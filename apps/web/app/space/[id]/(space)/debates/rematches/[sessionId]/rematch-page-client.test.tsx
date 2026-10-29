@@ -897,6 +897,108 @@ vi.mock('~/core/debates/matchmaking/hooks', () => ({
   },
 }));
 
+/**
+ * GEO-3489. Today's claims: the flag, the agendas, geo-chat's counts and the debaters' memberships.
+ * The flag is off unless a case turns it on, so every other suite here runs against master's picker.
+ */
+const todays = vi.hoisted(() => ({
+  flag: false,
+  agendas: { spaces: [], earlier: [], newestDay: null } as {
+    spaces: Array<{
+      spaceId: string;
+      listedOn: string;
+      sections: Array<{
+        id: string;
+        agendaId: string;
+        spaceId: string;
+        name: string;
+        claimIds: string[];
+        listedAt: string;
+      }>;
+    }>;
+    earlier: Array<{ claimId: string; spaceId: string; agendaId: string; listedOn: string; listedAt: string }>;
+    newestDay: string | null;
+  },
+  entities: [] as any[],
+  loading: false,
+  error: null as Error | null,
+  /** Debates since listing per claim id, or null for a geo-chat that cannot say. */
+  counts: null as Map<string, number> | null,
+  countsAsked: [] as Array<Array<{ claimId: string; since: string }>>,
+  /** How many of the two debaters are members of each space, by bare lowercase id. */
+  members: {} as Record<string, number>,
+}));
+
+// Like the real hook: the default until the browser has hydrated, then what is stored.
+vi.mock('~/core/state/feature-flags', async importOriginal => {
+  const actual = await importOriginal<typeof import('~/core/state/feature-flags')>();
+  const { useHydrated } = await import('~/core/hooks/use-hydrated');
+  return {
+    ...actual,
+    useFeatureFlag: (id: string) => {
+      const hydrated = useHydrated();
+      return id === 'todaysClaims'
+        ? hydrated && todays.flag
+        : actual.defaultFeatureFlags[id as keyof typeof actual.defaultFeatureFlags];
+    },
+  };
+});
+
+/** Each claim's newest listing, as `buildDebateAgendas` reports it: today's sections, then the week's. */
+function listedAtByClaim(agendas: typeof todays.agendas) {
+  const byClaim = new Map<string, string>();
+  for (const space of agendas.spaces)
+    for (const section of space.sections)
+      for (const claimId of section.claimIds) if (!byClaim.has(claimId)) byClaim.set(claimId, section.listedAt);
+  for (const listing of agendas.earlier)
+    if (!byClaim.has(listing.claimId)) byClaim.set(listing.claimId, listing.listedAt);
+  return byClaim;
+}
+
+// The builder has its own tests; this keeps its contract: `keepSpace` decides first which spaces count.
+vi.mock('~/core/debates/todays-claims/debate-agendas', async importOriginal => {
+  const { NO_AGENDAS, agendaDayFromValue } =
+    await importOriginal<typeof import('~/core/debates/todays-claims/debate-agendas')>();
+  const agendasIn = (keepSpace: (spaceId: string) => boolean) => {
+    const kept = {
+      ...todays.agendas,
+      spaces: todays.agendas.spaces.filter(space => keepSpace(space.spaceId)),
+      earlier: todays.agendas.earlier.filter(listing => keepSpace(listing.spaceId)),
+    };
+    return { ...kept, listedAtByClaim: listedAtByClaim(kept) };
+  };
+  return {
+    NO_AGENDAS,
+    agendaDayFromValue,
+    useDebateAgendas: (enabled: boolean) => ({
+      agendasIn: enabled ? agendasIn : () => NO_AGENDAS,
+      spaceIds: enabled
+        ? [...todays.agendas.spaces.map(space => space.spaceId), ...todays.agendas.earlier.map(l => l.spaceId)]
+        : [],
+      claimIds: enabled ? [...listedAtByClaim(todays.agendas).keys()] : [],
+      claimEntities: enabled ? todays.entities : [],
+      isLoading: enabled && todays.loading,
+      error: enabled ? todays.error : null,
+    }),
+  };
+});
+
+vi.mock('~/core/debates/todays-claims/claim-debate-counts', () => ({
+  useClaimDebateCounts: (asks: Array<{ claimId: string; since: string }>, enabled: boolean) => {
+    if (enabled) todays.countsAsked.push(asks);
+    return { byClaimId: enabled ? todays.counts : null, isLoading: false, error: null };
+  },
+}));
+
+vi.mock('~/core/debates/todays-claims/use-debaters-space-membership', () => ({
+  // Like the real lookup: with no debaters to ask about yet it is disabled, settled, and counts nobody.
+  useDebatersSpaceMembership: (_spaceIds: string[], debaterSpaceIds: string[]) => ({
+    debatersIn: (spaceId: string) =>
+      debaterSpaceIds.length === 0 ? 0 : (todays.members[spaceId.replace(/-/g, '').toLowerCase()] ?? 0),
+    isLoading: false,
+  }),
+}));
+
 // The curated lookup has its own tests; these cover the picker around it.
 vi.mock('~/core/debates/recommended-claims', () => ({
   useRecommendedClaimSections: () => ({
@@ -7412,5 +7514,444 @@ describe('click analytics labels in a debate room', () => {
 
     expect(await screen.findByTestId('rematch-outbound-request')).toBeInTheDocument();
     expect(unlabeledControls()).toEqual([]);
+  });
+});
+
+/**
+ * GEO-3489. Today's claims: the first tab, behind `todaysClaims`, listing every space's newest
+ * Debate agenda under its section headings.
+ */
+describe('Today’s claims', () => {
+  const T_LULA = 'a1000000000000000000000000000001';
+  const T_COURTS = 'a1000000000000000000000000000002';
+  const T_AGE = 'a1000000000000000000000000000003';
+  const T_PRISON = 'a1000000000000000000000000000004';
+  const T_VOTE = 'a1000000000000000000000000000005';
+  const T_OLD = 'a1000000000000000000000000000006';
+  const T_OLD_DEBATED = 'a1000000000000000000000000000007';
+  const bare = (id: string) => id.replace(/-/g, '').toLowerCase();
+
+  function agendaEntity(id: string, name: string, spaceId: string, topic?: { id: string; name: string }) {
+    return {
+      id,
+      name,
+      description: null,
+      spaces: [spaceId],
+      values: [{ property: { id: NAME_PROPERTY }, spaceId, value: name }],
+      relations: topic ? [{ type: { id: TOPICS_PROPERTY_ID }, toEntity: topic, isDeleted: false, spaceId }] : [],
+    };
+  }
+
+  function section(id: string, spaceId: string, name: string, claimIds: string[]) {
+    return { id, agendaId: `agenda-${spaceId}`, spaceId, name, claimIds, listedAt: '2026-10-28T00:00:00-04:00' };
+  }
+
+  /** World affairs (SPACE_1) with two sections, U.S. Politics (SPACE_2) with one, and an older listing. */
+  function twoAgendas() {
+    todays.flag = true;
+    todays.entities = [
+      agendaEntity(T_LULA, 'Lula should be re-elected', SPACE_1, { id: 'topic-lula', name: 'Lula’s victory' }),
+      agendaEntity(T_AGE, 'Lula is too old to govern', SPACE_1, { id: 'topic-lula', name: 'Lula’s victory' }),
+      agendaEntity(T_COURTS, 'The courts are persecuting the Bolsonaros', SPACE_1, {
+        id: 'topic-courts',
+        name: 'Bolsonaro trials',
+      }),
+      agendaEntity(T_PRISON, 'Better reentry support reduces recidivism', SPACE_2),
+      agendaEntity(T_VOTE, 'Released prisoners should keep the vote', SPACE_2),
+      agendaEntity(T_OLD, 'A claim from Monday', SPACE_1),
+      agendaEntity(T_OLD_DEBATED, 'A claim from Monday, debated since', SPACE_1),
+    ];
+    todays.agendas = {
+      newestDay: '2026-10-28',
+      spaces: [
+        {
+          spaceId: SPACE_1,
+          listedOn: '2026-10-28',
+          sections: [
+            section('block-brazil', SPACE_1, 'Brazil election', [T_LULA, T_AGE]),
+            section('block-bolsonaro', SPACE_1, 'The Bolsonaro family', [T_COURTS]),
+          ],
+        },
+        {
+          spaceId: SPACE_2,
+          listedOn: '2026-10-28',
+          sections: [section('block-prison', SPACE_2, 'Prisoner reintegration', [T_PRISON, T_VOTE])],
+        },
+      ],
+      earlier: [
+        {
+          claimId: T_OLD,
+          spaceId: SPACE_1,
+          agendaId: 'agenda-old',
+          listedOn: '2026-10-26',
+          listedAt: '2026-10-26T00:00:00-04:00',
+        },
+        {
+          claimId: T_OLD_DEBATED,
+          spaceId: SPACE_1,
+          agendaId: 'agenda-old',
+          listedOn: '2026-10-26',
+          listedAt: '2026-10-26T00:00:00-04:00',
+        },
+      ],
+    };
+    todays.counts = new Map([[T_OLD_DEBATED, 1]]);
+  }
+
+  const headings = () =>
+    within(screen.getByTestId('todays-claims-sections'))
+      .getAllByRole('heading')
+      .map(heading => heading.textContent);
+
+  const cards = () =>
+    [T_LULA, T_AGE, T_COURTS, T_PRISON, T_VOTE, T_OLD, T_OLD_DEBATED]
+      .map(id => todays.entities.find(entity => entity.id === id)!.name as string)
+      .filter(name => screen.queryByText(name) !== null)
+      .sort((a, b) => (appearsBefore(a, b) ? -1 : 1));
+
+  beforeEach(() => {
+    todays.flag = false;
+    todays.agendas = { spaces: [], earlier: [], newestDay: null };
+    todays.entities = [];
+    todays.loading = false;
+    todays.error = null;
+    todays.counts = null;
+    todays.countsAsked.length = 0;
+    todays.members = {};
+  });
+
+  afterEach(() => {
+    todays.flag = false;
+  });
+
+  it('is not offered with the flag off, and the picker lands where it does on master', async () => {
+    twoAgendas();
+    todays.flag = false;
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(await screen.findByRole('button', { name: /^Matches/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByRole('button', { name: /^Today’s claims/ })).toBeNull();
+  });
+
+  it('opens on Today’s claims, shared spaces first, sections in the agenda’s order', async () => {
+    twoAgendas();
+    // Both debaters are in U.S. Politics, neither in World affairs.
+    todays.members = { [bare(SPACE_2)]: 2 };
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(await screen.findByText('Better reentry support reduces recidivism')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Today’s claims/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(headings()).toEqual([
+      'Prisoner reintegration',
+      'Brazil election',
+      'The Bolsonaro family',
+      'Earlier this week',
+    ]);
+    expect(cards()).toEqual([
+      'Better reentry support reduces recidivism',
+      'Released prisoners should keep the vote',
+      'Lula should be re-elected',
+      'Lula is too old to govern',
+      'The courts are persecuting the Bolsonaros',
+    ]);
+  });
+
+  it('puts the claims debated since the listing below the rest, fewest first, with nothing on the card', async () => {
+    twoAgendas();
+    todays.agendas.spaces[0]!.sections[0] = section('block-brazil', SPACE_1, 'Brazil election', [
+      T_LULA,
+      T_AGE,
+      T_COURTS,
+    ]);
+    todays.agendas.spaces[0]!.sections.splice(1, 1);
+    todays.counts = new Map([
+      [T_LULA, 2],
+      [T_AGE, 1],
+    ]);
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    await screen.findByText('The courts are persecuting the Bolsonaros');
+    expect(cards().slice(0, 3)).toEqual([
+      'The courts are persecuting the Bolsonaros',
+      'Lula is too old to govern',
+      'Lula should be re-elected',
+    ]);
+    expect(screen.queryByText(/Debated/)).toBeNull();
+    // Each claim's count is asked from its own listing.
+    expect(todays.countsAsked.at(-1)).toEqual(
+      expect.arrayContaining([
+        { claimId: T_LULA, since: '2026-10-28T00:00:00-04:00' },
+        { claimId: T_OLD, since: '2026-10-26T00:00:00-04:00' },
+      ])
+    );
+  });
+
+  it('keeps the order it opened with when a count changes while the picker is open', async () => {
+    twoAgendas();
+    const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await screen.findByText('Lula should be re-elected');
+    const opened = cards();
+
+    todays.counts = new Map([[T_LULA, 3]]);
+    rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(cards()).toEqual(opened);
+  });
+
+  it('folds Earlier this week, lists only its undebated claims, and remembers a section for the day', async () => {
+    twoAgendas();
+    const { unmount } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await screen.findByText('Lula should be re-elected');
+
+    expect(screen.queryByText('A claim from Monday')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /Earlier this week/ }));
+    expect(screen.getByText('A claim from Monday')).toBeInTheDocument();
+    expect(screen.queryByText('A claim from Monday, debated since')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: /Brazil election/ }));
+    expect(screen.queryByText('Lula should be re-elected')).toBeNull();
+
+    // Back to the picker the same day: as the viewer left it.
+    unmount();
+    const again = render(<DebateRematchPageClient sessionId="rematch-2" />);
+    await screen.findByText('The courts are persecuting the Bolsonaros');
+    expect(screen.queryByText('Lula should be re-elected')).toBeNull();
+    expect(screen.getByText('A claim from Monday')).toBeInTheDocument();
+
+    // The next day's agenda opens every section at its default again.
+    again.unmount();
+    todays.agendas = { ...todays.agendas, newestDay: '2026-10-29' };
+    render(<DebateRematchPageClient sessionId="rematch-3" />);
+    expect(await screen.findByText('Lula should be re-elected')).toBeInTheDocument();
+    expect(screen.queryByText('A claim from Monday')).toBeNull();
+  });
+
+  it('narrows with master’s pills, hiding a section that has nothing left', async () => {
+    twoAgendas();
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await screen.findByText('Lula should be re-elected');
+
+    toggleFilter('Bolsonaro trials');
+
+    await waitFor(() => expect(screen.queryByText('Lula should be re-elected')).toBeNull());
+    expect(headings()).toEqual(['The Bolsonaro family']);
+  });
+
+  // A session that arrives after everything else would otherwise latch every space at 0 debaters.
+  it('waits for the session before ordering spaces by who is in them', async () => {
+    twoAgendas();
+    todays.members = { [bare(SPACE_2)]: 2 };
+    mocks.sessionLoading = true;
+    mocks.session = null;
+    const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await settleTabSwap();
+
+    mocks.sessionLoading = false;
+    mocks.session = session();
+    rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    await screen.findByText('Better reentry support reduces recidivism');
+    expect(headings()[0]).toBe('Prisoner reintegration');
+  });
+
+  // Anyone can publish the type; only a space that can carry a published debate has an agenda.
+  it('ignores an agenda published in a personal space, and lands where master does', async () => {
+    const PERSONAL = '019fedae-72b6-7ab2-927a-df044d57c599';
+    todays.flag = true;
+    mocks.spaceTypes[PERSONAL] = 'PERSONAL';
+    todays.entities = [agendaEntity(T_LULA, 'Lula should be re-elected', SPACE_1)];
+    todays.agendas = {
+      newestDay: '2026-10-28',
+      spaces: [
+        { spaceId: PERSONAL, listedOn: '2026-10-28', sections: [section('block-x', PERSONAL, 'Read this', [T_LULA])] },
+      ],
+      earlier: [],
+    };
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(await screen.findByRole('button', { name: /^Matches/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByRole('button', { name: /^Today’s claims/ })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Read this' })).toBeNull();
+  });
+
+  it('lands where master does when nothing on the agendas can be debated by this pair', async () => {
+    twoAgendas();
+    mocks.excludedClaimIds = [CLAIM_SOURCE, T_LULA, T_AGE, T_COURTS, T_PRISON, T_VOTE, T_OLD, T_OLD_DEBATED];
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(await screen.findByRole('button', { name: /^Matches/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByRole('button', { name: /^Today’s claims/ })).toBeNull();
+  });
+
+  it('reports the landing with what the tab lists', async () => {
+    twoAgendas();
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await screen.findByText('Lula should be re-elected');
+    await settleTabSwap();
+
+    const landing = mocks.capture.mock.calls.find(
+      ([event, properties]) => event === 'feature_exposed' && properties?.feature_id === 'debate-rematch-landing-tab'
+    );
+    // Five on today's agendas and the one earlier claim nobody has debated since.
+    expect(landing?.[1]).toMatchObject({ landing_tab: 'todays_claims', todays_claims_count: 6 });
+  });
+
+  // Every other tab lands on what can still be requested, not on the pair's already-debated fold.
+  it('lands where master does when the pair have debated every claim on the agendas', async () => {
+    twoAgendas();
+    const ids = [T_LULA, T_AGE, T_COURTS, T_OLD, T_OLD_DEBATED].map(id => [id, SPACE_1] as const);
+    mocks.claims = [...ids, [T_PRISON, SPACE_2] as const, [T_VOTE, SPACE_2] as const].map(([id, spaceId]) => ({
+      ...sharedClaim(),
+      claim: { id, space_id: spaceId, claim_entity_id: id, claim: 'x', description: null },
+      shared_preference: false,
+      previously_debated: true,
+    }));
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(await screen.findByRole('button', { name: /^Matches/ })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  // Unknown reads as "every space allowed"; landing on rows that then vanish bounced the pair.
+  it('waits for the acceptor’s spaces before landing on agendas they rule out', async () => {
+    twoAgendas();
+    todays.agendas = { ...todays.agendas, spaces: [todays.agendas.spaces[1]!], earlier: [] };
+    mocks.publishableSpaceIds = null;
+    mocks.publishableSpacesLoading = true;
+    const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await settleTabSwap();
+
+    mocks.publishableSpaceIds = new Set([bare(SPACE_1)]);
+    mocks.publishableSpacesLoading = false;
+    rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(await screen.findByRole('button', { name: /^Matches/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByText('Better reentry support reduces recidivism')).toBeNull();
+  });
+
+  // Every tab's spaces are judged by one lookup; another tab's arriving later must not reach in here.
+  it('keeps its sections as the viewer left them while another tab’s spaces are looked up', async () => {
+    twoAgendas();
+    const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await screen.findByText('Lula should be re-elected');
+    fireEvent.click(screen.getByRole('button', { name: /Brazil election/ }));
+    expect(screen.queryByText('Lula should be re-elected')).toBeNull();
+
+    mocks.spacesPending = true;
+    rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(screen.queryByText('Lula should be re-elected')).toBeNull();
+    expect(screen.getByText('The courts are persecuting the Bolsonaros')).toBeInTheDocument();
+    // A choice made in that window is still the day's.
+    fireEvent.click(screen.getByRole('button', { name: /Earlier this week/ }));
+    mocks.spacesPending = false;
+    rerender(<DebateRematchPageClient sessionId="rematch-2" />);
+    expect(await screen.findByText('A claim from Monday')).toBeInTheDocument();
+    expect(screen.queryByText('Lula should be re-elected')).toBeNull();
+  });
+
+  it('keeps the tab and its list when a background refetch of the agendas fails', async () => {
+    twoAgendas();
+    const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await screen.findByText('Lula should be re-elected');
+
+    todays.error = new Error('graph unavailable');
+    rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(screen.getByRole('button', { name: /^Today’s claims/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText('Lula should be re-elected')).toBeInTheDocument();
+  });
+
+  it('lands where master does when only Earlier this week, folded, has anything to request', async () => {
+    twoAgendas();
+    mocks.excludedClaimIds = [CLAIM_SOURCE, T_LULA, T_AGE, T_COURTS, T_PRISON, T_VOTE];
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(await screen.findByRole('button', { name: /^Matches/ })).toHaveAttribute('aria-pressed', 'true');
+    // Still one tap away.
+    expect(screen.getByRole('button', { name: /^Today’s claims/ })).toBeInTheDocument();
+  });
+
+  // With every lookup answered on the first render, the landing used to be decided — and latched —
+  // on the flag's pre-hydration default, so a stored flag never got its tab.
+  it('lands on Today’s claims when the flag is stored and every lookup is already answered', async () => {
+    twoAgendas();
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(await screen.findByText('Lula should be re-elected')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Today’s claims/ })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  // An unresolved space reads as publishable, so the judgement must wait for the agendas' own spaces.
+  it('waits for the agendas’ spaces to be judged before landing on them', async () => {
+    const PERSONAL = '019fedae-72b6-7ab2-927a-df044d57c599';
+    twoAgendas();
+    todays.agendas = {
+      newestDay: '2026-10-28',
+      spaces: [
+        { spaceId: PERSONAL, listedOn: '2026-10-28', sections: [section('block-x', PERSONAL, 'Read this', [T_LULA])] },
+      ],
+      earlier: [],
+    };
+    todays.loading = true;
+    const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await settleTabSwap();
+
+    // The agendas arrive; their space is still being looked up.
+    todays.loading = false;
+    mocks.spacesPending = true;
+    rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+    await settleTabSwap();
+
+    mocks.spaceTypes[PERSONAL] = 'PERSONAL';
+    mocks.spacesPending = false;
+    rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(await screen.findByRole('button', { name: /^Matches/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByRole('heading', { name: 'Read this' })).toBeNull();
+  });
+
+  // A refetch of the counts — the gateway invalidates the whole `debates` root — must not take an
+  // older claim out of Earlier this week while the picker is open.
+  it('keeps Earlier this week as it opened when the counts are refetched', async () => {
+    twoAgendas();
+    const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await screen.findByText('Lula should be re-elected');
+    fireEvent.click(screen.getByRole('button', { name: /Earlier this week/ }));
+    expect(screen.getByText('A claim from Monday')).toBeInTheDocument();
+
+    todays.counts = new Map([
+      [T_OLD_DEBATED, 1],
+      [T_OLD, 1],
+    ]);
+    rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(screen.getByText('A claim from Monday')).toBeInTheDocument();
+  });
+
+  // GEO-3495: a section opened or closed is a filter choice on this list, by its data block.
+  it('records a section toggle as a filter choice on the Today’s claims list', async () => {
+    twoAgendas();
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await screen.findByText('Lula should be re-elected');
+    mocks.capture.mockClear();
+
+    fireEvent.click(screen.getByRole('button', { name: /Brazil election/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Earlier this week/ }));
+
+    const choices = mocks.capture.mock.calls
+      .filter(([event, properties]) => event === 'action_completed' && properties?.target_type === 'section')
+      .map(([, properties]) => [properties.list_id, properties.target_id, properties.filter_selected]);
+    expect(choices).toEqual([
+      ['todays_claims', 'block-brazil', false],
+      ['todays_claims', 'earlier-this-week', true],
+    ]);
+  });
+
+  it('lands where master does when no space has an agenda', async () => {
+    todays.flag = true;
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(await screen.findByRole('button', { name: /^Matches/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByRole('button', { name: /^Today’s claims/ })).toBeNull();
   });
 });
