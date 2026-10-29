@@ -47,6 +47,11 @@ export function useRequestOpponent(request: ScheduledDebateRequest | undefined):
  * the request that booked it, then names them from the graph. `null` until both land.
  */
 export function useUpcomingRoomOpponent(room: UpcomingDebateRoom): DebateParticipantSummary | null {
+  return useRequestOpponent(useUpcomingRoomRequest(room));
+}
+
+/** The request that booked an upcoming room, once the request list has it. A lobby has none. */
+export function useUpcomingRoomRequest(room: UpcomingDebateRoom): ScheduledDebateRequest | undefined {
   const requests = useScheduledDebates();
-  return useRequestOpponent(requestForRoom(requests.data?.requests, room.room_id));
+  return requestForRoom(requests.data?.requests, room.room_id);
 }

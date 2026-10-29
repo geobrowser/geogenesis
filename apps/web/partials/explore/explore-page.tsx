@@ -8,6 +8,7 @@ import { DEFAULT_EXPLORE_TYPE_IDS, EXPLORE_ENTITY_TYPES } from '~/core/explore/e
 import type { ExplorePageSort } from '~/core/explore/explore-feed-params';
 import { MAX_EXPLORE_TOPIC_SELECTIONS } from '~/core/explore/explore-topic-ids';
 import { useAwaitedSmartAccount } from '~/core/hooks/use-awaited-smart-account';
+import { usePastCallInterleave } from '~/core/space-calls/recording/explore-past-calls';
 import { useFeatureFlag } from '~/core/state/feature-flags';
 import { useFollowedTopics } from '~/core/topics/use-followed-topics';
 import { normId } from '~/core/utils/norm-id';
@@ -27,6 +28,7 @@ const FOR_YOU_SORT_OPTIONS: readonly ExplorePageSort[] = ['for-you', 'best', 'to
 // sort menu reveals both for readers who want to narrow or widen it.
 const EXPLORE_FEED_PROPS = {
   apiEndpoint: '/api/explore/feed',
+  preserveSession: true,
   initialTime: 'month',
   showSortFilter: true,
   showMoreFilters: true,
@@ -56,7 +58,13 @@ const FOR_YOU_ENABLED_FOR_EVERYONE = process.env.NEXT_PUBLIC_FOR_YOU_ENABLED ===
  * GEO-3083. Its own component so the follow query only runs with the flag on, and so the feed
  * remounts, opening on For you, when the flag turns on after hydration.
  */
-function ExploreForYouFeed({ walletAddress }: { walletAddress: string | null }) {
+function ExploreForYouFeed({
+  walletAddress,
+  interleave,
+}: {
+  walletAddress: string | null;
+  interleave: React.ComponentProps<typeof EntityFeed>['interleave'];
+}) {
   const { topicIds, isLoading } = useFollowedTopics();
   // Before Privy restores the wallet, the account reads as signed out and the follows as empty.
   // `walletAddress` comes from the httpOnly wallet cookie, so wait for the account rather than serve Best.
@@ -81,6 +89,7 @@ function ExploreForYouFeed({ walletAddress }: { walletAddress: string | null }) 
       followedTopicIds={followedTopicIds}
       pendingTopicFollows={heldPicks.length > 0}
       walletAddress={walletAddress}
+      interleave={interleave}
     />
   );
 }
@@ -107,6 +116,8 @@ export function ExplorePage({ sidePanel, walletAddress = null }: Props) {
   // GEO-3083. Off, Explore is unchanged: Best, New, Top, opening on Best.
   const forYouFlag = useFeatureFlag('forYouFeed');
   const forYouEnabled = FOR_YOU_ENABLED_FOR_EVERYONE || forYouFlag;
+  // GEO-3421. Published past calls between the cards; off, nothing is fetched or drawn.
+  const pastCalls = usePastCallInterleave(useFeatureFlag('callRecording'));
 
   return (
     <EntityPageSidebarLayout sidebar={sidePanelEnabled ? sidePanel : null}>
@@ -124,9 +135,9 @@ export function ExplorePage({ sidePanel, walletAddress = null }: Props) {
           <ExploreLiveLobbiesBanner />
         </div>
         {forYouEnabled ? (
-          <ExploreForYouFeed walletAddress={walletAddress} />
+          <ExploreForYouFeed walletAddress={walletAddress} interleave={pastCalls} />
         ) : (
-          <EntityFeed {...EXPLORE_FEED_PROPS} initialSort="best" walletAddress={walletAddress} />
+          <EntityFeed {...EXPLORE_FEED_PROPS} initialSort="best" walletAddress={walletAddress} interleave={pastCalls} />
         )}
       </main>
     </EntityPageSidebarLayout>

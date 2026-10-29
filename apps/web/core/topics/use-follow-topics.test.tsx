@@ -6,6 +6,7 @@ import type { ReactNode } from 'react';
 import { decodeFunctionData } from 'viem';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { enterActionContext, snapshotActionContext } from '~/core/action-context';
 import { interestedTopicsQueryKey } from '~/core/io/subgraph/fetch-interested-topics';
 import { PERMISSIONLESS_ACTIONS, SpaceRegistryAbi } from '~/core/utils/contracts/space-registry';
 
@@ -15,7 +16,14 @@ import { useFollowEntities, useFollowTopics } from './use-follow-topics';
 const mocks = vi.hoisted(() => ({
   fetchInterestedTopics: vi.fn(),
   sendUserOperation: vi.fn(),
+  capture: vi.fn(),
+  revision: 0,
   personalSpaceId: '11111111111111111111111111111111' as string | null,
+}));
+
+vi.mock('~/core/analytics', () => ({
+  capture: mocks.capture,
+  analyticsContextRevision: () => mocks.revision,
 }));
 
 vi.mock('~/core/hooks/use-personal-space-id', () => ({
@@ -33,13 +41,13 @@ const SPACE = '11111111111111111111111111111111';
 const TOPIC_A = '22222222222222222222222222222222';
 const TOPIC_B = '33333333333333333333333333333333';
 
-function setup(interested: InterestedTopicRow[] = [], kind: FollowKind = 'topic') {
+function setup(interested: InterestedTopicRow[] = [], kind: FollowKind = 'topic', source?: 'onboarding') {
   mocks.fetchInterestedTopics.mockResolvedValue(interested);
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={client}>{children}</QueryClientProvider>
   );
-  const { result } = renderHook(() => (kind === 'topic' ? useFollowTopics() : useFollowEntities({ kind })), {
+  const { result } = renderHook(() => (kind === 'topic' ? useFollowTopics({ source }) : useFollowEntities({ kind })), {
     wrapper,
   });
   const cachedInterested = () => client.getQueryData<InterestedTopicRow[]>(interestedTopicsQueryKey(SPACE));
@@ -230,5 +238,96 @@ describe('useFollowEntities on a person (GEO-3236)', () => {
 
     expect(sentActions()).toEqual([{ to: `0x${SPACE}`, action: PERMISSIONLESS_ACTIONS.UNINTERESTED, entity: PERSON }]);
     expect(cachedInterested()).toEqual([]);
+  });
+});
+
+describe('onboarding follow analytics (GEO-3468)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.revision = 0;
+    mocks.personalSpaceId = SPACE;
+    mocks.sendUserOperation.mockResolvedValue('0xhash');
+  });
+  const completions = () => mocks.capture.mock.calls.filter(([event]) => event === 'action_completed');
+
+  it('records three successful onboarding follows from one transaction', async () => {
+    const third = '55555555555555555555555555555555';
+    const { result } = setup([], 'topic', 'onboarding');
+    await act(() => result.current.follow([TOPIC_A, TOPIC_B, third].map(id => ({ id }))));
+    expect(mocks.sendUserOperation).toHaveBeenCalledOnce();
+    expect(completions()).toHaveLength(3);
+    expect(completions().map(([, p]) => p.target_id)).toEqual([TOPIC_A, TOPIC_B, third]);
+    for (const [, props] of completions())
+      expect(props).toMatchObject({
+        component: 'onboarding_customize_feed',
+        action_kind: 'follow_topic',
+        target_type: 'topic',
+        outcome: 'succeeded',
+        measurement_version: 'growth-v2',
+      });
+  });
+
+  it('does not count existing follows or repeat a successful batch', async () => {
+    const { result } = setup([{ objectId: TOPIC_A, spaceId: SPACE }], 'topic', 'onboarding');
+    const topics = [{ id: TOPIC_A }, { id: TOPIC_B }];
+    await act(() => result.current.follow(topics));
+    await act(() => result.current.follow(topics));
+    expect(completions()).toHaveLength(1);
+    expect(completions()[0][1].target_id).toBe(TOPIC_B);
+  });
+
+  it('leaves regular Follow button reporting to its existing observer', async () => {
+    const { result } = setup();
+    await act(() => result.current.follow([{ id: TOPIC_A }]));
+    expect(completions()).toEqual([]);
+  });
+
+  it('never reports a failed write as a successful follow', async () => {
+    mocks.sendUserOperation.mockRejectedValue(new Error('failed'));
+    const { result } = setup([], 'topic', 'onboarding');
+    await act(() => result.current.follow([{ id: TOPIC_A }]));
+    expect(completions()).toHaveLength(1);
+    expect(completions()[0][1].outcome).toBe('unknown');
+  });
+
+  it('keeps onboarding attribution when an unrelated click is still in scope', async () => {
+    const { result } = setup([], 'topic', 'onboarding');
+    enterActionContext(snapshotActionContext('topic_follow_button', 'topic', TOPIC_B));
+    await act(() => result.current.follow([{ id: TOPIC_A }]));
+    expect(completions()).toHaveLength(1);
+    expect(completions()[0][1]).toMatchObject({
+      component: 'onboarding_customize_feed',
+      target_id: TOPIC_A,
+    });
+  });
+
+  it('keeps the original actor if the account changes before the mutation starts', async () => {
+    const { result } = setup([], 'topic', 'onboarding');
+    await act(async () => {
+      const pending = result.current.follow([{ id: TOPIC_A }]);
+      mocks.revision++;
+      await pending;
+    });
+    expect(completions()).toEqual([]);
+  });
+
+  it('keeps the original analytics actor while existing follows are loading', async () => {
+    const { result } = setup([], 'topic', 'onboarding');
+    mocks.fetchInterestedTopics.mockImplementation(async () => {
+      mocks.revision++;
+      return [];
+    });
+    await act(() => result.current.follow([{ id: TOPIC_A }]));
+    expect(completions()).toEqual([]);
+  });
+
+  it('does not attribute a completed write to a different account after a switch', async () => {
+    mocks.sendUserOperation.mockImplementation(async () => {
+      mocks.revision++;
+      return '0xhash';
+    });
+    const { result } = setup([], 'topic', 'onboarding');
+    await act(() => result.current.follow([{ id: TOPIC_A }]));
+    expect(completions()).toEqual([]);
   });
 });

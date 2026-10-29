@@ -1,6 +1,6 @@
 'use client';
 
-import { CancelledError, type Query, type QueryClient, type QueryKey } from '@tanstack/react-query';
+import { CancelledError, type InfiniteData, type Query, type QueryClient, type QueryKey } from '@tanstack/react-query';
 
 import * as React from 'react';
 
@@ -11,6 +11,8 @@ import {
   claimResponseTargetKey,
   isClaimResponseSummaryQueryKey,
 } from '~/core/responses/claim-response-summary-query-keys';
+import type { SpaceCallsResponse } from '~/core/space-calls/api';
+import { parseSpaceCallPatch, withSpaceCallPatch } from '~/core/space-calls/space-calls-patch';
 
 import {
   type DebateLobbiesResponse,
@@ -26,6 +28,7 @@ import {
   getStoredGeoChatAccessToken,
   resetGeoChatSession,
 } from './api';
+import { historyRouteMissing } from './history-route';
 import {
   type DebateLobbyCardPatch,
   applyLobbyCardPatch,
@@ -86,6 +89,8 @@ type DebateEventPayload = {
   lobby_claim_lists?: unknown;
   /** On `debate.lobby_guests_changed`: visitors without an account. */
   guest_count?: unknown;
+  /** On `debate.space_calls_changed`: the call's list row; see `parseSpaceCallPatch`. */
+  space_call?: unknown;
   claim_entity_ids?: string[];
   sections?: MatchmakingSection[];
 };
@@ -176,7 +181,8 @@ export class DebateGatewayClient {
    * at the `as_of` caught up with. Released once no read is in flight; see `releaseCaughtUpPatches`.
    */
   private readonly caughtUpPatches = new Map<string, string>();
-  private unsubscribeLobbyFetches: (() => void) | null = null;
+  /** Lobby reads landing (for the held patches) and history losing its last observer. */
+  private unsubscribeQueryCache: (() => void) | null = null;
 
   private snapshot: DebateGatewaySnapshot = {
     status: 'idle',
@@ -237,7 +243,11 @@ export class DebateGatewayClient {
     if (debatePresence !== undefined) this.setDebatePresence(debatePresence);
     this.getPrivyIdentityToken = getPrivyIdentityToken;
     this.accountKey = accountKey;
-    this.unsubscribeLobbyFetches ??= this.queryClient.getQueryCache().subscribe(event => {
+    this.unsubscribeQueryCache ??= this.queryClient.getQueryCache().subscribe(event => {
+      if (event.type === 'observerRemoved') {
+        if (isAccountHistoryQueryKey(event.query.queryKey)) this.trimUnwatchedHistory(event.query);
+        return;
+      }
       // A fetch's own success; the overlay's `setQueryData` is `manual` and does not come back here.
       if (event.type !== 'updated' || event.action.type !== 'success' || event.action.manual) return;
       if (this.accountKey && isLobbyCalendarQueryKey(event.query.queryKey, this.accountKey)) {
@@ -304,8 +314,8 @@ export class DebateGatewayClient {
     this.pendingChangedClaimsBySpace.clear();
     this.heldLobbyPatches.clear();
     this.caughtUpPatches.clear();
-    this.unsubscribeLobbyFetches?.();
-    this.unsubscribeLobbyFetches = null;
+    this.unsubscribeQueryCache?.();
+    this.unsubscribeQueryCache = null;
     if (accountKey) this.queryClient.removeQueries({ queryKey: ['debates'] });
     this.setSnapshot({ status: 'idle', paused: false, pauseReason: null });
   }
@@ -520,6 +530,11 @@ export class DebateGatewayClient {
       case 'debate.state_changed':
         if (identifiers.debate_id) this.queueQuery(['debates', 'detail', dashlessId(identifiers.debate_id)]);
         if (identifiers.space_id) this.queueQuery(['debates', 'space', identifiers.space_id]);
+        // Not history, though a debate ending is when its row joins the Requests timeline's past. This
+        // reaches space and debate subscribers for any public debate and fires many times within one,
+        // and carries neither its state nor whose it is, so refreshing on it re-asked every page held
+        // for debates that aren't the viewer's. Their own ending changes their activity, which this
+        // refreshes; the timeline refreshes history when the debate leaves it (`useRefreshHistoryWhenLiveEnds`).
         this.queueAccountActivity();
         break;
       case 'debate.rematch_changed':
@@ -545,6 +560,8 @@ export class DebateGatewayClient {
         this.queueAccountQuery('scheduled-debates');
         this.queueAccountQuery('upcoming-rooms');
         this.queueAccountQuery('room');
+        // A request ending moves it from the live lists into the Requests timeline's past (GEO-3463).
+        this.queueAccountQuery('history');
         this.queueAccountActivity();
         break;
       case 'debate.matchmaking_changed':
@@ -556,7 +573,9 @@ export class DebateGatewayClient {
         const patch = parseLobbyCardPatch(identifiers.lobby_card);
         const lobbyId = identifiers.lobby_id ? dashlessId(identifiers.lobby_id) : null;
         if (!patch) {
-          // Card-less: a lobby was created, opened or closed.
+          // Card-less: a lobby was created, opened or closed. Any lobby, so not history: this goes to
+          // every matchmaking subscriber, and one the viewer was in reaches them as
+          // `debate.my_lobby_changed` too, which does refresh it.
           this.queueAccountQuery('lobbies');
           if (lobbyId) this.queueAccountQuery('lobby', lobbyId);
         } else {
@@ -570,6 +589,8 @@ export class DebateGatewayClient {
       case 'debate.my_lobby_changed':
         this.queueAccountQuery('lobbies');
         this.queueAccountQuery('my-lobby');
+        // A lobby the viewer joined closing belongs in their history now.
+        this.queueAccountQuery('history');
         if (identifiers.lobby_id) this.queueAccountQuery('lobby', dashlessId(identifiers.lobby_id));
         break;
       // GEO-3131. Sent to the lobby's present members.
@@ -616,6 +637,21 @@ export class DebateGatewayClient {
         this.queryClient.setQueryData<DebateLobbyView>(
           ['debates', 'account', this.accountKey, 'lobby', dashlessId(identifiers.lobby_id)],
           current => (current ? { ...current, guest_count: count } : current)
+        );
+        break;
+      }
+      // GEO-3419. To the space scope: a call started, ended or closed (no row: refetch the list),
+      // or its people or hosts changed (a row, patched in place when newer).
+      case 'debate.space_calls_changed': {
+        if (!identifiers.space_id) break;
+        const listKey = ['debates', 'space-calls', dashlessId(identifiers.space_id)];
+        const patch = parseSpaceCallPatch(identifiers.space_call);
+        if (!patch || patch.status !== 'live') {
+          this.queueQuery(listKey);
+          break;
+        }
+        this.queryClient.setQueriesData<SpaceCallsResponse>({ queryKey: listKey }, list =>
+          list ? withSpaceCallPatch(list, patch) : list
         );
         break;
       }
@@ -724,6 +760,7 @@ export class DebateGatewayClient {
     if (scope.scope === 'space') {
       this.queueQuery(['debates', 'claims', scope.space_id]);
       this.queueQuery(['debates', 'space', scope.space_id]);
+      this.queueQuery(['debates', 'space-calls', dashlessId(scope.space_id)]);
       return;
     }
     if (scope.scope === 'matchmaking') {
@@ -775,13 +812,65 @@ export class DebateGatewayClient {
       | 'lobbies'
       | 'lobby'
       | 'lobby-claims'
-      | 'my-lobby',
+      | 'my-lobby'
+      | 'history',
     id?: string
   ) {
     if (!this.accountKey) return;
-    this.queueQuery(
-      id ? ['debates', 'account', this.accountKey, kind, id] : ['debates', 'account', this.accountKey, kind]
-    );
+    const queryKey = id
+      ? ['debates', 'account', this.accountKey, kind, id]
+      : ['debates', 'account', this.accountKey, kind];
+    if (kind === 'history' && historyRouteMissing(this.queryClient.getQueryState(queryKey))) return;
+    this.queueQuery(queryKey);
+  }
+
+  /**
+   * The Requests timeline's past (GEO-3463) is an infinite query, and refetching one re-requests every
+   * page it holds, one after the other. While nobody is looking at it, the pages past the first are
+   * dropped, so the panel opening next asks for one page and the rest load again, from that page's
+   * cursor, as the viewer scrolls back. While it is on screen it keeps them all: trimming then would
+   * pull the rows the viewer is reading out from under them on every request that changes. Replacing
+   * the first page and keeping the rest would be cheaper but wrong: new items push older ones off it,
+   * and the old second page's cursor starts after them, so they would fall into a gap no page covers.
+   *
+   * After the cancel, so a page still in flight cannot land on top and bring the rest back.
+   *
+   * The cut is not a fetch, so it keeps the data's age and any invalidation: `setQueryData` would
+   * stamp the pages fresh and clear `isInvalidated`, and the tab opening again inside `staleTime`
+   * would then skip the refetch an ended request was waiting on. A fetch cancelled on the way here
+   * (`cancelled`) was one somebody wanted, so it leaves the query invalidated too.
+   */
+  private keepFirstHistoryPage(queryKey: QueryKey, { cancelled = false }: { cancelled?: boolean } = {}) {
+    const query = this.queryClient.getQueryCache().find({ queryKey, exact: true });
+    if (!query || query.getObserversCount() > 0) return;
+    const stale = cancelled || query.state.isInvalidated;
+    const data = query.state.data as InfiniteData<unknown, unknown> | undefined;
+    if (data && data.pages.length > 1) {
+      this.queryClient.setQueryData<InfiniteData<unknown, unknown>>(
+        queryKey,
+        { pages: data.pages.slice(0, 1), pageParams: data.pageParams.slice(0, 1) },
+        { updatedAt: query.state.dataUpdatedAt }
+      );
+    }
+    if (stale) void this.queryClient.invalidateQueries({ queryKey, exact: true, refetchType: 'none' });
+  }
+
+  /**
+   * History's last observer going away — the Requests tab closing — cuts it to its first page then,
+   * not at the next event: paging back ten pages, closing and coming back after it had gone stale
+   * otherwise re-asked all ten on the way in. A page still loading is cancelled first, as at a flush,
+   * so it cannot land and bring the rest back.
+   */
+  private trimUnwatchedHistory(query: Query) {
+    if (query.getObserversCount() > 0) return;
+    const { queryKey } = query;
+    if (query.state.fetchStatus !== 'fetching') {
+      this.keepFirstHistoryPage(queryKey);
+      return;
+    }
+    void this.queryClient
+      .cancelQueries({ queryKey, exact: true })
+      .then(() => this.keepFirstHistoryPage(queryKey, { cancelled: true }));
   }
 
   private queueClaims(spaceId: string, claimEntityIds?: string[]) {
@@ -881,16 +970,19 @@ export class DebateGatewayClient {
         // trips complete; restarting every batch on every event starved the list of updates for as
         // long as the other side kept responding. A batch in flight is left to land and is then
         // asked again, so the answer on screen is never older than the event that prompted it.
-        const inFlightRematchBatches = this.queryClient.getQueryCache().findAll({
+        //
+        // History on screen is the same: its refetch re-asks every page it holds, one after another,
+        // and `requests_changed` comes faster than that for a viewer paged a few pages back.
+        const inFlightLeftToLand = this.queryClient.getQueryCache().findAll({
           ...queryFilters,
           fetchStatus: 'fetching',
-          predicate: query => isRematchClaimsQueryKey(query.queryKey) && matches(query),
+          predicate: query => isLeftToLandAtFlush(query) && matches(query),
         });
         await this.queryClient.cancelQueries({
           ...queryFilters,
-          predicate: query =>
-            query.state.data !== undefined && !isRematchClaimsQueryKey(query.queryKey) && matches(query),
+          predicate: query => query.state.data !== undefined && !isLeftToLandAtFlush(query) && matches(query),
         });
+        if (isAccountHistoryQueryKey(queryFilters.queryKey)) this.keepFirstHistoryPage(queryFilters.queryKey);
         // `cancelRefetch: false`: a refetch of a query still fetching joins that request instead
         // of aborting it. Everything this flush meant to cancel has been cancelled above.
         //
@@ -900,11 +992,11 @@ export class DebateGatewayClient {
         try {
           await this.queryClient.invalidateQueries(queryFilters, { throwOnError: true, cancelRefetch: false });
         } finally {
-          if (inFlightRematchBatches.length > 0) {
+          if (inFlightLeftToLand.length > 0) {
             await this.queryClient.refetchQueries(
               {
                 type: 'active',
-                predicate: query => inFlightRematchBatches.some(batch => batch.queryHash === query.queryHash),
+                predicate: query => inFlightLeftToLand.some(batch => batch.queryHash === query.queryHash),
               },
               { throwOnError: true, cancelRefetch: false }
             );
@@ -1437,6 +1529,29 @@ function isLobbyCalendarQueryKey(queryKey: readonly unknown[], accountKey: strin
     queryKey[2] === accountKey &&
     queryKey[3] === 'lobbies' &&
     queryKey[4] === 'calendar'
+  );
+}
+
+/** An account's history list (`debateQueryKeys.history`), whose refetch is held to its first page. */
+function isAccountHistoryQueryKey(queryKey: QueryKey | undefined): queryKey is QueryKey {
+  return (
+    Array.isArray(queryKey) &&
+    queryKey.length === 4 &&
+    queryKey[0] === 'debates' &&
+    queryKey[1] === 'account' &&
+    queryKey[3] === 'history'
+  );
+}
+
+/**
+ * What a flush never cancels, loaded or not: the rematch picker's batches, and history while the
+ * timeline shows it. Unwatched history is still cancelled, so a page in flight cannot land on top of
+ * the cut to its first page.
+ */
+function isLeftToLandAtFlush(query: Query) {
+  return (
+    isRematchClaimsQueryKey(query.queryKey) ||
+    (isAccountHistoryQueryKey(query.queryKey) && query.getObserversCount() > 0)
   );
 }
 

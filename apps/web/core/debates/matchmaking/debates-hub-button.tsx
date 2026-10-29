@@ -13,7 +13,7 @@ import { LiveLobbiesPreview } from '../lobbies/live-lobbies-preview';
 import { useLobbyReminderReplay } from '../lobbies/lobby-reminder-press';
 import { useDebateRequests } from './hooks';
 import { useDebatesHub } from './use-debates-hub';
-import { useUnexpiredRequests } from './use-request-countdown';
+import { useRequestsTabCount } from './use-requests-tab-count';
 
 /**
  * Navbar entry point for the matchmaking hub.
@@ -26,26 +26,38 @@ import { useUnexpiredRequests } from './use-request-countdown';
  * behind it are gated on the session already — `useDebateActivity` on `authenticated`, and the
  * requests list is read-only here — so signed out nothing is fetched and the count is simply zero.
  *
- * `compact` is the debate feed's phone bar (GEO-3415): a 22px pill inside a 44px target, keeping the
- * "Debate" word and the live chip, since that bar has the room the phone navbar does not. It leaves
- * the reminder replay to the navbar's button, which stays mounted under the feed, so a queued
- * reminder is set once rather than by both.
+ * `compact` draws a 22px pill inside a 44px target, keeping the "Debate" word and the live chip.
+ * `placement` identifies the surface independently of its size. The debate feed leaves reminder
+ * replay to the navbar mounted underneath it; Explore's compact navbar owns its own replay.
  */
-export function DebatesHubButton({ compact = false }: { compact?: boolean } = {}) {
+export function DebatesHubButton({
+  compact = false,
+  placement = 'navbar',
+}: {
+  compact?: boolean;
+  placement?: 'navbar' | 'debate_feed_bar';
+} = {}) {
   const { authenticated } = useGeoChatAuth();
   const { isOpen, toggle } = useDebatesHub();
-  const { data: activity } = useDebateActivity();
+  const { data: activity, dataUpdatedAt: activityUpdatedAt } = useDebateActivity();
   // Read-only: the coordinator already fetches this list whenever there is anything in it, and the
   // badge must agree with the one in the panel rather than counting requests that have expired.
   const { data: requests } = useDebateRequests(false);
-  const incoming = useUnexpiredRequests(requests?.incoming ?? []);
 
-  // Guarded rather than relying on the lookups being empty: a stale cache from a session that has
-  // since signed out would otherwise badge the button for nobody.
-  const requestCount = !authenticated
-    ? 0
-    : (requests ? incoming.length : (activity?.incoming_request_count ?? 0)) +
-      (activity?.scheduled_awaiting_answer_count ?? 0);
+  // The panel's Requests badge, from the same hook, so the two always show one number (GEO-3463).
+  // It returns zero signed out rather than relying on the lookups being empty: a stale cache from a
+  // session that has since signed out would otherwise badge the button for nobody.
+  //
+  // The scheduled list is read live only while the panel is open, which reads it anyway (one request
+  // for both), so the two count from the same list. Closed, the badge counts from the cached list
+  // only while it is newer than activity.
+  const requestCount = useRequestsTabCount({
+    authenticated,
+    activity,
+    activityUpdatedAt,
+    requests,
+    fetchScheduled: isOpen,
+  });
 
   // GEO-3268. Mounting the lineup here, on every page, is also what keeps the lobby list live with
   // the panel closed: it holds the matchmaking scope that carries `debate.lobbies_changed`.
@@ -123,12 +135,14 @@ export function DebatesHubButton({ compact = false }: { compact?: boolean } = {}
     <>
       {/* GEO-3289. A reminder a visitor asked for before signing up is set from here once their
           account can, so it does not wait on the panel being open or the lobby's card still showing. */}
-      {compact ? null : <LobbyReminderReplay />}
+      {placement === 'navbar' ? <LobbyReminderReplay /> : null}
       <LiveLobbiesPreview lobbies={live} disabled={isOpen}>
         <button
           type="button"
           data-debates-hub-opener
-          data-geo-analytics-label={compact ? 'Debate feed bar debate hub toggle' : 'Navbar debate hub toggle'}
+          data-geo-analytics-label={
+            placement === 'debate_feed_bar' ? 'Debate feed bar debate hub toggle' : 'Navbar debate hub toggle'
+          }
           data-geo-analytics-intent="toggle_debates_hub"
           // The pending count is the whole point of the button, and an aria-label would otherwise
           // override the visible number. It says "Debate" to match the label: a control should answer
@@ -160,7 +174,7 @@ export function liveLobbiesLabel(live: { headcount: number }[]) {
   return live.length === 1 ? `Live · ${live[0]!.headcount}` : `${live.length} live`;
 }
 
-/** The replay as a component, so the compact button can leave it out without a conditional hook. */
+/** The replay as a component, so the feed's button can leave it out without a conditional hook. */
 function LobbyReminderReplay() {
   useLobbyReminderReplay();
   return null;

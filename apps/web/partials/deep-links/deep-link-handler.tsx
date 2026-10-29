@@ -6,6 +6,7 @@ import { useDebatesPanelDeepLink } from '~/core/debates/use-debates-panel-deep-l
 
 import { GoogleCalendarReturn } from '~/partials/availability/google-calendar-return';
 import { AvailabilityDeepLink } from '~/partials/availability/shared-availability';
+import { EmailSettingsDeepLink } from '~/partials/notifications/email-settings-deep-link';
 import { ScheduledDebateNoticeDeepLink } from '~/partials/scheduled-debates/scheduled-debate-notice-deep-link';
 
 /**
@@ -28,6 +29,7 @@ export function DeepLinkHandler() {
     <>
       <AvailabilityDeepLink />
       <GoogleCalendarReturn />
+      <EmailSettingsDeepLink />
       <ScheduledDebateNoticeDeepLink />
     </>
   );

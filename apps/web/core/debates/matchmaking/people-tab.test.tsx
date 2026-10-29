@@ -20,8 +20,9 @@ import {
 } from '../api';
 import type { ClaimPickerEntity } from '../claim-picker-page';
 import type { ParticipantPositionsByClaim } from '../participant-positions';
+import { ResizeObserverStub } from '../resize-observer-fixtures';
 import type { PersonRecord } from './person-record';
-import { debatesHubPeopleSpaceIdsAtom } from '~/atoms';
+import { debatesHubPanelPeopleSpaceIdsAtom, debatesHubPeopleSortAtom, debatesHubPeopleSpaceIdsAtom } from '~/atoms';
 
 const mocks = vi.hoisted(() => ({
   promptSignIn: vi.fn(),
@@ -47,6 +48,12 @@ const mocks = vi.hoisted(() => ({
   claimEntitiesLoading: false,
   claimEntitiesError: null as Error | null,
   createChallenge: vi.fn(),
+  createRequest: vi.fn(),
+  createRequestPending: false,
+  createRequestVariables: undefined as { claim_entity_id: string } | undefined,
+  /** What the shared claim-request path says about "Debate on this" (`useClaimMatchup`). */
+  matchupBlockedReason: undefined as string | undefined,
+  matchupError: null as string | null,
   onTabChange: vi.fn(),
   cancelChallenge: vi.fn(),
   cancelPending: false,
@@ -136,6 +143,26 @@ vi.mock('./hooks', () => ({
   }),
   useDebateRequests: () => ({ data: { incoming: [], outbound: null }, isLoading: false, error: null }),
   useSchedulablePeople: (enabled: boolean) => mocks.useSchedulablePeople(enabled),
+  // "Debate on this" in a row's matches list (GEO-3463), and the strip's cancel behind `useOutgoingAsk`.
+  useCreateDebateRequest: () => ({
+    mutate: mocks.createRequest,
+    isPending: mocks.createRequestPending,
+    variables: mocks.createRequestVariables,
+  }),
+  useWithdrawDebateRequest: () => ({ mutate: vi.fn(), isPending: false }),
+}));
+
+// "Debate on this" goes through the claim cards' own request path (`useClaimMatchup`), which has
+// its own suite; here it only matters that the list hands it the claim and shows what it says back.
+vi.mock('~/core/claims/browse/use-claim-matchup', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/claims/browse/use-claim-matchup')>()),
+  useClaimMatchup: ({ claimId, spaceId }: { claimId: string; spaceId: string }) => ({
+    match: null,
+    blockedReason: mocks.matchupBlockedReason,
+    isRequesting: mocks.createRequestPending,
+    requestError: mocks.matchupError,
+    request: () => mocks.createRequest({ space_id: spaceId, claim_entity_id: claimId }),
+  }),
 }));
 
 // The record is fetched once for the whole list through react-query; these tests render the tab
@@ -162,9 +189,23 @@ vi.mock('~/core/hooks/use-space-labels', async importOriginal => {
 });
 
 // Reaches for a query client this suite does not stand up, and booking has its own coverage.
+// Booking reads room completion only when moving a scheduled request.
+vi.mock('../rooms/request-room', () => ({
+  useRequestRoom: () => ({
+    requests: { isLoading: false },
+    rooms: { isLoading: false },
+    request: undefined,
+    room: null,
+    finished: false,
+  }),
+}));
+
 vi.mock('../rooms/scheduling-hooks', () => ({
   useCreateScheduledDebate: () => mocks.propose,
   useRescheduleScheduledDebate: () => mocks.propose,
+  // The week reads these only when moving a request (GEO-3429), which the People tab never does.
+  useScheduledDebates: () => ({ data: undefined }),
+  useNoTimeWorks: () => ({ mutate: vi.fn(), reset: vi.fn(), isPending: false, error: null }),
 }));
 
 vi.mock('../use-current-geo-chat-user-id', () => ({
@@ -208,6 +249,7 @@ vi.mock('~/core/hooks/use-privy-sign-in', () => ({
 }));
 
 const { PeopleTab, formatSlot } = await import('./people-tab');
+const { HubAskProvider } = await import('./hub-ask-context');
 
 describe('formatSlot', () => {
   // Wednesday 7 Oct 2026, 10:00 local.
@@ -286,6 +328,11 @@ function challenge(role: 'requester' | 'recipient', expiresInMs = 25 * 60_000): 
     created_at: '2026-08-05T11:00:00.000Z',
     expires_at: new Date(Date.now() + expiresInMs).toISOString(),
   };
+}
+
+/** A claim request the viewer sent, `expiresInMs` from expiring (negative: already expired). */
+function openRequest(expiresInMs: number) {
+  return { id: 'request-1', status: 'pending', expires_at: new Date(Date.now() + expiresInMs).toISOString() };
 }
 
 const awaitingText = 'You have a debate request awaiting a reply.';
@@ -385,11 +432,6 @@ function expectSpaceMetrics(option: HTMLElement, expected: { debates: string; cl
 }
 
 // Radix's menu measures its content; jsdom has no observer to measure with.
-class ResizeObserverStub {
-  observe() {}
-  unobserve() {}
-  disconnect() {}
-}
 vi.stubGlobal('ResizeObserver', ResizeObserverStub);
 
 afterEach(cleanup);
@@ -501,7 +543,9 @@ describe('PeopleTab', () => {
 
     render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
-    expect(screen.queryByText(/matches?/)).not.toBeInTheDocument();
+    // Arturas is the viewer here (`currentUserId`). Other rows may say "No matches"; this one says nothing.
+    const viewerRow = screen.getByText('Arturas').closest('li') as HTMLElement;
+    expect(within(viewerRow).queryByText(/matches?/)).not.toBeInTheDocument();
   });
 
   it('sorts the people with the most matches first and preserves roster order for ties', () => {
@@ -560,7 +604,8 @@ describe('PeopleTab', () => {
     mocks.claimEntities = [claimEntity('claim-1', 'Should we build this?'), claimEntity('claim-2', 'Is this true?')];
     mocks.spaceLabels = new Map([[normId(spaceId), { name: 'US Politics', image: null }]]);
 
-    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+    // The full row's list: space, name and each side as a badge. The panel's compact list has its own test.
+    render(<PeopleTab onTabChange={mocks.onTabChange} dense />);
 
     fireEvent.click(screen.getByRole('button', { name: 'View 2 matching claims with Arturas' }));
 
@@ -729,15 +774,14 @@ describe('PeopleTab', () => {
     }
   });
 
-  it('pins search alongside a sent request rather than in a second sticky', () => {
-    // Two stickies would both claim top-0 and overlap; the card is conditional, so search could
-    // not be offset by a known height either.
+  // GEO-3463. In the panel the request you sent is the strip's above the tabs, with its countdown
+  // and Cancel on every tab, so the list does not repeat it; search stays pinned on its own.
+  it('leaves a sent request to the panel strip, keeping search pinned', () => {
     mocks.challenge = challenge('requester');
     render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
-    const pinned = screen.getByLabelText('Search people').closest('.sticky');
-    expect(pinned).not.toBeNull();
-    expect(card()?.closest('.sticky')).toBe(pinned);
+    expect(card()).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Search people').closest('.sticky')).not.toBeNull();
   });
 
   it('shows no request card when nothing is outstanding', () => {
@@ -767,22 +811,21 @@ describe('PeopleTab', () => {
     expect(button).toHaveAttribute('data-geo-analytics-label', 'Debate hub In a debate');
   });
 
-  // Matches the Matches tab: a request you're waiting on gets a card rather than a sentence, and
-  // stays in view rather than scrolling away behind people you can no longer ask.
-  it('puts a sticky card above the list for a request you sent', () => {
+  // Full screen's rail keeps the card: a request you're waiting on gets a card rather than a
+  // sentence, above the people you can no longer ask.
+  it('puts a card above the rail for a request you sent', () => {
     mocks.challenge = challenge('requester');
-    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+    render(<PeopleTab onTabChange={mocks.onTabChange} dense />);
 
     const request = card();
     expect(request).toBeInTheDocument();
-    expect(request?.parentElement).toHaveClass('sticky', 'top-0');
     expect(within(request!).getByText('Awaiting response')).toBeInTheDocument();
     expect(screen.queryByText(awaitingText)).not.toBeInTheDocument();
   });
 
   it('names the person you asked, without a claim or space to show', () => {
     mocks.challenge = challenge('requester');
-    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+    render(<PeopleTab onTabChange={mocks.onTabChange} dense />);
 
     const request = card()!;
     expect(within(request).getByText('You')).toBeInTheDocument();
@@ -823,7 +866,7 @@ describe('PeopleTab', () => {
   // The clock and what you can do about it lead the card, above the pairing they apply to.
   it('leads with the countdown and the cancel action, before the two people', () => {
     mocks.challenge = challenge('requester');
-    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+    render(<PeopleTab onTabChange={mocks.onTabChange} dense />);
 
     const request = card()!;
     const countdown = within(request).getByText(/Expires in/);
@@ -863,7 +906,7 @@ describe('PeopleTab', () => {
   // The same action the Requests tab offers on this challenge, reachable without leaving People.
   it('cancels the request from the card', () => {
     mocks.challenge = challenge('requester');
-    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+    render(<PeopleTab onTabChange={mocks.onTabChange} dense />);
 
     fireEvent.click(within(card()!).getByRole('button', { name: 'Cancel request' }));
 
@@ -873,7 +916,7 @@ describe('PeopleTab', () => {
   it('holds the cancel button while it is in flight', () => {
     mocks.challenge = challenge('requester');
     mocks.cancelPending = true;
-    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+    render(<PeopleTab onTabChange={mocks.onTabChange} dense />);
 
     expect(within(card()!).getByRole('button', { name: 'Cancelling…' })).toBeDisabled();
   });
@@ -881,19 +924,43 @@ describe('PeopleTab', () => {
   it('announces a failed cancel rather than only drawing it', () => {
     mocks.challenge = challenge('requester');
     mocks.cancelError = new Error('Challenge already answered.');
-    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+    render(<PeopleTab onTabChange={mocks.onTabChange} dense />);
 
     expect(screen.getByRole('alert')).toHaveTextContent('Challenge already answered.');
   });
 
   it('leaves the other blocked reasons alone', () => {
-    mocks.outboundRequest = { id: 'request-1' };
+    mocks.outboundRequest = openRequest(60_000);
     render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
     expect(card()).not.toBeInTheDocument();
     expect(
       screen.getByText('You already have an open request — withdraw it to challenge someone else.')
     ).toBeInTheDocument();
+  });
+
+  // The strip reads the request through its expiry and says nobody took it at `expires_at`; the
+  // buttons have to come back then too, not when geo-chat next sends `requests_changed`.
+  it('lets the buttons go once the open request has expired, as the strip does', () => {
+    mocks.outboundRequest = openRequest(-1_000);
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    expect(screen.queryByText(/You already have an open request/)).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Debate now' })[0]).toBeEnabled();
+  });
+
+  // The panel draws no challenge card, so "awaiting a reply" would read as a request waiting on the
+  // viewer. A challenge they sent pauses the other rows the way any ask does in the panel.
+  it('gives the other rows the one-at-a-time reason after a challenge is sent', () => {
+    mocks.challenge = challenge('requester');
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    const others = screen.getAllByRole('button', { name: 'Debate now' });
+    expect(others.length).toBeGreaterThan(0);
+    for (const button of others) {
+      expect(button).toBeDisabled();
+      expect(button).toHaveAttribute('title', 'One request at a time. Cancel yours to ask on another claim.');
+    }
   });
 
   // GEO-2725. Signed out the button is the entry to signing in, so it stays live and opens Privy
@@ -923,7 +990,7 @@ describe('PeopleTab', () => {
         }),
       ],
     ]);
-    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+    render(<PeopleTab onTabChange={mocks.onTabChange} dense />);
 
     expect(screen.getByText('119 positions')).toBeInTheDocument();
     expect(screen.getByText('11 debates')).toBeInTheDocument();
@@ -1160,8 +1227,150 @@ describe('PeopleTab filters', () => {
     ]);
   });
 
+  // GEO-3463. The panel's one Filters button: spaces as pills whose counts say what is left, every
+  // pick narrowing (AND), and a removable chip under search for each thing that is on.
+  describe('in the panel', () => {
+    const openFilters = async () => {
+      fireEvent.click(screen.getByRole('button', { name: /^Filters/ }));
+      return screen.findByRole('dialog', { name: 'Filters' });
+    };
+
+    it('narrows by a space picked in Filters, and shows it as a chip that undoes it', async () => {
+      render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+      const filters = await openFilters();
+      const crypto = within(filters).getByRole('button', { name: /Crypto/ });
+      expect(crypto).toHaveTextContent('1');
+      fireEvent.click(crypto);
+
+      expect(screen.getByText('Arturas')).toBeInTheDocument();
+      expect(screen.queryByText('Vytautas')).not.toBeInTheDocument();
+
+      fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
+      fireEvent.click(await screen.findByRole('button', { name: 'Remove Crypto' }));
+
+      expect(screen.getByText('Vytautas')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Filters' })).toBeInTheDocument();
+    });
+
+    it('counts a second space over the people the first leaves, not over everyone', async () => {
+      // Arturas is active in Crypto and Health, Vytautas in Health only, Ona in Crypto only.
+      mocks.people = [person('user-them', 'Arturas'), person('user-other', 'Vytautas'), person('user-third', 'Ona')];
+      mocks.records.set(
+        PROFILE_THEM,
+        record({
+          positions: 2,
+          debatesArgued: null,
+          claimsBySpace: new Map([
+            ['spacea', 1],
+            ['spaceb', 1],
+          ]),
+          debatesBySpace: new Map(),
+          joinedAt: null,
+        })
+      );
+      mocks.records.set(
+        'profile-user-third',
+        record({
+          positions: 1,
+          debatesArgued: null,
+          claimsBySpace: new Map([['spacea', 1]]),
+          debatesBySpace: new Map(),
+          joinedAt: null,
+        })
+      );
+      render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+      const filters = await openFilters();
+      expect(within(filters).getByRole('button', { name: /Crypto/ })).toHaveTextContent('2');
+      fireEvent.click(within(filters).getByRole('button', { name: /Health/ }));
+
+      // Of the two Health leaves, one is in Crypto too. "Either space" would have said 2.
+      expect(within(filters).getByRole('button', { name: /Crypto/ })).toHaveTextContent('1');
+      fireEvent.click(within(filters).getByRole('button', { name: /Crypto/ }));
+
+      expect(screen.getByText('Arturas')).toBeInTheDocument();
+      expect(screen.queryByText('Vytautas')).not.toBeInTheDocument();
+      expect(screen.queryByText('Ona')).not.toBeInTheDocument();
+    });
+
+    // Full screen's rail reads its picks as any of them; read here as all of them, its two picks
+    // would leave only people active in both.
+    it('keeps its own spaces, apart from the ones picked on full screen', async () => {
+      // Arturas is active in Crypto, Vytautas in Health: nobody is in both.
+      const store = createStore();
+      store.set(debatesHubPeopleSpaceIdsAtom, ['spacea', 'spaceb']);
+
+      render(<PeopleTab onTabChange={mocks.onTabChange} />, store);
+
+      expect(await screen.findByText('Arturas')).toBeInTheDocument();
+      expect(screen.getByText('Vytautas')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Filters' })).toBeInTheDocument();
+      expect(store.get(debatesHubPeopleSpaceIdsAtom)).toEqual(['spacea', 'spaceb']);
+    });
+
+    it('offers Online now, which asks for nobody offline and shows a chip', async () => {
+      render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+      const filters = await openFilters();
+      fireEvent.click(within(filters).getByRole('checkbox', { name: 'Online now' }));
+
+      expect(mocks.useSchedulablePeople).toHaveBeenLastCalledWith(false);
+      expect(screen.getByRole('button', { name: 'Remove Online now' })).toBeInTheDocument();
+    });
+
+    it('shows Clear all only once something is picked, and never for Sort alone', async () => {
+      render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+      const filters = await openFilters();
+      expect(within(filters).queryByRole('button', { name: 'Clear all' })).not.toBeInTheDocument();
+
+      fireEvent.click(within(filters).getByRole('radio', { name: 'A–Z' }));
+      expect(within(filters).queryByRole('button', { name: 'Clear all' })).not.toBeInTheDocument();
+
+      fireEvent.click(within(filters).getByRole('checkbox', { name: 'Online now' }));
+      fireEvent.click(within(filters).getByRole('button', { name: 'Clear all' }));
+      expect(within(filters).getByRole('checkbox', { name: 'Online now' })).toHaveAttribute('aria-checked', 'false');
+      // Sort is not a filter, so clearing leaves it where it was.
+      expect(within(filters).getByRole('radio', { name: 'A–Z' })).toHaveAttribute('aria-checked', 'true');
+    });
+
+    // Preston, 23 Oct: Online first leads and is the default, matches ordering each group.
+    it('opens on Online first, offered first, then Most matches and A–Z', async () => {
+      render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+      const filters = await openFilters();
+      const sorts = within(filters).getAllByRole('radio');
+      expect(sorts.map(option => option.textContent)).toEqual(['Online first', 'Most matches', 'A–Z']);
+      expect(sorts[0]).toHaveAttribute('aria-checked', 'true');
+    });
+
+    it('puts people who can be asked now ahead of someone in a debate by default', () => {
+      mocks.people = [{ ...person('user-other', 'Vytautas'), in_debate: true }, person('user-them', 'Arturas')];
+      render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+      const names = screen.getAllByRole('listitem').map(item => item.textContent ?? '');
+      expect(names.findIndex(text => text.includes('Arturas'))).toBeLessThan(
+        names.findIndex(text => text.includes('Vytautas'))
+      );
+    });
+
+    it('sorts A–Z from Filters', async () => {
+      mocks.people = [person('user-other', 'Vytautas'), person('user-them', 'Arturas')];
+      render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+      const filters = await openFilters();
+      fireEvent.click(within(filters).getByRole('radio', { name: 'A–Z' }));
+
+      const names = screen.getAllByRole('listitem').map(item => item.textContent ?? '');
+      expect(names.findIndex(text => text.includes('Arturas'))).toBeLessThan(
+        names.findIndex(text => text.includes('Vytautas'))
+      );
+    });
+  });
+
   it('narrows the list to people in a picked space, and counts them on the option', async () => {
-    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+    render(<PeopleTab onTabChange={mocks.onTabChange} dense />);
 
     fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
     // One person each, counted over everyone the other filters leave.
@@ -1186,7 +1395,7 @@ describe('PeopleTab filters', () => {
       })
     );
 
-    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+    render(<PeopleTab onTabChange={mocks.onTabChange} dense />);
 
     expect(screen.getByRole('button', { name: /Any space/ })).toBeInTheDocument();
     expect(screen.getByText('Arturas')).toBeInTheDocument();
@@ -1213,7 +1422,7 @@ describe('PeopleTab filters', () => {
     const store = createStore();
     store.set(debatesHubPeopleSpaceIdsAtom, ['spacec']);
 
-    render(<PeopleTab onTabChange={mocks.onTabChange} />, store);
+    render(<PeopleTab onTabChange={mocks.onTabChange} dense />, store);
 
     await waitFor(() => expect(store.get(debatesHubPeopleSpaceIdsAtom)).toEqual([]));
     fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
@@ -1226,7 +1435,7 @@ describe('PeopleTab filters', () => {
     const store = createStore();
     store.set(debatesHubPeopleSpaceIdsAtom, ['spacea']);
 
-    const view = render(<PeopleTab onTabChange={mocks.onTabChange} />, store);
+    const view = render(<PeopleTab onTabChange={mocks.onTabChange} dense />, store);
 
     // The selection survives for reconciliation, but an unverified space cannot narrow the roster,
     // appear on a row, or put itself back into the shared menu through `keepSelectedVisible`.
@@ -1244,7 +1453,7 @@ describe('PeopleTab filters', () => {
     mocks.publishableSpaceIds = new Set(['spacea']);
     view.rerender(
       <Provider store={store}>
-        <PeopleTab onTabChange={mocks.onTabChange} />
+        <PeopleTab onTabChange={mocks.onTabChange} dense />
       </Provider>
     );
 
@@ -1259,7 +1468,7 @@ describe('PeopleTab filters', () => {
     const store = createStore();
     store.set(debatesHubPeopleSpaceIdsAtom, ['spacea']);
 
-    const view = render(<PeopleTab onTabChange={mocks.onTabChange} />, store);
+    const view = render(<PeopleTab onTabChange={mocks.onTabChange} dense />, store);
 
     expect(store.get(debatesHubPeopleSpaceIdsAtom)).toEqual(['spacea']);
     expect(screen.getByRole('button', { name: /Any space/ })).toBeInTheDocument();
@@ -1270,7 +1479,7 @@ describe('PeopleTab filters', () => {
     mocks.peopleError = new Error('Roster unavailable');
     view.rerender(
       <Provider store={store}>
-        <PeopleTab onTabChange={mocks.onTabChange} />
+        <PeopleTab onTabChange={mocks.onTabChange} dense />
       </Provider>
     );
     expect(store.get(debatesHubPeopleSpaceIdsAtom)).toEqual(['spacea']);
@@ -1279,7 +1488,7 @@ describe('PeopleTab filters', () => {
     mocks.peopleError = null;
     view.rerender(
       <Provider store={store}>
-        <PeopleTab onTabChange={mocks.onTabChange} />
+        <PeopleTab onTabChange={mocks.onTabChange} dense />
       </Provider>
     );
 
@@ -1296,7 +1505,7 @@ describe('PeopleTab filters', () => {
   // swallow the "Clear filters" press as an outside-click instead of passing it to the button.
   it('blames the filters rather than the search once a space is picked too', async () => {
     const store = createStore();
-    store.set(debatesHubPeopleSpaceIdsAtom, ['spacea']);
+    store.set(debatesHubPanelPeopleSpaceIdsAtom, ['spacea']);
 
     render(<PeopleTab onTabChange={mocks.onTabChange} />, store);
     fireEvent.change(screen.getByLabelText('Search people'), { target: { value: 'Vytautas' } });
@@ -1308,7 +1517,7 @@ describe('PeopleTab filters', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
     // Both filters are taken back, not just the one named last: the space selection is what the
     // label promises and the search is what the viewer can see in the box.
-    expect(store.get(debatesHubPeopleSpaceIdsAtom)).toEqual([]);
+    expect(store.get(debatesHubPanelPeopleSpaceIdsAtom)).toEqual([]);
     expect((screen.getByLabelText('Search people') as HTMLInputElement).value).toBe('');
   });
 
@@ -1340,7 +1549,7 @@ describe('PeopleTab filters', () => {
       [PROFILE_OTHER, record()],
     ]);
 
-    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+    render(<PeopleTab onTabChange={mocks.onTabChange} dense />);
 
     const row = screen.getByText('Arturas').closest('li') as HTMLElement;
     expect(within(row).getAllByTestId('person-space-icon')).toHaveLength(PERSON_SPACE_ICON_CAP);
@@ -1365,7 +1574,7 @@ describe('PeopleTab filters', () => {
       ],
     ]);
 
-    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+    render(<PeopleTab onTabChange={mocks.onTabChange} dense />);
 
     const row = screen.getByText('Arturas').closest('li') as HTMLElement;
     expect(row.textContent!.indexOf('Active in')).toBeLessThan(row.textContent!.indexOf('On Geo since Jan 2026'));
@@ -1389,7 +1598,7 @@ describe('PeopleTab filters', () => {
     mocks.people = [person('user-them', 'Arturas')];
     mocks.positionsPlaceholderData = true;
 
-    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+    render(<PeopleTab onTabChange={mocks.onTabChange} dense />);
 
     const row = screen.getByText('Arturas').closest('li') as HTMLElement;
     fireEvent.click(within(row).getByRole('button', { name: 'View 1 active space' }));
@@ -1420,7 +1629,7 @@ describe('PeopleTab filters', () => {
       ],
     ]);
 
-    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+    render(<PeopleTab onTabChange={mocks.onTabChange} dense />);
 
     const row = screen.getByText('Arturas').closest('li') as HTMLElement;
     fireEvent.click(within(row).getByRole('button', { name: 'View 1 active space' }));
@@ -1477,7 +1686,7 @@ describe('PeopleTab filters', () => {
       ],
     ]);
 
-    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+    render(<PeopleTab onTabChange={mocks.onTabChange} dense />);
 
     const trigger = screen.getByRole('button', { name: 'View 4 active spaces' });
     fireEvent.click(trigger);
@@ -1497,14 +1706,14 @@ describe('PeopleTab filters', () => {
   });
 
   it('draws nothing at all for somebody in no spaces', () => {
-    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+    render(<PeopleTab onTabChange={mocks.onTabChange} dense />);
 
     const row = screen.getByText('Vytautas').closest('li') as HTMLElement;
     expect(within(row).getAllByTestId('person-space-icon')).toHaveLength(1);
 
     mocks.records = new Map();
     cleanup();
-    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+    render(<PeopleTab onTabChange={mocks.onTabChange} dense />);
 
     const bare = screen.getByText('Vytautas').closest('li') as HTMLElement;
     expect(within(bare).queryByTestId('person-space-icon')).not.toBeInTheDocument();
@@ -1524,7 +1733,7 @@ describe('PeopleTab filters', () => {
       ],
     ]);
 
-    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+    render(<PeopleTab onTabChange={mocks.onTabChange} dense />);
 
     const trigger = screen.getByRole('button', { name: 'View 1 active space' });
     fireEvent.click(trigger);
@@ -1541,7 +1750,7 @@ describe('PeopleTab filters', () => {
     // A remembered selection must not smuggle a disabled space back into `keepSelectedVisible`.
     store.set(debatesHubPeopleSpaceIdsAtom, ['spaceb']);
 
-    render(<PeopleTab onTabChange={mocks.onTabChange} />, store);
+    render(<PeopleTab onTabChange={mocks.onTabChange} dense />, store);
 
     await waitFor(() => expect(store.get(debatesHubPeopleSpaceIdsAtom)).toEqual([]));
 
@@ -1600,7 +1809,7 @@ describe('Online only', () => {
   }
 
   it('is off by default, so offline people are listed alongside online ones', () => {
-    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+    render(<PeopleTab onTabChange={mocks.onTabChange} dense />);
 
     expect(screen.getByRole('switch', { name: 'Online only' })).toHaveAttribute('aria-checked', 'false');
     expect(mocks.useSchedulablePeople).toHaveBeenLastCalledWith(true);
@@ -1613,7 +1822,7 @@ describe('Online only', () => {
       truncated: false,
       people: [schedulable('user-away', 'Ona', [slotIn(26)])],
     };
-    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+    render(<PeopleTab onTabChange={mocks.onTabChange} dense />);
     expect(screen.getByText('Ona')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('switch', { name: 'Online only' }));
@@ -1653,7 +1862,7 @@ describe('Online only', () => {
       truncated: false,
       people: [{ ...schedulable('user-them', 'Arturas', [slotIn(26)]), online: true }],
     };
-    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+    render(<PeopleTab onTabChange={mocks.onTabChange} dense />);
 
     const rows = screen.getAllByRole('listitem');
     expect(within(rows[0]).getByText('Vytautas')).toBeInTheDocument();
@@ -1675,7 +1884,7 @@ describe('Online only', () => {
   ])('draws an away person with a disabled Away pill when %s', (_, overrides) => {
     mocks.people = [{ ...person('user-them', 'Arturas'), away: true, can_challenge: false }];
     mocks.schedulable = { viewer_timezone: 'UTC', truncated: false, people: [], ...overrides };
-    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+    render(<PeopleTab onTabChange={mocks.onTabChange} dense />);
 
     const row = screen.getByRole('listitem');
     expect(within(row).queryByRole('button', { name: 'Schedule a debate with Arturas' })).not.toBeInTheDocument();
@@ -1700,7 +1909,7 @@ describe('Online only', () => {
     mocks.createChallenge.mockImplementation((_request, options) =>
       options.onError(new GeoChatRequestError('away', 'recipient_away', 409))
     );
-    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+    render(<PeopleTab onTabChange={mocks.onTabChange} dense />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Debate now' }));
 
@@ -1711,7 +1920,7 @@ describe('Online only', () => {
 
   it('offers an away person no Schedule with Online only on', () => {
     mocks.people = [{ ...person('user-them', 'Arturas'), away: true, can_challenge: false }];
-    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+    render(<PeopleTab onTabChange={mocks.onTabChange} dense />);
     fireEvent.click(screen.getByRole('switch', { name: 'Online only' }));
 
     const row = screen.getByRole('listitem');
@@ -1773,7 +1982,10 @@ describe('Online only', () => {
       truncated: false,
       people: [{ ...offline, user: { ...offline.user, profile_space_id: ona } }],
     };
-    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+    // Most matches, the sort this is about; the panel opens on Online first.
+    const store = createStore();
+    store.set(debatesHubPeopleSortAtom, 'matches');
+    render(<PeopleTab onTabChange={mocks.onTabChange} />, store);
 
     const onaRow = screen.getByText('Ona').closest('li')!;
     const arturasRow = screen.getByText('Arturas').closest('li')!;
@@ -1806,7 +2018,7 @@ describe('Online only', () => {
       truncated: false,
       people: [schedulable('user-away', 'Ona', [past, ...upcoming])],
     };
-    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+    render(<PeopleTab onTabChange={mocks.onTabChange} dense />);
 
     expect(screen.getAllByRole('button', { name: /^Schedule a debate with Ona / })).toHaveLength(3);
     expect(screen.getByRole('button', { name: 'More times for Ona' })).toBeInTheDocument();
@@ -1835,7 +2047,7 @@ describe('Online only', () => {
         slots: [{ ...picked, viewerIsFree: true }],
       },
     });
-    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+    render(<PeopleTab onTabChange={mocks.onTabChange} dense />);
 
     fireEvent.click(screen.getAllByRole('button', { name: /^Schedule a debate with Ona / })[0]);
 
@@ -1869,7 +2081,7 @@ describe('Online only', () => {
         slots: [{ ...picked, viewerIsFree: true }],
       },
     });
-    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+    render(<PeopleTab onTabChange={mocks.onTabChange} dense />);
 
     const chip = screen.getAllByRole('button', { name: /^Schedule a debate with Ona / })[0];
     expect(chip).toHaveAttribute('data-geo-analytics-intent', 'open_peer_availability');
@@ -1894,13 +2106,23 @@ describe('Online only', () => {
   it('asks the viewer to set availability rather than implying nobody matches', () => {
     mocks.people = [];
     mocks.schedulable = { viewer_timezone: '', viewer_has_schedule: false, truncated: false, people: [] };
-    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+    render(<PeopleTab onTabChange={mocks.onTabChange} dense />);
 
     expect(screen.getByRole('button', { name: 'Set availability' })).toBeInTheDocument();
     // Offline people are listed without hours now (GEO-3154), so it no longer promises them.
     expect(screen.queryByText(/to see offline people/)).not.toBeInTheDocument();
     expect(screen.getByText(/so others can schedule a debate with you/)).toBeInTheDocument();
     expect(screen.queryByText(/at the same times as you/)).not.toBeInTheDocument();
+  });
+
+  // Review, 27 Oct: the panel's no-times line already asks, so the box asked a second time.
+  it('leaves the ask to the panel’s own no-times line', () => {
+    mocks.people = [];
+    mocks.schedulable = { viewer_timezone: '', viewer_has_schedule: false, truncated: false, people: [] };
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    expect(screen.queryByRole('button', { name: 'Set availability' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/so others can schedule a debate with you/)).not.toBeInTheDocument();
   });
 
   it('does not tell a viewer with no hours that their times failed to load', () => {
@@ -1931,7 +2153,7 @@ describe('Online only', () => {
           },
         ],
       };
-      render(<PeopleTab onTabChange={mocks.onTabChange} />);
+      render(<PeopleTab onTabChange={mocks.onTabChange} dense />);
 
       const row = screen.getByRole('listitem');
       expect(within(row).getByRole('button', { name: 'Schedule a debate with Ona' })).toBeInTheDocument();
@@ -1958,7 +2180,7 @@ describe('Online only', () => {
         truncated: false,
         people: [{ ...schedulable('user-away', 'Ona', []), their_windows: [stretch] }],
       };
-      render(<PeopleTab onTabChange={mocks.onTabChange} />);
+      render(<PeopleTab onTabChange={mocks.onTabChange} dense />);
 
       const [chip] = screen.getAllByRole('button', { name: /^Schedule a debate with Ona / });
       fireEvent.click(chip);
@@ -1976,7 +2198,7 @@ describe('Online only', () => {
         // Began an hour ago and runs two more: the chip is the coming half hour.
         people: [{ ...schedulable('user-away', 'Ona', []), their_windows: [windowIn(-1, 6)] }],
       };
-      render(<PeopleTab onTabChange={mocks.onTabChange} />);
+      render(<PeopleTab onTabChange={mocks.onTabChange} dense />);
 
       const began = Date.parse(windowIn(-1, 6).start);
       const next = began + (Math.floor((Date.now() - began) / 1_800_000) + 1) * 1_800_000;
@@ -1997,7 +2219,7 @@ describe('Online only', () => {
         // first 48 half hours are all past, and the stretch is still open.
         people: [{ ...schedulable('user-away', 'Ona', []), their_windows: [windowIn(-25, 60)] }],
       };
-      render(<PeopleTab onTabChange={mocks.onTabChange} />);
+      render(<PeopleTab onTabChange={mocks.onTabChange} dense />);
 
       expect(screen.getAllByRole('button', { name: /^Schedule a debate with Ona / })).toHaveLength(1);
       expect(screen.getByRole('button', { name: 'More times for Ona' })).toBeInTheDocument();
@@ -2011,7 +2233,7 @@ describe('Online only', () => {
         truncated: false,
         people: [{ ...schedulable('user-away', 'Ona', []), their_windows: [windowIn(26, 2)] }],
       };
-      render(<PeopleTab onTabChange={mocks.onTabChange} />);
+      render(<PeopleTab onTabChange={mocks.onTabChange} dense />);
 
       const [chip] = screen.getAllByRole('button', { name: /^Schedule a debate with Ona / });
       expect(chip).toHaveAttribute('data-geo-analytics-label', 'Debate hub Free time');
@@ -2049,7 +2271,7 @@ describe('Online only', () => {
           },
         ],
       };
-      render(<PeopleTab onTabChange={mocks.onTabChange} />);
+      render(<PeopleTab onTabChange={mocks.onTabChange} dense />);
 
       const chips = screen.getAllByRole('button', { name: /^Schedule a debate with Ona / });
       expect(chips).toHaveLength(1);
@@ -2067,7 +2289,7 @@ describe('Online only', () => {
         truncated: false,
         people: [{ ...schedulable('user-away', 'Ona', []), their_windows: [windowIn(25, 1), windowIn(28, 1)] }],
       };
-      render(<PeopleTab onTabChange={mocks.onTabChange} />);
+      render(<PeopleTab onTabChange={mocks.onTabChange} dense />);
 
       const chips = screen.getAllByRole('button', { name: /^Schedule a debate with Ona / });
       expect(chips).toHaveLength(2);
@@ -2165,9 +2387,397 @@ describe('Online only', () => {
       refetch: vi.fn(),
     }));
     const store = createStore();
-    store.set(debatesHubPeopleSpaceIdsAtom, [offlineSpace]);
+    store.set(debatesHubPanelPeopleSpaceIdsAtom, [offlineSpace]);
     render(<PeopleTab onTabChange={mocks.onTabChange} />, store);
 
-    expect(store.get(debatesHubPeopleSpaceIdsAtom)).toEqual([offlineSpace]);
+    expect(store.get(debatesHubPanelPeopleSpaceIdsAtom)).toEqual([offlineSpace]);
+  });
+});
+
+describe('panel row (GEO-3463)', () => {
+  const wire = (at: Date) => at.toISOString().replace('.000Z', 'Z');
+  function slotIn(hours: number) {
+    const start = new Date(Date.now() + hours * 3_600_000);
+    start.setUTCMinutes(start.getUTCMinutes() < 30 ? 0 : 30, 0, 0);
+    return { start: wire(start), end: wire(new Date(start.getTime() + 30 * 60_000)) };
+  }
+  function schedulablePerson(userId: string, name: string, online = false): SchedulablePerson {
+    return {
+      user: { user_id: userId, profile_space_id: `profile-${userId}`, display_name: name, avatar_cid: null },
+      online,
+      slots: [slotIn(26)],
+      truncated: false,
+    };
+  }
+  /** The row, not the sent-request card above the list, which names the person too. */
+  const rowOf = (name: string) =>
+    screen
+      .getAllByText(name)
+      .map(element => element.closest('li'))
+      .find(Boolean)!;
+  /**
+   * By text: role queries find nothing inside this popover's list in jsdom (the matches tests above
+   * read it by text for the same reason), though the button is there.
+   */
+  const debateOnThis = (list: HTMLElement) =>
+    within(list).queryAllByText('Debate on this')[0]?.closest('button') ?? null;
+  const fact = (name: string) => within(rowOf(name)).getByTestId('person-row-fact');
+
+  /** One claim where the viewer agrees and Arturas disagrees. */
+  function oneMatchWithArturas() {
+    const spaceId = '019fedae-72b6-7ab2-927a-df044d57c600';
+    mocks.positionsByClaim = new Map([
+      [
+        'claim-1',
+        [
+          {
+            profileSpaceId: mocks.personalSpaceId!,
+            claimId: 'claim-1',
+            spaceId,
+            responseKind: 'stance',
+            position: true,
+          },
+          {
+            profileSpaceId: PROFILE_SPACE_IDS['user-them'],
+            claimId: 'claim-1',
+            spaceId,
+            responseKind: 'stance',
+            position: false,
+          },
+        ],
+      ],
+    ]);
+    mocks.claimEntities = [claimEntity('claim-1', 'Should we build this?')];
+    return spaceId;
+  }
+
+  /** A challenge the viewer sent to Arturas, by his real profile id, `ms` from expiring. */
+  function askedArturas(ms: number) {
+    const sent = challenge('requester', ms);
+    return { ...sent, recipient: { ...sent.recipient, profile_space_id: PROFILE_SPACE_IDS['user-them'] } };
+  }
+
+  beforeEach(() => {
+    mocks.createRequest.mockReset();
+    mocks.createRequestPending = false;
+    mocks.createRequestVariables = undefined;
+    mocks.matchupBlockedReason = undefined;
+    mocks.matchupError = null;
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.stubGlobal('ResizeObserver', ResizeObserverStub);
+  });
+
+  // 26 Oct: the green dot says "online", so the line is the matches — "No matches" when there are none.
+  it('gives an online person their matches and Debate now, and one with none "No matches"', () => {
+    oneMatchWithArturas();
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    expect(within(fact('Arturas')).getByRole('button', { name: 'View 1 matching claim with Arturas' })).toBeVisible();
+    expect(fact('Vytautas')).toHaveTextContent('No matches');
+    expect(fact('Vytautas')).not.toHaveTextContent('Online now');
+    expect(within(rowOf('Arturas')).getByRole('button', { name: 'Debate now' })).toBeEnabled();
+    // The record moved into the hover card: the row itself carries one fact.
+    expect(within(rowOf('Arturas')).queryByText(/On Geo since/)).not.toBeInTheDocument();
+  });
+
+  it('gives an offline person their next free time and Schedule', async () => {
+    mocks.schedulable = {
+      viewer_timezone: 'UTC',
+      viewer_has_schedule: true,
+      truncated: false,
+      people: [schedulablePerson('user-gone', 'Ona')],
+    };
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    expect(fact('Ona')).toHaveTextContent(/^Free (today|tomorrow|[A-Z][a-z]{2}) \d/);
+    expect(within(rowOf('Ona')).queryByRole('button', { name: 'Debate now' })).not.toBeInTheDocument();
+    // No chips on the panel row: the one time is the fact, the week is behind Schedule.
+    expect(
+      within(rowOf('Ona')).queryByRole('button', { name: /^Schedule a debate with Ona / })
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(within(rowOf('Ona')).getByRole('button', { name: 'Schedule a debate with Ona' }));
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+    expect(mocks.usePeerSchedule).toHaveBeenCalledWith('user-gone');
+  });
+
+  // Someone away off geo-chat's schedulable list has no free time this week, so Schedule would open
+  // an empty week: the pill says Away, as on the full row.
+  it('says when an away person is next free and offers Schedule, or a disabled Away with no week', () => {
+    mocks.people = [
+      { ...person('user-them', 'Arturas'), away: true, can_challenge: false },
+      { ...person('user-other', 'Vytautas'), away: true, can_challenge: false },
+    ];
+    mocks.schedulable = {
+      viewer_timezone: 'UTC',
+      viewer_has_schedule: true,
+      truncated: false,
+      people: [schedulablePerson('user-them', 'Arturas', true)],
+    };
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    expect(fact('Arturas')).toHaveTextContent(/^Away · Free /);
+    expect(fact('Vytautas')).toHaveTextContent(/^Away$/);
+    expect(within(rowOf('Arturas')).getByRole('button', { name: 'Schedule a debate with Arturas' })).toBeEnabled();
+    expect(
+      within(rowOf('Vytautas')).queryByRole('button', { name: 'Schedule a debate with Vytautas' })
+    ).not.toBeInTheDocument();
+    expect(within(rowOf('Vytautas')).getByRole('button', { name: 'Away' })).toBeDisabled();
+  });
+
+  it('keeps the calendar on a row in a debate, beside a disabled In a debate pill', async () => {
+    mocks.people = [{ ...person('user-them', 'Arturas'), in_debate: true }];
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    expect(fact('Arturas')).toHaveTextContent('In a debate');
+    expect(within(rowOf('Arturas')).getByRole('button', { name: 'In a debate' })).toBeDisabled();
+
+    fireEvent.click(within(rowOf('Arturas')).getByRole('button', { name: 'See times for Arturas' }));
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+    expect(mocks.usePeerSchedule).toHaveBeenCalledWith('user-them');
+  });
+
+  it('puts the calendar on every row, online ones included', () => {
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    for (const name of ['Arturas', 'Vytautas']) {
+      expect(within(rowOf(name)).getByRole('button', { name: `See times for ${name}` })).toBeEnabled();
+    }
+  });
+
+  it('counts the ask down on the row that sent it, and pauses every other Debate now', () => {
+    mocks.challenge = askedArturas(72_000);
+    // The panel hands the open ask down from one provider; outside it no row is "the one asked".
+    render(
+      <HubAskProvider>
+        <PeopleTab onTabChange={mocks.onTabChange} />
+      </HubAskProvider>
+    );
+
+    // A timer, not a live region: a status re-announced every second would read the countdown aloud.
+    expect(within(rowOf('Arturas')).getByRole('timer')).toHaveTextContent(/^Requesting · 1:1\d$/);
+    expect(within(rowOf('Arturas')).queryByRole('status')).not.toBeInTheDocument();
+    expect(within(rowOf('Arturas')).queryByRole('button', { name: 'Debate now' })).not.toBeInTheDocument();
+    expect(within(rowOf('Vytautas')).getByRole('button', { name: 'Debate now' })).toBeDisabled();
+    expect(screen.queryByText(/Asking/)).not.toBeInTheDocument();
+  });
+
+  it('sends a claim request for the claim from "Debate on this"', async () => {
+    const spaceId = oneMatchWithArturas();
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'View 1 matching claim with Arturas' }));
+    const list = await screen.findByRole('list', { name: 'Matching claims with Arturas' });
+    fireEvent.click(debateOnThis(list)!);
+
+    expect(mocks.createRequest).toHaveBeenCalledWith({ space_id: spaceId, claim_entity_id: 'claim-1' });
+  });
+
+  // The same blocked reasons and errors as a claim card's offer, rather than a quiet no-op.
+  it('greys "Debate on this" out for an unavailable viewer, and says why', async () => {
+    oneMatchWithArturas();
+    mocks.matchupBlockedReason = 'Switch yourself to available to send a request.';
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'View 1 matching claim with Arturas' }));
+    const list = await screen.findByRole('list', { name: 'Matching claims with Arturas' });
+    expect(debateOnThis(list)!).toBeDisabled();
+  });
+
+  it('shows a refused "Debate on this" in the list', async () => {
+    oneMatchWithArturas();
+    mocks.matchupError = 'Your response is still confirming — try again in a moment.';
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'View 1 matching claim with Arturas' }));
+    const list = await screen.findByRole('list', { name: 'Matching claims with Arturas' });
+    expect(within(list).getByText(/still confirming/)).toBeInTheDocument();
+  });
+
+  // Note from Preston: every row with matches carries the link, before the next-free fact.
+  it('puts the matches link on an offline row too, before when they are next free', async () => {
+    oneMatchWithArturas();
+    mocks.people = [person('user-other', 'Vytautas')];
+    mocks.schedulable = {
+      viewer_timezone: 'UTC',
+      viewer_has_schedule: true,
+      truncated: false,
+      people: [
+        {
+          ...schedulablePerson('user-them', 'Arturas'),
+          user: {
+            user_id: 'user-them',
+            profile_space_id: PROFILE_SPACE_IDS['user-them'],
+            display_name: 'Arturas',
+            avatar_cid: null,
+          },
+        },
+      ],
+    };
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    expect(fact('Arturas')).toHaveTextContent(/^\s*1 match\s*·\s*Free /);
+    fireEvent.click(within(fact('Arturas')).getByRole('button', { name: 'View 1 matching claim with Arturas' }));
+    const list = await screen.findByRole('list', { name: 'Matching claims with Arturas' });
+    // Asking on a claim is for someone online to take; an offline row's list only shows the sides.
+    expect(debateOnThis(list)).not.toBeInTheDocument();
+  });
+
+  it('greys "Debate on this" out while another ask is out', async () => {
+    oneMatchWithArturas();
+    mocks.challenge = challenge('requester');
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'View 1 matching claim with Arturas' }));
+    const list = await screen.findByRole('list', { name: 'Matching claims with Arturas' });
+    expect(debateOnThis(list)!).toBeDisabled();
+  });
+
+  it('offers no "Debate on this" to someone signed out', async () => {
+    oneMatchWithArturas();
+    mocks.authenticated = false;
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    const trigger = screen.queryByRole('button', { name: 'View 1 matching claim with Arturas' });
+    // Signed out there are no viewer positions to match, so the list never opens at all.
+    if (!trigger) return;
+    fireEvent.click(trigger);
+    const list = await screen.findByRole('list', { name: 'Matching claims with Arturas' });
+    expect(debateOnThis(list)).not.toBeInTheDocument();
+  });
+
+  // Review: the panel row opened an empty week on its own after "recipient away" with nothing to book.
+  it('opens no week on "recipient away" when the person has no time to book', () => {
+    mocks.createChallenge.mockImplementation((_request, options) =>
+      options.onError(new GeoChatRequestError('away', 'recipient_away', 409))
+    );
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    fireEvent.click(within(rowOf('Arturas')).getByRole('button', { name: 'Debate now' }));
+
+    expect(mocks.createChallenge).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  // Mockup pass: the prototype's matches list, one tight row per claim, sides in words.
+  it('lists each match with both sides in words and an outlined "Debate on this"', async () => {
+    oneMatchWithArturas();
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'View 1 matching claim with Arturas' }));
+    const list = await screen.findByRole('list', { name: 'Matching claims with Arturas' });
+    expect(within(list).getByText('You: Agree · Arturas: Disagree')).toBeInTheDocument();
+    expect(debateOnThis(list)!).toHaveClass('border', 'bg-white');
+  });
+
+  // Mockup pass: row separators are the divider tone, and the row's pills grow to 32px on phones.
+  it('draws the panel row with the divider separator and phone-height pills', () => {
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    expect(rowOf('Arturas')).toHaveClass('border-divider');
+    expect(within(rowOf('Arturas')).getByRole('button', { name: 'Debate now' })).toHaveClass('md:h-8');
+  });
+
+  describe('profile card', () => {
+    function canHover(matches: boolean) {
+      vi.stubGlobal(
+        'matchMedia',
+        vi.fn(() => ({ matches, addEventListener: vi.fn(), removeEventListener: vi.fn() }))
+      );
+    }
+    const nameOf = (name: string) => screen.getByRole('link', { name });
+
+    it('opens on a resting mouse with status, record, spaces and Follow, and closes on leave', async () => {
+      canHover(true);
+      mocks.records = new Map([
+        [
+          PROFILE_SPACE_IDS['user-them'],
+          record({ positions: 48, debatesArgued: 12, claimsBySpace: new Map([['spacea', 3]]) }),
+        ],
+        // Spaces are only drawn once every row's activity has answered.
+        [PROFILE_SPACE_IDS['user-other'], record()],
+      ]);
+      mocks.spaceLabels = new Map([['spacea', { name: 'US Politics', image: null }]]);
+      render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+      fireEvent.pointerEnter(nameOf('Arturas'), { pointerType: 'mouse' });
+      const hoverCard = await screen.findByRole('dialog', { name: 'About Arturas' });
+      expect(hoverCard).toHaveTextContent('Online now');
+      expect(hoverCard).toHaveTextContent('12 debates');
+      expect(hoverCard).toHaveTextContent('48 positions');
+      expect(hoverCard).toHaveTextContent('Active in US Politics');
+      expect(within(hoverCard).getByTestId('follow')).toHaveAttribute('data-variant', 'compact');
+
+      fireEvent.pointerLeave(nameOf('Arturas'), { pointerType: 'mouse' });
+      await waitFor(() => expect(screen.queryByRole('dialog', { name: 'About Arturas' })).not.toBeInTheDocument());
+    });
+
+    it('never opens on touch', async () => {
+      canHover(false);
+      render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+      fireEvent.pointerEnter(nameOf('Arturas'), { pointerType: 'touch' });
+      await new Promise(resolve => setTimeout(resolve, 400));
+      expect(screen.queryByRole('dialog', { name: 'About Arturas' })).not.toBeInTheDocument();
+    });
+
+    // Review: a click on the name left a pending open running, so the card opened over the next page.
+    it('drops a pending open when the name is clicked', async () => {
+      canHover(true);
+      render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+      fireEvent.pointerEnter(nameOf('Arturas'), { pointerType: 'mouse' });
+      fireEvent.click(nameOf('Arturas'));
+      await new Promise(resolve => setTimeout(resolve, 400));
+      // Queried directly: after the click the card would sit outside the accessible tree, which a role
+      // query would read as "not open" either way.
+      expect(document.querySelector('[aria-label="About Arturas"]')).toBeNull();
+    });
+
+    it('waits for the pointer to stop moving before it opens', async () => {
+      canHover(true);
+      render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+      fireEvent.pointerEnter(nameOf('Arturas'), { pointerType: 'mouse' });
+      await new Promise(resolve => setTimeout(resolve, 200));
+      fireEvent.pointerMove(nameOf('Arturas'), { pointerType: 'mouse' });
+      await new Promise(resolve => setTimeout(resolve, 200));
+      expect(screen.queryByRole('dialog', { name: 'About Arturas' })).not.toBeInTheDocument();
+      expect(await screen.findByRole('dialog', { name: 'About Arturas' })).toBeInTheDocument();
+    });
+
+    // Review: the pointer slipping off the name and straight back left the close running, and the
+    // card shut under it.
+    it('stays open when the pointer comes back to the name inside the grace', async () => {
+      canHover(true);
+      render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+      fireEvent.pointerEnter(nameOf('Arturas'), { pointerType: 'mouse' });
+      await screen.findByRole('dialog', { name: 'About Arturas' });
+
+      fireEvent.pointerLeave(nameOf('Arturas'), { pointerType: 'mouse' });
+      await new Promise(resolve => setTimeout(resolve, 50));
+      fireEvent.pointerEnter(nameOf('Arturas'), { pointerType: 'mouse' });
+      await new Promise(resolve => setTimeout(resolve, 250));
+
+      // Queried directly: once the pointer has left, jsdom's popper hides the wrapper, which a role
+      // query would read as "not open" either way.
+      expect(document.querySelector('[aria-label="About Arturas"]')).toHaveAttribute('data-state', 'open');
+    });
+
+    it('stays shut while the matches list is open', async () => {
+      canHover(true);
+      oneMatchWithArturas();
+      render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+      fireEvent.click(screen.getByRole('button', { name: 'View 1 matching claim with Arturas' }));
+      await screen.findByRole('list', { name: 'Matching claims with Arturas' });
+      fireEvent.pointerEnter(nameOf('Arturas'), { pointerType: 'mouse' });
+      await new Promise(resolve => setTimeout(resolve, 400));
+      expect(screen.queryByRole('dialog', { name: 'About Arturas' })).not.toBeInTheDocument();
+    });
   });
 });

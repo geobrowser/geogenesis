@@ -22,6 +22,7 @@ export const ACTION_COMPONENTS = [
   'bounty_interest',
   'debate_matchmaking',
   'scheduled_debate_notice',
+  'debate_room',
   'search',
   'ai_assistant',
   'create_space',
@@ -31,7 +32,9 @@ export const ACTION_COMPONENTS = [
   'debate_end_card',
   'debate_claims_panel',
   'topic_follow_button',
+  'onboarding_customize_feed',
   'person_follow_button',
+  'debate_claim_card',
 ] as const;
 export type ActionComponent = (typeof ACTION_COMPONENTS)[number];
 export type ActionKind =
@@ -54,11 +57,14 @@ export type ActionKind =
   | 'join_debate'
   | 'running_late'
   | 'cant_make_it'
+  | 'no_time_works'
+  | 'nudge'
   | 'search'
   | 'search_result'
   | 'assistant_message'
   | 'assistant_option'
-  | 'create_space';
+  | 'create_space'
+  | 'filter_claims';
 export type ActionContext = {
   component: ActionComponent;
   page_path: string;
@@ -108,6 +114,33 @@ export type ActionContext = {
    * a vote an email's vote link cast, and on that vote again when a device vote is saved later.
    */
   ref_email?: string;
+  /**
+   * GEO-3495. The graph entity a list was built from, when `list_id` names a kind of list rather than
+   * one list: a lobby's curated claim list page.
+   */
+  list_entity_id?: string;
+  /**
+   * GEO-3495. The section of the list the item sits in, as an id: on Today's claims the agenda's data
+   * block (its section); on a lobby's curated list, the card's section.
+   */
+  list_section_id?: string;
+  /**
+   * GEO-3495. The Debate agenda a claim was listed on and its date (YYYY-MM-DD, New York). Set by the
+   * Today's claims lists (GEO-3489, GEO-3490, GEO-3491); nothing on master sets them yet.
+   */
+  agenda_id?: string;
+  agenda_date?: string;
+  /**
+   * GEO-3495. On Today's claims, how many times the claim had been debated since its agenda listing,
+   * which orders debated claims below undebated ones. A count only; dropped unless a finite number.
+   */
+  debated_since_listing?: number;
+  /** GEO-3495. Whether the list was narrowed by a search, never what was searched. */
+  list_searched?: boolean;
+  /** GEO-3495. The in-room picker session the action was taken in (geo-chat's rematch session id). */
+  rematch_session_id?: string;
+  /** GEO-3495. On a `filter_claims` toggle: whether the space or topic was picked or let go. */
+  filter_selected?: boolean;
 };
 export const ACTION_CONTEXT_FIELDS = [
   'component',
@@ -139,6 +172,14 @@ export const ACTION_CONTEXT_FIELDS = [
   'lobby_id',
   'room_vote_id',
   'ref_email',
+  'list_entity_id',
+  'list_section_id',
+  'agenda_id',
+  'agenda_date',
+  'debated_since_listing',
+  'list_searched',
+  'rematch_session_id',
+  'filter_selected',
   'auth_attempt_id',
   'action_session_id',
   'action_anonymous_id',
@@ -260,6 +301,7 @@ export function snapshotActionContext(
   return Object.fromEntries(
     ACTION_CONTEXT_FIELDS.flatMap(key => {
       const value = context[key];
+      if (key === 'debated_since_listing' && !(typeof value === 'number' && Number.isFinite(value))) return [];
       return value === undefined ? [] : [[key, Array.isArray(value) ? [...value] : value]];
     })
   ) as ActionContext;

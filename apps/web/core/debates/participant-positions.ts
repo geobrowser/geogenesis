@@ -230,7 +230,9 @@ export function participantSidesOn(
   spaceId: string,
   participants: DebateRematchParticipant[]
 ) {
-  const rows = positionsByClaim.get(claimId) ?? [];
+  // The graph, geo-chat, and pending responses can use different spellings of the same claim id.
+  // Merge matching groups so an optimistic row cannot hide the other participant's indexed side.
+  const rows = [...positionsByClaim].flatMap(([id, rows]) => (sameId(id, claimId) ? rows : []));
   return participants.map(participant => {
     const row = rows.find(
       position => sameId(position.profileSpaceId, participant.profile_space_id) && sameId(position.spaceId, spaceId)

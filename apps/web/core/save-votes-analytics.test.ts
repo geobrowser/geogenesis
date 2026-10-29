@@ -1,7 +1,28 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type AuthAttempt, type AuthAttemptOutcome, authProperties } from './auth-attempt';
-import { saveVotesSignIn, saveVotesSignInProperties } from './save-votes-analytics';
+import { captureSaveVotesImpression, saveVotesSignIn, saveVotesSignInProperties } from './save-votes-analytics';
+
+const capture = vi.hoisted(() => vi.fn());
+vi.mock('./analytics', () => ({ capture }));
+beforeEach(() => capture.mockReset());
+
+describe('captureSaveVotesImpression', () => {
+  it('records the first feed ask with one local vote using the existing impression event', () => {
+    captureSaveVotesImpression('threshold', 1);
+
+    expect(capture).toHaveBeenCalledOnce();
+    expect(capture).toHaveBeenCalledWith(
+      'component_impression',
+      expect.objectContaining({
+        component: 'save_votes_prompt',
+        prompt_reason: 'threshold',
+        local_vote_count: 1,
+        presentation_instance_id: expect.any(String),
+      })
+    );
+  });
+});
 
 const attempt = (outcome?: AuthAttemptOutcome, auth_intent = 'save_votes'): AuthAttempt => ({
   id: 'attempt',

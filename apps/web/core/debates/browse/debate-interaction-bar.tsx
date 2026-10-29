@@ -4,22 +4,12 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import type { ResponseKind } from '~/core/responses/entity-response';
-
-import { Warning } from '~/design-system/icons/warning';
 import { Text } from '~/design-system/text';
 
-import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
-
 import { Comment, Share } from './icons';
-import { CIRCLE_ACTION_CLASS, PILL_ACTION_CLASS } from './pill-action';
+import { PILL_ACTION_CLASS } from './pill-action';
 
 type InteractionBarProps = {
-  orientation: 'vertical' | 'horizontal';
-  /** Tighten horizontal pills for constrained card surfaces without changing their actions. */
-  compact?: boolean;
-  entityId: string;
-  spaceId: string;
   commentCount: number;
   onComment: () => void;
   /**
@@ -31,40 +21,20 @@ type InteractionBarProps = {
    */
   commentsPanelOpen?: boolean;
   /**
-   * Claims and Share are omitted together while a surface is still resolving its debate — the
-   * explore card renders the bar before the geo-chat lookups land, and neither control can act
-   * without a debate to act on.
+   * Omitted while a surface is still resolving its debate — the explore card renders the bar before
+   * the geo-chat lookups land, and Share cannot act without a debate to act on.
    */
-  claimsCount?: number;
-  onClaims?: () => void;
   onShare?: () => void;
   shareOpen?: boolean;
-  /**
-   * What kind of response the vote control records, or `'infer'` to let `EntityVoteButtons` read
-   * it off the entity.
-   *
-   * Not just a kind: naming one skips that component's entity lookup, and with it
-   * `resolveEntitySpaceId`, which is what diverts counts and votes to the space an entity actually
-   * lives in when the surface is listing it from somewhere else (GEO-2660). The full-screen feed
-   * only ever shows a space its own debates, so it keeps the cheaper fixed kind. An explore card
-   * can be a data block row listing a debate from another space, where the fixed kind reads that
-   * row's votes against the listing space and finds none — so it asks for the lookup.
-   *
-   * A debate infers to `'curation'` either way, so this changes which space is read, not what the
-   * control looks like.
-   */
-  responseKind?: ResponseKind | 'infer';
   /**
    * The debate's overflow menu, drawn last. Its host decides what is in it and whether it is drawn
    * at all — today only the full-screen feed's Remove debate (GEO-2785), for the few who may.
    */
   overflow?: React.ReactNode;
-  /** Passed to `EntityVoteButtons`: whether the bar is near enough to the viewport to load counts. */
-  nearViewport?: boolean;
   className?: string;
 };
 
-type DebateActionKind = 'comments' | 'claims' | 'share';
+type DebateActionKind = 'comments' | 'share';
 
 function debateActionAnalyticsProps(actionKind: DebateActionKind) {
   return {
@@ -74,95 +44,28 @@ function debateActionAnalyticsProps(actionKind: DebateActionKind) {
 }
 
 /**
- * The upvote/downvote/comment/claims/share bar beside each debate. Entity votes
- * use the same persisted response path as gallery and entity-page vote controls.
+ * The debate's own actions on its card: comments and share. They sit at the end of the claim's
+ * Agree/Disagree row (`DebateClaimFooter`), which replaced the debate's up/down vote (GEO-3454).
  *
  * Shared by both renditions of a debate — the full-screen feed and the explore card — so the two
- * present the same score, counts and controls rather than two spellings of them (GEO-2912).
+ * present the same counts and controls rather than two spellings of them (GEO-2912).
  */
 export function DebateInteractionBar({
-  orientation,
-  compact = false,
-  entityId,
-  spaceId,
   commentCount,
   commentsPanelOpen,
-  claimsCount,
   onComment,
-  onClaims,
   onShare,
   shareOpen,
-  responseKind = 'curation',
   overflow,
-  nearViewport,
   className,
 }: InteractionBarProps) {
-  // Defined at all means comments open in the app's global panel rather than in one this bar's
-  // host owns, which is what makes this control one of that panel's openers. Named once so the two
-  // orientations below can't disagree about what the prop means.
-  const opensGlobalCommentsPanel = commentsPanelOpen !== undefined;
-
-  // The counts are said, not just shown. `aria-label` replaces a control's visible text for a
-  // screen reader, and the visible text on these two is the number — so labelling them "Comments"
-  // and "Claims" is the one reading that drops the thing they are there to report. Counted the way
-  // `EntityCommentsButton` counts, which is the control the explore card used before this one.
-  const voteResponseKind = responseKind === 'infer' ? undefined : responseKind;
-
+  // The count is said, not just shown. `aria-label` replaces a control's visible text for a screen
+  // reader, and the visible text here is the number — so labelling it "Comments" is the one reading
+  // that drops the thing it is there to report. Counted the way `EntityCommentsButton` counts.
   const commentsLabel = `Comments (${commentCount})`;
-  const claimsLabel = `Claims (${claimsCount ?? 0})`;
-
-  if (orientation === 'vertical') {
-    return (
-      <div className={cx('flex w-9 flex-col items-center gap-3', className)}>
-        <EntityVoteButtons
-          entityId={entityId}
-          spaceId={spaceId}
-          responseKind={voteResponseKind}
-          presentation="debate-vertical"
-          nearViewport={nearViewport}
-        />
-        <CircleAction
-          label={String(commentCount)}
-          onClick={onComment}
-          icon={<Comment />}
-          ariaLabel={commentsLabel}
-          actionKind="comments"
-          open={commentsPanelOpen}
-          commentsPanelOpener={opensGlobalCommentsPanel}
-        />
-        {onClaims && (
-          <CircleAction
-            label={String(claimsCount ?? 0)}
-            onClick={onClaims}
-            icon={<Warning />}
-            ariaLabel={claimsLabel}
-            actionKind="claims"
-          />
-        )}
-        {onShare && (
-          <CircleAction
-            label="Share"
-            onClick={onShare}
-            icon={<Share />}
-            ariaLabel="Share debate"
-            actionKind="share"
-            expanded={shareOpen}
-          />
-        )}
-        {overflow}
-      </div>
-    );
-  }
 
   return (
-    <div className={cx('flex w-full items-center gap-2', className)}>
-      <EntityVoteButtons
-        entityId={entityId}
-        spaceId={spaceId}
-        responseKind={voteResponseKind}
-        presentation="debate-horizontal"
-        nearViewport={nearViewport}
-      />
+    <div className={cx('flex items-center gap-2 md:gap-1', className)}>
       <PillAction
         onClick={onComment}
         icon={<Comment />}
@@ -170,19 +73,10 @@ export function DebateInteractionBar({
         ariaLabel={commentsLabel}
         actionKind="comments"
         open={commentsPanelOpen}
-        commentsPanelOpener={opensGlobalCommentsPanel}
-        compact={compact}
+        // Defined at all means comments open in the app's global panel rather than in one this
+        // bar's host owns, which is what makes this control one of that panel's openers.
+        commentsPanelOpener={commentsPanelOpen !== undefined}
       />
-      {onClaims && (
-        <PillAction
-          onClick={onClaims}
-          icon={<Warning />}
-          label={String(claimsCount ?? 0)}
-          ariaLabel={claimsLabel}
-          actionKind="claims"
-          compact={compact}
-        />
-      )}
       {onShare && (
         <PillAction
           onClick={onShare}
@@ -191,8 +85,12 @@ export function DebateInteractionBar({
           ariaLabel="Share debate"
           actionKind="share"
           expanded={shareOpen}
-          compact={compact}
-          hideLabel={compact}
+          // The row shares its width with Agree and Disagree, whose labels are the ones that must
+          // stay whole. Read against the row's own container, not the viewport: the same card is a
+          // 320px explore column and a 640px full-screen one. A labelled Share is ~48px wider, which
+          // a row of comments and share has room for above 400px, and one with the "…" only above
+          // ~408px — so that one gives its label up sooner.
+          collapsesLabel={overflow ? 'wide' : 'compact'}
         />
       )}
       {overflow}
@@ -200,7 +98,7 @@ export function DebateInteractionBar({
   );
 }
 
-function CircleAction({
+function PillAction({
   label,
   icon,
   onClick,
@@ -209,6 +107,7 @@ function CircleAction({
   expanded,
   open,
   commentsPanelOpener,
+  collapsesLabel,
 }: {
   label: string;
   icon: React.ReactNode;
@@ -229,57 +128,11 @@ function CircleAction({
   // See {@link InteractionBarProps.commentsPanelOpen}: marks this button to the global comments
   // panel as one of its openers.
   commentsPanelOpener?: boolean;
-}) {
-  return (
-    <div className="flex flex-col items-center gap-1">
-      <button
-        type="button"
-        {...debateActionAnalyticsProps(actionKind)}
-        aria-label={ariaLabel}
-        aria-haspopup={expanded === undefined ? undefined : 'dialog'}
-        aria-expanded={expanded ?? open}
-        data-entity-comments-opener={commentsPanelOpener ? '' : undefined}
-        onClick={onClick}
-        className={CIRCLE_ACTION_CLASS}
-      >
-        {icon}
-      </button>
-      <Text as="span" variant="tag" color="grey-04" className="tabular-nums">
-        {label}
-      </Text>
-    </div>
-  );
-}
-
-function PillAction({
-  label,
-  icon,
-  onClick,
-  ariaLabel,
-  actionKind,
-  expanded,
-  open,
-  commentsPanelOpener,
-  compact = false,
-  hideLabel = false,
-  className,
-}: {
-  label: string;
-  icon: React.ReactNode;
-  onClick: () => void;
-  ariaLabel: string;
-  /** Stable analytics dimension; unlike the accessible label it deliberately excludes live counts. */
-  actionKind: DebateActionKind;
-  // See {@link CircleAction}: announces the dialog and its open state when this button opens one.
-  expanded?: boolean;
-  // See {@link CircleAction}.
-  open?: boolean;
-  // See {@link CircleAction}.
-  commentsPanelOpener?: boolean;
-  compact?: boolean;
-  /** Keep an icon-only action when its accessible label already communicates the action. */
-  hideLabel?: boolean;
-  className?: string;
+  /**
+   * Drop to the icon alone in a narrow container; the accessible label still names the action.
+   * `'wide'` for a row that also carries the "…", which needs the room sooner.
+   */
+  collapsesLabel?: 'compact' | 'wide';
 }) {
   return (
     <button
@@ -292,16 +145,28 @@ function PillAction({
       onClick={onClick}
       className={cx(
         PILL_ACTION_CLASS,
-        compact && hideLabel ? 'size-7 justify-center px-0' : compact ? 'gap-1 px-1.5' : 'gap-1.5 px-2.5',
-        className
+        'gap-1.5 px-2.5',
+        // Keep the count in the accessible label when a narrow phone card needs icon-only actions.
+        actionKind === 'comments' &&
+          'md:gap-1 md:px-1.5 md:@max-[300px]/debate-actions:size-7 md:@max-[300px]/debate-actions:justify-center md:@max-[300px]/debate-actions:px-0',
+        collapsesLabel === 'compact' && '@max-[400px]:size-7 @max-[400px]:justify-center @max-[400px]:px-0',
+        collapsesLabel === 'wide' && '@max-[420px]:size-7 @max-[420px]:justify-center @max-[420px]:px-0'
       )}
     >
       <span className="text-text">{icon}</span>
-      {!hideLabel ? (
-        <Text as="span" variant="metadataMedium" color="text" className="tabular-nums">
-          {label}
-        </Text>
-      ) : null}
+      <Text
+        as="span"
+        variant="metadataMedium"
+        color="text"
+        className={cx(
+          'tabular-nums',
+          actionKind === 'comments' && 'md:@max-[300px]/debate-actions:hidden',
+          collapsesLabel === 'compact' && '@max-[400px]:hidden',
+          collapsesLabel === 'wide' && '@max-[420px]:hidden'
+        )}
+      >
+        {label}
+      </Text>
     </button>
   );
 }

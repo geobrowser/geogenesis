@@ -27,6 +27,9 @@ describe('feature flags', () => {
     // shipped state rather than a developer convenience — see the explore-page test.
     expect(defaultFeatureFlags.exploreSidePanel).toBe(false);
     expect(defaultFeatureFlags.lobbyHosting).toBe(false);
+    expect(defaultFeatureFlags.todaysClaims).toBe(false);
+    expect(defaultFeatureFlags.spaceCalls).toBe(false);
+    expect(defaultFeatureFlags.callRecording).toBe(false);
     expect(defaultFeatureFlags.debateDeviceSwitchRecording).toBe(false);
     expect(defaultFeatureFlags.googleSignIn).toBe(false);
     expect(defaultFeatureFlags.googleCalendar).toBe(false);
@@ -40,6 +43,9 @@ describe('feature flags', () => {
       exploreSidePanel: false,
       forYouFeed: false,
       lobbyHosting: false,
+      todaysClaims: false,
+      spaceCalls: false,
+      callRecording: false,
       debateDeviceSwitchRecording: false,
       googleSignIn: false,
       googleCalendar: false,
@@ -70,6 +76,9 @@ describe('feature flags', () => {
       exploreSidePanel: false,
       forYouFeed: false,
       lobbyHosting: false,
+      todaysClaims: false,
+      spaceCalls: false,
+      callRecording: false,
       debateDeviceSwitchRecording: false,
       googleSignIn: false,
       googleCalendar: false,
@@ -101,6 +110,9 @@ describe('feature flags', () => {
       exploreSidePanel: false,
       forYouFeed: false,
       lobbyHosting: false,
+      todaysClaims: false,
+      spaceCalls: false,
+      callRecording: false,
       debateDeviceSwitchRecording: false,
       googleSignIn: false,
       googleCalendar: false,

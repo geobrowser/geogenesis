@@ -9,7 +9,6 @@ import { motion } from 'framer-motion';
 import Link from 'next/link';
 
 import { useActionContext } from '~/core/action-context-provider';
-import { ClaimEndSlot } from '~/core/claims/browse/claim-end-slot';
 import { viewerResponseWithIndexedFallback } from '~/core/claims/browse/claim-position-summaries';
 import { CLAIM_RESPONSE_OBJECT_TYPE, useClaimResponseSummary } from '~/core/claims/browse/claim-response-summary';
 import { ClaimSummary, ControversialTag } from '~/core/claims/browse/claim-summary';
@@ -59,10 +58,12 @@ import type {
 } from '../api';
 import { useGeoChatAuth } from '../hooks';
 import {
+  type DebateActionAnalyticsSurface,
   type DebateAnalyticsAttributes,
   type DebateAnalyticsSurface,
   debateActionAnalyticsAttributes,
 } from './hub-analytics';
+import { CardEndSlot, otherSideHeld } from './hub-claim-end-slot';
 import { hubCardMotion } from './hub-motion';
 import { useHubScrollSelector } from './hub-scroll';
 
@@ -127,6 +128,8 @@ type Props = {
    * button that says the same word.
    */
   noteFor?: (position: boolean) => React.ReactNode;
+  /** False in the claim picker, where a named opponent's position replaces the faces. */
+  showParticipants?: boolean;
   /**
    * Leaves the end slot out.
    *
@@ -214,6 +217,7 @@ export function MatchmakingClaimCard({
   headerMeta,
   footer,
   noteFor,
+  showParticipants,
   onOpenClaim,
   viewerIdentityPending,
   viewerResponseUnknown,
@@ -266,6 +270,7 @@ export function MatchmakingClaimCard({
       {isOnGraph ? (
         <RespondableControls
           noteFor={noteFor}
+          showParticipants={showParticipants}
           claim={claim}
           positions={positions}
           readiness={readiness}
@@ -287,6 +292,8 @@ export function MatchmakingClaimCard({
         />
       ) : (
         <UnresolvableControls
+          noteFor={noteFor}
+          showParticipants={showParticipants}
           positions={positions}
           readiness={readiness}
           analyticsSurface={analyticsSurface}
@@ -362,11 +369,13 @@ function ClaimHeader({
 
   return (
     <>
-      {/* `items-start` so the chip stays put when the slot stacks a blocked reason beneath it. No
-          reserved height: the slot is now the height of the chip beside it, so the row does not grow
-          when the match lookup answers. */}
-      <div className="claim-card-panel-header">
-        <span className="flex min-w-0 items-center gap-1.5">
+      {/* On one text baseline, not centred: the space (11px), Controversial (14px) and the slot's
+          Schedule (13px) are three sizes, and centring their boxes left each sitting at a different
+          height (27 Oct). The baseline is also what keeps the chip on the slot's first line when the
+          slot stacks a blocked reason under it. Here rather than in the utility, which Explore's
+          meta row also uses: Tailwind emits `items-baseline` after it, so this wins. */}
+      <div className="claim-card-panel-header items-baseline">
+        <span className="flex min-w-0 items-baseline gap-1.5" data-testid="claim-card-eyebrow">
           <SpaceChip spaceId={claim.space_id} />
           {isControversial ? <ControversialTag /> : null}
           {meta ? (
@@ -661,7 +670,7 @@ export function useClaimPositionControl({
 
   /**
    * A signed-out press (GEO-3214). The side is kept on this device and drawn as the visitor's at
-   * once, with no sign-in in the way; the save sheet asks for an account once they have a few. It
+   * once, with no sign-in in the way; the save sheet asks for an account after their first vote. It
    * replaced opening Privy's dialog at the press, which about half of visitors closed.
    */
   const voteOnThisDevice = (position: boolean) =>
@@ -786,6 +795,7 @@ function RespondableControls({
   headerMeta,
   hasFooter,
   noteFor,
+  showParticipants,
   analyticsSurface,
 }: {
   claim: DebateClaimSummary;
@@ -808,6 +818,7 @@ function RespondableControls({
   readResponses?: boolean;
   /** See {@link Props.noteFor}. */
   noteFor?: (position: boolean) => React.ReactNode;
+  showParticipants?: boolean;
   onOpenClaim?: () => void;
   viewerIdentityPending?: boolean;
   viewerResponseUnknown?: boolean;
@@ -964,10 +975,11 @@ function RespondableControls({
         endSlot={
           endSlot ??
           (hideEndSlot ? null : (
-            <ClaimEndSlot
-              claimId={claim.claim_entity_id}
-              spaceId={claim.space_id}
+            <CardEndSlot
+              claim={claim}
               activeDebate={activeDebate}
+              otherSideHeld={otherSideHeld(optimisticPositions, viewerPosition)}
+              analyticsSurface={analyticsSurface}
               // `undefined` until the reads have landed, so a card that cannot yet say which side
               // the viewer holds does not read as saying they hold none.
               viewerPosition={sideKnown ? viewerPosition : undefined}
@@ -988,6 +1000,7 @@ function RespondableControls({
         pending={isResponseSubmitting}
         titleFor={actionTitle}
         noteFor={noteFor}
+        showParticipants={showParticipants}
         localSide={localVoteSide}
         analyticsSurface={analyticsSurface}
       />
@@ -1163,6 +1176,8 @@ function UnresolvableControls({
   endSlot,
   headerMeta,
   analyticsSurface,
+  noteFor,
+  showParticipants,
 }: {
   claim: DebateClaimSummary;
   positions: DebateClaimPositionSummary[];
@@ -1173,6 +1188,8 @@ function UnresolvableControls({
   hideEndSlot?: boolean;
   endSlot?: React.ReactNode;
   headerMeta?: React.ReactNode;
+  noteFor?: (position: boolean) => React.ReactNode;
+  showParticipants?: boolean;
 }) {
   return (
     <>
@@ -1195,10 +1212,11 @@ function UnresolvableControls({
              is not the safe direction to be wrong in. */
           endSlot ??
           (hideEndSlot ? null : (
-            <ClaimEndSlot
-              claimId={claim.claim_entity_id}
-              spaceId={claim.space_id}
+            <CardEndSlot
+              claim={claim}
               activeDebate={activeDebate}
+              otherSideHeld={otherSideHeld(positions, readiness.viewer_response?.position)}
+              analyticsSurface={analyticsSurface}
               // No response control here, so there is no optimistic side to read — geo-chat's is
               // the only answer this card has about where the viewer stands, and where it is silent
               // this card genuinely does not know. Not `?? null`: on the Matches tab this readiness
@@ -1213,6 +1231,8 @@ function UnresolvableControls({
         positions={positions}
         responseKind={CLAIM_RESPONSE_KIND}
         viewerPosition={readiness.viewer_response?.position ?? null}
+        noteFor={noteFor}
+        showParticipants={showParticipants}
       />
       <div className="mt-3">
         <Text as="span" variant="footnote" color="grey-04">
@@ -1234,6 +1254,7 @@ export function PositionRow({
   noteFor,
   localSide = null,
   endSlot,
+  endSlotWraps,
   showParticipants = true,
   analyticsSurface,
 }: {
@@ -1268,6 +1289,15 @@ export function PositionRow({
   /** A compact third action, kept beside both positions at narrow and wide card widths. */
   endSlot?: React.ReactNode;
   /**
+   * Let the end slot drop to its own line under the pills when the row is too narrow for all three.
+   * For an end slot wider than one compact action — the debate card's comments and share, which
+   * would otherwise squeeze the labels to "Dis..." — at the width that end slot needs:
+   * `claim-row-end-inline` for those two, `claim-row-wide-end-inline` with the debate's "…" as well.
+   * Phones keep these actions inline with tighter pills and icon-only supporting actions.
+   * The claim list leaves it off and keeps its three columns.
+   */
+  endSlotWraps?: 'compact' | 'wide';
+  /**
    * False to leave the ready-to-debate faces out of the pills.
    *
    * Those faces are the people standing ready to argue each side — a matchmaking fact. On a surface
@@ -1276,11 +1306,12 @@ export function PositionRow({
    */
   showParticipants?: boolean;
   /** Names the two pills for click analytics: "<surface> Claim card agree" / "… disagree". */
-  analyticsSurface?: DebateAnalyticsSurface;
+  analyticsSurface?: DebateActionAnalyticsSurface;
 }) {
   const copy = CLAIM_RESPONSE_COPY;
   const forSide = showParticipants ? positions.find(position => position.position === true) : undefined;
   const againstSide = showParticipants ? positions.find(position => position.position === false) : undefined;
+  const compactMobileActions = Boolean(endSlot && endSlotWraps);
 
   // Two across where there is room for both labels whole, stacked where there is not.
   //
@@ -1296,11 +1327,18 @@ export function PositionRow({
   // run out of room. Keep that row three columns at every card width instead of letting the nested
   // PositionRow stack while the comments pill remains stranded beside it.
   return (
-    <div className="@container">
+    <div className={compactMobileActions ? '@container/debate-actions' : '@container'}>
       <div
         className={cx(
           'grid gap-2',
-          endSlot ? 'grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]' : 'grid-cols-1 claim-pills-wide:grid-cols-2'
+          !endSlot
+            ? 'grid-cols-1 claim-pills-wide:grid-cols-2'
+            : endSlotWraps === 'compact'
+              ? 'grid-cols-2 claim-row-end-inline:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]'
+              : endSlotWraps === 'wide'
+                ? 'grid-cols-2 claim-row-wide-end-inline:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]'
+                : 'grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]',
+          compactMobileActions && 'md:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)_auto] md:gap-1'
         )}
       >
         {/* The note shares its button's grid cell rather than sitting in one of
@@ -1320,6 +1358,7 @@ export function PositionRow({
             // it had one, which would now let geo-chat print "Verify" on a claim minted before the
             // vocabularies merged — a word this app has no way to publish any more.
             label={copy.positiveAction}
+            compactMobile={compactMobileActions}
             summary={forSide}
             responseKind={responseKind}
             position
@@ -1340,6 +1379,7 @@ export function PositionRow({
         <div className="flex flex-col">
           <PositionButton
             label={copy.negativeAction}
+            compactMobile={compactMobileActions}
             summary={againstSide}
             responseKind={responseKind}
             position={false}
@@ -1357,7 +1397,18 @@ export function PositionRow({
           />
           {localSide === false ? <LocalVoteNote /> : noteFor?.(false)}
         </div>
-        {endSlot ? <div className="flex h-7 shrink-0 items-center">{endSlot}</div> : null}
+        {endSlot ? (
+          <div
+            className={cx(
+              'flex h-7 shrink-0 items-center',
+              compactMobileActions && 'md:col-span-1',
+              endSlotWraps === 'compact' && 'col-span-2 claim-row-end-inline:col-span-1',
+              endSlotWraps === 'wide' && 'col-span-2 claim-row-wide-end-inline:col-span-1'
+            )}
+          >
+            {endSlot}
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -1383,10 +1434,12 @@ export function SpaceChip({ spaceId }: { spaceId: string }) {
     );
   }
 
+  // The name sets the baseline, so the chip sits on the line of text beside it; the thumbnail, which
+  // has none, stays centred on the name.
   return (
-    <span className="flex min-w-0 items-center gap-1.5">
+    <span className="flex min-w-0 items-baseline gap-1.5">
       {image ? (
-        <span className="relative h-4 w-4 shrink-0 overflow-hidden rounded-sm">
+        <span className="relative h-4 w-4 shrink-0 self-center overflow-hidden rounded-sm">
           <ThumbGeoImage value={image} alt="" />
         </span>
       ) : null}
@@ -1407,6 +1460,7 @@ function PositionButton({
   title,
   localOnly = false,
   analytics,
+  compactMobile = false,
 }: {
   label: string;
   summary: DebateClaimPositionSummary | undefined;
@@ -1420,6 +1474,8 @@ function PositionButton({
   /** The selection is a vote kept on this device, not yet counted. */
   localOnly?: boolean;
   analytics?: DebateAnalyticsAttributes;
+  /** Fit the debate card's response pills beside its supporting actions on phones. */
+  compactMobile?: boolean;
 }) {
   // `@container` so the avatar stack can measure the pill it is sitting in — see `PositionAvatars`,
   // which sheds faces rather than letting the label truncate.
@@ -1438,17 +1494,18 @@ function PositionButton({
   // already has — the two systems agree, and the pill borrows it rather than inventing a shade.
   const className = cx(
     '@container flex min-h-7 items-center justify-center rounded-full border px-3 text-button text-text',
+    compactMobile && 'md:px-1.5 md:text-[15px] md:@max-[280px]/debate-actions:px-1',
     selected ? 'border-transparent bg-divider' : 'border-dashed border-grey-03 bg-white'
   );
   // Icon, label and faces are one centred group at a single 6px gap, per the Figma card. They used
   // to be two groups pushed to opposite ends by `justify-between`, which left the faces adrift at
   // the far edge of a wide pill instead of reading as part of the label they belong to.
   const content = (
-    <span className="flex min-w-0 items-center gap-1.5">
+    <span className={cx('flex min-w-0 items-center gap-1.5', compactMobile && 'md:gap-1')}>
       {/* Thumbs for a stance, chevrons for a factual claim — see `ResponsePositionIcon`. Filled,
           where the glyph has a filled form, so the pill reads as taken even in a screenshot; a
           chevron has none, and leans on the pill's own fill below. */}
-      <span className="shrink-0">
+      <span className={cx('shrink-0', compactMobile && 'md:@max-[280px]/debate-actions:hidden')}>
         <ResponsePositionIcon responseKind={responseKind} position={position} selected={selected} />
       </span>
       <span className="truncate">

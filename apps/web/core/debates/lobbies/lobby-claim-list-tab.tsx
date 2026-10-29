@@ -10,12 +10,13 @@ import { Text } from '~/design-system/text';
 
 import type { DebateLobbyClaimList } from '../api';
 import { type PlacedClaimListSection, placeClaimListSections, useClaimListPage } from '../claim-list-pages';
+import { DebateClaimCardSurface, sectionStartOffsets } from '../debate-claim-card-surface';
 import { useDebateClaimsBySpaces, useGeoChatAuth } from '../hooks';
 import { claimRowKey } from '../matchmaking/claim-row-key';
 import { HubStickyControls } from '../matchmaking/claims-tab';
 import { hubAnalyticsAttributes } from '../matchmaking/hub-analytics';
 import { HubCardList } from '../matchmaking/hub-motion';
-import { useHubScrollSelector } from '../matchmaking/hub-scroll';
+import { scrollToSection, useHubScrollSelector } from '../matchmaking/hub-scroll';
 import { HubQueryState } from '../matchmaking/hub-states';
 import {
   claimRowGroups,
@@ -131,6 +132,8 @@ function ClaimListSections({
       )
     );
   }, [sections, rows.claims]);
+  // GEO-3495. Where each section starts in the page's numbering.
+  const sectionOffsets = sectionStartOffsets(sections.map(section => section.claims.length));
 
   // In page order, so a long page reads a section's room sides as it scrolls into view.
   const batches = React.useMemo(() => exploreRoomClaimBatches(entriesBySection.flat()), [entriesBySection]);
@@ -199,37 +202,25 @@ function ClaimListSections({
             </Text>
           </div>
           <HubCardList>
-            {(entriesBySection[index] ?? []).map(entry =>
-              // Keyed on the element itself, as `ClaimsTab` does: the list's popLayout measures it.
-              React.cloneElement(
-                renderRoomCard(
+            {(entriesBySection[index] ?? []).map((entry, position) => (
+              // GEO-3495: the card's impression, and a request sent from it, name this list, its
+              // section and the card's place counted down the whole page.
+              <DebateClaimCardSurface
+                key={claimRowKey(entry)}
+                claimId={entry.claim.claim_entity_id}
+                listId="lobby_list"
+                position={sectionOffsets[index] + position + 1}
+                scope={{ list_entity_id: list.entity_id, list_section_id: section.id }}
+              >
+                {renderRoomCard(
                   entry,
                   placedAnswersReady({ authenticated, accountKey }, rows.unresolvedSpaceIds, entry.claim.space_id)
-                ),
-                {
-                  key: claimRowKey(entry),
-                }
-              )
-            )}
+                )}
+              </DebateClaimCardSurface>
+            ))}
           </HubCardList>
         </section>
       ))}
     </div>
   );
-}
-
-/**
- * Brings `node` to the top of `scroller`, or of the page when the claims have no box of their own
- * (phones), clear of whatever is pinned there: the offset is the section's own `scroll-margin-top`.
- */
-export function scrollToSection(node: HTMLElement, scroller: HTMLElement | null) {
-  const margin = Number.parseFloat(getComputedStyle(node).scrollMarginTop) || 0;
-  const nodeTop = node.getBoundingClientRect().top;
-  if (scroller) {
-    const top = nodeTop - scroller.getBoundingClientRect().top + scroller.scrollTop - margin;
-    if (typeof scroller.scrollTo === 'function') scroller.scrollTo({ top, behavior: 'smooth' });
-    else scroller.scrollTop = top;
-    return;
-  }
-  window.scrollTo({ top: nodeTop + window.scrollY - margin, behavior: 'smooth' });
 }

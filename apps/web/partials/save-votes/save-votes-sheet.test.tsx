@@ -5,6 +5,7 @@ import * as React from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { snapshotActionContext } from '~/core/action-context';
 import { noteEmailArrival } from '~/core/deep-links/ref-email';
 import {
   saveVotesHeading,
@@ -13,12 +14,15 @@ import {
   savedVotesCopy,
   savingVotesCopy,
 } from '~/core/save-votes-copy';
+import { castLocalVote } from '~/core/state/cast-local-vote';
 import { clearLocalVotes, readLocalVotes, removeLocalVote, toggleLocalVote } from '~/core/state/local-votes';
 import {
+  clearSaveVotesPromptLobby,
   closeSaveVotesPrompt,
   markPromptedThisSession,
   openSaveVotesPrompt,
   readSaveVotesPrompt,
+  setSaveVotesPromptLobby,
 } from '~/core/state/save-votes-prompt';
 
 import { useMarkEmailCaptureShowing } from '~/partials/explore/email-capture-presence';
@@ -55,6 +59,7 @@ vi.mock('~/core/privy-auth-events', () => ({
   beginPrivyAuth: (...args: unknown[]) => mocks.beginPrivyAuth(...args),
   cancelPrivyAuth: () => mocks.cancelPrivyAuth(),
 }));
+vi.mock('~/core/analytics-operations', () => ({ recordAction: vi.fn() }));
 vi.mock('~/core/save-votes-analytics', () => ({
   captureSaveVotesImpression: (...args: unknown[]) => mocks.impression(...args),
   saveVotesSignInProperties: (auth_control: string, local_vote_count: number, prompt_reason?: string) => ({
@@ -100,6 +105,7 @@ afterEach(cleanup);
 beforeEach(() => {
   clearLocalVotes();
   closeSaveVotesPrompt();
+  clearSaveVotesPromptLobby();
   window.sessionStorage.clear();
   mocks.ready = true;
   mocks.authenticated = false;
@@ -130,6 +136,74 @@ describe('copy', () => {
 });
 
 describe('SaveVotesSheet', () => {
+  it.each([
+    ['feed', 'threshold', true, null],
+    ['feed', 'threshold', false, null],
+    ['single', 'single_claim', true, null],
+    ['single', 'single_claim', false, null],
+    ['feed', 'threshold', true, 'Onboarding with Adam'],
+    ['feed', 'threshold', false, 'Onboarding with Adam'],
+  ] as const)(
+    'asks once after the first %s vote (%s, already mounted: %s, lobby: %s)',
+    (surface, reason, alreadyMounted, lobbyName) => {
+      if (lobbyName) setSaveVotesPromptLobby(lobbyName);
+      const label = lobbyName ? 'Join the discussion' : 'Save your votes';
+      const cast = (entityId: string, direction: 'positive' | 'negative' = 'positive') =>
+        act(() => {
+          castLocalVote({
+            entityId,
+            spaceId: 'space-1',
+            responseKind: 'stance',
+            direction,
+            title: entityId,
+            surface,
+            attribution: snapshotActionContext('claim_position_control', 'claim', entityId),
+          });
+        });
+      // In the app the sheet is lazy-loaded after the first vote. Cover that first mount as well as
+      // a sheet already mounted, and React's effect replay, without counting a return-visit ask too.
+      const sheet = (
+        <React.StrictMode>
+          <SaveVotesSheet />
+        </React.StrictMode>
+      );
+      const view = alreadyMounted ? render(sheet) : null;
+
+      cast('a');
+      if (!alreadyMounted) render(sheet);
+
+      const region = screen.getByRole('region', { name: label });
+      expect(region).toHaveTextContent(lobbyName ?? 'Save your vote');
+      expect(screen.queryByRole('dialog', { name: label })).not.toBeInTheDocument();
+      expect(mocks.impression.mock.calls).toEqual([[reason, 1]]);
+      expect(readLocalVotes().prompt.shownCount).toBe(1);
+      view?.rerender(sheet);
+      expect(mocks.impression).toHaveBeenCalledOnce();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Not now' }));
+      cast('a', 'negative');
+      expect(readSaveVotesPrompt()).toBeNull();
+      for (const entityId of ['b', 'c', 'd']) {
+        cast(entityId);
+        expect(readSaveVotesPrompt()).toBeNull();
+      }
+      expect(mocks.impression).toHaveBeenCalledOnce();
+
+      cast('e');
+      expect(screen.getByRole('dialog', { name: label })).toHaveTextContent(lobbyName ?? 'Save your 5 votes');
+      expect(screen.queryByRole('region', { name: label })).not.toBeInTheDocument();
+      expect(mocks.impression.mock.calls).toEqual([
+        [reason, 1],
+        ['repeat', 5],
+      ]);
+      expect(readLocalVotes().prompt.shownCount).toBe(2);
+      fireEvent.click(screen.getByRole('button', { name: 'Not now' }));
+      cast('f');
+      expect(readSaveVotesPrompt()).toBeNull();
+      expect(mocks.impression).toHaveBeenCalledTimes(2);
+    }
+  );
+
   it('asks a visitor who came from one of our emails to log in, not sign up (GEO-3374)', () => {
     noteEmailArrival('?ref_email=welcome');
     vote('a', 'Couples should keep separate finances');
@@ -590,7 +664,7 @@ describe('SaveVotesSheet from the navbar', () => {
 
   // Copilot on #2933: the two presentations are different trees, so switching mid-code remounted the
   // code step — clearing what was typed and mailing a second code.
-  it('leaves a code step where it is when the navbar is pressed', () => {
+  it.each(['navbar', 'repeat'] as const)('leaves a code step where it is when %s opens', reason => {
     vote('a');
     vote('b');
     markPromptedThisSession();
@@ -601,7 +675,7 @@ describe('SaveVotesSheet from the navbar', () => {
     expect(mocks.accountStepMounts).toBe(1);
     mocks.impression.mockClear();
 
-    act(() => openSaveVotesPrompt('navbar'));
+    act(() => openSaveVotesPrompt(reason));
 
     expect(screen.getByRole('region', { name: 'Save your votes' })).toHaveTextContent('sam@hey.com');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
@@ -653,7 +727,7 @@ describe('SaveVotesSheet from the navbar', () => {
     opener.remove();
   });
 
-  it('takes over from the corner card rather than showing both', () => {
+  it.each(['navbar', 'repeat'] as const)('takes over from the corner card without showing both for %s', reason => {
     vote('a');
     vote('b');
     markPromptedThisSession();
@@ -661,7 +735,7 @@ describe('SaveVotesSheet from the navbar', () => {
     act(() => openSaveVotesPrompt('threshold'));
     expect(screen.getByRole('region', { name: 'Save your votes' })).toBeInTheDocument();
 
-    act(() => openSaveVotesPrompt('navbar'));
+    act(() => openSaveVotesPrompt(reason));
     expect(screen.queryByRole('region', { name: 'Save your votes' })).not.toBeInTheDocument();
     expect(screen.getByRole('dialog', { name: 'Save your votes' })).toBeInTheDocument();
   });

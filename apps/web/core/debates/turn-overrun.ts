@@ -4,7 +4,28 @@ import * as React from 'react';
 
 import type { Debate, ParticipantSlot } from './api';
 import { MIC_OVERRUN_MAX_MS } from './local-audio-gate';
+import { GATE_CLOSE_DELAY_MS } from './speech-activity';
 import { useSpeechActivity } from './use-speech-activity';
+
+/**
+ * How long a speaker can pause past the buzzer, timed from their last sound, before the overrun
+ * treats them as finished. Also how recently they must have spoken for a pause *at* the buzzer to
+ * count as still talking.
+ *
+ * GEO-3470. The overrun used to end on the speech gate closing, whose 300 ms delay is tuned for the
+ * microphone meter, so the first breath between two phrases cut the speaker off mid-sentence with
+ * most of the cap unused, and someone pausing at the exact buzzer got no overrun at all. Measured on
+ * the raw audio of 52 recordings (23 and 24 Oct 2026), 94% of the mid-sentence pauses that closed the
+ * gate were shorter than 900 ms; longer windows gained little while holding every finished speaker
+ * open for longer. The shared gate keeps its own timing: this hold is the overrun's alone, and the
+ * cap still bounds it.
+ */
+export const OVERRUN_PAUSE_HOLD_MS = 900;
+
+function clearTimer(timerRef: React.RefObject<number | null>) {
+  if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+  timerRef.current = null;
+}
 
 /**
  * How long past the listener's own buzzer the opponent can still be heard finishing.
@@ -12,7 +33,7 @@ import { useSpeechActivity } from './use-speech-activity';
  * The speaker's microphone stays open for at most `MIC_OVERRUN_MAX_MS` past *their* buzzer. Each
  * room keeps its own clock against the server, so the two buzzers can land a little apart, and the
  * audio is on the network for a moment longer still. The slack covers that; the overrun still ends
- * the moment they go quiet, so it never adds a visible delay.
+ * once they have paused for `OVERRUN_PAUSE_HOLD_MS`, so it never adds a visible delay.
  */
 export const REMOTE_OVERRUN_WINDOW_MS = MIC_OVERRUN_MAX_MS + 1_500;
 
@@ -51,10 +72,11 @@ export function opponentTurnState({
  * - The listener's room reads the opponent's incoming audio, so their tile shows them finishing for
  *   exactly as long as they can be heard, clock skew and network delay included.
  *
- * Ends on the speech gate's own change rather than at the next render, so the microphone closes as
- * the sentence does. Latched off: once they fall silent, a breath or a cough cannot reopen it until
- * their next turn. Someone who was not talking at the buzzer, or who ended their turn themselves,
- * gets the clean cut they always had.
+ * Ends `OVERRUN_PAUSE_HOLD_MS` after their last sound, on a timer started from the speech gate's own
+ * change rather than at the next render, so the microphone closes as the sentence does. A breath
+ * between phrases is shorter than that and keeps it running (GEO-3470). Latched off: once the hold
+ * runs out, a cough cannot reopen it until their next turn. Someone who had not spoken within the
+ * hold before the buzzer, or who ended their turn themselves, gets the clean cut they always had.
  */
 export function useTurnOverrun({
   track,
@@ -90,6 +112,11 @@ export function useTurnOverrun({
   // `waiting`: the turn ended in silence, but speech may yet arrive (`startsLate` only).
   const phaseRef = React.useRef<'idle' | 'waiting' | 'running'>('idle');
   const endedAtRef = React.useRef(0);
+  // When they last made a sound, as far as the gate can tell: it closes `GATE_CLOSE_DELAY_MS` into a
+  // pause, so the pause began that long before. Only read while the gate is closed. It can be stale:
+  // a track swap or `listening` dropping resets the gate without a close report. A stale value only
+  // ever reads as an old pause, which falls back to the clean cut from before GEO-3470.
+  const lastSoundAtRef = React.useRef(Number.NEGATIVE_INFINITY);
   const yieldedRef = React.useRef(yielded);
   yieldedRef.current = yielded;
   // The cap is held in a ref rather than returned from the turn effect's cleanup: that effect re-runs
@@ -97,26 +124,32 @@ export function useTurnOverrun({
   // it, leaving a noisy room to hold the microphone open, and recorded, past the window. Only the
   // overrun ending (or unmounting) clears it.
   const capTimerRef = React.useRef<number | null>(null);
+  // Runs while a running overrun is in a pause; speech resuming before it fires cancels it.
+  const holdTimerRef = React.useRef<number | null>(null);
+  const clearTimers = React.useCallback(() => {
+    clearTimer(capTimerRef);
+    clearTimer(holdTimerRef);
+  }, []);
   const stop = React.useCallback(() => {
     phaseRef.current = 'idle';
-    if (capTimerRef.current !== null) window.clearTimeout(capTimerRef.current);
-    capTimerRef.current = null;
+    clearTimers();
     setSince(null);
-  }, []);
-  React.useEffect(
-    () => () => {
-      if (capTimerRef.current !== null) window.clearTimeout(capTimerRef.current);
-      capTimerRef.current = null;
-    },
-    []
-  );
+  }, [clearTimers]);
+  React.useEffect(() => clearTimers, [clearTimers]);
+  const holdThroughPause = React.useCallback(() => {
+    clearTimer(holdTimerRef);
+    const remaining = lastSoundAtRef.current + OVERRUN_PAUSE_HOLD_MS - Date.now();
+    holdTimerRef.current = window.setTimeout(stop, Math.max(0, remaining));
+  }, [stop]);
 
   const speakingRef = useSpeechActivity(track, listening, speaking => {
+    if (!speaking) lastSoundAtRef.current = Date.now() - GATE_CLOSE_DELAY_MS;
     if (speaking && phaseRef.current === 'waiting') {
       phaseRef.current = 'running';
       setSince(endedAtRef.current);
-    } else if (!speaking && phaseRef.current === 'running') {
-      stop();
+    } else if (phaseRef.current === 'running') {
+      if (speaking) clearTimer(holdTimerRef);
+      else holdThroughPause();
     }
   });
 
@@ -135,17 +168,23 @@ export function useTurnOverrun({
       return;
     }
     endedAtRef.current = Date.now();
-    if (speakingRef.current) {
+    // A pause at the buzzer is still mid-sentence when they spoke within the hold before it (GEO-3470).
+    // Our own microphone only: the opponent's pause is timed against our buzzer, which can land before
+    // theirs, so a hold from it could run out before their next words arrive. `waiting` covers them.
+    const pausing =
+      !startsLate && !speakingRef.current && endedAtRef.current - lastSoundAtRef.current < OVERRUN_PAUSE_HOLD_MS;
+    if (speakingRef.current || pausing) {
       phaseRef.current = 'running';
       setSince(endedAtRef.current);
+      if (pausing) holdThroughPause();
     } else if (startsLate) {
       phaseRef.current = 'waiting';
     } else {
       return;
     }
-    if (capTimerRef.current !== null) window.clearTimeout(capTimerRef.current);
+    clearTimer(capTimerRef);
     capTimerRef.current = window.setTimeout(stop, windowMs);
-  }, [overrunPossible, speakingRef, startsLate, stop, turnActive, windowMs]);
+  }, [holdThroughPause, overrunPossible, speakingRef, startsLate, stop, turnActive, windowMs]);
 
   return since;
 }

@@ -98,6 +98,11 @@ type DebateFeedPlayerProps = {
   /** Remove claim overlays and suppress audible subtitles in constrained card layouts. */
   reducedOverlays?: boolean;
   /**
+   * The host draws the frame: the player sits inside a card that clips it to its own corners, with
+   * the claim and its controls joined on underneath (GEO-3454), so it carries no radius of its own.
+   */
+  framed?: boolean;
+  /**
    * Load this debate's recordings without playing them — for the card the viewer is about to
    * reach. Resolving the two signed URLs is a round trip each, and until they land
    * `DebateFeedPlayer` renders the "Loading…" placeholder instead of a <video>, which is what
@@ -174,6 +179,7 @@ export function DebateFeedPlayer({
   releaseMedia = false,
   buffer = false,
   reducedOverlays = false,
+  framed = false,
   onOpenClaims,
   onPlaybackRequest,
   initialSeekSeconds = null,
@@ -967,14 +973,15 @@ export function DebateFeedPlayer({
         // No gap and one radius on the outside: the two tiles are a single surface in the Figma
         // frame, which is what lets the subtitle and the round card straddle the seam rather than
         // sit inside one tile.
-        // 12px in the compact gallery (a profile's or claim's Activity), 16px in the feeds.
+        // 12px in the compact gallery (a profile's or claim's Activity), 16px in the feeds, and none
+        // where a card frames the player and clips it to its own corners.
         //
         // `@container` so the round card sizes against the player rather than the viewport: this
         // same component is a feed card, an explore card and a fullscreen player, and a breakpoint
         // would get two of the three wrong.
         className={cx(
           'group @container relative flex flex-col overflow-hidden',
-          reducedOverlays ? 'rounded-lg' : 'rounded-xl',
+          framed ? null : reducedOverlays ? 'rounded-lg' : 'rounded-xl',
           stamped && endCardShown && '[&_[data-debate-end-card]>section]:animate-[fadeIn_250ms_ease-out_both]'
         )}
       >

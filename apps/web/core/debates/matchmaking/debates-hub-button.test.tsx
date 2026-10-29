@@ -1,6 +1,8 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 
+import type { ComponentProps } from 'react';
+
 import { Provider, createStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -42,11 +44,18 @@ vi.mock('./hooks', () => ({
   useDebateRequests: () => ({ data: undefined, isLoading: false, error: null }),
 }));
 
-function renderButton({ compact = false }: { compact?: boolean } = {}) {
+// The badge is the panel's needs-you count (GEO-3463), which reads the scheduled list from cache only
+// and the viewer's id for challenges. Neither is loaded here, so activity's counts stand in.
+vi.mock('../rooms/scheduling-hooks', () => ({
+  useScheduledDebates: () => ({ data: undefined }),
+}));
+vi.mock('../use-current-geo-chat-user-id', () => ({ useCurrentGeoChatUserId: () => 'user-a' }));
+
+function renderButton(props: ComponentProps<typeof DebatesHubButton> = {}) {
   const store = createStore();
   return render(
     <Provider store={store}>
-      <DebatesHubButton compact={compact} />
+      <DebatesHubButton {...props} />
     </Provider>
   );
 }
@@ -57,6 +66,7 @@ beforeEach(() => {
   mocks.incomingRequestCount = 0;
   mocks.scheduledAwaitingAnswerCount = undefined;
   lineup.live = [];
+  replay.mockClear();
 });
 
 afterEach(cleanup);
@@ -258,9 +268,22 @@ describe('DebatesHubButton', () => {
   // GEO-3415. The debate feed's phone bar, which has room the phone navbar does not.
   describe('compact', () => {
     it('leaves the reminder replay to the navbar button, so it runs once', () => {
-      replay.mockClear();
-      renderButton({ compact: true });
+      renderButton({ compact: true, placement: 'debate_feed_bar' });
       expect(replay).not.toHaveBeenCalled();
+      expect(screen.getByRole('button', { name: 'Debate' })).toHaveAttribute(
+        'data-geo-analytics-label',
+        'Debate feed bar debate hub toggle'
+      );
+    });
+
+    it('replays queued reminders when it is the mobile Explore navbar button', () => {
+      renderButton({ compact: true, placement: 'navbar' });
+
+      expect(replay).toHaveBeenCalled();
+      expect(screen.getByRole('button', { name: 'Debate' })).toHaveAttribute(
+        'data-geo-analytics-label',
+        'Navbar debate hub toggle'
+      );
     });
 
     it('keeps the word and a 44px target on a phone', () => {

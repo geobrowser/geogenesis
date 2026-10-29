@@ -7,11 +7,12 @@ import { Text } from '~/design-system/text';
 
 import type { DebateLobbyMember } from '../api';
 import { debateActionAnalyticsAttributes } from '../matchmaking/hub-analytics';
-import { inDebateRequestLabel, movedToListenersLabel, personName } from './lobby-format';
+import { type MemberActionTarget, inDebateRequestLabel, movedToListenersLabel, personName } from './lobby-format';
 import { useIsLobbyGuest } from './lobby-guest-hooks';
 import { LobbyMemberActions, hasMemberActions } from './lobby-member-actions';
 import { LobbyPersonName } from './lobby-people';
 import { LobbyPopup } from './lobby-popup';
+import { useIsCallRoom } from './lobby-purpose';
 import { LobbyRequestDebate, canRequestLobbyMember } from './lobby-request-debate';
 import { LobbyScheduleSection } from './lobby-schedule';
 import type { LobbyPageView } from './lobby-view';
@@ -22,7 +23,7 @@ import type { LobbyPageView } from './lobby-view';
  */
 export function personMenuAnalyticsAttributes(
   lobby: Pick<LobbyPageView, 'viewer'>,
-  member: Pick<DebateLobbyMember, 'role' | 'creator'>,
+  member: MemberActionTarget,
   isSelf: boolean,
   outsideLobby = false
 ) {
@@ -100,7 +101,10 @@ export function LobbyPersonCard({
   const name = personName(member);
   // A guest's tap is queued behind sign-up, so a guest has no id to check against.
   const guest = useIsLobbyGuest();
-  const requestable = guest ? !member.in_debate && !member.stepped_out : canRequestLobbyMember(member, viewerId);
+  // A space call has no debates: no request, no schedule, no "in a debate".
+  const call = useIsCallRoom();
+  const requestable =
+    !call && (guest ? !member.in_debate && !member.stepped_out : canRequestLobbyMember(member, viewerId));
   const hostControls = !outsideLobby && hasMemberActions(lobby, member, isSelf);
 
   return (
@@ -132,12 +136,12 @@ export function LobbyPersonCard({
         <div className="px-1.5 pb-1.5">
           <LobbyRequestDebate lobbyId={lobby.lobby_id} member={member} />
         </div>
-      ) : member.in_debate && !isSelf ? (
+      ) : member.in_debate && !isSelf && !call ? (
         <Text as="p" variant="footnote" color="grey-04" className="px-1.5 pb-1.5">
           {inDebateRequestLabel(member)}
         </Text>
       ) : null}
-      {!isSelf && (guest || viewerId !== null) ? (
+      {!isSelf && !call && (guest || viewerId !== null) ? (
         <LobbyScheduleSection member={member} disagreements={disagreements} />
       ) : null}
       {hostControls ? (

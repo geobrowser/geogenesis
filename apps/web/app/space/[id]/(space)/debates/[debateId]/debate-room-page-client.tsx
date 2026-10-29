@@ -110,9 +110,11 @@ import {
   type OpenRoundsRoomPhase,
   debateThankingStartsAtMs,
   debateTurnRoleForDebate,
+  hasNumberedOpenRounds,
   isBetweenOpenRounds,
   isDebatesLastTurn,
   isOpenRoundsDebate,
+  openRoundCountInMs,
   openRoundGapAfterTurn,
   openRoundLastWord,
   openRoundLeadInAfterTurn,
@@ -802,8 +804,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     localSlot,
     audioMuted: audioMuted || pendingTurnYield !== null,
     msSinceTurnEnded: localTurnEndedAt === null ? null : Date.now() - localTurnEndedAt,
-    // `useTurnOverrun` ends the overrun the moment they stop, so one that is running means they are
-    // still talking.
+    // `useTurnOverrun` ends the overrun once they have paused long enough to have finished, so one
+    // that is running means they are still talking.
     stillSpeaking: localTurnEndedAt !== null,
     msUntilTurnStarts: localTurnStartsIn === null ? null : localTurnStartsIn * 1_000,
     openRoundsPhase: countdown.openRounds?.phase ?? null,
@@ -3778,6 +3780,7 @@ function DebateRecordingModal({
               <DebateRoundIndicator
                 // Once the new round is announced, the counter moves to it.
                 phase={reveal.announcedRoundPhase ?? countdown.openRounds}
+                numberedOnly={hasNumberedOpenRounds(debate)}
                 maxRounds={debate.open_rounds.max_rebuttal_rounds}
                 requiredRounds={openRoundsRequiredRebuttalRounds(debate.open_rounds)}
               />
@@ -4235,7 +4238,14 @@ export function localTurnStartsInSeconds(
   countdown: DebateCountdown,
   localSlot: ParticipantSlot | null
 ): number | null {
-  if (!localSlot || countdown.remainingSeconds <= 0 || countdown.remainingSeconds > 5) return null;
+  // Open rounds counts in for three seconds; fixed formats retain five. Result windows
+  // read their saved duration so a debate already underway keeps its original count-in.
+  const countInSeconds = isOpenRoundsDebate(debate)
+    ? countdown.openRounds?.phase === 'result'
+      ? openRoundCountInMs(debate.open_rounds) / 1_000
+      : 3
+    : 5;
+  if (!localSlot || countdown.remainingSeconds <= 0 || countdown.remainingSeconds > countInSeconds) return null;
 
   if (countdown.effectiveStatus === 'preflight') {
     return countdown.activeSlot === localSlot ? countdown.remainingSeconds : null;

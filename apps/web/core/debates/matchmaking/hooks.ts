@@ -51,6 +51,7 @@ import {
 } from '../hooks';
 import { lobbyDebateRequested } from '../lobbies/lobby-analytics';
 import { routeIntoDebate } from '../lobbies/step-out';
+import { markAskWithdrawn, unmarkAskWithdrawn } from './ask-withdrawals';
 
 const MATCHMAKING_CLAIMS_PAGE_SIZE = 20;
 
@@ -189,11 +190,11 @@ const SCHEDULABLE_DAYS = PEER_SCHEDULE_DAYS - 1;
 const SCHEDULABLE_SLOTS = 48 + 3;
 
 /**
- * The calendar's window (GEO-3152): this week and next, which from a Sunday is fourteen days out.
- * geo-chat's range is inclusive and counts from today's UTC date, so the far edge can run a day
- * past next Sunday; the grid drops anything outside the two weeks it draws.
+ * The calendar draws fourteen local days. geo-chat resolves inclusive UTC dates in each peer's
+ * zone, so one extra date covers the far edge even when the peer is well ahead of the viewer.
+ * The grid drops the slack outside its two visible windows.
  */
-export const CALENDAR_DAYS = 14;
+export const CALENDAR_DAYS = 15;
 /**
  * Everyone with free time this week, online or not, shared slots first (GEO-2937).
  *
@@ -202,7 +203,11 @@ export const CALENDAR_DAYS = 14;
  */
 export function useSchedulablePeople(
   enabled: boolean,
-  { calendar = false, spaces = EMPTY_SPACES }: { calendar?: boolean; spaces?: string[] } = {}
+  {
+    calendar = false,
+    spaces = EMPTY_SPACES,
+    calendarDate,
+  }: { calendar?: boolean; spaces?: string[]; calendarDate?: string } = {}
 ) {
   const days = calendar ? CALENDAR_DAYS : SCHEDULABLE_DAYS;
   // Only the calendar narrows on the server, and only once the unfiltered list hit its cap: below
@@ -216,7 +221,7 @@ export function useSchedulablePeople(
   const query = useQuery({
     ...debateQueryNetworkOptions,
     ...viewerReadRetryOptions(accountKey),
-    queryKey: debateQueryKeys.schedulablePeople(accountKey, days, limit, calendar, serverSpaces),
+    queryKey: debateQueryKeys.schedulablePeople(accountKey, days, limit, calendar, serverSpaces, calendarDate),
     queryFn: ({ signal }) =>
       listSchedulablePeople({ days, limit, spaces: serverSpaces }, getPrivyIdentityToken, accountKey, signal),
     // A new space selection keeps the last week drawn while the narrowed one loads.
@@ -418,8 +423,13 @@ export function useCreateDebateRequest() {
       void invalidateDebatesOutsideRematchClaims(queryClient);
     },
   });
-  return useObservedMutation(mutation, 'start_debate', request =>
-    getContext({ target_type: 'claim', target_id: request.claim_entity_id })
+  return useObservedMutation(
+    mutation,
+    'start_debate',
+    request => getContext({ target_type: 'claim', target_id: request.claim_entity_id }),
+    undefined,
+    // GEO-3495: geo-chat records the accepted request as the origin of the debate it becomes.
+    created => ({ request_id: created.id })
   );
 }
 
@@ -429,6 +439,10 @@ export function useWithdrawDebateRequest() {
 
   return useMutation({
     mutationFn: (requestId: string) => withdrawDebateRequest(requestId, getPrivyIdentityToken, accountKey),
+    // On the press, so the panel reads the request's end as taken back even when a poll drops it
+    // before the response lands (GEO-3463).
+    onMutate: requestId => markAskWithdrawn(requestId),
+    onError: (_error, requestId) => unmarkAskWithdrawn(requestId),
     onSuccess: () => void invalidateDebatesOutsideRematchClaims(queryClient),
   });
 }

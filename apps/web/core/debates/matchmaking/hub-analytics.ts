@@ -18,7 +18,9 @@ export type DebateActionAnalyticsSurface =
   | 'rejoin-bar'
   | 'challenge-accepted-prompt'
   | 'challenge-dialog'
-  | 'open-elsewhere';
+  | 'open-elsewhere'
+  /** The full-screen feed's and explore's debate card, whose claim pills replaced its up/down vote. */
+  | 'debate-card';
 
 const ACTION_SURFACE_ANALYTICS = {
   hub: {
@@ -94,6 +96,11 @@ const ACTION_SURFACE_ANALYTICS = {
     labelPrefix: 'Debate open elsewhere',
     actionIntent: 'debate_open_elsewhere_action',
   },
+  // The intent the card's comments and share already carry, so all of its actions read as one.
+  'debate-card': {
+    labelPrefix: 'Debate',
+    actionIntent: 'debate_action',
+  },
 } as const satisfies Record<DebateActionAnalyticsSurface, { labelPrefix: string; actionIntent: string }>;
 
 const FILTER_INTENTS = {
@@ -123,6 +130,20 @@ export function debateActionAnalyticsAttributes(
     'data-geo-analytics-label': debateAnalyticsLabel(surface, action),
     'data-geo-analytics-intent': intent ?? ACTION_SURFACE_ANALYTICS[surface].actionIntent,
   } as const;
+}
+
+/**
+ * As {@link debateActionAnalyticsAttributes}, except on the hub, where the control keeps `hubLabel`:
+ * a label its series had before it moved into a control shared with other surfaces, so the move
+ * does not split the series there while the other surfaces still read apart from the hub.
+ */
+export function debateActionAnalyticsAttributesKeepingHubLabel(
+  surface: DebateActionAnalyticsSurface,
+  action: string,
+  hubLabel: string
+) {
+  const attributes = debateActionAnalyticsAttributes(surface, action);
+  return surface === 'hub' ? { ...attributes, 'data-geo-analytics-label': hubLabel } : attributes;
 }
 
 /**

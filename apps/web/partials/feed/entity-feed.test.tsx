@@ -965,3 +965,42 @@ describe('leadFirst', () => {
     expect(leadFirst(items, null)).toBe(items);
   });
 });
+
+// GEO-3421. Past calls sit between the feed's own cards, client side, on an unfiltered feed only.
+describe('EntityFeed interleave', () => {
+  const item = (id: string) => ({
+    entityId: id,
+    spaceId: 'space-1',
+    spaceName: 'Space',
+    spaceImage: null,
+    types: [],
+    createdAtSec: 0,
+    title: id,
+    description: null,
+    imageUrl: null,
+    commentCount: 0,
+    recordingUrls: [],
+    debateVideoUrls: [],
+    debateClaim: null,
+    isMemberOrEditor: true,
+    hasPendingMembershipRequest: false,
+  });
+  const interleave = (feedLength: number) =>
+    new Map<number, React.ReactNode>([[1, <p key="extra">{`extra after 2 of ${feedLength}`}</p>]]);
+
+  it('draws the extra cards where asked, without touching the request', async () => {
+    mocks.pages = [{ items: [item('a'), item('b'), item('c')] }];
+    render(<EntityFeed apiEndpoint="/api/explore/feed" initialSort="best" interleave={interleave} />);
+
+    expect(screen.getByText('extra after 2 of 3')).toBeTruthy();
+    expect(Object.keys(mocks.itemAt)).toEqual(['1', '2', '3']);
+    expect(await requestedUrl()).not.toContain('interleave');
+  });
+
+  it('draws none on a feed narrowed to a space', () => {
+    mocks.pages = [{ items: [item('a'), item('b'), item('c')] }];
+    render(<EntityFeed apiEndpoint="/api/activity/feed" lockedSpaceId="space-1" interleave={interleave} />);
+
+    expect(screen.queryByText(/extra after/)).toBeNull();
+  });
+});

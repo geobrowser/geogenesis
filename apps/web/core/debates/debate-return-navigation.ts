@@ -1,5 +1,6 @@
 'use client';
 
+import { isSpaceCallPath } from '~/core/space-calls/routes';
 import { currentNavigationType } from '~/core/utils/navigation-type';
 import { readSession, removeSession, writeSession } from '~/core/utils/session-storage';
 
@@ -143,6 +144,8 @@ function isDebateFlowHref(href: string) {
   // A room is a debate surface like the rest: captured as a destination, it saves itself as its
   // own, and leaving lands back in it.
   if (isDebateRoomPath(pathname)) return true;
+  // A space call is left the same way, so it is never the page leaving one goes back to.
+  if (isSpaceCallPath(pathname)) return true;
 
   const segments = pathname.split('/').filter(Boolean);
   return segments[0] === 'space' && segments[2] === 'debates' && segments.length > 3;

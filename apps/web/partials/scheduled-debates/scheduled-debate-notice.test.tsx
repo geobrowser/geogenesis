@@ -7,6 +7,7 @@ import * as React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { GeoChatRequestError } from '~/core/debates/api';
+import { useScheduledNoticeOpen } from '~/core/debates/rooms/scheduled-notice-open';
 
 import { ScheduledDebateNoticeDialog } from './scheduled-debate-notice';
 
@@ -72,12 +73,19 @@ vi.mock('~/partials/availability/peer-availability-booking-modal', () => ({
     rescheduleRequestId,
     rescheduleNote,
     userId,
+    onCantMakeIt,
   }: {
     rescheduleRequestId: string;
     rescheduleNote?: string;
     userId: string;
+    onCantMakeIt?: () => void;
   }) => (
-    <div data-testid="week" data-request={rescheduleRequestId} data-note={rescheduleNote ?? ''} data-user={userId} />
+    <div data-testid="week" data-request={rescheduleRequestId} data-note={rescheduleNote ?? ''} data-user={userId}>
+      {/* The week's close warning, reduced to its Can't make it (GEO-3429). */}
+      <button type="button" onClick={onCantMakeIt}>
+        warning: I cant make it
+      </button>
+    </div>
   ),
 }));
 
@@ -96,10 +104,15 @@ function agreed(overrides: Record<string, unknown> = {}) {
   };
 }
 
+/** The agreed debate's room: open, due, with Maya inside by the bare join rule. */
+function openRoom(overrides: Record<string, unknown> = {}) {
+  return { room_id: 'room-1', joinable: true, due: true, others_present: true, ...overrides };
+}
+
 beforeEach(() => {
   state.requests = { data: { requests: [agreed()] }, isPending: false, isError: false };
   state.rooms = {
-    data: { rooms: [{ room_id: 'room-1', joinable: true, due: true, others_present: true }] },
+    data: { rooms: [openRoom()] },
   };
   state.late = idle();
   state.cant = idle();
@@ -142,6 +155,110 @@ function open(step: 'decide' | 'late' | 'cant', onReschedule?: () => void) {
   return { onClose };
 }
 
+// GEO-3428, board 6c: the popup a nudge puts on screen.
+describe('ScheduledDebateNoticeDialog: the nudge popup', () => {
+  it('says who is waiting and since when, with Join now, Running late and Can’t make it', () => {
+    render(<ScheduledDebateNoticeDialog open requestId={REQUEST} initialStep="nudge" onClose={() => {}} />);
+
+    expect(heading()).toHaveTextContent('Maya is waiting for you');
+    expect(screen.getByText(/debate started 3 minutes ago and Maya is in the room\./)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Join now' })).toHaveAttribute('href', '/debate/room-1');
+    expect(screen.getByRole('button', { name: 'Running late' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Can’t make it' })).toBeInTheDocument();
+    expect(state.late.mutate).not.toHaveBeenCalled();
+  });
+
+  // Rounded as board 2 and the join banner round it (`startOffset`).
+  it('says starting now in the first minute after the start', () => {
+    state.requests = {
+      data: { requests: [agreed({ scheduled_start_at: new Date(Date.now() - 20_000).toISOString() })] },
+      isPending: false,
+      isError: false,
+    };
+    render(<ScheduledDebateNoticeDialog open requestId={REQUEST} initialStep="nudge" onClose={() => {}} />);
+    expect(screen.getByText(/debate is starting now and Maya is in the room\./)).toBeInTheDocument();
+  });
+
+  it('has no explainer or Reschedule instead, which are board 2’s', () => {
+    render(
+      <ScheduledDebateNoticeDialog
+        open
+        requestId={REQUEST}
+        initialStep="nudge"
+        onClose={() => {}}
+        onReschedule={() => {}}
+      />
+    );
+    expect(screen.queryByText(/After Can’t make it you can suggest another time/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Reschedule instead' })).not.toBeInTheDocument();
+  });
+
+  // The popup steps aside for any other notice dialog; it must not count as one itself.
+  it('counts every step but the nudge as an open notice, until it closes', () => {
+    function Probe() {
+      return <span data-testid="probe">{String(useScheduledNoticeOpen())}</span>;
+    }
+    const { rerender } = render(
+      <>
+        <Probe />
+        <ScheduledDebateNoticeDialog open requestId={REQUEST} initialStep="nudge" onClose={() => {}} />
+      </>
+    );
+    expect(screen.getByTestId('probe')).toHaveTextContent('false');
+    for (const step of ['decide', 'late', 'cant'] as const) {
+      rerender(
+        <>
+          <Probe />
+          <ScheduledDebateNoticeDialog key={step} open requestId={REQUEST} initialStep={step} onClose={() => {}} />
+        </>
+      );
+      expect(screen.getByTestId('probe')).toHaveTextContent('true');
+    }
+    rerender(
+      <>
+        <Probe />
+        <ScheduledDebateNoticeDialog open={false} requestId={REQUEST} initialStep="late" onClose={() => {}} />
+      </>
+    );
+    expect(screen.getByTestId('probe')).toHaveTextContent('false');
+  });
+
+  it('says where the answer stands: open, answering, back to open, and sent', async () => {
+    succeedWith(state.late, { expected_at: new Date(Date.now() + 10 * 60_000).toISOString(), note: null });
+    const onAnswerChange = vi.fn();
+    render(
+      <ScheduledDebateNoticeDialog
+        open
+        requestId={REQUEST}
+        initialStep="nudge"
+        onClose={() => {}}
+        onAnswerChange={onAnswerChange}
+      />
+    );
+    expect(onAnswerChange).toHaveBeenLastCalledWith('open');
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'Running late' }));
+    expect(onAnswerChange).toHaveBeenLastCalledWith('answering');
+    await user.click(screen.getByRole('button', { name: 'Back' }));
+    expect(onAnswerChange).toHaveBeenLastCalledWith('open');
+    await user.click(screen.getByRole('button', { name: 'Running late' }));
+    await user.click(screen.getByRole('button', { name: /^Tell / }));
+    expect(onAnswerChange).toHaveBeenLastCalledWith('sent');
+  });
+
+  it('answers in place, with a way back to the popup', async () => {
+    render(<ScheduledDebateNoticeDialog open requestId={REQUEST} initialStep="nudge" onClose={() => {}} />);
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole('button', { name: 'Running late' }));
+    expect(heading()).toHaveTextContent('How late will you be?');
+    await user.click(screen.getByRole('button', { name: 'Back' }));
+    expect(heading()).toHaveTextContent('Maya is waiting for you');
+    await user.click(screen.getByRole('button', { name: 'Can’t make it' }));
+    expect(heading()).toHaveTextContent('Can’t make it?');
+  });
+});
+
 describe('ScheduledDebateNoticeDialog', () => {
   // A mail scanner opening the link must not mark anyone late or cancel anything.
   it('sends nothing on opening, whichever screen it lands on', () => {
@@ -162,6 +279,15 @@ describe('ScheduledDebateNoticeDialog', () => {
       expect(screen.getByRole('link', { name: 'Join now' })).toHaveAttribute('href', '/debate/room-1');
       expect(screen.getByRole('button', { name: 'I’m running late' })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'I can’t make it' })).toBeInTheDocument();
+    });
+
+    // A tab that crashed without sending its leave still counts in `others_present` (GEO-3450).
+    it('does not say Maya is waiting when she is not in the room now', () => {
+      state.rooms = { data: { rooms: [openRoom({ others_live: false })] } };
+      open('decide', vi.fn());
+
+      expect(screen.queryByText('Maya is in the room, waiting for you')).not.toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Join now' })).toBeInTheDocument();
     });
 
     it('keeps the calendar reachable', async () => {
@@ -327,6 +453,48 @@ describe('ScheduledDebateNoticeDialog', () => {
       expect(state.cant.mutate).not.toHaveBeenCalled();
     });
 
+    // GEO-3429: closing that week and choosing I can't make it comes back here, with the note.
+    it('comes back from the week with the note still typed', async () => {
+      const user = userEvent.setup();
+      open('cant');
+      await user.type(screen.getByLabelText('Add a note for Maya (optional)'), 'Flight delayed');
+      await user.click(screen.getByRole('button', { name: 'Suggest another time instead' }));
+      await user.click(screen.getByRole('button', { name: 'warning: I cant make it' }));
+
+      expect(screen.queryByTestId('week')).not.toBeInTheDocument();
+      expect(screen.getByLabelText('Add a note for Maya (optional)')).toHaveValue('Flight delayed');
+    });
+
+    it('hands the week the latest note on a second Suggest', async () => {
+      const user = userEvent.setup();
+      open('cant');
+      await user.type(screen.getByLabelText('Add a note for Maya (optional)'), 'A');
+      await user.click(screen.getByRole('button', { name: 'Suggest another time instead' }));
+      await user.click(screen.getByRole('button', { name: 'warning: I cant make it' }));
+      const field = screen.getByLabelText('Add a note for Maya (optional)');
+      await user.clear(field);
+      await user.type(field, 'B');
+      await user.click(screen.getByRole('button', { name: 'Suggest another time instead' }));
+
+      expect(screen.getByTestId('week')).toHaveAttribute('data-note', 'B');
+    });
+
+    // The note lives with the dialog, so a newer one survives a hop to Running late and back.
+    it('keeps the latest note across Running late and back', async () => {
+      const user = userEvent.setup();
+      open('cant');
+      await user.type(screen.getByLabelText('Add a note for Maya (optional)'), 'A');
+      await user.click(screen.getByRole('button', { name: 'Suggest another time instead' }));
+      await user.click(screen.getByRole('button', { name: 'warning: I cant make it' }));
+      const field = screen.getByLabelText('Add a note for Maya (optional)');
+      await user.clear(field);
+      await user.type(field, 'B');
+      await user.click(screen.getByRole('button', { name: 'I’m only running late' }));
+      await user.click(screen.getByRole('button', { name: 'I can’t make it at all' }));
+
+      expect(screen.getByLabelText('Add a note for Maya (optional)')).toHaveValue('B');
+    });
+
     // The cancel refetches the list, which then says the debate is off. That is the news being
     // confirmed, not a reason to swap the confirmation for "no longer on".
     it('keeps saying it is cancelled once the list says so too', async () => {
@@ -339,6 +507,33 @@ describe('ScheduledDebateNoticeDialog', () => {
       rerender(<ScheduledDebateNoticeDialog open requestId={REQUEST} initialStep="cant" onClose={vi.fn()} />);
       expect(heading()).toHaveTextContent('Your debate is cancelled. We’ve let Maya know.');
       expect(screen.queryByText('This debate is no longer on.')).not.toBeInTheDocument();
+    });
+  });
+
+  // GEO-3430. The join banner stays up until the other debater has been told something.
+  describe('onSent', () => {
+    it.each([
+      ['late', 'Send to Maya', () => succeedWith(state.late, { expected_at: '2026-10-21T17:13:00.000Z', note: null })],
+      ['cant', 'Cancel the debate', () => succeedWith(state.cant, {})],
+    ] as const)('hears a %s that went through, once', async (step, send, succeed) => {
+      succeed();
+      const onSent = vi.fn();
+      render(
+        <ScheduledDebateNoticeDialog open requestId={REQUEST} initialStep={step} onClose={vi.fn()} onSent={onSent} />
+      );
+      expect(onSent).not.toHaveBeenCalled();
+
+      await userEvent.setup().click(screen.getByRole('button', { name: send }));
+      expect(onSent).toHaveBeenCalledTimes(1);
+    });
+
+    it('hears nothing while the send has not gone through', async () => {
+      const onSent = vi.fn();
+      render(
+        <ScheduledDebateNoticeDialog open requestId={REQUEST} initialStep="cant" onClose={vi.fn()} onSent={onSent} />
+      );
+      await userEvent.setup().click(screen.getByRole('button', { name: 'Cancel the debate' }));
+      expect(onSent).not.toHaveBeenCalled();
     });
   });
 
