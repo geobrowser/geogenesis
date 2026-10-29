@@ -4,6 +4,7 @@ import { act, cleanup, fireEvent, render as rtlRender, screen, waitFor, within }
 
 import { type ReactElement, type ReactNode, StrictMode } from 'react';
 
+import { visualElementStore } from 'framer-motion';
 import { Provider, createStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -7779,6 +7780,41 @@ describe('Today’s claims', () => {
 
     await waitFor(() => expect(screen.queryByText('Lula should be re-elected')).toBeNull());
     expect(headings()).toEqual(['The Bolsonaro family']);
+  });
+
+  it('measures filtered cards in the picker’s scroll coordinates', async () => {
+    twoAgendas();
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    const card = (await screen.findByText('The courts are persecuting the Bolsonaros')).closest('article')!;
+    await settleTabSwap();
+    const scroller = card.closest<HTMLElement>('[data-rematch-scroll]')!;
+    // jsdom does not load Tailwind or lay out the picker. Give this fixed, scrolling layer
+    // real geometry: the card sits 400px into its content, regardless of its scroll offset.
+    scroller.style.position = 'fixed';
+    scroller.scrollTop = 240;
+    const bounds = vi.spyOn(card, 'getBoundingClientRect').mockImplementation(() => {
+      const top = 400 - scroller.scrollTop;
+      return { x: 0, y: top, top, bottom: top + 100, left: 0, right: 600, width: 600, height: 100, toJSON: () => ({}) };
+    });
+    try {
+      const projection = visualElementStore.get(card)!.projection!;
+      const contentTop = () => {
+        projection.root.updateScroll('snapshot');
+        projection.path.forEach(parent => parent.updateScroll('snapshot'));
+        return projection.measure().layoutBox.y.min;
+      };
+      expect(contentTop()).toBe(400);
+
+      toggleFilter('Bolsonaro trials');
+      // Filtering shortens the list, so the browser can clamp the scroll offset. Motion must
+      // account for that instead of treating it as a card moving and animating a spurious jump.
+      scroller.scrollTop = 40;
+      await settleTabSwap();
+      expect(screen.getByText('The courts are persecuting the Bolsonaros').closest('article')).toBe(card);
+      expect(contentTop()).toBe(400);
+    } finally {
+      bounds.mockRestore();
+    }
   });
 
   // A session that arrives after everything else would otherwise latch every space at 0 debaters.
