@@ -227,6 +227,13 @@ export const debateQueryKeys = {
   rematchLiveKit: (accountKey: string | null, sessionId: string) => ['rematch-livekit', accountKey, sessionId] as const,
   rematchClaims: (accountKey: string | null, sessionId: string, claimIds: string[]) =>
     ['debates', 'account', accountKey, 'rematch', sessionId, 'claims', claimIds] as const,
+  /**
+   * GEO-3489. The answer is the same whoever asks, but geo-chat needs a signed-in caller, so the key
+   * carries the account the way `rematchClaims` does: a request made before the account was known
+   * fails, and keyed without it that failure would be the answer for the visit.
+   */
+  claimDebateCounts: (accountKey: string | null, asks: { claimId: string; since: string }[]) =>
+    ['debates', 'account', accountKey, 'claim-debate-counts', asks] as const,
   sharePrompts: (accountKey: string | null) => ['debates', 'account', accountKey, 'share-prompts'] as const,
   profile: (accountKey: string | null, profileSpaceId: string) =>
     ['debates', 'account', accountKey, 'profile', profileSpaceId] as const,
@@ -490,7 +497,7 @@ const DEBATE_CLAIM_ID_BOUNDARY_DIVISOR = 16;
  * unchanged set; deriving the cut points from the ids makes an insertion rebuild the chunk it lands
  * in and then resynchronise at the next boundary, leaving the rest of the space cached.
  */
-function stableClaimIdChunks(claimIds: string[], batchSize = DEBATE_CLAIM_ID_BATCH_SIZE) {
+export function stableClaimIdChunks(claimIds: string[], batchSize = DEBATE_CLAIM_ID_BATCH_SIZE) {
   const uniqueClaimIds = [...new Set(claimIds)].sort();
   const chunks: string[][] = [];
   let current: string[] = [];
@@ -1298,8 +1305,13 @@ export function useCreateDebateRematchRequest(sessionId: string) {
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.activity(accountKey) });
     },
   });
-  return useObservedMutation(mutation, 'start_debate', request =>
-    getContext({ target_type: 'claim', target_id: request.claim_id })
+  return useObservedMutation(
+    mutation,
+    'start_debate',
+    request => getContext({ target_type: 'claim', target_id: request.claim_id }),
+    undefined,
+    // GEO-3495: the rematch request geo-chat records as the debate's accepted request.
+    result => (result.request ? { request_id: result.request.id } : {})
   );
 }
 
@@ -1422,8 +1434,13 @@ export function useCreateDebateChallenge() {
       }
     },
   });
-  return useObservedMutation(mutation, 'start_debate', request =>
-    getContext({ target_type: 'space', target_id: request.recipient_profile_space_id })
+  return useObservedMutation(
+    mutation,
+    'start_debate',
+    request => getContext({ target_type: 'space', target_id: request.recipient_profile_space_id }),
+    undefined,
+    // GEO-3495: geo-chat records the challenge as the origin of the debate it becomes.
+    challenge => ({ request_id: challenge.id })
   );
 }
 

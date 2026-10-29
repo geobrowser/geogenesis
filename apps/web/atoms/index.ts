@@ -514,6 +514,16 @@ export const rematchHideMyPositionsAtom = atomWithStorage('rematchHideMyPosition
  */
 export const rematchHideAgreedAtom = atomWithStorage('rematchHideAgreed', true);
 
+/**
+ * GEO-3489. Which Today's claims sections the viewer opened or closed in the debate-again picker,
+ * with the agenda day they did it on: a choice holds for that day and the next day's agenda starts
+ * every section at its default again. Read through `useTodaysSectionsOpen`.
+ */
+export const todaysClaimsSectionsAtom = atomWithStorage<{ day: string | null; open: Record<string, boolean> }>(
+  'todaysClaimsSections',
+  { day: null, open: {} }
+);
+
 export const rankingComposeRemoveScrollShardAtom = atom<HTMLElement | null>(null);
 
 // Set to `Date.now()` whenever a ranking "Create new" entity is published. The

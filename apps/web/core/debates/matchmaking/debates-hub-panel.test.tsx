@@ -8,6 +8,7 @@ import { usePathname } from 'next/navigation';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { GeoChatRequestError } from '../api';
+import type { DebateClaimListId } from '../debate-claim-card-surface';
 import { DEBATES_MODAL } from '../debates-panel-deep-link';
 import { DebatesHubPanel } from './debates-hub-panel';
 import {
@@ -64,6 +65,12 @@ const mocks = vi.hoisted(() => ({
   scheduledAwaitingAnswerCount: undefined as number | undefined,
   scheduledRequests: undefined as unknown[] | undefined,
   matches: [] as unknown[],
+  capture: vi.fn(),
+}));
+
+vi.mock('~/core/analytics', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/analytics')>()),
+  capture: mocks.capture,
 }));
 
 // Booking reads room completion only when moving a scheduled request.
@@ -205,6 +212,8 @@ vi.mock('~/core/hooks/use-spaces-by-ids', () => ({
 // stays real because the People tab renders it.
 vi.mock('./claims-tab', async () => {
   const actual = await vi.importActual<typeof import('./claims-tab')>('./claims-tab');
+  const surface = await vi.importActual<typeof import('../debate-claim-card-surface')>('../debate-claim-card-surface');
+  const MOCK_LIST_IDS = { explore: 'hub_explore', lobby: 'hub_lobby', positions: 'hub_my_positions' } as const;
   return {
     ...actual,
     // Two markers rather than one, because the hub now mounts a second, warming instance behind
@@ -217,8 +226,16 @@ vi.mock('./claims-tab', async () => {
     //
     // The warming one also records what it was handed: it has to be the panel's Explore, with the
     // panel's filters, not a bare `ClaimsTab warm` running full screen's settings.
-    ClaimsTab: (props: { warm?: boolean; atomsFrom?: string; panelFilters?: unknown }) => {
+    ClaimsTab: (props: {
+      warm?: boolean;
+      atomsFrom?: string;
+      panelFilters?: unknown;
+      variant?: 'explore' | 'lobby' | 'positions';
+      listId?: DebateClaimListId;
+    }) => {
       if (props.warm) mocks.warmClaimsTab = props;
+      // Says which list it is, as the real one does, so the tab row can record leaving it.
+      surface.useReportDrawnHubList(props.listId ?? MOCK_LIST_IDS[props.variant ?? 'explore'], !props.warm);
       return <div data-testid={props.warm ? 'claims-tab-warm' : 'claims-tab'} />;
     },
   };
@@ -613,6 +630,34 @@ describe('DebatesHubPanel', () => {
     // Tab bodies cross-fade, so the incoming panel arrives after the outgoing one finishes.
     // Signed in, the list includes offline people free at shared times, so the empty copy says so.
     expect(await screen.findByText('Nobody is online or free to debate this week.')).toBeInTheDocument();
+  });
+
+  // GEO-3495: a press on a claim tab names the tab, and the list on screen it left. Which list a
+  // claim tab draws is the list's own business (its filters), so the list reports itself.
+  it('records a press on a claim tab as leaving the list on screen', () => {
+    const store = createStore();
+    store.set(debatesHubAtom, { tab: 'explore' });
+    render(
+      <Provider store={store}>
+        <DebatesHubPanel />
+      </Provider>
+    );
+    mocks.capture.mockClear();
+    const tabPresses = () =>
+      mocks.capture.mock.calls
+        .filter(([event, props]) => event === 'action_completed' && props.action_kind === 'filter_claims')
+        .map(([, props]) => [props.list_id ?? null, props.target_type, props.target_id]);
+
+    fireEvent.click(screen.getByRole('button', { name: /^Matches/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^People/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Explore/ }));
+
+    expect(tabPresses()).toEqual([
+      ['hub_explore', 'hub_tab', 'matches'],
+      // People is not a claim list, so the press onto it is not a claim choice, and a press from it
+      // left no list.
+      [null, 'hub_tab', 'explore'],
+    ]);
   });
 
   // GEO-3463. Before the tabs: the header and at most one strip. The strip decides for itself

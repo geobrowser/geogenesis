@@ -13,6 +13,7 @@ import { debatesHubExploreShowAtom, debatesHubMatchesIncludeOfflineAtom } from '
 type ListProps = {
   warm?: boolean;
   variant?: string;
+  listId?: string;
   atomsFrom?: string;
   panelFilters?: PanelListFilters;
   keepClaim?: (entry: MatchmakingClaim) => boolean;
@@ -114,7 +115,12 @@ describe('PanelMatchesTab', () => {
     act(() => seen.matchesList?.panelFilters?.toggles?.[0]?.onChange(true));
 
     expect(store.get(debatesHubMatchesIncludeOfflineAtom)).toBe(true);
-    expect(seen.claimsTab).toMatchObject({ variant: 'positions', atomsFrom: 'panelMatches' });
+    // Recorded as Matches' wider list (GEO-3495), not as Explore's My positions.
+    expect(seen.claimsTab).toMatchObject({
+      variant: 'positions',
+      listId: 'hub_matches_offline',
+      atomsFrom: 'panelMatches',
+    });
     const keep = seen.claimsTab!.keepClaim!;
     // Someone offline disagrees: kept, and the card offers Schedule.
     expect(keep(claim(true, { total: 1, now: 0 }, { total: 2, now: 0 }))).toBe(true);

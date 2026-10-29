@@ -27,6 +27,7 @@ describe('feature flags', () => {
     // shipped state rather than a developer convenience — see the explore-page test.
     expect(defaultFeatureFlags.exploreSidePanel).toBe(false);
     expect(defaultFeatureFlags.lobbyHosting).toBe(false);
+    expect(defaultFeatureFlags.todaysClaims).toBe(false);
     expect(defaultFeatureFlags.spaceCalls).toBe(false);
     expect(defaultFeatureFlags.debateDeviceSwitchRecording).toBe(false);
     expect(defaultFeatureFlags.googleSignIn).toBe(false);
@@ -41,6 +42,7 @@ describe('feature flags', () => {
       exploreSidePanel: false,
       forYouFeed: false,
       lobbyHosting: false,
+      todaysClaims: false,
       spaceCalls: false,
       debateDeviceSwitchRecording: false,
       googleSignIn: false,
@@ -72,6 +74,7 @@ describe('feature flags', () => {
       exploreSidePanel: false,
       forYouFeed: false,
       lobbyHosting: false,
+      todaysClaims: false,
       spaceCalls: false,
       debateDeviceSwitchRecording: false,
       googleSignIn: false,
@@ -104,6 +107,7 @@ describe('feature flags', () => {
       exploreSidePanel: false,
       forYouFeed: false,
       lobbyHosting: false,
+      todaysClaims: false,
       spaceCalls: false,
       debateDeviceSwitchRecording: false,
       googleSignIn: false,

@@ -412,9 +412,9 @@ export type DebateOpenRounds = {
   extend_count_in_ms?: number;
   /**
    * Rebuttal rounds every debate plays: rounds `1..=required_rebuttal_rounds` are appended with the
-   * opening, the rounds before the last of them run straight on, and the first Extend / End pick
-   * follows the last of them. Snapshotted per debate like the cap, and absent from a geo-chat that
-   * predates it, which reads as `0`: the opening ends on a pick, as it always did.
+   * opening, and the first Extend / End decision window follows the last of them. Pre-picks open
+   * during that last required round once its lead-in ends, unless it is the cap. Snapshotted per
+   * debate like the cap; absent reads as `0`, so the opening itself ends on a decision.
    */
   required_rebuttal_rounds?: number;
   /**
@@ -534,8 +534,10 @@ export type DebateRematchRequest = {
   turn_format_id: string;
   /** The Open rounds cap decided when the request was made (GEO-3201). Present only for `open_rounds`. */
   max_rebuttal_rounds?: number | null;
-  /** The rebuttal rounds that run before the first pick, decided with the cap. Absent reads as `0`. */
+  /** The rebuttal rounds that run before the first decision window, decided with the cap. Absent reads as `0`. */
   required_rebuttal_rounds?: number | null;
+  /** Exact initial turns snapshotted when the request was created. Absent means legacy timing. */
+  turn_durations_ms?: number[] | null;
   created_at: string;
   expires_at: string;
 };
@@ -969,8 +971,10 @@ export type DebateRequest = {
   turn_format_id: string | null;
   /** The Open rounds cap decided when the request was made (GEO-3201). Present only for `open_rounds`. */
   max_rebuttal_rounds?: number | null;
-  /** The rebuttal rounds that run before the first pick, decided with the cap. Absent reads as `0`. */
+  /** The rebuttal rounds that run before the first decision window, decided with the cap. Absent reads as `0`. */
   required_rebuttal_rounds?: number | null;
+  /** Exact initial turns snapshotted when the request was created. Absent means legacy timing. */
+  turn_durations_ms?: number[] | null;
   created_at: string;
   /** Fixed for the lifetime of the request, even as it advances between recipients. */
   expires_at: string;
@@ -2005,6 +2009,34 @@ export async function listDebateRematchClaims(
 ) {
   const query = claimIds.length > 0 ? `?claim_ids=${encodeURIComponent(claimIds.join(','))}` : '';
   return geoChatRequest<DebateRematchClaimsResponse>(`/debate-rematches/${sessionId}/claims${query}`, {
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    signal,
+  });
+}
+
+/** The most claims one `/debate-claims/debate-counts` request takes (geo-chat's own cap). */
+export const CLAIM_DEBATE_COUNTS_MAX_CLAIMS = 200;
+
+export type ClaimDebateCountsResponse = {
+  /** One per claim asked about, in the order asked, zero included. */
+  counts: { claim_entity_id: string; debates: number }[];
+};
+
+/**
+ * GEO-3489. How many recorded debates each claim has had since its own `since` — for Today's claims,
+ * which orders a section's claims by how often each was debated since it was listed.
+ */
+export async function getClaimDebateCounts(
+  claims: { claim_entity_id: string; since: string }[],
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  signal?: AbortSignal
+) {
+  return geoChatRequest<ClaimDebateCountsResponse>('/debate-claims/debate-counts', {
+    method: 'POST',
+    body: { claims },
     auth: true,
     getPrivyIdentityToken,
     accountKey,
@@ -3416,7 +3448,7 @@ export type DebateLobbyVoiceToken = {
   /** Join with the mic off; set once the room is crowded. Always false for a listener. */
   start_muted: boolean;
   expires_at: string;
-  /** A publisher in a space call (GEO-3419); lobbies never share a screen. */
+  /** A publisher in a space call (GEO-3419), or a lobby host (GEO-3507). */
   can_share_screen?: boolean;
 };
 

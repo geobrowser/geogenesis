@@ -77,7 +77,12 @@ export function LobbyRoomClaims({
           <HubMessageNote>{LOBBY_ROOM_CLAIMS_COPY.recent}</HubMessageNote>
         </div>
       ) : null}
-      <LobbyRoomClaimsList claims={claims} renderOffer={renderOffer} renderMenu={renderMenu} />
+      <LobbyRoomClaimsList
+        claims={claims}
+        renderOffer={renderOffer}
+        renderMenu={renderMenu}
+        listId="lobby_room_claims"
+      />
     </HubQueryState>
   );
 }
