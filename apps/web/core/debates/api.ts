@@ -2016,6 +2016,34 @@ export async function listDebateRematchClaims(
   });
 }
 
+/** The most claims one `/debate-claims/debate-counts` request takes (geo-chat's own cap). */
+export const CLAIM_DEBATE_COUNTS_MAX_CLAIMS = 200;
+
+export type ClaimDebateCountsResponse = {
+  /** One per claim asked about, in the order asked, zero included. */
+  counts: { claim_entity_id: string; debates: number }[];
+};
+
+/**
+ * GEO-3489. How many recorded debates each claim has had since its own `since` — for Today's claims,
+ * which orders a section's claims by how often each was debated since it was listed.
+ */
+export async function getClaimDebateCounts(
+  claims: { claim_entity_id: string; since: string }[],
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  signal?: AbortSignal
+) {
+  return geoChatRequest<ClaimDebateCountsResponse>('/debate-claims/debate-counts', {
+    method: 'POST',
+    body: { claims },
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    signal,
+  });
+}
+
 export async function createDebateRematchRequest(
   sessionId: string,
   request: { source_space_id: string; claim_id: string; format_id: string },
