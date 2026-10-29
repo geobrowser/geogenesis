@@ -67,11 +67,17 @@ export function useArrivalHold(enabled: boolean) {
   return { topRef, listRef, hold: enabled && (active || topAbove), scrollToTop };
 }
 
-/** "1 new match", for arrivals waiting while the list is held; pressing it goes to the top, where they land. */
+/**
+ * "1 new match", for arrivals waiting while the list is held; pressing it goes to the top, where they land.
+ * Hangs below its positioned parent (the sticky filter block), so it stays on screen at any scroll.
+ */
 export function NewArrivalsPill({ count, onClick }: { count: number; onClick: () => void }) {
   if (count === 0) return null;
   return (
-    <div className="sticky top-2 z-10 flex justify-center" data-testid="new-matches-pill">
+    <div
+      className="pointer-events-none absolute inset-x-0 top-full z-10 mt-2 flex justify-center *:pointer-events-auto"
+      data-testid="new-matches-pill"
+    >
       <HubPillButton variant="primary" analyticsSurface="rematch" analyticsLabel="New matches pill" onClick={onClick}>
         {count === 1 ? '1 new match' : `${count} new matches`}
       </HubPillButton>

@@ -3482,6 +3482,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
               }}
             />
           </div>
+          {tab === 'matches' && !landingPending ? (
+            <NewArrivalsPill count={matchArrivals.waitingCount} onClick={arrivalHold.scrollToTop} />
+          ) : null}
         </div>
 
         {/* A request error belongs on the card it was sent from; this line is the fallback for when
@@ -3691,7 +3694,6 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
           ) : tab === 'matches' ? (
             <>
               <div ref={arrivalHold.topRef} />
-              <NewArrivalsPill count={matchArrivals.waitingCount} onClick={arrivalHold.scrollToTop} />
               <div ref={arrivalHold.listRef}>
                 <HubCardList>{visibleClaims.map((claim, index) => renderClaimCard(claim, index + 1))}</HubCardList>
               </div>
