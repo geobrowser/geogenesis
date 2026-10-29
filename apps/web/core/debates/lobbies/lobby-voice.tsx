@@ -927,10 +927,7 @@ function VoiceBar({
             onClick={() => camera.onToggle(!camera.on)}
             className="md:h-10"
           >
-            <span className="inline-flex items-center gap-1.5">
-              <CameraIcon disabled={!camera.on} />
-              <span className="md:sr-only">{camera.on ? 'Camera off' : 'Camera on'}</span>
-            </span>
+            <CameraIcon disabled={!camera.on} />
           </HubPillButton>
         ) : null}
         {mic && screen ? (

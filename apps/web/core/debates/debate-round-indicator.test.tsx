@@ -132,3 +132,18 @@ describe('DebateRoundIndicator', () => {
     expect(document.querySelector('[data-round-pip="6"]')).toHaveClass('w-[2.6cqw]');
   });
 });
+
+it('calls the first of three required rounds Round 1 without named roles', () => {
+  const { container } = render(
+    <DebateRoundIndicator
+      phase={{ phase: 'speaking', roundIndex: 0, isFinalRound: false }}
+      maxRounds={10}
+      requiredRounds={2}
+      numberedOnly
+    />
+  );
+  expect(screen.getByText('Round 1')).toBeInTheDocument();
+  expect(container.textContent).toContain('Rounds 2 to 3 are next.');
+  expect(container.textContent).not.toMatch(/opening|rebuttal|closing/i);
+  expect(container.querySelectorAll('[data-round-pip]')).toHaveLength(4);
+});
