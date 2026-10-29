@@ -187,8 +187,8 @@ const NO_CLAIMS: DebateRematchClaim[] = [];
  * forth — and it is where the pair land whenever it has anything in it. `opponent` is "Their
  * positions" on screen and `positions` is "My positions"; the ids predate the labels.
  *
- * `todays` is GEO-3489, "Today's claims": every space's newest Debate agenda. It leads the strip and the landing whenever an agenda lists a claim this pair
- * can debate, because a claim listed today has no positions yet and so can never be a match.
+ * `todays` is GEO-3489, "Today's claims": every space's newest Debate agenda. It leads the strip
+ * and the landing whenever an agenda lists a claim this pair can debate, because a claim listed today has no positions yet and so can never be a match.
  */
 type PickerTab = 'todays' | 'matches' | 'related' | 'debate' | 'explore' | 'positions' | 'opponent';
 

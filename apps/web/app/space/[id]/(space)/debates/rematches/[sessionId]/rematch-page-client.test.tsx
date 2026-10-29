@@ -954,15 +954,13 @@ vi.mock('~/core/debates/todays-claims/debate-agendas', async importOriginal => {
   return {
     NO_AGENDAS,
     agendaDayFromValue,
-    useDebateAgendas: (enabled = true) => ({
-      agendasIn: enabled ? agendasIn : () => NO_AGENDAS,
-      spaceIds: enabled
-        ? [...todays.agendas.spaces.map(space => space.spaceId), ...todays.agendas.earlier.map(l => l.spaceId)]
-        : [],
-      claimIds: enabled ? [...listedAtByClaim(todays.agendas).keys()] : [],
-      claimEntities: enabled ? todays.entities : [],
-      isLoading: enabled && todays.loading,
-      error: enabled ? todays.error : null,
+    useDebateAgendas: () => ({
+      agendasIn,
+      spaceIds: [...todays.agendas.spaces.map(space => space.spaceId), ...todays.agendas.earlier.map(l => l.spaceId)],
+      claimIds: [...listedAtByClaim(todays.agendas).keys()],
+      claimEntities: todays.entities,
+      isLoading: todays.loading,
+      error: todays.error,
     }),
   };
 });
@@ -7546,8 +7544,8 @@ describe('click analytics labels in a debate room', () => {
 });
 
 /**
- * GEO-3489. Today's claims: the first tab, listing every space's newest
- * Debate agenda under its section headings.
+ * GEO-3489. Today's claims: the first tab, listing every space's newest Debate agenda under its
+ * section headings.
  */
 describe('Today’s claims', () => {
   const T_LULA = 'a1000000000000000000000000000001';
