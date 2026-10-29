@@ -221,6 +221,13 @@ export function useResetEntityResponseIndexingSnapshot({ entityId, spaceId, resp
 
 /** Shown when a response the viewer was told was made fails to land after all (GEO-2889). */
 export const RESPONSE_FAILED_AFTER_SUBMIT_COPY = 'Your position didn’t publish, so it has been undone. Try again.';
+/** A curation upvote/downvote reads as a vote, not a position, so it gets its own wording. */
+export const CURATION_FAILED_AFTER_SUBMIT_COPY = 'Your vote didn’t publish, so it has been undone. Try again.';
+
+/** The failure copy that fits the kind of response the viewer was shown as made. */
+export function responseFailedAfterSubmitCopy(responseKind: ResponseKind | null): string {
+  return responseKind === 'curation' ? CURATION_FAILED_AFTER_SUBMIT_COPY : RESPONSE_FAILED_AFTER_SUBMIT_COPY;
+}
 
 type ResponseMutationVariables = {
   direction: ResponseDirection;
@@ -669,10 +676,13 @@ export function useEntityResponse({ entityId, entityName, spaceId, responseKind 
       // The viewer was shown this response as made the moment the bundler took it, so its failure
       // has to be said out loud: the rollback below on its own reads as the position vanishing. A
       // toast rather than only the card's inline error, because a card can be gone by now — the
-      // picker moves an answered claim away. Not for an older vote a newer press has replaced: its
-      // outcome is no longer what the screen shows.
-      if (failedRun?.submitted && isLatestVote && responseKind !== 'curation') {
-        setToast(createElement('span', null, RESPONSE_FAILED_AFTER_SUBMIT_COPY));
+      // picker moves an answered claim away, and in rows (comments, ranking cards, subtopics) the
+      // inline error is screen-reader-only, so an arrow that just unfills says nothing at all. This
+      // covers curation too now that those arrows also render as made on bundler-accept — only the
+      // copy differs. Not for an older vote a newer press has replaced: its outcome is no longer
+      // what the screen shows.
+      if (failedRun?.submitted && isLatestVote) {
+        setToast(createElement('span', null, responseFailedAfterSubmitCopy(responseKind)));
       }
       if (!runs || !failedRun) return;
       failedRun.status = 'failed';
