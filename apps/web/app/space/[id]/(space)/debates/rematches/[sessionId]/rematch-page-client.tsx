@@ -143,7 +143,7 @@ import { Skeleton } from '~/design-system/skeleton';
 import { tabGroupTabLinkStyles } from '~/design-system/tab-group';
 import { Text } from '~/design-system/text';
 
-import { firstName } from '~/partials/profile/claim-response-tag';
+import { ClaimResponseTag, firstName } from '~/partials/profile/claim-response-tag';
 
 import { RematchPublishCard } from './rematch-publish-card';
 import { RematchRequestCard } from './rematch-request-card';
@@ -2769,12 +2769,16 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
         scope={cardScope}
       >
         <RematchClaimCard
-          claim={claim}
+          // The list can hold an older row while new claims hydrate. Its content stays visible,
+          // but both the opponent label and the request control need the latest participant sides.
+          claim={{ ...claim, participants: sidesOf(claim.claim.claim_entity_id, claim.claim.space_id) }}
           previouslyDebated={previouslyDebated}
           context={saidBy ? null : topicMatchCaptionFor(claim)}
           headerMeta={saidBy}
           session={session}
           currentUserId={currentUserId}
+          opponent={remoteParticipant}
+          opponentPositionKnown={!positions.isLoading && !positions.isPlaceholderData && !positions.error}
           chatPosition={chatPositionFor(claim.claim.claim_entity_id, claim.claim.space_id)}
           readiness={readinessByClaimId.get(normId(claim.claim.claim_entity_id)) ?? null}
           onRequest={() =>
@@ -3464,6 +3468,8 @@ function RematchClaimCard({
   claim,
   session,
   currentUserId,
+  opponent,
+  opponentPositionKnown,
   chatPosition,
   readiness: claimReadiness,
   onRequest,
@@ -3476,6 +3482,9 @@ function RematchClaimCard({
   claim: DebateRematchClaim;
   session: DebateRematchSession | null;
   currentUserId: string | null;
+  opponent: DebateRematchParticipant | null;
+  /** A failed or pending participant lookup cannot establish that the opponent has no position. */
+  opponentPositionKnown: boolean;
   /** geo-chat's own copy of this viewer's position; `undefined` when it has no row yet. */
   chatPosition: boolean | null | undefined;
   readiness: ClaimReadinessState | null;
@@ -3493,7 +3502,8 @@ function RematchClaimCard({
 }) {
   // `true` off a room, so this route's gate is unchanged. See `useRoomOpponentPresent`.
   const roomOpponentPresent = useRoomOpponentPresent();
-  const remotePosition = claim.participants.find(side => side.user_id !== currentUserId)?.position ?? null;
+  const remotePosition = claim.participants.find(side => side.user_id === opponent?.user_id)?.position ?? null;
+  const showOpponentPosition = opponent !== null && opponentPositionKnown && remotePosition !== null;
 
   // A claim whose stored kind didn't parse still has to render; 'stance' is the fallback
   // `responsePositionLabel` already applies, so the labels agree either way.
@@ -3581,6 +3591,16 @@ function RematchClaimCard({
       readiness={readiness}
       headerMeta={headerMeta}
       analyticsSurface="rematch"
+      showParticipants={false}
+      noteFor={position =>
+        showOpponentPosition && (
+          <ClaimResponseTag
+            response={{ stance: remotePosition ? 'agree' : 'disagree' }}
+            personName={opponent.display_name}
+            forPosition={position}
+          />
+        )
+      }
       // The card's own offer is replaced rather than hidden. A rematch request is its own mutation
       // with its own gating, but it is the same offer to the reader — so it wears the same control
       // in the same place instead of a footer button of its own (GEO-2825). Nothing to watch here

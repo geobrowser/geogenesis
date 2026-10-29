@@ -1274,6 +1274,29 @@ describe('replaying a queued side with no card on screen', () => {
 });
 
 describe('MatchmakingClaimCard', () => {
+  it('keeps faces by default and lets the picker hide them without changing the viewer’s vote', () => {
+    const heldPositions = positions.map(side => ({ ...side, participants: [participant(`holder-${side.position}`)] }));
+    const { unmount } = renderCard(
+      <MatchmakingClaimCard claim={claim} positions={heldPositions} readiness={readiness()} />
+    );
+    expect(within(screen.getByRole('button', { name: /^Agree/ })).getAllByTestId('avatar').length).toBeGreaterThan(0);
+    unmount();
+
+    renderCard(
+      <MatchmakingClaimCard claim={claim} positions={heldPositions} readiness={readiness()} showParticipants={false} />
+    );
+    const agree = screen.getByRole('button', { name: /^Agree/ });
+    const disagree = screen.getByRole('button', { name: /^Disagree/ });
+    expect(within(agree).queryByTestId('avatar')).toBeNull();
+    expect(within(disagree).queryByTestId('avatar')).toBeNull();
+    expect(agree).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(disagree);
+    expect(mocks.submitResponse).toHaveBeenCalledWith(
+      'negative',
+      expect.objectContaining({ onError: expect.any(Function) })
+    );
+  });
+
   it('attributes response events to the claim text as well as its id', () => {
     renderCard(<MatchmakingClaimCard claim={claim} positions={positions} readiness={readiness()} />);
 
