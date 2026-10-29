@@ -3411,7 +3411,7 @@ export type DebateLobbyVoiceToken = {
   /** Join with the mic off; set once the room is crowded. Always false for a listener. */
   start_muted: boolean;
   expires_at: string;
-  /** A publisher in a space call (GEO-3419); lobbies never share a screen. */
+  /** A publisher in a space call (GEO-3419), or a lobby host (GEO-3507). */
   can_share_screen?: boolean;
 };
 
