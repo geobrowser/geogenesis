@@ -90,7 +90,7 @@ export type ActionContext = {
   debate_id?: string;
   variant?: string;
   /**
-   * GEO-3140 / GEO-3144. The feed version that put this card on the page (e.g. `best-1`,
+   * GEO-3140 / GEO-3144. The feed version that put this card on the page (e.g. Best's `BEST_FEED_VERSION`,
    * `for-you-1.0+web.1`), and on an interleaved page which arm picked it and in which experiment,
    * so engagement can be credited per version. `feed_exploration` marks a For you exploration slot.
    * `feed_slot: 'fresh'` marks a card Best's fresh slot placed (GEO-3221).

@@ -8,6 +8,7 @@ import { DEBATE_TYPE_ID } from '~/core/debates/ontology';
 
 import { NEWS_STORY_TYPE_ID } from './explore-constants';
 import { claimsRequireDebateTagFilter } from './explore-debate-tag-filter';
+import { BEST_FEED_VERSION } from './for-you/feed-version';
 
 /**
  * The graph is mocked at `graphql()` — the single boundary every sort's fetcher goes through —
@@ -366,7 +367,7 @@ describe('a window reorder (GEO-3140 For you, GEO-3144 interleaving)', () => {
   it("names Best's version when nothing replaces it", async () => {
     windows.queue = [windowOf(claims, { hasNextPage: false, endCursor: null })];
     const result = await fetchExploreFeed({ ...feedArgs, typeIds: [CLAIM_TYPE_ID] });
-    expect(result.feed).toEqual({ name: 'best', version: 'best-1' });
+    expect(result.feed).toEqual({ name: 'best', version: BEST_FEED_VERSION });
   });
 
   it("serves the reordered window, through Best's own diversity pass, under the reorder's name", async () => {
