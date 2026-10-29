@@ -107,7 +107,7 @@ describe('DebateFormatDetails', () => {
     expect(container.textContent).not.toMatch(/makes an argument|rebuts|clos/i);
   });
 
-  it('shows three numbered rounds at 60, 45 and 30 seconds, then 30-second extras', () => {
+  it('condenses numbered rounds into one row each with the per-debater duration', () => {
     const { container } = renderDetails({
       formatId: 'open_rounds',
       openRounds: requestOpenRounds({
@@ -117,12 +117,15 @@ describe('DebateFormatDetails', () => {
       }),
     });
     for (const round of [1, 2, 3]) {
-      expect(screen.getByText(`Round ${round} · You`)).toBeInTheDocument();
-      expect(screen.getByText(`Round ${round} · Remote speaker`)).toBeInTheDocument();
+      expect(screen.getByText(`Round ${round}`)).toBeInTheDocument();
     }
-    expect(screen.getAllByText('1m')).toHaveLength(2);
-    expect(screen.getAllByText('45s')).toHaveLength(2);
-    expect(screen.getAllByText('30s')).toHaveLength(3);
+    expect(screen.getByText('1m each')).toBeInTheDocument();
+    expect(screen.getByText('45s each')).toBeInTheDocument();
+    expect(screen.getByText('30s each')).toBeInTheDocument();
+    expect(screen.getByText('30s')).toBeInTheDocument();
+    // Three required rounds and one extension row, regardless of the number of debaters.
+    expect(container.firstElementChild?.children).toHaveLength(4);
+    expect(screen.queryByText(/Local speaker|Remote speaker| · You/)).not.toBeInTheDocument();
     expect(screen.getByText('Both of you must pick Extend to add a round. Up to 8 more rounds.')).toBeInTheDocument();
     expect(container.textContent).not.toMatch(/opening|rebut|clos/i);
   });

@@ -99,18 +99,17 @@ export function DebateFormatDetails({
   return (
     <div className="grid">
       {turns.map(({ durationMs, role }, index) => {
+        if (numberedOnly && index % 2 === 1) return null;
+        const rowIndex = numberedOnly ? openRoundIndexForTurn(index) : index;
         const participant = participants[index % participants.length] ?? firstParticipant;
         return (
-          <TurnRow
+          <FormatRow
             key={index}
             durationMs={durationMs}
-            alternate={index % 2 === 1}
+            alternate={rowIndex % 2 === 1}
             participant={participant}
-            label={
-              numberedOnly
-                ? `Round ${openRoundNumber(openRoundIndexForTurn(index))} · ${participant.user_id === currentUserId ? 'You' : speakerLabel(participant)}`
-                : turnLabel(participant, currentUserId, role)
-            }
+            perSpeaker={numberedOnly}
+            label={numberedOnly ? `Round ${openRoundNumber(rowIndex)}` : turnLabel(participant, currentUserId, role)}
           />
         );
       })}
@@ -126,31 +125,41 @@ export function DebateFormatDetails({
   );
 }
 
-function TurnRow({
+function FormatRow({
   durationMs,
   alternate,
   participant,
   label,
+  perSpeaker,
 }: {
   durationMs: number;
   alternate: boolean;
   participant: FormatParticipant;
   label: string;
+  perSpeaker: boolean;
 }) {
   return (
     <div className={`flex items-center gap-5 rounded-md px-3 py-3 ${alternate ? 'bg-grey-01' : ''}`}>
-      <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-text text-smallButton text-text">
-        {formatTurnDuration(durationMs)}
+      <span
+        className={
+          perSpeaker
+            ? 'order-last ml-auto grid h-7 shrink-0 place-items-center text-metadata text-grey-04'
+            : 'grid h-7 w-7 shrink-0 place-items-center rounded-full border border-text text-smallButton text-text'
+        }
+      >
+        {`${formatTurnDuration(durationMs)}${perSpeaker ? ' each' : ''}`}
       </span>
       <div className="flex min-w-0 items-center gap-1.5">
-        <span className="h-4 w-4 shrink-0 overflow-hidden rounded-full">
-          <Avatar
-            avatarUrl={participant.avatar_cid}
-            value={participant.profile_space_id}
-            alt={speakerLabel(participant)}
-            size={16}
-          />
-        </span>
+        {!perSpeaker && (
+          <span className="h-4 w-4 shrink-0 overflow-hidden rounded-full">
+            <Avatar
+              avatarUrl={participant.avatar_cid}
+              value={participant.profile_space_id}
+              alt={speakerLabel(participant)}
+              size={16}
+            />
+          </span>
+        )}
         <Text as="div" variant="metadataMedium" color="text" className="min-w-0 truncate">
           {label}
         </Text>
