@@ -924,6 +924,16 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     [participants, positions.byClaim]
   );
 
+  // A held list preserves its rows through metadata refetches, but its participant sides can be
+  // stale. Match membership and card controls must read the same current positions.
+  const withCurrentPositions = React.useCallback(
+    (claim: DebateRematchClaim): DebateRematchClaim => ({
+      ...claim,
+      participants: sidesOf(claim.claim.claim_entity_id, claim.claim.space_id),
+    }),
+    [sidesOf]
+  );
+
   /**
    * Every geo-chat rematch-claim lookup on this page, in one list.
    *
@@ -1382,12 +1392,13 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    */
   const isRematchable = React.useCallback(
     (claim: DebateRematchClaim) => {
-      const mine = viewerPositionOf(claim);
-      const theirs = opponentPositionOf(claim);
+      const current = withCurrentPositions(claim);
+      const mine = viewerPositionOf(current);
+      const theirs = opponentPositionOf(current);
 
       return mine !== null && theirs !== null && mine !== theirs;
     },
-    [opponentPositionOf, viewerPositionOf]
+    [opponentPositionOf, viewerPositionOf, withCurrentPositions]
   );
 
   // The opponent's tab: every claim they hold a side on, matches then most debatable first. Held
@@ -3171,7 +3182,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
         <RematchClaimCard
           // The list can hold an older row while new claims hydrate. Its content stays visible,
           // but both the opponent label and the request control need the latest participant sides.
-          claim={{ ...claim, participants: sidesOf(claim.claim.claim_entity_id, claim.claim.space_id) }}
+          claim={withCurrentPositions(claim)}
           previouslyDebated={previouslyDebated}
           context={saidBy ? null : topicMatchCaptionFor(claim)}
           headerMeta={

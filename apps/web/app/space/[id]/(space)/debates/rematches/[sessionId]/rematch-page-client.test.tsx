@@ -2416,6 +2416,30 @@ describe('DebateRematchPageClient', () => {
       expect(screen.getByText('A claim only Salina answered')).toBeInTheDocument();
     });
 
+    it('refreshes hidden matches from current positions when switching tabs during a metadata refetch', async () => {
+      threeClaims();
+      const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await showOpponentClaims();
+
+      // The card already draws these new sides, but its held list row still carries the old ones.
+      mocks.responseCountsLoading = true;
+      mocks.positions = [...mocks.positions, position('profile-local', OPPONENT_ONLY, SPACE_1, false)];
+      rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+      await settleExit();
+      expect(screen.getByText('A claim only Salina answered')).toBeInTheDocument();
+
+      await showMatches();
+      expect(screen.getByText('A claim only Salina answered')).toBeInTheDocument();
+      await showOpponentClaims();
+      expect(screen.queryByText('A claim only Salina answered')).toBeNull();
+
+      mocks.responseCountsLoading = false;
+      rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+      await settleExit();
+      expect(screen.queryByText('A claim only Salina answered')).toBeNull();
+      expect(within(screen.getByRole('button', { name: /^Their positions/ })).getByText('1')).toBeInTheDocument();
+    });
+
     it.each(['refetching', 'failed'] as const)(
       'waits for a trustworthy match set when an empty positions lookup is %s',
       async state => {
