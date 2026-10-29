@@ -236,8 +236,9 @@ function BaseExploreFeedCard({
   const cardActions = <ExploreCardActions item={item} />;
   const isDebate = isDebateEntity(item.types);
   // GEO-3497. A debate that falls back to this card keeps the Trending tag its playable card has.
-  // `compactDebateChrome` draws `DebateExploreMetaRow`, which asks for itself.
-  const isTrending = useIsTrending(item.entityId, isDebate && !compactDebateChrome);
+  // Only the generic row below draws it; compact chrome's `DebateExploreMetaRow` draws its own from
+  // the same cached query.
+  const isTrending = useIsTrending(item.entityId, isDebate);
 
   return (
     <ActionSurfaceArticle

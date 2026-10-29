@@ -6,14 +6,16 @@ import { useQuery } from '@tanstack/react-query';
 import { Effect } from 'effect';
 import { parse } from 'graphql';
 
+import { createBatchLoader } from '~/core/io/batch-loader';
 import { graphql } from '~/core/io/graphql-client';
 import { normId } from '~/core/utils/norm-id';
 
 import { zonedDay } from '../debate-hours';
 
 /**
- * `AGENDA_TIME_ZONE`, restated rather than imported: `debate-agendas` pulls in the claim picker, and
- * the claim card this tag sits on is part of that picker.
+ * The agenda calendar's zone. Restated rather than imported from `debate-agendas`, because GEO-3538
+ * (#3036) removes that copy when agendas come from gaia, which leaves this the only reader. If both
+ * are ever on master together, keep one.
  */
 const AGENDA_TIME_ZONE = 'America/New_York';
 
@@ -33,14 +35,6 @@ const LAST_LISTED_ON_SOURCE = /* GraphQL */ `
 
 const lastListedOnDocument = parse(LAST_LISTED_ON_SOURCE) as TypedDocumentNode<any, any>;
 
-/** Ids asked for in one request. A feed page or a hub tab is well under this. */
-const BATCH_SIZE = 100;
-
-type Waiter = { resolve: (day: string | null) => void; reject: (error: unknown) => void };
-
-let pending = new Map<string, Waiter[]>();
-let flushScheduled = false;
-
 async function fetchLastListedOn(ids: string[]): Promise<Map<string, string | null>> {
   const rows = await Effect.runPromise(
     graphql({
@@ -53,42 +47,17 @@ async function fetchLastListedOn(ids: string[]): Promise<Map<string, string | nu
   return new Map(rows.map(row => [normId(row.id), row.lastListedOn]));
 }
 
-function flush() {
-  flushScheduled = false;
-  const batch = pending;
-  pending = new Map();
-  const ids = [...batch.keys()];
-
-  for (let start = 0; start < ids.length; start += BATCH_SIZE) {
-    const chunk = ids.slice(start, start + BATCH_SIZE);
-    fetchLastListedOn(chunk).then(
-      days => {
-        for (const id of chunk) for (const waiter of batch.get(id) ?? []) waiter.resolve(days.get(id) ?? null);
-      },
-      error => {
-        for (const id of chunk) for (const waiter of batch.get(id) ?? []) waiter.reject(error);
-      }
-    );
-  }
-}
-
 /**
- * One entity's `lastListedOn`, asked for together with every other card that mounts in the same
- * task. Each card asks for its own id, so the tag needs no plumbing through the lists that render
- * it, and a page of cards is still one request.
+ * One entity's `lastListedOn`, asked for together with every other card mounting in the same
+ * commit. Each card asks for its own id, so the tag needs no plumbing through the lists that render
+ * it, and a page of cards is still one request. Takes a normalized id; an entity the API does not
+ * return has no listing.
  */
-export function loadLastListedOn(entityId: string): Promise<string | null> {
-  const id = normId(entityId);
-  return new Promise((resolve, reject) => {
-    const waiters = pending.get(id);
-    if (waiters) waiters.push({ resolve, reject });
-    else pending.set(id, [{ resolve, reject }]);
-    if (!flushScheduled) {
-      flushScheduled = true;
-      setTimeout(flush, 0);
-    }
-  });
-}
+export const loadLastListedOn = createBatchLoader<string | null>({
+  fetchBatch: fetchLastListedOn,
+  missing: () => null,
+  maxBatchSize: 100,
+});
 
 /**
  * GEO-3497. Trending while the claim was last listed on today's or yesterday's agenda (New York
@@ -102,19 +71,16 @@ export function isTrendingListing(lastListedOn: string | null | undefined, now: 
   return lastListedOn >= yesterday && lastListedOn <= today;
 }
 
-export function lastListedOnQueryKey(entityId: string) {
-  return ['entity-last-listed-on', normId(entityId)] as const;
-}
-
 /**
  * Whether a claim, or a debate through its claim, carries the Trending tag. False while loading and
  * on failure: the tag is a hint, and a missing one costs nothing a wrong one would.
  */
 export function useIsTrending(entityId: string | null | undefined, enabled = true): boolean {
+  const id = entityId ? normId(entityId) : '';
   const { data } = useQuery({
-    queryKey: lastListedOnQueryKey(entityId ?? ''),
-    queryFn: () => loadLastListedOn(entityId as string),
-    enabled: enabled && Boolean(entityId),
+    queryKey: ['entity-last-listed-on', id],
+    queryFn: () => loadLastListedOn(id),
+    enabled: enabled && id.length > 0,
     // Agendas are swept into the ranking hourly, so a listing is never fresher than that.
     staleTime: 10 * 60_000,
     retry: 1,

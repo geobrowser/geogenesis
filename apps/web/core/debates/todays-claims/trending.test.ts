@@ -52,7 +52,7 @@ describe('loadLastListedOn', () => {
     ]);
 
     const [first, second, missing] = await Promise.all([
-      loadLastListedOn('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'),
+      loadLastListedOn('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'),
       loadLastListedOn('bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'),
       loadLastListedOn('cccccccccccccccccccccccccccccccc'),
     ]);

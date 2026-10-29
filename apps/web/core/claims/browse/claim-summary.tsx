@@ -244,17 +244,7 @@ export function ClaimSides({
  * about the claim, it is a fact about how few people have read it.
  */
 export function ControversialTag({ className }: { className?: string }) {
-  return (
-    <span
-      className={cx(
-        'inline-flex items-center gap-1.5 text-[0.875rem] leading-none whitespace-nowrap text-red-01',
-        className
-      )}
-    >
-      <Fire />
-      Controversial
-    </span>
-  );
+  return <ClaimStatusTag icon={<Fire />} label="Controversial" colorClassName="text-red-01" className={className} />;
 }
 
 /**
@@ -265,14 +255,36 @@ export function ControversialTag({ className }: { className?: string }) {
  */
 export function TrendingTag({ className }: { className?: string }) {
   return (
+    <ClaimStatusTag icon={<TrendingArrow />} label="Trending" colorClassName="text-ctaPrimary" className={className} />
+  );
+}
+
+/**
+ * The shape the claim status tags share: an icon and a word in one colour, in the meta row beside the
+ * space chip. The sizing and `whitespace-nowrap` reasoning is on {@link ControversialTag}; it holds
+ * for every tag drawn through here, which is why they share it.
+ */
+function ClaimStatusTag({
+  icon,
+  label,
+  colorClassName,
+  className,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  colorClassName: string;
+  className?: string;
+}) {
+  return (
     <span
       className={cx(
-        'inline-flex items-center gap-1.5 text-[0.875rem] leading-none whitespace-nowrap text-ctaPrimary',
+        'inline-flex items-center gap-1.5 text-[0.875rem] leading-none whitespace-nowrap',
+        colorClassName,
         className
       )}
     >
-      <TrendingArrow />
-      Trending
+      {icon}
+      {label}
     </span>
   );
 }

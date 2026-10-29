@@ -22,7 +22,10 @@ const { attribute } = vi.hoisted(() => ({ attribute: vi.fn() }));
 // own suites.
 vi.mock('~/core/hooks/use-is-personal-space', () => ({ useIsPersonalSpace: () => undefined }));
 // The Trending tag's agenda read (GEO-3497) is a query of its own; these rows render without a client.
-vi.mock('~/core/debates/todays-claims/trending', () => ({ useIsTrending: () => false }));
+const trending = vi.hoisted(() => ({ value: false }));
+vi.mock('~/core/debates/todays-claims/trending', () => ({
+  useIsTrending: (_entityId: string, enabled = true) => enabled && trending.value,
+}));
 vi.mock('~/core/hooks/use-personal-space-id', () => ({
   usePersonalSpaceId: () => ({ personalSpaceId: null, isRegistered: false, isLoading: false }),
 }));
@@ -138,6 +141,39 @@ const item: ExploreFeedItem = {
 afterEach(cleanup);
 
 describe('ExploreFeedCard', () => {
+  afterEach(() => {
+    trending.value = false;
+  });
+
+  describe('Trending tag (GEO-3497)', () => {
+    const debateItem: ExploreFeedItem = {
+      ...item,
+      types: [{ id: 'fd51f935-2063-4617-be39-7b672b23364c', name: 'Debate' }],
+      title: 'A debate',
+    };
+
+    it("keeps it on a debate's generic fallback card", () => {
+      trending.value = true;
+      render(<ExploreFeedCard item={debateItem} />);
+
+      expect(screen.getByText('Trending')).toBeInTheDocument();
+    });
+
+    it('draws it once under compact chrome, from the debate meta row', () => {
+      trending.value = true;
+      render(<ExploreFeedCard item={debateItem} compactDebateChrome />);
+
+      expect(screen.getAllByText('Trending')).toHaveLength(1);
+    });
+
+    it('leaves other generic cards alone', () => {
+      trending.value = true;
+      render(<ExploreFeedCard item={{ ...item, types: [{ id: 'some-other-type', name: 'Person' }] }} />);
+
+      expect(screen.queryByText('Trending')).toBeNull();
+    });
+  });
+
   it('routes Topic-typed items to the topic card, without connection counts (GEO-3191)', () => {
     const topicItem: ExploreFeedItem = {
       ...item,
