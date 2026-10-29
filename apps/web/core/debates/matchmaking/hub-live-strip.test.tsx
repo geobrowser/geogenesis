@@ -136,6 +136,20 @@ describe('HubLiveStrip', () => {
     expect(screen.getByRole('button', { name: 'Going' })).toHaveClass('bg-text', 'text-white');
   });
 
+  // GEO-3498: a live lobby takes the slot and the callout waits; a scheduled one does not push it out.
+  it('puts the Today’s claims callout after a live lobby and ahead of a scheduled one', () => {
+    const callout = <section aria-label="Today’s claims" />;
+    const later = lobby({ open: false, scheduled: true, name: 'AI policy night' });
+
+    const { rerender } = render(<HubLiveStrip lineup={{ ...EMPTY, later: [later] }} todaysCallout={callout} />);
+    expect(screen.getByRole('region', { name: 'Today’s claims' })).toBeInTheDocument();
+    expect(screen.queryByTestId('hub-strip-next-lobby')).not.toBeInTheDocument();
+
+    rerender(<HubLiveStrip lineup={{ ...EMPTY, live: [lobby()] }} todaysCallout={callout} />);
+    expect(screen.getByRole('region', { name: 'Live debate lobby' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Today’s claims' })).not.toBeInTheDocument();
+  });
+
   // 26 Oct (Preston): black means live. A lobby on Tuesday is not.
   it('draws an upcoming lobby light, not on the live strip’s black', () => {
     const later = lobby({ open: false, scheduled: true });

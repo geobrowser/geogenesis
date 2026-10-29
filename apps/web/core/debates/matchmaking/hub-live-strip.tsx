@@ -45,11 +45,19 @@ const STRIP_PILL_CLASS_NAME = hubPillClassName('primary', 'px-3.5 md:h-8');
  *  1. your open ask — who was asked, the time left, Cancel — and once it ends unanswered, that nobody
  *     took it, with Schedule;
  *  2. a live lobby, as the full live card (`LiveLobbySpotlight`): every live lobby, Join for each;
- *  3. the next scheduled lobby, when none is live.
+ *  3. the Today's claims callout (GEO-3498), which waits for a live lobby but not a scheduled one;
+ *  4. the next scheduled lobby, when none is live.
  *
  * It sits outside the tabs, so the ask stays in view on every tab while it runs.
  */
-export function HubLiveStrip({ lineup }: { lineup: LobbyLineup }) {
+export function HubLiveStrip({
+  lineup,
+  todaysCallout = null,
+}: {
+  lineup: LobbyLineup;
+  /** The Today's claims callout, or null when there is none to show. */
+  todaysCallout?: React.ReactNode;
+}) {
   const { ask, ended, cancel, cancelling, dismissEnded } = useHubAskState();
 
   if (ask) return <AskStrip ask={ask} onCancel={cancel} cancelling={cancelling} />;
@@ -57,6 +65,8 @@ export function HubLiveStrip({ lineup }: { lineup: LobbyLineup }) {
 
   const [live] = lineup.live;
   if (live) return <LiveLobbySpotlight lineup={lineup} />;
+
+  if (todaysCallout) return todaysCallout;
 
   const next = lineup.soon ?? lineup.later[0] ?? null;
   if (next) return <NextLobbyStrip lobby={next} />;

@@ -122,6 +122,11 @@ type Props = {
   /** Rendered under the summary, for hosts with something extra to say. */
   footer?: React.ReactNode;
   /**
+   * Leaves the summary band out. For the Today's claims callout (GEO-3498), which asks for a side and
+   * moves on: the split is the list's to show, and the callout's card is the claim and the two pills.
+   */
+  hideSummary?: boolean;
+  /**
    * Rendered under one of the two response buttons — see `PositionRow`.
    *
    * A profile uses it to say which side that person came down on, under the
@@ -216,6 +221,7 @@ export function MatchmakingClaimCard({
   header,
   headerMeta,
   footer,
+  hideSummary,
   noteFor,
   showParticipants,
   onOpenClaim,
@@ -289,6 +295,7 @@ export function MatchmakingClaimCard({
           endSlot={endSlot}
           headerMeta={headerMeta}
           hasFooter={Boolean(footer)}
+          hideSummary={hideSummary}
         />
       ) : (
         <UnresolvableControls
@@ -794,6 +801,7 @@ function RespondableControls({
   endSlot,
   headerMeta,
   hasFooter,
+  hideSummary,
   noteFor,
   showParticipants,
   analyticsSurface,
@@ -810,6 +818,8 @@ function RespondableControls({
    * band that had already claimed the bottom edge.
    */
   hasFooter?: boolean;
+  /** See {@link Props.hideSummary}. */
+  hideSummary?: boolean;
   answersReady?: boolean;
   /** See {@link Props.answersMayComeFromIndex}. */
   answersMayComeFromIndex?: boolean;
@@ -1014,7 +1024,7 @@ function RespondableControls({
       {/* Nothing at all while the reads are held, rather than the summary's own "nobody has
           answered yet" — a disabled hook reports a total of zero, and that is the absence of an
           answer rather than an answer of none. */}
-      {!readResponses || summary.isLoading ? null : (
+      {hideSummary || !readResponses || summary.isLoading ? null : (
         // The card's own footer band (Figma 76081-15715): grey, full-bleed to the card's edge, with
         // the share, the split and the faces on one line. It was a rule and two stacked rows, which
         // read as more card rather than as the card's base — and the split bar, at full width above

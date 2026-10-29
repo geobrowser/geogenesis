@@ -3,6 +3,7 @@ import { atomWithStorage } from 'jotai/utils';
 
 import type { ActionContext, ActionScope } from '~/core/action-context';
 import type { Debate } from '~/core/debates/api';
+import type { CalloutDay } from '~/core/debates/todays-claims/todays-callout';
 import type { EntitySidePanelTabSelection } from '~/core/utils/entity-tab-navigation';
 
 export const showingIdsAtom = atomWithStorage<boolean>('showingIds', false);
@@ -523,6 +524,20 @@ export const todaysClaimsSectionsAtom = atomWithStorage<{ day: string | null; op
   'todaysClaimsSections',
   { day: null, open: {} }
 );
+
+/**
+ * GEO-3498. The day's Today's claims callout: the claims it asks about, which were answered or
+ * skipped there, and whether it was dismissed. One copy for the side panel and the full-screen hub,
+ * so answering in one counts in the other. Read through `useTodaysCallout`.
+ */
+export const todaysClaimsCalloutAtom = atomWithStorage<CalloutDay>('todaysClaimsCallout', {
+  accountKey: null,
+  day: null,
+  claims: [],
+  answered: [],
+  skipped: [],
+  dismissed: false,
+});
 
 export const rankingComposeRemoveScrollShardAtom = atom<HTMLElement | null>(null);
 

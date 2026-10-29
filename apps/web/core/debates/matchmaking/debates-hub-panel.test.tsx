@@ -95,8 +95,20 @@ vi.mock('../rooms/scheduling-hooks', () => ({
 // The strip, the nudge and the Requests schedule have their own suites; here it only matters that
 // the panel draws them where it should.
 vi.mock('./hub-live-strip', () => ({
-  HubLiveStrip: ({ lineup }: { lineup: { live: unknown[] } }) => (
-    <div data-testid="hub-live-strip" data-live={String(lineup.live.length)} />
+  HubLiveStrip: ({ lineup, todaysCallout }: { lineup: { live: unknown[] }; todaysCallout?: React.ReactNode }) => (
+    <div data-testid="hub-live-strip" data-live={String(lineup.live.length)}>
+      {todaysCallout}
+    </div>
+  ),
+}));
+// The callout and its day's set have their own suites; here it only matters where it is drawn.
+const todaysCallout = vi.hoisted(() => ({ visible: false }));
+vi.mock('../todays-claims/use-todays-callout', () => ({ useTodaysCallout: () => todaysCallout }));
+vi.mock('./todays-claims-callout', () => ({
+  TodaysClaimsCallout: ({ layout, onFindDebate }: { layout: string; onFindDebate: () => void }) => (
+    <button type="button" data-testid="todays-claims-callout" data-layout={layout} onClick={onFindDebate}>
+      Find a debate
+    </button>
   ),
 }));
 vi.mock('./no-times-nudge', () => ({ NoTimesNudge: () => <div data-testid="no-times-nudge" /> }));
@@ -288,6 +300,7 @@ function renderOpen(tab: DebatesHubTab = 'requests') {
 beforeEach(() => {
   mocks.warmClaimsTab = null;
   lineup.live = [];
+  todaysCallout.visible = false;
   mocks.ready = true;
   mocks.authenticated = true;
   mocks.accountKey = 'user-a';
@@ -602,6 +615,21 @@ describe('DebatesHubPanel', () => {
     );
 
     expect(screen.queryByRole('heading', { name: 'Debates' })).not.toBeInTheDocument();
+  });
+
+  // GEO-3498. The callout rides in the strip's slot, and its one action once done is Matches.
+  it('hands the strip the Today’s claims callout, whose Find a debate opens Matches', () => {
+    renderOpen('people');
+    expect(screen.queryByTestId('todays-claims-callout')).not.toBeInTheDocument();
+    cleanup();
+
+    todaysCallout.visible = true;
+    renderOpen('people');
+    const callout = within(screen.getByTestId('hub-live-strip')).getByTestId('todays-claims-callout');
+    expect(callout).toHaveAttribute('data-layout', 'panel');
+
+    fireEvent.click(callout);
+    expect(screen.getByRole('button', { name: /^Matches/ })).toHaveAttribute('aria-current', 'true');
   });
 
   it('renders every tab and switches between them', async () => {

@@ -26,6 +26,7 @@ import { ElevatedPopoverPortalContext } from '~/design-system/use-elevated-popov
 import { DrawnHubListProvider, useDrawnHubList } from '../debate-claim-card-surface';
 import { useDebateActivity, useGeoChatAuth } from '../hooks';
 import { useLobbyLineup } from '../lobbies/live-lobbies';
+import { useTodaysCallout } from '../todays-claims/use-todays-callout';
 import { useRecordHubTabPress } from './claims-tab';
 import { useDebateRequests, useMatchmakingMatches, useMatchmakingScope } from './hooks';
 import { hubAnalyticsAttributes } from './hub-analytics';
@@ -41,6 +42,7 @@ import { PeopleTab } from './people-tab';
 import { RequestsTab } from './requests-tab';
 import { ScrollableTabRow } from './scrollable-tab-row';
 import { SIGNED_OUT_TABS } from './signed-out-tabs';
+import { TodaysClaimsCallout } from './todays-claims-callout';
 import { useCalendarHref } from './use-calendar-href';
 import { useDebatesHub } from './use-debates-hub';
 import { useFocusTrap } from './use-focus-trap';
@@ -265,6 +267,7 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
   const { data: matches } = useMatchmakingMatches(authenticated);
   const matchCount = matches?.matches.length ?? 0;
   const lobbyLineup = useLobbyLineup();
+  const todaysCallout = useTodaysCallout();
   const setExploreShow = useSetAtom(debatesHubExploreShowAtom);
   const scrollRef = React.useRef<HTMLDivElement>(null);
   // The availability pill, which the schedule editor hands focus back to when it closes.
@@ -319,7 +322,14 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
             44px strip, or the live lobby card. The lobby spotlight, the upcoming lobbies card and the
             schedule banner used to stack here, about 520px at an 800px window before the first person
             or claim. */}
-        <HubLiveStrip lineup={lobbyLineup} />
+        <HubLiveStrip
+          lineup={lobbyLineup}
+          todaysCallout={
+            todaysCallout.visible ? (
+              <TodaysClaimsCallout callout={todaysCallout} layout="panel" onFindDebate={() => changeTab('lobby')} />
+            ) : null
+          }
+        />
 
         {/* Hidden until Privy resolves, not just the body below it. `authenticated` is false during
             restoration, so a row drawn before then is the signed-out one — a returning viewer would

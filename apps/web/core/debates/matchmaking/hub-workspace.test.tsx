@@ -41,6 +41,16 @@ vi.mock('./lobby-tab', () => ({
 }));
 
 vi.mock('./hub-live-rail', () => ({ HubLiveRail: () => <div data-testid="hub-live-rail" /> }));
+// The callout and its day's set have their own suites; here it only matters where it is drawn.
+const todaysCallout = vi.hoisted(() => ({ visible: false }));
+vi.mock('../todays-claims/use-todays-callout', () => ({ useTodaysCallout: () => todaysCallout }));
+vi.mock('./todays-claims-callout', () => ({
+  TodaysClaimsCallout: ({ layout, onFindDebate }: { layout: string; onFindDebate: () => void }) => (
+    <button type="button" data-testid="todays-claims-callout" data-layout={layout} onClick={onFindDebate}>
+      Find a debate
+    </button>
+  ),
+}));
 // The open ask is the strip's and the cards' business, covered in their own suites.
 vi.mock('./hub-ask-context', () => ({ HubAskProvider: ({ children }: { children: React.ReactNode }) => children }));
 // Covered through the side panel's suite; here it only matters that the header draws them.
@@ -71,6 +81,7 @@ vi.mock('next/navigation', () => ({ useSearchParams: () => new URLSearchParams(w
 
 // The picker is a popover, which measures itself. jsdom has no layout and no observer to report it.
 beforeEach(() => {
+  todaysCallout.visible = false;
   mocks.ready = true;
   mocks.authenticated = true;
   setUrl('');
@@ -160,6 +171,26 @@ describe('when only the filters change, not the list', () => {
 
     expect(store.get(debatesHubExploreSpaceSeedSpentAtom)).toBe(false);
     expect(exploreSearch()).toBe('');
+  });
+});
+
+// GEO-3498. Under the title, and its one action once done is Matches.
+describe('the Today’s claims callout', () => {
+  it('sits under the title only when there is one, and opens Matches once done', () => {
+    render(<DebatesHubWorkspace />);
+    expect(screen.queryByTestId('todays-claims-callout')).not.toBeInTheDocument();
+    cleanup();
+
+    todaysCallout.visible = true;
+    render(<DebatesHubWorkspace />);
+    const callout = screen.getByTestId('todays-claims-callout');
+    expect(callout).toHaveAttribute('data-layout', 'hub');
+    expect(screen.getByRole('heading', { level: 1, name: 'Debates' }).compareDocumentPosition(callout)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
+    );
+
+    fireEvent.click(callout);
+    expect(screen.getByTestId('lobby-tab')).toBeInTheDocument();
   });
 });
 
