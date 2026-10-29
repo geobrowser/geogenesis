@@ -201,6 +201,8 @@ export const debateQueryKeys = {
     ['debates', 'account', accountKey, 'lobbies', 'calendar', from, to] as const,
   /** Refetched on a card-less `debate.lobbies_changed`. */
   myLobby: (accountKey: string | null) => ['debates', 'account', accountKey, 'my-lobby'] as const,
+  /** Every lobby view this account has read. */
+  lobbyRoot: (accountKey: string | null) => ['debates', 'account', accountKey, 'lobby'] as const,
   /** Dashless, as `debate.lobby_changed` spells it. */
   lobby: (accountKey: string | null, lobbyId: string) =>
     ['debates', 'account', accountKey, 'lobby', dashlessId(lobbyId)] as const,

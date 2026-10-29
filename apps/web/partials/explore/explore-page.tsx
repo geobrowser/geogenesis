@@ -117,7 +117,7 @@ export function ExplorePage({ sidePanel, walletAddress = null }: Props) {
   const forYouFlag = useFeatureFlag('forYouFeed');
   const forYouEnabled = FOR_YOU_ENABLED_FOR_EVERYONE || forYouFlag;
   // GEO-3421. Published past calls between the cards; off, nothing is fetched or drawn.
-  const pastCalls = usePastCallInterleave(useFeatureFlag('callRecording'));
+  const pastCalls = usePastCallInterleave(useFeatureFlag('spaceCalls'));
 
   return (
     <EntityPageSidebarLayout sidebar={sidePanelEnabled ? sidePanel : null}>

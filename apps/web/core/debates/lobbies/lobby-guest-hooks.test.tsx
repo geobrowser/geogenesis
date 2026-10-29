@@ -4,7 +4,7 @@ import * as React from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { DebateLobbyGuestSession } from '../api';
+import type { DebateLobbyGuestSession, DebateLobbyGuestView } from '../api';
 
 const mocks = vi.hoisted(() => ({
   start: vi.fn(),
@@ -20,7 +20,8 @@ vi.mock('../api', async importOriginal => ({
 }));
 
 const { GeoChatRequestError } = await import('../api');
-const { useLobbyGuestSession } = await import('./lobby-guest-hooks');
+const { GUEST_VIEW_HIDDEN_POLL_MS, GUEST_VIEW_POLL_MS, guestViewPollMs, useLobbyGuestSession } =
+  await import('./lobby-guest-hooks');
 const { isMemberView, lobbyViewForGuest, lobbyViewForMember } = await import('./lobby-view');
 const { readGuestSecret, storeGuestSecret } = await import('./lobby-guest-secret');
 
@@ -373,6 +374,23 @@ describe('useLobbyGuestSession', () => {
     rerender({ listen: false, signedIn: true, member: 'joined' });
     expect(result.current.state.status).toBe('released');
     expect(readGuestSecret('lobby1')).toBeNull();
+  });
+});
+
+describe('guestViewPollMs', () => {
+  const view = (held?: boolean) =>
+    ({
+      lobby: { call: held === undefined ? null : { space_id: 's', space_name: null, started_by: null, held } },
+      claims: null,
+      highlights: null,
+    }) as unknown as DebateLobbyGuestView;
+
+  it('keeps the lobby poll, and reads a held call every 3 minutes (GEO-3420)', () => {
+    expect(guestViewPollMs(view(), false)).toBe(GUEST_VIEW_POLL_MS);
+    expect(guestViewPollMs(view(false), true)).toBe(GUEST_VIEW_HIDDEN_POLL_MS);
+    expect(guestViewPollMs(undefined, false)).toBe(GUEST_VIEW_POLL_MS);
+    expect(guestViewPollMs(view(true), false)).toBe(3 * 60_000);
+    expect(guestViewPollMs(view(true), true)).toBe(3 * 60_000);
   });
 });
 
