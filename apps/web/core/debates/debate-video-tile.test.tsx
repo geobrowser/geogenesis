@@ -8,6 +8,36 @@ import { DebateVideoTile } from './debate-video-tile';
 afterEach(cleanup);
 
 describe('DebateVideoTile', () => {
+  it.each([false, true])('keeps turn cues in the existing name chip (Open rounds: %s)', openRounds => {
+    const tile = (active: boolean, upNext = false, finishingSince: number | null = null) => (
+      <DebateVideoTile
+        participantPosition={true}
+        participantName="You"
+        active={active}
+        upNext={upNext}
+        inactiveIndicatorId="local"
+        openRounds={openRounds}
+        finishingSince={finishingSince}
+      >
+        <div />
+      </DebateVideoTile>
+    );
+    const view = render(tile(false, true));
+    const nameChip = screen.getByText('You').parentElement!;
+    expect(nameChip).toHaveTextContent('Up next');
+
+    view.rerender(tile(true));
+    expect(screen.getByText('You').parentElement).toBe(nameChip);
+    expect(nameChip).toHaveTextContent('Your turn');
+    expect(screen.queryByText('Up next')).not.toBeInTheDocument();
+
+    view.rerender(tile(false, false, Date.now()));
+    expect(screen.getByText('You').parentElement).toBe(nameChip);
+    expect(nameChip).toHaveTextContent('Finishing');
+    expect(screen.queryByText('Your turn')).not.toBeInTheDocument();
+    expect(view.container.querySelector('section')).not.toHaveClass('outline-[3px]');
+  });
+
   it.each([false, true])(
     'never shows a speaker still finishing past the buzzer as muted (GEO-3407, Open rounds: %s)',
     openRounds => {

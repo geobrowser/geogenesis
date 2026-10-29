@@ -63,7 +63,7 @@ import {
   useHoldDebateTabClaim,
   writeDebateTabClaim,
 } from '~/core/debates/debate-tab-claims';
-import { DebateTurnNotice } from '~/core/debates/debate-turn-notice';
+import { DebateTurnAnnouncement } from '~/core/debates/debate-turn-announcement';
 import { DebateVideoTile } from '~/core/debates/debate-video-tile';
 import {
   useAbortDebate,
@@ -3637,6 +3637,7 @@ function DebateRecordingModal({
       key="local"
       participantPosition={localParticipant?.position ?? null}
       participantName="You"
+      upNext={localUpcomingSeconds !== null}
       tileLabel="Your video"
       active={floorIsOpen && countdown.activeSlot === displayLocalSlot}
       overlayText={
@@ -3698,6 +3699,7 @@ function DebateRecordingModal({
       key="remote"
       participantPosition={remoteParticipant?.position ?? null}
       participantName={remoteName}
+      upNext={remoteUpcomingSeconds !== null}
       tileLabel={`${remoteName}’s video`}
       active={floorIsOpen && countdown.activeSlot === remoteParticipant?.participant_slot}
       overlayText={
@@ -3809,7 +3811,7 @@ function DebateRecordingModal({
             />
           </div>
 
-          <DebateTurnNotice
+          <DebateTurnAnnouncement
             speaker={currentSpeaker}
             nextSpeaker={nextSpeaker}
             microphoneMuted={audioMuted}

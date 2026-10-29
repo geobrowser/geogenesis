@@ -11,6 +11,7 @@ import { Text } from '~/design-system/text';
 import { MutedMicrophoneIndicator } from './debate-room-controls';
 import {
   ROOM_COUNT_ENTER_CLASS,
+  ROOM_GLASS_CLASS,
   ROOM_OUTLINED_STYLE,
   ROOM_UI_FONT,
   RoomDim,
@@ -124,6 +125,7 @@ export function DebateVideoTile({
   inactiveIndicatorId,
   tileLabel,
   participantName,
+  upNext = false,
   showMutedIndicator = false,
   countdown,
   closingMessage = false,
@@ -162,6 +164,8 @@ export function DebateVideoTile({
   tileLabel?: string;
   /** Visible name, so the room's turn announcement maps to a picture. */
   participantName?: string;
+  /** Names an imminent turn in the existing participant chip, without adding another overlay. */
+  upNext?: boolean;
   showMutedIndicator?: boolean;
   countdown?: React.ReactElement<RecordingCountdownRingProps> | null;
   closingMessage?: boolean;
@@ -206,6 +210,15 @@ export function DebateVideoTile({
     !finishing && (showMutedIndicator || (inactive && !revealInactive && !countdown && !overlayText && !endingTurn));
   const outlined = active;
   const upcoming = upcomingSeconds !== null && upcomingSeconds !== undefined;
+  const turnStatus = active
+    ? inactiveIndicatorId === 'local'
+      ? 'Your turn'
+      : 'Speaking'
+    : upNext
+      ? 'Up next'
+      : finishing
+        ? 'Finishing'
+        : null;
 
   return (
     <section
@@ -316,11 +329,19 @@ export function DebateVideoTile({
           <div className="flex min-w-0 flex-col items-start gap-1">
             {participantName && (
               <DebateTileChip
-                className={cx('max-w-full text-text', tileChipSurface)}
+                className={cx('max-w-full', active ? ROOM_GLASS_CLASS : [tileChipSurface, 'text-text'])}
                 openRounds={openRounds}
                 title={participantName}
               >
-                <span className="truncate">{participantName}</span>
+                <span className="min-w-0 truncate">{participantName}</span>
+                {turnStatus && (
+                  <>
+                    <span aria-hidden="true">·</span>
+                    <span className="shrink-0" data-participant-turn-status>
+                      {turnStatus}
+                    </span>
+                  </>
+                )}
               </DebateTileChip>
             )}
             {positionLabel !== null && <DebatePositionChip label={positionLabel} openRounds={openRounds} />}
