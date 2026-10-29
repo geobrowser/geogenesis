@@ -2,6 +2,8 @@
 
 import * as React from 'react';
 
+import { tagStyles } from '~/design-system/tag';
+
 import { HubPillButton } from './hub-pill-button';
 
 /** How long after the last pointer, key or wheel input in the list the viewer still counts as working it. */
@@ -121,7 +123,7 @@ export function NewArrivalTag({ onSeen }: { onSeen: () => void }) {
     <span
       ref={ref}
       data-testid="new-match-tag"
-      className="inline-flex h-5 shrink-0 animate-pulse items-center rounded-full bg-ctaTertiary px-2 text-metadata text-ctaPrimary [animation-iteration-count:2]"
+      className={tagStyles('shrink-0 font-normal whitespace-nowrap text-text')}
     >
       New
     </span>
