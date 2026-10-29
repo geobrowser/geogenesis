@@ -210,6 +210,21 @@ function DebateHourRsvp({ lobby, onColor = false }: { lobby: DebateLobbySummary;
   );
 }
 
+/** Join, for a debate hour that is open now: into the lobby, in the solid pill. */
+function JoinDebateHour({ lobby, className }: { lobby: DebateLobbySummary; className?: string }) {
+  return (
+    <Link
+      href={debateRoomPath(lobby.lobby_id)}
+      onClick={() => markLobbyEntry(lobby.lobby_id, 'debate_hours')}
+      data-geo-analytics-label="Debate hours Join lobby"
+      data-geo-analytics-intent="debate_hours_action"
+      className={cx(PILL_CLASS_NAME, SOLID_PILL_CLASS_NAME, className)}
+    >
+      Join
+    </Link>
+  );
+}
+
 /**
  * When the featured card says "Starting soon". Wider than the panel's 15-minute countdown
  * (`LOBBY_SOON_WINDOW_MS`): a newcomer deciding whether to wait for this one wants to know an hour out.
@@ -252,19 +267,7 @@ function FeaturedDebateHour({ lobby, now }: { lobby: DebateLobbySummary; now: nu
           <LobbyByline lobby={lobby} hostedBy analyticsLabel="Debate hours host" />
         </span>
       </div>
-      {live ? (
-        <Link
-          href={debateRoomPath(lobby.lobby_id)}
-          onClick={() => markLobbyEntry(lobby.lobby_id, 'debate_hours')}
-          data-geo-analytics-label="Debate hours Join lobby"
-          data-geo-analytics-intent="debate_hours_action"
-          className={cx(PILL_CLASS_NAME, SOLID_PILL_CLASS_NAME, 'w-full')}
-        >
-          Join
-        </Link>
-      ) : (
-        <DebateHourRsvp lobby={lobby} onColor />
-      )}
+      {live ? <JoinDebateHour lobby={lobby} className="w-full" /> : <DebateHourRsvp lobby={lobby} onColor />}
       <span className="text-center text-[15px] leading-5 text-[#151515]/70">
         {live ? 'Free to join · listen in or pair up' : 'Free to join · we’ll send a calendar invite'}
       </span>
@@ -272,9 +275,16 @@ function FeaturedDebateHour({ lobby, now }: { lobby: DebateLobbySummary; now: nu
   );
 }
 
-/** One more debate hour this week: the day and time on a coloured tile, the name, the hosts, RSVP. */
+/**
+ * One more debate hour this week: the day and time on a coloured tile, the name, the hosts, RSVP. One
+ * already open (a second live lobby; the busiest is featured) says who is there and offers Join.
+ */
 function DebateHourCard({ lobby, tile }: { lobby: DebateLobbySummary; tile: string }) {
-  const going = lobby.reminder_count > 0 ? goingLabel(lobby.reminder_count) : null;
+  const status = lobby.open
+    ? `${lobby.headcount} here`
+    : lobby.reminder_count > 0
+      ? goingLabel(lobby.reminder_count)
+      : 'Be the first to RSVP';
   return (
     <li
       className="flex flex-col gap-4 rounded-xl border border-[#e2e2e2] bg-white p-5 md:p-4"
@@ -316,8 +326,8 @@ function DebateHourCard({ lobby, tile }: { lobby: DebateLobbySummary; tile: stri
         </div>
       </div>
       <div className="flex items-center justify-between gap-3 border-t border-[#efefef] pt-4">
-        <span className="text-[16px] leading-5 text-[#151515]/60">{going ?? 'Be the first to RSVP'}</span>
-        <DebateHourRsvp lobby={lobby} />
+        <span className="text-[16px] leading-5 text-[#151515]/60">{status}</span>
+        {lobby.open ? <JoinDebateHour lobby={lobby} /> : <DebateHourRsvp lobby={lobby} />}
       </div>
     </li>
   );

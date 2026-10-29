@@ -145,6 +145,29 @@ describe('DebateHoursPage', () => {
     expect(within(featured).queryByRole('button', { name: 'RSVP' })).not.toBeInTheDocument();
   });
 
+  it('offers Join on a second open lobby in the list, with who is there in place of who is going', () => {
+    mocks.list = {
+      ...mocks.list,
+      data: {
+        lobbies: [
+          lobby('busy', { open: true, headcount: 12 }),
+          lobby('quiet', { open: true, headcount: 3, reminder_count: 5 }),
+          lobby('later'),
+        ],
+      },
+    };
+    render(<DebateHoursPage />);
+    const [quiet, later] = screen.getAllByTestId('debate-hour-card');
+    expect(within(quiet!).getByRole('link', { name: 'Join' })).toHaveAttribute(
+      'href',
+      expect.stringContaining('quiet')
+    );
+    expect(within(quiet!).queryByRole('button', { name: 'RSVP' })).not.toBeInTheDocument();
+    expect(quiet).toHaveTextContent('3 here');
+    expect(quiet).not.toHaveTextContent('5 going');
+    expect(within(later!).getByRole('button', { name: 'RSVP' })).toBeInTheDocument();
+  });
+
   it('says plainly when nothing is scheduled this week, and points somewhere to watch', () => {
     mocks.list = { ...mocks.list, data: { lobbies: [] } };
     render(<DebateHoursPage />);
