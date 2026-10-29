@@ -817,9 +817,10 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   };
   const localAudioEnabled = shouldEnableLocalAudio(localAudioGate);
   // GEO-3410. Recording parts go out while this microphone is closed, and only those expected to land
-  // before it opens again: on a slow uplink a part in flight doubled the call's round trip. Past the
-  // recording (thanking, the end screen) nothing is held back.
-  const inRecordingWindow = countdown.effectiveStatus === 'preflight' || countdown.effectiveStatus === 'in_progress';
+  // before it opens again: on a slow uplink a part in flight doubled the call's round trip. Held until
+  // the recorder stops, post-roll into the thank-you included; after that nothing is held back.
+  const inRecordingWindow =
+    capturing || countdown.effectiveStatus === 'preflight' || countdown.effectiveStatus === 'in_progress';
   const recordingMicLive = inRecordingWindow && localAudioEnabled;
   const recordingCallWindowEndsAt = inRecordingWindow
     ? Date.now() + msLocalAudioStaysClosed(localAudioGate, countdown.remainingMs)

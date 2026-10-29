@@ -6533,6 +6533,44 @@ describe('DebateRoomPageClient', () => {
       expect(callWindowMs()).toBe(0);
     });
 
+    it('keeps holding parts through the post-roll into the thank-you, until the recorder stops (GEO-3410)', async () => {
+      setHistoryLength(2);
+      const recorders = installRecordingMocks();
+      vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:00:20.000Z'));
+      let elapsedMs = 0;
+      vi.spyOn(performance, 'now').mockImplementation(() => elapsedMs);
+      // Two turns of 30 s from 00:00:10, so the thank-you opens both mics at 00:01:10.
+      const at = (index: number, atSecond: number): Partial<Debate> => {
+        elapsedMs = (atSecond - 20) * 1_000;
+        return {
+          turn_durations_ms: [30_000, 30_000],
+          current_turn_index: index,
+          current_speaker_slot: index % 2 === 0 ? 1 : 2,
+          started_at: '2026-07-02T00:00:10.000Z',
+          turn_started_at: new Date(Date.parse('2026-07-02T00:00:10.000Z') + index * 30_000).toISOString(),
+          turn_ends_at: new Date(Date.parse('2026-07-02T00:00:40.000Z') + index * 30_000).toISOString(),
+        };
+      };
+      const view = await renderLiveDebate(at(0, 20));
+      await waitFor(() => expect(mocks.startLiveStream).toHaveBeenCalled());
+      const { callWindowMs } = mocks.startLiveStream.mock.calls[0][0] as { callWindowMs: () => number | null };
+      mocks.debate = { ...mocks.debate!, ...at(1, 45) };
+      view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+      await waitFor(() => expect(callWindowMs()).toBe(24_000));
+
+      // Two seconds into the thank-you, inside the recording's post-roll.
+      mocks.debate = { ...mocks.debate!, ...at(1, 72) };
+      view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+      await waitFor(() => expect(mocks.liveStreamYieldToCall).toHaveBeenCalled());
+      expect(callWindowMs()).toBe(0);
+      expect((recorders[0] as MediaRecorder | undefined)?.state).toBe('recording');
+
+      mocks.liveStreamResume.mockClear();
+      act(() => recorders[0]!.dispatchEvent(new Event('stop')));
+      await waitFor(() => expect(mocks.liveStreamResume).toHaveBeenCalled());
+      expect(callWindowMs()).toBeNull();
+    });
+
     it('reports a recording that could not be handed to the upload queue (GEO-3171)', async () => {
       mocks.enqueueRecording.mockRejectedValue(new Error('disk said no'));
       setHistoryLength(2);
