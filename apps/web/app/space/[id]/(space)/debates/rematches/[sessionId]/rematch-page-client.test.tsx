@@ -356,7 +356,7 @@ vi.mock('~/core/debates/hooks', () => ({
     data:
       mocks.savedClaimsLoading || mocks.savedClaimsError
         ? undefined
-        : { claims: mocks.savedClaims ?? mocks.claims, excluded_claim_ids: [CLAIM_SOURCE] },
+        : { claims: mocks.savedClaims ?? mocks.claims, excluded_claim_ids: mocks.excludedClaimIds },
     isLoading: mocks.savedClaimsLoading,
     error: mocks.savedClaimsError,
   }),
@@ -2885,6 +2885,19 @@ describe('DebateRematchPageClient', () => {
       // The answer had every claim but one, so only that one went by id.
       expect(mocks.entityIdLookups.flat()).not.toContain(CLAIM_SHARED);
       expect(mocks.entityIdLookups).toContainEqual([TOPPED_UP, NOT_A_CLAIM]);
+    });
+
+    // GEO-3504: a source debate that does not count as debated leaves its claim on offer, and only
+    // geo-chat knows which it is.
+    it('lists the source debate’s claim when geo-chat does not exclude it', async () => {
+      everyFilter();
+      mocks.excludedClaimIds = [];
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await showOpponentClaims();
+
+      await waitFor(() => expect(screen.getByText('The claim the pair just debated')).toBeInTheDocument());
+      expect(rows()).toBe(3);
+      expect(badge()).toBe(rows());
     });
 
     // The top-up is not waited for, so there is a moment with one row and not two — and the badge
@@ -6700,6 +6713,10 @@ describe('inside a debate room', () => {
       });
       expect(rejoin).toHaveBeenCalledTimes(3);
     } finally {
+      // Unmounted and flushed on the fake clock: a timer scheduled on it never fires once real timers
+      // are back, and the cases after this one inherit whatever it was holding.
+      cleanup();
+      vi.runOnlyPendingTimers();
       vi.useRealTimers();
     }
   });
