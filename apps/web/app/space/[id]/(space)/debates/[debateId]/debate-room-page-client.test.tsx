@@ -6,7 +6,12 @@ import { type ComponentPropsWithoutRef, StrictMode } from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { type Debate, type DebateRematchSession, GeoChatRequestError } from '~/core/debates/api';
+import {
+  type Debate,
+  type DebateRematchSession,
+  GeoChatRequestError,
+  type LiveKitJoinResponse,
+} from '~/core/debates/api';
 import {
   clearDebateReturnDestination,
   rememberDebateReturnDestination,
@@ -7309,6 +7314,140 @@ describe('DebateRoomPageClient', () => {
     });
   });
 
+  describe('turn ownership announcements (GEO-3523)', () => {
+    const turnAnnouncement = () => screen.getByRole('status', { name: 'Debate turn' });
+    const openingDebate = (openRounds: boolean): Debate => {
+      const debate = openRoundsListening();
+      return {
+        ...debate,
+        turn_format_id: openRounds ? 'open_rounds' : 'standard',
+        open_rounds: openRounds ? debate.open_rounds : undefined,
+        current_turn_index: 0,
+        current_speaker_slot: 1,
+        turn_started_at: '2026-10-06T20:00:00.000Z',
+        turn_ends_at: '2026-10-06T20:01:00.000Z',
+      };
+    };
+
+    it.each([false, true].flatMap(openRounds => [false, true].map(localOpens => ({ openRounds, localOpens }))))(
+      'hands the floor over on the room clock (Open rounds: $openRounds, local opens: $localOpens)',
+      async ({ openRounds, localOpens }) => {
+        mocks.getServerTime.mockRejectedValue(new Error('Clock endpoint unavailable'));
+        if (!localOpens) joinAsBob();
+        vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt('20:00:54.000'));
+        const debate = openingDebate(openRounds);
+        const view = await renderLiveDebate(debate);
+        expect(turnAnnouncement()).toHaveTextContent(localOpens ? 'Your turn' : 'Alice’s turn');
+        expect(
+          within(debateVideoTile(localOpens ? 'local' : 'remote')).getByText(localOpens ? 'Your turn' : 'Speaking')
+        ).toBeInTheDocument();
+        expect(screen.queryByText('Up next')).not.toBeInTheDocument();
+        expect(turnAnnouncement()).not.toHaveTextContent('Starts in');
+        expect(screen.getByRole('region', { name: 'Your video' })).toHaveTextContent('You');
+        expect(screen.getByRole('region', { name: localOpens ? 'Bob’s video' : 'Alice’s video' })).toHaveTextContent(
+          localOpens ? 'Bob' : 'Alice'
+        );
+
+        rerenderAt(view, '20:00:55.000', debate);
+        await waitFor(() =>
+          expect(within(debateVideoTile(localOpens ? 'remote' : 'local')).getByText('Up next')).toBeInTheDocument()
+        );
+        expect(turnAnnouncement()).toHaveTextContent(localOpens ? 'Up next: Bob' : 'You’re next');
+        expect(turnAnnouncement()).toHaveTextContent(localOpens ? 'Speak now' : 'Listen');
+
+        // Keep serving the previous turn from the API. The floor changes at the exact deadline,
+        // including throughout the previous speaker's possible three-second microphone overrun.
+        rerenderAt(view, '20:01:00.000', debate);
+        await waitFor(() => expect(turnAnnouncement()).toHaveTextContent(localOpens ? 'Bob’s turn' : 'Your turn'));
+        expect(turnAnnouncement()).toHaveTextContent(localOpens ? 'Listen' : 'Speak now — the floor is yours.');
+        expect(turnAnnouncement()).not.toHaveTextContent('Starts in');
+        expect(document.querySelectorAll('[data-active-speaker="true"]')).toHaveLength(1);
+        expect(
+          within(debateVideoTile(localOpens ? 'remote' : 'local')).getByText(localOpens ? 'Speaking' : 'Your turn')
+        ).toBeInTheDocument();
+        expect(screen.queryByText('Up next')).not.toBeInTheDocument();
+        expect(debateVideoTile(localOpens ? 'local' : 'remote')).not.toHaveClass('outline-[3px]');
+        expect(debateVideoTile(localOpens ? 'remote' : 'local')).toHaveClass('outline-[3px]');
+
+        // Permission to speak remains after the short GO overlay has disappeared.
+        rerenderAt(view, '20:01:10.000', debate);
+        expect(turnAnnouncement()).toHaveTextContent(localOpens ? 'Bob’s turn' : 'Your turn');
+        expect(turnAnnouncement()).toHaveTextContent(localOpens ? 'Listen' : 'Speak now');
+      }
+    );
+
+    it.each([false, true])('names the local turn while the join token loads (Open rounds: %s)', async openRounds => {
+      mocks.getServerTime.mockRejectedValue(new Error('Clock endpoint unavailable'));
+      vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt('20:00:20.000'));
+      const joining = deferred<LiveKitJoinResponse>();
+      const connecting = deferred<void>();
+      mocks.liveKitJoinMutateAsync.mockReturnValue(joining.promise);
+      mocks.roomConnect.mockReturnValue(connecting.promise);
+      mocks.debate = openingDebate(openRounds);
+      render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+      await waitFor(() => expect(mocks.liveKitJoinMutateAsync).toHaveBeenCalled());
+
+      expect(turnAnnouncement()).toHaveTextContent('Your turn');
+      expect(turnAnnouncement()).toHaveTextContent('Connecting to call audio…');
+      expect(turnAnnouncement()).not.toHaveTextContent('Speak now');
+      expect(debateVideoTile('local')).toHaveAttribute('data-active-speaker', 'true');
+      expect(debateVideoTile('remote')).toHaveAttribute('data-active-speaker', 'false');
+
+      expect(screen.queryByRole('button', { name: 'End turn' })).not.toBeInTheDocument();
+
+      await act(async () =>
+        joining.resolve({
+          token: 'livekit-token',
+          url: 'wss://livekit.test',
+          room_name: 'geo-debate-debate-1',
+          role: 'participant',
+          participant_slot: 1,
+          position: true,
+          position_label: 'Yes',
+        })
+      );
+      await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
+      expect(turnAnnouncement()).toHaveTextContent('Connecting to call audio…');
+      expect(turnAnnouncement()).not.toHaveTextContent('Speak now');
+
+      await act(async () => connecting.resolve());
+      await waitFor(() => expect(turnAnnouncement()).toHaveTextContent('Speak now'));
+    });
+
+    it.each([false, true])(
+      'keeps the turn instruction in sync with the mic and connection (Open rounds: %s)',
+      async openRounds => {
+        mocks.getServerTime.mockRejectedValue(new Error('Clock endpoint unavailable'));
+        mocks.featureFlags.debateDebugging = true;
+        vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt('20:00:20.000'));
+        await renderLiveDebate(openingDebate(openRounds));
+        expect(turnAnnouncement()).toHaveTextContent('Speak now');
+        fireEvent.click(screen.getByRole('button', { name: 'Mute microphone' }));
+        expect(turnAnnouncement()).toHaveTextContent('Your turn');
+        expect(turnAnnouncement()).toHaveTextContent('Your microphone is off.');
+        expect(turnAnnouncement()).not.toHaveTextContent('Speak now');
+
+        fireEvent.click(screen.getByRole('button', { name: 'Unmute microphone' }));
+        expect(turnAnnouncement()).toHaveTextContent('Speak now');
+        act(() => emitRoomEvent('reconnecting'));
+        expect(turnAnnouncement()).toHaveTextContent('Your turn');
+        expect(turnAnnouncement()).toHaveTextContent('Reconnecting — the debate clock is still running.');
+        expect(turnAnnouncement()).not.toHaveTextContent('Speak now');
+
+        act(() => emitRoomEvent('reconnected'));
+        expect(turnAnnouncement()).toHaveTextContent('Speak now');
+      }
+    );
+
+    it('does not announce a speaking turn or a next speaker during the Open rounds vote', async () => {
+      mocks.getServerTime.mockRejectedValue(new Error('Clock endpoint unavailable'));
+      vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt('20:02:03.000'));
+      await renderLiveDebate(openRoundsDeciding());
+      expect(turnAnnouncement()).toBeEmptyDOMElement();
+      expect(document.querySelectorAll('[data-active-speaker="true"]')).toHaveLength(0);
+    });
+  });
+
   // GEO-3366: classic outlined type and glass pills, with the room's timer build-up.
   describe('open rounds classic + glass (GEO-3366)', () => {
     const pill = (participant: 'local' | 'remote', kind: string) =>
@@ -7402,7 +7541,7 @@ describe('DebateRoomPageClient', () => {
       expect(debateVideoTile('remote').querySelector('[data-room-speaker-outline]')).toHaveClass('border-[#FF4A26]');
     });
 
-    it('labels your tile "Turn ended" when you end early, and puts up the other debater\'s turn', async () => {
+    it('labels your tile "Turn ended" when you end early, and names who is next', async () => {
       vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt('20:02:20.000'));
       mocks.endTurnMutateAsync.mockReturnValue(deferred<Debate>().promise);
       await renderLiveDebate(openRoundsRoundOneSpeaking());
@@ -7411,7 +7550,7 @@ describe('DebateRoomPageClient', () => {
 
       await waitFor(() => expect(pill('local', 'ended')).toHaveTextContent('Turn ended'));
       expect(screen.queryByText('Ending turn…')).not.toBeInTheDocument();
-      expect(pill('remote', 'turn')).toHaveTextContent('Bob’s turn');
+      expect(pill('remote', 'turn')).toHaveTextContent('Bob is next');
       expect(pill('remote', 'turn')).toHaveClass('rounded-full', 'backdrop-blur-[14px]');
       expect(pill('local', 'ended')).toHaveClass('border-dashed');
       expect(debateVideoTile('local')).toHaveAttribute('data-active-speaker', 'false');

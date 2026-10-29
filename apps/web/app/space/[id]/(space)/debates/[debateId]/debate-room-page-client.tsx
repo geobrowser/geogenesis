@@ -63,6 +63,7 @@ import {
   useHoldDebateTabClaim,
   writeDebateTabClaim,
 } from '~/core/debates/debate-tab-claims';
+import { DebateTurnAnnouncement } from '~/core/debates/debate-turn-announcement';
 import { DebateVideoTile } from '~/core/debates/debate-video-tile';
 import {
   useAbortDebate,
@@ -3465,6 +3466,9 @@ function DebateRecordingModal({
     (localSlot
       ? debate.participants.find(participant => participant.participant_slot === localSlot)
       : debate.participants.find(participant => participant.user_id === currentUserId)) ?? null;
+  // The debate already identifies our seat while a reload/retry is fetching its join token.
+  // This fallback is display-only; microphone gating still requires the joined slot above.
+  const displayLocalSlot = localSlot ?? localParticipant?.participant_slot ?? null;
   const remoteParticipant =
     debate.participants.find(participant => participant.user_id !== localParticipant?.user_id) ?? null;
   const remoteName = remoteParticipant ? speakerName(remoteParticipant) : 'The other debater';
@@ -3484,7 +3488,12 @@ function DebateRecordingModal({
   // The pick, the reveal and what it means span both tiles, so both dim under them.
   const tilesDimmed =
     openRoundsStyle && (countdown.openRounds?.phase === 'deciding' || reveal.step === 'flip' || reveal.result !== null);
-  const localUpcomingSeconds = reveal.holdsCountIn ? null : localTurnStartsInSeconds(debate, countdown, localSlot);
+  const localUpcomingSeconds = reveal.holdsCountIn
+    ? null
+    : localTurnStartsInSeconds(debate, countdown, displayLocalSlot);
+  const remoteUpcomingSeconds = reveal.holdsCountIn
+    ? null
+    : localTurnStartsInSeconds(debate, countdown, remoteParticipant?.participant_slot ?? null);
   // Open rounds names the turn after an early end too, so an opening is still "You're up in".
   const localUpcomingLabel =
     !openRoundsStyle && countdown.yieldingSlot && !countdown.preservesExistingCountIn
@@ -3510,6 +3519,19 @@ function DebateRecordingModal({
       ));
   const localEndingTurn = countdown.yieldingSlot !== null && countdown.yieldingSlot === localSlot;
   const speakingTurn = countdown.effectiveStatus === 'in_progress' && countdown.activeSlot !== null;
+  const floorIsOpen = speakingTurn && countdown.yieldingSlot === null;
+  const currentSpeaker = floorIsOpen
+    ? {
+        name: countdown.activeSlot === displayLocalSlot ? 'You' : remoteName,
+        local: countdown.activeSlot === displayLocalSlot,
+      }
+    : null;
+  const nextSpeaker =
+    localUpcomingSeconds !== null
+      ? { name: 'You', local: true, seconds: localUpcomingSeconds }
+      : remoteUpcomingSeconds !== null
+        ? { name: remoteName, local: false, seconds: remoteUpcomingSeconds }
+        : null;
   // The speaker's last five seconds, when the timer warns, and in Open rounds the tile's outline
   // turns red with it (GEO-3315).
   const speakerFinalSeconds = speakingTurn && countdown.remainingSeconds > 0 && countdown.remainingSeconds <= 5;
@@ -3545,7 +3567,7 @@ function DebateRecordingModal({
       : null;
   const localCountdown = localEndingTurn
     ? null
-    : countdown.activeSlot === localSlot
+    : countdown.activeSlot === displayLocalSlot
       ? countdownRing
       : sharedPhaseCountdown;
   // In Open rounds the "Turn ended" pill says it, as in the mockup, without the spent timer.
@@ -3614,11 +3636,10 @@ function DebateRecordingModal({
     <DebateVideoTile
       key="local"
       participantPosition={localParticipant?.position ?? null}
-      active={
-        countdown.effectiveStatus === 'in_progress' &&
-        (!openRoundsStyle || !localEndingTurn) &&
-        (countdown.activeSlot === localSlot || countdown.yieldingSlot === localSlot)
-      }
+      participantName="You"
+      upNext={localUpcomingSeconds !== null}
+      tileLabel="Your video"
+      active={floorIsOpen && countdown.activeSlot === displayLocalSlot}
       overlayText={
         connecting
           ? roomState === 'connected' || Boolean(localParticipant?.joined_at)
@@ -3667,7 +3688,7 @@ function DebateRecordingModal({
       chipsHidden={reveal.chipsHidden}
       openRounds={openRoundsStyle}
       dimmed={tilesDimmed}
-      finalSeconds={finalSeconds && countdown.activeSlot === localSlot}
+      finalSeconds={finalSeconds && countdown.activeSlot === displayLocalSlot}
       finishingSince={localFinishingSince}
     >
       <video ref={setLocalVideoElement} className="h-full w-full bg-grey-01 object-cover" playsInline muted autoPlay />
@@ -3677,12 +3698,10 @@ function DebateRecordingModal({
     <DebateVideoTile
       key="remote"
       participantPosition={remoteParticipant?.position ?? null}
-      active={
-        countdown.effectiveStatus === 'in_progress' &&
-        (!openRoundsStyle || !remoteEndingTurn) &&
-        (countdown.activeSlot === remoteParticipant?.participant_slot ||
-          countdown.yieldingSlot === remoteParticipant?.participant_slot)
-      }
+      participantName={remoteName}
+      upNext={remoteUpcomingSeconds !== null}
+      tileLabel={`${remoteName}’s video`}
+      active={floorIsOpen && countdown.activeSlot === remoteParticipant?.participant_slot}
       overlayText={
         connecting
           ? remoteParticipant?.joined_at
@@ -3791,6 +3810,13 @@ function DebateRecordingModal({
               className="ml-auto shrink-0"
             />
           </div>
+
+          <DebateTurnAnnouncement
+            speaker={currentSpeaker}
+            nextSpeaker={nextSpeaker}
+            microphoneMuted={audioMuted}
+            connectionState={roomState === 'connecting' || roomState === 'reconnecting' ? roomState : 'connected'}
+          />
 
           {/* A size container, so the Open rounds panel and announcements over the tiles size with them. */}
           <div
