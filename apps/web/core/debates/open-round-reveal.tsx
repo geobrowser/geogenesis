@@ -18,7 +18,8 @@ import {
 import { rebuttalRoundsLabel } from './debate-round-indicator';
 import {
   type OpenRoundsRoomPhase,
-  debateTurnRoleForDebate,
+  debateRoundRoleForDebate,
+  hasNumberedOpenRounds,
   openRoundCountInMs,
   openRoundNumber,
   openRoundRevealedPicks,
@@ -126,7 +127,7 @@ export type OpenRoundResult =
   /** `label` is the round in the player's words, "Round 2 · Rebuttal". */
   | { kind: 'round'; round: number; label: string; opener: string | null }
   | { kind: 'wrap'; note: string | null }
-  | { kind: 'max'; rounds: number };
+  | { kind: 'max'; rounds: number; numberedOnly?: boolean };
 
 /** The next round and its opener, or the ending, in outlined type across the tiles' seam. */
 export function OpenRoundResultOverlay({ result }: { result: OpenRoundResult }) {
@@ -323,7 +324,11 @@ export function useOpenRoundReveal({
   const announcing = step === 'result' || (step === 'countIn' && !countingIn);
   let result: OpenRoundResult | null = null;
   if (maxReached) {
-    result = { kind: 'max', rounds: openRounds?.max_rebuttal_rounds ?? 0 };
+    result = {
+      kind: 'max',
+      rounds: openRounds?.max_rebuttal_rounds ?? 0,
+      ...(hasNumberedOpenRounds(debate) && { numberedOnly: true }),
+    };
   } else if (roundIndex !== null && announcing) {
     result =
       outcome === 'extend'
@@ -331,7 +336,7 @@ export function useOpenRoundReveal({
           {
             kind: 'round',
             round: openRoundNumber(roundIndex + 1),
-            label: roundLabel((roundIndex + 1) * 2, turnIndex => debateTurnRoleForDebate(debate, turnIndex)),
+            label: roundLabel((roundIndex + 1) * 2, turnIndex => debateRoundRoleForDebate(debate, turnIndex)),
             opener: localOpens ? null : remote.name,
           }
         : { kind: 'wrap', note: openRoundWrapNote(localPick?.pick, { name: remote.name, pick: remotePick?.pick }) };
@@ -383,7 +388,10 @@ function openRoundAnnouncementText({
   localPick: OpenRoundRevealedPick | null;
   remote: { name: string; pick: OpenRoundRevealedPick | null };
 }) {
-  if (result?.kind === 'max') return `That's the max: ${rebuttalRoundsLabel(result.rounds)}.`;
+  if (result?.kind === 'max')
+    return result.numberedOnly
+      ? `That's the max: ${openRoundNumber(result.rounds)} rounds.`
+      : `That's the max: ${rebuttalRoundsLabel(result.rounds)}.`;
   if (step === null) return '';
   // Mid-sentence, so a missing pick is lower case.
   const said = (entry: OpenRoundRevealedPick | null) =>

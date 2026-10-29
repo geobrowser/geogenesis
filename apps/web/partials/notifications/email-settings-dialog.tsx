@@ -8,15 +8,16 @@ import { createPortal } from 'react-dom';
 import { useFocusTrap } from '~/core/debates/matchmaking/use-focus-trap';
 import { useScrollLock } from '~/core/debates/use-scroll-lock';
 import {
-  EMAIL_GROUPS,
   EMAIL_GROUP_COPY,
   type EmailGroup,
   type EmailGroupSettings,
   INVITES_OFF_WARNING,
   SAVE_FAILED,
+  shownEmailGroups,
 } from '~/core/notifications/email-groups';
 import { type EmailSettingsEntry, emailSettingsOpened } from '~/core/notifications/email-settings-analytics';
 import { useNotificationPreferences, useSaveEmailSwitch } from '~/core/notifications/hooks';
+import { useFeatureFlag } from '~/core/state/feature-flags';
 
 import { DIALOG_ACTION_BUTTON_CLASS_NAME } from '~/design-system/button';
 import { Text } from '~/design-system/text';
@@ -78,6 +79,7 @@ export function EmailSettingsDialog({
   const data = preferences.data;
   const usable = !unavailable && !noEmail && data !== undefined;
   const allOn = data?.email_enabled ?? false;
+  const shown = shownEmailGroups(useFeatureFlag('spaceCalls'));
   const groups: EmailGroupSettings | null = data?.email_groups ?? null;
   const address = data?.email ?? null;
 
@@ -145,7 +147,7 @@ export function EmailSettingsDialog({
               (!usable || !allOn) && 'opacity-45'
             )}
           >
-            {EMAIL_GROUPS.map((group, index) => (
+            {shown.map((group, index) => (
               <GroupRow
                 key={group}
                 group={group}

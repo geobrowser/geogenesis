@@ -110,6 +110,7 @@ import {
   type OpenRoundsRoomPhase,
   debateThankingStartsAtMs,
   debateTurnRoleForDebate,
+  hasNumberedOpenRounds,
   isBetweenOpenRounds,
   isDebatesLastTurn,
   isOpenRoundsDebate,
@@ -3779,6 +3780,7 @@ function DebateRecordingModal({
               <DebateRoundIndicator
                 // Once the new round is announced, the counter moves to it.
                 phase={reveal.announcedRoundPhase ?? countdown.openRounds}
+                numberedOnly={hasNumberedOpenRounds(debate)}
                 maxRounds={debate.open_rounds.max_rebuttal_rounds}
                 requiredRounds={openRoundsRequiredRebuttalRounds(debate.open_rounds)}
               />

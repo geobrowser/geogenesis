@@ -67,7 +67,6 @@ describe('FeatureFlagsDialog', () => {
         lobbyHosting: false,
         todaysClaims: false,
         spaceCalls: false,
-        callRecording: false,
         googleSignIn: false,
         googleCalendar: false,
         microsoftCalendar: false,

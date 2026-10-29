@@ -5,13 +5,17 @@ import React, { useEffect, useRef, useState } from 'react';
 import { cva } from 'class-variance-authority';
 import cx from 'classnames';
 import { motion } from 'framer-motion';
+import { useLinkStatus } from 'next/link';
 import { usePathname } from 'next/navigation';
 
 import { useEditable } from '~/core/state/editable-store';
 import { useActiveTabIdForEditor } from '~/core/state/editor/editor-provider';
 import { useEntitySidePanelActiveTab } from '~/core/state/entity-side-panel-active-tab';
+import { useInPageTabSwitch, useSwitchesInPage } from '~/core/state/in-page-tab-switch';
+import { usePendingTab, useTabContentSkeleton } from '~/core/state/pending-tab';
 import { entityTabIdFromHref, isEntityTabActive } from '~/core/utils/entity-tab-navigation';
 
+import { Dots } from '~/design-system/dots';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { useHorizontalOverflow } from '~/design-system/use-horizontal-overflow';
 
@@ -134,6 +138,11 @@ export function TabGroup({ tabs, className = '' }: TabGroupProps) {
   const scrollStartLeft = useRef<number>(0);
   const pointerUpHandler = useRef<((e: PointerEvent) => void) | null>(null);
   const { indicator, registerActiveTab } = useActiveTabIndicator(tabs);
+  const path = usePathname();
+  const activeTabId = useActiveTabIdForEditor();
+  const fullPath = activeTabId ? `${path}?tabId=${activeTabId}` : `${path}`;
+
+  const { pendingHref, handlePendingChange } = usePendingTab(fullPath);
 
   const handlePointerDown = (e: React.PointerEvent) => {
     // Only allow dragging if content is scrollable
@@ -204,6 +213,10 @@ export function TabGroup({ tabs, className = '' }: TabGroupProps) {
                     hidden={t.hidden}
                     sidePanelKey={t.sidePanelKey}
                     activeRef={registerActiveTab}
+                    activeTabId={activeTabId}
+                    fullPath={fullPath}
+                    pendingHref={pendingHref}
+                    onPendingChange={handlePendingChange}
                   />
                 </span>
               ) : (
@@ -215,6 +228,10 @@ export function TabGroup({ tabs, className = '' }: TabGroupProps) {
                   hidden={t.hidden}
                   sidePanelKey={t.sidePanelKey}
                   activeRef={registerActiveTab}
+                  activeTabId={activeTabId}
+                  fullPath={fullPath}
+                  pendingHref={pendingHref}
+                  onPendingChange={handlePendingChange}
                 />
               )}
             </React.Fragment>
@@ -241,6 +258,51 @@ interface TabProps {
   hidden?: boolean;
   sidePanelKey?: string;
   activeRef: (element: HTMLElement | null) => void;
+  activeTabId: string | null;
+  fullPath: string;
+  pendingHref: string | null;
+  onPendingChange: (href: string, pending: boolean) => void;
+}
+
+/**
+ * Whether a click on an already-selected tab should be swallowed. Shared by both tab rows.
+ *
+ * Keyed on *selected* rather than on `useLinkStatus`'s pending, which is the whole trick. Pending
+ * stops at the commit, and committing now means the loading boundary is up rather than the content
+ * being there — measured at 63ms against content at 2665ms, so a guard on pending covered 2% of the
+ * window somebody would actually re-click in. `selected` covers the committed tab too, so it holds
+ * for the whole stream, and clicking the current tab becomes the no-op a tab row should give rather
+ * than a full round trip for the page already on screen.
+ *
+ * A different tab is never a repeat — that is somebody changing their mind mid-navigation — and nor
+ * is a modified or non-primary click, which opens a new tab or window.
+ */
+export function isRepeatTabClick(event: React.MouseEvent, selected: boolean): boolean {
+  if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return false;
+  return selected;
+}
+
+export function TabPendingMarker({
+  href,
+  onPendingChange,
+}: {
+  href: string;
+  onPendingChange: (href: string, pending: boolean) => void;
+}) {
+  const { pending } = useLinkStatus();
+  const hasSkeleton = useTabContentSkeleton();
+
+  useEffect(() => {
+    onPendingChange(href, pending);
+  }, [href, onPendingChange, pending]);
+
+  if (!pending || hasSkeleton) return null;
+
+  return (
+    <span data-tab-pending aria-hidden className="flex items-center">
+      <Dots />
+    </span>
+  );
 }
 
 /** Shared with entity/space `TabGroup` and governance home tab rows (same underline behavior). */
@@ -263,14 +325,22 @@ export const tabGroupTabLinkStyles = cva(
   }
 );
 
-function Tab({ href, label, badge, disabled, hidden, sidePanelKey, activeRef }: TabProps) {
+function Tab({
+  href,
+  label,
+  badge,
+  disabled,
+  hidden,
+  sidePanelKey,
+  activeRef,
+  activeTabId,
+  fullPath,
+  pendingHref,
+  onPendingChange,
+}: TabProps) {
   const { editable } = useEditable();
-
-  const path = usePathname();
-  const activeTabId = useActiveTabIdForEditor();
   const sidePanelTab = useEntitySidePanelActiveTab();
 
-  const fullPath = activeTabId ? `${path}?tabId=${activeTabId}` : `${path}`;
   const active = isEntityTabActive({
     href,
     activeTabId,
@@ -280,13 +350,22 @@ function Tab({ href, label, badge, disabled, hidden, sidePanelKey, activeRef }: 
     activeSystemTab: sidePanelTab?.activeSystemTab,
   });
 
+  const selected = pendingHref ? pendingHref === href : active;
+  const switchTabInPage = useInPageTabSwitch();
+  const switchesInPage = useSwitchesInPage(href);
+
+  const handleClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
+    if (isRepeatTabClick(event, selected)) event.preventDefault();
+    switchTabInPage(event, href, () => onPendingChange(href, true));
+  };
+
   if (!editable && hidden) {
     return null;
   }
 
   if (disabled) {
     return (
-      <div ref={active ? activeRef : undefined} className={tabGroupTabLinkStyles({ active, disabled })}>
+      <div ref={selected ? activeRef : undefined} className={tabGroupTabLinkStyles({ active: selected, disabled })}>
         {label}
         {badge && <Badge>{badge}</Badge>}
       </div>
@@ -298,9 +377,9 @@ function Tab({ href, label, badge, disabled, hidden, sidePanelKey, activeRef }: 
   if (sidePanelTab) {
     return (
       <button
-        ref={active ? activeRef : undefined}
+        ref={selected ? activeRef : undefined}
         type="button"
-        className={tabGroupTabLinkStyles({ active, disabled })}
+        className={tabGroupTabLinkStyles({ active: selected, disabled })}
         onClick={() =>
           sidePanelKey ? sidePanelTab.setActiveSystemTab(sidePanelKey) : sidePanelTab.setActiveTabId(hrefTabId)
         }
@@ -320,13 +399,16 @@ function Tab({ href, label, badge, disabled, hidden, sidePanelKey, activeRef }: 
     // The underline is one sibling owned by `TabGroup`, animated with x + width only. A shared
     // layout marker measured the page's vertical scroll between routes and flew through the label.
     <Link
-      ref={active ? activeRef : undefined}
-      className={tabGroupTabLinkStyles({ active, disabled })}
+      ref={selected ? activeRef : undefined}
+      className={tabGroupTabLinkStyles({ active: selected, disabled })}
       href={href}
-      prefetch
+      prefetch={!switchesInPage}
+      hoverPrefetch={!switchesInPage}
+      onClick={handleClick}
     >
       {label}
       {badge && <Badge>{badge}</Badge>}
+      <TabPendingMarker href={href} onPendingChange={onPendingChange} />
     </Link>
   );
 }

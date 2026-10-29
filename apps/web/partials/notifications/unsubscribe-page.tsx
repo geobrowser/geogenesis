@@ -19,8 +19,8 @@ import {
   INVALID_UNSUBSCRIBE_LINK,
   SAVE_FAILED,
   UNDO_EXPIRED_BODY,
-  UNSUBSCRIBE_COPY,
   UNSUBSCRIBE_UNAVAILABLE,
+  unsubscribeCopy,
   withAddress,
 } from '~/core/notifications/email-groups';
 import { emailPreferenceChanged } from '~/core/notifications/email-settings-analytics';
@@ -113,7 +113,7 @@ export function UnsubscribePage() {
   const current = answer ?? read.data ?? null;
   if (!current) return <Card aria-busy />;
 
-  const copy = UNSUBSCRIBE_COPY[current.group];
+  const copy = unsubscribeCopy(current.group, current.group_name);
   const fill = (text: string) => withAddress(text, current.email);
   const failed = change.isError ? (
     <p className="text-footnote text-red-01" role="status">

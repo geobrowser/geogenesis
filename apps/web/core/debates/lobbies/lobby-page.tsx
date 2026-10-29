@@ -6,15 +6,19 @@ import Link from 'next/link';
 
 import { useIsPhoneLayout } from '~/core/hooks/use-is-phone-layout';
 import { CallRoom } from '~/core/space-calls/call-room';
+import { CallScreenStage } from '~/core/space-calls/call-screen-stage';
 import { EndedCallRecording } from '~/core/space-calls/recording/ended-call-recording';
-import { spaceCallPath } from '~/core/space-calls/routes';
+import { spaceCallPath, spaceCallsTabPath } from '~/core/space-calls/routes';
 import { useBrowseSidebarPageDefault } from '~/core/state/browse-sidebar-state';
+import { useFeatureFlag } from '~/core/state/feature-flags';
 import { NavUtils } from '~/core/utils/utils';
 
 import { Spinner } from '~/design-system/spinner';
 import { Text } from '~/design-system/text';
 
-import type { DebateLobbyView } from '../api';
+import { CallPreOpen } from '~/partials/space-calls/call-pre-open';
+
+import { type DebateLobbyView, isLobbyNotFound } from '../api';
 import { useDebateActivity, useGeoChatAuth } from '../hooks';
 import { useMatchmakingScope } from '../matchmaking/hooks';
 import { HubHeaderControls } from '../matchmaking/hub-header-controls';
@@ -33,13 +37,7 @@ import { markLobbyEntry } from './lobby-analytics';
 import { LobbyClaimsArea } from './lobby-claims-area';
 import { useClaimsTabMark } from './lobby-claims-mark';
 import { useExitLobbyWhenOut, useLobbyExitHref } from './lobby-exit';
-import {
-  RSVP_FAILED,
-  lobbyDateLabel,
-  lobbyErrorMessage,
-  notYetOpenLabel,
-  rsvpLabel,
-} from './lobby-format';
+import { RSVP_FAILED, lobbyDateLabel, lobbyErrorMessage, notYetOpenLabel, rsvpLabel } from './lobby-format';
 import { LOBBY_GUEST_COPY, LobbyGuestBanner } from './lobby-guest';
 import {
   LobbyGuestProvider,
@@ -143,8 +141,13 @@ export function DebateLobbyPage({ lobbyId }: { lobbyId: string }) {
   const waitingOutside =
     !guest && lobby !== null && !lobby.viewer.connected && (admitted || lobby.access.status === 'not_yet_open');
   useMatchmakingScope(waitingOutside);
-  // Only where the page shows the guest banner, which is how a closed prompt is opened again.
-  useLobbySignInPrompt(lobbyId, signedOut && (admitted || lobby?.access.status === 'not_yet_open'));
+  // Only where the page shows the guest banner, which is how a closed prompt is opened again. A
+  // scheduled call's pre-call page has none: it asks on Remind me, or once the call is open.
+  const callRoom = useIsCallRoom();
+  const spaceCalls = useFeatureFlag('spaceCalls');
+  const preCallPage = callRoom && spaceCalls;
+  const notYetOpen = lobby?.access.status === 'not_yet_open';
+  useLobbySignInPrompt(lobbyId, signedOut && (admitted || (notYetOpen && !preCallPage)));
   const exitHref = useLobbyExitHref();
   const exiting = useExitLobbyWhenOut({
     lobbyId,
@@ -164,6 +167,7 @@ export function DebateLobbyPage({ lobbyId }: { lobbyId: string }) {
       <LobbyAccess
         lobby={lobby}
         failed={(guest ? guestQuery : lobbyQuery).isError}
+        missing={isLobbyNotFound((guest ? guestQuery : lobbyQuery).error)}
         onRetry={() => void (guest ? guestQuery : lobbyQuery).refetch()}
         presence={presence}
         guestSession={guestSession}
@@ -200,6 +204,7 @@ export function memberPath(
 function LobbyAccess({
   lobby,
   failed,
+  missing,
   onRetry,
   presence,
   guestSession,
@@ -207,6 +212,8 @@ function LobbyAccess({
 }: {
   lobby: LobbyPageView | null;
   failed: boolean;
+  /** The last read was a 404: whatever is cached is gone. */
+  missing: boolean;
   /** Reads the lobby again; a member join follows once it loads. */
   onRetry: () => void;
   presence: ReturnType<typeof useLobbyPresence>;
@@ -216,6 +223,16 @@ function LobbyAccess({
 }) {
   const guest = useIsLobbyGuest();
   const purpose = useLobbyRoomPurpose();
+  // Scheduled calls (GEO-3420) are the community calls feature; off, a call page reads as before.
+  const spaceCalls = useFeatureFlag('spaceCalls');
+  // A call gone from geo-chat leaves quietly, never showing a cached copy.
+  if (missing && purpose.purpose === 'call' && spaceCalls) {
+    return (
+      <LobbyNotice action={{ href: spaceCallsTabPath(purpose.spaceId), label: CALL_STATE_COPY.backToCalls }}>
+        {CALL_STATE_COPY.unavailable}
+      </LobbyNotice>
+    );
+  }
   if (!lobby) {
     const call = purpose.purpose === 'call';
     return failed ? (
@@ -240,6 +257,7 @@ function LobbyAccess({
         <LobbyClosedCard
           lobby={lobby}
           ended={lobby.access.reason === 'ended'}
+          cancelled={lobby.access.reason === 'cancelled'}
           after={
             <>
               {purpose.purpose === 'call' ? <EndedCallRecording lobby={lobby} /> : null}
@@ -254,7 +272,7 @@ function LobbyAccess({
         />
       );
     case 'not_yet_open':
-      return <NotYetOpen lobby={lobby} />;
+      return purpose.purpose === 'call' && spaceCalls ? <CallPreOpen lobby={lobby} /> : <NotYetOpen lobby={lobby} />;
     case 'admitted':
       if (guest && guestSession.state.status === 'removed') {
         return (
@@ -565,7 +583,15 @@ function LobbyRoom({
       header={<LobbyHeader lobby={lobby} phone={phone} availability={phone ? null : availability} />}
       belowHeader={!guest && state.status === 'joined' ? <LobbyScheduledRequests lobby={lobby} /> : null}
       people={
-        <LobbyPeople lobby={lobby} viewerId={currentUserId} ownAvailable={ownAvailable} disagreements={disagreements} />
+        // A host's shared screen (GEO-3507), above the speakers as in a call.
+        <CallScreenStage members={lobby.members}>
+          <LobbyPeople
+            lobby={lobby}
+            viewerId={currentUserId}
+            ownAvailable={ownAvailable}
+            disagreements={disagreements}
+          />
+        </CallScreenStage>
       }
       aside={{
         tab: 'Claims',
@@ -578,9 +604,12 @@ function LobbyRoom({
       availability={availability}
       queuedOutcome={queuedRequest.outcome}
       onDismissQueuedOutcome={queuedRequest.dismissOutcome}
+      voiceExtras={LOBBY_VOICE_EXTRAS}
     />
   );
 }
+
+const LOBBY_VOICE_EXTRAS = { screenShare: true };
 
 function LobbyTitle({ lobby }: { lobby: LobbyPageView }) {
   return (

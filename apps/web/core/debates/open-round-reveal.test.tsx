@@ -249,6 +249,17 @@ describe('useOpenRoundReveal', () => {
     expect(current.announcedRoundPhase).toMatchObject({ phase: 'speaking', roundIndex: 1 });
   });
 
+  it('announces Round 4 without a role after extending the third required round', () => {
+    const original = revealRebut();
+    const debate = {
+      ...original,
+      turn_durations_ms: [60_000, 60_000, 45_000, 45_000, 30_000, 30_000, 30_000, 30_000],
+      open_rounds: { ...original.open_rounds!, required_rebuttal_rounds: 2 },
+    };
+    const current = reveal({ debate, phase: { ...resolvedRebut, roundIndex: 2 }, elapsedMs: 2_000 });
+    expect(current.result).toEqual({ kind: 'round', round: 4, label: 'Round 4', opener: null });
+  });
+
   it('names the opener to the listener, then clears the title and votes for the count-in', () => {
     const listener = { localSlot: 2 as const, remote: { slot: 1 as const, name: 'Alice' } };
     expect(reveal({ ...listener, elapsedMs: 2_000 }).result).toEqual({
@@ -333,6 +344,17 @@ describe('useOpenRoundReveal', () => {
     expect(current.result).toEqual({ kind: 'max', rounds: 10 });
     expect(current.holdsEndCard).toBe(true);
     expect(current.announcement).toBe("That's the max: 10 rebuttal rounds.");
+  });
+
+  it('announces the cap in total rounds without named roles for numbered Open rounds', () => {
+    const debate = { ...revealRebut(), turn_durations_ms: [60_000, 60_000, 45_000, 45_000, 30_000, 30_000] };
+    const current = reveal({
+      debate,
+      phase: { phase: 'finished', roundIndex: 10, isFinalRound: true },
+      effectiveStatus: 'thanking',
+      elapsedMs: 1_000,
+    });
+    expect(current.announcement).toBe("That's the max: 11 rounds.");
   });
 
   it('does nothing for a fixed format', () => {

@@ -3,7 +3,7 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as Effect from 'effect/Effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
+import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { DEBATE_TYPE_ID } from '~/core/debates/ontology';
 
 import { NEWS_STORY_TYPE_ID } from './explore-constants';
@@ -1023,6 +1023,74 @@ describe('For you', () => {
     const bestItems = items.filter(item => !item.entityId.startsWith('t'));
     expect(bestItems.length).toBeGreaterThanOrEqual(5);
     expect(opsOf('ExploreForYouBestConnection').length).toBeGreaterThan(1);
+  });
+});
+
+describe('the topics clauses reaching the query', () => {
+  const PHILOSOPHY = 'cccccccccccccccccccccccccccccccc';
+  const ETHICS = 'dddddddddddddddddddddddddddddddd';
+
+  const paths = [
+    { name: 'best, ranked by type', args: { sort: 'best' as const, typeIds: [CLAIM_TYPE_ID] } },
+    { name: 'best, untyped ranked walk', args: { sort: 'best' as const, typeIds: [] } },
+    { name: 'new', args: { sort: 'new' as const, typeIds: [CLAIM_TYPE_ID] } },
+    { name: 'top', args: { sort: 'top' as const, typeIds: [CLAIM_TYPE_ID] } },
+  ];
+
+  const filterPaths = paths.filter(path => path.args.sort !== 'best');
+
+  function sentFilter() {
+    return windows.variables[0]?.filter as { and?: unknown[]; or?: unknown; relations?: unknown } | undefined;
+  }
+
+  function topicClause(topicId: string) {
+    return { relations: { some: { typeId: { is: TOPICS_PROPERTY_ID }, toEntityId: { is: topicId } } } };
+  }
+
+  it.each(filterPaths)('sends one clause per picked topic on the $name path', async ({ args }) => {
+    windows.queue = [windowOf([entity('c1', CLAIM_TYPE_ID)], { hasNextPage: false, endCursor: null })];
+
+    await fetchExploreFeed({ ...feedArgs, ...args, topicIds: [PHILOSOPHY, ETHICS] });
+
+    // Two clauses, not one: the threading must not collapse the selection on its way down, or the
+    // intersection the dropdown promises quietly becomes a union. See `topic-feed-filter.test`.
+    expect(sentFilter()?.and).toEqual([topicClause(PHILOSOPHY), topicClause(ETHICS)]);
+  });
+
+  it.each(paths)('leaves the $name filter untouched when no topic is picked', async ({ args }) => {
+    windows.queue = [windowOf([entity('c1', CLAIM_TYPE_ID)], { hasNextPage: false, endCursor: null })];
+
+    await fetchExploreFeed({ ...feedArgs, ...args });
+
+    // The regression that matters most: this feature is off for everyone who never opens the
+    // dropdown, so the unfiltered request has to be exactly what it was before.
+    expect(sentFilter()?.and).toBeUndefined();
+  });
+
+  it('keeps the ranked walk’s no-filter fast path when neither gate nor topic applies', async () => {
+    windows.queue = [windowOf([entity('c1', CLAIM_TYPE_ID)], { hasNextPage: false, endCursor: null })];
+
+    await fetchExploreFeed({ ...feedArgs, sort: 'best', typeIds: [], requireDebateTagOnClaims: false });
+
+    expect(sentFilter()).toBeUndefined();
+  });
+
+  it.each(filterPaths)('combines the topic clauses with the debate-tag gate on the $name path', async ({ args }) => {
+    windows.queue = [windowOf([entity('c1', CLAIM_TYPE_ID)], { hasNextPage: false, endCursor: null })];
+
+    await fetchExploreFeed({ ...feedArgs, ...args, topicIds: [PHILOSOPHY] });
+
+    expect(sentFilter()?.or).toEqual(claimsRequireDebateTagFilter([SPACE]).or);
+    expect(sentFilter()?.and).toEqual([topicClause(PHILOSOPHY)]);
+  });
+
+  it.each(filterPaths)('keeps the feed exclusions alongside the topics on the $name path', async ({ args }) => {
+    windows.queue = [windowOf([entity('c1', CLAIM_TYPE_ID)], { hasNextPage: false, endCursor: null })];
+
+    await fetchExploreFeed({ ...feedArgs, ...args, topicIds: [PHILOSOPHY] });
+
+    expect(sentFilter()?.relations).toBeDefined();
+    expect(sentFilter()?.and).toEqual([topicClause(PHILOSOPHY)]);
   });
 });
 

@@ -4,16 +4,13 @@ import * as React from 'react';
 
 import { notFound } from 'next/navigation';
 
-import { fetchCommunityCalls } from '~/core/community-calls/fetch-community-calls';
 import { ROOT_SPACE } from '~/core/constants';
-import { SIDE_RAIL_FETCH_TIMEOUT_MS, resolveWithin } from '~/core/utils/resolve-within';
 
 import { CommunityTabPage } from '~/partials/community-tab/community-tab-page';
 import { EntityPageSidebarLayout } from '~/partials/entity-page/entity-page-sidebar-layout';
 import { RootExploreSidePanelContainer } from '~/partials/explore/root-explore-side-panel-container';
-import { SpaceOverviewSidePanel } from '~/partials/space-page/space-overview-side-panel';
 
-import { cachedFetchSpace } from '~/app/space/[id]/cached-fetch-space';
+import { CommunityCallsSidePanel } from './community-calls-side-panel';
 
 type Props = {
   params: Promise<{ id: string }>;
@@ -40,21 +37,9 @@ export default async function CommunityPage(props: Props) {
         <RootExploreSidePanelContainer spaceId={spaceId} includeSubspaces={false} />
       </React.Suspense>
     ) : (
-      <SpaceOverviewSidePanel
-        spaceId={spaceId}
-        spaceName={
-          (await resolveWithin(() => cachedFetchSpace(spaceId).catch(() => null), SIDE_RAIL_FETCH_TIMEOUT_MS, null))
-            ?.entity?.name ?? undefined
-        }
-        // Bounded like the layout's copy. `fetchCommunityCalls` is `cache()`d, so this awaits the
-        // *same promise* the layout started — and a memoised promise that never settles is not made
-        // safe by the layout having given up on it.
-        communityCalls={await resolveWithin(
-          () => fetchCommunityCalls(spaceId).catch(() => []),
-          SIDE_RAIL_FETCH_TIMEOUT_MS,
-          []
-        )}
-      />
+      <React.Suspense fallback={null}>
+        <CommunityCallsSidePanel spaceId={spaceId} />
+      </React.Suspense>
     );
 
   return (
