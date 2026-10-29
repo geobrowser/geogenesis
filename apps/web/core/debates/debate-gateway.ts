@@ -578,6 +578,10 @@ export class DebateGatewayClient {
         this.queueAccountQuery('room');
         // A request ending moves it from the live lists into the Requests timeline's past (GEO-3463).
         this.queueAccountQuery('history');
+        // A pending scheduled request holds its time for both people (GEO-3532), so one arriving or
+        // ending changes who is free when, for whoever did not press the button.
+        this.queueAccountQuery('schedulable-people');
+        this.queueAccountQuery('peer-schedule');
         this.queueAccountActivity();
         break;
       case 'debate.matchmaking_changed':
@@ -854,7 +858,9 @@ export class DebateGatewayClient {
       | 'lobby'
       | 'lobby-claims'
       | 'my-lobby'
-      | 'history',
+      | 'history'
+      | 'schedulable-people'
+      | 'peer-schedule',
     id?: string
   ) {
     const queryKey = this.accountQueryKey(kind, id);
