@@ -1,5 +1,6 @@
 import type { Mutator } from '~/core/sync/use-mutate';
 import { getRelations } from '~/core/sync/use-store';
+import type { Relation } from '~/core/types';
 
 /**
  * Points backlinks in the source space at where the move put the data.
@@ -13,9 +14,11 @@ export function retargetMoveBacklinks(
   entityId: string,
   sourceSpaceId: string,
   targetSpaceId: string,
-  storage: Mutator
+  storage: Mutator,
+  backlinks: Relation[] = []
 ) {
   getRelations({
+    mergeWith: backlinks,
     selector: relation =>
       relation.toEntity.id === entityId &&
       relation.spaceId === sourceSpaceId &&

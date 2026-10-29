@@ -15,7 +15,7 @@ import { E } from '~/core/sync/orm';
 import { GeoEventStream } from '~/core/sync/stream';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
-import type { Entity } from '~/core/types';
+import type { Entity, Relation } from '~/core/types';
 import { sortSpaceListByRankNameId } from '~/core/utils/space/browse-space-list-sort';
 import { NavUtils, hasName } from '~/core/utils/utils';
 
@@ -24,6 +24,7 @@ import { ArrowLeft } from '~/design-system/icons/arrow-left';
 import { Input } from '~/design-system/input';
 
 import { cloneEntityIntoSpace, collectHydrationTargetIds } from '~/partials/versions/clone-entity-into-space';
+import { loadMoveBacklinks } from '~/partials/versions/load-move-backlinks';
 import { collectMoveDeletions } from '~/partials/versions/move-entity-deletions';
 import { retargetMoveBacklinks } from '~/partials/versions/retarget-move-backlinks';
 
@@ -100,6 +101,15 @@ export const MoveEntityToSpace = ({
       }
     }
 
+    // Backlinks from every space, which the store only holds for entities someone opened.
+    let backlinks: Relation[];
+
+    try {
+      backlinks = await loadMoveBacklinks({ entityId, sourceSpaceId, store, cache });
+    } catch {
+      return false;
+    }
+
     // 1. Clone entity into target space
     cloneEntityIntoSpace(entityId, sourceSpaceId, targetSpaceId, storage, loaded);
 
@@ -108,15 +118,15 @@ export const MoveEntityToSpace = ({
     // each descendant goes unless something outside the subtree still points at
     // it (a shared block). What that comes to is decided in `collectMoveDeletions`,
     // where it can be tested.
-    const { values, relations } = collectMoveDeletions(entityId, sourceSpaceId);
+    const { values, relations } = collectMoveDeletions(entityId, sourceSpaceId, backlinks);
 
     storage.values.deleteMany(values);
     storage.relations.deleteMany(relations);
 
     // 3. Point this space's backlinks at where the data went. They survive the move untouched —
-    // the entity id has not changed — but a `toSpaceId` naming the source space now names a space
-    // the entity's data just left.
-    retargetMoveBacklinks(entityId, sourceSpaceId, targetSpaceId, storage);
+    // the entity id has not changed — but one that resolves to the source space now resolves to a
+    // space the entity's data just left.
+    retargetMoveBacklinks(entityId, sourceSpaceId, targetSpaceId, storage, backlinks);
 
     return true;
   };

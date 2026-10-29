@@ -9,8 +9,10 @@ import { prepareLocalDataForPublishing } from '~/core/utils/publish/publish';
 const store = vi.hoisted(() => ({ relations: [] as any[], values: [] as any[], written: [] as any[] }));
 
 vi.mock('~/core/sync/use-store', () => ({
-  getRelations: ({ selector }: { selector?: (r: any) => boolean }) =>
-    store.relations.filter(r => (selector ? selector(r) : true)),
+  getRelations: ({ selector, mergeWith = [] }: { selector?: (r: any) => boolean; mergeWith?: any[] }) =>
+    [...store.relations, ...mergeWith.filter(m => !store.relations.some(r => r.id === m.id))].filter(r =>
+      selector ? selector(r) : true
+    ),
   getValues: ({ selector }: { selector?: (v: any) => boolean }) =>
     store.values.filter(v => (selector ? selector(v) : true)),
 }));
@@ -77,6 +79,14 @@ describe('retargetMoveBacklinks', () => {
     const [op] = ops as any[];
     expect(Array.from(op.id)).toEqual(Array.from(IdUtils.toBytes(id) as Uint8Array));
     expect(Array.from(op.toSpace)).toEqual(Array.from(IdUtils.toBytes(TARGET) as Uint8Array));
+  });
+
+  it('retargets a backlink only the loaded backlinks know about', () => {
+    const backlinks = [relation({ id: 'unopened', from: 'unopened-entity', to: ENTITY })];
+
+    retargetMoveBacklinks(ENTITY, SOURCE, TARGET, storage, backlinks as any);
+
+    expect(store.written.map(r => [r.id, r.toSpaceId])).toEqual([['unopened', TARGET]]);
   });
 
   it('leaves a backlink held in another space alone', () => {

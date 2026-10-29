@@ -8,8 +8,10 @@ import { collectMoveDeletions } from './move-entity-deletions';
 const store = vi.hoisted(() => ({ relations: [] as any[], values: [] as any[] }));
 
 vi.mock('~/core/sync/use-store', () => ({
-  getRelations: ({ selector }: { selector?: (r: any) => boolean }) =>
-    store.relations.filter(r => (selector ? selector(r) : true)),
+  getRelations: ({ selector, mergeWith = [] }: { selector?: (r: any) => boolean; mergeWith?: any[] }) =>
+    [...store.relations, ...mergeWith.filter(m => !store.relations.some(r => r.id === m.id))].filter(r =>
+      selector ? selector(r) : true
+    ),
   getValues: ({ selector }: { selector?: (v: any) => boolean }) =>
     store.values.filter(v => (selector ? selector(v) : true)),
 }));
@@ -136,6 +138,37 @@ describe('collectMoveDeletions', () => {
     store.values = [value('block', SOURCE, 'block-v')];
 
     const { values } = collectMoveDeletions(ENTITY, SOURCE);
+
+    expect(values.map(v => v.id)).toEqual(['block-v']);
+  });
+
+  it('keeps a block shared with an entity only the loaded backlinks know about', () => {
+    store.relations = [relation({ id: 'contains-block', from: ENTITY, to: 'block', typeId: SystemIds.BLOCKS })];
+    store.values = [value('block', SOURCE, 'block-v')];
+    const backlinks = [relation({ id: 'unopened-ref', from: 'unopened', to: 'block', typeId: SystemIds.BLOCKS })];
+
+    const { values, relations } = collectMoveDeletions(ENTITY, SOURCE, backlinks as any);
+
+    expect(values).toEqual([]);
+    expect(relations.map(r => r.id)).toEqual(['contains-block']);
+  });
+
+  it('keeps a block that a link stored in another space reads from the source', () => {
+    store.relations = [relation({ id: 'contains-block', from: ENTITY, to: 'block', typeId: SystemIds.BLOCKS })];
+    store.values = [value('block', SOURCE, 'block-v')];
+    const backlinks = [relation({ id: 'far-ref', from: 'unrelated', to: 'block', spaceId: OTHER, toSpaceId: SOURCE })];
+
+    const { values } = collectMoveDeletions(ENTITY, SOURCE, backlinks as any);
+
+    expect(values).toEqual([]);
+  });
+
+  it('clears a block whose only other link reads it from another space', () => {
+    store.relations = [relation({ id: 'contains-block', from: ENTITY, to: 'block', typeId: SystemIds.BLOCKS })];
+    store.values = [value('block', SOURCE, 'block-v')];
+    const backlinks = [relation({ id: 'far-ref', from: 'unrelated', to: 'block', toSpaceId: OTHER })];
+
+    const { values } = collectMoveDeletions(ENTITY, SOURCE, backlinks as any);
 
     expect(values.map(v => v.id)).toEqual(['block-v']);
   });

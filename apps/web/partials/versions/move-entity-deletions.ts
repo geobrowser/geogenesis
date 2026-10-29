@@ -10,10 +10,14 @@ import { collectSubtree } from './clone-entity-into-space';
  *
  * Only this entity's own data in the source space — not backlinks (the id still exists), and not
  * the same values/relations in other spaces.
+ *
+ * `backlinks` are relations aimed at the subtree that the store may not hold, from
+ * `loadMoveBacklinks`. A block stays when any of them still resolves to the source space.
  */
 export function collectMoveDeletions(
   entityId: string,
-  sourceSpaceId: string
+  sourceSpaceId: string,
+  backlinks: Relation[] = []
 ): { values: Value[]; relations: Relation[] } {
   const { entityIds: subtreeIds } = collectSubtree(entityId, sourceSpaceId);
 
@@ -27,8 +31,11 @@ export function collectMoveDeletions(
 
   const keptIds = [...subtreeIds].filter(id => {
     if (id === entityId) return false;
+
     const externalRefs = getRelations({
-      selector: r => r.toEntity.id === id && r.spaceId === sourceSpaceId && !containmentRelationIds.has(r.id),
+      mergeWith: backlinks,
+      selector: r =>
+        r.toEntity.id === id && (r.toSpaceId ?? r.spaceId) === sourceSpaceId && !containmentRelationIds.has(r.id),
     });
     return externalRefs.length > 0;
   });
