@@ -898,11 +898,10 @@ vi.mock('~/core/debates/matchmaking/hooks', () => ({
 }));
 
 /**
- * GEO-3489. Today's claims: the flag, the agendas, geo-chat's counts and the debaters' memberships.
- * The flag is off unless a case turns it on, so every other suite here runs against master's picker.
+ * GEO-3489. Today's claims: the agendas, geo-chat's counts and the debaters' memberships. No space
+ * has an agenda unless a case lists one, so every other suite here runs without the tab.
  */
 const todays = vi.hoisted(() => ({
-  flag: false,
   agendas: { spaces: [], earlier: [], newestDay: null } as {
     spaces: Array<{
       spaceId: string;
@@ -928,21 +927,6 @@ const todays = vi.hoisted(() => ({
   /** How many of the two debaters are members of each space, by bare lowercase id. */
   members: {} as Record<string, number>,
 }));
-
-// Like the real hook: the default until the browser has hydrated, then what is stored.
-vi.mock('~/core/state/feature-flags', async importOriginal => {
-  const actual = await importOriginal<typeof import('~/core/state/feature-flags')>();
-  const { useHydrated } = await import('~/core/hooks/use-hydrated');
-  return {
-    ...actual,
-    useFeatureFlag: (id: string) => {
-      const hydrated = useHydrated();
-      return id === 'todaysClaims'
-        ? hydrated && todays.flag
-        : actual.defaultFeatureFlags[id as keyof typeof actual.defaultFeatureFlags];
-    },
-  };
-});
 
 /** Each claim's newest listing, as `buildDebateAgendas` reports it: today's sections, then the week's. */
 function listedAtByClaim(agendas: typeof todays.agendas) {
@@ -970,15 +954,13 @@ vi.mock('~/core/debates/todays-claims/debate-agendas', async importOriginal => {
   return {
     NO_AGENDAS,
     agendaDayFromValue,
-    useDebateAgendas: (enabled: boolean) => ({
-      agendasIn: enabled ? agendasIn : () => NO_AGENDAS,
-      spaceIds: enabled
-        ? [...todays.agendas.spaces.map(space => space.spaceId), ...todays.agendas.earlier.map(l => l.spaceId)]
-        : [],
-      claimIds: enabled ? [...listedAtByClaim(todays.agendas).keys()] : [],
-      claimEntities: enabled ? todays.entities : [],
-      isLoading: enabled && todays.loading,
-      error: enabled ? todays.error : null,
+    useDebateAgendas: () => ({
+      agendasIn,
+      spaceIds: [...todays.agendas.spaces.map(space => space.spaceId), ...todays.agendas.earlier.map(l => l.spaceId)],
+      claimIds: [...listedAtByClaim(todays.agendas).keys()],
+      claimEntities: todays.entities,
+      isLoading: todays.loading,
+      error: todays.error,
     }),
   };
 });
@@ -7734,8 +7716,8 @@ describe('click analytics labels in a debate room', () => {
 });
 
 /**
- * GEO-3489. Today's claims: the first tab, behind `todaysClaims`, listing every space's newest
- * Debate agenda under its section headings.
+ * GEO-3489. Today's claims: the first tab, listing every space's newest Debate agenda under its
+ * section headings.
  */
 describe('Today’s claims', () => {
   const T_LULA = 'a1000000000000000000000000000001';
@@ -7764,7 +7746,6 @@ describe('Today’s claims', () => {
 
   /** World affairs (SPACE_1) with two sections, U.S. Politics (SPACE_2) with one, and an older listing. */
   function twoAgendas() {
-    todays.flag = true;
     todays.entities = [
       agendaEntity(T_LULA, 'Lula should be re-elected', SPACE_1, { id: 'topic-lula', name: 'Lula’s victory' }),
       agendaEntity(T_AGE, 'Lula is too old to govern', SPACE_1, { id: 'topic-lula', name: 'Lula’s victory' }),
@@ -7826,7 +7807,6 @@ describe('Today’s claims', () => {
       .sort((a, b) => (appearsBefore(a, b) ? -1 : 1));
 
   beforeEach(() => {
-    todays.flag = false;
     todays.agendas = { spaces: [], earlier: [], newestDay: null };
     todays.entities = [];
     todays.loading = false;
@@ -7834,19 +7814,6 @@ describe('Today’s claims', () => {
     todays.counts = null;
     todays.countsAsked.length = 0;
     todays.members = {};
-  });
-
-  afterEach(() => {
-    todays.flag = false;
-  });
-
-  it('is not offered with the flag off, and the picker lands where it does on master', async () => {
-    twoAgendas();
-    todays.flag = false;
-    render(<DebateRematchPageClient sessionId="rematch-1" />);
-
-    expect(await screen.findByRole('button', { name: /^Matches/ })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.queryByRole('button', { name: /^Today’s claims/ })).toBeNull();
   });
 
   it('opens on Today’s claims, shared spaces first, sections in the agenda’s order', async () => {
@@ -7973,7 +7940,6 @@ describe('Today’s claims', () => {
   // Anyone can publish the type; only a space that can carry a published debate has an agenda.
   it('ignores an agenda published in a personal space, and lands where master does', async () => {
     const PERSONAL = '019fedae-72b6-7ab2-927a-df044d57c599';
-    todays.flag = true;
     mocks.spaceTypes[PERSONAL] = 'PERSONAL';
     todays.entities = [agendaEntity(T_LULA, 'Lula should be re-elected', SPACE_1)];
     todays.agendas = {
@@ -8087,9 +8053,8 @@ describe('Today’s claims', () => {
     expect(screen.getByRole('button', { name: /^Today’s claims/ })).toBeInTheDocument();
   });
 
-  // With every lookup answered on the first render, the landing used to be decided — and latched —
-  // on the flag's pre-hydration default, so a stored flag never got its tab.
-  it('lands on Today’s claims when the flag is stored and every lookup is already answered', async () => {
+  // With every lookup answered on the first render, the landing is decided — and latched — at once.
+  it('lands on Today’s claims when every lookup is already answered', async () => {
     twoAgendas();
     render(<DebateRematchPageClient sessionId="rematch-1" />);
 
@@ -8164,7 +8129,6 @@ describe('Today’s claims', () => {
   });
 
   it('lands where master does when no space has an agenda', async () => {
-    todays.flag = true;
     render(<DebateRematchPageClient sessionId="rematch-1" />);
 
     expect(await screen.findByRole('button', { name: /^Matches/ })).toHaveAttribute('aria-pressed', 'true');

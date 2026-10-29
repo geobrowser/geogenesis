@@ -63,13 +63,6 @@ export const featureFlagDefinitions = [
     enabledByDefault: false,
   },
   {
-    id: 'todaysClaims',
-    label: 'Debate again: Today’s claims',
-    description:
-      'Open the debate-again picker on a Today’s claims tab: every space’s newest Debate agenda, member spaces first (GEO-3489). Debated claims sort below undebated ones once geo-chat counts them.',
-    enabledByDefault: false,
-  },
-  {
     id: 'spaceCalls',
     label: 'Community calls',
     description:
