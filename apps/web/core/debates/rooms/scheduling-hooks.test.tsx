@@ -148,8 +148,7 @@ describe('useAdminScheduledDebates', () => {
   });
 });
 
-function mutationWrapper() {
-  const client = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
+function mutationWrapper(client = new QueryClient({ defaultOptions: { mutations: { retry: false } } })) {
   return ({ children }: { children: React.ReactNode }) => (
     <QueryClientProvider client={client}>{children}</QueryClientProvider>
   );
@@ -157,10 +156,10 @@ function mutationWrapper() {
 
 // Analytics rides on the server's answer, in the hook rather than at the call site: a shared link's
 // modal can close while the request is in flight, and a caller's own callbacks die with it.
-describe('scheduling analytics', () => {
-  const startsAt = new Date(Date.now() + 3 * 3_600_000);
-  const sent = { request_id: 'req-1' } as ScheduledDebateRequest;
+const startsAt = new Date(Date.now() + 3 * 3_600_000);
+const sent = { request_id: 'req-1' } as ScheduledDebateRequest;
 
+describe('scheduling analytics', () => {
   it('records a sent request with where it came from, once the server accepts it', async () => {
     vi.spyOn(api, 'createScheduledDebate').mockResolvedValue(sent);
     const { result } = renderHook(() => useCreateScheduledDebate(), { wrapper: mutationWrapper() });
@@ -368,3 +367,42 @@ function settleAfterSwitch<T>(value: T, reject = false): Promise<never> {
   revision.current += 1;
   return (reject ? Promise.reject(value) : Promise.resolve(value)) as Promise<never>;
 }
+
+// GEO-3532: a pending invite holds its time for both people, so sending or answering one changes
+// what anyone's week shows as free.
+describe('availability after an invite', () => {
+  function renderWithClient<T>(hook: () => T) {
+    const client = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
+    const invalidate = vi.spyOn(client, 'invalidateQueries');
+    const { result } = renderHook(hook, { wrapper: mutationWrapper(client) });
+    const expectAvailabilityRefreshed = () =>
+      expect(invalidate.mock.calls.map(([filters]) => filters?.queryKey)).toEqual(
+        expect.arrayContaining([
+          debateQueryKeys.schedulablePeopleRoot('acct'),
+          debateQueryKeys.peerScheduleRoot('acct'),
+        ])
+      );
+    return { result, expectAvailabilityRefreshed };
+  }
+
+  it('refreshes every availability read once an invite is sent', async () => {
+    vi.spyOn(api, 'createScheduledDebate').mockResolvedValue(sent);
+    const { result, expectAvailabilityRefreshed } = renderWithClient(() => useCreateScheduledDebate());
+
+    await act(() => result.current.mutateAsync({ opponentUserId: 'them', startsAt, minutes: 30 }));
+
+    expectAvailabilityRefreshed();
+  });
+
+  it.each([true, false])(
+    'refreshes every availability read once an invite is answered (accepted=%s)',
+    async accepted => {
+      vi.spyOn(api, 'respondToScheduledDebate').mockResolvedValue({ ...sent, outcome: 'recorded' });
+      const { result, expectAvailabilityRefreshed } = renderWithClient(() => useRespondToScheduledDebate());
+
+      await act(() => result.current.mutateAsync({ requestId: 'req-1', accepted }));
+
+      expectAvailabilityRefreshed();
+    }
+  );
+});

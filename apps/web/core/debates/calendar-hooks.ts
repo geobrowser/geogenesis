@@ -23,7 +23,7 @@ import {
   getCalendarConnections,
   refreshCalendar,
 } from './api';
-import { debateQueryKeys, debateQueryNetworkOptions, useGeoChatAuth } from './hooks';
+import { debateQueryKeys, debateQueryNetworkOptions, invalidateAvailabilityReads, useGeoChatAuth } from './hooks';
 
 /** geo-chat answers this on every calendar route while no calendar provider is configured. */
 export const CALENDAR_DISABLED_CODE = 'calendar_disabled';
@@ -113,8 +113,7 @@ export function useInvalidateCalendarReads() {
   return () => {
     void queryClient.invalidateQueries({ queryKey: debateQueryKeys.calendarConnections(accountKey) });
     void queryClient.invalidateQueries({ queryKey: debateQueryKeys.calendarBusyRoot(accountKey) });
-    void queryClient.invalidateQueries({ queryKey: debateQueryKeys.schedulablePeopleRoot(accountKey) });
-    void queryClient.invalidateQueries({ queryKey: debateQueryKeys.peerScheduleRoot(accountKey) });
+    invalidateAvailabilityReads(queryClient, accountKey);
   };
 }
 
