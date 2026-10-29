@@ -1242,18 +1242,42 @@ describe('DebateRematchPageClient', () => {
     expect(mocks.back).not.toHaveBeenCalled();
   });
 
-  it('boots out of an ended rematch when the opponent left, for the coordinator to announce', async () => {
-    mocks.session = session({ status: 'ended' });
-    // The leave marker is module-scoped and survives earlier "Leave debate" cases in this file.
-    unmarkLocalRematchLeave('rematch-1');
+  it.each([['ended'], ['expired']] as const)(
+    'boots out of an %s rematch when the opponent left, for the coordinator to announce',
+    async status => {
+      mocks.session = session({ status });
+      // The leave marker is module-scoped and survives earlier "Leave debate" cases in this file.
+      unmarkLocalRematchLeave('rematch-1');
 
-    const { store } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+      const { store } = render(<DebateRematchPageClient sessionId="rematch-1" />);
 
-    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith(`/space/${SPACE_1}/debates`));
-    expect(screen.queryByRole('dialog', { name: 'Opponent left' })).not.toBeInTheDocument();
-    // The notice is raised for `DebateCoordinator` to show on the debates page.
-    expect(store.get(opponentLeftNoticeAtom)).toEqual({ recordingDiscarded: false });
-  });
+      await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith(`/space/${SPACE_1}/debates`));
+      expect(screen.queryByRole('dialog', { name: 'Opponent left' })).not.toBeInTheDocument();
+      // The notice is raised for `DebateCoordinator` to show on the debates page.
+      expect(store.get(opponentLeftNoticeAtom)).toEqual({ recordingDiscarded: false });
+    }
+  );
+
+  it.each([['on the same page'], ['after Back remounts the page']] as const)(
+    'does not announce the viewer their own Leave %s',
+    async when => {
+      unmarkLocalRematchLeave('rematch-1');
+      const first = render(<DebateRematchPageClient sessionId="rematch-1" />);
+      fireEvent.click(screen.getByRole('button', { name: 'Leave' }));
+
+      mocks.session = session({ status: 'ended' });
+      let { store } = first;
+      if (when === 'on the same page') {
+        first.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+      } else {
+        first.unmount();
+        ({ store } = render(<DebateRematchPageClient sessionId="rematch-1" />));
+      }
+
+      await waitFor(() => expect(mocks.replace).toHaveBeenCalled());
+      expect(store.get(opponentLeftNoticeAtom)).toBeNull();
+    }
+  );
 
   // The pin this used to assert is gone (GEO-2647); what matters is that both claims are listed
   // and a shared preference is still the one you can act on.

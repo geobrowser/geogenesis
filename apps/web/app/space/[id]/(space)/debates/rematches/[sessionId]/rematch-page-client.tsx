@@ -54,8 +54,12 @@ import {
   useNotInterestedClaimIds,
   useRejectDebateRematchRequest,
 } from '~/core/debates/hooks';
-import { markLocalRematchLeave, unmarkLocalRematchLeave } from '~/core/debates/local-debate-leave';
 import { useDebateReturnNavigation } from '~/core/debates/lobbies/lobby-return';
+import {
+  didLocallyLeaveRematch,
+  markLocalRematchLeave,
+  unmarkLocalRematchLeave,
+} from '~/core/debates/local-debate-leave';
 import { claimRowKey } from '~/core/debates/matchmaking/claim-row-key';
 import { type AnsweredState, useCollapseAnswered } from '~/core/debates/matchmaking/collapse-answered';
 import { FacetFilterPills, type FacetPillOption } from '~/core/debates/matchmaking/facet-filter-pills';
@@ -2507,9 +2511,12 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
         if (!exitStartedRef.current) forgetEndedRematch(session);
         // Announce 'opponent left' (via the notice atom, shown by DebateCoordinator) unless the
         // viewer left themselves: `returnFromSession` runs on their own Leave too, which sets
-        // `leaveRequestedRef`. Both terminal statuses count — a tab the opponent closed surfaces as
-        // `expired` after ~90 seconds, not `ended`.
-        if (!leaveRequestedRef.current) setOpponentLeftNotice({ recordingDiscarded: false });
+        // `leaveRequestedRef`, and the local mark outlives the ref when Back remounts the page into
+        // the session they ended. Both terminal statuses count — a tab the opponent closed surfaces
+        // as `expired` after ~90 seconds, not `ended`.
+        if (!leaveRequestedRef.current && !didLocallyLeaveRematch(session.id)) {
+          setOpponentLeftNotice({ recordingDiscarded: false });
+        }
         returnFromSession(session);
       }
       // geo-chat replaces a finished room session on the next join, which someone who never left
