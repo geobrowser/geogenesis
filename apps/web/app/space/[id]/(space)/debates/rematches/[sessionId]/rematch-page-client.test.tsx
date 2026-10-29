@@ -2385,6 +2385,13 @@ describe('DebateRematchPageClient', () => {
       await showOpponentClaims();
       expect(screen.getByText('A claim only Salina answered')).toBeInTheDocument();
 
+      const search = screen.getByRole('textbox', { name: 'Search claims and topics' });
+      fireEvent.change(search, { target: { value: 'only Salina' } });
+      await waitFor(() => expect(screen.queryByText('A claim you both agree on')).toBeNull());
+      fireEvent.change(search, { target: { value: '' } });
+      expect(await screen.findByText('A claim you both agree on')).toBeInTheDocument();
+      expect(screen.getByText('A claim only Salina answered')).toBeInTheDocument();
+
       mocks.responseCountsLoading = false;
       fireEvent.click(screen.getByRole('button', { name: /^Matches/ }));
       await settleTabSwap();
@@ -2408,6 +2415,27 @@ describe('DebateRematchPageClient', () => {
       expect(screen.queryByText('A claim both participants chose')).toBeNull();
       expect(screen.getByText('A claim only Salina answered')).toBeInTheDocument();
     });
+
+    it.each(['refetching', 'failed'] as const)(
+      'waits for a trustworthy match set when an empty positions lookup is %s',
+      async state => {
+        mocks.positions = [];
+        mocks.positionsFetching = state === 'refetching';
+        mocks.positionsError = state === 'failed' ? new Error('Positions unavailable') : null;
+        const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+        await showOpponentClaims();
+
+        threeClaims();
+        mocks.positionsFetching = false;
+        mocks.positionsError = null;
+        rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+        await settleTabSwap();
+
+        expect(screen.queryByText('A claim both participants chose')).toBeNull();
+        expect(screen.getByText('A claim only Salina answered')).toBeInTheDocument();
+        expect(within(screen.getByRole('button', { name: /^Their positions/ })).getByText('2')).toBeInTheDocument();
+      }
+    );
 
     it('keeps the hidden set through position changes and resets it for a new session', async () => {
       threeClaims();
@@ -2435,6 +2463,20 @@ describe('DebateRematchPageClient', () => {
       fireEvent.click(screen.getByRole('button', { name: 'See matches' }));
       await settleTabSwap();
       expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
+    });
+
+    it('leaves spaces belonging only to hidden matches out of their position filters', async () => {
+      threeClaims();
+      mocks.entities = [publishedEntity(CLAIM_SHARED, 'A claim both participants chose'), ...mocks.entities.slice(1)];
+      mocks.positions = mocks.positions.map(side =>
+        side.claimId === CLAIM_SHARED ? { ...side, spaceId: SPACE_2 } : side
+      );
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await showOpponentClaims();
+
+      expect(screen.getByText('A claim only Salina answered')).toBeInTheDocument();
+      expect(queryFilterPill('Governance space')).toBeNull();
+      expect(spacesOffered()).toBe(0);
     });
 
     /**
@@ -2470,7 +2512,7 @@ describe('DebateRematchPageClient', () => {
       expect(spacesOffered()).toBe(2);
     });
 
-    it('ends the list with a way to everything of theirs', async () => {
+    it('ends the list with a way to their other positions', async () => {
       threeClaims();
       render(<DebateRematchPageClient sessionId="rematch-1" />);
       expect(await screen.findByText('A claim both participants chose')).toBeInTheDocument();
@@ -2485,8 +2527,8 @@ describe('DebateRematchPageClient', () => {
 
     /**
      * "Hide agreed": on their tab, the claims you hold the same side on are a dead end — there is
-     * nothing to debate — so they are out of the way by default. The matches and the claims only
-     * they have answered stay, because those are what the tab is for.
+     * nothing to debate — so they are out of the way by default. Claims only they have answered
+     * stay; existing matches are in Matches.
      */
     describe('Hide agreed', () => {
       const SWITCH = { name: 'Hide agreed' } as const;

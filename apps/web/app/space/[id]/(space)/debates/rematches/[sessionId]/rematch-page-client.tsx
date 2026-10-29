@@ -1967,6 +1967,14 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   );
 
   /**
+   * GEO-3148. The Matches tab: the opponent's positions that you hold the other side of, not yet
+   * debated between you. Every one shows Request debate, which is why the cards need no badge.
+   *
+   * Drawn from the opponent's list rather than fetched, because a match *is* one of their positions,
+   * so it waits on, holds through and fails with exactly what that list does.
+   */
+  const matchClaims = React.useMemo(() => opponentClaims.filter(isRematchable), [isRematchable, opponentClaims]);
+  /**
    * Related and "From this debate" can leave the strip; the rest are always there. A choice — or a
    * landing — on a tab that has gone falls back to their positions rather than leaving the viewer on
    * a tab with no button to get back to it.
@@ -1999,6 +2007,11 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   /** The tab the strip marks, which is none until there is one. */
   const activeTab = landingPending ? null : tab;
 
+  // One-off decisions need a settled answer, including the mount refetch of cached positions.
+  const opponentTabError = sessionQuery.error ?? positions.error ?? opponentEntitiesQuery.error;
+  const opponentLandingPending =
+    sessionQuery.isLoading || positions.isLoading || positions.isFetching || opponentClaimsSettling;
+
   // Hide the matches the viewer arrived with for this visit to Their positions. Keep the snapshot
   // through position changes, searches and filter changes so creating a match never takes its card
   // away. Leaving the tab (or changing session) clears it; the next visit uses the current matches.
@@ -2007,10 +2020,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     sessionId: string;
     keys: ReadonlySet<string>;
   } | null>(null);
-  const currentMatchKeys = React.useMemo(
-    () => new Set(opponentClaims.filter(isRematchable).map(claimRowKey)),
-    [isRematchable, opponentClaims]
-  );
+  const currentMatchKeys = React.useMemo(() => new Set(matchClaims.map(claimRowKey)), [matchClaims]);
   const hiddenMatchKeys =
     viewingOpponent && hiddenMatches?.sessionId === sessionId ? hiddenMatches.keys : currentMatchKeys;
   if (hiddenMatches !== null && (!viewingOpponent || hiddenMatches.sessionId !== sessionId)) {
@@ -2018,7 +2028,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   } else if (
     viewingOpponent &&
     hiddenMatches === null &&
-    (opponentClaimsListed.length > 0 || (!sessionQuery.isLoading && !positions.isLoading && !opponentClaimsSettling))
+    (opponentClaimsListed.length > 0 || (!opponentLandingPending && !opponentTabError))
   ) {
     // Wait for the initial list, but freeze immediately if a refetch is holding existing rows.
     setHiddenMatches({ sessionId, keys: hiddenMatchKeys });
@@ -2038,14 +2048,6 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     [hideAgreed, isAgreed, opponentClaimsUnmatched]
   );
 
-  /**
-   * GEO-3148. The Matches tab: the opponent's positions that you hold the other side of, not yet
-   * debated between you. Every one shows Request debate, which is why the cards need no badge.
-   *
-   * Drawn from the opponent's list rather than fetched, because a match *is* one of their positions,
-   * so it waits on, holds through and fails with exactly what that list does.
-   */
-  const matchClaims = React.useMemo(() => opponentClaims.filter(isRematchable), [isRematchable, opponentClaims]);
   /**
    * Whether they have taken a side on anything at all — the debated ones included, which their tab
    * folds away rather than drops. What the Matches empty state says and offers turns on this, not on
@@ -2186,9 +2188,6 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    * `isLoading` on positions, because a cached answer reads as settled while the mount refetch is
    * still out, and yesterday's empty answer would land the pair somewhere for good.
    * ---------------------------------------------------------------------------------------------*/
-  const opponentTabError = sessionQuery.error ?? positions.error ?? opponentEntitiesQuery.error;
-  const opponentLandingPending =
-    sessionQuery.isLoading || positions.isLoading || positions.isFetching || opponentClaimsSettling;
   const landingStates: [PickerTab, LandingState][] = [
     // First whenever an agenda lists a claim this pair can debate in a section that starts open
     // (GEO-3489): landing on one closed "Earlier this week" heading is landing on nothing to see.
