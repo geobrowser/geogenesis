@@ -27,6 +27,8 @@ const mocks = vi.hoisted(() => ({
   getDebateLobbyVoiceToken: vi.fn(),
   acquired: true,
   requestTakeover: false,
+  /** The surface the owning tab says holds voice when it refuses. */
+  refusedBy: undefined as string | undefined,
   roomProps: null as Record<string, unknown> | null,
   connectionState: 'connected',
   canPlayAudio: true,
@@ -138,13 +140,20 @@ vi.mock('../hooks', async importOriginal => ({
   useGeoChatAuth: () => ({ ready: true, authenticated: true, accountKey: 'acct', getPrivyIdentityToken: vi.fn() }),
 }));
 
-vi.mock('../debate-room-ownership', () => ({
-  createDebateRoomOwnershipCoordinator: () => ({
-    acquire: async () => ({ acquired: mocks.acquired, waitedForLocalRelease: false }),
-    requestTakeover: async () => mocks.requestTakeover,
-    release: async () => undefined,
-    close: () => undefined,
-  }),
+// The tab's voice lock: `acquired` is a free lock, `requestTakeover` another tab handing it over.
+vi.mock('../debate-room-ownership', async importOriginal => ({
+  ...(await importOriginal<typeof import('../debate-room-ownership')>()),
+  createDebateRoomOwnershipCoordinator: () => {
+    let owned = false;
+    return {
+      coordinationMode: 'lock-and-broadcast',
+      requestTakeover: async () => (owned = mocks.acquired || mocks.requestTakeover),
+      release: async () => undefined,
+      close: () => undefined,
+      ownsConnection: () => owned,
+      lastRefusedBy: () => (owned ? undefined : mocks.refusedBy),
+    };
+  },
 }));
 
 vi.mock('@livekit/components-react', () => ({
@@ -232,9 +241,12 @@ function renderVoice(view = lobby(), onConnectedChange = vi.fn(), joined = true)
   return { ...result, setJoined: (next: boolean) => result.rerender(ui(next)) };
 }
 
-beforeEach(() => {
+beforeEach(async () => {
+  // Lets the last test's tab voice hold run its deferred release.
+  await new Promise(resolve => setTimeout(resolve, 0));
   mocks.acquired = true;
   mocks.requestTakeover = false;
+  mocks.refusedBy = undefined;
   mocks.roomProps = null;
   mocks.connectionState = ConnectionState.Connected;
   mocks.canPlayAudio = true;
@@ -480,6 +492,15 @@ describe('LobbyVoice', () => {
     renderVoice();
     expect(await screen.findByText('Voice is on in another tab')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Use voice here' })).toBeTruthy();
+    expect(mocks.getDebateLobbyVoiceToken).not.toHaveBeenCalled();
+  });
+
+  it('says a live debate holds voice, with nothing to press', async () => {
+    mocks.acquired = false;
+    mocks.refusedBy = 'debate';
+    renderVoice();
+    expect(await screen.findByText('Voice is on in your debate tab')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Use voice here' })).toBeNull();
     expect(mocks.getDebateLobbyVoiceToken).not.toHaveBeenCalled();
   });
 
