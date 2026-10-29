@@ -518,7 +518,7 @@ describe('DebateCalendar', () => {
   it("shows everyone's free time to a viewer with no schedule, and nudges without blocking", async () => {
     render(<DebateCalendar />);
 
-    expect(mocks.schedulableOptions[0]).toEqual({ calendar: true, spaces: [] });
+    expect(mocks.schedulableOptions[0]).toEqual({ calendar: true, calendarDate: NOW.toDateString(), spaces: [] });
     expect(cell(/Thursday.*free: Elena/)).toBeInTheDocument();
     // The debates panel's own callout, not a calendar-only notice.
     expect(await screen.findByText('Debate schedule')).toBeInTheDocument();
@@ -528,16 +528,40 @@ describe('DebateCalendar', () => {
     });
   });
 
-  it('runs Sunday to Saturday, with a line at the current time in today', () => {
+  it('starts with today and shows the next six days, with a line at the current time', () => {
     render(<DebateCalendar />);
 
     const headers = screen.getAllByRole('columnheader').slice(1);
-    expect(headers[0]).toHaveTextContent(/Sun\s*4/);
-    expect(headers[6]).toHaveTextContent(/Sat\s*10/);
+    expect(headers[0]).toHaveTextContent(/Wed\s*7/);
+    expect(headers[6]).toHaveTextContent(/Tue\s*13/);
     // Wednesday 10:00 sharp: the top of Wednesday's 10 o'clock row.
     const line = screen.getByTestId('calendar-now-line');
     expect(line.closest('[role="gridcell"]')).toHaveAccessibleName(/^Wednesday, October 7, 10:00 AM/);
     expect(line).toHaveStyle({ top: '0%' });
+  });
+
+  it('advances the availability read with the visible day after local midnight', () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
+    vi.setSystemTime(new Date(2026, 9, 7, 23, 59));
+    render(<DebateCalendar />);
+    expect(mocks.schedulableOptions.at(-1)).toMatchObject({ calendarDate: new Date(2026, 9, 7).toDateString() });
+    act(() => vi.advanceTimersByTime(60_000));
+    expect(screen.getAllByRole('columnheader')[1]).toHaveTextContent(/Thu\s*8/);
+    expect(mocks.schedulableOptions.at(-1)).toMatchObject({ calendarDate: new Date(2026, 9, 8).toDateString() });
+  });
+
+  it('moves by seven days and returns to a range starting today', () => {
+    mocks.schedulable = response([free('11', 'Elena', [thursdaySix, [at(15, 18), at(15, 19)]])]);
+    render(<DebateCalendar />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next week' }));
+    const nextHeaders = screen.getAllByRole('columnheader').slice(1);
+    expect(nextHeaders[0]).toHaveTextContent(/Wed\s*14/);
+    expect(nextHeaders[6]).toHaveTextContent(/Tue\s*20/);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Today' }));
+    expect(screen.getAllByRole('columnheader')[1]).toHaveTextContent(/Wed\s*7/);
+    expect(screen.getByRole('button', { name: 'Previous week' })).toBeDisabled();
   });
 
   it('opens this week on the current time, and other weeks on their first busy hour', () => {
@@ -1719,9 +1743,9 @@ describe('DebateCalendar, People and Claims panel (GEO-3220)', () => {
 });
 
 describe('DebateCalendar, lobbies pinned above the hours (GEO-3268)', () => {
-  // Wednesday's lobby, in a week drawn Sunday to Saturday.
+  // Wednesday is today, the first column of the rolling window.
   const withWednesdayLobby = () => {
-    weekLobbies.byDay = [[], [], [], ['NYC Debates'], [], [], []];
+    weekLobbies.byDay = [['NYC Debates'], [], [], [], [], [], []];
   };
 
   it('pins a Lobbies row under the day headers, outside the hours', () => {

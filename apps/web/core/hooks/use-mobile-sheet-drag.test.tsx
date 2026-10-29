@@ -33,7 +33,7 @@ function Sheet({
   open?: boolean;
   onDismiss?: () => void;
 }) {
-  const { setOverlayElement, sheetStyle, sheet } = useMobileSheetDrag({
+  const { setOverlayElement, sheetStyle, sheetControlsRef, sheet } = useMobileSheetDrag({
     enabled: open,
     onDismiss,
     peekTopPx: PEEK,
@@ -43,7 +43,7 @@ function Sheet({
   if (!open) return null;
   return (
     <div ref={setOverlayElement}>
-      <MobileSheetSurface sheetStyle={sheetStyle} sheet={sheet}>
+      <MobileSheetSurface sheetStyle={sheetStyle} sheetControlsRef={sheetControlsRef} sheet={sheet}>
         <div data-mobile-sheet-scroll>
           <span data-testid="content" />
         </div>

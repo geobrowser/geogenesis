@@ -12,8 +12,9 @@ import {
 } from './save-votes-prompt';
 
 describe('savePromptReasonAfterVote', () => {
-  it('asks on the second vote in a feed', () => {
-    expect(savePromptReasonAfterVote({ count: 1, surface: 'feed', shownCount: 0 })).toBeNull();
+  it('asks on the first vote in a feed', () => {
+    expect(savePromptReasonAfterVote({ count: 0, surface: 'feed', shownCount: 0 })).toBeNull();
+    expect(savePromptReasonAfterVote({ count: 1, surface: 'feed', shownCount: 0 })).toBe('threshold');
     expect(savePromptReasonAfterVote({ count: 2, surface: 'feed', shownCount: 0 })).toBe('threshold');
   });
 
@@ -22,7 +23,9 @@ describe('savePromptReasonAfterVote', () => {
   });
 
   it('asks once more at five votes, then stops asking on its own', () => {
-    expect(savePromptReasonAfterVote({ count: 3, surface: 'feed', shownCount: 1 })).toBeNull();
+    for (const count of [1, 2, 3, 4]) {
+      expect(savePromptReasonAfterVote({ count, surface: 'feed', shownCount: 1 })).toBeNull();
+    }
     expect(savePromptReasonAfterVote({ count: 5, surface: 'feed', shownCount: 1 })).toBe('repeat');
     expect(savePromptReasonAfterVote({ count: 9, surface: 'feed', shownCount: 2 })).toBeNull();
   });

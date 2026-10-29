@@ -2,8 +2,7 @@
 
 import * as React from 'react';
 
-import cx from 'classnames';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { useSetAtom } from 'jotai';
 import { createPortal } from 'react-dom';
 
@@ -13,7 +12,7 @@ import { EntitySidePanelPopoverPortalProvider } from '~/core/state/entity-side-p
 import { InsideMobileSheet } from '~/core/state/mobile-sheet-cover';
 import { hideMainPageScrollbars } from '~/core/utils/hide-main-scrollbars';
 
-import { MobileSheetGrabHandle } from '~/design-system/mobile-sheet-grab-handle';
+import { MobileSheetSurface } from '~/design-system/mobile-sheet-surface';
 
 import { EntitySidePanelSurface } from '~/partials/entity-page/entity-side-panel';
 
@@ -41,11 +40,12 @@ const ENTITY_SHEET_TOP_OFFSET_PX = 200;
 
 export function RankingComposeEntitySheet({ target, onClose }: Props) {
   const isMobile = useIsMobileLayout();
+  const reduceMotion = useReducedMotion();
   const setRemoveScrollShard = useSetAtom(rankingComposeRemoveScrollShardAtom);
 
   const [portalTarget, setPortalTarget] = React.useState<HTMLElement | null>(null);
 
-  const { setOverlayElement, sheetStyle, sheet } = useMobileSheetDrag({
+  const { setOverlayElement, sheetStyle, sheetControlsRef, sheet } = useMobileSheetDrag({
     enabled: isMobile && Boolean(target),
     onDismiss: onClose,
     peekTopPx: ENTITY_SHEET_TOP_OFFSET_PX,
@@ -93,6 +93,22 @@ export function RankingComposeEntitySheet({ target, onClose }: Props) {
     return null;
   }
 
+  const panelBody = target ? (
+    <EntitySidePanelPopoverPortalProvider>
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <EntitySidePanelSurface
+          entityId={target.entityId}
+          requestedSpaceId={target.spaceId}
+          openedWithMainViewEditing={false}
+          previewImageUrl={target.previewImageUrl}
+          previewName={target.previewName}
+          previewDescription={target.previewDescription}
+          onClose={onClose}
+        />
+      </div>
+    </EntitySidePanelPopoverPortalProvider>
+  ) : null;
+
   return createPortal(
     <AnimatePresence>
       {target ? (
@@ -112,42 +128,35 @@ export function RankingComposeEntitySheet({ target, onClose }: Props) {
             aria-label="Close entity preview"
           />
 
-          <motion.div
-            role="dialog"
-            aria-modal="true"
-            data-ranking-entity-sheet
-            data-mobile-sheet-surface
-            initial={isMobile ? { y: '100%' } : { x: '100%' }}
-            animate={isMobile ? { y: 0 } : { x: 0 }}
-            exit={isMobile ? { y: '100%' } : { x: '100%' }}
-            transition={MOBILE_SHEET_ENTRANCE_SPRING}
-            className={cx(
-              'shadow-2xl absolute z-1 flex flex-col overflow-hidden bg-white',
-              isMobile
-                ? 'inset-x-0 bottom-0 overscroll-none'
-                : 'rounded-l-2xl inset-y-0 right-0 w-[min(600px,100vw)] border-l border-grey-02'
-            )}
-            style={isMobile ? sheetStyle : undefined}
-            onClick={event => event.stopPropagation()}
-          >
-            {isMobile ? <MobileSheetGrabHandle /> : null}
-
-            <InsideMobileSheet sheet={sheet}>
-              <EntitySidePanelPopoverPortalProvider>
-                <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-                  <EntitySidePanelSurface
-                    entityId={target.entityId}
-                    requestedSpaceId={target.spaceId}
-                    openedWithMainViewEditing={false}
-                    previewImageUrl={target.previewImageUrl}
-                    previewName={target.previewName}
-                    previewDescription={target.previewDescription}
-                    onClose={onClose}
-                  />
-                </div>
-              </EntitySidePanelPopoverPortalProvider>
-            </InsideMobileSheet>
-          </motion.div>
+          {isMobile ? (
+            <MobileSheetSurface
+              role="dialog"
+              aria-modal="true"
+              data-ranking-entity-sheet
+              sheetStyle={sheetStyle}
+              sheetControlsRef={sheetControlsRef}
+              sheet={sheet}
+              exit={{ transform: reduceMotion ? 'translateY(0%)' : 'translateY(100%)' }}
+              onClick={event => event.stopPropagation()}
+            >
+              {panelBody}
+            </MobileSheetSurface>
+          ) : (
+            <motion.div
+              role="dialog"
+              aria-modal="true"
+              data-ranking-entity-sheet
+              data-mobile-sheet-surface
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={MOBILE_SHEET_ENTRANCE_SPRING}
+              className="rounded-l-2xl shadow-2xl absolute inset-y-0 right-0 z-1 flex w-[min(600px,100vw)] flex-col overflow-hidden border-l border-grey-02 bg-white"
+              onClick={event => event.stopPropagation()}
+            >
+              <InsideMobileSheet sheet={sheet}>{panelBody}</InsideMobileSheet>
+            </motion.div>
+          )}
         </motion.div>
       ) : null}
     </AnimatePresence>,

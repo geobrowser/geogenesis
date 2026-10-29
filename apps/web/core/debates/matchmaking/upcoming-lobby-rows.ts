@@ -4,6 +4,7 @@ import {
   type UpcomingDebateRoom,
   dashlessId,
 } from '~/core/debates/api';
+import { hostsLabel } from '~/core/debates/lobbies/lobby-format';
 import { sameId } from '~/core/debates/rooms/room-presence';
 
 /**
@@ -22,6 +23,16 @@ export type UpcomingLobbyRow = {
   hosting: boolean;
   onRoster: boolean;
 };
+
+/**
+ * Who hosts a lobby row, for its card and its timeline row alike: "You’re hosting", "Hosted by …",
+ * or `null` when the list that names hosts did not return this lobby.
+ */
+export function lobbyHostLine(row: Pick<UpcomingLobbyRow, 'hosting' | 'hosts'>) {
+  if (row.hosting) return 'You’re hosting';
+  const hosts = hostsLabel(row.hosts);
+  return hosts ? `Hosted by ${hosts}` : null;
+}
 
 /**
  * Two sources, because neither has every lobby. `/me/debate-rooms` lists the ones the viewer said

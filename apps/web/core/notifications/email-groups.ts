@@ -2,8 +2,10 @@
  * The five email groups a person can switch off one by one (GEO-3392), and their copy.
  *
  * The ids are geo-notifications' (`src/delivery/email-groups.ts`, GEO-3372), which maps every email
- * kind to exactly one of them. The names and descriptions are the approved mockup's, word for word:
- * the desktop dialog has a description per group, the phone one a shorter one.
+ * kind to exactly one of them. The names and descriptions are the approved mockup's, word for word,
+ * except the digest's day: Tuesday mornings since 27 Oct 2026 (GEO-3500), not Sunday evenings, as
+ * geo-notifications' own unsubscribe page says. The desktop dialog has a description per group, the
+ * phone one a shorter one.
  */
 export const EMAIL_GROUPS = ['invites', 'your_debates', 'replies', 'digest', 'getting_started'] as const;
 export type EmailGroup = (typeof EMAIL_GROUPS)[number];
@@ -28,8 +30,8 @@ export const EMAIL_GROUP_COPY: Record<EmailGroup, { name: string; description: s
   },
   digest: {
     name: 'Weekly digest',
-    description: 'Debates and claims for you, Sunday evenings.',
-    shortDescription: 'Debates and claims for you, Sundays.',
+    description: 'Debates and claims for you, Tuesday mornings.',
+    shortDescription: 'Debates and claims for you, Tuesdays.',
   },
   getting_started: {
     name: 'Getting started',
@@ -70,11 +72,11 @@ export const UNSUBSCRIBE_COPY: Record<
   digest: {
     askTitle: 'Unsubscribe from the weekly digest?',
     askBody:
-      '{email} will stop getting the Sunday digest. Debate invites, reminders and replies to your comments keep coming.',
+      '{email} will stop getting the Tuesday digest. Debate invites, reminders and replies to your comments keep coming.',
     doneTitle: "You're unsubscribed from the weekly digest",
     doneBody: "{email} won't get it anymore. You'll still get debate invites, reminders and replies to your comments.",
     undoneTitle: 'The weekly digest is back on',
-    undoneBody: 'Your next one arrives Sunday evening.',
+    undoneBody: 'Your next one arrives Tuesday morning.',
   },
   getting_started: {
     askTitle: 'Unsubscribe from getting started emails?',

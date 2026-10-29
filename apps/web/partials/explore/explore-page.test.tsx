@@ -111,7 +111,7 @@ describe('ExplorePage For you sort', () => {
   it('opens on Best with the default sorts when the flag is off', () => {
     renderExplore();
 
-    expect(mocks.feedProps.at(-1)?.initialSort).toBe('best');
+    expect(mocks.feedProps.at(-1)).toMatchObject({ initialSort: 'best', preserveSession: true });
     expect(mocks.feedProps.at(-1)?.sortOptions).toBeUndefined();
   });
 
@@ -121,6 +121,7 @@ describe('ExplorePage For you sort', () => {
 
     expect(mocks.feedProps.at(-1)).toMatchObject({
       initialSort: 'for-you',
+      preserveSession: true,
       sortOptions: ['for-you', 'best', 'top', 'new'],
       followedTopicIds: ['aaaa', 'bbbb'],
     });

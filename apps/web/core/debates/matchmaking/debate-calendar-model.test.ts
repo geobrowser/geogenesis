@@ -82,24 +82,36 @@ describe('freeSlotsByUser', () => {
 });
 
 describe('week', () => {
-  it('starts on the local Sunday and offers this week and next', () => {
-    expect(weekStart(NOW, 0)).toEqual(new Date(2026, 9, 4));
-    expect(weekStart(NOW, 1)).toEqual(new Date(2026, 9, 11));
-    // A Sunday is the first day of its own week, not the last of the one before.
+  it('starts today at local midnight and offers two rolling seven-day windows', () => {
+    expect(weekStart(NOW, 0)).toEqual(new Date(2026, 9, 7));
+    expect(weekStart(NOW, 1)).toEqual(new Date(2026, 9, 14));
+    // Sunday stays the first column when today is Sunday.
     expect(weekStart(new Date(2026, 9, 4, 23, 0), 0)).toEqual(new Date(2026, 9, 4));
     const range = weekRangeLabel(weekDays(weekStart(NOW, 0)));
-    expect(range).toMatch(/4/);
-    expect(range).toMatch(/10/);
+    expect(range).toMatch(/7/);
+    expect(range).toMatch(/13/);
     expect(range).toMatch(/Oct/);
     expect(range).toMatch(/2026/);
   });
 
+  it.each(Array.from({ length: 7 }, (_, day) => day + 4))('starts on today for October %i', day => {
+    expect(weekStart(new Date(2026, 9, day, 23, 59), 0)).toEqual(new Date(2026, 9, day));
+  });
+
+  it('keeps consecutive windows across month and year boundaries', () => {
+    const now = new Date(2026, 11, 29, 18);
+    const first = weekDays(weekStart(now, 0));
+    expect(first[6]).toEqual(new Date(2027, 0, 4));
+    expect(first[7]).toEqual(weekStart(now, 1));
+    expect(weekDays(weekStart(now, 1))[6]).toEqual(new Date(2027, 0, 11));
+  });
+
   it('places an instant in its day and local hour, and nothing outside the week', () => {
     const days = weekDays(weekStart(NOW, 0));
-    expect(cellOf(at(8, 18, 30), days)).toEqual({ day: 4, hour: 18 });
-    expect(cellOf(at(4, 0), days)).toEqual({ day: 0, hour: 0 });
-    expect(cellOf(at(11, 9), days)).toBeNull();
-    expect(cellOf(at(3, 23), days)).toBeNull();
+    expect(cellOf(at(8, 18, 30), days)).toEqual({ day: 1, hour: 18 });
+    expect(cellOf(at(7, 0), days)).toEqual({ day: 0, hour: 0 });
+    expect(cellOf(at(14, 0), days)).toBeNull();
+    expect(cellOf(at(6, 23, 59), days)).toBeNull();
   });
 });
 
@@ -131,7 +143,7 @@ describe('weekCells', () => {
       order: (left, right) => matches[right.userKey] - matches[left.userKey],
     });
 
-    expect(cells.get('4:18')).toEqual([
+    expect(cells.get('1:18')).toEqual([
       { userKey: 'many', slots: [{ start: at(8, 18, 30), viewerFree: false }] },
       {
         userKey: 'few',

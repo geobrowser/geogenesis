@@ -23,7 +23,10 @@ const mocks = vi.hoisted(() => ({
   sendUserOperation: vi.fn(),
   getSpace: vi.fn(),
   fetchFollowed: vi.fn(),
+  capture: vi.fn(),
 }));
+
+vi.mock('~/core/analytics', () => ({ capture: mocks.capture, analyticsContextRevision: () => 0 }));
 
 vi.mock('~/core/hooks/use-personal-space-id', () => ({
   usePersonalSpaceId: () => ({
@@ -47,7 +50,8 @@ vi.mock('~/core/topics/use-followed-topics', () => ({
 vi.mock('~/core/topics/use-follow-topics', async importOriginal => {
   const actual = await importOriginal<typeof import('~/core/topics/use-follow-topics')>();
   return {
-    useFollowTopics: () => (mocks.useActualFollow ? actual.useFollowTopics() : { follow: mocks.follow }),
+    useFollowTopics: (options?: Parameters<typeof actual.useFollowTopics>[0]) =>
+      mocks.useActualFollow ? actual.useFollowTopics(options) : { follow: mocks.follow },
   };
 });
 vi.mock('~/core/io/queries', () => ({ getSpace: mocks.getSpace }));
@@ -82,6 +86,7 @@ beforeEach(() => {
   mocks.address = '0xA';
   mocks.followedLoading = false;
   mocks.follow.mockReset();
+  mocks.capture.mockClear();
   mocks.useActualFollow = false;
   mocks.sendUserOperation.mockReset();
   mocks.sendUserOperation.mockResolvedValue('0xhash');
@@ -138,6 +143,15 @@ describe('PendingTopicFollowsRunner', () => {
     expect(mocks.sendUserOperation).toHaveBeenCalledOnce();
     const { calls } = mocks.sendUserOperation.mock.calls[0][0] as { calls: { data: `0x${string}` }[] };
     expect(calls).toHaveLength(2);
+    const completions = mocks.capture.mock.calls.filter(([event]) => event === 'action_completed');
+    expect(completions).toHaveLength(2);
+    expect(completions.map(([, props]) => props.target_id)).toEqual(topics.slice(1).map(topic => topic.id));
+    for (const [, props] of completions)
+      expect(props).toMatchObject({
+        component: 'onboarding_customize_feed',
+        action_kind: 'follow_topic',
+        outcome: 'succeeded',
+      });
     calls.forEach(({ data }, index) => {
       const { functionName, args } = decodeFunctionData({ abi: SpaceRegistryAbi, data });
       expect(functionName).toBe('enter');
