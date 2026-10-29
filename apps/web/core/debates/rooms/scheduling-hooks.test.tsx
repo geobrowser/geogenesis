@@ -148,8 +148,7 @@ describe('useAdminScheduledDebates', () => {
   });
 });
 
-function mutationWrapper() {
-  const client = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
+function mutationWrapper(client = new QueryClient({ defaultOptions: { mutations: { retry: false } } })) {
   return ({ children }: { children: React.ReactNode }) => (
     <QueryClientProvider client={client}>{children}</QueryClientProvider>
   );
@@ -157,10 +156,10 @@ function mutationWrapper() {
 
 // Analytics rides on the server's answer, in the hook rather than at the call site: a shared link's
 // modal can close while the request is in flight, and a caller's own callbacks die with it.
-describe('scheduling analytics', () => {
-  const startsAt = new Date(Date.now() + 3 * 3_600_000);
-  const sent = { request_id: 'req-1' } as ScheduledDebateRequest;
+const startsAt = new Date(Date.now() + 3 * 3_600_000);
+const sent = { request_id: 'req-1' } as ScheduledDebateRequest;
 
+describe('scheduling analytics', () => {
   it('records a sent request with where it came from, once the server accepts it', async () => {
     vi.spyOn(api, 'createScheduledDebate').mockResolvedValue(sent);
     const { result } = renderHook(() => useCreateScheduledDebate(), { wrapper: mutationWrapper() });
@@ -372,45 +371,38 @@ function settleAfterSwitch<T>(value: T, reject = false): Promise<never> {
 // GEO-3532: a pending invite holds its time for both people, so sending or answering one changes
 // what anyone's week shows as free.
 describe('availability after an invite', () => {
-  const startsAt = new Date(Date.now() + 3 * 3_600_000);
-  const sent = { request_id: 'req-1' } as ScheduledDebateRequest;
-
-  function invalidatedKeys() {
+  function renderWithClient<T>(hook: () => T) {
     const client = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
     const invalidate = vi.spyOn(client, 'invalidateQueries');
-    const wrapper = ({ children }: { children: React.ReactNode }) => (
-      <QueryClientProvider client={client}>{children}</QueryClientProvider>
-    );
-    return { wrapper, keys: () => invalidate.mock.calls.map(([filters]) => filters?.queryKey) };
+    const { result } = renderHook(hook, { wrapper: mutationWrapper(client) });
+    const expectAvailabilityRefreshed = () =>
+      expect(invalidate.mock.calls.map(([filters]) => filters?.queryKey)).toEqual(
+        expect.arrayContaining([
+          debateQueryKeys.schedulablePeopleRoot('acct'),
+          debateQueryKeys.peerScheduleRoot('acct'),
+        ])
+      );
+    return { result, expectAvailabilityRefreshed };
   }
 
   it('refreshes every availability read once an invite is sent', async () => {
     vi.spyOn(api, 'createScheduledDebate').mockResolvedValue(sent);
-    const { wrapper, keys } = invalidatedKeys();
-    const { result } = renderHook(() => useCreateScheduledDebate(), { wrapper });
+    const { result, expectAvailabilityRefreshed } = renderWithClient(() => useCreateScheduledDebate());
 
     await act(() => result.current.mutateAsync({ opponentUserId: 'them', startsAt, minutes: 30 }));
 
-    expect(keys()).toEqual(
-      expect.arrayContaining([debateQueryKeys.schedulablePeopleRoot('acct'), debateQueryKeys.peerScheduleRoot('acct')])
-    );
+    expectAvailabilityRefreshed();
   });
 
   it.each([true, false])(
     'refreshes every availability read once an invite is answered (accepted=%s)',
     async accepted => {
       vi.spyOn(api, 'respondToScheduledDebate').mockResolvedValue({ ...sent, outcome: 'recorded' });
-      const { wrapper, keys } = invalidatedKeys();
-      const { result } = renderHook(() => useRespondToScheduledDebate(), { wrapper });
+      const { result, expectAvailabilityRefreshed } = renderWithClient(() => useRespondToScheduledDebate());
 
       await act(() => result.current.mutateAsync({ requestId: 'req-1', accepted }));
 
-      expect(keys()).toEqual(
-        expect.arrayContaining([
-          debateQueryKeys.schedulablePeopleRoot('acct'),
-          debateQueryKeys.peerScheduleRoot('acct'),
-        ])
-      );
+      expectAvailabilityRefreshed();
     }
   );
 });

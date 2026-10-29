@@ -31,7 +31,7 @@ import {
   respondToScheduledDebate,
 } from '../api';
 import { useDebateVisibility } from '../debate-attention';
-import { debateQueryKeys, debateQueryNetworkOptions, useGeoChatAuth } from '../hooks';
+import { debateQueryKeys, debateQueryNetworkOptions, invalidateAvailabilityReads, useGeoChatAuth } from '../hooks';
 
 /** Backstop for an event refetch that failed past the gateway's retries; the socket stays ready. */
 const SCHEDULED_POLL_MS = 60_000;
@@ -147,7 +147,7 @@ export function useCreateScheduledDebate() {
       }
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.scheduledDebates(accountKey) });
       // A pending invite holds its time for both people (GEO-3532), so it leaves every availability read.
-      invalidateAvailability(queryClient, accountKey);
+      invalidateAvailabilityReads(queryClient, accountKey);
     },
     onError: (error, { analytics }, isCurrent) => {
       if (isCurrent?.()) debateScheduledRequestFailed({ mode: 'request', error, analytics });
@@ -172,13 +172,7 @@ export function useCreateScheduledDebate() {
 function invalidateFreedTime(queryClient: QueryClient, accountKey: string | null) {
   void queryClient.invalidateQueries({ queryKey: debateQueryKeys.scheduledDebates(accountKey) });
   void queryClient.invalidateQueries({ queryKey: debateQueryKeys.upcomingRooms(accountKey) });
-  invalidateAvailability(queryClient, accountKey);
-}
-
-/** Every read that subtracts time someone is already holding: Find a time and anyone's week. */
-function invalidateAvailability(queryClient: QueryClient, accountKey: string | null) {
-  void queryClient.invalidateQueries({ queryKey: debateQueryKeys.schedulablePeopleRoot(accountKey) });
-  void queryClient.invalidateQueries({ queryKey: debateQueryKeys.peerScheduleRoot(accountKey) });
+  invalidateAvailabilityReads(queryClient, accountKey);
 }
 
 /** Moves an existing request to a new time: "Choose different time" in the scheduling emails. */
@@ -244,7 +238,7 @@ export function useRespondToScheduledDebate() {
       // An acceptance books the room, which the join prompt reads from a different key.
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.upcomingRooms(accountKey) });
       // A decline frees the invite's time, and an acceptance frees the times of the invites it supersedes.
-      invalidateAvailability(queryClient, accountKey);
+      invalidateAvailabilityReads(queryClient, accountKey);
     },
   });
   const accept = useObservedMutation(
