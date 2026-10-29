@@ -45,6 +45,9 @@ export type ReceiverSnapshot = {
   silentConcealedSamples?: number;
   /** Seconds. */
   jitter?: number;
+  /** The level of what was received, before it reaches any speaker. */
+  energy?: number;
+  samplesDuration?: number;
 };
 
 /** Remote audio tracks by track id, so one person joining or leaving does not skew the others. */
@@ -63,6 +66,11 @@ export type VoiceSampleMetrics = {
   recv_concealed_pct: number | null;
   /** The worst across everyone heard. */
   recv_jitter_ms: number | null;
+  /**
+   * The loudest incoming track's mean level, in dBFS: whether there was anything to hear, apart
+   * from whether it was played.
+   */
+  recv_audio_level_db: number | null;
 };
 
 /** Digital silence has no finite level; it is reported as this. */
@@ -99,6 +107,12 @@ function percent(part: number | null, whole: number | null) {
   return part === null || whole === null || whole <= 0 ? null : round((100 * part) / whole, 1);
 }
 
+/** `totalAudioEnergy` integrates the squared level over time, so energy over seconds is mean power. */
+function levelDb(energy: number | null, seconds: number | null) {
+  if (energy === null || seconds === null || seconds <= 0) return null;
+  return energy <= 0 ? MIC_LEVEL_FLOOR_DB : Math.max(MIC_LEVEL_FLOOR_DB, round(10 * Math.log10(energy / seconds), 1));
+}
+
 const ms = (seconds?: number) => (seconds === undefined ? null : Math.round(seconds * 1_000));
 
 function round(value: number, digits: number) {
@@ -132,6 +146,14 @@ export function voiceSampleMetrics(
     const silent = growth(current.silentConcealedSamples, previous?.silentConcealedSamples, previous !== undefined);
     return all === null || silent === null ? null : Math.max(0, all - silent);
   });
+  const levels = tracks.flatMap(([id, current]) => {
+    const previous = previousReceivers?.get(id);
+    const level = levelDb(
+      growth(current.energy, previous?.energy, previous !== undefined),
+      growth(current.samplesDuration, previous?.samplesDuration, previous !== undefined)
+    );
+    return level === null ? [] : [level];
+  });
   const jitters = tracks.flatMap(([, current]) => (current.jitter === undefined ? [] : [current.jitter]));
 
   return {
@@ -140,17 +162,12 @@ export function voiceSampleMetrics(
     send_loss_pct: percent(sentLost, sent),
     rtt_ms: ms(sender.roundTripTime),
     send_jitter_ms: ms(sender.jitter),
-    // `totalAudioEnergy` integrates the squared level over time, so energy over seconds is mean power.
-    mic_level_db:
-      energy === null || micSeconds === null || micSeconds <= 0
-        ? null
-        : energy <= 0
-          ? MIC_LEVEL_FLOOR_DB
-          : Math.max(MIC_LEVEL_FLOOR_DB, round(10 * Math.log10(energy / micSeconds), 1)),
+    mic_level_db: levelDb(energy, micSeconds),
     recv_tracks: tracks.length,
     recv_loss_pct: percent(receivedLost, received === null || receivedLost === null ? null : received + receivedLost),
     recv_concealed_pct: percent(concealed, samples),
     recv_jitter_ms: jitters.length === 0 ? null : ms(Math.max(...jitters)),
+    recv_audio_level_db: levels.length === 0 ? null : Math.max(...levels),
   };
 }
 
@@ -201,6 +218,8 @@ export function readReceiverReport(entries: readonly StatsEntry[]): ReceiverSnap
     snapshot.concealedSamples = add(snapshot.concealedSamples, entry.concealedSamples);
     snapshot.silentConcealedSamples = add(snapshot.silentConcealedSamples, entry.silentConcealedSamples);
     snapshot.jitter = num(entry.jitter) ?? snapshot.jitter;
+    snapshot.energy = add(snapshot.energy, entry.totalAudioEnergy);
+    snapshot.samplesDuration = add(snapshot.samplesDuration, entry.totalSamplesDuration);
   }
   return snapshot;
 }

@@ -37,6 +37,7 @@ import {
 } from '~/core/debates/open-rounds-fixtures';
 import { clearRematchJoinIntents, rememberRematchJoinIntent } from '~/core/debates/rematch-join-intent';
 import { DebateRequestMediaPreview } from '~/core/debates/request-media-preview';
+import { tabVoiceOwner } from '~/core/debates/voice-owner';
 import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
 import { readMediaDevicePreference, rememberMediaDevice } from '~/core/media/device-preferences';
 
@@ -90,6 +91,9 @@ const mocks = vi.hoisted(() => ({
   roomConnect: vi.fn(),
   roomConstruct: vi.fn(),
   roomSwitchActiveDevice: vi.fn(),
+  roomOff: vi.fn(),
+  roomStartAudio: vi.fn(() => Promise.resolve()),
+  roomCanPlaybackAudio: true,
   roomRemoteParticipants: new Map<string, unknown>(),
   roomLocalParticipant: { publishTrack: (...args: unknown[]) => mocks.publishTrack(...args) },
   roomDisconnect: vi.fn(),
@@ -110,6 +114,8 @@ const mocks = vi.hoisted(() => ({
   ownershipRelease: vi.fn(),
   ownershipClose: vi.fn(),
   ownershipTakeoverHandler: null as null | ((context: DebateRoomTakeoverContext) => boolean | Promise<boolean>),
+  // Not reset per test: the tab voice owner can outlive a test and keep its coordinator.
+  voiceTakeoverHandler: null as null | ((context: DebateRoomTakeoverContext) => boolean | Promise<boolean>),
   ownershipCoordinationMode: 'lock-and-broadcast' as 'lock-and-broadcast' | 'lock-only' | 'livekit-fallback',
   useRealRoomOwnership: false,
   deviceChangeHandler: null as null | (() => void),
@@ -268,6 +274,20 @@ vi.mock('~/core/debates/debate-room-ownership', async importOriginal => {
     createDebateRoomOwnershipCoordinator: (
       options: Parameters<typeof actual.createDebateRoomOwnershipCoordinator>[0]
     ) => {
+      // The tab's cross-surface voice lock: never contested here (as without Web Locks).
+      if (options.debateId === 'voice') {
+        mocks.voiceTakeoverHandler = options.onTakeoverRequested;
+        return {
+          instanceId: 'voice-instance',
+          coordinationMode: 'livekit-fallback' as const,
+          acquire: async () => ({ acquired: true, waitedForLocalRelease: false }),
+          requestTakeover: async () => true,
+          release: async () => undefined,
+          close: () => undefined,
+          ownsConnection: () => true,
+          lastRefusedBy: () => undefined,
+        };
+      }
       if (mocks.useRealRoomOwnership) return actual.createDebateRoomOwnershipCoordinator(options);
       mocks.ownershipTakeoverHandler = options.onTakeoverRequested;
       return {
@@ -278,6 +298,7 @@ vi.mock('~/core/debates/debate-room-ownership', async importOriginal => {
         release: mocks.ownershipRelease,
         close: mocks.ownershipClose,
         ownsConnection: () => true,
+        lastRefusedBy: () => undefined,
       };
     },
   };
@@ -298,6 +319,11 @@ vi.hoisted(() => {
       localParticipant = mocks.roomLocalParticipant;
 
       on = mocks.roomOn;
+      off = mocks.roomOff;
+      startAudio = mocks.roomStartAudio;
+      get canPlaybackAudio() {
+        return mocks.roomCanPlaybackAudio;
+      }
       connect = mocks.roomConnect;
       disconnect = mocks.roomDisconnect;
       switchActiveDevice = mocks.roomSwitchActiveDevice;
@@ -468,6 +494,9 @@ beforeEach(() => {
   mocks.refetchDebate.mockReset();
   mocks.clearTimedOutDebateActivity.mockReset();
   mocks.roomOn.mockReset();
+  mocks.roomOff.mockReset();
+  mocks.roomStartAudio.mockReset().mockResolvedValue(undefined);
+  mocks.roomCanPlaybackAudio = true;
   mocks.roomSwitchActiveDevice.mockReset();
   mocks.roomSwitchActiveDevice.mockResolvedValue(true);
   mocks.roomRemoteParticipants = new Map();
@@ -901,11 +930,13 @@ describe('DebateRoomPageClient', () => {
     await waitFor(() => expect(mocks.liveKitJoinMutateAsync).toHaveBeenCalled());
     await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
     expect(mocks.markJoinedMutateAsync).not.toHaveBeenCalled();
-    expect(mocks.startVoiceCallTelemetry).toHaveBeenCalledWith(expect.anything(), 'debate', 'debate-1', {
-      debate_id: 'debate-1',
-      participant_slot: 1,
-      call_session_id: expect.any(String),
-    });
+    expect(mocks.startVoiceCallTelemetry).toHaveBeenCalledWith(
+      expect.anything(),
+      'debate',
+      'debate-1',
+      { debate_id: 'debate-1', participant_slot: 1, call_session_id: expect.any(String) },
+      { probe: expect.any(Function) }
+    );
     expect(screen.getByText('Not recording')).toBeInTheDocument();
     expect(screen.queryByText('Recording')).not.toBeInTheDocument();
   });
@@ -2728,6 +2759,37 @@ describe('DebateRoomPageClient', () => {
     });
   });
 
+  it('lets the Ready click start incoming audio the browser held back', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
+    fireEvent.click(await screen.findByRole('button', { name: "I'm ready to debate" }));
+
+    expect(mocks.roomStartAudio).toHaveBeenCalled();
+  });
+
+  it.each([true, false])(
+    'offers to enable blocked audio on the pre-screen once Ready is pressed (ready: %s)',
+    async localReady => {
+      mocks.debate = readyDebate({ localReady, remoteReady: false });
+
+      render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+      await waitFor(() => expect(mocks.publishTrack).toHaveBeenCalled());
+      mocks.roomCanPlaybackAudio = false;
+      act(() => emitRoomEvent('audioPlaybackChanged', false));
+
+      if (!localReady) {
+        // The Ready click is the gesture that unblocks it.
+        await waitFor(() => expect(screen.getByRole('button', { name: "I'm ready to debate" })).toBeEnabled());
+        expect(screen.queryByRole('button', { name: 'Enable audio' })).not.toBeInTheDocument();
+        return;
+      }
+      fireEvent.click(await screen.findByRole('button', { name: 'Enable audio' }));
+      expect(mocks.roomStartAudio).toHaveBeenCalled();
+    }
+  );
+
   it('connects to LiveKit once the debate leaves the ready pre-screen', async () => {
     mocks.debate = {
       ...readyDebate({ localReady: true, remoteReady: true }),
@@ -3163,6 +3225,216 @@ describe('DebateRoomPageClient', () => {
     expect(released).toBe(true);
   });
 
+  it('hands voice to a lobby tab during the intro and offers to take it back', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
+
+    // A lobby page opening in another tab does not take it by itself.
+    await expect(
+      Promise.resolve(
+        mocks.voiceTakeoverHandler?.({
+          requesterPriority: 2,
+          ownerPriority: 0,
+          automatic: true,
+          requesterLabel: 'lobby',
+        })
+      )
+    ).resolves.toBe(false);
+
+    const previewsBefore = mocks.createLocalTracks.mock.calls.length;
+    let released: boolean | undefined;
+    await act(async () => {
+      released = await mocks.voiceTakeoverHandler?.({
+        requesterPriority: 2,
+        ownerPriority: 0,
+        automatic: false,
+        requesterLabel: 'lobby',
+      });
+    });
+    expect(released).toBe(true);
+    expect(mocks.roomDisconnect).toHaveBeenCalled();
+    expect(await screen.findByText('Voice is on in another tab')).toBeInTheDocument();
+    expect(mocks.roomConnect).toHaveBeenCalledOnce();
+    // Nor are the camera and mic opened again behind the other tab's back.
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 20));
+    });
+    expect(mocks.createLocalTracks).toHaveBeenCalledTimes(previewsBefore);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Use voice here' }));
+    await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalledTimes(2));
+  });
+
+  it('takes voice back when the camera is turned on after giving it up in the intro', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
+    await act(async () => {
+      await mocks.voiceTakeoverHandler?.({
+        requesterPriority: 2,
+        ownerPriority: 0,
+        automatic: false,
+        requesterLabel: 'lobby',
+      });
+    });
+    expect(await screen.findByText('Voice is on in another tab')).toBeInTheDocument();
+    const previewsBefore = mocks.createLocalTracks.mock.calls.length;
+
+    // Shown as it is: nothing open.
+    expect(await screen.findByRole('button', { name: 'Turn camera on' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Unmute microphone' })).toBeInTheDocument();
+
+    const claim = vi.spyOn(tabVoiceOwner(mocks.currentUserId!), 'claim');
+    fireEvent.click(screen.getByRole('button', { name: 'Turn camera on' }));
+    await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalledTimes(2));
+    expect(claim).toHaveBeenCalledWith({ kind: 'debate' });
+    expect(mocks.createLocalTracks.mock.calls.length).toBeGreaterThan(previewsBefore);
+    // Only what was turned on comes back on.
+    expect(screen.getByRole('button', { name: 'Unmute microphone' })).toBeInTheDocument();
+  });
+
+  it('does not mark ready or open devices from an intro that gave voice up', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
+    await act(async () => {
+      await mocks.voiceTakeoverHandler?.({
+        requesterPriority: 2,
+        ownerPriority: 0,
+        automatic: false,
+        requesterLabel: 'lobby',
+      });
+    });
+    expect(await screen.findByText('Voice is on in another tab')).toBeInTheDocument();
+    const previewsBefore = mocks.createLocalTracks.mock.calls.length;
+
+    // Both devices show off, so Ready waits on one being turned on, which takes voice back.
+    expect(screen.getByText('Enable video and audio to start')).toBeInTheDocument();
+    const ready = screen.getByRole('button', { name: "I'm ready to debate" });
+    expect(ready).toBeDisabled();
+    fireEvent.click(ready);
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 0));
+    });
+    expect(mocks.readyMutateAsync).not.toHaveBeenCalled();
+    expect(mocks.createLocalTracks.mock.calls.length).toBe(previewsBefore);
+  });
+
+  it('gives voice to the tab it just handed the room to, before re-rendering', async () => {
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.markJoinedMutateAsync).toHaveBeenCalled());
+
+    // "Continue here" in another tab: the room is handed over, then that tab claims voice before
+    // this one renders again.
+    let voiceReleased: boolean | undefined;
+    await act(async () => {
+      const roomReleased = await mocks.ownershipTakeoverHandler?.({
+        requesterPriority: 2,
+        ownerPriority: 0,
+        automatic: false,
+      });
+      expect(roomReleased).toBe(true);
+      voiceReleased = await mocks.voiceTakeoverHandler?.({
+        requesterPriority: 2,
+        ownerPriority: 0,
+        automatic: false,
+        requesterLabel: 'debate',
+      });
+    });
+    expect(voiceReleased).toBe(true);
+  });
+
+  it('keeps a connecting debate from an automatic claim while it is still claiming voice', async () => {
+    const owner = tabVoiceOwner(mocks.currentUserId!);
+    let finishClaim = (_owned: boolean) => {};
+    const realClaim = owner.claim.bind(owner);
+    const claim = vi.spyOn(owner, 'claim').mockImplementationOnce(options => {
+      // The real claim sets up the takeover handler; the room waits on this slower one.
+      void realClaim(options);
+      return new Promise<boolean>(resolve => (finishClaim = resolve));
+    });
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(claim).toHaveBeenCalled());
+
+    // A page opening in a nearer tab, before the room has rendered as connecting.
+    let released: boolean | undefined;
+    await act(async () => {
+      released = await mocks.voiceTakeoverHandler?.({
+        requesterPriority: 2,
+        ownerPriority: 0,
+        automatic: true,
+        requesterLabel: 'lobby',
+      });
+    });
+    expect(released).toBe(false);
+
+    await act(async () => finishClaim(true));
+    await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
+  });
+
+  it('keeps asking for voice when a starting debate loses its first claim', async () => {
+    const owner = tabVoiceOwner(mocks.currentUserId!);
+    vi.spyOn(owner, 'claim').mockResolvedValueOnce(false);
+    const claimUntilHeld = vi.spyOn(owner, 'claimUntilHeld').mockResolvedValue(true);
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.markJoinedMutateAsync).toHaveBeenCalled());
+
+    expect(claimUntilHeld).toHaveBeenCalledWith(expect.objectContaining({ kind: 'debate' }));
+    // The room goes ahead meanwhile, and still refuses to hand voice over.
+    expect(mocks.roomConnect).toHaveBeenCalled();
+    const [{ stop }] = claimUntilHeld.mock.calls[0]!;
+    expect(stop()).toBe(false);
+  });
+
+  it('keeps voice from another tab while the debate is under way', async () => {
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.markJoinedMutateAsync).toHaveBeenCalled());
+
+    let released: boolean | undefined;
+    await act(async () => {
+      released = await mocks.voiceTakeoverHandler?.({
+        requesterPriority: 2,
+        ownerPriority: 0,
+        automatic: false,
+        requesterLabel: 'lobby',
+      });
+    });
+    expect(released).toBe(false);
+    expect(mocks.roomDisconnect).not.toHaveBeenCalled();
+  });
+
   it('does not auto-reclaim across devices after a duplicate-identity disconnect', async () => {
     vi.spyOn(document, 'hasFocus').mockReturnValue(true);
     mocks.debate = {
@@ -3524,6 +3796,61 @@ describe('DebateRoomPageClient', () => {
     await waitFor(() => expect(screen.queryByText('Reconnecting to the debate room…')).not.toBeInTheDocument());
   });
 
+  it.each([false, true])(
+    'asks for a click when the browser blocks the opponent’s audio (Open rounds: %s)',
+    async openRounds => {
+      mocks.debate = {
+        ...readyDebate({ localReady: true, remoteReady: true }),
+        status: 'connecting',
+        connecting_started_at: '2099-07-02T00:00:00.000Z',
+        connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+        open_rounds: openRounds ? openRoundsListening().open_rounds : undefined,
+      };
+
+      render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+      await waitFor(() => expect(mocks.markJoinedMutateAsync).toHaveBeenCalled());
+      expect(screen.queryByText('Audio is blocked')).not.toBeInTheDocument();
+
+      mocks.roomCanPlaybackAudio = false;
+      act(() => emitRoomEvent('audioPlaybackChanged', false));
+      fireEvent.click(await screen.findByRole('button', { name: 'Enable audio' }));
+      expect(mocks.roomStartAudio).toHaveBeenCalled();
+
+      mocks.roomCanPlaybackAudio = true;
+      act(() => emitRoomEvent('audioPlaybackChanged', true));
+      await waitFor(() => expect(screen.queryByText('Audio is blocked')).not.toBeInTheDocument());
+    }
+  );
+
+  it('keeps the speaker off when enabling blocked audio unmutes the elements', async () => {
+    // The room's speaker toggle sits behind the debugging flag.
+    mocks.featureFlags.debateDebugging = true;
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+    };
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.markJoinedMutateAsync).toHaveBeenCalled());
+    const remoteAudio = document.createElement('audio');
+    act(() => emitRoomEvent('trackSubscribed', { kind: 'audio', attach: () => remoteAudio, detach: () => [] }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Turn speaker off' }));
+    expect(remoteAudio.muted).toBe(true);
+    // As LiveKit's does: every remote audio element is unmuted and played.
+    mocks.roomStartAudio.mockImplementation(async () => {
+      remoteAudio.muted = false;
+    });
+    mocks.roomCanPlaybackAudio = false;
+    act(() => emitRoomEvent('audioPlaybackChanged', false));
+    const notice = (await screen.findByText('Audio is blocked')).closest('[role="status"]') as HTMLElement;
+    fireEvent.click(within(notice).getByRole('button', { name: 'Enable audio' }));
+
+    await waitFor(() => expect(mocks.roomStartAudio).toHaveBeenCalled());
+    await waitFor(() => expect(remoteAudio.muted).toBe(true));
+  });
+
   it('reports a reconnect episode once, with its duration, and joins with resilient connect options', async () => {
     mocks.debate = {
       ...readyDebate({ localReady: true, remoteReady: true }),
@@ -3791,7 +4118,7 @@ describe('DebateRoomPageClient', () => {
     expect(debateVideoTile('local').parentElement).toHaveClass('max-w-[430px]');
     expect(screen.queryByRole('button', { name: 'Mute microphone' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Turn camera off' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Disable audio' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Turn speaker off' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Leave debate' })).toBeInTheDocument();
     expect(screen.queryByText(/has the floor/i)).not.toBeInTheDocument();
     expectActiveDebateVideoTile('local');
@@ -3872,7 +4199,7 @@ describe('DebateRoomPageClient', () => {
     expect(await screen.findByRole('dialog', { name: 'Debate recording' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Mute microphone' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Turn camera off' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Disable audio' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Turn speaker off' })).toBeInTheDocument();
     expect(screen.getByRole('list', { name: 'Debate phases' })).toBeInTheDocument();
     expect(screen.getByText('Connecting').closest('li')).not.toHaveAttribute('aria-current');
     expect(screen.getByText('Preflight').closest('li')).not.toHaveAttribute('aria-current');
@@ -3885,7 +4212,7 @@ describe('DebateRoomPageClient', () => {
     act(() => trackSubscribed?.({ attach: () => remoteVideo }));
     expect(remoteVideo.muted).toBe(false);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Disable audio' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Turn speaker off' }));
 
     await waitFor(() => expect(remoteVideo.muted).toBe(true));
     expectDebateVideoTileInColor('remote');

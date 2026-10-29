@@ -18,7 +18,7 @@ describe('optional debate room telemetry', () => {
     });
     const { loadDebateRoomTelemetry } = await import('./debate-room-telemetry');
     const start = await loadDebateRoomTelemetry();
-    expect(() => start(room, 'd', 1)()).not.toThrow();
+    expect(() => start(room, 'd', 1, () => null).stop()).not.toThrow();
   });
 
   it('bounds a telemetry chunk that never loads', async () => {
@@ -28,7 +28,7 @@ describe('optional debate room telemetry', () => {
     const pending = loadDebateRoomTelemetry();
     await vi.advanceTimersByTimeAsync(5_000);
     const start = await pending;
-    expect(() => start(room, 'd', 1)()).not.toThrow();
+    expect(() => start(room, 'd', 1, () => null).stop()).not.toThrow();
     expect(vi.getTimerCount()).toBe(0);
   });
 
@@ -48,7 +48,7 @@ describe('optional debate room telemetry', () => {
         throw new Error('session id failed');
       });
     }
-    expect(() => start(room, 'd', 1)()).not.toThrow();
+    expect(() => start(room, 'd', 1, () => null).stop()).not.toThrow();
   });
 
   it('passes attribution through and stops healthy telemetry', async () => {
@@ -57,13 +57,15 @@ describe('optional debate room telemetry', () => {
     vi.doMock(telemetryModule, () => ({ startVoiceCallTelemetry }));
     const { loadDebateRoomTelemetry } = await import('./debate-room-telemetry');
     const start = await loadDebateRoomTelemetry();
-    const finish = start(room, 'd', 2);
-    expect(startVoiceCallTelemetry).toHaveBeenCalledWith(room, 'debate', 'd', {
-      debate_id: 'd',
-      participant_slot: 2,
-      call_session_id: expect.any(String),
-    });
-    finish();
+    const telemetry = start(room, 'd', 2, () => null);
+    expect(startVoiceCallTelemetry).toHaveBeenCalledWith(
+      room,
+      'debate',
+      'd',
+      { debate_id: 'd', participant_slot: 2, call_session_id: expect.any(String) },
+      { probe: expect.any(Function) }
+    );
+    telemetry.stop();
     expect(stop).toHaveBeenCalledOnce();
   });
 });

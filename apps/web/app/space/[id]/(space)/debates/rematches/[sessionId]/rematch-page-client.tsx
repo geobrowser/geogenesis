@@ -81,6 +81,7 @@ import { HubPillButton } from '~/core/debates/matchmaking/hub-pill-button';
 import { HubQueryState, HubSkeleton, exploreClaimsAction } from '~/core/debates/matchmaking/hub-states';
 import { HideAgreedSwitch, HideMyPositionsSwitch } from '~/core/debates/matchmaking/matches-only-switch';
 import { MatchmakingClaimCard } from '~/core/debates/matchmaking/matchmaking-claim-card';
+import { NewArrivalTag, NewArrivalsPill, useArrivalHold } from '~/core/debates/matchmaking/new-arrivals';
 import { ScrollableTabRow } from '~/core/debates/matchmaking/scrollable-tab-row';
 import {
   carriesEveryTopic,
@@ -99,7 +100,7 @@ import { TopicSearchSuggestions } from '~/core/debates/matchmaking/topic-search-
 import { useDebouncedSearch } from '~/core/debates/matchmaking/use-debounced-search';
 import { useDebouncedSelection } from '~/core/debates/matchmaking/use-debounced-selection';
 import { useSpaceFilterMenu } from '~/core/debates/matchmaking/use-space-filter-selection';
-import { useStableListOrder } from '~/core/debates/matchmaking/use-stable-list-order';
+import { useNewArrivalsFirst, useStableListOrder } from '~/core/debates/matchmaking/use-stable-list-order';
 import { DEBATE_TAG_ID } from '~/core/debates/ontology';
 import {
   type ParticipantPositionsByClaim,
@@ -137,7 +138,6 @@ import { useLeaveRematchOnExit } from '~/core/debates/use-leave-rematch-on-exit'
 import { useRelatedDebateClaims } from '~/core/debates/use-related-debate-claims';
 import { useEffectOnceWhen } from '~/core/hooks/use-effect-once';
 import { useEntityResponse, useEntityResponseIndexingSnapshot } from '~/core/hooks/use-entity-vote';
-import { useHydrated } from '~/core/hooks/use-hydrated';
 import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sentinel';
 import { useLastSettled } from '~/core/hooks/use-last-settled';
 import { useOpenClaimInSidePanel } from '~/core/hooks/use-open-claim-in-side-panel';
@@ -145,7 +145,6 @@ import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
 import { equals as idEquals, uuidToHex } from '~/core/id/normalize';
 import { responsePositionLabel } from '~/core/responses/entity-response';
-import { useFeatureFlag } from '~/core/state/feature-flags';
 import { normId } from '~/core/utils/norm-id';
 import { getTopRankedSpaceId } from '~/core/utils/space/space-ranking';
 import { validateSpaceId } from '~/core/utils/utils';
@@ -188,9 +187,8 @@ const NO_CLAIMS: DebateRematchClaim[] = [];
  * forth — and it is where the pair land whenever it has anything in it. `opponent` is "Their
  * positions" on screen and `positions` is "My positions"; the ids predate the labels.
  *
- * `todays` is GEO-3489, "Today's claims": every space's newest Debate agenda, behind the
- * `todaysClaims` flag. It leads the strip and the landing whenever an agenda lists a claim this pair
- * can debate, because a claim listed today has no positions yet and so can never be a match.
+ * `todays` is GEO-3489, "Today's claims": every space's newest Debate agenda. It leads the strip
+ * and the landing whenever an agenda lists a claim this pair can debate, because a claim listed today has no positions yet and so can never be a match.
  */
 type PickerTab = 'todays' | 'matches' | 'related' | 'debate' | 'explore' | 'positions' | 'opponent';
 
@@ -443,7 +441,13 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // back out by `participantSidesOn`, which matches on the current participants' space ids.
   const localParticipant =
     currentUserId === null ? null : (participants.find(participant => participant.user_id === currentUserId) ?? null);
-  const positions = useParticipantPositions(participants, localParticipant?.profile_space_id ?? null);
+  // The other debater's responses show as soon as geo-chat reports them, ahead of the graph (GEO-3505).
+  const positions = useParticipantPositions(participants, localParticipant?.profile_space_id ?? null, {
+    liveFrom:
+      currentUserId === null
+        ? null
+        : (participants.find(participant => participant.user_id !== currentUserId)?.profile_space_id ?? null),
+  });
 
   const remoteParticipant =
     currentUserId === null ? null : (participants.find(participant => participant.user_id !== currentUserId) ?? null);
@@ -535,20 +539,18 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const relatedRowsError = relatedEntitiesByIdQuery.error ?? relatedClaimsQuery.error ?? null;
 
   /* -----------------------------------------------------------------------------------------------
-   * GEO-3489. Today's claims: every space's newest Debate agenda, behind `todaysClaims`.
+   * GEO-3489. Today's claims: every space's newest Debate agenda.
    *
    * The agendas, the claims they list and geo-chat's rows for those are asked for up front, like the
    * other tabs', because the pair land here. So are each claim's debates since its listing and the
    * debaters' membership of the agendas' spaces: both decide the order, and the order is set once.
    * ---------------------------------------------------------------------------------------------*/
-  const todaysClaimsEnabled = useFeatureFlag('todaysClaims');
-  const flagsHydrated = useHydrated();
-  const todaysAgendasQuery = useDebateAgendas(todaysClaimsEnabled);
+  const todaysAgendasQuery = useDebateAgendas();
   // Every agenda's claims and spaces, before publishability says which count: the rows and each
   // space's type are looked up for all of them, so they are ready when it does.
   const todaysClaimIds = todaysAgendasQuery.claimIds;
   const todaysSpaceIds = todaysAgendasQuery.spaceIds;
-  const todaysClaimsQuery = useDebateRematchClaimsForIds(sessionId, todaysClaimIds, todaysClaimsEnabled);
+  const todaysClaimsQuery = useDebateRematchClaimsForIds(sessionId, todaysClaimIds);
 
   /* -----------------------------------------------------------------------------------------------
    * GEO-2870 phase 2. "From this debate": the claims geo-chat extracted from the debate this session
@@ -953,18 +955,16 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    * Keyed canonically, and read through {@link isClaimExcluded}.
    *
    * These ids come from geo-chat, which spells them as UUIDs; every caller tests them against a
-   * graph entity id, which is bare hex. A raw `has` across that boundary is always false, so the
-   * exclusions geo-chat sends were never applied to any graph-sourced list — the claim the pair
-   * just debated included, which this set adds by hand for exactly that reason.
+   * graph entity id, which is bare hex. A raw `has` across that boundary is always false.
+   *
+   * geo-chat alone decides whether the source debate's claim is excluded: only when that debate
+   * counts as debated (GEO-3504), so a debate the pair abandoned leaves its claim on offer.
    */
-  const excludedClaimIds = React.useMemo(() => {
-    const excluded = new Set(
-      rematchClaimLookups.flatMap(data => (data?.excluded_claim_ids ?? []).map(claimId => normId(claimId)))
-    );
-    const sourceClaimId = sourceDebateQuery.data?.claim.claim_entity_id;
-    if (sourceClaimId) excluded.add(normId(sourceClaimId));
-    return excluded;
-  }, [rematchClaimLookups, sourceDebateQuery.data]);
+  const excludedClaimIds = React.useMemo(
+    () =>
+      new Set(rematchClaimLookups.flatMap(data => (data?.excluded_claim_ids ?? []).map(claimId => normId(claimId)))),
+    [rematchClaimLookups]
+  );
 
   /** Whether this session excludes a claim, whichever spelling of its id the caller holds. */
   const isClaimExcluded = React.useCallback(
@@ -1182,7 +1182,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // (an unresolved space reads as publishable).
   const todaysScopeJudged = useLastSettled(
     !publishabilityUnknown,
-    publishabilityUnknown || !todaysClaimsEnabled || todaysAgendasQuery.isLoading,
+    publishabilityUnknown || todaysAgendasQuery.isLoading,
     sessionId
   );
   const todaysScopePending = !todaysScopeJudged;
@@ -1199,7 +1199,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
         : [...todaysAgendas.listedAtByClaim].map(([claimId, listedAt]) => ({ claimId, since: listedAt })),
     [todaysAgendas.listedAtByClaim, todaysAgendasQuery.isLoading, todaysScopePending]
   );
-  const todaysDebateCounts = useClaimDebateCounts(todaysCountAsks, todaysClaimsEnabled && todaysCountAsks.length > 0);
+  const todaysDebateCounts = useClaimDebateCounts(todaysCountAsks, todaysCountAsks.length > 0);
   /**
    * The counts the tab opened with, held for the session. They decide which older claims appear
    * under Earlier this week as well as the order, and anything that invalidates the `debates` root —
@@ -1220,7 +1220,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const todaysMembership = useDebatersSpaceMembership(
     todaysAgendaSpaceIds,
     participantSpaceIds,
-    todaysClaimsEnabled && todaysAgendaSpaceIds.length > 0
+    todaysAgendaSpaceIds.length > 0
   );
 
   /**
@@ -1826,20 +1826,19 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    * every claim reads as undebated and the agenda's own order stands.
    */
   const todaysSettling =
-    todaysClaimsEnabled &&
-    (todaysAgendasQuery.isLoading ||
-      // The debaters decide the space order, and they come with the session — which, like the counts,
-      // waits for Privy to restore who the viewer is. Until then neither has an answer to give.
-      !geoChatReady ||
-      viewerIdentityUnresolved ||
-      sessionQuery.isLoading ||
-      (todaysClaimIds.length > 0 &&
-        (todaysClaimsQuery.isLoading ||
-          todaysDebateCounts.isLoading ||
-          todaysMembership.isLoading ||
-          todaysScopePending)));
+    todaysAgendasQuery.isLoading ||
+    // The debaters decide the space order, and they come with the session — which, like the counts,
+    // waits for Privy to restore who the viewer is. Until then neither has an answer to give.
+    !geoChatReady ||
+    viewerIdentityUnresolved ||
+    sessionQuery.isLoading ||
+    (todaysClaimIds.length > 0 &&
+      (todaysClaimsQuery.isLoading ||
+        todaysDebateCounts.isLoading ||
+        todaysMembership.isLoading ||
+        todaysScopePending));
   const todaysNow = React.useMemo(() => {
-    if (!todaysClaimsEnabled || todaysSettling) return NO_TODAYS;
+    if (todaysSettling) return NO_TODAYS;
     const entitiesById = new Map(todaysAgendasQuery.claimEntities.map(entity => [normId(entity.id), entity]));
     const debatesOf = (claimId: string) => todaysCountsByClaim?.get(claimId);
     const listed = new Set<string>();
@@ -1906,7 +1905,6 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     rowFromEntity,
     todaysAgendas,
     todaysAgendasQuery.claimEntities,
-    todaysClaimsEnabled,
     todaysCountsByClaim,
     todaysMembership.debatersIn,
     todaysSettling,
@@ -1938,8 +1936,8 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     () => todaysClaims.filter(claim => todaysSectionByRow.get(claimRowKey(claim)) !== EARLIER_THIS_WEEK_SECTION).length,
     [todaysClaims, todaysSectionByRow]
   );
-  /** In the strip while it is settling or once it has a row, and only with the flag. */
-  const todaysOffered = todaysClaimsEnabled && !todaysFailed && (todaysSettling || todaysListedCount > 0);
+  /** In the strip while it is settling or once it has a row. */
+  const todaysOffered = !todaysFailed && (todaysSettling || todaysListedCount > 0);
 
   /**
    * Both of you hold the same side: nothing to debate. What "Hide agreed" takes off their tab.
@@ -2126,16 +2124,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     // First whenever an agenda lists a claim this pair can debate in a section that starts open
     // (GEO-3489): landing on one closed "Earlier this week" heading is landing on nothing to see.
     // Every input is the session's or the graph's, so both of the pair land on the same tab.
-    // Pending until the stored flags have been read: `useFeatureFlag` answers its default until then,
-    // and with every other lookup already cached the landing would be decided — and latched — on it.
-    [
-      'todays',
-      !flagsHydrated
-        ? 'pending'
-        : !todaysClaimsEnabled || todaysFailed
-          ? 'empty'
-          : listLandingState(todaysSettling, todaysLandingCount),
-    ],
+    ['todays', todaysFailed ? 'empty' : listLandingState(todaysSettling, todaysLandingCount)],
     // A lookup that failed cannot say whether there are matches. It is not a reason to wait either.
     ['matches', opponentTabError ? 'empty' : listLandingState(opponentLandingPending, matchClaims.length)],
     // Empty while extraction is still running counts as empty: landing on "pulling the claims out"
@@ -2207,6 +2196,15 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   /** The tab the strip marks, which is none until there is one. */
   const activeTab = landingPending ? null : tab;
 
+  // GEO-3505: a match made after the picker loaded goes to the top of Matches, tagged New, but
+  // waits while the viewer is working the list or scrolled down, so nothing moves under them.
+  const arrivalHold = useArrivalHold(activeTab === 'matches');
+  const matchArrivals = useNewArrivalsFirst(matchClaims, claimRowKey, {
+    resetKey: sessionId,
+    settled: !opponentLandingPending,
+    hold: arrivalHold.hold,
+  });
+
   // Recommended is offered only when a curator has a page for this pairing; the order is fixed, so
   // a source that appears doesn't reshuffle the ones already in the menu. The rest are in the hub's
   // order — All claims, Featured, My positions — so the same menu means the same thing on both
@@ -2239,7 +2237,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     tab === 'todays'
       ? todaysClaims
       : tab === 'matches'
-        ? matchClaims
+        ? matchArrivals.items
         : tab === 'opponent'
           ? opponentClaims
           : tab === 'related'
@@ -3132,20 +3130,26 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
           claim={{ ...claim, participants: sidesOf(claim.claim.claim_entity_id, claim.claim.space_id) }}
           previouslyDebated={previouslyDebated}
           context={saidBy ? null : topicMatchCaptionFor(claim)}
-          headerMeta={saidBy}
+          headerMeta={
+            saidBy ??
+            (tab === 'matches' && matchArrivals.newKeys.has(claimRowKey(claim)) ? (
+              <NewArrivalTag onSeen={() => matchArrivals.dismiss(claimRowKey(claim))} />
+            ) : null)
+          }
           session={session}
           currentUserId={currentUserId}
           opponent={remoteParticipant}
           opponentPositionKnown={!positions.isLoading && !positions.isPlaceholderData && !positions.error}
           chatPosition={chatPositionFor(claim.claim.claim_entity_id, claim.claim.space_id)}
           readiness={readinessByClaimId.get(normId(claim.claim.claim_entity_id)) ?? null}
-          onRequest={() =>
+          onRequest={() => {
+            matchArrivals.dismiss(claimRowKey(claim));
             createRequest.mutate({
               source_space_id: claim.claim.space_id,
               claim_id: claim.claim.claim_entity_id,
               format_id: defaultDebateFormatId,
-            })
-          }
+            });
+          }}
           busy={createRequest.isPending || session?.status === 'request_pending'}
           // Associate the shared mutation error with the claim that initiated it.
           requestError={hasRequestTarget(claim) ? requestError : null}
@@ -3460,6 +3464,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
               }}
             />
           </div>
+          {tab === 'matches' && !landingPending ? (
+            <NewArrivalsPill count={matchArrivals.waitingCount} onClick={arrivalHold.scrollToTop} />
+          ) : null}
         </div>
 
         {/* A request error belongs on the card it was sent from; this line is the fallback for when
@@ -3666,6 +3673,13 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
                 ])}
               </HubCardList>
             </div>
+          ) : tab === 'matches' ? (
+            <>
+              <div ref={arrivalHold.topRef} />
+              <div ref={arrivalHold.listRef}>
+                <HubCardList>{visibleClaims.map((claim, index) => renderClaimCard(claim, index + 1))}</HubCardList>
+              </div>
+            </>
           ) : (
             <HubCardList>{visibleClaims.map((claim, index) => renderClaimCard(claim, index + 1))}</HubCardList>
           )}
