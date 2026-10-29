@@ -88,6 +88,23 @@ describe('cloneEntityIntoSpace — related entities', () => {
     expect(run().relations.find(r => r.toEntity.id === 'related')?.toSpaceId).toBe(SOURCE);
   });
 
+  it('leaves a Types relation unpinned, so the schema still finds the type in its own space', () => {
+    store.relations = [relation({ id: 'types', from: ENTITY, to: 'a-type', typeId: SystemIds.TYPES_PROPERTY })];
+
+    const copied = run().relations.find(r => r.type.id === SystemIds.TYPES_PROPERTY);
+
+    expect(copied?.spaceId).toBe(TARGET);
+    expect(copied?.toSpaceId).toBeUndefined();
+  });
+
+  it('keeps a space a Types relation already names', () => {
+    store.relations = [
+      relation({ id: 'types', from: ENTITY, to: 'a-type', typeId: SystemIds.TYPES_PROPERTY, toSpaceId: 'type-home' }),
+    ];
+
+    expect(run().relations.find(r => r.type.id === SystemIds.TYPES_PROPERTY)?.toSpaceId).toBe('type-home');
+  });
+
   it('keeps a space the link already names', () => {
     store.relations = [relation({ id: 'rel', from: ENTITY, to: 'related', toSpaceId: 'space-elsewhere' })];
 
