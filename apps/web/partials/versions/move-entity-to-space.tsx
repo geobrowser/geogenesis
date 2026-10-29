@@ -75,9 +75,9 @@ export const MoveEntityToSpace = ({
   const moveEntityToSpace = async (targetSpaceId: string) => {
     if (!targetSpaceId || targetSpaceId === sourceSpaceId) return false;
 
-    // 0. Load the related targets. A target nobody opened is not in the store, so it would be
-    // copied as nothing. The clone reads them from `loaded`: the store only takes them in on a
-    // later microtask.
+    // 0. Load the media the clone copies. A media entity nobody opened is not in the store, so it
+    // would be copied as nothing. The clone reads them from `loaded`: the store only takes them in
+    // on a later microtask.
     const hydrationIds = collectHydrationTargetIds(entityId, sourceSpaceId);
     let loaded: Entity[] = [];
 

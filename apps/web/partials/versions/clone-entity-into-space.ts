@@ -4,22 +4,6 @@ import { ID } from '~/core/id';
 import type { Mutator } from '~/core/sync/use-mutate';
 import { getRelations, getValues } from '~/core/sync/use-store';
 import { Entity, Relation } from '~/core/types';
-import { normId } from '~/core/utils/norm-id';
-
-const SYSTEM_ENTITY_IDS = new Set(Object.values(SystemIds).map(normId));
-
-const NEVER_COPIED_TYPE_IDS = new Set(
-  [
-    SystemIds.PERSON_TYPE,
-    SystemIds.ACCOUNT_TYPE,
-    SystemIds.DAO_SPACE_TYPE,
-    SystemIds.EOA_SPACE_TYPE,
-    SystemIds.ROOT_SPACE_TYPE,
-    SystemIds.SPACE_TYPE,
-    SystemIds.SCHEMA_TYPE,
-    SystemIds.PROPERTY,
-  ].map(normId)
-);
 
 function signatureOf(relation: Relation): string {
   return `${relation.type.id}|${relation.fromEntity.id}|${relation.toEntity.id}|${relation.toSpaceId ?? ''}|${
@@ -70,22 +54,6 @@ function isMediaUrl(value: string | undefined): value is string {
   return typeof value === 'string' && (value.startsWith('ipfs://') || value.startsWith('http'));
 }
 
-/**
- * Whether a related target is one of the kinds above — owned by someone or shared by everyone,
- * either way not a move's to copy.
- */
-function isNeverCopied(entityId: string, loadedRelations: Relation[]): boolean {
-  return (
-    getRelations({
-      mergeWith: loadedRelations,
-      selector: relation =>
-        relation.fromEntity.id === entityId &&
-        relation.type.id === SystemIds.TYPES_PROPERTY &&
-        NEVER_COPIED_TYPE_IDS.has(normId(relation.toEntity.id)),
-    }).length > 0
-  );
-}
-
 function collectCopyTargets(entityId: string, sourceSpaceId: string) {
   const { entityIds, relationFromIds } = collectSubtree(entityId, sourceSpaceId);
 
@@ -102,24 +70,11 @@ function collectCopyTargets(entityId: string, sourceSpaceId: string) {
 
   const mediaEntityIds = new Set(mediaRelations.map(r => r.toEntity.id).filter(id => !entityIds.has(id)));
 
-  const relatedCandidateIds = getRelations({
-    selector: relation =>
-      relationFromIds.has(relation.fromEntity.id) &&
-      relation.spaceId === sourceSpaceId &&
-      relation.type.id !== SystemIds.BLOCKS &&
-      relation.type.id !== SystemIds.TABS_PROPERTY &&
-      relation.renderableType !== 'IMAGE' &&
-      relation.renderableType !== 'VIDEO',
-  })
-    .map(relation => relation.toEntity.id)
-    .filter(id => !entityIds.has(id) && !mediaEntityIds.has(id) && !SYSTEM_ENTITY_IDS.has(normId(id)));
-
-  return { entityIds, relationFromIds, mediaRelations, mediaEntityIds, relatedCandidateIds };
+  return { entityIds, relationFromIds, mediaRelations, mediaEntityIds };
 }
 
 export function collectHydrationTargetIds(entityId: string, sourceSpaceId: string): string[] {
-  const { mediaEntityIds, relatedCandidateIds } = collectCopyTargets(entityId, sourceSpaceId);
-  return [...new Set([...mediaEntityIds, ...relatedCandidateIds])];
+  return [...collectCopyTargets(entityId, sourceSpaceId).mediaEntityIds];
 }
 
 export function cloneEntityIntoSpace(
@@ -129,17 +84,12 @@ export function cloneEntityIntoSpace(
   storage: Mutator,
   loaded: Entity[] = []
 ) {
-  const { entityIds, relationFromIds, mediaRelations, mediaEntityIds, relatedCandidateIds } = collectCopyTargets(
-    entityId,
-    sourceSpaceId
-  );
+  const { entityIds, relationFromIds, mediaRelations, mediaEntityIds } = collectCopyTargets(entityId, sourceSpaceId);
 
   const loadedValues = loaded.flatMap(entity => entity.values);
   const loadedRelations = loaded.flatMap(entity => entity.relations);
 
-  const relatedEntityIds = new Set(relatedCandidateIds.filter(id => !isNeverCopied(id, loadedRelations)));
-
-  const valueEntityIds = new Set([...entityIds, ...mediaEntityIds, ...relatedEntityIds]);
+  const valueEntityIds = new Set([...entityIds, ...mediaEntityIds]);
   const relationSourceIds = new Set([...relationFromIds, ...mediaEntityIds]);
 
   const sourceValues = getValues({
@@ -147,19 +97,10 @@ export function cloneEntityIntoSpace(
     selector: value => valueEntityIds.has(value.entity.id) && value.spaceId === sourceSpaceId,
   });
 
-  const sourceRelations = [
-    ...getRelations({
-      mergeWith: loadedRelations,
-      selector: relation => relationSourceIds.has(relation.fromEntity.id) && relation.spaceId === sourceSpaceId,
-    }),
-    ...getRelations({
-      mergeWith: loadedRelations,
-      selector: relation =>
-        relatedEntityIds.has(relation.fromEntity.id) &&
-        relation.spaceId === sourceSpaceId &&
-        relation.type.id === SystemIds.TYPES_PROPERTY,
-    }),
-  ];
+  const sourceRelations = getRelations({
+    mergeWith: loadedRelations,
+    selector: relation => relationSourceIds.has(relation.fromEntity.id) && relation.spaceId === sourceSpaceId,
+  });
 
   const existingTargetValueIds = new Set(
     getValues({
@@ -171,9 +112,7 @@ export function cloneEntityIntoSpace(
   const existingTargetRelationSignatures = new Set(
     getRelations({
       mergeWith: loadedRelations,
-      selector: relation =>
-        (relationSourceIds.has(relation.fromEntity.id) || relatedEntityIds.has(relation.fromEntity.id)) &&
-        relation.spaceId === targetSpaceId,
+      selector: relation => relationSourceIds.has(relation.fromEntity.id) && relation.spaceId === targetSpaceId,
     }).map(signatureOf)
   );
 
@@ -196,19 +135,25 @@ export function cloneEntityIntoSpace(
   });
 
   sourceRelations.forEach(relation => {
-    if (existingTargetRelationSignatures.has(signatureOf(relation))) return;
+    const toSpaceId = relation.toSpaceId ?? (valueEntityIds.has(relation.toEntity.id) ? undefined : sourceSpaceId);
 
     // Preserve `entityId` (the relation entity): data block view/shown-columns
     // config hangs off it, and the renderer resolves that config by this id.
     // Only `id` (the store key) must be fresh to avoid clobbering the source.
-    storage.relations.set({
+    const copy: Relation = {
       ...relation,
       id: IdUtils.generate(),
       spaceId: targetSpaceId,
+      toSpaceId,
       fromEntity: { ...relation.fromEntity },
       toEntity: { ...relation.toEntity },
       type: { ...relation.type },
-    });
+    };
+
+    if (existingTargetRelationSignatures.has(signatureOf(copy))) return;
+    if (existingTargetRelationSignatures.has(signatureOf(relation))) return;
+
+    storage.relations.set(copy);
   });
 
   // An already-published media entity often isn't in the store at all. Only the

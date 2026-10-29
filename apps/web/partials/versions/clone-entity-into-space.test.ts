@@ -30,6 +30,7 @@ const relation = (o: Record<string, any>) => ({
   type: { id: o.typeId ?? 'ordinary-property', name: null },
   fromEntity: { id: o.from, name: null },
   toEntity: { id: o.to, name: null, value: o.to },
+  toSpaceId: o.toSpaceId,
 });
 
 const value = (entityId: string, spaceId: string, id: string) => ({
@@ -56,193 +57,76 @@ beforeEach(() => {
 });
 
 describe('cloneEntityIntoSpace — related entities', () => {
-  // The reported bug: the relation came across, its target did not, so following the link in the
-  // destination landed on an entity with no data there.
-  it('copies a related entity own values into the destination', () => {
-    store.relations = [relation({ id: 'rel', from: ENTITY, to: 'related' })];
-    store.values = [value('related', SOURCE, 'related-v')];
-
-    const written = run();
-
-    expect(written.values.some(v => v.entity.id === 'related' && v.spaceId === TARGET)).toBe(true);
-  });
-
-  it('copies a related entity types so the destination renders it as what it is', () => {
+  it('does not copy a related entity values or types', () => {
     store.relations = [
       relation({ id: 'rel', from: ENTITY, to: 'related' }),
       relation({ id: 'related-type', from: 'related', to: 'some-type', typeId: SystemIds.TYPES_PROPERTY }),
     ];
-
-    const written = run();
-
-    expect(written.relations.some(r => r.fromEntity.id === 'related' && r.spaceId === TARGET)).toBe(true);
-  });
-
-  // One level. Copying a related entity's other relations would pull its neighbours in behind it.
-  it('does not copy a related entity other outgoing relations', () => {
-    store.relations = [
-      relation({ id: 'rel', from: ENTITY, to: 'related' }),
-      relation({ id: 'related-onward', from: 'related', to: 'second-degree' }),
-    ];
-    store.values = [value('second-degree', SOURCE, 'second-v')];
-
-    const written = run();
-
-    expect(
-      written.relations.some(r => r.id && r.fromEntity.id === 'related' && r.toEntity.id === 'second-degree')
-    ).toBe(false);
-    expect(written.values.some(v => v.entity.id === 'second-degree')).toBe(false);
-  });
-
-  it('never copies shared ontology, however it is referenced', () => {
-    store.relations = [relation({ id: 'rel', from: ENTITY, to: SystemIds.PERSON_TYPE })];
-    store.values = [value(SystemIds.PERSON_TYPE, SOURCE, 'system-v')];
-
-    const written = run();
-
-    expect(written.values.some(v => v.entity.id === SystemIds.PERSON_TYPE)).toBe(false);
-  });
-
-  it('never copies a person', () => {
-    store.relations = [
-      relation({ id: 'rel', from: ENTITY, to: 'a-person' }),
-      relation({ id: 'person-type', from: 'a-person', to: SystemIds.PERSON_TYPE, typeId: SystemIds.TYPES_PROPERTY }),
-    ];
-    store.values = [value('a-person', SOURCE, 'person-v')];
-
-    const written = run();
-
-    expect(written.values.some(v => v.entity.id === 'a-person')).toBe(false);
-  });
-
-  // A plain space carries only SPACE_TYPE, not one of the specialized space types, so before the
-  // fix it slipped past the never-copied check and was duplicated like ordinary content.
-  it('never copies a plain space', () => {
-    store.relations = [
-      relation({ id: 'rel', from: ENTITY, to: 'a-space' }),
-      relation({ id: 'space-type', from: 'a-space', to: SystemIds.SPACE_TYPE, typeId: SystemIds.TYPES_PROPERTY }),
-    ];
-    store.values = [value('a-space', SOURCE, 'space-v')];
-
-    const written = run();
-
-    expect(written.values.some(v => v.entity.id === 'a-space')).toBe(false);
-    expect(written.relations.some(r => r.fromEntity.id === 'a-space')).toBe(false);
-  });
-
-  it('never copies a custom type (Types → SCHEMA_TYPE)', () => {
-    store.relations = [
-      relation({ id: 'rel', from: ENTITY, to: 'custom-type' }),
-      relation({ id: 'type-type', from: 'custom-type', to: SystemIds.SCHEMA_TYPE, typeId: SystemIds.TYPES_PROPERTY }),
-      relation({ id: 'type-props', from: 'custom-type', to: 'a-property', typeId: SystemIds.PROPERTIES }),
-    ];
-    store.values = [value('custom-type', SOURCE, 'type-v')];
-
-    const written = run();
-
-    expect(written.values.some(v => v.entity.id === 'custom-type')).toBe(false);
-    expect(written.relations.some(r => r.fromEntity.id === 'custom-type')).toBe(false);
-  });
-
-  it('never copies a custom property (Types → PROPERTY)', () => {
-    store.relations = [
-      relation({ id: 'rel', from: ENTITY, to: 'custom-property' }),
-      relation({
-        id: 'property-type',
-        from: 'custom-property',
-        to: SystemIds.PROPERTY,
-        typeId: SystemIds.TYPES_PROPERTY,
-      }),
-    ];
-    store.values = [value('custom-property', SOURCE, 'property-v')];
-
-    const written = run();
-
-    expect(written.values.some(v => v.entity.id === 'custom-property')).toBe(false);
-    expect(written.relations.some(r => r.fromEntity.id === 'custom-property')).toBe(false);
-  });
-
-  it('never copies a person whose type is recorded in their own space', () => {
-    store.relations = [
-      relation({ id: 'rel', from: ENTITY, to: 'a-person' }),
-      relation({
-        id: 'person-type',
-        from: 'a-person',
-        to: SystemIds.PERSON_TYPE,
-        typeId: SystemIds.TYPES_PROPERTY,
-        spaceId: 'their-own-profile-space',
-      }),
-    ];
-    store.values = [value('a-person', SOURCE, 'person-v')];
-
-    const written = run();
-
-    expect(written.values.some(v => v.entity.id === 'a-person')).toBe(false);
-  });
-
-  it('never copies a property defined in the space that declared it', () => {
-    store.relations = [
-      relation({ id: 'rel', from: ENTITY, to: 'a-property' }),
-      relation({
-        id: 'property-type',
-        from: 'a-property',
-        to: SystemIds.PROPERTY,
-        typeId: SystemIds.TYPES_PROPERTY,
-        spaceId: 'the-space-that-declared-it',
-      }),
-    ];
-    store.values = [value('a-property', SOURCE, 'property-v')];
-
-    const written = run();
-
-    expect(written.values.some(v => v.entity.id === 'a-property')).toBe(false);
-  });
-
-  it('copies a related entity’s source-space values only', () => {
-    store.relations = [relation({ id: 'rel', from: ENTITY, to: 'related' })];
-    store.values = [value('related', SOURCE, 'here-v'), value('related', 'somewhere-else', 'elsewhere-v')];
-
-    const written = run();
-
-    const forRelated = written.values.filter(v => v.entity.id === 'related');
-    expect(forRelated).toHaveLength(1);
-    expect(forRelated[0]?.property.id).toBe('prop-here-v');
-  });
-
-  it('leaves the source copies in place — the clone adds, it does not move', () => {
-    store.relations = [relation({ id: 'rel', from: ENTITY, to: 'related' })];
     store.values = [value('related', SOURCE, 'related-v')];
 
     const written = run();
 
-    expect(written.values.every(v => v.spaceId === TARGET)).toBe(true);
-    expect(store.values.find(v => v.id === 'related-v')?.spaceId).toBe(SOURCE);
+    expect(written.values.some(v => v.entity.id === 'related')).toBe(false);
+    expect(written.relations.some(r => r.fromEntity.id === 'related')).toBe(false);
+  });
+
+  it('points the copied link at the source space, where the related entity data is', () => {
+    store.relations = [relation({ id: 'rel', from: ENTITY, to: 'related' })];
+
+    const copied = run().relations.find(r => r.toEntity.id === 'related');
+
+    expect(copied?.spaceId).toBe(TARGET);
+    expect(copied?.toSpaceId).toBe(SOURCE);
+  });
+
+  it('pins a link from a block to a related entity too', () => {
+    store.relations = [
+      relation({ id: 'contains-block', from: ENTITY, to: 'block', typeId: SystemIds.BLOCKS }),
+      relation({ id: 'block-rel', from: 'block', to: 'related' }),
+    ];
+
+    expect(run().relations.find(r => r.toEntity.id === 'related')?.toSpaceId).toBe(SOURCE);
+  });
+
+  it('keeps a space the link already names', () => {
+    store.relations = [relation({ id: 'rel', from: ENTITY, to: 'related', toSpaceId: 'space-elsewhere' })];
+
+    expect(run().relations.find(r => r.toEntity.id === 'related')?.toSpaceId).toBe('space-elsewhere');
+  });
+
+  it('leaves a link to a copied block unpinned, so it resolves to the copy', () => {
+    store.relations = [relation({ id: 'contains-block', from: ENTITY, to: 'block', typeId: SystemIds.BLOCKS })];
+
+    expect(run().relations.find(r => r.toEntity.id === 'block')?.toSpaceId).toBeUndefined();
+  });
+
+  it('leaves a link to copied media unpinned', () => {
+    store.relations = [relation({ id: 'cover', from: ENTITY, to: 'an-image', renderableType: 'IMAGE' })];
+
+    expect(run().relations.find(r => r.toEntity.id === 'an-image')?.toSpaceId).toBeUndefined();
+  });
+
+  it('does not write the pinned link again over one an earlier clone wrote', () => {
+    store.relations = [
+      relation({ id: 'rel', from: ENTITY, to: 'related' }),
+      relation({ id: 'pinned-copy', from: ENTITY, to: 'related', spaceId: TARGET, toSpaceId: SOURCE }),
+    ];
+
+    expect(run().relations.some(r => r.toEntity.id === 'related')).toBe(false);
+  });
+
+  it('does not write the pinned link next to an unpinned copy of it', () => {
+    store.relations = [
+      relation({ id: 'rel', from: ENTITY, to: 'related' }),
+      relation({ id: 'unpinned-copy', from: ENTITY, to: 'related', spaceId: TARGET }),
+    ];
+
+    expect(run().relations.some(r => r.toEntity.id === 'related')).toBe(false);
   });
 });
 
 describe('collectHydrationTargetIds', () => {
   const unloaded = () => collectHydrationTargetIds(ENTITY, SOURCE);
-
-  it('names a related target that has nothing in the store yet', () => {
-    store.relations = [relation({ id: 'rel', from: ENTITY, to: 'never-opened' })];
-
-    expect(unloaded()).toEqual(['never-opened']);
-  });
-
-  it('names a target the exclusions would drop once it is loaded', () => {
-    store.relations = [
-      relation({ id: 'rel', from: ENTITY, to: 'a-person' }),
-      relation({
-        id: 'person-type',
-        from: 'a-person',
-        to: SystemIds.PERSON_TYPE,
-        typeId: SystemIds.TYPES_PROPERTY,
-        spaceId: 'their-own-profile-space',
-      }),
-    ];
-
-    expect(unloaded()).toContain('a-person');
-  });
 
   it('names the media entity behind an image property', () => {
     store.relations = [relation({ id: 'rel', from: ENTITY, to: 'an-image', renderableType: 'IMAGE' })];
@@ -250,8 +134,9 @@ describe('collectHydrationTargetIds', () => {
     expect(unloaded()).toEqual(['an-image']);
   });
 
-  it('leaves out the subtree and shared ontology, which need no fetching', () => {
+  it('leaves out related entities, the subtree and shared ontology, none of which is copied from a fetch', () => {
     store.relations = [
+      relation({ id: 'rel', from: ENTITY, to: 'never-opened' }),
       relation({ id: 'block-rel', from: ENTITY, to: 'a-block', typeId: SystemIds.BLOCKS }),
       relation({ id: 'ontology-rel', from: ENTITY, to: SystemIds.PERSON_TYPE }),
     ];
@@ -259,51 +144,21 @@ describe('collectHydrationTargetIds', () => {
     expect(unloaded()).toEqual([]);
   });
 
-  it('copies nothing for an unloaded target, and its values once the fetch has landed', () => {
-    store.relations = [relation({ id: 'rel', from: ENTITY, to: 'never-opened' })];
-
-    expect(run().values.some(v => v.entity.id === 'never-opened')).toBe(false);
-
-    store.values = [value('never-opened', SOURCE, 'fetched-v')];
-
-    expect(run().values.some(v => v.entity.id === 'never-opened')).toBe(true);
-  });
-
-  it('copies a fetched target the store has not taken in yet', () => {
-    store.relations = [relation({ id: 'rel', from: ENTITY, to: 'never-opened' })];
+  it('copies a fetched media entity the store has not taken in yet', () => {
+    store.relations = [relation({ id: 'cover', from: ENTITY, to: 'an-image', renderableType: 'IMAGE' })];
     const fetched = {
-      id: 'never-opened',
-      values: [value('never-opened', SOURCE, 'fetched-v')],
+      id: 'an-image',
+      values: [value('an-image', SOURCE, 'fetched-v')],
       relations: [
-        relation({ id: 'fetched-type', from: 'never-opened', to: 'a-type', typeId: SystemIds.TYPES_PROPERTY }),
+        relation({ id: 'fetched-type', from: 'an-image', to: SystemIds.IMAGE_TYPE, typeId: SystemIds.TYPES_PROPERTY }),
       ],
     };
 
     const written = run([fetched]);
 
-    expect(written.values.map(v => v.entity.id)).toContain('never-opened');
-    expect(written.relations.some(r => r.fromEntity.id === 'never-opened' && r.toEntity.id === 'a-type')).toBe(true);
-  });
-
-  it('drops a fetched target whose fetched type says it is never copied', () => {
-    store.relations = [relation({ id: 'rel', from: ENTITY, to: 'a-person' })];
-    const fetched = {
-      id: 'a-person',
-      values: [value('a-person', SOURCE, 'person-v')],
-      relations: [
-        relation({
-          id: 'person-type',
-          from: 'a-person',
-          to: SystemIds.PERSON_TYPE,
-          typeId: SystemIds.TYPES_PROPERTY,
-          spaceId: 'their-own-profile-space',
-        }),
-      ],
-    };
-
-    const written = run([fetched]);
-
-    expect(written.values.some(v => v.entity.id === 'a-person')).toBe(false);
-    expect(written.relations.some(r => r.fromEntity.id === 'a-person')).toBe(false);
+    expect(written.values.map(v => v.entity.id)).toContain('an-image');
+    expect(written.relations.some(r => r.fromEntity.id === 'an-image' && r.toEntity.id === SystemIds.IMAGE_TYPE)).toBe(
+      true
+    );
   });
 });
