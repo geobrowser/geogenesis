@@ -823,6 +823,28 @@ describe('voice held by another tab', () => {
     expect(screen.getByRole('button', { name: 'Turn microphone on' })).toBeInTheDocument();
   });
 
+  it('opens nothing when voice moves to another tab while the permission query is out', async () => {
+    mocks.permission = 'granted';
+    let answer!: () => void;
+    mocks.permissionGate = new Promise<void>(resolve => {
+      answer = resolve;
+    });
+    const { rerender } = mount();
+    expect(await screen.findByRole('button', { name: 'Turn camera on' })).toBeInTheDocument();
+
+    // Free when asked; taken before the permission answer lands.
+    mocks.voiceHeldElsewhere = true;
+    rerender(<DebateRequestMediaPreview sessionKey="debate:debate-1" />);
+    await act(async () => {
+      answer();
+      await new Promise(resolve => setTimeout(resolve, 0));
+    });
+
+    expect(mocks.ensurePreview).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Turn camera on' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Turn microphone on' })).toBeInTheDocument();
+  });
+
   it('keeps a device the viewer turned on here when voice moves on', async () => {
     mocks.permission = 'prompt';
     const { rerender } = mount();

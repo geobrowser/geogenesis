@@ -126,6 +126,7 @@ function MediaPreview({
   const voiceHeldElsewhere = React.useEffectEvent(() => voice.heldElsewhere());
   // Another tab took voice after this card opened its devices without a claim: close them.
   const voiceTakenElsewhere = voice.ownership === 'elsewhere';
+  const voiceTakenElsewhereNow = React.useEffectEvent(() => voiceTakenElsewhere);
   React.useEffect(() => {
     if (!voiceTakenElsewhere) return;
     setVoiceFree(false);
@@ -139,8 +140,10 @@ function MediaPreview({
     let active = true;
     session.beginSession(sessionKey);
 
-    void Promise.all([readMediaPermission(), voiceHeldElsewhere()]).then(([answer, heldElsewhere]) => {
+    void Promise.all([readMediaPermission(), voiceHeldElsewhere()]).then(([answer, wasHeldElsewhere]) => {
       if (!active) return;
+      // Voice can move while the permission query is out; a "free" from before then is stale.
+      const heldElsewhere = wasHeldElsewhere || voiceTakenElsewhereNow();
       setPermission(answer);
       setVoiceFree(!heldElsewhere);
       if (heldElsewhere) {
@@ -163,9 +166,11 @@ function MediaPreview({
     };
   }, [sessionKey]);
 
+  // Opened by itself only while no other tab holds voice; a device turned on here claimed it.
+  const mayOpenUnasked = voiceFree && !voiceTakenElsewhere;
   const open = {
-    micOn: want.micOn && !micToLobby && (voiceFree || toggledHere.mic),
-    cameraOn: want.cameraOn && !cameraToLobby && (voiceFree || toggledHere.camera),
+    micOn: want.micOn && !micToLobby && (mayOpenUnasked || toggledHere.mic),
+    cameraOn: want.cameraOn && !cameraToLobby && (mayOpenUnasked || toggledHere.camera),
   };
   const openKey = `${open.micOn}:${open.cameraOn}`;
   React.useEffect(() => {
