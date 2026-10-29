@@ -43,6 +43,9 @@ const { SPACE_1, SPACE_2, CLAIM_SHARED, CLAIM_MORE, CLAIM_SOURCE, CLAIM_FRESH, N
 const mocks = vi.hoisted(() => ({
   /** Bumped to remount the stubbed header's subtree, the way the real one does as voice connects. */
   headerEpoch: 0,
+  /** GEO-3527. Agree / disagree counts by claim id, and whether the counts lookup is in flight. */
+  responseCounts: new Map<string, { positive: number; negative: number }>(),
+  responseCountsLoading: false,
   /** GEO-3223. Whether the viewport is a phone's. */
   isPhone: true,
   sourceDebate: { claim: { claim_entity_id: CLAIM_SOURCE, space_id: SPACE_1 } } as unknown,
@@ -290,6 +293,23 @@ vi.mock('~/core/claims/browse/claim-response-summary', async importOriginal => (
     viewerSpaceId: null,
   }),
 }));
+
+// GEO-3527. The lists' counts lookup, answered from the fixture rather than the graph.
+vi.mock('~/core/debates/matchmaking/claim-debatability', async importOriginal => {
+  const actual = await importOriginal<typeof import('~/core/debates/matchmaking/claim-debatability')>();
+  return {
+    ...actual,
+    useClaimResponseCounts: (claims: Array<{ claimEntityId: string; spaceId: string }>) => ({
+      counts: new Map(
+        claims.flatMap(claim => {
+          const found = mocks.responseCounts.get(claim.claimEntityId);
+          return found ? [[actual.claimCountsKey(claim.claimEntityId, claim.spaceId), found] as const] : [];
+        })
+      ),
+      isLoading: mocks.responseCountsLoading,
+    }),
+  };
+});
 
 // The publishing card has its own tests; here it only has to be mounted where the page puts it.
 vi.mock('./rematch-publish-card', () => ({
@@ -954,6 +974,8 @@ function mutation(mutate = mocks.mutate) {
 
 beforeEach(() => {
   mocks.isPhone = true;
+  mocks.responseCounts.clear();
+  mocks.responseCountsLoading = false;
   mocks.capture.mockClear();
   mocks.sourceDebate = { claim: { claim_entity_id: CLAIM_SOURCE, space_id: SPACE_1 } };
   mocks.sourceDebateLoading = false;
@@ -1970,6 +1992,19 @@ describe('DebateRematchPageClient', () => {
     // the rows the tab will list — which `participantClaimRows` filters — so the lookup behind them
     // has to have run before the viewer gets there. A number that waits is a number that reads `0`
     // for a viewer with a backlog, which is what GEO-2656 took out of the other tab.
+    // GEO-3527. Ordered about the viewer, not the opponent: they side with nine of ten on the shared
+    // claim and hold out against nine on their own one, so their own one leads.
+    it('puts the claims the viewer holds against the crowd first', async () => {
+      viewerOnlyClaim();
+      mocks.responseCounts.set(CLAIM_SHARED, { positive: 9, negative: 1 });
+      mocks.responseCounts.set(VIEWER_ONLY, { positive: 1, negative: 9 });
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await showMyPositions();
+
+      await screen.findByText('Only mine');
+      expect(appearsBefore('Only mine', 'A claim both participants chose')).toBe(true);
+    });
+
     it('looks the viewer’s own claims up with the opponent’s, so the tab can count them', async () => {
       viewerOnlyClaim();
       // A position on the claim this session excludes — the one the pair just debated. It is one of
@@ -2878,6 +2913,64 @@ describe('DebateRematchPageClient', () => {
       await settleTabSwap();
 
       expect(appearsBefore(THIRD_CLAIM, FIRST_CLAIM)).toBe(true);
+    });
+
+    /**
+     * GEO-3527. Their claims are ordered by how debatable they are for them: here both are 9 to 1,
+     * and they sit with the nine on the first and against them on the second.
+     */
+    function againstTheCrowdOnTheSecond() {
+      twoUnmatchedPositions();
+      // Both positions are disagreements, so the second claim's nine agreeing are the crowd.
+      mocks.responseCounts.set(CLAIM_SHARED, { positive: 1, negative: 9 });
+      mocks.responseCounts.set(CLAIM_MORE, { positive: 9, negative: 1 });
+    }
+
+    it('puts a claim they hold against the crowd above one they side with it on', async () => {
+      againstTheCrowdOnTheSecond();
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await showOpponentClaims();
+
+      expect(appearsBefore(SECOND_CLAIM, FIRST_CLAIM)).toBe(true);
+    });
+
+    it('keeps a claim you hold the opposite side on above a more debatable one', async () => {
+      againstTheCrowdOnTheSecond();
+      // The viewer agrees with the first, which the opponent disagrees with: a match.
+      mocks.positions = [position('profile-local', CLAIM_SHARED, SPACE_1, true), ...mocks.positions];
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await showOpponentClaims();
+
+      expect(appearsBefore(FIRST_CLAIM, SECOND_CLAIM)).toBe(true);
+    });
+
+    it('waits for the counts before drawing the list, so the order it holds is the debatable one', async () => {
+      againstTheCrowdOnTheSecond();
+      mocks.responseCountsLoading = true;
+      const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await showOpponentClaims();
+      expect(screen.queryByText(FIRST_CLAIM)).toBeNull();
+
+      mocks.responseCountsLoading = false;
+      rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+      await settleTabSwap();
+
+      expect(appearsBefore(SECOND_CLAIM, FIRST_CLAIM)).toBe(true);
+    });
+
+    it('holds the order it loaded with when the counts move', async () => {
+      againstTheCrowdOnTheSecond();
+      const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await showOpponentClaims();
+      expect(appearsBefore(SECOND_CLAIM, FIRST_CLAIM)).toBe(true);
+
+      // The crowd swings round on both while the viewer is working the list.
+      mocks.responseCounts.set(CLAIM_SHARED, { positive: 9, negative: 1 });
+      mocks.responseCounts.set(CLAIM_MORE, { positive: 1, negative: 9 });
+      rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+      await settleTabSwap();
+
+      expect(appearsBefore(SECOND_CLAIM, FIRST_CLAIM)).toBe(true);
     });
 
     /**
