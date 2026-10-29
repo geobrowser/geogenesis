@@ -120,6 +120,7 @@ import {
 import { useClaimDebateCounts } from '~/core/debates/todays-claims/claim-debate-counts';
 import { NO_AGENDAS, useDebateAgendas } from '~/core/debates/todays-claims/debate-agendas';
 import { EARLIER_THIS_WEEK_SECTION, useTodaysSectionsOpen } from '~/core/debates/todays-claims/section-open-state';
+import { type TodaysCardScope, todaysCardScope } from '~/core/debates/todays-claims/todays-claims-attribution';
 import { orderAgendaSpaces, orderByDebatesSinceListing } from '~/core/debates/todays-claims/todays-claims-order';
 import { useDebatersSpaceMembership } from '~/core/debates/todays-claims/use-debaters-space-membership';
 import { useClaimSpaceAllowlist } from '~/core/debates/use-claim-space-allowlist';
@@ -238,6 +239,7 @@ const PICKER_TAB_LIST_IDS: Record<PickerTab, DebateClaimListId> = {
   opponent: 'rematch_their_positions',
   positions: 'rematch_my_positions',
   explore: 'rematch_explore',
+  todays: 'todays_claims',
 };
 
 /**
@@ -1748,16 +1750,42 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
         );
         if (rows.length === 0) continue;
         const key = todaysSectionKey(section.spaceId, section.id);
-        sections.push({ key, name: section.name, defaultOpen: true });
-        items.push(...rows.map(row => ({ row, sectionKey: key })));
+        sections.push({ key, name: section.name, defaultOpen: true, sectionId: section.id });
+        items.push(
+          ...rows.map(row => ({
+            row,
+            sectionKey: key,
+            scope: todaysCardScope(
+              section.agendaId,
+              section.listedAt,
+              debatesOf(normId(row.claim.claim_entity_id)),
+              section.id
+            ),
+          }))
+        );
       }
     }
-    const earlier = todaysAgendas.earlier.flatMap(listing =>
-      (debatesOf(listing.claimId) ?? 0) > 0 ? [] : (rowOf(listing.claimId, listing.spaceId) ?? [])
-    );
+    const earlier = todaysAgendas.earlier.flatMap(listing => {
+      if ((debatesOf(listing.claimId) ?? 0) > 0) return [];
+      const row = rowOf(listing.claimId, listing.spaceId);
+      return row
+        ? [
+            {
+              row,
+              sectionKey: EARLIER_THIS_WEEK_SECTION,
+              scope: todaysCardScope(listing.agendaId, listing.listedAt, debatesOf(listing.claimId)),
+            },
+          ]
+        : [];
+    });
     if (earlier.length > 0) {
-      sections.push({ key: EARLIER_THIS_WEEK_SECTION, name: 'Earlier this week', defaultOpen: false });
-      items.push(...earlier.map(row => ({ row, sectionKey: EARLIER_THIS_WEEK_SECTION })));
+      sections.push({
+        key: EARLIER_THIS_WEEK_SECTION,
+        name: 'Earlier this week',
+        defaultOpen: false,
+        sectionId: EARLIER_THIS_WEEK_SECTION,
+      });
+      items.push(...earlier);
     }
     return { sections, items };
   }, [
@@ -3007,6 +3035,10 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // GEO-3495. Each card's 1-based place in its list, counted down the list as drawn: across sections
   // and rounds, and on into the already-debated fold below.
   const cardScope = { rematch_session_id: sessionId, ...(debouncedSearch ? { list_searched: true } : {}) };
+  const todaysScopeByRow = React.useMemo(
+    () => new Map(todaysItems.map(item => [claimRowKey(item.row), item.scope])),
+    [todaysItems]
+  );
   const renderClaimCard = (claim: DebateRematchClaim, position: number, previouslyDebated = false) => {
     const saidBy = debateSaidByFor(claim);
     return (
@@ -3015,7 +3047,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
         claimId={claim.claim.claim_entity_id}
         listId={listId}
         position={position}
-        scope={cardScope}
+        scope={tab === 'todays' ? { ...cardScope, ...todaysScopeByRow.get(claimRowKey(claim)) } : cardScope}
       >
         <RematchClaimCard
           // The list can hold an older row while new claims hydrate. Its content stays visible,
@@ -3065,6 +3097,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // GEO-3495. Where each section and round starts in the list's numbering, and where the fold does.
   const sectionOffsets = sectionStartOffsets(visibleSections.map(section => section.claims.length));
   const roundOffsets = sectionStartOffsets(visibleDebateRounds.map(round => round.items.length));
+  const todaysSectionOffsets = sectionStartOffsets(visibleTodaysSections.map(section => section.claims.length));
   const foldOffset = showsSections
     ? visibleSections.reduce((total, section) => total + section.claims.length, 0)
     : visibleCount;
@@ -3514,17 +3547,24 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
             </div>
           ) : showsTodaysSections ? (
             <div className="flex flex-col gap-4" data-testid="todays-claims-sections">
-              {visibleTodaysSections.map(section => (
+              {visibleTodaysSections.map((section, sectionIndex) => (
                 <RecommendedSection
                   key={section.key}
                   name={section.name}
                   count={section.claims.length}
                   open={todaysSectionsOpen.isOpen(section.key, section.defaultOpen)}
-                  onToggle={open => todaysSectionsOpen.setOpen(section.key, open)}
+                  onToggle={open => {
+                    todaysSectionsOpen.setOpen(section.key, open);
+                    recordFilter(listId, { kind: 'section', value: section.sectionId, selected: open });
+                  }}
                   // Not the section's name, which an agenda's editor wrote.
                   analytics={debateActionAnalyticsAttributes('rematch', 'Today’s claims section toggle')}
                 >
-                  <HubCardList>{section.claims.map(claim => renderClaimCard(claim))}</HubCardList>
+                  <HubCardList>
+                    {section.claims.map((claim, index) =>
+                      renderClaimCard(claim, todaysSectionOffsets[sectionIndex] + index + 1)
+                    )}
+                  </HubCardList>
                 </RecommendedSection>
               ))}
             </div>
@@ -4005,8 +4045,16 @@ const recommendedSectionKey = (sectionId: string) => `recommended:${sectionId}`;
 const todaysSectionKey = (spaceId: string, blockId: string) => `todays:${normId(spaceId)}:${normId(blockId)}`;
 
 /** GEO-3489. A Today's claims heading, and whether it starts open. */
-type TodaysSection = { key: string; name: string; defaultOpen: boolean };
-type TodaysItem = { row: DebateRematchClaim; sectionKey: string };
+type TodaysSection = {
+  key: string;
+  name: string;
+  defaultOpen: boolean;
+  /** What a toggle of it is recorded as (GEO-3495): the agenda's data block, or Earlier this week. */
+  sectionId: string;
+};
+/** A Today's claims card, with what its impressions and requests are attributed to (GEO-3495). */
+type TodaysItem = { row: DebateRematchClaim; sectionKey: string; scope: TodaysCardScope };
+
 const NO_TODAYS: { sections: TodaysSection[]; items: TodaysItem[] } = { sections: [], items: [] };
 const todaysSectionKeyOf = (section: TodaysSection) => section.key;
 const todaysItemKeyOf = (item: TodaysItem) => claimRowKey(item.row);

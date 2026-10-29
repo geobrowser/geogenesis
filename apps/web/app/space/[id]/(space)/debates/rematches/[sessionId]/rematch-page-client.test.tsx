@@ -937,7 +937,8 @@ function listedAtByClaim(agendas: typeof todays.agendas) {
 
 // The builder has its own tests; this keeps its contract: `keepSpace` decides first which spaces count.
 vi.mock('~/core/debates/todays-claims/debate-agendas', async importOriginal => {
-  const { NO_AGENDAS } = await importOriginal<typeof import('~/core/debates/todays-claims/debate-agendas')>();
+  const { NO_AGENDAS, agendaDayFromValue } =
+    await importOriginal<typeof import('~/core/debates/todays-claims/debate-agendas')>();
   const agendasIn = (keepSpace: (spaceId: string) => boolean) => {
     const kept = {
       ...todays.agendas,
@@ -948,6 +949,7 @@ vi.mock('~/core/debates/todays-claims/debate-agendas', async importOriginal => {
   };
   return {
     NO_AGENDAS,
+    agendaDayFromValue,
     useDebateAgendas: (enabled: boolean) => ({
       agendasIn: enabled ? agendasIn : () => NO_AGENDAS,
       spaceIds: enabled
@@ -7831,6 +7833,25 @@ describe('Today’s claims', () => {
     rerender(<DebateRematchPageClient sessionId="rematch-1" />);
 
     expect(screen.getByText('A claim from Monday')).toBeInTheDocument();
+  });
+
+  // GEO-3495: a section opened or closed is a filter choice on this list, by its data block.
+  it('records a section toggle as a filter choice on the Today’s claims list', async () => {
+    twoAgendas();
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await screen.findByText('Lula should be re-elected');
+    mocks.capture.mockClear();
+
+    fireEvent.click(screen.getByRole('button', { name: /Brazil election/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Earlier this week/ }));
+
+    const choices = mocks.capture.mock.calls
+      .filter(([event, properties]) => event === 'action_completed' && properties?.target_type === 'section')
+      .map(([, properties]) => [properties.list_id, properties.target_id, properties.filter_selected]);
+    expect(choices).toEqual([
+      ['todays_claims', 'block-brazil', false],
+      ['todays_claims', 'earlier-this-week', true],
+    ]);
   });
 
   it('lands where master does when no space has an agenda', async () => {
