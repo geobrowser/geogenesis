@@ -907,12 +907,18 @@ const todays = vi.hoisted(() => ({
   members: {} as Record<string, number>,
 }));
 
+// Like the real hook: the default until the browser has hydrated, then what is stored.
 vi.mock('~/core/state/feature-flags', async importOriginal => {
   const actual = await importOriginal<typeof import('~/core/state/feature-flags')>();
+  const { useHydrated } = await import('~/core/hooks/use-hydrated');
   return {
     ...actual,
-    useFeatureFlag: (id: string) =>
-      id === 'todaysClaims' ? todays.flag : actual.defaultFeatureFlags[id as keyof typeof actual.defaultFeatureFlags],
+    useFeatureFlag: (id: string) => {
+      const hydrated = useHydrated();
+      return id === 'todaysClaims'
+        ? hydrated && todays.flag
+        : actual.defaultFeatureFlags[id as keyof typeof actual.defaultFeatureFlags];
+    },
   };
 });
 
@@ -7665,6 +7671,63 @@ describe('Today’s claims', () => {
     expect(await screen.findByRole('button', { name: /^Matches/ })).toHaveAttribute('aria-pressed', 'true');
     // Still one tap away.
     expect(screen.getByRole('button', { name: /^Today’s claims/ })).toBeInTheDocument();
+  });
+
+  // With every lookup answered on the first render, the landing used to be decided — and latched —
+  // on the flag's pre-hydration default, so a stored flag never got its tab.
+  it('lands on Today’s claims when the flag is stored and every lookup is already answered', async () => {
+    twoAgendas();
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(await screen.findByText('Lula should be re-elected')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Today’s claims/ })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  // An unresolved space reads as publishable, so the judgement must wait for the agendas' own spaces.
+  it('waits for the agendas’ spaces to be judged before landing on them', async () => {
+    const PERSONAL = '019fedae-72b6-7ab2-927a-df044d57c599';
+    twoAgendas();
+    todays.agendas = {
+      newestDay: '2026-10-28',
+      spaces: [
+        { spaceId: PERSONAL, listedOn: '2026-10-28', sections: [section('block-x', PERSONAL, 'Read this', [T_LULA])] },
+      ],
+      earlier: [],
+    };
+    todays.loading = true;
+    const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await settleTabSwap();
+
+    // The agendas arrive; their space is still being looked up.
+    todays.loading = false;
+    mocks.spacesPending = true;
+    rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+    await settleTabSwap();
+
+    mocks.spaceTypes[PERSONAL] = 'PERSONAL';
+    mocks.spacesPending = false;
+    rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(await screen.findByRole('button', { name: /^Matches/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByRole('heading', { name: 'Read this' })).toBeNull();
+  });
+
+  // A refetch of the counts — the gateway invalidates the whole `debates` root — must not take an
+  // older claim out of Earlier this week while the picker is open.
+  it('keeps Earlier this week as it opened when the counts are refetched', async () => {
+    twoAgendas();
+    const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await screen.findByText('Lula should be re-elected');
+    fireEvent.click(screen.getByRole('button', { name: /Earlier this week/ }));
+    expect(screen.getByText('A claim from Monday')).toBeInTheDocument();
+
+    todays.counts = new Map([
+      [T_OLD_DEBATED, 1],
+      [T_OLD, 1],
+    ]);
+    rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(screen.getByText('A claim from Monday')).toBeInTheDocument();
   });
 
   it('lands where master does when no space has an agenda', async () => {

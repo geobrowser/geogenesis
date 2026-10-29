@@ -122,6 +122,7 @@ import { useLeaveRematchOnExit } from '~/core/debates/use-leave-rematch-on-exit'
 import { useRelatedDebateClaims } from '~/core/debates/use-related-debate-claims';
 import { useEffectOnceWhen } from '~/core/hooks/use-effect-once';
 import { useEntityResponse, useEntityResponseIndexingSnapshot } from '~/core/hooks/use-entity-vote';
+import { useHydrated } from '~/core/hooks/use-hydrated';
 import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sentinel';
 import { useLastSettled } from '~/core/hooks/use-last-settled';
 import { useOpenClaimInSidePanel } from '~/core/hooks/use-open-claim-in-side-panel';
@@ -490,6 +491,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    * debaters' membership of the agendas' spaces: both decide the order, and the order is set once.
    * ---------------------------------------------------------------------------------------------*/
   const todaysClaimsEnabled = useFeatureFlag('todaysClaims');
+  const flagsHydrated = useHydrated();
   const todaysAgendasQuery = useDebateAgendas(todaysClaimsEnabled);
   // Every agenda's claims and spaces, before publishability says which count: the rows and each
   // space's type are looked up for all of them, so they are ready when it does.
@@ -1105,7 +1107,14 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    * sections to their defaults and read as it settling all over again.
    */
   const publishabilityUnknown = publishabilityPending || publishableSpacesLoading;
-  const todaysScopeJudged = useLastSettled(!publishabilityUnknown, publishabilityUnknown, sessionId);
+  // Judged only once there is something to judge: an empty or cached candidate set answers before
+  // the agendas arrive, and holding that answer would wave through the agendas' spaces unlooked-at
+  // (an unresolved space reads as publishable).
+  const todaysScopeJudged = useLastSettled(
+    !publishabilityUnknown,
+    publishabilityUnknown || !todaysClaimsEnabled || todaysAgendasQuery.isLoading,
+    sessionId
+  );
   const todaysScopePending = !todaysScopeJudged;
   const todaysAgendas = React.useMemo(
     () => (todaysScopePending ? NO_AGENDAS : todaysAgendasQuery.agendasIn(canPublishDebateIn)),
@@ -1121,6 +1130,19 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     [todaysAgendas.listedAtByClaim, todaysAgendasQuery.isLoading, todaysScopePending]
   );
   const todaysDebateCounts = useClaimDebateCounts(todaysCountAsks, todaysClaimsEnabled && todaysCountAsks.length > 0);
+  /**
+   * The counts the tab opened with, held for the session. They decide which older claims appear
+   * under Earlier this week as well as the order, and anything that invalidates the `debates` root —
+   * the gateway's reconnect, a request sent — refetches them; a fresh answer would take a claim out
+   * from under the reader. A claim that joins the agendas later has no count here, and lists as
+   * undebated.
+   */
+  const todaysCountsRef = React.useRef<{ sessionId: string; byClaimId: Map<string, number> } | null>(null);
+  if (todaysDebateCounts.byClaimId && todaysCountsRef.current?.sessionId !== sessionId) {
+    todaysCountsRef.current = { sessionId, byClaimId: todaysDebateCounts.byClaimId };
+  }
+  const todaysCountsByClaim =
+    todaysCountsRef.current?.sessionId === sessionId ? todaysCountsRef.current.byClaimId : todaysDebateCounts.byClaimId;
   const todaysAgendaSpaceIds = React.useMemo(
     () => todaysAgendas.spaces.map(space => space.spaceId),
     [todaysAgendas.spaces]
@@ -1688,7 +1710,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const todaysNow = React.useMemo(() => {
     if (!todaysClaimsEnabled || todaysSettling) return NO_TODAYS;
     const entitiesById = new Map(todaysAgendasQuery.claimEntities.map(entity => [normId(entity.id), entity]));
-    const debatesOf = (claimId: string) => todaysDebateCounts.byClaimId?.get(claimId);
+    const debatesOf = (claimId: string) => todaysCountsByClaim?.get(claimId);
     const listed = new Set<string>();
     const rowOf = (claimId: string, spaceId: string) => {
       if (listed.has(claimId) || isClaimExcluded(claimId)) return null;
@@ -1728,7 +1750,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     todaysAgendas,
     todaysAgendasQuery.claimEntities,
     todaysClaimsEnabled,
-    todaysDebateCounts.byClaimId,
+    todaysCountsByClaim,
     todaysMembership.debatersIn,
     todaysSettling,
     todaysAgendaSpaceIds,
@@ -1982,7 +2004,16 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     // First whenever an agenda lists a claim this pair can debate in a section that starts open
     // (GEO-3489): landing on one closed "Earlier this week" heading is landing on nothing to see.
     // Every input is the session's or the graph's, so both of the pair land on the same tab.
-    ['todays', !todaysClaimsEnabled || todaysFailed ? 'empty' : listLandingState(todaysSettling, todaysLandingCount)],
+    // Pending until the stored flags have been read: `useFeatureFlag` answers its default until then,
+    // and with every other lookup already cached the landing would be decided — and latched — on it.
+    [
+      'todays',
+      !flagsHydrated
+        ? 'pending'
+        : !todaysClaimsEnabled || todaysFailed
+          ? 'empty'
+          : listLandingState(todaysSettling, todaysLandingCount),
+    ],
     // A lookup that failed cannot say whether there are matches. It is not a reason to wait either.
     ['matches', opponentTabError ? 'empty' : listLandingState(opponentLandingPending, matchClaims.length)],
     // Empty while extraction is still running counts as empty: landing on "pulling the claims out"
