@@ -230,7 +230,7 @@ export function useDebateAgendas(enabled = true): {
   /** True until the agendas and their claims have settled; empty agendas mean "none" only after. */
   isLoading: boolean;
   error: unknown;
-  /** Asks for the agendas again, for a Try again after they failed. */
+  /** Asks again for whatever failed, the agendas or their claims, for a Try again. */
   refetch: () => void;
 } {
   const {
@@ -266,6 +266,7 @@ export function useDebateAgendas(enabled = true): {
     entities: claimEntities,
     isLoading: claimsLoading,
     error: claimsError,
+    refetch: refetchClaims,
   } = useClaimEntitiesByIds(enabled ? itemIds : NO_IDS);
 
   const claimIds = React.useMemo(() => claimEntities.map(claim => normId(claim.id)), [claimEntities]);
@@ -276,7 +277,11 @@ export function useDebateAgendas(enabled = true): {
   );
 
   const isLoading = enabled && (agendasLoading || (itemIds.length > 0 && claimsLoading));
-  const refetch = React.useCallback(() => void refetchAgendas(), [refetchAgendas]);
+  // Both reads behind the error: the agendas, and any batch of their claims that failed.
+  const refetch = React.useCallback(() => {
+    void refetchAgendas();
+    refetchClaims();
+  }, [refetchAgendas, refetchClaims]);
 
   return React.useMemo(
     () => ({

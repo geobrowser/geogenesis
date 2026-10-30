@@ -28,6 +28,7 @@ const entity = (id: string): ClaimPickerEntity => ({
 
 const mocks = vi.hoisted(() => ({
   agendasLoading: false,
+  agendasFailed: false,
   publishableLoading: false,
   counts: { byClaimId: null as Map<string, number> | null, isLoading: false, error: null },
   countCalls: [] as { asks: unknown[]; enabled: boolean }[],
@@ -39,12 +40,12 @@ vi.mock('./debate-agendas', async importOriginal => {
     ...actual,
     useDebateAgendas: () => ({
       agendasIn: (keep: (spaceId: string) => boolean) =>
-        actual.buildDebateAgendas(rows, new Set([...CLAIMS, OTHER]), keep),
+        actual.buildDebateAgendas(mocks.agendasFailed ? [] : rows, new Set([...CLAIMS, OTHER]), keep),
       spaceIds: [PUBLISHABLE, UNPUBLISHABLE],
       claimIds: [...CLAIMS, OTHER],
       claimEntities: [...CLAIMS, OTHER].map(entity),
       isLoading: mocks.agendasLoading,
-      error: null,
+      error: mocks.agendasFailed ? new Error('statement timeout') : null,
       refetch: () => {},
     }),
   };
@@ -65,6 +66,7 @@ vi.mock('./claim-debate-counts', () => ({
 
 afterEach(() => {
   mocks.agendasLoading = false;
+  mocks.agendasFailed = false;
   mocks.publishableLoading = false;
   mocks.counts = { byClaimId: null, isLoading: false, error: null };
   mocks.countCalls = [];
@@ -101,6 +103,19 @@ describe('useTodaysClaimsList', () => {
     mocks.counts = { byClaimId: new Map([[CLAIMS[0]!, 1]]), isLoading: false, error: null };
     rerender();
     expect(claimIdsOf(result.current.sections)).toEqual(CLAIMS);
+  });
+
+  it('orders by the counts once agendas that failed load on Try again', () => {
+    mocks.agendasFailed = true;
+    // Nothing to ask about yet: zero count queries combine to an empty answer.
+    mocks.counts = { byClaimId: new Map(), isLoading: false, error: null };
+    const { result, rerender } = renderHook(() => useTodaysClaimsList());
+    expect(result.current.sections).toEqual([]);
+
+    mocks.agendasFailed = false;
+    mocks.counts = { byClaimId: new Map([[CLAIMS[0]!, 1]]), isLoading: false, error: null };
+    rerender();
+    expect(claimIdsOf(result.current.sections)).toEqual([CLAIMS[1], CLAIMS[0]]);
   });
 
   it('settles in agenda order for a signed-out guest, who gets no counts', () => {

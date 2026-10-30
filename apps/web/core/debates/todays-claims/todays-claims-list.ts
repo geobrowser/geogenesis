@@ -136,7 +136,9 @@ export function useTodaysClaimsList({
   // background, and a newer count would move a card under the reader. The picker pins its own the
   // same way (`todaysCountsRef`).
   const pinnedCounts = React.useRef<{ byClaimId: Map<string, number> | null } | null>(null);
-  if (!settling && !pinnedCounts.current) pinnedCounts.current = { byClaimId: counts.byClaimId };
+  // Only once there were claims to count: pinned on an empty ask (agendas that failed and come back
+  // on Try again), every claim would read as undebated for the rest of the visit.
+  if (!settling && !pinnedCounts.current && asks.length > 0) pinnedCounts.current = { byClaimId: counts.byClaimId };
   const debatesByClaim = pinnedCounts.current ? pinnedCounts.current.byClaimId : counts.byClaimId;
   const sections = React.useMemo(() => {
     if (settling) return NO_SECTIONS;
