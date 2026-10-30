@@ -36,6 +36,7 @@ import {
   saveOpenRoundPick,
   unhideDebate,
   updateDebateAvailability,
+  updateDebateLobby,
 } from './api';
 
 const completeRequest = {
@@ -630,6 +631,26 @@ describe('matchmaking read authentication', () => {
   });
 });
 
+describe('editing a lobby', () => {
+  // GEO-3540: a PATCH carrying only what changed.
+  it('patches the lobby with the fields given', async () => {
+    const fetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ lobby_id: 'lobby-1' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+    vi.stubGlobal('fetch', fetch);
+
+    await updateDebateLobby('lobby-1', { starts_at: '2026-11-01T19:00:00.000Z' }, vi.fn(), 'user-a');
+
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:8080/debate-lobbies/lobby-1',
+      expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ starts_at: '2026-11-01T19:00:00.000Z' }) })
+    );
+  });
+});
+
 // GEO-3289 (geo-chat GEO-3291): the lobby list opens to signed-out visitors the same way.
 describe('lobby list authentication', () => {
   beforeEach(() => {
@@ -660,6 +681,51 @@ describe('lobby list authentication', () => {
     const getPrivyIdentityToken = vi.fn().mockRejectedValue(new Error('Identity token unavailable'));
 
     await expect(listDebateLobbies(getPrivyIdentityToken, 'user-a')).rejects.toThrow('Identity token unavailable');
+    expect(fetch).not.toHaveBeenCalled();
+  });
+});
+
+describe('debate lobby calendar authentication (GEO-3517)', () => {
+  beforeEach(() => {
+    resetGeoChatSession();
+    window.localStorage.removeItem('geo:chat-session');
+  });
+
+  it('reads the calendar anonymously when nobody is signed in', async () => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ lobbies: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+      );
+    vi.stubGlobal('fetch', fetch);
+    const getPrivyIdentityToken = vi.fn();
+
+    await expect(
+      listDebateLobbyCalendar(
+        { from: new Date('2026-10-11T07:00:00Z'), to: new Date('2026-10-18T07:00:00Z') },
+        getPrivyIdentityToken,
+        null
+      )
+    ).resolves.toEqual({ lobbies: [] });
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/debate-lobbies/calendar'),
+      expect.objectContaining({ headers: {} })
+    );
+    expect(getPrivyIdentityToken).not.toHaveBeenCalled();
+  });
+
+  it('does not downgrade a signed-in calendar read to anonymous when the token exchange fails', async () => {
+    const fetch = vi.fn();
+    vi.stubGlobal('fetch', fetch);
+    const getPrivyIdentityToken = vi.fn().mockRejectedValue(new Error('Identity token unavailable'));
+
+    await expect(
+      listDebateLobbyCalendar(
+        { from: new Date('2026-10-11T07:00:00Z'), to: new Date('2026-10-18T07:00:00Z') },
+        getPrivyIdentityToken,
+        'user-a'
+      )
+    ).rejects.toThrow('Identity token unavailable');
     expect(fetch).not.toHaveBeenCalled();
   });
 });

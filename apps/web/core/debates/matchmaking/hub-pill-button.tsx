@@ -60,11 +60,13 @@ export function hubPillClassName(
     // beside it absorbs the shrinking instead, which is why rows give it `min-w-0 truncate`.
     // shrink-0 is redundant today and kept only to survive a later `min-w-0` on this button,
     // which would defeat the `min-width: auto` this leans on.
-    'inline-flex shrink-0 items-center justify-center rounded-full whitespace-nowrap transition-colors disabled:opacity-50',
+    // Keep the border in both states so selecting a filter cannot change its width and rewrap
+    // the measured pill row. Only its color changes with the selection.
+    'inline-flex shrink-0 items-center justify-center rounded-full border whitespace-nowrap transition-colors disabled:opacity-50',
     PILL_SIZE[size],
     variant === 'primary'
-      ? 'bg-text text-white hover:bg-text/90'
-      : cx('border border-grey-02 text-text', variant === 'secondary' && 'hover:bg-grey-01'),
+      ? 'border-transparent bg-text text-white hover:bg-text/90'
+      : cx('border-grey-02 text-text', variant === 'secondary' && 'hover:bg-grey-01'),
     className
   );
 }

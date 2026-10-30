@@ -3,7 +3,7 @@
  * into live / upcoming / past. Mirrors curator's `getNextOccurrences` /
  * `isOccurrenceLive`, reusing geogenesis's existing schedule parser.
  */
-import { localToUtcMs, parseSchedule } from '~/core/utils/schedule';
+import { MIN_CALL_DURATION_MINUTES, isValidTimeZone, localToUtcMs, parseSchedule } from '~/core/utils/schedule';
 
 import { LIVE_WINDOW_AFTER_MS, OCCURRENCE_MATCH_TOLERANCE_MS } from './constants';
 import { Occurrence } from './types';
@@ -12,6 +12,9 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_DURATION_MS = 60 * 60 * 1000;
 
 const BYDAY_INDEX: Record<string, number> = { SU: 0, MO: 1, TU: 2, WE: 3, TH: 4, FR: 5, SA: 6 };
+const FREQUENCIES = new Set(['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY']);
+/** Past the window on the wall clock: no zone is a day off UTC, so stepping stops here. */
+const ZONE_SLACK_MS = DAY_MS;
 
 // How far back/forward we expand recurring series for the listing, plus a hard
 // iteration cap so a malformed RRULE can never loop unbounded.
@@ -19,10 +22,33 @@ const PAST_WINDOW_MS = 60 * DAY_MS;
 const FUTURE_WINDOW_MS = 180 * DAY_MS;
 const MAX_OCCURRENCES = 500;
 
-function toMs(dateStr: string, time: string): number {
+/** `MONTHLY;BYDAY=3MO` or `-1FR`: the nth weekday of the month, counted from the end when negative. */
+function parseOrdinalByDay(byDay: string[]): { n: number; weekday: number }[] {
+  return byDay.flatMap(token => {
+    const match = /^([+-]?\d{1,2})([A-Z]{2})$/.exec(token);
+    const weekday = match ? BYDAY_INDEX[match[2]] : undefined;
+    const n = match ? Number(match[1]) : 0;
+    return weekday === undefined || n === 0 ? [] : [{ n, weekday }];
+  });
+}
+
+/** Day of month of the nth `weekday` in a month (0-based month), or null when it has none. */
+function nthWeekdayOfMonth(year: number, month: number, weekday: number, n: number): number | null {
+  const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  if (n > 0) {
+    const first = (weekday - new Date(Date.UTC(year, month, 1)).getUTCDay() + 7) % 7;
+    const day = 1 + first + (n - 1) * 7;
+    return day <= daysInMonth ? day : null;
+  }
+  const last = (new Date(Date.UTC(year, month, daysInMonth)).getUTCDay() - weekday + 7) % 7;
+  const day = daysInMonth - last + (n + 1) * 7;
+  return day >= 1 ? day : null;
+}
+
+function toMs(dateStr: string, time: string, seconds = 0): number {
   const [y, m, d] = dateStr.split('-').map(Number);
   const [h, min] = time.split(':').map(Number);
-  return Date.UTC(y, m - 1, d, h || 0, min || 0);
+  return Date.UTC(y, m - 1, d, h || 0, min || 0, seconds);
 }
 
 /**
@@ -35,22 +61,33 @@ function toTrueMs(naiveMs: number, tz: string | undefined): number {
   return tz ? localToUtcMs(naiveMs, tz) : naiveMs;
 }
 
-/** Expand a schedule into occurrences within [now - 60d, now + 180d]. */
-export function getOccurrences(schedule: string, now = Date.now()): Occurrence[] {
+/** Expand a schedule into occurrences within [now - 60d, now + `futureMs`], 180 days by default. */
+export function getOccurrences(
+  schedule: string,
+  now = Date.now(),
+  { futureMs = FUTURE_WINDOW_MS }: { futureMs?: number } = {}
+): Occurrence[] {
   const parsed = parseSchedule(schedule);
+  // What geo-chat cannot read makes no calls.
   if (!parsed.startDate) return [];
+  if (parsed.timezone && !isValidTimeZone(parsed.timezone)) return [];
+  if (parsed.freq && !FREQUENCIES.has(parsed.freq)) return [];
 
   // All stepping arithmetic below (weekBase/startMs) stays in "naive" ms — wall-clock
   // calendar math (add N days/weeks/months) is timezone-agnostic by nature. Only the
   // final occurrence instants get converted to true UTC via `toTrueMs`, once per
   // occurrence, so each one picks up the correct offset for its own date.
-  const baseStart = toMs(parsed.startDate, parsed.startTime);
-  const duration = parsed.endTime
-    ? Math.max(toMs(parsed.startDate, parsed.endTime) - baseStart, DEFAULT_DURATION_MS)
-    : DEFAULT_DURATION_MS;
+  const baseStart = toMs(parsed.startDate, parsed.startTime, parsed.startSeconds);
+  // An end earlier on the clock than the start is the next day's (RFC 5545; geo-chat agrees).
+  const sameDayEnd = parsed.endTime ? toMs(parsed.startDate, parsed.endTime, parsed.endSeconds) : null;
+  const endMs = sameDayEnd !== null && sameDayEnd < baseStart ? sameDayEnd + DAY_MS : sameDayEnd;
+  // geo-chat's rule: the DTEND's length when it is at least 15 minutes, otherwise an hour.
+  const length = endMs !== null ? endMs - baseStart : null;
+  const duration = length !== null && length >= MIN_CALL_DURATION_MINUTES * 60_000 ? length : DEFAULT_DURATION_MS;
 
   const windowStart = now - PAST_WINDOW_MS;
-  const windowEnd = now + FUTURE_WINDOW_MS;
+  const windowEnd = now + futureMs;
+  const steppingEnd = windowEnd + ZONE_SLACK_MS;
   const interval = Math.max(parsed.interval, 1);
 
   // Non-recurring: the single instance.
@@ -69,14 +106,36 @@ export function getOccurrences(schedule: string, now = Date.now()): Occurrence[]
   };
 
   const base = new Date(baseStart);
+  const ordinals = parsed.freq === 'MONTHLY' ? parseOrdinalByDay(parsed.byDay) : [];
 
-  if (parsed.freq === 'WEEKLY' && parsed.byDay.length > 0) {
+  if (ordinals.length > 0) {
+    for (let i = 0; i < MAX_OCCURRENCES; i++) {
+      const month = Date.UTC(base.getUTCFullYear(), base.getUTCMonth() + i * interval, 1);
+      if (month > steppingEnd) break;
+      const at = new Date(month);
+      for (const { n, weekday } of ordinals) {
+        const day = nthWeekdayOfMonth(at.getUTCFullYear(), at.getUTCMonth(), weekday, n);
+        if (day !== null) {
+          push(
+            Date.UTC(
+              at.getUTCFullYear(),
+              at.getUTCMonth(),
+              day,
+              base.getUTCHours(),
+              base.getUTCMinutes(),
+              base.getUTCSeconds()
+            )
+          );
+        }
+      }
+    }
+  } else if (parsed.freq === 'WEEKLY' && parsed.byDay.length > 0) {
     const days = parsed.byDay.map(d => BYDAY_INDEX[d]).filter(d => d !== undefined);
     // Walk the week containing the first occurrence, stepping `interval` weeks.
     const weekStart = baseStart - base.getUTCDay() * DAY_MS;
     for (let week = 0; week < MAX_OCCURRENCES; week++) {
       const weekBase = weekStart + week * interval * 7 * DAY_MS;
-      if (weekBase > windowEnd) break;
+      if (weekBase > steppingEnd) break;
       for (const day of days) push(weekBase + day * DAY_MS);
     }
   } else {
@@ -95,7 +154,8 @@ export function getOccurrences(schedule: string, now = Date.now()): Occurrence[]
             base.getUTCMonth() + i * interval,
             base.getUTCDate(),
             base.getUTCHours(),
-            base.getUTCMinutes()
+            base.getUTCMinutes(),
+            base.getUTCSeconds()
           );
           break;
         case 'YEARLY':
@@ -104,7 +164,8 @@ export function getOccurrences(schedule: string, now = Date.now()): Occurrence[]
             base.getUTCMonth(),
             base.getUTCDate(),
             base.getUTCHours(),
-            base.getUTCMinutes()
+            base.getUTCMinutes(),
+            base.getUTCSeconds()
           );
           break;
         default:
@@ -120,7 +181,7 @@ export function getOccurrences(schedule: string, now = Date.now()): Occurrence[]
       ) {
         continue;
       }
-      if (startMs > windowEnd) break;
+      if (startMs > steppingEnd) break;
       push(startMs);
     }
   }

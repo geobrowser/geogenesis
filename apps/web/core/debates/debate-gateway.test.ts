@@ -1,10 +1,18 @@
-import { CancelledError, InfiniteQueryObserver, QueryClient, QueryObserver } from '@tanstack/react-query';
+import {
+  CancelledError,
+  InfiniteQueryObserver,
+  QueryClient,
+  type QueryFilters,
+  QueryObserver,
+  matchQuery,
+} from '@tanstack/react-query';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { GeoChatRequestError, getStoredGeoChatAccessToken, resetGeoChatSession } from './api';
 import { DebateGatewayClient, type DebateGatewaySession } from './debate-gateway';
 import { type LobbyHighlightsState, settleFetchedLobbyHighlights } from './lobbies/lobby-highlights-state';
+import { type RemoteClaimResponse, subscribeRemoteClaimResponses } from './remote-claim-responses';
 
 vi.mock('./api', async importOriginal => {
   const actual = await importOriginal<typeof import('./api')>();
@@ -239,6 +247,9 @@ describe('DebateGatewayClient', () => {
         ['debates', 'account', 'user-a', 'room'],
         // GEO-3463: a request that ends moves into the Requests timeline's history.
         ['debates', 'account', 'user-a', 'history'],
+        // GEO-3532: a pending scheduled request holds its time, so availability reads go too.
+        ['debates', 'account', 'user-a', 'schedulable-people'],
+        ['debates', 'account', 'user-a', 'peer-schedule'],
         ['debates', 'account', 'user-a', 'activity'],
         ['debates', 'account', 'user-a', 'profile'],
       ],
@@ -1079,6 +1090,169 @@ describe('DebateGatewayClient', () => {
     });
   });
 
+  describe('space calls changed', () => {
+    async function spaceCallsChanged(payload: Record<string, unknown>) {
+      client.start(
+        vi.fn(async () => 'privy-token'),
+        'user-a'
+      );
+      await vi.runAllTicks();
+      sockets[0]!.open();
+      sockets[0]!.receive('READY', readyPayload([]));
+      await flushInvalidations();
+      invalidateQueries.mockClear();
+      sockets[0]!.receive('EVENT', { event_id: 'calls-1', event_type: 'debate.space_calls_changed', payload });
+      await flushInvalidations();
+    }
+
+    it('refetches the list, and the call it names (GEO-3420)', async () => {
+      await spaceCallsChanged({ space_id: 'SP-1', lobby_id: 'AB-CD' });
+      expectInvalidated(invalidateQueries, { queryKey: ['debates', 'space-calls', 'sp1'], refetchType: 'active' });
+      expectInvalidated(invalidateQueries, {
+        queryKey: ['debates', 'account', 'user-a', 'lobby', 'abcd'],
+        refetchType: 'active',
+      });
+    });
+
+    /** The keyed invalidations, and whether the space's calls not yet open were refetched too. */
+    function invalidated() {
+      const filters: Record<string, unknown>[] = invalidateQueries.mock.calls.map(
+        (call: unknown[]) => call[0] as Record<string, unknown>
+      );
+      return {
+        keyed: filters.filter(filter => typeof filter.predicate !== 'function'),
+        preOpen: filters.some(filter => typeof filter.predicate === 'function'),
+      };
+    }
+
+    it('refetches the lists and the calls not yet open when no call is named', async () => {
+      await spaceCallsChanged({ space_id: 'sp1' });
+      expect(invalidated()).toEqual({
+        keyed: [
+          { queryKey: ['debates', 'space-calls', 'sp1'], refetchType: 'active' },
+          { queryKey: ['debates', 'space-past-calls', 'sp1'], refetchType: 'active' },
+        ],
+        preOpen: true,
+      });
+    });
+
+    it.each([
+      ['started', [['debates', 'space-calls', 'sp1']], false],
+      [
+        'opened',
+        [
+          ['debates', 'space-calls', 'sp1'],
+          ['debates', 'space-past-calls', 'sp1'],
+        ],
+        true,
+      ],
+      ['schedule', [['debates', 'space-calls', 'sp1']], true],
+      [
+        'ended',
+        [
+          ['debates', 'space-calls', 'sp1'],
+          ['debates', 'space-past-calls', 'sp1'],
+        ],
+        false,
+      ],
+      ['agenda', [], false],
+    ])('narrows a rowless %s to its own data', async (change, keys, preOpen) => {
+      await spaceCallsChanged({ space_id: 'sp1', change });
+      expect(invalidated()).toEqual({ keyed: keys.map(queryKey => ({ queryKey, refetchType: 'active' })), preOpen });
+    });
+
+    it('refetches only the call for its agenda', async () => {
+      await spaceCallsChanged({ space_id: 'sp1', lobby_id: 'AB-CD', change: 'agenda' });
+      expect(invalidateQueries.mock.calls.map((call: unknown[]) => call[0])).toEqual([
+        { queryKey: ['debates', 'account', 'user-a', 'lobby', 'abcd'], refetchType: 'active' },
+      ]);
+    });
+
+    it('refetches this account’s cached calls not yet open in the space on a schedule change, and nothing else', async () => {
+      const call = (spaceId: string, status: string) => ({
+        lobby_id: 'x',
+        access: status === 'not_yet_open' ? { status, opens_at: '2026-11-04T15:50:00Z' } : { status },
+        call: { space_id: spaceId, space_name: null, started_by: null },
+      });
+      const preOpen = ['debates', 'account', 'user-a', 'lobby', 'call1'];
+      const open = ['debates', 'account', 'user-a', 'lobby', 'call2'];
+      const elsewhere = ['debates', 'account', 'user-a', 'lobby', 'call3'];
+      queryClient.setQueryData(preOpen, call('SP-1', 'not_yet_open'));
+      queryClient.setQueryData(open, call('sp1', 'admitted'));
+      queryClient.setQueryData(elsewhere, call('sp2', 'not_yet_open'));
+      queryClient.setQueryData(['debates', 'account', 'user-b', 'lobby', 'call1'], call('sp1', 'not_yet_open'));
+
+      await spaceCallsChanged({ space_id: 'sp1', change: 'schedule' });
+      const all: QueryFilters[] = invalidateQueries.mock.calls.map((args: unknown[]) => args[0] as QueryFilters);
+      const filters = all.find(filter => filter.predicate)!;
+      const matched = queryClient
+        .getQueryCache()
+        .findAll()
+        .filter(query => matchQuery(filters, query))
+        .map(query => query.queryKey);
+      expect(matched).toEqual([preOpen]);
+    });
+
+    it('refetches the pre-call page of a call that opened early, by its id however spelled', async () => {
+      const view = (lobbyId: string, status: string) => ({
+        lobby_id: lobbyId,
+        access: status === 'not_yet_open' ? { status, opens_at: '2026-11-04T15:50:00Z' } : { status },
+        call: { space_id: 'sp1', space_name: null, started_by: null },
+      });
+      const preOpen = ['debates', 'account', 'user-a', 'lobby', 'abcd'];
+      const otherCall = ['debates', 'account', 'user-a', 'lobby', 'ef01'];
+      queryClient.setQueryData(preOpen, view('AB-CD', 'not_yet_open'));
+      queryClient.setQueryData(otherCall, view('ef01', 'not_yet_open'));
+      const row = { call_id: 'abcd', as_of: '2026-11-04T15:20:00.000001Z', hosts: [], avatars: [], headcount: 1 };
+
+      await spaceCallsChanged({ space_id: 'sp1', space_call: { status: 'live', as_of: row.as_of, call: row } });
+      const all: QueryFilters[] = invalidateQueries.mock.calls.map((args: unknown[]) => args[0] as QueryFilters);
+      const matched = queryClient
+        .getQueryCache()
+        .findAll()
+        .filter(query => all.some(filters => matchQuery(filters, query)))
+        .map(query => query.queryKey);
+      expect(matched).toEqual([preOpen]);
+    });
+
+    it('patches a live row into the live list and leaves the past pages alone', async () => {
+      const call = {
+        call_id: 'call1',
+        name: 'Weekly',
+        starts_at: '2026-10-23T15:00:00Z',
+        started_by: null,
+        hosts: [],
+        headcount: 1,
+        avatars: [],
+        as_of: '2026-10-23T15:04:11.000001Z',
+      };
+      const liveKey = ['debates', 'space-calls', 'sp1', 'user-a'];
+      const pastKey = ['debates', 'space-past-calls', 'sp1'];
+      const past = { pages: [{ calls: [], next_cursor: null }], pageParams: [null] };
+      queryClient.setQueryData(liveKey, { space_id: 'sp1', supported: true, viewer_can_start: false, calls: [call] });
+      queryClient.setQueryData(pastKey, past);
+
+      const newer = { ...call, headcount: 3, as_of: '2026-10-23T15:04:11.000002Z' };
+      await spaceCallsChanged({ space_id: 'sp1', space_call: { status: 'live', as_of: newer.as_of, call: newer } });
+
+      expect(queryClient.getQueryData<{ calls: { headcount: number }[] }>(liveKey)?.calls[0]?.headcount).toBe(3);
+      expect(queryClient.getQueryData(pastKey)).toBe(past);
+      expect(invalidateQueries).not.toHaveBeenCalled();
+    });
+
+    it('refetches the past calls when a call ends', async () => {
+      await spaceCallsChanged({
+        space_id: 'sp1',
+        space_call: {
+          status: 'ended',
+          as_of: '2026-10-23T16:00:00Z',
+          call: { call_id: 'call1', as_of: '2026-10-23T16:00:00Z', hosts: [], avatars: [], headcount: 0 },
+        },
+      });
+      expectInvalidated(invalidateQueries, { queryKey: ['debates', 'space-past-calls', 'sp1'], refetchType: 'active' });
+    });
+  });
+
   describe('lobby claim lists', () => {
     const lobbyKey = ['debates', 'account', 'user-a', 'lobby', 'abcd'];
     const list = (entityId: string, position: number) => ({
@@ -1327,6 +1501,43 @@ describe('DebateGatewayClient', () => {
 
     client.stop();
     expect(client.getSnapshot().capabilities).toEqual([]);
+  });
+
+  it('hands a claims_changed claim_response to the picker at once, and nothing for one without it', async () => {
+    const heard: RemoteClaimResponse[] = [];
+    const unsubscribe = subscribeRemoteClaimResponses(response => heard.push(response));
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+
+    sockets[0]!.receive('EVENT', {
+      event_id: 'event-plain',
+      event_type: 'debate.claims_changed',
+      payload: { space_id: 'space-1', claim_entity_ids: ['claim-1'] },
+    });
+    sockets[0]!.receive('EVENT', {
+      event_id: 'event-response',
+      event_type: 'debate.claims_changed',
+      payload: {
+        space_id: 'space-1',
+        claim_entity_ids: ['claim-1', 'claim-2'],
+        claim_response: {
+          claim_entity_id: 'claim-1',
+          profile_space_id: 'profile-2',
+          response_kind: 'stance',
+          position: false,
+        },
+      },
+    });
+    unsubscribe();
+
+    expect(heard).toEqual([
+      { profileSpaceId: 'profile-2', claimId: 'claim-1', spaceId: 'space-1', responseKind: 'stance', position: false },
+    ]);
   });
 
   it('filters claim invalidations to active claim queries that intersect the event', async () => {

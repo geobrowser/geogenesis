@@ -25,6 +25,33 @@ const DAY_NAMES: Record<string, string> = {
 
 const VALID_DAYS = new Set(Object.keys(DAY_NAMES));
 
+/** `MO`, or an RFC 5545 ordinal such as `3MO` or `-1FR`. */
+function isValidByDay(token: string): boolean {
+  if (VALID_DAYS.has(token)) return true;
+  const match = /^([+-]?\d{1,2})([A-Z]{2})$/.exec(token);
+  const n = match ? Math.abs(Number(match[1])) : 0;
+  return Boolean(match && VALID_DAYS.has(match[2]) && n >= 1 && n <= 5);
+}
+
+const ORDINAL_NAMES: Record<string, string> = {
+  '1': 'first',
+  '2': 'second',
+  '3': 'third',
+  '4': 'fourth',
+  '5': 'fifth',
+  '-1': 'last',
+  '-2': 'second to last',
+};
+
+/** "Monday", or "the third Monday" for an ordinal BYDAY such as `3MO` or `-1FR`. */
+function byDayLabel(token: string): string {
+  const match = /^([+-]?\d{1,2})([A-Z]{2})$/.exec(token);
+  if (!match) return DAY_NAMES[token] ?? token;
+  const ordinal = ORDINAL_NAMES[String(Number(match[1]))];
+  const day = DAY_NAMES[match[2]];
+  return ordinal && day ? `the ${ordinal} ${day}` : token;
+}
+
 const FREQ_LABELS: Record<string, string> = {
   DAILY: 'Daily',
   WEEKLY: 'Weekly',
@@ -46,6 +73,19 @@ export interface ScheduleValidationResult {
   valid: boolean;
   errors: string[];
 }
+
+/** The instant a valid iCal date names: TZID digits are that zone's wall clock, a `Z` value is UTC. */
+function icalInstantMs(value: string, tzid: string | undefined): number {
+  const naive = parseICalDate(value)!.getTime();
+  return tzid && !value.endsWith('Z') ? localToUtcMs(naive, tzid) : naive;
+}
+
+/** A valid TZID date whose wall clock the zone skips; a `Z` value never is. */
+function skipped(value: string, tzid: string | undefined): boolean {
+  return Boolean(tzid) && !value.endsWith('Z') && isSkippedLocalTime(parseICalDate(value)!.getTime(), tzid!);
+}
+
+export const SKIPPED_TIME_ERROR = "That time doesn't exist on this date because of the clock change";
 
 function parseICalDate(value: string): Date | null {
   const match = value.match(ICAL_DATE_RE);
@@ -85,18 +125,29 @@ export function tzOffsetMs(tz: string, utcMs: number): number {
   return Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second) - utcMs;
 }
 
+const HOUR_MS = 3_600_000;
+const DAY_MS = 86_400_000;
+
+/** The true instants whose wall clock in `tz` reads `naiveMs`: none in a DST gap, two in a repeated hour. */
+function localInstants(naiveMs: number, tz: string): number[] {
+  const offsets = new Set([tzOffsetMs(tz, naiveMs - DAY_MS), tzOffsetMs(tz, naiveMs + DAY_MS)]);
+  return [...offsets].map(offset => naiveMs - offset).filter(at => at + tzOffsetMs(tz, at) === naiveMs);
+}
+
 /**
- * Converts a "naive" ms value (local wall-clock digits stamped as if UTC) in `tz` to
- * the true UTC instant. A single `tzOffsetMs` sample taken at the naive value can
- * land on the wrong side of a DST transition — e.g. "09:00 America/Los_Angeles" on
- * the spring-forward day, read as a UTC instant, falls in the pre-transition early
- * morning hours and would wrongly report the *old* (PST) offset. Re-sampling at the
- * resulting estimate resolves this for all but a vanishing window exactly at a
- * transition instant.
+ * Converts a "naive" ms value (local wall-clock digits stamped as if UTC) in `tz` to the true UTC
+ * instant, as geo-chat does: a repeated hour takes its earlier instant, a skipped one reads an hour on.
  */
 export function localToUtcMs(naiveMs: number, tz: string): number {
-  const estimate = naiveMs - tzOffsetMs(tz, naiveMs);
-  return naiveMs - tzOffsetMs(tz, estimate);
+  const instants = localInstants(naiveMs, tz);
+  if (instants.length > 0) return Math.min(...instants);
+  const later = localInstants(naiveMs + HOUR_MS, tz);
+  return later.length > 0 ? Math.min(...later) : naiveMs - tzOffsetMs(tz, naiveMs);
+}
+
+/** A wall-clock time the clocks skip in `tz`, such as 02:30 on a spring-forward night. */
+export function isSkippedLocalTime(naiveMs: number, tz: string): boolean {
+  return localInstants(naiveMs, tz).length === 0;
 }
 
 /** Whether `tz` resolves as a real IANA timezone name (vs. e.g. a Windows zone name). */
@@ -171,7 +222,7 @@ function validateRRule(rrule: string): string[] {
       case 'BYDAY': {
         const days = val.split(',');
         for (const day of days) {
-          if (!VALID_DAYS.has(day)) {
+          if (!isValidByDay(day)) {
             errors.push(`Invalid day "${day}". Must be one of: ${[...VALID_DAYS].join(', ')}`);
           }
         }
@@ -221,6 +272,7 @@ export function validateSchedule(
 
   const lines = schedule.split('\n').filter(l => l.trim());
   const props: Record<string, string> = {};
+  const tzids: Record<string, string | undefined> = {};
 
   for (const line of lines) {
     const colonIdx = line.indexOf(':');
@@ -249,14 +301,20 @@ export function validateSchedule(
     }
 
     props[key] = value;
+    tzids[key] = tzid;
   }
 
   if (!props.DTSTART) {
     errors.push('DTSTART is required');
   } else if (!isValidICalDate(props.DTSTART)) {
     errors.push(`Invalid DTSTART date "${props.DTSTART}". Expected format: YYYYMMDDTHHmmSS (optionally ending with Z)`);
-  } else if (options?.requireFutureStart && parseICalDate(props.DTSTART)!.getTime() <= Date.now()) {
+  } else if (skipped(props.DTSTART, tzids.DTSTART)) {
+    errors.push(SKIPPED_TIME_ERROR);
+  } else if (options?.requireFutureStart && icalInstantMs(props.DTSTART, tzids.DTSTART) <= Date.now()) {
     errors.push('Start time must be in the future');
+  }
+  if (props.DTEND && isValidICalDate(props.DTEND) && skipped(props.DTEND, tzids.DTEND)) {
+    errors.push(SKIPPED_TIME_ERROR);
   }
 
   if (props.DTEND) {
@@ -345,6 +403,9 @@ export interface ParsedSchedule {
   interval: number; // 1 = default
   /** IANA zone the schedule was authored in (e.g. "America/Los_Angeles"), or unset for legacy UTC schedules. */
   timezone?: string;
+  /** DTSTART and DTEND seconds, set only when not zero. The form never writes them. */
+  startSeconds?: number;
+  endSeconds?: number;
 }
 
 /** Parse an iCalendar schedule string into structured fields. */
@@ -385,6 +446,7 @@ export function parseSchedule(schedule: string): ParsedSchedule {
       const day = d.getUTCDate().toString().padStart(2, '0');
       result.startDate = `${y}-${m}-${day}`;
       result.startTime = `${d.getUTCHours().toString().padStart(2, '0')}:${d.getUTCMinutes().toString().padStart(2, '0')}`;
+      if (d.getUTCSeconds()) result.startSeconds = d.getUTCSeconds();
     }
   }
 
@@ -392,6 +454,7 @@ export function parseSchedule(schedule: string): ParsedSchedule {
     const d = parseICalDate(props.DTEND);
     if (d) {
       result.endTime = `${d.getUTCHours().toString().padStart(2, '0')}:${d.getUTCMinutes().toString().padStart(2, '0')}`;
+      if (d.getUTCSeconds()) result.endSeconds = d.getUTCSeconds();
     }
   }
 
@@ -465,8 +528,9 @@ export function formatSchedule(schedule: string): string {
     const freqLabel = rrule.freq ? (FREQ_LABELS[rrule.freq] ?? rrule.freq) : '';
 
     if (rrule.byDay && rrule.byDay.length > 0) {
-      const dayNames = rrule.byDay.map(d => DAY_NAMES[d] ?? d);
-      const interval = rrule.interval && rrule.interval > 1 ? `Every ${rrule.interval} weeks` : freqLabel;
+      const dayNames = rrule.byDay.map(byDayLabel);
+      const unit = rrule.freq === 'MONTHLY' ? 'months' : 'weeks';
+      const interval = rrule.interval && rrule.interval > 1 ? `Every ${rrule.interval} ${unit}` : freqLabel;
       parts.push(`${interval} on ${dayNames.join(', ')}`);
     } else if (rrule.interval && rrule.interval > 1) {
       const unit =

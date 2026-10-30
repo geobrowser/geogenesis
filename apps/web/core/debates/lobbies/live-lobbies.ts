@@ -28,13 +28,20 @@ function opensAtMs(lobby: Pick<DebateLobbySummary, 'opens_at'>) {
   return Number.isNaN(at) ? Number.POSITIVE_INFINITY : at;
 }
 
+/**
+ * Every lobby still to open, soonest first. A lobby past its opening time that the server has not
+ * opened yet is still here: it is about to.
+ */
+export function lobbiesToOpen(lobbies: DebateLobbySummary[]): DebateLobbySummary[] {
+  return lobbies.filter(lobby => !lobby.open).sort((a, b) => opensAtMs(a) - opensAtMs(b));
+}
+
 export function lobbyLineup(lobbies: DebateLobbySummary[]): LobbyLineup {
   if (lobbies.length === 0) return EMPTY_LINEUP;
-  let next: DebateLobbySummary | null = null;
-  for (const lobby of lobbies) {
-    if (!lobby.open && (next === null || opensAtMs(lobby) < opensAtMs(next))) next = lobby;
-  }
-  return { live: lobbies.filter(lobby => lobby.open).sort(busiestFirst), next };
+  return {
+    live: lobbies.filter(lobby => lobby.open).sort(busiestFirst),
+    next: lobbiesToOpen(lobbies)[0] ?? null,
+  };
 }
 
 /**

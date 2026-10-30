@@ -6,13 +6,21 @@ import * as React from 'react';
 
 import { isParticipantPositionsQueryKey } from '~/core/debates/participant-positions';
 import { isRematchClaimsQueryKey } from '~/core/debates/rematch-claims-query-key';
+import { publishRemoteClaimResponse, remoteClaimResponseFromEvent } from '~/core/debates/remote-claim-responses';
 import { queryClient } from '~/core/query-client';
 import {
   claimResponseTargetKey,
   isClaimResponseSummaryQueryKey,
 } from '~/core/responses/claim-response-summary-query-keys';
 import type { SpaceCallsResponse } from '~/core/space-calls/api';
-import { parseSpaceCallPatch, withSpaceCallPatch } from '~/core/space-calls/space-calls-patch';
+import { spaceCallKeys } from '~/core/space-calls/query-keys';
+import {
+  isPreOpenCallView,
+  isPreOpenViewOfCall,
+  parseSpaceCallPatch,
+  spaceCallsRefetch,
+  withSpaceCallPatch,
+} from '~/core/space-calls/space-calls-patch';
 
 import {
   type DebateLobbiesResponse,
@@ -91,7 +99,11 @@ type DebateEventPayload = {
   guest_count?: unknown;
   /** On `debate.space_calls_changed`: the call's list row; see `parseSpaceCallPatch`. */
   space_call?: unknown;
+  /** On a rowless `debate.space_calls_changed`; see `spaceCallsRefetch`. */
+  change?: unknown;
   claim_entity_ids?: string[];
+  /** On `debate.claims_changed` from one person's response report; see `remoteClaimResponseFromEvent`. */
+  claim_response?: unknown;
   sections?: MatchmakingSection[];
 };
 
@@ -522,11 +534,15 @@ export class DebateGatewayClient {
       case 'debate.activity_changed':
         this.queueAccountActivity();
         break;
-      case 'debate.claims_changed':
+      case 'debate.claims_changed': {
         if (identifiers.space_id) {
           this.queueClaims(identifiers.space_id, identifiers.claim_entity_ids);
         }
+        // Applied at once, before the refetch above can know about it.
+        const response = remoteClaimResponseFromEvent(identifiers);
+        if (response) publishRemoteClaimResponse(response);
         break;
+      }
       case 'debate.state_changed':
         if (identifiers.debate_id) this.queueQuery(['debates', 'detail', dashlessId(identifiers.debate_id)]);
         if (identifiers.space_id) this.queueQuery(['debates', 'space', identifiers.space_id]);
@@ -562,6 +578,10 @@ export class DebateGatewayClient {
         this.queueAccountQuery('room');
         // A request ending moves it from the live lists into the Requests timeline's past (GEO-3463).
         this.queueAccountQuery('history');
+        // A pending scheduled request holds its time for both people (GEO-3532), so one arriving or
+        // ending changes who is free when, for whoever did not press the button.
+        this.queueAccountQuery('schedulable-people');
+        this.queueAccountQuery('peer-schedule');
         this.queueAccountActivity();
         break;
       case 'debate.matchmaking_changed':
@@ -640,14 +660,38 @@ export class DebateGatewayClient {
         );
         break;
       }
-      // GEO-3419. To the space scope: a call started, ended or closed (no row: refetch the list),
-      // or its people or hosts changed (a row, patched in place when newer).
+      // GEO-3419. A live row is patched in place when newer; anything else refetches, narrowed by a
+      // rowless event's `change` (GEO-3420).
       case 'debate.space_calls_changed': {
         if (!identifiers.space_id) break;
-        const listKey = ['debates', 'space-calls', dashlessId(identifiers.space_id)];
+        const listKey = spaceCallKeys.list(identifiers.space_id);
         const patch = parseSpaceCallPatch(identifiers.space_call);
+        const lobbyRoot = this.accountQueryKey('lobby');
+        // A call opened early: its pre-call page would otherwise wait for its own opens_at.
+        if (patch && patch.status !== 'scheduled' && lobbyRoot) {
+          const callId = patch.call.call_id;
+          const filters = {
+            queryKey: lobbyRoot,
+            predicate: (query: Query) => isPreOpenViewOfCall(query.state.data as DebateLobbyView | undefined, callId),
+          };
+          // Rows mostly carry roster changes; only a cached pre-call view needs a read.
+          if (this.queryClient.getQueryCache().findAll(filters).length > 0) {
+            this.queueInvalidation(`pre-open-call:${dashlessId(callId)}`, { ...filters, refetchType: 'active' });
+          }
+        }
         if (!patch || patch.status !== 'live') {
-          this.queueQuery(listKey);
+          const refetch = spaceCallsRefetch(patch ? undefined : identifiers.change);
+          if (refetch.list) this.queueQuery(listKey);
+          if (refetch.past) this.queueQuery(spaceCallKeys.past(identifiers.space_id));
+          if (refetch.preOpen && lobbyRoot) {
+            const spaceId = identifiers.space_id;
+            this.queueInvalidation(`pre-open-calls:${dashlessId(spaceId)}`, {
+              queryKey: lobbyRoot,
+              predicate: query => isPreOpenCallView(query.state.data as DebateLobbyView | undefined, spaceId),
+              refetchType: 'active',
+            });
+          }
+          if (!patch && identifiers.lobby_id) this.queueAccountQuery('lobby', dashlessId(identifiers.lobby_id));
           break;
         }
         this.queryClient.setQueriesData<SpaceCallsResponse>({ queryKey: listKey }, list =>
@@ -760,7 +804,8 @@ export class DebateGatewayClient {
     if (scope.scope === 'space') {
       this.queueQuery(['debates', 'claims', scope.space_id]);
       this.queueQuery(['debates', 'space', scope.space_id]);
-      this.queueQuery(['debates', 'space-calls', dashlessId(scope.space_id)]);
+      this.queueQuery(spaceCallKeys.list(scope.space_id));
+      this.queueQuery(spaceCallKeys.past(scope.space_id));
       return;
     }
     if (scope.scope === 'matchmaking') {
@@ -813,15 +858,21 @@ export class DebateGatewayClient {
       | 'lobby'
       | 'lobby-claims'
       | 'my-lobby'
-      | 'history',
+      | 'history'
+      | 'schedulable-people'
+      | 'peer-schedule',
     id?: string
   ) {
-    if (!this.accountKey) return;
-    const queryKey = id
-      ? ['debates', 'account', this.accountKey, kind, id]
-      : ['debates', 'account', this.accountKey, kind];
+    const queryKey = this.accountQueryKey(kind, id);
+    if (!queryKey) return;
     if (kind === 'history' && historyRouteMissing(this.queryClient.getQueryState(queryKey))) return;
     this.queueQuery(queryKey);
+  }
+
+  /** This account's key for `kind`, as `debateQueryKeys` spells it; `null` signed out. */
+  private accountQueryKey(kind: string, id?: string): QueryKey | null {
+    if (!this.accountKey) return null;
+    return id ? ['debates', 'account', this.accountKey, kind, id] : ['debates', 'account', this.accountKey, kind];
   }
 
   /**

@@ -22,7 +22,7 @@ export async function GET(request: Request) {
   const typeIds = parseTopicFeedTypeIds(searchParams.get('typeIds'));
   if (typeIds.length === 0) return NextResponse.json({ items: [], nextCursor: null });
 
-  const selectedTopicIds = parseTopicFeedSelectedIds(searchParams.get('topicIds'), topicId);
+  const selectedTopicIds = parseTopicFeedSelectedIds(searchParams.get('topicIds'), { pageTopicId: topicId });
   const requestedSpaceIds = parseTopicFeedSpaceIds(searchParams.get('spaceIds'), routeSpaceId);
   const { browse, memberOrEditorSpaceIds, walletAddress } = await resolveExploreFeedRequestContext(routeSpaceId);
 

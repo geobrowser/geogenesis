@@ -191,12 +191,12 @@ describe('ExplorePage past calls', () => {
   });
 
   it('hands it the past calls with the flag on, on either sort', () => {
-    mocks.flags = { callRecording: true };
+    mocks.flags = { spaceCalls: true };
     const { unmount } = renderExplore();
     expect(mocks.feedProps.at(-1)?.interleave).toBe(pastCallInterleave);
     unmount();
 
-    mocks.flags = { callRecording: true, forYouFeed: true };
+    mocks.flags = { spaceCalls: true, forYouFeed: true };
     renderExplore();
     expect(mocks.feedProps.at(-1)?.interleave).toBe(pastCallInterleave);
   });

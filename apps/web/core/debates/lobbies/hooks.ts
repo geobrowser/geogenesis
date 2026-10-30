@@ -19,11 +19,13 @@ import {
   type DebateLobbySummary,
   type DebateLobbyView,
   GeoChatRequestError,
+  type UpdateDebateLobbyRequest,
   createDebateLobby,
   dashlessId,
   endDebateLobby,
   endDebateLobbyStepOut,
   getDebateLobby,
+  getDebateLobbyGoing,
   getMyDebateLobby,
   listDebateLobbies,
   listDebateLobbyCalendar,
@@ -32,6 +34,7 @@ import {
   setDebateLobbyPresence,
   setDebateLobbyReminder,
   stepOutOfDebateLobby,
+  updateDebateLobby,
 } from '../api';
 import { rememberLobbyReturnDestination } from '../debate-return-navigation';
 import { debateQueryKeys, debateQueryNetworkOptions, useGeoChatAuth } from '../hooks';
@@ -115,8 +118,11 @@ export function useDebateLobbies(enabled = true, { staleTime }: { staleTime?: nu
 
 /**
  * Every lobby starting in `[from, to)` (GEO-3271), for the calendar's week: no per-host or total cap,
- * and ended lobbies included. Signed in only. Refetched with the lobby list; card patches are laid
- * over it by the gateway.
+ * and ended lobbies included. Refetched with the lobby list; card patches are laid over it by the
+ * gateway.
+ *
+ * Signed in only, unless `signedOut`: then a visitor without an account reads the range a new account
+ * sees (GEO-3517), polled as the list is.
  *
  * `keepPreviousRange` draws the last range's lobbies while a new range loads, for a reader that
  * filters by date itself (the Requests timeline, whose range moves on at midnight), rather than
@@ -126,7 +132,7 @@ export function useDebateLobbyCalendar(
   from: Date,
   to: Date,
   enabled = true,
-  { keepPreviousRange = false }: { keepPreviousRange?: boolean } = {}
+  { signedOut = false, keepPreviousRange = false }: { signedOut?: boolean; keepPreviousRange?: boolean } = {}
 ) {
   const { accountKey, authenticated, ready, getPrivyIdentityToken } = useGeoChatAuth();
 
@@ -134,7 +140,8 @@ export function useDebateLobbyCalendar(
     ...debateQueryNetworkOptions,
     queryKey: debateQueryKeys.lobbyCalendar(accountKey, from.getTime(), to.getTime()),
     queryFn: ({ signal }) => listDebateLobbyCalendar({ from, to }, getPrivyIdentityToken, accountKey, signal),
-    enabled: enabled && ready && authenticated,
+    enabled: enabled && ready && (authenticated || signedOut),
+    ...(authenticated ? {} : { refetchInterval: SIGNED_OUT_LOBBIES_POLL_MS }),
     ...(keepPreviousRange ? { placeholderData: keepPreviousData } : {}),
   });
 }
@@ -150,6 +157,9 @@ export function useMyDebateLobby(enabled = true) {
     enabled: enabled && ready && authenticated,
   });
 }
+
+/** A held call opens only when scheduled calls are switched back on, which nothing announces to its page. */
+export const HELD_CALL_REFETCH_MS = 3 * 60_000;
 
 /** Floor between refetches at `opens_at`, so a client clock ahead of the server cannot spin. */
 const OPENS_REFETCH_MIN_MS = 5_000;
@@ -192,10 +202,12 @@ export function useDebateLobby(lobbyId: string, enabled = true) {
     },
     enabled: enabled && Boolean(lobbyId) && ready && authenticated,
     structuralSharing: shareLobbyViewWithFreshRoster,
+    refetchInterval: ({ state }) => (state.data?.call?.held ? HELD_CALL_REFETCH_MS : false),
   });
 
   const access = query.data?.access;
-  useRefetchAtOpening(query, access?.status === 'not_yet_open' ? access.opens_at : null);
+  const held = query.data?.call?.held === true;
+  useRefetchAtOpening(query, access?.status === 'not_yet_open' && !held ? access.opens_at : null);
 
   return query;
 }
@@ -429,6 +441,40 @@ export function useEndDebateLobby(lobbyId: string) {
       store(view);
       if (view.purpose !== 'call') lobbyEnded(view.lobby_id, { scheduled: view.scheduled, opensAt: view.opens_at });
     },
+  });
+}
+
+/**
+ * A host edits the lobby (GEO-3540). The answer is stored as a fetch would be, so lists it carries
+ * never replace newer ones the roster already heard.
+ */
+export function useUpdateDebateLobby(lobbyId: string) {
+  const queryClient = useQueryClient();
+  const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
+  const store = useStoreLobbyView();
+
+  return useMutation({
+    mutationFn: (body: UpdateDebateLobbyRequest) => updateDebateLobby(lobbyId, body, getPrivyIdentityToken, accountKey),
+    onSuccess: view => {
+      store(
+        settleFetchedLobbyClaimLists(
+          queryClient.getQueryData<DebateLobbyView>(debateQueryKeys.lobby(accountKey, view.lobby_id)),
+          view
+        )
+      );
+    },
+  });
+}
+
+/** Everyone going, for a host (GEO-3540). Read afresh each time the list mounts. */
+export function useDebateLobbyGoing(lobbyId: string) {
+  const { accountKey, authenticated, ready, getPrivyIdentityToken } = useGeoChatAuth();
+  return useQuery({
+    ...debateQueryNetworkOptions,
+    queryKey: debateQueryKeys.lobbyGoing(accountKey, lobbyId),
+    queryFn: ({ signal }) => getDebateLobbyGoing(lobbyId, getPrivyIdentityToken, accountKey, signal),
+    enabled: Boolean(lobbyId) && ready && authenticated,
+    staleTime: 0,
   });
 }
 

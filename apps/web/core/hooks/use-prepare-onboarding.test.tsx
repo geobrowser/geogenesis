@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   avatarAtom,
   nameAtom,
+  onboardingNameOnlyAtom,
   selectedTopicIdsAtom,
   spaceIdAtom,
   stepAtom,
@@ -194,6 +195,27 @@ describe('usePrepareOnboarding', () => {
       });
 
       expect(result.current.redirect).toBeNull();
+    });
+  });
+
+  // GEO-3517. The debate hours page's RSVP asks a new account for a name only.
+  describe('name-only onboarding', () => {
+    it('is set by a press that asks for it and cleared by the next one that does not', () => {
+      const { result } = renderHook(() => ({
+        prepare: usePrepareOnboarding(),
+        nameOnly: useAtomValue(onboardingNameOnlyAtom),
+      }));
+      expect(result.current.nameOnly).toBe(false);
+
+      act(() => {
+        result.current.prepare({ nameOnly: true });
+      });
+      expect(result.current.nameOnly).toBe(true);
+
+      act(() => {
+        result.current.prepare();
+      });
+      expect(result.current.nameOnly).toBe(false);
     });
   });
 });

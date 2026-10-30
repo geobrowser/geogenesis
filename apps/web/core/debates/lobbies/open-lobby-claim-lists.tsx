@@ -10,6 +10,7 @@ import type { ClaimListOption } from '../claim-list-pages';
 import { debateActionAnalyticsAttributes } from '../matchmaking/hub-analytics';
 import { hubPillClassName } from '../matchmaking/hub-pill-button';
 import { CLAIM_LIST_PICKER_COPY, ClaimListPicker } from './lobby-claim-list-picker';
+import { useClaimListName } from './lobby-claim-list-tab';
 import { LobbyPopup } from './lobby-popup';
 
 export const OPEN_LOBBY_CLAIM_LISTS_COPY = {
@@ -20,8 +21,18 @@ export const OPEN_LOBBY_CLAIM_LISTS_COPY = {
   hint: 'Shown as tabs in the lobby’s claims panel. You can change them in the lobby.',
 };
 
-/** A list picked for a lobby being opened: the page, the space it was picked from, its name. */
+/**
+ * A list picked for a lobby being opened: the page, the space it was picked from, its name. A list
+ * the lobby already has (the edit dialog, GEO-3540) comes with an empty name, read from the graph.
+ */
 export type PickedClaimList = Pick<ClaimListOption, 'entityId' | 'spaceId' | 'name'>;
+
+/** Picked lists as geo-chat takes them, in order: on a new lobby, and replacing an edited one's (GEO-3540). */
+export function claimListsRequestBody(
+  lists: readonly Pick<PickedClaimList, 'entityId' | 'spaceId'>[]
+): NonNullable<CreateDebateLobbyRequest['claim_lists']> {
+  return lists.map(list => ({ entity_id: list.entityId, space_id: list.spaceId }));
+}
 
 /**
  * The tabs a new lobby starts with, in pick order (GEO-3275). Nothing at all when none were
@@ -30,9 +41,7 @@ export type PickedClaimList = Pick<ClaimListOption, 'entityId' | 'spaceId' | 'na
 export function claimListsRequestField(
   lists: readonly Pick<PickedClaimList, 'entityId' | 'spaceId'>[]
 ): Pick<CreateDebateLobbyRequest, 'claim_lists'> {
-  return lists.length > 0
-    ? { claim_lists: lists.map(list => ({ entity_id: list.entityId, space_id: list.spaceId })) }
-    : {};
+  return lists.length > 0 ? { claim_lists: claimListsRequestBody(lists) } : {};
 }
 
 /**
@@ -61,24 +70,14 @@ export function OpenLobbyClaimListsField({
         </Text>
       </Text>
       <div className="flex flex-wrap items-center gap-1.5">
-        {value.map(list => (
-          <span
-            key={list.entityId}
-            // The "Add a list" pill's own type and shape, so picked lists and the button read as one row.
-            className={hubPillClassName('tag', 'max-w-full gap-1 pr-1')}
-          >
-            <span className="max-w-[200px] truncate">{list.name}</span>
-            <button
-              type="button"
-              aria-label={`Remove ${list.name}`}
-              {...debateActionAnalyticsAttributes('hub', 'Open lobby remove claim list', 'remove_lobby_claim_list')}
-              onClick={() => onChange(value.filter(other => other.entityId !== list.entityId))}
-              className="grid size-5 shrink-0 place-items-center rounded-full text-grey-04 hover:bg-grey-02 hover:text-text"
-            >
-              <CloseSmall />
-            </button>
-          </span>
-        ))}
+        {value.map(list => {
+          const remove = () => onChange(value.filter(other => other.entityId !== list.entityId));
+          return list.name ? (
+            <PickedListChip key={list.entityId} name={list.name} onRemove={remove} />
+          ) : (
+            <SavedListChip key={list.entityId} list={list} onRemove={remove} />
+          );
+        })}
         {full ? null : (
           <LobbyPopup
             open={picking}
@@ -111,5 +110,31 @@ export function OpenLobbyClaimListsField({
         {full ? OPEN_LOBBY_CLAIM_LISTS_COPY.full : OPEN_LOBBY_CLAIM_LISTS_COPY.hint}
       </Text>
     </div>
+  );
+}
+
+/** A list the lobby already has, named from the graph. */
+function SavedListChip({ list, onRemove }: { list: PickedClaimList; onRemove: () => void }) {
+  const name = useClaimListName({ entity_id: list.entityId, space_id: list.spaceId });
+  return <PickedListChip name={name} onRemove={onRemove} />;
+}
+
+function PickedListChip({ name, onRemove }: { name: string; onRemove: () => void }) {
+  return (
+    <span
+      // The "Add a list" pill's own type and shape, so picked lists and the button read as one row.
+      className={hubPillClassName('tag', 'max-w-full gap-1 pr-1')}
+    >
+      <span className="max-w-[200px] truncate">{name}</span>
+      <button
+        type="button"
+        aria-label={`Remove ${name}`}
+        {...debateActionAnalyticsAttributes('hub', 'Open lobby remove claim list', 'remove_lobby_claim_list')}
+        onClick={onRemove}
+        className="grid size-5 shrink-0 place-items-center rounded-full text-grey-04 hover:bg-grey-02 hover:text-text"
+      >
+        <CloseSmall />
+      </button>
+    </span>
   );
 }
