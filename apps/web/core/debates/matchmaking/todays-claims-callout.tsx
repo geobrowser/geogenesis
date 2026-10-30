@@ -177,6 +177,8 @@ function CalloutCard({ callout, claim, position }: { callout: TodaysCallout; cla
           answersMayComeFromIndex
           hideEndSlot
           hideSummary
+          // Just the two sides to take: who stands ready on each is the lists' to show.
+          showParticipants={false}
           analyticsSurface="hub"
         />
       </DebateClaimCardSurface>

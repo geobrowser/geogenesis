@@ -30,8 +30,18 @@ vi.mock('~/core/claims/browse/claim-response-summary', () => ({
 }));
 // The card has its own suites; here it only matters which claim it is drawn for and how.
 vi.mock('./matchmaking-claim-card', () => ({
-  MatchmakingClaimCard: (props: { claim: { claim: string }; hideEndSlot?: boolean; hideSummary?: boolean }) => (
-    <article data-testid="claim-card" data-hide-end-slot={props.hideEndSlot} data-hide-summary={props.hideSummary}>
+  MatchmakingClaimCard: (props: {
+    claim: { claim: string };
+    hideEndSlot?: boolean;
+    hideSummary?: boolean;
+    showParticipants?: boolean;
+  }) => (
+    <article
+      data-testid="claim-card"
+      data-hide-end-slot={props.hideEndSlot}
+      data-hide-summary={props.hideSummary}
+      data-show-participants={String(props.showParticipants)}
+    >
       {props.claim.claim}
     </article>
   ),
@@ -97,6 +107,7 @@ describe('TodaysClaimsCallout', () => {
     expect(screen.getByTestId('claim-card')).toHaveTextContent('Claim B');
     expect(screen.getByTestId('claim-card')).toHaveAttribute('data-hide-summary', 'true');
     expect(screen.getByTestId('claim-card')).toHaveAttribute('data-hide-end-slot', 'true');
+    expect(screen.getByTestId('claim-card')).toHaveAttribute('data-show-participants', 'false');
     expect(screen.getByRole('list', { name: '1 of 3 answered' })).toBeInTheDocument();
     expect(mocks.surfaces[0]).toMatchObject({
       claimId: 'b',
