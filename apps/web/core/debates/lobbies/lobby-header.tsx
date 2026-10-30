@@ -19,7 +19,7 @@ import { Text } from '~/design-system/text';
 
 import { debateActionAnalyticsAttributes, debateSurfaceAnalyticsAttributes } from '../matchmaking/hub-analytics';
 import { HubPillButton } from '../matchmaking/hub-pill-button';
-import { EditLobbyButton, canEditLobby } from './edit-lobby-dialog';
+import { EditLobbyButton, EditLobbyDialog, canEditLobby } from './edit-lobby-dialog';
 import { useEndDebateLobby } from './hooks';
 import { lobbyShareUrl } from './lobby-analytics';
 import {
@@ -215,34 +215,39 @@ function EndLobbyControl({ lobby }: { lobby: LobbyPageView }) {
 /** Phone: Copy link and, for a host, Edit lobby and End lobby behind the title's "…". */
 function LobbyTitleMenu({ lobby }: { lobby: LobbyPageView }) {
   const [open, setOpen] = React.useState(false);
+  // Out here, not in the sheet: a dialog opened inside the modal sheet can't be tapped.
+  const [editing, setEditing] = React.useState(false);
   const title = useLobbyRoomPurpose().purpose === 'call' ? 'Call options' : 'Lobby options';
 
   return (
-    <LobbyPopup
-      open={open}
-      onOpenChange={setOpen}
-      title={title}
-      trigger={
-        <button
-          type="button"
-          aria-label={title}
-          {...debateActionAnalyticsAttributes('hub', 'Lobby options')}
-          className="flex size-8 shrink-0 items-center justify-center rounded-full text-grey-04 hover:bg-grey-01 hover:text-text"
-        >
-          <Ellipsis />
-        </button>
-      }
-    >
-      <div className="flex flex-col gap-2 pb-1">
-        <CopyLinkRow lobbyId={lobby.lobby_id} />
-        {lobby.viewer.hosting || canEditLobby(lobby) ? (
-          <div className="flex flex-wrap gap-2">
-            <EditLobbyButton lobby={lobby} />
-            {lobby.viewer.hosting ? <EndLobbyControl lobby={lobby} /> : null}
-          </div>
-        ) : null}
-      </div>
-    </LobbyPopup>
+    <>
+      <LobbyPopup
+        open={open}
+        onOpenChange={setOpen}
+        title={title}
+        trigger={
+          <button
+            type="button"
+            aria-label={title}
+            {...debateActionAnalyticsAttributes('hub', 'Lobby options')}
+            className="flex size-8 shrink-0 items-center justify-center rounded-full text-grey-04 hover:bg-grey-01 hover:text-text"
+          >
+            <Ellipsis />
+          </button>
+        }
+      >
+        <div className="flex flex-col gap-2 pb-1">
+          <CopyLinkRow lobbyId={lobby.lobby_id} />
+          {lobby.viewer.hosting || canEditLobby(lobby) ? (
+            <div className="flex flex-wrap gap-2">
+              <EditLobbyButton lobby={lobby} onOpen={() => setEditing(true)} />
+              {lobby.viewer.hosting ? <EndLobbyControl lobby={lobby} /> : null}
+            </div>
+          ) : null}
+        </div>
+      </LobbyPopup>
+      {editing ? <EditLobbyDialog lobby={lobby} onClose={() => setEditing(false)} /> : null}
+    </>
   );
 }
 

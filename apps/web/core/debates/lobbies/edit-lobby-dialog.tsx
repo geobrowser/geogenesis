@@ -12,6 +12,7 @@ import { type DebateLobbyView, GeoChatRequestError, type UpdateDebateLobbyReques
 import { HubPillButton } from '../matchmaking/hub-pill-button';
 import { useUpdateDebateLobby } from './hooks';
 import { lobbyErrorMessage } from './lobby-format';
+import { useLobbyHandoff } from './lobby-popup';
 import { OpenLobbyClaimListsField, type PickedClaimList, claimListsRequestBody } from './open-lobby-claim-lists';
 import {
   LobbyDialogFrame,
@@ -72,8 +73,9 @@ function sameLists(a: readonly Pick<PickedClaimList, 'entityId' | 'spaceId'>[], 
 }
 
 /**
- * The PATCH body for the form: only what changed, or why it cannot be sent. `startsAtLocal` is
- * `null` when the start cannot move. An empty body means nothing changed.
+ * The PATCH body for the form: only what changed since `lobby` (as the dialog opened on it), or why
+ * it cannot be sent. `startsAtLocal` is `null` when the start cannot move. An empty body means
+ * nothing changed.
  */
 export function lobbyEditRequestFor(
   lobby: Pick<EditableLobby, 'name' | 'starts_at'>,
@@ -100,13 +102,26 @@ export function lobbyEditRequestFor(
   return { body };
 }
 
-/** "Edit lobby" and the dialog it opens, for a host (GEO-3540). Nothing for anyone else. */
-export function EditLobbyButton({ lobby, label = EDIT_LOBBY_COPY.open }: { lobby: EditableLobby; label?: string }) {
+/**
+ * "Edit lobby" and the dialog it opens, for a host (GEO-3540). Nothing for anyone else. Inside a
+ * lobby popup, pass `onOpen`: the popup closes first and its owner shows the dialog, since one
+ * opened inside a modal sheet can't be tapped and one inside a popover closes with it.
+ */
+export function EditLobbyButton({
+  lobby,
+  label = EDIT_LOBBY_COPY.open,
+  onOpen,
+}: {
+  lobby: EditableLobby;
+  label?: string;
+  onOpen?: () => void;
+}) {
   const [open, setOpen] = React.useState(false);
+  const { handoff } = useLobbyHandoff();
   if (!canEditLobby(lobby)) return null;
   return (
     <>
-      <HubPillButton analyticsLabel="Lobby edit" onClick={() => setOpen(true)}>
+      <HubPillButton analyticsLabel="Lobby edit" onClick={() => (onOpen ? handoff(onOpen) : setOpen(true))}>
         {label}
       </HubPillButton>
       {open ? <EditLobbyDialog lobby={lobby} onClose={() => setOpen(false)} /> : null}
@@ -124,6 +139,9 @@ export function EditLobbyDialog({ lobby, onClose }: { lobby: EditableLobby; onCl
   const update = useUpdateDebateLobby(lobby.lobby_id);
   const [, setToast] = useToast();
   const movable = canMoveLobby(lobby);
+  // What the form opened with, and what a save is measured against: the lobby can change under the
+  // dialog (another host's edit), and an untouched field must not send the value it showed back.
+  const [opened] = React.useState(() => ({ name: lobby.name, starts_at: lobby.starts_at }));
   const [initialStart] = React.useState(() => toDateTimeLocalValue(new Date(lobby.starts_at)));
   const [initialLists] = React.useState<PickedClaimList[]>(() =>
     // Names are read from the graph by each chip.
@@ -139,7 +157,7 @@ export function EditLobbyDialog({ lobby, onClose }: { lobby: EditableLobby; onCl
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
-    const request = lobbyEditRequestFor(lobby, initialLists, { name, startsAtLocal, claimLists });
+    const request = lobbyEditRequestFor(opened, initialLists, { name, startsAtLocal, claimLists });
     if ('error' in request) {
       setFormError(request.error);
       return;

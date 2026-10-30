@@ -12,12 +12,13 @@ import { Text } from '~/design-system/text';
 import { useElevatedPopoverPortal } from '~/design-system/use-elevated-popover-portal';
 
 import type { DebateLobbySummary } from '../api';
-import { EditLobbyButton, canEditLobby } from '../lobbies/edit-lobby-dialog';
+import { EditLobbyButton, EditLobbyDialog, canEditLobby } from '../lobbies/edit-lobby-dialog';
 import { useDebateLobby } from '../lobbies/hooks';
 import type { LobbyLineup } from '../lobbies/live-lobbies';
 import { markLobbyEntry } from '../lobbies/lobby-analytics';
 import { lobbyDateLabel, lobbyTimeLabel, notYetOpenLabel } from '../lobbies/lobby-format';
 import { usePreOpenHosts } from '../lobbies/lobby-host-lobbies';
+import { LobbyHandoffScope } from '../lobbies/lobby-popup';
 import { LobbyClaimListNames, LobbyGoing, LobbyHostedBy } from '../lobbies/lobby-pre-open-details';
 import { LobbyReminderError, useLobbyReminderPress } from '../lobbies/lobby-reminder-press';
 import { LiveLobbySpotlight, SPOTLIGHT_SECONDARY_PILL_CLASS_NAME } from '../lobbies/lobby-spotlight';
@@ -171,6 +172,10 @@ function NextLobbyStrip({ lobby }: { lobby: DebateLobbySummary }) {
   const when = lobbyTimeLabel(lobby.starts_at, now);
   const portal = useElevatedPopoverPortal();
   const [open, setOpen] = React.useState(false);
+  // Held here, not in the details: Edit closes them first, so Escape in the dialog and the details
+  // closing don't take it with them. The view stays live while it is up.
+  const [editing, setEditing] = React.useState(false);
+  const { data: editingView } = useDebateLobby(lobby.lobby_id, editing);
 
   // The calendar's RSVP, Going black, on the strip's light surface. One press for both copies of it.
   const rsvp = (
@@ -216,13 +221,16 @@ function NextLobbyStrip({ lobby }: { lobby: DebateLobbySummary }) {
                 aria-label="Lobby details"
                 className="z-100 flex w-[368px] max-w-[calc(100vw-32px)] flex-col gap-3 rounded-xl border border-grey-02 bg-white p-3.5 shadow-lg"
               >
-                <LobbyDetails lobby={lobby} now={now} rsvp={rsvp} />
+                <LobbyHandoffScope onOpenChange={setOpen}>
+                  <LobbyDetails lobby={lobby} now={now} rsvp={rsvp} onEdit={() => setEditing(true)} />
+                </LobbyHandoffScope>
               </Popover.Content>
             </Popover.Portal>
           ) : null}
         </Popover.Root>
         {rsvp}
       </section>
+      {editing && editingView ? <EditLobbyDialog lobby={editingView} onClose={() => setEditing(false)} /> : null}
       <LobbyReminderError error={remind.error} />
     </>
   );
@@ -241,7 +249,17 @@ const LOBBY_DETAILS_EDIT = 'Edit';
  * coalesced, so one RSVP cleared and another set leave the count where it was: reopening is what
  * catches that, and a block or a name change.
  */
-function LobbyDetails({ lobby, now, rsvp }: { lobby: DebateLobbySummary; now: number; rsvp: React.ReactNode }) {
+function LobbyDetails({
+  lobby,
+  now,
+  rsvp,
+  onEdit,
+}: {
+  lobby: DebateLobbySummary;
+  now: number;
+  rsvp: React.ReactNode;
+  onEdit: () => void;
+}) {
   const { data: view, refetch } = useDebateLobby(lobby.lobby_id);
   // Only over a view already held: with none, the query's own first read is out already.
   const staleAtOpening = React.useRef(view !== undefined);
@@ -289,7 +307,7 @@ function LobbyDetails({ lobby, now, rsvp }: { lobby: DebateLobbySummary; now: nu
           Open lobby page
         </Link>
         <div className="flex items-center gap-2">
-          {view ? <EditLobbyButton lobby={view} label={LOBBY_DETAILS_EDIT} /> : null}
+          {view ? <EditLobbyButton lobby={view} label={LOBBY_DETAILS_EDIT} onOpen={onEdit} /> : null}
           {rsvp}
         </div>
       </div>

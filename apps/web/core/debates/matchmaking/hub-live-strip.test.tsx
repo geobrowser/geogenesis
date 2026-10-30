@@ -48,7 +48,10 @@ const VIEW_BASE = {
   access: { status: 'not_yet_open', opens_at: '2026-10-30T18:50:00Z' },
   viewer: { role: null, hosting: false },
 };
-vi.mock('../lobbies/hooks', () => ({ useDebateLobby: () => lobbyView }));
+vi.mock('../lobbies/hooks', () => ({
+  useDebateLobby: () => lobbyView,
+  useUpdateDebateLobby: () => ({ mutate: vi.fn(), error: null, isPending: false }),
+}));
 vi.mock('../lobbies/lobby-host-lobbies', () => ({
   usePreOpenHosts: (lobby: { hosts?: unknown[] }) => lobby.hosts ?? [],
 }));
@@ -193,6 +196,25 @@ describe('HubLiveStrip', () => {
     fireEvent.click(screen.getByRole('button', { name: /lobby details/ }));
     const details = screen.getByRole('dialog', { name: 'Lobby details' });
     expect(within(details).getByRole('button', { name: 'Edit' })).toBeInTheDocument();
+    lobbyView.data = undefined;
+  });
+
+  // Review: the dialog is the strip's, not the details', so Escape in it leaves the panel alone and
+  // the details closing can't take it with them.
+  it('closes the details before showing the edit dialog', async () => {
+    lobbyView.data = { ...VIEW_BASE, viewer: { role: 'host', hosting: false }, reminder_count: 0, going: [] };
+    const later = lobby({ open: false, scheduled: true });
+    render(<HubLiveStrip lineup={{ ...EMPTY, later: [later] }} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /lobby details/ }));
+    fireEvent.click(
+      within(screen.getByRole('dialog', { name: 'Lobby details' })).getByRole('button', { name: 'Edit' })
+    );
+
+    expect(await screen.findByRole('dialog', { name: 'Edit lobby' })).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Lobby details' })).toBeNull();
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByRole('dialog', { name: 'Edit lobby' })).toBeNull();
     lobbyView.data = undefined;
   });
 

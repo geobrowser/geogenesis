@@ -203,6 +203,17 @@ describe('EditLobbyDialog', () => {
     expect(mocks.mutate.mock.calls[0][0]).toEqual({ claim_lists: [{ entity_id: 'p2', space_id: 's2' }] });
   });
 
+  // Review: another host's edit lands while this dialog is up; fields left alone send nothing back.
+  it('measures a save against what it opened with, not a newer view', () => {
+    const { rerender } = render(<EditLobbyDialog lobby={lobby()} onClose={() => {}} />);
+    const later = new Date(STARTS_AT.getTime() + 3_600_000).toISOString();
+    rerender(<EditLobbyDialog lobby={lobby({ name: 'Renamed by Ben', starts_at: later })} onClose={() => {}} />);
+
+    fireEvent.change(screen.getByDisplayValue('Debate hour'), { target: { value: 'Debate hour!' } });
+    fireEvent.click(screen.getByRole('button', { name: EDIT_LOBBY_COPY.save }));
+    expect(mocks.mutate.mock.calls[0][0]).toEqual({ name: 'Debate hour!' });
+  });
+
   it('closes without a request when nothing changed', () => {
     const onClose = vi.fn();
     render(<EditLobbyDialog lobby={lobby()} onClose={onClose} />);
