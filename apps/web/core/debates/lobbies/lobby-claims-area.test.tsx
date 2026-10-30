@@ -14,6 +14,7 @@ import {
   useSaveVotesPromptLobbyName,
 } from '~/core/state/save-votes-prompt';
 
+import { TODAYS_CLAIMS_LIST_ID } from '../todays-claims/todays-claims-list-id';
 import { LobbyClaimsArea } from './lobby-claims-area';
 import type { LobbyPageView } from './lobby-view';
 
@@ -38,6 +39,9 @@ vi.mock('./lobby-explore-claims', () => ({
 vi.mock('./lobby-claim-list-tab', () => ({
   LobbyClaimListTab: ({ list }: { list: { entity_id: string } }) => <p data-testid={`list-tab-${list.entity_id}`} />,
   useClaimListName: (list: { entity_id: string }) => `List ${list.entity_id}`,
+}));
+vi.mock('./lobby-todays-claims-tab', () => ({
+  LobbyTodaysClaimsTab: () => <p data-testid="todays-claims-tab" />,
 }));
 vi.mock('./lobby-claim-list-picker', () => ({
   LobbyClaimListPicker: ({ onAdded }: { onAdded: (entityId: string) => void }) => (
@@ -267,6 +271,19 @@ describe('LobbyClaimsArea', () => {
 
       rerender(<LobbyClaimsArea lobby={withLists([])} />);
       expect(screen.getByRole('button', { name: 'In this room' }).getAttribute('aria-current')).toBe('true');
+      expect(screen.getByTestId('lobby-room-claims')).toBeTruthy();
+    });
+
+    // GEO-3491: Today's claims is stored like a page, and opens on the agendas rather than a page.
+    it('opens a Today’s claims list on the agendas, and removing it works like any list', () => {
+      const todays = { ...list(TODAYS_CLAIMS_LIST_ID, 0), space_id: TODAYS_CLAIMS_LIST_ID };
+      const { rerender } = render(<LobbyClaimsArea lobby={withLists([todays, list('p1', 1)])} />);
+      fireEvent.click(screen.getByRole('button', { name: `List ${TODAYS_CLAIMS_LIST_ID}` }));
+      expect(screen.getByTestId('todays-claims-tab')).toBeTruthy();
+      expect(screen.queryByTestId(`list-tab-${TODAYS_CLAIMS_LIST_ID}`)).toBeNull();
+
+      rerender(<LobbyClaimsArea lobby={withLists([list('p1', 0)])} />);
+      expect(screen.queryByTestId('todays-claims-tab')).toBeNull();
       expect(screen.getByTestId('lobby-room-claims')).toBeTruthy();
     });
   });

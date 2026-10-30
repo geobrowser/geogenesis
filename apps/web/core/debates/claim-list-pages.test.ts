@@ -12,6 +12,7 @@ import {
   placeClaimListSections,
   searchClaimListGroups,
 } from './claim-list-pages';
+import { DEBATE_AGENDA_TYPE_ID } from './ontology';
 
 const CURATORS = '3be38bb922bc80c6a6503fbbba28d2b0';
 const POLITICS = '4582fbbee28a16589154f7e36f1ee3c5';
@@ -55,6 +56,27 @@ describe('catalogOptions', () => {
     // The two claims in the tag's space, in the one block that holds any.
     expect(options[0]!.themes.map(claims => claims.length)).toEqual([2]);
     expect(options[0]!.themes[0]![0]!.tagSpaceIds).toEqual([DEBATED]);
+  });
+
+  it('leaves out a daily Debate agenda, which Today’s claims stands for', () => {
+    expect(
+      catalogOptions({
+        relationsConnection: {
+          pageInfo: null,
+          nodes: [
+            {
+              spaceId: CURATORS,
+              fromEntity: {
+                id: 'agenda-1',
+                name: 'Debate agenda 30 Oct',
+                typeIds: [DEBATE_AGENDA_TYPE_ID],
+                blocks: [{ spaceId: CURATORS, toEntity: { items: [item(CURATORS)] } }],
+              },
+            },
+          ],
+        },
+      })
+    ).toEqual([]);
   });
 
   it('leaves out a page with no claims in that space', () => {

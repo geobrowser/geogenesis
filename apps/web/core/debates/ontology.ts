@@ -26,6 +26,12 @@ export const DEBATE_TYPE_ID = 'fd51f93520634617be397b672b23364c';
  */
 export const DEBATE_TAG_ID = '55c95b2626f8482cb9739ea99dfde438';
 
+/**
+ * Debate agenda (TYPE): a space's daily page of claims to debate (GEO-3487), read through gaia's
+ * `currentDebateAgendas`. A new one every day, so never offered as a fixed lobby claim list.
+ */
+export const DEBATE_AGENDA_TYPE_ID = '79e3757b2630492c9d3bd73a78d45893';
+
 /** Transcript (TYPE) — holds the per-turn text blocks of a debate. */
 export const TRANSCRIPT_TYPE_ID = '97042e6d9c7b4db5930c43d48debda84';
 

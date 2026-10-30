@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, renderHook, screen, within } from '@testing-library/react';
 
 import * as React from 'react';
 
@@ -7,7 +7,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { GeoChatRequestError } from '../api';
 import type { ClaimListPage } from '../claim-list-pages';
 import { HUB_SCROLL_SELECTOR, HubScrollSelectorProvider } from '../matchmaking/hub-scroll';
-import { LobbyClaimListTab } from './lobby-claim-list-tab';
+import { TODAYS_CLAIMS_LIST_ID } from '../todays-claims/todays-claims-list-id';
+import { LobbyClaimListTab, useClaimListName } from './lobby-claim-list-tab';
 import type { LobbyPageView } from './lobby-view';
 
 const mocks = vi.hoisted(() => ({
@@ -213,5 +214,14 @@ describe('LobbyClaimListTab', () => {
     render(<LobbyClaimListTab lobby={lobbyFor(false)} list={list} />);
     expect(screen.getByText('Something went wrong.')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Try again' })).toBeTruthy();
+  });
+});
+
+describe('useClaimListName', () => {
+  it('names Today’s claims itself, with no page to read', () => {
+    const { result } = renderHook(() =>
+      useClaimListName({ entity_id: TODAYS_CLAIMS_LIST_ID, space_id: TODAYS_CLAIMS_LIST_ID })
+    );
+    expect(result.current).toBe('Today’s claims');
   });
 });

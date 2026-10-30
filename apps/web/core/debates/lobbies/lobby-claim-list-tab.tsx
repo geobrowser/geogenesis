@@ -25,6 +25,7 @@ import {
   rowsByPlacedClaim,
   taggedClaimEntry,
 } from '../matchmaking/tagged-claim-entry';
+import { TODAYS_CLAIMS_LIST_NAME, isTodaysClaimsList } from '../todays-claims/todays-claims-list-id';
 import { useDebatePublishableSpaces } from '../use-debate-publishable-spaces';
 import { useRemoveLobbyClaimList } from './lobby-claim-lists-hooks';
 import { LOBBY_CLAIMS_CONTROLS_TOP_CLASS, LOBBY_CLAIMS_SECTION_SCROLL_MARGIN_CLASS } from './lobby-claims-sticky';
@@ -42,9 +43,10 @@ export const CLAIM_LIST_TAB_COPY = {
   empty: 'This list has no claims yet.',
 };
 
-/** The tab's label: the page's own name, once the page has been read. */
+/** The tab's label: the page's own name, once the page has been read; Today's claims by its own. */
 export function useClaimListName(list: Pick<DebateLobbyClaimList, 'entity_id' | 'space_id'>) {
   const { data } = useClaimListPage(list.entity_id, list.space_id);
+  if (isTodaysClaimsList(list.entity_id)) return TODAYS_CLAIMS_LIST_NAME;
   return data?.name ?? CLAIM_LIST_TAB_COPY.fallbackName;
 }
 

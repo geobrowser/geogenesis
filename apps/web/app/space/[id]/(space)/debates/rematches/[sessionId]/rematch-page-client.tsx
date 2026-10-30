@@ -70,11 +70,9 @@ import {
 } from '~/core/debates/matchmaking/claim-debatability';
 import { claimRowKey } from '~/core/debates/matchmaking/claim-row-key';
 import { type AnsweredState, useCollapseAnswered } from '~/core/debates/matchmaking/collapse-answered';
+import { CollapsibleClaimSection } from '~/core/debates/matchmaking/collapsible-claim-section';
 import { FacetFilterPills, type FacetPillOption } from '~/core/debates/matchmaking/facet-filter-pills';
-import {
-  type DebateAnalyticsAttributes,
-  debateActionAnalyticsAttributes,
-} from '~/core/debates/matchmaking/hub-analytics';
+import { debateActionAnalyticsAttributes } from '~/core/debates/matchmaking/hub-analytics';
 import { HubFilterMenu, type HubFilterOption } from '~/core/debates/matchmaking/hub-filter-menu';
 import { HubCardList, hubCardMotion } from '~/core/debates/matchmaking/hub-motion';
 import { HubPillButton } from '~/core/debates/matchmaking/hub-pill-button';
@@ -151,7 +149,6 @@ import { validateSpaceId } from '~/core/utils/utils';
 import { validateEntityId } from '~/core/utils/utils';
 
 import { PILL_BUTTON_SECONDARY_CLASS_NAME, SmallButton } from '~/design-system/button';
-import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Input } from '~/design-system/input';
 import { Skeleton } from '~/design-system/skeleton';
 import { tabGroupTabLinkStyles } from '~/design-system/tab-group';
@@ -3657,7 +3654,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
             // Each data block on the curator's page is its own section, in page order.
             <div className="flex flex-col gap-4">
               {visibleSections.map((section, sectionIndex) => (
-                <RecommendedSection
+                <CollapsibleClaimSection
                   key={section.id}
                   name={section.name}
                   count={section.claims.length}
@@ -3670,13 +3667,13 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
                       renderClaimCard(claim, sectionOffsets[sectionIndex] + index + 1)
                     )}
                   </HubCardList>
-                </RecommendedSection>
+                </CollapsibleClaimSection>
               ))}
             </div>
           ) : showsTodaysSections ? (
             <div className="flex flex-col gap-4" data-testid="todays-claims-sections">
               {visibleTodaysSections.map((section, sectionIndex) => (
-                <RecommendedSection
+                <CollapsibleClaimSection
                   key={section.key}
                   name={section.name}
                   count={section.claims.length}
@@ -3693,7 +3690,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
                       renderClaimCard(claim, todaysSectionOffsets[sectionIndex] + index + 1)
                     )}
                   </HubCardList>
-                </RecommendedSection>
+                </CollapsibleClaimSection>
               ))}
             </div>
           ) : tab === 'debate' ? (
@@ -3788,7 +3785,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
             something new; still reachable because going again on one is a choice geo-chat allows. */}
         {!tabIsLoading && visibleDebatedClaims.length > 0 ? (
           <div className="mt-6" data-testid="rematch-already-debated">
-            <RecommendedSection
+            <CollapsibleClaimSection
               key={`${sessionId}:${tab}`}
               name={`Already debated with ${remoteName}`}
               count={visibleDebatedClaims.length}
@@ -3800,7 +3797,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
               <HubCardList>
                 {visibleDebatedClaims.map((claim, index) => renderClaimCard(claim, foldOffset + index + 1, true))}
               </HubCardList>
-            </RecommendedSection>
+            </CollapsibleClaimSection>
           </div>
         ) : null}
       </main>
@@ -4191,78 +4188,6 @@ type TodaysItem = { row: DebateRematchClaim; sectionKey: string; scope: TodaysCa
 const NO_TODAYS: { sections: TodaysSection[]; items: TodaysItem[] } = { sections: [], items: [] };
 const todaysSectionKeyOf = (section: TodaysSection) => section.key;
 const todaysItemKeyOf = (item: TodaysItem) => claimRowKey(item.row);
-
-/** One curated block, collapsible so a long page of recommendations stays scannable. */
-function RecommendedSection({
-  name,
-  count,
-  defaultOpen = true,
-  open: controlledOpen,
-  onToggle,
-  showCount = false,
-  analytics,
-  onOpenChange,
-  children,
-}: {
-  name: string;
-  count: number;
-  /** The toggle's click-analytics label and intent. The name can carry a person's or curator's words. */
-  analytics: DebateAnalyticsAttributes;
-  defaultOpen?: boolean;
-  /**
-   * Held by the caller instead, with `onToggle` asked to change it — for Today's claims, whose
-   * sections stay as the viewer left them for the day (GEO-3489).
-   */
-  open?: boolean;
-  onToggle?: (open: boolean) => void;
-  /** Draw the count beside the name. A closed section otherwise gives no hint of what is in it. */
-  showCount?: boolean;
-  onOpenChange?: (open: boolean) => void;
-  children: React.ReactNode;
-}) {
-  const [uncontrolledOpen, setOpen] = React.useState(defaultOpen);
-  const open = controlledOpen ?? uncontrolledOpen;
-  const contentId = React.useId();
-
-  const onOpenChangeRef = React.useRef(onOpenChange);
-  React.useLayoutEffect(() => {
-    onOpenChangeRef.current = onOpenChange;
-  });
-  React.useLayoutEffect(() => {
-    onOpenChangeRef.current?.(open);
-    return () => onOpenChangeRef.current?.(true);
-  }, [open]);
-
-  return (
-    <section>
-      <button
-        type="button"
-        aria-expanded={open}
-        aria-controls={contentId}
-        onClick={() => (onToggle ? onToggle(!open) : setOpen(current => !current))}
-        {...analytics}
-        className="mb-2 flex w-full items-center gap-2 text-left"
-      >
-        <Text as="h2" variant="smallTitle" color="text">
-          {name}
-        </Text>
-        {showCount ? (
-          <span
-            aria-hidden
-            className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-grey-01 px-1.5 text-metadataMedium text-grey-04 tabular-nums"
-          >
-            {count}
-          </span>
-        ) : null}
-        <span className={cx('text-grey-04 transition-transform', open ? 'rotate-180' : undefined)}>
-          <ChevronDownSmall />
-        </span>
-        <span className="sr-only">{`${count} ${count === 1 ? 'claim' : 'claims'}`}</span>
-      </button>
-      {open ? <div id={contentId}>{children}</div> : null}
-    </section>
-  );
-}
 
 /**
  * One row per claim, keeping the first that survived the gates.

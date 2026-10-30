@@ -10,8 +10,9 @@ import { TAG_PROPERTY_ID } from '~/core/constants';
 import { uuidToHex } from '~/core/id/normalize';
 import { graphql } from '~/core/io/graphql-client';
 
-import { DEBATE_TAG_ID } from './ontology';
+import { DEBATE_AGENDA_TYPE_ID, DEBATE_TAG_ID } from './ontology';
 import { tagDisplaySpaceId } from './tagged-claims';
+import { isTodaysClaimsList } from './todays-claims/todays-claims-list-id';
 import { isSpaceDebatePublishable } from './use-debate-publishable-spaces';
 
 /**
@@ -157,6 +158,7 @@ const CATALOG_SOURCE = /* GraphQL */ `
         fromEntity {
           id
           name
+          typeIds
           # Unscoped, because the space differs per node; each row is matched to its tag's space below.
           blocks: relationsList(first: $relationsLimit, filter: { typeId: { is: $blocksTypeId } }) {
             spaceId
@@ -187,6 +189,7 @@ type CatalogQuery = {
       fromEntity: {
         id: string;
         name: string | null;
+        typeIds?: string[] | null;
         blocks: Array<{
           spaceId: string;
           toEntity: {
@@ -228,6 +231,8 @@ export function catalogOptions(data: CatalogQuery): ClaimListOption[] {
   return (data.relationsConnection?.nodes ?? []).flatMap(node => {
     const page = node?.fromEntity;
     if (!node || !page) return [];
+    // A daily agenda is offered as Today's claims, which follows the newest one (GEO-3491).
+    if ((page.typeIds ?? []).some(typeId => uuidToHex(typeId) === DEBATE_AGENDA_TYPE_ID)) return [];
     const spaceId = uuidToHex(node.spaceId);
     const themes = (page.blocks ?? [])
       .filter(block => uuidToHex(block.spaceId) === spaceId)
@@ -484,7 +489,8 @@ export function useClaimListPage(entityId: string, spaceId: string) {
         })
       ),
     staleTime: CLAIM_LIST_STALE_TIME,
-    enabled: Boolean(id && space),
+    // Today's claims is no page in the graph; its tab reads the agendas instead.
+    enabled: Boolean(id && space) && !isTodaysClaimsList(id),
   });
 }
 

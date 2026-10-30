@@ -22,6 +22,8 @@ import {
 } from '../claim-list-pages';
 import { debateActionAnalyticsAttributes } from '../matchmaking/hub-analytics';
 import { HubQueryState } from '../matchmaking/hub-states';
+import { todaysListCounts, useTodaysClaimsList } from '../todays-claims/todays-claims-list';
+import { TODAYS_CLAIMS_LIST_ID, TODAYS_CLAIMS_LIST_NAME } from '../todays-claims/todays-claims-list-id';
 import { useDebatePublishableSpaces } from '../use-debate-publishable-spaces';
 import { useSaveLobbyClaimList } from './lobby-claim-lists-hooks';
 import { moderationErrorMessage } from './lobby-format';
@@ -211,6 +213,7 @@ export function ClaimListPicker({
     );
     return searchClaimListGroups(ranked, query);
   }, [catalog.data, counted, labelsById, query]);
+  const todays = useTodaysOption(query);
   const visible = groups.slice(0, shown);
   const hasMore = groups.length > shown;
   const sentinel = useInfiniteScrollSentinel({
@@ -247,10 +250,20 @@ export function ClaimListPicker({
           isLoading={catalog.isLoading}
           error={catalog.error}
           onRetry={() => void catalog.refetch()}
-          isEmpty={groups.length === 0}
+          isEmpty={groups.length === 0 && !todays.shown}
           emptyMessage={query.trim() ? CLAIM_LIST_PICKER_COPY.noMatch(query.trim()) : CLAIM_LIST_PICKER_COPY.none}
         >
           <div className="flex flex-col gap-2">
+            {todays.shown ? (
+              <TodaysClaimsRow
+                counts={todays.counts}
+                isAdded={added.has(TODAYS_CLAIMS_LIST_ID)}
+                isPicking={pickingId === TODAYS_CLAIMS_LIST_ID}
+                disabled={disabled}
+                analyticsLabel={analyticsLabel}
+                onPick={onPick}
+              />
+            ) : null}
             {visible.map(group => (
               <SpaceGroup
                 key={group.spaceId}
@@ -268,6 +281,75 @@ export function ClaimListPicker({
         </HubQueryState>
       </div>
       {footer}
+    </div>
+  );
+}
+
+/** Today's claims as a picker option: no page, so no themes; its tab reads the newest agendas. */
+export const TODAYS_CLAIMS_OPTION: ClaimListOption = {
+  entityId: TODAYS_CLAIMS_LIST_ID,
+  spaceId: TODAYS_CLAIMS_LIST_ID,
+  name: TODAYS_CLAIMS_LIST_NAME,
+  themes: [],
+};
+
+/**
+ * GEO-3491. Whether the pinned Today's claims row shows, and its counts once known: while the agendas
+ * load, and once they list a claim the tab would draw. A search hides it unless its name matches.
+ */
+function useTodaysOption(query: string) {
+  const { sections, isLoading, error } = useTodaysClaimsList({ ordered: false });
+  const counts = isLoading ? null : todaysListCounts(sections);
+  const needle = query.trim().toLocaleLowerCase();
+  const matches = !needle || TODAYS_CLAIMS_LIST_NAME.toLocaleLowerCase().includes(needle);
+  const shown = matches && !error && (counts === null || counts.claimCount > 0);
+  return { shown, counts };
+}
+
+/** The pinned row above the spaces' lists, set off from them by a rule. */
+function TodaysClaimsRow({
+  counts,
+  isAdded,
+  isPicking,
+  disabled,
+  analyticsLabel,
+  onPick,
+}: {
+  counts: { spaceCount: number; claimCount: number } | null;
+  isAdded: boolean;
+  isPicking: boolean;
+  disabled: boolean;
+  analyticsLabel: string;
+  onPick: (option: ClaimListOption) => void;
+}) {
+  return (
+    <div className="border-b border-grey-02 pb-2">
+      <button
+        type="button"
+        disabled={isAdded || disabled}
+        {...debateActionAnalyticsAttributes('hub', `${analyticsLabel} Today’s claims`, 'add_lobby_claim_list')}
+        onClick={() => onPick(TODAYS_CLAIMS_OPTION)}
+        className="flex w-full items-center justify-between gap-3 rounded-md px-2 py-2 text-left transition-colors hover:bg-grey-01 disabled:hover:bg-transparent"
+      >
+        <span className="flex min-w-0 flex-col">
+          <Text as="span" variant="metadataMedium" color={isAdded ? 'grey-03' : 'text'} className="truncate">
+            {TODAYS_CLAIMS_LIST_NAME}
+          </Text>
+          {counts ? (
+            <Text as="span" variant="footnote" color="grey-04">
+              {counts.spaceCount} {counts.spaceCount === 1 ? 'space' : 'spaces'} · {counts.claimCount}{' '}
+              {counts.claimCount === 1 ? 'claim' : 'claims'}
+            </Text>
+          ) : (
+            <span className="mt-1 h-3 w-24 animate-pulse rounded bg-grey-01" aria-hidden />
+          )}
+        </span>
+        {isAdded || isPicking ? (
+          <Text as="span" variant="footnote" color="grey-04" className="shrink-0">
+            {isAdded ? CLAIM_LIST_PICKER_COPY.added : CLAIM_LIST_PICKER_COPY.adding}
+          </Text>
+        ) : null}
+      </button>
     </div>
   );
 }
