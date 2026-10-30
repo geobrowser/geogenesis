@@ -25,7 +25,7 @@ import { moderationErrorMessage } from './lobby-format';
 import { useIsLobbyGuest } from './lobby-guest-hooks';
 import { LobbyRoomClaimsWithHighlights, LobbyRoomVote } from './lobby-highlights';
 import { LobbyPopup, LobbyPopupMenuRow } from './lobby-popup';
-import { LobbyTodaysClaimsTab } from './lobby-todays-claims-tab';
+import { LobbyTodaysClaimsTab, todaysLeadSpaceId } from './lobby-todays-claims-tab';
 import type { LobbyPageView } from './lobby-view';
 
 /** The two built-in tabs, then one per claim list as `list:<page id>` (GEO-3274). */
@@ -106,6 +106,7 @@ export function LobbyClaimsArea({ lobby }: { lobby: LobbyPageView }) {
           <LobbyClaimListPicker
             lobbyId={lobby.lobby_id}
             lists={lists}
+            leadSpaceId={todaysLeadSpaceId(lobby)}
             onAdded={entityId => setActiveTab(claimListKey({ entity_id: entityId }))}
           />
         ) : null}

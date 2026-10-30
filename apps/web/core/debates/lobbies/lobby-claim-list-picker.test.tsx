@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   },
   mutate: vi.fn(),
   todays: { sections: [] as TodaysListSection[], isLoading: false, error: null as Error | null },
+  todaysArgs: undefined as unknown,
 }));
 
 vi.mock('../claim-list-pages', async importOriginal => ({
@@ -26,7 +27,10 @@ vi.mock('../claim-list-pages', async importOriginal => ({
 }));
 vi.mock('../todays-claims/todays-claims-list', async importOriginal => ({
   ...(await importOriginal<typeof import('../todays-claims/todays-claims-list')>()),
-  useTodaysClaimsList: () => mocks.todays,
+  useTodaysClaimsList: (args: unknown) => {
+    mocks.todaysArgs = args;
+    return mocks.todays;
+  },
 }));
 vi.mock('../use-debate-publishable-spaces', async importOriginal => ({
   ...(await importOriginal<typeof import('../use-debate-publishable-spaces')>()),
@@ -255,11 +259,20 @@ describe('ClaimListPickerContent', () => {
       expect(screen.getByRole('button', { name: /Today’s claims/ })).toHaveTextContent('1 space · 3 claims');
     });
 
-    it('is left out when the agendas failed and nothing listed', () => {
+    // A failed read is not an empty one: the tab it adds has its own Try again.
+    it('stays offered, without counts, when the agendas failed and nothing listed', () => {
       mocks.catalog.data = catalog;
       mocks.todays = { sections: [], isLoading: false, error: new Error('statement timeout') };
       render(<ClaimListPickerContent lobbyId="lobby-1" lists={[]} onAdded={vi.fn()} />);
-      expect(screen.queryByRole('button', { name: /Today’s claims/ })).toBeNull();
+      const todays = screen.getByRole('button', { name: /Today’s claims/ });
+      expect(todays).not.toHaveTextContent(/claims? ·|spaces? ·|0 claims/);
+      expect(todays.textContent).toBe('Today’s claims');
+    });
+
+    it('counts with the lobby’s own space leading, as its tab draws it', () => {
+      mocks.catalog.data = catalog;
+      render(<ClaimListPickerContent lobbyId="lobby-1" lists={[]} leadSpaceId={POLITICS} onAdded={vi.fn()} />);
+      expect(mocks.todaysArgs).toEqual({ ordered: false, leadSpaceId: POLITICS });
     });
   });
 });

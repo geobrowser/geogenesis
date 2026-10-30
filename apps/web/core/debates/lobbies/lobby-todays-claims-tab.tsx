@@ -4,6 +4,8 @@ import * as React from 'react';
 
 import { useSpaceLabels } from '~/core/hooks/use-space-labels';
 
+import { Text } from '~/design-system/text';
+
 import { DebateClaimCardSurface, sectionStartOffsets, useRecordClaimFilter } from '../debate-claim-card-surface';
 import { claimRowKey } from '../matchmaking/claim-row-key';
 import { CollapsibleClaimSection } from '../matchmaking/collapsible-claim-section';
@@ -11,6 +13,7 @@ import { FacetFilterPills } from '../matchmaking/facet-filter-pills';
 import { debateActionAnalyticsAttributes } from '../matchmaking/hub-analytics';
 import { panelFacetOptions } from '../matchmaking/hub-filters';
 import { HubCardList } from '../matchmaking/hub-motion';
+import { HubPillButton } from '../matchmaking/hub-pill-button';
 import { HubQueryState } from '../matchmaking/hub-states';
 import { carriesEveryTopic, countBy, hasId, inEverySpace, toggleId } from '../matchmaking/topic-facets';
 import { useTodaysSectionsOpen } from '../todays-claims/section-open-state';
@@ -21,9 +24,16 @@ import type { LobbyPageView } from './lobby-view';
 export const TODAYS_CLAIMS_TAB_COPY = {
   empty: 'No agendas today yet.',
   noMatch: 'No claims match these filters.',
+  partial: 'Some claims didn’t load.',
+  retry: 'Try again',
 };
 
 const LIST_ID = 'todays_claims_lobby';
+
+/** The space a lobby's Today's claims leads with: its own, for a space's call; none for a lobby. */
+export function todaysLeadSpaceId(lobby: Pick<LobbyPageView, 'call'>): string | null {
+  return lobby.call?.space_id ?? null;
+}
 
 /**
  * A lobby's "Today's claims" tab (GEO-3491): every space's newest Debate agenda, the lobby's own space
@@ -33,7 +43,7 @@ const LIST_ID = 'todays_claims_lobby';
  */
 export function LobbyTodaysClaimsTab({ lobby }: { lobby: LobbyPageView }) {
   const { sections, newestDay, isLoading, error, refetch } = useTodaysClaimsList({
-    leadSpaceId: lobby.call?.space_id ?? null,
+    leadSpaceId: todaysLeadSpaceId(lobby),
   });
   const [spaceIds, setSpaceIds] = React.useState<string[]>([]);
   const [topicIds, setTopicIds] = React.useState<string[]>([]);
@@ -95,6 +105,18 @@ export function LobbyTodaysClaimsTab({ lobby }: { lobby: LobbyPageView }) {
             setTopicIds([]);
           }}
         />
+      ) : null}
+      {/* Some of the agendas' claims failed while others listed: say the list is short, with the
+          same Try again the whole-tab error offers, rather than drawing it as if it were whole. */}
+      {error && sections.length > 0 ? (
+        <div className="flex items-center justify-between gap-3" role="status">
+          <Text as="p" variant="footnote" color="grey-04">
+            {TODAYS_CLAIMS_TAB_COPY.partial}
+          </Text>
+          <HubPillButton analyticsLabel="Lobby Today’s claims retry" onClick={refetch}>
+            {TODAYS_CLAIMS_TAB_COPY.retry}
+          </HubPillButton>
+        </div>
       ) : null}
       <HubQueryState
         analyticsSurface="hub"

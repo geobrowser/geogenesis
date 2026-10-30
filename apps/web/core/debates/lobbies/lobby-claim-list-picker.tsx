@@ -52,10 +52,13 @@ const SCROLL_ATTRIBUTE = 'data-claim-list-picker-scroll';
 export function LobbyClaimListPicker({
   lobbyId,
   lists,
+  leadSpaceId = null,
   onAdded,
 }: {
   lobbyId: string;
   lists: DebateLobbyClaimList[];
+  /** The space Today's claims leads with in this lobby, so its row counts what its tab will draw. */
+  leadSpaceId?: string | null;
   /** The page just added, so the host lands on its tab. */
   onAdded: (entityId: string) => void;
 }) {
@@ -91,6 +94,7 @@ export function LobbyClaimListPicker({
       <ClaimListPickerContent
         lobbyId={lobbyId}
         lists={lists}
+        leadSpaceId={leadSpaceId}
         onAdded={entityId => {
           setOpen(false);
           onAdded(entityId);
@@ -130,10 +134,12 @@ const AddButton = React.forwardRef<
 export function ClaimListPickerContent({
   lobbyId,
   lists,
+  leadSpaceId = null,
   onAdded,
 }: {
   lobbyId: string;
   lists: DebateLobbyClaimList[];
+  leadSpaceId?: string | null;
   onAdded: (entityId: string) => void;
 }) {
   const save = useSaveLobbyClaimList(lobbyId);
@@ -143,6 +149,7 @@ export function ClaimListPickerContent({
   return (
     <ClaimListPicker
       addedIds={addedIds}
+      leadSpaceId={leadSpaceId}
       pickingId={picking}
       disabled={save.isPending}
       analyticsLabel="Lobby pick claim list"
@@ -171,6 +178,7 @@ export function ClaimListPickerContent({
  */
 export function ClaimListPicker({
   addedIds,
+  leadSpaceId = null,
   onPick,
   pickingId = null,
   disabled = false,
@@ -179,6 +187,11 @@ export function ClaimListPicker({
 }: {
   /** Pages already chosen, shown as added and not offered again. Any id spelling. */
   addedIds: readonly string[];
+  /**
+   * The space Today's claims would lead with: the lobby's own. A claim listed in two spaces counts
+   * under the first, so the row's space count depends on it. None when the lobby has no space yet.
+   */
+  leadSpaceId?: string | null;
   onPick: (option: ClaimListOption) => void;
   /** The page a pick is in flight for, which reads "Adding…". */
   pickingId?: string | null;
@@ -213,7 +226,7 @@ export function ClaimListPicker({
     );
     return searchClaimListGroups(ranked, query);
   }, [catalog.data, counted, labelsById, query]);
-  const todays = useTodaysOption(query);
+  const todays = useTodaysOption(query, leadSpaceId);
   const visible = groups.slice(0, shown);
   const hasMore = groups.length > shown;
   const sentinel = useInfiniteScrollSentinel({
@@ -251,6 +264,7 @@ export function ClaimListPicker({
           <div className="mb-2">
             <TodaysClaimsRow
               counts={todays.counts}
+              isLoading={todays.isLoading}
               isAdded={added.has(TODAYS_CLAIMS_LIST_ID)}
               isPicking={pickingId === TODAYS_CLAIMS_LIST_ID}
               disabled={disabled}
@@ -298,22 +312,25 @@ const TODAYS_CLAIMS_OPTION: ClaimListOption = {
 };
 
 /**
- * GEO-3491. Whether the pinned Today's claims row shows, and its counts once known: while the agendas
- * load, and whenever they list a claim the tab would draw. A search hides it unless its name matches.
+ * GEO-3491. Whether the pinned Today's claims row shows, and its counts once known. Shown unless the
+ * agendas are known to list nothing the tab would draw: while they load, and after an error too,
+ * since a failed read is not an empty one and the tab has its own Try again. A search hides it unless
+ * its name matches.
  */
-function useTodaysOption(query: string) {
-  const { sections, isLoading } = useTodaysClaimsList({ ordered: false });
+function useTodaysOption(query: string, leadSpaceId: string | null) {
+  const { sections, isLoading, error } = useTodaysClaimsList({ ordered: false, leadSpaceId });
   const counts = isLoading ? null : todaysListCounts(sections);
   const needle = query.trim().toLocaleLowerCase();
   const matches = !needle || TODAYS_CLAIMS_LIST_NAME.toLocaleLowerCase().includes(needle);
-  // Not hidden on an error alone: a failed batch of claims still leaves the rest to list.
-  const shown = matches && (counts === null || counts.claimCount > 0);
-  return { shown, counts };
+  const shown = matches && (counts === null || counts.claimCount > 0 || Boolean(error));
+  // No counts to show after an error that left nothing listed: they would read as an empty list.
+  return { shown, isLoading, counts: counts && counts.claimCount > 0 ? counts : null };
 }
 
 /** The pinned row above the spaces' lists, set off from them by a rule. */
 function TodaysClaimsRow({
   counts,
+  isLoading,
   isAdded,
   isPicking,
   disabled,
@@ -321,6 +338,7 @@ function TodaysClaimsRow({
   onPick,
 }: {
   counts: { spaceCount: number; claimCount: number } | null;
+  isLoading: boolean;
   isAdded: boolean;
   isPicking: boolean;
   disabled: boolean;
@@ -334,9 +352,9 @@ function TodaysClaimsRow({
         detail={
           counts ? (
             `${counts.spaceCount} ${counts.spaceCount === 1 ? 'space' : 'spaces'} · ${counts.claimCount} ${counts.claimCount === 1 ? 'claim' : 'claims'}`
-          ) : (
+          ) : isLoading ? (
             <span className="mt-1 block h-3 w-24 animate-pulse rounded bg-grey-01" aria-hidden />
-          )
+          ) : null
         }
         isAdded={isAdded}
         isPicking={isPicking}

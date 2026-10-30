@@ -228,4 +228,20 @@ describe('LobbyTodaysClaimsTab', () => {
     fireEvent.click(await screen.findByRole('button', { name: /Try again/ }));
     expect(mocks.list.refetch).toHaveBeenCalled();
   });
+
+  it('says the list is short, with Try again, when some claims failed to load', () => {
+    mocks.list.sections = sections;
+    mocks.list.error = new Error('one batch failed');
+    render(<LobbyTodaysClaimsTab lobby={lobby} />);
+    expect(screen.getByText('Some claims didn’t load.')).toBeTruthy();
+    expect(screen.getAllByRole('article')).toHaveLength(4);
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(mocks.list.refetch).toHaveBeenCalled();
+  });
+
+  it('says nothing about a partial list when every claim loaded', () => {
+    mocks.list.sections = sections;
+    render(<LobbyTodaysClaimsTab lobby={lobby} />);
+    expect(screen.queryByText('Some claims didn’t load.')).toBeNull();
+  });
 });

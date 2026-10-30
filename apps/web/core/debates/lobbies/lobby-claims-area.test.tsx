@@ -40,12 +40,19 @@ vi.mock('./lobby-claim-list-tab', () => ({
   LobbyClaimListTab: ({ list }: { list: { entity_id: string } }) => <p data-testid={`list-tab-${list.entity_id}`} />,
   useClaimListName: (list: { entity_id: string }) => `List ${list.entity_id}`,
 }));
-vi.mock('./lobby-todays-claims-tab', () => ({
+vi.mock('./lobby-todays-claims-tab', async importOriginal => ({
+  ...(await importOriginal<typeof import('./lobby-todays-claims-tab')>()),
   LobbyTodaysClaimsTab: () => <p data-testid="todays-claims-tab" />,
 }));
 vi.mock('./lobby-claim-list-picker', () => ({
-  LobbyClaimListPicker: ({ onAdded }: { onAdded: (entityId: string) => void }) => (
-    <button type="button" onClick={() => onAdded('p2')}>
+  LobbyClaimListPicker: ({
+    onAdded,
+    leadSpaceId,
+  }: {
+    onAdded: (entityId: string) => void;
+    leadSpaceId?: string | null;
+  }) => (
+    <button type="button" data-lead-space={leadSpaceId ?? ''} onClick={() => onAdded('p2')}>
       Add a claim list
     </button>
   ),
@@ -285,6 +292,12 @@ describe('LobbyClaimsArea', () => {
       rerender(<LobbyClaimsArea lobby={withLists([list('p1', 0)])} />);
       expect(screen.queryByTestId('todays-claims-tab')).toBeNull();
       expect(screen.getByTestId('lobby-room-claims')).toBeTruthy();
+    });
+
+    it('hands the host’s picker the lobby’s space, which Today’s claims leads with', () => {
+      const call = { ...withLists([], true), call: { space_id: 'space-1' } } as unknown as LobbyPageView;
+      render(<LobbyClaimsArea lobby={call} />);
+      expect(screen.getByRole('button', { name: 'Add a claim list' }).getAttribute('data-lead-space')).toBe('space-1');
     });
   });
 });
