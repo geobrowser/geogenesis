@@ -30,7 +30,7 @@ import {
   onGuestTabLockLost,
   releaseGuestTabLock,
 } from './lobby-guest-tab-lock';
-import { useLobbyRoomNoun } from './lobby-purpose';
+import { useRoomCapabilities } from './room-capabilities';
 
 /** While visible; every 30s hidden, and at once on focus. The server caches each lobby for 2s. */
 export const GUEST_VIEW_POLL_MS = 5_000;
@@ -108,7 +108,7 @@ export function useLobbyGuestSession(
   { listen, signedIn, member }: { listen: boolean; signedIn: boolean; member: LobbyMemberPath }
 ) {
   const id = dashlessId(lobbyId);
-  const room = useLobbyRoomNoun();
+  const room = useRoomCapabilities().noun;
   const [state, setState] = React.useState<GuestSessionState>({ status: 'idle', attempt: 0 });
   // Read by answers and events that land between renders.
   const stateRef = React.useRef(state);

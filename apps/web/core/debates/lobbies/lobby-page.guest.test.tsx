@@ -206,7 +206,7 @@ vi.mock('~/core/space-calls/call-room', () => ({ CallRoom: () => <div data-testi
 vi.mock('../use-current-geo-chat-user-id', () => ({ useCurrentGeoChatUserId: () => mocks.userId }));
 
 const { DebateLobbyPage, memberPath } = await import('./lobby-page');
-const { LobbyPurposeProvider } = await import('./lobby-purpose');
+const { RoomCapabilitiesProvider } = await import('./room-capabilities');
 const { readGuestSecret } = await import('./lobby-guest-secret');
 
 const adam: DebateLobbyMember = {
@@ -640,9 +640,9 @@ describe('DebateLobbyPage account prompt', () => {
 
   it('does not ask on a scheduled call’s page before it opens, and does once it is open (GEO-3420)', () => {
     const asCall = (node: React.ReactNode) => (
-      <LobbyPurposeProvider value={{ purpose: 'call', spaceId: 'space1', exitHref: '/space/space1' }}>
+      <RoomCapabilitiesProvider purpose={{ purpose: 'call', spaceId: 'space1', exitHref: '/space/space1' }}>
         {node}
-      </LobbyPurposeProvider>
+      </RoomCapabilitiesProvider>
     );
     mocks.guestView = {
       ...mocks.guestView!,
@@ -666,9 +666,9 @@ describe('DebateLobbyPage account prompt', () => {
       lobby: { ...lobbyFields, access: { status: 'not_yet_open', opens_at: '2099-10-06T17:50:00Z' } },
     };
     render(
-      <LobbyPurposeProvider value={{ purpose: 'call', spaceId: 'space1', exitHref: '/space/space1' }}>
+      <RoomCapabilitiesProvider purpose={{ purpose: 'call', spaceId: 'space1', exitHref: '/space/space1' }}>
         <DebateLobbyPage lobbyId="lobby1" />
-      </LobbyPurposeProvider>
+      </RoomCapabilitiesProvider>
     );
     expect(screen.queryByTestId('call-pre-open')).not.toBeInTheDocument();
     expect(screen.getByTestId('debate-lobby')).toBeInTheDocument();
@@ -682,9 +682,9 @@ describe('DebateLobbyPage account prompt', () => {
     mocks.memberError = true;
     mocks.memberErrorValue = new GeoChatRequestError('gone', 'lobby_not_found', 404);
     render(
-      <LobbyPurposeProvider value={{ purpose: 'call', spaceId: 'space1', exitHref: '/space/space1' }}>
+      <RoomCapabilitiesProvider purpose={{ purpose: 'call', spaceId: 'space1', exitHref: '/space/space1' }}>
         <DebateLobbyPage lobbyId="lobby1" />
-      </LobbyPurposeProvider>
+      </RoomCapabilitiesProvider>
     );
     expect(screen.getByText('Could not open this call.')).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Back to calls' })).not.toBeInTheDocument();
@@ -697,9 +697,9 @@ describe('DebateLobbyPage account prompt', () => {
     mocks.memberError = true;
     mocks.memberErrorValue = new GeoChatRequestError('gone', 'lobby_not_found', 404);
     render(
-      <LobbyPurposeProvider value={{ purpose: 'call', spaceId: 'space1', exitHref: '/space/space1' }}>
+      <RoomCapabilitiesProvider purpose={{ purpose: 'call', spaceId: 'space1', exitHref: '/space/space1' }}>
         <DebateLobbyPage lobbyId="lobby1" />
-      </LobbyPurposeProvider>
+      </RoomCapabilitiesProvider>
     );
     expect(screen.getByText('This call isn’t available.')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Back to calls' })).toHaveAttribute('href', '/space/space1/calls');

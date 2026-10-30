@@ -6,8 +6,8 @@ import { Text } from '~/design-system/text';
 
 import { useGeoChatAuth } from '../hooks';
 import { useLobbyGuestSignIn } from './lobby-guest-sign-in';
-import { useIsCallRoom } from './lobby-purpose';
 import { LOBBY_QUEUED_REQUEST_COPY, useLobbyQueuedRequest } from './lobby-queued-request';
+import { useRoomCapabilities } from './room-capabilities';
 
 export const LOBBY_GUEST_COPY = {
   listening: 'You’re listening.',
@@ -77,7 +77,7 @@ export function LobbyGuestBanner({
   const { pending } = useLobbyQueuedRequest();
   // Signed in, waiting for the member view (a new account takes a minute or two): no more asking.
   const { authenticated } = useGeoChatAuth();
-  const copy = useIsCallRoom() ? { ...LOBBY_GUEST_COPY, ...CALL_GUEST_COPY } : LOBBY_GUEST_COPY;
+  const copy = useRoomCapabilities().noun === 'call' ? { ...LOBBY_GUEST_COPY, ...CALL_GUEST_COPY } : LOBBY_GUEST_COPY;
   if (authenticated) {
     return (
       <div role="status" className="rounded-xl bg-grey-01 px-4 py-3" data-testid="lobby-guest-banner">

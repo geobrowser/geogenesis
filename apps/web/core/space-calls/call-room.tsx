@@ -72,7 +72,6 @@ export function CallRoom({
       tab={tab}
       onTab={setTab}
       voiceExtras={{
-        screenShare: true,
         preJoin: join => (
           <CallPreJoin
             recording={recording}

@@ -9,7 +9,7 @@ import { useGeoChatAuth } from '~/core/debates/hooks';
 import { useDebateLobby } from '~/core/debates/lobbies/hooks';
 import { useDebateLobbyGuestView } from '~/core/debates/lobbies/lobby-guest-hooks';
 import { DebateLobbyPage } from '~/core/debates/lobbies/lobby-page';
-import { LobbyPurposeProvider, type LobbyRoomPurpose } from '~/core/debates/lobbies/lobby-purpose';
+import { type LobbyRoomPurpose, RoomCapabilitiesProvider } from '~/core/debates/lobbies/room-capabilities';
 import { sameId } from '~/core/debates/rooms/room-presence';
 import { debateRoomPath } from '~/core/debates/rooms/room-routes';
 import { NavUtils } from '~/core/utils/utils';
@@ -29,9 +29,9 @@ export function SpaceCallPage({ spaceId, callId }: { spaceId: string; callId: st
   if (useCallAtItsPath(spaceId, callId)) return <div className="min-h-[calc(100dvh-2.75rem)]" />;
 
   return (
-    <LobbyPurposeProvider value={purpose}>
+    <RoomCapabilitiesProvider purpose={purpose}>
       <DebateLobbyPage key={callId} lobbyId={callId} />
-    </LobbyPurposeProvider>
+    </RoomCapabilitiesProvider>
   );
 }
 
