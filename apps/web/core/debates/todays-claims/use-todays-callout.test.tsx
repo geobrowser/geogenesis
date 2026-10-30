@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   rowGroups: [] as unknown[],
   scores: {} as Record<string, number>,
   scoresLoading: false,
+  scoresFailed: false,
   typesPending: false,
   notPublishable: new Set<string>(),
   personalSpaceLoading: false,
@@ -81,7 +82,7 @@ vi.mock('../matchmaking/claim-order-facts', async importOriginal => ({
   useClaimOrderFacts: (ids: string[]) => ({
     facts: new Map(ids.map(id => [id, { rankingScore: mocks.scores[id] ?? null, createdAtMs: null }])),
     isLoading: mocks.scoresLoading,
-    failed: false,
+    failed: mocks.scoresFailed,
   }),
 }));
 vi.mock('./use-debaters-space-membership', () => ({
@@ -138,6 +139,7 @@ beforeEach(() => {
   mocks.rowGroups = [];
   mocks.scores = {};
   mocks.scoresLoading = false;
+  mocks.scoresFailed = false;
   mocks.typesPending = false;
   mocks.notPublishable = new Set();
   mocks.personalSpaceLoading = false;
@@ -147,6 +149,14 @@ beforeEach(() => {
 });
 
 const storedFor = (accountKey: string) => store.get(todaysClaimsCalloutAtom)[accountKey];
+const storedClaim = (claimId: string, spaceId = 'member') => ({
+  claimId,
+  spaceId,
+  agendaId: `agenda-${spaceId}`,
+  sectionId: `block-${spaceId}`,
+  topic: `topic ${spaceId}`,
+  listedOn: '2026-10-29',
+});
 
 afterEach(() => cleanup());
 
@@ -316,6 +326,72 @@ describe('useTodaysCallout', () => {
     const reopened = renderHook(() => useTodaysCallout(), { wrapper });
     expect(reopened.result.current.visible).toBe(true);
     expect(reopened.result.current.step?.current?.claimId).toBe('b');
+  });
+
+  // Copilot: a failed batch must not leave the batches that answered ranked first.
+  it('ranks nothing when any score batch failed, keeping Today’s claims order', () => {
+    mocks.scores = { y: 9 };
+    mocks.scoresFailed = true;
+    const { result } = renderHook(() => useTodaysCallout(), { wrapper });
+
+    expect(result.current.claims.map(claim => claim.claimId)).toEqual(['b', 'c', 'a', 'x', 'y']);
+  });
+
+  // Copilot: a tab holding yesterday's agendas must not replace the set another tab took today.
+  it('keeps a set already taken for a later agenda day', () => {
+    const later = {
+      day: '2026-10-30',
+      claims: [storedClaim('n')],
+      answered: ['n'],
+      skipped: [],
+      dismissed: false,
+    };
+    store.set(todaysClaimsCalloutAtom, { acct1: later });
+    const { result } = renderHook(() => useTodaysCallout(), { wrapper });
+
+    expect(storedFor('acct1')).toEqual(later);
+    expect(result.current.visible).toBe(false);
+  });
+
+  // Copilot: the visit snapshot is per account.
+  it('gives each account its own end card on the same day', () => {
+    store.set(todaysClaimsCalloutAtom, {
+      acct1: {
+        day: '2026-10-29',
+        claims: [storedClaim('a')],
+        answered: ['a'],
+        skipped: [],
+        dismissed: false,
+        ended: true,
+      },
+    });
+    const { result, rerender } = renderHook(() => useTodaysCallout(), { wrapper });
+    expect(result.current.visible).toBe(false);
+
+    mocks.auth = { authenticated: true, accountKey: 'acct2' };
+    rerender();
+    for (const claimId of ['b', 'c', 'a', 'x', 'y']) act(() => result.current.markAnswered(claimId));
+    expect(result.current.step?.current).toBeNull();
+    expect(result.current.visible).toBe(true);
+  });
+
+  // Copilot: an ended day stays hidden while the sides it was finished with are still loading.
+  it('keeps an ended day hidden while the viewer’s sides load', () => {
+    store.set(todaysClaimsCalloutAtom, {
+      acct1: {
+        day: '2026-10-29',
+        claims: [storedClaim('a'), storedClaim('b')],
+        answered: ['a'],
+        skipped: [],
+        dismissed: false,
+        ended: true,
+      },
+    });
+    mocks.rowsLoading = true;
+    const { result } = renderHook(() => useTodaysCallout(), { wrapper });
+
+    expect(result.current.step?.current?.claimId).toBe('b');
+    expect(result.current.visible).toBe(false);
   });
 
   // Review: one browser, two accounts, the same day.

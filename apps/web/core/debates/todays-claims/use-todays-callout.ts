@@ -99,7 +99,8 @@ export function useTodaysCallout() {
   );
 
   // Each claim's ranking score, the one Explore's Best orders by (agenda boost included). A failed
-  // lookup leaves every claim unscored, and the set keeps Today's claims order under the same caps.
+  // lookup leaves every claim unscored, and the set keeps Today's claims order under the same caps —
+  // all of them, even when only one batch failed, so the batches that answered aren't put first.
   const orderedIds = React.useMemo(() => ordered.map(claim => claim.claimId), [ordered]);
   const scores = useClaimOrderFacts(orderedIds, choosing && orderedIds.length > 0);
 
@@ -145,9 +146,13 @@ export function useTodaysCallout() {
     if (!choosing || day === null || ordered.length === 0 || rows.isLoading || scores.isLoading) return;
     const answerable = ordered.filter(claim => answersReadyIn(claim.spaceId));
     if (answerable.length === 0) return;
-    const claims = pickCalloutClaims(answerable, answeredInRows, claimId => scores.facts.get(uuidToHex(claimId)));
+    const claims = pickCalloutClaims(answerable, answeredInRows, claimId =>
+      scores.failed ? undefined : scores.facts.get(uuidToHex(claimId))
+    );
+    // A set already taken for this day or a later one stays: another tab, holding newer agendas
+    // than this one's cache, may have taken it, and replacing it would lose that day's progress.
     writeMine(previous =>
-      previous?.day === day ? previous : { day, claims, answered: [], skipped: [], dismissed: false }
+      previous && previous.day >= day ? previous : { day, claims, answered: [], skipped: [], dismissed: false }
     );
   }, [answeredInRows, answersReadyIn, choosing, day, ordered, rows.isLoading, scores, writeMine]);
 
@@ -172,13 +177,16 @@ export function useTodaysCallout() {
 
   // The end card is the visit's that reached it: it stays while the panel (or the hub) stays open,
   // and the next time either opens it is gone until the next agenda day. Each mount notes whether
-  // the day had already ended when it first saw it; reaching the end here marks the day ended.
+  // the day had already ended when it first saw it, per account, and keeps an ended day hidden even
+  // while the viewer's sides are still loading and the set reads as unfinished again; reaching the
+  // end here marks the day ended.
   const finished = step !== null && step.current === null;
-  const arrival = React.useRef<{ day: string; ended: boolean } | null>(null);
-  if (current && arrival.current?.day !== current.day) {
-    arrival.current = { day: current.day, ended: current.ended === true };
+  const visit = current && accountKey !== null ? `${accountKey}|${current.day}` : null;
+  const arrival = React.useRef<{ visit: string; ended: boolean } | null>(null);
+  if (visit !== null && current && arrival.current?.visit !== visit) {
+    arrival.current = { visit, ended: current.ended === true };
   }
-  const endedBeforeThisVisit = arrival.current?.day === current?.day && arrival.current?.ended === true;
+  const endedBeforeThisVisit = visit !== null && arrival.current?.visit === visit && arrival.current.ended;
   React.useEffect(() => {
     if (finished && !current?.ended) update(() => ({ ended: true }));
   }, [current?.ended, finished, update]);
@@ -200,9 +208,7 @@ export function useTodaysCallout() {
     [agendaEntities, fetched.entities]
   );
 
-  const visible = Boolean(
-    current && step && !current.dismissed && current.claims.length > 0 && !(finished && endedBeforeThisVisit)
-  );
+  const visible = Boolean(current && step && !current.dismissed && current.claims.length > 0 && !endedBeforeThisVisit);
 
   return {
     visible,
