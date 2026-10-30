@@ -299,14 +299,15 @@ const TODAYS_CLAIMS_OPTION: ClaimListOption = {
 
 /**
  * GEO-3491. Whether the pinned Today's claims row shows, and its counts once known: while the agendas
- * load, and once they list a claim the tab would draw. A search hides it unless its name matches.
+ * load, and whenever they list a claim the tab would draw. A search hides it unless its name matches.
  */
 function useTodaysOption(query: string) {
-  const { sections, isLoading, error } = useTodaysClaimsList({ ordered: false });
+  const { sections, isLoading } = useTodaysClaimsList({ ordered: false });
   const counts = isLoading ? null : todaysListCounts(sections);
   const needle = query.trim().toLocaleLowerCase();
   const matches = !needle || TODAYS_CLAIMS_LIST_NAME.toLocaleLowerCase().includes(needle);
-  const shown = matches && !error && (counts === null || counts.claimCount > 0);
+  // Not hidden on an error alone: a failed batch of claims still leaves the rest to list.
+  const shown = matches && (counts === null || counts.claimCount > 0);
   return { shown, counts };
 }
 

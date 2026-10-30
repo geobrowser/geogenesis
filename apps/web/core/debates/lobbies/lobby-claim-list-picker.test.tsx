@@ -247,5 +247,19 @@ describe('ClaimListPickerContent', () => {
         expect.anything()
       );
     });
+
+    it('stays offered when some of the agenda claims failed to load', () => {
+      mocks.catalog.data = catalog;
+      mocks.todays = { sections: [todaysSection(CURATORS, 3)], isLoading: false, error: new Error('one batch failed') };
+      render(<ClaimListPickerContent lobbyId="lobby-1" lists={[]} onAdded={vi.fn()} />);
+      expect(screen.getByRole('button', { name: /Today’s claims/ })).toHaveTextContent('1 space · 3 claims');
+    });
+
+    it('is left out when the agendas failed and nothing listed', () => {
+      mocks.catalog.data = catalog;
+      mocks.todays = { sections: [], isLoading: false, error: new Error('statement timeout') };
+      render(<ClaimListPickerContent lobbyId="lobby-1" lists={[]} onAdded={vi.fn()} />);
+      expect(screen.queryByRole('button', { name: /Today’s claims/ })).toBeNull();
+    });
   });
 });
