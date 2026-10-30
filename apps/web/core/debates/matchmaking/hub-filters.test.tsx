@@ -386,6 +386,22 @@ describe('panelFacetOptions', () => {
     expect(options[0]).toMatchObject({ kind: 'space', name: 'Crypto' });
   });
 
+  // GEO-3491: a lobby's Today's claims tab draws the debate-again picker's row, topics included.
+  it('offers topics beside the spaces from the start when asked to', () => {
+    const options = panelFacetOptions({
+      spaces,
+      topics,
+      spaceIds: [],
+      topicIds: [],
+      listedCount: 5,
+      labelsById: labels,
+      labelsLoading: false,
+      topicsWithSpaces: true,
+    });
+
+    expect(ids(options)).toEqual(['space1', 'space2', 'topic1']);
+  });
+
   it('drops the other spaces once one is picked, since a claim lives in one, and brings topics in', () => {
     const options = panelFacetOptions({
       spaces,

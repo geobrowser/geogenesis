@@ -8,7 +8,7 @@ import { NavUtils } from '~/core/utils/utils';
 
 import { Text } from '~/design-system/text';
 
-import type { DebateLobbyClaimList } from '../api';
+import type { DebateLobbyClaimList, MatchmakingClaim } from '../api';
 import { type PlacedClaimListSection, placeClaimListSections, useClaimListPage } from '../claim-list-pages';
 import { DebateClaimCardSurface, sectionStartOffsets } from '../debate-claim-card-surface';
 import { useDebateClaimsBySpaces, useGeoChatAuth } from '../hooks';
@@ -25,6 +25,7 @@ import {
   rowsByPlacedClaim,
   taggedClaimEntry,
 } from '../matchmaking/tagged-claim-entry';
+import { TODAYS_CLAIMS_LIST_NAME, isTodaysClaimsList } from '../todays-claims/todays-claims-list-id';
 import { useDebatePublishableSpaces } from '../use-debate-publishable-spaces';
 import { useRemoveLobbyClaimList } from './lobby-claim-lists-hooks';
 import { LOBBY_CLAIMS_CONTROLS_TOP_CLASS, LOBBY_CLAIMS_SECTION_SCROLL_MARGIN_CLASS } from './lobby-claims-sticky';
@@ -42,9 +43,10 @@ export const CLAIM_LIST_TAB_COPY = {
   empty: 'This list has no claims yet.',
 };
 
-/** The tab's label: the page's own name, once the page has been read. */
+/** The tab's label: the page's own name, once the page has been read; Today's claims by its own. */
 export function useClaimListName(list: Pick<DebateLobbyClaimList, 'entity_id' | 'space_id'>) {
   const { data } = useClaimListPage(list.entity_id, list.space_id);
+  if (isTodaysClaimsList(list.entity_id)) return TODAYS_CLAIMS_LIST_NAME;
   return data?.name ?? CLAIM_LIST_TAB_COPY.fallbackName;
 }
 
@@ -106,38 +108,9 @@ function ClaimListSections({
   page: { entityId: string; spaceId: string };
   sections: PlacedClaimListSection[];
 }) {
-  const { authenticated, accountKey } = useGeoChatAuth();
-
-  // geo-chat's rows for the page's claims, each in the space it is debated in: the viewer's side,
-  // who stands ready on each, a live debate. A claim with no row still lists, with no sides.
-  const groups = React.useMemo(
-    () =>
-      authenticated && accountKey
-        ? claimRowGroups(
-            sections.flatMap(section => section.claims.map(claim => ({ spaceId: claim.spaceId, claimId: claim.id })))
-          )
-        : [],
-    [accountKey, authenticated, sections]
-  );
-  const rows = useDebateClaimsBySpaces(groups);
-  const entriesBySection = React.useMemo(() => {
-    const byClaim = rowsByPlacedClaim(rows.claims);
-    return sections.map(section =>
-      section.claims.map(claim =>
-        taggedClaimEntry(
-          claim,
-          claim.spaceId,
-          byClaim.get(placedClaimKey({ spaceId: claim.spaceId, claimId: claim.id }))
-        )
-      )
-    );
-  }, [sections, rows.claims]);
+  const { entriesBySection, renderCard } = useLobbyListCards(lobby, sections);
   // GEO-3495. Where each section starts in the page's numbering.
   const sectionOffsets = sectionStartOffsets(sections.map(section => section.claims.length));
-
-  // In page order, so a long page reads a section's room sides as it scrolls into view.
-  const batches = React.useMemo(() => exploreRoomClaimBatches(entriesBySection.flat()), [entriesBySection]);
-  const renderRoomCard = useLobbyRoomCardRenderer(lobby, batches);
 
   const sectionDomId = (section: PlacedClaimListSection) => `lobby-claim-list-${page.entityId}-${section.id}`;
   // Only the box the claims scroll in: `scrollIntoView` scrolls every ancestor, and moved the
@@ -212,10 +185,7 @@ function ClaimListSections({
                 position={sectionOffsets[index] + position + 1}
                 scope={{ list_entity_id: list.entity_id, list_section_id: section.id }}
               >
-                {renderRoomCard(
-                  entry,
-                  placedAnswersReady({ authenticated, accountKey }, rows.unresolvedSpaceIds, entry.claim.space_id)
-                )}
+                {renderCard(entry)}
               </DebateClaimCardSurface>
             ))}
           </HubCardList>
@@ -223,4 +193,50 @@ function ClaimListSections({
       ))}
     </div>
   );
+}
+
+/** A lobby list's claim: placed in the one space its card is drawn and debated in. */
+type LobbyListClaim = { id: string; name: string; description: string | null; spaceId: string };
+
+/**
+ * The cards of a lobby list tab, section by section: the claim list tabs and Today's claims
+ * (GEO-3491) draw the same cards, the ones the Explore tab draws, so a card has the room's sides,
+ * Request debate and the host menu.
+ *
+ * geo-chat's rows for the claims, each in the space it is debated in, give the viewer's side, who
+ * stands ready on each, and a live debate. A claim with no row still lists, with no sides. Room sides
+ * are read in list order, so a long list reads a section's as it scrolls into view.
+ */
+export function useLobbyListCards(lobby: LobbyPageView, sections: readonly { claims: readonly LobbyListClaim[] }[]) {
+  const { authenticated, accountKey } = useGeoChatAuth();
+  const groups = React.useMemo(
+    () =>
+      authenticated && accountKey
+        ? claimRowGroups(
+            sections.flatMap(section => section.claims.map(claim => ({ spaceId: claim.spaceId, claimId: claim.id })))
+          )
+        : [],
+    [accountKey, authenticated, sections]
+  );
+  const rows = useDebateClaimsBySpaces(groups);
+  const entriesBySection = React.useMemo(() => {
+    const byClaim = rowsByPlacedClaim(rows.claims);
+    return sections.map(section =>
+      section.claims.map(claim =>
+        taggedClaimEntry(
+          claim,
+          claim.spaceId,
+          byClaim.get(placedClaimKey({ spaceId: claim.spaceId, claimId: claim.id }))
+        )
+      )
+    );
+  }, [sections, rows.claims]);
+  const batches = React.useMemo(() => exploreRoomClaimBatches(entriesBySection.flat()), [entriesBySection]);
+  const renderRoomCard = useLobbyRoomCardRenderer(lobby, batches);
+  const renderCard = (entry: MatchmakingClaim) =>
+    renderRoomCard(
+      entry,
+      placedAnswersReady({ authenticated, accountKey }, rows.unresolvedSpaceIds, entry.claim.space_id)
+    );
+  return { entriesBySection, renderCard };
 }

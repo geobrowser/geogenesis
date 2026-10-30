@@ -224,6 +224,10 @@ export function useClaimEntitiesByIds(
       entities: results.flatMap(result => result.data ?? []),
       isLoading: results.some(result => result.isLoading),
       error: results.find(result => result.error)?.error ?? null,
+      /** Asks the batches that failed again, for a Try again. */
+      refetch: () => {
+        for (const result of results) if (result.error) void result.refetch();
+      },
     }),
     []
   );

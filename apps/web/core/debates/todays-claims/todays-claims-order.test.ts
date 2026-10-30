@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { orderAgendaSpaces, orderByDebatesSinceListing, todaysSectionsInOrder } from './todays-claims-order';
+import {
+  orderAgendaSpaces,
+  orderByDebatesSinceListing,
+  todaysSectionKey,
+  todaysSectionsInOrder,
+} from './todays-claims-order';
 
 const AI = '41e851610e13a19441c4d980f2f2ce6b';
 const WORLD = '89bd89bf28ff8a0963faf92a8c905e20';
@@ -65,5 +70,11 @@ describe('todaysSectionsInOrder', () => {
       ['w-2', ['c']],
       ['ai-1', ['x']],
     ]);
+  });
+});
+
+describe('todaysSectionKey', () => {
+  it('is the same key for any spelling of the space and block', () => {
+    expect(todaysSectionKey('AAAA0000-0000-0000-0000-000000000000', 'b-1')).toBe(todaysSectionKey(UNRANKED_A, 'b-1'));
   });
 });

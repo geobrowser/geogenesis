@@ -22,6 +22,8 @@ import {
 } from '../claim-list-pages';
 import { debateActionAnalyticsAttributes } from '../matchmaking/hub-analytics';
 import { HubQueryState } from '../matchmaking/hub-states';
+import { todaysListCounts, useTodaysClaimsList } from '../todays-claims/todays-claims-list';
+import { TODAYS_CLAIMS_LIST_ID, TODAYS_CLAIMS_LIST_NAME } from '../todays-claims/todays-claims-list-id';
 import { useDebatePublishableSpaces } from '../use-debate-publishable-spaces';
 import { useSaveLobbyClaimList } from './lobby-claim-lists-hooks';
 import { moderationErrorMessage } from './lobby-format';
@@ -50,10 +52,13 @@ const SCROLL_ATTRIBUTE = 'data-claim-list-picker-scroll';
 export function LobbyClaimListPicker({
   lobbyId,
   lists,
+  leadSpaceId = null,
   onAdded,
 }: {
   lobbyId: string;
   lists: DebateLobbyClaimList[];
+  /** The space Today's claims leads with in this lobby, so its row counts what its tab will draw. */
+  leadSpaceId?: string | null;
   /** The page just added, so the host lands on its tab. */
   onAdded: (entityId: string) => void;
 }) {
@@ -89,6 +94,7 @@ export function LobbyClaimListPicker({
       <ClaimListPickerContent
         lobbyId={lobbyId}
         lists={lists}
+        leadSpaceId={leadSpaceId}
         onAdded={entityId => {
           setOpen(false);
           onAdded(entityId);
@@ -128,10 +134,12 @@ const AddButton = React.forwardRef<
 export function ClaimListPickerContent({
   lobbyId,
   lists,
+  leadSpaceId = null,
   onAdded,
 }: {
   lobbyId: string;
   lists: DebateLobbyClaimList[];
+  leadSpaceId?: string | null;
   onAdded: (entityId: string) => void;
 }) {
   const save = useSaveLobbyClaimList(lobbyId);
@@ -141,6 +149,7 @@ export function ClaimListPickerContent({
   return (
     <ClaimListPicker
       addedIds={addedIds}
+      leadSpaceId={leadSpaceId}
       pickingId={picking}
       disabled={save.isPending}
       analyticsLabel="Lobby pick claim list"
@@ -169,6 +178,7 @@ export function ClaimListPickerContent({
  */
 export function ClaimListPicker({
   addedIds,
+  leadSpaceId = null,
   onPick,
   pickingId = null,
   disabled = false,
@@ -177,6 +187,11 @@ export function ClaimListPicker({
 }: {
   /** Pages already chosen, shown as added and not offered again. Any id spelling. */
   addedIds: readonly string[];
+  /**
+   * The space Today's claims would lead with: the lobby's own. A claim listed in two spaces counts
+   * under the first, so the row's space count depends on it. None when the lobby has no space yet.
+   */
+  leadSpaceId?: string | null;
   onPick: (option: ClaimListOption) => void;
   /** The page a pick is in flight for, which reads "Adding…". */
   pickingId?: string | null;
@@ -211,6 +226,7 @@ export function ClaimListPicker({
     );
     return searchClaimListGroups(ranked, query);
   }, [catalog.data, counted, labelsById, query]);
+  const todays = useTodaysOption(query, leadSpaceId);
   const visible = groups.slice(0, shown);
   const hasMore = groups.length > shown;
   const sentinel = useInfiniteScrollSentinel({
@@ -242,12 +258,27 @@ export function ClaimListPicker({
         }}
       />
       <div {...{ [SCROLL_ATTRIBUTE]: '' }} className="-mx-3 max-h-[min(420px,55vh)] overflow-y-auto px-3">
+        {/* Outside the catalog's states: the agendas load on their own, so a slow or failed catalog
+            does not keep Today's claims from being added. */}
+        {todays.shown ? (
+          <div className="mb-2">
+            <TodaysClaimsRow
+              counts={todays.counts}
+              isLoading={todays.isLoading}
+              isAdded={added.has(TODAYS_CLAIMS_LIST_ID)}
+              isPicking={pickingId === TODAYS_CLAIMS_LIST_ID}
+              disabled={disabled}
+              analyticsLabel={analyticsLabel}
+              onPick={onPick}
+            />
+          </div>
+        ) : null}
         <HubQueryState
           analyticsSurface="hub"
           isLoading={catalog.isLoading}
           error={catalog.error}
           onRetry={() => void catalog.refetch()}
-          isEmpty={groups.length === 0}
+          isEmpty={groups.length === 0 && !todays.shown}
           emptyMessage={query.trim() ? CLAIM_LIST_PICKER_COPY.noMatch(query.trim()) : CLAIM_LIST_PICKER_COPY.none}
         >
           <div className="flex flex-col gap-2">
@@ -269,6 +300,112 @@ export function ClaimListPicker({
       </div>
       {footer}
     </div>
+  );
+}
+
+/** Today's claims as a picker option: no page, so no themes; its tab reads the newest agendas. */
+const TODAYS_CLAIMS_OPTION: ClaimListOption = {
+  entityId: TODAYS_CLAIMS_LIST_ID,
+  spaceId: TODAYS_CLAIMS_LIST_ID,
+  name: TODAYS_CLAIMS_LIST_NAME,
+  themes: [],
+};
+
+/**
+ * GEO-3491. Whether the pinned Today's claims row shows, and its counts once known. Shown unless the
+ * agendas are known to list nothing the tab would draw: while they load, and after an error too,
+ * since a failed read is not an empty one and the tab has its own Try again. A search hides it unless
+ * its name matches.
+ */
+function useTodaysOption(query: string, leadSpaceId: string | null) {
+  const { sections, isLoading, error } = useTodaysClaimsList({ ordered: false, leadSpaceId });
+  const counts = isLoading ? null : todaysListCounts(sections);
+  const needle = query.trim().toLocaleLowerCase();
+  const matches = !needle || TODAYS_CLAIMS_LIST_NAME.toLocaleLowerCase().includes(needle);
+  const shown = matches && (counts === null || counts.claimCount > 0 || Boolean(error));
+  // No counts to show after an error that left nothing listed: they would read as an empty list.
+  return { shown, isLoading, counts: counts && counts.claimCount > 0 ? counts : null };
+}
+
+/** The pinned row above the spaces' lists, set off from them by a rule. */
+function TodaysClaimsRow({
+  counts,
+  isLoading,
+  isAdded,
+  isPicking,
+  disabled,
+  analyticsLabel,
+  onPick,
+}: {
+  counts: { spaceCount: number; claimCount: number } | null;
+  isLoading: boolean;
+  isAdded: boolean;
+  isPicking: boolean;
+  disabled: boolean;
+  analyticsLabel: string;
+  onPick: (option: ClaimListOption) => void;
+}) {
+  return (
+    <div className="border-b border-grey-02 pb-2">
+      <ClaimListPickerRow
+        name={TODAYS_CLAIMS_LIST_NAME}
+        detail={
+          counts ? (
+            `${counts.spaceCount} ${counts.spaceCount === 1 ? 'space' : 'spaces'} · ${counts.claimCount} ${counts.claimCount === 1 ? 'claim' : 'claims'}`
+          ) : isLoading ? (
+            <span className="mt-1 block h-3 w-24 animate-pulse rounded bg-grey-01" aria-hidden />
+          ) : null
+        }
+        isAdded={isAdded}
+        isPicking={isPicking}
+        disabled={disabled}
+        analyticsLabel={`${analyticsLabel} Today’s claims`}
+        onClick={() => onPick(TODAYS_CLAIMS_OPTION)}
+      />
+    </div>
+  );
+}
+
+/** One option in the picker: a list's name over its counts, and whether it is added or being added. */
+function ClaimListPickerRow({
+  name,
+  detail,
+  isAdded,
+  isPicking,
+  disabled,
+  analyticsLabel,
+  onClick,
+}: {
+  name: string;
+  detail: React.ReactNode;
+  isAdded: boolean;
+  isPicking: boolean;
+  disabled: boolean;
+  analyticsLabel: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={isAdded || disabled}
+      {...debateActionAnalyticsAttributes('hub', analyticsLabel, 'add_lobby_claim_list')}
+      onClick={onClick}
+      className="flex w-full items-center justify-between gap-3 rounded-md px-2 py-2 text-left transition-colors hover:bg-grey-01 disabled:hover:bg-transparent"
+    >
+      <span className="flex min-w-0 flex-col">
+        <Text as="span" variant="metadataMedium" color={isAdded ? 'grey-03' : 'text'} className="truncate">
+          {name}
+        </Text>
+        <Text as="span" variant="footnote" color="grey-04">
+          {detail}
+        </Text>
+      </span>
+      {isAdded || isPicking ? (
+        <Text as="span" variant="footnote" color="grey-04" className="shrink-0">
+          {isAdded ? CLAIM_LIST_PICKER_COPY.added : CLAIM_LIST_PICKER_COPY.adding}
+        </Text>
+      ) : null}
+    </button>
   );
 }
 
@@ -298,29 +435,16 @@ function SpaceGroup({
         const isAdded = added.has(ID.uuidToHex(option.entityId));
         const { themeCount, claimCount } = counts.get(option) ?? { themeCount: 0, claimCount: 0 };
         return (
-          <button
+          <ClaimListPickerRow
             key={option.entityId}
-            type="button"
-            disabled={isAdded || disabled}
-            {...debateActionAnalyticsAttributes('hub', analyticsLabel, 'add_lobby_claim_list')}
+            name={option.name}
+            detail={`${themeCount} ${themeCount === 1 ? 'theme' : 'themes'} · ${claimCount} ${claimCount === 1 ? 'claim' : 'claims'}`}
+            isAdded={isAdded}
+            isPicking={picking === option.entityId}
+            disabled={disabled}
+            analyticsLabel={analyticsLabel}
             onClick={() => onPick(option)}
-            className="flex w-full items-center justify-between gap-3 rounded-md px-2 py-2 text-left transition-colors hover:bg-grey-01 disabled:hover:bg-transparent"
-          >
-            <span className="flex min-w-0 flex-col">
-              <Text as="span" variant="metadataMedium" color={isAdded ? 'grey-03' : 'text'} className="truncate">
-                {option.name}
-              </Text>
-              <Text as="span" variant="footnote" color="grey-04">
-                {themeCount} {themeCount === 1 ? 'theme' : 'themes'} · {claimCount}{' '}
-                {claimCount === 1 ? 'claim' : 'claims'}
-              </Text>
-            </span>
-            {isAdded || picking === option.entityId ? (
-              <Text as="span" variant="footnote" color="grey-04" className="shrink-0">
-                {isAdded ? CLAIM_LIST_PICKER_COPY.added : CLAIM_LIST_PICKER_COPY.adding}
-              </Text>
-            ) : null}
-          </button>
+          />
         );
       })}
     </section>

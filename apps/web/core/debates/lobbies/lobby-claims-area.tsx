@@ -13,6 +13,7 @@ import { Text } from '~/design-system/text';
 import type { DebateLobbyClaimList } from '../api';
 import { debateActionAnalyticsAttributes, hubAnalyticsAttributes } from '../matchmaking/hub-analytics';
 import { ScrollableTabRow } from '../matchmaking/scrollable-tab-row';
+import { isTodaysClaimsList } from '../todays-claims/todays-claims-list-id';
 import { LobbyClaimListPicker } from './lobby-claim-list-picker';
 import { LobbyClaimListTab, useClaimListName } from './lobby-claim-list-tab';
 import { useRemoveLobbyClaimList, useSaveLobbyClaimList } from './lobby-claim-lists-hooks';
@@ -24,6 +25,7 @@ import { moderationErrorMessage } from './lobby-format';
 import { useIsLobbyGuest } from './lobby-guest-hooks';
 import { LobbyRoomClaimsWithHighlights, LobbyRoomVote } from './lobby-highlights';
 import { LobbyPopup, LobbyPopupMenuRow } from './lobby-popup';
+import { LobbyTodaysClaimsTab, todaysLeadSpaceId } from './lobby-todays-claims-tab';
 import type { LobbyPageView } from './lobby-view';
 
 /** The two built-in tabs, then one per claim list as `list:<page id>` (GEO-3274). */
@@ -104,6 +106,7 @@ export function LobbyClaimsArea({ lobby }: { lobby: LobbyPageView }) {
           <LobbyClaimListPicker
             lobbyId={lobby.lobby_id}
             lists={lists}
+            leadSpaceId={todaysLeadSpaceId(lobby)}
             onAdded={entityId => setActiveTab(claimListKey({ entity_id: entityId }))}
           />
         ) : null}
@@ -112,6 +115,8 @@ export function LobbyClaimsArea({ lobby }: { lobby: LobbyPageView }) {
         <LobbyRoomClaimsWithHighlights lobby={lobby} onExplore={() => setActiveTab('explore')} />
       ) : shownTab === 'explore' ? (
         <LobbyExploreClaims lobby={lobby} />
+      ) : activeList && isTodaysClaimsList(activeList.entity_id) ? (
+        <LobbyTodaysClaimsTab lobby={lobby} />
       ) : activeList ? (
         <LobbyClaimListTab key={activeList.entity_id} lobby={lobby} list={activeList} />
       ) : null}

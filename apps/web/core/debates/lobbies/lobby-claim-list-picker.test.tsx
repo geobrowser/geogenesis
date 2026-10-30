@@ -5,6 +5,8 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { ClaimListCatalog } from '../claim-list-pages';
+import type { TodaysListSection } from '../todays-claims/todays-claims-list';
+import { TODAYS_CLAIMS_LIST_ID } from '../todays-claims/todays-claims-list-id';
 import { ClaimListPicker, ClaimListPickerContent, LobbyClaimListPicker } from './lobby-claim-list-picker';
 
 const mocks = vi.hoisted(() => ({
@@ -15,11 +17,20 @@ const mocks = vi.hoisted(() => ({
     refetch: vi.fn(),
   },
   mutate: vi.fn(),
+  todays: { sections: [] as TodaysListSection[], isLoading: false, error: null as Error | null },
+  todaysArgs: undefined as unknown,
 }));
 
 vi.mock('../claim-list-pages', async importOriginal => ({
   ...(await importOriginal<typeof import('../claim-list-pages')>()),
   useClaimListCatalog: () => mocks.catalog,
+}));
+vi.mock('../todays-claims/todays-claims-list', async importOriginal => ({
+  ...(await importOriginal<typeof import('../todays-claims/todays-claims-list')>()),
+  useTodaysClaimsList: (args: unknown) => {
+    mocks.todaysArgs = args;
+    return mocks.todays;
+  },
 }));
 vi.mock('../use-debate-publishable-spaces', async importOriginal => ({
   ...(await importOriginal<typeof import('../use-debate-publishable-spaces')>()),
@@ -69,6 +80,7 @@ afterEach(() => {
   cleanup();
   mocks.catalog = { data: undefined, isLoading: false, error: null, refetch: vi.fn() };
   mocks.mutate.mockClear();
+  mocks.todays = { sections: [], isLoading: false, error: null };
   vi.unstubAllGlobals();
 });
 
@@ -166,5 +178,101 @@ describe('ClaimListPickerContent', () => {
     // The harness does submit on Enter in an ordinary field, so the line above is not vacuous.
     await user.type(screen.getByRole('textbox', { name: 'Name' }), 'AI night{Enter}');
     expect(submit).toHaveBeenCalledTimes(1);
+  });
+
+  describe('Today’s claims (GEO-3491)', () => {
+    const todaysSection = (spaceId: string, claims: number): TodaysListSection => ({
+      key: `todays:${spaceId}`,
+      sectionId: `block-${spaceId}`,
+      name: 'Brazil',
+      claims: Array.from({ length: claims }, (_, index) => ({
+        id: `c-${spaceId}-${index}`,
+        name: 'A claim',
+        description: null,
+        spaceId,
+        topics: [],
+        scope: { agenda_id: 'agenda' },
+      })),
+    });
+
+    it('pins Today’s claims above the spaces’ lists, counted as its tab draws it', () => {
+      mocks.catalog.data = catalog;
+      mocks.todays.sections = [todaysSection(CURATORS, 3), todaysSection(POLITICS, 11)];
+      render(<ClaimListPickerContent lobbyId="lobby-1" lists={[]} onAdded={vi.fn()} />);
+
+      const buttons = screen.getAllByRole('button');
+      expect(buttons[0]).toHaveTextContent('Today’s claims');
+      expect(buttons[0]).toHaveTextContent('2 spaces · 14 claims');
+      expect(buttons[1]).toHaveTextContent('U.S. politics highlights');
+    });
+
+    it('adds it under its own id, and marks it added once it is', () => {
+      mocks.catalog.data = catalog;
+      mocks.todays.sections = [todaysSection(CURATORS, 3)];
+      const onAdded = vi.fn();
+      const { rerender } = render(<ClaimListPickerContent lobbyId="lobby-1" lists={[]} onAdded={onAdded} />);
+
+      fireEvent.click(screen.getByRole('button', { name: /Today’s claims/ }));
+      expect(mocks.mutate).toHaveBeenCalledWith(
+        { entityId: TODAYS_CLAIMS_LIST_ID, spaceId: TODAYS_CLAIMS_LIST_ID },
+        expect.anything()
+      );
+      mocks.mutate.mock.calls[0]![1].onSuccess();
+      expect(onAdded).toHaveBeenCalledWith(TODAYS_CLAIMS_LIST_ID);
+
+      rerender(<ClaimListPickerContent lobbyId="lobby-1" lists={[added(TODAYS_CLAIMS_LIST_ID)]} onAdded={onAdded} />);
+      const todays = screen.getByRole('button', { name: /Today’s claims/ });
+      expect(todays).toHaveTextContent('Added');
+      expect(todays).toBeDisabled();
+    });
+
+    it('is left out when no agenda lists a claim, or a search does not name it', () => {
+      mocks.catalog.data = catalog;
+      render(<ClaimListPickerContent lobbyId="lobby-1" lists={[]} onAdded={vi.fn()} />);
+      expect(screen.queryByRole('button', { name: /Today’s claims/ })).toBeNull();
+      cleanup();
+
+      mocks.todays.sections = [todaysSection(CURATORS, 3)];
+      render(<ClaimListPickerContent lobbyId="lobby-1" lists={[]} onAdded={vi.fn()} />);
+      fireEvent.change(screen.getByRole('textbox', { name: 'Search claim lists' }), { target: { value: 'spicy' } });
+      expect(screen.queryByRole('button', { name: /Today’s claims/ })).toBeNull();
+      fireEvent.change(screen.getByRole('textbox', { name: 'Search claim lists' }), { target: { value: 'today' } });
+      expect(screen.getByRole('button', { name: /Today’s claims/ })).toBeTruthy();
+    });
+
+    it('stays addable while the page catalog is still loading or has failed', () => {
+      mocks.todays.sections = [todaysSection(CURATORS, 3)];
+      mocks.catalog = { data: undefined, isLoading: false, error: new Error('timeout'), refetch: vi.fn() };
+      render(<ClaimListPickerContent lobbyId="lobby-1" lists={[]} onAdded={vi.fn()} />);
+
+      fireEvent.click(screen.getByRole('button', { name: /Today’s claims/ }));
+      expect(mocks.mutate).toHaveBeenCalledWith(
+        { entityId: TODAYS_CLAIMS_LIST_ID, spaceId: TODAYS_CLAIMS_LIST_ID },
+        expect.anything()
+      );
+    });
+
+    it('stays offered when some of the agenda claims failed to load', () => {
+      mocks.catalog.data = catalog;
+      mocks.todays = { sections: [todaysSection(CURATORS, 3)], isLoading: false, error: new Error('one batch failed') };
+      render(<ClaimListPickerContent lobbyId="lobby-1" lists={[]} onAdded={vi.fn()} />);
+      expect(screen.getByRole('button', { name: /Today’s claims/ })).toHaveTextContent('1 space · 3 claims');
+    });
+
+    // A failed read is not an empty one: the tab it adds has its own Try again.
+    it('stays offered, without counts, when the agendas failed and nothing listed', () => {
+      mocks.catalog.data = catalog;
+      mocks.todays = { sections: [], isLoading: false, error: new Error('statement timeout') };
+      render(<ClaimListPickerContent lobbyId="lobby-1" lists={[]} onAdded={vi.fn()} />);
+      const todays = screen.getByRole('button', { name: /Today’s claims/ });
+      expect(todays).not.toHaveTextContent(/claims? ·|spaces? ·|0 claims/);
+      expect(todays.textContent).toBe('Today’s claims');
+    });
+
+    it('counts with the lobby’s own space leading, as its tab draws it', () => {
+      mocks.catalog.data = catalog;
+      render(<ClaimListPickerContent lobbyId="lobby-1" lists={[]} leadSpaceId={POLITICS} onAdded={vi.fn()} />);
+      expect(mocks.todaysArgs).toEqual({ ordered: false, leadSpaceId: POLITICS });
+    });
   });
 });
