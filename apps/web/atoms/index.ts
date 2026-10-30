@@ -182,9 +182,7 @@ export type DebatesHubTab = 'requests' | 'lobby' | 'explore' | 'positions' | 'pe
  */
 export const debatesHubAtom = atom<{ tab: DebatesHubTab; requestId?: string } | null>(null);
 
-export type OpponentLeftNotice = { recordingDiscarded: boolean };
-
-export const opponentLeftNoticeAtom = atom<OpponentLeftNotice | null>(null);
+export const opponentLeftNoticeAtom = atom(false);
 
 /**
  * The hub's filter selections, held outside the tabs that draw them (GEO-2850).

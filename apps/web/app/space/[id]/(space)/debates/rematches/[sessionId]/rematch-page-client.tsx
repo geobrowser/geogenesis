@@ -2927,7 +2927,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
           !leaveRequestedRef.current &&
           !didLocallyLeaveRematch(session.id)
         ) {
-          setOpponentLeftNotice({ recordingDiscarded: false });
+          setOpponentLeftNotice(true);
         }
         returnFromSession(session);
       }

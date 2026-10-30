@@ -518,7 +518,7 @@ describe('DebateCoordinator', () => {
   // The room and rematch pages don't draw the opponent-left dialog anymore.
   it('renders the opponent-left notice from the atom and clears it when dismissed', () => {
     const store = createStore();
-    store.set(opponentLeftNoticeAtom, { recordingDiscarded: false });
+    store.set(opponentLeftNoticeAtom, true);
 
     render(
       <Provider store={store}>
@@ -531,12 +531,12 @@ describe('DebateCoordinator', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Close' }));
 
     expect(screen.queryByRole('dialog', { name: 'Opponent left' })).not.toBeInTheDocument();
-    expect(store.get(opponentLeftNoticeAtom)).toBeNull();
+    expect(store.get(opponentLeftNoticeAtom)).toBe(false);
   });
 
   it('opens the debates hub and clears the notice from Find debate', () => {
     const store = createStore();
-    store.set(opponentLeftNoticeAtom, { recordingDiscarded: false });
+    store.set(opponentLeftNoticeAtom, true);
 
     render(
       <Provider store={store}>
@@ -548,7 +548,7 @@ describe('DebateCoordinator', () => {
 
     // The notice closes and the hub opens on its default tab, the one way back into a debate.
     expect(screen.queryByRole('dialog', { name: 'Opponent left' })).not.toBeInTheDocument();
-    expect(store.get(opponentLeftNoticeAtom)).toBeNull();
+    expect(store.get(opponentLeftNoticeAtom)).toBe(false);
     expect(store.get(debatesHubAtom)).toEqual({ tab: 'people' });
   });
 

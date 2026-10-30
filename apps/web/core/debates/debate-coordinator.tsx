@@ -521,9 +521,9 @@ export function DebateCoordinator() {
     <>
       {opponentLeftNotice && (
         <OpponentLeftDialog
-          onClose={() => setOpponentLeftNotice(null)}
+          onClose={() => setOpponentLeftNotice(false)}
           onFindDebate={() => {
-            setOpponentLeftNotice(null);
+            setOpponentLeftNotice(false);
             debatesHub.open();
           }}
         />

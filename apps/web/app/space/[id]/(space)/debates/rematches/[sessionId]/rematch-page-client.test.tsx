@@ -1363,7 +1363,7 @@ describe('DebateRematchPageClient', () => {
       await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith(`/space/${SPACE_1}/debates`));
       expect(screen.queryByRole('dialog', { name: 'Opponent left' })).not.toBeInTheDocument();
       // The notice is raised for `DebateCoordinator` to show on the debates page.
-      expect(view.store.get(opponentLeftNoticeAtom)).toEqual({ recordingDiscarded: false });
+      expect(view.store.get(opponentLeftNoticeAtom)).toBe(true);
     }
   );
 
@@ -1376,7 +1376,7 @@ describe('DebateRematchPageClient', () => {
       const { store } = render(<DebateRematchPageClient sessionId="rematch-1" />);
 
       await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith(`/space/${SPACE_1}/debates`));
-      expect(store.get(opponentLeftNoticeAtom)).toBeNull();
+      expect(store.get(opponentLeftNoticeAtom)).toBe(false);
     }
   );
 
@@ -1397,7 +1397,7 @@ describe('DebateRematchPageClient', () => {
       }
 
       await waitFor(() => expect(mocks.replace).toHaveBeenCalled());
-      expect(store.get(opponentLeftNoticeAtom)).toBeNull();
+      expect(store.get(opponentLeftNoticeAtom)).toBe(false);
     }
   );
 

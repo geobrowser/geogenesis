@@ -8492,7 +8492,7 @@ describe('opponent-left notice', () => {
   const notice = () => getDefaultStore().get(opponentLeftNoticeAtom);
 
   beforeEach(() => {
-    getDefaultStore().set(opponentLeftNoticeAtom, null);
+    getDefaultStore().set(opponentLeftNoticeAtom, false);
     unmarkLocalDebateLeave('debate-1');
     unmarkLocalRematchLeave('rematch-1');
   });
@@ -8506,7 +8506,7 @@ describe('opponent-left notice', () => {
     view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates'));
-    expect(notice()).toEqual({ recordingDiscarded: false });
+    expect(notice()).toBe(true);
   });
 
   it('does not show the notice when the room loads already cancelled', async () => {
@@ -8515,7 +8515,7 @@ describe('opponent-left notice', () => {
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates'));
-    expect(notice()).toBeNull();
+    expect(notice()).toBe(false);
   });
 
   it('does not show the notice when the room loads with an already-ended rematch', async () => {
@@ -8527,7 +8527,7 @@ describe('opponent-left notice', () => {
     await act(async () => {
       await Promise.resolve();
     });
-    expect(notice()).toBeNull();
+    expect(notice()).toBe(false);
   });
 });
 
