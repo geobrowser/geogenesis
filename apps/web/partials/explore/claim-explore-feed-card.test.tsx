@@ -471,48 +471,55 @@ describe('ClaimExploreFeedCard', () => {
     expect(cards[1].matches(':last-child')).toBe(true);
   });
 
-  it('matches the debates-panel shell on mobile when Explore opts in', () => {
+  it('draws the debates-panel card at every width when the host opts in', () => {
+    // Unprefixed on purpose: this was phone-only once (`md:`), and desktop drew a different card for
+    // the same claim (GEO-3542).
     mocks.positive = 9;
     mocks.negative = 3;
-    const { container } = render(<ClaimExploreFeedCard item={item} variant="debate-panel-mobile" />);
+    const { container } = render(<ClaimExploreFeedCard item={item} variant="debate-panel" />);
     scrollIntoRange();
 
     const card = container.querySelector(':scope > article') as HTMLElement;
-    expect(card).toHaveClass('md:claim-card-panel-surface', 'md:my-2');
-    expect(card.firstElementChild).toHaveClass('md:gap-y-0!');
+    expect(card).toHaveClass('claim-card-panel-surface', 'my-2');
+    expect(card).not.toHaveClass('border-b', 'py-4');
+    expect(card.className).not.toContain('md:');
+    expect(card.firstElementChild).toHaveClass('grid-cols-1');
+    expect(card.firstElementChild?.className).not.toContain('220px');
 
     const title = screen.getByRole('link', { name: item.title }).querySelector('h2');
-    expect(title).toHaveClass('md:claim-card-panel-title!');
+    expect(title).toHaveClass('claim-card-panel-title!');
+    expect(title).not.toHaveClass('text-[19px]!');
 
-    const desktopMetadata = screen.getByText('Claim').closest('.contents');
-    expect(desktopMetadata).toHaveClass('md:hidden');
+    // The compact header drops the type rather than hiding it.
+    expect(screen.queryByText('Claim')).toBeNull();
 
+    // Only the band — no second, wide copy of the verdict behind a breakpoint.
     const summary = screen.getByTestId('inline-summary');
-    expect(summary).toHaveClass('claim-card-summary-band', 'md:-mx-3', 'md:-mb-3', 'md:mt-3', 'md:rounded-b-lg');
+    expect(summary).toHaveClass('claim-card-summary-band', '-mx-3', '-mb-3', 'mt-3', 'rounded-b-lg');
+    expect(screen.queryByText('9 agree')).toBeNull();
+    expect(summary.parentElement).toHaveClass('row-start-4');
+    expect(screen.getByTestId('pills').parentElement).toHaveClass('row-start-3');
   });
 
-  it('keeps mobile metadata semantic content single and preserves the Join action', () => {
+  it('keeps the panel header to one copy of each segment and preserves the Join action', () => {
     mocks.positive = 6;
     mocks.negative = 6;
-    render(<ClaimExploreFeedCard item={{ ...item, isMemberOrEditor: false }} variant="debate-panel-mobile" />);
+    render(<ClaimExploreFeedCard item={{ ...item, isMemberOrEditor: false }} variant="debate-panel" />);
     scrollIntoRange();
 
     expect(screen.getAllByText('Controversial')).toHaveLength(1);
-    const segmentWrapper = screen.getByTestId('join-root').closest('.contents');
-    expect(segmentWrapper).toHaveProperty('tagName', 'DIV');
-    expect(segmentWrapper).not.toHaveClass('md:hidden');
-    const metadataWrapper = segmentWrapper?.parentElement;
-    expect(metadataWrapper).toHaveProperty('tagName', 'DIV');
-    expect(metadataWrapper).toHaveClass('contents', 'md:flex', 'md:flex-1');
-    expect(metadataWrapper).not.toHaveClass('flex', 'flex-1');
+    expect(screen.getByTestId('join-root')).toBeInTheDocument();
+    const header = screen.getByTestId('join-root').closest('.claim-card-panel-header\\!');
+    expect(header).not.toBeNull();
   });
 
-  it('leaves the existing feed-row shell unchanged outside the Explore opt-in', () => {
+  it('leaves the existing feed-row shell unchanged outside the opt-in', () => {
     const { container } = render(<ClaimExploreFeedCard item={item} />);
 
     const card = container.querySelector(':scope > article') as HTMLElement;
-    expect(card).not.toHaveClass('md:rounded-lg', 'md:p-3');
-    expect(screen.getByText('Claim').closest('.contents')).toBeNull();
+    expect(card).toHaveClass('border-b', 'py-4');
+    expect(card).not.toHaveClass('claim-card-panel-surface');
+    expect(screen.getByText('Claim')).toBeInTheDocument();
   });
 
   it('puts the pills above the verdict on a phone, as the debates panel does', () => {

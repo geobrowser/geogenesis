@@ -49,7 +49,7 @@ export function ExploreMetaRow({
   extraSegments,
   endSlot,
   className,
-  compactOnMobile = false,
+  compact = false,
 }: {
   item: ExploreFeedItem;
   hideSpaceLink?: boolean;
@@ -69,8 +69,13 @@ export function ExploreMetaRow({
    */
   endSlot?: React.ReactNode;
   className?: string;
-  /** On mobile, keep only the space and caller-supplied segments, matching the debates card. */
-  compactOnMobile?: boolean;
+  /**
+   * Keep only the space, actions and caller-supplied segments, in the debates card's smaller header.
+   *
+   * At every width: it was phone-only once, and the claim card drew a second, larger header on
+   * desktop. The two widths now share one card (GEO-3542).
+   */
+  compact?: boolean;
 }) {
   // Deduped by normalized id and named only where the type has a name — an unnamed one renders as a
   // raw id, which says less than nothing.
@@ -87,23 +92,23 @@ export function ExploreMetaRow({
     return out;
   }, [item.types]);
 
-  const segments: { key: string; content: React.ReactNode; showOnCompactMobile: boolean }[] = [];
+  const allSegments: { key: string; content: React.ReactNode; showWhenCompact: boolean }[] = [];
 
   const offer = useSpaceOffer(item, { hidden: hideJoinButton });
   if (offer.shown) {
-    segments.push({
+    allSegments.push({
       key: 'join',
       // Joining is behaviour, not metadata. Compacting the row must never remove an action the
-      // ordinary Explore card offers; only the Claim type disappears on mobile.
-      showOnCompactMobile: true,
+      // ordinary Explore card offers; only the type disappears.
+      showWhenCompact: true,
       content: offer.shown,
     });
   }
 
   if (types.length > 0) {
-    segments.push({
+    allSegments.push({
       key: 'types',
-      showOnCompactMobile: false,
+      showWhenCompact: false,
       content: (
         <span className="inline-flex min-w-0 flex-wrap items-center gap-1">
           {types.map(type => (
@@ -117,14 +122,13 @@ export function ExploreMetaRow({
   }
 
   extraSegments?.forEach((content, index) => {
-    segments.push({ key: `extra-${index}`, content, showOnCompactMobile: true });
+    allSegments.push({ key: `extra-${index}`, content, showWhenCompact: true });
   });
+
+  const segments = compact ? allSegments.filter(segment => segment.showWhenCompact) : allSegments;
 
   const showSpace = !hideSpaceLink;
   if (!showSpace && segments.length === 0 && !endSlot) return null;
-
-  const hasCompactSegments = segments.some(segment => segment.showOnCompactMobile);
-  const firstCompactSegment = segments.find(segment => segment.showOnCompactMobile);
 
   const metadata = (
     <>
@@ -132,61 +136,38 @@ export function ExploreMetaRow({
         <Link
           href={NavUtils.toSpace(item.spaceId)}
           className={cx(
-            'flex min-w-0 items-center gap-1.5 text-[14px] leading-[13px] font-normal tracking-[-0.35px] text-text hover:underline',
-            compactOnMobile && 'md:text-footnoteMedium md:tracking-normal md:text-grey-04'
+            'flex min-w-0 items-center gap-1.5 hover:underline',
+            compact
+              ? 'text-footnoteMedium tracking-normal text-grey-04'
+              : 'text-[14px] leading-[13px] font-normal tracking-[-0.35px] text-text'
           )}
         >
           <SpaceThumb
             image={item.spaceImage}
             name={item.spaceName}
-            className={compactOnMobile ? 'md:size-4 md:rounded-sm' : undefined}
+            className={compact ? 'size-4 rounded-sm' : undefined}
           />
           <span className="min-w-0 truncate">{item.spaceName}</span>
         </Link>
       ) : null}
       {/* A 6px spacer rather than a dot: the space is the row's subject, not one of its facts. */}
-      {showSpace && segments.length > 0 ? (
-        <span className={cx('w-1.5 shrink-0', compactOnMobile && !hasCompactSegments && 'md:hidden')} />
-      ) : null}
-      {segments.map((segment, index) => {
-        // A segment later in the desktop run may become the first compact segment. Its desktop
-        // separator disappears with the segments ahead of it; subsequent compact segments keep
-        // their dot, so the responsive row has exactly the same separator rules without a second
-        // copy of any semantic content.
-        const hideDotOnCompactMobile = !segment.showOnCompactMobile || segment.key === firstCompactSegment?.key;
-        const renderedSegment = compactOnMobile ? (
-          // Segments are intentionally arbitrary React nodes. In particular, the Join action is
-          // rooted in a div through Pending, so this wrapper must permit both block and inline
-          // content. A span here produces browser-repaired SSR markup and a hydration mismatch.
-          <div className={cx('contents', !segment.showOnCompactMobile && 'md:hidden')}>{segment.content}</div>
-        ) : (
-          segment.content
-        );
-
-        return (
-          <React.Fragment key={segment.key}>
-            {index > 0 ? (
-              <MetaDot className={compactOnMobile && hideDotOnCompactMobile ? 'md:hidden' : undefined} />
-            ) : null}
-            {renderedSegment}
-          </React.Fragment>
-        );
-      })}
+      {showSpace && segments.length > 0 ? <span className="w-1.5 shrink-0" /> : null}
+      {segments.map((segment, index) => (
+        <React.Fragment key={segment.key}>
+          {index > 0 ? <MetaDot /> : null}
+          {segment.content}
+        </React.Fragment>
+      ))}
     </>
   );
 
   return (
     <div
-      className={cx(
-        'flex min-w-0 flex-wrap items-center gap-y-2',
-        compactOnMobile && 'md:claim-card-panel-header!',
-        className
-      )}
+      className={cx('flex min-w-0 flex-wrap items-center gap-y-2', compact && 'claim-card-panel-header!', className)}
     >
-      {compactOnMobile ? (
-        // Preserve the ordinary desktop row's direct-child layout. This group only becomes a flex
-        // item where the max-width mobile variant also moves the end slot to the header's far edge.
-        <div className="contents md:flex md:min-w-0 md:flex-1 md:flex-wrap md:items-center">{metadata}</div>
+      {compact ? (
+        // Grouped so the end slot sits at the header's far edge, as it does on the debates card.
+        <div className="flex min-w-0 flex-1 flex-wrap items-center">{metadata}</div>
       ) : (
         metadata
       )}

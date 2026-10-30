@@ -348,7 +348,6 @@ export function ClaimPageView({
                     spaceId={spaceId}
                     responseKind={responseKind}
                     summary={summary}
-                    matchDebatePanelOnMobile={false}
                   />
                 </div>
               ) : null}

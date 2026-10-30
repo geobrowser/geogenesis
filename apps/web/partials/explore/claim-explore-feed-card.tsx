@@ -43,10 +43,15 @@ import { ExploreMetaRow } from './explore-meta-row';
  * Two zones, divided. Everything you can *do* to the claim sits on the left — the claim, the pills,
  * the offer that ends the meta row. Everything describing its *state* sits on the right, behind a
  * rule that runs the full height so the meta row is inside the split rather than spanning above it.
- * At phone width the verdict moves above the pills and the rule goes away entirely rather than
+ * At phone width the verdict moves below the pills and the rule goes away entirely rather than
  * turning horizontal. Deliberate, and matching the claim page's own phone layout: stacked, the two
  * zones are already separated by the stack, and a full-bleed rule across a narrow card reads as the
  * end of the card rather than as a divider inside it.
+ *
+ * The `debate-panel` variant skips the two-zone layout at every width and draws the debates panel's
+ * card instead: a box, the compact header, the smaller title, the pills, and the summary band across
+ * the bottom. Explore and a space's Claims page use it. It was phone-only first, and desktop kept
+ * the two zones, so one claim looked like two different cards depending on the window (GEO-3542).
  *
  * No separate actions row. It briefly carried debate and related-claim counts, which the coverage
  * numbers did not support — 33 debates against 311,047 claims — and then comments and Share, which
@@ -62,7 +67,7 @@ import { ExploreMetaRow } from './explore-meta-row';
  *
  * Scoped to Claim entities by the caller. Every other type keeps the generic card untouched.
  */
-export type ClaimCardVariant = 'feed' | 'debate-panel-mobile';
+export type ClaimCardVariant = 'feed' | 'debate-panel';
 
 export function ClaimExploreFeedCard({
   item,
@@ -84,7 +89,7 @@ export function ClaimExploreFeedCard({
    * existing.
    */
   titleOpensSidePanel?: boolean;
-  /** The main Explore page opts into the debates side-panel chrome at phone widths. */
+  /** Explore and the Claims page opt into the debates side-panel card at every width. */
   variant?: ClaimCardVariant;
   /**
    * A note about how somebody *else* answered this claim, for a surface that is
@@ -207,7 +212,7 @@ export function ClaimExploreFeedCard({
   const noteFor = React.useCallback((position: boolean) => responseNote?.(position), [responseNote]);
 
   const hasVerdict = !summary.isLoading && summary.hasCounts && summary.total > 0;
-  const matchesDebatePanelOnMobile = variant === 'debate-panel-mobile';
+  const matchesDebatePanel = variant === 'debate-panel';
 
   return (
     // The `<ActionSurfaceArticle>` is the root and stays the root. Two things depend on that and neither is
@@ -215,16 +220,11 @@ export function ClaimExploreFeedCard({
     // direct-child rule that a wrapper silently breaks, and `last:` is only meaningful on an
     // element that is actually a sibling of the other cards — inside a wrapper every card is an
     // only child, so `:last-child` matches all of them.
-    //
-    // The mobile Explore shell is selected by a viewport query rather than this article's container
-    // query. That lets the root itself take the debates panel's border, radius and padding while the
-    // card's internal wide/narrow decision remains local to the space it actually has.
     <ActionSurfaceArticle
       ref={setContainer}
       className={cx(
         '@container flex flex-col gap-4',
-        'border-b border-divider py-4 last:border-b-0',
-        matchesDebatePanelOnMobile && 'md:my-2 md:claim-card-panel-surface md:last:border-b'
+        matchesDebatePanel ? 'my-2 claim-card-panel-surface' : 'border-b border-divider py-4 last:border-b-0'
       )}
     >
       {/*
@@ -255,15 +255,19 @@ export function ClaimExploreFeedCard({
             it, rather than the offer floating 36px out while the number sits 24px in. */}
       <div
         className={cx(
-          'grid claim-card-narrow:grid-cols-1 claim-card-narrow:gap-y-4',
-          // The container-query variant is emitted after viewport variants, so this is important:
-          // at phone width both match, and the panel rhythm (explicit margins on header/title/
-          // footer) must win over the feed card's generic 16px row gap.
-          matchesDebatePanelOnMobile && 'md:gap-y-0!',
-          // No verdict, no column, no rule. A claim nobody has answered has nothing to report, and
-          // an empty 220px cell behind a vertical line reads as something having failed to load —
-          // where the claim simply taking the full width reads as a claim nobody has answered.
-          hasVerdict ? 'grid-cols-[minmax(0,1fr)_220px] gap-x-6' : 'grid-cols-1'
+          'grid',
+          // The panel card spaces its rows with explicit margins on the header, title and band, so
+          // it takes no row gap and never the second column.
+          matchesDebatePanel
+            ? 'grid-cols-1'
+            : [
+                'claim-card-narrow:grid-cols-1 claim-card-narrow:gap-y-4',
+                // No verdict, no column, no rule. A claim nobody has answered has nothing to report,
+                // and an empty 220px cell behind a vertical line reads as something having failed to
+                // load — where the claim simply taking the full width reads as a claim nobody has
+                // answered.
+                hasVerdict ? 'grid-cols-[minmax(0,1fr)_220px] gap-x-6' : 'grid-cols-1',
+              ]
         )}
       >
         {/* The same row every other explore card draws, through the same component. It was a copy
@@ -275,7 +279,7 @@ export function ClaimExploreFeedCard({
           hideSpaceLink={hideSpaceLink}
           hideJoinButton={hideJoinButton}
           extraSegments={extraSegments}
-          compactOnMobile={matchesDebatePanelOnMobile}
+          compact={matchesDebatePanel}
           endSlot={
             <ClaimEndSlot
               claimId={item.entityId}
@@ -287,7 +291,7 @@ export function ClaimExploreFeedCard({
               className="ml-auto"
             />
           }
-          className="col-start-1 row-start-1 mb-3 claim-card-narrow:mb-0"
+          className={cx('col-start-1 row-start-1', !matchesDebatePanel && 'mb-3 claim-card-narrow:mb-0')}
         />
 
         {/* No thumbnail: claims carry no image, so the generic card's 60px well is either an empty
@@ -300,9 +304,12 @@ export function ClaimExploreFeedCard({
         >
           <h2
             className={cx(
-              EXPLORE_CARD_TITLE_CLASS_NAME,
               'text-pretty group-hover/title:underline',
-              matchesDebatePanelOnMobile && 'md:claim-card-panel-title!'
+              // The panel title keeps the feed title's weight and colour, and takes the panel's size,
+              // clamp and spacing in place of the feed's 19px.
+              matchesDebatePanel
+                ? 'mt-0! claim-card-panel-title! font-semibold! text-text'
+                : EXPLORE_CARD_TITLE_CLASS_NAME
             )}
           >
             {item.title}
@@ -311,7 +318,8 @@ export function ClaimExploreFeedCard({
 
         <div
           className={cx(
-            'col-start-1 row-start-3 mt-4 claim-card-narrow:mt-0'
+            'col-start-1 row-start-3',
+            !matchesDebatePanel && 'mt-4 claim-card-narrow:mt-0'
             // Nothing to add on a phone: the pills hold row 3 either way, and the verdict below
             // them takes row 4. That is the debates panel's order — what you can *do* to the claim
             // before what everyone else did with it — and on a wide card the verdict is a column
@@ -357,13 +365,19 @@ export function ClaimExploreFeedCard({
             The narrow variant drops the rule rather than rotating it — see the note on the
             component. */}
         {hasVerdict ? (
-          <div className="col-start-2 row-span-3 row-start-1 border-l border-divider pl-6 claim-card-narrow:col-start-1 claim-card-narrow:row-span-1 claim-card-narrow:row-start-4 claim-card-narrow:border-l-0 claim-card-narrow:pl-0">
+          <div
+            className={
+              matchesDebatePanel
+                ? 'col-start-1 row-start-4'
+                : 'col-start-2 row-span-3 row-start-1 border-l border-divider pl-6 claim-card-narrow:col-start-1 claim-card-narrow:row-span-1 claim-card-narrow:row-start-4 claim-card-narrow:border-l-0 claim-card-narrow:pl-0'
+            }
+          >
             <ClaimVerdictColumn
               entityId={item.entityId}
               spaceId={item.spaceId}
               responseKind={responseKind}
               summary={summary}
-              matchDebatePanelOnMobile={matchesDebatePanelOnMobile}
+              panelBand={matchesDebatePanel}
             />
           </div>
         ) : null}
@@ -437,6 +451,9 @@ const ACTIVITY_SECTION = { hash: ENTITY_COMMENTS_ANCHOR_ID, sidePanel: { scrollT
  * serves both from one cache entry and one request. That is worth knowing before either side is
  * repointed at a query of its own.
  *
+ * `panelBand` skips the choice and draws only the narrow band, bled to the edges of the debate-panel
+ * card's padding — that card has the band at every width.
+ *
  * Exported for the claim page's hero, which is this card's layout at page scale: the same column,
  * so the page and the feed cannot describe one claim in two shapes. The caller supplies the
  * `@container` the `claim-card-narrow` rules measure.
@@ -446,17 +463,30 @@ export function ClaimVerdictColumn({
   spaceId,
   responseKind,
   summary,
-  matchDebatePanelOnMobile,
+  panelBand = false,
 }: {
   entityId: string;
   spaceId: string;
   responseKind: ResponseKind;
   summary: ClaimResponseSummary;
-  matchDebatePanelOnMobile: boolean;
+  panelBand?: boolean;
 }) {
   const copy = CLAIM_RESPONSE_COPY;
 
   const percent = summary.percent ?? 0;
+
+  const band = (
+    <ClaimSummary
+      entityId={entityId}
+      spaceId={spaceId}
+      responseKind={responseKind}
+      summary={summary}
+      layout="inline"
+      className={cx('claim-card-summary-band', panelBand && '-mx-3 mt-3 -mb-3 rounded-b-lg')}
+    />
+  );
+
+  if (panelBand) return band;
 
   // The share and its verb on one line, the bar under it, then the two sides — the claim page's own
   // arrangement, through the claim page's own component. Two sides rather than one merged cluster
@@ -493,22 +523,9 @@ export function ClaimVerdictColumn({
         />
       </div>
 
-      {/* Narrow: the debates panel's footer band — share, split and faces on one line, on grey.
-          The ordinary feed row keeps it within the row; the boxed mobile Explore variant bleeds it
-          through its new padding to the border, exactly as the panel card does. */}
-      <div className="hidden claim-card-narrow:block">
-        <ClaimSummary
-          entityId={entityId}
-          spaceId={spaceId}
-          responseKind={responseKind}
-          summary={summary}
-          layout="inline"
-          className={cx(
-            'claim-card-summary-band',
-            matchDebatePanelOnMobile && 'md:-mx-3 md:mt-3 md:-mb-3 md:rounded-b-lg'
-          )}
-        />
-      </div>
+      {/* Narrow: the debates panel's footer band — share, split and faces on one line, on grey,
+          kept within the row. */}
+      <div className="hidden claim-card-narrow:block">{band}</div>
     </>
   );
 }

@@ -178,7 +178,7 @@ export function ClaimsPageClient({ spaceId }: ClaimsPageClientProps) {
               // say the same thing on all of them.
               hideSpaceLink
               hideJoinButton
-              claimCardVariant="debate-panel-mobile"
+              claimCardVariant="debate-panel"
             />
           ))
         )}

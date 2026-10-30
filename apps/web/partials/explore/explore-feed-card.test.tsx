@@ -250,9 +250,9 @@ describe('ExploreFeedCard', () => {
       ...item,
       types: [{ id: '96f859ef-a1ca-4b22-9372-c86ad58b694b', name: 'Claim' }],
     };
-    render(<ExploreFeedCard item={claimItem} claimCardVariant="debate-panel-mobile" />);
+    render(<ExploreFeedCard item={claimItem} claimCardVariant="debate-panel" />);
 
-    expect(screen.getByTestId('claim-card')).toHaveAttribute('data-variant', 'debate-panel-mobile');
+    expect(screen.getByTestId('claim-card')).toHaveAttribute('data-variant', 'debate-panel');
   });
 
   it('leaves every other type on the generic card', () => {

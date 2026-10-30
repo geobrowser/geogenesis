@@ -42,7 +42,7 @@ const EXPLORE_FEED_PROPS = {
   compactHeader: true,
   dividerBeforeFeed: true,
   titleOpensSidePanel: true,
-  claimCardVariant: 'debate-panel-mobile',
+  claimCardVariant: 'debate-panel',
   feedTopSpacingClassName: '',
   sendIdentityToken: true,
   cdnFirstPage: true,

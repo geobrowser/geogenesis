@@ -330,11 +330,9 @@ describe('EntityFeed card and query wiring', () => {
 
     it('hands the mobile debates-panel Claim variant to cards only when requested', () => {
       mocks.pages = [{ items: [item] }];
-      const { rerender } = render(
-        <EntityFeed apiEndpoint="/api/explore/feed" claimCardVariant="debate-panel-mobile" />
-      );
+      const { rerender } = render(<EntityFeed apiEndpoint="/api/explore/feed" claimCardVariant="debate-panel" />);
 
-      expect(mocks.cardProps?.claimCardVariant).toBe('debate-panel-mobile');
+      expect(mocks.cardProps?.claimCardVariant).toBe('debate-panel');
 
       rerender(<EntityFeed apiEndpoint="/api/activity/feed" lockedSpaceId="space-1" />);
       expect(mocks.cardProps?.claimCardVariant).toBe('feed');
