@@ -36,13 +36,21 @@ const STRIP_PILL_CLASS_NAME = hubPillClassName('primary', 'px-3.5 md:h-8');
  *  1. your open ask — who was asked, the time left, Cancel — and once it ends unanswered, that nobody
  *     took it, with Schedule;
  *  2. a live lobby, as the full live card (`LiveLobbySpotlight`): every live lobby, Join for each;
- *  3. signed out, the next lobby still to open, when none is live.
+ *  3. the Today's claims callout (GEO-3498), which waits for a live lobby but not a scheduled one;
+ *  4. signed out, the next lobby still to open, when none is live.
  *
  * Signed in, a lobby still to open is not here: the Requests timeline is the place for those
  * (GEO-3519). Signed out there is no Requests tab, so the strip stays (Preston, 28 Oct).
  * It sits outside the tabs, so the ask stays in view on every tab while it runs.
  */
-export function HubLiveStrip({ lineup }: { lineup: LobbyLineup }) {
+export function HubLiveStrip({
+  lineup,
+  todaysCallout = null,
+}: {
+  lineup: LobbyLineup;
+  /** The Today's claims callout, or null when there is none to show. */
+  todaysCallout?: React.ReactNode;
+}) {
   const { ask, ended, cancel, cancelling, dismissEnded } = useHubAskState();
   // Nothing while auth is still resolving, so a signed-in viewer never sees the strip flash.
   const { ready, authenticated } = useGeoChatAuth();
@@ -52,6 +60,8 @@ export function HubLiveStrip({ lineup }: { lineup: LobbyLineup }) {
 
   const [live] = lineup.live;
   if (live) return <LiveLobbySpotlight lineup={lineup} />;
+
+  if (todaysCallout) return todaysCallout;
 
   if (ready && !authenticated && lineup.next) return <NextLobbyStrip lobby={lineup.next} />;
 

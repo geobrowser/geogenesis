@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { orderAgendaSpaces, orderByDebatesSinceListing } from './todays-claims-order';
+import { orderAgendaSpaces, orderByDebatesSinceListing, todaysSectionsInOrder } from './todays-claims-order';
 
 const AI = '41e851610e13a19441c4d980f2f2ce6b';
 const WORLD = '89bd89bf28ff8a0963faf92a8c905e20';
@@ -32,5 +32,38 @@ describe('orderByDebatesSinceListing', () => {
 
   it('reads an unknown count as undebated', () => {
     expect(orderByDebatesSinceListing(['a', 'b'], () => undefined)).toEqual(['a', 'b']);
+  });
+});
+
+describe('todaysSectionsInOrder', () => {
+  const section = (spaceId: string, id: string, claimIds: string[]) => ({
+    id,
+    agendaId: `agenda-${spaceId}`,
+    spaceId,
+    name: id,
+    claimIds,
+    listedOn: '2026-10-29',
+    listedAt: '2026-10-29',
+  });
+
+  it('walks spaces in the given order, each agenda’s sections in order, undebated claims first', () => {
+    const spaces = [
+      { spaceId: AI, listedOn: '2026-10-29', sections: [section(AI, 'ai-1', ['x'])] },
+      {
+        spaceId: WORLD,
+        listedOn: '2026-10-29',
+        sections: [section(WORLD, 'w-1', ['a', 'b']), section(WORLD, 'w-2', ['c'])],
+      },
+    ];
+    // A space spelled with dashes still matches its agenda.
+    const dashed = `${WORLD.slice(0, 8)}-${WORLD.slice(8, 12)}-${WORLD.slice(12, 16)}-${WORLD.slice(16, 20)}-${WORLD.slice(20)}`;
+
+    const walked = todaysSectionsInOrder(spaces, [dashed, AI, UNRANKED_A], id => (id === 'a' ? 1 : undefined));
+
+    expect(walked.map(({ section: { id }, claimIds }) => [id, claimIds])).toEqual([
+      ['w-1', ['b', 'a']],
+      ['w-2', ['c']],
+      ['ai-1', ['x']],
+    ]);
   });
 });

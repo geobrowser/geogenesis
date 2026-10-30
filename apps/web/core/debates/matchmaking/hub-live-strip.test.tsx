@@ -126,6 +126,11 @@ describe('HubLiveStrip', () => {
     expect(screen.queryByText('AI policy night')).not.toBeInTheDocument();
   });
 
+  it('shows a signed-in viewer the Today’s claims callout', () => {
+    render(<HubLiveStrip lineup={EMPTY} todaysCallout={<section aria-label="Today’s claims" />} />);
+    expect(screen.getByRole('region', { name: 'Today’s claims' })).toBeInTheDocument();
+  });
+
   // Signed out there is no Requests tab, so the next lobby keeps its strip (Preston, 28 Oct).
   describe('signed out', () => {
     const later = lobby({ lobby_id: 'later', open: false, scheduled: true, name: 'AI policy night' });
@@ -162,6 +167,19 @@ describe('HubLiveStrip', () => {
 
       expect(screen.getByTestId('lobby-spotlight')).toHaveTextContent('NYC Debates');
       expect(screen.queryByTestId('hub-strip-next-lobby')).not.toBeInTheDocument();
+    });
+
+    // GEO-3498: a live lobby takes the slot and the callout waits; a scheduled one does not push it out.
+    it('puts the Today’s claims callout after a live lobby and ahead of the next one', () => {
+      const callout = <section aria-label="Today’s claims" />;
+
+      const { rerender } = render(<HubLiveStrip lineup={lobbyLineup([later])} todaysCallout={callout} />);
+      expect(screen.getByRole('region', { name: 'Today’s claims' })).toBeInTheDocument();
+      expect(screen.queryByTestId('hub-strip-next-lobby')).not.toBeInTheDocument();
+
+      rerender(<HubLiveStrip lineup={lobbyLineup([later, lobby()])} todaysCallout={callout} />);
+      expect(screen.getByTestId('lobby-spotlight')).toHaveTextContent('NYC Debates');
+      expect(screen.queryByRole('region', { name: 'Today’s claims' })).not.toBeInTheDocument();
     });
 
     it('shows nothing while auth is still resolving, so a signed-in viewer never sees it flash', () => {
