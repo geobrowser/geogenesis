@@ -360,9 +360,9 @@
 @custom-variant claim-row-wide-end-inline (@container (width >= 370px));
 
 /* Shared claim-card chrome.
-   The matchmaking card uses these directly; mobile Explore applies the same utilities through the
-   max-width `md:` variant. Keeping the declarations here means the two surfaces cannot drift by
-   copying a nearly-identical Tailwind string into each component. */
+   The matchmaking card and the Explore claim card's `debate-panel` variant both use these. Keeping
+   the declarations here means the two surfaces cannot drift by copying a nearly-identical Tailwind
+   string into each component. */
 @utility claim-card-panel-surface {
   @apply rounded-lg border border-grey-02 bg-white p-3;
 }
@@ -377,6 +377,14 @@
 
 @utility claim-card-summary-band {
   @apply border-t border-divider bg-grey-01 px-3 py-2;
+}
+
+/* The summary band as the panel card's base: bled through `claim-card-panel-surface`'s `p-3` to its
+   border, and rounded to its `rounded-lg`. Change either there and change it here. The radius is
+   named rather than `inherit`ed because the Explore card nests the band two wrappers deep, where
+   `inherit` reads a radius of 0. */
+@utility claim-card-panel-band {
+  @apply -mx-3 mt-3 -mb-3 rounded-b-lg;
 }
 
 /* Lifts the debate and the indicator and settles them back, miming the direction the

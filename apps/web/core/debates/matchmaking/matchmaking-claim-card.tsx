@@ -1026,11 +1026,11 @@ function RespondableControls({
           summary={summary}
           layout="inline"
           className={cx(
-            '-mx-3 mt-3 claim-card-summary-band',
+            'claim-card-summary-band',
             // Only reaches the card's base when nothing follows it. A host that passes a footer —
             // the rematch picker's error alert — renders after this, and a band bled past the
             // padding would sit under it.
-            !hasFooter && '-mb-3 rounded-b-[inherit]'
+            hasFooter ? '-mx-3 mt-3' : 'claim-card-panel-band'
           )}
         />
       )}

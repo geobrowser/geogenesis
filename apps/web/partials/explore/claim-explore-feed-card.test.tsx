@@ -489,16 +489,33 @@ describe('ClaimExploreFeedCard', () => {
     const title = screen.getByRole('link', { name: item.title }).querySelector('h2');
     expect(title).toHaveClass('claim-card-panel-title!');
     expect(title).not.toHaveClass('text-[19px]!');
+    // The feed title's treatment survives the resize — the tracking is what `text-metadataMedium`
+    // reads its letter-spacing from, so dropping it silently tightens the heading.
+    expect(title).toHaveClass('mt-0!', 'font-semibold!', 'tracking-[-0.02em]', 'text-text');
+
+    // `text-footnoteMedium` would draw the name at 500 without `font-normal`, and `SpaceThumb`'s own
+    // `h-3 w-3` beat an unflagged `size-4` — both held on phones only by `md:` coming later.
+    const space = screen.getByText(item.spaceName).closest('a') as HTMLElement;
+    expect(space).toHaveClass('text-footnoteMedium', 'font-normal');
+    expect(space.firstElementChild).toHaveClass('size-4!');
 
     // The compact header drops the type rather than hiding it.
     expect(screen.queryByText('Claim')).toBeNull();
 
     // Only the band — no second, wide copy of the verdict behind a breakpoint.
     const summary = screen.getByTestId('inline-summary');
-    expect(summary).toHaveClass('claim-card-summary-band', '-mx-3', '-mb-3', 'mt-3', 'rounded-b-lg');
+    expect(summary).toHaveClass('claim-card-summary-band', 'claim-card-panel-band');
     expect(screen.queryByText('9 agree')).toBeNull();
     expect(summary.parentElement).toHaveClass('row-start-4');
     expect(screen.getByTestId('pills').parentElement).toHaveClass('row-start-3');
+  });
+
+  it('draws no band on a panel card nobody has answered', () => {
+    render(<ClaimExploreFeedCard item={item} variant="debate-panel" />);
+    scrollIntoRange();
+
+    expect(screen.queryByTestId('inline-summary')).toBeNull();
+    expect(screen.queryByText(/agree$/i)).toBeNull();
   });
 
   it('keeps the panel header to one copy of each segment and preserves the Join action', () => {

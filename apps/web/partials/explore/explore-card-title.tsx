@@ -10,13 +10,21 @@ import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 
 import { ExploreCardEntityLink } from './explore-card-entity-link';
 
+/** The heading treatment every Explore card title shares, whatever its size. */
+const EXPLORE_CARD_TITLE_TYPE_CLASS_NAME = 'mt-0! font-semibold! tracking-[-0.02em] text-text';
+
 /**
  * The type an Explore card's heading is set in, shared with the debate card's claim (GEO-3454) so a
  * debate reads the same in the feed and at full screen. Important-flagged because a bare `h2` picks
  * up the prose heading styles.
  */
-export const EXPLORE_CARD_TITLE_CLASS_NAME =
-  'mt-0! text-[19px]! leading-[23px]! font-semibold! tracking-[-0.02em] text-text';
+export const EXPLORE_CARD_TITLE_CLASS_NAME = `${EXPLORE_CARD_TITLE_TYPE_CLASS_NAME} text-[19px]! leading-[23px]!`;
+
+/**
+ * The same heading at the debates panel card's size, clamp and spacing, for the claim card's
+ * `debate-panel` variant (GEO-3542).
+ */
+export const EXPLORE_CARD_PANEL_TITLE_CLASS_NAME = `${EXPLORE_CARD_TITLE_TYPE_CLASS_NAME} claim-card-panel-title!`;
 
 /**
  * What heads an Explore card, and which entity that heading opens.

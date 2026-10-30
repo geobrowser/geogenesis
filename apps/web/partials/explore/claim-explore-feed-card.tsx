@@ -28,7 +28,7 @@ import { Text } from '~/design-system/text';
 import { ENTITY_COMMENTS_ANCHOR_ID } from '~/partials/comments/entity-comments-anchor';
 
 import { ExploreCardEntityLink } from './explore-card-entity-link';
-import { EXPLORE_CARD_TITLE_CLASS_NAME } from './explore-card-title';
+import { EXPLORE_CARD_PANEL_TITLE_CLASS_NAME, EXPLORE_CARD_TITLE_CLASS_NAME } from './explore-card-title';
 import { ExploreCommentsIcon } from './explore-comments-icon';
 import { ExploreMetaRow } from './explore-meta-row';
 
@@ -305,11 +305,7 @@ export function ClaimExploreFeedCard({
           <h2
             className={cx(
               'text-pretty group-hover/title:underline',
-              // The panel title keeps the feed title's weight and colour, and takes the panel's size,
-              // clamp and spacing in place of the feed's 19px.
-              matchesDebatePanel
-                ? 'mt-0! claim-card-panel-title! font-semibold! text-text'
-                : EXPLORE_CARD_TITLE_CLASS_NAME
+              matchesDebatePanel ? EXPLORE_CARD_PANEL_TITLE_CLASS_NAME : EXPLORE_CARD_TITLE_CLASS_NAME
             )}
           >
             {item.title}
@@ -452,7 +448,7 @@ const ACTIVITY_SECTION = { hash: ENTITY_COMMENTS_ANCHOR_ID, sidePanel: { scrollT
  * repointed at a query of its own.
  *
  * `panelBand` skips the choice and draws only the narrow band, bled to the edges of the debate-panel
- * card's padding — that card has the band at every width.
+ * card's padding (`claim-card-panel-band`) — that card has the band at every width.
  *
  * Exported for the claim page's hero, which is this card's layout at page scale: the same column,
  * so the page and the feed cannot describe one claim in two shapes. The caller supplies the
@@ -482,7 +478,7 @@ export function ClaimVerdictColumn({
       responseKind={responseKind}
       summary={summary}
       layout="inline"
-      className={cx('claim-card-summary-band', panelBand && '-mx-3 mt-3 -mb-3 rounded-b-lg')}
+      className={cx('claim-card-summary-band', panelBand && 'claim-card-panel-band')}
     />
   );
 

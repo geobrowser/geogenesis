@@ -136,16 +136,18 @@ export function ExploreMetaRow({
         <Link
           href={NavUtils.toSpace(item.spaceId)}
           className={cx(
-            'flex min-w-0 items-center gap-1.5 hover:underline',
+            // `font-normal` in both: `text-footnoteMedium` carries a 500 weight of its own.
+            'flex min-w-0 items-center gap-1.5 font-normal hover:underline',
             compact
               ? 'text-footnoteMedium tracking-normal text-grey-04'
-              : 'text-[14px] leading-[13px] font-normal tracking-[-0.35px] text-text'
+              : 'text-[14px] leading-[13px] tracking-[-0.35px] text-text'
           )}
         >
           <SpaceThumb
             image={item.spaceImage}
             name={item.spaceName}
-            className={compact ? 'size-4 rounded-sm' : undefined}
+            // Important, or `SpaceThumb`'s own `h-3 w-3` wins.
+            className={compact ? 'size-4!' : undefined}
           />
           <span className="min-w-0 truncate">{item.spaceName}</span>
         </Link>
