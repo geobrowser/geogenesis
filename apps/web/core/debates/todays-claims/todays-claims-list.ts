@@ -13,7 +13,7 @@ import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '../use-deb
 import { useClaimDebateCounts } from './claim-debate-counts';
 import { type DebateAgendas, NO_AGENDAS, useDebateAgendas } from './debate-agendas';
 import { type TodaysCardScope, todaysCardScope } from './todays-claims-attribution';
-import { orderedAgendaSections, todaysSectionKey } from './todays-claims-order';
+import { orderAgendaSpaces, todaysSectionKey, todaysSectionsInOrder } from './todays-claims-order';
 
 /** A Today's claims card: the claim, the agenda space it is drawn in, its topics there. */
 export type TodaysListClaim = {
@@ -57,7 +57,11 @@ export function placeTodaysClaims(
   const listed = new Set<string>();
 
   const sections: TodaysListSection[] = [];
-  for (const { section, claimIds } of orderedAgendaSections(agendas, leads, debatesOf)) {
+  const spaceOrder = orderAgendaSpaces(
+    agendas.spaces.map(space => space.spaceId),
+    leads
+  );
+  for (const { section, claimIds } of todaysSectionsInOrder(agendas.spaces, spaceOrder, debatesOf)) {
     const claims = claimIds.flatMap(claimId => {
       const entity = entitiesById.get(claimId);
       if (!entity || listed.has(claimId)) return [];

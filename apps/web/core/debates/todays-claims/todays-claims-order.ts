@@ -38,19 +38,19 @@ export function orderByDebatesSinceListing<T>(items: T[], debatesOf: (item: T) =
 export const todaysSectionKey = (spaceId: string, blockId: string) => `todays:${normId(spaceId)}:${normId(blockId)}`;
 
 /**
- * Every space's newest agenda, section by section, in the order Today's claims lists them: spaces by
- * `orderAgendaSpaces` with `spaceWeight` as its first key, each space's sections in its agenda's
- * order, and inside each the claims by `orderByDebatesSinceListing`. What a claim id becomes, and
- * whether it shows at all, is the caller's.
+ * Today's claims order, section by section: spaces in `spaceOrder`, each space's sections in its
+ * agenda's order, and inside each section {@link orderByDebatesSinceListing}. The one walk every
+ * Today's claims surface lists from — the picker (GEO-3489), the callout (GEO-3498) and a lobby's
+ * tab (GEO-3491) — so their orders can't drift apart. Claims listed twice come back twice; dedupe is
+ * the caller's.
  */
-export function orderedAgendaSections(
-  agendas: Pick<DebateAgendas, 'spaces'>,
-  spaceWeight: (spaceId: string) => number,
+export function todaysSectionsInOrder(
+  spaces: DebateAgendas['spaces'],
+  spaceOrder: string[],
   debatesOf: (claimId: string) => number | undefined
-): { section: DebateAgendaSection; claimIds: string[] }[] {
-  const spaceIds = agendas.spaces.map(space => space.spaceId);
-  return orderAgendaSpaces(spaceIds, spaceWeight).flatMap(spaceId => {
-    const space = agendas.spaces.find(candidate => idEquals(candidate.spaceId, spaceId));
+): Array<{ section: DebateAgendaSection; claimIds: string[] }> {
+  return spaceOrder.flatMap(spaceId => {
+    const space = spaces.find(candidate => idEquals(candidate.spaceId, spaceId));
     return (space?.sections ?? []).map(section => ({
       section,
       claimIds: orderByDebatesSinceListing(section.claimIds, debatesOf),

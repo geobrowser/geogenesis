@@ -1,12 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { agendaRow } from './debate-agenda-fixtures';
-import { buildDebateAgendas } from './debate-agendas';
 import {
   orderAgendaSpaces,
   orderByDebatesSinceListing,
-  orderedAgendaSections,
   todaysSectionKey,
+  todaysSectionsInOrder,
 } from './todays-claims-order';
 
 const AI = '41e851610e13a19441c4d980f2f2ce6b';
@@ -42,24 +40,35 @@ describe('orderByDebatesSinceListing', () => {
   });
 });
 
-describe('orderedAgendaSections', () => {
-  it('walks spaces by weight, sections in agenda order, debated claims last in each', () => {
-    const rows = [
-      agendaRow({ spaceId: UNRANKED_A, sectionId: 'a-1', entityId: 'c1' }),
-      agendaRow({ spaceId: UNRANKED_A, sectionId: 'a-1', entityId: 'c2' }),
-      agendaRow({ spaceId: UNRANKED_A, sectionId: 'a-2', entityId: 'c3' }),
-      agendaRow({ spaceId: UNRANKED_B, sectionId: 'b-1', entityId: 'c4' }),
+describe('todaysSectionsInOrder', () => {
+  const section = (spaceId: string, id: string, claimIds: string[]) => ({
+    id,
+    agendaId: `agenda-${spaceId}`,
+    spaceId,
+    name: id,
+    claimIds,
+    listedOn: '2026-10-29',
+    listedAt: '2026-10-29',
+  });
+
+  it('walks spaces in the given order, each agenda’s sections in order, undebated claims first', () => {
+    const spaces = [
+      { spaceId: AI, listedOn: '2026-10-29', sections: [section(AI, 'ai-1', ['x'])] },
+      {
+        spaceId: WORLD,
+        listedOn: '2026-10-29',
+        sections: [section(WORLD, 'w-1', ['a', 'b']), section(WORLD, 'w-2', ['c'])],
+      },
     ];
-    const agendas = buildDebateAgendas(rows, new Set(['c1', 'c2', 'c3', 'c4']));
-    const walked = orderedAgendaSections(
-      agendas,
-      spaceId => (spaceId === UNRANKED_B ? 1 : 0),
-      claimId => (claimId === 'c1' ? 1 : 0)
-    );
-    expect(walked.map(({ section, claimIds }) => [section.id, claimIds])).toEqual([
-      ['b-1', ['c4']],
-      ['a-1', ['c2', 'c1']],
-      ['a-2', ['c3']],
+    // A space spelled with dashes still matches its agenda.
+    const dashed = `${WORLD.slice(0, 8)}-${WORLD.slice(8, 12)}-${WORLD.slice(12, 16)}-${WORLD.slice(16, 20)}-${WORLD.slice(20)}`;
+
+    const walked = todaysSectionsInOrder(spaces, [dashed, AI, UNRANKED_A], id => (id === 'a' ? 1 : undefined));
+
+    expect(walked.map(({ section: { id }, claimIds }) => [id, claimIds])).toEqual([
+      ['w-1', ['b', 'a']],
+      ['w-2', ['c']],
+      ['ai-1', ['x']],
     ]);
   });
 });

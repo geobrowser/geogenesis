@@ -32,7 +32,6 @@ import {
 } from '~/core/debates/debate-claim-card-surface';
 import { markEnteringDebate } from '~/core/debates/debate-entry-intent';
 import { useDebateGatewaySpaceScopes } from '~/core/debates/debate-gateway';
-import { debatePublishableSpacePredicate } from '~/core/debates/debate-publish-target';
 import { DebateRequestDialog } from '~/core/debates/debate-request-dialog';
 import { DebateOpenElsewhereScreen } from '~/core/debates/debate-room-holding-screens';
 import { claimDebateEntry, debateRoomClaimKey } from '~/core/debates/debate-tab-claims';
@@ -127,8 +126,13 @@ import { useClaimDebateCounts } from '~/core/debates/todays-claims/claim-debate-
 import { NO_AGENDAS, useDebateAgendas } from '~/core/debates/todays-claims/debate-agendas';
 import { EARLIER_THIS_WEEK_SECTION, useTodaysSectionsOpen } from '~/core/debates/todays-claims/section-open-state';
 import { type TodaysCardScope, todaysCardScope } from '~/core/debates/todays-claims/todays-claims-attribution';
-import { orderedAgendaSections, todaysSectionKey } from '~/core/debates/todays-claims/todays-claims-order';
+import {
+  orderAgendaSpaces,
+  todaysSectionKey,
+  todaysSectionsInOrder,
+} from '~/core/debates/todays-claims/todays-claims-order';
 import { useDebatersSpaceMembership } from '~/core/debates/todays-claims/use-debaters-space-membership';
+import { useCanPublishDebateIn } from '~/core/debates/use-can-publish-debate-in';
 import { useClaimSpaceAllowlist } from '~/core/debates/use-claim-space-allowlist';
 import { useCurrentGeoChatUserId } from '~/core/debates/use-current-geo-chat-user-id';
 import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '~/core/debates/use-debate-publishable-spaces';
@@ -140,7 +144,6 @@ import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sent
 import { useLastSettled } from '~/core/hooks/use-last-settled';
 import { useOpenClaimInSidePanel } from '~/core/hooks/use-open-claim-in-side-panel';
 import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
-import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
 import { equals as idEquals, uuidToHex } from '~/core/id/normalize';
 import { responsePositionLabel } from '~/core/responses/entity-response';
 import { normId } from '~/core/utils/norm-id';
@@ -750,7 +753,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   //
   // Two of the three gates can be sent; one cannot. The viewer's allowlist and the acceptor's
   // editor spaces are both resolved sets that answer independently of this query. The *space-type*
-  // test is the one that cannot go: `spaceTypePublishable` is built from `candidateSpaceIds`, which
+  // test is the one that cannot go: `canPublishDebateIn`'s type check is built from `candidateSpaceIds`, which
   // is derived from this query's own results, so sending it would make the query depend on its own
   // answer. It stays a client gate below.
   //
@@ -1152,10 +1155,8 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     for (const spaceId of todaysSpaceIds) ids.add(spaceId);
     return [...ids];
   }, [catalogEntities, taggedSpaceFacet.spaces, todaysSpaceIds]);
-  const { spacesById: candidateSpaces, isLoading: candidateSpacesPending } = useSpacesByIds(candidateSpaceIds);
-  const spaceTypePublishable = React.useMemo(() => debatePublishableSpacePredicate(candidateSpaces), [candidateSpaces]);
   /**
-   * Whether {@link canPublishDebateIn} can be trusted yet.
+   * `publishabilityPending`: whether {@link canPublishDebateIn} can be trusted yet.
    *
    * An unresolved type reads as publishable — deliberately, so a slow lookup doesn't empty the
    * picker — so while this is true the predicate admits spaces it will go on to reject, a personal
@@ -1165,12 +1166,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    * has a second `useSpacesByIds` for the allowlist, whose pending state `scope.pending` carries;
    * they are different questions about different ids and neither covers the other.
    */
-  const publishabilityPending = candidateSpacesPending;
-  const canPublishDebateIn = React.useCallback(
-    (spaceId: string | null | undefined) =>
-      isSpaceDebatePublishable(spaceId, publishableSpaceIds) && spaceTypePublishable(spaceId),
-    [publishableSpaceIds, spaceTypePublishable]
-  );
+  const { canPublishDebateIn, typesPending: publishabilityPending } = useCanPublishDebateIn(candidateSpaceIds);
 
   /**
    * GEO-3489. The agendas that count: those in a space that can carry a published debate, as
@@ -1861,7 +1857,8 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
 
     const sections: TodaysSection[] = [];
     const items: TodaysItem[] = [];
-    for (const { section, claimIds } of orderedAgendaSections(todaysAgendas, todaysMembership.debatersIn, debatesOf)) {
+    const spaceOrder = orderAgendaSpaces(todaysAgendaSpaceIds, todaysMembership.debatersIn);
+    for (const { section, claimIds } of todaysSectionsInOrder(todaysAgendas.spaces, spaceOrder, debatesOf)) {
       const rows = claimIds.flatMap(claimId => rowOf(claimId, section.spaceId) ?? []);
       if (rows.length === 0) continue;
       const key = todaysSectionKey(section.spaceId, section.id);
@@ -1911,6 +1908,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     todaysCountsByClaim,
     todaysMembership.debatersIn,
     todaysSettling,
+    todaysAgendaSpaceIds,
   ]);
   const todaysHeld = useLastSettled(todaysNow, todaysSettling, sessionId);
   const todaysSections = useStableListOrder(todaysHeld.sections, todaysSectionKeyOf, sessionId);
