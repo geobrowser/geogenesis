@@ -1,4 +1,7 @@
+import { equals as idEquals } from '~/core/id/normalize';
 import { compareBySpaceRank, compareTiedSpaceIds } from '~/core/utils/space/space-ranking';
+
+import type { DebateAgendaSection, DebateAgendas } from './debate-agendas';
 
 /**
  * GEO-3489. The order spaces' agendas are listed in: spaces both debaters are members of, then spaces
@@ -24,4 +27,24 @@ export function orderByDebatesSinceListing<T>(items: T[], debatesOf: (item: T) =
     .map((item, index) => ({ item, index, debates: debatesOf(item) ?? 0 }))
     .sort((a, b) => a.debates - b.debates || a.index - b.index)
     .map(({ item }) => item);
+}
+
+/**
+ * Today's claims order, section by section: spaces in `spaceOrder`, each space's sections in its
+ * agenda's order, and inside each section {@link orderByDebatesSinceListing}. The one walk every
+ * Today's claims surface lists from — the picker (GEO-3489) and the callout (GEO-3498) — so their
+ * orders can't drift apart. Claims listed twice come back twice; dedupe is the caller's.
+ */
+export function todaysSectionsInOrder(
+  spaces: DebateAgendas['spaces'],
+  spaceOrder: string[],
+  debatesOf: (claimId: string) => number | undefined
+): Array<{ section: DebateAgendaSection; claimIds: string[] }> {
+  return spaceOrder.flatMap(spaceId => {
+    const space = spaces.find(candidate => idEquals(candidate.spaceId, spaceId));
+    return (space?.sections ?? []).map(section => ({
+      section,
+      claimIds: orderByDebatesSinceListing(section.claimIds, debatesOf),
+    }));
+  });
 }

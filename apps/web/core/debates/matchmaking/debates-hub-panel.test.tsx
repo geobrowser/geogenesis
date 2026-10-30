@@ -11,6 +11,7 @@ import { GeoChatRequestError } from '../api';
 import type { DebateClaimListId } from '../debate-claim-card-surface';
 import { DEBATES_MODAL } from '../debates-panel-deep-link';
 import { DebatesHubPanel } from './debates-hub-panel';
+import { todaysCalloutMock } from './todays-claims-callout-fixtures';
 import {
   type DebatesHubTab,
   debatesHubAtom,
@@ -95,10 +96,21 @@ vi.mock('../rooms/scheduling-hooks', () => ({
 // The strip, the nudge and the Requests schedule have their own suites; here it only matters that
 // the panel draws them where it should.
 vi.mock('./hub-live-strip', () => ({
-  HubLiveStrip: ({ lineup }: { lineup: { live: unknown[] } }) => (
-    <div data-testid="hub-live-strip" data-live={String(lineup.live.length)} />
+  HubLiveStrip: ({ lineup, todaysCallout }: { lineup: { live: unknown[] }; todaysCallout?: React.ReactNode }) => (
+    <div data-testid="hub-live-strip" data-live={String(lineup.live.length)}>
+      {todaysCallout}
+    </div>
   ),
 }));
+// The callout and its day's set have their own suites; here it only matters where it is drawn.
+vi.mock(
+  '../todays-claims/use-todays-callout',
+  async () => (await import('./todays-claims-callout-fixtures')).useTodaysCalloutModule
+);
+vi.mock(
+  './todays-claims-callout',
+  async () => (await import('./todays-claims-callout-fixtures')).todaysClaimsCalloutModule
+);
 vi.mock('./no-times-nudge', () => ({ NoTimesNudge: () => <div data-testid="no-times-nudge" /> }));
 vi.mock('./requests-schedule', () => ({ RequestsSchedule: () => <div data-testid="requests-schedule" /> }));
 // Matches reads geo-chat's match list and the graph through react-query, which this suite does not
@@ -288,6 +300,7 @@ function renderOpen(tab: DebatesHubTab = 'requests') {
 beforeEach(() => {
   mocks.warmClaimsTab = null;
   lineup.live = [];
+  todaysCalloutMock.visible = false;
   mocks.ready = true;
   mocks.authenticated = true;
   mocks.accountKey = 'user-a';
@@ -602,6 +615,20 @@ describe('DebatesHubPanel', () => {
     );
 
     expect(screen.queryByRole('heading', { name: 'Debates' })).not.toBeInTheDocument();
+  });
+
+  // GEO-3498. The callout rides in the strip's slot, and its one action once done is Matches.
+  it('hands the strip the Today’s claims callout, whose Find a debate opens Matches', () => {
+    renderOpen('people');
+    expect(screen.queryByTestId('todays-claims-callout')).not.toBeInTheDocument();
+    cleanup();
+
+    todaysCalloutMock.visible = true;
+    renderOpen('people');
+    const callout = within(screen.getByTestId('hub-live-strip')).getByTestId('todays-claims-callout');
+
+    fireEvent.click(callout);
+    expect(screen.getByRole('button', { name: /^Matches/ })).toHaveAttribute('aria-current', 'true');
   });
 
   it('renders every tab and switches between them', async () => {

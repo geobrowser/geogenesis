@@ -13,6 +13,9 @@ import { type ClaimPickerEntity, useClaimEntitiesByIds } from '../claim-picker-p
 import { debateQueryKeys, debateQueryNetworkOptions } from '../hooks';
 import { currentDebateAgendasDocument } from './current-debate-agendas-document';
 
+/** The heading of an agenda section whose block has no name of its own. */
+export const UNNAMED_AGENDA_SECTION = 'Today’s claims';
+
 /** "Earlier this week": agendas from the six days before today. */
 export const EARLIER_AGENDA_DAYS = 6;
 
@@ -137,7 +140,7 @@ export function buildDebateAgendas(
         id: row.sectionId ?? row.agendaId,
         agendaId: row.agendaId,
         spaceId: row.spaceId,
-        name: row.sectionName ?? 'Today’s claims',
+        name: row.sectionName ?? UNNAMED_AGENDA_SECTION,
         claimIds: [],
         listedOn: row.listedOn,
         listedAt: row.listedAt,
