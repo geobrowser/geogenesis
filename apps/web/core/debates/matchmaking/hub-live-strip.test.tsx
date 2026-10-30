@@ -42,6 +42,12 @@ vi.mock('../lobbies/lobby-reminder-press', () => ({
 
 // The lobby's own read, for what the list row leaves out (GEO-3463 details).
 const lobbyView = vi.hoisted(() => ({ data: undefined as unknown, refetch: vi.fn() }));
+/** What every view carries that these tests do not look at: a viewer who does not host it. */
+const VIEW_BASE = {
+  purpose: 'lobby',
+  access: { status: 'not_yet_open', opens_at: '2026-10-30T18:50:00Z' },
+  viewer: { role: null, hosting: false },
+};
 vi.mock('../lobbies/hooks', () => ({ useDebateLobby: () => lobbyView }));
 vi.mock('../lobbies/lobby-host-lobbies', () => ({
   usePreOpenHosts: (lobby: { hosts?: unknown[] }) => lobby.hosts ?? [],
@@ -155,6 +161,7 @@ describe('HubLiveStrip', () => {
       avatar_cid: null,
     });
     lobbyView.data = {
+      ...VIEW_BASE,
       name: 'Geo Open Debates - Politics and Policy Night',
       hosts: [host],
       reminder_count: 14,
@@ -172,6 +179,20 @@ describe('HubLiveStrip', () => {
     expect(details).toHaveTextContent('Ana, Ben and 12 more going');
     expect(details).toHaveTextContent('List page-1');
     expect(within(details).getByRole('link', { name: 'Open lobby page' })).toHaveAttribute('href', '/debate/lobby1');
+    // Not this viewer's lobby: nothing to edit, and the going row is only a summary.
+    expect(within(details).queryByRole('button', { name: 'Edit' })).toBeNull();
+    lobbyView.data = undefined;
+  });
+
+  // GEO-3540: a host edits the lobby from its details.
+  it('offers a host Edit in the lobby’s details', () => {
+    lobbyView.data = { ...VIEW_BASE, viewer: { role: 'host', hosting: false }, reminder_count: 0, going: [] };
+    const later = lobby({ open: false, scheduled: true });
+    render(<HubLiveStrip lineup={{ ...EMPTY, later: [later] }} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /lobby details/ }));
+    const details = screen.getByRole('dialog', { name: 'Lobby details' });
+    expect(within(details).getByRole('button', { name: 'Edit' })).toBeInTheDocument();
     lobbyView.data = undefined;
   });
 
@@ -184,7 +205,7 @@ describe('HubLiveStrip', () => {
       display_name: name,
       avatar_cid: null,
     });
-    lobbyView.data = { reminder_count: 2, going: [person('a', 'Ana'), person('b', 'Ben')] };
+    lobbyView.data = { ...VIEW_BASE, reminder_count: 2, going: [person('a', 'Ana'), person('b', 'Ben')] };
     const later = (count: number) => lobby({ open: false, scheduled: true, reminder_count: count });
     const { rerender } = render(<HubLiveStrip lineup={{ ...EMPTY, later: [later(2)] }} />);
     fireEvent.click(screen.getByRole('button', { name: /lobby details/ }));
@@ -202,7 +223,7 @@ describe('HubLiveStrip', () => {
   // Review, 27 Oct: one RSVP cleared and another set inside the 3s broadcast window leave the count
   // where it was, so a held view kept naming the person who left. Opening reads it again.
   it('reads the names again each time the details open', async () => {
-    lobbyView.data = { reminder_count: 1, going: [] };
+    lobbyView.data = { ...VIEW_BASE, reminder_count: 1, going: [] };
     render(<HubLiveStrip lineup={{ ...EMPTY, later: [lobby({ open: false, scheduled: true, reminder_count: 1 })] }} />);
     const trigger = screen.getByRole('button', { name: /lobby details/ });
 

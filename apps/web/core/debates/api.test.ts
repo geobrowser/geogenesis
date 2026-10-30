@@ -36,6 +36,7 @@ import {
   saveOpenRoundPick,
   unhideDebate,
   updateDebateAvailability,
+  updateDebateLobby,
 } from './api';
 
 const completeRequest = {
@@ -627,6 +628,26 @@ describe('matchmaking read authentication', () => {
       'Identity token unavailable'
     );
     expect(fetch).not.toHaveBeenCalled();
+  });
+});
+
+describe('editing a lobby', () => {
+  // GEO-3540: a PATCH carrying only what changed.
+  it('patches the lobby with the fields given', async () => {
+    const fetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ lobby_id: 'lobby-1' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+    vi.stubGlobal('fetch', fetch);
+
+    await updateDebateLobby('lobby-1', { starts_at: '2026-11-01T19:00:00.000Z' }, vi.fn(), 'user-a');
+
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:8080/debate-lobbies/lobby-1',
+      expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ starts_at: '2026-11-01T19:00:00.000Z' }) })
+    );
   });
 });
 

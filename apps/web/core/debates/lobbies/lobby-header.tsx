@@ -19,6 +19,7 @@ import { Text } from '~/design-system/text';
 
 import { debateActionAnalyticsAttributes, debateSurfaceAnalyticsAttributes } from '../matchmaking/hub-analytics';
 import { HubPillButton } from '../matchmaking/hub-pill-button';
+import { EditLobbyButton } from './edit-lobby-dialog';
 import { useEndDebateLobby } from './hooks';
 import { lobbyShareUrl } from './lobby-analytics';
 import {
@@ -130,6 +131,7 @@ export function LobbyHeader({
       </div>
       <div className="flex flex-wrap items-center gap-2">
         {hostLists}
+        <EditLobbyButton lobby={lobby} />
         <CopyLinkButton lobbyId={lobby.lobby_id} />
         {availability}
         {lobby.viewer.hosting ? <EndLobbyControl lobby={lobby} /> : null}
@@ -235,6 +237,7 @@ function LobbyTitleMenu({ lobby }: { lobby: LobbyPageView }) {
         <CopyLinkRow lobbyId={lobby.lobby_id} />
         {lobby.viewer.hosting ? (
           <div className="flex flex-wrap gap-2">
+            <EditLobbyButton lobby={lobby} />
             <EndLobbyControl lobby={lobby} />
           </div>
         ) : null}

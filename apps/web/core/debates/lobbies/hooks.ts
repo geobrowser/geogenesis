@@ -18,11 +18,13 @@ import {
   type DebateLobbySummary,
   type DebateLobbyView,
   GeoChatRequestError,
+  type UpdateDebateLobbyRequest,
   createDebateLobby,
   dashlessId,
   endDebateLobby,
   endDebateLobbyStepOut,
   getDebateLobby,
+  getDebateLobbyGoing,
   getMyDebateLobby,
   listDebateLobbies,
   listDebateLobbyCalendar,
@@ -30,6 +32,7 @@ import {
   setDebateLobbyPresence,
   setDebateLobbyReminder,
   stepOutOfDebateLobby,
+  updateDebateLobby,
 } from '../api';
 import { rememberLobbyReturnDestination } from '../debate-return-navigation';
 import { debateQueryKeys, debateQueryNetworkOptions, useGeoChatAuth } from '../hooks';
@@ -330,6 +333,40 @@ export function useEndDebateLobby(lobbyId: string) {
       store(view);
       if (view.purpose !== 'call') lobbyEnded(view.lobby_id, { scheduled: view.scheduled, opensAt: view.opens_at });
     },
+  });
+}
+
+/**
+ * A host edits the lobby (GEO-3540). The answer is stored as a fetch would be, so lists it carries
+ * never replace newer ones the roster already heard.
+ */
+export function useUpdateDebateLobby(lobbyId: string) {
+  const queryClient = useQueryClient();
+  const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
+  const store = useStoreLobbyView();
+
+  return useMutation({
+    mutationFn: (body: UpdateDebateLobbyRequest) => updateDebateLobby(lobbyId, body, getPrivyIdentityToken, accountKey),
+    onSuccess: view => {
+      store(
+        settleFetchedLobbyClaimLists(
+          queryClient.getQueryData<DebateLobbyView>(debateQueryKeys.lobby(accountKey, view.lobby_id)),
+          view
+        )
+      );
+    },
+  });
+}
+
+/** Everyone going, for a host (GEO-3540). Read afresh each time the list opens. */
+export function useDebateLobbyGoing(lobbyId: string, enabled: boolean) {
+  const { accountKey, authenticated, ready, getPrivyIdentityToken } = useGeoChatAuth();
+  return useQuery({
+    ...debateQueryNetworkOptions,
+    queryKey: debateQueryKeys.lobbyGoing(accountKey, lobbyId),
+    queryFn: ({ signal }) => getDebateLobbyGoing(lobbyId, getPrivyIdentityToken, accountKey, signal),
+    enabled: enabled && Boolean(lobbyId) && ready && authenticated,
+    staleTime: 0,
   });
 }
 

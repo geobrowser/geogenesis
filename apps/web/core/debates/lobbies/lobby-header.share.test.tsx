@@ -18,7 +18,8 @@ const lobby = {
   lobby_id: '11111111111141118111111111111111',
   name: 'A lobby',
   members: [],
-  viewer: { kind: 'guest', hosting: false },
+  access: { status: 'admitted' },
+  viewer: { kind: 'guest', role: null, hosting: false },
 } as unknown as LobbyPageView;
 afterEach(() => {
   cleanup();

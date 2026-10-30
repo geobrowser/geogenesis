@@ -12,6 +12,7 @@ import { Text } from '~/design-system/text';
 import { useElevatedPopoverPortal } from '~/design-system/use-elevated-popover-portal';
 
 import type { DebateLobbySummary } from '../api';
+import { EditLobbyButton, canEditLobby } from '../lobbies/edit-lobby-dialog';
 import { useDebateLobby } from '../lobbies/hooks';
 import type { LobbyLineup } from '../lobbies/live-lobbies';
 import { markLobbyEntry } from '../lobbies/lobby-analytics';
@@ -227,6 +228,9 @@ function NextLobbyStrip({ lobby }: { lobby: DebateLobbySummary }) {
   );
 }
 
+/** Short beside Going in the details' footer. */
+const LOBBY_DETAILS_EDIT = 'Edit';
+
 /**
  * The lobby's own read for what the list row leaves out: hosts, who is going, claim lists. Asked for
  * only while the details are open, and drawn from the list row until it lands.
@@ -269,7 +273,11 @@ function LobbyDetails({ lobby, now, rsvp }: { lobby: DebateLobbySummary; now: nu
         ) : null}
       </div>
       <LobbyHostedBy hosts={hosts} />
-      <LobbyGoing going={view?.going} count={goingCount} />
+      <LobbyGoing
+        going={view?.going}
+        count={goingCount}
+        hostOf={view && canEditLobby(view) ? lobby.lobby_id : undefined}
+      />
       <LobbyClaimListNames lists={view?.claim_lists} />
       <div className="flex items-center justify-between gap-2 border-t border-divider pt-3">
         <Link
@@ -280,7 +288,10 @@ function LobbyDetails({ lobby, now, rsvp }: { lobby: DebateLobbySummary; now: nu
         >
           Open lobby page
         </Link>
-        {rsvp}
+        <div className="flex items-center gap-2">
+          {view ? <EditLobbyButton lobby={view} label={LOBBY_DETAILS_EDIT} /> : null}
+          {rsvp}
+        </div>
       </div>
     </>
   );

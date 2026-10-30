@@ -25,6 +25,7 @@ import { HubHeaderControls } from '../matchmaking/hub-header-controls';
 import { HubPillButton, hubPillClassName } from '../matchmaking/hub-pill-button';
 import { debateRoomPath } from '../rooms/room-routes';
 import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
+import { EditLobbyButton, canEditLobby } from './edit-lobby-dialog';
 import {
   type LobbyPresenceRoster,
   type LobbyPresenceState,
@@ -324,7 +325,11 @@ function NotYetOpen({ lobby }: { lobby: LobbyPageView }) {
         </Text>
       </div>
       {/* Who is going and what it starts with, as the side panel's lobby details show them (GEO-3463). */}
-      <LobbyGoing going={lobby.going} count={lobby.reminder_count} />
+      <LobbyGoing
+        going={lobby.going}
+        count={lobby.reminder_count}
+        hostOf={canEditLobby(lobby) ? lobby.lobby_id : undefined}
+      />
       <LobbyClaimListNames lists={lobby.claim_lists} />
       <div className="flex flex-wrap gap-2">
         {guest ? null : (
@@ -339,6 +344,7 @@ function NotYetOpen({ lobby }: { lobby: LobbyPageView }) {
           </HubPillButton>
         )}
         <FindDebateLink />
+        <EditLobbyButton lobby={lobby} />
         {canCancel ? (
           confirmingCancel ? (
             <>
