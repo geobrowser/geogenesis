@@ -1,9 +1,17 @@
 import { IdUtils, Position, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
+import { RELATION_ENTITY_RELATIONSHIP_TYPE } from '~/core/constants';
 import { ID } from '~/core/id';
 import type { Mutator } from '~/core/sync/use-mutate';
 import { getRelations, getValues } from '~/core/sync/use-store';
 import { Entity, Relation } from '~/core/types';
+
+// Never pinned: the schema reads their `toSpaceId` as the type's defining space, and unset means the type's own space.
+const SCHEMA_RELATION_TYPE_IDS = new Set<string>([
+  SystemIds.TYPES_PROPERTY,
+  SystemIds.RELATION_VALUE_RELATIONSHIP_TYPE,
+  RELATION_ENTITY_RELATIONSHIP_TYPE,
+]);
 
 function signatureOf(relation: Relation): string {
   return `${relation.type.id}|${relation.fromEntity.id}|${relation.toEntity.id}|${relation.toSpaceId ?? ''}|${
@@ -135,7 +143,7 @@ export function cloneEntityIntoSpace(
   });
 
   sourceRelations.forEach(relation => {
-    const pin = relation.type.id !== SystemIds.TYPES_PROPERTY && !valueEntityIds.has(relation.toEntity.id);
+    const pin = !SCHEMA_RELATION_TYPE_IDS.has(relation.type.id) && !valueEntityIds.has(relation.toEntity.id);
     const toSpaceId = relation.toSpaceId ?? (pin ? sourceSpaceId : undefined);
 
     // Preserve `entityId` (the relation entity): data block view/shown-columns

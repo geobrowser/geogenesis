@@ -2,6 +2,8 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { RELATION_ENTITY_RELATIONSHIP_TYPE } from '~/core/constants';
+
 import { cloneEntityIntoSpace, collectHydrationTargetIds } from './clone-entity-into-space';
 
 const store = vi.hoisted(() => ({ relations: [] as any[], values: [] as any[] }));
@@ -17,6 +19,12 @@ vi.mock('~/core/sync/use-store', () => ({
   getValues: ({ selector, mergeWith }: { selector?: (v: any) => boolean; mergeWith?: any[] }) =>
     withMerged(store.values, mergeWith).filter(v => (selector ? selector(v) : true)),
 }));
+
+const SCHEMA_RELATION_TYPES = [
+  ['a Types relation', SystemIds.TYPES_PROPERTY],
+  ["a property's relation value type", SystemIds.RELATION_VALUE_RELATIONSHIP_TYPE],
+  ["a property's relation entity type", RELATION_ENTITY_RELATIONSHIP_TYPE],
+];
 
 const SOURCE = 'space-source';
 const TARGET = 'space-target';
@@ -88,21 +96,22 @@ describe('cloneEntityIntoSpace — related entities', () => {
     expect(run().relations.find(r => r.toEntity.id === 'related')?.toSpaceId).toBe(SOURCE);
   });
 
-  it('leaves a Types relation unpinned, so the schema still finds the type in its own space', () => {
-    store.relations = [relation({ id: 'types', from: ENTITY, to: 'a-type', typeId: SystemIds.TYPES_PROPERTY })];
+  it.each(SCHEMA_RELATION_TYPES)(
+    'leaves %s unpinned, so the schema still finds the type in its own space',
+    (_, typeId) => {
+      store.relations = [relation({ id: 'rel', from: ENTITY, to: 'a-type', typeId })];
 
-    const copied = run().relations.find(r => r.type.id === SystemIds.TYPES_PROPERTY);
+      const copied = run().relations.find(r => r.type.id === typeId);
 
-    expect(copied?.spaceId).toBe(TARGET);
-    expect(copied?.toSpaceId).toBeUndefined();
-  });
+      expect(copied?.spaceId).toBe(TARGET);
+      expect(copied?.toSpaceId).toBeUndefined();
+    }
+  );
 
-  it('keeps a space a Types relation already names', () => {
-    store.relations = [
-      relation({ id: 'types', from: ENTITY, to: 'a-type', typeId: SystemIds.TYPES_PROPERTY, toSpaceId: 'type-home' }),
-    ];
+  it.each(SCHEMA_RELATION_TYPES)('keeps a space %s already names', (_, typeId) => {
+    store.relations = [relation({ id: 'rel', from: ENTITY, to: 'a-type', typeId, toSpaceId: 'type-home' })];
 
-    expect(run().relations.find(r => r.type.id === SystemIds.TYPES_PROPERTY)?.toSpaceId).toBe('type-home');
+    expect(run().relations.find(r => r.type.id === typeId)?.toSpaceId).toBe('type-home');
   });
 
   it('keeps a space the link already names', () => {
