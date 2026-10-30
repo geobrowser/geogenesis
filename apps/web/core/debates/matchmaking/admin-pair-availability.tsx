@@ -69,6 +69,7 @@ export function AdminPairAvailability({
   first,
   second,
   selected,
+  selectedLength = SLOT_MINUTES * 60_000,
   onPick,
 }: {
   /** Dates in `zone`, today first. */
@@ -80,6 +81,8 @@ export function AdminPairAvailability({
   first: DebaterAvailability;
   second: DebaterAvailability;
   selected: number | null;
+  /** How long the picked match runs, so an hour outlines both of its half-hours. */
+  selectedLength?: number;
   onPick: (start: number) => void;
 }) {
   const firstStarts = useStarts(first.slots);
@@ -194,7 +197,10 @@ export function AdminPairAvailability({
                         cell.start <= now ? 'opacity-30' : 'cursor-pointer hover:brightness-90',
                         // Every three hours a slightly stronger rule, to match the ticks above.
                         index % 6 === 0 && index > 0 && 'shadow-[inset_1px_0_0_var(--color-grey-03)]',
-                        cell.start === selected && 'z-10 outline-2 -outline-offset-2 outline-text'
+                        selected !== null &&
+                          cell.start >= selected &&
+                          cell.start < selected + selectedLength &&
+                          'z-10 outline-2 -outline-offset-2 outline-text'
                       )}
                     >
                       {cell.first && cell.second ? (

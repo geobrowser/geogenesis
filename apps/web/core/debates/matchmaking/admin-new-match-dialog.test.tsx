@@ -690,10 +690,75 @@ describe('AdminNewMatchDialog', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Send invites' }));
     const [variables, options] = mocks.create.mock.calls[0];
-    expect(variables).toMatchObject({ firstUserId: 'ana', secondUserId: 'raj' });
+    expect(variables).toMatchObject({ firstUserId: 'ana', secondUserId: 'raj', minutes: 30 });
     expect(variables.start.toISOString()).toBe(at(7, 9));
     options.onSuccess();
     expect(onSent).toHaveBeenCalledWith('Invites sent to Ana Ruiz and Raj Mehta.');
+  });
+
+  describe('a 60-minute match (GEO-3544)', () => {
+    const slotButtons = () =>
+      screen
+        .getAllByRole('button')
+        .filter(button => /Ana .*Raj /.test(button.getAttribute('aria-label') ?? ''))
+        .map(button => button.getAttribute('aria-label')!.split(' ')[0]);
+
+    it('recommends only starts they are both free for the whole hour, and books the hour', () => {
+      renderDialog();
+      fireEvent.click(screen.getByRole('button', { name: 'Select Ana Ruiz' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Select Raj Mehta' }));
+      expect(slotButtons()).toEqual(['9:00', '9:30']);
+
+      fireEvent.click(screen.getByRole('radio', { name: '60 min' }));
+      // 9:30 has only half an hour left of their shared 9:00–10:00.
+      expect(slotButtons()).toEqual(['9:00']);
+
+      fireEvent.click(screen.getAllByRole('button').find(b => /^9:00/.test(b.getAttribute('aria-label') ?? ''))!);
+      expect(screen.getByText(/9:00 AM – 10:00 AM/)).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Send invites' }));
+      const [variables] = mocks.create.mock.calls[0];
+      expect(variables).toMatchObject({ firstUserId: 'ana', secondUserId: 'raj', minutes: 60 });
+      expect(variables.start.toISOString()).toBe(at(7, 9));
+    });
+
+    it('drops a half-hour picked before the length went up to an hour it does not fit', () => {
+      renderDialog();
+      fireEvent.click(screen.getByRole('button', { name: 'Select Ana Ruiz' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Select Raj Mehta' }));
+      fireEvent.click(screen.getAllByRole('button').find(b => /^9:30/.test(b.getAttribute('aria-label') ?? ''))!);
+      expect(screen.getByRole('button', { name: 'Send invites' })).toBeEnabled();
+
+      fireEvent.click(screen.getByRole('radio', { name: '60 min' }));
+      expect(screen.getByRole('button', { name: 'Send invites' })).toBeDisabled();
+    });
+
+    it('says when they are never both free for an hour', () => {
+      (mocks.overlap as { candidates: { slots: unknown[] }[] }).candidates[0].slots = [
+        { start: at(7, 9), end: at(7, 9, 30) },
+      ];
+      renderDialog();
+      fireEvent.click(screen.getByRole('button', { name: 'Select Ana Ruiz' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Select Raj Mehta' }));
+      fireEvent.click(screen.getByRole('radio', { name: '60 min' }));
+
+      expect(screen.getByText(/never both free for a whole hour/)).toBeInTheDocument();
+    });
+
+    it('flags an hour either is busy for part of, in Pick any time', () => {
+      renderDialog();
+      fireEvent.click(screen.getByRole('button', { name: 'Select Ana Ruiz' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Select Raj Mehta' }));
+      fireEvent.click(screen.getByRole('radio', { name: '60 min' }));
+      fireEvent.click(screen.getByRole('radio', { name: 'Pick any time' }));
+      fireEvent.change(screen.getByRole('combobox', { name: 'Day' }), { target: { value: '1' } });
+
+      fireEvent.change(screen.getByLabelText(/^Starts/), { target: { value: '09:30' } });
+      expect(screen.getAllByText(/Not a time they.re both free/).length).toBe(2);
+
+      fireEvent.change(screen.getByLabelText(/^Starts/), { target: { value: '09:00' } });
+      expect(screen.getByText('They’re both free then.')).toBeInTheDocument();
+      expect(screen.queryByText(/Not a time they.re both free/)).not.toBeInTheDocument();
+    });
   });
 
   it('says when two schedules never overlap, and flags a time picked anyway', () => {

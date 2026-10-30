@@ -33,6 +33,16 @@ export const CLOSE_WAIT_MS = 2500;
 /** A slot is 30 minutes, so a booking is one slot. */
 const SCHEDULED_DEBATE_MINUTES = 30;
 
+/**
+ * A move keeps the debate's length: an admin can book an hour (GEO-3544), which a reschedule must
+ * not cut to the half-hour a new request takes.
+ */
+function debateMinutes(request: ScheduledDebateRequest | undefined) {
+  if (!request) return SCHEDULED_DEBATE_MINUTES;
+  const minutes = Math.round((Date.parse(request.scheduled_end_at) - Date.parse(request.scheduled_start_at)) / 60_000);
+  return Number.isFinite(minutes) && minutes > 0 ? minutes : SCHEDULED_DEBATE_MINUTES;
+}
+
 type Props = Omit<React.ComponentProps<typeof PeerAvailabilityModal>, 'booking'> & {
   /**
    * Picking a slot moves this request instead of proposing a new one. Set by a scheduling email's
@@ -237,7 +247,7 @@ export function PeerAvailabilityBookingModal({
             if (rescheduleRequestId && !active) return;
             const slot = {
               startsAt: new Date(startsAt),
-              minutes: SCHEDULED_DEBATE_MINUTES,
+              minutes: rescheduleRequestId ? debateMinutes(active) : SCHEDULED_DEBATE_MINUTES,
               analytics: { entry, viewerIsFree: pick.viewerIsFree },
             };
             const callbacks = {
