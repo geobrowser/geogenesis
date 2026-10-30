@@ -79,7 +79,7 @@ export type DebateHoursWindow = {
 };
 
 /** The calendar day `instant` falls on *in `timeZone`*, as `yyyy-MM-dd`. */
-function zonedDay(instant: Date, timeZone: string, dayOffset = 0) {
+export function zonedDay(instant: Date, timeZone: string, dayOffset = 0) {
   // Assembled from parts rather than read off a formatted string. Field order and separators are
   // locale data, not an API guarantee — and a runtime built against a trimmed ICU serves en-US for
   // every locale asked of it, so an `en-CA` format call can hand back `09/08/2026`. That string

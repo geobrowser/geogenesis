@@ -6,8 +6,9 @@ import * as React from 'react';
 import { ErrorBoundary } from 'react-error-boundary';
 
 import { DataBlockProvider } from '~/core/blocks/data/use-data-block';
+import { useNearViewport } from '~/core/hooks/use-near-viewport';
 import { useEditorInstance } from '~/core/state/editor/editor-provider';
-import { useEditorStoreLite } from '~/core/state/editor/use-editor';
+import { useEditorStoreLite } from '~/core/state/editor/use-editor-blocks';
 import { reportBoundaryError } from '~/core/telemetry/logger';
 
 import { TableBlock, TableBlockError } from '../blocks/table/table-block';
@@ -52,8 +53,12 @@ export const DataNode = Node.create({
   },
 });
 
+const UNMOUNTED_BLOCK_MIN_HEIGHT = 320;
+
 function DataNodeComponent({ node, updateAttributes }: NodeViewProps) {
   const { spaceId } = useEditorInstance();
+
+  const { ref, nearViewport } = useNearViewport();
   const { id } = node.attrs;
 
   const { blockRelations } = useEditorStoreLite();
@@ -90,24 +95,34 @@ function DataNodeComponent({ node, updateAttributes }: NodeViewProps) {
 
   return (
     <NodeViewWrapper>
-      <div contentEditable="false" suppressContentEditableWarning={true} className="data-node">
-        <ErrorBoundary fallback={<TableBlockError spaceId={spaceId} blockId={id} />} onError={reportBoundaryError}>
-          <DataBlockProvider
-            spaceId={spaceId}
-            entityId={id}
-            relationId={relation?.entityId ?? ''}
-            knownSourceType={node.attrs.initialDataSource === 'COLLECTION' ? 'COLLECTION' : undefined}
-          >
-            <TableBlock
+      <div
+        ref={ref}
+        contentEditable="false"
+        suppressContentEditableWarning={true}
+        className="data-node"
+        style={nearViewport ? undefined : { minHeight: UNMOUNTED_BLOCK_MIN_HEIGHT }}
+      >
+        {nearViewport && (
+          <ErrorBoundary fallback={<TableBlockError spaceId={spaceId} blockId={id} />} onError={reportBoundaryError}>
+            <DataBlockProvider
               spaceId={spaceId}
-              blockId={id}
-              querySetupPending={querySetupPending}
-              onCompleteQuerySetup={onCompleteQuerySetup}
-              initialFiltersOpen={node.attrs.filtersOpenOnCreate === true || node.attrs.filtersOpenOnCreate === 'true'}
-              onConsumedInitialFiltersOpen={() => updateAttributes({ filtersOpenOnCreate: false })}
-            />
-          </DataBlockProvider>
-        </ErrorBoundary>
+              entityId={id}
+              relationId={relation?.entityId ?? ''}
+              knownSourceType={node.attrs.initialDataSource === 'COLLECTION' ? 'COLLECTION' : undefined}
+            >
+              <TableBlock
+                spaceId={spaceId}
+                blockId={id}
+                querySetupPending={querySetupPending}
+                onCompleteQuerySetup={onCompleteQuerySetup}
+                initialFiltersOpen={
+                  node.attrs.filtersOpenOnCreate === true || node.attrs.filtersOpenOnCreate === 'true'
+                }
+                onConsumedInitialFiltersOpen={() => updateAttributes({ filtersOpenOnCreate: false })}
+              />
+            </DataBlockProvider>
+          </ErrorBoundary>
+        )}
       </div>
     </NodeViewWrapper>
   );

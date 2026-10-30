@@ -9,7 +9,7 @@ import { NavUtils } from '~/core/utils/utils';
 
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
-import { ExploreJoinSpaceButton } from './explore-join-space-button';
+import { useSpaceOffer } from './explore-meta-row';
 import { ExploreTypeTag } from './explore-type-tag';
 import { SpaceThumb } from './space-thumb';
 
@@ -22,14 +22,18 @@ export function DebateExploreMetaRow({
   hideSpaceLink = false,
   hideJoinButton = false,
   compact = false,
+  hideTypeTag = false,
   endSlot,
 }: {
   item: ExploreFeedItem;
   hideSpaceLink?: boolean;
   hideJoinButton?: boolean;
   compact?: boolean;
+  /** Leave out the "Debate" tag: the playable card's shape says what it is (GEO-3454). */
+  hideTypeTag?: boolean;
   endSlot?: React.ReactNode;
 }) {
+  const offer = useSpaceOffer(item, { hidden: hideJoinButton, joinVariant: 'pill' });
   return (
     <div className="flex items-center justify-between gap-3">
       <div
@@ -47,17 +51,11 @@ export function DebateExploreMetaRow({
             <span className="min-w-0 truncate">{item.spaceName}</span>
           </Link>
         ) : null}
-        {!hideJoinButton && !item.isMemberOrEditor ? (
-          <ExploreJoinSpaceButton
-            spaceId={item.spaceId}
-            hasRequestedSpaceMembership={item.hasPendingMembershipRequest}
-            variant="pill"
-            label="Join"
-          />
-        ) : null}
-        {!compact ? <ExploreTypeTag>Debate</ExploreTypeTag> : null}
+        {offer.shown}
+        {!compact && !hideTypeTag ? <ExploreTypeTag>Debate</ExploreTypeTag> : null}
       </div>
       {endSlot}
+      {offer.mounted}
     </div>
   );
 }

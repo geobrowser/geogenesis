@@ -31,7 +31,7 @@ export function ClaimSourcesTab({
 
   return (
     <div className="flex flex-col gap-4">
-      <ClaimProvenance claimId={claimId} claimRelations={claimRelations} spaceId={spaceId} />
+      <ClaimProvenance claimId={claimId} claimRelations={claimRelations} spaceId={spaceId} sourceRows={sources.data} />
       <PersonRecordFeed
         rows={sources.data ?? []}
         isLoading={sources.isLoading}

@@ -7,6 +7,7 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import type { ScheduleEntry } from '~/core/availability/schedule-analytics';
+import { useHoverIntent } from '~/core/hooks/use-hover-intent';
 
 import { Avatar } from '~/design-system/avatar';
 import { CloseSmall } from '~/design-system/icons/close-small';
@@ -28,9 +29,9 @@ import {
   hourLabel,
   hourProgress,
   hourStart,
-  timeRangeLabel,
   weekOffsetLabels,
 } from './debate-calendar-model';
+import { formatTimeRange } from './scheduled-debate-format';
 import { debateActionAnalyticsAttributes } from './hub-analytics';
 import { HUB_ICON_BUTTON_CLASS_NAME } from './hub-pill-button';
 import { useDebatesHub } from './use-debates-hub';
@@ -47,7 +48,24 @@ const CARD_CLOSE_DELAY_MS = 200;
 
 const GRID_COLUMNS = 'grid-cols-[4rem_repeat(7,minmax(0,1fr))]';
 
-type RenderRow = (userKey: string, slots: FreeSlot[], entry: ScheduleEntry) => React.ReactNode;
+/**
+ * A block in the week that opens a card: the admin week's debates, the pinned row's lobbies. Its
+ * fill, border and layout are the caller's.
+ */
+export const CALENDAR_BLOCK_CLASS_NAME =
+  'flex w-full min-w-0 rounded-md border px-2 text-left text-footnote transition-shadow hover:shadow-inner-text data-[state=open]:shadow-inner-text';
+/** The compact block's one line, for a cell holding more than one. */
+export const CALENDAR_COMPACT_BLOCK_CLASS_NAME = 'items-center gap-1 py-0.5';
+/** "+N more" under a cell's blocks, opening everything in it. */
+export const CALENDAR_MORE_BUTTON_CLASS_NAME =
+  'self-start rounded-md px-1 text-footnoteMedium text-grey-04 transition-colors hover:bg-grey-01 hover:text-text';
+
+type RenderRow = (
+  userKey: string,
+  slots: FreeSlot[],
+  entry: ScheduleEntry,
+  options?: { insidePopover?: boolean }
+) => React.ReactNode;
 
 type Props = {
   /** Eight local midnights: the week's seven days and the one that closes it. */
@@ -61,9 +79,14 @@ type Props = {
   opponentName: (userId: string | null) => string | null;
   renderRow: RenderRow;
   now: number;
+  /** A row pinned under the day headers, such as the week's debate lobbies (GEO-3268). */
+  pinnedRow?: PinnedRow;
 };
 
 type Card = { key: string; userKey: string; slots: FreeSlot[] };
+
+/** A labelled row under the day headers, with something drawn for each day. */
+export type PinnedRow = { label: string; renderDay: (date: Date, day: number) => React.ReactNode };
 
 /**
  * The week as a grid (GEO-3152): a column per day, a row per hour, and in each cell the faces of
@@ -86,6 +109,7 @@ export function CalendarWeek({
   opponentName,
   renderRow,
   now,
+  pinnedRow,
 }: Props) {
   const cellRefs = React.useRef(new Map<string, HTMLDivElement>());
 
@@ -115,28 +139,18 @@ export function CalendarWeek({
   const shownCard = React.useRef<Card | null>(null);
   shownCard.current = card;
   const cardAnchor = React.useRef<HTMLElement | null>(null);
-  const cardTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-  const clearCardTimer = () => {
-    if (cardTimer.current) clearTimeout(cardTimer.current);
-    cardTimer.current = null;
-  };
-  React.useEffect(() => clearCardTimer, []);
+  const cardIntent = useHoverIntent({ openDelay: 0, closeDelay: CARD_CLOSE_DELAY_MS });
+  const clearCardTimer = cardIntent.cancel;
   const showCard = (next: Card, anchor: HTMLElement, delay: number) => {
-    clearCardTimer();
-    const show = () => {
+    cardIntent.openSoon(() => {
       cardAnchor.current = anchor;
       const shown = shownCard.current;
       const person = peopleByUser.get(next.userKey);
       if (person && (shown?.key !== next.key || shown.userKey !== next.userKey)) calendarPersonViewed(person.user_id);
       setCard(next);
-    };
-    if (delay === 0) show();
-    else cardTimer.current = setTimeout(show, delay);
+    }, delay);
   };
-  const hideCard = () => {
-    clearCardTimer();
-    cardTimer.current = setTimeout(() => setCard(null), CARD_CLOSE_DELAY_MS);
-  };
+  const hideCard = () => cardIntent.closeSoon(() => setCard(null));
 
   const openHourAt = (key: string) => {
     const people = cells.get(key) ?? [];
@@ -179,6 +193,7 @@ export function CalendarWeek({
       firstBusy={firstBusy}
       role="grid"
       ariaLabel="Who is free each hour this week"
+      pinnedRow={pinnedRow}
       renderCell={(date, day, hour) => {
         const key = cellKey(day, hour);
         const people = cells.get(key) ?? [];
@@ -293,7 +308,8 @@ export function CalendarWeek({
                 {renderRow(
                   card.userKey,
                   card.slots.length > 0 ? card.slots : (slotsByUser.get(card.userKey) ?? []),
-                  'calendar_card'
+                  'calendar_card',
+                  { insidePopover: true }
                 )}
               </ul>
             </Popover.Content>
@@ -320,6 +336,7 @@ export function CalendarWeekFrame({
   role,
   ariaLabel,
   renderCell,
+  pinnedRow,
   children,
 }: {
   /** Eight local midnights: the week's seven days and the one that closes it. */
@@ -331,6 +348,8 @@ export function CalendarWeekFrame({
   ariaLabel: string;
   /** One cell, carrying its own key. */
   renderCell: (date: Date, day: number, hour: number) => React.ReactNode;
+  /** Drawn under the day headers, outside the hours' scroll, so it stays in view as they move. */
+  pinnedRow?: PinnedRow;
   /** Rendered after the grid, inside its frame: a card anchored somewhere in it. */
   children?: React.ReactNode;
 }) {
@@ -362,7 +381,7 @@ export function CalendarWeekFrame({
       <div
         role={role}
         aria-label={ariaLabel}
-        aria-rowcount={role === 'grid' ? HOURS_IN_DAY + 1 : undefined}
+        aria-rowcount={role === 'grid' ? HOURS_IN_DAY + 1 + (pinnedRow ? 1 : 0) : undefined}
         className="min-w-[900px]"
       >
         <div role="row" className={cx('grid border-b border-grey-02 bg-white', GRID_COLUMNS)}>
@@ -397,6 +416,23 @@ export function CalendarWeekFrame({
             </div>
           ))}
         </div>
+
+        {pinnedRow ? (
+          <div role="row" className={cx('grid border-b border-grey-02 bg-white', GRID_COLUMNS)}>
+            <div role="rowheader" className="border-r border-grey-01 px-2 py-1.5 text-footnote text-grey-04">
+              {pinnedRow.label}
+            </div>
+            {days.slice(0, DAYS_IN_WEEK).map((date, day) => (
+              <div
+                key={date.getTime()}
+                role={role === 'grid' ? 'gridcell' : 'cell'}
+                className="flex min-w-0 flex-col gap-1 border-r border-grey-01 px-1.5 py-1.5 last:border-r-0"
+              >
+                {pinnedRow.renderDay(date, day)}
+              </div>
+            ))}
+          </div>
+        ) : null}
 
         <div ref={scrollRef} className="max-h-[max(24rem,calc(100vh-22rem))] overflow-y-auto" role="rowgroup">
           {Array.from({ length: HOURS_IN_DAY }, (_, hour) => (
@@ -519,7 +555,7 @@ function HourPeople({
         <div className="flex flex-col gap-0.5">
           <Text as="p" variant="listSemibold">
             {date.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })},{' '}
-            {timeRangeLabel(start, start + 60 * 60_000)}
+            {formatTimeRange(start, start + 60 * 60_000, { periodOnce: false })}
           </Text>
           <Text as="p" variant="footnote" color="grey-04">
             {people.length} {people.length === 1 ? 'person' : 'people'} free · most matches first
@@ -531,7 +567,9 @@ function HourPeople({
       </div>
       <ul className="min-h-0 overflow-y-auto px-4">
         {people.map(({ userKey, slots }) => (
-          <React.Fragment key={userKey}>{renderRow(userKey, slots, 'calendar_hour')}</React.Fragment>
+          <React.Fragment key={userKey}>
+            {renderRow(userKey, slots, 'calendar_hour', { insidePopover: true })}
+          </React.Fragment>
         ))}
       </ul>
     </>
@@ -548,12 +586,20 @@ function DebateBlock({
 }) {
   const { open } = useDebatesHub();
   const name = opponentName(debate.opponentUserId);
+  // A match the Geo team arranged says so while it is pending, whoever has answered so far, so it
+  // does not read as the other debater having asked (GEO-3229).
+  const pendingLead =
+    debate.state === 'asked'
+      ? debate.arrangedByAdmin
+        ? 'Geo team invite'
+        : 'Asked'
+      : debate.arrangedByAdmin
+        ? 'Arranged by the Geo team'
+        : 'Requested';
   const label =
     debate.state === 'booked'
       ? `Booked${name ? ` · Debate with ${name}` : ''}`
-      : debate.state === 'asked'
-        ? `Asked${name ? ` · ${name}` : ''}`
-        : `Requested${name ? ` · ${name}` : ''}`;
+      : `${pendingLead}${name ? ` · ${name}` : ''}`;
   return (
     <button
       type="button"
@@ -568,7 +614,7 @@ function DebateBlock({
         debate.state === 'booked' ? 'bg-text text-white' : 'border border-dashed border-text bg-white text-text'
       )}
     >
-      <span>{timeRangeLabel(debate.start, debate.end)}</span>
+      <span>{formatTimeRange(debate.start, debate.end, { periodOnce: false })}</span>
       <span className={cx('truncate font-normal', debate.state === 'booked' ? 'text-grey-02' : 'text-grey-04')}>
         {label}
       </span>

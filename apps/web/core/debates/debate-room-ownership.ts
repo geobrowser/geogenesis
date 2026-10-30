@@ -9,6 +9,8 @@ type TakeoverRequest = {
   // viewer turned to it, rather than the viewer pressing "Continue here". Absent on older builds,
   // which only ever sent explicit or focus-driven requests, so absent reads as explicit.
   automatic?: boolean;
+  /** What the requester is, e.g. the voice surface asking. */
+  requesterLabel?: string;
 };
 
 type TakeoverResponse = {
@@ -16,6 +18,8 @@ type TakeoverResponse = {
   requestId: string;
   requesterId: string;
   released: boolean;
+  /** What the owner is, when it refused. */
+  ownerLabel?: string;
 };
 
 type OwnershipMessage = TakeoverRequest | TakeoverResponse;
@@ -24,11 +28,13 @@ export type DebateRoomTakeoverContext = {
   requesterPriority: DebateRoomTabPriority;
   ownerPriority: DebateRoomTabPriority;
   automatic: boolean;
+  requesterLabel?: string;
 };
 
 export type DebateRoomTakeoverOptions = {
   /** The tab is reclaiming the room because the viewer turned to it, not because they asked. */
   automatic?: boolean;
+  requesterLabel?: string;
 };
 
 type CreateDebateRoomOwnershipCoordinatorOptions = {
@@ -37,6 +43,8 @@ type CreateDebateRoomOwnershipCoordinatorOptions = {
   onTakeoverRequested: (context: DebateRoomTakeoverContext) => boolean | Promise<boolean>;
   // Test seam; production uses debateRoomTabPriority.
   getTabPriority?: () => DebateRoomTabPriority;
+  /** Sent with a refusal so the requester can say what holds it. */
+  describeOwner?: () => string | undefined;
 };
 
 export type DebateRoomOwnershipCoordinator = {
@@ -47,6 +55,8 @@ export type DebateRoomOwnershipCoordinator = {
   release: () => Promise<void>;
   close: () => void;
   ownsConnection: () => boolean;
+  /** The refusing owner's label from the last takeover this coordinator asked for. */
+  lastRefusedBy: () => string | undefined;
 };
 
 export type DebateRoomOwnershipAcquireResult = {
@@ -76,14 +86,19 @@ const acquisitionStaggerMs: Record<DebateRoomTabPriority, number> = { 0: 700, 1:
 const takeoverResponseTimeoutMs = 1_500;
 const localReleaseBarriers = new Map<string, Promise<void>>();
 
+export function debateRoomCoordinationName(debateId: string, userId: string) {
+  return `geo:debate-room:${debateId}:${userId}`;
+}
+
 export function createDebateRoomOwnershipCoordinator({
   debateId,
   userId,
   onTakeoverRequested,
   getTabPriority = debateRoomTabPriority,
+  describeOwner,
 }: CreateDebateRoomOwnershipCoordinatorOptions): DebateRoomOwnershipCoordinator {
   const instanceId = createInstanceId();
-  const coordinationName = `geo:debate-room:${debateId}:${userId}`;
+  const coordinationName = debateRoomCoordinationName(debateId, userId);
   const lockManager =
     typeof navigator !== 'undefined' && typeof navigator.locks?.request === 'function' ? navigator.locks : null;
   let channel: BroadcastChannel | null = null;
@@ -108,6 +123,7 @@ export function createDebateRoomOwnershipCoordinator({
   let acquisition: Promise<DebateRoomOwnershipAcquireResult> | null = null;
   let activeAcquisitionAttempt: { cancelled: boolean } | null = null;
   const pendingTakeovers = new Map<string, (released: boolean) => void>();
+  let lastRefusedBy: string | undefined;
 
   const fallBackToLiveKitIdentity = () => {
     lockRequestsAvailable = false;
@@ -124,6 +140,7 @@ export function createDebateRoomOwnershipCoordinator({
         requestId: message.requestId,
         requesterId: message.requesterId,
         released,
+        ownerLabel: released ? undefined : describeOwner?.(),
       } satisfies TakeoverResponse);
     } catch {
       // The channel may close while an async takeover decision is finishing. The requester will
@@ -275,6 +292,7 @@ export function createDebateRoomOwnershipCoordinator({
       if (!message || typeof message !== 'object') return;
 
       if (message.type === 'takeover-response' && message.requesterId === instanceId) {
+        if (pendingTakeovers.has(message.requestId)) lastRefusedBy = message.released ? undefined : message.ownerLabel;
         pendingTakeovers.get(message.requestId)?.(message.released);
         return;
       }
@@ -284,6 +302,7 @@ export function createDebateRoomOwnershipCoordinator({
         requesterPriority: message.requesterPriority ?? 2,
         ownerPriority: getTabPriority(),
         automatic: message.automatic === true,
+        requesterLabel: message.requesterLabel,
       };
       void Promise.resolve(onTakeoverRequested(takeoverContext))
         .then(async released => {
@@ -302,7 +321,8 @@ export function createDebateRoomOwnershipCoordinator({
       return coordinationMode;
     },
     acquire: () => acquireLock(),
-    requestTakeover: async ({ automatic = false }: DebateRoomTakeoverOptions = {}) => {
+    requestTakeover: async ({ automatic = false, requesterLabel }: DebateRoomTakeoverOptions = {}) => {
+      lastRefusedBy = undefined;
       if (ownsConnection) return true;
       if (!lockManager || !lockRequestsAvailable) return (await acquireLock(true)).acquired;
       if (closed) return false;
@@ -328,6 +348,7 @@ export function createDebateRoomOwnershipCoordinator({
             requesterId: instanceId,
             requesterPriority: getTabPriority(),
             automatic,
+            requesterLabel,
           } satisfies TakeoverRequest);
         } catch {
           window.clearTimeout(timeout);
@@ -347,6 +368,7 @@ export function createDebateRoomOwnershipCoordinator({
       channel?.close();
     },
     ownsConnection: () => ownsConnection,
+    lastRefusedBy: () => lastRefusedBy,
   };
 }
 

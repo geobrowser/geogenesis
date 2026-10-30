@@ -4,6 +4,8 @@ import * as React from 'react';
 
 import { useRouter } from 'next/navigation';
 
+import { debateActionAnalyticsAttributes } from '~/core/debates/matchmaking/hub-analytics';
+
 import { Text } from '~/design-system/text';
 
 import type { Debate } from './api';
@@ -13,6 +15,7 @@ import { debatePath } from './debate-routes';
 import { useAbortDebate, useClearDebateActivity } from './hooks';
 import { routeIntoDebate } from './lobbies/step-out';
 import { SpaceChip } from './matchmaking/matchmaking-claim-card';
+import { debateMediaSessionKey } from './media-session';
 
 /**
  * GEO-2514. Accepting a request creates the debate outright — there is no match prompt in between
@@ -70,15 +73,20 @@ export function DebateReadyPrompt({ debate, currentUserId }: { debate: Debate; c
   return (
     <DebateRequestDialog
       claim={debate.claim.claim}
+      media={{ kind: 'choose', sessionKey: debateMediaSessionKey(debate.id) }}
       participants={debate.participants}
       currentUserId={currentUserId}
       formatId={debate.turn_format_id}
-      openRounds={debate.open_rounds}
+      openRounds={debate.open_rounds ? { ...debate.open_rounds, turn_durations_ms: debate.turn_durations_ms } : null}
       busy={abortDebate.isPending}
       error={declineError}
       actionsLayout="split"
       acceptLabel={joining ? 'Joining…' : 'Join debate'}
       rejectLabel={abortDebate.isPending ? 'Declining…' : 'Decline'}
+      analytics={{
+        accept: debateActionAnalyticsAttributes('debate-ready-prompt', 'Join'),
+        reject: debateActionAnalyticsAttributes('debate-ready-prompt', 'Decline'),
+      }}
       eyebrow={
         <span className="flex min-w-0 items-center justify-center gap-1.5 text-metadata text-grey-04">
           <SpaceChip spaceId={debate.claim.space_id} />
@@ -110,6 +118,7 @@ export function DebateRejoinBar({ debate, openInAnotherTab = false }: { debate: 
       <button
         type="button"
         disabled={joining}
+        {...debateActionAnalyticsAttributes('rejoin-bar', 'Join')}
         onClick={() => {
           setJoining(true);
           markEnteringDebate(debate.id);

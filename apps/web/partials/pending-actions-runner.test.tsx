@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { snapshotActionContext, withActionContext } from '~/core/action-context';
 import { beginAuthAttempt, finishAuthAttempt, resetAuthAttempt } from '~/core/auth-attempt';
-import { pendingActionsAtom, useEnqueuePendingAction } from '~/core/state/pending-actions';
+import { type PendingAction, pendingActionsAtom, useEnqueuePendingAction } from '~/core/state/pending-actions';
 
 import { PendingActionsRunner } from './pending-actions-runner';
 
@@ -17,9 +17,10 @@ const mocks = vi.hoisted(() => ({
   /** Privy's own signed-in state, which outlives a smart account that is still resolving. */
   privyAuthenticated: false,
   reportError: vi.fn(),
+  promptSignIn: vi.fn(),
 }));
 vi.mock('~/core/analytics', () => ({ capture: vi.fn() }));
-vi.mock('@geogenesis/auth', () => ({
+vi.mock('~/core/wallet/auth-hooks', () => ({
   usePrivy: () => ({ ready: true, authenticated: mocks.privyAuthenticated }),
 }));
 vi.mock('~/core/hooks/use-smart-account', () => ({
@@ -32,11 +33,13 @@ vi.mock('~/core/hooks/use-personal-space-id', () => ({
   }),
 }));
 vi.mock('~/core/state/status-bar-store', () => ({ useReportError: () => mocks.reportError }));
+vi.mock('~/core/hooks/use-privy-sign-in', () => ({ usePrivySignIn: () => mocks.promptSignIn }));
 
 beforeEach(() => {
   mocks.authenticated = false;
   mocks.registered = false;
   mocks.privyAuthenticated = false;
+  mocks.promptSignIn.mockReset();
   localStorage.clear();
   sessionStorage.clear();
   resetAuthAttempt();
@@ -138,5 +141,88 @@ describe('a press replaced while the one before it runs', () => {
 
     await waitFor(() => expect(second).toHaveBeenCalledOnce());
     await waitFor(() => expect(store.get(pendingActionsAtom)).toHaveLength(0));
+  });
+});
+
+describe('a press made while sign-in was resolving', () => {
+  const press = (id: string, onSignedOut: PendingAction['onSignedOut']) => ({
+    id,
+    label: id,
+    requires: 'personalSpace' as const,
+    run: vi.fn(),
+    onSignedOut,
+  });
+
+  it('opens one prompt for every press that asks for an account, and its dismissal withdraws them all', () => {
+    const { store, wrapper, enqueue } = renderQueue();
+    const deviceVote = vi.fn();
+    act(() => {
+      enqueue(press('vote', { prompt: { auth_control: 'null_positive' } }));
+      enqueue(press('device-vote', deviceVote));
+      enqueue(press('join', { prompt: { auth_control: 'join_space' } }));
+    });
+
+    const runner = render(<PendingActionsRunner />, { wrapper });
+    runner.rerender(<PendingActionsRunner />);
+
+    expect(deviceVote).toHaveBeenCalledOnce();
+    expect(mocks.promptSignIn).toHaveBeenCalledOnce();
+    expect(mocks.promptSignIn.mock.calls[0]![0]).toEqual({ auth_control: 'join_space' });
+    expect(store.get(pendingActionsAtom).map(action => action.id)).toEqual(['vote', 'join']);
+
+    act(() => mocks.promptSignIn.mock.calls[0]![1].onCancel());
+    expect(store.get(pendingActionsAtom)).toHaveLength(0);
+  });
+
+  it('carries nothing out while sign-in is still resolving, or for a viewer who turns out signed in', () => {
+    mocks.privyAuthenticated = true;
+    const { store, wrapper, enqueue } = renderQueue();
+    const deviceVote = vi.fn();
+    act(() => {
+      enqueue(press('vote', deviceVote));
+      enqueue(press('join', { prompt: { auth_control: 'join_space' } }));
+    });
+
+    const runner = render(<PendingActionsRunner />, { wrapper });
+    mocks.authenticated = true;
+    runner.rerender(<PendingActionsRunner />);
+
+    expect(deviceVote).not.toHaveBeenCalled();
+    expect(mocks.promptSignIn).not.toHaveBeenCalled();
+    expect(store.get(pendingActionsAtom)).toHaveLength(2);
+  });
+
+  it('drops a signed-in viewer’s press when they sign out, rather than carrying it out', () => {
+    mocks.privyAuthenticated = true;
+    const { store, wrapper, enqueue } = renderQueue();
+    const deviceVote = vi.fn();
+    act(() => {
+      enqueue(press('vote', deviceVote));
+      enqueue(press('join', { prompt: { auth_control: 'join_space' } }));
+    });
+    const runner = render(<PendingActionsRunner />, { wrapper });
+
+    mocks.privyAuthenticated = false;
+    runner.rerender(<PendingActionsRunner />);
+
+    expect(store.get(pendingActionsAtom)).toHaveLength(0);
+    expect(deviceVote).not.toHaveBeenCalled();
+    expect(mocks.promptSignIn).not.toHaveBeenCalled();
+  });
+
+  it('carries each press out once, however many renders follow', () => {
+    const { wrapper, enqueue } = renderQueue();
+    const deviceVote = vi.fn();
+    act(() => {
+      enqueue(press('vote', deviceVote));
+      enqueue(press('join', { prompt: { auth_control: 'join_space' } }));
+    });
+
+    const runner = render(<PendingActionsRunner />, { wrapper });
+    runner.rerender(<PendingActionsRunner />);
+    runner.rerender(<PendingActionsRunner />);
+
+    expect(deviceVote).toHaveBeenCalledOnce();
+    expect(mocks.promptSignIn).toHaveBeenCalledOnce();
   });
 });

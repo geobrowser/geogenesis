@@ -3,11 +3,12 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as Effect from 'effect/Effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
+import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { DEBATE_TYPE_ID } from '~/core/debates/ontology';
 
 import { NEWS_STORY_TYPE_ID } from './explore-constants';
 import { claimsRequireDebateTagFilter } from './explore-debate-tag-filter';
+import { BEST_FEED_VERSION } from './for-you/feed-version';
 
 /**
  * The graph is mocked at `graphql()` — the single boundary every sort's fetcher goes through —
@@ -26,32 +27,56 @@ const windows = vi.hoisted(() => ({
   variables: [] as Record<string, unknown>[],
   operations: [] as string[],
   responder: null as null | ((operation: string, variables: Record<string, unknown>) => unknown),
+  /**
+   * Hand each response to the fetcher's own `decoder`, as the real client does, instead of
+   * returning it as the decoded page. For responses shaped like the graph's raw reply.
+   */
+  decode: false,
 }));
 
 vi.mock('~/core/io/graphql-client', () => ({
-  graphql: ({ query, variables }: { query: any; variables: Record<string, unknown> }) => {
+  graphql: ({
+    query,
+    variables,
+    decoder,
+  }: {
+    query: any;
+    variables: Record<string, unknown>;
+    decoder: (data: unknown) => unknown;
+  }) => {
     const operation =
       query.definitions.find((definition: any) => definition.kind === 'OperationDefinition')?.name?.value ?? '';
     windows.operations.push(operation);
+    const respond = (data: unknown) => Effect.succeed(windows.decode ? decoder(data) : data);
     if (windows.responder) {
       windows.calls += 1;
       windows.variables.push(variables);
-      return Effect.succeed(windows.responder(operation, variables));
+      return respond(windows.responder(operation, variables));
     }
     const next = windows.queue[Math.min(windows.calls, windows.queue.length - 1)];
     windows.calls += 1;
     windows.variables.push(variables);
-    return Effect.succeed(next);
+    return respond(next);
   },
 }));
 
-// Only reached when a wallet is passed, which these cases do not do; mocked so the module graph
+// Only reached when a wallet is passed, which most cases do not do; mocked so the module graph
 // does not pull the subgraph client in.
-vi.mock('~/core/io/subgraph', () => ({ fetchProfile: () => Effect.succeed(null) }));
-vi.mock('~/core/io/subgraph/fetch-proposed-members', () => ({ fetchActiveMemberRequest: async () => null }));
+const viewer = vi.hoisted(() => ({ profileLookups: 0, requestLookups: [] as [string, string][] }));
+vi.mock('~/core/io/subgraph', () => ({
+  fetchProfile: () => {
+    viewer.profileLookups += 1;
+    return Effect.succeed({ spaceId: 'profile-space' });
+  },
+}));
+vi.mock('~/core/io/subgraph/fetch-proposed-members', () => ({
+  fetchActiveMemberRequest: async (spaceId: string, memberSpaceId: string) => {
+    viewer.requestLookups.push([spaceId, memberSpaceId]);
+    return { isVotingEnded: false };
+  },
+}));
 
-const { ExploreSpaceScopeUnresolvedError, fetchCompleteExplorePopulationIndex, fetchExploreFeed } =
-  await import('./fetch-explore-feed');
+const { ExploreSpaceScopeUnresolvedError, fetchExploreFeed } = await import('./fetch-explore-feed');
 const { encodeExploreForYouCursor } = await import('./explore-window-cursor');
 
 const SPACE = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
@@ -109,6 +134,9 @@ beforeEach(() => {
   windows.variables = [];
   windows.operations = [];
   windows.responder = null;
+  windows.decode = false;
+  viewer.profileLookups = 0;
+  viewer.requestLookups = [];
 });
 
 /**
@@ -339,7 +367,7 @@ describe('a window reorder (GEO-3140 For you, GEO-3144 interleaving)', () => {
   it("names Best's version when nothing replaces it", async () => {
     windows.queue = [windowOf(claims, { hasNextPage: false, endCursor: null })];
     const result = await fetchExploreFeed({ ...feedArgs, typeIds: [CLAIM_TYPE_ID] });
-    expect(result.feed).toEqual({ name: 'best', version: 'best-1' });
+    expect(result.feed).toEqual({ name: 'best', version: BEST_FEED_VERSION });
   });
 
   it("serves the reordered window, through Best's own diversity pass, under the reorder's name", async () => {
@@ -392,195 +420,177 @@ describe('a window reorder (GEO-3140 For you, GEO-3144 interleaving)', () => {
   });
 });
 
-describe('a complete contextual population', () => {
-  it('exhausts relation pages, deduplicates source entities, and preserves all feed guards', async () => {
-    windows.queue = [
-      {
-        nodes: [
-          { fromEntity: { id: 'relation-ranked', rankingScore: '10', createdAt: '1' } },
-          { fromEntity: null },
-          null,
-        ],
-        pageInfo: { hasNextPage: true, endCursor: 'next-relation-page' },
-      },
-      {
-        nodes: [
-          { fromEntity: { id: 'relation-ranked', rankingScore: '10', createdAt: '1' } },
-          { fromEntity: { id: 'relation-unscored', rankingScore: null, createdAt: '2' } },
-        ],
-        pageInfo: { hasNextPage: false },
-      },
-    ];
-    const relationFilter = { typeId: { is: 'topics-property' }, toEntityId: { is: 'page-topic' } };
-    const entityFilter = { relations: { some: { toEntityId: { is: 'selected-topic' } } } };
-    const args = {
+describe("a topic page's feed from the ranked topic table (GEO-3092)", () => {
+  const PAGE_TOPIC = 'cccccccccccccccccccccccccccccccc';
+  const SELECTED_TOPIC = 'dddddddddddddddddddddddddddddddd';
+  const topicArgs = {
+    ...feedArgs,
+    requireDebateTagOnClaims: false,
+    rankedTopicIds: [PAGE_TOPIC, SELECTED_TOPIC],
+    entityFilter: { id: { is: 'top-only' } },
+  };
+
+  it.each(['best', 'new'] as const)('asks for %s order over entities carrying every topic', async sort => {
+    windows.queue = [windowOf([entity('t1', CLAIM_TYPE_ID)], { hasNextPage: false, endCursor: '1' })];
+
+    await fetchExploreFeed({ ...topicArgs, sort });
+
+    expect(windows.operations).toEqual(['ExploreTopicFeedConnection']);
+    expect(windows.variables[0]).toMatchObject({
+      topicIds: [PAGE_TOPIC, SELECTED_TOPIC],
+      typeIds: [CLAIM_TYPE_ID],
       spaceIds: [SPACE],
-      sort: 'best' as const,
-      time: 'all' as const,
-      typeIds: [CLAIM_TYPE_ID],
-      requireName: true,
-      scopes: [{ typeIds: [CLAIM_TYPE_ID], entityFilter, relationFilter }],
-    };
-    const rows = await fetchCompleteExplorePopulationIndex(args);
-    expect(rows.map(row => row.id)).toEqual(['relation-ranked', 'relation-unscored']);
-    expect(windows.operations).toEqual(['ExploreRelationIndex', 'ExploreRelationIndex']);
-    expect(windows.variables[1]?.after).toBe('next-relation-page');
-    const filter = windows.variables[0]?.filter as any;
-    expect(filter.and[0]).toEqual(relationFilter);
-    expect(filter.and[1].fromEntity.and[1]).toEqual(entityFilter);
-    expect(filter.and[1].fromEntity.and[0]).toMatchObject({
-      typeIds: { overlaps: [CLAIM_TYPE_ID] },
-      spaceIds: { overlaps: [SPACE] },
-      values: { some: { spaceId: { in: [SPACE] }, text: { isNull: false, isNot: '' } } },
-      relations: { none: { or: expect.any(Array) } },
+      sortBy: sort,
+      offset: 0,
+      debateTaggedClaims: false,
     });
-    expect(await fetchCompleteExplorePopulationIndex(args)).toEqual(rows);
-    expect(windows.calls).toBe(2);
-
-    windows.calls = 0;
-    const newest = await fetchCompleteExplorePopulationIndex({ ...args, sort: 'new' });
-    expect(newest.map(row => row.id)).toEqual(['relation-unscored', 'relation-ranked']);
+    // Below `offset + first` a window comes back short.
+    const sent = windows.variables[0] as { first: number; maxPerTopic: number };
+    expect(sent.maxPerTopic).toBe(sent.first);
+    // The table already holds exactly the topic population; the relation filter is Top's.
+    expect(windows.variables[0]).not.toHaveProperty('filter');
   });
 
-  it.each([
-    { relation: true, endCursor: null, message: 'no end cursor', failedCalls: 1 },
-    { relation: true, endCursor: 'repeated', message: 'repeated its end cursor', failedCalls: 2 },
-    { relation: false, endCursor: null, message: 'no end cursor', failedCalls: 1 },
-    { relation: false, endCursor: 'repeated', message: 'repeated its end cursor', failedCalls: 2 },
-  ])('rejects invalid cursor chains and evicts the failed population: %j', async scenario => {
-    const id = `cursor-contract-${scenario.relation}-${scenario.endCursor}`;
-    const node = { id, rankingScore: '1', createdAt: '1' };
-    const nodes = scenario.relation ? [{ fromEntity: node }] : [node];
-    windows.responder = () => ({ nodes, pageInfo: { hasNextPage: true, endCursor: scenario.endCursor } });
-    const args = {
-      spaceIds: [SPACE],
-      sort: 'best' as const,
-      time: 'all' as const,
-      typeIds: [CLAIM_TYPE_ID],
-      scopes: [
-        {
-          typeIds: [CLAIM_TYPE_ID],
-          entityFilter: { id: { is: id } },
-          ...(scenario.relation ? { relationFilter: { toEntityId: { is: id } } } : {}),
-        },
-      ],
+  it("forwards the caller's debate-tag rule to the walk rather than filtering after it", async () => {
+    windows.queue = [windowOf([entity('t1', CLAIM_TYPE_ID)], { hasNextPage: false, endCursor: '1' })];
+
+    await fetchExploreFeed({ ...topicArgs, requireDebateTagOnClaims: true });
+
+    expect(windows.variables[0]).toMatchObject({ debateTaggedClaims: true });
+  });
+
+  it('keeps New in the order the table returns, and pages on by offset', async () => {
+    const ids = Array.from({ length: 31 }, (_, index) => `n${index.toString().padStart(2, '0')}`);
+    // The table's own order, by offset: one full window of 30, then the last row.
+    windows.responder = (_operation, variables) => {
+      const offset = Number(variables.offset);
+      const rows = ids.slice(offset, offset + Number(variables.first));
+      const end = offset + rows.length;
+      return windowOf(
+        rows.map(id => entity(id, CLAIM_TYPE_ID)),
+        { hasNextPage: rows.length === variables.first, endCursor: String(end) }
+      );
     };
 
-    await expect(fetchCompleteExplorePopulationIndex(args)).rejects.toThrow(scenario.message);
-    expect(windows.calls).toBe(scenario.failedCalls);
-    windows.responder = () => ({ nodes, pageInfo: { hasNextPage: false, endCursor: null } });
-    await expect(fetchCompleteExplorePopulationIndex(args)).resolves.toEqual([node]);
-    expect(windows.calls).toBe(scenario.failedCalls + 1);
+    const pages: string[][] = [];
+    const offsets: unknown[] = [];
+    const caps: unknown[] = [];
+    let cursor: string | null = null;
+    do {
+      windows.variables = [];
+      const page = await fetchExploreFeed({ ...topicArgs, sort: 'new', cursor });
+      pages.push(page.items.map(item => item.entityId));
+      offsets.push(...windows.variables.map(variables => variables.offset));
+      caps.push(...windows.variables.map(variables => variables.maxPerTopic));
+      cursor = page.nextCursor;
+    } while (cursor && pages.length < 5);
+
+    expect(pages.flat()).toEqual(ids);
+    expect(pages[0]).toHaveLength(22);
+    // The rest of the first window is cut from it again; the next window starts at offset 30.
+    expect(offsets).toEqual([0, 0, 30]);
+    // A cap below `offset + first` would leave the deeper window short.
+    expect(caps).toEqual([30, 30, 60]);
   });
 
-  it('shares one compact population when equivalent space filters arrive in a different order', async () => {
-    const secondSpace = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
-    windows.responder = operation =>
-      operation === 'ExploreCompleteIndex'
-        ? {
-            nodes: [{ id: 'cache-order', typeIds: [CLAIM_TYPE_ID], rankingScore: '1', createdAt: '1' }],
-            pageInfo: { hasNextPage: false, endCursor: null },
-          }
-        : windowOf([], { hasNextPage: false, endCursor: null });
-    const args = {
-      spaceIds: [SPACE, secondSpace],
-      sort: 'best' as const,
-      time: 'all' as const,
-      typeIds: [CLAIM_TYPE_ID],
-      requireName: true,
-      scopes: [{ typeIds: [CLAIM_TYPE_ID], entityFilter: { id: { is: 'cache-order' } } }],
-    };
+  describe("through the connection's own decoder", () => {
+    /** A valid entity id; the decoder drops a node whose ids are not. */
+    const hexId = (prefix: string, index: number) => `${prefix}${index.toString(16).padStart(31, '0')}`;
 
-    await fetchCompleteExplorePopulationIndex(args);
-    await fetchCompleteExplorePopulationIndex({ ...args, spaceIds: [secondSpace, SPACE] });
-
-    expect(windows.operations.filter(operation => operation === 'ExploreCompleteIndex')).toHaveLength(1);
-  });
-
-  it('keeps entities omitted by the denormalized candidates and places unscored entities last', async () => {
-    windows.queue = [
-      {
-        nodes: [
-          { id: 'unscored', rankingScore: null },
-          { id: 'ranked', rankingScore: '42.5' },
+    /** One node as the graph returns it: a named Claim typed in the feed's space. */
+    function rawNode(id: string) {
+      return {
+        id,
+        name: `entity-${id}`,
+        description: null,
+        spaceIds: [SPACE],
+        createdAt: '1780000000',
+        backlinks: { totalCount: 0 },
+        types: [{ id: CLAIM_TYPE_ID, name: 'Claim' }],
+        valuesList: [],
+        relationsList: [
+          {
+            id: `f${id.slice(1)}`,
+            spaceId: SPACE,
+            position: null,
+            verified: null,
+            entityId: `d${id.slice(1)}`,
+            fromEntity: { id, name: `entity-${id}` },
+            toEntity: { id: CLAIM_TYPE_ID, name: 'Claim', types: [], valuesList: [] },
+            toSpaceId: null,
+            type: { id: SystemIds.TYPES_PROPERTY, name: 'Types' },
+          },
         ],
-        pageInfo: { hasNextPage: false, endCursor: null },
-      },
-      windowOf([entity('unscored', CLAIM_TYPE_ID), entity('ranked', CLAIM_TYPE_ID)], {
-        hasNextPage: false,
-        endCursor: null,
-      }),
-    ];
+      };
+    }
 
-    const scopeFilter = { id: { in: ['ranked', 'unscored'] } };
-    const result = await fetchExploreFeed({
-      ...feedArgs,
-      requireDebateTagOnClaims: false,
-      completePopulationScopes: [{ typeIds: [CLAIM_TYPE_ID], entityFilter: scopeFilter }],
+    /** The table's raw reply for an offset window over `rows`; `null` is a node that won't decode. */
+    function serveRaw(rows: Array<string | null>) {
+      windows.decode = true;
+      windows.responder = (_operation, variables) => {
+        const offset = Number(variables.offset);
+        const nodes = rows.slice(offset, offset + Number(variables.first));
+        return {
+          entitiesRankedForTopicsConnection: { nodes: nodes.map(id => (id === null ? { id: null } : rawNode(id))) },
+        };
+      };
+    }
+
+    async function scroll() {
+      const pages: string[][] = [];
+      const offsets: unknown[] = [];
+      let cursor: string | null = null;
+      do {
+        windows.variables = [];
+        const page = await fetchExploreFeed({ ...topicArgs, sort: 'new', cursor });
+        pages.push(page.items.map(item => item.entityId));
+        offsets.push(...windows.variables.map(variables => variables.offset));
+        cursor = page.nextCursor;
+      } while (cursor && pages.length < 6);
+      return { pages, offsets, endedWithCursor: cursor !== null };
+    }
+
+    it('pages past a full window, and counts a node it could not decode toward the next offset', async () => {
+      // 30 is New's window. Row 5 does not decode, so the first window yields 29 cards from 30 nodes.
+      const ids = Array.from({ length: 35 }, (_, index) => hexId('e', index));
+      serveRaw(ids.map((id, index) => (index === 5 ? null : id)));
+
+      const { pages, offsets, endedWithCursor } = await scroll();
+
+      const expected = ids.filter((_, index) => index !== 5);
+      expect(pages.flat()).toEqual(expected);
+      // Offset 29 would serve row 29 twice; the next window starts at the 30th node, not the 29th card.
+      expect(offsets).toContain(30);
+      expect(offsets).not.toContain(29);
+      expect(endedWithCursor).toBe(false);
     });
 
-    expect(result.items.map(item => item.entityId)).toEqual(['ranked', 'unscored']);
-    expect(windows.calls).toBe(2);
-    expect((windows.variables[0]?.filter as { and?: unknown[] }).and).toContainEqual(scopeFilter);
-    expect(windows.variables[1]?.filter).toEqual(
-      expect.objectContaining({ and: expect.arrayContaining([{ id: { in: ['ranked', 'unscored'] } }]) })
-    );
-  });
+    it('ends the feed on a short window', async () => {
+      const ids = [1, 2, 3].map(index => hexId('e', index));
+      serveRaw(ids);
 
-  it('uses the same compact population for New and orders it by creation time', async () => {
-    windows.queue = [
-      {
-        nodes: [
-          { id: 'older-high-rank', rankingScore: '100', createdAt: '1700000000' },
-          { id: 'newer-low-rank', rankingScore: '1', createdAt: '1800000000' },
-        ],
-        pageInfo: { hasNextPage: false, endCursor: null },
-      },
-      windowOf([entity('older-high-rank', CLAIM_TYPE_ID), entity('newer-low-rank', CLAIM_TYPE_ID)], {
-        hasNextPage: false,
-        endCursor: null,
-      }),
-    ];
+      const { pages, offsets } = await scroll();
 
-    const result = await fetchExploreFeed({
-      ...feedArgs,
-      sort: 'new',
-      requireDebateTagOnClaims: false,
-      completePopulationScopes: [
-        { typeIds: [CLAIM_TYPE_ID], entityFilter: { id: { in: ['older-high-rank', 'newer-low-rank'] } } },
-      ],
+      expect(pages).toEqual([ids]);
+      expect(offsets).toEqual([0]);
     });
 
-    expect(result.items.map(item => item.entityId)).toEqual(['newer-low-rank', 'older-high-rank']);
-    expect(windows.calls).toBe(2);
+    it('serves an empty, finished page when the topic has nothing', async () => {
+      serveRaw([]);
+
+      const page = await fetchExploreFeed({ ...topicArgs, sort: 'new' });
+
+      expect(page).toMatchObject({ items: [], nextCursor: null });
+    });
   });
 
-  it('reuses the ordered compact population when infinite scroll advances', async () => {
-    const rows = Array.from({ length: 31 }, (_, index) => ({
-      id: `entity-${index.toString().padStart(2, '0')}`,
-      rankingScore: String(31 - index),
-      createdAt: String(1_800_000_000 - index),
-    }));
-    windows.responder = operation =>
-      operation === 'ExploreCompleteIndex'
-        ? { nodes: rows, pageInfo: { hasNextPage: false, endCursor: null } }
-        : windowOf(
-            rows.map(row => entity(row.id, CLAIM_TYPE_ID)),
-            { hasNextPage: false, endCursor: null }
-          );
+  it('leaves Top on its own query, scoped by the topic filter', async () => {
+    windows.queue = [windowOf([entity('t1', CLAIM_TYPE_ID)], { hasNextPage: false, endCursor: null })];
 
-    const args = {
-      ...feedArgs,
-      requireDebateTagOnClaims: false,
-      completePopulationScopes: [{ typeIds: [CLAIM_TYPE_ID], entityFilter: { id: { in: rows.map(row => row.id) } } }],
-    };
-    const first = await fetchExploreFeed(args);
-    expect(first.nextCursor).not.toBeNull();
+    await fetchExploreFeed({ ...topicArgs, sort: 'top' });
 
-    await fetchExploreFeed({ ...args, cursor: first.nextCursor });
-
-    expect(windows.operations.filter(operation => operation === 'ExploreCompleteIndex')).toHaveLength(1);
-    expect(windows.operations.filter(operation => operation === 'ExploreEntitiesConnection')).toHaveLength(2);
+    expect(windows.operations).not.toContain('ExploreTopicFeedConnection');
+    expect(JSON.stringify(windows.variables[0]?.filter)).toContain('top-only');
   });
 });
 
@@ -645,13 +655,13 @@ describe('leading Best with a playable debate', () => {
     `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
   const mediaAsked: string[] = [];
 
-  const withMedia = (processed: Record<string, boolean>) =>
+  const withMedia = (processed: Record<string, boolean>, stills: string[] = []) =>
     vi.stubGlobal(
       'fetch',
       vi.fn(async (url: string) => {
         mediaAsked.push(url);
         const id = Object.keys(processed).find(hex => url.includes(`/debates/${uuid(hex)}/media`));
-        const artifacts = id && processed[id] ? [{ kind: 'final_video' }] : [];
+        const artifacts = id && processed[id] ? [{ kind: 'final_video' }, ...stills.map(kind => ({ kind }))] : [];
         return new Response(JSON.stringify({ artifacts }), { status: 200 });
       })
     );
@@ -713,6 +723,32 @@ describe('leading Best with a playable debate', () => {
     await fetchExploreFeed({ ...leadArgs, cursor: 'w1:0:next' });
 
     expect(mediaAsked).toEqual([]);
+  });
+
+  // GEO-3280. The card paints these before its own debate and media queries return.
+  it("hands the lead debate's stills to the card, and only the lead's", async () => {
+    windows.queue = [rankedWindow()];
+    withMedia({ [D1]: true, [D2]: true }, ['speaker_still_slot_1', 'speaker_still_slot_2']);
+
+    const result = await fetchExploreFeed(leadArgs);
+    const [lead, ...rest] = result.items;
+
+    expect(lead.entityId).toBe(D1);
+    expect(lead.debatePosters).toEqual({
+      slot1: expect.stringMatching(new RegExp(`/debates/${D1}/media/artifacts/speaker_still_slot_1/content$`)),
+      slot2: expect.stringMatching(new RegExp(`/debates/${D1}/media/artifacts/speaker_still_slot_2/content$`)),
+    });
+    expect(rest.every(item => item.debatePosters === undefined)).toBe(true);
+  });
+
+  it('gives the lead no stills when geo-chat cut none', async () => {
+    windows.queue = [rankedWindow()];
+    withMedia({ [D2]: true });
+
+    const result = await fetchExploreFeed(leadArgs);
+
+    expect(result.items[0].entityId).toBe(D2);
+    expect(result.items[0].debatePosters).toBeUndefined();
   });
 });
 
@@ -987,5 +1023,105 @@ describe('For you', () => {
     const bestItems = items.filter(item => !item.entityId.startsWith('t'));
     expect(bestItems.length).toBeGreaterThanOrEqual(5);
     expect(opsOf('ExploreForYouBestConnection').length).toBeGreaterThan(1);
+  });
+});
+
+describe('the topics clauses reaching the query', () => {
+  const PHILOSOPHY = 'cccccccccccccccccccccccccccccccc';
+  const ETHICS = 'dddddddddddddddddddddddddddddddd';
+
+  const paths = [
+    { name: 'best, ranked by type', args: { sort: 'best' as const, typeIds: [CLAIM_TYPE_ID] } },
+    { name: 'best, untyped ranked walk', args: { sort: 'best' as const, typeIds: [] } },
+    { name: 'new', args: { sort: 'new' as const, typeIds: [CLAIM_TYPE_ID] } },
+    { name: 'top', args: { sort: 'top' as const, typeIds: [CLAIM_TYPE_ID] } },
+  ];
+
+  const filterPaths = paths.filter(path => path.args.sort !== 'best');
+
+  function sentFilter() {
+    return windows.variables[0]?.filter as { and?: unknown[]; or?: unknown; relations?: unknown } | undefined;
+  }
+
+  function topicClause(topicId: string) {
+    return { relations: { some: { typeId: { is: TOPICS_PROPERTY_ID }, toEntityId: { is: topicId } } } };
+  }
+
+  it.each(filterPaths)('sends one clause per picked topic on the $name path', async ({ args }) => {
+    windows.queue = [windowOf([entity('c1', CLAIM_TYPE_ID)], { hasNextPage: false, endCursor: null })];
+
+    await fetchExploreFeed({ ...feedArgs, ...args, topicIds: [PHILOSOPHY, ETHICS] });
+
+    // Two clauses, not one: the threading must not collapse the selection on its way down, or the
+    // intersection the dropdown promises quietly becomes a union. See `topic-feed-filter.test`.
+    expect(sentFilter()?.and).toEqual([topicClause(PHILOSOPHY), topicClause(ETHICS)]);
+  });
+
+  it.each(paths)('leaves the $name filter untouched when no topic is picked', async ({ args }) => {
+    windows.queue = [windowOf([entity('c1', CLAIM_TYPE_ID)], { hasNextPage: false, endCursor: null })];
+
+    await fetchExploreFeed({ ...feedArgs, ...args });
+
+    // The regression that matters most: this feature is off for everyone who never opens the
+    // dropdown, so the unfiltered request has to be exactly what it was before.
+    expect(sentFilter()?.and).toBeUndefined();
+  });
+
+  it('keeps the ranked walk’s no-filter fast path when neither gate nor topic applies', async () => {
+    windows.queue = [windowOf([entity('c1', CLAIM_TYPE_ID)], { hasNextPage: false, endCursor: null })];
+
+    await fetchExploreFeed({ ...feedArgs, sort: 'best', typeIds: [], requireDebateTagOnClaims: false });
+
+    expect(sentFilter()).toBeUndefined();
+  });
+
+  it.each(filterPaths)('combines the topic clauses with the debate-tag gate on the $name path', async ({ args }) => {
+    windows.queue = [windowOf([entity('c1', CLAIM_TYPE_ID)], { hasNextPage: false, endCursor: null })];
+
+    await fetchExploreFeed({ ...feedArgs, ...args, topicIds: [PHILOSOPHY] });
+
+    expect(sentFilter()?.or).toEqual(claimsRequireDebateTagFilter([SPACE]).or);
+    expect(sentFilter()?.and).toEqual([topicClause(PHILOSOPHY)]);
+  });
+
+  it.each(filterPaths)('keeps the feed exclusions alongside the topics on the $name path', async ({ args }) => {
+    windows.queue = [windowOf([entity('c1', CLAIM_TYPE_ID)], { hasNextPage: false, endCursor: null })];
+
+    await fetchExploreFeed({ ...feedArgs, ...args, topicIds: [PHILOSOPHY] });
+
+    expect(sentFilter()?.relations).toBeDefined();
+    expect(sentFilter()?.and).toEqual([topicClause(PHILOSOPHY)]);
+  });
+});
+
+describe("a signed-in reader's pending membership requests", () => {
+  const page = () => [windowOf([entity('c1', CLAIM_TYPE_ID)], { hasNextPage: false, endCursor: null })];
+
+  it('checks against the member space the route already resolved, without looking it up again', async () => {
+    windows.queue = page();
+
+    const result = await fetchExploreFeed({ ...feedArgs, walletAddress: '0xabc', viewerMemberSpaceId: 'member-space' });
+
+    expect(viewer.profileLookups).toBe(0);
+    expect(viewer.requestLookups).toEqual([[SPACE, 'member-space']]);
+    expect(result.items[0]?.hasPendingMembershipRequest).toBe(true);
+  });
+
+  it('skips the checks for a reader the route found no member space for', async () => {
+    windows.queue = page();
+
+    await fetchExploreFeed({ ...feedArgs, walletAddress: '0xabc', viewerMemberSpaceId: null });
+
+    expect(viewer.profileLookups).toBe(0);
+    expect(viewer.requestLookups).toEqual([]);
+  });
+
+  it('looks the member space up itself when the caller did not', async () => {
+    windows.queue = page();
+
+    await fetchExploreFeed({ ...feedArgs, walletAddress: '0xabc' });
+
+    expect(viewer.profileLookups).toBe(1);
+    expect(viewer.requestLookups).toEqual([[SPACE, 'profile-space']]);
   });
 });

@@ -10,6 +10,7 @@ import { useActionContext } from '~/core/action-context-provider';
 import { copyAvailabilityLink } from '~/core/availability/availability-deep-link';
 import { summarizeSchedule } from '~/core/availability/schedule-summary';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
+import { useFeatureFlag } from '~/core/state/feature-flags';
 
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { useElevatedPopoverPortal } from '~/design-system/use-elevated-popover-portal';
@@ -17,7 +18,12 @@ import { useElevatedPopoverPortal } from '~/design-system/use-elevated-popover-p
 import { OwnScheduleModal } from '~/partials/availability/own-schedule-modal';
 
 import { useDebateActivity, useDebateSchedule, useGeoChatAuth, useUpdateDebateAvailability } from '../hooks';
-import { type DebateAnalyticsSurface, debateActionAnalyticsAttributes } from './hub-analytics';
+import { OpenLobbyDialog } from '../lobbies/open-lobby-dialog';
+import {
+  type DebateActionAnalyticsSurface,
+  debateActionAnalyticsAttributes,
+  debateActionAnalyticsAttributesKeepingHubLabel,
+} from './hub-analytics';
 import { hubPillClassName } from './hub-pill-button';
 
 /** How long "Link copied" stays before the row reads as a link again. */
@@ -35,8 +41,8 @@ export function HubHeaderControls({
 }: {
   /** The set-schedule banner sends focus here when it retires. */
   scheduleButtonRef?: React.RefObject<HTMLButtonElement | null>;
-  /** Whose clicks these are: the hub's, or the calendar's on its own page. */
-  analyticsSurface?: DebateAnalyticsSurface;
+  /** Whose clicks these are: the hub's, the calendar's on its own page, or a lobby's. */
+  analyticsSurface?: DebateActionAnalyticsSurface;
   children?: React.ReactNode;
 }) {
   return (
@@ -56,15 +62,15 @@ export function HubHeaderControls({
  * It replaced a full-width "I'm available" switch and a calendar icon for the weekly editor, which
  * sat beside the Calendar button looking identical to it while meaning something else.
  *
- * With no weekly times saved, the pill carries the brand-purple dot the old calendar icon did, so a
- * viewer who closed the set-schedule banner still has something quiet asking.
+ * With no weekly times saved, the pill carries the brand-purple dot the old calendar icon did, so
+ * the ask is still there on screens without the set-schedule banner.
  */
 function AvailabilityMenu({
   triggerRef,
   analyticsSurface,
 }: {
   triggerRef?: React.RefObject<HTMLButtonElement | null>;
-  analyticsSurface: DebateAnalyticsSurface;
+  analyticsSurface: DebateActionAnalyticsSurface;
 }) {
   const { authenticated } = useGeoChatAuth();
   const { data: activity } = useDebateActivity(authenticated);
@@ -73,6 +79,10 @@ function AvailabilityMenu({
   const popoverPortal = useElevatedPopoverPortal();
   const [open, setOpen] = React.useState(false);
   const [editing, setEditing] = React.useState(false);
+  const [openingLobby, setOpeningLobby] = React.useState(false);
+  // Only hosts open lobbies. It used to be a card above the panel's tabs (GEO-3133); the panel now
+  // starts with its content (GEO-3463), so it moved here, last, under the invite link.
+  const canHost = useFeatureFlag('lobbyHosting');
   const ownRef = React.useRef<HTMLButtonElement | null>(null);
   const openerRef = triggerRef ?? ownRef;
 
@@ -154,15 +164,32 @@ function AvailabilityMenu({
                 }}
                 className="flex w-full flex-col gap-0.5 border-t border-grey-01 p-2.5 text-left transition-colors hover:bg-grey-01"
               >
-                <span className="text-metadataMedium text-text">
-                  {isSet ? 'Edit my availability' : 'Set my availability'}
-                </span>
+                {/* "My times", the calendar's own name for the same week (decision 28). */}
+                <span className="text-metadataMedium text-text">{isSet ? 'Edit my times' : 'Set my times'}</span>
                 <span className="text-footnote text-grey-04">
                   {summary ? `${summary} · others can book these` : 'The times others can book you for.'}
                 </span>
               </button>
 
               <CopyBookingLink />
+
+              {/* Not from inside a lobby: one is already open around the menu. */}
+              {canHost && analyticsSurface !== 'lobby' ? (
+                <button
+                  type="button"
+                  // On the hub, the label the lobbies card's button had, so that series keeps reading
+                  // the same; elsewhere the surface's own prefix, so full screen and the calendar are
+                  // told apart from it.
+                  {...debateActionAnalyticsAttributesKeepingHubLabel(analyticsSurface, 'Open a lobby', 'Open a lobby')}
+                  onClick={() => {
+                    setOpen(false);
+                    setOpeningLobby(true);
+                  }}
+                  className="flex w-full border-t border-grey-01 p-2.5 text-left text-metadata text-text transition-colors hover:bg-grey-01"
+                >
+                  Open a lobby
+                </button>
+              ) : null}
             </Popover.Content>
           </Popover.Portal>
         ) : null}
@@ -174,6 +201,7 @@ function AvailabilityMenu({
         // Saves are attributed to the screen the editor was opened from, as its click label is.
         surface={analyticsSurface === 'calendar' ? 'calendar' : 'hub_header'}
       />
+      {openingLobby ? <OpenLobbyDialog onClose={() => setOpeningLobby(false)} /> : null}
     </>
   );
 }
@@ -207,7 +235,7 @@ function CopyBookingLink() {
       }}
       className="flex w-full border-t border-grey-01 p-2.5 text-left text-metadata text-text transition-colors hover:bg-grey-01"
     >
-      {state === 'copied' ? 'Link copied' : state === 'failed' ? 'Couldn’t copy the link' : 'Copy link to book you'}
+      {state === 'copied' ? 'Link copied' : state === 'failed' ? 'Couldn’t copy the link' : 'Copy my invite link'}
     </button>
   );
 }

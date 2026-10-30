@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 
 import * as React from 'react';
 
@@ -8,12 +8,17 @@ import { usePathname } from 'next/navigation';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { GeoChatRequestError } from '../api';
+import type { DebateClaimListId } from '../debate-claim-card-surface';
 import { DEBATES_MODAL } from '../debates-panel-deep-link';
 import { DebatesHubPanel } from './debates-hub-panel';
 import {
   type DebatesHubTab,
   debatesHubAtom,
   debatesHubExploreSearchAtom,
+  debatesHubExploreShowAtom,
+  debatesHubExploreShowMineAtom,
+  debatesHubExploreSomeoneOnlineAtom,
+  debatesHubExploreSortAtom,
   debatesHubExploreSpaceIdsAtom,
   debatesHubExploreSpaceSeedSpentAtom,
   debatesHubExploreTopicIdsAtom,
@@ -21,8 +26,20 @@ import {
   debatesHubLobbySpaceIdsAtom,
   debatesHubLobbySpaceSeedSpentAtom,
   debatesHubLobbyTopicIdsAtom,
+  debatesHubMatchesIncludeOfflineAtom,
   debatesHubMatchesOnlyAtom,
+  debatesHubMatchesSortAtom,
+  debatesHubPanelExploreSearchAtom,
+  debatesHubPanelExploreSpaceIdsAtom,
+  debatesHubPanelExploreSpaceSeedSpentAtom,
+  debatesHubPanelExploreTopicIdsAtom,
+  debatesHubPanelMatchesSearchAtom,
+  debatesHubPanelMatchesSpaceIdsAtom,
+  debatesHubPanelMatchesSpaceSeedSpentAtom,
+  debatesHubPanelMatchesTopicIdsAtom,
+  debatesHubPanelPeopleSpaceIdsAtom,
   debatesHubPeopleOnlineOnlyAtom,
+  debatesHubPeopleSortAtom,
   debatesHubPeopleSpaceIdsAtom,
   debatesHubPositionsSearchAtom,
   debatesHubPositionsSpaceIdsAtom,
@@ -32,6 +49,8 @@ import {
 import * as atomsModule from '~/atoms';
 
 const mocks = vi.hoisted(() => ({
+  /** What the panel handed its warming Explore, so the test can tell it apart from a bare `ClaimsTab`. */
+  warmClaimsTab: null as { atomsFrom?: string; panelFilters?: unknown } | null,
   promptSignIn: vi.fn(),
   ready: true,
   authenticated: true,
@@ -45,6 +64,24 @@ const mocks = vi.hoisted(() => ({
   isMobile: false,
   scheduledAwaitingAnswerCount: undefined as number | undefined,
   scheduledRequests: undefined as unknown[] | undefined,
+  matches: [] as unknown[],
+  capture: vi.fn(),
+}));
+
+vi.mock('~/core/analytics', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/analytics')>()),
+  capture: mocks.capture,
+}));
+
+// Booking reads room completion only when moving a scheduled request.
+vi.mock('../rooms/request-room', () => ({
+  useRequestRoom: () => ({
+    requests: { isLoading: false },
+    rooms: { isLoading: false },
+    request: undefined,
+    room: null,
+    finished: false,
+  }),
 }));
 
 vi.mock('../rooms/scheduling-hooks', () => ({
@@ -52,12 +89,35 @@ vi.mock('../rooms/scheduling-hooks', () => ({
   // The People tab's booking modal; booking has its own coverage.
   useCreateScheduledDebate: () => ({ mutate: vi.fn(), isPending: false, error: null }),
   useRescheduleScheduledDebate: () => ({ mutate: vi.fn(), isPending: false, error: null }),
+  useNoTimeWorks: () => ({ mutate: vi.fn(), reset: vi.fn(), isPending: false, error: null }),
 }));
+
+// The strip, the nudge and the Requests schedule have their own suites; here it only matters that
+// the panel draws them where it should.
+vi.mock('./hub-live-strip', () => ({
+  HubLiveStrip: ({ lineup }: { lineup: { live: unknown[] } }) => (
+    <div data-testid="hub-live-strip" data-live={String(lineup.live.length)} />
+  ),
+}));
+vi.mock('./no-times-nudge', () => ({ NoTimesNudge: () => <div data-testid="no-times-nudge" /> }));
+vi.mock('./requests-schedule', () => ({ RequestsSchedule: () => <div data-testid="requests-schedule" /> }));
+// Matches reads geo-chat's match list and the graph through react-query, which this suite does not
+// stand up. Its own suite covers it; here it only matters which tab shows it.
+vi.mock('./matches-list', () => ({ MatchesList: () => <div data-testid="matches-list" /> }));
 
 // The scheduled section has its own suite and reads rooms and summaries this one does not stand up.
 vi.mock('./scheduled-debates-section', () => ({
   ScheduledDebatesSection: () => null,
-  useScheduledContent: () => ({ answerable: [], upcoming: [], people: [], requestsError: null, roomsError: null }),
+  hasScheduledContent: () => false,
+  useScheduledContent: () => ({
+    answerable: [],
+    upcoming: [],
+    lobbies: [],
+    people: [],
+    requestsError: null,
+    roomsError: null,
+    lobbiesError: null,
+  }),
 }));
 
 vi.mock('next/navigation', () => ({
@@ -89,11 +149,17 @@ vi.mock('../claim-picker-page', async importOriginal => ({
   useClaimEntitiesByIds: () => ({ entities: [], isLoading: false, error: null }),
 }));
 
+// GEO-3268's lineup reads the lobby list and holds the matchmaking scope; nothing is live here.
+const lineup = vi.hoisted(() => ({ live: [] as { lobby_id: string }[], soon: null, later: [] }));
+vi.mock('../lobbies/live-lobbies', () => ({ useLobbyLineup: () => lineup }));
+
 vi.mock('../hooks', () => ({
   // The set-schedule banner reads the saved calendar; these keep the mock complete rather than
   // exercising it — the schedule itself is covered in core/availability.
   useDebateSchedule: () => ({ blocks: [], isSet: false }),
   useSaveDebateSchedule: () => ({ mutate: vi.fn(), isPending: false }),
+  // The People tab's week reads it when moving a request (GEO-3429); nothing here moves one.
+  usePeerSchedule: () => ({ schedule: undefined }),
   useGeoChatAuth: () => ({ ready: mocks.ready, authenticated: mocks.authenticated, accountKey: mocks.accountKey }),
   useDebateActivity: () => ({
     data: {
@@ -117,7 +183,7 @@ vi.mock('./hooks', () => ({
     error: mocks.peopleError,
   }),
   useMatchmakingClaims: () => ({ data: undefined, isLoading: false, error: null, hasNextPage: false }),
-  useMatchmakingMatches: () => ({ data: { matches: [] }, isLoading: false, error: null }),
+  useMatchmakingMatches: () => ({ data: { matches: mocks.matches }, isLoading: false, error: null }),
   useCreateDebateRequest: () => ({ mutate: vi.fn(), isPending: false, error: null }),
   useWithdrawDebateRequest: () => ({ mutate: vi.fn(), isPending: false, error: null }),
   useAcceptDebateRequest: () => ({ mutate: vi.fn(), isPending: false, error: null }),
@@ -146,6 +212,8 @@ vi.mock('~/core/hooks/use-spaces-by-ids', () => ({
 // stays real because the People tab renders it.
 vi.mock('./claims-tab', async () => {
   const actual = await vi.importActual<typeof import('./claims-tab')>('./claims-tab');
+  const surface = await vi.importActual<typeof import('../debate-claim-card-surface')>('../debate-claim-card-surface');
+  const MOCK_LIST_IDS = { explore: 'hub_explore', lobby: 'hub_lobby', positions: 'hub_my_positions' } as const;
   return {
     ...actual,
     // Two markers rather than one, because the hub now mounts a second, warming instance behind
@@ -155,7 +223,21 @@ vi.mock('./claims-tab', async () => {
     //
     // The real warming instance renders null; this draws a marker because that is the only way a
     // test can see it at all.
-    ClaimsTab: ({ warm = false }: { warm?: boolean }) => <div data-testid={warm ? 'claims-tab-warm' : 'claims-tab'} />,
+    //
+    // The warming one also records what it was handed: it has to be the panel's Explore, with the
+    // panel's filters, not a bare `ClaimsTab warm` running full screen's settings.
+    ClaimsTab: (props: {
+      warm?: boolean;
+      atomsFrom?: string;
+      panelFilters?: unknown;
+      variant?: 'explore' | 'lobby' | 'positions';
+      listId?: DebateClaimListId;
+    }) => {
+      if (props.warm) mocks.warmClaimsTab = props;
+      // Says which list it is, as the real one does, so the tab row can record leaving it.
+      surface.useReportDrawnHubList(props.listId ?? MOCK_LIST_IDS[props.variant ?? 'explore'], !props.warm);
+      return <div data-testid={props.warm ? 'claims-tab-warm' : 'claims-tab'} />;
+    },
   };
 });
 
@@ -204,6 +286,8 @@ function renderOpen(tab: DebatesHubTab = 'requests') {
 }
 
 beforeEach(() => {
+  mocks.warmClaimsTab = null;
+  lineup.live = [];
   mocks.ready = true;
   mocks.authenticated = true;
   mocks.accountKey = 'user-a';
@@ -216,6 +300,7 @@ beforeEach(() => {
   mocks.isMobile = false;
   mocks.scheduledAwaitingAnswerCount = undefined;
   mocks.scheduledRequests = undefined;
+  mocks.matches = [];
 });
 
 afterEach(cleanup);
@@ -249,8 +334,70 @@ const FILTER_ATOMS = [
   { name: 'debatesHubLobbyTopicIdsAtom', atom: debatesHubLobbyTopicIdsAtom, dirty: ['topic-a'], cleared: [] },
   { name: 'debatesHubLobbySearchAtom', atom: debatesHubLobbySearchAtom, dirty: 'nuclear', cleared: '' },
   { name: 'debatesHubLobbySpaceSeedSpentAtom', atom: debatesHubLobbySpaceSeedSpentAtom, dirty: true, cleared: false },
+  // GEO-3463: the panel's own selections, apart from full screen's.
+  {
+    name: 'debatesHubPanelMatchesSpaceIdsAtom',
+    atom: debatesHubPanelMatchesSpaceIdsAtom,
+    dirty: ['space-a'],
+    cleared: [],
+  },
+  {
+    name: 'debatesHubPanelMatchesTopicIdsAtom',
+    atom: debatesHubPanelMatchesTopicIdsAtom,
+    dirty: ['topic-a'],
+    cleared: [],
+  },
+  { name: 'debatesHubPanelMatchesSearchAtom', atom: debatesHubPanelMatchesSearchAtom, dirty: 'nuclear', cleared: '' },
+  {
+    name: 'debatesHubPanelMatchesSpaceSeedSpentAtom',
+    atom: debatesHubPanelMatchesSpaceSeedSpentAtom,
+    dirty: true,
+    cleared: false,
+  },
+  {
+    name: 'debatesHubPanelExploreSpaceIdsAtom',
+    atom: debatesHubPanelExploreSpaceIdsAtom,
+    dirty: ['space-a'],
+    cleared: [],
+  },
+  {
+    name: 'debatesHubPanelExploreTopicIdsAtom',
+    atom: debatesHubPanelExploreTopicIdsAtom,
+    dirty: ['topic-a'],
+    cleared: [],
+  },
+  { name: 'debatesHubPanelExploreSearchAtom', atom: debatesHubPanelExploreSearchAtom, dirty: 'nuclear', cleared: '' },
+  {
+    name: 'debatesHubPanelExploreSpaceSeedSpentAtom',
+    atom: debatesHubPanelExploreSpaceSeedSpentAtom,
+    dirty: true,
+    cleared: false,
+  },
   { name: 'debatesHubPeopleSpaceIdsAtom', atom: debatesHubPeopleSpaceIdsAtom, dirty: ['space-a'], cleared: [] },
+  {
+    name: 'debatesHubPanelPeopleSpaceIdsAtom',
+    atom: debatesHubPanelPeopleSpaceIdsAtom,
+    dirty: ['space-a'],
+    cleared: [],
+  },
   { name: 'debatesHubPeopleOnlineOnlyAtom', atom: debatesHubPeopleOnlineOnlyAtom, dirty: true, cleared: false },
+  // GEO-3463: the panel's Sort and its tab-specific filters are session state like the rest.
+  { name: 'debatesHubPeopleSortAtom', atom: debatesHubPeopleSortAtom, dirty: 'az', cleared: 'online' },
+  { name: 'debatesHubMatchesSortAtom', atom: debatesHubMatchesSortAtom, dirty: 'people', cleared: 'best' },
+  { name: 'debatesHubExploreSortAtom', atom: debatesHubExploreSortAtom, dirty: 'newest', cleared: 'best' },
+  {
+    name: 'debatesHubMatchesIncludeOfflineAtom',
+    atom: debatesHubMatchesIncludeOfflineAtom,
+    dirty: true,
+    cleared: false,
+  },
+  {
+    name: 'debatesHubExploreSomeoneOnlineAtom',
+    atom: debatesHubExploreSomeoneOnlineAtom,
+    dirty: true,
+    cleared: false,
+  },
+  { name: 'debatesHubExploreShowMineAtom', atom: debatesHubExploreShowMineAtom, dirty: true, cleared: false },
 ] as const;
 
 describe('DebatesHubPanel', () => {
@@ -260,17 +407,43 @@ describe('DebatesHubPanel', () => {
   //
   // Every atom the bar holds, not a sample of them: this is the isolation test, so an atom left out
   // of `resetDebatesHubFiltersAtom` has to fail here rather than quietly hand B one of A's filters.
-  // GEO-2861. Four tabs, and "My positions" is not one of them: it is a source inside Explore's
-  // menu, one more answer to "which claims?" rather than a surface of its own.
-  it('offers Live, People, Explore, My positions and Requests, in that order', () => {
+  // GEO-3463. Four tabs, People first. "Live" became Matches and "My positions" one of Explore's Shows.
+  it('offers People, Matches, Explore and Requests, in that order', () => {
     renderOpen('explore');
 
-    const order = ['Live', 'People', 'Explore', 'My positions', 'Requests'];
-    const row = screen.getByRole('button', { name: /^Live/ }).closest('.overflow-x-auto');
+    const order = ['People', 'Matches', 'Explore', 'Requests'];
+    const row = screen.getByRole('button', { name: /^People/ }).closest('.overflow-x-auto');
     const labels = [...(row?.querySelectorAll('button') ?? [])].map(button => button.textContent?.trim());
 
     expect(labels).toEqual(order);
-    expect(screen.queryByRole('button', { name: 'My claims' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Live/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^My positions/ })).not.toBeInTheDocument();
+  });
+
+  // The Panel-Matches board: how many matches there are, quietly beside the tab's name.
+  it('shows how many matches there are beside Matches, and nothing at none', () => {
+    renderOpen('explore');
+    expect(screen.getByRole('button', { name: /^Matches/ })).toHaveTextContent(/^Matches$/);
+    cleanup();
+
+    mocks.matches = [{}, {}, {}];
+    renderOpen('explore');
+    // Review, 27 Oct: read aloud as "3 online", though it counts matched claims.
+    expect(screen.getByRole('button', { name: /^Matches/ })).toHaveTextContent(/^Matches3 matches$/);
+    cleanup();
+
+    mocks.matches = [{}];
+    renderOpen('explore');
+    expect(screen.getByRole('button', { name: /^Matches/ })).toHaveTextContent(/^Matches1 match$/);
+  });
+
+  it('labels each tab’s clicks with its new name', () => {
+    renderOpen('explore');
+
+    expect(screen.getByRole('button', { name: /^Matches/ })).toHaveAttribute(
+      'data-geo-analytics-label',
+      'Debate hub Matches tab'
+    );
   });
 
   it('clears the filter bar when the account behind it changes', () => {
@@ -300,7 +473,9 @@ describe('DebatesHubPanel', () => {
    */
   it('covers every filter atom on every surface', () => {
     const exported = Object.keys(atomsModule).filter(name =>
-      /^debatesHub[A-Z][A-Za-z]*(?:SpaceIds|TopicIds|Search|SpaceSeedSpent|OnlineOnly)Atom$/.test(name)
+      /^debatesHub[A-Z][A-Za-z]*(?:SpaceIds|TopicIds|Search|SpaceSeedSpent|OnlineOnly|Sort|IncludeOffline|SomeoneOnline|ShowMine)Atom$/.test(
+        name
+      )
     );
 
     expect(new Set(exported)).toEqual(new Set(FILTER_ATOMS.map(entry => entry.name)));
@@ -432,18 +607,18 @@ describe('DebatesHubPanel', () => {
   it('renders every tab and switches between them', async () => {
     renderOpen();
 
-    for (const label of ['Requests', 'Live', 'Explore', 'People']) {
+    for (const label of ['Requests', 'Matches', 'Explore', 'People']) {
       expect(screen.getByRole('button', { name: new RegExp(`^${label}`) })).toBeInTheDocument();
     }
 
     // jsdom has no layout, so reachability at a narrow width can't be asserted directly. The
     // scroll container is the thing that guarantees it, so pin that instead — without it the
     // last tab is clipped by the panel's `overflow-hidden` with no way to get to it.
-    const row = screen.getByRole('button', { name: /^Live/ }).closest('.overflow-x-auto');
+    const row = screen.getByRole('button', { name: /^People/ }).closest('.overflow-x-auto');
     expect(row).not.toBeNull();
 
     // Order, not just presence: the labels alone stayed green through a reorder.
-    const order = ['Live', 'People', 'Explore', 'My positions', 'Requests'];
+    const order = ['People', 'Matches', 'Explore', 'Requests'];
     const rendered = order.map(label => screen.getByRole('button', { name: new RegExp(`^${label}`) }));
     for (const [index, tab] of rendered.slice(0, -1).entries()) {
       const next = rendered[index + 1];
@@ -455,6 +630,58 @@ describe('DebatesHubPanel', () => {
     // Tab bodies cross-fade, so the incoming panel arrives after the outgoing one finishes.
     // Signed in, the list includes offline people free at shared times, so the empty copy says so.
     expect(await screen.findByText('Nobody is online or free to debate this week.')).toBeInTheDocument();
+  });
+
+  // GEO-3495: a press on a claim tab names the tab, and the list on screen it left. Which list a
+  // claim tab draws is the list's own business (its filters), so the list reports itself.
+  it('records a press on a claim tab as leaving the list on screen', () => {
+    const store = createStore();
+    store.set(debatesHubAtom, { tab: 'explore' });
+    render(
+      <Provider store={store}>
+        <DebatesHubPanel />
+      </Provider>
+    );
+    mocks.capture.mockClear();
+    const tabPresses = () =>
+      mocks.capture.mock.calls
+        .filter(([event, props]) => event === 'action_completed' && props.action_kind === 'filter_claims')
+        .map(([, props]) => [props.list_id ?? null, props.target_type, props.target_id]);
+
+    fireEvent.click(screen.getByRole('button', { name: /^Matches/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^People/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Explore/ }));
+
+    expect(tabPresses()).toEqual([
+      ['hub_explore', 'hub_tab', 'matches'],
+      // People is not a claim list, so the press onto it is not a claim choice, and a press from it
+      // left no list.
+      [null, 'hub_tab', 'explore'],
+    ]);
+  });
+
+  // GEO-3463. Before the tabs: the header and at most one strip. The strip decides for itself
+  // whether it has anything to say; the upcoming-lobbies card and the schedule banner are gone.
+  it('puts only the strip between the header and the tabs, on every tab', () => {
+    for (const tab of ['people', 'lobby', 'explore', 'requests'] as const) {
+      renderOpen(tab);
+      const strip = screen.getByTestId('hub-live-strip');
+      const firstTab = screen.getByRole('button', { name: /^People/ });
+      expect(Boolean(strip.compareDocumentPosition(firstTab) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+      expect(screen.queryByTestId('schedule-banner')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('live-lobbies-card')).not.toBeInTheDocument();
+      cleanup();
+    }
+  });
+
+  it('draws each tab’s own body', () => {
+    // Nobody who disagrees is online in this suite, so Matches shows the wider list on its own.
+    renderOpen('lobby');
+    expect(screen.getByTestId('claims-tab')).toBeInTheDocument();
+    cleanup();
+
+    renderOpen('requests');
+    expect(screen.getByTestId('requests-schedule')).toBeInTheDocument();
   });
 
   it('toggles availability from the panel header', async () => {
@@ -492,22 +719,18 @@ describe('DebatesHubPanel', () => {
   });
 
   // GEO-2725. The hub used to be one sign-in message end to end. Explore and People describe the
-  // corpus rather than the viewer, so both are readable signed out and are what the row offers.
-  it('offers Explore and People to anonymous visitors, and shows the Explore list', () => {
+  // corpus rather than the viewer, so both are readable signed out and are what the row offers —
+  // People first since GEO-3463, the tab the panel opens on for everyone.
+  it('offers People and Explore to anonymous visitors, and lands on People', () => {
     mocks.authenticated = false;
     renderOpen();
 
-    // Explore leads: it is the one the panel opens on, and a row that led with the tab you are not
-    // on was `SIGNED_OUT_TABS` naming the contents while `TABS` quietly decided the order.
     const row = screen.getByRole('button', { name: 'Explore' }).closest('.overflow-x-auto');
     const labels = [...(row?.querySelectorAll('button') ?? [])].map(button => button.textContent?.trim());
-    expect(labels).toEqual(['Explore', 'People']);
+    expect(labels).toEqual(['People', 'Explore']);
 
-    expect(screen.getByRole('button', { name: 'Explore' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'People' })).toBeInTheDocument();
     expect(screen.queryByText('Sign in to find people to debate.')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Explore' })).toHaveAttribute('aria-current', 'true');
-    expect(screen.getByTestId('claims-tab')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'People' })).toHaveAttribute('aria-current', 'true');
   });
 
   // Matches and Requests are a particular person's, so signed out they have no possible contents.
@@ -522,11 +745,22 @@ describe('DebatesHubPanel', () => {
     expect(screen.queryByRole('button', { name: /positions/i })).not.toBeInTheDocument();
   });
 
-  it('draws My positions as its own tab once there is a viewer to have any', () => {
-    renderOpen('positions');
+  // GEO-3463. My positions is one of Explore's Shows; a link to the old tab lands there.
+  it('opens Explore on My positions when asked for the positions tab', () => {
+    const store = renderOpen('positions');
 
-    expect(screen.getByRole('button', { name: /^My positions/ })).toHaveAttribute('aria-current', 'true');
+    expect(store.get(debatesHubAtom)).toEqual({ tab: 'explore' });
+    expect(store.get(debatesHubExploreShowAtom)).toBe('mine');
+    expect(screen.getByRole('button', { name: /^Explore/ })).toHaveAttribute('aria-current', 'true');
     expect(screen.getByTestId('claims-tab')).toBeInTheDocument();
+  });
+
+  it('opens plain Explore for a signed-out link to the positions tab', () => {
+    mocks.authenticated = false;
+    const store = renderOpen('positions');
+
+    expect(store.get(debatesHubAtom)).toEqual({ tab: 'explore' });
+    expect(store.get(debatesHubExploreShowAtom)).toBe('unanswered');
   });
 
   // `authenticated` is false while Privy restores, so a row drawn before then is the signed-out
@@ -549,11 +783,11 @@ describe('DebatesHubPanel', () => {
   });
 
   // Signing out with Matches open would otherwise leave a tab body showing with no tab selected.
-  it('falls back to Explore when signed out on a tab that is no longer offered', () => {
+  it('falls back to People when signed out on a tab that is no longer offered', () => {
     mocks.authenticated = false;
     renderOpen('lobby');
 
-    expect(screen.getByRole('button', { name: 'Explore' })).toHaveAttribute('aria-current', 'true');
+    expect(screen.getByRole('button', { name: 'People' })).toHaveAttribute('aria-current', 'true');
     expect(screen.queryByRole('button', { name: /Matches/ })).not.toBeInTheDocument();
   });
 
@@ -584,6 +818,41 @@ describe('DebatesHubPanel', () => {
 
     expect(store.get(debatesHubAtom)).not.toBeNull();
     opener.remove();
+  });
+
+  // GEO-3463. On a phone, Filters is a bottom sheet — inside the panel's own sheet, so the focus
+  // trap and `aria-modal` boundary still hold around it.
+  it('opens Filters as a sheet inside the mobile sheet', async () => {
+    mocks.isMobile = true;
+    window.ResizeObserver ??= class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    } as unknown as typeof ResizeObserver;
+    renderOpen('people');
+    const dialog = screen.getByRole('dialog', { name: 'Debates' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Filters' }));
+    const filters = await screen.findByRole('dialog', { name: 'Filters' });
+    expect(dialog).toContainElement(filters);
+    expect(within(filters).getByRole('button', { name: /^Show/ })).toBeInTheDocument();
+  });
+
+  // Escape belongs to whatever is on top: closing Filters must not take the panel with it.
+  it.each([false, true])('closes Filters, not the panel, on Escape (mobile: %s)', async isMobile => {
+    mocks.isMobile = isMobile;
+    window.ResizeObserver ??= class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    } as unknown as typeof ResizeObserver;
+    const store = renderOpen('people');
+    fireEvent.click(screen.getByRole('button', { name: 'Filters' }));
+    const filters = await screen.findByRole('dialog', { name: 'Filters' });
+
+    fireEvent.keyDown(filters, { key: 'Escape' });
+
+    expect(screen.queryByRole('dialog', { name: 'Filters' })).not.toBeInTheDocument();
+    expect(store.get(debatesHubAtom)).not.toBeNull();
   });
 
   it('gives the mobile sheet a close button that assistive tech can reach', () => {
@@ -712,6 +981,16 @@ describe('warming Explore', () => {
     expect(screen.getByTestId('claims-tab-warm')).toBeInTheDocument();
   });
 
+  // 26 Oct: a bare `ClaimsTab warm` ran with full screen's settings and seeded the viewer's spaces.
+  it('warms the panel’s Explore, with the panel’s filters and selection', () => {
+    renderOpen('people');
+
+    expect(mocks.warmClaimsTab).toMatchObject({
+      atomsFrom: 'panelExplore',
+      panelFilters: expect.objectContaining({ sort: expect.objectContaining({ value: 'best' }) }),
+    });
+  });
+
   // Or the selection atoms and geo-chat's space scopes would have two owners, and the tab the
   // viewer is looking at would be competing with a copy of itself.
   it('drops the warming mount once Explore is the tab on screen', () => {
@@ -748,8 +1027,9 @@ describe('the way out to the full-screen hub', () => {
     }
   });
 
+  // `positions` lands on Explore's My positions, which is full screen's positions list.
   it.each([
-    ['explore', 'explore'],
+    ['explore', null],
     ['positions', 'positions'],
   ] as const)('opens the workspace on the list %s was showing', (tab, list) => {
     renderOpen(tab);
@@ -769,19 +1049,18 @@ describe('the way out to the full-screen hub', () => {
 
   // Link the list on screen, not the stored tab — signed out that can be Explore while storage still says Lobby.
   describe('signed out, where the tab on screen is not the tab in storage', () => {
-    it('carries what Explore is showing, not the stored tab’s empty atoms', () => {
+    it('carries what is on screen (People), not the stored tab’s list', () => {
       mocks.authenticated = false;
       const store = createStore();
       store.set(debatesHubAtom, { tab: 'lobby' });
-      store.set(debatesHubExploreSearchAtom, 'nuclear');
+      store.set(debatesHubLobbySearchAtom, 'nuclear');
       render(
         <Provider store={store}>
           <DebatesHubPanel />
         </Provider>
       );
 
-      const href = screen.getByRole('link', { name: /open full screen/i }).getAttribute('href') ?? '';
-      expect(new URLSearchParams(href.split('?')[1] ?? '').get('q')).toBe('nuclear');
+      expect(screen.getByRole('link', { name: /open full screen/i })).toHaveAttribute('href', '/matchmaking');
     });
 
     it('names Explore, not the list the viewer cannot see', () => {
@@ -796,15 +1075,17 @@ describe('the way out to the full-screen hub', () => {
       );
 
       const href = screen.getByRole('link', { name: /open full screen/i }).getAttribute('href') ?? '';
-      expect(new URLSearchParams(href.split('?')[1] ?? '').get('list')).toBe('explore');
+      expect(new URLSearchParams(href.split('?')[1] ?? '').get('list')).toBeNull();
     });
   });
 
-  it('omits Lobby from the URL, which is the workspace default', () => {
+  it('names Lobby in the URL so Matches still opens in the workspace', () => {
+    // Someone online who disagrees: Matches is drawing geo-chat's match list, not its fallback.
+    mocks.matches = [{}];
     renderOpen('lobby');
 
     const href = screen.getByRole('link', { name: /open full screen/i }).getAttribute('href') ?? '';
-    expect(new URLSearchParams(href.split('?')[1] ?? '').get('list')).toBeNull();
+    expect(new URLSearchParams(href.split('?')[1] ?? '').get('list')).toBe('lobby');
   });
 
   it.each(['requests', 'people'] as const)('hands over no list from %s, which is not one', tab => {
@@ -815,6 +1096,7 @@ describe('the way out to the full-screen hub', () => {
   });
 
   it('hands over Lobby from Lobby, not what its Matches-only toggle says', () => {
+    mocks.matches = [{}];
     const store = createStore();
     store.set(debatesHubAtom, { tab: 'lobby' });
     store.set(debatesHubMatchesOnlyAtom, true);
@@ -826,8 +1108,53 @@ describe('the way out to the full-screen hub', () => {
     );
 
     const href = screen.getByRole('link', { name: /open full screen/i }).getAttribute('href') ?? '';
-    // Default list is omitted; the toggle never becomes its own `list` value.
-    expect(new URLSearchParams(href.split('?')[1] ?? '').get('list')).toBeNull();
+    // The toggle never becomes its own `list` value.
+    expect(new URLSearchParams(href.split('?')[1] ?? '').get('list')).toBe('lobby');
+  });
+
+  // Matches drawing offline people is drawing your positions, whether switched on or as its fallback.
+  it('opens your positions from Matches while it shows offline people', () => {
+    const listOf = () =>
+      new URLSearchParams(
+        screen
+          .getByRole('link', { name: /open full screen/i })
+          .getAttribute('href')
+          ?.split('?')[1] ?? ''
+      ).get('list');
+    mocks.matches = [{}];
+    const store = renderOpen('lobby');
+    expect(listOf()).toBe('lobby');
+
+    act(() => store.set(debatesHubMatchesIncludeOfflineAtom, true));
+    expect(listOf()).toBe('positions');
+
+    // Nobody who disagrees is online: the tab falls back to the same list without the switch.
+    cleanup();
+    mocks.matches = [];
+    renderOpen('lobby');
+    expect(listOf()).toBe('positions');
+  });
+
+  // Explore with Someone online draws geo-chat's list, which is full screen's default (`lobby`).
+  it('opens geo-chat’s list from Explore with Someone online, with Explore’s narrowing', () => {
+    const store = createStore();
+    store.set(debatesHubAtom, { tab: 'explore' });
+    store.set(debatesHubExploreSomeoneOnlineAtom, true);
+    store.set(debatesHubPanelExploreSearchAtom, 'nuclear');
+    render(
+      <Provider store={store}>
+        <DebatesHubPanel />
+      </Provider>
+    );
+
+    const params = new URLSearchParams(
+      screen
+        .getByRole('link', { name: /open full screen/i })
+        .getAttribute('href')
+        ?.split('?')[1] ?? ''
+    );
+    expect(params.get('list')).toBe('lobby');
+    expect(params.get('q')).toBe('nuclear');
   });
 
   /**
@@ -866,7 +1193,7 @@ describe('the filters the expand link carries', () => {
   it('carries no scope, which the workspace has no way to honour', () => {
     const store = createStore();
     store.set(debatesHubAtom, { tab: 'explore' });
-    store.set(debatesHubExploreSearchAtom, 'nuclear');
+    store.set(debatesHubPanelExploreSearchAtom, 'nuclear');
 
     render(
       <Provider store={store}>
@@ -881,9 +1208,11 @@ describe('the filters the expand link carries', () => {
   it('carries the tab’s narrowing into the URL', () => {
     const store = createStore();
     store.set(debatesHubAtom, { tab: 'explore' });
-    store.set(debatesHubExploreSearchAtom, 'nuclear');
-    store.set(debatesHubExploreSpaceIdsAtom, ['space-a']);
-    store.set(debatesHubExploreTopicIdsAtom, ['topic-a', 'topic-b']);
+    store.set(debatesHubPanelExploreSearchAtom, 'nuclear');
+    store.set(debatesHubPanelExploreSpaceIdsAtom, ['space-a']);
+    store.set(debatesHubPanelExploreTopicIdsAtom, ['topic-a', 'topic-b']);
+    // Full screen's own selection is not what the panel is showing.
+    store.set(debatesHubExploreSearchAtom, 'climate');
 
     render(
       <Provider store={store}>
@@ -895,17 +1224,17 @@ describe('the filters the expand link carries', () => {
     const params = new URLSearchParams(href.split('?')[1] ?? '');
     // Carried with the rest: the search is an atom now, so it outlives the tab being unmounted,
     // which was the one reason this link used to leave it behind.
-    expect(params.get('list')).toBe('explore');
+    expect(params.get('list')).toBeNull();
     expect(params.get('q')).toBe('nuclear');
     expect(params.get('spaces')).toBe('space-a');
     expect(params.get('topics')).toBe('topic-a,topic-b');
   });
 
-  it('carries Lobby’s narrowing, not Explore’s', () => {
+  it('carries Matches’ narrowing, not Explore’s', () => {
     const store = createStore();
     store.set(debatesHubAtom, { tab: 'lobby' });
-    store.set(debatesHubLobbySearchAtom, 'climate');
-    store.set(debatesHubExploreSearchAtom, 'nuclear');
+    store.set(debatesHubPanelMatchesSearchAtom, 'climate');
+    store.set(debatesHubPanelExploreSearchAtom, 'nuclear');
 
     render(
       <Provider store={store}>
@@ -915,6 +1244,28 @@ describe('the filters the expand link carries', () => {
 
     const href = screen.getByRole('link', { name: /open full screen/i }).getAttribute('href') ?? '';
     expect(new URLSearchParams(href.split('?')[1] ?? '').get('q')).toBe('climate');
+  });
+
+  // The panel wants every picked space, full screen any of them: several would open a wider list.
+  it('leaves several picked spaces behind, and carries one', () => {
+    const store = createStore();
+    store.set(debatesHubAtom, { tab: 'explore' });
+    store.set(debatesHubPanelExploreSpaceIdsAtom, ['space-a', 'space-b']);
+    store.set(debatesHubPanelExploreTopicIdsAtom, ['topic-a']);
+
+    render(
+      <Provider store={store}>
+        <DebatesHubPanel />
+      </Provider>
+    );
+
+    const link = screen.getByRole('link', { name: /open full screen/i });
+    const params = () => new URLSearchParams(link.getAttribute('href')?.split('?')[1] ?? '');
+    expect(params().get('spaces')).toBeNull();
+    expect(params().get('topics')).toBe('topic-a');
+
+    act(() => store.set(debatesHubPanelExploreSpaceIdsAtom, ['space-a']));
+    expect(params().get('spaces')).toBe('space-a');
   });
 });
 
@@ -941,8 +1292,8 @@ describe('Requests badge', () => {
     expect(renderRequestsButton()).not.toHaveTextContent('pending requests');
   });
 
-  // Pending in either direction: a request you sent is still in the tab until they answer.
-  it('counts every pending scheduled request once the list lands, sent or received', () => {
+  // GEO-3463: only what needs the viewer's answer. A request you sent is waiting on them, not you.
+  it('counts only the scheduled requests waiting on your answer once the list lands', () => {
     mocks.scheduledAwaitingAnswerCount = 1;
     mocks.scheduledRequests = [
       { status: 'pending', room_id: null, viewer_must_answer: true },
@@ -950,6 +1301,23 @@ describe('Requests badge', () => {
       { status: 'accepted', room_id: 'room-1', viewer_must_answer: false },
     ];
 
-    expect(renderRequestsButton()).toHaveTextContent('2 pending requests');
+    expect(renderRequestsButton()).toHaveTextContent('1 pending requests');
+  });
+});
+
+// GEO-3463. One strip above the tabs, fed the lobby lineup, and one "no times" line below the list.
+describe('DebatesHubPanel strip and nudge', () => {
+  it('hands the strip the lobby lineup', () => {
+    lineup.live = [{ lobby_id: 'nyc' }];
+    renderOpen('explore');
+    expect(screen.getByTestId('hub-live-strip')).toHaveAttribute('data-live', '1');
+  });
+
+  it('draws the no-times line once, outside the tabs, above the way out to full screen', () => {
+    renderOpen('people');
+    const nudge = screen.getByTestId('no-times-nudge');
+    const link = screen.getByRole('link', { name: /open full screen/i });
+    expect(Boolean(nudge.compareDocumentPosition(link) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+    expect(screen.getAllByTestId('no-times-nudge')).toHaveLength(1);
   });
 });

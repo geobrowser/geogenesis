@@ -4,54 +4,63 @@ import { useMutation, useMutationState, useQueryClient } from '@tanstack/react-q
 
 import * as React from 'react';
 
-import { reconcileDeletedRelations } from '~/core/bounties/reconcile-store';
+import { snapshotActionContext } from '~/core/action-context';
+import { observeOperation } from '~/core/analytics-operations';
 import { readCachedSmartAccount } from '~/core/hooks/cached-write-identity';
-import { publishOnce } from '~/core/hooks/publish-once';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
-import { usePublish } from '~/core/hooks/use-publish';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
-import { followedTopicsQueryKey } from '~/core/io/subgraph/fetch-followed-topics';
 import { interestedTopicsQueryKey } from '~/core/io/subgraph/fetch-interested-topics';
 import { SPACE_REGISTRY_ADDRESS_HEX } from '~/core/sdk/geo-network';
-import type { Relation } from '~/core/types';
 import { normId } from '~/core/utils/norm-id';
 
 import {
-  type FollowedTopicRelation,
-  type TopicRef,
-  buildFollowRelations,
-  buildUnfollowRelations,
-  followEditName,
-} from './follow-ops';
-import {
+  type FollowKind,
   type InterestedCall,
   type InterestedTopicRow,
+  type TopicRef,
   buildInterestedClearCalls,
   buildInterestedFollowCalls,
   interestedTopicIds,
-  isInterestedFollowEnabled,
 } from './interested';
-import { followedTopicsQueryOptions, interestedTopicsQueryOptions } from './use-followed-topics';
+import { interestedTopicsQueryOptions } from './use-followed-topics';
 
 const FOLLOW_MUTATION_KEY = ['follow-topics'] as const;
 
-type FollowVariables =
-  | { kind: 'follow'; spaceId: string; topicIds: string[]; topics: TopicRef[] }
-  | { kind: 'unfollow'; spaceId: string; topicIds: string[] };
+/** One held Interested: an entity, in the space it was cast in. Clearing one names both. */
+function heldKey(row: InterestedTopicRow) {
+  return `${normId(row.objectId)}:${normId(row.spaceId)}`;
+}
+
+type FollowVariables = { spaceId: string; topicIds: string[]; followKind: FollowKind } & (
+  | {
+      kind: 'follow';
+      topics: TopicRef[];
+      operations?: ReadonlyMap<string, ReturnType<typeof observeOperation>>;
+    }
+  | { kind: 'unfollow' }
+);
 
 /**
- * One edit per call, published to the viewer's personal space. Topics already being written by any
- * mounted control are skipped. Resolves false when signed out, blocked, or the publish failed.
+ * A topic follow is an Interested vote (GEO-3158), cast from the viewer's personal space: one user
+ * operation for the whole selection. A follow skips topics already held Interested, and an unfollow
+ * clears every Interested on the topic. Topics already being written by any mounted control are
+ * skipped. Resolves false when signed out, any requested topic is blocked, or the write failed.
  *
- * With `NEXT_PUBLIC_INTERESTED_FOLLOW_ENABLED` (GEO-3158) a follow is an Interested instead: one
- * user operation for the whole selection, and no `Following` relation. Interested replaces the
- * relation entirely, so neither path reads or writes relations: a follow skips topics already held
- * Interested, and an unfollow clears every Interested on the topic. Old `Following` relations are
- * left where they are and count for nothing. Flag off, nothing here reads or writes Interested.
+ * The old topic follow, a `Following` relation, is never written or read; existing ones are left
+ * where they are and count for nothing.
  */
-export function useFollowTopics() {
+export function useFollowTopics({ source }: { source?: 'onboarding' } = {}) {
+  return useFollowEntities({ kind: 'topic', source });
+}
+
+/**
+ * The follow writes for a topic or a person (GEO-3236, keyed by their personal space id): an
+ * Interested vote either way. Every caller shares one mutation key, so a follow in flight shows as
+ * saving on every control for it.
+ */
+export function useFollowEntities({ kind, source }: { kind: FollowKind; source?: 'onboarding' }) {
+  const followKind = kind;
   const { personalSpaceId, isRegistered } = usePersonalSpaceId();
-  const { makeProposal } = usePublish();
   const { smartAccount } = useSmartAccount();
   const queryClient = useQueryClient();
 
@@ -74,10 +83,11 @@ export function useFollowTopics() {
     }
   };
 
-  const runInterested = async (variables: FollowVariables, interested: InterestedTopicRow[]): Promise<boolean> => {
+  const write = async (variables: FollowVariables): Promise<boolean> => {
     const { spaceId } = variables;
     // Interested is an on-chain response from the personal space, which must exist on chain.
     if (!isRegistered) return false;
+    const interested = await queryClient.ensureQueryData(interestedTopicsQueryOptions(spaceId));
     const interestedKey = interestedTopicsQueryKey(spaceId);
 
     if (variables.kind === 'follow') {
@@ -88,14 +98,25 @@ export function useFollowTopics() {
         followedTopicIds: interestedTopicIds(interested),
       });
       if (calls.length === 0) return true;
-      if (!(await sendCalls(calls))) return false;
+      const sent = await sendCalls(calls);
+      // Only newly written topics complete; already-followed picks produce no follow event.
+      for (const row of added) {
+        const operation = variables.operations?.get(normId(row.objectId));
+        if (sent) operation?.succeeded();
+        else operation?.failed('unknown');
+      }
+      if (!sent) return false;
 
-      // Same reasoning as the relation path below: cancel, then write what was sent.
+      // A refetch started before the write would land the pre-write rows, and the indexer trails the
+      // write, so cancel, then write what was sent; it stands until the query goes stale normally.
       await queryClient.cancelQueries({ queryKey: interestedKey, exact: true });
       queryClient.setQueryData<InterestedTopicRow[]>(interestedKey, current => {
         const kept = current ?? interested;
         const known = new Set(kept.map(row => normId(row.objectId)));
-        return [...kept, ...added.filter(row => !known.has(normId(row.objectId)))];
+        return [
+          ...kept,
+          ...added.filter(row => !known.has(normId(row.objectId))).map(row => ({ ...row, kind: variables.followKind })),
+        ];
       });
       return true;
     }
@@ -110,65 +131,14 @@ export function useFollowTopics() {
     if (!(await sendCalls(calls))) return false;
 
     await queryClient.cancelQueries({ queryKey: interestedKey, exact: true });
-    const gone = new Set(cleared.map(row => `${normId(row.objectId)}:${normId(row.spaceId)}`));
+    const gone = new Set(cleared.map(heldKey));
     queryClient.setQueryData<InterestedTopicRow[]>(interestedKey, current =>
-      (current ?? interested).filter(row => !gone.has(`${normId(row.objectId)}:${normId(row.spaceId)}`))
+      (current ?? interested).filter(row => !gone.has(heldKey(row)))
     );
     return true;
   };
 
-  const { mutateAsync } = useMutation({
-    mutationKey: FOLLOW_MUTATION_KEY,
-    mutationFn: async (variables: FollowVariables) => {
-      const { spaceId } = variables;
-      if (isInterestedFollowEnabled()) {
-        const interested = await queryClient.ensureQueryData(interestedTopicsQueryOptions(spaceId));
-        return runInterested(variables, interested);
-      }
-
-      const queryKey = followedTopicsQueryKey(spaceId);
-      const rows = await queryClient.ensureQueryData(followedTopicsQueryOptions(spaceId));
-
-      let added: FollowedTopicRelation[] = [];
-      let relations: Relation[];
-      if (variables.kind === 'follow') {
-        const built = buildFollowRelations({
-          personalSpaceId: spaceId,
-          topics: variables.topics,
-          existingTopicIds: new Set(rows.map(row => row.toEntityId)),
-        });
-        added = built.followed;
-        relations = built.relations;
-      } else {
-        relations = buildUnfollowRelations({ personalSpaceId: spaceId, rows, topicIds: variables.topicIds });
-      }
-
-      if (relations.length === 0) return true;
-
-      const ok = await publishOnce(makeProposal, {
-        values: [],
-        relations,
-        spaceId,
-        name: followEditName(variables.kind === 'follow' ? 'Follow' : 'Unfollow', relations),
-      });
-      if (!ok) return false;
-
-      if (variables.kind === 'unfollow') reconcileDeletedRelations(relations);
-
-      // A refetch started before the publish would land the pre-write rows.
-      // No refetch after either: the indexer trails the publish, so these rows
-      // stand until the query goes stale normally.
-      await queryClient.cancelQueries({ queryKey, exact: true });
-      const deleted = new Set(relations.filter(r => r.isDeleted).map(r => r.id));
-      // A refetch during the publish may already hold the new rows.
-      queryClient.setQueryData<FollowedTopicRelation[]>(queryKey, current => {
-        const kept = (current ?? rows).filter(row => !deleted.has(row.id));
-        const known = new Set(kept.map(row => normId(row.id)));
-        return [...kept, ...added.filter(row => !known.has(normId(row.id)))];
-      });
-      return true;
-    },
-  });
+  const { mutateAsync } = useMutation({ mutationKey: FOLLOW_MUTATION_KEY, mutationFn: write });
 
   const run = React.useCallback(
     async (kind: FollowVariables['kind'], topics: readonly TopicRef[]) => {
@@ -186,18 +156,42 @@ export function useFollowTopics() {
       if (free.length === 0) return false;
 
       const topicIds = [...new Set(free.map(topic => normId(topic.id)))];
+      // Snapshot at invocation: TanStack Query can defer mutationFn before its first await.
+      // The regular Follow button observes its own action. Onboarding needs one observer per topic,
+      // independent of whichever click happened to trigger this background pass.
+      const operations =
+        source === 'onboarding' && kind === 'follow'
+          ? new Map(
+              free.map(topic => {
+                const id = normId(topic.id);
+                const context = snapshotActionContext(
+                  'onboarding_customize_feed',
+                  'topic',
+                  id,
+                  {},
+                  {},
+                  { ignoreEventContext: true }
+                );
+                return [id, observeOperation('follow_topic', 'topic', id, undefined, context)] as const;
+              })
+            )
+          : undefined;
+
       try {
-        return await mutateAsync(
+        const succeeded = await mutateAsync(
           kind === 'follow'
-            ? { kind, spaceId: personalSpaceId, topicIds, topics: free }
-            : { kind, spaceId: personalSpaceId, topicIds }
+            ? { kind, spaceId: personalSpaceId, topicIds, topics: free, followKind, operations }
+            : { kind, spaceId: personalSpaceId, topicIds, followKind }
         );
+        // A batch may have sent only its free topics. Callers retaining work for retry must not
+        // discard the blocked ones: the other control's operation can still fail.
+        return succeeded && free.length === topics.length;
       } catch (error) {
         console.error(`[follow-topics] ${kind} failed:`, error);
         return false;
       }
     },
-    [mutateAsync, personalSpaceId, queryClient]
+    [mutateAsync, personalSpaceId, queryClient, followKind, source]
   );
 
   const follow = React.useCallback((topics: readonly TopicRef[]) => run('follow', topics), [run]);

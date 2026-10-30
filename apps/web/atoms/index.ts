@@ -1,7 +1,9 @@
 import { atom } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
 
-import type { ActionContext } from '~/core/action-context';
+import type { ActionContext, ActionScope } from '~/core/action-context';
+import type { Debate } from '~/core/debates/api';
+import type { EntitySidePanelTabSelection } from '~/core/utils/entity-tab-navigation';
 
 export const showingIdsAtom = atomWithStorage<boolean>('showingIds', false);
 
@@ -9,6 +11,8 @@ export const editingPropertiesAtom = atom<boolean>(false);
 
 export type EntitySidePanelTarget = {
   analyticsContext?: ActionContext;
+  /** A linked entity tab to select when the panel opens. */
+  initialTab?: EntitySidePanelTabSelection;
   entityId: string;
   spaceId: string;
   openedWithMainViewEditing: boolean;
@@ -103,17 +107,80 @@ export const spaceSidebarHasContentAtom = atom<boolean | null>(null);
  * page they should open the comments beside what you're reading rather than
  * navigate away from it.
  */
-export const entityCommentsPanelAtom = atom<{
+export type EntityCommentsPanelTarget = {
   entityId: string;
   spaceId: string;
   /** Logical graph type retained so comments created from the global panel are attributed correctly. */
   targetEntityType?: string;
-} | null>(null);
+};
+
+export const entityCommentsPanelAtom = atom<EntityCommentsPanelTarget | null>(null);
+
+/**
+ * The debate whose claims panel an explore card has open, or `null`. Drawn by an app-level host, not
+ * the card: a card inside the entity side panel unmounts when opening this closes that panel.
+ */
+export type ExploreDebateClaimsPanelTarget = {
+  debateId: string;
+  debate: Debate;
+  /** The opening card's analytics scope, so the panel keeps attributing to it. */
+  scope: ActionScope;
+};
+
+export const exploreDebateClaimsPanelAtom = atom<ExploreDebateClaimsPanelTarget | null>(null);
+
+/** Which panel the full-screen debate feed has open, or `null`. */
+export const debateFeedPanelAtom = atom<'claims' | 'comments' | null>(null);
+
+/**
+ * Every panel sharing the one right-hand slot. Opening any of these clears the others.
+ *
+ * A slot panel whose opener can sit inside another slot panel must render from an app-level host,
+ * or clearing that panel unmounts the new one. Hosts close their own panel on route change.
+ *
+ * Not in this slot (left alone on purpose): ranking-compose entity sheets, proposal review
+ * panels (exclusive among themselves), the debates hub, and slide-ups (those stack).
+ */
+type EntityPanelKind = 'entity' | 'comments' | 'exploreDebateClaims' | 'debateFeed';
+
+const clearEntityPanelsExceptAtom = atom(null, (_get, set, keep: EntityPanelKind) => {
+  if (keep !== 'entity') set(entitySidePanelAtom, null);
+  if (keep !== 'comments') set(entityCommentsPanelAtom, null);
+  if (keep !== 'exploreDebateClaims') set(exploreDebateClaimsPanelAtom, null);
+  if (keep !== 'debateFeed') set(debateFeedPanelAtom, null);
+});
+
+export const openEntitySidePanelAtom = atom(null, (_get, set, target: EntitySidePanelTarget | null) => {
+  set(entitySidePanelAtom, target);
+  if (target) set(clearEntityPanelsExceptAtom, 'entity');
+});
+
+export const openEntityCommentsPanelAtom = atom(null, (_get, set, target: EntityCommentsPanelTarget | null) => {
+  set(entityCommentsPanelAtom, target);
+  if (target) set(clearEntityPanelsExceptAtom, 'comments');
+});
+
+export const openExploreDebateClaimsPanelAtom = atom(
+  null,
+  (_get, set, target: ExploreDebateClaimsPanelTarget | null) => {
+    set(exploreDebateClaimsPanelAtom, target);
+    if (target) set(clearEntityPanelsExceptAtom, 'exploreDebateClaims');
+  }
+);
+
+export const openDebateFeedPanelAtom = atom(null, (_get, set, panel: 'claims' | 'comments' | null) => {
+  set(debateFeedPanelAtom, panel);
+  if (panel) set(clearEntityPanelsExceptAtom, 'debateFeed');
+});
 
 export type DebatesHubTab = 'requests' | 'lobby' | 'explore' | 'positions' | 'people';
 
-/** `null` while the debates matchmaking hub is closed. */
-export const debatesHubAtom = atom<{ tab: DebatesHubTab } | null>(null);
+/**
+ * `null` while the debates matchmaking hub is closed. `requestId` is a scheduled request a link
+ * asked to see (GEO-3431): the Requests tab brings it into view and outlines it until the hub is
+ * opened on something else.
+ */
+export const debatesHubAtom = atom<{ tab: DebatesHubTab; requestId?: string } | null>(null);
 
 /**
  * The hub's filter selections, held outside the tabs that draw them (GEO-2850).
@@ -185,6 +252,28 @@ export const debatesHubPositionsTopicIdsAtom = atom<string[]>([]);
 export const debatesHubPositionsSearchAtom = atom('');
 
 /**
+ * The side panel's own search and picks for its Matches and Explore tabs (GEO-3463), apart from full
+ * screen's lists above.
+ *
+ * The two surfaces read a selection differently. In the panel every pick narrows (spaces AND, like
+ * topics) and nothing is seeded; full screen reads spaces as "any of these" and seeds the viewer's
+ * member spaces. Sharing one selection let full screen's seed of three spaces empty the panel's
+ * Matches, since no claim sits in three spaces at once. Each panel tab keeps one selection across the
+ * lists it swaps between (Matches' offline switch, Explore's Show), so changing those keeps it.
+ *
+ * The seed markers exist to give the panel's lists the same shape as full screen's; the panel never
+ * seeds, so nothing spends them.
+ */
+export const debatesHubPanelMatchesSpaceIdsAtom = atom<string[]>([]);
+export const debatesHubPanelMatchesTopicIdsAtom = atom<string[]>([]);
+export const debatesHubPanelMatchesSearchAtom = atom('');
+export const debatesHubPanelMatchesSpaceSeedSpentAtom = atom(false);
+export const debatesHubPanelExploreSpaceIdsAtom = atom<string[]>([]);
+export const debatesHubPanelExploreTopicIdsAtom = atom<string[]>([]);
+export const debatesHubPanelExploreSearchAtom = atom('');
+export const debatesHubPanelExploreSpaceSeedSpentAtom = atom(false);
+
+/**
  * The People tab's spaces filter (GEO-2944).
  *
  * Its own selection rather than any other tab's, for the reason Lobby and Positions have theirs:
@@ -195,11 +284,70 @@ export const debatesHubPositionsSearchAtom = atom('');
 export const debatesHubPeopleSpaceIdsAtom = atom<string[]>([]);
 
 /**
+ * The side panel People tab's spaces (GEO-3463), apart from full screen's rail above for the reason
+ * the panel's claim tabs have their own: the panel wants someone active in every picked space, the
+ * rail in any of them, so the rail's two picks would empty the panel.
+ */
+export const debatesHubPanelPeopleSpaceIdsAtom = atom<string[]>([]);
+
+/**
  * The People tab's "Online only" switch (GEO-2937). Off, the default, lists offline people with free
  * time this week alongside online ones. Outside the tab for the same reason as the
  * spaces filter above.
  */
 export const debatesHubPeopleOnlineOnlyAtom = atom(false);
+
+/**
+ * The side panel's Sort, one per tab (GEO-3463). Sort lives in the Filters popover and never counts
+ * as a filter, so these sit beside the filters rather than in them — Clear all leaves them alone.
+ * Session-scoped like the rest of the bar. People opens Online first (matches order each group);
+ * both claim lists open on Explore's ranking.
+ */
+export type DebatesHubPeopleSort = 'matches' | 'online' | 'az';
+export type DebatesHubMatchesSort = 'best' | 'newest' | 'people';
+export type DebatesHubExploreSort = 'best' | 'newest';
+export const debatesHubPeopleSortAtom = atom<DebatesHubPeopleSort>('online');
+export const debatesHubMatchesSortAtom = atom<DebatesHubMatchesSort>('best');
+export const debatesHubExploreSortAtom = atom<DebatesHubExploreSort>('best');
+
+/**
+ * Matches' "Include people who are offline" (GEO-3463). Off by default: Matches is claims you could
+ * debate now. On, it adds claims where only offline people hold the other side, which the card
+ * offers as Schedule rather than Debate now.
+ */
+export const debatesHubMatchesIncludeOfflineAtom = atom(false);
+
+/**
+ * Explore's "Someone online to debate" (GEO-3463, decision 39). On, Explore lists only claims where
+ * someone online holds a side — the list the old Live tab opened on, moved behind a filter so
+ * Matches can mean only matches.
+ */
+export const debatesHubExploreSomeoneOnlineAtom = atom(false);
+
+/**
+ * Whether Explore's Show is on "My positions" (GEO-3463). The positions list used to be a tab of its
+ * own; it is now one of Explore's three Shows. Session-scoped: it is a list you look at, not how you
+ * like to arrive.
+ */
+export const debatesHubExploreShowMineAtom = atom(false);
+
+export type DebatesHubExploreShow = 'unanswered' | 'all' | 'mine';
+
+/**
+ * Explore's Show control: Not answered (the default), All, or My positions.
+ *
+ * Not answered and All are the stored "hide my positions" preference the tab already had (GEO-2863),
+ * so the panel and full screen keep agreeing about it. My positions swaps the list itself, so it is
+ * its own flag and leaves that preference where the viewer put it.
+ */
+export const debatesHubExploreShowAtom = atom(
+  (get): DebatesHubExploreShow =>
+    get(debatesHubExploreShowMineAtom) ? 'mine' : get(debatesHubHideMyPositionsAtom) ? 'unanswered' : 'all',
+  (_get, set, next: DebatesHubExploreShow) => {
+    set(debatesHubExploreShowMineAtom, next === 'mine');
+    if (next !== 'mine') set(debatesHubHideMyPositionsAtom, next === 'unanswered');
+  }
+);
 
 /**
  * Whether each claim-browse surface's membership default has been applied or forfeited this session.
@@ -213,8 +361,18 @@ export const debatesHubExploreSpaceSeedSpentAtom = atom(false);
 export const debatesHubLobbySpaceSeedSpentAtom = atom(false);
 export const debatesHubPositionsSpaceSeedSpentAtom = atom(false);
 
+/** The debate lobby's Explore tab: its own filters, apart from the hub's Explore. */
+export const lobbyExploreSpaceIdsAtom = atom<string[]>([]);
+export const lobbyExploreTopicIdsAtom = atom<string[]>([]);
+export const lobbyExploreSearchAtom = atom('');
+export const lobbyExploreSpaceSeedSpentAtom = atom(false);
+
 /**
- * Whether the hub has already moved the viewer off an empty Lobby this session (GEO-2863).
+ * Whether the hub's move off an empty Lobby is spent for this session (GEO-2863).
+ *
+ * Spent by the move itself, and by the viewer answering the question it guesses at — pressing
+ * "Matches only" either way, or leaving for Explore from the empty state's button. A viewer who has
+ * chosen what to look at on Lobby is not moved off it later in the same session.
  *
  * Held out here because `LobbyTab` cannot hold it: `HubSwap` unmounts the tab when the viewer
  * leaves it, so a ref or state inside would be gone by the time they came back. With "Matches only"
@@ -225,7 +383,7 @@ export const debatesHubPositionsSpaceSeedSpentAtom = atom(false);
  * The move is a courtesy on first arrival, not a policy. Once it has been made, the viewer gets the
  * empty state and can read it.
  */
-export const debatesHubLeftLobbyForExploreAtom = atom(false);
+export const debatesHubLobbyMoveSpentAtom = atom(false);
 
 /**
  * Which account the filter state above belongs to, so it is never handed to a different viewer.
@@ -263,10 +421,29 @@ export const resetDebatesHubFiltersAtom = atom(null, (_get, set) => {
   set(debatesHubPositionsTopicIdsAtom, []);
   set(debatesHubPositionsSearchAtom, '');
   set(debatesHubPositionsSpaceSeedSpentAtom, false);
+  set(lobbyExploreSpaceIdsAtom, []);
+  set(lobbyExploreTopicIdsAtom, []);
+  set(lobbyExploreSearchAtom, '');
+  set(lobbyExploreSpaceSeedSpentAtom, false);
+  set(debatesHubPanelMatchesSpaceIdsAtom, []);
+  set(debatesHubPanelMatchesTopicIdsAtom, []);
+  set(debatesHubPanelMatchesSearchAtom, '');
+  set(debatesHubPanelMatchesSpaceSeedSpentAtom, false);
+  set(debatesHubPanelExploreSpaceIdsAtom, []);
+  set(debatesHubPanelExploreTopicIdsAtom, []);
+  set(debatesHubPanelExploreSearchAtom, '');
+  set(debatesHubPanelExploreSpaceSeedSpentAtom, false);
   set(debatesHubPeopleSpaceIdsAtom, []);
+  set(debatesHubPanelPeopleSpaceIdsAtom, []);
   set(debatesHubPeopleOnlineOnlyAtom, false);
+  set(debatesHubPeopleSortAtom, 'online');
+  set(debatesHubMatchesSortAtom, 'best');
+  set(debatesHubExploreSortAtom, 'best');
+  set(debatesHubMatchesIncludeOfflineAtom, false);
+  set(debatesHubExploreSomeoneOnlineAtom, false);
+  set(debatesHubExploreShowMineAtom, false);
   // A different viewer has not been shown anything yet, so the courtesy is theirs to receive.
-  set(debatesHubLeftLobbyForExploreAtom, false);
+  set(debatesHubLobbyMoveSpentAtom, false);
   // `debatesHubMatchesOnlyAtom` is deliberately absent: it is a standing preference rather than
   // working state, which is the whole reason it is stored rather than session-scoped. Handing a new
   // account the previous one's *filters* is a leak; handing them a browsing preference held on this
@@ -306,6 +483,9 @@ export const debatesHubMatchesOnlyAtom = atomWithStorage('debatesHubMatchesOnly'
  */
 export const debatesHubHideMyPositionsAtom = atomWithStorage('debatesHubHideMyPositions', true);
 
+/** Profiles show the full record by default; remember an explicit choice to browse unanswered claims. */
+export const profileHideMyPositionsAtom = atomWithStorage('profileHideMyPositions', false);
+
 /**
  * "Hide my positions" on the debate-again flow's Explore tab (GEO-2863).
  *
@@ -333,6 +513,16 @@ export const rematchHideMyPositionsAtom = atomWithStorage('rematchHideMyPosition
  * on soonest. Stored and on by default for the same reasons as {@link rematchHideMyPositionsAtom}.
  */
 export const rematchHideAgreedAtom = atomWithStorage('rematchHideAgreed', true);
+
+/**
+ * GEO-3489. Which Today's claims sections the viewer opened or closed in the debate-again picker,
+ * with the agenda day they did it on: a choice holds for that day and the next day's agenda starts
+ * every section at its default again. Read through `useTodaysSectionsOpen`.
+ */
+export const todaysClaimsSectionsAtom = atomWithStorage<{ day: string | null; open: Record<string, boolean> }>(
+  'todaysClaimsSections',
+  { day: null, open: {} }
+);
 
 export const rankingComposeRemoveScrollShardAtom = atom<HTMLElement | null>(null);
 

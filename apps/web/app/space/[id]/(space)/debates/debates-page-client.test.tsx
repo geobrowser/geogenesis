@@ -1,11 +1,13 @@
 import '@testing-library/jest-dom/vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
+import { getDefaultStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Debate } from '~/core/debates/api';
 
 import { DebatesPageClient } from './debates-page-client';
+import { openDebateFeedPanelAtom } from '~/atoms';
 
 const mocks = vi.hoisted(() => ({
   play: vi.fn(() => Promise.resolve()),
@@ -25,6 +27,13 @@ const mocks = vi.hoisted(() => ({
 
 // Stands in for the claims panel so a test can see whether it is remounted or merely handed a new
 // debate: only a mount appends. Its content has its own suite.
+// Follow (GEO-3236) writes through the account and reads follows; both have their own suites.
+vi.mock('~/core/follows/follow-button', () => ({ FollowButton: () => null }));
+vi.mock('~/core/follows/person-follow-counts', () => ({
+  usePersonFollowerCount: () => null,
+  usePersonFollowers: () => null,
+}));
+
 vi.mock('~/core/debates/browse/debate-claims-panel', async () => {
   const React = await import('react');
   return {
@@ -45,6 +54,7 @@ vi.mock('~/core/debates/browse/debate-claims-panel', async () => {
 // debate-overflow-menu.test.tsx.
 vi.mock('~/core/debates/browse/debate-overflow-menu', () => ({
   DebateOverflowMenu: () => null,
+  useCanRemoveDebate: () => false,
 }));
 
 vi.mock('~/core/debates/use-debate-votes', () => ({
@@ -71,8 +81,23 @@ vi.mock('~/core/debates/browse/use-debate-end-card', () => ({
   useDebateEndCard: () => ({}),
 }));
 
-vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({
-  EntityVoteButtons: () => <div data-testid="entity-vote-buttons" />,
+// The claim's response reads reach Privy and the sync store; they have their own suites. Here the
+// card only has to draw its Agree and Disagree.
+vi.mock('~/core/debates/browse/use-debate-claim-response', () => ({
+  useDebateClaimResponse: () => ({
+    responseKind: 'stance',
+    summary: { isLoading: true },
+    control: {
+      optimisticPositions: [],
+      viewerPosition: null,
+      respond: vi.fn(),
+      canRespond: true,
+      isResponseSubmitting: false,
+      actionTitle: () => '',
+      localVoteSide: null,
+      responseError: null,
+    },
+  }),
 }));
 
 vi.mock('next/navigation', () => ({
@@ -137,7 +162,7 @@ vi.mock('~/core/hooks/use-comments', () => ({
   useComments: () => ({ comments: [], totalCount: 0, isLoading: false, error: null, refetch: vi.fn() }),
 }));
 
-// The feed's Claims badge reads the debate's transcript claims through react-query, and this
+// The player's claim ticker reads the debate's transcript claims through react-query, and this
 // suite renders the feed without a QueryClientProvider. Stub it the way the other debate suites do;
 // the grouping and ordering have their own unit tests.
 vi.mock('~/core/debates/use-debate-transcript-claims', async () => {
@@ -192,8 +217,15 @@ describe('DebatesPageClient browse feed', () => {
     // voting now happens on the end-of-debate scorecard and in the claims panel.
     expect(screen.getAllByText('Alex').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Sam').length).toBeGreaterThan(0);
-    expect(screen.getAllByTestId('entity-vote-buttons')).toHaveLength(2);
+    // The claim is voted on from the card; the debate's own up/down vote is gone (GEO-3454).
+    expect(screen.getByRole('button', { name: 'Agree' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Disagree' })).toBeInTheDocument();
 
+    // The feed holds full recordings until the viewer presses Play (feed-full-playback.ts).
+    const play = await screen.findByRole('button', { name: 'Play debate' });
+    expect(container.querySelectorAll('video')).toHaveLength(0);
+
+    fireEvent.click(play);
     await waitFor(() => expect(container.querySelectorAll('video')).toHaveLength(2));
   });
 
@@ -222,7 +254,9 @@ describe('DebatesPageClient browse feed', () => {
     );
 
     render(<DebatesPageClient spaceId="space-1" />);
-    fireEvent.click(screen.getAllByRole('button', { name: 'Claims (0)' })[0]);
+    // Opened through the feed's panel slot: the card's claims pill is gone, and what opens the panel
+    // now (the end card) is stubbed here.
+    act(() => getDefaultStore().set(openDebateFeedPanelAtom, 'claims'));
     expect(mocks.claimsPanelMounts).toEqual(['debate-1']);
 
     const secondItem = observed.find(entry => entry.element.textContent?.includes('Second claim'))!;

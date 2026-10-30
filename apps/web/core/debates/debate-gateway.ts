@@ -1,26 +1,50 @@
 'use client';
 
-import { CancelledError, type Query, type QueryClient, type QueryKey } from '@tanstack/react-query';
+import { CancelledError, type InfiniteData, type Query, type QueryClient, type QueryKey } from '@tanstack/react-query';
 
 import * as React from 'react';
 
 import { isParticipantPositionsQueryKey } from '~/core/debates/participant-positions';
 import { isRematchClaimsQueryKey } from '~/core/debates/rematch-claims-query-key';
+import { publishRemoteClaimResponse, remoteClaimResponseFromEvent } from '~/core/debates/remote-claim-responses';
 import { queryClient } from '~/core/query-client';
 import {
   claimResponseTargetKey,
   isClaimResponseSummaryQueryKey,
 } from '~/core/responses/claim-response-summary-query-keys';
+import type { SpaceCallsResponse } from '~/core/space-calls/api';
+import { spaceCallKeys } from '~/core/space-calls/query-keys';
+import {
+  isPreOpenCallView,
+  isPreOpenViewOfCall,
+  parseSpaceCallPatch,
+  spaceCallsRefetch,
+  withSpaceCallPatch,
+} from '~/core/space-calls/space-calls-patch';
 
 import {
+  type DebateLobbiesResponse,
+  type DebateLobbyCalendarResponse,
+  type DebateLobbySummary,
+  type DebateLobbyView,
   GeoChatRequestError,
   type GeoChatSession,
   type GetPrivyIdentityToken,
   dashlessId,
   getGeoChatApiBaseUrl,
   getGeoChatSession,
+  getStoredGeoChatAccessToken,
   resetGeoChatSession,
 } from './api';
+import { historyRouteMissing } from './history-route';
+import {
+  type DebateLobbyCardPatch,
+  applyLobbyCardPatch,
+  applyLobbyCardPatchToCalendar,
+  parseLobbyCardPatch,
+} from './lobbies/lobby-card-patch';
+import { parseLobbyClaimLists, withLobbyClaimLists } from './lobbies/lobby-claim-lists-state';
+import { type LobbyHighlightsState, parseLobbyHighlights, withLobbyHighlights } from './lobbies/lobby-highlights-state';
 
 export type DebateGatewaySession = GeoChatSession;
 
@@ -65,7 +89,21 @@ type DebateEventPayload = {
   debate_id?: string;
   rematch_session_id?: string;
   lobby_id?: string;
+  /** On `debate.lobbies_changed`; see `parseLobbyCardPatch`. */
+  lobby_card?: unknown;
+  /** On `debate.lobby_highlights_changed`: the full state; see `parseLobbyHighlights`. */
+  lobby_highlights?: unknown;
+  /** On `debate.lobby_claim_lists_changed`: the full state; see `parseLobbyClaimLists`. */
+  lobby_claim_lists?: unknown;
+  /** On `debate.lobby_guests_changed`: visitors without an account. */
+  guest_count?: unknown;
+  /** On `debate.space_calls_changed`: the call's list row; see `parseSpaceCallPatch`. */
+  space_call?: unknown;
+  /** On a rowless `debate.space_calls_changed`; see `spaceCallsRefetch`. */
+  change?: unknown;
   claim_entity_ids?: string[];
+  /** On `debate.claims_changed` from one person's response report; see `remoteClaimResponseFromEvent`. */
+  claim_response?: unknown;
   sections?: MatchmakingSection[];
 };
 
@@ -137,10 +175,26 @@ export class DebateGatewayClient {
   private readonly scopes = new Map<string, { scope: DebateGatewayScope; count: number }>();
   private readonly sentScopes = new Set<string>();
   private readonly confirmedScopes = new Set<string>();
+  /** Retained scopes the server refused; not re-sent on this socket. Retried once per connection. */
+  private readonly refusedScopes = new Set<string>();
+  /** Backoff for scopes whose subscription check failed transiently; reset once READY confirms them. */
+  private readonly subscriptionRetries = new Map<
+    string,
+    { attempt: number; timer: ReturnType<typeof setTimeout> | null }
+  >();
   private readonly recentEventIds = new Set<string>();
   private readonly recentEventIdOrder: string[] = [];
   private readonly pendingInvalidations = new Map<string, InvalidationFilters>();
   private readonly pendingChangedClaimsBySpace = new Map<string, Set<string>>();
+  /** The newest card patch per dashless lobby id, laid over each list GET until one catches up. */
+  private readonly heldLobbyPatches = new Map<string, DebateLobbyCardPatch>();
+  /**
+   * Held patches a read has caught up with while another lobby read was still in flight, by lobby,
+   * at the `as_of` caught up with. Released once no read is in flight; see `releaseCaughtUpPatches`.
+   */
+  private readonly caughtUpPatches = new Map<string, string>();
+  /** Lobby reads landing (for the held patches) and history losing its last observer. */
+  private unsubscribeQueryCache: (() => void) | null = null;
 
   private snapshot: DebateGatewaySnapshot = {
     status: 'idle',
@@ -152,12 +206,16 @@ export class DebateGatewayClient {
   private getPrivyIdentityToken: GetPrivyIdentityToken | null = null;
   private accountKey: string | null = null;
   private socket: WebSocketLike | null = null;
+  /** The access token `socket` authenticated with. */
+  private socketAccessToken: string | null = null;
   private enabled = false;
   private hasReachedReady = false;
   private readyForDebates = false;
   private lastSequence: number | null = null;
   private reconnectAttempt = 0;
   private lastErrorReconnectAt: number | null = null;
+  private authExpiredAttempt = 0;
+  private lastAuthExpiredAt: number | null = null;
   private heartbeatIntervalMs = DEFAULT_HEARTBEAT_INTERVAL_MS;
   private heartbeatsAwaitingAck = 0;
   private debatePresence = true;
@@ -197,6 +255,26 @@ export class DebateGatewayClient {
     if (debatePresence !== undefined) this.setDebatePresence(debatePresence);
     this.getPrivyIdentityToken = getPrivyIdentityToken;
     this.accountKey = accountKey;
+    this.unsubscribeQueryCache ??= this.queryClient.getQueryCache().subscribe(event => {
+      if (event.type === 'observerRemoved') {
+        if (isAccountHistoryQueryKey(event.query.queryKey)) this.trimUnwatchedHistory(event.query);
+        return;
+      }
+      // A fetch's own success; the overlay's `setQueryData` is `manual` and does not come back here.
+      if (event.type !== 'updated' || event.action.type !== 'success' || event.action.manual) return;
+      if (this.accountKey && isLobbyCalendarQueryKey(event.query.queryKey, this.accountKey)) {
+        // What the read returned, taken before the overlay rewrites the cache with patches' own
+        // `as_of`, which would make a stale week look caught up.
+        const week = event.query.state.data as DebateLobbyCalendarResponse | undefined;
+        // A calendar week read before a patch would otherwise undo it, as a list read would.
+        this.overlayHeldPatchesOnCalendars();
+        // A week holds lobbies the capped list never returns, so its reads release patches too.
+        if (week) this.releaseCaughtUpPatches(week.lobbies);
+      }
+      if (this.accountKey && isLobbiesQueryKey(event.query.queryKey, this.accountKey)) {
+        this.overlayHeldLobbyPatches(event.query.state.data as DebateLobbiesResponse | undefined);
+      }
+    });
     if (this.enabled) return;
     this.enabled = true;
     this.setSnapshot({ status: 'connecting', paused: false, pauseReason: null });
@@ -235,13 +313,21 @@ export class DebateGatewayClient {
     this.lastSequence = null;
     this.reconnectAttempt = 0;
     this.lastErrorReconnectAt = null;
+    this.authExpiredAttempt = 0;
+    this.lastAuthExpiredAt = null;
     this.clearAllTimers();
     this.disposeSocket();
     this.sentScopes.clear();
     this.confirmedScopes.clear();
+    this.refusedScopes.clear();
+    this.clearSubscriptionRetries();
     this.pendingInvalidations.clear();
     this.capabilities = EMPTY_CAPABILITIES;
     this.pendingChangedClaimsBySpace.clear();
+    this.heldLobbyPatches.clear();
+    this.caughtUpPatches.clear();
+    this.unsubscribeQueryCache?.();
+    this.unsubscribeQueryCache = null;
     if (accountKey) this.queryClient.removeQueries({ queryKey: ['debates'] });
     this.setSnapshot({ status: 'idle', paused: false, pauseReason: null });
   }
@@ -267,6 +353,9 @@ export class DebateGatewayClient {
       this.scopes.delete(key);
       this.sentScopes.delete(key);
       this.confirmedScopes.delete(key);
+      this.clearSubscriptionRetry(key);
+      // The server never held a refused scope, so there is nothing to unsubscribe.
+      if (this.refusedScopes.delete(key)) return;
       this.sendSubscription(scope, 'UNSUBSCRIBE');
     };
   }
@@ -283,9 +372,12 @@ export class DebateGatewayClient {
 
       const socket = this.createWebSocket(gatewayWebSocketUrl(this.getApiBaseUrl(), session.access_token));
       this.socket = socket;
+      this.socketAccessToken = session.access_token;
       this.readyForDebates = false;
       this.sentScopes.clear();
       this.confirmedScopes.clear();
+      this.refusedScopes.clear();
+      // Pending check retries keep their timers, so READY skips them and each goes out when due.
       this.scheduleTokenRotation(session);
       this.handshakeTimer = setTimeout(() => this.forceReconnect(socket), HANDSHAKE_TIMEOUT_MS);
 
@@ -348,6 +440,15 @@ export class DebateGatewayClient {
           // A real ceiling, and reconnecting re-sends the same scopes and hits it again. The
           // account-routed stream keeps working; only the scopes past the limit are lost.
           this.setSnapshot({ status: 'degraded', paused: true, pauseReason: 'subscription_limit' });
+        } else if (isAuthenticationExpired(envelope.payload)) {
+          // The cached session can still look unexpired, so drop it or the reconnect re-presents it.
+          // Only if it is still this socket's: another tab may already have stored a newer one.
+          if (getStoredGeoChatAccessToken() === this.socketAccessToken) resetGeoChatSession();
+          this.forceReconnect(socket, this.authExpiredReconnectDelayMs(), 'session');
+        } else if (this.refuseForbiddenScope(envelope.payload)) {
+          // Only that scope is refused; the socket and every other subscription stay up.
+        } else if (this.retryFailedSubscriptionCheck(envelope.payload)) {
+          // Transient, and only for that scope; it is re-sent on its own backoff.
         } else if (this.canRecoverFromError()) {
           // Anything else is not known to be permanent, and parking here was a dead end: nothing in
           // this branch closes the socket, so heartbeats keep being acked, `heartbeatsAwaitingAck`
@@ -402,22 +503,23 @@ export class DebateGatewayClient {
       this.hasReachedReady = true;
     }
 
-    const readyScopes = new Map<string, DebateGatewayScope>();
+    const readyScopes = new Set<string>();
     for (const subscription of Array.isArray(ready.subscriptions) ? ready.subscriptions : []) {
       const scope = parseScope(subscription);
-      if (!scope) continue;
-      const key = scopeKey(scope);
-      readyScopes.set(key, scope);
+      if (scope) readyScopes.add(scopeKey(scope));
     }
 
     for (const key of this.confirmedScopes) {
       if (!readyScopes.has(key)) this.confirmedScopes.delete(key);
     }
 
-    for (const [key, scope] of readyScopes) {
-      if (!this.scopes.has(key) || this.confirmedScopes.has(key)) continue;
+    for (const key of readyScopes) {
+      this.clearSubscriptionRetry(key);
+      const retained = this.scopes.get(key);
+      if (!retained || this.confirmedScopes.has(key)) continue;
       this.confirmedScopes.add(key);
-      this.queueScopeReconcile(scope);
+      // The retained spelling, which is what the query keys were built from.
+      this.queueScopeReconcile(retained.scope);
     }
 
     for (const { scope } of this.scopes.values()) this.sendSubscription(scope, 'SUBSCRIBE');
@@ -432,14 +534,23 @@ export class DebateGatewayClient {
       case 'debate.activity_changed':
         this.queueAccountActivity();
         break;
-      case 'debate.claims_changed':
+      case 'debate.claims_changed': {
         if (identifiers.space_id) {
           this.queueClaims(identifiers.space_id, identifiers.claim_entity_ids);
         }
+        // Applied at once, before the refetch above can know about it.
+        const response = remoteClaimResponseFromEvent(identifiers);
+        if (response) publishRemoteClaimResponse(response);
         break;
+      }
       case 'debate.state_changed':
-        if (identifiers.debate_id) this.queueQuery(['debates', 'detail', identifiers.debate_id]);
+        if (identifiers.debate_id) this.queueQuery(['debates', 'detail', dashlessId(identifiers.debate_id)]);
         if (identifiers.space_id) this.queueQuery(['debates', 'space', identifiers.space_id]);
+        // Not history, though a debate ending is when its row joins the Requests timeline's past. This
+        // reaches space and debate subscribers for any public debate and fires many times within one,
+        // and carries neither its state nor whose it is, so refreshing on it re-asked every page held
+        // for debates that aren't the viewer's. Their own ending changes their activity, which this
+        // refreshes; the timeline refreshes history when the debate leaves it (`useRefreshHistoryWhenLiveEnds`).
         this.queueAccountActivity();
         break;
       case 'debate.rematch_changed':
@@ -450,9 +561,9 @@ export class DebateGatewayClient {
         break;
       case 'debate.media_changed':
         if (identifiers.debate_id) {
-          this.queueQuery(['debates', 'media', identifiers.debate_id]);
-          this.queueQuery(['debates', 'detail', identifiers.debate_id]);
-          this.queueQuery(['debates', 'transcript', identifiers.debate_id]);
+          this.queueQuery(['debates', 'media', dashlessId(identifiers.debate_id)]);
+          this.queueQuery(['debates', 'detail', dashlessId(identifiers.debate_id)]);
+          this.queueQuery(['debates', 'transcript', dashlessId(identifiers.debate_id)]);
         }
         if (identifiers.space_id) this.queueQuery(['debates', 'space', identifiers.space_id]);
         break;
@@ -465,6 +576,12 @@ export class DebateGatewayClient {
         this.queueAccountQuery('scheduled-debates');
         this.queueAccountQuery('upcoming-rooms');
         this.queueAccountQuery('room');
+        // A request ending moves it from the live lists into the Requests timeline's past (GEO-3463).
+        this.queueAccountQuery('history');
+        // A pending scheduled request holds its time for both people (GEO-3532), so one arriving or
+        // ending changes who is free when, for whoever did not press the button.
+        this.queueAccountQuery('schedulable-people');
+        this.queueAccountQuery('peer-schedule');
         this.queueAccountActivity();
         break;
       case 'debate.matchmaking_changed':
@@ -472,15 +589,198 @@ export class DebateGatewayClient {
         break;
       // GEO-3133. Sent to matchmaking subscribers: the lobbies card, and a lobby page whose viewer
       // is not inside, which `debate.lobby_changed` does not reach.
-      case 'debate.lobbies_changed':
+      case 'debate.lobbies_changed': {
+        const patch = parseLobbyCardPatch(identifiers.lobby_card);
+        const lobbyId = identifiers.lobby_id ? dashlessId(identifiers.lobby_id) : null;
+        if (!patch) {
+          // Card-less: a lobby was created, opened or closed. Any lobby, so not history: this goes to
+          // every matchmaking subscriber, and one the viewer was in reaches them as
+          // `debate.my_lobby_changed` too, which does refresh it.
+          this.queueAccountQuery('lobbies');
+          if (lobbyId) this.queueAccountQuery('lobby', lobbyId);
+        } else {
+          this.holdLobbyPatch(patch);
+          if (lobbyId && !this.isInsideLobby(lobbyId)) this.queueAccountQuery('lobby', lobbyId);
+        }
+        break;
+      }
+      // Sent to this viewer alone when their own standing in a lobby changes.
+      // A ban, unban or reminder can change the viewer's lobby page without a `debate.lobby_changed`.
+      case 'debate.my_lobby_changed':
         this.queueAccountQuery('lobbies');
+        this.queueAccountQuery('my-lobby');
+        // A lobby the viewer joined closing belongs in their history now.
+        this.queueAccountQuery('history');
         if (identifiers.lobby_id) this.queueAccountQuery('lobby', dashlessId(identifiers.lobby_id));
         break;
       // GEO-3131. Sent to the lobby's present members.
-      case 'debate.lobby_changed':
-        if (identifiers.lobby_id) this.queueAccountQuery('lobby', dashlessId(identifiers.lobby_id));
+      // `sections: ["claims"]` means only the In this room list changed; `["people"]`, only the view
+      // (a pair's round or recording).
+      case 'debate.lobby_changed': {
+        if (!identifiers.lobby_id) break;
+        const lobbyId = dashlessId(identifiers.lobby_id);
+        const only = identifiers.sections?.length === 1 ? identifiers.sections[0] : null;
+        if (only !== 'claims') this.queueAccountQuery('lobby', lobbyId);
+        if (only !== 'people') this.queueAccountQuery('lobby-claims', lobbyId);
         break;
+      }
+      // GEO-3135. Full state to the roster: replaces the cached copy when newer, never refetches.
+      // An empty cache is seeded only for a lobby on screen (its GET in flight or failed), never for
+      // one the page isn't showing.
+      case 'debate.lobby_highlights_changed': {
+        const highlights = parseLobbyHighlights(identifiers.lobby_highlights);
+        if (!highlights || !this.accountKey) break;
+        const key = ['debates', 'account', this.accountKey, 'lobby-highlights', dashlessId(highlights.lobby_id)];
+        const query = this.queryClient.getQueryCache().find({ queryKey: key, exact: true });
+        const shown = query !== undefined && (query.state.fetchStatus === 'fetching' || query.getObserversCount() > 0);
+        this.queryClient.setQueryData<LobbyHighlightsState>(key, current =>
+          current || shown ? withLobbyHighlights(current, highlights) : current
+        );
+        break;
+      }
+      // GEO-3273. Full state to the roster: laid over the cached view when newer, never refetches.
+      // Guests get the lists from their polled guest view instead.
+      case 'debate.lobby_claim_lists_changed': {
+        const lists = parseLobbyClaimLists(identifiers.lobby_claim_lists);
+        if (!lists || !this.accountKey) break;
+        this.queryClient.setQueryData<DebateLobbyView>(
+          ['debates', 'account', this.accountKey, 'lobby', dashlessId(lists.lobby_id)],
+          current => (current ? withLobbyClaimLists(current, lists) : current)
+        );
+        break;
+      }
+      // GEO-3129. Coalesced to the roster; patches the cached view, never refetches.
+      case 'debate.lobby_guests_changed': {
+        const count = identifiers.guest_count;
+        if (!identifiers.lobby_id || !this.accountKey) break;
+        if (typeof count !== 'number' || !Number.isInteger(count) || count < 0) break;
+        this.queryClient.setQueryData<DebateLobbyView>(
+          ['debates', 'account', this.accountKey, 'lobby', dashlessId(identifiers.lobby_id)],
+          current => (current ? { ...current, guest_count: count } : current)
+        );
+        break;
+      }
+      // GEO-3419. A live row is patched in place when newer; anything else refetches, narrowed by a
+      // rowless event's `change` (GEO-3420).
+      case 'debate.space_calls_changed': {
+        if (!identifiers.space_id) break;
+        const listKey = spaceCallKeys.list(identifiers.space_id);
+        const patch = parseSpaceCallPatch(identifiers.space_call);
+        const lobbyRoot = this.accountQueryKey('lobby');
+        // A call opened early: its pre-call page would otherwise wait for its own opens_at.
+        if (patch && patch.status !== 'scheduled' && lobbyRoot) {
+          const callId = patch.call.call_id;
+          const filters = {
+            queryKey: lobbyRoot,
+            predicate: (query: Query) => isPreOpenViewOfCall(query.state.data as DebateLobbyView | undefined, callId),
+          };
+          // Rows mostly carry roster changes; only a cached pre-call view needs a read.
+          if (this.queryClient.getQueryCache().findAll(filters).length > 0) {
+            this.queueInvalidation(`pre-open-call:${dashlessId(callId)}`, { ...filters, refetchType: 'active' });
+          }
+        }
+        if (!patch || patch.status !== 'live') {
+          const refetch = spaceCallsRefetch(patch ? undefined : identifiers.change);
+          if (refetch.list) this.queueQuery(listKey);
+          if (refetch.past) this.queueQuery(spaceCallKeys.past(identifiers.space_id));
+          if (refetch.preOpen && lobbyRoot) {
+            const spaceId = identifiers.space_id;
+            this.queueInvalidation(`pre-open-calls:${dashlessId(spaceId)}`, {
+              queryKey: lobbyRoot,
+              predicate: query => isPreOpenCallView(query.state.data as DebateLobbyView | undefined, spaceId),
+              refetchType: 'active',
+            });
+          }
+          if (!patch && identifiers.lobby_id) this.queueAccountQuery('lobby', dashlessId(identifiers.lobby_id));
+          break;
+        }
+        this.queryClient.setQueriesData<SpaceCallsResponse>({ queryKey: listKey }, list =>
+          list ? withSpaceCallPatch(list, patch) : list
+        );
+        break;
+      }
     }
+  }
+
+  /** Connected to that lobby's page here, so `debate.lobby_changed` already keeps it current. */
+  private isInsideLobby(lobbyId: string) {
+    if (!this.accountKey) return false;
+    const view = this.queryClient.getQueryData<DebateLobbyView>([
+      'debates',
+      'account',
+      this.accountKey,
+      'lobby',
+      lobbyId,
+    ]);
+    return view?.viewer.connected === true;
+  }
+
+  /**
+   * Applies a card patch and holds it, so a GET that read the list before the patch cannot undo it.
+   * A GET in flight is never cancelled for a patch: patches can outpace its round trip.
+   */
+  private holdLobbyPatch(patch: DebateLobbyCardPatch) {
+    const id = dashlessId(patch.lobby.lobby_id);
+    const held = this.heldLobbyPatches.get(id);
+    if (held && Date.parse(held.asOf) >= Date.parse(patch.asOf)) return;
+    this.heldLobbyPatches.set(id, patch);
+    this.overlayHeldLobbyPatches();
+  }
+
+  /** Lays held patches over the cached list. `fetched`, a GET's result, also drops those it has caught up with. */
+  private overlayHeldLobbyPatches(fetched?: DebateLobbiesResponse) {
+    if (!this.accountKey) return;
+    this.overlayHeldPatchesOnCalendars();
+    const key = ['debates', 'account', this.accountKey, 'lobbies'];
+    const list = this.queryClient.getQueryData<DebateLobbiesResponse>(key);
+    if (list) {
+      let next = list;
+      for (const patch of this.heldLobbyPatches.values()) next = applyLobbyCardPatch(next, patch);
+      if (next !== list) this.queryClient.setQueryData(key, next);
+    }
+    // After the overlay: a read that predates a patch needs it laid over before it can go.
+    if (fetched) this.releaseCaughtUpPatches(fetched.lobbies);
+  }
+
+  /**
+   * Releases the held patches a fetched read (the list, or a calendar week) has caught up with,
+   * called once that read's data has had the held patches laid over it.
+   *
+   * Not while any lobby read is still in flight: one may predate a patch, and its landing needs the
+   * patch held to lay it back over. The catch-up is remembered instead and released once the last
+   * read in flight lands, even if that read does not include the lobby. A newer patch held since
+   * then is not the one caught up with, so it stays.
+   */
+  private releaseCaughtUpPatches(rows: DebateLobbySummary[]) {
+    if (!this.accountKey) return;
+    for (const row of rows) {
+      const id = dashlessId(row.lobby_id);
+      const held = this.heldLobbyPatches.get(id);
+      if (held && row.as_of && Date.parse(row.as_of) >= Date.parse(held.asOf)) this.caughtUpPatches.set(id, held.asOf);
+    }
+    if (this.queryClient.isFetching({ queryKey: ['debates', 'account', this.accountKey, 'lobbies'] }) > 0) return;
+    for (const [id, asOf] of this.caughtUpPatches) {
+      if (this.heldLobbyPatches.get(id)?.asOf === asOf) this.heldLobbyPatches.delete(id);
+    }
+    this.caughtUpPatches.clear();
+  }
+
+  /**
+   * Lays held patches over every cached calendar week (GEO-3300), so a lobby's headcount and who is
+   * going stay current there too. A week's own row newer than a patch is left as it is.
+   */
+  private overlayHeldPatchesOnCalendars() {
+    if (!this.accountKey || this.heldLobbyPatches.size === 0) return;
+    const patches = [...this.heldLobbyPatches.values()];
+    this.queryClient.setQueriesData<DebateLobbyCalendarResponse>(
+      { queryKey: ['debates', 'account', this.accountKey, 'lobbies', 'calendar'] },
+      // `undefined` leaves a week untouched, so one no patch changes is not rewritten.
+      week => {
+        if (!week) return undefined;
+        const next = patches.reduce(applyLobbyCardPatchToCalendar, week);
+        return next === week ? undefined : next;
+      }
+    );
   }
 
   private queueMatchmakingSections(sections?: MatchmakingSection[]) {
@@ -504,6 +804,8 @@ export class DebateGatewayClient {
     if (scope.scope === 'space') {
       this.queueQuery(['debates', 'claims', scope.space_id]);
       this.queueQuery(['debates', 'space', scope.space_id]);
+      this.queueQuery(spaceCallKeys.list(scope.space_id));
+      this.queueQuery(spaceCallKeys.past(scope.space_id));
       return;
     }
     if (scope.scope === 'matchmaking') {
@@ -511,11 +813,12 @@ export class DebateGatewayClient {
       // `debate.lobbies_changed` rides this scope too.
       this.queueAccountQuery('lobbies');
       this.queueAccountQuery('lobby');
+      this.queueAccountQuery('lobby-claims');
       return;
     }
-    this.queueQuery(['debates', 'detail', scope.debate_id]);
-    this.queueQuery(['debates', 'media', scope.debate_id]);
-    this.queueQuery(['debates', 'transcript', scope.debate_id]);
+    this.queueQuery(['debates', 'detail', dashlessId(scope.debate_id)]);
+    this.queueQuery(['debates', 'media', dashlessId(scope.debate_id)]);
+    this.queueQuery(['debates', 'transcript', dashlessId(scope.debate_id)]);
   }
 
   private queueBroadReconcile() {
@@ -552,13 +855,73 @@ export class DebateGatewayClient {
       | 'upcoming-rooms'
       | 'room'
       | 'lobbies'
-      | 'lobby',
+      | 'lobby'
+      | 'lobby-claims'
+      | 'my-lobby'
+      | 'history'
+      | 'schedulable-people'
+      | 'peer-schedule',
     id?: string
   ) {
-    if (!this.accountKey) return;
-    this.queueQuery(
-      id ? ['debates', 'account', this.accountKey, kind, id] : ['debates', 'account', this.accountKey, kind]
-    );
+    const queryKey = this.accountQueryKey(kind, id);
+    if (!queryKey) return;
+    if (kind === 'history' && historyRouteMissing(this.queryClient.getQueryState(queryKey))) return;
+    this.queueQuery(queryKey);
+  }
+
+  /** This account's key for `kind`, as `debateQueryKeys` spells it; `null` signed out. */
+  private accountQueryKey(kind: string, id?: string): QueryKey | null {
+    if (!this.accountKey) return null;
+    return id ? ['debates', 'account', this.accountKey, kind, id] : ['debates', 'account', this.accountKey, kind];
+  }
+
+  /**
+   * The Requests timeline's past (GEO-3463) is an infinite query, and refetching one re-requests every
+   * page it holds, one after the other. While nobody is looking at it, the pages past the first are
+   * dropped, so the panel opening next asks for one page and the rest load again, from that page's
+   * cursor, as the viewer scrolls back. While it is on screen it keeps them all: trimming then would
+   * pull the rows the viewer is reading out from under them on every request that changes. Replacing
+   * the first page and keeping the rest would be cheaper but wrong: new items push older ones off it,
+   * and the old second page's cursor starts after them, so they would fall into a gap no page covers.
+   *
+   * After the cancel, so a page still in flight cannot land on top and bring the rest back.
+   *
+   * The cut is not a fetch, so it keeps the data's age and any invalidation: `setQueryData` would
+   * stamp the pages fresh and clear `isInvalidated`, and the tab opening again inside `staleTime`
+   * would then skip the refetch an ended request was waiting on. A fetch cancelled on the way here
+   * (`cancelled`) was one somebody wanted, so it leaves the query invalidated too.
+   */
+  private keepFirstHistoryPage(queryKey: QueryKey, { cancelled = false }: { cancelled?: boolean } = {}) {
+    const query = this.queryClient.getQueryCache().find({ queryKey, exact: true });
+    if (!query || query.getObserversCount() > 0) return;
+    const stale = cancelled || query.state.isInvalidated;
+    const data = query.state.data as InfiniteData<unknown, unknown> | undefined;
+    if (data && data.pages.length > 1) {
+      this.queryClient.setQueryData<InfiniteData<unknown, unknown>>(
+        queryKey,
+        { pages: data.pages.slice(0, 1), pageParams: data.pageParams.slice(0, 1) },
+        { updatedAt: query.state.dataUpdatedAt }
+      );
+    }
+    if (stale) void this.queryClient.invalidateQueries({ queryKey, exact: true, refetchType: 'none' });
+  }
+
+  /**
+   * History's last observer going away — the Requests tab closing — cuts it to its first page then,
+   * not at the next event: paging back ten pages, closing and coming back after it had gone stale
+   * otherwise re-asked all ten on the way in. A page still loading is cancelled first, as at a flush,
+   * so it cannot land and bring the rest back.
+   */
+  private trimUnwatchedHistory(query: Query) {
+    if (query.getObserversCount() > 0) return;
+    const { queryKey } = query;
+    if (query.state.fetchStatus !== 'fetching') {
+      this.keepFirstHistoryPage(queryKey);
+      return;
+    }
+    void this.queryClient
+      .cancelQueries({ queryKey, exact: true })
+      .then(() => this.keepFirstHistoryPage(queryKey, { cancelled: true }));
   }
 
   private queueClaims(spaceId: string, claimEntityIds?: string[]) {
@@ -658,16 +1021,19 @@ export class DebateGatewayClient {
         // trips complete; restarting every batch on every event starved the list of updates for as
         // long as the other side kept responding. A batch in flight is left to land and is then
         // asked again, so the answer on screen is never older than the event that prompted it.
-        const inFlightRematchBatches = this.queryClient.getQueryCache().findAll({
+        //
+        // History on screen is the same: its refetch re-asks every page it holds, one after another,
+        // and `requests_changed` comes faster than that for a viewer paged a few pages back.
+        const inFlightLeftToLand = this.queryClient.getQueryCache().findAll({
           ...queryFilters,
           fetchStatus: 'fetching',
-          predicate: query => isRematchClaimsQueryKey(query.queryKey) && matches(query),
+          predicate: query => isLeftToLandAtFlush(query) && matches(query),
         });
         await this.queryClient.cancelQueries({
           ...queryFilters,
-          predicate: query =>
-            query.state.data !== undefined && !isRematchClaimsQueryKey(query.queryKey) && matches(query),
+          predicate: query => query.state.data !== undefined && !isLeftToLandAtFlush(query) && matches(query),
         });
+        if (isAccountHistoryQueryKey(queryFilters.queryKey)) this.keepFirstHistoryPage(queryFilters.queryKey);
         // `cancelRefetch: false`: a refetch of a query still fetching joins that request instead
         // of aborting it. Everything this flush meant to cancel has been cancelled above.
         //
@@ -677,11 +1043,11 @@ export class DebateGatewayClient {
         try {
           await this.queryClient.invalidateQueries(queryFilters, { throwOnError: true, cancelRefetch: false });
         } finally {
-          if (inFlightRematchBatches.length > 0) {
+          if (inFlightLeftToLand.length > 0) {
             await this.queryClient.refetchQueries(
               {
                 type: 'active',
-                predicate: query => inFlightRematchBatches.some(batch => batch.queryHash === query.queryHash),
+                predicate: query => inFlightLeftToLand.some(batch => batch.queryHash === query.queryHash),
               },
               { throwOnError: true, cancelRefetch: false }
             );
@@ -751,7 +1117,8 @@ export class DebateGatewayClient {
     if (!this.readyForDebates || !this.socket || this.socket.readyState !== OPEN) return;
     const key = scopeKey(scope);
     if (op === 'SUBSCRIBE') {
-      if (this.sentScopes.has(key)) return;
+      // A scope waiting on its check backoff is re-sent only by its own timer, not by each READY.
+      if (this.sentScopes.has(key) || this.refusedScopes.has(key) || this.subscriptionRetries.get(key)?.timer) return;
       this.sentScopes.add(key);
     }
     this.sendEnvelope(op, scope);
@@ -820,6 +1187,67 @@ export class DebateGatewayClient {
     if (!this.enabled) return;
     this.setSnapshot({ status: 'degraded', paused: true, pauseReason: reason });
     this.scheduleReconnect(minimumDelayMs);
+  }
+
+  /** `false` when the ERROR names no scope (older geo-chat, or a room), leaving the generic path. */
+  private refuseForbiddenScope(payload: unknown) {
+    const scope = subscriptionErrorScope(payload, 'subscription_forbidden');
+    if (!scope) return false;
+    const key = scopeKey(scope);
+    this.sentScopes.delete(key);
+    this.confirmedScopes.delete(key);
+    this.clearSubscriptionRetry(key);
+    if (this.scopes.has(key)) this.refusedScopes.add(key);
+    return true;
+  }
+
+  /** `false` when the ERROR names no scope (older geo-chat), leaving the generic path. */
+  private retryFailedSubscriptionCheck(payload: unknown) {
+    const scope = subscriptionErrorScope(payload, 'subscription_check_failed');
+    if (!scope) return false;
+    const key = scopeKey(scope);
+    this.sentScopes.delete(key);
+    this.confirmedScopes.delete(key);
+    if (!this.scopes.has(key)) return true;
+
+    const retry = this.subscriptionRetries.get(key) ?? { attempt: 0, timer: null };
+    if (retry.timer) clearTimeout(retry.timer);
+    const baseDelay = Math.min(30_000, 1_000 * 2 ** retry.attempt);
+    const delay = Math.min(30_000, Math.round(baseDelay + baseDelay * 0.2 * this.random()));
+    retry.attempt += 1;
+    // Survives a reconnect: a retry that comes due while no socket is ready is left to the next READY.
+    retry.timer = setTimeout(() => {
+      retry.timer = null;
+      const retained = this.scopes.get(key);
+      if (retained) this.sendSubscription(retained.scope, 'SUBSCRIBE');
+    }, delay);
+    this.subscriptionRetries.set(key, retry);
+    return true;
+  }
+
+  private clearSubscriptionRetry(key: string) {
+    const retry = this.subscriptionRetries.get(key);
+    if (retry?.timer) clearTimeout(retry.timer);
+    this.subscriptionRetries.delete(key);
+  }
+
+  private clearSubscriptionRetries() {
+    for (const retry of this.subscriptionRetries.values()) {
+      if (retry.timer) clearTimeout(retry.timer);
+    }
+    this.subscriptionRetries.clear();
+  }
+
+  /** `reconnectAttempt` resets on each successful flush, so repeated rejections get their own floor. */
+  private authExpiredReconnectDelayMs() {
+    const now = Date.now();
+    if (this.lastAuthExpiredAt === null || now - this.lastAuthExpiredAt >= ERROR_RECONNECT_COOLDOWN_MS) {
+      this.authExpiredAttempt = 0;
+    }
+    this.lastAuthExpiredAt = now;
+    const delay = this.authExpiredAttempt === 0 ? 0 : Math.min(30_000, 1_000 * 2 ** this.authExpiredAttempt);
+    this.authExpiredAttempt += 1;
+    return delay;
   }
 
   private canRecoverFromError() {
@@ -1077,10 +1505,24 @@ function gatewayWebSocketUrl(apiBaseUrl: string, accessToken: string) {
   return url.toString();
 }
 
+/**
+ * Canonical, so a scope retained from a route matches geo-chat's READY and ERROR echoes whatever
+ * spelling each uses. Payloads keep the retained spelling; only keys are normalized.
+ */
 function scopeKey(scope: DebateGatewayScope) {
-  if (scope.scope === 'space') return `space:${scope.space_id}`;
+  if (scope.scope === 'space') return `space:${canonicalSpaceId(scope.space_id)}`;
   if (scope.scope === 'matchmaking') return 'matchmaking';
-  return `debate:${scope.debate_id}`;
+  return `debate:${dashlessId(scope.debate_id.trim())}`;
+}
+
+/** Mirrors geo-chat's `normalize_space_id`, including its zero-padded 32-byte form. */
+function canonicalSpaceId(value: string) {
+  const trimmed = value.trim().toLowerCase();
+  const withoutPrefix = trimmed.startsWith('0x') ? trimmed.slice(2) : trimmed;
+  if (/^[0-9a-f]{32}0{32}$/.test(withoutPrefix)) return withoutPrefix.slice(0, 32);
+  const compact = withoutPrefix.replace(/-/g, '');
+  if (/^[0-9a-f]{32}$/.test(compact)) return compact;
+  return trimmed;
 }
 
 function parseScope(value: unknown): DebateGatewayScope | null {
@@ -1095,6 +1537,16 @@ function parseScope(value: unknown): DebateGatewayScope | null {
     return { scope: 'matchmaking' };
   }
   return null;
+}
+
+/** The scope a subscription ERROR names, when geo-chat echoes one this client can send. */
+function subscriptionErrorScope(payload: unknown, code: 'subscription_forbidden' | 'subscription_check_failed') {
+  if (!isRecord(payload) || payload.code !== code) return null;
+  return parseScope(payload.subscription);
+}
+
+function isAuthenticationExpired(payload: unknown) {
+  return isRecord(payload) && payload.code === 'authentication_expired';
 }
 
 function isEventsLagged(payload: unknown) {
@@ -1117,6 +1569,51 @@ function rateLimitRetryDelayMs(payload: unknown) {
 
 function isGatewayEnvelope(value: unknown): value is GatewayEnvelope {
   return isRecord(value) && value.v === 1 && typeof value.op === 'string' && 'payload' in value;
+}
+
+/** A calendar week of lobbies (GEO-3300): `debateQueryKeys.lobbyCalendar`, under the list's key. */
+function isLobbyCalendarQueryKey(queryKey: readonly unknown[], accountKey: string) {
+  return (
+    queryKey.length === 7 &&
+    queryKey[0] === 'debates' &&
+    queryKey[1] === 'account' &&
+    queryKey[2] === accountKey &&
+    queryKey[3] === 'lobbies' &&
+    queryKey[4] === 'calendar'
+  );
+}
+
+/** An account's history list (`debateQueryKeys.history`), whose refetch is held to its first page. */
+function isAccountHistoryQueryKey(queryKey: QueryKey | undefined): queryKey is QueryKey {
+  return (
+    Array.isArray(queryKey) &&
+    queryKey.length === 4 &&
+    queryKey[0] === 'debates' &&
+    queryKey[1] === 'account' &&
+    queryKey[3] === 'history'
+  );
+}
+
+/**
+ * What a flush never cancels, loaded or not: the rematch picker's batches, and history while the
+ * timeline shows it. Unwatched history is still cancelled, so a page in flight cannot land on top of
+ * the cut to its first page.
+ */
+function isLeftToLandAtFlush(query: Query) {
+  return (
+    isRematchClaimsQueryKey(query.queryKey) ||
+    (isAccountHistoryQueryKey(query.queryKey) && query.getObserversCount() > 0)
+  );
+}
+
+function isLobbiesQueryKey(queryKey: readonly unknown[], accountKey: string) {
+  return (
+    queryKey.length === 4 &&
+    queryKey[0] === 'debates' &&
+    queryKey[1] === 'account' &&
+    queryKey[2] === accountKey &&
+    queryKey[3] === 'lobbies'
+  );
 }
 
 function isDebateEvent(value: unknown): value is DebateInvalidationEvent {

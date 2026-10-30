@@ -1,5 +1,5 @@
 /** `calendar` is the full-screen week everyone's free time is drawn on (GEO-3152). */
-export type DebateAnalyticsSurface = 'hub' | 'rematch' | 'profile-debates' | 'calendar';
+export type DebateAnalyticsSurface = 'hub' | 'rematch' | 'profile-debates' | 'profile-positions' | 'calendar' | 'lobby';
 /**
  * Surfaces with actions but no filters. The last four are availability and scheduling's own
  * dialogs and prompts, which open from the hub and from outside it alike.
@@ -10,7 +10,17 @@ export type DebateActionAnalyticsSurface =
   | 'schedule-editor'
   | 'peer-availability'
   | 'availability-link'
-  | 'room-join-prompt';
+  | 'scheduled-notice'
+  | 'room-join-prompt'
+  /** The room page's own notices, and the prompts that can open over a room (GEO-3433). */
+  | 'room'
+  | 'debate-ready-prompt'
+  | 'rejoin-bar'
+  | 'challenge-accepted-prompt'
+  | 'challenge-dialog'
+  | 'open-elsewhere'
+  /** The full-screen feed's and explore's debate card, whose claim pills replaced its up/down vote. */
+  | 'debate-card';
 
 const ACTION_SURFACE_ANALYTICS = {
   hub: {
@@ -24,6 +34,10 @@ const ACTION_SURFACE_ANALYTICS = {
   'profile-debates': {
     labelPrefix: 'Profile debates',
     actionIntent: 'profile_debates_action',
+  },
+  'profile-positions': {
+    labelPrefix: 'Profile positions',
+    actionIntent: 'profile_positions_action',
   },
   calendar: {
     labelPrefix: 'Debate calendar',
@@ -45,9 +59,47 @@ const ACTION_SURFACE_ANALYTICS = {
     labelPrefix: 'Availability link',
     actionIntent: 'availability_link_action',
   },
+  // GEO-3427: Running late and Can't make it, from an email or the reschedule link.
+  'scheduled-notice': {
+    labelPrefix: 'Scheduled debate notice',
+    actionIntent: 'scheduled_debate_notice_action',
+  },
   'room-join-prompt': {
     labelPrefix: 'Scheduled debate prompt',
     actionIntent: 'scheduled_debate_prompt_action',
+  },
+  lobby: {
+    labelPrefix: 'Debate lobby',
+    actionIntent: 'debate_lobby_action',
+  },
+  room: {
+    labelPrefix: 'Debate room',
+    actionIntent: 'debate_room_action',
+  },
+  'debate-ready-prompt': {
+    labelPrefix: 'Debate ready prompt',
+    actionIntent: 'debate_ready_prompt_action',
+  },
+  'rejoin-bar': {
+    labelPrefix: 'Debate rejoin bar',
+    actionIntent: 'debate_rejoin_bar_action',
+  },
+  'challenge-accepted-prompt': {
+    labelPrefix: 'Challenge accepted prompt',
+    actionIntent: 'challenge_accepted_prompt_action',
+  },
+  'challenge-dialog': {
+    labelPrefix: 'Debate challenge dialog',
+    actionIntent: 'debate_challenge_dialog_action',
+  },
+  'open-elsewhere': {
+    labelPrefix: 'Debate open elsewhere',
+    actionIntent: 'debate_open_elsewhere_action',
+  },
+  // The intent the card's comments and share already carry, so all of its actions read as one.
+  'debate-card': {
+    labelPrefix: 'Debate',
+    actionIntent: 'debate_action',
   },
 } as const satisfies Record<DebateActionAnalyticsSurface, { labelPrefix: string; actionIntent: string }>;
 
@@ -55,7 +107,9 @@ const FILTER_INTENTS = {
   hub: 'filter_debates_hub',
   rematch: 'filter_debate_rematch',
   'profile-debates': 'filter_profile_debates',
+  'profile-positions': 'filter_profile_positions',
   calendar: 'filter_debate_calendar',
+  lobby: 'filter_debate_lobby',
 } as const satisfies Record<DebateAnalyticsSurface, string>;
 
 /**
@@ -78,6 +132,26 @@ export function debateActionAnalyticsAttributes(
   } as const;
 }
 
+/**
+ * As {@link debateActionAnalyticsAttributes}, except on the hub, where the control keeps `hubLabel`:
+ * a label its series had before it moved into a control shared with other surfaces, so the move
+ * does not split the series there while the other surfaces still read apart from the hub.
+ */
+export function debateActionAnalyticsAttributesKeepingHubLabel(
+  surface: DebateActionAnalyticsSurface,
+  action: string,
+  hubLabel: string
+) {
+  const attributes = debateActionAnalyticsAttributes(surface, action);
+  return surface === 'hub' ? { ...attributes, 'data-geo-analytics-label': hubLabel } : attributes;
+}
+
+/**
+ * A control's label and intent together, for a shared component to spread onto the element it
+ * renders. Passing the object rather than a bare label keeps the two from drifting apart.
+ */
+export type DebateAnalyticsAttributes = ReturnType<typeof debateActionAnalyticsAttributes>;
+
 /** Analytics metadata for controls shared by the debate hub, rematch page, and profile debate list. */
 export function debateSurfaceAnalyticsAttributes(
   surface: DebateAnalyticsSurface,
@@ -89,7 +163,7 @@ export function debateSurfaceAnalyticsAttributes(
 
 /**
  * Stable metadata for hub-only controls that cannot use {@link HubPillButton} because their visual
- * treatment is different (inline links, menus, and the schedule callout).
+ * treatment is different (inline links and menus).
  */
 export function hubAnalyticsAttributes(action: string, intent?: string) {
   return debateActionAnalyticsAttributes('hub', action, intent);

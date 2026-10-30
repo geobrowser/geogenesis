@@ -11,9 +11,13 @@
  * debate. For you's version is assembled from gaia's, which bumps itself on any gaia-side change
  * (code version plus a config revision kept by trigger, migration 0102), and this app's own
  * FOR_YOU_WEB_VERSION, bumped by hand on any change to how this app builds a For you page.
+ *
+ * best-1: Best from GEO-3140 on. gaia 0111/0112 (23 Oct) changed how it scores debates without a bump.
+ * best-2: one gaia deploy of two changes. Debate agenda claims, their debates and agenda topics rank
+ *   first (GEO-3488, gaia 0113); new debates get a starting lift that fades with impressions (gaia 0114).
  */
 
-export const BEST_FEED_VERSION = 'best-1';
+export const BEST_FEED_VERSION = 'best-2';
 
 /** This app's half of For you: candidates (Best's window), the diversity pass, the lead debate. */
 export const FOR_YOU_WEB_VERSION = 1;
@@ -67,4 +71,14 @@ export type FeedItemRanking = {
   exploration?: boolean;
   /** The chance it had of being picked for an exploration slot. */
   explorationProbability?: number | null;
+  /**
+   * GEO-3221. `fresh` when the card filled Best's fresh slot rather than earning its rank; Best's
+   * version then reads `<BEST_FEED_VERSION>+fresh.<config revision>`.
+   */
+  slot?: 'fresh';
+  /**
+   * GEO-3234. Set in the browser: how many already-seen cards were hidden from this card's page. The
+   * page's cards' version then ends `+seen.<n>`.
+   */
+  seenHidden?: number;
 };

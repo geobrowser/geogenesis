@@ -10,6 +10,7 @@ import { usePendingMembershipSet } from '~/core/hooks/use-pending-memberships';
 import type { FeaturedRanking } from '~/core/io/subgraph/fetch-featured-rankings';
 import type { FeaturedSpace } from '~/core/io/subgraph/fetch-featured-spaces';
 import type { TopicUsage } from '~/core/io/subgraph/topic-space-usage';
+import { useFeatureFlag } from '~/core/state/feature-flags';
 import { normId } from '~/core/utils/norm-id';
 
 import { ExploreCommunityCallsSection } from '~/partials/community-calls/explore-community-calls-section';
@@ -49,6 +50,8 @@ export function ExploreSidePanel({
   // SSR-seeded set for first paint.
   const dynamicPendingSet = usePendingMembershipSet();
   const { isVisible: showOnboarding } = useCuratorOnboardingStatus();
+  // With community calls on, geo-chat's calls replace the curator-era listing (GEO-3420).
+  const showCommunityCalls = !useFeatureFlag('spaceCalls') && communityCalls.length > 0;
 
   const pendingSet = new Set(pendingMembershipSpaceIds.map(normId));
   const memberOrEditorSet = new Set(memberOrEditorSpaceIds.map(normId));
@@ -63,11 +66,7 @@ export function ExploreSidePanel({
   const showSubspaces = Boolean(spaceId) && !!subspaces && subspaces.length > 0;
 
   const hasContent =
-    showOnboarding ||
-    showSubspaces ||
-    joinableSpaces.length > 0 ||
-    featuredRankings.length > 0 ||
-    communityCalls.length > 0;
+    showOnboarding || showSubspaces || joinableSpaces.length > 0 || featuredRankings.length > 0 || showCommunityCalls;
 
   // Root space header reads this so an empty rail can collapse after Suspense streams in.
   const setSidebarHasContent = useSetAtom(spaceSidebarHasContentAtom);
@@ -110,7 +109,7 @@ export function ExploreSidePanel({
       ),
     });
   }
-  if (communityCalls.length > 0) {
+  if (showCommunityCalls) {
     sections.push({
       key: 'community-calls',
       node: (

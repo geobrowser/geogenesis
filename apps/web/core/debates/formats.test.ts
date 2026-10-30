@@ -1,7 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
 import formatContract from './debate-formats.contract.json';
-import { debateFormatById, debateFormats, debateTimingSummary, debateTurnRole, defaultDebateFormatId } from './formats';
+import {
+  debateFormatById,
+  debateFormats,
+  debateTimingSummary,
+  debateTurnRole,
+  defaultDebateFormatId,
+  hasNumberedOpenRoundsTurns,
+  openRoundsInitialTurnDurationsMs,
+  openRoundsMaxSpeakingTimeMs,
+} from './formats';
 
 describe('debate formats', () => {
   /**
@@ -48,5 +57,37 @@ describe('debate formats', () => {
 
   it('puts the rebuttal second-to-last when a format has more rounds', () => {
     expect([0, 2, 4, 6].map(index => debateTurnRole(index, 8))).toEqual(['opening', 'response', 'rebuttal', 'closing']);
+  });
+});
+
+describe('Open rounds allowance previews', () => {
+  const turns = [60_000, 60_000, 45_000, 45_000, 30_000, 30_000];
+  it('uses the same stored required turns for cards and total speaking time', () => {
+    const format = {
+      max_rebuttal_rounds: 10,
+      required_rebuttal_rounds: 2,
+      rebuttal_turn_ms: 30_000,
+      turn_durations_ms: turns,
+    };
+    expect(openRoundsInitialTurnDurationsMs(format)).toEqual(turns);
+    expect(openRoundsMaxSpeakingTimeMs(format)).toBe(750_000);
+    expect(hasNumberedOpenRoundsTurns(turns)).toBe(true);
+    // A ready prompt can arrive after an extension. Do not count appended turns twice.
+    expect(openRoundsMaxSpeakingTimeMs({ ...format, turn_durations_ms: [...turns, 30_000, 30_000] })).toBe(750_000);
+  });
+  it('counts required rounds inside the cap and hides all optional time at the required-only cap', () => {
+    expect(
+      openRoundsMaxSpeakingTimeMs({
+        max_rebuttal_rounds: 2,
+        required_rebuttal_rounds: 2,
+        rebuttal_turn_ms: 30_000,
+        turn_durations_ms: turns,
+      })
+    ).toBe(270_000);
+  });
+  it('preserves all 45-second rounds for legacy/custom required counts without a snapshot', () => {
+    const format = { max_rebuttal_rounds: 10, required_rebuttal_rounds: 2, rebuttal_turn_ms: 45_000 };
+    expect(openRoundsInitialTurnDurationsMs(format)).toEqual([60_000, 60_000, 45_000, 45_000, 45_000, 45_000]);
+    expect(openRoundsMaxSpeakingTimeMs(format)).toBe(1_020_000);
   });
 });

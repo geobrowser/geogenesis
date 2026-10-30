@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { GeoChatRequestError } from './api';
 import {
+  debateQueryKeys,
   useCreateDebateChallenge,
   useDebate,
   useDebateActivity,
@@ -41,7 +42,7 @@ const mocks = vi.hoisted(() => ({
   useScope: vi.fn(),
 }));
 
-vi.mock('@geogenesis/auth', () => ({
+vi.mock('~/core/wallet/auth-hooks', () => ({
   usePrivy: () => ({ ready: true, authenticated: mocks.authenticated, user: { id: 'user-a' } }),
 }));
 
@@ -235,7 +236,7 @@ describe('debate query network ownership', () => {
     renderHook(() => useRematchLiveKitJoin('rematch-1', true));
 
     expect(mocks.useQuery.mock.calls.at(-1)?.[0]).toMatchObject({
-      queryKey: ['debates', 'account', 'user-a', 'rematch-livekit', 'rematch-1'],
+      queryKey: ['rematch-livekit', 'user-a', 'rematch-1'],
       staleTime: Infinity,
       gcTime: 0,
       refetchOnReconnect: false,
@@ -361,5 +362,24 @@ describe('useSaveDebateSchedule analytics', () => {
 
     expect(mocks.debateScheduleSaved).not.toHaveBeenCalled();
     expect(mocks.queryClient.setQueryData).toHaveBeenCalled();
+  });
+
+  // Anyone's week flags which of their times the viewer is free for, from this schedule.
+  it('refreshes Find a time and every open week', () => {
+    mocks.queryClient.invalidateQueries.mockClear();
+    const { result } = renderHook(() => useSaveDebateSchedule({ surface: 'navbar' }));
+    (
+      result.current as unknown as {
+        onSuccess: (response: typeof saved, blocks: unknown, isCurrent: () => boolean) => void;
+      }
+    ).onSuccess(saved, [], () => true);
+
+    const keys = mocks.queryClient.invalidateQueries.mock.calls.map(([filters]) => filters?.queryKey);
+    expect(keys).toEqual(
+      expect.arrayContaining([
+        debateQueryKeys.schedulablePeopleRoot('user-a'),
+        debateQueryKeys.peerScheduleRoot('user-a'),
+      ])
+    );
   });
 });

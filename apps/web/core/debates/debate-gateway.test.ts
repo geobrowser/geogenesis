@@ -1,13 +1,22 @@
-import { CancelledError, QueryClient, QueryObserver } from '@tanstack/react-query';
+import {
+  CancelledError,
+  InfiniteQueryObserver,
+  QueryClient,
+  type QueryFilters,
+  QueryObserver,
+  matchQuery,
+} from '@tanstack/react-query';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { GeoChatRequestError, resetGeoChatSession } from './api';
+import { GeoChatRequestError, getStoredGeoChatAccessToken, resetGeoChatSession } from './api';
 import { DebateGatewayClient, type DebateGatewaySession } from './debate-gateway';
+import { type LobbyHighlightsState, settleFetchedLobbyHighlights } from './lobbies/lobby-highlights-state';
+import { type RemoteClaimResponse, subscribeRemoteClaimResponses } from './remote-claim-responses';
 
 vi.mock('./api', async importOriginal => {
   const actual = await importOriginal<typeof import('./api')>();
-  return { ...actual, resetGeoChatSession: vi.fn() };
+  return { ...actual, resetGeoChatSession: vi.fn(), getStoredGeoChatAccessToken: vi.fn(() => null) };
 });
 
 type MessageHandler = (event: { data: unknown }) => void;
@@ -173,15 +182,15 @@ describe('DebateGatewayClient', () => {
     expect(invalidateQueries.mock.calls).toEqual(
       expect.arrayContaining([
         [
-          { queryKey: ['debates', 'media', 'debate-1'], refetchType: 'active' },
+          { queryKey: ['debates', 'media', 'debate1'], refetchType: 'active' },
           { throwOnError: true, cancelRefetch: false },
         ],
         [
-          { queryKey: ['debates', 'detail', 'debate-1'], refetchType: 'active' },
+          { queryKey: ['debates', 'detail', 'debate1'], refetchType: 'active' },
           { throwOnError: true, cancelRefetch: false },
         ],
         [
-          { queryKey: ['debates', 'transcript', 'debate-1'], refetchType: 'active' },
+          { queryKey: ['debates', 'transcript', 'debate1'], refetchType: 'active' },
           { throwOnError: true, cancelRefetch: false },
         ],
         [
@@ -206,8 +215,10 @@ describe('DebateGatewayClient', () => {
       'state',
       { event_type: 'debate.state_changed', payload: { debate_id: 'debate-1', space_id: 'space-1' } },
       [
-        ['debates', 'detail', 'debate-1'],
+        ['debates', 'detail', 'debate1'],
         ['debates', 'space', 'space-1'],
+        // Not history: this reaches space subscribers for any public debate and fires many times in
+        // one. The viewer's own ending refreshes it from the timeline, as the debate leaves activity.
         ['debates', 'account', 'user-a', 'activity'],
         ['debates', 'account', 'user-a', 'profile'],
       ],
@@ -234,6 +245,11 @@ describe('DebateGatewayClient', () => {
         ['debates', 'account', 'user-a', 'scheduled-debates'],
         ['debates', 'account', 'user-a', 'upcoming-rooms'],
         ['debates', 'account', 'user-a', 'room'],
+        // GEO-3463: a request that ends moves into the Requests timeline's history.
+        ['debates', 'account', 'user-a', 'history'],
+        // GEO-3532: a pending scheduled request holds its time, so availability reads go too.
+        ['debates', 'account', 'user-a', 'schedulable-people'],
+        ['debates', 'account', 'user-a', 'peer-schedule'],
         ['debates', 'account', 'user-a', 'activity'],
         ['debates', 'account', 'user-a', 'profile'],
       ],
@@ -256,6 +272,8 @@ describe('DebateGatewayClient', () => {
       ],
     ],
     [
+      // Any lobby's, sent to every matchmaking subscriber: not the viewer's history, which their own
+      // lobby closing refreshes through `debate.my_lobby_changed`.
       'lobby list',
       { event_type: 'debate.lobbies_changed', payload: { lobby_id: 'abc' } },
       [
@@ -264,11 +282,33 @@ describe('DebateGatewayClient', () => {
       ],
     ],
     [
+      'own lobby standing',
+      { event_type: 'debate.my_lobby_changed', payload: { lobby_id: 'AB-C' } },
+      [
+        ['debates', 'account', 'user-a', 'lobbies'],
+        ['debates', 'account', 'user-a', 'my-lobby'],
+        ['debates', 'account', 'user-a', 'history'],
+        ['debates', 'account', 'user-a', 'lobby', 'abc'],
+      ],
+    ],
+    ['an unknown type, which it ignores', { event_type: 'debate.later_changed', payload: { lobby_id: 'abc' } }, []],
+    [
       'one lobby',
       { event_type: 'debate.lobby_changed', payload: { lobby_id: 'AB-CD' } },
       [
         ['debates', 'account', 'user-a', 'lobby', 'abcd'],
+        ['debates', 'account', 'user-a', 'lobby-claims', 'abcd'],
       ],
+    ],
+    [
+      'one lobby’s claims only',
+      { event_type: 'debate.lobby_changed', payload: { lobby_id: 'AB-CD', sections: ['claims'] } },
+      [['debates', 'account', 'user-a', 'lobby-claims', 'abcd']],
+    ],
+    [
+      'one lobby’s people only',
+      { event_type: 'debate.lobby_changed', payload: { lobby_id: 'AB-CD', sections: ['people'] } },
+      [['debates', 'account', 'user-a', 'lobby', 'abcd']],
     ],
   ])('maps %s events to their authoritative query families', async (_label, event, expectedKeys) => {
     client.start(
@@ -288,6 +328,1125 @@ describe('DebateGatewayClient', () => {
       expectInvalidated(invalidateQueries, { queryKey, refetchType: 'active' });
     }
     expect(invalidateQueries).toHaveBeenCalledTimes(expectedKeys.length);
+  });
+
+  // An infinite query's refetch asks for every page it holds. What an event changes is the newest
+  // end, so history nobody is looking at is cut back to its first page.
+  it('cuts history nobody is looking at back to its first page', async () => {
+    const historyKey = ['debates', 'account', 'user-a', 'history'];
+    const page = (id: string, next: string | null) => ({ items: [{ id }], next_cursor: next });
+    queryClient.setQueryData(historyKey, {
+      pages: [page('a', 'c2'), page('b', 'c3'), page('c', null)],
+      pageParams: [null, 'c2', 'c3'],
+    });
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    await flushInvalidations();
+    invalidateQueries.mockClear();
+
+    sockets[0]!.receive('EVENT', { event_id: 'history-event', event_type: 'debate.requests_changed', payload: {} });
+    await flushInvalidations();
+
+    expectInvalidated(invalidateQueries, { queryKey: historyKey, refetchType: 'active' });
+    expect(queryClient.getQueryData(historyKey)).toEqual({ pages: [page('a', 'c2')], pageParams: [null] });
+  });
+
+  // On screen, the pages stay: cutting them would pull the rows being read out from under the viewer.
+  it('keeps every page of history the timeline is showing', async () => {
+    const historyKey = ['debates', 'account', 'user-a', 'history'];
+    const page = (id: string, next: string | null) => ({ items: [{ id }], next_cursor: next });
+    const held = { pages: [page('a', 'c2'), page('b', null)], pageParams: [null, 'c2'] };
+    queryClient.setQueryData(historyKey, held);
+    const observer = new InfiniteQueryObserver(queryClient, {
+      queryKey: historyKey,
+      queryFn: () => new Promise<never>(() => {}),
+      initialPageParam: null,
+      getNextPageParam: () => null,
+      enabled: false,
+    });
+    const unsubscribe = observer.subscribe(() => {});
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    await flushInvalidations();
+
+    sockets[0]!.receive('EVENT', { event_id: 'history-shown', event_type: 'debate.requests_changed', payload: {} });
+    await flushInvalidations();
+
+    expect(queryClient.getQueryData(historyKey)).toEqual(held);
+    unsubscribe();
+  });
+
+  // Paging back ten pages, closing and coming back after they went stale re-asked all ten on mount.
+  it('cuts history to its first page as soon as the timeline stops showing it', async () => {
+    const historyKey = ['debates', 'account', 'user-a', 'history'];
+    const page = (id: string, next: string | null) => ({ items: [{ id }], next_cursor: next });
+    queryClient.setQueryData(historyKey, {
+      pages: [page('a', 'c2'), page('b', 'c3'), page('c', null)],
+      pageParams: [null, 'c2', 'c3'],
+    });
+    const observer = () =>
+      new InfiniteQueryObserver(queryClient, {
+        queryKey: historyKey,
+        queryFn: () => new Promise<never>(() => {}),
+        initialPageParam: null,
+        getNextPageParam: () => null,
+        enabled: false,
+      });
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    const first = observer().subscribe(() => {});
+    const second = observer().subscribe(() => {});
+
+    // Another view of it still open: nothing is cut.
+    first();
+    expect(queryClient.getQueryData<{ pages: unknown[] }>(historyKey)?.pages).toHaveLength(3);
+
+    second();
+    expect(queryClient.getQueryData(historyKey)).toEqual({ pages: [page('a', 'c2')], pageParams: [null] });
+  });
+
+  // The cut is not a fetch. Stamping the pages fresh and clearing an invalidation let the tab, opened
+  // again inside `staleTime`, skip the refetch an ended request was waiting on.
+  it('keeps history stale through the cut, so the tab opening again refetches it', async () => {
+    invalidateQueries.mockRestore();
+    const historyKey = ['debates', 'account', 'user-a', 'history'];
+    const page = (id: string, next: string | null) => ({ items: [{ id }], next_cursor: next });
+    queryClient.setQueryData(historyKey, {
+      pages: [page('a', 'c2'), page('b', null)],
+      pageParams: [null, 'c2'],
+    });
+    const updatedAt = queryClient.getQueryState(historyKey)!.dataUpdatedAt;
+    const queryFn = vi.fn(async () => page('a', 'c2'));
+    const observer = () =>
+      new InfiniteQueryObserver(queryClient, {
+        queryKey: historyKey,
+        queryFn,
+        initialPageParam: null as string | null,
+        getNextPageParam: last => last.next_cursor,
+        staleTime: 30_000,
+        retry: false,
+      });
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    const unsubscribe = observer().subscribe(() => {});
+    expect(queryFn).not.toHaveBeenCalled();
+    // A request ended while the refetch that would have shown it was cancelled: still invalidated.
+    await queryClient.invalidateQueries({ queryKey: historyKey, refetchType: 'none' });
+    vi.advanceTimersByTime(5_000);
+
+    unsubscribe();
+    expect(queryClient.getQueryData(historyKey)).toEqual({ pages: [page('a', 'c2')], pageParams: [null] });
+    await vi.runAllTicks();
+    expect(queryClient.getQueryState(historyKey)).toMatchObject({ isInvalidated: true, dataUpdatedAt: updatedAt });
+
+    // Back within 30s of the data: the mount refetches rather than trusting the cut as fresh.
+    const again = observer().subscribe(() => {});
+    expect(queryFn).toHaveBeenCalledTimes(1);
+    again();
+  });
+
+  // An event is what moves something into the past; the history on screen has to be asked again.
+  it('refetches the history the timeline is showing when a request changes', async () => {
+    invalidateQueries.mockRestore();
+    const historyKey = ['debates', 'account', 'user-a', 'history'];
+    const queryFn = vi.fn(async () => ({ items: [], next_cursor: null }));
+    const observer = new InfiniteQueryObserver(queryClient, {
+      queryKey: historyKey,
+      queryFn,
+      initialPageParam: null,
+      getNextPageParam: () => null,
+      staleTime: Infinity,
+    });
+    const unsubscribe = observer.subscribe(() => {});
+    await vi.waitFor(() => expect(queryFn).toHaveBeenCalledTimes(1));
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    await flushInvalidations();
+    const before = queryFn.mock.calls.length;
+
+    sockets[0]!.receive('EVENT', { event_id: 'history-active', event_type: 'debate.requests_changed', payload: {} });
+    await flushInvalidations();
+
+    expect(queryFn.mock.calls.length).toBe(before + 1);
+    unsubscribe();
+  });
+
+  // Until geo-chat#299 deploys the route is a 404, and every request event would add another.
+  it('does not ask again for history whose route was missing', async () => {
+    invalidateQueries.mockRestore();
+    const historyKey = ['debates', 'account', 'user-a', 'history'];
+    const queryFn = vi.fn(async () => {
+      throw new GeoChatRequestError('Not found', null, 404);
+    });
+    const observer = new InfiniteQueryObserver(queryClient, {
+      queryKey: historyKey,
+      queryFn,
+      initialPageParam: null,
+      getNextPageParam: () => null,
+      retry: false,
+      staleTime: Infinity,
+    });
+    const unsubscribe = observer.subscribe(() => {});
+    await vi.waitFor(() => expect(queryFn).toHaveBeenCalledTimes(1));
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    await flushInvalidations();
+    const before = queryFn.mock.calls.length;
+
+    sockets[0]!.receive('EVENT', { event_id: 'history-missing', event_type: 'debate.requests_changed', payload: {} });
+    await flushInvalidations();
+
+    expect(queryFn.mock.calls.length).toBe(before);
+    unsubscribe();
+  });
+
+  // Refetching history re-asks every page it holds, and `requests_changed` can come faster than that.
+  // Cancelling the refetch at each flush meant a viewer paged back never saw it land.
+  it('lets the history on screen finish refetching when another event comes in', async () => {
+    invalidateQueries.mockRestore();
+    const historyKey = ['debates', 'account', 'user-a', 'history'];
+    const calls: { land: () => void; aborted: boolean }[] = [];
+    const queryFn = vi.fn(({ signal }: { signal: AbortSignal }) => {
+      const id = `page-${calls.length}`;
+      return new Promise(resolve => {
+        const call = { land: () => resolve({ items: [{ id }], next_cursor: null }), aborted: false };
+        signal.addEventListener('abort', () => (call.aborted = true));
+        calls.push(call);
+      });
+    });
+    const observer = new InfiniteQueryObserver(queryClient, {
+      queryKey: historyKey,
+      queryFn,
+      initialPageParam: null,
+      getNextPageParam: () => null,
+      staleTime: Infinity,
+      retry: false,
+    });
+    const unsubscribe = observer.subscribe(() => {});
+    await vi.waitFor(() => expect(calls).toHaveLength(1));
+    calls[0]!.land();
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    await flushInvalidations();
+    for (const call of calls) call.land();
+    await vi.runAllTicks();
+    const before = calls.length;
+
+    sockets[0]!.receive('EVENT', { event_id: 'history-1', event_type: 'debate.requests_changed', payload: {} });
+    await flushInvalidations();
+    expect(calls).toHaveLength(before + 1);
+    const inFlight = calls[before]!;
+    sockets[0]!.receive('EVENT', { event_id: 'history-2', event_type: 'debate.requests_changed', payload: {} });
+    await flushInvalidations();
+
+    // The second flush joined the refetch in flight instead of aborting and restarting it...
+    expect(inFlight.aborted).toBe(false);
+    expect(calls).toHaveLength(before + 1);
+    inFlight.land();
+    await vi.waitFor(() =>
+      expect(queryClient.getQueryData<{ pages: { items: { id: string }[] }[] }>(historyKey)?.pages[0]!.items).toEqual([
+        { id: `page-${before}` },
+      ])
+    );
+    // ...and asks again once it has landed, so what is on screen postdates the second event.
+    await vi.waitFor(() => expect(calls).toHaveLength(before + 2));
+    calls[before + 1]!.land();
+    unsubscribe();
+  });
+
+  // The tab closing while it pages back: the page in flight is cancelled first, then the cut, so it
+  // cannot land afterwards and bring the rest back.
+  it('cuts history to its first page once a page still loading has been cancelled', async () => {
+    const historyKey = ['debates', 'account', 'user-a', 'history'];
+    const page = (id: string, next: string | null) => ({ items: [{ id }], next_cursor: next });
+    queryClient.setQueryData(historyKey, {
+      pages: [page('a', 'c2'), page('b', 'c3')],
+      pageParams: [null, 'c2'],
+    });
+    let land!: () => void;
+    const observer = new InfiniteQueryObserver(queryClient, {
+      queryKey: historyKey,
+      queryFn: () => new Promise<ReturnType<typeof page>>(resolve => (land = () => resolve(page('c', null)))),
+      initialPageParam: null as string | null,
+      getNextPageParam: last => last.next_cursor,
+      staleTime: Infinity,
+      retry: false,
+    });
+    const unsubscribe = observer.subscribe(() => {});
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    const paging = observer.fetchNextPage().catch(() => undefined);
+    await vi.runAllTicks();
+    expect(queryClient.getQueryCache().find({ queryKey: historyKey, exact: true })!.state.fetchStatus).toBe('fetching');
+
+    unsubscribe();
+    await vi.waitFor(() =>
+      expect(queryClient.getQueryData(historyKey)).toEqual({ pages: [page('a', 'c2')], pageParams: [null] })
+    );
+    // The page it cancelled was wanted, so the cut leaves it to be asked for again.
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: historyKey, exact: true, refetchType: 'none' });
+    land();
+    await paging;
+    expect(queryClient.getQueryData(historyKey)).toEqual({ pages: [page('a', 'c2')], pageParams: [null] });
+  });
+
+  describe('lobby card patches', () => {
+    const lobbiesKey = ['debates', 'account', 'user-a', 'lobbies'];
+    const myLobbyKey = ['debates', 'account', 'user-a', 'my-lobby'];
+    const row = (lobbyId: string, headcount: number, asOf: string | null = null, viewerReminded = false) => ({
+      lobby_id: lobbyId,
+      name: lobbyId,
+      scheduled: false,
+      starts_at: '2026-10-07T12:00:00Z',
+      opens_at: '2026-10-07T12:00:00Z',
+      open: true,
+      hosts: [],
+      headcount,
+      avatars: [],
+      debating_count: 0,
+      reminder_count: 0,
+      viewer_reminded: viewerReminded,
+      viewer_on_roster: false,
+      as_of: asOf,
+    });
+    const card = (lobbyId: string, headcount: number, asOf: string) => {
+      const { viewer_reminded: _r, viewer_on_roster: _o, as_of: _a, ...lobby } = row(lobbyId, headcount);
+      return { status: 'listed', as_of: asOf, lobby };
+    };
+
+    async function started() {
+      client.start(
+        vi.fn(async () => 'privy-token'),
+        'user-a'
+      );
+      await vi.runAllTicks();
+      sockets[0]!.open();
+      sockets[0]!.receive('READY', readyPayload([]));
+      await flushInvalidations();
+      invalidateQueries.mockClear();
+    }
+
+    let eventCount = 0;
+    async function lobbiesChanged(payload: Record<string, unknown>) {
+      eventCount += 1;
+      sockets[0]!.receive('EVENT', {
+        event_id: `lobbies-${eventCount}`,
+        event_type: 'debate.lobbies_changed',
+        payload,
+      });
+      await flushInvalidations();
+    }
+
+    const cachedIds = () =>
+      queryClient
+        .getQueryData<{ lobbies: { lobby_id: string; headcount: number }[] }>(lobbiesKey)
+        ?.lobbies.map(lobby => `${lobby.lobby_id}:${lobby.headcount}`);
+
+    it('patches a cached row without refetching, keeping the viewer’s own fields', async () => {
+      await started();
+      queryClient.setQueryData(lobbiesKey, { lobbies: [row('aa', 3, null, true), row('bb', 2)] });
+
+      await lobbiesChanged({ lobby_id: 'bb', lobby_card: card('bb', 5, '2026-10-07T12:00:01Z') });
+
+      expect(cachedIds()).toEqual(['bb:5', 'aa:3']);
+      expect(
+        queryClient.getQueryData<{ lobbies: { viewer_reminded: boolean }[] }>(lobbiesKey)?.lobbies[1]
+      ).toMatchObject({ viewer_reminded: true });
+      expect(invalidateQueries).not.toHaveBeenCalledWith(expect.objectContaining({ queryKey: lobbiesKey }));
+      expect(invalidateQueries).not.toHaveBeenCalledWith(expect.objectContaining({ queryKey: myLobbyKey }));
+      expectInvalidated(invalidateQueries, {
+        queryKey: [...lobbiesKey.slice(0, 3), 'lobby', 'bb'],
+        refetchType: 'active',
+      });
+    });
+
+    it('drops a patch no newer than the row, whether the GET or a patch set it', async () => {
+      await started();
+      queryClient.setQueryData(lobbiesKey, { lobbies: [row('aa', 3, '2026-10-07T12:00:04Z')] });
+
+      await lobbiesChanged({ lobby_id: 'aa', lobby_card: card('aa', 9, '2026-10-07T12:00:04Z') });
+      expect(cachedIds()).toEqual(['aa:3']);
+
+      await lobbiesChanged({ lobby_id: 'aa', lobby_card: card('aa', 6, '2026-10-07T12:00:05Z') });
+      await lobbiesChanged({ lobby_id: 'aa', lobby_card: card('aa', 4, '2026-10-07T12:00:02Z') });
+      expect(cachedIds()).toEqual(['aa:6']);
+    });
+
+    it('never adds a lobby from a patch', async () => {
+      await started();
+      queryClient.setQueryData(lobbiesKey, { lobbies: [row('aa', 3)] });
+
+      await lobbiesChanged({ lobby_id: 'bb', lobby_card: card('bb', 1, '2026-10-07T12:00:01Z') });
+
+      expect(cachedIds()).toEqual(['aa:3']);
+      expect(invalidateQueries).not.toHaveBeenCalledWith(expect.objectContaining({ queryKey: lobbiesKey }));
+    });
+
+    /** A list GET per call: each resolves with its response when released, in call order. */
+    function slowLobbyFetches(responses: object[]) {
+      const releases: (() => void)[] = [];
+      const fetchLobbies = vi.fn(() => {
+        const response = responses[Math.min(fetchLobbies.mock.calls.length - 1, responses.length - 1)]!;
+        return new Promise<object>(done => releases.push(() => done(response)));
+      });
+      return { fetchLobbies, release: (index: number) => releases[index]!() };
+    }
+
+    it('keeps a patch that lands during a GET when the older GET arrives, without asking again', async () => {
+      await started();
+      invalidateQueries.mockRestore();
+      const { fetchLobbies, release } = slowLobbyFetches([{ lobbies: [row('aa', 3, '2026-10-07T12:00:01Z')] }]);
+      const observer = new QueryObserver(queryClient, { queryKey: lobbiesKey, queryFn: fetchLobbies });
+      const unsubscribe = observer.subscribe(() => undefined);
+      release(0);
+      await vi.waitFor(() => expect(cachedIds()).toEqual(['aa:3']));
+
+      void observer.refetch();
+      await lobbiesChanged({ lobby_id: 'aa', lobby_card: card('aa', 8, '2026-10-07T12:00:05Z') });
+      expect(cachedIds()).toEqual(['aa:8']);
+      release(1);
+
+      await vi.waitFor(() => expect(fetchLobbies).toHaveBeenCalledTimes(2));
+      await vi.runAllTicks();
+      expect(cachedIds()).toEqual(['aa:8']);
+      unsubscribe();
+    });
+
+    it('applies a patch that lands during the first load once the list arrives', async () => {
+      await started();
+      invalidateQueries.mockRestore();
+      const { fetchLobbies, release } = slowLobbyFetches([{ lobbies: [row('aa', 3, '2026-10-07T12:00:01Z')] }]);
+      const observer = new QueryObserver(queryClient, { queryKey: lobbiesKey, queryFn: fetchLobbies });
+      const unsubscribe = observer.subscribe(() => undefined);
+
+      await lobbiesChanged({ lobby_id: 'aa', lobby_card: card('aa', 8, '2026-10-07T12:00:05Z') });
+      release(0);
+
+      await vi.waitFor(() => expect(cachedIds()).toEqual(['aa:8']));
+      expect(fetchLobbies).toHaveBeenCalledTimes(1);
+      unsubscribe();
+    });
+
+    it('does not cancel a slow GET for a stream of patches, and drops held patches the GET has caught up with', async () => {
+      await started();
+      invalidateQueries.mockRestore();
+      const { fetchLobbies, release } = slowLobbyFetches([
+        { lobbies: [row('aa', 3, '2026-10-07T12:00:01Z')] },
+        { lobbies: [row('aa', 6, '2026-10-07T12:00:04Z')] },
+        { lobbies: [row('aa', 2, '2026-10-07T12:00:09Z')] },
+      ]);
+      const observer = new QueryObserver(queryClient, { queryKey: lobbiesKey, queryFn: fetchLobbies });
+      const unsubscribe = observer.subscribe(() => undefined);
+      release(0);
+      await vi.waitFor(() => expect(cachedIds()).toEqual(['aa:3']));
+
+      void observer.refetch();
+      for (const [headcount, second] of [
+        [4, 2],
+        [5, 3],
+        [7, 5],
+      ] as const) {
+        await lobbiesChanged({ lobby_id: 'aa', lobby_card: card('aa', headcount, `2026-10-07T12:00:0${second}Z`) });
+      }
+      release(1);
+      await vi.waitFor(() => expect(fetchLobbies).toHaveBeenCalledTimes(2));
+      await vi.runAllTicks();
+      // The GET read the lobby at :04; the patch from :05 is newer and stays on top.
+      expect(cachedIds()).toEqual(['aa:7']);
+
+      void observer.refetch();
+      release(2);
+      await vi.waitFor(() => expect(cachedIds()).toEqual(['aa:2']));
+      expect(fetchLobbies).toHaveBeenCalledTimes(3);
+      unsubscribe();
+    });
+
+    it.each([
+      ['no lobby_card', {}],
+      ['another status', { lobby_card: { status: 'removed', as_of: '2026-10-07T12:00:01Z' } }],
+      ['a card without as_of', { lobby_card: { ...card('aa', 1, ''), as_of: undefined } }],
+    ])('refetches the list, not the viewer’s own lobby, for %s', async (_label, extra) => {
+      await started();
+      queryClient.setQueryData(lobbiesKey, { lobbies: [row('aa', 3)] });
+
+      await lobbiesChanged({ lobby_id: 'aa', ...extra });
+
+      expectInvalidated(invalidateQueries, { queryKey: lobbiesKey, refetchType: 'active' });
+      expect(invalidateQueries).not.toHaveBeenCalledWith(expect.objectContaining({ queryKey: myLobbyKey }));
+      expect(cachedIds()).toEqual(['aa:3']);
+    });
+
+    it('leaves the lobby page to debate.lobby_changed while the viewer is connected there', async () => {
+      await started();
+      const lobbyKey = [...lobbiesKey.slice(0, 3), 'lobby', 'aa'];
+      queryClient.setQueryData(lobbiesKey, { lobbies: [row('aa', 3)] });
+      queryClient.setQueryData(lobbyKey, { viewer: { connected: true } });
+
+      await lobbiesChanged({ lobby_id: 'aa', lobby_card: card('aa', 4, '2026-10-07T12:00:01Z') });
+      expect(invalidateQueries).not.toHaveBeenCalledWith(expect.objectContaining({ queryKey: lobbyKey }));
+
+      queryClient.setQueryData(lobbyKey, { viewer: { connected: false } });
+      await lobbiesChanged({ lobby_id: 'aa', lobby_card: card('aa', 5, '2026-10-07T12:00:02Z') });
+      expectInvalidated(invalidateQueries, { queryKey: lobbyKey, refetchType: 'active' });
+    });
+
+    // GEO-3300. The calendar's week reads its own range, under the list's key.
+    describe('on a calendar week', () => {
+      const weekKey = [...lobbiesKey, 'calendar', 1, 2];
+      const weekRow = (
+        lobbyId: string,
+        headcount: number,
+        state: 'upcoming' | 'open' | 'ended',
+        asOf: string | null = null
+      ) => ({
+        ...row(lobbyId, headcount, asOf),
+        open: state === 'open',
+        state,
+        closed_at: state === 'ended' ? '2026-10-07T13:00:00Z' : null,
+      });
+      const weekIds = () =>
+        queryClient
+          .getQueryData<{ lobbies: { lobby_id: string; headcount: number; state: string }[] }>(weekKey)
+          ?.lobbies.map(lobby => `${lobby.lobby_id}:${lobby.headcount}:${lobby.state}`);
+
+      it('patches a lobby in the week too, keeping the week’s order and the viewer’s own fields', async () => {
+        await started();
+        queryClient.setQueryData(lobbiesKey, { lobbies: [row('aa', 3)] });
+        queryClient.setQueryData(weekKey, {
+          lobbies: [weekRow('bb', 1, 'upcoming'), { ...weekRow('aa', 3, 'open'), viewer_reminded: true }],
+        });
+
+        await lobbiesChanged({ lobby_id: 'aa', lobby_card: card('aa', 7, '2026-10-07T12:00:01Z') });
+
+        expect(weekIds()).toEqual(['bb:1:upcoming', 'aa:7:open']);
+        expect(
+          queryClient.getQueryData<{ lobbies: { viewer_reminded: boolean }[] }>(weekKey)?.lobbies[1]
+        ).toMatchObject({ viewer_reminded: true });
+      });
+
+      it('patches the week even when the list is not cached', async () => {
+        await started();
+        queryClient.setQueryData(weekKey, { lobbies: [weekRow('aa', 3, 'open')] });
+
+        await lobbiesChanged({ lobby_id: 'aa', lobby_card: card('aa', 4, '2026-10-07T12:00:01Z') });
+
+        expect(weekIds()).toEqual(['aa:4:open']);
+      });
+
+      it('leaves an ended lobby ended', async () => {
+        await started();
+        queryClient.setQueryData(weekKey, { lobbies: [weekRow('aa', 3, 'ended')] });
+
+        await lobbiesChanged({ lobby_id: 'aa', lobby_card: card('aa', 9, '2026-10-07T12:00:01Z') });
+
+        expect(weekIds()).toEqual(['aa:3:ended']);
+      });
+
+      // Copilot on #2850: the list used to drop a patch as soon as it caught up, even with a week
+      // read from before that patch still in flight, which then landed with nothing to lay over it.
+      it('keeps a patch for a week read still in flight when the list catches up first', async () => {
+        await started();
+        queryClient.setQueryData(lobbiesKey, { lobbies: [row('aa', 3, '2026-10-07T12:00:01Z')] });
+        queryClient.setQueryData(weekKey, { lobbies: [weekRow('aa', 3, 'open', '2026-10-07T12:00:01Z')] });
+
+        // A week read that started before the patch, held open.
+        let releaseWeek!: () => void;
+        const weekRead = queryClient.fetchQuery({
+          queryKey: weekKey,
+          queryFn: () =>
+            new Promise<object>(done => {
+              releaseWeek = () => done({ lobbies: [weekRow('aa', 3, 'open', '2026-10-07T12:00:01Z')] });
+            }),
+        });
+        await lobbiesChanged({ lobby_id: 'aa', lobby_card: card('aa', 8, '2026-10-07T12:00:05Z') });
+
+        // The list catches up with the patch before the week read lands.
+        await queryClient.fetchQuery({
+          queryKey: lobbiesKey,
+          queryFn: async () => ({ lobbies: [row('aa', 8, '2026-10-07T12:00:05Z')] }),
+        });
+        releaseWeek();
+        await weekRead;
+
+        expect(weekIds()).toEqual(['aa:8:open']);
+      });
+
+      // Copilot on #2850: a lobby the capped list never returns could only be released by the list,
+      // so its patch was held for the session and laid over every week on every update.
+      describe('releasing a calendar-only lobby’s patch', () => {
+        /** Whether `aa`'s patch is still held: a stale week row is re-patched by the next overlay. */
+        async function aaStillHeld() {
+          queryClient.setQueryData(weekKey, {
+            lobbies: [
+              weekRow('aa', 3, 'open', '2026-10-07T12:00:01Z'),
+              weekRow('bb', 1, 'open', '2026-10-07T12:00:01Z'),
+            ],
+          });
+          await lobbiesChanged({ lobby_id: 'bb', lobby_card: card('bb', 2, '2026-10-07T12:00:09Z') });
+          return weekIds()?.[0] === 'aa:8:open';
+        }
+
+        it('lets a week read that has caught up release it', async () => {
+          await started();
+          queryClient.setQueryData(weekKey, { lobbies: [weekRow('aa', 3, 'open', '2026-10-07T12:00:01Z')] });
+          await lobbiesChanged({ lobby_id: 'aa', lobby_card: card('aa', 8, '2026-10-07T12:00:05Z') });
+
+          await queryClient.fetchQuery({
+            queryKey: weekKey,
+            queryFn: async () => ({ lobbies: [weekRow('aa', 8, 'open', '2026-10-07T12:00:05Z')] }),
+          });
+
+          expect(await aaStillHeld()).toBe(false);
+        });
+
+        // Copilot on #2850: a week that caught up while the list was in flight used to forget it had,
+        // and a list landing without that lobby left the patch held for the session.
+        it('releases it once the last read in flight lands, a week having caught up meanwhile', async () => {
+          await started();
+          queryClient.setQueryData(weekKey, { lobbies: [weekRow('aa', 3, 'open', '2026-10-07T12:00:01Z')] });
+          let releaseList!: () => void;
+          const listRead = queryClient.fetchQuery({
+            queryKey: lobbiesKey,
+            queryFn: () => new Promise<object>(done => (releaseList = () => done({ lobbies: [] }))),
+          });
+          await lobbiesChanged({ lobby_id: 'aa', lobby_card: card('aa', 8, '2026-10-07T12:00:05Z') });
+
+          await queryClient.fetchQuery({
+            queryKey: weekKey,
+            queryFn: async () => ({ lobbies: [weekRow('aa', 8, 'open', '2026-10-07T12:00:05Z')] }),
+          });
+          // The list lands last, without the lobby.
+          releaseList();
+          await listRead;
+
+          expect(await aaStillHeld()).toBe(false);
+        });
+
+        // Copilot on #2850: the week's catch-up was read after the overlay had already written the
+        // patch's own `as_of` into it, so a stale week looked caught up and released the patch.
+        it('judges a week’s catch-up by what the read returned, not by the patched cache', async () => {
+          await started();
+          queryClient.setQueryData(weekKey, { lobbies: [weekRow('aa', 3, 'open', '2026-10-07T12:00:01Z')] });
+          await lobbiesChanged({ lobby_id: 'aa', lobby_card: card('aa', 8, '2026-10-07T12:00:05Z') });
+
+          // A week read from before the patch lands, with nothing else in flight.
+          await queryClient.fetchQuery({
+            queryKey: weekKey,
+            queryFn: async () => ({ lobbies: [weekRow('aa', 3, 'open', '2026-10-07T12:00:01Z')] }),
+          });
+
+          expect(await aaStillHeld()).toBe(true);
+        });
+
+        it('keeps a newer patch that arrived after the catch-up was remembered', async () => {
+          await started();
+          queryClient.setQueryData(weekKey, { lobbies: [weekRow('aa', 3, 'open', '2026-10-07T12:00:01Z')] });
+          let releaseList!: () => void;
+          const listRead = queryClient.fetchQuery({
+            queryKey: lobbiesKey,
+            queryFn: () => new Promise<object>(done => (releaseList = () => done({ lobbies: [] }))),
+          });
+          await lobbiesChanged({ lobby_id: 'aa', lobby_card: card('aa', 8, '2026-10-07T12:00:05Z') });
+          await queryClient.fetchQuery({
+            queryKey: weekKey,
+            queryFn: async () => ({ lobbies: [weekRow('aa', 8, 'open', '2026-10-07T12:00:05Z')] }),
+          });
+          // A newer patch, which no read has caught up with.
+          await lobbiesChanged({ lobby_id: 'aa', lobby_card: card('aa', 9, '2026-10-07T12:00:07Z') });
+          releaseList();
+          await listRead;
+
+          // Still held: a stale row is re-patched to the newer count.
+          queryClient.setQueryData(weekKey, { lobbies: [weekRow('aa', 3, 'open', '2026-10-07T12:00:01Z')] });
+          await lobbiesChanged({ lobby_id: 'bb', lobby_card: card('bb', 2, '2026-10-07T12:00:09Z') });
+          expect(weekIds()?.[0]).toBe('aa:9:open');
+        });
+
+        it('lays the patch over a read that predates it before releasing it', async () => {
+          await started();
+          queryClient.setQueryData(weekKey, { lobbies: [weekRow('aa', 3, 'open', '2026-10-07T12:00:01Z')] });
+          // A list read from before the patch, still in flight.
+          let releaseList!: () => void;
+          const listRead = queryClient.fetchQuery({
+            queryKey: lobbiesKey,
+            queryFn: () =>
+              new Promise<object>(
+                done => (releaseList = () => done({ lobbies: [row('aa', 3, '2026-10-07T12:00:01Z')] }))
+              ),
+          });
+          await lobbiesChanged({ lobby_id: 'aa', lobby_card: card('aa', 8, '2026-10-07T12:00:05Z') });
+          await queryClient.fetchQuery({
+            queryKey: weekKey,
+            queryFn: async () => ({ lobbies: [weekRow('aa', 8, 'open', '2026-10-07T12:00:05Z')] }),
+          });
+
+          releaseList();
+          await listRead;
+
+          expect(cachedIds()).toEqual(['aa:8']);
+        });
+
+        it('keeps it while another lobby read is still in flight, which may predate it', async () => {
+          await started();
+          queryClient.setQueryData(weekKey, { lobbies: [weekRow('aa', 3, 'open', '2026-10-07T12:00:01Z')] });
+          let releaseList!: () => void;
+          const listRead = queryClient.fetchQuery({
+            queryKey: lobbiesKey,
+            queryFn: () => new Promise<object>(done => (releaseList = () => done({ lobbies: [] }))),
+          });
+          await lobbiesChanged({ lobby_id: 'aa', lobby_card: card('aa', 8, '2026-10-07T12:00:05Z') });
+
+          await queryClient.fetchQuery({
+            queryKey: [...lobbiesKey, 'calendar', 3, 4],
+            queryFn: async () => ({ lobbies: [weekRow('aa', 8, 'open', '2026-10-07T12:00:05Z')] }),
+          });
+          const held = await aaStillHeld();
+          releaseList();
+          await listRead;
+
+          expect(held).toBe(true);
+        });
+      });
+
+      it('lays a held patch over a week read before it', async () => {
+        await started();
+        queryClient.setQueryData(lobbiesKey, { lobbies: [row('aa', 3)] });
+        await lobbiesChanged({ lobby_id: 'aa', lobby_card: card('aa', 8, '2026-10-07T12:00:05Z') });
+
+        // A week fetched now, from a read taken before that patch.
+        await queryClient.fetchQuery({
+          queryKey: weekKey,
+          queryFn: async () => ({ lobbies: [weekRow('aa', 3, 'open', '2026-10-07T12:00:01Z')] }),
+        });
+
+        expect(weekIds()).toEqual(['aa:8:open']);
+      });
+    });
+  });
+
+  describe('lobby guest count', () => {
+    const lobbyKey = ['debates', 'account', 'user-a', 'lobby', 'abcd'];
+
+    async function guestsChanged(payload: Record<string, unknown>) {
+      client.start(
+        vi.fn(async () => 'privy-token'),
+        'user-a'
+      );
+      await vi.runAllTicks();
+      sockets[0]!.open();
+      sockets[0]!.receive('READY', readyPayload([]));
+      await flushInvalidations();
+      invalidateQueries.mockClear();
+      sockets[0]!.receive('EVENT', { event_id: 'guests-1', event_type: 'debate.lobby_guests_changed', payload });
+      await flushInvalidations();
+    }
+
+    it('patches the cached view’s count and never refetches', async () => {
+      queryClient.setQueryData(lobbyKey, { lobby_id: 'abcd', guest_count: 1, members: [] });
+      await guestsChanged({ lobby_id: 'AB-CD', guest_count: 4 });
+      expect(queryClient.getQueryData<{ guest_count: number }>(lobbyKey)?.guest_count).toBe(4);
+      expect(invalidateQueries).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['no cached view', undefined, { lobby_id: 'AB-CD', guest_count: 4 }],
+      ['an unreadable count', { lobby_id: 'abcd', guest_count: 1 }, { lobby_id: 'AB-CD', guest_count: 'x' }],
+    ])('leaves %s alone', async (_label, cached, payload) => {
+      if (cached) queryClient.setQueryData(lobbyKey, cached);
+      await guestsChanged(payload);
+      expect(queryClient.getQueryData(lobbyKey)).toEqual(cached);
+      expect(invalidateQueries).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('space calls changed', () => {
+    async function spaceCallsChanged(payload: Record<string, unknown>) {
+      client.start(
+        vi.fn(async () => 'privy-token'),
+        'user-a'
+      );
+      await vi.runAllTicks();
+      sockets[0]!.open();
+      sockets[0]!.receive('READY', readyPayload([]));
+      await flushInvalidations();
+      invalidateQueries.mockClear();
+      sockets[0]!.receive('EVENT', { event_id: 'calls-1', event_type: 'debate.space_calls_changed', payload });
+      await flushInvalidations();
+    }
+
+    it('refetches the list, and the call it names (GEO-3420)', async () => {
+      await spaceCallsChanged({ space_id: 'SP-1', lobby_id: 'AB-CD' });
+      expectInvalidated(invalidateQueries, { queryKey: ['debates', 'space-calls', 'sp1'], refetchType: 'active' });
+      expectInvalidated(invalidateQueries, {
+        queryKey: ['debates', 'account', 'user-a', 'lobby', 'abcd'],
+        refetchType: 'active',
+      });
+    });
+
+    /** The keyed invalidations, and whether the space's calls not yet open were refetched too. */
+    function invalidated() {
+      const filters: Record<string, unknown>[] = invalidateQueries.mock.calls.map(
+        (call: unknown[]) => call[0] as Record<string, unknown>
+      );
+      return {
+        keyed: filters.filter(filter => typeof filter.predicate !== 'function'),
+        preOpen: filters.some(filter => typeof filter.predicate === 'function'),
+      };
+    }
+
+    it('refetches the lists and the calls not yet open when no call is named', async () => {
+      await spaceCallsChanged({ space_id: 'sp1' });
+      expect(invalidated()).toEqual({
+        keyed: [
+          { queryKey: ['debates', 'space-calls', 'sp1'], refetchType: 'active' },
+          { queryKey: ['debates', 'space-past-calls', 'sp1'], refetchType: 'active' },
+        ],
+        preOpen: true,
+      });
+    });
+
+    it.each([
+      ['started', [['debates', 'space-calls', 'sp1']], false],
+      [
+        'opened',
+        [
+          ['debates', 'space-calls', 'sp1'],
+          ['debates', 'space-past-calls', 'sp1'],
+        ],
+        true,
+      ],
+      ['schedule', [['debates', 'space-calls', 'sp1']], true],
+      [
+        'ended',
+        [
+          ['debates', 'space-calls', 'sp1'],
+          ['debates', 'space-past-calls', 'sp1'],
+        ],
+        false,
+      ],
+      ['agenda', [], false],
+    ])('narrows a rowless %s to its own data', async (change, keys, preOpen) => {
+      await spaceCallsChanged({ space_id: 'sp1', change });
+      expect(invalidated()).toEqual({ keyed: keys.map(queryKey => ({ queryKey, refetchType: 'active' })), preOpen });
+    });
+
+    it('refetches only the call for its agenda', async () => {
+      await spaceCallsChanged({ space_id: 'sp1', lobby_id: 'AB-CD', change: 'agenda' });
+      expect(invalidateQueries.mock.calls.map((call: unknown[]) => call[0])).toEqual([
+        { queryKey: ['debates', 'account', 'user-a', 'lobby', 'abcd'], refetchType: 'active' },
+      ]);
+    });
+
+    it('refetches this account’s cached calls not yet open in the space on a schedule change, and nothing else', async () => {
+      const call = (spaceId: string, status: string) => ({
+        lobby_id: 'x',
+        access: status === 'not_yet_open' ? { status, opens_at: '2026-11-04T15:50:00Z' } : { status },
+        call: { space_id: spaceId, space_name: null, started_by: null },
+      });
+      const preOpen = ['debates', 'account', 'user-a', 'lobby', 'call1'];
+      const open = ['debates', 'account', 'user-a', 'lobby', 'call2'];
+      const elsewhere = ['debates', 'account', 'user-a', 'lobby', 'call3'];
+      queryClient.setQueryData(preOpen, call('SP-1', 'not_yet_open'));
+      queryClient.setQueryData(open, call('sp1', 'admitted'));
+      queryClient.setQueryData(elsewhere, call('sp2', 'not_yet_open'));
+      queryClient.setQueryData(['debates', 'account', 'user-b', 'lobby', 'call1'], call('sp1', 'not_yet_open'));
+
+      await spaceCallsChanged({ space_id: 'sp1', change: 'schedule' });
+      const all: QueryFilters[] = invalidateQueries.mock.calls.map((args: unknown[]) => args[0] as QueryFilters);
+      const filters = all.find(filter => filter.predicate)!;
+      const matched = queryClient
+        .getQueryCache()
+        .findAll()
+        .filter(query => matchQuery(filters, query))
+        .map(query => query.queryKey);
+      expect(matched).toEqual([preOpen]);
+    });
+
+    it('refetches the pre-call page of a call that opened early, by its id however spelled', async () => {
+      const view = (lobbyId: string, status: string) => ({
+        lobby_id: lobbyId,
+        access: status === 'not_yet_open' ? { status, opens_at: '2026-11-04T15:50:00Z' } : { status },
+        call: { space_id: 'sp1', space_name: null, started_by: null },
+      });
+      const preOpen = ['debates', 'account', 'user-a', 'lobby', 'abcd'];
+      const otherCall = ['debates', 'account', 'user-a', 'lobby', 'ef01'];
+      queryClient.setQueryData(preOpen, view('AB-CD', 'not_yet_open'));
+      queryClient.setQueryData(otherCall, view('ef01', 'not_yet_open'));
+      const row = { call_id: 'abcd', as_of: '2026-11-04T15:20:00.000001Z', hosts: [], avatars: [], headcount: 1 };
+
+      await spaceCallsChanged({ space_id: 'sp1', space_call: { status: 'live', as_of: row.as_of, call: row } });
+      const all: QueryFilters[] = invalidateQueries.mock.calls.map((args: unknown[]) => args[0] as QueryFilters);
+      const matched = queryClient
+        .getQueryCache()
+        .findAll()
+        .filter(query => all.some(filters => matchQuery(filters, query)))
+        .map(query => query.queryKey);
+      expect(matched).toEqual([preOpen]);
+    });
+
+    it('patches a live row into the live list and leaves the past pages alone', async () => {
+      const call = {
+        call_id: 'call1',
+        name: 'Weekly',
+        starts_at: '2026-10-23T15:00:00Z',
+        started_by: null,
+        hosts: [],
+        headcount: 1,
+        avatars: [],
+        as_of: '2026-10-23T15:04:11.000001Z',
+      };
+      const liveKey = ['debates', 'space-calls', 'sp1', 'user-a'];
+      const pastKey = ['debates', 'space-past-calls', 'sp1'];
+      const past = { pages: [{ calls: [], next_cursor: null }], pageParams: [null] };
+      queryClient.setQueryData(liveKey, { space_id: 'sp1', supported: true, viewer_can_start: false, calls: [call] });
+      queryClient.setQueryData(pastKey, past);
+
+      const newer = { ...call, headcount: 3, as_of: '2026-10-23T15:04:11.000002Z' };
+      await spaceCallsChanged({ space_id: 'sp1', space_call: { status: 'live', as_of: newer.as_of, call: newer } });
+
+      expect(queryClient.getQueryData<{ calls: { headcount: number }[] }>(liveKey)?.calls[0]?.headcount).toBe(3);
+      expect(queryClient.getQueryData(pastKey)).toBe(past);
+      expect(invalidateQueries).not.toHaveBeenCalled();
+    });
+
+    it('refetches the past calls when a call ends', async () => {
+      await spaceCallsChanged({
+        space_id: 'sp1',
+        space_call: {
+          status: 'ended',
+          as_of: '2026-10-23T16:00:00Z',
+          call: { call_id: 'call1', as_of: '2026-10-23T16:00:00Z', hosts: [], avatars: [], headcount: 0 },
+        },
+      });
+      expectInvalidated(invalidateQueries, { queryKey: ['debates', 'space-past-calls', 'sp1'], refetchType: 'active' });
+    });
+  });
+
+  describe('lobby claim lists', () => {
+    const lobbyKey = ['debates', 'account', 'user-a', 'lobby', 'abcd'];
+    const list = (entityId: string, position: number) => ({
+      entity_id: entityId,
+      space_id: 's1',
+      position,
+      added_by: null,
+      added_at: '2026-10-13T12:00:00Z',
+    });
+
+    async function listsChanged(payload: Record<string, unknown>) {
+      client.start(
+        vi.fn(async () => 'privy-token'),
+        'user-a'
+      );
+      await vi.runAllTicks();
+      sockets[0]!.open();
+      sockets[0]!.receive('READY', readyPayload([]));
+      await flushInvalidations();
+      invalidateQueries.mockClear();
+      sockets[0]!.receive('EVENT', { event_id: 'lists-1', event_type: 'debate.lobby_claim_lists_changed', payload });
+      await flushInvalidations();
+    }
+
+    it('lays newer lists over the cached view and never refetches', async () => {
+      queryClient.setQueryData(lobbyKey, {
+        lobby_id: 'abcd',
+        claim_lists: [list('p1', 0)],
+        claim_lists_as_of: '2026-10-13T12:00:00.000100Z',
+      });
+      await listsChanged({
+        lobby_id: 'AB-CD',
+        lobby_claim_lists: {
+          lobby_id: 'AB-CD',
+          as_of: '2026-10-13T12:00:00.000200Z',
+          claim_lists: [list('p1', 0), list('p2', 1)],
+        },
+      });
+      expect(queryClient.getQueryData<{ claim_lists: unknown[] }>(lobbyKey)?.claim_lists).toHaveLength(2);
+      expect(invalidateQueries).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['an older state', { lobby_id: 'AB-CD', as_of: '2026-10-13T12:00:00Z', claim_lists: [] }],
+      ['an unreadable payload', { lobby_id: 'AB-CD', claim_lists: 'x' }],
+    ])('ignores %s', async (_label, lobbyClaimLists) => {
+      queryClient.setQueryData(lobbyKey, {
+        lobby_id: 'abcd',
+        claim_lists: [list('p1', 0)],
+        claim_lists_as_of: '2026-10-13T12:00:00.000100Z',
+      });
+      await listsChanged({ lobby_id: 'AB-CD', lobby_claim_lists: lobbyClaimLists });
+      expect(queryClient.getQueryData<{ claim_lists: unknown[] }>(lobbyKey)?.claim_lists).toHaveLength(1);
+      expect(invalidateQueries).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('lobby highlights', () => {
+    const highlightsKey = ['debates', 'account', 'user-a', 'lobby-highlights', 'abcd'];
+    const state = (asOf: string | null, agree: number) => ({
+      lobby_id: 'AB-CD',
+      as_of: asOf,
+      highlights: [],
+      room_vote: {
+        vote_id: 'v1',
+        claim: { id: 'c1', space_id: 's', claim_entity_id: 'e', claim: 'Claim', description: null },
+        started_by: null,
+        started_at: '2026-10-07T12:00:00Z',
+        tally: { agree, disagree: 0, eligible: 4 },
+      },
+    });
+
+    async function started() {
+      client.start(
+        vi.fn(async () => 'privy-token'),
+        'user-a'
+      );
+      await vi.runAllTicks();
+      sockets[0]!.open();
+      sockets[0]!.receive('READY', readyPayload([]));
+      await flushInvalidations();
+      invalidateQueries.mockClear();
+    }
+
+    let eventCount = 0;
+    async function highlightsChanged(lobbyHighlights: unknown) {
+      eventCount += 1;
+      sockets[0]!.receive('EVENT', {
+        event_id: `highlights-${eventCount}`,
+        event_type: 'debate.lobby_highlights_changed',
+        payload: { lobby_id: 'AB-CD', lobby_highlights: lobbyHighlights },
+      });
+      await flushInvalidations();
+    }
+
+    const cachedAgree = () =>
+      queryClient.getQueryData<{ room_vote: { tally: { agree: number } } }>(highlightsKey)?.room_vote.tally.agree;
+
+    it('replaces the cached state with a newer one, keeping the viewer, and never refetches', async () => {
+      await started();
+      queryClient.setQueryData(highlightsKey, {
+        ...state('2026-10-07T12:00:01.000100Z', 1),
+        viewer: { room_vote_position: true, vote_id: 'v1' },
+      });
+
+      await highlightsChanged(state('2026-10-07T12:00:01.000200Z', 2));
+
+      expect(cachedAgree()).toBe(2);
+      expect(queryClient.getQueryData<{ viewer: unknown }>(highlightsKey)?.viewer).toEqual({
+        room_vote_position: true,
+        vote_id: 'v1',
+      });
+      expect(invalidateQueries).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['an older state', state('2026-10-07T12:00:00.9Z', 5)],
+      ['the same state', state('2026-10-07T12:00:01.0001Z', 5)],
+      ['an unreadable payload', { lobby_id: 'AB-CD' }],
+    ])('ignores %s', async (_label, payload) => {
+      await started();
+      queryClient.setQueryData(highlightsKey, {
+        ...state('2026-10-07T12:00:01.000100Z', 1),
+        viewer: { room_vote_position: null, vote_id: 'v1' },
+      });
+
+      await highlightsChanged(payload);
+
+      expect(cachedAgree()).toBe(1);
+      expect(invalidateQueries).not.toHaveBeenCalled();
+    });
+
+    it('seeds the cache while the first GET is in flight, and an older GET keeps it', async () => {
+      await started();
+      let respond!: (value: LobbyHighlightsState) => void;
+      const fetched = new Promise<LobbyHighlightsState>(resolve => (respond = resolve));
+      // As `useLobbyHighlights` does: the GET settles against whatever the cache holds by then.
+      const fetching = queryClient.fetchQuery({
+        queryKey: highlightsKey,
+        queryFn: async () => {
+          const response = await fetched;
+          return settleFetchedLobbyHighlights(queryClient.getQueryData<LobbyHighlightsState>(highlightsKey), response);
+        },
+      });
+
+      await highlightsChanged(state('2026-10-07T12:00:02Z', 3));
+      expect(cachedAgree()).toBe(3);
+      expect(queryClient.getQueryData<{ viewer: unknown }>(highlightsKey)?.viewer).toEqual({
+        room_vote_position: null,
+        vote_id: null,
+      });
+
+      respond({ ...state('2026-10-07T12:00:01Z', 1), viewer: { room_vote_position: true, vote_id: 'v1' } });
+      await fetching;
+      expect(cachedAgree()).toBe(3);
+      expect(queryClient.getQueryData<{ viewer: unknown }>(highlightsKey)?.viewer).toEqual({
+        room_vote_position: true,
+        vote_id: 'v1',
+      });
+      expect(invalidateQueries).not.toHaveBeenCalled();
+    });
+
+    it('applies an event to a lobby on screen whose first GET failed, but not once nothing shows it', async () => {
+      await started();
+      const observer = new QueryObserver(queryClient, {
+        queryKey: highlightsKey,
+        queryFn: () => Promise.reject(new Error('down')),
+        retry: false,
+      });
+      const unsubscribe = observer.subscribe(() => undefined);
+      await vi.waitFor(() => expect(observer.getCurrentResult().isError).toBe(true));
+
+      await highlightsChanged(state('2026-10-07T12:00:01Z', 2));
+      expect(cachedAgree()).toBe(2);
+
+      unsubscribe();
+      queryClient.removeQueries({ queryKey: highlightsKey });
+      const unshown = new QueryObserver(queryClient, {
+        queryKey: highlightsKey,
+        queryFn: () => Promise.reject(new Error('down')),
+        retry: false,
+      });
+      const stop = unshown.subscribe(() => undefined);
+      await vi.waitFor(() => expect(unshown.getCurrentResult().isError).toBe(true));
+      stop();
+      await highlightsChanged(state('2026-10-07T12:00:02Z', 4));
+      expect(queryClient.getQueryData(highlightsKey)).toBeUndefined();
+    });
+
+    it('leaves a lobby whose highlights were never read uncached', async () => {
+      await started();
+      await highlightsChanged(state('2026-10-07T12:00:01Z', 1));
+      expect(queryClient.getQueryData(highlightsKey)).toBeUndefined();
+    });
   });
 
   it('subscribes to the matchmaking scope and reconciles every hub query on confirmation', async () => {
@@ -310,7 +1469,7 @@ describe('DebateGatewayClient', () => {
     sockets[0]!.receive('READY', readyPayload([{ scope: 'matchmaking' }]));
     await flushInvalidations();
 
-    for (const kind of ['people', 'matchmaking-claims', 'matches', 'lobbies', 'lobby']) {
+    for (const kind of ['people', 'matchmaking-claims', 'matches', 'lobbies', 'lobby', 'lobby-claims']) {
       expectInvalidated(invalidateQueries, {
         queryKey: ['debates', 'account', 'user-a', kind],
         refetchType: 'active',
@@ -342,6 +1501,43 @@ describe('DebateGatewayClient', () => {
 
     client.stop();
     expect(client.getSnapshot().capabilities).toEqual([]);
+  });
+
+  it('hands a claims_changed claim_response to the picker at once, and nothing for one without it', async () => {
+    const heard: RemoteClaimResponse[] = [];
+    const unsubscribe = subscribeRemoteClaimResponses(response => heard.push(response));
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+
+    sockets[0]!.receive('EVENT', {
+      event_id: 'event-plain',
+      event_type: 'debate.claims_changed',
+      payload: { space_id: 'space-1', claim_entity_ids: ['claim-1'] },
+    });
+    sockets[0]!.receive('EVENT', {
+      event_id: 'event-response',
+      event_type: 'debate.claims_changed',
+      payload: {
+        space_id: 'space-1',
+        claim_entity_ids: ['claim-1', 'claim-2'],
+        claim_response: {
+          claim_entity_id: 'claim-1',
+          profile_space_id: 'profile-2',
+          response_kind: 'stance',
+          position: false,
+        },
+      },
+    });
+    unsubscribe();
+
+    expect(heard).toEqual([
+      { profileSpaceId: 'profile-2', claimId: 'claim-1', spaceId: 'space-1', responseKind: 'stance', position: false },
+    ]);
   });
 
   it('filters claim invalidations to active claim queries that intersect the event', async () => {
@@ -900,6 +2096,27 @@ describe('DebateGatewayClient', () => {
     expect(predicate!(cache.find({ queryKey: ['debates', 'claims', 'space-1', 'all'] })!)).toBe(true);
   });
 
+  it('leaves the rematch voice token out of the broad reconcile', async () => {
+    queryClient.setQueryData(['rematch-livekit', 'user-a', 'rematch-1'], { token: 't', url: 'wss://x' });
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    await flushInvalidations();
+
+    type InvalidationFilters = NonNullable<Parameters<QueryClient['invalidateQueries']>[0]>;
+    const invalidationCalls = invalidateQueries.mock.calls as unknown as Array<[InvalidationFilters]>;
+    const predicate = invalidationCalls.map(call => call[0]).find(filters => 'predicate' in filters)?.predicate;
+    expect(predicate).toBeTypeOf('function');
+    // A fresh token landing while the call is Reconnecting restarts it from scratch, and a reconnect
+    // of this socket is when that is most likely (GEO-3343).
+    const token = queryClient.getQueryCache().find({ queryKey: ['rematch-livekit', 'user-a', 'rematch-1'] });
+    expect(predicate!(token!)).toBe(false);
+  });
+
   it('ignores a refetch cancelled by a later flush instead of recycling the socket', async () => {
     invalidateQueries.mockRejectedValueOnce(new CancelledError());
     client.start(
@@ -939,6 +2156,71 @@ describe('DebateGatewayClient', () => {
     expect(sockets[0]!.readyState).toBe(FakeWebSocket.CLOSED);
     await vi.advanceTimersByTimeAsync(1_000);
     expect(sockets).toHaveLength(2);
+  });
+
+  it('reconnects with a fresh session when the server says the token expired early', async () => {
+    vi.mocked(resetGeoChatSession).mockClear();
+    client.retainScope({ scope: 'space', space_id: 'space-1' });
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    await flushInvalidations();
+
+    // Revoked while `expires_at` is still ten minutes out, and still the stored session.
+    vi.mocked(getStoredGeoChatAccessToken).mockReturnValueOnce('access token');
+    session = { ...session, access_token: 'fresh-token' };
+    sockets[0]!.receive('ERROR', { code: 'authentication_expired', message: 'token expired' });
+
+    expect(resetGeoChatSession).toHaveBeenCalledTimes(1);
+    expect(sockets[0]!.readyState).toBe(FakeWebSocket.CLOSED);
+    expect(client.getSnapshot()).toMatchObject({ paused: true, pauseReason: 'session' });
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(getSession).toHaveBeenCalledTimes(2);
+    expect(sockets[1]!.url).toContain('access_token=fresh-token');
+    sockets[1]!.open();
+    sockets[1]!.receive('READY', readyPayload([]));
+    await flushInvalidations();
+    expect(client.getSnapshot()).toMatchObject({ status: 'ready', paused: false });
+
+    // A repeat inside the cooldown neither parks nor spins: it reconnects again, on a longer floor.
+    vi.mocked(getStoredGeoChatAccessToken).mockReturnValueOnce('fresh-token');
+    sockets[1]!.receive('ERROR', { code: 'authentication_expired', message: 'token expired' });
+    expect(resetGeoChatSession).toHaveBeenCalledTimes(2);
+    expect(sockets[1]!.readyState).toBe(FakeWebSocket.CLOSED);
+    await vi.advanceTimersByTimeAsync(1_999);
+    expect(sockets).toHaveLength(2);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(sockets).toHaveLength(3);
+    sockets[2]!.open();
+    sockets[2]!.receive('READY', readyPayload([]));
+    expect(sockets[2]!.sent).toContainEqual(
+      expect.objectContaining({ op: 'SUBSCRIBE', payload: { scope: 'space', space_id: 'space-1' } })
+    );
+  });
+
+  it("keeps a newer stored session when the socket's token is rejected", async () => {
+    vi.mocked(resetGeoChatSession).mockClear();
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+
+    // Another tab already refreshed: the stored session is newer than this socket's.
+    vi.mocked(getStoredGeoChatAccessToken).mockReturnValueOnce('other-tab-token');
+    session = { ...session, access_token: 'other-tab-token' };
+    sockets[0]!.receive('ERROR', { code: 'authentication_expired', message: 'token expired' });
+
+    expect(resetGeoChatSession).not.toHaveBeenCalled();
+    expect(sockets[0]!.readyState).toBe(FakeWebSocket.CLOSED);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(sockets[1]!.url).toContain('access_token=other-tab-token');
   });
 
   it('cancels an in-flight snapshot before invalidating it', async () => {
@@ -1364,6 +2646,387 @@ describe('DebateGatewayClient', () => {
     expect(sockets[1]!.readyState).toBe(FakeWebSocket.CLOSED);
     await vi.advanceTimersByTimeAsync(1_000);
     expect(sockets).toHaveLength(3);
+  });
+
+  it('drops only a refused scope that the ERROR names, keeping the socket and other scopes', async () => {
+    client.retainScope({ scope: 'space', space_id: 'space-1' });
+    client.retainScope({ scope: 'debate', debate_id: 'private-debate' });
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    await flushInvalidations();
+
+    const refusal = {
+      code: 'subscription_forbidden',
+      message: 'not authorized',
+      subscription: { scope: 'debate', debate_id: 'private-debate' },
+    };
+    sockets[0]!.receive('ERROR', refusal);
+
+    expect(sockets[0]!.readyState).toBe(FakeWebSocket.OPEN);
+    expect(client.getSnapshot()).toMatchObject({ status: 'ready', paused: false });
+    // A later READY on the same socket does not re-send it.
+    sockets[0]!.receive('READY', readyPayload([{ scope: 'space', space_id: 'space-1' }]));
+    expect(sockets[0]!.sent.filter(message => message.op === 'SUBSCRIBE')).toHaveLength(2);
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(sockets).toHaveLength(1);
+
+    // A reconnect retries it once, and a second refusal still does not recycle.
+    sockets[0]!.serverClose();
+    await vi.advanceTimersByTimeAsync(1_000);
+    sockets[1]!.open();
+    sockets[1]!.receive('READY', readyPayload([]));
+    const subscribed = () =>
+      sockets[1]!.sent.filter(message => message.op === 'SUBSCRIBE').map(message => message.payload);
+    expect(subscribed()).toEqual([
+      { scope: 'space', space_id: 'space-1' },
+      { scope: 'debate', debate_id: 'private-debate' },
+    ]);
+
+    sockets[1]!.receive('ERROR', refusal);
+    sockets[1]!.receive('READY', readyPayload([{ scope: 'space', space_id: 'space-1' }]));
+    expect(sockets[1]!.readyState).toBe(FakeWebSocket.OPEN);
+    expect(client.getSnapshot()).toMatchObject({ status: 'ready', paused: false });
+    expect(subscribed()).toHaveLength(2);
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(sockets).toHaveLength(2);
+  });
+
+  it('retries a refused scope once every holder has released it and it is retained again', async () => {
+    const release = client.retainScope({ scope: 'debate', debate_id: 'private-debate' });
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    sockets[0]!.receive('ERROR', {
+      code: 'subscription_forbidden',
+      message: 'not authorized',
+      subscription: { scope: 'debate', debate_id: 'private-debate' },
+    });
+
+    release();
+    expect(sockets[0]!.sent.some(message => message.op === 'UNSUBSCRIBE')).toBe(false);
+
+    client.retainScope({ scope: 'debate', debate_id: 'private-debate' });
+    expect(sockets[0]!.sent.filter(message => message.op === 'SUBSCRIBE')).toHaveLength(2);
+  });
+
+  it('retries refused scopes after the account changes', async () => {
+    client.retainScope({ scope: 'matchmaking' });
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    sockets[0]!.receive('ERROR', {
+      code: 'subscription_forbidden',
+      message: 'authentication is required for resource subscriptions',
+      subscription: { scope: 'matchmaking' },
+    });
+
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-b'
+    );
+    await vi.runAllTicks();
+    sockets[1]!.open();
+    sockets[1]!.receive('READY', readyPayload([]));
+    expect(sockets[1]!.sent).toContainEqual(
+      expect.objectContaining({ op: 'SUBSCRIBE', payload: { scope: 'matchmaking' } })
+    );
+  });
+
+  it('keeps recycling the socket when the refusal names no client scope', async () => {
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+
+    // A room subscription, which this client never sends and cannot map to a scope.
+    sockets[0]!.receive('ERROR', {
+      code: 'subscription_forbidden',
+      message: 'not authorized',
+      subscription: { space_id: 'space-1', room_id: 'room-1', room_kind: 'member', resume_after_seq: null },
+    });
+
+    expect(sockets[0]!.readyState).toBe(FakeWebSocket.CLOSED);
+    expect(client.getSnapshot()).toMatchObject({ status: 'degraded', paused: true });
+  });
+
+  it('re-sends a scope whose check failed on its own backoff, without parking the gateway', async () => {
+    client.retainScope({ scope: 'space', space_id: 'space-1' });
+    const releaseDebate = client.retainScope({ scope: 'debate', debate_id: 'debate-1' });
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([{ scope: 'space', space_id: 'space-1' }]));
+    await flushInvalidations();
+
+    const failure = {
+      code: 'subscription_check_failed',
+      message: 'try again',
+      subscription: { scope: 'debate', debate_id: 'debate-1' },
+    };
+    const debateSubscribes = () =>
+      sockets[0]!.sent.filter(
+        message => message.op === 'SUBSCRIBE' && (message.payload as { scope: string }).scope === 'debate'
+      ).length;
+    expect(debateSubscribes()).toBe(1);
+
+    // A long outage: every re-send fails, and the gaps grow 1s, 2s, 4s, 8s.
+    for (const [index, delay] of [1_000, 2_000, 4_000, 8_000].entries()) {
+      sockets[0]!.receive('ERROR', failure);
+      await vi.advanceTimersByTimeAsync(delay - 1);
+      expect(debateSubscribes()).toBe(index + 1);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(debateSubscribes()).toBe(index + 2);
+    }
+
+    expect(sockets).toHaveLength(1);
+    expect(sockets[0]!.readyState).toBe(FakeWebSocket.OPEN);
+    expect(client.getSnapshot()).toMatchObject({ status: 'ready', paused: false });
+
+    // The other scope keeps delivering.
+    invalidateQueries.mockClear();
+    sockets[0]!.receive('EVENT', {
+      event_id: 'event-space-1',
+      event_type: 'debate.state_changed',
+      payload: { space_id: 'space-1' },
+    });
+    await flushInvalidations();
+    expectInvalidated(invalidateQueries, { queryKey: ['debates', 'space', 'space-1'], refetchType: 'active' });
+
+    // Releasing cancels the pending retry.
+    sockets[0]!.receive('ERROR', failure);
+    releaseDebate();
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(debateSubscribes()).toBe(5);
+  });
+
+  it('does not let a READY for another scope re-send a scope waiting on its check backoff', async () => {
+    client.retainScope({ scope: 'space', space_id: 'space-1' });
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([{ scope: 'space', space_id: 'space-1' }]));
+    client.retainScope({ scope: 'debate', debate_id: 'debate-b' });
+    sockets[0]!.receive('ERROR', {
+      code: 'subscription_check_failed',
+      message: 'try again',
+      subscription: { scope: 'debate', debate_id: 'debate-b' },
+    });
+    const debateSubscribes = () =>
+      sockets[0]!.sent.filter(
+        message => message.op === 'SUBSCRIBE' && (message.payload as { scope: string }).scope === 'debate'
+      ).length;
+
+    // Another scope's subscribe succeeds, and geo-chat answers with READY.
+    client.retainScope({ scope: 'space', space_id: 'space-2' });
+    sockets[0]!.receive(
+      'READY',
+      readyPayload([
+        { scope: 'space', space_id: 'space-1' },
+        { scope: 'space', space_id: 'space-2' },
+      ])
+    );
+    await vi.advanceTimersByTimeAsync(999);
+    expect(debateSubscribes()).toBe(1);
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(debateSubscribes()).toBe(2);
+  });
+
+  it('resets the backoff once READY confirms the scope', async () => {
+    client.retainScope({ scope: 'debate', debate_id: 'debate-1' });
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    const failure = {
+      code: 'subscription_check_failed',
+      message: 'try again',
+      subscription: { scope: 'debate', debate_id: 'debate-1' },
+    };
+    const subscribes = () => sockets[0]!.sent.filter(message => message.op === 'SUBSCRIBE').length;
+
+    sockets[0]!.receive('ERROR', failure);
+    await vi.advanceTimersByTimeAsync(1_000);
+    sockets[0]!.receive('ERROR', failure);
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(subscribes()).toBe(3);
+
+    sockets[0]!.receive('READY', readyPayload([{ scope: 'debate', debate_id: 'debate-1' }]));
+    sockets[0]!.receive('ERROR', failure);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(subscribes()).toBe(4);
+  });
+
+  it('keeps a backing-off scope out of the reconnect burst until its retry is due', async () => {
+    client.retainScope({ scope: 'space', space_id: 'space-1' });
+    client.retainScope({ scope: 'debate', debate_id: 'debate-1' });
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    const failure = {
+      code: 'subscription_check_failed',
+      message: 'try again',
+      subscription: { scope: 'debate', debate_id: 'debate-1' },
+    };
+    // Two failures: the next retry is due 2s after the second.
+    sockets[0]!.receive('ERROR', failure);
+    await vi.advanceTimersByTimeAsync(1_000);
+    sockets[0]!.receive('ERROR', failure);
+
+    sockets[0]!.serverClose();
+    await vi.advanceTimersByTimeAsync(1_000);
+    sockets[1]!.open();
+    sockets[1]!.receive('READY', readyPayload([]));
+    const subscribed = () =>
+      sockets[1]!.sent.filter(message => message.op === 'SUBSCRIBE').map(message => message.payload);
+    expect(subscribed()).toEqual([{ scope: 'space', space_id: 'space-1' }]);
+
+    await vi.advanceTimersByTimeAsync(999);
+    expect(subscribed()).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(subscribed()).toEqual([
+      { scope: 'space', space_id: 'space-1' },
+      { scope: 'debate', debate_id: 'debate-1' },
+    ]);
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(subscribed()).toHaveLength(2);
+  });
+
+  it('sends a check retry that came due while disconnected on the next READY, once', async () => {
+    client.retainScope({ scope: 'debate', debate_id: 'debate-1' });
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    sockets[0]!.receive('ERROR', {
+      code: 'subscription_check_failed',
+      message: 'try again',
+      subscription: { scope: 'debate', debate_id: 'debate-1' },
+    });
+
+    sockets[0]!.serverClose();
+    await vi.advanceTimersByTimeAsync(1_000);
+    sockets[1]!.open();
+    sockets[1]!.receive('READY', readyPayload([]));
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(sockets[1]!.sent.filter(message => message.op === 'SUBSCRIBE')).toHaveLength(1);
+  });
+
+  it('keeps recycling the socket when a failed check names no scope', async () => {
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+
+    sockets[0]!.receive('ERROR', { code: 'subscription_check_failed', message: 'try again' });
+
+    expect(sockets[0]!.readyState).toBe(FakeWebSocket.CLOSED);
+    expect(client.getSnapshot()).toMatchObject({ status: 'degraded', paused: true });
+  });
+
+  it('matches ERROR echoes to a retained debate scope whatever the id spelling', async () => {
+    const dashedUpper = '3F2B8C1A-9D4E-4A7B-B6C5-1E0F2A3B4C5D';
+    const dashless = '3f2b8c1a9d4e4a7bb6c51e0f2a3b4c5d';
+    const refusedDashed = '7c9e6679-7425-40de-944b-e07fc1f90ae7';
+    client.retainScope({ scope: 'debate', debate_id: dashedUpper });
+    client.retainScope({ scope: 'debate', debate_id: refusedDashed });
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    const subscribes = (debateId: string) =>
+      sockets[0]!.sent.filter(
+        message => message.op === 'SUBSCRIBE' && (message.payload as { debate_id?: string }).debate_id === debateId
+      ).length;
+
+    sockets[0]!.receive('ERROR', {
+      code: 'subscription_check_failed',
+      message: 'try again',
+      subscription: { scope: 'debate', debate_id: dashless },
+    });
+    sockets[0]!.receive('ERROR', {
+      code: 'subscription_forbidden',
+      message: 'not authorized',
+      subscription: { scope: 'debate', debate_id: '7c9e6679742540de944be07fc1f90ae7' },
+    });
+
+    expect(sockets[0]!.readyState).toBe(FakeWebSocket.OPEN);
+    // The retry goes out in the retained spelling; the refused scope stays refused through READY.
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(subscribes(dashedUpper)).toBe(2);
+    sockets[0]!.receive('READY', readyPayload([]));
+    expect(subscribes(refusedDashed)).toBe(1);
+    expect(sockets).toHaveLength(1);
+  });
+
+  it('confirms a retained space scope from a normalized READY and reconciles its own query keys', async () => {
+    const dashed = 'A1B2C3D4-E5F6-4789-8ABC-DEF012345678';
+    client.retainScope({ scope: 'space', space_id: dashed });
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    await flushInvalidations();
+    invalidateQueries.mockClear();
+
+    sockets[0]!.receive('READY', readyPayload([{ scope: 'space', space_id: 'a1b2c3d4e5f647898abcdef012345678' }]));
+    await flushInvalidations();
+    expectInvalidated(invalidateQueries, { queryKey: ['debates', 'claims', dashed], refetchType: 'active' });
+
+    // A check failure echoed in the zero-padded 32-byte form still finds it.
+    sockets[0]!.receive('ERROR', {
+      code: 'subscription_check_failed',
+      message: 'try again',
+      subscription: { scope: 'space', space_id: '0xa1b2c3d4e5f647898abcdef01234567800000000000000000000000000000000' },
+    });
+    expect(sockets[0]!.readyState).toBe(FakeWebSocket.OPEN);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(
+      sockets[0]!.sent.filter(
+        message => message.op === 'SUBSCRIBE' && (message.payload as { space_id?: string }).space_id === dashed
+      )
+    ).toHaveLength(2);
   });
 
   it('reconnects with a new session when the authenticated account changes', async () => {

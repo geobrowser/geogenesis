@@ -49,9 +49,8 @@ export const PERMISSIONLESS_ACTIONS = {
   DOWNVOTED: '0xde8b897ce7cc541dacb388d5aabb3dc0fb7856920284f41582c15b5fc31a8662' as Hex,
   UNVOTED: '0x3bd4c337382f79aa5007a91169bb57723b5dd59e6b4bb60d20362bcc0d9d998b' as Hex,
   /**
-   * keccak256('PERMISSIONLESS.INTERESTED'), vote kind 3 (GEO-3158). On a topic it is the topic follow.
-   * The SDK has no method for it yet, so the calldata is built in `~/core/topics/interested`. Only
-   * accepted on chain once registered with `setPermissionlessAction`; until then the flag stays off.
+   * keccak256('PERMISSIONLESS.INTERESTED'), vote kind 3 (GEO-3158). On a topic or a person it is the
+   * follow. The SDK has no method for it yet, so the calldata is built in `~/core/topics/interested`.
    */
   INTERESTED: '0x18e7bf94be2682e4578e3ba940e4fcc2efcb9767062e812cfa4656d7d35377d9' as Hex,
   /** keccak256('PERMISSIONLESS.UNINTERESTED'): clears an Interested. There is no negative. */

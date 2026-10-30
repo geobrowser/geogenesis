@@ -280,14 +280,13 @@ export function holdOpenDebateTab(key: DebateTabClaimKey, tabId = debateTabId())
 }
 
 /**
- * Whether a tab other than this one still has the flow open. Its own holds are ignored by name, so
- * a release this tab made a moment ago never reads as someone else.
- *
- * False whenever it cannot tell: without Web Locks, or if the query fails.
+ * Whether a tab other than this one still has the flow open, or `null` when it cannot tell: without
+ * Web Locks, or if the query fails. Its own holds are ignored by name, so a release this tab made a
+ * moment ago never reads as someone else. For a caller that must not act on a guess (GEO-3338).
  */
-export async function hasOtherOpenDebateTab(key: DebateTabClaimKey, tabId = debateTabId()): Promise<boolean> {
+export async function findOtherOpenDebateTab(key: DebateTabClaimKey, tabId = debateTabId()): Promise<boolean | null> {
   const locks = lockManager();
-  if (!locks) return false;
+  if (!locks) return null;
   try {
     const { held = [], pending = [] } = await locks.query();
     const prefix = `${OPEN_TAB_LOCK_PREFIX}${key}:`;
@@ -295,6 +294,14 @@ export async function hasOtherOpenDebateTab(key: DebateTabClaimKey, tabId = deba
     // Pending counts: a tab whose request has not been granted yet is a tab arriving.
     return [...held, ...pending].some(lock => lock.name?.startsWith(prefix) && lock.name !== own);
   } catch {
-    return false;
+    return null;
   }
+}
+
+/**
+ * {@link findOtherOpenDebateTab}, false whenever it cannot tell: the single-tab behaviour, for a
+ * caller whose own exit already says the viewer is leaving.
+ */
+export async function hasOtherOpenDebateTab(key: DebateTabClaimKey, tabId = debateTabId()): Promise<boolean> {
+  return (await findOtherOpenDebateTab(key, tabId)) ?? false;
 }

@@ -14,7 +14,13 @@ import {
   listAdminDebateSchedules,
   sendAdminAvailabilityPrompt,
 } from '../api';
-import { debateQueryKeys, debateQueryNetworkOptions, useGeoChatAuth } from '../hooks';
+import {
+  debateQueryKeys,
+  debateQueryNetworkOptions,
+  invalidateAvailabilityReads,
+  useGeoChatAuth,
+  usePeerSchedule,
+} from '../hooks';
 
 /**
  * Where the list stops paging. Far past today's debater count; past it, the dialog still finds
@@ -90,6 +96,19 @@ export function useAdminPairOverlap(firstUserId: string | null, secondUserId: st
   });
 }
 
+/**
+ * One debater's own free half-hours over the next two weeks (GEO-3231), so New match can draw each
+ * person's availability beside the times they share.
+ *
+ * The peer week's own read, with the admin as the viewer: its `their_slots` is the other person's
+ * whole fortnight, booked debates already taken out, and is never capped. The admin's own week only
+ * annotates it, and is ignored. It refuses an admin's own id (a schedule cannot be matched against
+ * itself), which reads here as an error for that one row.
+ */
+export function useAdminDebaterAvailability(userId: string | null) {
+  return usePeerSchedule(userId, ADMIN_MATCH_DAYS);
+}
+
 export function useCreateAdminMatch() {
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
   const queryClient = useQueryClient();
@@ -105,12 +124,17 @@ export function useCreateAdminMatch() {
         getPrivyIdentityToken,
         accountKey
       ),
-    // The calendar draws the new match from its own list, so it has to read it again.
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: debateQueryKeys.adminScheduledDebatesRoot }),
+    // The calendar draws the new match from its own list, so it has to read it again, and the dialog
+    // stays pending until it has. The match is pending, which holds its time for both debaters
+    // (GEO-3532), so their weeks go too.
+    onSuccess: () => {
+      invalidateAvailabilityReads(queryClient, accountKey);
+      return queryClient.invalidateQueries({ queryKey: debateQueryKeys.adminScheduledDebatesRoot });
+    },
   });
 }
 
-/** Emails someone asking them to set availability. `sent: false` means no email on file. */
+/** Asks someone to add availability; the answer says what became of the email (GEO-3228). */
 export function useAdminAvailabilityPrompt() {
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
   return useMutation({

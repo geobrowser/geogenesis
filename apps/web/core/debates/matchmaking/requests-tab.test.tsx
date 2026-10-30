@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DebateChallenge, DebateRequest, DebateRequestParty } from '../api';
+import { EMPTY_SCHEDULED } from './requests-fixtures';
 import { RequestsTab } from './requests-tab';
 import type { ScheduledContent } from './scheduled-debates-section';
 
@@ -19,7 +20,16 @@ const mocks = vi.hoisted(() => ({
   rejectChallenge: vi.fn(),
   currentUserId: 'user-me' as string | null,
   peerAvailability: false,
-  scheduled: { answerable: [], upcoming: [], people: [], requestsError: null, roomsError: null } as ScheduledContent,
+  scheduled: {
+    answerable: [],
+    upcoming: [],
+    lobbies: [],
+    people: [],
+    requestsError: null,
+    roomsError: null,
+    lobbiesError: null,
+    loading: false,
+  } as ScheduledContent,
 }));
 
 vi.mock('~/core/state/feature-flags', async importOriginal => ({
@@ -29,6 +39,18 @@ vi.mock('~/core/state/feature-flags', async importOriginal => ({
 
 // The section's own rendering needs a QueryClientProvider, which this suite deliberately does without
 // (see below). Stubbed, because what is under test here is whether the section appears at all.
+// Reads the scheduled-debates query, like the section above, and is covered by its own suite.
+vi.mock('./availability-request-notice', () => ({
+  useAvailabilityRequests: () => [],
+  AvailabilityRequestNotice: () => null,
+}));
+
+vi.mock('./requests-schedule', () => ({
+  RequestsSchedule: ({ focusedRequestId }: { focusedRequestId: string | null }) => (
+    <div data-testid="requests-schedule" data-focused-request={focusedRequestId ?? ''} />
+  ),
+}));
+
 vi.mock('./scheduled-debates-section', async importOriginal => ({
   ...(await importOriginal<typeof import('./scheduled-debates-section')>()),
   useScheduledContent: () => mocks.scheduled,
@@ -154,22 +176,23 @@ beforeEach(() => {
 
 afterEach(cleanup);
 
-const openFilter = (label: string) => fireEvent.click(screen.getByRole('button', { name: new RegExp(label) }));
+// The panel's tab is the schedule, with its own suite; the full-screen rail keeps the sectioned
+// list and the cards these tests drive.
+describe('RequestsTab in the panel', () => {
+  it('draws the schedule, handing it the linked request', () => {
+    render(<RequestsTab focusedRequestId="scheduled-1" />);
 
-describe('RequestsTab', () => {
-  it('gives plain request and filter controls stable analytics metadata', () => {
+    expect(screen.getByTestId('requests-schedule')).toHaveAttribute('data-focused-request', 'scheduled-1');
+    expect(screen.queryByRole('heading', { name: 'Received' })).not.toBeInTheDocument();
+  });
+});
+
+describe('RequestsTab rail', () => {
+  it('gives plain request controls stable analytics metadata', () => {
     mocks.outbound = request('request-outbound', SPACE_B, 'A second claim');
     mocks.challenge = challenge('requester');
-    render(<RequestsTab />);
+    render(<RequestsTab dense />);
 
-    expect(screen.getByRole('button', { name: /Any status/ })).toHaveAttribute(
-      'data-geo-analytics-label',
-      'Debate hub Status filter'
-    );
-    expect(screen.getByRole('button', { name: /Any space/ })).toHaveAttribute(
-      'data-geo-analytics-label',
-      'Debate hub Space filter'
-    );
     expect(screen.getByRole('button', { name: 'Cancel request' })).toHaveAttribute(
       'data-geo-analytics-label',
       'Debate hub Cancel request'
@@ -191,26 +214,10 @@ describe('RequestsTab', () => {
       'Debate hub Block requester'
     );
   });
-  // GEO-2684. The shared helper's own test only proves it carries the sticky classes, so this is
-  // what would catch these filters being moved back into the scrolling body.
-  it('pins the status and space filters above the requests', () => {
-    render(<RequestsTab />);
-
-    const pinned = screen.getByRole('button', { name: /Any status/ }).closest('.sticky');
-    expect(pinned).not.toBeNull();
-    expect(pinned?.className).toContain('top-0');
-
-    // Both controls ride in the same pinned block rather than a second one that could overlap it.
-    expect(screen.getByRole('button', { name: /Any space/ }).closest('.sticky')).toBe(pinned);
-
-    // The requests themselves stay outside it, or they would be pinned too and never scroll.
-    expect(screen.getByRole('heading', { name: 'Received' }).closest('.sticky')).toBeNull();
-  });
-
   // The whole point of the popup's "Not now": the request is untouched, so it is still here with
   // its countdown for the rest of its 25-minute life.
   it('lists a request nobody has answered yet, with its countdown', () => {
-    render(<RequestsTab />);
+    render(<RequestsTab dense />);
 
     expect(screen.getByRole('heading', { name: 'Received' })).toBeInTheDocument();
     expect(screen.getByText('Bitcoin will never go above $250K')).toBeInTheDocument();
@@ -222,7 +229,7 @@ describe('RequestsTab', () => {
   // The card's answer is the real one, unlike the popup's "Not now" — it frees the request to
   // advance to the next candidate, which is why the two no longer share a label.
   it('declines the request from the card', () => {
-    render(<RequestsTab />);
+    render(<RequestsTab dense />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
 
@@ -233,7 +240,7 @@ describe('RequestsTab', () => {
   // next render, so both taps of a double tap run against a still-enabled one, and the second
   // answer 409s over the request the first already took.
   it('answers once however fast the card is tapped', () => {
-    render(<RequestsTab />);
+    render(<RequestsTab dense />);
 
     const dismiss = screen.getByRole('button', { name: 'Dismiss' });
     fireEvent.click(dismiss);
@@ -247,7 +254,7 @@ describe('RequestsTab', () => {
   // every press after that is swallowed and the request can only be answered by reloading.
   it('lets the viewer answer again after a failed answer', () => {
     mocks.dismiss.mockImplementation((_variables, options) => options?.onError?.(new Error('nope')));
-    render(<RequestsTab />);
+    render(<RequestsTab dense />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
@@ -258,7 +265,7 @@ describe('RequestsTab', () => {
   // The two buttons share one guard, so a failed Accept has to free the card for Dismiss too.
   it('frees the other action when an answer fails', () => {
     mocks.accept.mockImplementation((_variables, options) => options?.onError?.(new Error('nope')));
-    render(<RequestsTab />);
+    render(<RequestsTab dense />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
@@ -270,7 +277,7 @@ describe('RequestsTab', () => {
   // Copilot raised this on PR #2359. "I don't want to debate this claim" is the same dismiss
   // endpoint the buttons use, so an answer already taken would 409 behind it.
   it('counts the overflow dismissal as the card answer', () => {
-    render(<RequestsTab />);
+    render(<RequestsTab dense />);
 
     fireEvent.click(screen.getByRole('button', { name: 'More options' }));
     fireEvent.click(screen.getByRole('button', { name: "I don't want to debate this claim" }));
@@ -283,7 +290,7 @@ describe('RequestsTab', () => {
   // Blocking writes the viewer's block list rather than answering the request, so it must not be
   // gated: swallowing a safety action because an answer was already taken is the worse failure.
   it('blocks even once the request has been answered', () => {
-    render(<RequestsTab />);
+    render(<RequestsTab dense />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
     fireEvent.click(screen.getByRole('button', { name: 'More options' }));
@@ -294,7 +301,7 @@ describe('RequestsTab', () => {
 
   it('separates the request you sent from the ones you received', () => {
     mocks.outbound = request('request-2', SPACE_A, 'Chips are better than fries');
-    render(<RequestsTab />);
+    render(<RequestsTab dense />);
 
     const sent = screen.getByRole('heading', { name: 'Sent' });
     const received = screen.getByRole('heading', { name: 'Received' });
@@ -315,52 +322,17 @@ describe('RequestsTab', () => {
       ...request('request-2', SPACE_A, 'Chips are better than fries'),
       expires_at: '2020-01-01T00:00:00.000Z',
     };
-    render(<RequestsTab />);
+    render(<RequestsTab dense />);
 
     expect(screen.queryByRole('heading', { name: 'Sent' })).not.toBeInTheDocument();
     expect(screen.queryByText('Chips are better than fries')).not.toBeInTheDocument();
-  });
-
-  it('narrows to one side with the status filter', () => {
-    mocks.outbound = request('request-2', SPACE_A, 'Chips are better than fries');
-    render(<RequestsTab />);
-
-    openFilter('Any status');
-    fireEvent.click(screen.getByRole('button', { name: 'Awaiting response' }));
-
-    expect(screen.getByRole('heading', { name: 'Sent' })).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'Received' })).not.toBeInTheDocument();
-    expect(screen.queryByText('Bitcoin will never go above $250K')).not.toBeInTheDocument();
-  });
-
-  // `findBy` throughout: emptying the list crosses `HubQueryState`'s animated swap, so the old
-  // content is still on screen for a frame after the filter changes.
-  it('offers a way back when the filters hide everything', async () => {
-    mocks.incoming = [request('request-1', SPACE_B, 'Only in the other space')];
-    render(<RequestsTab />);
-
-    openFilter('Any status');
-    fireEvent.click(screen.getByRole('button', { name: 'Awaiting response' }));
-
-    expect(await screen.findByText('No requests match these filters.')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
-
-    expect(await screen.findByText('Only in the other space')).toBeInTheDocument();
-  });
-
-  it('says where requests will show up when there are none', () => {
-    mocks.incoming = [];
-    render(<RequestsTab />);
-
-    expect(screen.getByText('Any debate requests you’ll receive will appear here.')).toBeInTheDocument();
   });
 
   // A claimless challenge lands here too, so "Not now" in its popup is not the end of it.
   it('keeps a claimless challenge under Received, with its countdown', () => {
     mocks.incoming = [];
     mocks.challenge = challenge('recipient');
-    render(<RequestsTab />);
+    render(<RequestsTab dense />);
 
     expect(screen.getByRole('heading', { name: 'Received' })).toBeInTheDocument();
     expect(screen.getByText('Someone wants to debate you')).toBeInTheDocument();
@@ -374,7 +346,7 @@ describe('RequestsTab', () => {
   it('files a challenge you sent under Sent, where you can cancel it', () => {
     mocks.incoming = [];
     mocks.challenge = challenge('requester');
-    render(<RequestsTab />);
+    render(<RequestsTab dense />);
 
     expect(screen.getByRole('heading', { name: 'Sent' })).toBeInTheDocument();
     // The card carries its own state in the footer now, beside the action, rather than a header
@@ -386,13 +358,26 @@ describe('RequestsTab', () => {
     expect(mocks.rejectChallenge).toHaveBeenCalledWith('challenge-1');
   });
 
+  // geo-chat's ids come dashed and bare: compared as strings, an incoming challenge read as sent.
+  it('files a challenge to the viewer under Received when their id is dashed and its is bare', () => {
+    mocks.incoming = [];
+    mocks.currentUserId = '0b9c7a52-4d1e-4f6a-9a3b-2c8e5f1d7a60';
+    const toMe = challenge('recipient');
+    mocks.challenge = { ...toMe, recipient: { ...toMe.recipient, user_id: '0b9c7a524d1e4f6a9a3b2c8e5f1d7a60' } };
+    render(<RequestsTab dense />);
+
+    expect(screen.getByRole('heading', { name: 'Received' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Sent' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Explore claims' })).toBeInTheDocument();
+  });
+
   // Guessing the role from an absent id filed the challenge under Sent, which told the person it
   // was sent *to* that they had sent it, and offered them "Cancel request" instead of accepting.
   it('waits for the viewer id before deciding which side of a challenge they are on', async () => {
     mocks.incoming = [];
     mocks.currentUserId = null;
     mocks.challenge = challenge('recipient');
-    render(<RequestsTab />);
+    render(<RequestsTab dense />);
 
     expect(screen.queryByRole('heading', { name: 'Sent' })).not.toBeInTheDocument();
     expect(screen.queryByText('Waiting for a reply')).not.toBeInTheDocument();
@@ -400,14 +385,14 @@ describe('RequestsTab', () => {
     // …and once it resolves, it lands under Received with the accept action.
     mocks.currentUserId = 'user-me';
     cleanup();
-    render(<RequestsTab />);
+    render(<RequestsTab dense />);
 
     expect(await screen.findByRole('heading', { name: 'Received' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Explore claims' })).toBeInTheDocument();
   });
 
   it('shows both sides of a request and keeps blocking behind the overflow menu', () => {
-    render(<RequestsTab />);
+    render(<RequestsTab dense />);
 
     const parties = screen.getByText('Arturas').closest('div')!;
     // Named from the side rather than from the fixture's `position_label` — geo-chat's label reads
@@ -425,13 +410,6 @@ describe('RequestsTab', () => {
 /**
  * Dense is the workspace rail.
  */
-const EMPTY_SCHEDULED: ScheduledContent = {
-  answerable: [],
-  upcoming: [],
-  people: [],
-  requestsError: null,
-  roomsError: null,
-};
 
 describe('dense (workspace rail) visibility', () => {
   beforeEach(() => {
@@ -491,6 +469,25 @@ describe('dense (workspace rail) visibility', () => {
   it('appears for an upcoming room', () => {
     mocks.peerAvailability = true;
     mocks.scheduled = { ...EMPTY_SCHEDULED, upcoming: [{ id: 'room-1' }] as unknown as ScheduledContent['upcoming'] };
+    const { container } = render(<RequestsTab dense />);
+
+    expect(container.innerHTML).not.toBe('');
+  });
+
+  it('appears when the lobby list could not be read', () => {
+    mocks.peerAvailability = true;
+    mocks.scheduled = { ...EMPTY_SCHEDULED, lobbiesError: new Error('nope') };
+    const { container } = render(<RequestsTab dense />);
+
+    expect(container.innerHTML).not.toBe('');
+  });
+
+  it('appears for a lobby the viewer is going to', () => {
+    mocks.peerAvailability = true;
+    mocks.scheduled = {
+      ...EMPTY_SCHEDULED,
+      lobbies: [{ lobbyId: 'lobby-1' }] as unknown as ScheduledContent['lobbies'],
+    };
     const { container } = render(<RequestsTab dense />);
 
     expect(container.innerHTML).not.toBe('');

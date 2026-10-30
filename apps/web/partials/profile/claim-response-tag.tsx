@@ -40,7 +40,7 @@ export function ClaimResponseTag({
   forPosition,
 }: {
   response: ClaimResponse | undefined;
-  /** The profile's owner. Falls back to "They" where the name has not loaded. */
+  /** The person whose position is shown. Uses a generic label when their name is unavailable. */
   personName?: string | null;
   /**
    * Which button this is rendering under. The tag appears under one of them and
@@ -50,20 +50,13 @@ export function ClaimResponseTag({
 }) {
   const side = response?.stance;
 
-  // Nothing to say: they have not answered this claim. An absent tag is the
-  // honest rendering; a greyed one would imply a verdict never given.
-  //
-  // Not the retracted case, which is filtered out of the tab entirely rather
-  // than rendered blank here: `decodeVoteOrder` drops a claim whose answer has
-  // been taken back.
-  if (!side) return null;
-  if ((side === 'agree') !== forPosition) return null;
-
-  const word = RESPONSE_WORD[side];
+  if (!side || (side === 'agree') !== forPosition) return null;
+  const name = firstName(personName);
 
   return (
     <p className="mt-1.5 text-center text-breadcrumb text-grey-04">
-      {firstName(personName) ?? 'They'} <span className={side === 'agree' ? 'text-green' : 'text-red-01'}>{word}</span>
+      {name ?? 'They'}{' '}
+      <span className={side === 'agree' ? 'text-green' : 'text-red-01'}>{name ? RESPONSE_WORD[side] : side}</span>
     </p>
   );
 }

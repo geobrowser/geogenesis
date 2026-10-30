@@ -1,5 +1,3 @@
-import { SystemIds } from '@geoprotocol/geo-sdk/lite';
-
 import * as Effect from 'effect/Effect';
 
 import type { BrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data';
@@ -8,14 +6,15 @@ import type { DebateMediaResponse } from '~/core/debates/api';
 import { DEBATE_TYPE_ID } from '~/core/debates/ontology';
 import { hasProcessedVideo } from '~/core/debates/playback-utils';
 import { geoChatBaseUrl } from '~/core/debates/server/geo-chat-base-url';
-import { EntitiesOrderBy, type EntityFilter, type RelationFilter } from '~/core/gql/graphql';
+import { speakerStillUrl } from '~/core/debates/speaker-still';
+import { EntitiesOrderBy, type EntityFilter } from '~/core/gql/graphql';
 import { ID } from '~/core/id';
 import { graphql } from '~/core/io/graphql-client';
 import { fetchProfile } from '~/core/io/subgraph';
 import { fetchActiveMemberRequest } from '~/core/io/subgraph/fetch-proposed-members';
-import { collectCursorPages } from '~/core/sync/collect-cursor-pages';
 import { normId } from '~/core/utils/norm-id';
 import { createPromiseTtlCache } from '~/core/utils/promise-ttl-cache';
+import { runAfterResponse } from '~/core/utils/run-after-response';
 
 import { exploreBestByTypeConnectionDocument } from './explore-best-by-type-document';
 import { exploreBestConnectionDocument } from './explore-best-document';
@@ -26,8 +25,7 @@ import {
   buildExploreFeedRows,
   decodeExploreCardEntity,
 } from './explore-card-item';
-import { exploreCompleteIndexDocument } from './explore-complete-index-document';
-import { EXPLORE_ENTITY_NAME_PROPERTY_ID, EXPLORE_PAGE_SIZE } from './explore-constants';
+import { EXPLORE_PAGE_SIZE } from './explore-constants';
 import { claimsRequireDebateTagFilter } from './explore-debate-tag-filter';
 import {
   EXPLORE_DIVERSITY_WINDOW_SIZE,
@@ -39,12 +37,19 @@ import {
   targetMixAppliesTo,
 } from './explore-diversity';
 import { exploreEntitiesByPropertyConnectionDocument } from './explore-entities-by-property-document';
-import { exploreEntitiesConnectionDocument } from './explore-entities-document';
+import {
+  exploreEntitiesConnectionDocument,
+  exploreEntitiesNoPageInfoConnectionDocument,
+} from './explore-entities-document';
+import {
+  type ExploreTime,
+  buildExploreFeedFilter,
+  combineEntityFilters,
+  timeThresholdSec,
+} from './explore-feed-filter';
 import { exploreForYouBestConnectionDocument, exploreForYouConnectionDocument } from './explore-for-you-document';
 import { FOR_YOU_FEED, composeForYouPage } from './explore-for-you-mix';
-import type { ExploreCompleteIndexNode } from './explore-index-selection';
-import { exploreRelationIndexDocument } from './explore-relation-index-document';
-import { parseEntityUpdatedAtToUnixSec } from './explore-relative-time';
+import { exploreTopicFeedConnectionDocument } from './explore-topic-feed-document';
 import { entityMatchesExploreTypeIds } from './explore-type-filter';
 import {
   type ExploreForYouCursor,
@@ -55,14 +60,28 @@ import {
   nextExploreWindowCursor,
 } from './explore-window-cursor';
 import { BEST_FEED_VERSION, type FeedDescriptor } from './for-you/feed-version';
+import { type FreshSlotConfig, freshSlotActive } from './fresh-slot/fresh-slot-config';
+import {
+  FRESH_SLOT_AS_OF_STEP_MS,
+  FRESH_SLOT_CANDIDATE_LIMIT,
+  decodeFreshSlotCursor,
+  encodeFreshSlotCursor,
+} from './fresh-slot/fresh-slot-cursor';
+import { type FreshMergedRow, mergeFreshSlot } from './fresh-slot/merge-fresh-slot';
+import { recordRecentFreshScope } from './fresh-slot/recent-fresh-scopes';
+import { readSharedFreshList, writeSharedFreshList } from './fresh-slot/shared-fresh-list';
 import { leadWithPlayableDebate } from './lead-with-playable-debate';
+import { resolveStillUrl } from './resolve-still-redirect';
+import { hideSeenInPage } from './seen-demotion/hide-seen';
+import type { SeenDemotionPageConfig } from './seen-demotion/seen-demotion-config';
 
 /**
  * `best` is the Phase A ranked feed (quality + structure + recency, server-side).
  * `top` ranks by the integer score property; `new` is reverse-chronological.
  */
 export type ExploreSort = 'new' | 'top' | 'best';
-export type ExploreTime = 'today' | 'week' | 'month' | 'year' | 'all';
+export type { ExploreTime } from './explore-feed-filter';
+export { buildExploreFeedFilter } from './explore-feed-filter';
 
 // Re-exported so the many components importing the card's item shape from here keep working; it is
 // defined alongside the card builder in `explore-card-item`, which the Coverage section also uses.
@@ -88,6 +107,17 @@ export type ExploreFeedResult = {
    * window hook replaced it with (For you, an interleaved page); absent on New and Top.
    */
   feed?: FeedDescriptor;
+  /**
+   * GEO-3234. Present on a plain Best page while seen demotion is on: the browser moves cards its
+   * visitor has already seen down the page. The same for every visitor, so the page stays cacheable.
+   */
+  seenDemotion?: SeenDemotionPageConfig;
+  /**
+   * GEO-3234. Only while seen hiding is on: up to one page of the rows that follow this page in the
+   * same Best window, so the browser can fill a slot whose card it hides without a second request.
+   * The next page serves them again; the browser skips anything it already showed.
+   */
+  reserve?: ExploreFeedItem[];
 };
 
 /**
@@ -104,41 +134,8 @@ export type ExploreWindowReorder = (
   context: { windowKey: string; arrange: (rows: ExploreFeedRow[]) => ExploreFeedRow[] }
 ) => Promise<{ rows: ExploreFeedRow[]; feed: FeedDescriptor } | null>;
 
-/**
- * One disjoint branch of a contextual feed's complete population.
- *
- * Each scope must include every entity that belongs to the feed for its supplied types; the
- * results are merged and ranked here. Topic feeds use one scope for all directly tagged entities.
- */
-export type ExploreCompletePopulationScope = {
-  typeIds: readonly string[];
-  entityFilter: EntityFilter;
-  /** Optional relation entry point. Source entities still satisfy the full feed predicate. */
-  relationFilter?: RelationFilter;
-};
-
-// Entities we never want to surface in any feed.
-// - `System type` relation to the `System` entity: marks system-managed rows.
-// - `types` relation to `Data block` / `Text block`: these are block entities that
-//   exist as internal structure of parent entities and aren't meaningful on their own.
-const SYSTEM_TYPE_PROPERTY_ID = '88b3d6ad288c529ca2120e1c24819185';
-const SYSTEM_ENTITY_ID = '2ff7ea098b9e50bc9be78a0cafa268d0';
-const DATA_BLOCK_TYPE_ID = 'b8803a8665de412bbb357e0c84adf473';
-const TEXT_BLOCK_TYPE_ID = '76474f2f00894e77a0410b39fb17d0bf';
-
-const FEED_EXCLUDED_RELATIONS_FILTER = {
-  relations: {
-    none: {
-      or: [
-        { typeId: { is: SYSTEM_TYPE_PROPERTY_ID }, toEntityId: { is: SYSTEM_ENTITY_ID } },
-        {
-          typeId: { is: SystemIds.TYPES_PROPERTY },
-          toEntityId: { in: [DATA_BLOCK_TYPE_ID, TEXT_BLOCK_TYPE_ID] },
-        },
-      ],
-    },
-  },
-} satisfies EntityFilter;
+/** The orders a topic page's feed can be served in from gaia's topic ranking table (GEO-3092). */
+type RankedTopicFeedSort = Extract<ExploreSort, 'best' | 'new'>;
 
 /**
  * How long one request will keep scanning for a window with something in it, and the hard stop on
@@ -157,30 +154,6 @@ const FEED_EXCLUDED_RELATIONS_FILTER = {
  */
 const MAX_EMPTY_WINDOW_SCAN_MS = 3_000;
 const MAX_EMPTY_WINDOW_SCANS = 6;
-
-function timeThresholdSec(filter: ExploreTime): number | null {
-  const now = Math.floor(Date.now() / 1000);
-  switch (filter) {
-    case 'today':
-      return now - 86400;
-    case 'week':
-      return now - 7 * 86400;
-    case 'month':
-      return now - 30 * 86400;
-    case 'year':
-      return now - 365 * 86400;
-    case 'all':
-    default:
-      return null;
-  }
-}
-
-function combineEntityFilters(...filters: Array<EntityFilter | undefined>): EntityFilter | undefined {
-  const present = filters.filter((filter): filter is EntityFilter => filter !== undefined);
-  if (present.length === 0) return undefined;
-  if (present.length === 1) return present[0];
-  return { and: present };
-}
 
 type ExploreEntitiesPageResponse = {
   entities: ExploreCardEntity[];
@@ -222,6 +195,31 @@ function decodeExploreBest(data: {
   return decodeConnection(data.entitiesRankedForFeedConnection ?? null);
 }
 
+type RankedWindowArgs = {
+  spaceIds: string[];
+  time: ExploreTime;
+  limit: number;
+  offset: number;
+  typeIds: readonly string[];
+};
+
+/**
+ * The variables shared by the offset-paged ranked connections: Best by type, For you's streams and
+ * a topic page's feed. Each also takes a per-type or per-topic cap, and that cap must be at least
+ * `offset + first`, or a page silently comes back short.
+ */
+function rankedWindowVariables(args: RankedWindowArgs) {
+  const t = timeThresholdSec(args.time);
+  return {
+    first: args.limit,
+    offset: args.offset,
+    spaceIds: args.spaceIds,
+    typeIds: [...args.typeIds],
+    createdAfter: t != null ? String(t) : undefined,
+    spaceIdsForLists: args.spaceIds,
+  };
+}
+
 /**
  * "Best", type-filtered by the server (GEO-2885).
  *
@@ -236,16 +234,12 @@ function decodeExploreBest(data: {
  * smallest provably exact value. It is computed here, from numbers this function owns, rather
  * than defaulted in the document — see `exploreBestByTypeConnectionDocument`.
  */
-async function fetchBestEntitiesByTypePage(args: {
-  spaceIds: string[];
-  time: ExploreTime;
-  limit: number;
-  offset: number;
-  typeIds: readonly string[];
-  requireDebateTagOnClaims?: boolean;
-  entityFilter?: EntityFilter;
-}): Promise<ExploreEntitiesPageResponse> {
-  const t = timeThresholdSec(args.time);
+async function fetchBestEntitiesByTypePage(
+  args: RankedWindowArgs & {
+    requireDebateTagOnClaims?: boolean;
+    entityFilter?: EntityFilter;
+  }
+): Promise<ExploreEntitiesPageResponse> {
   return Effect.runPromise(
     graphql({
       query: exploreBestByTypeConnectionDocument,
@@ -257,17 +251,41 @@ async function fetchBestEntitiesByTypePage(args: {
         return { ...page, endCursor: String(args.offset + page.entities.length) };
       },
       variables: {
-        first: args.limit,
-        offset: args.offset,
-        spaceIds: args.spaceIds,
-        typeIds: [...args.typeIds],
+        ...rankedWindowVariables(args),
         maxPerType: args.offset + args.limit,
-        createdAfter: t != null ? String(t) : undefined,
-        filter: combineEntityFilters(
-          args.requireDebateTagOnClaims ? claimsRequireDebateTagFilter(args.spaceIds) : undefined,
-          args.entityFilter
-        ),
-        spaceIdsForLists: args.spaceIds,
+        filter: combineEntityFilters(mergeBestFilter(args.spaceIds, args.requireDebateTagOnClaims), args.entityFilter),
+      },
+    })
+  );
+}
+
+/**
+ * One window of a topic page's feed (GEO-3092), ordered by gaia's topic ranking table. Entities
+ * must carry every topic in `topicIds`. A `maxPerTopic` below `offset + first` returns short.
+ */
+async function fetchRankedTopicFeedPage(
+  args: RankedWindowArgs & {
+    topicIds: readonly string[];
+    sort: RankedTopicFeedSort;
+    requireDebateTagOnClaims?: boolean;
+  }
+): Promise<ExploreEntitiesPageResponse> {
+  return Effect.runPromise(
+    graphql({
+      query: exploreTopicFeedConnectionDocument,
+      decoder: (data: { entitiesRankedForTopicsConnection?: { nodes?: unknown[] } | null }) => {
+        const nodes = data.entitiesRankedForTopicsConnection?.nodes ?? [];
+        const page = decodeConnection({ nodes });
+        // The connection reports no next page, ever; a full window is the only sign of more.
+        const end = args.offset + nodes.length;
+        return { ...page, endCursor: String(end), hasNextPage: nodes.length >= args.limit };
+      },
+      variables: {
+        ...rankedWindowVariables(args),
+        topicIds: [...args.topicIds],
+        maxPerTopic: args.offset + args.limit,
+        debateTaggedClaims: args.requireDebateTagOnClaims ?? false,
+        sortBy: args.sort,
       },
     })
   );
@@ -287,19 +305,15 @@ type ForYouStreamPage = {
  * A For you stream (GEO-3083) with each row's followed topics, scoped and filtered like
  * `fetchBestEntitiesByTypePage`. A per-topic or per-type cap below `offset + first` returns short.
  */
-async function fetchForYouStreamPage(args: {
-  /** `best` also selects each row's followed topics; `plainBest` doesn't, for a schema without them. */
-  stream: 'topics' | 'best' | 'plainBest';
-  topicIds: readonly string[];
-  spaceIds: string[];
-  time: ExploreTime;
-  limit: number;
-  offset: number;
-  typeIds: readonly string[];
-  requireDebateTagOnClaims?: boolean;
-  entityFilter?: EntityFilter;
-}): Promise<ForYouStreamPage> {
-  const t = timeThresholdSec(args.time);
+async function fetchForYouStreamPage(
+  args: RankedWindowArgs & {
+    /** `best` also selects each row's followed topics; `plainBest` doesn't, for a schema without them. */
+    stream: 'topics' | 'best' | 'plainBest';
+    topicIds: readonly string[];
+    requireDebateTagOnClaims?: boolean;
+    entityFilter?: EntityFilter;
+  }
+): Promise<ForYouStreamPage> {
   const connection =
     args.stream === 'topics' ? 'entitiesRankedForTopicsConnection' : 'entitiesRankedForFeedByTypeConnection';
   return Effect.runPromise(
@@ -329,15 +343,11 @@ async function fetchForYouStreamPage(args: {
         return { entities, rawIndex, matchedTopicIds, fetched: nodes.length };
       },
       variables: {
-        first: args.limit,
-        offset: args.offset,
+        ...rankedWindowVariables(args),
         ...(args.stream === 'plainBest' ? {} : { topicIds: [...args.topicIds] }),
-        spaceIds: args.spaceIds,
-        typeIds: [...args.typeIds],
         ...(args.stream === 'topics'
           ? { maxPerTopic: args.offset + args.limit }
           : { maxPerType: args.offset + args.limit }),
-        createdAfter: t != null ? String(t) : undefined,
         // The topic walk applies the debate-tag rule itself (gaia#984). As a filter after the walk it
         // would drop rows past each topic's cap and leave pages nearly empty.
         ...(args.stream === 'topics' ? { debateTaggedClaims: args.requireDebateTagOnClaims ?? false } : {}),
@@ -347,45 +357,18 @@ async function fetchForYouStreamPage(args: {
             : undefined,
           args.entityFilter
         ),
-        spaceIdsForLists: args.spaceIds,
       },
     })
   );
 }
 
-export function buildExploreFeedFilter(args: {
-  spaceIds: string[];
-  time: ExploreTime;
-  typeIds?: readonly string[];
-  requireName?: boolean;
-  requireDebateTagOnClaims?: boolean;
-  includeEntityScopeInFilter?: boolean;
-  entityFilter?: EntityFilter;
-}): EntityFilter {
-  const t = timeThresholdSec(args.time);
-  const base: EntityFilter = {
-    ...FEED_EXCLUDED_RELATIONS_FILTER,
-    ...(args.requireDebateTagOnClaims ? claimsRequireDebateTagFilter(args.spaceIds) : {}),
-    ...(args.includeEntityScopeInFilter
-      ? {
-          spaceIds: { overlaps: [...args.spaceIds] },
-          ...(args.typeIds?.length ? { typeIds: { overlaps: [...args.typeIds] } } : {}),
-        }
-      : {}),
-    ...(args.requireName !== false
-      ? {
-          values: {
-            some: {
-              spaceId: { in: args.spaceIds },
-              propertyId: { is: EXPLORE_ENTITY_NAME_PROPERTY_ID },
-              text: { isNull: false, isNot: '' },
-            },
-          },
-        }
-      : {}),
-    ...(t != null ? { createdAt: { greaterThanOrEqualTo: String(t) } } : {}),
-  };
-  return combineEntityFilters(base, args.entityFilter) ?? base;
+/**
+ * The debate-tag gate the two Best paths send, or `undefined` so the ranked walk keeps its
+ * no-filter fast path. Topics no longer ride this: Best/New serve a topic selection from gaia's
+ * ranking table via `rankedTopicIds`, and Top filters topics through `buildExploreFeedFilter`.
+ */
+function mergeBestFilter(spaceIds: string[], requireDebateTagOnClaims: boolean | undefined): EntityFilter | undefined {
+  return requireDebateTagOnClaims ? claimsRequireDebateTagFilter(spaceIds) : undefined;
 }
 
 async function fetchExploreEntitiesPage(args: {
@@ -395,13 +378,16 @@ async function fetchExploreEntitiesPage(args: {
   after: string | null;
   orderBy: EntitiesOrderBy[];
   typeIds?: readonly string[];
+  topicIds?: readonly string[];
   requireName?: boolean;
   requireDebateTagOnClaims?: boolean;
   entityFilter?: EntityFilter;
+  /** For callers that read neither `hasNextPage` nor `endCursor`; the page then reports false / null. */
+  skipPageInfo?: boolean;
 }): Promise<ExploreEntitiesPageResponse> {
   return Effect.runPromise(
     graphql({
-      query: exploreEntitiesConnectionDocument,
+      query: args.skipPageInfo ? exploreEntitiesNoPageInfoConnectionDocument : exploreEntitiesConnectionDocument,
       decoder: decodeExploreEntities,
       variables: {
         limit: args.limit,
@@ -416,201 +402,223 @@ async function fetchExploreEntitiesPage(args: {
   );
 }
 
-const COMPLETE_INDEX_PAGE_SIZE = 500;
+/** One Fresh list per scroll and scope, shared by every page request of that scroll. */
+const freshListCache = createPromiseTtlCache<ExploreEntitiesPageResponse>({ ttlMs: 60_000, maxEntries: 48 });
 
-async function fetchCompleteIndexScope(
-  args: ExploreCompletePopulationScope & {
-    spaceIds: string[];
-    time: ExploreTime;
-    requireName?: boolean;
-    requireDebateTagOnClaims?: boolean;
-  }
-): Promise<ExploreCompleteIndexNode[]> {
-  const filter = buildExploreFeedFilter({ ...args, includeEntityScopeInFilter: Boolean(args.relationFilter) });
+/**
+ * GEO-3279. The newest settled Fresh list per scope, so a new scroll can start from it at once while
+ * the current minute's list loads behind the response. The minute pin alone left every first
+ * request of a minute paying the ~4s Fresh query, and with sparse traffic that was most visitors.
+ */
+const latestFreshLists = new Map<string, FreshList>();
+const LATEST_FRESH_LISTS_MAX_ENTRIES = 48;
 
-  // Both entry points exhaust the same cursor contract. A malformed cursor must reject the
-  // population promise (and evict it from the cache), never cache a partial count or loop forever.
-  return collectCursorPages<ExploreCompleteIndexNode>(async after => {
-    if (args.relationFilter) {
-      const page = await Effect.runPromise(
-        graphql({
-          query: exploreRelationIndexDocument,
-          decoder: response => response.relationsConnection ?? null,
-          variables: {
-            first: COMPLETE_INDEX_PAGE_SIZE,
-            after: after ?? null,
-            filter: { and: [args.relationFilter, { fromEntity: filter }] },
-          },
-        })
-      );
-      return {
-        items: (page?.nodes ?? []).flatMap(node => (node?.fromEntity ? [node.fromEntity] : [])),
-        endCursor: page?.pageInfo?.endCursor ?? null,
-        hasNextPage: page?.pageInfo?.hasNextPage ?? false,
-      };
-    }
+/**
+ * How old a Fresh list a new scroll may start from. It only misses what was created since it was
+ * pinned, against a freshness window of hours; older than this, the scroll waits for a new one.
+ */
+export const FRESH_LIST_MAX_STALE_MS = 30 * 60_000;
 
-    const page = await Effect.runPromise(
-      graphql({
-        query: exploreCompleteIndexDocument,
-        decoder: response => response.entitiesConnection ?? null,
-        variables: {
-          limit: COMPLETE_INDEX_PAGE_SIZE,
-          after: after ?? null,
-          filter,
-          spaceIds: { in: args.spaceIds },
-          typeIds: { in: [...args.typeIds] },
-        },
-      })
-    );
-    return {
-      items: page?.nodes ?? [],
-      endCursor: page?.pageInfo?.endCursor ?? null,
-      hasNextPage: page?.pageInfo?.hasNextPage ?? false,
-    };
-  });
-}
+type FreshList = { asOfMs: number; page: ExploreEntitiesPageResponse };
 
-function rankingScore(value: ExploreCompleteIndexNode['rankingScore']): number | null {
-  if (value === null || value === undefined || value === '') return null;
-  const score = Number(value);
-  return Number.isFinite(score) ? score : null;
-}
-
-type CompletePopulationIndexArgs = {
-  spaceIds: string[];
-  sort: Extract<ExploreSort, 'best' | 'new'>;
+/** The one derivation of a Fresh list's scope key; the request path and the warm-up both use it. */
+export function freshListScopeKey(args: {
+  spaceIds: readonly string[];
   time: ExploreTime;
   typeIds: readonly string[];
   requireName?: boolean;
   requireDebateTagOnClaims?: boolean;
-  scopes: readonly ExploreCompletePopulationScope[];
-};
-
-/** Matches the Topic facet/composition query freshness while bounding stale feed membership. */
-const COMPLETE_POPULATION_CACHE_TTL_MS = 60_000;
-/** Each entry may hold a whole Topic population, so keep the per-instance cache deliberately small. */
-const COMPLETE_POPULATION_CACHE_MAX_ENTRIES = 24;
-const completePopulationCache = createPromiseTtlCache<ExploreCompleteIndexNode[]>({
-  ttlMs: COMPLETE_POPULATION_CACHE_TTL_MS,
-  maxEntries: COMPLETE_POPULATION_CACHE_MAX_ENTRIES,
-});
-
-function completePopulationCacheKey(args: CompletePopulationIndexArgs): string {
+  entityFilter?: EntityFilter;
+  freshnessHours: number;
+}) {
   return JSON.stringify({
-    // These are set-valued GraphQL filters. Canonicalizing their order lets the header request
-    // reuse the feed request even though the browse sidebar and Topic scope assemble the same
-    // spaces in different orders.
     spaceIds: args.spaceIds.map(normId).sort(),
-    sort: args.sort,
     time: args.time,
     typeIds: args.typeIds.map(normId).sort(),
     requireName: args.requireName ?? null,
     requireDebateTagOnClaims: args.requireDebateTagOnClaims ?? null,
-    scopes: args.scopes,
+    entityFilter: args.entityFilter ?? null,
+    freshnessHours: args.freshnessHours,
   });
 }
 
-async function buildCompletePopulationIndex(args: CompletePopulationIndexArgs): Promise<ExploreCompleteIndexNode[]> {
-  const scopeRows = await Promise.all(
-    args.scopes
-      .filter(scope => scope.typeIds.length > 0)
-      .map(scope =>
-        fetchCompleteIndexScope({
-          spaceIds: args.spaceIds,
-          time: args.time,
-          typeIds: scope.typeIds,
-          requireName: args.requireName,
-          requireDebateTagOnClaims: args.requireDebateTagOnClaims,
-          entityFilter: scope.entityFilter,
-          relationFilter: scope.relationFilter,
-        })
-      )
-  );
+/**
+ * GEO-3308. A first page that served a scope is remembered, so the cron can keep it warm. The scope
+ * is the space set, types and hours only; nothing about the reader. After the response, fail open,
+ * and at most once a minute per scope per instance.
+ */
+const recentlyRecorded = new Map<string, number>();
+const RECORD_SCOPE_EVERY_MS = 60_000;
 
-  const byId = new Map<string, ExploreCompleteIndexNode>();
-  for (const row of scopeRows.flat()) {
-    if (!row.id) continue;
-    byId.set(normId(row.id), row);
+function recordRequestedScope(scopeKey: string, scope: Parameters<typeof freshListScopeKey>[0]) {
+  const now = Date.now();
+  const last = recentlyRecorded.get(scopeKey);
+  if (last !== undefined && now - last < RECORD_SCOPE_EVERY_MS) return;
+  recentlyRecorded.set(scopeKey, now);
+  if (recentlyRecorded.size > 200) {
+    const oldest = recentlyRecorded.keys().next().value;
+    if (typeof oldest === 'string') recentlyRecorded.delete(oldest);
   }
-
-  return [...byId.values()].sort((left, right) => {
-    if (args.sort === 'new') {
-      const created =
-        parseEntityUpdatedAtToUnixSec(String(right.createdAt ?? '')) -
-        parseEntityUpdatedAtToUnixSec(String(left.createdAt ?? ''));
-      return created || (right.id ?? '').localeCompare(left.id ?? '');
+  runAfterResponse(async () => {
+    try {
+      await recordRecentFreshScope(
+        {
+          spaceIds: scope.spaceIds.map(normId).sort(),
+          typeIds: scope.typeIds.map(normId).sort(),
+          time: scope.time,
+          requireName: scope.requireName ?? null,
+          requireDebateTagOnClaims: scope.requireDebateTagOnClaims ?? null,
+          freshnessHours: scope.freshnessHours,
+        },
+        now
+      );
+    } catch (error) {
+      console.error('explore fresh slot: recording the requested scope failed', error);
     }
-
-    const leftScore = rankingScore(left.rankingScore);
-    const rightScore = rankingScore(right.rankingScore);
-    if (leftScore === null && rightScore !== null) return 1;
-    if (leftScore !== null && rightScore === null) return -1;
-    if (leftScore !== null && rightScore !== null && leftScore !== rightScore) return rightScore - leftScore;
-    return (right.id ?? '').localeCompare(left.id ?? '');
   });
 }
 
-/**
- * Reuses one compact population across the page requests generated by infinite scroll.
- *
- * This cache is per server instance and therefore best-effort on serverless, but every hit avoids
- * downloading and sorting the complete Topic population again. Rejected requests are evicted, and
- * both entry count and freshness are bounded so a wide range of filters cannot grow memory forever.
- */
-export async function fetchCompleteExplorePopulationIndex(
-  args: CompletePopulationIndexArgs
-): Promise<ExploreCompleteIndexNode[]> {
-  return completePopulationCache.get(completePopulationCacheKey(args), () => buildCompletePopulationIndex(args));
+export function resetRecordedScopesForTests() {
+  recentlyRecorded.clear();
+}
+
+function rememberLatestFreshList(scopeKey: string, list: FreshList) {
+  const current = latestFreshLists.get(scopeKey);
+  if (current && current.asOfMs > list.asOfMs) return;
+  latestFreshLists.delete(scopeKey);
+  latestFreshLists.set(scopeKey, list);
+  while (latestFreshLists.size > LATEST_FRESH_LISTS_MAX_ENTRIES) {
+    const oldestKey = latestFreshLists.keys().next().value;
+    if (typeof oldestKey !== 'string') break;
+    latestFreshLists.delete(oldestKey);
+  }
 }
 
 /**
- * Complete contextual ordering without the generic connection's expensive combined predicate.
- * Best keeps ranking-score order (with unscored entities last); New keeps creation-time order.
+ * The Fresh list (GEO-3221): the newest eligible items created in `[asOf - freshnessHours, asOf]`,
+ * newest first. It is New's own query — the same name, system-entity, block-type, debate-tag and
+ * type rules, scoped to the same spaces — with a creation-time range, so nothing reaches the fresh
+ * slot that New would not show. A Debate entity exists in the graph only once it is published.
+ *
+ * The upper bound is what keeps it stable while someone scrolls: an item created after the scroll
+ * began joins the next scroll, not this one.
+ *
+ * A scroll's first page may be served an older list of the same scope (GEO-3279), and the returned
+ * `asOfMs` is then that list's pin, which the scroll must carry so its later pages cut from the same
+ * list. A pinned page always gets exactly its own `asOfMs`.
  */
-async function fetchCompleteEntitiesPage(args: {
+async function fetchFreshEntitiesPage(args: {
   spaceIds: string[];
-  sort: Extract<ExploreSort, 'best' | 'new'>;
   time: ExploreTime;
-  limit: number;
-  offset: number;
   typeIds: readonly string[];
   requireName?: boolean;
   requireDebateTagOnClaims?: boolean;
-  scopes: readonly ExploreCompletePopulationScope[];
-}): Promise<ExploreEntitiesPageResponse> {
-  const ordered = await fetchCompleteExplorePopulationIndex(args);
+  entityFilter?: EntityFilter;
+  asOfMs: number;
+  freshnessHours: number;
+  startsScroll: boolean;
+  /** The scheduled warm-up (GEO-3308): build this minute's list and share it before returning. */
+  warm?: boolean;
+}): Promise<FreshList> {
+  const scopeKey = freshListScopeKey(args);
 
-  const indexPage = ordered.slice(args.offset, args.offset + args.limit);
-  const ids = indexPage.flatMap(row => (row.id ? [row.id] : []));
-  if (ids.length === 0) {
-    return { entities: [], endCursor: null, hasNextPage: false };
-  }
+  const cacheKey = (asOfMs: number) => JSON.stringify({ scopeKey, asOfSec: Math.floor(asOfMs / 1000) });
+  const usable = (list: FreshList | null | undefined): list is FreshList =>
+    !!list && list.asOfMs <= args.asOfMs && args.asOfMs - list.asOfMs <= FRESH_LIST_MAX_STALE_MS;
 
-  // The compact index already proved these ids belong to the contextual population. Repeating the
-  // relation-heavy Topic predicate here would throw away the speedup, so the card query narrows by
-  // those exact ids and retains the ordinary display/name/space guards.
-  const cardPage = await fetchExploreEntitiesPage({
-    spaceIds: args.spaceIds,
-    time: args.time,
-    limit: ids.length,
-    after: null,
-    orderBy: [EntitiesOrderBy.CreatedAtDesc],
-    typeIds: args.typeIds,
-    requireName: args.requireName,
-    requireDebateTagOnClaims: args.requireDebateTagOnClaims,
-    entityFilter: { id: { in: ids } },
-  });
-  const cardById = new Map(cardPage.entities.map(entity => [normId(entity.id), entity]));
-
-  return {
-    entities: ids.flatMap(id => {
-      const entity = cardById.get(normId(id));
-      return entity ? [entity] : [];
-    }),
-    endCursor: String(args.offset + ids.length),
-    hasNextPage: args.offset + ids.length < ordered.length,
+  /**
+   * `pinned`: a later page of a scroll, whose pin is in the past. Another instance may have built
+   * exactly that list and shared it; a pinned list is never shared, since it is not the newest.
+   */
+  const load = async (asOfMs: number, { pinned }: { pinned: boolean }): Promise<FreshList> => {
+    const asOfSec = Math.floor(asOfMs / 1000);
+    const range: EntityFilter = {
+      createdAt: {
+        greaterThanOrEqualTo: String(asOfSec - args.freshnessHours * 3600),
+        lessThanOrEqualTo: String(asOfSec),
+      },
+    };
+    const page = await freshListCache.get(cacheKey(asOfMs), async () => {
+      if (pinned) {
+        const shared = await readSharedFreshList<ExploreEntitiesPageResponse>(scopeKey);
+        if (shared?.asOfMs === asOfMs) return shared.page;
+      }
+      const fetched = await fetchExploreEntitiesPage({
+        spaceIds: args.spaceIds,
+        time: args.time,
+        limit: FRESH_SLOT_CANDIDATE_LIMIT,
+        after: null,
+        // The id breaks ties: whole batches of claims share one creation second, and the cursor's
+        // mask indexes this list, so its order must not vary between requests.
+        orderBy: [EntitiesOrderBy.CreatedAtDesc, EntitiesOrderBy.IdDesc],
+        typeIds: args.typeIds,
+        requireName: args.requireName,
+        requireDebateTagOnClaims: args.requireDebateTagOnClaims,
+        entityFilter: combineEntityFilters(args.entityFilter, range),
+        // Only `entities` is read from this list; `hasNextPage` would re-run the whole filter (~2s).
+        skipPageInfo: true,
+      });
+      if (!pinned) {
+        const share = () => writeSharedFreshList(scopeKey, { asOfMs, page: fetched }, FRESH_LIST_MAX_STALE_MS);
+        if (args.warm) await share();
+        else runAfterResponse(share);
+      }
+      return fetched;
+    });
+    const list = { asOfMs, page };
+    rememberLatestFreshList(scopeKey, list);
+    return list;
   };
+
+  if (args.startsScroll) {
+    // A scope with an entity filter is not one the cron can rebuild from its inputs.
+    if (!args.warm && !args.entityFilter) recordRequestedScope(scopeKey, args);
+    let latest = latestFreshLists.get(scopeKey);
+    if (!usable(latest)) {
+      // A cold instance holds nothing; start from the list another instance shared.
+      const shared = await readSharedFreshList<ExploreEntitiesPageResponse>(scopeKey);
+      if (usable(shared)) {
+        rememberLatestFreshList(scopeKey, shared);
+        // So this scroll's later pages, pinned to it, find it here too.
+        void freshListCache.get(cacheKey(shared.asOfMs), async () => shared.page);
+        latest = shared;
+      }
+    }
+    if (usable(latest)) {
+      if (latest.asOfMs < args.asOfMs) {
+        runAfterResponse(() =>
+          load(args.asOfMs, { pinned: false }).catch(error => {
+            console.error('explore fresh slot: background Fresh list refresh failed', error);
+          })
+        );
+      }
+      return latest;
+    }
+  }
+  return load(args.asOfMs, { pinned: !args.startsScroll && !args.warm });
+}
+
+/**
+ * GEO-3308. Builds and shares the Fresh list for the current minute, the way a first page would
+ * have, so the first visitor of a scope after a quiet spell reads it instead of waiting on gaia.
+ * The arguments are the ones the request path derives for the scope.
+ */
+export async function warmSharedFreshList(args: {
+  spaceIds: string[];
+  time: ExploreTime;
+  typeIds: readonly string[];
+  requireName?: boolean;
+  requireDebateTagOnClaims?: boolean;
+  freshnessHours: number;
+  now?: number;
+}): Promise<FreshList> {
+  const { now = Date.now(), ...scope } = args;
+  return fetchFreshEntitiesPage({
+    ...scope,
+    asOfMs: Math.floor(now / FRESH_SLOT_AS_OF_STEP_MS) * FRESH_SLOT_AS_OF_STEP_MS,
+    startsScroll: false,
+    warm: true,
+  });
 }
 
 // "Top" sort: rank by the integer score property via `entitiesOrderedByPropertyConnection`.
@@ -620,6 +628,7 @@ async function fetchTopEntitiesPage(args: {
   limit: number;
   after: string | null;
   typeIds?: readonly string[];
+  topicIds?: readonly string[];
   requireName?: boolean;
   requireDebateTagOnClaims?: boolean;
   entityFilter?: EntityFilter;
@@ -696,12 +705,9 @@ async function fetchBestEntitiesPage(args: {
         // are 1.7x and 2.3x slower with the argument rather than 135x, and they have no
         // equivalent cliff, so New and Top keep filtering server-side where it is exact.
         createdAfter: t != null ? String(t) : undefined,
-        // Left undefined when the caller does not ask for the tag gate, so the sort keeps its
-        // no-filter fast path unless there is a clause the connection genuinely does not know.
-        filter: combineEntityFilters(
-          args.requireDebateTagOnClaims ? claimsRequireDebateTagFilter(args.spaceIds) : undefined,
-          args.entityFilter
-        ),
+        // Left undefined when there is no tag gate, so the sort keeps its no-filter fast path unless
+        // there is a clause the connection genuinely does not know.
+        filter: combineEntityFilters(mergeBestFilter(args.spaceIds, args.requireDebateTagOnClaims), args.entityFilter),
         spaceIdsForLists: args.spaceIds,
       },
     })
@@ -744,6 +750,11 @@ export async function fetchExploreFeed(args: {
   spaceFilterIds: string[] | null;
   cursor: string | null;
   walletAddress?: string | null;
+  /**
+   * The wallet's member space, when the caller has already resolved it (`null` for none), so the
+   * pending-request check does not look it up again on every page. Omitted, it is looked up.
+   */
+  viewerMemberSpaceId?: string | null;
   memberOrEditorSpaceIds: string[];
   /** Restrict surfaced entities to these type IDs (via `filter.typeIds.overlaps`). Omit for no type filter. */
   typeIds?: readonly string[];
@@ -755,6 +766,7 @@ export async function fetchExploreFeed(args: {
    * the ranked queries is the kind of change GEO-2793 measured turning 43ms into seconds.
    */
   excludeTypeIds?: readonly string[];
+  topicIds?: readonly string[];
   /** If true (default), filter out entities with null or empty `name`. */
   requireName?: boolean;
   /**
@@ -783,10 +795,23 @@ export async function fetchExploreFeed(args: {
    */
   reorderWindow?: ExploreWindowReorder;
   /**
-   * Complete population branches for a contextual feed. When supplied, Best and New order this
-   * full population from a compact index rather than applying one expensive combined predicate.
+   * GEO-3092. A topic page's topics, the page's own first: Best and New then page through entities
+   * tagged with all of them straight from gaia's topic ranking table, and `entityFilter` is not
+   * consulted for those sorts. Top is unaffected.
    */
-  completePopulationScopes?: readonly ExploreCompletePopulationScope[];
+  rankedTopicIds?: readonly string[];
+  /**
+   * GEO-3221. The fresh slot's live config: newest items merged into Best's page at read time.
+   * Applied only to plain Best with a type selection, and only to a scroll that began with it.
+   * `now` pins the clock for tests and the ranking lab's preview.
+   */
+  freshSlot?: { config: FreshSlotConfig; revision: number; now?: number };
+  /**
+   * GEO-3234. Marks the debates the lead check verified playable (`playableLead`), so a browser
+   * demoting a lead its visitor has seen can promote another verified one. Only while seen demotion
+   * is on, so with it off the page is exactly what it was.
+   */
+  markPlayableLeads?: boolean;
 }): Promise<ExploreFeedResult> {
   const spaceMeta = browseSpaceRowsToMap(args.browse);
   const baseIds = exploreBrowseSpaceIds(args.browse, args.spaceFilterIds);
@@ -823,8 +848,10 @@ export async function fetchExploreFeed(args: {
     if (pendingTargets.length === 0) return out;
 
     try {
-      const profile = await Effect.runPromise(fetchProfile(wallet));
-      const memberSpaceId = profile?.spaceId;
+      const memberSpaceId =
+        args.viewerMemberSpaceId !== undefined
+          ? args.viewerMemberSpaceId
+          : (await Effect.runPromise(fetchProfile(wallet)))?.spaceId;
       if (!memberSpaceId) return out;
 
       const pendingMap = new Map<string, boolean>();
@@ -852,7 +879,9 @@ export async function fetchExploreFeed(args: {
     return out;
   };
 
-  const { after, offset } = decodeExploreWindowCursor(args.cursor);
+  // Always unwrapped, so a fresh cursor still pages on if the slot was switched off mid-scroll.
+  const freshCursor = decodeFreshSlotCursor(args.cursor, args.freshSlot?.now ?? Date.now());
+  const { after, offset } = decodeExploreWindowCursor(freshCursor.inner);
 
   // Every sort scans wider than it serves — the row builder drops entities with no
   // displayable space, so over-scanning absorbs that. Best scans wider still, because a
@@ -864,25 +893,28 @@ export async function fetchExploreFeed(args: {
   // Best with a type selection goes to the server (GEO-2885); Best with none keeps the untyped
   // walk, which is the right plan when there is no type argument and is what the by-type
   // connection cannot serve — it matches nothing without `typeIds`.
-  const completeSort =
-    (args.completePopulationScopes?.length ?? 0) > 0 && (args.sort === 'best' || args.sort === 'new')
+  const rankedTopicSort =
+    (args.rankedTopicIds?.length ?? 0) > 0 &&
+    (args.typeIds?.length ?? 0) > 0 &&
+    (args.sort === 'best' || args.sort === 'new')
       ? args.sort
       : null;
-  const usesCompletePopulation = completeSort !== null;
-  const bestFiltersServerSide = !usesCompletePopulation && args.sort === 'best' && (args.typeIds?.length ?? 0) > 0;
+  const bestFiltersServerSide = rankedTopicSort === null && args.sort === 'best' && (args.typeIds?.length ?? 0) > 0;
+
+  const windowOffsetOf = (windowAfter: string | null) =>
+    Number.isSafeInteger(Number(windowAfter)) && Number(windowAfter) >= 0 ? Number(windowAfter) : 0;
 
   const fetchWindow = (windowAfter: string | null) =>
-    completeSort !== null
-      ? fetchCompleteEntitiesPage({
+    rankedTopicSort !== null
+      ? fetchRankedTopicFeedPage({
+          topicIds: args.rankedTopicIds ?? [],
+          sort: rankedTopicSort,
           spaceIds: baseIds,
-          sort: completeSort,
           time: args.time,
           limit: windowSize,
-          offset: Number.isSafeInteger(Number(windowAfter)) && Number(windowAfter) >= 0 ? Number(windowAfter) : 0,
+          offset: windowOffsetOf(windowAfter),
           typeIds: args.typeIds ?? [],
-          requireName: args.requireName,
           requireDebateTagOnClaims: args.requireDebateTagOnClaims,
-          scopes: args.completePopulationScopes ?? [],
         })
       : bestFiltersServerSide
         ? fetchBestEntitiesByTypePage({
@@ -913,6 +945,7 @@ export async function fetchExploreFeed(args: {
                 limit: windowSize,
                 after: windowAfter,
                 typeIds: args.typeIds,
+                topicIds: args.topicIds,
                 requireName: args.requireName,
                 requireDebateTagOnClaims: args.requireDebateTagOnClaims,
                 entityFilter: args.entityFilter,
@@ -924,6 +957,7 @@ export async function fetchExploreFeed(args: {
                 after: windowAfter,
                 orderBy: [EntitiesOrderBy.CreatedAtDesc],
                 typeIds: args.typeIds,
+                topicIds: args.topicIds,
                 requireName: args.requireName,
                 requireDebateTagOnClaims: args.requireDebateTagOnClaims,
                 entityFilter: args.entityFilter,
@@ -989,7 +1023,11 @@ export async function fetchExploreFeed(args: {
   };
 
   const forYouTopicIds = args.forYouTopicIds ?? [];
-  if (forYouTopicIds.length > 0 && bestFiltersServerSide) {
+  // An explicit explore-dropdown topic is served by the ranked topic path (`rankedTopicIds`), which
+  // makes `bestFiltersServerSide` false anyway; the For-you stream keys on followed topics
+  // (`forYouTopicIds`), not `args.topicIds`, and it skips personalization and the fresh slot — a
+  // known limit of serving a topic selection from gaia's ranking table.
+  if (forYouTopicIds.length > 0 && bestFiltersServerSide && (args.topicIds?.length ?? 0) === 0) {
     const streamArgs = {
       topicIds: forYouTopicIds,
       spaceIds: baseIds,
@@ -1010,6 +1048,59 @@ export async function fetchExploreFeed(args: {
       attachMeta,
     });
   }
+
+  // GEO-3221. The fresh slot, on plain Best only: For you returned above, and a window the reorder
+  // hook replaced (For you, an interleaving experiment) is left alone, so an experiment's arms are
+  // never confounded by it.
+  const freshConfig = args.freshSlot?.config;
+  const freshApplies =
+    freshSlotActive(freshConfig) &&
+    args.sort === 'best' &&
+    bestFiltersServerSide &&
+    (args.topicIds?.length ?? 0) === 0 &&
+    (freshCursor.firstPage || freshCursor.pinned);
+  const freshVersion = `${BEST_FEED_VERSION}+fresh.${args.freshSlot?.revision ?? 0}`;
+  let freshRows: ExploreFeedRow[] | null = null;
+  // The scroll's pin; a first page served an older Fresh list takes that list's pin instead.
+  let freshAsOfMs = freshCursor.asOfMs;
+  if (freshApplies) {
+    try {
+      const fresh = await fetchFreshEntitiesPage({
+        spaceIds: baseIds,
+        time: args.time,
+        typeIds: args.typeIds ?? [],
+        requireName: args.requireName,
+        requireDebateTagOnClaims: args.requireDebateTagOnClaims,
+        entityFilter: args.entityFilter,
+        asOfMs: freshCursor.asOfMs,
+        freshnessHours: freshConfig.freshnessHours,
+        startsScroll: freshCursor.firstPage,
+      });
+      freshAsOfMs = fresh.asOfMs;
+      freshRows = windowRows(fresh.page.entities);
+    } catch (error) {
+      // Best without the slot for this page; the cursor keeps the scroll's state for the next.
+      console.error('explore fresh slot: fresh list failed, serving Best for this page', error);
+    }
+  }
+
+  const mergeFresh = (
+    window: { rows: ExploreFeedRow[]; feed: FeedDescriptor | undefined },
+    shown: ReadonlySet<number>
+  ): { rows: FreshMergedRow<ExploreFeedRow>[]; shownAfter: Set<number> } | null =>
+    freshRows !== null && freshConfig && window.feed?.name === 'best'
+      ? mergeFreshSlot({
+          best: window.rows,
+          fresh: freshRows,
+          shown,
+          config: freshConfig,
+          pageSize,
+          idOf: row => normId(row.entityId),
+          typeOf: exploreItemTypeKey,
+        })
+      : null;
+  const mergedRows = (merged: { rows: FreshMergedRow<ExploreFeedRow>[] }): ExploreFeedRow[] =>
+    merged.rows.map(({ row, fresh }) => (fresh ? { ...row, ranking: { version: freshVersion, slot: 'fresh' } } : row));
 
   // A window that survives none of the above is not the end of the feed, and returning it as an
   // empty page is what makes it behave like one — badly (GEO-2835 review). The client's sentinel
@@ -1039,9 +1130,11 @@ export async function fetchExploreFeed(args: {
   let windowOffset = offset;
   let extraScans = 0;
   let scanBudgetSpent = false;
+  let shownAtWindowStart = freshCursor.shown;
   let page = await fetchWindow(windowAfter);
   let window = await orderWindow(page.entities, windowAfter);
-  let ordered = window.rows;
+  let merged = mergeFresh(window, shownAtWindowStart);
+  let ordered = merged ? mergedRows(merged) : window.rows;
 
   const scanDeadline = Date.now() + MAX_EMPTY_WINDOW_SCAN_MS;
 
@@ -1053,42 +1146,96 @@ export async function fetchExploreFeed(args: {
       break;
     }
     extraScans += 1;
+    if (merged) shownAtWindowStart = merged.shownAfter;
     windowAfter = page.endCursor;
     // A fresh window is served from its start; the offset only ever indexed the window the
     // cursor named.
     windowOffset = 0;
     page = await fetchWindow(windowAfter);
     window = await orderWindow(page.entities, windowAfter);
-    ordered = window.rows;
+    merged = mergeFresh(window, shownAtWindowStart);
+    ordered = merged ? mergedRows(merged) : window.rows;
   }
 
   // GEO-3070. Only on the first ranked window, which is where page one comes from. Every page cut
   // from that window is reordered the same way, so the lead debate is served once and nothing it
   // displaced is skipped; later windows are ranked further down and left as they are.
+  //
+  // GEO-3234: `playableLeads` is filled by the check's callback, hence a holder, not a `let`.
+  const playableLeads: { ids: Set<string> | null } = { ids: null };
+  const stills = new Map<string, DebatePosters>();
+  let leadPosters: LeadPosters | null = null;
   if (args.leadWithPlayableDebate && args.sort === 'best' && windowAfter === null) {
-    ordered = await leadWithPlayableDebate(ordered, {
+    const led = await leadWithPlayableDebate(window.rows, {
       isDebate: row => exploreItemTypeKey(row) === normId(DEBATE_TYPE_ID),
-      isPlayable: (row, signal) => debateHasProcessedVideo(row.entityId, signal),
+      isPlayable: (row, signal) => debateHasProcessedVideo(row.entityId, signal, stills),
+      onPlayable: args.markPlayableLeads
+        ? rows => {
+            playableLeads.ids = new Set(rows.map(row => normId(row.entityId)));
+          }
+        : undefined,
     });
+    // The merge's page boundaries depend only on which rows Best holds, never their order, so
+    // merging the led order again moves no boundary (GEO-3221).
+    merged = mergeFresh({ ...window, rows: led }, shownAtWindowStart);
+    ordered = merged ? mergedRows(merged) : led;
+    leadPosters = postersOfLead(led, stills);
   }
 
   // Serving a prefix and advancing the cursor past the whole scan is what dropped ranks
   // 23-30 of every page before (GEO-2695). The offset keeps the rest reachable.
-  const slice = ordered.slice(windowOffset, windowOffset + pageSize);
+  const served = ordered.slice(windowOffset, windowOffset + pageSize);
+  const leadIds = playableLeads.ids;
+  const marked =
+    leadIds !== null && window.feed?.name === 'best'
+      ? served.map(row => (leadIds.has(normId(row.entityId)) ? { ...row, playableLead: true } : row))
+      : served;
+  // GEO-3234. The rest of this window, capped at a page, for the browser to fill from. Never a fresh
+  // card: those hold their own positions.
+  const reserved =
+    args.markPlayableLeads && window.feed?.name === 'best'
+      ? ordered
+          .slice(windowOffset + served.length, windowOffset + served.length + pageSize)
+          .filter(row => row.ranking?.slot !== 'fresh')
+          .map(row => (leadIds?.has(normId(row.entityId)) ? { ...row, playableLead: true } : row))
+      : [];
+  // With seen demotion on, the browser opens the page on the newest playable debate, not always the
+  // one the lead check put first; a first visit sees that one first, so it gets the stills.
+  if (leadIds !== null) leadPosters = postersOfFirstVisitLead(marked, reserved, stills) ?? leadPosters;
+  leadPosters = await withDirectStills(leadPosters);
+  const slice = withLeadPosters(marked, leadPosters);
+  const reserveRows = withLeadPosters(reserved, leadPosters);
+
+  const nextWindowCursor = scanBudgetSpent
+    ? null
+    : nextExploreWindowCursor({
+        after: windowAfter,
+        offset: windowOffset,
+        served: slice.length,
+        windowLength: ordered.length,
+        hasNextPage: page.hasNextPage,
+        endCursor: page.endCursor,
+      });
+  // Pages inside one window share its starting mask; stepping to the next window carries what this
+  // one showed, so nothing it showed comes round again.
+  const staysInWindow = windowOffset + slice.length < ordered.length;
+  const nextCursor =
+    nextWindowCursor !== null && freshApplies
+      ? encodeFreshSlotCursor({
+          asOfMs: freshAsOfMs,
+          shown: staysInWindow || !merged ? shownAtWindowStart : merged.shownAfter,
+          inner: nextWindowCursor,
+        })
+      : nextWindowCursor;
+  const feed: FeedDescriptor | undefined = merged ? { name: 'best', version: freshVersion } : window.feed;
+
+  const withMeta = await attachMeta([...slice, ...reserveRows]);
 
   return {
-    items: await attachMeta(slice),
-    ...(window.feed ? { feed: window.feed } : {}),
-    nextCursor: scanBudgetSpent
-      ? null
-      : nextExploreWindowCursor({
-          after: windowAfter,
-          offset: windowOffset,
-          served: slice.length,
-          windowLength: ordered.length,
-          hasNextPage: page.hasNextPage,
-          endCursor: page.endCursor,
-        }),
+    items: withMeta.slice(0, slice.length),
+    ...(reserveRows.length > 0 ? { reserve: withMeta.slice(slice.length) } : {}),
+    ...(feed ? { feed } : {}),
+    nextCursor,
   };
 }
 
@@ -1220,10 +1367,12 @@ async function serveForYouPage(args: {
   let page = result.page;
   // GEO-3070, as for Best: the first page opens on a playable debate.
   if (args.leadWithPlayableDebate && args.cursor === null) {
+    const stills = new Map<string, DebatePosters>();
     page = await leadWithPlayableDebate(page, {
       isDebate: row => exploreItemTypeKey(row) === normId(DEBATE_TYPE_ID),
-      isPlayable: (row, signal) => debateHasProcessedVideo(row.entityId, signal),
+      isPlayable: (row, signal) => debateHasProcessedVideo(row.entityId, signal, stills),
     });
+    page = withLeadPosters(page, await withDirectStills(postersOfLead(page, stills)));
   }
 
   return {
@@ -1240,11 +1389,87 @@ async function serveForYouPage(args: {
  * by, so the lead slot never holds a debate the card would then refuse to play. A Debate entity's id
  * is its geo-chat debate id, hyphenated.
  */
-async function debateHasProcessedVideo(entityId: string, signal: AbortSignal): Promise<boolean> {
-  const response = await fetch(`${geoChatBaseUrl()}/debates/${ID.hexToUuid(entityId)}/media`, {
+async function debateHasProcessedVideo(
+  entityId: string,
+  signal: AbortSignal,
+  stills?: Map<string, DebatePosters>
+): Promise<boolean> {
+  const debateId = ID.hexToUuid(entityId);
+  const response = await fetch(`${geoChatBaseUrl()}/debates/${debateId}/media`, {
     signal,
     cache: 'no-store',
   });
   if (!response.ok) return false;
-  return hasProcessedVideo((await response.json()) as DebateMediaResponse);
+  const media = (await response.json()) as DebateMediaResponse;
+  const processed = hasProcessedVideo(media);
+  // GEO-3280. The same URLs the card's player builds from the same response, so the browser loads
+  // each still once, whichever of the two paints it first.
+  if (processed && stills) {
+    const posters = {
+      slot1: speakerStillUrl(debateId, 1, media.artifacts),
+      slot2: speakerStillUrl(debateId, 2, media.artifacts),
+    };
+    if (posters.slot1 || posters.slot2) stills.set(normId(entityId), posters);
+  }
+  return processed;
+}
+
+type DebatePosters = NonNullable<ExploreFeedItem['debatePosters']>;
+type LeadPosters = { entityId: string; posters: DebatePosters };
+
+/**
+ * The stills of the debate the lead check put first, if it put one there. A row that only passed the
+ * check is left alone: one card's stills is what the first paint needs, and a poster on every
+ * candidate would compete with it for the connection.
+ */
+function postersOfLead(led: readonly ExploreFeedRow[], stills: Map<string, DebatePosters>): LeadPosters | null {
+  const lead = led[0];
+  const posters = lead ? stills.get(normId(lead.entityId)) : undefined;
+  return lead && posters ? { entityId: normId(lead.entityId), posters } : null;
+}
+
+/**
+ * The stills of the debate a visitor with nothing seen is shown first. `hideSeenInPage` with an
+ * empty history picks it exactly as the browser will: the newest playable debate on offer, which
+ * may be lower on the page or in the reserve. Null when the page has no verified lead.
+ */
+function postersOfFirstVisitLead(
+  items: readonly ExploreFeedRow[],
+  reserve: readonly ExploreFeedRow[],
+  stills: Map<string, DebatePosters>
+): LeadPosters | null {
+  const hasLead = items[0]?.playableLead === true && items[0].ranking?.slot !== 'fresh';
+  if (!hasLead) return null;
+  const [lead] = hideSeenInPage({
+    items,
+    reserve,
+    shown: new Set(),
+    idOf: row => row.entityId,
+    isSeen: () => false,
+    typeOf: exploreItemTypeKey,
+    isPinned: row => row.ranking?.slot === 'fresh',
+    isDebate: row => exploreItemTypeKey(row) === normId(DEBATE_TYPE_ID),
+    hasLead,
+    canLead: row => row.playableLead === true,
+    createdAtSec: row => row.createdAtSec,
+  }).items;
+  const posters = lead ? stills.get(normId(lead.entityId)) : undefined;
+  return lead && posters ? { entityId: normId(lead.entityId), posters } : null;
+}
+
+/**
+ * The lead's stills as the browser should load them: the presigned storage URLs the durable routes
+ * redirect to, so the largest paint skips that hop. Both resolve at once, each bounded, and a still
+ * that cannot be resolved keeps its durable URL.
+ */
+async function withDirectStills(lead: LeadPosters | null): Promise<LeadPosters | null> {
+  if (!lead) return lead;
+  const direct = (src: string | null) => (src ? resolveStillUrl(src) : Promise.resolve(src));
+  const [slot1, slot2] = await Promise.all([direct(lead.posters.slot1), direct(lead.posters.slot2)]);
+  return { ...lead, posters: { slot1, slot2 } };
+}
+
+function withLeadPosters<T extends ExploreFeedRow>(rows: T[], lead: LeadPosters | null): T[] {
+  if (!lead) return rows;
+  return rows.map(row => (normId(row.entityId) === lead.entityId ? { ...row, debatePosters: lead.posters } : row));
 }

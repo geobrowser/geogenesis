@@ -15,6 +15,7 @@ import { type CursorPage, collectCursorPages } from '~/core/sync/collect-cursor-
 import type { DebateRematchParticipant, DebateResponseKind } from './api';
 import { claimResponseIndexedEvent, pendingClaimResponse } from './claim-response-indexed-notifier';
 import { useDebateAttention } from './debate-attention';
+import { subscribeRemoteClaimResponses } from './remote-claim-responses';
 
 /**
  * Both participants' positions on every claim, read straight from the knowledge graph.
@@ -230,7 +231,9 @@ export function participantSidesOn(
   spaceId: string,
   participants: DebateRematchParticipant[]
 ) {
-  const rows = positionsByClaim.get(claimId) ?? [];
+  // The graph, geo-chat, and pending responses can use different spellings of the same claim id.
+  // Merge matching groups so an optimistic row cannot hide the other participant's indexed side.
+  const rows = [...positionsByClaim].flatMap(([id, rows]) => (sameId(id, claimId) ? rows : []));
   return participants.map(participant => {
     const row = rows.find(
       position => sameId(position.profileSpaceId, participant.profile_space_id) && sameId(position.spaceId, spaceId)
@@ -388,6 +391,74 @@ function useOwnPendingPositions(
   );
 }
 
+/** How long a reported response is shown while the graph disagrees: past p95 indexing, so a write that never lands expires. */
+const REMOTE_MAX_HOLD_MS = 60_000;
+
+type RemotePosition = { row: PendingParticipantPosition; receivedAt: number };
+
+/**
+ * `liveFrom`'s responses as geo-chat reports them, ahead of the graph. Each row is held until this
+ * query's fetch agrees, so a refetch landing before indexing can't flicker it; a newer report replaces it.
+ */
+function useRemotePendingPositions(
+  liveFrom: string | null | undefined,
+  queryKey: readonly unknown[]
+): PendingParticipantPosition[] {
+  const queryClient = useQueryClient();
+  const [held, setHeld] = React.useState<RemotePosition[]>([]);
+  const queryHash = hashKey(queryKey);
+
+  React.useEffect(() => {
+    setHeld(current => (current.length === 0 ? current : []));
+    if (!liveFrom) return;
+
+    const unsubscribeEvents = subscribeRemoteClaimResponses(response => {
+      if (!sameId(response.profileSpaceId, liveFrom)) return;
+      // The graph's spelling, so the row groups under the same claim key the fetched rows use.
+      const row: PendingParticipantPosition = {
+        ...response,
+        profileSpaceId: bareId(response.profileSpaceId),
+        claimId: bareId(response.claimId),
+        spaceId: bareId(response.spaceId),
+      };
+      const key = positionKey(row);
+      const receivedAt = Date.now();
+      setHeld(current => [...current.filter(entry => positionKey(entry.row) !== key), { row, receivedAt }]);
+    });
+
+    const unsubscribeCache = queryClient.getQueryCache().subscribe(event => {
+      if (event.query.queryHash !== queryHash) return;
+      if (event.type !== 'updated' || event.action.type !== 'success') return;
+      const fetched = (event.query.state.data ?? []) as ParticipantPosition[];
+      setHeld(current => {
+        const kept = current.filter(entry => !fetchedAgrees(fetched, entry.row));
+        return kept.length === current.length ? current : kept;
+      });
+    });
+
+    return () => {
+      unsubscribeEvents();
+      unsubscribeCache();
+    };
+  }, [liveFrom, queryClient, queryHash]);
+
+  // Expire the oldest row at its bound; each expiry re-arms for the next.
+  React.useEffect(() => {
+    if (held.length === 0) return;
+    const oldest = Math.min(...held.map(entry => entry.receivedAt));
+    const timer = setTimeout(
+      () => {
+        const now = Date.now();
+        setHeld(current => current.filter(entry => now - entry.receivedAt < REMOTE_MAX_HOLD_MS));
+      },
+      Math.max(0, oldest + REMOTE_MAX_HOLD_MS - Date.now())
+    );
+    return () => clearTimeout(timer);
+  }, [held]);
+
+  return React.useMemo(() => held.map(entry => entry.row), [held]);
+}
+
 function samePositions(a: PendingParticipantPosition[], b: PendingParticipantPosition[]) {
   if (a.length !== b.length) return false;
   return a.every((row, i) => {
@@ -410,8 +481,11 @@ function samePositions(a: PendingParticipantPosition[], b: PendingParticipantPos
  * another, and that side then reads as no position at all.
  */
 function positionKey(row: Pick<ParticipantPosition, 'profileSpaceId' | 'claimId' | 'spaceId' | 'responseKind'>) {
-  const bare = (id: string) => id.replace(/-/g, '').toLowerCase();
-  return `${bare(row.profileSpaceId)}|${bare(row.claimId)}|${bare(row.spaceId)}|${row.responseKind}`;
+  return `${bareId(row.profileSpaceId)}|${bareId(row.claimId)}|${bareId(row.spaceId)}|${row.responseKind}`;
+}
+
+function bareId(id: string) {
+  return id.replace(/-/g, '').toLowerCase();
 }
 
 /**
@@ -444,7 +518,17 @@ export function useParticipantPositions(
    * Only read others' positions on claims the viewer has answered (`fetchPositionsOnViewerClaims`).
    * For callers that only compare people against the viewer; needs `localProfileSpaceId`.
    */
-  { onlyViewerClaims = false }: { onlyViewerClaims?: boolean } = {}
+  {
+    onlyViewerClaims = false,
+    liveFrom = null,
+  }: {
+    onlyViewerClaims?: boolean;
+    /**
+     * A participant whose responses are shown as soon as geo-chat reports them, ahead of the graph.
+     * The rematch picker's other debater; never a whole room, since the reports are not yet on chain.
+     */
+    liveFrom?: string | null;
+  } = {}
 ) {
   const queryClient = useQueryClient();
   const foreground = useDebateAttention();
@@ -508,9 +592,15 @@ export function useParticipantPositions(
   // changes on every poll — so the whole page re-rendered every 20s for a refetch that returned the
   // same rows.
   const ownPending = useOwnPendingPositions(localProfileSpaceId, queryKey);
+  // Never the viewer's own: those come from this browser's writes, which know more.
+  const remoteLiveFrom = liveFrom && !(localProfileSpaceId && sameId(liveFrom, localProfileSpaceId)) ? liveFrom : null;
+  const remotePending = useRemotePendingPositions(remoteLiveFrom, queryKey);
   const byClaim = React.useMemo(
-    () => groupParticipantPositions(applyPendingPositions(query.data ?? [], ownPending)),
-    [query.data, ownPending]
+    () =>
+      groupParticipantPositions(
+        applyPendingPositions(applyPendingPositions(query.data ?? [], remotePending), ownPending)
+      ),
+    [query.data, remotePending, ownPending]
   );
 
   return {
@@ -537,5 +627,12 @@ export function useParticipantPositions(
      */
     isFetching: query.isFetching,
     error: query.error,
+    /**
+     * Whether `byClaim` holds anything the graph actually answered: this key's rows, or the previous
+     * key's held over. Not `byClaim.size`, which also counts the viewer's own in-flight responses
+     * overlaid on top — present even when every fetch has failed, so a surface deciding "did the read
+     * fail with nothing in hand" must ask this instead (GEO-3220).
+     */
+    hasFetchedData: query.data !== undefined,
   };
 }

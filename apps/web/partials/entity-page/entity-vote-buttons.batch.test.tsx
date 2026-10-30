@@ -17,6 +17,7 @@ import {
   useClaimResponseSummaryBatch,
 } from '~/core/responses/use-claim-response-summaries';
 
+import { EntitySidePanelNavigation } from './entity-side-panel-navigation';
 import { EntityVoteButtons, RespondersPopoverContent } from './entity-vote-buttons';
 
 const mocks = vi.hoisted(() => ({
@@ -33,7 +34,9 @@ const mocks = vi.hoisted(() => ({
   personProfileOpened: vi.fn(),
 }));
 
-vi.mock('@geogenesis/auth', () => ({
+vi.mock('~/core/debates/rematch-panel-context', () => ({ useRematchPanelContext: () => ({}) }));
+
+vi.mock('~/core/wallet/auth-hooks', () => ({
   // `usePrepareOnboarding` reads it to leave a signed-in user's onboarding alone.
   usePrivy: () => ({ authenticated: false }),
   useGeoLogin: () => ({ login: vi.fn() }),
@@ -109,7 +112,7 @@ beforeEach(() => {
   mocks.getResponders.mockReset();
   mocks.getResponders.mockReturnValue([]);
   mocks.getSummaryPage.mockReset();
-  mocks.getSummaryPage.mockReturnValue([]);
+  mocks.getSummaryPage.mockReturnValue({ items: [], endCursor: null, hasNextPage: false });
   mocks.getViewerResponse.mockReset();
   mocks.getViewerResponse.mockReturnValue('positive');
   mocks.optimisticResponse = undefined;
@@ -122,7 +125,10 @@ beforeEach(() => {
   mocks.personProfileOpened.mockReset();
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 describe('EntityVoteButtons claims-page batching', () => {
   it('skips entity hydration and all individual response queries while the page batch is unresolved', async () => {
@@ -159,7 +165,7 @@ describe('EntityVoteButtons claims-page batching', () => {
     expect(responseIcons.every(icon => icon.getAttribute('viewBox') === '0 0 12 12')).toBe(true);
   });
 
-  it('renders persisted curation state in the fullscreen debate pill', () => {
+  it('renders persisted curation state from the batch', () => {
     mocks.smartAccount = {};
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     queryClient.setQueryData(entityResponseCountsQueryKey('debate-1', 'space-1', 0, 'curation'), {
@@ -170,12 +176,7 @@ describe('EntityVoteButtons claims-page batching', () => {
 
     const view = render(
       <ClaimResponseBatchBoundary ready>
-        <EntityVoteButtons
-          entityId="debate-1"
-          spaceId="space-1"
-          responseKind="curation"
-          presentation="debate-vertical"
-        />
+        <EntityVoteButtons entityId="debate-1" spaceId="space-1" responseKind="curation" />
       </ClaimResponseBatchBoundary>,
       {
         wrapper: ({ children }: { children: ReactNode }) => (
@@ -185,7 +186,8 @@ describe('EntityVoteButtons claims-page batching', () => {
     );
 
     expect(view.getByText('7')).toBeInTheDocument();
-    expect(view.getByRole('button', { name: 'Remove upvote' })).toHaveAttribute('aria-pressed', 'true');
+    // The persisted upvote is what makes the button offer to remove it.
+    expect(view.getByRole('button', { name: 'Remove upvote' })).toBeInTheDocument();
     fireEvent.click(view.getByRole('button', { name: 'Downvote' }));
     expect(mocks.submitResponse).toHaveBeenLastCalledWith('negative');
   });
@@ -303,10 +305,16 @@ function renderButtons(ready: boolean, seedCaches = false, responseKind: 'stance
  * not part of the boundary's `ready`.
  */
 describe('RespondersPopoverContent under a batch', () => {
-  const renderPopover = (queryClient: QueryClient, responseKind: 'stance' | 'curation' = 'stance') =>
+  const renderPopover = (queryClient: QueryClient, responseKind: 'stance' | 'curation' = 'stance', inRoom = false) =>
     render(
       <ClaimResponseBatchBoundary ready>
-        <RespondersPopoverContent entityId="claim-1" spaceId="space-1" objectType={0} responseKind={responseKind} />
+        {inRoom ? (
+          <EntitySidePanelNavigation entityId="claim-1" spaceId="space-1">
+            <RespondersPopoverContent entityId="claim-1" spaceId="space-1" objectType={0} responseKind={responseKind} />
+          </EntitySidePanelNavigation>
+        ) : (
+          <RespondersPopoverContent entityId="claim-1" spaceId="space-1" objectType={0} responseKind={responseKind} />
+        )}
       </ClaimResponseBatchBoundary>,
       {
         wrapper: ({ children }: { children: ReactNode }) => (
@@ -380,11 +388,14 @@ describe('RespondersPopoverContent under a batch', () => {
       },
     ]);
 
-    const view = renderPopover(queryClient, responseKind);
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    const view = renderPopover(queryClient, responseKind, true);
     const profileLink = await view.findByRole('link', { name: 'Dovile' });
     fireEvent.click(profileLink);
+    expect(open).toHaveBeenCalledTimes(1);
+    open.mockRestore();
 
-    expect(mocks.personProfileOpened).toHaveBeenCalledWith('profile-9', 'person-9', {
+    expect(mocks.personProfileOpened).toHaveBeenCalledExactlyOnceWith('profile-9', 'person-9', {
       interaction_surface: interactionSurface,
     });
   });

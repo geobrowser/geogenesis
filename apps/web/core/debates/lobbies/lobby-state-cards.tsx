@@ -1,0 +1,256 @@
+'use client';
+
+import type * as React from 'react';
+
+import cx from 'classnames';
+import Link from 'next/link';
+
+import { NavUtils } from '~/core/utils/utils';
+
+import { Text } from '~/design-system/text';
+
+import type { DebateLobbySummary } from '../api';
+import { HubPillButton, hubPillClassName } from '../matchmaking/hub-pill-button';
+import { debateRoomPath } from '../rooms/room-routes';
+import { markLobbyEntry } from './lobby-analytics';
+import { nextLobbyTimeLabel, personName, rsvpLabel } from './lobby-format';
+import { nextLobbyByHost, useListedLobbies } from './lobby-host-lobbies';
+import { useLobbyRoomPurpose } from './lobby-purpose';
+import { LobbyReminderError, useLobbyReminderPress } from './lobby-reminder-press';
+import type { LobbyPageView } from './lobby-view';
+
+export const LOBBY_STATE_COPY = {
+  banned: 'You can’t join this lobby',
+  bannedFrom: (name: string) => `A host has blocked you from ${name}.`,
+  removed: 'A host removed you from this lobby.',
+  ended: 'This lobby has ended',
+  closed: 'This lobby has closed',
+  findDebate: 'Find a debate',
+  nextLobby: (host: string, name: string, time: string) => `${host}’s next lobby: ${name}, ${time}.`,
+  emptyTitle: 'Nobody’s here right now.',
+  emptyDetail: 'You’re the first one here. Share the link, or come back for the next lobby.',
+  whoIsFree: 'See who’s free this week',
+} as const;
+
+export const CALL_STATE_COPY = {
+  banned: 'You can’t join this call',
+  ended: 'This call has ended',
+  closed: 'This call has closed',
+  /** A scheduled call dropped by a schedule edit (GEO-3420). */
+  cancelled: 'This call was cancelled',
+  backToSpace: 'Back to the space',
+  unavailable: 'This call isn’t available.',
+  backToCalls: 'Back to calls',
+  emptyDetail: 'You’re the first one here. Share the link so others can join.',
+} as const;
+
+/** The centered card every full-page lobby state sits in; `className` sets its width and spacing. */
+export function LobbyCardFrame({
+  className,
+  after,
+  children,
+  ...props
+}: React.ComponentProps<'div'> & {
+  /** Below the card, e.g. a host's lists once the lobby has ended. */
+  after?: React.ReactNode;
+}) {
+  return (
+    <div className="flex min-h-[calc(100dvh-2.75rem)] flex-col items-center justify-center gap-4 px-4 py-8">
+      <div {...props} className={cx('flex w-full flex-col rounded-xl border border-grey-02 bg-white', className)}>
+        {children}
+      </div>
+      {after}
+    </div>
+  );
+}
+
+/** A full-page state: a titled card with its actions. */
+export function LobbyStateCard({
+  title,
+  children,
+  actions,
+  after,
+}: {
+  title: string;
+  children?: React.ReactNode;
+  actions: React.ReactNode;
+  after?: React.ReactNode;
+}) {
+  return (
+    <LobbyCardFrame role="status" className="max-w-md gap-2.5 p-5" data-testid="lobby-state-card" after={after}>
+      <Text as="h1" variant="smallTitle">
+        {title}
+      </Text>
+      {children}
+      <div className="mt-1.5 flex flex-wrap gap-2">{actions}</div>
+    </LobbyCardFrame>
+  );
+}
+
+/** Out of a state card: Find a debate from a lobby, back to its space from a call. */
+export function FindDebateLink({ primary = false }: { primary?: boolean }) {
+  const purpose = useLobbyRoomPurpose();
+  if (purpose.purpose === 'call') {
+    return (
+      <Link href={NavUtils.toSpace(purpose.spaceId)} className={hubPillClassName(primary ? 'primary' : 'secondary')}>
+        {CALL_STATE_COPY.backToSpace}
+      </Link>
+    );
+  }
+  return (
+    <Link href={NavUtils.toExplore()} className={hubPillClassName(primary ? 'primary' : 'secondary')}>
+      {LOBBY_STATE_COPY.findDebate}
+    </Link>
+  );
+}
+
+export function LobbyBannedCard({ name }: { name: string }) {
+  const call = useLobbyRoomPurpose().purpose === 'call';
+  return (
+    <LobbyStateCard
+      title={call ? CALL_STATE_COPY.banned : LOBBY_STATE_COPY.banned}
+      actions={<FindDebateLink primary />}
+    >
+      <Text as="p" variant="metadata" color="grey-04">
+        {LOBBY_STATE_COPY.bannedFrom(name)}
+      </Text>
+    </LobbyStateCard>
+  );
+}
+
+/** Ended or closed empty, with the creator's next lobby when the lobbies list has one. */
+export function LobbyClosedCard({
+  lobby,
+  ended,
+  cancelled = false,
+  after,
+}: {
+  lobby: Pick<LobbyPageView, 'lobby_id' | 'created_by'>;
+  ended: boolean;
+  /** Read for a call only: a lobby says closed either way. */
+  cancelled?: boolean;
+  after?: React.ReactNode;
+}) {
+  const call = useLobbyRoomPurpose().purpose === 'call';
+  const listed = useListedLobbies(!call);
+  const next = call ? null : nextLobbyByHost(listed, lobby.created_by, lobby.lobby_id);
+  const time = next ? nextLobbyTimeLabel(next.lobby) : null;
+  const remind = useLobbyReminderPress(next?.lobby ?? null);
+  const copy = call ? CALL_STATE_COPY : LOBBY_STATE_COPY;
+
+  return (
+    <LobbyStateCard
+      title={call && cancelled ? CALL_STATE_COPY.cancelled : ended ? copy.ended : copy.closed}
+      actions={
+        <>
+          {next ? <NextLobbyAction lobby={next.lobby} remind={remind} primary /> : null}
+          <FindDebateLink primary={!next} />
+        </>
+      }
+      after={after}
+    >
+      {next && time ? (
+        <Text as="p" variant="metadata" color="grey-04">
+          {LOBBY_STATE_COPY.nextLobby(personName(next.host), next.lobby.name, time)}
+        </Text>
+      ) : null}
+      <LobbyReminderError error={remind.error} />
+    </LobbyStateCard>
+  );
+}
+
+/** RSVP on a lobby still to open; Join on one already open. */
+function NextLobbyAction({
+  lobby,
+  remind,
+  primary = false,
+}: {
+  lobby: DebateLobbySummary;
+  remind: ReturnType<typeof useLobbyReminderPress>;
+  primary?: boolean;
+}) {
+  if (lobby.open) {
+    return (
+      <Link
+        href={debateRoomPath(lobby.lobby_id)}
+        onClick={() => markLobbyEntry(lobby.lobby_id, 'other_lobby')}
+        className={hubPillClassName(primary ? 'primary' : 'secondary')}
+      >
+        Join
+      </Link>
+    );
+  }
+  const { reminded } = remind;
+  return (
+    <HubPillButton
+      variant={primary && !reminded ? 'primary' : 'secondary'}
+      analyticsLabel={reminded ? 'Lobby next reminded' : 'Lobby next remind me'}
+      aria-pressed={reminded}
+      pending={remind.pending}
+      onClick={remind.press}
+    >
+      {rsvpLabel(reminded)}
+    </HubPillButton>
+  );
+}
+
+/**
+ * Nobody else is in the lobby. Copy link is in the header; this adds the creator's next lobby and
+ * a way to the People tab.
+ */
+export function LobbyEmptyRoom({
+  lobby,
+  signedIn,
+}: {
+  lobby: Pick<LobbyPageView, 'lobby_id' | 'created_by'>;
+  signedIn: boolean;
+}) {
+  const call = useLobbyRoomPurpose().purpose === 'call';
+  const listed = useListedLobbies(!call);
+  const next = call ? null : nextLobbyByHost(listed, lobby.created_by, lobby.lobby_id);
+
+  return (
+    <div
+      className="mx-auto flex w-full max-w-md flex-col items-center gap-3 py-10 text-center"
+      data-testid="lobby-empty-room"
+    >
+      <Text as="p" variant="smallTitle">
+        {LOBBY_STATE_COPY.emptyTitle}
+      </Text>
+      <Text as="p" variant="metadata" color="grey-04">
+        {call ? CALL_STATE_COPY.emptyDetail : LOBBY_STATE_COPY.emptyDetail}
+      </Text>
+      {next ? <NextLobbyCard lobby={next.lobby} /> : null}
+      {/* The People tab is signed in only. */}
+      {signedIn && !call ? (
+        <Link
+          href={NavUtils.toDebatesPanel({ tab: 'people', pathname: debateRoomPath(lobby.lobby_id) })}
+          className={hubPillClassName('secondary', 'mt-1')}
+        >
+          {LOBBY_STATE_COPY.whoIsFree}
+        </Link>
+      ) : null}
+    </div>
+  );
+}
+
+function NextLobbyCard({ lobby }: { lobby: DebateLobbySummary }) {
+  const time = nextLobbyTimeLabel(lobby);
+  const remind = useLobbyReminderPress(lobby);
+  return (
+    <div className="mt-3 flex w-full flex-col gap-1">
+      <div className="flex w-full items-center gap-3 rounded-xl border border-grey-02 p-3 text-left">
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <Text as="p" variant="footnoteMedium" color="grey-04">
+            {time ? `Next lobby · ${time}` : 'Next lobby'}
+          </Text>
+          <Text as="p" variant="metadataMedium" className="truncate">
+            {lobby.name}
+          </Text>
+        </div>
+        <NextLobbyAction lobby={lobby} remind={remind} />
+      </div>
+      <LobbyReminderError error={remind.error} />
+    </div>
+  );
+}

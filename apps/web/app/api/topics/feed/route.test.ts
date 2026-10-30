@@ -7,7 +7,6 @@ import { GET } from './route';
 const mocks = vi.hoisted(() => ({
   fetchFeed: vi.fn(),
   filter: vi.fn(),
-  scopes: vi.fn(),
 }));
 
 vi.mock('~/core/explore/fetch-explore-feed', () => ({
@@ -25,10 +24,6 @@ vi.mock('~/core/topics/browse/topic-feed-filter', () => ({
     mocks.filter(topicId, selectedTopicIds);
     return {};
   },
-  topicFeedPopulationScopes: (topicId: string, selectedTopicIds: string[], typeIds: string[]) => {
-    mocks.scopes(topicId, selectedTopicIds, typeIds);
-    return [];
-  },
 }));
 
 const PAGE_TOPIC = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
@@ -42,11 +37,10 @@ beforeEach(() => {
   mocks.fetchFeed.mockReset();
   mocks.fetchFeed.mockResolvedValue({ items: [], nextCursor: null });
   mocks.filter.mockReset();
-  mocks.scopes.mockReset();
 });
 
 describe('GET /api/topics/feed', () => {
-  it('bounds selected Topics before building either Topic population filter', async () => {
+  it('bounds selected Topics before building the ranked topic list or the filter', async () => {
     const selectedTopicIds = Array.from({ length: 11 }, (_, index) => topicId(index + 1));
     const params = new URLSearchParams({
       topicId: PAGE_TOPIC,
@@ -59,6 +53,16 @@ describe('GET /api/topics/feed', () => {
 
     expect(response.status).toBe(200);
     expect(mocks.filter.mock.calls[0]?.[1]).toEqual(selectedTopicIds.slice(0, 10));
-    expect(mocks.scopes.mock.calls[0]?.[1]).toEqual(selectedTopicIds.slice(0, 10));
+    expect(mocks.fetchFeed.mock.calls[0]?.[0]).toMatchObject({
+      rankedTopicIds: [PAGE_TOPIC, ...selectedTopicIds.slice(0, 10)],
+    });
+  });
+
+  it('serves New from the ranked topic table too', async () => {
+    const params = new URLSearchParams({ topicId: PAGE_TOPIC, spaceId: SPACE, sort: 'new' });
+
+    await GET(new Request(`https://example.com/api/topics/feed?${params}`));
+
+    expect(mocks.fetchFeed.mock.calls[0]?.[0]).toMatchObject({ sort: 'new', rankedTopicIds: [PAGE_TOPIC] });
   });
 });

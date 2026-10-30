@@ -194,6 +194,14 @@ type MultiProps<T extends string> = {
   searchPlaceholder?: string;
   /** What the menu says when the query matches nothing. */
   searchEmptyLabel?: string;
+  emptyLabel?: string;
+  /**
+   * Replaces the labelled pill that opens the menu, for a host that opens it from something of its
+   * own. The topic pill row ends in a "More" pill that opens this list, and a second labelled
+   * trigger there would read as one more topic. `label` and `labelPending` go unused when this is
+   * set.
+   */
+  trigger?: React.ReactElement;
 };
 
 /**
@@ -244,6 +252,8 @@ export function HubMultiFilterMenu<T extends string>({
   countsPending,
   searchPlaceholder,
   searchEmptyLabel = 'No matches',
+  emptyLabel,
+  trigger,
 }: MultiProps<T>) {
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState('');
@@ -373,19 +383,21 @@ export function HubMultiFilterMenu<T extends string>({
       className="max-w-[280px]"
       viewportRef={setViewportNode}
       trigger={
-        <SmallButton
-          icon={<ChevronDownSmall />}
-          className="max-w-[160px]"
-          {...(analytics
-            ? debateSurfaceAnalyticsAttributes(analytics.surface, `${analytics.name} filter`, 'filter')
-            : {})}
-        >
-          {labelPending ? (
-            <Skeleton className="h-[1em] w-16" aria-label="Loading space name" />
-          ) : (
-            <span className="truncate">{label}</span>
-          )}
-        </SmallButton>
+        trigger ?? (
+          <SmallButton
+            icon={<ChevronDownSmall />}
+            className="max-w-[160px]"
+            {...(analytics
+              ? debateSurfaceAnalyticsAttributes(analytics.surface, `${analytics.name} filter`, 'filter')
+              : {})}
+          >
+            {labelPending ? (
+              <Skeleton className="h-[1em] w-16" aria-label="Loading space name" />
+            ) : (
+              <span className="truncate">{label}</span>
+            )}
+          </SmallButton>
+        )
       }
     >
       <>
@@ -476,11 +488,13 @@ export function HubMultiFilterMenu<T extends string>({
           <div
             role="status"
             aria-live="polite"
-            className={searching && visibleOptions.length === 0 ? 'px-3 py-2.5' : undefined}
+            className={
+              visibleOptions.length === 0 && (searching ? searchEmptyLabel : emptyLabel) ? 'px-3 py-2.5' : undefined
+            }
           >
-            {searching && visibleOptions.length === 0 ? (
+            {visibleOptions.length === 0 && (searching ? searchEmptyLabel : emptyLabel) ? (
               <Text variant="footnote" className="text-grey-04!">
-                {searchEmptyLabel}
+                {searching ? searchEmptyLabel : emptyLabel}
               </Text>
             ) : null}
           </div>

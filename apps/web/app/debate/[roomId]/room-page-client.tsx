@@ -4,12 +4,21 @@ import * as React from 'react';
 
 import cx from 'classnames';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 import { toSignIn } from '~/core/auth/sign-in-deep-link';
 import { GeoChatRequestError } from '~/core/debates/api';
+import type { DebateRoomView } from '~/core/debates/api';
+import { toDebatesPanel } from '~/core/debates/debates-panel-deep-link';
 import { useGeoChatAuth } from '~/core/debates/hooks';
-import { DebateLobbyPage, LobbiesUnavailable } from '~/core/debates/lobbies/lobby-page';
+import { LOBBY_LINK_VIA } from '~/core/debates/lobbies/lobby-analytics';
+import { useDebateLobbyGuestView } from '~/core/debates/lobbies/lobby-guest-hooks';
+import { DebateLobbyPage } from '~/core/debates/lobbies/lobby-page';
+import {
+  type DebateAnalyticsAttributes,
+  debateActionAnalyticsAttributes,
+} from '~/core/debates/matchmaking/hub-analytics';
+import { useGeoChatUserSummaries } from '~/core/debates/matchmaking/use-geo-chat-user-summaries';
 import {
   useDebateRoom,
   useDebateRoomPresence,
@@ -23,9 +32,12 @@ import {
   toRoomAccess,
 } from '~/core/debates/rooms/room-access-deep-link';
 import { DebateRoomProvider } from '~/core/debates/rooms/room-context';
-import { ROOM_NOT_YET_OPEN, ROOM_NO_ACCESS } from '~/core/debates/rooms/room-copy';
+import { ROOM_CANT_MAKE_IT, ROOM_NOT_YET_OPEN, ROOM_NO_ACCESS } from '~/core/debates/rooms/room-copy';
+import { opponentName } from '~/core/debates/rooms/room-opponent';
+import { noticeFrom, sameId } from '~/core/debates/rooms/room-presence';
 import { debateRoomPath } from '~/core/debates/rooms/room-routes';
-import { useFeatureFlag } from '~/core/state/feature-flags';
+import { useCurrentGeoChatUserId } from '~/core/debates/use-current-geo-chat-user-id';
+import { useSpaceCallRedirect } from '~/core/space-calls/space-call-page';
 import { NavUtils } from '~/core/utils/utils';
 
 import { Spinner } from '~/design-system/spinner';
@@ -39,24 +51,29 @@ import { DebateRematchPageClient } from '../../space/[id]/(space)/debates/rematc
  */
 export function DebateRoomPageClient({ roomId }: { roomId: string }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const roomQuery = useDebateRoom(roomId);
   const room = roomQuery.data ?? null;
   // A lobby answers `not_a_participant` here, so it is never a denial.
   const isLobby = room?.kind === 'lobby';
-  const lobbyJoining = useFeatureFlag('lobbyJoining');
 
   // Refusals arrive in the body, not the status: a stranger gets a 200 saying `not_a_participant`.
   // Only a room that does not exist is an HTTP error.
   // Read the body's own verdict first, and consult the transport only when there is no room to go
   // on. React Query keeps the last payload through a failed refetch, and `retry: false` means one
   // 404 on one 3s poll would otherwise redirect everyone currently sitting in the room.
-  const denial = isLobby
-    ? null
-    : room
-      ? roomAccessDenialFor(room.access)
-      : roomQuery.error instanceof GeoChatRequestError
-        ? roomAccessDenialForStatus(roomQuery.error.status)
-        : null;
+  // GEO-3427: the other debater said they can't make it, which is what closed the room. The person
+  // waiting in it is told that here, with what they wrote, rather than sent to a generic "closed".
+  const withdrawal = withdrawalOf(room);
+
+  const denial =
+    isLobby || withdrawal
+      ? null
+      : room
+        ? roomAccessDenialFor(room.access)
+        : roomQuery.error instanceof GeoChatRequestError
+          ? roomAccessDenialForStatus(roomQuery.error.status)
+          : null;
 
   React.useEffect(() => {
     if (!denial) return;
@@ -65,9 +82,16 @@ export function DebateRoomPageClient({ roomId }: { roomId: string }) {
   }, [denial, router]);
 
   const admitted = room?.access.status === 'admitted';
-  const { rejoin } = useRoomPresence(roomId, admitted);
+  const { rejoin } = useRoomPresence(roomId, admitted, room?.starts_at ?? null);
   const presence = useDebateRoomPresence(room);
   const { ready, authenticated } = useGeoChatAuth();
+  // Signed out, the room's kind is unknown; the guest view answers for a lobby (GEO-3129), and is
+  // kept through sign-in so the lobby page stays mounted until the member read says the same.
+  const signedOut = ready && !authenticated;
+  const guestView = useDebateLobbyGuestView(roomId, { enabled: signedOut });
+  const knownLobby = isLobby || guestView.data !== undefined;
+  // A space call (GEO-3419) answers as a lobby; it has its own page under its space.
+  const toCall = useSpaceCallRedirect(roomId, knownLobby);
 
   // A room whose debate is over would otherwise mount the picker, flash its claims and redirect
   // into the finished debate. Decided on the debate's own status: a session converts on acceptance,
@@ -88,19 +112,31 @@ export function DebateRoomPageClient({ roomId }: { roomId: string }) {
   // valid, they are just not in this one.
   if (denial) return null;
 
+  if (withdrawal) return <RoomWithdrawn {...withdrawal} />;
+
+  // GEO-3131. A lobby's room view is only its kind; the lobby page reads the rest, signed out too.
+  // A lobby link opens for everyone, including a brand-new account (GEO-3270).
+  if (toCall) return null;
+  if (knownLobby) return <DebateLobbyPage key={roomId} lobbyId={roomId} />;
+
   // A room link is pasted into a calendar invite, so the person opening it is often signed out.
   // The room cannot say who they are, and an error card is a dead end.
-  if (ready && !authenticated) {
+  if (signedOut) {
+    if (guestView.isPending && guestView.fetchStatus !== 'idle') {
+      return <RoomNotice busy>Opening…</RoomNotice>;
+    }
+    const lobbyLink = searchParams?.get('via') === LOBBY_LINK_VIA;
     return (
-      <RoomNotice action={{ href: toSignIn({ pathname: debateRoomPath(roomId), via: 'room' }), label: 'Sign in' }}>
-        Sign in to join your debate.
+      <RoomNotice
+        action={{
+          href: toSignIn({ pathname: debateRoomPath(roomId), via: lobbyLink ? LOBBY_LINK_VIA : 'room' }),
+          label: 'Sign in',
+          analytics: debateActionAnalyticsAttributes('room', 'Notice sign in'),
+        }}
+      >
+        {lobbyLink ? 'Sign in to join the lobby.' : 'Sign in to join your debate.'}
       </RoomNotice>
     );
-  }
-
-  // GEO-3131. A lobby's room view is only its kind; the lobby page reads the rest.
-  if (isLobby) {
-    return lobbyJoining ? <DebateLobbyPage key={roomId} lobbyId={roomId} /> : <LobbiesUnavailable />;
   }
 
   if (!room) {
@@ -115,7 +151,14 @@ export function DebateRoomPageClient({ roomId }: { roomId: string }) {
   // rather than bouncing someone who is merely early.
   if (room.access.status === 'not_yet_open') {
     return (
-      <RoomNotice action={{ href: NavUtils.toExplore(), label: ROOM_NOT_YET_OPEN.explore }} stacked>
+      <RoomNotice
+        action={{
+          href: NavUtils.toExplore(),
+          label: ROOM_NOT_YET_OPEN.explore,
+          analytics: debateActionAnalyticsAttributes('room', 'Notice not yet open explore'),
+        }}
+        stacked
+      >
         {ROOM_NOT_YET_OPEN.message(formatTime(room.access.opens_at), leadMinutes(room.starts_at, room.access.opens_at))}
       </RoomNotice>
     );
@@ -129,14 +172,93 @@ export function DebateRoomPageClient({ roomId }: { roomId: string }) {
 
   if (debateFinished) {
     return (
-      <RoomNotice action={{ href: NavUtils.toExplore(), label: 'Find a debate' }}>{ROOM_NO_ACCESS.ended}</RoomNotice>
+      <RoomNotice
+        action={{
+          href: NavUtils.toExplore(),
+          label: 'Find a debate',
+          analytics: debateActionAnalyticsAttributes('room', 'Notice find a debate'),
+        }}
+      >
+        {ROOM_NO_ACCESS.ended}
+      </RoomNotice>
     );
   }
 
   return (
-    <DebateRoomProvider roomId={roomId} presence={presence} rejoin={rejoin}>
+    <DebateRoomProvider roomId={roomId} presence={presence} rejoin={rejoin} room={room}>
       <DebateRematchPageClient sessionId={room.rematch_session_id} />
     </DebateRoomProvider>
+  );
+}
+
+/**
+ * Why this room closed, when that is news to say in it (GEO-3427): a debater's Can't make it, which
+ * closes it `cancelled` or `rescheduled`, or any move to a new time, which is not "finished" though
+ * the room is gone. `null` for every other room, which gets the ordinary closed page.
+ */
+function withdrawalOf(room: DebateRoomView | null) {
+  if (room?.access.status !== 'closed') return null;
+  const { reason } = room.access;
+  if (reason === 'rescheduled') return { reason, room };
+  if (reason !== 'cancelled') return null;
+  return (room.notices ?? []).some(notice => notice.kind === 'cant_make_it') ? { reason, room } : null;
+}
+
+/** What the person left in the room is told, naming the one who withdrew and what they wrote. */
+function RoomWithdrawn({ reason, room }: { reason: 'cancelled' | 'rescheduled'; room: DebateRoomView }) {
+  const router = useRouter();
+  const viewerId = useCurrentGeoChatUserId();
+  const otherId = viewerId ? (room.participants.find(userId => !sameId(userId, viewerId)) ?? null) : null;
+  // The other debater's. Someone reading the room they called off themselves, from a second tab
+  // say, gets the ordinary closed-room page.
+  const notice = noticeFrom(room.notices, otherId, 'cant_make_it');
+  const ids = React.useMemo(() => (notice ? [notice.user_id] : []), [notice]);
+  const person = useGeoChatUserSummaries(ids, notice !== null)[0] ?? null;
+  const rescheduled = reason === 'rescheduled';
+  // Called off by the viewer themselves, from a second tab say: the ordinary closed page. A move
+  // without a Can't make it is said to both of them below instead.
+  const own = viewerId !== null && notice === null && !rescheduled;
+
+  React.useEffect(() => {
+    if (!own) return;
+    const denial = roomAccessDenialFor(room.access);
+    if (denial) router.replace(toRoomAccess(denial));
+  }, [room.access, own, router]);
+
+  if (viewerId === null) return <RoomNotice busy>Opening your debate room…</RoomNotice>;
+  const seeNewTime = {
+    href: toDebatesPanel({ tab: 'requests' }),
+    label: ROOM_CANT_MAKE_IT.seeNewTime,
+    analytics: debateActionAnalyticsAttributes('room', 'Notice see the new time'),
+  };
+  if (!notice) {
+    return own ? null : (
+      <RoomNotice stacked action={seeNewTime}>
+        {ROOM_CANT_MAKE_IT.moved}
+      </RoomNotice>
+    );
+  }
+  const name = opponentName(person);
+  return (
+    <RoomNotice
+      stacked
+      action={
+        rescheduled
+          ? seeNewTime
+          : {
+              href: toDebatesPanel({ tab: 'people' }),
+              label: ROOM_CANT_MAKE_IT.findSomeone,
+              analytics: debateActionAnalyticsAttributes('room', 'Notice find someone else'),
+            }
+      }
+    >
+      {rescheduled ? ROOM_CANT_MAKE_IT.rescheduled(name) : ROOM_CANT_MAKE_IT.cancelled(name)}
+      {notice.note && (
+        <>
+          <br />“{notice.note}”
+        </>
+      )}
+    </RoomNotice>
   );
 }
 
@@ -170,7 +292,8 @@ function RoomNotice({
 }: {
   children: React.ReactNode;
   busy?: boolean;
-  action?: { href: string; label: string };
+  /** `analytics` names the click, since a link's text never reaches the warehouse. */
+  action?: { href: string; label: string; analytics: DebateAnalyticsAttributes };
   /** Puts the action under the message rather than beside it, for a message long enough to wrap. */
   stacked?: boolean;
 }) {
@@ -185,7 +308,11 @@ function RoomNotice({
         {busy && <Spinner />}
         <Text color="grey-04">{children}</Text>
         {action && (
-          <Link href={action.href} className="shrink-0 rounded-full bg-text px-3 py-1.5 text-metadata text-white">
+          <Link
+            href={action.href}
+            {...action.analytics}
+            className="shrink-0 rounded-full bg-text px-3 py-1.5 text-metadata text-white"
+          >
             {action.label}
           </Link>
         )}
