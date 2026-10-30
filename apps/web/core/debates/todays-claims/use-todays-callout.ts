@@ -41,7 +41,8 @@ const NO_IDS: string[] = [];
  * `CALLOUT_MAX_CLAIMS` of today's agenda claims the viewer has not answered, highest-ranked first
  * and varied by topic and space (`pickCalloutClaims`). It is stored per account with the agenda
  * day, so the panel and the hub walk the same set, and a newer agenda day starts a new one — which
- * is also what brings a dismissed callout back.
+ * is also what brings a dismissed callout back. Once nothing is left to ask, the end card stays
+ * until dismissed or until the surface closes, and isn't shown again that day.
  *
  * Signed out there is nothing: the reads are all held back.
  */
@@ -169,6 +170,19 @@ export function useTodaysCallout() {
   );
   const dismiss = React.useCallback(() => update(() => ({ dismissed: true })), [update]);
 
+  // The end card is the visit's that reached it: it stays while the panel (or the hub) stays open,
+  // and the next time either opens it is gone until the next agenda day. Each mount notes whether
+  // the day had already ended when it first saw it; reaching the end here marks the day ended.
+  const finished = step !== null && step.current === null;
+  const arrival = React.useRef<{ day: string; ended: boolean } | null>(null);
+  if (current && arrival.current?.day !== current.day) {
+    arrival.current = { day: current.day, ended: current.ended === true };
+  }
+  const endedBeforeThisVisit = arrival.current?.day === current?.day && arrival.current?.ended === true;
+  React.useEffect(() => {
+    if (finished && !current?.ended) update(() => ({ ended: true }));
+  }, [current?.ended, finished, update]);
+
   // The set's claims, from the agendas' own lookup where it has them; only the ones it lacks — a set
   // taken from an agenda that has changed since — are asked for again.
   const agendaEntities = agendasQuery.claimEntities;
@@ -186,7 +200,9 @@ export function useTodaysCallout() {
     [agendaEntities, fetched.entities]
   );
 
-  const visible = Boolean(current && step && !current.dismissed && current.claims.length > 0);
+  const visible = Boolean(
+    current && step && !current.dismissed && current.claims.length > 0 && !(finished && endedBeforeThisVisit)
+  );
 
   return {
     visible,

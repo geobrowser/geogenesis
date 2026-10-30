@@ -37,7 +37,8 @@ type Props = {
  * GEO-3498. The daily Today's claims callout: one claim at a time from the day's set, on the
  * standard claim card, with Skip and the set's progress. Once nothing is left to ask it offers
  * Matches, and says the viewer is set for today only when every claim was answered rather than
- * skipped. Dismissing it hides it until the next agenda day.
+ * skipped. Dismissing it hides it until the next agenda day, and so does closing the surface once
+ * the end card is up (`useTodaysCallout`).
  *
  * Draw it only while `callout.visible`.
  */

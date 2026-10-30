@@ -39,6 +39,11 @@ export type CalloutDay = {
   answered: string[];
   skipped: string[];
   dismissed: boolean;
+  /**
+   * Whether the end card has been shown: nothing was left to ask. It stays for the visit it was
+   * reached in, and is gone the next time the panel or the hub opens (Preston, 30 Oct).
+   */
+  ended?: boolean;
 };
 
 /**

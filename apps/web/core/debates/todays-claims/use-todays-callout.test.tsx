@@ -282,6 +282,42 @@ describe('useTodaysCallout', () => {
     expect(result.current.claims.map(claim => claim.claimId)).toEqual(['n']);
   });
 
+  // Preston, 30 Oct: the end card stays while the panel is open, and is gone once it reopens.
+  it('keeps the end card for the visit that reached it, then not again that day', () => {
+    const first = renderHook(() => useTodaysCallout(), { wrapper });
+    for (const claimId of ['c', 'a', 'b', 'x']) act(() => first.result.current.markAnswered(claimId));
+    expect(first.result.current.step?.current?.claimId).toBe('y');
+    expect(storedFor('acct1')?.ended).toBeUndefined();
+
+    act(() => first.result.current.skip('y'));
+    expect(first.result.current.step?.current).toBeNull();
+    expect(first.result.current.visible).toBe(true);
+    expect(storedFor('acct1')).toMatchObject({ ended: true, dismissed: false });
+    first.rerender();
+    expect(first.result.current.visible).toBe(true);
+
+    // The panel closes and opens again.
+    first.unmount();
+    const reopened = renderHook(() => useTodaysCallout(), { wrapper });
+    expect(reopened.result.current.visible).toBe(false);
+
+    // The next agenda day asks again.
+    mocks.agendas = agendasFor('2026-10-30', { member: ['n'] });
+    reopened.rerender();
+    expect(reopened.result.current.visible).toBe(true);
+    expect(reopened.result.current.claims.map(claim => claim.claimId)).toEqual(['n']);
+  });
+
+  it('still asks on reopening while claims are left', () => {
+    const first = renderHook(() => useTodaysCallout(), { wrapper });
+    act(() => first.result.current.markAnswered('c'));
+    first.unmount();
+
+    const reopened = renderHook(() => useTodaysCallout(), { wrapper });
+    expect(reopened.result.current.visible).toBe(true);
+    expect(reopened.result.current.step?.current?.claimId).toBe('b');
+  });
+
   // Review: one browser, two accounts, the same day.
   it('keeps each account’s day apart on the same browser', () => {
     const { result, rerender } = renderHook(() => useTodaysCallout(), { wrapper });
