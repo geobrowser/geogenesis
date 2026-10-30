@@ -230,11 +230,14 @@ export function useDebateAgendas(enabled = true): {
   /** True until the agendas and their claims have settled; empty agendas mean "none" only after. */
   isLoading: boolean;
   error: unknown;
+  /** Asks for the agendas again, for a Try again after they failed. */
+  refetch: () => void;
 } {
   const {
     data: rows = NO_ROWS,
     isLoading: agendasLoading,
     error: agendasError,
+    refetch: refetchAgendas,
   } = useQuery({
     queryKey: debateQueryKeys.todaysAgendas(),
     queryFn: ({ signal }) => fetchCurrentDebateAgendas(signal),
@@ -273,6 +276,7 @@ export function useDebateAgendas(enabled = true): {
   );
 
   const isLoading = enabled && (agendasLoading || (itemIds.length > 0 && claimsLoading));
+  const refetch = React.useCallback(() => void refetchAgendas(), [refetchAgendas]);
 
   return React.useMemo(
     () => ({
@@ -282,8 +286,9 @@ export function useDebateAgendas(enabled = true): {
       claimEntities,
       isLoading,
       error: agendasError ?? claimsError ?? null,
+      refetch,
     }),
-    [agendasError, agendasIn, claimEntities, claimIds, claimsError, enabled, isLoading, spaceIds]
+    [agendasError, agendasIn, claimEntities, claimIds, claimsError, enabled, isLoading, refetch, spaceIds]
   );
 }
 

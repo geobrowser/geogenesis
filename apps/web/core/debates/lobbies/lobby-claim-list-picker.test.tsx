@@ -235,5 +235,17 @@ describe('ClaimListPickerContent', () => {
       fireEvent.change(screen.getByRole('textbox', { name: 'Search claim lists' }), { target: { value: 'today' } });
       expect(screen.getByRole('button', { name: /Today’s claims/ })).toBeTruthy();
     });
+
+    it('stays addable while the page catalog is still loading or has failed', () => {
+      mocks.todays.sections = [todaysSection(CURATORS, 3)];
+      mocks.catalog = { data: undefined, isLoading: false, error: new Error('timeout'), refetch: vi.fn() };
+      render(<ClaimListPickerContent lobbyId="lobby-1" lists={[]} onAdded={vi.fn()} />);
+
+      fireEvent.click(screen.getByRole('button', { name: /Today’s claims/ }));
+      expect(mocks.mutate).toHaveBeenCalledWith(
+        { entityId: TODAYS_CLAIMS_LIST_ID, spaceId: TODAYS_CLAIMS_LIST_ID },
+        expect.anything()
+      );
+    });
   });
 });

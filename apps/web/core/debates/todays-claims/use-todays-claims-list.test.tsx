@@ -45,6 +45,7 @@ vi.mock('./debate-agendas', async importOriginal => {
       claimEntities: [...CLAIMS, OTHER].map(entity),
       isLoading: mocks.agendasLoading,
       error: null,
+      refetch: () => {},
     }),
   };
 });
@@ -89,6 +90,17 @@ describe('useTodaysClaimsList', () => {
     rerender();
     expect(result.current.isLoading).toBe(false);
     expect(claimIdsOf(result.current.sections)).toEqual([CLAIMS[1], CLAIMS[0]]);
+  });
+
+  it('keeps the order it settled on when the counts refetch in the background', () => {
+    mocks.counts = { byClaimId: new Map(), isLoading: false, error: null };
+    const { result, rerender } = renderHook(() => useTodaysClaimsList());
+    expect(claimIdsOf(result.current.sections)).toEqual(CLAIMS);
+
+    // A debate finished on the first claim; a reconnect refetched the counts.
+    mocks.counts = { byClaimId: new Map([[CLAIMS[0]!, 1]]), isLoading: false, error: null };
+    rerender();
+    expect(claimIdsOf(result.current.sections)).toEqual(CLAIMS);
   });
 
   it('settles in agenda order for a signed-out guest, who gets no counts', () => {

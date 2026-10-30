@@ -15,7 +15,9 @@ const mocks = vi.hoisted(() => ({
     newestDay: '2026-10-30' as string | null,
     isLoading: false,
     error: null as Error | null,
+    refetch: vi.fn(),
   },
+  rowGroups: [] as unknown[],
   listArgs: undefined as unknown,
   recorded: [] as unknown[][],
   surfaces: [] as { listId: string; position: number; scope: unknown }[],
@@ -60,7 +62,10 @@ vi.mock('../debate-claim-card-surface', () => ({
 }));
 vi.mock('../hooks', () => ({
   useGeoChatAuth: () => ({ authenticated: true, accountKey: 'acct' }),
-  useDebateClaimsBySpaces: () => ({ claims: [], unresolvedSpaceIds: new Set() }),
+  useDebateClaimsBySpaces: (groups: unknown) => {
+    mocks.rowGroups.push(groups);
+    return { claims: [], unresolvedSpaceIds: new Set() };
+  },
 }));
 vi.mock('~/core/hooks/use-space-labels', () => ({
   useSpaceLabels: () => ({ labelsById: new Map(), isLoading: false }),
@@ -128,7 +133,8 @@ const lobby = {
 
 afterEach(() => {
   cleanup();
-  mocks.list = { sections: [], newestDay: '2026-10-30', isLoading: false, error: null };
+  mocks.list = { sections: [], newestDay: '2026-10-30', isLoading: false, error: null, refetch: vi.fn() };
+  mocks.rowGroups = [];
   mocks.recorded = [];
   mocks.surfaces = [];
 });
@@ -204,5 +210,22 @@ describe('LobbyTodaysClaimsTab', () => {
   it('says when no agenda lists anything yet', async () => {
     render(<LobbyTodaysClaimsTab lobby={lobby} />);
     expect(await screen.findByText('No agendas today yet.')).toBeTruthy();
+  });
+
+  it('asks geo-chat for every listed claim once, whatever the pills narrow', () => {
+    mocks.list.sections = sections;
+    render(<LobbyTodaysClaimsTab lobby={lobby} />);
+    const before = JSON.stringify(mocks.rowGroups.at(-1));
+
+    fireEvent.click(screen.getByRole('button', { name: 'AI 2' }));
+    expect(screen.getAllByRole('article')).toHaveLength(2);
+    expect(JSON.stringify(mocks.rowGroups.at(-1))).toBe(before);
+  });
+
+  it('offers Try again when the agendas fail', async () => {
+    mocks.list.error = new Error('statement timeout');
+    render(<LobbyTodaysClaimsTab lobby={lobby} />);
+    fireEvent.click(await screen.findByRole('button', { name: /Try again/ }));
+    expect(mocks.list.refetch).toHaveBeenCalled();
   });
 });

@@ -32,7 +32,7 @@ const LIST_ID = 'todays_claims_lobby';
  * collapsible sections, each holding the cards the lobby's other lists draw.
  */
 export function LobbyTodaysClaimsTab({ lobby }: { lobby: LobbyPageView }) {
-  const { sections, newestDay, isLoading, error } = useTodaysClaimsList({
+  const { sections, newestDay, isLoading, error, refetch } = useTodaysClaimsList({
     leadSpaceId: lobby.call?.space_id ?? null,
   });
   const [spaceIds, setSpaceIds] = React.useState<string[]>([]);
@@ -100,12 +100,14 @@ export function LobbyTodaysClaimsTab({ lobby }: { lobby: LobbyPageView }) {
         analyticsSurface="hub"
         isLoading={isLoading}
         error={sections.length === 0 ? error : null}
+        onRetry={refetch}
         isEmpty={visibleSections.length === 0}
         emptyMessage={filtered ? TODAYS_CLAIMS_TAB_COPY.noMatch : TODAYS_CLAIMS_TAB_COPY.empty}
       >
         <TodaysSections
           lobby={lobby}
-          sections={visibleSections}
+          sections={sections}
+          passes={passes}
           isOpen={sectionsOpen.isOpen}
           onToggle={(section, open) => {
             sectionsOpen.setOpen(section.key, open);
@@ -117,43 +119,57 @@ export function LobbyTodaysClaimsTab({ lobby }: { lobby: LobbyPageView }) {
   );
 }
 
-type VisibleSection = ReturnType<typeof useTodaysClaimsList>['sections'][number];
+type TodaysSection = ReturnType<typeof useTodaysClaimsList>['sections'][number];
 
+/**
+ * The sections' cards, under the pills. The cards are built over every listed claim and the pills
+ * only choose which are drawn: built from the narrowed list, each pick re-asked geo-chat for the
+ * rows behind them, and the cards lost their sides until it answered.
+ */
 function TodaysSections({
   lobby,
   sections,
+  passes,
   isOpen,
   onToggle,
 }: {
   lobby: LobbyPageView;
-  sections: VisibleSection[];
+  sections: TodaysSection[];
+  passes: (claim: TodaysListClaim) => boolean;
   isOpen: (sectionKey: string, defaultOpen: boolean) => boolean;
-  onToggle: (section: VisibleSection, open: boolean) => void;
+  onToggle: (section: TodaysSection, open: boolean) => void;
 }) {
   const { entriesBySection, renderCard } = useLobbyListCards(lobby, sections);
-  // GEO-3495. Where each section starts in the list's numbering.
-  const sectionOffsets = sectionStartOffsets(sections.map(section => section.claims.length));
+  const drawn = sections.flatMap((section, index) => {
+    const cards = section.claims.flatMap((claim, position) => {
+      const entry = entriesBySection[index]?.[position];
+      return entry && passes(claim) ? [{ claim, entry }] : [];
+    });
+    return cards.length > 0 ? [{ section, cards }] : [];
+  });
+  // GEO-3495. Where each drawn section starts in the list's numbering.
+  const sectionOffsets = sectionStartOffsets(drawn.map(({ cards }) => cards.length));
 
   return (
     <div className="flex flex-col gap-4">
-      {sections.map((section, index) => (
+      {drawn.map(({ section, cards }, index) => (
         <CollapsibleClaimSection
           key={section.key}
           name={section.name}
-          count={section.claims.length}
+          count={cards.length}
           open={isOpen(section.key, true)}
           onToggle={open => onToggle(section, open)}
           // Not the section's name, which an agenda's editor wrote.
           analytics={debateActionAnalyticsAttributes('hub', 'Lobby Today’s claims section toggle')}
         >
           <HubCardList>
-            {(entriesBySection[index] ?? []).map((entry, position) => (
+            {cards.map(({ claim, entry }, position) => (
               <DebateClaimCardSurface
                 key={claimRowKey(entry)}
                 claimId={entry.claim.claim_entity_id}
                 listId={LIST_ID}
                 position={sectionOffsets[index] + position + 1}
-                scope={section.claims[position]!.scope}
+                scope={claim.scope}
               >
                 {renderCard(entry)}
               </DebateClaimCardSurface>

@@ -134,6 +134,7 @@ const CATALOG_SOURCE = /* GraphQL */ `
     $tagPropertyId: UUID!
     $tagId: UUID!
     $claimTypeId: UUID!
+    $agendaTypeId: UUID!
     $blocksTypeId: UUID!
     $itemTypeId: UUID!
     $relationsLimit: Int!
@@ -146,7 +147,11 @@ const CATALOG_SOURCE = /* GraphQL */ `
       filter: {
         typeId: { is: $tagPropertyId }
         toEntityId: { is: $tagId }
-        fromEntity: { not: { typeIds: { anyEqualTo: $claimTypeId } } }
+        # Not claims, and not daily agendas: Today's claims stands for those (GEO-3491). In the query,
+        # so a day's agendas never use up the catalog's pages.
+        fromEntity: {
+          and: [{ not: { typeIds: { anyEqualTo: $claimTypeId } } }, { not: { typeIds: { anyEqualTo: $agendaTypeId } } }]
+        }
       }
     ) {
       pageInfo {
@@ -158,7 +163,6 @@ const CATALOG_SOURCE = /* GraphQL */ `
         fromEntity {
           id
           name
-          typeIds
           # Unscoped, because the space differs per node; each row is matched to its tag's space below.
           blocks: relationsList(first: $relationsLimit, filter: { typeId: { is: $blocksTypeId } }) {
             spaceId
@@ -189,7 +193,6 @@ type CatalogQuery = {
       fromEntity: {
         id: string;
         name: string | null;
-        typeIds?: string[] | null;
         blocks: Array<{
           spaceId: string;
           toEntity: {
@@ -231,8 +234,6 @@ export function catalogOptions(data: CatalogQuery): ClaimListOption[] {
   return (data.relationsConnection?.nodes ?? []).flatMap(node => {
     const page = node?.fromEntity;
     if (!node || !page) return [];
-    // A daily agenda is offered as Today's claims, which follows the newest one (GEO-3491).
-    if ((page.typeIds ?? []).some(typeId => uuidToHex(typeId) === DEBATE_AGENDA_TYPE_ID)) return [];
     const spaceId = uuidToHex(node.spaceId);
     const themes = (page.blocks ?? [])
       .filter(block => uuidToHex(block.spaceId) === spaceId)
@@ -315,6 +316,7 @@ async function fetchClaimListCatalog(signal?: AbortSignal): Promise<ClaimListCat
           tagPropertyId: TAG_PROPERTY_ID,
           tagId: DEBATE_TAG_ID,
           claimTypeId: CLAIM_TYPE_ID,
+          agendaTypeId: DEBATE_AGENDA_TYPE_ID,
           blocksTypeId: SystemIds.BLOCKS,
           itemTypeId: SystemIds.COLLECTION_ITEM_RELATION_TYPE,
           relationsLimit: RELATIONS_LIMIT,

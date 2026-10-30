@@ -245,6 +245,20 @@ export function ClaimListPicker({
         }}
       />
       <div {...{ [SCROLL_ATTRIBUTE]: '' }} className="-mx-3 max-h-[min(420px,55vh)] overflow-y-auto px-3">
+        {/* Outside the catalog's states: the agendas load on their own, so a slow or failed catalog
+            does not keep Today's claims from being added. */}
+        {todays.shown ? (
+          <div className="mb-2">
+            <TodaysClaimsRow
+              counts={todays.counts}
+              isAdded={added.has(TODAYS_CLAIMS_LIST_ID)}
+              isPicking={pickingId === TODAYS_CLAIMS_LIST_ID}
+              disabled={disabled}
+              analyticsLabel={analyticsLabel}
+              onPick={onPick}
+            />
+          </div>
+        ) : null}
         <HubQueryState
           analyticsSurface="hub"
           isLoading={catalog.isLoading}
@@ -254,16 +268,6 @@ export function ClaimListPicker({
           emptyMessage={query.trim() ? CLAIM_LIST_PICKER_COPY.noMatch(query.trim()) : CLAIM_LIST_PICKER_COPY.none}
         >
           <div className="flex flex-col gap-2">
-            {todays.shown ? (
-              <TodaysClaimsRow
-                counts={todays.counts}
-                isAdded={added.has(TODAYS_CLAIMS_LIST_ID)}
-                isPicking={pickingId === TODAYS_CLAIMS_LIST_ID}
-                disabled={disabled}
-                analyticsLabel={analyticsLabel}
-                onPick={onPick}
-              />
-            ) : null}
             {visible.map(group => (
               <SpaceGroup
                 key={group.spaceId}
