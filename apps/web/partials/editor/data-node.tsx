@@ -8,9 +8,10 @@ import { ErrorBoundary } from 'react-error-boundary';
 import { DataBlockProvider } from '~/core/blocks/data/use-data-block';
 import { useNearViewport } from '~/core/hooks/use-near-viewport';
 import { useEditorInstance } from '~/core/state/editor/editor-provider';
-import { useEditorStoreLite } from '~/core/state/editor/use-editor-blocks';
+import { useDataBlockPlaceholderSizing, useEditorStoreLite } from '~/core/state/editor/use-editor-blocks';
 import { reportBoundaryError } from '~/core/telemetry/logger';
 
+import { DataBlockServerPlaceholder } from '../blocks/table/data-block-loading-placeholder';
 import { TableBlock, TableBlockError } from '../blocks/table/table-block';
 
 export type TableNodeInitialDataSource = 'COLLECTION' | 'QUERY';
@@ -61,6 +62,8 @@ function DataNodeComponent({ node, updateAttributes }: NodeViewProps) {
   const { ref, nearViewport } = useNearViewport();
   const { id } = node.attrs;
 
+  const placeholderSizing = useDataBlockPlaceholderSizing(id);
+
   const { blockRelations } = useEditorStoreLite();
   const relation = blockRelations.find(b => b.block.id === id);
 
@@ -100,8 +103,17 @@ function DataNodeComponent({ node, updateAttributes }: NodeViewProps) {
         contentEditable="false"
         suppressContentEditableWarning={true}
         className="data-node"
-        style={nearViewport ? undefined : { minHeight: UNMOUNTED_BLOCK_MIN_HEIGHT }}
+        style={nearViewport || placeholderSizing ? undefined : { minHeight: UNMOUNTED_BLOCK_MIN_HEIGHT }}
       >
+        {!nearViewport && placeholderSizing && (
+          <div aria-hidden className="pointer-events-none">
+            <DataBlockServerPlaceholder
+              view={placeholderSizing.view}
+              items={placeholderSizing.pageSize}
+              mediaFrame={placeholderSizing.mediaFrame}
+            />
+          </div>
+        )}
         {nearViewport && (
           <ErrorBoundary fallback={<TableBlockError spaceId={spaceId} blockId={id} />} onError={reportBoundaryError}>
             <DataBlockProvider

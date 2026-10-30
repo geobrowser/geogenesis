@@ -7,6 +7,7 @@ import * as React from 'react';
 
 import { useSearchParams } from 'next/navigation';
 
+import type { BlockMediaFrame } from '~/core/hooks/use-block-media-dimensions';
 import { blockMediaFrame } from '~/core/hooks/use-block-media-dimensions';
 import { getRelations, getValues, useRelations, useValues } from '~/core/sync/use-store';
 import { store } from '~/core/sync/use-sync-engine';
@@ -14,7 +15,7 @@ import { getImagePath, getVideoPath, validateEntityId } from '~/core/utils/utils
 
 import type { ServerBlock } from '~/partials/editor/server-content';
 
-import { dataBlockViewFromRelations } from '../../blocks/data/data-block-view';
+import { type DataBlockView, dataBlockViewFromRelations } from '../../blocks/data/data-block-view';
 import { readBlockPageSizeFromValues } from '../../blocks/data/parse-block-page-size';
 import { readBlockMediaDimensions } from '../../blocks/data/read-block-media-dimensions';
 import {
@@ -374,4 +375,20 @@ export function useEditorServerContent() {
   const { blockModels, blockIds } = useEditorBlockModels();
   const serverBlocks = React.useMemo(() => blockModels.map(m => m.server), [blockModels]);
   return { serverBlocks, blockIds };
+}
+
+export type DataBlockPlaceholderSizing = {
+  view: DataBlockView;
+  pageSize?: number;
+  mediaFrame?: BlockMediaFrame;
+};
+
+export function useDataBlockPlaceholderSizing(blockId: string): DataBlockPlaceholderSizing | undefined {
+  const { blockModels, blockIds } = useEditorBlockModels();
+  return React.useMemo(() => {
+    const index = blockIds.indexOf(blockId);
+    const server = index >= 0 ? blockModels[index]?.server : undefined;
+    if (!server || server.type !== 'data') return undefined;
+    return { view: server.view ?? 'TABLE', pageSize: server.pageSize, mediaFrame: server.mediaFrame };
+  }, [blockModels, blockIds, blockId]);
 }
