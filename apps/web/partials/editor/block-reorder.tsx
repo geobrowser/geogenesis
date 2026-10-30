@@ -29,6 +29,7 @@ import { OrderDots } from '~/design-system/icons/order-dots';
 import { Plus } from '~/design-system/icons/plus';
 import { Menu, MenuItem } from '~/design-system/menu';
 
+import { focusEditorAtClick } from './focus-editor-at-click';
 import { ensureUniqueNodeIds } from './id-extension';
 
 type BlockLayout = {
@@ -449,7 +450,11 @@ export function BlockReorder({
       {children}
 
       {enabled && activeChildIndex === null && blockLayout.length > 0 ? (
-        <BlockGutterHoverArea blocks={blockLayout} editorLeft={editorLeft} onClick={() => editor.commands.focus()} />
+        <BlockGutterHoverArea
+          blocks={blockLayout}
+          editorLeft={editorLeft}
+          onClick={event => focusEditorAtClick(editor, event)}
+        />
       ) : null}
 
       {enabled

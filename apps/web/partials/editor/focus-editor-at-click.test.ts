@@ -1,0 +1,165 @@
+import { Node } from '@tiptap/core';
+import Document from '@tiptap/extension-document';
+import Heading from '@tiptap/extension-heading';
+import { BulletList, ListItem } from '@tiptap/extension-list';
+import Paragraph from '@tiptap/extension-paragraph';
+import Text from '@tiptap/extension-text';
+import { TextSelection } from '@tiptap/pm/state';
+import { Editor } from '@tiptap/react';
+
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import { focusEditorAtClick } from './focus-editor-at-click';
+import { TrailingNode } from './trailing-node';
+
+const TableNode = Node.create({
+  name: 'tableNode',
+  group: 'block',
+  atom: true,
+  parseHTML: () => [{ tag: 'table-node' }],
+  renderHTML: () => ['table-node'],
+});
+
+const BOX = { left: 100, right: 500, top: 0, bottom: 300 };
+
+const editors: Editor[] = [];
+
+afterEach(() => {
+  for (const editor of editors.splice(0)) editor.destroy();
+  vi.restoreAllMocks();
+});
+
+type Block = string | 'table' | 'heading' | 'bullet';
+
+function nodeFor(block: Block) {
+  if (block === 'table') return { type: 'tableNode' };
+  if (block === 'heading') return { type: 'heading', attrs: { level: 1 }, content: [{ type: 'text', text: 'H' }] };
+  if (block === 'bullet') {
+    return {
+      type: 'bulletList',
+      content: [{ type: 'listItem', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'L' }] }] }],
+    };
+  }
+  return { type: 'paragraph', content: [{ type: 'text', text: block }] };
+}
+
+function makeEditor(blocks: Block[]) {
+  const editor = new Editor({
+    extensions: [Document, Paragraph, Text, Heading, BulletList, ListItem, TableNode, TrailingNode],
+    content: {
+      type: 'doc',
+      content: blocks.map(nodeFor),
+    },
+  });
+  editors.push(editor);
+  vi.spyOn(editor.view.dom, 'getBoundingClientRect').mockReturnValue({ ...BOX, width: 400, height: 300 } as DOMRect);
+  return editor;
+}
+
+function blocks(editor: Editor) {
+  return Array.from({ length: editor.state.doc.childCount }, (_, index) => {
+    const child = editor.state.doc.child(index);
+    return child.type.name === 'tableNode' ? 'table' : child.textContent;
+  });
+}
+
+describe('focusEditorAtClick', () => {
+  it('puts the caret in a new paragraph below a table that ends the doc', () => {
+    const editor = makeEditor(['A', 'table']);
+    const posAtCoords = vi.spyOn(editor.view, 'posAtCoords');
+
+    focusEditorAtClick(editor, { clientX: 300, clientY: BOX.bottom + 20 });
+    editor.commands.insertContent('x');
+
+    expect(posAtCoords).not.toHaveBeenCalled();
+    expect(blocks(editor)).toEqual(['A', 'table', 'x']);
+  });
+
+  it('puts the caret at the end of a paragraph that ends the doc', () => {
+    const editor = makeEditor(['A', 'B']);
+
+    focusEditorAtClick(editor, { clientX: 300, clientY: BOX.bottom + 20 });
+    editor.commands.insertContent('x');
+
+    expect(blocks(editor)).toEqual(['A', 'Bx']);
+  });
+
+  it('looks up a gutter click at its height just inside the editor', () => {
+    const editor = makeEditor(['A', 'B', 'C']);
+    const insideB = editor.state.doc.child(0).nodeSize + 2;
+    const posAtCoords = vi.spyOn(editor.view, 'posAtCoords').mockReturnValue({ pos: insideB, inside: -1 });
+
+    focusEditorAtClick(editor, { clientX: BOX.left - 40, clientY: 150 });
+    editor.commands.insertContent('x');
+
+    expect(posAtCoords).toHaveBeenCalledWith({ left: BOX.left + 1, top: 150 });
+    expect(blocks(editor)).toEqual(['A', 'Bx', 'C']);
+  });
+
+  it('never selects a table beside the click', () => {
+    const editor = makeEditor(['table', 'A']);
+    vi.spyOn(editor.view, 'posAtCoords').mockReturnValue({ pos: 0, inside: 0 });
+
+    focusEditorAtClick(editor, { clientX: BOX.left - 40, clientY: 20 });
+
+    expect(editor.state.selection).toBeInstanceOf(TextSelection);
+    editor.commands.insertContent('x');
+    expect(blocks(editor)).toEqual(['table', 'xA']);
+  });
+
+  it('falls back to the end when nothing is at the click', () => {
+    const editor = makeEditor(['A', 'B']);
+    vi.spyOn(editor.view, 'posAtCoords').mockReturnValue(null);
+
+    focusEditorAtClick(editor, { clientX: BOX.left - 40, clientY: 150 });
+    editor.commands.insertContent('x');
+
+    expect(blocks(editor)).toEqual(['A', 'Bx']);
+  });
+
+  describe('on a touch device', () => {
+    function makeTouchEditor(blocks: Block[]) {
+      vi.spyOn(navigator, 'platform', 'get').mockReturnValue('iPhone');
+      const editor = makeEditor(blocks);
+      document.body.appendChild(editor.view.dom);
+      return editor;
+    }
+
+    it('puts the caret in a new paragraph below a table that ends the doc', () => {
+      const editor = makeTouchEditor(['A', 'table']);
+
+      focusEditorAtClick(editor, { clientX: 300, clientY: BOX.bottom + 20 });
+      editor.commands.insertContent('x');
+
+      expect(blocks(editor)).toEqual(['A', 'table', 'x']);
+    });
+
+    it('puts the caret beside a block when the doc ends in a table', () => {
+      const editor = makeTouchEditor(['A', 'table']);
+      vi.spyOn(editor.view, 'posAtCoords').mockReturnValue({ pos: 1, inside: -1 });
+
+      focusEditorAtClick(editor, { clientX: BOX.left - 40, clientY: 20 });
+      editor.commands.insertContent('x');
+
+      expect(blocks(editor)).toEqual(['xA', 'table', '']);
+    });
+
+    it('puts the caret in a new paragraph below a heading that ends the doc', () => {
+      const editor = makeTouchEditor(['A', 'heading']);
+
+      focusEditorAtClick(editor, { clientX: 300, clientY: BOX.bottom + 20 });
+      editor.commands.insertContent('x');
+
+      expect(blocks(editor)).toEqual(['A', 'H', 'x']);
+    });
+
+    it('puts the caret in a new paragraph below a bullet list that ends the doc', () => {
+      const editor = makeTouchEditor(['A', 'bullet']);
+
+      focusEditorAtClick(editor, { clientX: 300, clientY: BOX.bottom + 20 });
+      editor.commands.insertContent('x');
+
+      expect(blocks(editor)).toEqual(['A', 'L', 'x']);
+    });
+  });
+});
