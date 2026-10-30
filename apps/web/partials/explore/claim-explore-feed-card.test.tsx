@@ -12,6 +12,7 @@ import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import type { Entity } from '~/core/types';
 
 import { ClaimExploreFeedCard } from './claim-explore-feed-card';
+import { DEBATE_CARD_COLUMN_CLASS_NAME, DEBATE_CARD_COLUMN_STYLE } from './debate-explore-feed-card';
 
 // The readiness backfill refreshes readiness reads through the query client once it lands.
 function render(ui: React.ReactElement) {
@@ -482,7 +483,12 @@ describe('ClaimExploreFeedCard', () => {
     const card = container.querySelector(':scope > article') as HTMLElement;
     expect(card).toHaveClass('claim-card-panel-surface', 'my-2');
     expect(card).not.toHaveClass('border-b', 'py-4');
-    expect(card.className).not.toContain('md:');
+    // As wide as the debate card beside it: the same cap, from the same budget.
+    expect(card).toHaveClass(...DEBATE_CARD_COLUMN_CLASS_NAME.split(' '));
+    expect(card.style.getPropertyValue('--debate-card-column-width')).toBe(
+      (DEBATE_CARD_COLUMN_STYLE as Record<string, string>)['--debate-card-column-width']
+    );
+    expect(card.className).not.toContain('md:claim-card-panel');
     expect(card.firstElementChild).toHaveClass('grid-cols-1');
     expect(card.firstElementChild?.className).not.toContain('220px');
 
@@ -536,6 +542,7 @@ describe('ClaimExploreFeedCard', () => {
     const card = container.querySelector(':scope > article') as HTMLElement;
     expect(card).toHaveClass('border-b', 'py-4');
     expect(card).not.toHaveClass('claim-card-panel-surface');
+    expect(card.style.getPropertyValue('--debate-card-column-width')).toBe('');
     expect(screen.getByText('Claim')).toBeInTheDocument();
   });
 

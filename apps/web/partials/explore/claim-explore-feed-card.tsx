@@ -27,6 +27,7 @@ import { Text } from '~/design-system/text';
 
 import { ENTITY_COMMENTS_ANCHOR_ID } from '~/partials/comments/entity-comments-anchor';
 
+import { DEBATE_CARD_COLUMN_CLASS_NAME, DEBATE_CARD_COLUMN_STYLE } from './debate-explore-feed-card';
 import { ExploreCardEntityLink } from './explore-card-entity-link';
 import { EXPLORE_CARD_PANEL_TITLE_CLASS_NAME, EXPLORE_CARD_TITLE_CLASS_NAME } from './explore-card-title';
 import { ExploreCommentsIcon } from './explore-comments-icon';
@@ -220,12 +221,18 @@ export function ClaimExploreFeedCard({
     // direct-child rule that a wrapper silently breaks, and `last:` is only meaningful on an
     // element that is actually a sibling of the other cards — inside a wrapper every card is an
     // only child, so `:last-child` matches all of them.
+    //
+    // The panel card takes the debate card's column width, so a claim and a debate in one feed are
+    // the same width.
     <ActionSurfaceArticle
       ref={setContainer}
       className={cx(
         '@container flex flex-col gap-4',
-        matchesDebatePanel ? 'my-2 claim-card-panel-surface' : 'border-b border-divider py-4 last:border-b-0'
+        matchesDebatePanel
+          ? ['my-2 claim-card-panel-surface', DEBATE_CARD_COLUMN_CLASS_NAME]
+          : 'border-b border-divider py-4 last:border-b-0'
       )}
+      style={matchesDebatePanel ? DEBATE_CARD_COLUMN_STYLE : undefined}
     >
       {/*
         Two zones, divided by a rule that runs the whole height: everything you can *do* to the claim

@@ -80,9 +80,18 @@ const DEACTIVATE_RATIO = 0.4;
  */
 const DEBATE_CARD_COLUMN_BUDGET = debateCardColumnWidth('83dvh - 228px', DEBATE_CARD_WRAPS_BELOW);
 
-const DEBATE_CARD_COLUMN_STYLE = {
+export const DEBATE_CARD_COLUMN_STYLE = {
   '--debate-card-column-width': `clamp(320px, ${DEBATE_CARD_COLUMN_BUDGET}, 560px)`,
 } as React.CSSProperties;
+
+/**
+ * Caps a card at the column width set by one of the styles here, and lets it take the feed's width
+ * on phones.
+ *
+ * Exported with {@link DEBATE_CARD_COLUMN_STYLE} for the claim card's `debate-panel` variant, so a
+ * claim in the Explore feed is exactly as wide as the debate beside it (GEO-3542).
+ */
+export const DEBATE_CARD_COLUMN_CLASS_NAME = 'max-w-[var(--debate-card-column-width)] md:max-w-full';
 
 /**
  * The same budget with the column, rather than 560px, as its ceiling.
@@ -433,7 +442,7 @@ export function DebateExploreFeedCard({
       <div
         className={cx(
           'flex w-full min-w-0 flex-col overflow-hidden border border-grey-02 bg-white',
-          compactChrome ? 'max-w-full' : 'max-w-[var(--debate-card-column-width)] md:max-w-full',
+          compactChrome ? 'max-w-full' : DEBATE_CARD_COLUMN_CLASS_NAME,
           compactChrome ? 'rounded-lg' : 'rounded-xl'
         )}
         style={compactChrome ? undefined : fullWidth ? DEBATE_CARD_FULL_WIDTH_STYLE : DEBATE_CARD_COLUMN_STYLE}
