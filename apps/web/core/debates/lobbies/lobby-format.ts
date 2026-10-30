@@ -209,6 +209,9 @@ export function goingLabel(count: number) {
 
 export const RSVP_FAILED = 'Could not update your RSVP. Try again.';
 
+/** Dismiss on an upcoming lobby in the Requests timeline (GEO-3519) did not save, so the lobby is back. */
+export const DISMISS_FAILED = 'Could not dismiss this lobby. Try again.';
+
 export const ROLE_LABEL: Record<DebateLobbyRole, string> = {
   host: 'Host',
   speaker: 'Speaker',

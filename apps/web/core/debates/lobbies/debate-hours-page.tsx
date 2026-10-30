@@ -232,10 +232,7 @@ function JoinDebateHour({ lobby, className }: { lobby: DebateLobbySummary; class
   );
 }
 
-/**
- * When the featured card says "Starting soon". Wider than the panel's 15-minute countdown
- * (`LOBBY_SOON_WINDOW_MS`): a newcomer deciding whether to wait for this one wants to know an hour out.
- */
+/** When the featured card says "Starting soon": a newcomer deciding whether to wait for this one wants to know an hour out. */
 const STARTING_SOON_MS = 60 * 60_000;
 
 /** The next debate hour, or one happening now, as the page's one big thing to do. */

@@ -2872,6 +2872,8 @@ export type DebateLobbyView = {
     /** Host powers now: a host, or the acting host. Gate host tools on this, not `role`. */
     hosting: boolean;
     reminded: boolean;
+    /** Said not interested (GEO-3519); cleared by an RSVP. Absent from a geo-chat that predates it. */
+    dismissed?: boolean;
     /** While in this lobby's voice: when voice stops holding off Away without input. */
     voice_away_at: string | null;
     /** This viewer has a live connection here; `false` while stepped out. */
@@ -2972,6 +2974,11 @@ export type DebateLobbySummary = {
   debating_count: number;
   reminder_count: number;
   viewer_reminded: boolean;
+  /**
+   * The viewer said they are not interested (GEO-3519), so the Requests timeline leaves it out. An
+   * RSVP clears it. Absent from a geo-chat that predates dismissals, which reads as not dismissed.
+   */
+  viewer_dismissed?: boolean;
   /** On the roster, stepped out included. */
   viewer_on_roster: boolean;
   /** When this row was read; orders card patches. `null` before the lobby's first broadcast; absent from older geo-chat. */
@@ -3619,6 +3626,25 @@ export async function endDebateLobby(
   });
 }
 
+/**
+ * One of the viewer's own marks on a lobby: `PUT` sets it, `DELETE` clears it, and either answers
+ * with the lobby's view.
+ */
+function setDebateLobbyViewerMark(
+  lobbyId: string,
+  mark: 'reminder' | 'dismissal',
+  on: boolean,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<DebateLobbyView>(`/debate-lobbies/${lobbyId}/${mark}`, {
+    method: on ? 'PUT' : 'DELETE',
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
 /** Remind me. Setting it is `409 lobby_already_open` or `409 lobby_closed` when too late. */
 export async function setDebateLobbyReminder(
   lobbyId: string,
@@ -3626,12 +3652,20 @@ export async function setDebateLobbyReminder(
   getPrivyIdentityToken: GetPrivyIdentityToken,
   accountKey: string | null
 ) {
-  return geoChatRequest<DebateLobbyView>(`/debate-lobbies/${lobbyId}/reminder`, {
-    method: reminded ? 'PUT' : 'DELETE',
-    auth: true,
-    getPrivyIdentityToken,
-    accountKey,
-  });
+  return setDebateLobbyViewerMark(lobbyId, 'reminder', reminded, getPrivyIdentityToken, accountKey);
+}
+
+/**
+ * Not interested (GEO-3519): the lobby leaves the viewer's Requests timeline, on every device. The
+ * same answers as {@link setDebateLobbyReminder}; an RSVP clears it on geo-chat's side.
+ */
+export async function setDebateLobbyDismissal(
+  lobbyId: string,
+  dismissed: boolean,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return setDebateLobbyViewerMark(lobbyId, 'dismissal', dismissed, getPrivyIdentityToken, accountKey);
 }
 
 /* -------------------------------------------------------------------------------------------------

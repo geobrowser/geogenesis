@@ -6,7 +6,10 @@ import {
 } from '../api';
 
 /** `DebateLobbySummary` as broadcast: nothing about whoever receives it. */
-export type DebateLobbyCard = Omit<DebateLobbySummary, 'viewer_reminded' | 'viewer_on_roster' | 'as_of'>;
+export type DebateLobbyCard = Omit<
+  DebateLobbySummary,
+  'viewer_reminded' | 'viewer_dismissed' | 'viewer_on_roster' | 'as_of'
+>;
 
 export type DebateLobbyCardPatch = { asOf: string; lobby: DebateLobbyCard };
 
@@ -36,6 +39,8 @@ function patchedRow(cached: DebateLobbySummary, patch: DebateLobbyCardPatch): De
   return {
     ...patch.lobby,
     viewer_reminded: cached.viewer_reminded,
+    // Absent from the card, so dropped with it: a dismissed lobby would come back on someone else's RSVP.
+    viewer_dismissed: cached.viewer_dismissed,
     viewer_on_roster: cached.viewer_on_roster,
     as_of: patch.asOf,
   };
