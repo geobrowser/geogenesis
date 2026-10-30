@@ -162,10 +162,10 @@ describe('ControversialTag', () => {
 describe('TrendingTag', () => {
   afterEach(cleanup);
 
-  it('reads as Trending in Geo blue, with the arrow drawn in the same colour and hidden from assistive tech', () => {
+  it('reads as Trending in Geo purple, with the arrow drawn in the same colour and hidden from assistive tech', () => {
     const { container } = render(<TrendingTag />);
 
-    expect(screen.getByText('Trending')).toHaveClass('text-ctaPrimary');
+    expect(screen.getByText('Trending')).toHaveClass('text-purple');
     const arrow = container.querySelector('svg');
     expect(arrow).toHaveAttribute('aria-hidden', 'true');
     expect(arrow?.querySelector('path')).toHaveAttribute('stroke', 'currentColor');
@@ -180,7 +180,7 @@ describe('TrendingTag', () => {
     );
 
     const shape = (label: string) =>
-      [...screen.getByText(label).classList].filter(name => name !== 'text-red-01' && name !== 'text-ctaPrimary');
+      [...screen.getByText(label).classList].filter(name => name !== 'text-red-01' && name !== 'text-purple');
     expect(shape('Trending')).toEqual(shape('Controversial'));
   });
 });

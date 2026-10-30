@@ -251,11 +251,11 @@ export function ControversialTag({ className }: { className?: string }) {
  * GEO-3497. A claim on today's or yesterday's agenda, or a debate on one, outside Today's claims.
  *
  * Controversial's shape exactly, so the two read as one family and sit side by side when a claim is
- * both: Geo blue, with an up-right arrow where the flame is.
+ * both: Geo purple, with an up-right arrow where the flame is.
  */
 export function TrendingTag({ className }: { className?: string }) {
   return (
-    <ClaimStatusTag icon={<TrendingArrow />} label="Trending" colorClassName="text-ctaPrimary" className={className} />
+    <ClaimStatusTag icon={<TrendingArrow />} label="Trending" colorClassName="text-purple" className={className} />
   );
 }
 
