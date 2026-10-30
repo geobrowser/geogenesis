@@ -126,20 +126,21 @@ export function AcceptOrReject({
   // memory-only and resets on page reload, so it can't grow unbounded.
 
   // Indexer lag after a vote is variable — a single delayed refresh often lands
-  // before the vote is indexed and nothing updates the tallies. Fire a short
-  // backoff so a fast index gets picked up right away and a slow one still
-  // catches up. Deliberately NOT tracked for cleanup on unmount: a common flow
-  // is "cast vote → close modal" (which unmounts this component), and the
-  // governance list BEHIND the modal must still refresh. router.refresh() on a
-  // subsequently-navigated route is harmless — it just refreshes wherever the
-  // user is now.
+  // before the vote is indexed and nothing updates the tallies. Spread several
+  // refreshes over a backoff so a fast index gets picked up right away and a slow
+  // one (indexed tens of seconds later) still catches up without a manual reload.
+  // Deliberately NOT tracked for cleanup on unmount: a common flow is "cast vote →
+  // close modal" (which unmounts this component), and the governance list BEHIND
+  // the modal must still refresh. router.refresh() on a subsequently-navigated
+  // route is harmless — it just refreshes wherever the user is now.
   const onVoteSuccess = () => {
     for (const delayMs of [800, 3_000, 7_000, 15_000, 30_000]) {
       window.setTimeout(() => {
         router.refresh();
-        // `router.refresh()` re-runs server components and leaves client caches alone, so the votes
-        // behind the comment attribution badges have to be invalidated by hand — otherwise an open
-        // comments panel keeps badging this voter with the vote they just changed (GEO-2907).
+        // `router.refresh()` re-runs server components and leaves client caches alone, so the
+        // votes behind the comment attribution badges have to be invalidated by hand —
+        // otherwise an open comments panel keeps badging this voter with the vote they just
+        // changed (GEO-2907).
         queryClient.invalidateQueries({ queryKey: proposalCommentVotesQueryKey(proposalId) });
       }, delayMs);
     }
