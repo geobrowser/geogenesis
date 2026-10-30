@@ -25,6 +25,7 @@ const agendas = (
         agendaId: `agenda-${space.spaceId}`,
         spaceId: space.spaceId,
         name: section.name ?? section.id,
+        listedOn: space.listedOn ?? '2026-10-29',
         listedAt: '2026-10-29T00:00:00-04:00',
       })),
     })),
@@ -39,7 +40,7 @@ const claim = (claimId: string, spaceId = 's', topic = `topic-${claimId}`): Call
   agendaId: 'a',
   sectionId: 'b',
   topic,
-  listedAt: '2026-10-29',
+  listedOn: '2026-10-29',
 });
 
 describe('todaysClaimsInOrder', () => {

@@ -187,7 +187,7 @@ function CalloutCard({ callout, claim, position }: { callout: TodaysCallout; cla
         claimId={claim.claimId}
         listId="todays_claims_callout"
         position={position}
-        scope={todaysCardScope(claim.agendaId, claim.listedAt, claim.debatesSinceListing, claim.sectionId)}
+        scope={todaysCardScope(claim.agendaId, claim.listedOn, claim.debatesSinceListing, claim.sectionId)}
       >
         <MatchmakingClaimCard
           claim={entry.claim}

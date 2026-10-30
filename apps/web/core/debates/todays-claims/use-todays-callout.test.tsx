@@ -106,6 +106,7 @@ function agendasFor(day: string, spaces: Record<string, string[]>): DebateAgenda
           spaceId,
           name: `Topic ${spaceId}`,
           claimIds,
+          listedOn: day,
           listedAt: day,
         },
       ],

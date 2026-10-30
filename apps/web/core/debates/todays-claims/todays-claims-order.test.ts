@@ -42,6 +42,7 @@ describe('todaysSectionsInOrder', () => {
     spaceId,
     name: id,
     claimIds,
+    listedOn: '2026-10-29',
     listedAt: '2026-10-29',
   });
 

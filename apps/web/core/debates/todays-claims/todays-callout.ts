@@ -24,7 +24,8 @@ export type CalloutClaim = {
    * spaces counts once, or the section's own id when it has no heading.
    */
   topic: string;
-  listedAt: string;
+  /** The agenda's day (`YYYY-MM-DD`), for the card's attribution. */
+  listedOn: string;
   /** Debates since the listing when the set was taken, when geo-chat could count them. */
   debatesSinceListing?: number;
 };
@@ -64,7 +65,7 @@ export function todaysClaimsInOrder(
           agendaId: section.agendaId,
           sectionId: section.id,
           topic: section.name === UNNAMED_AGENDA_SECTION ? section.id : section.name.trim().toLowerCase(),
-          listedAt: section.listedAt,
+          listedOn: section.listedOn,
           ...(debates === undefined ? {} : { debatesSinceListing: debates }),
         },
       ];

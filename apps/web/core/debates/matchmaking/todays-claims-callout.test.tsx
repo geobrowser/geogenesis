@@ -51,7 +51,7 @@ const claim = (claimId: string): CalloutClaim => ({
   agendaId: 'agenda1',
   sectionId: 'block1',
   topic: 'Elections',
-  listedAt: '2026-10-29T00:00:00-04:00',
+  listedOn: '2026-10-29',
 });
 
 const CLAIMS = [claim('a'), claim('b'), claim('c')];
