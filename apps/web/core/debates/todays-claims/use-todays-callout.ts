@@ -35,14 +35,14 @@ import { todaysClaimsCalloutAtom } from '~/atoms';
 const NO_IDS: string[] = [];
 
 /**
- * GEO-3498. The daily Today's claims callout, shared by the side panel and the full-screen hub.
+ * GEO-3498. The daily Today's claims callout in the debates side panel.
  *
  * The day's set is taken once, the first time every read it is made from has settled: up to
  * `CALLOUT_MAX_CLAIMS` of today's agenda claims the viewer has not answered, highest-ranked first
  * and varied by topic and space (`pickCalloutClaims`). It is stored per account with the agenda
- * day, so the panel and the hub walk the same set, and a newer agenda day starts a new one — which
+ * day, so the set outlives the panel closing, a reload and other tabs, and a newer agenda day starts a new one — which
  * is also what brings a dismissed callout back. Once nothing is left to ask, the end card stays
- * until dismissed or until the surface closes, and isn't shown again that day.
+ * until dismissed or until the panel closes, and isn't shown again that day.
  *
  * Signed out there is nothing: the reads are all held back.
  */
@@ -175,8 +175,8 @@ export function useTodaysCallout() {
   );
   const dismiss = React.useCallback(() => update(() => ({ dismissed: true })), [update]);
 
-  // The end card is the visit's that reached it: it stays while the panel (or the hub) stays open,
-  // and the next time either opens it is gone until the next agenda day. Each mount notes whether
+  // The end card is the visit's that reached it: it stays while the panel stays open, and the
+  // next time it opens it is gone until the next agenda day. Each mount notes whether
   // the day had already ended when it first saw it, per account, and keeps an ended day hidden even
   // while the viewer's sides are still loading and the set reads as unfinished again; reaching the
   // end here marks the day ended.

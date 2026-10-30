@@ -27,8 +27,6 @@ export const CALLOUT_ADVANCE_DELAY_MS = 700;
 
 type Props = {
   callout: TodaysCallout;
-  /** The side panel's banner slot, or the full-screen hub under its title (mockups 2c and 2d). */
-  layout: 'panel' | 'hub';
   /** Opens Matches, the one action once every claim is answered. */
   onFindDebate: () => void;
 };
@@ -37,19 +35,18 @@ type Props = {
  * GEO-3498. The daily Today's claims callout: one claim at a time from the day's set, on the
  * standard claim card, with Skip and the set's progress. Once nothing is left to ask it offers
  * Matches, and says the viewer is set for today only when every claim was answered rather than
- * skipped. Dismissing it hides it until the next agenda day, and so does closing the surface once
- * the end card is up (`useTodaysCallout`).
+ * skipped. Dismissing it hides it until the next agenda day, and so does closing the side panel once
+ * the end card is up (`useTodaysCallout`). The side panel only: the full-screen hub doesn't draw it.
  *
  * Draw it only while `callout.visible`.
  */
-export function TodaysClaimsCallout({ callout, layout, onFindDebate }: Props) {
+export function TodaysClaimsCallout({ callout, onFindDebate }: Props) {
   const { step, claims } = callout;
   if (!step) return null;
 
   const current = step.current;
   const finished = current === null;
   const title = step.allAnswered ? 'You’re set for today' : 'Today’s claims';
-  const headingLevel = layout === 'hub' ? 'h2' : 'h3';
   const answeredCount = step.done.filter(Boolean).length;
 
   const dots = (
@@ -101,34 +98,13 @@ export function TodaysClaimsCallout({ callout, layout, onFindDebate }: Props) {
     <CalloutCard key={current.claimId} callout={callout} claim={current} position={step.currentIndex + 1} />
   ) : null;
 
-  if (layout === 'hub') {
-    return (
-      <section
-        aria-label="Today’s claims"
-        data-testid="todays-claims-callout"
-        className={cx(
-          HUB_CALLOUT_CLASS_NAME,
-          'relative mb-4 flex items-center gap-6 pr-12 md:flex-col md:items-stretch md:gap-3'
-        )}
-      >
-        <div className="flex w-48 shrink-0 flex-col items-start gap-3 md:w-auto">
-          <HubCalloutTitle as={headingLevel} title={title} />
-          {dots}
-          {action}
-        </div>
-        {card ? <div className="min-w-0 flex-1">{card}</div> : null}
-        <div className="absolute top-3 right-3">{dismiss}</div>
-      </section>
-    );
-  }
-
   return (
     <section
       aria-label="Today’s claims"
       data-testid="todays-claims-callout"
       className={cx(HUB_CALLOUT_CLASS_NAME, 'mx-4 mb-3 shrink-0')}
     >
-      <HubCalloutTitle as={headingLevel} title={title}>
+      <HubCalloutTitle as="h3" title={title}>
         {dismiss}
       </HubCalloutTitle>
       {card ? <div className="mt-3">{card}</div> : null}

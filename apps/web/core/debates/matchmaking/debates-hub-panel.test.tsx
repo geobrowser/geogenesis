@@ -626,7 +626,6 @@ describe('DebatesHubPanel', () => {
     todaysCalloutMock.visible = true;
     renderOpen('people');
     const callout = within(screen.getByTestId('hub-live-strip')).getByTestId('todays-claims-callout');
-    expect(callout).toHaveAttribute('data-layout', 'panel');
 
     fireEvent.click(callout);
     expect(screen.getByRole('button', { name: /^Matches/ })).toHaveAttribute('aria-current', 'true');

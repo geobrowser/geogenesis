@@ -326,7 +326,7 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
           lineup={lobbyLineup}
           todaysCallout={
             todaysCallout.visible ? (
-              <TodaysClaimsCallout callout={todaysCallout} layout="panel" onFindDebate={() => changeTab('lobby')} />
+              <TodaysClaimsCallout callout={todaysCallout} onFindDebate={() => changeTab('lobby')} />
             ) : null
           }
         />

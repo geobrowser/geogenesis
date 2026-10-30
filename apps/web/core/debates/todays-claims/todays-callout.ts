@@ -30,7 +30,7 @@ export type CalloutClaim = {
   debatesSinceListing?: number;
 };
 
-/** One account's day, as the viewer's browser holds it, so the panel and the hub walk the same set. */
+/** One account's day, as the viewer's browser holds it, so the set outlives the panel closing and a reload. */
 export type CalloutDay = {
   /** The agenda day the set was taken on. A newer agenda day starts a new set. */
   day: string;
@@ -41,7 +41,7 @@ export type CalloutDay = {
   dismissed: boolean;
   /**
    * Whether the end card has been shown: nothing was left to ask. It stays for the visit it was
-   * reached in, and is gone the next time the panel or the hub opens (Preston, 30 Oct).
+   * reached in, and is gone the next time the panel opens (Preston, 30 Oct).
    */
   ended?: boolean;
 };

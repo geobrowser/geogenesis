@@ -9,7 +9,6 @@ import { Text } from '~/design-system/text';
 
 import { DrawnHubListProvider, useDrawnHubList } from '../debate-claim-card-surface';
 import { useGeoChatAuth } from '../hooks';
-import { useTodaysCallout } from '../todays-claims/use-todays-callout';
 import { fromClaimsFilterSearch } from './claims-filter-params';
 import {
   ClaimsTab,
@@ -25,7 +24,6 @@ import { HubHeaderControls } from './hub-header-controls';
 import { HubLiveRail } from './hub-live-rail';
 import { HubSkeleton } from './hub-states';
 import { LobbyTab } from './lobby-tab';
-import { TodaysClaimsCallout } from './todays-claims-callout';
 import { useHubFilterOwner } from './use-hub-filter-owner';
 import { isWorkspaceList, useWorkspaceQuery, workspaceHref } from './use-workspace-query';
 import type { DebatesHubTab } from '~/atoms';
@@ -133,9 +131,6 @@ export function DebatesHubWorkspace() {
 
   const drawnList = useDrawnHubList();
   const recordTabPress = useRecordHubTabPress(shown, drawnList);
-  // GEO-3498. The same callout and progress as the side panel's. The live rail sits beside it here,
-  // so a live lobby does not need its place.
-  const todaysCallout = useTodaysCallout();
   const picker = (
     <HubFilterMenu
       label={options.find(option => option.value === shown)?.label ?? 'Explore'}
@@ -159,12 +154,6 @@ export function DebatesHubWorkspace() {
               leaving full screen for the panel. */}
           <HubHeaderControls />
         </header>
-
-        {todaysCallout.visible ? (
-          <div className="px-4">
-            <TodaysClaimsCallout callout={todaysCallout} layout="hub" onFindDebate={() => setList('lobby')} />
-          </div>
-        ) : null}
 
         <div className="flex gap-8 px-4">
           {/* Shared claim cards read the open ask here too (GEO-3463, decision 4): "Requesting · m:ss"

@@ -90,7 +90,7 @@ describe('TodaysClaimsCallout', () => {
     const value = callout({
       step: { current: CLAIMS[1]!, currentIndex: 1, done: [true, false, false], allAnswered: false },
     });
-    render(<TodaysClaimsCallout callout={value} layout="panel" onFindDebate={vi.fn()} />);
+    render(<TodaysClaimsCallout callout={value} onFindDebate={vi.fn()} />);
 
     const region = screen.getByRole('region', { name: 'Today’s claims' });
     expect(region).toHaveTextContent('Today’s claims');
@@ -115,10 +115,10 @@ describe('TodaysClaimsCallout', () => {
   it('moves on a moment after the bundler has the side, so the pressed pill is seen', () => {
     vi.useFakeTimers();
     const value = callout();
-    const { rerender } = render(<TodaysClaimsCallout callout={value} layout="panel" onFindDebate={vi.fn()} />);
+    const { rerender } = render(<TodaysClaimsCallout callout={value} onFindDebate={vi.fn()} />);
 
     mocks.indexing = { status: 'reconciling', submitted: true, pending: { expectedResponse: 'positive' } };
-    rerender(<TodaysClaimsCallout callout={value} layout="panel" onFindDebate={vi.fn()} />);
+    rerender(<TodaysClaimsCallout callout={value} onFindDebate={vi.fn()} />);
     expect(value.markAnswered).not.toHaveBeenCalled();
 
     act(() => vi.advanceTimersByTime(CALLOUT_ADVANCE_DELAY_MS));
@@ -129,15 +129,15 @@ describe('TodaysClaimsCallout', () => {
   it('stays on the claim while the side is still being submitted, and after the write fails', () => {
     vi.useFakeTimers();
     const value = callout();
-    const { rerender } = render(<TodaysClaimsCallout callout={value} layout="panel" onFindDebate={vi.fn()} />);
+    const { rerender } = render(<TodaysClaimsCallout callout={value} onFindDebate={vi.fn()} />);
 
     mocks.indexing = { status: 'reconciling', pending: { expectedResponse: 'positive' } };
-    rerender(<TodaysClaimsCallout callout={value} layout="panel" onFindDebate={vi.fn()} />);
+    rerender(<TodaysClaimsCallout callout={value} onFindDebate={vi.fn()} />);
     act(() => vi.advanceTimersByTime(CALLOUT_ADVANCE_DELAY_MS * 3));
     expect(value.markAnswered).not.toHaveBeenCalled();
 
     mocks.indexing = { status: 'idle', pending: null };
-    rerender(<TodaysClaimsCallout callout={value} layout="panel" onFindDebate={vi.fn()} />);
+    rerender(<TodaysClaimsCallout callout={value} onFindDebate={vi.fn()} />);
     act(() => vi.advanceTimersByTime(CALLOUT_ADVANCE_DELAY_MS * 3));
     expect(value.markAnswered).not.toHaveBeenCalled();
     expect(screen.getByTestId('claim-card')).toHaveTextContent('Claim A');
@@ -147,7 +147,7 @@ describe('TodaysClaimsCallout', () => {
     vi.useFakeTimers();
     mocks.indexing = { status: 'reconciling', submitted: true, pending: { expectedResponse: null } };
     const value = callout();
-    render(<TodaysClaimsCallout callout={value} layout="panel" onFindDebate={vi.fn()} />);
+    render(<TodaysClaimsCallout callout={value} onFindDebate={vi.fn()} />);
 
     act(() => vi.advanceTimersByTime(CALLOUT_ADVANCE_DELAY_MS * 2));
     expect(value.markAnswered).not.toHaveBeenCalled();
@@ -156,7 +156,7 @@ describe('TodaysClaimsCallout', () => {
   it('moves straight past a claim the viewer already holds a side on', () => {
     mocks.indexedDirection = 'negative';
     const value = callout();
-    render(<TodaysClaimsCallout callout={value} layout="panel" onFindDebate={vi.fn()} />);
+    render(<TodaysClaimsCallout callout={value} onFindDebate={vi.fn()} />);
 
     expect(value.markAnswered).toHaveBeenCalledWith('a');
   });
@@ -165,14 +165,14 @@ describe('TodaysClaimsCallout', () => {
     mocks.indexedDirection = 'negative';
     mocks.viewerResponseLoading = true;
     const value = callout();
-    render(<TodaysClaimsCallout callout={value} layout="panel" onFindDebate={vi.fn()} />);
+    render(<TodaysClaimsCallout callout={value} onFindDebate={vi.fn()} />);
 
     expect(value.markAnswered).not.toHaveBeenCalled();
   });
 
   it('skips a claim the graph no longer has', () => {
     const value = callout({ entityOf: () => undefined } as Partial<TodaysCallout>);
-    render(<TodaysClaimsCallout callout={value} layout="panel" onFindDebate={vi.fn()} />);
+    render(<TodaysClaimsCallout callout={value} onFindDebate={vi.fn()} />);
 
     expect(screen.queryByTestId('claim-card')).not.toBeInTheDocument();
     expect(value.skip).toHaveBeenCalledWith('a');
@@ -181,7 +181,7 @@ describe('TodaysClaimsCallout', () => {
   // Review: one failed lookup used to skip all ten and report the viewer set for the day.
   it('does not skip a claim while its lookup has not answered', () => {
     const value = callout({ entityOf: () => undefined, entitiesSettled: false } as Partial<TodaysCallout>);
-    render(<TodaysClaimsCallout callout={value} layout="panel" onFindDebate={vi.fn()} />);
+    render(<TodaysClaimsCallout callout={value} onFindDebate={vi.fn()} />);
 
     expect(value.skip).not.toHaveBeenCalled();
   });
@@ -190,7 +190,7 @@ describe('TodaysClaimsCallout', () => {
     const value = callout({
       step: { current: null, currentIndex: -1, done: [true, false, false], allAnswered: false },
     });
-    render(<TodaysClaimsCallout callout={value} layout="panel" onFindDebate={vi.fn()} />);
+    render(<TodaysClaimsCallout callout={value} onFindDebate={vi.fn()} />);
 
     expect(screen.getByRole('heading', { level: 3, name: 'Today’s claims' })).toBeInTheDocument();
     expect(screen.queryByText('You’re set for today')).not.toBeInTheDocument();
@@ -200,9 +200,9 @@ describe('TodaysClaimsCallout', () => {
   it('says so once every claim is answered and offers Matches', () => {
     const onFindDebate = vi.fn();
     const value = callout({ step: { current: null, currentIndex: -1, done: [true, true, true], allAnswered: true } });
-    render(<TodaysClaimsCallout callout={value} layout="hub" onFindDebate={onFindDebate} />);
+    render(<TodaysClaimsCallout callout={value} onFindDebate={onFindDebate} />);
 
-    expect(screen.getByRole('heading', { level: 2, name: 'You’re set for today' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 3, name: 'You’re set for today' })).toBeInTheDocument();
     expect(screen.getByRole('list', { name: '3 of 3 answered' })).toBeInTheDocument();
     expect(screen.queryByTestId('claim-card')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Skip' })).not.toBeInTheDocument();

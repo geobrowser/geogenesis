@@ -3,9 +3,9 @@ import * as React from 'react';
 import { Text } from '~/design-system/text';
 
 /**
- * The lavender callout above the debates hub's tabs, and under the full-screen hub's title: the
- * debate schedule banner (GEO-2936) and the Today's claims callout (GEO-3498). Its surface, without
- * the spacing, which each surface sets for its own gutters.
+ * The lavender callout: the debate schedule banner on the calendar (GEO-2936) and the Today's claims
+ * callout above the debates side panel's tabs (GEO-3498). Its surface, without the spacing, which
+ * each surface sets for its own gutters.
  */
 export const HUB_CALLOUT_CLASS_NAME = 'rounded-lg bg-purple-tint p-4';
 

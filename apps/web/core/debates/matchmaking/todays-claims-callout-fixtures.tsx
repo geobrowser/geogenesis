@@ -1,8 +1,8 @@
 import * as React from 'react';
 
 /**
- * Test stand-ins for the Today's claims callout (GEO-3498), for suites that draw a surface it sits
- * on — the side panel and the full-screen hub — where only whether and where it is drawn matters.
+ * Test stand-ins for the Today's claims callout (GEO-3498), for suites that draw the surface it sits
+ * on — the side panel — where only whether and where it is drawn matters.
  * The callout and its day's set have their own suites.
  *
  *   vi.mock('../todays-claims/use-todays-callout', async () =>
@@ -17,9 +17,9 @@ export const todaysCalloutMock = { visible: false };
 export const useTodaysCalloutModule = { useTodaysCallout: () => todaysCalloutMock };
 
 /** Its one action stands in for the whole callout: pressing it is pressing Find a debate. */
-function TodaysClaimsCallout({ layout, onFindDebate }: { layout: string; onFindDebate: () => void }) {
+function TodaysClaimsCallout({ onFindDebate }: { onFindDebate: () => void }) {
   return (
-    <button type="button" data-testid="todays-claims-callout" data-layout={layout} onClick={onFindDebate}>
+    <button type="button" data-testid="todays-claims-callout" onClick={onFindDebate}>
       Find a debate
     </button>
   );
