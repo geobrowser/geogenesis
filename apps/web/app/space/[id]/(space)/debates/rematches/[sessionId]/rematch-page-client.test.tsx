@@ -15,12 +15,14 @@ import {
   rememberDebateReturnDestination,
   rememberLobbyReturnDestination,
 } from '~/core/debates/debate-return-navigation';
+import { unmarkLocalRematchLeave } from '~/core/debates/local-debate-leave';
 import { HUB_CARD_EXIT_TRANSITION } from '~/core/debates/matchmaking/hub-motion';
 import type { ParticipantPosition } from '~/core/debates/participant-positions';
 import { DebateRoomProvider } from '~/core/debates/rooms/room-context';
 import type { DebateRoomPresence, DebateRoomPresenceState } from '~/core/debates/rooms/room-presence';
 
 import { DebateRematchPageClient, resolveLandingTab } from './rematch-page-client';
+import { opponentLeftNoticeAtom } from '~/atoms';
 
 /** Where a scheduled room's Leave goes (GEO-3428). */
 const PEOPLE_TAB = '/explore?modal=debates&modalTarget=people';
@@ -446,7 +448,8 @@ function render(ui: ReactElement) {
     </Provider>
   );
   const view = rtlRender(wrap(ui));
-  return { ...view, rerender: (next: ReactElement) => view.rerender(wrap(next)) };
+  // The store is returned so a case can read the atoms the page writes.
+  return { ...view, store, rerender: (next: ReactElement) => view.rerender(wrap(next)) };
 }
 
 // `debate.claims_changed` is delivered per space; the picker has to hold a scope on every space
@@ -1346,6 +1349,57 @@ describe('DebateRematchPageClient', () => {
     expect(mocks.replace).toHaveBeenCalledWith(destination);
     expect(mocks.back).not.toHaveBeenCalled();
   });
+
+  it.each([['ended'], ['expired']] as const)(
+    'boots out of an %s rematch when the opponent left, for the coordinator to announce',
+    async status => {
+      // The leave marker is module-scoped and survives earlier "Leave debate" cases in this file.
+      unmarkLocalRematchLeave('rematch-1');
+      const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+      mocks.session = session({ status });
+      view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+      await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith(`/space/${SPACE_1}/debates`));
+      expect(screen.queryByRole('dialog', { name: 'Opponent left' })).not.toBeInTheDocument();
+      // The notice is raised for `DebateCoordinator` to show on the debates page.
+      expect(view.store.get(opponentLeftNoticeAtom)).toBe(true);
+    }
+  );
+
+  it.each([['ended'], ['expired']] as const)(
+    'boots out of a picker that loads onto an %s rematch without announcing',
+    async status => {
+      unmarkLocalRematchLeave('rematch-1');
+      mocks.session = session({ status });
+
+      const { store } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+      await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith(`/space/${SPACE_1}/debates`));
+      expect(store.get(opponentLeftNoticeAtom)).toBe(false);
+    }
+  );
+
+  it.each([['on the same page'], ['after Back remounts the page']] as const)(
+    'does not announce the viewer their own Leave %s',
+    async when => {
+      unmarkLocalRematchLeave('rematch-1');
+      const first = render(<DebateRematchPageClient sessionId="rematch-1" />);
+      fireEvent.click(screen.getByRole('button', { name: 'Leave' }));
+
+      mocks.session = session({ status: 'ended' });
+      let { store } = first;
+      if (when === 'on the same page') {
+        first.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+      } else {
+        first.unmount();
+        ({ store } = render(<DebateRematchPageClient sessionId="rematch-1" />));
+      }
+
+      await waitFor(() => expect(mocks.replace).toHaveBeenCalled());
+      expect(store.get(opponentLeftNoticeAtom)).toBe(false);
+    }
+  );
 
   // The pin this used to assert is gone (GEO-2647); what matters is that both claims are listed
   // and a shared preference is still the one you can act on.

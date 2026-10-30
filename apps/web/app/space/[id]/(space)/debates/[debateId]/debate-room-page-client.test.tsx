@@ -4,6 +4,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import * as React from 'react';
 import { type ComponentPropsWithoutRef, StrictMode } from 'react';
 
+import { getDefaultStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type Debate, type DebateRematchSession, GeoChatRequestError } from '~/core/debates/api';
@@ -21,6 +22,7 @@ import {
   reportLobbyCamera,
   reportLobbyMic,
 } from '~/core/debates/lobbies/step-out';
+import { unmarkLocalDebateLeave, unmarkLocalRematchLeave } from '~/core/debates/local-debate-leave';
 import { DebateMediaSessionProvider, debateMediaSessionKey, useDebateMediaSession } from '~/core/debates/media-session';
 import {
   CAP_ROUND_ENDS_AT as OPEN_ROUNDS_CAP_ROUND_ENDS_AT,
@@ -42,6 +44,7 @@ import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-polic
 import { readMediaDevicePreference, rememberMediaDevice } from '~/core/media/device-preferences';
 
 import { DebateRoomPageClient, upcomingTurnLabel } from './debate-room-page-client';
+import { opponentLeftNoticeAtom } from '~/atoms';
 
 const mocks = vi.hoisted(() => ({
   startVoiceCallTelemetry: vi.fn(),
@@ -8484,6 +8487,49 @@ function setMobileLayout(matches: boolean) {
     }))
   );
 }
+
+describe('opponent-left notice', () => {
+  const notice = () => getDefaultStore().get(opponentLeftNoticeAtom);
+
+  beforeEach(() => {
+    getDefaultStore().set(opponentLeftNoticeAtom, false);
+    unmarkLocalDebateLeave('debate-1');
+    unmarkLocalRematchLeave('rematch-1');
+  });
+
+  it('shows the notice when the debate is cancelled while mounted', async () => {
+    const ready = readyDebate({ localReady: false, remoteReady: true });
+    mocks.debate = ready;
+    const view = render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    mocks.debate = { ...ready, status: 'cancelled' };
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates'));
+    expect(notice()).toBe(true);
+  });
+
+  it('does not show the notice when the room loads already cancelled', async () => {
+    mocks.debate = { ...readyDebate({ localReady: true, remoteReady: true }), status: 'cancelled' };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates'));
+    expect(notice()).toBe(false);
+  });
+
+  it('does not show the notice when the room loads with an already-ended rematch', async () => {
+    mocks.debate = { ...completedDebate(), rematch_session_id: 'rematch-1' };
+    mocks.rematch = rematchSession('ended');
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(notice()).toBe(false);
+  });
+});
 
 function completedDebate(): Debate {
   return {

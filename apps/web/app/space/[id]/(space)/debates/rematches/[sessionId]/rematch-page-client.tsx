@@ -6,7 +6,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 import { motion } from 'framer-motion';
-import { useAtom } from 'jotai';
+import { useAtom, useSetAtom } from 'jotai';
 import { useRouter } from 'next/navigation';
 import pluralize from 'pluralize';
 
@@ -60,6 +60,11 @@ import {
   useRejectDebateRematchRequest,
 } from '~/core/debates/hooks';
 import { useDebateReturnNavigation } from '~/core/debates/lobbies/lobby-return';
+import {
+  didLocallyLeaveRematch,
+  markLocalRematchLeave,
+  unmarkLocalRematchLeave,
+} from '~/core/debates/local-debate-leave';
 import {
   type ClaimResponseCounts,
   claimCountsKey,
@@ -162,7 +167,7 @@ import { ClaimResponseTag, firstName } from '~/partials/profile/claim-response-t
 import { RematchPublishCard } from './rematch-publish-card';
 import { RematchRequestCard } from './rematch-request-card';
 import { RematchVoiceHeader } from './rematch-voice';
-import { rematchHideAgreedAtom, rematchHideMyPositionsAtom } from '~/atoms';
+import { opponentLeftNoticeAtom, rematchHideAgreedAtom, rematchHideMyPositionsAtom } from '~/atoms';
 
 const NO_PARTICIPANTS: DebateRematchParticipant[] = [];
 const NO_CLAIMS: DebateRematchClaim[] = [];
@@ -387,6 +392,8 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const viewerIdentityUnresolved = geoChatAuthenticated && currentUserId === null;
   const exitStartedRef = React.useRef(false);
   const leaveRequestedRef = React.useRef(false);
+  const sessionSeenLiveRef = React.useRef<string | null>(null);
+  const setOpponentLeftNotice = useSetAtom(opponentLeftNoticeAtom);
   const sessionQuery = useDebateRematch(sessionId);
   const [search, setSearch] = React.useState('');
   const { value: debouncedSearch, pending: searchSettling } = useDebouncedSearch(search);
@@ -2867,6 +2874,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
 
   React.useEffect(() => {
     if (!session) return;
+    if (session.status === 'browsing' || session.status === 'request_pending') {
+      sessionSeenLiveRef.current = session.id;
+    }
     if (session.status === 'converted' && session.converted_debate_id) {
       // The requester walks into the room the same way the accepter does, and without the intent
       // `DebateCoordinator` reads the walk as an unannounced debate and reopens the dialog.
@@ -2896,6 +2906,18 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
         // Before the way out, once: activity still reading it as browsing would route straight back
         // in (GEO-3342). Leaving through the button has already done this and started the exit.
         if (!exitStartedRef.current) forgetEndedRematch(session);
+        // Announce 'opponent left' (via the notice atom, shown by DebateCoordinator) unless the
+        // viewer left themselves: `returnFromSession` runs on their own Leave too, which sets
+        // `leaveRequestedRef`, and the local mark outlives the ref when Back remounts the page into
+        // the session they ended. Both terminal statuses count — a tab the opponent closed surfaces
+        // as `expired` after ~90 seconds, not `ended`. Only for a session this mount saw live.
+        if (
+          sessionSeenLiveRef.current === session.id &&
+          !leaveRequestedRef.current &&
+          !didLocallyLeaveRematch(session.id)
+        ) {
+          setOpponentLeftNotice(true);
+        }
         returnFromSession(session);
       }
       // geo-chat replaces a finished room session on the next join, which someone who never left
@@ -2917,7 +2939,16 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
         });
       }
     }
-  }, [forgetEndedRematch, inDebateRoom, rejoinRetry, returnFromSession, roomRejoin, router, session]);
+  }, [
+    forgetEndedRematch,
+    inDebateRoom,
+    rejoinRetry,
+    returnFromSession,
+    roomRejoin,
+    router,
+    session,
+    setOpponentLeftNotice,
+  ]);
 
   const [confirmingLeave, setConfirmingLeave] = React.useState(false);
   const leaveButtonRef = React.useRef<HTMLButtonElement>(null);
@@ -2933,6 +2964,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   }, [leaveNeedsConfirm]);
 
   const leave = () => {
+    // Durable so a Back-remount into the ended session doesn't read the viewer's own Leave as the
+    // opponent leaving; cleared again if the leave request fails.
+    markLocalRematchLeave(sessionId);
     // `leaveDebateRematch` ends the session for *both* people and puts both on a cooldown. In a
     // room that is the wrong verb: leaving is per person and the room stays open to come back to,
     // so this walks out and lets `useRoomPresence` report the departure on unmount.
@@ -2947,6 +2981,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       onSuccess: returnFromSession,
       onError: () => {
         leaveRequestedRef.current = false;
+        unmarkLocalRematchLeave(sessionId);
       },
     });
   };
