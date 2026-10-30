@@ -42,7 +42,26 @@ vi.mock('../lobbies/lobby-reminder-press', () => ({
 
 // The lobby's own read, for what the list row leaves out (GEO-3463 details).
 const lobbyView = vi.hoisted(() => ({ data: undefined as unknown, refetch: vi.fn() }));
-vi.mock('../lobbies/hooks', () => ({ useDebateLobby: () => lobbyView }));
+/** What every view carries that these tests do not look at: a viewer who does not host it. */
+const VIEW_BASE = {
+  purpose: 'lobby',
+  access: { status: 'not_yet_open', opens_at: '2026-10-30T18:50:00Z' },
+  viewer: { role: null, hosting: false },
+};
+// The view read for a lobby carries that lobby's id, as geo-chat's does.
+const useDebateLobby = vi.hoisted(() =>
+  vi.fn((lobbyId: string) => ({
+    ...lobbyView,
+    data: lobbyView.data && { ...(lobbyView.data as object), lobby_id: lobbyId },
+  }))
+);
+const useUpdateDebateLobby = vi.hoisted(() =>
+  vi.fn((_lobbyId: string) => ({ mutate: vi.fn(), error: null, isPending: false }))
+);
+vi.mock('../lobbies/hooks', () => ({
+  useDebateLobby,
+  useUpdateDebateLobby,
+}));
 vi.mock('../lobbies/lobby-host-lobbies', () => ({
   usePreOpenHosts: (lobby: { hosts?: unknown[] }) => lobby.hosts ?? [],
 }));
@@ -155,6 +174,7 @@ describe('HubLiveStrip', () => {
       avatar_cid: null,
     });
     lobbyView.data = {
+      ...VIEW_BASE,
       name: 'Geo Open Debates - Politics and Policy Night',
       hosts: [host],
       reminder_count: 14,
@@ -172,6 +192,63 @@ describe('HubLiveStrip', () => {
     expect(details).toHaveTextContent('Ana, Ben and 12 more going');
     expect(details).toHaveTextContent('List page-1');
     expect(within(details).getByRole('link', { name: 'Open lobby page' })).toHaveAttribute('href', '/debate/lobby1');
+    // Not this viewer's lobby: nothing to edit, and the going row is only a summary.
+    expect(within(details).queryByRole('button', { name: 'Edit' })).toBeNull();
+    lobbyView.data = undefined;
+  });
+
+  // GEO-3540: a host edits the lobby from its details.
+  it('offers a host Edit in the lobby’s details', () => {
+    lobbyView.data = { ...VIEW_BASE, viewer: { role: 'host', hosting: false }, reminder_count: 0, going: [] };
+    const later = lobby({ open: false, scheduled: true });
+    render(<HubLiveStrip lineup={{ ...EMPTY, later: [later] }} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /lobby details/ }));
+    const details = screen.getByRole('dialog', { name: 'Lobby details' });
+    expect(within(details).getByRole('button', { name: 'Edit' })).toBeInTheDocument();
+    lobbyView.data = undefined;
+  });
+
+  // Review: the dialog is the strip's, not the details', so Escape in it leaves the panel alone and
+  // the details closing can't take it with them.
+  it('closes the details before showing the edit dialog', async () => {
+    lobbyView.data = { ...VIEW_BASE, viewer: { role: 'host', hosting: false }, reminder_count: 0, going: [] };
+    const later = lobby({ open: false, scheduled: true });
+    useDebateLobby.mockClear();
+    render(<HubLiveStrip lineup={{ ...EMPTY, later: [later] }} />);
+    // Review round 2: nothing reads the lobby (or schedules its refetch at opening) until it's wanted.
+    expect(useDebateLobby).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: /lobby details/ }));
+    fireEvent.click(
+      within(screen.getByRole('dialog', { name: 'Lobby details' })).getByRole('button', { name: 'Edit' })
+    );
+
+    expect(await screen.findByRole('dialog', { name: 'Edit lobby' })).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Lobby details' })).toBeNull();
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByRole('dialog', { name: 'Edit lobby' })).toBeNull();
+    lobbyView.data = undefined;
+  });
+
+  // Copilot review: another lobby taking the next spot hands the strip a different lobby mid-edit.
+  it('keeps an edit on the lobby it began on', async () => {
+    lobbyView.data = { ...VIEW_BASE, viewer: { role: 'host', hosting: false }, reminder_count: 0, going: [] };
+    const first = lobby({ lobby_id: 'lobby-a', open: false, scheduled: true });
+    const sooner = lobby({ lobby_id: 'lobby-b', open: false, scheduled: true });
+    const { rerender } = render(<HubLiveStrip lineup={{ ...EMPTY, later: [first] }} />);
+    fireEvent.click(screen.getByRole('button', { name: /lobby details/ }));
+    fireEvent.click(
+      within(screen.getByRole('dialog', { name: 'Lobby details' })).getByRole('button', { name: 'Edit' })
+    );
+    await screen.findByRole('dialog', { name: 'Edit lobby' });
+
+    useUpdateDebateLobby.mockClear();
+    rerender(<HubLiveStrip lineup={{ ...EMPTY, later: [sooner, first] }} />);
+
+    expect(screen.getByRole('dialog', { name: 'Edit lobby' })).toBeInTheDocument();
+    expect(useUpdateDebateLobby.mock.calls.map(([id]) => id)).not.toContain('lobby-b');
+    expect(useUpdateDebateLobby).toHaveBeenLastCalledWith('lobby-a');
     lobbyView.data = undefined;
   });
 
@@ -184,7 +261,7 @@ describe('HubLiveStrip', () => {
       display_name: name,
       avatar_cid: null,
     });
-    lobbyView.data = { reminder_count: 2, going: [person('a', 'Ana'), person('b', 'Ben')] };
+    lobbyView.data = { ...VIEW_BASE, reminder_count: 2, going: [person('a', 'Ana'), person('b', 'Ben')] };
     const later = (count: number) => lobby({ open: false, scheduled: true, reminder_count: count });
     const { rerender } = render(<HubLiveStrip lineup={{ ...EMPTY, later: [later(2)] }} />);
     fireEvent.click(screen.getByRole('button', { name: /lobby details/ }));
@@ -202,7 +279,7 @@ describe('HubLiveStrip', () => {
   // Review, 27 Oct: one RSVP cleared and another set inside the 3s broadcast window leave the count
   // where it was, so a held view kept naming the person who left. Opening reads it again.
   it('reads the names again each time the details open', async () => {
-    lobbyView.data = { reminder_count: 1, going: [] };
+    lobbyView.data = { ...VIEW_BASE, reminder_count: 1, going: [] };
     render(<HubLiveStrip lineup={{ ...EMPTY, later: [lobby({ open: false, scheduled: true, reminder_count: 1 })] }} />);
     const trigger = screen.getByRole('button', { name: /lobby details/ });
 
