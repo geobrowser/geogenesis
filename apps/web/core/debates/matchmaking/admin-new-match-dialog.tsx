@@ -879,14 +879,10 @@ function TimePicker({
   );
   const length = minutes * 60_000;
   // The shared half-hours a whole match fits from: for an hour, those followed by another.
-  const slots = React.useMemo(() => {
-    const shared = new Set(sharedStarts);
-    return sharedStarts.filter(start => {
-      if (start <= now) return false;
-      for (let at = start + SLOT_MS; at < start + length; at += SLOT_MS) if (!shared.has(at)) return false;
-      return true;
-    });
-  }, [length, now, sharedStarts]);
+  const slots = React.useMemo(
+    () => sharedStarts.filter(start => start > now && sharedThroughout(sharedStarts, start, length)),
+    [length, now, sharedStarts]
+  );
   const mutual = React.useMemo(() => new Set(slots), [slots]);
   // Whether a time is outside their availability is only known once the overlap has answered in
   // full, or once either is known to be unset; until then the override says nothing rather than

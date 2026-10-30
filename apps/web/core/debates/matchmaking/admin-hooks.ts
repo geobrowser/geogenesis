@@ -21,6 +21,7 @@ import {
   useGeoChatAuth,
   usePeerSchedule,
 } from '../hooks';
+import { slotPayload } from '../rooms/scheduling-hooks';
 
 /**
  * Where the list stops paging. Far past today's debater count; past it, the dialog still finds
@@ -131,8 +132,7 @@ export function useCreateAdminMatch() {
         {
           first_user_id: firstUserId,
           second_user_id: secondUserId,
-          scheduled_start_at: start.toISOString(),
-          scheduled_end_at: new Date(start.getTime() + minutes * 60_000).toISOString(),
+          ...slotPayload(start, minutes),
         },
         getPrivyIdentityToken,
         accountKey

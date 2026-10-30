@@ -81,7 +81,7 @@ export function AdminPairAvailability({
   first: DebaterAvailability;
   second: DebaterAvailability;
   selected: number | null;
-  /** How long the picked match runs, so an hour outlines both of its half-hours. */
+  /** How long the picked match runs: every half-hour it touches is outlined. */
   selectedLength?: number;
   onPick: (start: number) => void;
 }) {
@@ -198,8 +198,8 @@ export function AdminPairAvailability({
                         // Every three hours a slightly stronger rule, to match the ticks above.
                         index % 6 === 0 && index > 0 && 'shadow-[inset_1px_0_0_var(--color-grey-03)]',
                         selected !== null &&
-                          cell.start >= selected &&
                           cell.start < selected + selectedLength &&
+                          cell.end > selected &&
                           'z-10 outline-2 -outline-offset-2 outline-text'
                       )}
                     >

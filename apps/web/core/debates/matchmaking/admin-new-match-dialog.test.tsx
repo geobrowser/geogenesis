@@ -732,6 +732,26 @@ describe('AdminNewMatchDialog', () => {
       expect(screen.getByRole('button', { name: 'Send invites' })).toBeDisabled();
     });
 
+    it('outlines every half-hour the match touches on the strip', () => {
+      renderDialog();
+      fireEvent.click(screen.getByRole('button', { name: 'Select Ana Ruiz' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Select Raj Mehta' }));
+      const outlined = () =>
+        [...document.querySelectorAll<HTMLElement>('[data-start]')]
+          .filter(cell => cell.classList.contains('outline-text'))
+          .map(cell => new Date(Number(cell.dataset.start)).toISOString());
+
+      fireEvent.click(screen.getByRole('radio', { name: '60 min' }));
+      fireEvent.click(screen.getAllByRole('button').find(b => /^9:00/.test(b.getAttribute('aria-label') ?? ''))!);
+      expect(outlined()).toEqual([at(7, 9), at(7, 9, 30)]);
+
+      // Off the half-hour, 9:15–10:15 touches 9:00, 9:30 and 10:00, not just the cells after 9:15.
+      fireEvent.click(screen.getByRole('radio', { name: 'Pick any time' }));
+      fireEvent.change(screen.getByRole('combobox', { name: 'Day' }), { target: { value: '1' } });
+      fireEvent.change(screen.getByLabelText(/^Starts/), { target: { value: '09:15' } });
+      expect(outlined()).toEqual([at(7, 9), at(7, 9, 30), at(7, 10)]);
+    });
+
     it('says when they are never both free for an hour', () => {
       (mocks.overlap as { candidates: { slots: unknown[] }[] }).candidates[0].slots = [
         { start: at(7, 9), end: at(7, 9, 30) },
