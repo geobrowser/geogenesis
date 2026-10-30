@@ -27,6 +27,13 @@ export const OPEN_LOBBY_CLAIM_LISTS_COPY = {
  */
 export type PickedClaimList = Pick<ClaimListOption, 'entityId' | 'spaceId' | 'name'>;
 
+/** Picked lists as geo-chat takes them, in order: on a new lobby, and replacing an edited one's (GEO-3540). */
+export function claimListsRequestBody(
+  lists: readonly Pick<PickedClaimList, 'entityId' | 'spaceId'>[]
+): NonNullable<CreateDebateLobbyRequest['claim_lists']> {
+  return lists.map(list => ({ entity_id: list.entityId, space_id: list.spaceId }));
+}
+
 /**
  * The tabs a new lobby starts with, in pick order (GEO-3275). Nothing at all when none were
  * picked, so a host who skips the field sends exactly the request they sent before it existed.
@@ -34,9 +41,7 @@ export type PickedClaimList = Pick<ClaimListOption, 'entityId' | 'spaceId' | 'na
 export function claimListsRequestField(
   lists: readonly Pick<PickedClaimList, 'entityId' | 'spaceId'>[]
 ): Pick<CreateDebateLobbyRequest, 'claim_lists'> {
-  return lists.length > 0
-    ? { claim_lists: lists.map(list => ({ entity_id: list.entityId, space_id: list.spaceId })) }
-    : {};
+  return lists.length > 0 ? { claim_lists: claimListsRequestBody(lists) } : {};
 }
 
 /**

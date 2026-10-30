@@ -38,7 +38,7 @@ describe('LobbyGoing for a host (GEO-3540)', () => {
     expect(mocks.going).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: /Person 0, Person 1 and 21 more going/ }));
 
-    expect(mocks.going).toHaveBeenCalledWith('lobby-1', true);
+    expect(mocks.going).toHaveBeenCalledWith('lobby-1');
     expect(screen.getAllByText(EVERYONE_GOING_COPY.title(23)).length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: 'Person 22' })).toBeInTheDocument();
     expect(screen.getAllByRole('listitem')).toHaveLength(23);

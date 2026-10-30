@@ -3336,11 +3336,7 @@ export type CreateDebateLobbyRequest = {
  * A host's edit (GEO-3540). Fields left out stay as they are. `starts_at` only before the lobby
  * opens; `claim_lists` replaces every list, in order.
  */
-export type UpdateDebateLobbyRequest = {
-  name?: string;
-  starts_at?: string;
-  claim_lists?: Array<{ entity_id: string; space_id: string }>;
-};
+export type UpdateDebateLobbyRequest = Partial<CreateDebateLobbyRequest>;
 
 /** A new start resends everyone going their calendar invite at the new time. */
 export async function updateDebateLobby(

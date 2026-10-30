@@ -358,14 +358,14 @@ export function useUpdateDebateLobby(lobbyId: string) {
   });
 }
 
-/** Everyone going, for a host (GEO-3540). Read afresh each time the list opens. */
-export function useDebateLobbyGoing(lobbyId: string, enabled: boolean) {
+/** Everyone going, for a host (GEO-3540). Read afresh each time the list mounts. */
+export function useDebateLobbyGoing(lobbyId: string) {
   const { accountKey, authenticated, ready, getPrivyIdentityToken } = useGeoChatAuth();
   return useQuery({
     ...debateQueryNetworkOptions,
     queryKey: debateQueryKeys.lobbyGoing(accountKey, lobbyId),
     queryFn: ({ signal }) => getDebateLobbyGoing(lobbyId, getPrivyIdentityToken, accountKey, signal),
-    enabled: enabled && Boolean(lobbyId) && ready && authenticated,
+    enabled: Boolean(lobbyId) && ready && authenticated,
     staleTime: 0,
   });
 }

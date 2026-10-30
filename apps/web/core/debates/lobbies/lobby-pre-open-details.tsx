@@ -33,14 +33,20 @@ export function goingNamesLabel(going: Pick<DebateLobbyPerson, 'display_name'>[]
   return `${shown.join(', ')} and ${more} more going`;
 }
 
+function PersonAvatar({ person }: { person: Pick<DebateLobbyPerson, 'avatar_cid' | 'profile_space_id'> }) {
+  return (
+    <span className="size-6 shrink-0 overflow-hidden rounded-full [&>svg]:size-full">
+      <Avatar avatarUrl={person.avatar_cid} value={person.profile_space_id} alt="" size={24} />
+    </span>
+  );
+}
+
 export function LobbyHostedBy({ hosts }: { hosts: DebateLobbyPerson[] }) {
   const hostedBy = hostsLabel(hosts);
   if (!hostedBy) return null;
   return (
     <div className="flex min-w-0 items-center gap-2.5">
-      <span className="size-6 shrink-0 overflow-hidden rounded-full [&>svg]:size-full">
-        <Avatar avatarUrl={hosts[0]!.avatar_cid} value={hosts[0]!.profile_space_id} alt="" size={24} />
-      </span>
+      <PersonAvatar person={hosts[0]!} />
       <Text as="span" variant="metadata" color="grey-04" className="min-w-0 truncate">
         Hosted by {hostedBy}
       </Text>
@@ -109,11 +115,12 @@ function EveryoneGoing({ lobbyId, count, summary }: { lobbyId: string; count: nu
 
 /** Mounted on each open, so the list is read afresh. */
 function EveryoneGoingList({ lobbyId, count }: { lobbyId: string; count: number }) {
-  const { data, isError } = useDebateLobbyGoing(lobbyId, true);
+  const { data, isError } = useDebateLobbyGoing(lobbyId);
+  const title = EVERYONE_GOING_COPY.title(data?.count ?? count);
   return (
-    <section className="flex flex-col gap-1 p-2" aria-label={EVERYONE_GOING_COPY.title(data?.count ?? count)}>
+    <section className="flex flex-col gap-1 p-2" aria-label={title}>
       <Text as="p" variant="metadataMedium" className="px-2 pt-1 pb-1">
-        {EVERYONE_GOING_COPY.title(data?.count ?? count)}
+        {title}
       </Text>
       {data ? (
         <ul className="flex max-h-[300px] flex-col overflow-y-auto">
@@ -122,9 +129,7 @@ function EveryoneGoingList({ lobbyId, count }: { lobbyId: string; count: number 
               key={person.user_id}
               className="flex min-w-0 items-center gap-2.5 rounded-lg px-2 py-1.5 hover:bg-grey-01"
             >
-              <span className="size-6 shrink-0 overflow-hidden rounded-full [&>svg]:size-full">
-                <Avatar avatarUrl={person.avatar_cid} value={person.profile_space_id} alt="" size={24} />
-              </span>
+              <PersonAvatar person={person} />
               <Text as="span" variant="metadata" className="min-w-0">
                 <LobbyPersonName person={person} interactionSurface="lobby_going">
                   {personName(person)}

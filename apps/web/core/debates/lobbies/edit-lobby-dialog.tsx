@@ -2,22 +2,25 @@
 
 import * as React from 'react';
 
-import { createPortal } from 'react-dom';
-
 import { useToast } from '~/core/hooks/use-toast';
 
 import { DIALOG_ACTION_BUTTON_CLASS_NAME, DIALOG_SECONDARY_ACTION_BUTTON_CLASS_NAME } from '~/design-system/button';
 import { Input } from '~/design-system/input';
 import { Text } from '~/design-system/text';
-import { ElevatedPopoverPortalContext } from '~/design-system/use-elevated-popover-portal';
 
 import { type DebateLobbyView, GeoChatRequestError, type UpdateDebateLobbyRequest } from '../api';
 import { HubPillButton } from '../matchmaking/hub-pill-button';
-import { useScrollLock } from '../use-scroll-lock';
 import { useUpdateDebateLobby } from './hooks';
-import { MAX_SCHEDULE_AHEAD_DAYS, NAME_MAX_CHARS, lobbyErrorMessage } from './lobby-format';
-import { OpenLobbyClaimListsField, type PickedClaimList } from './open-lobby-claim-lists';
-import { localTimeZone, toDateTimeLocalValue } from './open-lobby-dialog';
+import { lobbyErrorMessage } from './lobby-format';
+import { OpenLobbyClaimListsField, type PickedClaimList, claimListsRequestBody } from './open-lobby-claim-lists';
+import {
+  LobbyDialogFrame,
+  LobbyStartFields,
+  checkLobbyName,
+  checkLobbyStart,
+  toDateTimeLocalValue,
+  useLobbyStartInput,
+} from './open-lobby-dialog';
 
 /** What the dialog reads from the lobby; the lobby page and the side panel both hold it. */
 export type EditableLobby = Pick<
@@ -83,24 +86,17 @@ export function lobbyEditRequestFor(
   now: number = Date.now()
 ): { body: UpdateDebateLobbyRequest } | { error: string } {
   const body: UpdateDebateLobbyRequest = {};
-  const name = edits.name.trim();
-  if (!name) return { error: 'Name the lobby.' };
-  if ([...name].length > NAME_MAX_CHARS) return { error: `Keep the name to ${NAME_MAX_CHARS} characters.` };
-  if (name !== lobby.name) body.name = name;
+  const name = checkLobbyName(edits.name);
+  if ('error' in name) return name;
+  if (name.value !== lobby.name) body.name = name.value;
 
   if (edits.startsAtLocal !== null && edits.startsAtLocal !== toDateTimeLocalValue(new Date(lobby.starts_at))) {
-    const startsAt = new Date(edits.startsAtLocal);
-    if (!edits.startsAtLocal || Number.isNaN(startsAt.getTime())) return { error: 'Pick a start time.' };
-    if (startsAt.getTime() <= now) return { error: 'Pick a time in the future.' };
-    if (startsAt.getTime() > now + MAX_SCHEDULE_AHEAD_DAYS * 86_400_000) {
-      return { error: `Pick a time within ${MAX_SCHEDULE_AHEAD_DAYS} days.` };
-    }
-    body.starts_at = startsAt.toISOString();
+    const start = checkLobbyStart(edits.startsAtLocal, now);
+    if ('error' in start) return start;
+    body.starts_at = start.value;
   }
 
-  if (!sameLists(edits.claimLists, initialLists)) {
-    body.claim_lists = edits.claimLists.map(list => ({ entity_id: list.entityId, space_id: list.spaceId }));
-  }
+  if (!sameLists(edits.claimLists, initialLists)) body.claim_lists = claimListsRequestBody(edits.claimLists);
   return { body };
 }
 
@@ -125,7 +121,6 @@ export function EditLobbyButton({ lobby, label = EDIT_LOBBY_COPY.open }: { lobby
  */
 export function EditLobbyDialog({ lobby, onClose }: { lobby: EditableLobby; onClose: () => void }) {
   const titleId = React.useId();
-  const [popoverContainer, setPopoverContainer] = React.useState<HTMLDivElement | null>(null);
   const update = useUpdateDebateLobby(lobby.lobby_id);
   const [, setToast] = useToast();
   const movable = canMoveLobby(lobby);
@@ -135,24 +130,11 @@ export function EditLobbyDialog({ lobby, onClose }: { lobby: EditableLobby; onCl
     (lobby.claim_lists ?? []).map(list => ({ entityId: list.entity_id, spaceId: list.space_id, name: '' }))
   );
   const [name, setName] = React.useState(lobby.name);
-  const [startDate, setStartDate] = React.useState(initialStart.slice(0, 10));
-  const [startTime, setStartTime] = React.useState(initialStart.slice(11));
-  const [timeZone] = React.useState(localTimeZone);
+  const start = useLobbyStartInput(initialStart);
   const [claimLists, setClaimLists] = React.useState<PickedClaimList[]>(initialLists);
   const [formError, setFormError] = React.useState<string | null>(null);
 
-  useScrollLock();
-
-  React.useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      // The claim list picker over the dialog handles its own Escape.
-      if (event.key === 'Escape' && !event.defaultPrevented) onClose();
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [onClose]);
-
-  const startsAtLocal = movable ? (startDate && startTime ? `${startDate}T${startTime}` : '') : null;
+  const startsAtLocal = movable ? start.startsAtLocal : null;
   const moving = movable && startsAtLocal !== initialStart;
 
   const submit = (event: React.FormEvent) => {
@@ -175,81 +157,50 @@ export function EditLobbyDialog({ lobby, onClose }: { lobby: EditableLobby; onCl
     });
   };
 
-  return createPortal(
-    <div
-      ref={setPopoverContainer}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby={titleId}
-      className="fixed inset-0 z-1200 flex items-center justify-center bg-text/45 p-5 backdrop-blur-sm"
-      onPointerDown={event => {
-        if (event.target === event.currentTarget) onClose();
-      }}
-    >
-      <section className="grid max-h-full w-[min(560px,100%)] gap-5 overflow-y-auto rounded-lg bg-white p-5 text-text shadow-card">
-        <h2 id={titleId}>
-          <Text as="span" variant="smallTitle">
-            {EDIT_LOBBY_COPY.title}
+  return (
+    <LobbyDialogFrame titleId={titleId} onClose={onClose}>
+      <h2 id={titleId}>
+        <Text as="span" variant="smallTitle">
+          {EDIT_LOBBY_COPY.title}
+        </Text>
+      </h2>
+      <form className="grid gap-4" onSubmit={submit}>
+        <label className="grid gap-1.5">
+          <Text as="span" variant="footnoteMedium">
+            Name
           </Text>
-        </h2>
-        <form className="grid gap-4" onSubmit={submit}>
-          <label className="grid gap-1.5">
-            <Text as="span" variant="footnoteMedium">
-              Name
-            </Text>
-            <Input value={name} onChange={event => setName(event.target.value)} autoFocus />
-          </label>
+          <Input value={name} onChange={event => setName(event.target.value)} autoFocus />
+        </label>
 
-          {movable ? (
-            <div className="grid gap-1.5">
-              <div className="flex items-end gap-3">
-                <label className="grid min-w-0 flex-1 gap-1.5">
-                  <Text as="span" variant="footnoteMedium">
-                    Date
-                  </Text>
-                  <Input type="date" value={startDate} onChange={event => setStartDate(event.target.value)} />
-                </label>
-                <label className="grid min-w-0 flex-1 gap-1.5">
-                  <Text as="span" variant="footnoteMedium">
-                    Start time
-                    {timeZone ? (
-                      <Text as="span" variant="footnote" color="grey-04">
-                        {' '}
-                        · {timeZone}
-                      </Text>
-                    ) : null}
-                  </Text>
-                  <Input type="time" value={startTime} onChange={event => setStartTime(event.target.value)} />
-                </label>
-              </div>
-              <Text as="p" variant="footnote" color="grey-04">
+        {movable ? (
+          <LobbyStartFields
+            start={start}
+            note={
+              <>
                 {EDIT_LOBBY_COPY.opensEarly}
                 {moving && lobby.reminder_count > 0 ? ` ${EDIT_LOBBY_COPY.willEmail(lobby.reminder_count)}` : null}
-              </Text>
-            </div>
-          ) : null}
+              </>
+            }
+          />
+        ) : null}
 
-          <ElevatedPopoverPortalContext.Provider value={popoverContainer}>
-            <OpenLobbyClaimListsField value={claimLists} onChange={setClaimLists} />
-          </ElevatedPopoverPortalContext.Provider>
+        <OpenLobbyClaimListsField value={claimLists} onChange={setClaimLists} />
 
-          {formError || update.error ? (
-            <Text as="p" variant="footnote" color="red-01">
-              {formError ?? editErrorMessage(update.error)}
-            </Text>
-          ) : null}
+        {formError || update.error ? (
+          <Text as="p" variant="footnote" color="red-01">
+            {formError ?? editErrorMessage(update.error)}
+          </Text>
+        ) : null}
 
-          <div className="grid grid-cols-2 gap-2">
-            <button type="button" onClick={onClose} className={DIALOG_SECONDARY_ACTION_BUTTON_CLASS_NAME}>
-              Cancel
-            </button>
-            <button type="submit" disabled={update.isPending} className={DIALOG_ACTION_BUTTON_CLASS_NAME}>
-              {update.isPending ? EDIT_LOBBY_COPY.saving : EDIT_LOBBY_COPY.save}
-            </button>
-          </div>
-        </form>
-      </section>
-    </div>,
-    document.body
+        <div className="grid grid-cols-2 gap-2">
+          <button type="button" onClick={onClose} className={DIALOG_SECONDARY_ACTION_BUTTON_CLASS_NAME}>
+            Cancel
+          </button>
+          <button type="submit" disabled={update.isPending} className={DIALOG_ACTION_BUTTON_CLASS_NAME}>
+            {update.isPending ? EDIT_LOBBY_COPY.saving : EDIT_LOBBY_COPY.save}
+          </button>
+        </div>
+      </form>
+    </LobbyDialogFrame>
   );
 }

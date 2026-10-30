@@ -19,7 +19,7 @@ import { Text } from '~/design-system/text';
 
 import { debateActionAnalyticsAttributes, debateSurfaceAnalyticsAttributes } from '../matchmaking/hub-analytics';
 import { HubPillButton } from '../matchmaking/hub-pill-button';
-import { EditLobbyButton } from './edit-lobby-dialog';
+import { EditLobbyButton, canEditLobby } from './edit-lobby-dialog';
 import { useEndDebateLobby } from './hooks';
 import { lobbyShareUrl } from './lobby-analytics';
 import {
@@ -212,7 +212,7 @@ function EndLobbyControl({ lobby }: { lobby: LobbyPageView }) {
   );
 }
 
-/** Phone: Copy link and, for a host, End lobby behind the title's "…". */
+/** Phone: Copy link and, for a host, Edit lobby and End lobby behind the title's "…". */
 function LobbyTitleMenu({ lobby }: { lobby: LobbyPageView }) {
   const [open, setOpen] = React.useState(false);
   const title = useLobbyRoomPurpose().purpose === 'call' ? 'Call options' : 'Lobby options';
@@ -235,10 +235,10 @@ function LobbyTitleMenu({ lobby }: { lobby: LobbyPageView }) {
     >
       <div className="flex flex-col gap-2 pb-1">
         <CopyLinkRow lobbyId={lobby.lobby_id} />
-        {lobby.viewer.hosting ? (
+        {lobby.viewer.hosting || canEditLobby(lobby) ? (
           <div className="flex flex-wrap gap-2">
             <EditLobbyButton lobby={lobby} />
-            <EndLobbyControl lobby={lobby} />
+            {lobby.viewer.hosting ? <EndLobbyControl lobby={lobby} /> : null}
           </div>
         ) : null}
       </div>

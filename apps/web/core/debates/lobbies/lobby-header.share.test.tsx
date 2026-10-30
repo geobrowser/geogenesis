@@ -42,3 +42,15 @@ it.each([false, true])('tags the lobby copy control (phone: %s)', async phone =>
     expect.objectContaining({ ...parseShareLink(url), handoff_kind: 'copied', target_type: 'lobby' })
   );
 });
+
+// GEO-3540: any host edits, present or not; End stays with whoever is hosting.
+it.each([false, true])('offers Edit lobby to a host who is not the acting host (phone: %s)', phone => {
+  const host = {
+    ...lobby,
+    purpose: 'lobby',
+    viewer: { kind: 'user', role: 'host', hosting: false },
+  } as unknown as LobbyPageView;
+  render(<LobbyHeader lobby={host} phone={phone} availability={null} />);
+  expect(screen.getByRole('button', { name: 'Edit lobby' })).toBeTruthy();
+  expect(screen.queryByRole('button', { name: /^End/ })).toBeNull();
+});
