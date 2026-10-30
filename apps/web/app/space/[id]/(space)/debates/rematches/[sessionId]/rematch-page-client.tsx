@@ -329,6 +329,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const viewerIdentityUnresolved = geoChatAuthenticated && currentUserId === null;
   const exitStartedRef = React.useRef(false);
   const leaveRequestedRef = React.useRef(false);
+  const sessionSeenLiveRef = React.useRef<string | null>(null);
   const setOpponentLeftNotice = useSetAtom(opponentLeftNoticeAtom);
   const sessionQuery = useDebateRematch(sessionId);
   const [search, setSearch] = React.useState('');
@@ -2480,6 +2481,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
 
   React.useEffect(() => {
     if (!session) return;
+    if (session.status === 'browsing' || session.status === 'request_pending') {
+      sessionSeenLiveRef.current = session.id;
+    }
     if (session.status === 'converted' && session.converted_debate_id) {
       // The requester walks into the room the same way the accepter does, and without the intent
       // `DebateCoordinator` reads the walk as an unannounced debate and reopens the dialog.
@@ -2513,8 +2517,12 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
         // viewer left themselves: `returnFromSession` runs on their own Leave too, which sets
         // `leaveRequestedRef`, and the local mark outlives the ref when Back remounts the page into
         // the session they ended. Both terminal statuses count — a tab the opponent closed surfaces
-        // as `expired` after ~90 seconds, not `ended`.
-        if (!leaveRequestedRef.current && !didLocallyLeaveRematch(session.id)) {
+        // as `expired` after ~90 seconds, not `ended`. Only for a session this mount saw live.
+        if (
+          sessionSeenLiveRef.current === session.id &&
+          !leaveRequestedRef.current &&
+          !didLocallyLeaveRematch(session.id)
+        ) {
           setOpponentLeftNotice({ recordingDiscarded: false });
         }
         returnFromSession(session);

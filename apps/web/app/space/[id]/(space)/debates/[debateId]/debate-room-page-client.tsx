@@ -474,6 +474,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const [recordingRemovalAcknowledged, setRecordingRemovalAcknowledged] = React.useState(false);
   const setOpponentLeftNotice = useSetAtom(opponentLeftNoticeAtom);
   const lastActiveDebateStatusRef = React.useRef<Debate['status'] | null>(null);
+  const debateSeenLiveRef = React.useRef<string | null>(null);
+  const rematchSeenLiveRef = React.useRef<string | null>(null);
 
   const carriedLobby = useCarriedLobbyChoice();
   /*
@@ -888,6 +890,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const opponentLeftFromDebateCancel = Boolean(
     debate &&
     debate.status === 'cancelled' &&
+    debateSeenLiveRef.current === debate.id &&
     debate.cancellation_reason !== 'connection_timeout' &&
     recordingCancelledBy === null &&
     !didLocallyLeaveDebate(debate.id)
@@ -896,6 +899,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     debate &&
     debate.rematch_session_id &&
     rematchSessionStatus === 'ended' &&
+    rematchSeenLiveRef.current === debate.rematch_session_id &&
     !didLocallyLeaveRematch(debate.rematch_session_id) &&
     (debate.status === 'thanking' || debate.status === 'complete')
   );
@@ -2535,7 +2539,11 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         return;
       }
       // Opponent left rematch on thank-you: leave this screen and show the notice on a normal page.
-      if (session?.status === 'ended' && !didLocallyLeaveRematch(session.id)) {
+      if (
+        session?.status === 'ended' &&
+        rematchSeenLiveRef.current === session.id &&
+        !didLocallyLeaveRematch(session.id)
+      ) {
         disconnectRoom(roomRef, localTracksRef, localVideoRef, remoteMediaRef);
         localMediaStreamRef.current = null;
         setRemoteVideoReady(false);
@@ -2722,7 +2730,11 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     if (!handoffSettled) return;
     if (roomState === 'idle') {
       if (rematchSessionClosed && !rematchLeaveRequestedRef.current && !idleSaveFailed) {
-        if (debate?.rematch_session_id && !didLocallyLeaveRematch(debate.rematch_session_id)) {
+        if (
+          debate?.rematch_session_id &&
+          rematchSeenLiveRef.current === debate.rematch_session_id &&
+          !didLocallyLeaveRematch(debate.rematch_session_id)
+        ) {
           setOpponentLeftNotice({ recordingDiscarded: false });
         }
         void leaveIdleRoom(returnFromDebate);
@@ -3004,9 +3016,10 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
 
   React.useEffect(() => {
     if (!shouldReturnFromTerminalDebate) return;
-    if (debate?.status === 'cancelled' && !didLocallyLeaveDebate(debate.id)) return;
+    // The announce effect below takes this exit, notice first.
+    if (opponentLeftFromDebateCancel) return;
     returnFromDebate();
-  }, [debate, returnFromDebate, shouldReturnFromTerminalDebate]);
+  }, [opponentLeftFromDebateCancel, returnFromDebate, shouldReturnFromTerminalDebate]);
 
   React.useEffect(() => {
     if (!shouldAnnounceOpponentLeft) return;
@@ -3034,6 +3047,20 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     if (!debate || debate.status === 'cancelled') return;
     lastActiveDebateStatusRef.current = debate.status;
   }, [debate]);
+
+  React.useEffect(() => {
+    if (debate && debate.status !== 'complete' && debate.status !== 'cancelled') {
+      debateSeenLiveRef.current = debate.id;
+    }
+  }, [debate]);
+
+  React.useEffect(() => {
+    const session = rematchQuery.data;
+    if (!session) return;
+    if (session.status === 'deciding' || session.status === 'browsing' || session.status === 'request_pending') {
+      rematchSeenLiveRef.current = session.id;
+    }
+  }, [rematchQuery.data]);
 
   React.useEffect(() => {
     if (!idleRematchDestination || idleSaveFailed) return;

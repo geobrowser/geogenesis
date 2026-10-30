@@ -1245,16 +1245,30 @@ describe('DebateRematchPageClient', () => {
   it.each([['ended'], ['expired']] as const)(
     'boots out of an %s rematch when the opponent left, for the coordinator to announce',
     async status => {
-      mocks.session = session({ status });
       // The leave marker is module-scoped and survives earlier "Leave debate" cases in this file.
       unmarkLocalRematchLeave('rematch-1');
+      const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
 
-      const { store } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+      mocks.session = session({ status });
+      view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
 
       await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith(`/space/${SPACE_1}/debates`));
       expect(screen.queryByRole('dialog', { name: 'Opponent left' })).not.toBeInTheDocument();
       // The notice is raised for `DebateCoordinator` to show on the debates page.
-      expect(store.get(opponentLeftNoticeAtom)).toEqual({ recordingDiscarded: false });
+      expect(view.store.get(opponentLeftNoticeAtom)).toEqual({ recordingDiscarded: false });
+    }
+  );
+
+  it.each([['ended'], ['expired']] as const)(
+    'boots out of a picker that loads onto an %s rematch without announcing',
+    async status => {
+      unmarkLocalRematchLeave('rematch-1');
+      mocks.session = session({ status });
+
+      const { store } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+      await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith(`/space/${SPACE_1}/debates`));
+      expect(store.get(opponentLeftNoticeAtom)).toBeNull();
     }
   );
 
