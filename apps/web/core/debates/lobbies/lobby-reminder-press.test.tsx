@@ -101,9 +101,18 @@ describe('useLobbyReminderPress', () => {
     expect(mocks.queue).toHaveBeenCalledWith('abc123');
     expect(mocks.signIn).toHaveBeenCalledWith(
       expect.objectContaining({ target_type: 'debate_lobby', target_id: 'abc123', auth_control: 'remind_lobby' }),
-      { onCancel: mocks.cancel }
+      { onCancel: mocks.cancel, nameOnlyOnboarding: false }
     );
     expect(mocks.config).toMatchObject({ id: 'lobby-reminder', requires: 'auth', liveOnly: true });
+  });
+
+  // GEO-3517. The debate hours page asks a new account for a name only.
+  it('passes a name-only onboarding on to the account prompt when asked', () => {
+    mocks.authenticated = false;
+    const { result } = renderHook(() => useLobbyReminderPress(lobby(), { nameOnlyOnboarding: true }));
+    act(() => result.current.press());
+
+    expect(mocks.signIn).toHaveBeenCalledWith(expect.anything(), { onCancel: mocks.cancel, nameOnlyOnboarding: true });
   });
 
   it('draws the queued reminder as set on its own lobby only', () => {
