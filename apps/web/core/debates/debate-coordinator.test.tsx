@@ -549,7 +549,7 @@ describe('DebateCoordinator', () => {
     // The notice closes and the hub opens on its default tab, the one way back into a debate.
     expect(screen.queryByRole('dialog', { name: 'Opponent left' })).not.toBeInTheDocument();
     expect(store.get(opponentLeftNoticeAtom)).toBeNull();
-    expect(store.get(debatesHubAtom)).toEqual({ tab: 'lobby' });
+    expect(store.get(debatesHubAtom)).toEqual({ tab: 'people' });
   });
 
   // The rematch the viewer is already looking at, plus the debate it came from still reported in

@@ -6,22 +6,26 @@ import Link from 'next/link';
 
 import { useIsPhoneLayout } from '~/core/hooks/use-is-phone-layout';
 import { CallRoom } from '~/core/space-calls/call-room';
+import { CallScreenStage } from '~/core/space-calls/call-screen-stage';
 import { EndedCallRecording } from '~/core/space-calls/recording/ended-call-recording';
-import { spaceCallPath } from '~/core/space-calls/routes';
+import { spaceCallPath, spaceCallsTabPath } from '~/core/space-calls/routes';
 import { useBrowseSidebarPageDefault } from '~/core/state/browse-sidebar-state';
+import { useFeatureFlag } from '~/core/state/feature-flags';
 import { NavUtils } from '~/core/utils/utils';
 
-import { Avatar } from '~/design-system/avatar';
 import { Spinner } from '~/design-system/spinner';
 import { Text } from '~/design-system/text';
 
-import type { DebateLobbyView } from '../api';
+import { CallPreOpen } from '~/partials/space-calls/call-pre-open';
+
+import { type DebateLobbyView, isLobbyNotFound } from '../api';
 import { useDebateActivity, useGeoChatAuth } from '../hooks';
 import { useMatchmakingScope } from '../matchmaking/hooks';
 import { HubHeaderControls } from '../matchmaking/hub-header-controls';
 import { HubPillButton, hubPillClassName } from '../matchmaking/hub-pill-button';
 import { debateRoomPath } from '../rooms/room-routes';
 import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
+import { EditLobbyButton, EditLobbyDialog, canEditLobby } from './edit-lobby-dialog';
 import {
   type LobbyPresenceRoster,
   type LobbyPresenceState,
@@ -34,15 +38,7 @@ import { markLobbyEntry } from './lobby-analytics';
 import { LobbyClaimsArea } from './lobby-claims-area';
 import { useClaimsTabMark } from './lobby-claims-mark';
 import { useExitLobbyWhenOut, useLobbyExitHref } from './lobby-exit';
-import {
-  RSVP_FAILED,
-  goingLabel,
-  hostsLabel,
-  lobbyDateLabel,
-  lobbyErrorMessage,
-  notYetOpenLabel,
-  rsvpLabel,
-} from './lobby-format';
+import { RSVP_FAILED, lobbyDateLabel, lobbyErrorMessage, notYetOpenLabel, rsvpLabel } from './lobby-format';
 import { LOBBY_GUEST_COPY, LobbyGuestBanner } from './lobby-guest';
 import {
   LobbyGuestProvider,
@@ -57,6 +53,7 @@ import { useLobbyHighlights } from './lobby-highlights-hooks';
 import { usePreOpenHosts } from './lobby-host-lobbies';
 import { EndPickerLeftBehind } from './lobby-left-picker';
 import { LobbyHostLists, LobbyRemovedNotice } from './lobby-moderation';
+import { LobbyClaimListNames, LobbyGoing, LobbyHostedBy } from './lobby-pre-open-details';
 import { type LobbyRoomNoun, useIsCallRoom, useLobbyRoomPurpose } from './lobby-purpose';
 import { LobbyQueuedRequestProvider, useLobbyQueuedRequest } from './lobby-queued-request';
 import { LobbyAnalyticsScope } from './lobby-room-analytics';
@@ -145,8 +142,13 @@ export function DebateLobbyPage({ lobbyId }: { lobbyId: string }) {
   const waitingOutside =
     !guest && lobby !== null && !lobby.viewer.connected && (admitted || lobby.access.status === 'not_yet_open');
   useMatchmakingScope(waitingOutside);
-  // Only where the page shows the guest banner, which is how a closed prompt is opened again.
-  useLobbySignInPrompt(lobbyId, signedOut && (admitted || lobby?.access.status === 'not_yet_open'));
+  // Only where the page shows the guest banner, which is how a closed prompt is opened again. A
+  // scheduled call's pre-call page has none: it asks on Remind me, or once the call is open.
+  const callRoom = useIsCallRoom();
+  const spaceCalls = useFeatureFlag('spaceCalls');
+  const preCallPage = callRoom && spaceCalls;
+  const notYetOpen = lobby?.access.status === 'not_yet_open';
+  useLobbySignInPrompt(lobbyId, signedOut && (admitted || (notYetOpen && !preCallPage)));
   const exitHref = useLobbyExitHref();
   const exiting = useExitLobbyWhenOut({
     lobbyId,
@@ -158,6 +160,10 @@ export function DebateLobbyPage({ lobbyId }: { lobbyId: string }) {
     exitHref,
   });
 
+  // A host's edit (GEO-3540) lives above the access switch: the lobby opening replaces the waiting
+  // card, and the dialog stays up to say its start can't move now rather than vanish with it.
+  const [editing, setEditing] = React.useState(false);
+
   // Blank while the route changes, rather than a flash of the card being left.
   if (exiting) return <div className="min-h-[calc(100dvh-2.75rem)]" data-testid="lobby-exiting" />;
 
@@ -166,11 +172,14 @@ export function DebateLobbyPage({ lobbyId }: { lobbyId: string }) {
       <LobbyAccess
         lobby={lobby}
         failed={(guest ? guestQuery : lobbyQuery).isError}
+        missing={isLobbyNotFound((guest ? guestQuery : lobbyQuery).error)}
         onRetry={() => void (guest ? guestQuery : lobbyQuery).refetch()}
         presence={presence}
         guestSession={guestSession}
         exitHref={exitHref}
+        onEdit={() => setEditing(true)}
       />
+      {editing && lobby ? <EditLobbyDialog lobby={lobby} onClose={() => setEditing(false)} /> : null}
     </LobbyGuestProvider>
   );
 }
@@ -202,22 +211,38 @@ export function memberPath(
 function LobbyAccess({
   lobby,
   failed,
+  missing,
   onRetry,
   presence,
   guestSession,
   exitHref,
+  onEdit,
 }: {
   lobby: LobbyPageView | null;
   failed: boolean;
+  /** The last read was a 404: whatever is cached is gone. */
+  missing: boolean;
   /** Reads the lobby again; a member join follows once it loads. */
   onRetry: () => void;
   presence: ReturnType<typeof useLobbyPresence>;
   guestSession: LobbyGuestSession;
   /** Where leaving goes: the page the lobby was opened from. */
   exitHref: string;
+  /** Opens the host's edit dialog, held by the page. */
+  onEdit: () => void;
 }) {
   const guest = useIsLobbyGuest();
   const purpose = useLobbyRoomPurpose();
+  // Scheduled calls (GEO-3420) are the community calls feature; off, a call page reads as before.
+  const spaceCalls = useFeatureFlag('spaceCalls');
+  // A call gone from geo-chat leaves quietly, never showing a cached copy.
+  if (missing && purpose.purpose === 'call' && spaceCalls) {
+    return (
+      <LobbyNotice action={{ href: spaceCallsTabPath(purpose.spaceId), label: CALL_STATE_COPY.backToCalls }}>
+        {CALL_STATE_COPY.unavailable}
+      </LobbyNotice>
+    );
+  }
   if (!lobby) {
     const call = purpose.purpose === 'call';
     return failed ? (
@@ -242,6 +267,7 @@ function LobbyAccess({
         <LobbyClosedCard
           lobby={lobby}
           ended={lobby.access.reason === 'ended'}
+          cancelled={lobby.access.reason === 'cancelled'}
           after={
             <>
               {purpose.purpose === 'call' ? <EndedCallRecording lobby={lobby} /> : null}
@@ -256,7 +282,11 @@ function LobbyAccess({
         />
       );
     case 'not_yet_open':
-      return <NotYetOpen lobby={lobby} />;
+      return purpose.purpose === 'call' && spaceCalls ? (
+        <CallPreOpen lobby={lobby} />
+      ) : (
+        <NotYetOpen lobby={lobby} onEdit={onEdit} />
+      );
     case 'admitted':
       if (guest && guestSession.state.status === 'removed') {
         return (
@@ -276,7 +306,7 @@ function LobbyAccess({
   }
 }
 
-function NotYetOpen({ lobby }: { lobby: LobbyPageView }) {
+function NotYetOpen({ lobby, onEdit }: { lobby: LobbyPageView; onEdit: () => void }) {
   const guest = useIsLobbyGuest();
   const reminder = useDebateLobbyReminder();
   const end = useEndDebateLobby(lobby.lobby_id);
@@ -288,7 +318,6 @@ function NotYetOpen({ lobby }: { lobby: LobbyPageView }) {
   // Ticks so the countdown moves; passed in so the compiler sees it change.
   const now = useMinuteNow();
   const hosts = usePreOpenHosts(lobby);
-  const hostedBy = hostsLabel(hosts);
   const date = lobbyDateLabel(lobby.starts_at);
 
   return (
@@ -297,16 +326,7 @@ function NotYetOpen({ lobby }: { lobby: LobbyPageView }) {
         {LOBBY_COPY.scheduled}
       </Text>
       <LobbyTitle lobby={lobby} />
-      {hostedBy ? (
-        <div className="flex items-center gap-2.5">
-          <span className="size-6 shrink-0 overflow-hidden rounded-full [&>svg]:size-full">
-            <Avatar avatarUrl={hosts[0]!.avatar_cid} value={hosts[0]!.profile_space_id} alt="" size={24} />
-          </span>
-          <Text as="span" variant="metadata" color="grey-04">
-            Hosted by {hostedBy}
-          </Text>
-        </div>
-      ) : null}
+      <LobbyHostedBy hosts={hosts} />
       <div className="flex flex-col gap-1 rounded-xl bg-grey-01 p-3">
         {date ? (
           <Text as="p" variant="smallTitle">
@@ -317,11 +337,13 @@ function NotYetOpen({ lobby }: { lobby: LobbyPageView }) {
           {notYetOpenLabel(lobby, now)}
         </Text>
       </div>
-      {lobby.reminder_count > 0 ? (
-        <Text as="p" variant="metadata" color="grey-04">
-          {goingLabel(lobby.reminder_count)}
-        </Text>
-      ) : null}
+      {/* Who is going and what it starts with, as the side panel's lobby details show them (GEO-3463). */}
+      <LobbyGoing
+        going={lobby.going}
+        count={lobby.reminder_count}
+        hostOf={canEditLobby(lobby) ? lobby.lobby_id : undefined}
+      />
+      <LobbyClaimListNames lists={lobby.claim_lists} />
       <div className="flex flex-wrap gap-2">
         {guest ? null : (
           <HubPillButton
@@ -335,6 +357,7 @@ function NotYetOpen({ lobby }: { lobby: LobbyPageView }) {
           </HubPillButton>
         )}
         <FindDebateLink />
+        <EditLobbyButton lobby={lobby} onOpen={onEdit} />
         {canCancel ? (
           confirmingCancel ? (
             <>
@@ -579,7 +602,15 @@ function LobbyRoom({
       header={<LobbyHeader lobby={lobby} phone={phone} availability={phone ? null : availability} />}
       belowHeader={!guest && state.status === 'joined' ? <LobbyScheduledRequests lobby={lobby} /> : null}
       people={
-        <LobbyPeople lobby={lobby} viewerId={currentUserId} ownAvailable={ownAvailable} disagreements={disagreements} />
+        // A host's shared screen (GEO-3507), above the speakers as in a call.
+        <CallScreenStage members={lobby.members}>
+          <LobbyPeople
+            lobby={lobby}
+            viewerId={currentUserId}
+            ownAvailable={ownAvailable}
+            disagreements={disagreements}
+          />
+        </CallScreenStage>
       }
       aside={{
         tab: 'Claims',
@@ -592,9 +623,12 @@ function LobbyRoom({
       availability={availability}
       queuedOutcome={queuedRequest.outcome}
       onDismissQueuedOutcome={queuedRequest.dismissOutcome}
+      voiceExtras={LOBBY_VOICE_EXTRAS}
     />
   );
 }
+
+const LOBBY_VOICE_EXTRAS = { screenShare: true };
 
 function LobbyTitle({ lobby }: { lobby: LobbyPageView }) {
   return (

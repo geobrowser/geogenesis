@@ -19,6 +19,21 @@ import { WATCH_LIVE_ENABLED } from '~/core/debates/watch-live';
 import { useClaimMatchup } from './use-claim-matchup';
 
 /**
+ * Whether a match was computed for a side the viewer has since stepped off, so it names someone on
+ * their own side now. Only a positive contradiction counts: both readings known, and disagreeing.
+ * Shared with the hub's own end slot, which withdraws its offer on the same thing.
+ */
+export function matchContradictsViewerSide(
+  match: { viewer_response?: { position: boolean } | null; viewer_position?: boolean | null } | null | undefined,
+  viewerPosition: boolean | null | undefined
+) {
+  const matchedSide = match ? (match.viewer_response?.position ?? match.viewer_position) : null;
+  return (
+    matchedSide !== null && matchedSide !== undefined && viewerPosition !== undefined && matchedSide !== viewerPosition
+  );
+}
+
+/**
  * The end of a claim's meta row: whatever this claim offers the reader right now.
  *
  * One slot, and every state in it is a verb. That is the point of the thing. `active_debate` is the
@@ -137,9 +152,7 @@ function MatchmakingClaimEndSlot({
   //
   // Only a positive contradiction withdraws it. Both readings have to be known and they have to
   // disagree — an unknown local side, or a match that names none, leaves the offer alone.
-  const matchedSide = match ? (match.viewer_response?.position ?? match.viewer_position) : null;
-  const contradictsViewerSide =
-    matchedSide !== null && matchedSide !== undefined && viewerPosition !== undefined && matchedSide !== viewerPosition;
+  const contradictsViewerSide = matchContradictsViewerSide(match, viewerPosition);
 
   // A match is otherwise derived from the same `debate_claim_readiness` rows
   // `create_debate_request_as` reads, so nothing further about the position belongs here — a check

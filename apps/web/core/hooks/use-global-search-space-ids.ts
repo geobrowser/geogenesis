@@ -1,11 +1,10 @@
 'use client';
 
-import { skipToken, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 
 import * as React from 'react';
 
-import { browseSidebarDataQueryKey } from '~/core/browse/browse-sidebar-query';
-import type { BrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data';
+import { browseSidebarQueryOptions } from '~/core/browse/browse-sidebar-query-options';
 import { ROOT_SPACE } from '~/core/constants';
 
 import { buildGlobalSearchSpaceIds } from './global-search-space-ids';
@@ -21,14 +20,12 @@ import { useSpaceId } from './use-space-id';
  * the active scope.
  */
 export function useGlobalSearchSpaceIds(): string[] {
-  const queryClient = useQueryClient();
   const currentSpaceId = useSpaceId();
   const { personalSpaceId } = usePersonalSpaceId();
-  const sidebarQueryKey = browseSidebarDataQueryKey(personalSpaceId);
-  const { data: browseSidebarData = null } = useQuery<BrowseSidebarData | null>({
-    queryKey: sidebarQueryKey,
-    queryFn: skipToken,
-    placeholderData: () => queryClient.getQueryData<BrowseSidebarData>(sidebarQueryKey) ?? null,
+
+  const { data: browseSidebarData = null } = useQuery({
+    ...browseSidebarQueryOptions({ personalSpaceId }),
+    enabled: false,
   });
 
   const memberAndEditorSpaceIds = React.useMemo(() => {

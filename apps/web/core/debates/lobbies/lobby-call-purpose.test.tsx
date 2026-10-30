@@ -213,6 +213,12 @@ describe('state cards in a space call', () => {
     expect(screen.queryByText(/next lobby/i)).not.toBeInTheDocument();
   });
 
+  it('says a cancelled scheduled call was cancelled (GEO-3420)', () => {
+    render(inCall(<LobbyClosedCard lobby={{ lobby_id: 'call1', created_by: null }} ended={false} cancelled />));
+
+    expect(screen.getByRole('heading', { name: 'This call was cancelled' })).toBeInTheDocument();
+  });
+
   it('asks the first one in to share the link, without lobby suggestions', () => {
     render(inCall(<LobbyEmptyRoom lobby={{ lobby_id: 'call1', created_by: 'Adam' }} signedIn />));
 

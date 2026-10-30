@@ -45,6 +45,9 @@ const { SPACE_1, SPACE_2, CLAIM_SHARED, CLAIM_MORE, CLAIM_SOURCE, CLAIM_FRESH, N
 const mocks = vi.hoisted(() => ({
   /** Bumped to remount the stubbed header's subtree, the way the real one does as voice connects. */
   headerEpoch: 0,
+  /** GEO-3527. Agree / disagree counts by claim id, and whether the counts lookup is in flight. */
+  responseCounts: new Map<string, { positive: number; negative: number }>(),
+  responseCountsLoading: false,
   /** GEO-3223. Whether the viewport is a phone's. */
   isPhone: true,
   sourceDebate: { claim: { claim_entity_id: CLAIM_SOURCE, space_id: SPACE_1 } } as unknown,
@@ -175,6 +178,7 @@ const mocks = vi.hoisted(() => ({
   /** Analytics, so the landing report can be read back (GEO-3148). */
   capture: vi.fn(),
   positionsLoading: false,
+  positionsPlaceholder: false,
   positionsError: null as unknown,
   positionsFetching: false,
   positionParticipants: [] as string[][],
@@ -292,6 +296,23 @@ vi.mock('~/core/claims/browse/claim-response-summary', async importOriginal => (
   }),
 }));
 
+// GEO-3527. The lists' counts lookup, answered from the fixture rather than the graph.
+vi.mock('~/core/debates/matchmaking/claim-debatability', async importOriginal => {
+  const actual = await importOriginal<typeof import('~/core/debates/matchmaking/claim-debatability')>();
+  return {
+    ...actual,
+    useClaimResponseCounts: (claims: Array<{ claimEntityId: string; spaceId: string }>) => ({
+      counts: new Map(
+        claims.flatMap(claim => {
+          const found = mocks.responseCounts.get(claim.claimEntityId);
+          return found ? [[actual.claimCountsKey(claim.claimEntityId, claim.spaceId), found] as const] : [];
+        })
+      ),
+      isLoading: mocks.responseCountsLoading,
+    }),
+  };
+});
+
 // The publishing card has its own tests; here it only has to be mounted where the page puts it.
 vi.mock('./rematch-publish-card', () => ({
   RematchPublishCard: ({ debate }: { debate: { claim: { claim_entity_id: string } } }) => (
@@ -337,7 +358,7 @@ vi.mock('~/core/debates/hooks', () => ({
     data:
       mocks.savedClaimsLoading || mocks.savedClaimsError
         ? undefined
-        : { claims: mocks.savedClaims ?? mocks.claims, excluded_claim_ids: [CLAIM_SOURCE] },
+        : { claims: mocks.savedClaims ?? mocks.claims, excluded_claim_ids: mocks.excludedClaimIds },
     isLoading: mocks.savedClaimsLoading,
     error: mocks.savedClaimsError,
   }),
@@ -722,10 +743,11 @@ vi.mock('~/core/debates/participant-positions', async importOriginal => {
       return {
         byClaim: actual.groupParticipantPositions(mocks.positions),
         isLoading: mocks.positionsLoading,
+        isPlaceholderData: mocks.positionsPlaceholder,
         // An answer for this key still on its way — whether that is the previous pair's rows held
         // over, or this pair's cached rows while the mount refetch runs. `isLoading` is false for
         // both, and both can be empty where the answer arriving is not.
-        isFetching: mocks.positionsLoading || mocks.positionsFetching,
+        isFetching: mocks.positionsLoading || mocks.positionsPlaceholder || mocks.positionsFetching,
         error: mocks.positionsError,
       };
     },
@@ -878,6 +900,89 @@ vi.mock('~/core/debates/matchmaking/hooks', () => ({
   },
 }));
 
+/**
+ * GEO-3489. Today's claims: the agendas, geo-chat's counts and the debaters' memberships. No space
+ * has an agenda unless a case lists one, so every other suite here runs without the tab.
+ */
+const todays = vi.hoisted(() => ({
+  agendas: { spaces: [], earlier: [], newestDay: null } as {
+    spaces: Array<{
+      spaceId: string;
+      listedOn: string;
+      sections: Array<{
+        id: string;
+        agendaId: string;
+        spaceId: string;
+        name: string;
+        claimIds: string[];
+        listedOn: string;
+        listedAt: string;
+      }>;
+    }>;
+    earlier: Array<{ claimId: string; spaceId: string; agendaId: string; listedOn: string; listedAt: string }>;
+    newestDay: string | null;
+  },
+  entities: [] as any[],
+  loading: false,
+  error: null as Error | null,
+  /** Debates since listing per claim id, or null for a geo-chat that cannot say. */
+  counts: null as Map<string, number> | null,
+  countsAsked: [] as Array<Array<{ claimId: string; since: string }>>,
+  /** How many of the two debaters are members of each space, by bare lowercase id. */
+  members: {} as Record<string, number>,
+}));
+
+/** Each claim's newest listing, as `buildDebateAgendas` reports it: today's sections, then the week's. */
+function listedAtByClaim(agendas: typeof todays.agendas) {
+  const byClaim = new Map<string, string>();
+  for (const space of agendas.spaces)
+    for (const section of space.sections)
+      for (const claimId of section.claimIds) if (!byClaim.has(claimId)) byClaim.set(claimId, section.listedAt);
+  for (const listing of agendas.earlier)
+    if (!byClaim.has(listing.claimId)) byClaim.set(listing.claimId, listing.listedAt);
+  return byClaim;
+}
+
+// The builder has its own tests; this keeps its contract: `keepSpace` decides first which spaces count.
+vi.mock('~/core/debates/todays-claims/debate-agendas', async importOriginal => {
+  const { NO_AGENDAS } = await importOriginal<typeof import('~/core/debates/todays-claims/debate-agendas')>();
+  const agendasIn = (keepSpace: (spaceId: string) => boolean) => {
+    const kept = {
+      ...todays.agendas,
+      spaces: todays.agendas.spaces.filter(space => keepSpace(space.spaceId)),
+      earlier: todays.agendas.earlier.filter(listing => keepSpace(listing.spaceId)),
+    };
+    return { ...kept, listedAtByClaim: listedAtByClaim(kept) };
+  };
+  return {
+    NO_AGENDAS,
+    useDebateAgendas: () => ({
+      agendasIn,
+      spaceIds: [...todays.agendas.spaces.map(space => space.spaceId), ...todays.agendas.earlier.map(l => l.spaceId)],
+      claimIds: [...listedAtByClaim(todays.agendas).keys()],
+      claimEntities: todays.entities,
+      isLoading: todays.loading,
+      error: todays.error,
+    }),
+  };
+});
+
+vi.mock('~/core/debates/todays-claims/claim-debate-counts', () => ({
+  useClaimDebateCounts: (asks: Array<{ claimId: string; since: string }>, enabled: boolean) => {
+    if (enabled) todays.countsAsked.push(asks);
+    return { byClaimId: enabled ? todays.counts : null, isLoading: false, error: null };
+  },
+}));
+
+vi.mock('~/core/debates/todays-claims/use-debaters-space-membership', () => ({
+  // Like the real lookup: with no debaters to ask about yet it is disabled, settled, and counts nobody.
+  useDebatersSpaceMembership: (_spaceIds: string[], debaterSpaceIds: string[]) => ({
+    debatersIn: (spaceId: string) =>
+      debaterSpaceIds.length === 0 ? 0 : (todays.members[spaceId.replace(/-/g, '').toLowerCase()] ?? 0),
+    isLoading: false,
+  }),
+}));
+
 // The curated lookup has its own tests; these cover the picker around it.
 vi.mock('~/core/debates/recommended-claims', () => ({
   useRecommendedClaimSections: () => ({
@@ -955,6 +1060,8 @@ function mutation(mutate = mocks.mutate) {
 
 beforeEach(() => {
   mocks.isPhone = true;
+  mocks.responseCounts.clear();
+  mocks.responseCountsLoading = false;
   mocks.capture.mockClear();
   mocks.sourceDebate = { claim: { claim_entity_id: CLAIM_SOURCE, space_id: SPACE_1 } };
   mocks.sourceDebateLoading = false;
@@ -1049,6 +1156,7 @@ beforeEach(() => {
     position('profile-remote', CLAIM_SHARED, SPACE_1, false),
   ];
   mocks.positionsLoading = false;
+  mocks.positionsPlaceholder = false;
   mocks.positionsError = null;
   mocks.positionsFetching = false;
   mocks.positionParticipants.length = 0;
@@ -1139,7 +1247,7 @@ describe('DebateRematchPageClient', () => {
         <DebateRematchPageClient sessionId="rematch-1" />
       </StrictMode>
     );
-    await showOpponentClaims();
+    await showMatches();
 
     expect(await screen.findByText('A claim both participants chose')).toBeInTheDocument();
     await new Promise(resolve => window.setTimeout(resolve, 0));
@@ -1304,9 +1412,9 @@ describe('DebateRematchPageClient', () => {
     await waitFor(() => expect(screen.getAllByRole('button', { name: 'Request debate' })[0]).toBeEnabled());
   });
 
-  it('renders active semantic response buttons with holder avatars', async () => {
+  it('renders active response buttons without faces and shows the opponent’s position beneath their side', async () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
-    await showOpponentClaims();
+    await showMatches();
 
     const sharedClaimCard = screen.getByText('A claim both participants chose').closest('article');
     expect(sharedClaimCard).not.toBeNull();
@@ -1322,7 +1430,89 @@ describe('DebateRematchPageClient', () => {
         .getByRole('button', { name: /^Disagree/ })
         .querySelector('img, svg')
     ).not.toBeNull();
+    for (const button of within(sharedClaimCard!).getAllByRole('button', { name: /^(Agree|Disagree)/ })) {
+      expect(button.querySelector('img, [aria-hidden="true"]')).toBeNull();
+    }
+    const tag = within(sharedClaimCard!).getByText('disagrees').closest('p')!;
+    expect(tag).toHaveTextContent('Salina disagrees');
+    expect(tag.parentElement).toContainElement(within(sharedClaimCard!).getByRole('button', { name: /^Disagree/ }));
+    expect(within(sharedClaimCard!).getByRole('button', { name: /^Agree/ })).toHaveAttribute('aria-pressed', 'true');
   });
+
+  it('shows the opponent’s agreement under Agree independently of the viewer’s side', async () => {
+    mocks.positions = [
+      position('profile-local', CLAIM_SHARED, SPACE_1, false),
+      position('profile-remote', CLAIM_SHARED, SPACE_1, true),
+    ];
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showMatches();
+
+    const card = screen.getByText('A claim both participants chose').closest('article')!;
+    const tag = within(card).getByText('agrees').closest('p')!;
+    expect(tag).toHaveTextContent('Salina agrees');
+    expect(tag.parentElement).toContainElement(within(card).getByRole('button', { name: /^Agree/ }));
+    expect(within(card).queryByText('disagrees')).toBeNull();
+  });
+
+  it('leaves the opponent’s position blank when unanswered and keeps the viewer’s selected side', async () => {
+    mocks.positions = [position('profile-local', CLAIM_SHARED, SPACE_1, true)];
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    const card = screen.getByText('A claim both participants chose').closest('article')!;
+    expect(within(card).queryByText(/has no position/)).toBeNull();
+    expect(within(card).queryByText('agrees')).toBeNull();
+    expect(within(card).queryByText('disagrees')).toBeNull();
+    expect(within(card).getByRole('button', { name: /^Agree/ })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it.each([true, null])(
+    'shows the latest opponent position (%s) while the claim list holds its previous rows',
+    async latestPosition => {
+      mocks.positions = [position('profile-remote', CLAIM_SHARED, SPACE_1, false)];
+      const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await showOpponentClaims();
+      const card = screen.getByText('A claim both participants chose').closest('article')!;
+      expect(within(card).getByText('disagrees')).toBeInTheDocument();
+
+      // They change this answer and take a side on another claim. The position lookup has settled,
+      // but hydrating the new claim keeps the last settled list on screen.
+      mocks.positions = [
+        position('profile-local', CLAIM_SHARED, SPACE_1, true),
+        ...(latestPosition === null
+          ? []
+          : [position('profile-remote', CLAIM_SHARED.replace(/-/g, ''), SPACE_1, latestPosition)]),
+        position('profile-remote', CLAIM_FRESH, SPACE_1, false),
+      ];
+      mocks.browsedLookupLoading = true;
+      view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+      expect(screen.getByText('A claim both participants chose').closest('article')).toBe(card);
+      if (latestPosition === null) {
+        expect(within(card).queryByText('agrees')).toBeNull();
+        expect(within(card).queryByText(/has no position/)).toBeNull();
+      } else {
+        expect(within(card).getByText('agrees')).toBeInTheDocument();
+      }
+      expect(within(card).queryByText('disagrees')).toBeNull();
+      expect(within(card).queryByRole('button', { name: 'Request debate' })).toBeNull();
+    }
+  );
+
+  it.each(['loading', 'placeholder', 'error'] as const)(
+    'does not show an opponent position when the lookup is %s',
+    async state => {
+      mocks.positions = [position('profile-remote', CLAIM_SHARED, SPACE_1, false)];
+      mocks.positionsLoading = state === 'loading';
+      mocks.positionsPlaceholder = state === 'placeholder';
+      mocks.positionsError = state === 'error' ? new Error('Position lookup failed') : null;
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await showAllClaims();
+
+      expect(screen.getByText('A newly published claim')).toBeInTheDocument();
+      expect(screen.queryByText('disagrees')).toBeNull();
+    }
+  );
 
   it('changes responses through the semantic buttons without rendering a second response area', async () => {
     mocks.claims = [
@@ -1358,7 +1548,7 @@ describe('DebateRematchPageClient', () => {
     ];
 
     render(<DebateRematchPageClient sessionId="rematch-1" />);
-    await showOpponentClaims();
+    await showMatches();
 
     const claimCard = screen.getByText('A claim both participants chose').closest('article');
     expect(claimCard).not.toBeNull();
@@ -1581,10 +1771,10 @@ describe('DebateRematchPageClient', () => {
     expect(await screen.findByText('A claim both participants chose')).toBeInTheDocument();
     expect(screen.queryByText('A newly published claim')).toBeNull();
 
-    // Only the shared claim carries a side from Salina, and their tab counts it.
+    // The shared claim is already a match, so it is left out of Their positions.
     const theirs = screen.getByRole('button', { name: /^Their positions/ });
     expect(theirs).toHaveAttribute('aria-pressed', 'false');
-    expect(within(theirs).getByText('1')).toBeInTheDocument();
+    expect(within(theirs).getByText('0')).toBeInTheDocument();
 
     await showExplore();
 
@@ -1940,6 +2130,19 @@ describe('DebateRematchPageClient', () => {
     // the rows the tab will list — which `participantClaimRows` filters — so the lookup behind them
     // has to have run before the viewer gets there. A number that waits is a number that reads `0`
     // for a viewer with a backlog, which is what GEO-2656 took out of the other tab.
+    // GEO-3527. Ordered about the viewer, not the opponent: they side with nine of ten on the shared
+    // claim and hold out against nine on their own one, so their own one leads.
+    it('puts the claims the viewer holds against the crowd first', async () => {
+      viewerOnlyClaim();
+      mocks.responseCounts.set(CLAIM_SHARED, { positive: 9, negative: 1 });
+      mocks.responseCounts.set(VIEWER_ONLY, { positive: 1, negative: 9 });
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await showMyPositions();
+
+      await screen.findByText('Only mine');
+      expect(appearsBefore('Only mine', 'A claim both participants chose')).toBe(true);
+    });
+
     it('looks the viewer’s own claims up with the opponent’s, so the tab can count them', async () => {
       viewerOnlyClaim();
       // A position on the claim this session excludes — the one the pair just debated. It is one of
@@ -2186,17 +2389,170 @@ describe('DebateRematchPageClient', () => {
       expect(screen.queryByText('A claim you both agree on')).toBeNull();
     });
 
-    it('lists every position the opponent holds under their positions', async () => {
+    it('leaves existing matches out of their positions and its count', async () => {
       threeClaims();
       render(<DebateRematchPageClient sessionId="rematch-1" />);
       await showOpponentClaims();
 
-      expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
+      expect(screen.queryByText('A claim both participants chose')).toBeNull();
       expect(screen.getByText('A claim only Salina answered')).toBeInTheDocument();
       expect(screen.getByText('A claim you both agree on')).toBeInTheDocument();
-      expect(within(screen.getByRole('button', { name: /^Their positions/ })).getByText('3')).toBeInTheDocument();
+      expect(within(screen.getByRole('button', { name: /^Their positions/ })).getByText('2')).toBeInTheDocument();
       // And says what turns one of these into a match.
       expect(screen.getByText(/Take the other side of one of Salina’s claims/)).toBeInTheDocument();
+    });
+
+    it.each([false, true])('keeps a newly made match until switching tabs (refetching: %s)', async refetching => {
+      threeClaims();
+      const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+      expect(await screen.findByText('A claim both participants chose')).toBeInTheDocument();
+      mocks.responseCountsLoading = refetching;
+      rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+      await showOpponentClaims();
+
+      mocks.positions = [...mocks.positions, position('profile-local', OPPONENT_ONLY, SPACE_1, false)];
+      rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+      await settleExit();
+
+      expect(screen.getByText('A claim only Salina answered')).toBeInTheDocument();
+      expect(within(screen.getByRole('button', { name: /^Their positions/ })).getByText('2')).toBeInTheDocument();
+      // Re-selecting the current tab is not a tab switch.
+      await showOpponentClaims();
+      expect(screen.getByText('A claim only Salina answered')).toBeInTheDocument();
+
+      const search = screen.getByRole('textbox', { name: 'Search claims and topics' });
+      fireEvent.change(search, { target: { value: 'only Salina' } });
+      await waitFor(() => expect(screen.queryByText('A claim you both agree on')).toBeNull());
+      fireEvent.change(search, { target: { value: '' } });
+      expect(await screen.findByText('A claim you both agree on')).toBeInTheDocument();
+      expect(screen.getByText('A claim only Salina answered')).toBeInTheDocument();
+
+      mocks.responseCountsLoading = false;
+      fireEvent.click(screen.getByRole('button', { name: /^Matches/ }));
+      await settleTabSwap();
+      expect(screen.getByText('A claim only Salina answered')).toBeInTheDocument();
+      await showOpponentClaims();
+
+      expect(screen.queryByText('A claim only Salina answered')).toBeNull();
+      expect(within(screen.getByRole('button', { name: /^Their positions/ })).getByText('1')).toBeInTheDocument();
+    });
+
+    it('waits for positions before hiding matches when their tab is chosen during loading', async () => {
+      threeClaims();
+      mocks.positionsLoading = true;
+      const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await showOpponentClaims();
+
+      mocks.positionsLoading = false;
+      rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+      await settleTabSwap();
+
+      expect(screen.queryByText('A claim both participants chose')).toBeNull();
+      expect(screen.getByText('A claim only Salina answered')).toBeInTheDocument();
+    });
+
+    it('refreshes hidden matches from current positions when switching tabs during a metadata refetch', async () => {
+      threeClaims();
+      const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await showOpponentClaims();
+
+      // The card already draws these new sides, but its held list row still carries the old ones.
+      mocks.responseCountsLoading = true;
+      mocks.positions = [...mocks.positions, position('profile-local', OPPONENT_ONLY, SPACE_1, false)];
+      rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+      await settleExit();
+      expect(screen.getByText('A claim only Salina answered')).toBeInTheDocument();
+
+      await showMatches();
+      expect(screen.getByText('A claim only Salina answered')).toBeInTheDocument();
+      await showOpponentClaims();
+      expect(screen.queryByText('A claim only Salina answered')).toBeNull();
+
+      mocks.responseCountsLoading = false;
+      rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+      await settleExit();
+      expect(screen.queryByText('A claim only Salina answered')).toBeNull();
+      expect(within(screen.getByRole('button', { name: /^Their positions/ })).getByText('1')).toBeInTheDocument();
+    });
+
+    it.each(['refetching', 'failed'] as const)(
+      'waits for a trustworthy match set when an empty positions lookup is %s',
+      async state => {
+        mocks.positions = [];
+        mocks.positionsFetching = state === 'refetching';
+        mocks.positionsError = state === 'failed' ? new Error('Positions unavailable') : null;
+        const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+        await showOpponentClaims();
+
+        threeClaims();
+        mocks.positionsFetching = false;
+        mocks.positionsError = null;
+        rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+        await settleTabSwap();
+
+        expect(screen.queryByText('A claim both participants chose')).toBeNull();
+        expect(screen.getByText('A claim only Salina answered')).toBeInTheDocument();
+        expect(within(screen.getByRole('button', { name: /^Their positions/ })).getByText('2')).toBeInTheDocument();
+      }
+    );
+
+    it('keeps the hidden set through position changes and resets it for a new session', async () => {
+      threeClaims();
+      const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await showOpponentClaims();
+
+      // This is no longer a match, but its exclusion stays fixed for this visit.
+      mocks.positions = mocks.positions.filter(side => side.profileSpaceId !== 'profile-local');
+      rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+      await settleExit();
+      expect(screen.queryByText('A claim both participants chose')).toBeNull();
+
+      rerender(<DebateRematchPageClient sessionId="rematch-2" />);
+      await showOpponentClaims();
+      expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
+    });
+
+    it('points to Matches when every position is already a match', async () => {
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await showOpponentClaims();
+
+      expect(
+        screen.getByText('No other positions to show. Check Matches for claims you can debate.')
+      ).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'See matches' }));
+      await settleTabSwap();
+      expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
+    });
+
+    it('offers Explore when the hidden matches no longer have opposing positions', async () => {
+      const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await showOpponentClaims();
+
+      // The hidden set stays fixed until a tab switch, but Matches is now empty.
+      mocks.positions = [position('profile-remote', CLAIM_SHARED, SPACE_1, false)];
+      rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+      await settleExit();
+
+      expect(within(screen.getByRole('button', { name: /^Matches/ })).getByText('0')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'See matches' })).toBeNull();
+      expect(screen.queryByText(/Check Matches for claims/)).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: 'Explore claims' }));
+      await settleTabSwap();
+      expect(screen.getByText('A newly published claim')).toBeInTheDocument();
+    });
+
+    it('leaves spaces belonging only to hidden matches out of their position filters', async () => {
+      threeClaims();
+      mocks.entities = [publishedEntity(CLAIM_SHARED, 'A claim both participants chose'), ...mocks.entities.slice(1)];
+      mocks.positions = mocks.positions.map(side =>
+        side.claimId === CLAIM_SHARED ? { ...side, spaceId: SPACE_2 } : side
+      );
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await showOpponentClaims();
+
+      expect(screen.getByText('A claim only Salina answered')).toBeInTheDocument();
+      expect(queryFilterPill('Governance space')).toBeNull();
+      expect(spacesOffered()).toBe(0);
     });
 
     /**
@@ -2232,13 +2588,13 @@ describe('DebateRematchPageClient', () => {
       expect(spacesOffered()).toBe(2);
     });
 
-    it('ends the list with a way to everything of theirs', async () => {
+    it('ends the list with a way to their other positions', async () => {
       threeClaims();
       render(<DebateRematchPageClient sessionId="rematch-1" />);
       expect(await screen.findByText('A claim both participants chose')).toBeInTheDocument();
 
       expect(screen.getByText('That’s every match.')).toBeInTheDocument();
-      fireEvent.click(screen.getByRole('button', { name: 'See all 3 of Salina’s positions' }));
+      fireEvent.click(screen.getByRole('button', { name: 'See Salina’s other positions' }));
       await settleTabSwap();
 
       expect(screen.getByRole('button', { name: /^Their positions/ })).toHaveAttribute('aria-pressed', 'true');
@@ -2247,8 +2603,8 @@ describe('DebateRematchPageClient', () => {
 
     /**
      * "Hide agreed": on their tab, the claims you hold the same side on are a dead end — there is
-     * nothing to debate — so they are out of the way by default. The matches and the claims only
-     * they have answered stay, because those are what the tab is for.
+     * nothing to debate — so they are out of the way by default. Claims only they have answered
+     * stay; existing matches are in Matches.
      */
     describe('Hide agreed', () => {
       const SWITCH = { name: 'Hide agreed' } as const;
@@ -2265,11 +2621,11 @@ describe('DebateRematchPageClient', () => {
         await showOpponentClaims();
 
         expect(screen.getByRole('switch', SWITCH)).toHaveAttribute('aria-checked', 'true');
-        expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
+        expect(screen.queryByText('A claim both participants chose')).toBeNull();
         expect(screen.getByText('A claim only Salina answered')).toBeInTheDocument();
         await waitFor(() => expect(screen.queryByText('A claim you both agree on')).toBeNull());
         // The badge counts what the tab shows.
-        expect(within(screen.getByRole('button', { name: /^Their positions/ })).getByText('2')).toBeInTheDocument();
+        expect(within(screen.getByRole('button', { name: /^Their positions/ })).getByText('1')).toBeInTheDocument();
       });
 
       it('brings them back when it is turned off', async () => {
@@ -2280,7 +2636,7 @@ describe('DebateRematchPageClient', () => {
         fireEvent.click(screen.getByRole('switch', SWITCH));
 
         expect(await screen.findByText('A claim you both agree on')).toBeInTheDocument();
-        expect(within(screen.getByRole('button', { name: /^Their positions/ })).getByText('3')).toBeInTheDocument();
+        expect(within(screen.getByRole('button', { name: /^Their positions/ })).getByText('2')).toBeInTheDocument();
       });
 
       it('is only on their tab', async () => {
@@ -2408,7 +2764,6 @@ describe('DebateRematchPageClient', () => {
         threeClaims();
         mocks.entities = [sharedEntity(), publishedEntity(AGREED, 'A claim you both agree on')];
         mocks.positions = [
-          position('profile-local', CLAIM_SHARED, SPACE_1, true),
           position('profile-remote', CLAIM_SHARED, SPACE_1, false),
           position('profile-local', AGREED, SPACE_2, true),
           position('profile-remote', AGREED, SPACE_2, true),
@@ -2555,6 +2910,7 @@ describe('DebateRematchPageClient', () => {
   // The session's own claims arrive in one round trip; they shouldn't sit behind the scan either.
   it('shows the opponent’s claims without waiting on the browsed claim scan', async () => {
     mocks.entityQueryLoading = true;
+    mocks.positions = mocks.positions.filter(side => side.profileSpaceId !== 'profile-local');
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showOpponentClaims();
 
@@ -2609,6 +2965,7 @@ describe('DebateRematchPageClient', () => {
   // reports as pending, which is why the badge has to consult the positions query itself.
   it('shows the count once it is known', async () => {
     mocks.positionsLoading = false;
+    mocks.positions = mocks.positions.filter(side => side.profileSpaceId !== 'profile-local');
     render(<DebateRematchPageClient sessionId="rematch-1" />);
 
     expect(screen.queryByLabelText('Counting positions')).toBeNull();
@@ -2619,6 +2976,7 @@ describe('DebateRematchPageClient', () => {
   // that is right for every claim already on it. Dropping back to a skeleton would flicker the badge
   // on precisely the event that should be invisible.
   it('keeps showing a known count while a refetch is in flight', async () => {
+    mocks.positions = mocks.positions.filter(side => side.profileSpaceId !== 'profile-local');
     const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
     expect(screen.getByRole('button', { name: /^Their positions/ })).toHaveTextContent('1');
 
@@ -2687,7 +3045,6 @@ describe('DebateRematchPageClient', () => {
         claimIn(RETRACTED, 'A claim they took their side back on', SPACE_1),
       ];
       mocks.positions = [
-        position('profile-local', CLAIM_SHARED, SPACE_1, true),
         position('profile-remote', CLAIM_SHARED, SPACE_1, false),
         position('profile-remote', TOPPED_UP, SPACE_1, true),
         position('profile-remote', CLAIM_SOURCE, SPACE_1, true),
@@ -2718,6 +3075,19 @@ describe('DebateRematchPageClient', () => {
       // The answer had every claim but one, so only that one went by id.
       expect(mocks.entityIdLookups.flat()).not.toContain(CLAIM_SHARED);
       expect(mocks.entityIdLookups).toContainEqual([TOPPED_UP, NOT_A_CLAIM]);
+    });
+
+    // GEO-3504: a source debate that does not count as debated leaves its claim on offer, and only
+    // geo-chat knows which it is.
+    it('lists the source debate’s claim when geo-chat does not exclude it', async () => {
+      everyFilter();
+      mocks.excludedClaimIds = [];
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await showOpponentClaims();
+
+      await waitFor(() => expect(screen.getByText('The claim the pair just debated')).toBeInTheDocument());
+      expect(rows()).toBe(3);
+      expect(badge()).toBe(rows());
     });
 
     // The top-up is not waited for, so there is a moment with one row and not two — and the badge
@@ -2850,6 +3220,92 @@ describe('DebateRematchPageClient', () => {
       expect(appearsBefore(THIRD_CLAIM, FIRST_CLAIM)).toBe(true);
     });
 
+    // GEO-3505. The pill hangs off the sticky filter block: a sticky of its own above the list
+    // slid under that block once the list scrolled, so it showed only back at the top.
+    it('holds a match that arrives while the list is in use, with the pill under the sticky filters', async () => {
+      const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+      const matches = await screen.findByRole('button', { name: /^Matches/ });
+      await waitFor(() => expect(matches).toHaveAttribute('aria-pressed', 'true'));
+      fireEvent.pointerMove(await screen.findByText(FIRST_CLAIM));
+
+      mocks.positions = [
+        ...mocks.positions,
+        position('profile-local', CLAIM_FRESH, SPACE_1, true),
+        position('profile-remote', CLAIM_FRESH, SPACE_1, false),
+      ];
+      mocks.entities = [...mocks.entities, opponentEntity(CLAIM_FRESH, THIRD_CLAIM)];
+      mocks.claims = [...mocks.claims, sessionRow(CLAIM_FRESH, THIRD_CLAIM, true)];
+      rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+      await settleTabSwap();
+
+      const filters = screen.getByRole('group', { name: 'Claim picker filters' });
+      expect(within(filters).getByTestId('new-matches-pill')).toHaveTextContent('1 new match');
+      expect(screen.queryByText(THIRD_CLAIM)).toBeNull();
+
+      // Once the viewer stops, it lands on top and the pill goes.
+      await waitFor(() => expect(screen.queryByTestId('new-matches-pill')).toBeNull(), { timeout: 4_000 });
+      expect(appearsBefore(THIRD_CLAIM, FIRST_CLAIM)).toBe(true);
+    });
+
+    /**
+     * GEO-3527. Their claims are ordered by how debatable they are for them: here both are 9 to 1,
+     * and they sit with the nine on the first and against them on the second.
+     */
+    function againstTheCrowdOnTheSecond() {
+      twoUnmatchedPositions();
+      // Both positions are disagreements, so the second claim's nine agreeing are the crowd.
+      mocks.responseCounts.set(CLAIM_SHARED, { positive: 1, negative: 9 });
+      mocks.responseCounts.set(CLAIM_MORE, { positive: 9, negative: 1 });
+    }
+
+    it('puts a claim they hold against the crowd above one they side with it on', async () => {
+      againstTheCrowdOnTheSecond();
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await showOpponentClaims();
+
+      expect(appearsBefore(SECOND_CLAIM, FIRST_CLAIM)).toBe(true);
+    });
+
+    it('leaves an existing match out regardless of its debatability', async () => {
+      againstTheCrowdOnTheSecond();
+      // The viewer agrees with the first, which the opponent disagrees with: a match.
+      mocks.positions = [position('profile-local', CLAIM_SHARED, SPACE_1, true), ...mocks.positions];
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await showOpponentClaims();
+
+      expect(screen.queryByText(FIRST_CLAIM)).toBeNull();
+      expect(screen.getByText(SECOND_CLAIM)).toBeInTheDocument();
+    });
+
+    it('waits for the counts before drawing the list, so the order it holds is the debatable one', async () => {
+      againstTheCrowdOnTheSecond();
+      mocks.responseCountsLoading = true;
+      const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await showOpponentClaims();
+      expect(screen.queryByText(FIRST_CLAIM)).toBeNull();
+
+      mocks.responseCountsLoading = false;
+      rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+      await settleTabSwap();
+
+      expect(appearsBefore(SECOND_CLAIM, FIRST_CLAIM)).toBe(true);
+    });
+
+    it('holds the order it loaded with when the counts move', async () => {
+      againstTheCrowdOnTheSecond();
+      const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await showOpponentClaims();
+      expect(appearsBefore(SECOND_CLAIM, FIRST_CLAIM)).toBe(true);
+
+      // The crowd swings round on both while the viewer is working the list.
+      mocks.responseCounts.set(CLAIM_SHARED, { positive: 9, negative: 1 });
+      mocks.responseCounts.set(CLAIM_MORE, { positive: 1, negative: 9 });
+      rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+      await settleTabSwap();
+
+      expect(appearsBefore(SECOND_CLAIM, FIRST_CLAIM)).toBe(true);
+    });
+
     /**
      * The route keeps this component when it moves from one rematch to another — nothing keys it on
      * the session — so the hold that carries a list through a refetch would otherwise carry it
@@ -2950,7 +3406,7 @@ describe('DebateRematchPageClient', () => {
     mocks.claims = [];
     mocks.session = session({ recently_rejected_claim_ids: [CLAIM_SHARED] });
     render(<DebateRematchPageClient sessionId="rematch-1" />);
-    await showOpponentClaims();
+    await showMatches();
 
     expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
     expect(screen.getByText('Recently rejected')).toBeInTheDocument();
@@ -3267,6 +3723,7 @@ describe('DebateRematchPageClient', () => {
       position('profile-remote', CLAIM_MORE, SPACE_2, false),
     ];
     mocks.matchmakingClaims = [matchmakingClaim(), matchmakingClaim(CLAIM_SHARED, 'A claim both participants chose')];
+    mocks.positions = mocks.positions.filter(side => side.profileSpaceId !== 'profile-local');
     const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showOpponentClaims();
     await waitFor(() => expect(screen.getByText('A claim both participants chose')).toBeInTheDocument());
@@ -3364,6 +3821,7 @@ describe('DebateRematchPageClient', () => {
     // A second claim of theirs in the Governance space, so Crypto narrows their list and the row
     // has a reason to offer it.
     mocks.positions = [...mocks.positions, position('profile-remote', CLAIM_MORE, SPACE_2, false)];
+    mocks.positions = mocks.positions.filter(side => side.profileSpaceId !== 'profile-local');
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showOpponentClaims();
 
@@ -3537,6 +3995,7 @@ describe('DebateRematchPageClient', () => {
   it('keeps the opponent’s claims from spaces outside the viewer’s allowed set', async () => {
     mocks.claims = [sharedClaim()];
     mocks.spaceAllowlist = new Set([SPACE_2.replace(/-/g, '')]);
+    mocks.positions = mocks.positions.filter(side => side.profileSpaceId !== 'profile-local');
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showOpponentClaims();
 
@@ -3662,6 +4121,7 @@ describe('DebateRematchPageClient', () => {
       mocks.claims = [sharedClaim()];
       mocks.spaceTypes = { [SPACE_1]: 'DAO' };
       mocks.publishableSpaceIds = new Set([SPACE_1.replace(/-/g, '')]);
+      mocks.positions = mocks.positions.filter(side => side.profileSpaceId !== 'profile-local');
       render(<DebateRematchPageClient sessionId="rematch-1" />);
       await showOpponentClaims();
 
@@ -3682,6 +4142,7 @@ describe('DebateRematchPageClient', () => {
     it('keeps a claim in a DAO space, which the acceptor can publish into', async () => {
       mocks.claims = [sharedClaim()];
       mocks.spaceTypes = { [SPACE_1]: 'DAO' };
+      mocks.positions = mocks.positions.filter(side => side.profileSpaceId !== 'profile-local');
       render(<DebateRematchPageClient sessionId="rematch-1" />);
       await showOpponentClaims();
 
@@ -3693,6 +4154,7 @@ describe('DebateRematchPageClient', () => {
     it('keeps a claim whose space type has not resolved yet', async () => {
       mocks.claims = [sharedClaim()];
       mocks.spaceTypes = {};
+      mocks.positions = mocks.positions.filter(side => side.profileSpaceId !== 'profile-local');
       render(<DebateRematchPageClient sessionId="rematch-1" />);
       await showOpponentClaims();
 
@@ -3707,6 +4169,7 @@ describe('DebateRematchPageClient', () => {
   it('holds the browsed list, but not the opponent’s, while the allowlist is still resolving', async () => {
     mocks.spaceAllowlist = null;
     mocks.allowlistLoading = true;
+    mocks.positions = mocks.positions.filter(side => side.profileSpaceId !== 'profile-local');
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showOpponentClaims();
 
@@ -3722,6 +4185,7 @@ describe('DebateRematchPageClient', () => {
   // the opponent's positions vanishing every time they took another one.
   it('keeps the opponent’s list and count up while a new response is being looked up', async () => {
     const FRESH = '019fedb7-5b96-7e83-9f66-7bc2ad4f9953';
+    mocks.positions = mocks.positions.filter(side => side.profileSpaceId !== 'profile-local');
     const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showOpponentClaims();
     expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
@@ -3788,7 +4252,7 @@ describe('DebateRematchPageClient', () => {
   // session, so the claim opens beside the picker instead.
   it('opens a claim in the side panel rather than navigating to it', async () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
-    await showOpponentClaims();
+    await showMatches();
 
     const claim = screen.getByText('A claim both participants chose');
     expect(claim.closest('a')).toBeNull();
@@ -4280,7 +4744,7 @@ describe('DebateRematchPageClient', () => {
     ];
     mocks.optimisticResponses.set(CLAIM_SHARED, 'positive');
     render(<DebateRematchPageClient sessionId="rematch-1" />);
-    await showOpponentClaims();
+    await showMatches();
 
     const card = screen.getByText('A claim both participants chose').closest('article');
     expect(within(card!).getByRole('button', { name: /^Agree/ })).toHaveAttribute('aria-pressed', 'true');
@@ -4324,7 +4788,7 @@ describe('DebateRematchPageClient', () => {
     });
     mocks.requestError = new Error('respond to this claim before requesting a rematch');
     const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
-    await showOpponentClaims();
+    await showMatches();
 
     const card = screen.getByText('A claim both participants chose').closest('article');
     fireEvent.click(within(card!).getByRole('button', { name: 'Request debate' }));
@@ -4343,7 +4807,7 @@ describe('DebateRematchPageClient', () => {
     mocks.requestError = new Error('respond to this claim before requesting a rematch');
     mocks.requestVariables = { claim_id: 'a-claim-this-tab-does-not-show', source_space_id: SPACE_1 };
     render(<DebateRematchPageClient sessionId="rematch-1" />);
-    await showOpponentClaims();
+    await showMatches();
 
     const card = screen.getByText('A claim both participants chose').closest('article');
     expect(within(card!).queryByRole('alert')).not.toBeInTheDocument();
@@ -4489,7 +4953,7 @@ describe('DebateRematchPageClient', () => {
     mocks.requestError = new Error('Other space request failed');
     mocks.requestVariables = { claim_id: CLAIM_SHARED, source_space_id: 'another-space' };
     render(<DebateRematchPageClient sessionId="rematch-1" />);
-    await showOpponentClaims();
+    await showMatches();
     const card = screen.getByText('A claim both participants chose').closest('article');
     expect(within(card!).queryByRole('alert')).not.toBeInTheDocument();
     expect(screen.getByRole('alert')).toHaveTextContent('Other space request failed');
@@ -4607,7 +5071,7 @@ describe('DebateRematchPageClient', () => {
     ];
     mocks.optimisticResponses.set(CLAIM_SHARED, 'positive');
     render(<DebateRematchPageClient sessionId="rematch-1" />);
-    await showOpponentClaims();
+    await showMatches();
 
     const request = await screen.findByRole('button', { name: 'Request debate' });
     expect(request).toBeEnabled();
@@ -4912,6 +5376,12 @@ async function showAllClaims() {
 /** The viewer's own backlog, a tab of its own since it left Explore's menu. */
 async function showMyPositions() {
   fireEvent.click(screen.getByRole('button', { name: /^My positions/ }));
+  await settleTabSwap();
+}
+
+/** Existing matches are listed separately from Their positions. */
+async function showMatches() {
+  fireEvent.click(screen.getByRole('button', { name: /^Matches/ }));
   await settleTabSwap();
 }
 
@@ -5516,6 +5986,24 @@ describe('where the pair land', () => {
       )
       .map(([, properties]) => properties.rematch_session_id);
     expect(landings).toEqual(['rematch-1', 'rematch-2']);
+  });
+
+  // GEO-3495: a tab press is recorded as leaving the list on screen. Before the landing there is
+  // none, only the skeleton, so the first press names nothing it left.
+  it('records a tab press from the list on screen, and none from the skeleton', async () => {
+    mocks.positionsFetching = true;
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await settleTabSwap();
+    mocks.capture.mockClear();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Explore' }));
+    await settleTabSwap();
+    fireEvent.click(screen.getByRole('button', { name: /^Matches/ }));
+
+    const presses = mocks.capture.mock.calls
+      .filter(([event, properties]) => event === 'action_completed' && properties?.target_type === 'tab')
+      .map(([, properties]) => [properties.list_id, properties.target_id]);
+    expect(presses).toEqual([['rematch_explore', 'rematch_matches']]);
   });
 
   it('reports where it landed, once, with what each earlier tab held', async () => {
@@ -6430,7 +6918,8 @@ describe('inside a debate room', () => {
   // Each rejoin already retries its request. When all of those fail, the session is still ended and
   // will not change, so nothing would ever ask again without this.
   it('tries a failed rejoin again, a bounded number of times', async () => {
-    vi.useFakeTimers();
+    // Only the retry timers need to advance. Faking the animation clock can stall later tab swaps.
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     try {
       const rejoin = vi.fn().mockResolvedValue(false);
       mocks.session = session({ status: 'expired' });
@@ -6456,6 +6945,10 @@ describe('inside a debate room', () => {
       });
       expect(rejoin).toHaveBeenCalledTimes(3);
     } finally {
+      // Unmounted and flushed on the fake clock: a timer scheduled on it never fires once real timers
+      // are back, and the cases after this one inherit whatever it was holding.
+      cleanup();
+      vi.runOnlyPendingTimers();
       vi.useRealTimers();
     }
   });
@@ -6650,6 +7143,7 @@ describe('claims the pair have already debated', () => {
       debated({ ...sharedClaim(), claim: claimSummary(CLAIM_SOURCE, 'The claim the pair just debated') }),
     ];
 
+    mocks.positions = mocks.positions.filter(side => side.profileSpaceId !== 'profile-local');
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showOpponentClaims();
 
@@ -6660,6 +7154,7 @@ describe('claims the pair have already debated', () => {
 
   /** A geo-chat that predates the flag sends `false` on every row, and the page is what it was. */
   it('changes nothing when no claim is flagged', async () => {
+    mocks.positions = mocks.positions.filter(side => side.profileSpaceId !== 'profile-local');
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showOpponentClaims();
 
@@ -7270,5 +7765,434 @@ describe('click analytics labels in a debate room', () => {
 
     expect(await screen.findByTestId('rematch-outbound-request')).toBeInTheDocument();
     expect(unlabeledControls()).toEqual([]);
+  });
+});
+
+/**
+ * GEO-3489. Today's claims: the first tab, listing every space's newest Debate agenda under its
+ * section headings.
+ */
+describe('Today’s claims', () => {
+  const T_LULA = 'a1000000000000000000000000000001';
+  const T_COURTS = 'a1000000000000000000000000000002';
+  const T_AGE = 'a1000000000000000000000000000003';
+  const T_PRISON = 'a1000000000000000000000000000004';
+  const T_VOTE = 'a1000000000000000000000000000005';
+  const T_OLD = 'a1000000000000000000000000000006';
+  const T_OLD_DEBATED = 'a1000000000000000000000000000007';
+  const bare = (id: string) => id.replace(/-/g, '').toLowerCase();
+
+  function agendaEntity(id: string, name: string, spaceId: string, topic?: { id: string; name: string }) {
+    return {
+      id,
+      name,
+      description: null,
+      spaces: [spaceId],
+      values: [{ property: { id: NAME_PROPERTY }, spaceId, value: name }],
+      relations: topic ? [{ type: { id: TOPICS_PROPERTY_ID }, toEntity: topic, isDeleted: false, spaceId }] : [],
+    };
+  }
+
+  function section(id: string, spaceId: string, name: string, claimIds: string[]) {
+    return {
+      id,
+      agendaId: `agenda-${spaceId}`,
+      spaceId,
+      name,
+      claimIds,
+      listedOn: '2026-10-28',
+      listedAt: '2026-10-28T04:00:00+00:00',
+    };
+  }
+
+  /** World affairs (SPACE_1) with two sections, U.S. Politics (SPACE_2) with one, and an older listing. */
+  function twoAgendas() {
+    todays.entities = [
+      agendaEntity(T_LULA, 'Lula should be re-elected', SPACE_1, { id: 'topic-lula', name: 'Lula’s victory' }),
+      agendaEntity(T_AGE, 'Lula is too old to govern', SPACE_1, { id: 'topic-lula', name: 'Lula’s victory' }),
+      agendaEntity(T_COURTS, 'The courts are persecuting the Bolsonaros', SPACE_1, {
+        id: 'topic-courts',
+        name: 'Bolsonaro trials',
+      }),
+      agendaEntity(T_PRISON, 'Better reentry support reduces recidivism', SPACE_2),
+      agendaEntity(T_VOTE, 'Released prisoners should keep the vote', SPACE_2),
+      agendaEntity(T_OLD, 'A claim from Monday', SPACE_1),
+      agendaEntity(T_OLD_DEBATED, 'A claim from Monday, debated since', SPACE_1),
+    ];
+    todays.agendas = {
+      newestDay: '2026-10-28',
+      spaces: [
+        {
+          spaceId: SPACE_1,
+          listedOn: '2026-10-28',
+          sections: [
+            section('block-brazil', SPACE_1, 'Brazil election', [T_LULA, T_AGE]),
+            section('block-bolsonaro', SPACE_1, 'The Bolsonaro family', [T_COURTS]),
+          ],
+        },
+        {
+          spaceId: SPACE_2,
+          listedOn: '2026-10-28',
+          sections: [section('block-prison', SPACE_2, 'Prisoner reintegration', [T_PRISON, T_VOTE])],
+        },
+      ],
+      earlier: [
+        {
+          claimId: T_OLD,
+          spaceId: SPACE_1,
+          agendaId: 'agenda-old',
+          listedOn: '2026-10-26',
+          listedAt: '2026-10-26T04:00:00+00:00',
+        },
+        {
+          claimId: T_OLD_DEBATED,
+          spaceId: SPACE_1,
+          agendaId: 'agenda-old',
+          listedOn: '2026-10-26',
+          listedAt: '2026-10-26T04:00:00+00:00',
+        },
+      ],
+    };
+    todays.counts = new Map([[T_OLD_DEBATED, 1]]);
+  }
+
+  const headings = () =>
+    within(screen.getByTestId('todays-claims-sections'))
+      .getAllByRole('heading')
+      .map(heading => heading.textContent);
+
+  const cards = () =>
+    [T_LULA, T_AGE, T_COURTS, T_PRISON, T_VOTE, T_OLD, T_OLD_DEBATED]
+      .map(id => todays.entities.find(entity => entity.id === id)!.name as string)
+      .filter(name => screen.queryByText(name) !== null)
+      .sort((a, b) => (appearsBefore(a, b) ? -1 : 1));
+
+  beforeEach(() => {
+    todays.agendas = { spaces: [], earlier: [], newestDay: null };
+    todays.entities = [];
+    todays.loading = false;
+    todays.error = null;
+    todays.counts = null;
+    todays.countsAsked.length = 0;
+    todays.members = {};
+  });
+
+  it('opens on Today’s claims, shared spaces first, sections in the agenda’s order', async () => {
+    twoAgendas();
+    // Both debaters are in U.S. Politics, neither in World affairs.
+    todays.members = { [bare(SPACE_2)]: 2 };
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(await screen.findByText('Better reentry support reduces recidivism')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Today’s claims/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(headings()).toEqual([
+      'Prisoner reintegration',
+      'Brazil election',
+      'The Bolsonaro family',
+      'Earlier this week',
+    ]);
+    expect(cards()).toEqual([
+      'Better reentry support reduces recidivism',
+      'Released prisoners should keep the vote',
+      'Lula should be re-elected',
+      'Lula is too old to govern',
+      'The courts are persecuting the Bolsonaros',
+    ]);
+  });
+
+  it('puts the claims debated since the listing below the rest, fewest first, with nothing on the card', async () => {
+    twoAgendas();
+    todays.agendas.spaces[0]!.sections[0] = section('block-brazil', SPACE_1, 'Brazil election', [
+      T_LULA,
+      T_AGE,
+      T_COURTS,
+    ]);
+    todays.agendas.spaces[0]!.sections.splice(1, 1);
+    todays.counts = new Map([
+      [T_LULA, 2],
+      [T_AGE, 1],
+    ]);
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    await screen.findByText('The courts are persecuting the Bolsonaros');
+    expect(cards().slice(0, 3)).toEqual([
+      'The courts are persecuting the Bolsonaros',
+      'Lula is too old to govern',
+      'Lula should be re-elected',
+    ]);
+    expect(screen.queryByText(/Debated/)).toBeNull();
+    // Each claim's count is asked from its own listing.
+    expect(todays.countsAsked.at(-1)).toEqual(
+      expect.arrayContaining([
+        { claimId: T_LULA, since: '2026-10-28T04:00:00+00:00' },
+        { claimId: T_OLD, since: '2026-10-26T04:00:00+00:00' },
+      ])
+    );
+  });
+
+  it('keeps the order it opened with when a count changes while the picker is open', async () => {
+    twoAgendas();
+    const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await screen.findByText('Lula should be re-elected');
+    const opened = cards();
+
+    todays.counts = new Map([[T_LULA, 3]]);
+    rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(cards()).toEqual(opened);
+  });
+
+  it('folds Earlier this week, lists only its undebated claims, and remembers a section for the day', async () => {
+    twoAgendas();
+    const { unmount } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await screen.findByText('Lula should be re-elected');
+
+    expect(screen.queryByText('A claim from Monday')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /Earlier this week/ }));
+    expect(screen.getByText('A claim from Monday')).toBeInTheDocument();
+    expect(screen.queryByText('A claim from Monday, debated since')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: /Brazil election/ }));
+    expect(screen.queryByText('Lula should be re-elected')).toBeNull();
+
+    // Back to the picker the same day: as the viewer left it.
+    unmount();
+    const again = render(<DebateRematchPageClient sessionId="rematch-2" />);
+    await screen.findByText('The courts are persecuting the Bolsonaros');
+    expect(screen.queryByText('Lula should be re-elected')).toBeNull();
+    expect(screen.getByText('A claim from Monday')).toBeInTheDocument();
+
+    // The next day's agenda opens every section at its default again.
+    again.unmount();
+    todays.agendas = { ...todays.agendas, newestDay: '2026-10-29' };
+    render(<DebateRematchPageClient sessionId="rematch-3" />);
+    expect(await screen.findByText('Lula should be re-elected')).toBeInTheDocument();
+    expect(screen.queryByText('A claim from Monday')).toBeNull();
+  });
+
+  it('narrows with master’s pills, hiding a section that has nothing left', async () => {
+    twoAgendas();
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await screen.findByText('Lula should be re-elected');
+
+    toggleFilter('Bolsonaro trials');
+
+    await waitFor(() => expect(screen.queryByText('Lula should be re-elected')).toBeNull());
+    expect(headings()).toEqual(['The Bolsonaro family']);
+  });
+
+  // A session that arrives after everything else would otherwise latch every space at 0 debaters.
+  it('waits for the session before ordering spaces by who is in them', async () => {
+    twoAgendas();
+    todays.members = { [bare(SPACE_2)]: 2 };
+    mocks.sessionLoading = true;
+    mocks.session = null;
+    const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await settleTabSwap();
+
+    mocks.sessionLoading = false;
+    mocks.session = session();
+    rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    await screen.findByText('Better reentry support reduces recidivism');
+    expect(headings()[0]).toBe('Prisoner reintegration');
+  });
+
+  // Anyone can publish the type; only a space that can carry a published debate has an agenda.
+  it('ignores an agenda published in a personal space, and lands where master does', async () => {
+    const PERSONAL = '019fedae-72b6-7ab2-927a-df044d57c599';
+    mocks.spaceTypes[PERSONAL] = 'PERSONAL';
+    todays.entities = [agendaEntity(T_LULA, 'Lula should be re-elected', SPACE_1)];
+    todays.agendas = {
+      newestDay: '2026-10-28',
+      spaces: [
+        { spaceId: PERSONAL, listedOn: '2026-10-28', sections: [section('block-x', PERSONAL, 'Read this', [T_LULA])] },
+      ],
+      earlier: [],
+    };
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(await screen.findByRole('button', { name: /^Matches/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByRole('button', { name: /^Today’s claims/ })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Read this' })).toBeNull();
+  });
+
+  it('lands where master does when nothing on the agendas can be debated by this pair', async () => {
+    twoAgendas();
+    mocks.excludedClaimIds = [CLAIM_SOURCE, T_LULA, T_AGE, T_COURTS, T_PRISON, T_VOTE, T_OLD, T_OLD_DEBATED];
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(await screen.findByRole('button', { name: /^Matches/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByRole('button', { name: /^Today’s claims/ })).toBeNull();
+  });
+
+  it('reports the landing with what the tab lists', async () => {
+    twoAgendas();
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await screen.findByText('Lula should be re-elected');
+    await settleTabSwap();
+
+    const landing = mocks.capture.mock.calls.find(
+      ([event, properties]) => event === 'feature_exposed' && properties?.feature_id === 'debate-rematch-landing-tab'
+    );
+    // Five on today's agendas and the one earlier claim nobody has debated since.
+    expect(landing?.[1]).toMatchObject({ landing_tab: 'todays_claims', todays_claims_count: 6 });
+  });
+
+  // Every other tab lands on what can still be requested, not on the pair's already-debated fold.
+  it('lands where master does when the pair have debated every claim on the agendas', async () => {
+    twoAgendas();
+    const ids = [T_LULA, T_AGE, T_COURTS, T_OLD, T_OLD_DEBATED].map(id => [id, SPACE_1] as const);
+    mocks.claims = [...ids, [T_PRISON, SPACE_2] as const, [T_VOTE, SPACE_2] as const].map(([id, spaceId]) => ({
+      ...sharedClaim(),
+      claim: { id, space_id: spaceId, claim_entity_id: id, claim: 'x', description: null },
+      shared_preference: false,
+      previously_debated: true,
+    }));
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(await screen.findByRole('button', { name: /^Matches/ })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  // Unknown reads as "every space allowed"; landing on rows that then vanish bounced the pair.
+  it('waits for the acceptor’s spaces before landing on agendas they rule out', async () => {
+    twoAgendas();
+    todays.agendas = { ...todays.agendas, spaces: [todays.agendas.spaces[1]!], earlier: [] };
+    mocks.publishableSpaceIds = null;
+    mocks.publishableSpacesLoading = true;
+    const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await settleTabSwap();
+
+    mocks.publishableSpaceIds = new Set([bare(SPACE_1)]);
+    mocks.publishableSpacesLoading = false;
+    rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(await screen.findByRole('button', { name: /^Matches/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByText('Better reentry support reduces recidivism')).toBeNull();
+  });
+
+  // Every tab's spaces are judged by one lookup; another tab's arriving later must not reach in here.
+  it('keeps its sections as the viewer left them while another tab’s spaces are looked up', async () => {
+    twoAgendas();
+    const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await screen.findByText('Lula should be re-elected');
+    fireEvent.click(screen.getByRole('button', { name: /Brazil election/ }));
+    expect(screen.queryByText('Lula should be re-elected')).toBeNull();
+
+    mocks.spacesPending = true;
+    rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(screen.queryByText('Lula should be re-elected')).toBeNull();
+    expect(screen.getByText('The courts are persecuting the Bolsonaros')).toBeInTheDocument();
+    // A choice made in that window is still the day's.
+    fireEvent.click(screen.getByRole('button', { name: /Earlier this week/ }));
+    mocks.spacesPending = false;
+    rerender(<DebateRematchPageClient sessionId="rematch-2" />);
+    expect(await screen.findByText('A claim from Monday')).toBeInTheDocument();
+    expect(screen.queryByText('Lula should be re-elected')).toBeNull();
+  });
+
+  it('keeps the tab and its list when a background refetch of the agendas fails', async () => {
+    twoAgendas();
+    const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await screen.findByText('Lula should be re-elected');
+
+    todays.error = new Error('graph unavailable');
+    rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(screen.getByRole('button', { name: /^Today’s claims/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText('Lula should be re-elected')).toBeInTheDocument();
+  });
+
+  it('lands where master does when only Earlier this week, folded, has anything to request', async () => {
+    twoAgendas();
+    mocks.excludedClaimIds = [CLAIM_SOURCE, T_LULA, T_AGE, T_COURTS, T_PRISON, T_VOTE];
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(await screen.findByRole('button', { name: /^Matches/ })).toHaveAttribute('aria-pressed', 'true');
+    // Still one tap away.
+    expect(screen.getByRole('button', { name: /^Today’s claims/ })).toBeInTheDocument();
+  });
+
+  // With every lookup answered on the first render, the landing is decided — and latched — at once.
+  it('lands on Today’s claims when every lookup is already answered', async () => {
+    twoAgendas();
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(await screen.findByText('Lula should be re-elected')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Today’s claims/ })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  // An unresolved space reads as publishable, so the judgement must wait for the agendas' own spaces.
+  it('waits for the agendas’ spaces to be judged before landing on them', async () => {
+    const PERSONAL = '019fedae-72b6-7ab2-927a-df044d57c599';
+    twoAgendas();
+    todays.agendas = {
+      newestDay: '2026-10-28',
+      spaces: [
+        { spaceId: PERSONAL, listedOn: '2026-10-28', sections: [section('block-x', PERSONAL, 'Read this', [T_LULA])] },
+      ],
+      earlier: [],
+    };
+    todays.loading = true;
+    const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await settleTabSwap();
+
+    // The agendas arrive; their space is still being looked up.
+    todays.loading = false;
+    mocks.spacesPending = true;
+    rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+    await settleTabSwap();
+
+    mocks.spaceTypes[PERSONAL] = 'PERSONAL';
+    mocks.spacesPending = false;
+    rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(await screen.findByRole('button', { name: /^Matches/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByRole('heading', { name: 'Read this' })).toBeNull();
+  });
+
+  // A refetch of the counts — the gateway invalidates the whole `debates` root — must not take an
+  // older claim out of Earlier this week while the picker is open.
+  it('keeps Earlier this week as it opened when the counts are refetched', async () => {
+    twoAgendas();
+    const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await screen.findByText('Lula should be re-elected');
+    fireEvent.click(screen.getByRole('button', { name: /Earlier this week/ }));
+    expect(screen.getByText('A claim from Monday')).toBeInTheDocument();
+
+    todays.counts = new Map([
+      [T_OLD_DEBATED, 1],
+      [T_OLD, 1],
+    ]);
+    rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(screen.getByText('A claim from Monday')).toBeInTheDocument();
+  });
+
+  // GEO-3495: a section opened or closed is a filter choice on this list, by its data block.
+  it('records a section toggle as a filter choice on the Today’s claims list', async () => {
+    twoAgendas();
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await screen.findByText('Lula should be re-elected');
+    mocks.capture.mockClear();
+
+    fireEvent.click(screen.getByRole('button', { name: /Brazil election/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Earlier this week/ }));
+
+    const choices = mocks.capture.mock.calls
+      .filter(([event, properties]) => event === 'action_completed' && properties?.target_type === 'section')
+      .map(([, properties]) => [properties.list_id, properties.target_id, properties.filter_selected]);
+    expect(choices).toEqual([
+      ['todays_claims', 'block-brazil', false],
+      ['todays_claims', 'earlier-this-week', true],
+    ]);
+  });
+
+  it('lands where master does when no space has an agenda', async () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(await screen.findByRole('button', { name: /^Matches/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByRole('button', { name: /^Today’s claims/ })).toBeNull();
   });
 });
