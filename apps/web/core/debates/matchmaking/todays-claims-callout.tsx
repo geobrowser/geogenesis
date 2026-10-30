@@ -146,7 +146,7 @@ export function TodaysClaimsCallout({ callout, layout, onFindDebate }: Props) {
  * claim takes its place. A side already held — taken on another surface since the set was chosen —
  * moves on straight away. The rows can also report a side as soon as the write starts (geo-chat is
  * told then), which moves the card on before the bundler does; that optimism is wanted (Preston,
- * 30 Oct), so a write that fails after that shows its error on the claim's other cards, not here.
+ * 30 Oct), so a write that fails after that doesn't keep this card up.
  */
 function CalloutCard({ callout, claim, position }: { callout: TodaysCallout; claim: CalloutClaim; position: number }) {
   const { markAnswered, skip } = callout;
