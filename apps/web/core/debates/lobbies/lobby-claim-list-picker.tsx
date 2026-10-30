@@ -286,7 +286,7 @@ export function ClaimListPicker({
 }
 
 /** Today's claims as a picker option: no page, so no themes; its tab reads the newest agendas. */
-export const TODAYS_CLAIMS_OPTION: ClaimListOption = {
+const TODAYS_CLAIMS_OPTION: ClaimListOption = {
   entityId: TODAYS_CLAIMS_LIST_ID,
   spaceId: TODAYS_CLAIMS_LIST_ID,
   name: TODAYS_CLAIMS_LIST_NAME,
@@ -324,33 +324,65 @@ function TodaysClaimsRow({
 }) {
   return (
     <div className="border-b border-grey-02 pb-2">
-      <button
-        type="button"
-        disabled={isAdded || disabled}
-        {...debateActionAnalyticsAttributes('hub', `${analyticsLabel} Today’s claims`, 'add_lobby_claim_list')}
-        onClick={() => onPick(TODAYS_CLAIMS_OPTION)}
-        className="flex w-full items-center justify-between gap-3 rounded-md px-2 py-2 text-left transition-colors hover:bg-grey-01 disabled:hover:bg-transparent"
-      >
-        <span className="flex min-w-0 flex-col">
-          <Text as="span" variant="metadataMedium" color={isAdded ? 'grey-03' : 'text'} className="truncate">
-            {TODAYS_CLAIMS_LIST_NAME}
-          </Text>
-          {counts ? (
-            <Text as="span" variant="footnote" color="grey-04">
-              {counts.spaceCount} {counts.spaceCount === 1 ? 'space' : 'spaces'} · {counts.claimCount}{' '}
-              {counts.claimCount === 1 ? 'claim' : 'claims'}
-            </Text>
+      <ClaimListPickerRow
+        name={TODAYS_CLAIMS_LIST_NAME}
+        detail={
+          counts ? (
+            `${counts.spaceCount} ${counts.spaceCount === 1 ? 'space' : 'spaces'} · ${counts.claimCount} ${counts.claimCount === 1 ? 'claim' : 'claims'}`
           ) : (
-            <span className="mt-1 h-3 w-24 animate-pulse rounded bg-grey-01" aria-hidden />
-          )}
-        </span>
-        {isAdded || isPicking ? (
-          <Text as="span" variant="footnote" color="grey-04" className="shrink-0">
-            {isAdded ? CLAIM_LIST_PICKER_COPY.added : CLAIM_LIST_PICKER_COPY.adding}
-          </Text>
-        ) : null}
-      </button>
+            <span className="mt-1 block h-3 w-24 animate-pulse rounded bg-grey-01" aria-hidden />
+          )
+        }
+        isAdded={isAdded}
+        isPicking={isPicking}
+        disabled={disabled}
+        analyticsLabel={`${analyticsLabel} Today’s claims`}
+        onClick={() => onPick(TODAYS_CLAIMS_OPTION)}
+      />
     </div>
+  );
+}
+
+/** One option in the picker: a list's name over its counts, and whether it is added or being added. */
+function ClaimListPickerRow({
+  name,
+  detail,
+  isAdded,
+  isPicking,
+  disabled,
+  analyticsLabel,
+  onClick,
+}: {
+  name: string;
+  detail: React.ReactNode;
+  isAdded: boolean;
+  isPicking: boolean;
+  disabled: boolean;
+  analyticsLabel: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={isAdded || disabled}
+      {...debateActionAnalyticsAttributes('hub', analyticsLabel, 'add_lobby_claim_list')}
+      onClick={onClick}
+      className="flex w-full items-center justify-between gap-3 rounded-md px-2 py-2 text-left transition-colors hover:bg-grey-01 disabled:hover:bg-transparent"
+    >
+      <span className="flex min-w-0 flex-col">
+        <Text as="span" variant="metadataMedium" color={isAdded ? 'grey-03' : 'text'} className="truncate">
+          {name}
+        </Text>
+        <Text as="span" variant="footnote" color="grey-04">
+          {detail}
+        </Text>
+      </span>
+      {isAdded || isPicking ? (
+        <Text as="span" variant="footnote" color="grey-04" className="shrink-0">
+          {isAdded ? CLAIM_LIST_PICKER_COPY.added : CLAIM_LIST_PICKER_COPY.adding}
+        </Text>
+      ) : null}
+    </button>
   );
 }
 
@@ -380,29 +412,16 @@ function SpaceGroup({
         const isAdded = added.has(ID.uuidToHex(option.entityId));
         const { themeCount, claimCount } = counts.get(option) ?? { themeCount: 0, claimCount: 0 };
         return (
-          <button
+          <ClaimListPickerRow
             key={option.entityId}
-            type="button"
-            disabled={isAdded || disabled}
-            {...debateActionAnalyticsAttributes('hub', analyticsLabel, 'add_lobby_claim_list')}
+            name={option.name}
+            detail={`${themeCount} ${themeCount === 1 ? 'theme' : 'themes'} · ${claimCount} ${claimCount === 1 ? 'claim' : 'claims'}`}
+            isAdded={isAdded}
+            isPicking={picking === option.entityId}
+            disabled={disabled}
+            analyticsLabel={analyticsLabel}
             onClick={() => onPick(option)}
-            className="flex w-full items-center justify-between gap-3 rounded-md px-2 py-2 text-left transition-colors hover:bg-grey-01 disabled:hover:bg-transparent"
-          >
-            <span className="flex min-w-0 flex-col">
-              <Text as="span" variant="metadataMedium" color={isAdded ? 'grey-03' : 'text'} className="truncate">
-                {option.name}
-              </Text>
-              <Text as="span" variant="footnote" color="grey-04">
-                {themeCount} {themeCount === 1 ? 'theme' : 'themes'} · {claimCount}{' '}
-                {claimCount === 1 ? 'claim' : 'claims'}
-              </Text>
-            </span>
-            {isAdded || picking === option.entityId ? (
-              <Text as="span" variant="footnote" color="grey-04" className="shrink-0">
-                {isAdded ? CLAIM_LIST_PICKER_COPY.added : CLAIM_LIST_PICKER_COPY.adding}
-              </Text>
-            ) : null}
-          </button>
+          />
         );
       })}
     </section>

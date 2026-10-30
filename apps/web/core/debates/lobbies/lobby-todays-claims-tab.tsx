@@ -2,37 +2,20 @@
 
 import * as React from 'react';
 
-import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
+import { useSpaceLabels } from '~/core/hooks/use-space-labels';
 
 import { DebateClaimCardSurface, sectionStartOffsets, useRecordClaimFilter } from '../debate-claim-card-surface';
-import { useDebateClaimsBySpaces, useGeoChatAuth } from '../hooks';
 import { claimRowKey } from '../matchmaking/claim-row-key';
 import { CollapsibleClaimSection } from '../matchmaking/collapsible-claim-section';
-import { FacetFilterPills, type FacetPillOption } from '../matchmaking/facet-filter-pills';
+import { FacetFilterPills } from '../matchmaking/facet-filter-pills';
 import { debateActionAnalyticsAttributes } from '../matchmaking/hub-analytics';
+import { panelFacetOptions } from '../matchmaking/hub-filters';
 import { HubCardList } from '../matchmaking/hub-motion';
 import { HubQueryState } from '../matchmaking/hub-states';
-import {
-  claimRowGroups,
-  placedAnswersReady,
-  placedClaimKey,
-  rowsByPlacedClaim,
-  taggedClaimEntry,
-} from '../matchmaking/tagged-claim-entry';
-import {
-  carriesEveryTopic,
-  countBy,
-  hasId,
-  inEverySpace,
-  keepSelectedVisible,
-  narrowingOptions,
-  orderFacetOptions,
-  toggleId,
-} from '../matchmaking/topic-facets';
+import { carriesEveryTopic, countBy, hasId, inEverySpace, toggleId } from '../matchmaking/topic-facets';
 import { useTodaysSectionsOpen } from '../todays-claims/section-open-state';
 import { type TodaysListClaim, useTodaysClaimsList } from '../todays-claims/todays-claims-list';
-import { useLobbyRoomCardRenderer } from './lobby-explore-claims';
-import { exploreRoomClaimBatches } from './lobby-explore-claims-hooks';
+import { useLobbyListCards } from './lobby-claim-list-tab';
 import type { LobbyPageView } from './lobby-view';
 
 export const TODAYS_CLAIMS_TAB_COPY = {
@@ -76,29 +59,20 @@ export function LobbyTodaysClaimsTab({ lobby }: { lobby: LobbyPageView }) {
     [sections]
   );
   const { labelsById, isLoading: labelsLoading } = useSpaceLabels(allSpaceIds);
-  const pillOptions = React.useMemo<FacetPillOption[]>(() => {
-    const total = narrowed.length;
-    const spaces = narrowingOptions(
-      keepSelectedVisible(countBy(narrowed.map(claim => ({ id: claim.spaceId, name: null }))), spaceIds),
-      total,
-      spaceIds
-    ).map(space => {
-      const label = spaceLabel(labelsById, space.id);
-      return {
-        kind: 'space' as const,
-        id: space.id,
-        name: label?.name ?? (labelsLoading ? null : 'Space'),
-        image: label?.image ?? null,
-        count: space.count,
-      };
-    });
-    const topics = narrowingOptions(
-      keepSelectedVisible(countBy(narrowed.flatMap(claim => claim.topics)), topicIds),
-      total,
-      topicIds
-    ).map(topic => ({ kind: 'topic' as const, id: topic.id, name: topic.name ?? 'Topic', count: topic.count }));
-    return [...orderFacetOptions(spaces, spaceIds), ...orderFacetOptions(topics, topicIds)];
-  }, [labelsById, labelsLoading, narrowed, spaceIds, topicIds]);
+  const pillOptions = React.useMemo(
+    () =>
+      panelFacetOptions({
+        spaces: countBy(narrowed.map(claim => ({ id: claim.spaceId, name: null }))),
+        topics: countBy(narrowed.flatMap(claim => claim.topics)),
+        spaceIds,
+        topicIds,
+        listedCount: narrowed.length,
+        labelsById,
+        labelsLoading,
+        topicsWithSpaces: true,
+      }),
+    [labelsById, labelsLoading, narrowed, spaceIds, topicIds]
+  );
   const pickedIds = React.useMemo(() => [...spaceIds, ...topicIds], [spaceIds, topicIds]);
   const filtered = pickedIds.length > 0;
 
@@ -156,41 +130,9 @@ function TodaysSections({
   isOpen: (sectionKey: string, defaultOpen: boolean) => boolean;
   onToggle: (section: VisibleSection, open: boolean) => void;
 }) {
-  const { authenticated, accountKey } = useGeoChatAuth();
-
-  // geo-chat's rows for the agendas' claims, each in its agenda's space: the viewer's side, who stands
-  // ready on each, a live debate. A claim with no row still lists, with no sides.
-  const groups = React.useMemo(
-    () =>
-      authenticated && accountKey
-        ? claimRowGroups(
-            sections.flatMap(section => section.claims.map(claim => ({ spaceId: claim.spaceId, claimId: claim.id })))
-          )
-        : [],
-    [accountKey, authenticated, sections]
-  );
-  const rows = useDebateClaimsBySpaces(groups);
-  const entriesBySection = React.useMemo(() => {
-    const byClaim = rowsByPlacedClaim(rows.claims);
-    return sections.map(section =>
-      section.claims.map(claim => ({
-        entry: taggedClaimEntry(
-          claim,
-          claim.spaceId,
-          byClaim.get(placedClaimKey({ spaceId: claim.spaceId, claimId: claim.id }))
-        ),
-        claim,
-      }))
-    );
-  }, [sections, rows.claims]);
+  const { entriesBySection, renderCard } = useLobbyListCards(lobby, sections);
   // GEO-3495. Where each section starts in the list's numbering.
   const sectionOffsets = sectionStartOffsets(sections.map(section => section.claims.length));
-
-  const batches = React.useMemo(
-    () => exploreRoomClaimBatches(entriesBySection.flat().map(({ entry }) => entry)),
-    [entriesBySection]
-  );
-  const renderRoomCard = useLobbyRoomCardRenderer(lobby, batches);
 
   return (
     <div className="flex flex-col gap-4">
@@ -205,18 +147,15 @@ function TodaysSections({
           analytics={debateActionAnalyticsAttributes('hub', 'Lobby Today’s claims section toggle')}
         >
           <HubCardList>
-            {(entriesBySection[index] ?? []).map(({ entry, claim }, position) => (
+            {(entriesBySection[index] ?? []).map((entry, position) => (
               <DebateClaimCardSurface
                 key={claimRowKey(entry)}
                 claimId={entry.claim.claim_entity_id}
                 listId={LIST_ID}
                 position={sectionOffsets[index] + position + 1}
-                scope={claim.scope}
+                scope={section.claims[position]!.scope}
               >
-                {renderRoomCard(
-                  entry,
-                  placedAnswersReady({ authenticated, accountKey }, rows.unresolvedSpaceIds, entry.claim.space_id)
-                )}
+                {renderCard(entry)}
               </DebateClaimCardSurface>
             ))}
           </HubCardList>

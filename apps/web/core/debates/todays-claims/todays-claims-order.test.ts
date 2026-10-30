@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { orderAgendaSpaces, orderByDebatesSinceListing } from './todays-claims-order';
+import { agendaRow } from './debate-agenda-fixtures';
+import { buildDebateAgendas } from './debate-agendas';
+import {
+  orderAgendaSpaces,
+  orderByDebatesSinceListing,
+  orderedAgendaSections,
+  todaysSectionKey,
+} from './todays-claims-order';
 
 const AI = '41e851610e13a19441c4d980f2f2ce6b';
 const WORLD = '89bd89bf28ff8a0963faf92a8c905e20';
@@ -32,5 +39,33 @@ describe('orderByDebatesSinceListing', () => {
 
   it('reads an unknown count as undebated', () => {
     expect(orderByDebatesSinceListing(['a', 'b'], () => undefined)).toEqual(['a', 'b']);
+  });
+});
+
+describe('orderedAgendaSections', () => {
+  it('walks spaces by weight, sections in agenda order, debated claims last in each', () => {
+    const rows = [
+      agendaRow({ spaceId: UNRANKED_A, sectionId: 'a-1', entityId: 'c1' }),
+      agendaRow({ spaceId: UNRANKED_A, sectionId: 'a-1', entityId: 'c2' }),
+      agendaRow({ spaceId: UNRANKED_A, sectionId: 'a-2', entityId: 'c3' }),
+      agendaRow({ spaceId: UNRANKED_B, sectionId: 'b-1', entityId: 'c4' }),
+    ];
+    const agendas = buildDebateAgendas(rows, new Set(['c1', 'c2', 'c3', 'c4']));
+    const walked = orderedAgendaSections(
+      agendas,
+      spaceId => (spaceId === UNRANKED_B ? 1 : 0),
+      claimId => (claimId === 'c1' ? 1 : 0)
+    );
+    expect(walked.map(({ section, claimIds }) => [section.id, claimIds])).toEqual([
+      ['b-1', ['c4']],
+      ['a-1', ['c2', 'c1']],
+      ['a-2', ['c3']],
+    ]);
+  });
+});
+
+describe('todaysSectionKey', () => {
+  it('is the same key for any spelling of the space and block', () => {
+    expect(todaysSectionKey('AAAA0000-0000-0000-0000-000000000000', 'b-1')).toBe(todaysSectionKey(UNRANKED_A, 'b-1'));
   });
 });

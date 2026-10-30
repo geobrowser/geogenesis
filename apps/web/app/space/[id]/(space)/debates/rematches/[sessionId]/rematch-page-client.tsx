@@ -127,7 +127,7 @@ import { useClaimDebateCounts } from '~/core/debates/todays-claims/claim-debate-
 import { NO_AGENDAS, useDebateAgendas } from '~/core/debates/todays-claims/debate-agendas';
 import { EARLIER_THIS_WEEK_SECTION, useTodaysSectionsOpen } from '~/core/debates/todays-claims/section-open-state';
 import { type TodaysCardScope, todaysCardScope } from '~/core/debates/todays-claims/todays-claims-attribution';
-import { orderAgendaSpaces, orderByDebatesSinceListing } from '~/core/debates/todays-claims/todays-claims-order';
+import { orderedAgendaSections, todaysSectionKey } from '~/core/debates/todays-claims/todays-claims-order';
 import { useDebatersSpaceMembership } from '~/core/debates/todays-claims/use-debaters-space-membership';
 import { useClaimSpaceAllowlist } from '~/core/debates/use-claim-space-allowlist';
 import { useCurrentGeoChatUserId } from '~/core/debates/use-current-geo-chat-user-id';
@@ -1861,28 +1861,23 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
 
     const sections: TodaysSection[] = [];
     const items: TodaysItem[] = [];
-    for (const spaceId of orderAgendaSpaces(todaysAgendaSpaceIds, todaysMembership.debatersIn)) {
-      const space = todaysAgendas.spaces.find(candidate => idEquals(candidate.spaceId, spaceId));
-      for (const section of space?.sections ?? []) {
-        const rows = orderByDebatesSinceListing(section.claimIds, debatesOf).flatMap(
-          claimId => rowOf(claimId, section.spaceId) ?? []
-        );
-        if (rows.length === 0) continue;
-        const key = todaysSectionKey(section.spaceId, section.id);
-        sections.push({ key, name: section.name, defaultOpen: true, sectionId: section.id });
-        items.push(
-          ...rows.map(row => ({
-            row,
-            sectionKey: key,
-            scope: todaysCardScope(
-              section.agendaId,
-              section.listedOn,
-              debatesOf(normId(row.claim.claim_entity_id)),
-              section.id
-            ),
-          }))
-        );
-      }
+    for (const { section, claimIds } of orderedAgendaSections(todaysAgendas, todaysMembership.debatersIn, debatesOf)) {
+      const rows = claimIds.flatMap(claimId => rowOf(claimId, section.spaceId) ?? []);
+      if (rows.length === 0) continue;
+      const key = todaysSectionKey(section.spaceId, section.id);
+      sections.push({ key, name: section.name, defaultOpen: true, sectionId: section.id });
+      items.push(
+        ...rows.map(row => ({
+          row,
+          sectionKey: key,
+          scope: todaysCardScope(
+            section.agendaId,
+            section.listedOn,
+            debatesOf(normId(row.claim.claim_entity_id)),
+            section.id
+          ),
+        }))
+      );
     }
     const earlier = todaysAgendas.earlier.flatMap(listing => {
       if ((debatesOf(listing.claimId) ?? 0) > 0) return [];
@@ -1916,7 +1911,6 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     todaysCountsByClaim,
     todaysMembership.debatersIn,
     todaysSettling,
-    todaysAgendaSpaceIds,
   ]);
   const todaysHeld = useLastSettled(todaysNow, todaysSettling, sessionId);
   const todaysSections = useStableListOrder(todaysHeld.sections, todaysSectionKeyOf, sessionId);
@@ -4168,11 +4162,6 @@ function TopicMatchCaption({ names }: { names: string[] }) {
 /** The page's names for its collapsible sections, so it can tell which of them are closed. */
 const ALREADY_DEBATED_SECTION = 'already-debated';
 const recommendedSectionKey = (sectionId: string) => `recommended:${sectionId}`;
-/**
- * A Today's claims section, by its space and agenda block: one block can be linked into two spaces'
- * agendas. "Earlier this week" is `EARLIER_THIS_WEEK_SECTION`.
- */
-const todaysSectionKey = (spaceId: string, blockId: string) => `todays:${normId(spaceId)}:${normId(blockId)}`;
 
 /** GEO-3489. A Today's claims heading, and whether it starts open. */
 type TodaysSection = {

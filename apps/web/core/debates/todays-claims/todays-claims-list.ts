@@ -13,7 +13,7 @@ import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '../use-deb
 import { useClaimDebateCounts } from './claim-debate-counts';
 import { type DebateAgendas, NO_AGENDAS, useDebateAgendas } from './debate-agendas';
 import { type TodaysCardScope, todaysCardScope } from './todays-claims-attribution';
-import { orderAgendaSpaces, orderByDebatesSinceListing } from './todays-claims-order';
+import { orderedAgendaSections, todaysSectionKey } from './todays-claims-order';
 
 /** A Today's claims card: the claim, the agenda space it is drawn in, its topics there. */
 export type TodaysListClaim = {
@@ -36,9 +36,6 @@ export type TodaysListSection = {
   claims: TodaysListClaim[];
 };
 
-export const todaysListSectionKey = (spaceId: string, blockId: string) =>
-  `todays:${normId(spaceId)}:${normId(blockId)}`;
-
 /**
  * Every space's newest agenda as sections: the lead space first (the lobby's own, when it has one),
  * then the rest by the space ranking, each space's sections in its agenda's order. Inside a section,
@@ -56,37 +53,33 @@ export function placeTodaysClaims(
 ): TodaysListSection[] {
   const entitiesById = new Map(entities.map(entity => [normId(entity.id), entity]));
   const topicsById = claimTopicsById(entities);
-  const spaceIds = agendas.spaces.map(space => space.spaceId);
   const leads = (spaceId: string) => (leadSpaceId && idEquals(spaceId, leadSpaceId) ? 1 : 0);
   const listed = new Set<string>();
 
   const sections: TodaysListSection[] = [];
-  for (const spaceId of orderAgendaSpaces(spaceIds, leads)) {
-    const space = agendas.spaces.find(candidate => idEquals(candidate.spaceId, spaceId));
-    for (const section of space?.sections ?? []) {
-      const claims = orderByDebatesSinceListing(section.claimIds, debatesOf).flatMap(claimId => {
-        const entity = entitiesById.get(claimId);
-        if (!entity || listed.has(claimId)) return [];
-        listed.add(claimId);
-        return [
-          {
-            id: claimId,
-            name: entity.name?.trim() ?? '',
-            description: entity.description,
-            spaceId: section.spaceId,
-            topics: topicsFor(topicsById, claimId, section.spaceId) ?? [],
-            scope: todaysCardScope(section.agendaId, section.listedOn, debatesOf(claimId), section.id),
-          },
-        ];
-      });
-      if (claims.length === 0) continue;
-      sections.push({
-        key: todaysListSectionKey(section.spaceId, section.id),
-        sectionId: section.id,
-        name: section.name,
-        claims,
-      });
-    }
+  for (const { section, claimIds } of orderedAgendaSections(agendas, leads, debatesOf)) {
+    const claims = claimIds.flatMap(claimId => {
+      const entity = entitiesById.get(claimId);
+      if (!entity || listed.has(claimId)) return [];
+      listed.add(claimId);
+      return [
+        {
+          id: claimId,
+          name: entity.name?.trim() ?? '',
+          description: entity.description,
+          spaceId: section.spaceId,
+          topics: topicsFor(topicsById, claimId, section.spaceId) ?? [],
+          scope: todaysCardScope(section.agendaId, section.listedOn, debatesOf(claimId), section.id),
+        },
+      ];
+    });
+    if (claims.length === 0) continue;
+    sections.push({
+      key: todaysSectionKey(section.spaceId, section.id),
+      sectionId: section.id,
+      name: section.name,
+      claims,
+    });
   }
   return sections;
 }
