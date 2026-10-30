@@ -48,8 +48,9 @@ const VIEW_BASE = {
   access: { status: 'not_yet_open', opens_at: '2026-10-30T18:50:00Z' },
   viewer: { role: null, hosting: false },
 };
+const useDebateLobby = vi.hoisted(() => vi.fn(() => lobbyView));
 vi.mock('../lobbies/hooks', () => ({
-  useDebateLobby: () => lobbyView,
+  useDebateLobby,
   useUpdateDebateLobby: () => ({ mutate: vi.fn(), error: null, isPending: false }),
 }));
 vi.mock('../lobbies/lobby-host-lobbies', () => ({
@@ -204,7 +205,10 @@ describe('HubLiveStrip', () => {
   it('closes the details before showing the edit dialog', async () => {
     lobbyView.data = { ...VIEW_BASE, viewer: { role: 'host', hosting: false }, reminder_count: 0, going: [] };
     const later = lobby({ open: false, scheduled: true });
+    useDebateLobby.mockClear();
     render(<HubLiveStrip lineup={{ ...EMPTY, later: [later] }} />);
+    // Review round 2: nothing reads the lobby (or schedules its refetch at opening) until it's wanted.
+    expect(useDebateLobby).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole('button', { name: /lobby details/ }));
     fireEvent.click(

@@ -173,9 +173,8 @@ function NextLobbyStrip({ lobby }: { lobby: DebateLobbySummary }) {
   const portal = useElevatedPopoverPortal();
   const [open, setOpen] = React.useState(false);
   // Held here, not in the details: Edit closes them first, so Escape in the dialog and the details
-  // closing don't take it with them. The view stays live while it is up.
+  // closing don't take it with them.
   const [editing, setEditing] = React.useState(false);
-  const { data: editingView } = useDebateLobby(lobby.lobby_id, editing);
 
   // The calendar's RSVP, Going black, on the strip's light surface. One press for both copies of it.
   const rsvp = (
@@ -230,10 +229,16 @@ function NextLobbyStrip({ lobby }: { lobby: DebateLobbySummary }) {
         </Popover.Root>
         {rsvp}
       </section>
-      {editing && editingView ? <EditLobbyDialog lobby={editingView} onClose={() => setEditing(false)} /> : null}
+      {editing ? <EditFromStrip lobbyId={lobby.lobby_id} onClose={() => setEditing(false)} /> : null}
       <LobbyReminderError error={remind.error} />
     </>
   );
+}
+
+/** The edit dialog over the lobby's live view. Mounted only while editing, so its read runs only then. */
+function EditFromStrip({ lobbyId, onClose }: { lobbyId: string; onClose: () => void }) {
+  const { data: view } = useDebateLobby(lobbyId);
+  return view ? <EditLobbyDialog lobby={view} onClose={onClose} /> : null;
 }
 
 /** Short beside Going in the details' footer. */
