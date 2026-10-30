@@ -116,17 +116,26 @@ export function useDebateLobbies(enabled = true, { staleTime }: { staleTime?: nu
 
 /**
  * Every lobby starting in `[from, to)` (GEO-3271), for the calendar's week: no per-host or total cap,
- * and ended lobbies included. Signed in only. Refetched with the lobby list; card patches are laid
- * over it by the gateway.
+ * and ended lobbies included. Refetched with the lobby list; card patches are laid over it by the
+ * gateway.
+ *
+ * Signed in only, unless `signedOut`: then a visitor without an account reads the range a new account
+ * sees (GEO-3517), polled as the list is.
  */
-export function useDebateLobbyCalendar(from: Date, to: Date, enabled = true) {
+export function useDebateLobbyCalendar(
+  from: Date,
+  to: Date,
+  enabled = true,
+  { signedOut = false }: { signedOut?: boolean } = {}
+) {
   const { accountKey, authenticated, ready, getPrivyIdentityToken } = useGeoChatAuth();
 
   return useQuery({
     ...debateQueryNetworkOptions,
     queryKey: debateQueryKeys.lobbyCalendar(accountKey, from.getTime(), to.getTime()),
     queryFn: ({ signal }) => listDebateLobbyCalendar({ from, to }, getPrivyIdentityToken, accountKey, signal),
-    enabled: enabled && ready && authenticated,
+    enabled: enabled && ready && (authenticated || signedOut),
+    ...(authenticated ? {} : { refetchInterval: SIGNED_OUT_LOBBIES_POLL_MS }),
   });
 }
 

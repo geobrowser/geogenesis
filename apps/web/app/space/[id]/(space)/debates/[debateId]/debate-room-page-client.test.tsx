@@ -68,6 +68,8 @@ const mocks = vi.hoisted(() => ({
   liveStreamRelease: vi.fn(),
   liveStreamAbort: vi.fn(),
   liveStreamDetach: vi.fn(),
+  liveStreamYieldToCall: vi.fn(),
+  liveStreamResume: vi.fn(),
   getRecording: vi.fn(),
   deleteRecording: vi.fn(),
   requestPersistentStorage: vi.fn(),
@@ -243,6 +245,8 @@ vi.mock('~/core/debates/recording-stream', () => ({
       release: mocks.liveStreamRelease,
       abort: mocks.liveStreamAbort,
       detach: mocks.liveStreamDetach,
+      yieldToCall: mocks.liveStreamYieldToCall,
+      resume: mocks.liveStreamResume,
     };
   },
 }));
@@ -440,6 +444,8 @@ beforeEach(() => {
   mocks.leaveRematchMutateAsync.mockReset();
   mocks.enqueueRecording.mockReset();
   mocks.startLiveStream.mockReset();
+  mocks.liveStreamYieldToCall.mockReset();
+  mocks.liveStreamResume.mockReset();
   mocks.liveStreamAppend.mockReset();
   mocks.liveStreamFinish.mockReset().mockResolvedValue(null);
   mocks.liveStreamRelease.mockReset().mockResolvedValue(undefined);
@@ -6815,6 +6821,81 @@ describe('DebateRoomPageClient', () => {
       } finally {
         onLine.mockRestore();
       }
+    });
+
+    it('sends parts only while this microphone is closed, and cuts one short when it opens (GEO-3410)', async () => {
+      setHistoryLength(2);
+      installRecordingMocks();
+      // The device clock stays at 00:00:20; the room's clock runs on from it.
+      vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:00:20.000Z'));
+      let elapsedMs = 0;
+      vi.spyOn(performance, 'now').mockImplementation(() => elapsedMs);
+      // Turns of 30 s from 00:00:10; slot 1 (user-a) speaks first.
+      const turn = (index: number, atSecond: number): Partial<Debate> => {
+        elapsedMs = (atSecond - 20) * 1_000;
+        return {
+          turn_durations_ms: [30_000, 30_000, 30_000],
+          current_turn_index: index,
+          current_speaker_slot: index % 2 === 0 ? 1 : 2,
+          started_at: '2026-07-02T00:00:10.000Z',
+          turn_started_at: new Date(Date.parse('2026-07-02T00:00:10.000Z') + index * 30_000).toISOString(),
+          turn_ends_at: new Date(Date.parse('2026-07-02T00:00:40.000Z') + index * 30_000).toISOString(),
+        };
+      };
+      // Slot 1 is user-a, so their microphone is live.
+      const view = await renderLiveDebate(turn(0, 20));
+      await waitFor(() => expect(mocks.startLiveStream).toHaveBeenCalled());
+      const { callWindowMs } = mocks.startLiveStream.mock.calls[0][0] as { callWindowMs: () => number | null };
+      expect(callWindowMs()).toBe(0);
+
+      // The opponent's turn, 25 s left: less the second the next speaker's mic opens early.
+      mocks.debate = { ...mocks.debate!, ...turn(1, 45) };
+      view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+      await waitFor(() => expect(mocks.liveStreamResume).toHaveBeenCalled());
+      expect(callWindowMs()).toBe(24_000);
+
+      mocks.debate = { ...mocks.debate!, ...turn(2, 75) };
+      view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+      await waitFor(() => expect(mocks.liveStreamYieldToCall).toHaveBeenCalled());
+      expect(callWindowMs()).toBe(0);
+    });
+
+    it('keeps holding parts through the post-roll into the thank-you, until the recorder stops (GEO-3410)', async () => {
+      setHistoryLength(2);
+      const recorders = installRecordingMocks();
+      vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:00:20.000Z'));
+      let elapsedMs = 0;
+      vi.spyOn(performance, 'now').mockImplementation(() => elapsedMs);
+      // Two turns of 30 s from 00:00:10, so the thank-you opens both mics at 00:01:10.
+      const at = (index: number, atSecond: number): Partial<Debate> => {
+        elapsedMs = (atSecond - 20) * 1_000;
+        return {
+          turn_durations_ms: [30_000, 30_000],
+          current_turn_index: index,
+          current_speaker_slot: index % 2 === 0 ? 1 : 2,
+          started_at: '2026-07-02T00:00:10.000Z',
+          turn_started_at: new Date(Date.parse('2026-07-02T00:00:10.000Z') + index * 30_000).toISOString(),
+          turn_ends_at: new Date(Date.parse('2026-07-02T00:00:40.000Z') + index * 30_000).toISOString(),
+        };
+      };
+      const view = await renderLiveDebate(at(0, 20));
+      await waitFor(() => expect(mocks.startLiveStream).toHaveBeenCalled());
+      const { callWindowMs } = mocks.startLiveStream.mock.calls[0][0] as { callWindowMs: () => number | null };
+      mocks.debate = { ...mocks.debate!, ...at(1, 45) };
+      view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+      await waitFor(() => expect(callWindowMs()).toBe(24_000));
+
+      // Two seconds into the thank-you, inside the recording's post-roll.
+      mocks.debate = { ...mocks.debate!, ...at(1, 72) };
+      view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+      await waitFor(() => expect(mocks.liveStreamYieldToCall).toHaveBeenCalled());
+      expect(callWindowMs()).toBe(0);
+      expect((recorders[0] as MediaRecorder | undefined)?.state).toBe('recording');
+
+      mocks.liveStreamResume.mockClear();
+      act(() => recorders[0]!.dispatchEvent(new Event('stop')));
+      await waitFor(() => expect(mocks.liveStreamResume).toHaveBeenCalled());
+      expect(callWindowMs()).toBeNull();
     });
 
     it('reports a recording that could not be handed to the upload queue (GEO-3171)', async () => {

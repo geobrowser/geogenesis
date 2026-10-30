@@ -15,6 +15,7 @@ import { useLogout } from '~/core/wallet/auth-hooks';
 import {
   avatarAtom,
   nameAtom,
+  onboardingNameOnlyAtom,
   selectedTopicIdsAtom,
   spaceIdAtom,
   stepAtom,
@@ -53,6 +54,7 @@ export function useGeoLogoutCleanup() {
   const setPending = useSetAtom(pendingPersonalSpaceAtom);
   const setSelectedTopicIds = useSetAtom(selectedTopicIdsAtom);
   const setFeedTopics = useSetAtom(feedTopicsAtom);
+  const setNameOnly = useSetAtom(onboardingNameOnlyAtom);
 
   useLogout({
     onSuccess: async () => {
@@ -74,6 +76,7 @@ export function useGeoLogoutCleanup() {
         setPending(null);
         setSelectedTopicIds([]);
         setFeedTopics(NO_HELD_FEED_TOPICS);
+        setNameOnly(false);
         // Bulletproof reset — see the doc comment. `/root` is the public home and
         // drops the user out of any onboarding/pending context they logged out of.
         window.location.assign('/root');

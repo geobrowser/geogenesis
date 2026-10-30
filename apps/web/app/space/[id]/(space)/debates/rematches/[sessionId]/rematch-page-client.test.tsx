@@ -912,6 +912,7 @@ const todays = vi.hoisted(() => ({
         spaceId: string;
         name: string;
         claimIds: string[];
+        listedOn: string;
         listedAt: string;
       }>;
     }>;
@@ -941,8 +942,7 @@ function listedAtByClaim(agendas: typeof todays.agendas) {
 
 // The builder has its own tests; this keeps its contract: `keepSpace` decides first which spaces count.
 vi.mock('~/core/debates/todays-claims/debate-agendas', async importOriginal => {
-  const { NO_AGENDAS, agendaDayFromValue } =
-    await importOriginal<typeof import('~/core/debates/todays-claims/debate-agendas')>();
+  const { NO_AGENDAS } = await importOriginal<typeof import('~/core/debates/todays-claims/debate-agendas')>();
   const agendasIn = (keepSpace: (spaceId: string) => boolean) => {
     const kept = {
       ...todays.agendas,
@@ -953,7 +953,6 @@ vi.mock('~/core/debates/todays-claims/debate-agendas', async importOriginal => {
   };
   return {
     NO_AGENDAS,
-    agendaDayFromValue,
     useDebateAgendas: () => ({
       agendasIn,
       spaceIds: [...todays.agendas.spaces.map(space => space.spaceId), ...todays.agendas.earlier.map(l => l.spaceId)],
@@ -7741,7 +7740,15 @@ describe('Today’s claims', () => {
   }
 
   function section(id: string, spaceId: string, name: string, claimIds: string[]) {
-    return { id, agendaId: `agenda-${spaceId}`, spaceId, name, claimIds, listedAt: '2026-10-28T00:00:00-04:00' };
+    return {
+      id,
+      agendaId: `agenda-${spaceId}`,
+      spaceId,
+      name,
+      claimIds,
+      listedOn: '2026-10-28',
+      listedAt: '2026-10-28T04:00:00+00:00',
+    };
   }
 
   /** World affairs (SPACE_1) with two sections, U.S. Politics (SPACE_2) with one, and an older listing. */
@@ -7781,14 +7788,14 @@ describe('Today’s claims', () => {
           spaceId: SPACE_1,
           agendaId: 'agenda-old',
           listedOn: '2026-10-26',
-          listedAt: '2026-10-26T00:00:00-04:00',
+          listedAt: '2026-10-26T04:00:00+00:00',
         },
         {
           claimId: T_OLD_DEBATED,
           spaceId: SPACE_1,
           agendaId: 'agenda-old',
           listedOn: '2026-10-26',
-          listedAt: '2026-10-26T00:00:00-04:00',
+          listedAt: '2026-10-26T04:00:00+00:00',
         },
       ],
     };
@@ -7863,8 +7870,8 @@ describe('Today’s claims', () => {
     // Each claim's count is asked from its own listing.
     expect(todays.countsAsked.at(-1)).toEqual(
       expect.arrayContaining([
-        { claimId: T_LULA, since: '2026-10-28T00:00:00-04:00' },
-        { claimId: T_OLD, since: '2026-10-26T00:00:00-04:00' },
+        { claimId: T_LULA, since: '2026-10-28T04:00:00+00:00' },
+        { claimId: T_OLD, since: '2026-10-26T04:00:00+00:00' },
       ])
     );
   });
