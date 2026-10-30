@@ -5,10 +5,12 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import { ActionSurfaceArticle } from '~/core/action-context-provider';
+import { TrendingTag } from '~/core/claims/browse/claim-summary';
 import { CLAIM_TYPE_ID, TOPIC_TYPE_ID } from '~/core/claims/ontology';
 import { EVENT_SCHEMA } from '~/core/community-calls/constants';
 import { useRecordingSources } from '~/core/community-calls/use-recording-sources';
 import { isDebateEntity } from '~/core/debates/is-debate-entity';
+import { useIsTrending } from '~/core/debates/todays-claims/trending';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { useNearViewport } from '~/core/hooks/use-near-viewport';
 import { RANKING_BLOCK_TYPE_ID } from '~/core/ranking-block-ids';
@@ -232,6 +234,11 @@ function BaseExploreFeedCard({
   const isCommunityCall = item.types.some(type => normId(type.id) === COMMUNITY_CALL_EVENT_TYPE);
   const isRanking = item.types.some(type => normId(type.id) === RANKING_BLOCK_TYPE);
   const cardActions = <ExploreCardActions item={item} />;
+  const isDebate = isDebateEntity(item.types);
+  // GEO-3497. A debate that falls back to this card keeps the Trending tag its playable card has.
+  // Only the generic row below draws it; compact chrome's `DebateExploreMetaRow` draws its own from
+  // the same cached query.
+  const isTrending = useIsTrending(item.entityId, isDebate);
 
   return (
     <ActionSurfaceArticle
@@ -252,7 +259,8 @@ function BaseExploreFeedCard({
           item={item}
           hideSpaceLink={hideSpaceLink}
           hideJoinButton={hideJoinButton}
-          endSlot={isDebateEntity(item.types) ? debateEndSlot : undefined}
+          extraSegments={isTrending ? [<TrendingTag key="trending" />] : undefined}
+          endSlot={isDebate ? debateEndSlot : undefined}
         />
       )}
 

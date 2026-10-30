@@ -4,6 +4,8 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { TrendingTag } from '~/core/claims/browse/claim-summary';
+import { useIsTrending } from '~/core/debates/todays-claims/trending';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -34,6 +36,9 @@ export function DebateExploreMetaRow({
   endSlot?: React.ReactNode;
 }) {
   const offer = useSpaceOffer(item, { hidden: hideJoinButton, joinVariant: 'pill' });
+  // GEO-3497. gaia answers a debate's `lastListedOn` with its claim's, so the debate's own id is
+  // enough, and the tag shows whenever the debate was recorded.
+  const isTrending = useIsTrending(item.entityId);
   return (
     <div className="flex items-center justify-between gap-3">
       <div
@@ -51,6 +56,7 @@ export function DebateExploreMetaRow({
             <span className="min-w-0 truncate">{item.spaceName}</span>
           </Link>
         ) : null}
+        {isTrending ? <TrendingTag /> : null}
         {offer.shown}
         {!compact && !hideTypeTag ? <ExploreTypeTag>Debate</ExploreTypeTag> : null}
       </div>

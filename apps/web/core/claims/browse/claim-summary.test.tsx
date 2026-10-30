@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { ClaimResponseSummary } from './claim-response-summary';
 import { summarizeClaimResponses } from './claim-response-summary';
-import { ClaimSummary, ControversialTag } from './claim-summary';
+import { ClaimSummary, ControversialTag, TrendingTag } from './claim-summary';
 
 // The faces and the list each run their own responder query, which is not what this is about. The
 // avatars still render something pressable, because where the popover lands is.
@@ -156,5 +156,31 @@ describe('ControversialTag', () => {
     render(<ControversialTag className="ml-2" />);
 
     expect(screen.getByText('Controversial')).toHaveClass('ml-2');
+  });
+});
+
+describe('TrendingTag', () => {
+  afterEach(cleanup);
+
+  it('reads as Trending in Geo purple, with the arrow drawn in the same colour and hidden from assistive tech', () => {
+    const { container } = render(<TrendingTag />);
+
+    expect(screen.getByText('Trending')).toHaveClass('text-purple');
+    const arrow = container.querySelector('svg');
+    expect(arrow).toHaveAttribute('aria-hidden', 'true');
+    expect(arrow?.querySelector('path')).toHaveAttribute('stroke', 'currentColor');
+  });
+
+  it('has Controversial’s shape exactly, so the two sit side by side as one family (GEO-3497)', () => {
+    render(
+      <>
+        <ControversialTag />
+        <TrendingTag />
+      </>
+    );
+
+    const shape = (label: string) =>
+      [...screen.getByText(label).classList].filter(name => name !== 'text-red-01' && name !== 'text-purple');
+    expect(shape('Trending')).toEqual(shape('Controversial'));
   });
 });

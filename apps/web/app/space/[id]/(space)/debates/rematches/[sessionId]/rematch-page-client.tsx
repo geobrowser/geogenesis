@@ -3168,6 +3168,8 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
           // but both the opponent label and the request control need the latest participant sides.
           claim={withCurrentPositions(claim)}
           previouslyDebated={previouslyDebated}
+          // Every claim on Today's claims is on an agenda, so the tag would say nothing there.
+          hideTrending={tab === 'todays'}
           context={saidBy ? null : topicMatchCaptionFor(claim)}
           headerMeta={
             saidBy ??
@@ -3936,6 +3938,7 @@ function RematchClaimCard({
   previouslyDebated = false,
   context = null,
   headerMeta = null,
+  hideTrending = false,
 }: {
   claim: DebateRematchClaim;
   session: DebateRematchSession | null;
@@ -3957,6 +3960,8 @@ function RematchClaimCard({
   context?: React.ReactNode;
   /** Drawn in the card's meta row beside the space — "From this debate" says who said the claim. */
   headerMeta?: React.ReactNode;
+  /** On Today's claims, which lists only agenda claims (GEO-3497). */
+  hideTrending?: boolean;
 }) {
   // `true` off a room, so this route's gate is unchanged. See `useRoomOpponentPresent`.
   const roomOpponentPresent = useRoomOpponentPresent();
@@ -4049,6 +4054,7 @@ function RematchClaimCard({
       readiness={readiness}
       headerMeta={headerMeta}
       analyticsSurface="rematch"
+      hideTrending={hideTrending}
       showParticipants={false}
       noteFor={position =>
         showOpponentPosition && (

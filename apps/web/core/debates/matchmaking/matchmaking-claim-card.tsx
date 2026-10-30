@@ -11,7 +11,7 @@ import Link from 'next/link';
 import { useActionContext } from '~/core/action-context-provider';
 import { viewerResponseWithIndexedFallback } from '~/core/claims/browse/claim-position-summaries';
 import { CLAIM_RESPONSE_OBJECT_TYPE, useClaimResponseSummary } from '~/core/claims/browse/claim-response-summary';
-import { ClaimSummary, ControversialTag } from '~/core/claims/browse/claim-summary';
+import { ClaimSummary, ControversialTag, TrendingTag } from '~/core/claims/browse/claim-summary';
 import { LocalVoteNote } from '~/core/claims/browse/local-vote-note';
 import { useClaimMatchup, withMatchParticipants } from '~/core/claims/browse/use-claim-matchup';
 import {
@@ -57,6 +57,7 @@ import type {
   MatchmakingReadiness,
 } from '../api';
 import { useGeoChatAuth } from '../hooks';
+import { useIsTrending } from '../todays-claims/trending';
 import {
   type DebateActionAnalyticsSurface,
   type DebateAnalyticsAttributes,
@@ -179,6 +180,11 @@ type Props = {
    * Unset, the card's controls carry no label, as before.
    */
   analyticsSurface?: DebateAnalyticsSurface;
+  /**
+   * Leaves the Trending tag off (GEO-3497). For Today's claims, where every card is on an agenda and
+   * the tag would say nothing.
+   */
+  hideTrending?: boolean;
   /** `AnimatePresence mode="popLayout"` measures the exiting row through this; without it the row
    * never pops out of flow and the rows above close the gap only after the fade finishes. */
   ref?: React.Ref<HTMLElement>;
@@ -226,6 +232,7 @@ export function MatchmakingClaimCard({
   hideEndSlot,
   endSlot,
   analyticsSurface,
+  hideTrending = false,
   ref,
 }: Props) {
   // geo-chat can hand back a claim the graph has never seen. Responding to one is impossible, and
@@ -249,6 +256,9 @@ export function MatchmakingClaimCard({
   // split instead of the batch's.
   const responseBatch = useClaimResponseBatchState();
   const readResponses = nearViewport || responseBatch.managed;
+
+  // Batched across every card mounting together, so a list costs one request (see `useIsTrending`).
+  const isTrending = useIsTrending(isOnGraph && !hideTrending ? claim.claim_entity_id : null, readResponses);
 
   // The host's ref and the observer's, on the one element. The Matches tab hangs its infinite
   // scroll sentinel off the former and popLayout measures the exiting row through it, so it cannot
@@ -280,6 +290,7 @@ export function MatchmakingClaimCard({
           answersMayComeFromIndex={answersMayComeFromIndex}
           responseBlockedReason={responseBlockedReason}
           readResponses={readResponses}
+          isTrending={isTrending}
           onOpenClaim={onOpenClaim}
           viewerIdentityPending={viewerIdentityPending}
           viewerResponseUnknown={viewerResponseUnknown}
@@ -328,6 +339,7 @@ function ClaimHeader({
   isOnGraph,
   endSlot,
   isControversial,
+  isTrending,
   meta,
   onOpenClaim,
   analytics,
@@ -339,6 +351,8 @@ function ClaimHeader({
   meta?: React.ReactNode;
   /** Flagged beside the space chip — what kind of claim this is, which is the row's own question. */
   isControversial?: boolean;
+  /** Beside Controversial when the claim is both (GEO-3497). */
+  isTrending?: boolean;
   onOpenClaim?: () => void;
   analytics?: DebateAnalyticsAttributes;
 }) {
@@ -378,6 +392,7 @@ function ClaimHeader({
         <span className="flex min-w-0 items-baseline gap-1.5" data-testid="claim-card-eyebrow">
           <SpaceChip spaceId={claim.space_id} />
           {isControversial ? <ControversialTag className="self-center" /> : null}
+          {isTrending ? <TrendingTag className="self-center" /> : null}
           {meta ? (
             <span className="flex min-w-0 items-center gap-1.5 text-footnoteMedium text-grey-04">
               <span aria-hidden>·</span>
@@ -785,6 +800,7 @@ function RespondableControls({
   answersMayComeFromIndex = false,
   responseBlockedReason = null,
   readResponses = true,
+  isTrending = false,
   onOpenClaim,
   viewerIdentityPending,
   viewerResponseUnknown,
@@ -816,6 +832,8 @@ function RespondableControls({
   responseBlockedReason?: string | null;
   /** False while the card is still far enough below the fold that its reads are not worth making. */
   readResponses?: boolean;
+  /** The claim is on a current agenda (GEO-3497). */
+  isTrending?: boolean;
   /** See {@link Props.noteFor}. */
   noteFor?: (position: boolean) => React.ReactNode;
   showParticipants?: boolean;
@@ -971,6 +989,7 @@ function RespondableControls({
         onOpenClaim={onOpenClaim}
         analytics={analyticsSurface ? debateActionAnalyticsAttributes(analyticsSurface, 'Claim card title') : undefined}
         isControversial={summary.isControversial}
+        isTrending={isTrending}
         meta={headerMeta}
         endSlot={
           endSlot ??
