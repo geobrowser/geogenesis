@@ -21,15 +21,14 @@
  * answered with thumbs now, so every control here fills its icon and this is the only shade.
  *
  * One definition so these cannot drift apart again.
- */
-export const VOTE_BUTTON_CLASS = 'text-grey-04 hover:text-text';
-
-/**
- * The same shade with the hover step taken out, for a response that is still confirming.
  *
- * The claim pills drop their hover outline for that window (they ignore presses until the response
- * lands, so nothing under the pointer is going to happen) and the thumbs do the same. A separate
- * constant rather than `VOTE_BUTTON_CLASS` plus an override, for the reason given above: `cx` does
- * not resolve conflicting utilities, so a second `hover:` class would leave the winner to emit order.
+ * Kept as separate resting and hover pieces so `ResponseButton` can compose them: the resting shade
+ * is always on, the hover step only while the control accepts a press. That is what lets a
+ * confirming response drop its hover without a second `hover:` class fighting the first — `cx`
+ * concatenates rather than resolving conflicting Tailwind utilities, so the winner would otherwise
+ * fall to emit order. `VOTE_BUTTON_CLASS` is the two composed, kept so the pill (whose hover
+ * *outline* is a different property) and the tests that pin the literal keep one name for the pair.
  */
-export const VOTE_BUTTON_CONFIRMING_CLASS = 'text-grey-04';
+export const VOTE_BUTTON_RESTING_CLASS = 'text-grey-04';
+export const VOTE_BUTTON_HOVER_CLASS = 'hover:text-text';
+export const VOTE_BUTTON_CLASS = `${VOTE_BUTTON_RESTING_CLASS} ${VOTE_BUTTON_HOVER_CLASS}`;

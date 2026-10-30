@@ -7,7 +7,7 @@ import { type MockInstance, afterEach, beforeEach, describe, expect, it, vi } fr
 
 import { ActionContextProvider } from '~/core/action-context-provider';
 import { userEntityVotesQueryKey, votedEntityIdsPendingQueryKey } from '~/core/hooks/use-user-voted-entity-ids';
-import { entityResponseIndexingQueryKey } from '~/core/responses/entity-response';
+import { type ResponseKind, entityResponseIndexingQueryKey } from '~/core/responses/entity-response';
 import {
   resetFailedResponses,
   retryFailedResponses,
@@ -17,6 +17,7 @@ import {
 import { ReceiptConfirmationTimeoutError } from '../errors';
 import { QueuedSendTimeoutError } from './smart-account-send-queue';
 import {
+  CURATION_FAILED_AFTER_SUBMIT_COPY,
   RESPONSE_FAILED_AFTER_SUBMIT_COPY,
   responseIndexingRetryDelayMs,
   useEntityResponse,
@@ -1033,15 +1034,15 @@ function createHarness() {
  * still decides whether it stays.
  */
 describe('useEntityResponse publishes on submission', () => {
-  function renderResponse() {
+  function renderResponse(responseKind: ResponseKind = 'stance') {
     const { wrapper } = createHarness();
     return renderHook(
       () => ({
-        response: useEntityResponse({ entityId: 'claim-1', spaceId: TARGET_SPACE_ID, responseKind: 'stance' }),
+        response: useEntityResponse({ entityId: 'claim-1', spaceId: TARGET_SPACE_ID, responseKind }),
         snapshot: useEntityResponseIndexingSnapshot({
           entityId: 'claim-1',
           spaceId: TARGET_SPACE_ID,
-          responseKind: 'stance',
+          responseKind,
         }),
         toast: useToast()[0],
       }),
@@ -1111,6 +1112,34 @@ describe('useEntityResponse publishes on submission', () => {
     expect(result.current.toast?.props.children).toBe(RESPONSE_FAILED_AFTER_SUBMIT_COPY);
     // And no one-click retry: the op may still land, so sending it again could publish twice.
     expect(failed.result.current.count).toBe(0);
+    expect(mocks.tx).toHaveBeenCalledTimes(1);
+    consoleError.mockRestore();
+  });
+
+  it('rolls a curation vote back, and says so in vote wording, when it fails after submission', async () => {
+    const transaction = deferred<unknown>();
+    mocks.runEffectEither.mockReturnValueOnce(transaction.promise);
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const { result } = renderResponse('curation');
+
+    act(() => result.current.response.submitResponse('positive'));
+    await act(async () => Promise.resolve());
+    submit();
+    expect(result.current.response.isSubmittingResponse).toBe(false);
+
+    await act(async () => {
+      transaction.resolve({
+        _tag: 'Left',
+        left: new ReceiptConfirmationTimeoutError('UserOperation 0xaa was submitted but its receipt did not arrive'),
+      });
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    // The arrow unfills, so the failure is spoken — as a vote, not a position.
+    expect(result.current.snapshot.status).toBe('idle');
+    expect(result.current.response.optimisticResponse).toBeUndefined();
+    expect(result.current.response.isProcessingResponse).toBe(false);
+    expect(result.current.toast?.props.children).toBe(CURATION_FAILED_AFTER_SUBMIT_COPY);
     expect(mocks.tx).toHaveBeenCalledTimes(1);
     consoleError.mockRestore();
   });

@@ -125,7 +125,7 @@ describe('a vote from a signed-in account without a personal space', () => {
     fireEvent.click(upvote());
 
     expect(queued()).toHaveLength(0);
-    expect(upvote()).toHaveAttribute('title', 'Finish setting up your account to vote');
+    expect(upvote()).toHaveAttribute('aria-label', 'Finish setting up your account to vote');
   });
 });
 
