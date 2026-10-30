@@ -1,6 +1,7 @@
 import type { DataBlockView } from '~/core/blocks/data/data-block-view';
 import type { BlockMediaFrame } from '~/core/hooks/use-block-media-dimensions';
 
+import { Skeleton } from '~/design-system/skeleton';
 import { BulletedListViewSkeleton, GalleryViewSkeleton, ListViewSkeleton } from '~/design-system/skeletons';
 
 import { TableBlockLoadingPlaceholder } from './table-block-loading-placeholder';
@@ -38,4 +39,16 @@ export function DataBlockLoadingPlaceholder({ view, items, mediaFrame }: Props) 
     default:
       return <TableBlockLoadingPlaceholder rows={items} />;
   }
+}
+
+export function DataBlockServerPlaceholder({ view, items, mediaFrame }: Props) {
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <Skeleton className="h-4 w-4" />
+        <Skeleton className="h-5 w-16" />
+      </div>
+      <DataBlockLoadingPlaceholder view={view} items={items} mediaFrame={mediaFrame} />
+    </div>
+  );
 }

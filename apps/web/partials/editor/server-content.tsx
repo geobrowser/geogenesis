@@ -3,10 +3,9 @@ import type { BlockMediaFrame } from '~/core/hooks/use-block-media-dimensions';
 import { renderMarkdownDocument } from '~/core/state/editor/markdown-render';
 import { PROFILE_OVERVIEW_TAIL_BLOCK_SENTINEL } from '~/core/state/editor/profile-overview-tail-placeholder';
 
-import { Skeleton } from '~/design-system/skeleton';
 import { Spacer } from '~/design-system/spacer';
 
-import { DataBlockLoadingPlaceholder } from '../blocks/table/data-block-loading-placeholder';
+import { DataBlockServerPlaceholder } from '../blocks/table/data-block-loading-placeholder';
 
 export type ServerBlock =
   | { type: 'text'; markdown: string }
@@ -67,17 +66,7 @@ const ServerBlockRenderer = ({ block }: { block: ServerBlock }) => {
       return (
         <>
           <Spacer height={24} />
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <Skeleton className="h-4 w-4" />
-              <Skeleton className="h-5 w-16" />
-            </div>
-            <DataBlockLoadingPlaceholder
-              view={block.view ?? 'TABLE'}
-              items={block.pageSize}
-              mediaFrame={block.mediaFrame}
-            />
-          </div>
+          <DataBlockServerPlaceholder view={block.view ?? 'TABLE'} items={block.pageSize} mediaFrame={block.mediaFrame} />
         </>
       );
   }
