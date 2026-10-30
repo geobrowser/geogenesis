@@ -40,10 +40,10 @@ import { Text } from '~/design-system/text';
 import { type DebateLobbyVoiceToken, dashlessId, getDebateLobbyVoiceToken } from '../api';
 import { cameraFailureMessage } from '../camera-failure';
 import { CameraIcon, MicrophoneIcon } from '../debate-room-controls';
-import { createDebateRoomOwnershipCoordinator } from '../debate-room-ownership';
 import { useGeoChatAuth } from '../hooks';
 import { tokenAllowsCamera } from '../livekit-grant';
 import { HubPillButton } from '../matchmaking/hub-pill-button';
+import { useVoiceOwnership } from '../voice-owner';
 import { createLobbyCamera } from './lobby-camera';
 import { lobbyErrorMessage } from './lobby-format';
 import { useLobbyRoomNoun } from './lobby-purpose';
@@ -58,7 +58,7 @@ export type LobbyVoiceStates = {
   speaking: ReadonlySet<string>;
   micOn: ReadonlySet<string>;
   cameras: ReadonlyMap<string, TrackReference>;
-  /** Shared screens, by sharer; only a call's room reads them (GEO-3419). */
+  /** Shared screens, by sharer; read by a call's or a lobby's room (GEO-3419, GEO-3507). */
   screens?: ReadonlyMap<string, TrackReference>;
   connected: boolean;
 };
@@ -86,6 +86,18 @@ const voiceTokenKey = (accountKey: string | null, lobbyId: string, canPublish: b
 /** Hosts, the acting host and speakers publish; a change needs a new token. */
 function rolePublishes(lobby: MemberLobbyPageView) {
   return lobby.viewer.hosting || lobby.viewer.role === 'host' || lobby.viewer.role === 'speaker';
+}
+
+const SCREEN_SHARE_SOURCE = Track.sourceToProto(Track.Source.ScreenShare);
+
+/**
+ * The server's live grant decides who shares (lobby hosts, GEO-3507); the token's flag until it
+ * arrives. An empty source list allows all.
+ */
+function grantsScreenShare(permissions: ReturnType<typeof useLocalParticipantPermissions>, tokenAllows: boolean) {
+  if (!permissions) return tokenAllows;
+  const sources = permissions.canPublishSources;
+  return sources.length === 0 || sources.includes(SCREEN_SHARE_SOURCE);
 }
 
 const ROOM_OPTIONS: RoomOptions = {
@@ -132,7 +144,7 @@ export function LobbyVoice({
   onAudible?: () => void;
   /** Voice is refused, failed or in another tab: a guest room still playing goes too. */
   onUnavailable?: () => void;
-  /** A call: offer screen sharing when the token allows it, and show shared screens. */
+  /** Offer screen sharing when the token allows it, and show shared screens. */
   screenShare?: boolean;
   /** A call: a publisher's device check before first connecting; `join` connects with its choice. */
   preJoin?: (join: (choice: LobbyVoiceJoinChoice) => void) => React.ReactNode;
@@ -159,50 +171,25 @@ export function LobbyVoice({
   const lobbyId = lobby.lobby_id;
   const canPublish = rolePublishes(lobby);
 
-  // One LiveKit identity per person: a second tab would replace this one, so tabs take turns.
-  const [ownership, setOwnership] = React.useState<OwnershipState>('pending');
+  // One voice per person across all Geo tabs: another tab's lobby, picker or debate takes turns
+  // with this one. Yielding disconnects first, so this tab neither sends nor plays.
   const roomRef = React.useRef<Room | null>(null);
-  const coordinatorRef = React.useRef<ReturnType<typeof createDebateRoomOwnershipCoordinator> | null>(null);
-
-  React.useEffect(() => {
-    if (!currentUserId) return;
-    let cancelled = false;
-    const coordinator = createDebateRoomOwnershipCoordinator({
-      debateId: `lobby:${dashlessId(lobbyId)}`,
-      userId: currentUserId,
-      onTakeoverRequested: async () => {
-        // Yield only when not on screen, and disconnect before answering.
-        if (typeof document !== 'undefined' && document.visibilityState === 'visible') return false;
-        try {
-          await roomRef.current?.disconnect();
-        } catch {
-          // Released when the page goes away anyway.
-        }
-        roomRef.current = null;
-        if (!cancelled) setOwnership('elsewhere');
-        return true;
-      },
-    });
-    coordinatorRef.current = coordinator;
-    void (async () => {
-      const result = await coordinator.acquire();
-      if (cancelled) return;
-      if (result.acquired) return setOwnership('owned');
-      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
-        const released = await coordinator.requestTakeover();
-        if (!cancelled) setOwnership(released ? 'owned' : 'elsewhere');
-      } else {
-        setOwnership('elsewhere');
+  const voice = useVoiceOwnership({
+    userId: currentUserId,
+    kind: 'lobby',
+    active: Boolean(currentUserId),
+    claimOnActive: true,
+    claimKey: lobbyId,
+    onYield: async () => {
+      try {
+        await roomRef.current?.disconnect();
+      } catch {
+        // Released when the page goes away anyway.
       }
-    })();
-    return () => {
-      cancelled = true;
-      coordinatorRef.current = null;
-      setOwnership('pending');
-      void coordinator.release();
-      coordinator.close();
-    };
-  }, [currentUserId, lobbyId]);
+      roomRef.current = null;
+    },
+  });
+  const ownership: OwnershipState = voice.ownership;
 
   // Minted right before connecting, once this connection holds a lease; LiveKit refreshes it while
   // connected. Disabled during a lapse's rejoin, which keeps the token and the live room.
@@ -234,12 +221,11 @@ export function LobbyVoice({
     setEpoch(value => value + 1);
   }, [accountKey, canPublish, lobbyId, queryClient]);
 
+  const { takeOver: claimVoice } = voice;
   const takeOver = React.useCallback(async () => {
-    const coordinator = coordinatorRef.current;
-    if (!coordinator || !(await coordinator.requestTakeover())) return;
-    setOwnership('owned');
+    if (!(await claimVoice())) return;
     retry();
-  }, [retry]);
+  }, [claimVoice, retry]);
 
   const data = token.data;
   const micIntent = Boolean(data?.can_publish) && (micChoice ?? !data?.start_muted);
@@ -288,7 +274,7 @@ export function LobbyVoice({
     setCameraIntent(choice.videoEnabled);
   }, []);
   // Shown as voice in another tab, with "Use voice here"; it does not reconnect by itself.
-  const handleReplaced = React.useCallback(() => setOwnership('elsewhere'), []);
+  const handleReplaced = voice.markElsewhere;
   // A join dropped before it ever connected gets one fresh token by itself, then the notice.
   const autoRetriedRef = React.useRef(false);
   const handleNeverConnected = React.useCallback(() => {
@@ -323,6 +309,7 @@ export function LobbyVoice({
   const notice = ((): VoiceNotice | null => {
     if (!currentUserId || ownership === 'pending') return { message: 'Connecting voice…' };
     if (ownership === 'elsewhere') {
+      if (voice.heldBy === 'debate') return { message: 'Voice is on in your debate tab' };
       return { message: 'Voice is on in another tab', actionLabel: 'Use voice here', onAction: () => void takeOver() };
     }
     if (token.error) {
@@ -377,7 +364,8 @@ export function LobbyVoice({
     >
       <ConnectedVoice
         canPublish={data.can_publish}
-        canShareScreen={screenShare && Boolean(data.can_share_screen)}
+        canShareScreen={screenShare}
+        tokenSharesScreen={Boolean(data.can_share_screen)}
         watchScreens={screenShare}
         micFailure={micFailure}
         cameraAllowed={cameraAllowed}
@@ -419,6 +407,7 @@ type VoiceNotice = {
 function ConnectedVoice({
   canPublish,
   canShareScreen,
+  tokenSharesScreen,
   watchScreens,
   micFailure,
   cameraAllowed,
@@ -436,7 +425,10 @@ function ConnectedVoice({
   children,
 }: {
   canPublish: boolean;
+  /** The room offers sharing; the grant decides who. */
   canShareScreen: boolean;
+  /** The token's grant, until LiveKit sends the live one. */
+  tokenSharesScreen: boolean;
   watchScreens: boolean;
   micFailure: MediaDeviceFailure | null;
   cameraAllowed: boolean;
@@ -513,9 +505,11 @@ function ConnectedVoice({
     camera.release();
   }, [camera, canPublish, localParticipant, mayPublish, onCameraChoice, onMicChoice]);
 
-  // A call's screen share stops with publishing rights, and with the room.
+  // A screen share stops with publishing rights or the grant, and with the room. A revoked grant
+  // also unpublishes it on the server, which `isScreenShareEnabled` follows.
   // Phones mostly cannot capture a screen (no getDisplayMedia); they get no button.
-  const mayShareScreen = canShareScreen && mayPublish && canCaptureScreen();
+  const mayShareScreen =
+    canShareScreen && mayPublish && grantsScreenShare(permissions, tokenSharesScreen) && canCaptureScreen();
   React.useEffect(() => {
     if (!canShareScreen || mayShareScreen) return;
     void localParticipant.setScreenShareEnabled(false).catch(() => undefined);
@@ -691,7 +685,7 @@ const NO_SOURCES: Track.Source[] = [];
 // Besides publish, unpublish and subscription changes; not active speakers, which change constantly.
 const CAMERA_UPDATES = { updateOnlyOn: [RoomEvent.TrackMuted, RoomEvent.TrackUnmuted] };
 
-/** Who is speaking, whose mic is on and whose camera (and, in a call, screen) shows in the room this sits in. */
+/** Who is speaking, whose mic is on and whose camera (and, when watched, screen) shows in the room this sits in. */
 function useParticipantVoiceStates(connected: boolean, watchScreens = false) {
   const participants = useParticipants();
   const cameraTracks = useTracks(CAMERA_SOURCES, CAMERA_UPDATES);
@@ -758,7 +752,7 @@ export function LobbyGuestVoice({
   onRemoved: () => void;
   /** The member room is taking over and draws its own bar. */
   quiet?: boolean;
-  /** A call: show shared screens. */
+  /** Show shared screens. */
   screenShare?: boolean;
 }) {
   const [connectFailed, setConnectFailed] = React.useState(false);
@@ -908,10 +902,7 @@ function VoiceBar({
             onClick={() => camera.onToggle(!camera.on)}
             className="md:h-10"
           >
-            <span className="inline-flex items-center gap-1.5">
-              <CameraIcon disabled={!camera.on} />
-              <span className="md:sr-only">{camera.on ? 'Camera off' : 'Camera on'}</span>
-            </span>
+            <CameraIcon disabled={!camera.on} />
           </HubPillButton>
         ) : null}
         {mic && screen ? (

@@ -33,10 +33,10 @@ describe('readUrlSeed', () => {
     expect(readUrlSeed('explore', EXPLORE_LINK)).toMatchObject({ spaceIds: ['space-a'] });
   });
 
-  // A link naming no list is about Lobby: the workspace opens there and omits it as the default.
-  it('treats a link with no list as naming Lobby', () => {
-    expect(readUrlSeed('explore', 'spaces=space-a')).toBeNull();
-    expect(readUrlSeed('lobby', 'spaces=space-a')).toMatchObject({ spaceIds: ['space-a'] });
+  // A link naming no list is about Explore: the workspace opens there and omits it as the default.
+  it('treats a link with no list as naming Explore', () => {
+    expect(readUrlSeed('lobby', 'spaces=space-a')).toBeNull();
+    expect(readUrlSeed('explore', 'spaces=space-a')).toMatchObject({ spaceIds: ['space-a'] });
   });
 
   it('reads each query on its own', () => {
@@ -57,8 +57,8 @@ describe('readUrlSeed', () => {
  * "Matches only" is on — which it is by default, and it survives the filter reset.
  */
 describe('the atoms a seed is written into', () => {
-  it('sends a list-less link to Lobby, which both of its branches read', () => {
-    const seed = readUrlSeed('lobby', 'spaces=space-a&q=climate');
+  it('sends an explicit Lobby link to the atoms both of its branches read', () => {
+    const seed = readUrlSeed('lobby', 'list=lobby&spaces=space-a&q=climate');
 
     expect(seed).toMatchObject({ spaceIds: ['space-a'], search: 'climate' });
     // The same atoms `MatchesList` reads, so the filters are on screen whichever branch draws.

@@ -728,6 +728,26 @@ describe('useDebateLobby', () => {
     });
     await waitFor(() => expect(result.current.data?.access.status).toBe('admitted'));
   });
+
+  it('reads a held call every 3 minutes, not at its passed opens_at', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const held = {
+      ...view(false, { status: 'not_yet_open', opens_at: new Date(Date.now() - 60_000).toISOString() }),
+      call: { space_id: 's1', space_name: null, started_by: null, status: 'scheduled' as const, held: true },
+    };
+    api.getDebateLobby.mockResolvedValue(held);
+    renderHook(() => useDebateLobby('lobby1'), { wrapper });
+    await waitFor(() => expect(api.getDebateLobby).toHaveBeenCalledTimes(1));
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(170_000);
+    });
+    expect(api.getDebateLobby).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(11_000);
+    });
+    await waitFor(() => expect(api.getDebateLobby).toHaveBeenCalledTimes(2));
+  });
 });
 
 describe('useDebateLobby and claim lists (GEO-3274)', () => {

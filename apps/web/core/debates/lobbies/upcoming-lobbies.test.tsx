@@ -4,26 +4,11 @@ import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { LobbyByline } from './lobby-host-names';
-import { lobbyBadgeTime, lobbyDayLabel } from './upcoming-lobbies';
+import { lobbyBadgeTime } from './upcoming-lobbies';
 
 afterEach(cleanup);
 
-// Wednesday 14 October 2026, noon local.
-const NOW = new Date(2026, 9, 14, 12, 0).getTime();
 const at = (day: number, hour: number, minute = 0) => new Date(2026, 9, day, hour, minute).toISOString();
-
-describe('lobbyDayLabel', () => {
-  it('says Today and Tomorrow, then the weekday within a week, then the date', () => {
-    expect(lobbyDayLabel(at(14, 18), NOW)).toBe('Today');
-    expect(lobbyDayLabel(at(15, 9), NOW)).toBe('Tomorrow');
-    expect(lobbyDayLabel(at(17, 11), NOW)).toBe(
-      new Date(2026, 9, 17).toLocaleDateString(undefined, { weekday: 'short' })
-    );
-    expect(lobbyDayLabel(at(28, 11), NOW)).toBe(
-      new Date(2026, 9, 28).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-    );
-  });
-});
 
 describe('lobbyBadgeTime', () => {
   it('drops the minutes on the hour and keeps them off it', () => {

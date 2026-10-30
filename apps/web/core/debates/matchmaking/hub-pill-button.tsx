@@ -36,7 +36,17 @@ type Props = {
  * `large` is the full-width choice a dialog of its own leads with, a thumb's height on a phone: the
  * Running late and Can't make it screens (GEO-3427). Everything else is the hub's `default`.
  */
-export type HubPillSize = 'default' | 'large';
+/**
+ * `compact` is the Requests timeline's inline actions (GEO-3463): 26px and 14px on desktop, as the
+ * schedule board draws them, and the phone sheet's 32px.
+ */
+export type HubPillSize = 'default' | 'large' | 'compact';
+
+const PILL_SIZE: Record<HubPillSize, string> = {
+  default: 'h-7 px-3 text-metadata',
+  large: 'h-12 px-5 text-button',
+  compact: 'h-6.5 px-2.5 text-breadcrumb md:h-8 md:px-3',
+};
 
 export function hubPillClassName(
   variant: 'primary' | 'secondary' | 'tag' = 'secondary',
@@ -50,11 +60,13 @@ export function hubPillClassName(
     // beside it absorbs the shrinking instead, which is why rows give it `min-w-0 truncate`.
     // shrink-0 is redundant today and kept only to survive a later `min-w-0` on this button,
     // which would defeat the `min-width: auto` this leans on.
-    'inline-flex shrink-0 items-center justify-center rounded-full whitespace-nowrap transition-colors disabled:opacity-50',
-    size === 'large' ? 'h-12 px-5 text-button' : 'h-7 px-3 text-metadata',
+    // Keep the border in both states so selecting a filter cannot change its width and rewrap
+    // the measured pill row. Only its color changes with the selection.
+    'inline-flex shrink-0 items-center justify-center rounded-full border whitespace-nowrap transition-colors disabled:opacity-50',
+    PILL_SIZE[size],
     variant === 'primary'
-      ? 'bg-text text-white hover:bg-text/90'
-      : cx('border border-grey-02 text-text', variant === 'secondary' && 'hover:bg-grey-01'),
+      ? 'border-transparent bg-text text-white hover:bg-text/90'
+      : cx('border-grey-02 text-text', variant === 'secondary' && 'hover:bg-grey-01'),
     className
   );
 }

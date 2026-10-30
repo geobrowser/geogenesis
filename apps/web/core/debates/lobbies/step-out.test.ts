@@ -193,6 +193,8 @@ describe('every debate entry steps out of a lobby', () => {
     // GEO-3268: links into a lobby from the panel spotlight and row, the Debate button's hover list,
     // the calendar and Explore.
     'core/debates/lobbies/lobby-spotlight.tsx',
+    // GEO-3463: the panel strip that replaced the spotlight above the tabs, joining a live lobby.
+    'core/debates/matchmaking/hub-live-strip.tsx',
     'core/debates/lobbies/live-lobbies-preview.tsx',
     'core/debates/lobbies/upcoming-lobbies.tsx',
     'core/debates/lobbies/lobbies-calendar.tsx',
@@ -232,6 +234,39 @@ describe('every debate entry steps out of a lobby', () => {
       })
       .map(path => relative(root, path))
       .filter(path => !allowed.has(path));
+    expect(offenders).toEqual([]);
+  });
+
+  /** Each `<Link …>` opening tag in `source`, braces and arrows inside its props included. */
+  function linkTags(source: string) {
+    const tags: string[] = [];
+    for (const match of source.matchAll(/<Link\b/g)) {
+      let depth = 0;
+      let end = match.index + match[0].length;
+      for (; end < source.length; end += 1) {
+        const char = source[end];
+        if (char === '{') depth += 1;
+        else if (char === '}') depth -= 1;
+        else if (char === '>' && depth === 0 && source[end - 1] !== '=') break;
+      }
+      tags.push(source.slice(match.index, end + 1));
+    }
+    return tags;
+  }
+
+  // The file-wide check above passes a file once any one of its links steps out. GEO-3463's panel
+  // timeline had two Watch links, one into a debate's page from the graph (no `debatePath`), and only
+  // the other stepped out. In a file that links into debates, every link says what its click does.
+  it('gives every link in a file that steps out a click of its own', () => {
+    const offenders = ['core', 'app', 'partials']
+      .flatMap(dir => sources(join(root, dir)))
+      .flatMap(path => {
+        const source = readFileSync(path, 'utf8');
+        if (!/\bdebateEntryClick\(/.test(source) || path.endsWith('step-out.ts')) return [];
+        return linkTags(source)
+          .filter(tag => !/\bonClick=/.test(tag))
+          .map(tag => `${relative(root, path)}: ${tag.split('\n')[0]}`);
+      });
     expect(offenders).toEqual([]);
   });
 });

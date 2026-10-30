@@ -92,6 +92,7 @@ import { useDebateAttention, useDebateVisibility } from './debate-attention';
 import { markEnteringDebate, markEnteringPendingDebate } from './debate-entry-intent';
 import { useDebateGatewayScope, useDebateGatewaySnapshot, useDebateGatewaySpaceScopes } from './debate-gateway';
 import { lobbyDebateRequested } from './lobbies/lobby-analytics';
+import { markAskWithdrawn, unmarkAskWithdrawn } from './matchmaking/ask-withdrawals';
 import {
   type ParticipantAvatarMapper,
   type ParticipantAvatarSource,
@@ -200,6 +201,8 @@ export const debateQueryKeys = {
     ['debates', 'account', accountKey, 'lobbies', 'calendar', from, to] as const,
   /** Refetched on a card-less `debate.lobbies_changed`. */
   myLobby: (accountKey: string | null) => ['debates', 'account', accountKey, 'my-lobby'] as const,
+  /** Every lobby view this account has read. */
+  lobbyRoot: (accountKey: string | null) => ['debates', 'account', accountKey, 'lobby'] as const,
   /** Dashless, as `debate.lobby_changed` spells it. */
   lobby: (accountKey: string | null, lobbyId: string) =>
     ['debates', 'account', accountKey, 'lobby', dashlessId(lobbyId)] as const,
@@ -222,8 +225,21 @@ export const debateQueryKeys = {
   // Reconnecting makes livekit-client abandon the resume and rejoin from scratch (GEO-3343) — and a
   // network blip is exactly when the socket and the call drop together.
   rematchLiveKit: (accountKey: string | null, sessionId: string) => ['rematch-livekit', accountKey, sessionId] as const,
+  /**
+   * GEO-3538. gaia's current debate agendas, the same for everyone. Outside the `debates` root for
+   * the reason `rematchLiveKit` is: the gateway refetches that root on every (re)connect, which would
+   * swap an open picker's agendas under the reader, and after midnight New York swap in a new day.
+   */
+  todaysAgendas: () => ['todays-agendas'] as const,
   rematchClaims: (accountKey: string | null, sessionId: string, claimIds: string[]) =>
     ['debates', 'account', accountKey, 'rematch', sessionId, 'claims', claimIds] as const,
+  /**
+   * GEO-3489. The answer is the same whoever asks, but geo-chat needs a signed-in caller, so the key
+   * carries the account the way `rematchClaims` does: a request made before the account was known
+   * fails, and keyed without it that failure would be the answer for the visit.
+   */
+  claimDebateCounts: (accountKey: string | null, asks: { claimId: string; since: string }[]) =>
+    ['debates', 'account', accountKey, 'claim-debate-counts', asks] as const,
   sharePrompts: (accountKey: string | null) => ['debates', 'account', accountKey, 'share-prompts'] as const,
   profile: (accountKey: string | null, profileSpaceId: string) =>
     ['debates', 'account', accountKey, 'profile', profileSpaceId] as const,
@@ -235,10 +251,22 @@ export const debateQueryKeys = {
     ['debates', 'account', accountKey, 'matchmaking-claims', filters] as const,
   matches: (accountKey: string | null) => ['debates', 'account', accountKey, 'matches'] as const,
   requests: (accountKey: string | null) => ['debates', 'account', accountKey, 'requests'] as const,
+  /** GEO-3464. The viewer's past requests, invites, debates and lobbies, paged; refreshed with the requests. */
+  history: (accountKey: string | null) => ['debates', 'account', accountKey, 'history'] as const,
   blocks: (accountKey: string | null) => ['debates', 'account', accountKey, 'blocks'] as const,
   /** GEO-2862. The viewer's private "Not interested" list. */
   notInterested: (accountKey: string | null) => ['debates', 'account', accountKey, 'not-interested'] as const,
 };
+
+/**
+ * Every read of who is free when: Find a time and anyone's week. Each is computed from the viewer's
+ * schedule, their calendar, and the time both people hold for accepted debates and pending invites
+ * (GEO-3532), so a change to any of those leaves all of them stale.
+ */
+export function invalidateAvailabilityReads(queryClient: QueryClient, accountKey: string | null) {
+  void queryClient.invalidateQueries({ queryKey: debateQueryKeys.schedulablePeopleRoot(accountKey) });
+  void queryClient.invalidateQueries({ queryKey: debateQueryKeys.peerScheduleRoot(accountKey) });
+}
 
 export function useGeoChatAuth() {
   const privy = usePrivy();
@@ -485,7 +513,7 @@ const DEBATE_CLAIM_ID_BOUNDARY_DIVISOR = 16;
  * unchanged set; deriving the cut points from the ids makes an insertion rebuild the chunk it lands
  * in and then resynchronise at the next boundary, leaving the rest of the space cached.
  */
-function stableClaimIdChunks(claimIds: string[], batchSize = DEBATE_CLAIM_ID_BATCH_SIZE) {
+export function stableClaimIdChunks(claimIds: string[], batchSize = DEBATE_CLAIM_ID_BATCH_SIZE) {
   const uniqueClaimIds = [...new Set(claimIds)].sort();
   const chunks: string[][] = [];
   let current: string[] = [];
@@ -723,8 +751,9 @@ export function useSaveDebateSchedule({ surface }: { surface: ScheduleEditorSurf
         debateScheduleSaved(fromPayload(saved.schedule), { surface, isFirstSchedule: before?.is_set !== true });
       }
       queryClient.setQueryData(scheduleKey, saved);
-      // Who shares a slot with the viewer is computed from this schedule.
-      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.schedulablePeopleRoot(accountKey) });
+      // Who shares a slot with the viewer is computed from this schedule, and so is which of
+      // anyone's times the viewer is free for.
+      invalidateAvailabilityReads(queryClient, accountKey);
       // An admin's request for more times is answered by saving (GEO-3228).
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.scheduledDebates(accountKey) });
     },
@@ -1293,8 +1322,13 @@ export function useCreateDebateRematchRequest(sessionId: string) {
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.activity(accountKey) });
     },
   });
-  return useObservedMutation(mutation, 'start_debate', request =>
-    getContext({ target_type: 'claim', target_id: request.claim_id })
+  return useObservedMutation(
+    mutation,
+    'start_debate',
+    request => getContext({ target_type: 'claim', target_id: request.claim_id }),
+    undefined,
+    // GEO-3495: the rematch request geo-chat records as the debate's accepted request.
+    result => (result.request ? { request_id: result.request.id } : {})
   );
 }
 
@@ -1417,8 +1451,13 @@ export function useCreateDebateChallenge() {
       }
     },
   });
-  return useObservedMutation(mutation, 'start_debate', request =>
-    getContext({ target_type: 'space', target_id: request.recipient_profile_space_id })
+  return useObservedMutation(
+    mutation,
+    'start_debate',
+    request => getContext({ target_type: 'space', target_id: request.recipient_profile_space_id }),
+    undefined,
+    // GEO-3495: geo-chat records the challenge as the origin of the debate it becomes.
+    challenge => ({ request_id: challenge.id })
   );
 }
 
@@ -1448,6 +1487,11 @@ export function useRejectDebateChallenge() {
 
   return useMutation({
     mutationFn: (challengeId: string) => rejectDebateChallenge(challengeId, getPrivyIdentityToken, accountKey),
+    // The requester taking theirs back is not "nobody took it" (GEO-3463), and is marked on the press
+    // so a poll that drops it first still reads that way. A recipient's own reject is recorded too,
+    // harmlessly: only the viewer's outgoing asks are ever looked up.
+    onMutate: challengeId => markAskWithdrawn(challengeId),
+    onError: (_error, challengeId) => unmarkAskWithdrawn(challengeId),
     onSuccess: () => {
       queryClient.setQueryData<DebateActivity>(debateQueryKeys.activity(accountKey), current =>
         current ? { ...current, challenge: null } : current

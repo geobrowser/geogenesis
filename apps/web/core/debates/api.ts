@@ -412,9 +412,9 @@ export type DebateOpenRounds = {
   extend_count_in_ms?: number;
   /**
    * Rebuttal rounds every debate plays: rounds `1..=required_rebuttal_rounds` are appended with the
-   * opening, the rounds before the last of them run straight on, and the first Extend / End pick
-   * follows the last of them. Snapshotted per debate like the cap, and absent from a geo-chat that
-   * predates it, which reads as `0`: the opening ends on a pick, as it always did.
+   * opening, and the first Extend / End decision window follows the last of them. Pre-picks open
+   * during that last required round once its lead-in ends, unless it is the cap. Snapshotted per
+   * debate like the cap; absent reads as `0`, so the opening itself ends on a decision.
    */
   required_rebuttal_rounds?: number;
   /**
@@ -534,8 +534,10 @@ export type DebateRematchRequest = {
   turn_format_id: string;
   /** The Open rounds cap decided when the request was made (GEO-3201). Present only for `open_rounds`. */
   max_rebuttal_rounds?: number | null;
-  /** The rebuttal rounds that run before the first pick, decided with the cap. Absent reads as `0`. */
+  /** The rebuttal rounds that run before the first decision window, decided with the cap. Absent reads as `0`. */
   required_rebuttal_rounds?: number | null;
+  /** Exact initial turns snapshotted when the request was created. Absent means legacy timing. */
+  turn_durations_ms?: number[] | null;
   created_at: string;
   expires_at: string;
 };
@@ -969,8 +971,10 @@ export type DebateRequest = {
   turn_format_id: string | null;
   /** The Open rounds cap decided when the request was made (GEO-3201). Present only for `open_rounds`. */
   max_rebuttal_rounds?: number | null;
-  /** The rebuttal rounds that run before the first pick, decided with the cap. Absent reads as `0`. */
+  /** The rebuttal rounds that run before the first decision window, decided with the cap. Absent reads as `0`. */
   required_rebuttal_rounds?: number | null;
+  /** Exact initial turns snapshotted when the request was created. Absent means legacy timing. */
+  turn_durations_ms?: number[] | null;
   created_at: string;
   /** Fixed for the lifetime of the request, even as it advances between recipients. */
   expires_at: string;
@@ -2012,6 +2016,34 @@ export async function listDebateRematchClaims(
   });
 }
 
+/** The most claims one `/debate-claims/debate-counts` request takes (geo-chat's own cap). */
+export const CLAIM_DEBATE_COUNTS_MAX_CLAIMS = 200;
+
+export type ClaimDebateCountsResponse = {
+  /** One per claim asked about, in the order asked, zero included. */
+  counts: { claim_entity_id: string; debates: number }[];
+};
+
+/**
+ * GEO-3489. How many recorded debates each claim has had since its own `since` — for Today's claims,
+ * which orders a section's claims by how often each was debated since it was listed.
+ */
+export async function getClaimDebateCounts(
+  claims: { claim_entity_id: string; since: string }[],
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  signal?: AbortSignal
+) {
+  return geoChatRequest<ClaimDebateCountsResponse>('/debate-claims/debate-counts', {
+    method: 'POST',
+    body: { claims },
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    signal,
+  });
+}
+
 export async function createDebateRematchRequest(
   sessionId: string,
   request: { source_space_id: string; claim_id: string; format_id: string },
@@ -2814,6 +2846,11 @@ export type DebateLobbyView = {
   hosts_changed_at: string | null;
   reminder_count: number;
   /**
+   * Who RSVP'd, oldest first, capped (GEO-3463); `reminder_count` stays the true total. People blocked
+   * either way are left out. Absent from a geo-chat that predates it.
+   */
+  going?: DebateLobbyPerson[];
+  /**
    * Who runs the lobby, present or not: the creator first, the acting host last. Empty for a banned
    * viewer. Absent from older geo-chat.
    */
@@ -2866,7 +2903,22 @@ export type DebateLobbyCallDetails = {
   started_by: DebateLobbyPerson | null;
   /** GEO-3421; the same for every viewer. Absent from geo-chat without recording. */
   recording?: CallRecordingState | null;
+  /** GEO-3420; absent from a geo-chat that predates scheduled calls. */
+  status?: SpaceCallStatus;
+  /** Scheduled calls are switched off: this one stays `not_yet_open` past its `opens_at`. */
+  held?: boolean;
+  /** `null` for a call started on the spot. */
+  ends_at?: string | null;
+  /** `null` for a call started on the spot. */
+  series?: DebateCallSeries | null;
+  /** `null` until a host writes one; the series description stands in meanwhile. */
+  agenda?: DebateCallAgenda | null;
+  /** `null` in the guest view. Reminded about the call if either reminder is set. */
+  viewer?: { can_edit_agenda: boolean; reminded: boolean; series_reminded: boolean } | null;
 };
+
+/** A space call's state (GEO-3420): `scheduled` until its room opens. */
+export type SpaceCallStatus = 'scheduled' | 'live' | 'cancelled' | 'ended';
 
 export type CallRecordingStatus = 'off' | 'recording' | 'processing' | 'ready' | 'failed';
 
@@ -2885,6 +2937,24 @@ export type CallRecordingState = {
   published: boolean;
   /** Set once `ready`. */
   duration_seconds: number | null;
+};
+
+/** A space's call series: a Community Call entity on the graph (GEO-3420). */
+export type DebateCallSeries = {
+  /** The graph entity id, 32 hex. */
+  series_id: string;
+  name: string;
+  /** The series' graph description: the read-only default agenda. */
+  description: string | null;
+  schedule: string;
+  one_off: boolean;
+};
+
+export type DebateCallAgenda = {
+  body: string;
+  /** Sent back as `base_updated_at`, so two hosts cannot overwrite each other. */
+  updated_at: string;
+  updated_by: DebateLobbyPerson | null;
 };
 
 export type DebateLobbySummary = {
@@ -2955,6 +3025,10 @@ export async function listDebateLobbyCalendar(
     accountKey,
     signal,
   });
+}
+
+export function isLobbyNotFound(error: unknown): boolean {
+  return error instanceof GeoChatRequestError && error.status === 404 && error.code === 'lobby_not_found';
 }
 
 /** 404 `lobby_not_found` for an id that is not a lobby, which includes a two-person room. */
@@ -3375,7 +3449,7 @@ export type DebateLobbyVoiceToken = {
   /** Join with the mic off; set once the room is crowded. Always false for a listener. */
   start_muted: boolean;
   expires_at: string;
-  /** A publisher in a space call (GEO-3419); lobbies never share a screen. */
+  /** A publisher in a space call (GEO-3419), or a lobby host (GEO-3507). */
   can_share_screen?: boolean;
 };
 
@@ -4371,4 +4445,58 @@ function decodeGeoChatAccessToken(token: string | undefined): { user_id?: string
   } catch {
     return null;
   }
+}
+
+/** One past request, invite, debate or lobby in the viewer's history (GEO-3464). */
+export type DebateHistoryKind = 'claim_request' | 'challenge' | 'scheduled_invite' | 'debate' | 'lobby';
+
+export type DebateHistoryItem = {
+  /** Unique across kinds, e.g. `claim_request:<uuid>`. */
+  id: string;
+  kind: DebateHistoryKind;
+  occurred_at: string;
+  /** `null` for debates, lobbies and invites the Geo team arranged, which have no sender. */
+  direction: 'outgoing' | 'incoming' | null;
+  /**
+   * How it ended, from the viewer's side. Read through `historyOutcomeLabel`, which knows the values:
+   * requests and challenges `accepted | declined | taken_by_other | cancelled | expired |
+   * passed_by_everyone | unknown` (a claim request's `cancelled` can be geo-chat withdrawing it); invites
+   * their status, with `declined` the viewer's own answer, `declined_by_other` the other debater's, and
+   * `missed` or `unknown` for a past booking with no debate behind it; debates (finished only) `held | never_started |
+   * abandoned`; lobbies `joined`.
+   */
+  outcome: string;
+  /** geo-chat user ids of everyone else involved, the viewer left out. */
+  other_user_ids: string[];
+  /** The same people, named, in the same order (geo-chat#299). Optional so an older response still reads. */
+  others?: DebateParticipantSummary[];
+  /** The request lists' own claim shape: `claim` is the text, `id` the debate claim row. */
+  claim: DebateClaimSummary | null;
+  debate_id: string | null;
+  /** The lobby: the one joined, or the one a request, challenge or debate was made in. */
+  lobby: { room_id: string; name: string } | null;
+  scheduled_start_at: string | null;
+};
+
+export type DebateHistoryResponse = {
+  items: DebateHistoryItem[];
+  next_cursor: string | null;
+};
+
+/** The viewer's history, newest first, a page at a time (GEO-3464). */
+export async function listDebateHistory(
+  cursor: string | null,
+  limit: number,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  signal?: AbortSignal
+) {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (cursor) params.set('cursor', cursor);
+  return geoChatRequest<DebateHistoryResponse>(`/me/debate-history?${params.toString()}`, {
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    signal,
+  });
 }
