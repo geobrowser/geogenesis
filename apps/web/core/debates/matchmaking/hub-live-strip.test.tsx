@@ -48,10 +48,19 @@ const VIEW_BASE = {
   access: { status: 'not_yet_open', opens_at: '2026-10-30T18:50:00Z' },
   viewer: { role: null, hosting: false },
 };
-const useDebateLobby = vi.hoisted(() => vi.fn(() => lobbyView));
+// The view read for a lobby carries that lobby's id, as geo-chat's does.
+const useDebateLobby = vi.hoisted(() =>
+  vi.fn((lobbyId: string) => ({
+    ...lobbyView,
+    data: lobbyView.data && { ...(lobbyView.data as object), lobby_id: lobbyId },
+  }))
+);
+const useUpdateDebateLobby = vi.hoisted(() =>
+  vi.fn((_lobbyId: string) => ({ mutate: vi.fn(), error: null, isPending: false }))
+);
 vi.mock('../lobbies/hooks', () => ({
   useDebateLobby,
-  useUpdateDebateLobby: () => ({ mutate: vi.fn(), error: null, isPending: false }),
+  useUpdateDebateLobby,
 }));
 vi.mock('../lobbies/lobby-host-lobbies', () => ({
   usePreOpenHosts: (lobby: { hosts?: unknown[] }) => lobby.hosts ?? [],
@@ -219,6 +228,27 @@ describe('HubLiveStrip', () => {
     expect(screen.queryByRole('dialog', { name: 'Lobby details' })).toBeNull();
     fireEvent.keyDown(window, { key: 'Escape' });
     expect(screen.queryByRole('dialog', { name: 'Edit lobby' })).toBeNull();
+    lobbyView.data = undefined;
+  });
+
+  // Copilot review: another lobby taking the next spot hands the strip a different lobby mid-edit.
+  it('keeps an edit on the lobby it began on', async () => {
+    lobbyView.data = { ...VIEW_BASE, viewer: { role: 'host', hosting: false }, reminder_count: 0, going: [] };
+    const first = lobby({ lobby_id: 'lobby-a', open: false, scheduled: true });
+    const sooner = lobby({ lobby_id: 'lobby-b', open: false, scheduled: true });
+    const { rerender } = render(<HubLiveStrip lineup={{ ...EMPTY, later: [first] }} />);
+    fireEvent.click(screen.getByRole('button', { name: /lobby details/ }));
+    fireEvent.click(
+      within(screen.getByRole('dialog', { name: 'Lobby details' })).getByRole('button', { name: 'Edit' })
+    );
+    await screen.findByRole('dialog', { name: 'Edit lobby' });
+
+    useUpdateDebateLobby.mockClear();
+    rerender(<HubLiveStrip lineup={{ ...EMPTY, later: [sooner, first] }} />);
+
+    expect(screen.getByRole('dialog', { name: 'Edit lobby' })).toBeInTheDocument();
+    expect(useUpdateDebateLobby.mock.calls.map(([id]) => id)).not.toContain('lobby-b');
+    expect(useUpdateDebateLobby).toHaveBeenLastCalledWith('lobby-a');
     lobbyView.data = undefined;
   });
 

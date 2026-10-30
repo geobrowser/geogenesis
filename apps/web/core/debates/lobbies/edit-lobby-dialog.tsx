@@ -103,9 +103,10 @@ export function lobbyEditRequestFor(
 }
 
 /**
- * "Edit lobby" and the dialog it opens, for a host (GEO-3540). Nothing for anyone else. Inside a
- * lobby popup, pass `onOpen`: the popup closes first and its owner shows the dialog, since one
- * opened inside a modal sheet can't be tapped and one inside a popover closes with it.
+ * "Edit lobby" and the dialog it opens, for a host (GEO-3540). Nothing for anyone else. Pass
+ * `onOpen` when the owner shows the dialog: inside a lobby popup (the popup closes first, since a
+ * dialog opened inside a modal sheet can't be tapped and one inside a popover closes with it), and
+ * wherever the button's own surface is replaced when the lobby opens.
  */
 export function EditLobbyButton({
   lobby,
@@ -157,6 +158,14 @@ export function EditLobbyDialog({ lobby, onClose }: { lobby: EditableLobby; onCl
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
+    // The lobby opened while the host was changing its start, and the time fields went with it. Say
+    // so rather than save the rest as if the time had gone through; the next Save sends the rest.
+    if (!movable && start.startsAtLocal !== initialStart) {
+      setFormError(EDIT_LOBBY_COPY.openedMeanwhile);
+      start.setDate(initialStart.slice(0, 10));
+      start.setTime(initialStart.slice(11));
+      return;
+    }
     const request = lobbyEditRequestFor(opened, initialLists, { name, startsAtLocal, claimLists });
     if ('error' in request) {
       setFormError(request.error);

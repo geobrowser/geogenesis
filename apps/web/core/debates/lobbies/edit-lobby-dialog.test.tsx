@@ -214,6 +214,24 @@ describe('EditLobbyDialog', () => {
     expect(mocks.mutate.mock.calls[0][0]).toEqual({ name: 'Debate hour!' });
   });
 
+  // Copilot review: a start changed before the lobby opened is not dropped when the fields go.
+  it('says the lobby opened when its new start can no longer be sent, then saves the rest', () => {
+    const onClose = vi.fn();
+    const { rerender } = render(<EditLobbyDialog lobby={lobby()} onClose={onClose} />);
+    const moved = toDateTimeLocalValue(new Date(STARTS_AT.getTime() + 3_600_000));
+    fireEvent.change(document.querySelector('input[type="date"]')!, { target: { value: moved.slice(0, 10) } });
+    fireEvent.change(document.querySelector('input[type="time"]')!, { target: { value: moved.slice(11) } });
+    fireEvent.change(screen.getByDisplayValue('Debate hour'), { target: { value: 'Late debate' } });
+    rerender(<EditLobbyDialog lobby={lobby({ access: { status: 'admitted' } })} onClose={onClose} />);
+
+    fireEvent.click(screen.getByRole('button', { name: EDIT_LOBBY_COPY.save }));
+    expect(mocks.mutate).not.toHaveBeenCalled();
+    expect(screen.getByText(EDIT_LOBBY_COPY.openedMeanwhile)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: EDIT_LOBBY_COPY.save }));
+    expect(mocks.mutate.mock.calls[0][0]).toEqual({ name: 'Late debate' });
+  });
+
   it('closes without a request when nothing changed', () => {
     const onClose = vi.fn();
     render(<EditLobbyDialog lobby={lobby()} onClose={onClose} />);

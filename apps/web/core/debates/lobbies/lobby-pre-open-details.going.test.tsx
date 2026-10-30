@@ -11,7 +11,11 @@ vi.mock('~/core/hooks/use-is-phone-layout', () => ({ useIsPhoneLayout: () => tru
 vi.mock('./hooks', () => ({ useDebateLobbyGoing: mocks.going }));
 vi.mock('./lobby-people', () => ({
   LobbyAvatarStack: () => null,
-  LobbyPersonName: ({ children }: { children: React.ReactNode }) => <button type="button">{children}</button>,
+  LobbyPersonName: ({ children, lazy }: { children: React.ReactNode; lazy?: boolean }) => (
+    <button type="button" data-lazy={lazy ? 'yes' : 'no'}>
+      {children}
+    </button>
+  ),
 }));
 
 const { EVERYONE_GOING_COPY, LobbyGoing } = await import('./lobby-pre-open-details');
@@ -42,6 +46,8 @@ describe('LobbyGoing for a host (GEO-3540)', () => {
     expect(screen.getAllByText(EVERYONE_GOING_COPY.title(23)).length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: 'Person 22' })).toBeInTheDocument();
     expect(screen.getAllByRole('listitem')).toHaveLength(23);
+    // Copilot review: a profile is read on its click, not for every row as the list opens.
+    expect(screen.getByRole('button', { name: 'Person 22' })).toHaveAttribute('data-lazy', 'yes');
   });
 
   it('says so when the list fails to load', () => {

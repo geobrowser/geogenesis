@@ -52,6 +52,19 @@ const STRIP_PILL_CLASS_NAME = hubPillClassName('primary', 'px-3.5 md:h-8');
  * It sits outside the tabs, so the ask stays in view on every tab while it runs.
  */
 export function HubLiveStrip({ lineup }: { lineup: LobbyLineup }) {
+  // An edit (GEO-3540) outlives the strip it began from, pinned to that lobby: the lobby opening
+  // swaps the strip for the live one, and another lobby taking the next spot hands the same strip a
+  // different lobby.
+  const [editingId, setEditingId] = React.useState<string | null>(null);
+  return (
+    <>
+      <HubLiveStripContent lineup={lineup} onEdit={setEditingId} />
+      {editingId ? <EditFromStrip key={editingId} lobbyId={editingId} onClose={() => setEditingId(null)} /> : null}
+    </>
+  );
+}
+
+function HubLiveStripContent({ lineup, onEdit }: { lineup: LobbyLineup; onEdit: (lobbyId: string) => void }) {
   const { ask, ended, cancel, cancelling, dismissEnded } = useHubAskState();
 
   if (ask) return <AskStrip ask={ask} onCancel={cancel} cancelling={cancelling} />;
@@ -61,7 +74,7 @@ export function HubLiveStrip({ lineup }: { lineup: LobbyLineup }) {
   if (live) return <LiveLobbySpotlight lineup={lineup} />;
 
   const next = lineup.soon ?? lineup.later[0] ?? null;
-  if (next) return <NextLobbyStrip lobby={next} />;
+  if (next) return <NextLobbyStrip lobby={next} onEdit={onEdit} />;
 
   return null;
 }
@@ -166,15 +179,12 @@ function EndedAskStrip({ ended, onDismiss }: { ended: EndedAsk; onDismiss: () =>
  * "happening now", and a lobby on Tuesday is not. The name opens the lobby's details — its full name,
  * when it opens, who hosts it, who is going and the claim lists it starts with.
  */
-function NextLobbyStrip({ lobby }: { lobby: DebateLobbySummary }) {
+function NextLobbyStrip({ lobby, onEdit }: { lobby: DebateLobbySummary; onEdit: (lobbyId: string) => void }) {
   const remind = useLobbyReminderPress(lobby);
   const now = useMinuteNow();
   const when = lobbyTimeLabel(lobby.starts_at, now);
   const portal = useElevatedPopoverPortal();
   const [open, setOpen] = React.useState(false);
-  // Held here, not in the details: Edit closes them first, so Escape in the dialog and the details
-  // closing don't take it with them.
-  const [editing, setEditing] = React.useState(false);
 
   // The calendar's RSVP, Going black, on the strip's light surface. One press for both copies of it.
   const rsvp = (
@@ -221,7 +231,7 @@ function NextLobbyStrip({ lobby }: { lobby: DebateLobbySummary }) {
                 className="z-100 flex w-[368px] max-w-[calc(100vw-32px)] flex-col gap-3 rounded-xl border border-grey-02 bg-white p-3.5 shadow-lg"
               >
                 <LobbyHandoffScope onOpenChange={setOpen}>
-                  <LobbyDetails lobby={lobby} now={now} rsvp={rsvp} onEdit={() => setEditing(true)} />
+                  <LobbyDetails lobby={lobby} now={now} rsvp={rsvp} onEdit={() => onEdit(lobby.lobby_id)} />
                 </LobbyHandoffScope>
               </Popover.Content>
             </Popover.Portal>
@@ -229,7 +239,6 @@ function NextLobbyStrip({ lobby }: { lobby: DebateLobbySummary }) {
         </Popover.Root>
         {rsvp}
       </section>
-      {editing ? <EditFromStrip lobbyId={lobby.lobby_id} onClose={() => setEditing(false)} /> : null}
       <LobbyReminderError error={remind.error} />
     </>
   );

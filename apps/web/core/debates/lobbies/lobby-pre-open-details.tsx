@@ -131,7 +131,7 @@ function EveryoneGoingList({ lobbyId, count }: { lobbyId: string; count: number 
             >
               <PersonAvatar person={person} />
               <Text as="span" variant="metadata" className="min-w-0">
-                <LobbyPersonName person={person} interactionSurface="lobby_going">
+                <LobbyPersonName person={person} interactionSurface="lobby_going" lazy>
                   {personName(person)}
                 </LobbyPersonName>
               </Text>
