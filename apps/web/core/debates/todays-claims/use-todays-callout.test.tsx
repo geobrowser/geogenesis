@@ -8,7 +8,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DebateAgendas } from './debate-agendas';
 
 const mocks = vi.hoisted(() => ({
-  flag: true,
   auth: { authenticated: true, accountKey: 'acct1' as string | null },
   agendas: null as unknown as DebateAgendas,
   agendasLoading: false,
@@ -27,7 +26,6 @@ const mocks = vi.hoisted(() => ({
   entitiesError: null as Error | null,
 }));
 
-vi.mock('~/core/state/feature-flags', () => ({ useFeatureFlag: () => mocks.flag }));
 vi.mock('~/core/hooks/use-personal-space-id', () => ({
   usePersonalSpaceId: () => ({
     personalSpaceId: mocks.personalSpaceLoading ? null : 'me',
@@ -129,7 +127,6 @@ beforeEach(() => {
   // The set is kept in the browser's storage, which outlives a store.
   window.localStorage.clear();
   store = createStore();
-  mocks.flag = true;
   mocks.auth = { authenticated: true, accountKey: 'acct1' };
   mocks.agendas = agendasFor('2026-10-29', { other: ['x', 'y'], member: ['a', 'b', 'c'] });
   mocks.agendasLoading = false;
@@ -420,15 +417,10 @@ describe('useTodaysCallout', () => {
     expect(result.current.visible).toBe(false);
   });
 
-  it('shows nothing signed out or with the flag off', () => {
+  it('shows and takes nothing signed out', () => {
     mocks.auth = { authenticated: false, accountKey: null };
     const signedOut = renderHook(() => useTodaysCallout(), { wrapper });
     expect(signedOut.result.current.visible).toBe(false);
-
-    mocks.auth = { authenticated: true, accountKey: 'acct1' };
-    mocks.flag = false;
-    const flagOff = renderHook(() => useTodaysCallout(), { wrapper });
-    expect(flagOff.result.current.visible).toBe(false);
     expect(store.get(todaysClaimsCalloutAtom)).toEqual({});
   });
 });

@@ -63,13 +63,6 @@ export const featureFlagDefinitions = [
     enabledByDefault: false,
   },
   {
-    id: 'todaysClaimsCallout',
-    label: 'Today’s claims callout',
-    description:
-      'Ask for a side on up to 10 of the day’s Debate agenda claims, one at a time, in a callout atop the debates side panel (GEO-3498).',
-    enabledByDefault: false,
-  },
-  {
     id: 'spaceCalls',
     label: 'Community calls',
     description:

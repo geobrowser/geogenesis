@@ -65,7 +65,6 @@ describe('FeatureFlagsDialog', () => {
         exploreSidePanel: false,
         forYouFeed: false,
         lobbyHosting: false,
-        todaysClaimsCallout: false,
         spaceCalls: false,
         googleSignIn: false,
         googleCalendar: false,

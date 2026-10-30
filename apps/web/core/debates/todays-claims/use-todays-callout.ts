@@ -6,7 +6,6 @@ import { useAtom } from 'jotai';
 
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { uuidToHex } from '~/core/id/normalize';
-import { useFeatureFlag } from '~/core/state/feature-flags';
 import { normId } from '~/core/utils/norm-id';
 
 import { useClaimEntitiesByIds } from '../claim-picker-page';
@@ -47,9 +46,8 @@ const NO_IDS: string[] = [];
  * Signed out there is nothing: the reads are all held back.
  */
 export function useTodaysCallout() {
-  const flagOn = useFeatureFlag('todaysClaimsCallout');
   const { authenticated, accountKey } = useGeoChatAuth();
-  const enabled = flagOn && authenticated && accountKey !== null;
+  const enabled = authenticated && accountKey !== null;
   const [stored, setStored] = useAtom(todaysClaimsCalloutAtom);
 
   const agendasQuery = useDebateAgendas(enabled);
