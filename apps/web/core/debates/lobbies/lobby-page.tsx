@@ -25,6 +25,7 @@ import { HubHeaderControls } from '../matchmaking/hub-header-controls';
 import { HubPillButton, hubPillClassName } from '../matchmaking/hub-pill-button';
 import { debateRoomPath } from '../rooms/room-routes';
 import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
+import { EditLobbyButton, EditLobbyDialog, canEditLobby } from './edit-lobby-dialog';
 import {
   type LobbyPresenceRoster,
   type LobbyPresenceState,
@@ -159,6 +160,10 @@ export function DebateLobbyPage({ lobbyId }: { lobbyId: string }) {
     exitHref,
   });
 
+  // A host's edit (GEO-3540) lives above the access switch: the lobby opening replaces the waiting
+  // card, and the dialog stays up to say its start can't move now rather than vanish with it.
+  const [editing, setEditing] = React.useState(false);
+
   // Blank while the route changes, rather than a flash of the card being left.
   if (exiting) return <div className="min-h-[calc(100dvh-2.75rem)]" data-testid="lobby-exiting" />;
 
@@ -172,7 +177,9 @@ export function DebateLobbyPage({ lobbyId }: { lobbyId: string }) {
         presence={presence}
         guestSession={guestSession}
         exitHref={exitHref}
+        onEdit={() => setEditing(true)}
       />
+      {editing && lobby ? <EditLobbyDialog lobby={lobby} onClose={() => setEditing(false)} /> : null}
     </LobbyGuestProvider>
   );
 }
@@ -209,6 +216,7 @@ function LobbyAccess({
   presence,
   guestSession,
   exitHref,
+  onEdit,
 }: {
   lobby: LobbyPageView | null;
   failed: boolean;
@@ -220,6 +228,8 @@ function LobbyAccess({
   guestSession: LobbyGuestSession;
   /** Where leaving goes: the page the lobby was opened from. */
   exitHref: string;
+  /** Opens the host's edit dialog, held by the page. */
+  onEdit: () => void;
 }) {
   const guest = useIsLobbyGuest();
   const purpose = useLobbyRoomPurpose();
@@ -272,7 +282,11 @@ function LobbyAccess({
         />
       );
     case 'not_yet_open':
-      return purpose.purpose === 'call' && spaceCalls ? <CallPreOpen lobby={lobby} /> : <NotYetOpen lobby={lobby} />;
+      return purpose.purpose === 'call' && spaceCalls ? (
+        <CallPreOpen lobby={lobby} />
+      ) : (
+        <NotYetOpen lobby={lobby} onEdit={onEdit} />
+      );
     case 'admitted':
       if (guest && guestSession.state.status === 'removed') {
         return (
@@ -292,7 +306,7 @@ function LobbyAccess({
   }
 }
 
-function NotYetOpen({ lobby }: { lobby: LobbyPageView }) {
+function NotYetOpen({ lobby, onEdit }: { lobby: LobbyPageView; onEdit: () => void }) {
   const guest = useIsLobbyGuest();
   const reminder = useDebateLobbyReminder();
   const end = useEndDebateLobby(lobby.lobby_id);
@@ -324,7 +338,11 @@ function NotYetOpen({ lobby }: { lobby: LobbyPageView }) {
         </Text>
       </div>
       {/* Who is going and what it starts with, as the side panel's lobby details show them (GEO-3463). */}
-      <LobbyGoing going={lobby.going} count={lobby.reminder_count} />
+      <LobbyGoing
+        going={lobby.going}
+        count={lobby.reminder_count}
+        hostOf={canEditLobby(lobby) ? lobby.lobby_id : undefined}
+      />
       <LobbyClaimListNames lists={lobby.claim_lists} />
       <div className="flex flex-wrap gap-2">
         {guest ? null : (
@@ -339,6 +357,7 @@ function NotYetOpen({ lobby }: { lobby: LobbyPageView }) {
           </HubPillButton>
         )}
         <FindDebateLink />
+        <EditLobbyButton lobby={lobby} onOpen={onEdit} />
         {canCancel ? (
           confirmingCancel ? (
             <>

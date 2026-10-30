@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import * as React from 'react';
 
@@ -113,6 +113,7 @@ vi.mock('./hooks', () => ({
   useRefetchAtOpening: vi.fn(),
   useDebateLobbies: (enabled: boolean) => ({ data: enabled ? { lobbies: mocks.lobbies } : undefined }),
   useEndDebateLobby: () => ({ mutate: vi.fn(), isPending: false, isError: false }),
+  useUpdateDebateLobby: () => ({ mutate: vi.fn(), error: null, isPending: false }),
 }));
 vi.mock('./lobby-guest-hooks', async importOriginal => ({
   ...(await importOriginal<typeof import('./lobby-guest-hooks')>()),
@@ -910,6 +911,22 @@ describe('DebateLobbyPage state screens', () => {
     expect(screen.getByText('3 going')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'RSVP' })).toBeInTheDocument();
     expect(screen.queryByText(/No account/)).not.toBeInTheDocument();
+  });
+
+  // GEO-3540 review: the lobby opening replaces the waiting card; a host's edit stays up through it.
+  it('keeps a host’s edit dialog up when the lobby opens', () => {
+    mocks.authenticated = true;
+    const host = { ...memberView.viewer, role: 'host' as const, connected: false };
+    mocks.memberLobby = { ...memberView, ...notYetOpen, viewer: host };
+    const { rerender } = render(<DebateLobbyPage lobbyId="lobby1" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Edit lobby' }));
+    expect(screen.getByRole('dialog', { name: 'Edit lobby' })).toBeInTheDocument();
+
+    mocks.memberLobby = { ...memberView, ...notYetOpen, access: { status: 'admitted' }, viewer: host };
+    rerender(<DebateLobbyPage lobbyId="lobby1" />);
+
+    expect(screen.queryByText('Debate lobby · scheduled')).not.toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Edit lobby' })).toBeInTheDocument();
   });
 
   it('points an ended lobby at the host’s next one, with RSVP', () => {

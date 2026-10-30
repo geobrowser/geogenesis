@@ -12,11 +12,13 @@ import { Text } from '~/design-system/text';
 import { useElevatedPopoverPortal } from '~/design-system/use-elevated-popover-portal';
 
 import type { DebateLobbySummary } from '../api';
+import { EditLobbyButton, EditLobbyDialog, canEditLobby } from '../lobbies/edit-lobby-dialog';
 import { useDebateLobby } from '../lobbies/hooks';
 import type { LobbyLineup } from '../lobbies/live-lobbies';
 import { markLobbyEntry } from '../lobbies/lobby-analytics';
 import { lobbyDateLabel, lobbyTimeLabel, notYetOpenLabel } from '../lobbies/lobby-format';
 import { usePreOpenHosts } from '../lobbies/lobby-host-lobbies';
+import { LobbyHandoffScope } from '../lobbies/lobby-popup';
 import { LobbyClaimListNames, LobbyGoing, LobbyHostedBy } from '../lobbies/lobby-pre-open-details';
 import { LobbyReminderError, useLobbyReminderPress } from '../lobbies/lobby-reminder-press';
 import { LiveLobbySpotlight, SPOTLIGHT_SECONDARY_PILL_CLASS_NAME } from '../lobbies/lobby-spotlight';
@@ -50,6 +52,19 @@ const STRIP_PILL_CLASS_NAME = hubPillClassName('primary', 'px-3.5 md:h-8');
  * It sits outside the tabs, so the ask stays in view on every tab while it runs.
  */
 export function HubLiveStrip({ lineup }: { lineup: LobbyLineup }) {
+  // An edit (GEO-3540) outlives the strip it began from, pinned to that lobby: the lobby opening
+  // swaps the strip for the live one, and another lobby taking the next spot hands the same strip a
+  // different lobby.
+  const [editingId, setEditingId] = React.useState<string | null>(null);
+  return (
+    <>
+      <HubLiveStripContent lineup={lineup} onEdit={setEditingId} />
+      {editingId ? <EditFromStrip key={editingId} lobbyId={editingId} onClose={() => setEditingId(null)} /> : null}
+    </>
+  );
+}
+
+function HubLiveStripContent({ lineup, onEdit }: { lineup: LobbyLineup; onEdit: (lobbyId: string) => void }) {
   const { ask, ended, cancel, cancelling, dismissEnded } = useHubAskState();
 
   if (ask) return <AskStrip ask={ask} onCancel={cancel} cancelling={cancelling} />;
@@ -59,7 +74,7 @@ export function HubLiveStrip({ lineup }: { lineup: LobbyLineup }) {
   if (live) return <LiveLobbySpotlight lineup={lineup} />;
 
   const next = lineup.soon ?? lineup.later[0] ?? null;
-  if (next) return <NextLobbyStrip lobby={next} />;
+  if (next) return <NextLobbyStrip lobby={next} onEdit={onEdit} />;
 
   return null;
 }
@@ -164,7 +179,7 @@ function EndedAskStrip({ ended, onDismiss }: { ended: EndedAsk; onDismiss: () =>
  * "happening now", and a lobby on Tuesday is not. The name opens the lobby's details — its full name,
  * when it opens, who hosts it, who is going and the claim lists it starts with.
  */
-function NextLobbyStrip({ lobby }: { lobby: DebateLobbySummary }) {
+function NextLobbyStrip({ lobby, onEdit }: { lobby: DebateLobbySummary; onEdit: (lobbyId: string) => void }) {
   const remind = useLobbyReminderPress(lobby);
   const now = useMinuteNow();
   const when = lobbyTimeLabel(lobby.starts_at, now);
@@ -215,7 +230,9 @@ function NextLobbyStrip({ lobby }: { lobby: DebateLobbySummary }) {
                 aria-label="Lobby details"
                 className="z-100 flex w-[368px] max-w-[calc(100vw-32px)] flex-col gap-3 rounded-xl border border-grey-02 bg-white p-3.5 shadow-lg"
               >
-                <LobbyDetails lobby={lobby} now={now} rsvp={rsvp} />
+                <LobbyHandoffScope onOpenChange={setOpen}>
+                  <LobbyDetails lobby={lobby} now={now} rsvp={rsvp} onEdit={() => onEdit(lobby.lobby_id)} />
+                </LobbyHandoffScope>
               </Popover.Content>
             </Popover.Portal>
           ) : null}
@@ -227,6 +244,15 @@ function NextLobbyStrip({ lobby }: { lobby: DebateLobbySummary }) {
   );
 }
 
+/** The edit dialog over the lobby's live view. Mounted only while editing, so its read runs only then. */
+function EditFromStrip({ lobbyId, onClose }: { lobbyId: string; onClose: () => void }) {
+  const { data: view } = useDebateLobby(lobbyId);
+  return view ? <EditLobbyDialog lobby={view} onClose={onClose} /> : null;
+}
+
+/** Short beside Going in the details' footer. */
+const LOBBY_DETAILS_EDIT = 'Edit';
+
 /**
  * The lobby's own read for what the list row leaves out: hosts, who is going, claim lists. Asked for
  * only while the details are open, and drawn from the list row until it lands.
@@ -237,7 +263,17 @@ function NextLobbyStrip({ lobby }: { lobby: DebateLobbySummary }) {
  * coalesced, so one RSVP cleared and another set leave the count where it was: reopening is what
  * catches that, and a block or a name change.
  */
-function LobbyDetails({ lobby, now, rsvp }: { lobby: DebateLobbySummary; now: number; rsvp: React.ReactNode }) {
+function LobbyDetails({
+  lobby,
+  now,
+  rsvp,
+  onEdit,
+}: {
+  lobby: DebateLobbySummary;
+  now: number;
+  rsvp: React.ReactNode;
+  onEdit: () => void;
+}) {
   const { data: view, refetch } = useDebateLobby(lobby.lobby_id);
   // Only over a view already held: with none, the query's own first read is out already.
   const staleAtOpening = React.useRef(view !== undefined);
@@ -269,7 +305,11 @@ function LobbyDetails({ lobby, now, rsvp }: { lobby: DebateLobbySummary; now: nu
         ) : null}
       </div>
       <LobbyHostedBy hosts={hosts} />
-      <LobbyGoing going={view?.going} count={goingCount} />
+      <LobbyGoing
+        going={view?.going}
+        count={goingCount}
+        hostOf={view && canEditLobby(view) ? lobby.lobby_id : undefined}
+      />
       <LobbyClaimListNames lists={view?.claim_lists} />
       <div className="flex items-center justify-between gap-2 border-t border-divider pt-3">
         <Link
@@ -280,7 +320,10 @@ function LobbyDetails({ lobby, now, rsvp }: { lobby: DebateLobbySummary; now: nu
         >
           Open lobby page
         </Link>
-        {rsvp}
+        <div className="flex items-center gap-2">
+          {view ? <EditLobbyButton lobby={view} label={LOBBY_DETAILS_EDIT} onOpen={onEdit} /> : null}
+          {rsvp}
+        </div>
       </div>
     </>
   );

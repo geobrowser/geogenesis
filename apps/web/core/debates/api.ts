@@ -1124,7 +1124,7 @@ export type GeoChatSession = {
 export type GetPrivyIdentityToken = () => Promise<string | null | undefined>;
 
 type RequestOptions = {
-  method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   body?: unknown;
   auth?: boolean | 'optional';
   getPrivyIdentityToken?: GetPrivyIdentityToken;
@@ -3008,8 +3008,8 @@ export type DebateLobbyCalendarResponse = { lobbies: DebateLobbyCalendarRow[] };
 
 /**
  * Every lobby starting in `[from, to)`, soonest first (GEO-3271), with none of the list's caps and
- * ended lobbies included. Account required. Up to 35 days; a lobby ended before it opened is left
- * out by geo-chat, as a cancellation.
+ * ended lobbies included. Up to 35 days; a lobby ended before it opened is left out by geo-chat, as a
+ * cancellation. Signed out, the range a new account sees (GEO-3517), as the list does.
  */
 export async function listDebateLobbyCalendar(
   { from, to }: { from: Date; to: Date },
@@ -3019,7 +3019,8 @@ export async function listDebateLobbyCalendar(
 ) {
   const params = new URLSearchParams({ from: from.toISOString(), to: to.toISOString() });
   return geoChatRequest<DebateLobbyCalendarResponse>(`/debate-lobbies/calendar?${params.toString()}`, {
-    auth: true,
+    // As the list: `true` signed in, so a failed token exchange is an error, not an anonymous range.
+    auth: accountKey ? true : 'optional',
     getPrivyIdentityToken,
     accountKey,
     signal,
@@ -3331,6 +3332,49 @@ export type CreateDebateLobbyRequest = {
   starts_at?: string;
   claim_lists?: Array<{ entity_id: string; space_id: string }>;
 };
+
+/**
+ * A host's edit (GEO-3540). Fields left out stay as they are. `starts_at` only before the lobby
+ * opens; `claim_lists` replaces every list, in order.
+ */
+export type UpdateDebateLobbyRequest = Partial<CreateDebateLobbyRequest>;
+
+/** A new start resends everyone going their calendar invite at the new time. */
+export async function updateDebateLobby(
+  lobbyId: string,
+  body: UpdateDebateLobbyRequest,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<DebateLobbyView>(`/debate-lobbies/${lobbyId}`, {
+    method: 'PATCH',
+    body,
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+/** Everyone going, oldest RSVP first, for a host (GEO-3540). `count` is every RSVP. */
+export type DebateLobbyGoingList = {
+  lobby_id: string;
+  people: DebateLobbyPerson[];
+  count: number;
+};
+
+export async function getDebateLobbyGoing(
+  lobbyId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  signal?: AbortSignal
+) {
+  return geoChatRequest<DebateLobbyGoingList>(`/debate-lobbies/${lobbyId}/going`, {
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    signal,
+  });
+}
 
 /** Without `starts_at` the lobby opens now. A start opens it 10 minutes early. */
 export async function createDebateLobby(

@@ -56,7 +56,14 @@ import { Truncate } from '~/design-system/truncate';
 
 import { FeedTopicPicker, RECOMMENDED_FEED_TOPIC_COUNT } from './customize-feed';
 import { InterestGrid, preloadInterestImages } from './interest-grid';
-import { avatarAtom, nameAtom, selectedTopicIdsAtom, stepAtom, topicIdAtom } from './onboarding-atoms';
+import {
+  avatarAtom,
+  nameAtom,
+  onboardingNameOnlyAtom,
+  selectedTopicIdsAtom,
+  stepAtom,
+  topicIdAtom,
+} from './onboarding-atoms';
 import { type OnboardingStep, shouldOpenOnboardingDialog } from './onboarding-dialog-visibility';
 import { useContentBelow } from './use-content-below';
 import { feedTopicsAtom, heldTopicsFor } from '~/atoms/onboarding-feed-topics';
@@ -111,6 +118,8 @@ export const OnboardingDialog = () => {
 
   const [step, setStep] = useAtom(stepAtom);
   const [entityMatchCandidates, setEntityMatchCandidates] = useState<SearchResult[]>([]);
+  // GEO-3517: a sign-in from the debate hours page asks only for a name.
+  const [nameOnly, setNameOnly] = useAtom(onboardingNameOnlyAtom);
 
   // Flows like "Add my ranking" record where the user was headed before being
   const [postOnboardingRedirect, setPostOnboardingRedirect] = useAtom(postOnboardingRedirectAtom);
@@ -120,7 +129,8 @@ export const OnboardingDialog = () => {
     if (step !== 'completed' && step !== 'done') trackAuthOnboarding(step, 'dismissed');
     hideOnboarding();
     setPostOnboardingRedirect(null);
-  }, [hideOnboarding, setPostOnboardingRedirect, step]);
+    setNameOnly(false);
+  }, [hideOnboarding, setNameOnly, setPostOnboardingRedirect, step]);
 
   // Warm the router cache for the destination once the onboarding
   // dialog is actually visible, so the post-creation redirect lands
@@ -221,7 +231,9 @@ export const OnboardingDialog = () => {
 
     // Not on phones, where the assistant is a sheet that covers the page the viewer was just sent
     // back to. Left unmarked as seen so it still introduces itself on a wider screen.
-    if (!hasSeenAssistant && !isPhone) {
+    // Nor after a name-only run (GEO-3517): it would cover the debate hours page just as the RSVP
+    // lands there. It still introduces itself next time.
+    if (!hasSeenAssistant && !isPhone && !nameOnly) {
       setChatOpen(true);
       setHasSeenAssistant(true);
     }
@@ -239,7 +251,8 @@ export const OnboardingDialog = () => {
       setStep('existing-entity-match');
     } else {
       setTopicId('');
-      setStep('interested-in');
+      if (nameOnly) beginOptimisticOnboarding('');
+      else setStep('interested-in');
     }
   }
 
@@ -293,20 +306,27 @@ export const OnboardingDialog = () => {
         >
           <Title className="sr-only">Set up your Geo account</Title>
           <ModalCard childKey="card" effectiveStep={effectiveStep}>
-            <StepHeader step={effectiveStep} onClearEntityMatches={() => setEntityMatchCandidates([])} />
+            <StepHeader
+              step={effectiveStep}
+              nameOnly={nameOnly}
+              onClearEntityMatches={() => setEntityMatchCandidates([])}
+            />
             {effectiveStep === 'start' && <StepWelcome onProfileContinue={onProfileContinue} />}
             {effectiveStep === 'existing-entity-match' && (
               <StepExistingEntityMatch
                 candidates={entityMatchCandidates}
                 onSkip={() => {
                   setTopicId('');
-                  setStep('interested-in');
+                  if (nameOnly) beginOptimisticOnboarding('');
+                  else setStep('interested-in');
                 }}
                 onSelect={(entityId, entityName) => {
                   if (entityName) setName(entityName);
-                  // Claiming an existing entity skips the space step but still picks topics.
+                  // Claiming an existing entity skips the space step but still picks topics, unless
+                  // this run asks for a name only.
                   setTopicId(entityId);
-                  setStep('customize-feed');
+                  if (nameOnly) beginOptimisticOnboarding(entityId);
+                  else setStep('customize-feed');
                 }}
               />
             )}
@@ -369,7 +389,7 @@ type StepWithHeader = (typeof STEPS_WITH_HEADER)[number];
 const StepDots = ({ step }: { step: StepWithHeader }) => {
   const currentOrder = stepOrder[step] ?? 1;
   return (
-    <div className="flex w-full items-center justify-center gap-[7px]">
+    <div className="flex w-full items-center justify-center gap-[7px]" data-testid="onboarding-step-dots">
       {Object.values(stepOrder).map(order => (
         <span
           key={order}
@@ -386,7 +406,16 @@ const StepDots = ({ step }: { step: StepWithHeader }) => {
 
 // `step` is the normalized effectiveStep, so a legacy value persisted by an
 // older version of the flow still renders the header for the step it maps to.
-const StepHeader = ({ step, onClearEntityMatches }: { step: Step; onClearEntityMatches: () => void }) => {
+const StepHeader = ({
+  step,
+  nameOnly,
+  onClearEntityMatches,
+}: {
+  step: Step;
+  /** One step only, so no dots to count through. */
+  nameOnly: boolean;
+  onClearEntityMatches: () => void;
+}) => {
   const setStep = useSetAtom(stepAtom);
   const topicId = useAtomValue(topicIdAtom);
   // Cleanup runs via the app-root useGeoLogoutCleanup; this only triggers it.
@@ -422,7 +451,7 @@ const StepHeader = ({ step, onClearEntityMatches }: { step: Step; onClearEntityM
           />
         </div>
       )}
-      <StepDots step={step as StepWithHeader} />
+      {nameOnly ? null : <StepDots step={step as StepWithHeader} />}
       {/* Onboarding can't be dismissed, so logout is the only way out. */}
       <button
         type="button"
