@@ -33,10 +33,13 @@ export function LobbyAvatarStack({ people, total }: { people: DebateLobbyPerson[
 export function LobbyPersonName({
   person,
   interactionSurface,
+  lazy,
   children,
 }: {
   person: Pick<DebateLobbyPerson, 'profile_space_id'>;
   interactionSurface: string;
+  /** Read the profile on the click even in a menu: a menu listing many people (everyone going). */
+  lazy?: boolean;
   children: React.ReactNode;
 }) {
   // In a lobby menu the profile is read up front, and the menu closes once the profile opens: closing
@@ -44,7 +47,7 @@ export function LobbyPersonName({
   const { inPopup, close } = useLobbyHandoff();
   const openProfile = useOpenDebaterProfile(person.profile_space_id, {
     interactionSurface,
-    lazy: !inPopup,
+    lazy: lazy ?? !inPopup,
     onOpened: inPopup ? close : undefined,
   });
 
