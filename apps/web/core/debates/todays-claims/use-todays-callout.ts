@@ -46,7 +46,7 @@ const NO_IDS: string[] = [];
  * Signed out there is nothing: the reads are all held back.
  */
 export function useTodaysCallout() {
-  const flagOn = useFeatureFlag('todaysClaims');
+  const flagOn = useFeatureFlag('todaysClaimsCallout');
   const { authenticated, accountKey } = useGeoChatAuth();
   const enabled = flagOn && authenticated && accountKey !== null;
   const [stored, setStored] = useAtom(todaysClaimsCalloutAtom);

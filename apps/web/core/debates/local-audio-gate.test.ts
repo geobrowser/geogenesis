@@ -4,6 +4,7 @@ import {
   type LocalAudioGateInput,
   MIC_OVERRUN_MAX_MS,
   MIC_PREARM_BEFORE_TURN_MS,
+  msLocalAudioStaysClosed,
   shouldEnableLocalAudio,
   turnOverrunPossible,
 } from './local-audio-gate';
@@ -149,6 +150,34 @@ describe('local audio gate', () => {
     it('still respects the viewer muting themselves, and nothing runs over past the debate', () => {
       expect(gate({ ...overrunning, openRoundsPhase: 'result', audioMuted: true })).toBe(false);
       expect(gate({ ...overrunning, effectiveStatus: 'complete' })).toBe(false);
+    });
+  });
+
+  // GEO-3410: recording parts go out only inside this.
+  describe('how long the mic is sure to stay closed', () => {
+    const closed = (overrides: Partial<LocalAudioGateInput>, msUntilPhaseEnds: number) =>
+      msLocalAudioStaysClosed({ ...speaking, activeSlot: 2, ...overrides }, msUntilPhaseEnds);
+
+    it('is nothing while the mic is live, however the gate opened it', () => {
+      expect(msLocalAudioStaysClosed(speaking, 30_000)).toBe(0);
+      expect(closed({ openRoundsPhase: 'deciding' }, 8_000)).toBe(0);
+      expect(closed({ msUntilTurnStarts: 800 }, 800)).toBe(0);
+      expect(
+        closed({ activeSlot: null, msSinceTurnEnded: 100, stillSpeaking: true, openRoundsPhase: 'result' }, 3_000)
+      ).toBe(0);
+    });
+
+    it('ends the prearm before the next boundary of the room clock', () => {
+      expect(closed({}, 30_000)).toBe(30_000 - MIC_PREARM_BEFORE_TURN_MS);
+      // A round's last turn ends into the vote, which opens both mics.
+      expect(closed({ openRoundsPhase: 'speaking' }, 12_000)).toBe(12_000 - MIC_PREARM_BEFORE_TURN_MS);
+      expect(closed({ activeSlot: null, openRoundsPhase: 'result' }, 3_000)).toBe(3_000 - MIC_PREARM_BEFORE_TURN_MS);
+      expect(closed({ effectiveStatus: 'preflight', activeSlot: null }, 5_000)).toBe(5_000 - MIC_PREARM_BEFORE_TURN_MS);
+      expect(closed({}, 500)).toBe(0);
+    });
+
+    it('opens no later than the turn the gate is counting into', () => {
+      expect(closed({ msUntilTurnStarts: 1_500 }, 4_000)).toBe(1_500 - MIC_PREARM_BEFORE_TURN_MS);
     });
   });
 });

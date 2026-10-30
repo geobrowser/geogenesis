@@ -63,10 +63,10 @@ export const featureFlagDefinitions = [
     enabledByDefault: false,
   },
   {
-    id: 'todaysClaims',
-    label: 'Today’s claims',
+    id: 'todaysClaimsCallout',
+    label: 'Today’s claims callout',
     description:
-      'Open the debate-again picker on a Today’s claims tab: every space’s newest Debate agenda, member spaces first (GEO-3489). Debated claims sort below undebated ones once geo-chat counts them. Also asks for a side on up to 10 of them a day in a callout atop the debates side panel and full-screen hub (GEO-3498).',
+      'Ask for a side on up to 10 of the day’s Debate agenda claims, one at a time, in a callout atop the debates side panel and full-screen hub (GEO-3498).',
     enabledByDefault: false,
   },
   {

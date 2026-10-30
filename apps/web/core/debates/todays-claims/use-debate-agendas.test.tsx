@@ -91,7 +91,7 @@ describe('useDebateAgendas', () => {
     expect(result.current.agendasIn(() => false).spaces).toEqual([]);
   });
 
-  it('asks for nothing with the flag off', () => {
+  it('asks for nothing when disabled', () => {
     const { result } = renderHook(() => useDebateAgendas(false));
 
     expect(result.current.isLoading).toBe(false);

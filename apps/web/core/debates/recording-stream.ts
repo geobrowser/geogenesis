@@ -379,7 +379,7 @@ export class RecordingChunkLedger {
 export type RecordingPartTransport = {
   startMultipart: () => Promise<{ filename: string; upload_id: string; part_size: number }>;
   getPartUrls: (filename: string, uploadId: string, partNumbers: number[]) => Promise<LocalRecordingPartUrl[]>;
-  putPart: (upload: ObjectStoreUpload, body: Blob) => Promise<void>;
+  putPart: (upload: ObjectStoreUpload, body: Blob, signal?: AbortSignal) => Promise<void>;
   abortMultipart: (filename: string, uploadId: string) => Promise<void>;
 };
 
@@ -411,6 +411,12 @@ export type RecordingPartStreamerOptions = RecordingPartTransport & {
    * that lasts {@link MAX_CONTINUOUS_PAUSE_MS} lets one part through.
    */
   shouldPause: () => boolean | RecordingPauseReason | null;
+  /**
+   * How long the call can spare the uplink from now: `0` while the local mic is live, `null` when
+   * unbounded. A part starts only if predicted to finish inside it (GEO-3410).
+   */
+  callWindowMs?: () => number | null;
+  now?: () => number;
   /** The recording has not started streaming {@link STREAM_STALL_AFTER_MS} after its first bytes. */
   onStall?: (stall: RecordingStreamStall) => void;
   /** Persists progress so a reload knows which parts already landed. */
@@ -442,6 +448,18 @@ const MAX_START_ATTEMPTS = 3;
 export const MAX_CONTINUOUS_PAUSE_MS = 60_000;
 /** How long after its first bytes a recording that has not started streaming is reported. */
 export const STREAM_STALL_AFTER_MS = 30_000;
+/** Assumed until a part has been timed. Below the ~5 Mbps a listen-only upload needs to keep up. */
+export const DEFAULT_UPLINK_BITS_PER_SECOND = 4_000_000;
+/** Recent parts the uplink estimate takes the slowest of. */
+const UPLINK_SAMPLES = 3;
+/** Older samples are dropped, so one slow part cannot hold every later one back for good. */
+export const UPLINK_SAMPLE_MAX_AGE_MS = 2 * 60_000;
+const PART_TIME_MARGIN = 1.25;
+const PART_TIME_SLACK_MS = 1_000;
+
+function isAbortError(error: unknown): boolean {
+  return (error as { name?: unknown } | null)?.name === 'AbortError';
+}
 
 function pauseReason(value: boolean | RecordingPauseReason | null): RecordingPauseReason | null {
   if (!value) return null;
@@ -458,7 +476,9 @@ function pauseReason(value: boolean | RecordingPauseReason | null): RecordingPau
  * live call for the same upstream.
  */
 export class RecordingPartStreamer {
-  private readonly options: Required<Pick<RecordingPartStreamerOptions, 'setTimer' | 'clearTimer' | 'finishGraceMs'>> &
+  private readonly options: Required<
+    Pick<RecordingPartStreamerOptions, 'setTimer' | 'clearTimer' | 'finishGraceMs' | 'now'>
+  > &
     RecordingPartStreamerOptions;
   private readonly ledger: RecordingChunkLedger;
   private multipart: StreamedRecordingMultipart | null = null;
@@ -484,12 +504,19 @@ export class RecordingPartStreamer {
   private startFailures = 0;
   private stallTimer: unknown = null;
   private stallReported = false;
+  private partAbort: AbortController | null = null;
+  private partsAbortedForMic = 0;
+  private micLiveSince: number | null = null;
+  private pausedMicLiveMs = 0;
+  /** Recent live parts' rates and when they landed, newest last. */
+  private uplinkSamples: { bitsPerSecond: number; at: number }[] = [];
 
   constructor(options: RecordingPartStreamerOptions) {
     this.options = {
       setTimer: (callback, delayMs) => setTimeout(callback, delayMs),
       clearTimer: timer => clearTimeout(timer as ReturnType<typeof setTimeout>),
       finishGraceMs: 10_000,
+      now: () => Date.now(),
       ...options,
     };
     this.ledger = options.ledger ?? new RecordingChunkLedger();
@@ -512,7 +539,12 @@ export class RecordingPartStreamer {
     this.wake();
   }
 
-  /** New bytes are in the shared ledger: send any part they complete. */
+  /** The call needs the uplink now: a part on the wire is cut short and sent again later. */
+  yieldToCall(): void {
+    this.partAbort?.abort();
+  }
+
+  /** New bytes are in the shared ledger, or the call freed the uplink: send any part that is waiting. */
   wake(): void {
     this.schedule(0);
     this.armStallCheck();
@@ -559,6 +591,7 @@ export class RecordingPartStreamer {
     if (this.byteSize > 0) this.reportStall();
     this.stopped = true;
     this.clearScheduled();
+    this.settleMicLivePause();
     if (this.inFlight) {
       await Promise.race([
         this.inFlight.catch(() => undefined),
@@ -596,6 +629,9 @@ export class RecordingPartStreamer {
       paused_room_not_connected_ms: this.pausedMsByReason.room_not_connected,
       paused_offline_ms: this.pausedMsByReason.offline,
       parts_sent_through_pause: this.partsSentThroughPause,
+      paused_mic_live_ms: this.pausedMicLiveMs,
+      parts_aborted_for_mic: this.partsAbortedForMic,
+      backlog_parts_at_finish: partSize ? totalPartCount(this.byteSize, partSize) - this.uploaded.size : null,
       start_attempts: this.startAttempts,
       start_failures: this.startFailures,
       part_failures: this.partFailures,
@@ -644,6 +680,14 @@ export class RecordingPartStreamer {
     // Parts are what compete with the call, and they stand down — but not for ever.
     let throughPause = false;
     if (this.multipart && this.nextPartNumber() !== null) {
+      const callWindow = this.options.callWindowMs?.() ?? null;
+      if (callWindow !== null && callWindow < this.predictedPartMs(this.multipart.partSize)) {
+        // Not counted towards the longest pause: the call gets its turns whole.
+        this.micLiveSince ??= this.options.now();
+        this.schedule(PAUSE_RECHECK_MS);
+        return;
+      }
+      this.settleMicLivePause();
       const reason = pauseReason(this.options.shouldPause());
       if (reason) {
         this.lastPauseReason = reason;
@@ -672,6 +716,13 @@ export class RecordingPartStreamer {
         if (throughPause) this.partsSentThroughPause += 1;
       }
     } catch (error) {
+      if (sendingPart && isAbortError(error)) {
+        // Cut short for the call, not a failure: it goes again in the next window.
+        this.partsAbortedForMic += 1;
+        this.inFlight = null;
+        this.schedule(0);
+        return;
+      }
       this.failures += 1;
       if (this.multipart) this.partFailures += 1;
       else this.startFailures += 1;
@@ -719,16 +770,59 @@ export class RecordingPartStreamer {
     const multipart = this.multipart!;
     const partNumber = this.nextPartNumber();
     if (partNumber === null) return;
-    const upload = await this.partUrl(partNumber);
-    const { start, end } = partRange(partNumber, multipart.partSize, this.byteSize);
-    const body = await this.ledger.read(start, end, this.options.readDurable);
-    const put = () => this.options.putPart(upload, body);
-    await trackRecordingPartUpload(this.options.telemetry, partNumber, body.size, put);
+    // Armed before the URL and the bytes are fetched, so a mic that opens meanwhile still stops the PUT.
+    const abort = new AbortController();
+    this.partAbort = abort;
+    let startedAt: number | undefined;
+    let body: Blob | undefined;
+    try {
+      const upload = await this.partUrl(partNumber);
+      const { start, end } = partRange(partNumber, multipart.partSize, this.byteSize);
+      body = await this.ledger.read(start, end, this.options.readDurable);
+      abort.signal.throwIfAborted();
+      startedAt = this.options.now();
+      const sent = body;
+      await trackRecordingPartUpload(this.options.telemetry, partNumber, sent.size, () =>
+        this.options.putPart(upload, sent, abort.signal)
+      );
+    } catch (error) {
+      // A part cut short needed longer than it ran, so the link is at most this fast. Without it a
+      // link slower than the default would be cut short every window and never learnt.
+      if (startedAt !== undefined && body && isAbortError(error)) {
+        this.noteUplink(body.size, this.options.now() - startedAt);
+      }
+      throw error;
+    } finally {
+      if (this.partAbort === abort) this.partAbort = null;
+    }
+    this.noteUplink(body.size, this.options.now() - startedAt);
     this.uploaded.add(partNumber);
     this.urls.delete(partNumber);
     // Its bytes are safe in object storage now, so this tab need not hold them.
     this.ledger.confirm(this.confirmedBytes());
     this.options.onMultipartChange?.(this.snapshot()!);
+  }
+
+  private settleMicLivePause() {
+    if (this.micLiveSince === null) return;
+    this.pausedMicLiveMs += Math.max(0, this.options.now() - this.micLiveSince);
+    this.micLiveSince = null;
+  }
+
+  private noteUplink(bytes: number, elapsedMs: number) {
+    if (elapsedMs <= 0 || bytes <= 0) return;
+    this.uplinkSamples.push({ bitsPerSecond: (bytes * 8_000) / elapsedMs, at: this.options.now() });
+    if (this.uplinkSamples.length > UPLINK_SAMPLES) this.uplinkSamples.shift();
+  }
+
+  /** How long a part is expected to take, from the slowest recent part: a fast one must not oversell the link. */
+  private predictedPartMs(partSize: number): number {
+    const now = this.options.now();
+    this.uplinkSamples = this.uplinkSamples.filter(sample => now - sample.at < UPLINK_SAMPLE_MAX_AGE_MS);
+    const bitsPerSecond = this.uplinkSamples.length
+      ? Math.min(...this.uplinkSamples.map(sample => sample.bitsPerSecond))
+      : DEFAULT_UPLINK_BITS_PER_SECOND;
+    return ((partSize * 8_000) / bitsPerSecond) * PART_TIME_MARGIN + PART_TIME_SLACK_MS;
   }
 
   private async partUrl(partNumber: number): Promise<ObjectStoreUpload> {
@@ -803,8 +897,8 @@ export async function uploadRemainingParts(
 }
 
 /** One part of a streamed recording. The signed URL carries everything; no headers are needed. */
-export async function putRecordingPart(upload: ObjectStoreUpload, body: Blob): Promise<void> {
-  const response = await fetch(upload.url, { method: upload.method, body });
+export async function putRecordingPart(upload: ObjectStoreUpload, body: Blob, signal?: AbortSignal): Promise<void> {
+  const response = await fetch(upload.url, { method: upload.method, body, signal });
   if (!response.ok) {
     throw recordingStorageHttpError(`Recording part upload failed (${response.status})`, response.status);
   }
@@ -821,6 +915,10 @@ export type LiveRecordingStream = {
   append: (chunk: Blob, chunkAtMs: number) => void;
   /** Bytes recorded so far. */
   size: () => number;
+  /** The local microphone went live: a part on the wire is cut short for the call. */
+  yieldToCall: () => void;
+  /** The call freed the uplink: send whatever is waiting. */
+  resume: () => void;
   /**
    * The recorder has stopped: waits for every chunk write, stops the streamer, and returns the
    * multipart upload for the queue to finish — or `null` if nothing was streamed.
@@ -889,12 +987,14 @@ export function startLiveRecordingStream({
   metadata,
   transport,
   shouldPause,
+  callWindowMs,
   retainedBytesLimit = RECORDING_RETAINED_BYTES_LIMIT,
 }: {
   id: string;
   metadata: RecordingStreamMetadata;
   transport: RecordingPartTransport;
   shouldPause: () => boolean | RecordingPauseReason | null;
+  callWindowMs?: () => number | null;
   /** For tests. */
   retainedBytesLimit?: number;
 }): LiveRecordingStream {
@@ -909,6 +1009,8 @@ export function startLiveRecordingStream({
     ...transport,
     telemetry: { debate_id: metadata.debateId, recording_started_at_ms: metadata.startedAtMs, upload_phase: 'live' },
     shouldPause,
+    // Without IndexedDB nothing spills, so only uploading frees memory: send whatever the mic.
+    callWindowMs: () => (durable ? (callWindowMs?.() ?? null) : null),
     ledger,
     readDurable,
     onStall: stall => reportRecordingStreamStall(metadata.debateId, stall),
@@ -959,6 +1061,10 @@ export function startLiveRecordingStream({
       return multipart;
     },
     size: () => ledger.size,
+    yieldToCall: () => {
+      if (durable) streamer.yieldToCall();
+    },
+    resume: () => streamer.wake(),
     recording() {
       const availableFrom = ledger.confirmedBytes;
       return {
