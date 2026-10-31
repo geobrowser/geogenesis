@@ -1,6 +1,6 @@
 'use client';
 
-import { SystemIds } from '@geoprotocol/geo-sdk/lite';
+import { useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 import { useState } from 'react';
@@ -11,9 +11,11 @@ import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSpace } from '~/core/hooks/use-space';
 import { useSpacesWhereMember } from '~/core/hooks/use-spaces-where-member';
 import { EntityId } from '~/core/io/substream-schema';
+import { E } from '~/core/sync/orm';
+import { GeoEventStream } from '~/core/sync/stream';
 import { useMutate } from '~/core/sync/use-mutate';
-import { getRelations, getValues } from '~/core/sync/use-store';
-import type { Relation } from '~/core/types';
+import { useSyncEngine } from '~/core/sync/use-sync-engine';
+import type { Entity, Relation } from '~/core/types';
 import { sortSpaceListByRankNameId } from '~/core/utils/space/browse-space-list-sort';
 import { NavUtils, hasName } from '~/core/utils/utils';
 
@@ -21,7 +23,10 @@ import { GeoImage } from '~/design-system/geo-image';
 import { ArrowLeft } from '~/design-system/icons/arrow-left';
 import { Input } from '~/design-system/input';
 
-import { cloneEntityIntoSpace, collectSubtree } from '~/partials/versions/clone-entity-into-space';
+import { cloneEntityIntoSpace, collectHydrationTargetIds } from '~/partials/versions/clone-entity-into-space';
+import { loadMoveBacklinks } from '~/partials/versions/load-move-backlinks';
+import { collectMoveDeletions } from '~/partials/versions/move-entity-deletions';
+import { retargetMoveBacklinks } from '~/partials/versions/retarget-move-backlinks';
 
 type MoveEntityToSpaceProps = {
   entityId: EntityId;
@@ -40,6 +45,8 @@ export const MoveEntityToSpace = ({
 }: MoveEntityToSpaceProps) => {
   const router = useRouter();
   const { storage } = useMutate();
+  const { store, stream } = useSyncEngine();
+  const cache = useQueryClient();
 
   const { personalSpaceId } = usePersonalSpaceId();
   const { space: personalSpace } = useSpace(personalSpaceId ?? undefined);
@@ -66,58 +73,62 @@ export const MoveEntityToSpace = ({
       ? namedSpaces
       : namedSpaces.filter(space => space?.entity?.name?.toLowerCase()?.includes(query.toLowerCase()));
 
-  const moveEntityToSpace = (targetSpaceId: string) => {
-    if (!targetSpaceId || targetSpaceId === sourceSpaceId) return;
+  const moveEntityToSpace = async (targetSpaceId: string) => {
+    if (!targetSpaceId || targetSpaceId === sourceSpaceId) return false;
+
+    // 0. Load the media the clone copies. A media entity nobody opened is not in the store, so it
+    // would be copied as nothing. The clone reads them from `loaded`: the store only takes them in
+    // on a later microtask.
+    const hydrationIds = collectHydrationTargetIds(entityId, sourceSpaceId);
+    let loaded: Entity[] = [];
+
+    if (hydrationIds.length > 0) {
+      try {
+        const { merged, remote } = await E.syncMany({
+          store,
+          cache,
+          where: { id: { in: hydrationIds } },
+          first: hydrationIds.length,
+        });
+
+        loaded = merged;
+
+        if (merged.length > 0) {
+          stream.emit({ type: GeoEventStream.ENTITIES_SYNCED, entities: merged, remoteEntities: remote });
+        }
+      } catch {
+        return false;
+      }
+    }
+
+    // Backlinks from every space, which the store only holds for entities someone opened.
+    let backlinks: Relation[];
+
+    try {
+      backlinks = await loadMoveBacklinks({ entityId, sourceSpaceId, store, cache });
+    } catch {
+      return false;
+    }
 
     // 1. Clone entity into target space
-    cloneEntityIntoSpace(entityId, sourceSpaceId, targetSpaceId, storage);
+    cloneEntityIntoSpace(entityId, sourceSpaceId, targetSpaceId, storage, loaded);
 
     // 2. Delete entity from source space. The clone walked the BLOCKS/TABS
     // subtree, so tear down the same subtree here: the root always goes, and
     // each descendant goes unless something outside the subtree still points at
-    // it (a shared block).
-    const { entityIds: subtreeIds } = collectSubtree(entityId, sourceSpaceId);
+    // it (a shared block). What that comes to is decided in `collectMoveDeletions`,
+    // where it can be tested.
+    const { values, relations } = collectMoveDeletions(entityId, sourceSpaceId, backlinks);
 
-    const containmentRelationIds = new Set(
-      getRelations({
-        selector: r =>
-          subtreeIds.has(r.fromEntity.id) &&
-          r.spaceId === sourceSpaceId &&
-          (r.type.id === SystemIds.BLOCKS || r.type.id === SystemIds.TABS_PROPERTY),
-      }).map(r => r.id)
-    );
+    storage.values.deleteMany(values);
+    storage.relations.deleteMany(relations);
 
-    const orphanedDescendantIds = [...subtreeIds].filter(id => {
-      if (id === entityId) return false;
-      const externalRefs = getRelations({
-        selector: r => r.toEntity.id === id && !containmentRelationIds.has(r.id),
-      });
-      return externalRefs.length === 0;
-    });
+    // 3. Point this space's backlinks at where the data went. They survive the move untouched —
+    // the entity id has not changed — but one that resolves to the source space now resolves to a
+    // space the entity's data just left.
+    retargetMoveBacklinks(entityId, sourceSpaceId, targetSpaceId, storage, backlinks);
 
-    const allValuesToDelete = getValues({
-      selector: value => value.entity.id === entityId && value.spaceId === sourceSpaceId,
-    });
-    const relationIds = new Set<string>();
-    const allRelationsToDelete: Relation[] = [];
-
-    const pushRelation = (r: Relation) => {
-      if (relationIds.has(r.id)) return;
-      relationIds.add(r.id);
-      allRelationsToDelete.push(r);
-    };
-
-    getRelations({
-      selector: r => (r.fromEntity.id === entityId || r.toEntity.id === entityId) && r.spaceId === sourceSpaceId,
-    }).forEach(pushRelation);
-
-    for (const id of orphanedDescendantIds) {
-      allValuesToDelete.push(...getValues({ selector: v => v.entity.id === id }));
-      getRelations({ selector: r => r.fromEntity.id === id || r.toEntity.id === id }).forEach(pushRelation);
-    }
-
-    storage.values.deleteMany(allValuesToDelete);
-    storage.relations.deleteMany(allRelationsToDelete);
+    return true;
   };
 
   return (
@@ -139,8 +150,9 @@ export const MoveEntityToSpace = ({
           <MoveSpaceItem
             key={space.id}
             space={space}
-            onSelect={() => {
-              moveEntityToSpace(space.id);
+            onSelect={async () => {
+              const moved = await moveEntityToSpace(space.id);
+              if (!moved) return;
               router.push(NavUtils.toEntity(space.id, entityId, true, entityName));
               onDone?.();
             }}
