@@ -21,6 +21,7 @@ import {
   useGeoChatAuth,
   usePeerSchedule,
 } from '../hooks';
+import { slotPayload } from '../rooms/scheduling-hooks';
 
 /**
  * Where the list stops paging. Far past today's debater count; past it, the dialog still finds
@@ -30,6 +31,9 @@ const MAX_ADMIN_DEBATERS = 1000;
 
 /** How far ahead New match offers times, matching the calendar's two weeks. */
 export const ADMIN_MATCH_DAYS = 14;
+
+/** How long a match New match books (GEO-3544): the usual half-hour, or a whole hour. */
+export type AdminMatchMinutes = 30 | 60;
 
 const adminKeys = {
   debaters: (accountKey: string | null) => ['debates', 'admin-debaters', accountKey] as const,
@@ -113,13 +117,22 @@ export function useCreateAdminMatch() {
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ firstUserId, secondUserId, start }: { firstUserId: string; secondUserId: string; start: Date }) =>
+    mutationFn: ({
+      firstUserId,
+      secondUserId,
+      start,
+      minutes,
+    }: {
+      firstUserId: string;
+      secondUserId: string;
+      start: Date;
+      minutes: AdminMatchMinutes;
+    }) =>
       createAdminScheduledDebate(
         {
           first_user_id: firstUserId,
           second_user_id: secondUserId,
-          scheduled_start_at: start.toISOString(),
-          scheduled_end_at: new Date(start.getTime() + 30 * 60_000).toISOString(),
+          ...slotPayload(start, minutes),
         },
         getPrivyIdentityToken,
         accountKey
