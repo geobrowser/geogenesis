@@ -301,6 +301,25 @@ describe('space chat state', () => {
       expect(state.pendingReactions).toHaveLength(1);
     });
 
+    it('keeps the viewer’s unsettled taps through every page merge', () => {
+      const pending = tap('👍', true);
+      const tapped = withPendingReaction(seeded(), pending);
+      const merged = withChatPage(tapped, {
+        messages: [message(1, { reactions: [{ value: '👍', count: 1, reacted: false }], reaction_version: 1 })],
+        next_before: null,
+      });
+      const restarted = withChatPage(tapped, {
+        messages: [message(80), message(79)],
+        next_before: { before_message_id: message(79).id },
+      });
+      const older = withOlderChatPage(tapped, { messages: [message(0)], next_before: null });
+      const created = withChatMessage(tapped, message(2));
+      for (const state of [merged, restarted, older, created]) expect(state.pendingReactions).toEqual([pending]);
+      expect(shownReactions(merged.messages[0]!, merged.pendingReactions)).toEqual([
+        { value: '👍', count: 2, reacted: true },
+      ]);
+    });
+
     it('keeps the higher-version reactions when a page copy is older', () => {
       let state = withRoomEvent(seeded(), event(4, '👍', [{ value: '👍', count: 4 }]), VIEWER);
       state = withChatPage(state, {

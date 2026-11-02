@@ -129,6 +129,7 @@ export function withChatPage(current: SpaceChatState | undefined, page: SpaceCha
   const olderLoaded =
     oldestCached !== undefined && (oldestRead === undefined || dashlessId(oldestCached.id) < dashlessId(oldestRead.id));
   return {
+    ...current,
     messages,
     nextBefore: olderLoaded ? current.nextBefore : nextBefore,
     pending: settlePending(current.pending, messages),
