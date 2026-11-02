@@ -7,6 +7,7 @@ import * as React from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 
 import { featureFlagDefinitions, useFeatureFlags } from '~/core/state/feature-flags';
+import { NavUtils } from '~/core/utils/utils';
 
 import { SquareButton } from '~/design-system/button';
 import { Checkbox } from '~/design-system/checkbox';
@@ -23,7 +24,7 @@ export function FeatureFlagsDialog({ defaultShortcutOpen = false }: { defaultSho
 
   const close = React.useCallback(() => {
     setShortcutOpen(false);
-    if (routeOpen) router.replace('/explore');
+    if (routeOpen) router.replace(NavUtils.toExplore());
   }, [routeOpen, router]);
 
   React.useEffect(() => {

@@ -10,6 +10,7 @@ import { resetGeoChatSession } from '~/core/debates/api';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useEditable } from '~/core/state/editable-store';
 import { pendingPersonalSpaceAtom } from '~/core/state/pending-personal-space';
+import { NavUtils } from '~/core/utils/utils';
 import { useLogout } from '~/core/wallet/auth-hooks';
 
 import {
@@ -79,7 +80,7 @@ export function useGeoLogoutCleanup() {
         setNameOnly(false);
         // Bulletproof reset — see the doc comment. `/explore` is the public home and
         // drops the user out of any onboarding/pending context they logged out of.
-        window.location.assign('/explore');
+        window.location.assign(NavUtils.toExplore());
       }
     },
   });

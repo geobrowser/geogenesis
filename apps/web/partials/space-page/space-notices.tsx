@@ -20,8 +20,7 @@ import { useEditorInstance } from '~/core/state/editor/editor-provider';
 import { useTabId } from '~/core/state/editor/use-editor-blocks';
 import { useName } from '~/core/state/entity-page-store/entity-store';
 import { useMutate } from '~/core/sync/use-mutate';
-import { NavUtils } from '~/core/utils/utils';
-import { getTabSlug } from '~/core/utils/utils';
+import { NavUtils, getTabSlug } from '~/core/utils/utils';
 
 import { SmallButton } from '~/design-system/button';
 import { ClientOnly } from '~/design-system/client-only';
@@ -463,7 +462,8 @@ const CopyInviteLink = () => {
 
   const onCopyInviteLink = async () => {
     try {
-      await navigator.clipboard.writeText(`https://geobrowser.com/explore`);
+      const inviteUrl = new URL(NavUtils.toExplore(), window.location.origin).toString();
+      await navigator.clipboard.writeText(inviteUrl);
       setHasCopiedId(true);
       setTimeout(() => {
         setHasCopiedId(false);
