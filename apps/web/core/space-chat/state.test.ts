@@ -8,6 +8,7 @@ import {
   withChatPage,
   withOlderChatPage,
   withOwnReaction,
+  withOwnReactionResult,
   withPendingMessage,
   withRoomEvent,
 } from './state';
@@ -160,6 +161,86 @@ describe('space chat state', () => {
     expect(state.messages[0]!.reactions).toEqual([]);
   });
 
+  describe('reaction versions', () => {
+    const id = message(1).id;
+    const thumbs = (count: number, version: number, userId = OTHER, added = true) =>
+      ({ type: 'reaction', messageId: id, userId, value: '👍', count, added, version }) as const;
+    const seeded = () =>
+      withChatPage(undefined, {
+        messages: [message(1, { reactions: [{ value: '👍', count: 1, reacted: false }], reaction_version: 1 })],
+        next_before: null,
+      });
+
+    it('drops an event at or below the held version, so out-of-order events converge', () => {
+      let state = seeded();
+      state = withRoomEvent(state, thumbs(3, 3), VIEWER);
+      state = withRoomEvent(state, thumbs(2, 2), VIEWER);
+      expect(state.messages[0]).toMatchObject({ reactions: [{ value: '👍', count: 3 }], reaction_version: 3 });
+      state = withRoomEvent(state, thumbs(9, 3), VIEWER);
+      expect(state.messages[0]!.reactions![0]!.count).toBe(3);
+    });
+
+    it('drops an event older than the history read it follows', () => {
+      const state = withRoomEvent(seeded(), thumbs(0, 1), VIEWER);
+      expect(state.messages[0]!.reactions).toEqual([{ value: '👍', count: 1, reacted: false }]);
+    });
+
+    it('settles the viewer’s own reaction whether its response or its event comes first', () => {
+      const guessed = withOwnReaction(seeded(), id, '👍', true);
+      const viaResponse = withRoomEvent(
+        withOwnReactionResult(guessed, id, { value: '👍', added: true, count: 2, version: 2 }),
+        thumbs(2, 2, VIEWER),
+        VIEWER
+      );
+      const viaEvent = withOwnReactionResult(withRoomEvent(guessed, thumbs(2, 2, VIEWER), VIEWER), id, {
+        value: '👍',
+        added: true,
+        count: 2,
+        version: 2,
+      });
+      for (const state of [viaResponse, viaEvent]) {
+        expect(state.messages[0]).toMatchObject({
+          reactions: [{ value: '👍', count: 2, reacted: true }],
+          reaction_version: 2,
+        });
+      }
+    });
+
+    it('drops the viewer’s response when someone else’s later change already landed', () => {
+      let state = withOwnReaction(seeded(), id, '👍', true);
+      state = withRoomEvent(state, thumbs(3, 3), VIEWER);
+      state = withOwnReactionResult(state, id, { value: '👍', added: true, count: 2, version: 2 });
+      expect(state.messages[0]).toMatchObject({
+        reactions: [{ value: '👍', count: 3, reacted: true }],
+        reaction_version: 3,
+      });
+    });
+
+    it('keeps the higher-version reactions when a page copy is older', () => {
+      let state = withRoomEvent(seeded(), thumbs(4, 4), VIEWER);
+      state = withChatPage(state, {
+        messages: [message(1, { reactions: [{ value: '👍', count: 1, reacted: false }], reaction_version: 1 })],
+        next_before: null,
+      });
+      expect(state.messages[0]).toMatchObject({ reactions: [{ value: '👍', count: 4 }], reaction_version: 4 });
+    });
+
+    it('applies every change from a geo-chat without versions', () => {
+      let state = withChatPage(undefined, page([1]));
+      state = withRoomEvent(
+        state,
+        { type: 'reaction', messageId: id, userId: OTHER, value: '👍', count: 2, added: true },
+        VIEWER
+      );
+      state = withRoomEvent(
+        state,
+        { type: 'reaction', messageId: id, userId: OTHER, value: '👍', count: 1, added: false },
+        VIEWER
+      );
+      expect(state.messages[0]!.reactions).toEqual([{ value: '👍', count: 1, reacted: false }]);
+    });
+  });
+
   it('parses the gateway room events and ignores unknown ones', () => {
     expect(parseSpaceChatRoomEvent({ event_type: 'message.created', payload: { message: message(1) } })).toEqual({
       type: 'created',
@@ -176,9 +257,10 @@ describe('space chat state', () => {
           value: '👍',
           count: 3,
           added: true,
+          version: 7,
         },
       })
-    ).toEqual({ type: 'reaction', messageId: 'm', userId: 'u', value: '👍', count: 3, added: true });
+    ).toEqual({ type: 'reaction', messageId: 'm', userId: 'u', value: '👍', count: 3, added: true, version: 7 });
     expect(parseSpaceChatRoomEvent({ event_type: 'message.pinned', payload: {} })).toBeNull();
     expect(parseSpaceChatRoomEvent({ event_type: 'message.deleted', payload: { message_id: 'm' } })).toBeNull();
   });

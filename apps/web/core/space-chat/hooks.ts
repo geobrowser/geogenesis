@@ -26,6 +26,7 @@ import {
   withChatPage,
   withOlderChatPage,
   withOwnReaction,
+  withOwnReactionResult,
   withPendingMessage,
   withoutPendingMessage,
 } from './state';
@@ -151,10 +152,18 @@ export function useSpaceChatRoom(
     [update]
   );
 
+  // A resend of the same failed draft reuses its nonce: if the first post was stored after all,
+  // geo-chat returns it instead of posting twice, and charges no quota.
+  const failedSend = React.useRef<{ roomId: string; body: string; replyTo: string | null; nonce: string } | null>(null);
   const send = React.useCallback(
     async (body: string, replyTo: string | null) => {
       if (!auth || !roomId) throw new GeoChatRequestError('Sign in to chat', 'authentication_required', 401);
-      const clientNonce = newClientNonce();
+      const failed = failedSend.current;
+      const clientNonce =
+        failed && failed.roomId === roomId && failed.body === body && failed.replyTo === replyTo
+          ? failed.nonce
+          : newClientNonce();
+      failedSend.current = null;
       update(state =>
         withPendingMessage(state, {
           client_nonce: clientNonce,
@@ -169,6 +178,7 @@ export function useSpaceChatRoom(
         );
       } catch (error) {
         update(state => withoutPendingMessage(state, clientNonce));
+        failedSend.current = { roomId, body, replyTo, nonce: clientNonce };
         throw error;
       }
     },
@@ -193,7 +203,10 @@ export function useSpaceChatRoom(
       if (!auth) throw new GeoChatRequestError('Sign in to chat', 'authentication_required', 401);
       update(state => withOwnReaction(state, id, value, added));
       try {
-        await setSpaceChatReaction(id, value, added, auth);
+        const result = await setSpaceChatReaction(id, value, added, auth);
+        update(state =>
+          withOwnReactionResult(state, id, { value, added, count: result.count, version: result.version })
+        );
       } catch (error) {
         // The page read carries the viewer's own `reacted`, so it settles what the guess got wrong.
         void queryClient.invalidateQueries({ queryKey, exact: true });

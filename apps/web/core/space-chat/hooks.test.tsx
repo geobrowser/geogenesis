@@ -8,16 +8,26 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   gateway: 'idle' as string,
   getSpaceChatMessages: vi.fn(),
+  postSpaceChatMessage: vi.fn(),
+  authenticated: false,
 }));
 
 vi.mock('~/core/debates/hooks', () => ({
-  useGeoChatAuth: () => ({ ready: true, authenticated: false, accountKey: null, getPrivyIdentityToken: vi.fn() }),
+  useGeoChatAuth: () => ({
+    ready: true,
+    authenticated: mocks.authenticated,
+    accountKey: mocks.authenticated ? 'account' : null,
+    getPrivyIdentityToken: vi.fn(),
+  }),
 }));
 vi.mock('~/core/debates/debate-gateway', () => ({
   useDebateGatewaySnapshot: () => ({ status: mocks.gateway }),
   useSpaceChatRoomScope: () => undefined,
 }));
-vi.mock('./api', () => ({ getSpaceChatMessages: mocks.getSpaceChatMessages }));
+vi.mock('./api', () => ({
+  getSpaceChatMessages: mocks.getSpaceChatMessages,
+  postSpaceChatMessage: mocks.postSpaceChatMessage,
+}));
 
 const { useSpaceChatRoom } = await import('./hooks');
 
@@ -50,6 +60,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   cleanup();
+  mocks.authenticated = false;
   vi.useRealTimers();
 });
 
@@ -68,5 +79,26 @@ describe('useSpaceChatRoom signed out', () => {
     await vi.advanceTimersByTimeAsync(30_000);
     const full = mocks.getSpaceChatMessages.mock.calls.slice(2).filter(call => call[1].after === undefined);
     expect(full.length).toBeGreaterThan(0);
+  });
+});
+
+describe('useSpaceChatRoom send', () => {
+  it('resends a failed draft with its nonce, and a new draft with a new one', async () => {
+    mocks.authenticated = true;
+    mocks.gateway = 'ready';
+    mocks.postSpaceChatMessage.mockRejectedValueOnce(new Error('network')).mockImplementation(async (_room, body) => ({
+      ...message(9),
+      client_nonce: body.client_nonce,
+    }));
+    const { result } = renderHook(() => useSpaceChatRoom(ROOM), { wrapper });
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+
+    await expect(result.current.send('hello', null)).rejects.toThrow('network');
+    await result.current.send('hello', null);
+    await result.current.send('another', null);
+    const nonces = mocks.postSpaceChatMessage.mock.calls.map(call => call[1].client_nonce);
+    expect(nonces[1]).toBe(nonces[0]);
+    expect(nonces[2]).not.toBe(nonces[0]);
+    mocks.gateway = 'idle';
   });
 });

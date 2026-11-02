@@ -31,6 +31,8 @@ export type SpaceChatMessage = {
   deleted_at: string | null;
   /** Absent from a geo-chat that predates reactions. */
   reactions?: SpaceChatReaction[];
+  /** Orders reaction changes on this message; absent from a geo-chat without it. */
+  reaction_version?: number;
 };
 
 export type SpaceChatPage = {
@@ -117,8 +119,14 @@ export function deleteSpaceChatMessage(messageId: string, auth: SpaceChatAuth) {
 }
 
 export function setSpaceChatReaction(messageId: string, value: string, added: boolean, auth: SpaceChatAuth) {
-  return geoChatRequest<{ reaction: { message_id: string; user_id: string; value: string }; count: number }>(
-    `/messages/${encodeURIComponent(messageId)}/reactions`,
-    { ...writeOptions(auth), method: added ? 'PUT' : 'DELETE', body: { value } }
-  );
+  return geoChatRequest<{
+    reaction: { message_id: string; user_id: string; value: string };
+    count: number;
+    /** The message's `reaction_version` after the request; absent from a geo-chat without it. */
+    version?: number;
+  }>(`/messages/${encodeURIComponent(messageId)}/reactions`, {
+    ...writeOptions(auth),
+    method: added ? 'PUT' : 'DELETE',
+    body: { value },
+  });
 }

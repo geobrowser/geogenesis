@@ -39,14 +39,24 @@ export function sameMessageId(a: string, b: string) {
   return dashlessId(a) === dashlessId(b);
 }
 
-/** Of two copies of one message, the later: a delete beats everything, then the later edit. */
+const reactionVersion = (message: SpaceChatMessage) => message.reaction_version ?? 0;
+
+/**
+ * Of two copies of one message, the later: a delete beats everything, then the later edit.
+ * Reactions come from the higher `reaction_version`, the incoming copy on a tie.
+ */
 function laterCopy(known: SpaceChatMessage, incoming: SpaceChatMessage) {
   if (known.deleted_at || incoming.deleted_at) return known.deleted_at ? known : incoming;
-  if (known.edited_at && (!incoming.edited_at || Date.parse(known.edited_at) > Date.parse(incoming.edited_at))) {
-    // The stored edit is newer; reactions are only ever newer on the incoming copy.
-    return { ...known, reactions: incoming.reactions ?? known.reactions };
-  }
-  return incoming;
+  const knownEditNewer =
+    known.edited_at !== null && (!incoming.edited_at || Date.parse(known.edited_at) > Date.parse(incoming.edited_at));
+  const base = knownEditNewer ? known : incoming;
+  const reactionsFrom = reactionVersion(known) > reactionVersion(incoming) ? known : incoming;
+  if (base === reactionsFrom) return base;
+  return {
+    ...base,
+    reactions: reactionsFrom.reactions ?? known.reactions,
+    reaction_version: reactionsFrom.reaction_version,
+  };
 }
 
 function byIdNewestFirst(a: SpaceChatMessage, b: SpaceChatMessage) {
@@ -149,7 +159,32 @@ export type SpaceChatRoomEvent =
   | { type: 'created'; message: SpaceChatMessage }
   | { type: 'edited'; messageId: string; body: string; editedAt: string }
   | { type: 'deleted'; messageId: string; deletedAt: string }
-  | { type: 'reaction'; messageId: string; userId: string; value: string; count: number; added: boolean };
+  | {
+      type: 'reaction';
+      messageId: string;
+      userId: string;
+      value: string;
+      count: number;
+      added: boolean;
+      /** The message's `reaction_version` after the change; absent from a geo-chat without it. */
+      version?: number;
+    };
+
+type ReactionChange = { value: string; count: number; added: boolean; version?: number };
+
+/**
+ * A reaction change with absolute `count`, applied only above the message's held version (events
+ * arrive out of order), then held. Without a version it always applies.
+ */
+function withReactionChange(message: SpaceChatMessage, change: ReactionChange, own: boolean): SpaceChatMessage {
+  if (message.deleted_at) return message;
+  if (change.version !== undefined && change.version <= reactionVersion(message)) return message;
+  return {
+    ...message,
+    reactions: withReactionCount(message.reactions ?? [], change, own),
+    reaction_version: change.version ?? message.reaction_version,
+  };
+}
 
 /** `viewerId` decides `reacted` on the viewer's own reaction events; every other field is shared. */
 export function withRoomEvent(
@@ -168,15 +203,10 @@ export function withRoomEvent(
       );
     case 'deleted':
       return patchMessage(current, event.messageId, message => redacted(message, event.deletedAt));
-    case 'reaction':
-      return patchMessage(current, event.messageId, message =>
-        message.deleted_at
-          ? message
-          : {
-              ...message,
-              reactions: withReactionCount(message.reactions ?? [], event, viewerId),
-            }
-      );
+    case 'reaction': {
+      const own = viewerId !== null && dashlessId(viewerId) === dashlessId(event.userId);
+      return patchMessage(current, event.messageId, message => withReactionChange(message, event, own));
+    }
   }
 }
 
@@ -186,10 +216,9 @@ export function redacted(message: SpaceChatMessage, deletedAt: string): SpaceCha
 
 function withReactionCount(
   reactions: SpaceChatReaction[],
-  event: { userId: string; value: string; count: number; added: boolean },
-  viewerId: string | null
+  event: { value: string; count: number; added: boolean },
+  own: boolean
 ): SpaceChatReaction[] {
-  const own = viewerId !== null && dashlessId(viewerId) === dashlessId(event.userId);
   const index = reactions.findIndex(reaction => reaction.value === event.value);
   if (event.count <= 0) return index === -1 ? reactions : reactions.filter((_, at) => at !== index);
   if (index === -1) return [...reactions, { value: event.value, count: event.count, reacted: own && event.added }];
@@ -212,9 +241,18 @@ export function withOwnReaction(
     const count = (known?.count ?? 0) + (added ? 1 : -1);
     return {
       ...message,
-      reactions: withReactionCount(reactions, { userId: 'self', value, count, added }, 'self'),
+      reactions: withReactionCount(reactions, { value, count, added }, true),
     };
   });
+}
+
+/** The server's answer to the viewer's own reaction, gated by version like an event. */
+export function withOwnReactionResult(
+  current: SpaceChatState,
+  messageId: string,
+  change: ReactionChange
+): SpaceChatState {
+  return patchMessage(current, messageId, message => withReactionChange(message, change, true));
 }
 
 /** The geo-chat EVENT envelope's `payload` for a room event; `null` when unreadable or unknown. */
@@ -247,6 +285,7 @@ export function parseSpaceChatRoomEvent(payload: unknown): SpaceChatRoomEvent | 
         value: body.value,
         count: body.count,
         added: body.added,
+        ...(typeof body.version === 'number' ? { version: body.version } : {}),
       };
     default:
       return null;
