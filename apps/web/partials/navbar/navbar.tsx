@@ -82,7 +82,7 @@ export function Navbar({
           ) : null}
           {/* The mark holds its size (`shrink-0`) so the squeeze lands on the breadcrumb text. */}
           {hideLogo ? null : (
-            <Link href={NavUtils.toRoot()} className={showBrowseButton ? 'shrink-0 mobile:hidden' : 'shrink-0'}>
+            <Link href={NavUtils.toExplore()} className={showBrowseButton ? 'shrink-0 mobile:hidden' : 'shrink-0'}>
               <GeoLogoLarge />
             </Link>
           )}

@@ -102,6 +102,7 @@ describe('Navbar', () => {
 
     expect(screen.queryByRole('button', { name: 'Open browse menu' })).not.toBeInTheDocument();
     expect(screen.getByRole('link')).not.toHaveClass('mobile:hidden');
+    expect(screen.getByRole('link')).toHaveAttribute('href', '/explore');
   });
 
   it('uses the debate bar on mobile Explore', () => {

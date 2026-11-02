@@ -77,9 +77,9 @@ export function useGeoLogoutCleanup() {
         setSelectedTopicIds([]);
         setFeedTopics(NO_HELD_FEED_TOPICS);
         setNameOnly(false);
-        // Bulletproof reset — see the doc comment. `/root` is the public home and
+        // Bulletproof reset — see the doc comment. `/explore` is the public home and
         // drops the user out of any onboarding/pending context they logged out of.
-        window.location.assign('/root');
+        window.location.assign('/explore');
       }
     },
   });

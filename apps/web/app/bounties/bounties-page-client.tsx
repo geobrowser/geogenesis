@@ -17,7 +17,7 @@ export function BountiesPageClient() {
 
   // Soft gate (per-browser feature flag): defence in depth against a direct URL.
   React.useEffect(() => {
-    if (!enabled) router.replace('/root');
+    if (!enabled) router.replace('/explore');
   }, [enabled, router]);
 
   if (!enabled) return null;

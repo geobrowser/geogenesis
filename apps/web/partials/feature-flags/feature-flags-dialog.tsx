@@ -23,7 +23,7 @@ export function FeatureFlagsDialog({ defaultShortcutOpen = false }: { defaultSho
 
   const close = React.useCallback(() => {
     setShortcutOpen(false);
-    if (routeOpen) router.replace('/root');
+    if (routeOpen) router.replace('/explore');
   }, [routeOpen, router]);
 
   React.useEffect(() => {

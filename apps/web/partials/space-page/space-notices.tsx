@@ -463,7 +463,7 @@ const CopyInviteLink = () => {
 
   const onCopyInviteLink = async () => {
     try {
-      await navigator.clipboard.writeText(`https://geobrowser.com/root`);
+      await navigator.clipboard.writeText(`https://geobrowser.com/explore`);
       setHasCopiedId(true);
       setTimeout(() => {
         setHasCopiedId(false);
