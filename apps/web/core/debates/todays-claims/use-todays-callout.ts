@@ -37,10 +37,11 @@ const NO_IDS: string[] = [];
  * GEO-3498. The daily Today's claims callout in the debates side panel.
  *
  * The day's set is taken once, the first time every read it is made from has settled: up to
- * `CALLOUT_MAX_CLAIMS` of today's agenda claims the viewer has not answered, highest-ranked first
- * and varied by topic and space (`pickCalloutClaims`). It is stored per account with the agenda
- * day, so the set outlives the panel closing, a reload and other tabs, and a newer agenda day starts a new one — which
- * is also what brings a dismissed callout back. Once nothing is left to ask, the end card stays
+ * `CALLOUT_MAX_CLAIMS` of today's agenda claims the viewer has not answered, topped up from spaces'
+ * older current agendas only when today's run short; from the viewer's own spaces first (GEO-3547),
+ * highest-ranked first and varied by topic and space (`pickCalloutClaims`). It is stored per
+ * account with the agenda day, so the set outlives the panel closing, a reload and other tabs, and
+ * a newer agenda day starts a new one — which is also what brings a dismissed callout back. Once nothing is left to ask, the end card stays
  * until dismissed or until the panel closes, and isn't shown again that day.
  *
  * Signed out there is nothing: the reads are all held back.
@@ -71,7 +72,7 @@ export function useTodaysCallout() {
     current === null;
 
   // Member spaces first, which needs the viewer's own space: until it is known, nobody is a member
-  // of anything and the order would be taken without it.
+  // of anything and the set would be taken without it.
   const agendaSpaceIds = React.useMemo(() => agendas.spaces.map(space => space.spaceId), [agendas.spaces]);
   const { personalSpaceId, isLoading: personalSpaceLoading } = usePersonalSpaceId();
   const membership = useDebatersSpaceMembership(
@@ -144,15 +145,18 @@ export function useTodaysCallout() {
     if (!choosing || day === null || ordered.length === 0 || rows.isLoading || scores.isLoading) return;
     const answerable = ordered.filter(claim => answersReadyIn(claim.spaceId));
     if (answerable.length === 0) return;
-    const claims = pickCalloutClaims(answerable, answeredInRows, claimId =>
-      scores.failed ? undefined : scores.facts.get(uuidToHex(claimId))
+    const claims = pickCalloutClaims(
+      answerable,
+      answeredInRows,
+      claimId => (scores.failed ? undefined : scores.facts.get(uuidToHex(claimId))),
+      spaceId => membership.debatersIn(spaceId) > 0
     );
     // A set already taken for this day or a later one stays: another tab, holding newer agendas
     // than this one's cache, may have taken it, and replacing it would lose that day's progress.
     writeMine(previous =>
       previous && previous.day >= day ? previous : { day, claims, answered: [], skipped: [], dismissed: false }
     );
-  }, [answeredInRows, answersReadyIn, choosing, day, ordered, rows.isLoading, scores, writeMine]);
+  }, [answeredInRows, answersReadyIn, choosing, day, membership, ordered, rows.isLoading, scores, writeMine]);
 
   const step = React.useMemo(() => (current ? calloutStep(current, answeredInRows) : null), [answeredInRows, current]);
 
