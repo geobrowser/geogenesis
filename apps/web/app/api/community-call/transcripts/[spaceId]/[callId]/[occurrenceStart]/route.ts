@@ -9,7 +9,7 @@
  * RAPPORTEUR_BACKEND_URL (server-only) for local testing against a different deploy.
  */
 
-const DEFAULT_RAPPORTEUR_BACKEND_URL = 'https://rapporteur-staging-testnet.up.railway.app';
+const DEFAULT_RAPPORTEUR_BACKEND_URL = 'https://curator-rapporteur-testnet.geobrowser.io';
 
 const STRIPPED_REQUEST_HEADERS = new Set(['host', 'connection', 'content-length', 'cookie']);
 const STRIPPED_RESPONSE_HEADERS = new Set([

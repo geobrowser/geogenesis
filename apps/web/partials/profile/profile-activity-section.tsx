@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { ActionContextProvider } from '~/core/action-context-provider';
 import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import { DebatePlaybackGate } from '~/core/debates/debate-playback-gate';
 import { type ExploreFeedRow, toExploreFeedItem } from '~/core/explore/explore-card-item';
@@ -109,31 +110,18 @@ export function ProfileActivitySection({
    */
   className?: string;
 }) {
-  // A failed kind is available: it has something to say, even if the something
-  // is that it could not be read.
-  const available = React.useMemo(() => kinds.filter(kind => kind.rows.length > 0 || kind.isError), [kinds]);
-  // Whether the card is still assembling. Read twice: the skeleton below waits on
-  // it, and so does the default — see `defaultKey`.
+  // Keep pending kinds in their declared order so the first response cannot choose the tab.
+  // Only a settled empty kind disappears; errors remain available for their message.
+  const available = React.useMemo(
+    () => kinds.filter(kind => kind.isLoading || kind.rows.length > 0 || kind.isError),
+    [kinds]
+  );
+  // Freeze the default once all kinds have settled; later refetches must not change it.
   const isLoading = kinds.some(kind => kind.isLoading);
 
-  /**
-   * The lead kind: the first that has a *settled* record to show.
-   *
-   * Settled, not merely non-empty, because the rows can arrive before their order
-   * does. `usePersonDebates` hands the profile its debates a round trip before
-   * `useEntityScores` says how to rank them, and the caller folds that second wait
-   * into `isLoading` precisely so a row about to reshuffle is not put up as though
-   * it were final. Preferring a settled kind here honours that.
-   *
-   * A preference, not a guarantee. Where nothing available has settled — one kind,
-   * rows in, ranks still out — the fallback puts it up unsettled, because the
-   * alternative is holding the card blank behind the slower request, which is the
-   * one thing the skeleton gate below is written not to do. That case paints once
-   * and reshuffles, exactly as it did before this change. Closing it means moving
-   * when the card first paints, which is the gate's decision to make and not this
-   * line's.
-   */
-  const lead = available.find(kind => !kind.isLoading) ?? available[0];
+  // Debates comes first on every shared surface. Its gallery waits for rows and ranking to
+  // settle, while the toggle keeps the same selection throughout that wait.
+  const lead = available[0];
 
   /** The reader's own pick, and only that. Null until they make one. */
   const [pickedKey, setPickedKey] = React.useState<string | null>(null);
@@ -183,14 +171,18 @@ export function ProfileActivitySection({
   const selected =
     available.find(kind => kind.key === pickedKey) ?? available.find(kind => kind.key === defaultKey) ?? lead;
 
+  // Wait for the first ranked view, then keep that gallery mounted if new rows trigger another
+  // ranking request. Replacing it with a skeleton would discard scroll and playback ownership.
+  const [loadedGalleryKey, setLoadedGalleryKey] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    if (selected && !selected.isLoading && selected.rows.length > 0) setLoadedGalleryKey(selected.key);
+  }, [selected]);
+  const showGalleryLoading = selected?.isLoading && (loadedGalleryKey !== selected.key || selected.rows.length === 0);
+
   const { sectionRef, reserveRef, prepareSwitch } = useMobileActivityHeightReserve(selected?.key);
   // The gallery measures whether its row can scroll; the arrows live in the header, so it reports
   // up. Null while no gallery is mounted — a kind that failed to load has no row to step through.
   const [navigation, setNavigation] = React.useState<GalleryNavigation | null>(null);
-
-  // Reserve the section while its first usable record is on the way. Once either kind resolves,
-  // draw it immediately rather than holding the whole card behind the slower request.
-  if (available.length === 0 && isLoading) return <ProfileActivitySkeleton className={className} />;
 
   // Nothing at all once both kinds have settled empty. Most accounts have never been in a debate,
   // and a permanent heading over blank space would imply that content failed to render.
@@ -252,7 +244,11 @@ export function ProfileActivitySection({
                 <span className="relative -top-px">
                   {kind.label}
                   <span className={cx('ml-1.5 tabular-nums', isSelected ? 'text-white/70' : 'text-grey-03')}>
-                    {kind.isCountUnavailable ? '—' : kind.total.toLocaleString()}
+                    {kind.isCountUnavailable
+                      ? '—'
+                      : kind.isLoading && kind.total === 0
+                        ? '…'
+                        : kind.total.toLocaleString()}
                   </span>
                 </span>
               </button>
@@ -264,7 +260,7 @@ export function ProfileActivitySection({
            * full tab. Both belong to the selected kind — see `navigation`.
            */}
           <div className="ml-auto flex shrink-0 items-center gap-2">
-            {selected.rows.length > 0 ? (
+            {selected.isLoading || selected.rows.length > 0 ? (
               // The data block galleries' own arrows (`table-pagination`), 12px apart as they are
               // there: dark when there is somewhere to go, grey at the row's end.
               <span className="mr-1 flex items-center gap-3">
@@ -276,7 +272,9 @@ export function ProfileActivitySection({
           </div>
         </header>
 
-        {selected.isError && selected.rows.length === 0 ? (
+        {showGalleryLoading ? (
+          <ActivityGallerySkeleton />
+        ) : selected.isError && selected.rows.length === 0 ? (
           /*
            * No retry here on purpose. This card is a summary; the tab its count
            * links to holds the authoritative list and offers the retry, so a
@@ -314,15 +312,9 @@ export function ProfileActivitySection({
   );
 }
 
-function ProfileActivitySkeleton({ className }: { className?: string }) {
+function ActivityGallerySkeleton() {
   return (
-    <section aria-label="Loading activity" aria-busy="true" className={cx('flex flex-col', className)}>
-      {/* Drawn here too, so the heading is in the tree before the rows are, not only after. */}
-      <h3 className="sr-only">Activity</h3>
-      <header className="flex items-center gap-2 pb-3">
-        <Skeleton className="h-7 w-24 rounded-full" />
-        <Skeleton className="h-7 w-20 rounded-full" />
-      </header>
+    <div role="status" aria-label="Loading activity" aria-busy="true">
       {/*
        * `py-2`, the gallery scroller's own padding — and no footer under it. The real section has
        * had neither a bottom rule nor a centered "see all" since that control moved up into the
@@ -332,7 +324,7 @@ function ProfileActivitySkeleton({ className }: { className?: string }) {
       <div className="py-2">
         <Skeleton className="h-44 w-full rounded-lg" />
       </div>
-    </section>
+    </div>
   );
 }
 
@@ -613,8 +605,9 @@ function ActivityGallery({
           ref={scrollerRef}
           className="no-scrollbar flex snap-x snap-mandatory items-start gap-4 overflow-x-auto py-2"
         >
-          {shown.map(row => (
+          {shown.map((row, index) => (
             <GalleryCard
+              itemPosition={index + 1}
               key={`${row.entityId}-${row.spaceId}`}
               row={row}
               label={spaceLabel(labelsById, row.spaceId)}
@@ -766,7 +759,7 @@ function useActivityGallery(rows: ExploreFeedRow[]) {
       const scroller = scrollerRef.current;
       if (!scroller) return;
       const firstCard = scroller.querySelector<HTMLElement>('[data-activity-card]');
-      const cardWidth = firstCard?.getBoundingClientRect().width || 260;
+      const cardWidth = firstCard?.getBoundingClientRect().width || 300;
       // `gap-4` is 16px. Move one complete card plus that gap so the next snap point lands flush.
       scroller.scrollBy({ left: direction * (cardWidth + 16), behavior: 'smooth' });
     },
@@ -808,15 +801,15 @@ function useActivityGallery(rows: ExploreFeedRow[]) {
 /**
  * One card in the row.
  *
- * Debate cards stay at `260px`, leaving almost three in view at the profile's
- * 750px content width. Claim cards use `300px`: after the card's border and 24px
- * horizontal padding, their 274px pill row clears the 272px container-query threshold and
- * keeps both response buttons beside each other.
+ * Both kinds use `300px`: after the card's border and 24px horizontal padding,
+ * their 274px pill row has room for both response labels. Debate cards own their
+ * frame, just as claim cards do; an extra gallery frame would spend that room twice.
  *
  * Narrow enough that the next card is visibly cut off, which is what says the
  * row scrolls without a control saying so.
  */
 function GalleryCard({
+  itemPosition,
   row,
   label,
   response,
@@ -825,6 +818,7 @@ function GalleryCard({
   onDebatePlaybackAvailabilityChange,
   debateEndSlot,
 }: {
+  itemPosition: number;
   row: ExploreFeedRow;
   label: SpaceLabel | undefined;
   response: ClaimResponse | undefined;
@@ -843,42 +837,31 @@ function GalleryCard({
   const isClaim = isClaimRow(row);
 
   return (
-    <div
-      data-activity-card
-      data-activity-debate-id={isClaim ? undefined : row.entityId}
-      className={cx(
-        // `cqw`, not `vw`. The viewport is the wrong ruler for a card in a side
-        // panel: the panel is a column of its own width inside a window that may
-        // be three times wider, so `84vw` there is not 84% of anything the reader
-        // can see. The wrapper around the scroller establishes the container this
-        // measures — see `ActivityGallery`.
-        // 260 + 16px gaps shows 2.7 debate cards in the profile's content column. Claims need 300px
-        // to preserve two response columns after the card's padding. `84cqw` remains the phone
-        // ceiling, where the response row may stack rather than overflow.
-        isClaim ? 'w-[min(300px,84cqw)]' : 'w-[min(260px,84cqw)]',
-        'shrink-0 snap-start',
-        // The lobby card brings its own outline; the feed's card does not, and
-        // draws a rule underneath itself to separate it from the next card
-        // *down* — which in a row is a line under nothing.
-        !isClaim && 'rounded-lg border border-grey-02 bg-white px-3 [&>*]:border-b-0'
-      )}
-    >
-      {isClaim ? (
-        <GalleryClaimCard row={row} response={response} personName={personName} />
-      ) : (
-        // The Join button is hidden: this is a record being read, not a place to
-        // be recruited into.
-        <ExploreFeedCard
-          item={toExploreFeedItem(row, label)}
-          hideJoinButton
-          titleOpensSidePanel
-          compactDebateChrome
-          onDebatePlaybackRequest={onDebatePlaybackRequest}
-          onDebatePlaybackAvailabilityChange={onDebatePlaybackAvailabilityChange}
-          debateEndSlot={debateEndSlot?.(toExploreFeedItem(row, label))}
-        />
-      )}
-    </div>
+    <ActionContextProvider value={{ list_id: 'profile_activity', item_position: itemPosition }}>
+      <div
+        data-activity-card
+        data-activity-debate-id={isClaim ? undefined : row.entityId}
+        // Measure the visible gallery, including inside a side panel, rather than the viewport.
+        // The next card still peeks into view; the card itself owns its frame and padding.
+        className="w-[min(300px,84cqw)] shrink-0 snap-start"
+      >
+        {isClaim ? (
+          <GalleryClaimCard row={row} response={response} personName={personName} />
+        ) : (
+          // The Join button is hidden: this is a record being read, not a place to
+          // be recruited into.
+          <ExploreFeedCard
+            item={toExploreFeedItem(row, label)}
+            hideJoinButton
+            titleOpensSidePanel
+            compactDebateChrome
+            onDebatePlaybackRequest={onDebatePlaybackRequest}
+            onDebatePlaybackAvailabilityChange={onDebatePlaybackAvailabilityChange}
+            debateEndSlot={debateEndSlot?.(toExploreFeedItem(row, label))}
+          />
+        )}
+      </div>
+    </ActionContextProvider>
   );
 }
 

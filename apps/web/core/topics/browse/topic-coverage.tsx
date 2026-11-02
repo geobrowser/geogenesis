@@ -78,8 +78,13 @@ export function TopicCoverage({ topicId, spaceId }: { topicId: string; spaceId: 
           that from membership data this query has no way to ask for — so rather than render the
           control in a state derived from a default, it isn't offered here. */}
       <div>
-        {items.map(item => (
-          <ExploreFeedCard key={`${item.entityId}-${item.spaceId}`} item={item} hideJoinButton />
+        {items.map((item, index) => (
+          <ExploreFeedCard
+            itemPosition={index + 1}
+            key={`${item.entityId}-${item.spaceId}`}
+            item={item}
+            hideJoinButton
+          />
         ))}
       </div>
       <CursorPager

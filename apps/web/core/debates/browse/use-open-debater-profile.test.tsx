@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   openSidePanel: vi.fn(),
   sidePanelTarget: null as null | { entityId: string },
   spaces: new Map<string, { topicId: string | null; entity: { id: string } }>(),
+  spaceReads: [] as (string | undefined)[],
 }));
 
 vi.mock('~/core/hooks/use-entity-side-panel', () => ({
@@ -16,6 +17,7 @@ vi.mock('~/core/hooks/use-entity-side-panel', () => ({
 
 vi.mock('~/core/hooks/use-space', () => ({
   useSpace: (spaceId?: string) => {
+    mocks.spaceReads.push(spaceId);
     const space = spaceId ? (mocks.spaces.get(spaceId) ?? null) : null;
     return { space, isLoading: space === null };
   },
@@ -64,6 +66,7 @@ beforeEach(() => {
   mocks.openSidePanel.mockReset();
   mocks.sidePanelTarget = null;
   mocks.spaces.clear();
+  mocks.spaceReads.length = 0;
 });
 
 describe('useOpenDebaterProfile', () => {
@@ -164,6 +167,23 @@ describe('useOpenDebaterProfile', () => {
  * which is how people read a graph" — and this hook was preventing the default on every click, so the
  * anchors it was newly attached to could not be opened any other way.
  */
+describe('useOpenDebaterProfile with lazy', () => {
+  it('reads no space until clicked, then opens the profile once it resolves', () => {
+    mocks.spaces.set(PERSONAL_SPACE_ID, { topicId: TOPIC_ENTITY_ID, entity: { id: PAGE_ENTITY_ID } });
+    const { result } = renderHook(() => useOpenDebaterProfile(PERSONAL_SPACE_ID, { lazy: true }));
+
+    expect(mocks.spaceReads.every(read => read === undefined)).toBe(true);
+
+    click(result);
+
+    expect(mocks.spaceReads.at(-1)).toBe(PERSONAL_SPACE_ID);
+    expect(mocks.openSidePanel).toHaveBeenCalledOnce();
+    expect(mocks.openSidePanel).toHaveBeenCalledWith(TOPIC_ENTITY_ID, PERSONAL_SPACE_ID, false, {
+      forceRequestedSpace: true,
+    });
+  });
+});
+
 describe("useOpenDebaterProfile and the browser's own click", () => {
   beforeEach(() => {
     mocks.spaces.set(PERSONAL_SPACE_ID, { topicId: TOPIC_ENTITY_ID, entity: { id: PAGE_ENTITY_ID } });

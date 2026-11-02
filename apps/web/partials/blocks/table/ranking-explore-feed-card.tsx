@@ -7,13 +7,14 @@ import { ExploreFeedCard } from '~/partials/explore/explore-feed-card';
 import { useBlockExploreFeedItem } from './use-block-explore-feed-item';
 
 type Props = {
+  itemPosition?: number;
   entityId: string;
   entitySpaceId: string;
   blockSpaceId: string;
   entry: RankingEntryDisplay;
 };
 
-export function RankingExploreFeedCard({ entityId, entitySpaceId, blockSpaceId, entry }: Props) {
+export function RankingExploreFeedCard({ entityId, entitySpaceId, blockSpaceId, entry, itemPosition }: Props) {
   const item = useBlockExploreFeedItem({
     rowEntityId: entityId,
     entitySpaceId,
@@ -25,5 +26,13 @@ export function RankingExploreFeedCard({ entityId, entitySpaceId, blockSpaceId, 
   });
   const hideSpaceLink = entitySpaceId === blockSpaceId;
 
-  return <ExploreFeedCard item={item} hideSpaceLink={hideSpaceLink} hideJoinButton />;
+  return (
+    <ExploreFeedCard
+      itemPosition={itemPosition}
+      listId="ranking_entries"
+      item={item}
+      hideSpaceLink={hideSpaceLink}
+      hideJoinButton
+    />
+  );
 }

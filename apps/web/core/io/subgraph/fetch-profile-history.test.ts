@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DESCRIPTION_PROPERTY } from '~/core/profile/history-ontology';
 import { TAGLINE_PROPERTY } from '~/core/profile/profile-ontology';
 
-import { fetchProfileHistory } from './fetch-profile-history';
+import { fetchProfileHistory, loadProfileHistory } from './fetch-profile-history';
 
 const graphqlMock = vi.fn();
 
@@ -73,5 +73,31 @@ describe('fetchProfileHistory', () => {
       tagline: null,
       description: null,
     });
+  });
+});
+
+describe('loadProfileHistory', () => {
+  beforeEach(() => graphqlMock.mockReset());
+
+  it('sends the histories asked for in one tick as one aliased query', async () => {
+    const OTHER_ID = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+    graphqlMock.mockReturnValue(
+      Effect.succeed({
+        p0: { tagline: [{ text: 'First' }], description: [], employment: [], education: [] },
+        p1: { tagline: [{ text: 'Second' }], description: [], employment: [], education: [] },
+      })
+    );
+
+    const [first, second] = await Promise.all([
+      loadProfileHistory(ENTITY_ID, SPACE_ID),
+      loadProfileHistory(OTHER_ID, SPACE_ID),
+    ]);
+
+    expect(graphqlMock).toHaveBeenCalledTimes(1);
+    const query = (graphqlMock.mock.calls[0]?.[0] as { query: string }).query;
+    expect(query).toMatch(new RegExp(`p0:\\s*entity\\(id: "${ENTITY_ID}"\\)`));
+    expect(query).toMatch(new RegExp(`p1:\\s*entity\\(id: "${OTHER_ID}"\\)`));
+    expect(first.tagline).toBe('First');
+    expect(second.tagline).toBe('Second');
   });
 });

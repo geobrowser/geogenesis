@@ -5,7 +5,7 @@ import { DOCUMENTATION_SPACE_ID, PLACEHOLDER_SPACE_IMAGE } from '~/core/constant
 import { AbortError } from '~/core/io/subgraph/errors';
 import type { FeaturedSpace } from '~/core/io/subgraph/fetch-featured-spaces';
 
-import { fetchBrowseSidebarData } from './fetch-browse-sidebar-data';
+import { browseSidebarVisibleSpaces, fetchBrowseSidebarData } from './fetch-browse-sidebar-data';
 
 const mocks = vi.hoisted(() => ({
   fetchEditorSpaceIds: vi.fn(),
@@ -140,5 +140,19 @@ describe('fetchBrowseSidebarData', () => {
     mocks.fetchFeaturedSpaces.mockRejectedValue(abort);
 
     await expect(fetchBrowseSidebarData(null)).rejects.toBe(abort);
+  });
+});
+
+describe('browseSidebarVisibleSpaces', () => {
+  const row = (id: string, name = id) => ({ id, name, image: null });
+
+  it('lists featured, then editor, then member spaces, each once whatever its id spelling', () => {
+    const spaces = browseSidebarVisibleSpaces({
+      featured: [row('aa-bb', 'Featured')],
+      editorOf: [row('cc'), row('AABB', 'Featured again')],
+      memberOf: [row('cc'), row('dd')],
+    });
+
+    expect(spaces.map(space => space.name)).toEqual(['Featured', 'cc', 'dd']);
   });
 });

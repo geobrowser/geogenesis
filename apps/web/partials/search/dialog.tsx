@@ -1,6 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import * as React from 'react';
 
 import cx from 'classnames';
@@ -12,6 +12,7 @@ import { useFetchNextPageOnScroll } from '~/core/hooks/use-fetch-next-page-on-sc
 import { useKey } from '~/core/hooks/use-key';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSearch } from '~/core/hooks/use-search';
+import { useSearchResultAction } from '~/core/hooks/use-search-result-action';
 import { useSpace } from '~/core/hooks/use-space';
 import { useSpacesWhereMember } from '~/core/hooks/use-spaces-where-member';
 import { EntityId } from '~/core/io/substream-schema';
@@ -26,8 +27,9 @@ import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { LeftArrowLong } from '~/design-system/icons/left-arrow-long';
 import { Search } from '~/design-system/icons/search';
 import { Input } from '~/design-system/input';
-import { ResizableContainer } from '~/design-system/resizable-container';
-import { Toggle } from '~/design-system/toggle';
+import { useElevatedPopoverPortal } from '~/design-system/use-elevated-popover-portal';
+
+import { AdvancedSearchFilters, type FacetScope, type SearchFilterTag } from './advanced-search-filters';
 
 type Props = {
   open: boolean;
@@ -52,6 +54,15 @@ const readCanonicalOnly = (): boolean => {
   }
 };
 
+const persistCanonicalOnly = (canonicalOnly: boolean) => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(SEARCH_CANONICAL_ONLY_KEY, String(canonicalOnly));
+  } catch {}
+};
+
+type SearchScope = { kind: 'canonical' } | { kind: 'all' } | { kind: 'space'; id: string };
+
 export const SearchDialog = ({ open, onDone }: Props) => {
   if (!open) return null;
 
@@ -59,47 +70,86 @@ export const SearchDialog = ({ open, onDone }: Props) => {
 };
 
 const SearchDialogComponent = ({ open, onDone }: Props) => {
+  const trackSelection = useSearchResultAction({ overlay: 'modal' });
   const router = useRouter();
-  const [canonicalOnly, setCanonicalOnly] = useState<boolean>(readCanonicalOnly);
+  const [scope, setScope] = useState<SearchScope>(() =>
+    readCanonicalOnly() ? { kind: 'canonical' } : { kind: 'all' }
+  );
   const [isShowingAdvanced, setIsShowingAdvanced] = useState<boolean>(false);
-  // Explicit `true` (not just omitted) when off — useSearch uses this to tell
-  // "user asked for unrestricted search" apart from "caller has no opinion",
-  // and drops the canonical-plus-scoped-spaces eligibility filter accordingly.
-  const autocomplete = useSearch({
+
+  const [filterTypeIds, setFilterTypeIds] = useState<string[]>([]);
+  const [filterTags, setFilterTags] = useState<SearchFilterTag[]>([]);
+
+  const [filterMenuOpen, setFilterMenuOpen] = useState(false);
+
+  const filterPopoverHost = useElevatedPopoverPortal();
+
+  const selectedSpaceId = scope.kind === 'space' ? scope.id : null;
+  const canonicalOnly = scope.kind === 'canonical';
+  const includeNonCanonical = scope.kind !== 'canonical';
+
+  const filterByTypes = filterTypeIds.length > 0 ? filterTypeIds : undefined;
+  const filterByTagIds = useMemo(
+    () => (filterTags.length > 0 ? filterTags.map(tag => tag.id) : undefined),
+    [filterTags]
+  );
+
+  const search = useSearch({
     enabled: open,
-    includeNonCanonical: canonicalOnly ? false : true,
+    includeNonCanonical,
+    filterBySpace: selectedSpaceId ?? undefined,
     analyticsSurface: 'global',
+    filterByTypes,
+    filterByTags: filterByTagIds,
   });
-  const { fetchNextPage, hasNextPage, isFetchingNextPage } = autocomplete;
+
+  const { fetchNextPage, hasNextPage, isFetchingNextPage, onQueryChange } = search;
+
+  const facetScope: FacetScope = selectedSpaceId
+    ? { mode: 'space', spaceId: selectedSpaceId }
+    : { mode: 'global', includeNonCanonical };
+
+  const toggleFilterType = useCallback((id: string) => {
+    setFilterTypeIds(prev => (prev.includes(id) ? prev.filter(typeId => typeId !== id) : [...prev, id]));
+  }, []);
+  const clearFilterTypes = useCallback(() => setFilterTypeIds([]), []);
+  const toggleSpaceSelected = useCallback((id: string) => {
+    // Picking a space replaces the current one; clearing it returns to Canonical only, not an
+    // unscoped "All spaces".
+    setScope(prev => (prev.kind === 'space' && prev.id === id ? { kind: 'canonical' } : { kind: 'space', id }));
+  }, []);
+  const addFilterTag = useCallback((tag: SearchFilterTag) => {
+    setFilterTags(prev => (prev.some(existing => existing.id === tag.id) ? prev : [...prev, tag]));
+  }, []);
+  const removeFilterTag = useCallback((id: string) => {
+    setFilterTags(prev => prev.filter(tag => tag.id !== id));
+  }, []);
 
   const toggleCanonicalOnly = useCallback(() => {
-    setCanonicalOnly(prev => {
-      const next = !prev;
-      if (typeof window !== 'undefined') {
-        try {
-          window.localStorage.setItem(SEARCH_CANONICAL_ONLY_KEY, String(next));
-        } catch {
-          // Quota or blocked site data — the toggle still works, it just won't persist.
-        }
-      }
+    setScope(prev => {
+      const next: SearchScope = prev.kind === 'canonical' ? { kind: 'all' } : { kind: 'canonical' };
+      persistCanonicalOnly(next.kind === 'canonical');
       return next;
     });
   }, []);
+
   const { hydrate } = useSyncEngine();
 
   const [selectedIndex, setSelectedIndex] = useState<number>(0);
   const [openSpacesIndex, setOpenSpacesIndex] = useState<number | null>(null);
   const [isCreatingNewEntity, setIsCreatingNewEntity] = useState<boolean>(false);
-  const selectedEntity = openSpacesIndex !== null ? autocomplete.results[openSpacesIndex] : null;
+  const selectedEntity = openSpacesIndex !== null ? search.results[openSpacesIndex] : null;
 
   const handleOpenChange = useCallback(() => {
-    autocomplete.onQueryChange('');
+    onQueryChange('');
     setOpenSpacesIndex(null);
     setIsCreatingNewEntity(false);
+    setFilterTypeIds([]);
+    setFilterTags([]);
     onDone();
-  }, [autocomplete, onDone]);
+  }, [onQueryChange, onDone]);
 
-  const isValidEntityId = validateEntityId(autocomplete.query);
+  const isValidEntityId = validateEntityId(search.query);
 
   let view: View = 'selectEntity';
   if (openSpacesIndex !== null && selectedEntity) {
@@ -108,23 +158,30 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
     view = 'createEntity';
   }
 
-  const hasResults = autocomplete.results.length > 0;
+  useEffect(() => {
+    if (!isShowingAdvanced) setFilterMenuOpen(false);
+  }, [isShowingAdvanced]);
+
+  const hasResults = search.results.length > 0;
   const resultsScrollRef = React.useRef<HTMLUListElement | null>(null);
+
   const handleResultsScroll = useFetchNextPageOnScroll<HTMLUListElement>({
-    hasNextPage,
+    hasNextPage: Boolean(hasNextPage && !filterMenuOpen && hasResults && !search.isLoading),
     isFetchingNextPage,
     fetchNextPage,
     scrollRef: resultsScrollRef,
   });
 
-  useKey('Enter', () => {
-    if (!hasResults) return;
+  useKey('Enter', event => {
+    // cmdk handles Enter on its selected item; only handle the input fallback here.
+    if (event.defaultPrevented || !hasResults) return;
 
-    const result = autocomplete.results[selectedIndex];
+    const result = search.results[selectedIndex];
 
     if (result) {
+      trackSelection(result, selectedIndex, 'search_results');
       router.push(NavUtils.toEntity(result.spaces[0].spaceId, result.id));
-      autocomplete.onQueryChange('');
+      onQueryChange('');
       setOpenSpacesIndex(null);
       onDone();
     }
@@ -134,41 +191,52 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
     if (!hasResults) return;
 
     event.preventDefault();
-    setSelectedIndex(prev => (prev - 1 + autocomplete.results.length) % autocomplete.results.length);
+    setSelectedIndex(prev => (prev - 1 + search.results.length) % search.results.length);
   });
 
   useKey('ArrowDown', event => {
     if (!hasResults) return;
 
     event.preventDefault();
-    setSelectedIndex(prev => (prev + 1) % autocomplete.results.length);
+    setSelectedIndex(prev => (prev + 1) % search.results.length);
   });
+
+  useEffect(() => {
+    setSelectedIndex(0);
+  }, [search.query, filterTypeIds, filterTags, scope]);
+
+  useEffect(() => {
+    setSelectedIndex(prev => (search.results.length === 0 ? prev : prev >= search.results.length ? 0 : prev));
+  }, [search.results.length]);
 
   useEffect(() => {
     if (!hasResults) return;
 
-    const element = document.querySelector(`#search-result-${selectedIndex}`);
+    const list = resultsScrollRef.current;
+    const element = document.getElementById(`search-result-${selectedIndex}`);
+    if (!list || !element) return;
 
-    if (element) {
-      element.scrollIntoView({
-        behavior: 'smooth',
-        block: 'start',
-      });
+    const listRect = list.getBoundingClientRect();
+    const elRect = element.getBoundingClientRect();
+    if (elRect.top < listRect.top) {
+      list.scrollTop -= listRect.top - elRect.top;
+    } else if (elRect.bottom > listRect.bottom) {
+      list.scrollTop += elRect.bottom - listRect.bottom;
     }
   }, [hasResults, selectedIndex]);
 
   return (
-    <Command.Dialog open={open} onOpenChange={handleOpenChange} label="Entity search">
+    <Command.Dialog open={open} onOpenChange={handleOpenChange} label="Entity search" shouldFilter={false}>
       <Dialog.Title className="sr-only">Entity search</Dialog.Title>
       <div className="pointer-events-none fixed inset-0 z-100 flex h-full w-full items-start justify-center">
-        <div className="pointer-events-auto mt-32 w-full max-w-[434px] overflow-hidden rounded-lg border border-grey-02 bg-white shadow-dropdown">
+        <div className="pointer-events-auto mt-32 w-full max-w-[434px] overflow-clip rounded-lg border border-grey-02 bg-white shadow-dropdown">
           <Command.List>
             {view === 'createEntity' && (
               <CreateNewEntityInSpace
-                entityId={autocomplete.query as EntityId}
+                entityId={search.query as EntityId}
                 setIsCreatingNewEntity={setIsCreatingNewEntity}
                 onDone={() => {
-                  autocomplete.onQueryChange('');
+                  onQueryChange('');
                   setIsCreatingNewEntity(false);
                   onDone();
                 }}
@@ -178,7 +246,7 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
               <>
                 <div className="relative border-b border-grey-02 p-1">
                   <AnimatePresence mode="wait">
-                    {autocomplete.isLoading ? (
+                    {search.isLoading ? (
                       <div className="absolute top-[50%] left-4 z-100">
                         <motion.span
                           key="dots"
@@ -206,8 +274,8 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
                   </AnimatePresence>
                   <Input
                     withExternalSearchIcon
-                    onChange={e => autocomplete.onQueryChange(e.currentTarget.value)}
-                    value={autocomplete.query}
+                    onChange={e => onQueryChange(e.currentTarget.value)}
+                    value={search.query}
                   />
                 </div>
                 <div className="w-full">
@@ -224,78 +292,72 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
                       </span>
                     </div>
                   </button>
-                  <ResizableContainer>
-                    {isShowingAdvanced && (
-                      <div className="border-b border-grey-02 px-4 py-2">
-                        <button
-                          type="button"
-                          onClick={toggleCanonicalOnly}
-                          aria-pressed={canonicalOnly}
-                          title="Limit results to the canonical graph plus your spaces. Turn off to search all entities."
-                          className="flex w-full items-center justify-between text-footnoteMedium text-grey-04 transition-colors hover:text-text"
-                        >
-                          <span className="whitespace-nowrap">Canonical only</span>
-                          <Toggle checked={canonicalOnly} />
-                        </button>
-                      </div>
-                    )}
-                  </ResizableContainer>
+                  {isShowingAdvanced ? (
+                    <div className="flex flex-col gap-3 border-b border-grey-02 px-4 py-3">
+                      <AdvancedSearchFilters
+                        canonicalOnly={canonicalOnly}
+                        onToggleCanonicalOnly={toggleCanonicalOnly}
+                        selectedSpaceId={selectedSpaceId}
+                        onToggleSpace={toggleSpaceSelected}
+                        typeIds={filterTypeIds}
+                        onToggleType={toggleFilterType}
+                        onClearTypes={clearFilterTypes}
+                        tags={filterTags}
+                        onAddTag={addFilterTag}
+                        onRemoveTag={removeFilterTag}
+                        facetScope={facetScope}
+                        portalContainer={filterPopoverHost}
+                        onFilterMenuOpenChange={setFilterMenuOpen}
+                      />
+                    </div>
+                  ) : null}
                 </div>
-                <ResizableContainer duration={0.15}>
-                  <ResultsList ref={resultsScrollRef} onScroll={handleResultsScroll}>
-                    {autocomplete.isEmpty ? (
-                      isValidEntityId ? (
-                        <div className="px-2 pb-1">
-                          <EntityIdNotFound setIsCreatingNewEntity={setIsCreatingNewEntity} />
-                        </div>
-                      ) : (
-                        <Command.Empty className="px-2 pb-2">No results found for {autocomplete.query}</Command.Empty>
-                      )
-                    ) : null}
-                    {autocomplete.results.map((result, i) => (
-                      <motion.div
-                        key={result.id}
-                        initial={{ opacity: 0, y: -5 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.02 * i }}
-                        className="border-b border-divider last:border-none"
-                      >
-                        <div>
-                          <Command.Item
-                            onMouseEnter={() => {
-                              router.prefetch(NavUtils.toEntity(result.spaces[0].spaceId, result.id));
-                              hydrate([result.id]);
-                            }}
-                            onSelect={() => {
-                              router.push(NavUtils.toEntity(result.spaces[0].spaceId, result.id));
-                              autocomplete.onQueryChange('');
-                              setOpenSpacesIndex(null);
-                              onDone();
-                            }}
-                          >
-                            <ResultContent
-                              id={`search-result-${i}`}
-                              // The onClick behavior is handled by cmdk.
-                              onClick={() => {}}
-                              // A real destination, so the row can be opened in a new tab, middle
-                              // clicked, or right clicked like any other link (GEO-2701). The same
-                              // one cmdk pushes on a plain click.
-                              href={NavUtils.toEntity(result.spaces[0].spaceId, result.id)}
-                              result={result}
-                              active={i === selectedIndex}
-                              onChooseSpace={() => setOpenSpacesIndex(i)}
-                            />
-                          </Command.Item>
-                        </div>
-                      </motion.div>
-                    ))}
-                    {autocomplete.isFetchingNextPage ? (
-                      <div className="flex items-center justify-center py-2 text-smallButton">
-                        <Dots />
+                <ResultsList ref={resultsScrollRef} onScroll={handleResultsScroll}>
+                  {search.isEmpty ? (
+                    isValidEntityId ? (
+                      <div className="px-2 pb-1">
+                        <EntityIdNotFound setIsCreatingNewEntity={setIsCreatingNewEntity} />
                       </div>
-                    ) : null}
-                  </ResultsList>
-                </ResizableContainer>
+                    ) : (
+                      <Command.Empty className="px-2 pb-2">No results found for {search.query}</Command.Empty>
+                    )
+                  ) : null}
+                  {search.results.map((result, i) => (
+                    <div key={result.id} className="border-b border-divider last:border-none">
+                      <Command.Item
+                        onMouseEnter={() => {
+                          router.prefetch(NavUtils.toEntity(result.spaces[0].spaceId, result.id));
+                          hydrate([result.id]);
+                        }}
+                        onSelect={() => {
+                          trackSelection(result, i, 'search_results');
+                          router.push(NavUtils.toEntity(result.spaces[0].spaceId, result.id));
+                          onQueryChange('');
+                          setOpenSpacesIndex(null);
+                          onDone();
+                        }}
+                      >
+                        <ResultContent
+                          id={`search-result-${i}`}
+                          // The onClick behavior is handled by cmdk.
+                          onClick={() => {}}
+                          // A real destination, so the row can be opened in a new tab, middle
+                          // clicked, or right clicked like any other link (GEO-2701). The same
+                          // one cmdk pushes on a plain click.
+                          href={NavUtils.toEntity(result.spaces[0].spaceId, result.id)}
+                          result={result}
+                          active={i === selectedIndex}
+                          onChooseSpace={() => setOpenSpacesIndex(i)}
+                        />
+                      </Command.Item>
+                    </div>
+                  ))}
+                  {search.isFetchingNextPage ? (
+                    <div className="flex items-center justify-center py-2 text-smallButton">
+                      <Dots />
+                    </div>
+                  ) : null}
+                </ResultsList>
               </>
             )}
             {view === 'selectSpace' && (
@@ -327,8 +389,9 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
                         <div>
                           <Command.Item
                             onSelect={() => {
+                              trackSelection(selectedEntity, i, 'search_spaces');
                               router.push(NavUtils.toEntity(space.spaceId, selectedEntity.id));
-                              autocomplete.onQueryChange('');
+                              onQueryChange('');
                               setOpenSpacesIndex(null);
                               onDone();
                             }}

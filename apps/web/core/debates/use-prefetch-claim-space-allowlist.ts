@@ -22,9 +22,9 @@ import { useBrowseSidebarQuerySource } from '~/core/browse/use-browse-sidebar-ca
  *
  * Called from the debate room rather than from `DebateCoordinator`, which was the obvious home and
  * the wrong one: the coordinator is mounted on *every page in the app*, and reading the sidebar's
- * query source there pulls a smart-account resolver — and with it a `CookiesProvider` requirement —
- * into the graph of every page, for a warm-up most viewers never trigger. The room is already inside
- * those providers, and being in a debate is the signal that matters anyway.
+ * query source there pulls a smart-account resolver into the graph of every page, for a warm-up most
+ * viewers never trigger. The room is already inside the wallet providers, and being in a debate is
+ * the signal that matters anyway.
  *
  * The fetchers are still imported dynamically so the sidebar's loaders stay off the path until a
  * warm-up actually runs.

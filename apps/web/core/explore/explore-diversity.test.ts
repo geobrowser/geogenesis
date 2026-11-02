@@ -4,9 +4,10 @@ import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import { DEBATE_TYPE_ID } from '~/core/debates/ontology';
 
 import {
+  DEFAULT_EXPLORE_TYPE_IDS,
   EPISODE_TYPE_ID,
-  EXPLORE_ENTITY_TYPE_IDS,
   EXPLORE_PAGE_SIZE,
+  FEED_ENTITY_TYPE_IDS,
   NEWS_STORY_TYPE_ID,
   TWEET_TYPE_ID,
 } from './explore-constants';
@@ -65,14 +66,18 @@ describe('exploreItemTypeKey', () => {
     expect(key(item('a', CLAIM_TYPE_ID, EPISODE_TYPE_ID))).toBe(key(item('c', EPISODE_TYPE_ID)));
   });
 
-  it('classifies independently of the order the menu lists types in', () => {
-    // The invariant that keeps the two apart. Claim leads the dropdown so the boxes a reader
-    // arrives with read first; it must still lose classification ties to a more specific type, or
-    // the diversity cap starts extending claim runs instead of breaking them — the exact failure
-    // this module exists to prevent.
-    expect(EXPLORE_ENTITY_TYPE_IDS.indexOf(CLAIM_TYPE_ID)).toBeLessThan(
-      EXPLORE_ENTITY_TYPE_IDS.indexOf(EPISODE_TYPE_ID)
-    );
+  // The Topic feed shares this classifier and still serves News stories, so dropping News from
+  // Explore's whitelist must not move a multi-typed News story into the Claim bucket.
+  it('keeps classifying a Claim that is also a News story as a News story', () => {
+    expect(key(item('a', CLAIM_TYPE_ID, NEWS_STORY_TYPE_ID))).toBe(key(item('b', NEWS_STORY_TYPE_ID)));
+    expect(key(item('a', DEBATE_TYPE_ID, NEWS_STORY_TYPE_ID))).toBe(key(item('b', NEWS_STORY_TYPE_ID)));
+  });
+
+  it('classifies independently of the order the type list declares', () => {
+    // The invariant that keeps the two apart. Claim sits ahead of Episode in the list; it must
+    // still lose classification ties to a more specific type, or the diversity cap starts extending
+    // claim runs instead of breaking them — the exact failure this module exists to prevent.
+    expect(FEED_ENTITY_TYPE_IDS.indexOf(CLAIM_TYPE_ID)).toBeLessThan(FEED_ENTITY_TYPE_IDS.indexOf(EPISODE_TYPE_ID));
     expect(key(item('a', CLAIM_TYPE_ID, EPISODE_TYPE_ID))).toBe(key(item('b', EPISODE_TYPE_ID)));
   });
 
@@ -481,7 +486,11 @@ describe('applyTargetMix', () => {
 });
 
 describe('targetMixAppliesTo', () => {
-  it('applies to the default selection', () => {
+  it('applies to the Explore default selection', () => {
+    expect(targetMixAppliesTo(DEFAULT_EXPLORE_TYPE_IDS)).toBe(true);
+  });
+  // Explore no longer serves News story, but the Topic feed shares this mix and still offers it.
+  it('still applies with News story selected, for the Topic feed', () => {
     expect(targetMixAppliesTo([NEWS_STORY_TYPE_ID, DEBATE_TYPE_ID, CLAIM_TYPE_ID])).toBe(true);
   });
   it('does not apply to a single type — there is no ratio to hit', () => {

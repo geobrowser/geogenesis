@@ -83,4 +83,24 @@ describe('PersonRecordLine', () => {
 
     expect(container).toBeEmptyDOMElement();
   });
+
+  it('adds how many follow them (GEO-3236)', () => {
+    render(<PersonRecordLine record={FULL} followers={42} />);
+
+    expect(screen.getByText('42 followers')).toBeInTheDocument();
+  });
+
+  it('says "follower" for one, and leaves the stat out at zero', () => {
+    const { rerender } = render(<PersonRecordLine record={FULL} followers={1} />);
+    expect(screen.getByText('1 follower')).toBeInTheDocument();
+
+    rerender(<PersonRecordLine record={FULL} followers={0} />);
+    expect(screen.queryByText(/follower/)).toBeNull();
+  });
+
+  it('shows followers for someone with no record yet', () => {
+    render(<PersonRecordLine record={null} followers={3} />);
+
+    expect(screen.getByText('3 followers')).toBeInTheDocument();
+  });
 });

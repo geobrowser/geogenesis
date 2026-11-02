@@ -2,9 +2,14 @@
 
 import * as React from 'react';
 
+import { useAtom } from 'jotai';
+
 import type { HubFilterOption } from '~/core/debates/matchmaking/hub-filter-menu';
+import { HideMyPositionsSwitch } from '~/core/debates/matchmaking/matches-only-switch';
 import { keepSelectableTopics } from '~/core/debates/matchmaking/topic-facets';
+import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
+import { ID } from '~/core/id';
 import {
   matchingEntityIds,
   narrowedFacets,
@@ -12,16 +17,12 @@ import {
   reachableTopicFacets,
   usePersonPositionIndex,
 } from '~/core/profile/use-person-position-index';
-import {
-  DEFAULT_POSITION_SORT,
-  type PositionSort,
-  usePersonPositions,
-  usePersonResponses,
-} from '~/core/profile/use-person-positions';
+import { DEFAULT_POSITION_SORT, type PositionSort, usePersonPositions } from '~/core/profile/use-person-positions';
 
 import { PersonRecordFeed } from './person-record-feed';
 import { RecordFilterRow } from './record-filter-row';
 import { useRecordSelection } from './use-record-selection';
+import { profileHideMyPositionsAtom } from '~/atoms';
 
 /**
  * The claims a person holds a position on (GEO-2859, GEO-2918).
@@ -46,24 +47,24 @@ export function PersonPositionsTab({ spaceId }: { spaceId: string }) {
   const [sort, setSort] = React.useState<PositionSort>(DEFAULT_POSITION_SORT);
   const spaces = useRecordSelection();
   const topics = useRecordSelection();
+  const { personalSpaceId, isLoading: isLoadingIdentity } = usePersonalSpaceId();
+  const [hideMyPositions, setHideMyPositions] = useAtom(profileHideMyPositionsAtom);
+  const canHideMyPositions = Boolean(personalSpaceId && !ID.equals(personalSpaceId, spaceId));
+  const hidesMyPositions = canHideMyPositions && hideMyPositions;
+  const waitingForIdentity = hideMyPositions && isLoadingIdentity;
 
-  /*
-   * The vote table, read before either of the two things that narrow to it.
-   *
-   * A retraction is a row rewritten to "neither", not a row removed, so every
-   * `votedBy` read — the index behind these menus included — counts claims this
-   * person no longer holds a position on. The menus and the list have to narrow
-   * to the same set or a topic offers a count the list below it cannot fill.
-   *
-   * One request: `usePersonPositions` shares this query key.
-   */
-  const responses = usePersonResponses({ spaceId });
-
+  // Held positions only, like the list and the count — the server leaves a
+  // retracted one out of the index, so a topic it alone carried is not offered.
   const {
     index,
     isLoading: isLoadingIndex,
+    isFetching: isFetchingIndex,
     isError: isIndexError,
-  } = usePersonPositionIndex({ spaceId, answeredIds: responses.answeredIds });
+    refetch: refetchIndex,
+  } = usePersonPositionIndex({
+    spaceId,
+    excludeAnsweredBy: hidesMyPositions ? personalSpaceId : null,
+  });
 
   const selection = React.useMemo(
     () => ({ spaceIds: spaces.values, topicIds: topics.values }),
@@ -72,19 +73,16 @@ export function PersonPositionsTab({ spaceId }: { spaceId: string }) {
 
   const facets = React.useMemo(() => narrowedFacets(index, selection), [index, selection]);
 
-  const isFiltered = spaces.values.length > 0 || topics.values.length > 0;
+  const isFiltered = spaces.values.length > 0 || topics.values.length > 0 || hidesMyPositions;
 
-  // Null until the index has landed, so an unfiltered record is never briefly
-  // drawn as an empty one — `[]` means "the filters left nothing".
+  // Without the exclusion, the index only supplies menus. With it, wait for the
+  // viewer's filtered record before loading cards; `[]` keeps the full list out.
   const matchingIds = React.useMemo(() => {
+    // Never fetch an unfiltered page while the exclusion is loading or has failed.
+    if (waitingForIdentity || (hidesMyPositions && (isLoadingIndex || isIndexError))) return [];
     if (!isFiltered || isLoadingIndex) return null;
     return matchingEntityIds(index, selection);
-  }, [index, isFiltered, isLoadingIndex, selection]);
-
-  // The index is only as settled as the set it was narrowed by, so the menus
-  // wait for both. Without this a topic carried only by a retracted claim is
-  // offered for as long as the vote read takes, and then disappears.
-  const isLoadingFacets = isLoadingIndex || responses.answeredIds === undefined;
+  }, [hidesMyPositions, index, isFiltered, isIndexError, isLoadingIndex, selection, waitingForIdentity]);
 
   // A claim in two spaces must render in the one that satisfied the filter —
   // not whichever the entity lists first, and not a picked space where the
@@ -162,18 +160,29 @@ export function PersonPositionsTab({ spaceId }: { spaceId: string }) {
   const replaceTopics = topics.replace;
 
   React.useEffect(() => {
-    if (isLoadingFacets) return;
+    // Cached facets cannot establish reachability while a refresh is in flight,
+    // and a failed lookup cannot establish it at all.
+    if (isLoadingIndex || isFetchingIndex || isIndexError) return;
     // `replaceTopics` rather than `topics`: the selection object is rebuilt each
     // render, so depending on it would re-run this on every one. The callback is
     // stable, and `replace` keeps the previous array when nothing changed, so
     // this settles rather than chasing its own output.
     replaceTopics(current => keepSelectableTopics(current, reachableTopics, true));
-  }, [isLoadingFacets, reachableTopics, replaceTopics]);
+  }, [isLoadingIndex, isFetchingIndex, isIndexError, reachableTopics, replaceTopics]);
 
   return (
     <div className="flex flex-col gap-4">
       <RecordFilterRow
         sort={{ value: sort, options: SORT_OPTIONS, onChange: value => setSort(value as PositionSort) }}
+        end={
+          canHideMyPositions ? (
+            <HideMyPositionsSwitch
+              analyticsSurface="profile-positions"
+              checked={hideMyPositions}
+              onChange={setHideMyPositions}
+            />
+          ) : null
+        }
         /*
          * Dropped rather than drawn empty when the index could not be read.
          *
@@ -197,7 +206,7 @@ export function PersonPositionsTab({ spaceId }: { spaceId: string }) {
                   onClear: spaces.clear,
                   anyLabel: 'Any space',
                   noun: ['space', 'spaces'],
-                  isPending: isLoadingFacets,
+                  isPending: isLoadingIndex,
                 },
                 {
                   key: 'topics',
@@ -207,7 +216,7 @@ export function PersonPositionsTab({ spaceId }: { spaceId: string }) {
                   onClear: topics.clear,
                   anyLabel: 'Any topic',
                   noun: ['topic', 'topics'],
-                  isPending: isLoadingFacets,
+                  isPending: isLoadingIndex,
                 },
               ]
         }
@@ -215,24 +224,24 @@ export function PersonPositionsTab({ spaceId }: { spaceId: string }) {
 
       <PersonRecordFeed
         rows={rows}
-        /*
-         * The positions query alone. The index only feeds the menus — the claims
-         * come from a different request, and `matchingIds` stays null until a
-         * filter exists, which it cannot before the menus are drawn.
-         *
-         * This said as much in a comment while still ORing the index's loading
-         * state in, so the first cards waited behind the slowest request on the
-         * page: a complete scan of the record.
-         */
-        isLoading={isLoading}
-        isError={isError}
+        // The unfiltered record need not wait on its facet menus. Excluding the
+        // viewer's answers does need the index, since it now determines the rows.
+        isLoading={isLoading || waitingForIdentity || (hidesMyPositions && isLoadingIndex)}
+        isError={isError || (hidesMyPositions && isIndexError)}
+        onRetry={hidesMyPositions && isIndexError ? () => void refetchIndex() : undefined}
         isFetchingNextPage={isFetchingNextPage}
         hasNextPage={hasNextPage}
         fetchNextPage={fetchNextPage}
         loadingLabel="Loading positions…"
         // Said differently when the reader narrowed their own way here: an empty
         // result is a statement about the filter, not about the person.
-        emptyLabel={isFiltered ? 'No positions match these filters.' : 'No positions on claims yet.'}
+        emptyLabel={
+          hidesMyPositions
+            ? 'No unanswered claims match these filters. Turn off “Hide my positions” to see claims you’ve answered.'
+            : isFiltered
+              ? 'No positions match these filters.'
+              : 'No positions on claims yet.'
+        }
         errorLabel="Couldn’t load positions."
         noun="positions"
         responseByClaimId={responseByClaimId}

@@ -7,7 +7,11 @@ import { Effect } from 'effect';
 import { getSpace } from '../io/queries';
 
 export function useSpace(spaceId?: string) {
-  const { data: space, isLoading } = useQuery({
+  const {
+    data: space,
+    isLoading,
+    isError,
+  } = useQuery({
     queryKey: ['space', spaceId],
     queryFn: () => (spaceId ? Effect.runPromise(getSpace(spaceId)) : null),
     enabled: Boolean(spaceId),
@@ -16,5 +20,6 @@ export function useSpace(spaceId?: string) {
   return {
     space,
     isLoading,
+    isError,
   };
 }

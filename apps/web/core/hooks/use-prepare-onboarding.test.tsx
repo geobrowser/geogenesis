@@ -6,18 +6,20 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   avatarAtom,
   nameAtom,
+  onboardingNameOnlyAtom,
   selectedTopicIdsAtom,
   spaceIdAtom,
   stepAtom,
   topicIdAtom,
-} from '~/partials/onboarding/dialog';
+} from '~/partials/onboarding/onboarding-atoms';
 
 import { usePrepareOnboarding } from './use-prepare-onboarding';
+import { feedTopicsAtom } from '~/atoms/onboarding-feed-topics';
 import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
 
 const mocks = vi.hoisted(() => ({ authenticated: false }));
 
-vi.mock('@geogenesis/auth', () => ({
+vi.mock('~/core/wallet/auth-hooks', () => ({
   usePrivy: () => ({ authenticated: mocks.authenticated }),
 }));
 
@@ -37,6 +39,7 @@ function setup() {
   return renderHook(() => ({
     prepare: usePrepareOnboarding(),
     setSelectedTopicIds: useSetAtom(selectedTopicIdsAtom),
+    setFeedTopics: useSetAtom(feedTopicsAtom),
     setName: useSetAtom(nameAtom),
     setTopicId: useSetAtom(topicIdAtom),
     setAvatar: useSetAtom(avatarAtom),
@@ -50,6 +53,7 @@ function setup() {
     spaceId: useAtomValue(spaceIdAtom),
     step: useAtomValue(stepAtom),
     selectedTopicIds: useAtomValue(selectedTopicIdsAtom),
+    feedTopics: useAtomValue(feedTopicsAtom),
   }));
 }
 
@@ -98,6 +102,22 @@ describe('usePrepareOnboarding', () => {
     });
 
     expect(result.current.selectedTopicIds).toEqual([]);
+  });
+
+  // Held until the next personal space exists and then followed, so another account's picks
+  // would be published as this one's follows.
+  it('clears the held feed topics', () => {
+    const { result } = setup();
+    act(() => {
+      result.current.setFeedTopics({ address: '0xA', topics: [{ id: 'topic-a', name: 'Bitcoin' }] });
+    });
+    expect(result.current.feedTopics.topics).toHaveLength(1);
+
+    act(() => {
+      result.current.prepare();
+    });
+
+    expect(result.current.feedTopics).toEqual({ address: '', topics: [] });
   });
 
   // Reported in review: two callers gate on `!smartAccount` rather than `!authenticated`, and a
@@ -175,6 +195,27 @@ describe('usePrepareOnboarding', () => {
       });
 
       expect(result.current.redirect).toBeNull();
+    });
+  });
+
+  // GEO-3517. The debate hours page's RSVP asks a new account for a name only.
+  describe('name-only onboarding', () => {
+    it('is set by a press that asks for it and cleared by the next one that does not', () => {
+      const { result } = renderHook(() => ({
+        prepare: usePrepareOnboarding(),
+        nameOnly: useAtomValue(onboardingNameOnlyAtom),
+      }));
+      expect(result.current.nameOnly).toBe(false);
+
+      act(() => {
+        result.current.prepare({ nameOnly: true });
+      });
+      expect(result.current.nameOnly).toBe(true);
+
+      act(() => {
+        result.current.prepare();
+      });
+      expect(result.current.nameOnly).toBe(false);
     });
   });
 });

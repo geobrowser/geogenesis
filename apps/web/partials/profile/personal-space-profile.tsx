@@ -11,7 +11,7 @@ import { ID } from '~/core/id';
 import { collectSkills, currentRoles } from '~/core/profile/profile-summary';
 import { DEFAULT_DEBATE_SORT, sortRows } from '~/core/profile/record-client-filter';
 import { useEntityScores } from '~/core/profile/use-entity-scores';
-import { heldPositionsCount, usePersonPositions, usePersonResponses } from '~/core/profile/use-person-positions';
+import { usePersonPositions } from '~/core/profile/use-person-positions';
 import { useProfileDebateVisibility } from '~/core/profile/use-profile-debate-visibility';
 import { normId } from '~/core/utils/norm-id';
 
@@ -148,12 +148,6 @@ function ProfileActivity({
   const positions = usePersonPositions({ spaceId });
   const { facts, isLoading: isLoadingFacts, isError: isFactsError } = useProfileFacts({ spaceId, personEntityId });
 
-  // The rail's own source, so the card and the number beside it cannot disagree
-  // — and neither counts a position that has been taken back. Same query key as
-  // `positions` above, so no extra request.
-  const responses = usePersonResponses({ spaceId });
-  const positionsCount = heldPositionsCount(responses, facts.positions);
-
   // A personal space is named by its Person entity, which is where the response
   // tags get "Susan agreed" from. The same lookup the gallery already makes for
   // its space chips, so it costs nothing.
@@ -199,11 +193,10 @@ function ProfileActivity({
       rows: positions.rows,
       responseByClaimId: positions.responseByClaimId,
       personName,
-      total: positionsCount ?? 0,
-      isLoading: positions.isLoading || isLoadingFacts || positionsCount === null,
-      // Both sources have to fail before the count is gone: the vote table can
-      // answer it on its own, and does.
-      isCountUnavailable: isFactsError && responses.isError,
+      // Held positions only, like the rows beside it — see `POSITION_VOTE_TYPES`.
+      total: facts.positions,
+      isLoading: positions.isLoading || isLoadingFacts,
+      isCountUnavailable: isFactsError,
       isError: positions.isError,
       href: `/space/${spaceId}/positions`,
       seeAllLabel: 'View all claims',

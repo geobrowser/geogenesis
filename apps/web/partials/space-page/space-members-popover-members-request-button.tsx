@@ -10,14 +10,20 @@ import { UnderVote } from './request-status-label';
 
 type SpaceMembersPopoverMemberRequestButtonProps = {
   spaceId: string;
+  spaceName?: string;
   memberRequest: ActiveMemberRequest | null;
 };
 
 export function SpaceMembersPopoverMemberRequestButton({
   spaceId,
+  spaceName,
   memberRequest,
 }: SpaceMembersPopoverMemberRequestButtonProps) {
-  const { join: handleJoin, status, optimisticRequested } = useJoinSpace({ spaceId });
+  const {
+    join: handleJoin,
+    status,
+    optimisticRequested,
+  } = useJoinSpace({ spaceId, space: spaceName ? { name: spaceName } : undefined });
 
   // Durable + optimistic pending state so a request made anywhere (and surviving
   // refresh) reflects here without waiting on this page's SSR memberRequest.

@@ -4,32 +4,34 @@ import { useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
-import { useAtom } from 'jotai';
+import cx from 'classnames';
+import { useAtom, useAtomValue } from 'jotai';
 
-import { resolveClaimResponseKind } from '~/core/claims/browse/use-claim-response-state';
 import { DEBATE_TAG_ID } from '~/core/debates/ontology';
 import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sentinel';
+import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
-import { ID } from '~/core/id';
-import { responsePositionLabel } from '~/core/responses/entity-response';
-import { validateEntityId } from '~/core/utils/utils';
 
 import { Input } from '~/design-system/input';
 
-import type {
-  DebateClaim,
-  DebateClaimPositionSummary,
-  MatchmakingClaim,
-  MatchmakingClaimsFilter,
-  MatchmakingClaimsQuery,
-} from '../api';
+import type { MatchmakingClaim, MatchmakingClaimsFilter, MatchmakingClaimsQuery } from '../api';
 import { eligibleClaimSpaceIds, isClaimSpaceAllowed } from '../claim-space-allowlist';
+import {
+  DebateClaimCardSurface,
+  type DebateClaimListId,
+  type DrawnHubList,
+  type HubTabName,
+  useRecordClaimFilter,
+  useRecordedSpaceTopicFilters,
+  useReportDrawnHubList,
+} from '../debate-claim-card-surface';
 import { useDebateActivity, useDebateClaimsBySpaces, useGeoChatAuth } from '../hooks';
 import {
   type TaggedClaim,
   type TaggedClaimFilters,
   tagDisplaySpaceId,
+  useTaggedAnsweredCount,
   useTaggedClaims,
   useTaggedSpaceFacet,
   useTaggedTopicFacet,
@@ -37,25 +39,35 @@ import {
 import { useClaimSpaceAllowlist } from '../use-claim-space-allowlist';
 import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '../use-debate-publishable-spaces';
 import { claimRowKey } from './claim-row-key';
+import { fromClaimsFilterSearch } from './claims-filter-params';
 import { type AnsweredState, useCollapseAnswered } from './collapse-answered';
 import { DebateHoursNote } from './debate-hours-note';
 import { useDebateRequests } from './hooks';
 import type { DebateAnalyticsSurface } from './hub-analytics';
+import { HubFacetRail } from './hub-facet-rail';
 import { type HubFilterOption, HubMultiFilterMenu, pickerLabel } from './hub-filter-menu';
+import { PanelFiltersBar, type PanelListFilters } from './hub-filters';
 import { HubCardList } from './hub-motion';
-import { HubPillButton } from './hub-pill-button';
-import { HubQueryState, HubSkeleton } from './hub-states';
+import { useHubScrollSelector } from './hub-scroll';
+import { HubQueryState, HubSkeleton, exploreClaimsAction } from './hub-states';
 import { HideMyPositionsSwitch } from './matches-only-switch';
 import { MatchmakingClaimCard } from './matchmaking-claim-card';
 import { OutboundRequestCard } from './outbound-request-card';
-import { keepSelectableTopics, orderFacetOptions, toggleId } from './topic-facets';
-import { useBoundedPaging } from './use-bounded-paging';
+import {
+  claimRowGroups,
+  placedAnswersReady,
+  placedClaimKey,
+  rowsByPlacedClaim,
+  taggedClaimEntry,
+} from './tagged-claim-entry';
+import { countBy, inEverySpace, keepSelectableTopics, keepSelectedVisible, orderFacetOptions } from './topic-facets';
+import { useClaimRowTopics, useHeldClaimRows, useRowTopicFacet } from './use-claim-rows';
 import { useDebouncedSearch } from './use-debounced-search';
 import { useDebouncedSelection } from './use-debounced-selection';
 import { useScopedMatchmakingClaims } from './use-scoped-claims';
 import { useSpaceFilterMenu } from './use-space-filter-selection';
-import { useStableListOrder } from './use-stable-list-order';
 import {
+  type DebatesHubTab,
   debatesHubExploreSearchAtom,
   debatesHubExploreSpaceIdsAtom,
   debatesHubExploreSpaceSeedSpentAtom,
@@ -65,24 +77,32 @@ import {
   debatesHubLobbySpaceIdsAtom,
   debatesHubLobbySpaceSeedSpentAtom,
   debatesHubLobbyTopicIdsAtom,
+  debatesHubPanelExploreSearchAtom,
+  debatesHubPanelExploreSpaceIdsAtom,
+  debatesHubPanelExploreSpaceSeedSpentAtom,
+  debatesHubPanelExploreTopicIdsAtom,
+  debatesHubPanelMatchesSearchAtom,
+  debatesHubPanelMatchesSpaceIdsAtom,
+  debatesHubPanelMatchesSpaceSeedSpentAtom,
+  debatesHubPanelMatchesTopicIdsAtom,
   debatesHubPositionsSearchAtom,
   debatesHubPositionsSpaceIdsAtom,
   debatesHubPositionsSpaceSeedSpentAtom,
   debatesHubPositionsTopicIdsAtom,
+  lobbyExploreSearchAtom,
+  lobbyExploreSpaceIdsAtom,
+  lobbyExploreSpaceSeedSpentAtom,
+  lobbyExploreTopicIdsAtom,
 } from '~/atoms';
 
 /**
- * Which list a surface is showing. One per surface now, rather than a source the viewer picks.
+ * Which list a surface is showing.
  *
- * `all` is the tab's own rather than geo-chat's: the index has no notion of the Debate tag, so this
- * swaps the list's *source* for the knowledge graph rather than changing a query param (GEO-2771).
+ * `all` is the tab's own rather than geo-chat's: the index has no notion of that tag, so it swaps
+ * the list's *source* for the knowledge graph rather than changing a query param (GEO-2771).
  *
  * `mine` and `debate_now` stay geo-chat's. Both are viewer-relative and scored on who is available
  * and who this viewer is already pair-blocked with, which is not in the graph at any price.
- *
- * Featured is gone with the picker it lived in (GEO-2863). It was a curated cut of the same tag
- * behind a menu most viewers never opened, and the menu was costing Explore's filter row the space
- * its switch needed.
  */
 type ClaimsTabFilter = 'all' | 'mine' | 'debate_now';
 
@@ -103,8 +123,6 @@ const NOTHING_HERE: Record<ClaimsTabFilter, string> = {
   debate_now: 'Nobody is ready to debate you on a claim right now.',
 };
 
-/** Stable identity so the geo-chat lookups don't restart on every render of a geo-chat list. */
-
 /**
  * Key prefixes for the two lookups behind the graph-sourced list, so "Try again" can reach them.
  *
@@ -124,25 +142,72 @@ const DEBATE_CLAIMS_QUERY_PREFIX = ['debates', 'claims'] as const;
  * `topic_ids`, so neither is a page-local filter any more and the list is whatever the index says.
  *
  * The server still returns `topics: []` on every row, which is not the contradiction it looks
- * like: the rows are filtered, and the topic answer rides in the facet beside them. Only Featured
+ * like: the rows are filtered, and the topic answer rides in the facet beside them. Only Explore
  * resolves topics itself, because its list comes from the knowledge graph and the index has never
  * seen it.
  */
 /**
  * Which surface is drawing this list (GEO-2861).
  *
- * Three surfaces over the same machinery, each fixed to one list: Lobby is `debate_now`, Explore is
- * the Debate tag, Positions is the viewer's own. None of them picks — the source menu that used to
- * choose between the last two went with GEO-2863.
+ * Each variant is fixed to one list: Lobby is `debate_now`, Explore the Debate tag, Positions the
+ * viewer's own. The panel gives each a tab (Lobby also has a Matches toggle); the workspace picks
+ * among them with the menu beside search.
  *
  * They hold their filter selections apart — narrowing what you can debate right now is a different
  * act from narrowing what you are browsing, and from narrowing what you have already answered — so
- * the atoms come from here rather than being read directly, and adding a surface means adding a row
- * rather than threading another flag through.
+ * the atoms come from here rather than being read directly.
  */
 export type ClaimsTabVariant = 'explore' | 'lobby' | 'positions';
 
-const VARIANT_ATOMS = {
+/** Every list the tab draws: the hub's, plus the debate lobby's Explore tab (`lobbyExplore`). */
+export type ClaimsListVariant = ClaimsTabVariant | 'lobbyExplore';
+
+/** Every value the `list` param may name, for validating one that arrived from outside. */
+export const CLAIMS_TAB_VARIANTS: readonly ClaimsTabVariant[] = ['explore', 'lobby', 'positions'];
+
+export const DEFAULT_WORKSPACE_LIST: ClaimsTabVariant = 'explore';
+
+/**
+ * The seed a variant should apply for a query, or null when the link names a different list.
+ *
+ * No spent marker any more. It used to hold a module-level set of `(list, query)` pairs so a second
+ * mount could not re-apply a link — but the workspace is the only caller now, and it does not
+ * remount on a query change, so that guard belongs there instead. Worse, the marker refused a
+ * genuine re-navigation: Back and then Forward to a URL already visited read as spent, and the
+ * filters it named never came back.
+ *
+ * Pure, so the caller decides when to ask and what "already applied" means.
+ */
+export function readUrlSeed(variant: ClaimsTabVariant, query: string) {
+  const seed = fromClaimsFilterSearch(new URLSearchParams(query), CLAIMS_TAB_VARIANTS);
+
+  if ((seed.list ?? DEFAULT_WORKSPACE_LIST) !== variant) return null;
+
+  return seed;
+}
+
+/**
+ * Which surface is drawing it, which is a different question from which list it draws (GEO-2726).
+ *
+ * `variant` picks the question and the selections; this picks the furniture. The workspace has room
+ * for an open facet rail where the panel has 400px and menus, and both arrangements ask the same
+ * thing of the same atoms — so the two are orthogonal and compose, rather than one being a third
+ * variant.
+ */
+export type ClaimsLayout = 'panel' | 'workspace';
+
+/**
+ * `workspace`: facet rail + list; panel menus are the narrow fallback.
+ *
+ * Keyed by variant, and these are full screen's. The side panel reads its own (`PANEL_ATOMS`), since
+ * it narrows by every pick where full screen takes any of them and seeds member spaces (GEO-3463).
+ *
+ * So the expand link is how a panel selection reaches the workspace: it carries it in the URL, and
+ * the workspace seeds from it on mount — the same way a shared or reopened `/matchmaking?…` arrives.
+ * The workspace writes changes back to the URL (GEO-3298) so the address bar stays a link to what is
+ * on screen; the panel does not.
+ */
+export const VARIANT_ATOMS = {
   explore: {
     spaceIds: debatesHubExploreSpaceIdsAtom,
     topicIds: debatesHubExploreTopicIdsAtom,
@@ -163,15 +228,139 @@ const VARIANT_ATOMS = {
     search: debatesHubLobbySearchAtom,
     seedSpent: debatesHubLobbySpaceSeedSpentAtom,
   },
+  lobbyExplore: {
+    spaceIds: lobbyExploreSpaceIdsAtom,
+    topicIds: lobbyExploreTopicIdsAtom,
+    search: lobbyExploreSearchAtom,
+    seedSpent: lobbyExploreSpaceSeedSpentAtom,
+  },
+} as const satisfies Record<ClaimsListVariant, unknown>;
+
+/**
+ * The side panel's selections, one per tab (GEO-3463): Matches' and Explore's, each kept across the
+ * lists that tab swaps between. Apart from full screen's above, which read picks differently.
+ */
+export const PANEL_ATOMS = {
+  panelMatches: {
+    spaceIds: debatesHubPanelMatchesSpaceIdsAtom,
+    topicIds: debatesHubPanelMatchesTopicIdsAtom,
+    search: debatesHubPanelMatchesSearchAtom,
+    seedSpent: debatesHubPanelMatchesSpaceSeedSpentAtom,
+  },
+  panelExplore: {
+    spaceIds: debatesHubPanelExploreSpaceIdsAtom,
+    topicIds: debatesHubPanelExploreTopicIdsAtom,
+    search: debatesHubPanelExploreSearchAtom,
+    seedSpent: debatesHubPanelExploreSpaceSeedSpentAtom,
+  },
 } as const;
+
+export type PanelAtomsKey = keyof typeof PANEL_ATOMS;
+
+/** Whose search and selection a list reads: a list's own, or a panel tab's. */
+export type FilterAtomsKey = ClaimsListVariant | PanelAtomsKey;
+
+export const FILTER_ATOMS = { ...VARIANT_ATOMS, ...PANEL_ATOMS } as const satisfies Record<FilterAtomsKey, unknown>;
+
+/**
+ * Where each list reports, and whether it hides the viewer's answered claims. `lobbyExplore` reads the
+ * Debate tag like `explore`, but its cards offer requests only on a side taken, so it keeps them.
+ */
+const LIST_SURFACE: Record<ClaimsListVariant, { analyticsSurface: DebateAnalyticsSurface; hidesAnswered: boolean }> = {
+  explore: { analyticsSurface: 'hub', hidesAnswered: true },
+  lobby: { analyticsSurface: 'hub', hidesAnswered: true },
+  positions: { analyticsSurface: 'hub', hidesAnswered: true },
+  lobbyExplore: { analyticsSurface: 'lobby', hidesAnswered: false },
+};
+
+/** GEO-3495. Each list, as claim card impressions, requests and filter choices name it. */
+const CLAIMS_LIST_IDS: Record<ClaimsListVariant, DebateClaimListId> = {
+  explore: 'hub_explore',
+  lobby: 'hub_lobby',
+  positions: 'hub_my_positions',
+  lobbyExplore: 'lobby_explore',
+};
+
+/** GEO-3495. The hub tabs that are claim lists, by the name a press on them records. */
+const HUB_TAB_NAMES: Partial<Record<DebatesHubTab, HubTabName>> = {
+  lobby: 'matches',
+  explore: 'explore',
+  positions: 'my_positions',
+};
+
+/**
+ * GEO-3495. Records a press from `shown`, the hub tab a host is drawing, onto another claim tab: for
+ * the side panel's tab row and full screen's list picker alike. It names the tab pressed, not a
+ * list: which list a hub tab draws is decided by its own filters once it is open. It is recorded as
+ * leaving the list on screen, which that list reports itself (`useReportDrawnHubList`); a press from
+ * People or Requests left no list.
+ */
+export function useRecordHubTabPress(shown: DebatesHubTab, drawn: DrawnHubList) {
+  const recordFilter = useRecordClaimFilter('debate_matchmaking');
+  const drawnList = useAtomValue(drawn);
+  return (to: DebatesHubTab) => {
+    const name = HUB_TAB_NAMES[to];
+    if (to === shown || !name) return;
+    recordFilter(HUB_TAB_NAMES[shown] ? drawnList : null, { kind: 'hub_tab', value: name });
+  };
+}
+
+/** What the tab would hand its own card, for a host drawing the card itself. */
+export type ClaimCardDefaults = { answersReady: boolean; allowsSignedOutVotes: boolean };
+
+const NO_KEPT_ROWS: MatchmakingClaim[] = [];
 
 export function ClaimsTab({
   variant = 'explore',
+  renderClaim,
+  onVisibleClaims,
+  stickyTopClassName,
   trailing,
   warm = false,
+  listId: listIdOverride,
   onSettledEmpty,
+  onTabChange,
+  layout = 'panel',
+  scopePicker,
+  atomsFrom,
+  panelFilters,
+  notice,
+  keepClaim,
+  collapsesAnswered: collapsesAnsweredOverride,
 }: {
-  variant?: ClaimsTabVariant;
+  variant?: ClaimsListVariant;
+  /**
+   * Whose search and space/topic selection this list reads, when not its own variant's (GEO-3463).
+   * The panel's Explore swaps between three lists under its Show control and Matches between two,
+   * and what the viewer typed or picked should not change when the list under it does — so each
+   * panel tab reads its own (`PANEL_ATOMS`), never full screen's.
+   */
+  atomsFrom?: FilterAtomsKey;
+  /**
+   * The side panel's one search field and Filters button in place of the menus row (GEO-3463), with
+   * this tab's Sort and switches. Panel layout only; the workspace keeps its rail.
+   */
+  panelFilters?: PanelListFilters;
+  /**
+   * Above the list, under the filters: what the panel wants said about this list (GEO-3463). As a
+   * function, told whether the list has rows, for a line about the rows that must not sit over the
+   * list's own empty state.
+   */
+  notice?: React.ReactNode | ((listHasRows: boolean) => React.ReactNode);
+  /** Leaves out rows the list's source cannot narrow by itself, e.g. claims with nobody on the other side. */
+  keepClaim?: (entry: MatchmakingClaim) => boolean;
+  /**
+   * Fold away the claims the viewer has answered, with the usual hold on one answered in front of
+   * them, on a list that would not otherwise (the panel's Explore reading `debate_now` under Not
+   * answered, GEO-3463). Unset, the variant decides as it always has.
+   */
+  collapsesAnswered?: boolean;
+  /** Draws each claim in place of the default card, for a host with its own offer (the lobby). */
+  renderClaim?: (entry: MatchmakingClaim, card: ClaimCardDefaults) => React.ReactElement;
+  /** The claims on screen, after each change. */
+  onVisibleClaims?: (entries: MatchmakingClaim[]) => void;
+  /** Where the pinned controls stop, for a host scrolling the page under a fixed bar. */
+  stickyTopClassName?: string;
   /** Rendered at the end of the filter row. Lobby passes its "Matches only" switch. */
   trailing?: React.ReactNode;
   /**
@@ -182,6 +371,11 @@ export function ClaimsTab({
    * not fired for a filtered empty list, which is a question the viewer asked and got an answer to.
    */
   onSettledEmpty?: () => void;
+  /**
+   * Only reached from an empty, unfiltered list's action, as on Matches and People. Lobby passes it:
+   * with nobody ready to debate, the corpus is the one list that always has something on it.
+   */
+  onTabChange?: (tab: DebatesHubTab) => void;
   /**
    * Run the queries, draw nothing (GEO-2863).
    *
@@ -200,15 +394,33 @@ export function ClaimsTab({
    * the requests instead. Being the same component is what makes that impossible.
    */
   warm?: boolean;
+  /**
+   * GEO-3495: the list id its cards, requests and filters record, where the variant's own would name
+   * a different list. The panel's Matches draws your positions with someone on the other side, which
+   * is not Explore's My positions.
+   */
+  listId?: DebateClaimListId;
+  layout?: ClaimsLayout;
+  scopePicker?: React.ReactNode;
 } = {}) {
   const isLobby = variant === 'lobby';
-  const atoms = VARIANT_ATOMS[variant];
+  const atoms = FILTER_ATOMS[atomsFrom ?? variant];
+  const { analyticsSurface, hidesAnswered } = LIST_SURFACE[variant];
+  const workspace = layout === 'workspace';
+  const panelMode = panelFilters !== undefined && !workspace;
   const queryClient = useQueryClient();
   const { authenticated, accountKey } = useGeoChatAuth();
   // A signed-out viewer gets Privy rather than a dead pill, the same hook and for the same reason
   // the claim page and the entity vote arrows use it. Passed as `undefined` when signed in so the
   // card keeps publishing directly.
-  const promptSignIn = usePrivySignIn();
+  const promptSignIn = usePrivySignIn(undefined, {
+    analytics: {
+      component: 'debate_matchmaking',
+      auth_control: 'browse_claims',
+      auth_continuation: 'repeat',
+      auth_intent: 'start_debate',
+    },
+  });
   const onRequireSignIn = authenticated ? undefined : promptSignIn;
 
   // The account's open request, from the same two sources the matches list reads it from — the
@@ -288,9 +500,9 @@ export function ClaimsTab({
 
   // Which tag this filter reads, and whether it reads one at all.
   //
-  // `claimsTagId` is always a real tag so the graph query has a stable key per filter — switching
-  // Featured to All and back lands on each one's own cached catalog rather than refetching. Whether
-  // that catalog is *used* is `graphSourced`, which is also what holds the index query off.
+  // `claimsTagId` is always a real tag so the graph query has a stable key per filter — moving
+  // between filters lands on each one's own cached catalog rather than refetching. Whether that
+  // catalog is *used* is `graphSourced`, which is also what holds the index query off.
   const claimsTagId = TAG_FOR_FILTER[filter] ?? DEBATE_TAG_ID;
   const graphSourced = TAG_FOR_FILTER[filter] !== undefined;
 
@@ -307,8 +519,8 @@ export function ClaimsTab({
     () => ({
       search: debouncedSearch || null,
       topicIds: debouncedTopicIds,
-      // Narrowed to what geo-chat understands: `featured` and `all` are this tab's own sources, and
-      // the query is disabled for both anyway.
+      // Narrowed to what geo-chat understands: `all` is this tab's own source, and the query is
+      // disabled for it anyway.
       filter: graphSourced ? 'all' : (filter as MatchmakingClaimsFilter),
     }),
     [debouncedSearch, debouncedTopicIds, graphSourced, filter]
@@ -320,7 +532,7 @@ export function ClaimsTab({
   );
 
   // Every way the pages can describe a wider corpus than this tab will show is handled in there,
-  // once, for both pickers — see `useScopedMatchmakingClaims`. Featured passes `unusable`: it draws
+  // once, for both pickers — see `useScopedMatchmakingClaims`. Explore passes `unusable`: it draws
   // its own list, so there is nothing worth asking the index for, and the masking that comes with
   // it also keeps the paging sentinel off a list that has no next page.
   const claimsQuery = useScopedMatchmakingClaims(query, scope, debouncedSpaceIds, graphSourced);
@@ -333,13 +545,13 @@ export function ClaimsTab({
   //
   // The source gate covers the selections and the query, and deliberately not the search.
   //
-  // Featured builds both menus from the live space and topic selections over a list it already
+  // Explore builds both menus from the live space and topic selections over a list it already
   // holds, so those are right on the same render as the tick and there is nothing to wait for. The
-  // debounce still runs there, feeding a query Featured never makes, so ungated it would drop
+  // debounce still runs there, feeding a query Explore never makes, so ungated it would drop
   // skeletons over numbers that were already correct.
   //
-  // Search is the exception, because Featured filters by `debouncedSearch` like every other source
-  // does — see `taggedSearched`. Its counts really do describe the pre-typing query for as long
+  // Search is the exception, because Explore filters by `debouncedSearch` like the index-sourced
+  // filters do — see `taggedSearched`. Its counts really do describe the pre-typing query for as long
   // as the box is unsettled, so that window has to cover the counts wherever they came from.
   //
   // The graph path is folded in below, once its facets exist to be asked — see `countsPending`.
@@ -357,10 +569,10 @@ export function ClaimsTab({
   // run over the loaded pages either: tagged claims are a couple of thousand out of a corpus of
   // thousands, so a page-local filter would page for a very long time before it found one.
   //
-  // GEO-2771 moved `all` here from the index for the same reason it was always true of `featured`,
-  // and for one more: the graph already knows which claims are meant for debating, so replicating
-  // that into geo-chat only to filter on it is a trip with nothing at the end of it. What geo-chat
-  // still answers is everything *about* these claims — see the row lookup below.
+  // GEO-2771 moved `all` here from the index for one more reason: the graph already knows which
+  // claims are meant for debating, so replicating that into geo-chat only to filter on it is a trip
+  // with nothing at the end of it. What geo-chat still answers is everything *about* these claims
+  // — see the row lookup below.
   //
   // The list comes from the graph: one ranked, filtered page at a time (GEO-2798). Search, topics
   // and spaces are all applied by the server, so what arrives is what the viewer asked for and the
@@ -370,22 +582,47 @@ export function ClaimsTab({
   // set. Without that a topic living only in a space the viewer cannot see is still offered, and
   // picking it returns rows the client then removes — an option that can only produce an empty list
   // (GEO-2653). It is the same list geo-chat's own query is scoped by, for the same reason.
+  //
+  // "Hide my positions" goes out with it too (GEO-2894): the server leaves out what this account has
+  // answered, so a page arrives as fifty claims the viewer can see and both facets count the same
+  // set. Only on the surface that hides anything — Explore, signed in, switch on — and keyed on the
+  // stored preference rather than on anything about the answers, so the query does not change when
+  // they land.
+  const { personalSpaceId, isLoading: personalSpaceLoading } = usePersonalSpaceId();
+  const excludesAnswered = graphSourced && !isLobby && hidesAnswered && authenticated && hideMyPositions;
+  const excludeAnsweredBy = excludesAnswered ? personalSpaceId : null;
+  // Until the account's space is known there is no telling which claims to leave out, and asking
+  // without it would draw the answered ones and then take them back.
+  const excludePending = excludesAnswered && personalSpaceId === null && personalSpaceLoading;
+
   const taggedFilters = React.useMemo<TaggedClaimFilters>(
     () => ({
       search: debouncedSearch,
       topicIds: debouncedTopicIds,
       spaceIds,
       eligibleSpaceIds,
+      excludeAnsweredBy,
+      order: panelFilters?.graphOrder,
+      // In the panel spaces narrow like topics, AND, with the pills counting co-occurrence — the
+      // debate again picker's arrangement (GEO-3223). Full screen keeps "any of these".
+      spaceMatch: panelMode ? 'all' : undefined,
     }),
-    [debouncedSearch, debouncedTopicIds, eligibleSpaceIds, spaceIds]
+    [
+      debouncedSearch,
+      debouncedTopicIds,
+      eligibleSpaceIds,
+      excludeAnsweredBy,
+      panelFilters?.graphOrder,
+      panelMode,
+      spaceIds,
+    ]
   );
 
   // Held while the space gates are still resolving: they pass everything until they land, so asking
   // now would fetch and cache a page scoped to every space and then narrow it under the viewer.
-  const taggedEnabled = graphSourced && !spacesPending;
+  const taggedEnabled = graphSourced && !spacesPending && !excludePending;
   const {
     claims: taggedClaims,
-    fetched: taggedFetched,
     isLoading: taggedLoading,
     error: taggedError,
     hasNextPage: taggedHasNextPage,
@@ -426,19 +663,13 @@ export function ClaimsTab({
   // not yet resolved. `fetchDebateClaims` sends `auth: 'optional'` when it has no account, so a
   // request in that window succeeds and comes back with every viewer field null; the rows still
   // carry the public ones, so the card drew its avatars while reporting no response from the viewer.
-  const taggedGroups = React.useMemo(() => {
-    if (!authenticated || !accountKey) return [];
-    const bySpace = new Map<string, string[]>();
-    for (const { claim, spaceId } of taggedPage) {
-      if (!validateEntityId(claim.entity.id)) continue;
-      const existing = bySpace.get(spaceId);
-      if (existing) existing.push(claim.entity.id);
-      else bySpace.set(spaceId, [claim.entity.id]);
-    }
-    return [...bySpace.entries()]
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([spaceId, claimIds]) => ({ spaceId, claimIds }));
-  }, [accountKey, authenticated, taggedPage]);
+  const taggedGroups = React.useMemo(
+    () =>
+      authenticated && accountKey
+        ? claimRowGroups(taggedPage.map(({ claim, spaceId }) => ({ spaceId, claimId: claim.entity.id })))
+        : [],
+    [accountKey, authenticated, taggedPage]
+  );
   const taggedRows = useDebateClaimsBySpaces(taggedGroups);
 
   // The page in the shape the rest of the tab already speaks. geo-chat has a row for a claim only
@@ -451,34 +682,15 @@ export function ClaimsTab({
     // of them comes back twice — once per space, each with that space's sides, readiness and live
     // debate. Keyed on the claim alone the map keeps whichever arrived last, and would draw one
     // space's answers onto another space's card and publish into the second.
-    const rowsBySpaceAndClaim = new Map(
-      taggedRows.claims.map(row => [`${ID.uuidToHex(row.space_id)}:${ID.uuidToHex(row.claim_entity_id)}`, row])
+    const rowsBySpaceAndClaim = rowsByPlacedClaim(taggedRows.claims);
+
+    return taggedPage.map(({ claim, spaceId }) =>
+      taggedClaimEntry(
+        claim.entity,
+        spaceId,
+        rowsBySpaceAndClaim.get(placedClaimKey({ spaceId, claimId: claim.entity.id }))
+      )
     );
-
-    return taggedPage.map(({ claim, spaceId }) => {
-      const row = rowsBySpaceAndClaim.get(`${ID.uuidToHex(spaceId)}:${ID.uuidToHex(claim.entity.id)}`);
-      const responseKind = resolveClaimResponseKind();
-
-      return {
-        claim: {
-          id: row?.id ?? claim.entity.id,
-          space_id: spaceId,
-          claim_entity_id: claim.entity.id,
-          claim: claim.entity.name ?? '',
-          description: claim.entity.description,
-        },
-        topics: [],
-        response_kind: responseKind,
-        viewer_response: row?.viewer_response ?? null,
-        viewer_position: row?.viewer_response?.position ?? null,
-        viewer_debate_ready: row?.viewer_debate_ready ?? false,
-        readiness_disabled_reason: row?.readiness_disabled_reason ?? null,
-        positions: taggedPositionSummaries(row),
-        // The index's ranking score, which this list is ordered by on the server and doesn't re-sort.
-        score: 0,
-        active_debate: Boolean(row?.active_debate),
-      };
-    });
   }, [graphSourced, taggedPage, taggedRows.claims]);
 
   // Whether a card may be answered at all.
@@ -512,7 +724,7 @@ export function ClaimsTab({
   const taggedAnswersReadyFor = React.useCallback(
     (entry: MatchmakingClaim) =>
       !graphSourced ||
-      (authenticated ? Boolean(accountKey) && !taggedRows.unresolvedSpaceIds.has(entry.claim.space_id) : true),
+      placedAnswersReady({ authenticated, accountKey }, taggedRows.unresolvedSpaceIds, entry.claim.space_id),
     [accountKey, authenticated, graphSourced, taggedRows.unresolvedSpaceIds]
   );
 
@@ -589,8 +801,23 @@ export function ClaimsTab({
     // panel and reopening it would re-seed the member spaces over a filter the viewer had cleared
     // on purpose — deciding they meant something other than what they asked for, which is the one
     // thing GEO-2789 says a default must never do.
-    seedSpent: spaceSeedSpent,
+    //
+    // The panel never seeds (GEO-3463): every pick there narrows (AND), so a default of all the
+    // viewer's spaces would be a filter nobody set that empties the list. It opens on All.
+    seedSpent: panelMode || spaceSeedSpent,
     onSeedSpend: () => setSpaceSeedSpent(true),
+  });
+
+  // GEO-3495. The viewer's own filter presses, by what they chose; the seed above is not one.
+  const listId = listIdOverride ?? CLAIMS_LIST_IDS[variant];
+  // The warm instance draws nothing, and a lobby's own Explore is not the hub.
+  useReportDrawnHubList(listId, !warm && variant !== 'lobbyExplore');
+  const recordedFilters = useRecordedSpaceTopicFilters(listId, {
+    spaceIds,
+    onSpaceToggle,
+    onSpacesClear,
+    topicIds,
+    setTopicIds,
   });
 
   // The server re-sorts on every readiness change, so hold the order the user is looking at until
@@ -606,41 +833,28 @@ export function ClaimsTab({
   //
   // Spaces follow whichever query this surface is actually making, which is not the same answer for
   // both. The tagged query takes the live selection (`taggedFilters`); the index query takes the
-  // debounced one (`useScopedMatchmakingClaims`, above). Keyed on the live value for both, Lobby
-  // and Positions reset their budget at the tick while still receiving the previous selection's
-  // pages — charging one of its barren pages to a list that had not been asked for yet.
+  // debounced one (`useScopedMatchmakingClaims`, above).
   //
   // The rule this key exists to keep is that it names the list the queries are fetching. That is a
   // rule about each query, not a property of any one field.
   //
-  // And the switch, because it decides which of the fetched rows can be *seen* — so turning it off
-  // turns a barren page into a full one retrospectively. Without it a list that had reached the
-  // paging cap stayed capped after the viewer revealed everything it had been hiding, and ordinary
-  // scrolling did not resume until they pressed "Keep looking" for rows already on screen.
-  //
-  // The stored preference rather than `collapsesAnswered`, which also carries which surface this is:
-  // keyed on that, every surface would reset the others' budgets for no reason.
-  //
   // The *eligible* set too, which is not something the viewer picks. It goes out with the query, so
   // a membership landing or a space ceasing to be publishable makes this a different corpus — and
-  // everything keyed on "which list is this" has to hear about it. The paging budget is the one
-  // that bites: a corpus that had reached the cap handed its exhaustion to the corpus that replaced
-  // it, which then arrived stopped.
+  // everything keyed on "which list is this" has to hear about it.
+  //
+  // Not the "Hide my positions" switch, though it goes out with the query too. The order is held so
+  // the list does not rearrange under someone reading it, and the switch changes which rows show
+  // rather than which list this is: keyed on it, pressing the switch would re-sort every surviving
+  // row to the server's current ranking.
   const keyedSpaceIds = graphSourced ? spaceIds : debouncedSpaceIds;
-  const listKey = `${debouncedSearch}|${keyedSpaceIds.join(',')}|${debouncedTopicIds.join(',')}|${filter}|${eligibleSpaceIds === null ? 'any' : eligibleSpaceIds.join(',')}`;
+  const listKey = `${debouncedSearch}|${keyedSpaceIds.join(',')}|${debouncedTopicIds.join(',')}|${filter}|${eligibleSpaceIds === null ? 'any' : eligibleSpaceIds.join(',')}|${taggedFilters.order ?? 'best'}`;
 
-  /**
-   * The same list, plus the switch — which the paging budget needs and the order must not have.
-   *
-   * Turning the switch off makes a barren page full retrospectively, so a budget that did not reset
-   * with it stayed capped over rows it had just revealed. The *order* is the opposite: it is held so
-   * the list does not rearrange under someone reading it, and the switch changes which rows show
-   * rather than which list this is. Keyed on it, pressing the switch threw the held order away and
-   * re-sorted every surviving row to the server's current ranking — moving the cards the viewer was
-   * looking at, which is the one thing `useStableListOrder` exists to prevent.
-   */
-  const pagingKey = `${listKey}|${hideMyPositions}`;
-  const claims = useStableListOrder(graphSourced ? taggedEntries : serverClaims, claimRowKey, listKey);
+  // The panel's Sort, for lists geo-chat orders its own way (GEO-3463). Sorted before the hold, so a
+  // page arriving or a live count changing does not move rows already placed; see `useHeldClaimRows`.
+  const clientSort = panelFilters?.clientSort;
+  const claims = useHeldClaimRows(graphSourced ? taggedEntries : serverClaims, clientSort, listKey, {
+    appendNew: true,
+  });
 
   /**
    * Explore hides the claims the viewer has already answered (GEO-2863).
@@ -653,9 +867,11 @@ export function ClaimsTab({
    * to turn it off. It ran silently at first, and silently is how correct behaviour read as the
    * list discarding rows. Going and *looking* at them is the Positions tab.
    *
-   * `viewer_response` is the whole predicate. geo-chat records a position the moment the write
-   * starts, so it answers promptly — it is the *graph* that waits on the indexer, which is why the
-   * card reconciles against that separately.
+   * The backlog is left out by the server — see `excludeAnsweredBy` — so what this collapses is
+   * what the graph does not know yet: a claim answered while the viewer is looking at it, and one
+   * answered moments before, still inside the indexer lag. `viewer_response` is the predicate for
+   * both. geo-chat records a position the moment the write starts, so it answers promptly — it is
+   * the *graph* that waits on the indexer, which is why the card reconciles against that separately.
    *
    * Not while `taggedAnswersReady` is false, which is the same signal that decides whether a card
    * may be pressed at all: until the per-space rows land, `viewer_response` reads `null` for "holds
@@ -668,7 +884,7 @@ export function ClaimsTab({
   // Signed out there are no positions to hide — geo-chat answers every `viewer_response` null for
   // a viewer it has no account for — so the collapse is a no-op and the switch is a control that
   // cannot do anything. Both go, rather than leaving one drawn over the other's nothing.
-  const hidesMyPositions = authenticated && hideMyPositions;
+  const hidesMyPositions = hidesAnswered && authenticated && hideMyPositions;
 
   /**
    * And not when the answers cannot be had at all, which is a different thing from not having them
@@ -677,13 +893,10 @@ export function ClaimsTab({
    * A brand new account is the case this is for: geo-chat refuses every viewer-relative read until
    * it has registered them, so the per-space rows 401 and `viewer_response` never arrives for any
    * claim. The collapse then sits in `classifying` forever, and everything downstream of it follows
-   * — the tab holds its skeleton on `answersSettled`, `stillPaging` reads an empty list, bounded
-   * paging advances looking for rows the hold is what is keeping off screen, and the next page puts
-   * another lookup in flight to be held on in turn. The viewer watches it cycle: skeleton, a
+   * — the tab holds its skeleton on `answersSettled`, `stillPaging` reads an empty list, the
+   * sentinel advances looking for rows the hold is what is keeping off screen, and the next page
+   * puts another lookup in flight to be held on in turn. The viewer watches it cycle: skeleton, a
    * screenful of un-pressable cards, "looking for claims you haven't answered yet", skeleton again.
-   *
-   * It is the barren-corpus loop from GEO-2863 reached by a different road, and the bound is no
-   * help here — the pages are not barren, the rows are being held back.
    *
    * Turning the collapse off is not a fallback, it is the correct answer: a viewer whose account
    * does not exist yet holds no positions, so there is nothing to hide, and a lookup that failed
@@ -709,7 +922,8 @@ export function ClaimsTab({
   else if (answersArrived) answersUnavailableForRef.current = null;
   const answersUnavailable = answersUnavailableForRef.current === listKey;
 
-  const collapsesAnswered = !isLobby && filter !== 'mine' && hidesMyPositions && !answersUnavailable;
+  const collapsesAnswered =
+    (collapsesAnsweredOverride ?? (!isLobby && filter !== 'mine' && hidesMyPositions)) && !answersUnavailable;
   const answeredStateOf = React.useCallback(
     (entry: MatchmakingClaim): AnsweredState =>
       !taggedAnswersReady ? 'unknown' : entry.viewer_response !== null ? 'answered' : 'unanswered',
@@ -755,7 +969,7 @@ export function ClaimsTab({
   }
   const answersSettled = answersSettledForRef.current === listKey;
 
-  const visibleClaims = useCollapseAnswered(claims, {
+  const collapsedClaims = useCollapseAnswered(claims, {
     keyOf: claimRowKey,
     answeredStateOf,
     enabled: collapsesAnswered,
@@ -763,6 +977,17 @@ export function ClaimsTab({
     // answered ones are taken back a moment later — the first-paint problem again, one page down.
     classifying: answersInFlight,
   });
+
+  // The panel's own narrowing on top of the source's (GEO-3463): what the source cannot be asked for.
+  const visibleClaims = React.useMemo(() => {
+    // geo-chat's lists take spaces as "any of these", and each of their rows sits in one space. The
+    // panel's picks are AND, so a row has to be in every one picked.
+    const inPickedSpaces =
+      panelMode && !graphSourced && spaceIds.length > 1
+        ? collapsedClaims.filter(entry => inEverySpace(spaceIds, entry.claim.space_id))
+        : collapsedClaims;
+    return keepClaim ? inPickedSpaces.filter(keepClaim) : inPickedSpaces;
+  }, [collapsedClaims, graphSourced, keepClaim, panelMode, spaceIds]);
 
   // The topic menu, from the server's count over the tag. It describes every claim the current
   // filters allow rather than the pages loaded so far — which is what a client-side version could
@@ -791,6 +1016,28 @@ export function ClaimsTab({
   // keeps the previous filter's numbers on screen rather than blinking — which is exactly the
   // window this flag exists to mark, or the old counts read as current for a debounce plus a
   // request. `facetsSettled` is the same question these menus already answer with.
+  // Under the tab's own narrowing (`keepClaim`) the server's facets count the source rather than the
+  // rows on screen, so a count would not say what picking it leaves. The rows are geo-chat's and in
+  // hand, so they are counted here instead: spaces off the rows, topics off the claim entities, as
+  // the matches list counts its own.
+  const keptRows = keepClaim ? visibleClaims : NO_KEPT_ROWS;
+  const { topicsByClaimId: keptTopicsById } = useClaimRowTopics(keptRows);
+  const keptFacetTopics = useRowTopicFacet(keptRows, keptTopicsById, topicIds);
+  const panelFacetSpaces = React.useMemo(
+    // A picked space stays at zero when the rows leave it, as the source's facets keep it, or its
+    // pill (the way to un-pick it) and its name go.
+    () =>
+      keepClaim
+        ? keepSelectedVisible(countBy(keptRows.map(entry => ({ id: entry.claim.space_id, name: null }))), spaceIds)
+        : facetSpaces,
+    [facetSpaces, keepClaim, keptRows, spaceIds]
+  );
+  const panelFacetTopics = keepClaim ? keptFacetTopics : facetTopics;
+  // Whether those counts describe the rows on screen, which is what "does this pill still narrow"
+  // compares them with. The source's facets count the rows before the client folded any away (the
+  // answered ones, or a row outside one of the picked spaces), so then the listed count is unknown.
+  const facetsCountListedRows = Boolean(keepClaim) || visibleClaims.length === claims.length;
+
   const countsPending =
     searchSettling || indexedCountsPending || (graphSourced && (topicsSettling || spacesSettling || !facetsSettled));
 
@@ -829,9 +1076,9 @@ export function ClaimsTab({
     setTopicIds(current => keepSelectableTopics(current, facetTopics, facetsComplete && !topicsSettling));
   }, [facetTopics, facetsComplete, setTopicIds, topicsSettling]);
 
-  // Featured is not counted: it chooses which list is on screen rather than narrowing one, so an
-  // empty Featured tab should say nothing is featured — not that filters are hiding things — and
-  // "Clear filters" should leave the viewer on the tab they picked.
+  // The variant is not counted as narrowing: it chooses which list is on screen rather than cutting
+  // one down, so an empty list should say the list is empty — not that filters are hiding things —
+  // and "Clear filters" should leave the viewer on the list they picked.
   // Two questions, and they had one answer.
   //
   // What the viewer has *narrowed* by decides what an empty list means: with nothing narrowing it,
@@ -842,12 +1089,25 @@ export function ClaimsTab({
   // All claims is exactly what a viewer stuck on an empty My positions wants.
   // The list has rows and the viewer has answered all of them — which is the one empty state here
   // that is not about curation or about a filter, and reads wrongly as either.
-  const collapsedEverything = visibleClaims.length === 0 && claims.length > 0;
+  //
+  // With the backlog left out by the server, "every claim here is answered" arrives as an empty
+  // list rather than as rows collapsed away — the same shape as a corpus the filters leave nothing
+  // in. The two want different ways out, the switch or the filters, so an empty excluded list asks
+  // once how many it left out.
+  const hasNextPage = graphSourced ? taggedHasNextPage : claimsQuery.hasNextPage;
+  const excludedEmpty =
+    Boolean(excludeAnsweredBy) && !taggedLoading && !taggedError && claims.length === 0 && !hasNextPage;
+  const answeredHere = useTaggedAnsweredCount(claimsTagId, taggedFilters, taggedEnabled && excludedEmpty);
+  const excludedEverything = excludedEmpty && (answeredHere.answeredCount ?? 0) > 0;
+  // Counted before the tab's own narrowing: rows `keepClaim` took out were not answered, and "turn
+  // off Hide my positions" would do nothing for them. That case has its own message, below.
+  const collapsedEverything = collapsedClaims.length === 0 && (claims.length > 0 || excludedEverything);
+  const predicateEmptied = Boolean(keepClaim) && visibleClaims.length === 0 && collapsedClaims.length > 0;
   const hasNarrowingFilters = Boolean(debouncedSearch || spaceIds.length || topicIds.length);
 
-  // Both lists page now, so the sentinel follows whichever one is on screen (GEO-2798). The tagged
-  // lists used to arrive whole, which is why this was the index's alone.
-  const hasNextPage = graphSourced ? taggedHasNextPage : claimsQuery.hasNextPage;
+  React.useEffect(() => {
+    onVisibleClaims?.(visibleClaims);
+  }, [onVisibleClaims, visibleClaims]);
 
   // Reported once, and only from a settled, unnarrowed, working, *finished* list. Every one of
   // those matters: mid-load every list is empty, an error is not an answer about the corpus, a
@@ -858,9 +1118,22 @@ export function ClaimsTab({
   // publishability gates run over the loaded page, so a page can arrive with everything on it
   // removed while the corpus goes on — and Lobby would then walk the viewer off to Explore before
   // the sentinel had fetched the rows that would have kept them here.
-  const listIsLoading = spacesPending || (graphSourced ? taggedLoading : claimsQuery.isLoading);
+  const listIsLoading = spacesPending || excludePending || (graphSourced ? taggedLoading : claimsQuery.isLoading);
   const listError = graphSourced ? taggedError : claimsQuery.error;
-  const settledEmpty = !listIsLoading && !listError && !hasNarrowingFilters && !hasNextPage && claims.length === 0;
+  // Whether the rows in hand are the answer to what is picked: not on a first load, and not while a
+  // pick's previous rows are held over (`countsPending`), or "Show" would name the old count, or 0.
+  const resultPending =
+    listIsLoading || countsPending || answeredHere.isLoading || (collapsesAnswered && !answersSettled);
+  // Not when the server left the viewer's answers out: an empty list then is their backlog, not an
+  // empty corpus to be moved out of.
+  const settledEmpty =
+    !listIsLoading &&
+    !listError &&
+    !hasNarrowingFilters &&
+    !hasNextPage &&
+    claims.length === 0 &&
+    !answeredHere.isLoading &&
+    !excludedEverything;
   const reportedEmpty = React.useRef(false);
   React.useEffect(() => {
     if (!settledEmpty || reportedEmpty.current || !onSettledEmpty) return;
@@ -874,20 +1147,6 @@ export function ClaimsTab({
   const hasFilters = hasNarrowingFilters;
 
   const fetchNextPage = graphSourced ? fetchNextTaggedPage : claimsQuery.fetchNextPage;
-  // The collapse runs over the page in hand, so a viewer who has answered most of a corpus leaves
-  // the sentinel permanently in view and the list pages the whole thing on their behalf. Bounded
-  // rather than stopped: it advances while that is getting somewhere, and asks when it is not.
-  const { autoPages, stoppedShort, keepLooking } = useBoundedPaging({
-    // The server's own count, before the space and publishability gates run over it. A page they
-    // empty entirely is the barren case this bound is for, and counting the gated rows would make
-    // it look like no page had landed at all.
-    loaded: graphSourced ? taggedFetched : claimsQuery.fetched,
-    visible: visibleClaims.length,
-    settling: answersInFlight,
-    hasNextPage,
-    fetchNextPage,
-    resetKey: pagingKey,
-  });
 
   /**
    * The list does not fetch ahead until it has drawn once.
@@ -903,15 +1162,11 @@ export function ClaimsTab({
    * a list the viewer can already read — which is the only state in which fetching ahead is worth
    * anything to them anyway.
    *
-   * And it waits for each page's answers as well, which is the part that keeps it finite. A page
-   * arrives, its rows are held back while they are classified, the list stays short, and a sentinel
-   * a page ahead of the viewport fires again — while `useBoundedPaging` skips its accounting for
-   * exactly that window, because a page mid-classification cannot yet be called barren. So the
-   * budget was never charged and the loop had nothing to stop it: it walked the corpus as fast as
-   * the network allowed, hundreds of requests deep. Serialising the two closes it. Every page is
-   * charged before the next one starts, which is what the budget was counting on all along.
+   * And it waits for each page's answers as well. A page arrives, its rows are held back while they
+   * are classified, the list stays short, and a sentinel a page ahead of the viewport would fire
+   * again — putting the next lookup in flight before this one has let anything onto the screen.
    */
-  const mayFetchAhead = autoPages && answersSettled && !answersInFlight;
+  const mayFetchAhead = hasNextPage && answersSettled && !answersInFlight;
 
   /**
    * Rows under the list while the next page is on its way.
@@ -927,19 +1182,16 @@ export function ClaimsTab({
     hasNextPage &&
     ((graphSourced ? taggedFetchingNextPage : claimsQuery.isFetchingNextPage) || answersInFlight);
 
+  const hubScrollSelector = useHubScrollSelector();
   const sentinelRef = useInfiniteScrollSentinel({
     hasNextPage: mayFetchAhead,
     isFetchingNextPage: graphSourced ? taggedFetchingNextPage : claimsQuery.isFetchingNextPage,
     fetchNextPage,
-    // Further ahead than the default, because this list is filtered after it arrives: a page of
-    // fifty can add three rows, so the end of what is on screen is much closer to the end of what
-    // has been fetched than the row count suggests. Starting the next page a screenful or two early
-    // is what keeps that from reading as a list that stops every time you reach the bottom.
+    // Further ahead than the default, because a page's rows are fetched and then classified before
+    // any of it can be shown. Starting the next page a screenful or two early is what keeps that
+    // from reading as a list that stops every time you reach the bottom.
     rootMargin: '1200px',
-    // The hub scrolls in its own panel, and `rootMargin` expands the root — so measured against the
-    // viewport the lead above buys nothing: the sentinel is clipped by the panel until it has been
-    // scrolled to, which is the moment the lead was meant to come before.
-    rootSelector: '[data-debates-hub-scroll]',
+    rootSelector: hubScrollSelector,
   });
 
   /**
@@ -961,66 +1213,112 @@ export function ClaimsTab({
   const searchingMessage = collapsesAnswered
     ? 'Looking for claims you haven’t answered yet…'
     : 'Looking for more claims…';
-  const stoppedShortMessage = collapsesAnswered
-    ? 'Nothing you haven’t already answered in the claims searched so far.'
-    : 'Nothing in the claims searched so far.';
 
   // Every hook above has run, so the cache is filled and the atoms are seeded; there is simply
   // nothing to draw. Placed here rather than early, which would break the rules of hooks.
   if (warm) return null;
-
   return (
-    <div className="flex flex-col">
-      <HubStickyControls>
+    <HubListColumns
+      workspace={workspace}
+      rail={
+        <HubFacetRail
+          facetSpaces={facetSpaces}
+          spaceIds={spaceIds}
+          onSpaceToggle={recordedFilters.onSpaceToggle}
+          onSpacesClear={recordedFilters.onSpacesClear}
+          facetTopics={facetTopics}
+          topicIds={topicIds}
+          onTopicToggle={recordedFilters.onTopicToggle}
+          onTopicsClear={recordedFilters.onTopicsClear}
+        />
+      }
+    >
+      <HubStickyControls workspaceStickyOffset={workspace} topClassName={stickyTopClassName}>
+        {panelFilters && panelMode ? (
+          <PanelFiltersBar
+            analyticsSurface={analyticsSurface}
+            filters={panelFilters}
+            search={search}
+            onSearchChange={setSearch}
+            searchPlaceholder="Search claims"
+            spaces={panelFacetSpaces}
+            topics={panelFacetTopics}
+            spaceIds={spaceIds}
+            topicIds={topicIds}
+            onSpaceToggle={onSpaceToggle}
+            onSpacesClear={onSpacesClear}
+            onTopicIdsChange={setTopicIds}
+            onFilterChoice={recordedFilters.recordFilter}
+            listedCount={hasNextPage || !facetsCountListedRows ? 0 : visibleClaims.length}
+            // A tagged claim can sit in several spaces, so the others stay on offer after a pick.
+            spacesAreExclusive={!graphSourced}
+            resultCount={resultPending || hasNextPage ? null : visibleClaims.length}
+            countsPending={!keepClaim && countsPending}
+          />
+        ) : null}
         {/* Pinned above the filters, the way the matches list pins it. A request sent from here used
             to vanish the moment it was sent — the card that sent it looks exactly as it did before,
             and the only evidence was on another tab. It rides inside the sticky block rather than
             above it because two stickies would both claim `top-0` and overlap, and this one is
             conditional so the filters could not be offset by a known height. */}
-        {outbound ? <OutboundRequestCard request={outbound} /> : null}
+        {/* The panel says all of this in the strip above the tabs instead (GEO-3463). */}
+        {outbound && !panelMode ? <OutboundRequestCard request={outbound} /> : null}
 
-        <Input
-          withSearchIcon
-          value={search}
-          onChange={event => setSearch(event.currentTarget.value)}
-          placeholder="Search claims"
-          aria-label="Search claims"
-        />
+        {panelMode ? null : (
+          <Input
+            withSearchIcon
+            value={search}
+            onChange={event => setSearch(event.currentTarget.value)}
+            placeholder="Search claims"
+            aria-label="Search claims"
+          />
+        )}
 
-        <SpaceTopicFilters
-          analyticsSurface="hub"
-          spaceIds={spaceIds}
-          onSpaceToggle={onSpaceToggle}
-          onSpacesClear={onSpacesClear}
-          topicIds={topicIds}
-          onTopicToggle={id => setTopicIds(current => toggleId(current, id))}
-          onTopicsClear={() => setTopicIds([])}
-          facetSpaces={facetSpaces}
-          facetTopics={facetTopics}
-          countsPending={countsPending}
-          // Lobby passes its own ("Matches only"); Explore draws the one that hides answered claims.
-          // Positions draws neither: it *is* the list of answered claims, so hiding them there
-          // could only empty it — a broken tab rather than a filter — and the state cannot be set
-          // from the one place it must not apply. Nor is it drawn signed out, where the viewer has
-          // no positions for it to hide and it would be a switch with nothing behind it.
-          //
-          trailing={
-            isLobby ? (
-              trailing
-            ) : filter === 'mine' || !authenticated ? null : (
-              <HideMyPositionsSwitch analyticsSurface="hub" checked={hideMyPositions} onChange={setHideMyPositions} />
-            )
-          }
-        />
+        {panelMode ? null : (
+          <SpaceTopicFilters
+            analyticsSurface={analyticsSurface}
+            leading={scopePicker}
+            menusClassName={workspace ? '@[72rem]/hub:hidden' : undefined}
+            spaceIds={spaceIds}
+            onSpaceToggle={recordedFilters.onSpaceToggle}
+            onSpacesClear={recordedFilters.onSpacesClear}
+            topicIds={topicIds}
+            onTopicToggle={recordedFilters.onTopicToggle}
+            onTopicsClear={recordedFilters.onTopicsClear}
+            facetSpaces={facetSpaces}
+            facetTopics={facetTopics}
+            countsPending={countsPending}
+            // Lobby passes its own ("Matches only"); Explore draws the one that hides answered claims.
+            // Positions draws neither: it *is* the list of answered claims, so hiding them there
+            // could only empty it — a broken tab rather than a filter — and the state cannot be set
+            // from the one place it must not apply. Nor is it drawn signed out, where the viewer has
+            // no positions for it to hide and it would be a switch with nothing behind it.
+            //
+            trailing={
+              isLobby ? (
+                trailing
+              ) : filter === 'mine' || !authenticated || !hidesAnswered ? null : (
+                <HideMyPositionsSwitch
+                  analyticsSurface={analyticsSurface}
+                  checked={hideMyPositions}
+                  onChange={setHideMyPositions}
+                />
+              )
+            }
+          />
+        )}
       </HubStickyControls>
 
       <div className="flex flex-col gap-3 px-4 py-3">
+        {typeof notice === 'function' ? notice(visibleClaims.length > 0) : notice}
         <HubQueryState
-          analyticsSurface="hub"
+          analyticsSurface={analyticsSurface}
           // Plus the answers, where the list hides some of them. Drawing before they land shows a
           // screenful the tab is about to take back — see `answersSettled`.
           isLoading={
             spacesPending ||
+            excludePending ||
+            answeredHere.isLoading ||
             (graphSourced ? taggedLoading : claimsQuery.isLoading) ||
             (collapsesAnswered && !answersSettled)
           }
@@ -1063,10 +1361,9 @@ export function ClaimsTab({
               ? { label: 'Sign in', message: 'Sign in to browse claims to debate.', onClick: onRequireSignIn }
               : undefined
           }
-          // What an empty list means depends on where it came from, and the two graph-sourced
-          // filters mean different things by it: Featured says a curator has tagged nothing, All
-          // says nothing carries the Debate tag. Both are statements about curation, not about the
-          // viewer's filters, so they only show when no filter is narrowing anything.
+          // What an empty list means depends on where it came from. Explore is the graph-sourced
+          // one, and empty there says nothing carries the Debate tag — a statement about curation,
+          // not about the viewer's filters, so it only shows when no filter is narrowing anything.
           //
           // Answered-everything comes first, because it is the only one of the three that is true
           // of a list with rows in it. Saying "nothing carries the Debate tag" to someone who has
@@ -1074,17 +1371,19 @@ export function ClaimsTab({
           emptyMessage={
             stillPaging
               ? searchingMessage
-              : stoppedShort
-                ? stoppedShortMessage
-                : collapsedEverything
-                  ? 'You’ve answered every claim here. Turn off “Hide my positions” to see them, or pick another space or topic.'
+              : collapsedEverything
+                ? panelMode
+                  ? 'You’ve answered every claim here. Choose All under Show to see them, or pick another space or topic.'
+                  : 'You’ve answered every claim here. Turn off “Hide my positions” to see them, or pick another space or topic.'
+                : predicateEmptied
+                  ? (panelFilters?.emptyPredicate?.message ?? 'No claims match these filters.')
                   : hasNarrowingFilters
                     ? 'No claims match these filters.'
                     : NOTHING_HERE[filter]
           }
           // "Debate now" is the only filter here scored on who is online, so it is the only one an
-          // empty list means "nobody is around" for — Featured and All claims are statements about
-          // curation, and My positions is about the viewer. Withheld under a narrowing filter for
+          // empty list means "nobody is around" for — Explore is a statement about curation, and My
+          // positions is about the viewer. Withheld under a narrowing filter for
           // the same reason it is on the other tabs: that emptiness has a different cause
           // (GEO-2840).
           // `live` unconditionally: `SIGNED_OUT_HIDDEN_FILTERS` takes "Debate now" out of the menu
@@ -1095,48 +1394,64 @@ export function ClaimsTab({
           emptyAction={
             stillPaging
               ? undefined
-              : stoppedShort
-                ? { label: 'Keep looking', onClick: keepLooking }
-                : collapsedEverything
-                  ? { label: 'Show my positions', onClick: () => setHideMyPositions(false) }
+              : collapsedEverything
+                ? // The panel has no switch: Show is how it hides them, and All is this.
+                  { label: panelMode ? 'Show all' : 'Show my positions', onClick: () => setHideMyPositions(false) }
+                : predicateEmptied && panelFilters?.emptyPredicate?.action
+                  ? panelFilters.emptyPredicate.action
                   : hasFilters
                     ? {
                         label: 'Clear filters',
                         onClick: () => {
                           setSearch('');
+                          recordedFilters.recordFilter({ kind: 'filters', value: 'all' });
                           // The menu's own clear row, so this counts as choosing the unfiltered
                           // list and the default cannot put its spaces back.
                           onSpacesClear();
                           setTopicIds([]);
                         },
                       }
-                    : undefined
+                    : (panelFilters?.emptyAction ?? exploreClaimsAction(onTabChange))
           }
         >
           {/* One list, in the server's order. Splitting out the claims you'd already answered
             re-ranked the tab by something the Position filter in the dropdown already covers, and
             it moved a card between two sections the moment you took a side. */}
           <HubCardList>
-            {visibleClaims.map(entry => (
-              <MatchmakingClaimCard
+            {visibleClaims.map((entry, index) => (
+              // GEO-3495: the card's impression, and a request sent from it, name this list and place.
+              <DebateClaimCardSurface
                 key={claimRowKey(entry)}
-                claim={entry.claim}
-                positions={entry.positions}
-                readiness={entry}
-                activeDebate={entry.active_debate}
-                // The paged list is geo-chat's own, so every row carries its kind already; only the
-                // tagged list has to wait for one — and only for the space this claim is in.
-                answersReady={taggedAnswersReadyFor(entry)}
-                // And where it cannot, the indexed read answers for the side, the same way the main
-                // feed's cards do. geo-chat refusing this viewer used to leave the whole panel
-                // unpressable while those cards went on working.
-                answersMayComeFromIndex
-                onRequireSignIn={onRequireSignIn}
-              />
+                claimId={entry.claim.claim_entity_id}
+                listId={listId}
+                position={index + 1}
+                scope={debouncedSearch ? { list_searched: true } : undefined}
+              >
+                {renderClaim ? (
+                  renderClaim(entry, {
+                    answersReady: taggedAnswersReadyFor(entry),
+                    allowsSignedOutVotes: !authenticated,
+                  })
+                ) : (
+                  <MatchmakingClaimCard
+                    claim={entry.claim}
+                    positions={entry.positions}
+                    readiness={entry}
+                    activeDebate={entry.active_debate}
+                    // The paged list is geo-chat's own, so every row carries its kind already; only the
+                    // tagged list has to wait for one — and only for the space this claim is in.
+                    answersReady={taggedAnswersReadyFor(entry)}
+                    // And where it cannot, the indexed read answers for the side, the same way the main
+                    // feed's cards do. geo-chat refusing this viewer used to leave the whole panel
+                    // unpressable while those cards went on working.
+                    answersMayComeFromIndex
+                    allowsSignedOutVotes={!authenticated}
+                  />
+                )}
+              </DebateClaimCardSurface>
             ))}
           </HubCardList>
         </HubQueryState>
-
         {/* Pages arrive as the viewer reaches the end of the list rather than on a button. Outside
           the empty state deliberately: the space allowlist and the topic filter both run over the
           loaded pages, so a page can arrive with nothing to show — and with the sentinel rendered
@@ -1157,19 +1472,9 @@ export function ClaimsTab({
           </div>
         ) : null}
 
-        {mayFetchAhead ? (
-          <div ref={sentinelRef} data-testid="claims-scroll-sentinel" className="h-px" />
-        ) : stoppedShort && visibleClaims.length > 0 ? (
-          // The empty state carries this offer when the list is empty, and cannot when it is not —
-          // `HubQueryState` draws its action *instead of* the rows. Stopping short with rows on
-          // screen is the ordinary case, so without this the list simply stopped paging and said
-          // nothing, which is the one outcome the bound was meant to avoid.
-          <div className="flex justify-center pt-1">
-            <HubPillButton onClick={keepLooking}>Keep looking</HubPillButton>
-          </div>
-        ) : null}
+        {mayFetchAhead ? <div ref={sentinelRef} data-testid="claims-scroll-sentinel" className="h-px" /> : null}
       </div>
-    </div>
+    </HubListColumns>
   );
 }
 
@@ -1181,38 +1486,57 @@ export function ClaimsTab({
  * can't see. The tab row above it is already fixed — it sits outside the panel's scroll container
  * — so this is the only piece that needed pinning here.
  */
-export function HubStickyControls({ children }: { children: React.ReactNode }) {
+/**
+ * The workspace's two columns: an open facet rail beside the list.
+ */
+export function HubListColumns({
+  workspace,
+  rail,
+  children,
+}: {
+  workspace: boolean;
+  rail: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  if (!workspace) return <div className="flex flex-col">{children}</div>;
+
   return (
-    <div className="sticky top-0 z-10 flex flex-col gap-3 border-b border-grey-02 bg-white px-4 py-3">{children}</div>
+    <div className="flex min-w-0 gap-8">
+      <aside
+        aria-label="Filters"
+        className="sticky top-[7.5rem] hidden max-h-[calc(100dvh-8.5rem)] w-60 shrink-0 self-start overflow-y-auto @[72rem]/hub:block"
+        data-testid="hub-facet-rail"
+        data-hub-facet-rail-scroll
+      >
+        {rail}
+      </aside>
+      {/* `@container/claims` is containment for the cards' own queries (`claim-pills-wide`,
+          `claim-card-narrow`), not a column grid. The list is one card per row at every width. */}
+      <div className="@container/claims flex min-w-0 flex-1 flex-col">{children}</div>
+    </div>
   );
 }
 
-/**
- * The two sides of a tagged claim, from geo-chat's per-space row.
- *
- * That row reports the sides as `online_choices` — who is online and available on each — where the
- * hub's index reports a total alongside them. The card draws the avatars and their overflow count
- * off `total_count`, so the online count stands in for it: it is the only count this endpoint
- * gives, and undercounting a side is better than claiming a total it never told us.
- */
-function taggedPositionSummaries(row: DebateClaim | undefined): DebateClaimPositionSummary[] {
-  return [true, false].map(position => {
-    const choice = row?.online_choices.find(candidate => candidate.position === position);
-
-    return {
-      position,
-      // Our label, never geo-chat's stale Verify/Dispute — see `positionSummariesFromCounts`.
-      position_label: responsePositionLabel(position),
-      total_count: choice?.participant_count ?? 0,
-      available_now_count: choice?.participant_count ?? 0,
-      // These are `online_choices`, so the count already *is* the present population — the same
-      // number, but it has to be set explicitly. `present_count` is what the avatar stack and its
-      // `+N` read (GEO-2691), and leaving it unset would fall back to the length of the capped
-      // preview and silently drop the overflow: 5 people behind 2 faces would render no "+3".
-      present_count: choice?.participant_count ?? 0,
-      participants: choice?.participants ?? [],
-    };
-  });
+export function HubStickyControls({
+  children,
+  workspaceStickyOffset = false,
+  topClassName,
+}: {
+  children: React.ReactNode;
+  workspaceStickyOffset?: boolean;
+  topClassName?: string;
+}) {
+  return (
+    <div
+      className={cx(
+        'sticky z-10 flex flex-col gap-3 border-b border-grey-02 bg-white px-4 py-3',
+        topClassName ?? (workspaceStickyOffset ? 'top-[7.5rem]' : 'top-0')
+      )}
+      data-hub-sticky-controls
+    >
+      {children}
+    </div>
+  );
 }
 
 type SpaceTopicFiltersProps = {
@@ -1241,6 +1565,7 @@ type SpaceTopicFiltersProps = {
    * at the edge than as a fourth pill in the run.
    */
   trailing?: React.ReactNode;
+  menusClassName?: string;
 };
 
 /**
@@ -1262,7 +1587,9 @@ export function SpaceTopicFilters({
   countsPending,
   leading,
   trailing,
+  menusClassName,
 }: SpaceTopicFiltersProps) {
+  const menu = (node: React.ReactNode) => (menusClassName ? <div className={menusClassName}>{node}</div> : node);
   const facetSpaceIds = React.useMemo(() => facetSpaces.map(space => space.id), [facetSpaces]);
 
   const { labelsById, isLoading: labelsLoading } = useSpaceLabels(facetSpaceIds);
@@ -1306,45 +1633,49 @@ export function SpaceTopicFilters({
   return (
     <div className="flex flex-wrap items-center gap-2">
       {leading}
-      <HubMultiFilterMenu
-        // The hub is docked to the viewport's right, but this trigger starts at the panel's left.
-        // Viewport-based alignment chooses the end there and hangs the menu over the page behind
-        // the panel. This wrapper owns the debate filters, so unrelated profile/feed menus keep
-        // their adaptive placement.
-        align="start"
-        label={spaceMenuLabel}
-        analytics={{ name: 'Space', surface: analyticsSurface }}
-        labelPending={spaceIds.length === 1 && !onlySpace && labelsLoading}
-        options={spaceOptions}
-        values={spaceIds}
-        onToggle={onSpaceToggle}
-        onClear={onSpacesClear}
-        clearLabel="Any space"
-        countsPending={countsPending}
-        showImages
-      />
-      {facetTopics && topicIds && onTopicToggle && onTopicsClear ? (
-        // Beside the space menu, never pushed to the far end. The rematch picker used to do that
-        // with the width it has spare, and once "Matches only" arrived at that end the two sat
-        // together there — a menu and a switch, reading as one control. The menus belong with each
-        // other; the switch is what the end of the row is for.
+      {menu(
         <HubMultiFilterMenu
+          // The hub is docked to the viewport's right, but this trigger starts at the panel's left.
+          // Viewport-based alignment chooses the end there and hangs the menu over the page behind
+          // the panel. This wrapper owns the debate filters, so unrelated profile/feed menus keep
+          // their adaptive placement.
           align="start"
-          label={topicMenuLabel}
-          analytics={{ name: 'Topic', surface: analyticsSurface }}
-          options={topicOptions}
-          values={topicIds}
-          onToggle={onTopicToggle}
-          onClear={onTopicsClear}
-          clearLabel="Any topic"
+          label={spaceMenuLabel}
+          analytics={{ name: 'Space', surface: analyticsSurface }}
+          labelPending={spaceIds.length === 1 && !onlySpace && labelsLoading}
+          options={spaceOptions}
+          values={spaceIds}
+          onToggle={onSpaceToggle}
+          onClear={onSpacesClear}
+          clearLabel="Any space"
           countsPending={countsPending}
-          // Only this menu takes a query. The space menu is the handful of spaces the viewer
-          // belongs to; the topic facet is every subject the corpus has been tagged with, which is
-          // a scrolling list on any space that has been used for a while.
-          searchPlaceholder="Search topics"
-          searchEmptyLabel="No topics match"
+          showImages
         />
-      ) : null}
+      )}
+      {facetTopics && topicIds && onTopicToggle && onTopicsClear
+        ? // Beside the space menu, never pushed to the far end. The rematch picker used to do that
+          // with the width it has spare, and once "Matches only" arrived at that end the two sat
+          // together there — a menu and a switch, reading as one control. The menus belong with each
+          // other; the switch is what the end of the row is for.
+          menu(
+            <HubMultiFilterMenu
+              align="start"
+              label={topicMenuLabel}
+              analytics={{ name: 'Topic', surface: analyticsSurface }}
+              options={topicOptions}
+              values={topicIds}
+              onToggle={onTopicToggle}
+              onClear={onTopicsClear}
+              clearLabel="Any topic"
+              countsPending={countsPending}
+              // Only this menu takes a query. The space menu is the handful of spaces the viewer
+              // belongs to; the topic facet is every subject the corpus has been tagged with, which
+              // is a scrolling list on any space that has been used for a while.
+              searchPlaceholder="Search topics"
+              searchEmptyLabel="No topics match"
+            />
+          )
+        : null}
       {/* A growable gap rather than `ml-auto`, which is what lets this be right about both cases
           without anyone having to measure the label.
 

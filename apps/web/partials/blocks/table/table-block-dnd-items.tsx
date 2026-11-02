@@ -12,7 +12,7 @@ import {
 import { SortableContext, arrayMove, useSortable } from '@dnd-kit/sortable';
 import type { SortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Position} from '@geoprotocol/geo-sdk/lite';
+import { Position } from '@geoprotocol/geo-sdk/lite';
 
 import React from 'react';
 
@@ -37,6 +37,7 @@ const MOUSE_ACTIVATION = { distance: 10 };
 const TOUCH_ACTIVATION = { delay: 250, tolerance: 6 };
 
 export type RenderItemProps = {
+  itemPosition?: number;
   row: Row;
   isEditing: boolean;
   spaceId: string;
@@ -252,6 +253,7 @@ export const TableBlockDndItems = ({
             {config.renderItem({
               ...sharedItemProps,
               row,
+              itemPosition: index + 1,
               isPlaceholder: false,
             })}
           </React.Fragment>
@@ -401,6 +403,7 @@ const SortableItem = ({
         {config.renderItem({
           ...sharedItemProps,
           row,
+          itemPosition: position + 1,
           isPlaceholder: false,
         })}
       </div>

@@ -19,7 +19,7 @@ function matches(source: string, path: string) {
 }
 
 describe('marketing routing', () => {
-  it.each(['/', '/terms', '/api/subscribe', '/_marketing/_next/static/chunk.js',
+  it.each(['/', '/terms', '/www/help', '/www/docs', '/www/faq', '/www/downloads', '/www/api/help', '/www/future-page', '/api/subscribe', '/_marketing/_next/static/chunk.js',
     '/_marketing/image', '/hero/logo.svg', '/hero/debates/debate-1.webm',
     '/curators/card-grey-1.webp', '/opengraph-image.jpg', '/twitter-image.jpg'])
   ('forwards %s to the marketing deployment without changing its path', async path => {
@@ -30,10 +30,29 @@ describe('marketing routing', () => {
   });
 
   it.each(['/root', '/explore', '/space/123', '/space/123/debates/456',
+    '/help', '/docs', '/faq', '/downloads', '/api/help', '/api/downloads/desktop',
     '/api/chat', '/api/debates/publish-sweep', '/_next/image', '/_next/static/chunk.js',
-    '/early-access', '/curator-program', '/ending-homelessness', '/blog'])
+    '/early-access', '/curator-program', '/ending-homelessness', '/blog', '/unsubscribe', '/settings/notifications'])
   ('does not capture existing Genesis or legacy route %s', async path => {
     expect((await marketingRoutes()).some(route => matches(route.source, path))).toBe(false);
+  });
+
+  // GEO-3392. Every email's footer links to `/?modal=email-settings`; without this the marketing
+  // rewrite above takes it, and the app never opens the dialog.
+  it("sends the email footers' settings link from the marketing root into the app", async () => {
+    const redirects = await config.redirects!();
+    const toSettings = redirects.filter(route => route.source === '/' && route.destination === '/explore');
+
+    expect(toSettings).toEqual([
+      {
+        source: '/',
+        has: [{ type: 'query', key: 'modal', value: 'email-settings' }],
+        destination: '/explore',
+        permanent: false,
+      },
+    ]);
+    // Only that link: a bare `/` still reaches the marketing site.
+    expect(redirects.some(route => route.source === '/' && !route.has)).toBe(false);
   });
 });
 

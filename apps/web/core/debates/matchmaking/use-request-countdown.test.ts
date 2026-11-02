@@ -92,6 +92,48 @@ describe('useRequestCountdown', () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
+  // GEO-3463: the panel times a live ask as m:ss, so its seconds move every second, not every 15.
+  it('ticks every second in clock format, even with more than a minute left', async () => {
+    vi.setSystemTime(new Date('2026-08-05T12:00:00.000Z'));
+    const { useRequestCountdown } = await import('./use-request-countdown');
+
+    const { result } = renderHook(() => useRequestCountdown('2026-08-05T12:01:30.000Z', { format: 'clock' }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(result.current.label).toBe('1:30');
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_000);
+    });
+    expect(result.current.label).toBe('1:29');
+  });
+
+  it('stops the clock format at expiry too', async () => {
+    vi.setSystemTime(new Date('2026-08-05T12:00:00.000Z'));
+    const { useRequestCountdown } = await import('./use-request-countdown');
+
+    const { result } = renderHook(() => useRequestCountdown('2026-08-05T12:00:02.000Z', { format: 'clock' }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3_000);
+    });
+
+    expect(result.current.label).toBe('0:00');
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('times nothing, and arms nothing, for no expiry', async () => {
+    const { useRequestCountdown } = await import('./use-request-countdown');
+
+    const { result } = renderHook(() => useRequestCountdown(null, { format: 'clock' }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(result.current.label).toBe('0:00');
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it('never arms a timer for an unparseable expiry', async () => {
     vi.setSystemTime(new Date('2026-08-05T12:00:00.000Z'));
     const { useRequestCountdown } = await import('./use-request-countdown');
@@ -158,5 +200,47 @@ describe('useUnexpiredRequests', () => {
 
     expect(result.current.map(request => request.id)).toEqual(['malformed']);
     expect(vi.getTimerCount()).toBe(0);
+  });
+});
+
+describe('useLiveRequest', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    mocks.serverTimeMs = new Date('2026-08-05T12:00:00.000Z').getTime();
+    vi.setSystemTime(new Date('2026-08-05T12:00:00.000Z'));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.resetModules();
+  });
+
+  async function live(request: { status: string; expires_at: string } | null | undefined) {
+    const { useLiveRequest } = await import('./use-request-countdown');
+    const { result } = renderHook(() => useLiveRequest(request));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    return result;
+  }
+
+  it('keeps a pending request until it expires', async () => {
+    const result = await live({ status: 'pending', expires_at: '2026-08-05T12:00:10.000Z' });
+    expect(result.current).not.toBeNull();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(11_000);
+    });
+
+    expect(result.current).toBeNull();
+  });
+
+  it('drops one the server has already answered', async () => {
+    expect((await live({ status: 'accepted', expires_at: '2026-08-05T12:30:00.000Z' })).current).toBeNull();
+  });
+
+  it('answers null for no request at all', async () => {
+    expect((await live(null)).current).toBeNull();
+    expect((await live(undefined)).current).toBeNull();
   });
 });

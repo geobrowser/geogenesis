@@ -121,6 +121,7 @@ function FeaturedRankingCard({
             <span className="shrink-0">
               <ExploreJoinSpaceButton
                 spaceId={ranking.spaceId}
+                spaceName={ranking.spaceName ?? undefined}
                 hasRequestedSpaceMembership={pending}
                 variant="pill"
                 label="Join"

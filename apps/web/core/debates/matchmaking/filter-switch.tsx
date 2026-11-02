@@ -21,11 +21,16 @@ export function FilterSwitch({
   checked,
   onChange,
   analyticsSurface,
+  disabled = false,
+  title,
 }: {
   label: string;
   checked: boolean;
   onChange: (next: boolean) => void;
   analyticsSurface: DebateAnalyticsSurface;
+  /** Greyed out and inert, with `title` saying why. */
+  disabled?: boolean;
+  title?: string;
 }) {
   return (
     <button
@@ -34,8 +39,10 @@ export function FilterSwitch({
       aria-checked={checked}
       aria-label={label}
       {...debateSurfaceAnalyticsAttributes(analyticsSurface, label, 'filter')}
+      disabled={disabled}
+      title={title}
       onClick={() => onChange(!checked)}
-      className="flex min-h-7 shrink-0 cursor-pointer items-center gap-1.5 text-metadata text-grey-04"
+      className="flex min-h-7 shrink-0 cursor-pointer items-center gap-1.5 text-metadata text-grey-04 disabled:cursor-not-allowed disabled:opacity-50"
     >
       <span>{label}</span>
       <Toggle checked={checked} />

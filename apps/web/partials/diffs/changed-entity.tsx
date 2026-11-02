@@ -9,6 +9,7 @@ import cx from 'classnames';
 import { Effect } from 'effect';
 
 import { DATA_BLOCK_DROPDOWNS_PROPERTY_ID } from '~/core/blocks/data/block-ontology-ids';
+import { parsePersistedSort } from '~/core/blocks/data/persisted-sort';
 import { DATA_BLOCK_VIEW_EXPLORE_ID } from '~/core/data-block-ids';
 import { getBatchEntities } from '~/core/io/queries';
 import { RANKING_VIEW_PILL_ID } from '~/core/ranking-block-ids';
@@ -16,6 +17,7 @@ import { hasMarkdownSyntax, renderMarkdownDocument, renderMarkdownInline } from 
 import { reactiveRelations } from '~/core/sync/store';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
 import { SORT_PROPERTY } from '~/core/system-ids';
+import { builtInSortLabel } from '~/core/utils/column-sort';
 import type {
   BlockChange,
   DataBlockChange,
@@ -628,36 +630,51 @@ type BlockChangeRowProps = {
 };
 
 const BlockChangeRow = ({ block, spaceId }: BlockChangeRowProps) => {
-  switch (block.type) {
-    case 'textBlock':
-      return (
-        <div className="grid grid-cols-2 gap-20">
-          <TextBlockCell block={block} side="before" />
-          <TextBlockCell block={block} side="after" />
+  const row = (() => {
+    switch (block.type) {
+      case 'textBlock':
+        return (
+          <div className="grid grid-cols-2 gap-20">
+            <TextBlockCell block={block} side="before" />
+            <TextBlockCell block={block} side="after" />
+          </div>
+        );
+      case 'imageBlock':
+        return (
+          <div className="grid grid-cols-2 gap-20">
+            <ImageBlockCell block={block} side="before" />
+            <ImageBlockCell block={block} side="after" />
+          </div>
+        );
+      case 'videoBlock':
+        return (
+          <div className="grid grid-cols-2 gap-20">
+            <VideoBlockCell block={block} side="before" />
+            <VideoBlockCell block={block} side="after" />
+          </div>
+        );
+      case 'dataBlock':
+        return (
+          <div className="grid grid-cols-2 gap-20">
+            <DataBlockCell block={block} side="before" spaceId={spaceId} />
+            <DataBlockCell block={block} side="after" spaceId={spaceId} />
+          </div>
+        );
+    }
+  })();
+
+  if (block.moved) {
+    return (
+      <div>
+        <div className="mb-2 inline-flex items-center gap-1.5 rounded border border-grey-02 bg-grey-01 px-2 py-1">
+          <span className="text-metadata text-grey-04">Moved</span>
         </div>
-      );
-    case 'imageBlock':
-      return (
-        <div className="grid grid-cols-2 gap-20">
-          <ImageBlockCell block={block} side="before" />
-          <ImageBlockCell block={block} side="after" />
-        </div>
-      );
-    case 'videoBlock':
-      return (
-        <div className="grid grid-cols-2 gap-20">
-          <VideoBlockCell block={block} side="before" />
-          <VideoBlockCell block={block} side="after" />
-        </div>
-      );
-    case 'dataBlock':
-      return (
-        <div className="grid grid-cols-2 gap-20">
-          <DataBlockCell block={block} side="before" spaceId={spaceId} />
-          <DataBlockCell block={block} side="after" spaceId={spaceId} />
-        </div>
-      );
+        {row}
+      </div>
+    );
   }
+
+  return row;
 };
 
 const renderHeading = (level: number, children: React.ReactNode): React.ReactNode => {
@@ -1053,12 +1070,8 @@ function extractEntityIdsFromConfigValues(configValues: ValueChange[]): string[]
   const ids = new Set<string>();
 
   const extractFromSortJson = (raw: string) => {
-    try {
-      const parsed = JSON.parse(raw);
-      maybeAddEntityBatchId(ids, parsed.sort_by);
-    } catch {
-      // ignore
-    }
+    const sort = parsePersistedSort(raw);
+    if (sort?.kind === 'property') maybeAddEntityBatchId(ids, sort.columnId);
   };
 
   const extractFromFilterJson = (raw: string) => {
@@ -1191,7 +1204,8 @@ const DataBlockCell = ({ block, side, spaceId }: DataBlockCellProps) => {
 
   if (isNew && side === 'before') return <div />;
   if (isDeleted && side === 'after') return <div />;
-  if (!hasNameChange && !hasConfigChanges) return <div />;
+  // A moved block has no name/config change of its own, but must still render so the reorder shows.
+  if (!hasNameChange && !hasConfigChanges && !dataBlock.moved) return <div />;
 
   return (
     <div
@@ -1561,15 +1575,11 @@ function getSortValue(sortValues: ValueChange[], side: 'before' | 'after'): stri
 }
 
 function formatSortDisplay(value: string, nameMap: Map<string, string>): string {
-  try {
-    const parsed = JSON.parse(value);
-    const direction = parsed.sort_direction === 'ascending' ? 'Ascending' : 'Descending';
-    const columnId = parsed.sort_by ?? 'unknown';
-    const columnName = nameMap.get(columnId) ?? columnId;
-    return `${columnName}, ${direction}`;
-  } catch {
-    return value;
-  }
+  const sort = parsePersistedSort(value);
+  if (!sort) return value;
+  const direction = sort.direction === 'asc' ? 'Ascending' : 'Descending';
+  const name = sort.kind === 'builtin' ? builtInSortLabel(sort.sort) : (nameMap.get(sort.columnId) ?? sort.columnId);
+  return `${name}, ${direction}`;
 }
 
 function formatFilterDisplay(value: string, nameMap: Map<string, string>): string {

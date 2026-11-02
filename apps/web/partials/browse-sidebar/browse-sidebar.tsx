@@ -12,15 +12,15 @@ import { personalSpaceViewed } from '~/core/analytics';
 import { useBountiesEnabled } from '~/core/bounties/config';
 import { BROWSE_NAV_ICON } from '~/core/browse/browse-nav-icon-src';
 import { browseSidebarDataQueryKey } from '~/core/browse/browse-sidebar-query';
-import { fetchBrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data';
-import type { BrowseSidebarData, BrowseSpaceRow } from '~/core/browse/fetch-browse-sidebar-data';
+import { browseSidebarQueryOptions } from '~/core/browse/browse-sidebar-query-options';
+import type { BrowseSpaceRow } from '~/core/browse/fetch-browse-sidebar-data';
 import { GEO_APPS_SIDEBAR_LINKS } from '~/core/browse/geo-apps-sidebar-src';
 import { DOCUMENTATION_SPACE_ENTITY_ID, DOCUMENTATION_SPACE_ID } from '~/core/constants';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSpaceId } from '~/core/hooks/use-space-id';
-import { browseSidebarOpenAtom } from '~/core/state/browse-sidebar-state';
+import { browseSidebarShownAtom } from '~/core/state/browse-sidebar-state';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import {
   activeRequestedSpacesForOwner,
@@ -28,7 +28,7 @@ import {
   requestedMembershipSpacesAtom,
 } from '~/core/state/requested-membership';
 import { normId } from '~/core/utils/norm-id';
-import { NavUtils, getImagePath } from '~/core/utils/utils';
+import { NavUtils } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
 import { FallbackImage } from '~/design-system/fallback-image';
@@ -38,23 +38,9 @@ import { Close } from '~/design-system/icons/close';
 import { GeoLogoLarge } from '~/design-system/icons/geo-logo-large';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
-import { avatarAtom } from '~/partials/onboarding/dialog';
-
-import { loadBrowseSidebarData } from './load-browse-sidebar-data';
+import { avatarAtom } from '~/partials/onboarding/onboarding-atoms';
 
 const SIDEBAR_WIDTH_PX = 200;
-
-/** Warm the HTTP cache for sidebar thumbs before the panel is opened (thumbs mount only when expanded). */
-function collectBrowseSidebarImageHrefs(data: BrowseSidebarData): string[] {
-  const seen = new Set<string>();
-  const add = (image: string | null | undefined) => {
-    if (image) seen.add(getImagePath(image));
-  };
-  for (const row of data.featured) add(row.image);
-  for (const row of data.editorOf) add(row.image);
-  for (const row of data.memberOf) add(row.image);
-  return [...seen];
-}
 
 const navLinkBase = 'flex items-center gap-3 rounded-lg p-2.5 text-browseMenu font-normal not-italic';
 const navLinkIdle = `${navLinkBase} text-text hover:bg-grey-01`;
@@ -310,20 +296,16 @@ type BrowseSidebarProps =
 
 export function BrowseSidebar(props: BrowseSidebarProps = {}) {
   const presentation = props.presentation ?? 'desktop';
-  const [open, setOpen] = useAtom(browseSidebarOpenAtom);
+  const [open, setOpen] = useAtom(browseSidebarShownAtom);
   const mobile = presentation === 'mobile';
   const onClose = props.presentation === 'mobile' ? props.onClose : undefined;
   const { personalSpaceId: personalSpaceIdFromHook } = usePersonalSpaceId();
   const { smartAccount } = useSmartAccount();
   const walletAddress = smartAccount?.account.address;
   const queryClient = useQueryClient();
-  const sidebarQueryKeyInput = personalSpaceIdFromHook ?? walletAddress ?? null;
-  const { data = null } = useQuery({
-    queryKey: browseSidebarDataQueryKey(sidebarQueryKeyInput),
-    queryFn: () =>
-      personalSpaceIdFromHook ? fetchBrowseSidebarData(personalSpaceIdFromHook) : loadBrowseSidebarData(walletAddress),
-    staleTime: 60_000,
-  });
+  const { data = null } = useQuery(
+    browseSidebarQueryOptions({ personalSpaceId: personalSpaceIdFromHook, walletAddress })
+  );
   const personalSpaceId = data?.personalSpaceId ?? personalSpaceIdFromHook;
 
   // Optimistic, persisted bridge: spaces requested this session (from anywhere)
@@ -376,15 +358,6 @@ export function BrowseSidebar(props: BrowseSidebarProps = {}) {
     if (!data?.personalSpaceId) return;
     queryClient.setQueryData(browseSidebarDataQueryKey(data.personalSpaceId), data);
   }, [data, queryClient]);
-
-  React.useEffect(() => {
-    if (!data) return;
-    for (const href of collectBrowseSidebarImageHrefs(data)) {
-      const img = new Image();
-      img.decoding = 'async';
-      img.src = href;
-    }
-  }, [data]);
 
   // Preload both idle and active variants of nav icons so the swap on click
   // is instant (otherwise the fresh SVG has to fetch and the icon updates a

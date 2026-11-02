@@ -1,22 +1,30 @@
 import { describe, expect, it } from 'vitest';
 
-import { debateFormatById, debateFormats, debateTimingSummary, debateTurnRole, defaultDebateFormatId } from './formats';
+import formatContract from './debate-formats.contract.json';
+import {
+  debateFormatById,
+  debateFormats,
+  debateTimingSummary,
+  debateTurnRole,
+  defaultDebateFormatId,
+  hasNumberedOpenRoundsTurns,
+  openRoundsInitialTurnDurationsMs,
+  openRoundsMaxSpeakingTimeMs,
+} from './formats';
 
 describe('debate formats', () => {
-  it('matches the prototype format catalog', () => {
-    expect(debateFormats.map(format => [format.id, format.label, format.turnDurationsMs])).toEqual([
-      ['dev-short', '7/7 4/4 3/3', [7_000, 7_000, 4_000, 4_000, 3_000, 3_000]],
-      ['standard', '1/1 45/45 30/30', [60_000, 60_000, 45_000, 45_000, 30_000, 30_000]],
-      ['extended-standard', '45/45 30/30', [45_000, 45_000, 30_000, 30_000]],
-      ['triple-standard', '45/45 30/30 30/30', [45_000, 45_000, 30_000, 30_000, 30_000, 30_000]],
-    ]);
-  });
-
-  it('matches the geo-chat catalog for the live format', () => {
-    // geo-chat resolves the id independently in `DebateFormat::standard()` and writes the
-    // durations onto the debate row. If the two catalogs drift, the request dialog previews turns
-    // the debate will not actually run.
-    expect(debateFormatById('standard')?.turnDurationsMs).toEqual([60_000, 60_000, 45_000, 45_000, 30_000, 30_000]);
+  /**
+   * geo-chat keeps its own copy of this catalog (`DebateFormat` in `crates/debates`) and is the
+   * one that writes `turn_durations_ms` onto the debate row; this copy only previews turns in the
+   * request dialog. `debate-formats.contract.json` is the shape both sides agree on (GEO-2956):
+   * this test holds `formats.ts` to it, geo-chat's tests hold its constructors to its own copy,
+   * and geo-chat's CI diffs that copy against this file on `master`. A change here therefore
+   * fails geo-chat's CI until geo-chat ships the same change.
+   */
+  it('matches the catalog contract shared with geo-chat', () => {
+    expect(
+      debateFormats.map(format => ({ id: format.id, label: format.label, turn_durations_ms: format.turnDurationsMs }))
+    ).toEqual(formatContract);
   });
 
   it('formats round summaries', () => {
@@ -49,5 +57,37 @@ describe('debate formats', () => {
 
   it('puts the rebuttal second-to-last when a format has more rounds', () => {
     expect([0, 2, 4, 6].map(index => debateTurnRole(index, 8))).toEqual(['opening', 'response', 'rebuttal', 'closing']);
+  });
+});
+
+describe('Open rounds allowance previews', () => {
+  const turns = [60_000, 60_000, 45_000, 45_000, 30_000, 30_000];
+  it('uses the same stored required turns for cards and total speaking time', () => {
+    const format = {
+      max_rebuttal_rounds: 10,
+      required_rebuttal_rounds: 2,
+      rebuttal_turn_ms: 30_000,
+      turn_durations_ms: turns,
+    };
+    expect(openRoundsInitialTurnDurationsMs(format)).toEqual(turns);
+    expect(openRoundsMaxSpeakingTimeMs(format)).toBe(750_000);
+    expect(hasNumberedOpenRoundsTurns(turns)).toBe(true);
+    // A ready prompt can arrive after an extension. Do not count appended turns twice.
+    expect(openRoundsMaxSpeakingTimeMs({ ...format, turn_durations_ms: [...turns, 30_000, 30_000] })).toBe(750_000);
+  });
+  it('counts required rounds inside the cap and hides all optional time at the required-only cap', () => {
+    expect(
+      openRoundsMaxSpeakingTimeMs({
+        max_rebuttal_rounds: 2,
+        required_rebuttal_rounds: 2,
+        rebuttal_turn_ms: 30_000,
+        turn_durations_ms: turns,
+      })
+    ).toBe(270_000);
+  });
+  it('preserves all 45-second rounds for legacy/custom required counts without a snapshot', () => {
+    const format = { max_rebuttal_rounds: 10, required_rebuttal_rounds: 2, rebuttal_turn_ms: 45_000 };
+    expect(openRoundsInitialTurnDurationsMs(format)).toEqual([60_000, 60_000, 45_000, 45_000, 45_000, 45_000]);
+    expect(openRoundsMaxSpeakingTimeMs(format)).toBe(1_020_000);
   });
 });

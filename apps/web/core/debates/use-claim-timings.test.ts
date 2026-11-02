@@ -3,15 +3,30 @@ import { renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ClaimTiming } from './claim-timing';
+import { RENDERED_TURN_SEGMENTS } from './open-rounds-media-fixtures';
 import type { DebateTranscriptClaims, TranscriptClaim } from './transcript-claims';
 import { useClaimTimings } from './use-claim-timings';
 
 const transcript = vi.hoisted(() => ({
   calls: [] as { debateId: string; enabled: boolean }[],
   state: { data: undefined as unknown, isSuccess: false, isError: false },
+  media: undefined as unknown,
+  mediaEnabled: [] as boolean[],
+  mediaSettled: true,
 }));
 
 vi.mock('./hooks', () => ({
+  useDebateMedia: (_id: string, enabled: boolean) => {
+    transcript.mediaEnabled.push(enabled);
+    return {
+      data: transcript.mediaSettled ? transcript.media : undefined,
+      isPending: !transcript.mediaSettled,
+      isLoading: !transcript.mediaSettled,
+      isSuccess: transcript.mediaSettled,
+      isError: false,
+      error: null,
+    };
+  },
   useDebateTranscript: (debateId: string, _format: string, enabled: boolean) => {
     transcript.calls.push({ debateId, enabled });
     return transcript.state;
@@ -52,6 +67,25 @@ describe('useClaimTimings', () => {
   beforeEach(() => {
     transcript.calls = [];
     transcript.state = { data: undefined, isSuccess: false, isError: false };
+    transcript.media = undefined;
+    transcript.mediaEnabled = [];
+    transcript.mediaSettled = true;
+  });
+
+  // Timecodes published to the graph are the edited video's; the player plays the raw recordings,
+  // so each is placed by the turn it falls in, from the turn's two served positions (GEO-3293).
+  it('places each claim on the recordings the player plays, not the edited video', () => {
+    // The Preston vs Adam render: turn 2 is at 121.6 s in the video and 128 s in the recordings.
+    transcript.media = { turn_segments: RENDERED_TURN_SEGMENTS };
+    const { result } = renderHook(() =>
+      useClaimTimings(
+        'debate-1',
+        claims([claim('a', published(10_000, 12_000)), claim('b', published(130_000, 134_000))])
+      )
+    );
+
+    expect(result.current.timings.get('a')).toMatchObject({ startMs: 10_000, endMs: 12_000 });
+    expect(result.current.timings.get('b')).toMatchObject({ startMs: 136_400, endMs: 140_400 });
   });
 
   /**
@@ -104,6 +138,32 @@ describe('useClaimTimings', () => {
   it('is ready immediately when no transcript is needed', () => {
     const { result } = renderHook(() => useClaimTimings('debate-1', claims([claim('a', published(0, 1_000))])));
 
+    expect(result.current.isReady).toBe(true);
+  });
+
+  // The claims panel and activity rows read this for every debate. Only a published timecode needs
+  // the media, so a debate without one asks for nothing new.
+  it('asks for the media only when a claim carries a published timecode', () => {
+    renderHook(() => useClaimTimings('debate-1', claims([claim('a', null), claim('b', null)])));
+    expect(transcript.mediaEnabled.at(-1)).toBe(false);
+
+    renderHook(() => useClaimTimings('debate-1', claims([claim('a', published(0, 1_000)), claim('b', null)])));
+    expect(transcript.mediaEnabled.at(-1)).toBe(true);
+  });
+
+  // Copilot, #2843: while the media is still coming, a published time is on the edited clock and
+  // would place the claim early, then move it. It is held back until the media answers.
+  it('holds a published timing back until the media that places it has answered', () => {
+    transcript.media = { turn_segments: RENDERED_TURN_SEGMENTS };
+    transcript.mediaSettled = false;
+    const input = claims([claim('b', published(130_000, 134_000))]);
+    const { result, rerender } = renderHook(() => useClaimTimings('debate-1', input));
+    expect(result.current.timings.has('b')).toBe(false);
+    expect(result.current.isReady).toBe(false);
+
+    transcript.mediaSettled = true;
+    rerender();
+    expect(result.current.timings.get('b')).toMatchObject({ startMs: 136_400, endMs: 140_400 });
     expect(result.current.isReady).toBe(true);
   });
 });

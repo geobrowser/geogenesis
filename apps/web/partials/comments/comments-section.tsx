@@ -30,6 +30,7 @@ import { uuidToHex } from '~/core/id/normalize';
 import { useEntityResponseScores } from '~/core/responses/use-entity-response-scores';
 import { renderMarkdownDocument } from '~/core/state/editor/markdown-render';
 import { pendingCommentComposerAtom } from '~/core/state/pending-comment-intents';
+import { observePanelNavigation } from '~/core/utils/entity-side-panel-link';
 import { NavUtils } from '~/core/utils/utils';
 
 import { Dropdown } from '~/design-system/dropdown';
@@ -54,6 +55,7 @@ import {
   threadSpineOffsetPx,
 } from './comment-density';
 import { getRelativeTime } from './comment-time';
+import { ENTITY_COMMENTS_ANCHOR_ID } from './entity-comments-anchor';
 import { ThreadAvatar } from './thread-avatar';
 import { ThreadCollapseToggle, ThreadListSpine, ThreadParentSpine, branchPointerBlurProps } from './thread-branch';
 import type { CommentActivityRow, CommentFilter, CommentSortOrder, CommentWithReplies } from './types';
@@ -278,7 +280,16 @@ export function CommentSection({
   });
   const { personalSpaceId } = usePersonalSpaceId();
   const { smartAccount } = useSmartAccount();
-  const promptSignIn = usePrivySignIn();
+  const promptSignIn = usePrivySignIn(undefined, {
+    analytics: {
+      component: 'comment_composer',
+      target_type: 'entity',
+      target_id: entityId,
+      auth_control: 'comment',
+      auth_intent: 'comment',
+      auth_continuation: 'resume',
+    },
+  });
   const [pendingComposer, setPendingComposer] = useAtom(pendingCommentComposerAtom);
   const [composerExpanded, setComposerExpanded] = useState(false);
   const [pendingReplyToId, setPendingReplyToId] = useState<string | null>(null);
@@ -296,7 +307,8 @@ export function CommentSection({
   const requireSignInToComment = React.useCallback(
     (replyToCommentId?: string) => {
       setPendingComposer({ entityId, replyToCommentId: replyToCommentId ?? null });
-      promptSignIn();
+      // A dismissed sign-in drops the intent, so a later, unrelated sign-in doesn't pop this open.
+      promptSignIn(undefined, { onCancel: () => setPendingComposer(null) });
     },
     [entityId, promptSignIn, setPendingComposer]
   );
@@ -353,8 +365,8 @@ export function CommentSection({
 
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
-    if (window.location.hash !== '#entity-comments') return;
-    const el = document.getElementById('entity-comments');
+    if (window.location.hash !== `#${ENTITY_COMMENTS_ANCHOR_ID}`) return;
+    const el = document.getElementById(ENTITY_COMMENTS_ANCHOR_ID);
     if (el) {
       requestAnimationFrame(() => el.scrollIntoView({ behavior: 'smooth', block: 'start' }));
     }
@@ -470,7 +482,10 @@ export function CommentSection({
           publish here, because the heading's number is an aggregate none of them can otherwise move. */}
       <ActivityPostsProvider onAdjust={adjustActivityPosts}>
         <CommentBranchHighlightProvider>
-          <div id="entity-comments" className={cx('flex w-full min-w-0 flex-col', variant === 'page' && 'pt-10')}>
+          <div
+            id={ENTITY_COMMENTS_ANCHOR_ID}
+            className={cx('flex w-full min-w-0 flex-col', variant === 'page' && 'pt-10')}
+          >
             {!isPanel && (
               <>
                 <div className="text-mediumTitle">
@@ -1229,6 +1244,7 @@ function CommentItem({
         style={{ width: density.avatarPx, height: density.avatarPx }}
       >
         <ThreadAvatar
+          panelNavigation="observe"
           href={NavUtils.toSpace(comment.author.spaceId)}
           // The same name printed beside it: a linked face with an empty `alt` has no accessible name.
           label={comment.author.name ?? 'Anonymous'}
@@ -1244,7 +1260,7 @@ function CommentItem({
       <div className="flex min-w-0 flex-1 flex-nowrap items-center gap-1.5 overflow-hidden">
         <a
           href={NavUtils.toSpace(comment.author.spaceId)}
-          onClick={recordAuthorOpen}
+          {...observePanelNavigation(recordAuthorOpen)}
           className="min-w-0 truncate hover:underline"
         >
           <span className={cx(density.nameClass, 'text-text')}>{comment.author.name ?? 'Anonymous'}</span>
@@ -1427,7 +1443,7 @@ function CommentItem({
           >
             <a
               href={NavUtils.toSpace(comment.author.spaceId)}
-              onClick={recordAuthorOpen}
+              {...observePanelNavigation(recordAuthorOpen)}
               className="min-w-0 truncate hover:underline"
             >
               <span className={cx(density.nameClass, 'text-text')}>{comment.author.name ?? 'Anonymous'}</span>

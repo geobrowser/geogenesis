@@ -15,30 +15,17 @@ import { print } from 'graphql';
 import { createHash } from 'node:crypto';
 
 import type { DebateTranscriptSegment } from '../../core/debates/api';
-import {
-  AUTHORS_PROPERTY_ID,
-  BLOCKS_PROPERTY_ID,
-  CLAIM_END_OFFSET_PROPERTY_ID,
-  CLAIM_START_OFFSET_PROPERTY_ID,
-  DEBATE_CLAIMS_PROPERTY_ID,
-  DEBATE_TRANSCRIPTS_PROPERTY_ID,
-  DEBATE_TYPE_ID,
-  MARKDOWN_CONTENT_PROPERTY_ID,
-  NAME_PROPERTY_ID,
-} from '../../core/debates/ontology';
+import { DEBATE_TYPE_ID } from '../../core/debates/ontology';
 import { type DebateTranscriptClaims, groupTranscriptClaims } from '../../core/debates/transcript-claims';
+import { hexToUuid } from '../../core/id/create-id';
 import {
   type DebateTranscriptClaimsQuery,
   debateTranscriptClaimsDocument,
+  debateTranscriptClaimsVariables,
 } from '../../core/io/debate-transcript-claims-document';
 
 export const API = 'https://api-testnet.geobrowser.io/graphql';
 const CHAT = 'https://chat-api-testnet.geobrowser.io';
-
-/** `4c81561d1f95…` → `4c81561d-1f95-…`. The chat API wants the dashed form; the graph does not. */
-function toDashedUuid(id: string): string {
-  return id.replaceAll('-', '').replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/, '$1-$2-$3-$4-$5');
-}
 
 export async function graphql<T>(query: string, variables: Record<string, unknown>): Promise<T> {
   const response = await fetch(API, {
@@ -77,17 +64,10 @@ export async function fetchAllDebates(): Promise<{ id: string; name: string | nu
 
 /** One debate's claims and turns, grouped exactly as the app groups them. */
 export async function fetchDebateClaims(debateEntityId: string, spaceId: string): Promise<DebateTranscriptClaims> {
-  const data = await graphql<DebateTranscriptClaimsQuery>(print(debateTranscriptClaimsDocument), {
-    id: debateEntityId,
-    transcriptsPropertyId: DEBATE_TRANSCRIPTS_PROPERTY_ID,
-    blocksPropertyId: BLOCKS_PROPERTY_ID,
-    authorsPropertyId: AUTHORS_PROPERTY_ID,
-    claimsPropertyId: DEBATE_CLAIMS_PROPERTY_ID,
-    spaceId,
-    namePropertyId: NAME_PROPERTY_ID,
-    markdownPropertyId: MARKDOWN_CONTENT_PROPERTY_ID,
-    offsetPropertyIds: [CLAIM_START_OFFSET_PROPERTY_ID, CLAIM_END_OFFSET_PROPERTY_ID],
-  });
+  const data = await graphql<DebateTranscriptClaimsQuery>(
+    print(debateTranscriptClaimsDocument),
+    debateTranscriptClaimsVariables(debateEntityId, spaceId)
+  );
 
   return groupTranscriptClaims(data, spaceId);
 }
@@ -105,7 +85,7 @@ export async function fetchDebateClaims(debateEntityId: string, spaceId: string)
  * a confident, quietly partial answer — the one outcome these scripts exist to avoid.
  */
 export async function fetchTranscriptSegments(debateEntityId: string): Promise<DebateTranscriptSegment[]> {
-  const url = `${CHAT}/debates/${toDashedUuid(debateEntityId)}/transcript?format=json`;
+  const url = `${CHAT}/debates/${hexToUuid(debateEntityId)}/transcript?format=json`;
 
   let response: Response;
   try {

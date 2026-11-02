@@ -195,7 +195,8 @@ export function collectCandidateEntityIds(index: OwnershipIndex, relations: read
  */
 export function buildIsNewEntity(
   allValues: readonly Value[],
-  allRelations: readonly Relation[]
+  allRelations: readonly Relation[],
+  confirmedOnGraph: ReadonlySet<string> = new Set()
 ): (entityId: string) => boolean {
   const established = new Set<string>();
 
@@ -213,7 +214,7 @@ export function buildIsNewEntity(
     established.add(relation.entityId);
   }
 
-  return entityId => !established.has(entityId);
+  return entityId => !established.has(entityId) && !confirmedOnGraph.has(entityId);
 }
 
 /** Which selected rows cannot be deselected — complement of {@link findDanglingDependencies}. */

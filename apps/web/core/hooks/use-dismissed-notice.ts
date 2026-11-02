@@ -21,11 +21,27 @@ import { dismissedNoticesAtom } from '~/atoms';
  * dismissal, which is not something a combined "dismiss" could express.
  */
 export function useDismissedNotice(id: string) {
+  const { isDismissed, remember } = useDismissedNotices();
+  return { dismissed: isDismissed(id), remember: useCallback(() => remember([id]), [id, remember]) };
+}
+
+/**
+ * The same for a notice that stands for several ids at once, such as the Explore banner for every
+ * lobby live right now (GEO-3268): dismissing it records each, so the next one still shows.
+ */
+export function useDismissedNotices() {
   const [dismissedNotices, setDismissedNotices] = useAtom(dismissedNoticesAtom);
 
-  const remember = useCallback(() => {
-    setDismissedNotices(previous => (previous.includes(id) ? previous : [...previous, id]));
-  }, [id, setDismissedNotices]);
+  const remember = useCallback(
+    (ids: string[]) => {
+      setDismissedNotices(previous => {
+        const added = ids.filter((id, index) => !previous.includes(id) && ids.indexOf(id) === index);
+        return added.length > 0 ? [...previous, ...added] : previous;
+      });
+    },
+    [setDismissedNotices]
+  );
+  const isDismissed = useCallback((id: string) => dismissedNotices.includes(id), [dismissedNotices]);
 
-  return { dismissed: dismissedNotices.includes(id), remember };
+  return { isDismissed, remember };
 }

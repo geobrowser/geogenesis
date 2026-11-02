@@ -18,7 +18,7 @@ vi.mock('~/core/id', () => ({ ID: { createEntityId: () => 'new-entity' } }));
 vi.mock('~/core/state/pending-personal-space', () => ({
   isPendingPersonalSpaceId: (spaceId: string | null | undefined) => spaceId?.startsWith('pending:') ?? false,
 }));
-vi.mock('../create-space/create-space-dialog', () => ({
+vi.mock('../create-space/create-space-state', () => ({
   useOpenCreateSpaceDialog: () => mocks.createSpace,
 }));
 

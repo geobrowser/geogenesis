@@ -11,6 +11,7 @@ import { Duration, Effect, Either, Schedule } from 'effect';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { TransactionWriteFailedError } from '~/core/errors';
 import { checkEntityExists } from '~/core/io/queries';
+import { commentsFetchedQueryKey } from '~/core/io/query-keys';
 import { geo } from '~/core/sdk/geo-client';
 import { useReportError } from '~/core/state/status-bar-store';
 import { toUserFacingError } from '~/core/utils/error-diagnostics';
@@ -367,6 +368,9 @@ export function useCreateComment(targetEntityId: string) {
         // Merge server results with any pending-publish rows already in the cache so concurrent
         // optimistic comments (including this one, until the indexer sees it) survive the update.
         const applyServerList = (list: CommentEntity[]) => {
+          // The poll fetched the full list, just like commentsQueryOptions. Without this marker,
+          // useCommentCount counts only pending rows and loses the increment once indexing clears it.
+          queryClient.setQueryData(commentsFetchedQueryKey(targetEntityId), true);
           queryClient.setQueryData<CommentEntity[]>(['comments', targetEntityId], (prev?: CommentEntity[]) =>
             mergePendingWithServer(list, prev)
           );

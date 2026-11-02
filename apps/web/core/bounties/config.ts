@@ -28,13 +28,15 @@ export function useBountiesEnabled(): boolean {
 }
 
 /**
- * Payout authoring is OFF until the curator points ledger (neo4j) derives from
- * the graph. curator-app writes a payout to the graph AND credits neo4j at
- * payout time (its `editors/bounty/$spaceId/payout/$bountyId` route publishes
- * the relation, then calls the backend credit); a payout published only from
- * here would never reach that ledger, so balances and rewards would silently
- * diverge. Flip this once curator-backend sweeps Payout entities from the
- * graph — its ProcessedPayout guard is already keyed on the payout id for it.
+ * Payouts attached to a REVIEW stay off here: the review flow pays the
+ * submission's creator entity, which can be a person rather than the curator's
+ * space. Direct payouts to an allocated curator (`useDirectPayout`) are on, and
+ * run LEDGER FIRST: credit the curator points ledger (neo4j) through
+ * curator-backend, whose balance check decides whether the payout happens, and
+ * only then publish the Payout relation. That is the reverse of curator-app's
+ * route, and deliberate: publishing first can leave a Payout in the graph that
+ * the ledger then refused. (The ledger's check is not concurrency-safe across
+ * different payouts; see `payout-credit.ts`.)
  */
 export const PAYOUT_AUTHORING_ENABLED = false;
 
@@ -42,3 +44,9 @@ export const PAYOUT_AUTHORING_ENABLED = false;
 export function isBountyEntity(types: readonly { id: string }[] | null | undefined): boolean {
   return !!types?.some(type => type.id.replace(/-/g, '').toLowerCase() === BOUNTY_TYPE_ID);
 }
+
+/**
+ * curator-backend, which owns the curator points ledger (space balances and
+ * curator rewards). Testnet host — bounties are testnet-only (see above).
+ */
+export const CURATOR_API_URL = 'https://curator-api-testnet.geobrowser.io';

@@ -1,15 +1,52 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   MAX_CALL_DURATION_MINUTES,
   MIN_CALL_DURATION_MINUTES,
+  SKIPPED_TIME_ERROR,
   formatSchedule,
+  isSkippedLocalTime,
+  localToUtcMs,
   parseSchedule,
   serializeSchedule,
   validateSchedule,
 } from './schedule';
 
+// geo-chat's `parse_time`: a repeated hour takes its earlier instant, a skipped one reads an hour on.
+describe('localToUtcMs, as geo-chat resolves wall clocks', () => {
+  const at = (iso: string) => Date.parse(iso);
+  const naive = (y: number, m: number, d: number, h: number, min: number) => Date.UTC(y, m - 1, d, h, min);
+
+  it('reads a time the clocks skip an hour on', () => {
+    expect(localToUtcMs(naive(2026, 3, 8, 2, 30), 'America/New_York')).toBe(at('2026-03-08T07:30:00Z'));
+    expect(isSkippedLocalTime(naive(2026, 3, 8, 2, 30), 'America/New_York')).toBe(true);
+  });
+
+  it('takes the earlier of a repeated hour, west and east of UTC', () => {
+    expect(localToUtcMs(naive(2026, 11, 1, 1, 30), 'America/New_York')).toBe(at('2026-11-01T05:30:00Z'));
+    expect(localToUtcMs(naive(2026, 10, 25, 1, 30), 'Europe/London')).toBe(at('2026-10-25T00:30:00Z'));
+    expect(isSkippedLocalTime(naive(2026, 11, 1, 1, 30), 'America/New_York')).toBe(false);
+  });
+
+  it('reads ordinary times on either side of a change', () => {
+    expect(localToUtcMs(naive(2026, 3, 8, 9, 0), 'America/Los_Angeles')).toBe(at('2026-03-08T16:00:00Z'));
+    expect(localToUtcMs(naive(2026, 3, 7, 9, 0), 'America/Los_Angeles')).toBe(at('2026-03-07T17:00:00Z'));
+    expect(localToUtcMs(naive(2026, 10, 26, 17, 0), 'Africa/Lagos')).toBe(at('2026-10-26T16:00:00Z'));
+    expect(localToUtcMs(naive(2026, 10, 26, 17, 0), 'Not/AZone')).toBe(at('2026-10-26T17:00:00Z'));
+  });
+});
+
 describe('validateSchedule', () => {
+  it('refuses a start or end the clocks skip', () => {
+    expect(validateSchedule('DTSTART;TZID=America/New_York:20260308T023000').errors).toContain(SKIPPED_TIME_ERROR);
+    expect(
+      validateSchedule('DTSTART;TZID=America/New_York:20260308T013000\nDTEND;TZID=America/New_York:20260308T024500')
+        .errors
+    ).toContain(SKIPPED_TIME_ERROR);
+    expect(validateSchedule('DTSTART;TZID=America/New_York:20261101T013000').valid).toBe(true);
+    expect(validateSchedule('DTSTART:20260308T023000Z').valid).toBe(true);
+  });
+
   it('accepts a valid schedule with DTSTART only', () => {
     const result = validateSchedule('DTSTART:20260305T170000Z');
     expect(result.valid).toBe(true);
@@ -96,6 +133,36 @@ describe('validateSchedule', () => {
   it('accepts a future DTSTART when requireFutureStart is set', () => {
     const result = validateSchedule('DTSTART:20990101T000000Z', { requireFutureStart: true });
     expect(result.valid).toBe(true);
+  });
+
+  describe('requireFutureStart with a TZID start, at 17:17 EDT', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-10-26T21:17:00Z'));
+    });
+    afterEach(() => vi.useRealTimers());
+
+    const future = (schedule: string) => validateSchedule(schedule, { requireFutureStart: true });
+
+    it('accepts a New York start later today', () => {
+      expect(future('DTSTART;TZID=America/New_York:20261026T174000').valid).toBe(true);
+      expect(future('DTSTART;TZID=America/New_York:20261026T175700').valid).toBe(true);
+    });
+
+    it('rejects a New York start five minutes ago', () => {
+      expect(future('DTSTART;TZID=America/New_York:20261026T171200').errors).toContain(
+        'Start time must be in the future'
+      );
+    });
+
+    it('rejects a Tokyo start an hour ago', () => {
+      expect(future('DTSTART;TZID=Asia/Tokyo:20261027T051700').errors).toContain('Start time must be in the future');
+    });
+
+    it('reads a Z value as UTC', () => {
+      expect(future('DTSTART:20261026T213000Z').valid).toBe(true);
+      expect(future('DTSTART:20261026T210000Z').valid).toBe(false);
+    });
   });
 
   it('accepts a past DTSTART when requireFutureStart is not set', () => {
@@ -326,6 +393,18 @@ describe('formatSchedule', () => {
   it('formats a schedule with interval', () => {
     const formatted = formatSchedule('DTSTART:20260305T170000Z\nRRULE:FREQ=WEEKLY;INTERVAL=2;BYDAY=MO');
     expect(formatted).toContain('Every 2 weeks on Monday');
+  });
+
+  it('names an ordinal monthly weekday', () => {
+    expect(formatSchedule('DTSTART:20260518T130000Z\nRRULE:FREQ=MONTHLY;BYDAY=3MO')).toContain(
+      'Monthly on the third Monday'
+    );
+    expect(formatSchedule('DTSTART:20261030T170000Z\nRRULE:FREQ=MONTHLY;BYDAY=-1FR')).toContain(
+      'Monthly on the last Friday'
+    );
+    expect(formatSchedule('DTSTART:20261030T170000Z\nRRULE:FREQ=MONTHLY;INTERVAL=2;BYDAY=1TU')).toContain(
+      'Every 2 months on the first Tuesday'
+    );
   });
 
   it('formats multiple days', () => {

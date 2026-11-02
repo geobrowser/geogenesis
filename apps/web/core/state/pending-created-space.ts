@@ -2,6 +2,7 @@
 
 import { atom, useAtomValue } from 'jotai';
 
+import type { ActionContext } from '~/core/action-context';
 import type { VotingSettingsInput } from '~/core/hooks/use-deploy-space';
 import type { SpaceGovernanceType, SpaceType } from '~/core/types';
 
@@ -25,6 +26,8 @@ import type { SpaceGovernanceType, SpaceType } from '~/core/types';
 export type PendingCreatedSpace = {
   /** Dedupe key so the runner never fires the same deploy twice. */
   jobId: string;
+  /** Snapshot before the dialog closes; the runner can execute on another page. */
+  attribution: ActionContext;
   type: SpaceType;
   spaceName: string;
   spaceImage?: string;

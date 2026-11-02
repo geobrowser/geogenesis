@@ -2,11 +2,15 @@
 
 import * as React from 'react';
 
-import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
+import cx from 'classnames';
+
+import { ActionSurfaceArticle } from '~/core/action-context-provider';
+import { CLAIM_TYPE_ID, TOPIC_TYPE_ID } from '~/core/claims/ontology';
 import { EVENT_SCHEMA } from '~/core/community-calls/constants';
 import { useRecordingSources } from '~/core/community-calls/use-recording-sources';
 import { isDebateEntity } from '~/core/debates/is-debate-entity';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
+import { useNearViewport } from '~/core/hooks/use-near-viewport';
 import { RANKING_BLOCK_TYPE_ID } from '~/core/ranking-block-ids';
 import { normId } from '~/core/utils/norm-id';
 
@@ -15,12 +19,20 @@ import { PublishedRecordingPlayer } from '~/partials/community-calls/published-r
 import { type ClaimCardVariant, ClaimExploreFeedCard } from './claim-explore-feed-card';
 import { DebateExploreFeedCard } from './debate-explore-feed-card';
 import { DebateExploreMetaRow } from './debate-explore-meta-row';
-import { EXPLORE_CARD_CLASS, ExploreCardActions, ExploreCardDefaultBody } from './explore-card-chrome';
+import {
+  EXPLORE_CARD_CLASS,
+  ExploreCardActions,
+  ExploreCardDefaultBody,
+  ExploreCardSurface,
+} from './explore-card-chrome';
 import { ExploreCardTitle } from './explore-card-title';
 import { ExploreMetaRow } from './explore-meta-row';
 import { RankingCardBody } from './explore-ranking-card-body';
+import { TopicExploreFeedCardArticle } from './topic-explore-feed-card';
 
 type ExploreFeedCardProps = {
+  itemPosition?: number;
+  listId?: string;
   item: ExploreFeedItem;
   /** Hide the space thumbnail + space-name link in the meta row. Useful when the card is rendered inside the space it references (e.g. the activity tab). */
   hideSpaceLink?: boolean;
@@ -45,10 +57,17 @@ type ExploreFeedCardProps = {
   onDebatePlaybackAvailabilityChange?: (debateId: string, available: boolean) => void;
   /** Profile-only owner action shown beside the debate's full-screen control. */
   debateEndSlot?: React.ReactNode;
+  /**
+   * Hold the card back until it comes near the viewport, drawing a placeholder of about its height
+   * until then. For a long list whose lower cards nobody has scrolled to yet — see
+   * `DeferredExploreFeedCard`.
+   */
+  deferUntilNearViewport?: boolean;
 };
 
 const COMMUNITY_CALL_EVENT_TYPE = normId(EVENT_SCHEMA.COMMUNITY_CALL_EVENT_TYPE);
 const CLAIM_TYPE = normId(CLAIM_TYPE_ID);
+const TOPIC_TYPE = normId(TOPIC_TYPE_ID);
 const RANKING_BLOCK_TYPE = normId(RANKING_BLOCK_TYPE_ID);
 
 type CardBodyProps = {
@@ -92,6 +111,63 @@ function CommunityCallCardBody({ item, actions, titleOpensSidePanel }: CardBodyP
  * the debate can't actually be watched. Everything else renders one of the bodies below.
  */
 export function ExploreFeedCard(props: ExploreFeedCardProps) {
+  const { ref, nearViewport } = useNearViewport();
+  // Latched: a card that has rendered in full never goes back to a placeholder. Its index can move
+  // past the eager cutoff after it mounts (seen cards hidden once the seen store loads, a refetched
+  // first page), and dropping a live card — a debate mid-playback — for a placeholder would restart it.
+  const [rendered, setRendered] = React.useState(() => !props.deferUntilNearViewport);
+  const showCard = rendered || nearViewport || !props.deferUntilNearViewport;
+  if (showCard && !rendered) setRendered(true);
+
+  if (!showCard) {
+    return <ExploreFeedCardPlaceholder ref={ref} types={props.item.types} />;
+  }
+
+  return (
+    <ExploreCardSurface
+      item={props.item}
+      itemPosition={props.itemPosition}
+      listId={props.listId}
+      variant={props.claimCardVariant}
+    >
+      <ExploreFeedCardBody {...props} />
+    </ExploreCardSurface>
+  );
+}
+
+/**
+ * Stands in for a card held back by `deferUntilNearViewport` until it comes near the viewport.
+ *
+ * Explore draws two pages of cards — forty-odd — as soon as the feed loads, and on a phone only the
+ * first two are on screen. Each one is a stack of hooks: the response state, the position control,
+ * the Join offer with its sign-in and queue, the comment count, a viewport observer. Rendering all of
+ * them, and subscribing all their queries, was most of the main-thread time between the feed
+ * arriving and the page answering a tap. A card held back costs one observer until it is within
+ * `useNearViewport`'s margin (800px), which is far enough ahead that a reader scrolling at any
+ * normal speed never sees the placeholder.
+ *
+ * The placeholder is roughly the card's height — a debate's player or a one-line claim — so the
+ * feed's infinite-scroll sentinel stays about as far down as before and the page does not fetch
+ * further ahead than it used to. It is not exact; a card that mounts below the fold can change the
+ * page's height there without moving anything on screen.
+ */
+function ExploreFeedCardPlaceholder({
+  ref,
+  types,
+}: {
+  ref: (element: HTMLDivElement | null) => void;
+  types: ExploreFeedItem['types'];
+}) {
+  return (
+    <div
+      ref={ref}
+      data-testid="explore-feed-card-placeholder"
+      className={cx(EXPLORE_CARD_CLASS, isDebateEntity(types) ? 'min-h-[600px] lg:min-h-[820px]' : 'min-h-[140px]')}
+    />
+  );
+}
+
+function ExploreFeedCardBody(props: ExploreFeedCardProps) {
   const isDebate = isDebateEntity(props.item.types);
   if (isDebate) {
     return (
@@ -127,6 +203,21 @@ export function ExploreFeedCard(props: ExploreFeedCardProps) {
     );
   }
 
+  // Topics trade the votes for Follow (GEO-3191), and lead their metadata with the follower count.
+  // No connection counts here: see `TopicExploreFeedCard` for why the main feed doesn't ask.
+  const isTopic = props.item.types.some(type => normId(type.id) === TOPIC_TYPE);
+  if (isTopic) {
+    return (
+      <TopicExploreFeedCardArticle
+        item={props.item}
+        counts={null}
+        hideSpaceLink={props.hideSpaceLink}
+        hideJoinButton={props.hideJoinButton}
+        titleOpensSidePanel={props.titleOpensSidePanel}
+      />
+    );
+  }
+
   return <BaseExploreFeedCard {...props} />;
 }
 
@@ -143,7 +234,11 @@ function BaseExploreFeedCard({
   const cardActions = <ExploreCardActions item={item} />;
 
   return (
-    <article className={EXPLORE_CARD_CLASS}>
+    <ActionSurfaceArticle
+      className={
+        compactDebateChrome ? 'flex flex-col gap-2 rounded-lg border border-grey-02 bg-white p-3' : EXPLORE_CARD_CLASS
+      }
+    >
       {compactDebateChrome ? (
         <DebateExploreMetaRow
           item={item}
@@ -173,6 +268,6 @@ function BaseExploreFeedCard({
           compactTitle={compactDebateChrome}
         />
       )}
-    </article>
+    </ActionSurfaceArticle>
   );
 }

@@ -8,6 +8,7 @@ import { useState } from 'react';
 import cx from 'classnames';
 
 import { useAccessControl } from '~/core/hooks/use-access-control';
+import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { EntityId } from '~/core/io/substream-schema';
 import { useEditable } from '~/core/state/editable-store';
 import { useMutate } from '~/core/sync/use-mutate';
@@ -38,7 +39,11 @@ export function EntityPageContextMenu({ entityId, entityName, spaceId }: Props) 
   const { storage } = useMutate();
   const { isMember, isEditor } = useAccessControl(spaceId);
 
-  const { editable, setEditable } = useEditable();
+  // Panel-aware, like the row this menu sits in: a side panel keeps its own edit switch, so the global
+  // flag alone hid Move and Delete in a panel being edited over a page that was not, and offered them
+  // in a panel being read over one that was.
+  const editable = useUserIsEditing(spaceId);
+  const { setEditable } = useEditable();
 
   const values = useValues({
     selector: v => v.entity.id === entityId && v.spaceId === spaceId,

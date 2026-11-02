@@ -1,6 +1,13 @@
 import { errorName } from '~/core/utils/error-name';
 
-import type { Debate, DebateMediaResponse, DebateMediaTurnSegment, DebateParticipant, ParticipantSlot } from './api';
+import type {
+  Debate,
+  DebateMediaArtifactKind,
+  DebateMediaResponse,
+  DebateMediaTurnSegment,
+  DebateParticipant,
+  ParticipantSlot,
+} from './api';
 
 export type TurnState = {
   slot: ParticipantSlot;
@@ -38,23 +45,46 @@ export function isWatchableDebate(debate: Debate) {
 
 /** The media worker composed the two per-slot recordings into a single `final_video`. */
 export function hasProcessedVideo(media: DebateMediaResponse | undefined): boolean {
-  return media?.artifacts.some(artifact => artifact.kind === 'final_video') ?? false;
+  return hasMediaArtifact(media, 'final_video');
 }
 
 export function hasSocialVideo(media: DebateMediaResponse | undefined): boolean {
-  return media?.artifacts.some(artifact => artifact.kind === 'social_video') ?? false;
+  return hasMediaArtifact(media, 'social_video');
 }
 
-export function normalizeTurnDurationsMs(values: number[]) {
-  const normalized = values.filter(value => Number.isFinite(value) && value > 0);
-  return normalized.length > 0 ? normalized : [30_000, 30_000];
+/** Whether the media worker published `kind` for this debate. Older debates lack newer kinds. */
+export function hasMediaArtifact(media: DebateMediaResponse | undefined, kind: DebateMediaArtifactKind): boolean {
+  return media?.artifacts.some(artifact => artifact.kind === kind) ?? false;
 }
 
-export function timelineSecondsFor(turnDurationsMs: number[]) {
+/**
+ * The debate row's own turn allowance, or `null` when it cannot be trusted (GEO-2956).
+ *
+ * This used to invent `[30_000, 30_000]` for an empty array and quietly drop any entry that was
+ * not a positive number. Both are wrong answers that look plausible: a two-turn schedule laid
+ * over a six-turn recording reads as a content problem, not a data one, and dropping one entry
+ * shifts every later turn onto the wrong speaker.
+ *
+ * The catalog in `formats.ts` is deliberately not a fallback either. The row snapshots the
+ * durations at creation and the id does not version them: 65 of the 185 complete debates the
+ * API listed on 2026-09-30 carry `turn_format_id: 'standard'` with the old four-turn allowance,
+ * which `standard` no longer resolves to. So the caller gets `null` and has to use what the
+ * render recorded (`turn_segments`) or say it cannot play the debate.
+ */
+export function usableTurnDurationsMs(values: readonly number[] | null | undefined): readonly number[] | null {
+  if (!Array.isArray(values) || values.length === 0) return null;
+  return values.every(value => Number.isFinite(value) && value > 0) ? values : null;
+}
+
+export function timelineSecondsFor(turnDurationsMs: readonly number[]) {
   return turnDurationsMs.reduce((sum, value) => sum + value / 1_000, 0);
 }
 
-export function turnStateForTime(firstSlot: ParticipantSlot, turnDurationsMs: number[], seconds: number): TurnState {
+export function turnStateForTime(
+  firstSlot: ParticipantSlot,
+  turnDurationsMs: readonly number[],
+  seconds: number
+): TurnState {
   let elapsedBoundary = 0;
   for (let index = 0; index < turnDurationsMs.length; index += 1) {
     const segmentSeconds = turnDurationsMs[index] / 1_000;
@@ -117,16 +147,23 @@ export function turnStateFromSegments(segments: DebateMediaTurnSegment[], second
     (ms >= segments[segments.length - 1].output_end_ms ? segments[segments.length - 1] : null);
   if (!active) return null;
 
-  const countdownStartMs = Math.min(
-    Math.max(active.countdown_start_ms ?? active.output_start_ms, active.output_start_ms),
-    active.output_end_ms
-  );
-  const clockMs = Math.max(1, active.output_end_ms - countdownStartMs);
+  const { countdown_end_ms: originalEndMs, countdown_duration_ms: originalDurationMs } = active;
+  const originalClock = originalEndMs !== undefined && originalDurationMs !== undefined;
+  const countdownStartMs = originalClock
+    ? (active.countdown_start_ms ?? active.output_start_ms)
+    : Math.min(
+        Math.max(active.countdown_start_ms ?? active.output_start_ms, active.output_start_ms),
+        active.output_end_ms
+      );
+  const countdownEndMs = originalClock ? originalEndMs : active.output_end_ms;
+  const clockMs = Math.max(1, originalClock ? originalDurationMs : countdownEndMs - countdownStartMs);
+  // A paused final frame holds the value at the retained turn's end.
+  const positionMs = originalClock ? Math.max(countdownStartMs, Math.min(ms, active.output_end_ms)) : ms;
 
   return {
     slot: active.participant_slot,
-    progress: Math.max(0, Math.min(1, (ms - countdownStartMs) / clockMs)),
-    seconds: Math.max(0, (active.output_end_ms - ms) / 1_000),
+    progress: Math.max(0, Math.min(1, (positionMs - countdownStartMs) / clockMs)),
+    seconds: Math.max(0, (countdownEndMs - positionMs) / 1_000),
   };
 }
 
@@ -488,7 +525,7 @@ export function turnSpansFromSegments(segments: DebateMediaTurnSegment[]): TurnS
 }
 
 /** The same list off the format's allowance, for a debate whose segments never arrived. */
-export function turnSpansForDurations(firstSlot: ParticipantSlot, turnDurationsMs: number[]): TurnSpan[] {
+export function turnSpansForDurations(firstSlot: ParticipantSlot, turnDurationsMs: readonly number[]): TurnSpan[] {
   let startSeconds = 0;
   return turnDurationsMs.map((durationMs, index) => {
     const endSeconds = startSeconds + durationMs / 1_000;

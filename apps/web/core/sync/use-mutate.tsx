@@ -154,7 +154,8 @@ export interface Mutator {
   setAsPublished: (valueIds: string[], relationIds: string[]) => void;
 }
 
-function createMutator(store: GeoStore): Mutator {
+/** Exported for tests that need the real mutator over their own store. */
+export function createMutator(store: GeoStore): Mutator {
   // Create an Image entity from a file/URL and link it onto `fromEntityId` under
   // `relationPropertyId` as an IMAGE renderable. Shared by `images.createAndLink`
   // and the video-keyframe flow so both mint images against the same store.

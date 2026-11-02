@@ -28,7 +28,7 @@ vi.mock('~/core/hooks/use-profiles-by-space-ids', () => ({
 
 vi.mock('~/core/io/subgraph/fetch-profile-history', () => ({
   profileHistoryQueryKey: (entityId: string | undefined, spaceId: string) => ['profile-history', entityId, spaceId],
-  fetchProfileHistory: (entityId: string, spaceId: string) => mocks.fetchHistory(entityId, spaceId),
+  loadProfileHistory: (entityId: string, spaceId: string) => mocks.fetchHistory(entityId, spaceId),
 }));
 
 const profile = (spaceId: string, id: string): Profile => ({

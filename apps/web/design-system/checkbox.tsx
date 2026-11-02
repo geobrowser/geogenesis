@@ -42,7 +42,38 @@ export const getChecked = (value: string | null | undefined) => {
   }
 };
 
-export function CheckboxVisual({ checked, className = '' }: { checked: boolean | null; className?: string }) {
+/**
+ * `filled` is the 14px box the debates panel's Filters popover uses for its switches (GEO-3463):
+ * grey-edged when off, solid black with a white tick when on. Two states only, so `null` reads as off.
+ */
+export function CheckboxVisual({
+  checked,
+  className = '',
+  variant = 'default',
+}: {
+  checked: boolean | null;
+  className?: string;
+  variant?: 'default' | 'filled';
+}) {
+  if (variant === 'filled') {
+    return (
+      <span
+        aria-hidden
+        className={cx(
+          'inline-flex size-3.5 shrink-0 items-center justify-center rounded-sm border',
+          checked ? 'border-text bg-text text-white' : 'border-grey-03 bg-white',
+          className
+        )}
+      >
+        {checked ? (
+          <svg viewBox="0 0 10 10" className="size-2.5" fill="none" stroke="currentColor" strokeWidth="1.6">
+            <path d="M2 5.2 4.1 7.2 8 3" />
+          </svg>
+        ) : null}
+      </span>
+    );
+  }
+
   const icon = getIcon(checked);
 
   return (

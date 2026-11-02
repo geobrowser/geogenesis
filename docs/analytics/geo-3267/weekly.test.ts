@@ -1,0 +1,869 @@
+// CLICKHOUSE_BINARY=/path/to/clickhouse bun run docs/analytics/geo-3267/weekly.test.ts
+// Alternatively CHDB_PYTHON=/path/to/python-with-chdb uses the same ClickHouse SQL engine.
+import assert from 'node:assert/strict'
+import { spawnSync } from 'node:child_process'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
+const target = '1'.repeat(32)
+const profile = '2'.repeat(32)
+const share = (n: number) => n.toString(16).padStart(32, '0')
+const rows: string[] = []
+const quote = (value: string) =>
+  `'${value.replaceAll('\\', '\\\\').replaceAll("'", "\\'")}'`
+function event(
+  name: string,
+  day: number,
+  hour: number,
+  visitor = '',
+  session = '',
+  account = '',
+  props: Record<string, unknown> = {}
+) {
+  rows.push(
+    `(${quote(`2026-10-${day.toString().padStart(2, '0')} ${hour.toString().padStart(2, '0')}:00:00`)}, ${quote(name)}, ${quote(visitor)}, ${quote(session)}, ${quote(account)}, ${quote(JSON.stringify(props))})`
+  )
+}
+function handoff(
+  n: number,
+  day = 12,
+  visitor = `sender-${n}`,
+  extra = {},
+  account = ''
+) {
+  event('share_link_handoff', day, 8, visitor, `sender-session-${n}`, account, {
+    share_id: share(n),
+    share_content_type: 'debate',
+    share_content_id: target,
+    method: 'x',
+    handoff_kind: 'composer_requested',
+    sharer_profile_space_id: profile,
+    sharer_role: 'debater',
+    ...extra,
+  })
+}
+function landing(
+  n: number,
+  day: number,
+  hour: number,
+  visitor: string,
+  session: string,
+  method = 'x',
+  extra = {}
+) {
+  const url = `https://geobrowser.io/explore?utm_source=${method}&utm_medium=share&utm_campaign=geo_share&utm_content=v1%3Adebate%3A${target}%3A${share(n)}`
+  event('page_viewed', day, hour, visitor, session, '', {
+    landing_page_url: url,
+    ...extra,
+  })
+}
+handoff(1, 11)
+handoff(1, 12) // Retried delivery must not move this old handoff into this week's denominator.
+landing(1, 12, 9, 'visitor-a', 'session-a')
+landing(1, 12, 10, 'visitor-a', 'session-a') // Repeated page view: one acquired session.
+event('auth_attempt_started', 12, 10, 'visitor-a', 'session-a', '', {
+  auth_attempt_id: 'attempt-a',
+  action_anonymous_id: 'visitor-a',
+  action_session_id: 'session-a',
+})
+// Completion in another tab/campaign still credits the original attempt's share.
+event(
+  'auth_identity_linked',
+  12,
+  11,
+  'different-tab',
+  'different-session',
+  'account-a',
+  {
+    auth_attempt_id: 'attempt-a',
+    action_anonymous_id: 'visitor-a',
+    action_session_id: 'session-a',
+  }
+)
+event('signed_up', 12, 11, 'different-tab', 'different-session', 'account-a', {
+  auth_attempt_id: 'attempt-a',
+  utm_source: 'reddit',
+  signup_context_source: 'completion',
+  signup_anonymous_id: 'different-tab',
+  signup_session_id: 'different-session',
+})
+event('signed_up', 13, 11, 'different-tab', 'different-session', 'account-a', {
+  auth_attempt_id: 'attempt-a',
+})
+handoff(2)
+landing(2, 12, 12, 'visitor-a', 'session-second-share')
+event(
+  'signed_in',
+  12,
+  13,
+  'visitor-a',
+  'session-second-share',
+  'existing-account'
+)
+landing(3, 12, 9, 'visitor-b', 'session-b', 'reddit') // Missing outbound event must survive LEFT JOIN.
+event('signed_up', 12, 10, 'new-tab-b', 'completion-b', 'account-b', {
+  signup_context_source: 'auth_start',
+  signup_anonymous_id: 'visitor-b',
+  signup_session_id: 'session-b',
+})
+handoff(4, 12, 'self')
+landing(4, 12, 10, 'self', 'self-session')
+handoff(5, 12, 'sender-test', { is_test: true })
+landing(5, 12, 10, 'visitor-test-link', 'session-test-link')
+landing(6, 12, 10, 'test-visitor', 'session-test', 'x', { is_automated: true })
+landing(6, 12, 10, 'labeled-visitor', 'session-labeled')
+event(
+  'page_viewed',
+  12,
+  11,
+  'labeled-visitor',
+  'session-labeled',
+  'team-account'
+)
+// Identification may arrive after the anonymous page view, without another page view.
+landing(2, 12, 10, 'restored-team', 'restored-team-session')
+event(
+  'session_restored',
+  12,
+  11,
+  'restored-team',
+  'restored-team-session',
+  'team-account'
+)
+// A team sender's earlier anonymous share must not become "unmatched" acquisition.
+handoff(10, 12, 'late-team-sender')
+event(
+  'signed_in',
+  12,
+  9,
+  'late-team-sender',
+  'sender-session-10',
+  'team-account'
+)
+landing(10, 12, 10, 'outside-recipient', 'outside-recipient-session')
+// Account completion in a different tab still excludes its initiating team session.
+landing(2, 12, 10, 'team-auth-start', 'team-auth-session')
+event(
+  'auth_attempt_started',
+  12,
+  11,
+  'team-auth-start',
+  'team-auth-session',
+  '',
+  {
+    auth_attempt_id: 'team-attempt',
+    action_anonymous_id: 'team-auth-start',
+    action_session_id: 'team-auth-session',
+  }
+)
+event(
+  'auth_identity_linked',
+  12,
+  12,
+  'team-new-tab',
+  'team-new-session',
+  'team-account',
+  {
+    auth_attempt_id: 'team-attempt',
+    action_anonymous_id: 'team-auth-start',
+    action_session_id: 'team-auth-session',
+  }
+)
+handoff(7)
+landing(7, 12, 10, 'ambiguous', 'ambiguous-session')
+event('auth_attempt_started', 12, 11, 'ambiguous', 'ambiguous-session', '', {
+  auth_attempt_id: 'ambiguous-attempt',
+  action_anonymous_id: 'ambiguous',
+  action_session_id: 'ambiguous-session',
+})
+event(
+  'auth_identity_linked',
+  12,
+  11,
+  'other',
+  'other-session',
+  'ambiguous-account',
+  {
+    auth_attempt_id: 'ambiguous-attempt',
+    action_anonymous_id: 'other',
+    action_session_id: 'other-session',
+  }
+)
+event(
+  'signed_up',
+  12,
+  12,
+  'ambiguous',
+  'ambiguous-session',
+  'ambiguous-account',
+  {
+    auth_attempt_id: 'ambiguous-attempt',
+    signup_context_source: 'auth_start',
+    signup_anonymous_id: 'ambiguous',
+    signup_session_id: 'ambiguous-session',
+  }
+)
+event('page_viewed', 13, 10, 'visitor-a', 'direct-session', '', {
+  landing_page_url: 'https://geobrowser.io/explore',
+})
+event('signed_up', 13, 11, 'visitor-a', 'direct-session', 'direct-account', {
+  signup_context_source: 'auth_start',
+  signup_anonymous_id: 'visitor-a',
+  signup_session_id: 'direct-session',
+})
+landing(8, 12, 10, 'malformed', 'malformed-session', 'invented-channel')
+landing(9, 11, 23, 'prior-week', 'prior-week-session', 'reddit')
+event('auth_attempt_started', 11, 23, 'prior-week', 'prior-week-session', '', {
+  auth_attempt_id: 'prior-week-attempt',
+  action_anonymous_id: 'prior-week',
+  action_session_id: 'prior-week-session',
+})
+event(
+  'signed_up',
+  12,
+  1,
+  'prior-week',
+  'prior-week-session',
+  'prior-week-account',
+  { auth_attempt_id: 'prior-week-attempt' }
+)
+
+// Identity evidence after the report boundary must still clean historical metrics.
+for (const lifecycle of ['signed_in', 'session_restored'] as const) {
+  const visitor = `boundary-${lifecycle}`
+  const session = `${visitor}-session`
+  landing(2, 18, 23, visitor, session)
+  event(lifecycle, 19, 1, visitor, session, 'team-account')
+}
+landing(2, 18, 23, 'boundary-auth-start', 'boundary-auth-session')
+event(
+  'auth_attempt_started',
+  18,
+  23,
+  'boundary-auth-start',
+  'boundary-auth-session',
+  '',
+  {
+    auth_attempt_id: 'boundary-team-attempt',
+    action_anonymous_id: 'boundary-auth-start',
+    action_session_id: 'boundary-auth-session',
+  }
+)
+event(
+  'auth_identity_linked',
+  19,
+  1,
+  'boundary-new-tab',
+  'boundary-new-session',
+  'team-account',
+  {
+    auth_attempt_id: 'boundary-team-attempt',
+    action_anonymous_id: 'boundary-auth-start',
+    action_session_id: 'boundary-auth-session',
+  }
+)
+handoff(11, 18, 'boundary-team-sender', { method: 'linkedin' })
+event(
+  'signed_in',
+  19,
+  1,
+  'boundary-team-sender',
+  'sender-session-11',
+  'team-account'
+)
+landing(
+  11,
+  18,
+  23,
+  'boundary-outside-recipient',
+  'boundary-outside-session',
+  'linkedin'
+)
+// The system share sheet can reach any app, so its arrivals are their own channel rather than X.
+handoff(60, 12, 'native-sender', { method: 'native_share' })
+landing(
+  60,
+  12,
+  14,
+  'native-recipient',
+  'native-recipient-session',
+  'native_share'
+)
+// Reading later evidence must not add later handoffs, visits or conversions to the week.
+handoff(12, 19, 'future-sender', { method: 'linkedin' })
+landing(12, 19, 10, 'future-visitor', 'future-session', 'linkedin')
+event(
+  'signed_up',
+  19,
+  11,
+  'future-visitor',
+  'future-session',
+  'future-account',
+  {
+    signup_context_source: 'auth_start',
+    signup_anonymous_id: 'future-visitor',
+    signup_session_id: 'future-session',
+  }
+)
+
+// Each explicit initiating-auth path must recognize a sender returning in another tab.
+const recoveredIdentityCases = [
+  { lifecycle: 'auth_identity_linked', viaAttempt: true },
+  { lifecycle: 'signed_in', viaAttempt: true },
+  { lifecycle: 'signed_up', viaAttempt: false },
+  { lifecycle: 'session_restored', viaAttempt: false },
+]
+for (const [
+  index,
+  { lifecycle, viaAttempt },
+] of recoveredIdentityCases.entries()) {
+  const n = 20 + index
+  const visitor = `self-phone-${n}`
+  const session = `self-phone-session-${n}`
+  const account = `self-account-${n}`
+  handoff(n, 12, `self-desktop-${n}`, { method: 'copy_link' }, account)
+  landing(n, 12, 9, visitor, session, 'copy_link')
+  const attribution = viaAttempt
+    ? {
+        auth_attempt_id: `self-attempt-${n}`,
+        action_anonymous_id: visitor,
+        action_session_id: session,
+      }
+    : {
+        signup_context_source: 'auth_start',
+        signup_anonymous_id: visitor,
+        signup_session_id: session,
+      }
+  if (viaAttempt)
+    event('auth_attempt_started', 12, 10, visitor, session, '', attribution)
+  event(
+    lifecycle,
+    12,
+    11,
+    `completion-tab-${n}`,
+    `completion-session-${n}`,
+    account,
+    attribution
+  )
+}
+// Reusing an anonymous ID does not prove identity in a different session.
+landing(20, 12, 12, 'self-phone-20', 'unlinked-session', 'copy_link')
+// Conflicting source pairs or authenticated accounts must not invent self-visit proof.
+handoff(
+  24,
+  12,
+  'ambiguous-self-desktop',
+  { method: 'copy_link' },
+  'ambiguous-self-account'
+)
+for (const suffix of ['a', 'b']) {
+  landing(
+    24,
+    12,
+    9,
+    `ambiguous-self-${suffix}`,
+    `ambiguous-self-session-${suffix}`,
+    'copy_link'
+  )
+  event(
+    'auth_attempt_started',
+    12,
+    10,
+    `ambiguous-self-${suffix}`,
+    `ambiguous-self-session-${suffix}`,
+    '',
+    {
+      auth_attempt_id: 'ambiguous-self-attempt',
+      action_anonymous_id: `ambiguous-self-${suffix}`,
+      action_session_id: `ambiguous-self-session-${suffix}`,
+    }
+  )
+}
+event(
+  'auth_identity_linked',
+  12,
+  11,
+  'ambiguous-self-completion',
+  'ambiguous-self-completion-session',
+  'ambiguous-self-account',
+  { auth_attempt_id: 'ambiguous-self-attempt' }
+)
+handoff(
+  25,
+  12,
+  'conflicting-account-desktop',
+  { method: 'copy_link' },
+  'conflicting-account-owner'
+)
+landing(
+  25,
+  12,
+  9,
+  'conflicting-account-phone',
+  'conflicting-account-phone-session',
+  'copy_link'
+)
+event(
+  'auth_attempt_started',
+  12,
+  10,
+  'conflicting-account-phone',
+  'conflicting-account-phone-session',
+  '',
+  {
+    auth_attempt_id: 'conflicting-account-attempt',
+    action_anonymous_id: 'conflicting-account-phone',
+    action_session_id: 'conflicting-account-phone-session',
+  }
+)
+for (const account of ['conflicting-account-owner', 'another-account']) {
+  event(
+    'auth_identity_linked',
+    12,
+    11,
+    'conflicting-account-completion',
+    'conflicting-account-completion-session',
+    account,
+    { auth_attempt_id: 'conflicting-account-attempt' }
+  )
+}
+event(
+  'signed_up',
+  12,
+  12,
+  'conflicting-account-completion',
+  'conflicting-account-completion-session',
+  'conflicting-account-owner',
+  {
+    auth_attempt_id: 'conflicting-account-attempt',
+  }
+)
+// Recovery after the cutoff excludes the earlier self-visit, not the real handoff.
+handoff(
+  26,
+  18,
+  'late-self-desktop',
+  { method: 'copy_link' },
+  'late-self-account'
+)
+landing(26, 18, 23, 'late-self-phone', 'late-self-phone-session', 'copy_link')
+event(
+  'auth_attempt_started',
+  18,
+  23,
+  'late-self-phone',
+  'late-self-phone-session',
+  '',
+  {
+    auth_attempt_id: 'late-self-attempt',
+    action_anonymous_id: 'late-self-phone',
+    action_session_id: 'late-self-phone-session',
+  }
+)
+event(
+  'auth_identity_linked',
+  19,
+  1,
+  'late-self-completion',
+  'late-self-completion-session',
+  'late-self-account',
+  { auth_attempt_id: 'late-self-attempt' }
+)
+// A proven different account is still a legitimate acquired visit.
+handoff(
+  27,
+  12,
+  'other-owner-desktop',
+  { method: 'copy_link' },
+  'other-owner-account'
+)
+landing(
+  27,
+  12,
+  9,
+  'different-reader-phone',
+  'different-reader-session',
+  'copy_link'
+)
+event(
+  'auth_attempt_started',
+  12,
+  10,
+  'different-reader-phone',
+  'different-reader-session',
+  '',
+  {
+    auth_attempt_id: 'different-reader-attempt',
+    action_anonymous_id: 'different-reader-phone',
+    action_session_id: 'different-reader-session',
+  }
+)
+event(
+  'auth_identity_linked',
+  12,
+  11,
+  'different-reader-completion',
+  'different-reader-completion-session',
+  'different-reader-account',
+  { auth_attempt_id: 'different-reader-attempt' }
+)
+
+// Sender identity can arrive after an anonymous handoff, even after the report ends.
+const senderIdentityCases = [
+  { lifecycle: 'signed_in', day: 12, recovery: 'session' },
+  { lifecycle: 'session_restored', day: 19, recovery: 'session' },
+  { lifecycle: 'auth_identity_linked', day: 12, recovery: 'attempt' },
+  { lifecycle: 'signed_up', day: 19, recovery: 'snapshot' },
+]
+for (const [
+  index,
+  { lifecycle, day, recovery },
+] of senderIdentityCases.entries()) {
+  const n = 30 + index
+  const visitor = `late-sender-${n}`
+  const session = `sender-session-${n}`
+  const account = `late-sender-account-${n}`
+  handoff(n, 12, visitor, {
+    method: 'linkedin',
+    sharer_role: 'anonymous',
+    sharer_profile_space_id: '',
+  })
+  landing(
+    n,
+    12,
+    9,
+    `sender-return-${n}`,
+    `sender-return-session-${n}`,
+    'linkedin'
+  )
+  event(
+    index === 0 ? 'signed_up' : 'signed_in',
+    12,
+    10,
+    `sender-return-${n}`,
+    `sender-return-session-${n}`,
+    account,
+    index === 0
+      ? {
+          signup_context_source: 'auth_start',
+          signup_anonymous_id: `sender-return-${n}`,
+          signup_session_id: `sender-return-session-${n}`,
+        }
+      : {}
+  )
+  const attribution =
+    recovery === 'attempt'
+      ? {
+          auth_attempt_id: `sender-attempt-${n}`,
+          action_anonymous_id: visitor,
+          action_session_id: session,
+        }
+      : recovery === 'snapshot'
+        ? {
+            signup_context_source: 'auth_start',
+            signup_anonymous_id: visitor,
+            signup_session_id: session,
+          }
+        : {}
+  if (recovery === 'attempt')
+    event('auth_attempt_started', 12, 8, visitor, session, '', attribution)
+  event(
+    lifecycle,
+    day,
+    11,
+    recovery === 'session' ? visitor : `sender-completion-${n}`,
+    recovery === 'session' ? session : `sender-completion-session-${n}`,
+    account,
+    attribution
+  )
+}
+// Ambiguous, unrelated-session, different-reader and absent identity evidence retain real visits.
+for (const [index, kind] of [
+  'ambiguous',
+  'unrelated-session',
+  'different-reader',
+  'unknown',
+  'known-handoff',
+].entries()) {
+  const n = 34 + index
+  const visitor = `sender-control-${n}`
+  const account = `sender-control-account-${n}`
+  handoff(
+    n,
+    12,
+    visitor,
+    {
+      method: 'linkedin',
+      sharer_role: 'anonymous',
+      sharer_profile_space_id: '',
+    },
+    kind === 'known-handoff' ? account : ''
+  )
+  landing(
+    n,
+    12,
+    9,
+    `reader-control-${n}`,
+    `reader-control-session-${n}`,
+    'linkedin'
+  )
+  event(
+    'signed_in',
+    12,
+    10,
+    `reader-control-${n}`,
+    `reader-control-session-${n}`,
+    kind === 'different-reader' ? `different-reader-account-${n}` : account
+  )
+  if (kind !== 'unknown') {
+    event(
+      'signed_in',
+      12,
+      11,
+      visitor,
+      kind === 'unrelated-session'
+        ? 'unrelated-sender-session'
+        : `sender-session-${n}`,
+      account
+    )
+  }
+  if (kind === 'ambiguous' || kind === 'known-handoff') {
+    event(
+      'session_restored',
+      12,
+      12,
+      visitor,
+      `sender-session-${n}`,
+      `switched-account-${n}`
+    )
+  }
+  if (kind === 'ambiguous') {
+    // Either arbitrary account choice must wrongly remove a real visit.
+    landing(
+      n,
+      12,
+      9,
+      `second-reader-${n}`,
+      `second-reader-session-${n}`,
+      'linkedin'
+    )
+    event(
+      'signed_in',
+      12,
+      10,
+      `second-reader-${n}`,
+      `second-reader-session-${n}`,
+      `switched-account-${n}`
+    )
+  }
+}
+
+// No-attempt conversions must apply the same pair validation as identity recovery.
+const fallbackCases = [
+  { kind: 'conflicting-visitor', credited: false },
+  { kind: 'conflicting-session', credited: false },
+  { kind: 'matching-pairs', credited: true },
+  { kind: 'action-only', credited: true },
+  { kind: 'signup-only', credited: true },
+  { kind: 'partial-action', credited: true },
+  { kind: 'partial-signup', credited: true },
+  { kind: 'completion-context', credited: true },
+  { kind: 'incomplete-pairs', credited: false },
+]
+for (const [index, { kind }] of fallbackCases.entries()) {
+  const n = 40 + index
+  const visitor = `fallback-${n}`
+  const session = `fallback-session-${n}`
+  const evidence: Record<string, string> = {
+    action_anonymous_id: visitor,
+    action_session_id: session,
+    signup_context_source: 'auth_start',
+    signup_anonymous_id: visitor,
+    signup_session_id: session,
+  }
+  if (kind === 'conflicting-visitor')
+    evidence.signup_anonymous_id = `other-${visitor}`
+  if (kind === 'conflicting-session')
+    evidence.signup_session_id = `other-${session}`
+  if (kind === 'action-only') delete evidence.signup_context_source
+  if (kind === 'signup-only') {
+    delete evidence.action_anonymous_id
+    delete evidence.action_session_id
+  }
+  if (kind === 'partial-action' || kind === 'incomplete-pairs')
+    delete evidence.action_session_id
+  if (kind === 'partial-signup' || kind === 'incomplete-pairs')
+    delete evidence.signup_anonymous_id
+  if (kind === 'completion-context') {
+    evidence.signup_context_source = 'completion'
+    evidence.signup_session_id = `completion-${session}`
+  }
+  handoff(n, 12, `fallback-sender-${n}`, {
+    method: 'reddit',
+    sharer_profile_space_id: share(1000 + index),
+  })
+  landing(n, 12, 9, visitor, session, 'reddit')
+  if (kind.startsWith('conflicting-')) {
+    // Both references acquired the share, so choosing either one must fail.
+    landing(
+      n,
+      12,
+      9,
+      evidence.signup_anonymous_id,
+      evidence.signup_session_id,
+      'reddit'
+    )
+  }
+  event(
+    'signed_up',
+    12,
+    10,
+    `fallback-completion-${n}`,
+    `fallback-completion-session-${n}`,
+    `fallback-account-${n}`,
+    evidence
+  )
+}
+
+// A label removed in the latest table version must not exclude a real visitor.
+handoff(50, 12, 'allowed-label-sender', { method: 'linkedin' })
+landing(50, 12, 9, 'allowed-label-reader', 'allowed-label-session', 'linkedin')
+event(
+  'signed_in',
+  12,
+  10,
+  'allowed-label-reader',
+  'allowed-label-session',
+  'allowed-label-account'
+)
+
+const report = readFileSync(new URL('./weekly.sql', import.meta.url), 'utf8')
+  .replaceAll('{start_date:Date}', "toDate('2026-10-12')")
+  .replaceAll('{end_date:Date}', "toDate('2026-10-19')")
+  .trim()
+  .replace(/;$/, '')
+const sql = `
+${readFileSync(new URL('./fixture-schema.sql', import.meta.url), 'utf8')}
+INSERT INTO analytics.privy_account_labels (source_account_id, label_id, privy_user_id, active, updated_at) VALUES
+  ('team', 'internal', 'team-account', true, '2026-10-11 00:00:00'),
+  ('allowed', 'internal', 'allowed-label-account', true, '2026-10-11 00:00:00');
+INSERT INTO analytics.privy_account_labels (source_account_id, label_id, privy_user_id, active, updated_at) VALUES
+  ('allowed', 'internal', 'allowed-label-account', false, '2026-10-12 00:00:00');
+INSERT INTO analytics.events_canonical (event_time, event_name, anonymous_id, session_id, privy_user_id, properties_json) VALUES ${rows.join(',')};
+EXPLAIN json=1 ${report} FORMAT JSONEachRow;
+${report} FORMAT JSONEachRow;
+`
+const directory = mkdtempSync(join(tmpdir(), 'geo-3267-weekly-'))
+try {
+  const result = process.env.CHDB_PYTHON
+    ? spawnSync(
+        process.env.CHDB_PYTHON,
+        [
+          '-c',
+          "import chdb, sys; print(chdb.query(sys.stdin.read(), 'JSONEachRow'))",
+        ],
+        { input: sql, encoding: 'utf8', cwd: directory }
+      )
+    : spawnSync(
+        process.env.CLICKHOUSE_BINARY ?? 'clickhouse',
+        ['local', '--path', directory, '--multiquery', '--query', sql],
+        { encoding: 'utf8' }
+      )
+  if (result.error) throw result.error
+  assert.equal(result.status, 0, result.stderr)
+  const output = result.stdout
+    .trim()
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => JSON.parse(line))
+  // Both warehouse inputs should be read once. Inlined CTE reuse previously
+  // expanded this fixture to 19 source scans; the report timed out in production.
+  const explain = output.find((row) => typeof row.explain === 'string')
+  assert.ok(explain, 'Missing ClickHouse execution plan')
+  let sourceReads = 0
+  function countSourceReads(value: unknown) {
+    if (Array.isArray(value)) value.forEach(countSourceReads)
+    else if (value && typeof value === 'object') {
+      const node = value as Record<string, unknown>
+      if (node['Node Type'] === 'ReadFromMergeTree') sourceReads++
+      Object.values(node).forEach(countSourceReads)
+    }
+  }
+  countSourceReads(JSON.parse(explain.explain))
+  assert.equal(
+    sourceReads,
+    2,
+    'Report must read each warehouse source only once'
+  )
+  const channel = (name: string) =>
+    output.find((row) => row.channel === name && row.breakdown === 'channel')
+  assert.equal(Number(channel('x')?.visits), 3, JSON.stringify(output))
+  assert.equal(Number(channel('x')?.visitors), 2)
+  assert.equal(Number(channel('x')?.new_accounts), 1)
+  assert.equal(Number(channel('x')?.link_handoffs), 3)
+  assert.equal(Number(channel('x')?.matched_visits), 3)
+  assert.equal(Number(channel('x')?.unmatched_visits), 0)
+  assert.equal(Number(channel('reddit')?.visits), 12)
+  assert.equal(Number(channel('reddit')?.new_accounts), 8)
+  assert.equal(Number(channel('reddit')?.unmatched_visits), 1)
+  assert.equal(Number(channel('reddit')?.link_handoffs), 9)
+  for (const [index, { kind, credited }] of fallbackCases.entries()) {
+    const row = output.find(
+      (row) =>
+        row.channel === 'reddit' &&
+        row.breakdown === 'sharer' &&
+        row.sharer_profile_space_id === share(1000 + index)
+    )
+    assert.equal(
+      Number(row?.visits),
+      kind.startsWith('conflicting-') ? 2 : 1,
+      kind
+    )
+    assert.equal(Number(row?.new_accounts), credited ? 1 : 0, kind)
+  }
+  assert.equal(Number(channel('copy_link')?.visits), 5, JSON.stringify(output))
+  assert.equal(Number(channel('copy_link')?.visitors), 5)
+  assert.equal(Number(channel('copy_link')?.new_accounts), 0)
+  assert.equal(Number(channel('copy_link')?.link_handoffs), 8)
+  assert.equal(Number(channel('linkedin')?.visits), 6, JSON.stringify(output))
+  assert.equal(Number(channel('linkedin')?.visitors), 6)
+  assert.equal(Number(channel('linkedin')?.new_accounts), 0)
+  assert.equal(Number(channel('linkedin')?.link_handoffs), 10)
+  assert.equal(Number(channel('linkedin')?.matched_visits), 6)
+  assert.equal(Number(channel('linkedin')?.unmatched_visits), 0)
+  assert.equal(
+    Number(channel('native_share')?.visits),
+    1,
+    JSON.stringify(output)
+  )
+  assert.equal(Number(channel('native_share')?.link_handoffs), 1)
+  assert.equal(Number(channel('native_share')?.matched_visits), 1)
+  assert.equal(output.filter((row) => row.breakdown === 'channel').length, 5)
+  const anonymousSender = output.find(
+    (row) => row.channel === 'linkedin' && row.breakdown === 'sharer'
+  )
+  assert.equal(anonymousSender?.sharer_role, 'anonymous')
+  assert.equal(anonymousSender?.sharer_profile_space_id, '')
+  assert.ok(
+    output.some(
+      (row) =>
+        row.breakdown === 'sharer' &&
+        row.sharer_profile_space_id === profile &&
+        row.sharer_role === 'debater'
+    )
+  )
+  assert.ok(
+    output.some(
+      (row) =>
+        row.channel === 'reddit' &&
+        row.breakdown === 'sharer' &&
+        row.sharer_role === 'unknown'
+    )
+  )
+  console.log(
+    'Passed weekly acquisition SQL: duplicate delivery, repeated visits, unique visitors, auth recovery/campaign changes, prior-week arrivals, unmatched shares, self/team/test exclusions, direct returns, and ambiguous auth joins.'
+  )
+} finally {
+  rmSync(directory, { recursive: true, force: true })
+}

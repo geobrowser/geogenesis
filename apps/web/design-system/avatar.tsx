@@ -3,6 +3,10 @@ import BoringAvatar from 'boring-avatars';
 import { NativeGeoImage } from './geo-image';
 import { colors } from './theme/colors';
 
+// `size` is the generated avatar's size, and several call sites omit it while the container is
+// larger (24-32px). Floor the request so the 2x image is still sharp there; it is a ~2KB webp.
+const MIN_DISPLAY_WIDTH = 32;
+
 interface Props {
   avatarUrl?: string | null;
   value?: string;
@@ -39,6 +43,7 @@ export const Avatar = ({ value, avatarUrl, priority = false, alt = '', size = 12
     <NativeGeoImage
       value={avatarUrl}
       alt={alt}
+      displayWidth={Math.max(size, MIN_DISPLAY_WIDTH)}
       className="h-full w-full object-cover"
       loading={priority ? 'eager' : 'lazy'}
       fetchPriority={priority ? 'high' : undefined}

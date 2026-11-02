@@ -1,5 +1,7 @@
 'use client';
 
+import type { DebateOpenRounds } from './api';
+
 export type DebateFormatId = 'dev-short' | 'standard' | 'extended-standard' | 'triple-standard';
 
 export type DebateFormat = {
@@ -37,6 +39,58 @@ export const defaultDebateFormatId: DebateFormatId = process.env.NODE_ENV === 'p
 
 export function debateFormatById(id: string | null | undefined): DebateFormat | null {
   return debateFormats.find(format => format.id === id) ?? null;
+}
+
+/**
+ * Open rounds (GEO-3166), against geo-chat `docs/open-rounds-contract.md`. It is not in
+ * `debateFormats` because a client cannot ask for it: the server assigns it through its rollout
+ * setting when a debate is created. These are its fixed opening turns and the rebuttal length the
+ * server uses when no debate payload says otherwise.
+ */
+export const OPEN_ROUNDS_FORMAT_ID = 'open_rounds';
+export const openRoundsOpeningTurnDurationsMs = [60_000, 60_000] as const;
+export const openRoundsDefaultRebuttalTurnMs = 45_000;
+
+/** The request/ready card reads the same stored allowance as playback. */
+export type OpenRoundsFormat = Pick<
+  DebateOpenRounds,
+  'max_rebuttal_rounds' | 'rebuttal_turn_ms' | 'required_rebuttal_rounds'
+> & {
+  turn_durations_ms?: readonly number[] | null;
+};
+
+export const openRoundsExtraTurnMs = 30_000;
+
+/** GEO-3521's stored third pair, never shortened media segments or the current rollout setting. */
+export function hasNumberedOpenRoundsTurns(turns: readonly number[]) {
+  return turns[4] === openRoundsExtraTurnMs && turns[5] === openRoundsExtraTurnMs;
+}
+
+/** The rebuttal rounds that run before the first decision window. `0` from a geo-chat that does not send it. */
+export function openRoundsRequiredRebuttalRounds(openRounds: Pick<DebateOpenRounds, 'required_rebuttal_rounds'>) {
+  return Math.max(0, openRounds.required_rebuttal_rounds ?? 0);
+}
+
+/** Required turns only. An older request without a snapshot keeps all its 45-second rounds. */
+export function openRoundsInitialTurnDurationsMs(format: OpenRoundsFormat): readonly number[] {
+  const required = openRoundsRequiredRebuttalRounds(format);
+  return (
+    format.turn_durations_ms?.slice(0, (required + 1) * 2) ?? [
+      ...openRoundsOpeningTurnDurationsMs,
+      ...Array.from({ length: required * 2 }, () => openRoundsDefaultRebuttalTurnMs),
+    ]
+  );
+}
+
+/** One allowance feeds both the detailed request card and its compact speaking-time summary. */
+export function openRoundsMaxSpeakingTimeMs(format: OpenRoundsFormat) {
+  const initial = openRoundsInitialTurnDurationsMs(format);
+  const optionalRounds = Math.max(0, format.max_rebuttal_rounds - openRoundsRequiredRebuttalRounds(format));
+  return initial.reduce((total, ms) => total + ms, 0) + optionalRounds * format.rebuttal_turn_ms * 2;
+}
+
+export function isOpenRoundsFormatId(id: string | null | undefined) {
+  return id === OPEN_ROUNDS_FORMAT_ID;
 }
 
 export function isDebateFormatId(id: string | null | undefined): id is DebateFormatId {
@@ -78,7 +132,7 @@ export function debateTimingSummary(format: DebateFormat) {
   return debateRoundSummaries(format).join(' · ');
 }
 
-function formatTurnDuration(durationMs: number) {
+export function formatTurnDuration(durationMs: number) {
   const seconds = Math.max(0, Math.round(durationMs / 1_000));
   if (seconds > 0 && seconds % 60 === 0) {
     return `${seconds / 60}m`;

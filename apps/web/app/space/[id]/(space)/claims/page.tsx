@@ -2,6 +2,13 @@ import { IdUtils } from '@geoprotocol/geo-sdk/lite';
 
 import { notFound } from 'next/navigation';
 
+import { QuerySeed, type QuerySeedEntry } from '~/core/query-seed';
+import {
+  NO_SPACE_ACTIVITY_FILTERS,
+  fetchSpaceActivityRowsPage,
+  spaceActivityRowsQueryKey,
+} from '~/core/space/space-activity-rows';
+
 import { ClaimsPageClient } from './claims-page-client';
 
 interface Props {
@@ -32,5 +39,35 @@ export default async function ClaimsPage(props: Props) {
    * React reuses an element of the same type across a route-param change, so without this they
    * all carry over — which is also what let the rows query hold the previous space's claims.
    */
-  return <ClaimsPageClient key={params.id} spaceId={params.id} />;
+  return (
+    <QuerySeed key={params.id} entries={await firstPageSeed(params.id)}>
+      <ClaimsPageClient key={params.id} spaceId={params.id} />
+    </QuerySeed>
+  );
+}
+
+/**
+ * The first page of the unfiltered, Best-ordered list: the one the client would fetch on arrival,
+ * keyed as `useSpaceActivityRowsInfinite` keys it. Without it the server HTML is the heading and a
+ * loading skeleton. A failed read is dropped and the page fetches for itself, as it did before.
+ */
+async function firstPageSeed(spaceId: string): Promise<QuerySeedEntry[]> {
+  try {
+    const page = await fetchSpaceActivityRowsPage({
+      spaceId,
+      kind: 'claims',
+      sort: 'best',
+      filters: NO_SPACE_ACTIVITY_FILTERS,
+      after: null,
+    });
+
+    return [
+      {
+        queryKey: [...spaceActivityRowsQueryKey(spaceId, 'claims', 'best', NO_SPACE_ACTIVITY_FILTERS), 'infinite'],
+        data: { pages: [page], pageParams: [null] },
+      },
+    ];
+  } catch {
+    return [];
+  }
 }

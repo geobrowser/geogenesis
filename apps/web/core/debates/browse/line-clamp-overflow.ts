@@ -45,6 +45,24 @@ export function exceedsLineClamp({
 }
 
 /**
+ * The clamp the browser is actually drawing, where it says.
+ *
+ * A container query can change the clamp without the component knowing — the debate claim card is
+ * two lines on a wide player, one on a small one and unclamped in the small player's opened list
+ * (GEO-3114). Counting against the `maxLines` the caller was written for would call a two-line
+ * claim on the one-line layout "fits", and an unclamped one "overflowing" with nothing hidden.
+ *
+ * `null` where the computed style carries no number — jsdom, which parses no stylesheet, and any
+ * browser that does not expose the property — and the caller's `maxLines` stands.
+ */
+export function drawnLineClamp(style: CSSStyleDeclaration): number | 'none' | null {
+  const value = style.getPropertyValue('-webkit-line-clamp').trim();
+  if (value === 'none') return 'none';
+  const lines = Number.parseInt(value, 10);
+  return Number.isFinite(lines) && lines > 0 ? lines : null;
+}
+
+/**
  * {@link exceedsLineClamp}, measured off a live element and kept current as it resizes.
  *
  * Two surfaces clamp claim text and offer a control to unclamp it — the feed's debate title and
@@ -80,15 +98,20 @@ export function useLineClampOverflow(
   React.useLayoutEffect(() => {
     if (!element || !enabled) return;
 
-    const measure = () =>
+    const measure = () => {
+      const style = getComputedStyle(element);
+      const drawn = drawnLineClamp(style);
       setOverflowing(
-        exceedsLineClamp({
-          contentHeight: element.scrollHeight,
-          clampedHeight: element.clientHeight,
-          lineHeight: parseFloat(getComputedStyle(element).lineHeight),
-          maxLines,
-        })
+        drawn === 'none'
+          ? false
+          : exceedsLineClamp({
+              contentHeight: element.scrollHeight,
+              clampedHeight: element.clientHeight,
+              lineHeight: parseFloat(style.lineHeight),
+              maxLines: drawn ?? maxLines,
+            })
       );
+    };
     measure();
 
     // Measured again on the next frame, and again once webfonts have landed.

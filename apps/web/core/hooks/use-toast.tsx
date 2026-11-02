@@ -9,15 +9,17 @@ import { atom, useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { Z_LAYER_CLASS } from '~/core/z-layers';
 
 type ToastPlacement = 'bottom' | 'top';
-type ToastState = { content: React.ReactElement<any>; placement: ToastPlacement } | null;
+type ToastState = { content: React.ReactElement<any>; placement: ToastPlacement; persistent: boolean } | null;
+/** `persistent` skips the auto-dismiss, for toasts carrying an action the user must not miss. */
+type ToastOptions = { persistent?: boolean };
 
 const toastStateAtom = atom<ToastState>(null);
 
 function toastAtomFor(placement: ToastPlacement) {
   return atom(
     get => get(toastStateAtom)?.content ?? null,
-    (_get, set, content: React.ReactElement<any> | null) => {
-      set(toastStateAtom, content ? { content, placement } : null);
+    (_get, set, content: React.ReactElement<any> | null, options?: ToastOptions) => {
+      set(toastStateAtom, content ? { content, placement, persistent: options?.persistent ?? false } : null);
     }
   );
 }
@@ -33,17 +35,23 @@ export function useToast({ placement = 'bottom' }: { placement?: ToastPlacement 
   return [toast, setToast] as const;
 }
 
+/** Setter only, so callers don't re-render when the toast changes. */
+export function useSetToast({ placement = 'bottom' }: { placement?: ToastPlacement } = {}) {
+  return useSetAtom(toastAtoms[placement]);
+}
+
 export function Toast() {
   const toastState = useAtomValue(toastStateAtom);
   const clearToast = useSetAtom(toastAtoms.bottom);
   const toast = toastState?.content ?? null;
   const placement = toastState?.placement ?? 'bottom';
+  const persistent = toastState?.persistent ?? false;
 
   React.useEffect(() => {
-    if (!toast) return;
+    if (!toast || persistent) return;
     const timeout = setTimeout(() => clearToast(null), 5000);
     return () => clearTimeout(timeout);
-  }, [clearToast, toast]);
+  }, [clearToast, toast, persistent]);
 
   return (
     // The live region stays mounted so screen readers reliably announce

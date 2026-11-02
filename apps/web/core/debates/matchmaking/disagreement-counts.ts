@@ -20,6 +20,8 @@ export type MatchingClaimsAnalysis = {
   byProfile: Map<string, ClaimMatch[]>;
   /** Distinct matching claims per person and space, used by the Active in breakdown. */
   countsByProfileAndSpace: Map<string, Map<string, number>>;
+  /** The claims behind those counts, each in the space where the pair opposes each other there. */
+  byProfileAndSpace: Map<string, Map<string, ClaimMatch[]>>;
 };
 
 /**
@@ -39,8 +41,8 @@ export function analyzeMatchingClaims(
   viewerProfileSpaceId: string | null
 ): MatchingClaimsAnalysis {
   const byProfile = new Map<string, ClaimMatch[]>();
-  const countsByProfileAndSpace = new Map<string, Map<string, number>>();
-  if (!viewerProfileSpaceId) return { byProfile, countsByProfileAndSpace };
+  const byProfileAndSpace = new Map<string, Map<string, ClaimMatch[]>>();
+  if (!viewerProfileSpaceId) return { byProfile, countsByProfileAndSpace: new Map(), byProfileAndSpace };
 
   const viewerId = normId(viewerProfileSpaceId);
   const seenClaimsByProfile = new Map<string, Set<string>>();
@@ -64,19 +66,21 @@ export function analyzeMatchingClaims(
       const claimId = normId(row.claimId);
       const spaceId = normId(row.spaceId);
 
+      const match: ClaimMatch = {
+        claimId: row.claimId,
+        spaceId: row.spaceId,
+        responseKind: row.responseKind,
+        viewerPosition,
+        personPosition: row.position,
+      };
+
       const seenForProfile = seenClaimsByProfile.get(profileId) ?? new Set<string>();
       if (!seenForProfile.has(claimId)) {
         seenForProfile.add(claimId);
         seenClaimsByProfile.set(profileId, seenForProfile);
 
         const matches = byProfile.get(profileId) ?? [];
-        matches.push({
-          claimId: row.claimId,
-          spaceId: row.spaceId,
-          responseKind: row.responseKind,
-          viewerPosition,
-          personPosition: row.position,
-        });
+        matches.push(match);
         byProfile.set(profileId, matches);
       }
 
@@ -86,13 +90,52 @@ export function analyzeMatchingClaims(
       seenForProfileSpace.add(claimId);
       seenClaimsByProfileAndSpace.set(profileSpaceKey, seenForProfileSpace);
 
-      const bySpace = countsByProfileAndSpace.get(profileId) ?? new Map<string, number>();
-      bySpace.set(spaceId, (bySpace.get(spaceId) ?? 0) + 1);
-      countsByProfileAndSpace.set(profileId, bySpace);
+      const listsBySpace = byProfileAndSpace.get(profileId) ?? new Map<string, ClaimMatch[]>();
+      const list = listsBySpace.get(spaceId) ?? [];
+      list.push(match);
+      listsBySpace.set(spaceId, list);
+      byProfileAndSpace.set(profileId, listsBySpace);
     }
   }
 
-  return { byProfile, countsByProfileAndSpace };
+  // Counted from the lists rather than alongside them, so the Active in numbers and the claims
+  // listed under them cannot drift apart.
+  const countsByProfileAndSpace = new Map(
+    [...byProfileAndSpace].map(([profileId, listsBySpace]) => [
+      profileId,
+      new Map([...listsBySpace].map(([spaceId, list]) => [spaceId, list.length])),
+    ])
+  );
+
+  return { byProfile, countsByProfileAndSpace, byProfileAndSpace };
+}
+
+/**
+ * One person's matching claims, narrowed to `spaceIds` (GEO-3230): a claim counts once, shown in
+ * the first selected space where the pair opposes each other. No spaces means every match, the
+ * person-level list unchanged.
+ */
+export function matchesInSpaces(
+  analysis: MatchingClaimsAnalysis,
+  profileSpaceId: string,
+  spaceIds: ReadonlySet<string>
+): ClaimMatch[] {
+  const profileId = normId(profileSpaceId);
+  if (spaceIds.size === 0) return analysis.byProfile.get(profileId) ?? [];
+
+  const listsBySpace = analysis.byProfileAndSpace.get(profileId);
+  if (!listsBySpace) return [];
+  const seen = new Set<string>();
+  const matches: ClaimMatch[] = [];
+  for (const spaceId of spaceIds) {
+    for (const match of listsBySpace.get(normId(spaceId)) ?? []) {
+      const claimId = normId(match.claimId);
+      if (seen.has(claimId)) continue;
+      seen.add(claimId);
+      matches.push(match);
+    }
+  }
+  return matches;
 }
 
 function positionContext(spaceId: string, responseKind: string): string {

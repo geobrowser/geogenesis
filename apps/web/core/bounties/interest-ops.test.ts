@@ -99,10 +99,19 @@ describe('allocation ops', () => {
     const { relations } = buildRemoveAllocationOps({
       daoSpaceId: 'dao-1',
       bounty,
-      targetId: 'person-1',
+      targetIds: ['person-1'],
       existingRelations: existing,
     });
     expect(relations.map(r => r.id)).toEqual(['a1', 'a2']);
+
+    // One curator allocated under both identities: both rows go.
+    const both = buildRemoveAllocationOps({
+      daoSpaceId: 'dao-1',
+      bounty,
+      targetIds: ['person-1', 'personal-2'],
+      existingRelations: existing,
+    });
+    expect(both.relations.map(r => r.id)).toEqual(['a1', 'a2', 'a3']);
     expect(relations.every(r => r.isDeleted && r.spaceId === 'dao-1')).toBe(true);
   });
 });

@@ -1,21 +1,23 @@
 'use client';
 
-import { usePrivy } from '@geogenesis/auth';
-
 import * as React from 'react';
 
 import { useSetAtom } from 'jotai';
 import { usePathname, useSearchParams } from 'next/navigation';
 
+import { usePrivy } from '~/core/wallet/auth-hooks';
+
 import {
   avatarAtom,
   nameAtom,
+  onboardingNameOnlyAtom,
   selectedTopicIdsAtom,
   spaceIdAtom,
   stepAtom,
   topicIdAtom,
-} from '~/partials/onboarding/dialog';
+} from '~/partials/onboarding/onboarding-atoms';
 
+import { NO_HELD_FEED_TOPICS, feedTopicsAtom } from '~/atoms/onboarding-feed-topics';
 import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
 
 /**
@@ -47,6 +49,8 @@ export function usePrepareOnboarding() {
   const setSpaceId = useSetAtom(spaceIdAtom);
   const setStep = useSetAtom(stepAtom);
   const setSelectedTopicIds = useSetAtom(selectedTopicIdsAtom);
+  const setFeedTopics = useSetAtom(feedTopicsAtom);
+  const setNameOnly = useSetAtom(onboardingNameOnlyAtom);
 
   /**
    * Where to land once onboarding finishes, which the callers want three different things from.
@@ -58,9 +62,17 @@ export function usePrepareOnboarding() {
    *
    * Spelled as two fields rather than a magic string because the alternative was a sentinel that
    * could collide with a real path.
+   *
+   * `nameOnly` makes a new account's onboarding the name step alone (GEO-3517). Every sign-in sets
+   * it, so one that doesn't ask for it clears what an earlier press left.
    */
   return React.useCallback(
-    ({ returnTo, keepReturnTo }: { returnTo?: string | null; keepReturnTo?: boolean } = {}) => {
+    ({
+      returnTo,
+      keepReturnTo,
+      nameOnly = false,
+    }: { returnTo?: string | null; keepReturnTo?: boolean; nameOnly?: boolean } = {}) => {
+      setNameOnly(nameOnly);
       if (!keepReturnTo) {
         const search = searchParams?.toString();
         setPostOnboardingRedirect(returnTo === null ? null : (returnTo ?? `${pathname}${search ? `?${search}` : ''}`));
@@ -86,13 +98,16 @@ export function usePrepareOnboarding() {
       setSpaceId('');
       setStep('start');
       setSelectedTopicIds([]);
+      setFeedTopics(NO_HELD_FEED_TOPICS);
     },
     [
       authenticated,
       pathname,
       searchParams,
       setAvatar,
+      setFeedTopics,
       setName,
+      setNameOnly,
       setPostOnboardingRedirect,
       setSelectedTopicIds,
       setSpaceId,

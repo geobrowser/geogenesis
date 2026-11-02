@@ -3,7 +3,7 @@ import { QueryClient } from '@tanstack/react-query';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { Space } from '~/core/io/dto/spaces';
-import { profilesBySpaceIdsQueryKey, spacesByIdsQueryKey } from '~/core/io/query-keys';
+import { profilesBySpaceIdsQueryKey, spaceByIdQueryKey } from '~/core/io/query-keys';
 import type { Profile } from '~/core/types';
 
 import {
@@ -97,15 +97,19 @@ describe('claim response summaries', () => {
     expect(summaries.get('claim-a:stance')?.viewerResponse).toBeNull();
   });
 
-  it('paginates in deterministic 1,000-row pages and deduplicates rows repeated across pages', async () => {
+  it('paginates in deterministic 1,000-row cursor pages and deduplicates rows repeated across pages', async () => {
     const firstPage = Array.from({ length: CLAIM_RESPONSE_SUMMARY_PAGE_SIZE }, (_, index) =>
       row('claim-stance', 1, `user-${index}`, index % 2)
     );
     const duplicate = firstPage.at(-1)!;
     const fetchPage = vi
       .fn()
-      .mockResolvedValueOnce(firstPage)
-      .mockResolvedValueOnce([duplicate, row('claim-stance', 1, 'user-1000', 0)]);
+      .mockResolvedValueOnce({ items: firstPage, endCursor: 'cursor-1', hasNextPage: true })
+      .mockResolvedValueOnce({
+        items: [duplicate, row('claim-stance', 1, 'user-1000', 0)],
+        endCursor: 'cursor-2',
+        hasNextPage: false,
+      });
 
     const summaries = await fetchClaimResponseSummaries({
       spaceId: 'space-1',
@@ -115,7 +119,7 @@ describe('claim response summaries', () => {
     });
 
     expect(fetchPage).toHaveBeenCalledTimes(2);
-    expect(fetchPage.mock.calls.map(call => call[0].offset)).toEqual([0, 1000]);
+    expect(fetchPage.mock.calls.map(call => call[0].after)).toEqual([undefined, 'cursor-1']);
     expect(fetchPage.mock.calls[0]?.[0]).toMatchObject({
       first: 1000,
       filter: {
@@ -129,6 +133,41 @@ describe('claim response summaries', () => {
       viewerResponse: 'positive',
     });
     expect(summaries.get('claim-stance:stance')?.responders).toHaveLength(1001);
+  });
+
+  // The graph rejects an offset past 1000. Largest testnet space held 2,598 matching rows on
+  // 2026-10-19, so a batch over its claims needs a third page.
+  it('reads past 2,000 rows from a graph that rejects offsets above 1000', async () => {
+    const claims = Array.from({ length: 50 }, (_, index) => `claim-${index}`);
+    const rows = Array.from({ length: 2_500 }, (_, index) =>
+      row(claims[index % claims.length]!, 1, `user-${index}`, index % 5 === 0 ? 1 : 0)
+    );
+    const fetchPage = vi.fn(async (args: { first: number; offset?: number; after?: string }) => {
+      if (args.offset !== undefined) {
+        if (args.offset > 1000)
+          throw new Error(`Pagination argument "offset" cannot exceed 1000; received ${args.offset}`);
+        return rows.slice(args.offset, args.offset + args.first);
+      }
+      const start = args.after ? Number(args.after) : 0;
+      const end = start + args.first;
+      return { items: rows.slice(start, end), endCursor: String(end), hasNextPage: end < rows.length };
+    });
+
+    const summaries = await fetchClaimResponseSummaries({
+      spaceId: 'space-1',
+      targets: claims.map(entityId => ({ entityId, responseKind: 'stance' as const })),
+      personalSpaceId: null,
+      fetchPage: fetchPage as never,
+    });
+
+    let positive = 0;
+    let negative = 0;
+    for (const summary of summaries.values()) {
+      positive += summary.counts.positive;
+      negative += summary.counts.negative;
+    }
+    expect({ positive, negative }).toEqual({ positive: 2_000, negative: 500 });
+    expect(fetchPage).toHaveBeenCalledTimes(3);
   });
 
   it('deduplicates avatar metadata in chunks and seeds every existing per-claim cache', async () => {
@@ -184,7 +223,7 @@ describe('claim response summaries', () => {
       ])
     ).toHaveLength(205);
     expect(queryClient.getQueryData(profilesBySpaceIdsQueryKey(responderIds))).toBeInstanceOf(Map);
-    expect(queryClient.getQueryData(spacesByIdsQueryKey(responderIds))).toHaveLength(205);
+    expect(responderIds.every(id => queryClient.getQueryData(spaceByIdQueryKey(id)))).toBe(true);
   });
 
   it('keeps response caches usable when avatar metadata fails and reuses successful metadata on retry', async () => {

@@ -1,0 +1,121 @@
+import { describe, expect, it } from 'vitest';
+
+import type { Entity, Relation, Value } from '~/core/types';
+
+import { getNetRelations, getNetValues } from './net-changes';
+
+function value(overrides: Partial<Value> = {}): Value {
+  return {
+    id: 'name-value',
+    entity: { id: 'profile', name: null },
+    property: { id: 'name', name: 'Name', dataType: 'TEXT', relationValueTypes: [] },
+    value: 'Alice',
+    spaceId: 'personal',
+    isLocal: true,
+    hasBeenPublished: false,
+    ...overrides,
+  };
+}
+
+function relation(overrides: Partial<Relation> = {}): Relation {
+  return {
+    id: 'type-relation',
+    entityId: 'type-relation-entity',
+    fromEntity: { id: 'profile', name: null },
+    toEntity: { id: 'person', name: null, value: '' },
+    type: { id: 'types', name: 'Types' },
+    renderableType: 'RELATION',
+    spaceId: 'personal',
+    isLocal: true,
+    hasBeenPublished: false,
+    ...overrides,
+  };
+}
+
+function baseline(values: Value[] = [], relations: Relation[] = []) {
+  return new Map<string, Pick<Entity, 'values' | 'relations'>>([['profile', { values, relations }]]);
+}
+
+describe('net review changes', () => {
+  it('excludes unchanged personal-space values while retaining edits in another space', () => {
+    const personal = value();
+    const publicEdit = value({ id: 'public-name', spaceId: 'public', value: 'Updated' });
+    const synced = baseline([value({ isLocal: false })]);
+
+    expect(getNetValues([personal, publicEdit], synced)).toEqual([publicEdit]);
+  });
+
+  it('excludes values and relations created then deleted when the baseline confirms they never existed', () => {
+    expect(getNetValues([value({ isDeleted: true })], baseline())).toEqual([]);
+    expect(getNetRelations([relation({ isDeleted: true })], baseline())).toEqual([]);
+  });
+
+  it('keeps restored deletions reviewable until their remote baseline loads', () => {
+    const deletedValue = value({ isDeleted: true });
+    const deletedRelation = relation({ isDeleted: true });
+    expect(getNetValues([deletedValue], new Map())).toEqual([deletedValue]);
+    expect(getNetRelations([deletedRelation], new Map())).toEqual([deletedRelation]);
+  });
+
+  it.each(['values', 'relations'])('retains deletions outside incomplete %s baselines', kind => {
+    const deletedValue = value({ isDeleted: true });
+    const deletedRelation = relation({ isDeleted: true });
+    const partial = new Map([
+      ['profile', { values: [], relations: [], valuesComplete: false, relationsComplete: false }],
+    ]);
+    if (kind === 'values') expect(getNetValues([deletedValue], partial)).toEqual([deletedValue]);
+    else expect(getNetRelations([deletedRelation], partial)).toEqual([deletedRelation]);
+  });
+
+  it('retains relation deletions when the remote total proves the baseline is partial', () => {
+    const deleted = relation({ isDeleted: true });
+    const partial = new Map([['profile', { values: [], relations: [], relationsTotalCount: 1001 }]]);
+    expect(getNetRelations([deleted], partial)).toEqual([deleted]);
+  });
+
+  it('retains actual additions, changes, and deletions of remote data', () => {
+    const synced = baseline([value({ isLocal: false })], [relation({ isLocal: false })]);
+    const changed = value({ value: 'Bob' });
+    const deleted = value({ isDeleted: true });
+    const newRelation = relation({ id: 'new-relation', toEntity: { id: 'company', name: null, value: '' } });
+    const deletedRelation = relation({ isDeleted: true });
+
+    expect(getNetValues([changed, deleted], synced)).toEqual([changed, deleted]);
+    expect(getNetRelations([newRelation, deletedRelation], synced)).toEqual([newRelation, deletedRelation]);
+    expect(getNetValues([value()], new Map())).toEqual([value()]);
+  });
+
+  it('excludes unchanged personal relations while retaining relation-only edits in another space', () => {
+    const personal = relation();
+    const publicEdit = relation({ id: 'public-type', spaceId: 'public' });
+    const synced = baseline([], [relation({ isLocal: false })]);
+
+    expect(getNetRelations([personal, publicEdit], synced)).toEqual([publicEdit]);
+  });
+
+  it('excludes delete/recreate pairs that restore the original relation', () => {
+    const deleted = relation({ isDeleted: true });
+    const recreated = relation({ id: 'replacement' });
+    const synced = baseline([], [relation({ isLocal: false })]);
+
+    expect(getNetRelations([deleted, recreated], synced)).toEqual([]);
+  });
+
+  it('retains position and destination-space changes', () => {
+    const synced = baseline([], [relation({ isLocal: false, position: 'a' })]);
+    const reordered = relation({ position: 'b' });
+    const redirected = relation({ position: 'a', toSpaceId: 'other' });
+
+    expect(getNetRelations([reordered], synced)).toEqual([reordered]);
+    expect(getNetRelations([redirected], synced)).toEqual([redirected]);
+  });
+
+  it('does not treat local edits baked into the synced cache as a remote baseline', () => {
+    const localValue = value();
+    const localRelation = relation();
+    const synced = baseline([localValue], [localRelation]);
+
+    expect(getNetValues([localValue], synced)).toEqual([localValue]);
+    expect(getNetRelations([localRelation], synced)).toEqual([localRelation]);
+  });
+});

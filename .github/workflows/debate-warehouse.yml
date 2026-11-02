@@ -1,0 +1,33 @@
+name: Debate warehouse timing sync
+
+on:
+  schedule:
+    - cron: '23 */6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: debate-warehouse-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.6
+      - run: bun install --frozen-lockfile
+      - name: Refresh debate rounds and claim timing
+        working-directory: apps/web
+        env:
+          CLICKHOUSE_URL: ${{ secrets.DEBATE_WAREHOUSE_CLICKHOUSE_URL }}
+          CLICKHOUSE_UN: ${{ secrets.DEBATE_WAREHOUSE_CLICKHOUSE_UN }}
+          CLICKHOUSE_PW: ${{ secrets.DEBATE_WAREHOUSE_CLICKHOUSE_PW }}
+          DEBATE_WAREHOUSE_GRAPH_URL: ${{ vars.DEBATE_WAREHOUSE_GRAPH_URL }}
+          DEBATE_WAREHOUSE_CHAT_URL: ${{ vars.DEBATE_WAREHOUSE_CHAT_URL }}
+        run: bun scripts/sync-debate-warehouse.ts

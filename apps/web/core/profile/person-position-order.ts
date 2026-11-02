@@ -6,6 +6,7 @@ import { parse } from 'graphql';
 import { SCORE_SYSTEM_PROPERTY } from '~/core/constants';
 import { ID } from '~/core/id';
 import { graphql } from '~/core/io/graphql-client';
+import { POSITION_VOTE_KINDS, POSITION_VOTE_TYPES } from '~/core/profile/profile-facts';
 import { normId } from '~/core/utils/norm-id';
 
 /**
@@ -80,12 +81,23 @@ const VOTE_ORDER_SOURCE = /* GraphQL */ `
  * No `spaceIds`, deliberately. That argument used to be required alongside the
  * flag, which would have meant learning the person's spaces before the first
  * page could render; GEO-2928 made `votedBy` satisfy the same constraint.
+ *
+ * Held positions only, through `votedByTypes` (GEO-2962): the same kinds and
+ * types as the count, so this list is the New list in a different order.
  */
 const SCORE_ORDER_SOURCE = /* GraphQL */ `
-  query PersonScoreOrder($userId: UUID!, $propertyId: UUID!, $first: Int, $after: Cursor) {
+  query PersonScoreOrder(
+    $userId: UUID!
+    $kinds: [Int!]
+    $types: [Int!]
+    $propertyId: UUID!
+    $first: Int
+    $after: Cursor
+  ) {
     entitiesOrderedByPropertyConnection(
       votedBy: $userId
-      votedByKinds: [1, 2]
+      votedByKinds: $kinds
+      votedByTypes: $types
       propertyId: $propertyId
       dataType: "integer"
       sortDirection: DESC
@@ -120,10 +132,11 @@ const SCORE_ORDER_SOURCE = /* GraphQL */ `
  * the reference account's 208 claims, where this returns every one.
  */
 const BEST_ORDER_SOURCE = /* GraphQL */ `
-  query PersonBestOrder($userId: UUID!, $first: Int, $after: Cursor) {
+  query PersonBestOrder($userId: UUID!, $kinds: [Int!], $types: [Int!], $first: Int, $after: Cursor) {
     entitiesConnection(
       votedBy: $userId
-      votedByKinds: [1, 2]
+      votedByKinds: $kinds
+      votedByTypes: $types
       orderBy: RANKING_SCORE_DESC
       first: $first
       after: $after
@@ -237,12 +250,11 @@ export function stanceOf(node: VoteNode): Stance | null {
  * is not something anybody chooses: the controls offer two sides, and
  * `userVotes` is unique per (user, claim, object type, space, kind), so taking a
  * side back rewrites the row rather than deleting it. The row is what
- * `entitiesConnection(votedBy:)` counts, which is why the tab listed claims with
- * no position on them and the rail counted them — 17 of one account's 211, 12 of
- * another's 34, 50 across the 20 accounts measured. There is no server-side way
- * to exclude them today (`votedByTypes` does not exist; GEO-2962 asks for it),
- * so the vote table is the only source that can tell the difference, and every
- * part of the tab narrows to what it says.
+ * `entitiesConnection(votedBy:)` counts unless it is given `votedByTypes`, which
+ * is why the tab once listed claims with no position on them and the rail
+ * counted them — 17 of one account's 211, 12 of another's 34. The other sorts,
+ * the filter index and the count now pass `POSITION_VOTE_TYPES` and exclude
+ * them server-side (GEO-2962); this decode reaches the same set from the rows.
  *
  * The newest vote of each kind settles that kind even when it carries no side,
  * so a retraction cannot be skipped over and let an older answer fill the gap —
@@ -368,12 +380,13 @@ export async function fetchPositionOrder(
     return decodeVoteOrder(nodes as VoteNode[]);
   }
 
+  const held = { userId, kinds: [...POSITION_VOTE_KINDS], types: [...POSITION_VOTE_TYPES] };
   const nodes =
     sort === 'best'
-      ? await pageAll(personBestOrderDocument, { userId }, data => data.entitiesConnection, signal)
+      ? await pageAll(personBestOrderDocument, held, data => data.entitiesConnection, signal)
       : await pageAll(
           personScoreOrderDocument,
-          { userId, propertyId: SCORE_SYSTEM_PROPERTY },
+          { ...held, propertyId: SCORE_SYSTEM_PROPERTY },
           data => data.entitiesOrderedByPropertyConnection,
           signal
         );
@@ -389,8 +402,8 @@ export async function fetchPositionOrder(
     entityIds.push(key);
   }
 
-  // Neither ordering says anything about how anyone answered — including
-  // whether the answer still stands. The tab reads both from the vote order,
-  // which it holds whichever sort is showing, and narrows this list to it.
+  // Neither ordering says how anyone answered. The tab reads that from the vote
+  // order, which it holds whichever sort is showing. Whether the answer still
+  // stands the server has already settled — see `held` above.
   return { entityIds, responseByClaimId: {}, spacesByClaimId: {} };
 }

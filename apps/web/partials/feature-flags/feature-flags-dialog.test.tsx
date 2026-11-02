@@ -59,10 +59,16 @@ describe('FeatureFlagsDialog', () => {
       expect(JSON.parse(window.localStorage.getItem(featureFlagsStorageKey) ?? 'null')).toEqual({
         playbackDiagnostics: false,
         debugDebatesPage: true,
-        peerAvailability: false,
         debateDebugging: true,
+        debateDeviceSwitchRecording: false,
         debateFormatSelector: true,
         exploreSidePanel: false,
+        forYouFeed: false,
+        lobbyHosting: false,
+        spaceCalls: false,
+        googleSignIn: false,
+        googleCalendar: false,
+        microsoftCalendar: false,
         bountiesTab: true,
       });
     });

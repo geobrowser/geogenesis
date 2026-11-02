@@ -112,6 +112,25 @@ describe('DebateActivityRow', () => {
   });
   afterEach(cleanup);
 
+  it('identifies every video destination for the room navigation boundary', () => {
+    renderRow({
+      keyframeUrl: 'https://example.com/frame.jpg',
+      sides: [
+        { spaceId: 'ada-space', position: true },
+        { spaceId: 'ben-space', position: false },
+      ],
+      profilesBySpaceId: new Map([
+        ['ada-space', { name: 'Ada' }],
+        ['ben-space', { name: 'Ben' }],
+      ]),
+    });
+    const links = screen
+      .getAllByRole('link')
+      .filter(link => link.getAttribute('href') === '/space/claim-space/debate-1');
+    expect(links).toHaveLength(3);
+    for (const link of links) expect(link).toHaveAttribute('data-entity-side-panel-full-page');
+  });
+
   it('draws no collapse control on a debate that produced nothing and has no comments', () => {
     renderRow({ claimCount: 0, commentCount: 0 });
 

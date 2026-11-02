@@ -4,6 +4,8 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { observePanelNavigation } from '~/core/utils/entity-side-panel-link';
+
 import { Avatar } from '~/design-system/avatar';
 
 /**
@@ -26,6 +28,7 @@ export function ThreadAvatar({
   href,
   label,
   onClick,
+  panelNavigation,
   className,
 }: {
   avatarUrl?: string | null;
@@ -45,6 +48,8 @@ export function ThreadAvatar({
    */
   label?: string;
   onClick?: (event: React.MouseEvent) => void;
+  /** Whether a room boundary leaves navigation to this link or preserves its tracking callback. */
+  panelNavigation?: 'custom' | 'observe';
   className?: string;
 }) {
   // `shrink-0` because these sit in flex rows that would otherwise squeeze the frame narrower than
@@ -62,7 +67,15 @@ export function ThreadAvatar({
   }
 
   return (
-    <a href={href} aria-label={label} onClick={onClick} className={frameClassName} style={frameStyle}>
+    <a
+      href={href}
+      aria-label={label}
+      {...(panelNavigation === 'observe'
+        ? observePanelNavigation(onClick)
+        : { onClick, 'data-entity-side-panel-navigation': panelNavigation })}
+      className={frameClassName}
+      style={frameStyle}
+    >
       {face}
     </a>
   );

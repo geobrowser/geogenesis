@@ -4,8 +4,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { useScrollLock } from './use-scroll-lock';
 
-function Locked() {
-  useScrollLock();
+function Locked({ active }: { active?: boolean }) {
+  useScrollLock(active);
   return null;
 }
 
@@ -36,5 +36,16 @@ describe('useScrollLock', () => {
     second.unmount();
     expect(document.body.style.overflow).toBe('');
     expect(document.documentElement.style.overflow).toBe('');
+  });
+
+  it('holds nothing while inactive, and locks once it turns on', () => {
+    const view = render(<Locked active={false} />);
+    expect(document.body.style.overflow).toBe('');
+
+    view.rerender(<Locked active />);
+    expect(document.body.style.overflow).toBe('hidden');
+
+    view.rerender(<Locked active={false} />);
+    expect(document.body.style.overflow).toBe('');
   });
 });

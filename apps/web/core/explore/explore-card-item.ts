@@ -1,6 +1,6 @@
-import { countActivityForNode } from '~/core/claims/browse/claim-activity-fields';
 import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
+import { countActivityForNode } from '~/core/claims/browse/claim-activity-fields';
 import { getRecordingUrls } from '~/core/community-calls/recordings';
 import { isDebateEntity } from '~/core/debates/is-debate-entity';
 import { DEBATE_CLAIMS_PROPERTY_ID, DEBATE_VIDEOS_PROPERTY_ID } from '~/core/debates/ontology';
@@ -17,6 +17,7 @@ import {
   EXPLORE_ENTITY_NAME_PROPERTY_ID,
 } from './explore-constants';
 import { parseEntityUpdatedAtToUnixSec } from './explore-relative-time';
+import type { FeedItemRanking } from './for-you/feed-version';
 
 /**
  * The claim a Debate argued, as the card needs it: enough to title the card and to open the claim.
@@ -71,6 +72,23 @@ export type ExploreFeedItem = {
   activityCommentCount?: number;
   isMemberOrEditor: boolean;
   hasPendingMembershipRequest: boolean;
+  /**
+   * Which ranking put this card on the page, and why (GEO-3140 / GEO-3144). Set on Explore's Best,
+   * For you and interleaved pages; absent everywhere else.
+   */
+  ranking?: FeedItemRanking;
+  /**
+   * GEO-3234. A debate the lead check (GEO-3070) verified playable, so the browser may put it first
+   * in place of a lead this visitor has already seen. Set only while seen demotion is on.
+   */
+  playableLead?: boolean;
+  /**
+   * The lead debate's two speaker stills (GEO-3280), from the `/media` read the lead check already
+   * made. The card paints them while its debate and media queries are still in flight, so the
+   * page's largest image no longer waits on two geo-chat round trips after the feed. Set on the
+   * first page's lead debate only; every other debate card finds its stills itself.
+   */
+  debatePosters?: { slot1: string | null; slot2: string | null };
 };
 
 /**

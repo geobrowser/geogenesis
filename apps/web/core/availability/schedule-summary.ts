@@ -1,0 +1,84 @@
+import { type AvailabilityBlock, type RecurringBlock, WEEKDAY_LABELS, formatTime, mergeBlocks } from './blocks';
+
+/**
+ * Past this many distinct day groups a one-line summary stops being scannable — "Mon 9am · Tue 10am
+ * · Wed…" is the grid again, badly — so it falls back to a count.
+ */
+const MAX_GROUPS = 3;
+
+/**
+ * One line describing a saved week, for places too small to draw the grid: `Mon–Fri 6 – 8pm · Sat
+ * 10am – 12pm`. Null when there is nothing to describe.
+ *
+ * Only recurring blocks are summarised. One-off dates and exceptions are real availability, but
+ * "free next Thursday" in a summary of the week reads as though it repeats, so a schedule made only
+ * of dates says so instead of pretending to a pattern.
+ */
+export function summarizeSchedule(blocks: AvailabilityBlock[]): string | null {
+  const recurring = mergeBlocks(blocks).filter((block): block is RecurringBlock => block.kind === 'recurring');
+
+  if (recurring.length === 0) {
+    return blocks.some(block => block.kind === 'dated') ? 'Free on specific dates' : null;
+  }
+
+  // Days that share exactly the same hours are one group, so a working-week pattern reads as one
+  // phrase rather than five.
+  const hoursByDay = WEEKDAY_LABELS.map((_, weekday) =>
+    recurring
+      .filter(block => block.weekday === weekday)
+      .sort((a, b) => a.start - b.start)
+      .map(block => formatRange(block.start, block.end))
+      .join(', ')
+  );
+
+  const groups = new Map<string, number[]>();
+  hoursByDay.forEach((hours, weekday) => {
+    if (!hours) return;
+    groups.set(hours, [...(groups.get(hours) ?? []), weekday]);
+  });
+
+  const freeDays = hoursByDay.filter(Boolean).length;
+  if (groups.size > MAX_GROUPS) return `Free ${freeDays} days a week`;
+
+  return [...groups].map(([hours, weekdays]) => `${formatDays(weekdays)} ${hours}`).join(' · ');
+}
+
+const MINUTES_PER_DAY = 24 * 60;
+
+/**
+ * `6 – 8pm` when both ends share a half of the day, `10am – 12pm` when they do not. The spaced dash
+ * matches the calendar's own block labels, and the shared suffix is dropped as `formatDebateSlot`
+ * does.
+ *
+ * An end of midnight is the *next* day's 12am, so it never shares a suffix with the start: dropping
+ * it would turn 9am-to-midnight into `9 – 12am`, which reads as 9pm. And a block that runs the whole
+ * day is said as such — `12am – 12am` reads as no time at all.
+ */
+function formatRange(start: number, end: number) {
+  if (start === 0 && end === MINUTES_PER_DAY) return 'all day';
+
+  const from = formatTime(start);
+  const to = formatTime(end % MINUTES_PER_DAY);
+  const sharesSuffix = end < MINUTES_PER_DAY && from.slice(-2) === to.slice(-2);
+  return `${sharesSuffix ? from.slice(0, -2) : from} – ${to}`;
+}
+
+/** `Every day`, `Mon–Fri`, `Sat, Sun`, `Mon, Wed–Fri`: runs of three or more collapse to a range. */
+function formatDays(weekdays: number[]) {
+  if (weekdays.length === 7) return 'Every day';
+
+  const runs: number[][] = [];
+  for (const day of weekdays) {
+    const run = runs.at(-1);
+    if (run && run.at(-1) === day - 1) run.push(day);
+    else runs.push([day]);
+  }
+
+  return runs
+    .flatMap(run =>
+      run.length >= 3
+        ? [`${WEEKDAY_LABELS[run[0]]}–${WEEKDAY_LABELS[run[run.length - 1]]}`]
+        : run.map(day => WEEKDAY_LABELS[day])
+    )
+    .join(', ');
+}

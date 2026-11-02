@@ -10,11 +10,7 @@ export function EntitySidePanelPopoverPortalProvider({ children }: { children: R
   return (
     <EntitySidePanelPopoverPortalContext.Provider value={portalEl}>
       {children}
-      <div
-        ref={setPortalEl}
-        className="side-panel-elevated-popover pointer-events-none fixed inset-0 z-[60]"
-        aria-hidden
-      />
+      <div ref={setPortalEl} className="side-panel-elevated-popover pointer-events-none fixed inset-0 z-[60]" />
     </EntitySidePanelPopoverPortalContext.Provider>
   );
 }

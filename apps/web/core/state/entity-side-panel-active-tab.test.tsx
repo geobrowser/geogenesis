@@ -36,6 +36,25 @@ function ScopedProbe({ entityId, spaceId }: { entityId: string; spaceId: string 
 describe('EntitySidePanelActiveTabProvider', () => {
   afterEach(cleanup);
 
+  it('starts on a linked tab and resets to overview when the next entity has no tab', () => {
+    const view = render(
+      <EntitySidePanelActiveTabProvider entityId="entity-1" spaceId="space-1" initialTab={{ systemTab: 'claims' }}>
+        <Probe />
+      </EntitySidePanelActiveTabProvider>
+    );
+    expect(screen.getByTestId('system-tab')).toHaveTextContent('claims');
+    view.rerender(
+      <EntitySidePanelActiveTabProvider entityId="entity-2" spaceId="space-1" initialTab={{ tabId: AUTHORED_TAB_ID }}>
+        <Probe />
+      </EntitySidePanelActiveTabProvider>
+    );
+    expect(screen.getByTestId('authored-tab')).toHaveTextContent(AUTHORED_TAB_ID);
+    expect(screen.getByTestId('system-tab')).toHaveTextContent('none');
+    view.rerender(<ScopedProbe entityId="entity-3" spaceId="space-1" />);
+    expect(screen.getByTestId('authored-tab')).toHaveTextContent('none');
+    expect(screen.getByTestId('system-tab')).toHaveTextContent('none');
+  });
+
   it('retains the selection while the entity and effective space stay the same', () => {
     const view = render(<ScopedProbe entityId="entity-1" spaceId="space-1" />);
     fireEvent.click(screen.getByRole('button', { name: 'Select authored' }));

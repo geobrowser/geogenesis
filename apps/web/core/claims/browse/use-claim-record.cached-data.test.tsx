@@ -54,9 +54,9 @@ describe('useClaimRecord independent loading and cached data', () => {
       ],
     };
 
-    mocks.useQuery.mockImplementation(() => ({
-      data: undefined,
-      isLoading: mocks.countLoading,
+    mocks.useQuery.mockImplementation((options: { queryKey: string[] }) => ({
+      data: options.queryKey[1] === 'direct-debates' ? {} : undefined,
+      isLoading: options.queryKey[1] === 'direct-debates' ? false : mocks.countLoading,
       isError: false,
       error: null,
     }));
@@ -87,7 +87,6 @@ describe('useClaimRecord independent loading and cached data', () => {
       mocks.allowedSets.push(allowed);
       return entities.map(entity => ({ ...claimRow, entityId: entity.id }));
     });
-
   });
 
   it('publishes claim rows before the independent exact count and debate requests finish', () => {

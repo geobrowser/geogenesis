@@ -40,75 +40,29 @@ export { DEFAULT_POSITION_SORT };
 const PAGE_SIZE = 20;
 
 const EMPTY_RESPONSES: Record<string, ClaimResponse> = {};
-const EMPTY_SPACES: Record<string, string[]> = {};
 
 /**
- * The vote table, read once for the whole tab (GEO-2859).
+ * How this person answered each claim, from the vote table (GEO-2859).
  *
- * Three things need it and none of them can be answered without it: how each
- * claim was answered, whether the answer still stands — a retraction is a row
- * rather than an absence, so `entitiesConnection(votedBy:)` counts claims this
- * person no longer holds a position on — and which space they answered in.
+ * Only the vote table can say which side somebody took, so every sort reads it.
+ * It no longer decides *which* claims are listed or counted: a retraction is a
+ * row rewritten to "neither" rather than a row removed, and the server now
+ * leaves those out of every `votedBy` read itself (`votedByTypes`, GEO-2962) —
+ * so the count is the facts query's `totalCount` again, and the menus and the
+ * Top and Best orders no longer wait on this.
  *
- * One query key, shared with the `new` order, so the list, the filter menus and
- * the count all narrow to the same set and one request serves them.
+ * Keyed identically to the `new` order, so the two share one cache entry and
+ * switching sorts back and forth costs nothing.
  */
-export function usePersonResponses({ spaceId, enabled = true }: { spaceId: string; enabled?: boolean }) {
+function usePersonResponses(spaceId: string) {
   const { data, isLoading, isError } = useQuery({
     queryKey: personPositionOrderQueryKey(spaceId, 'new'),
-    enabled: enabled && spaceId !== '',
+    enabled: spaceId !== '',
     staleTime: 60_000,
     queryFn: ({ signal }) => fetchPositionOrder(spaceId, 'new', signal),
   });
 
-  const answeredIds = React.useMemo(() => (data ? new Set(data.entityIds) : undefined), [data]);
-
-  return {
-    responseByClaimId: data?.responseByClaimId ?? EMPTY_RESPONSES,
-    spacesByClaimId: data?.spacesByClaimId ?? EMPTY_SPACES,
-    /**
-     * The claims still answered, or undefined while the read is out.
-     *
-     * Undefined rather than an empty set, and callers must keep the difference:
-     * narrowing to an empty set draws a full record as an empty one.
-     */
-    answeredIds,
-    /** Positions this person actually holds — what the rail and the tab count. */
-    total: data ? data.entityIds.length : null,
-    isLoading,
-    isError,
-  };
-}
-
-/**
- * The Positions number, from the only source that can tell a held position from
- * a retracted one (GEO-2859).
- *
- * `entitiesConnection(votedBy:)` counts the row, and taking a side back rewrites
- * the row to "neither" rather than removing it — so the server's count is of
- * claims this person has *answered at some point*, which on one account is 211
- * against 194 positions actually held and on another 34 against 22. That number
- * sits directly above a list that shows the 194, so the two had to be reconciled
- * and the vote table is the side that can be.
- *
- * There is no server-side fix available *yet*: `votedByTypes` does not exist on
- * either connection, and `userVotes` counts rows rather than claims — a claim
- * answered for both stance and veracity is two of them. GEO-2962 asks for the
- * argument; when it lands this function and the vote scan behind it come out,
- * and the count goes back to being one `totalCount` in the server-rendered
- * facts query.
- */
-export function heldPositionsCount(
-  responses: { total: number | null; isError: boolean },
-  /** The server's count, which includes retractions. Used only as a last resort. */
-  serverCount: number
-): number | null {
-  if (responses.total !== null) return responses.total;
-
-  // The vote read failed. The server's count is then the only number there is,
-  // and an overstated count reads better than a permanently blank one — the
-  // alternative is a profile whose headline number never arrives.
-  return responses.isError ? serverCount : null;
+  return { responseByClaimId: data?.responseByClaimId ?? EMPTY_RESPONSES, isLoading, isError };
 }
 
 export function personPositionsQueryKey(spaceId: string, sort: PositionSort, filterKey: string) {
@@ -155,21 +109,12 @@ export function usePersonPositions({
     queryFn: ({ signal }) => fetchPositionOrder(spaceId, sort, signal),
   });
 
-  // The vote table, which Top needs as well as its own order: score order says
-  // nothing about how a claim was answered or whether the answer still stands.
-  // Keyed identically to the `new` order, so the two share one cache entry and
-  // switching sorts back and forth costs nothing.
-  const responses = usePersonResponses({ spaceId });
-  const { responseByClaimId, answeredIds } = responses;
+  // The vote table, which Top and Best need as well as their own order: score
+  // order says nothing about how a claim was answered.
+  const responses = usePersonResponses(spaceId);
+  const { responseByClaimId } = responses;
 
-  // Nothing before the vote table lands. Top's own order includes claims this
-  // person has retracted — `entitiesOrderedByPropertyConnection(votedBy:)`
-  // cannot tell a held position from a withdrawn one — so rendering it early
-  // would show the retracted ones for a beat and then drop them.
-  const orderedIds = React.useMemo(
-    () => (answeredIds ? applyFilter(order.data, matchingIds, answeredIds) : []),
-    [order.data, matchingIds, answeredIds]
-  );
+  const orderedIds = React.useMemo(() => applyFilter(order.data, matchingIds), [order.data, matchingIds]);
 
   /**
    * Where to render each claim: only where the *reader* asked for.
@@ -224,7 +169,7 @@ export function usePersonPositions({
     isError: isRowsError,
   } = useInfiniteQuery({
     queryKey: personPositionsQueryKey(spaceId, sort, filterKey),
-    enabled: spaceId !== '' && order.isSuccess && answeredIds !== undefined,
+    enabled: spaceId !== '' && order.isSuccess,
     initialPageParam: 0,
     getNextPageParam: (_last: ExploreFeedRow[], _pages: ExploreFeedRow[][], lastOffset: number) => {
       const next = lastOffset + first;
@@ -258,24 +203,11 @@ export function usePersonPositions({
  * lists over the same record, so this is exact — and it is what lets the two
  * halves come from different connections without ever disagreeing.
  */
-export function applyFilter(
-  order: PositionOrder | undefined,
-  matchingIds: readonly string[] | null,
-  /**
-   * The claims still answered, from the vote table.
-   *
-   * Applies to Top, whose order arrives from a connection that cannot tell a
-   * held position from a retracted one. The `new` order is already narrowed to
-   * these, so intersecting again costs a set lookup and changes nothing.
-   */
-  answeredIds?: ReadonlySet<string>
-): string[] {
+export function applyFilter(order: PositionOrder | undefined, matchingIds: readonly string[] | null): string[] {
   if (!order) return [];
-
-  const held = answeredIds ? order.entityIds.filter(id => answeredIds.has(id)) : order.entityIds;
-  if (matchingIds === null) return held;
+  if (matchingIds === null) return order.entityIds;
 
   const keep = new Set(matchingIds.map(normId));
 
-  return held.filter(id => keep.has(id));
+  return order.entityIds.filter(id => keep.has(id));
 }

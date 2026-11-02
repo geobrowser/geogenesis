@@ -4,8 +4,11 @@ import * as React from 'react';
 
 import type { DebateRequest, DebateRequestParty } from '../api';
 import { DebateRequestDialog, type DebateRequestDialogParticipant } from '../debate-request-dialog';
+import { requestOpenRounds } from '../format-details';
+import { debateRequestMediaSessionKey } from '../media-session';
 import { speakerLabel } from '../playback-utils';
 import { useAcceptDebateRequest, useBlockDebateUser, useDismissDebateRequest } from './hooks';
+import { debateActionAnalyticsAttributes } from './hub-analytics';
 import { SpaceChip } from './matchmaking-claim-card';
 import { RequestOverflowMenu } from './request-overflow-menu';
 import { useAnswerOnce } from './use-answer-once';
@@ -48,13 +51,21 @@ export function IncomingRequestPopup({
   return (
     <DebateRequestDialog
       claim={request.claim.claim}
+      media={{ kind: 'choose', sessionKey: debateRequestMediaSessionKey(request.id) }}
+      formatSummaryOnly
       participants={participants}
       currentUserId={currentUserId}
       formatId={request.turn_format_id}
+      openRounds={requestOpenRounds(request)}
       busy={busy}
       error={error?.message ?? null}
       actionsLayout="split"
       rejectLabel="Not now"
+      analytics={{
+        accept: debateActionAnalyticsAttributes('request-popup', 'Accept'),
+        reject: debateActionAnalyticsAttributes('request-popup', 'Not now'),
+        formatAction: debateActionAnalyticsAttributes('request-popup', 'Dismiss forever'),
+      }}
       eyebrow={
         <span className="flex min-w-0 items-center justify-center gap-1.5 text-metadata text-grey-04">
           <SpaceChip spaceId={request.claim.space_id} />

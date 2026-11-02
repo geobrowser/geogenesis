@@ -42,7 +42,15 @@ function pickHighlight(series: CallSeries[], now: number): { row: Row; isLive: b
  * all — with no live/upcoming occurrence, the rail still renders so "View all"
  * stays reachable.
  */
-export function SpaceCommunityCallsSection({ spaceId, series }: { spaceId: string; series: CallSeries[] }) {
+export function SpaceCommunityCallsSection({
+  spaceId,
+  spaceName,
+  series,
+}: {
+  spaceId: string;
+  spaceName?: string;
+  series: CallSeries[];
+}) {
   // Bucket after mount so SSR/CSR clock splits can't diverge (hydration-safe), then
   // keep refreshing so a call transitions live/upcoming while the page stays open.
   const [now, setNow] = React.useState<number | null>(null);
@@ -80,7 +88,13 @@ export function SpaceCommunityCallsSection({ spaceId, series }: { spaceId: strin
       ) : highlight.isLive ? (
         <LiveCard spaceId={spaceId} row={highlight.row} />
       ) : (
-        <UpcomingCard row={highlight.row} isMember={isMember} isEditor={isEditor} accessLoading={accessLoading} />
+        <UpcomingCard
+          row={highlight.row}
+          spaceName={spaceName}
+          isMember={isMember}
+          isEditor={isEditor}
+          accessLoading={accessLoading}
+        />
       )}
     </>
   );
@@ -121,11 +135,13 @@ function LiveCard({ spaceId, row }: { spaceId: string; row: Row }) {
 
 function UpcomingCard({
   row,
+  spaceName,
   isMember,
   isEditor,
   accessLoading,
 }: {
   row: Row;
+  spaceName?: string;
   isMember: boolean;
   isEditor: boolean;
   accessLoading: boolean;
@@ -134,7 +150,13 @@ function UpcomingCard({
     <CardShell>
       <div className="flex items-start justify-between gap-2">
         <Title row={row} />
-        <CardAction call={row.call} isMember={isMember} isEditor={isEditor} accessLoading={accessLoading} />
+        <CardAction
+          call={row.call}
+          spaceName={spaceName}
+          isMember={isMember}
+          isEditor={isEditor}
+          accessLoading={accessLoading}
+        />
       </div>
       <div className="mt-6 text-[16px] leading-[20px] text-grey-04">{formatDateLabel(row.occ.startMs)}</div>
     </CardShell>
@@ -155,11 +177,13 @@ function UpcomingCard({
  */
 function CardAction({
   call,
+  spaceName,
   isMember,
   isEditor,
   accessLoading,
 }: {
   call: CallSeries;
+  spaceName?: string;
   isMember: boolean;
   isEditor: boolean;
   accessLoading: boolean;
@@ -168,7 +192,12 @@ function CardAction({
   if (isMember || isEditor) return <RsvpButton call={call} />;
   return (
     <div className="shrink-0 whitespace-nowrap">
-      <ExploreJoinSpaceButton spaceId={call.spaceId} hasRequestedSpaceMembership={false} variant="text" />
+      <ExploreJoinSpaceButton
+        spaceId={call.spaceId}
+        spaceName={spaceName}
+        hasRequestedSpaceMembership={false}
+        variant="text"
+      />
     </div>
   );
 }

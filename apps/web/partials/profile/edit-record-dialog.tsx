@@ -14,12 +14,14 @@ import {
   positionDraftFromEntry,
 } from '~/core/profile/stage-history';
 
-import { Button, SquareButton } from '~/design-system/button';
+import { SquareButton } from '~/design-system/button';
 import { Close } from '~/design-system/icons/close';
 
 import { AddEducationSheet } from './add-education-sheet';
 import { AddPositionSheet } from './add-position-sheet';
+import { DiscardEditsDialog, useDiscardEditsGuard } from './discard-edits-dialog';
 import { HistorySection } from './history-section';
+import { profilePillClassName } from './profile-pill';
 
 type Kind = 'employment' | 'education';
 
@@ -116,6 +118,8 @@ export function EditRecordDialog({ kind, onOpenChange, entityId, spaceId }: Prop
     onOpenChange(false);
   };
 
+  const canSave = !isSaving && canEdit && history.hasPendingChanges;
+
   const save = () => {
     if (!history.hasPendingChanges) {
       close();
@@ -144,6 +148,22 @@ export function EditRecordDialog({ kind, onOpenChange, entityId, spaceId }: Prop
     onOpenChange(false);
   };
 
+  const discardGuard = useDiscardEditsGuard({
+    hasUnsavedEdits: !isSaving && history.hasPendingChanges,
+    canSave,
+    // With rows staged and no publish running, `canEdit` is the only thing left
+    // that can hold Save — false while the viewer's own space is still resolving.
+    saveBlockedReason: canEdit ? null : 'Your space is still loading. Try again in a moment.',
+    discard: close,
+    save,
+  });
+
+  /** Escape. On a sheet it steps back to the list, the same as its Back button. */
+  const dismiss = () => {
+    if (sheet) setSheet(null);
+    else discardGuard.requestClose();
+  };
+
   /**
    * A finished publish clears the queue, and a failed one reopens on it.
    *
@@ -165,7 +185,7 @@ export function EditRecordDialog({ kind, onOpenChange, entityId, spaceId }: Prop
   const copy = kind ? COPY[kind] : COPY.employment;
 
   return (
-    <Root open={kind !== null} onOpenChange={next => (next ? onOpenChange(true) : close())}>
+    <Root open={kind !== null} onOpenChange={next => (next ? onOpenChange(true) : dismiss())}>
       <Portal>
         <Overlay className="fixed inset-0 z-100 bg-text/20" />
         <Content // `px-4` so the card clears the screen edges on a phone, where
@@ -217,7 +237,7 @@ export function EditRecordDialog({ kind, onOpenChange, entityId, spaceId }: Prop
               <>
                 <header className="flex items-center justify-between px-5 py-4">
                   <Title className="text-smallTitle text-text">{copy.title}</Title>
-                  <SquareButton type="button" onClick={close} icon={<Close />} aria-label="Close" />
+                  <SquareButton type="button" onClick={discardGuard.requestClose} icon={<Close />} aria-label="Close" />
                 </header>
 
                 <Description className="sr-only">{copy.description}</Description>
@@ -241,21 +261,33 @@ export function EditRecordDialog({ kind, onOpenChange, entityId, spaceId }: Prop
                     {status === 'error' && errorMessage ? errorMessage : 'Saving publishes to your space.'}
                   </p>
                   <div className="flex items-center gap-2">
-                    <Button variant="secondary" onClick={close} disabled={isSaving}>
+                    <button
+                      type="button"
+                      onClick={discardGuard.requestClose}
+                      disabled={isSaving}
+                      className={profilePillClassName('secondary')}
+                    >
                       Cancel
-                    </Button>
+                    </button>
                     {/* `canEdit` is false while the viewer's own space is still
                         resolving, and publishing then returns without doing
                         anything at all — a Save that reports nothing and writes
                         nothing is the worst of both. */}
-                    <Button onClick={save} disabled={isSaving || !canEdit || !history.hasPendingChanges}>
+                    <button
+                      type="button"
+                      onClick={save}
+                      disabled={!canSave}
+                      className={profilePillClassName('primary')}
+                    >
                       Save
-                    </Button>
+                    </button>
                   </div>
                 </footer>
               </>
             )}
           </div>
+
+          <DiscardEditsDialog {...discardGuard.dialogProps} />
         </Content>
       </Portal>
     </Root>

@@ -127,6 +127,7 @@ export function DebateCommentRow({
       {/* A link, so middle-click and copy-address still reach the person's space, with the click
           itself intercepted to open the profile beside the thread instead of replacing it. */}
       <ThreadAvatar
+        panelNavigation="custom"
         href={NavUtils.toSpace(comment.author.spaceId)}
         // The same name the row prints beside it, because a face on its own announces nothing.
         label={comment.author.name ?? 'Anonymous'}
@@ -140,6 +141,7 @@ export function DebateCommentRow({
         <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
           <a
             href={NavUtils.toSpace(comment.author.spaceId)}
+            data-entity-side-panel-navigation="custom"
             onClick={openAuthorProfile}
             className="min-w-0 truncate hover:underline"
           >

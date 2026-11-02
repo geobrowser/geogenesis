@@ -1,20 +1,22 @@
 import { Effect } from 'effect';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
+import { compareOpenProposals } from '~/core/governance/sort-open-proposals';
 import {
   type ApiProposalListItem,
   convertVoteOption,
   getApiProposalCanExecute,
+  getEffectiveApiProposalStatus,
   mapActionTypeToProposalType,
   mapProposalStatus,
 } from '~/core/io/rest';
 import { fetchEditorSpaceIds } from '~/core/io/subgraph/fetch-editor-space-ids';
 import { defaultProfile, fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
-import { compareOpenProposals } from '~/core/governance/sort-open-proposals';
 import { fetchProposalSubmittedTimes, getSubmittedTime } from '~/core/io/subgraph/fetch-proposal-submitted-times';
 import { filterGrantedMembershipRequests } from '~/core/io/subgraph/filter-granted-membership-requests';
 import { ProposalStatus, ProposalType } from '~/core/io/substream-schema';
 import { Profile } from '~/core/types';
+import { mapWithConcurrency } from '~/core/utils/map-with-concurrency';
 
 import {
   type GovernanceHomeReviewCategory,
@@ -37,6 +39,7 @@ export {
 export type ActiveProposalsForSpacesWhereEditor = Awaited<ReturnType<typeof getActiveProposalsForSpacesWhereEditor>>;
 
 const PAGE_SIZE = 100;
+const REVIEW_SPACE_CONCURRENCY = 8;
 
 const MEMBERSHIP_ACTIONS = new Set(['ADD_MEMBER', 'REMOVE_MEMBER']);
 
@@ -93,10 +96,8 @@ export async function getActiveProposalsForSpacesWhereEditor(
     (proposalType === 'content' ? 'knowledge' : proposalType === 'membership' ? 'membership' : 'all');
   const status: GovernanceHomeStatusFilter = filters?.status ?? 'pending';
 
-  const allResults = await Promise.all(
-    spaceIds.map(spaceId =>
-      fetchProposalsForSpaceByGovernanceFilters({ spaceId, memberSpaceId, proposalType, category, status })
-    )
+  const allResults = await mapWithConcurrency(spaceIds, REVIEW_SPACE_CONCURRENCY, spaceId =>
+    fetchProposalsForSpaceByGovernanceFilters({ spaceId, memberSpaceId, proposalType, category, status })
   );
 
   const merged = allResults.flat();
@@ -131,12 +132,11 @@ export async function getActiveProposalsForSpacesWhereEditor(
   const profilesForProposals = await Effect.runPromise(fetchProfilesBySpaceIds(uniqueCreatorIds));
   const profilesBySpaceId = new Map(uniqueCreatorIds.map((id, i) => [id, profilesForProposals[i]]));
 
-
   const proposals = paginatedProposals.map(p => {
     const profile = profilesBySpaceId.get(p.proposedBy) ?? defaultProfile(p.proposedBy, p.proposedBy);
     const actionType = p.actions[0]?.actionType ?? 'UNKNOWN';
     const type = mapActionTypeToProposalType(actionType);
-    const status = mapProposalStatus(p.status);
+    const status = mapProposalStatus(getEffectiveApiProposalStatus(p));
 
     return {
       id: p.proposalId,

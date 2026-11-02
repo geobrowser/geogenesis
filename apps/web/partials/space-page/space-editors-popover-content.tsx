@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import pluralize from 'pluralize';
 
+import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { type ActiveEditorRequest } from '~/core/io/subgraph/fetch-proposed-editors';
 import { type SpaceParticipantsPage } from '~/core/space-members/fetch-space-participants-page';
 import {
@@ -41,6 +42,16 @@ export function SpaceEditorsContent({
     });
 
   const sentinelRef = useInfiniteScrollSentinel({ hasNextPage, isFetchingNextPage, fetchNextPage });
+  const promptSignIn = usePrivySignIn(undefined, {
+    analytics: {
+      component: 'join_space_button',
+      target_type: 'space',
+      target_id: spaceId,
+      auth_control: 'join_space',
+      auth_intent: 'join_space',
+      auth_continuation: 'repeat',
+    },
+  });
 
   return (
     <div className="z-10 w-[356px] divide-y divide-grey-02 rounded-lg border border-grey-02 bg-white shadow-lg">
@@ -62,22 +73,23 @@ export function SpaceEditorsContent({
         <p className="text-smallButton text-text">
           {totalCount} {pluralize('editor', totalCount)}
         </p>
-        {isEditor ? (
-          <button className="text-smallButton text-grey-04 transition-colors duration-75 hover:text-text">
-            {connectedAddress ? '' : 'Sign in to join'}
-          </button>
-        ) : (
+        {isEditor ? null : connectedAddress ? (
           <div className="text-smallButton text-grey-04 transition-colors duration-75 hover:text-text">
-            {connectedAddress ? (
-              <SpaceEditorsPopoverEditorRequestButton
-                spaceId={spaceId}
-                isMember={isMember}
-                editorRequest={editorRequest}
-              />
-            ) : (
-              'Sign in to join'
-            )}
+            <SpaceEditorsPopoverEditorRequestButton
+              spaceId={spaceId}
+              isMember={isMember}
+              editorRequest={editorRequest}
+            />
           </div>
+        ) : (
+          // Was plain text: it said what to do and did nothing when pressed.
+          <button
+            type="button"
+            onClick={() => promptSignIn()}
+            className="text-smallButton text-grey-04 transition-colors duration-75 hover:text-text"
+          >
+            Sign in to join
+          </button>
         )}
       </div>
     </div>

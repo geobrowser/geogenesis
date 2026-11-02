@@ -9,11 +9,13 @@ import cx from 'classnames';
 import { ID } from '~/core/id';
 import { Property } from '~/core/types';
 import {
+  BUILT_IN_SORT_OPTIONS,
+  BuiltInSort,
   ColumnSortState,
   DEFAULT_TABLE_SORT_PROPERTIES,
   SORTABLE_DATA_TYPES,
-  propertyForSort,
   propertySortLabel,
+  sortStateLabel,
 } from '~/core/utils/column-sort';
 
 import { SmallButton } from '~/design-system/button';
@@ -39,11 +41,8 @@ type DataBlockSortMenuProps = {
   isEditing?: boolean;
 };
 
-function sortColumnDisplayLabel(sortState: NonNullable<ColumnSortState>, properties: Property[]): string {
-  const p = propertyForSort(sortState.columnId, properties);
-  if (p) return propertySortLabel(p);
-  return sortState.columnId;
-}
+/** What the Ascending / Descending step is choosing a direction for. */
+type DirectionPickTarget = { kind: 'property'; columnId: string } | { kind: 'builtin'; sort: BuiltInSort };
 
 export function DataBlockSortMenu({
   properties,
@@ -56,7 +55,7 @@ export function DataBlockSortMenu({
 }: DataBlockSortMenuProps) {
   const triggerRef = React.useRef<Element | null>(null);
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
-  const [pickDirectionForColumnId, setPickDirectionForColumnId] = React.useState<string | null>(null);
+  const [directionPickTarget, setDirectionPickTarget] = React.useState<DirectionPickTarget | null>(null);
   const [contentElement, setContentElement] = React.useState<HTMLDivElement | null>(null);
 
   const { align, side } = useAdaptiveDropdownPlacement(triggerRef, {
@@ -110,29 +109,38 @@ export function DataBlockSortMenu({
   const onOpenChange = (open: boolean) => {
     setIsMenuOpen(open);
     if (!open) {
-      setPickDirectionForColumnId(null);
+      setDirectionPickTarget(null);
     }
   };
 
   const applySortAndClose = React.useCallback(
-    (columnId: string, direction: 'asc' | 'desc') => {
-      onSort({ columnId, direction });
+    (next: NonNullable<ColumnSortState>) => {
+      onSort(next);
       setIsMenuOpen(false);
-      setPickDirectionForColumnId(null);
+      setDirectionPickTarget(null);
     },
     [onSort]
   );
 
   const pickedProperty =
-    pickDirectionForColumnId === null
-      ? null
-      : (sortableProperties.find(p => p.id === pickDirectionForColumnId) ?? null);
+    directionPickTarget?.kind === 'property'
+      ? (sortableProperties.find(p => p.id === directionPickTarget.columnId) ?? null)
+      : null;
 
+  // A property that drops out of the list (e.g. the type filter changed) closes its direction step.
   React.useEffect(() => {
-    if (pickDirectionForColumnId !== null && pickedProperty === null) {
-      setPickDirectionForColumnId(null);
+    if (directionPickTarget?.kind === 'property' && pickedProperty === null) {
+      setDirectionPickTarget(null);
     }
-  }, [pickDirectionForColumnId, pickedProperty]);
+  }, [directionPickTarget, pickedProperty]);
+
+  // What Ascending / Descending will apply to: a built-in sort, or a property still in the list.
+  const pendingTarget: DirectionPickTarget | null =
+    directionPickTarget?.kind === 'builtin'
+      ? directionPickTarget
+      : pickedProperty
+        ? { kind: 'property', columnId: pickedProperty.id }
+        : null;
 
   const segmentSortReadOnly = Boolean(sortState !== null && !isEditing);
   const segmentTriggerDisabled = disabled || segmentSortReadOnly;
@@ -187,9 +195,7 @@ export function DataBlockSortMenu({
                 <span className="shrink-0 text-text tabular-nums" aria-hidden>
                   {sortState.direction === 'asc' ? '↑' : '↓'}
                 </span>
-                <span className="min-w-0 flex-1 truncate text-text">
-                  {sortColumnDisplayLabel(sortState, properties)}
-                </span>
+                <span className="min-w-0 flex-1 truncate text-text">{sortStateLabel(sortState, properties)}</span>
               </button>
             </Dropdown.Trigger>
             {isEditing && (
@@ -207,7 +213,7 @@ export function DataBlockSortMenu({
                   e.stopPropagation();
                   onSort(null);
                   setIsMenuOpen(false);
-                  setPickDirectionForColumnId(null);
+                  setDirectionPickTarget(null);
                 }}
               >
                 <Close color="text" />
@@ -258,17 +264,38 @@ export function DataBlockSortMenu({
           className="z-1001 w-[200px] overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg"
         >
           <div className={listScrollClassName} onWheel={onListWheel}>
-            {pickDirectionForColumnId === null || pickedProperty === null ? (
+            {pendingTarget === null ? (
               <>
+                {BUILT_IN_SORT_OPTIONS.map(option => {
+                  const isActive = sortState?.kind === 'builtin' && sortState.sort === option.sort;
+
+                  return (
+                    <MenuItem
+                      key={option.sort}
+                      className={listRowClassName}
+                      onClick={() => setDirectionPickTarget({ kind: 'builtin', sort: option.sort })}
+                    >
+                      <div className="flex w-full items-center justify-between gap-2">
+                        <span className={cx('min-w-0 truncate text-left', isActive && 'font-medium')}>
+                          {option.label}
+                        </span>
+                        <span className="inline-flex shrink-0 text-grey-04 [&_svg]:h-3.5 [&_svg]:w-3.5">
+                          <ChevronRight color="grey-04" />
+                        </span>
+                      </div>
+                    </MenuItem>
+                  );
+                })}
+                <div className="shrink-0 snap-none border-t border-grey-02" role="presentation" />
                 {sortableProperties.map(property => {
-                  const isActive = sortState !== null && ID.equals(sortState.columnId, property.id);
+                  const isActive = sortState?.kind === 'property' && ID.equals(sortState.columnId, property.id);
                   const label = propertySortLabel(property);
 
                   return (
                     <MenuItem
                       key={property.id}
                       className={listRowClassName}
-                      onClick={() => setPickDirectionForColumnId(property.id)}
+                      onClick={() => setDirectionPickTarget({ kind: 'property', columnId: property.id })}
                     >
                       <div className="flex w-full items-center justify-between gap-2">
                         <span className={cx('min-w-0 truncate text-left', isActive && 'font-medium')}>{label}</span>
@@ -282,14 +309,17 @@ export function DataBlockSortMenu({
               </>
             ) : (
               <>
-                <MenuItem className={listRowClassName} onClick={() => setPickDirectionForColumnId(null)}>
+                <MenuItem className={listRowClassName} onClick={() => setDirectionPickTarget(null)}>
                   <div className="flex w-full items-center gap-2">
                     <ArrowLeft color="grey-04" />
                     <span>Back</span>
                   </div>
                 </MenuItem>
                 <div className="shrink-0 snap-none border-t border-grey-02" role="presentation" />
-                <MenuItem className={listRowClassName} onClick={() => applySortAndClose(pickedProperty.id, 'asc')}>
+                <MenuItem
+                  className={listRowClassName}
+                  onClick={() => applySortAndClose({ ...pendingTarget, direction: 'asc' })}
+                >
                   <div className="flex w-full items-center justify-between gap-2">
                     <span>Ascending</span>
                     <span className="shrink-0 text-text tabular-nums" aria-hidden>
@@ -297,7 +327,10 @@ export function DataBlockSortMenu({
                     </span>
                   </div>
                 </MenuItem>
-                <MenuItem className={listRowClassName} onClick={() => applySortAndClose(pickedProperty.id, 'desc')}>
+                <MenuItem
+                  className={listRowClassName}
+                  onClick={() => applySortAndClose({ ...pendingTarget, direction: 'desc' })}
+                >
                   <div className="flex w-full items-center justify-between gap-2">
                     <span>Descending</span>
                     <span className="shrink-0 text-text tabular-nums" aria-hidden>

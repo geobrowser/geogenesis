@@ -49,5 +49,8 @@
     "singleQuote": true,
     "trailingComma": "es5",
     "semi": false
+  },
+  "patchedDependencies": {
+    "livekit-client@2.20.1": "patches/livekit-client@2.20.1.patch"
   }
 }

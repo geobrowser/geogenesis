@@ -31,7 +31,7 @@ describe('useEntityScores chunk retries', () => {
         return Effect.fail(new Error('last score chunk failed'));
       }
 
-      return Effect.succeed({ scores: new Map(), rankings: new Map() });
+      return Effect.succeed({ scores: new Map(), rankings: new Map(), createdAt: new Map() });
     });
   });
 
@@ -59,7 +59,7 @@ describe('useEntityScores chunk retries', () => {
   it('reports cached rankings as available after a background refresh fails', async () => {
     mocks.failLastChunk = false;
     mocks.graphql.mockReturnValueOnce(
-      Effect.succeed({ scores: new Map(), rankings: new Map([['id-1', 42]]) })
+      Effect.succeed({ scores: new Map(), rankings: new Map([['id-1', 42]]), createdAt: new Map() })
     );
     const { result } = renderHook(() => useEntityScores({ ids: ['id-1'] }), { wrapper });
     await waitFor(() => expect(result.current.rankings.get('id-1')).toBe(42));
@@ -79,7 +79,7 @@ describe('useEntityScores chunk retries', () => {
       if (variables.ids.includes('id-100') && lastChunkAttempts++ === 0) {
         return Effect.fail(new Error('transient score failure'));
       }
-      return Effect.succeed({ scores: new Map(), rankings: new Map() });
+      return Effect.succeed({ scores: new Map(), rankings: new Map(), createdAt: new Map() });
     });
 
     const { result } = renderHook(() => useEntityScores({ ids }), { wrapper: automaticRetryWrapper });

@@ -1,11 +1,12 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 
 import * as React from 'react';
 
-import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
-import { Menu } from './menu';
+import { Menu, MenuItem } from './menu';
 
 // The placement hook observes the trigger, and JSDOM has no ResizeObserver.
 class ResizeObserverStub {
@@ -133,5 +134,39 @@ describe('Menu alignment', () => {
     );
 
     expect(screen.getByText('Item').closest('[data-align]')).toHaveAttribute('data-align', 'start');
+  });
+});
+
+describe('MenuItem closeOnSelect', () => {
+  // For an item a server component hands to a menu whose open state it cannot reach — the profile's
+  // "Copy availability link" is one. The item's own click still runs.
+  it('runs the item and then closes the menu', async () => {
+    const onOpenChange = vi.fn();
+    const onClick = vi.fn();
+    render(
+      <Menu open onOpenChange={onOpenChange} trigger={<span>Open</span>}>
+        <MenuItem closeOnSelect onClick={onClick}>
+          Copy
+        </MenuItem>
+      </Menu>
+    );
+
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Copy' }));
+
+    expect(onClick).toHaveBeenCalledOnce();
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it('leaves the menu open without it', async () => {
+    const onOpenChange = vi.fn();
+    render(
+      <Menu open onOpenChange={onOpenChange} trigger={<span>Open</span>}>
+        <MenuItem onClick={() => {}}>Copy</MenuItem>
+      </Menu>
+    );
+
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Copy' }));
+
+    expect(onOpenChange).not.toHaveBeenCalledWith(false);
   });
 });

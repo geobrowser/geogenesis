@@ -5,6 +5,7 @@ import * as Popover from '@radix-ui/react-popover';
 import * as React from 'react';
 
 import cx from 'classnames';
+import type { Room } from 'livekit-client';
 
 import { useIsMobileCallLayout } from '~/core/community-calls/use-is-mobile-call-layout';
 import type { DebateParticipant } from '~/core/debates/api';
@@ -17,14 +18,9 @@ import { Text } from '~/design-system/text';
 import { useElevatedPopoverPortal } from '~/design-system/use-elevated-popover-portal';
 
 import { AudioSettings, MobileSettingsSheet } from './audio-settings';
+import { DebateAudioBlockedNotice } from './debate-audio-blocked-notice';
 import { DebateRecordingStatusPill } from './debate-recording-status-pill';
-import {
-  CameraIcon,
-  DebateTileToggleButton,
-  LeaveIcon,
-  MicrophoneIcon,
-  RecordingCircleButton,
-} from './debate-room-controls';
+import { CameraIcon, DebateLeaveButton, DebateTileToggleButton, MicrophoneIcon } from './debate-room-controls';
 import { DebateTileChip, DebateVideoTile, tileChipSurface } from './debate-video-tile';
 import { DeviceOptionGroup } from './device-option-group';
 import { MicrophoneLevelMeter } from './microphone-level-meter';
@@ -79,11 +75,15 @@ export function DebatePreScreen({
   mediaError,
   canRetryConnection,
   onRetryConnection,
+  retryConnectionLabel = 'Reconnect',
   canTakeOverConnection,
   onTakeOverConnection,
   readyBusy,
   onReady,
+  audioRoom,
+  onAudioStarted,
   onLeave,
+  returnsToLobby = false,
   leaveDisabled,
 }: {
   claim: string;
@@ -144,12 +144,17 @@ export function DebatePreScreen({
   mediaError: string | null;
   canRetryConnection: boolean;
   onRetryConnection: () => void;
+  retryConnectionLabel?: string;
   /** Another tab or device holds this debate and this one can claim it back. */
   canTakeOverConnection: boolean;
   onTakeOverConnection: () => void;
   readyBusy: boolean;
   onReady: () => void;
+  /** The connected room, so audio the browser blocked can be enabled with a click. */
+  audioRoom: Room | null;
+  onAudioStarted: () => void;
   onLeave: () => void;
+  returnsToLobby?: boolean;
   leaveDisabled: boolean;
 }) {
   const isMobile = useIsMobileCallLayout();
@@ -167,6 +172,8 @@ export function DebatePreScreen({
     ? remoteParticipant.display_name || remoteParticipant.profile_space_id
     : 'the other speaker';
   const mediaReady = previewState === 'ready';
+
+  const controlsAvailable = mediaReady || previewState === 'idle';
   const selectedCameraLabel =
     videoInputDevices.find(device => device.deviceId === selectedVideoInputId)?.label ?? 'Camera';
   // Named after what the person has to do, not after which flag is false — it is the only thing
@@ -215,7 +222,7 @@ export function DebatePreScreen({
       inactiveIndicatorId="local"
       tileLabel="You"
       tileControls={
-        mediaReady ? (
+        controlsAvailable ? (
           <div className="flex items-center gap-2">
             <DebateTileToggleButton
               ariaLabel={audioMuted ? 'Unmute microphone' : 'Mute microphone'}
@@ -317,7 +324,7 @@ export function DebatePreScreen({
     <div key="local" className={cx(cardGroup, 'order-1')}>
       {localTile}
 
-      {!mediaReady && previewState !== 'requesting' && (
+      {!mediaReady && previewState !== 'requesting' && previewState !== 'idle' && (
         <button
           type="button"
           onClick={onRetryMedia}
@@ -331,8 +338,12 @@ export function DebatePreScreen({
       )}
 
       {/* Laid out but hidden while access is requested, so granting it does not shift the screen. */}
-      {(mediaReady || previewState === 'requesting') && (
-        <div className={cx('contents', !mediaReady && 'invisible')} aria-hidden={!mediaReady} inert={!mediaReady}>
+      {(controlsAvailable || previewState === 'requesting') && (
+        <div
+          className={cx('contents', !controlsAvailable && 'invisible')}
+          aria-hidden={!controlsAvailable}
+          inert={!controlsAvailable}
+        >
           <div className={cx('flex w-full flex-col gap-[6px]', controlsOrder)}>
             {isMobile ? (
               <>
@@ -466,6 +477,13 @@ export function DebatePreScreen({
           {orderedGroups}
         </div>
 
+        {/* Before Ready, the Ready click itself unblocks audio. */}
+        {localReady && audioRoom && (
+          <div className="flex w-full max-w-[900px] justify-center">
+            <DebateAudioBlockedNotice room={audioRoom} openRoundsStyle={false} onAudioStarted={onAudioStarted} />
+          </div>
+        )}
+
         {error && (
           <div className="mt-3 flex w-full max-w-[900px] flex-wrap items-center justify-between gap-3 rounded-lg border border-red-01 bg-white px-4 py-3">
             <Text as="p" variant="metadata" color="red-01">
@@ -477,21 +495,14 @@ export function DebatePreScreen({
                 onClick={canTakeOverConnection ? onTakeOverConnection : onRetryConnection}
                 className="inline-flex min-h-8 shrink-0 items-center justify-center rounded-full bg-text px-4 text-button text-white hover:bg-text/90"
               >
-                {canTakeOverConnection ? 'Continue here' : 'Reconnect'}
+                {canTakeOverConnection ? 'Continue here' : retryConnectionLabel}
               </button>
             )}
           </div>
         )}
 
         <div className="mt-5 flex w-full justify-center">
-          <RecordingCircleButton
-            ariaLabel="Leave debate"
-            title="Leave debate"
-            onClick={onLeave}
-            disabled={leaveDisabled}
-          >
-            <LeaveIcon />
-          </RecordingCircleButton>
+          <DebateLeaveButton returnsToLobby={returnsToLobby} onClick={onLeave} disabled={leaveDisabled} />
         </div>
       </main>
 

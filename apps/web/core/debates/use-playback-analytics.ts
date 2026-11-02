@@ -2,14 +2,30 @@
 
 import * as React from 'react';
 
-import { capture } from '~/core/analytics';
+import { type AnalyticsEventName, capture } from '~/core/analytics';
+import { WATCH_DEBATE_MS, pushMarketingEvent } from '~/core/marketing-events';
 
 import type { Debate } from './api';
 import { createPlaybackMeasurement } from './playback-analytics';
 import { recordingWindowOffsetsSeconds } from './playback-utils';
 import type { DebatePlaybackController } from './use-debate-playback';
 
-export function usePlaybackAnalytics(debate: Debate, active: boolean, controller: DebatePlaybackController) {
+/** `mediaAttached` re-binds the measurement when the player swaps its <video> elements (GEO-3067). */
+export function usePlaybackAnalytics(
+  debate: Debate,
+  active: boolean,
+  controller: DebatePlaybackController,
+  mediaAttached = true
+) {
+  const playbackInstance = React.useRef(crypto.randomUUID());
+  // Which media this instance has already reported exposed, so re-binding to re-attached elements
+  // doesn't report it again under the same `exposure_id`.
+  const exposedFor = React.useRef<string | null>(null);
+  // Watch time toward the marketing "watched" event, kept across re-binds for the same media like
+  // the exposure latch, so a player swapping its <video> elements neither restarts nor repeats it.
+  const watched = React.useRef({ key: '', ms: 0, reported: false });
+  // Interval numbering continues across re-binds for the same media, like the exposure latch.
+  const intervalSequence = React.useRef({ key: '', count: 0 });
   const elementRef = React.useRef<HTMLDivElement>(null);
   const latest = React.useRef({ active, controller });
   latest.current = { active, controller };
@@ -32,10 +48,19 @@ export function usePlaybackAnalytics(debate: Debate, active: boolean, controller
     const element = elementRef.current;
     const primary = controller.slot1VideoRef.current;
     const secondary = controller.slot2VideoRef.current;
-    if (!element || !primary || !secondary || !controller.ready || typeof IntersectionObserver === 'undefined') return;
-    const instance = crypto.randomUUID();
+    if (
+      !mediaAttached ||
+      !element ||
+      !primary ||
+      !secondary ||
+      !controller.ready ||
+      typeof IntersectionObserver === 'undefined'
+    )
+      return;
+    const instance = playbackInstance.current;
     let visible = false;
-    let exposed = false;
+    const exposureKey = `${debate.id}|${mediaVersion}|${offset}`;
+    let exposed = exposedFor.current === exposureKey;
     let visibleSince: number | null = null;
     let disposed = false;
     let pageHidden = false;
@@ -47,14 +72,19 @@ export function usePlaybackAnalytics(debate: Debate, active: boolean, controller
       playback_instance_id: instance,
       presentation_instance_id: instance,
     };
-    const emit = (event: string, properties: Record<string, unknown>) => {
+    const emit = (event: AnalyticsEventName, properties: Record<string, unknown>) => {
       try {
         capture(event, { ...context, ...properties });
       } catch {
         /* Playback stays usable. */
       }
     };
-    const clock = createPlaybackMeasurement(properties => emit('debate_playback_interval', properties));
+    if (intervalSequence.current.key !== exposureKey) intervalSequence.current = { key: exposureKey, count: 0 };
+    if (watched.current.key !== exposureKey) watched.current = { key: exposureKey, ms: 0, reported: false };
+    let lastWatchedTick: number | null = null;
+    const clock = createPlaybackMeasurement(properties =>
+      emit('debate_playback_interval', { ...properties, interval_sequence: ++intervalSequence.current.count })
+    );
     const foreground = () => document.visibilityState === 'visible' && document.hasFocus();
     const tick = () => {
       if (disposed) return;
@@ -67,17 +97,29 @@ export function usePlaybackAnalytics(debate: Debate, active: boolean, controller
       else if (visibleSince === null) visibleSince = now;
       else if (!exposed && now - visibleSince >= 1000) {
         exposed = true;
+        exposedFor.current = exposureKey;
         emit('debate_exposed', { exposure_id: instance, visibility_rule: 'player-60pct-1s-v1' });
+      }
+      const eligible =
+        inView &&
+        mediaMs >= 0 &&
+        !state.controller.isScrubbing &&
+        [primary, secondary].every(video => !video.paused && !video.ended && !video.seeking && video.readyState >= 3);
+      // The playback intervals' eligibility, unmuted only, summed across intervals.
+      if (!eligible || state.controller.mutedByUser) lastWatchedTick = null;
+      else {
+        if (lastWatchedTick !== null) watched.current.ms += now - lastWatchedTick;
+        lastWatchedTick = now;
+        if (!watched.current.reported && watched.current.ms >= WATCH_DEBATE_MS) {
+          watched.current.reported = true;
+          pushMarketingEvent('geo_watch_debate', { debate_id: debate.id });
+        }
       }
       clock.sample({
         now,
         mediaMs: durationMs > 0 ? Math.min(mediaMs, durationMs) : mediaMs,
         durationMs,
-        eligible:
-          inView &&
-          mediaMs >= 0 &&
-          !state.controller.isScrubbing &&
-          [primary, secondary].every(video => !video.paused && !video.ended && !video.seeking && video.readyState >= 3),
+        eligible,
         muted: state.controller.mutedByUser,
         trigger: trigger.current,
       });
@@ -140,7 +182,19 @@ export function usePlaybackAnalytics(debate: Debate, active: boolean, controller
       window.removeEventListener('pagehide', hide);
       window.removeEventListener('pageshow', show);
     };
-  }, [debate.id, mediaVersion, offset, controller.ready, controller.slot1VideoRef, controller.slot2VideoRef]);
+  }, [
+    debate.id,
+    mediaVersion,
+    offset,
+    controller.ready,
+    controller.slot1VideoRef,
+    controller.slot2VideoRef,
+    mediaAttached,
+  ]);
 
-  return { elementRef, control: (name: string) => controlRef.current(name) };
+  return {
+    elementRef,
+    playbackInstanceId: playbackInstance.current,
+    control: (name: string) => controlRef.current(name),
+  };
 }

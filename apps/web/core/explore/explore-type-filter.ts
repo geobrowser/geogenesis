@@ -1,88 +1,38 @@
+import { normId } from '~/core/utils/norm-id';
+
 import { DEFAULT_EXPLORE_TYPE_IDS, EXPLORE_ENTITY_TYPES, EXPLORE_ENTITY_TYPE_IDS } from './explore-constants';
 
-export const EXPLORE_TYPE_FILTER_STORAGE_KEY = 'exploreSelectedTypeIds';
-
-const allowedTypeByNormalizedId = new Map(EXPLORE_ENTITY_TYPES.map(type => [normalizeId(type.id), type.id]));
-
-function normalizeId(id: string): string {
-  return id.replace(/-/g, '').toLowerCase();
-}
+const allowedTypeByNormalizedId = new Map(EXPLORE_ENTITY_TYPES.map(type => [normId(type.id), type.id]));
 
 /**
- * Every type there is. Distinct from `DEFAULT_EXPLORE_TYPE_IDS`, and the distinction matters more
- * than it looks: these two were one function until GEO-2790, and collapsing them again would be a
- * quiet bug. The client omits the `typeIds` param *precisely when every type is selected*, so the
- * server reading a missing param as "the default three" would hand back three types to the reader
- * who had just ticked all twelve.
- */
-function allExploreTypeIds(): string[] {
-  return [...EXPLORE_ENTITY_TYPE_IDS];
-}
-
-/**
- * A selection, put back into the order the menu declares.
+ * Keeps only Explore's types, in `EXPLORE_ENTITY_TYPES` order.
  *
- * Order is not cosmetic here. The feed keys its query on the joined ids and compares selections by
- * length, so the same three types in two orders would look like two different selections and refetch
- * for a change nobody made. Both callers below build a set and then need it ordered, so the rule
- * lives once rather than being spelled out at each of them.
+ * Order is not cosmetic here. The feed keys its query on the joined ids, so the same types in two
+ * orders would look like two different selections and refetch for a change nobody made.
  */
-function inCanonicalOrder(selected: ReadonlySet<string>): string[] {
-  return EXPLORE_ENTITY_TYPE_IDS.filter(id => selected.has(id));
-}
-
 export function sanitizeExploreTypeIds(ids: readonly unknown[]): string[] {
   const selected = new Set<string>();
 
   for (const id of ids) {
     if (typeof id !== 'string') continue;
-    const canonical = allowedTypeByNormalizedId.get(normalizeId(id));
+    const canonical = allowedTypeByNormalizedId.get(normId(id));
     if (canonical) selected.add(canonical);
   }
 
-  return inCanonicalOrder(selected);
+  return EXPLORE_ENTITY_TYPE_IDS.filter(id => selected.has(id));
 }
 
 /**
- * What the dropdown opens with. Nothing stored, or something unreadable, means the default.
+ * A missing parameter means Explore's own types; an empty value means none.
  *
- * Only a deliberate toggle writes this key, so "nothing stored" is the same population as "has
- * never touched the filter" — which is why a reader who once chose their own types keeps them, and
- * only someone who never expressed a preference is given the new one. A default is a guess about
- * what someone wants before they say; a stored selection is them having said.
- */
-export function parseStoredExploreTypeIds(raw: string | null): string[] {
-  if (raw === null) return [...DEFAULT_EXPLORE_TYPE_IDS];
-
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    return Array.isArray(parsed) ? sanitizeExploreTypeIds(parsed) : [...DEFAULT_EXPLORE_TYPE_IDS];
-  } catch {
-    return [...DEFAULT_EXPLORE_TYPE_IDS];
-  }
-}
-
-/**
- * Missing query params preserve the historical all-types API behavior; an empty value means none.
- *
- * Deliberately *not* the new default. The client drops the param when every type is selected, so
- * this is the "all twelve" path, not the "hasn't chosen yet" one — see `allExploreTypeIds`.
+ * Explore has no types menu, so its client never sends this — the server decides what the feed
+ * holds. A parameter is still honoured, narrowed to `EXPLORE_ENTITY_TYPES`, so an older client or a
+ * kept link keeps working without being able to ask for a type Explore no longer serves.
  */
 export function parseExploreTypeIdsParam(raw: string | null): string[] {
-  if (raw === null) return allExploreTypeIds();
+  if (raw === null) return [...DEFAULT_EXPLORE_TYPE_IDS];
   if (raw === '') return [];
   return sanitizeExploreTypeIds(raw.split(','));
-}
-
-export function toggleExploreTypeId(selectedTypeIds: readonly string[], typeId: string): string[] {
-  const selected = new Set(sanitizeExploreTypeIds(selectedTypeIds));
-  const canonicalTypeId = allowedTypeByNormalizedId.get(normalizeId(typeId));
-  if (!canonicalTypeId) return [...selected];
-
-  if (selected.has(canonicalTypeId)) selected.delete(canonicalTypeId);
-  else selected.add(canonicalTypeId);
-
-  return inCanonicalOrder(selected);
 }
 
 export function exploreTypeFilterLabel(selectedCount: number): string {
@@ -111,6 +61,6 @@ export function entityMatchesExploreTypeIds(
   selectedTypeIds: readonly string[]
 ): boolean {
   if (selectedTypeIds.length === 0) return true;
-  const selected = new Set(selectedTypeIds.map(normalizeId));
-  return entity.types.some(type => selected.has(normalizeId(type.id)));
+  const selected = new Set(selectedTypeIds.map(normId));
+  return entity.types.some(type => selected.has(normId(type.id)));
 }

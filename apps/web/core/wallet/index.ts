@@ -1,1 +1,1 @@
-export { GeoConnectButton, WalletProvider } from './wallet';
+export { GeoConnectButton } from './wallet';

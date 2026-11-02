@@ -4,6 +4,8 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { type DebateAnalyticsAttributes } from '~/core/debates/matchmaking/hub-analytics';
+
 import { Tooltip } from '~/design-system/tooltip';
 
 /**
@@ -14,9 +16,9 @@ import { Tooltip } from '~/design-system/tooltip';
  * `HubPillButton` in a footer. Same words, same action, two designs and two copies of the state
  * ladder underneath. Moving between the surfaces read as moving between two products.
  *
- * The *action* stays with the caller, because it genuinely differs: the panel sends
- * `create_debate_request_as`, the picker a session-scoped rematch request. Only the offer is shared
- * — what it looks like, what it is called in each state, and how it announces itself.
+ * The action stays with the caller: ordinary matchmaking sends `create_debate_request_as`, while
+ * the picker and its entity panel share `RematchRequestControl` for session-scoped requests. This
+ * primitive supplies the appearance and accessible pending/error announcements for both.
  */
 /**
  * The shape of a control in a claim card's end slot.
@@ -40,8 +42,14 @@ export function claimSlotPillClass(variant: 'inline' | 'block'): string {
   );
 }
 
+const REQUESTING_LABEL = 'Requesting…';
+
 export function RequestDebateControl({
   onRequest,
+  label = 'Request debate',
+  paused = false,
+  tone = 'primary',
+  buttonClassName,
   disabled = false,
   isRequesting = false,
   pending = false,
@@ -51,8 +59,24 @@ export function RequestDebateControl({
   note,
   variant = 'inline',
   className,
+  analytics,
 }: {
   onRequest: () => void;
+  /** The idle label. The hub's cards say "Debate now" (GEO-3463); everywhere else keeps the default. */
+  label?: string;
+  /**
+   * Waiting its turn behind another open request (GEO-3463): disabled and dimmer than an ordinary
+   * disabled offer, with `blockedReason` saying why. Still drawn, because an offer vanishing from
+   * every other card reads as the list breaking.
+   */
+  paused?: boolean;
+  /**
+   * `secondary` is the outlined pill, for an offer that is one of several in a list (a person's
+   * matches, each with its own "Debate on this") rather than the card's one action.
+   */
+  tone?: 'primary' | 'secondary';
+  /** Extra classes for the button itself, e.g. the hub's taller phone pill. */
+  buttonClassName?: string;
   disabled?: boolean;
   /** The request is in flight. Distinct from `pending`, which is waiting for the right to send it. */
   isRequesting?: boolean;
@@ -72,6 +96,8 @@ export function RequestDebateControl({
    */
   variant?: 'inline' | 'block';
   className?: string;
+  /** The button's click-analytics label and intent. Visible text never reaches the warehouse. */
+  analytics?: DebateAnalyticsAttributes;
 }) {
   const base = claimSlotPillClass(variant);
   const aside = cx('text-footnote', variant === 'block' ? 'text-left' : 'text-right');
@@ -80,7 +106,8 @@ export function RequestDebateControl({
     <button
       type="button"
       onClick={onRequest}
-      disabled={disabled || isRequesting || pending}
+      {...analytics}
+      disabled={disabled || paused || isRequesting || pending}
       aria-busy={isRequesting || pending ? true : undefined}
       className={cx(
         base,
@@ -88,7 +115,12 @@ export function RequestDebateControl({
         // inch below this and the negative half of the bar beneath that — so a red button here
         // reads as a side rather than an action. Dark is the only weight left that means
         // "primary" without borrowing a meaning that is already taken.
-        'bg-text text-white hover:bg-text/90 disabled:pointer-events-none disabled:cursor-default disabled:opacity-50'
+        tone === 'primary'
+          ? 'bg-text text-white hover:bg-text/90'
+          : 'border border-grey-02 bg-white text-text hover:bg-grey-01',
+        'disabled:pointer-events-none disabled:cursor-default',
+        paused ? 'disabled:opacity-35' : 'disabled:opacity-50',
+        buttonClassName
       )}
     >
       {/* Both labels stacked in one grid cell, so the button is always as wide as the longer of
@@ -104,9 +136,9 @@ export function RequestDebateControl({
       ) : (
         <span className="grid place-items-center">
           <span className="invisible col-start-1 row-start-1" aria-hidden>
-            Request debate
+            {label.length >= REQUESTING_LABEL.length ? label : REQUESTING_LABEL}
           </span>
-          <span className="col-start-1 row-start-1">{isRequesting ? 'Requesting…' : 'Request debate'}</span>
+          <span className="col-start-1 row-start-1">{isRequesting ? REQUESTING_LABEL : label}</span>
         </span>
       )}
     </button>

@@ -4,6 +4,11 @@ import * as Dialog from '@radix-ui/react-dialog';
 
 import * as React from 'react';
 
+import {
+  type DebateAnalyticsAttributes,
+  type DebateAnalyticsSurface,
+  debateActionAnalyticsAttributes,
+} from '~/core/debates/matchmaking/hub-analytics';
 import { type MediaDeviceOption, systemDefaultAudioOutput } from '~/core/debates/media-session';
 
 import { Text } from '~/design-system/text';
@@ -27,6 +32,7 @@ export function AudioSettings({
   devicesLocked = false,
   onAudioInputChange,
   onAudioOutputChange,
+  analyticsSurface,
 }: {
   audioInputDevices: MediaDeviceOption[];
   audioOutputDevices: MediaDeviceOption[];
@@ -43,6 +49,8 @@ export function AudioSettings({
   devicesLocked?: boolean;
   onAudioInputChange: (deviceId: string) => void;
   onAudioOutputChange: (deviceId: string) => void;
+  /** Names the device rows for click analytics, e.g. "Debate rematch Microphone option". Unset, no label. */
+  analyticsSurface?: DebateAnalyticsSurface;
 }) {
   return (
     <div className="space-y-3">
@@ -53,6 +61,9 @@ export function AudioSettings({
         disabled={devicesLocked}
         framed={framed}
         onChange={onAudioInputChange}
+        analytics={
+          analyticsSurface ? debateActionAnalyticsAttributes(analyticsSurface, 'Microphone option') : undefined
+        }
       />
       <div className={framed ? undefined : 'border-t border-grey-02 pt-3'}>
         <DeviceOptionGroup
@@ -62,6 +73,7 @@ export function AudioSettings({
           disabled={!audioOutputSupported}
           framed={framed}
           onChange={onAudioOutputChange}
+          analytics={analyticsSurface ? debateActionAnalyticsAttributes(analyticsSurface, 'Speaker option') : undefined}
         />
       </div>
       {error && (
@@ -79,12 +91,15 @@ export function MobileSettingsSheet({
   open,
   onOpenChange,
   returnFocusRef,
+  closeAnalytics,
   children,
 }: {
   title: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   returnFocusRef: React.RefObject<HTMLButtonElement | null>;
+  /** The close button's click-analytics label and intent. */
+  closeAnalytics?: DebateAnalyticsAttributes;
   children: React.ReactNode;
 }) {
   return (
@@ -106,6 +121,7 @@ export function MobileSettingsSheet({
               <button
                 type="button"
                 aria-label={`Close ${title}`}
+                {...closeAnalytics}
                 className="grid size-8 place-items-center rounded-full text-grey-04 hover:bg-grey-01 hover:text-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-text"
               >
                 <CloseIcon />

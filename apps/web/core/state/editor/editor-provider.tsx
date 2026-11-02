@@ -23,6 +23,8 @@ type EditorProviderProps = {
   id: string;
   spaceId: string;
   initialBlocks: Entity[];
+  /** Keep the editor unmounted until missing initial blocks arrive, without hiding the page header. */
+  isLoadingBlocks?: boolean;
   initialBlockRelations: Relation[];
   initialTabs?: Tabs;
   initialCollectionItems?: Record<string, Entity[]>;
@@ -37,6 +39,7 @@ export const EditorProvider = ({
   id,
   spaceId,
   initialBlocks,
+  isLoadingBlocks = false,
   initialBlockRelations,
   initialTabs,
   initialCollectionItems,
@@ -81,11 +84,21 @@ export const EditorProvider = ({
       spaceId,
       initialBlockRelations,
       initialBlocks,
+      isLoadingBlocks,
       initialTabs,
       initialCollectionItems,
       activeTabId,
     };
-  }, [id, spaceId, initialBlockRelations, initialBlocks, initialTabs, initialCollectionItems, activeTabId]);
+  }, [
+    id,
+    spaceId,
+    initialBlockRelations,
+    initialBlocks,
+    isLoadingBlocks,
+    initialTabs,
+    initialCollectionItems,
+    activeTabId,
+  ]);
 
   return (
     <EditorContext.Provider value={value}>

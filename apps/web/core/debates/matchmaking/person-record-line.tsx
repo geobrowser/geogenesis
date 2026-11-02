@@ -3,6 +3,7 @@
 import * as React from 'react';
 
 import { Megaphone } from '~/design-system/icons/megaphone';
+import { MemberTiny } from '~/design-system/icons/member-tiny';
 import { Warning } from '~/design-system/icons/warning';
 import { Text } from '~/design-system/text';
 
@@ -47,15 +48,19 @@ export function PersonRecordLine({
   record,
   match,
   activeSpaces,
+  followers = null,
 }: {
   record: PersonRecord | null;
   match?: React.ReactNode;
   activeSpaces?: React.ReactNode;
+  /** How many follow this person (GEO-3236). Left out at zero or while loading, like the rest. */
+  followers?: number | null;
 }) {
   const positions = record?.positions ?? null;
   const debatesArgued = record?.debatesArgued ?? null;
   const joinedAt = record?.joinedAt ?? null;
-  const hasStats = positions !== null || debatesArgued !== null;
+  const hasFollowers = Boolean(followers);
+  const hasStats = positions !== null || debatesArgued !== null || hasFollowers;
 
   if (!hasStats && !match && !activeSpaces && !joinedAt) return null;
 
@@ -77,6 +82,17 @@ export function PersonRecordLine({
               label={`${positions} ${positions === 1 ? 'position' : 'positions'}`}
             />
           )}
+          {hasFollowers && followers ? (
+            <Stat
+              icon={
+                <span className="flex size-[13px] items-center justify-center">
+                  <MemberTiny />
+                </span>
+              }
+              value={followers.toLocaleString('en-US')}
+              label={`${followers} ${followers === 1 ? 'follower' : 'followers'}`}
+            />
+          ) : null}
           {match ? (
             <>
               {hasStats ? (

@@ -7,7 +7,7 @@ import * as React from 'react';
 
 import { getSchemaFromTypeIds } from '~/core/database/entities';
 import { ID } from '~/core/id';
-import { useEditorStoreLite } from '~/core/state/editor/use-editor';
+import { useEditorStoreLite } from '~/core/state/editor/use-editor-blocks';
 import { useQueryEntity } from '~/core/sync/use-store';
 import type { Property } from '~/core/types';
 import { RANKED_SPACE_IDS } from '~/core/utils/space/space-ranking';

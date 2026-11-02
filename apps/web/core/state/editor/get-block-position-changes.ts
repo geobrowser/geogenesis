@@ -1,4 +1,4 @@
-export function getBlockPositionChanges(oldArray: string[], newArray: string[]) {
+export function getBlockPositionChanges(oldArray: string[], newArray: string[], preferMovedId?: string) {
   // Find additions and removals
   const added = newArray.filter(item => !oldArray.includes(item));
   const removed = oldArray.filter(item => !newArray.includes(item));
@@ -9,6 +9,19 @@ export function getBlockPositionChanges(oldArray: string[], newArray: string[]) 
   // Create a copy of arrays with only common elements
   const oldCommonOrder = oldArray.filter(item => commonItems.includes(item));
   const newCommonOrder = newArray.filter(item => commonItems.includes(item));
+
+  if (preferMovedId !== undefined && commonItems.includes(preferMovedId)) {
+    const oldWithoutPreferred = oldCommonOrder.filter(item => item !== preferMovedId);
+    const newWithoutPreferred = newCommonOrder.filter(item => item !== preferMovedId);
+
+    if (arraysEqual(oldWithoutPreferred, newWithoutPreferred)) {
+      return {
+        added,
+        removed,
+        moved: [preferMovedId],
+      };
+    }
+  }
 
   // Find the longest common subsequence (LCS)
   const lcs = findLCS(oldCommonOrder, newCommonOrder);
@@ -27,6 +40,10 @@ export function getBlockPositionChanges(oldArray: string[], newArray: string[]) 
     removed,
     moved,
   };
+}
+
+function arraysEqual(a: string[], b: string[]) {
+  return a.length === b.length && a.every((item, index) => item === b[index]);
 }
 
 /**

@@ -112,6 +112,10 @@ const ApiProposalBaseFields = {
    *  defaults versionId to 1, which is wrong for updated proposals. Optional
    *  because older API deployments may not send it. */
   proposalVersion: Schema.optional(Schema.Number),
+  /** Unix seconds after which the DAO refuses to execute (`canExecuteProposal`
+   *  checks `block.timestamp > executeBy`). Zero until the first vote opens the
+   *  window. Optional because older API deployments may not send it. */
+  executeBy: Schema.optional(Schema.NullOr(Schema.Number)),
   status: Schema.Union(
     Schema.Literal('PROPOSED'),
     Schema.Literal('EXECUTABLE'),
@@ -446,6 +450,38 @@ export function mapProposalStatus(apiStatus: ApiProposalStatusResponse['status']
 }
 
 /**
+ * Whether the DAO's execution window for this proposal has closed.
+ *
+ * The API keeps reporting `EXECUTABLE` / `canExecute: true` after `executeBy`
+ * passes — it deliberately doesn't let the deadline override a vote outcome —
+ * but the contract's `canExecuteProposal` returns false from then on, so every
+ * execute reverts `CanNotExecute()`. GEO-2609's proposal read "Pending execution"
+ * for over a month after its window closed. Mirrors the contract exactly
+ * (`block.timestamp > executeBy`), and treats a zero or missing `executeBy` as
+ * "no window yet", never as expired.
+ */
+export function isApiProposalExecutionWindowClosed(
+  proposal: Pick<ApiProposalStatusResponse, 'executeBy'>,
+  nowSeconds = Math.floor(Date.now() / 1000)
+): boolean {
+  const executeBy = proposal.executeBy ?? 0;
+  return executeBy > 0 && nowSeconds > executeBy;
+}
+
+/**
+ * The API status with the execution deadline applied: an `EXECUTABLE` proposal
+ * past `executeBy` can no longer execute, so it reads `REJECTED` — the same call
+ * the profile tab already makes for a closed window (`proposalStatusFromCurrent`).
+ */
+export function getEffectiveApiProposalStatus(
+  proposal: Pick<ApiProposalStatusResponse, 'status' | 'executeBy'>,
+  nowSeconds = Math.floor(Date.now() / 1000)
+): ApiProposalStatusResponse['status'] {
+  if (proposal.status === 'EXECUTABLE' && isApiProposalExecutionWindowClosed(proposal, nowSeconds)) return 'REJECTED';
+  return proposal.status;
+}
+
+/**
  * Whether the UI should offer to execute this proposal.
  *
  * SLOW proposals pass a percentage quorum and support threshold, and `quorum`/
@@ -463,9 +499,11 @@ export function mapProposalStatus(apiStatus: ApiProposalStatusResponse['status']
  * in execute.tsx, whereas a false negative hides the affordance entirely.
  */
 export function getApiProposalCanExecute(
-  proposal: Pick<ApiProposalStatusResponse, 'canExecute' | 'quorum' | 'threshold' | 'votingMode'>
+  proposal: Pick<ApiProposalStatusResponse, 'canExecute' | 'quorum' | 'threshold' | 'votingMode' | 'executeBy'>,
+  nowSeconds = Math.floor(Date.now() / 1000)
 ): boolean {
   if (!proposal.canExecute) return false;
+  if (isApiProposalExecutionWindowClosed(proposal, nowSeconds)) return false;
   if (proposal.votingMode === 'FAST') return true;
   return proposal.quorum.reached && proposal.threshold.reached;
 }

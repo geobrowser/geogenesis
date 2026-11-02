@@ -15,6 +15,8 @@ import {
   type ApiProposalListItem,
   convertVoteOption,
   findMembershipAction,
+  getApiProposalCanExecute,
+  getEffectiveApiProposalStatus,
   mapApiActionsToProposalType,
   mapProposalStatus,
 } from '~/core/io/rest';
@@ -239,8 +241,10 @@ function apiProposalToGovernanceDto(
     createdAtBlock: '0',
     startTime: proposal.timing.startTime,
     endTime: proposal.timing.endTime,
-    status: mapProposalStatus(proposal.status),
-    canExecute: proposal.canExecute,
+    status: mapProposalStatus(getEffectiveApiProposalStatus(proposal)),
+    // Through the shared gate, not the raw flag: it applies the FAST/SLOW rules
+    // and the `executeBy` deadline the API's `canExecute` ignores.
+    canExecute: getApiProposalCanExecute(proposal),
     bucket,
     createdBy: profile,
     targetProfile: maybeTargetProfile,
@@ -253,8 +257,8 @@ function apiProposalToGovernanceDto(
   };
 }
 
-function getProposalBucket(apiStatus: ApiProposalListItem['status']): ProposalBucket {
-  switch (apiStatus) {
+function getProposalBucket(proposal: ApiProposalListItem): ProposalBucket {
+  switch (getEffectiveApiProposalStatus(proposal)) {
     case 'EXECUTABLE':
       return 'executable';
     case 'PROPOSED':
@@ -310,11 +314,11 @@ async function fetchGovernanceProposals({
   if (status === 'pending') {
     combinedProposals = [
       ...sortOpenProposalsUnvotedFirstByEndTimeAsc(
-        combinedProposals.filter(p => p.status === 'EXECUTABLE'),
+        combinedProposals.filter(p => getEffectiveApiProposalStatus(p) === 'EXECUTABLE'),
         submittedTimes
       ),
       ...sortOpenProposalsUnvotedFirstByEndTimeAsc(
-        combinedProposals.filter(p => p.status !== 'EXECUTABLE'),
+        combinedProposals.filter(p => getEffectiveApiProposalStatus(p) !== 'EXECUTABLE'),
         submittedTimes
       ),
     ];
@@ -348,7 +352,7 @@ async function fetchGovernanceProposals({
     const maybeTargetProfile = targetId ? targetProfilesBySpaceId.get(targetId) : undefined;
     return apiProposalToGovernanceDto(
       p,
-      getProposalBucket(p.status),
+      getProposalBucket(p),
       getSubmittedTime(submittedTimes, p.proposalId),
       maybeProfile,
       maybeTargetProfile

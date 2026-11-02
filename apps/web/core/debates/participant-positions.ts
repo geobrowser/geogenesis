@@ -10,10 +10,12 @@ import { parse } from 'graphql';
 
 import { graphql } from '~/core/io/graphql-client';
 import { decodeActiveResponseDirection, responseKindToVoteKind } from '~/core/responses/entity-response';
+import { type CursorPage, collectCursorPages } from '~/core/sync/collect-cursor-pages';
 
 import type { DebateRematchParticipant, DebateResponseKind } from './api';
 import { claimResponseIndexedEvent, pendingClaimResponse } from './claim-response-indexed-notifier';
 import { useDebateAttention } from './debate-attention';
+import { subscribeRemoteClaimResponses } from './remote-claim-responses';
 
 /**
  * Both participants' positions on every claim, read straight from the knowledge graph.
@@ -43,8 +45,12 @@ export type ParticipantPosition = {
 
 export type ParticipantPositionsByClaim = Map<string, ParticipantPosition[]>;
 
-export function participantPositionsQueryKey(profileSpaceIds: string[]) {
-  return [PARTICIPANT_POSITIONS_QUERY_ROOT, [...profileSpaceIds].sort()] as const;
+/** `onViewerClaims` keys the scoped read apart, since it answers a narrower question. */
+export function participantPositionsQueryKey(profileSpaceIds: string[], onViewerClaims?: string | null) {
+  const ids = [...profileSpaceIds].sort();
+  return onViewerClaims
+    ? ([PARTICIPANT_POSITIONS_QUERY_ROOT, ids, { onViewerClaims }] as const)
+    : ([PARTICIPANT_POSITIONS_QUERY_ROOT, ids] as const);
 }
 
 export function isParticipantPositionsQueryKey(queryKey: readonly unknown[]) {
@@ -62,13 +68,19 @@ const VOTE_KIND_TO_RESPONSE_KIND = new Map<number, DebateResponseKind>([[respons
  * here: a response counts only in the space the claim lives in.
  */
 const PARTICIPANT_POSITIONS_SOURCE = /* GraphQL */ `
-  query ParticipantPositions($filter: UserVoteFilter!, $first: Int!, $offset: Int!) {
-    userVotes(filter: $filter, first: $first, offset: $offset, orderBy: [VOTED_AT_DESC, OBJECT_ID_ASC]) {
-      userId
-      objectId
-      spaceId
-      voteType
-      voteKind
+  query ParticipantPositions($filter: UserVoteFilter!, $first: Int!, $after: Cursor) {
+    userVotesConnection(filter: $filter, first: $first, after: $after, orderBy: [VOTED_AT_DESC, OBJECT_ID_ASC]) {
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+      nodes {
+        userId
+        objectId
+        spaceId
+        voteType
+        voteKind
+      }
     }
   }
 `;
@@ -76,33 +88,47 @@ const PARTICIPANT_POSITIONS_SOURCE = /* GraphQL */ `
 type ParticipantPositionRow = { userId: string; objectId: string; spaceId: string; voteType: number; voteKind: number };
 type ParticipantPositionsFilter = {
   userId: { in: string[] };
+  objectId?: { in: string[] };
   objectType: { is: number };
   voteType: { in: number[] };
   voteKind: { in: number[] };
 };
 const participantPositionsDocument = parse(PARTICIPANT_POSITIONS_SOURCE) as TypedDocumentNode<
-  { userVotes: Array<ParticipantPositionRow | null> | null },
-  { filter: ParticipantPositionsFilter; first: number; offset: number }
+  {
+    userVotesConnection: {
+      pageInfo: { hasNextPage: boolean; endCursor: string | null };
+      nodes: Array<ParticipantPositionRow | null>;
+    } | null;
+  },
+  { filter: ParticipantPositionsFilter; first: number; after?: string }
 >;
 
 type FetchPage = (
   filter: ParticipantPositionsFilter,
   first: number,
-  offset: number,
+  after: string | undefined,
   signal?: AbortSignal
-) => Promise<ParticipantPositionRow[]>;
+) => Promise<CursorPage<ParticipantPositionRow>>;
 
-function defaultFetchPage(filter: ParticipantPositionsFilter, first: number, offset: number, signal?: AbortSignal) {
+function defaultFetchPage(
+  filter: ParticipantPositionsFilter,
+  first: number,
+  after: string | undefined,
+  signal?: AbortSignal
+) {
   return Effect.runPromise(
     graphql({
       query: participantPositionsDocument,
-      decoder: data =>
-        (data.userVotes ?? []).flatMap(row =>
+      decoder: data => ({
+        items: (data.userVotesConnection?.nodes ?? []).flatMap(row =>
           row
             ? [{ ...row, userId: String(row.userId), objectId: String(row.objectId), spaceId: String(row.spaceId) }]
             : []
         ),
-      variables: { filter, first, offset },
+        endCursor: data.userVotesConnection?.pageInfo.endCursor ?? null,
+        hasNextPage: data.userVotesConnection?.pageInfo.hasNextPage ?? false,
+      }),
+      variables: { filter, first, after },
       signal,
     })
   );
@@ -121,22 +147,16 @@ export const POSITION_VOTE_FILTER = {
   voteKind: { in: [...VOTE_KIND_TO_RESPONSE_KIND.keys()] },
 };
 
-export async function fetchParticipantPositions(
-  profileSpaceIds: string[],
-  signal?: AbortSignal,
-  fetchPage: FetchPage = defaultFetchPage
+/** Every active position matching `filter`, across as many pages as it takes. */
+async function fetchPositions(
+  filter: ParticipantPositionsFilter,
+  signal: AbortSignal | undefined,
+  fetchPage: FetchPage
 ): Promise<ParticipantPosition[]> {
-  if (profileSpaceIds.length === 0) return [];
-  const filter = { userId: { in: profileSpaceIds }, ...POSITION_VOTE_FILTER };
-
-  const rows: ParticipantPositionRow[] = [];
-  let offset = 0;
-  while (true) {
-    const page = await fetchPage(filter, PAGE_SIZE, offset, signal);
-    rows.push(...page);
-    if (page.length < PAGE_SIZE) break;
-    offset += PAGE_SIZE;
-  }
+  // Cursors, not offsets: the graph rejects an offset past 1000, so offset paging threw on the
+  // fourth page and every match count vanished once the People tab's participants held more than
+  // 1,500 positions between them.
+  const rows = await collectCursorPages(after => fetchPage(filter, PAGE_SIZE, after, signal));
 
   return rows.flatMap(row => {
     const direction = decodeActiveResponseDirection(row.voteType);
@@ -152,6 +172,42 @@ export async function fetchParticipantPositions(
       },
     ];
   });
+}
+
+export async function fetchParticipantPositions(
+  profileSpaceIds: string[],
+  signal?: AbortSignal,
+  fetchPage: FetchPage = defaultFetchPage
+): Promise<ParticipantPosition[]> {
+  if (profileSpaceIds.length === 0) return [];
+  return fetchPositions({ userId: { in: profileSpaceIds }, ...POSITION_VOTE_FILTER }, signal, fetchPage);
+}
+
+/**
+ * The viewer's positions, and everyone else's only on the claims the viewer has answered.
+ *
+ * For callers that compare everyone against the viewer, like the People tab's match counts: a
+ * claim the viewer never answered cannot be a match, so fetching it is wasted. With everyone who
+ * has availability on the tab, the unscoped read was 4,080 rows over nine sequential pages on
+ * testnet, re-polled every 20s; scoped, the heaviest viewers need 830–1,633 and a light one ~120.
+ */
+export async function fetchPositionsOnViewerClaims(
+  viewerProfileSpaceId: string,
+  profileSpaceIds: string[],
+  signal?: AbortSignal,
+  fetchPage: FetchPage = defaultFetchPage
+): Promise<ParticipantPosition[]> {
+  const viewer = await fetchParticipantPositions([viewerProfileSpaceId], signal, fetchPage);
+  const others = profileSpaceIds.filter(id => !sameId(id, viewerProfileSpaceId));
+  const claimIds = [...new Set(viewer.map(position => position.claimId))];
+  if (others.length === 0 || claimIds.length === 0) return viewer;
+
+  const theirs = await fetchPositions(
+    { userId: { in: others }, objectId: { in: claimIds }, ...POSITION_VOTE_FILTER },
+    signal,
+    fetchPage
+  );
+  return [...viewer, ...theirs];
 }
 
 export function groupParticipantPositions(positions: ParticipantPosition[]): ParticipantPositionsByClaim {
@@ -175,7 +231,9 @@ export function participantSidesOn(
   spaceId: string,
   participants: DebateRematchParticipant[]
 ) {
-  const rows = positionsByClaim.get(claimId) ?? [];
+  // The graph, geo-chat, and pending responses can use different spellings of the same claim id.
+  // Merge matching groups so an optimistic row cannot hide the other participant's indexed side.
+  const rows = [...positionsByClaim].flatMap(([id, rows]) => (sameId(id, claimId) ? rows : []));
   return participants.map(participant => {
     const row = rows.find(
       position => sameId(position.profileSpaceId, participant.profile_space_id) && sameId(position.spaceId, spaceId)
@@ -333,6 +391,74 @@ function useOwnPendingPositions(
   );
 }
 
+/** How long a reported response is shown while the graph disagrees: past p95 indexing, so a write that never lands expires. */
+const REMOTE_MAX_HOLD_MS = 60_000;
+
+type RemotePosition = { row: PendingParticipantPosition; receivedAt: number };
+
+/**
+ * `liveFrom`'s responses as geo-chat reports them, ahead of the graph. Each row is held until this
+ * query's fetch agrees, so a refetch landing before indexing can't flicker it; a newer report replaces it.
+ */
+function useRemotePendingPositions(
+  liveFrom: string | null | undefined,
+  queryKey: readonly unknown[]
+): PendingParticipantPosition[] {
+  const queryClient = useQueryClient();
+  const [held, setHeld] = React.useState<RemotePosition[]>([]);
+  const queryHash = hashKey(queryKey);
+
+  React.useEffect(() => {
+    setHeld(current => (current.length === 0 ? current : []));
+    if (!liveFrom) return;
+
+    const unsubscribeEvents = subscribeRemoteClaimResponses(response => {
+      if (!sameId(response.profileSpaceId, liveFrom)) return;
+      // The graph's spelling, so the row groups under the same claim key the fetched rows use.
+      const row: PendingParticipantPosition = {
+        ...response,
+        profileSpaceId: bareId(response.profileSpaceId),
+        claimId: bareId(response.claimId),
+        spaceId: bareId(response.spaceId),
+      };
+      const key = positionKey(row);
+      const receivedAt = Date.now();
+      setHeld(current => [...current.filter(entry => positionKey(entry.row) !== key), { row, receivedAt }]);
+    });
+
+    const unsubscribeCache = queryClient.getQueryCache().subscribe(event => {
+      if (event.query.queryHash !== queryHash) return;
+      if (event.type !== 'updated' || event.action.type !== 'success') return;
+      const fetched = (event.query.state.data ?? []) as ParticipantPosition[];
+      setHeld(current => {
+        const kept = current.filter(entry => !fetchedAgrees(fetched, entry.row));
+        return kept.length === current.length ? current : kept;
+      });
+    });
+
+    return () => {
+      unsubscribeEvents();
+      unsubscribeCache();
+    };
+  }, [liveFrom, queryClient, queryHash]);
+
+  // Expire the oldest row at its bound; each expiry re-arms for the next.
+  React.useEffect(() => {
+    if (held.length === 0) return;
+    const oldest = Math.min(...held.map(entry => entry.receivedAt));
+    const timer = setTimeout(
+      () => {
+        const now = Date.now();
+        setHeld(current => current.filter(entry => now - entry.receivedAt < REMOTE_MAX_HOLD_MS));
+      },
+      Math.max(0, oldest + REMOTE_MAX_HOLD_MS - Date.now())
+    );
+    return () => clearTimeout(timer);
+  }, [held]);
+
+  return React.useMemo(() => held.map(entry => entry.row), [held]);
+}
+
 function samePositions(a: PendingParticipantPosition[], b: PendingParticipantPosition[]) {
   if (a.length !== b.length) return false;
   return a.every((row, i) => {
@@ -355,8 +481,11 @@ function samePositions(a: PendingParticipantPosition[], b: PendingParticipantPos
  * another, and that side then reads as no position at all.
  */
 function positionKey(row: Pick<ParticipantPosition, 'profileSpaceId' | 'claimId' | 'spaceId' | 'responseKind'>) {
-  const bare = (id: string) => id.replace(/-/g, '').toLowerCase();
-  return `${bare(row.profileSpaceId)}|${bare(row.claimId)}|${bare(row.spaceId)}|${row.responseKind}`;
+  return `${bareId(row.profileSpaceId)}|${bareId(row.claimId)}|${bareId(row.spaceId)}|${row.responseKind}`;
+}
+
+function bareId(id: string) {
+  return id.replace(/-/g, '').toLowerCase();
 }
 
 /**
@@ -384,7 +513,22 @@ export function applyPendingPositions(
 export function useParticipantPositions(
   participants: Array<Pick<DebateRematchParticipant, 'profile_space_id'>>,
   /** The viewer's own personal space id, so their in-flight writes can be shown immediately. */
-  localProfileSpaceId?: string | null
+  localProfileSpaceId?: string | null,
+  /**
+   * Only read others' positions on claims the viewer has answered (`fetchPositionsOnViewerClaims`).
+   * For callers that only compare people against the viewer; needs `localProfileSpaceId`.
+   */
+  {
+    onlyViewerClaims = false,
+    liveFrom = null,
+  }: {
+    onlyViewerClaims?: boolean;
+    /**
+     * A participant whose responses are shown as soon as geo-chat reports them, ahead of the graph.
+     * The rematch picker's other debater; never a whole room, since the reports are not yet on chain.
+     */
+    liveFrom?: string | null;
+  } = {}
 ) {
   const queryClient = useQueryClient();
   const foreground = useDebateAttention();
@@ -392,7 +536,11 @@ export function useParticipantPositions(
     () => [...new Set(participants.map(participant => participant.profile_space_id))].sort(),
     [participants]
   );
-  const queryKey = React.useMemo(() => participantPositionsQueryKey(profileSpaceIds), [profileSpaceIds]);
+  const viewerScope = onlyViewerClaims ? (localProfileSpaceId ?? null) : null;
+  const queryKey = React.useMemo(
+    () => participantPositionsQueryKey(profileSpaceIds, viewerScope),
+    [profileSpaceIds, viewerScope]
+  );
 
   // The viewer's own response lands in the graph a beat before anyone tells geo-chat about it;
   // the indexing snapshot turning `indexed` is that beat, so re-ask then rather than wait on the
@@ -408,7 +556,10 @@ export function useParticipantPositions(
 
   const query = useQuery({
     queryKey,
-    queryFn: ({ signal }) => fetchParticipantPositions(profileSpaceIds, signal),
+    queryFn: ({ signal }) =>
+      viewerScope
+        ? fetchPositionsOnViewerClaims(viewerScope, profileSpaceIds, signal)
+        : fetchParticipantPositions(profileSpaceIds, signal),
     enabled: profileSpaceIds.length > 0,
     // `debate.claims_changed` only reaches this tab for spaces it holds a scope on; the opponent
     // can respond somewhere it doesn't, and that claim should still turn up. A slow poll covers it.
@@ -441,9 +592,15 @@ export function useParticipantPositions(
   // changes on every poll — so the whole page re-rendered every 20s for a refetch that returned the
   // same rows.
   const ownPending = useOwnPendingPositions(localProfileSpaceId, queryKey);
+  // Never the viewer's own: those come from this browser's writes, which know more.
+  const remoteLiveFrom = liveFrom && !(localProfileSpaceId && sameId(liveFrom, localProfileSpaceId)) ? liveFrom : null;
+  const remotePending = useRemotePendingPositions(remoteLiveFrom, queryKey);
   const byClaim = React.useMemo(
-    () => groupParticipantPositions(applyPendingPositions(query.data ?? [], ownPending)),
-    [query.data, ownPending]
+    () =>
+      groupParticipantPositions(
+        applyPendingPositions(applyPendingPositions(query.data ?? [], remotePending), ownPending)
+      ),
+    [query.data, remotePending, ownPending]
   );
 
   return {
@@ -470,5 +627,12 @@ export function useParticipantPositions(
      */
     isFetching: query.isFetching,
     error: query.error,
+    /**
+     * Whether `byClaim` holds anything the graph actually answered: this key's rows, or the previous
+     * key's held over. Not `byClaim.size`, which also counts the viewer's own in-flight responses
+     * overlaid on top — present even when every fetch has failed, so a surface deciding "did the read
+     * fail with nothing in hand" must ask this instead (GEO-3220).
+     */
+    hasFetchedData: query.data !== undefined,
   };
 }

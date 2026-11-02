@@ -23,7 +23,7 @@ import { useAutofocus } from '~/core/hooks/use-autofocus';
 import { useRelationTargetTypeIds } from '~/core/hooks/use-relation-target-type-ids';
 import { useCanUserEdit } from '~/core/hooks/use-user-is-editing';
 import { useEditable } from '~/core/state/editable-store';
-import { useEditorStoreLite } from '~/core/state/editor/use-editor';
+import { useEditorStoreLite } from '~/core/state/editor/use-editor-blocks';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useQueryEntity, useValues } from '~/core/sync/use-store';
 import type { Relation } from '~/core/types';

@@ -7,7 +7,7 @@ import { TrackedErrorBoundary } from '~/core/telemetry/tracked-error-boundary';
 import { EmptyErrorComponent } from '~/design-system/empty-error-component';
 import { Spacer } from '~/design-system/spacer';
 
-import { Editor } from '~/partials/editor/editor';
+import { Editor } from '~/partials/editor/lazy-editor';
 import { AutomaticModeToggle } from '~/partials/entity-page/automatic-mode-toggle';
 import { BacklinksServerContainer } from '~/partials/entity-page/backlinks-server-container';
 import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
@@ -48,7 +48,7 @@ export default async function PostEntityPage({
       deterministicSpaceId={props.deterministicSpaceId}
       preventRedirect={isEditing}
     >
-      <EntityStoreProvider id={props.id} spaceId={props.spaceId}>
+      <EntityStoreProvider id={props.id} spaceId={props.spaceId} initialEntities={props.initialEntities}>
         <RouteEditorProvider
           id={props.id}
           spaceId={props.spaceId}

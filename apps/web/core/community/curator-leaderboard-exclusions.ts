@@ -1,4 +1,4 @@
-import { ID } from '~/core/id';
+import { spaceIdMatcher } from '~/core/utils/space-id-matcher';
 
 /**
  * Personal spaces kept off the curator leaderboard.
@@ -16,10 +16,5 @@ import { ID } from '~/core/id';
  */
 export const EXCLUDED_CURATOR_SPACE_IDS: readonly string[] = ['cc0bf85a27c217d75993bc785a15b198'];
 
-const excludedSpaceIds = new Set(EXCLUDED_CURATOR_SPACE_IDS.map(id => ID.uuidToHex(id)));
-
 /** Whether this personal space is one the leaderboard leaves out. */
-export function isExcludedCurator(spaceId: string | null | undefined): boolean {
-  if (!spaceId) return false;
-  return excludedSpaceIds.has(ID.uuidToHex(spaceId));
-}
+export const isExcludedCurator = spaceIdMatcher(EXCLUDED_CURATOR_SPACE_IDS);

@@ -5,6 +5,12 @@ type TakeoverRequest = {
   // Optional on the wire: tabs running a build that predates the field omit it, and the owner
   // assumes a focused requester so an old tab is never permanently unbeatable mid-deploy.
   requesterPriority?: DebateRoomTabPriority;
+  // GEO-3149. True when the requester is a blocked tab reclaiming the room on its own because the
+  // viewer turned to it, rather than the viewer pressing "Continue here". Absent on older builds,
+  // which only ever sent explicit or focus-driven requests, so absent reads as explicit.
+  automatic?: boolean;
+  /** What the requester is, e.g. the voice surface asking. */
+  requesterLabel?: string;
 };
 
 type TakeoverResponse = {
@@ -12,6 +18,8 @@ type TakeoverResponse = {
   requestId: string;
   requesterId: string;
   released: boolean;
+  /** What the owner is, when it refused. */
+  ownerLabel?: string;
 };
 
 type OwnershipMessage = TakeoverRequest | TakeoverResponse;
@@ -19,6 +27,14 @@ type OwnershipMessage = TakeoverRequest | TakeoverResponse;
 export type DebateRoomTakeoverContext = {
   requesterPriority: DebateRoomTabPriority;
   ownerPriority: DebateRoomTabPriority;
+  automatic: boolean;
+  requesterLabel?: string;
+};
+
+export type DebateRoomTakeoverOptions = {
+  /** The tab is reclaiming the room because the viewer turned to it, not because they asked. */
+  automatic?: boolean;
+  requesterLabel?: string;
 };
 
 type CreateDebateRoomOwnershipCoordinatorOptions = {
@@ -27,16 +43,20 @@ type CreateDebateRoomOwnershipCoordinatorOptions = {
   onTakeoverRequested: (context: DebateRoomTakeoverContext) => boolean | Promise<boolean>;
   // Test seam; production uses debateRoomTabPriority.
   getTabPriority?: () => DebateRoomTabPriority;
+  /** Sent with a refusal so the requester can say what holds it. */
+  describeOwner?: () => string | undefined;
 };
 
 export type DebateRoomOwnershipCoordinator = {
   readonly instanceId: string;
   readonly coordinationMode: DebateRoomOwnershipCoordinationMode;
   acquire: () => Promise<DebateRoomOwnershipAcquireResult>;
-  requestTakeover: () => Promise<boolean>;
+  requestTakeover: (options?: DebateRoomTakeoverOptions) => Promise<boolean>;
   release: () => Promise<void>;
   close: () => void;
   ownsConnection: () => boolean;
+  /** The refusing owner's label from the last takeover this coordinator asked for. */
+  lastRefusedBy: () => string | undefined;
 };
 
 export type DebateRoomOwnershipAcquireResult = {
@@ -66,14 +86,19 @@ const acquisitionStaggerMs: Record<DebateRoomTabPriority, number> = { 0: 700, 1:
 const takeoverResponseTimeoutMs = 1_500;
 const localReleaseBarriers = new Map<string, Promise<void>>();
 
+export function debateRoomCoordinationName(debateId: string, userId: string) {
+  return `geo:debate-room:${debateId}:${userId}`;
+}
+
 export function createDebateRoomOwnershipCoordinator({
   debateId,
   userId,
   onTakeoverRequested,
   getTabPriority = debateRoomTabPriority,
+  describeOwner,
 }: CreateDebateRoomOwnershipCoordinatorOptions): DebateRoomOwnershipCoordinator {
   const instanceId = createInstanceId();
-  const coordinationName = `geo:debate-room:${debateId}:${userId}`;
+  const coordinationName = debateRoomCoordinationName(debateId, userId);
   const lockManager =
     typeof navigator !== 'undefined' && typeof navigator.locks?.request === 'function' ? navigator.locks : null;
   let channel: BroadcastChannel | null = null;
@@ -98,6 +123,7 @@ export function createDebateRoomOwnershipCoordinator({
   let acquisition: Promise<DebateRoomOwnershipAcquireResult> | null = null;
   let activeAcquisitionAttempt: { cancelled: boolean } | null = null;
   const pendingTakeovers = new Map<string, (released: boolean) => void>();
+  let lastRefusedBy: string | undefined;
 
   const fallBackToLiveKitIdentity = () => {
     lockRequestsAvailable = false;
@@ -114,6 +140,7 @@ export function createDebateRoomOwnershipCoordinator({
         requestId: message.requestId,
         requesterId: message.requesterId,
         released,
+        ownerLabel: released ? undefined : describeOwner?.(),
       } satisfies TakeoverResponse);
     } catch {
       // The channel may close while an async takeover decision is finishing. The requester will
@@ -265,6 +292,7 @@ export function createDebateRoomOwnershipCoordinator({
       if (!message || typeof message !== 'object') return;
 
       if (message.type === 'takeover-response' && message.requesterId === instanceId) {
+        if (pendingTakeovers.has(message.requestId)) lastRefusedBy = message.released ? undefined : message.ownerLabel;
         pendingTakeovers.get(message.requestId)?.(message.released);
         return;
       }
@@ -273,6 +301,8 @@ export function createDebateRoomOwnershipCoordinator({
       const takeoverContext: DebateRoomTakeoverContext = {
         requesterPriority: message.requesterPriority ?? 2,
         ownerPriority: getTabPriority(),
+        automatic: message.automatic === true,
+        requesterLabel: message.requesterLabel,
       };
       void Promise.resolve(onTakeoverRequested(takeoverContext))
         .then(async released => {
@@ -291,7 +321,8 @@ export function createDebateRoomOwnershipCoordinator({
       return coordinationMode;
     },
     acquire: () => acquireLock(),
-    requestTakeover: async () => {
+    requestTakeover: async ({ automatic = false, requesterLabel }: DebateRoomTakeoverOptions = {}) => {
+      lastRefusedBy = undefined;
       if (ownsConnection) return true;
       if (!lockManager || !lockRequestsAvailable) return (await acquireLock(true)).acquired;
       if (closed) return false;
@@ -316,6 +347,8 @@ export function createDebateRoomOwnershipCoordinator({
             requestId,
             requesterId: instanceId,
             requesterPriority: getTabPriority(),
+            automatic,
+            requesterLabel,
           } satisfies TakeoverRequest);
         } catch {
           window.clearTimeout(timeout);
@@ -335,6 +368,7 @@ export function createDebateRoomOwnershipCoordinator({
       channel?.close();
     },
     ownsConnection: () => ownsConnection,
+    lastRefusedBy: () => lastRefusedBy,
   };
 }
 
@@ -361,4 +395,40 @@ async function waitForLocalReleaseBarriers(coordinationName: string, cancelled: 
 
 function createInstanceId() {
   return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+export type DebateRoomReleaseDecisionInput = DebateRoomTakeoverContext & {
+  status: string | null;
+  /** The owner's MediaRecorder has started; releasing now would tear an in-flight recording down. */
+  recordingStarted: boolean;
+  /** `preflight` with nothing recorded and its window still open. */
+  preflightStillPending: boolean;
+};
+
+/**
+ * Whether the tab holding a debate room hands it to another tab of the same browser that asked.
+ *
+ * Nothing is recorded or timed during the intro (`ready`) or the connecting window, so any tab may
+ * take the room then. Past that, a tab nearer the viewer's attention may still pull the room from
+ * one further away (focused over visible over hidden) until recording starts, which is what keeps a
+ * background tab from ever holding the room against the one the viewer is looking at (GEO-3149).
+ *
+ * An automatic request — a blocked tab reclaiming because the viewer turned to it — is honoured only
+ * when the requester really is nearer the viewer than the owner. Without that, two windows side by
+ * side (both visible, neither focused) would hand the room back and forth forever, each release
+ * re-arming the other's reclaim.
+ */
+export function shouldReleaseDebateRoom({
+  status,
+  recordingStarted,
+  preflightStillPending,
+  requesterPriority,
+  ownerPriority,
+  automatic,
+}: DebateRoomReleaseDecisionInput): boolean {
+  const requesterNearer = requesterPriority > ownerPriority;
+  if (automatic && !requesterNearer) return false;
+  if (status === 'ready' || status === 'connecting') return true;
+  if (status === 'preflight' && preflightStillPending) return true;
+  return requesterNearer && !recordingStarted && (status === 'connecting' || status === 'preflight');
 }

@@ -13,6 +13,7 @@ import { Spacer } from './spacer';
 import { Text } from './text';
 import { trapWheelToElement } from './trap-wheel-scroll';
 import { useAdaptiveDropdownPlacement } from './use-adaptive-dropdown-placement';
+import { useElevatedPopoverPortal } from './use-elevated-popover-portal';
 
 interface Props {
   trigger: React.ReactNode;
@@ -42,6 +43,7 @@ const contentStyles = cva('z-10 w-[273px] rounded border border-grey-02 bg-white
 export const Dropdown = ({ trigger, align, scrollableList = false, options }: Props) => {
   // Using a controlled state to enable exit animations with framer-motion
   const [open, setOpen] = useState(false);
+  const elevatedPopoverPortal = useElevatedPopoverPortal();
   const triggerRef = React.useRef<HTMLButtonElement>(null);
   const [contentElement, setContentElement] = React.useState<HTMLDivElement | null>(null);
   const { align: adaptiveAlign, side } = useAdaptiveDropdownPlacement(triggerRef, {
@@ -67,35 +69,38 @@ export const Dropdown = ({ trigger, align, scrollableList = false, options }: Pr
           <ChevronDownSmall color="ctaPrimary" />
         </DropdownPrimitive.Trigger>
       </span>
-      <DropdownPrimitive.Content
-        ref={setContentElement}
-        align={resolvedAlign}
-        side={side}
-        sideOffset={6}
-        avoidCollisions={true}
-        collisionPadding={8}
-        sticky="always"
-        className={contentStyles({ align: resolvedAlign, scroll: scrollableList })}
-        onWheel={onDropdownWheel}
-      >
-        <DropdownPrimitive.Group className={cx(!scrollableList && 'overflow-hidden')}>
-          {options.map((option, index) => (
-            <DropdownPrimitive.Item
-              key={`dropdown-item-${index}`}
-              disabled={option.disabled}
-              onClick={option.onClick}
-              className="flex min-h-10 cursor-pointer items-center justify-between border-b border-b-grey-02 px-3 py-2 text-button text-grey-04 select-none last:border-none hover:bg-bg hover:text-text hover:outline-hidden aria-disabled:cursor-not-allowed aria-disabled:text-grey-04"
-            >
-              {option.label}
-              {option.disabled && (
-                <Text variant="smallButton" color="grey-04">
-                  {option.sublabel}
-                </Text>
-              )}
-            </DropdownPrimitive.Item>
-          ))}
-        </DropdownPrimitive.Group>
-      </DropdownPrimitive.Content>
+      {/* Escape sticky controls and clipping ancestors while respecting the active overlay host. */}
+      <DropdownPrimitive.Portal container={elevatedPopoverPortal ?? undefined}>
+        <DropdownPrimitive.Content
+          ref={setContentElement}
+          align={resolvedAlign}
+          side={side}
+          sideOffset={6}
+          avoidCollisions={true}
+          collisionPadding={8}
+          sticky="always"
+          className={contentStyles({ align: resolvedAlign, scroll: scrollableList })}
+          onWheel={onDropdownWheel}
+        >
+          <DropdownPrimitive.Group className={cx(!scrollableList && 'overflow-hidden')}>
+            {options.map((option, index) => (
+              <DropdownPrimitive.Item
+                key={`dropdown-item-${index}`}
+                disabled={option.disabled}
+                onClick={option.onClick}
+                className="flex min-h-10 cursor-pointer items-center justify-between border-b border-b-grey-02 px-3 py-2 text-button text-grey-04 select-none last:border-none hover:bg-bg hover:text-text hover:outline-hidden aria-disabled:cursor-not-allowed aria-disabled:text-grey-04"
+              >
+                {option.label}
+                {option.disabled && (
+                  <Text variant="smallButton" color="grey-04">
+                    {option.sublabel}
+                  </Text>
+                )}
+              </DropdownPrimitive.Item>
+            ))}
+          </DropdownPrimitive.Group>
+        </DropdownPrimitive.Content>
+      </DropdownPrimitive.Portal>
     </DropdownPrimitive.Root>
   );
 };

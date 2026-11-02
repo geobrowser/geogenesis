@@ -36,9 +36,11 @@ function release() {
   restore = null;
 }
 
-export function useScrollLock() {
+/** `active` false holds nothing, for a page that only needs the lock in some layouts. */
+export function useScrollLock(active = true) {
   React.useEffect(() => {
+    if (!active) return;
     acquire();
     return release;
-  }, []);
+  }, [active]);
 }

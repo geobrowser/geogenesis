@@ -6,6 +6,7 @@ import * as React from 'react';
 
 import { Effect } from 'effect';
 
+import { chunk } from '~/core/community/community-graphql';
 import { uuidToHex } from '~/core/id/normalize';
 import { graphql } from '~/core/io/graphql-client';
 import { normId } from '~/core/utils/norm-id';
@@ -19,6 +20,12 @@ import {
   isPersonId,
   personAlias,
 } from './person-records-document';
+
+/**
+ * People per records document. The availability calendar already sends this many in one (geo-chat
+ * caps its list at 200), so a batch never asks for more than a request the app makes today.
+ */
+const PERSON_RECORDS_BATCH = 200;
 
 /** Raw per-person counts, before the winner grouping and the omit rules are applied. */
 type RawRecord = {
@@ -84,18 +91,25 @@ export function usePersonRecords(personIds: string[]): Map<string, PersonRecord>
     // arrive at once re-runs a request carrying four aliased connections per person, for records
     // that barely move — someone's lifetime positions and join date do not change second to second.
     staleTime: 5 * 60_000,
-    queryFn: ({ signal }) => {
-      const { document, variables, ids } = buildPersonRecordsDocument(key);
-      return Effect.runPromise(
-        graphql({
-          query: document,
-          variables,
-          signal,
-          // Decoded against the ids the document was built from, not `key`: aliases are positional,
-          // so an id the builder could not use shifts every alias after it.
-          decoder: (response: PersonRecordsQuery) => readPersonRecords(response, ids),
+    queryFn: async ({ signal }) => {
+      // A document per batch, read side by side: one document for everyone grows by four aliased
+      // connections per person, and admin New match (GEO-2942) lists far more people than a tab.
+      const batches = await Promise.all(
+        chunk(key, PERSON_RECORDS_BATCH).map(batch => {
+          const { document, variables, ids } = buildPersonRecordsDocument(batch);
+          return Effect.runPromise(
+            graphql({
+              query: document,
+              variables,
+              signal,
+              // Decoded against the ids the document was built from, not `batch`: aliases are
+              // positional, so an id the builder could not use shifts every alias after it.
+              decoder: (response: PersonRecordsQuery) => readPersonRecords(response, ids),
+            })
+          );
         })
       );
+      return new Map(batches.flatMap(batch => [...batch]));
     },
   });
 

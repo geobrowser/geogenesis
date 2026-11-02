@@ -199,7 +199,7 @@ describe('useBountyAllocationActions', () => {
     publishSucceeds();
     const { result } = renderHook(() => useBountyAllocationActions(detail));
     await act(async () => {
-      expect(await result.current.remove('person-2')).toBe(true);
+      expect(await result.current.remove({ id: 'person-2', targetIds: ['person-2'] })).toBe(true);
     });
     const call = mocks.makeProposal.mock.calls[0][0];
     expect(call.relations).toEqual([expect.objectContaining({ id: 'alloc-1', isDeleted: true })]);
@@ -207,7 +207,7 @@ describe('useBountyAllocationActions', () => {
     expect(mocks.reconcile).toHaveBeenCalledWith(call.relations);
     // Nothing to remove → no publish.
     await act(async () => {
-      expect(await result.current.remove('nobody')).toBe(false);
+      expect(await result.current.remove({ id: 'nobody', targetIds: ['nobody'] })).toBe(false);
     });
     expect(mocks.makeProposal).toHaveBeenCalledTimes(1);
   });

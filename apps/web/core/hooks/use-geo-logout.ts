@@ -1,6 +1,5 @@
 'use client';
 
-import { useLogout } from '@geogenesis/auth';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { useSetAtom } from 'jotai';
@@ -11,17 +10,20 @@ import { resetGeoChatSession } from '~/core/debates/api';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useEditable } from '~/core/state/editable-store';
 import { pendingPersonalSpaceAtom } from '~/core/state/pending-personal-space';
+import { useLogout } from '~/core/wallet/auth-hooks';
 
 import {
   avatarAtom,
   nameAtom,
+  onboardingNameOnlyAtom,
   selectedTopicIdsAtom,
   spaceIdAtom,
   stepAtom,
   topicIdAtom,
-} from '~/partials/onboarding/dialog';
+} from '~/partials/onboarding/onboarding-atoms';
 
 import { dismissedHintsAtom } from '~/atoms/dismissed-hints';
+import { NO_HELD_FEED_TOPICS, feedTopicsAtom } from '~/atoms/onboarding-feed-topics';
 
 /**
  * Registers the side-effects that wipe every trace of the previous account on
@@ -51,6 +53,8 @@ export function useGeoLogoutCleanup() {
   const setDismissedHints = useSetAtom(dismissedHintsAtom);
   const setPending = useSetAtom(pendingPersonalSpaceAtom);
   const setSelectedTopicIds = useSetAtom(selectedTopicIdsAtom);
+  const setFeedTopics = useSetAtom(feedTopicsAtom);
+  const setNameOnly = useSetAtom(onboardingNameOnlyAtom);
 
   useLogout({
     onSuccess: async () => {
@@ -71,6 +75,8 @@ export function useGeoLogoutCleanup() {
         setDismissedHints([]);
         setPending(null);
         setSelectedTopicIds([]);
+        setFeedTopics(NO_HELD_FEED_TOPICS);
+        setNameOnly(false);
         // Bulletproof reset — see the doc comment. `/root` is the public home and
         // drops the user out of any onboarding/pending context they logged out of.
         window.location.assign('/root');

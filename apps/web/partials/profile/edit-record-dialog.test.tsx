@@ -88,6 +88,16 @@ const props = {
   spaceId: 'f3dab79cb5a3d9d1759656dd5361d1c6',
 };
 
+/**
+ * A press from `down` released on `up`. The click lands on their common ancestor,
+ * which for any press touching the backdrop is the backdrop itself.
+ */
+function press(down: Element, up: Element, backdrop: Element) {
+  fireEvent.pointerDown(down);
+  fireEvent.pointerUp(up);
+  fireEvent.click(backdrop);
+}
+
 function renderDialog(onOpenChange: (open: boolean) => void = () => {}) {
   return render(<EditRecordDialog kind="employment" onOpenChange={onOpenChange} {...props} />);
 }
@@ -179,13 +189,160 @@ describe('EditRecordDialog', () => {
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
   });
 
-  it('throws the staged rows away on cancel', () => {
+  describe('closing with rows staged', () => {
+    const confirmation = () => screen.queryByText('Exiting without saving will discard edits');
+
+    it.each(['Cancel', 'Close'])('asks before %s throws them away', name => {
+      const onOpenChange = vi.fn();
+      renderDialog(onOpenChange);
+
+      fireEvent.click(screen.getByRole('button', { name }));
+
+      expect(confirmation()).toBeInTheDocument();
+      expect(mocks.discard).not.toHaveBeenCalled();
+      expect(onOpenChange).not.toHaveBeenCalled();
+    });
+
+    it('asks on Escape too', () => {
+      const onOpenChange = vi.fn();
+      renderDialog(onOpenChange);
+
+      fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+
+      expect(confirmation()).toBeInTheDocument();
+      expect(onOpenChange).not.toHaveBeenCalled();
+    });
+
+    it('throws the staged rows away on Discard edits', () => {
+      const onOpenChange = vi.fn();
+      renderDialog(onOpenChange);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Discard edits' }));
+
+      expect(mocks.discard).toHaveBeenCalledOnce();
+      expect(mocks.publish).not.toHaveBeenCalled();
+      expect(onOpenChange).toHaveBeenCalledWith(false);
+    });
+
+    it('publishes them on Save changes', () => {
+      const onOpenChange = vi.fn();
+      renderDialog(onOpenChange);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+
+      expect(mocks.publish).toHaveBeenCalledOnce();
+      expect(mocks.discard).not.toHaveBeenCalled();
+      expect(onOpenChange).toHaveBeenCalledWith(false);
+    });
+
+    it('goes back to editing when the question is dismissed', () => {
+      const onOpenChange = vi.fn();
+      renderDialog(onOpenChange);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+      fireEvent.keyDown(screen.getByRole('button', { name: 'Discard edits' }), { key: 'Escape' });
+
+      expect(confirmation()).not.toBeInTheDocument();
+      expect(screen.getByText('Edit experience')).toBeInTheDocument();
+      expect(mocks.discard).not.toHaveBeenCalled();
+      expect(onOpenChange).not.toHaveBeenCalled();
+    });
+  });
+
+  it('goes back to editing on a click outside the question', () => {
+    const onOpenChange = vi.fn();
+    renderDialog(onOpenChange);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    const backdrop = screen.getAllByRole('dialog').at(-1)!;
+    press(backdrop, backdrop, backdrop);
+
+    expect(screen.queryByText('Exiting without saving will discard edits')).not.toBeInTheDocument();
+    expect(mocks.discard).not.toHaveBeenCalled();
+    expect(onOpenChange).not.toHaveBeenCalled();
+  });
+
+  it('goes back to editing on Keep editing', () => {
+    const onOpenChange = vi.fn();
+    renderDialog(onOpenChange);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Keep editing' }));
+
+    expect(screen.queryByText('Exiting without saving will discard edits')).not.toBeInTheDocument();
+    expect(mocks.discard).not.toHaveBeenCalled();
+    expect(onOpenChange).not.toHaveBeenCalled();
+  });
+
+  it('starts focus on Keep editing, not on Discard', () => {
+    renderDialog();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(screen.getByRole('button', { name: 'Keep editing' })).toHaveFocus();
+  });
+
+  it('says why Save changes is held while the space is resolving', () => {
+    mocks.canEdit = false;
+    renderDialog();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled();
+    expect(screen.getByText('Your space is still loading. Try again in a moment.')).toBeInTheDocument();
+  });
+
+  // A click's target is the common ancestor of press and release, so a drag from
+  // the card out onto the backdrop lands as a click on the backdrop.
+  it('stays up after a drag from the question out onto the backdrop', () => {
+    renderDialog();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    const backdrop = screen.getAllByRole('dialog').at(-1)!;
+    press(screen.getByText('Exiting without saving will discard edits'), backdrop, backdrop);
+
+    expect(screen.getByText('Exiting without saving will discard edits')).toBeInTheDocument();
+  });
+
+  it('stays up after a drag from the backdrop in over the question', () => {
+    renderDialog();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    const backdrop = screen.getAllByRole('dialog').at(-1)!;
+    press(backdrop, screen.getByText('Exiting without saving will discard edits'), backdrop);
+
+    expect(screen.getByText('Exiting without saving will discard edits')).toBeInTheDocument();
+  });
+
+  it('reads out why Save changes is held as part of the question', () => {
+    mocks.canEdit = false;
+    renderDialog();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(screen.getByRole('dialog', { name: /Exiting without saving/ })).toHaveAccessibleDescription(
+      'Your space is still loading. Try again in a moment.'
+    );
+  });
+
+  it('gives the footer pills a keyboard focus ring', () => {
+    renderDialog();
+
+    for (const name of ['Cancel', 'Save']) {
+      expect(screen.getByRole('button', { name })).toHaveClass('focus-visible:outline-2', 'focus-visible:outline-text');
+    }
+  });
+
+  it('closes without asking when nothing is staged', () => {
+    mocks.hasPendingChanges = false;
     const onOpenChange = vi.fn();
     renderDialog(onOpenChange);
 
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
 
-    expect(mocks.discard).toHaveBeenCalledOnce();
+    expect(screen.queryByText('Exiting without saving will discard edits')).not.toBeInTheDocument();
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 

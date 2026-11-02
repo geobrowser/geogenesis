@@ -1,4 +1,4 @@
-import { SystemIds } from '@geoprotocol/geo-sdk/lite';
+import { Position, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { Effect } from 'effect';
 
@@ -14,9 +14,11 @@ import {
   UNIT_PROPERTY,
   VIDEO_RENDERABLE_TYPE,
 } from '~/core/constants';
+import { ID } from '~/core/id';
 import { getStrictRenderableType } from '~/core/io/dto/properties';
 import { getEntity } from '~/core/io/queries';
 import type { GeoStore } from '~/core/sync/store';
+import type { Mutator } from '~/core/sync/use-mutate';
 import { DataType, Entity, Property, Relation, SwitchableRenderableType, Value } from '~/core/types';
 import { getSpaceRank, scopeBySpacePrecedence } from '~/core/utils/space/space-ranking';
 
@@ -383,4 +385,50 @@ export function getCurrentRenderableType(
 
   // Otherwise, default to the base dataType
   return propertyDataType.dataType as SwitchableRenderableType;
+}
+
+/**
+ * Point a property's Data type or Renderable type relation at a new target.
+ *
+ * An existing relation goes through `relations.update`, which already knows when an id can be kept:
+ * a relation from the current edit is changed in place, while one that exists on the graph —
+ * loaded, published from this session, or carrying a pending update (`isExistingRelation`) — is
+ * deleted and recreated under a new id. That matters because GRC-20 `createRelation` with an
+ * existing id doesn't move its `to` target, so reusing it publishes a type change the graph ignores.
+ */
+export function replacePropertyTypeRelation(
+  {
+    existing,
+    property,
+    spaceId,
+    type,
+    target,
+  }: {
+    existing: Relation | undefined;
+    property: { id: string; name: string };
+    spaceId: string;
+    /** The relation type: `DATA_TYPE_PROPERTY` or `RENDERABLE_TYPE_PROPERTY`. */
+    type: { id: string; name: string };
+    target: { id: string; name: string };
+  },
+  relations: Pick<Mutator['relations'], 'set' | 'update'>
+): void {
+  const toEntity = { ...target, value: target.id };
+  if (existing) {
+    relations.update(existing, draft => {
+      draft.toEntity = toEntity;
+    });
+    return;
+  }
+  relations.set({
+    id: ID.createEntityId(),
+    entityId: ID.createEntityId(),
+    fromEntity: property,
+    type,
+    toEntity,
+    spaceId,
+    position: Position.generate(),
+    verified: false,
+    renderableType: 'RELATION',
+  });
 }

@@ -3,16 +3,19 @@
 import * as React from 'react';
 
 import { personProfileOpened } from '~/core/analytics';
+import { isDebateEntity } from '~/core/debates/is-debate-entity';
 import {
   AUTHORS_PROPERTY_ID,
   DEBATE_CLAIMS_PROPERTY_ID,
   SOURCES_PROPERTY_ID,
   TEXT_BLOCK_TYPE_ID,
 } from '~/core/debates/ontology';
+import type { ExploreFeedRow } from '~/core/explore/explore-card-item';
 import { useProfilesBySpaceIds } from '~/core/hooks/use-profiles-by-space-ids';
 import { ID } from '~/core/id';
-import { useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
+import { useQueryEntities } from '~/core/sync/use-store';
 import type { Relation } from '~/core/types';
+import { observePanelNavigation } from '~/core/utils/entity-side-panel-link';
 import { NavUtils } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
@@ -41,10 +44,13 @@ export function ClaimProvenance({
   claimId,
   claimRelations,
   spaceId,
+  sourceRows,
 }: {
   claimId: string;
   claimRelations: Relation[];
   spaceId: string;
+  /** Reuse the Sources tab's hydrated rows for every destination, including additional sources. */
+  sourceRows: readonly Pick<ExploreFeedRow, 'entityId' | 'types'>[];
 }) {
   // Every source, in relation order, deduped by target. A claim used to carry exactly one `Sources`
   // relation because every debate minted its own Claim; with find-or-create a transcript claim that
@@ -91,8 +97,17 @@ export function ClaimProvenance({
   // `Sources` points wherever the claim came from, which is not always a debate — a claim pulled
   // from an article carries that article. The relation only gives an id and a name, so the type
   // has to be read off the entity itself to name the source in the sentence below.
-  const { entity: sourceEntity } = useQueryEntity({ id: source?.id ?? '', enabled: source !== null });
-  const sourceKind = sourceEntity?.types.find(type => type.name)?.name?.toLowerCase() ?? 'source';
+  const sourceTypesById = React.useMemo(
+    () => new Map(sourceRows.map(row => [ID.uuidToHex(row.entityId), row.types])),
+    [sourceRows]
+  );
+  const sourceTypes = source ? sourceTypesById.get(ID.uuidToHex(source.id)) : undefined;
+  const sourceKind = sourceTypes?.find(type => type.name)?.name?.toLowerCase() ?? 'source';
+  const requiresFullPage = (id: string) => {
+    const types = sourceTypesById.get(ID.uuidToHex(id));
+    // An unresolved source may be a debate. Keep its full-page destination usable until known.
+    return types === undefined || isDebateEntity(types);
+  };
 
   const { profilesBySpaceId } = useProfilesBySpaceIds(speakerSpaceIds, speakerSpaceIds.length > 0);
   const speakers = speakerSpaceIds
@@ -137,11 +152,11 @@ export function ClaimProvenance({
                   {speaker.profile?.profileLink ? (
                     <Link
                       href={speaker.profile.profileLink}
-                      onClick={() =>
+                      {...observePanelNavigation(() =>
                         personProfileOpened(speaker.profile!.spaceId, speaker.profile!.id, {
                           interaction_surface: 'claim_provenance',
                         })
-                      }
+                      )}
                       className="whitespace-nowrap text-text hover:underline"
                     >
                       {speaker.profile.name}
@@ -156,7 +171,11 @@ export function ClaimProvenance({
             `From the ${sourceKind}`
           )}
         </Text>
-        <Link href={NavUtils.toEntity(spaceId, source.id)} className="truncate text-metadata text-text hover:underline">
+        <Link
+          href={NavUtils.toEntity(spaceId, source.id)}
+          data-entity-side-panel-full-page={requiresFullPage(source.id) || undefined}
+          className="truncate text-metadata text-text hover:underline"
+        >
           {source.name ?? `this ${sourceKind}`}
         </Link>
         {otherSources.length > 0 && (
@@ -171,7 +190,11 @@ export function ClaimProvenance({
                     ,{' '}
                   </Text>
                 ) : null}
-                <Link href={NavUtils.toEntity(spaceId, other.id)} className="text-metadata text-text hover:underline">
+                <Link
+                  href={NavUtils.toEntity(spaceId, other.id)}
+                  data-entity-side-panel-full-page={requiresFullPage(other.id) || undefined}
+                  className="text-metadata text-text hover:underline"
+                >
                   {other.name ?? `this ${sourceKind}`}
                 </Link>
               </React.Fragment>

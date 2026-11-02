@@ -8,9 +8,9 @@ import { Effect } from 'effect';
 
 import { COMMENT_MARKDOWN_CONTENT_ID, COMMENT_REPLY_TO_ID, COMMENT_RESOLVED_ID } from '~/core/comment-ids';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
+import { commentsQueryOptions } from '~/core/hooks/comments-query-options';
 import { uuidToHex } from '~/core/id/normalize';
 import { getCommentEntitiesViaReplyRelations } from '~/core/io/queries';
-import { commentsFetchedQueryKey } from '~/core/io/query-keys';
 import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
 import type { Entity } from '~/core/types';
 
@@ -240,18 +240,7 @@ export function useComments({ entityId, enabled = true }: UseCommentsOptions) {
     error,
     refetch,
   } = useQuery({
-    queryKey: ['comments', entityId],
-    // react-query passes an AbortSignal here; threading it through cancels in-flight GraphQL
-    // work when the component unmounts or the query is invalidated mid-flight.
-    queryFn: async ({ signal }) => {
-      const server = await fetchCommentEntitiesForTarget(entityId, signal);
-      const prev = queryClient.getQueryData<CommentEntity[]>(['comments', entityId]);
-      // Recorded because this entry has other writers, and an empty list from here means something
-      // different from an empty one left behind by a rolled-back optimistic row — see the key's own
-      // note. Set after the fetch resolves, so it marks an answer rather than an attempt.
-      queryClient.setQueryData(commentsFetchedQueryKey(entityId), true);
-      return mergePendingWithServer(server, prev);
-    },
+    ...commentsQueryOptions(queryClient, entityId),
     enabled: enabled && !!entityId,
   });
 

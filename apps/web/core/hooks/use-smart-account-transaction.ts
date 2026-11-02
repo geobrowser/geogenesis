@@ -1,4 +1,3 @@
-import type { GeoWalletClient } from '@geogenesis/auth/account';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { useCallback } from 'react';
@@ -6,12 +5,19 @@ import { useCallback } from 'react';
 import { Duration, Effect } from 'effect';
 
 import { TransactionWriteFailedError } from '../errors';
+import { readCachedSmartAccount } from './cached-write-identity';
 import { useSmartAccount } from './use-smart-account';
 
 type SendTxArgs = {
   to: `0x${string}`;
   data: `0x${string}`;
   value?: bigint;
+  /**
+   * Called once the bundler has accepted the op, before it is included (GEO-2889). The Effect
+   * still settles on inclusion, so a caller that acts on this must keep listening for the failure
+   * and undo what it did. Not called for a send that never got as far as the bundler.
+   */
+  onSubmitted?: (userOperationHash: `0x${string}`) => void;
 };
 
 function sanitizeErrorMessage(error: unknown) {
@@ -45,13 +51,9 @@ export function useSmartAccountTransaction() {
   // without re-running on every render — `useRankingComposeAccess` fires its
   // membership check from an effect keyed on the callback it builds from this.
   const sendTransaction = useCallback(
-    ({ to, data, value = 0n }: SendTxArgs) =>
+    ({ to, data, value = 0n, onSubmitted }: SendTxArgs) =>
       Effect.gen(function* () {
-        const cachedAccounts = queryClient
-          .getQueriesData<GeoWalletClient | null>({ queryKey: ['smart-account'] })
-          .map(([, cached]) => cached)
-          .filter((cached): cached is GeoWalletClient => Boolean(cached));
-        const account = smartAccount ?? (cachedAccounts.length === 1 ? cachedAccounts[0] : null) ?? null;
+        const account = readCachedSmartAccount(queryClient, smartAccount);
 
         if (!account) {
           return yield* Effect.fail(new TransactionWriteFailedError('Missing smart account'));
@@ -63,11 +65,14 @@ export function useSmartAccountTransaction() {
 
         const hash = yield* Effect.tryPromise({
           try: async () => {
-            return await account.sendTransaction({
-              to,
-              value,
-              data,
-            });
+            return await account.sendTransaction(
+              {
+                to,
+                value,
+                data,
+              },
+              onSubmitted ? { onSubmitted } : undefined
+            );
           },
           catch: error => new TransactionWriteFailedError(sanitizeErrorMessage(error), { cause: error }),
         }).pipe(

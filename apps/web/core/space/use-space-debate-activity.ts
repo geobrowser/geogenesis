@@ -20,12 +20,10 @@ import {
   SPACE_ACTIVITY_PAGE_SIZE,
   type SpaceActivityFilters,
   type SpaceActivityRowsPage,
-  type SpaceActivityRowsResponse,
   type SpaceActivitySort,
-  decodeSpaceActivityRows,
-  spaceActivityRowsDocumentFor,
+  fetchSpaceActivityRowsPage,
   spaceActivityRowsFilter,
-  spaceActivityRowsVariables,
+  spaceActivityRowsQueryKey,
   spaceTaggedClaimFilters,
 } from './space-activity-rows';
 import {
@@ -52,37 +50,6 @@ const SPACE_ACTIVITY_STALE_TIME = 60_000;
  * different questions, and sharing an entry between them would serve one list's answer for the
  * other's until it refetched.
  */
-const rowsQueryKey = (
-  spaceId: string,
-  kind: SpaceActivityKind,
-  sort: SpaceActivitySort,
-  filters: SpaceActivityFilters
-) => ['space-activity-rows', spaceId, kind, sort, filters.topicIds, filters.searchClaimIds] as const;
-
-function fetchRowsPage(args: {
-  spaceId: string;
-  kind: SpaceActivityKind;
-  sort: SpaceActivitySort;
-  filters: SpaceActivityFilters;
-  after: string | null;
-  signal?: AbortSignal;
-}) {
-  return Effect.runPromise(
-    graphql({
-      query: spaceActivityRowsDocumentFor(args.sort),
-      decoder: (response: SpaceActivityRowsResponse) => decodeSpaceActivityRows(args.spaceId, response),
-      variables: spaceActivityRowsVariables({
-        spaceId: args.spaceId,
-        kind: args.kind,
-        sort: args.sort,
-        first: SPACE_ACTIVITY_PAGE_SIZE,
-        after: args.after,
-        filters: args.filters,
-      }),
-      signal: args.signal,
-    })
-  );
-}
 
 /**
  * Whether this space is set up for debates at all.
@@ -155,11 +122,18 @@ export function useSpaceActivityRows(
 ): { rows: ExploreFeedRow[]; isLoading: boolean; isError: boolean } {
   const { data, isLoading, isError } = useQuery({
     // Unfiltered and ranked, which is what the card is: a top-six, not a view of someone's filters.
-    queryKey: [...rowsQueryKey(spaceId, kind, 'best', NO_SPACE_ACTIVITY_FILTERS), 'first-page'] as const,
+    queryKey: [...spaceActivityRowsQueryKey(spaceId, kind, 'best', NO_SPACE_ACTIVITY_FILTERS), 'first-page'] as const,
     enabled: enabled && spaceId !== '',
     staleTime: SPACE_ACTIVITY_STALE_TIME,
     queryFn: ({ signal }) =>
-      fetchRowsPage({ spaceId, kind, sort: 'best', filters: NO_SPACE_ACTIVITY_FILTERS, after: null, signal }),
+      fetchSpaceActivityRowsPage({
+        spaceId,
+        kind,
+        sort: 'best',
+        filters: NO_SPACE_ACTIVITY_FILTERS,
+        after: null,
+        signal,
+      }),
   });
 
   const rows = React.useMemo(() => data?.rows ?? [], [data?.rows]);
@@ -185,7 +159,7 @@ export function useSpaceActivityRowsInfinite(
   filters: SpaceActivityFilters = NO_SPACE_ACTIVITY_FILTERS
 ) {
   const query = useInfiniteQuery({
-    queryKey: [...rowsQueryKey(spaceId, kind, sort, filters), 'infinite'] as const,
+    queryKey: [...spaceActivityRowsQueryKey(spaceId, kind, sort, filters), 'infinite'] as const,
     enabled: spaceId !== '',
     staleTime: SPACE_ACTIVITY_STALE_TIME,
     /*
@@ -202,7 +176,8 @@ export function useSpaceActivityRowsInfinite(
       return previousKey[1] === spaceId && previousKey[2] === kind ? previous : undefined;
     },
     initialPageParam: null as string | null,
-    queryFn: ({ pageParam, signal }) => fetchRowsPage({ spaceId, kind, sort, filters, after: pageParam, signal }),
+    queryFn: ({ pageParam, signal }) =>
+      fetchSpaceActivityRowsPage({ spaceId, kind, sort, filters, after: pageParam, signal }),
     // A connection that claims another page but hands back no cursor has no way to reach it, and
     // re-sending `null` would restart the list and scroll forever.
     getNextPageParam: (last: SpaceActivityRowsPage) => (last.hasNextPage ? (last.endCursor ?? undefined) : undefined),

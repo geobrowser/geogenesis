@@ -24,6 +24,20 @@ export type GovernanceRevert = { selector: string; name: string; hint: string };
  */
 export const ACTION_REVERTED_SELECTOR = '0x24c05f9a';
 
+/**
+ * `InvalidSpaceIdForRole()`. During execution it comes from the DAO's role
+ * handlers (`DAOSpace._addEditor` / `_removeEditor` / `_addMember` /
+ * `_removeMember`): the proposal adds someone who already holds the role, or
+ * removes someone who doesn't hold it on-chain. It bubbles up unwrapped — not as
+ * `ActionReverted` — so it needs its own selector to be recognised as permanent.
+ *
+ * The removal case is the one that bites in practice (GEO-2609): the migration
+ * replay left a few roles in the indexer that the DAO contract never granted, so
+ * the UI lists someone as an editor, a proposal to remove them passes, and every
+ * execute reverts with this.
+ */
+export const INVALID_SPACE_ID_FOR_ROLE_SELECTOR = '0x48b38022';
+
 const REVERTS: readonly GovernanceRevert[] = [
   {
     selector: '0xdf322356',
@@ -71,9 +85,14 @@ const REVERTS: readonly GovernanceRevert[] = [
     hint: 'Fast-path proposals must contain exactly one action.',
   },
   {
-    selector: '0x48b38022',
+    selector: INVALID_SPACE_ID_FOR_ROLE_SELECTOR,
     name: 'InvalidSpaceIdForRole',
-    hint: 'The target space id is not valid for this membership role.',
+    hint: "This proposal's role change doesn't match the space's on-chain roles — the person it adds already has the role, or the person it removes doesn't hold it on-chain (the space's member list can show a role the contract never granted). It can't be executed.",
+  },
+  {
+    selector: '0xa4372757',
+    name: 'InvalidSetting',
+    hint: "The space's voting settings reject this change — a settings value is out of range, or removing an editor would leave fewer editors than the quorum or approval threshold. Lower those settings first; both changes can go in one proposal.",
   },
   {
     selector: '0xda581c0a',

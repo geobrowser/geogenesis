@@ -1,15 +1,18 @@
 'use client';
 
+import { useQueryClient } from '@tanstack/react-query';
+
 import * as React from 'react';
 
 import cx from 'classnames';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 
-import { ClaimEndSlot } from '~/core/claims/browse/claim-end-slot';
+import { useActionContext } from '~/core/action-context-provider';
 import { viewerResponseWithIndexedFallback } from '~/core/claims/browse/claim-position-summaries';
-import { useClaimResponseSummary } from '~/core/claims/browse/claim-response-summary';
+import { CLAIM_RESPONSE_OBJECT_TYPE, useClaimResponseSummary } from '~/core/claims/browse/claim-response-summary';
 import { ClaimSummary, ControversialTag } from '~/core/claims/browse/claim-summary';
+import { LocalVoteNote } from '~/core/claims/browse/local-vote-note';
 import { useClaimMatchup, withMatchParticipants } from '~/core/claims/browse/use-claim-matchup';
 import {
   useEntityResponse,
@@ -24,12 +27,19 @@ import { ID } from '~/core/id';
 import {
   CLAIM_RESPONSE_COPY,
   CLAIM_RESPONSE_KIND,
-  RESPONSE_CONFIRMING_COPY,
+  RESPONSE_LOCAL_ONLY_COPY,
   type ResponseKind,
+  isAwaitingResponseSubmission,
+  responseErrorMessage,
   responsePositionLabel,
 } from '~/core/responses/entity-response';
+import { readViewerResponseForReplay } from '~/core/responses/replay-viewer-response';
 import { useClaimResponseBatchState } from '~/core/responses/use-claim-response-summaries';
+import { castLocalVote } from '~/core/state/cast-local-vote';
+import { removeLocalVote, useLocalVote } from '~/core/state/local-votes';
+import { useQueuedAction } from '~/core/state/pending-actions';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
+import type { SavePromptSurface } from '~/core/state/save-votes-prompt';
 import { NavUtils, validateEntityId, validateSpaceId } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
@@ -39,6 +49,8 @@ import { OnlineDot } from '~/design-system/online-dot';
 import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
+import { ResponseButton } from '~/partials/entity-page/response-button';
+
 import type {
   Debate,
   DebateClaimPositionSummary,
@@ -47,7 +59,15 @@ import type {
   MatchmakingReadiness,
 } from '../api';
 import { useGeoChatAuth } from '../hooks';
+import {
+  type DebateActionAnalyticsSurface,
+  type DebateAnalyticsAttributes,
+  type DebateAnalyticsSurface,
+  debateActionAnalyticsAttributes,
+} from './hub-analytics';
+import { CardEndSlot, otherSideHeld } from './hub-claim-end-slot';
 import { hubCardMotion } from './hub-motion';
+import { useHubScrollSelector } from './hub-scroll';
 
 type Props = {
   claim: DebateClaimSummary;
@@ -94,8 +114,20 @@ type Props = {
   answersMayComeFromIndex?: boolean;
   /** Why responding is refused outright — an unpublished edit to the claim's own vocabulary. */
   responseBlockedReason?: string | null;
+  /** Rendered above the claim, e.g. who highlighted it in a lobby. */
+  header?: React.ReactNode;
+  /**
+   * Rendered in the meta row beside the space chip, e.g. who said the claim in a debate. Short: the
+   * row is one line and shares it with the end slot.
+   */
+  headerMeta?: React.ReactNode;
   /** Rendered under the summary, for hosts with something extra to say. */
   footer?: React.ReactNode;
+  /**
+   * Leaves the summary band out. For the Today's claims callout (GEO-3498), which asks for a side and
+   * moves on: the split is the list's to show, and the callout's card is the claim and the two pills.
+   */
+  hideSummary?: boolean;
   /**
    * Rendered under one of the two response buttons — see `PositionRow`.
    *
@@ -103,6 +135,8 @@ type Props = {
    * button that says the same word.
    */
   noteFor?: (position: boolean) => React.ReactNode;
+  /** False in the claim picker, where a named opponent's position replaces the faces. */
+  showParticipants?: boolean;
   /**
    * Leaves the end slot out.
    *
@@ -142,11 +176,16 @@ type Props = {
    */
   reconcileWithIndexedResponse?: boolean;
   /**
-   * Sends a signed-out viewer to Privy instead of publishing. Set by hosts that render to signed-out
-   * viewers — the hub's Claims tab and the claim page — and left unset when signing in is not a
-   * possibility the host has to handle, which keeps the response path unchanged for everyone else.
+   * Lets a signed-out viewer vote, kept on their device until they save it with an account
+   * (GEO-3214). Set by hosts that render to signed-out viewers — the hub's Claims tab, a profile's
+   * gallery — and left unset where the pills should stay disabled signed out.
    */
-  onRequireSignIn?: () => void;
+  allowsSignedOutVotes?: boolean;
+  /**
+   * Names the card's clicks for analytics on this surface, e.g. "Debate rematch Claim card agree".
+   * Unset, the card's controls carry no label, as before.
+   */
+  analyticsSurface?: DebateAnalyticsSurface;
   /** `AnimatePresence mode="popLayout"` measures the exiting row through this; without it the row
    * never pops out of flow and the rows above close the gap only after the fade finishes. */
   ref?: React.Ref<HTMLElement>;
@@ -181,15 +220,20 @@ export function MatchmakingClaimCard({
   answersReady,
   answersMayComeFromIndex,
   responseBlockedReason,
+  header,
+  headerMeta,
   footer,
+  hideSummary,
   noteFor,
+  showParticipants,
   onOpenClaim,
   viewerIdentityPending,
   viewerResponseUnknown,
   reconcileWithIndexedResponse,
-  onRequireSignIn,
+  allowsSignedOutVotes = false,
   hideEndSlot,
   endSlot,
+  analyticsSurface,
   ref,
 }: Props) {
   // geo-chat can hand back a claim the graph has never seen. Responding to one is impossible, and
@@ -204,7 +248,8 @@ export function MatchmakingClaimCard({
   // more cards at a time and previously did no response reads at all, mounting them eagerly is
   // sixty requests for claims nobody has scrolled to. `ClaimExploreFeedCard` gates its reads for
   // exactly this reason; the shared card had not caught up.
-  const { ref: viewportRef, nearViewport } = useNearViewport();
+  const hubScrollSelector = useHubScrollSelector();
+  const { ref: viewportRef, nearViewport } = useNearViewport({ rootSelector: hubScrollSelector });
 
   // A batch is the exception, and must not be deferred. `ClaimResponseBatchBoundary` primes these
   // very keys from one request for the whole page, so there is nothing per-card left to save — and
@@ -229,12 +274,15 @@ export function MatchmakingClaimCard({
     // `w-full` matters: popLayout absolutely positions an exiting card, which would otherwise
     // collapse to its content width as it fades.
     <motion.article ref={setCardRef} {...hubCardMotion} className="w-full claim-card-panel-surface">
+      {header}
       {isOnGraph ? (
         <RespondableControls
           noteFor={noteFor}
+          showParticipants={showParticipants}
           claim={claim}
           positions={positions}
           readiness={readiness}
+          analyticsSurface={analyticsSurface}
           activeDebate={activeDebate}
           answersReady={answersReady}
           answersMayComeFromIndex={answersMayComeFromIndex}
@@ -244,20 +292,26 @@ export function MatchmakingClaimCard({
           viewerIdentityPending={viewerIdentityPending}
           viewerResponseUnknown={viewerResponseUnknown}
           reconcileWithIndexedResponse={reconcileWithIndexedResponse}
-          onRequireSignIn={onRequireSignIn}
+          allowsSignedOutVotes={allowsSignedOutVotes}
           hideEndSlot={hideEndSlot}
           endSlot={endSlot}
+          headerMeta={headerMeta}
           hasFooter={Boolean(footer)}
+          hideSummary={hideSummary}
         />
       ) : (
         <UnresolvableControls
+          noteFor={noteFor}
+          showParticipants={showParticipants}
           positions={positions}
           readiness={readiness}
+          analyticsSurface={analyticsSurface}
           claim={claim}
           activeDebate={activeDebate}
           onOpenClaim={onOpenClaim}
           hideEndSlot={hideEndSlot}
           endSlot={endSlot}
+          headerMeta={headerMeta}
         />
       )}
 
@@ -283,25 +337,36 @@ function ClaimHeader({
   isOnGraph,
   endSlot,
   isControversial,
+  meta,
   onOpenClaim,
+  analytics,
 }: {
   claim: DebateClaimSummary;
   isOnGraph: boolean;
   endSlot: React.ReactNode;
+  /** The host's own fact about the claim, after the space chip. */
+  meta?: React.ReactNode;
   /** Flagged beside the space chip — what kind of claim this is, which is the row's own question. */
   isControversial?: boolean;
   onOpenClaim?: () => void;
+  analytics?: DebateAnalyticsAttributes;
 }) {
   const claimTextClassName = 'claim-card-panel-title';
 
   const openable = isOnGraph ? (
     onOpenClaim ? (
-      <button type="button" onClick={onOpenClaim} className={`${claimTextClassName} text-left hover:underline`}>
+      <button
+        type="button"
+        onClick={onOpenClaim}
+        {...analytics}
+        className={`${claimTextClassName} text-left hover:underline`}
+      >
         {claim.claim}
       </button>
     ) : (
       <Link
         href={NavUtils.toEntity(claim.space_id, claim.claim_entity_id)}
+        {...analytics}
         className={`${claimTextClassName} hover:underline`}
       >
         {claim.claim}
@@ -313,13 +378,21 @@ function ClaimHeader({
 
   return (
     <>
-      {/* `items-start` so the chip stays put when the slot stacks a blocked reason beneath it. No
-          reserved height: the slot is now the height of the chip beside it, so the row does not grow
-          when the match lookup answers. */}
-      <div className="claim-card-panel-header">
-        <span className="flex min-w-0 items-center gap-1.5">
+      {/* Keep the space and offer on one text baseline, including when the offer stacks a blocked
+          reason under its first line. The larger Controversial tag centres itself against the space
+          chip instead: sharing the smaller name's baseline lifts the tag above its thumbnail.
+          Here rather than in the utility, which Explore's meta row also uses: Tailwind emits
+          `items-baseline` after it, so this wins. */}
+      <div className="claim-card-panel-header items-baseline">
+        <span className="flex min-w-0 items-baseline gap-1.5" data-testid="claim-card-eyebrow">
           <SpaceChip spaceId={claim.space_id} />
-          {isControversial ? <ControversialTag /> : null}
+          {isControversial ? <ControversialTag className="self-center" /> : null}
+          {meta ? (
+            <span className="flex min-w-0 items-center gap-1.5 text-footnoteMedium text-grey-04">
+              <span aria-hidden>·</span>
+              <span className="truncate">{meta}</span>
+            </span>
+          ) : null}
         </span>
         {endSlot}
       </div>
@@ -345,8 +418,9 @@ export function useClaimPositionControl({
   responseBlockedReason = null,
   viewerIdentityPending,
   viewerResponseUnknown,
-  onRequireSignIn,
+  allowsSignedOutVotes = false,
   offersDebate = true,
+  savePromptSurface = 'feed',
 }: {
   claim: DebateClaimSummary;
   positions: DebateClaimPositionSummary[];
@@ -404,11 +478,16 @@ export function useClaimPositionControl({
    */
   viewerResponseUnknown?: boolean;
   /**
-   * What to do when a signed-out visitor presses a side. Given one, the pills stay live while
-   * signed out and pressing prompts sign-in — matching the vote arrows on an entity page. Without
-   * one they stay disabled, which is what the hub's cards have always done.
+   * Whether a signed-out visitor can press a side. When set, the pills stay live while signed out
+   * and a press is kept on this device until the visitor saves it with an account (GEO-3214).
+   * Unset, they stay disabled, which is what the hub's cards have always done.
    */
-  onRequireSignIn?: () => void;
+  allowsSignedOutVotes?: boolean;
+  /**
+   * Whether this claim stands alone on the page, which brings the save sheet's first ask forward to
+   * the first vote — see `SavePromptSurface`.
+   */
+  savePromptSurface?: SavePromptSurface;
   /**
    * Whether this host offers the account-level match at all.
    *
@@ -424,6 +503,7 @@ export function useClaimPositionControl({
    */
   offersDebate?: boolean;
 }) {
+  const getSignInContext = useActionContext('claim_position_control', 'claim', claim.claim_entity_id);
   const target = {
     entityId: claim.claim_entity_id,
     entityName: claim.claim,
@@ -432,12 +512,18 @@ export function useClaimPositionControl({
     // say "veracity" — which selects no SDK method, so the click throws. See `CLAIM_RESPONSE_KIND`.
     responseKind: CLAIM_RESPONSE_KIND,
   };
-  const { submitResponse, isConnected, personalSpaceId } = useEntityResponse(target);
+  const { submitResponse, submitResponseAsync, isConnected, personalSpaceId } = useEntityResponse(target);
   const responseIndexing = useEntityResponseIndexingSnapshot(target);
   const resetResponseIndexing = useResetEntityResponseIndexingSnapshot(target);
-  // Publishing before the personal space finishes registering fails, so wait it out the same way
-  // the claim page does.
+  // Publishing before the personal space finishes registering fails, so a press in that window is
+  // queued for the runner (`respond`) rather than published or refused.
   const { isPending: isAccountSetupPending } = usePendingPersonalSpace();
+  const { ready: authReady, authenticated } = useGeoChatAuth();
+  // Known to be signed out. Privy reports `authenticated: false` while it is still restoring a
+  // session, and a press in that window is a returning account's, not a visitor's to keep on the
+  // device — the saver would clear it as somebody else's the moment the session came back.
+  const signedOut = authReady && !authenticated;
+  const queryClient = useQueryClient();
 
   const copy = CLAIM_RESPONSE_COPY;
   const [responseError, setResponseError] = React.useState<string | null>(null);
@@ -464,10 +550,73 @@ export function useClaimPositionControl({
   const pendingResponse = responseIndexing.status === 'idle' ? null : responseIndexing.pending;
   const optimisticPosition =
     pendingResponse?.expectedResponse == null ? null : pendingResponse.expectedResponse === 'positive';
-  const viewerPosition = pendingResponse ? optimisticPosition : (readiness.viewer_response?.position ?? null);
+  // A side picked before the account could publish, held until the queued write starts. Without it
+  // the pill the visitor pressed reads as unpressed for the whole of onboarding. Read off the queue
+  // rather than kept here: the feed remounts this card when it reloads after onboarding, and state
+  // held in the card went with it.
+  //
+  // Replayed through the card on screen when there is one (`useQueuedAction`): `useEntityResponse`
+  // keys its in-flight state — what holds the pill while the write confirms — by the viewer's
+  // personal space, which the press's closure predates.
+  const queuedPositionAction = useQueuedAction({
+    id: `claim-position:${claim.claim_entity_id}:${claim.space_id}`,
+    component: 'claim_position_control',
+    label: 'your position',
+    // Held until the viewer's own side is known — the same wait that keeps the pills from
+    // republishing a held side — so the check below reads an answer, not a loading default.
+    ready: answersReady,
+    run: async (intent, { live, isCurrent }) => {
+      const direction = intent === 'positive' ? 'positive' : 'negative';
+      // The side the viewer holds: this card's answer when it is the one on screen; read fresh when
+      // the replay is the press's own closure, whose answer is from before they signed in.
+      const held = live
+        ? readiness.viewer_response?.position === true
+          ? 'positive'
+          : readiness.viewer_response?.position === false
+            ? 'negative'
+            : null
+        : await readViewerResponseForReplay(queryClient, {
+            entityId: claim.claim_entity_id,
+            spaceId: claim.space_id,
+            responseKind: CLAIM_RESPONSE_KIND,
+            objectType: CLAIM_RESPONSE_OBJECT_TYPE,
+          });
+      // Cleared (a sign-out) or replaced (a newer press) during that read: the write must not follow.
+      if (!isCurrent()) return;
+      // A returning viewer who already held this side: nothing to publish. Sending it again would be
+      // a second response for one press, where pressing a held side signed in means "remove".
+      if (held === direction) return;
+      await submitResponseAsync(direction);
+    },
+  });
+  const queuedPosition = queuedPositionAction.intent === undefined ? null : queuedPositionAction.intent === 'positive';
+  // A side picked signed out and kept on this device until a save publishes it (GEO-3214). Drawn as
+  // the viewer's, below a queued press and above the server's answer: until `LocalVotesSaver` has
+  // written it, it is the newest thing the viewer said.
+  const localVoteKey = { entityId: claim.claim_entity_id, spaceId: claim.space_id, responseKind: CLAIM_RESPONSE_KIND };
+  const localDirection = useLocalVote(localVoteKey.entityId, localVoteKey.spaceId, localVoteKey.responseKind);
+  const localPosition = localDirection === null ? null : localDirection === 'positive';
+  // The side the account holds, or is about to: what a signed-in press is decided against.
+  const heldPosition = pendingResponse
+    ? optimisticPosition
+    : (queuedPosition ?? readiness.viewer_response?.position ?? null);
+  // What the pills draw: the held side, unless a device vote is newer.
+  const viewerPosition = pendingResponse || queuedPosition !== null ? heldPosition : (localPosition ?? heldPosition);
   // Sent, and not yet seen on chain. `indexed` is past this: the chain has confirmed the write and
   // only geo-chat is still catching up, so the side drawn is a fact rather than a guess.
   const isResponsePending = responseIndexing.status === 'reconciling' || responseIndexing.status === 'delayed';
+  /**
+   * Narrower than `isResponsePending`: only until the bundler has the write (GEO-2889).
+   *
+   * This is what the pills wait on. Inclusion is the slow part — p90 ~30s, p99 ~2 minutes — and the
+   * side is already drawn held, so after submission the response reads as made and a press means
+   * what it says: pressing the held side retracts it, pressing the other switches. A failure after
+   * submission still rolls the side back and says so (`useEntityResponse`).
+   *
+   * `isResponsePending` stays the wider window, for the readers that must not trust the index while
+   * a write is out — `trustedIndexedPosition` — which is about the data, not about the press.
+   */
+  const isResponseSubmitting = isAwaitingResponseSubmission(responseIndexing);
 
   // Already cached from the navbar, so the viewer's own avatar can join the side they picked in the
   // same frame the pill fills in — rather than after geo-chat has indexed the response and told us
@@ -517,23 +666,68 @@ export function useClaimPositionControl({
     if (confirmed) resetResponseIndexing(responseIndexing.runId);
   }, [serverReadiness, resetResponseIndexing, responseIndexing]);
 
+  // Replayed by `PendingActionsRunner` once the personal space exists. A new account has none until
+  // well after sign-in completes — onboarding, then the space's own creation — so publishing at the
+  // press, or asking the visitor to press again, loses the side they picked.
+  //
+  // Queued at the press, like every other sign-up-gated control, rather than from the sign-in's
+  // completion callback. That callback belongs to this card, and the feed can remount the card
+  // while the visitor is signing up — the For you feed refetches once their follows load, and
+  // onboarding navigates back to the page when it is done — taking the callback, and the vote,
+  // with it. The queue and its runner are app-level and outlive the card.
+  const queuePosition = (position: boolean) => queuedPositionAction.queue(position ? 'positive' : 'negative');
+
+  /**
+   * A signed-out press (GEO-3214). The side is kept on this device and drawn as the visitor's at
+   * once, with no sign-in in the way; the save sheet asks for an account after their first vote. It
+   * replaced opening Privy's dialog at the press, which about half of visitors closed.
+   */
+  const voteOnThisDevice = (position: boolean) =>
+    castLocalVote({
+      ...localVoteKey,
+      direction: position ? 'positive' : 'negative',
+      title: claim.claim,
+      surface: savePromptSurface,
+      attribution: getSignInContext(),
+    });
+
   const respond = (position: boolean) => {
     if (!isConnected) {
-      onRequireSignIn?.();
+      // A new account whose space is still being made: hold the side rather than prompting a sign-in
+      // that would do nothing. Only then — a signed-in viewer with no space and no setup under way
+      // has nothing coming that would ever publish it.
+      if (isAccountSetupPending) {
+        // The queue owns this claim's side now; a device vote left behind would be saved over it.
+        if (localPosition !== null) removeLocalVote(localVoteKey);
+        // Pressing the side already queued takes it back, as pressing a held side does.
+        if (queuedPosition === position) queuedPositionAction.cancel();
+        else queuePosition(position);
+        return;
+      }
+      // Signed in with no space and none being made: nothing would ever publish a queued side. A host
+      // that doesn't allow signed-out votes leaves the pills disabled, so there is nothing to keep
+      // for either.
+      // Still restoring a session, the press is dropped rather than guessed at: it lasts a moment, and
+      // the alternative is a returning account's vote kept as a visitor's and then cleared.
+      if (!signedOut || !allowsSignedOutVotes) return;
+      voteOnThisDevice(position);
       return;
     }
-    if (isAccountSetupPending) return;
-    // Ignored rather than sent. While the write is confirming, the held pill is this client's guess,
-    // and pressing a held pill means "remove" — so a double-click, or a press on a side that is still
-    // confirming, published a retraction nobody asked for. The request then failed with geo-chat's
-    // "respond to this claim first" beside a pill that still looked held.
-    if (isResponsePending) return;
+    // Signed in with this claim's device vote still waiting to be saved: this press is newer, so it
+    // replaces that vote rather than being overwritten by it when the save reaches this claim.
+    if (localPosition !== null) removeLocalVote(localVoteKey);
+    // No confirming-window guard here on purpose. Until the bundler has the write, the held pill is
+    // this client's guess and pressing a held pill means "remove", so a double-click — or a press on
+    // a side that has not reached the bundler — published a retraction nobody asked for. That gate
+    // now lives once in `ResponseButton` (`acceptsPress: !pending`), and every surface that calls
+    // `respond` — the claim pills, the explore card, the debate overlay and the ticker — reaches it
+    // through that button, so the press never arrives here. A new caller that skips `ResponseButton`
+    // must carry the gate itself.
     setResponseError(null);
     // A failed publish silently rolls the optimistic state back, which reads as the response
     // simply vanishing. Catch it here so the reason is visible.
-    submitResponse(viewerPosition === position ? 'clear' : position ? 'positive' : 'negative', {
-      onError: error =>
-        setResponseError(error instanceof Error ? error.message : 'Could not publish your response. Try again.'),
+    submitResponse(heldPosition === position ? 'clear' : position ? 'positive' : 'negative', {
+      onError: error => setResponseError(responseErrorMessage(error)),
     });
   };
 
@@ -543,10 +737,12 @@ export function useClaimPositionControl({
     if (responseBlockedReason) return responseBlockedReason;
     // Ahead of the rest: it is the only one of these the reader can do nothing about, and naming
     // the side they cannot take yet is the least useful thing to say about a dead control.
-    if (!answersReady) return 'Loading this claim’s responses…';
-    if (!isConnected) return copy.connect;
-    if (isAccountSetupPending) return 'Finishing account setup…';
-    if (isResponsePending) return RESPONSE_CONFIRMING_COPY;
+    if (!answersReady && !isAccountSetupPending) return 'Loading this claim’s responses…';
+    // Signed out where a press is kept on this device: the pill does what its label says.
+    if (!isConnected && signedOut && allowsSignedOutVotes) {
+      return localPosition === position ? RESPONSE_LOCAL_ONLY_COPY : responsePositionLabel(position);
+    }
+    if (!isConnected && !isAccountSetupPending) return copy.connect;
     if (viewerPosition === position) return position ? copy.removePositive : copy.removeNegative;
     return responsePositionLabel(position);
   };
@@ -557,17 +753,33 @@ export function useClaimPositionControl({
     respond,
     actionTitle,
     responseError,
+    /**
+     * The side held only on this device, for `PositionRow`'s "Not counted yet · Save" note. Null once
+     * signed in: a save is under way by then, or the votes were cleared.
+     */
+    localVoteSide: signedOut && localPosition !== null ? localPosition : null,
     isConnected,
-    /** The viewer's response is on its way to the chain; the pills ignore presses until it lands. */
+    /**
+     * The viewer's response is on its way to the chain and not yet indexed. For readers deciding
+     * whether to trust the index — not for the pills, which use `isResponseSubmitting`.
+     */
     isResponsePending,
+    /** The viewer's response has not reached the bundler yet; the pills ignore presses until it has. */
+    isResponseSubmitting,
     /**
      * False only while the account genuinely cannot publish, never while one is in flight.
      *
-     * Being signed out doesn't disable the pills where a sign-in prompt was supplied: a disabled
+     * Being signed out doesn't disable the pills where the host allows signed-out votes: a disabled
      * control gives a visitor nothing to press and no way to learn what to do about it.
      */
+    // Live while a new account's personal space is still being made: a press is queued for it and
+    // drawn at once, rather than the pills going dead for the seconds — or minutes — that takes.
+    // `answersReady` is waived for the same window. It waits for the viewer's own side so a press on
+    // a held side clears it rather than republishing — and an account this new holds no side.
     canRespond:
-      (isConnected || Boolean(onRequireSignIn)) && !isAccountSetupPending && answersReady && !responseBlockedReason,
+      (isConnected || allowsSignedOutVotes || isAccountSetupPending) &&
+      (answersReady || isAccountSetupPending) &&
+      !responseBlockedReason,
   };
 }
 
@@ -585,11 +797,15 @@ function RespondableControls({
   viewerIdentityPending,
   viewerResponseUnknown,
   reconcileWithIndexedResponse = true,
-  onRequireSignIn,
+  allowsSignedOutVotes = false,
   hideEndSlot,
   endSlot,
+  headerMeta,
   hasFooter,
+  hideSummary,
   noteFor,
+  showParticipants,
+  analyticsSurface,
 }: {
   claim: DebateClaimSummary;
   positions: DebateClaimPositionSummary[];
@@ -603,6 +819,8 @@ function RespondableControls({
    * band that had already claimed the bottom edge.
    */
   hasFooter?: boolean;
+  /** See {@link Props.hideSummary}. */
+  hideSummary?: boolean;
   answersReady?: boolean;
   /** See {@link Props.answersMayComeFromIndex}. */
   answersMayComeFromIndex?: boolean;
@@ -611,6 +829,7 @@ function RespondableControls({
   readResponses?: boolean;
   /** See {@link Props.noteFor}. */
   noteFor?: (position: boolean) => React.ReactNode;
+  showParticipants?: boolean;
   onOpenClaim?: () => void;
   viewerIdentityPending?: boolean;
   viewerResponseUnknown?: boolean;
@@ -620,9 +839,11 @@ function RespondableControls({
    * from a second source contradicts the pair it is comparing rather than completing it.
    */
   reconcileWithIndexedResponse?: boolean;
-  onRequireSignIn?: () => void;
+  allowsSignedOutVotes?: boolean;
   hideEndSlot?: boolean;
   endSlot?: React.ReactNode;
+  headerMeta?: React.ReactNode;
+  analyticsSurface?: DebateAnalyticsSurface;
 }) {
   // One read for the card, and now the second half of what the card draws from. The header flags a
   // contested claim, the footer reports the split, and — since GEO-2823 — the viewer's own response
@@ -726,23 +947,32 @@ function RespondableControls({
   const sideKnown =
     answersReady || (answersMayComeFromIndex && reconcileWithIndexedResponse && settledDirection !== null);
 
-  const { viewerPosition, optimisticPositions, respond, actionTitle, responseError, canRespond, isResponsePending } =
-    useClaimPositionControl({
-      claim,
-      positions,
-      readiness: resolvedReadiness,
-      // The unmerged one, and only once geo-chat has actually answered for this claim — which is
-      // exactly what `answersReady` reports, before the index is allowed to stand in for it.
-      serverReadiness: answersReady ? readiness : null,
-      answersReady: sideKnown,
-      responseBlockedReason,
-      viewerIdentityPending,
-      viewerResponseUnknown,
-      onRequireSignIn,
-      // The faces the match implies belong with the offer the match makes. Where the slot is hidden
-      // there is no offer, so there is nothing for them to be coherent with — see `offersDebate`.
-      offersDebate: !hideEndSlot,
-    });
+  const {
+    viewerPosition,
+    optimisticPositions,
+    respond,
+    actionTitle,
+    responseError,
+    canRespond,
+    isResponseSubmitting,
+    localVoteSide,
+  } = useClaimPositionControl({
+    claim,
+    positions,
+    readiness: resolvedReadiness,
+    // The unmerged one, and only once geo-chat has actually answered for this claim — which is
+    // exactly what `answersReady` reports, before the index is allowed to stand in for it.
+    serverReadiness: answersReady ? readiness : null,
+    answersReady: sideKnown,
+    responseBlockedReason,
+    viewerIdentityPending,
+    viewerResponseUnknown,
+    allowsSignedOutVotes,
+    // The faces the match implies belong with the offer the match makes. Where the slot is hidden
+    // there is no offer, so there is nothing for them to be coherent with — see `offersDebate`. A
+    // host's own `endSlot` is its own offer, so the account-level match's faces don't belong either.
+    offersDebate: !hideEndSlot && endSlot === undefined,
+  });
 
   return (
     <>
@@ -750,14 +980,17 @@ function RespondableControls({
         claim={claim}
         isOnGraph
         onOpenClaim={onOpenClaim}
+        analytics={analyticsSurface ? debateActionAnalyticsAttributes(analyticsSurface, 'Claim card title') : undefined}
         isControversial={summary.isControversial}
+        meta={headerMeta}
         endSlot={
           endSlot ??
           (hideEndSlot ? null : (
-            <ClaimEndSlot
-              claimId={claim.claim_entity_id}
-              spaceId={claim.space_id}
+            <CardEndSlot
+              claim={claim}
               activeDebate={activeDebate}
+              otherSideHeld={otherSideHeld(optimisticPositions, viewerPosition)}
+              analyticsSurface={analyticsSurface}
               // `undefined` until the reads have landed, so a card that cannot yet say which side
               // the viewer holds does not read as saying they hold none.
               viewerPosition={sideKnown ? viewerPosition : undefined}
@@ -771,13 +1004,16 @@ function RespondableControls({
         viewerPosition={viewerPosition}
         onRespond={respond}
         // Not disabled while the response publishes: dimming the pills for the length of an indexing
-        // round trip read as the response not having landed. Pending instead — presses are ignored,
-        // because nothing serializes overlapping submissions and a second press on the held side is
-        // a retraction.
+        // round trip read as the response not having landed. Pending instead, and only until the
+        // bundler has the write — a press before then is a double-click on the held side, which is a
+        // retraction nobody meant; after it, the response is made (GEO-2889).
         disabled={!canRespond}
-        pending={isResponsePending}
+        pending={isResponseSubmitting}
         titleFor={actionTitle}
         noteFor={noteFor}
+        showParticipants={showParticipants}
+        localSide={localVoteSide}
+        analyticsSurface={analyticsSurface}
       />
       {responseError ? (
         <div role="alert" className="mt-2">
@@ -789,7 +1025,7 @@ function RespondableControls({
       {/* Nothing at all while the reads are held, rather than the summary's own "nobody has
           answered yet" — a disabled hook reports a total of zero, and that is the absence of an
           answer rather than an answer of none. */}
-      {!readResponses || summary.isLoading ? null : (
+      {hideSummary || !readResponses || summary.isLoading ? null : (
         // The card's own footer band (Figma 76081-15715): grey, full-bleed to the card's edge, with
         // the share, the split and the faces on one line. It was a rule and two stacked rows, which
         // read as more card rather than as the card's base — and the split bar, at full width above
@@ -949,14 +1185,22 @@ function UnresolvableControls({
   onOpenClaim,
   hideEndSlot,
   endSlot,
+  headerMeta,
+  analyticsSurface,
+  noteFor,
+  showParticipants,
 }: {
   claim: DebateClaimSummary;
   positions: DebateClaimPositionSummary[];
   readiness: MatchmakingReadiness;
   activeDebate?: Debate | boolean | null;
   onOpenClaim?: () => void;
+  analyticsSurface?: DebateAnalyticsSurface;
   hideEndSlot?: boolean;
   endSlot?: React.ReactNode;
+  headerMeta?: React.ReactNode;
+  noteFor?: (position: boolean) => React.ReactNode;
+  showParticipants?: boolean;
 }) {
   return (
     <>
@@ -964,6 +1208,8 @@ function UnresolvableControls({
         claim={claim}
         isOnGraph={false}
         onOpenClaim={onOpenClaim}
+        analytics={analyticsSurface ? debateActionAnalyticsAttributes(analyticsSurface, 'Claim card title') : undefined}
+        meta={headerMeta}
         endSlot={
           /* The slot stays live even though the graph cannot resolve this claim, because nothing in
              it needs the graph. Both the match and the debate are geo-chat state, and the request is
@@ -977,10 +1223,11 @@ function UnresolvableControls({
              is not the safe direction to be wrong in. */
           endSlot ??
           (hideEndSlot ? null : (
-            <ClaimEndSlot
-              claimId={claim.claim_entity_id}
-              spaceId={claim.space_id}
+            <CardEndSlot
+              claim={claim}
               activeDebate={activeDebate}
+              otherSideHeld={otherSideHeld(positions, readiness.viewer_response?.position)}
+              analyticsSurface={analyticsSurface}
               // No response control here, so there is no optimistic side to read — geo-chat's is
               // the only answer this card has about where the viewer stands, and where it is silent
               // this card genuinely does not know. Not `?? null`: on the Matches tab this readiness
@@ -995,6 +1242,8 @@ function UnresolvableControls({
         positions={positions}
         responseKind={CLAIM_RESPONSE_KIND}
         viewerPosition={readiness.viewer_response?.position ?? null}
+        noteFor={noteFor}
+        showParticipants={showParticipants}
       />
       <div className="mt-3">
         <Text as="span" variant="footnote" color="grey-04">
@@ -1014,11 +1263,21 @@ export function PositionRow({
   pending,
   titleFor,
   noteFor,
+  localSide = null,
   endSlot,
+  endSlotWraps,
+  showParticipants = true,
+  analyticsSurface,
 }: {
   positions: DebateClaimPositionSummary[];
   responseKind: ResponseKind;
   viewerPosition: boolean | null;
+  /**
+   * The side held only on this device (GEO-3214). It gets "Not counted yet · Save" under it, in place
+   * of the host's own note for that side, since what matters about that side right now is that it
+   * doesn't count yet.
+   */
+  localSide?: boolean | null;
   onRespond?: (position: boolean) => void;
   disabled?: boolean;
   /**
@@ -1040,10 +1299,30 @@ export function PositionRow({
   noteFor?: (position: boolean) => React.ReactNode;
   /** A compact third action, kept beside both positions at narrow and wide card widths. */
   endSlot?: React.ReactNode;
+  /**
+   * Let the end slot drop to its own line under the pills when the row is too narrow for all three.
+   * For an end slot wider than one compact action — the debate card's comments and share, which
+   * would otherwise squeeze the labels to "Dis..." — at the width that end slot needs:
+   * `claim-row-end-inline` for those two, `claim-row-wide-end-inline` with the debate's "…" as well.
+   * Phones keep these actions inline with tighter pills and icon-only supporting actions.
+   * The claim list leaves it off and keeps its three columns.
+   */
+  endSlotWraps?: 'compact' | 'wide';
+  /**
+   * False to leave the ready-to-debate faces out of the pills.
+   *
+   * Those faces are the people standing ready to argue each side — a matchmaking fact. On a surface
+   * that shows who *voted* beside the pills, two face stacks meaning two different things sit a row
+   * apart, and the nearer one reads as the voters.
+   */
+  showParticipants?: boolean;
+  /** Names the two pills for click analytics: "<surface> Claim card agree" / "… disagree". */
+  analyticsSurface?: DebateActionAnalyticsSurface;
 }) {
   const copy = CLAIM_RESPONSE_COPY;
-  const forSide = positions.find(position => position.position === true);
-  const againstSide = positions.find(position => position.position === false);
+  const forSide = showParticipants ? positions.find(position => position.position === true) : undefined;
+  const againstSide = showParticipants ? positions.find(position => position.position === false) : undefined;
+  const compactMobileActions = Boolean(endSlot && endSlotWraps);
 
   // Two across where there is room for both labels whole, stacked where there is not.
   //
@@ -1059,11 +1338,18 @@ export function PositionRow({
   // run out of room. Keep that row three columns at every card width instead of letting the nested
   // PositionRow stack while the comments pill remains stranded beside it.
   return (
-    <div className="@container">
+    <div className={compactMobileActions ? '@container/debate-actions' : '@container'}>
       <div
         className={cx(
           'grid gap-2',
-          endSlot ? 'grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]' : 'grid-cols-1 claim-pills-wide:grid-cols-2'
+          !endSlot
+            ? 'grid-cols-1 claim-pills-wide:grid-cols-2'
+            : endSlotWraps === 'compact'
+              ? 'grid-cols-2 claim-row-end-inline:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]'
+              : endSlotWraps === 'wide'
+                ? 'grid-cols-2 claim-row-wide-end-inline:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]'
+                : 'grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]',
+          compactMobileActions && 'md:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)_auto] md:gap-1'
         )}
       >
         {/* The note shares its button's grid cell rather than sitting in one of
@@ -1083,6 +1369,7 @@ export function PositionRow({
             // it had one, which would now let geo-chat print "Verify" on a claim minted before the
             // vocabularies merged — a word this app has no way to publish any more.
             label={copy.positiveAction}
+            compactMobile={compactMobileActions}
             summary={forSide}
             responseKind={responseKind}
             position
@@ -1091,12 +1378,19 @@ export function PositionRow({
             disabled={disabled}
             pending={pending}
             title={titleFor?.(true)}
+            localOnly={localSide === true}
+            analytics={
+              analyticsSurface
+                ? debateActionAnalyticsAttributes(analyticsSurface, `Claim card ${copy.positiveAction.toLowerCase()}`)
+                : undefined
+            }
           />
-          {noteFor?.(true)}
+          {localSide === true ? <LocalVoteNote /> : noteFor?.(true)}
         </div>
         <div className="flex flex-col">
           <PositionButton
             label={copy.negativeAction}
+            compactMobile={compactMobileActions}
             summary={againstSide}
             responseKind={responseKind}
             position={false}
@@ -1105,10 +1399,27 @@ export function PositionRow({
             disabled={disabled}
             pending={pending}
             title={titleFor?.(false)}
+            localOnly={localSide === false}
+            analytics={
+              analyticsSurface
+                ? debateActionAnalyticsAttributes(analyticsSurface, `Claim card ${copy.negativeAction.toLowerCase()}`)
+                : undefined
+            }
           />
-          {noteFor?.(false)}
+          {localSide === false ? <LocalVoteNote /> : noteFor?.(false)}
         </div>
-        {endSlot ? <div className="flex h-7 shrink-0 items-center">{endSlot}</div> : null}
+        {endSlot ? (
+          <div
+            className={cx(
+              'flex h-7 shrink-0 items-center',
+              compactMobileActions && 'md:col-span-1',
+              endSlotWraps === 'compact' && 'col-span-2 claim-row-end-inline:col-span-1',
+              endSlotWraps === 'wide' && 'col-span-2 claim-row-wide-end-inline:col-span-1'
+            )}
+          >
+            {endSlot}
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -1134,14 +1445,17 @@ export function SpaceChip({ spaceId }: { spaceId: string }) {
     );
   }
 
+  // The name sets the baseline, so the chip sits on the line of text beside it; the thumbnail, which
+  // has none, stays centred on the name.
   return (
-    <span className="flex min-w-0 items-center gap-1.5">
+    <span className="flex min-w-0 items-baseline gap-1.5">
       {image ? (
-        <span className="relative h-4 w-4 shrink-0 overflow-hidden rounded-sm">
+        <span className="relative h-4 w-4 shrink-0 self-center overflow-hidden rounded-sm">
           <ThumbGeoImage value={image} alt="" />
         </span>
       ) : null}
-      <span className="truncate text-footnoteMedium text-grey-04">{name}</span>
+      {/* Calibre's letters sit high in the line box; optically centre them with the thumbnail. */}
+      <span className="translate-y-px truncate text-footnoteMedium text-grey-04">{name}</span>
     </span>
   );
 }
@@ -1156,6 +1470,9 @@ function PositionButton({
   disabled,
   pending,
   title,
+  localOnly = false,
+  analytics,
+  compactMobile = false,
 }: {
   label: string;
   summary: DebateClaimPositionSummary | undefined;
@@ -1166,6 +1483,11 @@ function PositionButton({
   disabled?: boolean;
   pending?: boolean;
   title?: string;
+  /** The selection is a vote kept on this device, not yet counted. */
+  localOnly?: boolean;
+  analytics?: DebateAnalyticsAttributes;
+  /** Fit the debate card's response pills beside its supporting actions on phones. */
+  compactMobile?: boolean;
 }) {
   // `@container` so the avatar stack can measure the pill it is sitting in — see `PositionAvatars`,
   // which sheds faces rather than letting the label truncate.
@@ -1184,22 +1506,25 @@ function PositionButton({
   // already has — the two systems agree, and the pill borrows it rather than inventing a shade.
   const className = cx(
     '@container flex min-h-7 items-center justify-center rounded-full border px-3 text-button text-text',
+    compactMobile && 'md:px-1.5 md:text-[15px] md:@max-[280px]/debate-actions:px-1',
     selected ? 'border-transparent bg-divider' : 'border-dashed border-grey-03 bg-white'
   );
   // Icon, label and faces are one centred group at a single 6px gap, per the Figma card. They used
   // to be two groups pushed to opposite ends by `justify-between`, which left the faces adrift at
   // the far edge of a wide pill instead of reading as part of the label they belong to.
   const content = (
-    <span className="flex min-w-0 items-center gap-1.5">
+    <span className={cx('flex min-w-0 items-center gap-1.5', compactMobile && 'md:gap-1')}>
       {/* Thumbs for a stance, chevrons for a factual claim — see `ResponsePositionIcon`. Filled,
           where the glyph has a filled form, so the pill reads as taken even in a screenshot; a
           chevron has none, and leans on the pill's own fill below. */}
-      <span className="shrink-0">
+      <span className={cx('shrink-0', compactMobile && 'md:@max-[280px]/debate-actions:hidden')}>
         <ResponsePositionIcon responseKind={responseKind} position={position} selected={selected} />
       </span>
       <span className="truncate">
         {label}
-        {selected ? <span className="sr-only"> — your response</span> : null}
+        {selected ? (
+          <span className="sr-only">{localOnly ? ' — your response, not counted yet' : ' — your response'}</span>
+        ) : null}
       </span>
       {summary && presentCount(summary) > 0 ? (
         <PositionAvatars summary={summary} ringClassName={selected ? 'border-divider' : 'border-white'} />
@@ -1210,27 +1535,18 @@ function PositionButton({
   if (!onRespond) return <div className={className}>{content}</div>;
 
   return (
-    <button
-      type="button"
-      aria-pressed={selected}
-      aria-disabled={pending || undefined}
+    <ResponseButton
+      selected={selected}
+      pending={pending}
       disabled={disabled}
-      title={title}
-      onClick={() => {
-        if (!pending) onRespond(position);
-      }}
-      className={cx(
-        className,
-        'transition-colors disabled:opacity-60',
-        // The only sign the press was taken: the pill drops presses for the 10-50s a response
-        // spends confirming, and nothing else on the page says so. The copy that used to sit
-        // under the pills read as an unsettled side, so the cue stays on the pointer.
-        pending && 'cursor-progress',
-        !selected && !disabled && !pending && 'hover:border-text'
-      )}
+      actionTitle={title}
+      onPress={() => onRespond(position)}
+      className={cx(className, 'transition-colors disabled:opacity-60')}
+      hoverClassName={selected ? undefined : 'hover:border-text'}
+      buttonProps={analytics}
     >
       {content}
-    </button>
+    </ResponseButton>
   );
 }
 

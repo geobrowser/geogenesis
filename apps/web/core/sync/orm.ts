@@ -30,6 +30,7 @@ import { compareBySpaceRank } from '../utils/space/space-ranking';
 import { hasName } from '../utils/utils';
 // @TODO replace with Values.merge()
 import { merge } from '../utils/value/values';
+import { confirmAbsentPendingEntities } from './confirm-absent-pending-entities';
 import { EntityQuery, WhereCondition } from './experimental_query-layer';
 import { GeoStore, dedupeRelationsByKey, relationKey } from './store';
 
@@ -400,41 +401,37 @@ export class E {
     orderBy?: EntitiesOrderBy[];
     includeEmptyNames?: boolean;
     signal?: AbortController['signal'];
-  }): Promise<{ merged: Entity[]; remote: Entity[]; endCursor: string | null; hasNextPage: boolean }> {
-    if (where?.id?.in) {
-      const entityIds = where.id.in.filter(id => id !== '');
+  }): Promise<{
+    merged: Entity[];
+    remote: Entity[];
+    endCursor: string | null;
+    hasNextPage: boolean;
+    confirmedAbsentEntityIds?: string[];
+  }> {
+    // A relation target can be '' (#1410). The server rejects an empty id in a
+    // list, so it is dropped before any path below sees the list.
+    const requestedIds = where?.id?.in;
+    if (requestedIds?.some(id => id === '')) {
+      where = { ...where, id: { ...where.id, in: requestedIds.filter(id => id !== '') } };
+    }
+    const hasIdList = where?.id?.in !== undefined;
 
-      if (sort) {
-        const filter = convertWhereConditionToEntityFilter(where, { includeEmptyNames });
-        const page = await Effect.runPromise(
-          getEntitiesOrderedByPropertyConnection(
-            {
-              propertyId: sort.propertyId,
-              sortDirection: sort.direction === 'asc' ? SortOrder.Asc : SortOrder.Desc,
-              dataType: sort.dataType,
-              includeWithoutValue: sort.includeWithoutValue,
-              spaceId,
-              limit: first,
-              after,
-              offset,
-              filter,
-            },
-            signal
-          )
-        );
+    // An unsorted id list is a batch read in the caller's order. A sorted one
+    // (property `sort` or built-in `orderBy`) is a regular ordered page below,
+    // with the ids riding along as an `id.in` filter: one place for cursor
+    // paging and the remote-id dedupe.
+    if (where?.id?.in && !sort && !orderBy) {
+      const entityIds = where.id.in;
 
-        const remoteEntities = page.entities;
-        const remoteById = new Map(remoteEntities.map(e => [e.id as string, e]));
-        const merged = remoteEntities
-          .map(e => this.merge({ id: e.id, store, spaceId, mergeWith: remoteById.get(e.id) }))
-          .filter((e): e is Entity => e !== null);
-        return { merged, remote: remoteEntities, endCursor: page.endCursor, hasNextPage: page.hasNextPage };
-      }
+      // Sorted and deduped for the network read only: the request's key is its id list, so two
+      // callers asking for the same set in a different order (or with repeats) would otherwise each
+      // send the whole batch. Results are matched back by id below, so the order asked for is kept.
+      const requestIds = [...new Set(entityIds)].sort();
 
       const remoteEntities = (
         await Promise.all(
-          Array.from({ length: Math.ceil(entityIds.length / ENTITY_ID_BATCH_SIZE) }, (_, index) => {
-            const batchIds = entityIds.slice(index * ENTITY_ID_BATCH_SIZE, (index + 1) * ENTITY_ID_BATCH_SIZE);
+          Array.from({ length: Math.ceil(requestIds.length / ENTITY_ID_BATCH_SIZE) }, (_, index) => {
+            const batchIds = requestIds.slice(index * ENTITY_ID_BATCH_SIZE, (index + 1) * ENTITY_ID_BATCH_SIZE);
             return syncFetchQuery(cache, {
               queryKey: ['network', 'entities', batchIds, spaceId],
               queryFn: ({ signal }) => Effect.runPromise(getBatchEntities(batchIds, spaceId, signal)),
@@ -445,22 +442,40 @@ export class E {
 
       const remoteById = new Map(remoteEntities.map(e => [e.id as string, e]));
 
+      // Read local operations after the last network wait, including absence confirmation.
+      const absentIds = await confirmAbsentPendingEntities(requestIds, remoteEntities);
+
       const entities = entityIds.map(entityId => {
         return this.merge({ id: entityId, store, spaceId, mergeWith: remoteById.get(entityId) });
       });
 
       const nonNullEntities = entities.filter((e): e is Entity => e !== null);
+      const confirmedAbsence = absentIds.length ? { confirmedAbsentEntityIds: absentIds } : {};
 
       const hasAdditionalFilters = Object.keys(where).some(key => key !== 'id');
       if (hasAdditionalFilters) {
         const localQuery = new EntityQuery(nonNullEntities).where(where);
-        return { merged: localQuery.execute(), remote: remoteEntities, endCursor: null, hasNextPage: false };
+        return {
+          merged: localQuery.execute(),
+          remote: remoteEntities,
+          endCursor: null,
+          hasNextPage: false,
+          ...confirmedAbsence,
+        };
       }
 
-      return { merged: nonNullEntities, remote: remoteEntities, endCursor: null, hasNextPage: false };
+      return {
+        merged: nonNullEntities,
+        remote: remoteEntities,
+        endCursor: null,
+        hasNextPage: false,
+        ...confirmedAbsence,
+      };
     }
 
-    const filter = convertWhereConditionToEntityFilter(where, { includeEmptyNames });
+    // An explicit id list already is the population: keep unnamed members, as
+    // the batch read above does, instead of the open-query name exclusion.
+    const filter = convertWhereConditionToEntityFilter(where, { includeEmptyNames: includeEmptyNames || hasIdList });
     const typeIds = extractTypeIdsFromWhere(where);
 
     const page = sort
@@ -544,6 +559,7 @@ export class E {
     signal,
     additionalSpaceIds,
     includeNonCanonical,
+    tagIds,
   }: {
     store: GeoStore;
     cache: QueryClient;
@@ -553,6 +569,7 @@ export class E {
     signal?: AbortController['signal'];
     additionalSpaceIds?: string[];
     includeNonCanonical?: boolean;
+    tagIds?: string[];
   }): Promise<{ results: SearchResult[]; rawCount: number; serverCount: number; total: number }> {
     // Empty string is intentional here: the REST /search endpoint accepts
     // an empty query and returns top-N globally ranked entities (optionally
@@ -565,6 +582,7 @@ export class E {
 
     const spaceIdsFilter = where.space?.id?.equals ? where.space.id.equals : undefined;
     const typeIdsFilter = where.types?.map(t => t.id?.equals).filter(t => t !== undefined) ?? [];
+    const tagIdsFilter = tagIds?.length ? [...tagIds].sort() : undefined;
 
     const page = await syncFetchQuery(cache, {
       queryKey: [
@@ -577,6 +595,7 @@ export class E {
         skip,
         additionalSpaceIds,
         includeNonCanonical,
+        tagIdsFilter,
       ],
       queryFn: ({ signal: innerSignal }) =>
         Effect.runPromise(
@@ -587,6 +606,7 @@ export class E {
               query: nameFilter,
               spaceId: spaceIdsFilter ? spaceIdsFilter : undefined,
               typeIds: typeIdsFilter,
+              tagIds: tagIdsFilter,
               additionalSpaceIds,
               includeNonCanonical,
             },
@@ -599,7 +619,10 @@ export class E {
     });
     const remoteEntities = page.results;
 
-    const localEntities = new EntityQuery(store.getEntities()).where(where).execute();
+    const localWhere: WhereCondition = tagIds?.length
+      ? { ...where, relations: [...(where.relations ?? []), { toEntity: { id: { in: tagIds } } }] }
+      : where;
+    const localEntities = new EntityQuery(store.getEntities()).where(localWhere).execute();
 
     // Preserve remote (API relevance) ordering; append local-only entities at the end
     const remoteIds = remoteEntities.map(e => e.id);

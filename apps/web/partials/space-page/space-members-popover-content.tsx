@@ -18,6 +18,7 @@ import { SpaceMembersPopoverMemberRequestButton } from './space-members-popover-
 
 interface Props {
   spaceId: string;
+  spaceName?: string;
   isPublicSpace: boolean;
   isMember: boolean;
   isEditor: boolean;
@@ -27,6 +28,7 @@ interface Props {
 
 export function SpaceMembersContent({
   spaceId,
+  spaceName,
   isPublicSpace,
   isMember,
   isEditor,
@@ -68,7 +70,11 @@ export function SpaceMembersContent({
                 Leave space
               </button>
             ) : isEditor ? null : (
-              <SpaceMembersPopoverMemberRequestButton spaceId={spaceId} memberRequest={memberRequest} />
+              <SpaceMembersPopoverMemberRequestButton
+                spaceId={spaceId}
+                spaceName={spaceName}
+                memberRequest={memberRequest}
+              />
             )}
           </>
         )}

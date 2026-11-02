@@ -8,7 +8,7 @@ import equal from 'fast-deep-equal';
 
 import { getSchemaFromTypeIds } from '~/core/database/entities';
 import { ID } from '~/core/id';
-import { useEditorStoreLite } from '~/core/state/editor/use-editor';
+import { useEditorStoreLite } from '~/core/state/editor/use-editor-blocks';
 import { reactiveRelations } from '~/core/sync/store';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useValues } from '~/core/sync/use-store';

@@ -5,6 +5,7 @@ import * as React from 'react';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { useActionScope } from '~/core/action-context-provider';
 import type { ExploreFeedRow } from '~/core/explore/explore-card-item';
 
 import { PersonRecordFeed } from './person-record-feed';
@@ -152,4 +153,21 @@ describe('PersonRecordFeed', () => {
 
     expect(screen.getByText('Loading positions…')).toBeInTheDocument();
   });
+});
+
+it('supplies one-based row positions to any custom renderer without adding DOM wrappers', () => {
+  function CustomCard({ id }: { id: string }) {
+    const scope = useActionScope();
+    return (
+      <article data-testid="scoped-card" data-position={scope.item_position}>
+        {id}
+      </article>
+    );
+  }
+  const { unmount } = renderFeed({ rows: [row('a'), row('b')], renderCard: item => <CustomCard id={item.entityId} /> });
+  const cards = screen.getAllByTestId('scoped-card');
+  expect(cards.map(card => card.dataset.position)).toEqual(['1', '2']);
+  expect(cards[0].parentElement).toBe(cards[1].parentElement);
+  expect(cards[0].parentElement?.children).toHaveLength(2);
+  unmount();
 });

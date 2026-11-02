@@ -43,7 +43,7 @@ export function RankingExploreView({ state }: Props) {
   } = state;
 
   const cards = embeddedBrowseDisplayEntityIds
-    .map(entityId => {
+    .map((entityId, index) => {
       const entry = embeddedBrowseEntryByEntityId.get(entityId);
       if (!entry || (entriesResolving && isPlaceholderRankingEntry(entry))) {
         return <RankingExploreFeedCardSkeleton key={entityId} />;
@@ -51,6 +51,7 @@ export function RankingExploreView({ state }: Props) {
 
       return (
         <RankingExploreFeedCard
+          itemPosition={index + 1}
           key={entityId}
           entityId={entityId}
           entitySpaceId={resolveEntitySpaceId(entityId)}

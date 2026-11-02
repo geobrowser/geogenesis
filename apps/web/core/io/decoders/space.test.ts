@@ -83,5 +83,14 @@ describe('SpaceDecoder', () => {
 
     expect(space?.entity.name).toBe('Page name');
     expect(space?.topicId).toBeNull();
+    expect(space?.hasProfile).toBe(true);
+  });
+
+  it('reports no profile when the space has neither a topic nor a page', () => {
+    // A personal space registered on-chain whose profile publish never landed.
+    const space = SpaceDecoder.decode(makeRemoteSpace({ type: 'PERSONAL', topicId: null, page: null }));
+
+    expect(space).not.toBeNull();
+    expect(space?.hasProfile).toBe(false);
   });
 });

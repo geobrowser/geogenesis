@@ -1,11 +1,11 @@
 'use client';
 
-import { skipToken, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 
-import { browseSidebarDataQueryKey } from './browse-sidebar-query';
+import { browseSidebarQueryOptions } from './browse-sidebar-query-options';
 import type { BrowseSidebarData } from './fetch-browse-sidebar-data';
 
 export type BrowseSidebarQuerySource = {
@@ -36,19 +36,17 @@ export function useBrowseSidebarQuerySource(): BrowseSidebarQuerySource {
  * The browse sidebar's data if it is already in the cache, without fetching it.
  *
  * `BrowseSidebar` mounts on every page (`app/entry.tsx`) and loads this on its own, so by the time
- * any panel opens the rows are usually sitting there — names, images and all. `skipToken` keeps
+ * any panel opens the rows are usually sitting there — names, images and all. `enabled: false` keeps
  * this a pure read: it subscribes to the entry so a consumer re-renders when the sidebar's own
- * fetch lands, but never starts a second one.
+ * fetch lands, but never starts a second one. It still carries the sidebar's `queryFn`, so an
+ * invalidation can refetch even when this rendered after the sidebar.
  */
 export function useCachedBrowseSidebarData(): BrowseSidebarData | null {
-  const queryClient = useQueryClient();
-  const { keyInput } = useBrowseSidebarQuerySource();
-  const queryKey = browseSidebarDataQueryKey(keyInput);
+  const { personalSpaceId, walletAddress } = useBrowseSidebarQuerySource();
 
-  const { data = null } = useQuery<BrowseSidebarData | null>({
-    queryKey,
-    queryFn: skipToken,
-    placeholderData: () => queryClient.getQueryData<BrowseSidebarData>(queryKey) ?? null,
+  const { data = null } = useQuery({
+    ...browseSidebarQueryOptions({ personalSpaceId, walletAddress }),
+    enabled: false,
   });
 
   return data;

@@ -7,21 +7,39 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  */
 const state = vi.hoisted(() => ({ sidebar: null as null | (() => unknown) }));
 
-vi.mock('next/headers', () => ({ cookies: async () => ({ get: () => undefined }) }));
+const cookieJar = vi.hoisted(() => ({ read: vi.fn((): { value: string } | undefined => undefined) }));
+
+vi.mock('next/headers', () => ({ cookies: async () => ({ get: () => cookieJar.read() }) }));
 vi.mock('~/core/browse/fetch-browse-sidebar-data', () => ({
   fetchBrowseSidebarData: async () => state.sidebar!(),
 }));
 vi.mock('~/core/browse/resolve-member-space-from-wallet', () => ({
-  resolveMemberSpaceFromWalletSafe: async () => null,
+  resolveMemberSpaceFromWalletSafe: async () => {
+    memberLookups.count += 1;
+    return 'member-space';
+  },
 }));
 vi.mock('~/app/home/governance-home-space-ids', () => ({
-  getGovernanceHomeSpaceContext: async () => ({ editorIds: [], myProposalSpaceIds: [] }),
+  getGovernanceHomeSpaceContext: async () => membership.read(),
 }));
+
+const memberLookups = { count: 0 };
+const membership = vi.hoisted(() => ({
+  read: async (): Promise<{ editorIds: string[]; myProposalSpaceIds: string[] }> => ({
+    editorIds: [],
+    myProposalSpaceIds: [],
+  }),
+}));
+const defaultMembership = membership.read;
 
 const { resolveExploreFeedRequestContext } = await import('./resolve-explore-feed-request-context');
 
 beforeEach(() => {
   state.sidebar = null;
+  memberLookups.count = 0;
+  membership.read = defaultMembership;
+  cookieJar.read.mockReset();
+  cookieJar.read.mockReturnValue(undefined);
 });
 
 /**
@@ -56,5 +74,72 @@ describe('the browse fallback', () => {
     const { browse } = await resolveExploreFeedRequestContext();
 
     expect(browse.featuredError).toBeFalsy();
+  });
+});
+
+// The CDN keys on the URL and ignores cookies, so the cacheable feed page must not depend on them.
+describe('the anonymous request', () => {
+  const sidebar = () => ({ featured: [], editorOf: [], memberOf: [], documentationImage: null, personalSpaceId: null });
+
+  it('reads the wallet cookie by default', async () => {
+    cookieJar.read.mockReturnValue({ value: '0xabc' });
+    state.sidebar = sidebar;
+
+    const context = await resolveExploreFeedRequestContext();
+
+    expect(context.walletAddress).toBe('0xabc');
+    expect(context.personalMemberSpaceId).toBe('member-space');
+  });
+
+  it('ignores the cookie jar entirely', async () => {
+    cookieJar.read.mockReturnValue({ value: '0xabc' });
+    state.sidebar = sidebar;
+
+    const context = await resolveExploreFeedRequestContext(undefined, { anonymous: true });
+
+    expect(cookieJar.read).not.toHaveBeenCalled();
+    expect(memberLookups.count).toBe(0);
+    expect(context).toMatchObject({ walletAddress: null, personalMemberSpaceId: null, memberOrEditorSpaceIds: [] });
+  });
+});
+
+describe('a signed-in request', () => {
+  const sidebar = () => ({ featured: [], editorOf: [], memberOf: [], documentationImage: null, personalSpaceId: null });
+
+  beforeEach(() => {
+    cookieJar.read.mockReturnValue({ value: '0xabc' });
+  });
+
+  it('reads membership and the sidebar side by side, not one after the other', async () => {
+    const started: string[] = [];
+    let releaseMembership!: () => void;
+    membership.read = () => {
+      started.push('membership');
+      return new Promise(
+        resolve => (releaseMembership = () => resolve({ editorIds: ['editor-space'], myProposalSpaceIds: [] }))
+      );
+    };
+    state.sidebar = () => {
+      started.push('sidebar');
+      return sidebar();
+    };
+
+    const pending = resolveExploreFeedRequestContext();
+    await vi.waitFor(() => expect(started).toEqual(['membership', 'sidebar']));
+    releaseMembership();
+
+    expect((await pending).memberOrEditorSpaceIds).toEqual(['editor-space', 'member-space']);
+  });
+
+  it('still scopes the reader to their own space when the membership read fails', async () => {
+    membership.read = async () => {
+      throw new Error('graph down');
+    };
+    state.sidebar = sidebar;
+
+    const context = await resolveExploreFeedRequestContext();
+
+    expect(context.memberOrEditorSpaceIds).toEqual(['member-space']);
+    expect(context.browse.featuredError).toBeFalsy();
   });
 });

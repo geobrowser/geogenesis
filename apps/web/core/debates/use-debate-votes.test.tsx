@@ -38,6 +38,13 @@ const mocks = vi.hoisted(() => ({
   authReady: true,
   reportError: vi.fn(),
   enqueuePendingAction: vi.fn(),
+  dequeuePendingAction: vi.fn(),
+  /** The winner a queued vote will publish, as the queue reports it. */
+  queuedIntent: undefined as string | undefined,
+  /** Null while the personal space is still being created. */
+  personalSpaceId: null as string | null,
+  /** A new account whose personal space is being created in the background. */
+  accountSetupPending: false,
 }));
 
 vi.mock('~/core/analytics', () => ({ capture: mocks.capture, analyticsContextRevision: () => 0 }));
@@ -99,8 +106,34 @@ vi.mock('~/core/hooks/use-smart-account', () => ({
   }),
 }));
 
+// The queue as the hook drives it: what it queues (and how that replays), what it withdraws, and the
+// intent it draws from.
 vi.mock('~/core/state/pending-actions', () => ({
-  useEnqueuePendingAction: () => mocks.enqueuePendingAction,
+  useQueuedAction: ({
+    id,
+    requires = 'personalSpace',
+    run,
+  }: {
+    id: string;
+    requires?: string;
+    run: (intent: string | undefined, replay: { live: boolean; isCurrent: () => boolean }) => Promise<void> | void;
+  }) => ({
+    intent: mocks.queuedIntent,
+    isQueued: mocks.queuedIntent !== undefined,
+    // As the press's own fallback replays it — with no voting control mounted to answer.
+    queue: (intent: string) =>
+      mocks.enqueuePendingAction({
+        id,
+        requires,
+        intent,
+        run: () => run(intent, { live: false, isCurrent: () => true }),
+      }),
+    cancel: () => mocks.dequeuePendingAction(id),
+  }),
+}));
+
+vi.mock('~/core/state/pending-personal-space', () => ({
+  usePendingPersonalSpace: () => ({ isPending: mocks.accountSetupPending }),
 }));
 
 vi.mock('~/core/debates/hooks', () => ({
@@ -112,7 +145,12 @@ vi.mock('~/core/hooks/use-privy-sign-in', () => ({
 }));
 
 vi.mock('~/core/hooks/use-personal-space-id', () => ({
-  usePersonalSpaceId: () => ({ personalSpaceId: VOTER_SPACE, isRegistered: true, isLoading: false }),
+  personalSpaceIdQueryKey: (address: string | null | undefined) => ['personal-space-id', address],
+  usePersonalSpaceId: () => ({
+    personalSpaceId: mocks.personalSpaceId,
+    isRegistered: mocks.personalSpaceId !== null,
+    isLoading: false,
+  }),
 }));
 
 vi.mock('~/core/hooks/use-geo-profile', () => ({ useGeoProfile: () => ({ profile: { name: 'Voter' } }) }));
@@ -189,6 +227,10 @@ beforeEach(() => {
   mocks.openPrivySignIn.mockClear();
   mocks.reportError.mockClear();
   mocks.enqueuePendingAction.mockClear();
+  mocks.dequeuePendingAction.mockClear();
+  mocks.queuedIntent = undefined;
+  mocks.personalSpaceId = VOTER_SPACE;
+  mocks.accountSetupPending = false;
   mocks.voteEntities = [];
   mocks.publishedRelations = [];
   mocks.idCounter = 0;
@@ -245,6 +287,78 @@ describe('useDebateVotes castVote', () => {
     });
 
     await waitFor(() => expect(mocks.publishEdit).toHaveBeenCalled());
+  });
+
+  it('withdraws the queued pick when the sign-in is dismissed', async () => {
+    mocks.signedIn = false;
+    mocks.authenticated = false;
+    const view = await renderVotes();
+
+    await act(async () => {
+      await view.result.current.castVote(ALICE);
+    });
+
+    const [, options] = mocks.openPrivySignIn.mock.calls[0]!;
+    const action = mocks.enqueuePendingAction.mock.calls[0]![0] as { id: string };
+    (options as { onCancel: () => void }).onCancel();
+    expect(mocks.dequeuePendingAction).toHaveBeenCalledWith(action.id);
+  });
+
+  // The runner drops an action whose run resolves. A replay that quietly toasted and returned was
+  // read as a success, and the vote was gone.
+  it('fails a replay that still cannot publish, so the runner keeps it queued', async () => {
+    mocks.personalSpaceId = null;
+    const view = await renderVotes();
+
+    await expect(view.result.current.castVote(ALICE, { fromQueue: true })).rejects.toThrow(/not ready/);
+    expect(mocks.publishEdit).not.toHaveBeenCalled();
+  });
+
+  it('queues a pick made while the personal space is still being created', async () => {
+    mocks.personalSpaceId = null;
+    mocks.accountSetupPending = true;
+    const view = await renderVotes();
+
+    await act(async () => {
+      await view.result.current.castVote(ALICE);
+    });
+
+    expect(mocks.openPrivySignIn).not.toHaveBeenCalled();
+    expect(mocks.enqueuePendingAction).toHaveBeenCalledOnce();
+    expect(mocks.enqueuePendingAction.mock.calls[0]![0]).toMatchObject({
+      requires: 'personalSpace',
+      intent: ALICE_SPACE,
+    });
+  });
+
+  // Signed in with no space and no setup under way: nothing would ever publish a queued pick.
+  it('says what is missing, rather than queuing, for an account with no space being made', async () => {
+    mocks.personalSpaceId = null;
+    const view = await renderVotes();
+
+    await act(async () => {
+      await view.result.current.castVote(ALICE);
+    });
+
+    expect(mocks.enqueuePendingAction).not.toHaveBeenCalled();
+    expect(mocks.publishEdit).not.toHaveBeenCalled();
+  });
+
+  // The runner keeps a replay that throws and offers a retry; a quiet return would drop the pick.
+  it('fails a replay whose publish fails, so the runner keeps it queued', async () => {
+    mocks.prepareFails = true;
+    const view = await renderVotes();
+
+    await expect(view.result.current.castVote(ALICE, { fromQueue: true })).rejects.toThrow();
+    expect(mocks.reportError).not.toHaveBeenCalled();
+  });
+
+  it('draws a queued pick as the viewer’s, before it is published', async () => {
+    mocks.queuedIntent = ALICE_SPACE;
+    const view = await renderVotes();
+
+    expect(view.result.current.isMyPick(ALICE)).toBe(true);
+    expect(view.result.current.isMyPick(BOB)).toBe(false);
   });
 
   // `smartAccount` is null while the account restores too, and a login there would clear the
@@ -374,6 +488,44 @@ describe('useDebateVotes castVote', () => {
       expect(view.result.current.feed.isVoting).toBe(false);
       expect(view.result.current.panel.isVoting).toBe(false);
     });
+  });
+
+  // Replayed by the press's own closure, with no voting control on screen: its tally predates sign-in
+  // and knows no vote. The account voted on this debate before, so the replay must switch that vote,
+  // not mint a second one.
+  it('reads the viewer’s existing vote fresh when a queued pick replays with no control on screen', async () => {
+    mocks.signedIn = false;
+    mocks.authenticated = false;
+    const view = await renderVotes();
+    await act(async () => {
+      await view.result.current.castVote(BOB);
+    });
+    const action = mocks.enqueuePendingAction.mock.calls[0]![0] as { run: () => Promise<void> };
+
+    // Signed in now, and the index has the vote this account cast before.
+    mocks.signedIn = true;
+    mocks.authenticated = true;
+    mocks.voteEntities = [voteEntity('vote-1', ALICE_SPACE, 'winner-rel-1')];
+    // The account resolves; the tally this hook holds is still the one fetched signed out, with no vote.
+    view.rerender();
+    expect(view.result.current.hasVoted).toBe(false);
+    await act(async () => {
+      await action.run();
+    });
+
+    await waitFor(() => expect(mocks.publishEdit).toHaveBeenCalled());
+    expect(publishAt(0).all.every(relation => relation.fromEntity.id === 'vote-1')).toBe(true);
+  });
+
+  // A sign-out or a newer pick can clear or replace the queued pick while its fresh read is out.
+  it('does not publish a replayed pick that stopped being the queued one during its read', async () => {
+    const view = await renderVotes();
+
+    await act(async () => {
+      await view.result.current.castVote(BOB, { fromQueue: true, readExistingVoteFresh: true, isCurrent: () => false });
+    });
+
+    expect(mocks.publishEdit).not.toHaveBeenCalled();
   });
 
   it('reuses the existing Vote entity rather than minting a second one', async () => {

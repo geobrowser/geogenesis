@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 
 import { toPeerSchedule } from '~/core/availability/peer-schedule';
 import { usePeerSchedule } from '~/core/debates/hooks';
-import { readStoredFeatureFlag, usePeerAvailabilityEnabled } from '~/core/state/feature-flags';
+import { readStoredFeatureFlag, useDebugDebatesPageEnabled } from '~/core/state/feature-flags';
 
 import { Text } from '~/design-system/text';
 
@@ -23,12 +23,14 @@ import { PeerAvailabilityModal } from '~/partials/availability/peer-availability
  * without needing two accounts with two calendars in two zones.
  */
 export function DebugPeerAvailabilityPageClient({ spaceId }: { spaceId: string }) {
-  const enabled = usePeerAvailabilityEnabled();
+  // Scheduling shipped to everyone, but this page is a fixture bench, so it sits behind the debates
+  // debug flag with `debug-debate-rooms`.
+  const enabled = useDebugDebatesPageEnabled();
   const router = useRouter();
   React.useEffect(() => {
     // Read storage directly rather than `enabled`, which is hydration-gated and so reports the
     // default on this first pass — redirecting every visitor, flag on or not.
-    if (!readStoredFeatureFlag('peerAvailability')) router.replace(`/space/${spaceId}`);
+    if (!readStoredFeatureFlag('debugDebatesPage')) router.replace(`/space/${spaceId}`);
     // `enabled` is in the deps so turning the flag off while here still redirects, rather than
     // leaving a blank page.
   }, [enabled, router, spaceId]);

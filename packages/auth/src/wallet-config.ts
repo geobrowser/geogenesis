@@ -1,3 +1,4 @@
+import './ensure-web-storage.js';
 import { createConfig } from '@privy-io/wagmi';
 import type { Chain } from 'viem';
 import { http } from 'viem';

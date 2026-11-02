@@ -7,6 +7,7 @@ type DiffState = {
   isReviewOpen: boolean;
   setIsReviewOpen: (value: boolean) => void;
   reviewVersion: number;
+  reviewTargetVersion: number;
   bumpReviewVersion: () => void;
   activeSpace: string;
   setActiveSpace: (value: string) => void;
@@ -26,6 +27,7 @@ const initialDiffState = {
   isReviewOpen: false,
   setIsReviewOpen: (_value: boolean) => null,
   reviewVersion: 0,
+  reviewTargetVersion: 0,
   bumpReviewVersion: () => null,
   activeSpace: '',
   setActiveSpace: (_value: string) => null,
@@ -51,7 +53,13 @@ export const DiffProvider = ({ children }: DiffProviderProps) => {
   const [isReviewOpen, setIsReviewOpen] = useState<boolean>(false);
   const [reviewVersion, setReviewVersion] = useState<number>(0);
   const bumpReviewVersion = React.useCallback(() => setReviewVersion(v => v + 1), []);
-  const [activeSpace, setActiveSpace] = useState<string>('');
+  const [activeSpace, setActiveSpaceValue] = useState<string>('');
+  const [reviewTargetVersion, setReviewTargetVersion] = useState(0);
+  const setActiveSpace = React.useCallback((spaceId: string) => {
+    setActiveSpaceValue(spaceId);
+    // A repeated explicit request is distinct from refreshing the current diff.
+    if (spaceId) setReviewTargetVersion(version => version + 1);
+  }, []);
   const [isReadyToPublish, setIsReadyToPublish] = useState<boolean>(false);
   const [selectedVersion, setSelectedVersion] = useState<string>('');
   const [previousVersion, setPreviousVersion] = useState<string>('');
@@ -64,6 +72,7 @@ export const DiffProvider = ({ children }: DiffProviderProps) => {
         isReviewOpen,
         setIsReviewOpen,
         reviewVersion,
+        reviewTargetVersion,
         bumpReviewVersion,
         activeSpace,
         setActiveSpace,

@@ -1,12 +1,10 @@
 import { NextResponse } from 'next/server';
 
 import { getDebateAcceptorConfig } from '~/core/debates/server/acceptor-config';
-import {
-  DebateNotPublishableError,
-  assertDebateMediaHostConfigured,
-  listSweepCandidateDebateIds,
-} from '~/core/debates/server/debate-source';
+import { withAcceptorLock } from '~/core/debates/server/acceptor-lock';
+import { DebateNotPublishableError, assertDebateMediaHostConfigured } from '~/core/debates/server/debate-source';
 import { listEditorSpaceIds } from '~/core/debates/server/editor-spaces';
+import { listPublishCandidateDebateIds } from '~/core/debates/server/publish-candidates';
 import { publishDebateAsAcceptor } from '~/core/debates/server/publish-debate';
 
 // The sweep can sign several on-chain publishes in one run, so give it room past the default.
@@ -19,21 +17,28 @@ export const dynamic = 'force-dynamic';
 const MAX_PUBLISH_ATTEMPTS_PER_SWEEP = 8;
 
 // No publish starts after this point in the run. A publish interrupted by `maxDuration` after its
-// proposal lands leaves no Debate entity for the idempotency check, so the next tick would create
-// duplicate media and transcript entities. The remaining time is headroom for the publish in flight.
+// vote is sent leaves no Debate entity for the idempotency check until the indexer catches up; the
+// publish lease and the draft's derived ids keep the next tick from duplicating it. The remaining
+// time is headroom for the publish in flight.
 const PUBLISH_START_DEADLINE_MS = 180_000;
+
+// How long to wait for the early claims sweep to release the signing lock. The wait comes out of
+// the publish deadline (both run from the request's start), so it never eats the headroom left
+// for a publish in flight.
+const LOCK_WAIT_MS = 60_000;
 
 /**
  * Cron sweep: publish finished debates to the knowledge graph as the debate acceptor.
  *
  * Vercel Cron hits this on a schedule (see vercel.json) with `Authorization: Bearer $CRON_SECRET`.
  * It discovers its own work: the acceptor can only publish into spaces it edits, so it enumerates
- * those from the graph, then for each lists that space's `complete` debates from geo-chat and
- * publishes them. Idempotent and self-healing: publishing skips debates already in the KG and
+ * those from the graph, then for each asks geo-chat for that space's publish candidates (every
+ * finished debate not yet seen in the graph, however old: GEO-3157) and publishes them. Idempotent and self-healing: publishing skips debates already in the KG and
  * leaves debates whose media is still processing for the next tick. It's the sole publisher: no
  * browser or public route is in the loop, so nothing depends on a participant keeping a tab open.
  */
 export async function GET(request: Request) {
+  const requestStartedAt = Date.now();
   const secret = process.env.CRON_SECRET;
   if (!secret || request.headers.get('authorization') !== `Bearer ${secret}`) {
     return new NextResponse('Unauthorized', { status: 401 });
@@ -53,15 +58,30 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }
 
-  const startedAt = Date.now();
+  // One acceptor signing at a time (see `acceptor-lock.ts`). The early claims sweep beside this one
+  // holds the lock for well under a minute, so wait for it rather than skipping a five-minute tick.
+  const outcome = await withAcceptorLock(() => runSweep(config.spaceId, requestStartedAt), {
+    ttlMs: maxDuration * 1000,
+    waitMs: LOCK_WAIT_MS,
+  });
+  if (!outcome.ran) {
+    console.warn('[debate-acceptor] sweep skipped: another publish run holds the signing lock');
+    return NextResponse.json({ ok: true, skipped: 'acceptor_busy' });
+  }
+  return NextResponse.json(outcome.value);
+}
+
+async function runSweep(acceptorSpaceId: string, startedAt: number) {
   const budgetExhausted = (attempted: number) =>
     attempted >= MAX_PUBLISH_ATTEMPTS_PER_SWEEP || Date.now() - startedAt >= PUBLISH_START_DEADLINE_MS;
 
-  const spaceIds = await listEditorSpaceIds(config.spaceId);
+  const spaceIds = await listEditorSpaceIds(acceptorSpaceId);
   const published: string[] = [];
   const failed: Array<{ debateId: string; error: string }> = [];
   let attempted = 0;
   let alreadyPublished = 0;
+  // Submitted on an earlier tick and not in the graph yet (indexer lag). Not a slot: nothing is sent.
+  let submissionPending = 0;
   let notEditor = 0;
   let pending = 0;
   let skipped = 0;
@@ -73,7 +93,7 @@ export async function GET(request: Request) {
     if (budgetExhausted(attempted)) break;
     let debateIds: string[];
     try {
-      debateIds = await listSweepCandidateDebateIds(spaceId);
+      debateIds = await listPublishCandidateDebateIds(spaceId);
     } catch (error) {
       failed.push({ debateId: `space:${spaceId}`, error: error instanceof Error ? error.message : String(error) });
       continue;
@@ -87,6 +107,10 @@ export async function GET(request: Request) {
           alreadyPublished += 1;
           continue;
         }
+        if (result.status === 'submission_pending') {
+          submissionPending += 1;
+          continue;
+        }
         if (result.status === 'not_editor') {
           // Terminal and cheap (checked before any source is loaded), so it does not spend a slot.
           notEditor += 1;
@@ -98,9 +122,10 @@ export async function GET(request: Request) {
         if (error instanceof DebateNotPublishableError) {
           if (error.code === 'media_failed') {
             // Terminal: the worker has spent its retries, so no later tick will publish this.
-            // Collected rather than logged here — the sweep runs every five minutes and these
-            // debates never leave the list, so a line each would be a few hundred a day per stuck
-            // debate. One aggregate line below carries the same information without the noise.
+            // Candidate discovery drops debates the listing already reports as terminal
+            // (GEO-2985), so this only catches ones it could not see: a geo-chat older than the
+            // listing's `media` field, or a job that died between the listing and this read.
+            // Collected rather than logged here; one aggregate line below carries it.
             mediaFailed.push(debateId);
           } else if (error.code === 'media_not_ready' || error.code === 'not_complete') {
             // Media still processing or lifecycle state changed — retry next tick.
@@ -126,10 +151,11 @@ export async function GET(request: Request) {
     });
   }
 
-  return NextResponse.json({
+  return {
     ok: true,
     published,
     alreadyPublished,
+    submissionPending,
     notEditor,
     pending,
     // Every unpublishable debate the sweep saw, by id, on every tick — so the answer to "how many
@@ -137,5 +163,5 @@ export async function GET(request: Request) {
     mediaFailed,
     skipped,
     failed,
-  });
+  };
 }

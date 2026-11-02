@@ -7,14 +7,16 @@ interface Props {
   /** Rendered size. Defaults to the 12px this is drawn at; callers standing beside a larger
    *  control pass its size so the tick lands in the same box the icon it replaces did. */
   size?: number;
+  /** Drawn at the SVG default of 1; heavier for a tick shrunk onto a small badge. */
+  strokeWidth?: number;
 }
 
-export function TickSmall({ color, size = 12 }: Props) {
+export function TickSmall({ color, size = 12, strokeWidth }: Props) {
   const themeColor = color ? colors.light[color] : 'currentColor';
 
   return (
     <svg width={size} height={size} viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M1.5 6L4.5 9L10.5 3" stroke={themeColor} />
+      <path d="M1.5 6L4.5 9L10.5 3" stroke={themeColor} strokeWidth={strokeWidth} />
     </svg>
   );
 }

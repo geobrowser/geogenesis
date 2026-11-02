@@ -256,3 +256,30 @@ export function keepSelectableSpace(
   if (spaceId === null || !isResolved) return spaceId;
   return availableSpaceIds.some(id => normId(id) === normId(spaceId)) ? spaceId : null;
 }
+
+/**
+ * The spaces that should stay selected once the menu offering them has changed.
+ *
+ * The multi-select form of {@link keepSelectableSpace}, and the same rule: a selection the menu no
+ * longer offers keeps going out on every request while the trigger goes on counting it. The case
+ * that reaches it is an account change under an open menu — a member space from the old account is
+ * not among the new one's options, and the Explore route drops a space the reader cannot see, so the
+ * feed and the trigger would disagree about what is filtered.
+ *
+ * A space that is still offered comes back in the menu's spelling of its id, not the one it was
+ * picked under. Matching is by `normId`, but the menu's checkboxes and the trigger's label compare
+ * ids exactly — so keeping an old spelling would leave the space filtering the feed while its box
+ * reads unticked and the trigger falls back to "1 space".
+ *
+ * Returns the input unchanged while unresolved, and the same array when nothing changes, so it is
+ * safe to feed straight back into state without looping.
+ */
+export function keepSelectableSpaces(spaceIds: string[], availableSpaceIds: string[], isResolved: boolean): string[] {
+  if (spaceIds.length === 0 || !isResolved) return spaceIds;
+  const offered = new Map(availableSpaceIds.map(id => [normId(id), id]));
+  const kept = spaceIds.flatMap(id => {
+    const current = offered.get(normId(id));
+    return current === undefined ? [] : [current];
+  });
+  return kept.length === spaceIds.length && kept.every((id, index) => id === spaceIds[index]) ? spaceIds : kept;
+}

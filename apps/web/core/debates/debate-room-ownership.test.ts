@@ -6,6 +6,7 @@ import {
   type DebateRoomTakeoverContext,
   createDebateRoomOwnershipCoordinator,
   debateRoomTabPriority,
+  shouldReleaseDebateRoom,
 } from './debate-room-ownership';
 
 type QueuedLock = {
@@ -553,7 +554,7 @@ describe('focus-weighted acquisition', () => {
 
     // No timer advance: a hidden owner's release must not delay the takeover by another stagger.
     await expect(requester.requestTakeover()).resolves.toBe(true);
-    expect(onTakeoverRequested).toHaveBeenCalledWith({ requesterPriority: 2, ownerPriority: 0 });
+    expect(onTakeoverRequested).toHaveBeenCalledWith({ requesterPriority: 2, ownerPriority: 0, automatic: false });
 
     await closeCoordinators(owner, requester);
   });
@@ -568,10 +569,27 @@ describe('focus-weighted acquisition', () => {
     legacyChannel.postMessage({ type: 'takeover-request', requestId: 'legacy-1', requesterId: 'legacy-instance' });
     await new Promise(resolve => queueMicrotask(() => resolve(undefined)));
 
-    expect(onTakeoverRequested).toHaveBeenCalledWith({ requesterPriority: 2, ownerPriority: 1 });
+    expect(onTakeoverRequested).toHaveBeenCalledWith({ requesterPriority: 2, ownerPriority: 1, automatic: false });
 
     legacyChannel.close();
     await closeCoordinators(owner);
+  });
+
+  it('tells the owner when a takeover is automatic', async () => {
+    const onTakeoverRequested = vi.fn().mockResolvedValue(false);
+    const owner = createTab(() => 0, onTakeoverRequested);
+    const requester = createTab(() => 1);
+    vi.useFakeTimers();
+    const ownerAcquisition = owner.acquire();
+    await vi.advanceTimersByTimeAsync(700);
+    await ownerAcquisition;
+
+    const takeover = requester.requestTakeover({ automatic: true });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(onTakeoverRequested).toHaveBeenCalledWith({ requesterPriority: 1, ownerPriority: 0, automatic: true });
+    await expect(takeover).resolves.toBe(false);
+
+    await closeCoordinators(owner, requester);
   });
 
   it('does not stagger the LiveKit fallback, where last connect wins', async () => {
@@ -583,5 +601,42 @@ describe('focus-weighted acquisition', () => {
     await expect(hidden.acquire()).resolves.toEqual({ acquired: true, waitedForLocalRelease: false });
 
     await closeCoordinators(hidden);
+  });
+});
+
+describe('shouldReleaseDebateRoom', () => {
+  const base = {
+    status: 'ready',
+    recordingStarted: false,
+    preflightStillPending: false,
+    requesterPriority: 2,
+    ownerPriority: 0,
+    automatic: false,
+  } as const;
+
+  it('hands the intro and the connecting window to any tab that asks explicitly', () => {
+    for (const status of ['ready', 'connecting'] as const) {
+      expect(shouldReleaseDebateRoom({ ...base, status, requesterPriority: 0, ownerPriority: 2 })).toBe(true);
+    }
+  });
+
+  it('honours an automatic request only from a tab nearer the viewer than the owner', () => {
+    // GEO-3149: the visible tab takes the room from a hidden one…
+    expect(shouldReleaseDebateRoom({ ...base, automatic: true, requesterPriority: 1, ownerPriority: 0 })).toBe(true);
+    expect(shouldReleaseDebateRoom({ ...base, automatic: true, requesterPriority: 2, ownerPriority: 1 })).toBe(true);
+    // …but two equally placed windows never pass it back and forth, and a background tab never
+    // pulls it from the one in front.
+    expect(shouldReleaseDebateRoom({ ...base, automatic: true, requesterPriority: 1, ownerPriority: 1 })).toBe(false);
+    expect(shouldReleaseDebateRoom({ ...base, automatic: true, requesterPriority: 1, ownerPriority: 2 })).toBe(false);
+  });
+
+  it('lets a nearer tab take preflight until recording starts, and nothing after', () => {
+    const preflight = { ...base, status: 'preflight', requesterPriority: 1, ownerPriority: 0 } as const;
+    expect(shouldReleaseDebateRoom(preflight)).toBe(true);
+    expect(shouldReleaseDebateRoom({ ...preflight, recordingStarted: true })).toBe(false);
+    expect(shouldReleaseDebateRoom({ ...preflight, requesterPriority: 0, ownerPriority: 1 })).toBe(false);
+    expect(shouldReleaseDebateRoom({ ...preflight, requesterPriority: 0, preflightStillPending: true })).toBe(true);
+    expect(shouldReleaseDebateRoom({ ...base, status: 'in_progress' })).toBe(false);
+    expect(shouldReleaseDebateRoom({ ...base, status: 'thanking' })).toBe(false);
   });
 });

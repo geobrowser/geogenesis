@@ -39,6 +39,52 @@ export function RecordingCircleButton({
   );
 }
 
+/** The ready screen and recording room share the same exit control and lobby wording. */
+export function DebateLeaveButton({
+  returnsToLobby = false,
+  saving = false,
+  onClick,
+  disabled,
+  className,
+  appearance = 'default',
+}: {
+  returnsToLobby?: boolean;
+  saving?: boolean;
+  onClick: () => void;
+  disabled?: boolean;
+  className?: string;
+  appearance?: 'default' | 'text';
+}) {
+  const label = returnsToLobby ? 'Back to lobby' : 'Leave debate';
+  const accessibleLabel = saving ? 'Saving local recording' : label;
+  if (appearance === 'text') {
+    return (
+      <button
+        type="button"
+        aria-label={accessibleLabel}
+        title={accessibleLabel}
+        onClick={onClick}
+        disabled={disabled || saving}
+        className={cx('text-[3.6cqw] leading-none font-medium text-[#5e5e5b] disabled:opacity-50', className)}
+      >
+        {returnsToLobby ? label : 'Leave'}
+      </button>
+    );
+  }
+  return (
+    <RecordingCircleButton
+      ariaLabel={accessibleLabel}
+      title={accessibleLabel}
+      onClick={onClick}
+      disabled={disabled || saving}
+      className={cx(returnsToLobby && 'w-auto grid-flow-col gap-2 px-3 whitespace-nowrap', className)}
+    >
+      <LeaveIcon />
+      {returnsToLobby && <span className="text-metadata">{label}</span>}
+    </RecordingCircleButton>
+  );
+}
+
 /**
  * A mic or camera toggle that sits over a video tile, as the intro screen has them.
  *
@@ -51,12 +97,16 @@ export function DebateTileToggleButton({
   enabled,
   onClick,
   disabled,
+  compact = false,
+  appearance = 'default',
   children,
 }: {
   ariaLabel: string;
   enabled: boolean;
   onClick: () => void;
   disabled?: boolean;
+  compact?: boolean;
+  appearance?: 'default' | 'overlay';
   children: React.ReactNode;
 }) {
   return (
@@ -71,8 +121,15 @@ export function DebateTileToggleButton({
       onClick={onClick}
       disabled={disabled}
       className={cx(
-        'grid size-10 place-items-center rounded-full shadow-light transition disabled:opacity-50',
-        enabled ? 'bg-text text-white hover:bg-text/85' : 'bg-red-03 text-red-01 hover:bg-red-03/85'
+        'grid place-items-center rounded-full shadow-light transition disabled:opacity-50',
+        compact ? 'size-8 [&>svg]:size-3' : 'size-10',
+        appearance === 'overlay'
+          ? enabled
+            ? 'bg-divider text-text hover:bg-white'
+            : 'bg-red-01 text-white hover:bg-red-01/85'
+          : enabled
+            ? 'bg-text text-white hover:bg-text/85'
+            : 'bg-red-03 text-red-01 hover:bg-red-03/85'
       )}
     >
       {children}
@@ -110,7 +167,13 @@ export function MicrophoneIcon({ muted }: { muted: boolean }) {
   );
 }
 
-export function MutedMicrophoneIndicator() {
+export function MutedMicrophoneIndicator({
+  openRounds = false,
+  backdrop = true,
+}: {
+  openRounds?: boolean;
+  backdrop?: boolean;
+}) {
   const gradientId = React.useId();
 
   return (
@@ -122,12 +185,12 @@ export function MutedMicrophoneIndicator() {
       xmlns="http://www.w3.org/2000/svg"
       aria-hidden="true"
       data-muted-indicator="true"
-      className="size-[51px]"
+      className={openRounds ? 'size-[9cqw]' : 'size-[51px]'}
     >
       <path
         d="M0 25.5C0 11.4167 11.4167 0 25.5 0C39.5833 0 51 11.4167 51 25.5C51 39.5833 39.5833 51 25.5 51C11.4167 51 0 39.5833 0 25.5Z"
         fill={`url(#${gradientId})`}
-        fillOpacity="0.5"
+        fillOpacity={backdrop ? '0.5' : '0'}
       />
       <rect x="22" y="18" width="7" height="12.5" rx="3.5" stroke="white" />
       <path

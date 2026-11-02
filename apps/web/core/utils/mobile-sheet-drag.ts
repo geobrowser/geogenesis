@@ -2,116 +2,392 @@ const MOBILE_SHEET_SURFACE_SELECTOR = '[data-mobile-sheet-surface]';
 const MOBILE_SHEET_SCROLL_SELECTOR = '[data-mobile-sheet-scroll]';
 const MOBILE_SHEET_DRAG_HANDLE_SELECTOR = '[data-mobile-sheet-drag-handle]';
 const MOBILE_SHEET_OPEN_ATTRIBUTE = 'data-mobile-sheet-open';
-const INTERACTIVE_DRAG_TARGET_SELECTOR =
-  'button, a, input, textarea, select, [role="button"], [contenteditable="true"], [data-no-sheet-drag]';
+// Vertical swipes still have to scroll, focus or select inside these, so they never move the sheet.
+const NO_SHEET_GESTURE_SELECTOR = 'input, textarea, select, [contenteditable="true"], [data-no-sheet-drag]';
 
-let documentOverscrollLockCount = 0;
+const GESTURE_SLOP_PX = 4;
+const VELOCITY_SAMPLE_WINDOW_MS = 100;
+
+/** How far (or how fast) a release has to travel before the sheet changes state. */
+const MOBILE_SHEET_SNAP_OFFSET_PX = 64;
+const MOBILE_SHEET_DISMISS_OFFSET_PX = 72;
+const MOBILE_SHEET_FLING_VELOCITY_PX_PER_SECOND = 420;
 
 /**
- * Prevents browser overscroll gestures while any mobile sheet is open. The reference count keeps
- * the lock in place when sheets are stacked and makes each caller's cleanup idempotent.
+ * `peek` is the bottom-sheet container that opens first; `full` covers the viewport. The sheet goes
+ * full from an upward swipe anywhere on it, LinkedIn-style, rather than scrolling its content.
  */
-export function lockMobileSheetDocumentOverscroll(): () => void {
+export type MobileSheetSnap = 'peek' | 'full';
+
+/** Open sheets, bottom to top. Every sheet holds the overscroll lock while it is open. */
+const openSheets: symbol[] = [];
+const openListeners = new Set<() => void>();
+
+/** The sheet on top, or null when none is open. */
+export function getTopMobileSheet(): symbol | null {
+  return openSheets.at(-1) ?? null;
+}
+
+/** Notified whenever the top sheet changes: one opens, or the top one closes. */
+export function subscribeMobileSheetOpen(listener: () => void): () => void {
+  openListeners.add(listener);
+  return () => {
+    openListeners.delete(listener);
+  };
+}
+
+function notifyOpenChange() {
+  openListeners.forEach(listener => listener());
+}
+
+/**
+ * Prevents browser overscroll gestures while any mobile sheet is open, and records `sheet` as the
+ * top one. The lock stays in place until every stacked sheet releases it, and each caller's
+ * cleanup is idempotent.
+ */
+export function lockMobileSheetDocumentOverscroll(sheet: symbol = Symbol('mobile sheet')): () => void {
   const { documentElement, body } = document;
 
-  documentOverscrollLockCount += 1;
+  openSheets.push(sheet);
   documentElement.setAttribute(MOBILE_SHEET_OPEN_ATTRIBUTE, '');
   body.setAttribute(MOBILE_SHEET_OPEN_ATTRIBUTE, '');
+  notifyOpenChange();
 
   let released = false;
   return () => {
     if (released) return;
     released = true;
-    documentOverscrollLockCount = Math.max(0, documentOverscrollLockCount - 1);
+    const wasTop = getTopMobileSheet() === sheet;
+    openSheets.splice(openSheets.lastIndexOf(sheet), 1);
 
-    if (documentOverscrollLockCount === 0) {
+    if (openSheets.length === 0) {
       documentElement.removeAttribute(MOBILE_SHEET_OPEN_ATTRIBUTE);
       body.removeAttribute(MOBILE_SHEET_OPEN_ATTRIBUTE);
     }
+    if (wasTop) notifyOpenChange();
   };
 }
 
+/** The sheet's sliding surface inside its overlay root. */
+export function getMobileSheetSurface(root: HTMLElement): HTMLElement | null {
+  return root.querySelector<HTMLElement>(MOBILE_SHEET_SURFACE_SELECTOR);
+}
+
 /**
- * A mobile sheet can be pulled down from its non-interactive surface while its content is at the
- * top. Once the content has been scrolled, only the dedicated handle starts a sheet drag so a
- * downward gesture can return the content to the top without fighting the sheet.
+ * Whether `target` sits in a vertically scrollable list nested inside the sheet's content (a long
+ * menu, say). Swipes there belong to that list; the sheet's own scroll area doesn't count.
  */
-export function shouldStartMobileSheetDrag(target: EventTarget | null, root: HTMLElement): boolean {
+function isInNestedVerticalScroller(target: Element, surface: HTMLElement): boolean {
+  for (let el: Element | null = target; el && el !== surface; el = el.parentElement) {
+    if (!(el instanceof HTMLElement) || el.matches(MOBILE_SHEET_SCROLL_SELECTOR)) continue;
+    const { overflowY } = getComputedStyle(el);
+    if ((overflowY === 'auto' || overflowY === 'scroll') && el.scrollHeight > el.clientHeight + 1) return true;
+  }
+  return false;
+}
+
+/** Whether a gesture starting on `target` may move the sheet at all, once it proves vertical. */
+export function canStartMobileSheetGesture(target: EventTarget | null, root: HTMLElement): boolean {
   if (!(target instanceof Element)) return false;
 
-  const surface = root.querySelector<HTMLElement>(MOBILE_SHEET_SURFACE_SELECTOR);
+  const surface = getMobileSheetSurface(root);
   if (!surface?.contains(target)) return false;
 
   if (target.closest(MOBILE_SHEET_DRAG_HANDLE_SELECTOR)) return true;
-  if (target.closest(INTERACTIVE_DRAG_TARGET_SELECTOR)) return false;
-
-  const scrollEl = surface.querySelector<HTMLElement>(MOBILE_SHEET_SCROLL_SELECTOR);
-  return !scrollEl || scrollEl.scrollTop <= 0;
+  return !target.closest(NO_SHEET_GESTURE_SELECTOR) && !isInNestedVerticalScroller(target, surface);
 }
 
 /**
- * Safari does not implement directional `touch-action` values, so a non-passive touch listener is
- * still needed to keep a downward sheet drag from becoming browser pull-to-refresh. Upward and
- * horizontal gestures are left native so the sheet content continues to scroll normally.
+ * Whether a vertical gesture belongs to the sheet rather than to the content's native scroll.
+ * The handle always moves the sheet. In `peek`, an upward swipe expands the sheet instead of
+ * scrolling. In either state, a downward swipe with the content at its top moves the sheet down.
  */
-export function preventMobileSheetPullToRefresh(root: HTMLElement): () => void {
-  let gesture:
-    | {
-        direction: 'pending' | 'down' | 'native';
-        startX: number;
-        startY: number;
-        touchId: number;
-      }
-    | undefined;
+export function shouldClaimMobileSheetGesture({
+  snap,
+  direction,
+  onHandle,
+  contentScrollTop,
+}: {
+  snap: MobileSheetSnap;
+  direction: 'up' | 'down';
+  onHandle: boolean;
+  contentScrollTop: number;
+}): boolean {
+  if (onHandle) return true;
+  if (direction === 'down') return contentScrollTop <= 0;
+  return snap === 'peek';
+}
 
-  const handleTouchStart = (event: TouchEvent) => {
-    if (event.touches.length !== 1 || !shouldStartMobileSheetDrag(event.target, root)) {
+/**
+ * Where the sheet settles after a drag is released.
+ *
+ * A fling wins over distance: it settles at the next stop in the direction it is moving, from
+ * wherever the sheet is, so a drag that reverses before release goes where the finger last went.
+ * Without a fling, the sheet changes state once it has travelled far enough.
+ *
+ * From `full`, a pull down normally returns to `peek`. The exception is a sheet that was expanded
+ * and then pulled straight back down before its content was scrolled: that reads as "never mind",
+ * so it dismisses in one motion instead of stopping at `peek`.
+ */
+export function resolveMobileSheetRelease({
+  from,
+  top,
+  velocityY,
+  peekTop,
+  scrolledSinceFull,
+}: {
+  from: MobileSheetSnap;
+  /** The sheet's top edge at release, in px from the viewport top (0 = full screen). */
+  top: number;
+  /** Positive = moving down. */
+  velocityY: number;
+  peekTop: number;
+  scrolledSinceFull: boolean;
+}): MobileSheetSnap | 'dismiss' {
+  const fling = MOBILE_SHEET_FLING_VELOCITY_PX_PER_SECOND;
+  const dismissesFromFull = from === 'full' && !scrolledSinceFull;
+
+  if (velocityY < -fling) return top > peekTop ? 'peek' : 'full';
+  if (velocityY > fling) return dismissesFromFull || top >= peekTop ? 'dismiss' : 'peek';
+
+  if (from === 'peek') {
+    if (top < peekTop - MOBILE_SHEET_SNAP_OFFSET_PX) return 'full';
+    if (top > peekTop + MOBILE_SHEET_DISMISS_OFFSET_PX) return 'dismiss';
+    return 'peek';
+  }
+
+  if (top <= MOBILE_SHEET_SNAP_OFFSET_PX) return 'full';
+  if (dismissesFromFull) return 'dismiss';
+  return top > peekTop + MOBILE_SHEET_DISMISS_OFFSET_PX ? 'dismiss' : 'peek';
+}
+
+type GestureCallbacks = {
+  /** False while the sheet can't be dragged, e.g. during its dismiss animation. */
+  canStart: () => boolean;
+  getSnap: () => MobileSheetSnap;
+  /** The sheet's current top edge, read when a gesture is claimed. */
+  getTop: () => number;
+  onDragStart: () => void;
+  onDragMove: (top: number) => void;
+  onDragEnd: (top: number, velocityY: number) => void;
+  /** The drag was interrupted (OS cancel, second finger): return to where it started. */
+  onDragCancel: () => void;
+};
+
+type ActiveGesture = {
+  id: number;
+  onHandle: boolean;
+  startX: number;
+  startY: number;
+  startTime: number;
+  decided: 'pending' | 'sheet' | 'native' | 'horizontal';
+  /** Pointer Y and sheet top when the sheet claimed the gesture, which can be mid-scroll. */
+  anchorY: number;
+  anchorTop: number;
+  samples: { time: number; y: number }[];
+};
+
+function contentScrollTop(root: HTMLElement): number {
+  return (
+    root.querySelector<HTMLElement>(`${MOBILE_SHEET_SURFACE_SELECTOR} ${MOBILE_SHEET_SCROLL_SELECTOR}`)?.scrollTop ?? 0
+  );
+}
+
+function releaseVelocity(samples: ActiveGesture['samples']): number {
+  const last = samples[samples.length - 1];
+  const first = samples.find(sample => last.time - sample.time <= VELOCITY_SAMPLE_WINDOW_MS) ?? last;
+  const elapsed = last.time - first.time;
+  return elapsed > 0 ? ((last.y - first.y) / elapsed) * 1000 : 0;
+}
+
+/**
+ * Wires the sheet's drag gestures onto its overlay root. Touch drives everything on phones; a mouse
+ * can drag the handle for narrow desktop windows.
+ *
+ * Touch listeners are non-passive because Safari does not implement directional `touch-action`, so
+ * cancelling `touchmove` is the only way to stop a claimed drag from also scrolling the content or
+ * becoming pull-to-refresh. A gesture the sheet does not claim is left completely native.
+ *
+ * In `full`, a content scroll that reaches the top and keeps pulling down is handed to the sheet
+ * mid-gesture, so one continuous swipe goes from scrolling the page to collapsing it.
+ */
+export function attachMobileSheetGestures(root: HTMLElement, callbacks: GestureCallbacks): () => void {
+  let gesture: ActiveGesture | undefined;
+
+  const begin = (id: number, target: EventTarget | null, x: number, y: number) => {
+    if (!callbacks.canStart() || !canStartMobileSheetGesture(target, root)) {
       gesture = undefined;
       return;
     }
-
-    const touch = event.touches[0];
     gesture = {
-      direction: 'pending',
-      startX: touch.clientX,
-      startY: touch.clientY,
-      touchId: touch.identifier,
+      id,
+      onHandle: target instanceof Element && Boolean(target.closest(MOBILE_SHEET_DRAG_HANDLE_SELECTOR)),
+      startX: x,
+      startY: y,
+      startTime: performance.now(),
+      decided: 'pending',
+      anchorY: y,
+      anchorTop: 0,
+      samples: [],
     };
   };
 
-  const handleTouchMove = (event: TouchEvent) => {
-    if (!gesture) return;
-
-    const touchId = gesture.touchId;
-    const touch = Array.from(event.touches).find(candidate => candidate.identifier === touchId);
-    if (!touch) return;
-
-    if (gesture.direction === 'pending') {
-      const deltaX = touch.clientX - gesture.startX;
-      const deltaY = touch.clientY - gesture.startY;
-      if (Math.max(Math.abs(deltaX), Math.abs(deltaY)) < 4) return;
-
-      gesture.direction = deltaY > 0 && Math.abs(deltaY) > Math.abs(deltaX) ? 'down' : 'native';
-    }
-
-    if (gesture.direction === 'down' && event.cancelable) {
-      event.preventDefault();
-    }
+  const claim = (active: ActiveGesture, y: number, time: number) => {
+    active.decided = 'sheet';
+    // First, so the sheet can settle anything in flight before its position is read.
+    callbacks.onDragStart();
+    active.anchorY = y;
+    active.anchorTop = callbacks.getTop();
+    active.samples = [{ time, y }];
   };
 
-  const clearGesture = () => {
+  /** Returns true when the sheet owns this move and the browser default must be cancelled. */
+  const move = (x: number, y: number): boolean => {
+    const active = gesture;
+    if (!active) return false;
+
+    if (active.decided === 'pending') {
+      const deltaX = x - active.startX;
+      const deltaY = y - active.startY;
+      if (Math.max(Math.abs(deltaX), Math.abs(deltaY)) < GESTURE_SLOP_PX) return false;
+      if (Math.abs(deltaX) > Math.abs(deltaY)) {
+        active.decided = 'horizontal';
+        return false;
+      }
+      const owned = shouldClaimMobileSheetGesture({
+        snap: callbacks.getSnap(),
+        direction: deltaY < 0 ? 'up' : 'down',
+        onHandle: active.onHandle,
+        contentScrollTop: contentScrollTop(root),
+      });
+      if (!owned) {
+        // Not ours yet, but a full-screen scroll back up to the top can still hand over below.
+        active.decided = 'native';
+        active.anchorY = y;
+        return false;
+      }
+      // Measured from touch-down, in distance and time, so the slop still moves the sheet and the
+      // first move doesn't read as a fling.
+      claim(active, active.startY, active.startTime);
+    }
+
+    if (active.decided === 'horizontal') return false;
+
+    if (active.decided === 'native') {
+      // Hand over only after a real pull: the same slop of downward travel, measured from the highest
+      // point the finger reached with the content at its top. A 1px reversal while a scroll gets
+      // going would otherwise take the gesture and stop the scroll until the finger lifts.
+      if (callbacks.getSnap() !== 'full' || contentScrollTop(root) > 0) {
+        active.anchorY = y;
+        return false;
+      }
+      active.anchorY = Math.min(active.anchorY, y);
+      if (y - active.anchorY < GESTURE_SLOP_PX) return false;
+      claim(active, y, performance.now());
+    }
+
+    active.samples.push({ time: performance.now(), y });
+    if (active.samples.length > 12) active.samples.shift();
+    // A little resistance past full screen instead of a hard stop.
+    const raw = active.anchorTop + (y - active.anchorY);
+    callbacks.onDragMove(raw < 0 ? raw * 0.2 : raw);
+    return true;
+  };
+
+  const cancel = () => {
+    const active = gesture;
     gesture = undefined;
+    if (active?.decided === 'sheet') callbacks.onDragCancel();
+  };
+
+  const end = () => {
+    const active = gesture;
+    gesture = undefined;
+    if (active?.decided !== 'sheet') return;
+    const last = active.samples[active.samples.length - 1];
+    const raw = active.anchorTop + (last.y - active.anchorY);
+    // The lift itself is a sample: a finger held still before lifting has no velocity left.
+    const samples = [...active.samples, { time: performance.now(), y: last.y }];
+    callbacks.onDragEnd(Math.max(0, raw), releaseVelocity(samples));
+  };
+
+  const handleTouchStart = (event: TouchEvent) => {
+    if (event.touches.length !== 1) {
+      // A second finger cancels a sheet drag rather than leaving it stuck mid-way.
+      cancel();
+      return;
+    }
+    const touch = event.touches[0];
+    begin(touch.identifier, event.target, touch.clientX, touch.clientY);
+  };
+
+  const handleTouchMove = (event: TouchEvent) => {
+    const id = gesture?.id;
+    const touch = Array.from(event.touches).find(candidate => candidate.identifier === id);
+    if (!touch) return;
+    if (move(touch.clientX, touch.clientY) && event.cancelable) event.preventDefault();
+  };
+
+  const handleMouseMove = (event: PointerEvent) => {
+    if (event.pointerId !== gesture?.id) return;
+    if (move(event.clientX, event.clientY)) event.preventDefault();
+  };
+
+  const stopMouseTracking = () => {
+    window.removeEventListener('pointermove', handleMouseMove);
+    window.removeEventListener('pointerup', handleMouseUp);
+    window.removeEventListener('pointercancel', handleMouseCancel);
+  };
+
+  const handleMouseUp = (event: PointerEvent) => {
+    if (event.pointerId !== gesture?.id) return;
+    stopMouseTracking();
+    end();
+  };
+
+  const handleMouseCancel = (event: PointerEvent) => {
+    if (event.pointerId !== gesture?.id) return;
+    stopMouseTracking();
+    cancel();
+  };
+
+  const handlePointerDown = (event: PointerEvent) => {
+    if (event.pointerType !== 'mouse' || event.button !== 0) return;
+    if (!(event.target instanceof Element) || !event.target.closest(MOBILE_SHEET_DRAG_HANDLE_SELECTOR)) return;
+    begin(event.pointerId, event.target, event.clientX, event.clientY);
+    if (!gesture) return;
+    window.addEventListener('pointermove', handleMouseMove);
+    window.addEventListener('pointerup', handleMouseUp);
+    window.addEventListener('pointercancel', handleMouseCancel);
   };
 
   root.addEventListener('touchstart', handleTouchStart, { passive: true });
   root.addEventListener('touchmove', handleTouchMove, { passive: false });
-  root.addEventListener('touchend', clearGesture);
-  root.addEventListener('touchcancel', clearGesture);
+  root.addEventListener('touchend', end);
+  root.addEventListener('touchcancel', cancel);
+  root.addEventListener('pointerdown', handlePointerDown);
 
   return () => {
     root.removeEventListener('touchstart', handleTouchStart);
     root.removeEventListener('touchmove', handleTouchMove);
-    root.removeEventListener('touchend', clearGesture);
-    root.removeEventListener('touchcancel', clearGesture);
+    root.removeEventListener('touchend', end);
+    root.removeEventListener('touchcancel', cancel);
+    root.removeEventListener('pointerdown', handlePointerDown);
+    stopMouseTracking();
   };
+}
+
+/**
+ * Calls `onScrolled` the first time the sheet's content scrolls away from the top. Scroll events
+ * don't bubble, so this listens in the capture phase on the overlay root.
+ */
+export function watchMobileSheetContentScroll(root: HTMLElement, onScrolled: () => void): () => void {
+  const handleScroll = (event: Event) => {
+    const target = event.target;
+    if (target instanceof HTMLElement && target.matches(MOBILE_SHEET_SCROLL_SELECTOR) && target.scrollTop > 0) {
+      onScrolled();
+    }
+  };
+  root.addEventListener('scroll', handleScroll, true);
+  return () => root.removeEventListener('scroll', handleScroll, true);
 }

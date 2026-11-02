@@ -35,13 +35,16 @@ describe('entity response query fragments', () => {
     expect(query).toContain('voteKind: $voteKind');
   });
 
-  it('reads one deterministic page of response summaries for exact claim and kind filters', () => {
+  it('reads one deterministic cursor page of response summaries for exact claim and kind filters', () => {
     const query = print(claimResponseSummariesQuery);
 
-    expect(query).toContain('query ClaimResponseSummaries($filter: UserVoteFilter!, $first: Int!, $offset: Int!)');
+    expect(query).toContain('query ClaimResponseSummaries($filter: UserVoteFilter!, $first: Int!, $after: Cursor)');
+    expect(query).toContain('userVotesConnection');
     expect(query).toContain('filter: $filter');
     expect(query).toContain('first: $first');
-    expect(query).toContain('offset: $offset');
+    expect(query).toContain('after: $after');
+    expect(query).not.toContain('offset');
+    expect(query).toContain('endCursor');
     expect(query).toContain('orderBy: [OBJECT_ID_ASC, VOTE_KIND_ASC, USER_ID_ASC]');
     expect(query).toContain('userId');
     expect(query).toContain('objectId');

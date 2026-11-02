@@ -87,3 +87,73 @@ export function nextExploreWindowCursor(args: {
   }
   return null;
 }
+
+/**
+ * For you cursor (GEO-3083): per stream, the first unserved row's offset and a mask of rows served
+ * after it; null once the stream has run out.
+ */
+const FOR_YOU_CURSOR_PREFIX = 'f2:';
+
+export type ForYouStreamCursor = { offset: number; served: ReadonlySet<number> } | null;
+export type ExploreForYouCursor = { topic: ForYouStreamCursor; best: ForYouStreamCursor };
+
+const FOR_YOU_START: ExploreForYouCursor = {
+  topic: { offset: 0, served: new Set() },
+  best: { offset: 0, served: new Set() },
+};
+
+function encodeStream(stream: ForYouStreamCursor): string {
+  if (stream === null) return '-';
+  let mask = 0n;
+  for (const index of stream.served) mask |= 1n << BigInt(index);
+  return `${stream.offset}.${mask.toString(36)}`;
+}
+
+function decodeStream(raw: string): ForYouStreamCursor | undefined {
+  if (raw === '-') return null;
+  const match = /^(\d+)\.([0-9a-z]+)$/.exec(raw);
+  if (!match) return undefined;
+  const offset = Number(match[1]);
+  if (!Number.isSafeInteger(offset)) return undefined;
+  const served = new Set<number>();
+  let mask = [...match[2]].reduce((value, digit) => value * 36n + BigInt(parseInt(digit, 36)), 0n);
+  for (let index = 0; mask > 0n && index < 1024; index += 1, mask >>= 1n) {
+    if (mask & 1n) served.add(index);
+  }
+  return { offset, served };
+}
+
+export function encodeExploreForYouCursor(cursor: ExploreForYouCursor): string {
+  return `${FOR_YOU_CURSOR_PREFIX}${encodeStream(cursor.topic)}:${encodeStream(cursor.best)}`;
+}
+
+/** Anything that is not a well-formed For you cursor restarts at the first page. */
+export function decodeExploreForYouCursor(raw: string | null): ExploreForYouCursor {
+  if (!raw?.startsWith(FOR_YOU_CURSOR_PREFIX)) return FOR_YOU_START;
+  const parts = raw.slice(FOR_YOU_CURSOR_PREFIX.length).split(':');
+  if (parts.length !== 2) return FOR_YOU_START;
+  const topic = decodeStream(parts[0]);
+  const best = decodeStream(parts[1]);
+  if (topic === undefined || best === undefined) return FOR_YOU_START;
+  return { topic, best };
+}
+
+/**
+ * Moves a stream to its first unconsumed row (`consumed` indexes the rows fetched at its offset).
+ * Null once a short fetch is fully consumed.
+ */
+export function advanceForYouStream(
+  stream: ForYouStreamCursor,
+  consumed: ReadonlySet<number>,
+  fetched: number,
+  limit: number
+): ForYouStreamCursor {
+  if (stream === null) return null;
+  let frontier = 0;
+  while (consumed.has(frontier)) frontier += 1;
+  if (frontier >= fetched && fetched < limit) return null;
+  // Kept even past this fetch: a later page may read less of the stream than the one that served it.
+  const served = new Set<number>();
+  for (const index of consumed) if (index > frontier) served.add(index - frontier);
+  return { offset: stream.offset + frontier, served };
+}

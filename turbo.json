@@ -1,5 +1,6 @@
 {
   "$schema": "https://turbo.build/schema.json",
+  "globalDependencies": ["patches/**"],
   "tasks": {
     "build": {
       "dependsOn": ["codegen", "^build"],
@@ -19,7 +20,7 @@
       "cache": false
     },
     "test": {
-      "dependsOn": ["build"]
+      "dependsOn": ["^build"]
     }
   }
 }

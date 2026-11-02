@@ -78,4 +78,46 @@ describe('NativeGeoImage', () => {
 
     expect(container).toBeEmptyDOMElement();
   });
+
+  describe('displayWidth', () => {
+    const filebase = 'https://mature-tomato-basilisk.myfilebase.com/ipfs/bafyAvatar';
+
+    it('asks the optimizer first, with widths the optimizer accepts', () => {
+      render(<NativeGeoImage value="ipfs://bafyAvatar" alt="avatar" displayWidth={20} />);
+
+      const image = screen.getByAltText('avatar');
+      expect(image.getAttribute('src')).toMatch(/^\/_next\/image\?url=/);
+      expect(decodeURIComponent(image.getAttribute('src') ?? '')).toContain(filebase);
+      // 20px at 1x and 2x snap to the configured imageSizes (32 and 48 by default).
+      expect(image.getAttribute('srcSet')).toMatch(/w=32.*1x.*w=48.*2x/);
+    });
+
+    it('falls back to the raw url, then the next gateway, then the fallback', () => {
+      render(
+        <NativeGeoImage value="ipfs://bafyAvatar" alt="avatar" displayWidth={20} fallback={<span>fallback</span>} />
+      );
+
+      fireEvent.error(screen.getByAltText('avatar'));
+      expect(screen.getByAltText('avatar').getAttribute('src')).toBe(filebase);
+      expect(screen.getByAltText('avatar').getAttribute('srcset')).toBeNull();
+
+      fireEvent.error(screen.getByAltText('avatar'));
+      expect(screen.getByAltText('avatar').getAttribute('src')).not.toBe(filebase);
+
+      for (let i = 0; i < IPFS_GATEWAY_COUNT; i += 1) fireEvent.error(screen.queryByAltText('avatar') ?? document.body);
+      expect(screen.getByText('fallback')).toBeInTheDocument();
+    });
+
+    it('never sends a host we do not control to the optimizer (GEO-2984)', () => {
+      render(<NativeGeoImage value="https://example.com/a.png" alt="avatar" displayWidth={20} />);
+
+      expect(screen.getByAltText('avatar').getAttribute('src')).toBe('https://example.com/a.png');
+    });
+
+    it('leaves the src alone when no displayWidth is given', () => {
+      render(<NativeGeoImage value="ipfs://bafyAvatar" alt="avatar" />);
+
+      expect(screen.getByAltText('avatar').getAttribute('src')).toBe(filebase);
+    });
+  });
 });

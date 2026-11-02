@@ -176,7 +176,7 @@ export function ImageZoom({ imageSrc, variant = 'default', alt = '' }: ImageZoom
 
   return (
     <Zoom>
-      <div className="relative overflow-hidden rounded-lg" style={imageStyles[variant]}>
+      <div className="relative max-w-full overflow-hidden rounded-lg" style={imageStyles[variant]}>
         <img src={src} alt={alt} onError={onError} loading="lazy" decoding="async" className="h-full object-cover" />
       </div>
     </Zoom>

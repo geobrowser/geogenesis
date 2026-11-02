@@ -3,6 +3,7 @@
  *
  *     /explore?modal=debates
  *     /explore?modal=debates&modalTarget=people
+ *     /explore?modal=debates&modalTarget=requests:<requestId>     GEO-3431
  *     /space/<id>/questions?modal=debates&via=email
  *
  * Built on the scheme in `core/deep-links/modal-deep-link` — see there for why the trigger is a
@@ -11,6 +12,7 @@
  * Any page: the hub is mounted app-wide in `app/entry.tsx`, so it has no host route to be
  * contextual to. `/explore` is only the default this builder fills in.
  */
+import { requestIdFromTarget } from '~/core/availability/availability-deep-link';
 import { DEEP_LINK_MODALS, toModal } from '~/core/deep-links/modal-deep-link';
 
 import type { DebatesHubTab } from '~/atoms';
@@ -57,9 +59,27 @@ export function debatesPanelTab(target: string | null): DebatesHubTab | null {
   // `Object.hasOwn` rather than `in`, which would walk the prototype and resolve
   // `?modalTarget=toString` to a tab.
   if (target === null) return null;
+  if (debatesPanelRequestId(target) !== null) return 'requests';
   if (Object.hasOwn(TABS, target)) return target as DebatesHubTab;
 
   return Object.hasOwn(RENAMED_TABS, target) ? (RENAMED_TABS[target] ?? null) : null;
+}
+
+/** What comes before a scheduled request's id in the hub's `modalTarget`. */
+const REQUEST_TARGET_PREFIX = 'requests:';
+
+/**
+ * GEO-3431: the scheduled request a link names, `modalTarget=requests:<requestId>`, or null. The
+ * requester heads-up email's "Withdraw the invite" opens the Requests tab on the invite it is about.
+ *
+ * In `modalTarget` rather than a param of its own, because it is a sub-target of the hub like the
+ * tab is. A geogenesis that predates this reads it as an unknown tab and opens the hub on its
+ * default, which still works.
+ */
+export function debatesPanelRequestId(target: string | null): string | null {
+  return target?.startsWith(REQUEST_TARGET_PREFIX)
+    ? requestIdFromTarget(target.slice(REQUEST_TARGET_PREFIX.length))
+    : null;
 }
 
 /**
@@ -69,11 +89,17 @@ export function debatesPanelTab(target: string | null): DebatesHubTab | null {
  * Reading the link back is `useDeepLinkParams(DEBATES_MODAL)` rather than a `requestsDebatesPanel`
  * here — a per-feature wrapper over `requestsModal` had no callers once the protocol was shared.
  */
-export function toDebatesPanel(options?: { tab?: DebatesHubTab; via?: string; pathname?: string }): string {
+export function toDebatesPanel(options?: {
+  tab?: DebatesHubTab;
+  /** GEO-3431: a scheduled request to bring into view. Implies the Requests tab. */
+  requestId?: string;
+  via?: string;
+  pathname?: string;
+}): string {
   return toModal({
     modal: DEBATES_MODAL,
     pathname: options?.pathname ?? DEBATES_PATHNAME,
-    target: options?.tab,
+    target: options?.requestId ? `${REQUEST_TARGET_PREFIX}${options.requestId}` : options?.tab,
     via: options?.via,
   });
 }

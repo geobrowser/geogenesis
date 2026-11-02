@@ -31,8 +31,19 @@ export function profileBySpaceIdQueryKey(spaceId: string) {
   return ['profile-by-space-id', validateSpaceId(spaceId) ?? spaceId] as const;
 }
 
-export function spacesByIdsQueryKey(spaceIds: string[]) {
-  return ['spaces-by-ids', normalizeSpaceIds(spaceIds)] as const;
+/** Keyed on the set, since `fetchPersonalSpacesByPageIds` resolves the whole set in two reads. */
+export function personalSpacesByPageIdsQueryKey(pageIds: string[]) {
+  return ['personal-spaces-by-page-ids', normalizeSpaceIds(pageIds)] as const;
+}
+
+/** Keyed on the set, since `fetchPersonalSpaceIds` answers the whole set in one read per 100 ids. */
+export function personalSpaceIdsQueryKey(ids: string[]) {
+  return ['personal-space-ids', normalizeSpaceIds(ids)] as const;
+}
+
+/** One cache entry per space, for the same reason as {@link profileBySpaceIdQueryKey}. */
+export function spaceByIdQueryKey(spaceId: string) {
+  return ['space-by-id', validateSpaceId(spaceId) ?? spaceId] as const;
 }
 
 /**

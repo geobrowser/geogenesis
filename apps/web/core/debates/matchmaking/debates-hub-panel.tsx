@@ -4,66 +4,73 @@ import * as React from 'react';
 
 import cx from 'classnames';
 import { MotionConfig, motion } from 'framer-motion';
-import { useAtom, useSetAtom } from 'jotai';
+import { useAtomValue, useSetAtom } from 'jotai';
+import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { createPortal } from 'react-dom';
 
+import { ActionContextProvider } from '~/core/action-context-provider';
 import { DEBATES_MODAL } from '~/core/debates/debates-panel-deep-link';
 import { requestsModal } from '~/core/deep-links/modal-deep-link';
 import { useIsMobileLayout } from '~/core/hooks/use-is-mobile-layout';
 import { useMobileSheetDrag } from '~/core/hooks/use-mobile-sheet-drag';
 
+import { Calendar } from '~/design-system/icons/calendar';
 import { CloseSmall } from '~/design-system/icons/close-small';
-import { MobileSheetGrabHandle } from '~/design-system/mobile-sheet-grab-handle';
+import { ExpandSmall } from '~/design-system/icons/expand-small';
+import { MobileSheetSurface } from '~/design-system/mobile-sheet-surface';
 import { Badge, tabGroupTabLinkStyles } from '~/design-system/tab-group';
 import { Text } from '~/design-system/text';
+import { ElevatedPopoverPortalContext } from '~/design-system/use-elevated-popover-portal';
 
-import { useDebateActivity, useGeoChatAuth, useUpdateDebateAvailability } from '../hooks';
-import { useScheduledAwaitingBadgeCount } from '../rooms/scheduled-awaiting';
-import { ClaimsTab } from './claims-tab';
-import { useDebateRequests, useMatchmakingScope } from './hooks';
+import { DrawnHubListProvider, useDrawnHubList } from '../debate-claim-card-surface';
+import { useDebateActivity, useGeoChatAuth } from '../hooks';
+import { useLobbyLineup } from '../lobbies/live-lobbies';
+import { useTodaysCallout } from '../todays-claims/use-todays-callout';
+import { useRecordHubTabPress } from './claims-tab';
+import { useDebateRequests, useMatchmakingMatches, useMatchmakingScope } from './hooks';
+import { hubAnalyticsAttributes } from './hub-analytics';
+import { HubAskProvider } from './hub-ask-context';
+import { HubHeaderControls } from './hub-header-controls';
+import { HubLiveStrip } from './hub-live-strip';
 import { HubSwap } from './hub-motion';
 import { hubClosesOnArrivalAt } from './hub-navigation';
-import { LobbyTab } from './lobby-tab';
+import { HUB_ICON_BUTTON_CLASS_NAME, hubPillClassName } from './hub-pill-button';
+import { NoTimesNudge } from './no-times-nudge';
+import { PanelExploreTab, PanelMatchesTab, panelExploreVariant, useMatchesShowOffline } from './panel-claim-tabs';
 import { PeopleTab } from './people-tab';
 import { RequestsTab } from './requests-tab';
-import { SetScheduleBanner } from './set-schedule-banner';
+import { ScrollableTabRow } from './scrollable-tab-row';
+import { SIGNED_OUT_TABS } from './signed-out-tabs';
+import { TodaysClaimsCallout } from './todays-claims-callout';
+import { useCalendarHref } from './use-calendar-href';
 import { useDebatesHub } from './use-debates-hub';
 import { useFocusTrap } from './use-focus-trap';
-import { useUnexpiredRequests } from './use-request-countdown';
-import { type DebatesHubTab, debatesHubFiltersOwnerAtom, resetDebatesHubFiltersAtom } from '~/atoms';
+import { useHubFilterOwner } from './use-hub-filter-owner';
+import { useRequestsTabCount } from './use-requests-tab-count';
+import { isWorkspaceList, useWorkspaceQuery, workspaceHref } from './use-workspace-query';
+import { type DebatesHubTab, debatesHubExploreShowAtom, debatesHubExploreSomeoneOnlineAtom } from '~/atoms';
 
 // The hub sits below the navbar (h-11) rather than covering it, so the toggle that opened it stays
 // visible and clickable. Mobile falls back to the bottom-sheet pattern used by the entity panel.
 const MOBILE_SHEET_TOP_OFFSET_PX = 120;
 
-// Reading order, widest to narrowest: everything you could debate, then who is around, then the
-// two lists that only exist once matchmaking has produced something. The landing tab is set
-// separately, by `DEFAULT_TAB` in use-debates-hub — it happens to agree with this order, but
-// reordering here does not move it.
+// GEO-3463: four tabs, People first. Who is around comes before what to debate, because People is
+// the tab people actually use most (52 of 66 panel users, 30 Sep–13 Oct); then the claims you could
+// debate now, then everything else, then what is waiting on you. "Live" became Matches — it always
+// listed claims, never lobbies — and "My positions" became one of Explore's Shows.
+//
+// The ids stay the ones links and the full-screen hub already use: `lobby` is the matches list
+// (`?tab=matches` was renamed onto it long ago), and `positions` still opens, on Explore's Show.
+// The landing tab is `DEFAULT_TAB` in use-debates-hub, which agrees with this order.
 const TABS: { id: DebatesHubTab; label: string }[] = [
-  { id: 'lobby', label: 'Lobby' },
   { id: 'people', label: 'People' },
+  { id: 'lobby', label: 'Matches' },
   { id: 'explore', label: 'Explore' },
-  { id: 'positions', label: 'Positions' },
   { id: 'requests', label: 'Requests' },
 ];
 
-/**
- * GEO-2725. Lobby, Positions and Requests are a particular person's, so signed out they have no
- * possible contents — not an empty list but a meaningless one. Both of Lobby's lists are viewer-relative:
- * geo-chat scores `debate_now` on who is available to debate *you*, and a match is a claim you hold
- * a side on. Explore and People describe the world rather than the viewer, so both read fine
- * anonymously and are what the hub offers before sign-in (GEO-2861). Positions is the third of the
- * viewer's own: it was a source inside Explore's picker and left that menu signed out for exactly
- * this reason, so promoting it to a tab (GEO-2863) promotes the rule with it.
- *
- * In the order the anonymous row draws them, and it is read that way below rather than used to
- * filter the signed-in order. Filtered, this list said what the row contained and `TABS` quietly
- * decided how it was arranged: the row led with People while the panel opened on Explore, which is
- * the one an anonymous visitor is actually here for and the one `visibleTab` falls back to.
- */
-const SIGNED_OUT_TABS: DebatesHubTab[] = ['explore', 'people'];
+// Which tabs exist signed out, and why, is in `./signed-out-tabs`: the debates link reads it too.
 
 function tabsFor(authenticated: boolean) {
   if (authenticated) return TABS;
@@ -77,15 +84,17 @@ function tabsFor(authenticated: boolean) {
  */
 function visibleTab(activeTab: DebatesHubTab, authenticated: boolean): DebatesHubTab {
   if (authenticated || SIGNED_OUT_TABS.includes(activeTab)) return activeTab;
-  return 'explore';
+  return 'people';
 }
 
 export function DebatesHubPanel() {
   const isMobile = useIsMobileLayout();
+  const [popoverContainer, setPopoverContainer] = React.useState<HTMLDivElement | null>(null);
   const { isOpen, activeTab, close, setTab } = useDebatesHub();
-  const { dragControls, handleDragEnd, handlePointerDown, setOverlayElement } = useMobileSheetDrag({
+  const { setOverlayElement, sheetStyle, sheetControlsRef, sheet } = useMobileSheetDrag({
     enabled: isMobile && isOpen,
     onDismiss: close,
+    peekTopPx: MOBILE_SHEET_TOP_OFFSET_PX,
   });
   // Held here rather than per tab, so switching tabs doesn't drop and re-take the gateway scope.
   useMatchmakingScope(isOpen);
@@ -174,7 +183,14 @@ export function DebatesHubPanel() {
   // deliberately not an announced control — leaving Escape, which a phone rarely has, as the only
   // way out. The desktop aside is non-modal, so its toggle stays reachable and the design's
   // header stands.
-  const body = <DebatesHubSurface activeTab={activeTab} onTabChange={setTab} onClose={isMobile ? close : undefined} />;
+  const body = (
+    <ActionContextProvider value={{ overlay: 'debates_hub_sheet', component: 'debate_matchmaking' }}>
+      {/* One reading of the open ask for every card, row and the strip (GEO-3463). */}
+      <HubAskProvider>
+        <DebatesHubSurface activeTab={activeTab} onTabChange={setTab} onClose={isMobile ? close : undefined} />
+      </HubAskProvider>
+    </ActionContextProvider>
+  );
 
   if (isMobile) {
     return createPortal(
@@ -187,35 +203,27 @@ export function DebatesHubPanel() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.15 }}
-          onPointerDown={handlePointerDown}
         >
           {/* Not a button: `aria-modal` hides it from assistive tech anyway, so labelling it
               "Close" only promised a control nobody could hear about — the header's button is the
               announced one. Tapping outside still closes, which is what this is for. */}
           <div aria-hidden className="absolute inset-0 bg-grey-04/50" onClick={close} />
-          <motion.div
+          <MobileSheetSurface
             ref={sheetRef as React.RefObject<HTMLDivElement>}
             tabIndex={-1}
             data-debates-hub
-            data-mobile-sheet-surface
             role="dialog"
             aria-modal="true"
             aria-label="Debates"
-            drag="y"
-            dragControls={dragControls}
-            dragListener={false}
-            dragConstraints={{ top: 0, bottom: 0 }}
-            dragElastic={0.12}
-            onDragEnd={handleDragEnd}
-            initial={{ y: '100%' }}
-            animate={{ y: 0 }}
-            transition={{ type: 'spring', damping: 30, stiffness: 320 }}
-            className="rounded-t-2xl shadow-2xl absolute inset-x-0 bottom-0 z-1 flex flex-col overflow-hidden overscroll-none bg-white"
-            style={{ top: MOBILE_SHEET_TOP_OFFSET_PX }}
+            sheetStyle={sheetStyle}
+            sheetControlsRef={sheetControlsRef}
+            sheet={sheet}
           >
-            <MobileSheetGrabHandle />
-            {body}
-          </motion.div>
+            <ElevatedPopoverPortalContext.Provider value={popoverContainer}>
+              {body}
+            </ElevatedPopoverPortalContext.Provider>
+            <div ref={setPopoverContainer} />
+          </MobileSheetSurface>
         </motion.div>
       </MotionConfig>,
       document.body
@@ -245,17 +253,28 @@ type SurfaceProps = {
 
 function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: SurfaceProps) {
   const { authenticated, ready, accountKey } = useGeoChatAuth();
-  const filtersReconciled = useFilterOwner(accountKey, ready);
+  const filtersReconciled = useHubFilterOwner(accountKey, ready);
   const tabs = tabsFor(authenticated);
   const activeTab = visibleTab(requestedTab, authenticated);
+  // GEO-3431: a link's scheduled request, which only this Requests tab (not the live rail's) shows.
+  const { focusedRequestId } = useDebatesHub();
   const { data: activity } = useDebateActivity(authenticated);
   const { data: requests } = useDebateRequests(authenticated);
 
-  const incoming = useUnexpiredRequests(requests?.incoming ?? []);
-  const scheduledAwaiting = useScheduledAwaitingBadgeCount(activity);
-  const requestCount = (requests ? incoming.length : (activity?.incoming_request_count ?? 0)) + scheduledAwaiting;
+  const requestCount = useRequestsTabCount({ authenticated, activity, requests });
+  // How many matches are online now, quietly beside the tab's name (the Panel-Matches board). The
+  // same query Matches reads, so opening the tab costs nothing more.
+  const { data: matches } = useMatchmakingMatches(authenticated);
+  const matchCount = matches?.matches.length ?? 0;
+  const lobbyLineup = useLobbyLineup();
+  const todaysCallout = useTodaysCallout();
+  const setExploreShow = useSetAtom(debatesHubExploreShowAtom);
   const scrollRef = React.useRef<HTMLDivElement>(null);
+  // The availability pill, which the schedule editor hands focus back to when it closes.
+  const scheduleButtonRef = React.useRef<HTMLButtonElement | null>(null);
 
+  const drawnList = useDrawnHubList();
+  const recordTabPress = useRecordHubTabPress(activeTab, drawnList);
   // One scroll container is shared by all four tabs, so a scrolled People list would otherwise
   // leave Requests scrolled to the same offset.
   const changeTab = React.useCallback(
@@ -266,210 +285,215 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
     [onTabChange]
   );
 
-  return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex shrink-0 items-center justify-between gap-2 px-4 pt-4 pb-3">
-        <Text as="h2" variant="smallTitle">
-          Debates
-        </Text>
-        <div className="flex min-w-0 items-center gap-1">
-          <AvailabilityToggle />
-          {onClose ? (
-            <button
-              type="button"
-              data-geo-analytics-label="Close debate hub"
-              data-geo-analytics-intent="close_debates_hub"
-              aria-label="Close debates"
-              onClick={onClose}
-              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-grey-04 transition-colors hover:bg-grey-01 hover:text-text"
-            >
-              <CloseSmall />
-            </button>
-          ) : null}
-        </div>
-      </div>
-
-      <SetScheduleBanner />
-
-      {/* Hidden until Privy resolves, not just the body below it. `authenticated` is false during
-          restoration, so a row drawn before then is the signed-out one — a returning viewer would
-          watch Matches and Requests appear, and a selected tab of theirs jump to Claims. */}
-      <div className={cx('shrink-0 px-4', !ready && 'invisible')} aria-hidden={!ready}>
-        <div className="relative">
-          {/* The row is `w-max` so the labels never compress, and both panel shells are
-              `overflow-hidden` — so on a narrow phone whichever tab sits last is simply cut off
-              with no way to reach it. Scrolling costs nothing at the widths where everything
-              already fits, and Requests carries the badge, so it is the worst one to lose. */}
-          <div className="no-scrollbar overflow-x-auto">
-            <div className="relative flex w-max items-center gap-6 pb-2">
-              {tabs.map(tab => (
-                <button
-                  key={tab.id}
-                  type="button"
-                  data-geo-analytics-label={`Debate hub ${tab.label} tab`}
-                  data-geo-analytics-intent="navigate_debates_hub"
-                  aria-current={activeTab === tab.id ? 'true' : undefined}
-                  onClick={() => changeTab(tab.id)}
-                  className={tabGroupTabLinkStyles({ active: activeTab === tab.id })}
-                >
-                  {tab.label}
-                  {tab.id === 'requests' && requestCount > 0 ? (
-                    <Badge>
-                      {requestCount}
-                      <span className="sr-only"> pending requests</span>
-                    </Badge>
-                  ) : null}
-                  {activeTab === tab.id && (
-                    <motion.div
-                      layoutId="debates-hub-tab-active-border"
-                      layout
-                      initial={false}
-                      transition={{ duration: 0.2 }}
-                      className="absolute right-0 bottom-[-8px] left-0 z-100 h-px bg-text"
-                    />
-                  )}
-                </button>
-              ))}
-            </div>
-          </div>
-          {/* Outside the scroll container so the rule spans the visible row rather than the
-              scrollable width. */}
-          <div className="absolute right-0 bottom-0 left-0 z-0 h-px bg-grey-02" />
-        </div>
-      </div>
-
-      {/* layoutScroll tells Motion to account for this element's scroll offset when it measures
-          card positions — without it, reordering a scrolled list animates from the wrong place. */}
-      <motion.div
-        layoutScroll
-        ref={scrollRef}
-        data-debates-hub-scroll
-        data-mobile-sheet-scroll
-        className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-6"
-      >
-        {/* `filtersReconciled` joins the Privy gate rather than becoming a second one: the reset
-            below runs in a passive effect, so the render that first sees a new account still holds
-            the previous one's filter bar. Rendering the tabs then would show B the labels A had
-            picked and fire B's first query with A's space ids, an instant before the effect
-            corrects both. One render, but it is the wrong viewer's data. */}
-        {!ready || !filtersReconciled ? null : (
-          <>
-            <HubSwap activeKey={activeTab}>
-              {activeTab === 'requests' ? (
-                <RequestsTab />
-              ) : activeTab === 'lobby' ? (
-                <LobbyTab onTabChange={changeTab} />
-              ) : activeTab === 'explore' ? (
-                <ClaimsTab />
-              ) : activeTab === 'positions' ? (
-                <ClaimsTab variant="positions" />
-              ) : (
-                <PeopleTab onTabChange={changeTab} />
-              )}
-            </HubSwap>
-            {/* Explore's four serial round trips, started from whichever tab the viewer is on
-                instead of from the moment they ask for Explore — see `ClaimsTab`'s `warm`. The hub
-                opens on the Lobby and Explore is one press away, so the chain has the whole time
-                the viewer spends reading this tab to finish, and usually has.
-
-                Inside the readiness gate above for the reason that gate exists: warming with the
-                previous account's filter bar would fill the cache under the wrong viewer's query
-                keys, which is worse than not warming at all.
-
-                Dropped once Explore is the open tab, so the real one is the only instance holding
-                the selection atoms and geo-chat's space scopes. */}
-            {activeTab === 'explore' ? null : <ClaimsTab warm />}
-          </>
-        )}
-      </motion.div>
-    </div>
-  );
-}
-
-function AvailabilityToggle() {
-  const { authenticated } = useGeoChatAuth();
-  const { data: activity } = useDebateActivity(authenticated);
-  const updateAvailability = useUpdateDebateAvailability();
-
-  const available = activity?.available_to_debate ?? false;
-
-  if (!authenticated) return null;
+  // "My positions" is a Show on Explore now (GEO-3463). A link or an older caller asking for the
+  // positions tab lands there with it chosen, rather than on a tab that no longer exists.
+  // Signed out there are no positions to show, so it is plain Explore.
+  React.useEffect(() => {
+    if (requestedTab !== 'positions' || !ready) return;
+    if (authenticated) setExploreShow('mine');
+    onTabChange('explore');
+  }, [authenticated, onTabChange, ready, requestedTab, setExploreShow]);
 
   return (
-    <button
-      type="button"
-      data-geo-analytics-label="Debate availability"
-      data-geo-analytics-intent="update_debate_availability"
-      role="switch"
-      // Without this the switch announces "Unavailable, off", which is ambiguous about which way
-      // pressing it goes.
-      aria-label="Available to debate"
-      aria-checked={available}
-      disabled={updateAvailability.isPending}
-      onClick={() => updateAvailability.mutate(!available)}
-      className={cx(
-        'flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1.5 text-metadataMedium transition-colors disabled:cursor-wait',
-        available ? 'bg-green/15 text-green' : 'bg-grey-01 text-grey-04'
-      )}
-    >
-      <span>{available ? "I'm available" : 'Unavailable'}</span>
-      <span
-        aria-hidden="true"
-        className={cx(
-          'relative h-4 w-6 shrink-0 rounded-full transition-colors',
-          available ? 'bg-green' : 'bg-grey-03'
-        )}
-      >
-        <span
-          className={cx(
-            'absolute top-0.5 left-0.5 h-3 w-3 rounded-full bg-white transition-transform',
-            available && 'translate-x-2'
-          )}
+    <DrawnHubListProvider value={drawnList}>
+      <div className="flex min-h-0 flex-1 flex-col">
+        <div className="flex shrink-0 items-center justify-between gap-2 px-4 pt-4 pb-3">
+          <Text as="h2" variant="smallTitle">
+            Debates
+          </Text>
+          <HubHeaderControls scheduleButtonRef={scheduleButtonRef}>
+            <CalendarButton />
+            {onClose ? (
+              <button
+                type="button"
+                data-geo-analytics-label="Close debate hub"
+                data-geo-analytics-intent="close_debates_hub"
+                aria-label="Close debates"
+                onClick={onClose}
+                className={HUB_ICON_BUTTON_CLASS_NAME}
+              >
+                <CloseSmall />
+              </button>
+            ) : null}
+          </HubHeaderControls>
+        </div>
+
+        {/* At most one thing before the tabs, and nothing when there is nothing to say (GEO-3463): a
+            44px strip, or the live lobby card. The lobby spotlight, the upcoming lobbies card and the
+            schedule banner used to stack here, about 520px at an 800px window before the first person
+            or claim. */}
+        <HubLiveStrip
+          lineup={lobbyLineup}
+          todaysCallout={
+            todaysCallout.visible ? (
+              <TodaysClaimsCallout callout={todaysCallout} onFindDebate={() => changeTab('lobby')} />
+            ) : null
+          }
         />
-      </span>
-    </button>
+
+        {/* Hidden until Privy resolves, not just the body below it. `authenticated` is false during
+            restoration, so a row drawn before then is the signed-out one — a returning viewer would
+            watch Matches and Requests appear, and a selected tab of theirs jump to Claims. */}
+        <div className={cx('shrink-0 px-4', !ready && 'invisible')} aria-hidden={!ready}>
+          {/* The row is `w-max` so the labels never compress, and both panel shells are
+              `overflow-hidden` — so on a narrow phone whichever tab sits last would simply be cut
+              off. It scrolls instead, with a fade and an arrow on whichever side has more (GEO-3148).
+              The four tabs (GEO-3463) fit the panel's 400px at the design's 18px gap with the
+              Requests badge showing, so the arrows only appear on a very narrow phone. */}
+          <ScrollableTabRow activeKey={activeTab} analyticsLabelPrefix="Debate hub" className="gap-4.5">
+            {tabs.map(tab => (
+              <button
+                key={tab.id}
+                type="button"
+                {...hubAnalyticsAttributes(`${tab.label} tab`, 'navigate_debates_hub')}
+                aria-current={activeTab === tab.id ? 'true' : undefined}
+                data-tab-active={activeTab === tab.id ? 'true' : undefined}
+                onClick={() => {
+                  recordTabPress(tab.id);
+                  changeTab(tab.id);
+                }}
+                className={tabGroupTabLinkStyles({ active: activeTab === tab.id })}
+              >
+                {tab.label}
+                {tab.id === 'lobby' && matchCount > 0 ? (
+                  <span className="text-breadcrumb font-medium text-grey-04">
+                    {matchCount}
+                    {/* The count is of matched claims, not of people online. */}
+                    <span className="sr-only"> {matchCount === 1 ? 'match' : 'matches'}</span>
+                  </span>
+                ) : null}
+                {tab.id === 'requests' && requestCount > 0 ? (
+                  <Badge>
+                    {requestCount}
+                    <span className="sr-only"> pending requests</span>
+                  </Badge>
+                ) : null}
+                {activeTab === tab.id && (
+                  <motion.div
+                    layoutId="debates-hub-tab-active-border"
+                    layout
+                    initial={false}
+                    transition={{ duration: 0.2 }}
+                    className="absolute right-0 bottom-[-8px] left-0 z-100 h-px bg-text"
+                  />
+                )}
+              </button>
+            ))}
+          </ScrollableTabRow>
+        </div>
+
+        {/* layoutScroll tells Motion to account for this element's scroll offset when it measures
+            card positions — without it, reordering a scrolled list animates from the wrong place. */}
+        <motion.div
+          layoutScroll
+          ref={scrollRef}
+          data-debates-hub-scroll
+          data-mobile-sheet-scroll
+          className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-6"
+        >
+          {/* `filtersReconciled` joins the Privy gate rather than becoming a second one: the reset
+              below runs in a passive effect, so the render that first sees a new account still holds
+              the previous one's filter bar. Rendering the tabs then would show B the labels A had
+              picked and fire B's first query with A's space ids, an instant before the effect
+              corrects both. One render, but it is the wrong viewer's data. */}
+          {!ready || !filtersReconciled ? null : (
+            <>
+              {/* Upcoming lobbies are not above any tab any more (GEO-3463): the next one is in the strip,
+                  the ones the viewer is going to are in Requests, and all of them are on the calendar. */}
+              <HubSwap activeKey={activeTab}>
+                {activeTab === 'requests' ? (
+                  <RequestsTab focusedRequestId={focusedRequestId} />
+                ) : activeTab === 'lobby' ? (
+                  <PanelMatchesTab onTabChange={changeTab} />
+                ) : activeTab === 'explore' || activeTab === 'positions' ? (
+                  <PanelExploreTab onTabChange={changeTab} />
+                ) : (
+                  <PeopleTab onTabChange={changeTab} />
+                )}
+              </HubSwap>
+              {/* Explore's four serial round trips, started from whichever tab the viewer is on
+                  instead of from the moment they ask for Explore — see `ClaimsTab`'s `warm`. The panel
+                  opens on People and Explore is one press away, so the chain has the whole time
+                  the viewer spends reading this tab to finish, and usually has.
+
+                  Inside the readiness gate above for the reason that gate exists: warming with the
+                  previous account's filter bar would fill the cache under the wrong viewer's query
+                  keys, which is worse than not warming at all.
+
+                  Dropped once Explore is the open tab, so the real one is the only instance holding
+                  the selection atoms and geo-chat's space scopes. */}
+              {activeTab === 'explore' ? null : <PanelExploreTab warm onTabChange={changeTab} />}
+            </>
+          )}
+        </motion.div>
+
+        {!ready || !filtersReconciled ? null : <NoTimesNudge scheduleButtonRef={scheduleButtonRef} />}
+        {!ready || !filtersReconciled ? null : <ExpandToWorkspaceLink activeTab={activeTab} />}
+      </div>
+    </DrawnHubListProvider>
   );
 }
 
 /**
- * Keeps the hub's filter bar attributed to the viewer who set it.
+ * Calendar (GEO-3152): everyone's free time as a full-screen week. The panel closes on the way, so
+ * it does not sit over the week it opened; "Back to Debates" there brings it back on this page.
  *
- * The selections are session-scoped (GEO-2850), and a session outlives a sign-in — so "whose are
- * these" has to be tracked rather than assumed. Three transitions, and they do not want the same
- * answer:
- *
- * Signing in is the *same person* authenticating, not a new one. The Claims tab offers a sign-in
- * prompt from inside its own empty state, so wiping the bar there would lose the picks a viewer
- * made seconds earlier on the flow the tab itself invited — which is the complaint GEO-2850 exists
- * to fix. Nothing is cleared, and nothing is re-armed either: an untouched session still has its
- * seed, so the membership default GEO-2834 is about lands on its own once the account's spaces
- * arrive. A session whose seed is spent is one where the viewer worked the menu, and forcing it
- * back would overwrite what they did — including the deliberate clear that GEO-2789 says must
- * never be second-guessed, which looks identical to an untouched filter from here.
- *
- * A different account is a different viewer, and inherits nothing.
- *
- * Signing *out* changes nothing here. `owner` keeps naming the last account seen, so the next
- * sign-in is still compared against it — otherwise A could sign out, B sign in, and B be treated
- * as a first sign-in and handed A's filters.
- *
- * Held until Privy has resolved, because `accountKey` is null before that and a null mid-resolve
- * is not someone signing out.
+ * The header's only calendar icon, so it always means everyone's week; your own times are under
+ * the availability pill beside it. Icon-only on a phone, where the sheet also carries Close.
  */
-function useFilterOwner(accountKey: string | null, ready: boolean) {
-  const [owner, setOwner] = useAtom(debatesHubFiltersOwnerAtom);
-  const resetFilters = useSetAtom(resetDebatesHubFiltersAtom);
+function CalendarButton() {
+  const { close } = useDebatesHub();
+  const href = useCalendarHref();
+  return (
+    <Link
+      href={href}
+      onClick={close}
+      aria-label="Calendar"
+      data-geo-analytics-label="Debate hub Calendar"
+      data-geo-analytics-intent="open_debate_calendar"
+      className={hubPillClassName('secondary', 'gap-1.5 md:w-7 md:px-0 [&_svg]:shrink-0')}
+    >
+      <Calendar />
+      <span className="md:sr-only">Calendar</span>
+    </Link>
+  );
+}
 
-  // Only a handover between two established accounts leaves anything on screen that is not this
-  // viewer's. Every other case — signed out, first sign-in, the same account — keeps the bar it
-  // already has by design, so there is nothing to wait for and the tabs render immediately.
-  const awaitingHandover = ready && accountKey !== null && owner !== null && owner !== accountKey;
+/**
+ * The way out to the full-screen hub, carrying the list this tab is drawing and what narrows it:
+ * Matches showing offline people (switched on, or its fallback) is your positions, Explore's lists
+ * are whichever its Show and "Someone online" chose — My positions, geo-chat's (`lobby`) or the tag.
+ * Several picked spaces stay behind, since full screen would read them as any of them — see
+ * `useWorkspaceQuery`. Full screen has no Sort, so the panel's stays behind too.
+ */
+function ExpandToWorkspaceLink({ activeTab }: { activeTab: DebatesHubTab }) {
+  const { close } = useDebatesHub();
+  const { authenticated } = useGeoChatAuth();
+  const show = useAtomValue(debatesHubExploreShowAtom);
+  const someoneOnline = useAtomValue(debatesHubExploreSomeoneOnlineAtom);
+  const { showsOffline } = useMatchesShowOffline(activeTab === 'lobby');
+  const list =
+    activeTab === 'explore'
+      ? panelExploreVariant({ authenticated, show, someoneOnline })
+      : activeTab === 'lobby' && showsOffline
+        ? 'positions'
+        : activeTab;
+  // The panel tab's own selection, which is what is on screen (GEO-3463).
+  const query = useWorkspaceQuery(
+    isWorkspaceList(list) ? list : null,
+    activeTab === 'lobby' ? 'panelMatches' : 'panelExplore'
+  );
 
-  React.useEffect(() => {
-    if (!ready || accountKey === null || owner === accountKey) return;
-    if (owner !== null) resetFilters();
-    setOwner(accountKey);
-  }, [accountKey, owner, ready, resetFilters, setOwner]);
-
-  return !awaitingHandover;
+  return (
+    <div className="shrink-0 border-t border-grey-02 px-4 py-2.5">
+      <Link
+        href={workspaceHref(query)}
+        onClick={close}
+        className="flex items-center justify-center gap-1.5 text-metadata text-grey-04 transition-colors hover:text-text"
+      >
+        <ExpandSmall />
+        Open full screen
+      </Link>
+    </div>
+  );
 }

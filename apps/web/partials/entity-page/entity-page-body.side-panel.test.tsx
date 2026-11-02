@@ -27,6 +27,13 @@ const mocks = vi.hoisted(() => ({
   space: null as { type: string; entity: { id: string; types: { id: string }[] } } | null,
 }));
 
+// Follow (GEO-3236) writes through the account and reads follows; both have their own suites.
+vi.mock('~/core/follows/follow-button', () => ({ FollowButton: () => null }));
+vi.mock('~/core/follows/person-follow-counts', () => ({
+  usePersonFollowerCount: () => null,
+  usePersonFollowers: () => null,
+}));
+
 vi.mock('~/core/hooks/use-user-is-editing', () => ({ useUserIsEditing: () => mocks.editing }));
 // Node's built-in localStorage shim can shadow jsdom with a partial object. This
 // layout test only reaches the pending-space atom through transitive UI imports.
@@ -97,10 +104,12 @@ vi.mock('~/partials/entity-page/toggle-entity-page', () => ({
 vi.mock('~/partials/entity-page/automatic-mode-toggle', () => ({
   AutomaticModeToggle: () => <div data-testid="automatic-mode-toggle" />,
 }));
-vi.mock('~/partials/entity-page/backlinks-client-container', () => ({ BacklinksClientContainer: () => null }));
+vi.mock('~/partials/entity-page/backlinks-client-container', () => ({
+  BacklinksClientContainer: () => <div data-testid="backlinks" />,
+}));
 vi.mock('~/partials/entity-page/type-schema-inline', () => ({ TypeSchemaInline: () => null }));
 vi.mock('~/partials/entity-page/entity-page-header', () => ({ EntityPageHeader: () => null }));
-vi.mock('~/partials/editor/editor', () => ({ Editor: () => null }));
+vi.mock('~/partials/editor/lazy-editor', () => ({ Editor: () => null }));
 vi.mock('~/partials/comments/comments-section', () => ({
   CommentSection: (props: Record<string, unknown>) => {
     mocks.commentSection = props;
@@ -224,7 +233,9 @@ describe('EntityPageBody relation side panel', () => {
     ).toBe(4);
     expect(screen.queryByTestId('description')).toBeNull();
     expect(screen.getByTestId('person-profile').parentElement).toHaveClass('mt-6');
-    expect(mocks.actions).toMatchObject({ isVoteable: true, compact: true });
+    // GEO-3236: a profile is followed, not voted on, so Follow leads the actions and the votes go.
+    expect(mocks.actions).toMatchObject({ isVoteable: false, compact: true });
+    expect((mocks.actions as { leading?: unknown }).leading).toBeTruthy();
   });
 
   it('withholds generic-only chrome while the Person space lookup is pending', () => {
@@ -392,5 +403,42 @@ describe('EntityPageBody topic side panel', () => {
     expect(screen.getByTestId('properties')).toBeInTheDocument();
     expect(mocks.topicPage?.isEditing).toBe(true);
     expect(mocks.topicPage?.footer).toBeTruthy();
+  });
+});
+
+/**
+ * The claim and topic read views leave out the generic page's "Referenced by" list; editors still
+ * need it, so it comes back beneath either view in edit mode only.
+ */
+describe.each([
+  ['claim', CLAIM_TYPE_ID],
+  ['topic', TOPIC_TYPE_ID],
+])('EntityPageBody %s references', (name, typeId) => {
+  it('hides references in read mode', () => {
+    mocks.entity = { id: 'entity-1', types: [{ id: typeId }] };
+
+    render(<EntityPageBody variant="route" {...SHARED} serverRelations={[]} />);
+
+    expect(screen.getByTestId(`${name}-page`)).toBeInTheDocument();
+    expect(screen.queryByTestId('backlinks')).not.toBeInTheDocument();
+  });
+
+  it('shows references while editing', () => {
+    mocks.entity = { id: 'entity-1', types: [{ id: typeId }] };
+    mocks.editing = true;
+
+    render(<EntityPageBody variant="route" {...SHARED} serverRelations={[]} />);
+
+    expect(screen.getByTestId(`${name}-page`)).toContainElement(screen.getByTestId('backlinks'));
+  });
+
+  it('keeps references while editing even when properties are hidden', () => {
+    mocks.entity = { id: 'entity-1', types: [{ id: typeId }] };
+    mocks.editing = true;
+
+    render(<EntityPageBody variant="sidePanel" {...SHARED} hideProperties />);
+
+    expect(screen.queryByTestId('properties')).not.toBeInTheDocument();
+    expect(screen.getByTestId('backlinks')).toBeInTheDocument();
   });
 });

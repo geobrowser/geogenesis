@@ -1,5 +1,11 @@
+'use client';
+
 import * as React from 'react';
 
+import cx from 'classnames';
+import { usePathname } from 'next/navigation';
+
+import { useIsPhoneLayout } from '~/core/hooks/use-is-phone-layout';
 import { NavUtils } from '~/core/utils/utils';
 
 import { ClientOnly } from '~/design-system/client-only';
@@ -7,6 +13,7 @@ import { GeoLogoLarge } from '~/design-system/icons/geo-logo-large';
 import { NavigationMenu } from '~/design-system/icons/navigation-menu';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
+import { MobileNavbarBrand } from './mobile-navbar-brand';
 import { NavbarClientActions } from './navbar-client-actions';
 import { NavbarSpaceMetadata } from './navbar-space-metadata';
 
@@ -29,40 +36,59 @@ export function Navbar({
   hideLogo = false,
   showBrowseButton = true,
 }: Props) {
+  const isExplore = usePathname() === '/explore';
+  const isPhone = useIsPhoneLayout();
+  const compact = isExplore && isPhone;
+
   return (
     <nav
       ref={navbarRef}
       tabIndex={-1}
       data-app-navbar
-      className="sticky top-0 z-60 flex h-11 w-full items-center justify-between gap-1 border-b border-divider bg-white px-4 py-1 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-text max-[359px]:gap-0 max-[359px]:px-2"
+      className={cx(
+        'sticky top-0 z-60 flex h-11 w-full items-center justify-between gap-1 border-b border-divider bg-white px-4 py-1 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-text',
+        isExplore ? 'md:gap-0 md:border-0 md:py-0' : 'max-[359px]:gap-0 max-[359px]:px-2'
+      )}
     >
+      {isExplore ? (
+        <div className="hidden min-w-0 items-center md:flex">
+          <MobileNavbarBrand placement="navbar" />
+        </div>
+      ) : null}
       {/* `min-w-0` so this side is what gives when the bar is tight. Without it a flex child will
           not shrink below its content, so on a narrow phone the two groups fought and the controls
           on the right -- the only route to an account since they came back on mobile -- were the
           ones pushed out. The breadcrumb truncating is the right thing to lose. */}
-      <div className="flex min-w-0 items-center gap-8 max-[359px]:gap-2! mobile:gap-2 md:gap-4">
-        {showBrowseButton ? (
-          <button
-            ref={browseButtonRef}
-            type="button"
-            aria-label="Open browse menu"
-            aria-haspopup="dialog"
-            aria-expanded={browseOpen}
-            aria-controls="mobile-browse-drawer"
-            onClick={onBrowseClick}
-            className="-my-1 -ml-3 hidden h-11 w-11 shrink-0 items-center justify-center rounded-lg text-grey-04 transition-colors hover:bg-grey-01 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-text active:bg-divider mobile:flex"
-          >
-            <NavigationMenu />
-          </button>
-        ) : null}
-        {/* The mark holds its size (`shrink-0`) so the squeeze lands on the breadcrumb text. */}
-        {hideLogo ? null : (
-          <Link href={NavUtils.toRoot()} className={showBrowseButton ? 'shrink-0 mobile:hidden' : 'shrink-0'}>
-            <GeoLogoLarge />
-          </Link>
-        )}
-        <NavbarSpaceMetadata />
-      </div>
+      {!compact ? (
+        <div
+          className={cx(
+            'flex min-w-0 items-center gap-8 max-[359px]:gap-2! mobile:gap-2 md:gap-4',
+            isExplore && 'md:hidden'
+          )}
+        >
+          {showBrowseButton ? (
+            <button
+              ref={browseButtonRef}
+              type="button"
+              aria-label="Open browse menu"
+              aria-haspopup="dialog"
+              aria-expanded={browseOpen}
+              aria-controls="mobile-browse-drawer"
+              onClick={onBrowseClick}
+              className="-my-1 -ml-3 hidden h-11 w-11 shrink-0 items-center justify-center rounded-lg text-grey-04 transition-colors hover:bg-grey-01 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-text active:bg-divider mobile:flex"
+            >
+              <NavigationMenu />
+            </button>
+          ) : null}
+          {/* The mark holds its size (`shrink-0`) so the squeeze lands on the breadcrumb text. */}
+          {hideLogo ? null : (
+            <Link href={NavUtils.toRoot()} className={showBrowseButton ? 'shrink-0 mobile:hidden' : 'shrink-0'}>
+              <GeoLogoLarge />
+            </Link>
+          )}
+          <NavbarSpaceMetadata />
+        </div>
+      ) : null}
 
       {/* Hide navbar actions until we are on the client. This is because our account state only exists
           on the client due to the nature of wallets. By having different client and server states
@@ -79,7 +105,7 @@ export function Navbar({
           the breadcrumb remains the only content allowed to shrink. */}
       <ClientOnly>
         <div className="shrink-0">
-          <NavbarClientActions onSearchClick={onSearchClick} />
+          <NavbarClientActions compact={compact} onSearchClick={onSearchClick} />
         </div>
       </ClientOnly>
     </nav>

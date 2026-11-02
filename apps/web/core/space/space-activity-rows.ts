@@ -1,5 +1,6 @@
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 
+import { Effect } from 'effect';
 import { parse } from 'graphql';
 
 import { SCORE_SYSTEM_PROPERTY } from '~/core/constants';
@@ -14,6 +15,7 @@ import {
 import { exploreCardNodeFields, exploreCardPropertyFragment } from '~/core/explore/explore-card-selection';
 import { EXPLORE_ENTITY_NAME_PROPERTY_ID } from '~/core/explore/explore-constants';
 import type { EntityFilter } from '~/core/gql/graphql';
+import { graphql } from '~/core/io/graphql-client';
 import { normId } from '~/core/utils/norm-id';
 
 import { SPACE_ACTIVITY_TYPE_ID, type SpaceActivityKind } from './space-debate-activity';
@@ -328,3 +330,36 @@ export function decodeSpaceActivityRows(spaceId: string, response: SpaceActivity
     hasNextPage: connection?.pageInfo?.hasNextPage ?? false,
   };
 }
+
+/** One page of a space's activity rows. Shared by the hook and the server's seed. */
+export function fetchSpaceActivityRowsPage(args: {
+  spaceId: string;
+  kind: SpaceActivityKind;
+  sort: SpaceActivitySort;
+  filters: SpaceActivityFilters;
+  after: string | null;
+  signal?: AbortSignal;
+}) {
+  return Effect.runPromise(
+    graphql({
+      query: spaceActivityRowsDocumentFor(args.sort),
+      decoder: (response: SpaceActivityRowsResponse) => decodeSpaceActivityRows(args.spaceId, response),
+      variables: spaceActivityRowsVariables({
+        spaceId: args.spaceId,
+        kind: args.kind,
+        sort: args.sort,
+        first: SPACE_ACTIVITY_PAGE_SIZE,
+        after: args.after,
+        filters: args.filters,
+      }),
+      signal: args.signal,
+    })
+  );
+}
+
+export const spaceActivityRowsQueryKey = (
+  spaceId: string,
+  kind: SpaceActivityKind,
+  sort: SpaceActivitySort,
+  filters: SpaceActivityFilters
+) => ['space-activity-rows', spaceId, kind, sort, filters.topicIds, filters.searchClaimIds] as const;

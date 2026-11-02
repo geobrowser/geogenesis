@@ -3,6 +3,7 @@ import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 
 import { Environment } from '../environment';
+import { mapWithConcurrency } from '../utils/map-with-concurrency';
 import { getSpacesWhereMember } from './queries';
 import { type ApiProposalListItem, ApiProposalListResponseSchema, encodePathSegment, restFetch } from './rest';
 import { isValidUUID, spaceIdToGraphqlUuid } from './rest/validation';
@@ -70,6 +71,7 @@ function buildMyProposalStatsQuery(spaceId: string, nowSeconds: string): string 
 
 const REST_PAGE_SIZE = 100;
 const MAX_PAGES_PER_SPACE = 40;
+const SPACE_QUERY_CONCURRENCY = 6;
 
 async function fetchProposalPagesForSpace({
   spaceId,
@@ -129,8 +131,7 @@ async function fetchProposalPagesForSpace({
 }
 
 /**
- * Vote-related sidebar metrics: the GraphQL API does not expose `proposal` on `ProposalVoteFilter`,
- * so we aggregate from REST (`voterId` + per-space lists) across spaces the user can act in.
+ * Aggregates from REST (`voterId` + per-space lists) across spaces the user can act in.
  */
 async function fetchVoteBasedSidebarCountsRest(memberSpaceId: string): Promise<{
   votedOnAccepted: number;
@@ -149,16 +150,16 @@ async function fetchVoteBasedSidebarCountsRest(memberSpaceId: string): Promise<{
 
   const spaceIds = [...new Set([...editorIds, ...memberSpaces.map(s => s.id)])];
 
-  let votedOnAccepted = 0;
-  let votedOnRejected = 0;
-  let acceptedMembers = 0;
-  let acceptedEditors = 0;
-
-  for (const spaceId of spaceIds) {
+  const perSpace = await mapWithConcurrency(spaceIds, SPACE_QUERY_CONCURRENCY, async spaceId => {
     const [accepted, rejected] = await Promise.all([
       fetchProposalPagesForSpace({ spaceId, memberSpaceId, status: 'ACCEPTED' }),
       fetchProposalPagesForSpace({ spaceId, memberSpaceId, status: 'REJECTED' }),
     ]);
+
+    let votedOnAccepted = 0;
+    let votedOnRejected = 0;
+    let acceptedMembers = 0;
+    let acceptedEditors = 0;
 
     for (const p of accepted) {
       if (p.userVote == null) continue;
@@ -175,9 +176,19 @@ async function fetchVoteBasedSidebarCountsRest(memberSpaceId: string): Promise<{
         votedOnRejected += 1;
       }
     }
-  }
 
-  return { votedOnAccepted, votedOnRejected, acceptedMembers, acceptedEditors };
+    return { votedOnAccepted, votedOnRejected, acceptedMembers, acceptedEditors };
+  });
+
+  return perSpace.reduce(
+    (totals, space) => ({
+      votedOnAccepted: totals.votedOnAccepted + space.votedOnAccepted,
+      votedOnRejected: totals.votedOnRejected + space.votedOnRejected,
+      acceptedMembers: totals.acceptedMembers + space.acceptedMembers,
+      acceptedEditors: totals.acceptedEditors + space.acceptedEditors,
+    }),
+    { votedOnAccepted: 0, votedOnRejected: 0, acceptedMembers: 0, acceptedEditors: 0 }
+  );
 }
 
 export async function fetchSidebarCounts(spaceId: string): Promise<SidebarCounts> {
@@ -193,19 +204,20 @@ export async function fetchSidebarCounts(spaceId: string): Promise<SidebarCounts
     fetchVoteBasedSidebarCountsRest(spaceId),
   ]);
 
+  let myProposals = EMPTY_COUNTS.myProposals;
   if (Either.isLeft(myResult)) {
     logBatchError('my proposals', myResult.left);
-    return EMPTY_COUNTS;
-  }
-
-  const my = myResult.right;
-
-  return {
-    myProposals: {
+  } else {
+    const my = myResult.right;
+    myProposals = {
       inProgress: my.myInProgress.totalCount,
       accepted: my.myAccepted.totalCount,
       rejected: my.myRejected.totalCount,
-    },
+    };
+  }
+
+  return {
+    myProposals,
     votedOn: {
       accepted: voteRest.votedOnAccepted,
       rejected: voteRest.votedOnRejected,
