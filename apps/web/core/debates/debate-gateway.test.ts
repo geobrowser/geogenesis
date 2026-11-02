@@ -74,6 +74,12 @@ class FakeWebSocket {
     this.close();
   }
 
+  serverCloseWith(code: number) {
+    if (this.readyState === FakeWebSocket.CLOSED) return;
+    this.readyState = FakeWebSocket.CLOSED;
+    (this.onclose as ((event?: { code?: number }) => void) | null)?.({ code });
+  }
+
   send(value: string) {
     this.sent.push(JSON.parse(value) as Record<string, unknown>);
   }
@@ -1701,6 +1707,81 @@ describe('DebateGatewayClient', () => {
       await flushInvalidations();
       expect(anonymous.getSnapshot().status).toBe('ready');
       expectInvalidated(invalidateQueries, { queryKey: publicKey, refetchType: 'active' });
+    });
+
+    it('stops reconnecting on a capacity close, polls, and tries once more on focus', async () => {
+      anonymous.retainScope(roomScope);
+      sockets[0]!.open();
+      sockets[0]!.receive('ERROR', { code: 'anonymous_connection_limit', message: 'too many' });
+      expect(anonymous.getSnapshot()).toMatchObject({ status: 'degraded', pauseReason: 'capacity' });
+      expect(sockets[0]!.readyState).toBe(FakeWebSocket.CLOSED);
+      await vi.advanceTimersByTimeAsync(120_000);
+      expect(sockets).toHaveLength(1);
+
+      anonymous.retryAfterFocus();
+      expect(sockets).toHaveLength(2);
+      // Refused again by the close code alone (the per-replica cap): parked once more.
+      sockets[1]!.open();
+      sockets[1]!.serverCloseWith(4429);
+      expect(anonymous.getSnapshot().pauseReason).toBe('capacity');
+      await vi.advanceTimersByTimeAsync(120_000);
+      expect(sockets).toHaveLength(2);
+
+      anonymous.retryAfterFocus();
+      sockets[2]!.open();
+      sockets[2]!.receive('READY', readyPayload([echo]));
+      expect(anonymous.getSnapshot().status).toBe('ready');
+      // A focus while connected does nothing.
+      anonymous.retryAfterFocus();
+      expect(sockets).toHaveLength(3);
+    });
+
+    it('treats the per-replica capacity error the same way', () => {
+      anonymous.retainScope(roomScope);
+      sockets[0]!.open();
+      sockets[0]!.receive('ERROR', { code: 'anonymous_capacity' });
+      expect(anonymous.getSnapshot().pauseReason).toBe('capacity');
+    });
+
+    it('degrades a room past the room cap without dropping the socket', async () => {
+      anonymous.retainScope(roomScope);
+      sockets[0]!.open();
+      sockets[0]!.receive('READY', readyPayload([]));
+      sockets[0]!.receive('ERROR', { code: 'subscription_limit_reached', subscription: echo });
+      expect(anonymous.getSnapshot()).toMatchObject({ status: 'degraded', paused: true });
+      expect(sockets[0]!.readyState).toBe(FakeWebSocket.OPEN);
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(sockets).toHaveLength(1);
+    });
+
+    it('resends a rate-limited SUBSCRIBE after the stated delay instead of reconnecting', async () => {
+      anonymous.retainScope(roomScope);
+      sockets[0]!.open();
+      sockets[0]!.receive('READY', readyPayload([]));
+      const subscribes = () => sockets[0]!.sent.filter(frame => frame.op === 'SUBSCRIBE').length;
+      expect(subscribes()).toBe(1);
+      sockets[0]!.receive('ERROR', { code: 'rate_limited', message: 'limit', retry_after_seconds: 7 });
+      await vi.advanceTimersByTimeAsync(6_999);
+      expect(subscribes()).toBe(1);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(subscribes()).toBe(2);
+      expect(sockets).toHaveLength(1);
+      expect(sockets[0]!.readyState).toBe(FakeWebSocket.OPEN);
+    });
+
+    it('waits out a rate limit before reconnecting when a limited heartbeat closes the socket', async () => {
+      anonymous.retainScope(roomScope);
+      sockets[0]!.open();
+      sockets[0]!.receive('READY', readyPayload([echo]));
+      sockets[0]!.receive('ERROR', {
+        code: 'rate_limited',
+        message: 'gateway command limit `x` exceeded; retry after 20 seconds',
+      });
+      sockets[0]!.serverClose();
+      await vi.advanceTimersByTimeAsync(19_999);
+      expect(sockets).toHaveLength(1);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(sockets).toHaveLength(2);
     });
 
     it('keeps the signed-in and signed-out caches apart across a sign-in', async () => {

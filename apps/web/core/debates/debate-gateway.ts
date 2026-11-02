@@ -83,9 +83,10 @@ export type MatchmakingSection = 'people' | 'claims' | 'matches';
  * - `disconnected` and `session` are ordinary transport trouble that a reconnect resolves.
  * - `unsupported` means the server never advertised the debate capability, so nothing will recover
  *   it without a deploy.
+ * - `capacity`: geo-chat turned a signed-out socket away for load; it waits for window focus.
  */
 export type DebateGatewayPauseReason =
-  'disconnected' | 'session' | 'rate_limited' | 'subscription_limit' | 'unsupported' | 'error';
+  'disconnected' | 'session' | 'rate_limited' | 'subscription_limit' | 'unsupported' | 'error' | 'capacity';
 
 export type DebateGatewaySnapshot = {
   status: 'idle' | 'connecting' | 'ready' | 'degraded';
@@ -144,7 +145,7 @@ type WebSocketLike = {
   onopen: (() => void) | null;
   onmessage: ((event: { data: unknown }) => void) | null;
   onerror: (() => void) | null;
-  onclose: (() => void) | null;
+  onclose: ((event?: { code?: number }) => void) | null;
   send(value: string): void;
   close(): void;
 };
@@ -254,6 +255,10 @@ export class DebateGatewayClient {
   private invalidationTimer: ReturnType<typeof setTimeout> | null = null;
   private invalidationRetryTimers = new Set<ReturnType<typeof setTimeout>>();
   private connectionGeneration = 0;
+  /** Signed out and turned away for load; see `retryAfterFocus`. */
+  private parked = false;
+  /** A reconnect after a rate-limited command waits until then. */
+  private rateLimitedUntil = 0;
 
   constructor(options: DebateGatewayClientOptions) {
     this.queryClient = options.queryClient;
@@ -337,6 +342,8 @@ export class DebateGatewayClient {
   stop() {
     const accountKey = this.accountKey;
     this.enabled = false;
+    this.parked = false;
+    this.rateLimitedUntil = 0;
     this.getPrivyIdentityToken = null;
     this.accountKey = null;
     this.hasReachedReady = false;
@@ -455,7 +462,7 @@ export class DebateGatewayClient {
   }
 
   private connectAnonymous() {
-    if (!this.enabled || this.socket) return;
+    if (!this.enabled || this.socket || this.parked) return;
     ++this.connectionGeneration;
     const socket = this.createWebSocket(gatewayWebSocketUrl(this.getApiBaseUrl(), null));
     this.socket = socket;
@@ -468,7 +475,7 @@ export class DebateGatewayClient {
     socket.onopen = () => undefined;
     socket.onmessage = event => this.handleMessage(socket, event.data);
     socket.onerror = () => this.forceReconnect(socket);
-    socket.onclose = () => this.handleClose(socket);
+    socket.onclose = event => this.handleClose(socket, event?.code);
   }
 
   private handleMessage(socket: WebSocketLike, value: unknown) {
@@ -505,6 +512,14 @@ export class DebateGatewayClient {
       case 'ERROR':
         if (isEventsLagged(envelope.payload)) {
           this.queueBroadReconcile();
+        } else if (this.anonymous && isAnonymousCapacityError(envelope.payload)) {
+          this.parkForCapacity();
+        } else if (this.anonymous && isRateLimited(envelope.payload)) {
+          // The socket stays open for a limited SUBSCRIBE, so resend unconfirmed rooms after the
+          // delay. A limited HEARTBEAT closes the socket, and the reconnect waits the same delay.
+          this.retryUnconfirmedScopesAfter(rateLimitRetryDelayMs(envelope.payload));
+        } else if (this.anonymous && this.refuseScope(envelope.payload, 'subscription_limit_reached')) {
+          // That room alone polls; the socket and its other rooms stay up.
         } else if (isRateLimited(envelope.payload)) {
           const retryDelayMs = rateLimitRetryDelayMs(envelope.payload);
           // Loud on purpose, and distinct from every other pause. This one is *our* fault: we sent
@@ -1284,14 +1299,51 @@ export class DebateGatewayClient {
     }, delay);
   }
 
-  private handleClose(socket: WebSocketLike) {
+  private handleClose(socket: WebSocketLike, code?: number) {
     if (socket !== this.socket) return;
     this.socket = null;
     this.readyForDebates = false;
     this.clearConnectionTimers();
     if (!this.enabled) return;
+    if (this.anonymous && code === ANONYMOUS_CAPACITY_CLOSE_CODE) {
+      this.parkForCapacity();
+      return;
+    }
     this.setSnapshot({ status: 'degraded', paused: true, pauseReason: 'disconnected' });
-    this.scheduleReconnect();
+    this.scheduleReconnect(Math.max(0, this.rateLimitedUntil - Date.now()));
+  }
+
+  /** Turned away for load: no reconnects until `retryAfterFocus`. Readers poll meanwhile. */
+  private parkForCapacity() {
+    this.parked = true;
+    this.clearTimer('reconnect');
+    this.disposeSocket();
+    this.clearConnectionTimers();
+    this.setSnapshot({ status: 'degraded', paused: true, pauseReason: 'capacity' });
+  }
+
+  /** Signed out, on window focus: one more try after a capacity refusal. */
+  retryAfterFocus() {
+    if (!this.anonymous || !this.enabled || !this.parked) return;
+    this.parked = false;
+    this.setSnapshot({ status: 'connecting', paused: false, pauseReason: null });
+    void this.connect();
+  }
+
+  private retryUnconfirmedScopesAfter(delayMs: number) {
+    this.rateLimitedUntil = Date.now() + delayMs;
+    for (const key of [...this.sentScopes]) {
+      if (this.confirmedScopes.has(key)) continue;
+      this.sentScopes.delete(key);
+      const retry = this.subscriptionRetries.get(key) ?? { attempt: 0, timer: null };
+      if (retry.timer) clearTimeout(retry.timer);
+      retry.timer = setTimeout(() => {
+        retry.timer = null;
+        const retained = this.scopes.get(key);
+        if (retained) this.sendSubscription(retained.scope, 'SUBSCRIBE');
+      }, delayMs);
+      this.subscriptionRetries.set(key, retry);
+    }
   }
 
   private forceReconnect(socket: WebSocketLike, minimumDelayMs = 0, reason: DebateGatewayPauseReason = 'disconnected') {
@@ -1308,7 +1360,11 @@ export class DebateGatewayClient {
 
   /** `false` when the ERROR names no scope (older geo-chat, or a room), leaving the generic path. */
   private refuseForbiddenScope(payload: unknown) {
-    const scope = subscriptionErrorScope(payload, 'subscription_forbidden');
+    return this.refuseScope(payload, 'subscription_forbidden');
+  }
+
+  private refuseScope(payload: unknown, code: 'subscription_forbidden' | 'subscription_limit_reached') {
+    const scope = subscriptionErrorScope(payload, code);
     if (!scope) return false;
     const key = scopeKey(scope);
     this.sentScopes.delete(key);
@@ -1574,6 +1630,12 @@ export function useSpaceChatRoomScope(
     if (!enabled || !spaceId || !roomId || !roomKind) return;
     return gateway.retainScope({ scope: 'chat-room', space_id: spaceId, room_id: roomId, room_kind: roomKind });
   }, [enabled, gateway, roomId, roomKind, spaceId]);
+  React.useEffect(() => {
+    if (signedIn || !enabled) return;
+    const retry = () => publicChatGateway.retryAfterFocus();
+    window.addEventListener('focus', retry);
+    return () => window.removeEventListener('focus', retry);
+  }, [enabled, signedIn]);
   return React.useSyncExternalStore(gateway.subscribe, gateway.getSnapshot, gateway.getSnapshot);
 }
 
@@ -1695,7 +1757,10 @@ function parseScope(value: unknown): DebateGatewayScope | null {
 }
 
 /** The scope a subscription ERROR names, when geo-chat echoes one this client can send. */
-function subscriptionErrorScope(payload: unknown, code: 'subscription_forbidden' | 'subscription_check_failed') {
+function subscriptionErrorScope(
+  payload: unknown,
+  code: 'subscription_forbidden' | 'subscription_check_failed' | 'subscription_limit_reached'
+) {
   if (!isRecord(payload) || payload.code !== code) return null;
   return parseScope(payload.subscription);
 }
@@ -1708,6 +1773,13 @@ function isEventsLagged(payload: unknown) {
   return isRecord(payload) && payload.code === 'events_lagged';
 }
 
+const ANONYMOUS_CAPACITY_CLOSE_CODE = 4429;
+
+/** geo-chat's per-address and per-replica caps on signed-out sockets. */
+function isAnonymousCapacityError(payload: unknown) {
+  return isRecord(payload) && (payload.code === 'anonymous_connection_limit' || payload.code === 'anonymous_capacity');
+}
+
 function isRateLimited(payload: unknown) {
   return isRecord(payload) && payload.code === 'rate_limited';
 }
@@ -1717,6 +1789,9 @@ function isSubscriptionLimitReached(payload: unknown) {
 }
 
 function rateLimitRetryDelayMs(payload: unknown) {
+  if (isRecord(payload) && typeof payload.retry_after_seconds === 'number' && payload.retry_after_seconds > 0) {
+    return payload.retry_after_seconds * 1_000;
+  }
   if (!isRecord(payload) || typeof payload.message !== 'string') return 1_000;
   const seconds = payload.message.match(/retry after (\d+) seconds/)?.[1];
   return seconds ? Number(seconds) * 1_000 : 1_000;
