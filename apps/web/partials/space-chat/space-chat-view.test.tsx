@@ -107,6 +107,94 @@ describe('SpaceChatView', () => {
     expect(screen.getByLabelText('Message')).toHaveValue('again');
   });
 
+  describe('composer while sends are in flight', () => {
+    const box = () => screen.getByLabelText('Message') as HTMLTextAreaElement;
+    const type = (value: string) => fireEvent.change(box(), { target: { value } });
+    const enter = () => fireEvent.keyDown(box(), { key: 'Enter' });
+    const deferredSend = () => {
+      const pending: Array<{ body: string; resolve: () => void; reject: (error: unknown) => void }> = [];
+      const onSend = vi.fn(
+        (body: string) => new Promise<void>((resolve, reject) => void pending.push({ body, resolve, reject }))
+      );
+      return { onSend, pending };
+    };
+
+    it('clears the box at once and keeps text typed while a send is in flight', async () => {
+      const { onSend, pending } = deferredSend();
+      renderView({ composer: { kind: 'post', onSend, maxLength: 4000 } });
+      type('ok');
+      enter();
+      expect(box().value).toBe('');
+      type('and a follow-up');
+      await act(async () => undefined);
+      await act(async () => pending[0]!.resolve());
+      expect(box().value).toBe('and a follow-up');
+    });
+
+    it('sends every message of a rapid burst, one at a time, in order', async () => {
+      const { onSend, pending } = deferredSend();
+      renderView({ composer: { kind: 'post', onSend, maxLength: 4000 } });
+      for (const n of [1, 2, 3, 4, 5]) {
+        type(`m${n}`);
+        enter();
+      }
+      expect(box().value).toBe('');
+      for (let n = 0; n < 5; n += 1) {
+        await act(async () => undefined);
+        expect(onSend).toHaveBeenCalledTimes(n + 1);
+        await act(async () => pending[n]!.resolve());
+      }
+      expect(onSend.mock.calls.map(([body]) => body)).toEqual(['m1', 'm2', 'm3', 'm4', 'm5']);
+    });
+
+    it('shows a rate limit and loses no text: a failed send waits under the error while newer text is typed', async () => {
+      const { onSend, pending } = deferredSend();
+      renderView({ composer: { kind: 'post', onSend, maxLength: 4000 } });
+      type('first');
+      enter();
+      type('second draft');
+      await act(async () => undefined);
+      await act(async () =>
+        pending[0]!.reject(
+          new GeoChatRequestError('rate limit', 'rate_limited', 429, 12_000, { limit: 'sends_by_user' })
+        )
+      );
+      expect(screen.getByRole('alert')).toHaveTextContent('You’re sending messages too fast. Try again in 12s.');
+      expect(box().value).toBe('second draft');
+      expect(screen.getByText(SPACE_CHAT_VIEW_COPY.notSent('first'))).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: SPACE_CHAT_VIEW_COPY.restore }));
+      expect(box().value).toBe('first\nsecond draft');
+      expect(screen.queryByText(SPACE_CHAT_VIEW_COPY.notSent('first'))).not.toBeInTheDocument();
+    });
+
+    it('puts a failed send back into an empty box', async () => {
+      const { onSend, pending } = deferredSend();
+      renderView({ composer: { kind: 'post', onSend, maxLength: 4000 } });
+      type('lonely');
+      enter();
+      await act(async () => undefined);
+      await act(async () => pending[0]!.reject(new Error('network')));
+      expect(box().value).toBe('lonely');
+      expect(screen.getByRole('alert')).toBeInTheDocument();
+    });
+  });
+
+  it('keeps the edit box read-only while its save is in flight', async () => {
+    let finish: () => void = () => undefined;
+    const onEdit = vi.fn(() => new Promise<void>(resolve => (finish = resolve)));
+    renderView({ messages: [message('2', ANN, { body: 'mine' })], onEdit });
+    fireEvent.click(screen.getByRole('button', { name: 'Edit message' }));
+    const editBox = screen.getByLabelText('Edit message') as HTMLTextAreaElement;
+    fireEvent.change(editBox, { target: { value: 'mine, edited' } });
+    fireEvent.keyDown(editBox, { key: 'Enter' });
+    expect(onEdit).toHaveBeenCalledWith('2', 'mine, edited');
+    expect(editBox.readOnly).toBe(true);
+    fireEvent.keyDown(editBox, { key: 'Enter' });
+    expect(onEdit).toHaveBeenCalledTimes(1);
+    await act(async () => finish());
+  });
+
   it('turns a picked mention into its token on send', async () => {
     const { onSend } = renderView();
     const input = screen.getByLabelText('Message') as HTMLTextAreaElement;

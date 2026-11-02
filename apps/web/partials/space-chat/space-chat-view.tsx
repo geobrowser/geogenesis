@@ -45,6 +45,8 @@ export const SPACE_CHAT_VIEW_COPY = {
   replyingTo: (name: string) => `Replying to ${name}`,
   originalMessage: 'Original message',
   sendFailed: 'Could not send. Try again.',
+  notSent: (text: string) => `Not sent: ${text}`,
+  restore: 'Restore',
   editFailed: 'Could not save the edit. Try again.',
   deleteFailed: 'Could not delete. Try again.',
   reactFailed: 'Could not react. Try again.',
@@ -549,7 +551,7 @@ function EditForm({
   const initial = React.useMemo(() => bodyToDraft(body, mentionName), [body, mentionName]);
   const mention = useMentionDraft(initial.draft, initial.mentions, mentionCandidates);
   const save = () => {
-    if (mention.draft.trim() === '') return;
+    if (busy || mention.draft.trim() === '') return;
     onSave(draftToBody(mention.draft.trim(), mention.mentions));
   };
   return (
@@ -575,6 +577,8 @@ function EditForm({
           }
         }}
         aria-label="Edit message"
+        // Text typed while the save is in flight would close with the form.
+        readOnly={busy}
         autoFocus
         minRows={1}
         maxRows={5}
@@ -610,6 +614,8 @@ function SmallButton({
 }
 
 type MentionDraft = ReturnType<typeof useMentionDraft>;
+
+type UnsentDraft = { draft: string; mentions: DraftMention[]; replyToId: string | null };
 
 /** A draft with `@` mentions: the text, the people picked, and the open picker's state. */
 function useMentionDraft(initialDraft: string, initialMentions: DraftMention[], candidates?: ChatViewPerson[]) {
@@ -661,6 +667,11 @@ function useMentionDraft(initialDraft: string, initialMentions: DraftMention[], 
     reset: () => {
       setDraft('');
       setMentions([]);
+      setQuery(null);
+    },
+    restore: (nextDraft: string, nextMentions: DraftMention[]) => {
+      setDraft(nextDraft);
+      setMentions(nextMentions);
       setQuery(null);
     },
     onChange: (event: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -738,8 +749,13 @@ function ChatComposer({
   onCancelReply: () => void;
 }) {
   const mention = useMentionDraft('', [], composer.kind === 'post' ? composer.mentionCandidates : undefined);
-  const [sending, setSending] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  // Sends that failed while the box held newer text, oldest first, until restored.
+  const [unsent, setUnsent] = React.useState<UnsentDraft[]>([]);
+  // Sends go one after another, so they post in the order typed.
+  const queue = React.useRef<Promise<void>>(Promise.resolve());
+  const draftRef = React.useRef(mention.draft);
+  draftRef.current = mention.draft;
   const inputRef = mention.inputRef;
 
   React.useEffect(() => {
@@ -770,21 +786,38 @@ function ChatComposer({
     );
   }
 
-  const send = async () => {
+  const onSend = composer.onSend;
+  // The box clears at once so the next message can be typed; a failed one comes back into an
+  // empty box, or waits under the error until restored.
+  const send = () => {
     const draft = mention.draft.trim();
-    if (draft === '' || sending) return;
-    setSending(true);
+    if (draft === '') return;
+    const sent: UnsentDraft = { draft, mentions: mention.mentions, replyToId: replyTo?.id ?? null };
+    mention.reset();
+    onCancelReply();
     setError(null);
-    try {
-      await composer.onSend(draftToBody(draft, mention.mentions), replyTo?.id ?? null);
-      mention.reset();
-      onCancelReply();
-    } catch (cause) {
-      // The draft stays, so a refused send (a rate limit) can go again as written.
-      setError(errorMessage(cause, SPACE_CHAT_VIEW_COPY.sendFailed));
-    } finally {
-      setSending(false);
-    }
+    queue.current = queue.current.then(async () => {
+      try {
+        await onSend(draftToBody(sent.draft, sent.mentions), sent.replyToId);
+      } catch (cause) {
+        setError(errorMessage(cause, SPACE_CHAT_VIEW_COPY.sendFailed));
+        if (draftRef.current.trim() === '') {
+          draftRef.current = sent.draft;
+          mention.restore(sent.draft, sent.mentions);
+        } else {
+          setUnsent(current => [...current, sent]);
+        }
+      }
+    });
+  };
+
+  const restoreUnsent = () => {
+    const current = mention.draft.trim();
+    const drafts = [...unsent.map(entry => entry.draft), ...(current ? [current] : [])];
+    mention.restore(drafts.join('\n'), [...unsent.flatMap(entry => entry.mentions), ...mention.mentions]);
+    setUnsent([]);
+    setError(null);
+    inputRef.current?.focus();
   };
 
   return (
@@ -793,6 +826,14 @@ function ChatComposer({
         <p className="px-1 pb-1 text-footnote text-red-01" role="alert">
           {error}
         </p>
+      ) : null}
+      {unsent.length > 0 ? (
+        <div className="flex items-center gap-2 px-1 pb-1 text-footnote text-grey-04">
+          <span className="min-w-0 flex-1 truncate">
+            {SPACE_CHAT_VIEW_COPY.notSent(unsent.map(entry => entry.draft).join(' · '))}
+          </span>
+          <SmallButton onClick={restoreUnsent}>{SPACE_CHAT_VIEW_COPY.restore}</SmallButton>
+        </div>
       ) : null}
       {replyTo ? (
         <div className="flex items-center gap-2 px-1 pb-1 text-footnote text-grey-04">
@@ -805,7 +846,7 @@ function ChatComposer({
       <form
         onSubmit={event => {
           event.preventDefault();
-          void send();
+          send();
         }}
         className="relative flex items-end gap-2"
       >
@@ -820,7 +861,7 @@ function ChatComposer({
             if (event.key === 'Escape' && replyTo) onCancelReply();
             if (event.key === 'Enter' && !event.shiftKey) {
               event.preventDefault();
-              void send();
+              send();
             }
           }}
           aria-label="Message"
@@ -832,7 +873,7 @@ function ChatComposer({
         />
         <button
           type="submit"
-          disabled={sending || mention.draft.trim() === ''}
+          disabled={mention.draft.trim() === ''}
           className="shrink-0 rounded-md bg-text px-3 py-1.5 text-metadataMedium text-white disabled:opacity-40"
         >
           {SPACE_CHAT_VIEW_COPY.send}
