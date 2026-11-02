@@ -2500,20 +2500,15 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   useOpenRoundsOutcomeAnalytics(debate, localSlot);
 
   const endLocalTurn = React.useCallback(async () => {
-    if (
-      !localSlot ||
-      pendingTurnYield ||
-      countdown.effectiveStatus !== 'in_progress' ||
-      countdown.activeSlot !== localSlot ||
-      countdown.turnIndex === null
-    ) {
-      return;
-    }
+    if (!localSlot || pendingTurnYield || !countdownDebate || countdown.turnIndex === null) return;
+
+    const endedAtMs = serverClock.now();
+    if (!isLocalTurnLiveAt(countdownDebate, endedAtMs, countdown.turnIndex, localSlot)) return;
 
     const pendingYield = {
       turnIndex: countdown.turnIndex,
       participantSlot: localSlot,
-      endedAtMs: serverClock.now(),
+      endedAtMs,
     };
     setRoomError(null);
     // Close both the source and published tracks at the press, before the request or React's
@@ -2529,20 +2524,30 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         turnIndex: pendingYield.turnIndex,
         endedAtMs: pendingYield.endedAtMs,
       });
-    } catch (error) {
+    } catch {
       const refreshedDebate = await refetchDebate();
       setPendingTurnYield(null);
       const authoritativeYield = refreshedDebate.data?.turn_yields?.some(
         turnYield => turnYield.turn_index === pendingYield.turnIndex
       );
-      if (!authoritativeYield) {
-        setRoomError(error instanceof Error ? error.message : 'Could not end the turn.');
+      // geo-chat judges the press on its own clock, so one at the buzzer can still land past the
+      // turn's end and be refused. If the turn is over by now, the timer has ended it anyway.
+      const turnStillLive =
+        !refreshedDebate.data ||
+        isLocalTurnLiveAt(
+          refreshedDebate.data,
+          serverClock.now(),
+          pendingYield.turnIndex,
+          pendingYield.participantSlot
+        );
+      if (!authoritativeYield && turnStillLive) {
+        // Never geo-chat's message: it names request fields, not anything the debater did.
+        setRoomError('Could not end the turn. Try again.');
       }
     }
   }, [
-    countdown.activeSlot,
-    countdown.effectiveStatus,
     countdown.turnIndex,
+    countdownDebate,
     endDebateTurn,
     localSlot,
     localTracksRef,
@@ -4781,6 +4786,17 @@ export function recordingWindowForDebate(debate: Debate): DebateRecordingWindow 
     startAtMs,
     endAtMs: endAtMs + RECORDING_POST_ROLL_MS,
   };
+}
+
+/** Whether `turnIndex` is still `slot`'s turn to speak at `now`, not yielded and not run out. */
+function isLocalTurnLiveAt(debate: Debate, now: number, turnIndex: number, slot: ParticipantSlot) {
+  const turnWindow = countdownWindowForDebate(debate, now);
+  return (
+    turnWindow.effectiveStatus === 'in_progress' &&
+    turnWindow.activeSlot === slot &&
+    turnWindow.turnIndex === turnIndex &&
+    turnWindow.yieldingSlot === null
+  );
 }
 
 function debateWithPendingYield(debate: Debate, pendingTurnYield: PendingTurnYield | null): Debate {

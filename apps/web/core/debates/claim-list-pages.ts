@@ -10,8 +10,9 @@ import { TAG_PROPERTY_ID } from '~/core/constants';
 import { uuidToHex } from '~/core/id/normalize';
 import { graphql } from '~/core/io/graphql-client';
 
-import { DEBATE_TAG_ID } from './ontology';
+import { DEBATE_AGENDA_TYPE_ID, DEBATE_TAG_ID } from './ontology';
 import { tagDisplaySpaceId } from './tagged-claims';
+import { isTodaysClaimsList } from './todays-claims/todays-claims-list-id';
 import { isSpaceDebatePublishable } from './use-debate-publishable-spaces';
 
 /**
@@ -133,6 +134,7 @@ const CATALOG_SOURCE = /* GraphQL */ `
     $tagPropertyId: UUID!
     $tagId: UUID!
     $claimTypeId: UUID!
+    $agendaTypeId: UUID!
     $blocksTypeId: UUID!
     $itemTypeId: UUID!
     $relationsLimit: Int!
@@ -145,7 +147,11 @@ const CATALOG_SOURCE = /* GraphQL */ `
       filter: {
         typeId: { is: $tagPropertyId }
         toEntityId: { is: $tagId }
-        fromEntity: { not: { typeIds: { anyEqualTo: $claimTypeId } } }
+        # Not claims, and not daily agendas: Today's claims stands for those (GEO-3491). In the query,
+        # so a day's agendas never use up the catalog's pages.
+        fromEntity: {
+          and: [{ not: { typeIds: { anyEqualTo: $claimTypeId } } }, { not: { typeIds: { anyEqualTo: $agendaTypeId } } }]
+        }
       }
     ) {
       pageInfo {
@@ -310,6 +316,7 @@ async function fetchClaimListCatalog(signal?: AbortSignal): Promise<ClaimListCat
           tagPropertyId: TAG_PROPERTY_ID,
           tagId: DEBATE_TAG_ID,
           claimTypeId: CLAIM_TYPE_ID,
+          agendaTypeId: DEBATE_AGENDA_TYPE_ID,
           blocksTypeId: SystemIds.BLOCKS,
           itemTypeId: SystemIds.COLLECTION_ITEM_RELATION_TYPE,
           relationsLimit: RELATIONS_LIMIT,
@@ -484,7 +491,8 @@ export function useClaimListPage(entityId: string, spaceId: string) {
         })
       ),
     staleTime: CLAIM_LIST_STALE_TIME,
-    enabled: Boolean(id && space),
+    // Today's claims is no page in the graph; its tab reads the agendas instead.
+    enabled: Boolean(id && space) && !isTodaysClaimsList(id),
   });
 }
 

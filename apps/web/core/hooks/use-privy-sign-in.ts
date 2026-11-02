@@ -38,6 +38,8 @@ export type PrivySignInCallOptions = {
   onCancel?: () => void;
   /** Where this press returns to, for a caller whose destination depends on what was pressed. */
   redirectTo?: string;
+  /** A new account is asked only for a name in onboarding (GEO-3517); see `usePrepareOnboarding`. */
+  nameOnlyOnboarding?: boolean;
 };
 
 type PrivySignIn = (
@@ -85,7 +87,10 @@ export function usePrivySignIn(onComplete?: () => void, options?: UsePrivySignIn
   return React.useCallback<PrivySignIn>(
     (properties, callOptions) => {
       if (authenticatedRef.current) return undefined;
-      prepareOnboarding({ returnTo: callOptions?.redirectTo ?? optionsRef.current?.redirectTo });
+      prepareOnboarding({
+        returnTo: callOptions?.redirectTo ?? optionsRef.current?.redirectTo,
+        nameOnly: callOptions?.nameOnlyOnboarding,
+      });
       const configured = optionsRef.current?.analytics;
       const attempt = login(
         {

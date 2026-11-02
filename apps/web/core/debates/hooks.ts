@@ -209,6 +209,9 @@ export const debateQueryKeys = {
   /** Dashless. Refetched on `debate.lobby_changed`, and after the viewer's own vote is reported. */
   lobbyClaims: (accountKey: string | null, lobbyId: string) =>
     ['debates', 'account', accountKey, 'lobby-claims', dashlessId(lobbyId)] as const,
+  /** Dashless. Everyone going, for a host (GEO-3540); read each time the list opens. */
+  lobbyGoing: (accountKey: string | null, lobbyId: string) =>
+    ['debates', 'account', accountKey, 'lobby-going', dashlessId(lobbyId)] as const,
   /** Dashless. Replaced by `debate.lobby_highlights_changed`; fetched on mount and reconnect only. */
   lobbyHighlights: (accountKey: string | null, lobbyId: string) =>
     ['debates', 'account', accountKey, 'lobby-highlights', dashlessId(lobbyId)] as const,
