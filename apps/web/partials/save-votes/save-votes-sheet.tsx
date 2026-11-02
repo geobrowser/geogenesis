@@ -7,7 +7,7 @@ import * as React from 'react';
 import cx from 'classnames';
 import { useAtomValue } from 'jotai';
 
-import { useGoogleOAuthSignIn } from '~/core/auth/google-oauth';
+import { ContinueWithGoogleButton, useContinueWithGoogle } from '~/core/auth/continue-with-google';
 import { arrivedFromEmail } from '~/core/deep-links/ref-email';
 import { useAnyModalOpen } from '~/core/hooks/use-any-modal-open';
 import { usePrepareOnboarding } from '~/core/hooks/use-prepare-onboarding';
@@ -42,7 +42,6 @@ import { Z_LAYER_CLASS } from '~/core/z-layers';
 
 import { ArrowLeft } from '~/design-system/icons/arrow-left';
 import { CloseSmall } from '~/design-system/icons/close-small';
-import { GoogleMark } from '~/design-system/icons/google-mark';
 import { Mail } from '~/design-system/icons/mail';
 import { ResponsePositionIcon } from '~/design-system/icons/response-position-icon';
 
@@ -56,13 +55,13 @@ import {
   CHIP_LIST_CLASS,
   CHIP_ROW_CLASS,
   CORNER_CARD_CLASS,
-  ERROR_TEXT_CLASS,
   ICON_BUTTON_CLASS,
   INPUT_CLASS,
   TOP_BAR_CLASS,
   badgeClass,
   bodyClass,
   codeStepClasses,
+  errorClass,
   fieldClass,
   fineClass,
   googleButtonClass,
@@ -227,19 +226,7 @@ export function SaveVotesSheet() {
   };
 
   // Undefined with the `googleSignIn` flag off or in an in-app browser, which hides the button.
-  const googleSignIn = useGoogleOAuthSignIn();
-  const [googleStatus, setGoogleStatus] = React.useState<'idle' | 'starting' | 'failed'>('idle');
-  const startGoogle = React.useCallback(async () => {
-    if (!googleSignIn) return;
-    setGoogleStatus('starting');
-    try {
-      // Redirects away on success. The attempt is persisted first, so the saver still reads it as a
-      // save on the return and publishes the votes, which are on the device the whole time.
-      await googleSignIn(saveVotesSignInProperties('continue_with_google', count, attempt ? attempt.reason : reason));
-    } catch {
-      setGoogleStatus('failed');
-    }
-  }, [googleSignIn, count, attempt, reason]);
+  const google = useContinueWithGoogle();
 
   if (!open) return null;
   // Waits behind anything the visitor opened. Hidden rather than unmounted once a code is out, so
@@ -340,19 +327,21 @@ export function SaveVotesSheet() {
           <button type="submit" disabled={!canSend} className={primaryButtonClass(compact)}>
             {editing ? SAVE_VOTES_RESEND_LABEL : saveVotesSubmitLabel(count, logIn)}
           </button>
-          {googleSignIn ? (
-            <button
-              type="button"
-              onClick={() => void startGoogle()}
-              disabled={googleStatus === 'starting'}
+          {google ? (
+            <ContinueWithGoogleButton
+              status={google.status}
+              // The attempt is persisted before the redirect, so the saver still reads it as a save on
+              // the return and publishes the votes, which wait on the device the whole time.
+              onClick={() =>
+                void google.start(
+                  saveVotesSignInProperties('continue_with_google', count, attempt ? attempt.reason : reason)
+                )
+              }
               className={googleButtonClass(compact)}
-            >
-              <GoogleMark />
-              Continue with Google
-            </button>
+            />
           ) : null}
-          {googleStatus === 'failed' ? (
-            <p role="alert" className={cx('mt-2', ERROR_TEXT_CLASS)}>
+          {google?.status === 'failed' ? (
+            <p role="alert" className={errorClass}>
               Google sign-in did not start. Try again, or use your email.
             </p>
           ) : null}
