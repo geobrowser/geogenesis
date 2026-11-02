@@ -66,6 +66,7 @@ describe('FeatureFlagsDialog', () => {
         forYouFeed: false,
         lobbyHosting: false,
         spaceCalls: false,
+        spaceChat: false,
         googleSignIn: false,
         googleCalendar: false,
         microsoftCalendar: false,

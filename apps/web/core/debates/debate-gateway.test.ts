@@ -9,6 +9,8 @@ import {
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { SpaceChatState } from '~/core/space-chat/state';
+
 import { GeoChatRequestError, getStoredGeoChatAccessToken, resetGeoChatSession } from './api';
 import { DebateGatewayClient, type DebateGatewaySession } from './debate-gateway';
 import { type LobbyHighlightsState, settleFetchedLobbyHighlights } from './lobbies/lobby-highlights-state';
@@ -1506,6 +1508,66 @@ describe('DebateGatewayClient', () => {
     );
   });
 
+  it('subscribes a space chat room in the room shape and applies its events to the cached room', async () => {
+    const roomId = '0192aaaa-0000-7000-8000-000000000001';
+    const dashless = '0192aaaa000070008000000000000001';
+    const key = ['debates', 'account', 'user-a', 'space-chat', dashless];
+    queryClient.setQueryData<SpaceChatState>(key, { messages: [], nextBefore: null, pending: [] });
+    const release = client.retainScope({ scope: 'room', space_id: 'space-1', room_id: roomId, room_kind: 'member' });
+
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    await flushInvalidations();
+
+    const roomPayload = { space_id: 'space-1', room_id: roomId, room_kind: 'member', resume_after_seq: null };
+    expect(sockets[0]!.sent).toContainEqual(expect.objectContaining({ op: 'SUBSCRIBE', payload: roomPayload }));
+    invalidateQueries.mockClear();
+
+    // READY echoes it dashless; the confirmation refetches the room's first page.
+    sockets[0]!.receive(
+      'READY',
+      readyPayload([{ space_id: 'space-1', room_id: dashless, room_kind: 'member', resume_after_seq: null }])
+    );
+    await flushInvalidations();
+    expectInvalidated(invalidateQueries, { queryKey: key, refetchType: 'active' });
+
+    const message = {
+      id: '0195000000007000800000000000beef',
+      room_id: dashless,
+      room_kind: 'member',
+      author_id: 'author',
+      client_nonce: 'c-1',
+      reply_to_message_id: null,
+      body: 'hello',
+      attachment_ids: [],
+      created_at: '2026-07-20T12:00:01Z',
+      edited_at: null,
+      deleted_at: null,
+      reactions: [],
+    };
+    sockets[0]!.receiveRaw(
+      JSON.stringify({
+        v: 1,
+        op: 'EVENT',
+        seq: 7,
+        request_id: null,
+        space_id: 'space-1',
+        room_id: dashless,
+        room_kind: 'member',
+        payload: { event_type: 'message.created', payload: { message } },
+      })
+    );
+    expect(queryClient.getQueryData<SpaceChatState>(key)?.messages.map(item => item.body)).toEqual(['hello']);
+
+    release();
+    expect(sockets[0]!.sent).toContainEqual(expect.objectContaining({ op: 'UNSUBSCRIBE', payload: roomPayload }));
+  });
+
   it('exposes the advertised capabilities so surfaces can detect matchmaking support', async () => {
     client.start(
       vi.fn(async () => 'privy-token'),
@@ -2778,11 +2840,11 @@ describe('DebateGatewayClient', () => {
     sockets[0]!.open();
     sockets[0]!.receive('READY', readyPayload([]));
 
-    // A room subscription, which this client never sends and cannot map to a scope.
+    // A subscription this client never sends and cannot map to a scope.
     sockets[0]!.receive('ERROR', {
       code: 'subscription_forbidden',
       message: 'not authorized',
-      subscription: { space_id: 'space-1', room_id: 'room-1', room_kind: 'member', resume_after_seq: null },
+      subscription: { scope: 'lobby', lobby_id: 'lobby-1' },
     });
 
     expect(sockets[0]!.readyState).toBe(FakeWebSocket.CLOSED);

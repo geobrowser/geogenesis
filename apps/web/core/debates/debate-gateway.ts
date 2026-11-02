@@ -21,6 +21,7 @@ import {
   spaceCallsRefetch,
   withSpaceCallPatch,
 } from '~/core/space-calls/space-calls-patch';
+import { type SpaceChatState, parseSpaceChatRoomEvent, withRoomEvent } from '~/core/space-chat/state';
 
 import {
   type DebateLobbiesResponse,
@@ -31,6 +32,7 @@ import {
   type GeoChatSession,
   type GetPrivyIdentityToken,
   dashlessId,
+  getCurrentGeoChatUserId,
   getGeoChatApiBaseUrl,
   getGeoChatSession,
   getStoredGeoChatAccessToken,
@@ -52,7 +54,12 @@ export type DebateGatewayScope =
   | { scope: 'space'; space_id: string }
   | { scope: 'debate'; debate_id: string }
   /** Subscribed only while the matchmaking hub is open, so presence fan-out stays narrow. */
-  | { scope: 'matchmaking' };
+  | { scope: 'matchmaking' }
+  /**
+   * A space chat room (GEO-3422). Sent in geo-chat's original room shape, without `scope`, and
+   * echoed that way in READY and ERROR.
+   */
+  | { scope: 'room'; space_id: string; room_id: string; room_kind: 'member' | 'editor' };
 
 export type MatchmakingSection = 'people' | 'claims' | 'matches';
 
@@ -117,6 +124,8 @@ type GatewayEnvelope = {
   v: number;
   op: string;
   seq?: number | null;
+  /** Set on a room's events. */
+  room_id?: string | null;
   payload: unknown;
 };
 
@@ -421,7 +430,8 @@ export class DebateGatewayClient {
         this.handleReady(envelope.payload);
         break;
       case 'EVENT':
-        this.handleEvent(envelope.payload);
+        if (typeof envelope.room_id === 'string') this.handleRoomEvent(envelope.room_id, envelope.payload);
+        else this.handleEvent(envelope.payload);
         break;
       case 'HEARTBEAT_ACK':
         this.heartbeatsAwaitingAck = 0;
@@ -531,6 +541,17 @@ export class DebateGatewayClient {
     }
 
     for (const { scope } of this.scopes.values()) this.sendSubscription(scope, 'SUBSCRIBE');
+  }
+
+  /** A space chat room's message event (GEO-3422): applied to the cached room, never refetched. */
+  private handleRoomEvent(roomId: string, payload: unknown) {
+    const event = parseSpaceChatRoomEvent(payload);
+    const key = this.accountQueryKey('space-chat', dashlessId(roomId));
+    if (!event || !key) return;
+    const viewerId = getCurrentGeoChatUserId();
+    this.queryClient.setQueryData<SpaceChatState>(key, current =>
+      current ? withRoomEvent(current, event, viewerId) : current
+    );
   }
 
   private handleEvent(payload: unknown) {
@@ -816,6 +837,11 @@ export class DebateGatewayClient {
       this.queueQuery(spaceCallKeys.past(scope.space_id));
       return;
     }
+    if (scope.scope === 'room') {
+      // Room events are not replayed across a reconnect.
+      this.queueAccountQuery('space-chat', dashlessId(scope.room_id));
+      return;
+    }
     if (scope.scope === 'matchmaking') {
       this.queueMatchmakingSections();
       // `debate.lobbies_changed` rides this scope too.
@@ -862,6 +888,7 @@ export class DebateGatewayClient {
       | 'scheduled-debates'
       | 'upcoming-rooms'
       | 'room'
+      | 'space-chat'
       | 'lobbies'
       | 'lobby'
       | 'lobby-claims'
@@ -1128,6 +1155,11 @@ export class DebateGatewayClient {
       // A scope waiting on its check backoff is re-sent only by its own timer, not by each READY.
       if (this.sentScopes.has(key) || this.refusedScopes.has(key) || this.subscriptionRetries.get(key)?.timer) return;
       this.sentScopes.add(key);
+    }
+    if (scope.scope === 'room') {
+      const { space_id, room_id, room_kind } = scope;
+      this.sendEnvelope(op, { space_id, room_id, room_kind, resume_after_seq: null });
+      return;
     }
     this.sendEnvelope(op, scope);
   }
@@ -1439,6 +1471,20 @@ export function useDebateGatewayScope(scope: DebateGatewayScope, enabled: boolea
   }, [enabled, scopeId, scopeType]);
 }
 
+/** Holds a space chat room's subscription (GEO-3422) while `enabled`. */
+export function useSpaceChatRoomScope(
+  room: { space_id: string; id: string; kind: 'member' | 'editor' } | null,
+  enabled: boolean
+) {
+  const spaceId = room?.space_id ?? null;
+  const roomId = room?.id ?? null;
+  const roomKind = room?.kind ?? null;
+  React.useEffect(() => {
+    if (!enabled || !spaceId || !roomId || !roomKind) return;
+    return debateGateway.retainScope({ scope: 'room', space_id: spaceId, room_id: roomId, room_kind: roomKind });
+  }, [enabled, roomId, roomKind, spaceId]);
+}
+
 /**
  * Retains a space scope for every id in the list. `debate.claims_changed` is space-scoped, so a
  * surface showing claims from several spaces at once — the rematch picker — has to hold them all
@@ -1520,6 +1566,7 @@ function gatewayWebSocketUrl(apiBaseUrl: string, accessToken: string) {
 function scopeKey(scope: DebateGatewayScope) {
   if (scope.scope === 'space') return `space:${canonicalSpaceId(scope.space_id)}`;
   if (scope.scope === 'matchmaking') return 'matchmaking';
+  if (scope.scope === 'room') return `room:${dashlessId(scope.room_id.trim().toLowerCase())}`;
   return `debate:${dashlessId(scope.debate_id.trim())}`;
 }
 
@@ -1543,6 +1590,14 @@ function parseScope(value: unknown): DebateGatewayScope | null {
   }
   if (value.scope === 'matchmaking') {
     return { scope: 'matchmaking' };
+  }
+  if (
+    value.scope === undefined &&
+    typeof value.room_id === 'string' &&
+    typeof value.space_id === 'string' &&
+    (value.room_kind === 'member' || value.room_kind === 'editor')
+  ) {
+    return { scope: 'room', space_id: value.space_id, room_id: value.room_id, room_kind: value.room_kind };
   }
   return null;
 }

@@ -4358,16 +4358,23 @@ export async function retryDebatePhaseBoundaryRequest<T>(request: () => Promise<
 async function requestError(response: Response) {
   let code: string | null = null;
   let details: Record<string, unknown> | null = null;
+  let retryAfterSeconds: number | null = null;
   let message = `${response.status} ${response.statusText}`;
   try {
     const responseBody = (await response.text()).trim();
     if (responseBody) {
       try {
         const body = JSON.parse(responseBody) as {
-          error?: { code?: string; message?: string; details?: Record<string, unknown> };
+          error?: {
+            code?: string;
+            message?: string;
+            details?: Record<string, unknown>;
+            retry_after_seconds?: unknown;
+          };
         };
         code = body.error?.code ?? null;
         details = body.error?.details ?? null;
+        if (typeof body.error?.retry_after_seconds === 'number') retryAfterSeconds = body.error.retry_after_seconds;
         message = body.error?.message || message;
       } catch {
         message = responseBody;
@@ -4380,7 +4387,9 @@ async function requestError(response: Response) {
     message,
     code,
     response.status,
-    retryAfterMs(response.headers?.get('retry-after')),
+    // Cross-origin, `Retry-After` is unreadable unless geo-chat exposes it; the body says it too.
+    retryAfterMs(response.headers?.get('retry-after')) ??
+      (retryAfterSeconds === null ? null : Math.max(0, retryAfterSeconds * 1000)),
     details
   );
 }
