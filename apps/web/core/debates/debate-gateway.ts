@@ -21,7 +21,12 @@ import {
   spaceCallsRefetch,
   withSpaceCallPatch,
 } from '~/core/space-calls/space-calls-patch';
-import { type SpaceChatState, parseSpaceChatRoomEvent, withRoomEvent } from '~/core/space-chat/state';
+import {
+  type SpaceChatState,
+  parseSpaceChatRoomEvent,
+  spaceChatQueryKeys,
+  withRoomEvent,
+} from '~/core/space-chat/state';
 
 import {
   type DebateLobbiesResponse,
@@ -150,6 +155,11 @@ type DebateGatewayClientOptions = {
   getApiBaseUrl: () => string;
   createWebSocket?: (url: string) => WebSocketLike;
   random?: () => number;
+  /**
+   * Signed out: connects without a token, carries only member chat rooms, writes their public
+   * cache, and runs only while one is retained.
+   */
+  anonymous?: boolean;
 };
 
 type InvalidationFilters = NonNullable<Parameters<QueryClient['invalidateQueries']>[0]>;
@@ -180,6 +190,7 @@ export class DebateGatewayClient {
   private readonly getApiBaseUrl: DebateGatewayClientOptions['getApiBaseUrl'];
   private readonly createWebSocket: NonNullable<DebateGatewayClientOptions['createWebSocket']>;
   private readonly random: () => number;
+  private readonly anonymous: boolean;
   private readonly listeners = new Set<() => void>();
   private readonly scopes = new Map<string, { scope: DebateGatewayScope; count: number }>();
   private readonly sentScopes = new Set<string>();
@@ -250,6 +261,7 @@ export class DebateGatewayClient {
     this.getApiBaseUrl = options.getApiBaseUrl;
     this.createWebSocket = options.createWebSocket ?? (url => new WebSocket(url) as unknown as WebSocketLike);
     this.random = options.random ?? Math.random;
+    this.anonymous = options.anonymous ?? false;
   }
 
   getSnapshot = () => this.snapshot;
@@ -260,6 +272,7 @@ export class DebateGatewayClient {
   };
 
   start(getPrivyIdentityToken: GetPrivyIdentityToken, accountKey: string, debatePresence?: boolean) {
+    if (this.anonymous) return;
     if (this.enabled && this.accountKey !== accountKey) this.stop();
     if (debatePresence !== undefined) this.setDebatePresence(debatePresence);
     this.getPrivyIdentityToken = getPrivyIdentityToken;
@@ -350,6 +363,7 @@ export class DebateGatewayClient {
   }
 
   retainScope(scope: DebateGatewayScope) {
+    if (this.anonymous && (scope.scope !== 'chat-room' || scope.room_kind !== 'member')) return () => undefined;
     const key = scopeKey(scope);
     const retained = this.scopes.get(key);
     if (retained) {
@@ -357,6 +371,10 @@ export class DebateGatewayClient {
     } else {
       this.scopes.set(key, { scope, count: 1 });
       this.sendSubscription(scope, 'SUBSCRIBE');
+    }
+    if (this.anonymous) {
+      if (!this.enabled) this.startAnonymous();
+      else this.updateAnonymousStatus();
     }
 
     let released = false;
@@ -371,13 +389,40 @@ export class DebateGatewayClient {
       this.sentScopes.delete(key);
       this.confirmedScopes.delete(key);
       this.clearSubscriptionRetry(key);
+      if (this.anonymous && this.scopes.size === 0) {
+        this.stop();
+        return;
+      }
       // The server never held a refused scope, so there is nothing to unsubscribe.
-      if (this.refusedScopes.delete(key)) return;
-      this.sendSubscription(scope, 'UNSUBSCRIBE');
+      if (!this.refusedScopes.delete(key)) this.sendSubscription(scope, 'UNSUBSCRIBE');
+      if (this.anonymous) this.updateAnonymousStatus();
     };
   }
 
+  private startAnonymous() {
+    this.enabled = true;
+    this.setSnapshot({ status: 'connecting', paused: false, pauseReason: null });
+    void this.connect();
+  }
+
+  /** Signed out, `ready` means every retained room is confirmed; a refused one degrades it. */
+  private updateAnonymousStatus() {
+    if (!this.enabled || !this.readyForDebates) return;
+    const keys = [...this.scopes.keys()];
+    if (keys.some(key => this.refusedScopes.has(key))) {
+      this.setSnapshot({ status: 'degraded', paused: true, pauseReason: 'error' });
+    } else if (keys.every(key => this.confirmedScopes.has(key))) {
+      this.setSnapshot({ status: 'ready', paused: false, pauseReason: null });
+    } else {
+      this.setSnapshot({ status: 'connecting', paused: false, pauseReason: null });
+    }
+  }
+
   private async connect() {
+    if (this.anonymous) {
+      this.connectAnonymous();
+      return;
+    }
     const getPrivyIdentityToken = this.getPrivyIdentityToken;
     const accountKey = this.accountKey;
     if (!this.enabled || !getPrivyIdentityToken || !accountKey || this.socket) return;
@@ -409,6 +454,23 @@ export class DebateGatewayClient {
     }
   }
 
+  private connectAnonymous() {
+    if (!this.enabled || this.socket) return;
+    ++this.connectionGeneration;
+    const socket = this.createWebSocket(gatewayWebSocketUrl(this.getApiBaseUrl(), null));
+    this.socket = socket;
+    this.socketAccessToken = null;
+    this.readyForDebates = false;
+    this.sentScopes.clear();
+    this.confirmedScopes.clear();
+    this.refusedScopes.clear();
+    this.handshakeTimer = setTimeout(() => this.forceReconnect(socket), HANDSHAKE_TIMEOUT_MS);
+    socket.onopen = () => undefined;
+    socket.onmessage = event => this.handleMessage(socket, event.data);
+    socket.onerror = () => this.forceReconnect(socket);
+    socket.onclose = () => this.handleClose(socket);
+  }
+
   private handleMessage(socket: WebSocketLike, value: unknown) {
     if (socket !== this.socket || typeof value !== 'string') return;
 
@@ -431,7 +493,7 @@ export class DebateGatewayClient {
         break;
       case 'EVENT':
         if (typeof envelope.room_id === 'string') this.handleRoomEvent(envelope.room_id, envelope.payload);
-        else this.handleEvent(envelope.payload);
+        else if (!this.anonymous) this.handleEvent(envelope.payload);
         break;
       case 'HEARTBEAT_ACK':
         this.heartbeatsAwaitingAck = 0;
@@ -511,9 +573,10 @@ export class DebateGatewayClient {
 
     const firstReadyForSocket = !this.readyForDebates;
     this.readyForDebates = true;
-    this.setSnapshot({ status: 'ready', paused: false, pauseReason: null });
+    if (!this.anonymous) this.setSnapshot({ status: 'ready', paused: false, pauseReason: null });
 
-    if (firstReadyForSocket) {
+    // Signed out, each room refetches once READY confirms it, below.
+    if (firstReadyForSocket && !this.anonymous) {
       this.queueBroadReconcile();
       if (this.hasReachedReady) {
         if (this.lastSequence !== null) this.sendEnvelope('RESUME', {}, this.lastSequence);
@@ -541,14 +604,15 @@ export class DebateGatewayClient {
     }
 
     for (const { scope } of this.scopes.values()) this.sendSubscription(scope, 'SUBSCRIBE');
+    if (this.anonymous) this.updateAnonymousStatus();
   }
 
   /** A space chat room's message event (GEO-3422): applied to the cached room, never refetched. */
   private handleRoomEvent(roomId: string, payload: unknown) {
     const event = parseSpaceChatRoomEvent(payload);
-    const key = this.accountQueryKey('space-chat', dashlessId(roomId));
+    const key = this.chatRoomQueryKey(roomId);
     if (!event || !key) return;
-    const viewerId = getCurrentGeoChatUserId();
+    const viewerId = this.anonymous ? null : getCurrentGeoChatUserId();
     this.queryClient.setQueryData<SpaceChatState>(key, current =>
       current ? withRoomEvent(current, event, viewerId) : current
     );
@@ -839,7 +903,8 @@ export class DebateGatewayClient {
     }
     if (scope.scope === 'chat-room') {
       // Room events are not replayed across a reconnect.
-      this.queueAccountQuery('space-chat', dashlessId(scope.room_id));
+      const key = this.chatRoomQueryKey(scope.room_id);
+      if (key) this.queueQuery(key);
       return;
     }
     if (scope.scope === 'matchmaking') {
@@ -856,6 +921,10 @@ export class DebateGatewayClient {
   }
 
   private queueBroadReconcile() {
+    if (this.anonymous) {
+      for (const { scope } of this.scopes.values()) this.queueScopeReconcile(scope);
+      return;
+    }
     this.queueInvalidation(BROAD_INVALIDATION_KEY, {
       predicate: query => {
         const root = query.queryKey[0];
@@ -902,6 +971,11 @@ export class DebateGatewayClient {
     if (!queryKey) return;
     if (kind === 'history' && historyRouteMissing(this.queryClient.getQueryState(queryKey))) return;
     this.queueQuery(queryKey);
+  }
+
+  /** The room's cache: public signed out, under the account signed in. */
+  private chatRoomQueryKey(roomId: string): QueryKey | null {
+    return this.anonymous ? spaceChatQueryKeys.public(roomId) : this.accountQueryKey('space-chat', dashlessId(roomId));
   }
 
   /** This account's key for `kind`, as `debateQueryKeys` spells it; `null` signed out. */
@@ -1114,7 +1188,7 @@ export class DebateGatewayClient {
       // The socket authenticates with the same session the refetch just used, and
       // `getGeoChatSession` hands back the stored session until it is close to expiry. Without an
       // explicit reset the reconnect would re-present the very credentials the server rejected.
-      if (recovery === 'reauthenticate') resetGeoChatSession();
+      if (recovery === 'reauthenticate' && !this.anonymous) resetGeoChatSession();
       this.recentEventIds.clear();
       this.recentEventIdOrder.length = 0;
       if (this.socket) this.forceReconnect(this.socket);
@@ -1175,9 +1249,12 @@ export class DebateGatewayClient {
     this.presenceTransitionPending = false;
     this.sendEnvelope(
       'HEARTBEAT',
-      this.tabVisible === null
-        ? { debate_presence: this.debatePresence }
-        : { debate_presence: this.debatePresence, debate_visible: this.tabVisible },
+      // No presence signed out: geo-chat keeps none for an anonymous connection.
+      this.anonymous
+        ? {}
+        : this.tabVisible === null
+          ? { debate_presence: this.debatePresence }
+          : { debate_presence: this.debatePresence, debate_visible: this.tabVisible },
       this.lastSequence
     );
     this.heartbeatTimer = setTimeout(() => this.sendHeartbeat(), this.heartbeatIntervalMs);
@@ -1238,6 +1315,7 @@ export class DebateGatewayClient {
     this.confirmedScopes.delete(key);
     this.clearSubscriptionRetry(key);
     if (this.scopes.has(key)) this.refusedScopes.add(key);
+    if (this.anonymous) this.updateAnonymousStatus();
     return true;
   }
 
@@ -1426,6 +1504,14 @@ export const debateGateway = new DebateGatewayClient({
   getApiBaseUrl: getGeoChatApiBaseUrl,
 });
 
+/** Signed-out member-room chat: its own connection, opened while a room is retained. */
+export const publicChatGateway = new DebateGatewayClient({
+  queryClient,
+  getSession: () => Promise.reject(new Error('The public chat gateway has no session')),
+  getApiBaseUrl: getGeoChatApiBaseUrl,
+  anonymous: true,
+});
+
 export function useDebateGateway(
   enabled: boolean,
   getPrivyIdentityToken: GetPrivyIdentityToken,
@@ -1471,18 +1557,24 @@ export function useDebateGatewayScope(scope: DebateGatewayScope, enabled: boolea
   }, [enabled, scopeId, scopeType]);
 }
 
-/** Holds a space chat room's subscription (GEO-3422) while `enabled`. */
+/**
+ * Holds a space chat room's subscription (GEO-3422) while `enabled`: on the account's gateway
+ * signed in, on `publicChatGateway` signed out. Returns that gateway's snapshot.
+ */
 export function useSpaceChatRoomScope(
   room: { space_id: string; id: string; kind: 'member' | 'editor' } | null,
-  enabled: boolean
+  enabled: boolean,
+  signedIn: boolean
 ) {
+  const gateway = signedIn ? debateGateway : publicChatGateway;
   const spaceId = room?.space_id ?? null;
   const roomId = room?.id ?? null;
   const roomKind = room?.kind ?? null;
   React.useEffect(() => {
     if (!enabled || !spaceId || !roomId || !roomKind) return;
-    return debateGateway.retainScope({ scope: 'chat-room', space_id: spaceId, room_id: roomId, room_kind: roomKind });
-  }, [enabled, roomId, roomKind, spaceId]);
+    return gateway.retainScope({ scope: 'chat-room', space_id: spaceId, room_id: roomId, room_kind: roomKind });
+  }, [enabled, gateway, roomId, roomKind, spaceId]);
+  return React.useSyncExternalStore(gateway.subscribe, gateway.getSnapshot, gateway.getSnapshot);
 }
 
 /**
@@ -1550,12 +1642,12 @@ export function useDebateGatewaySnapshot() {
  * debate-queue behavior until the backend ships GEO-2514.
  */
 
-function gatewayWebSocketUrl(apiBaseUrl: string, accessToken: string) {
+function gatewayWebSocketUrl(apiBaseUrl: string, accessToken: string | null) {
   const url = new URL(apiBaseUrl);
   url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
   url.pathname = `${url.pathname.replace(/\/+$/, '')}/gateway/ws`;
   url.search = '';
-  url.searchParams.set('access_token', accessToken);
+  if (accessToken) url.searchParams.set('access_token', accessToken);
   return url.toString();
 }
 

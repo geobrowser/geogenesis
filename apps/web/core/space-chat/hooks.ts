@@ -5,7 +5,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import * as React from 'react';
 
 import { GeoChatRequestError } from '~/core/debates/api';
-import { useDebateGatewaySnapshot, useSpaceChatRoomScope } from '~/core/debates/debate-gateway';
+import { useDebateVisibility } from '~/core/debates/debate-attention';
+import { useSpaceChatRoomScope } from '~/core/debates/debate-gateway';
 import { useGeoChatAuth } from '~/core/debates/hooks';
 
 import {
@@ -105,7 +106,8 @@ export function useSpaceChatRoom(
 ): SpaceChatRoomView {
   const { ready, auth } = useSpaceChatAuth();
   const queryClient = useQueryClient();
-  const gateway = useDebateGatewaySnapshot();
+  // A hidden tab lets the signed-out connection go after the same grace presence has.
+  const visible = useDebateVisibility();
   const roomId = room?.id ?? null;
   const queryKey = React.useMemo(
     () =>
@@ -116,8 +118,12 @@ export function useSpaceChatRoom(
           : spaceChatQueryKeys.public(roomId),
     [auth, roomId]
   );
-  const live = auth !== null && gateway.status === 'ready';
-  useSpaceChatRoomScope(room, enabled && auth !== null);
+  const gateway = useSpaceChatRoomScope(
+    room,
+    enabled && ready && (auth !== null || (visible && room?.kind === 'member')),
+    auth !== null
+  );
+  const live = gateway.status === 'ready';
   const lastFullReadAt = React.useRef(0);
 
   const query = useQuery({

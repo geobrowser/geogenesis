@@ -11,6 +11,8 @@ const mocks = vi.hoisted(() => ({
   postSpaceChatMessage: vi.fn(),
   setSpaceChatReaction: vi.fn(),
   authenticated: false,
+  visible: true,
+  scope: vi.fn(),
 }));
 
 vi.mock('~/core/debates/hooks', () => ({
@@ -22,9 +24,12 @@ vi.mock('~/core/debates/hooks', () => ({
   }),
 }));
 vi.mock('~/core/debates/debate-gateway', () => ({
-  useDebateGatewaySnapshot: () => ({ status: mocks.gateway }),
-  useSpaceChatRoomScope: () => undefined,
+  useSpaceChatRoomScope: (...args: unknown[]) => {
+    mocks.scope(...args);
+    return { status: mocks.gateway };
+  },
 }));
+vi.mock('~/core/debates/debate-attention', () => ({ useDebateVisibility: () => mocks.visible }));
 vi.mock('./api', () => ({
   getSpaceChatMessages: mocks.getSpaceChatMessages,
   postSpaceChatMessage: mocks.postSpaceChatMessage,
@@ -63,6 +68,9 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   mocks.authenticated = false;
+  mocks.visible = true;
+  mocks.gateway = 'idle';
+  mocks.scope.mockReset();
   vi.useRealTimers();
 });
 
@@ -127,5 +135,42 @@ describe('useSpaceChatRoom react', () => {
     await waitFor(() => expect(result.current.state?.pendingReactions).toEqual([]));
     expect(result.current.state?.messages[0]?.reactions).toEqual([{ value: '👍', count: 1, reacted: true }]);
     mocks.gateway = 'idle';
+  });
+});
+
+describe('useSpaceChatRoom live signed out', () => {
+  it('holds the room on the public connection while visible, and lets it go when hidden', async () => {
+    const { rerender } = renderHook(() => useSpaceChatRoom(ROOM), { wrapper });
+    expect(mocks.scope).toHaveBeenLastCalledWith(ROOM, true, false);
+    mocks.visible = false;
+    rerender();
+    expect(mocks.scope).toHaveBeenLastCalledWith(ROOM, false, false);
+  });
+
+  it('never holds an editor room signed out', () => {
+    renderHook(() => useSpaceChatRoom({ ...ROOM, kind: 'editor' }), { wrapper });
+    expect(mocks.scope).toHaveBeenLastCalledWith(expect.objectContaining({ kind: 'editor' }), false, false);
+  });
+
+  it('stops polling while the socket is ready, and polls again when it drops', async () => {
+    mocks.gateway = 'ready';
+    const { result, rerender } = renderHook(() => useSpaceChatRoom(ROOM), { wrapper });
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+    const reads = mocks.getSpaceChatMessages.mock.calls.length;
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(mocks.getSpaceChatMessages.mock.calls.length).toBe(reads);
+
+    mocks.gateway = 'degraded';
+    rerender();
+    await vi.advanceTimersByTimeAsync(5_000);
+    await waitFor(() => expect(mocks.getSpaceChatMessages.mock.calls.length).toBeGreaterThan(reads));
+  });
+
+  it('moves the room to the account connection on sign-in', async () => {
+    const { rerender } = renderHook(() => useSpaceChatRoom(ROOM), { wrapper });
+    expect(mocks.scope).toHaveBeenLastCalledWith(ROOM, true, false);
+    mocks.authenticated = true;
+    rerender();
+    expect(mocks.scope).toHaveBeenLastCalledWith(ROOM, true, true);
   });
 });

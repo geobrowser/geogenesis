@@ -1573,6 +1573,176 @@ describe('DebateGatewayClient', () => {
     expect(sockets[0]!.sent).toContainEqual(expect.objectContaining({ op: 'UNSUBSCRIBE', payload: roomPayload }));
   });
 
+  describe('signed out (anonymous)', () => {
+    const roomId = '0192aaaa-0000-7000-8000-000000000001';
+    const dashless = '0192aaaa000070008000000000000001';
+    const publicKey = ['space-chat-public', dashless];
+    const roomScope = { scope: 'chat-room', space_id: 'space-1', room_id: roomId, room_kind: 'member' } as const;
+    const echo = { space_id: 'space-1', room_id: dashless, room_kind: 'member', resume_after_seq: null };
+    let anonymous: DebateGatewayClient;
+
+    beforeEach(() => {
+      anonymous = new DebateGatewayClient({
+        queryClient,
+        getSession,
+        getApiBaseUrl: () => 'https://chat.example.com/',
+        createWebSocket: url => {
+          const socket = new FakeWebSocket(url);
+          sockets.push(socket);
+          return socket;
+        },
+        random: () => 0,
+        anonymous: true,
+      });
+    });
+    afterEach(() => anonymous.stop());
+
+    const roomEvent = (body: string) =>
+      JSON.stringify({
+        v: 1,
+        op: 'EVENT',
+        seq: 3,
+        request_id: null,
+        space_id: 'space-1',
+        room_id: dashless,
+        room_kind: 'member',
+        payload: {
+          event_type: 'message.created',
+          payload: {
+            message: {
+              id: '0195000000007000800000000000beef',
+              room_id: dashless,
+              room_kind: 'member',
+              author_id: 'author',
+              client_nonce: 'c-1',
+              reply_to_message_id: null,
+              body,
+              attachment_ids: [],
+              created_at: '2026-07-20T12:00:01Z',
+              edited_at: null,
+              deleted_at: null,
+              reactions: [],
+            },
+          },
+        },
+      });
+
+    it('connects without a token while a member room is retained, and applies its events to the public cache', async () => {
+      queryClient.setQueryData<SpaceChatState>(publicKey, { messages: [], nextBefore: null, pending: [] });
+      const release = anonymous.retainScope(roomScope);
+      expect(sockets).toHaveLength(1);
+      expect(new URL(sockets[0]!.url).searchParams.has('access_token')).toBe(false);
+      expect(new URL(sockets[0]!.url).pathname).toBe('/gateway/ws');
+      expect(getSession).not.toHaveBeenCalled();
+
+      sockets[0]!.open();
+      sockets[0]!.receive('HELLO', { heartbeat_interval_ms: 30_000 });
+      expect(sockets[0]!.sent).toContainEqual(expect.objectContaining({ op: 'HEARTBEAT', payload: {} }));
+      sockets[0]!.receive('READY', readyPayload([]));
+      await flushInvalidations();
+      expect(sockets[0]!.sent).toContainEqual(
+        expect.objectContaining({ op: 'SUBSCRIBE', payload: { ...echo, room_id: roomId } })
+      );
+      expect(anonymous.getSnapshot().status).toBe('connecting');
+      expect(invalidateQueries).not.toHaveBeenCalled();
+
+      sockets[0]!.receive('READY', readyPayload([echo]));
+      await flushInvalidations();
+      expect(anonymous.getSnapshot().status).toBe('ready');
+      expectInvalidated(invalidateQueries, { queryKey: publicKey, refetchType: 'active' });
+
+      sockets[0]!.receiveRaw(roomEvent('hello'));
+      expect(queryClient.getQueryData<SpaceChatState>(publicKey)?.messages.map(item => item.body)).toEqual(['hello']);
+
+      // A lag refetches the room, not every debate query.
+      invalidateQueries.mockClear();
+      sockets[0]!.receive('ERROR', { code: 'events_lagged' });
+      await flushInvalidations();
+      expectInvalidated(invalidateQueries, { queryKey: publicKey, refetchType: 'active' });
+      expect(invalidateQueries).toHaveBeenCalledTimes(1);
+
+      release();
+      expect(sockets[0]!.readyState).toBe(FakeWebSocket.CLOSED);
+      expect(anonymous.getSnapshot().status).toBe('idle');
+    });
+
+    it('never carries anything but a member room', () => {
+      anonymous.retainScope({ scope: 'space', space_id: 'space-1' })();
+      anonymous.retainScope({ scope: 'matchmaking' })();
+      anonymous.retainScope({ ...roomScope, room_kind: 'editor' })();
+      anonymous.start(
+        vi.fn(async () => 'privy-token'),
+        'user-a'
+      );
+      expect(sockets).toHaveLength(0);
+    });
+
+    it('degrades when the room is refused, so the reader falls back to polling', async () => {
+      anonymous.retainScope(roomScope);
+      sockets[0]!.open();
+      sockets[0]!.receive('READY', readyPayload([]));
+      sockets[0]!.receive('ERROR', { code: 'subscription_forbidden', subscription: echo });
+      expect(anonymous.getSnapshot()).toMatchObject({ status: 'degraded', paused: true });
+    });
+
+    it('refetches the room once a reconnect confirms it again', async () => {
+      anonymous.retainScope(roomScope);
+      sockets[0]!.open();
+      sockets[0]!.receive('READY', readyPayload([echo]));
+      await flushInvalidations();
+      invalidateQueries.mockClear();
+
+      sockets[0]!.serverClose();
+      expect(anonymous.getSnapshot().status).toBe('degraded');
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(sockets).toHaveLength(2);
+      sockets[1]!.open();
+      sockets[1]!.receive('READY', readyPayload([echo]));
+      await flushInvalidations();
+      expect(anonymous.getSnapshot().status).toBe('ready');
+      expectInvalidated(invalidateQueries, { queryKey: publicKey, refetchType: 'active' });
+    });
+
+    it('keeps the signed-in and signed-out caches apart across a sign-in', async () => {
+      const accountKey = ['debates', 'account', 'user-a', 'space-chat', dashless];
+      queryClient.setQueryData<SpaceChatState>(publicKey, { messages: [], nextBefore: null, pending: [] });
+      queryClient.setQueryData<SpaceChatState>(accountKey, { messages: [], nextBefore: null, pending: [] });
+      const releasePublic = anonymous.retainScope(roomScope);
+      sockets[0]!.open();
+      sockets[0]!.receive('READY', readyPayload([echo]));
+
+      // Signing in moves the room to the account connection and closes the public one.
+      releasePublic();
+      expect(sockets[0]!.readyState).toBe(FakeWebSocket.CLOSED);
+      const releaseAccount = client.retainScope(roomScope);
+      client.start(
+        vi.fn(async () => 'privy-token'),
+        'user-a'
+      );
+      await vi.runAllTicks();
+      sockets[1]!.open();
+      sockets[1]!.receive('READY', readyPayload([echo]));
+      sockets[1]!.receiveRaw(roomEvent('signed in'));
+      expect(queryClient.getQueryData<SpaceChatState>(accountKey)?.messages.map(item => item.body)).toEqual([
+        'signed in',
+      ]);
+      expect(queryClient.getQueryData<SpaceChatState>(publicKey)?.messages).toEqual([]);
+
+      // Signing out: the account connection stops and the public one takes the room back.
+      releaseAccount();
+      client.stop();
+      anonymous.retainScope(roomScope);
+      expect(sockets).toHaveLength(3);
+      sockets[2]!.open();
+      sockets[2]!.receive('READY', readyPayload([echo]));
+      sockets[2]!.receiveRaw(roomEvent('signed out'));
+      expect(queryClient.getQueryData<SpaceChatState>(publicKey)?.messages.map(item => item.body)).toEqual([
+        'signed out',
+      ]);
+      expect(sockets.filter(socket => socket.readyState === FakeWebSocket.OPEN)).toHaveLength(1);
+    });
+  });
+
   it('exposes the advertised capabilities so surfaces can detect matchmaking support', async () => {
     client.start(
       vi.fn(async () => 'privy-token'),
