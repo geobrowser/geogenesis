@@ -89,7 +89,7 @@ export function withChatPage(current: SpaceChatState | undefined, page: SpaceCha
     oldestRead !== undefined &&
     dashlessId(oldestRead.id) > dashlessId(newestCached.id)
   ) {
-    // More arrived than one page holds: what is cached no longer joins up, so start over from here.
+    // A full page newer than everything cached leaves a gap: start over from this page.
     const messages = [...page.messages].sort(byIdNewestFirst);
     return { messages, nextBefore, pending: settlePending(current.pending, messages) };
   }

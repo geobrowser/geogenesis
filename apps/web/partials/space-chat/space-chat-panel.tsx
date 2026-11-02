@@ -27,9 +27,8 @@ export const SPACE_CHAT_COPY = {
 } as const;
 
 /**
- * A space's member-room chat (GEO-3422), on the space's Chat tab and inside its calls. `roomId`,
- * when the caller already knows it (a call's `chat_room_id`), starts the history read without
- * waiting for the room list; the list still decides who may post.
+ * A space's member-room chat (GEO-3422), on its Chat tab and in its calls. A known `roomId` starts
+ * the history read early; the room list still decides who may post.
  */
 export function SpaceChatPanel({
   spaceId,

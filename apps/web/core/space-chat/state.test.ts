@@ -58,6 +58,15 @@ describe('space chat state', () => {
     expect(state.nextBefore).toBe(message(10).id);
   });
 
+  it('merges an after-cursor poll, keeping older pages and their cursor', () => {
+    let state = withChatPage(undefined, page([3, 4, 5], 3));
+    expect(withChatPage(state, page([])).messages).toEqual(state.messages);
+    expect(withChatPage(state, page([])).nextBefore).toBe(message(3).id);
+    state = withChatPage(state, page([6, 7]));
+    expect(ids(state)).toEqual([7, 6, 5, 4, 3]);
+    expect(state.nextBefore).toBe(message(3).id);
+  });
+
   it('replaces a pending send with the stored message by nonce', () => {
     let state = withChatPage(undefined, page([1]));
     state = withPendingMessage(state, {

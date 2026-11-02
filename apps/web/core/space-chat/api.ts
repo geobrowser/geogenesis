@@ -62,11 +62,25 @@ export function listSpaceChatRooms(spaceId: string, auth: SpaceChatAuth | null, 
 
 export function getSpaceChatMessages(
   roomId: string,
-  { auth, before, limit, signal }: { auth: SpaceChatAuth | null; before?: string; limit?: number; signal?: AbortSignal }
+  {
+    auth,
+    before,
+    after,
+    limit,
+    signal,
+  }: {
+    auth: SpaceChatAuth | null;
+    before?: string;
+    /** Only messages newer than this id, still newest first. */
+    after?: string;
+    limit?: number;
+    signal?: AbortSignal;
+  }
 ) {
   const params = new URLSearchParams();
   if (limit !== undefined) params.set('limit', String(limit));
   if (before) params.set('before_message_id', before);
+  if (after) params.set('after_message_id', after);
   const query = params.toString() ? `?${params.toString()}` : '';
   return geoChatRequest<SpaceChatPage>(`/rooms/${encodeURIComponent(roomId)}/messages${query}`, {
     ...authOptions(auth),

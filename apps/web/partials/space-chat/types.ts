@@ -1,8 +1,4 @@
-/**
- * The space chat view's shapes (GEO-3422). They follow lobby chat's `RoomChat` props
- * (`partials/room-chat` on the lobby-watch branch) with replies, reactions and mentions as optional
- * additions, so the two views can fold into one.
- */
+/** Space chat view shapes (GEO-3422): lobby chat's `RoomChat` props plus replies, reactions and mentions. */
 
 /** Who wrote a message, as the chat view draws them. */
 export type ChatViewAuthor = {

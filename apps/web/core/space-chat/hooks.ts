@@ -31,8 +31,10 @@ import {
 } from './state';
 
 const FIRST_PAGE_LIMIT = 50;
-/** A poll only needs what is new; older pages are already merged in. */
+/** A poll asks only for messages after the newest held. */
 const POLL_PAGE_LIMIT = 20;
+/** Polls see new messages only; edits, deletes and reactions come with a full first-page read this often. */
+const POLL_FULL_READ_MS = 30_000;
 /** Signed out, or signed in while the gateway is down: the same cadence as lobby guest chat. */
 const POLL_VISIBLE_MS = 5_000;
 /** Signed in with the gateway up, events keep it current; a remount within this reads the cache. */
@@ -83,7 +85,7 @@ export type SpaceChatRoomView = {
   /** Loads the next older page; absent at the start of the room. */
   loadOlder?: () => void;
   loadingOlder: boolean;
-  /** Rejects with geo-chat's error; a rejected post keeps nothing, so the draft is resent as is. */
+  /** Rejects with geo-chat's error; a refused post is not stored, so the same draft can be resent. */
   send: (body: string, replyTo: string | null) => Promise<void>;
   edit: (id: string, body: string) => Promise<void>;
   remove: (id: string) => Promise<void>;
@@ -113,16 +115,20 @@ export function useSpaceChatRoom(
   );
   const live = auth !== null && gateway.status === 'ready';
   useSpaceChatRoomScope(room, enabled && auth !== null);
+  const lastFullReadAt = React.useRef(0);
 
   const query = useQuery({
     queryKey,
     queryFn: async ({ signal }) => {
-      const cached = queryClient.getQueryData<SpaceChatState>(queryKey);
+      const newest = queryClient.getQueryData<SpaceChatState>(queryKey)?.messages[0]?.id;
+      // Live events cover changes while the gateway is up, so its reconciles always read in full.
+      const poll = !live && newest !== undefined && Date.now() - lastFullReadAt.current < POLL_FULL_READ_MS;
       const page = await getSpaceChatMessages(roomId!, {
         auth,
-        limit: cached ? POLL_PAGE_LIMIT : FIRST_PAGE_LIMIT,
+        ...(poll ? { after: newest, limit: POLL_PAGE_LIMIT } : { limit: FIRST_PAGE_LIMIT }),
         signal,
       });
+      if (!poll) lastFullReadAt.current = Date.now();
       // Read once the response is in, so an event that landed meanwhile is kept.
       return withChatPage(queryClient.getQueryData<SpaceChatState>(queryKey), page);
     },
