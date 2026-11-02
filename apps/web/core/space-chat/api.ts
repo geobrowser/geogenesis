@@ -121,11 +121,10 @@ export function deleteSpaceChatMessage(messageId: string, auth: SpaceChatAuth) {
 export function setSpaceChatReaction(messageId: string, value: string, added: boolean, auth: SpaceChatAuth) {
   return geoChatRequest<{
     reaction: { message_id: string; user_id: string; value: string };
-    count: number;
-    /** The message's `reaction_version` after the request; absent from a geo-chat without it. */
-    version?: number;
-    /** Every emoji's count and the viewer's `reacted` after the request; absent from a geo-chat without it. */
-    reactions?: unknown;
+    /** The message's `reaction_version` after the request. */
+    reaction_version: number;
+    /** Every emoji's count and the viewer's `reacted` after the request; parsed by the caller. */
+    reactions: unknown;
   }>(`/messages/${encodeURIComponent(messageId)}/reactions`, {
     ...writeOptions(auth),
     method: added ? 'PUT' : 'DELETE',

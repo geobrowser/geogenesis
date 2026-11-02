@@ -123,40 +123,34 @@ describe('space chat state', () => {
     expect(state.messages[0]!.deleted_at).not.toBeNull();
   });
 
-  it('sets reaction counts from events, marking only the viewer’s own', () => {
-    let state = withChatPage(undefined, page([1]));
+  it('marks only the viewer’s own reaction events as reacted', () => {
     const id = message(1).id;
-    state = withRoomEvent(
-      state,
-      { type: 'reaction', messageId: id, userId: OTHER, value: '👍', count: 1, added: true },
-      VIEWER
-    );
+    const thumbs = (reactionVersion: number, userId: string, count: number, added = true) =>
+      ({
+        type: 'reaction',
+        messageId: id,
+        userId,
+        value: '👍',
+        added,
+        reactionVersion,
+        reactions: count ? [{ value: '👍', count }] : [],
+      }) as const;
+    let state = withChatPage(undefined, page([1]));
+    state = withRoomEvent(state, thumbs(1, OTHER, 1), VIEWER);
     expect(state.messages[0]!.reactions).toEqual([{ value: '👍', count: 1, reacted: false }]);
-    state = withRoomEvent(
-      state,
-      { type: 'reaction', messageId: id, userId: VIEWER.toUpperCase(), value: '👍', count: 2, added: true },
-      VIEWER
-    );
+    state = withRoomEvent(state, thumbs(2, VIEWER.toUpperCase(), 2), VIEWER);
     expect(state.messages[0]!.reactions).toEqual([{ value: '👍', count: 2, reacted: true }]);
-    state = withRoomEvent(
-      state,
-      { type: 'reaction', messageId: id, userId: OTHER, value: '👍', count: 1, added: false },
-      VIEWER
-    );
+    state = withRoomEvent(state, thumbs(3, OTHER, 1, false), VIEWER);
     expect(state.messages[0]!.reactions).toEqual([{ value: '👍', count: 1, reacted: true }]);
-    state = withRoomEvent(
-      state,
-      { type: 'reaction', messageId: id, userId: VIEWER, value: '👍', count: 0, added: false },
-      VIEWER
-    );
+    state = withRoomEvent(state, thumbs(4, VIEWER, 0, false), VIEWER);
     expect(state.messages[0]!.reactions).toEqual([]);
   });
 
   describe('reaction versions', () => {
     const id = message(1).id;
     type Counts = { value: string; count: number; reacted?: boolean }[];
-    const event = (version: number, value: string, reactions: Counts, userId = OTHER, added = true) =>
-      ({ type: 'reaction', messageId: id, userId, value, added, version, reactions }) as const;
+    const event = (reactionVersion: number, value: string, reactions: Counts, userId = OTHER, added = true) =>
+      ({ type: 'reaction', messageId: id, userId, value, added, reactionVersion, reactions }) as const;
     const seeded = (reactions = [{ value: '👍', count: 1, reacted: false }], version = 1) =>
       withChatPage(undefined, { messages: [message(1, { reactions, reaction_version: version })], next_before: null });
     const reactionsOf = (state: SpaceChatState) => state.messages[0]!.reactions;
@@ -208,7 +202,12 @@ describe('space chat state', () => {
     it('settles the viewer’s own reaction whether its response or its event comes first', () => {
       const pending = tap('👍', true);
       const tapped = withPendingReaction(seeded(), pending);
-      const response = { value: '👍', added: true, version: 2, reactions: [{ value: '👍', count: 2, reacted: true }] };
+      const response = {
+        value: '👍',
+        added: true,
+        reactionVersion: 2,
+        reactions: [{ value: '👍', count: 2, reacted: true }],
+      };
       const viewersEvent = event(2, '👍', [{ value: '👍', count: 2 }], VIEWER);
       const viaResponse = withRoomEvent(withOwnReactionResult(tapped, pending, response), viewersEvent, VIEWER);
       const viaEvent = withOwnReactionResult(withRoomEvent(tapped, viewersEvent, VIEWER), pending, response);
@@ -233,7 +232,7 @@ describe('space chat state', () => {
       state = withOwnReactionResult(state, pending, {
         value: '👍',
         added: true,
-        version: 3,
+        reactionVersion: 3,
         reactions: [
           { value: '❤️', count: 1, reacted: false },
           { value: '👍', count: 1, reacted: true },
@@ -260,7 +259,7 @@ describe('space chat state', () => {
       state = withOwnReactionResult(state, pending, {
         value: '👍',
         added: true,
-        version: 2,
+        reactionVersion: 2,
         reactions: [{ value: '👍', count: 2, reacted: true }],
       });
       expect(reactionsOf(state)).toEqual([
@@ -277,13 +276,13 @@ describe('space chat state', () => {
       state = withOwnReactionResult(state, remove, {
         value: '👍',
         added: false,
-        version: 3,
+        reactionVersion: 3,
         reactions: [{ value: '👍', count: 1, reacted: false }],
       });
       state = withOwnReactionResult(state, add, {
         value: '👍',
         added: true,
-        version: 2,
+        reactionVersion: 2,
         reactions: [{ value: '👍', count: 2, reacted: true }],
       });
       expect(reactionsOf(state)).toEqual([{ value: '👍', count: 1, reacted: false }]);
@@ -328,21 +327,6 @@ describe('space chat state', () => {
       });
       expect(state.messages[0]).toMatchObject({ reactions: [{ value: '👍', count: 4 }], reaction_version: 4 });
     });
-
-    it('applies every change from a geo-chat without versions or lists', () => {
-      let state = withChatPage(undefined, page([1]));
-      state = withRoomEvent(
-        state,
-        { type: 'reaction', messageId: id, userId: OTHER, value: '👍', count: 2, added: true },
-        VIEWER
-      );
-      state = withRoomEvent(
-        state,
-        { type: 'reaction', messageId: id, userId: OTHER, value: '👍', count: 1, added: false },
-        VIEWER
-      );
-      expect(reactionsOf(state)).toEqual([{ value: '👍', count: 1, reacted: false }]);
-    });
   });
 
   it('parses the gateway room events and ignores unknown ones', () => {
@@ -359,24 +343,42 @@ describe('space chat state', () => {
           room_kind: 'member',
           user_id: 'u',
           value: '👍',
-          count: 3,
           added: true,
-          version: 7,
+          reaction_version: 7,
+          reactions: [{ value: '👍', count: 3 }],
         },
       })
-    ).toEqual({ type: 'reaction', messageId: 'm', userId: 'u', value: '👍', count: 3, added: true, version: 7 });
+    ).toEqual({
+      type: 'reaction',
+      messageId: 'm',
+      userId: 'u',
+      value: '👍',
+      added: true,
+      reactionVersion: 7,
+      reactions: [{ value: '👍', count: 3 }],
+    });
     expect(
       parseSpaceChatRoomEvent({
         event_type: 'message.reaction_changed',
-        payload: { message_id: 'm', user_id: 'u', value: '👍', added: false, version: 8, reactions: [] },
+        payload: { message_id: 'm', user_id: 'u', value: '👍', added: false, reaction_version: 8, reactions: [] },
       })
-    ).toEqual({ type: 'reaction', messageId: 'm', userId: 'u', value: '👍', added: false, version: 8, reactions: [] });
-    expect(
-      parseSpaceChatRoomEvent({
-        event_type: 'message.reaction_changed',
-        payload: { message_id: 'm', user_id: 'u', value: '👍', added: true, reactions: [{ value: 1 }] },
-      })
-    ).toBeNull();
+    ).toEqual({
+      type: 'reaction',
+      messageId: 'm',
+      userId: 'u',
+      value: '👍',
+      added: false,
+      reactionVersion: 8,
+      reactions: [],
+    });
+    // Without the full list or its version, the event is unreadable.
+    for (const payload of [
+      { message_id: 'm', user_id: 'u', value: '👍', added: true, count: 3, reaction_version: 7 },
+      { message_id: 'm', user_id: 'u', value: '👍', added: true, reactions: [] },
+      { message_id: 'm', user_id: 'u', value: '👍', added: true, reaction_version: 7, reactions: [{ value: 1 }] },
+    ]) {
+      expect(parseSpaceChatRoomEvent({ event_type: 'message.reaction_changed', payload })).toBeNull();
+    }
     expect(parseSpaceChatRoomEvent({ event_type: 'message.pinned', payload: {} })).toBeNull();
     expect(parseSpaceChatRoomEvent({ event_type: 'message.deleted', payload: { message_id: 'm' } })).toBeNull();
   });

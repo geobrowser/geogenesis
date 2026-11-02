@@ -118,7 +118,7 @@ describe('useSpaceChatRoom react', () => {
 
     const settled = result.current.react(message(1).id, '👍', true);
     await waitFor(() => expect(result.current.state?.pendingReactions).toHaveLength(1));
-    answer({ count: 1, version: 1, reactions: [{ value: '👍', count: 1, reacted: true }] });
+    answer({ reaction_version: 1, reactions: [{ value: '👍', count: 1, reacted: true }] });
     await settled;
     await waitFor(() => expect(result.current.state?.pendingReactions).toEqual([]));
     expect(result.current.state?.messages[0]?.reactions).toEqual([{ value: '👍', count: 1, reacted: true }]);

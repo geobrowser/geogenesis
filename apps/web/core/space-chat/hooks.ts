@@ -209,12 +209,14 @@ export function useSpaceChatRoom(
         const result = await setSpaceChatReaction(id, value, added, auth);
         const reactions = parseReactionCounts(result.reactions);
         update(state =>
-          withOwnReactionResult(state, pending, {
-            value,
-            added,
-            version: result.version,
-            ...(reactions ? { reactions } : { count: result.count }),
-          })
+          reactions && typeof result.reaction_version === 'number'
+            ? withOwnReactionResult(state, pending, {
+                value,
+                added,
+                reactionVersion: result.reaction_version,
+                reactions,
+              })
+            : withoutPendingReaction(state, pending.id)
         );
       } catch (error) {
         update(state => withoutPendingReaction(state, pending.id));

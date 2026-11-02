@@ -190,12 +190,10 @@ export type ReactionCount = { value: string; count: number; reacted?: boolean };
 export type ReactionChange = {
   value: string;
   added: boolean;
-  /** The message's `reaction_version` after the change; absent from a geo-chat without it. */
-  version?: number;
-  /** Every emoji's count after the change; absent from a geo-chat without it. */
-  reactions?: ReactionCount[];
-  /** That emoji's count, from a geo-chat without the full list. */
-  count?: number;
+  /** The message's `reaction_version` after the change. */
+  reactionVersion: number;
+  /** Every emoji with a count after the change, in first-used order. */
+  reactions: ReactionCount[];
 };
 
 function ownReactedVersion(message: HeldSpaceChatMessage, value: string) {
@@ -208,38 +206,36 @@ function ownReactedVersion(message: HeldSpaceChatMessage, value: string) {
  */
 function withReactionChange(message: HeldSpaceChatMessage, change: ReactionChange, own: boolean): HeldSpaceChatMessage {
   if (message.deleted_at) return message;
-  const version = change.version;
-  const newer = version === undefined || version > reactionVersion(message);
+  const version = change.reactionVersion;
+  const newer = version > reactionVersion(message);
   let reactions = message.reactions ?? [];
-  if (newer && change.reactions) {
+  if (newer) {
     const held = new Map(reactions.map(reaction => [reaction.value, reaction.reacted]));
     reactions = change.reactions
       .filter(reaction => reaction.count > 0)
       .map(reaction => ({ value: reaction.value, count: reaction.count, reacted: held.get(reaction.value) ?? false }));
-  } else if (newer && change.count !== undefined) {
-    reactions = withReactionCount(reactions, { value: change.value, count: change.count });
   }
 
   // The viewer's `reacted`: from their own change, and from every emoji their response lists.
   const reactedUpdates = new Map<string, boolean>();
   if (own) {
-    for (const reaction of change.reactions ?? []) {
+    for (const reaction of change.reactions) {
       if (reaction.reacted !== undefined) reactedUpdates.set(reaction.value, reaction.reacted);
     }
     reactedUpdates.set(change.value, change.added);
   }
   let ownVersions = message.own_reacted_versions;
   for (const [value, reacted] of reactedUpdates) {
-    if (version !== undefined && version <= ownReactedVersion(message, value)) continue;
+    if (version <= ownReactedVersion(message, value)) continue;
     reactions = reactions.map(reaction => (reaction.value === value ? { ...reaction, reacted } : reaction));
-    if (version !== undefined) ownVersions = { ...ownVersions, [value]: version };
+    ownVersions = { ...ownVersions, [value]: version };
   }
 
   if (!newer && ownVersions === message.own_reacted_versions) return message;
   return {
     ...message,
     reactions,
-    reaction_version: newer ? (version ?? message.reaction_version) : message.reaction_version,
+    reaction_version: newer ? version : message.reaction_version,
     own_reacted_versions: ownVersions,
   };
 }
@@ -350,15 +346,15 @@ export function parseSpaceChatRoomEvent(payload: unknown): SpaceChatRoomEvent | 
       if (typeof body.message_id !== 'string' || typeof body.user_id !== 'string') return null;
       if (typeof body.value !== 'string' || typeof body.added !== 'boolean') return null;
       const reactions = parseReactionCounts(body.reactions);
-      if (!reactions && typeof body.count !== 'number') return null;
+      if (!reactions || typeof body.reaction_version !== 'number') return null;
       return {
         type: 'reaction',
         messageId: body.message_id,
         userId: body.user_id,
         value: body.value,
         added: body.added,
-        ...(typeof body.version === 'number' ? { version: body.version } : {}),
-        ...(reactions ? { reactions } : { count: body.count as number }),
+        reactionVersion: body.reaction_version,
+        reactions,
       };
     }
     default:
