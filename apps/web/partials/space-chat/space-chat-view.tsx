@@ -23,6 +23,10 @@ export const SPACE_CHAT_VIEW_COPY = {
   loading: 'Loading messages…',
   failed: 'Could not load the chat.',
   retry: 'Try again',
+  join: 'Join',
+  joinRetry: 'Try again',
+  /** The Explore join control's copy for a sent request. */
+  membershipPending: 'Membership pending',
   loadOlder: 'Load earlier messages',
   loadingOlder: 'Loading…',
   deleted: 'Message deleted',
@@ -744,16 +748,22 @@ function ChatComposer({
   if (composer.kind === 'closed') {
     return <p className="border-t border-grey-02 px-3 py-2.5 text-footnote text-grey-04">{composer.reason}</p>;
   }
-  if (composer.kind === 'sign_in') {
+  if (composer.kind === 'join') {
     return (
-      <div className="border-t border-grey-02 p-2">
-        <button
-          type="button"
-          onClick={composer.onSignIn}
-          className="w-full rounded-md border border-grey-02 px-3 py-2 text-left text-metadata text-grey-04 hover:text-text"
-        >
-          {composer.label}
-        </button>
+      <div className="flex items-center justify-between gap-3 border-t border-grey-02 px-3 py-2">
+        <p className="min-w-0 text-metadata text-grey-04">{composer.label}</p>
+        {composer.state === 'requested' ? (
+          <span className="shrink-0 text-metadata text-grey-04">{SPACE_CHAT_VIEW_COPY.membershipPending}</span>
+        ) : (
+          <button
+            type="button"
+            onClick={composer.onJoin}
+            disabled={composer.state === 'sending'}
+            className="flex h-6 shrink-0 items-center rounded border border-grey-02 px-2 text-metadata text-text shadow-button transition-colors duration-150 hover:border-text disabled:opacity-60"
+          >
+            {composer.state === 'error' ? SPACE_CHAT_VIEW_COPY.joinRetry : SPACE_CHAT_VIEW_COPY.join}
+          </button>
+        )}
       </div>
     );
   }

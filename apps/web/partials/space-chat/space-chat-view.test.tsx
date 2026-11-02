@@ -149,15 +149,23 @@ describe('SpaceChatView', () => {
     expect(onLoadOlder).toHaveBeenCalled();
   });
 
-  it('asks a signed-out reader to log in', () => {
-    const onSignIn = vi.fn();
+  it('offers a non-member the Join control in the composer slot', () => {
+    const onJoin = vi.fn();
     renderView({
-      composer: { kind: 'sign_in', label: 'Log in to chat', onSignIn },
+      composer: { kind: 'join', label: 'Join Geo to chat', state: 'idle', onJoin },
       onReact: undefined,
       canReply: false,
     });
+    expect(screen.getByText('Join Geo to chat')).toBeInTheDocument();
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Reply to message' })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Log in to chat' }));
-    expect(onSignIn).toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: SPACE_CHAT_VIEW_COPY.join }));
+    expect(onJoin).toHaveBeenCalled();
+  });
+
+  it('shows a sent request instead of the Join control', () => {
+    renderView({ composer: { kind: 'join', label: 'Join Geo to chat', state: 'requested', onJoin: vi.fn() } });
+    expect(screen.getByText(SPACE_CHAT_VIEW_COPY.membershipPending)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: SPACE_CHAT_VIEW_COPY.join })).not.toBeInTheDocument();
   });
 });

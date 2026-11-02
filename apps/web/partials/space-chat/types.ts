@@ -43,8 +43,16 @@ export type ChatViewComposer =
       /** Offered after `@`; no picker when absent. */
       mentionCandidates?: ChatViewPerson[];
     }
-  /** Reading is open, posting needs an account. */
-  | { kind: 'sign_in'; label: string; onSignIn: () => void }
+  /**
+   * Posting needs membership: a Join control, or the request's state once sent. `onJoin` signs a
+   * signed-out viewer in first.
+   */
+  | {
+      kind: 'join';
+      label: string;
+      state: 'idle' | 'sending' | 'requested' | 'error';
+      onJoin: () => void;
+    }
   /** Posting is not offered here, with a line saying why. */
   | { kind: 'closed'; reason: string }
   | { kind: 'none' };

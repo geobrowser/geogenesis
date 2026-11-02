@@ -4,7 +4,10 @@ import * as React from 'react';
 
 import { useGeoChatAuth } from '~/core/debates/hooks';
 import { useCurrentGeoChatUserId } from '~/core/debates/use-current-geo-chat-user-id';
-import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
+import { useAccessControl } from '~/core/hooks/use-access-control';
+import { useJoinSpace } from '~/core/hooks/use-join-space';
+import { useIsMembershipPending } from '~/core/hooks/use-pending-memberships';
+import { useSpace } from '~/core/hooks/use-space';
 import type { SpaceChatMessage } from '~/core/space-chat/api';
 import { spaceChatErrorMessage } from '~/core/space-chat/errors';
 import { useSpaceChatRoom, useSpaceChatRooms } from '~/core/space-chat/hooks';
@@ -19,8 +22,9 @@ import type { ChatViewComposer, ChatViewMessage } from './types';
 export const SPACE_CHAT_COPY = {
   label: 'Space chat',
   empty: 'No messages yet. Say hello.',
-  signIn: 'Log in to chat',
-  cannotPost: 'Only members and editors of this space can post here.',
+  join: (spaceName: string | null) => (spaceName ? `Join ${spaceName} to chat` : 'Join this space to chat'),
+  /** A member geo-chat hasn't caught up with yet. */
+  joining: 'You’re a member now. Posting opens in a moment.',
   unavailable: 'Chat isn’t available for this space.',
   /** Well under geo-chat's 16 KiB body limit; a chat line, not a document. */
   maxLength: 4000,
@@ -41,8 +45,8 @@ export function SpaceChatPanel({
 }) {
   const { authenticated } = useGeoChatAuth();
   const viewerId = useCurrentGeoChatUserId();
-  const signIn = usePrivySignIn();
   const rooms = useSpaceChatRooms(spaceId, true);
+  const membership = useChatMembership(spaceId, rooms.memberRoom?.can_post === true, rooms.refetch);
   const listed = rooms.memberRoom;
   const room = React.useMemo(
     () => listed ?? (knownRoomId ? { id: knownRoomId, space_id: spaceId, kind: 'member' as const } : null),
@@ -65,13 +69,18 @@ export function SpaceChatPanel({
   }
 
   const canPost = authenticated && listed?.can_post === true;
-  const composer: ChatViewComposer = !authenticated
-    ? { kind: 'sign_in', label: SPACE_CHAT_COPY.signIn, onSignIn: () => void signIn() }
-    : !listed
+  const composer: ChatViewComposer = canPost
+    ? { kind: 'post', onSend: chat.send, maxLength: SPACE_CHAT_COPY.maxLength, mentionCandidates: participants }
+    : authenticated && (!listed || membership.access.isLoading)
       ? { kind: 'none' }
-      : canPost
-        ? { kind: 'post', onSend: chat.send, maxLength: SPACE_CHAT_COPY.maxLength, mentionCandidates: participants }
-        : { kind: 'closed', reason: SPACE_CHAT_COPY.cannotPost };
+      : membership.access.isMember || membership.access.isEditor
+        ? { kind: 'closed', reason: SPACE_CHAT_COPY.joining }
+        : {
+            kind: 'join',
+            label: SPACE_CHAT_COPY.join(membership.spaceName),
+            state: membership.state,
+            onJoin: membership.join,
+          };
 
   return (
     <SpaceChatView
@@ -95,6 +104,53 @@ export function SpaceChatPanel({
       errorMessage={spaceChatErrorMessage}
     />
   );
+}
+
+/**
+ * The viewer's way in: the shared join path, and a room-list refetch whenever membership may have
+ * landed (window focus, a pending request resolving, the graph showing them as a member), since
+ * geo-chat learns members through its own sync.
+ */
+function useChatMembership(spaceId: string, canPost: boolean, refetchRooms: () => unknown) {
+  const { space } = useSpace(spaceId);
+  const spaceName = space?.entity?.name || null;
+  const { join, status, optimisticRequested } = useJoinSpace({
+    spaceId,
+    space: spaceName ? { name: spaceName } : undefined,
+  });
+  const pending = useIsMembershipPending(spaceId);
+  const access = useAccessControl(spaceId);
+  const joined = access.isMember || access.isEditor;
+
+  const wasPending = React.useRef(pending);
+  React.useEffect(() => {
+    if (wasPending.current && !pending && !canPost) void refetchRooms();
+    wasPending.current = pending;
+  }, [canPost, pending, refetchRooms]);
+  React.useEffect(() => {
+    if (joined && !canPost) void refetchRooms();
+  }, [canPost, joined, refetchRooms]);
+  React.useEffect(() => {
+    if (canPost) return;
+    const onFocus = () => void refetchRooms();
+    window.addEventListener('focus', onFocus);
+    // Until geo-chat's sync lists a known member, check again on a slow beat.
+    const timer = joined ? window.setInterval(onFocus, 15_000) : undefined;
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      window.clearInterval(timer);
+    };
+  }, [canPost, joined, refetchRooms]);
+
+  const state: 'idle' | 'sending' | 'requested' | 'error' =
+    status === 'success' || optimisticRequested || pending
+      ? 'requested'
+      : status === 'pending'
+        ? 'sending'
+        : status === 'error'
+          ? 'error'
+          : 'idle';
+  return { spaceName, join, state, access };
 }
 
 /** Everyone the loaded messages name: authors and mentions, and the viewer for pending sends. */
