@@ -8518,6 +8518,43 @@ describe('opponent-left notice', () => {
     expect(notice()).toBe(false);
   });
 
+  it("does not announce the viewer's own published leave once the room goes idle after a failed save", async () => {
+    const persistence = deferred<void>();
+    mocks.enqueueRecording.mockReturnValueOnce(persistence.promise);
+    mocks.leaveRematchMutateAsync.mockResolvedValue(undefined);
+    installRecordingMocks();
+    const view = await renderLiveDebate();
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'thanking',
+      turn_started_at: '2026-07-02T00:00:20.000Z',
+      turn_ends_at: '2026-07-02T00:00:40.000Z',
+      completed_at: null,
+      rematch_session_id: 'rematch-1',
+    };
+    mocks.rematch = rematchSession('deciding', { localConsented: true });
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.enqueueRecording).toHaveBeenCalledOnce());
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Leave debate' }));
+    await waitFor(() => expect(mocks.leaveRematchMutateAsync).toHaveBeenCalledOnce());
+    await act(async () => {
+      persistence.reject(new Error('Storage unavailable'));
+    });
+    expect(await screen.findAllByText('Storage unavailable')).not.toHaveLength(0);
+
+    mocks.debate = { ...mocks.debate, status: 'complete', completed_at: '2026-07-02T00:00:40.000Z' };
+    mocks.rematch = rematchSession('ended', { localConsented: true });
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    act(() => emitRoomEvent('disconnected', 99));
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(notice()).toBe(false);
+  });
+
   it('does not show the notice when the room loads with an already-ended rematch', async () => {
     mocks.debate = { ...completedDebate(), rematch_session_id: 'rematch-1' };
     mocks.rematch = rematchSession('ended');

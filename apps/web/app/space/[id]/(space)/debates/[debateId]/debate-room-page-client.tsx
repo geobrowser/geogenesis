@@ -3033,9 +3033,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       returnFromDebate();
     } catch (error) {
       if (debate.status === 'thanking' && rematchId) {
-        unmarkLocalRematchLeave(rematchId);
+        if (!rematchLeavePublishedRef.current) unmarkLocalRematchLeave(rematchId);
       } else if (debate.status === 'complete' && rematchId && rematchQuery.data?.status === 'ended') {
-        unmarkLocalRematchLeave(rematchId);
+        if (!rematchLeavePublishedRef.current) unmarkLocalRematchLeave(rematchId);
       } else if (debate.status !== 'complete') {
         unmarkLocalDebateLeave(debate.id);
       }
