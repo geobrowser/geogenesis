@@ -94,10 +94,12 @@ export function SpaceChatPanel({
       loadingOlder={chat.loadingOlder}
       composer={composer}
       viewerId={viewerId}
-      // Edits need posting rights; deleting one's own does not.
+      // geo-chat requires write access for edits and deletes: own messages need posting rights,
+      // other people's need moderation.
       onEdit={canPost ? chat.edit : undefined}
       onDelete={authenticated ? chat.remove : undefined}
-      canDeleteAny={listed?.can_moderate === true}
+      canDeleteOwn={canPost}
+      canDeleteAny={authenticated && listed?.can_moderate === true}
       onReact={canPost ? chat.react : undefined}
       canReply={canPost}
       mentionName={mentionName}

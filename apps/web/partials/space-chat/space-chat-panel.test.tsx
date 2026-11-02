@@ -11,11 +11,13 @@ const SPACE = '0243bd171b651379954685365870e6a6';
 const mocks = vi.hoisted(() => ({
   authenticated: false,
   canPost: false,
+  canModerate: false,
   pending: false,
   access: { isMember: false, isEditor: false, canEdit: false, isLoading: false },
   join: vi.fn(),
   joinStatus: 'idle' as 'idle' | 'pending' | 'success' | 'error',
   refetchRooms: vi.fn(),
+  messages: [] as unknown[],
 }));
 
 vi.mock('~/core/debates/hooks', () => ({ useGeoChatAuth: () => ({ authenticated: mocks.authenticated }) }));
@@ -38,10 +40,16 @@ vi.mock('~/core/space-chat/hooks', () => ({
     data: { supported: true, rooms: [] },
     isError: false,
     refetch: mocks.refetchRooms,
-    memberRoom: { id: 'room', space_id: SPACE, kind: 'member', can_post: mocks.canPost, can_moderate: false },
+    memberRoom: {
+      id: 'room',
+      space_id: SPACE,
+      kind: 'member',
+      can_post: mocks.canPost,
+      can_moderate: mocks.canModerate,
+    },
   }),
   useSpaceChatRoom: () => ({
-    state: { messages: [], nextBefore: null, pending: [] },
+    state: { messages: mocks.messages, nextBefore: null, pending: [] },
     status: 'ready',
     refetch: vi.fn(),
     loadingOlder: false,
@@ -55,6 +63,8 @@ vi.mock('~/core/space-chat/hooks', () => ({
 beforeEach(() => {
   mocks.authenticated = false;
   mocks.canPost = false;
+  mocks.canModerate = false;
+  mocks.messages = [];
   mocks.pending = false;
   mocks.access = { isMember: false, isEditor: false, canEdit: false, isLoading: false };
   mocks.joinStatus = 'idle';
@@ -144,5 +154,49 @@ describe('SpaceChatPanel composer', () => {
     expect(joinButton()).not.toBeInTheDocument();
     act(() => void window.dispatchEvent(new Event('focus')));
     expect(mocks.refetchRooms).not.toHaveBeenCalled();
+  });
+});
+
+describe('SpaceChatPanel delete', () => {
+  const chatMessage = (id: string, author: string) => ({
+    id,
+    room_id: 'room',
+    room_kind: 'member',
+    author_id: author,
+    client_nonce: id,
+    reply_to_message_id: null,
+    body: `message ${id}`,
+    attachment_ids: [],
+    created_at: '2026-11-02T12:00:00Z',
+    edited_at: null,
+    deleted_at: null,
+    reactions: [],
+  });
+  const deleteButtons = () => screen.queryAllByRole('button', { name: 'Delete message' });
+
+  beforeEach(() => {
+    mocks.authenticated = true;
+    mocks.messages = [
+      chatMessage('0195000000007000800000000000000a', 'viewer'),
+      chatMessage('0195000000007000800000000000000b', 'other'),
+    ];
+  });
+
+  it('offers no Delete to a former member who can no longer post', () => {
+    render(<SpaceChatPanel spaceId={SPACE} />);
+    expect(deleteButtons()).toHaveLength(0);
+  });
+
+  it('offers Delete on the viewer’s own messages when they can post', () => {
+    mocks.canPost = true;
+    render(<SpaceChatPanel spaceId={SPACE} />);
+    expect(deleteButtons()).toHaveLength(1);
+  });
+
+  it('offers Delete on everyone’s messages to a moderator', () => {
+    mocks.canPost = true;
+    mocks.canModerate = true;
+    render(<SpaceChatPanel spaceId={SPACE} />);
+    expect(deleteButtons()).toHaveLength(2);
   });
 });

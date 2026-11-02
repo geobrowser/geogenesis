@@ -70,8 +70,9 @@ type Props = {
   /** Dashless or dashed. */
   viewerId: string | null;
   onEdit?: (id: string, body: string) => Promise<void>;
-  /** Offered on the viewer's own and, with `canDeleteAny`, on everyone's. */
+  /** Offered on the viewer's own with `canDeleteOwn`, and on everyone's with `canDeleteAny`. */
   onDelete?: (id: string) => Promise<void>;
+  canDeleteOwn?: boolean;
   canDeleteAny?: boolean;
   /** Reactions toggle when given; otherwise they only show. */
   onReact?: (id: string, value: string, added: boolean) => Promise<void>;
@@ -100,6 +101,7 @@ export function SpaceChatView({
   viewerId,
   onEdit,
   onDelete,
+  canDeleteOwn = true,
   canDeleteAny = false,
   onReact,
   canReply = false,
@@ -204,7 +206,7 @@ export function SpaceChatView({
                 message={message}
                 showHeader={!grouped}
                 onEdit={own && onEdit ? onEdit : undefined}
-                onDelete={onDelete && (own || canDeleteAny) ? onDelete : undefined}
+                onDelete={onDelete && ((own && canDeleteOwn) || canDeleteAny) ? onDelete : undefined}
                 onReact={onReact}
                 onReply={posting && canReply ? () => setReplyTo(message) : undefined}
                 mentionName={mentionName}
