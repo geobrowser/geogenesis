@@ -13,7 +13,7 @@ import { spaceChatErrorMessage } from '~/core/space-chat/errors';
 import { useSpaceChatRoom, useSpaceChatRooms } from '~/core/space-chat/hooks';
 import { mentionedIds } from '~/core/space-chat/mentions';
 import { type ChatPerson, unknownPerson, useChatPeople, useSpaceChatParticipants } from '~/core/space-chat/people';
-import type { SpaceChatState } from '~/core/space-chat/state';
+import { type SpaceChatState, shownReactions } from '~/core/space-chat/state';
 import { normId } from '~/core/utils/norm-id';
 
 import { SpaceChatView } from './space-chat-view';
@@ -24,7 +24,7 @@ export const SPACE_CHAT_COPY = {
   empty: 'No messages yet. Say hello.',
   join: (spaceName: string | null) => (spaceName ? `Join ${spaceName} to chat` : 'Join this space to chat'),
   /** A member geo-chat hasn't caught up with yet. */
-  joining: 'You’re a member now. Posting opens in a moment.',
+  joining: 'You’re a member now. Posting opens within a few minutes.',
   unavailable: 'Chat isn’t available for this space.',
   /** Well under geo-chat's 16 KiB body limit; a chat line, not a document. */
   maxLength: 4000,
@@ -106,11 +106,9 @@ export function SpaceChatPanel({
   );
 }
 
-/**
- * The viewer's way in: the shared join path, and a room-list refetch whenever membership may have
- * landed (window focus, a pending request resolving, the graph showing them as a member), since
- * geo-chat learns members through its own sync.
- */
+const MEMBER_RECHECK_MS = [15_000, 30_000, 60_000];
+
+/** The shared join path, plus a room-list refetch whenever membership may have landed: geo-chat learns members through its own sync. */
 function useChatMembership(spaceId: string, canPost: boolean, refetchRooms: () => unknown) {
   const { space } = useSpace(spaceId);
   const spaceName = space?.entity?.name || null;
@@ -134,11 +132,18 @@ function useChatMembership(spaceId: string, canPost: boolean, refetchRooms: () =
     if (canPost) return;
     const onFocus = () => void refetchRooms();
     window.addEventListener('focus', onFocus);
-    // Until geo-chat's sync lists a known member, check again on a slow beat.
-    const timer = joined ? window.setInterval(onFocus, 15_000) : undefined;
+    // geo-chat syncs members every 5 minutes, so a known member is re-checked on a backing-off beat.
+    let timer: number | undefined;
+    const recheck = (step: number) => {
+      timer = window.setTimeout(() => {
+        onFocus();
+        recheck(Math.min(step + 1, MEMBER_RECHECK_MS.length - 1));
+      }, MEMBER_RECHECK_MS[step]);
+    };
+    if (joined) recheck(0);
     return () => {
       window.removeEventListener('focus', onFocus);
-      window.clearInterval(timer);
+      window.clearTimeout(timer);
     };
   }, [canPost, joined, refetchRooms]);
 
@@ -192,7 +197,7 @@ function viewMessages(
     editedAt: message.edited_at,
     deleted: message.deleted_at !== null,
     replyTo: replyTo(message.reply_to_message_id),
-    reactions: message.reactions ?? [],
+    reactions: shownReactions(message, state.pendingReactions),
   }));
   if (!self || state.pending.length === 0) return stored;
   return [

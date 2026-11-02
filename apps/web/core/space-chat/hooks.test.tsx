@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   gateway: 'idle' as string,
   getSpaceChatMessages: vi.fn(),
   postSpaceChatMessage: vi.fn(),
+  setSpaceChatReaction: vi.fn(),
   authenticated: false,
 }));
 
@@ -27,6 +28,7 @@ vi.mock('~/core/debates/debate-gateway', () => ({
 vi.mock('./api', () => ({
   getSpaceChatMessages: mocks.getSpaceChatMessages,
   postSpaceChatMessage: mocks.postSpaceChatMessage,
+  setSpaceChatReaction: mocks.setSpaceChatReaction,
 }));
 
 const { useSpaceChatRoom } = await import('./hooks');
@@ -99,6 +101,31 @@ describe('useSpaceChatRoom send', () => {
     const nonces = mocks.postSpaceChatMessage.mock.calls.map(call => call[1].client_nonce);
     expect(nonces[1]).toBe(nonces[0]);
     expect(nonces[2]).not.toBe(nonces[0]);
+    mocks.gateway = 'idle';
+  });
+});
+
+describe('useSpaceChatRoom react', () => {
+  it('holds a tap until its response settles it, and drops it on failure', async () => {
+    mocks.authenticated = true;
+    mocks.gateway = 'ready';
+    mocks.getSpaceChatMessages.mockResolvedValueOnce({ messages: [message(1)], next_before: null });
+    let answer: (value: unknown) => void = () => undefined;
+    mocks.setSpaceChatReaction.mockImplementationOnce(() => new Promise(resolve => (answer = resolve)));
+    mocks.setSpaceChatReaction.mockRejectedValueOnce(new Error('network'));
+    const { result } = renderHook(() => useSpaceChatRoom(ROOM), { wrapper });
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+
+    const settled = result.current.react(message(1).id, '👍', true);
+    await waitFor(() => expect(result.current.state?.pendingReactions).toHaveLength(1));
+    answer({ count: 1, version: 1, reactions: [{ value: '👍', count: 1, reacted: true }] });
+    await settled;
+    await waitFor(() => expect(result.current.state?.pendingReactions).toEqual([]));
+    expect(result.current.state?.messages[0]?.reactions).toEqual([{ value: '👍', count: 1, reacted: true }]);
+
+    await expect(result.current.react(message(1).id, '🎉', true)).rejects.toThrow('network');
+    await waitFor(() => expect(result.current.state?.pendingReactions).toEqual([]));
+    expect(result.current.state?.messages[0]?.reactions).toEqual([{ value: '👍', count: 1, reacted: true }]);
     mocks.gateway = 'idle';
   });
 });

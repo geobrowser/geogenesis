@@ -4,13 +4,15 @@ import type { SpaceChatMessage, SpaceChatPage } from './api';
 import {
   type SpaceChatState,
   parseSpaceChatRoomEvent,
+  shownReactions,
   withChatMessage,
   withChatPage,
   withOlderChatPage,
-  withOwnReaction,
   withOwnReactionResult,
   withPendingMessage,
+  withPendingReaction,
   withRoomEvent,
+  withoutPendingReaction,
 } from './state';
 
 const VIEWER = '0191aaaa000070008000000000000001';
@@ -150,74 +152,157 @@ describe('space chat state', () => {
     expect(state.messages[0]!.reactions).toEqual([]);
   });
 
-  it('guesses the viewer’s own reaction, and does nothing when already set', () => {
-    let state = withChatPage(undefined, page([1]));
-    const id = message(1).id;
-    state = withOwnReaction(state, id, '🎉', true);
-    expect(state.messages[0]!.reactions).toEqual([{ value: '🎉', count: 1, reacted: true }]);
-    const again = withOwnReaction(state, id, '🎉', true);
-    expect(again).toBe(state);
-    state = withOwnReaction(state, id, '🎉', false);
-    expect(state.messages[0]!.reactions).toEqual([]);
-  });
-
   describe('reaction versions', () => {
     const id = message(1).id;
-    const thumbs = (count: number, version: number, userId = OTHER, added = true) =>
-      ({ type: 'reaction', messageId: id, userId, value: '👍', count, added, version }) as const;
-    const seeded = () =>
-      withChatPage(undefined, {
-        messages: [message(1, { reactions: [{ value: '👍', count: 1, reacted: false }], reaction_version: 1 })],
-        next_before: null,
-      });
+    type Counts = { value: string; count: number; reacted?: boolean }[];
+    const event = (version: number, value: string, reactions: Counts, userId = OTHER, added = true) =>
+      ({ type: 'reaction', messageId: id, userId, value, added, version, reactions }) as const;
+    const seeded = (reactions = [{ value: '👍', count: 1, reacted: false }], version = 1) =>
+      withChatPage(undefined, { messages: [message(1, { reactions, reaction_version: version })], next_before: null });
+    const reactionsOf = (state: SpaceChatState) => state.messages[0]!.reactions;
+    const tap = (value: string, added: boolean, tapId = `tap-${value}`) => ({ id: tapId, messageId: id, value, added });
 
-    it('drops an event at or below the held version, so out-of-order events converge', () => {
-      let state = seeded();
-      state = withRoomEvent(state, thumbs(3, 3), VIEWER);
-      state = withRoomEvent(state, thumbs(2, 2), VIEWER);
-      expect(state.messages[0]).toMatchObject({ reactions: [{ value: '👍', count: 3 }], reaction_version: 3 });
-      state = withRoomEvent(state, thumbs(9, 3), VIEWER);
-      expect(state.messages[0]!.reactions![0]!.count).toBe(3);
+    it('keeps an emoji that a newer full list carries when its own older event is dropped', () => {
+      let state = seeded([], 3);
+      state = withRoomEvent(
+        state,
+        event(5, '❤️', [
+          { value: '👍', count: 1 },
+          { value: '❤️', count: 1 },
+        ]),
+        VIEWER
+      );
+      state = withRoomEvent(state, event(4, '👍', [{ value: '👍', count: 1 }]), VIEWER);
+      expect(reactionsOf(state)).toEqual([
+        { value: '👍', count: 1, reacted: false },
+        { value: '❤️', count: 1, reacted: false },
+      ]);
+      expect(state.messages[0]!.reaction_version).toBe(5);
+    });
+
+    it('replaces the counts with the full list and keeps the viewer’s reacted per emoji', () => {
+      let state = seeded([{ value: '👍', count: 2, reacted: true }]);
+      state = withRoomEvent(
+        state,
+        event(2, '🎉', [
+          { value: '👍', count: 2 },
+          { value: '🎉', count: 1 },
+        ]),
+        VIEWER
+      );
+      expect(reactionsOf(state)).toEqual([
+        { value: '👍', count: 2, reacted: true },
+        { value: '🎉', count: 1, reacted: false },
+      ]);
+      state = withRoomEvent(state, event(3, '👍', [{ value: '🎉', count: 1 }], VIEWER, false), VIEWER);
+      expect(reactionsOf(state)).toEqual([{ value: '🎉', count: 1, reacted: false }]);
+      state = withRoomEvent(state, event(4, '🎉', []), VIEWER);
+      expect(reactionsOf(state)).toEqual([]);
     });
 
     it('drops an event older than the history read it follows', () => {
-      const state = withRoomEvent(seeded(), thumbs(0, 1), VIEWER);
-      expect(state.messages[0]!.reactions).toEqual([{ value: '👍', count: 1, reacted: false }]);
+      const state = withRoomEvent(seeded(), event(1, '👍', []), VIEWER);
+      expect(reactionsOf(state)).toEqual([{ value: '👍', count: 1, reacted: false }]);
     });
 
     it('settles the viewer’s own reaction whether its response or its event comes first', () => {
-      const guessed = withOwnReaction(seeded(), id, '👍', true);
-      const viaResponse = withRoomEvent(
-        withOwnReactionResult(guessed, id, { value: '👍', added: true, count: 2, version: 2 }),
-        thumbs(2, 2, VIEWER),
-        VIEWER
-      );
-      const viaEvent = withOwnReactionResult(withRoomEvent(guessed, thumbs(2, 2, VIEWER), VIEWER), id, {
-        value: '👍',
-        added: true,
-        count: 2,
-        version: 2,
-      });
+      const pending = tap('👍', true);
+      const tapped = withPendingReaction(seeded(), pending);
+      const response = { value: '👍', added: true, version: 2, reactions: [{ value: '👍', count: 2, reacted: true }] };
+      const viewersEvent = event(2, '👍', [{ value: '👍', count: 2 }], VIEWER);
+      const viaResponse = withRoomEvent(withOwnReactionResult(tapped, pending, response), viewersEvent, VIEWER);
+      const viaEvent = withOwnReactionResult(withRoomEvent(tapped, viewersEvent, VIEWER), pending, response);
       for (const state of [viaResponse, viaEvent]) {
-        expect(state.messages[0]).toMatchObject({
-          reactions: [{ value: '👍', count: 2, reacted: true }],
-          reaction_version: 2,
-        });
+        expect(reactionsOf(state)).toEqual([{ value: '👍', count: 2, reacted: true }]);
+        expect(state.pendingReactions).toEqual([]);
       }
     });
 
-    it('drops the viewer’s response when someone else’s later change already landed', () => {
-      let state = withOwnReaction(seeded(), id, '👍', true);
-      state = withRoomEvent(state, thumbs(3, 3), VIEWER);
-      state = withOwnReactionResult(state, id, { value: '👍', added: true, count: 2, version: 2 });
-      expect(state.messages[0]).toMatchObject({
-        reactions: [{ value: '👍', count: 3, reacted: true }],
-        reaction_version: 3,
+    it('shows the viewer’s tap through someone else’s event, then settles it from the response', () => {
+      const pending = tap('👍', true);
+      let state = withPendingReaction(seeded([], 1), pending);
+      expect(shownReactions(state.messages[0]!, state.pendingReactions)).toEqual([
+        { value: '👍', count: 1, reacted: true },
+      ]);
+      // Someone else's ❤️ committed first, without the viewer's 👍.
+      state = withRoomEvent(state, event(2, '❤️', [{ value: '❤️', count: 1 }]), VIEWER);
+      expect(shownReactions(state.messages[0]!, state.pendingReactions)).toEqual([
+        { value: '❤️', count: 1, reacted: false },
+        { value: '👍', count: 1, reacted: true },
+      ]);
+      state = withOwnReactionResult(state, pending, {
+        value: '👍',
+        added: true,
+        version: 3,
+        reactions: [
+          { value: '❤️', count: 1, reacted: false },
+          { value: '👍', count: 1, reacted: true },
+        ],
       });
+      expect(state.pendingReactions).toEqual([]);
+      expect(shownReactions(state.messages[0]!, state.pendingReactions)).toEqual([
+        { value: '❤️', count: 1, reacted: false },
+        { value: '👍', count: 1, reacted: true },
+      ]);
+    });
+
+    it('keeps the viewer’s reacted from their response when someone else’s later list landed first', () => {
+      const pending = tap('👍', true);
+      let state = withPendingReaction(seeded(), pending);
+      state = withRoomEvent(
+        state,
+        event(3, '🎉', [
+          { value: '👍', count: 2 },
+          { value: '🎉', count: 1 },
+        ]),
+        VIEWER
+      );
+      state = withOwnReactionResult(state, pending, {
+        value: '👍',
+        added: true,
+        version: 2,
+        reactions: [{ value: '👍', count: 2, reacted: true }],
+      });
+      expect(reactionsOf(state)).toEqual([
+        { value: '👍', count: 2, reacted: true },
+        { value: '🎉', count: 1, reacted: false },
+      ]);
+      expect(state.messages[0]!.reaction_version).toBe(3);
+    });
+
+    it('ignores the viewer’s stale response after their own later change', () => {
+      const add = tap('👍', true, 'add');
+      const remove = tap('👍', false, 'remove');
+      let state = withPendingReaction(withPendingReaction(seeded(), add), remove);
+      state = withOwnReactionResult(state, remove, {
+        value: '👍',
+        added: false,
+        version: 3,
+        reactions: [{ value: '👍', count: 1, reacted: false }],
+      });
+      state = withOwnReactionResult(state, add, {
+        value: '👍',
+        added: true,
+        version: 2,
+        reactions: [{ value: '👍', count: 2, reacted: true }],
+      });
+      expect(reactionsOf(state)).toEqual([{ value: '👍', count: 1, reacted: false }]);
+      expect(state.pendingReactions).toEqual([]);
+    });
+
+    it('shows the latest unsettled tap per emoji, and nothing for a tap the held state already matches', () => {
+      let state = withPendingReaction(seeded([{ value: '👍', count: 1, reacted: true }]), tap('👍', true));
+      expect(shownReactions(state.messages[0]!, state.pendingReactions)).toEqual([
+        { value: '👍', count: 1, reacted: true },
+      ]);
+      state = withPendingReaction(state, tap('👍', false, 'second'));
+      expect(shownReactions(state.messages[0]!, state.pendingReactions)).toEqual([]);
+      state = withoutPendingReaction(state, 'second');
+      expect(state.pendingReactions).toHaveLength(1);
     });
 
     it('keeps the higher-version reactions when a page copy is older', () => {
-      let state = withRoomEvent(seeded(), thumbs(4, 4), VIEWER);
+      let state = withRoomEvent(seeded(), event(4, '👍', [{ value: '👍', count: 4 }]), VIEWER);
       state = withChatPage(state, {
         messages: [message(1, { reactions: [{ value: '👍', count: 1, reacted: false }], reaction_version: 1 })],
         next_before: null,
@@ -225,7 +310,7 @@ describe('space chat state', () => {
       expect(state.messages[0]).toMatchObject({ reactions: [{ value: '👍', count: 4 }], reaction_version: 4 });
     });
 
-    it('applies every change from a geo-chat without versions', () => {
+    it('applies every change from a geo-chat without versions or lists', () => {
       let state = withChatPage(undefined, page([1]));
       state = withRoomEvent(
         state,
@@ -237,7 +322,7 @@ describe('space chat state', () => {
         { type: 'reaction', messageId: id, userId: OTHER, value: '👍', count: 1, added: false },
         VIEWER
       );
-      expect(state.messages[0]!.reactions).toEqual([{ value: '👍', count: 1, reacted: false }]);
+      expect(reactionsOf(state)).toEqual([{ value: '👍', count: 1, reacted: false }]);
     });
   });
 
@@ -261,6 +346,18 @@ describe('space chat state', () => {
         },
       })
     ).toEqual({ type: 'reaction', messageId: 'm', userId: 'u', value: '👍', count: 3, added: true, version: 7 });
+    expect(
+      parseSpaceChatRoomEvent({
+        event_type: 'message.reaction_changed',
+        payload: { message_id: 'm', user_id: 'u', value: '👍', added: false, version: 8, reactions: [] },
+      })
+    ).toEqual({ type: 'reaction', messageId: 'm', userId: 'u', value: '👍', added: false, version: 8, reactions: [] });
+    expect(
+      parseSpaceChatRoomEvent({
+        event_type: 'message.reaction_changed',
+        payload: { message_id: 'm', user_id: 'u', value: '👍', added: true, reactions: [{ value: 1 }] },
+      })
+    ).toBeNull();
     expect(parseSpaceChatRoomEvent({ event_type: 'message.pinned', payload: {} })).toBeNull();
     expect(parseSpaceChatRoomEvent({ event_type: 'message.deleted', payload: { message_id: 'm' } })).toBeNull();
   });

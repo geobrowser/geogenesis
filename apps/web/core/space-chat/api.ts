@@ -124,6 +124,8 @@ export function setSpaceChatReaction(messageId: string, value: string, added: bo
     count: number;
     /** The message's `reaction_version` after the request; absent from a geo-chat without it. */
     version?: number;
+    /** Every emoji's count and the viewer's `reacted` after the request; absent from a geo-chat without it. */
+    reactions?: unknown;
   }>(`/messages/${encodeURIComponent(messageId)}/reactions`, {
     ...writeOptions(auth),
     method: added ? 'PUT' : 'DELETE',

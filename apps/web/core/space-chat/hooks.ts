@@ -21,14 +21,16 @@ import {
 } from './api';
 import {
   type SpaceChatState,
+  parseReactionCounts,
   spaceChatQueryKeys,
   withChatMessage,
   withChatPage,
   withOlderChatPage,
-  withOwnReaction,
   withOwnReactionResult,
   withPendingMessage,
+  withPendingReaction,
   withoutPendingMessage,
+  withoutPendingReaction,
 } from './state';
 
 const FIRST_PAGE_LIMIT = 50;
@@ -201,19 +203,25 @@ export function useSpaceChatRoom(
   const react = React.useCallback(
     async (id: string, value: string, added: boolean) => {
       if (!auth) throw new GeoChatRequestError('Sign in to chat', 'authentication_required', 401);
-      update(state => withOwnReaction(state, id, value, added));
+      const pending = { id: newClientNonce(), messageId: id, value, added };
+      update(state => withPendingReaction(state, pending));
       try {
         const result = await setSpaceChatReaction(id, value, added, auth);
+        const reactions = parseReactionCounts(result.reactions);
         update(state =>
-          withOwnReactionResult(state, id, { value, added, count: result.count, version: result.version })
+          withOwnReactionResult(state, pending, {
+            value,
+            added,
+            version: result.version,
+            ...(reactions ? { reactions } : { count: result.count }),
+          })
         );
       } catch (error) {
-        // The page read carries the viewer's own `reacted`, so it settles what the guess got wrong.
-        void queryClient.invalidateQueries({ queryKey, exact: true });
+        update(state => withoutPendingReaction(state, pending.id));
         throw error;
       }
     },
-    [auth, queryClient, queryKey, update]
+    [auth, update]
   );
 
   const state = query.data;

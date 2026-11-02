@@ -110,6 +110,31 @@ describe('SpaceChatPanel composer', () => {
     expect(mocks.refetchRooms).toHaveBeenCalled();
   });
 
+  it('re-checks a not-yet-synced member at 15s, 30s, then every 60s', () => {
+    vi.useFakeTimers();
+    try {
+      mocks.authenticated = true;
+      mocks.access = { isMember: true, isEditor: false, canEdit: false, isLoading: false };
+      render(<SpaceChatPanel spaceId={SPACE} />);
+      mocks.refetchRooms.mockClear();
+      const after = (ms: number) => act(() => void vi.advanceTimersByTime(ms));
+      after(14_999);
+      expect(mocks.refetchRooms).toHaveBeenCalledTimes(0);
+      after(1);
+      expect(mocks.refetchRooms).toHaveBeenCalledTimes(1);
+      after(30_000);
+      expect(mocks.refetchRooms).toHaveBeenCalledTimes(2);
+      after(59_999);
+      expect(mocks.refetchRooms).toHaveBeenCalledTimes(2);
+      after(1);
+      expect(mocks.refetchRooms).toHaveBeenCalledTimes(3);
+      after(60_000);
+      expect(mocks.refetchRooms).toHaveBeenCalledTimes(4);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('gives a member who can post the composer', () => {
     mocks.authenticated = true;
     mocks.canPost = true;
