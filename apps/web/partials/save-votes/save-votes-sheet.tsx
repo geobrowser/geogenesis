@@ -7,6 +7,7 @@ import * as React from 'react';
 import cx from 'classnames';
 import { useAtomValue } from 'jotai';
 
+import { useGoogleOAuthSignIn } from '~/core/auth/google-oauth';
 import { arrivedFromEmail } from '~/core/deep-links/ref-email';
 import { useAnyModalOpen } from '~/core/hooks/use-any-modal-open';
 import { usePrepareOnboarding } from '~/core/hooks/use-prepare-onboarding';
@@ -41,6 +42,7 @@ import { Z_LAYER_CLASS } from '~/core/z-layers';
 
 import { ArrowLeft } from '~/design-system/icons/arrow-left';
 import { CloseSmall } from '~/design-system/icons/close-small';
+import { GoogleMark } from '~/design-system/icons/google-mark';
 import { Mail } from '~/design-system/icons/mail';
 import { ResponsePositionIcon } from '~/design-system/icons/response-position-icon';
 
@@ -54,6 +56,7 @@ import {
   CHIP_LIST_CLASS,
   CHIP_ROW_CLASS,
   CORNER_CARD_CLASS,
+  ERROR_TEXT_CLASS,
   ICON_BUTTON_CLASS,
   INPUT_CLASS,
   TOP_BAR_CLASS,
@@ -62,6 +65,7 @@ import {
   codeStepClasses,
   fieldClass,
   fineClass,
+  googleButtonClass,
   primaryButtonClass,
 } from './save-votes-styles';
 
@@ -222,6 +226,21 @@ export function SaveVotesSheet() {
     setAttempt({ email: trimmedEmail, centered, reason: attempt ? attempt.reason : reason, phase: 'code' });
   };
 
+  // Undefined with the `googleSignIn` flag off or in an in-app browser, which hides the button.
+  const googleSignIn = useGoogleOAuthSignIn();
+  const [googleStatus, setGoogleStatus] = React.useState<'idle' | 'starting' | 'failed'>('idle');
+  const startGoogle = React.useCallback(async () => {
+    if (!googleSignIn) return;
+    setGoogleStatus('starting');
+    try {
+      // Redirects away on success. The attempt is persisted first, so the saver still reads it as a
+      // save on the return and publishes the votes, which are on the device the whole time.
+      await googleSignIn(saveVotesSignInProperties('continue_with_google', count, attempt ? attempt.reason : reason));
+    } catch {
+      setGoogleStatus('failed');
+    }
+  }, [googleSignIn, count, attempt, reason]);
+
   if (!open) return null;
   // Waits behind anything the visitor opened. Hidden rather than unmounted once a code is out, so
   // closing that overlay does not mail a second code (the email capture learned this first).
@@ -321,6 +340,22 @@ export function SaveVotesSheet() {
           <button type="submit" disabled={!canSend} className={primaryButtonClass(compact)}>
             {editing ? SAVE_VOTES_RESEND_LABEL : saveVotesSubmitLabel(count, logIn)}
           </button>
+          {googleSignIn ? (
+            <button
+              type="button"
+              onClick={() => void startGoogle()}
+              disabled={googleStatus === 'starting'}
+              className={googleButtonClass(compact)}
+            >
+              <GoogleMark />
+              Continue with Google
+            </button>
+          ) : null}
+          {googleStatus === 'failed' ? (
+            <p role="alert" className={cx('mt-2', ERROR_TEXT_CLASS)}>
+              Google sign-in did not start. Try again, or use your email.
+            </p>
+          ) : null}
 
           <p className={fineClass(compact)}>{SAVE_VOTES_FINE_PRINT}</p>
         </form>

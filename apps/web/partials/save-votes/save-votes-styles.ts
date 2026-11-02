@@ -67,11 +67,18 @@ export const primaryButtonClass = (compact: boolean) =>
     compact ? 'h-10' : 'h-11'
   );
 
+/** The outlined pill under it with Google's mark, the same size, in the text color Google's branding asks for. */
+export const googleButtonClass = (compact: boolean) =>
+  cx(
+    'mt-2 inline-flex w-full items-center justify-center gap-2 rounded-full border border-grey-02 bg-white text-[16px] font-medium whitespace-nowrap text-[#151515] transition-colors hover:border-text disabled:opacity-50 mobile:mx-auto mobile:flex mobile:h-12 mobile:max-w-[394px] mobile:text-[17px]',
+    compact ? 'h-10' : 'h-11'
+  );
+
 export const fineClass = (compact: boolean) =>
   cx('text-[12px] leading-[16px] text-grey-04 mobile:mt-3 mobile:text-[13px]', compact ? 'mt-2.5' : 'mt-3');
 
 /** `red-01` is under 4.5:1 on white at this size; this is the same red, dark enough to read. */
-const ERROR_TEXT_CLASS = 'text-[13px] leading-[18px] text-[#d92d14] mobile:text-[15px] mobile:leading-[20px]';
+export const ERROR_TEXT_CLASS = 'text-[13px] leading-[18px] text-[#d92d14] mobile:text-[15px] mobile:leading-[20px]';
 
 /**
  * The code step (`AccountStep`) in this sheet's look: the email capture's subtext, a larger box per
