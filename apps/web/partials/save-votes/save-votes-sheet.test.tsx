@@ -487,17 +487,31 @@ describe('SaveVotesSheet', () => {
       expect(screen.getByText('Check your email')).toBeInTheDocument();
     });
 
-    it('offers it in the centred dialog and the lobby ask too', () => {
+    it('offers it in the centred dialog too', () => {
       mocks.googleSignIn = vi.fn(() => Promise.resolve());
       vote('a');
       markPromptedThisSession();
-      setSaveVotesPromptLobby('Morning lobby');
       render(<SaveVotesSheet />);
       act(() => openSaveVotesPrompt('navbar'));
 
       expect(
         within(screen.getByRole('dialog')).getByRole('button', { name: 'Continue with Google' })
       ).toBeInTheDocument();
+    });
+
+    // The lobby ask promises they stay in the lobby with the audio playing; Google's redirect would not.
+    it('leaves it out of the lobby ask', () => {
+      mocks.googleSignIn = vi.fn(() => Promise.resolve());
+      vote('a');
+      vote('b');
+      markPromptedThisSession();
+      setSaveVotesPromptLobby('Morning lobby');
+      render(<SaveVotesSheet />);
+      act(() => openSaveVotesPrompt('threshold'));
+
+      const sheet = screen.getByRole('region', { name: 'Join the discussion' });
+      expect(within(sheet).getByRole('textbox', { name: 'Email address' })).toBeInTheDocument();
+      expect(within(sheet).queryByRole('button', { name: 'Continue with Google' })).not.toBeInTheDocument();
     });
   });
 

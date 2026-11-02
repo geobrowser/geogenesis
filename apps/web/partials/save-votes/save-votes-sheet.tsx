@@ -225,8 +225,11 @@ export function SaveVotesSheet() {
     setAttempt({ email: trimmedEmail, centered, reason: attempt ? attempt.reason : reason, phase: 'code' });
   };
 
-  // Undefined with the `googleSignIn` flag off or in an in-app browser, which hides the button.
-  const google = useContinueWithGoogle();
+  // Undefined with the `googleSignIn` flag off or in an in-app browser, which hides the button. Not in
+  // the lobby ask either: it promises they stay in the lobby with the audio playing, and Google
+  // redirects away from the page.
+  const continueWithGoogle = useContinueWithGoogle();
+  const google = lobbyName ? undefined : continueWithGoogle;
 
   if (!open) return null;
   // Waits behind anything the visitor opened. Hidden rather than unmounted once a code is out, so

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { type AnalyticsProperties } from '~/core/analytics';
 import { useGoogleOAuthSignIn } from '~/core/auth/google-oauth';
@@ -17,6 +17,15 @@ type ContinueWithGoogleStatus = 'idle' | 'starting' | 'failed';
 export function useContinueWithGoogle() {
   const signIn = useGoogleOAuthSignIn();
   const [status, setStatus] = useState<ContinueWithGoogleStatus>('idle');
+  // Back from Google's page can restore this one from the back/forward cache, state and all, which
+  // would leave the button off with nothing left to turn it back on.
+  useEffect(() => {
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) setStatus('idle');
+    };
+    window.addEventListener('pageshow', onPageShow);
+    return () => window.removeEventListener('pageshow', onPageShow);
+  }, []);
   const start = useCallback(
     async (properties: AnalyticsProperties) => {
       if (!signIn) return;
