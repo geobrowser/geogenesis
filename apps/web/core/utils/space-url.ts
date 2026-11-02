@@ -53,6 +53,7 @@ export const SPACE_TAB_SEGMENTS = [
   'activity',
   'bounties',
   'calls',
+  'chat',
   'claims',
   'community',
   'debates',
