@@ -10,9 +10,9 @@ import { GeoChatRequestError } from '../api';
 import { debateSurfaceAnalyticsAttributes } from '../matchmaking/hub-analytics';
 import { HubPillButton } from '../matchmaking/hub-pill-button';
 import { lobbyErrorMessage } from './lobby-format';
-import { useIsCallRoom } from './lobby-purpose';
 import type { MemberLobbyPageView } from './lobby-view';
 import { useLobbyHand } from './moderation-hooks';
+import { type LobbyRoomNoun, useRoomCapabilities } from './room-capabilities';
 
 /** The intent `HubPillButton` gives a hub pill, for the raised-hand pill drawn without it. */
 const HUB_PILL_INTENT = debateSurfaceAnalyticsAttributes('hub', 'action')['data-geo-analytics-intent'];
@@ -106,7 +106,7 @@ function useElementHeight(element: HTMLElement | null) {
 /** Raise hand / "Hand raised · Lower", for a listener who is in the lobby, with its hint. */
 export function LobbyHandControl({ lobby }: { lobby: Pick<MemberLobbyPageView, 'lobby_id' | 'viewer'> }) {
   const hand = useLobbyHand(lobby.lobby_id);
-  const call = useIsCallRoom();
+  const { noun, debates } = useRoomCapabilities();
   const raised = Boolean(lobby.viewer.hand_raised_at);
 
   return (
@@ -145,18 +145,18 @@ export function LobbyHandControl({ lobby }: { lobby: Pick<MemberLobbyPageView, '
         className={hand.isError ? 'min-w-0 flex-1' : 'min-w-0 flex-1 md:hidden'}
       >
         {hand.isError
-          ? handErrorMessage(hand.error, call ? 'call' : 'lobby')
+          ? handErrorMessage(hand.error, noun)
           : raised
             ? LOBBY_CONTROL_COPY.handRaised
-            : call
-              ? LOBBY_CONTROL_COPY.callListener
-              : LOBBY_CONTROL_COPY.listener}
+            : debates
+              ? LOBBY_CONTROL_COPY.listener
+              : LOBBY_CONTROL_COPY.callListener}
       </Text>
     </div>
   );
 }
 
-function handErrorMessage(error: unknown, room: 'lobby' | 'call') {
+function handErrorMessage(error: unknown, room: LobbyRoomNoun) {
   if (error instanceof GeoChatRequestError) {
     if (error.code === 'lobby_not_present') return `Join the ${room} to raise your hand.`;
     if (error.code === 'lobby_stepped_out') return 'You’re in a debate. Raise your hand once you’re back in the room.';
