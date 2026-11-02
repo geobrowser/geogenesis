@@ -182,7 +182,7 @@ const nextConfig: NextConfig = {
       },
       {
         source: '/spaces',
-        destination: '/root',
+        destination: '/explore',
         permanent: false,
       },
       {

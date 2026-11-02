@@ -14,9 +14,9 @@ export default function Custom404() {
       title="This page could not be found :-("
       action={
         <Button>
-          <Link href={NavUtils.toRoot()}>
+          <Link href={NavUtils.toExplore()}>
             <Text variant="button" color="white">
-              Go to root space
+              Go to Explore
             </Text>
           </Link>
         </Button>

@@ -97,6 +97,6 @@ describe('FeatureFlagsDialog', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Close feature flags' }));
 
-    expect(navigation.replace).toHaveBeenCalledWith('/root');
+    expect(navigation.replace).toHaveBeenCalledWith('/explore');
   });
 });
