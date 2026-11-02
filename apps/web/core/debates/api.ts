@@ -2953,6 +2953,8 @@ export type DebateLobbyPerson = {
 export type DebateLobbyCallDetails = {
   space_id: string;
   space_name: string | null;
+  /** The space's member chat room (GEO-3422); absent from geo-chat without space chat. */
+  chat_room_id?: string | null;
   started_by: DebateLobbyPerson | null;
   /** GEO-3421; the same for every viewer. Absent from geo-chat without recording. */
   recording?: CallRecordingState | null;

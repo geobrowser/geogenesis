@@ -26,7 +26,7 @@ describe('roomCapabilities', () => {
     });
   });
 
-  it('gives a call its space and recording, without debates or a next lobby', () => {
+  it('gives a call its space, recording and chat, without debates or a next lobby', () => {
     expect(roomCapabilities(CALL)).toEqual({
       noun: 'call',
       space: { id: 'space1', exitHref: '/space/space1' },
@@ -34,7 +34,7 @@ describe('roomCapabilities', () => {
       nextLobby: false,
       recording: true,
       screenShare: true,
-      chat: false,
+      chat: true,
     });
   });
 });
