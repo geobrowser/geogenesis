@@ -1,4 +1,5 @@
 import { normId } from '~/core/utils/norm-id';
+import { groupBy } from '~/core/utils/utils';
 
 import { type ClaimOrderFacts, compareByRanking } from '../matchmaking/claim-order-facts';
 import { type DebateAgendas, UNNAMED_AGENDA_SECTION } from './debate-agendas';
@@ -47,6 +48,19 @@ export type CalloutDay = {
 };
 
 /**
+ * `items` grouped by agenda day (`listedOn`, `YYYY-MM-DD`), newest day first, each group in the
+ * order it came in. The one day order the callout lists claims in and picks them in, so today's
+ * always come first in both.
+ */
+function newestDayFirst<T extends { listedOn: string }>(items: T[]): T[][] {
+  const byDay = groupBy(items, item => item.listedOn);
+  return Object.keys(byDay)
+    .sort()
+    .reverse()
+    .map(day => byDay[day]!);
+}
+
+/**
  * Every space's current agenda, newest agenda day first, and each day in the order the lists draw
  * it (`todaysSectionsInOrder`); each claim once, at its newest listing. The newest day's agendas
  * are today's; a space whose current agenda is older follows them, so the callout can fill its set
@@ -58,16 +72,9 @@ export function todaysClaimsInOrder(
   spaceOrder: string[],
   debatesOf: (claimId: string) => number | undefined
 ): CalloutClaim[] {
-  const days = [...new Set(agendas.spaces.map(space => space.listedOn))].sort().reverse();
   const seen = new Set<string>();
-  return days
-    .flatMap(day =>
-      todaysSectionsInOrder(
-        agendas.spaces.filter(space => space.listedOn === day),
-        spaceOrder,
-        debatesOf
-      )
-    )
+  return newestDayFirst(agendas.spaces)
+    .flatMap(spaces => todaysSectionsInOrder(spaces, spaceOrder, debatesOf))
     .flatMap(({ section, claimIds }) =>
       claimIds.flatMap(claimId => {
         if (seen.has(claimId)) return [];
@@ -92,8 +99,8 @@ export function todaysClaimsInOrder(
  * The day's set: up to `CALLOUT_MAX_CLAIMS` of the agenda claims the viewer has not answered,
  * today's first. Only when today's agendas can't fill the set does it take from older ones, a day
  * at a time, newest first (Preston, 2 Nov) — so an older agenda never pushes out a claim of today's.
- * Within a day, claims from spaces the viewer is a member of come first (Preston, 2 Nov), then the rest; each
- * group highest-ranked first (`compareByRanking`, Explore's Best). Kept varied (Preston, 29 Oct): at
+ * Within a day, claims from spaces the viewer is a member of come first (Preston, 2 Nov), then the
+ * rest; each group highest-ranked first (`compareByRanking`, Explore's Best). Kept varied (Preston, 29 Oct): at
  * most `CALLOUT_MAX_PER_TOPIC` from one topic and `CALLOUT_MAX_PER_SPACE` from one space, so a
  * member space comes first in every pass but can't fill the set while other spaces have claims to
  * ask about. Only when the agendas can't fill the set that way are the caps relaxed, the space cap
@@ -134,8 +141,7 @@ export function pickCalloutClaims(
   };
   // A day at a time, every pass of it before the next day's: the caps count across days, so an
   // older day's claims spread around the topics and spaces today's already took.
-  const days = [...new Set(ranked.map(claim => claim.listedOn))].sort().reverse();
-  const byDay = days.map(day => ranked.filter(claim => claim.listedOn === day));
+  const byDay = newestDayFirst(ranked);
   for (const claims of byDay) {
     fill(claims, CALLOUT_MAX_PER_TOPIC, CALLOUT_MAX_PER_SPACE);
     fill(claims, CALLOUT_MAX_PER_TOPIC, Infinity);
