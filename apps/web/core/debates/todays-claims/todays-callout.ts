@@ -79,21 +79,31 @@ export function todaysClaimsInOrder(
 }
 
 /**
- * The day's set: up to `CALLOUT_MAX_CLAIMS` of today's agenda claims the viewer has not answered,
- * the highest-ranked first (`compareByRanking`, Explore's Best), kept varied (Preston, 29 Oct): at
- * most `CALLOUT_MAX_PER_TOPIC` from one topic and `CALLOUT_MAX_PER_SPACE` from one space. Only when
- * the agendas can't fill the set that way are the caps relaxed, the space cap first, so a day with
- * one or two agendas still gets ten. Ties, and claims with no score, keep Today's claims order.
+ * The day's set: up to `CALLOUT_MAX_CLAIMS` of today's agenda claims the viewer has not answered.
+ * Claims from spaces the viewer is a member of come first (Preston, 2 Nov), then the rest; each
+ * group highest-ranked first (`compareByRanking`, Explore's Best). Kept varied (Preston, 29 Oct): at
+ * most `CALLOUT_MAX_PER_TOPIC` from one topic and `CALLOUT_MAX_PER_SPACE` from one space, so a
+ * member space comes first in every pass but can't fill the set while other spaces have claims to
+ * ask about. Only when the agendas can't fill the set that way are the caps relaxed, the space cap
+ * first, so a day with one or two agendas still gets ten — and the relaxed passes take member
+ * spaces' claims first too. Ties, and claims with no score, keep Today's claims order.
  */
 export function pickCalloutClaims(
   ordered: CalloutClaim[],
   isAnswered: (claimId: string) => boolean,
-  factsOf: (claimId: string) => ClaimOrderFacts | undefined
+  factsOf: (claimId: string) => ClaimOrderFacts | undefined,
+  isMemberSpace: (spaceId: string) => boolean = () => false
 ): CalloutClaim[] {
+  const memberFirst = (claim: CalloutClaim) => (isMemberSpace(claim.spaceId) ? 0 : 1);
   const ranked = ordered
     .map((claim, index) => ({ claim, index }))
     .filter(({ claim }) => !isAnswered(claim.claimId))
-    .sort((a, z) => compareByRanking(factsOf(a.claim.claimId), factsOf(z.claim.claimId)) || a.index - z.index)
+    .sort(
+      (a, z) =>
+        memberFirst(a.claim) - memberFirst(z.claim) ||
+        compareByRanking(factsOf(a.claim.claimId), factsOf(z.claim.claimId)) ||
+        a.index - z.index
+    )
     .map(({ claim }) => claim);
 
   const picked = new Set<CalloutClaim>();
@@ -114,7 +124,7 @@ export function pickCalloutClaims(
   fill(CALLOUT_MAX_PER_TOPIC, Infinity);
   fill(Infinity, Infinity);
 
-  // Asked best first, whichever pass let a claim in.
+  // Asked in that order — member spaces first, then best first — whichever pass let a claim in.
   return ranked.filter(claim => picked.has(claim));
 }
 

@@ -150,6 +150,42 @@ describe('pickCalloutClaims', () => {
     expect(ids(picked)).toEqual(['a1', 'a2', 'a3', 'a6', 'b1', 'b2', 'c1', 'd1', 'd2', 'e1']);
   });
 
+  // GEO-3547.
+  it('asks about the viewer’s own spaces first, each group highest-ranked first', () => {
+    const ordered = [
+      claim('a1', 'a', 'Election'),
+      claim('a2', 'a', 'Economy'),
+      claim('m1', 'm', 'AI'),
+      claim('b1', 'b', 'Health'),
+      claim('m2', 'm', 'Crypto'),
+    ];
+    const picked = pickCalloutClaims(
+      ordered,
+      () => false,
+      scored({ a1: 99, a2: 90, b1: 95, m1: 10, m2: 20 }),
+      spaceId => spaceId === 'm'
+    );
+
+    expect(ids(picked)).toEqual(['m2', 'm1', 'a1', 'b1', 'a2']);
+  });
+
+  it('keeps the caps for a member space while other spaces have claims to ask about', () => {
+    const ordered = [
+      ...['m1', 'm2', 'm3', 'm4', 'm5', 'm6'].map(id => claim(id, 'm', 'Election')),
+      ...['o1', 'o2', 'o3', 'o4', 'o5', 'o6'].map(id => claim(id, `space-${id}`, `topic-${id}`)),
+    ];
+    const picked = pickCalloutClaims(
+      ordered,
+      () => false,
+      scored({}),
+      spaceId => spaceId === 'm'
+    );
+
+    // Three from the member space's one story, every other space's claim, then the relaxed pass
+    // tops the set up from the member space before anywhere else.
+    expect(ids(picked)).toEqual(['m1', 'm2', 'm3', 'm4', 'o1', 'o2', 'o3', 'o4', 'o5', 'o6']);
+  });
+
   it('caps a topic across spaces', () => {
     const ordered = [
       claim('a1', 'a', 'election'),

@@ -170,11 +170,12 @@ describe('useTodaysCallout', () => {
     expect(storedFor('acct1')).toMatchObject({ day: '2026-10-29', answered: [], dismissed: false });
   });
 
-  it('picks the highest-ranked first', () => {
+  // GEO-3547: y outranks c and a, but they are in the viewer's own space.
+  it('picks from the viewer’s own spaces first, each highest-ranked first', () => {
     mocks.scores = { x: 1, y: 8, a: 5, b: 9, c: 7 };
     const { result } = renderHook(() => useTodaysCallout(), { wrapper });
 
-    expect(result.current.claims.map(claim => claim.claimId)).toEqual(['b', 'y', 'c', 'a', 'x']);
+    expect(result.current.claims.map(claim => claim.claimId)).toEqual(['b', 'c', 'a', 'y', 'x']);
   });
 
   it('waits for the ranking scores before taking the set', () => {
