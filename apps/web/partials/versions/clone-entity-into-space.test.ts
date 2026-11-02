@@ -126,6 +126,23 @@ describe('cloneEntityIntoSpace — related entities', () => {
     expect(run().relations.find(r => r.toEntity.id === 'block')?.toSpaceId).toBeUndefined();
   });
 
+  it('points a link to the moved entity that names the source at the destination', () => {
+    store.relations = [relation({ id: 'self', from: ENTITY, to: ENTITY, toSpaceId: SOURCE })];
+
+    expect(run().relations.find(r => r.toEntity.id === ENTITY)?.toSpaceId).toBe(TARGET);
+  });
+
+  it('points a link to a copied block that names the source at the destination', () => {
+    store.relations = [
+      relation({ id: 'contains-block', from: ENTITY, to: 'block', typeId: SystemIds.BLOCKS }),
+      relation({ id: 'to-block', from: ENTITY, to: 'block', toSpaceId: SOURCE }),
+    ];
+
+    const link = run().relations.find(r => r.toEntity.id === 'block' && r.type.id !== SystemIds.BLOCKS);
+
+    expect(link?.toSpaceId).toBe(TARGET);
+  });
+
   it('leaves a link to copied media unpinned', () => {
     store.relations = [relation({ id: 'cover', from: ENTITY, to: 'an-image', renderableType: 'IMAGE' })];
 

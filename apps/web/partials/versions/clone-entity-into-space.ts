@@ -143,8 +143,12 @@ export function cloneEntityIntoSpace(
   });
 
   sourceRelations.forEach(relation => {
-    const pin = !SCHEMA_RELATION_TYPE_IDS.has(relation.type.id) && !valueEntityIds.has(relation.toEntity.id);
-    const toSpaceId = relation.toSpaceId ?? (pin ? sourceSpaceId : undefined);
+    const movesWithEntity = valueEntityIds.has(relation.toEntity.id);
+    const pin = !SCHEMA_RELATION_TYPE_IDS.has(relation.type.id) && !movesWithEntity;
+    const toSpaceId =
+      movesWithEntity && relation.toSpaceId === sourceSpaceId
+        ? targetSpaceId
+        : (relation.toSpaceId ?? (pin ? sourceSpaceId : undefined));
 
     // Preserve `entityId` (the relation entity): data block view/shown-columns
     // config hangs off it, and the renderer resolves that config by this id.
