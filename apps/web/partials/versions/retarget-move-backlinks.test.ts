@@ -1,8 +1,9 @@
-import { IdUtils } from '@geoprotocol/geo-sdk';
+import { IdUtils, SystemIds } from '@geoprotocol/geo-sdk';
 
 import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { RELATION_ENTITY_RELATIONSHIP_TYPE } from '~/core/constants';
 import type { Relation } from '~/core/types';
 import { prepareLocalDataForPublishing } from '~/core/utils/publish/publish';
 
@@ -28,6 +29,12 @@ vi.mock('~/core/sync/use-sync-engine', () => {
 
 const { storage } = await import('~/core/sync/use-mutate');
 const { retargetMoveBacklinks } = await import('./retarget-move-backlinks');
+
+const SCHEMA_RELATION_TYPES = [
+  ['a Types relation', SystemIds.TYPES_PROPERTY],
+  ["a property's relation value type", SystemIds.RELATION_VALUE_RELATIONSHIP_TYPE],
+  ["a property's relation entity type", RELATION_ENTITY_RELATIONSHIP_TYPE],
+];
 
 const SOURCE = IdUtils.generate();
 const TARGET = IdUtils.generate();
@@ -118,6 +125,21 @@ describe('retargetMoveBacklinks', () => {
     store.relations = [relation({ id: 'elsewhere', from: 'other-entity', to: ENTITY, spaceId: OTHER })];
 
     expect(run()).toEqual([]);
+  });
+
+  it.each(SCHEMA_RELATION_TYPES)(
+    "leaves %s with no space hint alone, since unset means the type's own top space",
+    (_, typeId) => {
+      store.relations = [relation({ id: 'schema', from: 'an-instance', to: ENTITY, typeId })];
+
+      expect(run()).toEqual([]);
+    }
+  );
+
+  it.each(SCHEMA_RELATION_TYPES)('still retargets %s pinned to the source space', (_, typeId) => {
+    store.relations = [relation({ id: 'schema', from: 'an-instance', to: ENTITY, typeId, toSpaceId: SOURCE })];
+
+    expect(run().map(r => [r.id, r.toSpaceId])).toEqual([['schema', TARGET]]);
   });
 
   it('ignores a relation the moved entity points at itself', () => {

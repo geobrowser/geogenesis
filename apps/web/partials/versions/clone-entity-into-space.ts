@@ -7,7 +7,7 @@ import { getRelations, getValues } from '~/core/sync/use-store';
 import { Entity, Relation } from '~/core/types';
 
 // Never pinned: the schema reads their `toSpaceId` as the type's defining space, and unset means the type's own space.
-const SCHEMA_RELATION_TYPE_IDS = new Set<string>([
+export const SCHEMA_RELATION_TYPE_IDS = new Set<string>([
   SystemIds.TYPES_PROPERTY,
   SystemIds.RELATION_VALUE_RELATIONSHIP_TYPE,
   RELATION_ENTITY_RELATIONSHIP_TYPE,
