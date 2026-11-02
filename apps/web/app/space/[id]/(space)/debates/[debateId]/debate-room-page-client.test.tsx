@@ -5255,6 +5255,22 @@ describe('DebateRoomPageClient', () => {
       expectTurnHandedToOpponent();
     });
 
+    it('treats a press after an Open debates turn ran out as the timer ending it', async () => {
+      const roundTurnEndsAtMs = openRoundsAt('20:02:52.200');
+      vi.setSystemTime(roundTurnEndsAtMs - 1_000);
+      mocks.debate = openRoundsRoundOneSpeaking();
+      const endTurn = await renderSpeaking();
+      vi.setSystemTime(roundTurnEndsAtMs + 35);
+
+      fireEvent.click(endTurn);
+
+      expect(mocks.endTurnMutateAsync).not.toHaveBeenCalled();
+      await act(() => vi.advanceTimersByTimeAsync(500));
+      expect(mocks.endTurnMutateAsync).not.toHaveBeenCalled();
+      expect(screen.queryByText(/Could not end the turn|ended_at_ms/)).not.toBeInTheDocument();
+      expectTurnHandedToOpponent();
+    });
+
     it('shows nothing when the server refuses a press it clocked past the turn’s end', async () => {
       const pendingEnd = deferred<Debate>();
       mocks.endTurnMutateAsync.mockReturnValue(pendingEnd.promise);
