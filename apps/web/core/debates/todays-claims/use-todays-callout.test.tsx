@@ -178,6 +178,29 @@ describe('useTodaysCallout', () => {
     expect(result.current.claims.map(claim => claim.claimId)).toEqual(['b', 'c', 'a', 'y', 'x']);
   });
 
+  // GEO-3547: a short day is topped up from spaces whose current agenda is older.
+  it('tops the set up from older agendas after every claim of today’s', () => {
+    const today = agendasFor('2026-10-29', { other: ['x', 'y'], member: ['a', 'b', 'c'] });
+    const older = agendasFor('2026-10-27', { old: ['p', 'q'] });
+    mocks.agendas = {
+      ...today,
+      spaces: [...older.spaces, ...today.spaces],
+      listedAtByClaim: new Map([...today.listedAtByClaim, ...older.listedAtByClaim]),
+    };
+    const { result } = renderHook(() => useTodaysCallout(), { wrapper });
+
+    expect(result.current.claims.map(claim => [claim.claimId, claim.listedOn])).toEqual([
+      ['b', '2026-10-29'],
+      ['c', '2026-10-29'],
+      ['a', '2026-10-29'],
+      ['x', '2026-10-29'],
+      ['y', '2026-10-29'],
+      ['p', '2026-10-27'],
+      ['q', '2026-10-27'],
+    ]);
+    expect(storedFor('acct1')?.day).toBe('2026-10-29');
+  });
+
   it('waits for the ranking scores before taking the set', () => {
     mocks.scoresLoading = true;
     const { result, rerender } = renderHook(() => useTodaysCallout(), { wrapper });

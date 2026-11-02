@@ -37,8 +37,9 @@ const NO_IDS: string[] = [];
  * GEO-3498. The daily Today's claims callout in the debates side panel.
  *
  * The day's set is taken once, the first time every read it is made from has settled: up to
- * `CALLOUT_MAX_CLAIMS` of today's agenda claims the viewer has not answered, from the viewer's own
- * spaces first (GEO-3547), highest-ranked first and varied by topic and space (`pickCalloutClaims`). It is stored per account with the agenda
+ * `CALLOUT_MAX_CLAIMS` of today's agenda claims the viewer has not answered, topped up from spaces'
+ * older current agendas only when today's run short; from the viewer's own spaces first (GEO-3547),
+ * highest-ranked first and varied by topic and space (`pickCalloutClaims`). It is stored per account with the agenda
  * day, so the set outlives the panel closing, a reload and other tabs, and a newer agenda day starts a new one — which
  * is also what brings a dismissed callout back. Once nothing is left to ask, the end card stays
  * until dismissed or until the panel closes, and isn't shown again that day.
