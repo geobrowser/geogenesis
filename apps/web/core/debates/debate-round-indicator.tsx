@@ -50,11 +50,13 @@ export function DebateRoundIndicator({
   phase,
   maxRounds,
   requiredRounds = 0,
+  numberedOnly = false,
 }: {
   phase: OpenRoundsRoomPhase;
   maxRounds: number;
   /** Rebuttal rounds every debate plays, from `openRoundsRequiredRebuttalRounds`. */
   requiredRounds?: number;
+  numberedOnly?: boolean;
 }) {
   const { roundIndex } = phase;
   const ended = phase.phase === 'finished' || (phase.phase === 'result' && phase.outcome === 'end');
@@ -87,13 +89,17 @@ export function DebateRoundIndicator({
     >
       <p className="whitespace-nowrap">
         <span aria-hidden="true">
-          {roundIndex === 0 ? 'Opening' : `Round ${openRoundNumber(roundIndex)}`}
-          {roundIndex > 0 && <span className="font-normal text-[#5e5e5b]"> {`of ${openRoundNumber(maxRounds)}`}</span>}
+          {roundIndex === 0 && !numberedOnly ? 'Opening' : `Round ${openRoundNumber(roundIndex)}`}
+          {(roundIndex > 0 || numberedOnly) && (
+            <span className="font-normal text-[#5e5e5b]"> {`of ${openRoundNumber(maxRounds)}`}</span>
+          )}
         </span>
         <span className="sr-only">
-          {roundIndex === 0
-            ? 'Opening. No rebuttal rounds yet.'
-            : `Round ${openRoundNumber(roundIndex)} of ${openRoundNumber(maxRounds)}. ${rebuttalRoundsLabel(roundIndex)} so far.`}{' '}
+          {numberedOnly
+            ? `Round ${openRoundNumber(roundIndex)} of ${openRoundNumber(maxRounds)}.`
+            : roundIndex === 0
+              ? 'Opening. No rebuttal rounds yet.'
+              : `Round ${openRoundNumber(roundIndex)} of ${openRoundNumber(maxRounds)}. ${rebuttalRoundsLabel(roundIndex)} so far.`}{' '}
           {requiredToCome > 0 &&
             `${requiredRoundsToComeLabel(openRoundNumber(roundIndex + 1), openRoundNumber(roundIndex + requiredToCome))} `}
           {anotherPossible

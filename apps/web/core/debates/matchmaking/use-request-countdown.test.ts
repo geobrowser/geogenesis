@@ -92,6 +92,48 @@ describe('useRequestCountdown', () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
+  // GEO-3463: the panel times a live ask as m:ss, so its seconds move every second, not every 15.
+  it('ticks every second in clock format, even with more than a minute left', async () => {
+    vi.setSystemTime(new Date('2026-08-05T12:00:00.000Z'));
+    const { useRequestCountdown } = await import('./use-request-countdown');
+
+    const { result } = renderHook(() => useRequestCountdown('2026-08-05T12:01:30.000Z', { format: 'clock' }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(result.current.label).toBe('1:30');
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_000);
+    });
+    expect(result.current.label).toBe('1:29');
+  });
+
+  it('stops the clock format at expiry too', async () => {
+    vi.setSystemTime(new Date('2026-08-05T12:00:00.000Z'));
+    const { useRequestCountdown } = await import('./use-request-countdown');
+
+    const { result } = renderHook(() => useRequestCountdown('2026-08-05T12:00:02.000Z', { format: 'clock' }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3_000);
+    });
+
+    expect(result.current.label).toBe('0:00');
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('times nothing, and arms nothing, for no expiry', async () => {
+    const { useRequestCountdown } = await import('./use-request-countdown');
+
+    const { result } = renderHook(() => useRequestCountdown(null, { format: 'clock' }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(result.current.label).toBe('0:00');
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it('never arms a timer for an unparseable expiry', async () => {
     vi.setSystemTime(new Date('2026-08-05T12:00:00.000Z'));
     const { useRequestCountdown } = await import('./use-request-countdown');

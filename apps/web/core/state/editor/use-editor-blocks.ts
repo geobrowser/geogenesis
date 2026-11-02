@@ -63,6 +63,8 @@ export function useEditorBlockModels() {
     return blockRelations.map(b => b.block.id);
   }, [blockRelations]);
 
+  const blockIdSet = React.useMemo(() => new Set(blockIds), [blockIds]);
+
   const initialBlockValues = React.useMemo(() => {
     return initialBlockEntities.flatMap(b => b.values);
   }, [initialBlockEntities]);
@@ -79,12 +81,12 @@ export function useEditorBlockModels() {
   );
 
   const markdownValues = useValues({
-    selector: value => blockIds.includes(value.entity.id) && value.property.id === SystemIds.MARKDOWN_CONTENT,
+    selector: value => blockIdSet.has(value.entity.id) && value.property.id === SystemIds.MARKDOWN_CONTENT,
   });
 
   const blockConfigValues = useValues({
     selector: value =>
-      blockIds.includes(value.entity.id) &&
+      blockIdSet.has(value.entity.id) &&
       value.spaceId === spaceId &&
       (value.property.id === SystemIds.NAME_PROPERTY ||
         value.property.id === SystemIds.FILTER ||
@@ -93,12 +95,22 @@ export function useEditorBlockModels() {
 
   const blockTypesRelations = useRelations({
     selector: relation =>
-      blockIds.includes(relation.fromEntity.id) &&
+      blockIdSet.has(relation.fromEntity.id) &&
       relation.spaceId === spaceId &&
       relation.type.id === SystemIds.TYPES_PROPERTY,
   });
 
   const blockModels = React.useMemo<EditorBlockModel[]>(() => {
+    const blockEntityIds = new Set(blockRelations.flatMap(b => [b.block.id, b.entityId]));
+    const blockValues = getValues({
+      mergeWith: initialBlockValues,
+      selector: value => blockEntityIds.has(value.entity.id),
+    });
+    const blockRelationRows = getRelations({
+      mergeWith: initialBlockEntityRelations,
+      selector: relation => blockEntityIds.has(relation.fromEntity.id),
+    });
+
     return blockRelations.map((block): EditorBlockModel => {
       const markdownValueForBlockId =
         markdownValues.find(v => v.entity.id === block.block.id) ??
@@ -109,17 +121,15 @@ export function useEditorBlockModels() {
 
       if (toEntity?.type === 'IMAGE') {
         // Read image URL from Values using IMAGE_URL_PROPERTY (unified IPFS URL property)
-        const imageUrlValues = getValues({
-          mergeWith: initialBlockValues,
-          selector: value => value.entity.id === block.block.id && value.property.id === SystemIds.IMAGE_URL_PROPERTY,
-        });
+        const imageUrlValues = blockValues.filter(
+          value => value.entity.id === block.block.id && value.property.id === SystemIds.IMAGE_URL_PROPERTY
+        );
         const imageUrlValue = imageUrlValues?.[0]?.value || toEntity.value;
 
         // Read image title from Values using NAME_PROPERTY
-        const titleValues = getValues({
-          mergeWith: initialBlockValues,
-          selector: value => value.entity.id === block.block.id && value.property.id === SystemIds.NAME_PROPERTY,
-        });
+        const titleValues = blockValues.filter(
+          value => value.entity.id === block.block.id && value.property.id === SystemIds.NAME_PROPERTY
+        );
         const titleValue = titleValues?.[0]?.value || '';
 
         const server: ServerBlock = { type: 'image', src: getImagePath(imageUrlValue) };
@@ -141,17 +151,15 @@ export function useEditorBlockModels() {
 
       if (toEntity?.type === 'VIDEO') {
         // Read video URL from Values using IMAGE_URL_PROPERTY (unified IPFS URL property)
-        const videoUrlValues = getValues({
-          mergeWith: initialBlockValues,
-          selector: value => value.entity.id === block.block.id && value.property.id === SystemIds.IMAGE_URL_PROPERTY,
-        });
+        const videoUrlValues = blockValues.filter(
+          value => value.entity.id === block.block.id && value.property.id === SystemIds.IMAGE_URL_PROPERTY
+        );
         const videoUrlValue = videoUrlValues?.[0]?.value || toEntity.value;
 
         // Read video title from Values using NAME_PROPERTY
-        const titleValues = getValues({
-          mergeWith: initialBlockValues,
-          selector: value => value.entity.id === block.block.id && value.property.id === SystemIds.NAME_PROPERTY,
-        });
+        const titleValues = blockValues.filter(
+          value => value.entity.id === block.block.id && value.property.id === SystemIds.NAME_PROPERTY
+        );
         const titleValue = titleValues?.[0]?.value || '';
 
         const server: ServerBlock = { type: 'video', src: getVideoPath(videoUrlValue) };
@@ -171,36 +179,32 @@ export function useEditorBlockModels() {
         return { server, build: () => nodes };
       }
 
-      const blockTypeRelations = getRelations({
-        mergeWith: initialBlockEntityRelations,
-        selector: r =>
+      const blockTypeRelations = blockRelationRows.filter(
+        r =>
           r.fromEntity.id === block.block.id &&
           r.type.id === SystemIds.TYPES_PROPERTY &&
           r.spaceId === spaceId &&
-          !r.isDeleted,
-      });
+          !r.isDeleted
+      );
 
       if (isRankingBlockEntity(block.block.id, blockTypeRelations, spaceId)) {
         const server: ServerBlock = { type: 'data' };
 
-        const configuredFilters = getValues({
-          mergeWith: initialBlockValues,
-          selector: v =>
+        const configuredFilters = blockValues.filter(
+          v =>
             v.entity.id === block.block.id &&
             v.property.id === SystemIds.FILTER &&
             v.spaceId === spaceId &&
             v.value.length > 0 &&
-            !v.isDeleted,
-        });
+            !v.isDeleted
+        );
         const rankingBlockEntity = initialBlockEntities.find(b => b.id === block.block.id);
         const blockName = store.getEntity(block.block.id, { spaceId })?.name ?? rankingBlockEntity?.name;
         const rankingSetupConfigured = isRankingSetupConfigured(block.block.id, blockName, configuredFilters, spaceId);
         const readRankingDate = (propertyId: string) =>
-          getValues({
-            mergeWith: initialBlockValues,
-            selector: v =>
-              v.entity.id === block.block.id && v.property.id === propertyId && v.spaceId === spaceId && !v.isDeleted,
-          })[0]?.value ?? null;
+          blockValues.filter(
+            v => v.entity.id === block.block.id && v.property.id === propertyId && v.spaceId === spaceId && !v.isDeleted
+          )[0]?.value ?? null;
         const rankingStartDate = resolveRankingDate(RANKING_START_PROPERTY_IDS, readRankingDate) || null;
         const rankingEndDate = resolveRankingDate(RANKING_END_PROPERTY_IDS, readRankingDate) || null;
 
@@ -226,14 +230,13 @@ export function useEditorBlockModels() {
         // and the shown-column properties the server sends down with the page, so a gallery
         // block never has to flash a table skeleton or a default-ratio one on its way to cards.
         const blockRelationEntity = initialBlockEntities.find(b => b.id === block.entityId);
-        const viewRelations = getRelations({
-          mergeWith: initialBlockEntityRelations,
-          selector: r =>
+        const viewRelations = blockRelationRows.filter(
+          r =>
             r.fromEntity.id === block.entityId &&
             r.type.id === SystemIds.VIEW_PROPERTY &&
             r.spaceId === spaceId &&
-            !r.isDeleted,
-        });
+            !r.isDeleted
+        );
 
         const server: ServerBlock = {
           type: 'data',
@@ -242,33 +245,30 @@ export function useEditorBlockModels() {
           mediaFrame: blockMediaFrame(readBlockMediaDimensions(block.entityId, mediaPropertySource)),
         };
 
-        const dataSourceType = getRelations({
-          mergeWith: initialBlockEntityRelations,
-          selector: r =>
+        const dataSourceType = blockRelationRows.filter(
+          r =>
             r.fromEntity.id === block.block.id &&
             r.type.id === SystemIds.DATA_SOURCE_TYPE_RELATION_TYPE &&
             r.spaceId === spaceId &&
-            !r.isDeleted,
-        })[0]?.toEntity.id;
+            !r.isDeleted
+        )[0]?.toEntity.id;
         const isQuerySource =
           dataSourceType === SystemIds.QUERY_DATA_SOURCE || dataSourceType === SystemIds.ALL_OF_GEO_DATA_SOURCE;
-        const configuredShownColumns = getRelations({
-          mergeWith: initialBlockEntityRelations,
-          selector: r =>
+        const configuredShownColumns = blockRelationRows.filter(
+          r =>
             r.fromEntity.id === block.entityId &&
             (r.type.id === SystemIds.PROPERTIES || r.type.id === SystemIds.SHOWN_COLUMNS) &&
             r.spaceId === spaceId &&
-            !r.isDeleted,
-        });
-        const configuredFilters = getValues({
-          mergeWith: initialBlockValues,
-          selector: v =>
+            !r.isDeleted
+        );
+        const configuredFilters = blockValues.filter(
+          v =>
             v.entity.id === block.block.id &&
             v.property.id === SystemIds.FILTER &&
             v.spaceId === spaceId &&
             v.value.length > 0 &&
-            !v.isDeleted,
-        });
+            !v.isDeleted
+        );
 
         const initialDataSource = isQuerySource ? ('QUERY' as const) : ('COLLECTION' as const);
 

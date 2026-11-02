@@ -354,6 +354,32 @@ describe('bounded recording memory', () => {
       expect(await bufferOf(await recording.read(0, recording.size))).toEqual(await bufferOf(new Blob(chunks)));
     });
 
+    it('stays bounded when the microphone never closes long enough for a part, and loses nothing', async () => {
+      const wire = transport(64);
+      const live = stream.startLiveRecordingStream({
+        id: 'user-a:debate-1:1',
+        metadata: metadata(),
+        transport: wire,
+        shouldPause: () => false,
+        callWindowMs: () => 0,
+        retainedBytesLimit: 100,
+      });
+      const chunks = timeslices(40, 30);
+      for (const [index, chunk] of chunks.entries()) {
+        live.append(chunk, 1_000 + index * 1_000);
+        await savedChunks(live.id, index + 1);
+      }
+
+      expect(await live.finish()).toMatchObject({ uploadedPartNumbers: [] });
+      const event = analytics.capture.mock.calls.find(([name]) => name === 'debate_recording_stream_finished')?.[1];
+      const largestChunk = Math.max(...chunks.map(chunk => chunk.size));
+      const total = chunks.reduce((sum, chunk) => sum + chunk.size, 0);
+      expect(event.peak_retained_bytes).toBeLessThanOrEqual(100 + largestChunk);
+      expect(event.backlog_parts_at_finish).toBe(Math.ceil(total / 64));
+      const recording = live.recording();
+      expect(await bufferOf(await recording.read(0, recording.size))).toEqual(await bufferOf(new Blob(chunks)));
+    });
+
     it('keeps every timeslice in memory when neither IndexedDB nor the upload will take them', async () => {
       vi.spyOn(db.debateRecordingStreams, 'put').mockRejectedValue(new DOMException('quota', 'QuotaExceededError'));
       vi.spyOn(console, 'warn').mockImplementation(() => undefined);
@@ -374,6 +400,37 @@ describe('bounded recording memory', () => {
       const recording = live.recording();
       expect(recording).toMatchObject({ availableFrom: 0, heldInMemory: true });
       expect(await bufferOf(await recording.read(0, recording.size))).toEqual(await bufferOf(new Blob(chunks)));
+    });
+
+    it('uploads whatever the mic when IndexedDB cannot take the spill, so memory stays bounded', async () => {
+      vi.spyOn(db.debateRecordingStreams, 'put').mockRejectedValue(new DOMException('quota', 'QuotaExceededError'));
+      vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const wire = transport(64);
+      const live = stream.startLiveRecordingStream({
+        id: 'user-a:debate-1:1',
+        metadata: metadata(),
+        transport: wire,
+        shouldPause: () => false,
+        // The microphone is live for the whole recording.
+        callWindowMs: () => 0,
+        retainedBytesLimit: 10,
+      });
+      const chunks = timeslices(40, 30);
+      let appended = 0;
+      for (const chunk of chunks) {
+        live.append(chunk, 2_000);
+        appended += chunk.size;
+        await vi.waitFor(() => expect(wire.parts.size).toBe(Math.floor(appended / 64)), { timeout: 10_000 });
+      }
+      const wholeParts = Math.floor(appended / 64);
+      live.yieldToCall();
+
+      const multipart = await live.finish();
+      expect(multipart?.uploadedPartNumbers).toHaveLength(wholeParts);
+      const event = analytics.capture.mock.calls.find(([name]) => name === 'debate_recording_stream_finished')?.[1];
+      expect(event).toMatchObject({ saved_locally: false, parts_aborted_for_mic: 0, backlog_parts_at_finish: 1 });
+      const largestChunk = Math.max(...chunks.map(chunk => chunk.size));
+      expect(event.peak_retained_bytes).toBeLessThanOrEqual(64 + 2 * largestChunk);
     });
 
     it('hands the queue only the bytes no confirmed part holds', async () => {

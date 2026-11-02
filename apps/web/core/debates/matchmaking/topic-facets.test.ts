@@ -10,6 +10,7 @@ import {
   claimTopicsById,
   countBy,
   formatFacetCount,
+  inEverySpace,
   keepSelectableTopic,
   keepSelectableTopics,
   keepSelectedVisible,
@@ -486,5 +487,23 @@ describe('topicSuggestions (GEO-3223)', () => {
   it('stops at the limit, and offers nothing without a query', () => {
     expect(topicSuggestions(topics, 'pow', [], 0, 1)).toHaveLength(1);
     expect(topicSuggestions(topics, '', [])).toEqual([]);
+  });
+});
+
+describe('inEverySpace', () => {
+  const dashed = '1a2b3c4d-0000-4000-8000-000000000001';
+  const dashless = '1a2b3c4d000040008000000000000001';
+
+  it('passes everything with no picks, and a row only in every space picked', () => {
+    expect(inEverySpace([], 'spacea')).toBe(true);
+    expect(inEverySpace(['spacea'], 'spacea')).toBe(true);
+    expect(inEverySpace(['spacea', 'spaceb'], 'spacea')).toBe(false);
+    expect(inEverySpace(['spacea', 'spaceb'], ['spacea', 'spaceb', 'spacec'])).toBe(true);
+  });
+
+  // Review: one list compared raw ids, so a dashed pick failed a dashless row there and passed here.
+  it('compares ids dashless on both sides', () => {
+    expect(inEverySpace([dashed], dashless)).toBe(true);
+    expect(inEverySpace([dashless], [dashed])).toBe(true);
   });
 });

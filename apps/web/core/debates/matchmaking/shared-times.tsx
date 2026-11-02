@@ -88,19 +88,46 @@ export function SharedTimes({
  * A weekday alone names one day only within the coming week: the calendar (GEO-3220) offers two, and
  * there next Thursday would read exactly as this one.
  */
-export function formatSlot(iso: string, now: Date = new Date(), timezone?: string): string {
+export function formatSlot(
+  iso: string,
+  now: Date = new Date(),
+  timezone?: string,
+  {
+    compact = false,
+    locale,
+  }: {
+    /**
+     * "6 PM" rather than "6:00 PM" on the hour (the build spec's clock, GEO-3463). Only on a 12-hour
+     * clock: a 24-hour one keeps its minutes, since an hour alone reads "18" there.
+     */
+    compact?: boolean;
+    /** The viewer's locale unless a test pins one. */
+    locale?: string;
+  } = {}
+): string {
   const at = new Date(iso);
   if (Number.isNaN(at.getTime())) return iso;
   const clock = zonedClock(at, timezone);
   const today = zonedClock(now, timezone);
   // Format the wall clock in UTC so the browser cannot shift it a second time, including across DST.
   const wall = new Date(Date.parse(`${clock.date}T00:00:00Z`) + clock.minutes * 60_000);
-  const time = wall.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', timeZone: 'UTC' });
+  const dropMinutes = compact && clock.minutes % 60 === 0 && usesTwelveHourClock(locale);
+  const time = wall.toLocaleTimeString(locale, {
+    hour: 'numeric',
+    ...(dropMinutes ? {} : { minute: '2-digit' }),
+    timeZone: 'UTC',
+  });
   const dayDiff = (Date.parse(clock.date) - Date.parse(today.date)) / 86_400_000;
   if (dayDiff === 0) return `Today ${time}`;
   if (dayDiff === 1) return `Tomorrow ${time}`;
   if (dayDiff >= 7) {
-    return `${wall.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })} ${time}`;
+    return `${wall.toLocaleDateString(locale, { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })} ${time}`;
   }
-  return `${wall.toLocaleDateString(undefined, { weekday: 'short', timeZone: 'UTC' })} ${time}`;
+  return `${wall.toLocaleDateString(locale, { weekday: 'short', timeZone: 'UTC' })} ${time}`;
+}
+
+/** Whether the locale's clock runs 1–12 with a day period, where "6 PM" stands on its own. */
+function usesTwelveHourClock(locale: string | undefined) {
+  const { hourCycle } = new Intl.DateTimeFormat(locale, { hour: 'numeric' }).resolvedOptions();
+  return hourCycle === 'h11' || hourCycle === 'h12';
 }

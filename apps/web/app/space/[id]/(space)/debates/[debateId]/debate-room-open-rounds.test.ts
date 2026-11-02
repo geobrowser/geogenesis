@@ -402,7 +402,7 @@ describe('open rounds clock', () => {
     expect(recordingWindowForDebate(debate)).toEqual({ startAtMs: start, endAtMs: null });
   });
 
-  it('8.5 reveal → Extend: a 3 s result window that counts Alice into round 1, then round 1', () => {
+  it('8.5 legacy Extend without a saved count-in: the result window, then round 1', () => {
     const debate = revealRebut();
     const reveal = countdownAt(debate, at('20:02:05.000'));
     expect(reveal).toMatchObject({
@@ -412,8 +412,8 @@ describe('open rounds clock', () => {
       remainingSeconds: 3,
       openRounds: { phase: 'result', roundIndex: 0, outcome: 'extend', nextPhaseStartsAtMs: at('20:02:07.200') },
     });
-    // Round 1 is decided now, so the opener is counted in, in Open rounds' words (GEO-3315).
-    expect(localTurnStartsInSeconds(debate, reveal, 1)).toBe(3);
+    // This historical payload has no dedicated count-in; the result still occupies the window.
+    expect(localTurnStartsInSeconds(debate, reveal, 1)).toBeNull();
     expect(localTurnStartsInSeconds(debate, reveal, 2)).toBeNull();
     expect(upcomingTurnLabel(debate, reveal)).toBe('Your turn in');
 
@@ -435,7 +435,8 @@ describe('open rounds clock', () => {
     const debate = roundOneSpeaking();
     const aliceEnding = countdownAt(debate, at('20:02:49.000'));
     expect(aliceEnding).toMatchObject({ activeSlot: 1, turnIndex: 2 });
-    expect(localTurnStartsInSeconds(debate, aliceEnding, 2)).toBe(4);
+    expect(localTurnStartsInSeconds(debate, aliceEnding, 2)).toBeNull();
+    expect(localTurnStartsInSeconds(debate, countdownAt(debate, at('20:02:49.200')), 2)).toBe(3);
     expect(upcomingTurnLabel(debate, aliceEnding)).toBe('Your turn in');
 
     const bobEnding = countdownAt(debate, at('20:03:34.000'));
@@ -580,5 +581,31 @@ describe('open rounds: the lead-in to a required round (GEO-3258)', () => {
   it('starts round 1 when the lead-in ends', () => {
     const countdown = countdownAt(withLeadIn, at('20:02:09.000'));
     expect(countdown).toMatchObject({ turnIndex: 2, activeSlot: 1, remainingSeconds: 44 });
+  });
+});
+
+describe('open rounds count-in boundaries (GEO-3522)', () => {
+  it.each([
+    [3_000, '20:02:07.200', 3],
+    [3_000, '20:02:06.200', null],
+    [5_000, '20:02:08.200', 4],
+    [5_000, '20:02:06.200', null],
+    [0, '20:02:06.200', null],
+    [undefined, '20:02:06.200', null],
+    [-1, '20:02:06.200', null],
+  ] as const)('uses the saved %s ms count-in at %s', (countInMs, time, expected) => {
+    const debate = revealRebut();
+    debate.open_rounds = { ...debate.open_rounds!, extend_count_in_ms: countInMs };
+    expect(localTurnStartsInSeconds(debate, countdownAt(debate, at(time)), 1)).toBe(expected);
+  });
+
+  it.each([
+    [true, '20:00:56.000', null],
+    [true, '20:00:57.000', 3],
+    [false, '20:00:55.000', 5],
+    [false, '20:00:54.000', null],
+  ] as const)('keeps the ordinary count-in boundary for open=%s at %s', (open, time, expected) => {
+    const debate = open ? listening() : fixedDebate([60_000, 60_000]);
+    expect(localTurnStartsInSeconds(debate, countdownAt(debate, at(time)), 2)).toBe(expected);
   });
 });

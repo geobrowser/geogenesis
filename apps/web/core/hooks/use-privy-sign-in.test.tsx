@@ -53,6 +53,7 @@ vi.mock('~/partials/onboarding/onboarding-atoms', async () => {
     // Persisted onboarding state like the rest, and the one every hand-written reset forgot —
     // `PendingPersonalSpaceRunner` turns it into membership proposals for the new personal space.
     selectedTopicIdsAtom: atom<string[]>([]),
+    onboardingNameOnlyAtom: atom(false),
   };
 });
 

@@ -16,6 +16,7 @@ import { fetchProposalSubmittedTimes, getSubmittedTime } from '~/core/io/subgrap
 import { filterGrantedMembershipRequests } from '~/core/io/subgraph/filter-granted-membership-requests';
 import { ProposalStatus, ProposalType } from '~/core/io/substream-schema';
 import { Profile } from '~/core/types';
+import { mapWithConcurrency } from '~/core/utils/map-with-concurrency';
 
 import {
   type GovernanceHomeReviewCategory,
@@ -38,6 +39,7 @@ export {
 export type ActiveProposalsForSpacesWhereEditor = Awaited<ReturnType<typeof getActiveProposalsForSpacesWhereEditor>>;
 
 const PAGE_SIZE = 100;
+const REVIEW_SPACE_CONCURRENCY = 8;
 
 const MEMBERSHIP_ACTIONS = new Set(['ADD_MEMBER', 'REMOVE_MEMBER']);
 
@@ -94,10 +96,8 @@ export async function getActiveProposalsForSpacesWhereEditor(
     (proposalType === 'content' ? 'knowledge' : proposalType === 'membership' ? 'membership' : 'all');
   const status: GovernanceHomeStatusFilter = filters?.status ?? 'pending';
 
-  const allResults = await Promise.all(
-    spaceIds.map(spaceId =>
-      fetchProposalsForSpaceByGovernanceFilters({ spaceId, memberSpaceId, proposalType, category, status })
-    )
+  const allResults = await mapWithConcurrency(spaceIds, REVIEW_SPACE_CONCURRENCY, spaceId =>
+    fetchProposalsForSpaceByGovernanceFilters({ spaceId, memberSpaceId, proposalType, category, status })
   );
 
   const merged = allResults.flat();

@@ -14,7 +14,13 @@ import {
   listAdminDebateSchedules,
   sendAdminAvailabilityPrompt,
 } from '../api';
-import { debateQueryKeys, debateQueryNetworkOptions, useGeoChatAuth, usePeerSchedule } from '../hooks';
+import {
+  debateQueryKeys,
+  debateQueryNetworkOptions,
+  invalidateAvailabilityReads,
+  useGeoChatAuth,
+  usePeerSchedule,
+} from '../hooks';
 
 /**
  * Where the list stops paging. Far past today's debater count; past it, the dialog still finds
@@ -118,8 +124,13 @@ export function useCreateAdminMatch() {
         getPrivyIdentityToken,
         accountKey
       ),
-    // The calendar draws the new match from its own list, so it has to read it again.
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: debateQueryKeys.adminScheduledDebatesRoot }),
+    // The calendar draws the new match from its own list, so it has to read it again, and the dialog
+    // stays pending until it has. The match is pending, which holds its time for both debaters
+    // (GEO-3532), so their weeks go too.
+    onSuccess: () => {
+      invalidateAvailabilityReads(queryClient, accountKey);
+      return queryClient.invalidateQueries({ queryKey: debateQueryKeys.adminScheduledDebatesRoot });
+    },
   });
 }
 

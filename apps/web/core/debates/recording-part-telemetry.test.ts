@@ -43,6 +43,14 @@ it('records failure without leaking error text and preserves the upload error fo
   expect(capture.mock.calls.at(-1)?.[1]).toMatchObject({ phase: 'failed' });
   expect(JSON.stringify(capture.mock.calls)).not.toContain('secret');
 });
+it('records a part cut short for the call as aborted, not failed', async () => {
+  await expect(
+    trackRecordingPartUpload(context, 1, 50, async () => {
+      throw new DOMException('aborted', 'AbortError');
+    })
+  ).rejects.toMatchObject({ name: 'AbortError' });
+  expect(capture.mock.calls.at(-1)?.[1]).toMatchObject({ phase: 'aborted' });
+});
 it('allows upload success even when analytics throws', async () => {
   capture.mockImplementation(() => {
     throw new Error('analytics');

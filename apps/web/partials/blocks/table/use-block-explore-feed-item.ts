@@ -5,13 +5,14 @@ import { useQuery } from '@tanstack/react-query';
 
 import { Effect } from 'effect';
 
+import { getEntityCommentCountBatched } from '~/core/comments/batched-entity-comment-count';
 import { getRecordingUrls } from '~/core/community-calls/recordings';
 import { DEBATE_VIDEOS_PROPERTY_ID } from '~/core/debates/ontology';
 import { debateClaimFromEntity } from '~/core/explore/explore-card-item';
 import { parseEntityUpdatedAtToUnixSec } from '~/core/explore/explore-relative-time';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { useSpace } from '~/core/hooks/use-space';
-import { getEntity, getEntityCommentCount } from '~/core/io/queries';
+import { getEntity } from '~/core/io/queries';
 import {
   useAvatar,
   useCover,
@@ -89,7 +90,7 @@ export function useBlockExploreFeedItem({
 
   const { data: commentCount = 0 } = useQuery({
     queryKey: ['entity-comment-count', rowEntityId],
-    queryFn: ({ signal }) => Effect.runPromise(getEntityCommentCount(rowEntityId, signal)),
+    queryFn: () => getEntityCommentCountBatched(rowEntityId),
     staleTime: 60_000,
     enabled,
   });

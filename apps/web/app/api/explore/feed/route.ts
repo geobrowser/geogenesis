@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 
-import { browseSidebarVisibleSpaces } from '~/core/browse/fetch-browse-sidebar-data';
 import { PUBLIC_FEED_PARAM, parseExplorePageSort, parseExploreTime } from '~/core/explore/explore-feed-params';
 import { EXPLORE_FEED_POLICY } from '~/core/explore/explore-feed-policy';
+import { parseExploreTopicIds } from '~/core/explore/explore-topic-ids';
 import { parseExploreTypeIdsParam } from '~/core/explore/explore-type-filter';
 import { feedUnavailableResponse } from '~/core/explore/feed-route-response';
 import { type ExploreSort, fetchExploreFeed } from '~/core/explore/fetch-explore-feed';
@@ -14,6 +14,7 @@ import {
 } from '~/core/explore/for-you/resolve-for-you-viewer';
 import { readServingFreshSlotState } from '~/core/explore/fresh-slot/fresh-slot-store';
 import { readLastGoodPublicFeed, rememberPublicFeedPage } from '~/core/explore/last-good-public-feed';
+import { narrowExploreSpaceFilter } from '~/core/explore/narrow-explore-space-filter';
 import { resolveExploreFeedRequestContext } from '~/core/explore/resolve-explore-feed-request-context';
 import { seenDemotionPageConfig } from '~/core/explore/seen-demotion/seen-demotion-config';
 import { normId } from '~/core/utils/norm-id';
@@ -133,6 +134,7 @@ async function buildFeedResponse(request: Request, searchParams: URLSearchParams
   const spaceIdsParam = searchParams.get('spaceIds') ?? searchParams.get('spaceId');
   const cursor = searchParams.get('cursor');
   const typeIds = parseExploreTypeIdsParam(searchParams.get('typeIds'));
+  const topicIds = parseExploreTopicIds(searchParams.get('topicIds'));
 
   if (typeIds.length === 0) {
     return NextResponse.json({ items: [], nextCursor: null });
@@ -165,18 +167,9 @@ async function buildFeedResponse(request: Request, searchParams: URLSearchParams
   // written, where a server read would trail the indexer.
   const forYouTopicIds = personalized ? [] : requestedTopicIds;
 
-  // Only spaces this reader may see, whatever they asked for. `all` and an empty parameter both
-  // mean no narrowing; so does a list that matches nothing they can see, because a filter naming
-  // only spaces they cannot see is a request we have no honest way to answer and an empty feed is
-  // the wrong answer to it.
-  let spaceFilter: string[] | null = null;
-  if (spaceIdsParam && spaceIdsParam !== 'all') {
-    const wanted = new Set(spaceIdsParam.split(',').map(normId).filter(Boolean));
-    const visible = browseSidebarVisibleSpaces(browse)
-      .filter(row => wanted.has(normId(row.id)))
-      .map(row => row.id);
-    if (visible.length > 0) spaceFilter = visible;
-  }
+  // Only spaces this reader may see, whatever they asked for (see narrowExploreSpaceFilter). Shared
+  // with the topic-facet route so the dropdown counts scope to the same population the feed serves.
+  const spaceFilter = narrowExploreSpaceFilter(browse, spaceIdsParam);
 
   // GEO-3221. Best's fresh slot, read from the ranking lab's live config (disabled unless an admin
   // turned it on). Plain Best only; For you is left as it is.
@@ -197,6 +190,8 @@ async function buildFeedResponse(request: Request, searchParams: URLSearchParams
     typeIds,
     ...EXPLORE_FEED_POLICY,
     forYouTopicIds,
+    topicIds: topicIds.length > 0 ? topicIds : undefined,
+    rankedTopicIds: topicIds.length > 0 ? topicIds : undefined,
     reorderWindow: personalized
       ? createPersonalizedWindowReorder({
           userId: viewerId,

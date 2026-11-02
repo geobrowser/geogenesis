@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PeerSchedule } from '~/core/availability/peer-schedule';
 
 import { type DebateLobbyMember, GeoChatRequestError, type ScheduledDebateRequest } from '../api';
+import { ResizeObserverStub } from '../resize-observer-fixtures';
 import type { LobbyBooking } from './lobby-schedule';
 import type { LobbyPageView } from './lobby-view';
 
@@ -93,11 +94,6 @@ function menu(self = false, debating = false) {
   );
 }
 
-class ResizeObserverStub {
-  observe() {}
-  unobserve() {}
-  disconnect() {}
-}
 window.ResizeObserver ??= ResizeObserverStub as unknown as typeof ResizeObserver;
 
 beforeEach(() => {

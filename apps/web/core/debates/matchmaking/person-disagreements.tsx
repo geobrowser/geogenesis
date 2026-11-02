@@ -6,6 +6,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { useClaimMatchup } from '~/core/claims/browse/use-claim-matchup';
 import { type SpaceLabel, spaceLabel } from '~/core/hooks/use-space-labels';
 import { responsePositionLabel } from '~/core/responses/entity-response';
 import { normId } from '~/core/utils/norm-id';
@@ -15,8 +16,23 @@ import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { ResponsePositionIcon } from '~/design-system/icons/response-position-icon';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
+import { RequestDebateControl } from '../request-debate-control';
 import type { ClaimMatch } from './disagreement-counts';
+import { debateActionAnalyticsAttributes } from './hub-analytics';
+import { HUB_EYEBROW_CLASS_NAME } from './hub-eyebrow';
 import { PersonSpaceIcon } from './person-space-icons';
+
+/**
+ * "Debate on this" under each claim (GEO-3463), offered while the person is online. It sends an
+ * ordinary claim request for that claim, which geo-chat fans out to the people who hold the other
+ * side, this person among them.
+ */
+export type PersonMatchesDebate = {
+  /** Why every button waits, when the row's own Debate now would: a request out, a debate on. */
+  pausedReason?: string | null;
+  /** The request went out; the row closes the list, since the strip now has it. */
+  onRequested: () => void;
+};
 
 export function PersonMatches({
   personName,
@@ -27,6 +43,10 @@ export function PersonMatches({
   popoverPortal,
   triggerAttributes,
   hideWhenDetached = true,
+  open,
+  onOpenChange,
+  debate,
+  compact = false,
 }: {
   personName: string;
   matches: ClaimMatch[];
@@ -38,13 +58,23 @@ export function PersonMatches({
   triggerAttributes?: Readonly<Record<`data-${string}`, string>>;
   /** Off when the row sits inside another popover; see `PersonRow`'s `hidePopoversWhenDetached`. */
   hideWhenDetached?: boolean;
+  /** Controlled by the panel row, so its hover card can stay shut while this is open. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  debate?: PersonMatchesDebate;
+  /**
+   * The side panel's list (GEO-3463, the prototype's matches popover): one tight row per claim —
+   * its name, then "You: Agree · Ana: Disagree" — with "Debate on this" beside it. The calendar and
+   * the full row keep the fuller layout with each side as a badge.
+   */
+  compact?: boolean;
 }) {
   const firstClaimRef = React.useRef<HTMLAnchorElement>(null);
   const count = matches.length;
   if (count === 0) return null;
 
   return (
-    <Popover.Root>
+    <Popover.Root open={open} onOpenChange={onOpenChange}>
       <Popover.Trigger asChild>
         <button
           type="button"
@@ -69,38 +99,142 @@ export function PersonMatches({
               event.preventDefault();
               firstClaimRef.current?.focus();
             }}
-            className="z-100 w-[320px] max-w-[calc(100vw-32px)] overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg"
+            className={cx(
+              'z-100 w-[320px] max-w-[calc(100vw-32px)] overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg',
+              compact && 'p-1.5'
+            )}
           >
-            <p className="border-b border-grey-02 bg-grey-01 px-3 py-2 text-footnoteMedium text-grey-04">
-              <span className="text-text tabular-nums">{count}</span> {count === 1 ? 'match' : 'matches'} with{' '}
-              <span className="text-text">{personName}</span>
-            </p>
-            <ul
-              aria-label={`Matching claims with ${personName}`}
-              className="m-0 max-h-[320px] list-none overflow-y-auto overscroll-contain p-0"
-            >
-              {matches.map((match, index) => (
-                <li
-                  key={`${normId(match.claimId)}:${normId(match.spaceId)}`}
-                  className="border-t border-grey-02 first:border-t-0"
+            {compact ? (
+              <>
+                <p className={cx('m-0 px-2 pt-1 pb-1.5', HUB_EYEBROW_CLASS_NAME)}>
+                  {count} {count === 1 ? 'match' : 'matches'} with {personName}
+                </p>
+                <ul
+                  aria-label={`Matching claims with ${personName}`}
+                  className="m-0 max-h-[260px] list-none overflow-y-auto overscroll-contain p-0"
                 >
-                  <MatchingClaim
-                    ref={index === 0 ? firstClaimRef : undefined}
-                    match={match}
-                    viewerName="You"
-                    personName={personName}
-                    claimNamesById={claimNamesById}
-                    claimNamesLoading={claimNamesLoading}
-                    labelsById={labelsById}
-                    className="px-3 py-2.5"
-                  />
-                </li>
-              ))}
-            </ul>
+                  {matches.map((match, index) => (
+                    <li
+                      key={`${normId(match.claimId)}:${normId(match.spaceId)}`}
+                      className="flex items-start gap-2 rounded-lg p-2 transition-colors hover:bg-grey-01"
+                    >
+                      <CompactMatchingClaim
+                        ref={index === 0 ? firstClaimRef : undefined}
+                        match={match}
+                        personName={personName}
+                        claimNamesById={claimNamesById}
+                        claimNamesLoading={claimNamesLoading}
+                      />
+                      {debate ? <DebateOnThis match={match} debate={debate} /> : null}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : (
+              <>
+                <p className="border-b border-grey-02 bg-grey-01 px-3 py-2 text-footnoteMedium text-grey-04">
+                  <span className="text-text tabular-nums">{count}</span> {count === 1 ? 'match' : 'matches'} with{' '}
+                  <span className="text-text">{personName}</span>
+                </p>
+                <ul
+                  aria-label={`Matching claims with ${personName}`}
+                  className="m-0 max-h-[320px] list-none overflow-y-auto overscroll-contain p-0"
+                >
+                  {matches.map((match, index) => (
+                    <li
+                      key={`${normId(match.claimId)}:${normId(match.spaceId)}`}
+                      className="border-t border-grey-02 first:border-t-0"
+                    >
+                      <MatchingClaim
+                        ref={index === 0 ? firstClaimRef : undefined}
+                        match={match}
+                        viewerName="You"
+                        personName={personName}
+                        claimNamesById={claimNamesById}
+                        claimNamesLoading={claimNamesLoading}
+                        labelsById={labelsById}
+                        className="px-3 py-2.5"
+                      />
+                      {/* A sibling of the link, never inside it: a button nested in an anchor is invalid
+                      and its press would also follow the link. */}
+                      {debate ? (
+                        <div className="flex justify-end px-3 pb-2.5">
+                          <DebateOnThis match={match} debate={debate} />
+                        </div>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
           </Popover.Content>
         </Popover.Portal>
       ) : null}
     </Popover.Root>
+  );
+}
+
+/**
+ * A claim in the panel's compact list: its name, linked to the claim, and each side in words.
+ */
+const CompactMatchingClaim = React.forwardRef<
+  HTMLAnchorElement,
+  {
+    match: ClaimMatch;
+    personName: string;
+    claimNamesById: ReadonlyMap<string, string | null>;
+    claimNamesLoading: boolean;
+  }
+>(function CompactMatchingClaim({ match, personName, claimNamesById, claimNamesLoading }, ref) {
+  const firstName = personName.split(' ')[0] || personName;
+  return (
+    <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+      <Link
+        ref={ref}
+        href={NavUtils.toEntity(match.spaceId, match.claimId)}
+        className="text-breadcrumb font-medium text-text hover:underline focus-visible:underline focus-visible:outline-none"
+      >
+        {claimName(match.claimId, claimNamesById, claimNamesLoading)}
+      </Link>
+      <span className="text-browseSection text-grey-04">
+        You: {responsePositionLabel(match.viewerPosition)} · {firstName}: {responsePositionLabel(match.personPosition)}
+      </span>
+    </div>
+  );
+});
+
+/**
+ * One claim's "Debate on this": the same request, blocked reasons and error handling as a claim
+ * card's offer (`useClaimMatchup`), so an unavailable viewer is told why, a response geo-chat has not
+ * caught up with is recovered, and a refusal is shown rather than the button quietly going idle.
+ */
+function DebateOnThis({ match, debate }: { match: ClaimMatch; debate: PersonMatchesDebate }) {
+  const { blockedReason, isRequesting, requestError, request } = useClaimMatchup({
+    claimId: match.claimId,
+    spaceId: match.spaceId,
+    viewerPosition: match.viewerPosition,
+  });
+  const reason = debate.pausedReason ?? blockedReason ?? null;
+
+  // A request that went out and was not refused is now the strip's, so the list makes way for it.
+  const { onRequested } = debate;
+  const wasRequesting = React.useRef(false);
+  React.useEffect(() => {
+    if (wasRequesting.current && !isRequesting && !requestError) onRequested();
+    wasRequesting.current = isRequesting;
+  }, [isRequesting, onRequested, requestError]);
+
+  return (
+    <RequestDebateControl
+      onRequest={request}
+      label="Debate on this"
+      tone="secondary"
+      disabled={Boolean(reason)}
+      isRequesting={isRequesting}
+      blockedReason={reason}
+      requestError={requestError}
+      analytics={debateActionAnalyticsAttributes('hub', 'Debate on this', 'start_debate')}
+    />
   );
 }
 

@@ -164,6 +164,29 @@ describe('UnsubscribePage', () => {
     expect(screen.getByRole('heading', { name: 'Unsubscribe from the weekly digest?' })).toBeInTheDocument();
   });
 
+  it('asks about community call reminders in their own words', async () => {
+    mocks.get = vi.fn(async () => answer('ask', { group: 'community_calls', group_name: 'Community call reminders' }));
+    renderPage();
+
+    expect(
+      await screen.findByRole('heading', { name: 'Unsubscribe from community call reminders?' })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'jo•••@gmail.com will stop getting an email before a community call you asked to be reminded about. Debate invites and reminders keep coming.'
+      )
+    ).toBeInTheDocument();
+  });
+
+  it('opens a group this build does not know, by the name the service gives', async () => {
+    mocks.get = vi.fn(async () => answer('ask', { group: 'space_news', group_name: 'Space news' }));
+    renderPage();
+
+    expect(await screen.findByRole('heading', { name: 'Unsubscribe from Space news?' })).toBeInTheDocument();
+    expect(screen.getByText('jo•••@gmail.com will stop getting these emails.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Unsubscribe' })).toBeInTheDocument();
+  });
+
   it('offers no Undo for a group that was already off', async () => {
     mocks.get = vi.fn(async () => answer('already_off', { group: 'invites' }));
     renderPage();

@@ -13,7 +13,7 @@ import { LiveLobbiesPreview } from '../lobbies/live-lobbies-preview';
 import { useLobbyReminderReplay } from '../lobbies/lobby-reminder-press';
 import { useDebateRequests } from './hooks';
 import { useDebatesHub } from './use-debates-hub';
-import { useUnexpiredRequests } from './use-request-countdown';
+import { useRequestsTabCount } from './use-requests-tab-count';
 
 /**
  * Navbar entry point for the matchmaking hub.
@@ -39,18 +39,25 @@ export function DebatesHubButton({
 } = {}) {
   const { authenticated } = useGeoChatAuth();
   const { isOpen, toggle } = useDebatesHub();
-  const { data: activity } = useDebateActivity();
+  const { data: activity, dataUpdatedAt: activityUpdatedAt } = useDebateActivity();
   // Read-only: the coordinator already fetches this list whenever there is anything in it, and the
   // badge must agree with the one in the panel rather than counting requests that have expired.
   const { data: requests } = useDebateRequests(false);
-  const incoming = useUnexpiredRequests(requests?.incoming ?? []);
 
-  // Guarded rather than relying on the lookups being empty: a stale cache from a session that has
-  // since signed out would otherwise badge the button for nobody.
-  const requestCount = !authenticated
-    ? 0
-    : (requests ? incoming.length : (activity?.incoming_request_count ?? 0)) +
-      (activity?.scheduled_awaiting_answer_count ?? 0);
+  // The panel's Requests badge, from the same hook, so the two always show one number (GEO-3463).
+  // It returns zero signed out rather than relying on the lookups being empty: a stale cache from a
+  // session that has since signed out would otherwise badge the button for nobody.
+  //
+  // The scheduled list is read live only while the panel is open, which reads it anyway (one request
+  // for both), so the two count from the same list. Closed, the badge counts from the cached list
+  // only while it is newer than activity.
+  const requestCount = useRequestsTabCount({
+    authenticated,
+    activity,
+    activityUpdatedAt,
+    requests,
+    fetchScheduled: isOpen,
+  });
 
   // GEO-3268. Mounting the lineup here, on every page, is also what keeps the lobby list live with
   // the panel closed: it holds the matchmaking scope that carries `debate.lobbies_changed`.

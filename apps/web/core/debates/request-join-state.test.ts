@@ -123,7 +123,7 @@ describe('describeFormatLine', () => {
       label: 'Open rounds',
       isOpenRounds: true,
       turnDurationsMs: [60_000, 60_000],
-      openRounds: { maxRebuttalRounds: 3, rebuttalTurnMs: 45_000 },
+      openRounds: { max_rebuttal_rounds: 3, rebuttal_turn_ms: 45_000 },
     });
 
     // 2 openings (2 min) + 3 rounds × 2 debaters × 45s (4 min 30s).
@@ -190,4 +190,20 @@ describe('joinStateNeedsOpening', () => {
     expect(joinStateNeedsOpening({ audioMuted: false, videoEnabled: false }, ['audio'])).toBe(false);
     expect(joinStateNeedsOpening({ audioMuted: true, videoEnabled: false }, [])).toBe(false);
   });
+});
+
+it('counts the required 45-second round once in the new Open rounds upper bound', () => {
+  expect(
+    describeFormatLine({
+      label: 'Open rounds',
+      isOpenRounds: true,
+      turnDurationsMs: [60_000, 60_000],
+      openRounds: {
+        max_rebuttal_rounds: 10,
+        required_rebuttal_rounds: 2,
+        rebuttal_turn_ms: 30_000,
+        turn_durations_ms: [60_000, 60_000, 45_000, 45_000, 30_000, 30_000],
+      },
+    })
+  ).toBe('Open rounds · up to 12 min 30s total');
 });

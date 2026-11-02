@@ -12,7 +12,7 @@ import { personalSpaceViewed } from '~/core/analytics';
 import { useBountiesEnabled } from '~/core/bounties/config';
 import { BROWSE_NAV_ICON } from '~/core/browse/browse-nav-icon-src';
 import { browseSidebarDataQueryKey } from '~/core/browse/browse-sidebar-query';
-import { fetchBrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data';
+import { browseSidebarQueryOptions } from '~/core/browse/browse-sidebar-query-options';
 import type { BrowseSpaceRow } from '~/core/browse/fetch-browse-sidebar-data';
 import { GEO_APPS_SIDEBAR_LINKS } from '~/core/browse/geo-apps-sidebar-src';
 import { DOCUMENTATION_SPACE_ENTITY_ID, DOCUMENTATION_SPACE_ID } from '~/core/constants';
@@ -39,8 +39,6 @@ import { GeoLogoLarge } from '~/design-system/icons/geo-logo-large';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 import { avatarAtom } from '~/partials/onboarding/onboarding-atoms';
-
-import { loadBrowseSidebarData } from './load-browse-sidebar-data';
 
 const SIDEBAR_WIDTH_PX = 200;
 
@@ -305,13 +303,9 @@ export function BrowseSidebar(props: BrowseSidebarProps = {}) {
   const { smartAccount } = useSmartAccount();
   const walletAddress = smartAccount?.account.address;
   const queryClient = useQueryClient();
-  const sidebarQueryKeyInput = personalSpaceIdFromHook ?? walletAddress ?? null;
-  const { data = null } = useQuery({
-    queryKey: browseSidebarDataQueryKey(sidebarQueryKeyInput),
-    queryFn: () =>
-      personalSpaceIdFromHook ? fetchBrowseSidebarData(personalSpaceIdFromHook) : loadBrowseSidebarData(walletAddress),
-    staleTime: 60_000,
-  });
+  const { data = null } = useQuery(
+    browseSidebarQueryOptions({ personalSpaceId: personalSpaceIdFromHook, walletAddress })
+  );
   const personalSpaceId = data?.personalSpaceId ?? personalSpaceIdFromHook;
 
   // Optimistic, persisted bridge: spaces requested this session (from anywhere)

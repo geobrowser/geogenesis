@@ -1117,6 +1117,20 @@ describe('useDebatePlayback — no invented turn schedule (GEO-2956)', () => {
     expect(result.current.playbackBreaks.breaks[0]).toMatchObject({ decidingStartMs: 50_000, startMs: 54_000 });
   });
 
+  it('uses numbered-only cues for the three-round Open rounds generation', async () => {
+    const debate = {
+      ...debateFixture(),
+      turn_durations_ms: [60_000, 60_000, 45_000, 45_000, 30_000, 30_000],
+      open_rounds: { required_rebuttal_rounds: 2 },
+    } as Debate;
+    const { result } = renderHook(() => useDebatePlayback(debate, true));
+    await waitFor(() => expect(result.current.ready).toBe(true));
+    const turns = result.current.roundTurns;
+    expect(typeof turns).toBe('function');
+    if (typeof turns !== 'function') throw new Error('Open rounds must supply cue roles');
+    for (let index = 0; index < 6; index++) expect(turns(index)).toBeNull();
+  });
+
   // GEO-3276/3277: a final End's reveal plays after the last turn, so the video runs past it.
   it('runs the timeline on through a final End’s reveal after the last turn', async () => {
     mocks.turnSegments = renderedSegments;

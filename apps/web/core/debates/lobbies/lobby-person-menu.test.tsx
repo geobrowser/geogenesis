@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DebateLobbyMember } from '../api';
+import { ResizeObserverStub } from '../resize-observer-fixtures';
 import type { LobbyPageView } from './lobby-view';
 
 const mocks = vi.hoisted(() => ({
@@ -41,11 +42,6 @@ vi.mock('./moderation-hooks', () => ({
   }),
 }));
 
-class ResizeObserverStub {
-  observe() {}
-  unobserve() {}
-  disconnect() {}
-}
 window.ResizeObserver ??= ResizeObserverStub as unknown as typeof ResizeObserver;
 
 const { LobbyPersonMenu } = await import('./lobby-person-menu');

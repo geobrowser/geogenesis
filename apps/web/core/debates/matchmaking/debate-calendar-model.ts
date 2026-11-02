@@ -259,10 +259,19 @@ export function firstBusyHour(cells: ReadonlyMap<string, unknown>, debates: OwnD
   return first;
 }
 
+/**
+ * A day's two parts as a day list writes them: the weekday as the locale shortens it, and the day of
+ * the month. Apart, for a layout that stacks them, like the Requests timeline's date column.
+ */
+export function dayListParts(date: Date) {
+  return { weekday: date.toLocaleDateString(undefined, { weekday: 'short' }), day: date.getDate() };
+}
+
 /** A day list's heading: `Thu 8`, or `Today, Thu 8`. */
 export function dayListLabel(date: Date, today: Date): string {
   // Composed rather than formatted together: en-US writes the pair as `8 Thu`.
-  const label = `${date.toLocaleDateString(undefined, { weekday: 'short' })} ${date.getDate()}`;
+  const { weekday, day } = dayListParts(date);
+  const label = `${weekday} ${day}`;
   return date.toDateString() === today.toDateString() ? `Today, ${label}` : label;
 }
 
@@ -277,12 +286,6 @@ export function weekRangeLabel(days: Date[]): string {
 /** `18:00` or `6:00 PM`, as the viewer's locale writes an hour. */
 export function hourLabel(hour: number): string {
   return new Date(2000, 0, 1, hour).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
-}
-
-/** `18:00 – 18:30`, in the viewer's locale. */
-export function timeRangeLabel(start: number, end: number): string {
-  const time = (at: number) => new Date(at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
-  return `${time(start)} – ${time(end)}`;
 }
 
 /**

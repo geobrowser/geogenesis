@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { Debate, DebateMediaTurnSegment, DebateTranscriptSegment } from './api';
+import { requiredRoundListening } from './open-rounds-fixtures';
 import type { DebateTranscriptClaims, TranscriptClaim } from './transcript-claims';
 import { warehouseClaims, warehouseTurns } from './warehouse';
 
@@ -56,6 +57,26 @@ describe('warehouse debate timing', () => {
     });
     expect(warehouseTurns({ ...debate, turn_durations_ms: [1, 1, 1, 1] }, media.slice(0, 4))[2].round).toBe('rebuttal');
   });
+  it('keeps Open rounds roles from the debate instead of inventing a closing round', () => {
+    const openRounds = requiredRoundListening().open_rounds;
+    for (const durations of [
+      [60_000, 60_000, 45_000, 45_000, 45_000, 45_000],
+      [60_000, 60_000, 45_000, 45_000, 30_000, 30_000],
+    ]) {
+      const exported = warehouseTurns({ ...debate, open_rounds: openRounds, turn_durations_ms: durations }, media);
+      expect(exported.map(turn => turn.round)).toEqual([
+        'opening',
+        'opening',
+        'rebuttal',
+        'rebuttal',
+        'rebuttal',
+        'rebuttal',
+      ]);
+      const thirdRoundClaim = claims({ publishedTiming: { startMs: 41_000, endMs: 42_000 } });
+      expect(warehouseClaims('debate', 'space', thirdRoundClaim, [], exported)[0].round).toBe('rebuttal');
+    }
+  });
+
   it('rejects overlaps, duplicate indices and missing speakers', () => {
     expect(() => warehouseTurns(debate, [media[0], media[0]])).toThrow();
     expect(() => warehouseTurns(debate, [media[0], { ...media[1], output_start_ms: 9_999 }])).toThrow();

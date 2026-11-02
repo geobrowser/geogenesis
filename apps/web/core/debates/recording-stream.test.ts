@@ -341,6 +341,256 @@ describe('debate recording streaming', () => {
       expect(wire.putPart).toHaveBeenCalledTimes(2);
       expect((await streamer.finish())?.uploadedPartNumbers).toEqual([1, 2]);
     });
+
+    describe('sharing the uplink with the call (GEO-3410)', () => {
+      function clock() {
+        let now = 1_000_000;
+        return {
+          now: () => now,
+          advance: (ms: number) => {
+            now += ms;
+          },
+        };
+      }
+
+      it('sends no part while the microphone is live, never forcing one through, and catches up once it closes', async () => {
+        const timers = manualTimers();
+        const time = clock();
+        const wire = transport();
+        let window: number | null = 0;
+        const streamer = new stream.RecordingPartStreamer({
+          ...wire,
+          ...timers,
+          now: time.now,
+          shouldPause: () => false,
+          callWindowMs: () => window,
+        });
+
+        streamer.append(new Blob(['0123456789abcdefXYZ']));
+        // Far past the longest pause a poor connection gets.
+        for (let round = 0; round < 40; round += 1) {
+          time.advance(3_000);
+          await timers.runNext();
+        }
+        expect(wire.startMultipart).toHaveBeenCalledOnce();
+        expect(wire.putPart).not.toHaveBeenCalled();
+
+        window = 30_000;
+        streamer.wake();
+        await timers.drain();
+        expect(wire.sent.map(part => part.partNumber)).toEqual([1, 2]);
+        await streamer.finish();
+        const stats = streamer.stats();
+        // From the first held part to the window opening: most of the 120 s simulated.
+        expect(stats.paused_mic_live_ms).toBeGreaterThan(100_000);
+        expect(stats.paused_mic_live_ms).toBeLessThanOrEqual(120_000);
+        expect(stats).toMatchObject({
+          paused_ms: 0,
+          parts_sent_through_pause: 0,
+          parts_aborted_for_mic: 0,
+          backlog_parts_at_finish: 1,
+        });
+      });
+
+      it('holds a part the window is too short for, judged by the slowest recent part', async () => {
+        const timers = manualTimers();
+        const time = clock();
+        const wire = transport();
+        // Part 1 takes 2 s for 8 bytes: 32 bit/s, so the next is predicted at 2 s × 1.25 + 1 s.
+        wire.putPart.mockImplementationOnce(async (upload: { url: string }, body: Blob) => {
+          time.advance(2_000);
+          wire.sent.push({ partNumber: Number(upload.url.split('/').pop()), body: await text(body) });
+        });
+        let window = 60_000;
+        const streamer = new stream.RecordingPartStreamer({
+          ...wire,
+          ...timers,
+          now: time.now,
+          shouldPause: () => false,
+          callWindowMs: () => window,
+        });
+
+        streamer.append(new Blob(['01234567']));
+        await timers.drain();
+        expect(wire.sent.map(part => part.partNumber)).toEqual([1]);
+
+        window = 3_400;
+        streamer.append(new Blob(['89abcdef']));
+        await timers.runNext();
+        expect(wire.sent.map(part => part.partNumber)).toEqual([1]);
+
+        window = 3_600;
+        await timers.drain();
+        expect(wire.sent.map(part => part.partNumber)).toEqual([1, 2]);
+        await streamer.finish();
+      });
+
+      it('lets a slow part age out of the estimate, so it cannot hold every later part back', async () => {
+        const timers = manualTimers();
+        const time = clock();
+        const wire = transport();
+        wire.putPart.mockImplementationOnce(async (upload: { url: string }, body: Blob) => {
+          time.advance(2_000);
+          wire.sent.push({ partNumber: Number(upload.url.split('/').pop()), body: await text(body) });
+        });
+        let window = 60_000;
+        const streamer = new stream.RecordingPartStreamer({
+          ...wire,
+          ...timers,
+          now: time.now,
+          shouldPause: () => false,
+          callWindowMs: () => window,
+        });
+
+        streamer.append(new Blob(['01234567']));
+        await timers.drain();
+        // The slow part predicts 3.5 s for the next, more than any window this short.
+        window = 3_000;
+        streamer.append(new Blob(['89abcdef']));
+        await timers.runNext();
+        expect(wire.sent.map(part => part.partNumber)).toEqual([1]);
+
+        time.advance(stream.UPLINK_SAMPLE_MAX_AGE_MS);
+        await timers.drain();
+        expect(wire.sent.map(part => part.partNumber)).toEqual([1, 2]);
+        await streamer.finish();
+      });
+
+      it('assumes a modest uplink before any part is timed', async () => {
+        const timers = manualTimers();
+        const wire = transport();
+        let window = 999;
+        const streamer = new stream.RecordingPartStreamer({
+          ...wire,
+          ...timers,
+          shouldPause: () => false,
+          callWindowMs: () => window,
+        });
+
+        streamer.append(new Blob(['01234567']));
+        await timers.runNext();
+        await timers.runNext();
+        expect(wire.putPart).not.toHaveBeenCalled();
+
+        window = 1_100;
+        await timers.drain();
+        expect(wire.putPart).toHaveBeenCalledOnce();
+        await streamer.finish();
+      });
+
+      it('cuts a part short when the microphone opens, and sends it again in the next window', async () => {
+        const timers = manualTimers();
+        const wire = transport();
+        let window: number | null = 30_000;
+        const signals: AbortSignal[] = [];
+        wire.putPart.mockImplementationOnce(
+          (_upload: unknown, _body: Blob, signal?: AbortSignal) =>
+            new Promise<void>((_resolve, reject) => {
+              signals.push(signal!);
+              signal!.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+            })
+        );
+        const streamer = new stream.RecordingPartStreamer({
+          ...wire,
+          ...timers,
+          shouldPause: () => false,
+          callWindowMs: () => window,
+        });
+
+        streamer.append(new Blob(['01234567']));
+        await timers.drain();
+        expect(wire.putPart).toHaveBeenCalledOnce();
+
+        window = 0;
+        streamer.yieldToCall();
+        await flush();
+        expect(signals[0].aborted).toBe(true);
+        await timers.runNext();
+        expect(wire.putPart).toHaveBeenCalledOnce();
+
+        window = 30_000;
+        streamer.wake();
+        await timers.drain();
+        expect(wire.sent.map(part => part.partNumber)).toEqual([1]);
+        expect(streamer.stats()).toMatchObject({ parts_aborted_for_mic: 1, part_failures: 0 });
+        expect((await streamer.finish())?.uploadedPartNumbers).toEqual([1]);
+      });
+
+      it('learns from a part cut short, so a link slower than assumed is not cut short every window', async () => {
+        const timers = manualTimers();
+        const time = clock();
+        const wire = transport();
+        wire.putPart.mockImplementationOnce(
+          (_upload: unknown, _body: Blob, signal?: AbortSignal) =>
+            new Promise<void>((_resolve, reject) => {
+              signal!.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+            })
+        );
+        let window = 2_000;
+        const streamer = new stream.RecordingPartStreamer({
+          ...wire,
+          ...timers,
+          now: time.now,
+          shouldPause: () => false,
+          callWindowMs: () => window,
+        });
+
+        // The default predicts about 1 s, so the part starts, and is still going when the mic opens.
+        streamer.append(new Blob(['01234567']));
+        await timers.drain();
+        expect(wire.putPart).toHaveBeenCalledOnce();
+        time.advance(1_500);
+        window = 0;
+        streamer.yieldToCall();
+        await flush();
+        await timers.runNext();
+
+        // It needed more than 1.5 s, so the next is predicted past 1.5 s × 1.25 + 1 s.
+        window = 2_000;
+        streamer.wake();
+        await timers.runNext();
+        expect(wire.putPart).toHaveBeenCalledOnce();
+
+        window = 3_000;
+        await timers.drain();
+        expect(wire.sent.map(part => part.partNumber)).toEqual([1]);
+        expect(streamer.stats().parts_aborted_for_mic).toBe(1);
+        await streamer.finish();
+      });
+
+      it('stops a part whose microphone opened while its URL was being fetched', async () => {
+        const timers = manualTimers();
+        const wire = transport();
+        const streamer = new stream.RecordingPartStreamer({
+          ...wire,
+          ...timers,
+          shouldPause: () => false,
+          callWindowMs: () => 30_000,
+        });
+        streamer.append(new Blob(['abc']));
+        await timers.drain();
+        let release!: () => void;
+        const urls = wire.getPartUrls.getMockImplementation()!;
+        wire.getPartUrls.mockImplementationOnce(
+          async (...args: Parameters<typeof urls>) =>
+            new Promise(resolve => {
+              release = () => resolve(urls(...args));
+            })
+        );
+
+        streamer.append(new Blob(['defgh']));
+        await timers.runNext();
+        streamer.yieldToCall();
+        release();
+        await flush();
+
+        expect(wire.putPart).not.toHaveBeenCalled();
+        expect(streamer.stats().parts_aborted_for_mic).toBe(1);
+        await timers.drain();
+        expect(wire.sent.map(part => part.partNumber)).toEqual([1]);
+        await streamer.finish();
+      });
+    });
   });
 
   it('reports one summary of how the live upload went when the recording is handed over', async () => {

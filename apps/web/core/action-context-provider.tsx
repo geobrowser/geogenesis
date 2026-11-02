@@ -29,6 +29,7 @@ const IMPRESSION_COMPONENTS = new Set<ActionComponent>([
   'debate_claim_ticker',
   'debate_end_card',
   'debate_claims_panel',
+  'debate_claim_card',
 ]);
 
 /**

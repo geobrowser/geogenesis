@@ -1,5 +1,3 @@
-import { SystemIds } from '@geoprotocol/geo-sdk/lite';
-
 import * as Effect from 'effect/Effect';
 
 import type { BrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data';
@@ -27,7 +25,7 @@ import {
   buildExploreFeedRows,
   decodeExploreCardEntity,
 } from './explore-card-item';
-import { EXPLORE_ENTITY_NAME_PROPERTY_ID, EXPLORE_PAGE_SIZE } from './explore-constants';
+import { EXPLORE_PAGE_SIZE } from './explore-constants';
 import { claimsRequireDebateTagFilter } from './explore-debate-tag-filter';
 import {
   EXPLORE_DIVERSITY_WINDOW_SIZE,
@@ -43,6 +41,12 @@ import {
   exploreEntitiesConnectionDocument,
   exploreEntitiesNoPageInfoConnectionDocument,
 } from './explore-entities-document';
+import {
+  type ExploreTime,
+  buildExploreFeedFilter,
+  combineEntityFilters,
+  timeThresholdSec,
+} from './explore-feed-filter';
 import { exploreForYouBestConnectionDocument, exploreForYouConnectionDocument } from './explore-for-you-document';
 import { FOR_YOU_FEED, composeForYouPage } from './explore-for-you-mix';
 import { exploreTopicFeedConnectionDocument } from './explore-topic-feed-document';
@@ -76,7 +80,8 @@ import type { SeenDemotionPageConfig } from './seen-demotion/seen-demotion-confi
  * `top` ranks by the integer score property; `new` is reverse-chronological.
  */
 export type ExploreSort = 'new' | 'top' | 'best';
-export type ExploreTime = 'today' | 'week' | 'month' | 'year' | 'all';
+export type { ExploreTime } from './explore-feed-filter';
+export { buildExploreFeedFilter } from './explore-feed-filter';
 
 // Re-exported so the many components importing the card's item shape from here keep working; it is
 // defined alongside the card builder in `explore-card-item`, which the Coverage section also uses.
@@ -132,29 +137,6 @@ export type ExploreWindowReorder = (
 /** The orders a topic page's feed can be served in from gaia's topic ranking table (GEO-3092). */
 type RankedTopicFeedSort = Extract<ExploreSort, 'best' | 'new'>;
 
-// Entities we never want to surface in any feed.
-// - `System type` relation to the `System` entity: marks system-managed rows.
-// - `types` relation to `Data block` / `Text block`: these are block entities that
-//   exist as internal structure of parent entities and aren't meaningful on their own.
-const SYSTEM_TYPE_PROPERTY_ID = '88b3d6ad288c529ca2120e1c24819185';
-const SYSTEM_ENTITY_ID = '2ff7ea098b9e50bc9be78a0cafa268d0';
-const DATA_BLOCK_TYPE_ID = 'b8803a8665de412bbb357e0c84adf473';
-const TEXT_BLOCK_TYPE_ID = '76474f2f00894e77a0410b39fb17d0bf';
-
-const FEED_EXCLUDED_RELATIONS_FILTER = {
-  relations: {
-    none: {
-      or: [
-        { typeId: { is: SYSTEM_TYPE_PROPERTY_ID }, toEntityId: { is: SYSTEM_ENTITY_ID } },
-        {
-          typeId: { is: SystemIds.TYPES_PROPERTY },
-          toEntityId: { in: [DATA_BLOCK_TYPE_ID, TEXT_BLOCK_TYPE_ID] },
-        },
-      ],
-    },
-  },
-} satisfies EntityFilter;
-
 /**
  * How long one request will keep scanning for a window with something in it, and the hard stop on
  * how many it will look at. See the loop in `fetchExploreFeed` for why the scan happens here.
@@ -172,30 +154,6 @@ const FEED_EXCLUDED_RELATIONS_FILTER = {
  */
 const MAX_EMPTY_WINDOW_SCAN_MS = 3_000;
 const MAX_EMPTY_WINDOW_SCANS = 6;
-
-function timeThresholdSec(filter: ExploreTime): number | null {
-  const now = Math.floor(Date.now() / 1000);
-  switch (filter) {
-    case 'today':
-      return now - 86400;
-    case 'week':
-      return now - 7 * 86400;
-    case 'month':
-      return now - 30 * 86400;
-    case 'year':
-      return now - 365 * 86400;
-    case 'all':
-    default:
-      return null;
-  }
-}
-
-function combineEntityFilters(...filters: Array<EntityFilter | undefined>): EntityFilter | undefined {
-  const present = filters.filter((filter): filter is EntityFilter => filter !== undefined);
-  if (present.length === 0) return undefined;
-  if (present.length === 1) return present[0];
-  return { and: present };
-}
 
 type ExploreEntitiesPageResponse = {
   entities: ExploreCardEntity[];
@@ -295,10 +253,7 @@ async function fetchBestEntitiesByTypePage(
       variables: {
         ...rankedWindowVariables(args),
         maxPerType: args.offset + args.limit,
-        filter: combineEntityFilters(
-          args.requireDebateTagOnClaims ? claimsRequireDebateTagFilter(args.spaceIds) : undefined,
-          args.entityFilter
-        ),
+        filter: combineEntityFilters(mergeBestFilter(args.spaceIds, args.requireDebateTagOnClaims), args.entityFilter),
       },
     })
   );
@@ -407,39 +362,13 @@ async function fetchForYouStreamPage(
   );
 }
 
-export function buildExploreFeedFilter(args: {
-  spaceIds: string[];
-  time: ExploreTime;
-  typeIds?: readonly string[];
-  requireName?: boolean;
-  requireDebateTagOnClaims?: boolean;
-  includeEntityScopeInFilter?: boolean;
-  entityFilter?: EntityFilter;
-}): EntityFilter {
-  const t = timeThresholdSec(args.time);
-  const base: EntityFilter = {
-    ...FEED_EXCLUDED_RELATIONS_FILTER,
-    ...(args.requireDebateTagOnClaims ? claimsRequireDebateTagFilter(args.spaceIds) : {}),
-    ...(args.includeEntityScopeInFilter
-      ? {
-          spaceIds: { overlaps: [...args.spaceIds] },
-          ...(args.typeIds?.length ? { typeIds: { overlaps: [...args.typeIds] } } : {}),
-        }
-      : {}),
-    ...(args.requireName !== false
-      ? {
-          values: {
-            some: {
-              spaceId: { in: args.spaceIds },
-              propertyId: { is: EXPLORE_ENTITY_NAME_PROPERTY_ID },
-              text: { isNull: false, isNot: '' },
-            },
-          },
-        }
-      : {}),
-    ...(t != null ? { createdAt: { greaterThanOrEqualTo: String(t) } } : {}),
-  };
-  return combineEntityFilters(base, args.entityFilter) ?? base;
+/**
+ * The debate-tag gate the two Best paths send, or `undefined` so the ranked walk keeps its
+ * no-filter fast path. Topics no longer ride this: Best/New serve a topic selection from gaia's
+ * ranking table via `rankedTopicIds`, and Top filters topics through `buildExploreFeedFilter`.
+ */
+function mergeBestFilter(spaceIds: string[], requireDebateTagOnClaims: boolean | undefined): EntityFilter | undefined {
+  return requireDebateTagOnClaims ? claimsRequireDebateTagFilter(spaceIds) : undefined;
 }
 
 async function fetchExploreEntitiesPage(args: {
@@ -449,6 +378,7 @@ async function fetchExploreEntitiesPage(args: {
   after: string | null;
   orderBy: EntitiesOrderBy[];
   typeIds?: readonly string[];
+  topicIds?: readonly string[];
   requireName?: boolean;
   requireDebateTagOnClaims?: boolean;
   entityFilter?: EntityFilter;
@@ -698,6 +628,7 @@ async function fetchTopEntitiesPage(args: {
   limit: number;
   after: string | null;
   typeIds?: readonly string[];
+  topicIds?: readonly string[];
   requireName?: boolean;
   requireDebateTagOnClaims?: boolean;
   entityFilter?: EntityFilter;
@@ -774,12 +705,9 @@ async function fetchBestEntitiesPage(args: {
         // are 1.7x and 2.3x slower with the argument rather than 135x, and they have no
         // equivalent cliff, so New and Top keep filtering server-side where it is exact.
         createdAfter: t != null ? String(t) : undefined,
-        // Left undefined when the caller does not ask for the tag gate, so the sort keeps its
-        // no-filter fast path unless there is a clause the connection genuinely does not know.
-        filter: combineEntityFilters(
-          args.requireDebateTagOnClaims ? claimsRequireDebateTagFilter(args.spaceIds) : undefined,
-          args.entityFilter
-        ),
+        // Left undefined when there is no tag gate, so the sort keeps its no-filter fast path unless
+        // there is a clause the connection genuinely does not know.
+        filter: combineEntityFilters(mergeBestFilter(args.spaceIds, args.requireDebateTagOnClaims), args.entityFilter),
         spaceIdsForLists: args.spaceIds,
       },
     })
@@ -838,6 +766,7 @@ export async function fetchExploreFeed(args: {
    * the ranked queries is the kind of change GEO-2793 measured turning 43ms into seconds.
    */
   excludeTypeIds?: readonly string[];
+  topicIds?: readonly string[];
   /** If true (default), filter out entities with null or empty `name`. */
   requireName?: boolean;
   /**
@@ -995,7 +924,7 @@ export async function fetchExploreFeed(args: {
             // This path paginates by offset, and the window cursor's `after` slot carries it as
             // a decimal string. Anything unparseable restarts at 0, matching the tolerance
             // `decodeExploreWindowCursor` already documents.
-            offset: windowOffsetOf(windowAfter),
+            offset: Number.isSafeInteger(Number(windowAfter)) && Number(windowAfter) >= 0 ? Number(windowAfter) : 0,
             typeIds: args.typeIds ?? [],
             requireDebateTagOnClaims: args.requireDebateTagOnClaims,
             entityFilter: args.entityFilter,
@@ -1016,6 +945,7 @@ export async function fetchExploreFeed(args: {
                 limit: windowSize,
                 after: windowAfter,
                 typeIds: args.typeIds,
+                topicIds: args.topicIds,
                 requireName: args.requireName,
                 requireDebateTagOnClaims: args.requireDebateTagOnClaims,
                 entityFilter: args.entityFilter,
@@ -1027,6 +957,7 @@ export async function fetchExploreFeed(args: {
                 after: windowAfter,
                 orderBy: [EntitiesOrderBy.CreatedAtDesc],
                 typeIds: args.typeIds,
+                topicIds: args.topicIds,
                 requireName: args.requireName,
                 requireDebateTagOnClaims: args.requireDebateTagOnClaims,
                 entityFilter: args.entityFilter,
@@ -1092,7 +1023,11 @@ export async function fetchExploreFeed(args: {
   };
 
   const forYouTopicIds = args.forYouTopicIds ?? [];
-  if (forYouTopicIds.length > 0 && bestFiltersServerSide) {
+  // An explicit explore-dropdown topic is served by the ranked topic path (`rankedTopicIds`), which
+  // makes `bestFiltersServerSide` false anyway; the For-you stream keys on followed topics
+  // (`forYouTopicIds`), not `args.topicIds`, and it skips personalization and the fresh slot — a
+  // known limit of serving a topic selection from gaia's ranking table.
+  if (forYouTopicIds.length > 0 && bestFiltersServerSide && (args.topicIds?.length ?? 0) === 0) {
     const streamArgs = {
       topicIds: forYouTopicIds,
       spaceIds: baseIds,
@@ -1122,6 +1057,7 @@ export async function fetchExploreFeed(args: {
     freshSlotActive(freshConfig) &&
     args.sort === 'best' &&
     bestFiltersServerSide &&
+    (args.topicIds?.length ?? 0) === 0 &&
     (freshCursor.firstPage || freshCursor.pinned);
   const freshVersion = `${BEST_FEED_VERSION}+fresh.${args.freshSlot?.revision ?? 0}`;
   let freshRows: ExploreFeedRow[] | null = null;

@@ -31,6 +31,32 @@ export function useLobbyHandoff() {
 }
 
 /**
+ * The handoff for a popup that `onOpenChange` closes. `LobbyPopup` provides it to its content; a
+ * lobby popover drawn some other way (the side panel's lobby details) provides it with this.
+ */
+export function LobbyHandoffScope({
+  onOpenChange,
+  children,
+}: {
+  onOpenChange: (open: boolean) => void;
+  children: React.ReactNode;
+}) {
+  const handoff = React.useMemo<Handoff>(
+    () => ({
+      inPopup: true,
+      close: () => onOpenChange(false),
+      handoff: then => {
+        // Committed now, so Radix's focus return (queued on unmount) runs before `then`.
+        flushSync(() => onOpenChange(false));
+        setTimeout(then, 0);
+      },
+    }),
+    [onOpenChange]
+  );
+  return <LobbyHandoffContext.Provider value={handoff}>{children}</LobbyHandoffContext.Provider>;
+}
+
+/**
  * A lobby menu: a dropdown on desktop, a bottom sheet on a phone. The content mounts on each open,
  * so a confirm or error from last time does not linger.
  */
@@ -54,19 +80,7 @@ export function LobbyPopup({
   children: React.ReactNode;
 }) {
   const phone = useIsPhoneLayout();
-  const handoff = React.useMemo<Handoff>(
-    () => ({
-      inPopup: true,
-      close: () => onOpenChange(false),
-      handoff: then => {
-        // Committed now, so Radix's focus return (queued on unmount) runs before `then`.
-        flushSync(() => onOpenChange(false));
-        setTimeout(then, 0);
-      },
-    }),
-    [onOpenChange]
-  );
-  const content = open ? <LobbyHandoffContext.Provider value={handoff}>{children}</LobbyHandoffContext.Provider> : null;
+  const content = open ? <LobbyHandoffScope onOpenChange={onOpenChange}>{children}</LobbyHandoffScope> : null;
 
   if (phone) {
     return (

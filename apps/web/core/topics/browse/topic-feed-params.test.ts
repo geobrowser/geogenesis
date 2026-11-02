@@ -42,7 +42,7 @@ describe('Topic feed request parameters', () => {
       ),
     ];
 
-    expect(parseTopicFeedSelectedIds(ids, pageTopicId)).toEqual(ids.slice(1, MAX_TOPIC_FEED_SELECTED_TOPICS + 1));
+    expect(parseTopicFeedSelectedIds(ids, { pageTopicId })).toEqual(ids.slice(1, MAX_TOPIC_FEED_SELECTED_TOPICS + 1));
   });
 
   it('keeps every selection, still capped, when there is no page Topic', () => {

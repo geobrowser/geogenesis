@@ -3,12 +3,15 @@ import { describe, expect, it } from 'vitest';
 import type { Debate } from './api';
 import { debateTurnRole } from './formats';
 import {
+  debateRoundRoleForDebate,
   debateThankingStartsAtMs,
   debateTurnRoleForDebate,
+  hasNumberedOpenRounds,
   isBetweenOpenRounds,
   isDebatesLastTurn,
   isOpenRoundsDebate,
   openRebuttalRoundCount,
+  openRoundEndsOnPick,
   openRoundGapAfterTurn,
   openRoundLastWord,
   openRoundLeadInAfterTurn,
@@ -466,5 +469,40 @@ describe('isBetweenOpenRounds', () => {
     expect(isBetweenOpenRounds({ phase: 'speaking', roundIndex: 1, isFinalRound: false })).toBe(false);
     expect(isBetweenOpenRounds({ phase: 'finished', roundIndex: 1, isFinalRound: false })).toBe(false);
     expect(isBetweenOpenRounds(null)).toBe(false);
+  });
+});
+
+describe('GEO-3521: three numbered rounds', () => {
+  function threeRounds() {
+    const debate = requiredRoundListening();
+    return {
+      ...debate,
+      turn_durations_ms: [60_000, 60_000, 45_000, 45_000, 30_000, 30_000],
+      open_rounds: { ...debate.open_rounds!, required_rebuttal_rounds: 2, rebuttal_turn_ms: 30_000 },
+    };
+  }
+
+  it('runs rounds 1 to 3 without a pick, then waits for the first decision', () => {
+    const debate = threeRounds();
+    expect(openRoundEndsOnPick(debate.open_rounds, 0)).toBe(false);
+    expect(openRoundEndsOnPick(debate.open_rounds, 1)).toBe(false);
+    expect(openRoundEndsOnPick(debate.open_rounds, 2)).toBe(true);
+    expect(openRoundGapAfterTurn(debate, 3, at('20:03:30.000'), at('20:03:30.000')).kind).toBe('continue');
+    expect(openRoundGapAfterTurn(debate, 5, at('20:04:30.000'), at('20:04:30.000'))).toMatchObject({
+      kind: 'hold',
+      phase: { phase: 'deciding', roundIndex: 2 },
+    });
+  });
+
+  it('numbers every new round and keeps old Open rounds and fixed labels', () => {
+    const debate = threeRounds();
+    expect(hasNumberedOpenRounds(debate)).toBe(true);
+    for (let index = 0; index < 6; index++) expect(debateRoundRoleForDebate(debate, index)).toBeNull();
+    expect(debateRoundRoleForDebate(requiredRoundListening(), 0)).toBe('opening');
+    expect(debateRoundRoleForDebate(requiredRoundListening(), 2)).toBe('rebuttal');
+    const legacy = { ...debate, turn_durations_ms: [60_000, 60_000, 45_000, 45_000, 45_000, 45_000] };
+    expect(hasNumberedOpenRounds(legacy)).toBe(false);
+    expect(debateRoundRoleForDebate(legacy, 4)).toBe('rebuttal');
+    expect(debateRoundRoleForDebate(fixedDebate(debate.turn_durations_ms), 4)).toBe('closing');
   });
 });

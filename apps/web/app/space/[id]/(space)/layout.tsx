@@ -14,6 +14,7 @@ import { SpaceCallEntry } from '~/core/space-calls/space-call-entry';
 import { SpaceVerifyButton } from '~/core/space/space-verify-button';
 import { RouteEditorProvider, Tabs } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
+import { TabContentPending } from '~/core/state/pending-tab';
 import { Entities } from '~/core/utils/entity';
 import { Spaces } from '~/core/utils/space';
 import { spacePageEntityId } from '~/core/utils/space/space-page';
@@ -39,6 +40,7 @@ import { AddDataPanel } from '~/partials/space-page/add-data-panel';
 import { SpaceEditors } from '~/partials/space-page/space-editors';
 import { SpaceMembers } from '~/partials/space-page/space-members';
 import { SpacePageMetadataHeader } from '~/partials/space-page/space-metadata-header';
+import { SpaceTabLoading } from '~/partials/space-page/space-tab-loading';
 import { SpaceTabs } from '~/partials/space-page/space-tabs';
 import { SPACE_TABS_ANCHOR } from '~/partials/space-page/space-tabs-anchor';
 
@@ -313,7 +315,8 @@ export default async function Layout(props0: LayoutProps) {
            * and takes neither.
            */}
           <ProfileRailGate isProfile={isProfile} sidebar={profileRail}>
-            {children}
+            {/* A tab click shows this skeleton until the tab's content arrives, `?tabId=` tabs included. */}
+            <TabContentPending fallback={<SpaceTabLoading />}>{children}</TabContentPending>
           </ProfileRailGate>
         </RouteEditorProvider>
       </EntityStoreProvider>

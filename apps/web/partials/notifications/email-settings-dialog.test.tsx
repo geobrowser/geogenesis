@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   save: vi.fn(),
   status: 'idle' as 'idle' | 'saved' | 'failed',
   capture: vi.fn(),
+  spaceCalls: true,
 }));
 
 vi.mock('~/core/notifications/hooks', () => ({
@@ -26,11 +27,13 @@ vi.mock('~/core/notifications/hooks', () => ({
   useSaveEmailSwitch: () => ({ save: mocks.save, status: mocks.status }),
 }));
 vi.mock('~/core/analytics', () => ({ capture: (...args: unknown[]) => mocks.capture(...args) }));
+vi.mock('~/core/state/feature-flags', () => ({ useFeatureFlag: () => mocks.spaceCalls }));
 
 const { EmailSettingsDialog } = await import('./email-settings-dialog');
 
 const allOn: EmailGroupSettings = {
   invites: true,
+  community_calls: true,
   your_debates: true,
   replies: true,
   digest: true,
@@ -52,13 +55,14 @@ beforeEach(() => {
   mocks.save = vi.fn();
   mocks.status = 'idle';
   mocks.capture = vi.fn();
+  mocks.spaceCalls = true;
 });
 afterEach(() => cleanup());
 
 const toggle = (name: string) => screen.getByRole('switch', { name });
 
 describe('EmailSettingsDialog', () => {
-  it('shows where email goes, the all-email switch and the five groups, and records the open', () => {
+  it('shows where email goes, the all-email switch and the six groups, and records the open', () => {
     render(<EmailSettingsDialog entry="account_menu" onClose={() => {}} />);
 
     expect(screen.getByRole('dialog', { name: 'Email settings' })).toBeInTheDocument();
@@ -66,6 +70,7 @@ describe('EmailSettingsDialog', () => {
     expect(toggle('All Geo emails')).toHaveAttribute('aria-checked', 'true');
     for (const name of [
       'Debate invites and reminders',
+      'Community call reminders',
       'Your debates',
       'Replies',
       'Weekly digest',
@@ -75,6 +80,13 @@ describe('EmailSettingsDialog', () => {
     }
     expect(screen.getByText(/Space proposals are set in each space's settings\./)).toBeInTheDocument();
     expect(mocks.capture).toHaveBeenCalledWith('email_settings_opened', { entry: 'account_menu' });
+  });
+
+  it('leaves out call reminders with Community calls off', () => {
+    mocks.spaceCalls = false;
+    render(<EmailSettingsDialog entry="account_menu" onClose={() => {}} />);
+    expect(screen.queryByRole('switch', { name: 'Community call reminders' })).not.toBeInTheDocument();
+    expect(toggle('Your debates')).toBeInTheDocument();
   });
 
   it('saves a group as it changes, and says how saving went', async () => {

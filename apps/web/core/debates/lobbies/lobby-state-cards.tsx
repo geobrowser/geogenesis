@@ -36,7 +36,11 @@ export const CALL_STATE_COPY = {
   banned: 'You can’t join this call',
   ended: 'This call has ended',
   closed: 'This call has closed',
+  /** A scheduled call dropped by a schedule edit (GEO-3420). */
+  cancelled: 'This call was cancelled',
   backToSpace: 'Back to the space',
+  unavailable: 'This call isn’t available.',
+  backToCalls: 'Back to calls',
   emptyDetail: 'You’re the first one here. Share the link so others can join.',
 } as const;
 
@@ -118,10 +122,13 @@ export function LobbyBannedCard({ name }: { name: string }) {
 export function LobbyClosedCard({
   lobby,
   ended,
+  cancelled = false,
   after,
 }: {
   lobby: Pick<LobbyPageView, 'lobby_id' | 'created_by'>;
   ended: boolean;
+  /** Read for a call only: a lobby says closed either way. */
+  cancelled?: boolean;
   after?: React.ReactNode;
 }) {
   const call = useLobbyRoomPurpose().purpose === 'call';
@@ -133,7 +140,7 @@ export function LobbyClosedCard({
 
   return (
     <LobbyStateCard
-      title={ended ? copy.ended : copy.closed}
+      title={call && cancelled ? CALL_STATE_COPY.cancelled : ended ? copy.ended : copy.closed}
       actions={
         <>
           {next ? <NextLobbyAction lobby={next.lobby} remind={remind} primary /> : null}

@@ -55,7 +55,6 @@ import {
   firstBusyHour,
   hourLabel,
   hourStart,
-  timeRangeLabel,
   weekDays,
   weekStart,
 } from './debate-calendar-model';
@@ -69,6 +68,7 @@ import {
 } from './debate-calendar-week';
 import { HubPillButton } from './hub-pill-button';
 import { HubQueryState } from './hub-states';
+import { formatTimeRange } from './scheduled-debate-format';
 import { useGeoChatUserSummaries } from './use-geo-chat-user-summaries';
 
 /** Names, first names and zones for the debaters on the calendar, from one lookup each. */
@@ -245,7 +245,7 @@ function CellDebates({
 }
 
 function blockName(debate: AdminDebate, debaters: Debaters) {
-  return `${timeRangeLabel(debate.start, debate.end)}, ${pairLabel(debate, debaters)}, ${blockLabel(
+  return `${formatTimeRange(debate.start, debate.end, { periodOnce: false })}, ${pairLabel(debate, debaters)}, ${blockLabel(
     debate,
     debaters.firstNameOf
   )}${showsOffHours(debate) ? ', outside availability' : ''}`;
@@ -291,7 +291,9 @@ function AdminDebateBlock({
             </>
           ) : (
             <>
-              <span className="font-medium tabular-nums">{timeRangeLabel(debate.start, debate.end)}</span>
+              <span className="font-medium tabular-nums">
+                {formatTimeRange(debate.start, debate.end, { periodOnce: false })}
+              </span>
               <span className={cx('truncate', struck && 'line-through')}>{pair}</span>
               <span className={cx('truncate font-medium', STATE_LABEL_CLASS_NAMES[debate.state])}>{label}</span>
               {showsOffHours(debate) ? <OffHoursTag /> : null}
@@ -305,7 +307,7 @@ function AdminDebateBlock({
           align="start"
           sideOffset={8}
           collisionPadding={16}
-          aria-label={`${pair}, ${timeRangeLabel(debate.start, debate.end)}`}
+          aria-label={`${pair}, ${formatTimeRange(debate.start, debate.end, { periodOnce: false })}`}
           className="z-100 w-[340px] max-w-[calc(100vw-32px)] rounded-xl border border-grey-02 bg-white p-4 shadow-lg"
         >
           <AdminDebateDetails debate={debate} debaters={debaters} />
@@ -360,7 +362,9 @@ function HourDebates({
           sideOffset={8}
           collisionPadding={16}
           aria-label={
-            current ? `${pairLabel(current, debaters)}, ${timeRangeLabel(current.start, current.end)}` : heading
+            current
+              ? `${pairLabel(current, debaters)}, ${formatTimeRange(current.start, current.end, { periodOnce: false })}`
+              : heading
           }
           className="z-100 flex max-h-[min(36rem,calc(100vh-6rem))] w-[340px] max-w-[calc(100vw-32px)] flex-col overflow-y-auto rounded-xl border border-grey-02 bg-white p-4 shadow-lg"
         >
@@ -459,7 +463,7 @@ export function AdminDebateDetails({ debate, debaters }: { debate: AdminDebate; 
       <div className="flex items-start justify-between gap-2">
         <div className="flex min-w-0 flex-col gap-0.5">
           <Text as="p" variant="metadataMedium" className="tabular-nums">
-            {when} · {timeRangeLabel(debate.start, debate.end)}
+            {when} · {formatTimeRange(debate.start, debate.end, { periodOnce: false })}
           </Text>
           <Text as="p" variant="footnote" color="grey-04">
             Your time

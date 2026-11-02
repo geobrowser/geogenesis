@@ -239,7 +239,25 @@ describe('voiceSampleMetrics (GEO-3340)', () => {
       recv_loss_pct: null,
       recv_concealed_pct: null,
       recv_jitter_ms: null,
+      recv_audio_level_db: null,
     });
+  });
+
+  it('reports the loudest incoming track over the interval, apart from whether it played', () => {
+    const metrics = voiceSampleMetrics(
+      {},
+      undefined,
+      receivers([
+        ['a', { energy: 1.1, samplesDuration: 20 }],
+        ['b', { energy: 0, samplesDuration: 20 }],
+      ]),
+      receivers([
+        ['a', { energy: 0.1, samplesDuration: 10 }],
+        ['b', { energy: 0, samplesDuration: 10 }],
+      ])
+    );
+    // 1.0 over 10 s is a mean power of 0.1: -10 dBFS. Track b sent digital silence.
+    expect(metrics.recv_audio_level_db).toBe(-10);
   });
 });
 
@@ -277,6 +295,8 @@ describe('reading WebRTC stats reports', () => {
           concealedSamples: 48,
           silentConcealedSamples: 12,
           jitter: 0.02,
+          totalAudioEnergy: 0.3,
+          totalSamplesDuration: 0.1,
         },
         { type: 'inbound-rtp', kind: 'video', packetsReceived: 9_999 },
       ])
@@ -287,6 +307,8 @@ describe('reading WebRTC stats reports', () => {
       concealedSamples: 48,
       silentConcealedSamples: 12,
       jitter: 0.02,
+      energy: 0.3,
+      samplesDuration: 0.1,
     });
   });
 
