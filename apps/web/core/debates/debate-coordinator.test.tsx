@@ -552,6 +552,65 @@ describe('DebateCoordinator', () => {
     expect(store.get(debatesHubAtom)).toEqual({ tab: 'people' });
   });
 
+  it('holds an incoming request back behind the opponent-left notice', async () => {
+    mocks.activity = { ...idleActivity(), incoming_request_count: 1 };
+    mocks.requests = { outbound: null, incoming: [incomingRequest()] };
+    const store = createStore();
+    store.set(opponentLeftNoticeAtom, true);
+
+    render(
+      <Provider store={store}>
+        <DebateCoordinator />
+      </Provider>
+    );
+
+    expect(screen.getByRole('dialog', { name: 'Opponent left' })).toBeInTheDocument();
+    expect(screen.queryByText('Debate request')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+
+    expect(await screen.findByText('Debate request')).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Opponent left' })).not.toBeInTheDocument();
+  });
+
+  it('keeps the nudge popup off until the opponent-left notice is closed', async () => {
+    nudgePopup.enabled = [];
+    const store = createStore();
+    store.set(opponentLeftNoticeAtom, true);
+
+    render(
+      <Provider store={store}>
+        <DebateCoordinator />
+      </Provider>
+    );
+
+    await waitFor(() => expect(nudgePopup.enabled.length).toBeGreaterThan(0));
+    expect(nudgePopup.enabled).not.toContain(true);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+
+    await waitFor(() => expect(nudgePopup.enabled.at(-1)).toBe(true));
+  });
+
+  it('holds the share prompt back behind the opponent-left notice', async () => {
+    showSharePrompt();
+    const store = createStore();
+    store.set(opponentLeftNoticeAtom, true);
+
+    render(
+      <Provider store={store}>
+        <DebateCoordinator />
+      </Provider>
+    );
+
+    expect(screen.getByRole('dialog', { name: 'Opponent left' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Close share prompt' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+
+    expect(await screen.findByRole('button', { name: 'Close share prompt' })).toBeInTheDocument();
+  });
+
   // The rematch the viewer is already looking at, plus the debate it came from still reported in
   // activity. Neither may move them off the rematch page.
   // The popup and its snooze had no coverage at all: the harness mocks the request hooks and never

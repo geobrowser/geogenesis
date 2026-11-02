@@ -546,8 +546,14 @@ export function DebateCoordinator() {
         rooms={joinableRooms}
         // Not over an incoming request or the share prompt, which want an answer of their own.
         // Off on any room page, a lobby's or a space call's too: a live room is not the place.
+        // Not over the opponent-left notice either, which goes first: see the request popup below.
         enabled={
-          roomIdAtPath === null && !isSpaceCallPath(pathname) && !activeFlow && !promptedRequest && !visibleSharePrompt
+          roomIdAtPath === null &&
+          !isSpaceCallPath(pathname) &&
+          !activeFlow &&
+          !promptedRequest &&
+          !visibleSharePrompt &&
+          !opponentLeftNotice
         }
         onOpenChange={setNudgeOpen}
       />
@@ -623,8 +629,10 @@ export function DebateCoordinator() {
           onNotNow={() => setSnoozedChallengeId(promptedChallenge.id)}
         />
       )}
-      {/* Behind a nudge popup that is being answered (one that is not steps aside for this). */}
-      {promptedRequest && currentUserId && !nudgeOpen && (
+      {/* Behind a nudge popup that is being answered (one that is not steps aside for this). Behind
+          the opponent-left notice too: it says why the viewer is here, and is one click to close.
+          A request mounted under it would sit hidden, and could expire there. */}
+      {promptedRequest && currentUserId && !nudgeOpen && !opponentLeftNotice && (
         <IncomingRequestPopup
           key={promptedRequest.id}
           request={promptedRequest}
@@ -632,7 +640,7 @@ export function DebateCoordinator() {
           onNotNow={() => setSnoozedRequestIds(current => [...current, promptedRequest.id])}
         />
       )}
-      {!activeFlow && !promptedRequest && !nudgeOpen && visibleSharePrompt && (
+      {!activeFlow && !promptedRequest && !nudgeOpen && !opponentLeftNotice && visibleSharePrompt && (
         <DebateSharePromptDialog
           key={visibleSharePrompt.id}
           prompt={visibleSharePrompt}
