@@ -59,7 +59,7 @@ export type DebateGatewayScope =
    * A space chat room (GEO-3422). Sent in geo-chat's original room shape, without `scope`, and
    * echoed that way in READY and ERROR.
    */
-  | { scope: 'room'; space_id: string; room_id: string; room_kind: 'member' | 'editor' };
+  | { scope: 'chat-room'; space_id: string; room_id: string; room_kind: 'member' | 'editor' };
 
 export type MatchmakingSection = 'people' | 'claims' | 'matches';
 
@@ -837,7 +837,7 @@ export class DebateGatewayClient {
       this.queueQuery(spaceCallKeys.past(scope.space_id));
       return;
     }
-    if (scope.scope === 'room') {
+    if (scope.scope === 'chat-room') {
       // Room events are not replayed across a reconnect.
       this.queueAccountQuery('space-chat', dashlessId(scope.room_id));
       return;
@@ -1156,7 +1156,7 @@ export class DebateGatewayClient {
       if (this.sentScopes.has(key) || this.refusedScopes.has(key) || this.subscriptionRetries.get(key)?.timer) return;
       this.sentScopes.add(key);
     }
-    if (scope.scope === 'room') {
+    if (scope.scope === 'chat-room') {
       const { space_id, room_id, room_kind } = scope;
       this.sendEnvelope(op, { space_id, room_id, room_kind, resume_after_seq: null });
       return;
@@ -1481,7 +1481,7 @@ export function useSpaceChatRoomScope(
   const roomKind = room?.kind ?? null;
   React.useEffect(() => {
     if (!enabled || !spaceId || !roomId || !roomKind) return;
-    return debateGateway.retainScope({ scope: 'room', space_id: spaceId, room_id: roomId, room_kind: roomKind });
+    return debateGateway.retainScope({ scope: 'chat-room', space_id: spaceId, room_id: roomId, room_kind: roomKind });
   }, [enabled, roomId, roomKind, spaceId]);
 }
 
@@ -1566,7 +1566,7 @@ function gatewayWebSocketUrl(apiBaseUrl: string, accessToken: string) {
 function scopeKey(scope: DebateGatewayScope) {
   if (scope.scope === 'space') return `space:${canonicalSpaceId(scope.space_id)}`;
   if (scope.scope === 'matchmaking') return 'matchmaking';
-  if (scope.scope === 'room') return `room:${dashlessId(scope.room_id.trim().toLowerCase())}`;
+  if (scope.scope === 'chat-room') return `chat-room:${dashlessId(scope.room_id.trim().toLowerCase())}`;
   return `debate:${dashlessId(scope.debate_id.trim())}`;
 }
 
@@ -1597,7 +1597,7 @@ function parseScope(value: unknown): DebateGatewayScope | null {
     typeof value.space_id === 'string' &&
     (value.room_kind === 'member' || value.room_kind === 'editor')
   ) {
-    return { scope: 'room', space_id: value.space_id, room_id: value.room_id, room_kind: value.room_kind };
+    return { scope: 'chat-room', space_id: value.space_id, room_id: value.room_id, room_kind: value.room_kind };
   }
   return null;
 }

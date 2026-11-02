@@ -1513,7 +1513,12 @@ describe('DebateGatewayClient', () => {
     const dashless = '0192aaaa000070008000000000000001';
     const key = ['debates', 'account', 'user-a', 'space-chat', dashless];
     queryClient.setQueryData<SpaceChatState>(key, { messages: [], nextBefore: null, pending: [] });
-    const release = client.retainScope({ scope: 'room', space_id: 'space-1', room_id: roomId, room_kind: 'member' });
+    const release = client.retainScope({
+      scope: 'chat-room',
+      space_id: 'space-1',
+      room_id: roomId,
+      room_kind: 'member',
+    });
 
     client.start(
       vi.fn(async () => 'privy-token'),
