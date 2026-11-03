@@ -8,7 +8,7 @@ import { useAtomValue } from 'jotai';
 import dynamic from 'next/dynamic';
 import { usePathname, useSearchParams } from 'next/navigation';
 
-import { reloadedCodeStep } from '~/core/auth/code-step';
+import { pendingCodeElsewhere } from '~/core/auth/code-step';
 import { DebateCoordinator } from '~/core/debates/debate-coordinator';
 import { LastPageOutsideDebatesTracker } from '~/core/debates/lobbies/lobby-exit';
 import { useDebatesHub } from '~/core/debates/matchmaking/use-debates-hub';
@@ -278,7 +278,7 @@ function DeepLinkGate() {
 
 // A tab reloaded at the code step (GEO-3573). Read once: the recovery claims the step on mount.
 function CodeStepRecoveryGate() {
-  const [reloaded] = React.useState(() => reloadedCodeStep() !== null);
+  const [reloaded] = React.useState(() => pendingCodeElsewhere() !== null);
   return reloaded ? <CodeStepRecovery /> : null;
 }
 

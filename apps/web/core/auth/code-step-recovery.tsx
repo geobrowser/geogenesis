@@ -6,6 +6,7 @@ import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { useLoginWithEmail, usePrivy } from '~/core/wallet/auth-hooks';
 
 import {
+  codeOwnerChecked,
   hideRecoveryNotice,
   landedOnModalLink,
   recoveryNotice,
@@ -41,14 +42,19 @@ export function CodeStepRecovery() {
 
   React.useEffect(() => {
     if (!ready || authenticated) return;
+    let cancelled = false;
     const timer = setTimeout(
-      () => {
-        // Still unclaimed: no link opened sign-in, and no other tab took the step over.
-        if (reloadedCodeStep()) openSignInRef.current();
-      },
+      () =>
+        void codeOwnerChecked().then(() => {
+          // Still unclaimed and its page gone: no link opened sign-in, and no other tab took it over.
+          if (!cancelled && reloadedCodeStep()) openSignInRef.current();
+        }),
       landedOnModalLink() ? LINK_SIGN_IN_GRACE_MS : 0
     );
-    return () => clearTimeout(timer);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
   }, [authenticated, ready]);
 
   // Gone once the dialog closes or the new code is on its way.

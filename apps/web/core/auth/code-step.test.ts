@@ -12,6 +12,11 @@ async function load(): Promise<{ step: CodeStep; attempts: AuthAttemptModule }> 
   return { step: await import('./code-step'), attempts: await import('~/core/auth-attempt') };
 }
 
+/** The page that holds the code goes away, as a reload or a closed tab does. */
+function leave() {
+  window.dispatchEvent(new Event('pagehide'));
+}
+
 function steps() {
   return analytics.captureExperimental.mock.calls
     .filter(([event]) => event === 'experimental.auth_step')
@@ -68,6 +73,7 @@ describe('code step', () => {
     first.attempts.beginAuthAttempt({ component: 'save_votes', auth_intent: 'save_votes', page_view_id: 'old' });
     first.step.codeScreenShown('a@b.co');
     first.step.codeStepHidden();
+    leave();
 
     const { step } = await load();
     expect(step.reloadedCodeStep()).not.toBeNull();
@@ -84,26 +90,60 @@ describe('code step', () => {
     expect(steps().filter(props => props.returned_to === 'new_page')).toHaveLength(1);
   });
 
-  it('lets only the first page to claim it pick the step up', async () => {
+  it('lets only the first page to claim it pick the step up, until that page goes too', async () => {
     const first = await load();
     first.step.codeScreenShown('a@b.co');
+    leave();
 
     const second = await load();
     expect(second.step.takeCodeRecovery()).not.toBeNull();
 
-    // A third tab, opened later, behaves normally.
+    // A third tab, opened while the second is open, behaves normally.
+    const third = await load();
+    await third.step.codeOwnerChecked();
+    expect(third.step.reloadedCodeStep()).toBeNull();
+    expect(third.step.takeCodeRecovery()).toBeNull();
+
+    // The second goes without sending a new code (a refused send, say): its claim is released.
+    leave();
     const { step } = await load();
-    expect(step.reloadedCodeStep()).toBeNull();
-    expect(step.takeCodeRecovery()).toBeNull();
+    expect(step.takeCodeRecovery()).toMatchObject({ email: 'a@b.co' });
   });
 
-  // Each recovered page sends a new code; the page after it must be able to pick that one up too.
+  it('leaves a code alone while the page that sent it is still open', async () => {
+    const first = await load();
+    first.step.codeScreenShown('a@b.co');
+
+    const { step } = await load();
+    expect(step.pendingCodeElsewhere()).not.toBeNull();
+    await step.codeOwnerChecked();
+    expect(step.reloadedCodeStep()).toBeNull();
+    expect(step.takeCodeRecovery()).toBeNull();
+    expect(step.readPendingCode()).not.toHaveProperty('claimedBy');
+  });
+
+  it('recovers when the sending page cannot answer, as a suspended tab cannot', async () => {
+    const first = await load();
+    first.step.codeScreenShown('a@b.co');
+    // As if written by a page whose scripts are no longer running.
+    localStorage.setItem(
+      'geo:auth-code-step:v1',
+      JSON.stringify({ ...first.step.readPendingCode(), documentId: 'suspended' })
+    );
+
+    const { step } = await load();
+    expect(step.reloadedCodeStep()).toBeNull();
+    await step.codeOwnerChecked();
+    expect(step.reloadedCodeStep()).toMatchObject({ email: 'a@b.co' });
+  });
+
   it('recovers again on every later page, not just the first', async () => {
     const first = await load();
     first.attempts.beginAuthAttempt({ component: 'debate_matchmaking', auth_trigger: 'deep_link' });
     first.step.codeScreenShown('a@b.co');
 
     for (let cycle = 0; cycle < 3; cycle++) {
+      leave();
       const { step, attempts } = await load();
       const pending = step.takeCodeRecovery();
       expect(pending, `cycle ${cycle}`).toMatchObject({ email: 'a@b.co' });
@@ -140,6 +180,7 @@ describe('code step', () => {
     const first = await load();
     first.attempts.beginAuthAttempt({ component: 'sign_in_deep_link', auth_trigger: 'deep_link' });
     first.step.codeScreenShown('a@b.co');
+    leave();
 
     const { step, attempts } = await load();
     const pending = step.takeCodeRecovery()!;

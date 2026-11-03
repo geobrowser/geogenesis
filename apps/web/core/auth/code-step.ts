@@ -31,6 +31,8 @@ export type PendingCode = {
   claimedBy?: string;
   /** The attempt that document opened to pick it up. */
   recoveryAttemptId?: string;
+  /** When its owner (`claimedBy`, else `documentId`) fired `pagehide`. Cleared if it comes back. */
+  ownerGoneAt?: number;
 };
 
 /** What a recovered sign-in needs to report under the entry that started it, and nothing else. */
@@ -48,6 +50,83 @@ const ATTRIBUTION_KEYS = [
 
 const DOCUMENT_ID =
   typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : String(Math.random());
+
+/** The document holding the code: the one that claimed it, else the one that sent it. */
+function owner(pending: PendingCode) {
+  return pending.claimedBy ?? pending.documentId;
+}
+
+/** How long a page waits for the code's owner to answer before treating it as gone. */
+export const OWNER_PING_TIMEOUT_MS = 300;
+
+type OwnerState = 'checking' | 'alive' | 'gone';
+let ownerCheck: { owner: string; state: OwnerState } | null = null;
+const ownerCheckListeners = new Set<() => void>();
+
+function settleOwnerCheck(checked: string, state: OwnerState) {
+  if (ownerCheck?.owner !== checked || ownerCheck.state !== 'checking') return;
+  ownerCheck.state = state;
+  ownerCheckListeners.forEach(listener => listener());
+}
+
+const channel =
+  typeof window !== 'undefined' && typeof BroadcastChannel !== 'undefined'
+    ? new BroadcastChannel('geo:auth-code-step')
+    : null;
+
+// A page still open (a background desktop tab, say) answers for its code, so a new tab leaves it
+// alone. A suspended or closed one cannot, which is the iPhone case recovery is for.
+channel?.addEventListener('message', (event: MessageEvent) => {
+  const message = event.data as { type?: string; owner?: string } | null;
+  if (message?.type === 'alive' && message.owner) return settleOwnerCheck(message.owner, 'alive');
+  if (message?.type !== 'ping' || message.owner !== DOCUMENT_ID) return;
+  const pending = readPendingCode();
+  if (pending && owner(pending) === DOCUMENT_ID) channel.postMessage({ type: 'alive', owner: DOCUMENT_ID });
+});
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('pagehide', () => {
+    const pending = readPendingCode();
+    if (pending && owner(pending) === DOCUMENT_ID) write({ ...pending, ownerGoneAt: Date.now() });
+  });
+  // Back from the back-forward cache: still the owner unless another page claimed it meanwhile.
+  window.addEventListener('pageshow', event => {
+    if (!event.persisted) return;
+    const pending = readPendingCode();
+    if (pending && owner(pending) === DOCUMENT_ID && pending.ownerGoneAt !== undefined) {
+      write({ ...pending, ownerGoneAt: undefined });
+    }
+  });
+}
+
+function ownerState(pending: PendingCode): OwnerState {
+  if (pending.ownerGoneAt !== undefined || !channel) return 'gone';
+  const checked = owner(pending);
+  if (ownerCheck?.owner === checked) return ownerCheck.state;
+  ownerCheck = { owner: checked, state: 'checking' };
+  channel.postMessage({ type: 'ping', owner: checked });
+  setTimeout(() => settleOwnerCheck(checked, 'gone'), OWNER_PING_TIMEOUT_MS);
+  return 'checking';
+}
+
+/** A code held by another page, live or not: enough to start loading Privy for a likely recovery. */
+export function pendingCodeElsewhere(): PendingCode | null {
+  const pending = readPendingCode();
+  return pending && owner(pending) !== DOCUMENT_ID ? pending : null;
+}
+
+/** Resolves once this page knows whether the code's owner is still open. */
+export function codeOwnerChecked(): Promise<void> {
+  const pending = pendingCodeElsewhere();
+  if (!pending || ownerState(pending) !== 'checking') return Promise.resolve();
+  return new Promise(resolve => {
+    const listener = () => {
+      ownerCheckListeners.delete(listener);
+      resolve();
+    };
+    ownerCheckListeners.add(listener);
+  });
+}
 
 /** The query this document loaded with, before any deep link cleared its trigger. */
 const LANDING_SEARCH = typeof window === 'undefined' ? '' : window.location.search;
@@ -164,12 +243,12 @@ export function codeStepVisible() {
 }
 
 /**
- * A code asked for by an earlier document (this tab reloaded, or a new tab from the mail link),
- * still inside the window and not yet taken over by another document. Read-only.
+ * A code another page holds, inside the window, whose page is gone (reloaded, closed, suspended).
+ * Null while that is still being checked; see `codeOwnerChecked`.
  */
-export function reloadedCodeStep(now = Date.now()): PendingCode | null {
-  const pending = readPendingCode(now);
-  return pending && pending.documentId !== DOCUMENT_ID && !pending.claimedBy ? pending : null;
+export function reloadedCodeStep(): PendingCode | null {
+  const pending = pendingCodeElsewhere();
+  return pending && ownerState(pending) === 'gone' ? pending : null;
 }
 
 /**
@@ -181,7 +260,7 @@ export function takeCodeRecovery(): PendingCode | null {
   if (current?.claimedBy === DOCUMENT_ID && current.documentId !== DOCUMENT_ID) return current;
   const pending = reloadedCodeStep();
   if (!pending) return null;
-  write({ ...pending, claimedBy: DOCUMENT_ID, leftAt: undefined });
+  write({ ...pending, claimedBy: DOCUMENT_ID, leftAt: undefined, ownerGoneAt: undefined });
   // localStorage has no compare-and-set; a tab that lost the race reads the winner's claim here.
   const claimed = readPendingCode();
   if (claimed?.claimedBy !== DOCUMENT_ID) return null;
@@ -248,3 +327,6 @@ export function subscribeRecoveryNotice(listener: () => void) {
   noticeListeners.add(listener);
   return () => void noticeListeners.delete(listener);
 }
+
+// Ask early, so the answer is in by the time Privy is ready to open a recovered sign-in.
+if (pendingCodeElsewhere()) reloadedCodeStep();

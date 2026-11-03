@@ -39,6 +39,7 @@ vi.mock('~/core/auth-attempt', () => ({
 vi.mock('./code-step', () => ({
   ...mocks.step,
   landedOnModalLink: () => mocks.modalLink,
+  codeOwnerChecked: () => Promise.resolve(),
   recoveryNotice: () => mocks.notice,
   hideRecoveryNotice: () => setNotice(null),
   subscribeRecoveryNotice: (listener: () => void) => {
@@ -65,39 +66,39 @@ afterEach(() => {
 });
 
 describe('CodeStepRecovery', () => {
-  it('opens sign-in for an unclaimed code step once Privy is ready', () => {
+  it('opens sign-in for an unclaimed code step once Privy is ready', async () => {
     vi.useFakeTimers();
     mocks.step.reloadedCodeStep.mockReturnValue(PENDING);
     mocks.privy = { ready: false, authenticated: false, isModalOpen: false };
     const { rerender } = render(<CodeStepRecovery />);
-    act(() => void vi.runAllTimers());
+    await act(async () => void vi.runAllTimers());
     expect(mocks.openSignIn).not.toHaveBeenCalled();
 
     mocks.privy = { ready: true, authenticated: false, isModalOpen: false };
     rerender(<CodeStepRecovery />);
-    act(() => void vi.runAllTimers());
+    await act(async () => void vi.runAllTimers());
     expect(mocks.openSignIn).toHaveBeenCalledTimes(1);
   });
 
-  it('leaves a ?modal= link to open sign-in, and opens it only if the link did not', () => {
+  it('leaves a ?modal= link to open sign-in, and opens it only if the link did not', async () => {
     vi.useFakeTimers();
     mocks.modalLink = true;
     mocks.step.reloadedCodeStep.mockReturnValue(PENDING);
     render(<CodeStepRecovery />);
-    act(() => void vi.advanceTimersByTime(LINK_SIGN_IN_GRACE_MS - 1));
+    await act(async () => void vi.advanceTimersByTime(LINK_SIGN_IN_GRACE_MS - 1));
     expect(mocks.openSignIn).not.toHaveBeenCalled();
     // The link's sign-in claimed it (or another tab did): nothing more to open.
     mocks.step.reloadedCodeStep.mockReturnValue(null);
-    act(() => void vi.advanceTimersByTime(1));
+    await act(async () => void vi.advanceTimersByTime(1));
     expect(mocks.openSignIn).not.toHaveBeenCalled();
   });
 
-  it('opens nothing for someone already signed in', () => {
+  it('opens nothing for someone already signed in', async () => {
     vi.useFakeTimers();
     mocks.step.reloadedCodeStep.mockReturnValue(PENDING);
     mocks.privy = { ready: true, authenticated: true, isModalOpen: false };
     render(<CodeStepRecovery />);
-    act(() => void vi.runAllTimers());
+    await act(async () => void vi.runAllTimers());
     expect(mocks.openSignIn).not.toHaveBeenCalled();
   });
 
