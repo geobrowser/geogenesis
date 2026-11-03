@@ -24,7 +24,6 @@ import { LobbyGuestBanner } from './lobby-guest';
 import { useDebateLobbyGuestView, useIsLobbyGuest, type useLobbyGuestSession } from './lobby-guest-hooks';
 import { useModerationNotice } from './lobby-moderation';
 import { type LobbyGuestNotice, type LobbyHandoffNotice, LobbyNotices, LobbyToast } from './lobby-notices';
-import { useIsCallRoom } from './lobby-purpose';
 import { LobbyShowPeopleContext, LobbySlot, LobbySlotsProvider, useLobbySlotTargets } from './lobby-slots';
 import { LobbyEmptyRoom } from './lobby-state-cards';
 import { type LobbyPageView, isMemberView } from './lobby-view';
@@ -36,6 +35,7 @@ import {
   NO_LOBBY_VOICE,
   useLobbyVoiceStates,
 } from './lobby-voice';
+import { useRoomCapabilities } from './room-capabilities';
 
 const HANDOFF_NOTICE_MS = 8_000;
 const NO_MODERATION = { last_moderation: null };
@@ -112,10 +112,10 @@ export function LobbyRoomShell({
   queuedOutcome?: string | null;
   onDismissQueuedOutcome?: () => void;
   /** Passed to the member voice room: what a call adds to it. */
-  voiceExtras?: Pick<React.ComponentProps<typeof LobbyVoice>, 'screenShare' | 'preJoin'>;
+  voiceExtras?: Pick<React.ComponentProps<typeof LobbyVoice>, 'preJoin'>;
 }) {
   const guest = useIsLobbyGuest();
-  const call = useIsCallRoom();
+  const { noun, debates, screenShare } = useRoomCapabilities();
   const currentUserId = useCurrentGeoChatUserId();
   const { authenticated } = useGeoChatAuth();
   const phone = useIsPhoneLayout();
@@ -153,7 +153,7 @@ export function LobbyRoomShell({
           }
         : guestEnded && guestEndedAt !== null && guestViewAt >= guestEndedAt
           ? {
-              message: call ? LOBBY_ROOM_COPY.callGuestListeningOff : LOBBY_ROOM_COPY.guestListeningOff,
+              message: noun === 'call' ? LOBBY_ROOM_COPY.callGuestListeningOff : LOBBY_ROOM_COPY.guestListeningOff,
               retry: null,
             }
           : null;
@@ -197,14 +197,14 @@ export function LobbyRoomShell({
     !memberLobby.viewer.hosting ? (
       <LobbyHandControl lobby={memberLobby} />
     ) : null;
-  const leaveLabel = call ? 'Leave call' : 'Leave lobby';
+  const leaveLabel = noun === 'call' ? 'Leave call' : 'Leave lobby';
   const leave = guest ? (
     <Link href={exitHref} replace aria-label={leaveLabel} className={hubPillClassName('secondary', 'md:h-10')}>
       <LeaveLabel full={leaveLabel} />
     </Link>
   ) : (
     <HubPillButton
-      analyticsLabel={call ? 'Call leave' : 'Lobby leave'}
+      analyticsLabel={noun === 'call' ? 'Call leave' : 'Lobby leave'}
       aria-label={leaveLabel}
       onClick={onLeave}
       className="md:h-10"
@@ -238,7 +238,7 @@ export function LobbyRoomShell({
             onTab={onTab}
             asideLabel={aside.tab}
             asideMark={aside.mark}
-            label={call ? 'Call' : 'Lobby'}
+            label={noun === 'call' ? 'Call' : 'Lobby'}
           />
         ) : null}
 
@@ -252,7 +252,7 @@ export function LobbyRoomShell({
           <section
             {...(tabbed
               ? { role: 'tabpanel', id: tabIds.people.panel, 'aria-labelledby': tabIds.people.tab }
-              : { 'aria-label': call ? 'People in the call' : 'People in the lobby' })}
+              : { 'aria-label': `People in the ${noun}` })}
             hidden={!onPeopleTab}
             className={cx('flex min-w-0 flex-col gap-5 px-8 py-5 md:gap-3.5 md:px-4 md:py-3.5', columnScroll)}
           >
@@ -268,7 +268,7 @@ export function LobbyRoomShell({
                   onAutoReconnect={autoReconnectGuest}
                   onRemoved={guestSession.checkNow}
                   quiet={inVoice}
-                  screenShare={voiceExtras?.screenShare}
+                  screenShare={screenShare}
                 />
               ) : null}
               {memberLobby && inVoice ? (
@@ -280,6 +280,7 @@ export function LobbyRoomShell({
                   onConnectedChange={voice.setVoiceConnected}
                   onAudible={guestVoice ? guestSession.roomDone : undefined}
                   onUnavailable={guestVoice ? guestSession.roomDone : undefined}
+                  screenShare={screenShare}
                   {...voiceExtras}
                 >
                   <VoiceAwayWarning awayAt={voice.awayAt} />
@@ -309,6 +310,7 @@ export function LobbyRoomShell({
               )}
             >
               {/* The roster's speaker thumbnails (GEO-3399), drawn here so they stay in view on the aside. */}
+              {tabbed ? <div ref={slots.shareNoticeRef} className="empty:hidden" /> : null}
               {tabbed ? <div ref={slots.speakerStripRef} className="empty:hidden" /> : null}
               <HubScrollSelectorProvider value={columns ? HUB_SCROLL_SELECTOR : undefined}>
                 {aside.content}
@@ -321,7 +323,7 @@ export function LobbyRoomShell({
           controlsRef={slots.controlsRef}
           hand={handControl}
           availability={phone ? availability : null}
-          showHint={!guest && !call}
+          showHint={!guest && debates}
           leave={leave}
           banner={guest ? <LobbyGuestBanner lobbyId={lobby.lobby_id} listening={guestVoiceStates.connected} /> : null}
           notices={
@@ -493,7 +495,7 @@ const VOICE_AWAY_WARNING_MS = 2 * 60_000;
  */
 function VoiceAwayWarning({ awayAt }: { awayAt: string | null }) {
   const { connected } = useLobbyVoiceStates();
-  const call = useIsCallRoom();
+  const { debates } = useRoomCapabilities();
   const at = awayAt ? Date.parse(awayAt) : Number.NaN;
   const [now, setNow] = React.useState(() => Date.now());
   // Hidden on the tap until the next heartbeat brings a later `voice_away_at`.
@@ -507,8 +509,8 @@ function VoiceAwayWarning({ awayAt }: { awayAt: string | null }) {
     return () => clearTimeout(timeout);
   }, [at]);
 
-  // Away only affects debate requests, which a call has none of.
-  if (call) return null;
+  // Away only affects debate requests.
+  if (!debates) return null;
   if (!connected || Number.isNaN(at) || ackedAt === at || now < at - VOICE_AWAY_WARNING_MS) return null;
   return (
     <LobbySlot name="notices">

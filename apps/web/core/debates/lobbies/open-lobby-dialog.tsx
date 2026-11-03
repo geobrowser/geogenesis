@@ -40,6 +40,25 @@ export function localTimeZone() {
   }
 }
 
+/** The trimmed name, or why it cannot be used. Shared with the edit dialog (GEO-3540). */
+export function checkLobbyName(name: string): { value: string } | { error: string } {
+  const trimmed = name.trim();
+  if (!trimmed) return { error: 'Name the lobby.' };
+  if ([...trimmed].length > NAME_MAX_CHARS) return { error: `Keep the name to ${NAME_MAX_CHARS} characters.` };
+  return { value: trimmed };
+}
+
+/** The start as an ISO instant, or why it cannot be used. Shared with the edit dialog (GEO-3540). */
+export function checkLobbyStart(startsAtLocal: string, now: number): { value: string } | { error: string } {
+  const startsAt = new Date(startsAtLocal);
+  if (!startsAtLocal || Number.isNaN(startsAt.getTime())) return { error: 'Pick a start time.' };
+  if (startsAt.getTime() <= now) return { error: 'Pick a time in the future.' };
+  if (startsAt.getTime() > now + MAX_SCHEDULE_AHEAD_DAYS * 86_400_000) {
+    return { error: `Pick a time within ${MAX_SCHEDULE_AHEAD_DAYS} days.` };
+  }
+  return { value: startsAt.toISOString() };
+}
+
 /** The request body for the form, or why it cannot be sent yet. */
 export function lobbyRequestFor(
   name: string,
@@ -47,35 +66,73 @@ export function lobbyRequestFor(
   startsAtLocal: string,
   now: number = Date.now()
 ): { body: { name: string; starts_at?: string } } | { error: string } {
-  const trimmed = name.trim();
-  if (!trimmed) return { error: 'Name the lobby.' };
-  if ([...trimmed].length > NAME_MAX_CHARS) return { error: `Keep the name to ${NAME_MAX_CHARS} characters.` };
-  if (when === 'now') return { body: { name: trimmed } };
-  const startsAt = new Date(startsAtLocal);
-  if (!startsAtLocal || Number.isNaN(startsAt.getTime())) return { error: 'Pick a start time.' };
-  if (startsAt.getTime() <= now) return { error: 'Pick a time in the future.' };
-  if (startsAt.getTime() > now + MAX_SCHEDULE_AHEAD_DAYS * 86_400_000) {
-    return { error: `Pick a time within ${MAX_SCHEDULE_AHEAD_DAYS} days.` };
-  }
-  return { body: { name: trimmed, starts_at: startsAt.toISOString() } };
+  const checkedName = checkLobbyName(name);
+  if ('error' in checkedName) return checkedName;
+  if (when === 'now') return { body: { name: checkedName.value } };
+  const start = checkLobbyStart(startsAtLocal, now);
+  if ('error' in start) return start;
+  return { body: { name: checkedName.value, starts_at: start.value } };
 }
 
-/** Open a lobby now or schedule one, then hand over its link (GEO-3133, `lobbyHosting`). */
-export function OpenLobbyDialog({ onClose }: { onClose: () => void }) {
-  const titleId = React.useId();
-  const [popoverContainer, setPopoverContainer] = React.useState<HTMLDivElement | null>(null);
-  const create = useCreateDebateLobby();
-  const [name, setName] = React.useState('');
-  const [when, setWhen] = React.useState<'now' | 'later'>('now');
-  const [initialStart] = React.useState(() => toDateTimeLocalValue(new Date(Date.now() + 60 * 60_000)));
-  const [startDate, setStartDate] = React.useState(initialStart.slice(0, 10));
-  const [startTime, setStartTime] = React.useState(initialStart.slice(11));
+/** The Date and Start time inputs' state, from `initialLocal`. `startsAtLocal` is empty until both are set. */
+export function useLobbyStartInput(initialLocal: string) {
+  const [date, setDate] = React.useState(initialLocal.slice(0, 10));
+  const [time, setTime] = React.useState(initialLocal.slice(11));
+  return { date, time, setDate, setTime, startsAtLocal: date && time ? `${date}T${time}` : '' };
+}
+
+/** Date and Start time, in the viewer's zone, with `note` under them. */
+export function LobbyStartFields({
+  start,
+  note,
+}: {
+  start: ReturnType<typeof useLobbyStartInput>;
+  note: React.ReactNode;
+}) {
   const [timeZone] = React.useState(localTimeZone);
-  const [claimLists, setClaimLists] = React.useState<PickedClaimList[]>([]);
-  const [formError, setFormError] = React.useState<string | null>(null);
-  const [copied, setCopied] = React.useState(false);
-  const [shareId, setShareId] = React.useState(() => crypto.randomUUID());
-  const getShareContext = useActionContext('share_dialog', 'lobby', create.data?.lobby_id ?? '', { overlay: 'modal' });
+  return (
+    <div className="grid gap-1.5">
+      <div className="flex items-end gap-3">
+        <label className="grid min-w-0 flex-1 gap-1.5">
+          <Text as="span" variant="footnoteMedium">
+            Date
+          </Text>
+          <Input type="date" value={start.date} onChange={event => start.setDate(event.target.value)} />
+        </label>
+        <label className="grid min-w-0 flex-1 gap-1.5">
+          <Text as="span" variant="footnoteMedium">
+            Start time
+            {timeZone ? (
+              <Text as="span" variant="footnote" color="grey-04">
+                {' '}
+                · {timeZone}
+              </Text>
+            ) : null}
+          </Text>
+          <Input type="time" value={start.time} onChange={event => start.setTime(event.target.value)} />
+        </label>
+      </div>
+      <Text as="p" variant="footnote" color="grey-04">
+        {note}
+      </Text>
+    </div>
+  );
+}
+
+/**
+ * The lobby dialogs' modal frame (opening and editing, GEO-3540): closed by Escape or a press
+ * outside, with popovers inside it portaled into it.
+ */
+export function LobbyDialogFrame({
+  titleId,
+  onClose,
+  children,
+}: {
+  titleId: string;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  const [popoverContainer, setPopoverContainer] = React.useState<HTMLDivElement | null>(null);
 
   useScrollLock();
 
@@ -89,6 +146,41 @@ export function OpenLobbyDialog({ onClose }: { onClose: () => void }) {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [onClose]);
 
+  return createPortal(
+    <div
+      ref={setPopoverContainer}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={titleId}
+      className="fixed inset-0 z-1200 flex items-center justify-center bg-text/45 p-5 backdrop-blur-sm"
+      onPointerDown={event => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <ElevatedPopoverPortalContext.Provider value={popoverContainer}>
+        <section className="grid max-h-full w-[min(560px,100%)] gap-5 overflow-y-auto rounded-lg bg-white p-5 text-text shadow-card">
+          {children}
+        </section>
+      </ElevatedPopoverPortalContext.Provider>
+    </div>,
+    document.body
+  );
+}
+
+/** Open a lobby now or schedule one, then hand over its link (GEO-3133, `lobbyHosting`). */
+export function OpenLobbyDialog({ onClose }: { onClose: () => void }) {
+  const titleId = React.useId();
+  const create = useCreateDebateLobby();
+  const [name, setName] = React.useState('');
+  const [when, setWhen] = React.useState<'now' | 'later'>('now');
+  const [initialStart] = React.useState(() => toDateTimeLocalValue(new Date(Date.now() + 60 * 60_000)));
+  const start = useLobbyStartInput(initialStart);
+  const [claimLists, setClaimLists] = React.useState<PickedClaimList[]>([]);
+  const [formError, setFormError] = React.useState<string | null>(null);
+  const [copied, setCopied] = React.useState(false);
+  const [shareId, setShareId] = React.useState(() => crypto.randomUUID());
+  const getShareContext = useActionContext('share_dialog', 'lobby', create.data?.lobby_id ?? '', { overlay: 'modal' });
+
   const created = create.data ?? null;
   const share = created
     ? createShareLink(lobbyShareUrl(created.lobby_id), 'lobby', created.lobby_id, 'copy_link', shareId)
@@ -97,7 +189,7 @@ export function OpenLobbyDialog({ onClose }: { onClose: () => void }) {
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
-    const request = lobbyRequestFor(name, when, startDate && startTime ? `${startDate}T${startTime}` : '');
+    const request = lobbyRequestFor(name, when, start.startsAtLocal);
     if ('error' in request) {
       setFormError(request.error);
       return;
@@ -118,142 +210,104 @@ export function OpenLobbyDialog({ onClose }: { onClose: () => void }) {
     }
   };
 
-  return createPortal(
-    <div
-      ref={setPopoverContainer}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby={titleId}
-      className="fixed inset-0 z-1200 flex items-center justify-center bg-text/45 p-5 backdrop-blur-sm"
-      onPointerDown={event => {
-        if (event.target === event.currentTarget) onClose();
-      }}
-    >
-      <section className="grid max-h-full w-[min(560px,100%)] gap-5 overflow-y-auto rounded-lg bg-white p-5 text-text shadow-card">
-        <div className="grid gap-1.5">
-          <h2 id={titleId}>
-            <Text as="span" variant="smallTitle">
-              {created ? 'Your lobby is ready' : 'Open a debate lobby'}
-            </Text>
-          </h2>
-          {created ? null : (
-            <Text as="p" variant="metadata" color="grey-04">
-              A voice room anyone can join. People pair off into recorded debates and come back.
-            </Text>
-          )}
-        </div>
-
-        {created && link ? (
-          <>
-            <div className="grid gap-1">
-              <Text as="p" variant="metadata">
-                {created.name}
-              </Text>
-              <Text as="p" variant="footnote" color="grey-04">
-                {lobbyScheduleLabel({ ...created, open: created.access.status === 'admitted' }) ?? 'Open now'}
-              </Text>
-            </div>
-            <div className="flex items-center gap-2">
-              <Input readOnly value={link} aria-label="Lobby link" onFocus={event => event.currentTarget.select()} />
-              <button type="button" onClick={copy} className={DIALOG_SECONDARY_ACTION_BUTTON_CLASS_NAME}>
-                {copied ? 'Copied' : 'Copy'}
-              </button>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <button type="button" onClick={onClose} className={DIALOG_SECONDARY_ACTION_BUTTON_CLASS_NAME}>
-                Done
-              </button>
-              <Link
-                href={debateRoomPath(created.lobby_id)}
-                onClick={() => {
-                  markLobbyEntry(created.lobby_id, 'created');
-                  onClose();
-                }}
-                className={`${DIALOG_ACTION_BUTTON_CLASS_NAME} text-center`}
-              >
-                Go to lobby
-              </Link>
-            </div>
-          </>
-        ) : (
-          <form className="grid gap-4" onSubmit={submit}>
-            <label className="grid gap-1.5">
-              <Text as="span" variant="footnoteMedium">
-                Name
-              </Text>
-              <Input value={name} placeholder="Debate hour" onChange={event => setName(event.target.value)} autoFocus />
-            </label>
-
-            <RadioGroup.Root
-              aria-label="When"
-              value={when}
-              onValueChange={value => setWhen(value === 'later' ? 'later' : 'now')}
-              className="grid gap-1.5"
-            >
-              <Text as="span" variant="footnoteMedium">
-                When
-              </Text>
-              <div className="space-y-1 rounded-lg border border-grey-02 p-1">
-                <WhenOption value="now" selected={when === 'now'}>
-                  Open now
-                </WhenOption>
-                <WhenOption value="later" selected={when === 'later'}>
-                  Schedule a start time
-                </WhenOption>
-              </div>
-            </RadioGroup.Root>
-
-            {when === 'later' ? (
-              <div className="grid gap-1.5">
-                <div className="flex items-end gap-3">
-                  <label className="grid min-w-0 flex-1 gap-1.5">
-                    <Text as="span" variant="footnoteMedium">
-                      Date
-                    </Text>
-                    <Input type="date" value={startDate} onChange={event => setStartDate(event.target.value)} />
-                  </label>
-                  <label className="grid min-w-0 flex-1 gap-1.5">
-                    <Text as="span" variant="footnoteMedium">
-                      Start time
-                      {timeZone ? (
-                        <Text as="span" variant="footnote" color="grey-04">
-                          {' '}
-                          · {timeZone}
-                        </Text>
-                      ) : null}
-                    </Text>
-                    <Input type="time" value={startTime} onChange={event => setStartTime(event.target.value)} />
-                  </label>
-                </div>
-                <Text as="p" variant="footnote" color="grey-04">
-                  Opens 10 minutes early. The link works now.
-                </Text>
-              </div>
-            ) : null}
-
-            <ElevatedPopoverPortalContext.Provider value={popoverContainer}>
-              <OpenLobbyClaimListsField value={claimLists} onChange={setClaimLists} />
-            </ElevatedPopoverPortalContext.Provider>
-
-            {formError || create.error ? (
-              <Text as="p" variant="footnote" color="red-01">
-                {formError ?? lobbyErrorMessage(create.error, 'Could not open the lobby. Try again.')}
-              </Text>
-            ) : null}
-
-            <div className="grid grid-cols-2 gap-2">
-              <button type="button" onClick={onClose} className={DIALOG_SECONDARY_ACTION_BUTTON_CLASS_NAME}>
-                Cancel
-              </button>
-              <button type="submit" disabled={create.isPending} className={DIALOG_ACTION_BUTTON_CLASS_NAME}>
-                {create.isPending ? 'Opening…' : when === 'now' ? 'Open lobby' : 'Schedule lobby'}
-              </button>
-            </div>
-          </form>
+  return (
+    <LobbyDialogFrame titleId={titleId} onClose={onClose}>
+      <div className="grid gap-1.5">
+        <h2 id={titleId}>
+          <Text as="span" variant="smallTitle">
+            {created ? 'Your lobby is ready' : 'Open a debate lobby'}
+          </Text>
+        </h2>
+        {created ? null : (
+          <Text as="p" variant="metadata" color="grey-04">
+            A voice room anyone can join. People pair off into recorded debates and come back.
+          </Text>
         )}
-      </section>
-    </div>,
-    document.body
+      </div>
+
+      {created && link ? (
+        <>
+          <div className="grid gap-1">
+            <Text as="p" variant="metadata">
+              {created.name}
+            </Text>
+            <Text as="p" variant="footnote" color="grey-04">
+              {lobbyScheduleLabel({ ...created, open: created.access.status === 'admitted' }) ?? 'Open now'}
+            </Text>
+          </div>
+          <div className="flex items-center gap-2">
+            <Input readOnly value={link} aria-label="Lobby link" onFocus={event => event.currentTarget.select()} />
+            <button type="button" onClick={copy} className={DIALOG_SECONDARY_ACTION_BUTTON_CLASS_NAME}>
+              {copied ? 'Copied' : 'Copy'}
+            </button>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <button type="button" onClick={onClose} className={DIALOG_SECONDARY_ACTION_BUTTON_CLASS_NAME}>
+              Done
+            </button>
+            <Link
+              href={debateRoomPath(created.lobby_id)}
+              onClick={() => {
+                markLobbyEntry(created.lobby_id, 'created');
+                onClose();
+              }}
+              className={`${DIALOG_ACTION_BUTTON_CLASS_NAME} text-center`}
+            >
+              Go to lobby
+            </Link>
+          </div>
+        </>
+      ) : (
+        <form className="grid gap-4" onSubmit={submit}>
+          <label className="grid gap-1.5">
+            <Text as="span" variant="footnoteMedium">
+              Name
+            </Text>
+            <Input value={name} placeholder="Debate hour" onChange={event => setName(event.target.value)} autoFocus />
+          </label>
+
+          <RadioGroup.Root
+            aria-label="When"
+            value={when}
+            onValueChange={value => setWhen(value === 'later' ? 'later' : 'now')}
+            className="grid gap-1.5"
+          >
+            <Text as="span" variant="footnoteMedium">
+              When
+            </Text>
+            <div className="space-y-1 rounded-lg border border-grey-02 p-1">
+              <WhenOption value="now" selected={when === 'now'}>
+                Open now
+              </WhenOption>
+              <WhenOption value="later" selected={when === 'later'}>
+                Schedule a start time
+              </WhenOption>
+            </div>
+          </RadioGroup.Root>
+
+          {when === 'later' ? (
+            <LobbyStartFields start={start} note="Opens 10 minutes early. The link works now." />
+          ) : null}
+
+          <OpenLobbyClaimListsField value={claimLists} onChange={setClaimLists} />
+
+          {formError || create.error ? (
+            <Text as="p" variant="footnote" color="red-01">
+              {formError ?? lobbyErrorMessage(create.error, 'Could not open the lobby. Try again.')}
+            </Text>
+          ) : null}
+
+          <div className="grid grid-cols-2 gap-2">
+            <button type="button" onClick={onClose} className={DIALOG_SECONDARY_ACTION_BUTTON_CLASS_NAME}>
+              Cancel
+            </button>
+            <button type="submit" disabled={create.isPending} className={DIALOG_ACTION_BUTTON_CLASS_NAME}>
+              {create.isPending ? 'Opening…' : when === 'now' ? 'Open lobby' : 'Schedule lobby'}
+            </button>
+          </div>
+        </form>
+      )}
+    </LobbyDialogFrame>
   );
 }
 

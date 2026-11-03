@@ -1,44 +1,73 @@
 'use client';
 
-import type { DebateActivity, DebateRequestsResponse } from '../api';
+import type { DebateActivity, DebateChallenge, DebateRequestsResponse } from '../api';
+import { sameId } from '../rooms/room-presence';
 import { useOpenScheduledRequests } from '../rooms/scheduled-awaiting';
 import { useScheduledDebates } from '../rooms/scheduling-hooks';
+import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
 import { useLiveRequest, useUnexpiredRequests } from './use-request-countdown';
 
 /**
- * The Requests tab's badge: everything pending that the tab lists, in both directions.
+ * The challenge, when it is addressed to the viewer: one they sent is theirs to wait on, not to
+ * answer. Null until the viewer's id is known, rather than a guess. By `sameId`, since geo-chat's
+ * ids come both dashed and bare.
+ */
+export function incomingChallengeFor<T extends Pick<DebateChallenge, 'recipient'>>(
+  challenge: T | null | undefined,
+  viewerId: string | null
+): T | null {
+  return challenge && viewerId !== null && sameId(challenge.recipient.user_id, viewerId) ? challenge : null;
+}
+
+/**
+ * How many things are waiting on the viewer's answer (GEO-3463): live requests sent to them, a
+ * challenge sent to them, and scheduled invites they have not answered.
  *
- * Deliberately broader than the navbar button, which counts only what is waiting on the viewer —
- * that one is asking for attention, where this one says how much the tab holds. A scheduled request
- * you sent is still pending until they answer, and belongs in the count for the same reason it
- * belongs in the list.
+ * The Requests tab's badge, its "Needs you (N)" filter and the navbar button all read this one
+ * number, so none of them can say something different. It used to count everything pending in both
+ * directions on the tab and only the incoming half on the navbar; what you sent is now on the strip
+ * above the tabs, and the badge means "you have something to answer".
  *
- * Scheduled requests come from the list itself, so the number cannot disagree with the rows
- * underneath it; until that list lands, the navbar's "awaiting your answer" count stands in, which
- * is the most the badge knew before.
+ * `fetchScheduled` is off for the navbar while the panel is closed, since it mounts on every page.
+ * Its observer is then disabled, and a disabled observer is skipped by every refetch — the gateway's
+ * invalidation, the interval, focus — while still keeping the cached list alive. So a list left by
+ * the panel goes stale under the badge: one invite answered there, a second arriving after it
+ * closed, and the badge said 1 while activity, and the panel on reopening, said 2. The cached list
+ * counts only while it is newer than activity (`activityUpdatedAt`); otherwise activity's "awaiting
+ * your answer" count stands in — the same fallback the tab uses until its list lands.
  */
 export function useRequestsTabCount({
   authenticated,
   activity,
+  activityUpdatedAt = 0,
   requests,
+  fetchScheduled = true,
 }: {
   authenticated: boolean;
   activity: DebateActivity | undefined;
+  /** When `activity` was read (react-query's `dataUpdatedAt`): what a cached scheduled list must beat. */
+  activityUpdatedAt?: number;
   requests: DebateRequestsResponse | undefined;
+  fetchScheduled?: boolean;
 }) {
-  const scheduled = useScheduledDebates(authenticated);
+  const scheduled = useScheduledDebates(authenticated && fetchScheduled);
   const openScheduled = useOpenScheduledRequests(scheduled.data?.requests);
+  const viewerId = useCurrentGeoChatUserId();
 
   const incoming = useUnexpiredRequests(requests?.incoming ?? []);
-  // `??`, as every surface that draws the sent request derives it, so the count matches the card.
-  const outbound = useLiveRequest(requests?.outbound ?? activity?.outbound_request);
-  // The claimless challenge sits in the tab under Sent or Received, whichever way it points.
   const challenge = useLiveRequest(activity?.challenge);
 
   if (!authenticated) return 0;
 
   const instantIncoming = requests ? incoming.length : (activity?.incoming_request_count ?? 0);
-  const scheduledPending = scheduled.data ? openScheduled.length : (activity?.scheduled_awaiting_answer_count ?? 0);
+  const challengeToViewer = incomingChallengeFor(challenge, viewerId) ? 1 : 0;
+  // Fetched here, it is kept current like any read on screen. Only from cache, it counts while it is
+  // the newer of the two.
+  const listIsCurrent =
+    scheduled.data !== undefined && (fetchScheduled || scheduled.dataUpdatedAt >= activityUpdatedAt);
+  const scheduledToAnswer = listIsCurrent
+    ? openScheduled.filter(request => request.viewer_must_answer).length
+    : (activity?.scheduled_awaiting_answer_count ?? 0);
 
-  return instantIncoming + (outbound ? 1 : 0) + (challenge ? 1 : 0) + scheduledPending;
+  return instantIncoming + challengeToViewer + scheduledToAnswer;
 }

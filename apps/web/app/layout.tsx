@@ -3,7 +3,6 @@ import * as React from 'react';
 import { Metadata } from 'next';
 
 import cx from 'classnames';
-import 'katex/dist/katex.min.css';
 import localFont from 'next/font/local';
 import 'react-medium-image-zoom/dist/styles.css';
 

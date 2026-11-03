@@ -6,3 +6,5 @@ core/gql
 # each of these ~133KB files to tens of thousands of lines — a 40k-line diff from an unrelated
 # command. Same reason they are out of the eslint config.
 public
+# A byte-identical copy of geo-chat's file; formatting it would break the copy.
+core/community-calls/fixtures/call_series_vectors.json

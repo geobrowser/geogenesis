@@ -18,44 +18,12 @@ import {
  * The three claim lists are the panel's tabs and have their own suites; this one is about how the
  * workspace lets you move between them, since it has no tab strip to do it with.
  */
-vi.mock('./claims-tab', async () => {
-  const atoms = await import('~/atoms');
+// Keep the URL defaults, parser, and filter atoms real; only stub the list's rendering.
+vi.mock('./claims-tab', async importOriginal => {
+  const actual = await importOriginal<typeof import('./claims-tab')>();
   return {
-    // The list a URL means when it names none, so the workspace can follow a bare `/matchmaking`
-    // back to Lobby. Mirrored because this file mocks the module wholesale.
-    DEFAULT_WORKSPACE_LIST: 'lobby',
-    CLAIMS_TAB_VARIANTS: ['explore', 'lobby', 'positions'],
-    VARIANT_ATOMS: {
-      explore: {
-        spaceIds: atoms.debatesHubExploreSpaceIdsAtom,
-        topicIds: atoms.debatesHubExploreTopicIdsAtom,
-        search: atoms.debatesHubExploreSearchAtom,
-        seedSpent: atoms.debatesHubExploreSpaceSeedSpentAtom,
-      },
-      positions: {
-        spaceIds: atoms.debatesHubPositionsSpaceIdsAtom,
-        topicIds: atoms.debatesHubPositionsTopicIdsAtom,
-        search: atoms.debatesHubPositionsSearchAtom,
-        seedSpent: atoms.debatesHubPositionsSpaceSeedSpentAtom,
-      },
-      lobby: {
-        spaceIds: atoms.debatesHubLobbySpaceIdsAtom,
-        topicIds: atoms.debatesHubLobbyTopicIdsAtom,
-        search: atoms.debatesHubLobbySearchAtom,
-        seedSpent: atoms.debatesHubLobbySpaceSeedSpentAtom,
-      },
-    },
-    readUrlSeed: (variant: string, query: string) => {
-      const params = new URLSearchParams(query);
-      const list = params.get('list') ?? 'lobby';
-      if (list !== variant) return null;
-      return {
-        list: params.get('list'),
-        search: params.get('q') ?? '',
-        spaceIds: (params.get('spaces') ?? '').split(',').filter(Boolean),
-        topicIds: (params.get('topics') ?? '').split(',').filter(Boolean),
-      };
-    },
+    ...actual,
+    useRecordHubTabPress: () => mocks.recordTabPress,
     ClaimsTab: ({ variant, scopePicker }: { variant?: string; scopePicker?: React.ReactNode }) => {
       const logged = React.useRef(false);
       React.useEffect(() => {
@@ -73,10 +41,17 @@ vi.mock('./lobby-tab', () => ({
 }));
 
 vi.mock('./hub-live-rail', () => ({ HubLiveRail: () => <div data-testid="hub-live-rail" /> }));
+// The open ask is the strip's and the cards' business, covered in their own suites.
+vi.mock('./hub-ask-context', () => ({ HubAskProvider: ({ children }: { children: React.ReactNode }) => children }));
 // Covered through the side panel's suite; here it only matters that the header draws them.
 vi.mock('./hub-header-controls', () => ({ HubHeaderControls: () => <div data-testid="hub-header-controls" /> }));
 
-const mocks = vi.hoisted(() => ({ ready: true, authenticated: true, mounts: [] as string[] }));
+const mocks = vi.hoisted(() => ({
+  ready: true,
+  authenticated: true,
+  mounts: [] as string[],
+  recordTabPress: vi.fn(),
+}));
 
 /**
  * The address bar, which is both what `useSearchParams` reads and what the workspace writes to. In
@@ -201,21 +176,21 @@ describe('when the URL changes without a remount', () => {
 
   it('follows the URL to the list it names', () => {
     const navigate = renderWithSearch('');
-    expect(screen.getByTestId('lobby-tab')).toBeInTheDocument();
+    expect(screen.getByTestId('claims-tab-explore')).toBeInTheDocument();
 
     navigate('list=positions');
 
     expect(screen.getByTestId('claims-tab-positions')).toBeInTheDocument();
   });
 
-  // The other direction. Lobby is omitted from the query as the workspace default.
-  it('follows a bare URL back to Lobby', () => {
+  // The other direction. Explore is omitted from the query as the workspace default.
+  it('follows a bare URL back to Explore', () => {
     const navigate = renderWithSearch('list=positions');
     expect(screen.getByTestId('claims-tab-positions')).toBeInTheDocument();
 
     navigate('');
 
-    expect(screen.getByTestId('lobby-tab')).toBeInTheDocument();
+    expect(screen.getByTestId('claims-tab-explore')).toBeInTheDocument();
   });
 
   // The workspace's own write is not a navigation, so it must not be read back as one.
@@ -256,11 +231,11 @@ describe('before Privy has restored the session', () => {
 const picker = (label: string) => screen.getAllByRole('button', { name: label })[0];
 
 describe('choosing which claim list the workspace shows', () => {
-  it('opens on Matches', () => {
+  it('opens on Explore', () => {
     render(<DebatesHubWorkspace />);
 
-    expect(screen.getByTestId('lobby-tab')).toBeInTheDocument();
-    expect(picker('Matches')).toBeInTheDocument();
+    expect(screen.getByTestId('claims-tab-explore')).toBeInTheDocument();
+    expect(picker('Explore')).toBeInTheDocument();
   });
 
   // The label changed; the value links and the panel use did not.
@@ -272,32 +247,41 @@ describe('choosing which claim list the workspace shows', () => {
     expect(picker('Matches')).toBeInTheDocument();
   });
 
-  it('offers the panel’s three lists, in its order', () => {
+  it('offers Explore first, followed by Matches and My positions', () => {
     render(<DebatesHubWorkspace />);
 
-    fireEvent.click(picker('Matches'));
-    const labels = screen.getAllByRole('button').map(option => option.textContent ?? '');
-    const offered = ['Matches', 'Explore', 'My positions'].map(label => labels.findIndex(text => text.includes(label)));
+    fireEvent.click(picker('Explore'));
+    const labels = within(screen.getByRole('dialog'))
+      .getAllByRole('button')
+      .map(option => option.textContent);
 
-    expect(offered.every(index => index > -1)).toBe(true);
-    expect(offered).toEqual([...offered].sort((a, b) => a - b));
+    expect(labels).toEqual(['Explore', 'Matches', 'My positions']);
   });
 
   it('swaps the list rather than narrowing it', () => {
     render(<DebatesHubWorkspace />);
 
-    fireEvent.click(picker('Matches'));
+    fireEvent.click(picker('Explore'));
     fireEvent.click(screen.getByRole('button', { name: 'My positions' }));
 
     expect(screen.getByTestId('claims-tab-positions')).toBeInTheDocument();
     expect(screen.queryByTestId('lobby-tab')).toBeNull();
   });
 
+  // GEO-3495: the same recorder as the side panel's tab row, from the list on screen to the one picked.
+  it('records the list the viewer picks', () => {
+    mocks.recordTabPress.mockClear();
+    render(<DebatesHubWorkspace />);
+
+    fireEvent.click(picker('Explore'));
+    fireEvent.click(screen.getByRole('button', { name: 'My positions' }));
+
+    expect(mocks.recordTabPress).toHaveBeenCalledExactlyOnceWith('positions');
+  });
+
   it('remounts the tab when the list changes, rather than reusing the instance', () => {
     render(<DebatesHubWorkspace />);
 
-    fireEvent.click(picker('Matches'));
-    fireEvent.click(screen.getByRole('button', { name: 'Explore' }));
     fireEvent.click(picker('Explore'));
     fireEvent.click(screen.getByRole('button', { name: 'My positions' }));
 
@@ -306,6 +290,7 @@ describe('choosing which claim list the workspace shows', () => {
   });
 
   it('gives Matches its own component, not a ClaimsTab variant', () => {
+    setUrl('list=lobby');
     render(<DebatesHubWorkspace />);
 
     expect(screen.getByTestId('lobby-tab')).toBeInTheDocument();
@@ -332,6 +317,7 @@ describe('choosing which claim list the workspace shows', () => {
 
   it('falls back to Explore for a viewer who cannot be offered the list they were on', () => {
     mocks.authenticated = false;
+    setUrl('list=lobby');
     render(<DebatesHubWorkspace />);
 
     expect(screen.getByTestId('claims-tab-explore')).toBeInTheDocument();
@@ -341,14 +327,14 @@ describe('choosing which claim list the workspace shows', () => {
   it('hands the picker to whichever list is showing', () => {
     render(<DebatesHubWorkspace />);
 
-    expect(within(screen.getByTestId('lobby-tab')).getAllByRole('button', { name: 'Matches' })).toHaveLength(1);
-
-    fireEvent.click(picker('Matches'));
-    fireEvent.click(screen.getByRole('button', { name: 'Explore' }));
-
     expect(within(screen.getByTestId('claims-tab-explore')).getAllByRole('button', { name: 'Explore' })).toHaveLength(
       1
     );
+
+    fireEvent.click(picker('Explore'));
+    fireEvent.click(screen.getByRole('button', { name: 'Matches' }));
+
+    expect(within(screen.getByTestId('lobby-tab')).getAllByRole('button', { name: 'Matches' })).toHaveLength(1);
   });
 });
 
@@ -395,7 +381,7 @@ describe('keeping the URL in step with the list', () => {
   it('writes the list the viewer picks', () => {
     renderWorkspace();
 
-    fireEvent.click(picker('Matches'));
+    fireEvent.click(picker('Explore'));
     fireEvent.click(screen.getByRole('button', { name: 'My positions' }));
     settle();
 
@@ -419,7 +405,6 @@ describe('keeping the URL in step with the list', () => {
 
     expect(replaceState).toHaveBeenCalledTimes(1);
     expect(Object.fromEntries(new URLSearchParams(currentSearch()))).toEqual({
-      list: 'explore',
       q: 'climate',
       spaces: 'space-a,space-b',
       topics: 't1',
@@ -428,7 +413,7 @@ describe('keeping the URL in step with the list', () => {
 
   // The link that opened the page is what is on screen, so there is nothing to write.
   it('leaves the link it was opened from as it is', () => {
-    setUrl('list=explore&q=climate&spaces=space-a');
+    setUrl('q=climate&spaces=space-a');
     renderWorkspace();
     replaceState.mockClear();
 
@@ -446,11 +431,11 @@ describe('keeping the URL in step with the list', () => {
     settle();
     rerender();
 
-    expect(currentSearch()).toBe('list=explore');
+    expect(currentSearch()).toBe('');
     expect(store.get(debatesHubExploreSearchAtom)).toBe('');
   });
 
-  it('keeps an unfiltered Matches list a bare /matchmaking', () => {
+  it('keeps an unfiltered Explore list a bare /matchmaking', () => {
     renderWorkspace();
     settle();
 
@@ -467,7 +452,7 @@ describe('keeping the URL in step with the list', () => {
     settle();
     rerender();
 
-    expect(currentSearch()).toBe('list=explore&q=nuclear');
+    expect(currentSearch()).toBe('q=nuclear');
     expect(store.get(debatesHubExploreSearchAtom)).toBe('nuclear ');
   });
 

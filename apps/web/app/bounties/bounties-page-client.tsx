@@ -5,6 +5,7 @@ import * as React from 'react';
 import { useRouter } from 'next/navigation';
 
 import { useBountiesEnabled } from '~/core/bounties/config';
+import { NavUtils } from '~/core/utils/utils';
 
 import { Text } from '~/design-system/text';
 
@@ -17,7 +18,7 @@ export function BountiesPageClient() {
 
   // Soft gate (per-browser feature flag): defence in depth against a direct URL.
   React.useEffect(() => {
-    if (!enabled) router.replace('/root');
+    if (!enabled) router.replace(NavUtils.toExplore());
   }, [enabled, router]);
 
   if (!enabled) return null;

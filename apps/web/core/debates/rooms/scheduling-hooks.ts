@@ -31,7 +31,7 @@ import {
   respondToScheduledDebate,
 } from '../api';
 import { useDebateVisibility } from '../debate-attention';
-import { debateQueryKeys, debateQueryNetworkOptions, useGeoChatAuth } from '../hooks';
+import { debateQueryKeys, debateQueryNetworkOptions, invalidateAvailabilityReads, useGeoChatAuth } from '../hooks';
 
 /** Backstop for an event refetch that failed past the gateway's retries; the socket stays ready. */
 const SCHEDULED_POLL_MS = 60_000;
@@ -146,6 +146,8 @@ export function useCreateScheduledDebate() {
         debateScheduledRequestSent({ mode: 'request', requestId: request.request_id, startsAt, analytics });
       }
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.scheduledDebates(accountKey) });
+      // A pending invite holds its time for both people (GEO-3532), so it leaves every availability read.
+      invalidateAvailabilityReads(queryClient, accountKey);
     },
     onError: (error, { analytics }, isCurrent) => {
       if (isCurrent?.()) debateScheduledRequestFailed({ mode: 'request', error, analytics });
@@ -153,8 +155,13 @@ export function useCreateScheduledDebate() {
   });
   // The canonical action (GEO-3073), beside the instant challenge's `start_debate`. A geo-chat user
   // is all a booking knows about the other side, which also keeps these apart from challenges.
-  return useObservedMutation(mutation, 'start_debate', ({ opponentUserId }) =>
-    getContext({ target_type: 'debate_user', target_id: opponentUserId })
+  return useObservedMutation(
+    mutation,
+    'start_debate',
+    ({ opponentUserId }) => getContext({ target_type: 'debate_user', target_id: opponentUserId }),
+    undefined,
+    // GEO-3495: the scheduled request, which the warehouse joins to its room and so to the debate.
+    request => ({ request_id: request.request_id })
   );
 }
 
@@ -165,8 +172,7 @@ export function useCreateScheduledDebate() {
 function invalidateFreedTime(queryClient: QueryClient, accountKey: string | null) {
   void queryClient.invalidateQueries({ queryKey: debateQueryKeys.scheduledDebates(accountKey) });
   void queryClient.invalidateQueries({ queryKey: debateQueryKeys.upcomingRooms(accountKey) });
-  void queryClient.invalidateQueries({ queryKey: debateQueryKeys.schedulablePeopleRoot(accountKey) });
-  void queryClient.invalidateQueries({ queryKey: debateQueryKeys.peerScheduleRoot(accountKey) });
+  invalidateAvailabilityReads(queryClient, accountKey);
 }
 
 /** Moves an existing request to a new time: "Choose different time" in the scheduling emails. */
@@ -231,6 +237,8 @@ export function useRespondToScheduledDebate() {
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.scheduledDebates(accountKey) });
       // An acceptance books the room, which the join prompt reads from a different key.
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.upcomingRooms(accountKey) });
+      // A decline frees the invite's time, and an acceptance frees the times of the invites it supersedes.
+      invalidateAvailabilityReads(queryClient, accountKey);
     },
   });
   const accept = useObservedMutation(

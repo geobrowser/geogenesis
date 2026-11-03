@@ -16,6 +16,29 @@ import { RequestParties } from './request-parties';
 import { useRequestCountdown } from './use-request-countdown';
 
 /**
+ * A challenge's two answers, and the failure either left. Shared by this card and the panel's
+ * Requests timeline (GEO-3463). `reject` is the recipient's dismiss and the requester's withdraw
+ * alike: geo-chat has one endpoint for both.
+ */
+export function useIncomingChallengeActions(challenge: Pick<DebateChallenge, 'id'>) {
+  const acceptChallenge = useAcceptDebateChallenge();
+  const rejectChallenge = useRejectDebateChallenge();
+  // Each `useMutation` call owns its own state, so only the actions this caller offers can set this
+  // — the sender has no popup left to carry a failure, and the recipient's actions live here as
+  // well as in theirs.
+  const actionError = acceptChallenge.error ?? rejectChallenge.error;
+  return {
+    accept: () => acceptChallenge.mutate(challenge.id),
+    reject: () => rejectChallenge.mutate(challenge.id),
+    accepting: acceptChallenge.isPending,
+    rejecting: rejectChallenge.isPending,
+    busy: acceptChallenge.isPending || rejectChallenge.isPending,
+    /** Announced with `role="alert"` wherever it is drawn. */
+    error: actionError instanceof Error ? actionError.message : null,
+  };
+}
+
+/**
  * A challenge you sent or received, wherever it is shown — above the People list, and under Sent
  * and Received in the Requests tab.
  *
@@ -39,18 +62,12 @@ export function DebateChallengeCard({
   /** Whose clicks these are; the calendar shows this card too. */
   analyticsSurface?: DebateAnalyticsSurface;
 }) {
-  const acceptChallenge = useAcceptDebateChallenge();
-  const rejectChallenge = useRejectDebateChallenge();
+  const { accept, reject, accepting, rejecting, busy, error } = useIncomingChallengeActions(challenge);
   const countdown = useRequestCountdown(challenge.expires_at);
 
   const isRecipient = role === 'recipient';
   const viewer = isRecipient ? challenge.recipient : challenge.requester;
   const opponent = isRecipient ? challenge.requester : challenge.recipient;
-  const busy = acceptChallenge.isPending || rejectChallenge.isPending;
-  // Each `useMutation` call owns its own state, so only the action this card actually offers can
-  // set this — the sender has no popup left to carry a failure, and the recipient's actions live
-  // here as well as in theirs.
-  const actionError = acceptChallenge.error ?? rejectChallenge.error;
 
   return (
     <motion.article
@@ -77,12 +94,12 @@ export function DebateChallengeCard({
             <span aria-hidden>·</span>
             <button
               type="button"
-              onClick={() => rejectChallenge.mutate(challenge.id)}
+              onClick={reject}
               disabled={busy}
               {...debateActionAnalyticsAttributes(analyticsSurface, 'Cancel request', 'cancel_debate_request')}
               className="shrink-0 text-text underline transition-colors hover:text-grey-04 disabled:opacity-50"
             >
-              {rejectChallenge.isPending ? 'Cancelling…' : 'Cancel request'}
+              {rejecting ? 'Cancelling…' : 'Cancel request'}
             </button>
           </span>
         )}
@@ -96,18 +113,18 @@ export function DebateChallengeCard({
       {isRecipient ? (
         <div className="grid grid-cols-2 gap-2">
           <HubPillButton
-            onClick={() => rejectChallenge.mutate(challenge.id)}
+            onClick={reject}
             disabled={busy}
-            pending={rejectChallenge.isPending}
+            pending={rejecting}
             pendingLabel="Dismissing…"
           >
             Dismiss
           </HubPillButton>
           <HubPillButton
             variant="primary"
-            onClick={() => acceptChallenge.mutate(challenge.id)}
+            onClick={accept}
             disabled={busy}
-            pending={acceptChallenge.isPending}
+            pending={accepting}
             pendingLabel="Opening…"
           >
             Explore claims
@@ -115,11 +132,11 @@ export function DebateChallengeCard({
         </div>
       ) : null}
 
-      {actionError instanceof Error ? (
+      {error ? (
         // role="alert" so a failed action is announced, not just drawn under the button.
         <div role="alert">
           <Text as="p" variant="footnote" color="red-01">
-            {actionError.message}
+            {error}
           </Text>
         </div>
       ) : null}

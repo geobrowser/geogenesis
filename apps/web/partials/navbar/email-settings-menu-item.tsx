@@ -4,8 +4,9 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import { emailSettingsSummary } from '~/core/notifications/email-groups';
+import { emailSettingsSummary, shownEmailGroups } from '~/core/notifications/email-groups';
 import { useNotificationPreferences } from '~/core/notifications/hooks';
+import { useFeatureFlag } from '~/core/state/feature-flags';
 
 import { ChevronRight } from '~/design-system/icons/chevron-right';
 
@@ -19,13 +20,14 @@ import { ChevronRight } from '~/design-system/icons/chevron-right';
  */
 export function EmailSettingsMenuItem({ className, onOpen }: { className?: string; onOpen: () => void }) {
   const { registration, preferences } = useNotificationPreferences();
+  const shown = shownEmailGroups(useFeatureFlag('spaceCalls'));
 
   const unavailable = registration.isError || preferences.isError;
   const noEmail = registration.isSuccess && !registration.data.email;
   const data = preferences.data;
 
   const hint = unavailable ? 'Unavailable right now' : noEmail ? 'No email on your account' : null;
-  const summary = !hint && data ? emailSettingsSummary(data.email_enabled, data.email_groups) : null;
+  const summary = !hint && data ? emailSettingsSummary(data.email_enabled, data.email_groups, shown) : null;
 
   return (
     <button

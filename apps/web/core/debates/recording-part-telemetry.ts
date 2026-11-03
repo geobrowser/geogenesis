@@ -30,7 +30,7 @@ export async function trackRecordingPartUpload(
     await put();
   } catch (error) {
     // Neither messages nor signed upload URLs belong in analytics.
-    report('failed');
+    report((error as { name?: unknown } | null)?.name === 'AbortError' ? 'aborted' : 'failed');
     throw error;
   }
   report('completed');

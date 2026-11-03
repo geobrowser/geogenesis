@@ -5,6 +5,7 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import { useIsPhoneLayout } from '~/core/hooks/use-is-phone-layout';
+import { CALL_SCREEN_COPY, useScreenShareChoice } from '~/core/space-calls/call-screen-stage';
 
 import { Avatar } from '~/design-system/avatar';
 import { Text } from '~/design-system/text';
@@ -29,7 +30,6 @@ import {
 } from './lobby-format';
 import { LobbyGuestCount } from './lobby-guest';
 import { LobbyPersonMenu, personMenuAnalyticsAttributes } from './lobby-person-menu';
-import { useIsCallRoom } from './lobby-purpose';
 import { LobbyShowPeopleContext, LobbySlot } from './lobby-slots';
 import {
   EMPTY_VIDEO_GRID,
@@ -41,6 +41,7 @@ import {
 } from './lobby-video-grid';
 import type { LobbyPageView } from './lobby-view';
 import { type LobbyVoiceStates, useLobbyVoiceStates } from './lobby-voice';
+import { useRoomCapabilities } from './room-capabilities';
 
 export const LOBBY_ROSTER_COPY = {
   empty: 'Nobody’s here right now.',
@@ -71,9 +72,9 @@ export function LobbyPeople({
   ownAvailable: boolean | undefined;
   disagreements: DebateLobbyClaims['disagreements'];
 }) {
-  // A space call has no debates: no pairs, availability or disagreements on anyone.
-  const call = useIsCallRoom();
-  const pairs = call ? [] : (lobby.debate_pairs ?? []);
+  // Without debates (a space call): no pairs, availability or disagreements on anyone.
+  const { debates } = useRoomCapabilities();
+  const pairs = debates ? (lobby.debate_pairs ?? []) : [];
   const inPairs = new Set(pairs.flatMap(pair => pair.people.map(person => dashlessId(person.user_id))));
   const roster = rosterOrder(lobby.members).filter(member => !inPairs.has(dashlessId(member.user_id)));
   const speakers = roster.filter(publishes);
@@ -95,14 +96,14 @@ export function LobbyPeople({
       member,
       isSelf,
       viewerId,
-      status: call ? null : memberStatus(member, isSelf ? ownAvailable : undefined),
-      disagreements: isSelf || call ? null : disagreementCount(disagreements, member.user_id),
+      status: debates ? memberStatus(member, isSelf ? ownAvailable : undefined) : null,
+      disagreements: isSelf || !debates ? null : disagreementCount(disagreements, member.user_id),
     };
   };
 
   return (
     <>
-      {call ? null : <LobbyDebatePairs pairs={pairs} members={lobby.members} lobby={lobby} viewerId={viewerId} />}
+      {debates ? <LobbyDebatePairs pairs={pairs} members={lobby.members} lobby={lobby} viewerId={viewerId} /> : null}
       {speakers.length > 0 ? <SpeakerVideoGrid speakers={speakers} personProps={personProps} /> : null}
       {listeners.length + guests > 0 ? (
         <section className="flex flex-col gap-2.5 md:gap-2" aria-label="Listening">
@@ -265,6 +266,7 @@ function SpeakerTile({
           </span>
         </button>
       </LobbyPersonMenu>
+      <SharingTag member={member} />
       <div className="flex min-w-0 items-center px-1">
         <TileStatus
           member={member}
@@ -373,9 +375,9 @@ function SpeakingBars() {
 function PersonTags({ member, small }: { member: DebateLobbyMember; small: boolean }) {
   // The phone's size beside a name at the phone's size (a phone, or a compact tile).
   const size = small ? 'text-[12px]' : 'text-[14px]';
-  // "New" means no completed debate yet, which says nothing in a space call.
-  const call = useIsCallRoom();
-  const newcomer = Boolean(member.newcomer) && !call;
+  // "New" means no completed debate yet, which says nothing in a room without debates.
+  const { debates } = useRoomCapabilities();
+  const newcomer = Boolean(member.newcomer) && debates;
   return (
     <>
       {isHosting(member) ? (
@@ -409,8 +411,8 @@ function ListenerChip({
   'data-testid': testId = 'lobby-listener-chip',
 }: PersonProps & { voice?: SpeakerVoice; 'data-testid'?: string }) {
   const name = personName(member);
-  const call = useIsCallRoom();
-  const newcomer = Boolean(member.newcomer) && !call;
+  const { debates } = useRoomCapabilities();
+  const newcomer = Boolean(member.newcomer) && debates;
   const moved =
     Boolean(member.moved_to_listeners) ||
     (isSelf && lobby.viewer.kind === 'member' && lobby.viewer.last_moderation?.action === 'move_to_listeners');
@@ -475,6 +477,24 @@ const DESKTOP_GRID_CLASS = {
 } as const;
 
 type HoldFocus = (key: string, on: boolean) => void;
+
+/** Over a sharer's frame (GEO-3507): shows their screen on the stage above. */
+function SharingTag({ member }: { member: DebateLobbyMember }) {
+  const choice = useScreenShareChoice();
+  const sharerId = choice?.sharers.find(id => sameId(id, member.user_id));
+  if (!choice || !sharerId) return null;
+  return (
+    <button
+      type="button"
+      aria-pressed={choice.shown === sharerId}
+      aria-label={CALL_SCREEN_COPY.show(personName(member))}
+      onClick={() => choice.show(sharerId)}
+      className="absolute top-2.5 left-2.5 z-[1] rounded-md bg-text/70 px-1.5 py-0.5 text-metadataMedium text-white md:top-2 md:left-2"
+    >
+      {CALL_SCREEN_COPY.sharingTag}
+    </button>
+  );
+}
 
 /**
  * Holds a speaker in place while focus is inside it (see `nextVideoGrid`'s `held`). Released on blur,

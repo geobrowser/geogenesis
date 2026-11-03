@@ -13,7 +13,7 @@ import {
   LOBBY_CLAIM_LISTS_MAX,
   dashlessId,
 } from '../api';
-import type { LobbyRoomNoun } from './lobby-purpose';
+import type { LobbyRoomNoun } from './room-capabilities';
 
 /** geo-chat's limit, in characters (code points, not UTF-16 units). */
 export const NAME_MAX_CHARS = 120;
@@ -84,7 +84,8 @@ export function untilLabel(iso: string, now: number) {
   return `in ${days} days`;
 }
 
-function startOfLocalDay(ms: number) {
+/** Local midnight on the day of `ms`, as epoch ms: what anything grouped or counted by day keys on. */
+export function startOfLocalDay(ms: number) {
   const day = new Date(ms);
   day.setHours(0, 0, 0, 0);
   return day.getTime();

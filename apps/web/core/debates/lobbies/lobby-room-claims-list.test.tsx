@@ -167,6 +167,7 @@ describe('LobbyRoomClaimsList', () => {
   it('offers a request and names who disagrees when someone on the other side can be asked', () => {
     render(
       <LobbyRoomClaimsList
+        listId="lobby_room_claims"
         claims={[entry(true, [side(true, [person('Ana')], 0), side(false, [person('Ben'), person('Cy')], 1)])]}
         renderOffer={renderOffer}
       />
@@ -179,6 +180,7 @@ describe('LobbyRoomClaimsList', () => {
   it('names who disagrees but offers nothing when none of them can be asked', () => {
     render(
       <LobbyRoomClaimsList
+        listId="lobby_room_claims"
         claims={[entry(true, [side(true, [], 0), side(false, [person('Ben')], 0)])]}
         renderOffer={renderOffer}
       />
@@ -191,6 +193,7 @@ describe('LobbyRoomClaimsList', () => {
   it('offers nothing and names nobody while the viewer holds no side', () => {
     render(
       <LobbyRoomClaimsList
+        listId="lobby_room_claims"
         claims={[entry(null, [side(true, [person('Ana')], 1), side(false, [person('Ben')], 1)])]}
         renderOffer={renderOffer}
       />
@@ -204,6 +207,7 @@ describe('LobbyRoomClaimsList', () => {
     mocks.snapshot = { status: 'reconciling', pending: { expectedResponse: 'negative' }, runId: 'run-1' };
     render(
       <LobbyRoomClaimsList
+        listId="lobby_room_claims"
         claims={[entry(null, [side(true, [person('Ana')], 1), side(false, [person('Ben')], 0)])]}
         renderOffer={renderOffer}
       />
@@ -217,6 +221,7 @@ describe('LobbyRoomClaimsList', () => {
     mocks.snapshot = { status: 'reconciling', pending: { expectedResponse: null }, runId: 'run-1' };
     render(
       <LobbyRoomClaimsList
+        listId="lobby_room_claims"
         claims={[entry(true, [side(true, [], 0), side(false, [person('Ben')], 1)])]}
         renderOffer={renderOffer}
       />
@@ -227,7 +232,7 @@ describe('LobbyRoomClaimsList', () => {
 
   it('backfills readiness for the side the viewer holds, from geo-chat’s own row', () => {
     const claim = entry(true, [side(true, [], 0), side(false, [person('Ben')], 0)]);
-    render(<LobbyRoomClaimsList claims={[claim]} renderOffer={renderOffer} />);
+    render(<LobbyRoomClaimsList listId="lobby_room_claims" claims={[claim]} renderOffer={renderOffer} />);
 
     expect(mocks.backfill).toHaveBeenCalledWith({
       readiness: claim.readiness,
@@ -239,12 +244,14 @@ describe('LobbyRoomClaimsList', () => {
 
   it('points at a live debate when there is no offer, and never draws one beside the offer', () => {
     const live = { ...entry(true, [side(true, [], 0), side(false, [person('Ben')], 0)]), activeDebate: true };
-    const { unmount } = render(<LobbyRoomClaimsList claims={[live]} renderOffer={renderOffer} />);
+    const { unmount } = render(
+      <LobbyRoomClaimsList listId="lobby_room_claims" claims={[live]} renderOffer={renderOffer} />
+    );
     expect(screen.getByRole('link', { name: 'Watch live' }).getAttribute('href')).toBe('/space/space-1/debates');
     unmount();
 
     const offered = { ...entry(true, [side(true, [], 0), side(false, [person('Ben')], 1)]), activeDebate: true };
-    render(<LobbyRoomClaimsList claims={[offered]} renderOffer={renderOffer} />);
+    render(<LobbyRoomClaimsList listId="lobby_room_claims" claims={[offered]} renderOffer={renderOffer} />);
     expect(screen.getByRole('button', { name: 'Request as agree (1)' })).toBeTruthy();
     expect(screen.queryByRole('link', { name: 'Watch live' })).toBeNull();
   });
@@ -252,7 +259,7 @@ describe('LobbyRoomClaimsList', () => {
   it('draws no Watch live while live watching is off, leaving the spacer', () => {
     mocks.watchLive = false;
     const live = { ...entry(true, [side(true, [], 0), side(false, [person('Ben')], 0)]), activeDebate: true };
-    render(<LobbyRoomClaimsList claims={[live]} renderOffer={renderOffer} />);
+    render(<LobbyRoomClaimsList listId="lobby_room_claims" claims={[live]} renderOffer={renderOffer} />);
 
     expect(screen.queryByRole('link', { name: 'Watch live' })).toBeNull();
     expect(screen.getByTestId('card-end').querySelector('span[aria-hidden]')).toBeTruthy();
@@ -263,14 +270,28 @@ describe('LobbyRoomClaimsList', () => {
 
     it('sits beside the offer', () => {
       const offered = entry(true, [side(true, [], 0), side(false, [person('Ben')], 1)]);
-      render(<LobbyRoomClaimsList claims={[offered]} renderOffer={renderOffer} renderMenu={renderMenu} />);
+      render(
+        <LobbyRoomClaimsList
+          listId="lobby_room_claims"
+          claims={[offered]}
+          renderOffer={renderOffer}
+          renderMenu={renderMenu}
+        />
+      );
       expect(screen.getByRole('button', { name: 'Request as agree (1)' })).toBeTruthy();
       expect(screen.getByRole('button', { name: 'Claim options' })).toBeTruthy();
     });
 
     it('sits beside Watch live', () => {
       const live = { ...entry(true, [side(true, [], 0), side(false, [], 0)]), activeDebate: true };
-      render(<LobbyRoomClaimsList claims={[live]} renderOffer={renderOffer} renderMenu={renderMenu} />);
+      render(
+        <LobbyRoomClaimsList
+          listId="lobby_room_claims"
+          claims={[live]}
+          renderOffer={renderOffer}
+          renderMenu={renderMenu}
+        />
+      );
       expect(screen.getByRole('link', { name: 'Watch live' })).toBeTruthy();
       expect(screen.getByRole('button', { name: 'Claim options' })).toBeTruthy();
     });
@@ -279,6 +300,7 @@ describe('LobbyRoomClaimsList', () => {
       const quiet = entry(null, [side(true, [], 0), side(false, [], 0)]);
       const { container } = render(
         <LobbyRoomClaimsList
+          listId="lobby_room_claims"
           claims={[quiet]}
           renderOffer={renderOffer}
           renderMenu={renderMenu}
@@ -294,7 +316,9 @@ describe('LobbyRoomClaimsList', () => {
   it('takes the chain’s side only for a withdrawn row, never where geo-chat simply has none', () => {
     mocks.indexed = 'positive';
     const noRow = entry(null, [side(true, [], 0), side(false, [person('Ben')], 1)]);
-    const { unmount } = render(<LobbyRoomClaimsList claims={[noRow]} renderOffer={renderOffer} />);
+    const { unmount } = render(
+      <LobbyRoomClaimsList listId="lobby_room_claims" claims={[noRow]} renderOffer={renderOffer} />
+    );
     expect(screen.queryByRole('button')).toBeNull();
     unmount();
 
@@ -302,7 +326,7 @@ describe('LobbyRoomClaimsList', () => {
       ...noRow,
       readiness: { ...noRow.readiness, readiness_disabled_reason: 'claim_response_withdrawn' },
     };
-    render(<LobbyRoomClaimsList claims={[withdrawn]} renderOffer={renderOffer} />);
+    render(<LobbyRoomClaimsList listId="lobby_room_claims" claims={[withdrawn]} renderOffer={renderOffer} />);
     expect(screen.getByRole('button', { name: 'Request as agree (1)' })).toBeTruthy();
   });
 });

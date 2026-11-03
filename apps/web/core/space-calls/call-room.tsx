@@ -64,14 +64,14 @@ export function CallRoom({
       people={
         <>
           <StageRecordingPrompt notice={stageNotice.notice} onAcknowledge={stageNotice.acknowledge} onLeave={onLeave} />
-          <CallScreenStage members={lobby.members} />
-          <LobbyPeople lobby={lobby} viewerId={currentUserId} ownAvailable={undefined} disagreements={null} />
+          <CallScreenStage members={lobby.members}>
+            <LobbyPeople lobby={lobby} viewerId={currentUserId} ownAvailable={undefined} disagreements={null} />
+          </CallScreenStage>
         </>
       }
       tab={tab}
       onTab={setTab}
       voiceExtras={{
-        screenShare: true,
         preJoin: join => (
           <CallPreJoin
             recording={recording}

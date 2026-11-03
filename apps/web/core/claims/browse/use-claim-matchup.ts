@@ -5,6 +5,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import {
   type DebateActivity,
   type DebateClaimPositionSummary,
+  type DebateRequest,
   type DebateRequestsResponse,
   GeoChatRequestError,
   notifyClaimResponseIndexed,
@@ -12,6 +13,8 @@ import {
 import { readinessQueryPrefixes } from '~/core/debates/claim-response-indexed-notifier';
 import { useDebateActivity, useGeoChatAuth } from '~/core/debates/hooks';
 import { useCreateDebateRequest, useDebateRequests, useMatchmakingMatches } from '~/core/debates/matchmaking/hooks';
+import { useLiveRequest } from '~/core/debates/matchmaking/use-request-countdown';
+import { useCurrentGeoChatUserId } from '~/core/debates/use-current-geo-chat-user-id';
 import { ID } from '~/core/id';
 import { CLAIM_RESPONSE_KIND } from '~/core/responses/entity-response';
 
@@ -34,15 +37,42 @@ export function debateRequestErrorMessage(error: unknown, viewerPosition: boolea
   return error.message;
 }
 
-/** Why a claim request can't be sent now, or undefined. */
-export function claimRequestBlockedReason(
-  activity: Pick<DebateActivity, 'available_to_debate' | 'outbound_request'> | undefined,
+/**
+ * The viewer's open claim request, gone once its `expires_at` passes, as the live strip counts it:
+ * geo-chat's `requests_changed` for an expiry comes later, and until then the raw read still holds it.
+ */
+export function useLiveOutboundRequest(
+  activity: Pick<DebateActivity, 'outbound_request'> | undefined,
   requests: Pick<DebateRequestsResponse, 'outbound'> | undefined
 ) {
-  const outbound = requests?.outbound ?? activity?.outbound_request ?? null;
+  return useLiveRequest(requests?.outbound ?? activity?.outbound_request ?? null);
+}
+
+/**
+ * The challenge the viewer has out to one person, through the same expiry filter as the panel's
+ * strip, or null. geo-chat allows one of these beside one claim request; the web keeps them to one
+ * ask at a time (GEO-3463), so a claim request waits on this and a challenge on the request.
+ */
+export function useLiveOutboundChallenge(activity: Pick<DebateActivity, 'challenge'> | undefined) {
+  const currentUserId = useCurrentGeoChatUserId();
+  const challenge = useLiveRequest(activity?.challenge ?? null);
+  return challenge && currentUserId && challenge.requester.user_id === currentUserId ? challenge : null;
+}
+
+/**
+ * Why a claim request can't be sent now, or undefined. `outbound` is `useLiveOutboundRequest`'s and
+ * `outboundChallenge` is `useLiveOutboundChallenge`'s.
+ */
+export function claimRequestBlockedReason(
+  activity: Pick<DebateActivity, 'available_to_debate'> | undefined,
+  outbound: DebateRequest | null,
+  outboundChallenge: unknown = null
+) {
   // Only when the server actually says so — a missing field must not block requesting.
   if (activity?.available_to_debate === false) return 'Switch yourself to available to send a request.';
   if (outbound) return 'Withdraw your open request to send another.';
+  // Both out at once would leave the panel's strip with two asks to end, and it shows one.
+  if (outboundChallenge) return 'Cancel your challenge to send a request.';
   return undefined;
 }
 
@@ -98,7 +128,9 @@ export function useClaimMatchup({
         candidate => ID.equals(candidate.claim.claim_entity_id, claimId) && ID.equals(candidate.claim.space_id, spaceId)
       ) ?? null);
 
-  const blockedReason = claimRequestBlockedReason(activity, requestsQuery.data);
+  const outbound = useLiveOutboundRequest(activity, requestsQuery.data);
+  const outboundChallenge = useLiveOutboundChallenge(activity);
+  const blockedReason = claimRequestBlockedReason(activity, outbound, outboundChallenge);
 
   return {
     match,

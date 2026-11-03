@@ -20,6 +20,7 @@ import type {
   MatchmakingReadiness,
 } from '../api';
 import { trustedIndexedPosition, useBackfillReadinessForHeldPosition } from '../backfill-readiness-for-held-position';
+import { DebateClaimCardSurface, type DebateClaimListId } from '../debate-claim-card-surface';
 import { HubCardList } from '../matchmaking/hub-motion';
 import { useHubScrollSelector } from '../matchmaking/hub-scroll';
 import { MatchmakingClaimCard, isResolvableClaim } from '../matchmaking/matchmaking-claim-card';
@@ -65,8 +66,11 @@ export function LobbyRoomClaimsList({
   renderOffer,
   renderHeader,
   renderMenu,
+  listId,
 }: {
   claims: LobbyRoomClaim[];
+  /** GEO-3495. The list the cards' impressions and requests name. */
+  listId: DebateClaimListId;
   /** The lobby-scoped request control. Only called when someone on the other side can be requested. */
   renderOffer: (offer: LobbyRoomOffer) => React.ReactNode;
   /** Above the claim, e.g. who highlighted it. */
@@ -76,14 +80,20 @@ export function LobbyRoomClaimsList({
 }) {
   return (
     <HubCardList>
-      {claims.map(entry => (
-        <LobbyRoomClaimCard
+      {claims.map((entry, index) => (
+        <DebateClaimCardSurface
           key={entry.claim.id}
-          entry={entry}
-          renderOffer={renderOffer}
-          renderHeader={renderHeader}
-          renderMenu={renderMenu}
-        />
+          claimId={entry.claim.claim_entity_id}
+          listId={listId}
+          position={index + 1}
+        >
+          <LobbyRoomClaimCard
+            entry={entry}
+            renderOffer={renderOffer}
+            renderHeader={renderHeader}
+            renderMenu={renderMenu}
+          />
+        </DebateClaimCardSurface>
       ))}
     </HubCardList>
   );

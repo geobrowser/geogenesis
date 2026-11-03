@@ -9,7 +9,7 @@ import { reportEvent } from '~/core/telemetry/logger';
 import type { Debate } from './api';
 import { useDebateMedia, useDebateTranscript, useRecordingPlaybackUrl } from './hooks';
 import { type RecordingPlaybackVariant, recordingPlaybackVariant } from './mobile-rendition';
-import { debateTurnRoleForDebate, isOpenRoundsDebate } from './open-rounds';
+import { debateRoundRoleForDebate, isOpenRoundsDebate } from './open-rounds';
 import { breaksEndMs, playbackBreaksFrom } from './playback-breaks';
 import {
   PLAYBACK_END_EPSILON_SECONDS,
@@ -435,7 +435,7 @@ export function useDebatePlayback(
   const turnCount = turnDurations?.length ?? turnSegments.length;
   /** What the round cues call each turn: by count for a fixed format, as named for Open rounds. */
   const roundTurns = React.useMemo<TurnCount>(
-    () => (isOpenRoundsDebate(debate) ? turnIndex => debateTurnRoleForDebate(debate, turnIndex) : turnCount),
+    () => (isOpenRoundsDebate(debate) ? turnIndex => debateRoundRoleForDebate(debate, turnIndex) : turnCount),
     [debate, turnCount]
   );
   const turnStateAt = React.useCallback(

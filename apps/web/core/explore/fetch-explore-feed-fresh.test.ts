@@ -9,6 +9,7 @@ import { DEBATE_TYPE_ID } from '~/core/debates/ontology';
 
 import { DEFAULT_FRESH_SLOT_CONFIG, type FreshSlotConfig } from './fresh-slot/fresh-slot-config';
 import { FRESH_SLOT_AS_OF_STEP_MS, decodeFreshSlotCursor } from './fresh-slot/fresh-slot-cursor';
+import { BEST_FEED_VERSION } from './for-you/feed-version';
 
 /**
  * GEO-3221. The fresh slot inside the real feed: Best's ranked windows from the by-type connection,
@@ -165,9 +166,9 @@ describe('a whole scroll with the fresh slot on', () => {
 
   it('marks fresh cards and versions the page with the config revision', async () => {
     const [page] = await scroll({ config: ON, revision: 7 });
-    expect(page?.feed).toEqual({ name: 'best', version: 'best-1+fresh.7' });
+    expect(page?.feed).toEqual({ name: 'best', version: `${BEST_FEED_VERSION}+fresh.7` });
     const fresh = page!.items.filter(item => item.ranking?.slot === 'fresh');
-    expect(fresh.map(item => item.ranking)).toEqual(fresh.map(() => ({ version: 'best-1+fresh.7', slot: 'fresh' })));
+    expect(fresh.map(item => item.ranking)).toEqual(fresh.map(() => ({ version: `${BEST_FEED_VERSION}+fresh.7`, slot: 'fresh' })));
   });
 
   it('shows an item that is already in Best from Best', async () => {
@@ -485,7 +486,7 @@ describe('when the fresh slot is off or does not apply', () => {
       plain.map(page => page.items.map(item => item.entityId))
     );
     expect(disabled.map(page => page.nextCursor)).toEqual(plain.map(page => page.nextCursor));
-    expect(disabled[0]?.feed).toEqual({ name: 'best', version: 'best-1' });
+    expect(disabled[0]?.feed).toEqual({ name: 'best', version: BEST_FEED_VERSION });
     expect(graph.freshCalls).toHaveLength(0);
   });
 

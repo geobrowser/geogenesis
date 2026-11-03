@@ -85,8 +85,13 @@ export function useLobbyReminderReplay() {
  * `reminded` draws a queued reminder as set, so the press shows while sign-up runs, and a press
  * toggles what is drawn: taking back a queued one cancels it rather than setting it again. A
  * failure is `error`, for {@link LobbyReminderError} beside the button.
+ *
+ * `nameOnlyOnboarding` asks a new account only for a name, for the debate hours page (GEO-3517).
  */
-export function useLobbyReminderPress(lobby: Pick<DebateLobbySummary, 'lobby_id' | 'open' | 'viewer_reminded'> | null) {
+export function useLobbyReminderPress(
+  lobby: Pick<DebateLobbySummary, 'lobby_id' | 'open' | 'viewer_reminded'> | null,
+  { nameOnlyOnboarding = false }: { nameOnlyOnboarding?: boolean } = {}
+) {
   const reminder = useDebateLobbyReminder();
   const { mutate, isPending } = reminder;
   const error = useLobbyReminderError(reminder, lobby ?? NO_LOBBY);
@@ -124,9 +129,9 @@ export function useLobbyReminderPress(lobby: Pick<DebateLobbySummary, 'lobby_id'
         auth_continuation: 'queued',
       },
       // Walked away from: no reminder set on some later sign-in.
-      { onCancel: cancel }
+      { onCancel: cancel, nameOnlyOnboarding }
     );
-  }, [authenticated, cancel, lobby, lobbyId, mutate, pending, queue, queuedHere, reminded, signIn]);
+  }, [authenticated, cancel, lobby, lobbyId, mutate, nameOnlyOnboarding, pending, queue, queuedHere, reminded, signIn]);
 
   return {
     reminded,

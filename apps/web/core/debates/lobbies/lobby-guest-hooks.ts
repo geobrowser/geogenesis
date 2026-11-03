@@ -14,7 +14,7 @@ import {
   startDebateLobbyGuest,
 } from '../api';
 import { debateQueryNetworkOptions } from '../hooks';
-import { rateLimitDelayMs } from './hooks';
+import { HELD_CALL_REFETCH_MS, rateLimitDelayMs } from './hooks';
 import { isGuestListeningOff, lobbyErrorMessage } from './lobby-format';
 import { clearGuestSecret, readGuestSecret, storeGuestSecret } from './lobby-guest-secret';
 import {
@@ -30,11 +30,17 @@ import {
   onGuestTabLockLost,
   releaseGuestTabLock,
 } from './lobby-guest-tab-lock';
-import { useLobbyRoomNoun } from './lobby-purpose';
+import { useRoomCapabilities } from './room-capabilities';
 
 /** While visible; every 30s hidden, and at once on focus. The server caches each lobby for 2s. */
 export const GUEST_VIEW_POLL_MS = 5_000;
 export const GUEST_VIEW_HIDDEN_POLL_MS = 30_000;
+
+/** The guest view's next poll; a held call only changes when scheduled calls are switched back on. */
+export function guestViewPollMs(view: DebateLobbyGuestView | undefined, hidden: boolean): number {
+  if (view?.lobby.call?.held) return HELD_CALL_REFETCH_MS;
+  return hidden ? GUEST_VIEW_HIDDEN_POLL_MS : GUEST_VIEW_POLL_MS;
+}
 
 /** Not under `account`: the same for every visitor, and no sign-in reconcile touches it. */
 export const guestViewQueryKey = (lobbyId: string) => ['debates', 'lobby-guest-view', dashlessId(lobbyId)] as const;
@@ -55,10 +61,8 @@ export function useDebateLobbyGuestView<T = DebateLobbyGuestView>(
     select,
     ...(poll
       ? {
-          refetchInterval: () =>
-            typeof document !== 'undefined' && document.visibilityState === 'hidden'
-              ? GUEST_VIEW_HIDDEN_POLL_MS
-              : GUEST_VIEW_POLL_MS,
+          refetchInterval: ({ state }: { state: { data?: DebateLobbyGuestView } }) =>
+            guestViewPollMs(state.data, typeof document !== 'undefined' && document.visibilityState === 'hidden'),
           refetchIntervalInBackground: true,
           refetchOnWindowFocus: 'always' as const,
         }
@@ -104,7 +108,7 @@ export function useLobbyGuestSession(
   { listen, signedIn, member }: { listen: boolean; signedIn: boolean; member: LobbyMemberPath }
 ) {
   const id = dashlessId(lobbyId);
-  const room = useLobbyRoomNoun();
+  const room = useRoomCapabilities().noun;
   const [state, setState] = React.useState<GuestSessionState>({ status: 'idle', attempt: 0 });
   // Read by answers and events that land between renders.
   const stateRef = React.useRef(state);

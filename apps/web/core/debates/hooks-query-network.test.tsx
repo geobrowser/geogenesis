@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { GeoChatRequestError } from './api';
 import {
+  debateQueryKeys,
   useCreateDebateChallenge,
   useDebate,
   useDebateActivity,
@@ -361,5 +362,24 @@ describe('useSaveDebateSchedule analytics', () => {
 
     expect(mocks.debateScheduleSaved).not.toHaveBeenCalled();
     expect(mocks.queryClient.setQueryData).toHaveBeenCalled();
+  });
+
+  // Anyone's week flags which of their times the viewer is free for, from this schedule.
+  it('refreshes Find a time and every open week', () => {
+    mocks.queryClient.invalidateQueries.mockClear();
+    const { result } = renderHook(() => useSaveDebateSchedule({ surface: 'navbar' }));
+    (
+      result.current as unknown as {
+        onSuccess: (response: typeof saved, blocks: unknown, isCurrent: () => boolean) => void;
+      }
+    ).onSuccess(saved, [], () => true);
+
+    const keys = mocks.queryClient.invalidateQueries.mock.calls.map(([filters]) => filters?.queryKey);
+    expect(keys).toEqual(
+      expect.arrayContaining([
+        debateQueryKeys.schedulablePeopleRoot('user-a'),
+        debateQueryKeys.peerScheduleRoot('user-a'),
+      ])
+    );
   });
 });

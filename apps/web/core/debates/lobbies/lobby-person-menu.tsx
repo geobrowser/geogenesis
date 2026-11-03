@@ -12,10 +12,10 @@ import { useIsLobbyGuest } from './lobby-guest-hooks';
 import { LobbyMemberActions, hasMemberActions } from './lobby-member-actions';
 import { LobbyPersonName } from './lobby-people';
 import { LobbyPopup } from './lobby-popup';
-import { useIsCallRoom } from './lobby-purpose';
 import { LobbyRequestDebate, canRequestLobbyMember } from './lobby-request-debate';
 import { LobbyScheduleSection } from './lobby-schedule';
 import type { LobbyPageView } from './lobby-view';
+import { useRoomCapabilities } from './room-capabilities';
 
 /**
  * The person trigger's analytics: a host opening someone they can act on keeps the old host
@@ -101,10 +101,10 @@ export function LobbyPersonCard({
   const name = personName(member);
   // A guest's tap is queued behind sign-up, so a guest has no id to check against.
   const guest = useIsLobbyGuest();
-  // A space call has no debates: no request, no schedule, no "in a debate".
-  const call = useIsCallRoom();
+  // Without debates (a space call): no request, no schedule, no "in a debate".
+  const { debates } = useRoomCapabilities();
   const requestable =
-    !call && (guest ? !member.in_debate && !member.stepped_out : canRequestLobbyMember(member, viewerId));
+    debates && (guest ? !member.in_debate && !member.stepped_out : canRequestLobbyMember(member, viewerId));
   const hostControls = !outsideLobby && hasMemberActions(lobby, member, isSelf);
 
   return (
@@ -136,12 +136,12 @@ export function LobbyPersonCard({
         <div className="px-1.5 pb-1.5">
           <LobbyRequestDebate lobbyId={lobby.lobby_id} member={member} />
         </div>
-      ) : member.in_debate && !isSelf && !call ? (
+      ) : member.in_debate && !isSelf && debates ? (
         <Text as="p" variant="footnote" color="grey-04" className="px-1.5 pb-1.5">
           {inDebateRequestLabel(member)}
         </Text>
       ) : null}
-      {!isSelf && !call && (guest || viewerId !== null) ? (
+      {!isSelf && debates && (guest || viewerId !== null) ? (
         <LobbyScheduleSection member={member} disagreements={disagreements} />
       ) : null}
       {hostControls ? (

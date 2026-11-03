@@ -40,7 +40,7 @@ const CALL: PastCall = {
   space_id: 'space1',
   space_name: 'Crypto',
   name: 'Weekly community call',
-  started_at: '2026-10-23T15:00:02Z',
+  starts_at: '2026-10-23T15:00:02Z',
   ended_at: '2026-10-23T16:31:40Z',
   duration_seconds: 5498,
   started_by: null,

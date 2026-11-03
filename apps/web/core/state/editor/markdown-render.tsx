@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 import katex from 'katex';
+import 'katex/dist/katex.min.css';
 import type Token from 'markdown-it/lib/token.mjs';
 
 import { isWeb2Url, normalizeWeb2Url, tokenizeWeb2Urls } from '~/core/utils/url-detection';

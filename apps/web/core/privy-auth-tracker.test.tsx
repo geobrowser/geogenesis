@@ -76,6 +76,7 @@ vi.mock('~/partials/onboarding/onboarding-atoms', async () => {
     spaceIdAtom: atom(''),
     stepAtom: atom('start'),
     selectedTopicIdsAtom: atom<string[]>([]),
+    onboardingNameOnlyAtom: atom(false),
   };
 });
 vi.mock('~/core/hooks/use-personal-space-id', () => ({

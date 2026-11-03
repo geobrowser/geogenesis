@@ -53,7 +53,9 @@ export function FacetPill({
       )}
       <span
         className={cx(
-          'tabular-nums transition-opacity',
+          // Match the button's color transition: an instant white count on a still-white
+          // background briefly disappears while the selected pill fills in.
+          'tabular-nums transition-[color,opacity]',
           picked ? 'text-white/70' : 'text-grey-04',
           countsPending && 'opacity-50'
         )}

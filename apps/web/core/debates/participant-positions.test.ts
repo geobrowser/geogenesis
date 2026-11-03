@@ -18,6 +18,7 @@ import {
   participantSidesOn,
   useParticipantPositions,
 } from './participant-positions';
+import { publishRemoteClaimResponse } from './remote-claim-responses';
 
 const mocks = vi.hoisted(() => ({ graphql: vi.fn(), attention: true }));
 
@@ -226,6 +227,40 @@ describe('fetchPositionsOnViewerClaims', () => {
 });
 
 describe('participantSidesOn', () => {
+  it.each([
+    ['019fedb10c417f3e9a112c7d5e8b4419', '019fedb1-0c41-7f3e-9a11-2c7d5e8b4419'],
+    ['019fedb1-0c41-7f3e-9a11-2c7d5e8b4419', '019FEDB10C417F3E9A112C7D5E8B4419'],
+  ])('matches a claim indexed as %s when the card uses %s', (indexedId, cardId) => {
+    const byClaim = groupParticipantPositions([
+      {
+        profileSpaceId: LOCAL.profile_space_id,
+        claimId: cardId,
+        spaceId: 'space-1',
+        responseKind: 'stance',
+        position: true,
+      },
+      {
+        profileSpaceId: REMOTE.profile_space_id,
+        claimId: indexedId,
+        spaceId: 'space-1',
+        responseKind: 'stance',
+        position: false,
+      },
+    ]);
+
+    expect(participantSidesOn(byClaim, cardId, 'space-1', [LOCAL, REMOTE])).toEqual([
+      { participant: LOCAL, position: true, responseKind: 'stance' },
+      { participant: REMOTE, position: false, responseKind: 'stance' },
+    ]);
+    expect(participantSidesOn(byClaim, indexedId, 'space-1', [LOCAL, REMOTE])).toEqual([
+      { participant: LOCAL, position: true, responseKind: 'stance' },
+      { participant: REMOTE, position: false, responseKind: 'stance' },
+    ]);
+    expect(participantSidesOn(byClaim, cardId, 'space-2', [REMOTE])).toEqual([
+      { participant: REMOTE, position: null, responseKind: null },
+    ]);
+  });
+
   // geo-chat validates a request against the claim's home space, and the card publishes there; a
   // response in some other space that merely cites the claim is not a side on this claim.
   it('reads each participant’s side in the claim’s space only, matching ids in either form', () => {
@@ -605,5 +640,129 @@ describe('applyPendingPositions (GEO-2784)', () => {
     ];
     const merged = applyPendingPositions(FETCHED, pending);
     expect(merged.filter(r => r.claimId === 'c2')).toHaveLength(2);
+  });
+});
+
+describe('useParticipantPositions showing the other debater’s reported responses (GEO-3505)', () => {
+  const CLAIM = '019fedae72b67ab2927adf044d57c5aa';
+  const SPACE = '019fedae72b67ab2927adf044d57c560';
+  // geo-chat's spelling may differ from the graph's.
+  const dashed = (id: string) =>
+    `${id.slice(0, 8)}-${id.slice(8, 12)}-${id.slice(12, 16)}-${id.slice(16, 20)}-${id.slice(20)}`;
+
+  const theirSide = (result: { current: { byClaim: Map<string, unknown> } }) =>
+    participantSidesOn(result.current.byClaim as ReturnType<typeof groupParticipantPositions>, CLAIM, SPACE, [
+      LOCAL,
+      REMOTE,
+    ])[1]!.position;
+
+  const report = (position: boolean | null, profileSpaceId = REMOTE.profile_space_id) =>
+    act(() =>
+      publishRemoteClaimResponse({
+        profileSpaceId: dashed(profileSpaceId),
+        claimId: dashed(CLAIM),
+        spaceId: SPACE,
+        responseKind: 'stance',
+        position,
+      })
+    );
+
+  const graphRow = (voteType: number) => [
+    { userId: REMOTE.profile_space_id, objectId: CLAIM, spaceId: SPACE, voteType, voteKind: 1 },
+  ];
+
+  const renderPositions = (client: QueryClient, liveFrom: string | null = REMOTE.profile_space_id) =>
+    renderHook(() => useParticipantPositions([LOCAL, REMOTE], LOCAL.profile_space_id, { liveFrom }), {
+      wrapper: ({ children }) => React.createElement(QueryClientProvider, { client }, children),
+    });
+
+  const refetch = (client: QueryClient) =>
+    act(async () => {
+      await client.invalidateQueries({
+        queryKey: participantPositionsQueryKey([LOCAL.profile_space_id, REMOTE.profile_space_id]),
+      });
+    });
+
+  const loaded = async (rows: ReturnType<typeof graphRow>, liveFrom?: string | null) => {
+    mocks.graphql.mockImplementation(() => Effect.succeed(lastPage(rows)));
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const rendered = renderPositions(client, liveFrom);
+    await waitFor(() => expect(rendered.result.current.isLoading).toBe(false));
+    return { client, result: rendered.result };
+  };
+
+  it('shows their side as soon as it is reported, before the graph has it', async () => {
+    mocks.attention = true;
+    const { result } = await loaded([]);
+
+    report(false);
+    expect(theirSide(result)).toBe(false);
+    // Grouped under the graph's spelling, so a lookup by the graph's id finds it.
+    expect(result.current.byClaim.has(CLAIM)).toBe(true);
+  });
+
+  it('ignores anyone but the participant it was asked to follow', async () => {
+    mocks.attention = true;
+    const { result } = await loaded([]);
+
+    report(true, '019fedae72b67ab2927adf044d57c999');
+    report(true, LOCAL.profile_space_id);
+    expect(result.current.byClaim.size).toBe(0);
+  });
+
+  it('applies nothing without liveFrom', async () => {
+    mocks.attention = true;
+    const { result } = await loaded([], null);
+
+    report(true);
+    expect(result.current.byClaim.size).toBe(0);
+  });
+
+  it('holds through a refetch the indexer has not caught up with, then hands back once it agrees', async () => {
+    mocks.attention = true;
+    const { client, result } = await loaded(graphRow(0));
+    expect(theirSide(result)).toBe(true);
+
+    report(false);
+    expect(theirSide(result)).toBe(false);
+
+    // The refetch the event triggers lands before indexing: still the old side.
+    await refetch(client);
+    expect(theirSide(result)).toBe(false);
+
+    mocks.graphql.mockImplementation(() => Effect.succeed(lastPage(graphRow(1))));
+    await refetch(client);
+    expect(theirSide(result)).toBe(false);
+
+    // Released: the graph is the answer again.
+    mocks.graphql.mockImplementation(() => Effect.succeed(lastPage(graphRow(0))));
+    await refetch(client);
+    await waitFor(() => expect(theirSide(result)).toBe(true));
+  });
+
+  it('takes a withdrawal at once', async () => {
+    mocks.attention = true;
+    const { result } = await loaded(graphRow(0));
+    expect(theirSide(result)).toBe(true);
+
+    report(null);
+    expect(theirSide(result)).toBeNull();
+  });
+
+  it('stops asserting a report the graph never confirms after the hold bound', async () => {
+    mocks.attention = false;
+    const { result } = await loaded([]);
+
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    try {
+      report(true);
+      expect(theirSide(result)).toBe(true);
+      act(() => void vi.advanceTimersByTime(59_000));
+      expect(theirSide(result)).toBe(true);
+      act(() => void vi.advanceTimersByTime(1_000));
+      expect(theirSide(result)).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

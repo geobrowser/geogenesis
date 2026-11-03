@@ -9,7 +9,6 @@ import { motion } from 'framer-motion';
 import Link from 'next/link';
 
 import { useActionContext } from '~/core/action-context-provider';
-import { ClaimEndSlot } from '~/core/claims/browse/claim-end-slot';
 import { viewerResponseWithIndexedFallback } from '~/core/claims/browse/claim-position-summaries';
 import { CLAIM_RESPONSE_OBJECT_TYPE, useClaimResponseSummary } from '~/core/claims/browse/claim-response-summary';
 import { ClaimSummary, ControversialTag } from '~/core/claims/browse/claim-summary';
@@ -28,10 +27,10 @@ import { ID } from '~/core/id';
 import {
   CLAIM_RESPONSE_COPY,
   CLAIM_RESPONSE_KIND,
-  RESPONSE_CONFIRMING_COPY,
   RESPONSE_LOCAL_ONLY_COPY,
   type ResponseKind,
   isAwaitingResponseSubmission,
+  responseErrorMessage,
   responsePositionLabel,
 } from '~/core/responses/entity-response';
 import { readViewerResponseForReplay } from '~/core/responses/replay-viewer-response';
@@ -50,6 +49,8 @@ import { OnlineDot } from '~/design-system/online-dot';
 import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
+import { ResponseButton } from '~/partials/entity-page/response-button';
+
 import type {
   Debate,
   DebateClaimPositionSummary,
@@ -64,6 +65,7 @@ import {
   type DebateAnalyticsSurface,
   debateActionAnalyticsAttributes,
 } from './hub-analytics';
+import { CardEndSlot, otherSideHeld } from './hub-claim-end-slot';
 import { hubCardMotion } from './hub-motion';
 import { useHubScrollSelector } from './hub-scroll';
 
@@ -122,12 +124,19 @@ type Props = {
   /** Rendered under the summary, for hosts with something extra to say. */
   footer?: React.ReactNode;
   /**
+   * Leaves the summary band out. For the Today's claims callout (GEO-3498), which asks for a side and
+   * moves on: the split is the list's to show, and the callout's card is the claim and the two pills.
+   */
+  hideSummary?: boolean;
+  /**
    * Rendered under one of the two response buttons — see `PositionRow`.
    *
    * A profile uses it to say which side that person came down on, under the
    * button that says the same word.
    */
   noteFor?: (position: boolean) => React.ReactNode;
+  /** False in the claim picker, where a named opponent's position replaces the faces. */
+  showParticipants?: boolean;
   /**
    * Leaves the end slot out.
    *
@@ -214,7 +223,9 @@ export function MatchmakingClaimCard({
   header,
   headerMeta,
   footer,
+  hideSummary,
   noteFor,
+  showParticipants,
   onOpenClaim,
   viewerIdentityPending,
   viewerResponseUnknown,
@@ -267,6 +278,7 @@ export function MatchmakingClaimCard({
       {isOnGraph ? (
         <RespondableControls
           noteFor={noteFor}
+          showParticipants={showParticipants}
           claim={claim}
           positions={positions}
           readiness={readiness}
@@ -285,9 +297,12 @@ export function MatchmakingClaimCard({
           endSlot={endSlot}
           headerMeta={headerMeta}
           hasFooter={Boolean(footer)}
+          hideSummary={hideSummary}
         />
       ) : (
         <UnresolvableControls
+          noteFor={noteFor}
+          showParticipants={showParticipants}
           positions={positions}
           readiness={readiness}
           analyticsSurface={analyticsSurface}
@@ -363,13 +378,15 @@ function ClaimHeader({
 
   return (
     <>
-      {/* `items-start` so the chip stays put when the slot stacks a blocked reason beneath it. No
-          reserved height: the slot is now the height of the chip beside it, so the row does not grow
-          when the match lookup answers. */}
-      <div className="claim-card-panel-header">
-        <span className="flex min-w-0 items-center gap-1.5">
+      {/* Keep the space and offer on one text baseline, including when the offer stacks a blocked
+          reason under its first line. The larger Controversial tag centres itself against the space
+          chip instead: sharing the smaller name's baseline lifts the tag above its thumbnail.
+          Here rather than in the utility, which Explore's meta row also uses: Tailwind emits
+          `items-baseline` after it, so this wins. */}
+      <div className="claim-card-panel-header items-baseline">
+        <span className="flex min-w-0 items-baseline gap-1.5" data-testid="claim-card-eyebrow">
           <SpaceChip spaceId={claim.space_id} />
-          {isControversial ? <ControversialTag /> : null}
+          {isControversial ? <ControversialTag className="self-center" /> : null}
           {meta ? (
             <span className="flex min-w-0 items-center gap-1.5 text-footnoteMedium text-grey-04">
               <span aria-hidden>·</span>
@@ -699,18 +716,18 @@ export function useClaimPositionControl({
     // Signed in with this claim's device vote still waiting to be saved: this press is newer, so it
     // replaces that vote rather than being overwritten by it when the save reaches this claim.
     if (localPosition !== null) removeLocalVote(localVoteKey);
-    // Ignored rather than sent. Until the bundler has the write, the held pill is this client's guess,
-    // and pressing a held pill means "remove" — so a double-click, or a press on a side that has not
-    // reached the bundler, published a retraction nobody asked for. The request then failed with
-    // geo-chat's "respond to this claim first" beside a pill that still looked held. Once submitted
-    // the write is made, so a press is a new, deliberate response (GEO-2889).
-    if (isResponseSubmitting) return;
+    // No confirming-window guard here on purpose. Until the bundler has the write, the held pill is
+    // this client's guess and pressing a held pill means "remove", so a double-click — or a press on
+    // a side that has not reached the bundler — published a retraction nobody asked for. That gate
+    // now lives once in `ResponseButton` (`acceptsPress: !pending`), and every surface that calls
+    // `respond` — the claim pills, the explore card, the debate overlay and the ticker — reaches it
+    // through that button, so the press never arrives here. A new caller that skips `ResponseButton`
+    // must carry the gate itself.
     setResponseError(null);
     // A failed publish silently rolls the optimistic state back, which reads as the response
     // simply vanishing. Catch it here so the reason is visible.
     submitResponse(heldPosition === position ? 'clear' : position ? 'positive' : 'negative', {
-      onError: error =>
-        setResponseError(error instanceof Error ? error.message : 'Could not publish your response. Try again.'),
+      onError: error => setResponseError(responseErrorMessage(error)),
     });
   };
 
@@ -726,7 +743,6 @@ export function useClaimPositionControl({
       return localPosition === position ? RESPONSE_LOCAL_ONLY_COPY : responsePositionLabel(position);
     }
     if (!isConnected && !isAccountSetupPending) return copy.connect;
-    if (isResponseSubmitting) return RESPONSE_CONFIRMING_COPY;
     if (viewerPosition === position) return position ? copy.removePositive : copy.removeNegative;
     return responsePositionLabel(position);
   };
@@ -786,7 +802,9 @@ function RespondableControls({
   endSlot,
   headerMeta,
   hasFooter,
+  hideSummary,
   noteFor,
+  showParticipants,
   analyticsSurface,
 }: {
   claim: DebateClaimSummary;
@@ -801,6 +819,8 @@ function RespondableControls({
    * band that had already claimed the bottom edge.
    */
   hasFooter?: boolean;
+  /** See {@link Props.hideSummary}. */
+  hideSummary?: boolean;
   answersReady?: boolean;
   /** See {@link Props.answersMayComeFromIndex}. */
   answersMayComeFromIndex?: boolean;
@@ -809,6 +829,7 @@ function RespondableControls({
   readResponses?: boolean;
   /** See {@link Props.noteFor}. */
   noteFor?: (position: boolean) => React.ReactNode;
+  showParticipants?: boolean;
   onOpenClaim?: () => void;
   viewerIdentityPending?: boolean;
   viewerResponseUnknown?: boolean;
@@ -965,10 +986,11 @@ function RespondableControls({
         endSlot={
           endSlot ??
           (hideEndSlot ? null : (
-            <ClaimEndSlot
-              claimId={claim.claim_entity_id}
-              spaceId={claim.space_id}
+            <CardEndSlot
+              claim={claim}
               activeDebate={activeDebate}
+              otherSideHeld={otherSideHeld(optimisticPositions, viewerPosition)}
+              analyticsSurface={analyticsSurface}
               // `undefined` until the reads have landed, so a card that cannot yet say which side
               // the viewer holds does not read as saying they hold none.
               viewerPosition={sideKnown ? viewerPosition : undefined}
@@ -989,6 +1011,7 @@ function RespondableControls({
         pending={isResponseSubmitting}
         titleFor={actionTitle}
         noteFor={noteFor}
+        showParticipants={showParticipants}
         localSide={localVoteSide}
         analyticsSurface={analyticsSurface}
       />
@@ -1002,7 +1025,7 @@ function RespondableControls({
       {/* Nothing at all while the reads are held, rather than the summary's own "nobody has
           answered yet" — a disabled hook reports a total of zero, and that is the absence of an
           answer rather than an answer of none. */}
-      {!readResponses || summary.isLoading ? null : (
+      {hideSummary || !readResponses || summary.isLoading ? null : (
         // The card's own footer band (Figma 76081-15715): grey, full-bleed to the card's edge, with
         // the share, the split and the faces on one line. It was a rule and two stacked rows, which
         // read as more card rather than as the card's base — and the split bar, at full width above
@@ -1164,6 +1187,8 @@ function UnresolvableControls({
   endSlot,
   headerMeta,
   analyticsSurface,
+  noteFor,
+  showParticipants,
 }: {
   claim: DebateClaimSummary;
   positions: DebateClaimPositionSummary[];
@@ -1174,6 +1199,8 @@ function UnresolvableControls({
   hideEndSlot?: boolean;
   endSlot?: React.ReactNode;
   headerMeta?: React.ReactNode;
+  noteFor?: (position: boolean) => React.ReactNode;
+  showParticipants?: boolean;
 }) {
   return (
     <>
@@ -1196,10 +1223,11 @@ function UnresolvableControls({
              is not the safe direction to be wrong in. */
           endSlot ??
           (hideEndSlot ? null : (
-            <ClaimEndSlot
-              claimId={claim.claim_entity_id}
-              spaceId={claim.space_id}
+            <CardEndSlot
+              claim={claim}
               activeDebate={activeDebate}
+              otherSideHeld={otherSideHeld(positions, readiness.viewer_response?.position)}
+              analyticsSurface={analyticsSurface}
               // No response control here, so there is no optimistic side to read — geo-chat's is
               // the only answer this card has about where the viewer stands, and where it is silent
               // this card genuinely does not know. Not `?? null`: on the Matches tab this readiness
@@ -1214,6 +1242,8 @@ function UnresolvableControls({
         positions={positions}
         responseKind={CLAIM_RESPONSE_KIND}
         viewerPosition={readiness.viewer_response?.position ?? null}
+        noteFor={noteFor}
+        showParticipants={showParticipants}
       />
       <div className="mt-3">
         <Text as="span" variant="footnote" color="grey-04">
@@ -1415,14 +1445,17 @@ export function SpaceChip({ spaceId }: { spaceId: string }) {
     );
   }
 
+  // The name sets the baseline, so the chip sits on the line of text beside it; the thumbnail, which
+  // has none, stays centred on the name.
   return (
-    <span className="flex min-w-0 items-center gap-1.5">
+    <span className="flex min-w-0 items-baseline gap-1.5">
       {image ? (
-        <span className="relative h-4 w-4 shrink-0 overflow-hidden rounded-sm">
+        <span className="relative h-4 w-4 shrink-0 self-center overflow-hidden rounded-sm">
           <ThumbGeoImage value={image} alt="" />
         </span>
       ) : null}
-      <span className="truncate text-footnoteMedium text-grey-04">{name}</span>
+      {/* Calibre's letters sit high in the line box; optically centre them with the thumbnail. */}
+      <span className="translate-y-px truncate text-footnoteMedium text-grey-04">{name}</span>
     </span>
   );
 }
@@ -1502,28 +1535,18 @@ function PositionButton({
   if (!onRespond) return <div className={className}>{content}</div>;
 
   return (
-    <button
-      type="button"
-      aria-pressed={selected}
-      aria-disabled={pending || undefined}
+    <ResponseButton
+      selected={selected}
+      pending={pending}
       disabled={disabled}
-      title={title}
-      {...analytics}
-      onClick={() => {
-        if (!pending) onRespond(position);
-      }}
-      className={cx(
-        className,
-        'transition-colors disabled:opacity-60',
-        // The only sign the press was taken: the pill drops presses for the 10-50s a response
-        // spends confirming, and nothing else on the page says so. The copy that used to sit
-        // under the pills read as an unsettled side, so the cue stays on the pointer.
-        pending && 'cursor-progress',
-        !selected && !disabled && !pending && 'hover:border-text'
-      )}
+      actionTitle={title}
+      onPress={() => onRespond(position)}
+      className={cx(className, 'transition-colors disabled:opacity-60')}
+      hoverClassName={selected ? undefined : 'hover:border-text'}
+      buttonProps={analytics}
     >
       {content}
-    </button>
+    </ResponseButton>
   );
 }
 

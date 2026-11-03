@@ -1,3 +1,5 @@
+import { localDaysFrom } from '../lobbies/lobby-format';
+
 /** `Today at 1:00 PM`, `Tomorrow at ...`, else `Thu, Sep 24 at ...`. */
 export function formatDebateTime(iso: string, now = new Date()) {
   const at = new Date(iso);
@@ -7,7 +9,7 @@ export function formatDebateTime(iso: string, now = new Date()) {
 }
 
 function formatDay(at: Date, now: Date) {
-  const days = Math.round((startOfDay(at).getTime() - startOfDay(now).getTime()) / 86_400_000);
+  const days = localDaysFrom(now.getTime(), at.getTime());
   return days === 0
     ? 'Today'
     : days === 1
@@ -22,20 +24,27 @@ export function formatDebateSlot(startIso: string, endIso: string, now = new Dat
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
     return formatDebateTime(startIso, now);
   }
-  const from = formatTime(startIso);
-  const to = formatTime(endIso);
-  // `11:00 – 11:30 AM` rather than `11:00 AM – 11:30 AM`, when both ends share the period.
+  return `${formatDay(start, now)}, ${formatTimeRange(startIso, endIso)}`;
+}
+
+/**
+ * `11:00 – 11:30 AM` rather than `11:00 AM – 11:30 AM` when both ends share the period, for a row
+ * already under its day, such as the Requests timeline's (GEO-3463). `periodOnce: false` writes both
+ * ends in full, as the calendar's blocks and lists do.
+ */
+export function formatTimeRange(start: string | number, end: string | number, { periodOnce = true } = {}) {
+  const from = formatTime(start);
+  const to = formatTime(end);
+  if (!periodOnce) return `${from} – ${to}`;
   const period = /\s?([AP]M)$/i;
   const fromPeriod = from.match(period)?.[1];
   const shared = fromPeriod !== undefined && fromPeriod === to.match(period)?.[1];
-  return `${formatDay(start, now)}, ${shared ? from.replace(period, '') : from} – ${to}`;
+  return `${shared ? from.replace(period, '') : from} – ${to}`;
 }
 
-function startOfDay(at: Date) {
-  return new Date(at.getFullYear(), at.getMonth(), at.getDate());
-}
-
-export function formatTime(iso: string) {
+export function formatTime(iso: string | number) {
   const at = new Date(iso);
-  return Number.isNaN(at.getTime()) ? iso : at.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  return Number.isNaN(at.getTime())
+    ? String(iso)
+    : at.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
 }

@@ -149,12 +149,12 @@ type EntityFeedProps = {
   typeCountsPending?: boolean;
   /** Start contextual feeds on only the types whose population count is non-zero. */
   selectTypesWithResultsByDefault?: boolean;
-  /** Optional Topic facet shown beside the type picker. */
-  topicOptions?: HubFilterOption<string>[];
   /** Optional endpoint that counts and prunes Topic options against this feed's current filters. */
   topicFacetEndpoint?: string;
   /** Keep the Topic picker visible while its options load or when the default list is empty. */
   showTopicFilter?: boolean;
+  /** Drop the Topic counts under Top. */
+  hideTopicCountsUnderTop?: boolean;
   /** Stable query parameters owned by a contextual feed, such as the page Topic and route space. */
   fixedParams?: Record<string, string>;
   /** Optional bound for contextual AND-composed Topic selections. */
@@ -267,6 +267,7 @@ async function fetchTopicFacets(
   params: {
     selectedTopicIds: readonly string[];
     typeIds: readonly string[] | undefined;
+    spaceIds: readonly string[];
     fixedParams: Record<string, string>;
     signal?: AbortSignal;
   }
@@ -278,6 +279,7 @@ async function fetchTopicFacets(
     body: JSON.stringify({
       selectedTopicIds: params.selectedTopicIds,
       typeIds: params.typeIds,
+      spaceIds: params.spaceIds,
       fixedParams: params.fixedParams,
     }),
     signal: params.signal,
@@ -309,9 +311,9 @@ export function EntityFeed({
   typeCounts,
   typeCountsPending = false,
   selectTypesWithResultsByDefault = false,
-  topicOptions = [],
   topicFacetEndpoint,
   showTopicFilter = false,
+  hideTopicCountsUnderTop = false,
   fixedParams = {},
   maxTopicSelections,
   feedTopSpacingClassName,
@@ -334,6 +336,9 @@ export function EntityFeed({
   const moreFiltersRevealed = showMoreFilters && moreFiltersOpen;
   const typeFilterVisible = showTypeFilter || moreFiltersRevealed;
   const spaceFilterVisible = moreFiltersRevealed && lockedSpaceId == null;
+  const topicFilterVisible = showMoreFilters
+    ? showTopicFilter && moreFiltersRevealed
+    : showTopicFilter || Boolean(topicFacetEndpoint);
   const typeSelectionTouchedRef = React.useRef(false);
   const contextualTypeDefaultAppliedRef = React.useRef(false);
   // A locked space is the whole filter; otherwise whatever the revealed space menu has ticked, and
@@ -385,52 +390,11 @@ export function EntityFeed({
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([key, value]) => `${key}:${value}`)
     .join('|');
-  const topicFacets = useQuery({
-    queryKey: ['entity-feed-topic-facets', topicFacetEndpoint ?? null, topicIdsKey, typeIdsKey, fixedParamsKey],
-    enabled: Boolean(topicFacetEndpoint),
-    placeholderData: keepPreviousData,
-    queryFn: ({ signal }) =>
-      fetchTopicFacets(topicFacetEndpoint!, {
-        selectedTopicIds,
-        typeIds,
-        fixedParams,
-        signal,
-      }),
-    staleTime: 60_000,
-  });
-  const topicCountsPending = Boolean(topicFacetEndpoint) && (topicFacets.isLoading || topicFacets.isPlaceholderData);
-  const availableTopicOptions = React.useMemo<HubFilterOption<string>[]>(() => {
-    const options = topicFacetEndpoint
-      ? orderFacetOptions(topicFacets.data?.topics ?? [], selectedTopicIds).map(topic => ({
-          value: topic.id,
-          label: topic.name?.trim() || 'Topic',
-          count: topic.count,
-        }))
-      : topicOptions;
-    return options;
-  }, [selectedTopicIds, topicFacetEndpoint, topicFacets.data?.topics, topicOptions]);
-
-  React.useEffect(() => {
-    if (!topicFacetEndpoint || topicFacets.isPlaceholderData || topicFacets.error || !topicFacets.data) return;
-    setSelectedTopicIds(current => keepSelectableTopics(current, topicFacets.data.topics, true));
-  }, [topicFacetEndpoint, topicFacets.data, topicFacets.error, topicFacets.isPlaceholderData]);
   // One condition behind both the dropdown and the request, so what the viewer can see and what
   // the feed is filtered by cannot drift apart. `time` state is left alone while hidden, so
   // returning to Top restores the range the viewer last picked rather than resetting it.
   const timeRangeApplies = showTimeFilter && SORTS_WITH_TIME_RANGE.includes(sort);
   const requestedTime = timeRangeApplies ? time : undefined;
-  const topicFilterVisible = showTopicFilter || availableTopicOptions.length > 0;
-  const showFilterRow = showSortFilter || timeRangeApplies || typeFilterVisible || topicFilterVisible;
-
-  const toggleMoreFilters = React.useCallback(() => {
-    // Putting the menus away puts their filters away too, so the feed never stays narrowed by a
-    // menu the viewer can no longer see.
-    if (moreFiltersOpen) {
-      setSelectedTypeIds([...initialTypeIds]);
-      setSelectedSpaceIds([]);
-    }
-    setMoreFiltersOpen(!moreFiltersOpen);
-  }, [initialTypeIds, moreFiltersOpen, setMoreFiltersOpen]);
 
   // Read off the browse sidebar's cache, which `BrowseSidebar` fills on every page, so the menu
   // costs no request of its own.
@@ -440,6 +404,66 @@ export function EntityFeed({
       browseSidebar ? browseSidebarVisibleSpaces(browseSidebar).map(row => ({ value: row.id, label: row.name })) : [],
     [browseSidebar]
   );
+
+  const browseSidebarSettled = browseSidebar !== null && !browseSidebar.featuredError;
+
+  const topicFacets = useQuery({
+    queryKey: [
+      'entity-feed-topic-facets',
+      topicFacetEndpoint ?? null,
+      topicIdsKey,
+      typeIdsKey,
+      spaceIdsKey,
+      fixedParamsKey,
+    ],
+    enabled: Boolean(topicFacetEndpoint) && topicFilterVisible,
+    placeholderData: keepPreviousData,
+    queryFn: ({ signal }) =>
+      fetchTopicFacets(topicFacetEndpoint!, {
+        selectedTopicIds,
+        typeIds,
+        spaceIds: requestedSpaceIds,
+        fixedParams,
+        signal,
+      }),
+    staleTime: 60_000,
+  });
+  // A picker whose endpoint has not arrived yet is pending, not empty: a topic page keeps the
+  // control showing a loading state until its space scope resolves rather than offering no topics.
+  const topicCountsPending = topicFacetEndpoint
+    ? topicFacets.isLoading || topicFacets.isPlaceholderData
+    : showTopicFilter;
+  const topicFacetFailed = Boolean(topicFacetEndpoint) && topicFacets.isError && !topicFacets.data;
+  const topicCountsExact = hideTopicCountsUnderTop ? sort !== 'top' : true;
+  const availableTopicOptions = React.useMemo<HubFilterOption<string>[]>(() => {
+    if (!topicFacetEndpoint) return [];
+    return orderFacetOptions(topicFacets.data?.topics ?? [], selectedTopicIds).map(topic => ({
+      value: topic.id,
+      label: topic.name?.trim() || 'Topic',
+      ...(topicCountsExact ? { count: topic.count } : {}),
+    }));
+  }, [topicFacetEndpoint, topicFacets.data?.topics, selectedTopicIds, topicCountsExact]);
+
+  // A topic that drops to zero and is not selected leaves the menu; a still-loading or failed
+  // payload keeps the selection rather than discarding one mid-flight. Only the settled REST
+  // payload prunes — a feed with no endpoint yet has nothing to reconcile against.
+  React.useEffect(() => {
+    if (!topicFacetEndpoint || topicFacets.isPlaceholderData || topicFacets.error || !topicFacets.data) return;
+    setSelectedTopicIds(current => keepSelectableTopics(current, topicFacets.data.topics, true));
+  }, [topicFacetEndpoint, topicFacets.data, topicFacets.error, topicFacets.isPlaceholderData]);
+
+  const showFilterRow = showSortFilter || timeRangeApplies || typeFilterVisible || topicFilterVisible;
+
+  const toggleMoreFilters = React.useCallback(() => {
+    // Putting the menus away puts their filters away too, so the feed never stays narrowed by a
+    // menu the viewer can no longer see.
+    if (moreFiltersOpen) {
+      setSelectedTypeIds([...initialTypeIds]);
+      setSelectedSpaceIds([]);
+      setSelectedTopicIds([]);
+    }
+    setMoreFiltersOpen(!moreFiltersOpen);
+  }, [initialTypeIds, moreFiltersOpen, setMoreFiltersOpen]);
 
   const toggleSpace = React.useCallback((spaceId: string) => {
     setSelectedSpaceIds(current => toggleId(current, spaceId));
@@ -454,7 +478,7 @@ export function EntityFeed({
   // A payload whose Featured traversal failed is not settled either. It still arrives — with the
   // featured rows empty and `featuredError` set — so reading it as an answer would untick every
   // featured space on one transient failure, when the route's own lookup may well have succeeded.
-  const spaceOptionsSettled = browseSidebar !== null && !browseSidebar.featuredError;
+  const spaceOptionsSettled = browseSidebarSettled;
   React.useEffect(() => {
     setSelectedSpaceIds(current =>
       keepSelectableSpaces(
@@ -676,7 +700,6 @@ export function EntityFeed({
     'Any topic',
     () =>
       topicFacets.data?.topics.find(topic => normId(topic.id) === normId(selectedTopicIds[0]))?.name ??
-      topicOptions.find(option => normId(option.value) === normId(selectedTopicIds[0]))?.label ??
       availableTopicOptions.find(option => normId(option.value) === normId(selectedTopicIds[0]))?.label ??
       '1 topic',
     count => `${count} topics`
@@ -793,6 +816,7 @@ export function EntityFeed({
                   showImages={false}
                   searchPlaceholder="Search topics"
                   searchEmptyLabel="No topics found"
+                  emptyLabel={topicFacetFailed ? 'Couldn’t load topics' : undefined}
                   countsPending={topicCountsPending}
                 />
               ) : null}

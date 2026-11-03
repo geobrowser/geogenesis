@@ -40,7 +40,7 @@ export type NotificationPreferences = {
   /** The all-email switch. Off overrides every group; the groups keep their own values underneath. */
   email_enabled: boolean;
   /**
-   * The five groups (GEO-3372). Absent from a service that predates them: settings then shows only the
+   * The six groups (GEO-3372, community calls GEO-3420). Absent from a service that predates them: settings then shows only the
    * all-email switch.
    */
   email_groups?: EmailGroupSettings;

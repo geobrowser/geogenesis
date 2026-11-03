@@ -53,7 +53,7 @@ window.ResizeObserver ??= ResizeObserverStub as unknown as typeof ResizeObserver
 const { LobbyPeople } = await import('./lobby-roster');
 const { LobbyPersonCard } = await import('./lobby-person-menu');
 const { LobbyClosedCard, LobbyEmptyRoom } = await import('./lobby-state-cards');
-const { LobbyPurposeProvider } = await import('./lobby-purpose');
+const { RoomCapabilitiesProvider } = await import('./room-capabilities');
 const { memberActions, otherLobbyIdFrom } = await import('./lobby-format');
 
 const CALL = { purpose: 'call' as const, spaceId: 'space1', exitHref: '/space/space1' };
@@ -108,7 +108,7 @@ function view(members: DebateLobbyMember[], extra: Partial<LobbyPageView> = {}):
 }
 
 function inCall(children: React.ReactNode) {
-  return <LobbyPurposeProvider value={CALL}>{children}</LobbyPurposeProvider>;
+  return <RoomCapabilitiesProvider purpose={CALL}>{children}</RoomCapabilitiesProvider>;
 }
 
 describe('the roster in a space call', () => {
@@ -211,6 +211,12 @@ describe('state cards in a space call', () => {
     expect(screen.getByRole('heading', { name: 'This call has ended' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Back to the space' })).toHaveAttribute('href', '/space/space1');
     expect(screen.queryByText(/next lobby/i)).not.toBeInTheDocument();
+  });
+
+  it('says a cancelled scheduled call was cancelled (GEO-3420)', () => {
+    render(inCall(<LobbyClosedCard lobby={{ lobby_id: 'call1', created_by: null }} ended={false} cancelled />));
+
+    expect(screen.getByRole('heading', { name: 'This call was cancelled' })).toBeInTheDocument();
   });
 
   it('asks the first one in to share the link, without lobby suggestions', () => {

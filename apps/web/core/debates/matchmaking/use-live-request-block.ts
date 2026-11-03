@@ -5,7 +5,7 @@ import * as React from 'react';
 import { activeDebate } from '../activity-state';
 import type { DebateActivity, DebateRequestsResponse } from '../api';
 import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
-import { useUnexpiredRequests } from './use-request-countdown';
+import { useLiveRequest, useUnexpiredRequests } from './use-request-countdown';
 
 /**
  * Whether the viewer can send a live request right now, and if not, why — the People tab's rule,
@@ -32,6 +32,10 @@ export function useLiveRequestBlock(
   const outboundChallenge =
     pendingChallenge && currentUserId && pendingChallenge.requester.user_id === currentUserId ? pendingChallenge : null;
 
+  // The open request, through the same expiry filter as the panel's strip (`useOutgoingAsk`), so the
+  // buttons come back the moment the strip says nobody took it rather than at `requests_changed`.
+  const outboundRequest = useLiveRequest(requests?.outbound ?? activity?.outbound_request);
+
   // Every Debate button greys out at once when the viewer already has something open, so say why
   // rather than leaving a list of dead buttons. The card says it for an outbound challenge, so the
   // sentence would only repeat it.
@@ -41,7 +45,7 @@ export function useLiveRequestBlock(
       : 'You have a debate request awaiting a reply.'
     : activeDebate(activity)
       ? "You're already in a debate."
-      : activity?.outbound_request || requests?.outbound
+      : outboundRequest
         ? 'You already have an open request — withdraw it to challenge someone else.'
         : null;
 

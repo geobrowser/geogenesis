@@ -12,11 +12,9 @@ import { debateAnalyticsLabel, hubAnalyticsAttributes } from '../matchmaking/hub
 import { debateRoomPath } from '../rooms/room-routes';
 import type { LobbyLineup } from './live-lobbies';
 import { markLobbyEntry } from './lobby-analytics';
-import { debatingLabel, hereLabel, lobbyScheduleLabel, rsvpLabel, untilLabel } from './lobby-format';
+import { debatingLabel, hereLabel } from './lobby-format';
 import { LobbyByline } from './lobby-host-names';
 import { LobbyAvatarStack } from './lobby-people';
-import { LobbyReminderError, useLobbyReminderPress } from './lobby-reminder-press';
-import { useMinuteNow } from './use-minute-now';
 
 /**
  * The dark surface live lobbies are drawn on (GEO-3268): the Explore welcome banner's and the
@@ -82,148 +80,89 @@ export function joinLabel(lobby: Pick<DebateLobbySummary, 'viewer_on_roster'>, s
 }
 
 /**
- * The lobby spotlight at the top of the debates panel (GEO-3268), above the tabs, in place of the
- * set-schedule banner. The panel shows it while a lobby is live or one opens within 15 minutes.
- *
- * Live: the busiest lobby large, every other live one listed under it. Soon: a countdown to the
- * next opening, with RSVP. Lobbies further out stay in the card under the tabs, which scrolls.
+ * The live lobby card at the top of the debates panel (GEO-3268): the busiest live lobby large, every
+ * other live one listed under it. Kept over a one-line strip (Preston, 28 Oct): a live lobby is the
+ * one thing in the panel worth the room. A lobby that has not opened is the panel's light next-lobby
+ * strip instead.
  */
-export function LobbySpotlight({ lineup }: { lineup: LobbyLineup }) {
+export function LiveLobbySpotlight({ lineup }: { lineup: LobbyLineup }) {
   const [lead, ...others] = lineup.live;
-  if (!lead && !lineup.soon) return null;
-
-  return (
-    <div className="mx-4 mb-3" data-testid="lobby-spotlight">
-      {lead ? (
-        <LiveSpotlight lead={lead} others={others} />
-      ) : lineup.soon ? (
-        <SoonSpotlight lobby={lineup.soon} />
-      ) : null}
-    </div>
-  );
-}
-
-function LiveSpotlight({ lead, others }: { lead: DebateLobbySummary; others: DebateLobbySummary[] }) {
+  if (!lead) return null;
   const href = debateRoomPath(lead.lobby_id);
 
   return (
-    <section
-      aria-label={others.length > 0 ? 'Live debate lobbies' : 'Live debate lobby'}
-      className={cx('flex flex-col gap-3 rounded-lg p-4', LOBBY_DARK_SURFACE_CLASS_NAME)}
-      style={LOBBY_DARK_SURFACE_STYLE}
-    >
-      <LiveMark count={others.length + 1} />
-
-      <div className="flex min-w-0 flex-col gap-1">
-        <Text as="h3" variant="smallTitle" color="white" className="truncate">
-          {lead.name}
-        </Text>
-        {lead.hosts.length > 0 ? (
-          <p className={cx('truncate text-grey-03', LOBBY_BODY_TEXT_CLASS_NAME)}>
-            <LobbyByline lobby={lead} analyticsLabel={SPOTLIGHT_HOST_LABEL} hostedBy />
-          </p>
-        ) : null}
-      </div>
-
-      <div className="flex min-w-0 items-center gap-2.5">
-        <LobbyAvatarStack people={lead.avatars} total={lead.headcount} />
-        <p className={cx('min-w-0 truncate text-white', LOBBY_BODY_TEXT_CLASS_NAME)}>{liveLobbyCounts(lead)}</p>
-      </div>
-
-      <Link
-        href={href}
-        onClick={() => markLobbyEntry(lead.lobby_id, 'side_panel')}
-        {...hubAnalyticsAttributes(
-          lead.viewer_on_roster ? 'Lobby spotlight Open' : 'Lobby spotlight Join',
-          'join_lobby'
-        )}
-        className={SPOTLIGHT_ACTION_CLASS_NAME}
+    <div className="mx-4 mb-3" data-testid="lobby-spotlight">
+      <section
+        aria-label={others.length > 0 ? 'Live debate lobbies' : 'Live debate lobby'}
+        className={cx('flex flex-col gap-3 rounded-lg p-4', LOBBY_DARK_SURFACE_CLASS_NAME)}
+        style={LOBBY_DARK_SURFACE_STYLE}
       >
-        {joinLabel(lead)}
-      </Link>
+        <LiveMark count={others.length + 1} />
 
-      {others.length > 0 ? (
-        <div className="flex flex-col gap-2 border-t border-white/15 pt-3">
-          <Text as="p" variant="footnoteMedium" color="grey-03">
-            Also live
+        <div className="flex min-w-0 flex-col gap-1">
+          <Text as="h3" variant="smallTitle" color="white" className="truncate">
+            {lead.name}
           </Text>
-          <ul className="flex flex-col gap-3">
-            {others.map(lobby => (
-              <li key={lobby.lobby_id} className="flex min-w-0 items-center gap-2.5" data-testid="also-live-row">
-                <div className="flex min-w-0 flex-1 flex-col gap-1">
-                  <Text as="p" variant="metadataMedium" color="white" className="truncate">
-                    {lobby.name}
-                  </Text>
-                  <div className="flex min-w-0 items-center gap-2">
-                    <LobbyAvatarStack people={lobby.avatars} total={lobby.headcount} />
-                    <Text as="span" variant="footnote" color="grey-03" className="min-w-0 truncate">
-                      {liveLobbyCounts(lobby)}
-                    </Text>
-                  </div>
-                </div>
-                <Link
-                  href={debateRoomPath(lobby.lobby_id)}
-                  onClick={() => markLobbyEntry(lobby.lobby_id, 'side_panel')}
-                  {...hubAnalyticsAttributes(
-                    lobby.viewer_on_roster ? 'Lobby spotlight also live Open' : 'Lobby spotlight also live Join',
-                    'join_lobby'
-                  )}
-                  className={SPOTLIGHT_SECONDARY_PILL_CLASS_NAME}
-                >
-                  {joinLabel(lobby, true)}
-                </Link>
-              </li>
-            ))}
-          </ul>
+          {lead.hosts.length > 0 ? (
+            <p className={cx('truncate text-grey-03', LOBBY_BODY_TEXT_CLASS_NAME)}>
+              <LobbyByline lobby={lead} analyticsLabel={SPOTLIGHT_HOST_LABEL} hostedBy />
+            </p>
+          ) : null}
         </div>
-      ) : null}
-    </section>
-  );
-}
 
-function SoonSpotlight({ lobby }: { lobby: DebateLobbySummary }) {
-  const remind = useLobbyReminderPress(lobby);
-  // Ticks so the countdown moves; passed in so the compiler sees it change.
-  const now = useMinuteNow();
-  const schedule = lobbyScheduleLabel(lobby, now);
+        <div className="flex min-w-0 items-center gap-2.5">
+          <LobbyAvatarStack people={lead.avatars} total={lead.headcount} />
+          <p className={cx('min-w-0 truncate text-white', LOBBY_BODY_TEXT_CLASS_NAME)}>{liveLobbyCounts(lead)}</p>
+        </div>
 
-  return (
-    <section
-      aria-label="Upcoming debate lobby"
-      className={cx('flex flex-col gap-3 rounded-lg p-4', LOBBY_DARK_SURFACE_CLASS_NAME)}
-    >
-      {schedule ? (
-        <Text as="p" variant="footnoteMedium" color="grey-03">
-          {schedule}
-        </Text>
-      ) : null}
+        <Link
+          href={href}
+          onClick={() => markLobbyEntry(lead.lobby_id, 'side_panel')}
+          {...hubAnalyticsAttributes(
+            lead.viewer_on_roster ? 'Lobby spotlight Open' : 'Lobby spotlight Join',
+            'join_lobby'
+          )}
+          className={SPOTLIGHT_ACTION_CLASS_NAME}
+        >
+          {joinLabel(lead)}
+        </Link>
 
-      <div className="flex min-w-0 flex-col gap-1">
-        {/* "Opens in 12 min", then "Opens soon" until geo-chat opens it. */}
-        <p className="text-largeTitle text-white tabular-nums" aria-live="polite">
-          Opens {untilLabel(lobby.opens_at, now)}
-        </p>
-        <Text as="h3" variant="smallTitle" color="white" className="truncate">
-          {lobby.name}
-        </Text>
-      </div>
-
-      <p className={cx('text-grey-03', LOBBY_BODY_TEXT_CLASS_NAME)}>
-        <LobbyByline lobby={lobby} analyticsLabel={SPOTLIGHT_HOST_LABEL} hostedBy />
-      </p>
-
-      <button
-        type="button"
-        {...hubAnalyticsAttributes(remind.reminded ? 'Lobby spotlight reminded' : 'Lobby spotlight remind me')}
-        aria-pressed={remind.reminded}
-        aria-busy={remind.pending || undefined}
-        disabled={remind.pending}
-        onClick={remind.press}
-        className={SPOTLIGHT_ACTION_CLASS_NAME}
-      >
-        {rsvpLabel(remind.reminded)}
-      </button>
-      <LobbyReminderError error={remind.error} />
-    </section>
+        {others.length > 0 ? (
+          <div className="flex flex-col gap-2 border-t border-white/15 pt-3">
+            <Text as="p" variant="footnoteMedium" color="grey-03">
+              Also live
+            </Text>
+            <ul className="flex flex-col gap-3">
+              {others.map(lobby => (
+                <li key={lobby.lobby_id} className="flex min-w-0 items-center gap-2.5" data-testid="also-live-row">
+                  <div className="flex min-w-0 flex-1 flex-col gap-1">
+                    <Text as="p" variant="metadataMedium" color="white" className="truncate">
+                      {lobby.name}
+                    </Text>
+                    <div className="flex min-w-0 items-center gap-2">
+                      <LobbyAvatarStack people={lobby.avatars} total={lobby.headcount} />
+                      <Text as="span" variant="footnote" color="grey-03" className="min-w-0 truncate">
+                        {liveLobbyCounts(lobby)}
+                      </Text>
+                    </div>
+                  </div>
+                  <Link
+                    href={debateRoomPath(lobby.lobby_id)}
+                    onClick={() => markLobbyEntry(lobby.lobby_id, 'side_panel')}
+                    {...hubAnalyticsAttributes(
+                      lobby.viewer_on_roster ? 'Lobby spotlight also live Open' : 'Lobby spotlight also live Join',
+                      'join_lobby'
+                    )}
+                    className={SPOTLIGHT_SECONDARY_PILL_CLASS_NAME}
+                  >
+                    {joinLabel(lobby, true)}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+      </section>
+    </div>
   );
 }

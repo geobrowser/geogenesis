@@ -230,13 +230,18 @@ export function orderFacetOptions<T extends { id: string; count: number }>(optio
  * picked in is at least the viewer's own.
  */
 export function toggleId(selected: readonly string[], id: string): string[] {
-  // Compared canonically: a space id reaches the menu in whichever spelling its rows carried, so
-  // unticking could otherwise add a second spelling of a space that was already picked instead of
-  // removing it.
   const key = normId(id);
-  return selected.some(entry => normId(entry) === key)
-    ? selected.filter(entry => normId(entry) !== key)
-    : [...selected, id];
+  return hasId(selected, id) ? selected.filter(entry => normId(entry) !== key) : [...selected, id];
+}
+
+/**
+ * Whether `id` is in the selection, compared canonically: a space id reaches the menu in whichever
+ * spelling its rows carried, so unticking could otherwise add a second spelling of a space that was
+ * already picked instead of removing it.
+ */
+export function hasId(selected: readonly string[], id: string): boolean {
+  const key = normId(id);
+  return selected.some(entry => normId(entry) === key);
 }
 
 /**
@@ -334,6 +339,17 @@ export function carriesEveryTopic(topics: { id: string }[] | undefined, selected
   if (selected.length === 0) return true;
   const carried = new Set((topics ?? []).map(topic => topic.id));
   return selected.every(id => carried.has(id));
+}
+
+/**
+ * Whether a row is in every picked space: the side panel's space picks narrow (AND, GEO-3463), like
+ * topics. A claim row sits in one space, so it passes two picks only if they name the same space; a
+ * person is active in several. Ids compare dashless, since lists and facets disagree on dashes.
+ */
+export function inEverySpace(spaceIds: readonly string[], rowSpaceIds: string | readonly string[]): boolean {
+  if (spaceIds.length === 0) return true;
+  const rows = new Set((typeof rowSpaceIds === 'string' ? [rowSpaceIds] : rowSpaceIds).map(normId));
+  return spaceIds.every(id => rows.has(normId(id)));
 }
 
 /** Letters and digits in any script: what separates words in a topic name is everything else. */

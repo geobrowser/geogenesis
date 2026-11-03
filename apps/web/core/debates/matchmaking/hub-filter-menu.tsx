@@ -194,6 +194,7 @@ type MultiProps<T extends string> = {
   searchPlaceholder?: string;
   /** What the menu says when the query matches nothing. */
   searchEmptyLabel?: string;
+  emptyLabel?: string;
   /**
    * Replaces the labelled pill that opens the menu, for a host that opens it from something of its
    * own. The topic pill row ends in a "More" pill that opens this list, and a second labelled
@@ -251,6 +252,7 @@ export function HubMultiFilterMenu<T extends string>({
   countsPending,
   searchPlaceholder,
   searchEmptyLabel = 'No matches',
+  emptyLabel,
   trigger,
 }: MultiProps<T>) {
   const [open, setOpen] = React.useState(false);
@@ -486,11 +488,13 @@ export function HubMultiFilterMenu<T extends string>({
           <div
             role="status"
             aria-live="polite"
-            className={searching && visibleOptions.length === 0 ? 'px-3 py-2.5' : undefined}
+            className={
+              visibleOptions.length === 0 && (searching ? searchEmptyLabel : emptyLabel) ? 'px-3 py-2.5' : undefined
+            }
           >
-            {searching && visibleOptions.length === 0 ? (
+            {visibleOptions.length === 0 && (searching ? searchEmptyLabel : emptyLabel) ? (
               <Text variant="footnote" className="text-grey-04!">
-                {searchEmptyLabel}
+                {searching ? searchEmptyLabel : emptyLabel}
               </Text>
             ) : null}
           </div>

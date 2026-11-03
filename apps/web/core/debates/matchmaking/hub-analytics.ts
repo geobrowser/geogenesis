@@ -133,6 +133,20 @@ export function debateActionAnalyticsAttributes(
 }
 
 /**
+ * As {@link debateActionAnalyticsAttributes}, except on the hub, where the control keeps `hubLabel`:
+ * a label its series had before it moved into a control shared with other surfaces, so the move
+ * does not split the series there while the other surfaces still read apart from the hub.
+ */
+export function debateActionAnalyticsAttributesKeepingHubLabel(
+  surface: DebateActionAnalyticsSurface,
+  action: string,
+  hubLabel: string
+) {
+  const attributes = debateActionAnalyticsAttributes(surface, action);
+  return surface === 'hub' ? { ...attributes, 'data-geo-analytics-label': hubLabel } : attributes;
+}
+
+/**
  * A control's label and intent together, for a shared component to spread onto the element it
  * renders. Passing the object rather than a bare label keeps the two from drifting apart.
  */

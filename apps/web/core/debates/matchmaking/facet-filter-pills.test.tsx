@@ -3,6 +3,8 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { ResizeObserverStub } from '../resize-observer-fixtures';
+
 import { FacetFilterPills, type FacetPillOption, fitPills, rowLines } from './facet-filter-pills';
 
 const topics = (n: number): FacetPillOption[] =>
@@ -49,13 +51,6 @@ function layOut({ pill, row: rowWidth }: { pill: number; row: number }) {
       ({ width: pill, height: 28, top: 0, left: 0, right: pill, bottom: 28, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect
   );
   vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(rowWidth);
-}
-
-/** The menu's popover measures itself, and jsdom has no ResizeObserver to do it with. */
-class ResizeObserverStub {
-  observe() {}
-  unobserve() {}
-  disconnect() {}
 }
 
 afterEach(() => {
@@ -163,6 +158,7 @@ describe('FacetFilterPills', () => {
   });
 
   it('opens every option from "More", and picks from there', () => {
+    // The menu's popover measures itself, and jsdom has no ResizeObserver to do it with.
     vi.stubGlobal('ResizeObserver', ResizeObserverStub);
     layOut({ pill: 100, row: 320 });
     const options = topics(10);

@@ -16,8 +16,8 @@ import {
   moderationErrorMessage,
   personName,
 } from './lobby-format';
-import { useIsCallRoom } from './lobby-purpose';
 import { useModerateLobbyMember } from './moderation-hooks';
+import { useRoomCapabilities } from './room-capabilities';
 
 /** Step down rather than "Remove as host" on yourself. */
 const STEP_DOWN_LABEL = 'Step down as host';
@@ -49,7 +49,7 @@ export function LobbyMemberActions({
   onDone?: () => void;
 }) {
   const moderate = useModerateLobbyMember(lobby.lobby_id);
-  const call = useIsCallRoom();
+  const room = useRoomCapabilities().noun;
   const [confirmingBan, setConfirmingBan] = React.useState(false);
   const actions = memberActions(lobby.viewer, member, isSelf).filter(action => action !== 'mute' || micOn !== false);
   if (actions.length === 0) return null;
@@ -74,7 +74,7 @@ export function LobbyMemberActions({
       {confirmingBan ? (
         <div className="flex flex-col gap-2 px-3 py-2">
           <Text as="p" variant="metadata">
-            Ban {name}? They can’t rejoin this {call ? 'call' : 'lobby'} until a host unbans them.
+            Ban {name}? They can’t rejoin this {room} until a host unbans them.
           </Text>
           <div className="flex flex-wrap gap-2">
             <HubPillButton
@@ -114,9 +114,9 @@ export function LobbyMemberActions({
               ? STEP_DOWN_LABEL
               : isSelf && action === 'promote'
                 ? HOST_AGAIN_LABEL
-                : call && action === 'remove'
+                : room === 'call' && action === 'remove'
                   ? 'Remove from call'
-                  : call && action === 'ban'
+                  : room === 'call' && action === 'ban'
                     ? 'Ban from call'
                     : MEMBER_ACTION_LABEL[action]}
           </button>
@@ -124,7 +124,7 @@ export function LobbyMemberActions({
       )}
       {moderate.isError ? (
         <Text as="p" variant="footnote" color="red-01" className="px-3 pb-2">
-          {moderationErrorMessage(moderate.error, undefined, call ? 'call' : 'lobby')}
+          {moderationErrorMessage(moderate.error, undefined, room)}
         </Text>
       ) : null}
     </div>
