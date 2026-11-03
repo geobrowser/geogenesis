@@ -476,6 +476,32 @@ describe('SaveVotesSheet', () => {
       expect(mocks.beginPrivyAuth).not.toHaveBeenCalled();
     });
 
+    it('waits for Google to fail before starting the email path', async () => {
+      let failGoogle!: (error: Error) => void;
+      mocks.googleSignIn = vi.fn(
+        () =>
+          new Promise<void>((_, reject) => {
+            failGoogle = reject;
+          })
+      );
+      vote('a');
+      markPromptedThisSession();
+      render(<SaveVotesSheet />);
+      act(() => openSaveVotesPrompt('navbar'));
+      const field = screen.getByRole('textbox', { name: 'Email address' });
+      fireEvent.change(field, { target: { value: 'sam@hey.com' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
+      expect(screen.getByRole('button', { name: 'Save vote' })).toBeDisabled();
+      fireEvent.submit(field.closest('form')!);
+      expect(mocks.beginPrivyAuth).not.toHaveBeenCalled();
+      await act(async () => {
+        failGoogle(new Error('blocked'));
+      });
+      expect(screen.getByRole('button', { name: 'Save vote' })).toBeEnabled();
+      fireEvent.click(screen.getByRole('button', { name: 'Save vote' }));
+      expect(screen.getByText('Check your email')).toBeInTheDocument();
+    });
+
     it('says so when Google does not start, and keeps the email path', async () => {
       mocks.googleSignIn = vi.fn(() => Promise.reject(new Error('blocked')));
       vote('a');

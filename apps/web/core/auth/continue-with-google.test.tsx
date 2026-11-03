@@ -68,4 +68,34 @@ describe('useContinueWithGoogle', () => {
 
     expect(result.current!.status).toBe('starting');
   });
+  it('starts only one request when pressed twice before React renders', () => {
+    mocks.signIn = vi.fn(pending);
+    const { result } = renderHook(() => useContinueWithGoogle());
+    act(() => {
+      void result.current!.start({});
+      void result.current!.start({});
+    });
+    expect(mocks.signIn).toHaveBeenCalledOnce();
+  });
+
+  it('ignores a late failure from before a back/forward-cache restore', async () => {
+    let failOldStart!: (error: Error) => void;
+    mocks.signIn = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((_, reject) => {
+            failOldStart = reject;
+          })
+      )
+      .mockImplementation(pending);
+    const { result } = renderHook(() => useContinueWithGoogle());
+    act(() => void result.current!.start({}));
+    act(() => window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true })));
+    act(() => void result.current!.start({}));
+    await act(async () => {
+      failOldStart(new Error('old request failed'));
+    });
+    expect(result.current!.status).toBe('starting');
+  });
 });

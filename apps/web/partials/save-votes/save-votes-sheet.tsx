@@ -217,16 +217,16 @@ export function SaveVotesSheet() {
   // The button waits for an address that looks like one, so there is no rejection to show.
   const canSend = isLikelyEmail(trimmedEmail);
 
+  // Undefined with the `googleSignIn` flag off or in an in-app browser, which hides the button.
+  const google = useContinueWithGoogle();
+
   const submitEmail = (event: React.FormEvent) => {
     event.preventDefault();
-    if (!canSend) return;
+    if (!canSend || google?.status === 'starting') return;
     beginPrivyAuth(signInProperties);
     prepareOnboarding();
     setAttempt({ email: trimmedEmail, centered, reason: attempt ? attempt.reason : reason, phase: 'code' });
   };
-
-  // Undefined with the `googleSignIn` flag off or in an in-app browser, which hides the button.
-  const google = useContinueWithGoogle();
 
   if (!open) return null;
   // Waits behind anything the visitor opened. Hidden rather than unmounted once a code is out, so
@@ -326,7 +326,11 @@ export function SaveVotesSheet() {
               className={INPUT_CLASS}
             />
           </label>
-          <button type="submit" disabled={!canSend} className={primaryButtonClass(compact)}>
+          <button
+            type="submit"
+            disabled={!canSend || google?.status === 'starting'}
+            className={primaryButtonClass(compact)}
+          >
             {editing ? SAVE_VOTES_RESEND_LABEL : saveVotesSubmitLabel(count, logIn)}
           </button>
           {google ? (

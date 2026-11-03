@@ -1294,6 +1294,17 @@ describe('ExploreEmailCapturePopup Google sign-in', () => {
     });
   });
 
+  it('keeps the email account action off while Google is starting', async () => {
+    mocks.initOAuth.mockImplementationOnce(() => new Promise<void>(() => {}));
+    await subscribeWithGoogleFlag(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
+    const attemptId = currentAuthAttempt()?.id;
+    expect(screen.getByRole('button', { name: 'Create account' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+    expect(currentAuthAttempt()?.id).toBe(attemptId);
+    expect(currentAuthAttempt()?.properties.auth_control).toBe('continue_with_google');
+  });
+
   // Privy refuses Google in in-app browsers, and a retry there can never work.
   it('offers no Google button in an in-app browser', async () => {
     vi.spyOn(window.navigator, 'userAgent', 'get').mockReturnValue(

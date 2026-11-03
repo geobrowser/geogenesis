@@ -164,7 +164,10 @@ function EmailCapturePopup() {
     return () => window.removeEventListener('scroll', check);
   }, [authenticated, dismissed, scrolledEnough]);
 
-  /** What the close button does: remember it, and take it off the screen now. */
+  // Undefined with the `googleSignIn` flag off, which hides the button.
+  const google = useContinueWithGoogle();
+  const googleStarting = google?.status === 'starting';
+
   /**
    * Hands over to the account step, which owns the OTP flow from here.
    *
@@ -175,14 +178,12 @@ function EmailCapturePopup() {
    * actually signing up.
    */
   const startAccount = React.useCallback(() => {
+    if (googleStarting) return;
     beginPrivyAuth(ACCOUNT_ANALYTICS);
     prepareOnboarding();
     writePendingSignup(subscribedEmail);
     setWantsAccount(true);
-  }, [prepareOnboarding, subscribedEmail]);
-
-  // Undefined with the `googleSignIn` flag off, which hides the button.
-  const google = useContinueWithGoogle();
+  }, [googleStarting, prepareOnboarding, subscribedEmail]);
 
   const close = React.useCallback(() => {
     if (currentAuthAttempt()?.properties.component === 'explore_email_capture') finishAuthAttempt('closed');
@@ -380,7 +381,12 @@ function EmailCapturePopup() {
                     Laid out as the subscribe row is after the restyle: a column with the same
                     spacing and width, so the card keeps one shape whichever state it is in. */}
                 <div className={FORM_STACK_CLASS}>
-                  <button type="button" onClick={startAccount} className={PRIMARY_BUTTON_CLASS}>
+                  <button
+                    type="button"
+                    onClick={startAccount}
+                    disabled={googleStarting}
+                    className={PRIMARY_BUTTON_CLASS}
+                  >
                     Create account
                   </button>
                   {google ? (
