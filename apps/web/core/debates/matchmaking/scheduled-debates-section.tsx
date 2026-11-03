@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation';
 
 import type { ScheduleEntry } from '~/core/availability/schedule-analytics';
 import {
+  type DebateLobbyCalendarRow,
   type DebateParticipantSummary,
   type ScheduledDebateRequest,
   type UpcomingDebateRoom,
@@ -144,14 +145,19 @@ export const READ_FAILURE_COPY = {
   rooms: (error: Error) => accountSetupMessage(error) ?? 'Could not read your upcoming debates.',
   requests: (error: Error) => accountSetupMessage(error) ?? 'Could not read your scheduled debates.',
   lobbies: (error: Error) => accountSetupMessage(error) ?? 'Could not read your lobbies.',
+  /** The timeline's read of the next seven days' lobbies (GEO-3519). */
+  week: (error: Error) => accountSetupMessage(error) ?? 'Could not read this week’s lobbies.',
 };
 
-/** Every read that failed, in the timeline's order. */
-export function readFailureMessages(content: Pick<ScheduledContent, 'roomsError' | 'requestsError' | 'lobbiesError'>) {
+/** Every read that failed, in the timeline's order; `weekError` only where the week is read. */
+export function readFailureMessages(
+  content: Pick<ScheduledContent, 'roomsError' | 'requestsError' | 'lobbiesError'> & { weekError?: Error | null }
+) {
   return [
     content.roomsError && READ_FAILURE_COPY.rooms(content.roomsError),
     content.requestsError && READ_FAILURE_COPY.requests(content.requestsError),
     content.lobbiesError && READ_FAILURE_COPY.lobbies(content.lobbiesError),
+    content.weekError && READ_FAILURE_COPY.week(content.weekError),
   ].filter((message): message is string => Boolean(message));
 }
 
@@ -314,7 +320,12 @@ export type UpcomingRoomRow = {
   requestId: string | null;
 };
 
-export function useScheduledContent(): ScheduledContent {
+/**
+ * `week` is the calendar's next seven days, where the caller reads it (the Requests timeline, for the
+ * lobbies it offers): its Going lobbies are rows too, the moment the viewer RSVPs; see
+ * `upcomingLobbyRows`.
+ */
+export function useScheduledContent(week?: DebateLobbyCalendarRow[]): ScheduledContent {
   const requests = useScheduledDebates();
   const rooms = useUpcomingDebateRooms();
   const viewerId = useCurrentGeoChatUserId();
@@ -347,8 +358,8 @@ export function useScheduledContent(): ScheduledContent {
   );
 
   const lobbies = React.useMemo(
-    () => upcomingLobbyRows(roomList, lobbyList.data?.lobbies ?? [], viewerId),
-    [lobbyList.data, roomList, viewerId]
+    () => upcomingLobbyRows(roomList, lobbyList.data?.lobbies ?? [], viewerId, week),
+    [lobbyList.data, roomList, viewerId, week]
   );
 
   // The viewer included: their own side of the strip needs a face too.
