@@ -4,7 +4,7 @@ import { type QueryClient, useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
-import { capture } from '~/core/analytics';
+import { devLog } from '~/core/utils/dev-log';
 import { usePrivy } from '~/core/wallet/auth-hooks';
 
 import { type GetPrivyIdentityToken, getGeoChatSession, refreshGeoChatSessionProfile } from './api';
@@ -134,7 +134,7 @@ function refreshWhilePending(accountKey: string, retryAfterMs: number | null): C
   };
 }
 
-/** Refetches and `onboarding_step_viewed` (flow `debates_account`) events on status changes, once per step per account per load. */
+/** Refetches on status changes, and computes each session outcome once per step per account per load. */
 function useAccountStatusTransitions(
   accountKey: string | null,
   status: GeoChatAccountStatus,
@@ -158,16 +158,12 @@ function useAccountStatusTransitions(
     const report = (step: string, properties: Record<string, unknown>) => {
       if (reportedRef.current.has(step)) return;
       reportedRef.current.add(step);
-      try {
-        capture('onboarding_step_viewed', {
-          flow: 'debates_account',
-          step_id: step,
-          ms_since_sign_up: signedUpAt === null ? null : now - signedUpAt,
-          ...properties,
-        });
-      } catch {
-        // Analytics never affects the product.
-      }
+      // Not sent until `debates_session_outcome` is registered in the analytics repo (see PR).
+      devLog('[debates] session outcome %o', {
+        outcome: step,
+        ms_since_sign_up: signedUpAt === null ? null : now - signedUpAt,
+        ...properties,
+      });
     };
 
     if (status.kind === 'refused') {
