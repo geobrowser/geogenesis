@@ -33,6 +33,7 @@ const mocks = vi.hoisted(() => ({
     avatar_cid: string | null;
   }[],
   graphLookupIds: [] as string[],
+  graphLookupPeople: [] as unknown[],
   lobbies: [] as DebateLobbySummary[],
   lobbiesError: null as Error | null,
   requestsLoading: false,
@@ -86,8 +87,9 @@ vi.mock('./hooks', () => ({
 }));
 
 vi.mock('./use-geo-chat-user-summaries', () => ({
-  useGeoChatUserSummaries: (ids: string[]) => {
-    mocks.graphLookupIds = ids;
+  useGeoChatUserSummaries: (people: { user_id: string }[]) => {
+    mocks.graphLookupPeople = people;
+    mocks.graphLookupIds = people.map(person => person.user_id);
     return mocks.graphPeople;
   },
 }));
@@ -737,13 +739,18 @@ describe('pairing a room with the request that booked it', () => {
     expect(result.current.upcoming.map(row => row.room.room_id)).toEqual(['room-open']);
   });
 
-  it('looks up both sides in the graph, the viewer included', () => {
-    mocks.requests = [request(), request({ request_id: 'request-2' })];
+  it('looks up both sides, the viewer included, with the profile geo-chat sent for each', () => {
+    const them = { user_id: 'user-them', accepted: null, profile_space_id: 'space-them', display_name: null };
+    mocks.requests = [
+      request({ participants: [{ user_id: 'user-me', accepted: true }, them] }),
+      request({ request_id: 'request-2' }),
+    ];
     mocks.graphPeople = [ADA];
 
     const { result } = renderHook(() => useScheduledContent());
 
     expect(mocks.graphLookupIds).toEqual(['user-me', 'user-them', 'user-me', 'user-them']);
+    expect(mocks.graphLookupPeople[1]).toEqual(them);
     expect(result.current.people).toEqual([ADA]);
   });
 

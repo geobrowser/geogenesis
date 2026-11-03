@@ -19,9 +19,9 @@ import {
   REFUSED_RETRY_MAX_MS,
   getGeoChatAccountStatus,
   setLiveGeoChatAccountKey,
-  subscribeGeoChatAccountStatus,
 } from './geo-chat-account-status';
 import { useGeoChatAuth } from './hooks';
+import { useGeoChatAccountStatus } from './use-geo-chat-account-status';
 
 const PROFILE_REFRESH_MIN_MS = 1_000;
 /** An account this new reports its first acceptance even when it was never refused. */
@@ -49,13 +49,6 @@ function markAcceptanceReported(accountKey: string) {
 }
 
 /** The signed-in account's geo-chat session status. */
-export function useGeoChatAccountStatus(accountKey: string | null): GeoChatAccountStatus {
-  return React.useSyncExternalStore(
-    subscribeGeoChatAccountStatus,
-    () => getGeoChatAccountStatus(accountKey),
-    () => getGeoChatAccountStatus(null)
-  );
-}
 
 /**
  * Mounted once. The gateway retries a refused exchange; this hook reacts to the status it records. It

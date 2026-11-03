@@ -94,7 +94,22 @@ vi.mock('~/core/hooks/use-search', () => ({
   }),
 }));
 vi.mock('./use-geo-chat-user-summaries', () => ({
-  useGeoChatUserSummaries: (ids: string[]) => mocks.summaries.filter(summary => ids.includes(summary.user_id)),
+  useGeoChatUserSummaries: (people: { user_id: string }[]) =>
+    mocks.summaries.filter(summary => people.some(person => person.user_id === summary.user_id)),
+}));
+// A search hit is a graph Person page. Its personal space, then geo-chat's account for that space,
+// give the user id; the two ids differ, as they do for every account created after GEO-3553.
+const SAM_PAGE = 'sampage';
+vi.mock('~/core/hooks/use-personal-spaces-by-page-ids', () => ({
+  usePersonalSpacesByPageIds: (ids: string[]) => ({
+    data: new Map(ids.filter(id => id === 'sampage').map(id => [id, 'spacesam'])),
+  }),
+}));
+vi.mock('../hooks', async importOriginal => ({
+  ...(await importOriginal<typeof import('../hooks')>()),
+  useDebateProfilesBySpace: (spaceIds: string[]) => ({
+    data: mocks.summaries.filter(summary => spaceIds.includes(summary.profile_space_id)),
+  }),
 }));
 vi.mock('./use-person-facts', () => ({
   usePersonFacts: (_people: unknown, { anchorProfileSpaceId }: { anchorProfileSpaceId?: string | null }) => {
@@ -270,7 +285,7 @@ describe('AdminNewMatchDialog', () => {
     ]);
 
     mocks.searchQuery = 'sam';
-    mocks.searchResults = [{ id: 'sam' }];
+    mocks.searchResults = [{ id: SAM_PAGE }];
     rerender(<AdminNewMatchDialog open onOpenChange={vi.fn()} onSent={vi.fn()} />);
 
     const sam = people()[0];
@@ -282,7 +297,7 @@ describe('AdminNewMatchDialog', () => {
 
   it('matches someone with no availability at any time, flagged Off-hours', async () => {
     mocks.searchQuery = 'sam';
-    mocks.searchResults = [{ id: 'sam' }];
+    mocks.searchResults = [{ id: SAM_PAGE }];
     // What geo-chat answers measured from someone with no schedule: no shared time, no zone.
     mocks.overlap = {
       viewer_timezone: '',
@@ -321,7 +336,7 @@ describe('AdminNewMatchDialog', () => {
   it('recommends shared times for someone the roster missed, once their own read has a schedule', () => {
     // Sam is found by search only, as when the roster is stale, capped or failed to load.
     mocks.searchQuery = 'sam';
-    mocks.searchResults = [{ id: 'sam' }];
+    mocks.searchResults = [{ id: SAM_PAGE }];
     mocks.readZones = { sam: 'America/New_York' };
     mocks.overlap = {
       viewer_timezone: 'America/New_York',
@@ -397,7 +412,7 @@ describe('AdminNewMatchDialog', () => {
   it('flags a time Off-hours straight away when someone is unset, without waiting for the overlap', () => {
     mocks.overlap = undefined;
     mocks.searchQuery = 'sam';
-    mocks.searchResults = [{ id: 'sam' }];
+    mocks.searchResults = [{ id: SAM_PAGE }];
     const { rerender } = renderDialog();
     fireEvent.click(screen.getByRole('button', { name: 'Select Sam Patel' }));
     rerender(<AdminNewMatchDialog open onOpenChange={vi.fn()} onSent={vi.fn()} />);
@@ -414,7 +429,7 @@ describe('AdminNewMatchDialog', () => {
     mocks.overlap = undefined;
     mocks.overlapError = error;
     mocks.searchQuery = 'sam';
-    mocks.searchResults = [{ id: 'sam' }];
+    mocks.searchResults = [{ id: SAM_PAGE }];
     const { rerender } = renderDialog();
     fireEvent.click(screen.getByRole('button', { name: 'Select Sam Patel' }));
     rerender(<AdminNewMatchDialog open onOpenChange={vi.fn()} onSent={vi.fn()} />);
@@ -439,9 +454,17 @@ describe('AdminNewMatchDialog', () => {
     expect(screen.queryByText(/in Kolkata/)).not.toBeInTheDocument();
   });
 
+  it('leaves out a Person found in search who has no geo-chat account', () => {
+    mocks.searchQuery = 'nobody';
+    mocks.searchResults = [{ id: 'nobodypage' }];
+    renderDialog();
+
+    expect(screen.queryByRole('button', { name: /^Select / })).toBeNull();
+  });
+
   it('says whether the availability request went out', async () => {
     mocks.searchQuery = 'sam';
-    mocks.searchResults = [{ id: 'sam' }];
+    mocks.searchResults = [{ id: SAM_PAGE }];
     mocks.prompt.mockResolvedValueOnce({ sent: false });
     renderDialog();
 
@@ -457,7 +480,7 @@ describe('AdminNewMatchDialog', () => {
     ['channel_off', /Email delivery is off/],
   ])('settles on %s without offering a resend', async (outcome, text) => {
     mocks.searchQuery = 'sam';
-    mocks.searchResults = [{ id: 'sam' }];
+    mocks.searchResults = [{ id: SAM_PAGE }];
     mocks.prompt.mockResolvedValueOnce({ sent: false, outcome });
     renderDialog();
     await act(async () => {
@@ -472,7 +495,7 @@ describe('AdminNewMatchDialog', () => {
     ['rate_limited', /too many emails to them this hour/],
   ])('offers Retry after %s, and stops once it is sent', async (outcome, text) => {
     mocks.searchQuery = 'sam';
-    mocks.searchResults = [{ id: 'sam' }];
+    mocks.searchResults = [{ id: SAM_PAGE }];
     mocks.prompt.mockResolvedValueOnce({ sent: false, outcome }).mockResolvedValueOnce({ sent: true, outcome: 'sent' });
     renderDialog();
     await act(async () => {

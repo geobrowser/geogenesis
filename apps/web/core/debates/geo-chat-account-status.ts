@@ -27,7 +27,15 @@ export type GeoChatAccountStatus =
       profile: GeoChatProfileState;
       pendingSince: string | null;
       retryAfterMs: number | null;
+      /** The viewer's own profile, as geo-chat sent it. Absent from geo-chat before GEO-3553. */
+      viewer?: GeoChatViewerProfile;
     };
+
+export type GeoChatViewerProfile = {
+  profileSpaceId: string;
+  displayName: string | null;
+  avatarCid: string | null;
+};
 
 const UNKNOWN: GeoChatAccountStatus = { kind: 'unknown' };
 
@@ -57,7 +65,14 @@ function sameStatus(a: GeoChatAccountStatus, b: GeoChatAccountStatus) {
   if (a.kind !== b.kind) return false;
   if (a.kind === 'refused' && b.kind === 'refused') return a.reason === b.reason && a.code === b.code;
   if (a.kind === 'accepted' && b.kind === 'accepted') {
-    return a.profile === b.profile && a.pendingSince === b.pendingSince && a.retryAfterMs === b.retryAfterMs;
+    return (
+      a.profile === b.profile &&
+      a.pendingSince === b.pendingSince &&
+      a.retryAfterMs === b.retryAfterMs &&
+      a.viewer?.profileSpaceId === b.viewer?.profileSpaceId &&
+      a.viewer?.displayName === b.viewer?.displayName &&
+      a.viewer?.avatarCid === b.viewer?.avatarCid
+    );
   }
   return true;
 }
@@ -88,6 +103,11 @@ export function acceptedStatus(profile: GeoChatSessionProfile | null | undefined
     profile: profile.state,
     pendingSince: profile.pending_since,
     retryAfterMs: profile.retry_after_ms,
+    viewer: {
+      profileSpaceId: profile.profile_space_id,
+      displayName: profile.display_name,
+      avatarCid: profile.avatar_cid,
+    },
   };
 }
 

@@ -4501,12 +4501,6 @@ export async function readGeoChatSessionProfile(accountKey: string): Promise<Geo
   }
 }
 
-/** The stored session's profile for this account: the viewer's own name and space. */
-export function getStoredGeoChatProfile(accountKey: string | null): GeoChatSessionProfile | null {
-  if (!accountKey) return null;
-  return loadSession(accountKey)?.profile ?? null;
-}
-
 /** The access token every tab and request currently shares, if one is stored. */
 export function getStoredGeoChatAccessToken() {
   return loadStoredSession()?.session.access_token ?? null;

@@ -58,7 +58,7 @@ import {
   historyTitle,
   historyWatchable,
   isSettledHistoryItem,
-  unnamedHistoryUserIds,
+  unnamedHistoryPeople,
   useDebateHistory,
   useRefreshHistoryWhenLiveEnds,
 } from './request-history';
@@ -128,8 +128,8 @@ export function RequestsSchedule({ focusedRequestId = null }: { focusedRequestId
   const pastDebates = usePersonDebates(personalSpaceId ?? '', history.unavailable);
 
   // geo-chat names history's people itself; only anyone it could not name is looked up.
-  const historyUserIds = React.useMemo(() => unnamedHistoryUserIds(history.items), [history.items]);
-  const historyPeople = useGeoChatUserSummaries(historyUserIds, historyUserIds.length > 0);
+  const unnamedHistory = React.useMemo(() => unnamedHistoryPeople(history.items), [history.items]);
+  const historyPeople = useGeoChatUserSummaries(unnamedHistory, unnamedHistory.length > 0);
   const people = React.useMemo(() => [...scheduled.people, ...historyPeople], [historyPeople, scheduled.people]);
   // The roster only for the invites and booked debates that show who is online, as on the section:
   // history's people are named by geo-chat and the summaries above.

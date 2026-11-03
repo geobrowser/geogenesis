@@ -352,11 +352,8 @@ export function useScheduledContent(): ScheduledContent {
   );
 
   // The viewer included: their own side of the strip needs a face too.
-  const participantIds = React.useMemo(
-    () => (rows ?? []).flatMap(request => request.participants.map(participant => participant.user_id)),
-    [rows]
-  );
-  const people = useGeoChatUserSummaries(participantIds, true);
+  const participants = React.useMemo(() => (rows ?? []).flatMap(request => request.participants), [rows]);
+  const people = useGeoChatUserSummaries(participants, true);
 
   return {
     answerable,
@@ -373,9 +370,8 @@ export function useScheduledContent(): ScheduledContent {
 const LOBBY_LIST_STALE_MS = 30_000;
 
 /**
- * Names come from the graph, since a geo-chat user id is their personal space's page entity. The
- * roster is only a fallback while that loads: it covers people who are online, and whoever invited
- * you usually is not.
+ * Names come from the requests' own people and their graph profiles. The roster is only a fallback
+ * while those load: it covers people who are online, and whoever invited you usually is not.
  */
 export function useParticipantLookup(enabled: boolean, requestPeople: DebateParticipantSummary[]) {
   const roster = useDebatePeople(enabled);

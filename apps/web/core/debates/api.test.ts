@@ -19,7 +19,6 @@ import {
   getDebateActivity,
   getGeoChatSession,
   getRematchLiveKitToken,
-  getStoredGeoChatProfile,
   hideDebate,
   isAccountWarmingUp,
   joinDebateQueue,
@@ -1160,6 +1159,7 @@ describe('GEO-3553 session codes and profile state', () => {
       profile: 'pending',
       pendingSince: '2026-11-03T18:00:04Z',
       retryAfterMs: 5000,
+      viewer: { profileSpaceId: 'space-a', displayName: null, avatarCid: null },
     });
   });
 
@@ -1195,7 +1195,6 @@ describe('GEO-3553 session codes and profile state', () => {
     expect(JSON.parse(window.localStorage.getItem('geo:chat-session')!)).toMatchObject({
       session: { access_token: 'access', refresh_token: 'refresh', profile: { state: 'attached' } },
     });
-    expect(getStoredGeoChatProfile('user-a')).toMatchObject({ state: 'attached' });
   });
 
   it('refreshes once and retries when the access token is rejected', async () => {

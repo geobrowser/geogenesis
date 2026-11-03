@@ -20,10 +20,12 @@ import { PEER_SCHEDULE_DAYS, toPeerSchedule } from '~/core/availability/peer-sch
 import { type ScheduleEditorSurface, debateScheduleSaved } from '~/core/availability/schedule-analytics';
 import { useObservedMutation } from '~/core/hooks/use-observed-mutation';
 import { useSetToast } from '~/core/hooks/use-toast';
+import { validateSpaceId } from '~/core/io/rest/validation';
 import { usePrivy } from '~/core/wallet/auth-hooks';
 
 import {
   type CreateDebateChallengeBody,
+  DEBATE_PROFILE_LOOKUP_MAX,
   type Debate,
   type DebateActivity,
   type DebateClaimsResponse,
@@ -76,6 +78,7 @@ import {
   listDebateSharePrompts,
   listNotInterestedClaims,
   listSpaceDebates,
+  lookupDebateProfiles,
   markDebateCapturing,
   markDebateJoined,
   markDebateReady,
@@ -247,6 +250,8 @@ export const debateQueryKeys = {
   sharePrompts: (accountKey: string | null) => ['debates', 'account', accountKey, 'share-prompts'] as const,
   profile: (accountKey: string | null, profileSpaceId: string) =>
     ['debates', 'account', accountKey, 'profile', profileSpaceId] as const,
+  profileLookup: (accountKey: string | null, profileSpaceIds: readonly string[]) =>
+    ['debates', 'account', accountKey, 'profile-lookup', profileSpaceIds] as const,
   people: (accountKey: string | null) => ['debates', 'account', accountKey, 'people'] as const,
   /** Prefix covering every filter combination of the claims list. */
   matchmakingClaimsRoot: (accountKey: string | null) =>
@@ -1410,6 +1415,35 @@ export function useDebateProfile(
   }, [foreground, query.refetch, queryEnabled]);
 
   return query;
+}
+
+/**
+ * The geo-chat accounts behind these profile spaces, for people found in the graph. Spaces with no
+ * account are left out: they cannot be debated or matched.
+ */
+export function useDebateProfilesBySpace(profileSpaceIds: readonly string[], enabled = true) {
+  const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
+  const ids = React.useMemo(
+    () => [...new Set(profileSpaceIds.flatMap(id => validateSpaceId(id) ?? []))].sort(),
+    [profileSpaceIds]
+  );
+  return useQuery({
+    ...debateQueryNetworkOptions,
+    queryKey: debateQueryKeys.profileLookup(accountKey, ids),
+    queryFn: async ({ signal }) => {
+      const pages: string[][] = [];
+      for (let i = 0; i < ids.length; i += DEBATE_PROFILE_LOOKUP_MAX) {
+        pages.push(ids.slice(i, i + DEBATE_PROFILE_LOOKUP_MAX));
+      }
+      const found = await Promise.all(
+        pages.map(page => lookupDebateProfiles(page, getPrivyIdentityToken, accountKey, signal))
+      );
+      return found.flat();
+    },
+    enabled: enabled && authenticated && ids.length > 0,
+    // Which account a space belongs to does not change under it.
+    staleTime: 10 * 60_000,
+  });
 }
 
 export function useCreateDebateChallenge() {
