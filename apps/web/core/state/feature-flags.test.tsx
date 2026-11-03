@@ -33,6 +33,7 @@ describe('feature flags', () => {
     expect(defaultFeatureFlags.googleCalendar).toBe(false);
     expect(defaultFeatureFlags.microsoftCalendar).toBe(false);
     expect(defaultFeatureFlags.bountiesTab).toBe(true);
+    expect(defaultFeatureFlags.signInRecoveryAutoOpen).toBe(true);
     expect(normalizeFeatureFlags(null)).toEqual({
       playbackDiagnostics: false,
       debugDebatesPage: false,
@@ -47,6 +48,7 @@ describe('feature flags', () => {
       googleCalendar: false,
       microsoftCalendar: false,
       bountiesTab: true,
+      signInRecoveryAutoOpen: true,
     });
   });
 
@@ -78,6 +80,7 @@ describe('feature flags', () => {
       googleCalendar: false,
       microsoftCalendar: false,
       bountiesTab: true,
+      signInRecoveryAutoOpen: true,
     });
   });
 
@@ -110,6 +113,7 @@ describe('feature flags', () => {
       googleCalendar: false,
       microsoftCalendar: false,
       bountiesTab: true,
+      signInRecoveryAutoOpen: true,
     });
   });
 });
