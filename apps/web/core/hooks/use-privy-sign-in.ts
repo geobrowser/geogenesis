@@ -40,6 +40,8 @@ export type PrivySignInCallOptions = {
   redirectTo?: string;
   /** A new account is asked only for a name in onboarding (GEO-3517); see `usePrepareOnboarding`. */
   nameOnlyOnboarding?: boolean;
+  /** Fills in Privy's email field: a sign-in picked up again after the tab reloaded (GEO-3573). */
+  prefillEmail?: string;
 };
 
 type PrivySignIn = (
@@ -97,7 +99,8 @@ export function usePrivySignIn(onComplete?: () => void, options?: UsePrivySignIn
           ...(typeof configured === 'function' ? configured() : configured),
           ...(properties && !('nativeEvent' in properties) ? properties : {}),
         },
-        { resume: optionsRef.current?.resumeAuthAttempt }
+        { resume: optionsRef.current?.resumeAuthAttempt },
+        callOptions?.prefillEmail
       );
       // Registered with the app-level attempt rather than held here: this control can unmount
       // while the modal is open, and the withdrawal must still happen (see `sign-in-abandoned`).

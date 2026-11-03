@@ -5,6 +5,7 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import { currentAuthAttempt, openAuthAttempt } from '~/core/auth-attempt';
+import { announceCodeEmail } from '~/core/auth/code-step';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { beginPrivyAuth, completePrivyAuth } from '~/core/privy-auth-events';
 import { useLoginWithEmail } from '~/core/wallet/auth-hooks';
@@ -161,6 +162,8 @@ export function AccountStep({
     setSending(true);
     setCode('');
     try {
+      // Privy's flow state does not carry the address; the code-step tracker needs it for a reload.
+      announceCodeEmail(email);
       await sendCodeRef.current({ email });
     } catch {
       if (!mountedRef.current) return;

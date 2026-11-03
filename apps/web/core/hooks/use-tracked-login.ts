@@ -42,7 +42,12 @@ export function useTrackedLogin(params: Parameters<typeof useGeoLogin>[0]) {
     },
   });
   const trackedLogin = useCallback(
-    (properties?: AnalyticsProperties, options?: Parameters<typeof beginPrivyAuth>[1]) => {
+    (
+      properties?: AnalyticsProperties,
+      options?: Parameters<typeof beginPrivyAuth>[1],
+      /** An address to fill in on Privy's email field, for a sign-in being picked up again (GEO-3573). */
+      prefillEmail?: string
+    ) => {
       if (authenticatedRef.current) return undefined;
       const context = getContext(
         properties?.target_id && properties?.target_type
@@ -55,8 +60,9 @@ export function useTrackedLogin(params: Parameters<typeof useGeoLogin>[0]) {
         context.component === 'sign_in_prompt' ? (properties?.component ?? context.component) : context.component;
       const attempt = beginPrivyAuth({ ...context, auth_trigger: 'control', ...properties, component }, options);
       requested.current = { ...context, auth_attempt_id: attempt?.id };
-      // No argument with the flag off, so Privy's modal keeps the config's methods.
-      if (googleSignInOptions) login(googleSignInOptions);
+      const prefill = prefillEmail ? { prefill: { type: 'email' as const, value: prefillEmail } } : undefined;
+      // No argument with neither, so Privy's modal keeps the config's methods.
+      if (googleSignInOptions || prefill) login({ ...googleSignInOptions, ...prefill });
       else login();
       return attempt;
     },
