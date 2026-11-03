@@ -4450,7 +4450,7 @@ export type GeoChatProfileRead =
 
 /**
  * The profile state from `GET /auth/profile`, which never rotates the session, so the gateway
- * socket stays up. A rejected access token is refreshed once and the read retried.
+ * socket stays up. On a 401 the session is refreshed once and the read retried.
  */
 export async function readGeoChatSessionProfile(accountKey: string): Promise<GeoChatProfileRead> {
   const inFlight = geoChatSessionRequests.get(accountKey);
