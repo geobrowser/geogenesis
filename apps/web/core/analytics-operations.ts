@@ -18,6 +18,8 @@ export function classifyOperationFailure(error: unknown): 'rejected' | 'unavaila
     if (failure.code === 4001) classification = 'rejected';
     if (current instanceof Error) {
       if (current.name === 'QueuedSendTimeoutError') classification = 'unavailable';
+      // geo-chat refused the session exchange, so the request never reached the resource.
+      if (current.name === 'GeoChatSessionError') classification = 'unavailable';
       if (/user rejected/i.test(current.message)) classification = 'rejected';
     }
     current = failure.cause;
