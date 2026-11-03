@@ -19,6 +19,29 @@ import {
 import { useGeoChatAuth } from './hooks';
 
 const PROFILE_REFRESH_MIN_MS = 1_000;
+/** An account this new reports its first acceptance even when it was never refused. */
+const RECENT_SIGN_UP_MS = 24 * 60 * 60 * 1000;
+
+/** `session_accepted` is reported once per account per browser, so reloads don't repeat it. */
+function acceptanceReportedKey(accountKey: string) {
+  return `geo:debates-session-accepted:${accountKey}`;
+}
+
+function wasAcceptanceReported(accountKey: string) {
+  try {
+    return window.localStorage.getItem(acceptanceReportedKey(accountKey)) !== null;
+  } catch {
+    return false;
+  }
+}
+
+function markAcceptanceReported(accountKey: string) {
+  try {
+    window.localStorage.setItem(acceptanceReportedKey(accountKey), String(Date.now()));
+  } catch {
+    // Without storage it may repeat after a reload; the report is a nicety.
+  }
+}
 
 /** The signed-in account's geo-chat session status. */
 export function useGeoChatAccountStatus(accountKey: string | null): GeoChatAccountStatus {
@@ -177,10 +200,15 @@ function useAccountStatusTransitions(
     if (previous?.kind === 'refused') {
       void queryClient.invalidateQueries({ queryKey: ['debates'] });
     }
-    if (previous?.kind === 'refused' || status.profile !== 'attached') {
+    const recentSignUp = signedUpAt !== null && now - signedUpAt < RECENT_SIGN_UP_MS;
+    if (
+      (previous?.kind === 'refused' || status.profile !== 'attached' || recentSignUp) &&
+      !wasAcceptanceReported(accountKey)
+    ) {
+      markAcceptanceReported(accountKey);
       report('session_accepted', {
         profile_state: status.profile,
-        refused_ms: firstRefusalAtRef.current === null ? null : now - firstRefusalAtRef.current,
+        refused_ms: firstRefusalAtRef.current === null ? 0 : now - firstRefusalAtRef.current,
         refusal_code: previous?.kind === 'refused' ? previous.code : null,
         pending_ms: pendingMs,
       });

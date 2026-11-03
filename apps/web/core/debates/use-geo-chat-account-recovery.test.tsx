@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   refreshGeoChatSessionProfile: vi.fn(),
   capture: vi.fn(),
   devLog: vi.fn(),
+  createdAt: new Date(0) as Date,
 }));
 
 vi.mock('./api', () => ({
@@ -26,7 +27,7 @@ vi.mock('./api', () => ({
 vi.mock('./hooks', () => ({
   useGeoChatAuth: () => ({ ready: true, authenticated: true, accountKey: 'user-a', getPrivyIdentityToken: vi.fn() }),
 }));
-vi.mock('~/core/wallet/auth-hooks', () => ({ usePrivy: () => ({ user: { createdAt: new Date(0) } }) }));
+vi.mock('~/core/wallet/auth-hooks', () => ({ usePrivy: () => ({ user: { createdAt: mocks.createdAt } }) }));
 vi.mock('~/core/analytics', () => ({ capture: mocks.capture }));
 vi.mock('~/core/utils/dev-log', () => ({ devLog: mocks.devLog }));
 
@@ -50,6 +51,15 @@ function render() {
   return { invalidate };
 }
 
+function renderHookOnce() {
+  const queryClient = new QueryClient();
+  return renderHook(() => useGeoChatAccountRecovery(), {
+    wrapper: ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    ),
+  });
+}
+
 const outcomes = () => mocks.devLog.mock.calls.map(([, payload]) => (payload as { outcome: string }).outcome);
 
 beforeEach(() => {
@@ -59,6 +69,8 @@ beforeEach(() => {
   mocks.refreshGeoChatSessionProfile.mockReset().mockResolvedValue('pending');
   mocks.capture.mockReset();
   mocks.devLog.mockReset();
+  mocks.createdAt = new Date(0);
+  window.localStorage.clear();
 });
 
 afterEach(() => {
@@ -160,6 +172,39 @@ describe('useGeoChatAccountRecovery', () => {
 
     await act(() => vi.advanceTimersByTimeAsync(60_000));
     expect(mocks.refreshGeoChatSessionProfile).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports an immediate acceptance for a recent sign-up, with no refusal time', () => {
+    mocks.createdAt = new Date(Date.now() - 60_000);
+    render();
+    act(() => setGeoChatAccountStatus('user-a', accepted('attached')));
+
+    expect(outcomes()).toEqual(['session_accepted']);
+    expect(mocks.devLog).toHaveBeenLastCalledWith(
+      expect.any(String),
+      expect.objectContaining({ outcome: 'session_accepted', refused_ms: 0, ms_since_sign_up: 60_000 })
+    );
+  });
+
+  it('reports the first acceptance once per account per browser, not on every reload', () => {
+    mocks.createdAt = new Date(Date.now() - 60_000);
+    const first = renderHookOnce();
+    act(() => setGeoChatAccountStatus('user-a', accepted('attached')));
+    first.unmount();
+    resetGeoChatAccountStatusForTests();
+
+    renderHookOnce();
+    act(() => setGeoChatAccountStatus('user-a', accepted('attached')));
+
+    expect(outcomes()).toEqual(['session_accepted']);
+  });
+
+  it('does not report the acceptance of an account that signed up over a day ago', () => {
+    mocks.createdAt = new Date(Date.now() - 25 * 60 * 60 * 1000);
+    render();
+    act(() => setGeoChatAccountStatus('user-a', accepted('attached')));
+
+    expect(mocks.devLog).not.toHaveBeenCalled();
   });
 
   it('records nothing for an established account', () => {
