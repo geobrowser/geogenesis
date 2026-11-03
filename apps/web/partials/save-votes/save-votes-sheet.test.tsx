@@ -21,6 +21,7 @@ import {
   closeSaveVotesPrompt,
   markPromptedThisSession,
   openSaveVotesPrompt,
+  opensSaveVotesCentered,
   readSaveVotesPrompt,
   setSaveVotesPromptLobby,
 } from '~/core/state/save-votes-prompt';
@@ -446,6 +447,12 @@ describe('SaveVotesSheet', () => {
 
   // GEO-3555: Google sign-in on, the sheet offers it beside the email, as a save sign-in.
   describe('with Google sign-in on', () => {
+    // These assertions cover Google's lobby copy in whichever presentation the shared policy uses.
+    const lobbySheet = () =>
+      screen.getByRole(opensSaveVotesCentered(readSaveVotesPrompt()) ? 'dialog' : 'region', {
+        name: 'Join the discussion',
+      });
+
     it('starts Google as a save sign-in for the votes waiting', async () => {
       const googleSignIn = vi.fn(() => Promise.resolve());
       mocks.googleSignIn = googleSignIn;
@@ -509,7 +516,7 @@ describe('SaveVotesSheet', () => {
       render(<SaveVotesSheet />);
       act(() => openSaveVotesPrompt('threshold'));
 
-      const sheet = screen.getByRole('region', { name: 'Join the discussion' });
+      const sheet = lobbySheet();
       expect(within(sheet).getByRole('button', { name: 'Continue with Google' })).toBeInTheDocument();
       expect(sheet).toHaveTextContent('You’ll stay in Morning lobby.');
       expect(sheet).not.toHaveTextContent('audio keeps playing');
@@ -523,9 +530,7 @@ describe('SaveVotesSheet', () => {
       render(<SaveVotesSheet />);
       act(() => openSaveVotesPrompt('threshold'));
 
-      expect(screen.getByRole('region', { name: 'Join the discussion' })).toHaveTextContent(
-        'You’ll stay in Morning lobby, and your audio keeps playing.'
-      );
+      expect(lobbySheet()).toHaveTextContent('You’ll stay in Morning lobby, and your audio keeps playing.');
     });
   });
 
