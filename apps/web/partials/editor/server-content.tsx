@@ -11,7 +11,7 @@ export type ServerBlock =
   | { type: 'text'; markdown: string }
   | { type: 'image'; src: string }
   | { type: 'video'; src: string }
-  | { type: 'data'; view?: DataBlockView; pageSize?: number; mediaFrame?: BlockMediaFrame };
+  | { type: 'data'; view?: DataBlockView; pageSize?: number; itemCount?: number; mediaFrame?: BlockMediaFrame };
 
 type ServerContentProps = {
   blocks: ServerBlock[];
@@ -66,7 +66,12 @@ const ServerBlockRenderer = ({ block }: { block: ServerBlock }) => {
       return (
         <>
           <Spacer height={24} />
-          <DataBlockServerPlaceholder view={block.view ?? 'TABLE'} items={block.pageSize} mediaFrame={block.mediaFrame} />
+          <DataBlockServerPlaceholder
+            view={block.view ?? 'TABLE'}
+            items={block.pageSize}
+            itemCount={block.itemCount}
+            mediaFrame={block.mediaFrame}
+          />
         </>
       );
   }

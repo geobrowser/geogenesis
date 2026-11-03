@@ -110,6 +110,7 @@ function DataNodeComponent({ node, updateAttributes }: NodeViewProps) {
             <DataBlockServerPlaceholder
               view={placeholderSizing.view}
               items={placeholderSizing.pageSize}
+              itemCount={placeholderSizing.itemCount}
               mediaFrame={placeholderSizing.mediaFrame}
             />
           </div>

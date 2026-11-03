@@ -239,13 +239,6 @@ export function useEditorBlockModels() {
             !r.isDeleted
         );
 
-        const server: ServerBlock = {
-          type: 'data',
-          view: dataBlockViewFromRelations(viewRelations),
-          pageSize: readBlockPageSizeFromValues(blockRelationEntity?.values, spaceId),
-          mediaFrame: blockMediaFrame(readBlockMediaDimensions(block.entityId, mediaPropertySource)),
-        };
-
         const dataSourceType = blockRelationRows.filter(
           r =>
             r.fromEntity.id === block.block.id &&
@@ -255,6 +248,25 @@ export function useEditorBlockModels() {
         )[0]?.toEntity.id;
         const isQuerySource =
           dataSourceType === SystemIds.QUERY_DATA_SOURCE || dataSourceType === SystemIds.ALL_OF_GEO_DATA_SOURCE;
+
+        // A collection knows its length from its item relations, so its placeholder can reserve
+        // exactly that. A query block has no count yet, so `itemCount` stays undefined.
+        const itemCount = isQuerySource
+          ? undefined
+          : blockRelationRows.filter(
+              r =>
+                r.fromEntity.id === block.block.id &&
+                r.type.id === SystemIds.COLLECTION_ITEM_RELATION_TYPE &&
+                !r.isDeleted
+            ).length;
+
+        const server: ServerBlock = {
+          type: 'data',
+          view: dataBlockViewFromRelations(viewRelations),
+          pageSize: readBlockPageSizeFromValues(blockRelationEntity?.values, spaceId),
+          itemCount,
+          mediaFrame: blockMediaFrame(readBlockMediaDimensions(block.entityId, mediaPropertySource)),
+        };
         const configuredShownColumns = blockRelationRows.filter(
           r =>
             r.fromEntity.id === block.entityId &&
@@ -380,6 +392,7 @@ export function useEditorServerContent() {
 export type DataBlockPlaceholderSizing = {
   view: DataBlockView;
   pageSize?: number;
+  itemCount?: number;
   mediaFrame?: BlockMediaFrame;
 };
 
@@ -389,6 +402,11 @@ export function useDataBlockPlaceholderSizing(blockId: string): DataBlockPlaceho
     const index = blockIds.indexOf(blockId);
     const server = index >= 0 ? blockModels[index]?.server : undefined;
     if (!server || server.type !== 'data') return undefined;
-    return { view: server.view ?? 'TABLE', pageSize: server.pageSize, mediaFrame: server.mediaFrame };
+    return {
+      view: server.view ?? 'TABLE',
+      pageSize: server.pageSize,
+      itemCount: server.itemCount,
+      mediaFrame: server.mediaFrame,
+    };
   }, [blockModels, blockIds, blockId]);
 }

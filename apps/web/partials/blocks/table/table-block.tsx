@@ -1288,7 +1288,12 @@ const ConfiguredTableBlock = ({
 
         <motion.div layout="position" transition={{ duration: 0.15 }}>
           {showLoadingPlaceholder ? (
-            <DataBlockLoadingPlaceholder view={view} items={pageSize} mediaFrame={mediaFrame} />
+            <DataBlockLoadingPlaceholder
+              view={view}
+              items={pageSize}
+              itemCount={source.type === 'COLLECTION' ? collectionLength : undefined}
+              mediaFrame={mediaFrame}
+            />
           ) : (
             EntriesComponent
           )}
