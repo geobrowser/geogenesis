@@ -795,7 +795,8 @@ describe('RequestsSchedule', () => {
       mocks.calendarError = new Error('down');
       render(<RequestsSchedule />);
 
-      expect(screen.getByText('Could not read this week’s lobbies: down')).toBeInTheDocument();
+      expect(screen.getByText('Could not read this week’s lobbies.')).toBeInTheDocument();
+      expect(screen.queryByText(/down/)).not.toBeInTheDocument();
       expect(screen.queryByText('Any debate requests you’ll receive will appear here.')).not.toBeInTheDocument();
     });
 
