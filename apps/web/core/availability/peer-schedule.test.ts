@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { ScheduleOverlapResponse } from '~/core/debates/api';
 
 import {
+  fitLength,
   formatOffset,
   formatViewerInstant,
   markCurrent,
@@ -472,6 +473,44 @@ describe('markCurrent', () => {
     expect(currentOf(marked(spans, null))).toEqual([]);
     expect(currentOf(marked(spans, '2026-10-30T22:00:00Z'))).toEqual([]);
     expect(currentOf(marked(spans, 'not a time'))).toEqual([]);
+  });
+});
+
+describe('fitLength (GEO-3544)', () => {
+  const now = new Date('2026-09-21T15:00:00Z');
+  // New York, so 13:00Z on the 22nd is 9am there.
+  const fitted = (spans: ReturnType<typeof their>, minutes: number, own?: { start: string; minutes: number }) =>
+    fitLength(peerScheduleDays(toPeerSchedule(response({ their_slots: spans })), now), minutes, own).flatMap(day =>
+      day.slots.map(slot => `${slot.label}${slot.viewerIsFree ? ' mutual' : ''}`)
+    );
+
+  it('offers only the starts a whole hour fits from, and leaves a half-hour week alone', () => {
+    const spans = their(
+      ['2026-09-22T13:00:00Z', '2026-09-22T13:30:00Z'],
+      ['2026-09-22T13:30:00Z', '2026-09-22T14:00:00Z'],
+      ['2026-09-22T14:30:00Z', '2026-09-22T15:00:00Z']
+    );
+    expect(fitted(spans, 30)).toEqual(['9am mutual', '9:30am mutual', '10:30am mutual']);
+    // 9:30 runs into 10, which they are not free for; 10:30 into 11.
+    expect(fitted(spans, 60)).toEqual(['9am mutual']);
+  });
+
+  it('is mutual only when the viewer is free for the whole hour', () => {
+    const spans = their(
+      ['2026-09-22T13:00:00Z', '2026-09-22T13:30:00Z', true],
+      ['2026-09-22T13:30:00Z', '2026-09-22T14:00:00Z', false]
+    );
+    expect(fitted(spans, 60)).toEqual(['9am']);
+  });
+
+  it("counts the moved debate's own half-hours as free, since geo-chat leaves them out as committed", () => {
+    // Booked 9:30–10:30, so their week skips 9:30 and 10.
+    const spans = their(
+      ['2026-09-22T13:00:00Z', '2026-09-22T13:30:00Z'],
+      ['2026-09-22T14:30:00Z', '2026-09-22T15:00:00Z']
+    );
+    expect(fitted(spans, 60)).toEqual([]);
+    expect(fitted(spans, 60, { start: '2026-09-22T13:30:00Z', minutes: 60 })).toEqual(['9am mutual']);
   });
 });
 

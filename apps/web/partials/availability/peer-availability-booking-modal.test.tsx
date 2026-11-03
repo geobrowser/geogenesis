@@ -98,6 +98,7 @@ vi.mock('./peer-availability', async importOriginal => ({
       mode?: string;
       requestId?: string | null;
       moving?: { startsAt: string; agreed: boolean } | null;
+      minutes?: number;
       disabled?: boolean;
       noTimeWorks?: {
         action: 'cancel' | 'decline';
@@ -111,6 +112,7 @@ vi.mock('./peer-availability', async importOriginal => ({
   }) => (
     <>
       <output aria-label="mode">{booking?.mode ?? ''}</output>
+      <output aria-label="minutes">{booking?.minutes ?? ''}</output>
       <output aria-label="moving">{booking?.requestId ?? ''}</output>
       <button
         type="button"
@@ -417,6 +419,8 @@ describe('choosing a different time for an existing request', () => {
       />
     );
 
+    // The week offers only starts a whole hour fits from, not the half-hours a new request takes.
+    expect(screen.getByLabelText('minutes')).toHaveTextContent('60');
     await user.click(screen.getByRole('button', { name: 'pick' }));
 
     expect(mocks.reschedule.mock.calls[0][0].minutes).toBe(60);

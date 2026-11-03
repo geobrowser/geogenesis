@@ -188,6 +188,41 @@ export function markCurrent(days: PeerDay[], schedule: PeerSchedule, currentStar
 }
 
 /**
+ * The days cut to the starts a whole debate of `minutes` fits from (GEO-3544): every half-hour of
+ * it one of their free times, and mutual only when the viewer is free for all of it too. A
+ * half-hour debate keeps every chip as it is. `own` is the debate being moved, whose half-hours
+ * geo-chat leaves out as committed: they are already held for both, so an hour can still move by
+ * half an hour.
+ */
+export function fitLength(
+  days: PeerDay[],
+  minutes: number,
+  own: { start: string; minutes: number } | null = null
+): PeerDay[] {
+  if (minutes <= SLOT_MINUTES) return days;
+  const step = SLOT_MINUTES * 60_000;
+  const length = minutes * 60_000;
+  const viewerFreeAt = new Map(days.flatMap(day => day.slots.map(slot => [Date.parse(slot.start), slot.viewerIsFree])));
+  const ownStart = own ? Date.parse(own.start) : Number.NaN;
+  const held = (at: number) => own !== null && at >= ownStart && at < ownStart + own.minutes * 60_000;
+  return days.map(day => ({
+    ...day,
+    slots: day.slots.flatMap(slot => {
+      const start = Date.parse(slot.start);
+      let viewerIsFree = slot.viewerIsFree;
+      for (let at = start + step; at < start + length; at += step) {
+        if (held(at)) continue;
+        if (!viewerFreeAt.has(at)) return [];
+        const then = viewerFreeAt.get(at) ?? null;
+        viewerIsFree =
+          viewerIsFree === false || then === false ? false : viewerIsFree === null || then === null ? null : true;
+      }
+      return [{ ...slot, viewerIsFree }];
+    }),
+  }));
+}
+
+/**
  * A wire slot, or a merged window of them, as the chips it offers. The People tab reads its
  * offline rows' times through this too (GEO-3154), so a chip there is always one this grid draws.
  *

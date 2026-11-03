@@ -753,6 +753,27 @@ describe('moving a debate', () => {
     expect(tuesday.queryByRole('button', { name: /at 4pm/ })).not.toBeInTheDocument();
   });
 
+  it('offers only the starts an hour-long debate fits from (GEO-3544)', () => {
+    const halfPast = (hour: number): PeerSlot => ({
+      start: `2026-09-23T${hour}:30:00Z`,
+      end: `2026-09-23T${hour + 1}:00:00Z`,
+      viewerIsFree: true,
+    });
+    // Free 1pm–2pm, and 3pm alone.
+    const slots = [slot(13, true, 23), halfPast(13), slot(15, true, 23)];
+    const wednesday = () => within(day('2026-09-23'));
+
+    setupBooking(moving({ minutes: 60 }), { slots });
+    expect(wednesday().getByRole('button', { name: /at 1pm/ })).toBeInTheDocument();
+    expect(wednesday().queryByRole('button', { name: /at 1:30pm/ })).not.toBeInTheDocument();
+    expect(wednesday().queryByRole('button', { name: /at 3pm/ })).not.toBeInTheDocument();
+    cleanup();
+
+    // A half-hour debate still sees every one.
+    setupBooking(moving(), { slots });
+    expect(wednesday().getAllByRole('button', { name: /at (1pm|1:30pm|3pm)/ })).toHaveLength(3);
+  });
+
   it('says the week has nothing free when the only time is the current one', () => {
     setupBooking(moving({ moving: { startsAt: '2026-09-22T16:00:00Z', agreed: true } }), {
       slots: [slot(16, true, 22)],

@@ -206,6 +206,9 @@ export function PeerAvailabilityBookingModal({
     );
   }
 
+  // What the week offers and what is sent: a move keeps the debate's length, a request is a half-hour.
+  const minutes = rescheduleRequestId ? debateMinutes(active) : SCHEDULED_DEBATE_MINUTES;
+
   return (
     <>
       <PeerAvailabilityModal
@@ -217,6 +220,7 @@ export function PeerAvailabilityBookingModal({
           mode,
           requestId: rescheduleRequestId,
           moving: active ? { startsAt: active.scheduled_start_at, agreed } : null,
+          minutes,
           // Kept while its refusal shows: the refetch it triggers can resolve the request, and the
           // error is the only thing saying why the screen changed.
           noTimeWorks:
@@ -247,7 +251,7 @@ export function PeerAvailabilityBookingModal({
             if (rescheduleRequestId && !active) return;
             const slot = {
               startsAt: new Date(startsAt),
-              minutes: rescheduleRequestId ? debateMinutes(active) : SCHEDULED_DEBATE_MINUTES,
+              minutes,
               analytics: { entry, viewerIsFree: pick.viewerIsFree },
             };
             const callbacks = {
