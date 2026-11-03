@@ -1,10 +1,6 @@
 /**
- * GEO-3569. "Opening sign-in…" from first paint until Privy's dialog is up.
- *
- * Privy takes seconds to start on a phone, and the page that hydrates first is a feed: a visitor who
- * pressed Sign in on the marketing site started browsing it and then met the dialog as an
- * interruption. The overlay is static markup in the layout, shown by an attribute on <html> that an
- * inline script sets before the app's JavaScript has even downloaded; the sign-in link clears it.
+ * GEO-3569. An "Opening sign-in…" overlay from first paint until Privy's dialog is up. Static markup
+ * in the layout, shown by an `<html>` attribute an inline script sets before the app loads.
  */
 
 export const SIGN_IN_PENDING_ATTRIBUTE = 'data-sign-in-pending';

@@ -4,19 +4,9 @@ import { type AnalyticsProperties } from '~/core/analytics';
 import { type AuthAttempt, attemptProperties, captureAuthEvent, currentAuthAttempt } from '~/core/auth-attempt';
 
 /**
- * GEO-3573. The email code step, remembered across a new page.
- *
- * Phones often reload a backgrounded tab when the visitor comes back from their mail app, and a
- * visitor who came from an email link often comes back by tapping that link again, which opens a
- * new tab. Either way Privy's dialog and the in-memory flow its code belongs to are gone. Privy
- * cannot resume that flow (`loginWithCode` needs the `sendCode` that preceded it in the same
- * document), so what this keeps is enough to offer the sign-in again with the address filled in.
- *
- * Kept in localStorage, so the new tab sees it, for ten minutes at most and cleared when the
- * attempt ends. The address never leaves the device; events carry only the step.
- *
- * The step events are `experimental.auth_step`, one event with an `auth_step` property, so the
- * GEO-3550 funnel (email entered, code rejected or expired) adds values rather than event names.
+ * GEO-3573. The email code step, kept for ten minutes in localStorage so a reloaded or new tab can
+ * reopen sign-in prefilled: Privy's `loginWithCode` only works in the document that sent the code.
+ * The address stays on the device; events carry only the step.
  */
 
 const KEY = 'geo:auth-code-step:v1';
@@ -221,7 +211,7 @@ export function codeStepAttemptEnded(attempt: AuthAttempt) {
   if (own) capture('finished', pending, { outcome: attempt.outcome, recovered: Boolean(pending.recoveryAttemptId) });
 }
 
-/** Signed out, or the step otherwise no longer applies: a shared device must not prefill it later. */
+/** Cleared on sign-out too, so a shared device never prefills the previous person's address. */
 export function clearCodeStep() {
   announcedEmail = null;
   write(null);

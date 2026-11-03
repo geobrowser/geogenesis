@@ -33,11 +33,7 @@ export type AuthAttempt = {
   id: string;
   startedAt: number;
   openedAt?: number;
-  /**
-   * When the prompt opened, in ms since this document's navigation start. Events queued before the
-   * analytics runtime loads are stamped when it flushes them (#2899), so this is the reliable
-   * measure of how long a visitor waited for the dialog.
-   */
+  /** Ms since navigation start when the prompt opened; queued events are stamped at flush, not capture. */
   openedPageMs?: number;
   endedAt?: number;
   outcome?: AuthAttemptOutcome;

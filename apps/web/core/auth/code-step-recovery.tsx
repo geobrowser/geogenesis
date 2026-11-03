@@ -27,12 +27,8 @@ export function recoveryNoticeText(email: string | null) {
 export const LINK_SIGN_IN_GRACE_MS = 3_000;
 
 /**
- * GEO-3573. A page opened with a code step outstanding from an earlier page reopens sign-in with
- * the address filled in, and shows the notice while it waits for a new code.
- *
- * Nothing is sent until the visitor presses Submit: Privy cannot take the old code in a new
- * document, and mailing a new one unasked would leave two codes in their inbox. The claim, prefill
- * and attribution live in `usePrivySignIn`, so a deep link's own sign-in picks the step up too.
+ * GEO-3573. Reopens sign-in, prefilled, for a code step left by an earlier page, and shows the notice.
+ * Sends nothing itself; the claim and prefill live in `usePrivySignIn`, so a deep link's sign-in uses them too.
  */
 export function CodeStepRecovery() {
   const { ready, authenticated, isModalOpen } = usePrivy();

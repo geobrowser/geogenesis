@@ -22,11 +22,7 @@ function readPrivyEmailField(): string | null {
   return field instanceof HTMLInputElement ? field.value : null;
 }
 
-/**
- * Feeds `code-step` from every email sign-in at once. Privy's dialog and the headless code step
- * (save-votes, Explore email capture) share one email flow state, which `useLoginWithEmail` reads
- * without starting anything, so one observer covers every entry.
- */
+/** Feeds `code-step`. Privy's dialog and the headless code step share one email flow state, so this covers every entry. */
 export function CodeStepTracker() {
   const { state } = useLoginWithEmail();
   const { ready, authenticated } = usePrivy();
