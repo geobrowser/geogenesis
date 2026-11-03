@@ -695,7 +695,7 @@ export function useDebateSchedule() {
 /** About five minutes of `refusedRetryDelayMs` (2 s doubling to 30 s). */
 export const SCHEDULE_SAVE_REFUSED_RETRIES = 13;
 
-/** A save whose account is no longer signed in. Never retried and never reported. */
+/** A save for an account that is not the signed-in one. Never retried and never reported. */
 class ScheduleSaveAbandonedError extends Error {
   constructor() {
     super('The account that saved this schedule is no longer signed in.');
