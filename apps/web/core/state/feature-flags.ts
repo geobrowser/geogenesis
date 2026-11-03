@@ -96,6 +96,13 @@ export const featureFlagDefinitions = [
     description: 'Bounty board, space bounty tabs, and bounty detail surfaces. On by default; testnet only.',
     enabledByDefault: true,
   },
+  {
+    id: 'signInRecoveryAutoOpen',
+    label: 'Reopen sign-in after a reload at the code step',
+    description:
+      'A page opened while an email code is outstanding from a page that is gone reopens sign-in, prefilled (GEO-3573). Turn off to stop the dialog opening by itself.',
+    enabledByDefault: true,
+  },
 ] as const;
 
 export type FeatureFlagId = (typeof featureFlagDefinitions)[number]['id'];

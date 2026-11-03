@@ -93,6 +93,16 @@ describe('CodeStepRecovery', () => {
     expect(mocks.openSignIn).not.toHaveBeenCalled();
   });
 
+  it('opens nothing itself when signInRecoveryAutoOpen is off', async () => {
+    vi.useFakeTimers();
+    localStorage.setItem('geo:feature-flags', JSON.stringify({ signInRecoveryAutoOpen: false }));
+    mocks.step.reloadedCodeStep.mockReturnValue(PENDING);
+    render(<CodeStepRecovery />);
+    await act(async () => void vi.runAllTimers());
+    expect(mocks.openSignIn).not.toHaveBeenCalled();
+    localStorage.clear();
+  });
+
   it('opens nothing for someone already signed in', async () => {
     vi.useFakeTimers();
     mocks.step.reloadedCodeStep.mockReturnValue(PENDING);

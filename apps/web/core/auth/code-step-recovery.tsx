@@ -3,6 +3,7 @@
 import * as React from 'react';
 
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
+import { readStoredFeatureFlag } from '~/core/state/feature-flags';
 import { useLoginWithEmail, usePrivy } from '~/core/wallet/auth-hooks';
 
 import {
@@ -47,7 +48,9 @@ export function CodeStepRecovery() {
       () =>
         void codeOwnerChecked().then(() => {
           // Still unclaimed and its page gone: no link opened sign-in, and no other tab took it over.
-          if (!cancelled && reloadedCodeStep()) openSignInRef.current();
+          if (!cancelled && readStoredFeatureFlag('signInRecoveryAutoOpen') && reloadedCodeStep()) {
+            openSignInRef.current();
+          }
         }),
       landedOnModalLink() ? LINK_SIGN_IN_GRACE_MS : 0
     );
