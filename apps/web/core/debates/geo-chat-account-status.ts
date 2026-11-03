@@ -1,9 +1,4 @@
-/**
- * What geo-chat last said about the signed-in account's session, shared by every debates surface.
- *
- * Written by the session exchange in `api.ts`; read by `useGeoChatAccountRecovery`, which retries a
- * refused exchange and refreshes a pending profile, and by the surfaces that show setup copy.
- */
+/** geo-chat's last answer about the signed-in account's session; written by `api.ts`, read by the recovery hook and copy. */
 
 export type GeoChatProfileState = 'attached' | 'pending' | 'missing';
 
@@ -85,11 +80,7 @@ export function acceptedStatus(profile: GeoChatSessionProfile | null | undefined
   };
 }
 
-/**
- * A 401 from the session exchange, by code. `no_embedded_wallet` will not change by waiting.
- * Every other code waits, including `invalid_privy_token`, which older geo-chat sends for an
- * account it has not registered yet.
- */
+/** A 401 from the session exchange, by code. All but `no_embedded_wallet` clear by waiting; older geo-chat sends `invalid_privy_token` for an unregistered account. */
 export function sessionRefusalReason(status: number, code: string | null): GeoChatRefusalReason | null {
   if (status !== 401) return null;
   if (code === 'no_embedded_wallet') return null;

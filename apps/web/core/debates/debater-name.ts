@@ -1,8 +1,4 @@
-/**
- * The label for a person geo-chat has no name for yet. geo-chat accepts an account before its
- * profile is indexed, so `display_name` can be null anywhere it returns people. Never fall back
- * to an id: it reads as a broken page and can end up published.
- */
+/** For a person geo-chat has no name for yet (profile not indexed). Never an id: ids can get published. */
 export const UNNAMED_DEBATER = 'Debater';
 
 export function debaterName(displayName: string | null | undefined) {

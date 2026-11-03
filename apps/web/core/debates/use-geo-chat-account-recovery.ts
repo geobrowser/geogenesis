@@ -29,13 +29,8 @@ export function useGeoChatAccountStatus(accountKey: string | null): GeoChatAccou
 }
 
 /**
- * Keeps a new account's debates surfaces recovering on their own. Mounted once, beside the gateway.
- *
- * - Refused: retries the session exchange (2 s doubling to 30 s, visible tab only) for as long as it
- *   takes. Reads stop retrying a refusal themselves; the recovery refetches them.
- * - Accepted with a pending or missing profile: refreshes on `retry_after_ms` until it attaches.
- * - On recovery or attach, refetches every geo-chat read; on `missing`, re-reads the personal space
- *   so onboarding can reopen and publish the profile.
+ * Mounted once. Retries a refused session exchange until it succeeds, refreshes a pending profile on
+ * `retry_after_ms`, and refetches the debates reads on recovery and attach; `missing` re-reads the personal space.
  */
 export function useGeoChatAccountRecovery() {
   const { ready, authenticated, accountKey, getPrivyIdentityToken } = useGeoChatAuth();
@@ -134,11 +129,7 @@ function refreshWhilePending(accountKey: string, retryAfterMs: number | null): C
   };
 }
 
-/**
- * Refetches and analytics on each change of status. Analytics use `onboarding_step_viewed` with
- * `flow: 'debates_account'`, at most once per step per account per page load, so a daily query can
- * count how long new accounts wait to be accepted and for their profile to attach.
- */
+/** Refetches and `onboarding_step_viewed` (flow `debates_account`) events on status changes, once per step per account per load. */
 function useAccountStatusTransitions(
   accountKey: string | null,
   status: GeoChatAccountStatus,

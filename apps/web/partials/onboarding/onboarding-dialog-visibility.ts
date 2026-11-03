@@ -20,12 +20,7 @@ export function shouldOpenOnboardingDialog(isOnboardingVisible: boolean, step: O
   return isOnboardingVisible || step === 'completed';
 }
 
-/**
- * Whether the dialog should be mounted. Wider than `shouldOpenOnboardingDialog`: at a persisted
- * `done` the dialog must still mount when onboarding is needed again, because the dialog itself
- * resets `done` to `start`. Without this, a browser that once finished onboarding never reopens it
- * for an account whose profile never landed.
- */
+/** Mounted whenever onboarding is needed, even at a persisted `done`: the dialog itself resets `done` to `start`. */
 export function shouldMountOnboardingDialog(isOnboardingVisible: boolean, step: OnboardingStep): boolean {
   return isOnboardingVisible || shouldOpenOnboardingDialog(isOnboardingVisible, step);
 }

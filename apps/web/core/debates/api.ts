@@ -4408,9 +4408,8 @@ export async function getGeoChatSession(
 }
 
 /**
- * Refreshes the stored session now, ahead of its expiry, so geo-chat can attach a pending profile.
- * Joins an exchange already in flight. Resolves to the profile state, or null when there was
- * nothing to refresh or it failed; the stored session stays in use until it expires.
+ * Refreshes the stored session ahead of expiry so geo-chat can attach a pending profile. Joins an
+ * exchange in flight; null when there is nothing to refresh or it failed (the stored session stays).
  */
 export async function refreshGeoChatSessionProfile(accountKey: string): Promise<GeoChatProfileState | null> {
   const inFlight = geoChatSessionRequests.get(accountKey);
