@@ -1396,6 +1396,17 @@ describe('DebatesBrowseFeed — nothing is inserted above what the viewer has re
 
 // GEO-3381: the reply email's Reply on a debate links here with `?modal=comments`.
 describe('DebatesBrowseFeed comments deep link', () => {
+  beforeEach(() => {
+    // jsdom has no `scrollingElement`; a browser in standards mode reports the root element.
+    Object.defineProperty(document, 'scrollingElement', { configurable: true, get: () => document.documentElement });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    Reflect.deleteProperty(document, 'scrollingElement');
+    document.documentElement.scrollTop = 0;
+  });
+
   it('opens the debate it landed on with its comments, and clears the trigger', () => {
     mocks.search = 'modal=comments&ref_email=reply';
     const replaceState = vi.spyOn(window.history, 'replaceState');
@@ -1434,14 +1445,13 @@ describe('DebatesBrowseFeed comments deep link', () => {
   });
 
   // A debate the feed can't play shows its entity page, with the comments inline.
-  it('scrolls to the inline comments when the debate falls back to its entity page', () => {
+  it('scrolls to the inline comments on the fallback entity page, and keeps them in view as it fills in', async () => {
     mocks.search = 'modal=comments&ref_email=reply';
     const replaceState = vi.spyOn(window.history, 'replaceState');
-    vi.spyOn(window, 'requestAnimationFrame').mockImplementation(callback => {
-      callback(0);
-      return 0;
-    });
-    const scrollIntoView = vi.fn();
+    const page = document.documentElement;
+    page.scrollTop = 0;
+    // jsdom does no layout: the section reports where it sits on the page, less the scroll.
+    let offset = 600;
     render(
       <Provider store={createStore()}>
         <DebatesBrowseFeed
@@ -1451,7 +1461,7 @@ describe('DebatesBrowseFeed comments deep link', () => {
             <div
               id="entity-comments"
               ref={el => {
-                if (el) el.scrollIntoView = scrollIntoView;
+                if (el) el.getBoundingClientRect = () => ({ top: offset - page.scrollTop }) as DOMRect;
               }}
             />
           }
@@ -1459,8 +1469,19 @@ describe('DebatesBrowseFeed comments deep link', () => {
       </Provider>
     );
 
-    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' });
+    expect(page.scrollTop).toBe(600);
     expect(replaceState).toHaveBeenCalledWith(null, '', '/space/space-1/debate-1?ref_email=reply');
+
+    // The backlinks above the section load and push it down.
+    offset = 900;
+    const backlinks = document.createElement('div');
+    await act(async () => {
+      document.body.prepend(backlinks);
+      await Promise.resolve();
+    });
+    backlinks.remove();
+
+    expect(page.scrollTop).toBe(900);
   });
 
   it('leaves the comments closed without it', () => {

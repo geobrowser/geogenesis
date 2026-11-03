@@ -56,6 +56,7 @@ import {
 } from './comment-density';
 import { getRelativeTime } from './comment-time';
 import { ENTITY_COMMENTS_ANCHOR_ID } from './entity-comments-anchor';
+import { holdCommentsInView } from './hold-comments-in-view';
 import { ThreadAvatar } from './thread-avatar';
 import { ThreadCollapseToggle, ThreadListSpine, ThreadParentSpine, branchPointerBlurProps } from './thread-branch';
 import type { CommentActivityRow, CommentFilter, CommentSortOrder, CommentWithReplies } from './types';
@@ -363,13 +364,12 @@ export function CommentSection({
   const scoreFor = React.useCallback((row: { id: string }) => scoresById.get(uuidToHex(row.id)) ?? null, [scoresById]);
   const [filter, setFilter] = useState<CommentFilter>('all');
 
+  // `#entity-comments` lands on the section, and stays on it while what is above it loads.
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
     if (window.location.hash !== `#${ENTITY_COMMENTS_ANCHOR_ID}`) return;
-    const el = document.getElementById(ENTITY_COMMENTS_ANCHOR_ID);
-    if (el) {
-      requestAnimationFrame(() => el.scrollIntoView({ behavior: 'smooth', block: 'start' }));
-    }
+    const page = document.scrollingElement;
+    if (page instanceof HTMLElement) return holdCommentsInView(page);
   }, [entityId, spaceId]);
 
   const [collapsedThreadIds, setCollapsedThreadIds] = React.useState<Set<string>>(() => new Set());

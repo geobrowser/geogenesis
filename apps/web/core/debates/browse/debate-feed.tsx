@@ -26,8 +26,8 @@ import { Avatar } from '~/design-system/avatar';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
 
-import { ENTITY_COMMENTS_ANCHOR_ID } from '~/partials/comments/entity-comments-anchor';
 import { EntityCommentsPanel } from '~/partials/comments/entity-comments-panel';
+import { holdCommentsInView } from '~/partials/comments/hold-comments-in-view';
 import { EXPLORE_CARD_TITLE_CLASS_NAME } from '~/partials/explore/explore-card-title';
 
 import {
@@ -399,20 +399,18 @@ export function DebatesBrowseFeed({
   // `#entity-comments` — the comments section reads the hash once, when it mounts, which is before
   // this runs.
   const commentsLink = useDeepLinkParams(DEEP_LINK_MODALS.comments);
+  const [scrollToInlineComments, setScrollToInlineComments] = React.useState(false);
   useDeepLinkEffect({
     requested: commentsLink.requested,
     cleanUrl: commentsLink.cleanUrl,
     enabled: !rendersFeed || activeIndex >= 0,
-    run: () => {
-      if (rendersFeed) {
-        setFeedPanel('comments');
-        return;
-      }
-      requestAnimationFrame(() =>
-        document.getElementById(ENTITY_COMMENTS_ANCHOR_ID)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-      );
-    },
+    run: () => (rendersFeed ? setFeedPanel('comments') : setScrollToInlineComments(true)),
   });
+  React.useEffect(() => {
+    const page = document.scrollingElement;
+    if (!scrollToInlineComments || !(page instanceof HTMLElement)) return;
+    return holdCommentsInView(page);
+  }, [scrollToInlineComments]);
 
   // Where the linked debate has got to, for the visit's outcome, in the same order the render
   // below decides what to show.
