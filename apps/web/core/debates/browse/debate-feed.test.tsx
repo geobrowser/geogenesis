@@ -37,6 +37,8 @@ const mocks = vi.hoisted(() => ({
   /** What the stub player reports through `onPlaybackState`. */
   playerState: { ready: false, playing: false, autoplayBlocked: false, error: false },
   captured: [] as Array<{ event: string; properties: Record<string, unknown> }>,
+  /** The page's query string, for the deep links the feed reads. */
+  search: '',
 }));
 
 vi.mock('~/core/analytics', () => ({
@@ -84,7 +86,12 @@ vi.mock('~/core/sync/use-sync-engine', () => ({
 }));
 vi.mock('next/navigation', async () => {
   const actual = await vi.importActual<typeof import('next/navigation')>('next/navigation');
-  return { ...actual, useRouter: () => ({ prefetch: vi.fn(), push: vi.fn(), replace: vi.fn(), back: vi.fn() }) };
+  return {
+    ...actual,
+    useRouter: () => ({ prefetch: vi.fn(), push: vi.fn(), replace: vi.fn(), back: vi.fn() }),
+    usePathname: () => '/space/space-1/debate-1',
+    useSearchParams: () => new URLSearchParams(mocks.search),
+  };
 });
 
 vi.mock('~/core/sync/use-store', () => ({
@@ -212,6 +219,7 @@ beforeEach(() => {
   mocks.mediaError = false;
   mocks.playerState = { ready: false, playing: false, autoplayBlocked: false, error: false };
   mocks.captured.length = 0;
+  mocks.search = '';
 
   class MockIntersectionObserver implements IntersectionObserver {
     readonly root = null;
@@ -1383,5 +1391,31 @@ describe('DebatesBrowseFeed — nothing is inserted above what the viewer has re
     mocks.mediaLoading = true;
     view.rerender(<DebatesBrowseFeed spaceId="space-1" />);
     expect(headings()).toEqual(['Debate a', 'Debate b']);
+  });
+});
+
+// GEO-3381: the reply email's Reply on a debate links here with `?modal=comments`.
+describe('DebatesBrowseFeed comments deep link', () => {
+  it('opens the debate it landed on with its comments, and clears the trigger', () => {
+    mocks.search = 'modal=comments&ref_email=reply';
+    const replaceState = vi.spyOn(window.history, 'replaceState');
+    render(
+      <Provider store={createStore()}>
+        <DebatesBrowseFeed spaceId="space-1" initialDebateId="debate-1" />
+      </Provider>
+    );
+
+    expect(screen.getByText('Comments panel for debate-1')).toBeInTheDocument();
+    expect(replaceState).toHaveBeenCalledWith(null, '', '/space/space-1/debate-1?ref_email=reply');
+  });
+
+  it('leaves the comments closed without it', () => {
+    render(
+      <Provider store={createStore()}>
+        <DebatesBrowseFeed spaceId="space-1" initialDebateId="debate-1" />
+      </Provider>
+    );
+
+    expect(screen.queryByText(/Comments panel for/)).not.toBeInTheDocument();
   });
 });

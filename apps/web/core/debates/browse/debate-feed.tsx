@@ -12,6 +12,8 @@ import { isRemovedDebateAnswer } from '~/core/debates/debate-removal';
 import { useDebate, useProcessedVideoDebateIds, useSpaceDebates } from '~/core/debates/hooks';
 import { isWatchableDebate } from '~/core/debates/playback-utils';
 import { type DebatePageOutcome, useDebatePageOutcome } from '~/core/debates/use-debate-page-outcome';
+import { DEEP_LINK_MODALS } from '~/core/deep-links/modal-deep-link';
+import { useDeepLinkEffect, useDeepLinkParams } from '~/core/deep-links/use-deep-link';
 import { useComments } from '~/core/hooks/use-comments';
 import { useOpenClaimInSidePanel } from '~/core/hooks/use-open-claim-in-side-panel';
 import { useSpace } from '~/core/hooks/use-space';
@@ -389,6 +391,16 @@ export function DebatesBrowseFeed({
     if (href == null) return;
     window.history.replaceState(null, '', href);
   }, [activeId, rendersFeed, spaceId, surface]);
+
+  // `?modal=comments` (the reply email's Reply, GEO-3381) opens the comments of the debate the link
+  // landed on, once the feed is showing it.
+  const commentsLink = useDeepLinkParams(DEEP_LINK_MODALS.comments);
+  useDeepLinkEffect({
+    requested: commentsLink.requested,
+    cleanUrl: commentsLink.cleanUrl,
+    enabled: rendersFeed && activeIndex >= 0,
+    run: () => setFeedPanel('comments'),
+  });
 
   // Where the linked debate has got to, for the visit's outcome, in the same order the render
   // below decides what to show.
