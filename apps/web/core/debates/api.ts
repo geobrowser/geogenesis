@@ -4452,7 +4452,10 @@ export type GeoChatProfileRead =
  * The profile state from `GET /auth/profile`, which never rotates the session, so the gateway
  * socket stays up. On a 401 the session is refreshed once and the read retried.
  */
-export async function readGeoChatSessionProfile(accountKey: string): Promise<GeoChatProfileRead> {
+export async function readGeoChatSessionProfile(
+  accountKey: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken
+): Promise<GeoChatProfileRead> {
   const inFlight = geoChatSessionRequests.get(accountKey);
   if (inFlight) {
     return inFlight.then(
@@ -4462,43 +4465,51 @@ export async function readGeoChatSessionProfile(accountKey: string): Promise<Geo
   }
 
   const issuedForEpoch = geoChatSessionEpoch;
-  const read = async (session: GeoChatSession) => {
+  const failed = (error: unknown): GeoChatProfileRead => ({
+    state: null,
+    retryAfterMs: error instanceof GeoChatRequestError ? error.retryAfterMs : null,
+  });
+  const read = async (session: GeoChatSession): Promise<GeoChatProfileRead> => {
     const response = await fetchGeoChatSession(`${getGeoChatApiBaseUrl()}/auth/profile`, {
       method: 'GET',
       headers: { Authorization: `Bearer ${session.access_token}` },
     });
     if (!response.ok) throw await requestError(response);
-    return (await response.json()) as { profile: GeoChatSessionProfile | null };
-  };
-  const record = (session: GeoChatSession, profile: GeoChatSessionProfile | null): GeoChatProfileRead => {
-    if (issuedForEpoch !== geoChatSessionEpoch) return { state: null, retryAfterMs: null };
-    saveSession({ ...session, profile }, accountKey);
-    setGeoChatAccountStatus(accountKey, acceptedStatus(profile));
+    const { profile } = (await response.json()) as { profile: GeoChatSessionProfile | null };
+    // A refresh can land while this is in flight; its session, and the status it set, are newer.
+    const latest = loadSession(accountKey);
+    if (issuedForEpoch === geoChatSessionEpoch && latest?.access_token === session.access_token) {
+      saveSession({ ...latest, profile }, accountKey);
+      setGeoChatAccountStatus(accountKey, acceptedStatus(profile));
+    }
     return { state: profile?.state ?? 'attached' };
   };
 
-  let session = loadSession(accountKey);
+  const session = loadSession(accountKey);
   if (!session) return { state: null, retryAfterMs: null };
   try {
-    return record(session, (await read(session)).profile);
+    return await read(session);
   } catch (error) {
     const rejected =
       error instanceof GeoChatRequestError &&
       error.status === 401 &&
       (error.code === 'invalid_access_token' || error.code === 'missing_authorization');
-    if (!rejected || !session.refresh_token) {
-      const retryAfterMs = error instanceof GeoChatRequestError ? error.retryAfterMs : null;
-      return { state: null, retryAfterMs };
-    }
+    if (!rejected) return failed(error);
   }
   try {
-    session = await refreshGeoChatSession(session.refresh_token);
-    if (issuedForEpoch !== geoChatSessionEpoch) return { state: null, retryAfterMs: null };
-    saveSession(session, accountKey);
-    return record(session, (await read(session)).profile);
+    // Renewed the usual way, so it joins any exchange already in flight.
+    expireStoredSession(session.access_token);
+    return await read(await getGeoChatSession(getPrivyIdentityToken, accountKey));
   } catch (error) {
-    return { state: null, retryAfterMs: error instanceof GeoChatRequestError ? error.retryAfterMs : null };
+    return failed(error);
   }
+}
+
+/** Marks the stored session expired if it still holds `accessToken`, so the next exchange renews it. */
+function expireStoredSession(accessToken: string) {
+  const stored = loadStoredSession();
+  if (stored?.session.access_token !== accessToken) return;
+  saveSession({ ...stored.session, expires_at: new Date(0).toISOString() }, stored.account_key);
 }
 
 /** The access token every tab and request currently shares, if one is stored. */

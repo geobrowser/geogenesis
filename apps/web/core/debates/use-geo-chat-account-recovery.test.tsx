@@ -16,6 +16,7 @@ import { useGeoChatAccountRecovery } from './use-geo-chat-account-recovery';
 const mocks = vi.hoisted(() => ({
   getGeoChatSession: vi.fn(),
   readGeoChatSessionProfile: vi.fn(),
+  getToken: vi.fn(),
   capture: vi.fn(),
   devLog: vi.fn(),
   createdAt: new Date(0) as Date,
@@ -28,7 +29,12 @@ vi.mock('./api', () => ({
   readGeoChatSessionProfile: mocks.readGeoChatSessionProfile,
 }));
 vi.mock('./hooks', () => ({
-  useGeoChatAuth: () => ({ ready: true, authenticated: true, accountKey: 'user-a', getPrivyIdentityToken: vi.fn() }),
+  useGeoChatAuth: () => ({
+    ready: true,
+    authenticated: true,
+    accountKey: 'user-a',
+    getPrivyIdentityToken: mocks.getToken,
+  }),
 }));
 vi.mock('~/core/wallet/auth-hooks', () => ({ usePrivy: () => ({ user: { createdAt: mocks.createdAt } }) }));
 vi.mock('~/core/analytics', () => ({ capture: mocks.capture }));

@@ -12,7 +12,7 @@ import { usePrivy } from '~/core/wallet/auth-hooks';
 
 import { stepAtom } from '~/partials/onboarding/onboarding-atoms';
 
-import { readGeoChatSessionProfile } from './api';
+import { type GetPrivyIdentityToken, readGeoChatSessionProfile } from './api';
 import { debateGateway } from './debate-gateway';
 import {
   type GeoChatAccountStatus,
@@ -55,7 +55,7 @@ function markAcceptanceReported(accountKey: string) {
  * refreshes a pending profile on `retry_after_ms` and refetches the debates reads on recovery and attach.
  */
 export function useGeoChatAccountRecovery() {
-  const { ready, authenticated, accountKey } = useGeoChatAuth();
+  const { ready, authenticated, accountKey, getPrivyIdentityToken } = useGeoChatAuth();
   const { user } = usePrivy();
   const queryClient = useQueryClient();
   const activeKey = ready && authenticated ? accountKey : null;
@@ -80,9 +80,9 @@ export function useGeoChatAccountRecovery() {
   React.useEffect(() => {
     if (!activeKey) return;
     if (status.kind === 'accepted' && status.profile !== 'attached') {
-      return pollWhilePending(activeKey, status.retryAfterMs);
+      return pollWhilePending(activeKey, getPrivyIdentityToken, status.retryAfterMs);
     }
-  }, [activeKey, status]);
+  }, [activeKey, getPrivyIdentityToken, status]);
 }
 
 type Cancel = () => void;
@@ -105,7 +105,11 @@ function scheduleVisible(delayMs: number, step: () => void, register: (cancel: C
   register(() => clearTimeout(timer));
 }
 
-function pollWhilePending(accountKey: string, retryAfterMs: number | null): Cancel {
+function pollWhilePending(
+  accountKey: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  retryAfterMs: number | null
+): Cancel {
   let cancelled = false;
   let cancelPending: Cancel = () => undefined;
   const register = (cancel: Cancel) => {
@@ -117,7 +121,7 @@ function pollWhilePending(accountKey: string, retryAfterMs: number | null): Canc
     scheduleVisible(
       delayMs,
       () => {
-        void readGeoChatSessionProfile(accountKey).then(read => {
+        void readGeoChatSessionProfile(accountKey, getPrivyIdentityToken).then(read => {
           const next = getGeoChatAccountStatus(accountKey);
           // Unchanged status does not re-run the effect, so keep going from here.
           if (cancelled || next.kind !== 'accepted' || next.profile === 'attached') return;
