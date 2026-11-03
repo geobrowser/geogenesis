@@ -11,6 +11,11 @@ import { withSignupVisitor } from './auth/signup-visitor';
 import { pushMarketingEvent } from './marketing-events';
 
 export type { AnalyticsEventName } from './analytics-events';
+/**
+ * Events not yet in the registry. The runtime and the collector both accept the `experimental.`
+ * prefix without a definition, so an event can ship before its contract does.
+ */
+export type ExperimentalEventName = `experimental.${string}`;
 
 export type AnalyticsProperties = Record<string, unknown>;
 
@@ -37,7 +42,7 @@ type GeoAnalyticsRuntime = {
   measurementContextRevision?: () => number;
   reconcileAnonymousIdentity?: () => void;
   bindIdentity?: (accessToken: string) => Promise<boolean>;
-  capture?: (eventName: AnalyticsEventName, properties?: AnalyticsProperties) => void;
+  capture?: (eventName: AnalyticsEventName | ExperimentalEventName, properties?: AnalyticsProperties) => void;
   identify?: (user: AnalyticsIdentity, traits?: AnalyticsProperties) => void;
   identifyUser?: (user: AnalyticsIdentity, traits?: AnalyticsProperties) => void;
   pageViewed?: (properties?: AnalyticsProperties) => void;
@@ -61,7 +66,7 @@ type GeoAnalyticsRuntime = {
 type PendingCall =
   | {
       method: 'capture';
-      eventName: AnalyticsEventName;
+      eventName: AnalyticsEventName | ExperimentalEventName;
       properties: AnalyticsProperties;
     }
   | {
@@ -297,6 +302,15 @@ function loadAnalyticsScript() {
 }
 
 export function capture(eventName: AnalyticsEventName, properties: AnalyticsProperties = {}) {
+  captureAny(eventName, properties);
+}
+
+/** An event outside the registry; see `ExperimentalEventName`. */
+export function captureExperimental(eventName: ExperimentalEventName, properties: AnalyticsProperties = {}) {
+  captureAny(eventName, properties);
+}
+
+function captureAny(eventName: AnalyticsEventName | ExperimentalEventName, properties: AnalyticsProperties) {
   // An attributed action may complete on another route. Explicit nulls also
   // prevent the runtime from filling absent page entities from that later route.
   const route = properties.page_view_id ? { page_entity_id: null, page_entity_type: null } : pageContext();

@@ -1,7 +1,13 @@
 'use client';
 
 import { ACTION_CONTEXT_FIELDS, pageContext } from './action-context';
-import { type AnalyticsEventName, type AnalyticsProperties, capture } from './analytics';
+import {
+  type AnalyticsEventName,
+  type AnalyticsProperties,
+  type ExperimentalEventName,
+  capture,
+  captureExperimental,
+} from './analytics';
 import { isAnalyticsEnabled, readAnalyticsContext } from './analytics-context';
 import { equals } from './id/normalize';
 import { pushMarketingEvent } from './marketing-events';
@@ -27,6 +33,12 @@ export type AuthAttempt = {
   id: string;
   startedAt: number;
   openedAt?: number;
+  /**
+   * When the prompt opened, in ms since this document's navigation start. Events queued before the
+   * analytics runtime loads are stamped when it flushes them (#2899), so this is the reliable
+   * measure of how long a visitor waited for the dialog.
+   */
+  openedPageMs?: number;
   endedAt?: number;
   outcome?: AuthAttemptOutcome;
   properties: AnalyticsProperties;
@@ -56,6 +68,9 @@ const fields = new Set<string>([
   // Why the save sheet was open when that sign-in started: the navbar's centred sheet and the corner
   // card share one email field, so this is what tells their sign-ins apart (GEO-3400).
   'prompt_reason',
+  // A sign-in reopened after the tab reloaded at the code step (GEO-3573), and the attempt it resumes.
+  'auth_recovery',
+  'recovered_attempt_id',
 ]);
 
 const sourceIdentifierFields = new Set(['link_source', 'marketing_page', 'marketing_cta', 'marketing_handoff_id']);
@@ -117,9 +132,11 @@ export function readAuthAttempt(id: string) {
   return read(id);
 }
 
-export function captureAuthEvent(event: AnalyticsEventName, properties: AnalyticsProperties) {
+export function captureAuthEvent(event: AnalyticsEventName | ExperimentalEventName, properties: AnalyticsProperties) {
   try {
-    capture(event, { ...properties, measurement_version: 'growth-v2' });
+    const tagged = { ...properties, measurement_version: 'growth-v2' };
+    if (event.startsWith('experimental.')) captureExperimental(event as ExperimentalEventName, tagged);
+    else capture(event as AnalyticsEventName, tagged);
   } catch {
     /* Never block authentication or a queued action. */
   }
@@ -162,6 +179,11 @@ function saveQuietly(attempt: AuthAttempt, activate: boolean) {
     }
   }
 }
+/** Ms since this document's navigation start; undefined where there is no `performance`. */
+function pageMs() {
+  return typeof performance === 'undefined' ? undefined : Math.round(performance.now());
+}
+
 /** Prefer this tab's attempt. A new tab can inherit only an unambiguous active attempt. */
 export function currentAuthAttempt(recoverFromOtherTab = false): AuthAttempt | undefined {
   if (memory && Date.now() - memory.startedAt < TTL) return read(memory.id);
@@ -208,7 +230,7 @@ export function beginAuthAttempt(properties: AnalyticsProperties = {}) {
   };
   ownedAttemptId = attempt.id;
   save(attempt);
-  captureAuthEvent('auth_attempt_started', attemptProperties(attempt));
+  captureAuthEvent('auth_attempt_started', { ...attemptProperties(attempt), attempt_started_page_ms: pageMs() });
   pushMarketingEvent('geo_sign_up_start');
   return attempt;
 }
@@ -217,8 +239,12 @@ export function openAuthAttempt(properties: AnalyticsProperties = { auth_trigger
   if (!attempt || attempt.endedAt || attempt.id !== ownedAttemptId) attempt = beginAuthAttempt(properties);
   if (attempt.openedAt !== undefined) return;
   attempt.openedAt = Date.now();
+  attempt.openedPageMs = pageMs();
   save(attempt);
-  captureAuthEvent('auth_prompt_viewed', attemptProperties(attempt));
+  captureAuthEvent('auth_prompt_viewed', {
+    ...attemptProperties(attempt),
+    prompt_opened_page_ms: attempt.openedPageMs,
+  });
 }
 /**
  * On a redirect's return, takes over this tab's attempt `id` so the return can end it as its starter
@@ -249,6 +275,7 @@ export function finishAuthAttempt(outcome: AuthAttemptOutcome, attempt = current
     outcome,
     auth_duration_ms: Math.max(0, attempt.endedAt - (attempt.openedAt ?? attempt.startedAt)),
     prompt_seen: attempt.openedAt !== undefined,
+    prompt_opened_page_ms: attempt.openedPageMs,
   });
 }
 export function recoverAuthAttempt(properties?: AnalyticsProperties) {
