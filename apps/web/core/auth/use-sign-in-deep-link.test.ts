@@ -8,11 +8,9 @@ const mocks = vi.hoisted(() => ({
   run: undefined as (() => void) | undefined,
   openSignIn: vi.fn(),
   privy: { ready: true, authenticated: false, isModalOpen: false },
-  recovering: false,
 }));
 
 vi.mock('~/core/wallet/auth-hooks', () => ({ usePrivy: () => mocks.privy }));
-vi.mock('~/core/auth/code-step', () => ({ recoveringCodeStep: () => mocks.recovering }));
 vi.mock('~/core/deep-links/use-deep-link', () => ({
   useDeepLinkParams: () => ({ via: mocks.via, cleanUrl: window.location.pathname }),
   useDeepLinkEffect: ({ run }: { run: () => void }) => void (mocks.run = run),
@@ -41,7 +39,6 @@ afterEach(() => {
   mocks.run = undefined;
   mocks.openSignIn.mockReset();
   mocks.privy = { ready: true, authenticated: false, isModalOpen: false };
-  mocks.recovering = false;
   document.documentElement.removeAttribute(SIGN_IN_PENDING_ATTRIBUTE);
   window.sessionStorage.clear();
 });
@@ -117,18 +114,6 @@ describe('useSignInDeepLink', () => {
     act(() => void vi.advanceTimersByTime(OPENING_NOTICE_TIMEOUT_MS));
     expect(result.current.opening).toBe(false);
     vi.useRealTimers();
-  });
-
-  // GEO-3573: a tab reloaded at the code step reopens sign-in itself, prefilled.
-  it('leaves a reloaded code step to its recovery', () => {
-    mocks.recovering = true;
-    document.documentElement.setAttribute(SIGN_IN_PENDING_ATTRIBUTE, '');
-    const { result } = renderHook(() => useSignInDeepLink());
-    act(() => mocks.run?.());
-    expect(mocks.openSignIn).not.toHaveBeenCalled();
-    expect(result.current.opening).toBe(false);
-    // The layout's overlay, set before the app ran, comes down too.
-    expect(document.documentElement.hasAttribute(SIGN_IN_PENDING_ATTRIBUTE)).toBe(false);
   });
 
   // The inline script runs before React; it must recognise only the sign-in link.

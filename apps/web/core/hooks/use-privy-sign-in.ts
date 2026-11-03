@@ -3,6 +3,7 @@
 import * as React from 'react';
 
 import { type AnalyticsProperties } from '~/core/analytics';
+import { codeRecoveryOffered, codeRecoveryProperties, takeCodeRecovery } from '~/core/auth/code-step';
 import { onSignInAbandoned } from '~/core/auth/sign-in-abandoned';
 import { useTrackedLogin } from '~/core/hooks/use-tracked-login';
 import { usePrivy } from '~/core/wallet/auth-hooks';
@@ -94,14 +95,20 @@ export function usePrivySignIn(onComplete?: () => void, options?: UsePrivySignIn
         nameOnly: callOptions?.nameOnlyOnboarding,
       });
       const configured = optionsRef.current?.analytics;
+      // GEO-3573: a code asked for on an earlier page (a reload, or a new tab from the mail link) is
+      // picked up by whichever sign-in this page opens first, with its address filled back in.
+      const recovery = callOptions?.prefillEmail ? null : takeCodeRecovery();
       const attempt = login(
         {
+          ...(recovery?.properties ?? {}),
           ...(typeof configured === 'function' ? configured() : configured),
           ...(properties && !('nativeEvent' in properties) ? properties : {}),
+          ...(recovery ? codeRecoveryProperties(recovery) : {}),
         },
         { resume: optionsRef.current?.resumeAuthAttempt },
-        callOptions?.prefillEmail
+        callOptions?.prefillEmail ?? recovery?.email ?? undefined
       );
+      if (recovery) codeRecoveryOffered(recovery, attempt?.id);
       // Registered with the app-level attempt rather than held here: this control can unmount
       // while the modal is open, and the withdrawal must still happen (see `sign-in-abandoned`).
       // After `login`, whose new attempt clears the previous one's.

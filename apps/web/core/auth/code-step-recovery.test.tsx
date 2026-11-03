@@ -5,11 +5,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   privy: { ready: true, authenticated: false, isModalOpen: false },
   email: { status: 'initial' } as { status: string },
-  openSignIn: vi.fn(() => ({ id: 'recovery-attempt' })),
-  signInOptions: undefined as { analytics?: () => Record<string, unknown> } | undefined,
+  openSignIn: vi.fn(),
+  notice: null as { email: string | null } | null,
+  listeners: new Set<() => void>(),
+  modalLink: false,
   step: {
-    claimReloadedCodeStep: vi.fn(),
-    codeRecoveryOffered: vi.fn(),
+    reloadedCodeStep: vi.fn(),
     clearCodeStep: vi.fn(),
     codeScreenShown: vi.fn(),
     codeStepHidden: vi.fn(),
@@ -19,77 +20,106 @@ const mocks = vi.hoisted(() => ({
   },
 }));
 
+function setNotice(next: { email: string | null } | null) {
+  mocks.notice = next;
+  mocks.listeners.forEach(listener => listener());
+}
+
 vi.mock('~/core/wallet/auth-hooks', () => ({
   usePrivy: () => mocks.privy,
   useLoginWithEmail: () => ({ state: mocks.email }),
 }));
-vi.mock('~/core/hooks/use-privy-sign-in', () => ({
-  usePrivySignIn: (_: unknown, options: typeof mocks.signInOptions) => {
-    mocks.signInOptions = options;
-    return mocks.openSignIn;
+vi.mock('~/core/hooks/use-privy-sign-in', () => ({ usePrivySignIn: () => mocks.openSignIn }));
+vi.mock('~/core/hooks/use-on-sign-out', () => ({ useOnSignOut: vi.fn() }));
+vi.mock('~/core/auth-attempt', () => ({
+  currentAuthAttempt: () => undefined,
+  readAuthAttempt: () => undefined,
+  subscribeAuthAttempts: () => () => true,
+}));
+vi.mock('./code-step', () => ({
+  ...mocks.step,
+  landedOnModalLink: () => mocks.modalLink,
+  recoveryNotice: () => mocks.notice,
+  hideRecoveryNotice: () => setNotice(null),
+  subscribeRecoveryNotice: (listener: () => void) => {
+    mocks.listeners.add(listener);
+    return () => void mocks.listeners.delete(listener);
   },
 }));
-vi.mock('./code-step', () => mocks.step);
 
-const { CodeStepRecovery } = await import('./code-step-recovery');
+const { CodeStepRecovery, LINK_SIGN_IN_GRACE_MS } = await import('./code-step-recovery');
 const { CodeStepTracker } = await import('./code-step-tracker');
 
-const PENDING = {
-  attemptId: 'original',
-  email: 'a@b.co',
-  sentAt: Date.now(),
-  documentId: 'old',
-  properties: { component: 'save_votes', auth_trigger: 'control', auth_intent: 'save_votes' },
-};
+const PENDING = { attemptId: 'original', email: 'a@b.co', sentAt: Date.now(), documentId: 'old', properties: {} };
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
   mocks.privy = { ready: true, authenticated: false, isModalOpen: false };
   mocks.email = { status: 'initial' };
-  mocks.openSignIn.mockClear();
+  mocks.notice = null;
+  mocks.modalLink = false;
+  mocks.openSignIn.mockReset();
   Object.values(mocks.step).forEach(fn => fn.mockReset());
   document.body.innerHTML = '';
 });
 
 describe('CodeStepRecovery', () => {
-  it('reopens sign-in with the address filled in, under the entry that started it', () => {
-    mocks.step.claimReloadedCodeStep.mockReturnValue(PENDING);
-    render(<CodeStepRecovery />);
-
-    expect(mocks.openSignIn).toHaveBeenCalledTimes(1);
-    expect(mocks.openSignIn).toHaveBeenCalledWith(undefined, { prefillEmail: 'a@b.co' });
-    expect(mocks.signInOptions?.analytics?.()).toMatchObject({
-      component: 'save_votes',
-      // What `LocalVotesSaver` keys a save on, so a recovered save-votes sign-in still saves them.
-      auth_intent: 'save_votes',
-      auth_recovery: 'reloaded_code_step',
-      recovered_attempt_id: 'original',
-    });
-    expect(mocks.step.codeRecoveryOffered).toHaveBeenCalledWith(PENDING, 'recovery-attempt');
-    // Nothing is mailed by the recovery itself.
-    expect(screen.getByRole('status').textContent).toContain('Press Submit to get a new code sent to a@b.co');
-  });
-
-  it('waits for Privy, and opens nothing for someone already signed in', () => {
-    mocks.step.claimReloadedCodeStep.mockReturnValue(PENDING);
+  it('opens sign-in for an unclaimed code step once Privy is ready', () => {
+    vi.useFakeTimers();
+    mocks.step.reloadedCodeStep.mockReturnValue(PENDING);
     mocks.privy = { ready: false, authenticated: false, isModalOpen: false };
     const { rerender } = render(<CodeStepRecovery />);
+    act(() => void vi.runAllTimers());
     expect(mocks.openSignIn).not.toHaveBeenCalled();
 
-    mocks.privy = { ready: true, authenticated: true, isModalOpen: false };
+    mocks.privy = { ready: true, authenticated: false, isModalOpen: false };
     rerender(<CodeStepRecovery />);
-    expect(mocks.openSignIn).not.toHaveBeenCalled();
-    expect(mocks.step.clearCodeStep).toHaveBeenCalled();
+    act(() => void vi.runAllTimers());
+    expect(mocks.openSignIn).toHaveBeenCalledTimes(1);
   });
 
-  it('takes the notice down once the new code is on its way, or the dialog closes', () => {
-    mocks.step.claimReloadedCodeStep.mockReturnValue(PENDING);
+  it('leaves a ?modal= link to open sign-in, and opens it only if the link did not', () => {
+    vi.useFakeTimers();
+    mocks.modalLink = true;
+    mocks.step.reloadedCodeStep.mockReturnValue(PENDING);
+    render(<CodeStepRecovery />);
+    act(() => void vi.advanceTimersByTime(LINK_SIGN_IN_GRACE_MS - 1));
+    expect(mocks.openSignIn).not.toHaveBeenCalled();
+    // The link's sign-in claimed it (or another tab did): nothing more to open.
+    mocks.step.reloadedCodeStep.mockReturnValue(null);
+    act(() => void vi.advanceTimersByTime(1));
+    expect(mocks.openSignIn).not.toHaveBeenCalled();
+  });
+
+  it('opens nothing for someone already signed in', () => {
+    vi.useFakeTimers();
+    mocks.step.reloadedCodeStep.mockReturnValue(PENDING);
+    mocks.privy = { ready: true, authenticated: true, isModalOpen: false };
+    render(<CodeStepRecovery />);
+    act(() => void vi.runAllTimers());
+    expect(mocks.openSignIn).not.toHaveBeenCalled();
+  });
+
+  it('shows the notice while the recovered dialog waits, and takes it down once it closes', () => {
     const { rerender } = render(<CodeStepRecovery />);
+    act(() => setNotice({ email: 'a@b.co' }));
+    // Nothing is mailed by the recovery itself.
+    expect(screen.getByRole('status').textContent).toBe('Continue signing in as a@b.co. Tap Submit to get a new code.');
+
     mocks.privy = { ...mocks.privy, isModalOpen: true };
     rerender(<CodeStepRecovery />);
     expect(screen.queryByRole('status')).not.toBeNull();
-
     mocks.privy = { ...mocks.privy, isModalOpen: false };
+    rerender(<CodeStepRecovery />);
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+
+  it('takes the notice down once the new code is on its way', () => {
+    const { rerender } = render(<CodeStepRecovery />);
+    act(() => setNotice({ email: null }));
+    expect(screen.getByRole('status').textContent).toContain('Enter your email');
+    mocks.email = { status: 'sending-code' };
     rerender(<CodeStepRecovery />);
     expect(screen.queryByRole('status')).toBeNull();
   });
@@ -123,5 +153,12 @@ describe('CodeStepTracker', () => {
     expect(mocks.step.codeStepHidden).toHaveBeenCalledTimes(1);
     expect(mocks.step.codeStepVisible).toHaveBeenCalledTimes(1);
     visibility.mockRestore();
+  });
+
+  it('forgets the code step once signed in by any route', () => {
+    mocks.step.readPendingCode.mockReturnValue(PENDING as never);
+    mocks.privy = { ready: true, authenticated: true, isModalOpen: false };
+    render(<CodeStepTracker />);
+    expect(mocks.step.clearCodeStep).toHaveBeenCalled();
   });
 });

@@ -2,10 +2,18 @@
 
 import * as React from 'react';
 
-import { readAuthAttempt, subscribeAuthAttempts } from '~/core/auth-attempt';
-import { useLoginWithEmail } from '~/core/wallet/auth-hooks';
+import { currentAuthAttempt, readAuthAttempt, subscribeAuthAttempts } from '~/core/auth-attempt';
+import { useOnSignOut } from '~/core/hooks/use-on-sign-out';
+import { useLoginWithEmail, usePrivy } from '~/core/wallet/auth-hooks';
 
-import { codeScreenShown, codeStepAttemptEnded, codeStepHidden, codeStepVisible, readPendingCode } from './code-step';
+import {
+  clearCodeStep,
+  codeScreenShown,
+  codeStepAttemptEnded,
+  codeStepHidden,
+  codeStepVisible,
+  readPendingCode,
+} from './code-step';
 
 /** Privy's dialog names its address field this; nothing of ours does. */
 function readPrivyEmailField(): string | null {
@@ -21,6 +29,7 @@ function readPrivyEmailField(): string | null {
  */
 export function CodeStepTracker() {
   const { state } = useLoginWithEmail();
+  const { ready, authenticated } = usePrivy();
   const status = state.status;
   const previous = React.useRef(status);
   // Privy's dialog leaves the address screen once the code is on its way, so the field is read
@@ -48,13 +57,21 @@ export function CodeStepTracker() {
     const unsubscribe = subscribeAuthAttempts(() => {
       const pending = readPendingCode();
       if (!pending) return;
-      for (const id of [pending.attemptId, pending.recoveryAttemptId]) {
-        const attempt = id ? readAuthAttempt(id) : undefined;
+      const own = [pending.attemptId, pending.recoveryAttemptId].map(id => (id ? readAuthAttempt(id) : undefined));
+      // The code's own attempts first, then whatever this document just ended (a close of any sign-in).
+      for (const attempt of [...own, currentAuthAttempt()]) {
         if (attempt?.outcome) return codeStepAttemptEnded(attempt);
       }
     });
     return () => void unsubscribe();
   }, []);
+
+  // Signed in by any route, or signed out: nothing is left to pick up, and a shared device must not
+  // offer the last person's address.
+  React.useEffect(() => {
+    if (ready && authenticated && readPendingCode()) clearCodeStep();
+  }, [authenticated, ready]);
+  useOnSignOut(clearCodeStep);
 
   return null;
 }

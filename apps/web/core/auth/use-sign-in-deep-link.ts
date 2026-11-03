@@ -3,7 +3,6 @@
 import * as React from 'react';
 
 import { marketingAuthProperties } from '~/core/auth-attempt';
-import { recoveringCodeStep } from '~/core/auth/code-step';
 import { SIGN_IN_MODAL } from '~/core/auth/sign-in-deep-link';
 import { setSignInPending } from '~/core/auth/sign-in-pending';
 import { dashlessId } from '~/core/debates/api';
@@ -75,8 +74,7 @@ export function useSignInDeepLink(): { opening: boolean } {
     run: () => {
       // Already signed in: the link has done its job by landing them here, and a login dialog over
       // a live session is noise. The trigger is cleared either way.
-      // A tab reloaded at the code step reopens sign-in itself, with the address filled in.
-      if (authenticated || recoveringCodeStep()) {
+      if (authenticated) {
         setSignInPending(false);
         return;
       }

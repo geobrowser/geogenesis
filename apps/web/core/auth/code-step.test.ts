@@ -63,25 +63,38 @@ describe('code step', () => {
     expect(step.reloadedCodeStep()).toBeNull();
   });
 
-  it('hands a reloaded tab its code step inside the window, once claimed', async () => {
+  it('hands a new page its code step inside the window, carrying only the entry', async () => {
     const first = await load();
-    first.attempts.beginAuthAttempt({ component: 'save_votes' });
+    first.attempts.beginAuthAttempt({ component: 'save_votes', auth_intent: 'save_votes', page_view_id: 'old' });
     first.step.codeScreenShown('a@b.co');
     first.step.codeStepHidden();
 
     const { step } = await load();
-    expect(step.recoveringCodeStep()).toBe(true);
-    const claimed = step.claimReloadedCodeStep();
+    expect(step.reloadedCodeStep()).not.toBeNull();
+    const claimed = step.takeCodeRecovery();
     expect(claimed).toMatchObject({
       email: 'a@b.co',
-      properties: expect.objectContaining({ component: 'save_votes' }),
+      properties: { component: 'save_votes', auth_intent: 'save_votes' },
     });
-    // The dead page's view is not carried into the new one.
-    expect(Object.keys(claimed!.properties).filter(key => key.startsWith('page_'))).toEqual([]);
-    expect(steps().at(-1)).toMatchObject({ auth_step: 'returned_to_code_screen', returned_to: 'reloaded_page' });
-    // Claimed for this document: a second reader does not see it as a reload, but still knows.
+    // The dead page's view, and anything else the entry carried, is not stored.
+    expect(claimed!.properties).not.toHaveProperty('page_view_id');
+    expect(steps().at(-1)).toMatchObject({ auth_step: 'returned_to_code_screen', returned_to: 'new_page' });
+    // Claimed: taking it again in this page returns it without reporting a second return.
+    expect(step.takeCodeRecovery()).toMatchObject({ email: 'a@b.co' });
+    expect(steps().filter(props => props.returned_to === 'new_page')).toHaveLength(1);
+  });
+
+  it('lets only the first page to claim it pick the step up', async () => {
+    const first = await load();
+    first.step.codeScreenShown('a@b.co');
+
+    const second = await load();
+    expect(second.step.takeCodeRecovery()).not.toBeNull();
+
+    // A third tab, opened later, behaves normally.
+    const { step } = await load();
     expect(step.reloadedCodeStep()).toBeNull();
-    expect(step.recoveringCodeStep()).toBe(true);
+    expect(step.takeCodeRecovery()).toBeNull();
   });
 
   it('forgets a code older than the window', async () => {
@@ -91,28 +104,45 @@ describe('code step', () => {
 
     vi.setSystemTime(1_000_000 + first.step.CODE_RECOVERY_WINDOW_MS);
     const { step } = await load();
-    expect(step.reloadedCodeStep()).toBeNull();
-    expect(step.recoveringCodeStep()).toBe(false);
-    expect(sessionStorage.length).toBe(0);
+    expect(step.takeCodeRecovery()).toBeNull();
+    expect(localStorage.getItem('geo:auth-code-step:v1')).toBeNull();
   });
 
-  it('finishes when the recovered attempt ends, and only that one', async () => {
+  it('finishes when the recovered attempt signs in', async () => {
     const first = await load();
     first.attempts.beginAuthAttempt({ component: 'sign_in_deep_link', auth_trigger: 'deep_link' });
     first.step.codeScreenShown('a@b.co');
 
     const { step, attempts } = await load();
-    const pending = step.claimReloadedCodeStep()!;
-    const recovery = attempts.beginAuthAttempt({ ...pending.properties, auth_recovery: 'reloaded_code_step' });
+    const pending = step.takeCodeRecovery()!;
+    const recovery = attempts.beginAuthAttempt({ ...pending.properties, ...step.codeRecoveryProperties(pending) });
     step.codeRecoveryOffered(pending, recovery.id);
+    expect(step.recoveryNotice()).toEqual({ email: 'a@b.co' });
 
-    step.codeStepAttemptEnded({ ...recovery, id: 'someone-else', outcome: 'closed' });
+    // Superseded by another press: still waiting.
+    step.codeStepAttemptEnded({ ...recovery, outcome: 'superseded' });
     expect(step.readPendingCode()).not.toBeNull();
 
     attempts.finishAuthAttempt('signed_up', recovery);
     step.codeStepAttemptEnded(attempts.readAuthAttempt(recovery.id)!);
     expect(step.readPendingCode()).toBeNull();
+    expect(step.recoveryNotice()).toBeNull();
     expect(steps().at(-1)).toMatchObject({ auth_step: 'finished', outcome: 'signed_up', recovered: true });
     expect(steps().find(props => props.auth_step === 'recovery_offered')).toMatchObject({ prefilled: true });
+  });
+
+  it('forgets the step when the visitor closes any sign-in, or signs in by another route', async () => {
+    const { step, attempts } = await load();
+    step.codeScreenShown('a@b.co');
+    const other = attempts.beginAuthAttempt({ component: 'navbar' });
+
+    step.codeStepAttemptEnded({ ...other, outcome: 'closed' });
+    expect(step.readPendingCode()).toBeNull();
+    // Not the code's own attempt: nothing reported as finished.
+    expect(steps().some(props => props.auth_step === 'finished')).toBe(false);
+
+    step.codeScreenShown('a@b.co');
+    step.codeStepAttemptEnded({ ...other, id: 'elsewhere', outcome: 'signed_in' });
+    expect(step.readPendingCode()).toBeNull();
   });
 });
