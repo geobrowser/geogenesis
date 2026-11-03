@@ -4,15 +4,20 @@ import { type QueryClient, useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
+import { useAtomValue } from 'jotai';
+
+import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { devLog } from '~/core/utils/dev-log';
 import { usePrivy } from '~/core/wallet/auth-hooks';
 
-import { type GetPrivyIdentityToken, getGeoChatSession, refreshGeoChatSessionProfile } from './api';
+import { stepAtom } from '~/partials/onboarding/onboarding-atoms';
+
+import { refreshGeoChatSessionProfile } from './api';
+import { debateGateway } from './debate-gateway';
 import {
   type GeoChatAccountStatus,
   REFUSED_RETRY_MAX_MS,
   getGeoChatAccountStatus,
-  refusedRetryDelayMs,
   setLiveGeoChatAccountKey,
   subscribeGeoChatAccountStatus,
 } from './geo-chat-account-status';
@@ -53,11 +58,11 @@ export function useGeoChatAccountStatus(accountKey: string | null): GeoChatAccou
 }
 
 /**
- * Mounted once. Retries a refused session exchange until it succeeds, refreshes a pending profile on
- * `retry_after_ms`, and refetches the debates reads on recovery and attach; `missing` re-reads the personal space.
+ * Mounted once. The gateway retries a refused exchange; this hook reacts to the status it records. It
+ * refreshes a pending profile on `retry_after_ms` and refetches the debates reads on recovery and attach.
  */
 export function useGeoChatAccountRecovery() {
-  const { ready, authenticated, accountKey, getPrivyIdentityToken } = useGeoChatAuth();
+  const { ready, authenticated, accountKey } = useGeoChatAuth();
   const { user } = usePrivy();
   const queryClient = useQueryClient();
   const activeKey = ready && authenticated ? accountKey : null;
@@ -70,13 +75,21 @@ export function useGeoChatAccountRecovery() {
   const signedUpAt = user?.createdAt ? new Date(user.createdAt).getTime() : null;
   useAccountStatusTransitions(activeKey, status, queryClient, signedUpAt);
 
+  // A refused exchange is retried by the gateway's reconnect, which can be waiting up to 30 s.
+  // Finishing setup is when geo-chat starts accepting, so try the exchange at once.
+  const { isRegistered } = usePersonalSpaceId();
+  const onboardingCompleted = useAtomValue(stepAtom) === 'completed';
+  const refused = status.kind === 'refused';
+  React.useEffect(() => {
+    if (activeKey && refused && (isRegistered || onboardingCompleted)) debateGateway.retryNow();
+  }, [activeKey, refused, isRegistered, onboardingCompleted]);
+
   React.useEffect(() => {
     if (!activeKey) return;
-    if (status.kind === 'refused') return retryWhileRefused(activeKey, getPrivyIdentityToken);
     if (status.kind === 'accepted' && status.profile !== 'attached') {
       return refreshWhilePending(activeKey, status.retryAfterMs);
     }
-  }, [activeKey, getPrivyIdentityToken, status]);
+  }, [activeKey, status]);
 }
 
 type Cancel = () => void;
@@ -97,35 +110,6 @@ function scheduleVisible(delayMs: number, step: () => void, register: (cancel: C
     register(() => document.removeEventListener('visibilitychange', onVisible));
   }, delayMs);
   register(() => clearTimeout(timer));
-}
-
-function retryWhileRefused(accountKey: string, getPrivyIdentityToken: GetPrivyIdentityToken): Cancel {
-  let cancelled = false;
-  let cancelPending: Cancel = () => undefined;
-  const register = (cancel: Cancel) => {
-    cancelPending = cancel;
-  };
-
-  const attempt = (n: number) => {
-    scheduleVisible(
-      refusedRetryDelayMs(n),
-      () => {
-        void getGeoChatSession(getPrivyIdentityToken, accountKey)
-          .catch(() => undefined)
-          .then(() => {
-            // Success changes the status, which re-runs the effect and cancels this loop.
-            if (!cancelled && getGeoChatAccountStatus(accountKey).kind === 'refused') attempt(n + 1);
-          });
-      },
-      register
-    );
-  };
-  attempt(0);
-
-  return () => {
-    cancelled = true;
-    cancelPending();
-  };
 }
 
 function refreshWhilePending(accountKey: string, retryAfterMs: number | null): Cancel {

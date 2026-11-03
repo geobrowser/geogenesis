@@ -3,6 +3,7 @@ import { act, renderHook } from '@testing-library/react';
 
 import type { ReactNode } from 'react';
 
+import { getDefaultStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -18,6 +19,8 @@ const mocks = vi.hoisted(() => ({
   capture: vi.fn(),
   devLog: vi.fn(),
   createdAt: new Date(0) as Date,
+  isRegistered: false,
+  retryNow: vi.fn(),
 }));
 
 vi.mock('./api', () => ({
@@ -30,6 +33,16 @@ vi.mock('./hooks', () => ({
 vi.mock('~/core/wallet/auth-hooks', () => ({ usePrivy: () => ({ user: { createdAt: mocks.createdAt } }) }));
 vi.mock('~/core/analytics', () => ({ capture: mocks.capture }));
 vi.mock('~/core/utils/dev-log', () => ({ devLog: mocks.devLog }));
+vi.mock('./debate-gateway', () => ({ debateGateway: { retryNow: mocks.retryNow } }));
+vi.mock('~/core/hooks/use-personal-space-id', () => ({
+  usePersonalSpaceId: () => ({ isRegistered: mocks.isRegistered }),
+}));
+vi.mock('~/partials/onboarding/onboarding-atoms', async () => {
+  const { atom } = await import('jotai');
+  return { stepAtom: atom('start') };
+});
+
+const { stepAtom } = await import('~/partials/onboarding/onboarding-atoms');
 
 const refused: GeoChatAccountStatus = { kind: 'refused', reason: 'setting_up', code: 'no_personal_space' };
 const accepted = (profile: 'attached' | 'pending' | 'missing', retryAfterMs: number | null = null) =>
@@ -40,24 +53,29 @@ const accepted = (profile: 'attached' | 'pending' | 'missing', retryAfterMs: num
     retryAfterMs,
   }) as GeoChatAccountStatus;
 
+const mounted: Array<() => void> = [];
+
 function render() {
   const queryClient = new QueryClient();
   const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
-  renderHook(() => useGeoChatAccountRecovery(), {
+  const view = renderHook(() => useGeoChatAccountRecovery(), {
     wrapper: ({ children }: { children: ReactNode }) => (
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
     ),
   });
+  mounted.push(view.unmount);
   return { invalidate };
 }
 
 function renderHookOnce() {
   const queryClient = new QueryClient();
-  return renderHook(() => useGeoChatAccountRecovery(), {
+  const view = renderHook(() => useGeoChatAccountRecovery(), {
     wrapper: ({ children }: { children: ReactNode }) => (
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
     ),
   });
+  mounted.push(view.unmount);
+  return view;
 }
 
 const outcomes = () => mocks.devLog.mock.calls.map(([, payload]) => (payload as { outcome: string }).outcome);
@@ -70,6 +88,9 @@ beforeEach(() => {
   mocks.capture.mockReset();
   mocks.devLog.mockReset();
   mocks.createdAt = new Date(0);
+  mocks.isRegistered = false;
+  mocks.retryNow.mockReset();
+  getDefaultStore().set(stepAtom, 'start' as never);
   window.localStorage.clear();
 });
 
@@ -79,36 +100,58 @@ afterEach(() => {
 });
 
 afterEach(() => {
+  for (const unmount of mounted.splice(0)) unmount();
   vi.useRealTimers();
 });
 
 describe('useGeoChatAccountRecovery', () => {
-  it('retries a refused exchange with backoff, for as long as it takes', async () => {
+  it('leaves retrying a refused exchange to the gateway', async () => {
     render();
     act(() => setGeoChatAccountStatus('user-a', refused));
 
-    await act(() => vi.advanceTimersByTimeAsync(2_000));
-    expect(mocks.getGeoChatSession).toHaveBeenCalledTimes(1);
-    await act(() => vi.advanceTimersByTimeAsync(4_000));
-    expect(mocks.getGeoChatSession).toHaveBeenCalledTimes(2);
-
-    // Capped at 30 s and still going after ten minutes.
     await act(() => vi.advanceTimersByTimeAsync(10 * 60_000));
-    const calls = mocks.getGeoChatSession.mock.calls.length;
-    expect(calls).toBeGreaterThan(20);
-    await act(() => vi.advanceTimersByTimeAsync(30_000));
-    expect(mocks.getGeoChatSession.mock.calls.length).toBe(calls + 1);
+    expect(mocks.getGeoChatSession).not.toHaveBeenCalled();
+    expect(mocks.retryNow).not.toHaveBeenCalled();
     expect(outcomes()).toEqual(['session_refused']);
+  });
+
+  it('asks the gateway to retry at once when the personal space registers while refused', () => {
+    const view = renderHookOnce();
+    act(() => setGeoChatAccountStatus('user-a', refused));
+    expect(mocks.retryNow).not.toHaveBeenCalled();
+
+    mocks.isRegistered = true;
+    view.rerender();
+
+    expect(mocks.retryNow).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks the gateway to retry at once when onboarding completes while refused', () => {
+    mocks.isRegistered = true;
+    render();
+    act(() => setGeoChatAccountStatus('user-a', refused));
+    mocks.retryNow.mockClear();
+
+    act(() => getDefaultStore().set(stepAtom, 'completed' as never));
+
+    expect(mocks.retryNow).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not nudge the gateway for an accepted account', () => {
+    mocks.isRegistered = true;
+    render();
+    act(() => setGeoChatAccountStatus('user-a', accepted('attached')));
+    act(() => getDefaultStore().set(stepAtom, 'completed' as never));
+
+    expect(mocks.retryNow).not.toHaveBeenCalled();
   });
 
   it('refetches every debates read and records the wait once the account is accepted', async () => {
     const { invalidate } = render();
     act(() => setGeoChatAccountStatus('user-a', refused));
-    mocks.getGeoChatSession.mockImplementation(async () => {
-      setGeoChatAccountStatus('user-a', accepted('attached'));
-    });
-
     await act(() => vi.advanceTimersByTimeAsync(2_000));
+    // The gateway's reconnect exchanges the session and records the acceptance.
+    act(() => setGeoChatAccountStatus('user-a', accepted('attached')));
 
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['debates'] });
     expect(outcomes()).toEqual(['session_refused', 'session_accepted']);
@@ -121,26 +164,6 @@ describe('useGeoChatAccountRecovery', () => {
         refused_ms: 2_000,
       })
     );
-    // Stopped retrying.
-    await act(() => vi.advanceTimersByTimeAsync(60_000));
-    expect(mocks.getGeoChatSession).toHaveBeenCalledTimes(1);
-  });
-
-  it('waits for a hidden tab to come back before retrying', async () => {
-    render();
-    const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
-    act(() => setGeoChatAccountStatus('user-a', refused));
-
-    await act(() => vi.advanceTimersByTimeAsync(60_000));
-    expect(mocks.getGeoChatSession).not.toHaveBeenCalled();
-
-    visibility.mockReturnValue('visible');
-    await act(async () => {
-      document.dispatchEvent(new Event('visibilitychange'));
-      await vi.advanceTimersByTimeAsync(0);
-    });
-    expect(mocks.getGeoChatSession).toHaveBeenCalledTimes(1);
-    visibility.mockRestore();
   });
 
   it('refreshes a pending profile on retry_after_ms until it attaches, then refetches the names', async () => {
