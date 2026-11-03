@@ -8,7 +8,8 @@ import { ErrorBoundary } from 'react-error-boundary';
 import { DataBlockProvider } from '~/core/blocks/data/use-data-block';
 import { useNearViewport } from '~/core/hooks/use-near-viewport';
 import { useEditorInstance } from '~/core/state/editor/editor-provider';
-import { useDataBlockPlaceholderSizing, useEditorStoreLite } from '~/core/state/editor/use-editor-blocks';
+import { useDataBlockPlaceholderSizing } from '~/core/state/editor/data-block-placeholder-sizing';
+import { useEditorStoreLite } from '~/core/state/editor/use-editor-blocks';
 import { reportBoundaryError } from '~/core/telemetry/logger';
 
 import { DataBlockServerPlaceholder } from '../blocks/table/data-block-loading-placeholder';
