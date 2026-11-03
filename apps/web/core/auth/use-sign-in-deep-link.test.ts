@@ -130,4 +130,30 @@ describe('useSignInDeepLink', () => {
     expect(document.documentElement.hasAttribute(SIGN_IN_PENDING_ATTRIBUTE)).toBe(false);
     vi.useRealTimers();
   });
+
+  // Same answer as `hasPersistedPrivySession`, which the inline script copies.
+  it.each([
+    ['no session', () => {}, false],
+    ['the session cookie', () => void (document.cookie = 'privy-session=t'), true],
+    ['a refresh token', () => localStorage.setItem('privy:refresh_token', JSON.stringify('r')), true],
+    [
+      'only the deprecated refresh sentinel',
+      () => localStorage.setItem('privy:refresh_token', JSON.stringify('deprecated')),
+      false,
+    ],
+    ['an access token', () => localStorage.setItem('privy:token', JSON.stringify('a')), true],
+  ])('leaves the overlay off for a signed-in visitor: %s', async (_, arrange, signedIn) => {
+    const { hasPersistedPrivySession } = await import('~/core/wallet/privy-session');
+    localStorage.clear();
+    document.cookie = 'privy-session=; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+    document.documentElement.removeAttribute(SIGN_IN_PENDING_ATTRIBUTE);
+    arrange();
+    window.history.replaceState(null, '', '/explore?modal=signin');
+    expect(hasPersistedPrivySession()).toBe(signedIn);
+    new Function(SIGN_IN_PENDING_SCRIPT)();
+    expect(document.documentElement.hasAttribute(SIGN_IN_PENDING_ATTRIBUTE)).toBe(!signedIn);
+    localStorage.clear();
+    document.cookie = 'privy-session=; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+    document.documentElement.removeAttribute(SIGN_IN_PENDING_ATTRIBUTE);
+  });
 });
