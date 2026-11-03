@@ -64,6 +64,11 @@ export function announceCodeEmail(email: string) {
   announcedEmail = normalize(email);
 }
 
+/** The announced send failed; whatever is sent next reads its own address. */
+export function forgetAnnouncedCodeEmail() {
+  announcedEmail = null;
+}
+
 function normalize(value: unknown) {
   if (typeof value !== 'string') return null;
   const email = value.trim().toLowerCase();
@@ -109,15 +114,20 @@ function capture(step: AuthStep, pending: PendingCode, extra: AnalyticsPropertie
 export function codeScreenShown(fieldEmail?: string | null) {
   const attempt = currentAuthAttempt();
   const previous = readPendingCode();
-  const recovering = previous?.claimedBy === DOCUMENT_ID;
+  // A code sent from a recovered dialog is still that recovery, but this document's own code now,
+  // unclaimed, so the next page can pick it up again.
+  const recoveryAttemptId =
+    previous && (previous.claimedBy === DOCUMENT_ID || previous.documentId === DOCUMENT_ID)
+      ? previous.recoveryAttemptId
+      : undefined;
+  const recovering = recoveryAttemptId !== undefined;
   const pending: PendingCode = {
     attemptId: attempt?.id,
     email: announcedEmail ?? normalize(fieldEmail),
     sentAt: Date.now(),
     documentId: DOCUMENT_ID,
     properties: attempt ? entryAttribution(attempt.properties) : {},
-    // A code sent from a recovered dialog is still that recovery.
-    ...(recovering ? { claimedBy: DOCUMENT_ID, recoveryAttemptId: previous.recoveryAttemptId } : {}),
+    ...(recovering ? { recoveryAttemptId } : {}),
   };
   announcedEmail = null;
   write(pending);

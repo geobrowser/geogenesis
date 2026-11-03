@@ -97,6 +97,34 @@ describe('code step', () => {
     expect(step.takeCodeRecovery()).toBeNull();
   });
 
+  // Each recovered page sends a new code; the page after it must be able to pick that one up too.
+  it('recovers again on every later page, not just the first', async () => {
+    const first = await load();
+    first.attempts.beginAuthAttempt({ component: 'debate_matchmaking', auth_trigger: 'deep_link' });
+    first.step.codeScreenShown('a@b.co');
+
+    for (let cycle = 0; cycle < 3; cycle++) {
+      const { step, attempts } = await load();
+      const pending = step.takeCodeRecovery();
+      expect(pending, `cycle ${cycle}`).toMatchObject({ email: 'a@b.co' });
+      const recovery = attempts.beginAuthAttempt({ ...pending!.properties, ...step.codeRecoveryProperties(pending!) });
+      step.codeRecoveryOffered(pending!, recovery.id);
+      // Submit in the recovered dialog: a new code, this page's own.
+      step.codeScreenShown('a@b.co');
+      expect(step.readPendingCode()).toMatchObject({ recoveryAttemptId: recovery.id });
+      expect(step.readPendingCode()).not.toHaveProperty('claimedBy');
+      expect(steps().at(-1)).toMatchObject({ auth_step: 'code_screen_shown', recovered: true });
+    }
+  });
+
+  it('reads the address from the field once an announced send has failed', async () => {
+    const { step } = await load();
+    step.announceCodeEmail('first@example.com');
+    step.forgetAnnouncedCodeEmail();
+    step.codeScreenShown('other@example.com');
+    expect(step.readPendingCode()?.email).toBe('other@example.com');
+  });
+
   it('forgets a code older than the window', async () => {
     vi.useFakeTimers({ now: 1_000_000 });
     const first = await load();
