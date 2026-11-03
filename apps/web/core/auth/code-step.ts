@@ -2,6 +2,7 @@
 
 import { type AnalyticsProperties } from '~/core/analytics';
 import { type AuthAttempt, attemptProperties, captureAuthEvent, currentAuthAttempt } from '~/core/auth-attempt';
+import { devLog } from '~/core/utils/dev-log';
 
 // GEO-3573. Kept in localStorage for ten minutes: Privy's `loginWithCode` only works in the document
 // that sent the code, so a new page can only reopen sign-in prefilled. The address never leaves the device.
@@ -12,6 +13,12 @@ const KEY = 'geo:auth-code-step:v1';
 export const CODE_RECOVERY_WINDOW_MS = 10 * 60 * 1000;
 
 export const AUTH_STEP_EVENT = 'experimental.auth_step';
+
+/**
+ * Off until the analytics registry's `auth_step` contract is deployed: the collector rejects a
+ * growth-v2 event it has no contract for, failing its batch. Until then the payload is only logged.
+ */
+const SEND_AUTH_STEP = false;
 
 export type AuthStep =
   'code_screen_shown' | 'left_code_screen' | 'returned_to_code_screen' | 'recovery_offered' | 'finished';
@@ -179,14 +186,17 @@ function write(value: PendingCode | null) {
 
 function capture(step: AuthStep, pending: PendingCode, extra: AnalyticsProperties = {}) {
   const attempt = currentAuthAttempt();
-  captureAuthEvent(AUTH_STEP_EVENT, {
+  const payload: AnalyticsProperties = {
     ...pending.properties,
     ...(attempt ? attemptProperties(attempt) : {}),
     auth_step: step,
     code_attempt_id: pending.attemptId ?? null,
-    code_age_ms: Date.now() - pending.sentAt,
+    // The registry rejects a negative or fractional age; a clock set back can produce one.
+    code_age_ms: Math.max(0, Math.round(Date.now() - pending.sentAt)),
     ...extra,
-  });
+  };
+  if (SEND_AUTH_STEP) captureAuthEvent(AUTH_STEP_EVENT, payload);
+  else devLog('[auth_step]', payload);
 }
 
 /** Privy reports the code sent. `fieldEmail` is what its dialog's address field held, if any. */

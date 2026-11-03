@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const analytics = vi.hoisted(() => ({ capture: vi.fn(), captureExperimental: vi.fn() }));
+const analytics = vi.hoisted(() => ({ capture: vi.fn(), captureExperimental: vi.fn(), devLog: vi.fn() }));
 vi.mock('~/core/analytics', () => analytics);
+vi.mock('~/core/utils/dev-log', () => ({ devLog: analytics.devLog }));
 
 type CodeStep = typeof import('./code-step');
 type AuthAttemptModule = typeof import('~/core/auth-attempt');
@@ -18,8 +19,8 @@ function leave() {
 }
 
 function steps() {
-  return analytics.captureExperimental.mock.calls
-    .filter(([event]) => event === 'experimental.auth_step')
+  return analytics.devLog.mock.calls
+    .filter(([label]) => label === '[auth_step]')
     .map(([, props]) => props as Record<string, unknown>);
 }
 
@@ -28,6 +29,7 @@ beforeEach(() => {
   localStorage.clear();
   analytics.capture.mockClear();
   analytics.captureExperimental.mockClear();
+  analytics.devLog.mockClear();
 });
 afterEach(() => vi.useRealTimers());
 
@@ -163,6 +165,25 @@ describe('code step', () => {
     step.forgetAnnouncedCodeEmail();
     step.codeScreenShown('other@example.com');
     expect(step.readPendingCode()?.email).toBe('other@example.com');
+  });
+
+  it('never reports a negative code age when the clock went backwards', async () => {
+    vi.useFakeTimers({ now: 1_000_000 });
+    const { step } = await load();
+    step.codeScreenShown('a@b.co');
+    vi.setSystemTime(999_000.4);
+    step.codeStepHidden();
+    expect(steps().at(-1)).toMatchObject({ auth_step: 'left_code_screen', code_age_ms: 0 });
+  });
+
+  // Each recovered page sends a new code; the page after it must be able to pick that one up too.
+  // The collector rejects tagged events with no registry contract, so nothing goes out yet.
+  it('sends no step events until auth_step is registered', async () => {
+    const { step } = await load();
+    step.codeScreenShown('a@b.co');
+    expect(steps()).toHaveLength(1);
+    expect(analytics.captureExperimental).not.toHaveBeenCalled();
+    expect(analytics.capture).not.toHaveBeenCalled();
   });
 
   it('forgets a code older than the window', async () => {
