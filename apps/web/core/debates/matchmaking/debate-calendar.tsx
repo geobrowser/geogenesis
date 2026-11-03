@@ -24,6 +24,7 @@ import { useDebateActivity, useDebateSchedule, useGeoChatAuth } from '../hooks';
 import { lobbiesPinnedRow, lobbyDayLeads, useWeekLobbies } from '../lobbies/lobbies-calendar';
 import { useParticipantPositions } from '../participant-positions';
 import { speakerLabel } from '../playback-utils';
+import { sameId } from '../rooms/room-presence';
 import { useAdminScheduledDebates, useScheduledDebates } from '../rooms/scheduling-hooks';
 import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
 import { AdminDebatesBody, type CalendarView, CalendarViewSwitch } from './admin-debate-calendar';
@@ -562,11 +563,14 @@ function DebateCalendarBody({
     () => ownDebates(scheduled.data?.requests, justRequested, currentUserId).filter(debate => debate.end > now),
     [currentUserId, justRequested, now, scheduled.data]
   );
-  const opponentIds = React.useMemo(
-    () => debates.flatMap(debate => (debate.opponentUserId ? [debate.opponentUserId] : [])),
-    [debates]
+  const opponents = React.useMemo(
+    () =>
+      [...(scheduled.data?.requests ?? []), ...justRequested].flatMap(request =>
+        request.participants.filter(person => !currentUserId || !sameId(person.user_id, currentUserId))
+      ),
+    [currentUserId, justRequested, scheduled.data]
   );
-  const opponentSummaries = useGeoChatUserSummaries(opponentIds, opponentIds.length > 0);
+  const opponentSummaries = useGeoChatUserSummaries(opponents, opponents.length > 0);
   const opponentName = React.useCallback(
     (userId: string | null) => {
       if (!userId) return null;

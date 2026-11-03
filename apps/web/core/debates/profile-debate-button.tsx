@@ -2,6 +2,8 @@
 
 import * as React from 'react';
 
+import { debatesErrorMessage } from '~/core/debates/account-setup-copy';
+
 import { Text } from '~/design-system/text';
 
 import { useCreateDebateChallenge, useDebateProfile } from './hooks';
@@ -17,7 +19,7 @@ export function ProfileDebateButton({ spaceId }: { spaceId: string }) {
 
   if (!profileQuery.data?.can_challenge) return null;
 
-  const error = createChallenge.error instanceof Error ? createChallenge.error.message : null;
+  const error = createChallenge.error instanceof Error ? debatesErrorMessage(createChallenge.error) : null;
 
   return (
     <div className="flex flex-col items-end gap-1">

@@ -35,6 +35,7 @@ const state = vi.hoisted(() => ({
   late: null as unknown as Mutation,
   cant: null as unknown as Mutation,
   viewerName: 'Jordan' as string | null,
+  viewerProfile: null as { profileSpaceId: string; displayName: string | null; avatarCid: string | null } | null,
   noProfiles: false,
   finished: false as boolean | null,
 }));
@@ -51,15 +52,18 @@ vi.mock('~/core/debates/rooms/hooks', () => ({
 }));
 vi.mock('~/core/debates/use-current-geo-chat-user-id', () => ({ useCurrentGeoChatUserId: () => VIEWER }));
 vi.mock('~/core/debates/matchmaking/use-geo-chat-user-summaries', () => ({
-  useGeoChatUserSummaries: (ids: string[]) =>
-    (state.noProfiles
-      ? []
-      : [
-          { user_id: MAYA, profile_space_id: 'maya-space', display_name: 'Maya', avatar_cid: null },
-          { user_id: VIEWER, profile_space_id: 'jordan-space', display_name: state.viewerName, avatar_cid: null },
-        ]
-    ).filter(person => ids.includes(person.user_id)),
+  // geo-chat's own name wins, as in the real hook; otherwise the graph's.
+  useGeoChatUserSummaries: (people: { user_id: string; display_name?: string | null }[]) =>
+    people.flatMap(person => {
+      if (person.display_name) return [{ ...person, profile_space_id: 'sent-space', avatar_cid: null }];
+      if (state.noProfiles) return [];
+      return [
+        { user_id: MAYA, profile_space_id: 'maya-space', display_name: 'Maya', avatar_cid: null },
+        { user_id: VIEWER, profile_space_id: 'jordan-space', display_name: state.viewerName, avatar_cid: null },
+      ].filter(known => known.user_id === person.user_id);
+    }),
 }));
+vi.mock('~/core/debates/use-geo-chat-account-status', () => ({ useGeoChatViewer: () => state.viewerProfile }));
 vi.mock('next/link', () => ({
   default: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => (
     <a href={href} {...rest}>
@@ -117,6 +121,7 @@ beforeEach(() => {
   state.late = idle();
   state.cant = idle();
   state.viewerName = 'Jordan';
+  state.viewerProfile = null;
   state.noProfiles = false;
   state.finished = false;
 });
@@ -409,6 +414,14 @@ describe('ScheduledDebateNoticeDialog', () => {
 
       await user.click(screen.getByRole('button', { name: 'Back' }));
       expect(heading()).toHaveTextContent('Your debate with Maya started 3 minutes ago');
+    });
+
+    it('names the viewer in the preview from their own session profile', async () => {
+      state.viewerName = null;
+      state.viewerProfile = { profileSpaceId: 'jordan-space', displayName: 'Jordan Lee', avatarCid: null };
+      open('decide', vi.fn());
+      await userEvent.setup().click(screen.getByRole('button', { name: 'I’m running late' }));
+      expect(screen.getByText('“Jordan Lee is running about 10 minutes late.”')).toBeInTheDocument();
     });
 
     it('speaks to the viewer in the preview when their own name has not loaded', async () => {

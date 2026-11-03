@@ -5,6 +5,7 @@ import * as React from 'react';
 import type { AvailabilityBlock } from '~/core/availability/blocks';
 import { calendarBusyWindow } from '~/core/availability/calendar-busy';
 import type { ScheduleEditorSurface } from '~/core/availability/schedule-analytics';
+import { accountSetupMessage } from '~/core/debates/account-setup-copy';
 import type { CalendarProvider } from '~/core/debates/api';
 import { useCalendarBusy, useCalendarConnections } from '~/core/debates/calendar-hooks';
 import { useDebateSchedule, useSaveDebateSchedule } from '~/core/debates/hooks';
@@ -88,7 +89,7 @@ function ScheduleEditor({
 }: Props & Pick<React.ComponentProps<typeof AvailabilityModal>, 'calendarSection' | 'busyIntervals'>) {
   // `blocks` stays undefined until the read answers, and is passed straight through: the modal has
   // to tell "not read yet" from "an empty week" to avoid saving the latter over the former.
-  const { blocks, isError, refetch } = useDebateSchedule();
+  const { blocks, isError, error: scheduleError, refetch } = useDebateSchedule();
   const saveSchedule = useSaveDebateSchedule({ surface });
 
   return (
@@ -97,6 +98,7 @@ function ScheduleEditor({
       onOpenChange={onOpenChange}
       blocks={blocks}
       error={isError}
+      errorMessage={accountSetupMessage(scheduleError)}
       onRetry={() => refetch()}
       onSave={nextBlocks => {
         saveSchedule.mutate(nextBlocks);
