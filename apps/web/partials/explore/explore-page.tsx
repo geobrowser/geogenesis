@@ -102,9 +102,10 @@ type Props = {
   sidePanel: React.ReactNode;
   /** The wallet cookie the request carried, if any. */
   walletAddress?: string | null;
+  entryEntityId?: string | null;
 };
 
-export function ExplorePage({ sidePanel, walletAddress = null }: Props) {
+export function ExplorePage({ sidePanel, walletAddress = null, entryEntityId = null }: Props) {
   // GEO-2914. Hidden, not removed: the panel and everything in it is still built and still fed by
   // the route's own queries, so turning the flag on restores it without a deploy — and the tickets
   // still open against its contents have somewhere to land.
@@ -134,10 +135,16 @@ export function ExplorePage({ sidePanel, walletAddress = null }: Props) {
               anything to them; it is dismissed for good, and the lobby banner then leads. */}
           <ExploreLiveLobbiesBanner />
         </div>
-        {forYouEnabled ? (
+        {forYouEnabled && !entryEntityId ? (
           <ExploreForYouFeed walletAddress={walletAddress} interleave={pastCalls} />
         ) : (
-          <EntityFeed {...EXPLORE_FEED_PROPS} initialSort="best" walletAddress={walletAddress} interleave={pastCalls} />
+          <EntityFeed
+            {...EXPLORE_FEED_PROPS}
+            initialSort="best"
+            entryEntityId={entryEntityId}
+            walletAddress={walletAddress}
+            interleave={pastCalls}
+          />
         )}
       </main>
     </EntityPageSidebarLayout>

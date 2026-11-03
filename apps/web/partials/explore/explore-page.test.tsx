@@ -201,3 +201,9 @@ describe('ExplorePage past calls', () => {
     expect(mocks.feedProps.at(-1)?.interleave).toBe(pastCallInterleave);
   });
 });
+
+it('opens marketing card links on Best with the selection even when For you is enabled', () => {
+  mocks.flags = { forYouFeed: true };
+  render(<ExplorePage sidePanel={null} entryEntityId="selected" />);
+  expect(mocks.feedProps.at(-1)).toMatchObject({ initialSort: 'best', entryEntityId: 'selected' });
+});
