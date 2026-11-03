@@ -845,7 +845,7 @@ describe('RequestsSchedule', () => {
     mocks.requestsError = null;
     mocks.scheduled = { ...EMPTY_SCHEDULED, roomsError: new Error('rooms are down') };
     view.rerender(<RequestsSchedule />);
-    expect(screen.getByText('Could not read your upcoming debates: rooms are down')).toBeInTheDocument();
+    expect(screen.getByText('Could not read your upcoming debates.')).toBeInTheDocument();
     expect(empty()).not.toBeInTheDocument();
     // There may well be something coming up: the failure says so, not "Nothing coming up".
     expect(screen.queryByTestId('requests-nothing-ahead')).not.toBeInTheDocument();

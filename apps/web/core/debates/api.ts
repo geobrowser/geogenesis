@@ -3,6 +3,14 @@
 import type { AvailabilityPayload } from '~/core/availability/blocks';
 import { capSearchQuery } from '~/core/io/search-query';
 
+import {
+  type GeoChatProfileState,
+  type GeoChatRefusalReason,
+  type GeoChatSessionProfile,
+  acceptedStatus,
+  sessionRefusalReason,
+  setGeoChatAccountStatus,
+} from './geo-chat-account-status';
 import { getGeoChatApiBaseUrl } from './geo-chat-public-base-url';
 import type { DebateExtractedClaimsResponse } from './server/extracted-claims';
 import type { RecordingUrlVariant } from './stream-playback';
@@ -1119,6 +1127,8 @@ export type GeoChatSession = {
   access_token: string;
   refresh_token: string;
   expires_at: string;
+  /** Absent on geo-chat builds before GEO-3553; read as attached. */
+  profile?: GeoChatSessionProfile | null;
 };
 
 export type GetPrivyIdentityToken = () => Promise<string | null | undefined>;
@@ -4206,7 +4216,13 @@ export function isDebateProfileMissing(error: unknown) {
  * and the query layer to know a failure is worth asking about again.
  */
 export function isAccountWarmingUp(error: unknown) {
-  return error instanceof GeoChatSessionError && error.status === 401;
+  return accountRefusalReason(error) !== null;
+}
+
+/** Why the session exchange refused, for a refusal that clears by itself. See `sessionRefusalReason`. */
+export function accountRefusalReason(error: unknown): GeoChatRefusalReason | null {
+  if (!(error instanceof GeoChatSessionError)) return null;
+  return sessionRefusalReason(error.status, error.code);
 }
 
 /**
@@ -4335,6 +4351,7 @@ export async function getGeoChatSession(
   const effectiveAccountKey = accountKey ?? geoChatSessionAccountKey ?? loadStoredSession()?.account_key ?? null;
   const stored = loadSession(effectiveAccountKey);
   if (stored && new Date(stored.expires_at).getTime() > Date.now() + 30_000) {
+    setGeoChatAccountStatus(effectiveAccountKey, acceptedStatus(stored.profile));
     return stored;
   }
 
@@ -4349,6 +4366,7 @@ export async function getGeoChatSession(
         const refreshed = await refreshGeoChatSession(stored.refresh_token);
         assertCurrentGeoChatSessionEpoch(issuedForEpoch);
         saveSession(refreshed, effectiveAccountKey);
+        setGeoChatAccountStatus(effectiveAccountKey, acceptedStatus(refreshed.profile));
         return refreshed;
       } catch {
         assertCurrentGeoChatSessionEpoch(issuedForEpoch);
@@ -4361,9 +4379,23 @@ export async function getGeoChatSession(
       throw new Error('Sign in to use debates.');
     }
 
-    const session = await createGeoChatSession(privyIdentityToken);
+    let session: GeoChatSession;
+    try {
+      session = await createGeoChatSession(privyIdentityToken);
+    } catch (error) {
+      const reason = accountRefusalReason(error);
+      if (reason && issuedForEpoch === geoChatSessionEpoch) {
+        setGeoChatAccountStatus(effectiveAccountKey, {
+          kind: 'refused',
+          reason,
+          code: (error as GeoChatSessionError).code,
+        });
+      }
+      throw error;
+    }
     assertCurrentGeoChatSessionEpoch(issuedForEpoch);
     saveSession(session, effectiveAccountKey);
+    setGeoChatAccountStatus(effectiveAccountKey, acceptedStatus(session.profile));
     return session;
   })().finally(() => {
     if (geoChatSessionRequests.get(requestKey) === request) {
@@ -4373,6 +4405,29 @@ export async function getGeoChatSession(
 
   geoChatSessionRequests.set(requestKey, request);
   return request;
+}
+
+/**
+ * Refreshes the stored session now, ahead of its expiry, so geo-chat can attach a pending profile.
+ * Joins an exchange already in flight. Resolves to the profile state, or null when there was
+ * nothing to refresh or it failed; the stored session stays in use until it expires.
+ */
+export async function refreshGeoChatSessionProfile(accountKey: string): Promise<GeoChatProfileState | null> {
+  const inFlight = geoChatSessionRequests.get(accountKey);
+  if (inFlight) return inFlight.then(session => session.profile?.state ?? 'attached').catch(() => null);
+
+  const stored = loadSession(accountKey);
+  if (!stored?.refresh_token) return null;
+  const issuedForEpoch = geoChatSessionEpoch;
+  try {
+    const refreshed = await refreshGeoChatSession(stored.refresh_token);
+    if (issuedForEpoch !== geoChatSessionEpoch) return null;
+    saveSession(refreshed, accountKey);
+    setGeoChatAccountStatus(accountKey, acceptedStatus(refreshed.profile));
+    return refreshed.profile?.state ?? 'attached';
+  } catch {
+    return null;
+  }
 }
 
 /** The access token every tab and request currently shares, if one is stored. */

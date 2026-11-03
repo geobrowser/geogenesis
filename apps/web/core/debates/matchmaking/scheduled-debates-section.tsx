@@ -33,6 +33,7 @@ import { Text } from '~/design-system/text';
 
 import { PeerAvailabilityBookingModal } from '~/partials/availability/peer-availability-booking-modal';
 
+import { accountSetupMessage } from '../account-setup-copy';
 import { useDebatePeople } from './hooks';
 import { type DebateAnalyticsSurface, debateAnalyticsLabel, hubAnalyticsAttributes } from './hub-analytics';
 import { HubCardList, hubCardMotion } from './hub-motion';
@@ -140,9 +141,9 @@ export function ScheduledDebatesSection({ content }: { content: ScheduledContent
  * section and on the panel's timeline (GEO-3463), which lists them together above its now-line.
  */
 export const READ_FAILURE_COPY = {
-  rooms: (error: Error) => `Could not read your upcoming debates: ${error.message}`,
-  requests: (error: Error) => `Could not read your scheduled debates: ${error.message}`,
-  lobbies: (error: Error) => `Could not read your lobbies: ${error.message}`,
+  rooms: (error: Error) => accountSetupMessage(error) ?? 'Could not read your upcoming debates.',
+  requests: (error: Error) => accountSetupMessage(error) ?? 'Could not read your scheduled debates.',
+  lobbies: (error: Error) => accountSetupMessage(error) ?? 'Could not read your lobbies.',
 };
 
 /** Every read that failed, in the timeline's order. */

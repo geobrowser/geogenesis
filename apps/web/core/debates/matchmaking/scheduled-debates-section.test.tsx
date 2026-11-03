@@ -7,6 +7,7 @@ import * as React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { DebateLobbySummary, ScheduledDebateRequest, UpcomingDebateRoom } from '~/core/debates/api';
+import { GeoChatRequestError, GeoChatSessionError } from '~/core/debates/api';
 import { NavUtils } from '~/core/utils/utils';
 
 import type { UpcomingRoomRow } from './scheduled-debates-section';
@@ -782,7 +783,7 @@ describe('a schedule that could not be read', () => {
   it('says so rather than rendering as nothing scheduled', () => {
     setup({ requestsError: new Error('Service unavailable.') });
 
-    expect(screen.getByText(/Could not read your scheduled debates: Service unavailable./)).toBeInTheDocument();
+    expect(screen.getByText('Could not read your scheduled debates.')).toBeInTheDocument();
   });
 
   it('reports a failed room read too, not only a failed request read', () => {
@@ -933,7 +934,19 @@ describe('lobbies among the upcoming debates (GEO-3292)', () => {
     setup({ lobbiesError: new Error('boom') });
 
     expect(screen.getByText('Upcoming lobbies')).toBeInTheDocument();
-    expect(screen.getByText('Could not read your lobbies: boom')).toBeInTheDocument();
+    expect(screen.getByText('Could not read your lobbies.')).toBeInTheDocument();
+  });
+
+  // GEO-3553: a refused session is the account being set up, never geo-chat's raw message.
+  it('says the account is being set up when the session exchange is refused', () => {
+    setup({
+      requestsError: new GeoChatSessionError(
+        new GeoChatRequestError('no connected wallet or Knowledge Graph account', 'no_personal_space', 401)
+      ),
+    });
+
+    expect(screen.getByText('Setting up your account. This updates on its own.')).toBeInTheDocument();
+    expect(screen.queryByText(/Knowledge Graph/)).toBeNull();
   });
 
   it('carries a failed lobby list read out of the hook', () => {

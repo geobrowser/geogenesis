@@ -1,7 +1,6 @@
 'use client';
 
 import {
-  type Query,
   type QueryClient,
   type UseQueryResult,
   useMutation,
@@ -91,6 +90,7 @@ import { claimResponseIndexedEvent } from './claim-response-indexed-notifier';
 import { useDebateAttention, useDebateVisibility } from './debate-attention';
 import { markEnteringDebate, markEnteringPendingDebate } from './debate-entry-intent';
 import { useDebateGatewayScope, useDebateGatewaySnapshot, useDebateGatewaySpaceScopes } from './debate-gateway';
+import { refusedRetryDelayMs } from './geo-chat-account-status';
 import { lobbyDebateRequested } from './lobbies/lobby-analytics';
 import { markAskWithdrawn, unmarkAskWithdrawn } from './matchmaking/ask-withdrawals';
 import {
@@ -361,25 +361,6 @@ function withOnlineChoiceAvatars<T extends { online_choices: Array<{ participant
  * `claims` comes back in no particular order: batches are keyed by sorted id so their query keys
  * survive the caller reordering or prepending ids. Key the result by `claim_entity_id`.
  */
-/** How often a refused claim-rows lookup asks again while geo-chat registers the account. */
-const VIEWER_ANSWER_RECOVERY_POLL_MS = 10_000;
-
-/**
- * And how many times, because a wait that never ends is not a wait.
- *
- * Registration finishes in a minute or two, so nine polls at ten seconds covers it — the same
- * ninety seconds `WARMING_UP_RETRIES` gives the matchmaking reads, which is deliberate: they are
- * waiting for the same event, and a viewer should not find one half of the hub still trying while
- * the other gave up. Unbounded, an account that never registers left every failed batch asking
- * every ten seconds for the life of the tab, once per space, each one a fresh session exchange.
- *
- * Counted off `errorUpdateCount`, which is react-query's own and accumulates. Emphatically not
- * `fetchFailureCount`, which was the obvious choice and is wrong: that one counts retries *within*
- * a fetch and resets when the next one starts, so with `retry: false` it never exceeds one and the
- * bound never bites. The test for this caught exactly that — sixty polls where ten were expected.
- */
-const VIEWER_ANSWER_RECOVERY_POLLS = 9;
-
 export function useDebateClaimsBySpaces(groups: Array<{ spaceId: string; claimIds: string[] }>) {
   const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
 
@@ -437,33 +418,8 @@ export function useDebateClaimsBySpaces(groups: Array<{ spaceId: string; claimId
           signal
         ),
       enabled: authenticated && group.claimIds.length > 0,
-      /**
-       * How a claim's answers recover from a refusal, rather than staying refused for the visit.
-       *
-       * `answersReady` is a "not yet" that is supposed to clear itself — until it does, every pill on the
-       * card is unpressable, which is right while the lookup is out and wrong the moment it could succeed.
-       * With `retry: false` and nothing to trigger a refetch, a viewer whose account geo-chat had not yet
-       * registered kept a panel of dead pills for the rest of the visit while the same claims in the main
-       * feed took positions perfectly well. The account had finished registering; nothing asked again.
-       *
-       * So: poll, but only while being refused, and only for the reason that resolves on its own.
-       * `refetchInterval` returns `false` on success and on every other failure, which makes this a wait
-       * for one specific event and not a background poll — a real outage still fails once and stays
-       * failed, and a settled lookup is never asked twice.
-       *
-       * Ten seconds against a wait that runs a minute or two: short enough that the pills come alive
-       * while the viewer is still looking at them, long enough that a slow registration costs a handful
-       * of requests rather than a stream of them.
-       */
-      refetchInterval: (query: Query<DebateClaimsResponse, Error>) =>
-        query.state.status === 'error' &&
-        isAccountWarmingUp(query.state.error) &&
-        query.state.errorUpdateCount <= VIEWER_ANSWER_RECOVERY_POLLS
-          ? VIEWER_ANSWER_RECOVERY_POLL_MS
-          : false,
-      // Same reason `useClaimSpaceAllowlist` sets it: a tab nobody is looking at should not spend
-      // requests, and a refocus refetches this anyway.
-      refetchIntervalInBackground: false,
+      // A refused session exchange recovers through `useGeoChatAccountRecovery`, which refetches
+      // these rows once geo-chat accepts the account.
     })),
     combine,
   });
@@ -713,6 +669,8 @@ export function useDebateSchedule() {
     queryKey: debateQueryKeys.schedule(accountKey),
     // Signed out there is no schedule to fetch, and asking would 401 on every render.
     enabled: accountKey !== null,
+    // A refused session exchange is left to `useGeoChatAccountRecovery`, which refetches this.
+    retry: (failureCount, error) => !isAccountWarmingUp(error) && failureCount < 3,
     queryFn: () => getDebateSchedule(getPrivyIdentityToken, accountKey),
   });
 
@@ -741,6 +699,9 @@ export function useSaveDebateSchedule({ surface }: { surface: ScheduleEditorSurf
   return useMutation({
     mutationFn: (blocks: AvailabilityBlock[]) =>
       replaceDebateSchedule(toPayload(blocks, localTimezone()), getPrivyIdentityToken, accountKey),
+    // The editor closes on Save, so a refused session would drop the schedule unseen. Wait it out.
+    retry: (_failureCount, error) => isAccountWarmingUp(error),
+    retryDelay: refusedRetryDelayMs,
     // Taken at Save: the answer can arrive after a sign-out or account switch, and it is not the
     // next account's schedule.
     onMutate: snapshotAnalyticsRevision,
