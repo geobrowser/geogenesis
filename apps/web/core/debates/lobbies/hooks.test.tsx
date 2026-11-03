@@ -1127,6 +1127,37 @@ describe('useDebateLobbyDismissal', () => {
     await waitFor(() => expect(api.listDebateLobbies).toHaveBeenCalledTimes(2));
   });
 
+  // Review (Patrick, 2 Nov): a plain success is already written in, so it costs no read of the list
+  // and every calendar week.
+  it('reads nothing again after a success that cancelled no read', async () => {
+    const { client, wrapper } = setup();
+    const invalidate = vi.spyOn(client, 'invalidateQueries');
+    api.setDebateLobbyDismissal.mockResolvedValueOnce(view(false));
+    const { result } = renderHook(() => useDebateLobbyDismissal(), { wrapper });
+
+    await act(async () => result.current.mutate({ lobbyId: 'lobby1', dismissed: true }));
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(invalidate).not.toHaveBeenCalled();
+  });
+
+  it('reads the list again after a success that cancelled its read', async () => {
+    const { wrapper } = setup();
+    const write = deferredDismissal();
+    const { result } = renderHook(() => ({ list: useDebateLobbies(), dismissal: useDebateLobbyDismissal() }), {
+      wrapper,
+    });
+    await waitFor(() => expect(api.listDebateLobbies).toHaveBeenCalledTimes(1));
+    expect(result.current.list.isFetching).toBe(true);
+
+    act(() => result.current.dismissal.mutate({ lobbyId: 'lobby1', dismissed: true }));
+    await waitFor(() => expect(result.current.list.isFetching).toBe(false));
+
+    await act(async () => write.settle(view(false)));
+
+    await waitFor(() => expect(api.listDebateLobbies).toHaveBeenCalledTimes(2));
+  });
+
   // The panel holds one mutation for every row, so its own error follows only its last call.
   it('says each lobby’s own failure, whichever was dismissed last', async () => {
     const first = deferredDismissal();

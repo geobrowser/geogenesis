@@ -357,10 +357,13 @@ export function useDebateLobbyDismissal() {
     mutationFn: ({ lobbyId, dismissed }: LobbyDismissalVariables) =>
       setDebateLobbyDismissal(lobbyId, dismissed, getPrivyIdentityToken, accountKey),
     onMutate: async ({ lobbyId, dismissed }) => {
-      // A read already on its way would land the old row over this one. It is read again once the
-      // write settles, whichever way.
-      await queryClient.cancelQueries({ queryKey: debateQueryKeys.lobbies(accountKey) });
+      // A read already on its way would land the old row over this one. Cancelled, it is read again
+      // once the write settles.
+      const queryKey = debateQueryKeys.lobbies(accountKey);
+      const cancelledRead = queryClient.isFetching({ queryKey }) > 0;
+      await queryClient.cancelQueries({ queryKey });
       writeListed(lobbyId, { viewer_dismissed: dismissed });
+      return { cancelledRead };
     },
     // geo-chat's answer over the drawn one, where it gives one.
     onSuccess: (view, { dismissed }) => {
@@ -370,10 +373,13 @@ export function useDebateLobbyDismissal() {
     // Only this row put back, rather than a snapshot of the whole list: card patches that landed
     // while the write was out are kept.
     onError: (_error, { lobbyId, dismissed }) => writeListed(lobbyId, { viewer_dismissed: !dismissed }),
-    // The list and every calendar week, the reads cancelled above among them: one cancelled for
-    // nothing (a lobby opening meanwhile, a calendar week on its first load) is not left behind. A
-    // 409 (the lobby opened or ended since) is read again here too.
-    onSettled: () => queryClient.invalidateQueries({ queryKey: debateQueryKeys.lobbies(accountKey) }),
+    // The list and every calendar week, but only when something is owed: a read cancelled above
+    // (a lobby opening meanwhile, a calendar week on its first load), or a failure such as a 409 (the
+    // lobby opened or ended since). A plain success is already written in.
+    onSettled: (_view, error, _variables, context) => {
+      if (!error && !context?.cancelledRead) return;
+      return queryClient.invalidateQueries({ queryKey: debateQueryKeys.lobbies(accountKey) });
+    },
   });
 }
 
