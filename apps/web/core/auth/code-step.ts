@@ -3,11 +3,8 @@
 import { type AnalyticsProperties } from '~/core/analytics';
 import { type AuthAttempt, attemptProperties, captureAuthEvent, currentAuthAttempt } from '~/core/auth-attempt';
 
-/**
- * GEO-3573. The email code step, kept for ten minutes in localStorage so a reloaded or new tab can
- * reopen sign-in prefilled: Privy's `loginWithCode` only works in the document that sent the code.
- * The address stays on the device; events carry only the step.
- */
+// GEO-3573. Kept in localStorage for ten minutes: Privy's `loginWithCode` only works in the document
+// that sent the code, so a new page can only reopen sign-in prefilled. The address never leaves the device.
 
 const KEY = 'geo:auth-code-step:v1';
 
