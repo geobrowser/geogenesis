@@ -724,6 +724,7 @@ export function useSaveDebateSchedule({ surface }: { surface: ScheduleEditorSurf
     retryDelay: refusedRetryDelayMs,
     onError: (error, _blocks, isCurrent) => {
       if (error instanceof ScheduleSaveAbandonedError || isCurrent?.() === false) return;
+      if (!isLiveGeoChatAccount(accountKey)) return;
       setToast(React.createElement('span', null, 'We couldn’t save your availability. Please try again.'));
     },
     // Taken at Save: the answer can arrive after a sign-out or account switch, and it is not the

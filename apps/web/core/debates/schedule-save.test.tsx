@@ -94,6 +94,28 @@ describe('useSaveDebateSchedule while the session is refused', () => {
     expect(mocks.setToast).not.toHaveBeenCalled();
   });
 
+  it('shows no toast when the account signs out while an attempt is in flight', async () => {
+    let fail: (error: unknown) => void = () => undefined;
+    mocks.replaceDebateSchedule.mockImplementation(
+      () =>
+        new Promise((_resolve, reject) => {
+          fail = reject;
+        })
+    );
+    const { result } = render();
+
+    act(() => result.current.mutate(blocksA));
+    await act(() => vi.advanceTimersByTimeAsync(0));
+    setLiveGeoChatAccountKey(null);
+    await act(async () => {
+      fail(new Error('network'));
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(result.current.isError).toBe(true);
+    expect(mocks.setToast).not.toHaveBeenCalled();
+  });
+
   it('gives up after about five minutes and says so without the raw message', async () => {
     mocks.replaceDebateSchedule.mockRejectedValue(refused());
     const { result } = render();
