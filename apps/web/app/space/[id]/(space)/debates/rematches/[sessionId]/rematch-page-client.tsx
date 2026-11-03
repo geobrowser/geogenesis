@@ -35,6 +35,7 @@ import { useDebateGatewaySpaceScopes } from '~/core/debates/debate-gateway';
 import { DebateRequestDialog } from '~/core/debates/debate-request-dialog';
 import { DebateOpenElsewhereScreen } from '~/core/debates/debate-room-holding-screens';
 import { claimDebateEntry, debateRoomClaimKey } from '~/core/debates/debate-tab-claims';
+import { speakerLabel } from '~/core/debates/debater-name';
 import { toDebatesPanel } from '~/core/debates/debates-panel-deep-link';
 import { requestOpenRounds } from '~/core/debates/format-details';
 import { defaultDebateFormatId, isOpenRoundsFormatId } from '~/core/debates/formats';
@@ -451,7 +452,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
 
   const remoteParticipant =
     currentUserId === null ? null : (participants.find(participant => participant.user_id !== currentUserId) ?? null);
-  const remoteName = remoteParticipant?.display_name || remoteParticipant?.profile_space_id || 'debater';
+  const remoteName = speakerLabel(remoteParticipant ?? {});
   /** For the buttons and the line that name them (GEO-3148): "See Jenna’s positions" fits a pill. */
   const remoteFirstName = remoteName.trim().split(/\s+/)[0] || remoteName;
 
