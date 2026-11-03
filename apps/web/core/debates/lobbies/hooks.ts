@@ -105,8 +105,8 @@ export function useDebateLobbies(enabled = true, { staleTime }: { staleTime?: nu
     ...debateQueryNetworkOptions,
     queryKey: debateQueryKeys.lobbies(accountKey),
     queryFn: ({ signal }) => listDebateLobbies(getPrivyIdentityToken, accountKey, signal),
-    // Signed in it carries the viewer's own reminders and roster, so it waits out a new account
-    // geo-chat does not know yet like the account's other reads. Anonymous, one read.
+    // Signed in it carries the viewer's own reminders and roster, so it retries like the account's
+    // other reads; a refused session is refetched on recovery instead. Anonymous, one read.
     ...(accountKey ? viewerReadRetryOptions(accountKey) : {}),
     enabled: enabled && ready,
     ...(staleTime === undefined ? { refetchOnMount: 'always' as const } : { staleTime }),
