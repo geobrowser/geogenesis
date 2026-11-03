@@ -2,7 +2,7 @@ import { type Hex, encodeAbiParameters, encodeFunctionData, keccak256, stringToH
 
 import { validateSpaceId } from '~/core/io/rest/validation';
 
-import { EMPTY_SIGNATURE, EMPTY_TOPIC_HEX, SpaceRegistryAbi } from './space-registry';
+import { EMPTY_SIGNATURE, EMPTY_TOPIC_HEX, SPACE_MEMBER_ROLE, SpaceRegistryAbi } from './space-registry';
 
 /**
  * The SDK has no leave helper yet. DAOSpace.write handles SPACE_LEFT with an
@@ -33,7 +33,7 @@ export function encodeLeaveSpaceCall({
         keccak256(stringToHex('GOVERNANCE.SPACE_LEFT')),
         EMPTY_TOPIC_HEX,
         // Leave only membership. An editor who is also a member keeps their editor role.
-        encodeAbiParameters([{ type: 'bytes32' }], [keccak256(stringToHex('MEMBER'))]),
+        encodeAbiParameters([{ type: 'bytes32' }], [SPACE_MEMBER_ROLE]),
         EMPTY_SIGNATURE,
       ],
     }),

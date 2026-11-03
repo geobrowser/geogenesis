@@ -1,5 +1,3 @@
-import { sleep } from './utils';
-
 /** Bounded indexer reconciliation shared by response and membership writes. */
 export async function waitForIndexedValue<T>(
   fetchResponse: (signal: AbortSignal) => Promise<T>,
@@ -34,7 +32,8 @@ export async function waitForIndexedValue<T>(
 
     try {
       if ((await Promise.race([fetchResponse(controller.signal), timeoutPromise])) === expectedResponse) {
-        return true;
+        // A probe can resolve in the same turn that its run was superseded.
+        return !signal?.aborted && Date.now() <= deadline;
       }
     } catch {
       // Gaia can fail transiently while indexing. Keep the transaction in its
@@ -46,7 +45,19 @@ export async function waitForIndexedValue<T>(
 
     if (attempt < maxAttempts) {
       if (signal?.aborted) return false;
-      await sleep(intervalMs);
+      const remainingMs = deadline - Date.now();
+      if (remainingMs <= 0) return false;
+      const delayMs = Math.max(0, Math.min(intervalMs, remainingMs));
+      await new Promise<void>(resolve => {
+        const finish = () => {
+          clearTimeout(timeoutId);
+          signal?.removeEventListener('abort', finish);
+          resolve();
+        };
+        const timeoutId = setTimeout(finish, delayMs);
+        signal?.addEventListener('abort', finish, { once: true });
+        if (signal?.aborted) finish();
+      });
     }
   }
 

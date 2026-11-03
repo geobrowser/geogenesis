@@ -2,7 +2,7 @@
 
 import { useMutation, useMutationState, useQueryClient } from '@tanstack/react-query';
 
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 
 import { Effect, Either } from 'effect';
 import { useRouter } from 'next/navigation';
@@ -15,13 +15,14 @@ import { removeRequestedMembershipSpace, requestedMembershipSpacesAtom } from '~
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
 import { encodeLeaveSpaceCall } from '~/core/utils/contracts/leave-space';
+import { readSpaceMembership } from '~/core/utils/contracts/read-space-membership';
 import { waitForIndexedValue } from '~/core/utils/wait-for-indexed-value';
 
 import { usePersonalSpaceId } from './use-personal-space-id';
 import { useSmartAccount } from './use-smart-account';
 import { useSmartAccountTransaction } from './use-smart-account-transaction';
 
-export function useLeaveSpace(spaceId: string) {
+export function useLeaveSpace(spaceId: string, isMember: boolean) {
   const { smartAccount } = useSmartAccount();
   const { personalSpaceId, isRegistered } = usePersonalSpaceId();
   const tx = useSmartAccountTransaction();
@@ -44,13 +45,18 @@ export function useLeaveSpace(spaceId: string) {
       }
 
       const call = encodeLeaveSpaceCall({ registry: SPACE_REGISTRY_ADDRESS, personalSpaceId, spaceId });
-      const result = await runEffectEither(
-        tx(call).pipe(
-          Effect.withSpan('web.write.leaveSpace'),
-          Effect.annotateSpans({ 'io.operation': 'leave_space', 'space.type': 'DAO' })
-        )
-      );
-      if (Either.isLeft(result)) throw result.left;
+      // A prior confirmed leave can outlive the indexing wait and the popover.
+      // Read the chain before submitting again; an already-left member only needs
+      // reconciliation, while someone who has rejoined can leave normally.
+      if (await readSpaceMembership(spaceId, personalSpaceId)) {
+        const result = await runEffectEither(
+          tx(call).pipe(
+            Effect.withSpan('web.write.leaveSpace'),
+            Effect.annotateSpans({ 'io.operation': 'leave_space', 'space.type': 'DAO' })
+          )
+        );
+        if (Either.isLeft(result)) throw result.left;
+      }
       // Mutation options can change during navigation. Reconcile the submitted
       // target and identity, never the hook's latest props.
       return { spaceId, memberSpaceId: personalSpaceId };
@@ -98,7 +104,12 @@ export function useLeaveSpace(spaceId: string) {
     },
   });
 
-  const { mutateAsync } = mutation;
+  const { mutateAsync, reset } = mutation;
+  // The popover can stay mounted through leave -> join. Its previous success
+  // must not keep the Leave button disabled for the new membership.
+  useEffect(() => {
+    if (!isMember) reset();
+  }, [isMember, reset]);
   const leaveSpaceAsync = useCallback(async () => {
     // Read the cache synchronously: even two presses before a render share one write.
     if (queryClient.getMutationCache().findAll({ mutationKey, exact: true, status: 'pending' }).length > 0) {

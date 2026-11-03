@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   refresh: vi.fn(),
   tx: vi.fn(),
   getIsMemberOfSpace: vi.fn(),
+  readSpaceMembership: vi.fn(),
   connected: true,
   registered: true,
 }));
@@ -32,6 +33,7 @@ vi.mock('./use-personal-space-id', () => ({
 }));
 vi.mock('./use-smart-account-transaction', () => ({ useSmartAccountTransaction: () => mocks.tx }));
 vi.mock('~/core/io/queries', () => ({ getIsMemberOfSpace: mocks.getIsMemberOfSpace }));
+vi.mock('~/core/utils/contracts/read-space-membership', () => ({ readSpaceMembership: mocks.readSpaceMembership }));
 vi.mock('~/core/telemetry/effect-runtime', () => ({
   runEffectEither: <A, E>(effect: Effect.Effect<A, E>) => Effect.runPromise(Effect.either(effect)),
 }));
@@ -48,6 +50,7 @@ beforeEach(() => {
   mocks.registered = true;
   mocks.tx.mockReturnValue(Effect.succeed('0xreceipt'));
   mocks.getIsMemberOfSpace.mockReturnValue(Effect.succeed(false));
+  mocks.readSpaceMembership.mockResolvedValue(true);
   store.set(requestedMembershipSpacesAtom, []);
 });
 afterEach(() => {
@@ -63,7 +66,7 @@ describe('useLeaveSpace', () => {
       { id: SPACE, ownerId: MEMBER, requestedAt: Date.now() },
       { id: SPACE, ownerId: 'another-owner', requestedAt: Date.now() },
     ]);
-    const { result } = renderHook(() => useLeaveSpace(SPACE), { wrapper });
+    const { result } = renderHook(() => useLeaveSpace(SPACE, true), { wrapper });
 
     await act(() => result.current.leaveSpaceAsync());
 
@@ -87,7 +90,7 @@ describe('useLeaveSpace', () => {
   it('waits for delayed indexing before refreshing server-rendered membership', async () => {
     vi.useFakeTimers();
     mocks.getIsMemberOfSpace.mockReturnValueOnce(Effect.succeed(true)).mockReturnValue(Effect.succeed(false));
-    const { result } = renderHook(() => useLeaveSpace(SPACE), { wrapper });
+    const { result } = renderHook(() => useLeaveSpace(SPACE, true), { wrapper });
 
     await act(async () => {
       const leaving = result.current.leaveSpaceAsync();
@@ -105,7 +108,7 @@ describe('useLeaveSpace', () => {
   it('does not report a mined leave as failed when indexing remains unavailable', async () => {
     vi.useFakeTimers();
     mocks.getIsMemberOfSpace.mockReturnValue(Effect.fail(new Error('Indexer unavailable')));
-    const { result } = renderHook(() => useLeaveSpace(SPACE), { wrapper });
+    const { result } = renderHook(() => useLeaveSpace(SPACE, true), { wrapper });
 
     await act(async () => {
       const leaving = result.current.leaveSpaceAsync();
@@ -125,7 +128,7 @@ describe('useLeaveSpace', () => {
     const invalidate = vi.spyOn(client, 'invalidateQueries');
     const pending = [{ id: SPACE, ownerId: MEMBER, requestedAt: Date.now() }];
     store.set(requestedMembershipSpacesAtom, pending);
-    const { result } = renderHook(() => useLeaveSpace(SPACE), { wrapper });
+    const { result } = renderHook(() => useLeaveSpace(SPACE, true), { wrapper });
 
     await act(() => expect(result.current.leaveSpaceAsync()).rejects.toThrow('Transaction rejected'));
 
@@ -133,6 +136,57 @@ describe('useLeaveSpace', () => {
     expect(mocks.refresh).not.toHaveBeenCalled();
     expect(invalidate).not.toHaveBeenCalled();
     expect(store.get(requestedMembershipSpacesAtom)).toEqual(pending);
+  });
+
+  it('does not submit again after a confirmed leave even when the index is still behind on reopen', async () => {
+    vi.useFakeTimers();
+    mocks.getIsMemberOfSpace.mockReturnValue(Effect.succeed(true));
+    const first = renderHook(() => useLeaveSpace(SPACE, true), { wrapper });
+    await act(async () => {
+      const leaving = first.result.current.leaveSpaceAsync();
+      await vi.advanceTimersByTimeAsync(10_000);
+      await leaving;
+    });
+    first.unmount();
+    mocks.readSpaceMembership.mockResolvedValue(false);
+    const reopened = renderHook(() => useLeaveSpace(SPACE, true), { wrapper });
+
+    await act(async () => {
+      const leaving = reopened.result.current.leaveSpaceAsync();
+      await vi.advanceTimersByTimeAsync(10_000);
+      await leaving;
+    });
+
+    expect(mocks.tx).toHaveBeenCalledOnce();
+    expect(mocks.refresh).toHaveBeenCalledTimes(2);
+    expect(mocks.dispatch).not.toHaveBeenCalled();
+  });
+
+  it('reports an unreadable on-chain membership before submitting a transaction', async () => {
+    mocks.readSpaceMembership.mockRejectedValue(new Error('RPC unavailable'));
+    const { result } = renderHook(() => useLeaveSpace(SPACE, true), { wrapper });
+
+    await act(() => expect(result.current.leaveSpaceAsync()).rejects.toThrow('RPC unavailable'));
+
+    expect(mocks.tx).not.toHaveBeenCalled();
+    expect(mocks.refresh).not.toHaveBeenCalled();
+    expect(mocks.dispatch).toHaveBeenCalledWith(expect.objectContaining({ type: 'ERROR' }));
+  });
+
+  it('clears the completed leave state when membership ends so a rejoined member can leave again', async () => {
+    const { result, rerender } = renderHook(({ isMember }) => useLeaveSpace(SPACE, isMember), {
+      wrapper,
+      initialProps: { isMember: true },
+    });
+    await act(() => result.current.leaveSpaceAsync());
+    await waitFor(() => expect(result.current.status).toBe('success'));
+
+    rerender({ isMember: false });
+    await waitFor(() => expect(result.current.status).toBe('idle'));
+    rerender({ isMember: true });
+    expect(result.current.status).toBe('idle');
+    await act(() => result.current.leaveSpaceAsync());
+    expect(mocks.tx).toHaveBeenCalledTimes(2);
   });
 
   it('shares pending state and prevents resubmission after the popover remounts', async () => {
@@ -145,14 +199,14 @@ describe('useLeaveSpace', () => {
           })
       )
     );
-    const first = renderHook(() => useLeaveSpace(SPACE), { wrapper });
+    const first = renderHook(() => useLeaveSpace(SPACE, true), { wrapper });
     let leaving!: Promise<unknown>;
     act(() => {
       leaving = first.result.current.leaveSpaceAsync();
     });
     await waitFor(() => expect(mocks.tx).toHaveBeenCalledOnce());
     first.unmount();
-    const reopened = renderHook(() => useLeaveSpace(SPACE), { wrapper });
+    const reopened = renderHook(() => useLeaveSpace(SPACE, true), { wrapper });
 
     await waitFor(() => expect(reopened.result.current.status).toBe('pending'));
     await act(() => reopened.result.current.leaveSpaceAsync());
@@ -175,7 +229,7 @@ describe('useLeaveSpace', () => {
       )
     );
     const invalidate = vi.spyOn(client, 'invalidateQueries');
-    const { result, rerender } = renderHook(({ spaceId }) => useLeaveSpace(spaceId), {
+    const { result, rerender } = renderHook(({ spaceId }) => useLeaveSpace(spaceId, true), {
       wrapper,
       initialProps: { spaceId: SPACE },
     });
@@ -202,7 +256,7 @@ describe('useLeaveSpace', () => {
     });
     const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
     vi.spyOn(client, 'invalidateQueries').mockRejectedValueOnce(new Error('Refresh failed'));
-    const { result } = renderHook(() => useLeaveSpace(SPACE), { wrapper });
+    const { result } = renderHook(() => useLeaveSpace(SPACE, true), { wrapper });
 
     try {
       await act(() => expect(result.current.leaveSpaceAsync()).resolves.toBeDefined());
@@ -216,7 +270,7 @@ describe('useLeaveSpace', () => {
 
   it.each(['connected', 'registered'] as const)('requires %s identity before sending', async field => {
     mocks[field] = false;
-    const { result } = renderHook(() => useLeaveSpace(SPACE), { wrapper });
+    const { result } = renderHook(() => useLeaveSpace(SPACE, true), { wrapper });
 
     await act(() => expect(result.current.leaveSpaceAsync()).rejects.toThrow());
 

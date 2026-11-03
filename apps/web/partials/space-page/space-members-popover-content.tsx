@@ -36,7 +36,7 @@ export function SpaceMembersContent({
   memberRequest,
   initialParticipantsPage,
 }: Props) {
-  const { leaveSpace, status: leaveStatus } = useLeaveSpace(spaceId);
+  const { leaveSpace, status: leaveStatus } = useLeaveSpace(spaceId, isMember);
   const { participants, totalCount, isLoading, isFetchingNextPage, hasNextPage, fetchNextPage } =
     useSpaceParticipantsInfinite({
       spaceId,
