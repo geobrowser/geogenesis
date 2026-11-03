@@ -13,6 +13,7 @@ import {
   REFUSED_RETRY_MAX_MS,
   getGeoChatAccountStatus,
   refusedRetryDelayMs,
+  setLiveGeoChatAccountKey,
   subscribeGeoChatAccountStatus,
 } from './geo-chat-account-status';
 import { useGeoChatAuth } from './hooks';
@@ -38,6 +39,10 @@ export function useGeoChatAccountRecovery() {
   const queryClient = useQueryClient();
   const activeKey = ready && authenticated ? accountKey : null;
   const status = useGeoChatAccountStatus(activeKey);
+
+  React.useEffect(() => {
+    if (ready) setLiveGeoChatAccountKey(activeKey);
+  }, [ready, activeKey]);
 
   const signedUpAt = user?.createdAt ? new Date(user.createdAt).getTime() : null;
   useAccountStatusTransitions(activeKey, status, queryClient, signedUpAt);

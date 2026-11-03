@@ -19,6 +19,7 @@ import { fromPayload, localTimezone, toPayload } from '~/core/availability/block
 import { PEER_SCHEDULE_DAYS, toPeerSchedule } from '~/core/availability/peer-schedule';
 import { type ScheduleEditorSurface, debateScheduleSaved } from '~/core/availability/schedule-analytics';
 import { useObservedMutation } from '~/core/hooks/use-observed-mutation';
+import { useSetToast } from '~/core/hooks/use-toast';
 import { usePrivy } from '~/core/wallet/auth-hooks';
 
 import {
@@ -90,7 +91,7 @@ import { claimResponseIndexedEvent } from './claim-response-indexed-notifier';
 import { useDebateAttention, useDebateVisibility } from './debate-attention';
 import { markEnteringDebate, markEnteringPendingDebate } from './debate-entry-intent';
 import { useDebateGatewayScope, useDebateGatewaySnapshot, useDebateGatewaySpaceScopes } from './debate-gateway';
-import { refusedRetryDelayMs } from './geo-chat-account-status';
+import { isLiveGeoChatAccount, refusedRetryDelayMs } from './geo-chat-account-status';
 import { lobbyDebateRequested } from './lobbies/lobby-analytics';
 import { markAskWithdrawn, unmarkAskWithdrawn } from './matchmaking/ask-withdrawals';
 import {
@@ -691,17 +692,40 @@ export function useDebateSchedule() {
  * The timezone is read at save time rather than stored with the editor's state: a schedule means
  * "18:00 where I am", and the zone that matters is the one they were in when they said so.
  */
+/** About five minutes of `refusedRetryDelayMs` (2 s doubling to 30 s). */
+export const SCHEDULE_SAVE_REFUSED_RETRIES = 13;
+
+/** A save whose account is no longer signed in. Never retried and never reported. */
+class ScheduleSaveAbandonedError extends Error {
+  constructor() {
+    super('The account that saved this schedule is no longer signed in.');
+    this.name = 'ScheduleSaveAbandonedError';
+  }
+}
+
 export function useSaveDebateSchedule({ surface }: { surface: ScheduleEditorSurface }) {
   const queryClient = useQueryClient();
+  const setToast = useSetToast();
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
   const scheduleKey = debateQueryKeys.schedule(accountKey);
 
   return useMutation({
-    mutationFn: (blocks: AvailabilityBlock[]) =>
-      replaceDebateSchedule(toPayload(blocks, localTimezone()), getPrivyIdentityToken, accountKey),
-    // The editor closes on Save, so a refused session would drop the schedule unseen. Wait it out.
-    retry: (_failureCount, error) => isAccountWarmingUp(error),
+    // Retries outlive the editor, so every attempt checks the saving account is still signed in:
+    // the token getter is shared and would otherwise sign the next account's request.
+    mutationFn: (blocks: AvailabilityBlock[]) => {
+      if (!isLiveGeoChatAccount(accountKey)) return Promise.reject(new ScheduleSaveAbandonedError());
+      return replaceDebateSchedule(toPayload(blocks, localTimezone()), getPrivyIdentityToken, accountKey);
+    },
+    // One at a time per account, in order, so an older save still retrying cannot land last.
+    scope: { id: `debate-schedule:${accountKey}` },
+    // The editor closes on Save, so a refused session is waited out for a while rather than dropped.
+    retry: (failureCount, error) =>
+      isAccountWarmingUp(error) && failureCount < SCHEDULE_SAVE_REFUSED_RETRIES && isLiveGeoChatAccount(accountKey),
     retryDelay: refusedRetryDelayMs,
+    onError: (error, _blocks, isCurrent) => {
+      if (error instanceof ScheduleSaveAbandonedError || isCurrent?.() === false) return;
+      setToast(React.createElement('span', null, 'We couldn’t save your availability. Please try again.'));
+    },
     // Taken at Save: the answer can arrive after a sign-out or account switch, and it is not the
     // next account's schedule.
     onMutate: snapshotAnalyticsRevision,

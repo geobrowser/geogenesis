@@ -40,6 +40,17 @@ export function refusedRetryDelayMs(attempt: number) {
 }
 
 let current: { accountKey: string | null; status: GeoChatAccountStatus } = { accountKey: null, status: UNKNOWN };
+/** The signed-in account, kept by `useGeoChatAccountRecovery`; undefined until it mounts. */
+let liveAccountKey: string | null | undefined;
+
+export function setLiveGeoChatAccountKey(accountKey: string | null) {
+  liveAccountKey = accountKey;
+}
+
+/** False once the viewer signed out or switched away from `accountKey`, for work that outlives its caller. */
+export function isLiveGeoChatAccount(accountKey: string | null) {
+  return liveAccountKey === undefined || liveAccountKey === accountKey;
+}
 const listeners = new Set<() => void>();
 
 function sameStatus(a: GeoChatAccountStatus, b: GeoChatAccountStatus) {
@@ -90,5 +101,6 @@ export function sessionRefusalReason(status: number, code: string | null): GeoCh
 
 export function resetGeoChatAccountStatusForTests() {
   current = { accountKey: null, status: UNKNOWN };
+  liveAccountKey = undefined;
   listeners.clear();
 }
