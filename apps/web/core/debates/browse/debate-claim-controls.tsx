@@ -5,6 +5,7 @@ import * as React from 'react';
 import { ClaimSummary } from '~/core/claims/browse/claim-summary';
 import type { DebateActionAnalyticsSurface } from '~/core/debates/matchmaking/hub-analytics';
 import { PositionRow } from '~/core/debates/matchmaking/matchmaking-claim-card';
+import { responseAnnouncerKey } from '~/core/responses/response-confirming-announcer';
 
 import { Text } from '~/design-system/text';
 
@@ -58,6 +59,7 @@ export function DebateClaimControls({
           disabled={!control.canRespond}
           pending={control.isResponseSubmitting}
           announcing={control.isResponsePending}
+          announceKey={responseAnnouncerKey(claimId, spaceId, responseKind)}
           titleFor={control.actionTitle}
           localSide={control.localVoteSide}
           showParticipants={showParticipants}

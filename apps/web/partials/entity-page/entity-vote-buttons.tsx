@@ -38,6 +38,7 @@ import {
   responseErrorMessage,
   userEntityResponseQueryKey,
 } from '~/core/responses/entity-response';
+import { responseAnnouncerKey } from '~/core/responses/response-confirming-announcer';
 import { readViewerResponseForReplay } from '~/core/responses/replay-viewer-response';
 import { useClaimResponseBatchState } from '~/core/responses/use-claim-response-summaries';
 import { castLocalVote } from '~/core/state/cast-local-vote';
@@ -505,10 +506,15 @@ function EntityResponseButtons({
   }
 
   // Active for the whole confirming window, until the vote is indexed, so the sentence is spoken once
-  // when the vote enters it, not again on each indexing retry. Left off the compact sticky bar so the
-  // full-size page control is the one that speaks, and a vote is not announced twice; see the
-  // `compact` prop's note.
-  const confirmingAnnouncement = <ResponseConfirmingAnnouncement active={!compact && isProcessingResponse} />;
+  // when the vote enters it, not again on each indexing retry. The compact sticky bar stays silent and
+  // unkeyed so it never wins the announcer election; the full-size control carries the key, which also
+  // dedupes it against the same claim shown on another surface. See the `compact` prop's note.
+  const confirmingAnnouncement = (
+    <ResponseConfirmingAnnouncement
+      active={!compact && isProcessingResponse}
+      announceKey={compact ? undefined : responseAnnouncerKey(entityId, spaceId, responseKind)}
+    />
+  );
 
   // The two thumbs share `ResponseButton` with the claim pills, and the same submission window:
   // `isSubmittingResponse` clears once the bundler has the write.

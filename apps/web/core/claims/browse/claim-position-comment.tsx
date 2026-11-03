@@ -10,6 +10,7 @@ import { PositionRow } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import { useMediaQuery } from '~/core/hooks/use-media-query';
 import { usePublishComment } from '~/core/hooks/use-publish-comment';
 import { CLAIM_RESPONSE_COPY, type ResponseKind } from '~/core/responses/entity-response';
+import { responseAnnouncerKey } from '~/core/responses/response-confirming-announcer';
 
 const MAX_COMMENT_HEIGHT_PX = 120;
 
@@ -185,6 +186,7 @@ export function ClaimPositionCommentControl({
           disabled={disabled || isSubmitting}
           pending={pending}
           announcing={announcing}
+          announceKey={responseAnnouncerKey(entityId, spaceId, responseKind)}
           titleFor={titleFor}
           noteFor={noteFor}
           localSide={localSide}

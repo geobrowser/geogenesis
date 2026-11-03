@@ -33,6 +33,7 @@ import {
   responseErrorMessage,
   responsePositionLabel,
 } from '~/core/responses/entity-response';
+import { responseAnnouncerKey } from '~/core/responses/response-confirming-announcer';
 import { readViewerResponseForReplay } from '~/core/responses/replay-viewer-response';
 import { useClaimResponseBatchState } from '~/core/responses/use-claim-response-summaries';
 import { castLocalVote } from '~/core/state/cast-local-vote';
@@ -1012,6 +1013,7 @@ function RespondableControls({
         disabled={!canRespond}
         pending={isResponseSubmitting}
         announcing={isResponsePending}
+        announceKey={responseAnnouncerKey(claim.claim_entity_id, claim.space_id, CLAIM_RESPONSE_KIND)}
         titleFor={actionTitle}
         noteFor={noteFor}
         showParticipants={showParticipants}
@@ -1265,6 +1267,7 @@ export function PositionRow({
   disabled,
   pending,
   announcing = false,
+  announceKey,
   titleFor,
   noteFor,
   localSide = null,
@@ -1295,6 +1298,8 @@ export function PositionRow({
    * has the write; this runs until the response is indexed.
    */
   announcing?: boolean;
+  /** Claim identity, so the confirming sentence is spoken once across duplicate controls. */
+  announceKey?: string;
   titleFor?: (position: boolean) => string;
   /**
    * Something to say under one of the two buttons — on a profile, which side
@@ -1348,7 +1353,7 @@ export function PositionRow({
   // PositionRow stack while the comments pill remains stranded beside it.
   return (
     <div className={compactMobileActions ? '@container/debate-actions' : '@container'}>
-      <ResponseConfirmingAnnouncement active={announcing} />
+      <ResponseConfirmingAnnouncement active={announcing} announceKey={announceKey} />
       <div
         className={cx(
           'grid gap-2',

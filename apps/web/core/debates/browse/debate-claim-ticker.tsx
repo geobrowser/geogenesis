@@ -20,6 +20,7 @@ import { useDebateClaimsBySpaces } from '~/core/debates/hooks';
 import { speakerLabel } from '~/core/debates/playback-utils';
 import { useDrawableDebateClaims } from '~/core/debates/use-drawable-debate-claims';
 import { CLAIM_RESPONSE_COPY, type ResponseKind } from '~/core/responses/entity-response';
+import { responseAnnouncerKey } from '~/core/responses/response-confirming-announcer';
 import type { Entity } from '~/core/types';
 
 import { Avatar } from '~/design-system/avatar';
@@ -965,7 +966,10 @@ function TickerClaimHeader({
           20px buttons, so the same gap between glyph *centres* needs a smaller gap between boxes.
           No error text here — it would make the card grow while the reader is part-way through it. */}
       <span className={cx('flex shrink-0 items-center gap-1', compactLine && '@max-md:order-3')}>
-        <ResponseConfirmingAnnouncement active={control.isResponsePending} />
+        <ResponseConfirmingAnnouncement
+          active={control.isResponsePending}
+          announceKey={responseAnnouncerKey(claimId, spaceId, responseKind)}
+        />
         <ClaimIconButton
           responseKind={responseKind}
           position

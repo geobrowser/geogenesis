@@ -5,6 +5,12 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import { RESPONSE_CONFIRMING_COPY } from '~/core/responses/entity-response';
+import {
+  isResponseAnnouncer,
+  registerResponseAnnouncer,
+  subscribeResponseAnnouncer,
+  unregisterResponseAnnouncer,
+} from '~/core/responses/response-confirming-announcer';
 
 import { Tooltip } from '~/design-system/tooltip';
 
@@ -126,11 +132,38 @@ export function ResponseButton({
  * whole confirming window — through the reconciling⇄delayed retry flips — so the sentence goes in
  * once when the response enters that window and is cleared once when it is confirmed or dropped,
  * rather than removed and re-added on every flip and spoken again each time.
+ *
+ * `announceKey` identifies the response so that the same claim shown in several controls at once
+ * speaks once, not once per control: only the elected announcer for a key fills its region, the
+ * rest stay empty. Omit it and the control always announces for itself.
  */
-export function ResponseConfirmingAnnouncement({ active }: { active: boolean }) {
+export function ResponseConfirmingAnnouncement({ active, announceKey }: { active: boolean; announceKey?: string }) {
+  const isAnnouncer = useIsResponseAnnouncer(announceKey);
   return (
     <span aria-live="polite" className="sr-only">
-      {active ? RESPONSE_CONFIRMING_COPY : null}
+      {active && isAnnouncer ? RESPONSE_CONFIRMING_COPY : null}
     </span>
+  );
+}
+
+/** Elects one announcer per response identity among the controls mounted for it. */
+function useIsResponseAnnouncer(announceKey: string | undefined): boolean {
+  const idRef = React.useRef<symbol | null>(null);
+  if (idRef.current === null) idRef.current = Symbol('response-announcer');
+  const id = idRef.current;
+
+  React.useEffect(() => {
+    if (!announceKey) return;
+    registerResponseAnnouncer(announceKey, id);
+    return () => unregisterResponseAnnouncer(announceKey, id);
+  }, [announceKey, id]);
+
+  return React.useSyncExternalStore(
+    React.useCallback(
+      listener => (announceKey ? subscribeResponseAnnouncer(announceKey, listener) : () => {}),
+      [announceKey]
+    ),
+    () => (announceKey ? isResponseAnnouncer(announceKey, id) : true),
+    () => true
   );
 }
