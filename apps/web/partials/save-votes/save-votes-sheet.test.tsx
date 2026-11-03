@@ -146,7 +146,7 @@ describe('SaveVotesSheet', () => {
     ['feed', 'threshold', true, null, 'curation', 'positive'],
     ['feed', 'threshold', false, null, 'curation', 'negative'],
   ] as const)(
-    'asks once after the first %s vote (%s, already mounted: %s, lobby: %s)',
+    'asks once after the first %s vote (%s, already mounted: %s, lobby: %s, %s %s)',
     (surface, reason, alreadyMounted, lobbyName, responseKind, firstDirection) => {
       if (lobbyName) setSaveVotesPromptLobby(lobbyName);
       const label = lobbyName ? 'Join the discussion' : 'Save your votes';

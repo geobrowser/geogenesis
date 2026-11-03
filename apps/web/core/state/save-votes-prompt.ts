@@ -33,12 +33,7 @@ export type SaveVotesPressReason = 'navbar' | 'debate_feed_bar';
  */
 export function opensSaveVotesCentered(reason: SaveVotesPromptReason | null): boolean {
   return (
-    reason === 'navbar' ||
-    reason === 'debate_feed_bar' ||
-    reason === 'email_link' ||
-    reason === 'threshold' ||
-    reason === 'single_claim' ||
-    reason === 'repeat'
+    reason === 'navbar' || reason === 'debate_feed_bar' || reason === 'email_link' || isVoteTriggeredPrompt(reason)
   );
 }
 
