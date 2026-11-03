@@ -298,9 +298,12 @@ export function PeerAvailabilityView({
             )
           }
         >
-          {schedule.peerHasSchedule
-            ? `${name} has no times free in the next 7 days.`
-            : `${name} hasn’t set any availability yet.`}
+          {!schedule.peerHasSchedule
+            ? `${name} hasn’t set any availability yet.`
+            : minutes > SLOT_MINUTES
+              ? // Their half-hours may be free; what is missing is one long enough (GEO-3544).
+                `${name} has no whole hour free in the next 7 days.`
+              : `${name} has no times free in the next 7 days.`}
         </Empty>
       ) : (
         <>

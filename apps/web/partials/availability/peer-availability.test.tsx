@@ -774,6 +774,11 @@ describe('moving a debate', () => {
     expect(wednesday().getAllByRole('button', { name: /at (1pm|1:30pm|3pm)/ })).toHaveLength(3);
   });
 
+  it('says no whole hour is free, not no time, when only half-hours are (GEO-3544)', () => {
+    setupBooking(moving({ minutes: 60 }), { slots: [slot(13, true, 23), slot(15, true, 23)] });
+    expect(screen.getByText('Ada has no whole hour free in the next 7 days.')).toBeInTheDocument();
+  });
+
   it('says the week has nothing free when the only time is the current one', () => {
     setupBooking(moving({ moving: { startsAt: '2026-09-22T16:00:00Z', agreed: true } }), {
       slots: [slot(16, true, 22)],
