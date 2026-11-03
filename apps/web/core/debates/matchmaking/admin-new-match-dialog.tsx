@@ -22,7 +22,7 @@ import { Text } from '~/design-system/text';
 import { MUTUAL_SLOT, SELECTED_SLOT } from '~/partials/availability/peer-availability';
 import { ScheduleDialog } from '~/partials/availability/schedule-dialog';
 
-import { type DebatePerson, GeoChatRequestError, isDebateProfileMissing } from '../api';
+import { type DebatePerson, GeoChatRequestError, isDebateProfileLookupMissing, isDebateProfileMissing } from '../api';
 import { useDebateProfilesBySpace } from '../hooks';
 import { speakerLabel } from '../playback-utils';
 import { dayShift, timeIn, zoneCity } from './admin-debate-calendar-model';
@@ -230,9 +230,15 @@ function NewMatchBody({ onClose, onSent }: { onClose: () => void; onSent: (note:
   const hitSpaces = usePersonalSpacesByPageIds(hitPageIds, hitPageIds.length > 0);
   const hitSpaceIds = React.useMemo(() => [...(hitSpaces.data?.values() ?? [])], [hitSpaces.data]);
   const hitAccounts = useDebateProfilesBySpace(hitSpaceIds, hitSpaceIds.length > 0);
+  // An older geo-chat has no lookup; there a hit's page id is its user id.
+  const legacyHits = isDebateProfileLookupMissing(hitAccounts.error);
+  const hitLookupFailed = Boolean(hitAccounts.error) && !legacyHits;
   const hitUsers = React.useMemo(
-    () => (hitAccounts.data ?? []).filter(person => !isAvailable.has(normId(person.user_id))),
-    [hitAccounts.data, isAvailable]
+    () =>
+      (legacyHits ? hitPageIds.map(user_id => ({ user_id })) : (hitAccounts.data ?? [])).filter(
+        person => !isAvailable.has(normId(person.user_id))
+      ),
+    [hitAccounts.data, hitPageIds, isAvailable, legacyHits]
   );
   const hits = useGeoChatUserSummaries(hitUsers, hitUsers.length > 0);
   const hitPeople = React.useMemo(() => hits.map(offlinePerson), [hits]);
@@ -453,13 +459,25 @@ function NewMatchBody({ onClose, onSent }: { onClose: () => void; onSent: (note:
             ) : debatersQuery.isPending && listedRoster.length === 0 ? (
               <EmptyRow>Loading people…</EmptyRow>
             ) : listedRoster.length === 0 && listedHits.length === 0 ? (
-              <EmptyRow>{searchTerm && search.isLoading ? 'Searching…' : 'Nobody matches that.'}</EmptyRow>
+              hitLookupFailed ? null : (
+                <EmptyRow>{searchTerm && search.isLoading ? 'Searching…' : 'Nobody matches that.'}</EmptyRow>
+              )
             ) : (
               <>
                 {listedRoster.map(person => option(person, true))}
                 {listedHits.map(person => option(person, false))}
               </>
             )}
+            {hitLookupFailed ? (
+              <li className="flex flex-wrap items-center gap-2 border-b border-grey-02 py-4">
+                <Text as="p" variant="metadata" color="grey-04">
+                  Couldn&rsquo;t look up the people found by name.
+                </Text>
+                <HubPillButton analyticsSurface="calendar" onClick={() => void hitAccounts.refetch()}>
+                  Try again
+                </HubPillButton>
+              </li>
+            ) : null}
           </ul>
         </div>
 

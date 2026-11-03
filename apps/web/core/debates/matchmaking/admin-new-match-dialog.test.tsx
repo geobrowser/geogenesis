@@ -29,6 +29,8 @@ const mocks = vi.hoisted(() => ({
   // schedule. Stands in for a roster that is stale, capped or failed to load.
   readZones: {} as Record<string, string>,
   overlapError: null as Error | null,
+  lookupError: null as Error | null,
+  refetchLookup: vi.fn(),
 }));
 
 const readZone = (userId: string) =>
@@ -107,9 +109,10 @@ vi.mock('~/core/hooks/use-personal-spaces-by-page-ids', () => ({
 }));
 vi.mock('../hooks', async importOriginal => ({
   ...(await importOriginal<typeof import('../hooks')>()),
-  useDebateProfilesBySpace: (spaceIds: string[]) => ({
-    data: mocks.summaries.filter(summary => spaceIds.includes(summary.profile_space_id)),
-  }),
+  useDebateProfilesBySpace: (spaceIds: string[]) =>
+    mocks.lookupError
+      ? { data: undefined, error: mocks.lookupError, refetch: mocks.refetchLookup }
+      : { data: mocks.summaries.filter(summary => spaceIds.includes(summary.profile_space_id)), error: null },
 }));
 vi.mock('./use-person-facts', () => ({
   usePersonFacts: (_people: unknown, { anchorProfileSpaceId }: { anchorProfileSpaceId?: string | null }) => {
@@ -181,6 +184,7 @@ vi.mock('~/partials/availability/peer-availability', () => ({
 }));
 
 const { AdminNewMatchDialog } = await import('./admin-new-match-dialog');
+const { GeoChatRequestError } = await import('../api');
 
 // Tuesday 6 Oct 2026, 9:20 local.
 const NOW = new Date(2026, 9, 6, 9, 20);
@@ -263,7 +267,9 @@ beforeEach(() => {
     overlapError: null,
     matchesKnown: true,
     debatersError: null,
+    lookupError: null,
   });
+  mocks.refetchLookup.mockReset();
   mocks.refetchDebaters.mockReset();
   window.localStorage.clear();
   mocks.create.mockReset();
@@ -293,6 +299,44 @@ describe('AdminNewMatchDialog', () => {
     expect(sam).toHaveTextContent('No availability set');
     expect(within(sam).getByRole('button', { name: 'Select Sam Patel' })).toBeInTheDocument();
     expect(within(sam).getByRole('button', { name: 'Request availability from Sam Patel' })).toBeInTheDocument();
+  });
+
+  it('finds a hit by its page id on a geo-chat without the account lookup', () => {
+    mocks.lookupError = new GeoChatRequestError('Not Found', null, 404);
+    mocks.summaries = [...mocks.summaries, person(SAM_PAGE, 'Sam Patel')];
+    mocks.searchQuery = 'sam';
+    mocks.searchResults = [{ id: SAM_PAGE }];
+    renderDialog();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Select Sam Patel' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Select Ana Ruiz' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Send invites' }));
+    expect(mocks.create.mock.calls[0][0]).toMatchObject({ firstUserId: SAM_PAGE, secondUserId: 'ana' });
+  });
+
+  it('sends the user id the account lookup returns, not the page id', () => {
+    mocks.searchQuery = 'sam';
+    mocks.searchResults = [{ id: SAM_PAGE }];
+    renderDialog();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Select Sam Patel' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Select Ana Ruiz' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Send invites' }));
+    expect(mocks.create.mock.calls[0][0]).toMatchObject({ firstUserId: 'sam', secondUserId: 'ana' });
+  });
+
+  it('says the lookup failed on any other error, rather than falling back or finding nobody', () => {
+    mocks.lookupError = new GeoChatRequestError('boom', 'internal', 500);
+    mocks.summaries = [...mocks.summaries, person(SAM_PAGE, 'Sam Patel')];
+    mocks.searchQuery = 'zzz';
+    mocks.searchResults = [{ id: SAM_PAGE }];
+    renderDialog();
+
+    expect(screen.queryByRole('button', { name: 'Select Sam Patel' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Nobody matches that.')).not.toBeInTheDocument();
+    expect(screen.getByText('Couldn’t look up the people found by name.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(mocks.refetchLookup).toHaveBeenCalledTimes(1);
   });
 
   it('matches someone with no availability at any time, flagged Off-hours', async () => {

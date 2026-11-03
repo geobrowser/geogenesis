@@ -2118,6 +2118,11 @@ export async function lookupDebateProfiles(
 
 export const DEBATE_PROFILE_LOOKUP_MAX = 100;
 
+/** A geo-chat older than `profile_space_id` has no lookup route: a 404 with no error code. */
+export function isDebateProfileLookupMissing(error: unknown) {
+  return error instanceof GeoChatRequestError && error.status === 404 && error.code === null;
+}
+
 export async function getDebateProfile(
   profileSpaceId: string,
   getPrivyIdentityToken: GetPrivyIdentityToken,
