@@ -1055,6 +1055,19 @@ describe('marketing selection', () => {
     expect(mocks.itemAt[1]?.entityId).toBe('selected');
     expect(screen.queryByText('Could not load the feed.')).toBeNull();
   });
+  it('shows a resolved selection without waiting for the personalized feed identity token', () => {
+    mocks.entryItem = card('selected');
+    render(
+      <EntityFeed
+        {...props}
+        initialSort="for-you"
+        followedTopicIds={[]}
+        walletAddress="0x00000000000000000000000000000000000000aa"
+        sendIdentityToken
+      />
+    );
+    expect(mocks.itemAt[1]?.entityId).toBe('selected');
+  });
   it('stops pinning the selection after the visitor changes sort', () => {
     mocks.pages = [{ items: [card('ranked')] }];
     mocks.entryItem = card('selected');

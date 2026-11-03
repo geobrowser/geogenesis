@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 
 import { isDebateEntity } from '~/core/debates/is-debate-entity';
-import { DEBATE_CLAIMS_PROPERTY_ID } from '~/core/debates/ontology';
-import { debateHasProcessedVideo, fetchExploreFeed } from '~/core/explore/fetch-explore-feed';
+import { DEBATE_CLAIMS_PROPERTY_ID, DEBATE_TYPE_ID } from '~/core/debates/ontology';
+import { debateHasProcessedVideo, exploreBrowseSpaceIds, fetchExploreFeed } from '~/core/explore/fetch-explore-feed';
 import { leadWithPlayableDebate } from '~/core/explore/lead-with-playable-debate';
 import { resolveExploreFeedRequestContext } from '~/core/explore/resolve-explore-feed-request-context';
 import { normId } from '~/core/utils/norm-id';
@@ -14,6 +14,7 @@ export async function GET(request: Request) {
   if (!/^[0-9a-f]{32}$/.test(id)) return NextResponse.json({ item: null }, { status: 400, headers });
   try {
     const context = await resolveExploreFeedRequestContext();
+    const spaceIds = exploreBrowseSpaceIds(context.browse, null);
     const result = await fetchExploreFeed({
       ...context,
       sort: 'new',
@@ -24,7 +25,16 @@ export async function GET(request: Request) {
       entityFilter: {
         or: [
           { id: { is: id } },
-          { relations: { some: { typeId: { is: DEBATE_CLAIMS_PROPERTY_ID }, toEntityId: { is: id } } } },
+          {
+            typeIds: { overlaps: [DEBATE_TYPE_ID] },
+            relations: {
+              some: {
+                typeId: { is: DEBATE_CLAIMS_PROPERTY_ID },
+                toEntityId: { is: id },
+                spaceId: { in: spaceIds },
+              },
+            },
+          },
         ],
       },
     });

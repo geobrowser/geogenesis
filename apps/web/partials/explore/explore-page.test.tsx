@@ -1,6 +1,8 @@
 import '@testing-library/jest-dom/vitest';
 import { act, cleanup, render, screen } from '@testing-library/react';
 
+import * as React from 'react';
+
 import { Provider, createStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -47,7 +49,8 @@ vi.mock('~/core/space-calls/recording/explore-past-calls', () => ({
 vi.mock('~/partials/feed/entity-feed', () => ({
   EntityFeed: (props: Record<string, unknown>) => {
     mocks.feedProps.push(props);
-    return <div data-testid="feed" />;
+    const [mountedEntry] = React.useState(() => props.entryEntityId);
+    return <div data-testid="feed" data-mounted-entry={String(mountedEntry ?? '')} />;
   },
 }));
 
@@ -205,5 +208,17 @@ describe('ExplorePage past calls', () => {
 it('opens marketing card links on Best with the selection even when For you is enabled', () => {
   mocks.flags = { forYouFeed: true };
   render(<ExplorePage sidePanel={null} entryEntityId="selected" />);
-  expect(mocks.feedProps.at(-1)).toMatchObject({ initialSort: 'best', entryEntityId: 'selected' });
+  expect(mocks.feedProps.at(-1)).toMatchObject({
+    initialSort: 'best',
+    entryEntityId: 'selected',
+    sortOptions: ['for-you', 'best', 'top', 'new'],
+    followedTopicIds: ['aaaa', 'bbbb'],
+  });
+});
+
+it.each([false, true])('remounts the feed for a new selected-card URL (For you enabled: %s)', forYouFeed => {
+  mocks.flags = { forYouFeed };
+  const { rerender } = render(<ExplorePage sidePanel={null} entryEntityId="first" />);
+  rerender(<ExplorePage sidePanel={null} entryEntityId="second" />);
+  expect(screen.getByTestId('feed')).toHaveAttribute('data-mounted-entry', 'second');
 });

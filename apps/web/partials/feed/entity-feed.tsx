@@ -851,7 +851,7 @@ export function EntityFeed({
           <p className="text-browseMenu text-red-01">Could not load the feed.</p>
         ) : (showEntry && entryEntityId && entryQuery.isPending) ||
           (!entryItem && isLoading) ||
-          awaitingIdentityToken ||
+          (!entryItem && awaitingIdentityToken) ||
           (isForYou && followedTopicIds === null) ? (
           <div className="space-y-4">
             {Array.from({ length: 5 }).map((_, i) => (

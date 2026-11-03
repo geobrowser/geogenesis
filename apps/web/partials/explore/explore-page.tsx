@@ -61,8 +61,10 @@ const FOR_YOU_ENABLED_FOR_EVERYONE = process.env.NEXT_PUBLIC_FOR_YOU_ENABLED ===
 function ExploreForYouFeed({
   walletAddress,
   interleave,
+  entryEntityId,
 }: {
   walletAddress: string | null;
+  entryEntityId: string | null;
   interleave: React.ComponentProps<typeof EntityFeed>['interleave'];
 }) {
   const { topicIds, isLoading } = useFollowedTopics();
@@ -84,7 +86,8 @@ function ExploreForYouFeed({
   return (
     <EntityFeed
       {...EXPLORE_FEED_PROPS}
-      initialSort="for-you"
+      initialSort={entryEntityId ? 'best' : 'for-you'}
+      entryEntityId={entryEntityId}
       sortOptions={FOR_YOU_SORT_OPTIONS}
       followedTopicIds={followedTopicIds}
       pendingTopicFollows={heldPicks.length > 0}
@@ -135,10 +138,16 @@ export function ExplorePage({ sidePanel, walletAddress = null, entryEntityId = n
               anything to them; it is dismissed for good, and the lobby banner then leads. */}
           <ExploreLiveLobbiesBanner />
         </div>
-        {forYouEnabled && !entryEntityId ? (
-          <ExploreForYouFeed walletAddress={walletAddress} interleave={pastCalls} />
+        {forYouEnabled ? (
+          <ExploreForYouFeed
+            key={entryEntityId ?? 'default'}
+            walletAddress={walletAddress}
+            interleave={pastCalls}
+            entryEntityId={entryEntityId}
+          />
         ) : (
           <EntityFeed
+            key={entryEntityId ?? 'default'}
             {...EXPLORE_FEED_PROPS}
             initialSort="best"
             entryEntityId={entryEntityId}

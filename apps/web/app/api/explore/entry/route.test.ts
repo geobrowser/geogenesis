@@ -4,17 +4,19 @@ import { DEBATE_CLAIMS_PROPERTY_ID, DEBATE_TYPE_ID } from '~/core/debates/ontolo
 
 import { GET } from './route';
 
-const mocks = vi.hoisted(() => ({ context: vi.fn(), feed: vi.fn(), playable: vi.fn() }));
+const mocks = vi.hoisted(() => ({ context: vi.fn(), feed: vi.fn(), playable: vi.fn(), spaces: vi.fn() }));
 vi.mock('~/core/explore/resolve-explore-feed-request-context', () => ({
   resolveExploreFeedRequestContext: mocks.context,
 }));
 vi.mock('~/core/explore/fetch-explore-feed', () => ({
   fetchExploreFeed: mocks.feed,
   debateHasProcessedVideo: mocks.playable,
+  exploreBrowseSpaceIds: mocks.spaces,
 }));
 
 const ID = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const DEBATE = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+const SPACE = 'cccccccccccccccccccccccccccccccc';
 const claim = { entityId: ID, types: [] };
 const debate = { entityId: DEBATE, types: [{ id: DEBATE_TYPE_ID }] };
 const request = (id = ID) => new Request(`https://www.geobrowser.io/api/explore/entry?entityId=${id}`);
@@ -28,6 +30,7 @@ beforeEach(() => {
   });
   mocks.feed.mockResolvedValue({ items: [claim, debate] });
   mocks.playable.mockResolvedValue(true);
+  mocks.spaces.mockReturnValue([SPACE]);
 });
 describe('selected Explore entry', () => {
   it('rejects invalid ids before querying the graph', async () => {
@@ -48,7 +51,16 @@ describe('selected Explore entry', () => {
         entityFilter: {
           or: [
             { id: { is: ID } },
-            { relations: { some: { typeId: { is: DEBATE_CLAIMS_PROPERTY_ID }, toEntityId: { is: ID } } } },
+            {
+              typeIds: { overlaps: [DEBATE_TYPE_ID] },
+              relations: {
+                some: {
+                  typeId: { is: DEBATE_CLAIMS_PROPERTY_ID },
+                  toEntityId: { is: ID },
+                  spaceId: { in: [SPACE] },
+                },
+              },
+            },
           ],
         },
       })
