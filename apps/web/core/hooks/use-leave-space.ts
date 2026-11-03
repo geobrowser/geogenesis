@@ -94,9 +94,10 @@ export function useLeaveSpace(spaceId: string, isMember: boolean) {
         ['pending-memberships'],
         ['browse-sidebar-data'],
       ];
-      // A failed refetch must not hide the page refresh or turn a mined write into
-      // a retryable transaction error.
-      await Promise.allSettled(queryKeys.map(async queryKey => queryClient.invalidateQueries({ queryKey })));
+      // Invalidate every dependent cache now, but let network refetches run in
+      // the background. A stalled or failed refetch must not gate a confirmed
+      // leave's completion or the server-rendered page refresh.
+      void Promise.allSettled(queryKeys.map(async queryKey => queryClient.invalidateQueries({ queryKey })));
       router.refresh();
     },
     onError: error => {

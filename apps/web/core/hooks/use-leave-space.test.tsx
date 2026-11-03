@@ -13,6 +13,16 @@ import { useLeaveSpace } from './use-leave-space';
 
 const SPACE = '41e851610e13a19441c4d980f2f2ce6b';
 const MEMBER = 'b7c1aa0e3f2d4c5b9a8e7d6c5b4a3f21';
+const MEMBERSHIP_QUERY_KEYS = [
+  ['space', SPACE],
+  ['space-participants', SPACE, 'members'],
+  ['space-access-control', 'member', SPACE],
+  ['space-roles', SPACE],
+  ['spaces-where-member'],
+  ['creatable-space-ids'],
+  ['pending-memberships'],
+  ['browse-sidebar-data'],
+] as const;
 const mocks = vi.hoisted(() => ({
   dispatch: vi.fn(),
   refresh: vi.fn(),
@@ -73,17 +83,7 @@ describe('useLeaveSpace', () => {
     expect(mocks.tx).toHaveBeenCalledOnce();
     expect(mocks.getIsMemberOfSpace).toHaveBeenCalledWith(SPACE, MEMBER, expect.any(AbortSignal));
     expect(store.get(requestedMembershipSpacesAtom)).toEqual([expect.objectContaining({ ownerId: 'another-owner' })]);
-    for (const queryKey of [
-      ['space', SPACE],
-      ['space-participants', SPACE, 'members'],
-      ['space-access-control', 'member', SPACE],
-      ['space-roles', SPACE],
-      ['spaces-where-member'],
-      ['creatable-space-ids'],
-      ['pending-memberships'],
-      ['browse-sidebar-data'],
-    ])
-      expect(invalidate).toHaveBeenCalledWith({ queryKey });
+    for (const queryKey of MEMBERSHIP_QUERY_KEYS) expect(invalidate).toHaveBeenCalledWith({ queryKey });
     expect(mocks.refresh).toHaveBeenCalledOnce();
   });
 
@@ -104,6 +104,50 @@ describe('useLeaveSpace', () => {
     expect(mocks.tx).toHaveBeenCalledOnce();
     expect(mocks.refresh).toHaveBeenCalledOnce();
   });
+
+  it.each(MEMBERSHIP_QUERY_KEYS.flatMap(queryKey => [false, true].map(alreadyLeft => ({ queryKey, alreadyLeft }))))(
+    'finishes despite a stalled $queryKey refetch (alreadyLeft: $alreadyLeft)',
+    async ({ queryKey, alreadyLeft }) => {
+      vi.useFakeTimers();
+      mocks.readSpaceMembership.mockResolvedValue(!alreadyLeft);
+      let release!: () => void;
+      const stalledRefetch = new Promise<void>(resolve => {
+        release = resolve;
+      });
+      const invalidate = vi
+        .spyOn(client, 'invalidateQueries')
+        .mockImplementation(filters =>
+          JSON.stringify(filters?.queryKey) === JSON.stringify(queryKey) ? stalledRefetch : Promise.resolve()
+        );
+      const { result } = renderHook(() => useLeaveSpace(SPACE, true), { wrapper });
+      let settled = false;
+      let leaving!: Promise<unknown>;
+
+      try {
+        await act(async () => {
+          leaving = result.current.leaveSpaceAsync().then(value => {
+            settled = true;
+            return value;
+          });
+          await vi.advanceTimersByTimeAsync(1);
+        });
+
+        // Prove completion before the stalled refetch is released, not merely after
+        // a test timeout or after every invalidation happens to have resolved.
+        expect(settled).toBe(true);
+        expect(result.current.status).toBe('success');
+        expect(mocks.refresh).toHaveBeenCalledOnce();
+        expect(mocks.tx).toHaveBeenCalledTimes(alreadyLeft ? 0 : 1);
+        for (const key of MEMBERSHIP_QUERY_KEYS) expect(invalidate).toHaveBeenCalledWith({ queryKey: key });
+        expect(mocks.dispatch).not.toHaveBeenCalled();
+      } finally {
+        await act(async () => {
+          release();
+          await leaving;
+        });
+      }
+    }
+  );
 
   it('does not report a mined leave as failed when indexing remains unavailable', async () => {
     vi.useFakeTimers();
