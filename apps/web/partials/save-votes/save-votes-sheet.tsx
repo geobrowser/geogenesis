@@ -225,11 +225,8 @@ export function SaveVotesSheet() {
     setAttempt({ email: trimmedEmail, centered, reason: attempt ? attempt.reason : reason, phase: 'code' });
   };
 
-  // Undefined with the `googleSignIn` flag off or in an in-app browser, which hides the button. Not in
-  // the lobby ask either: it promises they stay in the lobby with the audio playing, and Google
-  // redirects away from the page.
-  const continueWithGoogle = useContinueWithGoogle();
-  const google = lobbyName ? undefined : continueWithGoogle;
+  // Undefined with the `googleSignIn` flag off or in an in-app browser, which hides the button.
+  const google = useContinueWithGoogle();
 
   if (!open) return null;
   // Waits behind anything the visitor opened. Hidden rather than unmounted once a code is out, so
@@ -297,7 +294,9 @@ export function SaveVotesSheet() {
               <p className={HEADING_CLASS}>Join the discussion</p>
               <p className={SUBTEXT_CLASS}>
                 Create an account to vote on claims, speak and debate. You’ll stay in{' '}
-                <span className="font-medium text-text">{lobbyName}</span>, and your audio keeps playing.
+                <span className="font-medium text-text">{lobbyName}</span>
+                {/* Google redirects away and back, so the lobby is rejoined but the audio stops meanwhile. */}
+                {google ? '.' : ', and your audio keeps playing.'}
               </p>
               <p className="mt-3 text-[12px] leading-[16px] font-medium text-grey-04">Saved for after sign-up</p>
             </>

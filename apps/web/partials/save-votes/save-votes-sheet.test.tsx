@@ -499,8 +499,8 @@ describe('SaveVotesSheet', () => {
       ).toBeInTheDocument();
     });
 
-    // The lobby ask promises they stay in the lobby with the audio playing; Google's redirect would not.
-    it('leaves it out of the lobby ask', () => {
+    // Google's redirect stops the lobby audio, so with Google on the lobby ask no longer promises it.
+    it('offers it in the lobby ask, without promising the audio keeps playing', () => {
       mocks.googleSignIn = vi.fn(() => Promise.resolve());
       vote('a');
       vote('b');
@@ -510,8 +510,22 @@ describe('SaveVotesSheet', () => {
       act(() => openSaveVotesPrompt('threshold'));
 
       const sheet = screen.getByRole('region', { name: 'Join the discussion' });
-      expect(within(sheet).getByRole('textbox', { name: 'Email address' })).toBeInTheDocument();
-      expect(within(sheet).queryByRole('button', { name: 'Continue with Google' })).not.toBeInTheDocument();
+      expect(within(sheet).getByRole('button', { name: 'Continue with Google' })).toBeInTheDocument();
+      expect(sheet).toHaveTextContent('You’ll stay in Morning lobby.');
+      expect(sheet).not.toHaveTextContent('audio keeps playing');
+    });
+
+    it('keeps the audio promise in the lobby ask with Google off', () => {
+      vote('a');
+      vote('b');
+      markPromptedThisSession();
+      setSaveVotesPromptLobby('Morning lobby');
+      render(<SaveVotesSheet />);
+      act(() => openSaveVotesPrompt('threshold'));
+
+      expect(screen.getByRole('region', { name: 'Join the discussion' })).toHaveTextContent(
+        'You’ll stay in Morning lobby, and your audio keeps playing.'
+      );
     });
   });
 
