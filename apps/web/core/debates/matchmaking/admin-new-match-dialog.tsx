@@ -900,13 +900,11 @@ function TimePicker({
   // included: 9:15 sits in 9:00's.
   const anyFreeOffGrid =
     overlapKnown && anyStart !== null && !anyInside && sharedThroughout(sharedStarts, anyStart, length);
+  // The pick that still stands: one the length or the clock has since ruled out is dropped, from the
+  // footer and the strip alike, but kept in `selected` so switching back brings it back.
+  const recommendedPick = selected !== null && mutual.has(selected) && onShownDay(selected) ? selected : null;
   React.useEffect(() => {
-    if (mode === 'recommended')
-      onChoose(
-        selected !== null && selected > now && onShownDay(selected) && mutual.has(selected)
-          ? { start: selected, outside: false }
-          : null
-      );
+    if (mode === 'recommended') onChoose(recommendedPick !== null ? { start: recommendedPick, outside: false } : null);
     else
       onChoose(
         anyStart !== null && anyStart > now
@@ -917,7 +915,7 @@ function TimePicker({
             }
           : null
       );
-  }, [anyFreeOffGrid, anyInside, anyStart, mode, mutual, now, onChoose, onShownDay, overlapKnown, selected]);
+  }, [anyFreeOffGrid, anyInside, anyStart, mode, now, onChoose, overlapKnown, recommendedPick]);
 
   // The zone alone wherever a label spans the fortnight; a single time carries its own offset.
   const zoneTitle = zoneName(zone);
@@ -1233,7 +1231,7 @@ function TimePicker({
           error: Boolean(secondAvailability.error),
           onRetry: () => void secondAvailability.refetch(),
         }}
-        selected={mode === 'recommended' ? selected : anyStart}
+        selected={mode === 'recommended' ? recommendedPick : anyStart}
         selectedLength={length}
         onPick={pickFromStrip}
       />

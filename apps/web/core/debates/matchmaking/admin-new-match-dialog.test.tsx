@@ -702,6 +702,10 @@ describe('AdminNewMatchDialog', () => {
         .getAllByRole('button')
         .filter(button => /Ana .*Raj /.test(button.getAttribute('aria-label') ?? ''))
         .map(button => button.getAttribute('aria-label')!.split(' ')[0]);
+    const outlined = () =>
+      [...document.querySelectorAll<HTMLElement>('[data-start]')]
+        .filter(cell => cell.classList.contains('outline-text'))
+        .map(cell => new Date(Number(cell.dataset.start)).toISOString());
 
     it('recommends only starts they are both free for the whole hour, and books the hour', () => {
       renderDialog();
@@ -728,18 +732,22 @@ describe('AdminNewMatchDialog', () => {
       fireEvent.click(screen.getAllByRole('button').find(b => /^9:30/.test(b.getAttribute('aria-label') ?? ''))!);
       expect(screen.getByRole('button', { name: 'Send invites' })).toBeEnabled();
 
+      expect(outlined()).toEqual([at(7, 9, 30)]);
+
       fireEvent.click(screen.getByRole('radio', { name: '60 min' }));
       expect(screen.getByRole('button', { name: 'Send invites' })).toBeDisabled();
+      // Nor does the strip keep outlining 9:30–10:30 as if it were picked.
+      expect(outlined()).toEqual([]);
+
+      fireEvent.click(screen.getByRole('radio', { name: '30 min' }));
+      expect(screen.getByRole('button', { name: 'Send invites' })).toBeEnabled();
+      expect(outlined()).toEqual([at(7, 9, 30)]);
     });
 
     it('outlines every half-hour the match touches on the strip', () => {
       renderDialog();
       fireEvent.click(screen.getByRole('button', { name: 'Select Ana Ruiz' }));
       fireEvent.click(screen.getByRole('button', { name: 'Select Raj Mehta' }));
-      const outlined = () =>
-        [...document.querySelectorAll<HTMLElement>('[data-start]')]
-          .filter(cell => cell.classList.contains('outline-text'))
-          .map(cell => new Date(Number(cell.dataset.start)).toISOString());
 
       fireEvent.click(screen.getByRole('radio', { name: '60 min' }));
       fireEvent.click(screen.getAllByRole('button').find(b => /^9:00/.test(b.getAttribute('aria-label') ?? ''))!);
