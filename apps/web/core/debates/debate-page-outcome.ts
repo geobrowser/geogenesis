@@ -34,6 +34,11 @@ export type DebatePagePlayerState = {
    * hand" so `ready_ms` and `media_loading` read the same before and after the hold existed.
    */
   pairHeld?: boolean;
+  /**
+   * GEO-3578: the debate's opening clip has started. The visitor is watching the debate, so the visit
+   * counts as played from here, with `played_via` saying it was the clip.
+   */
+  openingClipPlaying?: boolean;
 };
 
 export type DebatePageNotPlayedReason =
@@ -103,8 +108,15 @@ export function createDebatePageOutcome({ debateId, emit, now }: { debateId: str
       if (done) return;
       player = next;
       if (next.ready && readyAt === null) readyAt = now();
-      if (next.playing)
-        send({ outcome: 'played', played_ms: elapsed(now()), left_via: null, reason: null, detail: null });
+      if (next.playing || next.openingClipPlaying)
+        send({
+          outcome: 'played',
+          played_ms: elapsed(now()),
+          played_via: next.playing ? 'debate' : 'opening_clip',
+          left_via: null,
+          reason: null,
+          detail: null,
+        });
     },
     /** Another debate became the active one before this one played. */
     movedOn() {

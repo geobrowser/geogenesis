@@ -97,6 +97,7 @@ import { useDebateGatewayScope, useDebateGatewaySnapshot, useDebateGatewaySpaceS
 import { isLiveGeoChatAccount, refusedRetryDelayMs } from './geo-chat-account-status';
 import { lobbyDebateRequested } from './lobbies/lobby-analytics';
 import { markAskWithdrawn, unmarkAskWithdrawn } from './matchmaking/ask-withdrawals';
+import { decodeDebateMoments } from './moments';
 import {
   type ParticipantAvatarMapper,
   type ParticipantAvatarSource,
@@ -146,6 +147,8 @@ export const debateQueryKeys = {
   media: (debateId: string) => ['debates', 'media', dashlessId(debateId)] as const,
   /** GEO-2870. geo-chat's extracted claims for one debate, with whether its media job has finished. */
   extractedClaims: (debateId: string) => ['debates', 'extracted-claims', dashlessId(debateId)] as const,
+  /** GEO-3578. The same payload's moment list, read once rather than polled. */
+  moments: (debateId: string) => ['debates', 'moments', dashlessId(debateId)] as const,
   /** Viewer-specific: whether a recording can be read at all is decided per identity. */
   recordingUrl: (
     debateId: string,
@@ -1669,6 +1672,24 @@ export function useDebateExtractedClaims(debateId: string, enabled: boolean) {
     },
     enabled: enabled && Boolean(debateId),
     refetchInterval: query => extractedClaimsRefetchInterval(query.state.data),
+  });
+}
+
+/**
+ * A debate's published moments (GEO-3351), decoded, for the player's opening clip (GEO-3578).
+ *
+ * Read once and not polled, unlike `useDebateExtractedClaims`: the player asks while a debate is
+ * about to play, and a moment list that lands after that has missed its opening anyway. Public, so
+ * the read goes out unsigned and every viewer shares one cache entry per debate.
+ */
+export function useDebateMoments(debateId: string, enabled: boolean) {
+  return useQuery({
+    ...debateQueryNetworkOptions,
+    queryKey: debateQueryKeys.moments(debateId),
+    queryFn: async ({ signal }) =>
+      decodeDebateMoments(await getDebateExtractedClaims(debateId, undefined, null, signal)),
+    enabled: enabled && Boolean(debateId),
+    staleTime: Infinity,
   });
 }
 
