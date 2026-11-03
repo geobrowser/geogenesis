@@ -838,6 +838,7 @@ describe('lobbies among the upcoming debates (GEO-3292)', () => {
     hosts: [{ user_id: 'user-host', profile_space_id: 'space-host', display_name: 'Bryan', avatar_cid: null }],
     hosting: false,
     onRoster: false,
+    summary: null,
     ...overrides,
   });
 

@@ -1,5 +1,5 @@
 import { type DebateLobbyCalendarRow, type DebateLobbySummary, dashlessId } from '../api';
-import { lobbyLineup } from './live-lobbies';
+import { lobbiesToOpen, lobbyLineup } from './live-lobbies';
 
 /** How far ahead the debate hours page looks (GEO-3517): this week, from now. */
 export const DEBATE_HOURS_WINDOW_MS = 7 * 24 * 60 * 60_000;
@@ -44,12 +44,10 @@ export type DebateHours = {
 };
 
 export function debateHours(lobbies: DebateLobbySummary[], now: number): DebateHours {
-  const { live, soon, later } = lobbyLineup(lobbies, now);
-  // `lobbyLineup` keeps a lobby whose time has passed but that the server has not opened yet, so
+  const { live } = lobbyLineup(lobbies);
+  // `lobbiesToOpen` keeps a lobby whose time has passed but that the server has not opened yet, so
   // the window has no lower bound either.
-  const upcoming = (soon ? [soon, ...later] : later).filter(
-    lobby => Date.parse(lobby.starts_at) < now + DEBATE_HOURS_WINDOW_MS
-  );
+  const upcoming = lobbiesToOpen(lobbies).filter(lobby => Date.parse(lobby.starts_at) < now + DEBATE_HOURS_WINDOW_MS);
 
   const [featured = null, ...rest] = [...live, ...upcoming];
   return {
