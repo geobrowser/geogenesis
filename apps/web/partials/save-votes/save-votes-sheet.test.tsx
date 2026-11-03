@@ -476,6 +476,28 @@ describe('SaveVotesSheet', () => {
       expect(mocks.beginPrivyAuth).not.toHaveBeenCalled();
     });
 
+    it.each([false, true])('closing preserves a pending Google save (after editing email: %s)', editing => {
+      mocks.googleSignIn = vi.fn(() => new Promise<void>(() => {}));
+      vote('a');
+      markPromptedThisSession();
+      render(<SaveVotesSheet />);
+      act(() => openSaveVotesPrompt('navbar'));
+      if (editing) {
+        fireEvent.change(screen.getByRole('textbox', { name: 'Email address' }), {
+          target: { value: 'sam@hey.com' },
+        });
+        fireEvent.click(screen.getByRole('button', { name: 'Save vote' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Back to email' }));
+      }
+
+      fireEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Not now' }));
+
+      expect(mocks.cancelPrivyAuth).not.toHaveBeenCalled();
+      expect(readSaveVotesPrompt()).toBeNull();
+      expect(readLocalVotes().votes).toHaveLength(1);
+    });
+
     it('waits for Google to fail before starting the email path', async () => {
       let failGoogle!: (error: Error) => void;
       mocks.googleSignIn = vi.fn(

@@ -101,6 +101,9 @@ export function SaveVotesSheet() {
   const count = votes.length;
   const isChatOpen = useAtomValue(isChatOpenAtom);
   const prepareOnboarding = usePrepareOnboarding();
+  // Undefined with the `googleSignIn` flag off or in an in-app browser, which hides the button.
+  const google = useContinueWithGoogle();
+  const googleStarting = google?.status === 'starting';
 
   const [email, setEmail] = React.useState('');
   /**
@@ -193,13 +196,14 @@ export function SaveVotesSheet() {
   }, [open, visible, reason]);
 
   const close = React.useCallback(() => {
-    // Ends this sheet's own sign-in as closed, once a code is out, so it no longer counts as a save.
-    if (midSignIn) cancelPrivyAuth();
+    // Withdraw an email sign-in, including one left mid-edit. A Google redirect cannot be aborted;
+    // its new save attempt must survive closing even when an email was started before it.
+    if (midSignIn && !googleStarting) cancelPrivyAuth();
     // Not now, not never: the votes stay on the device and the pills still offer "Save".
     recordSavePromptDismissed();
     setAttempt(null);
     closeSaveVotesPrompt();
-  }, [midSignIn]);
+  }, [googleStarting, midSignIn]);
 
   /** Back to the email step, the address as it was sent, to fix a typo. Unmounting the code step ends it. */
   const changeEmail = React.useCallback(() => {
@@ -217,12 +221,9 @@ export function SaveVotesSheet() {
   // The button waits for an address that looks like one, so there is no rejection to show.
   const canSend = isLikelyEmail(trimmedEmail);
 
-  // Undefined with the `googleSignIn` flag off or in an in-app browser, which hides the button.
-  const google = useContinueWithGoogle();
-
   const submitEmail = (event: React.FormEvent) => {
     event.preventDefault();
-    if (!canSend || google?.status === 'starting') return;
+    if (!canSend || googleStarting) return;
     beginPrivyAuth(signInProperties);
     prepareOnboarding();
     setAttempt({ email: trimmedEmail, centered, reason: attempt ? attempt.reason : reason, phase: 'code' });
@@ -326,11 +327,7 @@ export function SaveVotesSheet() {
               className={INPUT_CLASS}
             />
           </label>
-          <button
-            type="submit"
-            disabled={!canSend || google?.status === 'starting'}
-            className={primaryButtonClass(compact)}
-          >
+          <button type="submit" disabled={!canSend || googleStarting} className={primaryButtonClass(compact)}>
             {editing ? SAVE_VOTES_RESEND_LABEL : saveVotesSubmitLabel(count, logIn)}
           </button>
           {google ? (

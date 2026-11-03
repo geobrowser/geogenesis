@@ -186,13 +186,16 @@ function EmailCapturePopup() {
   }, [googleStarting, prepareOnboarding, subscribedEmail]);
 
   const close = React.useCallback(() => {
-    if (currentAuthAttempt()?.properties.component === 'explore_email_capture') finishAuthAttempt('closed');
+    // Closing cannot abort Google's redirect; retain its attribution until it completes or fails.
+    if (!googleStarting && currentAuthAttempt()?.properties.component === 'explore_email_capture') {
+      finishAuthAttempt('closed');
+    }
     // Closing is a decision, so the attempt should not follow them to the next page.
     clearPendingSignup();
-    if (wantsAccount) cancelPrivyAuth();
+    if (wantsAccount && !googleStarting) cancelPrivyAuth();
     rememberDismissed();
     setClosed(true);
-  }, [rememberDismissed, wantsAccount]);
+  }, [googleStarting, rememberDismissed, wantsAccount]);
 
   const submit = React.useCallback(
     async (event: React.FormEvent) => {
