@@ -10,6 +10,7 @@ import { useRouter } from 'next/navigation';
 import { normalizeSpaceId } from '~/core/access/space-access';
 import { getIsMemberOfSpace } from '~/core/io/queries';
 import { SPACE_REGISTRY_ADDRESS } from '~/core/sdk/geo-network';
+import { spaceParticipantsQueryKey } from '~/core/space-members/use-space-participants-infinite';
 import { store } from '~/core/state/jotai-store';
 import { removeRequestedMembershipSpace, requestedMembershipSpacesAtom } from '~/core/state/requested-membership';
 import { useStatusBar } from '~/core/state/status-bar-store';
@@ -86,7 +87,8 @@ export function useLeaveSpace(spaceId: string, isMember: boolean) {
 
       const queryKeys = [
         ['space', targetSpaceId],
-        ['space-participants', targetSpaceId, 'members'],
+        // Omit the trailing page size so every cached member-page size refreshes.
+        spaceParticipantsQueryKey(targetSpaceId, 'members').slice(0, -1),
         ['space-access-control', 'member', normalizedSpaceId],
         ['space-roles', normalizedSpaceId],
         ['spaces-where-member'],

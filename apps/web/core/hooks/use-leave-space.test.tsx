@@ -6,6 +6,7 @@ import type { ReactNode } from 'react';
 import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import * as spaceParticipantQueries from '~/core/space-members/use-space-participants-infinite';
 import { store } from '~/core/state/jotai-store';
 import { requestedMembershipSpacesAtom } from '~/core/state/requested-membership';
 
@@ -85,6 +86,35 @@ describe('useLeaveSpace', () => {
     expect(store.get(requestedMembershipSpacesAtom)).toEqual([expect.objectContaining({ ownerId: 'another-owner' })]);
     for (const queryKey of MEMBERSHIP_QUERY_KEYS) expect(invalidate).toHaveBeenCalledWith({ queryKey });
     expect(mocks.refresh).toHaveBeenCalledOnce();
+  });
+
+  it('follows the participant key factory and invalidates every member page size without touching editors or another space', async () => {
+    // Exercise Patrick's concrete drift scenario: a key factory that canonicalizes
+    // IDs. The caller must follow it instead of repeating today's literal key.
+    const keyFactory = vi
+      .spyOn(spaceParticipantQueries, 'spaceParticipantsQueryKey')
+      .mockImplementation(
+        (id, kind, pageSize = 50) => ['space-participants', id.replace(/-/g, '').toLowerCase(), kind, pageSize] as const
+      );
+    const rawSpaceId = '41E85161-0E13-A194-41C4-D980F2F2CE6B';
+    const memberKeys = [10, 50].map(size =>
+      spaceParticipantQueries.spaceParticipantsQueryKey(rawSpaceId, 'members', size)
+    );
+    const untouchedKeys = [
+      spaceParticipantQueries.spaceParticipantsQueryKey(rawSpaceId, 'editors'),
+      spaceParticipantQueries.spaceParticipantsQueryKey('11111111111111111111111111111111', 'members'),
+    ];
+    for (const key of [...memberKeys, ...untouchedKeys]) client.setQueryData(key, { pages: [], pageParams: [] });
+    const { result } = renderHook(() => useLeaveSpace(rawSpaceId, true), { wrapper });
+
+    try {
+      await act(() => result.current.leaveSpaceAsync());
+
+      for (const key of memberKeys) expect(client.getQueryState(key)?.isInvalidated).toBe(true);
+      for (const key of untouchedKeys) expect(client.getQueryState(key)?.isInvalidated).toBe(false);
+    } finally {
+      keyFactory.mockRestore();
+    }
   });
 
   it('waits for delayed indexing before refreshing server-rendered membership', async () => {
