@@ -1409,6 +1409,60 @@ describe('DebatesBrowseFeed comments deep link', () => {
     expect(replaceState).toHaveBeenCalledWith(null, '', '/space/space-1/debate-1?ref_email=reply');
   });
 
+  it('waits for the linked debate before opening its comments', () => {
+    mocks.search = 'modal=comments&ref_email=reply';
+    // The linked debate's readiness lookup is still in flight.
+    mocks.processedIds = [];
+    mocks.mediaLoading = true;
+    const replaceState = vi.spyOn(window.history, 'replaceState');
+    const feed = () => (
+      <Provider store={createStore()}>
+        <DebatesBrowseFeed spaceId="space-1" initialDebateId="debate-1" fallback={<div>Entity page</div>} />
+      </Provider>
+    );
+    const view = render(feed());
+
+    // Still resolving: the trigger is kept, so it can fire once the debate is on screen.
+    expect(screen.queryByText(/Comments panel for/)).not.toBeInTheDocument();
+    expect(replaceState).not.toHaveBeenCalledWith(null, '', '/space/space-1/debate-1?ref_email=reply');
+
+    mocks.processedIds = ['debate-1'];
+    mocks.mediaLoading = false;
+    view.rerender(feed());
+    expect(screen.getByText('Comments panel for debate-1')).toBeInTheDocument();
+    expect(replaceState).toHaveBeenCalledWith(null, '', '/space/space-1/debate-1?ref_email=reply');
+  });
+
+  // A debate the feed can't play shows its entity page, with the comments inline.
+  it('scrolls to the inline comments when the debate falls back to its entity page', () => {
+    mocks.search = 'modal=comments&ref_email=reply';
+    const replaceState = vi.spyOn(window.history, 'replaceState');
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation(callback => {
+      callback(0);
+      return 0;
+    });
+    const scrollIntoView = vi.fn();
+    render(
+      <Provider store={createStore()}>
+        <DebatesBrowseFeed
+          spaceId="space-1"
+          initialDebateId="not-in-this-space"
+          fallback={
+            <div
+              id="entity-comments"
+              ref={el => {
+                if (el) el.scrollIntoView = scrollIntoView;
+              }}
+            />
+          }
+        />
+      </Provider>
+    );
+
+    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' });
+    expect(replaceState).toHaveBeenCalledWith(null, '', '/space/space-1/debate-1?ref_email=reply');
+  });
+
   it('leaves the comments closed without it', () => {
     render(
       <Provider store={createStore()}>

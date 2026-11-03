@@ -26,6 +26,7 @@ import { Avatar } from '~/design-system/avatar';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
 
+import { ENTITY_COMMENTS_ANCHOR_ID } from '~/partials/comments/entity-comments-anchor';
 import { EntityCommentsPanel } from '~/partials/comments/entity-comments-panel';
 import { EXPLORE_CARD_TITLE_CLASS_NAME } from '~/partials/explore/explore-card-title';
 
@@ -393,13 +394,24 @@ export function DebatesBrowseFeed({
   }, [activeId, rendersFeed, spaceId, surface]);
 
   // `?modal=comments` (the reply email's Reply, GEO-3381) opens the comments of the debate the link
-  // landed on, once the feed is showing it.
+  // landed on, once the feed is showing it. A debate the feed can't play falls back to its entity
+  // page, whose comments are inline: scroll to them there instead. Not by rewriting the URL to
+  // `#entity-comments` — the comments section reads the hash once, when it mounts, which is before
+  // this runs.
   const commentsLink = useDeepLinkParams(DEEP_LINK_MODALS.comments);
   useDeepLinkEffect({
     requested: commentsLink.requested,
     cleanUrl: commentsLink.cleanUrl,
-    enabled: rendersFeed && activeIndex >= 0,
-    run: () => setFeedPanel('comments'),
+    enabled: !rendersFeed || activeIndex >= 0,
+    run: () => {
+      if (rendersFeed) {
+        setFeedPanel('comments');
+        return;
+      }
+      requestAnimationFrame(() =>
+        document.getElementById(ENTITY_COMMENTS_ANCHOR_ID)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      );
+    },
   });
 
   // Where the linked debate has got to, for the visit's outcome, in the same order the render
