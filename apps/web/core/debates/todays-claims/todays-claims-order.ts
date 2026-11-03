@@ -1,4 +1,5 @@
 import { equals as idEquals } from '~/core/id/normalize';
+import { normId } from '~/core/utils/norm-id';
 import { compareBySpaceRank, compareTiedSpaceIds } from '~/core/utils/space/space-ranking';
 
 import type { DebateAgendaSection, DebateAgendas } from './debate-agendas';
@@ -30,10 +31,18 @@ export function orderByDebatesSinceListing<T>(items: T[], debatesOf: (item: T) =
 }
 
 /**
+ * A Today's claims section's key, by its space and agenda block: one block can be linked into two
+ * spaces' agendas. Every surface keys its sections this way, because they share one remembered
+ * open/closed state per day (`useTodaysSectionsOpen`).
+ */
+export const todaysSectionKey = (spaceId: string, blockId: string) => `todays:${normId(spaceId)}:${normId(blockId)}`;
+
+/**
  * Today's claims order, section by section: spaces in `spaceOrder`, each space's sections in its
  * agenda's order, and inside each section {@link orderByDebatesSinceListing}. The one walk every
- * Today's claims surface lists from — the picker (GEO-3489) and the callout (GEO-3498) — so their
- * orders can't drift apart. Claims listed twice come back twice; dedupe is the caller's.
+ * Today's claims surface lists from — the picker (GEO-3489), the callout (GEO-3498) and a lobby's
+ * tab (GEO-3491) — so their orders can't drift apart. Claims listed twice come back twice; dedupe is
+ * the caller's.
  */
 export function todaysSectionsInOrder(
   spaces: DebateAgendas['spaces'],

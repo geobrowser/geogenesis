@@ -170,11 +170,35 @@ describe('useTodaysCallout', () => {
     expect(storedFor('acct1')).toMatchObject({ day: '2026-10-29', answered: [], dismissed: false });
   });
 
-  it('picks the highest-ranked first', () => {
+  // GEO-3547: y outranks c and a, but they are in the viewer's own space.
+  it('picks from the viewer’s own spaces first, each highest-ranked first', () => {
     mocks.scores = { x: 1, y: 8, a: 5, b: 9, c: 7 };
     const { result } = renderHook(() => useTodaysCallout(), { wrapper });
 
-    expect(result.current.claims.map(claim => claim.claimId)).toEqual(['b', 'y', 'c', 'a', 'x']);
+    expect(result.current.claims.map(claim => claim.claimId)).toEqual(['b', 'c', 'a', 'y', 'x']);
+  });
+
+  // GEO-3547: a short day is topped up from spaces whose current agenda is older.
+  it('tops the set up from older agendas after every claim of today’s', () => {
+    const today = agendasFor('2026-10-29', { other: ['x', 'y'], member: ['a', 'b', 'c'] });
+    const older = agendasFor('2026-10-27', { old: ['p', 'q'] });
+    mocks.agendas = {
+      ...today,
+      spaces: [...older.spaces, ...today.spaces],
+      listedAtByClaim: new Map([...today.listedAtByClaim, ...older.listedAtByClaim]),
+    };
+    const { result } = renderHook(() => useTodaysCallout(), { wrapper });
+
+    expect(result.current.claims.map(claim => [claim.claimId, claim.listedOn])).toEqual([
+      ['b', '2026-10-29'],
+      ['c', '2026-10-29'],
+      ['a', '2026-10-29'],
+      ['x', '2026-10-29'],
+      ['y', '2026-10-29'],
+      ['p', '2026-10-27'],
+      ['q', '2026-10-27'],
+    ]);
+    expect(storedFor('acct1')?.day).toBe('2026-10-29');
   });
 
   it('waits for the ranking scores before taking the set', () => {

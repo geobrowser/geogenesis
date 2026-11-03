@@ -90,6 +90,10 @@ export const ENTITY_RESPONSE_COPY: Record<ResponseKind, EntityResponseCopy> = {
  */
 export const RESPONSE_CONFIRMING_COPY = 'Response submitted. Waiting for confirmation.';
 
+export function responseErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : 'Could not publish your response. Try again.';
+}
+
 /**
  * A signed-out vote kept on this device until it is saved with an account (GEO-3214). One sentence
  * for the pills and the arrows alike, for the same reason as the line above.

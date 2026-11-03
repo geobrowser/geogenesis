@@ -233,11 +233,14 @@ export function useDebateAgendas(enabled = true): {
   /** True until the agendas and their claims have settled; empty agendas mean "none" only after. */
   isLoading: boolean;
   error: unknown;
+  /** Asks again for whatever failed, the agendas or their claims, for a Try again. */
+  refetch: () => void;
 } {
   const {
     data: rows = NO_ROWS,
     isLoading: agendasLoading,
     error: agendasError,
+    refetch: refetchAgendas,
   } = useQuery({
     queryKey: debateQueryKeys.todaysAgendas(),
     queryFn: ({ signal }) => fetchCurrentDebateAgendas(signal),
@@ -266,6 +269,7 @@ export function useDebateAgendas(enabled = true): {
     entities: claimEntities,
     isLoading: claimsLoading,
     error: claimsError,
+    refetch: refetchClaims,
   } = useClaimEntitiesByIds(enabled ? itemIds : NO_IDS);
 
   const claimIds = React.useMemo(() => claimEntities.map(claim => normId(claim.id)), [claimEntities]);
@@ -276,6 +280,11 @@ export function useDebateAgendas(enabled = true): {
   );
 
   const isLoading = enabled && (agendasLoading || (itemIds.length > 0 && claimsLoading));
+  // Both reads behind the error: the agendas, and any batch of their claims that failed.
+  const refetch = React.useCallback(() => {
+    void refetchAgendas();
+    refetchClaims();
+  }, [refetchAgendas, refetchClaims]);
 
   return React.useMemo(
     () => ({
@@ -285,8 +294,9 @@ export function useDebateAgendas(enabled = true): {
       claimEntities,
       isLoading,
       error: agendasError ?? claimsError ?? null,
+      refetch,
     }),
-    [agendasError, agendasIn, claimEntities, claimIds, claimsError, enabled, isLoading, spaceIds]
+    [agendasError, agendasIn, claimEntities, claimIds, claimsError, enabled, isLoading, refetch, spaceIds]
   );
 }
 

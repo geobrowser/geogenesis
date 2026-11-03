@@ -61,7 +61,7 @@ export function EntityPageActions({
   return (
     <div className={cx('ml-auto flex shrink-0 items-center', compact ? 'gap-4' : 'gap-5')}>
       {leading}
-      {isVoteable && <EntityVoteButtons entityId={entityId} spaceId={spaceId} />}
+      {isVoteable && <EntityVoteButtons entityId={entityId} spaceId={spaceId} showInlineError={!compact} />}
       {editable && showCreate && (
         // The label keeps this icon-only link from announcing as its bare URL. `PrefetchLink`
         // matches the space header and includes hover prefetching.

@@ -27,6 +27,8 @@ import { InfoSmall } from '~/design-system/icons/info-small';
 import { ResponsePositionIcon } from '~/design-system/icons/response-position-icon';
 import { Tooltip } from '~/design-system/tooltip';
 
+import { ResponseButton } from '~/partials/entity-page/response-button';
+
 import { useLineClampOverflow } from './line-clamp-overflow';
 import { useDebateClaimResponse } from './use-debate-claim-response';
 import { useOpenDebaterProfile } from './use-open-debater-profile';
@@ -969,6 +971,7 @@ function TickerClaimHeader({
           label={copy.positiveAction}
           selected={control.viewerPosition === true}
           disabled={!control.canRespond}
+          pending={control.isResponseSubmitting}
           title={control.actionTitle(true) || copy.positiveAction}
           onClick={() => control.respond(true)}
           tone={tone}
@@ -979,6 +982,7 @@ function TickerClaimHeader({
           label={copy.negativeAction}
           selected={control.viewerPosition === false}
           disabled={!control.canRespond}
+          pending={control.isResponseSubmitting}
           title={control.actionTitle(false) || copy.negativeAction}
           onClick={() => control.respond(false)}
           tone={tone}
@@ -1010,6 +1014,7 @@ export function ClaimIconButton({
   label,
   selected,
   disabled,
+  pending,
   title,
   onClick,
   tone,
@@ -1020,6 +1025,7 @@ export function ClaimIconButton({
   label: string;
   selected: boolean;
   disabled: boolean;
+  pending: boolean;
   title: string;
   onClick?: () => void;
   tone: ClaimCardTone;
@@ -1027,65 +1033,74 @@ export function ClaimIconButton({
 }) {
   const glass = tone === 'glass';
   const column = layout === 'column';
+  const header = layout === 'header';
   return (
-    <button
-      type="button"
-      aria-label={label}
-      aria-pressed={selected}
-      title={title}
-      disabled={disabled}
-      onClick={
-        onClick &&
-        (event => {
-          event.stopPropagation();
-          onClick();
-        })
-      }
-      className={cx(
-        // 20px of target around a 12px glyph, but `-my-0.5` so the extra 4px grows into the card's
-        // padding instead of the header row. The frame's row is the avatar's 16px, and a button
-        // that sets the row taller pushes the whole card past the 97px the frame draws.
-        //
-        // 28px on a touch screen, by the same trick: a 20px target is comfortable under a cursor
-        // and small under a thumb. The negative margin absorbs all of the growth, so the row stays
-        // 16px and the card stays 97px on both.
-        'grid place-items-center transition-colors disabled:cursor-default',
-        column
-          ? // 6cqw, overlapping the column's gaps, and never under 24px.
-            '-my-[1cqw] size-[6cqw] min-h-6 min-w-6 rounded-full [&>svg]:size-[3.6cqw]'
-          : layout === 'header'
-            ? '-my-[1.5cqw] size-[6cqw] min-h-6 min-w-6 rounded-full [&>svg]:size-[3cqw]'
-            : '-my-0.5 size-5 rounded-sm md:-my-1.5 md:size-7',
-        // Recessive until it matters: dim at rest, brighter on hover, and unmistakable once the
-        // reader has actually taken a side.
-        selected
-          ? cx(
-              layout === 'header' ? 'hover:bg-white/15' : glass ? 'bg-white/15' : 'bg-divider',
-              position ? 'text-green' : layout === 'header' ? 'text-[#ff4a26]' : 'text-red-01'
-            )
-          : glass
-            ? layout === 'header'
-              ? 'text-white/65 hover:bg-white/15 hover:text-white disabled:hover:bg-transparent disabled:hover:text-white/65'
-              : 'text-white/55 hover:bg-white/15 hover:text-white disabled:hover:bg-transparent disabled:hover:text-white/55'
-            : 'text-grey-04 hover:bg-divider hover:text-text disabled:hover:bg-transparent disabled:hover:text-grey-04'
-      )}
-    >
-      {layout === 'header' ? (
-        <svg
-          viewBox="0 0 16 16"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.4"
-          strokeLinejoin="round"
-          aria-hidden
-          style={position ? undefined : { transform: 'scaleY(-1)' }}
-        >
-          <path d="M5 7.5V14H2.5V7.5H5Zm0 0 2.6-5c.9 0 1.6.8 1.4 1.7L8.6 6h4.1c.9 0 1.5.8 1.3 1.6l-1.2 5.2c-.2.7-.8 1.2-1.5 1.2H5" />
-        </svg>
-      ) : (
-        <ResponsePositionIcon responseKind={responseKind} position={position} selected={selected || column} />
-      )}
-    </button>
+    <span className="contents" onClick={event => event.stopPropagation()}>
+      <ResponseButton
+        selected={selected}
+        pending={pending}
+        disabled={disabled}
+        actionTitle={title}
+        ariaLabel={label}
+        onPress={() => onClick?.()}
+        className={cx(
+          // 20px of target around a 12px glyph, but `-my-0.5` so the extra 4px grows into the card's
+          // padding instead of the header row. The frame's row is the avatar's 16px, and a button
+          // that sets the row taller pushes the whole card past the 97px the frame draws.
+          //
+          // 28px on a touch screen, by the same trick: a 20px target is comfortable under a cursor
+          // and small under a thumb. The negative margin absorbs all of the growth, so the row stays
+          // 16px and the card stays 97px on both.
+          'grid place-items-center transition-colors disabled:cursor-default',
+          column
+            ? // 6cqw, overlapping the column's gaps, and never under 24px.
+              '-my-[1cqw] size-[6cqw] min-h-6 min-w-6 rounded-full [&>svg]:size-[3.6cqw]'
+            : header
+              ? '-my-[1.5cqw] size-[6cqw] min-h-6 min-w-6 rounded-full [&>svg]:size-[3cqw]'
+              : '-my-0.5 size-5 rounded-sm md:-my-1.5 md:size-7',
+          // Recessive until it matters: dim at rest, brighter on hover, and unmistakable once the
+          // reader has actually taken a side. The header thumbs carry no resting fill — their hover
+          // tint lives in `hoverClassName`.
+          selected
+            ? cx(
+                header ? undefined : glass ? 'bg-white/15' : 'bg-divider',
+                position ? 'text-green' : header ? 'text-[#ff4a26]' : 'text-red-01'
+              )
+            : glass
+              ? header
+                ? 'text-white/65'
+                : 'text-white/55'
+              : 'text-grey-04'
+        )}
+        // The hover step is `ResponseButton`'s to apply — only while the press is live — so the
+        // `disabled:hover:*` guards the raw button needed are gone.
+        hoverClassName={
+          selected
+            ? header
+              ? 'hover:bg-white/15'
+              : undefined
+            : glass
+              ? 'hover:bg-white/15 hover:text-white'
+              : 'hover:bg-divider hover:text-text'
+        }
+      >
+        {header ? (
+          <svg
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.4"
+            strokeLinejoin="round"
+            aria-hidden
+            style={position ? undefined : { transform: 'scaleY(-1)' }}
+          >
+            <path d="M5 7.5V14H2.5V7.5H5Zm0 0 2.6-5c.9 0 1.6.8 1.4 1.7L8.6 6h4.1c.9 0 1.5.8 1.3 1.6l-1.2 5.2c-.2.7-.8 1.2-1.5 1.2H5" />
+          </svg>
+        ) : (
+          <ResponsePositionIcon responseKind={responseKind} position={position} selected={selected || column} />
+        )}
+      </ResponseButton>
+    </span>
   );
 }
 

@@ -13,7 +13,7 @@ import {
   LOBBY_CLAIM_LISTS_MAX,
   dashlessId,
 } from '../api';
-import type { LobbyRoomNoun } from './lobby-purpose';
+import type { LobbyRoomNoun } from './room-capabilities';
 
 /** geo-chat's limit, in characters (code points, not UTF-16 units). */
 export const NAME_MAX_CHARS = 120;
