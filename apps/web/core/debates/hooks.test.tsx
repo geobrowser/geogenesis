@@ -362,14 +362,10 @@ describe('useDebateClaimsBySpaces', () => {
   });
 
   /**
-   * Reported: a viewer creates an account, and every pill in the hub is dead for the rest of the
-   * visit while the same claims in the main feed take positions perfectly well.
-   *
-   * geo-chat refuses viewer-relative reads until it has registered the account, so this lookup 401s
-   * — and with `retry: false` and nothing to trigger a refetch, the refusal was the last word. The
-   * card's `answersReady` is a "not yet" that is supposed to clear itself, and it had no way to.
+   * A refused session exchange is not polled per batch: `useGeoChatAccountRecovery` retries the
+   * exchange and invalidates `['debates']` once it succeeds, which refetches these rows.
    */
-  it('asks again while geo-chat has not registered the account yet', async () => {
+  it('recovers from a refusal when the account recovery invalidates the debates reads', async () => {
     vi.useFakeTimers();
     mocks.listDebateClaims
       .mockRejectedValueOnce(new GeoChatSessionError(new GeoChatRequestError('Unauthorized', null, 401)))
@@ -383,41 +379,14 @@ describe('useDebateClaimsBySpaces', () => {
     });
 
     await vi.waitFor(() => expect(result.current.isError).toBe(true));
+    // No polling of its own.
+    await vi.advanceTimersByTimeAsync(600_000);
+    expect(mocks.listDebateClaims).toHaveBeenCalledTimes(1);
 
-    await vi.advanceTimersByTimeAsync(10_000);
+    await queryClient.invalidateQueries({ queryKey: ['debates'] });
 
     await vi.waitFor(() => expect(result.current.isError).toBe(false));
     expect(result.current.claims).toHaveLength(1);
-    vi.useRealTimers();
-  });
-
-  /**
-   * And it stops. A wait that never ends is not a wait.
-   *
-   * Unbounded, an account that never registered left every failed batch asking every ten seconds
-   * for the life of the tab — once per space, each one a fresh session exchange. The matchmaking
-   * reads cap the same wait at about ninety seconds, and these are waiting for the same event, so a
-   * viewer should not find one half of the hub still trying while the other has given up.
-   */
-  it('gives up on the wait rather than polling for the life of the tab', async () => {
-    vi.useFakeTimers();
-    mocks.listDebateClaims.mockRejectedValue(
-      new GeoChatSessionError(new GeoChatRequestError('Unauthorized', null, 401))
-    );
-    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-
-    const { result } = renderHook(() => useDebateClaimsBySpaces([{ spaceId: 'space-1', claimIds: ['claim-1'] }]), {
-      wrapper: ({ children }: { children: ReactNode }) => (
-        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-      ),
-    });
-
-    await vi.waitFor(() => expect(result.current.isError).toBe(true));
-
-    // Well past the window: nine polls at ten seconds, and then nothing.
-    await vi.advanceTimersByTimeAsync(600_000);
-
-    expect(mocks.listDebateClaims.mock.calls.length).toBeLessThanOrEqual(10);
     vi.useRealTimers();
   });
 

@@ -18,6 +18,8 @@ type Props = {
   blocks?: AvailabilityBlock[];
   /** The read failed, so `blocks` will stay `undefined` and there is nothing left to wait for. */
   error?: boolean;
+  /** Replaces the failure copy, e.g. while geo-chat is still setting up the account. */
+  errorMessage?: string | null;
   onRetry?: () => void;
   onSave: (blocks: AvailabilityBlock[]) => void;
   /** Focus goes back here on close, since the opener is off in the panel behind the overlay. */
@@ -45,6 +47,7 @@ export function AvailabilityModal({
   onOpenChange,
   blocks,
   error,
+  errorMessage,
   onRetry,
   onSave,
   openerRef,
@@ -72,7 +75,7 @@ export function AvailabilityModal({
       {open && blocks === undefined ? (
         <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4">
           <Text as="p" variant="metadata" className="text-grey-04">
-            {error ? 'We couldn’t load your schedule.' : 'Loading your schedule…'}
+            {error ? (errorMessage ?? 'We couldn’t load your schedule.') : 'Loading your schedule…'}
           </Text>
           <div className="flex items-center gap-2">
             <button

@@ -1,5 +1,7 @@
 'use client';
 
+import { debatesErrorMessage } from '~/core/debates/account-setup-copy';
+
 import { Text } from '~/design-system/text';
 
 import { type DebateLobbyMember, GeoChatRequestError, dashlessId } from '../api';
@@ -124,7 +126,7 @@ function MemberRequestDebate({ lobbyId, member }: { lobbyId: string; member: Deb
       {error instanceof Error ? (
         <div role="alert">
           <Text as="p" variant="footnote" color="red-01">
-            {lobbyChallengeErrorMessage(error) ?? error.message}
+            {lobbyChallengeErrorMessage(error) ?? debatesErrorMessage(error)}
           </Text>
         </div>
       ) : null}
