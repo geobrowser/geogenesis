@@ -127,7 +127,7 @@ describe('code step', () => {
   it('recovers when the sending page cannot answer, as a suspended tab cannot', async () => {
     const first = await load();
     first.step.codeScreenShown('a@b.co');
-    // As if written by a page whose scripts are no longer running.
+    // Owned by a page with no listener, as a suspended tab has none.
     localStorage.setItem(
       'geo:auth-code-step:v1',
       JSON.stringify({ ...first.step.readPendingCode(), documentId: 'suspended' })
