@@ -12,7 +12,7 @@ import { usePrivy } from '~/core/wallet/auth-hooks';
 
 import { stepAtom } from '~/partials/onboarding/onboarding-atoms';
 
-import { refreshGeoChatSessionProfile } from './api';
+import { readGeoChatSessionProfile } from './api';
 import { debateGateway } from './debate-gateway';
 import {
   type GeoChatAccountStatus,
@@ -87,7 +87,7 @@ export function useGeoChatAccountRecovery() {
   React.useEffect(() => {
     if (!activeKey) return;
     if (status.kind === 'accepted' && status.profile !== 'attached') {
-      return refreshWhilePending(activeKey, status.retryAfterMs);
+      return pollWhilePending(activeKey, status.retryAfterMs);
     }
   }, [activeKey, status]);
 }
@@ -112,7 +112,7 @@ function scheduleVisible(delayMs: number, step: () => void, register: (cancel: C
   register(() => clearTimeout(timer));
 }
 
-function refreshWhilePending(accountKey: string, retryAfterMs: number | null): Cancel {
+function pollWhilePending(accountKey: string, retryAfterMs: number | null): Cancel {
   let cancelled = false;
   let cancelPending: Cancel = () => undefined;
   const register = (cancel: Cancel) => {
@@ -120,20 +120,21 @@ function refreshWhilePending(accountKey: string, retryAfterMs: number | null): C
   };
   const delay = Math.max(retryAfterMs ?? REFUSED_RETRY_MAX_MS, PROFILE_REFRESH_MIN_MS);
 
-  const attempt = () => {
+  const attempt = (delayMs: number) => {
     scheduleVisible(
-      delay,
+      delayMs,
       () => {
-        void refreshGeoChatSessionProfile(accountKey).then(() => {
+        void readGeoChatSessionProfile(accountKey).then(read => {
           const next = getGeoChatAccountStatus(accountKey);
           // Unchanged status does not re-run the effect, so keep going from here.
-          if (!cancelled && next.kind === 'accepted' && next.profile !== 'attached') attempt();
+          if (cancelled || next.kind !== 'accepted' || next.profile === 'attached') return;
+          attempt(read.state === null ? Math.max(delay, read.retryAfterMs ?? 0) : delay);
         });
       },
       register
     );
   };
-  attempt();
+  attempt(delay);
 
   return () => {
     cancelled = true;

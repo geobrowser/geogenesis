@@ -15,7 +15,7 @@ import { useGeoChatAccountRecovery } from './use-geo-chat-account-recovery';
 
 const mocks = vi.hoisted(() => ({
   getGeoChatSession: vi.fn(),
-  refreshGeoChatSessionProfile: vi.fn(),
+  readGeoChatSessionProfile: vi.fn(),
   capture: vi.fn(),
   devLog: vi.fn(),
   createdAt: new Date(0) as Date,
@@ -25,7 +25,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('./api', () => ({
   getGeoChatSession: mocks.getGeoChatSession,
-  refreshGeoChatSessionProfile: mocks.refreshGeoChatSessionProfile,
+  readGeoChatSessionProfile: mocks.readGeoChatSessionProfile,
 }));
 vi.mock('./hooks', () => ({
   useGeoChatAuth: () => ({ ready: true, authenticated: true, accountKey: 'user-a', getPrivyIdentityToken: vi.fn() }),
@@ -84,7 +84,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   resetGeoChatAccountStatusForTests();
   mocks.getGeoChatSession.mockReset().mockRejectedValue(new Error('refused'));
-  mocks.refreshGeoChatSessionProfile.mockReset().mockResolvedValue('pending');
+  mocks.readGeoChatSessionProfile.mockReset().mockResolvedValue({ state: 'pending' });
   mocks.capture.mockReset();
   mocks.devLog.mockReset();
   mocks.createdAt = new Date(0);
@@ -172,18 +172,31 @@ describe('useGeoChatAccountRecovery', () => {
 
     await act(() => vi.advanceTimersByTimeAsync(5_000));
     await act(() => vi.advanceTimersByTimeAsync(5_000));
-    expect(mocks.refreshGeoChatSessionProfile).toHaveBeenCalledTimes(2);
+    expect(mocks.readGeoChatSessionProfile).toHaveBeenCalledTimes(2);
 
-    mocks.refreshGeoChatSessionProfile.mockImplementation(async () => {
+    mocks.readGeoChatSessionProfile.mockImplementation(async () => {
       setGeoChatAccountStatus('user-a', accepted('attached'));
-      return 'attached';
+      return { state: 'attached' };
     });
     await act(() => vi.advanceTimersByTimeAsync(5_000));
 
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['debates'] });
     expect(outcomes()).toEqual(['session_accepted', 'profile_attached']);
     await act(() => vi.advanceTimersByTimeAsync(60_000));
-    expect(mocks.refreshGeoChatSessionProfile).toHaveBeenCalledTimes(3);
+    expect(mocks.readGeoChatSessionProfile).toHaveBeenCalledTimes(3);
+  });
+
+  it('waits out a rate limit before reading the profile again', async () => {
+    render();
+    mocks.readGeoChatSessionProfile.mockResolvedValue({ state: null, retryAfterMs: 20_000 });
+    act(() => setGeoChatAccountStatus('user-a', accepted('pending', 5_000)));
+
+    await act(() => vi.advanceTimersByTimeAsync(5_000));
+    expect(mocks.readGeoChatSessionProfile).toHaveBeenCalledTimes(1);
+    await act(() => vi.advanceTimersByTimeAsync(19_999));
+    expect(mocks.readGeoChatSessionProfile).toHaveBeenCalledTimes(1);
+    await act(() => vi.advanceTimersByTimeAsync(1));
+    expect(mocks.readGeoChatSessionProfile).toHaveBeenCalledTimes(2);
   });
 
   it('re-reads the personal space when the profile is missing, so setup can reopen', async () => {
@@ -194,7 +207,7 @@ describe('useGeoChatAccountRecovery', () => {
     expect(outcomes()).toEqual(['session_accepted', 'profile_missing']);
 
     await act(() => vi.advanceTimersByTimeAsync(60_000));
-    expect(mocks.refreshGeoChatSessionProfile).toHaveBeenCalledTimes(1);
+    expect(mocks.readGeoChatSessionProfile).toHaveBeenCalledTimes(1);
   });
 
   it('reports an immediate acceptance for a recent sign-up, with no refusal time', () => {

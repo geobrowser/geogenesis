@@ -2095,6 +2095,29 @@ export async function rejectDebateRematchRequest(
   });
 }
 
+/**
+ * geo-chat accounts by profile space, in request order; spaces with no account are left out. At
+ * most {@link DEBATE_PROFILE_LOOKUP_MAX} ids.
+ */
+export async function lookupDebateProfiles(
+  profileSpaceIds: string[],
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  signal?: AbortSignal
+) {
+  const response = await geoChatRequest<{ people: DebateParticipantSummary[] }>('/debate-profiles/lookup', {
+    method: 'POST',
+    body: { profile_space_ids: profileSpaceIds },
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    signal,
+  });
+  return response.people;
+}
+
+export const DEBATE_PROFILE_LOOKUP_MAX = 100;
+
 export async function getDebateProfile(
   profileSpaceId: string,
   getPrivyIdentityToken: GetPrivyIdentityToken,
@@ -2240,6 +2263,11 @@ export type DebateRoomView = {
   scheduled_end_at: string | null;
   /** The access list, as user ids. Empty for a viewer who is not admitted. */
   participants: string[];
+  /**
+   * Everyone the view mentions by user id, once each. Join by `sameId`: these ids are dashless, and
+   * other fields may be dashed. Absent from geo-chat before GEO-3553.
+   */
+  people?: DebateParticipantSummary[];
   /** Everyone currently inside, per connection rather than per user. Empty unless admitted. */
   occupants: string[];
   /** `null` once both sides are present, and for a viewer not in the room themselves. */
@@ -2372,6 +2400,10 @@ export type ScheduledDebateStatus =
 export type ScheduledDebateParticipant = {
   user_id: string;
   accepted: boolean | null;
+  /** Absent from geo-chat before GEO-3553. Dashless. */
+  profile_space_id?: string;
+  display_name?: string | null;
+  avatar_cid?: string | null;
 };
 
 export type ScheduledDebateRequest = {
@@ -2470,6 +2502,10 @@ export type AdminScheduledDebater = {
   /** Their IANA zone. */
   timezone: string;
   block_count: number;
+  /** Absent from geo-chat before GEO-3553. Dashless. */
+  profile_space_id?: string;
+  display_name?: string | null;
+  avatar_cid?: string | null;
 };
 
 export type AdminDebateSchedulesResponse = {
@@ -4407,26 +4443,68 @@ export async function getGeoChatSession(
   return request;
 }
 
-/**
- * Refreshes the stored session ahead of expiry so geo-chat can attach a pending profile. Joins an
- * exchange in flight; null when there is nothing to refresh or it failed (the stored session stays).
- */
-export async function refreshGeoChatSessionProfile(accountKey: string): Promise<GeoChatProfileState | null> {
-  const inFlight = geoChatSessionRequests.get(accountKey);
-  if (inFlight) return inFlight.then(session => session.profile?.state ?? 'attached').catch(() => null);
+export type GeoChatProfileRead =
+  | { state: GeoChatProfileState }
+  /** No usable session, or the read failed. `retryAfterMs` is geo-chat's, when it rate limited. */
+  | { state: null; retryAfterMs: number | null };
 
-  const stored = loadSession(accountKey);
-  if (!stored?.refresh_token) return null;
-  const issuedForEpoch = geoChatSessionEpoch;
-  try {
-    const refreshed = await refreshGeoChatSession(stored.refresh_token);
-    if (issuedForEpoch !== geoChatSessionEpoch) return null;
-    saveSession(refreshed, accountKey);
-    setGeoChatAccountStatus(accountKey, acceptedStatus(refreshed.profile));
-    return refreshed.profile?.state ?? 'attached';
-  } catch {
-    return null;
+/**
+ * The profile state from `GET /auth/profile`, which never rotates the session, so the gateway
+ * socket stays up. A rejected access token is refreshed once and the read retried.
+ */
+export async function readGeoChatSessionProfile(accountKey: string): Promise<GeoChatProfileRead> {
+  const inFlight = geoChatSessionRequests.get(accountKey);
+  if (inFlight) {
+    return inFlight.then(
+      session => ({ state: session.profile?.state ?? 'attached' }),
+      () => ({ state: null, retryAfterMs: null })
+    );
   }
+
+  const issuedForEpoch = geoChatSessionEpoch;
+  const read = async (session: GeoChatSession) => {
+    const response = await fetchGeoChatSession(`${getGeoChatApiBaseUrl()}/auth/profile`, {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    });
+    if (!response.ok) throw await requestError(response);
+    return (await response.json()) as { profile: GeoChatSessionProfile | null };
+  };
+  const record = (session: GeoChatSession, profile: GeoChatSessionProfile | null): GeoChatProfileRead => {
+    if (issuedForEpoch !== geoChatSessionEpoch) return { state: null, retryAfterMs: null };
+    saveSession({ ...session, profile }, accountKey);
+    setGeoChatAccountStatus(accountKey, acceptedStatus(profile));
+    return { state: profile?.state ?? 'attached' };
+  };
+
+  let session = loadSession(accountKey);
+  if (!session) return { state: null, retryAfterMs: null };
+  try {
+    return record(session, (await read(session)).profile);
+  } catch (error) {
+    const rejected =
+      error instanceof GeoChatRequestError &&
+      error.status === 401 &&
+      (error.code === 'invalid_access_token' || error.code === 'missing_authorization');
+    if (!rejected || !session.refresh_token) {
+      const retryAfterMs = error instanceof GeoChatRequestError ? error.retryAfterMs : null;
+      return { state: null, retryAfterMs };
+    }
+  }
+  try {
+    session = await refreshGeoChatSession(session.refresh_token);
+    if (issuedForEpoch !== geoChatSessionEpoch) return { state: null, retryAfterMs: null };
+    saveSession(session, accountKey);
+    return record(session, (await read(session)).profile);
+  } catch (error) {
+    return { state: null, retryAfterMs: error instanceof GeoChatRequestError ? error.retryAfterMs : null };
+  }
+}
+
+/** The stored session's profile for this account: the viewer's own name and space. */
+export function getStoredGeoChatProfile(accountKey: string | null): GeoChatSessionProfile | null {
+  if (!accountKey) return null;
+  return loadSession(accountKey)?.profile ?? null;
 }
 
 /** The access token every tab and request currently shares, if one is stored. */
