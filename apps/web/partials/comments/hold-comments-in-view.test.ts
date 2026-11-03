@@ -75,4 +75,52 @@ describe('holdCommentsInView on the page', () => {
 
     stop();
   });
+
+  // On the page the section is there at once; a slow phone can take longer than one hold to load
+  // what sits above it.
+  it('keeps following while the content above keeps arriving, past the first hold', async () => {
+    offset = 600;
+    document.body.append(anchor);
+    const stop = holdCommentsInView(page());
+
+    vi.advanceTimersByTime(1_500);
+    offset = 800;
+    document.body.prepend(document.createElement('div'));
+    await flushObservers();
+    expect(page().scrollTop).toBe(800);
+
+    vi.advanceTimersByTime(1_500);
+    offset = 1_000;
+    document.body.prepend(document.createElement('div'));
+    await flushObservers();
+    expect(page().scrollTop).toBe(1_000);
+
+    stop();
+  });
+
+  it('stops following after its overall cap, however long the page keeps moving', async () => {
+    offset = 600;
+    document.body.append(anchor);
+    holdCommentsInView(page());
+
+    for (let i = 1; i <= 6; i++) {
+      vi.advanceTimersByTime(1_900);
+      offset = 600 + i * 100;
+      document.body.prepend(document.createElement('div'));
+      await flushObservers();
+    }
+    // 11.4 s in: the last growth is past the 10 s cap.
+    expect(page().scrollTop).toBe(1_100);
+  });
+
+  it('lands the section clear of what is pinned over the page, by its scroll margin', () => {
+    offset = 600;
+    anchor.style.scrollMarginTop = '52px';
+    document.body.append(anchor);
+    const stop = holdCommentsInView(page());
+
+    expect(page().scrollTop).toBe(548);
+
+    stop();
+  });
 });

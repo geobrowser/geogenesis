@@ -482,9 +482,11 @@ export function CommentSection({
           publish here, because the heading's number is an aggregate none of them can otherwise move. */}
       <ActivityPostsProvider onAdjust={adjustActivityPosts}>
         <CommentBranchHighlightProvider>
+          {/* `scroll-mt-[52px]`: a landing on the page clears the navbar (44px) and the entity's sticky
+              header (48px), less the 40px of top padding the heading already sits below. */}
           <div
             id={ENTITY_COMMENTS_ANCHOR_ID}
-            className={cx('flex w-full min-w-0 flex-col', variant === 'page' && 'pt-10')}
+            className={cx('flex w-full min-w-0 flex-col', variant === 'page' && 'scroll-mt-[52px] pt-10')}
           >
             {!isPanel && (
               <>

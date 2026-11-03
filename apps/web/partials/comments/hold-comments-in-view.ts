@@ -10,10 +10,13 @@ import { ENTITY_COMMENTS_ANCHOR_ID } from './entity-comments-anchor';
  */
 const ANCHOR_SELECTOR = `[id="${ENTITY_COMMENTS_ANCHOR_ID}"]`;
 
-/** How long to wait for the section to render at all: the panel first loads the entity, then the body. */
+/**
+ * The most it ever runs: how long to wait for the section to render at all (the panel first loads the
+ * entity, then the body), and the cap on following it after.
+ */
 const WAIT_FOR_SECTION_MS = 10_000;
 
-/** How long to keep the section in place once it is there, while the content above it fills in. */
+/** How long to keep the section in place after it last moved, while the content above it fills in. */
 const HOLD_POSITION_MS = 2_000;
 
 /**
@@ -28,21 +31,27 @@ const HOLD_POSITION_MS = 2_000;
  */
 export function holdCommentsInView(scroller: HTMLElement): () => void {
   // The page's scroller is the viewport: its rect moves with the scroll, where an element's does not.
+  // Its top is also under the navbar and the entity's sticky header, which the anchor clears with its
+  // `scroll-margin-top`, as `scrollToSection` does for the hub. A panel has nothing pinned over it.
   const isPage = scroller === document.scrollingElement;
-  let found = false;
   let stopped = false;
-  let timer: ReturnType<typeof setTimeout> | undefined;
+  let holdTimer: ReturnType<typeof setTimeout> | undefined;
+  const capTimer = setTimeout(stop, WAIT_FOR_SECTION_MS);
 
   const align = () => {
     const anchor = scroller.querySelector<HTMLElement>(ANCHOR_SELECTOR);
     if (!anchor) return;
     const scrollerTop = isPage ? 0 : scroller.getBoundingClientRect().top;
-    const top = anchor.getBoundingClientRect().top - scrollerTop + scroller.scrollTop;
-    if (Math.abs(scroller.scrollTop - top) > 1) scroller.scrollTop = top;
-    if (!found) {
-      found = true;
-      clearTimeout(timer);
-      timer = setTimeout(stop, HOLD_POSITION_MS);
+    const margin = isPage ? Number.parseFloat(getComputedStyle(anchor).scrollMarginTop) || 0 : 0;
+    const top = anchor.getBoundingClientRect().top - scrollerTop + scroller.scrollTop - margin;
+    const moved = Math.abs(scroller.scrollTop - top) > 1;
+    if (moved) scroller.scrollTop = top;
+    // Held for a while after the section last moved, not after it first appeared: on the page it is
+    // there at once, and what loads above it can take longer than one hold. The overall cap below
+    // still ends it.
+    if (moved || holdTimer === undefined) {
+      clearTimeout(holdTimer);
+      holdTimer = setTimeout(stop, HOLD_POSITION_MS);
     }
   };
 
@@ -66,7 +75,8 @@ export function holdCommentsInView(scroller: HTMLElement): () => void {
   function stop() {
     if (stopped) return;
     stopped = true;
-    clearTimeout(timer);
+    clearTimeout(holdTimer);
+    clearTimeout(capTimer);
     observer?.disconnect();
     resizeObserver?.disconnect();
     for (const type of userEvents) scroller.removeEventListener(type, stop);
@@ -75,7 +85,6 @@ export function holdCommentsInView(scroller: HTMLElement): () => void {
   for (const type of userEvents) scroller.addEventListener(type, stop, { passive: true });
   observer?.observe(scroller, { childList: true, subtree: true });
   observeChildren();
-  timer = setTimeout(stop, WAIT_FOR_SECTION_MS);
   align();
 
   return stop;
