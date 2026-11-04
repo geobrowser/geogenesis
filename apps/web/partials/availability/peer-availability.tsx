@@ -215,12 +215,18 @@ export function PeerAvailabilityView({
   const minutes = booking?.minutes ?? SLOT_MINUTES;
   const days = React.useMemo(() => {
     const cutoff = clock();
-    const upcoming = peerScheduleDays(schedule, now).map(day => ({
+    // Fitted before the past is dropped, so the starts it adds inside the moved debate are dropped too.
+    const fitted = fitLength(
+      peerScheduleDays(schedule, now),
+      schedule,
+      minutes,
+      currentStart ? { start: currentStart, minutes } : null
+    );
+    const upcoming = fitted.map(day => ({
       ...day,
       slots: day.slots.filter(slot => Date.parse(slot.start) > cutoff),
     }));
-    const fitted = fitLength(upcoming, minutes, currentStart ? { start: currentStart, minutes } : null);
-    return markCurrent(fitted, schedule, currentStart);
+    return markCurrent(upcoming, schedule, currentStart);
   }, [schedule, now, clock, currentStart, minutes]);
   // The times on offer: everything drawn but the one being moved.
   const pickable = days.flatMap(day => day.slots).filter(slot => !slot.current);

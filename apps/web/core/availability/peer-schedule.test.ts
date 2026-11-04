@@ -480,9 +480,12 @@ describe('fitLength (GEO-3544)', () => {
   const now = new Date('2026-09-21T15:00:00Z');
   // New York, so 13:00Z on the 22nd is 9am there.
   const fitted = (spans: ReturnType<typeof their>, minutes: number, own?: { start: string; minutes: number }) =>
-    fitLength(peerScheduleDays(toPeerSchedule(response({ their_slots: spans })), now), minutes, own).flatMap(day =>
-      day.slots.map(slot => `${slot.label}${slot.viewerIsFree ? ' mutual' : ''}`)
-    );
+    fitLength(
+      peerScheduleDays(toPeerSchedule(response({ their_slots: spans })), now),
+      toPeerSchedule(response({ their_slots: spans })),
+      minutes,
+      own
+    ).flatMap(day => day.slots.map(slot => `${slot.label}${slot.viewerIsFree ? ' mutual' : ''}`));
 
   it('offers only the starts a whole hour fits from, and leaves a half-hour week alone', () => {
     const spans = their(
@@ -510,7 +513,17 @@ describe('fitLength (GEO-3544)', () => {
       ['2026-09-22T14:30:00Z', '2026-09-22T15:00:00Z']
     );
     expect(fitted(spans, 60)).toEqual([]);
-    expect(fitted(spans, 60, { start: '2026-09-22T13:30:00Z', minutes: 60 })).toEqual(['9am mutual']);
+    // Earlier to 9, or later to 10, which geo-chat leaves out as held and so is added as a start.
+    expect(fitted(spans, 60, { start: '2026-09-22T13:30:00Z', minutes: 60 })).toEqual(['9am mutual', '10am mutual']);
+  });
+
+  it('judges a move inside the held hour as mutual on the half-hours outside it', () => {
+    const spans = their(
+      ['2026-09-22T13:00:00Z', '2026-09-22T13:30:00Z'],
+      ['2026-09-22T14:30:00Z', '2026-09-22T15:00:00Z', false]
+    );
+    // 10:30 is theirs alone, so a move to 10 is not mutual; the held 10 says nothing either way.
+    expect(fitted(spans, 60, { start: '2026-09-22T13:30:00Z', minutes: 60 })).toEqual(['9am mutual', '10am']);
   });
 });
 
