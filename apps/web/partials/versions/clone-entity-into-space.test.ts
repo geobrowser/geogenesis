@@ -191,6 +191,29 @@ describe('cloneEntityIntoSpace — a subtree the store has not taken in', () => 
     expect(written.relations.map(r => r.toEntity.id)).toContain('block');
   });
 
+  it("copies a data block's view and shown columns when its relation entity was only loaded", () => {
+    const loaded = [
+      ...unopenedTab(),
+      {
+        id: 'tab-holds-block',
+        values: [],
+        relations: [
+          relation({ id: 'view', from: 'tab-holds-block', to: 'table-view', typeId: SystemIds.VIEW_PROPERTY }),
+          relation({ id: 'column', from: 'tab-holds-block', to: 'name-column', typeId: SystemIds.SHOWN_COLUMNS }),
+        ],
+      },
+    ];
+
+    const written = run(loaded).relations;
+    const holdsBlock = written.find(r => r.type.id === SystemIds.BLOCKS);
+    const config = written.filter(r => r.fromEntity.id === holdsBlock?.entityId);
+
+    expect(config.map(r => [r.type.id, r.toEntity.id, r.spaceId])).toEqual([
+      [SystemIds.VIEW_PROPERTY, 'table-view', TARGET],
+      [SystemIds.SHOWN_COLUMNS, 'name-column', TARGET],
+    ]);
+  });
+
   it('finds the media under a tab that was only loaded', () => {
     const loaded = unopenedTab();
     loaded[1]!.relations = [relation({ id: 'cover', from: 'block', to: 'an-image', renderableType: 'IMAGE' })];

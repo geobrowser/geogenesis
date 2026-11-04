@@ -79,7 +79,7 @@ describe('loadMoveSubtree', () => {
     const loaded = await run();
 
     expect(loaded.map(e => e.id).sort()).toEqual([ENTITY, 'block', 'tab'].sort());
-    expect(mocks.requests).toEqual([[ENTITY, 'tab'].sort(), ['block']]);
+    expect(mocks.requests).toEqual([[ENTITY, `${ENTITY}->tab`, 'tab'].sort(), ['block', 'tab->block'].sort()]);
   });
 
   it('loads the subtree once when the store already holds all of it', async () => {
@@ -87,7 +87,7 @@ describe('loadMoveSubtree', () => {
     mocks.remote = { [ENTITY]: entity(ENTITY, [contains(ENTITY, 'block')]), block: entity('block') };
 
     expect((await run()).map(e => e.id).sort()).toEqual([ENTITY, 'block'].sort());
-    expect(mocks.requests).toEqual([[ENTITY, 'block'].sort()]);
+    expect(mocks.requests).toEqual([[ENTITY, `${ENTITY}->block`, 'block'].sort()]);
   });
 
   it('does not follow containment stored in another space', async () => {
@@ -106,13 +106,32 @@ describe('loadMoveSubtree', () => {
 
     await run();
 
-    expect(mocks.requests.flat().sort()).toEqual([ENTITY, 'block'].sort());
+    expect(mocks.requests.flat().sort()).toEqual([ENTITY, 'block', `${ENTITY}->block`, `block->${ENTITY}`].sort());
   });
 
   it('rejects when a level fails to load, so the move can stop before writing', async () => {
     mocks.fail = true;
 
     await expect(run()).rejects.toThrow();
+  });
+
+  it("loads a data block's containment relation entity, which holds its view and shown columns", async () => {
+    const config = [
+      contains('tab->block', 'table-view', SystemIds.VIEW_PROPERTY),
+      contains('tab->block', 'name-column', SystemIds.SHOWN_COLUMNS),
+    ];
+    mocks.relations = [contains(ENTITY, 'tab', SystemIds.TABS_PROPERTY)];
+    mocks.remote = {
+      [ENTITY]: entity(ENTITY, [contains(ENTITY, 'tab', SystemIds.TABS_PROPERTY)]),
+      tab: entity('tab', [contains('tab', 'block')]),
+      block: entity('block'),
+      'tab->block': entity('tab->block', config),
+    };
+
+    const loaded = await run();
+
+    expect(mocks.requests[1]).toEqual(['block', 'tab->block']);
+    expect(loaded.find(e => e.id === 'tab->block')?.relations).toEqual(config);
   });
 
   it('reloads a tab with more relations than a batch read returns, and keeps the blocks past the cap', async () => {

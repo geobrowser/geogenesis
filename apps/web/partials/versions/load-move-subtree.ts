@@ -26,8 +26,8 @@ export async function loadMoveSubtree({
   const requested = new Set<string>();
 
   while (true) {
-    const { entityIds } = collectSubtree(entityId, sourceSpaceId, loaded);
-    const next = [...entityIds].filter(id => !requested.has(id));
+    const { relationFromIds } = collectSubtree(entityId, sourceSpaceId, loaded);
+    const next = [...relationFromIds].filter(id => !requested.has(id));
     if (next.length === 0) return loaded;
 
     next.forEach(id => requested.add(id));
