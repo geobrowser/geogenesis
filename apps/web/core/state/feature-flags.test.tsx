@@ -108,7 +108,7 @@ describe('feature flags', () => {
     });
   });
 
-  // A browser that toggled any flag used to store every flag, which froze each default it held.
+  // A stored complete object holds every default; only its overrides may survive a write.
   it('rewrites an older, complete object to its overrides, so later defaults reach it', () => {
     const complete = { ...defaultFeatureFlags, ourSignInBox: false, debateDebugging: true };
     expect(setFeatureFlagValue(complete, 'googleSignIn', true)).toEqual({ debateDebugging: true, googleSignIn: true });
