@@ -181,7 +181,7 @@ so `auth-attempt.ts` can read it without an import cycle; it is still the one sw
 | Send failed | `auth_step: code_send_failed` + `auth_error` **(new value)** |
 | Code entered | `auth_step: code_submitted`, `code_age_ms` = time from sent to entered **(new value)** |
 | Code rejected | `auth_step: code_rejected` + `code_rejections`, `auth_error` |
-| Code expired | `auth_step: code_expired` |
+| Code expired | `auth_step: code_expired` + `auth_error`. Inferred: a rejection once the code is `CODE_LIFETIME_MS` (10 min) old, since Privy returns `invalid_credentials` for wrong and expired codes alike |
 | Too many tries | `auth_step: code_rejected` with `attempts_exhausted: true` |
 | Resent | `auth_step: code_resent` + `code_resends` **(new value)** |
 | Tab hidden at code step / back | `left_code_screen` / `returned_to_code_screen` (existing) |
