@@ -156,6 +156,37 @@ describe('TodaysClaimsCallout', () => {
     expect(screen.getAllByTestId('claim-card')).toHaveLength(1);
   });
 
+  it('holds Skip until the next claim is on screen, so a second tap cannot skip one never seen', async () => {
+    const { rerender } = render(<TodaysClaimsCallout callout={callout()} onFindDebate={vi.fn()} />);
+    expect(screen.getByRole('button', { name: 'Skip' })).toBeEnabled();
+
+    const next = callout({
+      step: { current: CLAIMS[1]!, currentIndex: 1, done: [false, false, false], allAnswered: false },
+    });
+    rerender(<TodaysClaimsCallout callout={next} onFindDebate={vi.fn()} />);
+
+    // Claim A is still leaving: B isn't up yet.
+    expect(screen.getByTestId('claim-card')).toHaveTextContent('Claim A');
+    fireEvent.click(screen.getByRole('button', { name: 'Skip' }));
+    expect(next.skip).not.toHaveBeenCalled();
+
+    await waitFor(() => expect(screen.getByTestId('claim-card')).toHaveTextContent('Claim B'));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Skip' })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: 'Skip' }));
+    expect(next.skip).toHaveBeenCalledWith('b');
+  });
+
+  it('lets the last card leave once the set is done, and offers Matches', async () => {
+    const last = { current: CLAIMS[2]!, currentIndex: 2, done: [true, true, false], allAnswered: false };
+    const { rerender } = render(<TodaysClaimsCallout callout={callout({ step: last })} onFindDebate={vi.fn()} />);
+
+    const done = callout({ step: { current: null, currentIndex: 3, done: [true, true, true], allAnswered: true } });
+    rerender(<TodaysClaimsCallout callout={done} onFindDebate={vi.fn()} />);
+
+    expect(screen.getByRole('button', { name: 'Find a debate' })).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByTestId('claim-card')).not.toBeInTheDocument());
+  });
+
   // Review: a write still on its way to the bundler can fail, and the card has to be there to say so.
   it('stays on the claim while the side is still being submitted, and after the write fails', () => {
     vi.useFakeTimers();

@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { type Transition, motion } from 'framer-motion';
+import { type Transition, motion, useReducedMotionConfig } from 'framer-motion';
 import useMeasure from 'react-use-measure';
 
 type ResizableContainerProps = {
@@ -21,11 +21,14 @@ export function ResizableContainer({
   ...rest
 }: ResizableContainerProps) {
   const [ref, { height }] = useMeasure();
+  // A surrounding `MotionConfig reducedMotion="user"` only drops transform and layout motion, and a
+  // height tween is neither, so it's honoured here. Outside one this is always false.
+  const reduceMotion = useReducedMotionConfig();
 
   return (
     <motion.div
       animate={{ height: growOnMount ? height : height || 'auto' }}
-      transition={transition ?? { duration }}
+      transition={reduceMotion ? { duration: 0 } : (transition ?? { duration })}
       className="overflow-hidden"
     >
       <div ref={ref} {...rest} />

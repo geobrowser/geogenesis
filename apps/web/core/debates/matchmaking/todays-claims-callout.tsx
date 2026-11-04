@@ -44,6 +44,10 @@ type Props = {
  */
 export function TodaysClaimsCallout({ callout, onFindDebate }: Props) {
   const { step, claims } = callout;
+  // The claim whose card is on screen. During the step from one claim to the next the answered card
+  // is still leaving and the next isn't up yet, so Skip waits for it: a second tap would otherwise
+  // skip a claim the viewer never saw, and a skipped claim doesn't come back that day.
+  const [arrivedClaimId, setArrivedClaimId] = React.useState<string | null>(null);
   if (!step) return null;
 
   const current = step.current;
@@ -78,6 +82,7 @@ export function TodaysClaimsCallout({ callout, onFindDebate }: Props) {
   ) : (
     <button
       type="button"
+      disabled={arrivedClaimId !== current.claimId}
       onClick={() => callout.skip(current.claimId)}
       {...hubAnalyticsAttributes('Todays claims callout skip')}
       className="text-metadata text-grey-04 transition-colors hover:text-text"
@@ -97,7 +102,13 @@ export function TodaysClaimsCallout({ callout, onFindDebate }: Props) {
     </button>
   );
   const card = current ? (
-    <CalloutCard key={current.claimId} callout={callout} claim={current} position={step.currentIndex + 1} />
+    <CalloutCard
+      key={current.claimId}
+      callout={callout}
+      claim={current}
+      position={step.currentIndex + 1}
+      onArrive={setArrivedClaimId}
+    />
   ) : null;
 
   return (
@@ -132,8 +143,22 @@ export function TodaysClaimsCallout({ callout, onFindDebate }: Props) {
  * told then), which moves the card on before the bundler does; that optimism is wanted (Preston,
  * 30 Oct), so a write that fails after that doesn't keep this card up.
  */
-function CalloutCard({ callout, claim, position }: { callout: TodaysCallout; claim: CalloutClaim; position: number }) {
+function CalloutCard({
+  callout,
+  claim,
+  position,
+  onArrive,
+}: {
+  callout: TodaysCallout;
+  claim: CalloutClaim;
+  position: number;
+  /** Told once the card is up: `HubSwap` mounts it only after the previous card has left. */
+  onArrive: (claimId: string) => void;
+}) {
   const { markAnswered, skip } = callout;
+
+  React.useEffect(() => onArrive(claim.claimId), [claim.claimId, onArrive]);
+
   const entity = callout.entityOf(claim.claimId);
   const target = {
     entityId: claim.claimId,
