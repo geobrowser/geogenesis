@@ -3,7 +3,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 import { useRouter } from 'next/navigation';
 
@@ -53,6 +53,9 @@ export const MoveEntityToSpace = ({
   const memberSpaces = useSpacesWhereMember(personalSpaceId ?? undefined);
 
   const [query, setQuery] = useState<string>('');
+
+  const movingRef = useRef(false);
+  const [movingToSpaceId, setMovingToSpaceId] = useState<string | null>(null);
 
   const allSpaces = React.useMemo(() => {
     const others = memberSpaces.filter(s => s.id !== personalSpace?.id && s.id !== sourceSpaceId);
@@ -131,11 +134,34 @@ export const MoveEntityToSpace = ({
     return true;
   };
 
+  const selectSpace = async (targetSpaceId: string) => {
+    if (movingRef.current) return;
+    movingRef.current = true;
+    setMovingToSpaceId(targetSpaceId);
+
+    let moved = false;
+    try {
+      moved = await moveEntityToSpace(targetSpaceId);
+    } finally {
+      // A failed move can be tried again. A finished one stays locked: the menu closes behind it.
+      if (!moved) {
+        movingRef.current = false;
+        setMovingToSpaceId(null);
+      }
+    }
+
+    if (!moved) return;
+    router.push(NavUtils.toEntity(targetSpaceId, entityId, true, entityName));
+    onDone?.();
+  };
+
+  const isMoving = movingToSpaceId !== null;
+
   return (
     <div className="bg-white">
       <div className="border-grey flex items-center justify-between border-b border-grey-02">
         <div className="flex-1 p-2">
-          <button onClick={() => setIsMovingEntity(false)}>
+          <button onClick={() => setIsMovingEntity(false)} disabled={isMoving}>
             <ArrowLeft />
           </button>
         </div>
@@ -150,12 +176,9 @@ export const MoveEntityToSpace = ({
           <MoveSpaceItem
             key={space.id}
             space={space}
-            onSelect={async () => {
-              const moved = await moveEntityToSpace(space.id);
-              if (!moved) return;
-              router.push(NavUtils.toEntity(space.id, entityId, true, entityName));
-              onDone?.();
-            }}
+            disabled={isMoving}
+            isMovingHere={movingToSpaceId === space.id}
+            onSelect={() => selectSpace(space.id)}
           />
         ))}
       </div>
@@ -165,21 +188,26 @@ export const MoveEntityToSpace = ({
 
 type MoveSpaceItemProps = {
   space: ReturnType<typeof useSpacesWhereMember>[number];
+  disabled: boolean;
+  isMovingHere: boolean;
   onSelect: () => void;
 };
 
-const MoveSpaceItem = ({ space, onSelect }: MoveSpaceItemProps) => {
+const MoveSpaceItem = ({ space, disabled, isMovingHere, onSelect }: MoveSpaceItemProps) => {
   return (
     <button
       onClick={() => {
         onSelect();
       }}
-      className="flex cursor-pointer items-center gap-2 rounded p-1 transition-colors duration-150 ease-in-out hover:bg-grey-01"
+      disabled={disabled}
+      aria-busy={isMovingHere || undefined}
+      className="flex cursor-pointer items-center gap-2 rounded p-1 transition-colors duration-150 ease-in-out hover:bg-grey-01 disabled:cursor-default disabled:hover:bg-transparent"
     >
       <div className="relative size-4 rounded bg-grey-01">
         <GeoImage value={space.entity.image} fill style={{ objectFit: 'cover' }} alt="" />
       </div>
       <div className="text-button text-text">{space.entity.name}</div>
+      {isMovingHere && <div className="text-button text-grey-04">Moving…</div>}
     </button>
   );
 };
