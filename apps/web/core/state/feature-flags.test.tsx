@@ -34,6 +34,7 @@ describe('feature flags', () => {
     expect(defaultFeatureFlags.microsoftCalendar).toBe(false);
     expect(defaultFeatureFlags.bountiesTab).toBe(true);
     expect(defaultFeatureFlags.signInRecoveryAutoOpen).toBe(true);
+    expect(defaultFeatureFlags.ourSignInBox).toBe(false);
     expect(normalizeFeatureFlags(null)).toEqual({
       playbackDiagnostics: false,
       debugDebatesPage: false,
@@ -49,6 +50,7 @@ describe('feature flags', () => {
       microsoftCalendar: false,
       bountiesTab: true,
       signInRecoveryAutoOpen: true,
+      ourSignInBox: false,
     });
   });
 
@@ -81,40 +83,36 @@ describe('feature flags', () => {
       microsoftCalendar: false,
       bountiesTab: true,
       signInRecoveryAutoOpen: true,
+      ourSignInBox: false,
     });
   });
 
-  it('persists toggled feature flag values', () => {
+  it('persists only the flags set away from their default', () => {
     const store = createStore();
 
     store.set(featureFlagsAtom, currentFlags => {
-      const debugPageFlags = setFeatureFlagValue(normalizeFeatureFlags(currentFlags), 'debugDebatesPage', true);
+      const debugPageFlags = setFeatureFlagValue(currentFlags, 'debugDebatesPage', true);
       const debuggingFlags = setFeatureFlagValue(debugPageFlags, 'debateDebugging', true);
-      return setFeatureFlagValue(debuggingFlags, 'debateFormatSelector', true);
+      return setFeatureFlagValue(debuggingFlags, 'bountiesTab', false);
     });
 
-    expect(store.get(featureFlagsAtom).debugDebatesPage).toBe(true);
-    expect(store.get(featureFlagsAtom).debateDebugging).toBe(true);
-    expect(store.get(featureFlagsAtom).debateFormatSelector).toBe(true);
-    // Parsed, not string-compared: what is stored is the values, and the key order they happen to
-    // serialize in is incidental — it follows the definition list, and pinning it here would fail
-    // on a reordering that changes nothing a reader could notice.
-    expect(JSON.parse(window.localStorage.getItem(featureFlagsStorageKey) ?? 'null')).toEqual({
-      playbackDiagnostics: false,
+    expect(normalizeFeatureFlags(store.get(featureFlagsAtom))).toMatchObject({
       debugDebatesPage: true,
       debateDebugging: true,
-      debateFormatSelector: true,
-      exploreSidePanel: false,
-      forYouFeed: false,
-      lobbyHosting: false,
-      spaceCalls: false,
-      debateDeviceSwitchRecording: false,
-      googleSignIn: false,
-      googleCalendar: false,
-      microsoftCalendar: false,
-      bountiesTab: true,
-      signInRecoveryAutoOpen: true,
+      bountiesTab: false,
     });
+    expect(JSON.parse(window.localStorage.getItem(featureFlagsStorageKey) ?? 'null')).toEqual({
+      debugDebatesPage: true,
+      debateDebugging: true,
+      bountiesTab: false,
+    });
+  });
+
+  // A stored complete object holds every default; only its overrides may survive a write.
+  it('rewrites an older, complete object to its overrides, so later defaults reach it', () => {
+    const complete = { ...defaultFeatureFlags, ourSignInBox: false, debateDebugging: true };
+    expect(setFeatureFlagValue(complete, 'googleSignIn', true)).toEqual({ debateDebugging: true, googleSignIn: true });
+    expect(setFeatureFlagValue({ googleSignIn: true }, 'googleSignIn', false)).toEqual({});
   });
 });
 

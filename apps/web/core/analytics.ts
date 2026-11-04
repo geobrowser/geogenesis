@@ -141,7 +141,7 @@ declare global {
 }
 
 const appName = 'genesis';
-const analyticsScriptSrc = '/geo-analytics-23f2abe8ea1d.js';
+const analyticsScriptSrc = '/geo-analytics-ecc4321fdd27.js';
 
 /**
  * Amplitude autocapture, as `true` would enable it, minus "[Amplitude] Viewport Content Updated".
@@ -232,6 +232,17 @@ export function initAnalytics() {
   deferUntilIdle(loadAnalyticsScript);
 }
 
+/** Starts the deferred runtime load now, if it is still waiting. */
+let startDeferredLoad: (() => void) | null = null;
+
+/**
+ * Loads the runtime now rather than at idle: a flow whose events must survive the visitor leaving
+ * soon after, such as the sign-in box. Call it after that flow's first paint.
+ */
+export function startAnalyticsSoon() {
+  startDeferredLoad?.();
+}
+
 /** The longest the runtime waits for an idle moment before loading anyway. */
 export const ANALYTICS_IDLE_TIMEOUT_MS = 4000;
 
@@ -248,9 +259,11 @@ function deferUntilIdle(task: () => void) {
   const run = () => {
     if (done) return;
     done = true;
+    startDeferredLoad = null;
     for (const cleanup of cleanups) cleanup();
     task();
   };
+  startDeferredLoad = run;
 
   const schedule = () => {
     if (done) return;
@@ -292,7 +305,7 @@ function loadAnalyticsScript() {
 
   const script = document.createElement('script');
   script.src = analyticsScriptSrc;
-  script.integrity = 'sha256-I/Kr6Oodpsc9uYb/v8mQ3kJqenmFzBO78kHh4FYRx1M=';
+  script.integrity = 'sha256-7MQyH90nHmkg+uoZoVAgFQOqcFX/iQCNBDEh0hirQVU=';
   script.crossOrigin = 'anonymous';
   script.defer = true;
   script.async = true;

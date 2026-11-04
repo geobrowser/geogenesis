@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { snapshotActionContext } from '~/core/action-context';
 import { useContinueWithGoogle } from '~/core/auth/continue-with-google';
+import { closeSignInBox, openSignInBox } from '~/core/auth/sign-in-box/sign-in-box-store';
 import { noteEmailArrival } from '~/core/deep-links/ref-email';
 import {
   saveVotesHeading,
@@ -76,14 +77,17 @@ vi.mock('~/core/save-votes-analytics', () => ({
   }),
 }));
 vi.mock('~/partials/explore/email-capture-account-step', () => ({
+  SIGN_IN_UNAVAILABLE_COPY: 'Couldn’t reach sign-in. Try again.',
   AccountStep: ({
     email,
     classes,
     onChangeEmail,
+    onSignInUnavailable,
   }: {
     email: string;
     classes?: unknown;
     onChangeEmail?: () => void;
+    onSignInUnavailable?: () => void;
   }) => {
     // Mounting the real step is what mails a code, so a remount is a second email.
     React.useEffect(() => {
@@ -96,6 +100,11 @@ vi.mock('~/partials/explore/email-capture-account-step', () => ({
         {onChangeEmail ? (
           <button type="button" onClick={onChangeEmail}>
             Change
+          </button>
+        ) : null}
+        {onSignInUnavailable ? (
+          <button type="button" onClick={onSignInUnavailable}>
+            Privy did not load
           </button>
         ) : null}
       </>
@@ -379,6 +388,18 @@ describe('SaveVotesSheet', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Save votes' }));
     }
 
+    it("goes back to the address saying sign-in couldn't be reached when Privy never loaded", () => {
+      sendCodeTo('sam@hey.com');
+      fireEvent.click(screen.getByRole('button', { name: 'Privy did not load' }));
+      expect(screen.getByRole('textbox', { name: 'Email address' })).toHaveValue('sam@hey.com');
+      expect(screen.getByRole('alert')).toHaveTextContent('Couldn’t reach sign-in. Try again.');
+      expect(mocks.cancelPrivyAuth).not.toHaveBeenCalled();
+      // Sending again tries Privy again, and the line goes.
+      fireEvent.click(screen.getByRole('button', { name: 'Send code' }));
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+      expect(screen.getByText('Enter the code we sent to sam@hey.com')).toBeInTheDocument();
+    });
+
     it.each([
       ['the back arrow', 'Back to email'],
       ['Change beside the address', 'Change'],
@@ -476,12 +497,15 @@ describe('SaveVotesSheet', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
       });
 
-      expect(googleSignIn).toHaveBeenCalledWith({
-        component: 'save_votes_prompt',
-        auth_control: 'continue_with_google',
-        local_vote_count: 2,
-        prompt_reason: 'threshold',
-      });
+      expect(googleSignIn).toHaveBeenCalledWith(
+        {
+          component: 'save_votes_prompt',
+          auth_control: 'continue_with_google',
+          local_vote_count: 2,
+          prompt_reason: 'threshold',
+        },
+        { surface: 'save_votes' }
+      );
       // Google's own sign-in starts the attempt; the email path's is not started as well.
       expect(mocks.beginPrivyAuth).not.toHaveBeenCalled();
     });
@@ -663,6 +687,18 @@ describe('SaveVotesSheet', () => {
     expect(mocks.impression).not.toHaveBeenCalled();
 
     rerender(<SaveVotesSheet />);
+    expect(screen.getByRole('region', { name: 'Save your votes' })).toBeInTheDocument();
+  });
+
+  it('waits behind our sign-in box while it is up', () => {
+    vote('a');
+    vote('b');
+    markPromptedThisSession();
+    render(<SaveVotesSheet />);
+    act(() => openSignInBox({ attemptId: 'attempt', attribution: { component: 'follow_button' } }));
+    act(() => openSaveVotesPrompt('return_visit'));
+    expect(screen.queryByRole('region', { name: 'Save your votes' })).not.toBeInTheDocument();
+    act(() => closeSignInBox());
     expect(screen.getByRole('region', { name: 'Save your votes' })).toBeInTheDocument();
   });
 

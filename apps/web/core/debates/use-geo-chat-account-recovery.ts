@@ -6,8 +6,8 @@ import * as React from 'react';
 
 import { useAtomValue } from 'jotai';
 
+import { capture } from '~/core/analytics';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
-import { devLog } from '~/core/utils/dev-log';
 import { usePrivy } from '~/core/wallet/auth-hooks';
 
 import { stepAtom } from '~/partials/onboarding/onboarding-atoms';
@@ -148,23 +148,21 @@ function useAccountStatusTransitions(
 ) {
   const previousRef = React.useRef<{ accountKey: string | null; status: GeoChatAccountStatus } | null>(null);
   const firstRefusalAtRef = React.useRef<number | null>(null);
+  // `${account}:${outcome}`, never cleared: returning to an earlier account must not report again.
   const reportedRef = React.useRef(new Set<string>());
 
   React.useEffect(() => {
     const previous = previousRef.current?.accountKey === accountKey ? previousRef.current.status : null;
     previousRef.current = { accountKey, status };
-    if (previous === null) {
-      firstRefusalAtRef.current = null;
-      reportedRef.current = new Set();
-    }
+    if (previous === null) firstRefusalAtRef.current = null;
     if (!accountKey) return;
 
     const now = Date.now();
     const report = (step: string, properties: Record<string, unknown>) => {
-      if (reportedRef.current.has(step)) return;
-      reportedRef.current.add(step);
-      // Not sent until `debates_session_outcome` is registered in the analytics repo (see PR).
-      devLog('[debates] session outcome %o', {
+      const key = `${accountKey}:${step}`;
+      if (reportedRef.current.has(key)) return;
+      reportedRef.current.add(key);
+      capture('debates_session_outcome', {
         outcome: step,
         ms_since_sign_up: signedUpAt === null ? null : now - signedUpAt,
         ...properties,

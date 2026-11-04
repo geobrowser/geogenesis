@@ -49,6 +49,7 @@ describe('Privy login methods', () => {
     expect(using(/= useContinueWithGoogle\(/).sort()).toEqual([
       'partials/explore/email-capture-popup.tsx',
       'partials/save-votes/save-votes-sheet.tsx',
+      'partials/sign-in/sign-in-box.tsx',
     ]);
     expect(using(/useLinkWithOAuth/)).toEqual([]);
     expect(using(/from '@privy-io\/react-auth'/)).toEqual([]);

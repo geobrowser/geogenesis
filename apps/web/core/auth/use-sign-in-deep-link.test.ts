@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   via: null as string | null,
-  options: undefined as { analytics?: Record<string, unknown> } | undefined,
+  options: undefined as { analytics?: Record<string, unknown>; heading?: string } | undefined,
   run: undefined as (() => void) | undefined,
   openSignIn: vi.fn(),
   privy: { ready: true, authenticated: false, isModalOpen: false },
@@ -25,6 +25,7 @@ vi.mock('~/core/hooks/use-privy-sign-in', () => ({
 const { OPENING_NOTICE_TIMEOUT_MS, useSignInDeepLink } = await import('./use-sign-in-deep-link');
 const { SIGN_IN_PENDING_ATTRIBUTE, SIGN_IN_PENDING_SCRIPT } = await import('./sign-in-pending');
 const { claimLobbySignInPrompt } = await import('~/core/debates/lobbies/lobby-guest-sign-in');
+const { closeSignInBox, openSignInBox } = await import('./sign-in-box/sign-in-box-store');
 
 const LOBBY = '5f0c1a2b-3c4d-4e5f-8a9b-0c1d2e3f4a5b';
 // The prompt record outlives `sessionStorage.clear()` (it is per page load), so each test that
@@ -105,6 +106,25 @@ describe('useSignInDeepLink', () => {
     rerender();
     expect(result.current.opening).toBe(false);
     expect(document.documentElement.hasAttribute(SIGN_IN_PENDING_ATTRIBUTE)).toBe(false);
+  });
+
+  it('stops reporting opening once our sign-in box is up', () => {
+    const { result, rerender } = renderHook(() => useSignInDeepLink());
+    act(() => mocks.run?.());
+    act(() => openSignInBox({ attemptId: 'attempt', attribution: { component: 'sign_in_deep_link' } }));
+    rerender();
+    expect(result.current.opening).toBe(false);
+    expect(document.documentElement.hasAttribute(SIGN_IN_PENDING_ATTRIBUTE)).toBe(false);
+    act(() => closeSignInBox());
+  });
+
+  it("gives a debate room's sign-in box the lobby heading, and the plain link none", () => {
+    renderHook(() => useSignInDeepLink());
+    expect(mocks.options?.heading).toBeUndefined();
+    window.history.replaceState(null, '', `/debate/${LOBBY}`);
+    renderHook(() => useSignInDeepLink());
+    expect(mocks.options?.heading).toBe('Join the discussion');
+    window.history.replaceState(null, '', '/');
   });
 
   it('stops reporting opening if the dialog never comes', () => {

@@ -12,6 +12,8 @@ import { useDeepLinkEffect, useDeepLinkParams } from '~/core/deep-links/use-deep
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { usePrivy } from '~/core/wallet/auth-hooks';
 
+import { useSignInDialogOpen } from './sign-in-box/use-sign-in-dialog-open';
+
 /**
  * GEO-2727. Opens the Privy sign-in dialog for a viewer who arrived on `?modal=signin`.
  *
@@ -27,7 +29,8 @@ export const OPENING_NOTICE_TIMEOUT_MS = 20_000;
  * "Opening sign-in" overlay (`sign-in-pending`) up for exactly that long.
  */
 export function useSignInDeepLink(): { opening: boolean } {
-  const { ready, authenticated, isModalOpen } = usePrivy();
+  const { ready, authenticated } = usePrivy();
+  const dialogOpen = useSignInDialogOpen();
   const [opening, setOpening] = React.useState(false);
   const link = useDeepLinkParams(SIGN_IN_MODAL);
   const roomId = typeof window === 'undefined' ? undefined : /^\/debate\/([^/]+)$/.exec(window.location.pathname)?.[1];
@@ -39,6 +42,8 @@ export function useSignInDeepLink(): { opening: boolean } {
     // onboarding and gets pushed back here afterwards, and being handed the modal a second time
     // is exactly the confusion the modal was opened to resolve.
     redirectTo: link.cleanUrl,
+    // The sign-in box's heading for a lobby or debate, as the save-votes sheet's lobby ask has it.
+    heading: roomId ? 'Join the discussion' : undefined,
     analytics: {
       link_source: link.via ?? undefined,
       component: link.via === 'invite' ? 'invite_link' : 'sign_in_deep_link',
@@ -89,7 +94,7 @@ export function useSignInDeepLink(): { opening: boolean } {
   React.useEffect(() => {
     if (!opening) return;
     setSignInPending(true);
-    if (isModalOpen || authenticated) {
+    if (dialogOpen || authenticated) {
       setSignInPending(false);
       setOpening(false);
       return;
@@ -99,7 +104,7 @@ export function useSignInDeepLink(): { opening: boolean } {
       setOpening(false);
     }, OPENING_NOTICE_TIMEOUT_MS);
     return () => clearTimeout(timer);
-  }, [authenticated, isModalOpen, opening]);
+  }, [authenticated, dialogOpen, opening]);
 
   return { opening };
 }
