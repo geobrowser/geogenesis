@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { isDebateEntity } from '~/core/debates/is-debate-entity';
-import { DEBATE_CLAIMS_PROPERTY_ID, DEBATE_TYPE_ID } from '~/core/debates/ontology';
+import { fetchExploreEntryIds } from '~/core/explore/fetch-explore-entry-ids';
 import { debateHasProcessedVideo, exploreBrowseSpaceIds, fetchExploreFeed } from '~/core/explore/fetch-explore-feed';
 import { leadWithPlayableDebate } from '~/core/explore/lead-with-playable-debate';
 import { resolveExploreFeedRequestContext } from '~/core/explore/resolve-explore-feed-request-context';
@@ -25,21 +25,7 @@ export async function GET(request: Request) {
     };
     const result = await fetchExploreFeed({
       ...feedOptions,
-      entityFilter: {
-        or: [
-          { id: { is: id } },
-          {
-            typeIds: { overlaps: [DEBATE_TYPE_ID] },
-            relations: {
-              some: {
-                typeId: { is: DEBATE_CLAIMS_PROPERTY_ID },
-                toEntityId: { is: id },
-                spaceId: { in: spaceIds },
-              },
-            },
-          },
-        ],
-      },
+      entityFilter: { id: { in: await fetchExploreEntryIds(id, spaceIds) } },
     });
     // Claim cards lead with a playable debate about that claim, with the claim itself as fallback.
     const playable: typeof result.items = [];
