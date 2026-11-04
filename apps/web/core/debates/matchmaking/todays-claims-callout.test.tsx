@@ -5,6 +5,7 @@ import * as React from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { ResizeObserverStub } from '../resize-observer-fixtures';
 import type { CalloutClaim } from '../todays-claims/todays-callout';
 import type { TodaysCallout } from '../todays-claims/use-todays-callout';
 
@@ -52,6 +53,9 @@ vi.mock('../debate-claim-card-surface', () => ({
     return <>{props.children}</>;
   },
 }));
+
+// The card area eases its height through `ResizableContainer`, which needs one.
+vi.stubGlobal('ResizeObserver', ResizeObserverStub);
 
 const { TodaysClaimsCallout, CALLOUT_ADVANCE_DELAY_MS } = await import('./todays-claims-callout');
 
@@ -146,7 +150,7 @@ describe('TodaysClaimsCallout', () => {
 
     const leaving = screen.getByTestId('claim-card');
     expect(leaving).toHaveTextContent('Claim A');
-    await waitFor(() => expect(leaving.parentElement).toHaveStyle({ pointerEvents: 'none' }));
+    await waitFor(() => expect(leaving.closest('[style]')).toHaveStyle({ pointerEvents: 'none' }));
 
     await waitFor(() => expect(screen.getByTestId('claim-card')).toHaveTextContent('Claim B'));
     expect(screen.getAllByTestId('claim-card')).toHaveLength(1);
