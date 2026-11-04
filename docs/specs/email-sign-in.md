@@ -69,7 +69,13 @@ core/auth/signed-in-before.ts        "this browser has signed in" marker for lik
   (closes without withdrawing), as the centred sheet does. That call needs a `surface: 'privy'`
   option on `useTrackedLogin`, or it reopens the box.
 - **Google.** `useContinueWithGoogle()` as in the sheet, when `googleSignIn` is on and this isn't an
-  in-app browser.
+  in-app browser. It carries on the box's attempt rather than starting one, so a failed start leaves the
+  box open on email and the press still hears the outcome.
+  - What the redirect loses: the press's in-memory continuation (its queued pending action, `onComplete`,
+    `onCancel`). That is the same as Privy's modal with Google today.
+  - What survives: the return address (`postOnboardingRedirectAtom`), the attempt and its tags, and
+    locally saved votes.
+  - Persisting continuations across the redirect is GEO-3583.
 - **Other methods.** `privyConfig.loginMethods` is `['email']`. Google is added per call behind its flag,
   and no wallet login is enabled. So the box offers what Privy's dialog offers.
 - **Signed in elsewhere** (Google return, another tab): the box closes when `authenticated` flips.
@@ -270,6 +276,10 @@ Payload rules (registry branch `signin-box-events`):
 - Flag: `enabledByDefault: false` everywhere. Testing uses the flags dialog.
 - Code lifetime: `CODE_LIFETIME_MS` = 10 min, to be confirmed by Bryan's test.
 - Terms consent: off. Privy has no terms link set, so the box has no consent line and keeps `SAVE_VOTES_FINE_PRINT`.
+- Google redirect (Bryan, 2026-11-04): Google stays beside email on every surface behind `googleSignIn`. A
+  queued action is dropped on a Google redirect, as with Privy's modal. Persisting continuations is GEO-3583.
+- Privy fallback: when the code step falls back to Privy's dialog, it carries on the box's open attempt, so
+  the press's continuation and withdrawal still run once.
 
 Open:
 - The submit label "Continue" (the sheet's own are votes-specific: "Save votes" / "Log in").
