@@ -193,6 +193,14 @@ New attempt properties: `sign_in_surface` (`box` / `save_votes` / `email_capture
 `beginAuthAttempt`. It starts empty at rollout: browsers that haven't signed in since count as new until
 they do. The query should start its comparison two weeks after the marker ships.
 
+Payload rules (registry branch `signin-box-events`):
+- `sign_in_surface` is one of `box`, `save_votes`, `email_capture`, `privy_modal`.
+- `auth_error` and `last_auth_error` are Privy error codes (`privyErrorCode`, e.g. `invalid_credentials`)
+  or a fixed fallback, never an error message, which can contain the address. Tested, alongside the
+  no-`@` test over every payload.
+- `code_age_ms` is omitted when there is no code; when present it is an integer >= 0.
+- `privy_wait_ms`, `code_rejections` and `code_resends` are rounded integers (the registry doesn't check them).
+
 ### Analytics delta to request (beyond analytics#144)
 
 1. `enum_auth_step`: add `code_send_failed`, `code_submitted`, `code_resent`, `left_page`.
