@@ -89,7 +89,7 @@ function ScheduleEditor({
 }: Props & Pick<React.ComponentProps<typeof AvailabilityModal>, 'calendarSection' | 'busyIntervals'>) {
   // `blocks` stays undefined until the read answers, and is passed straight through: the modal has
   // to tell "not read yet" from "an empty week" to avoid saving the latter over the former.
-  const { blocks, isError, error: scheduleError, refetch } = useDebateSchedule();
+  const { blocks, data, isError, error: scheduleError, refetch } = useDebateSchedule();
   const saveSchedule = useSaveDebateSchedule({ surface });
 
   return (
@@ -97,6 +97,7 @@ function ScheduleEditor({
       open={open}
       onOpenChange={onOpenChange}
       blocks={blocks}
+      savedTimezone={data?.schedule.timezone}
       error={isError}
       errorMessage={accountSetupMessage(scheduleError)}
       onRetry={() => refetch()}

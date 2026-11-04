@@ -41,7 +41,7 @@ function copyFor(request: AvailabilityRequest) {
 /** Opens the person's own week, the same editor the People tab's Set availability opens. */
 export function AvailabilityRequestNotice({ requests }: { requests: AvailabilityRequest[] }) {
   const [open, setOpen] = React.useState(false);
-  const { blocks, isError, error: scheduleError, refetch } = useDebateSchedule();
+  const { blocks, data: schedule, isError, error: scheduleError, refetch } = useDebateSchedule();
   const saveSchedule = useSaveDebateSchedule({ surface: 'requests_tab' });
   const openerRef = React.useRef<HTMLElement | null>(null);
 
@@ -71,6 +71,7 @@ export function AvailabilityRequestNotice({ requests }: { requests: Availability
           open={open}
           onOpenChange={setOpen}
           blocks={blocks}
+          savedTimezone={schedule?.schedule.timezone}
           error={isError}
           errorMessage={accountSetupMessage(scheduleError)}
           onRetry={() => refetch()}

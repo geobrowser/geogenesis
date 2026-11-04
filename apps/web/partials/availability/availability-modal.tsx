@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 
-import type { AvailabilityBlock } from '~/core/availability/blocks';
+import { type AvailabilityBlock, localTimezone, scheduleTimezoneNote } from '~/core/availability/blocks';
 import type { BusyInterval } from '~/core/availability/calendar-busy';
 import { debateActionAnalyticsAttributes } from '~/core/debates/matchmaking/hub-analytics';
 
@@ -30,6 +30,8 @@ type Props = {
   calendarSection?: (state: { unsavedChanges: boolean }) => React.ReactNode;
   /** The viewer's own calendar busy time, shaded on the grid. */
   busyIntervals?: BusyInterval[];
+  /** The zone `blocks` were saved in, so the header can say when saving would move them. */
+  savedTimezone?: string;
 };
 
 /**
@@ -54,14 +56,22 @@ export function AvailabilityModal({
   headerAction,
   calendarSection,
   busyIntervals,
+  savedTimezone,
 }: Props) {
   const [draft, setDraft] = React.useState<AvailabilityBlock[]>(blocks ?? []);
+  // Read per render rather than once: a laptop that crosses a border keeps the dialog's zone honest.
+  const timezoneNote = scheduleTimezoneNote({
+    savedTimezone,
+    currentTimezone: localTimezone(),
+    hasBlocks: Boolean(blocks?.length),
+  });
 
   return (
     <ScheduleDialog
       open={open}
       onOpenChange={onOpenChange}
       title="Set your debate schedule"
+      description={timezoneNote}
       headerAction={headerAction}
       closeButtonProps={debateActionAnalyticsAttributes('schedule-editor', 'Close', 'close_debate_schedule')}
       openerRef={openerRef}

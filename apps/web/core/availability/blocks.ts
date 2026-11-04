@@ -282,6 +282,75 @@ export function localTimezone() {
   }
 }
 
+const UTC_ZONES = new Set(['UTC', 'Etc/UTC', 'Etc/GMT', 'GMT']);
+
+/**
+ * A zone as a person would name it — `Eastern Time (New York)` — for the editor's header
+ * (GEO-3582). The raw id alone means little to most people, and the generic name alone cannot
+ * tell two cities in one zone apart. Falls back to the id where `Intl` will not name it.
+ */
+export function timezoneLabel(zone: string): string {
+  if (zone === 'local') return 'your local time';
+  if (UTC_ZONES.has(zone)) return 'UTC';
+  const city = (zone.split('/').at(-1) ?? zone).replace(/_/g, ' ');
+  try {
+    const name = new Intl.DateTimeFormat('en-US', { timeZone: zone, timeZoneName: 'longGeneric' })
+      .formatToParts(new Date())
+      .find(part => part.type === 'timeZoneName')?.value;
+    return name ? `${name} (${city})` : city;
+  } catch {
+    return city;
+  }
+}
+
+/** The zone's offset from UTC at `at`, as `Intl` writes it (`GMT-05:00`); `undefined` if unreadable. */
+function offsetAt(zone: string, at: Date): string | undefined {
+  try {
+    return new Intl.DateTimeFormat('en-US', { timeZone: zone, timeZoneName: 'longOffset' })
+      .formatToParts(at)
+      .find(part => part.type === 'timeZoneName')?.value;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Whether saving in `current` would change what a schedule saved in `saved` means. Two ids for the
+ * same clock (`America/Detroit`, `America/New_York`) do not: checked in January and July, so a zone
+ * that only matches outside daylight saving still counts as different.
+ */
+export function timezoneChanges(saved: string | undefined, current: string): boolean {
+  if (!saved || saved === current || saved === 'local' || current === 'local') return false;
+  const year = new Date().getUTCFullYear();
+  return [new Date(Date.UTC(year, 0, 15)), new Date(Date.UTC(year, 6, 15))].some(at => {
+    const savedOffset = offsetAt(saved, at);
+    return savedOffset === undefined || savedOffset !== offsetAt(current, at);
+  });
+}
+
+/**
+ * The line under "Set your debate schedule" saying which zone the hours are in (GEO-3582).
+ *
+ * The grid draws a saved schedule's hours as saved, but Save stamps them with the zone the browser
+ * is in now (`useSaveDebateSchedule`). For someone who has travelled since, the two differ, and
+ * saving would quietly move every block — so that case says both zones.
+ */
+export function scheduleTimezoneNote({
+  savedTimezone,
+  currentTimezone,
+  hasBlocks,
+}: {
+  savedTimezone?: string;
+  currentTimezone: string;
+  hasBlocks: boolean;
+}): string {
+  const current = timezoneLabel(currentTimezone);
+  if (!hasBlocks || !savedTimezone || !timezoneChanges(savedTimezone, currentTimezone)) {
+    return `Times are in ${current}.`;
+  }
+  return `Times are in ${timezoneLabel(savedTimezone)}, where you saved them. Saving sets them to ${current}, where you are now.`;
+}
+
 /**
  * The inverse of {@link toPayload}: what the server holds, as blocks the calendar can draw.
  *

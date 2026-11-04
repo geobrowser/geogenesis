@@ -95,3 +95,29 @@ describe('AvailabilityModal across openings', () => {
     expect(onSave.mock.calls[0][0]).toEqual(saved);
   });
 });
+
+describe('AvailabilityModal time zone line (GEO-3582)', () => {
+  it('says which zone the hours are in', async () => {
+    render(<AvailabilityModal open onOpenChange={() => {}} blocks={saved} onSave={vi.fn()} />);
+
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText(/^Times are in /)).toBeInTheDocument();
+    expect(within(dialog).queryByText(/where you saved them/)).not.toBeInTheDocument();
+  });
+
+  // UTC+14 all year, so no test machine is already in it.
+  it('warns when the schedule was saved in another zone', async () => {
+    render(
+      <AvailabilityModal
+        open
+        onOpenChange={() => {}}
+        blocks={saved}
+        savedTimezone="Pacific/Kiritimati"
+        onSave={vi.fn()}
+      />
+    );
+
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText(/\(Kiritimati\), where you saved them\. Saving sets them to /)).toBeInTheDocument();
+  });
+});
