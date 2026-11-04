@@ -4,10 +4,12 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { SLOT_MINUTES } from '~/core/availability/blocks';
 import {
   type PeerDay,
   type PeerDaySlot,
   type PeerSchedule,
+  fitLength,
   formatOffset,
   formatViewerInstant,
   markCurrent,
@@ -60,6 +62,11 @@ export type PeerAvailabilityBooking = {
    * agreed to it. Names it above the week and marks its time there, which can't be picked.
    */
   moving?: { startsAt: string; agreed: boolean } | null;
+  /**
+   * How long the booking runs, 30 when absent. An hour offers only the starts both sides fit a
+   * whole hour from (GEO-3544): moving an admin's hour-long match must not land on a half-free hour.
+   */
+  minutes?: number;
   /**
    * "None of these work" (GEO-3429): call the debate off and send the other person the viewer's own
    * free times. Offered under the week, and under an empty one, which is where it matters most.
@@ -206,14 +213,22 @@ export function PeerAvailabilityView({
   // The time being moved is marked after that, so it shows even once it has passed: it is the debate
   // they are moving, not a time on offer.
   const currentStart = booking?.mode === 'reschedule' ? (booking.moving?.startsAt ?? null) : null;
+  const minutes = booking?.minutes ?? SLOT_MINUTES;
   const days = React.useMemo(() => {
     const cutoff = clock();
-    const upcoming = peerScheduleDays(schedule, now).map(day => ({
+    // Fitted before the past is dropped, so the starts it adds inside the moved debate are dropped too.
+    const fitted = fitLength(
+      peerScheduleDays(schedule, now),
+      schedule,
+      minutes,
+      currentStart ? { start: currentStart, minutes } : null
+    );
+    const upcoming = fitted.map(day => ({
       ...day,
       slots: day.slots.filter(slot => Date.parse(slot.start) > cutoff),
     }));
     return markCurrent(upcoming, schedule, currentStart);
-  }, [schedule, now, clock, currentStart]);
+  }, [schedule, now, clock, currentStart, minutes]);
   // The times on offer: everything drawn but the one being moved.
   const pickable = days.flatMap(day => day.slots).filter(slot => !slot.current);
   // One pick per week, held here rather than per chip: two selected times is not a thing anyone
@@ -290,9 +305,12 @@ export function PeerAvailabilityView({
             )
           }
         >
-          {schedule.peerHasSchedule
-            ? `${name} has no times free in the next 7 days.`
-            : `${name} hasn’t set any availability yet.`}
+          {!schedule.peerHasSchedule
+            ? `${name} hasn’t set any availability yet.`
+            : minutes > SLOT_MINUTES
+              ? // Their half-hours may be free; what is missing is one long enough (GEO-3544).
+                `${name} has no whole hour free in the next 7 days.`
+              : `${name} has no times free in the next 7 days.`}
         </Empty>
       ) : (
         <>

@@ -754,6 +754,55 @@ describe('moving a debate', () => {
     expect(tuesday.queryByRole('button', { name: /at 4pm/ })).not.toBeInTheDocument();
   });
 
+  it('offers only the starts an hour-long debate fits from (GEO-3544)', () => {
+    const halfPast = (hour: number): PeerSlot => ({
+      start: `2026-09-23T${hour}:30:00Z`,
+      end: `2026-09-23T${hour + 1}:00:00Z`,
+      viewerIsFree: true,
+    });
+    // Free 1pm–2pm, and 3pm alone.
+    const slots = [slot(13, true, 23), halfPast(13), slot(15, true, 23)];
+    const wednesday = () => within(day('2026-09-23'));
+
+    setupBooking(moving({ minutes: 60 }), { slots });
+    expect(wednesday().getByRole('button', { name: /at 1pm/ })).toBeInTheDocument();
+    expect(wednesday().queryByRole('button', { name: /at 1:30pm/ })).not.toBeInTheDocument();
+    expect(wednesday().queryByRole('button', { name: /at 3pm/ })).not.toBeInTheDocument();
+    cleanup();
+
+    // A half-hour debate still sees every one.
+    setupBooking(moving(), { slots });
+    expect(wednesday().getAllByRole('button', { name: /at (1pm|1:30pm|3pm)/ })).toHaveLength(3);
+  });
+
+  it('offers moving an hour half an hour later, into its own held time (GEO-3544)', () => {
+    // Booked 1:30–2:30pm, which geo-chat leaves out of their week; they are free at 1 and 2:30 too.
+    setupBooking(moving({ moving: { startsAt: '2026-09-23T13:30:00Z', agreed: true }, minutes: 60 }), {
+      slots: [slot(13, true, 23), { start: '2026-09-23T14:30:00Z', end: '2026-09-23T15:00:00Z', viewerIsFree: true }],
+    });
+    const wednesday = within(day('2026-09-23'));
+    expect(wednesday.getByRole('button', { name: /at 1pm/ })).toBeInTheDocument();
+    expect(wednesday.getByRole('button', { name: /at 2pm/ })).toBeInTheDocument();
+    // Its own start stays the current time, not an offer.
+    expect(wednesday.queryByRole('button', { name: /at 1:30pm/ })).not.toBeInTheDocument();
+    expect(wednesday.getByLabelText(/at 1:30pm, the current time$/)).toBeInTheDocument();
+  });
+
+  it('does not offer a start inside the held hour once it has passed', () => {
+    // Booked 7:30–8:30am today; it is 8am, so its second half-hour is no longer a start.
+    setupBooking(moving({ moving: { startsAt: '2026-09-21T07:30:00Z', agreed: true }, minutes: 60 }), {
+      slots: [{ start: '2026-09-21T08:30:00Z', end: '2026-09-21T09:00:00Z', viewerIsFree: true }, slot(9)],
+    });
+    const monday = within(day('2026-09-21'));
+    expect(monday.getByRole('button', { name: /at 8:30am/ })).toBeInTheDocument();
+    expect(monday.queryByRole('button', { name: /at 8am/ })).not.toBeInTheDocument();
+  });
+
+  it('says no whole hour is free, not no time, when only half-hours are (GEO-3544)', () => {
+    setupBooking(moving({ minutes: 60 }), { slots: [slot(13, true, 23), slot(15, true, 23)] });
+    expect(screen.getByText('Ada has no whole hour free in the next 7 days.')).toBeInTheDocument();
+  });
+
   it('says the week has nothing free when the only time is the current one', () => {
     setupBooking(moving({ moving: { startsAt: '2026-09-22T16:00:00Z', agreed: true } }), {
       slots: [slot(16, true, 22)],
