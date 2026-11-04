@@ -261,6 +261,7 @@ export function SpaceChatView({
         errorMessage={errorMessage}
         replyTo={posting ? replyTo : null}
         onCancelReply={() => setReplyTo(null)}
+        onRestoreReply={setReplyTo}
       />
     </div>
   );
@@ -677,7 +678,7 @@ function SmallButton({
 
 type MentionDraft = ReturnType<typeof useMentionDraft>;
 
-type UnsentDraft = { draft: string; mentions: DraftMention[]; replyToId: string | null };
+type UnsentDraft = { draft: string; mentions: DraftMention[]; replyTo: ChatViewMessage | null };
 
 /** A draft with `@` mentions: the text, the people picked, and the open picker's state. */
 function useMentionDraft(initialDraft: string, initialMentions: DraftMention[], candidates?: ChatViewPerson[]) {
@@ -804,11 +805,13 @@ function ChatComposer({
   errorMessage,
   replyTo,
   onCancelReply,
+  onRestoreReply,
 }: {
   composer: ChatViewComposer;
   errorMessage: (error: unknown, fallback: string) => string;
   replyTo: ChatViewMessage | null;
   onCancelReply: () => void;
+  onRestoreReply: (message: ChatViewMessage | null) => void;
 }) {
   const mention = useMentionDraft('', [], composer.kind === 'post' ? composer.mentionCandidates : undefined);
   const [error, setError] = React.useState<string | null>(null);
@@ -818,6 +821,8 @@ function ChatComposer({
   const queue = React.useRef<Promise<void>>(Promise.resolve());
   const draftRef = React.useRef(mention.draft);
   draftRef.current = mention.draft;
+  const replyRef = React.useRef(replyTo);
+  replyRef.current = replyTo;
   const inputRef = mention.inputRef;
 
   React.useEffect(() => {
@@ -857,36 +862,42 @@ function ChatComposer({
   }
 
   const onSend = composer.onSend;
-  // The box clears at once so the next message can be typed; a failed one comes back into an
-  // empty box, or waits under the error until restored.
+  // The box clears at once so the next message can be typed. A failed one comes back with its
+  // reply target, unchanged, so its retry reuses the same nonce: into an empty box, or under the
+  // error until restored.
+  const restoreDraft = (entry: UnsentDraft) => {
+    draftRef.current = entry.draft;
+    replyRef.current = entry.replyTo;
+    mention.restore(entry.draft, entry.mentions);
+    onRestoreReply(entry.replyTo);
+  };
   const send = () => {
     const draft = mention.draft.trim();
     if (draft === '') return;
-    const sent: UnsentDraft = { draft, mentions: mention.mentions, replyToId: replyTo?.id ?? null };
+    const sent: UnsentDraft = { draft, mentions: mention.mentions, replyTo };
     mention.reset();
     onCancelReply();
     setError(null);
     queue.current = queue.current.then(async () => {
       try {
-        await onSend(draftToBody(sent.draft, sent.mentions), sent.replyToId);
+        await onSend(draftToBody(sent.draft, sent.mentions), sent.replyTo?.id ?? null);
       } catch (cause) {
         setError(errorMessage(cause, SPACE_CHAT_VIEW_COPY.sendFailed));
-        if (draftRef.current.trim() === '') {
-          draftRef.current = sent.draft;
-          mention.restore(sent.draft, sent.mentions);
-        } else {
-          setUnsent(current => [...current, sent]);
-        }
+        if (draftRef.current.trim() === '' && replyRef.current === null) restoreDraft(sent);
+        else setUnsent(current => [...current, sent]);
       }
     });
   };
 
+  // One draft at a time, oldest first; what the box held waits in the queue in its place.
   const restoreUnsent = () => {
+    const [next, ...rest] = unsent;
+    if (!next) return;
     const current = mention.draft.trim();
-    const drafts = [...unsent.map(entry => entry.draft), ...(current ? [current] : [])];
-    mention.restore(drafts.join('\n'), [...unsent.flatMap(entry => entry.mentions), ...mention.mentions]);
-    setUnsent([]);
-    setError(null);
+    const held: UnsentDraft[] = current ? [{ draft: current, mentions: mention.mentions, replyTo }] : [];
+    setUnsent([...rest, ...held]);
+    restoreDraft(next);
+    if (rest.length + held.length === 0) setError(null);
     inputRef.current?.focus();
   };
 
@@ -953,7 +964,6 @@ function ChatComposer({
   );
 }
 
-/** geo-chat spells ids dashed in some fields and dashless in others. */
 /** Why the viewer can't post yet, with the control that changes it. */
 function ChatPrompt({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -964,6 +974,7 @@ function ChatPrompt({ label, children }: { label: string; children: React.ReactN
   );
 }
 
+/** geo-chat spells ids dashed in some fields and dashless in others. */
 function sameId(a: string, b: string) {
   return a.replaceAll('-', '').toLowerCase() === b.replaceAll('-', '').toLowerCase();
 }

@@ -63,6 +63,7 @@ beforeEach(() => {
   vi.useFakeTimers({ shouldAdvanceTime: true });
   queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   mocks.getSpaceChatMessages.mockReset();
+  mocks.postSpaceChatMessage.mockReset();
   mocks.getSpaceChatMessages.mockImplementation(async () => ({ messages: [], next_before: null }));
 });
 afterEach(() => {
@@ -109,6 +110,30 @@ describe('useSpaceChatRoom send', () => {
     const nonces = mocks.postSpaceChatMessage.mock.calls.map(call => call[1].client_nonce);
     expect(nonces[1]).toBe(nonces[0]);
     expect(nonces[2]).not.toBe(nonces[0]);
+    mocks.gateway = 'idle';
+  });
+
+  it('keeps a failed send’s nonce across other sends, per reply target, until it succeeds', async () => {
+    mocks.authenticated = true;
+    mocks.gateway = 'ready';
+    mocks.postSpaceChatMessage
+      .mockRejectedValueOnce(new Error('timeout'))
+      .mockImplementation(async (_room, body) => ({ ...message(9), client_nonce: body.client_nonce }));
+    const { result } = renderHook(() => useSpaceChatRoom(ROOM), { wrapper });
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+
+    await expect(result.current.send('yes', 'reply-target')).rejects.toThrow('timeout');
+    await result.current.send('in between', null);
+    await result.current.send('yes', null);
+    await result.current.send('yes', 'reply-target');
+    await result.current.send('yes', 'reply-target');
+    const nonces = mocks.postSpaceChatMessage.mock.calls.map(call => call[1].client_nonce);
+    // The retry after another send reuses the failed nonce; the same text without the reply does not.
+    expect(nonces[3]).toBe(nonces[0]);
+    expect(nonces[1]).not.toBe(nonces[0]);
+    expect(nonces[2]).not.toBe(nonces[0]);
+    // Once it succeeded, sending the same reply again is a new message.
+    expect(nonces[4]).not.toBe(nonces[0]);
     mocks.gateway = 'idle';
   });
 });

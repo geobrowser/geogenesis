@@ -163,9 +163,47 @@ describe('SpaceChatView', () => {
       expect(box().value).toBe('second draft');
       expect(screen.getByText(SPACE_CHAT_VIEW_COPY.notSent('first'))).toBeInTheDocument();
 
+      // Restore swaps one draft in at a time; the box's text waits in its place.
       fireEvent.click(screen.getByRole('button', { name: SPACE_CHAT_VIEW_COPY.restore }));
-      expect(box().value).toBe('first\nsecond draft');
-      expect(screen.queryByText(SPACE_CHAT_VIEW_COPY.notSent('first'))).not.toBeInTheDocument();
+      expect(box().value).toBe('first');
+      expect(screen.getByText(SPACE_CHAT_VIEW_COPY.notSent('second draft'))).toBeInTheDocument();
+    });
+
+    it('puts a failed reply back with its target, so the retry is still a reply', async () => {
+      const { onSend, pending } = deferredSend();
+      renderView({ composer: { kind: 'post', onSend, maxLength: 4000 } });
+      fireEvent.click(screen.getByRole('button', { name: 'Reply to message' }));
+      type('yes');
+      enter();
+      expect(screen.queryByText(SPACE_CHAT_VIEW_COPY.replyingTo('Ben'))).not.toBeInTheDocument();
+      await act(async () => undefined);
+      await act(async () => pending[0]!.reject(new Error('timeout')));
+      expect(box().value).toBe('yes');
+      expect(screen.getByText(SPACE_CHAT_VIEW_COPY.replyingTo('Ben'))).toBeInTheDocument();
+
+      enter();
+      await act(async () => undefined);
+      expect(onSend.mock.calls.map(call => call.slice(0, 2))).toEqual([
+        ['yes', '1'],
+        ['yes', '1'],
+      ]);
+    });
+
+    it('restores a reply that failed behind newer text with its target', async () => {
+      const { onSend, pending } = deferredSend();
+      renderView({ composer: { kind: 'post', onSend, maxLength: 4000 } });
+      fireEvent.click(screen.getByRole('button', { name: 'Reply to message' }));
+      type('yes');
+      enter();
+      type('later');
+      await act(async () => undefined);
+      await act(async () => pending[0]!.reject(new Error('timeout')));
+      expect(screen.queryByText(SPACE_CHAT_VIEW_COPY.replyingTo('Ben'))).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: SPACE_CHAT_VIEW_COPY.restore }));
+      expect(box().value).toBe('yes');
+      expect(screen.getByText(SPACE_CHAT_VIEW_COPY.replyingTo('Ben'))).toBeInTheDocument();
+      expect(screen.getByText(SPACE_CHAT_VIEW_COPY.notSent('later'))).toBeInTheDocument();
     });
 
     it('puts a failed send back into an empty box', async () => {

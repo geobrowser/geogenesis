@@ -8,6 +8,7 @@ import { GeoChatRequestError } from '~/core/debates/api';
 import { useDebateVisibility } from '~/core/debates/debate-attention';
 import { useSpaceChatRoomScope } from '~/core/debates/debate-gateway';
 import { useGeoChatAuth } from '~/core/debates/hooks';
+import { normId } from '~/core/utils/norm-id';
 
 import {
   type SpaceChatAuth,
@@ -160,18 +161,14 @@ export function useSpaceChatRoom(
     [update]
   );
 
-  // A resend of the same failed draft reuses its nonce: if the first post was stored after all,
-  // geo-chat returns it instead of posting twice, and charges no quota.
-  const failedSend = React.useRef<{ roomId: string; body: string; replyTo: string | null; nonce: string } | null>(null);
+  // A resend of a failed send reuses its nonce, whatever was sent in between: if the first post was
+  // stored after all, geo-chat returns it instead of posting twice, and charges no quota.
+  const failedSends = React.useRef(new Map<string, string>());
   const send = React.useCallback(
     async (body: string, replyTo: string | null) => {
       if (!auth || !roomId) throw new GeoChatRequestError('Sign in to chat', 'authentication_required', 401);
-      const failed = failedSend.current;
-      const clientNonce =
-        failed && failed.roomId === roomId && failed.body === body && failed.replyTo === replyTo
-          ? failed.nonce
-          : newClientNonce();
-      failedSend.current = null;
+      const key = JSON.stringify([normId(roomId), replyTo ? normId(replyTo) : null, body]);
+      const clientNonce = failedSends.current.get(key) ?? newClientNonce();
       update(state =>
         withPendingMessage(state, {
           client_nonce: clientNonce,
@@ -184,9 +181,10 @@ export function useSpaceChatRoom(
         applyWrite(
           await postSpaceChatMessage(roomId, { client_nonce: clientNonce, body, reply_to_message_id: replyTo }, auth)
         );
+        failedSends.current.delete(key);
       } catch (error) {
         update(state => withoutPendingMessage(state, clientNonce));
-        failedSend.current = { roomId, body, replyTo, nonce: clientNonce };
+        failedSends.current.set(key, clientNonce);
         throw error;
       }
     },
