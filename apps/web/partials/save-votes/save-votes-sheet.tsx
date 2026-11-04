@@ -1,17 +1,11 @@
 'use client';
 
-import { Content, Overlay, Portal, Root, Title } from '@radix-ui/react-dialog';
-
 import * as React from 'react';
 
 import cx from 'classnames';
 import { useAtomValue } from 'jotai';
 
-import {
-  ContinueWithGoogleButton,
-  isGoogleSignInStarting,
-  useContinueWithGoogle,
-} from '~/core/auth/continue-with-google';
+import { isGoogleSignInStarting, useContinueWithGoogle } from '~/core/auth/continue-with-google';
 import { arrivedFromEmail } from '~/core/deep-links/ref-email';
 import { useAnyModalOpen } from '~/core/hooks/use-any-modal-open';
 import { usePrepareOnboarding } from '~/core/hooks/use-prepare-onboarding';
@@ -42,35 +36,21 @@ import {
   wasPromptedThisSession,
 } from '~/core/state/save-votes-prompt';
 import { usePrivy } from '~/core/wallet/auth-hooks';
-import { Z_LAYER_CLASS } from '~/core/z-layers';
 
-import { ArrowLeft } from '~/design-system/icons/arrow-left';
-import { CloseSmall } from '~/design-system/icons/close-small';
-import { Mail } from '~/design-system/icons/mail';
 import { ResponsePositionIcon } from '~/design-system/icons/response-position-icon';
 
-import { AccountStep } from '~/partials/explore/email-capture-account-step';
 import { useIsEmailCaptureShowing } from '~/partials/explore/email-capture-presence';
 import { HEADING_CLASS, SUBTEXT_CLASS } from '~/partials/explore/email-capture-styles';
+import { CenteredSignInDialog, SignInCard, type SignInCardLabels } from '~/partials/sign-in/sign-in-card';
 
-import {
-  CENTERED_CARD_CLASS,
-  CHIP_CLASS,
-  CHIP_LIST_CLASS,
-  CHIP_ROW_CLASS,
-  CORNER_CARD_CLASS,
-  ICON_BUTTON_CLASS,
-  INPUT_CLASS,
-  TOP_BAR_CLASS,
-  badgeClass,
-  bodyClass,
-  codeStepClasses,
-  errorClass,
-  fieldClass,
-  fineClass,
-  googleButtonClass,
-  primaryButtonClass,
-} from './save-votes-styles';
+import { CHIP_CLASS, CHIP_LIST_CLASS, CHIP_ROW_CLASS, CORNER_CARD_CLASS } from './save-votes-styles';
+
+const SAVE_VOTES_LABELS: SignInCardLabels = {
+  back: 'save_votes_back',
+  dismiss: 'save_votes_dismiss',
+  form: 'Save votes',
+  verification: 'Save votes verification',
+};
 
 /**
  * Asks that open on their own count toward when the sheet asks again; a press on "Save" does not. The
@@ -181,8 +161,6 @@ export function SaveVotesSheet() {
   // Read when the dialog closes, which is after the render that closed it.
   const isModalOpenRef = React.useRef(isModalOpen);
   isModalOpenRef.current = isModalOpen;
-  /** What had focus when the centred dialog opened, to hand it back to: it has no Radix trigger. */
-  const openerRef = React.useRef<HTMLElement | null>(null);
   const visible = open && !overlayOpen;
 
   // Counted and measured once per opening, and only once the visitor can see it: an ask that waits
@@ -243,57 +221,16 @@ export function SaveVotesSheet() {
   const label = lobbyName ? 'Join the discussion' : 'Save your votes';
   const compact = !centered;
   const content = (
-    <div className={bodyClass(compact)}>
-      <div className={TOP_BAR_CLASS}>
-        {codeEmail !== null ? (
-          <button
-            type="button"
-            onClick={changeEmail}
-            aria-label="Back to email"
-            data-geo-analytics-label="save_votes_back"
-            data-geo-analytics-intent="navigate"
-            className={ICON_BUTTON_CLASS}
-          >
-            <ArrowLeft />
-          </button>
-        ) : (
-          <span aria-hidden className="size-7 mobile:size-11" />
-        )}
-        <button
-          type="button"
-          onClick={close}
-          aria-label="Not now"
-          data-geo-analytics-label="save_votes_dismiss"
-          data-geo-analytics-intent="dismiss"
-          className={ICON_BUTTON_CLASS}
-        >
-          <CloseSmall />
-        </button>
-      </div>
-
-      {codeEmail !== null ? (
-        <div role="status">
-          <div aria-hidden className={badgeClass(compact)}>
-            <Mail size={compact ? 20 : 22} />
-          </div>
-          <p className={HEADING_CLASS}>Check your email</p>
-          <AccountStep
-            email={codeEmail}
-            analytics={signInProperties}
-            analyticsLabel="Save votes verification"
-            onGiveUp={close}
-            appearance="save-votes"
-            classes={codeStepClasses(compact)}
-            onChangeEmail={changeEmail}
-          />
-        </div>
-      ) : (
-        <form
-          data-geo-analytics-label="Save votes"
-          data-geo-analytics-intent={logIn ? 'login' : 'signup'}
-          onSubmit={submitEmail}
-          noValidate
-        >
+    <SignInCard
+      compact={compact}
+      codeEmail={codeEmail}
+      onChangeEmail={changeEmail}
+      onClose={close}
+      closeLabel="Not now"
+      labels={SAVE_VOTES_LABELS}
+      intent={logIn ? 'login' : 'signup'}
+      header={
+        <>
           {lobbyName ? (
             <>
               <p className={HEADING_CLASS}>Join the discussion</p>
@@ -312,90 +249,36 @@ export function SaveVotesSheet() {
             </>
           )}
           <VoteChips votes={votes} rows={centered ? 2 : 1} />
-
-          <label className={fieldClass(compact)}>
-            <span aria-hidden className="shrink-0">
-              <Mail size={compact ? 16 : 18} />
-            </span>
-            <input
-              ref={emailInputRef}
-              type="text"
-              inputMode="email"
-              autoComplete="email"
-              value={email}
-              onChange={event => {
-                setEmail(event.currentTarget.value);
-              }}
-              placeholder="your@email.com"
-              aria-label="Email address"
-              className={INPUT_CLASS}
-            />
-          </label>
-          <button type="submit" disabled={!canSend || googleStarting} className={primaryButtonClass(compact)}>
-            {editing ? SAVE_VOTES_RESEND_LABEL : saveVotesSubmitLabel(count, logIn)}
-          </button>
-          {google ? (
-            <ContinueWithGoogleButton
-              status={google.status}
-              // The attempt is persisted before the redirect, so the saver still reads it as a save on
-              // the return and publishes the votes, which wait on the device the whole time.
-              onClick={() =>
-                void google.start(
-                  saveVotesSignInProperties('continue_with_google', count, attempt ? attempt.reason : reason)
-                )
-              }
-              className={googleButtonClass(compact)}
-            />
-          ) : null}
-          {google?.status === 'failed' ? (
-            <p role="alert" className={errorClass}>
-              Google sign-in did not start. Try again, or use your email.
-            </p>
-          ) : null}
-
-          <p className={fineClass(compact)}>{SAVE_VOTES_FINE_PRINT}</p>
-        </form>
-      )}
-    </div>
+        </>
+      }
+      email={email}
+      onEmailChange={setEmail}
+      emailInputRef={emailInputRef}
+      onSubmitEmail={submitEmail}
+      submitDisabled={!canSend || googleStarting}
+      submitLabel={editing ? SAVE_VOTES_RESEND_LABEL : saveVotesSubmitLabel(count, logIn)}
+      google={google}
+      // The attempt is persisted before the redirect, so the saver still reads it as a save on
+      // the return and publishes the votes, which wait on the device the whole time.
+      onGoogle={() =>
+        void google?.start(saveVotesSignInProperties('continue_with_google', count, attempt ? attempt.reason : reason))
+      }
+      finePrint={SAVE_VOTES_FINE_PRINT}
+      analytics={signInProperties}
+    />
   );
 
   if (centered) {
     return (
-      <Root
-        open
-        onOpenChange={next => {
-          if (!next) close();
-        }}
+      // Not while Privy's dialog is taking over, which owns focus then.
+      <CenteredSignInDialog
+        title={label}
+        hidden={overlayOpen}
+        onClose={close}
+        restoreFocus={() => !isModalOpenRef.current}
       >
-        <Portal>
-          {/* The card inside its backdrop, Radix's own pattern for a centred dialog: a press beside
-              the card is then outside the dialog's content, which is what dismisses it. */}
-          <Overlay
-            hidden={overlayOpen}
-            className={cx(
-              'fixed inset-0 flex animate-fade-in items-center justify-center bg-text/20 p-4 mobile:items-end mobile:p-0',
-              Z_LAYER_CLASS.saveVotesDialog
-            )}
-          >
-            <Content
-              aria-describedby={undefined}
-              onOpenAutoFocus={() => {
-                openerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-              }}
-              onCloseAutoFocus={event => {
-                // Radix would return focus to a trigger, and there is none. Not while Privy's dialog
-                // is taking over, which owns focus then.
-                event.preventDefault();
-                if (!isModalOpenRef.current) openerRef.current?.focus();
-              }}
-              className={cx(CENTERED_CARD_CLASS, 'focus:outline-hidden')}
-            >
-              <Title className="sr-only">{label}</Title>
-              {content}
-            </Content>
-          </Overlay>
-        </Portal>
-      </Root>
+        {content}
+      </CenteredSignInDialog>
     );
   }
 
