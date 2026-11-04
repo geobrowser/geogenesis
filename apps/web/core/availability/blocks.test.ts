@@ -10,11 +10,8 @@ import {
   mergeBlocks,
   mondayOf,
   overlapDepths,
-  scheduleTimezoneNote,
   slotsForRange,
   snapMinutes,
-  timezoneChanges,
-  timezoneLabel,
   toPayload,
   weekDates,
 } from './blocks';
@@ -268,48 +265,5 @@ describe('fromPayload', () => {
       blocks.map(({ id: _id, ...rest }) => rest).sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
 
     expect(shape(restored)).toEqual(shape(original));
-  });
-});
-
-describe("the editor's time zone line (GEO-3582)", () => {
-  it('names a zone the way a person would, with its city', () => {
-    expect(timezoneLabel('America/New_York')).toBe('Eastern Time (New York)');
-    expect(timezoneLabel('America/Argentina/Buenos_Aires')).toBe('Argentina Standard Time (Buenos Aires)');
-    expect(timezoneLabel('Etc/UTC')).toBe('UTC');
-    expect(timezoneLabel('local')).toBe('your local time');
-  });
-
-  it('falls back to the city for a zone Intl cannot read', () => {
-    expect(timezoneLabel('Nowhere/Made_Up')).toBe('Made Up');
-  });
-
-  it('treats two ids for the same clock as no change', () => {
-    expect(timezoneChanges('America/Detroit', 'America/New_York')).toBe(false);
-    expect(timezoneChanges('America/New_York', 'America/New_York')).toBe(false);
-    expect(timezoneChanges(undefined, 'America/New_York')).toBe(false);
-  });
-
-  // Phoenix and Denver share a clock in winter only; saving across them still moves summer hours.
-  it('counts a zone that differs only in daylight saving as a change', () => {
-    expect(timezoneChanges('America/Phoenix', 'America/Denver')).toBe(true);
-    expect(timezoneChanges('America/Los_Angeles', 'Europe/Vilnius')).toBe(true);
-  });
-
-  it('says only the current zone when saving would not move anything', () => {
-    expect(
-      scheduleTimezoneNote({ savedTimezone: 'America/New_York', currentTimezone: 'America/New_York', hasBlocks: true })
-    ).toBe('Times are in Eastern Time (New York).');
-    // Nothing saved yet, so there is nothing to move.
-    expect(scheduleTimezoneNote({ savedTimezone: 'UTC', currentTimezone: 'America/New_York', hasBlocks: false })).toBe(
-      'Times are in Eastern Time (New York).'
-    );
-  });
-
-  it('names both zones when someone has travelled since saving', () => {
-    expect(
-      scheduleTimezoneNote({ savedTimezone: 'America/Los_Angeles', currentTimezone: 'Europe/Vilnius', hasBlocks: true })
-    ).toBe(
-      'Times are in Pacific Time (Los Angeles), where you saved them. Saving sets them to Eastern European Time (Vilnius), where you are now.'
-    );
   });
 });

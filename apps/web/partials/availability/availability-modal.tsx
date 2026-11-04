@@ -2,8 +2,9 @@
 
 import * as React from 'react';
 
-import { type AvailabilityBlock, localTimezone, scheduleTimezoneNote } from '~/core/availability/blocks';
+import { type AvailabilityBlock, localTimezone } from '~/core/availability/blocks';
 import type { BusyInterval } from '~/core/availability/calendar-busy';
+import { convertBlocks, scheduleTimezoneNote, timezoneChanges } from '~/core/availability/schedule-zone';
 import { debateActionAnalyticsAttributes } from '~/core/debates/matchmaking/hub-analytics';
 
 import { Text } from '~/design-system/text';
@@ -30,7 +31,7 @@ type Props = {
   calendarSection?: (state: { unsavedChanges: boolean }) => React.ReactNode;
   /** The viewer's own calendar busy time, shaded on the grid. */
   busyIntervals?: BusyInterval[];
-  /** The zone `blocks` were saved in, so the header can say when saving would move them. */
+  /** The zone `blocks` were saved in. Drawn converted into the browser's zone where they differ. */
   savedTimezone?: string;
 };
 
@@ -58,13 +59,18 @@ export function AvailabilityModal({
   busyIntervals,
   savedTimezone,
 }: Props) {
-  const [draft, setDraft] = React.useState<AvailabilityBlock[]>(blocks ?? []);
   // Read per render rather than once: a laptop that crosses a border keeps the dialog's zone honest.
-  const timezoneNote = scheduleTimezoneNote({
-    savedTimezone,
-    currentTimezone: localTimezone(),
-    hasBlocks: Boolean(blocks?.length),
-  });
+  const currentTimezone = localTimezone();
+  const converted = Boolean(blocks?.length) && timezoneChanges(savedTimezone, currentTimezone);
+  // Save stamps the browser's zone, so a schedule saved elsewhere is drawn in it too — the same
+  // instants, so saving changes nothing the person did not change (GEO-3582). Memoised: the grid
+  // seeds from it once, and the unsaved-changes check below compares by reference.
+  const shown = React.useMemo(
+    () => (blocks && converted && savedTimezone ? convertBlocks(blocks, savedTimezone, currentTimezone) : blocks),
+    [blocks, converted, savedTimezone, currentTimezone]
+  );
+  const [draft, setDraft] = React.useState<AvailabilityBlock[]>(shown ?? []);
+  const timezoneNote = scheduleTimezoneNote({ savedTimezone, currentTimezone, converted });
 
   return (
     <ScheduleDialog
@@ -76,13 +82,13 @@ export function AvailabilityModal({
       closeButtonProps={debateActionAnalyticsAttributes('schedule-editor', 'Close', 'close_debate_schedule')}
       openerRef={openerRef}
     >
-      {/* The grid echoes `blocks` back on mount, so any other draft is an edit. */}
-      {calendarSection?.({ unsavedChanges: blocks !== undefined && draft !== blocks })}
+      {/* The grid echoes `shown` back on mount, so any other draft is an edit. */}
+      {calendarSection?.({ unsavedChanges: shown !== undefined && draft !== shown })}
       {/* Remounted per opening so a discarded draft cannot survive into the next one. The
           footer buttons ride in the calendar's own action row, beside its Clear all.
 
           Mounted only once `blocks` is known, because the grid seeds from it once. */}
-      {open && blocks === undefined ? (
+      {open && shown === undefined ? (
         <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4">
           <Text as="p" variant="metadata" className="text-grey-04">
             {error ? (errorMessage ?? 'We couldn’t load your schedule.') : 'Loading your schedule…'}
@@ -107,10 +113,10 @@ export function AvailabilityModal({
           </div>
         </div>
       ) : null}
-      {open && blocks !== undefined && (
+      {open && shown !== undefined && (
         <AvailabilityCalendar
           className="min-h-0 flex-1"
-          initialBlocks={blocks}
+          initialBlocks={shown}
           onChange={setDraft}
           busyIntervals={busyIntervals}
           actions={
