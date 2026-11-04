@@ -34,6 +34,7 @@ import { Text } from '~/design-system/text';
 
 import { PeerAvailabilityBookingModal } from '~/partials/availability/peer-availability-booking-modal';
 
+import { accountSetupMessage } from '../account-setup-copy';
 import { useDebatePeople } from './hooks';
 import { type DebateAnalyticsSurface, debateAnalyticsLabel, hubAnalyticsAttributes } from './hub-analytics';
 import { HubCardList, hubCardMotion } from './hub-motion';
@@ -141,11 +142,11 @@ export function ScheduledDebatesSection({ content }: { content: ScheduledContent
  * section and on the panel's timeline (GEO-3463), which lists them together above its now-line.
  */
 export const READ_FAILURE_COPY = {
-  rooms: (error: Error) => `Could not read your upcoming debates: ${error.message}`,
-  requests: (error: Error) => `Could not read your scheduled debates: ${error.message}`,
-  lobbies: (error: Error) => `Could not read your lobbies: ${error.message}`,
+  rooms: (error: Error) => accountSetupMessage(error) ?? 'Could not read your upcoming debates.',
+  requests: (error: Error) => accountSetupMessage(error) ?? 'Could not read your scheduled debates.',
+  lobbies: (error: Error) => accountSetupMessage(error) ?? 'Could not read your lobbies.',
   /** The timeline's read of the next seven days' lobbies (GEO-3519). */
-  week: (error: Error) => `Could not read this week’s lobbies: ${error.message}`,
+  week: (error: Error) => accountSetupMessage(error) ?? 'Could not read this week’s lobbies.',
 };
 
 /** Every read that failed, in the timeline's order; `weekError` only where the week is read. */
@@ -362,11 +363,8 @@ export function useScheduledContent(week?: DebateLobbyCalendarRow[]): ScheduledC
   );
 
   // The viewer included: their own side of the strip needs a face too.
-  const participantIds = React.useMemo(
-    () => (rows ?? []).flatMap(request => request.participants.map(participant => participant.user_id)),
-    [rows]
-  );
-  const people = useGeoChatUserSummaries(participantIds, true);
+  const participants = React.useMemo(() => (rows ?? []).flatMap(request => request.participants), [rows]);
+  const people = useGeoChatUserSummaries(participants, true);
 
   return {
     answerable,
@@ -383,9 +381,8 @@ export function useScheduledContent(week?: DebateLobbyCalendarRow[]): ScheduledC
 const LOBBY_LIST_STALE_MS = 30_000;
 
 /**
- * Names come from the graph, since a geo-chat user id is their personal space's page entity. The
- * roster is only a fallback while that loads: it covers people who are online, and whoever invited
- * you usually is not.
+ * Names come from the requests' own people and their graph profiles. The roster is only a fallback
+ * while those load: it covers people who are online, and whoever invited you usually is not.
  */
 export function useParticipantLookup(enabled: boolean, requestPeople: DebateParticipantSummary[]) {
   const roster = useDebatePeople(enabled);

@@ -47,7 +47,7 @@ import { GovernanceReopenEditLoadingBar } from '~/partials/governance/governance
 import { Main } from '~/partials/main';
 import { Navbar } from '~/partials/navbar/navbar';
 import { stepAtom as onboardingStepAtom } from '~/partials/onboarding/onboarding-atoms';
-import { shouldOpenOnboardingDialog } from '~/partials/onboarding/onboarding-dialog-visibility';
+import { shouldMountOnboardingDialog } from '~/partials/onboarding/onboarding-dialog-visibility';
 import { PendingActionsRunner } from '~/partials/pending-actions-runner';
 import { LocalVotesSaver } from '~/partials/save-votes/local-votes-saver';
 
@@ -235,7 +235,7 @@ function SaveVotesGate() {
 function OnboardingGate() {
   const { isOnboardingVisible } = useOnboarding();
   const step = useAtomValue(onboardingStepAtom);
-  return useSticky(shouldOpenOnboardingDialog(isOnboardingVisible, step)) ? <OnboardingDialog /> : null;
+  return useSticky(shouldMountOnboardingDialog(isOnboardingVisible, step)) ? <OnboardingDialog /> : null;
 }
 
 function PendingPersonalSpaceGate() {

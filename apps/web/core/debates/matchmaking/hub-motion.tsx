@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion, useIsPresent } from 'framer-motion';
 
 /**
  * Shared motion vocabulary for the hub, matching what the rest of the app already uses:
@@ -14,6 +14,9 @@ import { AnimatePresence, motion } from 'framer-motion';
  */
 export const HUB_LAYOUT_TRANSITION = { duration: 0.15 } as const;
 export const HUB_SWAP_TRANSITION = { duration: 0.1 } as const;
+
+/** The ease for hub motion the viewer is meant to follow rather than merely not notice. */
+export const HUB_EASE = [0.4, 0, 0.2, 1] as const;
 
 /**
  * Longer than the two above, and deliberately so.
@@ -28,7 +31,13 @@ export const HUB_SWAP_TRANSITION = { duration: 0.1 } as const;
  * below should be settled by the time the ghost has finished going, or the list looks like it is
  * still moving after the thing that moved it has gone.
  */
-export const HUB_CARD_EXIT_TRANSITION = { duration: 0.22, ease: [0.4, 0, 0.2, 1] } as const;
+export const HUB_CARD_EXIT_TRANSITION = { duration: 0.22, ease: HUB_EASE } as const;
+
+/**
+ * One item of a set handing over to the next (the Today's claims callout, GEO-3581). The arrival and
+ * the height easing around it share this, so they read as one movement after the exit.
+ */
+export const HUB_STEP_TRANSITION = { duration: 0.24, ease: HUB_EASE } as const;
 
 /**
  * `pointerEvents` is disabled on the way out so a card that is mid-fade can't take a click on a
@@ -59,19 +68,55 @@ export function HubCardList({ children, className }: { children: React.ReactNode
   );
 }
 
-/** Cross-fades between two states of the same region — skeleton to content, tab to tab. */
-export function HubSwap({ activeKey, children }: { activeKey: string; children: React.ReactNode }) {
+const HUB_SWAP_MOTION = {
+  /** Two states of the same region — skeleton to content, tab to tab. */
+  fade: {
+    initial: { opacity: 0, y: 4 },
+    animate: { opacity: 1, y: 0 },
+    exit: { opacity: 0 },
+    transition: HUB_SWAP_TRANSITION,
+  },
+  /**
+   * The answered item goes left and the next comes in from the right, so the move reads as "next"
+   * rather than as the content being swapped. Under the hub's `reducedMotion="user"` the slide drops
+   * out and only the fades are left.
+   */
+  step: {
+    initial: { opacity: 0, x: 16 },
+    animate: { opacity: 1, x: 0 },
+    exit: { opacity: 0, x: -16, transition: HUB_CARD_EXIT_TRANSITION },
+    transition: HUB_STEP_TRANSITION,
+  },
+} as const;
+
+/** Swaps a region's content when `activeKey` changes: the old content leaves before the new arrives. */
+export function HubSwap({
+  activeKey,
+  variant = 'fade',
+  children,
+}: {
+  activeKey: string;
+  variant?: keyof typeof HUB_SWAP_MOTION;
+  children: React.ReactNode;
+}) {
   return (
     <AnimatePresence mode="wait" initial={false}>
-      <motion.div
-        key={activeKey}
-        initial={{ opacity: 0, y: 4 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0 }}
-        transition={HUB_SWAP_TRANSITION}
-      >
+      <HubSwapItem key={activeKey} variant={variant}>
         {children}
-      </motion.div>
+      </HubSwapItem>
     </AnimatePresence>
+  );
+}
+
+/**
+ * A step's leaving item is inert, not just unclickable: a pill still focused on the answered card
+ * would otherwise take Enter on its way out, and pressing the side you hold withdraws it.
+ */
+function HubSwapItem({ variant, children }: { variant: keyof typeof HUB_SWAP_MOTION; children: React.ReactNode }) {
+  const isPresent = useIsPresent();
+  return (
+    <motion.div {...HUB_SWAP_MOTION[variant]} inert={variant === 'step' && !isPresent}>
+      {children}
+    </motion.div>
   );
 }

@@ -20,7 +20,7 @@ import {
   VOTE_TYPE_ID,
   VOTE_WINNER_PROPERTY_ID,
 } from '~/core/debates/ontology';
-import { orderedParticipants, speakerLabel } from '~/core/debates/playback-utils';
+import { orderedParticipants } from '~/core/debates/playback-utils';
 import { type DebateVoteRecord, tallyDebateVotes, voteSharePercentages } from '~/core/debates/vote-tally';
 import { TransactionWriteFailedError } from '~/core/errors';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
@@ -337,11 +337,14 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
         return;
       }
 
-      const winnerName = speakerLabel(participant);
+      // A placeholder or id must never be published, so an unnamed winner is left out of the name.
+      const winnerName = participant.display_name?.trim() || null;
       const voterName = profile?.name ?? 'Anonymous';
       const debateName = debate.claim.claim;
       const voteEntityId = previousVote?.id ?? IdUtils.generate();
-      const voteName = `${voterName} votes ${winnerName} on ${debateName}`;
+      const voteName = winnerName
+        ? `${voterName} votes ${winnerName} on ${debateName}`
+        : `${voterName} votes on ${debateName}`;
       const previousWinnerRelationId = previousVote?.winnerRelationId ?? null;
 
       const values: Value[] = [

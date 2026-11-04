@@ -65,6 +65,7 @@ import {
   writeDebateTabClaim,
 } from '~/core/debates/debate-tab-claims';
 import { DebateVideoTile } from '~/core/debates/debate-video-tile';
+import { speakerLabel } from '~/core/debates/debater-name';
 import {
   useAbortDebate,
   useClearDebateActivity,
@@ -3472,8 +3473,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
                         className="inline-flex max-w-full items-center rounded-md border border-grey-02 bg-bg px-2 py-1 text-[0.8125rem] text-text"
                       >
                         <span className="truncate">
-                          {participant.display_name || participant.profile_space_id} ·{' '}
-                          {responsePositionLabel(participant.position)}
+                          {speakerLabel(participant)} · {responsePositionLabel(participant.position)}
                         </span>
                       </span>
                     ))}
@@ -5073,8 +5073,8 @@ function labelForSlot(debate: Debate, slot: ParticipantSlot) {
   return participant ? responsePositionLabel(participant.position) : 'Position';
 }
 
-function speakerName(participant: Pick<Debate['participants'][number], 'display_name' | 'profile_space_id'>) {
-  return participant.display_name || participant.profile_space_id;
+function speakerName(participant: Pick<Debate['participants'][number], 'display_name'>) {
+  return speakerLabel(participant);
 }
 
 function timestampMs(value: string | null) {

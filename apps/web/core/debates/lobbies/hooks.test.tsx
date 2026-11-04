@@ -914,7 +914,7 @@ it('drops the account’s lobbies once the viewer signs out, for the anonymous l
 
 // Copilot on #2863: a brand-new account is refused for a minute or two. The list waits that out
 // like the account's other reads, so the navbar and a queued reminder do not sit on a failed read.
-it('waits out a new account’s warm-up signed in, and reads once signed out', async () => {
+it('leaves a new account’s warm-up to the recovery refetch signed in, and reads once signed out', async () => {
   const warmingUp = new GeoChatSessionError(new GeoChatRequestError('Unauthorized', null, 401));
   api.listDebateLobbies.mockRejectedValueOnce(warmingUp).mockResolvedValueOnce({ lobbies: [] });
   const client = new QueryClient();
@@ -924,7 +924,11 @@ it('waits out a new account’s warm-up signed in, and reads once signed out', a
 
   try {
     const signedIn = renderHook(() => useDebateLobbies(), { wrapper });
-    await waitFor(() => expect(signedIn.result.current.isSuccess).toBe(true), { timeout: 3_000 });
+    await waitFor(() => expect(signedIn.result.current.isError).toBe(true));
+    expect(api.listDebateLobbies).toHaveBeenCalledTimes(1);
+    // What `useGeoChatAccountRecovery` does once the account is accepted.
+    await act(() => client.invalidateQueries({ queryKey: ['debates'] }));
+    await waitFor(() => expect(signedIn.result.current.isSuccess).toBe(true));
     expect(api.listDebateLobbies).toHaveBeenCalledTimes(2);
     signedIn.unmount();
 

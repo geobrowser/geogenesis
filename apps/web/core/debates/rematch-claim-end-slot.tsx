@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import { debatesErrorMessage } from '~/core/debates/account-setup-copy';
 import { useEntityResponseIndexingSnapshot } from '~/core/hooks/use-entity-vote';
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
 import { equals as idEquals } from '~/core/id/normalize';
@@ -59,7 +60,8 @@ export function RematchClaimEndSlot({
     idEquals(createRequest.variables.claim_id, claimId) &&
     idEquals(createRequest.variables.source_space_id, spaceId)
   );
-  const error = isCurrentRequest && createRequest.error instanceof Error ? createRequest.error.message : null;
+  const error =
+    isCurrentRequest && createRequest.error instanceof Error ? debatesErrorMessage(createRequest.error) : null;
 
   if (
     !enabled ||
