@@ -11,16 +11,19 @@ type ContinueWithGoogleStatus = 'idle' | 'starting' | 'failed';
 
 // Both signup surfaces can mount, close and reopen while the same redirect is starting.
 // Its ownership outlives either hook instance; releasing it on unmount would allow a second start.
-let pendingStart: symbol | null = null;
+type GoogleStart = { id: symbol; pending: boolean };
+let currentStart: GoogleStart | null = null;
 const listeners = new Set<() => void>();
 const subscribe = (listener: () => void) => {
   listeners.add(listener);
   return () => listeners.delete(listener);
 };
 const emit = () => listeners.forEach(listener => listener());
+const readStart = () => currentStart;
+const serverStart = () => null;
 
 /** Read in account-action handlers too: a press can precede React's next render. */
-export const isGoogleSignInStarting = () => pendingStart !== null;
+export const isGoogleSignInStarting = () => currentStart?.pending === true;
 
 /**
  * "Continue with Google" on our own sign-in UI (GEO-3139): starts Google sign-in and remembers a
@@ -29,15 +32,15 @@ export const isGoogleSignInStarting = () => pendingStart !== null;
  */
 export function useContinueWithGoogle() {
   const signIn = useGoogleOAuthSignIn();
-  const starting = useSyncExternalStore(subscribe, isGoogleSignInStarting, () => false);
-  const [failed, setFailed] = useState(false);
+  const sharedStart = useSyncExternalStore(subscribe, readStart, serverStart);
+  const [failedStart, setFailedStart] = useState<symbol | null>(null);
   // Back from Google's page can restore this one from the back/forward cache, state and all, which
   // would leave the button off with nothing left to turn it back on.
   useEffect(() => {
     const onPageShow = (event: PageTransitionEvent) => {
       if (!event.persisted) return;
-      pendingStart = null;
-      setFailed(false);
+      currentStart = null;
+      setFailedStart(null);
       emit();
     };
     window.addEventListener('pageshow', onPageShow);
@@ -49,22 +52,27 @@ export function useContinueWithGoogle() {
     async (properties: AnalyticsProperties) => {
       if (!signIn || isGoogleSignInStarting()) return;
       const request = Symbol();
-      pendingStart = request;
-      setFailed(false);
+      currentStart = { id: request, pending: true };
+      setFailedStart(null);
       emit();
       try {
         // Redirects away on success, so nothing after this runs.
         await signIn(properties);
       } catch {
-        if (pendingStart !== request) return;
-        pendingStart = null;
-        setFailed(true);
+        if (currentStart?.id !== request) return;
+        currentStart = { id: request, pending: false };
+        setFailedStart(request);
         emit();
       }
     },
     [signIn]
   );
-  const status: ContinueWithGoogleStatus = starting ? 'starting' : failed ? 'failed' : 'idle';
+  // A failure belongs to this surface's request, and a newer shared request retires it.
+  const status: ContinueWithGoogleStatus = sharedStart?.pending
+    ? 'starting'
+    : failedStart !== null && failedStart === sharedStart?.id
+      ? 'failed'
+      : 'idle';
   return signIn ? { start, status } : undefined;
 }
 

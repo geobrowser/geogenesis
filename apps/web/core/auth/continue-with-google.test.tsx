@@ -129,6 +129,49 @@ describe('useContinueWithGoogle', () => {
     expect(mocks.signIn).toHaveBeenCalledTimes(2);
   });
 
+  it.each([
+    ['sheet', false],
+    ['popup', false],
+    ['sheet', true],
+    ['popup', true],
+  ] as const)(
+    'retires the %s error after another surface retries (immediate failure: %s)',
+    async (owner, immediate) => {
+      let failRetry!: (error: Error) => void;
+      mocks.signIn = vi
+        .fn()
+        .mockRejectedValueOnce(new Error('first request failed'))
+        .mockImplementation(() =>
+          immediate
+            ? Promise.reject(new Error('retry failed'))
+            : new Promise<void>((_, reject) => {
+                failRetry = reject;
+              })
+        );
+      const sheet = renderHook(() => useContinueWithGoogle());
+      const popup = renderHook(() => useContinueWithGoogle());
+      const first = owner === 'sheet' ? sheet : popup;
+      const retry = owner === 'sheet' ? popup : sheet;
+
+      await act(() => first.result.current!.start({ component: owner }));
+      expect(first.result.current!.status).toBe('failed');
+      expect(retry.result.current!.status).toBe('idle');
+
+      if (immediate) {
+        // Both shared transitions can happen within one React batch.
+        await act(() => retry.result.current!.start({ component: 'retry' }));
+      } else {
+        act(() => void retry.result.current!.start({ component: 'retry' }));
+        expect(first.result.current!.status).toBe('starting');
+        expect(retry.result.current!.status).toBe('starting');
+        await act(async () => failRetry(new Error('retry failed')));
+      }
+
+      expect(first.result.current!.status).toBe('idle');
+      expect(retry.result.current!.status).toBe('failed');
+    }
+  );
+
   it('ignores a late failure from before a back/forward-cache restore', async () => {
     let failOldStart!: (error: Error) => void;
     mocks.signIn = vi
