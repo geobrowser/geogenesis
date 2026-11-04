@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   authenticated: false,
   visible: true,
   scope: vi.fn(),
+  accountStatus: { kind: 'unknown' } as { kind: string; reason?: string },
 }));
 
 vi.mock('~/core/debates/hooks', () => ({
@@ -29,6 +30,9 @@ vi.mock('~/core/debates/debate-gateway', () => ({
     mocks.scope(...args);
     return mocks.gateway === 'ready';
   },
+}));
+vi.mock('~/core/debates/use-geo-chat-account-status', () => ({
+  useGeoChatAccountStatus: (accountKey: string | null) => (accountKey ? mocks.accountStatus : { kind: 'unknown' }),
 }));
 vi.mock('~/core/debates/debate-attention', () => ({ useDebateVisibility: () => mocks.visible }));
 vi.mock('./api', () => ({
@@ -71,6 +75,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   mocks.authenticated = false;
+  mocks.accountStatus = { kind: 'unknown' };
   mocks.visible = true;
   mocks.gateway = 'idle';
   mocks.scope.mockReset();
@@ -199,6 +204,40 @@ describe('useSpaceChatRoom live signed out', () => {
     mocks.authenticated = true;
     rerender();
     expect(mocks.scope).toHaveBeenLastCalledWith(ROOM, true, true);
+  });
+});
+
+describe('useSpaceChatRoom while geo-chat sets the account up', () => {
+  it('reads the public way while the session is refused as setting_up, then moves to the account', async () => {
+    mocks.authenticated = true;
+    mocks.accountStatus = { kind: 'refused', reason: 'setting_up' };
+    mocks.getSpaceChatMessages.mockResolvedValue({ messages: [message(1)], next_before: null });
+    const { result, rerender } = renderHook(() => useSpaceChatRoom(ROOM), { wrapper });
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+    expect(result.current.state?.messages.map(item => item.body)).toEqual(['m1']);
+    expect(mocks.getSpaceChatMessages.mock.calls[0]![1].auth).toBeNull();
+    // The public connection holds the room.
+    expect(mocks.scope).toHaveBeenLastCalledWith(ROOM, true, false);
+
+    mocks.accountStatus = { kind: 'accepted' };
+    rerender();
+    // The account connection takes the room over (`useSpaceChatRoomScope` releases the public one).
+    expect(mocks.scope).toHaveBeenLastCalledWith(ROOM, true, true);
+    await waitFor(() =>
+      expect(mocks.getSpaceChatMessages.mock.calls.at(-1)![1].auth).toMatchObject({ accountKey: 'account' })
+    );
+  });
+
+  it('leaves a signed-in account geo-chat accepted, or refused for another reason, on the account path', async () => {
+    mocks.authenticated = true;
+    mocks.accountStatus = { kind: 'refused', reason: 'unreachable' };
+    const { rerender } = renderHook(() => useSpaceChatRoom(ROOM), { wrapper });
+    expect(mocks.scope).toHaveBeenLastCalledWith(ROOM, true, true);
+    mocks.accountStatus = { kind: 'accepted' };
+    rerender();
+    expect(mocks.scope).toHaveBeenLastCalledWith(ROOM, true, true);
+    await waitFor(() => expect(mocks.getSpaceChatMessages).toHaveBeenCalled());
+    expect(mocks.getSpaceChatMessages.mock.calls[0]![1].auth).toMatchObject({ accountKey: 'account' });
   });
 });
 

@@ -13,7 +13,7 @@ import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { useSpace } from '~/core/hooks/use-space';
 import type { SpaceChatMessage } from '~/core/space-chat/api';
 import { spaceChatErrorMessage } from '~/core/space-chat/errors';
-import { useSpaceChatRoom, useSpaceChatRooms } from '~/core/space-chat/hooks';
+import { useSpaceChatAuth, useSpaceChatRoom, useSpaceChatRooms } from '~/core/space-chat/hooks';
 import { mentionedIds } from '~/core/space-chat/mentions';
 import { type ChatPerson, unknownPerson, useChatPeople, useSpaceChatParticipants } from '~/core/space-chat/people';
 import { spaceChatTabPath } from '~/core/space-chat/routes';
@@ -33,6 +33,8 @@ export const SPACE_CHAT_COPY = {
   empty: 'No messages yet. Say hello.',
   signedOut: (spaceName: string | null) => `Log in and join ${spaceName ?? 'this space'} to chat.`,
   nonMember: (spaceName: string | null) => `Members of ${spaceName ?? 'this space'} can post here. Anyone can read.`,
+  /** Signed in while geo-chat is still setting the account up. */
+  settingUp: 'Your account is still being set up. You can post once it’s ready.',
   /** A member geo-chat hasn't caught up with yet. */
   joining: 'You’re a member now. Posting opens within a few minutes.',
   unavailable: 'Chat isn’t available for this space.',
@@ -60,6 +62,7 @@ export function SpaceChatPanel({
   className?: string;
 }) {
   const { ready: authReady, authenticated } = useGeoChatAuth();
+  const { settingUp } = useSpaceChatAuth();
   const viewerId = useCurrentGeoChatUserId();
   const rooms = useSpaceChatRooms(spaceId, true);
   const membership = useChatMembership(spaceId, rooms.memberRoom?.can_post === true, rooms.refetch);
@@ -96,23 +99,27 @@ export function SpaceChatPanel({
     return <p className="px-4 py-8 text-center text-metadata text-grey-04">{SPACE_CHAT_COPY.unavailable}</p>;
   }
 
-  const canPost = authenticated && listed?.can_post === true;
+  // An account geo-chat is still setting up reads the public way and writes nothing.
+  const writer = authenticated && !settingUp;
+  const canPost = writer && listed?.can_post === true;
   const composer: ChatViewComposer = canPost
     ? { kind: 'post', onSend: chat.send, maxLength: SPACE_CHAT_COPY.maxLength, mentionCandidates: participants }
     : !authReady
       ? { kind: 'none' }
-      : !authenticated
-        ? { kind: 'sign_in', label: SPACE_CHAT_COPY.signedOut(membership.spaceName), onSignIn: () => void signIn() }
-        : !listed || membership.access.isLoading
-          ? { kind: 'none' }
-          : membership.access.isMember || membership.access.isEditor
-            ? { kind: 'closed', reason: SPACE_CHAT_COPY.joining }
-            : {
-                kind: 'join',
-                label: SPACE_CHAT_COPY.nonMember(membership.spaceName),
-                state: membership.state,
-                onJoin: membership.join,
-              };
+      : settingUp
+        ? { kind: 'closed', reason: SPACE_CHAT_COPY.settingUp }
+        : !authenticated
+          ? { kind: 'sign_in', label: SPACE_CHAT_COPY.signedOut(membership.spaceName), onSignIn: () => void signIn() }
+          : !listed || membership.access.isLoading
+            ? { kind: 'none' }
+            : membership.access.isMember || membership.access.isEditor
+              ? { kind: 'closed', reason: SPACE_CHAT_COPY.joining }
+              : {
+                  kind: 'join',
+                  label: SPACE_CHAT_COPY.nonMember(membership.spaceName),
+                  state: membership.state,
+                  onJoin: membership.join,
+                };
 
   return (
     <SpaceChatView
@@ -130,9 +137,9 @@ export function SpaceChatPanel({
       // geo-chat requires write access for edits and deletes: own messages need posting rights,
       // other people's need moderation.
       onEdit={canPost ? chat.edit : undefined}
-      onDelete={authenticated ? chat.remove : undefined}
+      onDelete={writer ? chat.remove : undefined}
       canDeleteOwn={canPost}
-      canDeleteAny={authenticated && listed?.can_moderate === true}
+      canDeleteAny={writer && listed?.can_moderate === true}
       onReact={canPost ? chat.react : undefined}
       canReply={canPost}
       mentionName={mentionName}

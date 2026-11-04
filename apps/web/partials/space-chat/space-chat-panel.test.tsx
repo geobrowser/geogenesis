@@ -11,6 +11,7 @@ const SPACE = '0243bd171b651379954685365870e6a6';
 const mocks = vi.hoisted(() => ({
   ready: true,
   authenticated: false,
+  settingUp: false,
   canPost: false,
   canModerate: false,
   pending: false,
@@ -41,6 +42,7 @@ vi.mock('~/core/space-chat/people', () => ({
   unknownPerson: (id: string) => ({ id, name: id, avatarUrl: null, avatarSeed: id }),
 }));
 vi.mock('~/core/space-chat/hooks', () => ({
+  useSpaceChatAuth: () => ({ ready: mocks.ready, auth: null, settingUp: mocks.settingUp }),
   useSpaceChatRooms: () => ({
     data: { supported: true, rooms: [] },
     isError: false,
@@ -68,6 +70,7 @@ vi.mock('~/core/space-chat/hooks', () => ({
 beforeEach(() => {
   mocks.ready = true;
   mocks.authenticated = false;
+  mocks.settingUp = false;
   mocks.canPost = false;
   mocks.canModerate = false;
   mocks.messages = [];
@@ -282,5 +285,48 @@ describe('SpaceChatPanel header and arrivals', () => {
     mocks.messages = [...mocks.messages, chatMessage('a0', 'other')];
     rerender(<SpaceChatPanel spaceId={SPACE} onArrival={onArrival} />);
     expect(onArrival).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('SpaceChatPanel while geo-chat sets the account up', () => {
+  it('shows the messages and the setting-up line, with no Log in, Join or error', () => {
+    mocks.authenticated = true;
+    mocks.settingUp = true;
+    mocks.messages = [
+      {
+        id: '0195000000007000800000000000000c',
+        room_id: 'room',
+        room_kind: 'member',
+        author_id: 'other',
+        client_nonce: 'c',
+        reply_to_message_id: null,
+        body: 'already here',
+        attachment_ids: [],
+        created_at: '2026-11-02T12:00:00Z',
+        edited_at: null,
+        deleted_at: null,
+        reactions: [],
+      },
+    ];
+    render(<SpaceChatPanel spaceId={SPACE} />);
+    expect(screen.getByText('already here')).toBeInTheDocument();
+    expect(screen.getByText(SPACE_CHAT_COPY.settingUp)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: SPACE_CHAT_VIEW_COPY.logIn })).not.toBeInTheDocument();
+    expect(joinButton()).not.toBeInTheDocument();
+    expect(screen.queryByText(SPACE_CHAT_VIEW_COPY.failed)).not.toBeInTheDocument();
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Delete message' })).not.toBeInTheDocument();
+  });
+
+  it('gives the composer back once the account is ready', () => {
+    mocks.authenticated = true;
+    mocks.canPost = true;
+    mocks.settingUp = true;
+    const { rerender } = render(<SpaceChatPanel spaceId={SPACE} />);
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    mocks.settingUp = false;
+    rerender(<SpaceChatPanel spaceId={SPACE} />);
+    expect(screen.getByRole('textbox')).toBeInTheDocument();
+    expect(screen.queryByText(SPACE_CHAT_COPY.settingUp)).not.toBeInTheDocument();
   });
 });

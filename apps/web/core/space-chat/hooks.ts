@@ -8,6 +8,7 @@ import { GeoChatRequestError } from '~/core/debates/api';
 import { useDebateVisibility } from '~/core/debates/debate-attention';
 import { useSpaceChatRoomScope } from '~/core/debates/debate-gateway';
 import { useGeoChatAuth } from '~/core/debates/hooks';
+import { useGeoChatAccountStatus } from '~/core/debates/use-geo-chat-account-status';
 import { normId } from '~/core/utils/norm-id';
 
 import {
@@ -45,14 +46,20 @@ const POLL_VISIBLE_MS = 5_000;
 /** Signed in with the gateway up, events keep it current; a remount within this reads the cache. */
 const SIGNED_IN_STALE_MS = 30_000;
 
-function useSpaceChatAuth(): { ready: boolean; auth: SpaceChatAuth | null } {
+/**
+ * The account chat reads and writes as. `null` signed out, and while geo-chat is still setting the
+ * account up (`settingUp`): those viewers read the public way until it accepts the session.
+ */
+export function useSpaceChatAuth(): { ready: boolean; auth: SpaceChatAuth | null; settingUp: boolean } {
   const { ready, authenticated, accountKey, getPrivyIdentityToken } = useGeoChatAuth();
-  const signedIn = authenticated && accountKey !== null;
+  const signedIn = ready && authenticated && accountKey !== null;
+  const status = useGeoChatAccountStatus(signedIn ? accountKey : null);
+  const settingUp = signedIn && status.kind === 'refused' && status.reason === 'setting_up';
   const auth = React.useMemo(
-    () => (signedIn && accountKey ? { getPrivyIdentityToken, accountKey } : null),
-    [accountKey, getPrivyIdentityToken, signedIn]
+    () => (signedIn && !settingUp && accountKey ? { getPrivyIdentityToken, accountKey } : null),
+    [accountKey, getPrivyIdentityToken, settingUp, signedIn]
   );
-  return { ready, auth };
+  return { ready, auth, settingUp };
 }
 
 /**
