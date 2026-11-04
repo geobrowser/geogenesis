@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
 import type { DebateLobbySummary } from '../api';
-import { type DebateLobbyCard, applyLobbyCardPatch, parseLobbyCardPatch, sortLobbies } from './lobby-card-patch';
+import {
+  type DebateLobbyCard,
+  applyLobbyCardPatch,
+  applyLobbyCardPatchToCalendar,
+  parseLobbyCardPatch,
+  sortLobbies,
+} from './lobby-card-patch';
 
 function summary(overrides: Partial<DebateLobbySummary> & { lobby_id: string }): DebateLobbySummary {
   return {
@@ -23,7 +29,13 @@ function summary(overrides: Partial<DebateLobbySummary> & { lobby_id: string }):
 }
 
 function card(overrides: Partial<DebateLobbyCard> & { lobby_id: string }): DebateLobbyCard {
-  const { viewer_reminded: _reminded, viewer_on_roster: _onRoster, as_of: _asOf, ...rest } = summary(overrides);
+  const {
+    viewer_reminded: _reminded,
+    viewer_dismissed: _dismissed,
+    viewer_on_roster: _onRoster,
+    as_of: _asOf,
+    ...rest
+  } = summary(overrides);
   return rest;
 }
 
@@ -61,6 +73,23 @@ describe('applyLobbyCardPatch', () => {
       viewer_reminded: true,
       viewer_on_roster: true,
       as_of: asOf,
+    });
+  });
+
+  // GEO-3519. The card says nothing of a dismissal, so dropping it would bring a dismissed lobby back
+  // into the Requests timeline whenever anyone else RSVPs to it, in the list and the calendar's week.
+  it('keeps a dismissal, on the list and on a calendar week', () => {
+    const cached = summary({ lobby_id: 'aa', open: false, viewer_dismissed: true });
+    const patch = { asOf, lobby: card({ lobby_id: 'aa', open: false, reminder_count: 3 }) };
+
+    expect(applyLobbyCardPatch({ lobbies: [cached] }, patch).lobbies[0]).toMatchObject({
+      reminder_count: 3,
+      viewer_dismissed: true,
+    });
+    const week = { lobbies: [{ ...cached, state: 'upcoming' as const, closed_at: null }] };
+    expect(applyLobbyCardPatchToCalendar(week, patch).lobbies[0]).toMatchObject({
+      reminder_count: 3,
+      viewer_dismissed: true,
     });
   });
 

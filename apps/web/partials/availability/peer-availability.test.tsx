@@ -78,9 +78,10 @@ describe('PeerAvailabilityView', () => {
     expect(screen.queryByText(/is in ,/)).not.toBeInTheDocument();
   });
 
-  it('falls back to a shortened id when nobody supplied a name', () => {
+  it('falls back to the neutral label, never the id, when nobody supplied a name', () => {
     setup({}, null);
-    expect(screen.getByRole('heading', { name: /user-pee/ })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Debater/ })).toBeInTheDocument();
+    expect(screen.queryByText(/user-pee/)).not.toBeInTheDocument();
   });
 
   it('shows the unknown-week state on a deployment that cannot send it', () => {

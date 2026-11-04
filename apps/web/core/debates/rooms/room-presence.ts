@@ -1,4 +1,5 @@
 import type { DebateRoomNotice, DebateRoomView } from '../api';
+import type { GeoChatPersonRef } from '../matchmaking/use-geo-chat-user-summaries';
 
 /**
  * Indicator states (GEO-2941). Read off the server's `waiting` reason and `occupants`, so the
@@ -50,6 +51,11 @@ export type DebateRoomPresenceInput = {
  */
 export function sameId(a: string, b: string) {
   return a.replace(/-/g, '').toLowerCase() === b.replace(/-/g, '').toLowerCase();
+}
+
+/** A user the room mentions, with the profile `people` carries for them where geo-chat sent one. */
+export function roomPerson(room: Pick<DebateRoomView, 'people'>, userId: string): GeoChatPersonRef {
+  return room.people?.find(person => sameId(person.user_id, userId)) ?? { user_id: userId };
 }
 
 /**

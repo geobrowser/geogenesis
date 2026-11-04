@@ -2,6 +2,8 @@
 
 import * as React from 'react';
 
+import { debatesErrorMessage } from '~/core/debates/account-setup-copy';
+
 import type { DebateRequest, DebateRequestParty } from '../api';
 import { DebateRequestDialog, type DebateRequestDialogParticipant } from '../debate-request-dialog';
 import { requestOpenRounds } from '../format-details';
@@ -58,7 +60,7 @@ export function IncomingRequestPopup({
       formatId={request.turn_format_id}
       openRounds={requestOpenRounds(request)}
       busy={busy}
-      error={error?.message ?? null}
+      error={error ? debatesErrorMessage(error) : null}
       actionsLayout="split"
       rejectLabel="Not now"
       analytics={{

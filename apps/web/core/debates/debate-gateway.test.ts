@@ -123,6 +123,30 @@ describe('DebateGatewayClient', () => {
     vi.restoreAllMocks();
   });
 
+  it('retryNow runs a waiting session retry at once, and does nothing while connected', async () => {
+    getSession.mockRejectedValue(new Error('refused'));
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.advanceTimersByTimeAsync(0);
+    expect(getSession).toHaveBeenCalledTimes(1);
+    // Backed off to a long wait.
+    for (let i = 0; i < 6; i += 1) await vi.advanceTimersByTimeAsync(30_000);
+    const waited = getSession.mock.calls.length;
+
+    getSession.mockImplementation(async () => session);
+    client.retryNow();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(getSession).toHaveBeenCalledTimes(waited + 1);
+    expect(sockets).toHaveLength(1);
+
+    // Connected: nothing to retry.
+    client.retryNow();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(getSession).toHaveBeenCalledTimes(waited + 1);
+  });
+
   it('authenticates, reference-counts scopes, and reconciles the subscribe/READY race', async () => {
     const releaseFirst = client.retainScope({ scope: 'space', space_id: 'space-1' });
     const releaseSecond = client.retainScope({ scope: 'space', space_id: 'space-1' });
