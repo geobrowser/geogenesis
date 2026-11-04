@@ -61,8 +61,10 @@ const FOR_YOU_ENABLED_FOR_EVERYONE = process.env.NEXT_PUBLIC_FOR_YOU_ENABLED ===
 function ExploreForYouFeed({
   walletAddress,
   interleave,
+  entryEntityId,
 }: {
   walletAddress: string | null;
+  entryEntityId: string | null;
   interleave: React.ComponentProps<typeof EntityFeed>['interleave'];
 }) {
   const { topicIds, isLoading } = useFollowedTopics();
@@ -84,7 +86,8 @@ function ExploreForYouFeed({
   return (
     <EntityFeed
       {...EXPLORE_FEED_PROPS}
-      initialSort="for-you"
+      initialSort={entryEntityId ? 'best' : 'for-you'}
+      entryEntityId={entryEntityId}
       sortOptions={FOR_YOU_SORT_OPTIONS}
       followedTopicIds={followedTopicIds}
       pendingTopicFollows={heldPicks.length > 0}
@@ -102,9 +105,10 @@ type Props = {
   sidePanel: React.ReactNode;
   /** The wallet cookie the request carried, if any. */
   walletAddress?: string | null;
+  entryEntityId?: string | null;
 };
 
-export function ExplorePage({ sidePanel, walletAddress = null }: Props) {
+export function ExplorePage({ sidePanel, walletAddress = null, entryEntityId = null }: Props) {
   // GEO-2914. Hidden, not removed: the panel and everything in it is still built and still fed by
   // the route's own queries, so turning the flag on restores it without a deploy — and the tickets
   // still open against its contents have somewhere to land.
@@ -135,9 +139,21 @@ export function ExplorePage({ sidePanel, walletAddress = null }: Props) {
           <ExploreLiveLobbiesBanner />
         </div>
         {forYouEnabled ? (
-          <ExploreForYouFeed walletAddress={walletAddress} interleave={pastCalls} />
+          <ExploreForYouFeed
+            key={entryEntityId ?? 'default'}
+            walletAddress={walletAddress}
+            interleave={pastCalls}
+            entryEntityId={entryEntityId}
+          />
         ) : (
-          <EntityFeed {...EXPLORE_FEED_PROPS} initialSort="best" walletAddress={walletAddress} interleave={pastCalls} />
+          <EntityFeed
+            key={entryEntityId ?? 'default'}
+            {...EXPLORE_FEED_PROPS}
+            initialSort="best"
+            entryEntityId={entryEntityId}
+            walletAddress={walletAddress}
+            interleave={pastCalls}
+          />
         )}
       </main>
     </EntityPageSidebarLayout>
