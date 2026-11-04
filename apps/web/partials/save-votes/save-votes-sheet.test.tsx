@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { snapshotActionContext } from '~/core/action-context';
 import { useContinueWithGoogle } from '~/core/auth/continue-with-google';
+import { closeSignInBox, openSignInBox } from '~/core/auth/sign-in-box/sign-in-box-store';
 import { noteEmailArrival } from '~/core/deep-links/ref-email';
 import {
   saveVotesHeading,
@@ -663,6 +664,18 @@ describe('SaveVotesSheet', () => {
     expect(mocks.impression).not.toHaveBeenCalled();
 
     rerender(<SaveVotesSheet />);
+    expect(screen.getByRole('region', { name: 'Save your votes' })).toBeInTheDocument();
+  });
+
+  it('waits behind our sign-in box while it is up', () => {
+    vote('a');
+    vote('b');
+    markPromptedThisSession();
+    render(<SaveVotesSheet />);
+    act(() => openSignInBox({ attemptId: 'attempt', attribution: { component: 'follow_button' } }));
+    act(() => openSaveVotesPrompt('return_visit'));
+    expect(screen.queryByRole('region', { name: 'Save your votes' })).not.toBeInTheDocument();
+    act(() => closeSignInBox());
     expect(screen.getByRole('region', { name: 'Save your votes' })).toBeInTheDocument();
   });
 

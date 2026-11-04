@@ -35,7 +35,7 @@ function SignInBox({ request }: { request: SignInBoxRequest }) {
   // Undefined with the `googleSignIn` flag off or in an in-app browser, which hides the button.
   const google = useContinueWithGoogle();
   const googleStarting = google?.status === 'starting';
-  const [email, setEmail] = React.useState('');
+  const [email, setEmail] = React.useState(request.prefillEmail ?? '');
   const [step, setStep] = React.useState<{ email: string; phase: 'code' | 'editing' } | null>(null);
   const codeEmail = step?.phase === 'code' ? step.email : null;
   const editing = step?.phase === 'editing';

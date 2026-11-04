@@ -14,6 +14,7 @@ import {
   recoveryNotice,
   subscribeRecoveryNotice,
 } from './code-step';
+import { useSignInDialogOpen } from './sign-in-box/use-sign-in-dialog-open';
 
 /** Shown over Privy's dialog; the copy is the product's to adjust (see PR.md). */
 export function recoveryNoticeText(email: string | null) {
@@ -34,7 +35,8 @@ export const LINK_SIGN_IN_GRACE_MS = 3_000;
  * in `usePrivySignIn`, so a deep link's sign-in uses it too.
  */
 export function CodeStepRecovery() {
-  const { ready, authenticated, isModalOpen } = usePrivy();
+  const { ready, authenticated } = usePrivy();
+  const dialogOpen = useSignInDialogOpen();
   const { state } = useLoginWithEmail();
   const notice = React.useSyncExternalStore(subscribeRecoveryNotice, recoveryNotice, () => null);
   const openSignIn = usePrivySignIn();
@@ -64,9 +66,9 @@ export function CodeStepRecovery() {
   // Gone once the dialog closes or the new code is on its way.
   React.useEffect(() => {
     if (!notice) return;
-    if (isModalOpen) sawModal.current = true;
-    if ((sawModal.current && !isModalOpen) || state.status === 'sending-code' || authenticated) hideRecoveryNotice();
-  }, [authenticated, isModalOpen, notice, state.status]);
+    if (dialogOpen) sawModal.current = true;
+    if ((sawModal.current && !dialogOpen) || state.status === 'sending-code' || authenticated) hideRecoveryNotice();
+  }, [authenticated, dialogOpen, notice, state.status]);
 
   if (!notice) return null;
   return (

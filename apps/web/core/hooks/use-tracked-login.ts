@@ -7,11 +7,30 @@ import { useActionContext, useActionScope } from '~/core/action-context-provider
 import { type AnalyticsProperties } from '~/core/analytics';
 import { currentAuthAttempt } from '~/core/auth-attempt';
 import { useGoogleSignInOptions } from '~/core/auth/google-sign-in';
-import { beginPrivyAuth } from '~/core/privy-auth-events';
+import { openSignInBox } from '~/core/auth/sign-in-box/sign-in-box-store';
+import { beginPrivyAuth, cancelPrivyAuth } from '~/core/privy-auth-events';
+import { readStoredFeatureFlag } from '~/core/state/feature-flags';
 import { useGeoLogin, usePrivy } from '~/core/wallet/auth-hooks';
 
+type TrackedLoginParams = {
+  /** The press's sign-in completed. */
+  onComplete?: () => void;
+  /** Privy reported a failure, or the sign-in was dismissed (`exited_auth_flow`). */
+  onError?: (error: string) => void;
+};
+
+/** Per-press extras. */
+export type TrackedLoginExtras = {
+  /** Fills in the email field: a sign-in picked up again after the tab reloaded (GEO-3573). */
+  prefillEmail?: string;
+  /** The sign-in box's heading, for an entry with its own ask. */
+  heading?: string;
+  /** `privy` opens Privy's own dialog even with `ourSignInBox` on: the box's code step falls back to it. */
+  surface?: 'privy';
+};
+
 /** Capture attribution at the press; the persistent observer owns completion tracking. */
-export function useTrackedLogin(params: Parameters<typeof useGeoLogin>[0]) {
+export function useTrackedLogin(params: TrackedLoginParams) {
   const scope = useActionScope();
   const getContext = useActionContext(
     'sign_in_prompt',
@@ -27,27 +46,27 @@ export function useTrackedLogin(params: Parameters<typeof useGeoLogin>[0]) {
   authenticatedRef.current = authenticated;
   // The only place Privy's login() is called, so the flag alone decides whether Google is offered.
   const googleSignInOptions = useGoogleSignInOptions();
+  const paramsRef = useRef(params);
+  paramsRef.current = params;
+  const complete = useCallback(() => {
+    const context = requested.current;
+    if (!context || currentAuthAttempt()?.id !== context.auth_attempt_id) return;
+    requested.current = null;
+    withActionContext(context, () => paramsRef.current?.onComplete?.());
+  }, []);
+  const fail = useCallback((error: string) => {
+    if (!requested.current || currentAuthAttempt()?.id !== requested.current.auth_attempt_id) return;
+    if (error === 'exited_auth_flow') requested.current = null;
+    paramsRef.current?.onError?.(error);
+  }, []);
   const { login } = useGeoLogin({
-    ...params,
     onComplete: args => {
-      const context = requested.current;
-      if (!context || args.wasAlreadyAuthenticated || currentAuthAttempt()?.id !== context.auth_attempt_id) return;
-      requested.current = null;
-      return withActionContext(context, () => params?.onComplete?.(args));
+      if (!args.wasAlreadyAuthenticated) complete();
     },
-    onError: error => {
-      if (!requested.current || currentAuthAttempt()?.id !== requested.current.auth_attempt_id) return;
-      if (error === 'exited_auth_flow') requested.current = null;
-      params?.onError?.(error);
-    },
+    onError: error => fail(error),
   });
   const trackedLogin = useCallback(
-    (
-      properties?: AnalyticsProperties,
-      options?: Parameters<typeof beginPrivyAuth>[1],
-      /** An address to fill in on Privy's email field, for a sign-in being picked up again (GEO-3573). */
-      prefillEmail?: string
-    ) => {
+    (properties?: AnalyticsProperties, options?: Parameters<typeof beginPrivyAuth>[1], extras?: TrackedLoginExtras) => {
       if (authenticatedRef.current) return undefined;
       const context = getContext(
         properties?.target_id && properties?.target_type
@@ -60,13 +79,28 @@ export function useTrackedLogin(params: Parameters<typeof useGeoLogin>[0]) {
         context.component === 'sign_in_prompt' ? (properties?.component ?? context.component) : context.component;
       const attempt = beginPrivyAuth({ ...context, auth_trigger: 'control', ...properties, component }, options);
       requested.current = { ...context, auth_attempt_id: attempt?.id };
+      const prefillEmail = extras?.prefillEmail;
+      if (attempt && extras?.surface !== 'privy' && readStoredFeatureFlag('ourSignInBox')) {
+        openSignInBox({
+          attemptId: attempt.id,
+          attribution: { ...attempt.properties, component: String(attempt.properties.component) },
+          heading: extras?.heading,
+          prefillEmail,
+          onComplete: complete,
+          onDismiss: () => {
+            fail('exited_auth_flow');
+            cancelPrivyAuth();
+          },
+        });
+        return attempt;
+      }
       const prefill = prefillEmail ? { prefill: { type: 'email' as const, value: prefillEmail } } : undefined;
       // No argument with neither, so Privy's modal keeps the config's methods.
       if (googleSignInOptions || prefill) login({ ...googleSignInOptions, ...prefill });
       else login();
       return attempt;
     },
-    [login, getContext, googleSignInOptions]
+    [login, getContext, googleSignInOptions, complete, fail]
   );
   return { login: trackedLogin };
 }

@@ -86,6 +86,13 @@ describe('SignInBox', () => {
     expect(screen.getByRole('dialog', { name: 'Join the discussion' })).toBeInTheDocument();
   });
 
+  it('starts from a recovered address', () => {
+    render(<SignInBoxHost />);
+    open({ prefillEmail: 'ann@example.com' });
+    expect(screen.getByLabelText('Email address')).toHaveValue('ann@example.com');
+    expect(screen.getByRole('button', { name: SIGN_IN_BOX_COPY.submit })).toBeEnabled();
+  });
+
   it('records the prompt as viewed when it paints', () => {
     render(<SignInBoxHost />);
     const { attempt } = open();

@@ -12,6 +12,8 @@ export type SignInBoxRequest = {
   attribution: { readonly component: string } & AnalyticsProperties;
   /** Overrides the default heading, for an entry with its own ask (a lobby link, say). */
   heading?: string;
+  /** The address to start from: a code step picked up again (GEO-3573). */
+  prefillEmail?: string;
   /** The attempt ended signed in. */
   onComplete?: () => void;
   /** Closed without signing in. */

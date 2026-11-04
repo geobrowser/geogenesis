@@ -127,6 +127,8 @@ export function AccountStep({
   const openPrivyModal = usePrivySignIn(undefined, {
     analytics,
     resumeAuthAttempt: true,
+    // Never the sign-in box, which hosts this step.
+    surface: 'privy',
     onError: () => giveUpRef.current(),
   });
   const [code, setCode] = React.useState('');

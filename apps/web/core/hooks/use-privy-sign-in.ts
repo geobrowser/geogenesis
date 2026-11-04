@@ -5,7 +5,7 @@ import * as React from 'react';
 import { type AnalyticsProperties } from '~/core/analytics';
 import { codeRecoveryOffered, codeRecoveryProperties, takeCodeRecovery } from '~/core/auth/code-step';
 import { onSignInAbandoned } from '~/core/auth/sign-in-abandoned';
-import { useTrackedLogin } from '~/core/hooks/use-tracked-login';
+import { type TrackedLoginExtras, useTrackedLogin } from '~/core/hooks/use-tracked-login';
 import { usePrivy } from '~/core/wallet/auth-hooks';
 
 import { usePrepareOnboarding } from './use-prepare-onboarding';
@@ -27,6 +27,10 @@ type UsePrivySignInOptions = {
   resumeAuthAttempt?: boolean;
   /** Called only for an attempt this hook started, after Privy reports a failure or dismissal. */
   onError?: () => void;
+  /** The sign-in box's heading, for an entry with its own ask. */
+  heading?: string;
+  /** `privy`: always Privy's own dialog, for the box's own fallback. */
+  surface?: TrackedLoginExtras['surface'];
 };
 
 /** Per-press options, for a caller whose continuation depends on what was pressed. */
@@ -41,7 +45,7 @@ export type PrivySignInCallOptions = {
   redirectTo?: string;
   /** A new account is asked only for a name in onboarding (GEO-3517); see `usePrepareOnboarding`. */
   nameOnlyOnboarding?: boolean;
-  /** Fills in Privy's email field: a sign-in picked up again after the tab reloaded (GEO-3573). */
+  /** Fills in the email field: a sign-in picked up again after the tab reloaded (GEO-3573). */
   prefillEmail?: string;
 };
 
@@ -105,7 +109,11 @@ export function usePrivySignIn(onComplete?: () => void, options?: UsePrivySignIn
       const attempt = login(
         { ...(recovery?.properties ?? {}), ...own, ...(recovery ? codeRecoveryProperties(recovery) : {}) },
         { resume: optionsRef.current?.resumeAuthAttempt },
-        callOptions?.prefillEmail ?? recovery?.email ?? undefined
+        {
+          prefillEmail: callOptions?.prefillEmail ?? recovery?.email ?? undefined,
+          heading: optionsRef.current?.heading,
+          surface: optionsRef.current?.surface,
+        }
       );
       if (recovery) codeRecoveryOffered(recovery, attempt?.id);
       // Registered with the app-level attempt rather than held here: this control can unmount

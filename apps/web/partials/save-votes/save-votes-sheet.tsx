@@ -6,6 +6,7 @@ import cx from 'classnames';
 import { useAtomValue } from 'jotai';
 
 import { isGoogleSignInStarting, useContinueWithGoogle } from '~/core/auth/continue-with-google';
+import { useSignInDialogOpen } from '~/core/auth/sign-in-box/use-sign-in-dialog-open';
 import { arrivedFromEmail } from '~/core/deep-links/ref-email';
 import { useAnyModalOpen } from '~/core/hooks/use-any-modal-open';
 import { usePrepareOnboarding } from '~/core/hooks/use-prepare-onboarding';
@@ -147,7 +148,9 @@ export function SaveVotesSheet() {
   // The email capture card shares this corner, and is mid-signup if it is still up once votes exist.
   const isEmailCaptureShowing = useIsEmailCaptureShowing();
   // Privy's dialog still comes first, centred or not: it is the visitor's sign-in in progress.
-  const overlayOpen = centered ? isModalOpen : isModalOpen || isChatOpen || isAnyModalOpen || isEmailCaptureShowing;
+  // Our sign-in box is a sign-in in progress too, opened by a press elsewhere while the corner card waited.
+  const signInOpen = useSignInDialogOpen();
+  const overlayOpen = centered ? signInOpen : signInOpen || isChatOpen || isAnyModalOpen || isEmailCaptureShowing;
 
   // Privy's dialog over the centred sheet is the code step's fallback (a send it could not make).
   // The sheet's modal would hold focus and pointer events away from it, so it steps aside instead,
