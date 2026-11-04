@@ -1,4 +1,5 @@
 /** Space chat view shapes (GEO-3422): lobby chat's `RoomChat` props plus replies, reactions and mentions. */
+import type * as React from 'react';
 
 /** Who wrote a message, as the chat view draws them. */
 export type ChatViewAuthor = {
@@ -43,10 +44,9 @@ export type ChatViewComposer =
       /** Offered after `@`; no picker when absent. */
       mentionCandidates?: ChatViewPerson[];
     }
-  /**
-   * Posting needs membership: a Join control, or the request's state once sent. `onJoin` signs a
-   * signed-out viewer in first.
-   */
+  /** Signed out: a Log in control. */
+  | { kind: 'sign_in'; label: string; onSignIn: () => void }
+  /** Signed in without membership: a Join control, or the request's state once sent. */
   | {
       kind: 'join';
       label: string;
@@ -56,5 +56,14 @@ export type ChatViewComposer =
   /** Posting is not offered here, with a line saying why. */
   | { kind: 'closed'; reason: string }
   | { kind: 'none' };
+
+/** The strip above the messages. */
+export type ChatViewHeader = {
+  title: string;
+  /** Who may read and post, or where else the messages show. */
+  subtitle: React.ReactNode;
+  /** Recent authors, newest first. */
+  people: ChatViewAuthor[];
+};
 
 export type ChatViewStatus = 'loading' | 'error' | 'ready';

@@ -237,23 +237,71 @@ describe('SpaceChatView', () => {
     expect(onLoadOlder).toHaveBeenCalled();
   });
 
-  it('offers a non-member the Join control in the composer slot', () => {
-    const onJoin = vi.fn();
+  it('offers a signed-out reader Log in in the composer slot', () => {
+    const onSignIn = vi.fn();
     renderView({
-      composer: { kind: 'join', label: 'Join Geo to chat', state: 'idle', onJoin },
+      composer: { kind: 'sign_in', label: 'Log in and join Geo to chat.', onSignIn },
       onReact: undefined,
       canReply: false,
     });
-    expect(screen.getByText('Join Geo to chat')).toBeInTheDocument();
+    expect(screen.getByText('Log in and join Geo to chat.')).toBeInTheDocument();
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: SPACE_CHAT_VIEW_COPY.logIn }));
+    expect(onSignIn).toHaveBeenCalled();
+  });
+
+  it('offers a non-member the Join control in the composer slot', () => {
+    const onJoin = vi.fn();
+    renderView({
+      composer: { kind: 'join', label: 'Members of Geo can post here. Anyone can read.', state: 'idle', onJoin },
+      onReact: undefined,
+      canReply: false,
+    });
+    expect(screen.getByText('Members of Geo can post here. Anyone can read.')).toBeInTheDocument();
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Reply to message' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: SPACE_CHAT_VIEW_COPY.join }));
     expect(onJoin).toHaveBeenCalled();
   });
 
-  it('shows a sent request instead of the Join control', () => {
-    renderView({ composer: { kind: 'join', label: 'Join Geo to chat', state: 'requested', onJoin: vi.fn() } });
-    expect(screen.getByText(SPACE_CHAT_VIEW_COPY.membershipPending)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: SPACE_CHAT_VIEW_COPY.join })).not.toBeInTheDocument();
+  it.each([
+    ['sending', SPACE_CHAT_VIEW_COPY.join, true],
+    ['requested', SPACE_CHAT_VIEW_COPY.membershipRequested, true],
+    ['error', SPACE_CHAT_VIEW_COPY.joinRetry, false],
+  ] as const)('labels the Join control while %s', (state, name, disabled) => {
+    const onJoin = vi.fn();
+    renderView({ composer: { kind: 'join', label: 'Members of Geo can post here.', state, onJoin } });
+    const button = screen.getByRole('button', { name });
+    if (disabled) expect(button).toBeDisabled();
+    else expect(button).toBeEnabled();
+  });
+
+  it('draws the header with its title, line and recent authors', () => {
+    renderView({
+      header: {
+        title: 'Chat',
+        subtitle: 'Everyone can read. Members can post.',
+        people: people.map(person => ({ ...person })),
+      },
+    });
+    expect(screen.getByRole('heading', { name: 'Chat' })).toBeInTheDocument();
+    expect(screen.getByText('Everyone can read. Members can post.')).toBeInTheDocument();
+  });
+
+  it('separates days, and a divider starts a new group', () => {
+    // Three minutes apart, so only the day change keeps the first two from grouping.
+    const at = (date: number, hour: number, minute: number) => new Date(2026, 9, date, hour, minute).toISOString();
+    renderView({
+      messages: [
+        message('1', BEN, { createdAt: at(14, 23, 58) }),
+        message('2', BEN, { createdAt: at(15, 0, 1) }),
+        message('3', BEN, { createdAt: at(15, 0, 2) }),
+      ],
+    });
+    const separators = screen.getAllByRole('separator');
+    expect(separators).toHaveLength(2);
+    expect(separators[1]).toHaveAccessibleName(/15 Oct/);
+    // The day's first message shows its author again; the next one, a minute on, groups.
+    expect(screen.getAllByText('Ben')).toHaveLength(2);
   });
 });

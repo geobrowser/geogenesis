@@ -15,18 +15,28 @@ import {
 } from '~/core/space-chat/mentions';
 
 import { Avatar } from '~/design-system/avatar';
+import { AvatarGroup } from '~/design-system/avatar-group';
+import { Button } from '~/design-system/button';
 
-import type { ChatViewComposer, ChatViewMessage, ChatViewPerson, ChatViewReaction, ChatViewStatus } from './types';
+import { dayBreaks } from './day-dividers';
+import type {
+  ChatViewComposer,
+  ChatViewHeader,
+  ChatViewMessage,
+  ChatViewPerson,
+  ChatViewReaction,
+  ChatViewStatus,
+} from './types';
 
 export const SPACE_CHAT_VIEW_COPY = {
   empty: 'No messages yet.',
   loading: 'Loading messages…',
   failed: 'Could not load the chat.',
   retry: 'Try again',
-  join: 'Join',
+  logIn: 'Log in',
+  join: 'Join space',
   joinRetry: 'Try again',
-  /** The Explore join control's copy for a sent request. */
-  membershipPending: 'Membership pending',
+  membershipRequested: 'Membership requested',
   loadOlder: 'Load earlier messages',
   loadingOlder: 'Loading…',
   deleted: 'Message deleted',
@@ -59,6 +69,7 @@ export const QUICK_REACTIONS = ['👍', '❤️', '😂', '🎉', '🤔', '👀'
 const GROUPING_WINDOW_MS = 5 * 60_000;
 const STICK_TO_BOTTOM_PX = 48;
 const MENTION_RESULTS = 6;
+const HEADER_PEOPLE = 4;
 
 type Props = {
   /** Oldest first. */
@@ -83,6 +94,8 @@ type Props = {
   /** A mentioned person's name; `null` leaves the token's fallback. */
   mentionName?: (personId: string) => string | null;
   errorMessage?: (error: unknown, fallback: string) => string;
+  /** A strip above the messages; none when absent. */
+  header?: ChatViewHeader;
   /** The list's accessible name. */
   label: string;
   emptyLabel?: string;
@@ -109,6 +122,7 @@ export function SpaceChatView({
   canReply = false,
   mentionName = () => null,
   errorMessage = (_error, fallback) => fallback,
+  header,
   label,
   emptyLabel = SPACE_CHAT_VIEW_COPY.empty,
   className,
@@ -123,6 +137,7 @@ export function SpaceChatView({
   const lastIsOwn = viewerId !== null && messages.length > 0 && sameId(messages.at(-1)!.author.id, viewerId);
   const previousEnds = React.useRef<{ first: string | null; last: string | null }>({ first: null, last: null });
   const posting = composer.kind === 'post';
+  const breaks = React.useMemo(() => dayBreaks(messages), [messages]);
 
   React.useLayoutEffect(() => {
     const list = listRef.current;
@@ -161,6 +176,7 @@ export function SpaceChatView({
 
   return (
     <div className={cx('relative flex min-h-0 flex-col', className)} data-testid="space-chat">
+      {header ? <ChatHeader header={header} /> : null}
       {status === 'loading' && messages.length === 0 ? (
         <ChatNotice>{SPACE_CHAT_VIEW_COPY.loading}</ChatNotice>
       ) : status === 'error' && messages.length === 0 ? (
@@ -195,14 +211,16 @@ export function SpaceChatView({
           ) : null}
           {messages.map((message, index) => {
             const previous = messages[index - 1];
+            const day = breaks.get(index);
             const grouped =
+              day === undefined &&
               previous !== undefined &&
               !previous.deleted &&
               !message.replyTo &&
               sameId(previous.author.id, message.author.id) &&
               Date.parse(message.createdAt) - Date.parse(previous.createdAt) < GROUPING_WINDOW_MS;
             const own = viewerId !== null && sameId(message.author.id, viewerId);
-            return (
+            const row = (
               <ChatRow
                 key={message.id}
                 message={message}
@@ -215,6 +233,14 @@ export function SpaceChatView({
                 mentionCandidates={composer.kind === 'post' ? composer.mentionCandidates : undefined}
                 errorMessage={errorMessage}
               />
+            );
+            return day === undefined ? (
+              row
+            ) : (
+              <React.Fragment key={message.id}>
+                <DayDivider label={day} />
+                {row}
+              </React.Fragment>
             );
           })}
         </ol>
@@ -237,6 +263,42 @@ export function SpaceChatView({
         onCancelReply={() => setReplyTo(null)}
       />
     </div>
+  );
+}
+
+function ChatHeader({ header }: { header: ChatViewHeader }) {
+  const people = header.people.slice(0, HEADER_PEOPLE);
+  return (
+    <div className="flex items-center justify-between gap-3 border-b border-grey-02 px-3 py-2">
+      <div className="min-w-0">
+        <h2 className="text-metadataMedium text-text">{header.title}</h2>
+        <p className="text-footnote text-grey-04">{header.subtitle}</p>
+      </div>
+      {people.length > 0 ? (
+        <div className="shrink-0 mobile:hidden">
+          <AvatarGroup>
+            {people.map(person => (
+              <AvatarGroup.Item key={person.id} size={20}>
+                <Avatar avatarUrl={person.avatarUrl} value={person.avatarSeed} size={20} />
+              </AvatarGroup.Item>
+            ))}
+          </AvatarGroup>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/** A local-day boundary in the list. */
+function DayDivider({ label }: { label: string }) {
+  return (
+    <li role="separator" aria-label={label} className="flex items-center gap-2 px-3 pt-3 pb-1">
+      <span aria-hidden className="h-px flex-1 bg-grey-02" />
+      <span aria-hidden className="shrink-0 text-footnote text-grey-04">
+        {label}
+      </span>
+      <span aria-hidden className="h-px flex-1 bg-grey-02" />
+    </li>
   );
 }
 
@@ -766,23 +828,31 @@ function ChatComposer({
   if (composer.kind === 'closed') {
     return <p className="border-t border-grey-02 px-3 py-2.5 text-footnote text-grey-04">{composer.reason}</p>;
   }
+  if (composer.kind === 'sign_in') {
+    return (
+      <ChatPrompt label={composer.label}>
+        <Button variant="primary" small onClick={composer.onSignIn}>
+          {SPACE_CHAT_VIEW_COPY.logIn}
+        </Button>
+      </ChatPrompt>
+    );
+  }
   if (composer.kind === 'join') {
     return (
-      <div className="flex items-center justify-between gap-3 border-t border-grey-02 px-3 py-2">
-        <p className="min-w-0 text-metadata text-grey-04">{composer.label}</p>
-        {composer.state === 'requested' ? (
-          <span className="shrink-0 text-metadata text-grey-04">{SPACE_CHAT_VIEW_COPY.membershipPending}</span>
-        ) : (
-          <button
-            type="button"
-            onClick={composer.onJoin}
-            disabled={composer.state === 'sending'}
-            className="flex h-6 shrink-0 items-center rounded border border-grey-02 px-2 text-metadata text-text shadow-button transition-colors duration-150 hover:border-text disabled:opacity-60"
-          >
-            {composer.state === 'error' ? SPACE_CHAT_VIEW_COPY.joinRetry : SPACE_CHAT_VIEW_COPY.join}
-          </button>
-        )}
-      </div>
+      <ChatPrompt label={composer.label}>
+        <Button
+          variant="primary"
+          small
+          onClick={composer.onJoin}
+          disabled={composer.state === 'sending' || composer.state === 'requested'}
+        >
+          {composer.state === 'requested'
+            ? SPACE_CHAT_VIEW_COPY.membershipRequested
+            : composer.state === 'error'
+              ? SPACE_CHAT_VIEW_COPY.joinRetry
+              : SPACE_CHAT_VIEW_COPY.join}
+        </Button>
+      </ChatPrompt>
     );
   }
 
@@ -884,6 +954,16 @@ function ChatComposer({
 }
 
 /** geo-chat spells ids dashed in some fields and dashless in others. */
+/** Why the viewer can't post yet, with the control that changes it. */
+function ChatPrompt({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-3 border-t border-grey-02 bg-grey-01 px-3 py-2.5">
+      <p className="min-w-0 text-metadata text-grey-04">{label}</p>
+      <div className="shrink-0">{children}</div>
+    </div>
+  );
+}
+
 function sameId(a: string, b: string) {
   return a.replaceAll('-', '').toLowerCase() === b.replaceAll('-', '').toLowerCase();
 }

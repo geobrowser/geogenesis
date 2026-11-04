@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   pending: false,
   access: { isMember: false, isEditor: false, canEdit: false, isLoading: false },
   join: vi.fn(),
+  signIn: vi.fn(),
   joinStatus: 'idle' as 'idle' | 'pending' | 'success' | 'error',
   refetchRooms: vi.fn(),
   messages: [] as unknown[],
@@ -28,6 +29,7 @@ vi.mock('~/core/hooks/use-space', () => ({ useSpace: () => ({ space: { entity: {
 vi.mock('~/core/hooks/use-join-space', () => ({
   useJoinSpace: () => ({ join: mocks.join, status: mocks.joinStatus, optimisticRequested: false }),
 }));
+vi.mock('~/core/hooks/use-privy-sign-in', () => ({ usePrivySignIn: () => mocks.signIn }));
 vi.mock('~/core/hooks/use-pending-memberships', () => ({ useIsMembershipPending: () => mocks.pending }));
 vi.mock('~/core/hooks/use-access-control', () => ({ useAccessControl: () => mocks.access }));
 vi.mock('~/core/space-chat/people', () => ({
@@ -69,6 +71,7 @@ beforeEach(() => {
   mocks.access = { isMember: false, isEditor: false, canEdit: false, isLoading: false };
   mocks.joinStatus = 'idle';
   mocks.join.mockReset();
+  mocks.signIn.mockReset();
   mocks.refetchRooms.mockReset();
 });
 afterEach(cleanup);
@@ -76,26 +79,48 @@ afterEach(cleanup);
 const joinButton = () => screen.queryByRole('button', { name: SPACE_CHAT_VIEW_COPY.join });
 
 describe('SpaceChatPanel composer', () => {
-  it('offers a signed-out reader the join path', () => {
+  it('offers a signed-out reader Log in', () => {
     render(<SpaceChatPanel spaceId={SPACE} />);
-    expect(screen.getByText(SPACE_CHAT_COPY.join('Geo'))).toBeInTheDocument();
+    expect(screen.getByText('Log in and join Geo to chat.')).toBeInTheDocument();
+    expect(joinButton()).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: SPACE_CHAT_VIEW_COPY.logIn }));
+    expect(mocks.signIn).toHaveBeenCalled();
+    expect(mocks.join).not.toHaveBeenCalled();
+  });
+
+  it('offers a signed-in non-member Join space', () => {
+    mocks.authenticated = true;
+    render(<SpaceChatPanel spaceId={SPACE} />);
+    expect(screen.getByText('Members of Geo can post here. Anyone can read.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: SPACE_CHAT_VIEW_COPY.logIn })).not.toBeInTheDocument();
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
     fireEvent.click(joinButton()!);
     expect(mocks.join).toHaveBeenCalled();
   });
 
-  it('offers a signed-in non-member the join path', () => {
+  it.each([
+    ['pending', SPACE_CHAT_VIEW_COPY.join, true],
+    ['success', SPACE_CHAT_VIEW_COPY.membershipRequested, true],
+    ['error', SPACE_CHAT_VIEW_COPY.joinRetry, false],
+  ] as const)('labels Join space while the request is %s', (status, name, disabled) => {
     mocks.authenticated = true;
+    mocks.joinStatus = status;
     render(<SpaceChatPanel spaceId={SPACE} />);
-    expect(screen.getByText(SPACE_CHAT_COPY.join('Geo'))).toBeInTheDocument();
-    expect(joinButton()).toBeInTheDocument();
-    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    const button = screen.getByRole('button', { name });
+    if (disabled) expect(button).toBeDisabled();
+    else expect(button).toBeEnabled();
+  });
+
+  it('names no space when its name is unknown', () => {
+    expect(SPACE_CHAT_COPY.signedOut(null)).toBe('Log in and join this space to chat.');
+    expect(SPACE_CHAT_COPY.nonMember(null)).toBe('Members of this space can post here. Anyone can read.');
   });
 
   it('shows a pending request, then refetches the rooms when it resolves', () => {
     mocks.authenticated = true;
     mocks.pending = true;
     const { rerender } = render(<SpaceChatPanel spaceId={SPACE} />);
-    expect(screen.getByText(SPACE_CHAT_VIEW_COPY.membershipPending)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: SPACE_CHAT_VIEW_COPY.membershipRequested })).toBeDisabled();
     expect(joinButton()).not.toBeInTheDocument();
     expect(mocks.refetchRooms).not.toHaveBeenCalled();
 
@@ -198,5 +223,52 @@ describe('SpaceChatPanel delete', () => {
     mocks.canModerate = true;
     render(<SpaceChatPanel spaceId={SPACE} />);
     expect(deleteButtons()).toHaveLength(2);
+  });
+});
+
+describe('SpaceChatPanel header and arrivals', () => {
+  const chatMessage = (id: string, author: string) => ({
+    id,
+    room_id: 'room',
+    room_kind: 'member',
+    author_id: author,
+    client_nonce: id,
+    reply_to_message_id: null,
+    body: `message ${id}`,
+    attachment_ids: [],
+    created_at: '2026-11-02T12:00:00Z',
+    edited_at: null,
+    deleted_at: null,
+    reactions: [],
+  });
+
+  it('heads the chat with its access line, or the line it is given', () => {
+    const { rerender } = render(<SpaceChatPanel spaceId={SPACE} />);
+    expect(screen.getByRole('heading', { name: SPACE_CHAT_COPY.title })).toBeInTheDocument();
+    expect(screen.getByText(SPACE_CHAT_COPY.access)).toBeInTheDocument();
+    rerender(<SpaceChatPanel spaceId={SPACE} subtitle="Also here" />);
+    expect(screen.getByText('Also here')).toBeInTheDocument();
+    expect(screen.queryByText(SPACE_CHAT_COPY.access)).not.toBeInTheDocument();
+  });
+
+  it('reports someone else’s new message, not the first load or the viewer’s own', () => {
+    mocks.authenticated = true;
+    const onArrival = vi.fn();
+    mocks.messages = [chatMessage('a1', 'other')];
+    const { rerender } = render(<SpaceChatPanel spaceId={SPACE} onArrival={onArrival} />);
+    expect(onArrival).not.toHaveBeenCalled();
+
+    mocks.messages = [chatMessage('a2', 'viewer'), ...mocks.messages];
+    rerender(<SpaceChatPanel spaceId={SPACE} onArrival={onArrival} />);
+    expect(onArrival).not.toHaveBeenCalled();
+
+    mocks.messages = [chatMessage('a3', 'other'), ...mocks.messages];
+    rerender(<SpaceChatPanel spaceId={SPACE} onArrival={onArrival} />);
+    expect(onArrival).toHaveBeenCalledTimes(1);
+
+    // An older page leaves the newest in place.
+    mocks.messages = [...mocks.messages, chatMessage('a0', 'other')];
+    rerender(<SpaceChatPanel spaceId={SPACE} onArrival={onArrival} />);
+    expect(onArrival).toHaveBeenCalledTimes(1);
   });
 });

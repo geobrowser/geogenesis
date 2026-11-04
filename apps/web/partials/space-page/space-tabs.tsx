@@ -11,6 +11,7 @@ import { hasRecordToShow } from '~/core/profile/profile-proposer';
 import { useSpaceCalls } from '~/core/space-calls/hooks';
 import { spaceCallsTabPath } from '~/core/space-calls/routes';
 import { useSpaceChatRooms } from '~/core/space-chat/hooks';
+import { spaceChatTabPath } from '~/core/space-chat/routes';
 import { useEditable } from '~/core/state/editable-store';
 import { useDebugDebatesPageEnabled, useFeatureFlag } from '~/core/state/feature-flags';
 import { useRelations, useValues } from '~/core/sync/use-store';
@@ -333,7 +334,7 @@ export function SpaceTabs({
   // Chat follows Calls (GEO-3422), except where geo-chat says the space has no rooms.
   const chatRooms = useSpaceChatRooms(spaceId, showCommunity && isSpaceChatEnabled);
   const showChat = showCommunity && isSpaceChatEnabled && chatRooms.data?.supported !== false;
-  const chatTab = showChat ? [{ label: 'Chat', href: `/space/${spaceId}/chat` }] : [];
+  const chatTab = showChat ? [{ label: 'Chat', href: spaceChatTabPath(spaceId) }] : [];
   systemTabsBefore.push(...chatTab);
 
   const systemTabsAfter: SystemTab[] = [];

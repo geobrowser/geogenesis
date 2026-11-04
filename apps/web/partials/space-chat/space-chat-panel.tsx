@@ -2,27 +2,37 @@
 
 import * as React from 'react';
 
+import Link from 'next/link';
+
 import { useGeoChatAuth } from '~/core/debates/hooks';
 import { useCurrentGeoChatUserId } from '~/core/debates/use-current-geo-chat-user-id';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useJoinSpace } from '~/core/hooks/use-join-space';
 import { useIsMembershipPending } from '~/core/hooks/use-pending-memberships';
+import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { useSpace } from '~/core/hooks/use-space';
 import type { SpaceChatMessage } from '~/core/space-chat/api';
 import { spaceChatErrorMessage } from '~/core/space-chat/errors';
 import { useSpaceChatRoom, useSpaceChatRooms } from '~/core/space-chat/hooks';
 import { mentionedIds } from '~/core/space-chat/mentions';
 import { type ChatPerson, unknownPerson, useChatPeople, useSpaceChatParticipants } from '~/core/space-chat/people';
+import { spaceChatTabPath } from '~/core/space-chat/routes';
 import { type SpaceChatState, shownReactions } from '~/core/space-chat/state';
 import { normId } from '~/core/utils/norm-id';
 
 import { SpaceChatView } from './space-chat-view';
-import type { ChatViewComposer, ChatViewMessage } from './types';
+import type { ChatViewAuthor, ChatViewComposer, ChatViewMessage } from './types';
 
 export const SPACE_CHAT_COPY = {
   label: 'Space chat',
+  title: 'Chat',
+  /** The member room's access, as geo-chat grants it. */
+  access: 'Everyone can read. Members can post.',
+  alsoPostsTo: 'Also posts to the space’s',
+  alsoPostsToLink: 'Chat',
   empty: 'No messages yet. Say hello.',
-  join: (spaceName: string | null) => (spaceName ? `Join ${spaceName} to chat` : 'Join this space to chat'),
+  signedOut: (spaceName: string | null) => `Log in and join ${spaceName ?? 'this space'} to chat.`,
+  nonMember: (spaceName: string | null) => `Members of ${spaceName ?? 'this space'} can post here. Anyone can read.`,
   /** A member geo-chat hasn't caught up with yet. */
   joining: 'You’re a member now. Posting opens within a few minutes.',
   unavailable: 'Chat isn’t available for this space.',
@@ -37,10 +47,16 @@ export const SPACE_CHAT_COPY = {
 export function SpaceChatPanel({
   spaceId,
   roomId: knownRoomId = null,
+  subtitle = SPACE_CHAT_COPY.access,
+  onArrival,
   className,
 }: {
   spaceId: string;
   roomId?: string | null;
+  /** The header's second line; the room's access by default. */
+  subtitle?: React.ReactNode;
+  /** Called when someone else's message arrives after the first load. */
+  onArrival?: () => void;
   className?: string;
 }) {
   const { authenticated } = useGeoChatAuth();
@@ -62,6 +78,18 @@ export function SpaceChatPanel({
     [people, viewerId]
   );
   const messages = React.useMemo(() => viewMessages(chat.state, people, self), [chat.state, people, self]);
+  const recentAuthors = React.useMemo(() => recentPeople(chat.state, people), [chat.state, people]);
+  useArrivals(chat.state, viewerId, onArrival);
+  const signIn = usePrivySignIn(undefined, {
+    analytics: {
+      component: 'space_chat',
+      target_type: 'space',
+      target_id: spaceId,
+      auth_control: 'space_chat_log_in',
+      auth_intent: 'space_chat',
+      auth_continuation: 'repeat',
+    },
+  });
   const mentionName = React.useCallback((personId: string) => people.get(normId(personId))?.name ?? null, [people]);
 
   if (rooms.data?.supported === false) {
@@ -71,20 +99,23 @@ export function SpaceChatPanel({
   const canPost = authenticated && listed?.can_post === true;
   const composer: ChatViewComposer = canPost
     ? { kind: 'post', onSend: chat.send, maxLength: SPACE_CHAT_COPY.maxLength, mentionCandidates: participants }
-    : authenticated && (!listed || membership.access.isLoading)
-      ? { kind: 'none' }
-      : membership.access.isMember || membership.access.isEditor
-        ? { kind: 'closed', reason: SPACE_CHAT_COPY.joining }
-        : {
-            kind: 'join',
-            label: SPACE_CHAT_COPY.join(membership.spaceName),
-            state: membership.state,
-            onJoin: membership.join,
-          };
+    : !authenticated
+      ? { kind: 'sign_in', label: SPACE_CHAT_COPY.signedOut(membership.spaceName), onSignIn: () => void signIn() }
+      : !listed || membership.access.isLoading
+        ? { kind: 'none' }
+        : membership.access.isMember || membership.access.isEditor
+          ? { kind: 'closed', reason: SPACE_CHAT_COPY.joining }
+          : {
+              kind: 'join',
+              label: SPACE_CHAT_COPY.nonMember(membership.spaceName),
+              state: membership.state,
+              onJoin: membership.join,
+            };
 
   return (
     <SpaceChatView
       className={className}
+      header={{ title: SPACE_CHAT_COPY.title, subtitle, people: recentAuthors }}
       label={SPACE_CHAT_COPY.label}
       emptyLabel={SPACE_CHAT_COPY.empty}
       messages={messages}
@@ -106,6 +137,48 @@ export function SpaceChatPanel({
       errorMessage={spaceChatErrorMessage}
     />
   );
+}
+
+/** The in-call chat's header line: the call's messages are the space's chat. */
+export function SpaceChatAlsoPostsTo({ spaceId }: { spaceId: string }) {
+  return (
+    <>
+      {SPACE_CHAT_COPY.alsoPostsTo}{' '}
+      <Link href={spaceChatTabPath(spaceId)} className="text-text underline">
+        {SPACE_CHAT_COPY.alsoPostsToLink}
+      </Link>
+    </>
+  );
+}
+
+/**
+ * Reports each change of newest stored message written by someone else. The first load, older
+ * pages and the viewer's own sends are not arrivals.
+ */
+function useArrivals(state: SpaceChatState | undefined, viewerId: string | null, onArrival?: () => void) {
+  const newest = state?.messages[0];
+  const newestId = newest ? normId(newest.id) : null;
+  const previous = React.useRef<string | null>(null);
+  const callback = React.useRef(onArrival);
+  callback.current = onArrival;
+  React.useEffect(() => {
+    const before = previous.current;
+    previous.current = newestId;
+    if (before === null || newestId === null || before === newestId || !newest) return;
+    if (viewerId && normId(newest.author_id) === normId(viewerId)) return;
+    callback.current?.();
+  }, [newest, newestId, viewerId]);
+}
+
+/** Distinct authors of the loaded messages, newest first. */
+function recentPeople(state: SpaceChatState | undefined, people: Map<string, ChatPerson>): ChatViewAuthor[] {
+  const seen = new Map<string, ChatViewAuthor>();
+  for (const message of state?.messages ?? []) {
+    if (message.deleted_at !== null) continue;
+    const id = normId(message.author_id);
+    if (!seen.has(id)) seen.set(id, people.get(id) ?? unknownPerson(message.author_id));
+  }
+  return [...seen.values()];
 }
 
 const MEMBER_RECHECK_MS = [15_000, 30_000, 60_000];
