@@ -50,7 +50,7 @@ export async function GET(request: Request) {
       // This is a bounded page of related debates, not a ranked-feed lead shortlist.
       candidates: result.items.length,
     });
-    let item =
+    let item: (typeof result.items)[number] | null =
       playable.find(item => normId(item.entityId) === id) ??
       playable[0] ??
       result.items.find(item => normId(item.entityId) === id) ??
