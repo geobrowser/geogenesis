@@ -265,14 +265,14 @@ describe('a sent request', () => {
     expect((await screen.findByText(/^Requested /)).textContent).toContain('6:45');
   });
 
-  it('falls back to a short id rather than an ungrammatical "They has"', async () => {
+  it('falls back to the neutral label, never an id, rather than an ungrammatical "They has"', async () => {
     succeed('mutate');
     const user = userEvent.setup();
     render(withToast(<PeerAvailabilityBookingModal open userId="user-0123456789" onClose={vi.fn()} />));
 
     await user.click(screen.getByRole('button', { name: 'pick' }));
 
-    expect(await screen.findByText(/user-012… has to accept/)).toBeInTheDocument();
+    expect(await screen.findByText(/Debater has to accept/)).toBeInTheDocument();
   });
 
   // The callbacks ride on the mutate call, and closing resets the mutation, which is what detaches

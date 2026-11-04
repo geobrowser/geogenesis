@@ -418,6 +418,19 @@ describe('useDebateVotes castVote', () => {
     );
   });
 
+  it('names the vote without the winner when geo-chat has no name for them', async () => {
+    const view = await renderVotes();
+    const unnamed = { ...ALICE, display_name: null } as unknown as DebateParticipant;
+
+    await act(async () => {
+      await view.result.current.castVote(unnamed);
+    });
+
+    expect(mocks.publishEdit).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'Vote: Voter votes on Cats beat dogs' })
+    );
+  });
+
   it('re-emits anchor relations and swaps the winner when changing a pick', async () => {
     mocks.voteEntities = [voteEntity('vote-1', ALICE_SPACE, 'winner-rel-1')];
     const view = await renderVotes();

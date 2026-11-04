@@ -14,6 +14,7 @@ import { historyRouteMissing } from '../history-route';
 import { debateQueryKeys, debateQueryNetworkOptions, useGeoChatAuth } from '../hooks';
 import { opponentName } from '../rooms/room-opponent';
 import { sameId } from '../rooms/room-presence';
+import type { GeoChatPersonRef } from './use-geo-chat-user-summaries';
 
 /** One page, as GEO-3464 sizes it: enough to fill a few days of the timeline per scroll. */
 export const HISTORY_PAGE_SIZE = 50;
@@ -110,26 +111,31 @@ export function useRefreshHistoryWhenLiveEnds(liveIds: readonly (string | null |
 /**
  * Each history item's people by name. geo-chat sends them (`others`); found by id rather than by
  * position, because it leaves out anyone it has no user row for and the two lists then differ.
- * `lookUp` covers a response from before it did.
+ * `lookUp` names whoever `others` leaves unnamed, from their graph profile.
  */
 export function historyNames(
   item: Pick<DebateHistoryItem, 'other_user_ids' | 'others'>,
   lookUp: (userId: string | null) => DebateParticipantSummary | null
 ) {
-  return item.other_user_ids.map(id =>
-    opponentName(item.others?.find(person => sameId(person.user_id, id)) ?? lookUp(id))
-  );
+  return item.other_user_ids.map(id => {
+    const sent = item.others?.find(person => sameId(person.user_id, id));
+    return opponentName(sent?.display_name ? sent : (lookUp(id) ?? sent ?? null));
+  });
 }
 
-/** The ids `others` does not name, which are the only ones worth asking the graph about. */
-export function unnamedHistoryUserIds(items: DebateHistoryItem[]) {
-  const ids = new Set<string>();
+/**
+ * The people `others` does not name, the only ones worth asking the graph about: its nameless
+ * entries by their profile space, and ids it left out entirely (older geo-chat) by id.
+ */
+export function unnamedHistoryPeople(items: DebateHistoryItem[]): GeoChatPersonRef[] {
+  const people: GeoChatPersonRef[] = [];
   for (const item of items) {
     for (const id of item.other_user_ids) {
-      if (!item.others?.some(person => sameId(person.user_id, id))) ids.add(id);
+      const sent = item.others?.find(person => sameId(person.user_id, id));
+      if (!sent?.display_name) people.push(sent ?? { user_id: id });
     }
   }
-  return [...ids];
+  return people;
 }
 
 /** What a history row is called, in the viewer's words. */

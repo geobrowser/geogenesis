@@ -9,13 +9,8 @@ import { HubQueryState } from './hub-states';
 afterEach(cleanup);
 
 /**
- * The state a brand-new account lands in.
- *
- * geo-chat refuses the session exchange with a 401 for a minute or two after sign-up, while it
- * registers the account. Both of the states that existed lie about that — the sign-in prompt at
- * somebody who has just signed in, "Something went wrong" about something going right and
- * unfinished — and the reads behind it wait the refusal out, which react-query reports as loading,
- * so the viewer watched a skeleton for the whole minute instead.
+ * The state a brand-new account lands in while geo-chat refuses its session exchange with a 401.
+ * Neither the sign-in prompt nor "Something went wrong" is true of it.
  */
 describe('a viewer geo-chat has not registered yet', () => {
   const refused = new GeoChatSessionError(new GeoChatRequestError('not yet', null, 401));
@@ -36,7 +31,8 @@ describe('a viewer geo-chat has not registered yet', () => {
 
     expect(screen.getByText(/Setting up your account/)).toBeInTheDocument();
     expect(screen.queryByText('Something went wrong.')).toBeNull();
-    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+    // `useGeoChatAccountRecovery` refetches by itself, so there is nothing to press.
+    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull();
   });
 
   // The one that matters in practice: until the retries are exhausted this is a *loading* query, so
@@ -81,26 +77,43 @@ describe('a viewer geo-chat has not registered yet', () => {
       </HubQueryState>
     );
 
-    expect(screen.getByText('Setting up your account. Check back in a minute.')).toBeInTheDocument();
+    expect(screen.getByText('Setting up your account. This updates on its own.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull();
   });
 
-  // And offers it once they are, which is the state that can act on a press.
-  it('offers one once they have given up', () => {
+  // An outage on geo-chat's side is not the viewer's account being set up.
+  it('says debates are unreachable for an upstream failure', () => {
     render(
       <HubQueryState
         analyticsSurface="hub"
         isLoading={false}
-        error={refused}
+        error={new GeoChatSessionError(new GeoChatRequestError('upstream', 'auth_upstream_failed', 401))}
         isEmpty={false}
         emptyMessage=""
-        onRetry={vi.fn()}
       >
         <div>rows</div>
       </HubQueryState>
     );
 
-    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+    expect(screen.getByText('Can’t reach debates right now. Retrying…')).toBeInTheDocument();
+    expect(screen.queryByText(/Setting up your account/)).toBeNull();
+  });
+
+  // A wallet-less account will not be fixed by waiting.
+  it('is an ordinary error for no_embedded_wallet', () => {
+    render(
+      <HubQueryState
+        analyticsSurface="hub"
+        isLoading={false}
+        error={new GeoChatSessionError(new GeoChatRequestError('no wallet', 'no_embedded_wallet', 401))}
+        isEmpty={false}
+        emptyMessage=""
+      >
+        <div>rows</div>
+      </HubQueryState>
+    );
+
+    expect(screen.getByText('Something went wrong.')).toBeInTheDocument();
   });
 
   /**

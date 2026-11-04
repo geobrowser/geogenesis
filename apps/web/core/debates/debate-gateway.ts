@@ -304,6 +304,14 @@ export class DebateGatewayClient {
     this.sendHeartbeat();
   }
 
+  /** Runs a waiting reconnect now, for when the server has just become able to accept it. */
+  retryNow() {
+    if (!this.enabled || this.socket || !this.reconnectTimer) return;
+    this.clearTimer('reconnect');
+    this.reconnectAttempt = 0;
+    void this.connect();
+  }
+
   stop() {
     const accountKey = this.accountKey;
     this.enabled = false;
