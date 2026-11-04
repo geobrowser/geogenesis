@@ -188,6 +188,68 @@ export function markCurrent(days: PeerDay[], schedule: PeerSchedule, currentStar
 }
 
 /**
+ * The days cut to the starts a whole debate of `minutes` fits from (GEO-3544): every half-hour of
+ * it one of their free times, and mutual only when the viewer is free for all of it too. A
+ * half-hour debate keeps every chip as it is.
+ *
+ * `own` is the debate being moved, whose half-hours geo-chat leaves out as committed. They are
+ * held for both and geo-chat lets a move overlap them, so they count as free, and the ones after
+ * its start are offered as starts too: an hour at 9:30 can move to 9:00 or to 10:00. Its own start
+ * is left to {@link markCurrent}. A held half-hour says nothing about the viewer, so mutual is
+ * judged on the rest.
+ */
+export function fitLength(
+  days: PeerDay[],
+  schedule: PeerSchedule,
+  minutes: number,
+  own: { start: string; minutes: number } | null = null
+): PeerDay[] {
+  if (minutes <= SLOT_MINUTES) return days;
+  const step = SLOT_MINUTES * 60_000;
+  const length = minutes * 60_000;
+  const viewerFreeAt = new Map(days.flatMap(day => day.slots.map(slot => [Date.parse(slot.start), slot.viewerIsFree])));
+  const ownStart = own ? Date.parse(own.start) : Number.NaN;
+  const ownEnd = own ? ownStart + own.minutes * 60_000 : Number.NaN;
+  const held = (at: number) => at >= ownStart && at < ownEnd;
+
+  const viewerZone = usableZone(schedule.viewerTimezone);
+  const peerZone = usableZone(schedule.peerTimezone);
+  const heldStarts: { date: string; slot: PeerDaySlot }[] = [];
+  for (let at = ownStart + step; at < ownEnd; at += step) {
+    if (viewerFreeAt.has(at)) continue;
+    const instant = new Date(at);
+    const viewer = zonedParts(instant, viewerZone);
+    heldStarts.push({ date: viewer.date, slot: daySlot(instant, viewer, peerZone, null) });
+  }
+
+  const fits = (slot: PeerDaySlot): PeerDaySlot[] => {
+    const start = Date.parse(slot.start);
+    let viewerIsFree: boolean | null | undefined;
+    for (let at = start; at < start + length; at += step) {
+      if (held(at)) continue;
+      if (!viewerFreeAt.has(at)) return [];
+      const then = viewerFreeAt.get(at) ?? null;
+      viewerIsFree =
+        viewerIsFree === undefined
+          ? then
+          : viewerIsFree === false || then === false
+            ? false
+            : viewerIsFree === null || then === null
+              ? null
+              : true;
+    }
+    return [{ ...slot, viewerIsFree: viewerIsFree ?? null }];
+  };
+
+  return days.map(day => ({
+    ...day,
+    slots: [...day.slots, ...heldStarts.filter(entry => entry.date === day.date).map(entry => entry.slot)]
+      .sort((a, b) => Date.parse(a.start) - Date.parse(b.start))
+      .flatMap(fits),
+  }));
+}
+
+/**
  * A wire slot, or a merged window of them, as the chips it offers. The People tab reads its
  * offline rows' times through this too (GEO-3154), so a chip there is always one this grid draws.
  *
