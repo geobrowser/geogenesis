@@ -108,6 +108,9 @@ describe('code step', () => {
 
     const { step } = await load();
     await step.claimCodeRecovery();
+    // Claimed before the app renders: the page must still expect a recovery.
+    expect(step.pendingCodeElsewhere()).toBeNull();
+    expect(step.codeRecoveryExpected()).toBe(true);
     expect(step.codeRecoveryWaiting()).toMatchObject({ email: 'a@b.co' });
     // Any sign-in in the same tab picks it up, a control's included.
     const claimed = step.takeCodeRecovery({ auth_trigger: 'control' });
@@ -127,7 +130,7 @@ describe('code step', () => {
     leave();
 
     const { step, attempts } = await loadNewTab('/explore');
-    expect(step.pendingCodeElsewhere()).toBeNull();
+    expect(step.codeRecoveryExpected()).toBe(false);
     expect(await step.claimCodeRecovery()).toBeNull();
     // A manual Log in or save-votes press opens an empty sign-in.
     expect(step.takeCodeRecovery({ auth_trigger: 'control' })).toBeNull();

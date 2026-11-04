@@ -432,6 +432,14 @@ export function takeCodeRecovery(properties: AnalyticsProperties = {}): PendingC
   return usable;
 }
 
+/**
+ * This page may pick a code step up: one another page holds, or one it has claimed already (the
+ * claim starts at load and can finish before the first render).
+ */
+export function codeRecoveryExpected(): boolean {
+  return pendingCodeElsewhere() !== null || heldClaim() !== null;
+}
+
 /** A claim this document holds that no sign-in has used yet, for the same tab to reopen sign-in with. */
 export function codeRecoveryWaiting(): PendingCode | null {
   const held = claimSettled ? null : heldClaim();

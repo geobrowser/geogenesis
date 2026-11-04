@@ -8,7 +8,7 @@ import { useAtomValue } from 'jotai';
 import dynamic from 'next/dynamic';
 import { usePathname, useSearchParams } from 'next/navigation';
 
-import { pendingCodeElsewhere } from '~/core/auth/code-step';
+import { codeRecoveryExpected } from '~/core/auth/code-step';
 import { DebateCoordinator } from '~/core/debates/debate-coordinator';
 import { LastPageOutsideDebatesTracker } from '~/core/debates/lobbies/lobby-exit';
 import { useDebatesHub } from '~/core/debates/matchmaking/use-debates-hub';
@@ -276,9 +276,9 @@ function DeepLinkGate() {
   return useSticky(requestsAnyModal(searchParams)) ? <DeepLinkHandler /> : null;
 }
 
-// A tab reloaded at the code step (GEO-3573). Read once: the recovery claims the step on mount.
+// A page that may pick up a code step another page left (GEO-3573). Read once, at mount.
 function CodeStepRecoveryGate() {
-  const [reloaded] = React.useState(() => pendingCodeElsewhere() !== null);
+  const [reloaded] = React.useState(codeRecoveryExpected);
   return reloaded ? <CodeStepRecovery /> : null;
 }
 
