@@ -62,7 +62,8 @@ beforeEach(() => {
 
 describe('moveEntity', () => {
   it('loads the subtree first, and hands it to every step of the move', async () => {
-    const tab = { id: 'tab', values: [], relations: [] };
+    const linkBack = { id: 'tab-links-back' };
+    const tab = { id: 'tab', values: [], relations: [linkBack] };
     const image = { id: 'an-image', values: [], relations: [] };
     const backlink = { id: 'backlink' };
     mocks.loadMoveSubtree.mockResolvedValue([tab]);
@@ -79,7 +80,7 @@ describe('moveEntity', () => {
     expect(mocks.loadMoveBacklinks.mock.calls[0]![0].loaded).toEqual([tab]);
     expect(mocks.cloneEntityIntoSpace).toHaveBeenCalledWith(ENTITY, SOURCE, TARGET, storage, [tab, image]);
     expect(mocks.collectMoveDeletions).toHaveBeenCalledWith(ENTITY, SOURCE, [backlink], [tab]);
-    expect(mocks.retargetMoveBacklinks).toHaveBeenCalledWith(ENTITY, SOURCE, TARGET, storage, [backlink]);
+    expect(mocks.retargetMoveBacklinks).toHaveBeenCalledWith(ENTITY, SOURCE, TARGET, storage, [backlink, linkBack]);
   });
 
   it('writes nothing when the subtree fails to load', async () => {

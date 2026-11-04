@@ -94,8 +94,11 @@ export async function moveEntity({
 
   // 3. Point this space's backlinks at where the data went. They survive the move untouched —
   // the entity id has not changed — but one that resolves to the source space now resolves to a
-  // space the entity's data just left.
-  retargetMoveBacklinks(entityId, sourceSpaceId, targetSpaceId, storage, backlinks);
+  // space the entity's data just left. A shared block kept in the source can link back too, and
+  // `backlinks` leaves out the subtree, so its relations come from `subtree`. The teardown's
+  // deletions are in the store by now, so the blocks it removed are skipped.
+  const subtreeRelations = subtree.flatMap(entity => entity.relations);
+  retargetMoveBacklinks(entityId, sourceSpaceId, targetSpaceId, storage, [...backlinks, ...subtreeRelations]);
 
   return true;
 }
