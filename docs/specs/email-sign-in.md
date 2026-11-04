@@ -157,11 +157,21 @@ Why not move the record into `AuthAttempt`:
 ## 7. Events (GEO-3550) and the analytics delta
 
 All events go through `captureAuthEvent` (growth-v2), with `attemptProperties` (entry attribution,
-`auth_attempt_id`, `action_anonymous_id` for the per-person rollup). `auth_step` goes out only when
-`SEND_AUTH_STEP` is true, reusing #3052's switch, and is otherwise logged with `devLog`. The code-step
-events are emitted from `AccountStep`, so the box, the sheet and the email capture report the same
-steps. "Left the page" is listened to by the card, so it covers the email step too. All of this lands
-with the fold, after #3052 merges.
+`auth_attempt_id`, `action_anonymous_id` for the per-person rollup). Every `auth_step` goes through
+`code-step.ts`'s capture (`captureAuthStep` for the new steps). It goes out only when `SEND_AUTH_STEP`
+is true, and is otherwise logged with `devLog`. #3052's switch now lives in `core/auth/auth-step-switch.ts`
+so `auth-attempt.ts` can read it without an import cycle; it is still the one switch.
+
+- The code-step events are emitted from `AccountStep`, so the box, the sheet and the email capture
+  report the same steps. Each host passes its `surface`.
+- "Left the page" is listened to by `SignInCard` (box and sheet), so it covers the email step too. It
+  fires only while the card's own attempt is current and open.
+- Google's steps are emitted from `useGoogleOAuthSignIn` (start, rejected start) and
+  `GoogleOAuthCompleter` (failed return).
+- Surface, method, last error and likely returning are tags on the attempt record (`tagAuthAttempt`),
+  so they survive the Google redirect. The attempt events carry them (and `last_auth_error` on
+  `closed`) only once `SEND_AUTH_STEP` is on; until then the live attempt events are unchanged.
+- The `geo:signed-in-before:v1` marker is written only with analytics enabled.
 
 | Funnel step | Event |
 |---|---|
