@@ -172,8 +172,10 @@ Why not move the record into `AuthAttempt`:
 
 All events go through `captureAuthEvent` (growth-v2), with `attemptProperties` (entry attribution,
 `auth_attempt_id`, `action_anonymous_id` for the per-person rollup). Every `auth_step` goes through
-`code-step.ts`'s capture (`captureAuthStep` for the new steps). It goes out only when `SEND_AUTH_STEP`
-is true, and is otherwise logged with `devLog`. #3052's switch now lives in `core/auth/auth-step-switch.ts`
+`code-step.ts`'s capture (`captureAuthStep` for the new steps), as the registered `auth_step`.
+`SEND_AUTH_STEP` is on now that the collector carries the contract (analytics #144, #148); turning it off
+logs the steps with `devLog` instead. The vendored runtime is `ecc4321fdd27`, whose validator knows
+`auth_step` and its optional integer `code_age_ms`. #3052's switch now lives in `core/auth/auth-step-switch.ts`
 so `auth-attempt.ts` can read it without an import cycle; it is still the one switch.
 
 - The code-step events are emitted from `AccountStep`, so the box, the sheet and the email capture
@@ -184,7 +186,7 @@ so `auth-attempt.ts` can read it without an import cycle; it is still the one sw
   `GoogleOAuthCompleter` (failed return).
 - Surface, method, last error and likely returning are tags on the attempt record (`tagAuthAttempt`),
   so they survive the Google redirect. The attempt events carry them (and `last_auth_error` on
-  `closed`) only once `SEND_AUTH_STEP` is on; until then the live attempt events are unchanged.
+  `closed`) while `SEND_AUTH_STEP` is on.
 - The `geo:signed-in-before:v1` marker is written only with analytics enabled.
 
 | Funnel step | Event |
