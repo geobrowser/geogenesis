@@ -113,12 +113,14 @@ describe('AccountStep when the send fails', () => {
     expect(mocks.openPrivyModal).not.toHaveBeenCalled();
   });
 
-  it("falls back to Privy's dialog for a send Privy refused", async () => {
+  it("falls back to Privy's dialog on its own attempt for a send Privy refused", async () => {
     mocks.sendCode.mockRejectedValue(Object.assign(new Error('captcha'), { privyErrorCode: 'captcha_failure' }));
     const onSignInUnavailable = vi.fn();
     render(<AccountStep email="reader@example.com" onGiveUp={vi.fn()} onSignInUnavailable={onSignInUnavailable} />);
     await act(async () => {});
     expect(mocks.openPrivyModal).toHaveBeenCalledTimes(1);
+    expect(mocks.openPrivyModal).toHaveBeenCalledWith(undefined, { attemptId: currentAuthAttempt()?.id });
+    expect(currentAuthAttempt()?.id).toEqual(expect.any(String));
     expect(onSignInUnavailable).not.toHaveBeenCalled();
   });
 });

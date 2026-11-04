@@ -183,6 +183,8 @@ export function AccountStep({
   // and in the error state, repeated presses fired again before Privy's state had left `error`.
   const [sending, setSending] = React.useState(false);
 
+  /** The attempt this step sends codes for; its Privy fallback carries on only that one. */
+  const ownAttemptIdRef = React.useRef<string | undefined>(undefined);
   // GEO-3550 counts: codes sent after the first, and wrong tries on the current code.
   const sendsRef = React.useRef(0);
   const rejectionsRef = React.useRef(0);
@@ -202,7 +204,7 @@ export function AccountStep({
       // The dialog it falls back to may be sent to a different address.
       forgetAnnouncedCodeEmail();
       const authError = authErrorCode(error);
-      tagAuthAttempt(currentAuthAttempt()?.id, { lastAuthError: authError });
+      tagAuthAttempt(ownAttemptIdRef.current, { lastAuthError: authError });
       captureAuthStep('code_send_failed', { auth_error: authError });
       if (!mountedRef.current) return;
       // Privy's dialog needs the same Privy, so it would never appear.
@@ -210,7 +212,7 @@ export function AccountStep({
       // Captcha, a Privy outage, an address it will not take. Hand them the dialog that does work
       // rather than a dead end.
       // Keep the step mounted while hidden so the modal's error callback can close the card.
-      openPrivyModalRef.current();
+      openPrivyModalRef.current(undefined, { attemptId: ownAttemptIdRef.current });
     } finally {
       if (mountedRef.current) setSending(false);
     }
@@ -232,7 +234,8 @@ export function AccountStep({
     if (!attempt || attempt.endedAt || attempt.properties.component !== attribution.component)
       beginPrivyAuth(attribution, { resume: true });
     openAuthAttempt(attribution);
-    tagAuthAttempt(currentAuthAttempt()?.id, { signInSurface: surfaceRef.current, signInMethod: 'email' });
+    ownAttemptIdRef.current = currentAuthAttempt()?.id;
+    tagAuthAttempt(ownAttemptIdRef.current, { signInSurface: surfaceRef.current, signInMethod: 'email' });
     void requestCode();
   }, [requestCode]);
 
@@ -247,7 +250,7 @@ export function AccountStep({
       } catch (error) {
         // Privy puts the reason in `otpState`, which the markup below reads.
         const authError = authErrorCode(error);
-        tagAuthAttempt(currentAuthAttempt()?.id, { lastAuthError: authError });
+        tagAuthAttempt(ownAttemptIdRef.current, { lastAuthError: authError });
         // Privy reports a wrong code and an expired one alike.
         const age = ownCodeAgeMs();
         if (age !== null && age >= CODE_LIFETIME_MS) {

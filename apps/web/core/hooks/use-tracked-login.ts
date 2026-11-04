@@ -27,16 +27,18 @@ export type TrackedLoginExtras = {
   heading?: string;
   /** `privy` opens Privy's own dialog even with `ourSignInBox` on: the box's code step falls back to it. */
   surface?: 'privy';
+  /** With `privy`: the attempt the fallback carries on. */
+  attemptId?: string;
 };
 
 /**
- * The open attempt a `privy` fallback carries on, so the press that opened it hears how it ends and
- * keeps what it queued for an abandoned sign-in.
+ * The attempt a `privy` fallback carries on, so the press that opened it hears how it ends and keeps
+ * what it queued for an abandoned sign-in. Undefined once a newer press has replaced it.
  */
 export function fallbackAttempt(extras?: TrackedLoginExtras) {
-  if (extras?.surface !== 'privy') return undefined;
+  if (extras?.surface !== 'privy' || !extras.attemptId) return undefined;
   const attempt = currentAuthAttempt();
-  return attempt && !attempt.endedAt ? attempt : undefined;
+  return attempt?.id === extras.attemptId && !attempt.endedAt ? attempt : undefined;
 }
 
 /** Capture attribution at the press; the persistent observer owns completion tracking. */
@@ -87,9 +89,11 @@ export function useTrackedLogin(params: TrackedLoginParams) {
       // agree with the component on the signed-in action (for example an Explore card).
       const component =
         context.component === 'sign_in_prompt' ? (properties?.component ?? context.component) : context.component;
+      const resumed = fallbackAttempt(extras);
+      // A fallback whose attempt was replaced opens nothing: the newer press owns sign-in now.
+      if (extras?.surface === 'privy' && !resumed) return undefined;
       const attempt =
-        fallbackAttempt(extras) ??
-        beginPrivyAuth({ ...context, auth_trigger: 'control', ...properties, component }, options);
+        resumed ?? beginPrivyAuth({ ...context, auth_trigger: 'control', ...properties, component }, options);
       requested.current = { ...context, auth_attempt_id: attempt?.id };
       const prefillEmail = extras?.prefillEmail;
       if (attempt && extras?.surface !== 'privy' && readStoredFeatureFlag('ourSignInBox')) {
@@ -102,7 +106,9 @@ export function useTrackedLogin(params: TrackedLoginParams) {
           onComplete: complete,
           onDismiss: () => {
             fail('exited_auth_flow');
-            cancelPrivyAuth();
+            // Already ended when the box saw the end itself; never a newer press's attempt.
+            const current = currentAuthAttempt();
+            if (current?.id === attempt.id && !current.endedAt) cancelPrivyAuth();
           },
         });
         return attempt;

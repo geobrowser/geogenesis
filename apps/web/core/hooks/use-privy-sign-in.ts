@@ -47,6 +47,8 @@ export type PrivySignInCallOptions = {
   nameOnlyOnboarding?: boolean;
   /** Fills in the email field: a sign-in picked up again after the tab reloaded (GEO-3573). */
   prefillEmail?: string;
+  /** With `surface: 'privy'`: the attempt the fallback carries on. */
+  attemptId?: string;
 };
 
 type PrivySignIn = (
@@ -94,8 +96,11 @@ export function usePrivySignIn(onComplete?: () => void, options?: UsePrivySignIn
   return React.useCallback<PrivySignIn>(
     (properties, callOptions) => {
       if (authenticatedRef.current) return undefined;
-      // A fallback carries on the open press, whose onboarding and return address are already set.
-      const resuming = fallbackAttempt({ surface: optionsRef.current?.surface }) !== undefined;
+      const surface = optionsRef.current?.surface;
+      // A fallback carries on its press, whose onboarding and return address are already set, or
+      // opens nothing once a newer press has replaced it.
+      const resuming = surface === 'privy';
+      if (resuming && !fallbackAttempt({ surface, attemptId: callOptions?.attemptId })) return undefined;
       if (!resuming)
         prepareOnboarding({
           returnTo: callOptions?.redirectTo ?? optionsRef.current?.redirectTo,
@@ -115,7 +120,8 @@ export function usePrivySignIn(onComplete?: () => void, options?: UsePrivySignIn
         {
           prefillEmail: callOptions?.prefillEmail ?? recovery?.email ?? undefined,
           heading: optionsRef.current?.heading,
-          surface: optionsRef.current?.surface,
+          surface,
+          attemptId: callOptions?.attemptId,
         }
       );
       if (recovery) codeRecoveryOffered(recovery, attempt?.id);

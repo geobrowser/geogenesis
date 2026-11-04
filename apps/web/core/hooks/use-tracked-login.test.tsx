@@ -98,10 +98,19 @@ describe('useTrackedLogin with ourSignInBox on', () => {
     });
   });
 
-  it("opens Privy's dialog for the box's own fallback", () => {
+  it("opens Privy's dialog for the box's own fallback, on its attempt", () => {
     const { login } = renderLogin();
-    login({ component: 'test' }, undefined, { surface: 'privy' });
+    expect(login({ component: 'test' }, undefined, { surface: 'privy', attemptId: 'attempt' })).toMatchObject({
+      id: 'attempt',
+    });
     expect(mocks.login).toHaveBeenCalled();
+    expect(readSignInBox()).toBeNull();
+  });
+
+  it('opens nothing for a fallback whose attempt was replaced', () => {
+    const { login } = renderLogin();
+    expect(login({ component: 'test' }, undefined, { surface: 'privy', attemptId: 'older' })).toBeUndefined();
+    expect(mocks.login).not.toHaveBeenCalled();
     expect(readSignInBox()).toBeNull();
   });
 
