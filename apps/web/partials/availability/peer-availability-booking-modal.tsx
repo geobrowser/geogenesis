@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import { debatesErrorMessage } from '~/core/debates/account-setup-copy';
 import { GeoChatRequestError, type ScheduledDebateRequest } from '~/core/debates/api';
 import { usePeerSchedule } from '~/core/debates/hooks';
 import { useRequestRoom } from '~/core/debates/rooms/request-room';
@@ -266,7 +267,7 @@ export function PeerAvailabilityBookingModal({
           error: mutation.error
             ? rescheduleRequestId
               ? rescheduleFailureMessage(mutation.error)
-              : mutation.error.message
+              : debatesErrorMessage(mutation.error)
             : null,
         }}
       />

@@ -5,6 +5,7 @@ import { MAX_SEARCH_QUERY_LENGTH } from '~/core/io/search-query';
 import {
   GeoChatRequestError,
   GeoChatSessionError,
+  accountRefusalReason,
   blockDebateUser,
   clearClaimNotInterested,
   completeLocalRecordingUpload,
@@ -30,13 +31,16 @@ import {
   listUpcomingDebateRooms,
   markClaimNotInterested,
   notifyClaimResponseIndexed,
+  readGeoChatSessionProfile,
   refreshCalendar,
   resetGeoChatSession,
   retryDebatePhaseBoundaryRequest,
   saveOpenRoundPick,
   unhideDebate,
   updateDebateAvailability,
+  updateDebateLobby,
 } from './api';
+import { getGeoChatAccountStatus, resetGeoChatAccountStatusForTests } from './geo-chat-account-status';
 
 const completeRequest = {
   filename: 'recordings/debate-1/recording.webm',
@@ -630,6 +634,26 @@ describe('matchmaking read authentication', () => {
   });
 });
 
+describe('editing a lobby', () => {
+  // GEO-3540: a PATCH carrying only what changed.
+  it('patches the lobby with the fields given', async () => {
+    const fetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ lobby_id: 'lobby-1' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+    vi.stubGlobal('fetch', fetch);
+
+    await updateDebateLobby('lobby-1', { starts_at: '2026-11-01T19:00:00.000Z' }, vi.fn(), 'user-a');
+
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:8080/debate-lobbies/lobby-1',
+      expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ starts_at: '2026-11-01T19:00:00.000Z' }) })
+    );
+  });
+});
+
 // GEO-3289 (geo-chat GEO-3291): the lobby list opens to signed-out visitors the same way.
 describe('lobby list authentication', () => {
   beforeEach(() => {
@@ -660,6 +684,51 @@ describe('lobby list authentication', () => {
     const getPrivyIdentityToken = vi.fn().mockRejectedValue(new Error('Identity token unavailable'));
 
     await expect(listDebateLobbies(getPrivyIdentityToken, 'user-a')).rejects.toThrow('Identity token unavailable');
+    expect(fetch).not.toHaveBeenCalled();
+  });
+});
+
+describe('debate lobby calendar authentication (GEO-3517)', () => {
+  beforeEach(() => {
+    resetGeoChatSession();
+    window.localStorage.removeItem('geo:chat-session');
+  });
+
+  it('reads the calendar anonymously when nobody is signed in', async () => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ lobbies: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+      );
+    vi.stubGlobal('fetch', fetch);
+    const getPrivyIdentityToken = vi.fn();
+
+    await expect(
+      listDebateLobbyCalendar(
+        { from: new Date('2026-10-11T07:00:00Z'), to: new Date('2026-10-18T07:00:00Z') },
+        getPrivyIdentityToken,
+        null
+      )
+    ).resolves.toEqual({ lobbies: [] });
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/debate-lobbies/calendar'),
+      expect.objectContaining({ headers: {} })
+    );
+    expect(getPrivyIdentityToken).not.toHaveBeenCalled();
+  });
+
+  it('does not downgrade a signed-in calendar read to anonymous when the token exchange fails', async () => {
+    const fetch = vi.fn();
+    vi.stubGlobal('fetch', fetch);
+    const getPrivyIdentityToken = vi.fn().mockRejectedValue(new Error('Identity token unavailable'));
+
+    await expect(
+      listDebateLobbyCalendar(
+        { from: new Date('2026-10-11T07:00:00Z'), to: new Date('2026-10-18T07:00:00Z') },
+        getPrivyIdentityToken,
+        'user-a'
+      )
+    ).rejects.toThrow('Identity token unavailable');
     expect(fetch).not.toHaveBeenCalled();
   });
 });
@@ -1021,6 +1090,221 @@ describe('a refused session exchange', () => {
 
     expect(error).toBeInstanceOf(GeoChatRequestError);
     expect(isAccountWarmingUp(error)).toBe(false);
+  });
+});
+
+describe('GEO-3553 session codes and profile state', () => {
+  const json = (body: unknown, status = 200) =>
+    new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
+  const refusal = (code: string) => json({ error: { code, message: 'raw server text' } }, 401);
+  const session = (profile?: Record<string, unknown>) => ({
+    access_token: 'access',
+    refresh_token: 'refresh',
+    expires_at: new Date(Date.now() + 15 * 60_000).toISOString(),
+    ...(profile ? { profile } : {}),
+  });
+  const pending = {
+    state: 'pending',
+    profile_space_id: 'space-a',
+    person_id: null,
+    display_name: null,
+    avatar_cid: null,
+    pending_since: '2026-11-03T18:00:04Z',
+    retry_after_ms: 5000,
+  };
+
+  beforeEach(() => {
+    window.localStorage.clear();
+    resetGeoChatSession();
+    resetGeoChatAccountStatusForTests();
+  });
+
+  it.each([
+    ['no_personal_space', 'setting_up'],
+    ['invalid_privy_token', 'setting_up'],
+    [null, 'setting_up'],
+    ['auth_upstream_failed', 'unreachable'],
+  ])('reads a %s refusal as %s and records it', async (code, reason) => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(code ? refusal(code) : new Response('', { status: 401, statusText: 'Unauthorized' }))
+    );
+
+    const error = await getGeoChatSession(vi.fn().mockResolvedValue('privy-token'), 'user-a').catch(
+      (thrown: unknown) => thrown
+    );
+
+    expect(accountRefusalReason(error)).toBe(reason);
+    expect(getGeoChatAccountStatus('user-a')).toEqual({ kind: 'refused', reason, code });
+  });
+
+  it('does not wait on an account with no embedded wallet', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(refusal('no_embedded_wallet')));
+
+    const error = await getGeoChatSession(vi.fn().mockResolvedValue('privy-token'), 'user-a').catch(
+      (thrown: unknown) => thrown
+    );
+
+    expect(isAccountWarmingUp(error)).toBe(false);
+    expect(getGeoChatAccountStatus('user-a')).toEqual({ kind: 'unknown' });
+  });
+
+  it('records a pending profile from the session response', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(json(session(pending))));
+
+    await getGeoChatSession(vi.fn().mockResolvedValue('privy-token'), 'user-a');
+
+    expect(getGeoChatAccountStatus('user-a')).toEqual({
+      kind: 'accepted',
+      profile: 'pending',
+      pendingSince: '2026-11-03T18:00:04Z',
+      retryAfterMs: 5000,
+      viewer: { profileSpaceId: 'space-a', displayName: null, avatarCid: null },
+    });
+  });
+
+  it('reads a response without a profile, from older geo-chat, as attached', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(json(session())));
+
+    await getGeoChatSession(vi.fn().mockResolvedValue('privy-token'), 'user-a');
+
+    expect(getGeoChatAccountStatus('user-a')).toMatchObject({ kind: 'accepted', profile: 'attached' });
+  });
+
+  const attached = { ...pending, state: 'attached', pending_since: null, retry_after_ms: null };
+  const errorJson = (status: number, code: string) =>
+    new Response(JSON.stringify({ error: { code, message: code } }), { status });
+
+  it('reads the profile with GET /auth/profile without rotating the session', async () => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(json(session(pending)))
+      .mockResolvedValueOnce(json({ profile: attached }));
+    vi.stubGlobal('fetch', fetch);
+    await getGeoChatSession(vi.fn().mockResolvedValue('privy-token'), 'user-a');
+
+    await expect(readGeoChatSessionProfile('user-a', vi.fn().mockResolvedValue('privy-token'))).resolves.toEqual({
+      state: 'attached',
+    });
+
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch).toHaveBeenLastCalledWith(
+      'http://localhost:8080/auth/profile',
+      expect.objectContaining({ method: 'GET', headers: { Authorization: 'Bearer access' } })
+    );
+    expect(getGeoChatAccountStatus('user-a')).toMatchObject({ kind: 'accepted', profile: 'attached' });
+    // Same tokens, new profile.
+    expect(JSON.parse(window.localStorage.getItem('geo:chat-session')!)).toMatchObject({
+      session: { access_token: 'access', refresh_token: 'refresh', profile: { state: 'attached' } },
+    });
+  });
+
+  it('refreshes once and retries when the access token is rejected', async () => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(json(session(pending)))
+      .mockResolvedValueOnce(errorJson(401, 'invalid_access_token'))
+      .mockResolvedValueOnce(json({ ...session(pending), access_token: 'rotated' }))
+      .mockResolvedValueOnce(json({ profile: attached }));
+    vi.stubGlobal('fetch', fetch);
+    await getGeoChatSession(vi.fn().mockResolvedValue('privy-token'), 'user-a');
+
+    await expect(readGeoChatSessionProfile('user-a', vi.fn().mockResolvedValue('privy-token'))).resolves.toEqual({
+      state: 'attached',
+    });
+
+    expect(fetch.mock.calls.map(([url]) => url)).toEqual([
+      'http://localhost:8080/auth/session',
+      'http://localhost:8080/auth/profile',
+      'http://localhost:8080/auth/session/refresh',
+      'http://localhost:8080/auth/profile',
+    ]);
+    expect(fetch).toHaveBeenLastCalledWith(
+      'http://localhost:8080/auth/profile',
+      expect.objectContaining({ headers: { Authorization: 'Bearer rotated' } })
+    );
+  });
+
+  it('drops the profile write when a refresh replaced the session mid-read', async () => {
+    const newer = { ...session(pending), access_token: 'newer', refresh_token: 'newer-refresh' };
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(json(session(pending)))
+      .mockImplementationOnce(async () => {
+        // Another tab, or the pre-expiry refresh, stores a rotated session before this answers.
+        window.localStorage.setItem('geo:chat-session', JSON.stringify({ account_key: 'user-a', session: newer }));
+        return json({ profile: attached });
+      });
+    vi.stubGlobal('fetch', fetch);
+    await getGeoChatSession(vi.fn().mockResolvedValue('privy-token'), 'user-a');
+
+    await expect(readGeoChatSessionProfile('user-a', vi.fn())).resolves.toEqual({ state: 'attached' });
+
+    expect(JSON.parse(window.localStorage.getItem('geo:chat-session')!)).toEqual({
+      account_key: 'user-a',
+      session: newer,
+    });
+  });
+
+  it('joins a session exchange already in flight when the access token is rejected', async () => {
+    let finishRefresh: (response: Response) => void = () => undefined;
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(json(session(pending)))
+      .mockResolvedValueOnce(errorJson(401, 'invalid_access_token'))
+      .mockImplementationOnce(() => new Promise<Response>(resolve => (finishRefresh = resolve)))
+      .mockResolvedValueOnce(json({ profile: attached }));
+    vi.stubGlobal('fetch', fetch);
+    await getGeoChatSession(vi.fn().mockResolvedValue('privy-token'), 'user-a');
+
+    const read = readGeoChatSessionProfile('user-a', vi.fn());
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(3));
+    // The gateway asks for a session while the renewal is in flight: it gets the same one.
+    const gateway = getGeoChatSession(vi.fn(), 'user-a');
+    finishRefresh(json({ ...session(pending), access_token: 'rotated' }));
+
+    await expect(read).resolves.toEqual({ state: 'attached' });
+    await expect(gateway).resolves.toMatchObject({ access_token: 'rotated' });
+    expect(fetch).toHaveBeenCalledTimes(4);
+  });
+
+  it('passes on a rate limit without refreshing, and keeps the stored session', async () => {
+    const limited = new Response(JSON.stringify({ error: { code: 'rate_limited', message: 'slow' } }), {
+      status: 429,
+      headers: { 'Retry-After': '20' },
+    });
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(json(session(pending)))
+      .mockResolvedValueOnce(limited);
+    vi.stubGlobal('fetch', fetch);
+    await getGeoChatSession(vi.fn().mockResolvedValue('privy-token'), 'user-a');
+
+    await expect(readGeoChatSessionProfile('user-a', vi.fn().mockResolvedValue('privy-token'))).resolves.toEqual({
+      state: null,
+      retryAfterMs: 20_000,
+    });
+
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(getGeoChatAccountStatus('user-a')).toMatchObject({ profile: 'pending' });
+  });
+
+  it('keeps the stored session when the profile read fails', async () => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(json(session(pending)))
+      .mockRejectedValueOnce(new Error('offline'));
+    vi.stubGlobal('fetch', fetch);
+    await getGeoChatSession(vi.fn().mockResolvedValue('privy-token'), 'user-a');
+
+    await expect(readGeoChatSessionProfile('user-a', vi.fn().mockResolvedValue('privy-token'))).resolves.toEqual({
+      state: null,
+      retryAfterMs: null,
+    });
+
+    expect(JSON.parse(window.localStorage.getItem('geo:chat-session')!)).toMatchObject({
+      session: { access_token: 'access' },
+    });
   });
 });
 

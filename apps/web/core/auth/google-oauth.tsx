@@ -64,12 +64,13 @@ export function useGoogleOAuthSignIn() {
   const signIn = useCallback(
     async (properties: AnalyticsProperties) => {
       prepareOnboarding();
-      beginPrivyAuth(properties);
+      const attempt = beginPrivyAuth(properties);
       try {
         if (!initGoogleOAuth) throw new Error('Google sign-in is not mounted');
         await initGoogleOAuth();
       } catch (error) {
-        cancelPrivyAuth();
+        // A newer email or Google sign-in may have replaced this request while it was starting.
+        if (currentAuthAttempt()?.id === attempt.id) cancelPrivyAuth();
         throw error;
       }
     },

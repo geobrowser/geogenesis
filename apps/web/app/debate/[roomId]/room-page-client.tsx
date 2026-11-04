@@ -34,7 +34,7 @@ import {
 import { DebateRoomProvider } from '~/core/debates/rooms/room-context';
 import { ROOM_CANT_MAKE_IT, ROOM_NOT_YET_OPEN, ROOM_NO_ACCESS } from '~/core/debates/rooms/room-copy';
 import { opponentName } from '~/core/debates/rooms/room-opponent';
-import { noticeFrom, sameId } from '~/core/debates/rooms/room-presence';
+import { noticeFrom, roomPerson, sameId } from '~/core/debates/rooms/room-presence';
 import { debateRoomPath } from '~/core/debates/rooms/room-routes';
 import { useCurrentGeoChatUserId } from '~/core/debates/use-current-geo-chat-user-id';
 import { useSpaceCallRedirect } from '~/core/space-calls/space-call-page';
@@ -212,8 +212,8 @@ function RoomWithdrawn({ reason, room }: { reason: 'cancelled' | 'rescheduled'; 
   // The other debater's. Someone reading the room they called off themselves, from a second tab
   // say, gets the ordinary closed-room page.
   const notice = noticeFrom(room.notices, otherId, 'cant_make_it');
-  const ids = React.useMemo(() => (notice ? [notice.user_id] : []), [notice]);
-  const person = useGeoChatUserSummaries(ids, notice !== null)[0] ?? null;
+  const people = React.useMemo(() => (notice ? [roomPerson(room, notice.user_id)] : []), [notice, room]);
+  const person = useGeoChatUserSummaries(people, notice !== null)[0] ?? null;
   const rescheduled = reason === 'rescheduled';
   // Called off by the viewer themselves, from a second tab say: the ordinary closed page. A move
   // without a Can't make it is said to both of them below instead.

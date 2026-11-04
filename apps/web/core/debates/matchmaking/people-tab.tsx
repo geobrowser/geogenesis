@@ -10,6 +10,7 @@ import { personProfileOpened } from '~/core/analytics';
 import { SLOT_MINUTES } from '~/core/availability/blocks';
 import { PEER_SCHEDULE_DAYS, slotStarts } from '~/core/availability/peer-schedule';
 import type { ScheduleEntry } from '~/core/availability/schedule-analytics';
+import { accountSetupMessage } from '~/core/debates/account-setup-copy';
 import { FollowButton } from '~/core/follows/follow-button';
 import { usePersonFollowerCount } from '~/core/follows/person-follow-counts';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
@@ -1059,11 +1060,7 @@ function PanelPersonRow({
           ? undefined
           : {
               // Fans out like any claim request: to people on the other side, this person among them.
-              pausedReason: ask
-                ? ONE_ASK_AT_A_TIME_REASON
-                : disabled
-                  ? disabledReason
-                  : null,
+              pausedReason: ask ? ONE_ASK_AT_A_TIME_REASON : disabled ? disabledReason : null,
               onRequested: closeMatches,
             }
       }
@@ -1395,7 +1392,7 @@ export function SidePanelProfileName({
  */
 function SetAvailabilityNotice() {
   const [open, setOpen] = React.useState(false);
-  const { blocks, isError, refetch } = useDebateSchedule();
+  const { blocks, isError, error: scheduleError, refetch } = useDebateSchedule();
   const saveSchedule = useSaveDebateSchedule({ surface: 'people_tab' });
   const openerRef = React.useRef<HTMLElement | null>(null);
 
@@ -1420,6 +1417,7 @@ function SetAvailabilityNotice() {
         onOpenChange={setOpen}
         blocks={blocks}
         error={isError}
+        errorMessage={accountSetupMessage(scheduleError)}
         onRetry={() => refetch()}
         onSave={nextBlocks => saveSchedule.mutate(nextBlocks)}
         openerRef={openerRef}

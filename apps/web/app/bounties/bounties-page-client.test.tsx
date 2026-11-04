@@ -40,6 +40,6 @@ describe('BountiesPageClient', () => {
     mocks.enabled = false;
     render(<BountiesPageClient />);
     expect(screen.queryByTestId('board')).not.toBeInTheDocument();
-    expect(mocks.replace).toHaveBeenCalledWith('/root');
+    expect(mocks.replace).toHaveBeenCalledWith('/explore');
   });
 });

@@ -7,6 +7,11 @@ import * as React from 'react';
 import cx from 'classnames';
 import { useAtomValue } from 'jotai';
 
+import {
+  ContinueWithGoogleButton,
+  isGoogleSignInStarting,
+  useContinueWithGoogle,
+} from '~/core/auth/continue-with-google';
 import { arrivedFromEmail } from '~/core/deep-links/ref-email';
 import { useAnyModalOpen } from '~/core/hooks/use-any-modal-open';
 import { usePrepareOnboarding } from '~/core/hooks/use-prepare-onboarding';
@@ -60,8 +65,10 @@ import {
   badgeClass,
   bodyClass,
   codeStepClasses,
+  errorClass,
   fieldClass,
   fineClass,
+  googleButtonClass,
   primaryButtonClass,
 } from './save-votes-styles';
 
@@ -87,7 +94,7 @@ const AUTOMATIC_REASONS: ReadonlySet<SaveVotesPromptReason> = new Set([
  *
  * Opened from the navbar's "Save N votes", it is the same card as a centred modal dialog instead
  * (GEO-3400): the visitor asked for it, so it comes forward rather than waiting in the corner. An
- * email's vote link (GEO-3374) and the automatic follow-up at five votes open it centred too;
+ * email's vote link (GEO-3374), the first vote (GEO-3572) and the follow-up at five votes open it centred too;
  * see `opensSaveVotesCentered`.
  */
 export function SaveVotesSheet() {
@@ -98,6 +105,9 @@ export function SaveVotesSheet() {
   const count = votes.length;
   const isChatOpen = useAtomValue(isChatOpenAtom);
   const prepareOnboarding = usePrepareOnboarding();
+  // Undefined with the `googleSignIn` flag off or in an in-app browser, which hides the button.
+  const google = useContinueWithGoogle();
+  const googleStarting = google?.status === 'starting';
 
   const [email, setEmail] = React.useState('');
   /**
@@ -190,8 +200,9 @@ export function SaveVotesSheet() {
   }, [open, visible, reason]);
 
   const close = React.useCallback(() => {
-    // Ends this sheet's own sign-in as closed, once a code is out, so it no longer counts as a save.
-    if (midSignIn) cancelPrivyAuth();
+    // Withdraw an email sign-in, including one left mid-edit. A Google redirect cannot be aborted;
+    // its new save attempt must survive closing even when an email was started before it.
+    if (midSignIn && !isGoogleSignInStarting()) cancelPrivyAuth();
     // Not now, not never: the votes stay on the device and the pills still offer "Save".
     recordSavePromptDismissed();
     setAttempt(null);
@@ -216,7 +227,7 @@ export function SaveVotesSheet() {
 
   const submitEmail = (event: React.FormEvent) => {
     event.preventDefault();
-    if (!canSend) return;
+    if (!canSend || isGoogleSignInStarting()) return;
     beginPrivyAuth(signInProperties);
     prepareOnboarding();
     setAttempt({ email: trimmedEmail, centered, reason: attempt ? attempt.reason : reason, phase: 'code' });
@@ -288,7 +299,9 @@ export function SaveVotesSheet() {
               <p className={HEADING_CLASS}>Join the discussion</p>
               <p className={SUBTEXT_CLASS}>
                 Create an account to vote on claims, speak and debate. You’ll stay in{' '}
-                <span className="font-medium text-text">{lobbyName}</span>, and your audio keeps playing.
+                <span className="font-medium text-text">{lobbyName}</span>
+                {/* Google redirects away and back, so the lobby is rejoined but the audio stops meanwhile. */}
+                {google ? '.' : ', and your audio keeps playing.'}
               </p>
               <p className="mt-3 text-[12px] leading-[16px] font-medium text-grey-04">Saved for after sign-up</p>
             </>
@@ -318,9 +331,27 @@ export function SaveVotesSheet() {
               className={INPUT_CLASS}
             />
           </label>
-          <button type="submit" disabled={!canSend} className={primaryButtonClass(compact)}>
+          <button type="submit" disabled={!canSend || googleStarting} className={primaryButtonClass(compact)}>
             {editing ? SAVE_VOTES_RESEND_LABEL : saveVotesSubmitLabel(count, logIn)}
           </button>
+          {google ? (
+            <ContinueWithGoogleButton
+              status={google.status}
+              // The attempt is persisted before the redirect, so the saver still reads it as a save on
+              // the return and publishes the votes, which wait on the device the whole time.
+              onClick={() =>
+                void google.start(
+                  saveVotesSignInProperties('continue_with_google', count, attempt ? attempt.reason : reason)
+                )
+              }
+              className={googleButtonClass(compact)}
+            />
+          ) : null}
+          {google?.status === 'failed' ? (
+            <p role="alert" className={errorClass}>
+              Google sign-in did not start. Try again, or use your email.
+            </p>
+          ) : null}
 
           <p className={fineClass(compact)}>{SAVE_VOTES_FINE_PRINT}</p>
         </form>

@@ -8,6 +8,7 @@ import cx from 'classnames';
 
 import { formatTime24, parseTime24 } from '~/core/availability/blocks';
 import { windowStart } from '~/core/availability/peer-schedule';
+import { usePersonalSpacesByPageIds } from '~/core/hooks/use-personal-spaces-by-page-ids';
 import { useSearch } from '~/core/hooks/use-search';
 import { type SpaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
 import { normId } from '~/core/utils/norm-id';
@@ -21,7 +22,8 @@ import { Text } from '~/design-system/text';
 import { MUTUAL_SLOT, SELECTED_SLOT } from '~/partials/availability/peer-availability';
 import { ScheduleDialog } from '~/partials/availability/schedule-dialog';
 
-import { type DebatePerson, GeoChatRequestError, isDebateProfileMissing } from '../api';
+import { type DebatePerson, GeoChatRequestError, isDebateProfileLookupMissing, isDebateProfileMissing } from '../api';
+import { useDebateProfilesBySpace } from '../hooks';
 import { speakerLabel } from '../playback-utils';
 import { dayShift, timeIn, zoneCity } from './admin-debate-calendar-model';
 import { DebaterFace, POSITIVE_TEXT_CLASS, debaterFirstName } from './admin-debate-parts';
@@ -211,19 +213,37 @@ function NewMatchBody({ onClose, onSent }: { onClose: () => void; onSent: (note:
 
   // Everyone with availability, read once and kept: the roster the facts below are keyed on, so a
   // keystroke never re-reads it or blanks the list while it loads.
-  const roster = useGeoChatUserSummaries(availableIds, availableIds.length > 0);
+  // Keyed dashless, as everything below is.
+  const rosterRows = React.useMemo(
+    () => (debatersQuery.data ?? []).map(debater => ({ ...debater, user_id: normId(debater.user_id) })),
+    [debatersQuery.data]
+  );
+  const roster = useGeoChatUserSummaries(rosterRows, availableIds.length > 0);
   const rosterPeople = React.useMemo(() => roster.map(offlinePerson), [roster]);
 
-  // Geo search for people by name: how anyone without availability is found at all. A geo-chat user
-  // id is the page entity of their personal space, so a person hit is a candidate id as it stands;
-  // the summaries lookup keeps only the hits that front a personal space.
+  // Geo search for people by name: how anyone without availability is found at all. A hit is a graph
+  // Person, not a geo-chat user: its personal space, then geo-chat's account for that space, gives
+  // the user id. A person with no account cannot be matched, so is left out.
   const search = useSearch({ filterByTypes: [SystemIds.PERSON_TYPE], restrictToFilterTypes: true });
   const searchTerm = search.query.trim().toLowerCase();
-  const hitIds = React.useMemo(
-    () => (searchTerm ? search.results.map(result => normId(result.id)).filter(id => !isAvailable.has(id)) : []),
-    [isAvailable, search.results, searchTerm]
+  const hitPageIds = React.useMemo(
+    () => (searchTerm ? search.results.map(result => normId(result.id)) : []),
+    [search.results, searchTerm]
   );
-  const hits = useGeoChatUserSummaries(hitIds, hitIds.length > 0);
+  const hitSpaces = usePersonalSpacesByPageIds(hitPageIds, hitPageIds.length > 0);
+  const hitSpaceIds = React.useMemo(() => [...(hitSpaces.data?.values() ?? [])], [hitSpaces.data]);
+  const hitAccounts = useDebateProfilesBySpace(hitSpaceIds, hitSpaceIds.length > 0);
+  // An older geo-chat has no lookup; there a hit's page id is its user id.
+  const legacyHits = isDebateProfileLookupMissing(hitAccounts.error);
+  const hitLookupFailed = Boolean(hitAccounts.error) && !legacyHits;
+  const hitUsers = React.useMemo(
+    () =>
+      (legacyHits ? hitPageIds.map(user_id => ({ user_id })) : (hitAccounts.data ?? [])).filter(
+        person => !isAvailable.has(normId(person.user_id))
+      ),
+    [hitAccounts.data, hitPageIds, isAvailable, legacyHits]
+  );
+  const hits = useGeoChatUserSummaries(hitUsers, hitUsers.length > 0);
   const hitPeople = React.useMemo(() => hits.map(offlinePerson), [hits]);
 
   const facts = usePersonFacts(rosterPeople, {
@@ -443,13 +463,25 @@ function NewMatchBody({ onClose, onSent }: { onClose: () => void; onSent: (note:
             ) : debatersQuery.isPending && listedRoster.length === 0 ? (
               <EmptyRow>Loading people…</EmptyRow>
             ) : listedRoster.length === 0 && listedHits.length === 0 ? (
-              <EmptyRow>{searchTerm && search.isLoading ? 'Searching…' : 'Nobody matches that.'}</EmptyRow>
+              hitLookupFailed ? null : (
+                <EmptyRow>{searchTerm && search.isLoading ? 'Searching…' : 'Nobody matches that.'}</EmptyRow>
+              )
             ) : (
               <>
                 {listedRoster.map(person => option(person, true))}
                 {listedHits.map(person => option(person, false))}
               </>
             )}
+            {hitLookupFailed ? (
+              <li className="flex flex-wrap items-center gap-2 border-b border-grey-02 py-4">
+                <Text as="p" variant="metadata" color="grey-04">
+                  Couldn&rsquo;t look up the people found by name.
+                </Text>
+                <HubPillButton analyticsSurface="calendar" onClick={() => void hitAccounts.refetch()}>
+                  Try again
+                </HubPillButton>
+              </li>
+            ) : null}
           </ul>
         </div>
 

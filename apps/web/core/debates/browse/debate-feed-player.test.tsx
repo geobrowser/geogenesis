@@ -409,14 +409,17 @@ describe('player layout', () => {
       [SPACE_2, 'Another affiliation whose width must not place the position chip'],
     ]);
     const { container } = render(<DebateFeedPlayer debate={debate} active />);
-    const { getByText } = within(container);
+    const { getAllByText, getByText } = within(container);
+    // Unnamed participants read as Debater, in slot order.
+    const names = getAllByText('Debater');
+    expect(names).toHaveLength(2);
 
-    for (const [name, position, affiliation] of [
-      [SPACE_1_DASHED, 'Agree', 'A deliberately much longer affiliation than the participant name'],
-      [SPACE_2, 'Disagree', 'Another affiliation whose width must not place the position chip'],
-    ]) {
+    for (const [index, position, affiliation] of [
+      [0, 'Agree', 'A deliberately much longer affiliation than the participant name'],
+      [1, 'Disagree', 'Another affiliation whose width must not place the position chip'],
+    ] as const) {
       const chip = getByText(position);
-      const nameNode = getByText(name);
+      const nameNode = names[index]!;
       const nameRow = nameNode.parentElement;
 
       expect(chip.parentElement).toBe(nameRow);

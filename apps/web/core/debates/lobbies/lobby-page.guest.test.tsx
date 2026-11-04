@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import * as React from 'react';
 
@@ -113,6 +113,7 @@ vi.mock('./hooks', () => ({
   useRefetchAtOpening: vi.fn(),
   useDebateLobbies: (enabled: boolean) => ({ data: enabled ? { lobbies: mocks.lobbies } : undefined }),
   useEndDebateLobby: () => ({ mutate: vi.fn(), isPending: false, isError: false }),
+  useUpdateDebateLobby: () => ({ mutate: vi.fn(), error: null, isPending: false }),
 }));
 vi.mock('./lobby-guest-hooks', async importOriginal => ({
   ...(await importOriginal<typeof import('./lobby-guest-hooks')>()),
@@ -206,7 +207,7 @@ vi.mock('~/core/space-calls/call-room', () => ({ CallRoom: () => <div data-testi
 vi.mock('../use-current-geo-chat-user-id', () => ({ useCurrentGeoChatUserId: () => mocks.userId }));
 
 const { DebateLobbyPage, memberPath } = await import('./lobby-page');
-const { LobbyPurposeProvider } = await import('./lobby-purpose');
+const { RoomCapabilitiesProvider } = await import('./room-capabilities');
 const { readGuestSecret } = await import('./lobby-guest-secret');
 
 const adam: DebateLobbyMember = {
@@ -640,9 +641,9 @@ describe('DebateLobbyPage account prompt', () => {
 
   it('does not ask on a scheduled call’s page before it opens, and does once it is open (GEO-3420)', () => {
     const asCall = (node: React.ReactNode) => (
-      <LobbyPurposeProvider value={{ purpose: 'call', spaceId: 'space1', exitHref: '/space/space1' }}>
+      <RoomCapabilitiesProvider purpose={{ purpose: 'call', spaceId: 'space1', exitHref: '/space/space1' }}>
         {node}
-      </LobbyPurposeProvider>
+      </RoomCapabilitiesProvider>
     );
     mocks.guestView = {
       ...mocks.guestView!,
@@ -666,9 +667,9 @@ describe('DebateLobbyPage account prompt', () => {
       lobby: { ...lobbyFields, access: { status: 'not_yet_open', opens_at: '2099-10-06T17:50:00Z' } },
     };
     render(
-      <LobbyPurposeProvider value={{ purpose: 'call', spaceId: 'space1', exitHref: '/space/space1' }}>
+      <RoomCapabilitiesProvider purpose={{ purpose: 'call', spaceId: 'space1', exitHref: '/space/space1' }}>
         <DebateLobbyPage lobbyId="lobby1" />
-      </LobbyPurposeProvider>
+      </RoomCapabilitiesProvider>
     );
     expect(screen.queryByTestId('call-pre-open')).not.toBeInTheDocument();
     expect(screen.getByTestId('debate-lobby')).toBeInTheDocument();
@@ -682,9 +683,9 @@ describe('DebateLobbyPage account prompt', () => {
     mocks.memberError = true;
     mocks.memberErrorValue = new GeoChatRequestError('gone', 'lobby_not_found', 404);
     render(
-      <LobbyPurposeProvider value={{ purpose: 'call', spaceId: 'space1', exitHref: '/space/space1' }}>
+      <RoomCapabilitiesProvider purpose={{ purpose: 'call', spaceId: 'space1', exitHref: '/space/space1' }}>
         <DebateLobbyPage lobbyId="lobby1" />
-      </LobbyPurposeProvider>
+      </RoomCapabilitiesProvider>
     );
     expect(screen.getByText('Could not open this call.')).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Back to calls' })).not.toBeInTheDocument();
@@ -697,9 +698,9 @@ describe('DebateLobbyPage account prompt', () => {
     mocks.memberError = true;
     mocks.memberErrorValue = new GeoChatRequestError('gone', 'lobby_not_found', 404);
     render(
-      <LobbyPurposeProvider value={{ purpose: 'call', spaceId: 'space1', exitHref: '/space/space1' }}>
+      <RoomCapabilitiesProvider purpose={{ purpose: 'call', spaceId: 'space1', exitHref: '/space/space1' }}>
         <DebateLobbyPage lobbyId="lobby1" />
-      </LobbyPurposeProvider>
+      </RoomCapabilitiesProvider>
     );
     expect(screen.getByText('This call isn’t available.')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Back to calls' })).toHaveAttribute('href', '/space/space1/calls');
@@ -910,6 +911,22 @@ describe('DebateLobbyPage state screens', () => {
     expect(screen.getByText('3 going')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'RSVP' })).toBeInTheDocument();
     expect(screen.queryByText(/No account/)).not.toBeInTheDocument();
+  });
+
+  // GEO-3540 review: the lobby opening replaces the waiting card; a host's edit stays up through it.
+  it('keeps a host’s edit dialog up when the lobby opens', () => {
+    mocks.authenticated = true;
+    const host = { ...memberView.viewer, role: 'host' as const, connected: false };
+    mocks.memberLobby = { ...memberView, ...notYetOpen, viewer: host };
+    const { rerender } = render(<DebateLobbyPage lobbyId="lobby1" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Edit lobby' }));
+    expect(screen.getByRole('dialog', { name: 'Edit lobby' })).toBeInTheDocument();
+
+    mocks.memberLobby = { ...memberView, ...notYetOpen, access: { status: 'admitted' }, viewer: host };
+    rerender(<DebateLobbyPage lobbyId="lobby1" />);
+
+    expect(screen.queryByText('Debate lobby · scheduled')).not.toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Edit lobby' })).toBeInTheDocument();
   });
 
   it('points an ended lobby at the host’s next one, with RSVP', () => {

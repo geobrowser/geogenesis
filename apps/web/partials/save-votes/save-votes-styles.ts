@@ -61,10 +61,21 @@ export const fieldClass = (compact: boolean) =>
 export const INPUT_CLASS =
   'h-full min-w-0 flex-1 bg-transparent text-[16px] text-text outline-hidden placeholder:text-grey-03';
 
-export const primaryButtonClass = (compact: boolean) =>
+/** The sheet's pill buttons: full width, at the field's height. */
+const pillButtonClass = (compact: boolean) =>
   cx(
-    'mt-2 inline-flex w-full items-center justify-center rounded-full bg-[#151515] text-[16px] font-medium whitespace-nowrap text-white transition-opacity hover:opacity-90 disabled:opacity-50 mobile:mx-auto mobile:flex mobile:h-12 mobile:max-w-[394px] mobile:text-[17px]',
+    'mt-2 inline-flex w-full items-center justify-center rounded-full text-[16px] font-medium whitespace-nowrap disabled:opacity-50 mobile:mx-auto mobile:flex mobile:h-12 mobile:max-w-[394px] mobile:text-[17px]',
     compact ? 'h-10' : 'h-11'
+  );
+
+export const primaryButtonClass = (compact: boolean) =>
+  cx(pillButtonClass(compact), 'bg-[#151515] text-white transition-opacity hover:opacity-90');
+
+/** The outlined pill under it with Google's mark, in the text color Google's branding asks for. */
+export const googleButtonClass = (compact: boolean) =>
+  cx(
+    pillButtonClass(compact),
+    'gap-2 border border-grey-02 bg-white text-[#151515] transition-colors hover:border-text'
   );
 
 export const fineClass = (compact: boolean) =>
@@ -72,6 +83,9 @@ export const fineClass = (compact: boolean) =>
 
 /** `red-01` is under 4.5:1 on white at this size; this is the same red, dark enough to read. */
 const ERROR_TEXT_CLASS = 'text-[13px] leading-[18px] text-[#d92d14] mobile:text-[15px] mobile:leading-[20px]';
+
+/** A line under the email step's buttons saying what went wrong. */
+export const errorClass = `mt-2 ${ERROR_TEXT_CLASS}`;
 
 /**
  * The code step (`AccountStep`) in this sheet's look: the email capture's subtext, a larger box per

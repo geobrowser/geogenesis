@@ -193,12 +193,14 @@ describe('every debate entry steps out of a lobby', () => {
     // GEO-3268: links into a lobby from the panel spotlight and row, the Debate button's hover list,
     // the calendar and Explore.
     'core/debates/lobbies/lobby-spotlight.tsx',
-    // GEO-3463: the panel strip that replaced the spotlight above the tabs, joining a live lobby.
-    'core/debates/matchmaking/hub-live-strip.tsx',
+    // GEO-3463, GEO-3519: Open lobby page in an upcoming lobby's details, from the Requests timeline.
+    'core/debates/matchmaking/lobby-details-popover.tsx',
     'core/debates/lobbies/live-lobbies-preview.tsx',
     'core/debates/lobbies/upcoming-lobbies.tsx',
     'core/debates/lobbies/lobbies-calendar.tsx',
     'partials/explore/explore-live-lobbies-banner.tsx',
+    // GEO-3517: the debate hours page links into lobbies only.
+    'core/debates/lobbies/debate-hours-page.tsx',
     'core/debates/lobbies/lobby-page.tsx',
     'core/debates/lobbies/lobby-state-cards.tsx',
     'core/debates/lobbies/open-lobby-dialog.tsx',

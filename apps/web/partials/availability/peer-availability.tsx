@@ -19,6 +19,7 @@ import {
   viewerInputValue,
 } from '~/core/availability/peer-schedule';
 import { type ScheduleEntry, debateAvailabilityViewed } from '~/core/availability/schedule-analytics';
+import { debaterName } from '~/core/debates/debater-name';
 import { usePeerSchedule } from '~/core/debates/hooks';
 import { debateActionAnalyticsAttributes } from '~/core/debates/matchmaking/hub-analytics';
 import { useEffectOnceWhen } from '~/core/hooks/use-effect-once';
@@ -881,8 +882,7 @@ export function Notice({
   );
 }
 
-/** The supplied name, or as a last resort enough of the id to tell two people apart. */
-export function peerDisplayName(peerName: string | null | undefined, userId: string) {
-  if (peerName) return peerName;
-  return userId.length > 10 ? `${userId.slice(0, 8)}…` : userId;
+/** The supplied name, or the neutral label. `_userId` is kept so callers need not change. */
+export function peerDisplayName(peerName: string | null | undefined, _userId: string) {
+  return debaterName(peerName);
 }

@@ -32,10 +32,10 @@ import {
 } from '~/core/debates/debate-claim-card-surface';
 import { markEnteringDebate } from '~/core/debates/debate-entry-intent';
 import { useDebateGatewaySpaceScopes } from '~/core/debates/debate-gateway';
-import { debatePublishableSpacePredicate } from '~/core/debates/debate-publish-target';
 import { DebateRequestDialog } from '~/core/debates/debate-request-dialog';
 import { DebateOpenElsewhereScreen } from '~/core/debates/debate-room-holding-screens';
 import { claimDebateEntry, debateRoomClaimKey } from '~/core/debates/debate-tab-claims';
+import { speakerLabel } from '~/core/debates/debater-name';
 import { toDebatesPanel } from '~/core/debates/debates-panel-deep-link';
 import { requestOpenRounds } from '~/core/debates/format-details';
 import { defaultDebateFormatId, isOpenRoundsFormatId } from '~/core/debates/formats';
@@ -70,11 +70,9 @@ import {
 } from '~/core/debates/matchmaking/claim-debatability';
 import { claimRowKey } from '~/core/debates/matchmaking/claim-row-key';
 import { type AnsweredState, useCollapseAnswered } from '~/core/debates/matchmaking/collapse-answered';
+import { CollapsibleClaimSection } from '~/core/debates/matchmaking/collapsible-claim-section';
 import { FacetFilterPills, type FacetPillOption } from '~/core/debates/matchmaking/facet-filter-pills';
-import {
-  type DebateAnalyticsAttributes,
-  debateActionAnalyticsAttributes,
-} from '~/core/debates/matchmaking/hub-analytics';
+import { debateActionAnalyticsAttributes } from '~/core/debates/matchmaking/hub-analytics';
 import { HubFilterMenu, type HubFilterOption } from '~/core/debates/matchmaking/hub-filter-menu';
 import { HubCardList, hubCardMotion } from '~/core/debates/matchmaking/hub-motion';
 import { HubPillButton } from '~/core/debates/matchmaking/hub-pill-button';
@@ -129,8 +127,13 @@ import { useClaimDebateCounts } from '~/core/debates/todays-claims/claim-debate-
 import { NO_AGENDAS, useDebateAgendas } from '~/core/debates/todays-claims/debate-agendas';
 import { EARLIER_THIS_WEEK_SECTION, useTodaysSectionsOpen } from '~/core/debates/todays-claims/section-open-state';
 import { type TodaysCardScope, todaysCardScope } from '~/core/debates/todays-claims/todays-claims-attribution';
-import { orderAgendaSpaces, orderByDebatesSinceListing } from '~/core/debates/todays-claims/todays-claims-order';
+import {
+  orderAgendaSpaces,
+  todaysSectionKey,
+  todaysSectionsInOrder,
+} from '~/core/debates/todays-claims/todays-claims-order';
 import { useDebatersSpaceMembership } from '~/core/debates/todays-claims/use-debaters-space-membership';
+import { useCanPublishDebateIn } from '~/core/debates/use-can-publish-debate-in';
 import { useClaimSpaceAllowlist } from '~/core/debates/use-claim-space-allowlist';
 import { useCurrentGeoChatUserId } from '~/core/debates/use-current-geo-chat-user-id';
 import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '~/core/debates/use-debate-publishable-spaces';
@@ -142,7 +145,6 @@ import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sent
 import { useLastSettled } from '~/core/hooks/use-last-settled';
 import { useOpenClaimInSidePanel } from '~/core/hooks/use-open-claim-in-side-panel';
 import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
-import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
 import { equals as idEquals, uuidToHex } from '~/core/id/normalize';
 import { responsePositionLabel } from '~/core/responses/entity-response';
 import { normId } from '~/core/utils/norm-id';
@@ -151,7 +153,6 @@ import { validateSpaceId } from '~/core/utils/utils';
 import { validateEntityId } from '~/core/utils/utils';
 
 import { PILL_BUTTON_SECONDARY_CLASS_NAME, SmallButton } from '~/design-system/button';
-import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Input } from '~/design-system/input';
 import { Skeleton } from '~/design-system/skeleton';
 import { tabGroupTabLinkStyles } from '~/design-system/tab-group';
@@ -451,7 +452,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
 
   const remoteParticipant =
     currentUserId === null ? null : (participants.find(participant => participant.user_id !== currentUserId) ?? null);
-  const remoteName = remoteParticipant?.display_name || remoteParticipant?.profile_space_id || 'debater';
+  const remoteName = speakerLabel(remoteParticipant ?? {});
   /** For the buttons and the line that name them (GEO-3148): "See Jenna’s positions" fits a pill. */
   const remoteFirstName = remoteName.trim().split(/\s+/)[0] || remoteName;
 
@@ -753,7 +754,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   //
   // Two of the three gates can be sent; one cannot. The viewer's allowlist and the acceptor's
   // editor spaces are both resolved sets that answer independently of this query. The *space-type*
-  // test is the one that cannot go: `spaceTypePublishable` is built from `candidateSpaceIds`, which
+  // test is the one that cannot go: `canPublishDebateIn`'s type check is built from `candidateSpaceIds`, which
   // is derived from this query's own results, so sending it would make the query depend on its own
   // answer. It stays a client gate below.
   //
@@ -1155,10 +1156,8 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     for (const spaceId of todaysSpaceIds) ids.add(spaceId);
     return [...ids];
   }, [catalogEntities, taggedSpaceFacet.spaces, todaysSpaceIds]);
-  const { spacesById: candidateSpaces, isLoading: candidateSpacesPending } = useSpacesByIds(candidateSpaceIds);
-  const spaceTypePublishable = React.useMemo(() => debatePublishableSpacePredicate(candidateSpaces), [candidateSpaces]);
   /**
-   * Whether {@link canPublishDebateIn} can be trusted yet.
+   * `publishabilityPending`: whether {@link canPublishDebateIn} can be trusted yet.
    *
    * An unresolved type reads as publishable — deliberately, so a slow lookup doesn't empty the
    * picker — so while this is true the predicate admits spaces it will go on to reject, a personal
@@ -1168,12 +1167,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    * has a second `useSpacesByIds` for the allowlist, whose pending state `scope.pending` carries;
    * they are different questions about different ids and neither covers the other.
    */
-  const publishabilityPending = candidateSpacesPending;
-  const canPublishDebateIn = React.useCallback(
-    (spaceId: string | null | undefined) =>
-      isSpaceDebatePublishable(spaceId, publishableSpaceIds) && spaceTypePublishable(spaceId),
-    [publishableSpaceIds, spaceTypePublishable]
-  );
+  const { canPublishDebateIn, typesPending: publishabilityPending } = useCanPublishDebateIn(candidateSpaceIds);
 
   /**
    * GEO-3489. The agendas that count: those in a space that can carry a published debate, as
@@ -1864,28 +1858,24 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
 
     const sections: TodaysSection[] = [];
     const items: TodaysItem[] = [];
-    for (const spaceId of orderAgendaSpaces(todaysAgendaSpaceIds, todaysMembership.debatersIn)) {
-      const space = todaysAgendas.spaces.find(candidate => idEquals(candidate.spaceId, spaceId));
-      for (const section of space?.sections ?? []) {
-        const rows = orderByDebatesSinceListing(section.claimIds, debatesOf).flatMap(
-          claimId => rowOf(claimId, section.spaceId) ?? []
-        );
-        if (rows.length === 0) continue;
-        const key = todaysSectionKey(section.spaceId, section.id);
-        sections.push({ key, name: section.name, defaultOpen: true, sectionId: section.id });
-        items.push(
-          ...rows.map(row => ({
-            row,
-            sectionKey: key,
-            scope: todaysCardScope(
-              section.agendaId,
-              section.listedOn,
-              debatesOf(normId(row.claim.claim_entity_id)),
-              section.id
-            ),
-          }))
-        );
-      }
+    const spaceOrder = orderAgendaSpaces(todaysAgendaSpaceIds, todaysMembership.debatersIn);
+    for (const { section, claimIds } of todaysSectionsInOrder(todaysAgendas.spaces, spaceOrder, debatesOf)) {
+      const rows = claimIds.flatMap(claimId => rowOf(claimId, section.spaceId) ?? []);
+      if (rows.length === 0) continue;
+      const key = todaysSectionKey(section.spaceId, section.id);
+      sections.push({ key, name: section.name, defaultOpen: true, sectionId: section.id });
+      items.push(
+        ...rows.map(row => ({
+          row,
+          sectionKey: key,
+          scope: todaysCardScope(
+            section.agendaId,
+            section.listedOn,
+            debatesOf(normId(row.claim.claim_entity_id)),
+            section.id
+          ),
+        }))
+      );
     }
     const earlier = todaysAgendas.earlier.flatMap(listing => {
       if ((debatesOf(listing.claimId) ?? 0) > 0) return [];
@@ -3657,7 +3647,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
             // Each data block on the curator's page is its own section, in page order.
             <div className="flex flex-col gap-4">
               {visibleSections.map((section, sectionIndex) => (
-                <RecommendedSection
+                <CollapsibleClaimSection
                   key={section.id}
                   name={section.name}
                   count={section.claims.length}
@@ -3670,13 +3660,13 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
                       renderClaimCard(claim, sectionOffsets[sectionIndex] + index + 1)
                     )}
                   </HubCardList>
-                </RecommendedSection>
+                </CollapsibleClaimSection>
               ))}
             </div>
           ) : showsTodaysSections ? (
             <div className="flex flex-col gap-4" data-testid="todays-claims-sections">
               {visibleTodaysSections.map((section, sectionIndex) => (
-                <RecommendedSection
+                <CollapsibleClaimSection
                   key={section.key}
                   name={section.name}
                   count={section.claims.length}
@@ -3693,7 +3683,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
                       renderClaimCard(claim, todaysSectionOffsets[sectionIndex] + index + 1)
                     )}
                   </HubCardList>
-                </RecommendedSection>
+                </CollapsibleClaimSection>
               ))}
             </div>
           ) : tab === 'debate' ? (
@@ -3788,7 +3778,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
             something new; still reachable because going again on one is a choice geo-chat allows. */}
         {!tabIsLoading && visibleDebatedClaims.length > 0 ? (
           <div className="mt-6" data-testid="rematch-already-debated">
-            <RecommendedSection
+            <CollapsibleClaimSection
               key={`${sessionId}:${tab}`}
               name={`Already debated with ${remoteName}`}
               count={visibleDebatedClaims.length}
@@ -3800,7 +3790,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
               <HubCardList>
                 {visibleDebatedClaims.map((claim, index) => renderClaimCard(claim, foldOffset + index + 1, true))}
               </HubCardList>
-            </RecommendedSection>
+            </CollapsibleClaimSection>
           </div>
         ) : null}
       </main>
@@ -4171,11 +4161,6 @@ function TopicMatchCaption({ names }: { names: string[] }) {
 /** The page's names for its collapsible sections, so it can tell which of them are closed. */
 const ALREADY_DEBATED_SECTION = 'already-debated';
 const recommendedSectionKey = (sectionId: string) => `recommended:${sectionId}`;
-/**
- * A Today's claims section, by its space and agenda block: one block can be linked into two spaces'
- * agendas. "Earlier this week" is `EARLIER_THIS_WEEK_SECTION`.
- */
-const todaysSectionKey = (spaceId: string, blockId: string) => `todays:${normId(spaceId)}:${normId(blockId)}`;
 
 /** GEO-3489. A Today's claims heading, and whether it starts open. */
 type TodaysSection = {
@@ -4191,78 +4176,6 @@ type TodaysItem = { row: DebateRematchClaim; sectionKey: string; scope: TodaysCa
 const NO_TODAYS: { sections: TodaysSection[]; items: TodaysItem[] } = { sections: [], items: [] };
 const todaysSectionKeyOf = (section: TodaysSection) => section.key;
 const todaysItemKeyOf = (item: TodaysItem) => claimRowKey(item.row);
-
-/** One curated block, collapsible so a long page of recommendations stays scannable. */
-function RecommendedSection({
-  name,
-  count,
-  defaultOpen = true,
-  open: controlledOpen,
-  onToggle,
-  showCount = false,
-  analytics,
-  onOpenChange,
-  children,
-}: {
-  name: string;
-  count: number;
-  /** The toggle's click-analytics label and intent. The name can carry a person's or curator's words. */
-  analytics: DebateAnalyticsAttributes;
-  defaultOpen?: boolean;
-  /**
-   * Held by the caller instead, with `onToggle` asked to change it — for Today's claims, whose
-   * sections stay as the viewer left them for the day (GEO-3489).
-   */
-  open?: boolean;
-  onToggle?: (open: boolean) => void;
-  /** Draw the count beside the name. A closed section otherwise gives no hint of what is in it. */
-  showCount?: boolean;
-  onOpenChange?: (open: boolean) => void;
-  children: React.ReactNode;
-}) {
-  const [uncontrolledOpen, setOpen] = React.useState(defaultOpen);
-  const open = controlledOpen ?? uncontrolledOpen;
-  const contentId = React.useId();
-
-  const onOpenChangeRef = React.useRef(onOpenChange);
-  React.useLayoutEffect(() => {
-    onOpenChangeRef.current = onOpenChange;
-  });
-  React.useLayoutEffect(() => {
-    onOpenChangeRef.current?.(open);
-    return () => onOpenChangeRef.current?.(true);
-  }, [open]);
-
-  return (
-    <section>
-      <button
-        type="button"
-        aria-expanded={open}
-        aria-controls={contentId}
-        onClick={() => (onToggle ? onToggle(!open) : setOpen(current => !current))}
-        {...analytics}
-        className="mb-2 flex w-full items-center gap-2 text-left"
-      >
-        <Text as="h2" variant="smallTitle" color="text">
-          {name}
-        </Text>
-        {showCount ? (
-          <span
-            aria-hidden
-            className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-grey-01 px-1.5 text-metadataMedium text-grey-04 tabular-nums"
-          >
-            {count}
-          </span>
-        ) : null}
-        <span className={cx('text-grey-04 transition-transform', open ? 'rotate-180' : undefined)}>
-          <ChevronDownSmall />
-        </span>
-        <span className="sr-only">{`${count} ${count === 1 ? 'claim' : 'claims'}`}</span>
-      </button>
-      {open ? <div id={contentId}>{children}</div> : null}
-    </section>
-  );
-}
 
 /**
  * One row per claim, keeping the first that survived the gates.

@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import { speakerLabel } from '~/core/debates/debater-name';
 import { debateActionAnalyticsAttributes } from '~/core/debates/matchmaking/hub-analytics';
 
 import { DIALOG_ACTION_BUTTON_CLASS_NAME, DIALOG_SECONDARY_ACTION_BUTTON_CLASS_NAME } from '~/design-system/button';
@@ -147,5 +148,5 @@ function describeAcceptedJoin({ micOn, cameraOn }: DebateJoinState, otherName: s
 }
 
 function participantName(participant: DebateRematchParticipant) {
-  return participant.display_name || 'Debater';
+  return speakerLabel(participant);
 }

@@ -16,7 +16,8 @@ const mocks = vi.hoisted(() => ({
   fail: false,
   /** Requests that fail before the agendas answer. */
   failTimes: 0,
-  claims: { entities: [] as unknown[], isLoading: false },
+  claims: { entities: [] as unknown[], isLoading: false, error: null as Error | null },
+  claimsRefetch: vi.fn(),
 }));
 
 vi.mock('~/core/io/graphql-client', () => ({
@@ -44,7 +45,8 @@ vi.mock('../claim-picker-page', () => ({
   useClaimEntitiesByIds: (ids: string[]) => ({
     entities: ids.length > 0 ? mocks.claims.entities : [],
     isLoading: ids.length > 0 && mocks.claims.isLoading,
-    error: null,
+    error: mocks.claims.error,
+    refetch: mocks.claimsRefetch,
   }),
 }));
 
@@ -71,7 +73,8 @@ beforeEach(() => {
   mocks.pending = false;
   mocks.fail = false;
   mocks.failTimes = 0;
-  mocks.claims = { entities: [{ id: CLAIM, name: 'A claim' }], isLoading: false };
+  mocks.claims = { entities: [{ id: CLAIM, name: 'A claim' }], isLoading: false, error: null };
+  mocks.claimsRefetch.mockClear();
 });
 
 afterEach(() => {
@@ -221,5 +224,18 @@ describe('useDebateAgendas', () => {
     expect(result.current.spaceIds).toEqual([]);
     expect(result.current.claimIds).toEqual([]);
     expect(result.current.agendasIn(() => true).spaces).toEqual([]);
+  });
+});
+
+describe('useDebateAgendas refetch', () => {
+  it('asks the claims again too, when it was their batch that failed', async () => {
+    mocks.claims.error = new Error('claims timeout');
+    const { result } = renderHook(() => useDebateAgendas(), { wrapper: Wrapper });
+    await waitFor(() => expect(result.current.error).toBe(mocks.claims.error));
+    const agendaCalls = mocks.calls.length;
+
+    result.current.refetch();
+    expect(mocks.claimsRefetch).toHaveBeenCalled();
+    await waitFor(() => expect(mocks.calls.length).toBe(agendaCalls + 1));
   });
 });

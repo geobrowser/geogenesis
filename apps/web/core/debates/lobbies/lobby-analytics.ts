@@ -33,6 +33,8 @@ export type LobbyEntry =
   | 'rejoin'
   /** A link on another lobby's page. */
   | 'other_lobby'
+  /** The debate hours page, where newcomers from the home page land (GEO-3517). */
+  | 'debate_hours'
   | 'unknown';
 
 export type LobbyExit = 'left' | 'debate_started' | 'page_closed' | 'lobby_ended' | 'unknown';

@@ -745,6 +745,7 @@ export function panelFacetOptions({
   labelsById,
   labelsLoading,
   spacesAreExclusive = true,
+  topicsWithSpaces = false,
 }: {
   spaces: { id: string; count: number }[];
   topics?: { id: string; name: string | null; count: number }[];
@@ -759,6 +760,11 @@ export function panelFacetOptions({
    * Exclusive spaces drop the unpicked ones once one is picked, since none of them could narrow.
    */
   spacesAreExclusive?: boolean;
+  /**
+   * Topics beside the spaces from the start, as the debate-again picker's row draws them, rather than
+   * once a space is picked. A lobby's Today's claims tab matches the picker (GEO-3491).
+   */
+  topicsWithSpaces?: boolean;
 }): FacetPillOption[] {
   const picked = new Set(spaceIds.map(normId));
   // A pill that would leave nothing drops out rather than sitting there at zero; a picked one stays,
@@ -778,7 +784,8 @@ export function panelFacetOptions({
     };
   });
 
-  const showTopics = topics && topicIds && (spaceIds.length > 0 || topicIds.length > 0 || spaceOptions.length === 0);
+  const showTopics =
+    topics && topicIds && (topicsWithSpaces || spaceIds.length > 0 || topicIds.length > 0 || spaceOptions.length === 0);
   const topicOptions = showTopics
     ? orderFacetOptions(
         narrowingOptions(
