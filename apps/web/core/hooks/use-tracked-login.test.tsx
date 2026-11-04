@@ -54,4 +54,21 @@ describe('useTrackedLogin', () => {
     login({ component: 'test' });
     expect(mocks.login.mock.calls[0]).toEqual([]);
   });
+
+  // GEO-3573: a sign-in picked up after a reload fills the address back in.
+  it('prefills the email beside Google', () => {
+    const { login } = renderLogin();
+    login({ component: 'test' }, undefined, 'a@b.co');
+    expect(mocks.login).toHaveBeenCalledWith({
+      loginMethods: ['email', 'google'],
+      prefill: { type: 'email', value: 'a@b.co' },
+    });
+  });
+
+  it('prefills the email with the flag off', () => {
+    window.localStorage.setItem(featureFlagsStorageKey, JSON.stringify({ googleSignIn: false }));
+    const { login } = renderLogin();
+    login({ component: 'test' }, undefined, 'a@b.co');
+    expect(mocks.login).toHaveBeenCalledWith({ prefill: { type: 'email', value: 'a@b.co' } });
+  });
 });

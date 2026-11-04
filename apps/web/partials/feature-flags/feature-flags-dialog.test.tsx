@@ -70,6 +70,7 @@ describe('FeatureFlagsDialog', () => {
         googleCalendar: false,
         microsoftCalendar: false,
         bountiesTab: true,
+        signInRecoveryAutoOpen: true,
       });
     });
   });
