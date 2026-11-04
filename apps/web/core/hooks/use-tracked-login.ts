@@ -90,7 +90,7 @@ export function useTrackedLogin(params: TrackedLoginParams) {
       const component =
         context.component === 'sign_in_prompt' ? (properties?.component ?? context.component) : context.component;
       const resumed = fallbackAttempt(extras);
-      // A fallback whose attempt was replaced opens nothing: the newer press owns sign-in now.
+      // A fallback for an attempt that is not current opens nothing; the current press owns sign-in.
       if (extras?.surface === 'privy' && !resumed) return undefined;
       const attempt =
         resumed ?? beginPrivyAuth({ ...context, auth_trigger: 'control', ...properties, component }, options);
