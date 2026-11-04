@@ -70,6 +70,13 @@ export const featureFlagDefinitions = [
     enabledByDefault: false,
   },
   {
+    id: 'spaceChat',
+    label: 'Space chat',
+    description:
+      'A Chat tab on every DAO space, readable signed out, with replies, reactions and mentions, and the same chat inside the space’s calls (GEO-3422). Needs geo-chat with space chat.',
+    enabledByDefault: false,
+  },
+  {
     id: 'googleSignIn',
     label: 'Google sign-in',
     description:
