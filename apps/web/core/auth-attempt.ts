@@ -293,6 +293,37 @@ const ENDED_BY_LEAVING: ReadonlySet<AuthAttemptOutcome> = new Set([
   'left_after_sign_in',
 ]);
 
+/** What a press does once its attempt ends. */
+export type AuthAttemptContinuation = {
+  /** The attempt ended signed in. */
+  signedIn?: () => void;
+  /** The attempt was dismissed, or left after Privy had signed someone in. */
+  abandoned?: () => void;
+};
+
+const continuations = new Map<string, AuthAttemptContinuation[]>();
+
+/**
+ * Registers what a press runs when attempt `id` ends, held here rather than by the control so it
+ * outlives it. `finishAuthAttempt` runs it once; a superseded attempt drops it.
+ */
+export function continueAuthAttempt(id: string, continuation: AuthAttemptContinuation) {
+  continuations.set(id, [...(continuations.get(id) ?? []), continuation]);
+}
+
+function runContinuations(id: string, outcome: AuthAttemptOutcome) {
+  const pending = continuations.get(id);
+  continuations.delete(id);
+  if (!pending || outcome === 'superseded') return;
+  for (const continuation of pending) {
+    try {
+      (isSignedInOutcome(outcome) ? continuation.signedIn : continuation.abandoned)?.();
+    } catch {
+      /* One press's continuation never blocks another's, or the sign-in. */
+    }
+  }
+}
+
 export function finishAuthAttempt(outcome: AuthAttemptOutcome, attempt = currentAuthAttempt()) {
   if (!attempt || attempt.endedAt) return;
   if (ENDED_BY_LEAVING.has(outcome) && attempt.id !== ownedAttemptId) return;
@@ -307,6 +338,7 @@ export function finishAuthAttempt(outcome: AuthAttemptOutcome, attempt = current
     prompt_seen: attempt.openedAt !== undefined,
     prompt_opened_page_ms: attempt.openedPageMs,
   });
+  runContinuations(attempt.id, outcome);
 }
 export function recoverAuthAttempt(properties?: AnalyticsProperties) {
   const attempt: AuthAttempt = {
@@ -319,6 +351,7 @@ export function recoverAuthAttempt(properties?: AnalyticsProperties) {
 }
 
 export function resetAuthAttempt() {
+  continuations.clear();
   memory = undefined;
   ownedAttemptId = undefined;
   unpersisted.clear();

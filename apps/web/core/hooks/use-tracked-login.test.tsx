@@ -11,7 +11,7 @@ import { pendingActionsAtom } from '~/core/state/pending-actions';
 
 import { useTrackedLogin } from './use-tracked-login';
 
-const mocks = vi.hoisted(() => ({ login: vi.fn(), cancelPrivyAuth: vi.fn() }));
+const mocks = vi.hoisted(() => ({ login: vi.fn() }));
 
 vi.mock('~/core/wallet/auth-hooks', () => ({
   useGeoLogin: () => ({ login: mocks.login }),
@@ -19,7 +19,6 @@ vi.mock('~/core/wallet/auth-hooks', () => ({
 }));
 vi.mock('~/core/privy-auth-events', () => ({
   beginPrivyAuth: () => ({ id: 'attempt', properties: { component: 'test', auth_trigger: 'control' } }),
-  cancelPrivyAuth: () => mocks.cancelPrivyAuth(),
 }));
 vi.mock('~/core/auth-attempt', async importOriginal => ({
   ...(await importOriginal<typeof import('~/core/auth-attempt')>()),
@@ -38,7 +37,6 @@ beforeEach(() => window.localStorage.setItem(featureFlagsStorageKey, JSON.string
 afterEach(() => {
   window.localStorage.clear();
   mocks.login.mockClear();
-  mocks.cancelPrivyAuth.mockClear();
   closeSignInBox();
 });
 
@@ -100,7 +98,7 @@ describe('useTrackedLogin with ourSignInBox on', () => {
 
   it("opens Privy's dialog for the box's own fallback, on its attempt", () => {
     const { login } = renderLogin();
-    expect(login({ component: 'test' }, undefined, { surface: 'privy', attemptId: 'attempt' })).toMatchObject({
+    expect(login({ component: 'test' }, undefined, { fallbackFor: 'attempt' })).toMatchObject({
       id: 'attempt',
     });
     expect(mocks.login).toHaveBeenCalled();
@@ -109,26 +107,8 @@ describe('useTrackedLogin with ourSignInBox on', () => {
 
   it('opens nothing for a fallback whose attempt was replaced', () => {
     const { login } = renderLogin();
-    expect(login({ component: 'test' }, undefined, { surface: 'privy', attemptId: 'older' })).toBeUndefined();
+    expect(login({ component: 'test' }, undefined, { fallbackFor: 'older' })).toBeUndefined();
     expect(mocks.login).not.toHaveBeenCalled();
     expect(readSignInBox()).toBeNull();
-  });
-
-  it("runs the press's continuation once, when the box completes", () => {
-    const onComplete = vi.fn();
-    const { login } = renderLogin({ onComplete });
-    login({ component: 'test' });
-    readSignInBox()?.onComplete?.();
-    readSignInBox()?.onComplete?.();
-    expect(onComplete).toHaveBeenCalledTimes(1);
-  });
-
-  it('closes the attempt and reports the exit when the box is dismissed', () => {
-    const onError = vi.fn();
-    const { login } = renderLogin({ onError });
-    login({ component: 'test' });
-    readSignInBox()?.onDismiss?.();
-    expect(onError).toHaveBeenCalledWith('exited_auth_flow');
-    expect(mocks.cancelPrivyAuth).toHaveBeenCalledTimes(1);
   });
 });

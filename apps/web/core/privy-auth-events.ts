@@ -14,7 +14,6 @@ import {
   tagAuthAttempt,
 } from './auth-attempt';
 import { signInMethodOf } from './auth/auth-step-switch';
-import { clearSignInAbandoned, runSignInAbandoned } from './auth/sign-in-abandoned';
 import { markSignedInBefore } from './auth/signed-in-before';
 import { beginSignupVisitor, clearSignupVisitor, createdSince, signupVisitorProperties } from './auth/signup-visitor';
 
@@ -29,8 +28,6 @@ export function beginPrivyAuth(
   options: Parameters<typeof beginSignupVisitor>[0] = {}
 ) {
   beginSignupVisitor(options);
-  // A new attempt replaces the last; whatever it would have withdrawn belongs to that one.
-  clearSignInAbandoned();
   return beginAuthAttempt(properties);
 }
 
@@ -57,7 +54,12 @@ function exitOutcome(account: ExitedFlowAccount): AuthAttemptOutcome {
 export function cancelPrivyAuth(account: ExitedFlowAccount = null) {
   finishAuthAttempt(exitOutcome(account));
   clearSignupVisitor();
-  runSignInAbandoned();
+}
+
+/** Withdraws attempt `id` if it is still current and open; a newer press's attempt is left alone. */
+export function cancelPrivyAuthAttempt(id: string) {
+  const attempt = currentAuthAttempt();
+  if (attempt?.id === id && !attempt.endedAt) cancelPrivyAuth();
 }
 
 /** A redirect sign-in came back failed: close attempt `id`, unless a newer sign-in has replaced it. */
@@ -93,8 +95,6 @@ export function completePrivyAuth(params: Completion, properties?: AnalyticsProp
     return;
   }
 
-  // Signed in: nothing queued for this attempt is to be withdrawn any more.
-  clearSignInAbandoned();
   const duplicateLifecycle = completedThisSession || (params.isNewUser && signedUpUserIds.has(params.user.id));
   const attempt = currentAuthAttempt(true);
   // Suppress repeated account events without leaving a newly initiated attempt pending.

@@ -150,8 +150,6 @@ export function AccountStep({
   const openPrivyModal = usePrivySignIn(undefined, {
     analytics,
     resumeAuthAttempt: true,
-    // Never the sign-in box, which hosts this step.
-    surface: 'privy',
     onError: () => giveUpRef.current(),
   });
   const [code, setCode] = React.useState('');
@@ -212,7 +210,7 @@ export function AccountStep({
       // Captcha, a Privy outage, an address it will not take. Hand them the dialog that does work
       // rather than a dead end.
       // Keep the step mounted while hidden so the modal's error callback can close the card.
-      openPrivyModalRef.current(undefined, { attemptId: ownAttemptIdRef.current });
+      openPrivyModalRef.current(undefined, { fallbackFor: ownAttemptIdRef.current });
     } finally {
       if (mountedRef.current) setSending(false);
     }

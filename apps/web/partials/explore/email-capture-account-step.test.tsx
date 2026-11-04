@@ -119,7 +119,7 @@ describe('AccountStep when the send fails', () => {
     render(<AccountStep email="reader@example.com" onGiveUp={vi.fn()} onSignInUnavailable={onSignInUnavailable} />);
     await act(async () => {});
     expect(mocks.openPrivyModal).toHaveBeenCalledTimes(1);
-    expect(mocks.openPrivyModal).toHaveBeenCalledWith(undefined, { attemptId: currentAuthAttempt()?.id });
+    expect(mocks.openPrivyModal).toHaveBeenCalledWith(undefined, { fallbackFor: currentAuthAttempt()?.id });
     expect(currentAuthAttempt()?.id).toEqual(expect.any(String));
     expect(onSignInUnavailable).not.toHaveBeenCalled();
   });

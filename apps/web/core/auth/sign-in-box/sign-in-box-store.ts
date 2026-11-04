@@ -14,10 +14,6 @@ export type SignInBoxRequest = {
   heading?: string;
   /** The address to start from: a code step picked up again (GEO-3573). */
   prefillEmail?: string;
-  /** The attempt ended signed in. */
-  onComplete?: () => void;
-  /** Closed without signing in. */
-  onDismiss?: () => void;
 };
 
 let current: SignInBoxRequest | null = null;

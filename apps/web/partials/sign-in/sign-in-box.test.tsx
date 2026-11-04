@@ -5,7 +5,14 @@ import * as React from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { beginAuthAttempt, finishAuthAttempt, readAuthAttempt, resetAuthAttempt } from '~/core/auth-attempt';
+import {
+  beginAuthAttempt,
+  continueAuthAttempt,
+  currentAuthAttempt,
+  finishAuthAttempt,
+  readAuthAttempt,
+  resetAuthAttempt,
+} from '~/core/auth-attempt';
 import {
   type SignInBoxRequest,
   closeSignInBox,
@@ -71,12 +78,13 @@ function open(overrides: Partial<SignInBoxRequest> = {}) {
   const request: SignInBoxRequest = {
     attemptId: attempt.id,
     attribution: { ...attempt.properties, component: 'navbar' },
-    onComplete: vi.fn(),
-    onDismiss: vi.fn(),
     ...overrides,
   };
+  // What `useTrackedLogin` registers for the press.
+  const press = { signedIn: vi.fn(), abandoned: vi.fn() };
+  continueAuthAttempt(attempt.id, press);
   act(() => openSignInBox(request));
-  return { attempt, request };
+  return { attempt, request, press };
 }
 
 function typeEmail(value: string) {
@@ -159,13 +167,13 @@ describe('SignInBox', () => {
 
   it("goes back to the address saying sign-in couldn't be reached when Privy never loaded", () => {
     render(<SignInBoxHost />);
-    const { request } = open();
+    const { press } = open();
     typeEmail('ann@example.com');
     fireEvent.click(screen.getByRole('button', { name: SIGN_IN_BOX_COPY.submit }));
     fireEvent.click(screen.getByRole('button', { name: 'Privy did not load' }));
     expect(screen.getByLabelText('Email address')).toHaveValue('ann@example.com');
     expect(screen.getByRole('alert')).toHaveTextContent('Couldn’t reach sign-in. Try again.');
-    expect(request.onDismiss).not.toHaveBeenCalled();
+    expect(press.abandoned).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Send code' }));
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
@@ -204,66 +212,78 @@ describe('SignInBox', () => {
 
   it('withdraws the press when closed', () => {
     render(<SignInBoxHost />);
-    const { request } = open();
+    const { press } = open();
     fireEvent.click(screen.getByRole('button', { name: SIGN_IN_BOX_COPY.close }));
-    expect(request.onDismiss).toHaveBeenCalledTimes(1);
-    expect(request.onComplete).not.toHaveBeenCalled();
+    expect(press.abandoned).toHaveBeenCalledTimes(1);
+    expect(press.signedIn).not.toHaveBeenCalled();
     expect(isSignInBoxOpen()).toBe(false);
   });
 
   it("runs the press's continuation once its attempt ends signed in", () => {
     render(<SignInBoxHost />);
-    const { attempt, request } = open();
+    const { attempt, press } = open();
     act(() => finishAuthAttempt('signed_up', readAuthAttempt(attempt.id)));
-    expect(request.onComplete).toHaveBeenCalledTimes(1);
-    expect(request.onDismiss).not.toHaveBeenCalled();
+    expect(press.signedIn).toHaveBeenCalledTimes(1);
+    expect(press.abandoned).not.toHaveBeenCalled();
     expect(isSignInBoxOpen()).toBe(false);
   });
 
-  it('closes without a continuation when its attempt ends another way', () => {
+  it('closes and withdraws the press when its attempt ends another way', () => {
     render(<SignInBoxHost />);
-    const { attempt, request } = open();
+    const { attempt, press } = open();
     act(() => finishAuthAttempt('closed', readAuthAttempt(attempt.id)));
-    expect(request.onComplete).not.toHaveBeenCalled();
-    expect(request.onDismiss).toHaveBeenCalledTimes(1);
+    expect(press.signedIn).not.toHaveBeenCalled();
+    expect(press.abandoned).toHaveBeenCalledTimes(1);
     expect(isSignInBoxOpen()).toBe(false);
   });
 
-  it("steps aside for Privy's dialog, still open on the attempt, and closes when it ends", () => {
+  it("closes for Privy's dialog, leaving the attempt to it", () => {
     const { rerender } = render(<SignInBoxHost />);
-    const { attempt, request } = open();
+    const { attempt, press } = open();
     mocks.isModalOpen = true;
     rerender(<SignInBoxHost />);
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    expect(isSignInBoxOpen()).toBe(true);
-    expect(request.onDismiss).not.toHaveBeenCalled();
+    expect(isSignInBoxOpen()).toBe(false);
+    expect(readAuthAttempt(attempt.id)?.endedAt).toBeUndefined();
     act(() => finishAuthAttempt('signed_in', readAuthAttempt(attempt.id)));
-    expect(request.onComplete).toHaveBeenCalledTimes(1);
-    expect(isSignInBoxOpen()).toBe(false);
+    expect(press.signedIn).toHaveBeenCalledTimes(1);
   });
 
-  it("closes once Privy's dialog goes with the attempt still open", () => {
+  it('withdraws its attempt once the visitor is signed in another way', async () => {
     const { rerender } = render(<SignInBoxHost />);
-    open();
-    mocks.isModalOpen = true;
-    rerender(<SignInBoxHost />);
-    mocks.isModalOpen = false;
-    rerender(<SignInBoxHost />);
-    expect(isSignInBoxOpen()).toBe(false);
-  });
-
-  it('closes once the visitor is signed in another way', () => {
-    const { rerender } = render(<SignInBoxHost />);
-    open();
+    const { attempt, press } = open();
     mocks.authenticated = true;
     rerender(<SignInBoxHost />);
+    await act(() => new Promise(resolve => setTimeout(resolve, 0)));
     expect(isSignInBoxOpen()).toBe(false);
+    expect(readAuthAttempt(attempt.id)?.outcome).toBe('closed');
+    expect(press.abandoned).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves an attempt its own sign-in ended as it was', async () => {
+    const { rerender } = render(<SignInBoxHost />);
+    const { attempt, press } = open();
+    mocks.authenticated = true;
+    rerender(<SignInBoxHost />);
+    act(() => finishAuthAttempt('signed_in', readAuthAttempt(attempt.id)));
+    await act(() => new Promise(resolve => setTimeout(resolve, 0)));
+    expect(readAuthAttempt(attempt.id)?.outcome).toBe('signed_in');
+    expect(press.signedIn).toHaveBeenCalledTimes(1);
+    expect(press.abandoned).not.toHaveBeenCalled();
+  });
+
+  it("never withdraws a newer press's attempt", () => {
+    render(<SignInBoxHost />);
+    open();
+    const newer = beginAuthAttempt({ component: 'vote_button' });
+    fireEvent.click(screen.getByRole('button', { name: SIGN_IN_BOX_COPY.close }));
+    expect(currentAuthAttempt()).toMatchObject({ id: newer.id });
+    expect(currentAuthAttempt()?.endedAt).toBeUndefined();
   });
 
   it('offers Google beside the email field when it is offered, under the attribution', () => {
     mocks.googleSignIn = vi.fn(() => new Promise<void>(() => {}));
     render(<SignInBoxHost />);
-    const { request } = open();
+    const { request, press } = open();
     fireEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
     expect(mocks.googleSignIn).toHaveBeenCalledWith(
       { ...request.attribution, auth_control: 'continue_with_google' },
@@ -271,7 +291,7 @@ describe('SignInBox', () => {
     );
     // A starting redirect cannot be withdrawn.
     fireEvent.click(screen.getByRole('button', { name: SIGN_IN_BOX_COPY.close }));
-    expect(request.onDismiss).not.toHaveBeenCalled();
+    expect(press.abandoned).not.toHaveBeenCalled();
   });
 
   it('starts a new press from the email step', () => {

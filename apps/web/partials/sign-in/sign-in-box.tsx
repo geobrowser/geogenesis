@@ -3,10 +3,11 @@
 import * as React from 'react';
 
 import { startAnalyticsSoon } from '~/core/analytics';
-import { isSignedInOutcome, openAuthAttempt, readAuthAttempt, subscribeAuthAttempts } from '~/core/auth-attempt';
+import { openAuthAttempt, readAuthAttempt, subscribeAuthAttempts } from '~/core/auth-attempt';
 import { isGoogleSignInStarting, useContinueWithGoogle } from '~/core/auth/continue-with-google';
 import { type SignInBoxRequest, closeSignInBox, useSignInBoxRequest } from '~/core/auth/sign-in-box/sign-in-box-store';
 import { isLikelyEmail } from '~/core/newsletter/subscribe-result';
+import { cancelPrivyAuthAttempt } from '~/core/privy-auth-events';
 import { SAVE_VOTES_FINE_PRINT, SAVE_VOTES_RESEND_LABEL } from '~/core/save-votes-copy';
 import { usePrivy } from '~/core/wallet/auth-hooks';
 
@@ -53,43 +54,37 @@ function SignInBox({ request }: { request: SignInBoxRequest }) {
     return () => cancelAnimationFrame(frame);
   }, []);
 
-  // Privy's dialog is the code step's fallback (a send it could not make), on this same attempt. The
-  // box steps aside but stays mounted until the attempt ends, so the press hears the outcome even if
-  // the control that opened it has unmounted.
-  const [steppedAside, setSteppedAside] = React.useState(false);
-  if (isModalOpen && !steppedAside) setSteppedAside(true);
-
-  // The press's continuation runs once its attempt ends signed in, however the box got there; any
-  // other end withdraws it. Both are no-ops for a press that already heard.
+  // The box shows only while its attempt is open. The attempt runs the press's continuation itself.
   React.useEffect(() => {
     const check = () => {
-      const attempt = readAuthAttempt(requestRef.current.attemptId);
-      if (!attempt?.endedAt) return;
-      if (isSignedInOutcome(attempt.outcome)) requestRef.current.onComplete?.();
-      else requestRef.current.onDismiss?.();
-      closeSignInBox(requestRef.current.attemptId);
+      if (readAuthAttempt(requestRef.current.attemptId)?.endedAt) closeSignInBox(requestRef.current.attemptId);
     };
     check();
     const unsubscribe = subscribeAuthAttempts(check);
     return () => void unsubscribe();
   }, []);
 
-  // Signed in some other way (a Google return, another tab): nothing left to ask. Not while stepped
-  // aside, where the attempt's end closes the box.
+  // Signed in some other way (another tab, a late session restore): withdraw the attempt. A task
+  // later, so the box's own sign-in, which ends the attempt as Privy reports it, is seen first.
   React.useEffect(() => {
-    if (authenticated && !steppedAside) closeSignInBox(requestRef.current.attemptId);
-  }, [authenticated, steppedAside]);
+    if (!authenticated) return;
+    const timer = setTimeout(() => {
+      cancelPrivyAuthAttempt(requestRef.current.attemptId);
+      closeSignInBox(requestRef.current.attemptId);
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [authenticated]);
 
-  // Privy's dialog gone with the attempt still open: nothing will end it here.
+  // Privy's dialog is the code step's fallback on this attempt, and `PrivyAuthTracker` ends it.
   React.useEffect(() => {
-    if (steppedAside && !isModalOpen) closeSignInBox(requestRef.current.attemptId);
-  }, [isModalOpen, steppedAside]);
+    if (isModalOpen) closeSignInBox(requestRef.current.attemptId);
+  }, [isModalOpen]);
   const isModalOpenRef = React.useRef(isModalOpen);
   isModalOpenRef.current = isModalOpen;
 
   const close = React.useCallback(() => {
     // A Google redirect cannot be aborted; its attempt must survive closing.
-    if (!isGoogleSignInStarting()) requestRef.current.onDismiss?.();
+    if (!isGoogleSignInStarting()) cancelPrivyAuthAttempt(requestRef.current.attemptId);
     closeSignInBox(requestRef.current.attemptId);
   }, []);
 
@@ -121,7 +116,6 @@ function SignInBox({ request }: { request: SignInBoxRequest }) {
   };
 
   const heading = request.heading ?? SIGN_IN_BOX_COPY.heading;
-  if (steppedAside) return null;
 
   return (
     <CenteredSignInDialog title={heading} hidden={false} onClose={close} restoreFocus={() => !isModalOpenRef.current}>

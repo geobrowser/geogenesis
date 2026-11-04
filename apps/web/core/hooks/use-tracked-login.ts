@@ -2,21 +2,21 @@
 
 import { useCallback, useRef } from 'react';
 
-import { type ActionContext, withActionContext } from '~/core/action-context';
+import { withActionContext } from '~/core/action-context';
 import { useActionContext, useActionScope } from '~/core/action-context-provider';
 import { type AnalyticsProperties } from '~/core/analytics';
-import { currentAuthAttempt, tagAuthAttempt } from '~/core/auth-attempt';
+import { continueAuthAttempt, currentAuthAttempt, tagAuthAttempt } from '~/core/auth-attempt';
 import { useGoogleSignInOptions } from '~/core/auth/google-sign-in';
 import { openSignInBox } from '~/core/auth/sign-in-box/sign-in-box-store';
-import { beginPrivyAuth, cancelPrivyAuth } from '~/core/privy-auth-events';
+import { beginPrivyAuth } from '~/core/privy-auth-events';
 import { readStoredFeatureFlag } from '~/core/state/feature-flags';
 import { useGeoLogin, usePrivy } from '~/core/wallet/auth-hooks';
 
 type TrackedLoginParams = {
-  /** The press's sign-in completed. */
+  /** The press's attempt ended signed in. */
   onComplete?: () => void;
-  /** Privy reported a failure, or the sign-in was dismissed (`exited_auth_flow`). */
-  onError?: (error: string) => void;
+  /** The press's attempt was dismissed. */
+  onAbandoned?: () => void;
 };
 
 /** Per-press extras. */
@@ -25,31 +25,31 @@ export type TrackedLoginExtras = {
   prefillEmail?: string;
   /** The sign-in box's heading, for an entry with its own ask. */
   heading?: string;
-  /** `privy` opens Privy's own dialog even with `ourSignInBox` on: the box's code step falls back to it. */
-  surface?: 'privy';
-  /** With `privy`: the attempt the fallback carries on. */
-  attemptId?: string;
+  /**
+   * Opens Privy's own dialog on this open attempt, with or without `ourSignInBox`: the code step's
+   * fallback for a send it could not make. Opens nothing once that attempt is not current.
+   */
+  fallbackFor?: string;
 };
 
-/**
- * The attempt a `privy` fallback carries on, so the press that opened it hears how it ends and keeps
- * what it queued for an abandoned sign-in. Undefined once a newer press has replaced it.
- */
-export function fallbackAttempt(extras?: TrackedLoginExtras) {
-  if (extras?.surface !== 'privy' || !extras.attemptId) return undefined;
+/** The attempt a fallback carries on: `fallbackFor`, while it is current and open. */
+export function fallbackAttempt(fallbackFor: string | undefined) {
+  if (fallbackFor === undefined) return undefined;
   const attempt = currentAuthAttempt();
-  return attempt?.id === extras.attemptId && !attempt.endedAt ? attempt : undefined;
+  return attempt?.id === fallbackFor && !attempt.endedAt ? attempt : undefined;
 }
 
-/** Capture attribution at the press; the persistent observer owns completion tracking. */
-export function useTrackedLogin(params: TrackedLoginParams) {
+/**
+ * Starts a press's sign-in and registers its continuation on the attempt, which runs it once when
+ * the attempt ends, whichever UI ended it and whether or not this control is still mounted.
+ */
+export function useTrackedLogin(params: TrackedLoginParams = {}) {
   const scope = useActionScope();
   const getContext = useActionContext(
     'sign_in_prompt',
     scope.target_type ?? 'application',
     scope.target_id ?? 'genesis'
   );
-  const requested = useRef<ActionContext | null>(null);
   // Privy's `login()` does nothing for someone already signed in, so an attempt opened then can only
   // ever be superseded by the next press (GEO-3245: 37 of them from one user stuck behind a Log in
   // button). Read through a ref so the returned callback keeps its identity.
@@ -60,23 +60,20 @@ export function useTrackedLogin(params: TrackedLoginParams) {
   const googleSignInOptions = useGoogleSignInOptions();
   const paramsRef = useRef(params);
   paramsRef.current = params;
-  const complete = useCallback(() => {
-    const context = requested.current;
-    if (!context || currentAuthAttempt()?.id !== context.auth_attempt_id) return;
-    requested.current = null;
-    withActionContext(context, () => paramsRef.current?.onComplete?.());
-  }, []);
-  const fail = useCallback((error: string) => {
-    if (!requested.current || currentAuthAttempt()?.id !== requested.current.auth_attempt_id) return;
-    if (error === 'exited_auth_flow') requested.current = null;
-    paramsRef.current?.onError?.(error);
-  }, []);
-  const { login } = useGeoLogin({
-    onComplete: args => {
-      if (!args.wasAlreadyAuthenticated) complete();
+  // Privy's dialog reports to `PrivyAuthTracker`, which ends the attempt.
+  const { login } = useGeoLogin({});
+
+  const openPrivyDialog = useCallback(
+    (attemptId: string, prefillEmail: string | undefined) => {
+      tagAuthAttempt(attemptId, { signInSurface: 'privy_modal' });
+      const prefill = prefillEmail ? { prefill: { type: 'email' as const, value: prefillEmail } } : undefined;
+      // No argument with neither, so Privy's modal keeps the config's methods.
+      if (googleSignInOptions || prefill) login({ ...googleSignInOptions, ...prefill });
+      else login();
     },
-    onError: error => fail(error),
-  });
+    [login, googleSignInOptions]
+  );
+
   const trackedLogin = useCallback(
     (properties?: AnalyticsProperties, options?: Parameters<typeof beginPrivyAuth>[1], extras?: TrackedLoginExtras) => {
       if (authenticatedRef.current) return undefined;
@@ -85,42 +82,39 @@ export function useTrackedLogin(params: TrackedLoginParams) {
           ? { target_id: String(properties.target_id), target_type: String(properties.target_type) }
           : undefined
       );
+      const continuation = {
+        signedIn: () => withActionContext(context, () => paramsRef.current.onComplete?.()),
+        abandoned: () => paramsRef.current.onAbandoned?.(),
+      };
+
+      if (extras?.fallbackFor !== undefined) {
+        const resumed = fallbackAttempt(extras.fallbackFor);
+        if (!resumed) return undefined;
+        continueAuthAttempt(resumed.id, continuation);
+        openPrivyDialog(resumed.id, extras.prefillEmail);
+        return resumed;
+      }
+
       // A caller supplies the fallback component; inherited/clicked surfaces must
       // agree with the component on the signed-in action (for example an Explore card).
       const component =
         context.component === 'sign_in_prompt' ? (properties?.component ?? context.component) : context.component;
-      const resumed = fallbackAttempt(extras);
-      // A fallback for an attempt that is not current opens nothing; the current press owns sign-in.
-      if (extras?.surface === 'privy' && !resumed) return undefined;
-      const attempt =
-        resumed ?? beginPrivyAuth({ ...context, auth_trigger: 'control', ...properties, component }, options);
-      requested.current = { ...context, auth_attempt_id: attempt?.id };
-      const prefillEmail = extras?.prefillEmail;
-      if (attempt && extras?.surface !== 'privy' && readStoredFeatureFlag('ourSignInBox')) {
+      const attempt = beginPrivyAuth({ ...context, auth_trigger: 'control', ...properties, component }, options);
+      continueAuthAttempt(attempt.id, continuation);
+      if (readStoredFeatureFlag('ourSignInBox')) {
         tagAuthAttempt(attempt.id, { signInSurface: 'box' });
         openSignInBox({
           attemptId: attempt.id,
           attribution: { ...attempt.properties, component: String(attempt.properties.component) },
           heading: extras?.heading,
-          prefillEmail,
-          onComplete: complete,
-          onDismiss: () => {
-            fail('exited_auth_flow');
-            // Already ended when the box saw the end itself; never a newer press's attempt.
-            const current = currentAuthAttempt();
-            if (current?.id === attempt.id && !current.endedAt) cancelPrivyAuth();
-          },
+          prefillEmail: extras?.prefillEmail,
         });
         return attempt;
       }
-      tagAuthAttempt(attempt?.id, { signInSurface: 'privy_modal' });
-      const prefill = prefillEmail ? { prefill: { type: 'email' as const, value: prefillEmail } } : undefined;
-      // No argument with neither, so Privy's modal keeps the config's methods.
-      if (googleSignInOptions || prefill) login({ ...googleSignInOptions, ...prefill });
-      else login();
+      openPrivyDialog(attempt.id, extras?.prefillEmail);
       return attempt;
     },
-    [login, getContext, googleSignInOptions, complete, fail]
+    [getContext, openPrivyDialog]
   );
   return { login: trackedLogin };
 }
