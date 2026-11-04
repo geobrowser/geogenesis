@@ -140,7 +140,7 @@ describe('TodaysClaimsCallout', () => {
     expect(value.markAnswered).toHaveBeenCalledWith('a');
   });
 
-  it('lets the answered card leave before the next claim comes in, and takes no clicks on its way out', async () => {
+  it('lets the answered card leave before the next claim comes in, and takes no input on its way out', async () => {
     const { rerender } = render(<TodaysClaimsCallout callout={callout()} onFindDebate={vi.fn()} />);
 
     const next = callout({
@@ -150,7 +150,8 @@ describe('TodaysClaimsCallout', () => {
 
     const leaving = screen.getByTestId('claim-card');
     expect(leaving).toHaveTextContent('Claim A');
-    await waitFor(() => expect(leaving.closest('[style]')).toHaveStyle({ pointerEvents: 'none' }));
+    // Inert, not just unclickable: a pill still focused on it can't take Enter either.
+    expect(leaving.closest('[inert]')).not.toBeNull();
 
     await waitFor(() => expect(screen.getByTestId('claim-card')).toHaveTextContent('Claim B'));
     expect(screen.getAllByTestId('claim-card')).toHaveLength(1);
@@ -174,6 +175,17 @@ describe('TodaysClaimsCallout', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Skip' })).toBeEnabled());
     fireEvent.click(screen.getByRole('button', { name: 'Skip' }));
     expect(next.skip).toHaveBeenCalledWith('b');
+  });
+
+  it('holds Skip while the claim is still loading, so nothing unseen can be skipped', () => {
+    const loading = callout({ entityOf: () => undefined, entitiesSettled: false });
+    const { rerender } = render(<TodaysClaimsCallout callout={loading} onFindDebate={vi.fn()} />);
+    expect(screen.queryByTestId('claim-card')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Skip' })).toBeDisabled();
+
+    rerender(<TodaysClaimsCallout callout={callout()} onFindDebate={vi.fn()} />);
+    expect(screen.getByTestId('claim-card')).toHaveTextContent('Claim A');
+    expect(screen.getByRole('button', { name: 'Skip' })).toBeEnabled();
   });
 
   it('lets the last card leave once the set is done, and offers Matches', async () => {

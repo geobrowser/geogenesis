@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion, useIsPresent } from 'framer-motion';
 
 /**
  * Shared motion vocabulary for the hub, matching what the rest of the app already uses:
@@ -78,13 +78,13 @@ const HUB_SWAP_MOTION = {
   },
   /**
    * The answered item goes left and the next comes in from the right, so the move reads as "next"
-   * rather than as the content being swapped. The leaving one takes no clicks. Under the hub's
-   * `reducedMotion="user"` the slide drops out and only the fades are left.
+   * rather than as the content being swapped. Under the hub's `reducedMotion="user"` the slide drops
+   * out and only the fades are left.
    */
   step: {
     initial: { opacity: 0, x: 16 },
-    animate: { opacity: 1, x: 0, pointerEvents: 'auto' },
-    exit: { opacity: 0, x: -16, pointerEvents: 'none', transition: HUB_CARD_EXIT_TRANSITION },
+    animate: { opacity: 1, x: 0 },
+    exit: { opacity: 0, x: -16, transition: HUB_CARD_EXIT_TRANSITION },
     transition: HUB_STEP_TRANSITION,
   },
 } as const;
@@ -101,9 +101,22 @@ export function HubSwap({
 }) {
   return (
     <AnimatePresence mode="wait" initial={false}>
-      <motion.div key={activeKey} {...HUB_SWAP_MOTION[variant]}>
+      <HubSwapItem key={activeKey} variant={variant}>
         {children}
-      </motion.div>
+      </HubSwapItem>
     </AnimatePresence>
+  );
+}
+
+/**
+ * A step's leaving item is inert, not just unclickable: a pill still focused on the answered card
+ * would otherwise take Enter on its way out, and pressing the side you hold withdraws it.
+ */
+function HubSwapItem({ variant, children }: { variant: keyof typeof HUB_SWAP_MOTION; children: React.ReactNode }) {
+  const isPresent = useIsPresent();
+  return (
+    <motion.div {...HUB_SWAP_MOTION[variant]} inert={variant === 'step' && !isPresent}>
+      {children}
+    </motion.div>
   );
 }

@@ -152,14 +152,20 @@ function CalloutCard({
   callout: TodaysCallout;
   claim: CalloutClaim;
   position: number;
-  /** Told once the card is up: `HubSwap` mounts it only after the previous card has left. */
+  /**
+   * Told once the card is up: `HubSwap` mounts it only after the previous card has left, and it
+   * draws nothing until the claim's entity has loaded.
+   */
   onArrive: (claimId: string) => void;
 }) {
   const { markAnswered, skip } = callout;
-
-  React.useEffect(() => onArrive(claim.claimId), [claim.claimId, onArrive]);
-
   const entity = callout.entityOf(claim.claimId);
+
+  const shown = Boolean(entity);
+  React.useEffect(() => {
+    if (shown) onArrive(claim.claimId);
+  }, [claim.claimId, onArrive, shown]);
+
   const target = {
     entityId: claim.claimId,
     entityName: entity?.name ?? '',
