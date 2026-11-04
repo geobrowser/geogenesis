@@ -16,6 +16,9 @@ const pending = () => new Promise<void>(() => {});
 
 beforeEach(() => {
   mocks.signIn = undefined;
+  const restored = renderHook(() => useContinueWithGoogle());
+  act(() => window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true })));
+  restored.unmount();
 });
 
 describe('useContinueWithGoogle', () => {
@@ -78,6 +81,54 @@ describe('useContinueWithGoogle', () => {
     expect(mocks.signIn).toHaveBeenCalledOnce();
   });
 
+  it('keeps one pending start across surfaces, including before React renders', () => {
+    mocks.signIn = vi.fn(pending);
+    const sheet = renderHook(() => useContinueWithGoogle());
+    const popup = renderHook(() => useContinueWithGoogle());
+
+    act(() => {
+      void sheet.result.current!.start({ component: 'save_votes_prompt' });
+      void popup.result.current!.start({ component: 'explore_email_capture' });
+    });
+
+    expect(mocks.signIn).toHaveBeenCalledExactlyOnceWith({ component: 'save_votes_prompt' });
+    expect(sheet.result.current!.status).toBe('starting');
+    expect(popup.result.current!.status).toBe('starting');
+  });
+
+  it('keeps the pending redirect locked when its initiating surface unmounts', () => {
+    mocks.signIn = vi.fn(pending);
+    const sheet = renderHook(() => useContinueWithGoogle());
+    act(() => void sheet.result.current!.start({ component: 'save_votes_prompt' }));
+    sheet.unmount();
+    const popup = renderHook(() => useContinueWithGoogle());
+
+    act(() => void popup.result.current!.start({ component: 'explore_email_capture' }));
+
+    expect(mocks.signIn).toHaveBeenCalledOnce();
+    expect(popup.result.current!.status).toBe('starting');
+  });
+
+  it('unlocks both surfaces after failure and permits a retry from the other surface', async () => {
+    let fail!: (error: Error) => void;
+    mocks.signIn = vi
+      .fn()
+      .mockImplementationOnce(() => new Promise<void>((_, reject) => (fail = reject)))
+      .mockImplementation(pending);
+    const sheet = renderHook(() => useContinueWithGoogle());
+    const popup = renderHook(() => useContinueWithGoogle());
+    act(() => void sheet.result.current!.start({}));
+
+    await act(async () => fail(new Error('blocked')));
+
+    expect(sheet.result.current!.status).toBe('failed');
+    expect(popup.result.current!.status).toBe('idle');
+    act(() => void popup.result.current!.start({}));
+    expect(sheet.result.current!.status).toBe('starting');
+    expect(popup.result.current!.status).toBe('starting');
+    expect(mocks.signIn).toHaveBeenCalledTimes(2);
+  });
+
   it('ignores a late failure from before a back/forward-cache restore', async () => {
     let failOldStart!: (error: Error) => void;
     mocks.signIn = vi
@@ -89,13 +140,17 @@ describe('useContinueWithGoogle', () => {
           })
       )
       .mockImplementation(pending);
-    const { result } = renderHook(() => useContinueWithGoogle());
-    act(() => void result.current!.start({}));
+    const sheet = renderHook(() => useContinueWithGoogle());
+    const popup = renderHook(() => useContinueWithGoogle());
+    act(() => void sheet.result.current!.start({}));
     act(() => window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true })));
-    act(() => void result.current!.start({}));
+    expect(sheet.result.current!.status).toBe('idle');
+    expect(popup.result.current!.status).toBe('idle');
+    act(() => void popup.result.current!.start({}));
     await act(async () => {
       failOldStart(new Error('old request failed'));
     });
-    expect(result.current!.status).toBe('starting');
+    expect(sheet.result.current!.status).toBe('starting');
+    expect(popup.result.current!.status).toBe('starting');
   });
 });

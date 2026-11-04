@@ -7,7 +7,11 @@ import * as React from 'react';
 import cx from 'classnames';
 import { useAtomValue } from 'jotai';
 
-import { ContinueWithGoogleButton, useContinueWithGoogle } from '~/core/auth/continue-with-google';
+import {
+  ContinueWithGoogleButton,
+  isGoogleSignInStarting,
+  useContinueWithGoogle,
+} from '~/core/auth/continue-with-google';
 import { arrivedFromEmail } from '~/core/deep-links/ref-email';
 import { useAnyModalOpen } from '~/core/hooks/use-any-modal-open';
 import { usePrepareOnboarding } from '~/core/hooks/use-prepare-onboarding';
@@ -198,12 +202,12 @@ export function SaveVotesSheet() {
   const close = React.useCallback(() => {
     // Withdraw an email sign-in, including one left mid-edit. A Google redirect cannot be aborted;
     // its new save attempt must survive closing even when an email was started before it.
-    if (midSignIn && !googleStarting) cancelPrivyAuth();
+    if (midSignIn && !isGoogleSignInStarting()) cancelPrivyAuth();
     // Not now, not never: the votes stay on the device and the pills still offer "Save".
     recordSavePromptDismissed();
     setAttempt(null);
     closeSaveVotesPrompt();
-  }, [googleStarting, midSignIn]);
+  }, [midSignIn]);
 
   /** Back to the email step, the address as it was sent, to fix a typo. Unmounting the code step ends it. */
   const changeEmail = React.useCallback(() => {
@@ -223,7 +227,7 @@ export function SaveVotesSheet() {
 
   const submitEmail = (event: React.FormEvent) => {
     event.preventDefault();
-    if (!canSend || googleStarting) return;
+    if (!canSend || isGoogleSignInStarting()) return;
     beginPrivyAuth(signInProperties);
     prepareOnboarding();
     setAttempt({ email: trimmedEmail, centered, reason: attempt ? attempt.reason : reason, phase: 'code' });

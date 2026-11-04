@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 
 import * as React from 'react';
 
@@ -7,6 +7,7 @@ import { Provider, createStore, getDefaultStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { beginAuthAttempt, currentAuthAttempt, readAuthAttempt, resetAuthAttempt } from '~/core/auth-attempt';
+import { useContinueWithGoogle } from '~/core/auth/continue-with-google';
 import { GoogleOAuthHost } from '~/core/auth/google-oauth';
 import type { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { isChatOpenAtom } from '~/core/state/chat-store';
@@ -119,6 +120,9 @@ beforeEach(() => {
   mocks.fetch.mockResolvedValue({ json: async () => ({ result: 'subscribed' }) });
   vi.stubGlobal('fetch', mocks.fetch);
   window.scrollY = 0;
+  const restored = renderHook(() => useContinueWithGoogle());
+  act(() => window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true })));
+  restored.unmount();
 });
 
 afterEach(() => {
@@ -1303,6 +1307,27 @@ describe('ExploreEmailCapturePopup Google sign-in', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
     expect(currentAuthAttempt()?.id).toBe(attemptId);
     expect(currentAuthAttempt()?.properties.auth_control).toBe('continue_with_google');
+  });
+
+  it('blocks email when the save sheet starts Google, even before React renders', async () => {
+    mocks.initOAuth.mockImplementationOnce(() => new Promise<void>(() => {}));
+    await subscribeWithGoogleFlag(true);
+    const store = createStore();
+    const sheet = renderHook(() => useContinueWithGoogle(), {
+      wrapper: ({ children }) => <Provider store={store}>{children}</Provider>,
+    });
+    let attemptId: string | undefined;
+
+    act(() => {
+      void sheet.result.current!.start({ component: 'save_votes_prompt' });
+      attemptId = currentAuthAttempt()?.id;
+      fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+    });
+
+    expect(currentAuthAttempt()?.id).toBe(attemptId);
+    expect(currentAuthAttempt()?.properties.component).toBe('save_votes_prompt');
+    expect(screen.getByRole('button', { name: 'Create account' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Continue with Google' })).toBeDisabled();
   });
 
   it('closing the popup preserves the pending Google redirect attribution', async () => {

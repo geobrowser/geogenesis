@@ -1,11 +1,12 @@
 import '@testing-library/jest-dom/vitest';
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, renderHook, screen, waitFor, within } from '@testing-library/react';
 
 import * as React from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { snapshotActionContext } from '~/core/action-context';
+import { useContinueWithGoogle } from '~/core/auth/continue-with-google';
 import { noteEmailArrival } from '~/core/deep-links/ref-email';
 import {
   saveVotesHeading,
@@ -122,6 +123,9 @@ beforeEach(() => {
   mocks.accountStepMounts = 0;
   mocks.accountStepClasses = undefined;
   mocks.googleSignIn = undefined;
+  const restored = renderHook(() => useContinueWithGoogle());
+  act(() => window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true })));
+  restored.unmount();
 });
 
 describe('copy', () => {
@@ -496,6 +500,26 @@ describe('SaveVotesSheet', () => {
       expect(mocks.cancelPrivyAuth).not.toHaveBeenCalled();
       expect(readSaveVotesPrompt()).toBeNull();
       expect(readLocalVotes().votes).toHaveLength(1);
+    });
+
+    it('blocks email when another surface starts Google, even before React renders', () => {
+      mocks.googleSignIn = vi.fn(() => new Promise<void>(() => {}));
+      vote('a');
+      markPromptedThisSession();
+      render(<SaveVotesSheet />);
+      act(() => openSaveVotesPrompt('navbar'));
+      const field = screen.getByRole('textbox', { name: 'Email address' });
+      fireEvent.change(field, { target: { value: 'sam@hey.com' } });
+      const popup = renderHook(() => useContinueWithGoogle());
+
+      act(() => {
+        void popup.result.current!.start({ component: 'explore_email_capture' });
+        fireEvent.submit(field.closest('form')!);
+      });
+
+      expect(mocks.beginPrivyAuth).not.toHaveBeenCalled();
+      expect(screen.getByRole('button', { name: 'Save vote' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: 'Continue with Google' })).toBeDisabled();
     });
 
     it('waits for Google to fail before starting the email path', async () => {

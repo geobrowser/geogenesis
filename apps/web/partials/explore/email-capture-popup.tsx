@@ -7,7 +7,11 @@ import { useAtomValue } from 'jotai';
 
 import { signupCompleted } from '~/core/analytics';
 import { currentAuthAttempt, finishAuthAttempt } from '~/core/auth-attempt';
-import { ContinueWithGoogleButton, useContinueWithGoogle } from '~/core/auth/continue-with-google';
+import {
+  ContinueWithGoogleButton,
+  isGoogleSignInStarting,
+  useContinueWithGoogle,
+} from '~/core/auth/continue-with-google';
 import { useDebatesHub } from '~/core/debates/matchmaking/use-debates-hub';
 import { useAnyModalOpen } from '~/core/hooks/use-any-modal-open';
 import { useDismissedNotice } from '~/core/hooks/use-dismissed-notice';
@@ -178,24 +182,24 @@ function EmailCapturePopup() {
    * actually signing up.
    */
   const startAccount = React.useCallback(() => {
-    if (googleStarting) return;
+    if (isGoogleSignInStarting()) return;
     beginPrivyAuth(ACCOUNT_ANALYTICS);
     prepareOnboarding();
     writePendingSignup(subscribedEmail);
     setWantsAccount(true);
-  }, [googleStarting, prepareOnboarding, subscribedEmail]);
+  }, [prepareOnboarding, subscribedEmail]);
 
   const close = React.useCallback(() => {
     // Closing cannot abort Google's redirect; retain its attribution until it completes or fails.
-    if (!googleStarting && currentAuthAttempt()?.properties.component === 'explore_email_capture') {
+    if (!isGoogleSignInStarting() && currentAuthAttempt()?.properties.component === 'explore_email_capture') {
       finishAuthAttempt('closed');
     }
     // Closing is a decision, so the attempt should not follow them to the next page.
     clearPendingSignup();
-    if (wantsAccount && !googleStarting) cancelPrivyAuth();
+    if (wantsAccount && !isGoogleSignInStarting()) cancelPrivyAuth();
     rememberDismissed();
     setClosed(true);
-  }, [googleStarting, rememberDismissed, wantsAccount]);
+  }, [rememberDismissed, wantsAccount]);
 
   const submit = React.useCallback(
     async (event: React.FormEvent) => {
