@@ -26,7 +26,7 @@ import { usePrivy } from '~/core/wallet/auth-hooks';
 import { ClientOnly } from '~/design-system/client-only';
 import { CloseSmall } from '~/design-system/icons/close-small';
 
-import { ACCOUNT_ANALYTICS, AccountStep } from './email-capture-account-step';
+import { ACCOUNT_ANALYTICS, AccountStep, SIGN_IN_UNAVAILABLE_COPY } from './email-capture-account-step';
 import { useMarkEmailCaptureShowing } from './email-capture-presence';
 import {
   CARD_CLASS,
@@ -120,6 +120,8 @@ function EmailCapturePopup() {
   // The address as accepted, so the account is created against what was actually subscribed rather
   // than whatever is in the field if they keep typing.
   const [subscribedEmail, setSubscribedEmail] = React.useState(() => resumed?.email ?? '');
+  /** The account step could not reach Privy; shown under the choice until it is tried again. */
+  const [signInUnavailable, setSignInUnavailable] = React.useState(false);
 
   // Watched only while the popup could still appear. The observer covers the whole body on a page
   // holding an infinite feed, so leaving it on after the card is dismissed, closed, or made moot by
@@ -183,6 +185,7 @@ function EmailCapturePopup() {
    */
   const startAccount = React.useCallback(() => {
     if (isGoogleSignInStarting()) return;
+    setSignInUnavailable(false);
     beginPrivyAuth(ACCOUNT_ANALYTICS);
     prepareOnboarding();
     writePendingSignup(subscribedEmail);
@@ -372,6 +375,12 @@ function EmailCapturePopup() {
                   setWantsAccount(false);
                   close();
                 }}
+                onSignInUnavailable={() => {
+                  // Back to the choice; a reload must not resume a send that never went out.
+                  clearPendingSignup();
+                  setSignInUnavailable(true);
+                  setWantsAccount(false);
+                }}
               />
             ) : (
               <>
@@ -410,6 +419,11 @@ function EmailCapturePopup() {
                 {google?.status === 'failed' ? (
                   <p role="alert" className={ERROR_CLASS}>
                     Google sign-in did not start. Try again, or create an account with your email.
+                  </p>
+                ) : null}
+                {signInUnavailable ? (
+                  <p role="alert" className={ERROR_CLASS}>
+                    {SIGN_IN_UNAVAILABLE_COPY}
                   </p>
                 ) : null}
               </>

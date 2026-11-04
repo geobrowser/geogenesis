@@ -53,6 +53,8 @@ export function SignInCard({
   onGoogle,
   finePrint,
   analytics,
+  error,
+  onSignInUnavailable,
 }: {
   compact: boolean;
   /** The address a code went to while the code step is up; null on the email step. */
@@ -76,6 +78,10 @@ export function SignInCard({
   finePrint: string;
   /** The code step's attribution. */
   analytics: AccountStepAnalytics;
+  /** A line under the submit button saying what went wrong. */
+  error?: string | null;
+  /** The code step could not reach Privy; see `AccountStep`. */
+  onSignInUnavailable?: () => void;
 }) {
   return (
     <div className={bodyClass(compact)}>
@@ -120,6 +126,7 @@ export function SignInCard({
             appearance="save-votes"
             classes={codeStepClasses(compact)}
             onChangeEmail={onChangeEmail}
+            onSignInUnavailable={onSignInUnavailable}
           />
         </div>
       ) : (
@@ -151,6 +158,11 @@ export function SignInCard({
           <button type="submit" disabled={submitDisabled} className={primaryButtonClass(compact)}>
             {submitLabel}
           </button>
+          {error ? (
+            <p role="alert" className={errorClass}>
+              {error}
+            </p>
+          ) : null}
           {google ? (
             <ContinueWithGoogleButton
               status={google.status}

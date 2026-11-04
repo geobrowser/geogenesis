@@ -40,6 +40,7 @@ import { usePrivy } from '~/core/wallet/auth-hooks';
 
 import { ResponsePositionIcon } from '~/design-system/icons/response-position-icon';
 
+import { SIGN_IN_UNAVAILABLE_COPY } from '~/partials/explore/email-capture-account-step';
 import { useIsEmailCaptureShowing } from '~/partials/explore/email-capture-presence';
 import { HEADING_CLASS, SUBTEXT_CLASS } from '~/partials/explore/email-capture-styles';
 import { CenteredSignInDialog, SignInCard, type SignInCardLabels } from '~/partials/sign-in/sign-in-card';
@@ -190,6 +191,13 @@ export function SaveVotesSheet() {
     closeSaveVotesPrompt();
   }, [midSignIn]);
 
+  /** Privy never loaded, so no code went out: back to the address, to try again. */
+  const [unavailable, setUnavailable] = React.useState(false);
+  const signInUnavailable = React.useCallback(() => {
+    setUnavailable(true);
+    setAttempt(current => (current?.phase === 'code' ? { ...current, phase: 'editing' } : current));
+  }, []);
+
   /** Back to the email step, the address as it was sent, to fix a typo. Unmounting the code step ends it. */
   const changeEmail = React.useCallback(() => {
     if (attempt?.phase !== 'code') return;
@@ -209,6 +217,7 @@ export function SaveVotesSheet() {
   const submitEmail = (event: React.FormEvent) => {
     event.preventDefault();
     if (!canSend || isGoogleSignInStarting()) return;
+    setUnavailable(false);
     beginPrivyAuth(signInProperties);
     prepareOnboarding();
     setAttempt({ email: trimmedEmail, centered, reason: attempt ? attempt.reason : reason, phase: 'code' });
@@ -268,6 +277,8 @@ export function SaveVotesSheet() {
       }
       finePrint={SAVE_VOTES_FINE_PRINT}
       analytics={signInProperties}
+      error={unavailable ? SIGN_IN_UNAVAILABLE_COPY : null}
+      onSignInUnavailable={signInUnavailable}
     />
   );
 

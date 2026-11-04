@@ -30,11 +30,27 @@ vi.mock('~/core/wallet/auth-hooks', () => ({
 }));
 vi.mock('~/partials/explore/email-capture-account-step', () => ({
   // Mounting the real step is what mails the code.
-  AccountStep: ({ email, analytics }: { email: string; analytics: unknown }) => {
+  SIGN_IN_UNAVAILABLE_COPY: 'Couldn’t reach sign-in. Try again.',
+  AccountStep: ({
+    email,
+    analytics,
+    onSignInUnavailable,
+  }: {
+    email: string;
+    analytics: unknown;
+    onSignInUnavailable?: () => void;
+  }) => {
     React.useEffect(() => {
       mocks.accountSteps.push({ email, analytics });
     }, [email, analytics]);
-    return <p>code step for {email}</p>;
+    return (
+      <>
+        <p>code step for {email}</p>
+        <button type="button" onClick={onSignInUnavailable}>
+          Privy did not load
+        </button>
+      </>
+    );
   },
 }));
 
@@ -117,6 +133,19 @@ describe('SignInBox', () => {
     expect(screen.getByLabelText('Email address')).toHaveValue('ann@example.com');
     fireEvent.click(screen.getByRole('button', { name: 'Send code' }));
     expect(mocks.accountSteps).toHaveLength(2);
+  });
+
+  it("goes back to the address saying sign-in couldn't be reached when Privy never loaded", () => {
+    render(<SignInBoxHost />);
+    const { request } = open();
+    typeEmail('ann@example.com');
+    fireEvent.click(screen.getByRole('button', { name: SIGN_IN_BOX_COPY.submit }));
+    fireEvent.click(screen.getByRole('button', { name: 'Privy did not load' }));
+    expect(screen.getByLabelText('Email address')).toHaveValue('ann@example.com');
+    expect(screen.getByRole('alert')).toHaveTextContent('Couldn’t reach sign-in. Try again.');
+    expect(request.onDismiss).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Send code' }));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
   it('withdraws the press when closed', () => {

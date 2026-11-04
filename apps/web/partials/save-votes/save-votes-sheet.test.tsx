@@ -77,14 +77,17 @@ vi.mock('~/core/save-votes-analytics', () => ({
   }),
 }));
 vi.mock('~/partials/explore/email-capture-account-step', () => ({
+  SIGN_IN_UNAVAILABLE_COPY: 'Couldn’t reach sign-in. Try again.',
   AccountStep: ({
     email,
     classes,
     onChangeEmail,
+    onSignInUnavailable,
   }: {
     email: string;
     classes?: unknown;
     onChangeEmail?: () => void;
+    onSignInUnavailable?: () => void;
   }) => {
     // Mounting the real step is what mails a code, so a remount is a second email.
     React.useEffect(() => {
@@ -97,6 +100,11 @@ vi.mock('~/partials/explore/email-capture-account-step', () => ({
         {onChangeEmail ? (
           <button type="button" onClick={onChangeEmail}>
             Change
+          </button>
+        ) : null}
+        {onSignInUnavailable ? (
+          <button type="button" onClick={onSignInUnavailable}>
+            Privy did not load
           </button>
         ) : null}
       </>
@@ -379,6 +387,18 @@ describe('SaveVotesSheet', () => {
       fireEvent.change(screen.getByRole('textbox', { name: 'Email address' }), { target: { value: address } });
       fireEvent.click(screen.getByRole('button', { name: 'Save votes' }));
     }
+
+    it("goes back to the address saying sign-in couldn't be reached when Privy never loaded", () => {
+      sendCodeTo('sam@hey.com');
+      fireEvent.click(screen.getByRole('button', { name: 'Privy did not load' }));
+      expect(screen.getByRole('textbox', { name: 'Email address' })).toHaveValue('sam@hey.com');
+      expect(screen.getByRole('alert')).toHaveTextContent('Couldn’t reach sign-in. Try again.');
+      expect(mocks.cancelPrivyAuth).not.toHaveBeenCalled();
+      // Sending again tries Privy again, and the line goes.
+      fireEvent.click(screen.getByRole('button', { name: 'Send code' }));
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+      expect(screen.getByText('Enter the code we sent to sam@hey.com')).toBeInTheDocument();
+    });
 
     it.each([
       ['the back arrow', 'Back to email'],

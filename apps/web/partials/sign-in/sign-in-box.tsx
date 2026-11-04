@@ -9,7 +9,7 @@ import { isLikelyEmail } from '~/core/newsletter/subscribe-result';
 import { SAVE_VOTES_FINE_PRINT, SAVE_VOTES_RESEND_LABEL } from '~/core/save-votes-copy';
 import { usePrivy } from '~/core/wallet/auth-hooks';
 
-import type { AccountStepAnalytics } from '~/partials/explore/email-capture-account-step';
+import { type AccountStepAnalytics, SIGN_IN_UNAVAILABLE_COPY } from '~/partials/explore/email-capture-account-step';
 import { HEADING_CLASS } from '~/partials/explore/email-capture-styles';
 
 import { SIGN_IN_BOX_COPY } from './sign-in-box-copy';
@@ -80,6 +80,13 @@ function SignInBox({ request }: { request: SignInBoxRequest }) {
     closeSignInBox(requestRef.current.attemptId);
   }, []);
 
+  // Privy never loaded, so no code went out: back to the address, to try again.
+  const [unavailable, setUnavailable] = React.useState(false);
+  const signInUnavailable = React.useCallback(() => {
+    setUnavailable(true);
+    setStep(current => (current?.phase === 'code' ? { ...current, phase: 'editing' } : current));
+  }, []);
+
   const changeEmail = React.useCallback(() => {
     if (step?.phase !== 'code') return;
     setEmail(step.email);
@@ -96,6 +103,7 @@ function SignInBox({ request }: { request: SignInBoxRequest }) {
   const submitEmail = (event: React.FormEvent) => {
     event.preventDefault();
     if (!canSend || isGoogleSignInStarting()) return;
+    setUnavailable(false);
     setStep({ email: trimmedEmail, phase: 'code' });
   };
 
@@ -122,6 +130,8 @@ function SignInBox({ request }: { request: SignInBoxRequest }) {
         onGoogle={() => void google?.start({ ...request.attribution, auth_control: 'continue_with_google' })}
         finePrint={SAVE_VOTES_FINE_PRINT}
         analytics={request.attribution as AccountStepAnalytics}
+        error={unavailable ? SIGN_IN_UNAVAILABLE_COPY : null}
+        onSignInUnavailable={signInUnavailable}
       />
     </CenteredSignInDialog>
   );

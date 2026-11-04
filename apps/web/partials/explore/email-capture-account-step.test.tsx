@@ -10,23 +10,28 @@ import { codeStepClasses } from '~/partials/save-votes/save-votes-styles';
 import { AccountStep } from './email-capture-account-step';
 
 const mocks = vi.hoisted(() => ({
+  privyLoaded: true,
+  openPrivyModal: vi.fn(),
   sendCode: vi.fn(),
   otpState: { status: 'initial' } as { status: string },
 }));
 
 vi.mock('~/core/analytics', () => ({ capture: vi.fn(), trackPrivyAuth: vi.fn(), signupCompleted: vi.fn() }));
 vi.mock('~/core/wallet/auth-hooks', () => ({
+  isPrivyLoaded: () => mocks.privyLoaded,
   useLoginWithEmail: () => ({
     sendCode: (args: { email: string }) => mocks.sendCode(args),
     loginWithCode: vi.fn(),
     state: mocks.otpState,
   }),
 }));
-vi.mock('~/core/hooks/use-privy-sign-in', () => ({ usePrivySignIn: () => vi.fn() }));
+vi.mock('~/core/hooks/use-privy-sign-in', () => ({ usePrivySignIn: () => mocks.openPrivyModal }));
 
 afterEach(cleanup);
 
 beforeEach(() => {
+  mocks.privyLoaded = true;
+  mocks.openPrivyModal.mockReset();
   mocks.sendCode.mockReset().mockResolvedValue(undefined);
   mocks.otpState = { status: 'awaiting-code-input' };
 });
@@ -79,5 +84,26 @@ describe('AccountStep as the save-votes code step (GEO-3439)', () => {
     );
     expect(screen.queryByRole('button', { name: 'Change email address' })).not.toBeInTheDocument();
     expect(screen.queryByText(/Didn’t get it/)).not.toBeInTheDocument();
+  });
+});
+
+describe('AccountStep when the send fails', () => {
+  it("hands back to its host when Privy never loaded, since Privy's dialog would not open either", async () => {
+    mocks.privyLoaded = false;
+    mocks.sendCode.mockRejectedValue(new Error('Timed out waiting for sign-in to load'));
+    const onSignInUnavailable = vi.fn();
+    render(<AccountStep email="reader@example.com" onGiveUp={vi.fn()} onSignInUnavailable={onSignInUnavailable} />);
+    await act(async () => {});
+    expect(onSignInUnavailable).toHaveBeenCalledTimes(1);
+    expect(mocks.openPrivyModal).not.toHaveBeenCalled();
+  });
+
+  it("falls back to Privy's dialog for a send Privy refused", async () => {
+    mocks.sendCode.mockRejectedValue(Object.assign(new Error('captcha'), { privyErrorCode: 'captcha_failure' }));
+    const onSignInUnavailable = vi.fn();
+    render(<AccountStep email="reader@example.com" onGiveUp={vi.fn()} onSignInUnavailable={onSignInUnavailable} />);
+    await act(async () => {});
+    expect(mocks.openPrivyModal).toHaveBeenCalledTimes(1);
+    expect(onSignInUnavailable).not.toHaveBeenCalled();
   });
 });

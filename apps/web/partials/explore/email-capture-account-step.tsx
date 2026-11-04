@@ -8,9 +8,12 @@ import { currentAuthAttempt, openAuthAttempt } from '~/core/auth-attempt';
 import { announceCodeEmail, forgetAnnouncedCodeEmail } from '~/core/auth/code-step';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { beginPrivyAuth, completePrivyAuth } from '~/core/privy-auth-events';
-import { useLoginWithEmail } from '~/core/wallet/auth-hooks';
+import { isPrivyLoaded, useLoginWithEmail } from '~/core/wallet/auth-hooks';
 
 import { ERROR_CLASS, FORM_STACK_CLASS, SUBTEXT_CLASS } from './email-capture-styles';
+
+/** Shown by the step's host when Privy never loaded, so no code could be sent. */
+export const SIGN_IN_UNAVAILABLE_COPY = 'Couldn’t reach sign-in. Try again.';
 
 /** Privy's OTP is six digits. */
 const CODE_LENGTH = 6;
@@ -96,9 +99,12 @@ export function AccountStep({
   appearance,
   classes,
   onChangeEmail,
+  onSignInUnavailable,
 }: {
   email: string;
   onGiveUp: () => void;
+  /** Privy never loaded, so its dialog can't stand in: the host offers the address again. */
+  onSignInUnavailable?: () => void;
   /** Whose sign-in this is. Defaults to Explore's email capture, the step's first host. */
   analytics?: AccountStepAnalytics;
   analyticsLabel?: string;
@@ -119,6 +125,8 @@ export function AccountStep({
   // changes, which would mail a second code on an unrelated re-render.
   const giveUpRef = React.useRef(onGiveUp);
   giveUpRef.current = onGiveUp;
+  const unavailableRef = React.useRef(onSignInUnavailable);
+  unavailableRef.current = onSignInUnavailable;
   // The same, for the attribution: a host can build it per render, and it must not re-send the code.
   const analyticsRef = React.useRef(analytics);
   analyticsRef.current = analytics;
@@ -171,6 +179,8 @@ export function AccountStep({
       // The dialog it falls back to may be sent to a different address.
       forgetAnnouncedCodeEmail();
       if (!mountedRef.current) return;
+      // Privy's dialog needs the same Privy, so it would never appear.
+      if (!isPrivyLoaded() && unavailableRef.current) return unavailableRef.current();
       // Captcha, a Privy outage, an address it will not take. Hand them the dialog that does work
       // rather than a dead end.
       // Keep the step mounted while hidden so the modal's error callback can close the card.
