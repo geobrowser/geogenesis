@@ -13,6 +13,7 @@ import {
   resetAuthAttempt,
 } from './auth-attempt';
 import { clearSignInAbandoned, runSignInAbandoned } from './auth/sign-in-abandoned';
+import { markSignedInBefore } from './auth/signed-in-before';
 import { beginSignupVisitor, clearSignupVisitor, createdSince, signupVisitorProperties } from './auth/signup-visitor';
 
 type Completion = Parameters<typeof trackPrivyAuth>[0];
@@ -75,6 +76,7 @@ export function resetPrivyAuthSession(account: ExitedFlowAccount = null) {
 
 export function completePrivyAuth(params: Completion, properties?: AnalyticsProperties) {
   if (!params.user.id) return;
+  markSignedInBefore();
   const completedThisSession = completedUserId === params.user.id;
   completedUserId = params.user.id;
   // Restores are not successful control-initiated attempts, even with a pending press.
