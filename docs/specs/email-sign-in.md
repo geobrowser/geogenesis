@@ -133,31 +133,26 @@ was about votes changes:
  └─────────────────────────────────┘
 ```
 
-## 6. Folding the code step into AuthAttempt (after #3052 merges)
+## 6. Code-step recovery: no fold (decided after #3052 merged)
 
-#3052 keeps a second store (`geo:auth-code-step:v1`). It records the code's sender, owner, claimant and
-attribution, and runs a BroadcastChannel ping to see if the owner is alive. The fold:
+`core/auth/code-step.ts` (#3052) stays the code-step store, with its rules unchanged. The box plugs into it:
 
-- `AuthAttempt` gains `code?: { sentAt; firstSentAt; resends; rejections; documentId; leftAt?; claimedBy?;
-  recoveryOf? }` and `email?: string` (local only). `attemptProperties()` never reads `code` or `email`.
-  A test asserts no captured payload contains `@`. The attempt is already persisted per id (24 h TTL),
-  and the recovery window is `code.sentAt` + 10 min.
-- **Same-tab or link only.** A reload in the same tab finds the attempt through the sessionStorage pointer
-  (`POINTER`), which survives a reload. A new tab may recover only if it landed on a sign-in link
-  (`?modal=signin`, or the debates link) within the window. Any other new tab is left alone.
-- **One claimant: Web Locks.** The document that sent the code holds
-  `navigator.locks.request('geo:auth-code:'+attemptId)` for its lifetime. A page that wants to recover
-  asks with `{ ifAvailable: true }`. Granted means the owner is gone, and this page becomes the owner by
-  keeping the lock. Not granted means the owner is alive, so do nothing. This replaces the ping and the
-  `pagehide` / `ownerGoneAt` bookkeeping. Without Web Locks, same-tab only.
-- **Cleared** in `finishAuthAttempt` (signed in, closed, superseded), in `resetPrivyAuthSession`
-  (sign-out), and when the box closes.
-- **Recovery in the box** opens straight on "Your code only works in the tab that asked for it. Send a new
-  code to address". No prefill of Privy's field and no notice over Privy's dialog.
-- **Privy's dialog (flag off)** keeps #3052's tracker, but writes into `AuthAttempt.code` through the same
-  functions, so there is one store with two writers. When the flag is removed, the tracker goes.
-- `code-step.ts` shrinks to the functions above, over AuthAttempt. `code-step-recovery.tsx`'s overlay is
-  replaced by the box's recovered state.
+- Every surface's code step is `AccountStep`, which calls `announceCodeEmail`. `CodeStepTracker` reads
+  Privy's shared `useLoginWithEmail` state, so codes sent from the box are recorded, claimed and
+  recovered exactly as #3052 does for the sheet and the email capture.
+- Recovery reaches the box through `usePrivySignIn`'s `takeCodeRecovery`. Its `prefillEmail` goes to the
+  box, which opens on the email step prefilled. #3052's notice (`recoveryNoticeText`) shows as it does
+  over Privy's dialog, and the box counts as that dialog for when the notice hides.
+- Every step event goes through `code-step.ts`'s `capture` and its single `SEND_AUTH_STEP` switch.
+
+Why not move the record into `AuthAttempt`:
+- The planned owner-held Web Lock would break #3052's main case. A suspended iPhone tab (the visitor is
+  in Mail) can't answer #3052's ping, so it reads as gone and the mail-link re-tap recovers. A frozen
+  tab most likely still holds its Web Locks, so an `ifAvailable` claim would read it as alive. #3052
+  uses its lock only to serialize claims.
+- Moving the record would rewrite a freshly reviewed module (tab ids, duplicate/opener/frame checks,
+  gone keys, ping, locked claim) to change where one record lives. Attempts are per id while the
+  pending code is one per browser. Nobody would see a difference.
 
 ## 7. Events (GEO-3550) and the analytics delta
 
