@@ -3,6 +3,7 @@
 import * as React from 'react';
 
 import cx from 'classnames';
+import { AnimatePresence, motion } from 'framer-motion';
 
 import { useClaimResponseSummary } from '~/core/claims/browse/claim-response-summary';
 import { useEntityResponseIndexingSnapshot } from '~/core/hooks/use-entity-vote';
@@ -24,6 +25,23 @@ import { taggedClaimEntry } from './tagged-claim-entry';
 
 /** How long the side just taken stays on screen before the next claim replaces it. */
 export const CALLOUT_ADVANCE_DELAY_MS = 700;
+
+/** One ease for the whole hand-off, so the card leaving, the next arriving and the height between
+ * them read as one movement. */
+const CALLOUT_EASE = [0.4, 0, 0.2, 1] as const;
+const CALLOUT_SLIDE_PX = 16;
+
+/**
+ * The answered card goes left and the next comes in from the right, one after the other, so the move
+ * reads as "next claim" rather than as the card's content being swapped. Under the hub's
+ * `reducedMotion="user"` the slide drops out and only the fades are left.
+ */
+const calloutCardMotion = {
+  initial: { opacity: 0, x: CALLOUT_SLIDE_PX },
+  animate: { opacity: 1, x: 0, pointerEvents: 'auto', transition: { duration: 0.24, ease: CALLOUT_EASE } },
+  // No clicks on a card that is on its way out.
+  exit: { opacity: 0, x: -CALLOUT_SLIDE_PX, pointerEvents: 'none', transition: { duration: 0.18, ease: CALLOUT_EASE } },
+} as const;
 
 type Props = {
   callout: TodaysCallout;
@@ -56,7 +74,7 @@ export function TodaysClaimsCallout({ callout, onFindDebate }: Props) {
           key={claim.claimId}
           aria-hidden
           className={cx(
-            'size-1.5 rounded-full',
+            'size-1.5 rounded-full transition-colors duration-200',
             step.done[index] || index === step.currentIndex ? 'bg-text' : 'bg-grey-03'
           )}
         />
@@ -107,12 +125,54 @@ export function TodaysClaimsCallout({ callout, onFindDebate }: Props) {
       <HubCalloutTitle as="h3" title={title}>
         {dismiss}
       </HubCalloutTitle>
-      {card ? <div className="mt-3">{card}</div> : null}
+      <CalloutCardStage>
+        <AnimatePresence mode="wait" initial={false}>
+          {card ? (
+            <motion.div key={current?.claimId} {...calloutCardMotion} className="pt-3">
+              {card}
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
+      </CalloutCardStage>
       <div className="mt-3 flex items-center justify-between gap-3">
         {dots}
         {action}
       </div>
     </section>
+  );
+}
+
+/**
+ * Eases the callout's height to whatever the card inside it needs — the next claim's, or none once
+ * the set is done — so the tabs below it glide rather than jump. It clips only while it moves, so the
+ * card's focus rings aren't cut off at rest.
+ */
+function CalloutCardStage({ children }: { children: React.ReactNode }) {
+  const [height, setHeight] = React.useState<number | null>(null);
+  const [moving, setMoving] = React.useState(false);
+  const observer = React.useRef<ResizeObserver | null>(null);
+  const measureRef = React.useCallback((node: HTMLDivElement | null) => {
+    observer.current?.disconnect();
+    observer.current = null;
+    if (!node) return;
+    const measure = () => setHeight(node.getBoundingClientRect().height);
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    observer.current = new ResizeObserver(measure);
+    observer.current.observe(node);
+  }, []);
+
+  return (
+    <motion.div
+      initial={false}
+      animate={{ height: height ?? 'auto' }}
+      transition={{ duration: 0.24, ease: CALLOUT_EASE }}
+      onAnimationStart={() => setMoving(true)}
+      onAnimationComplete={() => setMoving(false)}
+      className={moving ? 'overflow-hidden' : undefined}
+    >
+      <div ref={measureRef}>{children}</div>
+    </motion.div>
   );
 }
 

@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import * as React from 'react';
 
@@ -134,6 +134,22 @@ describe('TodaysClaimsCallout', () => {
 
     act(() => vi.advanceTimersByTime(CALLOUT_ADVANCE_DELAY_MS));
     expect(value.markAnswered).toHaveBeenCalledWith('a');
+  });
+
+  it('lets the answered card leave before the next claim comes in, and takes no clicks on its way out', async () => {
+    const { rerender } = render(<TodaysClaimsCallout callout={callout()} onFindDebate={vi.fn()} />);
+
+    const next = callout({
+      step: { current: CLAIMS[1]!, currentIndex: 1, done: [true, false, false], allAnswered: false },
+    });
+    rerender(<TodaysClaimsCallout callout={next} onFindDebate={vi.fn()} />);
+
+    const leaving = screen.getByTestId('claim-card');
+    expect(leaving).toHaveTextContent('Claim A');
+    await waitFor(() => expect(leaving.parentElement).toHaveStyle({ pointerEvents: 'none' }));
+
+    await waitFor(() => expect(screen.getByTestId('claim-card')).toHaveTextContent('Claim B'));
+    expect(screen.getAllByTestId('claim-card')).toHaveLength(1);
   });
 
   // Review: a write still on its way to the bundler can fail, and the card has to be there to say so.
