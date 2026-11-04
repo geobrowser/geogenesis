@@ -1579,6 +1579,45 @@ describe('DebateGatewayClient', () => {
     expect(sockets[0]!.sent).toContainEqual(expect.objectContaining({ op: 'UNSUBSCRIBE', payload: roomPayload }));
   });
 
+  it('resubscribes a chat room on the new token’s socket after a refresh closes the old one, and refetches it', async () => {
+    const roomId = '0192aaaa-0000-7000-8000-000000000001';
+    const dashless = '0192aaaa000070008000000000000001';
+    const key = ['debates', 'account', 'user-a', 'space-chat', dashless];
+    const roomPayload = { space_id: 'space-1', room_id: roomId, room_kind: 'member', resume_after_seq: null };
+    const echo = { space_id: 'space-1', room_id: dashless, room_kind: 'member', resume_after_seq: null };
+    queryClient.setQueryData<SpaceChatState>(key, { messages: [], nextBefore: null, pending: [] });
+    client.retainScope({ scope: 'chat-room', space_id: 'space-1', room_id: roomId, room_kind: 'member' });
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([echo]));
+    await flushInvalidations();
+    expect(client.getSnapshot().status).toBe('ready');
+
+    // geo-chat closes the socket opened with the old token once it is refreshed.
+    session = { ...session, access_token: 'refreshed-token' };
+    sockets[0]!.serverClose();
+    expect(client.getSnapshot()).toMatchObject({ status: 'degraded', pauseReason: 'disconnected' });
+    invalidateQueries.mockClear();
+
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(sockets).toHaveLength(2);
+    expect(sockets[1]!.url).toContain('access_token=refreshed-token');
+    sockets[1]!.open();
+    sockets[1]!.receive('READY', readyPayload([]));
+    await flushInvalidations();
+    expect(sockets[1]!.sent).toContainEqual(expect.objectContaining({ op: 'SUBSCRIBE', payload: roomPayload }));
+
+    sockets[1]!.receive('READY', readyPayload([echo]));
+    await flushInvalidations();
+    expect(client.getSnapshot().status).toBe('ready');
+    // Room events are not replayed, so the confirmation refetches the room.
+    expectInvalidated(invalidateQueries, { queryKey: key, refetchType: 'active' });
+  });
+
   describe('signed out (anonymous)', () => {
     const roomId = '0192aaaa-0000-7000-8000-000000000001';
     const dashless = '0192aaaa000070008000000000000001';

@@ -60,6 +60,11 @@ describe('SpaceChatView', () => {
     expect(screen.queryByText(/<@/)).not.toBeInTheDocument();
   });
 
+  it('names a mention of someone with no known name as someone, never blank', () => {
+    renderView({ messages: [message('1', BEN, { body: 'hi <@0191cccc000070008000000000000003>' })] });
+    expect(screen.getByText(`@${SPACE_CHAT_VIEW_COPY.unknownPerson}`)).toBeInTheDocument();
+  });
+
   it('quotes the message a reply answers, or says it is older than what is loaded', () => {
     renderView({
       messages: [
