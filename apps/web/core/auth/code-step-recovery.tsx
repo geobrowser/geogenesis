@@ -7,11 +7,11 @@ import { readStoredFeatureFlag } from '~/core/state/feature-flags';
 import { useLoginWithEmail, usePrivy } from '~/core/wallet/auth-hooks';
 
 import {
-  codeOwnerChecked,
+  claimCodeRecovery,
+  codeRecoveryWaiting,
   hideRecoveryNotice,
   landedOnModalLink,
   recoveryNotice,
-  reloadedCodeStep,
   subscribeRecoveryNotice,
 } from './code-step';
 
@@ -29,8 +29,9 @@ export function recoveryNoticeText(email: string | null) {
 export const LINK_SIGN_IN_GRACE_MS = 3_000;
 
 /**
- * GEO-3573. Reopens sign-in, prefilled, for a code step left by an earlier page, and shows the notice.
- * Sends nothing itself; the claim and prefill live in `usePrivySignIn`, so a deep link's sign-in uses them too.
+ * GEO-3573. Reopens sign-in, prefilled, for a code step the same tab left before a reload, and shows the
+ * notice. A new tab only recovers through a link's own sign-in. Sends nothing itself; the prefill lives
+ * in `usePrivySignIn`, so a deep link's sign-in uses it too.
  */
 export function CodeStepRecovery() {
   const { ready, authenticated, isModalOpen } = usePrivy();
@@ -46,9 +47,9 @@ export function CodeStepRecovery() {
     let cancelled = false;
     const timer = setTimeout(
       () =>
-        void codeOwnerChecked().then(() => {
-          // Still unclaimed and its page gone: no link opened sign-in, and no other tab took it over.
-          if (!cancelled && readStoredFeatureFlag('signInRecoveryAutoOpen') && reloadedCodeStep()) {
+        void claimCodeRecovery().then(() => {
+          // Claimed here, the same tab, and no sign-in has opened since (a link's would have used it).
+          if (!cancelled && readStoredFeatureFlag('signInRecoveryAutoOpen') && codeRecoveryWaiting()) {
             openSignInRef.current();
           }
         }),

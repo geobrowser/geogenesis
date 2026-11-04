@@ -1,16 +1,36 @@
 'use client';
 
 import { type AnalyticsProperties } from '~/core/analytics';
-import { type AuthAttempt, attemptProperties, captureAuthEvent, currentAuthAttempt } from '~/core/auth-attempt';
+import {
+  type AuthAttempt,
+  attemptProperties,
+  captureAuthEvent,
+  currentAuthAttempt,
+  isSignedInOutcome,
+} from '~/core/auth-attempt';
 import { devLog } from '~/core/utils/dev-log';
 
 // GEO-3573. Kept in localStorage for ten minutes: Privy's `loginWithCode` only works in the document
 // that sent the code, so a new page can only reopen sign-in prefilled. The address never leaves the device.
+// Only a page with evidence it is the same visitor picks it up (`mayPickUp`): the same tab, or a sign-in
+// link opened soon after. Any other page leaves it alone, so the next person on a shared browser never sees it.
 
 const KEY = 'geo:auth-code-step:v1';
+/** Per document that held the code and fired `pagehide`; kept apart so that write never touches the record. */
+const GONE_PREFIX = 'geo:auth-code-step:gone:';
+/** This tab's id, in sessionStorage: it survives a reload of the tab, not a new tab. */
+const TAB_KEY = 'geo:auth-code-step:tab';
+/** Serializes every change to the record across documents. */
+const LOCK = 'geo:auth-code-step';
 
-/** How long after the code was sent a new page still offers to pick up where it left off. */
+/** How long after the code was sent the same tab, reloaded, still picks up where it left off. */
 export const CODE_RECOVERY_WINDOW_MS = 10 * 60 * 1000;
+
+/** How long after the code was sent a new tab's sign-in link still picks it up (the mail link tapped again). */
+export const LINK_RECOVERY_WINDOW_MS = 5 * 60 * 1000;
+
+/** The triggers of a sign-in that a link opened. */
+const LINK_TRIGGERS = new Set(['deep_link', 'invite_link']);
 
 export const AUTH_STEP_EVENT = 'experimental.auth_step';
 
@@ -31,6 +51,8 @@ export type PendingCode = {
   sentAt: number;
   /** The document that sent it, to tell a reload from the same page coming back into view. */
   documentId: string;
+  /** The tab that sent it (`TAB_KEY`), so a reload of that tab may pick it up. */
+  tabId?: string;
   leftAt?: number;
   /** The entry that started it (`ATTRIBUTION_KEYS`), so a recovered sign-in reports under it. */
   properties: AnalyticsProperties;
@@ -38,8 +60,6 @@ export type PendingCode = {
   claimedBy?: string;
   /** The attempt that document opened to pick it up. */
   recoveryAttemptId?: string;
-  /** When its owner (`claimedBy`, else `documentId`) fired `pagehide`. Cleared if it comes back. */
-  ownerGoneAt?: number;
 };
 
 /** What a recovered sign-in needs to report under the entry that started it, and nothing else. */
@@ -55,8 +75,36 @@ const ATTRIBUTION_KEYS = [
   'local_vote_count',
 ] as const;
 
-const DOCUMENT_ID =
-  typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : String(Math.random());
+function newId() {
+  return typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : String(Math.random());
+}
+
+const DOCUMENT_ID = newId();
+
+const TAB_ID: string | null = (() => {
+  try {
+    const existing = sessionStorage.getItem(TAB_KEY);
+    if (existing) return existing;
+    const id = newId();
+    sessionStorage.setItem(TAB_KEY, id);
+    return id;
+  } catch {
+    return null;
+  }
+})();
+
+/** Runs `fn` holding the cross-document lock; without Web Locks, at once. */
+function locked<T>(fn: () => T): Promise<T> {
+  const locks = typeof navigator !== 'undefined' ? navigator.locks : undefined;
+  if (!locks) {
+    try {
+      return Promise.resolve(fn());
+    } catch (error) {
+      return Promise.reject(error);
+    }
+  }
+  return locks.request(LOCK, () => fn());
+}
 
 /** The document holding the code: the one that claimed it, else the one that sent it. */
 function owner(pending: PendingCode) {
@@ -91,23 +139,59 @@ channel?.addEventListener('message', (event: MessageEvent) => {
   if (pending && owner(pending) === DOCUMENT_ID) channel.postMessage({ type: 'alive', owner: DOCUMENT_ID });
 });
 
+/** This document gave up a claim no sign-in here could use; coming back from the cache doesn't retake it. */
+let releasedClaim = false;
+
+// pagehide can't wait for the lock, so it writes only this document's own key, never the record:
+// a claim another page makes meanwhile can't be overwritten by it.
 if (typeof window !== 'undefined') {
   window.addEventListener('pagehide', () => {
     const pending = readPendingCode();
-    if (pending && owner(pending) === DOCUMENT_ID) write({ ...pending, ownerGoneAt: Date.now() });
+    if (pending && owner(pending) === DOCUMENT_ID) markGone(DOCUMENT_ID);
   });
-  // Back from the back-forward cache: still the owner unless another page claimed it meanwhile.
+  // Back from the back-forward cache: the owner again, unless another page claimed it meanwhile.
   window.addEventListener('pageshow', event => {
-    if (!event.persisted) return;
-    const pending = readPendingCode();
-    if (pending && owner(pending) === DOCUMENT_ID && pending.ownerGoneAt !== undefined) {
-      write({ ...pending, ownerGoneAt: undefined });
-    }
+    if (event.persisted && !releasedClaim) unmarkGone(DOCUMENT_ID);
   });
 }
 
+function markGone(documentId: string) {
+  try {
+    localStorage.setItem(GONE_PREFIX + documentId, String(Date.now()));
+  } catch {
+    /* Without storage the ping still finds it gone. */
+  }
+}
+
+function unmarkGone(documentId: string) {
+  try {
+    localStorage.removeItem(GONE_PREFIX + documentId);
+  } catch {
+    /* Nothing was written either. */
+  }
+}
+
+function isMarkedGone(documentId: string) {
+  try {
+    return localStorage.getItem(GONE_PREFIX + documentId) !== null;
+  } catch {
+    return false;
+  }
+}
+
+function clearGoneMarks() {
+  try {
+    for (let index = localStorage.length - 1; index >= 0; index--) {
+      const key = localStorage.key(index);
+      if (key?.startsWith(GONE_PREFIX)) localStorage.removeItem(key);
+    }
+  } catch {
+    /* Storage is optional. */
+  }
+}
+
 function ownerState(pending: PendingCode): OwnerState {
-  if (pending.ownerGoneAt !== undefined || !channel) return 'gone';
+  if (isMarkedGone(owner(pending)) || !channel) return 'gone';
   const checked = owner(pending);
   if (ownerCheck?.owner === checked) return ownerCheck.state;
   ownerCheck = { owner: checked, state: 'checking' };
@@ -116,10 +200,30 @@ function ownerState(pending: PendingCode): OwnerState {
   return 'checking';
 }
 
-/** A code held by another page, live or not: enough to start loading Privy for a likely recovery. */
+/** The same tab that sent the code, reloaded or restored. */
+function sameTab(pending: PendingCode) {
+  return TAB_ID !== null && pending.tabId === TAB_ID;
+}
+
+/** Arrived on a link soon enough after the code was sent to be the visitor coming back from the email. */
+function linkInWindow(pending: PendingCode, now = Date.now()) {
+  return landedOnModalLink() && now - pending.sentAt < LINK_RECOVERY_WINDOW_MS;
+}
+
+/**
+ * Whether this page may pick `pending` up: the same tab, or a link opened inside the link window.
+ * `trigger` narrows the link case to a sign-in the link itself opened; omitted, it asks whether one might.
+ */
+function mayPickUp(pending: PendingCode, trigger?: unknown) {
+  if (sameTab(pending)) return true;
+  if (!linkInWindow(pending)) return false;
+  return trigger === undefined || (typeof trigger === 'string' && LINK_TRIGGERS.has(trigger));
+}
+
+/** A code held by another page, live or not, that this page may pick up: enough to start loading Privy. */
 export function pendingCodeElsewhere(): PendingCode | null {
   const pending = readPendingCode();
-  return pending && owner(pending) !== DOCUMENT_ID ? pending : null;
+  return pending && owner(pending) !== DOCUMENT_ID && mayPickUp(pending) ? pending : null;
 }
 
 /** Resolves once this page knows whether the code's owner is still open. */
@@ -167,6 +271,7 @@ export function readPendingCode(now = Date.now()): PendingCode | null {
     if (!value || typeof value.sentAt !== 'number' || typeof value.documentId !== 'string') return null;
     if (now - value.sentAt >= CODE_RECOVERY_WINDOW_MS) {
       localStorage.removeItem(KEY);
+      clearGoneMarks();
       return null;
     }
     return value;
@@ -178,7 +283,10 @@ export function readPendingCode(now = Date.now()): PendingCode | null {
 function write(value: PendingCode | null) {
   try {
     if (value) localStorage.setItem(KEY, JSON.stringify(value));
-    else localStorage.removeItem(KEY);
+    else {
+      localStorage.removeItem(KEY);
+      clearGoneMarks();
+    }
   } catch {
     /* Storage is optional; without it there is nothing to recover. */
   }
@@ -202,26 +310,31 @@ function capture(step: AuthStep, pending: PendingCode, extra: AnalyticsPropertie
 /** Privy reports the code sent. `fieldEmail` is what its dialog's address field held, if any. */
 export function codeScreenShown(fieldEmail?: string | null) {
   const attempt = currentAuthAttempt();
-  const previous = readPendingCode();
-  // A code sent from a recovered dialog is still that recovery, but this document's own code now,
-  // unclaimed, so the next page can pick it up again.
-  const recoveryAttemptId =
-    previous && (previous.claimedBy === DOCUMENT_ID || previous.documentId === DOCUMENT_ID)
-      ? previous.recoveryAttemptId
-      : undefined;
-  const recovering = recoveryAttemptId !== undefined;
-  const pending: PendingCode = {
-    attemptId: attempt?.id,
-    email: announcedEmail ?? normalize(fieldEmail),
-    sentAt: Date.now(),
-    documentId: DOCUMENT_ID,
-    properties: attempt ? entryAttribution(attempt.properties) : {},
-    ...(recovering ? { recoveryAttemptId } : {}),
-  };
+  const email = announcedEmail ?? normalize(fieldEmail);
   announcedEmail = null;
-  write(pending);
   setNotice(null);
-  capture('code_screen_shown', pending, { recovered: recovering });
+  void locked(() => {
+    const previous = readPendingCode();
+    // A code sent from a recovered dialog is still that recovery, but this document's own code now,
+    // unclaimed, so the next page can pick it up again.
+    const recoveryAttemptId =
+      previous && (previous.claimedBy === DOCUMENT_ID || previous.documentId === DOCUMENT_ID)
+        ? previous.recoveryAttemptId
+        : undefined;
+    const recovering = recoveryAttemptId !== undefined;
+    const pending: PendingCode = {
+      attemptId: attempt?.id,
+      email,
+      sentAt: Date.now(),
+      documentId: DOCUMENT_ID,
+      ...(TAB_ID ? { tabId: TAB_ID } : {}),
+      properties: attempt ? entryAttribution(attempt.properties) : {},
+      ...(recovering ? { recoveryAttemptId } : {}),
+    };
+    write(pending);
+    clearGoneMarks();
+    capture('code_screen_shown', pending, { recovered: recovering });
+  });
 }
 
 function entryAttribution(properties: AnalyticsProperties): AnalyticsProperties {
@@ -237,19 +350,25 @@ function ownCode(pending: PendingCode | null): pending is PendingCode {
 
 /** The tab went to the background with a code outstanding: the visitor is probably fetching it. */
 export function codeStepHidden() {
-  const pending = readPendingCode();
-  if (!ownCode(pending) || pending.leftAt !== undefined) return;
-  const left = { ...pending, leftAt: Date.now() };
-  write(left);
-  capture('left_code_screen', left);
+  const leftAt = Date.now();
+  void locked(() => {
+    const pending = readPendingCode();
+    if (!ownCode(pending) || pending.leftAt !== undefined) return;
+    const left = { ...pending, leftAt };
+    write(left);
+    capture('left_code_screen', left);
+  });
 }
 
 /** Back in view without a new page. */
 export function codeStepVisible() {
-  const pending = readPendingCode();
-  if (!ownCode(pending) || pending.leftAt === undefined) return;
-  write({ ...pending, leftAt: undefined });
-  capture('returned_to_code_screen', pending, { returned_to: 'same_page', away_ms: Date.now() - pending.leftAt });
+  const back = Date.now();
+  void locked(() => {
+    const pending = readPendingCode();
+    if (!ownCode(pending) || pending.leftAt === undefined) return;
+    write({ ...pending, leftAt: undefined });
+    capture('returned_to_code_screen', pending, { returned_to: 'same_page', away_ms: back - pending.leftAt });
+  });
 }
 
 /**
@@ -261,24 +380,62 @@ export function reloadedCodeStep(): PendingCode | null {
   return pending && ownerState(pending) === 'gone' ? pending : null;
 }
 
-/**
- * For a sign-in being opened: the code step this document picks up, claiming it on first use and
- * reporting the return. Null when there is none, or another tab claimed it first.
- */
-export function takeCodeRecovery(): PendingCode | null {
+/** This document's claim on a code another page sent, once it is confirmed. */
+function heldClaim(): PendingCode | null {
   const current = readPendingCode();
-  if (current?.claimedBy === DOCUMENT_ID && current.documentId !== DOCUMENT_ID) return current;
-  const pending = reloadedCodeStep();
-  if (!pending) return null;
-  write({ ...pending, claimedBy: DOCUMENT_ID, leftAt: undefined, ownerGoneAt: undefined });
-  // localStorage has no compare-and-set; a tab that lost the race reads the winner's claim here.
-  const claimed = readPendingCode();
-  if (claimed?.claimedBy !== DOCUMENT_ID) return null;
-  capture('returned_to_code_screen', pending, {
-    returned_to: 'new_page',
-    away_ms: Date.now() - (pending.leftAt ?? pending.sentAt),
-  });
-  return claimed;
+  return current?.claimedBy === DOCUMENT_ID && current.documentId !== DOCUMENT_ID ? current : null;
+}
+
+let claim: Promise<PendingCode | null> | null = null;
+/** A sign-in this document opened has used the claim, or opened without it; either way it is settled. */
+let claimSettled = false;
+
+/**
+ * Claims the code step another page left, once its owner is known to be gone. Under the lock the
+ * record is read again, so of two pages racing only the first claims; the other finds an owner it
+ * has not checked and stops. Resolves to the claim, or null.
+ */
+export function claimCodeRecovery(): Promise<PendingCode | null> {
+  claim ??= codeOwnerChecked().then(() =>
+    locked(() => {
+      if (claimSettled) return null;
+      const held = heldClaim();
+      if (held) return held;
+      const pending = reloadedCodeStep();
+      if (!pending) return null;
+      write({ ...pending, claimedBy: DOCUMENT_ID, leftAt: undefined });
+      // Without Web Locks there is no compare-and-set; a tab that lost the race reads the winner's claim here.
+      const claimed = heldClaim();
+      if (!claimed) return null;
+      capture('returned_to_code_screen', pending, {
+        returned_to: 'new_page',
+        away_ms: Date.now() - (pending.leftAt ?? pending.sentAt),
+      });
+      return claimed;
+    })
+  );
+  return claim;
+}
+
+/**
+ * For a sign-in being opened with `properties`: the code step this document claimed, if this sign-in
+ * may pick it up (`mayPickUp`). Null otherwise; a claim this sign-in can't use is released.
+ */
+export function takeCodeRecovery(properties: AnalyticsProperties = {}): PendingCode | null {
+  const held = heldClaim();
+  const usable = held && mayPickUp(held, properties.auth_trigger ?? null) ? held : null;
+  if (!claimSettled && held && !usable) {
+    releasedClaim = true;
+    markGone(DOCUMENT_ID);
+  }
+  claimSettled = true;
+  return usable;
+}
+
+/** A claim this document holds that no sign-in has used yet, for the same tab to reopen sign-in with. */
+export function codeRecoveryWaiting(): PendingCode | null {
+  const held = claimSettled ? null : heldClaim();
+  return held && sameTab(held) ? held : null;
 }
 
 /** Marks the sign-in that picks `pending` up; its entry's own attribution is `pending.properties`. */
@@ -288,30 +445,41 @@ export function codeRecoveryProperties(pending: PendingCode): AnalyticsPropertie
 
 /** Sign-in has been reopened for `pending`, as attempt `attemptId`. */
 export function codeRecoveryOffered(pending: PendingCode, attemptId: string | undefined) {
-  const offered = { ...pending, recoveryAttemptId: attemptId };
-  write(offered);
   setNotice({ email: pending.email });
-  capture('recovery_offered', offered, { prefilled: Boolean(pending.email) });
+  void locked(() => {
+    const held = heldClaim();
+    if (!held) return;
+    const offered = { ...held, recoveryAttemptId: attemptId };
+    write(offered);
+    capture('recovery_offered', offered, { prefilled: Boolean(pending.email) });
+  });
 }
 
 /**
- * An attempt in this document ended. Any sign-in, or the visitor closing sign-in, ends the code step;
- * it is reported as finished when the attempt was the code's own or its recovery's.
+ * An attempt in this document ended. A sign-in ends the code step, and so does closing sign-in on a
+ * page that may pick the code up; a close anywhere else leaves it for its owner. Reported as finished
+ * when the attempt was the code's own or its recovery's.
  */
 export function codeStepAttemptEnded(attempt: AuthAttempt) {
-  const pending = readPendingCode();
-  if (!pending || !attempt.outcome || attempt.outcome === 'superseded') return;
-  const own = attempt.id === pending.attemptId || attempt.id === pending.recoveryAttemptId;
-  write(null);
-  setNotice(null);
-  if (own) capture('finished', pending, { outcome: attempt.outcome, recovered: Boolean(pending.recoveryAttemptId) });
+  const outcome = attempt.outcome;
+  if (!outcome || outcome === 'superseded') return;
+  void locked(() => {
+    const pending = readPendingCode();
+    if (!pending) return;
+    const own = attempt.id === pending.attemptId || attempt.id === pending.recoveryAttemptId;
+    const ours = own || owner(pending) === DOCUMENT_ID || sameTab(pending);
+    if (!isSignedInOutcome(outcome) && !ours) return;
+    write(null);
+    setNotice(null);
+    if (own) capture('finished', pending, { outcome, recovered: Boolean(pending.recoveryAttemptId) });
+  });
 }
 
-/** Cleared on sign-out too, so a shared device never prefills the previous person's address. */
+/** Signed in or out: nothing is left to pick up. */
 export function clearCodeStep() {
   announcedEmail = null;
-  write(null);
   setNotice(null);
+  void locked(() => write(null));
 }
 
 // The notice over Privy's dialog, while a recovered sign-in is waiting for its new code.
@@ -338,5 +506,5 @@ export function subscribeRecoveryNotice(listener: () => void) {
   return () => void noticeListeners.delete(listener);
 }
 
-// Ask early, so the answer is in by the time Privy is ready to open a recovered sign-in.
-if (pendingCodeElsewhere()) reloadedCodeStep();
+// Claim early, so it is settled by the time Privy is ready to open a recovered sign-in.
+if (pendingCodeElsewhere()) void claimCodeRecovery();

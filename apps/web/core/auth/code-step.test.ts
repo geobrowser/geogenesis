@@ -7,10 +7,19 @@ vi.mock('~/core/utils/dev-log', () => ({ devLog: analytics.devLog }));
 type CodeStep = typeof import('./code-step');
 type AuthAttemptModule = typeof import('~/core/auth-attempt');
 
-/** A fresh document: module state (the document id, this tab's attempt) gone, sessionStorage kept. */
+const KEY = 'geo:auth-code-step:v1';
+
+/** A fresh document in the same tab: module state (the document id, this tab's attempt) gone, sessionStorage kept. */
 async function load(): Promise<{ step: CodeStep; attempts: AuthAttemptModule }> {
   vi.resetModules();
   return { step: await import('./code-step'), attempts: await import('~/core/auth-attempt') };
+}
+
+/** A fresh document in a new tab, landing on `url`. */
+async function loadNewTab(url = '/') {
+  sessionStorage.clear();
+  window.history.replaceState(null, '', url);
+  return load();
 }
 
 /** The page that holds the code goes away, as a reload or a closed tab does. */
@@ -24,22 +33,42 @@ function steps() {
     .map(([, props]) => props as Record<string, unknown>);
 }
 
+/** A Web Locks stand-in: one holder at a time, in request order, as across real documents. */
+function installLocks() {
+  let tail: Promise<unknown> = Promise.resolve();
+  const request = vi.fn((_name: string, callback: () => unknown) => {
+    const run = tail.then(() => new Promise(resolve => setTimeout(resolve, 0))).then(callback);
+    tail = run.catch(() => undefined);
+    return run;
+  });
+  Object.defineProperty(navigator, 'locks', { value: { request }, configurable: true });
+  return request;
+}
+
 beforeEach(() => {
   sessionStorage.clear();
   localStorage.clear();
+  window.history.replaceState(null, '', '/');
   analytics.capture.mockClear();
   analytics.captureExperimental.mockClear();
   analytics.devLog.mockClear();
 });
-afterEach(() => vi.useRealTimers());
+afterEach(() => {
+  vi.useRealTimers();
+  Reflect.deleteProperty(navigator, 'locks');
+});
 
 describe('code step', () => {
-  it('remembers the code screen with the address and the attempt it belongs to', async () => {
+  it('remembers the code screen with the address, the attempt and the tab it belongs to', async () => {
     const { step, attempts } = await load();
     const attempt = attempts.beginAuthAttempt({ component: 'navbar', auth_trigger: 'control' });
     step.codeScreenShown('  Someone@Example.com ');
 
-    expect(step.readPendingCode()).toMatchObject({ attemptId: attempt.id, email: 'someone@example.com' });
+    expect(step.readPendingCode()).toMatchObject({
+      attemptId: attempt.id,
+      email: 'someone@example.com',
+      tabId: sessionStorage.getItem('geo:auth-code-step:tab'),
+    });
     expect(steps()).toEqual([
       expect.objectContaining({ auth_step: 'code_screen_shown', component: 'navbar', code_attempt_id: attempt.id }),
     ]);
@@ -70,7 +99,7 @@ describe('code step', () => {
     expect(step.reloadedCodeStep()).toBeNull();
   });
 
-  it('hands a new page its code step inside the window, carrying only the entry', async () => {
+  it('hands the same tab its code step after a reload, carrying only the entry', async () => {
     const first = await load();
     first.attempts.beginAuthAttempt({ component: 'save_votes', auth_intent: 'save_votes', page_view_id: 'old' });
     first.step.codeScreenShown('a@b.co');
@@ -78,8 +107,10 @@ describe('code step', () => {
     leave();
 
     const { step } = await load();
-    expect(step.reloadedCodeStep()).not.toBeNull();
-    const claimed = step.takeCodeRecovery();
+    await step.claimCodeRecovery();
+    expect(step.codeRecoveryWaiting()).toMatchObject({ email: 'a@b.co' });
+    // Any sign-in in the same tab picks it up, a control's included.
+    const claimed = step.takeCodeRecovery({ auth_trigger: 'control' });
     expect(claimed).toMatchObject({
       email: 'a@b.co',
       properties: { component: 'save_votes', auth_intent: 'save_votes' },
@@ -87,9 +118,70 @@ describe('code step', () => {
     // The dead page's view, and anything else the entry carried, is not stored.
     expect(claimed!.properties).not.toHaveProperty('page_view_id');
     expect(steps().at(-1)).toMatchObject({ auth_step: 'returned_to_code_screen', returned_to: 'new_page' });
-    // Claimed: taking it again in this page returns it without reporting a second return.
-    expect(step.takeCodeRecovery()).toMatchObject({ email: 'a@b.co' });
-    expect(steps().filter(props => props.returned_to === 'new_page')).toHaveLength(1);
+    expect(step.codeRecoveryWaiting()).toBeNull();
+  });
+
+  it('shows nothing to a new tab with no link, and leaves the code for its owner', async () => {
+    const first = await load();
+    first.step.codeScreenShown('alice@example.com');
+    leave();
+
+    const { step, attempts } = await loadNewTab('/explore');
+    expect(step.pendingCodeElsewhere()).toBeNull();
+    expect(await step.claimCodeRecovery()).toBeNull();
+    // A manual Log in or save-votes press opens an empty sign-in.
+    expect(step.takeCodeRecovery({ auth_trigger: 'control' })).toBeNull();
+    expect(step.recoveryNotice()).toBeNull();
+
+    // Closing that sign-in clears nothing: the record is not this page's to clear.
+    const own = attempts.beginAuthAttempt({ component: 'navbar' });
+    step.codeStepAttemptEnded({ ...own, outcome: 'closed' });
+    await Promise.resolve();
+    expect(step.readPendingCode()).toMatchObject({ email: 'alice@example.com' });
+    expect(step.readPendingCode()).not.toHaveProperty('claimedBy');
+  });
+
+  it('lets a new tab from a sign-in link pick it up inside the link window', async () => {
+    vi.useFakeTimers({ now: 1_000_000, toFake: ['Date'] });
+    const first = await load();
+    first.step.codeScreenShown('a@b.co');
+    leave();
+
+    vi.setSystemTime(1_000_000 + 60_000);
+    const { step } = await loadNewTab('/explore?modal=signin');
+    await step.claimCodeRecovery();
+    // Not for the page's own auto-open: only the link's sign-in may use it.
+    expect(step.codeRecoveryWaiting()).toBeNull();
+    expect(step.takeCodeRecovery({ auth_trigger: 'deep_link' })).toMatchObject({ email: 'a@b.co' });
+  });
+
+  it('does not let a sign-in link pick it up after the link window', async () => {
+    vi.useFakeTimers({ now: 1_000_000, toFake: ['Date'] });
+    const first = await load();
+    first.step.codeScreenShown('a@b.co');
+    leave();
+
+    const { LINK_RECOVERY_WINDOW_MS } = first.step;
+    vi.setSystemTime(1_000_000 + LINK_RECOVERY_WINDOW_MS);
+    const { step } = await loadNewTab('/explore?modal=signin');
+    expect(step.pendingCodeElsewhere()).toBeNull();
+    expect(await step.claimCodeRecovery()).toBeNull();
+    expect(step.takeCodeRecovery({ auth_trigger: 'deep_link' })).toBeNull();
+    expect(step.readPendingCode()).not.toBeNull();
+  });
+
+  it('releases a link page claim that a non-link sign-in cannot use', async () => {
+    const first = await load();
+    first.step.codeScreenShown('a@b.co');
+    leave();
+
+    const linked = await loadNewTab('/explore?modal=debates&modalTarget=people');
+    expect(await linked.step.claimCodeRecovery()).not.toBeNull();
+    expect(linked.step.takeCodeRecovery({ auth_trigger: 'control' })).toBeNull();
+
+    // Another link tab can now take it, though the first is still open.
+    const { step } = await loadNewTab('/explore?modal=signin');
+    expect(await step.claimCodeRecovery()).not.toBeNull();
   });
 
   it('lets only the first page to claim it pick the step up, until that page goes too', async () => {
@@ -98,18 +190,60 @@ describe('code step', () => {
     leave();
 
     const second = await load();
-    expect(second.step.takeCodeRecovery()).not.toBeNull();
+    expect(await second.step.claimCodeRecovery()).not.toBeNull();
 
-    // A third tab, opened while the second is open, behaves normally.
+    // A third page, opened while the second is open, behaves normally.
     const third = await load();
-    await third.step.codeOwnerChecked();
-    expect(third.step.reloadedCodeStep()).toBeNull();
+    expect(await third.step.claimCodeRecovery()).toBeNull();
     expect(third.step.takeCodeRecovery()).toBeNull();
 
     // The second goes without sending a new code (a refused send, say): its claim is released.
     leave();
     const { step } = await load();
+    await step.claimCodeRecovery();
     expect(step.takeCodeRecovery()).toMatchObject({ email: 'a@b.co' });
+  });
+
+  it('gives the code to one of two pages claiming it at once, through the lock', async () => {
+    const request = installLocks();
+    const first = await load();
+    first.step.codeScreenShown('a@b.co');
+    await vi.waitFor(() => expect(first.step.readPendingCode()).not.toBeNull());
+    leave();
+
+    const a = await loadNewTab('/explore?modal=signin');
+    const b = await loadNewTab('/explore?modal=signin');
+    const claims = await Promise.all([a.step.claimCodeRecovery(), b.step.claimCodeRecovery()]);
+    expect(claims.filter(Boolean)).toHaveLength(1);
+    expect(request).toHaveBeenCalledWith('geo:auth-code-step', expect.any(Function));
+  });
+
+  it('still claims without Web Locks, reading the claim back', async () => {
+    expect('locks' in navigator).toBe(false);
+    const first = await load();
+    first.step.codeScreenShown('a@b.co');
+    leave();
+
+    const a = await load();
+    const b = await load();
+    const claims = await Promise.all([a.step.claimCodeRecovery(), b.step.claimCodeRecovery()]);
+    expect(claims.filter(Boolean)).toHaveLength(1);
+  });
+
+  it('never rewrites the record on pagehide, so a newer claim survives it', async () => {
+    const first = await load();
+    first.step.codeScreenShown('a@b.co');
+    leave();
+    const second = await load();
+    await second.step.claimCodeRecovery();
+    const record = localStorage.getItem(KEY);
+
+    // The first document's pagehide again (a late one), then the claimer's own.
+    const setItem = vi.spyOn(Storage.prototype, 'setItem');
+    leave();
+    expect(setItem.mock.calls.some(([key]) => key === KEY)).toBe(false);
+    setItem.mockRestore();
+    expect(localStorage.getItem(KEY)).toBe(record);
   });
 
   it('leaves a code alone while the page that sent it is still open', async () => {
@@ -118,8 +252,7 @@ describe('code step', () => {
 
     const { step } = await load();
     expect(step.pendingCodeElsewhere()).not.toBeNull();
-    await step.codeOwnerChecked();
-    expect(step.reloadedCodeStep()).toBeNull();
+    expect(await step.claimCodeRecovery()).toBeNull();
     expect(step.takeCodeRecovery()).toBeNull();
     expect(step.readPendingCode()).not.toHaveProperty('claimedBy');
   });
@@ -128,17 +261,14 @@ describe('code step', () => {
     const first = await load();
     first.step.codeScreenShown('a@b.co');
     // Owned by a page with no listener, as a suspended tab has none.
-    localStorage.setItem(
-      'geo:auth-code-step:v1',
-      JSON.stringify({ ...first.step.readPendingCode(), documentId: 'suspended' })
-    );
+    localStorage.setItem(KEY, JSON.stringify({ ...first.step.readPendingCode(), documentId: 'suspended' }));
 
     const { step } = await load();
     expect(step.reloadedCodeStep()).toBeNull();
-    await step.codeOwnerChecked();
-    expect(step.reloadedCodeStep()).toMatchObject({ email: 'a@b.co' });
+    expect(await step.claimCodeRecovery()).toMatchObject({ email: 'a@b.co' });
   });
 
+  // Each recovered page sends a new code; the page after it must be able to pick that one up too.
   it('recovers again on every later page, not just the first', async () => {
     const first = await load();
     first.attempts.beginAuthAttempt({ component: 'debate_matchmaking', auth_trigger: 'deep_link' });
@@ -147,6 +277,7 @@ describe('code step', () => {
     for (let cycle = 0; cycle < 3; cycle++) {
       leave();
       const { step, attempts } = await load();
+      await step.claimCodeRecovery();
       const pending = step.takeCodeRecovery();
       expect(pending, `cycle ${cycle}`).toMatchObject({ email: 'a@b.co' });
       const recovery = attempts.beginAuthAttempt({ ...pending!.properties, ...step.codeRecoveryProperties(pending!) });
@@ -176,7 +307,6 @@ describe('code step', () => {
     expect(steps().at(-1)).toMatchObject({ auth_step: 'left_code_screen', code_age_ms: 0 });
   });
 
-  // Each recovered page sends a new code; the page after it must be able to pick that one up too.
   // The collector rejects tagged events with no registry contract, so nothing goes out yet.
   it('sends no step events until auth_step is registered', async () => {
     const { step } = await load();
@@ -187,14 +317,16 @@ describe('code step', () => {
   });
 
   it('forgets a code older than the window', async () => {
-    vi.useFakeTimers({ now: 1_000_000 });
+    vi.useFakeTimers({ now: 1_000_000, toFake: ['Date'] });
     const first = await load();
     first.step.codeScreenShown('a@b.co');
+    leave();
 
     vi.setSystemTime(1_000_000 + first.step.CODE_RECOVERY_WINDOW_MS);
     const { step } = await load();
-    expect(step.takeCodeRecovery()).toBeNull();
-    expect(localStorage.getItem('geo:auth-code-step:v1')).toBeNull();
+    expect(await step.claimCodeRecovery()).toBeNull();
+    expect(localStorage.getItem(KEY)).toBeNull();
+    expect(Object.keys(localStorage).filter(key => key.startsWith('geo:auth-code-step:gone:'))).toEqual([]);
   });
 
   it('finishes when the recovered attempt signs in', async () => {
@@ -204,6 +336,7 @@ describe('code step', () => {
     leave();
 
     const { step, attempts } = await load();
+    await step.claimCodeRecovery();
     const pending = step.takeCodeRecovery()!;
     const recovery = attempts.beginAuthAttempt({ ...pending.properties, ...step.codeRecoveryProperties(pending) });
     step.codeRecoveryOffered(pending, recovery.id);
@@ -221,7 +354,7 @@ describe('code step', () => {
     expect(steps().find(props => props.auth_step === 'recovery_offered')).toMatchObject({ prefilled: true });
   });
 
-  it('forgets the step when the visitor closes any sign-in, or signs in by another route', async () => {
+  it('forgets the step when its own tab closes any sign-in, or anyone signs in', async () => {
     const { step, attempts } = await load();
     step.codeScreenShown('a@b.co');
     const other = attempts.beginAuthAttempt({ component: 'navbar' });
@@ -232,7 +365,8 @@ describe('code step', () => {
     expect(steps().some(props => props.auth_step === 'finished')).toBe(false);
 
     step.codeScreenShown('a@b.co');
-    step.codeStepAttemptEnded({ ...other, id: 'elsewhere', outcome: 'signed_in' });
+    const elsewhere = await loadNewTab();
+    elsewhere.step.codeStepAttemptEnded({ ...other, id: 'elsewhere', outcome: 'signed_in' });
     expect(step.readPendingCode()).toBeNull();
   });
 });

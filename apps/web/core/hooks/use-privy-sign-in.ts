@@ -95,16 +95,15 @@ export function usePrivySignIn(onComplete?: () => void, options?: UsePrivySignIn
         nameOnly: callOptions?.nameOnlyOnboarding,
       });
       const configured = optionsRef.current?.analytics;
-      // GEO-3573: a code asked for on an earlier page (a reload, or a new tab from the mail link) is
-      // picked up by whichever sign-in this page opens first, with its address filled back in.
-      const recovery = callOptions?.prefillEmail ? null : takeCodeRecovery();
+      const own = {
+        ...(typeof configured === 'function' ? configured() : configured),
+        ...(properties && !('nativeEvent' in properties) ? properties : {}),
+      };
+      // GEO-3573: a code asked for on an earlier page is picked up by the first sign-in this page opens,
+      // with its address filled back in, when that page is the same tab or the sign-in came from a link.
+      const recovery = callOptions?.prefillEmail ? null : takeCodeRecovery(own);
       const attempt = login(
-        {
-          ...(recovery?.properties ?? {}),
-          ...(typeof configured === 'function' ? configured() : configured),
-          ...(properties && !('nativeEvent' in properties) ? properties : {}),
-          ...(recovery ? codeRecoveryProperties(recovery) : {}),
-        },
+        { ...(recovery?.properties ?? {}), ...own, ...(recovery ? codeRecoveryProperties(recovery) : {}) },
         { resume: optionsRef.current?.resumeAuthAttempt },
         callOptions?.prefillEmail ?? recovery?.email ?? undefined
       );

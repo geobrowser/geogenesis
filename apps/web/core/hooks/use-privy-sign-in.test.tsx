@@ -100,6 +100,8 @@ describe('usePrivySignIn', () => {
     );
     expect(mocks.login).toHaveBeenCalledWith(expect.objectContaining({ prefill: { type: 'email', value: 'a@b.co' } }));
     expect(mocks.codeRecoveryOffered).toHaveBeenCalledWith(pending, 'recovery');
+    // Whether this sign-in may pick it up depends on its own trigger, so it is handed its properties.
+    expect(mocks.takeCodeRecovery).toHaveBeenCalledWith({ component: 'debate_matchmaking' });
   });
 
   // Privy fires onComplete when it restores an existing session — opening a second tab does it —
