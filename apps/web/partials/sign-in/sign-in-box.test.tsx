@@ -30,6 +30,7 @@ const mocks = vi.hoisted(() => ({
   accountSteps: [] as { email: string; analytics: unknown }[],
   googleSignIn: undefined as undefined | ((properties: Record<string, unknown>, options?: unknown) => Promise<void>),
   startAnalyticsSoon: vi.fn(),
+  requestRealAuth: vi.fn(),
   steps: [] as { step: string; extra: Record<string, unknown> }[],
 }));
 
@@ -43,6 +44,7 @@ vi.mock('~/core/analytics', async importOriginal => ({
   startAnalyticsSoon: () => mocks.startAnalyticsSoon(),
 }));
 
+vi.mock('~/core/wallet/auth-store', () => ({ requestRealAuth: () => mocks.requestRealAuth() }));
 vi.mock('~/core/auth/google-oauth', () => ({ useGoogleOAuthSignIn: () => mocks.googleSignIn }));
 vi.mock('~/core/wallet/auth-hooks', () => ({
   usePrivy: () => ({ ready: true, authenticated: mocks.authenticated, isModalOpen: mocks.isModalOpen }),
@@ -97,6 +99,7 @@ beforeEach(() => {
   mocks.accountSteps = [];
   mocks.googleSignIn = undefined;
   mocks.startAnalyticsSoon.mockReset();
+  mocks.requestRealAuth.mockReset();
   mocks.steps = [];
   localStorage.clear();
   sessionStorage.clear();
@@ -137,11 +140,13 @@ describe('SignInBox', () => {
     expect(readAuthAttempt(attempt.id)?.openedAt).toEqual(expect.any(Number));
   });
 
-  it('starts the analytics runtime after its first paint', async () => {
+  it('starts loading Privy and the analytics runtime after its first paint', async () => {
     render(<SignInBoxHost />);
     open();
+    expect(mocks.requestRealAuth).not.toHaveBeenCalled();
     expect(mocks.startAnalyticsSoon).not.toHaveBeenCalled();
     await act(() => new Promise(resolve => requestAnimationFrame(() => resolve(undefined))));
+    expect(mocks.requestRealAuth).toHaveBeenCalledTimes(1);
     expect(mocks.startAnalyticsSoon).toHaveBeenCalledTimes(1);
   });
 

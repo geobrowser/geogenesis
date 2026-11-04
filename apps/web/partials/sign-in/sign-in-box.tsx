@@ -10,6 +10,7 @@ import { isLikelyEmail } from '~/core/newsletter/subscribe-result';
 import { cancelPrivyAuthAttempt } from '~/core/privy-auth-events';
 import { SAVE_VOTES_FINE_PRINT, SAVE_VOTES_RESEND_LABEL } from '~/core/save-votes-copy';
 import { usePrivy } from '~/core/wallet/auth-hooks';
+import { requestRealAuth } from '~/core/wallet/auth-store';
 
 import { type AccountStepAnalytics, SIGN_IN_UNAVAILABLE_COPY } from '~/partials/explore/email-capture-account-step';
 import { HEADING_CLASS } from '~/partials/explore/email-capture-styles';
@@ -48,9 +49,12 @@ function SignInBox({ request }: { request: SignInBoxRequest }) {
   // The box on screen is the prompt being viewed.
   React.useEffect(() => {
     openAuthAttempt(requestRef.current.attribution);
-    // Its step events must reach the collector if the visitor leaves; the frame after paint keeps the
-    // runtime off the box's own first frame.
-    const frame = requestAnimationFrame(() => startAnalyticsSoon());
+    // After the first paint: Privy loads while the visitor types, so Submit need not wait for it, and
+    // the analytics runtime starts so step events reach the collector if the visitor leaves.
+    const frame = requestAnimationFrame(() => {
+      requestRealAuth();
+      startAnalyticsSoon();
+    });
     return () => cancelAnimationFrame(frame);
   }, []);
 

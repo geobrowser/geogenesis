@@ -66,9 +66,9 @@ core/auth/signed-in-before.ts        "this browser has signed in" marker for lik
 - **First paint without Privy.** The card imports nothing from `@geogenesis/auth`. `auth-hooks`'
   `useLoginWithEmail` queues calls until Privy is up (`invokeInstance` → `whenReady`, 20 s). While it
   waits, the code step shows the sheet's own pending state: "Sending a 6-digit code to", boxes disabled.
-  Privy starts loading at the code step's first headless call (`invokeInstance` → `requestRealAuth()`),
-  unless something loaded it earlier: a stored session, the 8 s idle load, or module evaluation on a
-  `signInExpectedOnLoad` page. Mounting the box does not request it.
+  The box calls `requestRealAuth()` in the frame after its first paint, so Privy loads while the visitor
+  types and Submit need not wait for the download. On a `signInExpectedOnLoad` page Privy has already
+  started at module evaluation.
 - **Box closing.** The box closes when its attempt ends, however it ended. Wallet: `EmbeddedWalletSync`
   (#2949); Privy's docs confirm `createOnLogin` skips headless logins.
 - **Dismissal.** Close, Escape or a press on the backdrop end the box's attempt (`cancelPrivyAuthAttempt`,
