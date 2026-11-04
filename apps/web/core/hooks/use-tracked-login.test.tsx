@@ -5,6 +5,7 @@ import * as React from 'react';
 import { Provider, createStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { closeSignInBox, readSignInBox } from '~/core/auth/sign-in-box/sign-in-box-store';
 import { featureFlagsStorageKey } from '~/core/state/feature-flags';
 import { pendingActionsAtom } from '~/core/state/pending-actions';
 
@@ -16,11 +17,17 @@ vi.mock('~/core/wallet/auth-hooks', () => ({
   useGeoLogin: () => ({ login: mocks.login }),
   usePrivy: () => ({ authenticated: false }),
 }));
-vi.mock('~/core/privy-auth-events', () => ({ beginPrivyAuth: () => ({ id: 'attempt' }) }));
+vi.mock('~/core/privy-auth-events', () => ({
+  beginPrivyAuth: () => ({ id: 'attempt', properties: { component: 'test', auth_trigger: 'control' } }),
+}));
+vi.mock('~/core/auth-attempt', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/auth-attempt')>()),
+  currentAuthAttempt: () => ({ id: 'attempt' }),
+}));
 
-function renderLogin() {
+function renderLogin(params: Parameters<typeof useTrackedLogin>[0] = {}) {
   const store = createStore();
-  const { result } = renderHook(() => useTrackedLogin({}), {
+  const { result } = renderHook(() => useTrackedLogin(params), {
     wrapper: ({ children }) => <Provider store={store}>{children}</Provider>,
   });
   return { store, login: result.current.login };
@@ -30,6 +37,7 @@ beforeEach(() => window.localStorage.setItem(featureFlagsStorageKey, JSON.string
 afterEach(() => {
   window.localStorage.clear();
   mocks.login.mockClear();
+  closeSignInBox();
 });
 
 // GEO-3139: Privy's login() is only called here, so the flag here is the one gate on the Google redirect.
@@ -58,7 +66,7 @@ describe('useTrackedLogin', () => {
   // GEO-3573: a sign-in picked up after a reload fills the address back in.
   it('prefills the email beside Google', () => {
     const { login } = renderLogin();
-    login({ component: 'test' }, undefined, 'a@b.co');
+    login({ component: 'test' }, undefined, { prefillEmail: 'a@b.co' });
     expect(mocks.login).toHaveBeenCalledWith({
       loginMethods: ['email', 'google'],
       prefill: { type: 'email', value: 'a@b.co' },
@@ -68,7 +76,39 @@ describe('useTrackedLogin', () => {
   it('prefills the email with the flag off', () => {
     window.localStorage.setItem(featureFlagsStorageKey, JSON.stringify({ googleSignIn: false }));
     const { login } = renderLogin();
-    login({ component: 'test' }, undefined, 'a@b.co');
+    login({ component: 'test' }, undefined, { prefillEmail: 'a@b.co' });
     expect(mocks.login).toHaveBeenCalledWith({ prefill: { type: 'email', value: 'a@b.co' } });
+  });
+});
+
+describe('useTrackedLogin with ourSignInBox on', () => {
+  beforeEach(() => window.localStorage.setItem(featureFlagsStorageKey, JSON.stringify({ ourSignInBox: true })));
+
+  it("opens our box with the attempt, its attribution, the prefill and the heading, not Privy's dialog", () => {
+    const { login } = renderLogin();
+    login({ component: 'test' }, undefined, { prefillEmail: 'a@b.co', heading: 'Join the discussion' });
+    expect(mocks.login).not.toHaveBeenCalled();
+    expect(readSignInBox()).toMatchObject({
+      attemptId: 'attempt',
+      attribution: { component: 'test', auth_trigger: 'control' },
+      prefillEmail: 'a@b.co',
+      heading: 'Join the discussion',
+    });
+  });
+
+  it("opens Privy's dialog for the box's own fallback, on its attempt", () => {
+    const { login } = renderLogin();
+    expect(login({ component: 'test' }, undefined, { fallbackFor: 'attempt' })).toMatchObject({
+      id: 'attempt',
+    });
+    expect(mocks.login).toHaveBeenCalled();
+    expect(readSignInBox()).toBeNull();
+  });
+
+  it('opens nothing for a fallback whose attempt was replaced', () => {
+    const { login } = renderLogin();
+    expect(login({ component: 'test' }, undefined, { fallbackFor: 'older' })).toBeUndefined();
+    expect(mocks.login).not.toHaveBeenCalled();
+    expect(readSignInBox()).toBeNull();
   });
 });

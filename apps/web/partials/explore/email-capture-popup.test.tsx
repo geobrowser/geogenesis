@@ -39,6 +39,7 @@ const mocks = vi.hoisted(() => ({
   trackPrivyAuth: vi.fn(),
   capture: vi.fn(),
   initOAuth: vi.fn(),
+  privyLoaded: true,
 }));
 
 vi.mock('~/core/analytics', () => ({
@@ -48,6 +49,7 @@ vi.mock('~/core/analytics', () => ({
 }));
 
 vi.mock('~/core/wallet/auth-hooks', () => ({
+  isPrivyLoaded: () => mocks.privyLoaded,
   usePrivy: () => ({ ready: mocks.ready, authenticated: mocks.authenticated, isModalOpen: mocks.isModalOpen }),
   useLoginWithEmail: (args?: unknown) => {
     mocks.useGeoLoginWithEmail();
@@ -104,6 +106,7 @@ beforeEach(() => {
   mocks.isDebatesHubOpen = false;
   store.set(isChatOpenAtom, false);
   store.set(entitySidePanelAtom, null);
+  mocks.privyLoaded = true;
   mocks.sendCode.mockReset().mockResolvedValue(undefined);
   mocks.loginWithCode.mockReset().mockResolvedValue(undefined);
   mocks.openPrivyModal.mockReset();
@@ -619,6 +622,26 @@ describe('ExploreEmailCapturePopup', () => {
       // No second email field anywhere in the card.
       expect(screen.queryByRole('textbox', { name: 'Email address' })).toBeNull();
       expect(screen.getByRole('textbox', { name: 'Verification code' })).toBeInTheDocument();
+    });
+
+    it("goes back to the account choice saying sign-in couldn't be reached when Privy never loaded", async () => {
+      mocks.privyLoaded = false;
+      mocks.sendCode.mockRejectedValue(new Error('Timed out waiting for sign-in to load'));
+      await subscribeSuccessfully();
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+      });
+      expect(screen.getByRole('alert')).toHaveTextContent('Couldn’t reach sign-in. Try again.');
+      expect(mocks.openPrivyModal).not.toHaveBeenCalled();
+      expect(screen.queryByRole('textbox', { name: 'Verification code' })).toBeNull();
+      // Trying again sends again, and the line goes.
+      mocks.privyLoaded = true;
+      mocks.sendCode.mockResolvedValue(undefined);
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+      });
+      expect(mocks.sendCode).toHaveBeenCalledTimes(2);
+      expect(screen.queryByText('Couldn’t reach sign-in. Try again.')).not.toBeInTheDocument();
     });
 
     // Reported from the browser: the code verified, the session existed, and then nothing — no

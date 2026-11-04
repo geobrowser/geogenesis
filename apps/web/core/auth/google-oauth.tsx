@@ -3,8 +3,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { type AnalyticsProperties } from '~/core/analytics';
-import { currentAuthAttempt } from '~/core/auth-attempt';
+import { currentAuthAttempt, tagAuthAttempt } from '~/core/auth-attempt';
+import { type SignInSurface, authErrorCode } from '~/core/auth/auth-step-switch';
+import { captureAuthStep } from '~/core/auth/code-step';
 import { useGoogleSignInEnabled, useGoogleSignInOffered } from '~/core/auth/google-sign-in';
+import { readSignInBox } from '~/core/auth/sign-in-box/sign-in-box-store';
 import { usePrepareOnboarding } from '~/core/hooks/use-prepare-onboarding';
 import { useSetToast } from '~/core/hooks/use-toast';
 import { beginPrivyAuth, cancelPrivyAuth, failRedirectedPrivyAuth } from '~/core/privy-auth-events';
@@ -44,15 +47,29 @@ function GoogleOAuthCompleter() {
       initGoogleOAuth = null;
     };
   }, [initOAuth]);
+  const returnError = state.status === 'error' ? state.error : undefined;
   // A failed start rejects to its caller; only a failed return is reported here, once.
   useEffect(() => {
     if (!isReturn || settled.current || state.status !== 'error') return;
     settled.current = true;
-    if (returnAttemptId) failRedirectedPrivyAuth(returnAttemptId);
+    if (returnAttemptId) {
+      const authError = authErrorCode(returnError);
+      tagAuthAttempt(returnAttemptId, { lastAuthError: authError });
+      if (currentAuthAttempt()?.id === returnAttemptId)
+        captureAuthStep('google_failed', { sign_in_method: 'google', auth_error: authError });
+      failRedirectedPrivyAuth(returnAttemptId);
+    }
     setToast(<>Google sign-in didn't complete. Try again.</>);
-  }, [isReturn, returnAttemptId, state.status, setToast]);
+  }, [isReturn, returnAttemptId, state.status, returnError, setToast]);
   return null;
 }
+
+/** Where a Google start comes from. */
+export type GoogleStartOptions = {
+  surface?: SignInSurface;
+  /** An open attempt to carry on, rather than start a new one: our sign-in box's, so its press hears the outcome. */
+  attemptId?: string;
+};
 
 /**
  * Starts Google sign-in from our own UI, saving the attempt first so attribution survives the redirect.
@@ -62,15 +79,27 @@ export function useGoogleOAuthSignIn() {
   const offered = useGoogleSignInOffered();
   const prepareOnboarding = usePrepareOnboarding();
   const signIn = useCallback(
-    async (properties: AnalyticsProperties) => {
-      prepareOnboarding();
-      const attempt = beginPrivyAuth(properties);
+    async (properties: AnalyticsProperties, { surface, attemptId }: GoogleStartOptions = {}) => {
+      const open = currentAuthAttempt();
+      const resumed = attemptId && open?.id === attemptId && !open.endedAt ? open : undefined;
+      // A resumed press already set onboarding and its return address.
+      if (!resumed) prepareOnboarding();
+      const attempt = resumed ?? beginPrivyAuth(properties);
+      tagAuthAttempt(attempt.id, { signInMethod: 'google', ...(surface ? { signInSurface: surface } : {}) });
+      captureAuthStep('google_started', { sign_in_method: 'google' });
       try {
         if (!initGoogleOAuth) throw new Error('Google sign-in is not mounted');
         await initGoogleOAuth();
       } catch (error) {
         // A newer email or Google sign-in may have replaced this request while it was starting.
-        if (currentAuthAttempt()?.id === attempt.id) cancelPrivyAuth();
+        if (currentAuthAttempt()?.id === attempt.id) {
+          const authError = authErrorCode(error);
+          tagAuthAttempt(attempt.id, { lastAuthError: authError });
+          captureAuthStep('google_failed', { sign_in_method: 'google', auth_error: authError });
+          // A resumed attempt stays open while the box still shows it, to say the start failed and
+          // offer email. Closed meanwhile, nothing else would end it.
+          if (!resumed || readSignInBox()?.attemptId !== attempt.id) cancelPrivyAuth();
+        }
         throw error;
       }
     },

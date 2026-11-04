@@ -3,9 +3,9 @@
 import * as React from 'react';
 
 import { type AnalyticsProperties } from '~/core/analytics';
+import { continueAuthAttempt } from '~/core/auth-attempt';
 import { codeRecoveryOffered, codeRecoveryProperties, takeCodeRecovery } from '~/core/auth/code-step';
-import { onSignInAbandoned } from '~/core/auth/sign-in-abandoned';
-import { useTrackedLogin } from '~/core/hooks/use-tracked-login';
+import { fallbackAttempt, useTrackedLogin } from '~/core/hooks/use-tracked-login';
 import { usePrivy } from '~/core/wallet/auth-hooks';
 
 import { usePrepareOnboarding } from './use-prepare-onboarding';
@@ -25,8 +25,10 @@ type UsePrivySignInOptions = {
   analytics?: AnalyticsProperties | (() => AnalyticsProperties);
   /** Keep the initiating signup visitor/session when email verification falls back to the modal. */
   resumeAuthAttempt?: boolean;
-  /** Called only for an attempt this hook started, after Privy reports a failure or dismissal. */
+  /** The press's attempt was dismissed. */
   onError?: () => void;
+  /** The sign-in box's heading, for an entry with its own ask. */
+  heading?: string;
 };
 
 /** Per-press options, for a caller whose continuation depends on what was pressed. */
@@ -41,8 +43,13 @@ export type PrivySignInCallOptions = {
   redirectTo?: string;
   /** A new account is asked only for a name in onboarding (GEO-3517); see `usePrepareOnboarding`. */
   nameOnlyOnboarding?: boolean;
-  /** Fills in Privy's email field: a sign-in picked up again after the tab reloaded (GEO-3573). */
+  /** Fills in the email field: a sign-in picked up again after the tab reloaded (GEO-3573). */
   prefillEmail?: string;
+  /**
+   * Opens Privy's own dialog on this open attempt: the code step's fallback. Its press keeps its
+   * onboarding and return address; once the attempt is not current it opens nothing.
+   */
+  fallbackFor?: string;
 };
 
 type PrivySignIn = (
@@ -78,22 +85,22 @@ export function usePrivySignIn(onComplete?: () => void, options?: UsePrivySignIn
   const authenticatedRef = React.useRef(authenticated);
   authenticatedRef.current = authenticated;
 
-  // useTrackedLogin owns attempt scoping for both completion and dismissal.
   const { login } = useTrackedLogin({
     onComplete: () => onCompleteRef.current?.(),
-    onError: error => {
-      // A rejected OTP can be retried in the same modal; only dismissal abandons the intent.
-      if (error === 'exited_auth_flow') optionsRef.current?.onError?.();
-    },
+    onAbandoned: () => optionsRef.current?.onError?.(),
   });
 
   return React.useCallback<PrivySignIn>(
     (properties, callOptions) => {
       if (authenticatedRef.current) return undefined;
-      prepareOnboarding({
-        returnTo: callOptions?.redirectTo ?? optionsRef.current?.redirectTo,
-        nameOnly: callOptions?.nameOnlyOnboarding,
-      });
+      const fallbackFor = callOptions?.fallbackFor;
+      const resuming = fallbackFor !== undefined;
+      if (resuming && !fallbackAttempt(fallbackFor)) return undefined;
+      if (!resuming)
+        prepareOnboarding({
+          returnTo: callOptions?.redirectTo ?? optionsRef.current?.redirectTo,
+          nameOnly: callOptions?.nameOnlyOnboarding,
+        });
       const configured = optionsRef.current?.analytics;
       const own = {
         ...(typeof configured === 'function' ? configured() : configured),
@@ -101,17 +108,19 @@ export function usePrivySignIn(onComplete?: () => void, options?: UsePrivySignIn
       };
       // GEO-3573: a code asked for on an earlier page is picked up by the first sign-in this page opens,
       // with its address filled back in, when that page is the same tab or the sign-in came from a link.
-      const recovery = callOptions?.prefillEmail ? null : takeCodeRecovery(own);
+      const recovery = callOptions?.prefillEmail || resuming ? null : takeCodeRecovery(own);
       const attempt = login(
         { ...(recovery?.properties ?? {}), ...own, ...(recovery ? codeRecoveryProperties(recovery) : {}) },
         { resume: optionsRef.current?.resumeAuthAttempt },
-        callOptions?.prefillEmail ?? recovery?.email ?? undefined
+        {
+          prefillEmail: callOptions?.prefillEmail ?? recovery?.email ?? undefined,
+          heading: optionsRef.current?.heading,
+          fallbackFor,
+        }
       );
       if (recovery) codeRecoveryOffered(recovery, attempt?.id);
-      // Registered with the app-level attempt rather than held here: this control can unmount
-      // while the modal is open, and the withdrawal must still happen (see `sign-in-abandoned`).
-      // After `login`, whose new attempt clears the previous one's.
-      if (callOptions?.onCancel) onSignInAbandoned(callOptions.onCancel);
+      // Held by the attempt, so it runs even after this control unmounts.
+      if (attempt && callOptions?.onCancel) continueAuthAttempt(attempt.id, { abandoned: callOptions.onCancel });
       return attempt;
     },
     [login, prepareOnboarding]

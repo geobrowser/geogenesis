@@ -28,8 +28,8 @@ function leave() {
 }
 
 function steps() {
-  return analytics.devLog.mock.calls
-    .filter(([label]) => label === '[auth_step]')
+  return analytics.capture.mock.calls
+    .filter(([event]) => event === 'auth_step')
     .map(([, props]) => props as Record<string, unknown>);
 }
 
@@ -396,13 +396,14 @@ describe('code step', () => {
     expect(steps().at(-1)).toMatchObject({ auth_step: 'left_code_screen', code_age_ms: 0 });
   });
 
-  // The collector rejects tagged events with no registry contract, so nothing goes out yet.
-  it('sends no step events until auth_step is registered', async () => {
+  it('sends steps as the registered auth_step, under growth-v2, never with the address', async () => {
     const { step } = await load();
     step.codeScreenShown('a@b.co');
     expect(steps()).toHaveLength(1);
+    expect(steps()[0]).toMatchObject({ auth_step: 'code_screen_shown', measurement_version: 'growth-v2' });
+    expect(Number.isInteger(steps()[0]?.code_age_ms)).toBe(true);
     expect(analytics.captureExperimental).not.toHaveBeenCalled();
-    expect(analytics.capture).not.toHaveBeenCalled();
+    expect(JSON.stringify(analytics.capture.mock.calls)).not.toContain('@');
   });
 
   it('forgets a code older than the window', async () => {
@@ -457,5 +458,75 @@ describe('code step', () => {
     const elsewhere = await loadNewTab();
     elsewhere.step.codeStepAttemptEnded({ ...other, id: 'elsewhere', outcome: 'signed_in' });
     expect(step.readPendingCode()).toBeNull();
+  });
+});
+
+// GEO-3550's payload rules: codes and counts only, integers, the code's age only with a code out.
+describe('sign-in steps', () => {
+  it('leaves out the code age before any code is sent, and splits by surface, method and returning', async () => {
+    localStorage.setItem('geo:signed-in-before:v1', '1');
+    const { step, attempts } = await load();
+    const attempt = attempts.beginAuthAttempt({ component: 'navbar', auth_trigger: 'control' });
+    attempts.tagAuthAttempt(attempt.id, { signInSurface: 'box' });
+    step.captureAuthStep('email_entered');
+    expect(steps().at(-1)).toMatchObject({
+      auth_step: 'email_entered',
+      auth_attempt_id: attempt.id,
+      sign_in_surface: 'box',
+      sign_in_method: 'email',
+      likely_returning: true,
+    });
+    expect(steps().at(-1)).not.toHaveProperty('code_age_ms');
+  });
+
+  it('times the send and gives later steps the code age', async () => {
+    vi.useFakeTimers({ now: 1_000_000, toFake: ['Date'] });
+    const { step, attempts } = await load();
+    attempts.beginAuthAttempt({ component: 'navbar' });
+    step.announceCodeEmail('ann@example.com');
+    vi.setSystemTime(1_001_234);
+    step.codeScreenShown(null);
+    expect(steps().at(-1)).toMatchObject({ auth_step: 'code_screen_shown', privy_wait_ms: 1234, code_age_ms: 0 });
+    vi.setSystemTime(1_004_000);
+    step.captureAuthStep('code_submitted');
+    const submitted = steps().at(-1)!;
+    expect(submitted.code_age_ms).toBe(2766);
+    expect(Number.isInteger(submitted.code_age_ms)).toBe(true);
+    expect(step.ownCodeAgeMs()).toBeGreaterThan(0);
+  });
+
+  it('puts no address in any step', async () => {
+    const { step, attempts } = await load();
+    attempts.beginAuthAttempt({ component: 'navbar' });
+    step.captureAuthStep('email_entered');
+    step.announceCodeEmail('ann@example.com');
+    step.codeScreenShown('ann@example.com');
+    for (const name of [
+      'code_send_failed',
+      'code_submitted',
+      'code_rejected',
+      'code_expired',
+      'code_resent',
+      'left_page',
+      'google_started',
+      'google_failed',
+    ] as const)
+      step.captureAuthStep(name, { auth_error: 'invalid_credentials' });
+    step.codeStepHidden();
+    step.codeStepVisible();
+    expect(steps().length).toBeGreaterThanOrEqual(12);
+    expect(JSON.stringify(steps())).not.toContain('@');
+  });
+});
+
+describe('authErrorCode', () => {
+  it("keeps Privy's code and never the message", async () => {
+    const { authErrorCode } = await import('./auth-step-switch');
+    expect(
+      authErrorCode(Object.assign(new Error('bad code for ann@example.com'), { privyErrorCode: 'invalid_credentials' }))
+    ).toBe('invalid_credentials');
+    expect(authErrorCode(new Error('ann@example.com was refused'))).toBe('unknown_error');
+    expect(authErrorCode({ privyErrorCode: 'ann@example.com' })).toBe('unknown_error');
+    expect(authErrorCode(undefined)).toBe('unknown_error');
   });
 });
