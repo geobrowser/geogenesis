@@ -4,11 +4,19 @@ import userEvent from '@testing-library/user-event';
 
 import * as React from 'react';
 
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { AvailabilityBlock } from '~/core/availability/blocks';
 
 import { AvailabilityModal } from './availability-modal';
+
+const mocks = vi.hoisted(() => ({ zone: 'Europe/Vilnius' }));
+
+// The test machine's own zone would otherwise decide what every test here sees.
+vi.mock('~/core/availability/blocks', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/availability/blocks')>()),
+  localTimezone: () => mocks.zone,
+}));
 
 const saved: AvailabilityBlock[] = [{ id: 'block-1', kind: 'recurring', weekday: 1, start: 540, end: 600 }];
 
@@ -93,5 +101,88 @@ describe('AvailabilityModal across openings', () => {
 
     expect(onSave).toHaveBeenCalledOnce();
     expect(onSave.mock.calls[0][0]).toEqual(saved);
+  });
+});
+
+describe('AvailabilityModal time zone (GEO-3582)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    // After both the US and the EU have left daylight saving: Los Angeles is 10 hours behind.
+    vi.setSystemTime(new Date('2026-11-04T12:00:00Z'));
+    mocks.zone = 'Europe/Vilnius';
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it('says which zone the hours are in', async () => {
+    render(<AvailabilityModal open onOpenChange={() => {}} blocks={saved} onSave={vi.fn()} />);
+
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('Times are in Eastern European Time (Vilnius).')).toBeInTheDocument();
+  });
+
+  it('leaves a schedule saved in the current zone as it is', async () => {
+    const onSave = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <AvailabilityModal open onOpenChange={() => {}} blocks={saved} savedTimezone="Europe/Vilnius" onSave={onSave} />
+    );
+
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('Times are in Eastern European Time (Vilnius).')).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'Save schedule' }));
+    expect(onSave.mock.calls[0][0]).toEqual(saved);
+  });
+
+  // Saved Tuesday 9–10am in Los Angeles, opened in Vilnius: the same hour is 7–8pm there, and
+  // saving without touching anything keeps it at that hour.
+  it('draws and saves a schedule from another zone at the same instants', async () => {
+    const onSave = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <AvailabilityModal
+        open
+        onOpenChange={() => {}}
+        blocks={saved}
+        savedTimezone="America/Los_Angeles"
+        onSave={onSave}
+      />
+    );
+
+    const dialog = await screen.findByRole('dialog');
+    expect(
+      within(dialog).getByText(
+        'Times are in Eastern European Time (Vilnius), converted from Pacific Time (Los Angeles) where you set them.'
+      )
+    ).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'Save schedule' }));
+    expect(onSave.mock.calls[0][0]).toEqual([
+      expect.objectContaining({ kind: 'recurring', weekday: 1, start: 19 * 60, end: 20 * 60 }),
+    ]);
+  });
+
+  // Save stamps whatever zone the browser is in at the time, so a grid still holding the old
+  // zone's hours would publish them an hour (or a day) off. Tokyo is 17 hours ahead of LA here.
+  it('redraws the grid in the new zone if the browser changes zone while it is open', async () => {
+    const onSave = vi.fn();
+    const user = userEvent.setup();
+    const props = {
+      open: true,
+      onOpenChange: () => {},
+      blocks: saved,
+      savedTimezone: 'America/Los_Angeles',
+      onSave,
+    };
+    const { rerender } = render(<AvailabilityModal {...props} />);
+    await screen.findByRole('dialog');
+
+    mocks.zone = 'Asia/Tokyo';
+    rerender(<AvailabilityModal {...props} />);
+
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByText(/^Times are in Japan Standard Time \(Tokyo\)/)).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'Save schedule' }));
+    expect(onSave.mock.calls[0][0]).toEqual([
+      expect.objectContaining({ kind: 'recurring', weekday: 2, start: 2 * 60, end: 3 * 60 }),
+    ]);
   });
 });

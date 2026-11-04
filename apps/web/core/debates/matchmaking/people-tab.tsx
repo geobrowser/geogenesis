@@ -1392,7 +1392,7 @@ export function SidePanelProfileName({
  */
 function SetAvailabilityNotice() {
   const [open, setOpen] = React.useState(false);
-  const { blocks, isError, error: scheduleError, refetch } = useDebateSchedule();
+  const { blocks, timezone, isError, error: scheduleError, refetch } = useDebateSchedule();
   const saveSchedule = useSaveDebateSchedule({ surface: 'people_tab' });
   const openerRef = React.useRef<HTMLElement | null>(null);
 
@@ -1416,6 +1416,7 @@ function SetAvailabilityNotice() {
         open={open}
         onOpenChange={setOpen}
         blocks={blocks}
+        savedTimezone={timezone}
         error={isError}
         errorMessage={accountSetupMessage(scheduleError)}
         onRetry={() => refetch()}
