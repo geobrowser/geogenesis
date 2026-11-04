@@ -80,6 +80,14 @@ const mocks = vi.hoisted(() => ({
 // The provider reads the account's live requests; the card only consumes what it hands down.
 vi.mock('./hub-ask-context', () => ({ useHubAsk: () => mocks.hubAsk }));
 
+const trending = vi.hoisted(() => ({ value: false, askedFor: [] as (string | null | undefined)[] }));
+vi.mock('../todays-claims/trending', () => ({
+  useIsTrending: (entityId: string | null | undefined) => {
+    trending.askedFor.push(entityId);
+    return entityId ? trending.value : false;
+  },
+}));
+
 vi.mock('../watch-live', () => ({
   get WATCH_LIVE_ENABLED() {
     return mocks.watchLive;
@@ -289,6 +297,8 @@ function renderCard(card: ReactElement, { smartAccount }: { smartAccount?: objec
 
 beforeEach(() => {
   mocks.hubAsk = undefined;
+  trending.value = false;
+  trending.askedFor = [];
   mocks.watchLive = true;
   // The disabled-state tooltip uses Radix positioning, which observes its content in the browser.
   vi.stubGlobal(
@@ -1274,6 +1284,22 @@ describe('replaying a queued side with no card on screen', () => {
 });
 
 describe('MatchmakingClaimCard', () => {
+  it('flags a claim on a current agenda as Trending beside the space (GEO-3497)', () => {
+    trending.value = true;
+    renderCard(<MatchmakingClaimCard claim={claim} positions={positions} readiness={readiness()} />);
+
+    expect(within(screen.getByTestId('claim-card-eyebrow')).getByText('Trending')).toBeInTheDocument();
+    expect(trending.askedFor).toContain(CLAIM_ENTITY_ID);
+  });
+
+  it("leaves the Trending tag off inside Today's claims, without asking for it", () => {
+    trending.value = true;
+    renderCard(<MatchmakingClaimCard claim={claim} positions={positions} readiness={readiness()} hideTrending />);
+
+    expect(screen.queryByText('Trending')).toBeNull();
+    expect(trending.askedFor.every(id => !id)).toBe(true);
+  });
+
   it('keeps faces by default and lets the picker hide them without changing the viewer’s vote', () => {
     const heldPositions = positions.map(side => ({ ...side, participants: [participant(`holder-${side.position}`)] }));
     const { unmount } = renderCard(

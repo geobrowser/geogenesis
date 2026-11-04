@@ -55,6 +55,16 @@ const mocks = vi.hoisted(() => ({
   negative: 0,
   commentCount: 0,
   notifyClaimResponseIndexed: vi.fn(),
+  trending: false,
+  /** Every `enabled` the Trending read was asked for. */
+  trendingEnabledCalls: [] as boolean[],
+}));
+
+vi.mock('~/core/debates/todays-claims/trending', () => ({
+  useIsTrending: (_id: string, enabled: boolean) => {
+    mocks.trendingEnabledCalls.push(enabled);
+    return mocks.trending;
+  },
 }));
 
 vi.mock('~/core/hooks/use-comment-count', () => ({
@@ -273,6 +283,8 @@ beforeEach(() => {
   mocks.negative = 0;
   mocks.commentCount = 0;
   mocks.notifyClaimResponseIndexed.mockClear();
+  mocks.trending = false;
+  mocks.trendingEnabledCalls = [];
 
   class MockIntersectionObserver implements IntersectionObserver {
     readonly root = null;
@@ -610,5 +622,27 @@ describe('ClaimExploreFeedCard', () => {
     // Beside the space chip, which is what the meta row is for — not a second voice in the split.
     const metaRow = screen.getByText('Global Politics').closest('div') as HTMLElement;
     expect(metaRow.textContent).toContain('Controversial');
+  });
+
+  it('flags an agenda claim as Trending beside Controversial when it is both (GEO-3497)', () => {
+    mocks.positive = 6;
+    mocks.negative = 6;
+    mocks.trending = true;
+    render(<ClaimExploreFeedCard item={item} />);
+    scrollIntoRange();
+
+    const metaRow = screen.getByText('Global Politics').closest('div') as HTMLElement;
+    expect(metaRow.textContent).toContain('Controversial');
+    expect(metaRow.textContent).toContain('Trending');
+    expect(metaRow.textContent!.indexOf('Controversial')).toBeLessThan(metaRow.textContent!.indexOf('Trending'));
+  });
+
+  it('shows no Trending tag off an agenda, and waits for the card to near the viewport to ask', () => {
+    render(<ClaimExploreFeedCard item={item} />);
+
+    expect(mocks.trendingEnabledCalls.every(enabled => !enabled)).toBe(true);
+    scrollIntoRange();
+    expect(mocks.trendingEnabledCalls.at(-1)).toBe(true);
+    expect(screen.queryByText('Trending')).toBeNull();
   });
 });
