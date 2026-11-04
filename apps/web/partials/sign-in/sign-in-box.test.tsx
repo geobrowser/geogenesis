@@ -21,8 +21,14 @@ const mocks = vi.hoisted(() => ({
   authenticated: false,
   isModalOpen: false,
   accountSteps: [] as { email: string; analytics: unknown }[],
-  googleSignIn: undefined as undefined | ((properties: Record<string, unknown>) => Promise<void>),
+  googleSignIn: undefined as undefined | ((properties: Record<string, unknown>, surface?: string) => Promise<void>),
   startAnalyticsSoon: vi.fn(),
+  steps: [] as { step: string; extra: Record<string, unknown> }[],
+}));
+
+vi.mock('~/core/auth/code-step', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/auth/code-step')>()),
+  captureAuthStep: (step: string, extra: Record<string, unknown> = {}) => mocks.steps.push({ step, extra }),
 }));
 
 vi.mock('~/core/analytics', async importOriginal => ({
@@ -83,6 +89,7 @@ beforeEach(() => {
   mocks.accountSteps = [];
   mocks.googleSignIn = undefined;
   mocks.startAnalyticsSoon.mockReset();
+  mocks.steps = [];
   localStorage.clear();
   sessionStorage.clear();
   resetAuthAttempt();
@@ -163,6 +170,27 @@ describe('SignInBox', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
+  it('reports leaving the page with the box open, and at which step', () => {
+    render(<SignInBoxHost />);
+    open();
+    act(() => void window.dispatchEvent(new Event('pagehide')));
+    typeEmail('ann@example.com');
+    fireEvent.click(screen.getByRole('button', { name: SIGN_IN_BOX_COPY.submit }));
+    act(() => void window.dispatchEvent(new Event('pagehide')));
+    expect(mocks.steps).toEqual([
+      { step: 'left_page', extra: { box_phase: 'email' } },
+      { step: 'left_page', extra: { box_phase: 'code' } },
+    ]);
+  });
+
+  it('reports no leaving once its attempt has ended', () => {
+    render(<SignInBoxHost />);
+    const { attempt } = open();
+    act(() => void finishAuthAttempt('superseded', readAuthAttempt(attempt.id)));
+    act(() => void window.dispatchEvent(new Event('pagehide')));
+    expect(mocks.steps).toEqual([]);
+  });
+
   it('withdraws the press when closed', () => {
     render(<SignInBoxHost />);
     const { request } = open();
@@ -211,7 +239,10 @@ describe('SignInBox', () => {
     render(<SignInBoxHost />);
     const { request } = open();
     fireEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
-    expect(mocks.googleSignIn).toHaveBeenCalledWith({ ...request.attribution, auth_control: 'continue_with_google' });
+    expect(mocks.googleSignIn).toHaveBeenCalledWith(
+      { ...request.attribution, auth_control: 'continue_with_google' },
+      'box'
+    );
     // A starting redirect cannot be withdrawn.
     fireEvent.click(screen.getByRole('button', { name: SIGN_IN_BOX_COPY.close }));
     expect(request.onDismiss).not.toHaveBeenCalled();

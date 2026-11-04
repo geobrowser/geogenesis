@@ -4,8 +4,15 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import { currentAuthAttempt, openAuthAttempt } from '~/core/auth-attempt';
-import { announceCodeEmail, forgetAnnouncedCodeEmail } from '~/core/auth/code-step';
+import { currentAuthAttempt, openAuthAttempt, tagAuthAttempt } from '~/core/auth-attempt';
+import { type SignInSurface, authErrorCode } from '~/core/auth/auth-step-switch';
+import {
+  CODE_LIFETIME_MS,
+  announceCodeEmail,
+  captureAuthStep,
+  forgetAnnouncedCodeEmail,
+  ownCodeAgeMs,
+} from '~/core/auth/code-step';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { beginPrivyAuth, completePrivyAuth } from '~/core/privy-auth-events';
 import { isPrivyLoaded, useLoginWithEmail } from '~/core/wallet/auth-hooks';
@@ -17,6 +24,9 @@ export const SIGN_IN_UNAVAILABLE_COPY = 'Couldn’t reach sign-in. Try again.';
 
 /** Privy's OTP is six digits. */
 const CODE_LENGTH = 6;
+
+/** Privy's tries per code. */
+const TRIES_PER_CODE = 5;
 
 /** The muted line under the boxes: the resend link, or the verification under way. */
 const NOTE_CLASS = 'mt-2 text-[14px] tracking-[-0.35px] text-[rgba(21,21,21,0.7)]';
@@ -100,8 +110,11 @@ export function AccountStep({
   classes,
   onChangeEmail,
   onSignInUnavailable,
+  surface = 'email_capture',
 }: {
   email: string;
+  /** The sign-in UI hosting the step (GEO-3550). */
+  surface?: Exclude<SignInSurface, 'privy_modal'>;
   onGiveUp: () => void;
   /** Privy never loaded, so its dialog can't stand in: the host offers the address again. */
   onSignInUnavailable?: () => void;
@@ -130,6 +143,8 @@ export function AccountStep({
   // The same, for the attribution: a host can build it per render, and it must not re-send the code.
   const analyticsRef = React.useRef(analytics);
   analyticsRef.current = analytics;
+  const surfaceRef = React.useRef(surface);
+  surfaceRef.current = surface;
   // Keep the modal fallback's UI error handler with the card; its analytics attribution is
   // snapshotted by usePrivySignIn and survives the card disappearing after authentication.
   const openPrivyModal = usePrivySignIn(undefined, {
@@ -168,16 +183,27 @@ export function AccountStep({
   // and in the error state, repeated presses fired again before Privy's state had left `error`.
   const [sending, setSending] = React.useState(false);
 
+  // GEO-3550 counts: codes sent after the first, and wrong tries on the current code.
+  const sendsRef = React.useRef(0);
+  const rejectionsRef = React.useRef(0);
+
   const requestCode = React.useCallback(async () => {
     setSending(true);
     setCode('');
+    sendsRef.current += 1;
+    rejectionsRef.current = 0;
+    if (sendsRef.current === 1) captureAuthStep('email_entered');
+    else captureAuthStep('code_resent', { code_resends: sendsRef.current - 1 });
     try {
       // Privy's flow state does not carry the address; the code-step tracker needs it for a reload.
       announceCodeEmail(email);
       await sendCodeRef.current({ email });
-    } catch {
+    } catch (error) {
       // The dialog it falls back to may be sent to a different address.
       forgetAnnouncedCodeEmail();
+      const authError = authErrorCode(error);
+      tagAuthAttempt(currentAuthAttempt()?.id, { lastAuthError: authError });
+      captureAuthStep('code_send_failed', { auth_error: authError });
       if (!mountedRef.current) return;
       // Privy's dialog needs the same Privy, so it would never appear.
       if (!isPrivyLoaded() && unavailableRef.current) return unavailableRef.current();
@@ -206,18 +232,34 @@ export function AccountStep({
     if (!attempt || attempt.endedAt || attempt.properties.component !== attribution.component)
       beginPrivyAuth(attribution, { resume: true });
     openAuthAttempt(attribution);
+    tagAuthAttempt(currentAuthAttempt()?.id, { signInSurface: surfaceRef.current, signInMethod: 'email' });
     void requestCode();
   }, [requestCode]);
 
   const submitCode = React.useCallback(
     async (value: string) => {
       if (value.length !== CODE_LENGTH) return;
+      captureAuthStep('code_submitted');
       try {
         await loginWithCode({ code: value });
         // Nothing to do on success. `authenticated` flips, the guard in the parent unmounts this,
         // and onboarding picks up a new account with no profile on its own.
-      } catch {
+      } catch (error) {
         // Privy puts the reason in `otpState`, which the markup below reads.
+        const authError = authErrorCode(error);
+        tagAuthAttempt(currentAuthAttempt()?.id, { lastAuthError: authError });
+        // Privy reports a wrong code and an expired one alike.
+        const age = ownCodeAgeMs();
+        if (age !== null && age >= CODE_LIFETIME_MS) {
+          captureAuthStep('code_expired', { auth_error: authError });
+          return;
+        }
+        rejectionsRef.current += 1;
+        captureAuthStep('code_rejected', {
+          auth_error: authError,
+          code_rejections: rejectionsRef.current,
+          attempts_exhausted: rejectionsRef.current >= TRIES_PER_CODE,
+        });
       }
     },
     [loginWithCode]

@@ -49,7 +49,7 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams(''),
 }));
 
-vi.mock('~/core/auth-attempt', () => ({ currentAuthAttempt: () => ({ id: undefined }) }));
+vi.mock('~/core/auth-attempt', () => ({ currentAuthAttempt: () => ({ id: undefined }), tagAuthAttempt: vi.fn() }));
 
 vi.mock('~/core/privy-auth-events', () => ({ beginPrivyAuth: mocks.beginPrivyAuth }));
 

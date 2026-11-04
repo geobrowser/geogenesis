@@ -19,12 +19,18 @@ const mocks = vi.hoisted(() => ({
   failRedirectedPrivyAuth: vi.fn(),
   attemptId: undefined as string | undefined,
   cancelPrivyAuth: vi.fn(),
+  steps: [] as { step: string; extra: Record<string, unknown> }[],
+  tags: [] as { id: string | undefined; tags: Record<string, unknown> }[],
 }));
 
 vi.mock('~/core/wallet/auth-hooks', () => ({ useLoginWithOAuth: mocks.useLoginWithOAuth }));
 vi.mock('~/core/hooks/use-prepare-onboarding', () => ({ usePrepareOnboarding: () => vi.fn() }));
 vi.mock('~/core/auth-attempt', () => ({
   currentAuthAttempt: () => (mocks.attemptId ? { id: mocks.attemptId } : undefined),
+  tagAuthAttempt: (id: string | undefined, tags: Record<string, unknown>) => mocks.tags.push({ id, tags }),
+}));
+vi.mock('~/core/auth/code-step', () => ({
+  captureAuthStep: (step: string, extra: Record<string, unknown> = {}) => mocks.steps.push({ step, extra }),
 }));
 vi.mock('~/core/hooks/use-toast', () => ({ useSetToast: () => mocks.setToast }));
 vi.mock('~/core/privy-auth-events', () => ({
@@ -60,6 +66,8 @@ function renderHost(flag: boolean) {
 beforeEach(() => {
   mocks.state = { status: 'initial' };
   mocks.attemptId = 'attempt-a';
+  mocks.steps = [];
+  mocks.tags = [];
   mocks.useLoginWithOAuth.mockImplementation(() => ({ initOAuth: mocks.initOAuth, state: mocks.state }));
 });
 
@@ -176,5 +184,35 @@ describe('a failed Google start', () => {
       await failed;
     });
     expect(mocks.cancelPrivyAuth).toHaveBeenCalledTimes(currentId === 'attempt-a' ? 1 : 0);
+  });
+});
+
+describe('Google sign-in steps (GEO-3550)', () => {
+  it('reports the start under its surface, and a rejected start by its code only', async () => {
+    mocks.attemptId = 'attempt-a';
+    mocks.initOAuth.mockRejectedValueOnce(
+      Object.assign(new Error('popup blocked for ann@example.com'), { privyErrorCode: 'oauth_init_failed' })
+    );
+    const host = renderHost(true);
+    const { result } = renderHook(() => useGoogleOAuthSignIn(), {
+      wrapper: ({ children }) => <Provider store={host.store}>{children}</Provider>,
+    });
+    await act(() => expect(result.current!({}, 'box')).rejects.toThrow());
+    expect(mocks.tags[0]).toEqual({ id: 'attempt-a', tags: { signInMethod: 'google', signInSurface: 'box' } });
+    expect(mocks.steps).toEqual([
+      { step: 'google_started', extra: { sign_in_method: 'google' } },
+      { step: 'google_failed', extra: { sign_in_method: 'google', auth_error: 'oauth_init_failed' } },
+    ]);
+    expect(JSON.stringify(mocks.steps)).not.toContain('@');
+  });
+
+  it('reports a failed return to the attempt it returned to', () => {
+    mocks.attemptId = 'returned';
+    window.history.replaceState({}, '', RETURN_URL);
+    const host = renderHost(true);
+    host.setState({ status: 'error', error: new Error('denied') });
+    expect(mocks.steps).toEqual([
+      { step: 'google_failed', extra: { sign_in_method: 'google', auth_error: 'unknown_error' } },
+    ]);
   });
 });

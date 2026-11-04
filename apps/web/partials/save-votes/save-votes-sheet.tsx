@@ -106,6 +106,7 @@ export function SaveVotesSheet() {
     centered: boolean;
     reason: SaveVotesPromptReason | null;
     phase: 'code' | 'editing';
+    attemptId?: string;
   } | null>(null);
   const codeEmail = attempt?.phase === 'code' ? attempt.email : null;
   const editing = attempt?.phase === 'editing';
@@ -218,9 +219,15 @@ export function SaveVotesSheet() {
     event.preventDefault();
     if (!canSend || isGoogleSignInStarting()) return;
     setUnavailable(false);
-    beginPrivyAuth(signInProperties);
+    const begun = beginPrivyAuth(signInProperties);
     prepareOnboarding();
-    setAttempt({ email: trimmedEmail, centered, reason: attempt ? attempt.reason : reason, phase: 'code' });
+    setAttempt({
+      email: trimmedEmail,
+      centered,
+      reason: attempt ? attempt.reason : reason,
+      phase: 'code',
+      attemptId: begun?.id,
+    });
   };
 
   if (!open) return null;
@@ -273,12 +280,17 @@ export function SaveVotesSheet() {
       // The attempt is persisted before the redirect, so the saver still reads it as a save on
       // the return and publishes the votes, which wait on the device the whole time.
       onGoogle={() =>
-        void google?.start(saveVotesSignInProperties('continue_with_google', count, attempt ? attempt.reason : reason))
+        void google?.start(
+          saveVotesSignInProperties('continue_with_google', count, attempt ? attempt.reason : reason),
+          'save_votes'
+        )
       }
       finePrint={SAVE_VOTES_FINE_PRINT}
       analytics={signInProperties}
       error={unavailable ? SIGN_IN_UNAVAILABLE_COPY : null}
       onSignInUnavailable={signInUnavailable}
+      surface="save_votes"
+      attemptId={attempt?.attemptId}
     />
   );
 

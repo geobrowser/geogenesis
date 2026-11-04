@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 
 import { type AnalyticsProperties } from '~/core/analytics';
+import { type SignInSurface } from '~/core/auth/auth-step-switch';
 import { useGoogleOAuthSignIn } from '~/core/auth/google-oauth';
 
 import { GoogleMark } from '~/design-system/icons/google-mark';
@@ -49,7 +50,7 @@ export function useContinueWithGoogle() {
     };
   }, []);
   const start = useCallback(
-    async (properties: AnalyticsProperties) => {
+    async (properties: AnalyticsProperties, surface?: SignInSurface) => {
       if (!signIn || isGoogleSignInStarting()) return;
       const request = Symbol();
       currentStart = { id: request, pending: true };
@@ -57,7 +58,7 @@ export function useContinueWithGoogle() {
       emit();
       try {
         // Redirects away on success, so nothing after this runs.
-        await signIn(properties);
+        await signIn(properties, surface);
       } catch {
         if (currentStart?.id !== request) return;
         currentStart = { id: request, pending: false };

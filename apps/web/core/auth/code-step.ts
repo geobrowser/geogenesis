@@ -6,8 +6,10 @@ import {
   attemptProperties,
   captureAuthEvent,
   currentAuthAttempt,
+  funnelProperties,
   isSignedInOutcome,
 } from '~/core/auth-attempt';
+import { SEND_AUTH_STEP } from '~/core/auth/auth-step-switch';
 import { devLog } from '~/core/utils/dev-log';
 
 // GEO-3573. Kept in localStorage for ten minutes: Privy's `loginWithCode` only works in the document
@@ -34,14 +36,25 @@ const LINK_TRIGGERS = new Set(['deep_link', 'invite_link']);
 
 export const AUTH_STEP_EVENT = 'experimental.auth_step';
 
-/**
- * Off until the analytics registry's `auth_step` contract is deployed: the collector rejects a
- * growth-v2 event it has no contract for, failing its batch. Until then the payload is only logged.
- */
-const SEND_AUTH_STEP = false;
+/** How long a Privy code works. A rejection after this is reported as expired. */
+export const CODE_LIFETIME_MS = 10 * 60 * 1000;
 
 export type AuthStep =
-  'code_screen_shown' | 'left_code_screen' | 'returned_to_code_screen' | 'recovery_offered' | 'finished';
+  | 'code_screen_shown'
+  | 'left_code_screen'
+  | 'returned_to_code_screen'
+  | 'recovery_offered'
+  | 'finished'
+  // GEO-3550
+  | 'email_entered'
+  | 'code_send_failed'
+  | 'code_submitted'
+  | 'code_rejected'
+  | 'code_expired'
+  | 'code_resent'
+  | 'left_page'
+  | 'google_started'
+  | 'google_failed';
 
 export type PendingCode = {
   /** The attempt the code was sent for. */
@@ -317,14 +330,18 @@ export function landedOnModalLink() {
 
 /** The address the headless step is about to send to; Privy's own dialog is read from its field. */
 let announcedEmail: string | null = null;
+/** When that send started, for `privy_wait_ms`. */
+let announcedAt: number | null = null;
 
 export function announceCodeEmail(email: string) {
   announcedEmail = normalize(email);
+  announcedAt = Date.now();
 }
 
 /** The announced send failed; whatever is sent next reads its own address. */
 export function forgetAnnouncedCodeEmail() {
   announcedEmail = null;
+  announcedAt = null;
 }
 
 function normalize(value: unknown) {
@@ -360,26 +377,48 @@ function write(value: PendingCode | null) {
   }
 }
 
-function capture(step: AuthStep, pending: PendingCode, extra: AnalyticsProperties = {}) {
+function capture(step: AuthStep, pending: PendingCode | null, extra: AnalyticsProperties = {}) {
   const attempt = currentAuthAttempt();
   const payload: AnalyticsProperties = {
-    ...pending.properties,
-    ...(attempt ? attemptProperties(attempt) : {}),
+    ...pending?.properties,
+    ...(attempt ? { ...attemptProperties(attempt), ...funnelProperties(attempt) } : {}),
+    sign_in_method: 'email',
     auth_step: step,
-    code_attempt_id: pending.attemptId ?? null,
-    // The registry rejects a negative or fractional age; a clock set back can produce one.
-    code_age_ms: Math.max(0, Math.round(Date.now() - pending.sentAt)),
+    ...(pending
+      ? {
+          code_attempt_id: pending.attemptId ?? null,
+          // The registry rejects a negative or fractional age; a clock set back can produce one.
+          code_age_ms: Math.max(0, Math.round(Date.now() - pending.sentAt)),
+        }
+      : {}),
     ...extra,
   };
   if (SEND_AUTH_STEP) captureAuthEvent(AUTH_STEP_EVENT, payload);
   else devLog('[auth_step]', payload);
 }
 
+/**
+ * A step of our own sign-in UI (GEO-3550). Carries the code's age while this document's code is out;
+ * `extra` holds only codes and counts, never an address or an error message.
+ */
+export function captureAuthStep(step: AuthStep, extra: AnalyticsProperties = {}) {
+  const pending = readPendingCode();
+  capture(step, ownCode(pending) ? pending : null, extra);
+}
+
+/** Ms since this document's code went out, or null with none outstanding. */
+export function ownCodeAgeMs(now = Date.now()): number | null {
+  const pending = readPendingCode(now);
+  return ownCode(pending) ? Math.max(0, now - pending.sentAt) : null;
+}
+
 /** Privy reports the code sent. `fieldEmail` is what its dialog's address field held, if any. */
 export function codeScreenShown(fieldEmail?: string | null) {
   const attempt = currentAuthAttempt();
   const email = announcedEmail ?? normalize(fieldEmail);
+  const privyWaitMs = announcedAt === null ? null : Math.max(0, Math.round(Date.now() - announcedAt));
   announcedEmail = null;
+  announcedAt = null;
   setNotice(null);
   void locked(() => {
     const previous = readPendingCode();
@@ -401,7 +440,10 @@ export function codeScreenShown(fieldEmail?: string | null) {
     };
     write(pending);
     clearGoneMarks();
-    capture('code_screen_shown', pending, { recovered: recovering });
+    capture('code_screen_shown', pending, {
+      recovered: recovering,
+      ...(privyWaitMs !== null ? { privy_wait_ms: privyWaitMs } : {}),
+    });
   });
 }
 
@@ -554,6 +596,7 @@ export function codeStepAttemptEnded(attempt: AuthAttempt) {
 /** Signed in or out: nothing is left to pick up. */
 export function clearCodeStep() {
   announcedEmail = null;
+  announcedAt = null;
   setNotice(null);
   void locked(() => write(null));
 }

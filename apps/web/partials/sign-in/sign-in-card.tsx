@@ -6,6 +6,8 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { currentAuthAttempt } from '~/core/auth-attempt';
+import { captureAuthStep } from '~/core/auth/code-step';
 import { ContinueWithGoogleButton, type useContinueWithGoogle } from '~/core/auth/continue-with-google';
 import { Z_LAYER_CLASS } from '~/core/z-layers';
 
@@ -34,6 +36,23 @@ import {
 export type SignInCardLabels = { back: string; dismiss: string; form: string; verification: string };
 
 /** The save-votes card (GEO-3439): email step or code step (`AccountStep` mails the code on mount). The host owns the state. */
+/** Reports the visitor leaving the page with this sign-in still open. */
+function useLeftPageStep(attemptId: string | undefined, phase: 'email' | 'code') {
+  const phaseRef = React.useRef(phase);
+  phaseRef.current = phase;
+  React.useEffect(() => {
+    if (!attemptId) return;
+    const onPageHide = () => {
+      const attempt = currentAuthAttempt();
+      if (attempt?.id !== attemptId || attempt.endedAt) return;
+      captureAuthStep('left_page', { box_phase: phaseRef.current });
+    };
+    // Capture phase: queued before the analytics runtime's own `pagehide` flush.
+    window.addEventListener('pagehide', onPageHide, { capture: true });
+    return () => window.removeEventListener('pagehide', onPageHide, { capture: true });
+  }, [attemptId]);
+}
+
 export function SignInCard({
   compact,
   codeEmail,
@@ -55,6 +74,8 @@ export function SignInCard({
   analytics,
   error,
   onSignInUnavailable,
+  surface,
+  attemptId,
 }: {
   compact: boolean;
   /** The address a code went to while the code step is up; null on the email step. */
@@ -82,7 +103,11 @@ export function SignInCard({
   error?: string | null;
   /** The code step could not reach Privy; see `AccountStep`. */
   onSignInUnavailable?: () => void;
+  surface: 'box' | 'save_votes';
+  /** The sign-in in progress, once there is one: leaving the page reports it (GEO-3550). */
+  attemptId?: string;
 }) {
+  useLeftPageStep(attemptId, codeEmail !== null ? 'code' : 'email');
   return (
     <div className={bodyClass(compact)}>
       <div className={TOP_BAR_CLASS}>
@@ -127,6 +152,7 @@ export function SignInCard({
             classes={codeStepClasses(compact)}
             onChangeEmail={onChangeEmail}
             onSignInUnavailable={onSignInUnavailable}
+            surface={surface}
           />
         </div>
       ) : (

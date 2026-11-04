@@ -5,7 +5,7 @@ import { useCallback, useRef } from 'react';
 import { type ActionContext, withActionContext } from '~/core/action-context';
 import { useActionContext, useActionScope } from '~/core/action-context-provider';
 import { type AnalyticsProperties } from '~/core/analytics';
-import { currentAuthAttempt } from '~/core/auth-attempt';
+import { currentAuthAttempt, tagAuthAttempt } from '~/core/auth-attempt';
 import { useGoogleSignInOptions } from '~/core/auth/google-sign-in';
 import { openSignInBox } from '~/core/auth/sign-in-box/sign-in-box-store';
 import { beginPrivyAuth, cancelPrivyAuth } from '~/core/privy-auth-events';
@@ -81,6 +81,7 @@ export function useTrackedLogin(params: TrackedLoginParams) {
       requested.current = { ...context, auth_attempt_id: attempt?.id };
       const prefillEmail = extras?.prefillEmail;
       if (attempt && extras?.surface !== 'privy' && readStoredFeatureFlag('ourSignInBox')) {
+        tagAuthAttempt(attempt.id, { signInSurface: 'box' });
         openSignInBox({
           attemptId: attempt.id,
           attribution: { ...attempt.properties, component: String(attempt.properties.component) },
@@ -94,6 +95,7 @@ export function useTrackedLogin(params: TrackedLoginParams) {
         });
         return attempt;
       }
+      tagAuthAttempt(attempt?.id, { signInSurface: 'privy_modal' });
       const prefill = prefillEmail ? { prefill: { type: 'email' as const, value: prefillEmail } } : undefined;
       // No argument with neither, so Privy's modal keeps the config's methods.
       if (googleSignInOptions || prefill) login({ ...googleSignInOptions, ...prefill });

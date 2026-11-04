@@ -11,7 +11,9 @@ import {
   finishAuthAttempt,
   recoverAuthAttempt,
   resetAuthAttempt,
+  tagAuthAttempt,
 } from './auth-attempt';
+import { signInMethodOf } from './auth/auth-step-switch';
 import { clearSignInAbandoned, runSignInAbandoned } from './auth/sign-in-abandoned';
 import { markSignedInBefore } from './auth/signed-in-before';
 import { beginSignupVisitor, clearSignupVisitor, createdSince, signupVisitorProperties } from './auth/signup-visitor';
@@ -103,6 +105,11 @@ export function completePrivyAuth(params: Completion, properties?: AnalyticsProp
   }
   if (params.isNewUser) signedUpUserIds.add(params.user.id);
   const active = attempt && !attempt.endedAt ? attempt : recoverAuthAttempt(properties);
+  const method = signInMethodOf(params.loginMethod);
+  if (method) {
+    active.signInMethod = method;
+    tagAuthAttempt(active.id, { signInMethod: method });
+  }
   const attribution = attemptProperties(active);
   const visitor = params.isNewUser ? signupVisitorProperties() : {};
   clearSignupVisitor();

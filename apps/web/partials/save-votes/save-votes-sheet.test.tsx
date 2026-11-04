@@ -497,12 +497,15 @@ describe('SaveVotesSheet', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
       });
 
-      expect(googleSignIn).toHaveBeenCalledWith({
-        component: 'save_votes_prompt',
-        auth_control: 'continue_with_google',
-        local_vote_count: 2,
-        prompt_reason: 'threshold',
-      });
+      expect(googleSignIn).toHaveBeenCalledWith(
+        {
+          component: 'save_votes_prompt',
+          auth_control: 'continue_with_google',
+          local_vote_count: 2,
+          prompt_reason: 'threshold',
+        },
+        'save_votes'
+      );
       // Google's own sign-in starts the attempt; the email path's is not started as well.
       expect(mocks.beginPrivyAuth).not.toHaveBeenCalled();
     });

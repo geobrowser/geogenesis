@@ -32,9 +32,9 @@ describe('useContinueWithGoogle', () => {
     mocks.signIn = signIn;
     const { result } = renderHook(() => useContinueWithGoogle());
 
-    act(() => void result.current!.start({ component: 'save_votes_prompt' }));
+    act(() => void result.current!.start({ component: 'save_votes_prompt' }, 'save_votes'));
 
-    expect(signIn).toHaveBeenCalledWith({ component: 'save_votes_prompt' });
+    expect(signIn).toHaveBeenCalledWith({ component: 'save_votes_prompt' }, 'save_votes');
     expect(result.current!.status).toBe('starting');
   });
 
@@ -91,7 +91,7 @@ describe('useContinueWithGoogle', () => {
       void popup.result.current!.start({ component: 'explore_email_capture' });
     });
 
-    expect(mocks.signIn).toHaveBeenCalledExactlyOnceWith({ component: 'save_votes_prompt' });
+    expect(mocks.signIn).toHaveBeenCalledExactlyOnceWith({ component: 'save_votes_prompt' }, undefined);
     expect(sheet.result.current!.status).toBe('starting');
     expect(popup.result.current!.status).toBe('starting');
   });

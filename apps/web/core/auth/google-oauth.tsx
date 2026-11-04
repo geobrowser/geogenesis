@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { type AnalyticsProperties } from '~/core/analytics';
-import { currentAuthAttempt } from '~/core/auth-attempt';
+import { currentAuthAttempt, tagAuthAttempt } from '~/core/auth-attempt';
+import { type SignInSurface, authErrorCode } from '~/core/auth/auth-step-switch';
+import { captureAuthStep } from '~/core/auth/code-step';
 import { useGoogleSignInEnabled, useGoogleSignInOffered } from '~/core/auth/google-sign-in';
 import { usePrepareOnboarding } from '~/core/hooks/use-prepare-onboarding';
 import { useSetToast } from '~/core/hooks/use-toast';
@@ -48,9 +50,15 @@ function GoogleOAuthCompleter() {
   useEffect(() => {
     if (!isReturn || settled.current || state.status !== 'error') return;
     settled.current = true;
-    if (returnAttemptId) failRedirectedPrivyAuth(returnAttemptId);
+    if (returnAttemptId) {
+      const authError = authErrorCode(state.error);
+      tagAuthAttempt(returnAttemptId, { lastAuthError: authError });
+      if (currentAuthAttempt()?.id === returnAttemptId)
+        captureAuthStep('google_failed', { sign_in_method: 'google', auth_error: authError });
+      failRedirectedPrivyAuth(returnAttemptId);
+    }
     setToast(<>Google sign-in didn't complete. Try again.</>);
-  }, [isReturn, returnAttemptId, state.status, setToast]);
+  }, [isReturn, returnAttemptId, state.status, state.error, setToast]);
   return null;
 }
 
@@ -62,15 +70,22 @@ export function useGoogleOAuthSignIn() {
   const offered = useGoogleSignInOffered();
   const prepareOnboarding = usePrepareOnboarding();
   const signIn = useCallback(
-    async (properties: AnalyticsProperties) => {
+    async (properties: AnalyticsProperties, surface?: SignInSurface) => {
       prepareOnboarding();
       const attempt = beginPrivyAuth(properties);
+      tagAuthAttempt(attempt.id, { signInMethod: 'google', ...(surface ? { signInSurface: surface } : {}) });
+      captureAuthStep('google_started', { sign_in_method: 'google' });
       try {
         if (!initGoogleOAuth) throw new Error('Google sign-in is not mounted');
         await initGoogleOAuth();
       } catch (error) {
         // A newer email or Google sign-in may have replaced this request while it was starting.
-        if (currentAuthAttempt()?.id === attempt.id) cancelPrivyAuth();
+        if (currentAuthAttempt()?.id === attempt.id) {
+          const authError = authErrorCode(error);
+          tagAuthAttempt(attempt.id, { lastAuthError: authError });
+          captureAuthStep('google_failed', { sign_in_method: 'google', auth_error: authError });
+          cancelPrivyAuth();
+        }
         throw error;
       }
     },

@@ -408,7 +408,12 @@ function EmailCapturePopup() {
                   {google ? (
                     <ContinueWithGoogleButton
                       status={google.status}
-                      onClick={() => void google.start({ ...ACCOUNT_ANALYTICS, auth_control: 'continue_with_google' })}
+                      onClick={() =>
+                        void google.start(
+                          { ...ACCOUNT_ANALYTICS, auth_control: 'continue_with_google' },
+                          'email_capture'
+                        )
+                      }
                       className={GOOGLE_BUTTON_CLASS}
                     />
                   ) : null}
