@@ -95,11 +95,8 @@ function navigationType(): string | null {
   }
 }
 
-/**
- * sessionStorage is copied into a tab opened by this one and into a duplicated tab, so a stored id
- * is kept only on a reload or history load of a page no other page opened. A duplicate also reports
- * a history load; that case is caught by `tabChecked`.
- */
+// sessionStorage is copied into opened and duplicated tabs: the stored id is kept only on a reload or
+// history load no other page opened. Duplicates also report a history load; `tabChecked` catches them.
 function inheritsTabId() {
   if (window.opener) return false;
   const type = navigationType();
