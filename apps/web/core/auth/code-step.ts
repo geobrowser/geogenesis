@@ -81,21 +81,57 @@ function newId() {
 
 const DOCUMENT_ID = newId();
 
-const TAB_ID: string | null = (() => {
+/** A frame shares its parent's sessionStorage, so it can't tell its tab apart; it never recovers. */
+const TOP_LEVEL = typeof window !== 'undefined' && window.top === window;
+
+function navigationType(): string | null {
   try {
-    const existing = sessionStorage.getItem(TAB_KEY);
-    if (existing) return existing;
+    const entry = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined;
+    if (entry?.type) return entry.type;
+    const legacy = (performance as { navigation?: { type?: number } }).navigation?.type;
+    return legacy === 1 ? 'reload' : legacy === 2 ? 'back_forward' : legacy === 0 ? 'navigate' : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * sessionStorage is copied into a tab opened by this one and into a duplicated tab, so a stored id
+ * is kept only on a reload or history load of a page no other page opened. A duplicate also reports
+ * a history load; that case is caught by `tabChecked`.
+ */
+function inheritsTabId() {
+  if (window.opener) return false;
+  const type = navigationType();
+  return type === 'reload' || type === 'back_forward';
+}
+
+function freshTabId(): string | null {
+  try {
     const id = newId();
     sessionStorage.setItem(TAB_KEY, id);
     return id;
   } catch {
     return null;
   }
+}
+
+let TAB_ID: string | null = (() => {
+  if (!TOP_LEVEL) return null;
+  try {
+    return (inheritsTabId() ? sessionStorage.getItem(TAB_KEY) : null) ?? freshTabId();
+  } catch {
+    return null;
+  }
 })();
+
+function hasLocks() {
+  return typeof navigator !== 'undefined' && navigator.locks !== undefined;
+}
 
 /** Runs `fn` holding the cross-document lock; without Web Locks, at once. */
 function locked<T>(fn: () => T): Promise<T> {
-  const locks = typeof navigator !== 'undefined' ? navigator.locks : undefined;
+  const locks = hasLocks() ? navigator.locks : undefined;
   if (!locks) {
     try {
       return Promise.resolve(fn());
@@ -132,12 +168,43 @@ const channel =
 // A page still open (a background desktop tab, say) answers for its code, so a new tab leaves it
 // alone. A suspended or closed one cannot, which is the iPhone case recovery is for.
 channel?.addEventListener('message', (event: MessageEvent) => {
-  const message = event.data as { type?: string; owner?: string } | null;
+  const message = event.data as { type?: string; owner?: string; tab?: string; from?: string; to?: string } | null;
+  if (message?.type === 'tab?' && message.tab === TAB_ID && message.from !== DOCUMENT_ID && !pageHidden) {
+    return channel.postMessage({ type: 'tab-taken', to: message.from });
+  }
+  if (message?.type === 'tab-taken' && message.to === DOCUMENT_ID) return settleTabCheck(true);
   if (message?.type === 'alive' && message.owner) return settleOwnerCheck(message.owner, 'alive');
   if (message?.type !== 'ping' || message.owner !== DOCUMENT_ID) return;
   const pending = readPendingCode();
   if (pending && owner(pending) === DOCUMENT_ID) channel.postMessage({ type: 'alive', owner: DOCUMENT_ID });
 });
+
+/** Between pagehide and a back-forward cache return: a reloaded page is not a second open copy of its tab. */
+let pageHidden = false;
+
+let settleTab: ((taken: boolean) => void) | null = null;
+
+function settleTabCheck(taken: boolean) {
+  settleTab?.(taken);
+  settleTab = null;
+}
+
+/**
+ * Resolves once no other open page answers for this tab id. One that does is the tab this one was
+ * duplicated from, so this page takes a new id. Without BroadcastChannel it can't tell, so no id.
+ */
+const tabChecked: Promise<void> =
+  TAB_ID === null
+    ? Promise.resolve()
+    : !channel
+      ? Promise.resolve().then(() => void (TAB_ID = null))
+      : new Promise<boolean>(resolve => {
+          settleTab = resolve;
+          channel.postMessage({ type: 'tab?', tab: TAB_ID, from: DOCUMENT_ID });
+          setTimeout(() => settleTabCheck(false), OWNER_PING_TIMEOUT_MS);
+        }).then(taken => {
+          if (taken) TAB_ID = freshTabId();
+        });
 
 /** This document gave up a claim no sign-in here could use; coming back from the cache doesn't retake it. */
 let releasedClaim = false;
@@ -146,11 +213,13 @@ let releasedClaim = false;
 // a claim another page makes meanwhile can't be overwritten by it.
 if (typeof window !== 'undefined') {
   window.addEventListener('pagehide', () => {
+    pageHidden = true;
     const pending = readPendingCode();
     if (pending && owner(pending) === DOCUMENT_ID) markGone(DOCUMENT_ID);
   });
   // Back from the back-forward cache: the owner again, unless another page claimed it meanwhile.
   window.addEventListener('pageshow', event => {
+    pageHidden = false;
     if (event.persisted && !releasedClaim) unmarkGone(DOCUMENT_ID);
   });
 }
@@ -215,8 +284,10 @@ function linkInWindow(pending: PendingCode, now = Date.now()) {
  * `trigger` narrows the link case to a sign-in the link itself opened; omitted, it asks whether one might.
  */
 function mayPickUp(pending: PendingCode, trigger?: unknown) {
+  if (!TOP_LEVEL) return false;
   if (sameTab(pending)) return true;
-  if (!linkInWindow(pending)) return false;
+  // Without Web Locks two documents can both claim, so only the same tab (one document at a time) may.
+  if (!hasLocks() || !linkInWindow(pending)) return false;
   return trigger === undefined || (typeof trigger === 'string' && LINK_TRIGGERS.has(trigger));
 }
 
@@ -396,7 +467,7 @@ let claimSettled = false;
  * has not checked and stops. Resolves to the claim, or null.
  */
 export function claimCodeRecovery(): Promise<PendingCode | null> {
-  claim ??= codeOwnerChecked().then(() =>
+  claim ??= Promise.all([codeOwnerChecked(), tabChecked]).then(() =>
     locked(() => {
       if (claimSettled) return null;
       const held = heldClaim();
@@ -404,7 +475,7 @@ export function claimCodeRecovery(): Promise<PendingCode | null> {
       const pending = reloadedCodeStep();
       if (!pending) return null;
       write({ ...pending, claimedBy: DOCUMENT_ID, leftAt: undefined });
-      // Without Web Locks there is no compare-and-set; a tab that lost the race reads the winner's claim here.
+      // Without Web Locks only the same tab gets here, one document at a time; the read-back is a guard.
       const claimed = heldClaim();
       if (!claimed) return null;
       capture('returned_to_code_screen', pending, {

@@ -45,7 +45,15 @@ function installLocks() {
   return request;
 }
 
+let navigation = 'reload';
+
 beforeEach(() => {
+  // Earlier tests' documents are gone, as a reloaded page's are.
+  window.dispatchEvent(new Event('pagehide'));
+  navigation = 'reload';
+  vi.spyOn(performance, 'getEntriesByType').mockImplementation(type =>
+    type === 'navigation' ? ([{ type: navigation }] as unknown as PerformanceEntryList) : []
+  );
   sessionStorage.clear();
   localStorage.clear();
   window.history.replaceState(null, '', '/');
@@ -55,7 +63,10 @@ beforeEach(() => {
 });
 afterEach(() => {
   vi.useRealTimers();
+  vi.restoreAllMocks();
   Reflect.deleteProperty(navigator, 'locks');
+  Reflect.deleteProperty(window, 'opener');
+  Object.defineProperty(window, 'top', { value: window, configurable: true, writable: true });
 });
 
 describe('code step', () => {
@@ -145,9 +156,11 @@ describe('code step', () => {
   });
 
   it('lets a new tab from a sign-in link pick it up inside the link window', async () => {
+    installLocks();
     vi.useFakeTimers({ now: 1_000_000, toFake: ['Date'] });
     const first = await load();
     first.step.codeScreenShown('a@b.co');
+    await vi.waitFor(() => expect(first.step.readPendingCode()).not.toBeNull());
     leave();
 
     vi.setSystemTime(1_000_000 + 60_000);
@@ -174,8 +187,10 @@ describe('code step', () => {
   });
 
   it('releases a link page claim that a non-link sign-in cannot use', async () => {
+    installLocks();
     const first = await load();
     first.step.codeScreenShown('a@b.co');
+    await vi.waitFor(() => expect(first.step.readPendingCode()).not.toBeNull());
     leave();
 
     const linked = await loadNewTab('/explore?modal=debates&modalTarget=people');
@@ -196,12 +211,14 @@ describe('code step', () => {
     expect(await second.step.claimCodeRecovery()).not.toBeNull();
 
     // A third page, opened while the second is open, behaves normally.
-    const third = await load();
+    const tab = sessionStorage.getItem('geo:auth-code-step:tab')!;
+    const third = await loadNewTab('/explore?modal=signin');
     expect(await third.step.claimCodeRecovery()).toBeNull();
-    expect(third.step.takeCodeRecovery()).toBeNull();
+    expect(third.step.takeCodeRecovery({ auth_trigger: 'deep_link' })).toBeNull();
 
     // The second goes without sending a new code (a refused send, say): its claim is released.
     leave();
+    sessionStorage.setItem('geo:auth-code-step:tab', tab);
     const { step } = await load();
     await step.claimCodeRecovery();
     expect(step.takeCodeRecovery()).toMatchObject({ email: 'a@b.co' });
@@ -221,7 +238,17 @@ describe('code step', () => {
     expect(request).toHaveBeenCalledWith('geo:auth-code-step', expect.any(Function));
   });
 
-  it('still claims without Web Locks, reading the claim back', async () => {
+  it('without Web Locks, lets no new tab pick it up, a sign-in link included', async () => {
+    const first = await load();
+    first.step.codeScreenShown('a@b.co');
+    leave();
+
+    const { step } = await loadNewTab('/explore?modal=signin');
+    expect(await step.claimCodeRecovery()).toBeNull();
+    expect(step.takeCodeRecovery({ auth_trigger: 'deep_link' })).toBeNull();
+  });
+
+  it('still claims the same tab without Web Locks, reading the claim back', async () => {
     expect('locks' in navigator).toBe(false);
     const first = await load();
     first.step.codeScreenShown('a@b.co');
@@ -231,6 +258,63 @@ describe('code step', () => {
     const b = await load();
     const claims = await Promise.all([a.step.claimCodeRecovery(), b.step.claimCodeRecovery()]);
     expect(claims.filter(Boolean)).toHaveLength(1);
+  });
+
+  it('gives a duplicated tab its own id while the original is open, so it never recovers it', async () => {
+    const first = await load();
+    first.step.codeScreenShown('a@b.co');
+    const original = sessionStorage.getItem('geo:auth-code-step:tab');
+
+    // Duplicate Tab copies sessionStorage and reports a history load.
+    navigation = 'back_forward';
+    const duplicate = await load();
+    await duplicate.step.claimCodeRecovery();
+    expect(sessionStorage.getItem('geo:auth-code-step:tab')).not.toBe(original);
+
+    // The original closes; someone reloads the duplicate.
+    leave();
+    navigation = 'reload';
+    const { step } = await load();
+    expect(await step.claimCodeRecovery()).toBeNull();
+    expect(step.codeRecoveryWaiting()).toBeNull();
+    expect(step.takeCodeRecovery()).toBeNull();
+  });
+
+  it('gives a page another page opened its own id', async () => {
+    const first = await load();
+    first.step.codeScreenShown('a@b.co');
+    leave();
+
+    // window.open copies the opener's sessionStorage.
+    Object.defineProperty(window, 'opener', { value: {}, configurable: true });
+    const { step } = await load();
+    expect(await step.claimCodeRecovery()).toBeNull();
+    expect(step.takeCodeRecovery()).toBeNull();
+  });
+
+  it('gives a page loaded by a plain navigation its own id', async () => {
+    const first = await load();
+    first.step.codeScreenShown('a@b.co');
+    leave();
+
+    navigation = 'navigate';
+    const { step } = await load();
+    expect(await step.claimCodeRecovery()).toBeNull();
+  });
+
+  it('never recovers inside a frame, which shares its parent tab storage', async () => {
+    installLocks();
+    const first = await load();
+    first.step.codeScreenShown('a@b.co');
+    await vi.waitFor(() => expect(first.step.readPendingCode()).not.toBeNull());
+    leave();
+
+    Object.defineProperty(window, 'top', { value: {}, configurable: true, writable: true });
+    window.history.replaceState(null, '', '/explore?modal=signin');
+    const { step } = await load();
+    expect(step.codeRecoveryExpected()).toBe(false);
+    expect(await step.claimCodeRecovery()).toBeNull();
+    expect(step.takeCodeRecovery({ auth_trigger: 'deep_link' })).toBeNull();
   });
 
   it('never rewrites the record on pagehide, so a newer claim survives it', async () => {
@@ -265,6 +349,8 @@ describe('code step', () => {
     first.step.codeScreenShown('a@b.co');
     // Owned by a page with no listener, as a suspended tab has none.
     localStorage.setItem(KEY, JSON.stringify({ ...first.step.readPendingCode(), documentId: 'suspended' }));
+    // The page standing in for it is gone; the owner itself never answers.
+    leave();
 
     const { step } = await load();
     expect(step.reloadedCodeStep()).toBeNull();
