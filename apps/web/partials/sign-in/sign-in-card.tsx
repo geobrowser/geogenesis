@@ -33,11 +33,7 @@ import {
 /** `data-geo-analytics-label`s of the card's controls, per surface. */
 export type SignInCardLabels = { back: string; dismiss: string; form: string; verification: string };
 
-/**
- * The save-votes sheet's card (GEO-3439), shared with the sign-in box: a back and close row, then
- * either the email step (the host's heading, an email field, submit, Google, fine print) or the code
- * step (`AccountStep`, which mails the code when it mounts). The host owns the state.
- */
+/** The save-votes card (GEO-3439): email step or code step (`AccountStep` mails the code on mount). The host owns the state. */
 export function SignInCard({
   compact,
   codeEmail,

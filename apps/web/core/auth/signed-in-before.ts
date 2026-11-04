@@ -1,8 +1,4 @@
-/**
- * Whether this browser has had a signed-in session, so a sign-in attempt can be read as likely
- * returning from its start (GEO-3550). Set on any sign-in or session restore, never cleared by
- * sign-out. Starts empty for every browser when it ships.
- */
+/** This browser has had a signed-in session (GEO-3550 likely returning). Set on sign-in or restore, kept on sign-out. */
 const KEY = 'geo:signed-in-before:v1';
 
 export function markSignedInBefore() {

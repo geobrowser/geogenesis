@@ -29,11 +29,7 @@ export function SignInBoxHost() {
   return request ? <SignInBox key={request.attemptId} request={request} /> : null;
 }
 
-/**
- * Our own sign-in: the save-votes sheet's centred card with its votes taken out. It paints at once;
- * Privy loads behind it, and the code step (`AccountStep`) sends through Privy's headless email
- * calls, which wait for it.
- */
+/** The save-votes card without votes. Paints before Privy loads; `AccountStep`'s headless calls wait for it. */
 function SignInBox({ request }: { request: SignInBoxRequest }) {
   const { authenticated, isModalOpen } = usePrivy();
   // Undefined with the `googleSignIn` flag off or in an in-app browser, which hides the button.
