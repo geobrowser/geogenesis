@@ -193,11 +193,7 @@ function recentPeople(state: SpaceChatState | undefined, people: Map<string, Cha
 /** Backs off, then stops: 5m45s in all, past one of geo-chat's 5-minute member syncs. */
 export const MEMBER_RECHECK_MS = [15_000, 30_000, 60_000, 60_000, 60_000, 60_000, 60_000];
 
-/**
- * The shared join path, plus a room-list refetch whenever membership may have landed: geo-chat
- * learns members through its own sync. Not while the account is setting up: acceptance moves the
- * panel to the account's own room list.
- */
+/** The join path, plus room-list refetches while geo-chat's member sync may lag. None while setting up. */
 function useChatMembership(spaceId: string, canPost: boolean, settingUp: boolean, refetchRooms: () => unknown) {
   const { space } = useSpace(spaceId);
   const spaceName = space?.entity?.name || null;
