@@ -38,7 +38,6 @@ import {
   responseErrorMessage,
   userEntityResponseQueryKey,
 } from '~/core/responses/entity-response';
-import { responseAnnouncerKey } from '~/core/responses/response-confirming-announcer';
 import { readViewerResponseForReplay } from '~/core/responses/replay-viewer-response';
 import { useClaimResponseBatchState } from '~/core/responses/use-claim-response-summaries';
 import { castLocalVote } from '~/core/state/cast-local-vote';
@@ -58,7 +57,7 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 
 import { ClaimResponderAvatars } from '~/partials/entity-page/claim-voter-avatars';
-import { ResponseButton, ResponseConfirmingAnnouncement } from '~/partials/entity-page/response-button';
+import { ResponseButton } from '~/partials/entity-page/response-button';
 import { VOTE_BUTTON_HOVER_CLASS, VOTE_BUTTON_RESTING_CLASS } from '~/partials/entity-page/vote-button-styles';
 
 import { slideUpPopoverContainerAtom } from '~/atoms';
@@ -73,21 +72,13 @@ type EntityVoteButtonsProps = {
   /**
    * A surface with no room for prose: the sticky entity header's 48px row.
    *
-   * Three of this control's states are sentences rather than controls — the indexing notice beside
-   * the buttons, and the two that stand in for the control entirely. Each is wider than a phone can
-   * spare next to a name and a set of thumbs: measured at 390px, the indexing notice alone pushed
-   * the row 94px past its own width and gave the document a horizontal scrollbar.
+   * Two of this control's states are sentences rather than controls, each wider than a phone can
+   * spare next to a name and a set of thumbs. They describe *state* — that an unpublished type edit
+   * is blocking responses, or that there is no response kind — and the page explains that state too,
+   * so a reader who finds nothing in the bar has somewhere else to find it.
    *
    * Dropped rather than truncated, because a sentence cut to "Response s…" tells nobody anything,
    * and dropped rather than wrapped, because the bar is one fixed-height line by design.
-   *
-   * Two of the three are dropped outright. They describe *state* — that an unpublished type edit is
-   * blocking responses, or that there is no response kind — and the page explains that state too, so
-   * a reader who finds nothing in the bar has somewhere else to find it.
-   *
-   * **The indexing notice stays off this copy.** The page header mounts another `EntityVoteButtons`
-   * for the same entity, and that one announces. Speaking here too would say the sentence twice.
-   * The bar takes no width either way.
    */
   compact?: boolean;
   /** Draw a failed vote's message beside the arrows. */
@@ -173,8 +164,6 @@ function EntityResponseButtons({
     submitResponseAsync,
     optimisticResponse,
     isSubmittingResponse,
-    isResponseConfirming,
-    responseRunId,
     isConnected,
     personalSpaceId,
   } = useEntityResponse({ entityId, entityName: entity?.name, spaceId, responseKind });
@@ -506,18 +495,6 @@ function EntityResponseButtons({
     );
   }
 
-  // Active for the whole confirming window, until the vote is indexed, so the sentence is spoken once
-  // when the vote enters it, not again on each indexing retry. The compact sticky bar stays silent and
-  // unkeyed so it never wins the announcer election; the full-size control carries the key, which also
-  // dedupes it against the same claim shown on another surface. See the `compact` prop's note.
-  const confirmingAnnouncement = (
-    <ResponseConfirmingAnnouncement
-      active={!compact && isResponseConfirming}
-      announceKey={compact ? undefined : responseAnnouncerKey(entityId, spaceId, responseKind)}
-      announceRunId={responseRunId}
-    />
-  );
-
   // The two thumbs share `ResponseButton` with the claim pills, and the same submission window:
   // `isSubmittingResponse` clears once the bundler has the write.
   const thumbClassName = cx(
@@ -564,7 +541,6 @@ function EntityResponseButtons({
         <ResponsePositionIcon responseKind={queryResponseKind} position={false} selected={negativeActive} />
       </ResponseButton>
       {claimResponderAvatarsPosition === 'trailing' ? claimResponderAvatarsTrigger('trailing') : null}
-      {confirmingAnnouncement}
       {responseError ? (
         <span role="alert" className={cx(showInlineError && !compact ? 'ml-1 text-metadata text-red-01' : 'sr-only')}>
           {responseError}

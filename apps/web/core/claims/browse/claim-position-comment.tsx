@@ -10,7 +10,6 @@ import { PositionRow } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import { useMediaQuery } from '~/core/hooks/use-media-query';
 import { usePublishComment } from '~/core/hooks/use-publish-comment';
 import { CLAIM_RESPONSE_COPY, type ResponseKind } from '~/core/responses/entity-response';
-import { responseAnnouncerKey } from '~/core/responses/response-confirming-announcer';
 
 const MAX_COMMENT_HEIGHT_PX = 120;
 
@@ -43,8 +42,6 @@ export function ClaimPositionCommentControl({
   promptForComment,
   disabled,
   pending,
-  announcing,
-  announceRunId,
   titleFor,
   noteFor,
   localSide,
@@ -74,10 +71,6 @@ export function ClaimPositionCommentControl({
   disabled?: boolean;
   /** The viewer's response is still confirming; presses are dropped. See `PositionRow`. */
   pending?: boolean;
-  /** Speak the confirming sentence once, hidden. See `PositionRow`. */
-  announcing?: boolean;
-  /** The submission in flight, so a switch or retraction mid-window re-announces. See `PositionRow`. */
-  announceRunId?: string | null;
   titleFor?: (position: boolean) => string;
   noteFor?: (position: boolean) => React.ReactNode;
   /** The side held only on this device; see `PositionRow`. */
@@ -188,9 +181,6 @@ export function ClaimPositionCommentControl({
           onRespond={choosePosition}
           disabled={disabled || isSubmitting}
           pending={pending}
-          announcing={announcing}
-          announceKey={responseAnnouncerKey(entityId, spaceId, responseKind)}
-          announceRunId={announceRunId}
           titleFor={titleFor}
           noteFor={noteFor}
           localSide={localSide}

@@ -5,12 +5,6 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import { RESPONSE_CONFIRMING_COPY } from '~/core/responses/entity-response';
-import {
-  isResponseAnnouncer,
-  registerResponseAnnouncer,
-  subscribeResponseAnnouncer,
-  unregisterResponseAnnouncer,
-} from '~/core/responses/response-confirming-announcer';
 
 import { Tooltip } from '~/design-system/tooltip';
 
@@ -122,86 +116,4 @@ export function ResponseButton({
   if (!tooltip || !behaviour.title) return button;
 
   return <Tooltip trigger={button} label={behaviour.title} />;
-}
-
-/**
- * One screen-reader confirmation for a response still being indexed. Hidden, and always mounted.
- *
- * A live region has to be in the document *before* its text changes for a screen reader to announce
- * that change, so the node stays and only its text comes and goes. `active` is held true across the
- * whole confirming window — through the reconciling⇄delayed retry flips — so the sentence goes in
- * once when the response enters that window and is cleared once when it is confirmed or dropped,
- * rather than removed and re-added on every flip and spoken again each time.
- *
- * `announceKey` identifies the response so that the same claim shown in several controls at once
- * speaks once, not once per control: only the elected announcer for a key fills its region, the
- * rest stay empty. Omit it and the control always announces for itself.
- *
- * `announceRunId` identifies the submission, so a switch or retraction mid-window re-announces.
- */
-export function ResponseConfirmingAnnouncement({
-  active,
-  announceKey,
-  announceRunId,
-}: {
-  active: boolean;
-  announceKey?: string;
-  announceRunId?: string | null;
-}) {
-  const isAnnouncer = useIsResponseAnnouncer(announceKey);
-  const text = useConfirmingAnnouncementText(active && isAnnouncer, announceRunId ?? null);
-  return (
-    <span aria-live="polite" className="sr-only">
-      {text}
-    </span>
-  );
-}
-
-/** Re-announces on each new runId by blanking the text a frame before restoring it. */
-function useConfirmingAnnouncementText(speaking: boolean, runId: string | null): string | null {
-  const [text, setText] = React.useState<string | null>(null);
-  const spokenRunIdRef = React.useRef<string | null | undefined>(undefined);
-
-  React.useEffect(() => {
-    if (!speaking) {
-      spokenRunIdRef.current = undefined;
-      setText(null);
-      return;
-    }
-    if (spokenRunIdRef.current === runId) return;
-    const isReAnnounce = spokenRunIdRef.current !== undefined;
-    spokenRunIdRef.current = runId;
-
-    if (!isReAnnounce || typeof requestAnimationFrame === 'undefined') {
-      setText(RESPONSE_CONFIRMING_COPY);
-      return;
-    }
-    setText('');
-    const frame = requestAnimationFrame(() => setText(RESPONSE_CONFIRMING_COPY));
-    return () => cancelAnimationFrame(frame);
-  }, [speaking, runId]);
-
-  return text;
-}
-
-/** Elects one announcer per response identity among the controls mounted for it. */
-function useIsResponseAnnouncer(announceKey: string | undefined): boolean {
-  const idRef = React.useRef<symbol | null>(null);
-  if (idRef.current === null) idRef.current = Symbol('response-announcer');
-  const id = idRef.current;
-
-  React.useEffect(() => {
-    if (!announceKey) return;
-    registerResponseAnnouncer(announceKey, id);
-    return () => unregisterResponseAnnouncer(announceKey, id);
-  }, [announceKey, id]);
-
-  return React.useSyncExternalStore(
-    React.useCallback(
-      listener => (announceKey ? subscribeResponseAnnouncer(announceKey, listener) : () => {}),
-      [announceKey]
-    ),
-    () => (announceKey ? isResponseAnnouncer(announceKey, id) : true),
-    () => true
-  );
 }

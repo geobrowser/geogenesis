@@ -42,7 +42,6 @@ import {
   entityResponseIndexingQueryKey,
   getResponseActionMethod,
   isAwaitingResponseSubmission,
-  isResponseConfirming,
   responseKindToVoteKind,
   userEntityResponseQueryKey,
   voteOutcomeProperties,
@@ -53,6 +52,7 @@ import {
   clearFailedResponse,
   recordFailedResponse,
 } from '~/core/responses/failed-response-retries';
+import { useAnnounceResponseConfirmed } from '~/core/responses/response-confirming-announcement';
 import { geo } from '~/core/sdk/geo-client';
 import { LOCAL_VOTES_LIST_ID } from '~/core/state/local-votes';
 import { useQueryEntity } from '~/core/sync/use-store';
@@ -273,6 +273,7 @@ export function useEntityResponse({ entityId, entityName, spaceId, responseKind 
   const currentRetryKeyRef = useRef(currentRetryKey);
   currentRetryKeyRef.current = currentRetryKey;
   const setToast = useSetToast();
+  const announceResponseConfirmed = useAnnounceResponseConfirmed();
 
   const indexingQueryKey = useMemo(
     () => entityResponseIndexingQueryKey(personalSpaceId, entityId, spaceId, responseKind),
@@ -436,21 +437,26 @@ export function useEntityResponse({ entityId, entityName, spaceId, responseKind 
   /**
    * Marks a run as accepted by the bundler, so the UI stops waiting on it (GEO-2889).
    *
-   * Only the run that is current moves the visible state: an older run reaching the bundler after a
-   * newer press must not take the newer one's place. The registry entry is updated either way, so a
-   * rollback that restores this run restores it as submitted.
+   * Only the run that is current moves the visible state and announces: an older run reaching the
+   * bundler after a newer press must not take the newer one's place, or speak over it. The registry
+   * entry is updated either way, so a rollback that restores this run restores it as submitted. The
+   * announcement fires exactly once per run — `justSubmitted` is only true on the transition out of
+   * `!current.submitted`, so a second call for the same run (the tx's own callback, then the
+   * mutation's success handler as a backstop) is silent the second time.
    */
   const markResponseSubmitted = useCallback(
     (runId: string) => {
       const run = responseIndexingRegistry.submissionRuns.get(indexingKeyId)?.get(runId);
       if (run) run.submitted = true;
-      queryClient.setQueryData<EntityResponseIndexingState>(indexingQueryKey, current =>
-        current?.status === 'reconciling' && current.runId === runId && !current.submitted
-          ? { ...current, submitted: true }
-          : current
-      );
+      let justSubmitted = false;
+      queryClient.setQueryData<EntityResponseIndexingState>(indexingQueryKey, current => {
+        if (current?.status !== 'reconciling' || current.runId !== runId || current.submitted) return current;
+        justSubmitted = true;
+        return { ...current, submitted: true };
+      });
+      if (justSubmitted) announceResponseConfirmed();
     },
-    [indexingKeyId, indexingQueryKey, queryClient, responseIndexingRegistry]
+    [indexingKeyId, indexingQueryKey, queryClient, responseIndexingRegistry, announceResponseConfirmed]
   );
 
   const executeResponse = useCallback(
@@ -779,10 +785,6 @@ export function useEntityResponse({ entityId, entityName, spaceId, responseKind 
     isSubmittingResponse: isAwaitingResponseSubmission(indexingState),
     isProcessingResponse:
       responseMutation.isPending || indexingState.status === 'reconciling' || indexingState.status === 'delayed',
-    /** The bundler has the write; only the index is still catching up. See `isResponseConfirming`. */
-    isResponseConfirming: isResponseConfirming(indexingState),
-    /** The submission in flight, for the screen-reader confirmation to re-announce on a switch or retraction. */
-    responseRunId: indexingState.runId,
     isResponseIndexingDelayed: indexingState.status === 'delayed',
     isConnected: !!personalSpaceId && isRegistered,
     personalSpaceId,

@@ -117,11 +117,6 @@ export function isAwaitingResponseSubmission(state: EntityResponseIndexingState)
   return state.status === 'reconciling' && !state.submitted;
 }
 
-/** The bundler has the write; only the index is still catching up. */
-export function isResponseConfirming(state: EntityResponseIndexingState) {
-  return (state.status === 'reconciling' || state.status === 'delayed') && !isAwaitingResponseSubmission(state);
-}
-
 /**
  * The one kind a claim is answered with.
  *

@@ -11,7 +11,6 @@ import { Provider, createStore } from 'jotai';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
-import { RESPONSE_CONFIRMING_COPY } from '~/core/responses/entity-response';
 
 import { EntityVoteButtons } from './entity-vote-buttons';
 import { slideUpPopoverContainersAtom } from '~/atoms';
@@ -59,7 +58,6 @@ vi.mock('~/core/hooks/use-entity-vote', () => ({
     isResponseIndexingDelayed: mocks.indexingDelayed,
     isSubmittingResponse: mocks.processing,
     isProcessingResponse: mocks.processing,
-    isResponseConfirming: mocks.processing,
     isConnected: true,
     personalSpaceId: 'profile-1',
   }),
@@ -241,24 +239,12 @@ describe('the responder faces on a claim', () => {
 });
 
 /**
- * The sticky entity header is one fixed-height line beside a name. Three of this control's states
- * are sentences rather than controls, and each is wider than a phone can spare: measured in a
- * browser at 390px, the indexing notice alone pushed the row 94px past its own width and gave the
- * document a horizontal scrollbar.
- *
- * The two that describe *state* are dropped outright: the page explains the same thing, so a reader
- * who finds nothing in the bar has somewhere else to look.
- *
- * The indexing notice is not. It announces an event the reader just caused, from a control they can
- * use in the bar, so it stays in the accessibility tree as `sr-only` — out of layout, still spoken.
- * The suite used to assert it was gone entirely, on my claim that the page's copy announced instead;
- * that claim was false for claims, which answer with `ClaimPositionCommentControl` and expose this
- * sentence only as a `title`.
+ * The sticky entity header is one fixed-height line beside a name. Two of this control's states are
+ * sentences rather than controls, and each is wider than a phone can spare next to a name and a set
+ * of thumbs. Both describe *state* and are dropped outright: the page explains the same thing, so a
+ * reader who finds nothing in the bar has somewhere else to look.
  */
 describe('compact, for the sticky header', () => {
-  // master extracted this string to a constant while this branch was open; taken from there rather
-  // than copied, so a reword cannot leave the test passing against text nobody ships.
-  const INDEXING = RESPONSE_CONFIRMING_COPY;
   const UNPUBLISHED = 'Publish changes before responding';
   const UNAVAILABLE = 'Response unavailable';
 
@@ -288,28 +274,6 @@ describe('compact, for the sticky header', () => {
       ],
     };
   }
-
-  /**
-   * The sticky bar and the page header both mount this control. Only the page copy announces, so
-   * one vote is not spoken twice. The claim page announces from its own pills.
-   */
-  it('stays silent in the sticky bar so the page control can announce once', async () => {
-    mocks.processing = true;
-    render(<EntityVoteButtons entityId="entity-1" spaceId={SPACE} responseKind="stance" compact />, { wrapper });
-
-    await waitFor(() => expect(tallyTrigger()).toBeInTheDocument());
-
-    expect(screen.queryByText(INDEXING)).not.toBeInTheDocument();
-  });
-
-  it('announces the indexing notice without showing it', async () => {
-    mocks.processing = true;
-    render(<EntityVoteButtons entityId="entity-1" spaceId={SPACE} responseKind="stance" />, { wrapper });
-
-    const notice = await screen.findByText(INDEXING);
-    expect(notice).toHaveAttribute('aria-live', 'polite');
-    expect(notice).toHaveClass('sr-only');
-  });
 
   /** These two stand in for the control entirely, so compact draws nothing rather than a sentence. */
   it('draws nothing for the states that are prose instead of a control', () => {

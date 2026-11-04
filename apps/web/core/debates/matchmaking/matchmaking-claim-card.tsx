@@ -30,11 +30,9 @@ import {
   RESPONSE_LOCAL_ONLY_COPY,
   type ResponseKind,
   isAwaitingResponseSubmission,
-  isResponseConfirming,
   responseErrorMessage,
   responsePositionLabel,
 } from '~/core/responses/entity-response';
-import { responseAnnouncerKey } from '~/core/responses/response-confirming-announcer';
 import { readViewerResponseForReplay } from '~/core/responses/replay-viewer-response';
 import { useClaimResponseBatchState } from '~/core/responses/use-claim-response-summaries';
 import { castLocalVote } from '~/core/state/cast-local-vote';
@@ -51,7 +49,7 @@ import { OnlineDot } from '~/design-system/online-dot';
 import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
-import { ResponseButton, ResponseConfirmingAnnouncement } from '~/partials/entity-page/response-button';
+import { ResponseButton } from '~/partials/entity-page/response-button';
 
 import type {
   Debate,
@@ -763,14 +761,9 @@ export function useClaimPositionControl({
     isConnected,
     /**
      * The viewer's response is on its way to the chain and not yet indexed. For readers deciding
-     * whether to trust the index — not for the pills' presses, which use `isResponseSubmitting`, nor
-     * the screen-reader confirmation, which waits for `isResponseConfirming`.
+     * whether to trust the index — not for the pills' presses, which use `isResponseSubmitting`.
      */
     isResponsePending,
-    /** The bundler has the write; only the index is still catching up. What the screen-reader confirmation waits on. */
-    isResponseConfirming: isResponseConfirming(responseIndexing),
-    /** The submission in flight, for the screen-reader confirmation to re-announce on a switch or retraction. */
-    responseRunId: responseIndexing.runId,
     /** The viewer's response has not reached the bundler yet; the pills ignore presses until it has. */
     isResponseSubmitting,
     /**
@@ -961,8 +954,6 @@ function RespondableControls({
     actionTitle,
     responseError,
     canRespond,
-    isResponseConfirming,
-    responseRunId,
     isResponseSubmitting,
     localVoteSide,
   } = useClaimPositionControl({
@@ -1018,9 +1009,6 @@ function RespondableControls({
         // retraction nobody meant; after it, the response is made (GEO-2889).
         disabled={!canRespond}
         pending={isResponseSubmitting}
-        announcing={isResponseConfirming}
-        announceKey={responseAnnouncerKey(claim.claim_entity_id, claim.space_id, CLAIM_RESPONSE_KIND)}
-        announceRunId={responseRunId}
         titleFor={actionTitle}
         noteFor={noteFor}
         showParticipants={showParticipants}
@@ -1273,9 +1261,6 @@ export function PositionRow({
   onRespond,
   disabled,
   pending,
-  announcing = false,
-  announceKey,
-  announceRunId,
   titleFor,
   noteFor,
   localSide = null,
@@ -1301,15 +1286,6 @@ export function PositionRow({
    * pointer, with a wait cursor.
    */
   pending?: boolean;
-  /**
-   * Speak the confirming sentence once, hidden. Separate from `pending`, which ends once the bundler
-   * has the write; this runs until the response is indexed.
-   */
-  announcing?: boolean;
-  /** Claim identity, so the confirming sentence is spoken once across duplicate controls. */
-  announceKey?: string;
-  /** The submission in flight, so a switch or retraction mid-window re-announces. */
-  announceRunId?: string | null;
   titleFor?: (position: boolean) => string;
   /**
    * Something to say under one of the two buttons — on a profile, which side
@@ -1363,7 +1339,6 @@ export function PositionRow({
   // PositionRow stack while the comments pill remains stranded beside it.
   return (
     <div className={compactMobileActions ? '@container/debate-actions' : '@container'}>
-      <ResponseConfirmingAnnouncement active={announcing} announceKey={announceKey} announceRunId={announceRunId} />
       <div
         className={cx(
           'grid gap-2',
