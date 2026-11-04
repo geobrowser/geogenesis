@@ -321,3 +321,18 @@ it.each([
     ],
   ]);
 });
+
+// GEO-3569: queued events are stamped at flush, so the wait for the dialog travels on the events.
+describe('page-relative timing', () => {
+  it('records when the attempt started and the prompt opened, in ms since navigation start', () => {
+    vi.spyOn(performance, 'now').mockReturnValueOnce(1200.4).mockReturnValueOnce(3400.6);
+    const attempt = beginAuthAttempt(entry);
+    openAuthAttempt();
+    finishAuthAttempt('closed', readAuthAttempt(attempt.id));
+    const props = (name: string) => capture.mock.calls.find(([event]) => event === name)?.[1];
+    expect(props('auth_attempt_started')).toMatchObject({ attempt_started_page_ms: 1200 });
+    expect(props('auth_prompt_viewed')).toMatchObject({ prompt_opened_page_ms: 3401 });
+    expect(props('auth_attempt_completed')).toMatchObject({ prompt_opened_page_ms: 3401 });
+    vi.restoreAllMocks();
+  });
+});

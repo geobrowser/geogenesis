@@ -1,7 +1,10 @@
 'use client';
 
+import * as React from 'react';
+
 import { marketingAuthProperties } from '~/core/auth-attempt';
 import { SIGN_IN_MODAL } from '~/core/auth/sign-in-deep-link';
+import { setSignInPending } from '~/core/auth/sign-in-pending';
 import { dashlessId } from '~/core/debates/api';
 import { LOBBY_LINK_VIA } from '~/core/debates/lobbies/lobby-analytics';
 import { claimLobbySignInPrompt } from '~/core/debates/lobbies/lobby-guest-sign-in';
@@ -16,8 +19,16 @@ import { usePrivy } from '~/core/wallet/auth-hooks';
  * each is only a few lines once the protocol is shared, and a component apiece meant a dynamic
  * import and a Suspense boundary in `app/entry.tsx` for every new link.
  */
-export function useSignInDeepLink() {
-  const { ready, authenticated } = usePrivy();
+/** How long "Opening sign-in" may stay up if Privy never opens, so it cannot strand the page. */
+export const OPENING_NOTICE_TIMEOUT_MS = 20_000;
+
+/**
+ * Returns whether the dialog has been asked for and is not on screen yet, and keeps the layout's
+ * "Opening sign-in" overlay (`sign-in-pending`) up for exactly that long.
+ */
+export function useSignInDeepLink(): { opening: boolean } {
+  const { ready, authenticated, isModalOpen } = usePrivy();
+  const [opening, setOpening] = React.useState(false);
   const link = useDeepLinkParams(SIGN_IN_MODAL);
   const roomId = typeof window === 'undefined' ? undefined : /^\/debate\/([^/]+)$/.exec(window.location.pathname)?.[1];
   // A lobby's shared link (GEO-3126). No `auth_intent`: there is no lobby action to resume.
@@ -63,11 +74,32 @@ export function useSignInDeepLink() {
     run: () => {
       // Already signed in: the link has done its job by landing them here, and a login dialog over
       // a live session is noise. The trigger is cleared either way.
-      if (authenticated) return;
+      if (authenticated) {
+        setSignInPending(false);
+        return;
+      }
       // The lobby page would otherwise open a second prompt after this one (GEO-3270). Any room:
       // a bare lobby link's fallback notice signs in as `room`, and the lobby can load after.
       if (roomId) claimLobbySignInPrompt(roomId);
+      setOpening(true);
       openSignIn();
     },
   });
+
+  React.useEffect(() => {
+    if (!opening) return;
+    setSignInPending(true);
+    if (isModalOpen || authenticated) {
+      setSignInPending(false);
+      setOpening(false);
+      return;
+    }
+    const timer = setTimeout(() => {
+      setSignInPending(false);
+      setOpening(false);
+    }, OPENING_NOTICE_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [authenticated, isModalOpen, opening]);
+
+  return { opening };
 }

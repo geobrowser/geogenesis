@@ -15,6 +15,17 @@ const mocks = vi.hoisted(() => ({
   privyOnError: undefined as undefined | ((error: unknown) => void),
   beginPrivyAuth: vi.fn(),
   setStep: vi.fn(),
+  takeCodeRecovery: vi.fn(),
+  codeRecoveryOffered: vi.fn(),
+}));
+
+vi.mock('~/core/auth/code-step', () => ({
+  takeCodeRecovery: mocks.takeCodeRecovery,
+  codeRecoveryOffered: mocks.codeRecoveryOffered,
+  codeRecoveryProperties: (pending: { attemptId?: string }) => ({
+    auth_recovery: 'reloaded_code_step',
+    recovered_attempt_id: pending.attemptId,
+  }),
 }));
 
 vi.mock('~/core/wallet/auth-hooks', () => ({
@@ -59,11 +70,40 @@ vi.mock('~/partials/onboarding/onboarding-atoms', async () => {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.takeCodeRecovery.mockReset();
+  mocks.beginPrivyAuth.mockReset();
   mocks.privyOnComplete = undefined;
   mocks.privyOnError = undefined;
 });
 
 describe('usePrivySignIn', () => {
+  // GEO-3573: the first sign-in a new page opens picks up a code step left by an earlier page.
+  it('picks up a code step from an earlier page, keeping its own attribution and destination', () => {
+    const pending = {
+      attemptId: 'original',
+      email: 'a@b.co',
+      properties: { component: 'save_votes', link_source: 'x' },
+    };
+    mocks.takeCodeRecovery.mockReturnValue(pending);
+    mocks.beginPrivyAuth.mockReturnValue({ id: 'recovery' });
+    const { result } = renderHook(() => usePrivySignIn(undefined, { analytics: { component: 'debate_matchmaking' } }));
+
+    act(() => void result.current());
+    expect(mocks.beginPrivyAuth).toHaveBeenCalledWith(
+      expect.objectContaining({
+        component: 'debate_matchmaking',
+        link_source: 'x',
+        auth_recovery: 'reloaded_code_step',
+        recovered_attempt_id: 'original',
+      }),
+      { resume: undefined }
+    );
+    expect(mocks.login).toHaveBeenCalledWith(expect.objectContaining({ prefill: { type: 'email', value: 'a@b.co' } }));
+    expect(mocks.codeRecoveryOffered).toHaveBeenCalledWith(pending, 'recovery');
+    // Whether this sign-in may pick it up depends on its own trigger, so it is handed its properties.
+    expect(mocks.takeCodeRecovery).toHaveBeenCalledWith({ component: 'debate_matchmaking' });
+  });
+
   // Privy fires onComplete when it restores an existing session — opening a second tab does it —
   // so an unarmed callback would run the consumer's intent with nobody having pressed anything.
   it('ignores a completion the caller never asked for', () => {

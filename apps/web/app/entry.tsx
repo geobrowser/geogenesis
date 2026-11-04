@@ -8,6 +8,7 @@ import { useAtomValue } from 'jotai';
 import dynamic from 'next/dynamic';
 import { usePathname, useSearchParams } from 'next/navigation';
 
+import { codeRecoveryExpected } from '~/core/auth/code-step';
 import { DebateCoordinator } from '~/core/debates/debate-coordinator';
 import { LastPageOutsideDebatesTracker } from '~/core/debates/lobbies/lobby-exit';
 import { useDebatesHub } from '~/core/debates/matchmaking/use-debates-hub';
@@ -145,6 +146,11 @@ const DeepLinkHandler = dynamic(
   { ssr: false }
 );
 
+const CodeStepRecovery = dynamic(
+  () => import('~/core/auth/code-step-recovery').then(m => ({ default: m.CodeStepRecovery })),
+  { ssr: false }
+);
+
 const ReviewChanges = dynamic(
   () => import('~/partials/review/review-changes').then(m => ({ default: m.ReviewChanges })),
   { ssr: false }
@@ -270,6 +276,12 @@ function DeepLinkGate() {
   return useSticky(requestsAnyModal(searchParams)) ? <DeepLinkHandler /> : null;
 }
 
+// A page that may pick up a code step another page left (GEO-3573). Read once, at mount.
+function CodeStepRecoveryGate() {
+  const [reloaded] = React.useState(codeRecoveryExpected);
+  return reloaded ? <CodeStepRecovery /> : null;
+}
+
 function DebatesHubGate() {
   const { isOpen } = useDebatesHub();
   return useSticky(isOpen) ? <DebatesHubPanel /> : null;
@@ -367,6 +379,7 @@ export function App({ children }: { children: React.ReactNode }) {
           <PostAuthRedirectGate />
           <React.Suspense fallback={null}>
             <DeepLinkGate />
+            <CodeStepRecoveryGate />
           </React.Suspense>
           <Toast />
           <GovernanceReopenEditLoadingBar />

@@ -3,6 +3,7 @@
 import * as React from 'react';
 
 import { type AnalyticsProperties } from '~/core/analytics';
+import { codeRecoveryOffered, codeRecoveryProperties, takeCodeRecovery } from '~/core/auth/code-step';
 import { onSignInAbandoned } from '~/core/auth/sign-in-abandoned';
 import { useTrackedLogin } from '~/core/hooks/use-tracked-login';
 import { usePrivy } from '~/core/wallet/auth-hooks';
@@ -40,6 +41,8 @@ export type PrivySignInCallOptions = {
   redirectTo?: string;
   /** A new account is asked only for a name in onboarding (GEO-3517); see `usePrepareOnboarding`. */
   nameOnlyOnboarding?: boolean;
+  /** Fills in Privy's email field: a sign-in picked up again after the tab reloaded (GEO-3573). */
+  prefillEmail?: string;
 };
 
 type PrivySignIn = (
@@ -92,13 +95,19 @@ export function usePrivySignIn(onComplete?: () => void, options?: UsePrivySignIn
         nameOnly: callOptions?.nameOnlyOnboarding,
       });
       const configured = optionsRef.current?.analytics;
+      const own = {
+        ...(typeof configured === 'function' ? configured() : configured),
+        ...(properties && !('nativeEvent' in properties) ? properties : {}),
+      };
+      // GEO-3573: a code asked for on an earlier page is picked up by the first sign-in this page opens,
+      // with its address filled back in, when that page is the same tab or the sign-in came from a link.
+      const recovery = callOptions?.prefillEmail ? null : takeCodeRecovery(own);
       const attempt = login(
-        {
-          ...(typeof configured === 'function' ? configured() : configured),
-          ...(properties && !('nativeEvent' in properties) ? properties : {}),
-        },
-        { resume: optionsRef.current?.resumeAuthAttempt }
+        { ...(recovery?.properties ?? {}), ...own, ...(recovery ? codeRecoveryProperties(recovery) : {}) },
+        { resume: optionsRef.current?.resumeAuthAttempt },
+        callOptions?.prefillEmail ?? recovery?.email ?? undefined
       );
+      if (recovery) codeRecoveryOffered(recovery, attempt?.id);
       // Registered with the app-level attempt rather than held here: this control can unmount
       // while the modal is open, and the withdrawal must still happen (see `sign-in-abandoned`).
       // After `login`, whose new attempt clears the previous one's.
