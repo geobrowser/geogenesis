@@ -1,6 +1,6 @@
 # Our own sign-in box (GEO-3569 part 2, GEO-3550)
 
-Status: design, for review before any feature code. Base `upstream/master` 99b732757.
+Status: built on branch `email-sign-in` behind `ourSignInBox` (off by default). This doc describes the code as built.
 
 ## Why
 
@@ -19,12 +19,12 @@ Switching that one call to "open our box" moves every entry below at once.
 
 | # | Entry | Code | Becomes |
 |---|---|---|---|
-| 1 | Marketing link `?modal=signin&via=marketing` (also `via=invite`, lobby and debate-room links) | `core/auth/use-sign-in-deep-link.ts` → `usePrivySignIn` | The box, centred. Its chunk and Privy both start loading at module evaluation on this URL (#3052's `signInExpectedOnLoad` already loads Privy early). |
+| 1 | Marketing link `?modal=signin&via=marketing` (also `via=invite`, lobby and debate-room links) | `core/auth/use-sign-in-deep-link.ts` → `usePrivySignIn` | The box, centred. On this URL (`signInExpectedOnLoad`) Privy starts loading at module evaluation and the box's chunk as soon as the app mounts. |
 | 2 | Debates link to a signed-in-only tab | `core/debates/use-debates-panel-deep-link.ts:59` | The box |
 | 3 | Navbar Log in, debate feed phone bar | `core/wallet/wallet.tsx:31` (`useTrackedLogin` directly) | The box. With votes on the device it still opens the save-votes sheet, as today. |
 | 4 | Save-votes sheet (corner card and centred) | `partials/save-votes/save-votes-sheet.tsx` | **Keeps its layout** (vote chips, its copy, corner placement). It renders the shared card (`partials/sign-in/sign-in-card.tsx`, extracted from it) and the shared code step (`AccountStep`). |
 | 5 | Explore email capture (newsletter, then account) | `partials/explore/email-capture-popup.tsx` + `email-capture-account-step.tsx` | Keeps its layout; shares the code step (`AccountStep`) and its step events. |
-| 6 | Code step's fallback to Privy's dialog | `email-capture-account-step.tsx:126` | Stays Privy's own dialog (a send we could not make). Needs a `surface: 'privy'` option on `useTrackedLogin` so it never reopens our box in a loop. |
+| 6 | Code step's fallback to Privy's dialog | `email-capture-account-step.tsx:126` | Stays Privy's own dialog (a send we could not make), opened with `fallbackFor: <attempt id>` so it carries on that attempt and never reopens the box. |
 | 7 | Gated controls, all via `usePrivySignIn` | vote buttons (`entity-vote-buttons`, `use-debate-votes`), follow, comments (section + inline composer), join space, bounty card + interest card, space editors popover, ranking compose, pending-actions runner, hub live rail, claims tab, people tab, debate calendar, lobby guest sign-in, lobby reminder, call remind press, shared availability, scheduled-debate notice link, email-settings link | The box, with the caller's `onComplete` / `onCancel` / `redirectTo` / analytics unchanged |
 | 8 | Google redirect return | `core/auth/google-oauth.tsx` (`GoogleOAuthCompleter`) | Unchanged. Its failure toast stays. |
 
@@ -39,9 +39,10 @@ code step, fine print, error states and copy are all the sheet's own.
 ```
 partials/sign-in/sign-in-card.tsx    the sheet's card body (back/close row, email step, code step) and its
                                      centred dialog, extracted from save-votes-sheet.tsx; the sheet renders it
-partials/sign-in/sign-in-box.tsx     SignInBoxHost (mounted once) + SignInBox: the card with a heading only
+partials/sign-in/sign-in-box.tsx     SignInBoxHost + SignInBox: the card with a heading only
+partials/sign-in/sign-in-box-gate.tsx loads the box's chunk (idle, first press, or at once) and mounts it
 partials/sign-in/sign-in-box-copy.ts the box's three words of its own (heading, submit, close label)
-core/auth/sign-in-box/sign-in-box-store.ts  the open request: attempt id, attribution, heading, callbacks
+core/auth/sign-in-box/sign-in-box-store.ts  the open request: attempt id, attribution, heading, prefill
 core/auth/signed-in-before.ts        "this browser has signed in" marker for likely_returning
 ```
 
@@ -49,25 +50,34 @@ core/auth/signed-in-before.ts        "this browser has signed in" marker for lik
   shared by the sheet and the Explore email capture. It mails the code on mount through Privy's headless
   `useLoginWithEmail` and falls back to Privy's own dialog when a send fails. The box uses it unchanged,
   so the GEO-3550 steps go into `AccountStep` once and cover all three surfaces.
-- **Opening.** `useTrackedLogin` reads `readStoredFeatureFlag('ourSignInBox')` at the press. Flag on:
-  `beginPrivyAuth(...)` as today, then `openSignInBox({ attemptId, attribution: attempt.properties,
-  heading, onComplete, onDismiss })` instead of Privy's `login()`. Flag off: unchanged.
+- **Opening.** `useTrackedLogin` begins the attempt (`beginPrivyAuth`) and registers the press's
+  continuation on it (`continueAuthAttempt`). It then reads `readStoredFeatureFlag('ourSignInBox')`:
+  on, `openSignInBox({ attemptId, attribution, heading, prefillEmail })`; off, Privy's `login()`.
+- **Continuation (one owner).** `finishAuthAttempt` runs each continuation registered on the attempt
+  once: `signedIn` on a signed-in end, `abandoned` (the caller's `onError` and `onCancel`) on any other,
+  nothing when a newer press supersedes it. It is held by the attempt, not by the control, so it runs
+  after the control unmounts, on the box, on Privy's fallback dialog and with the flag off. Whatever
+  ends the attempt (`AccountStep`'s headless `completePrivyAuth`, `PrivyAuthTracker` for Privy's dialog,
+  the box's close) is all it takes, in whatever order Privy reports.
+- **Loading the box.** `SignInBoxGate` (mounted with the flag on) downloads the box's chunk at idle
+  (2 s after mount, then `requestIdleCallback`), at the first press if that is sooner, or at once on a
+  page that opens sign-in by itself (`signInExpectedOnLoad`: the sign-in link or a code step to pick
+  up). If the chunk fails to load, the press gets Privy's dialog on the same attempt.
 - **First paint without Privy.** The card imports nothing from `@geogenesis/auth`. `auth-hooks`'
   `useLoginWithEmail` queues calls until Privy is up (`invokeInstance` → `whenReady`, 20 s). While it
   waits, the code step shows the sheet's own pending state: "Sending a 6-digit code to", boxes disabled.
-  The box calls `requestRealAuth()` when it mounts, and on `?modal=signin` Privy loads at module
-  evaluation (#3052).
-- **Completion.** `AccountStep`'s headless `onComplete` records the attempt (`completePrivyAuth`).
-  Headless login doesn't call Privy's global `useLogin` listeners, so the box watches its attempt
-  (`subscribeAuthAttempts`). When the attempt ends signed in, it runs the press's `onComplete` and closes.
-  Any other end just closes it. Wallet: `EmbeddedWalletSync` (#2949). Privy's docs confirm
-  `createOnLogin` skips headless logins.
-- **Dismissal.** Close, Escape or a press on the backdrop: `onDismiss`, where the host runs
-  `cancelPrivyAuth()` and the caller's `onError('exited_auth_flow')`. The exception is while a Google
+  Privy starts loading at the code step's first headless call (`invokeInstance` → `requestRealAuth()`),
+  unless something loaded it earlier: a stored session, the 8 s idle load, or module evaluation on a
+  `signInExpectedOnLoad` page. Mounting the box does not request it.
+- **Box closing.** The box closes when its attempt ends, however it ended. Wallet: `EmbeddedWalletSync`
+  (#2949); Privy's docs confirm `createOnLogin` skips headless logins.
+- **Dismissal.** Close, Escape or a press on the backdrop end the box's attempt (`cancelPrivyAuthAttempt`,
+  a no-op once a newer press owns sign-in), which withdraws the press. The exception is while a Google
   redirect is starting, as in the sheet.
-- **Privy's dialog as the fallback.** `AccountStep` opens it on a failed send. The box steps aside
-  (closes without withdrawing), as the centred sheet does. That call needs a `surface: 'privy'`
-  option on `useTrackedLogin`, or it reopens the box.
+- **Privy's dialog as the fallback.** `AccountStep` opens it on a failed send with
+  `fallbackFor: <its attempt id>`. It opens only while that attempt is current and open, and then
+  without preparing onboarding again. The box closes as the dialog opens; `PrivyAuthTracker` ends the
+  attempt when the dialog completes or is dismissed.
 - **Google.** `useContinueWithGoogle()` as in the sheet, when `googleSignIn` is on and this isn't an
   in-app browser. It carries on the box's attempt rather than starting one, so a failed start leaves the
   box open on email and the press still hears the outcome.
@@ -78,13 +88,11 @@ core/auth/signed-in-before.ts        "this browser has signed in" marker for lik
   - Persisting continuations across the redirect is GEO-3583.
 - **Other methods.** `privyConfig.loginMethods` is `['email']`. Google is added per call behind its flag,
   and no wallet login is enabled. So the box offers what Privy's dialog offers.
-- **Signed in elsewhere** (Google return, another tab): the box closes when `authenticated` flips.
-- **Gap: Privy fails to load.** The sheet has no state for this. `sendCode` rejects after 20 s, and
-  `AccountStep` then opens Privy's dialog, which needs the same Privy and never appears (the failure is
-  only logged). The step is left on its code screen with no code sent. Minimal fix (proposed, not
-  built): when the send fails *because Privy didn't load*, go back to the email step with one line in
-  the sheet's error style, "Couldn't reach sign-in. Try again." This affects the sheet and the email
-  capture today too.
+- **Signed in elsewhere** (another tab, a late session restore): when `authenticated` flips with the
+  attempt still open a task later, the box ends it as `closed` (withdrawing the press) and closes.
+- **Privy fails to load.** `sendCode` rejects after 20 s. Privy's dialog would need the same Privy, so
+  instead the box, the sheet and the email capture go back to the address with "Couldn't reach sign-in.
+  Try again." (`SIGN_IN_UNAVAILABLE_COPY`).
 
 ## 3. Privy capabilities relied on (`@privy-io/react-auth` 3.32.2, installed)
 
@@ -246,6 +254,12 @@ Payload rules (registry branch `signin-box-events`):
 - Flag off: Privy's dialog exactly as today. Flag on: the box everywhere, with Privy's dialog as the
   fallback for captcha or unknown send failures.
 - `sign_in_surface` lets the funnel compare the box against Privy's dialog during the rollout.
+- Flipping the default. The flags dialog used to store every flag's value on any toggle, which froze each
+  default in that browser. `ourSignInBox` was never in any such object (it is new here), and
+  `setFeatureFlagValue` now stores only flags set away from their default, rewriting an older complete
+  object on its next toggle. So flipping `enabledByDefault` reaches every browser except those that set
+  `ourSignInBox` off explicitly. Other flags' frozen defaults stay frozen until that browser toggles
+  something; that is safe because only internal browsers use the dialog.
 - The marketing link's conversion (41% now, 57% before) is the success measure: two weeks on the box.
 
 ## 9. Overlap with open PRs
@@ -278,9 +292,9 @@ Payload rules (registry branch `signin-box-events`):
 - Terms consent: off. Privy has no terms link set, so the box has no consent line and keeps `SAVE_VOTES_FINE_PRINT`.
 - Google redirect (Bryan, 2026-11-04): Google stays beside email on every surface behind `googleSignIn`. A
   queued action is dropped on a Google redirect, as with Privy's modal. Persisting continuations is GEO-3583.
-- Privy fallback: when the code step falls back to Privy's dialog, it carries on the box's open attempt, so
-  the press's continuation and withdrawal still run once.
+- Privy fallback: when the code step falls back to Privy's dialog, it carries on the box's open attempt
+  (`fallbackFor`), so the press's continuation and withdrawal still run once.
+- Continuations belong to the attempt (`continueAuthAttempt`), run once by `finishAuthAttempt`.
 
 Open:
 - The submit label "Continue" (the sheet's own are votes-specific: "Save votes" / "Log in").
-- The Privy-fails-to-load state (§2): the one state the sheet doesn't have.
