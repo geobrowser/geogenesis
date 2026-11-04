@@ -13,11 +13,12 @@ type OAuthState = { status: 'initial' | 'loading' | 'done' } | { status: 'error'
 
 const mocks = vi.hoisted(() => ({
   state: { status: 'initial' } as OAuthState,
-  initOAuth: vi.fn(async () => undefined),
+  initOAuth: vi.fn(async (): Promise<void> => undefined),
   useLoginWithOAuth: vi.fn(),
   setToast: vi.fn(),
   failRedirectedPrivyAuth: vi.fn(),
   attemptId: undefined as string | undefined,
+  cancelPrivyAuth: vi.fn(),
 }));
 
 vi.mock('~/core/wallet/auth-hooks', () => ({ useLoginWithOAuth: mocks.useLoginWithOAuth }));
@@ -27,8 +28,8 @@ vi.mock('~/core/auth-attempt', () => ({
 }));
 vi.mock('~/core/hooks/use-toast', () => ({ useSetToast: () => mocks.setToast }));
 vi.mock('~/core/privy-auth-events', () => ({
-  beginPrivyAuth: vi.fn(),
-  cancelPrivyAuth: vi.fn(),
+  beginPrivyAuth: vi.fn(() => ({ id: mocks.attemptId })),
+  cancelPrivyAuth: mocks.cancelPrivyAuth,
   failRedirectedPrivyAuth: mocks.failRedirectedPrivyAuth,
 }));
 
@@ -148,5 +149,32 @@ describe('a failed return from Google', () => {
 
     expect(mocks.initOAuth).toHaveBeenCalledWith({ provider: 'google' });
     expect(mocks.failRedirectedPrivyAuth).not.toHaveBeenCalled();
+  });
+});
+
+describe('a failed Google start', () => {
+  it.each(['attempt-a', 'newer-attempt'])('only cancels its own attempt when %s is current', async currentId => {
+    let failStart!: (error: Error) => void;
+    mocks.initOAuth.mockImplementationOnce(
+      () =>
+        new Promise<void>((_, reject) => {
+          failStart = reject;
+        })
+    );
+    const host = renderHost(true);
+    const { result } = renderHook(() => useGoogleOAuthSignIn(), {
+      wrapper: ({ children }) => <Provider store={host.store}>{children}</Provider>,
+    });
+    let started!: Promise<void>;
+    act(() => {
+      started = result.current!({});
+    });
+    const failed = expect(started).rejects.toThrow('blocked');
+    mocks.attemptId = currentId;
+    await act(async () => {
+      failStart(new Error('blocked'));
+      await failed;
+    });
+    expect(mocks.cancelPrivyAuth).toHaveBeenCalledTimes(currentId === 'attempt-a' ? 1 : 0);
   });
 });
