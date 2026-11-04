@@ -5,7 +5,7 @@ import * as React from 'react';
 import { type AnalyticsProperties } from '~/core/analytics';
 import { codeRecoveryOffered, codeRecoveryProperties, takeCodeRecovery } from '~/core/auth/code-step';
 import { onSignInAbandoned } from '~/core/auth/sign-in-abandoned';
-import { type TrackedLoginExtras, useTrackedLogin } from '~/core/hooks/use-tracked-login';
+import { type TrackedLoginExtras, fallbackAttempt, useTrackedLogin } from '~/core/hooks/use-tracked-login';
 import { usePrivy } from '~/core/wallet/auth-hooks';
 
 import { usePrepareOnboarding } from './use-prepare-onboarding';
@@ -94,10 +94,13 @@ export function usePrivySignIn(onComplete?: () => void, options?: UsePrivySignIn
   return React.useCallback<PrivySignIn>(
     (properties, callOptions) => {
       if (authenticatedRef.current) return undefined;
-      prepareOnboarding({
-        returnTo: callOptions?.redirectTo ?? optionsRef.current?.redirectTo,
-        nameOnly: callOptions?.nameOnlyOnboarding,
-      });
+      // A fallback carries on the open press, whose onboarding and return address are already set.
+      const resuming = fallbackAttempt({ surface: optionsRef.current?.surface }) !== undefined;
+      if (!resuming)
+        prepareOnboarding({
+          returnTo: callOptions?.redirectTo ?? optionsRef.current?.redirectTo,
+          nameOnly: callOptions?.nameOnlyOnboarding,
+        });
       const configured = optionsRef.current?.analytics;
       const own = {
         ...(typeof configured === 'function' ? configured() : configured),
@@ -105,7 +108,7 @@ export function usePrivySignIn(onComplete?: () => void, options?: UsePrivySignIn
       };
       // GEO-3573: a code asked for on an earlier page is picked up by the first sign-in this page opens,
       // with its address filled back in, when that page is the same tab or the sign-in came from a link.
-      const recovery = callOptions?.prefillEmail ? null : takeCodeRecovery(own);
+      const recovery = callOptions?.prefillEmail || resuming ? null : takeCodeRecovery(own);
       const attempt = login(
         { ...(recovery?.properties ?? {}), ...own, ...(recovery ? codeRecoveryProperties(recovery) : {}) },
         { resume: optionsRef.current?.resumeAuthAttempt },

@@ -29,6 +29,16 @@ export type TrackedLoginExtras = {
   surface?: 'privy';
 };
 
+/**
+ * The open attempt a `privy` fallback carries on, so the press that opened it hears how it ends and
+ * keeps what it queued for an abandoned sign-in.
+ */
+export function fallbackAttempt(extras?: TrackedLoginExtras) {
+  if (extras?.surface !== 'privy') return undefined;
+  const attempt = currentAuthAttempt();
+  return attempt && !attempt.endedAt ? attempt : undefined;
+}
+
 /** Capture attribution at the press; the persistent observer owns completion tracking. */
 export function useTrackedLogin(params: TrackedLoginParams) {
   const scope = useActionScope();
@@ -77,7 +87,9 @@ export function useTrackedLogin(params: TrackedLoginParams) {
       // agree with the component on the signed-in action (for example an Explore card).
       const component =
         context.component === 'sign_in_prompt' ? (properties?.component ?? context.component) : context.component;
-      const attempt = beginPrivyAuth({ ...context, auth_trigger: 'control', ...properties, component }, options);
+      const attempt =
+        fallbackAttempt(extras) ??
+        beginPrivyAuth({ ...context, auth_trigger: 'control', ...properties, component }, options);
       requested.current = { ...context, auth_attempt_id: attempt?.id };
       const prefillEmail = extras?.prefillEmail;
       if (attempt && extras?.surface !== 'privy' && readStoredFeatureFlag('ourSignInBox')) {
