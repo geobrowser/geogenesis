@@ -15,13 +15,16 @@ export async function GET(request: Request) {
   try {
     const context = await resolveExploreFeedRequestContext();
     const spaceIds = exploreBrowseSpaceIds(context.browse, null);
-    const result = await fetchExploreFeed({
+    const feedOptions = {
       ...context,
-      sort: 'new',
-      time: 'all',
+      sort: 'new' as const,
+      time: 'all' as const,
       cursor: null,
       spaceFilterIds: null,
       viewerMemberSpaceId: context.personalMemberSpaceId,
+    };
+    const result = await fetchExploreFeed({
+      ...feedOptions,
       entityFilter: {
         or: [
           { id: { is: id } },
@@ -44,12 +47,19 @@ export async function GET(request: Request) {
       isDebate: item => isDebateEntity(item.types),
       isPlayable: (item, signal) => debateHasProcessedVideo(item.entityId, signal),
       onPlayable: items => playable.push(...items),
+      // This is a bounded page of related debates, not a ranked-feed lead shortlist.
+      candidates: result.items.length,
     });
-    const item =
+    let item =
       playable.find(item => normId(item.entityId) === id) ??
       playable[0] ??
       result.items.find(item => normId(item.entityId) === id) ??
       null;
+    if (!item && result.items.length > 0) {
+      // Newer related debates can push the selected claim beyond this page.
+      const selected = await fetchExploreFeed({ ...feedOptions, entityFilter: { id: { is: id } } });
+      item = selected.items.find(item => normId(item.entityId) === id) ?? null;
+    }
     return NextResponse.json({ item }, { headers });
   } catch (error) {
     console.error('explore entry', error);

@@ -21,7 +21,7 @@ const claim = { entityId: ID, types: [] };
 const debate = { entityId: DEBATE, types: [{ id: DEBATE_TYPE_ID }] };
 const request = (id = ID) => new Request(`https://www.geobrowser.io/api/explore/entry?entityId=${id}`);
 beforeEach(() => {
-  vi.clearAllMocks();
+  vi.resetAllMocks();
   mocks.context.mockResolvedValue({
     browse: { featured: [] },
     memberOrEditorSpaceIds: ['member'],
@@ -78,6 +78,29 @@ describe('selected Explore entry', () => {
   it('does not synthesize a card for an unavailable entity', async () => {
     mocks.feed.mockResolvedValue({ items: [] });
     expect(await (await GET(request())).json()).toEqual({ item: null });
+  });
+  it('finds a playable debate after six unavailable related debates', async () => {
+    const related = Array.from({ length: 7 }, (_, index) => ({ ...debate, entityId: String(index).padStart(32, '0') }));
+    mocks.feed.mockResolvedValue({ items: [claim, ...related] });
+    mocks.playable.mockImplementation(async (id: string) => id === related[6].entityId);
+    expect(await (await GET(request())).json()).toEqual({ item: related[6] });
+  });
+  it('looks up the selected claim directly when newer debates fill the first page', async () => {
+    const related = Array.from({ length: 22 }, (_, index) => ({
+      ...debate,
+      entityId: String(index).padStart(32, '0'),
+    }));
+    mocks.feed.mockResolvedValueOnce({ items: related }).mockResolvedValueOnce({ items: [claim] });
+    mocks.playable.mockResolvedValue(false);
+    expect(await (await GET(request())).json()).toEqual({ item: claim });
+    expect(mocks.feed).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        browse: { featured: [] },
+        spaceFilterIds: null,
+        viewerMemberSpaceId: 'personal',
+        entityFilter: { id: { is: ID } },
+      })
+    );
   });
   it('returns a retryable failure when the graph cannot be read', async () => {
     const log = vi.spyOn(console, 'error').mockImplementation(() => {});
