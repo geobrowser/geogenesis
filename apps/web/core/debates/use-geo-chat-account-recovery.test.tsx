@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => ({
   createdAt: new Date(0) as Date,
   isRegistered: false,
   retryNow: vi.fn(),
+  accountKey: 'user-a',
 }));
 
 vi.mock('./api', () => ({
@@ -31,7 +32,7 @@ vi.mock('./hooks', () => ({
   useGeoChatAuth: () => ({
     ready: true,
     authenticated: true,
-    accountKey: 'user-a',
+    accountKey: mocks.accountKey,
     getPrivyIdentityToken: mocks.getToken,
   }),
 }));
@@ -93,6 +94,7 @@ beforeEach(() => {
   mocks.createdAt = new Date(0);
   mocks.isRegistered = false;
   mocks.retryNow.mockReset();
+  mocks.accountKey = 'user-a';
   getDefaultStore().set(stepAtom, 'start' as never);
   window.localStorage.clear();
 });
@@ -107,6 +109,22 @@ afterEach(() => {
 });
 
 describe('useGeoChatAccountRecovery', () => {
+  it('reports an account once per load, across a switch away and back', () => {
+    const view = renderHookOnce();
+    act(() => setGeoChatAccountStatus('user-a', refused));
+    mocks.accountKey = 'user-b';
+    view.rerender();
+    act(() => setGeoChatAccountStatus('user-b', refused));
+    mocks.accountKey = 'user-a';
+    view.rerender();
+    act(() => setGeoChatAccountStatus('user-a', { ...refused, code: 'other' }));
+    expect(outcomes()).toEqual(['session_refused', 'session_refused']);
+    expect(mocks.capture.mock.calls.map(([, payload]) => (payload as { refusal_code: string }).refusal_code)).toEqual([
+      'no_personal_space',
+      'no_personal_space',
+    ]);
+  });
+
   it('leaves retrying a refused exchange to the gateway', async () => {
     render();
     act(() => setGeoChatAccountStatus('user-a', refused));
