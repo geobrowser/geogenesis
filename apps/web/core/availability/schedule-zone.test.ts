@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
 import { type AvailabilityBlock, effectiveAvailability, localTimezone } from './blocks';
-import { convertBlocks, scheduleTimezoneNote, timezoneChanges, timezoneLabel } from './schedule-zone';
+import {
+  convertBlocks,
+  scheduleInCurrentZone,
+  scheduleTimezoneNote,
+  timezoneChanges,
+  timezoneLabel,
+} from './schedule-zone';
 
 const at = (hour: number, minute = 0) => hour * 60 + minute;
 // A Wednesday after both the US and the EU have left daylight saving: Los Angeles is 10 hours
@@ -18,6 +24,8 @@ describe('timezoneLabel', () => {
     expect(timezoneLabel('America/Argentina/Buenos_Aires')).toBe('Argentina Standard Time (Buenos Aires)');
     expect(timezoneLabel('Etc/UTC')).toBe('UTC');
     expect(timezoneLabel('local')).toBe('your local time');
+    // POSIX signs run backwards, so the bare offset is the only honest name.
+    expect(timezoneLabel('Etc/GMT+5')).toBe('GMT-05:00');
   });
 
   it('falls back to the city for a zone Intl cannot read', () => {
@@ -129,6 +137,26 @@ describe('convertBlocks', () => {
     expect(spans(convertBlocks(blocks, 'UTC', 'Asia/Kathmandu', NOW))).toEqual([
       { kind: 'recurring', weekday: 2, start: at(15), end: at(16, 30) },
     ]);
+  });
+});
+
+describe('scheduleInCurrentZone', () => {
+  const weekly: AvailabilityBlock[] = [{ id: 'r', kind: 'recurring', weekday: 1, start: at(9), end: at(10) }];
+
+  it('hands back the same blocks when the zone has not changed', () => {
+    expect(scheduleInCurrentZone(weekly, VILNIUS, VILNIUS)).toEqual({ blocks: weekly, converted: false });
+    expect(scheduleInCurrentZone(weekly, undefined, VILNIUS).blocks).toBe(weekly);
+  });
+
+  it('converts a schedule saved elsewhere', () => {
+    const { blocks, converted } = scheduleInCurrentZone(weekly, LA, VILNIUS);
+    expect(converted).toBe(true);
+    expect(blocks).toEqual([expect.objectContaining({ weekday: 1 })]);
+    expect(blocks).not.toBe(weekly);
+  });
+
+  it('has nothing to convert in an empty week', () => {
+    expect(scheduleInCurrentZone([], LA, VILNIUS).converted).toBe(false);
   });
 });
 

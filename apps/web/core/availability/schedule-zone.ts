@@ -6,7 +6,7 @@
  * converts the saved hours into the current zone on the way in: the same instants, drawn in the only
  * zone the grid can honestly draw. Saving then changes nothing they did not change.
  */
-import { type AvailabilityBlock, DAY_END_HOUR, SLOT_MINUTES, mergeBlocks } from './blocks';
+import { type AvailabilityBlock, DAY_END_HOUR, SLOT_MINUTES, localTimezone, mergeBlocks } from './blocks';
 import { DAY_MS, zonedClock, zonedOffsetMinutes, zonedWallClockInstant } from './peer-schedule';
 
 const UTC_ZONES = new Set(['UTC', 'Etc/UTC', 'Etc/GMT', 'GMT']);
@@ -31,6 +31,8 @@ export function timezoneLabel(zone: string): string {
     const name = new Intl.DateTimeFormat('en-US', { timeZone: zone, timeZoneName: 'longGeneric' })
       .formatToParts(new Date())
       .find(part => part.type === 'timeZoneName')?.value;
+    // `Etc/GMT+5` is POSIX for five hours *behind*: its "city" contradicts the name (`GMT-05:00`).
+    if (name && zone.startsWith('Etc/')) return name;
     return name ? `${name} (${city})` : city;
   } catch {
     return city;
@@ -138,6 +140,22 @@ export function convertBlocks(
   });
   // Snapping or a clock change can leave two pieces touching; they read as one window.
   return mergeBlocks(converted);
+}
+
+/**
+ * A saved schedule as the person sees it: converted into the zone they are in now, or as saved
+ * where that changes nothing. The one place the decision is made, so the editor and the summaries
+ * that open it can never show one slot at two different hours.
+ */
+export function scheduleInCurrentZone(
+  blocks: AvailabilityBlock[],
+  savedTimezone: string | undefined,
+  currentTimezone: string = localTimezone()
+): { blocks: AvailabilityBlock[]; converted: boolean } {
+  const converted = blocks.length > 0 && savedTimezone !== undefined && timezoneChanges(savedTimezone, currentTimezone);
+  return converted
+    ? { blocks: convertBlocks(blocks, savedTimezone, currentTimezone), converted }
+    : { blocks, converted };
 }
 
 /**

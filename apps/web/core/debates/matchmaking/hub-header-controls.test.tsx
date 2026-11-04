@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   authenticated: true,
   available: false,
   blocks: [] as AvailabilityBlock[],
+  timezone: undefined as string | undefined,
   saveSurfaces: [] as string[],
   updateAvailability: vi.fn(),
   canHost: false,
@@ -25,6 +26,7 @@ vi.mock('~/core/debates/hooks', () => ({
     data: mocks.loaded ? { is_set: mocks.isSet } : undefined,
     blocks: mocks.loaded ? mocks.blocks : undefined,
     isSet: mocks.isSet,
+    timezone: mocks.timezone,
     isError: false,
     refetch: vi.fn(),
   }),
@@ -48,6 +50,12 @@ vi.mock('../lobbies/open-lobby-dialog', () => ({
   OpenLobbyDialog: () => <div role="dialog" aria-label="Open a debate lobby" />,
 }));
 
+// The browser's zone, which the machine running the tests would otherwise decide.
+vi.mock('~/core/availability/blocks', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/availability/blocks')>()),
+  localTimezone: () => 'Europe/Vilnius',
+}));
+
 const { HubHeaderControls } = await import('./hub-header-controls');
 
 beforeAll(() => {
@@ -67,6 +75,7 @@ afterEach(() => {
     authenticated: true,
     available: false,
     blocks: [],
+    timezone: undefined,
     saveSurfaces: [],
     canHost: false,
   });
@@ -141,6 +150,19 @@ describe('HubHeaderControls', () => {
       within(await screen.findByRole('dialog', { name: /schedule/i })).getByRole('button', { name: 'Save schedule' })
     ).toBeInTheDocument();
     expect(new Set(mocks.saveSurfaces)).toEqual(new Set(['hub_header']));
+  });
+
+  // Saved in Los Angeles, read in Vilnius: the row says the hours the editor it opens will draw.
+  it('summarises a schedule saved in another zone in the current one (GEO-3582)', async () => {
+    mocks.isSet = true;
+    mocks.timezone = 'America/Los_Angeles';
+    mocks.blocks = [{ id: 'r1', kind: 'recurring', weekday: 1, start: 9 * 60, end: 10 * 60 }];
+    const user = userEvent.setup();
+    render(<HubHeaderControls />);
+
+    await user.click(pill());
+    const menu = await screen.findByRole('dialog', { name: 'Your availability' });
+    expect(within(menu).getByRole('button', { name: /^Edit my times/ })).toHaveTextContent(/Tue 7 – 8pm/);
   });
 
   it("labels its clicks as the surface it sits on, the hub's by default", async () => {

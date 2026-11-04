@@ -9,6 +9,7 @@ import cx from 'classnames';
 import { useActionContext } from '~/core/action-context-provider';
 import { copyAvailabilityLink } from '~/core/availability/availability-deep-link';
 import { summarizeSchedule } from '~/core/availability/schedule-summary';
+import { scheduleInCurrentZone } from '~/core/availability/schedule-zone';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useFeatureFlag } from '~/core/state/feature-flags';
 
@@ -75,7 +76,7 @@ function AvailabilityMenu({
   const { authenticated } = useGeoChatAuth();
   const { data: activity } = useDebateActivity(authenticated);
   const updateAvailability = useUpdateDebateAvailability();
-  const { blocks, isSet, data: schedule } = useDebateSchedule();
+  const { blocks, isSet, timezone, data: schedule } = useDebateSchedule();
   const popoverPortal = useElevatedPopoverPortal();
   const [open, setOpen] = React.useState(false);
   const [editing, setEditing] = React.useState(false);
@@ -86,11 +87,16 @@ function AvailabilityMenu({
   const ownRef = React.useRef<HTMLButtonElement | null>(null);
   const openerRef = triggerRef ?? ownRef;
 
+  // In the zone the editor this row opens draws it in, or a traveler reads one slot at two hours.
+  const summary = React.useMemo(
+    () => (isSet && blocks ? summarizeSchedule(scheduleInCurrentZone(blocks, timezone).blocks) : null),
+    [isSet, blocks, timezone]
+  );
+
   if (!authenticated) return null;
 
   const available = activity?.available_to_debate ?? false;
   const scheduleUnset = schedule !== undefined && !isSet;
-  const summary = isSet && blocks ? summarizeSchedule(blocks) : null;
 
   return (
     <>
