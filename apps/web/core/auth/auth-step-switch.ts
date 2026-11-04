@@ -1,7 +1,6 @@
 /**
- * GEO-3550's one send switch, for the `auth_step` events and the funnel properties on the attempt
- * events. Off until the analytics registry's contract is deployed: the collector rejects a
- * growth-v2 event it has no contract for, failing its batch. Until then `auth_step` is only logged.
+ * GEO-3550's send switch for `auth_step` and the attempt events' funnel properties. Off until the
+ * registry contract deploys: the collector fails a batch holding an event it has no contract for.
  */
 export const SEND_AUTH_STEP = false;
 
