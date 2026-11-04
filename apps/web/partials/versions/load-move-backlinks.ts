@@ -2,7 +2,7 @@ import type { QueryClient } from '@tanstack/react-query';
 
 import { Effect } from 'effect';
 
-import { getEntityBacklinks } from '~/core/io/queries';
+import { ENTITY_ID_BATCH_CONCURRENCY, getEntityBacklinks } from '~/core/io/queries';
 import { E } from '~/core/sync/orm';
 import type { GeoStore } from '~/core/sync/store';
 import type { Relation } from '~/core/types';
@@ -22,7 +22,9 @@ export async function loadMoveBacklinks({
 }): Promise<Relation[]> {
   const { entityIds: subtreeIds } = collectSubtree(entityId, sourceSpaceId);
 
-  const backlinks = await Promise.all([...subtreeIds].map(id => Effect.runPromise(getEntityBacklinks(id))));
+  const backlinks = await Effect.runPromise(
+    Effect.forEach([...subtreeIds], id => getEntityBacklinks(id), { concurrency: ENTITY_ID_BATCH_CONCURRENCY })
+  );
 
   const linkingIds = [...new Set(backlinks.flat().map(entity => entity.id))].filter(id => !subtreeIds.has(id));
   if (linkingIds.length === 0) return [];

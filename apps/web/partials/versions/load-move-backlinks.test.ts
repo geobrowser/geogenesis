@@ -9,9 +9,14 @@ const mocks = vi.hoisted(() => ({
   relations: [] as any[],
   backlinks: {} as Record<string, { id: string }[]>,
   entities: [] as any[],
-  failBacklinks: false,
+  failBacklinks: false as boolean | string,
   syncedIds: [] as string[][],
+  requested: [] as string[],
+  inFlight: 0,
+  maxInFlight: 0,
 }));
+
+const CONCURRENCY = vi.hoisted(() => 3);
 
 vi.mock('~/core/sync/use-store', () => ({
   getRelations: ({ selector }: { selector?: (r: any) => boolean }) =>
@@ -20,8 +25,17 @@ vi.mock('~/core/sync/use-store', () => ({
 }));
 
 vi.mock('~/core/io/queries', () => ({
+  ENTITY_ID_BATCH_CONCURRENCY: CONCURRENCY,
   getEntityBacklinks: (id: string) =>
-    mocks.failBacklinks ? Effect.fail(new Error('network')) : Effect.succeed(mocks.backlinks[id] ?? []),
+    Effect.gen(function* () {
+      mocks.requested.push(id);
+      mocks.inFlight++;
+      mocks.maxInFlight = Math.max(mocks.maxInFlight, mocks.inFlight);
+      yield* Effect.promise(() => new Promise(resolve => setTimeout(resolve, 0)));
+      mocks.inFlight--;
+      if (mocks.failBacklinks === true || mocks.failBacklinks === id) return yield* Effect.fail(new Error('network'));
+      return mocks.backlinks[id] ?? [];
+    }),
 }));
 
 vi.mock('~/core/sync/orm', () => ({
@@ -47,6 +61,11 @@ const relation = (over: Record<string, any>) => ({
   ...over,
 });
 
+const blocks = (count: number) =>
+  Array.from({ length: count }, (_, i) =>
+    relation({ id: `contains-block-${i}`, from: ENTITY, to: `block-${i}`, typeId: SystemIds.BLOCKS })
+  );
+
 const run = () => loadMoveBacklinks({ entityId: ENTITY, sourceSpaceId: SOURCE, store: {} as any, cache: {} as any });
 
 beforeEach(() => {
@@ -55,6 +74,9 @@ beforeEach(() => {
   mocks.entities = [];
   mocks.failBacklinks = false;
   mocks.syncedIds = [];
+  mocks.requested = [];
+  mocks.inFlight = 0;
+  mocks.maxInFlight = 0;
 });
 
 describe('loadMoveBacklinks', () => {
@@ -95,5 +117,30 @@ describe('loadMoveBacklinks', () => {
     mocks.failBacklinks = true;
 
     await expect(run()).rejects.toThrow();
+  });
+
+  it('runs only a few lookups at a time on a long page, and still looks up every block once', async () => {
+    mocks.relations = blocks(20);
+    mocks.backlinks = { 'block-7': [{ id: 'sharer' }] };
+    mocks.entities = [
+      {
+        id: 'sharer',
+        relations: [relation({ id: 'shares', from: 'sharer', to: 'block-7', typeId: SystemIds.BLOCKS })],
+      },
+    ];
+
+    expect((await run()).map(r => r.id)).toEqual(['shares']);
+    expect(mocks.maxInFlight).toBe(CONCURRENCY);
+    expect([...mocks.requested].sort()).toEqual([ENTITY, ...Array.from({ length: 20 }, (_, i) => `block-${i}`)].sort());
+  });
+
+  it('starts no more lookups once one has failed', async () => {
+    mocks.relations = blocks(20);
+    mocks.failBacklinks = ENTITY;
+
+    await expect(run()).rejects.toThrow();
+    await new Promise(resolve => setTimeout(resolve, 10));
+
+    expect(mocks.requested.length).toBeLessThan(21);
   });
 });
