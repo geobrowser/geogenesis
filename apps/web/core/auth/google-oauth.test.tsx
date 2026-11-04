@@ -5,6 +5,7 @@ import * as React from 'react';
 import { Provider, createStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { closeSignInBox, openSignInBox } from '~/core/auth/sign-in-box/sign-in-box-store';
 import { featureFlagsStorageKey } from '~/core/state/feature-flags';
 
 import { GoogleOAuthHost, useGoogleOAuthSignIn } from './google-oauth';
@@ -81,6 +82,7 @@ afterEach(() => {
   window.history.replaceState({}, '', '/');
   vi.clearAllMocks();
   vi.restoreAllMocks();
+  closeSignInBox();
 });
 
 describe('GoogleOAuthHost', () => {
@@ -214,6 +216,7 @@ describe('Google sign-in steps (GEO-3550)', () => {
   // The box's press must hear the outcome, and a failed start leaves the box open to say so.
   it("carries on the sign-in box's open attempt, and leaves it open when the start fails", async () => {
     mocks.attemptId = 'box-attempt';
+    openSignInBox({ attemptId: 'box-attempt', attribution: { component: 'navbar' } });
     mocks.initOAuth.mockRejectedValueOnce(Object.assign(new Error('blocked'), { privyErrorCode: 'oauth_init_failed' }));
     const host = renderHost(true);
     const { result } = renderHook(() => useGoogleOAuthSignIn(), {
@@ -225,6 +228,34 @@ describe('Google sign-in steps (GEO-3550)', () => {
     expect(mocks.cancelPrivyAuth).not.toHaveBeenCalled();
     expect(mocks.tags.map(tag => tag.id)).toEqual(['box-attempt', 'box-attempt']);
     expect(mocks.steps.map(entry => entry.step)).toEqual(['google_started', 'google_failed']);
+  });
+
+  // The box's close skips cancelling while Google starts; a failed start must then end the attempt.
+  it("cancels the box's attempt when the start fails after the box was closed", async () => {
+    mocks.attemptId = 'box-attempt';
+    openSignInBox({ attemptId: 'box-attempt', attribution: { component: 'navbar' } });
+    let failStart!: (error: Error) => void;
+    mocks.initOAuth.mockImplementationOnce(
+      () =>
+        new Promise<void>((_, reject) => {
+          failStart = reject;
+        })
+    );
+    const host = renderHost(true);
+    const { result } = renderHook(() => useGoogleOAuthSignIn(), {
+      wrapper: ({ children }) => <Provider store={host.store}>{children}</Provider>,
+    });
+    let started!: Promise<void>;
+    act(() => {
+      started = result.current!({}, { surface: 'box', attemptId: 'box-attempt' });
+    });
+    const failed = expect(started).rejects.toThrow('blocked');
+    closeSignInBox('box-attempt');
+    await act(async () => {
+      failStart(new Error('blocked'));
+      await failed;
+    });
+    expect(mocks.cancelPrivyAuth).toHaveBeenCalledTimes(1);
   });
 
   it('starts its own attempt when the one named has been replaced', async () => {

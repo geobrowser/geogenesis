@@ -7,6 +7,7 @@ import { currentAuthAttempt, tagAuthAttempt } from '~/core/auth-attempt';
 import { type SignInSurface, authErrorCode } from '~/core/auth/auth-step-switch';
 import { captureAuthStep } from '~/core/auth/code-step';
 import { useGoogleSignInEnabled, useGoogleSignInOffered } from '~/core/auth/google-sign-in';
+import { readSignInBox } from '~/core/auth/sign-in-box/sign-in-box-store';
 import { usePrepareOnboarding } from '~/core/hooks/use-prepare-onboarding';
 import { useSetToast } from '~/core/hooks/use-toast';
 import { beginPrivyAuth, cancelPrivyAuth, failRedirectedPrivyAuth } from '~/core/privy-auth-events';
@@ -95,8 +96,9 @@ export function useGoogleOAuthSignIn() {
           const authError = authErrorCode(error);
           tagAuthAttempt(attempt.id, { lastAuthError: authError });
           captureAuthStep('google_failed', { sign_in_method: 'google', auth_error: authError });
-          // A resumed attempt stays open: its surface says the start failed and email still works.
-          if (!resumed) cancelPrivyAuth();
+          // A resumed attempt stays open while the box still shows it, to say the start failed and
+          // offer email. Closed meanwhile, nothing else would end it.
+          if (!resumed || readSignInBox()?.attemptId !== attempt.id) cancelPrivyAuth();
         }
         throw error;
       }
