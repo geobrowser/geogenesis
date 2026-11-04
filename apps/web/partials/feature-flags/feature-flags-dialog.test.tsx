@@ -57,21 +57,10 @@ describe('FeatureFlagsDialog', () => {
     await waitFor(() => {
       // Values, not key order — see the note in `feature-flags.test.ts`.
       expect(JSON.parse(window.localStorage.getItem(featureFlagsStorageKey) ?? 'null')).toEqual({
-        playbackDiagnostics: false,
+        // Only the flags set away from their default.
         debugDebatesPage: true,
         debateDebugging: true,
-        debateDeviceSwitchRecording: false,
         debateFormatSelector: true,
-        exploreSidePanel: false,
-        forYouFeed: false,
-        lobbyHosting: false,
-        spaceCalls: false,
-        googleSignIn: false,
-        googleCalendar: false,
-        microsoftCalendar: false,
-        bountiesTab: true,
-        signInRecoveryAutoOpen: true,
-        ourSignInBox: false,
       });
     });
   });
