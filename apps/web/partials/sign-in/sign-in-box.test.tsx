@@ -225,16 +225,31 @@ describe('SignInBox', () => {
     const { attempt, request } = open();
     act(() => finishAuthAttempt('closed', readAuthAttempt(attempt.id)));
     expect(request.onComplete).not.toHaveBeenCalled();
+    expect(request.onDismiss).toHaveBeenCalledTimes(1);
     expect(isSignInBoxOpen()).toBe(false);
   });
 
-  it("steps aside for Privy's dialog without withdrawing the attempt", () => {
+  it("steps aside for Privy's dialog, still open on the attempt, and closes when it ends", () => {
     const { rerender } = render(<SignInBoxHost />);
-    const { request } = open();
+    const { attempt, request } = open();
     mocks.isModalOpen = true;
     rerender(<SignInBoxHost />);
-    expect(isSignInBoxOpen()).toBe(false);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(isSignInBoxOpen()).toBe(true);
     expect(request.onDismiss).not.toHaveBeenCalled();
+    act(() => finishAuthAttempt('signed_in', readAuthAttempt(attempt.id)));
+    expect(request.onComplete).toHaveBeenCalledTimes(1);
+    expect(isSignInBoxOpen()).toBe(false);
+  });
+
+  it("closes once Privy's dialog goes with the attempt still open", () => {
+    const { rerender } = render(<SignInBoxHost />);
+    open();
+    mocks.isModalOpen = true;
+    rerender(<SignInBoxHost />);
+    mocks.isModalOpen = false;
+    rerender(<SignInBoxHost />);
+    expect(isSignInBoxOpen()).toBe(false);
   });
 
   it('closes once the visitor is signed in another way', () => {

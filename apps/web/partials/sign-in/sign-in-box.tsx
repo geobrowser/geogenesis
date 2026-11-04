@@ -53,12 +53,20 @@ function SignInBox({ request }: { request: SignInBoxRequest }) {
     return () => cancelAnimationFrame(frame);
   }, []);
 
-  // The press's continuation runs once its attempt ends signed in, however the box got there.
+  // Privy's dialog is the code step's fallback (a send it could not make), on this same attempt. The
+  // box steps aside but stays mounted until the attempt ends, so the press hears the outcome even if
+  // the control that opened it has unmounted.
+  const [steppedAside, setSteppedAside] = React.useState(false);
+  if (isModalOpen && !steppedAside) setSteppedAside(true);
+
+  // The press's continuation runs once its attempt ends signed in, however the box got there; any
+  // other end withdraws it. Both are no-ops for a press that already heard.
   React.useEffect(() => {
     const check = () => {
       const attempt = readAuthAttempt(requestRef.current.attemptId);
       if (!attempt?.endedAt) return;
       if (isSignedInOutcome(attempt.outcome)) requestRef.current.onComplete?.();
+      else requestRef.current.onDismiss?.();
       closeSignInBox(requestRef.current.attemptId);
     };
     check();
@@ -66,16 +74,16 @@ function SignInBox({ request }: { request: SignInBoxRequest }) {
     return () => void unsubscribe();
   }, []);
 
-  // Signed in some other way (a Google return, another tab): nothing left to ask.
+  // Signed in some other way (a Google return, another tab): nothing left to ask. Not while stepped
+  // aside, where the attempt's end closes the box.
   React.useEffect(() => {
-    if (authenticated) closeSignInBox(requestRef.current.attemptId);
-  }, [authenticated]);
+    if (authenticated && !steppedAside) closeSignInBox(requestRef.current.attemptId);
+  }, [authenticated, steppedAside]);
 
-  // Privy's dialog is the code step's fallback (a send it could not make). The attempt it resumes
-  // is still this one, so the box steps aside rather than withdrawing it.
+  // Privy's dialog gone with the attempt still open: nothing will end it here.
   React.useEffect(() => {
-    if (isModalOpen) closeSignInBox(requestRef.current.attemptId);
-  }, [isModalOpen]);
+    if (steppedAside && !isModalOpen) closeSignInBox(requestRef.current.attemptId);
+  }, [isModalOpen, steppedAside]);
   const isModalOpenRef = React.useRef(isModalOpen);
   isModalOpenRef.current = isModalOpen;
 
@@ -113,6 +121,7 @@ function SignInBox({ request }: { request: SignInBoxRequest }) {
   };
 
   const heading = request.heading ?? SIGN_IN_BOX_COPY.heading;
+  if (steppedAside) return null;
 
   return (
     <CenteredSignInDialog title={heading} hidden={false} onClose={close} restoreFocus={() => !isModalOpenRef.current}>
