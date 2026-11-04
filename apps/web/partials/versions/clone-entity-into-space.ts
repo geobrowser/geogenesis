@@ -1,16 +1,19 @@
 import { IdUtils, Position, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
-import { RELATION_ENTITY_RELATIONSHIP_TYPE } from '~/core/constants';
+import { DATA_TYPE_PROPERTY, RELATION_ENTITY_RELATIONSHIP_TYPE, RENDERABLE_TYPE_PROPERTY } from '~/core/constants';
 import { ID } from '~/core/id';
 import type { Mutator } from '~/core/sync/use-mutate';
 import { getRelations, getValues } from '~/core/sync/use-store';
 import { Entity, Relation } from '~/core/types';
 
 // Never pinned: the schema reads their `toSpaceId` as the type's defining space, and unset means the type's own space.
+// A property's data type and renderable type are written with no space at all, and resolve from where the property lives.
 export const SCHEMA_RELATION_TYPE_IDS = new Set<string>([
   SystemIds.TYPES_PROPERTY,
   SystemIds.RELATION_VALUE_RELATIONSHIP_TYPE,
   RELATION_ENTITY_RELATIONSHIP_TYPE,
+  DATA_TYPE_PROPERTY,
+  RENDERABLE_TYPE_PROPERTY,
 ]);
 
 function signatureOf(relation: Relation): string {

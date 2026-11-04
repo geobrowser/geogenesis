@@ -2,7 +2,7 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { RELATION_ENTITY_RELATIONSHIP_TYPE } from '~/core/constants';
+import { DATA_TYPE_PROPERTY, RELATION_ENTITY_RELATIONSHIP_TYPE, RENDERABLE_TYPE_PROPERTY } from '~/core/constants';
 
 import { cloneEntityIntoSpace, collectHydrationTargetIds } from './clone-entity-into-space';
 
@@ -24,6 +24,8 @@ const SCHEMA_RELATION_TYPES = [
   ['a Types relation', SystemIds.TYPES_PROPERTY],
   ["a property's relation value type", SystemIds.RELATION_VALUE_RELATIONSHIP_TYPE],
   ["a property's relation entity type", RELATION_ENTITY_RELATIONSHIP_TYPE],
+  ["a property's data type", DATA_TYPE_PROPERTY],
+  ["a property's renderable type", RENDERABLE_TYPE_PROPERTY],
 ];
 
 const SOURCE = 'space-source';
