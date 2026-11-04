@@ -34,6 +34,7 @@ describe('feature flags', () => {
     expect(defaultFeatureFlags.microsoftCalendar).toBe(false);
     expect(defaultFeatureFlags.bountiesTab).toBe(true);
     expect(defaultFeatureFlags.signInRecoveryAutoOpen).toBe(true);
+    expect(defaultFeatureFlags.ourSignInBox).toBe(false);
     expect(normalizeFeatureFlags(null)).toEqual({
       playbackDiagnostics: false,
       debugDebatesPage: false,
@@ -49,6 +50,7 @@ describe('feature flags', () => {
       microsoftCalendar: false,
       bountiesTab: true,
       signInRecoveryAutoOpen: true,
+      ourSignInBox: false,
     });
   });
 
@@ -81,6 +83,7 @@ describe('feature flags', () => {
       microsoftCalendar: false,
       bountiesTab: true,
       signInRecoveryAutoOpen: true,
+      ourSignInBox: false,
     });
   });
 
@@ -114,6 +117,7 @@ describe('feature flags', () => {
       microsoftCalendar: false,
       bountiesTab: true,
       signInRecoveryAutoOpen: true,
+      ourSignInBox: false,
     });
   });
 });

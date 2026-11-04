@@ -71,6 +71,7 @@ describe('FeatureFlagsDialog', () => {
         microsoftCalendar: false,
         bountiesTab: true,
         signInRecoveryAutoOpen: true,
+        ourSignInBox: false,
       });
     });
   });

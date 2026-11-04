@@ -103,6 +103,13 @@ export const featureFlagDefinitions = [
       'A page opened while an email code is outstanding from a page that is gone reopens sign-in, prefilled (GEO-3573). Turn off to stop the dialog opening by itself.',
     enabledByDefault: true,
   },
+  {
+    id: 'ourSignInBox',
+    label: 'Our own sign-in box',
+    description:
+      'Every sign-in opens our own email box, which shows before Privy has loaded, instead of Privy’s dialog (GEO-3569).',
+    enabledByDefault: false,
+  },
 ] as const;
 
 export type FeatureFlagId = (typeof featureFlagDefinitions)[number]['id'];
