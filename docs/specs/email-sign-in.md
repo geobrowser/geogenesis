@@ -22,8 +22,8 @@ Switching that one call to "open our box" moves every entry below at once.
 | 1 | Marketing link `?modal=signin&via=marketing` (also `via=invite`, lobby and debate-room links) | `core/auth/use-sign-in-deep-link.ts` → `usePrivySignIn` | The box, centred. Its chunk and Privy both start loading at module evaluation on this URL (#3052's `signInExpectedOnLoad` already loads Privy early). |
 | 2 | Debates link to a signed-in-only tab | `core/debates/use-debates-panel-deep-link.ts:59` | The box |
 | 3 | Navbar Log in, debate feed phone bar | `core/wallet/wallet.tsx:31` (`useTrackedLogin` directly) | The box. With votes on the device it still opens the save-votes sheet, as today. |
-| 4 | Save-votes sheet (corner card and centred) | `partials/save-votes/save-votes-sheet.tsx` | **Keeps its layout** (vote chips, its copy, corner placement), **shares the logic**: same controller hook, same code step, same errors and events. See decision D1. |
-| 5 | Explore email capture (newsletter, then account) | `partials/explore/email-capture-popup.tsx` + `email-capture-account-step.tsx` | Same as 4: keeps its layout, shares the logic. |
+| 4 | Save-votes sheet (corner card and centred) | `partials/save-votes/save-votes-sheet.tsx` | **Keeps its layout** (vote chips, its copy, corner placement). It renders the shared card (`partials/sign-in/sign-in-card.tsx`, extracted from it) and the shared code step (`AccountStep`). |
+| 5 | Explore email capture (newsletter, then account) | `partials/explore/email-capture-popup.tsx` + `email-capture-account-step.tsx` | Keeps its layout; shares the code step (`AccountStep`) and its step events. |
 | 6 | Code step's fallback to Privy's dialog | `email-capture-account-step.tsx:126` | Stays Privy's own dialog (a send we could not make). Needs a `surface: 'privy'` option on `useTrackedLogin` so it never reopens our box in a loop. |
 | 7 | Gated controls, all via `usePrivySignIn` | vote buttons (`entity-vote-buttons`, `use-debate-votes`), follow, comments (section + inline composer), join space, bounty card + interest card, space editors popover, ranking compose, pending-actions runner, hub live rail, claims tab, people tab, debate calendar, lobby guest sign-in, lobby reminder, call remind press, shared availability, scheduled-debate notice link, email-settings link | The box, with the caller's `onComplete` / `onCancel` / `redirectTo` / analytics unchanged |
 | 8 | Google redirect return | `core/auth/google-oauth.tsx` (`GoogleOAuthCompleter`) | Unchanged. Its failure toast stays. |
@@ -33,50 +33,52 @@ Not sign-in entries (they matched the search but only read state): `export-walle
 
 ## 2. Component and state model
 
+The box is the save-votes sheet's centred card with the votes taken out. Its layout, field, buttons,
+code step, fine print, error states and copy are all the sheet's own.
+
 ```
-core/auth/sign-in-box/
-  sign-in-box-store.ts     module store: the open request (attribution, callbacks, heading), subscribe/open/close
-  use-email-sign-in.ts     controller: phases, Privy headless calls, error mapping, events; used by the box,
-                           the save-votes sheet and the email capture
-  sign-in-errors.ts        pure: Privy error + code age + rejection count → { kind, copy } (unit tested)
-  sign-in-box.tsx          the centred card / phone bottom sheet (Radix Dialog), mounted once
-  code-entry.tsx           the six-box code field, lifted out of email-capture-account-step.tsx
+partials/sign-in/sign-in-card.tsx    the sheet's card body (back/close row, email step, code step) and its
+                                     centred dialog, extracted from save-votes-sheet.tsx; the sheet renders it
+partials/sign-in/sign-in-box.tsx     SignInBoxHost (mounted once) + SignInBox: the card with a heading only
+partials/sign-in/sign-in-box-copy.ts the box's three words of its own (heading, submit, close label)
+core/auth/sign-in-box/sign-in-box-store.ts  the open request: attempt id, attribution, heading, callbacks
+core/auth/signed-in-before.ts        "this browser has signed in" marker for likely_returning
 ```
 
+- **Shared logic (D1).** The code step is `AccountStep` (`email-capture-account-step.tsx`), already
+  shared by the sheet and the Explore email capture. It mails the code on mount through Privy's headless
+  `useLoginWithEmail` and falls back to Privy's own dialog when a send fails. The box uses it unchanged,
+  so the GEO-3550 steps go into `AccountStep` once and cover all three surfaces.
 - **Opening.** `useTrackedLogin` reads `readStoredFeatureFlag('ourSignInBox')` at the press. Flag on:
-  `beginPrivyAuth(...)` as today, then `openSignInBox({ attempt, context, onComplete, onError, heading })`
-  instead of Privy's `login()`. Flag off: unchanged.
-- **First paint without Privy.** The box imports nothing from `@geogenesis/auth`. It uses `auth-hooks.ts`,
-  whose `useLoginWithEmail` and `useLoginWithOAuth` already return stand-ins until Privy is up and queue
-  calls until it is (`invokeInstance` → `whenReady`, 20 s timeout). The box is a small `dynamic()` chunk,
-  prefetched on idle and imported at module evaluation on `?modal=signin`. Radix Dialog and the save-votes
-  styles are already in the app. The box calls `requestRealAuth()` (`auth-store.ts:116`) when it mounts.
-- **Submit before Privy is ready.** The button turns into "Sending code…" right away. `sendCode` waits for
-  Privy inside `invokeInstance`. After 6 s it adds "Still connecting…". If Privy doesn't load
-  (`whenReady` rejects, or `markHostFailed`), it shows an error with Try again, which calls `restartAuthHost()`.
-- **Existing session.** Signed-in readers never see the box: `useTrackedLogin` already returns early when
-  `authenticated`. Deep links wait for `ready`. A signed-out shim reports `ready: true` immediately, and a
-  detected session reports not-ready until Privy restores it, so a returning signed-in reader is never
-  asked to sign in.
-- **Completion.** Headless `loginWithCode` calls only its own hook's `onComplete`. Privy's global
-  `useLogin` listeners are not called (checked in 3.32.2 source; `AccountStep` already relies on this).
-  So the controller does what `useTrackedLogin`'s `useGeoLogin` callback does today:
-  `completePrivyAuth(args, attribution)`, then the request's `onComplete` inside `withActionContext`.
-  Wallet: `EmbeddedWalletSync` (#2949) creates the embedded wallet for any session. Privy's docs confirm
-  `createOnLogin` does not apply to headless login. Onboarding and `redirectTo` are unchanged,
-  because `usePrepareOnboarding` runs at the press as today.
-- **Dismissal.** Close, Escape or a press on the backdrop: `cancelPrivyAuth()` (outcome `closed`, runs
-  `onSignInAbandoned` withdrawals), then the request's `onError('exited_auth_flow')`, so every caller's
-  "abandoned" path keeps working.
-- **Google.** `useContinueWithGoogle()` as in the sheet. Shown when the `googleSignIn` flag is on and this
-  isn't an in-app browser. A Google sign-in redirects, so in-memory pending actions are dropped, as today.
-- **Other methods.** `privyConfig.loginMethods` is `['email']` (`core/wallet/privy.tsx`). Google is
-  added per call behind `googleSignIn`. `walletList: ['detected_ethereum_wallets']` affects only Privy's
-  wallet picker, which no sign-in opens. **No wallet login is enabled today**, so the box offers email and
-  (flagged) Google, matching Privy's dialog exactly. Privy's dashboard can't add a method the client
-  config doesn't list, so nothing is hidden. If a method is added later, it gets a button here.
-- **Hiding behind other overlays.** The save-votes sheet hides itself while Privy's `isModalOpen`. It also
-  needs to hide while the box is open (`signInBoxOpen()` from the store).
+  `beginPrivyAuth(...)` as today, then `openSignInBox({ attemptId, attribution: attempt.properties,
+  heading, onComplete, onDismiss })` instead of Privy's `login()`. Flag off: unchanged.
+- **First paint without Privy.** The card imports nothing from `@geogenesis/auth`. `auth-hooks`'
+  `useLoginWithEmail` queues calls until Privy is up (`invokeInstance` → `whenReady`, 20 s). While it
+  waits, the code step shows the sheet's own pending state: "Sending a 6-digit code to", boxes disabled.
+  The box calls `requestRealAuth()` when it mounts, and on `?modal=signin` Privy loads at module
+  evaluation (#3052).
+- **Completion.** `AccountStep`'s headless `onComplete` records the attempt (`completePrivyAuth`).
+  Headless login doesn't call Privy's global `useLogin` listeners, so the box watches its attempt
+  (`subscribeAuthAttempts`). When the attempt ends signed in, it runs the press's `onComplete` and closes.
+  Any other end just closes it. Wallet: `EmbeddedWalletSync` (#2949). Privy's docs confirm
+  `createOnLogin` skips headless logins.
+- **Dismissal.** Close, Escape or a press on the backdrop: `onDismiss`, where the host runs
+  `cancelPrivyAuth()` and the caller's `onError('exited_auth_flow')`. The exception is while a Google
+  redirect is starting, as in the sheet.
+- **Privy's dialog as the fallback.** `AccountStep` opens it on a failed send. The box steps aside
+  (closes without withdrawing), as the centred sheet does. That call needs a `surface: 'privy'`
+  option on `useTrackedLogin`, or it reopens the box.
+- **Google.** `useContinueWithGoogle()` as in the sheet, when `googleSignIn` is on and this isn't an
+  in-app browser.
+- **Other methods.** `privyConfig.loginMethods` is `['email']`. Google is added per call behind its flag,
+  and no wallet login is enabled. So the box offers what Privy's dialog offers.
+- **Signed in elsewhere** (Google return, another tab): the box closes when `authenticated` flips.
+- **Gap: Privy fails to load.** The sheet has no state for this. `sendCode` rejects after 20 s, and
+  `AccountStep` then opens Privy's dialog, which needs the same Privy and never appears (the failure is
+  only logged). The step is left on its code screen with no code sent. Minimal fix (proposed, not
+  built): when the send fails *because Privy didn't load*, go back to the email step with one line in
+  the sheet's error style, "Couldn't reach sign-in. Try again." This affects the sheet and the email
+  capture today too.
 
 ## 3. Privy capabilities relied on (`@privy-io/react-auth` 3.32.2, installed)
 
@@ -88,54 +90,29 @@ Quoted from `dist/dts/index.d.ts` and `types-*.d.ts`:
   "For a single OTP, you may call this method up to a maximum of 5 times … After 5 attempts … the
   existing OTP is no longer valid, and you must request a new one."
 - `useLoginWithOAuth(callbacks?)` → `initOAuth({ provider, disableSignup? })`, which redirects. The return is
-  completed by the one `useLoginWithOAuth` mounted in `GoogleOAuthCompleter`.
-- Errors are `PrivyError` with `privyErrorCode`. Privy's own code screen
-  (`AwaitingPasswordlessCodeScreen`) maps `invalid_credentials` to "Invalid or expired verification
-  code". **Privy does not tell a wrong code from an expired one.** We tell them apart by code age (below).
-  Other codes it handles: `max_accounts_reached`, `user_does_not_exist` (only with `disableSignup`),
-  `linked_to_another_user`, `account_transfer_required`. On send: `too_many_requests`,
-  `invalid_data`, `disallowed_plus_email`, `allowlist_rejected`, `captcha_failure` / `captcha_timeout` /
-  `invalid_captcha`, `client_request_timeout`.
-- Captcha: headless `sendCode` fetches the captcha token itself (`qr(e)` in the bundle). The save-votes
-  path has used it in production since GEO-3214.
-- Global `useLogin` `onError` *is* broadcast for headless send failures (`initLoginWithEmail` →
-  `bt(Pe,"login","onError",…)`). `usePrivySignIn` only acts on `exited_auth_flow`, so that's harmless.
-- Code lifetime: Privy doesn't publish it in the installed types or the docs I checked. #3052 assumes 10
-  minutes. **To confirm with one real sign-up** (open question Q4).
+  completed by the one `useLoginWithOAuth` in `GoogleOAuthCompleter`.
+- Errors are `PrivyError` with `privyErrorCode`. Privy's own code screen maps `invalid_credentials` to
+  "Invalid or expired verification code": a wrong code and an expired one are the same error. The UI
+  keeps the sheet's single "That code didn't work. Send a new code". Analytics tells expired apart by
+  code age (`CODE_LIFETIME_MS`, assumed 10 min) and counts the five tries.
+- Captcha: headless `sendCode` fetches the token itself. The sheet has used it in production since GEO-3214.
+- Global `useLogin` `onError` is broadcast for headless send failures. `usePrivySignIn` acts only
+  on `exited_auth_flow`, so that's harmless.
 
-### Error → copy
+## 4. Copy
 
-| Situation | Detected by | Copy |
+The sheet's copy throughout (`save-votes-copy.ts`, `AccountStep`'s save-votes appearance). Only what
+was about votes changes:
+
+| Where | Sheet | Box |
 |---|---|---|
-| Wrong code | `invalid_credentials`, code younger than `CODE_LIFETIME_MS`, fewer than 5 rejections | That code didn't work. Check it and try again. |
-| Expired code | `invalid_credentials`, code at least `CODE_LIFETIME_MS` old | That code has expired. **Send a new code** |
-| Too many tries | 5th `invalid_credentials` on one code (counted by us), or `too_many_requests` on submit | Too many tries for this code. **Send a new code** (boxes disabled) |
-| Too many codes requested | `too_many_requests` on send | Too many codes sent. Wait a minute, then try again. |
-| Bad address | `invalid_data`, `disallowed_plus_email` | Check your email address and try again. |
-| Not allowed | `allowlist_rejected`, `max_accounts_reached` | We can't sign you in with this email right now. |
-| Captcha or unknown send failure | captcha codes, `unknown_auth_error` | Opens Privy's own dialog, keeping the attempt (today's fallback) |
-| Privy didn't load / timed out | `whenReady` rejects, `client_request_timeout` | Couldn't reach sign-in. Check your connection. **Try again** |
-| Google didn't start | `useContinueWithGoogle` status `failed` | Google sign-in didn't start. Try again, or use your email. |
+| Heading | Save your N votes / Join the discussion | **Log in or sign up**, or the caller's heading |
+| Subtext, vote chips | votes subtext and chips | none |
+| Submit | Save votes / Log in | **Continue** (pick to confirm) |
+| Close button label (screen readers) | Not now | **Close** |
+| Everything else | the sheet's: placeholder, "Send code" after Change, Google button and its error, fine print `SAVE_VOTES_FINE_PRINT`, "Check your email", the code step's lines and its error | the same |
 
-## 4. Copy for every state
-
-| State | Copy |
-|---|---|
-| Heading (default) | Log in or sign up |
-| Heading (lobby/room link) | Join the discussion |
-| Email field placeholder | your@email.com |
-| Submit | Continue |
-| Submit pending | Sending code… |
-| Slow Privy (6 s) | Still connecting… |
-| Google | Continue with Google |
-| Fine print | Same as the save-votes sheet (`SAVE_VOTES_FINE_PRINT`), or none |
-| Code heading | Check your email |
-| Code subtext | Enter the 6-digit code we sent to / **address** · Change |
-| Verifying | Verifying… |
-| Resend | Didn't get it? **Send a new code** |
-| After resend | New code sent. |
-| Recovered (reload/new tab) | Your code only works in the tab that asked for it. **Send a new code** to **address** |
-| Done | (box closes; onboarding or the action continues) |
+If the dashboard requires terms consent (Q5), the consent line goes under the fine print.
 
 ## 5. Mockup
 
@@ -143,20 +120,18 @@ Quoted from `dist/dts/index.d.ts` and `types-*.d.ts`:
  ┌─────────────────────────────────┐        ┌─────────────────────────────────┐
  │                              ✕  │        │ ←                            ✕  │
  │       Log in or sign up         │        │              (✉)                │
- │                                 │        │        Check your email         │
- │ ┌─────────────────────────────┐ │        │ Enter the 6-digit code we sent  │
- │ │ ✉  your@email.com           │ │        │   ann@example.com · Change      │
- │ └─────────────────────────────┘ │        │                                 │
+ │ ┌─────────────────────────────┐ │        │        Check your email         │
+ │ │ ✉  your@email.com           │ │        │ Enter the 6-digit code we sent  │
+ │ └─────────────────────────────┘ │        │   ann@example.com  Change       │
  │ ┌─────────────────────────────┐ │        │  ┌──┐┌──┐┌──┐┌──┐┌──┐┌──┐       │
  │ │          Continue           │ │        │  │ 4││ 1││ 7││  ││  ││  │       │
  │ └─────────────────────────────┘ │        │  └──┘└──┘└──┘└──┘└──┘└──┘       │
- │ ┌─────────────────────────────┐ │        │                                 │
- │ │  G  Continue with Google    │ │        │  Didn't get it? Send a new code │
- │ └─────────────────────────────┘ │        │                                 │
- │   fine print                    │        └─────────────────────────────────┘
+ │ ┌─────────────────────────────┐ │        │  Didn’t get it? Send a new code │
+ │ │  G  Continue with Google    │ │        └─────────────────────────────────┘
+ │ └─────────────────────────────┘ │
+ │ We’ll email you a 6-digit code. │        the save-votes sheet's centred card, exactly;
+ │ No password.                    │        Google only with its flag
  └─────────────────────────────────┘
-   centred 360px card on desktop, bottom sheet on phones (save-votes CENTERED_CARD_CLASS,
-   fieldClass, primaryButtonClass, googleButtonClass, codeStepClasses); Google only with its flag
 ```
 
 ## 6. Folding the code step into AuthAttempt (after #3052 merges)
@@ -189,7 +164,10 @@ attribution, and runs a BroadcastChannel ping to see if the owner is alive. The 
 
 All events go through `captureAuthEvent` (growth-v2), with `attemptProperties` (entry attribution,
 `auth_attempt_id`, `action_anonymous_id` for the per-person rollup). `auth_step` goes out only when
-`SEND_AUTH_STEP` is true, reusing #3052's switch, and is otherwise logged with `devLog`.
+`SEND_AUTH_STEP` is true, reusing #3052's switch, and is otherwise logged with `devLog`. The code-step
+events are emitted from `AccountStep`, so the box, the sheet and the email capture report the same
+steps. "Left the page" is listened to by the card, so it covers the email step too. All of this lands
+with the fold, after #3052 merges.
 
 | Funnel step | Event |
 |---|---|
@@ -227,8 +205,17 @@ they do. The query should start its comparison two weeks after the marker ships.
 4. Optional properties listed above. The collector accepts unregistered optional properties today (the
    contract test sends extras), so this is documentation only, plus `likely_returning` and
    `sign_in_surface` as split columns in `signin-steps.sql`.
-5. `left_page` is sent from `pagehide`. Confirm the collector client flushes on `pagehide` (beacon).
-   Otherwise left events are lost, which is the "missing data" GEO-3550 is about.
+5. **Flush on leaving (checked, `analytics/src/geo-analytics.js`).** Once loaded, the runtime flushes its
+   queue with `sendBeacon` on `pagehide` and on `visibilitychange` → hidden (lines 1987-1996). Every
+   queued event is also persisted to an outbox and replayed on the next `pageshow`. Two caveats, both
+   handled on the web side:
+   - Our `left_page` listener runs in the capture phase, so it queues before the runtime's own
+     `pagehide` flush (a later-registered bubble listener would miss it and wait for the next visit's
+     replay).
+   - The runtime loads only at idle, at first interaction, or after about 5 s (`deferUntilIdle` in
+     `core/analytics.ts`). A visitor who lands on the marketing link and leaves before any of those
+     loses every event of that visit, including `auth_prompt_viewed`. Proposed: when the box opens,
+     start the runtime at once (a small exported trigger in `core/analytics.ts`).
 
 ## 8. Rollout
 
@@ -247,8 +234,8 @@ they do. The query should start its comparison two weeks after the marker ships.
   The box touches `use-tracked-login.ts`, `auth-attempt.ts`, `email-capture-account-step.tsx` and
   `feature-flags.ts` too. Build order: the box's own new files first. Edits to the shared files wait for
   #3052 to merge and for a master merge.
-- **#2699** (debate player redesign) edits `email-capture-account-step.tsx`, which I'd lift `code-entry`
-  from. That's a merge conflict, not a design one.
+- **#2699** (debate player redesign) edits `email-capture-account-step.tsx`, where the step events go.
+  That's a merge conflict, not a design one.
 - **#2700, #2175** edit `feature-flags.ts` and the flags dialog test: one-line conflicts.
 - **#3049** edits `modal-deep-link.ts` (adds `?modal=comments`). No conflict with the sign-in link.
 - **#2884** edits `analytics-events.ts`. The box adds no new event names there (`auth_step` comes from #3052).
@@ -256,17 +243,17 @@ they do. The query should start its comparison two weeks after the marker ships.
   No file overlap. The box completes sign-in through the same Privy session that #2680's cookie sync
   reads, so nothing changes for it.
 
-## 10. Decisions and open questions
+## 10. Decisions
 
-- **D1 (need your call).** Save-votes sheet and Explore email capture: keep their layouts and share the
-  controller and code entry (recommended: the chips and newsletter step are their point, and the sheet
-  already has the look the box borrows), or render the shared box inside them.
-- **Q1.** Fine print in the box: reuse the save-votes line, or none?
-- **Q2.** Should the flag default differ by environment (local/preview on, production off)? There's no
-  mechanism for that today.
-- **Q3.** Is "Log in or sign up" the heading, or a heading per entry (callers already pass one for the lobby)?
-- **Q4.** Code lifetime for telling expired from wrong: confirm with one real sign-up (needs your go-ahead
-  and a fresh address), or take Privy support's figure.
-- **Q5.** Terms consent: Privy's dialog shows a consent screen if the dashboard requires terms
-  (`requireUsersAcceptTerms`). The headless path skips it, as the save-votes path does today. Is it
-  off in the dashboard?
+- D1: shared logic and the shared card. The sheet and the email capture keep their layouts. The code step
+  is `AccountStep` for all three.
+- Look: the sheet's UX exactly. Only the heading ("Log in or sign up", or the caller's), the submit label
+  and the close label differ, and there are no votes or newsletter parts.
+- Fine print: `SAVE_VOTES_FINE_PRINT`.
+- Flag: `enabledByDefault: false` everywhere. Testing uses the flags dialog.
+- Code lifetime: `CODE_LIFETIME_MS` = 10 min, to be confirmed by Bryan's test.
+- Terms consent: built as if off. Room is kept for a consent line under the fine print.
+
+Open:
+- The submit label "Continue" (the sheet's own are votes-specific: "Save votes" / "Log in").
+- The Privy-fails-to-load state (§2): the one state the sheet doesn't have.
