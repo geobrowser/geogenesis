@@ -24,12 +24,17 @@ export function debateOpeningFor(_debateId: string): DebateOpening {
 }
 
 /**
- * Debates whose opening clip this browser has already played, so it is not shown again.
+ * Debates whose opening clip this browser has already shown, so it is not shown again: played to its
+ * end, skipped into the debate, or mostly watched before the viewer moved on. A clip that played a
+ * few seconds while the viewer scrolled past is not seen, and opens the debate next time.
  *
  * Per browser, like `watched-debates.ts`, and plain `localStorage` behind try/catch for the same
  * reason: a module-level storage atom runs on import and breaks every suite that imports the player.
+ *
+ * v2: v1 marked a clip seen the moment it started, so one that played a second while the viewer
+ * scrolled past never came back. Starting over drops those.
  */
-const STORAGE_KEY = 'geogenesis.debates.opening-clip-seen.v1';
+const STORAGE_KEY = 'geogenesis.debates.opening-clip-seen.v2';
 
 /** Oldest dropped past this. A clip seen hundreds of debates ago costs one repeat at most. */
 const MAX_REMEMBERED = 500;

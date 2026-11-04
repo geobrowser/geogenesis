@@ -117,19 +117,65 @@ describe('useOpeningClip', () => {
     expect(renderHook(() => useOpeningClip({ ...props, debateId: 'debate-2' })).result.current.phase).toBe('clip');
   });
 
-  it('remembers the clip once it starts, reports the opening, and lets the debate go when it ends', () => {
+  it('hands over to the debate when the clip plays through, and remembers it then, not when it starts', () => {
     loaded([moment(0, 1)]);
     const { result } = renderHook(() => useOpeningClip(props));
 
     act(() => result.current.markStarted());
-    expect(hasSeenOpeningClip('debate-1')).toBe(true);
+    expect(hasSeenOpeningClip('debate-1')).toBe(false);
     expect(result.current.opening).toBe('moment');
+
+    act(() => result.current.end('completed', 1));
+    expect(hasSeenOpeningClip('debate-1')).toBe(true);
+    expect(result.current.phase).toBe('handover');
+    // The debate may start, and keeps loading, while the clip's last frame is still up.
+    expect(result.current.holdsDebate).toBe(false);
+    expect(result.current.preloadsDebate).toBe(true);
+    expect(result.current.moment?.momentIndex).toBe(0);
 
     act(() => result.current.finish());
     expect(result.current.phase).toBe('done');
-    expect(result.current.holdsDebate).toBe(false);
+    expect(result.current.moment).toBeNull();
     // Still reported as having opened on the clip, for the rest of this play.
     expect(result.current.opening).toBe('moment');
+  });
+
+  it('remembers a skipped clip as seen', () => {
+    loaded([moment(0, 1)]);
+    const { result } = renderHook(() => useOpeningClip(props));
+    act(() => result.current.end('switched_to_full', 0.2));
+
+    expect(hasSeenOpeningClip('debate-1')).toBe(true);
+    expect(result.current.phase).toBe('handover');
+  });
+
+  it('does not remember a clip moved on from early, and does once most of it played', () => {
+    loaded([moment(0, 1)]);
+    const early = renderHook(() => useOpeningClip(props));
+    act(() => early.result.current.end('skipped', 0.3));
+    expect(hasSeenOpeningClip('debate-1')).toBe(false);
+    expect(early.result.current.phase).toBe('done');
+
+    const most = renderHook(() => useOpeningClip({ ...props, debateId: 'debate-2' }));
+    act(() => most.result.current.end('left', 0.8));
+    expect(hasSeenOpeningClip('debate-2')).toBe(true);
+  });
+
+  it('loads the debate under the clip only on the active card', () => {
+    loaded([moment(0, 1)]);
+    expect(renderHook(() => useOpeningClip(props)).result.current.preloadsDebate).toBe(true);
+    expect(renderHook(() => useOpeningClip({ ...props, active: false })).result.current.preloadsDebate).toBe(false);
+  });
+
+  it('does not cut into a debate that started without the clip when the list lands late', () => {
+    vi.useFakeTimers();
+    const { result, rerender } = renderHook(() => useOpeningClip(props));
+    act(() => vi.advanceTimersByTime(OPENING_CLIP_WAIT_MS));
+    expect(result.current.phase).toBe('off');
+
+    loaded([moment(0, 1)]);
+    rerender();
+    expect(result.current.phase).toBe('off');
   });
 
   it('holds nothing on a card that is not the active one', () => {
@@ -175,6 +221,8 @@ describe('DebateOpeningClip', () => {
       moment: moment(2, 0.9),
       active: true,
       muted: true,
+      handingOver: false,
+      leaving: false,
       playbackInstanceId: 'instance-1',
       ...handlers,
       ...overrides,
@@ -207,7 +255,7 @@ describe('DebateOpeningClip', () => {
     fireEvent.ended(video);
 
     expect(onStarted).toHaveBeenCalledTimes(1);
-    expect(onEnded).toHaveBeenCalledWith('completed');
+    expect(onEnded).toHaveBeenCalledWith('completed', 1);
     expect(mocks.capture).toHaveBeenCalledWith(
       'debate_moment_ended',
       expect.objectContaining({
@@ -230,30 +278,45 @@ describe('DebateOpeningClip', () => {
     at(3.4);
     fireEvent.click(screen.getByRole('button', { name: 'Skip to full debate' }));
 
-    expect(onEnded).toHaveBeenCalledWith('switched_to_full');
+    expect(onEnded).toHaveBeenCalledWith('switched_to_full', expect.closeTo(3_400 / 12_000));
     expect(mocks.capture).toHaveBeenCalledWith(
       'debate_moment_ended',
       expect.objectContaining({ end_reason: 'switched_to_full', furthest_ms: 3_400 })
     );
   });
 
-  it('reports a viewer who moved on mid-clip as skipped, once', () => {
-    const { start, rerender, props, onEnded } = renderClip();
+  it('pauses when the viewer scrolls past and picks up where it was when they come back', () => {
+    const { start, at, rerender, props, onEnded, video } = renderClip();
     start();
-    rerender(<DebateOpeningClip {...props} active={false} />);
-    rerender(<DebateOpeningClip {...props} active={false} />);
+    at(4);
+    const pause = vi.mocked(HTMLMediaElement.prototype.pause);
+    play.mockClear();
 
-    expect(onEnded).toHaveBeenCalledTimes(1);
-    expect(onEnded).toHaveBeenCalledWith('skipped');
+    rerender(<DebateOpeningClip {...props} active={false} />);
+    expect(pause).toHaveBeenCalled();
+    expect(onEnded).not.toHaveBeenCalled();
+
+    rerender(<DebateOpeningClip {...props} active />);
+    expect(play).toHaveBeenCalled();
+    expect(video.currentTime).toBe(4);
   });
 
-  it('reports leaving when it unmounts mid-clip, and nothing for a clip that never started', () => {
+  it('reports a card that left the feed mid-clip as skipped, and leaving the page as left', () => {
     const started = renderClip();
     started.start();
+    started.at(3);
     started.unmount();
-    expect(started.onEnded).toHaveBeenCalledWith('left');
+    expect(started.onEnded).toHaveBeenCalledWith('skipped', 0.25);
 
-    mocks.capture.mockReset();
+    const left = renderClip();
+    left.start();
+    fireEvent(window, new Event('pagehide'));
+    expect(left.onEnded).toHaveBeenCalledWith('left', 0);
+    left.unmount();
+    expect(left.onEnded).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports nothing for a clip that never started', () => {
     const unstarted = renderClip();
     unstarted.unmount();
     expect(unstarted.onEnded).not.toHaveBeenCalled();
@@ -277,15 +340,40 @@ describe('DebateOpeningClip', () => {
     play.mockRejectedValue(new DOMException('', 'NotAllowedError'));
     const refused = renderClip();
     await act(async () => {});
-    expect(refused.onEnded).toHaveBeenCalledWith(null);
+    expect(refused.onEnded).toHaveBeenCalledWith(null, 0);
     expect(mocks.capture).not.toHaveBeenCalled();
   });
 
   it('unmutes the element inside the tap itself', () => {
-    const { video, onToggleMute } = renderClip();
+    const { video, onToggleMute, start } = renderClip();
+    start();
     fireEvent.click(screen.getByRole('button', { name: 'Unmute' }));
 
     expect(video.muted).toBe(false);
     expect(onToggleMute).toHaveBeenCalled();
+  });
+
+  it('stays transparent until the clip has a frame, so the stills show instead of black', () => {
+    const { container, start } = renderClip();
+    const overlay = container.querySelector('[data-opening-clip]') as HTMLElement;
+    expect(overlay.className).toContain('opacity-0');
+    expect(screen.queryByRole('button', { name: 'Skip to full debate' })).toBeNull();
+
+    start();
+    expect(overlay.className).toContain('opacity-100');
+  });
+
+  it('holds its last frame with no controls while handing over, then fades out', () => {
+    const { container, start, rerender, props } = renderClip();
+    start();
+    rerender(<DebateOpeningClip {...props} handingOver />);
+    const overlay = container.querySelector('[data-opening-clip]') as HTMLElement;
+    expect(overlay.dataset.openingClipState).toBe('handover');
+    expect(overlay.className).toContain('opacity-100');
+    expect(screen.queryByRole('button', { name: 'Skip to full debate' })).toBeNull();
+    expect(screen.queryByText('the best line')).toBeNull();
+
+    rerender(<DebateOpeningClip {...props} handingOver leaving />);
+    expect(overlay.className).toContain('opacity-0');
   });
 });

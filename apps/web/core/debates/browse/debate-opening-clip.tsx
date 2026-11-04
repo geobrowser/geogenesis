@@ -19,6 +19,20 @@ import { type DebateOpening, debateOpeningFor, hasSeenOpeningClip, markOpeningCl
  */
 export const OPENING_CLIP_WAIT_MS = 1_500;
 
+/** The crossfade from the clip to the debate, and from the stills to the clip. */
+export const OPENING_CLIP_FADE_MS = 300;
+
+/**
+ * The longest the clip's last frame waits for the debate to start before fading anyway.
+ *
+ * Long enough for a held card's recordings to attach and buffer on a slow connection; past it, the
+ * player's own loading state is more honest than a frozen frame.
+ */
+export const OPENING_HANDOVER_MAX_MS = 8_000;
+
+/** Watched this far, a clip the viewer moved on from counts as seen. */
+const SEEN_FRACTION = 0.75;
+
 /** How the opening clip ended, in `debate_moment_ended`'s words. */
 export type OpeningClipEnd = 'completed' | 'switched_to_full' | 'skipped' | 'left';
 
@@ -28,7 +42,12 @@ export type OpeningClipPhase =
   /** Waiting on the moment list. An active card holds the debate meanwhile. */
   | 'waiting'
   | 'clip'
-  /** The clip has ended, one way or another, and the full debate has the player. */
+  /**
+   * The clip has ended into the debate. Its last frame stays up while the debate starts underneath,
+   * then crossfades away, so the viewer never sees the player between the two.
+   */
+  | 'handover'
+  /** The full debate has the player. */
   | 'done';
 
 type OpeningState = {
@@ -36,14 +55,19 @@ type OpeningState = {
   /** Decided once per debate, on first render, so the clip ending cannot make it eligible again. */
   eligible: boolean;
   started: boolean;
+  handingOver: boolean;
   done: boolean;
+  /** The moment list took too long, so this play opens as before even if it arrives later. */
+  gaveUp: boolean;
 };
 
 const initialState = (debateId: string, linkedMoment: boolean): OpeningState => ({
   debateId,
   eligible: !linkedMoment && debateOpeningFor(debateId) === 'moment' && !hasSeenOpeningClip(debateId),
   started: false,
+  handingOver: false,
   done: false,
+  gaveUp: false,
 });
 
 /**
@@ -72,22 +96,20 @@ export function useOpeningClip({
   const moments = useDebateMoments(debateId, current.eligible && !current.done && (near || active));
   const moment: DebateMoment | null = React.useMemo(() => topMoment(moments.data ?? []), [moments.data]);
 
-  const [gaveUp, setGaveUp] = React.useState<string | null>(null);
   const phase: OpeningClipPhase = !current.eligible
     ? 'off'
     : current.done
       ? 'done'
-      : moment
-        ? 'clip'
-        : moments.isError || moments.isSuccess || gaveUp === debateId
+      : current.handingOver
+        ? 'handover'
+        : // Checked before the moment: a list that lands after the debate started must not cut it off.
+          current.gaveUp
           ? 'off'
-          : 'waiting';
-
-  React.useEffect(() => {
-    if (!active || phase !== 'waiting') return;
-    const timer = window.setTimeout(() => setGaveUp(debateId), OPENING_CLIP_WAIT_MS);
-    return () => window.clearTimeout(timer);
-  }, [active, debateId, phase]);
+          : moment
+            ? 'clip'
+            : moments.isError || moments.isSuccess
+              ? 'off'
+              : 'waiting';
 
   const update = React.useCallback(
     (patch: Partial<OpeningState>) =>
@@ -95,18 +117,38 @@ export function useOpeningClip({
     [debateId]
   );
 
+  React.useEffect(() => {
+    if (!active || phase !== 'waiting') return;
+    const timer = window.setTimeout(() => update({ gaveUp: true }), OPENING_CLIP_WAIT_MS);
+    return () => window.clearTimeout(timer);
+  }, [active, phase, update]);
+
   return {
     phase,
-    moment: phase === 'clip' ? moment : null,
+    moment: phase === 'clip' || phase === 'handover' ? moment : null,
     /** An active card does not start the full debate while this is true. */
     holdsDebate: active && (phase === 'waiting' || phase === 'clip'),
+    /**
+     * The debate should be loaded now, though not played: the clip is on screen and will hand over
+     * to it. What makes the handover seamless on a card that otherwise holds its recordings.
+     */
+    preloadsDebate: active && (phase === 'clip' || phase === 'handover'),
     /** What this play opened on, for analytics: the clip only once it has actually played. */
     opening: (current.started ? 'moment' : 'title_card') as DebateOpening,
-    markStarted: React.useCallback(() => {
-      markOpeningClipSeen(debateId);
-      update({ started: true });
-    }, [debateId, update]),
-    /** The clip is over: the full debate takes the player. */
+    markStarted: React.useCallback(() => update({ started: true }), [update]),
+    /**
+     * The clip is over. Played through or skipped, it is seen and hands over to the debate; moved on
+     * from, it is seen only if most of it played, and nothing hands over.
+     */
+    end: React.useCallback(
+      (end: OpeningClipEnd | null, watchedFraction: number) => {
+        const intoDebate = end === 'completed' || end === 'switched_to_full';
+        if (intoDebate || (end !== null && watchedFraction >= SEEN_FRACTION)) markOpeningClipSeen(debateId);
+        update(intoDebate ? { handingOver: true } : { done: true });
+      },
+      [debateId, update]
+    ),
+    /** The debate has the player; the clip can go. */
     finish: React.useCallback(() => update({ done: true }), [update]),
   };
 }
@@ -116,13 +158,22 @@ type DebateOpeningClipProps = {
   moment: DebateMoment;
   active: boolean;
   muted: boolean;
+  /**
+   * The clip has ended into the debate: hold its last frame with no controls, and fade out once
+   * `leaving` — when the debate is playing underneath.
+   */
+  handingOver: boolean;
+  leaving: boolean;
   /** The browser would only play the clip muted; the shared mute preference should say so. */
   onForcedMute: () => void;
   /** Shares the player's instance, so the clip and the debate after it join up in analytics. */
   playbackInstanceId: string;
   onStarted: () => void;
-  /** How the clip ended. `null`: it never started, and the debate plays as it did before. */
-  onEnded: (end: OpeningClipEnd | null) => void;
+  /**
+   * How the clip ended and how much of it played. `null`: it never started, and the debate plays as
+   * it did before.
+   */
+  onEnded: (end: OpeningClipEnd | null, watchedFraction: number) => void;
   /** The viewer pressing mute or unmute: the player's shared preference, which the debate keeps. */
   onToggleMute: () => void;
 };
@@ -132,14 +183,20 @@ type DebateOpeningClipProps = {
  * the debate's are, a Skip, and a progress line.
  *
  * Covers the player rather than replacing its <video> elements: the debate keeps its recordings,
- * URLs and pair hold underneath, so the clip ending hands over to a player that is already loaded.
- * The clip file is both debaters stacked at 480×578, the same shape as the player's two tiles.
+ * URLs and pair hold underneath, and loads while the clip plays, so the clip ending hands over to a
+ * player that is ready. The clip file is both debaters stacked at 480×578, the same shape as the
+ * player's two tiles.
+ *
+ * Transparent until the clip has a frame, so a card waiting on it shows the stills rather than black,
+ * and the clip fades in over them.
  */
 export function DebateOpeningClip({
   debateId,
   moment,
   active,
   muted,
+  handingOver,
+  leaving,
   onForcedMute,
   playbackInstanceId,
   onStarted,
@@ -149,12 +206,15 @@ export function DebateOpeningClip({
   const videoRef = React.useRef<HTMLVideoElement | null>(null);
   const [positionMs, setPositionMs] = React.useState(0);
   const [paused, setPaused] = React.useState(false);
+  const [shown, setShown] = React.useState(false);
   const durationMs = moment.durationMs;
   const progress = React.useRef({ started: false, ended: false, furthestMs: 0 });
 
+  const clipDurationMs = () => durationMs ?? Math.round((videoRef.current?.duration || 0) * 1000);
   const end = (reason: OpeningClipEnd | null) => {
     if (progress.current.ended) return;
     progress.current.ended = true;
+    const total = clipDurationMs();
     if (reason && progress.current.started) {
       try {
         capture('debate_moment_ended', {
@@ -167,27 +227,26 @@ export function DebateOpeningClip({
           playback_instance_id: playbackInstanceId,
           end_reason: reason,
           furthest_ms: Math.round(progress.current.furthestMs),
-          moment_duration_ms: durationMs ?? Math.round((videoRef.current?.duration ?? 0) * 1000),
+          moment_duration_ms: total,
           muted: videoRef.current?.muted ?? muted,
         });
       } catch {
         /* Playback stays usable. */
       }
     }
-    onEnded(reason);
+    onEnded(reason, total > 0 ? progress.current.furthestMs / total : 0);
   };
   const endRef = React.useRef(end);
   endRef.current = end;
 
-  // Plays while this is the active card. Refused with sound, it tries once more muted, as the
-  // debate's own autoplay does (GEO-2783); refused even muted, the clip is dropped for this play.
+  // Plays while this is the active card, and only pauses when it is not: a viewer who scrolls past
+  // and comes back picks the clip up where they left it. Refused with sound, it tries once more
+  // muted, as the debate's own autoplay does (GEO-2783); refused even muted, the clip is dropped.
   React.useEffect(() => {
     const video = videoRef.current;
-    if (!video) return;
+    if (!video || handingOver) return;
     if (!active) {
       video.pause();
-      // Moved on mid-clip: the clip has been seen, and coming back should find the debate.
-      if (progress.current.started) endRef.current('skipped');
       return;
     }
     let cancelled = false;
@@ -206,33 +265,47 @@ export function DebateOpeningClip({
     };
     // `onForcedMute` is the player's setter and stable in practice; re-running on it would replay.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, endRef, progress]);
+  }, [active, handingOver]);
 
   React.useEffect(() => {
     if (videoRef.current) videoRef.current.muted = muted;
   }, [muted]);
 
-  // The card unmounting mid-clip. Only once it has started, so a mount that React tears straight
-  // down again (Strict Mode, a re-rank) does not end a clip nobody saw.
-  React.useEffect(
-    () => () => {
+  // Leaving the page mid-clip, or the card leaving the feed's window (moved on from): reported once,
+  // and only for a clip that started, so a mount React tears straight down again (Strict Mode, a
+  // re-rank) does not end a clip nobody saw.
+  React.useEffect(() => {
+    const leave = () => {
       if (progress.current.started) endRef.current('left');
-    },
-    []
-  );
+    };
+    window.addEventListener('pagehide', leave);
+    return () => {
+      window.removeEventListener('pagehide', leave);
+      if (progress.current.started) endRef.current('skipped');
+    };
+  }, []);
 
   const togglePause = () => {
     const video = videoRef.current;
-    if (!video) return;
+    if (!video || handingOver) return;
     if (video.paused) void video.play().catch(() => undefined);
     else video.pause();
   };
 
-  const subtitle = momentSubtitleAt(moment.subtitles, positionMs);
+  const subtitle = handingOver ? null : momentSubtitleAt(moment.subtitles, positionMs);
   const fraction = durationMs ? Math.min(1, positionMs / durationMs) : 0;
+  const controls = shown && !handingOver;
 
   return (
-    <div data-opening-clip className="absolute inset-0 z-40 bg-black">
+    <div
+      data-opening-clip
+      data-opening-clip-state={handingOver ? 'handover' : shown ? 'playing' : 'loading'}
+      style={{ transitionDuration: `${OPENING_CLIP_FADE_MS}ms` }}
+      className={cx(
+        'absolute inset-0 z-40 bg-black transition-opacity ease-out motion-reduce:transition-none',
+        shown && !leaving ? 'opacity-100' : 'pointer-events-none opacity-0'
+      )}
+    >
       <video
         ref={videoRef}
         src={moment.clipUrl}
@@ -245,6 +318,7 @@ export function DebateOpeningClip({
         onClick={togglePause}
         onPlaying={() => {
           setPaused(false);
+          setShown(true);
           if (!progress.current.started) {
             progress.current.started = true;
             onStarted();
@@ -260,20 +334,54 @@ export function DebateOpeningClip({
         onError={() => end(progress.current.started ? 'completed' : null)}
       />
 
-      {/* Where the debate's own mute control sits, so it is found in the same place. The element is
-        unmuted inside the tap itself: iOS lets a video make sound only from a gesture made on it. */}
-      <button
-        type="button"
-        aria-label={muted ? 'Unmute' : 'Mute'}
-        onClick={event => {
-          event.stopPropagation();
-          if (videoRef.current) videoRef.current.muted = !muted;
-          onToggleMute();
-        }}
-        className="absolute top-3 left-3 z-10 grid size-10.5 place-items-center rounded-full bg-white text-text shadow-light [&>svg]:scale-[1.3]"
-      >
-        {muted ? <SpeakerMuted /> : <Speaker />}
-      </button>
+      {controls && (
+        <>
+          {/* Where the debate's own mute control sits, so it is found in the same place. The element
+            is unmuted inside the tap itself: iOS lets a video make sound only from a gesture made on
+            it. */}
+          <button
+            type="button"
+            aria-label={muted ? 'Unmute' : 'Mute'}
+            onClick={event => {
+              event.stopPropagation();
+              if (videoRef.current) videoRef.current.muted = !muted;
+              onToggleMute();
+            }}
+            className="absolute top-3 left-3 z-10 grid size-10.5 place-items-center rounded-full bg-white text-text shadow-light [&>svg]:scale-[1.3]"
+          >
+            {muted ? <SpeakerMuted /> : <Speaker />}
+          </button>
+
+          {paused && active && (
+            <button
+              type="button"
+              aria-label="Resume highlight"
+              onClick={togglePause}
+              className="absolute top-1/2 left-1/2 z-10 grid size-16 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-white text-text shadow-card"
+            >
+              <Play />
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={event => {
+              event.stopPropagation();
+              end('switched_to_full');
+            }}
+            className="absolute right-3 bottom-4 z-10 rounded-full bg-black/60 px-3 py-1.5 text-[0.875rem] leading-tight font-medium text-white backdrop-blur-sm hover:bg-black/75"
+          >
+            Skip to full debate
+          </button>
+
+          <div aria-hidden className="absolute inset-x-0 bottom-0 z-10 h-1 bg-white/25">
+            <div
+              className="h-full bg-white transition-[width] duration-250 ease-linear motion-reduce:transition-none"
+              style={{ width: `${fraction * 100}%` }}
+            />
+          </div>
+        </>
+      )}
 
       {/* The debate's own subtitle treatment, on the seam between the stacked debaters. */}
       {subtitle && (
@@ -281,35 +389,6 @@ export function DebateOpeningClip({
           {subtitle}
         </span>
       )}
-
-      {paused && progress.current.started && (
-        <button
-          type="button"
-          aria-label="Resume highlight"
-          onClick={togglePause}
-          className="absolute top-1/2 left-1/2 z-10 grid size-16 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-white text-text shadow-card"
-        >
-          <Play />
-        </button>
-      )}
-
-      <button
-        type="button"
-        onClick={event => {
-          event.stopPropagation();
-          end('switched_to_full');
-        }}
-        className="absolute right-3 bottom-4 z-10 rounded-full bg-black/60 px-3 py-1.5 text-[0.875rem] leading-tight font-medium text-white backdrop-blur-sm hover:bg-black/75"
-      >
-        Skip to full debate
-      </button>
-
-      <div aria-hidden className="absolute inset-x-0 bottom-0 z-10 h-1 bg-white/25">
-        <div
-          className={cx('h-full bg-white', 'transition-[width] duration-250 ease-linear motion-reduce:transition-none')}
-          style={{ width: `${fraction * 100}%` }}
-        />
-      </div>
     </div>
   );
 }

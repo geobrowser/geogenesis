@@ -53,7 +53,13 @@ import { DebateBreakOverlay, DebateEarlyEndLabels, useBreakCuts } from './debate
 import { DebateClaimCounter } from './debate-claim-counter';
 import { ClaimScrubberMarkers, DebateClaimTickerStack, useDebateClaimTicker } from './debate-claim-ticker';
 import { DebateEndCard } from './debate-end-card';
-import { DebateOpeningClip, type OpeningClipEnd, useOpeningClip } from './debate-opening-clip';
+import {
+  DebateOpeningClip,
+  OPENING_CLIP_FADE_MS,
+  OPENING_HANDOVER_MAX_MS,
+  type OpeningClipEnd,
+  useOpeningClip,
+} from './debate-opening-clip';
 import { DebateRoundBadge, DebateRoundBanner, DebateRoundCard } from './debate-round-cues';
 import { type DebatePreviewClips, debatePreviewClips, feedFullPlaybackStartedAtom } from './feed-full-playback';
 import { Pause, Play, Speaker, SpeakerMuted } from './icons';
@@ -210,8 +216,25 @@ export function DebateFeedPlayer({
   const autoStarted = (active || buffer) && debateStreamsFully(debate.recordings);
   // Signed only while this card is held and near the viewport; nothing at all with the flag off.
   const preview = useDebatePreviewClips(debate, holdFullPlayback && !cardStarted && (active || preload));
+  /*
+   * GEO-3578: the first play opens on the debate's most engaging moment, then the title card (the
+   * round card at 0:00), then the full debate from the start. The debate is held while the clip has
+   * the player, loads underneath it, and starts from the top once it ends.
+   */
+  const opening = useOpeningClip({
+    debateId: debate.id,
+    active,
+    near: active || preload,
+    linkedMoment: initialSeekSeconds != null,
+  });
   // A card started on its own — tapped, or carried on from its opening clip — is never held again.
-  const held = holdFullPlayback && !cardStarted && (preview.available ? !autoStarted : !fullPlaybackStarted);
+  // Nor is the active card while its clip plays: its recordings attach and buffer under the clip, so
+  // the clip ending hands over to a debate that is ready rather than one that has just begun loading.
+  const held =
+    holdFullPlayback &&
+    !cardStarted &&
+    !opening.preloadsDebate &&
+    (preview.available ? !autoStarted : !fullPlaybackStarted);
   // Loading is deliberately wider than playing. `useDebatePlayback`'s flag gates only the URL
   // fetch and the transcript query — playback is driven by `active` in the effect below — so a
   // preloading card fetches without autoplaying off-screen.
@@ -220,17 +243,6 @@ export function DebateFeedPlayer({
   // What the <video> elements actually hold: a released card, a held one, or one re-signing lapsed
   // URLs, has none.
   const detached = releaseMedia || held || controller.urlsLapsed;
-  /*
-   * GEO-3578: the first play opens on the debate's most engaging moment, then the title card (the
-   * round card at 0:00), then the full debate from the start. The debate is held while the clip has
-   * the player and starts from the top once it ends.
-   */
-  const opening = useOpeningClip({
-    debateId: debate.id,
-    active,
-    near: active || preload,
-    linkedMoment: initialSeekSeconds != null,
-  });
   const [openingClipPlaying, setOpeningClipPlaying] = React.useState(false);
   const measurement = usePlaybackAnalytics(debate, active, controller, !detached, opening.opening);
   const {
@@ -336,19 +348,19 @@ export function DebateFeedPlayer({
   };
   /**
    * The opening clip is over. Played to its end or skipped, the full debate takes over from the
-   * start, its title card first — on a held card too, since the viewer has been watching this one.
-   * Moved on from, or never started, the card is left as it would have been without the clip.
+   * start, its title card first — on a held card too, since the viewer has been watching this one —
+   * and the clip's last frame stays up until it is playing (`openingLeaving` below). Not through
+   * `pair.release()`, even on Skip: the clip is covering the wait, and starting one recording before
+   * the other can play is what the pair hold exists to prevent. Moved on from, or never started, the
+   * card is left as it would have been without the clip.
    */
-  const endOpeningClip = (end: OpeningClipEnd | null) => {
+  const endOpeningClip = (end: OpeningClipEnd | null, watchedFraction: number) => {
     setOpeningClipPlaying(false);
-    opening.finish();
+    opening.end(end, watchedFraction);
     if (end !== 'completed' && end !== 'switched_to_full') return;
     setStartedDebateId(debate.id);
-    if (end === 'switched_to_full') {
-      // Skip is the viewer asking for the debate, as Play is.
-      setFullPlaybackStarted(true);
-      pair.release();
-    }
+    // Skip is the viewer asking for the debate, as Play is.
+    if (end === 'switched_to_full') setFullPlaybackStarted(true);
   };
   const playFromStart = () => {
     measurement.control('replay');
@@ -505,6 +517,27 @@ export function DebateFeedPlayer({
   React.useEffect(() => {
     onPlaybackState?.({ ready, playing, autoplayBlocked, error: hasError, pairHeld, openingClipPlaying });
   }, [onPlaybackState, ready, playing, autoplayBlocked, hasError, pairHeld, openingClipPlaying]);
+
+  /*
+   * The clip's last frame leaves once the debate is playing under it — or once the debate cannot
+   * start by itself (refused, paused, failed, or the card moved off), where the player's own controls
+   * have to be seen — and is gone after the crossfade. A debate that never gets going is not waited
+   * on for ever.
+   */
+  const handingOver = opening.phase === 'handover';
+  const [handoverTimedOut, setHandoverTimedOut] = React.useState(false);
+  const openingLeaving = handingOver && (playing || awaitingTap || hasError || !active || handoverTimedOut);
+  const finishOpening = opening.finish;
+  React.useEffect(() => {
+    if (!handingOver) return;
+    const timer = window.setTimeout(() => setHandoverTimedOut(true), OPENING_HANDOVER_MAX_MS);
+    return () => window.clearTimeout(timer);
+  }, [handingOver]);
+  React.useEffect(() => {
+    if (!openingLeaving) return;
+    const timer = window.setTimeout(finishOpening, OPENING_CLIP_FADE_MS);
+    return () => window.clearTimeout(timer);
+  }, [finishOpening, openingLeaving]);
 
   // The live claim layer. Loaded alongside the recordings so a card is ready the moment the claim
   // it belongs to is spoken, rather than appearing a beat late on the first one.
@@ -1346,6 +1379,8 @@ export function DebateFeedPlayer({
             moment={opening.moment}
             active={active}
             muted={mutedByUser}
+            handingOver={handingOver}
+            leaving={openingLeaving}
             onForcedMute={() => setMutedByUser(true)}
             onToggleMute={() => setMutedByUser(current => !current)}
             playbackInstanceId={measurement.playbackInstanceId}
