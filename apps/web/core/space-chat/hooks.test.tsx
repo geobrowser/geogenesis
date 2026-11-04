@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, focusManager } from '@tanstack/react-query';
 import { cleanup, renderHook, waitFor } from '@testing-library/react';
 
 import * as React from 'react';
@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   gateway: 'idle' as string,
   getSpaceChatMessages: vi.fn(),
+  listSpaceChatRooms: vi.fn(),
   postSpaceChatMessage: vi.fn(),
   setSpaceChatReaction: vi.fn(),
   authenticated: false,
@@ -32,11 +33,12 @@ vi.mock('~/core/debates/debate-gateway', () => ({
 vi.mock('~/core/debates/debate-attention', () => ({ useDebateVisibility: () => mocks.visible }));
 vi.mock('./api', () => ({
   getSpaceChatMessages: mocks.getSpaceChatMessages,
+  listSpaceChatRooms: mocks.listSpaceChatRooms,
   postSpaceChatMessage: mocks.postSpaceChatMessage,
   setSpaceChatReaction: mocks.setSpaceChatReaction,
 }));
 
-const { useSpaceChatRoom } = await import('./hooks');
+const { useSpaceChatRoom, useSpaceChatRooms } = await import('./hooks');
 
 const ROOM = { id: 'room1', space_id: 'space1', kind: 'member' as const };
 const message = (n: number) => ({
@@ -197,5 +199,25 @@ describe('useSpaceChatRoom live signed out', () => {
     mocks.authenticated = true;
     rerender();
     expect(mocks.scope).toHaveBeenLastCalledWith(ROOM, true, true);
+  });
+});
+
+describe('useSpaceChatRooms', () => {
+  it('re-reads the room list on window focus once it is stale', async () => {
+    mocks.listSpaceChatRooms.mockReset();
+    mocks.listSpaceChatRooms.mockResolvedValue({ rooms: [] });
+    const { result } = renderHook(() => useSpaceChatRooms('space-1', true), { wrapper });
+    await waitFor(() => expect(result.current.data?.supported).toBe(true));
+    expect(mocks.listSpaceChatRooms).toHaveBeenCalledTimes(1);
+
+    focusManager.setFocused(false);
+    focusManager.setFocused(true);
+    expect(mocks.listSpaceChatRooms).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(60_001);
+    focusManager.setFocused(false);
+    focusManager.setFocused(true);
+    await waitFor(() => expect(mocks.listSpaceChatRooms).toHaveBeenCalledTimes(2));
+    focusManager.setFocused(undefined);
   });
 });

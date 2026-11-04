@@ -77,7 +77,8 @@ export function useSpaceChatRooms(spaceId: string, enabled: boolean) {
     enabled: enabled && ready,
     staleTime: 60_000,
     retry: false,
-    refetchOnWindowFocus: false,
+    // Rights change outside this tab (joining, removal), so a focus past the stale time re-reads.
+    refetchOnWindowFocus: true,
   });
   const memberRoom = query.data?.rooms.find(room => room.kind === 'member') ?? null;
   return { ...query, memberRoom };
