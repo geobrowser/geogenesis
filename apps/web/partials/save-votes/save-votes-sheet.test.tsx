@@ -1,11 +1,12 @@
 import '@testing-library/jest-dom/vitest';
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, renderHook, screen, waitFor, within } from '@testing-library/react';
 
 import * as React from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { snapshotActionContext } from '~/core/action-context';
+import { useContinueWithGoogle } from '~/core/auth/continue-with-google';
 import { noteEmailArrival } from '~/core/deep-links/ref-email';
 import {
   saveVotesHeading,
@@ -21,6 +22,7 @@ import {
   closeSaveVotesPrompt,
   markPromptedThisSession,
   openSaveVotesPrompt,
+  opensSaveVotesCentered,
   readSaveVotesPrompt,
   setSaveVotesPromptLobby,
 } from '~/core/state/save-votes-prompt';
@@ -46,7 +48,11 @@ const mocks = vi.hoisted(() => ({
   isModalOpen: false,
   accountStepMounts: 0,
   accountStepClasses: undefined as unknown,
+  googleSignIn: undefined as undefined | ((properties: Record<string, unknown>) => Promise<void>),
 }));
+
+// Undefined is the `googleSignIn` flag off (or an in-app browser); the hook's own gating is tested in `google-oauth`.
+vi.mock('~/core/auth/google-oauth', () => ({ useGoogleOAuthSignIn: () => mocks.googleSignIn }));
 
 vi.mock('~/core/wallet/auth-hooks', () => ({
   usePrivy: () => ({ ready: mocks.ready, authenticated: mocks.authenticated, isModalOpen: mocks.isModalOpen }),
@@ -116,6 +122,10 @@ beforeEach(() => {
   mocks.isModalOpen = false;
   mocks.accountStepMounts = 0;
   mocks.accountStepClasses = undefined;
+  mocks.googleSignIn = undefined;
+  const restored = renderHook(() => useContinueWithGoogle());
+  act(() => window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true })));
+  restored.unmount();
 });
 
 describe('copy', () => {
@@ -425,8 +435,9 @@ describe('SaveVotesSheet', () => {
     });
   });
 
-  // GEO-3400: email is the sheet's one way in; Privy's other methods are left to the app's other sign-ins.
-  it('offers no other way to sign in', () => {
+  // GEO-3400: email is the sheet's one way in with the `googleSignIn` flag off; Privy's other methods
+  // are left to the app's other sign-ins.
+  it('offers no other way to sign in with Google sign-in off', () => {
     vote('a');
     markPromptedThisSession();
     render(<SaveVotesSheet />);
@@ -436,6 +447,163 @@ describe('SaveVotesSheet', () => {
     expect(
       screen.getAllByRole('button').map(button => button.textContent || button.getAttribute('aria-label'))
     ).toEqual(['Not now', 'Save vote']);
+  });
+
+  // GEO-3555: Google sign-in on, the sheet offers it beside the email, as a save sign-in.
+  describe('with Google sign-in on', () => {
+    // These assertions cover Google's lobby copy in whichever presentation the shared policy uses.
+    const lobbySheet = () =>
+      screen.getByRole(opensSaveVotesCentered(readSaveVotesPrompt()) ? 'dialog' : 'region', {
+        name: 'Join the discussion',
+      });
+
+    it('starts Google as a save sign-in for the votes waiting', async () => {
+      const googleSignIn = vi.fn(() => Promise.resolve());
+      mocks.googleSignIn = googleSignIn;
+      vote('a');
+      vote('b');
+      markPromptedThisSession();
+      render(<SaveVotesSheet />);
+      act(() => openSaveVotesPrompt('threshold'));
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
+      });
+
+      expect(googleSignIn).toHaveBeenCalledWith({
+        component: 'save_votes_prompt',
+        auth_control: 'continue_with_google',
+        local_vote_count: 2,
+        prompt_reason: 'threshold',
+      });
+      // Google's own sign-in starts the attempt; the email path's is not started as well.
+      expect(mocks.beginPrivyAuth).not.toHaveBeenCalled();
+    });
+
+    it.each([false, true])('closing preserves a pending Google save (after editing email: %s)', editing => {
+      mocks.googleSignIn = vi.fn(() => new Promise<void>(() => {}));
+      vote('a');
+      markPromptedThisSession();
+      render(<SaveVotesSheet />);
+      act(() => openSaveVotesPrompt('navbar'));
+      if (editing) {
+        fireEvent.change(screen.getByRole('textbox', { name: 'Email address' }), {
+          target: { value: 'sam@hey.com' },
+        });
+        fireEvent.click(screen.getByRole('button', { name: 'Save vote' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Back to email' }));
+      }
+
+      fireEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Not now' }));
+
+      expect(mocks.cancelPrivyAuth).not.toHaveBeenCalled();
+      expect(readSaveVotesPrompt()).toBeNull();
+      expect(readLocalVotes().votes).toHaveLength(1);
+    });
+
+    it('blocks email when another surface starts Google, even before React renders', () => {
+      mocks.googleSignIn = vi.fn(() => new Promise<void>(() => {}));
+      vote('a');
+      markPromptedThisSession();
+      render(<SaveVotesSheet />);
+      act(() => openSaveVotesPrompt('navbar'));
+      const field = screen.getByRole('textbox', { name: 'Email address' });
+      fireEvent.change(field, { target: { value: 'sam@hey.com' } });
+      const popup = renderHook(() => useContinueWithGoogle());
+
+      act(() => {
+        void popup.result.current!.start({ component: 'explore_email_capture' });
+        fireEvent.submit(field.closest('form')!);
+      });
+
+      expect(mocks.beginPrivyAuth).not.toHaveBeenCalled();
+      expect(screen.getByRole('button', { name: 'Save vote' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: 'Continue with Google' })).toBeDisabled();
+    });
+
+    it('waits for Google to fail before starting the email path', async () => {
+      let failGoogle!: (error: Error) => void;
+      mocks.googleSignIn = vi.fn(
+        () =>
+          new Promise<void>((_, reject) => {
+            failGoogle = reject;
+          })
+      );
+      vote('a');
+      markPromptedThisSession();
+      render(<SaveVotesSheet />);
+      act(() => openSaveVotesPrompt('navbar'));
+      const field = screen.getByRole('textbox', { name: 'Email address' });
+      fireEvent.change(field, { target: { value: 'sam@hey.com' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
+      expect(screen.getByRole('button', { name: 'Save vote' })).toBeDisabled();
+      fireEvent.submit(field.closest('form')!);
+      expect(mocks.beginPrivyAuth).not.toHaveBeenCalled();
+      await act(async () => {
+        failGoogle(new Error('blocked'));
+      });
+      expect(screen.getByRole('button', { name: 'Save vote' })).toBeEnabled();
+      fireEvent.click(screen.getByRole('button', { name: 'Save vote' }));
+      expect(screen.getByText('Check your email')).toBeInTheDocument();
+    });
+
+    it('says so when Google does not start, and keeps the email path', async () => {
+      mocks.googleSignIn = vi.fn(() => Promise.reject(new Error('blocked')));
+      vote('a');
+      markPromptedThisSession();
+      render(<SaveVotesSheet />);
+      act(() => openSaveVotesPrompt('inline_save'));
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
+      });
+
+      expect(screen.getByRole('alert')).toHaveTextContent('Google sign-in did not start');
+      expect(screen.getByRole('button', { name: 'Continue with Google' })).toBeEnabled();
+      fireEvent.change(screen.getByRole('textbox', { name: 'Email address' }), { target: { value: 'sam@hey.com' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Save vote' }));
+      expect(screen.getByText('Check your email')).toBeInTheDocument();
+    });
+
+    it('offers it in the centred dialog too', () => {
+      mocks.googleSignIn = vi.fn(() => Promise.resolve());
+      vote('a');
+      markPromptedThisSession();
+      render(<SaveVotesSheet />);
+      act(() => openSaveVotesPrompt('navbar'));
+
+      expect(
+        within(screen.getByRole('dialog')).getByRole('button', { name: 'Continue with Google' })
+      ).toBeInTheDocument();
+    });
+
+    // Google's redirect stops the lobby audio, so with Google on the lobby ask no longer promises it.
+    it('offers it in the lobby ask, without promising the audio keeps playing', () => {
+      mocks.googleSignIn = vi.fn(() => Promise.resolve());
+      vote('a');
+      vote('b');
+      markPromptedThisSession();
+      setSaveVotesPromptLobby('Morning lobby');
+      render(<SaveVotesSheet />);
+      act(() => openSaveVotesPrompt('threshold'));
+
+      const sheet = lobbySheet();
+      expect(within(sheet).getByRole('button', { name: 'Continue with Google' })).toBeInTheDocument();
+      expect(sheet).toHaveTextContent('You’ll stay in Morning lobby.');
+      expect(sheet).not.toHaveTextContent('audio keeps playing');
+    });
+
+    it('keeps the audio promise in the lobby ask with Google off', () => {
+      vote('a');
+      vote('b');
+      markPromptedThisSession();
+      setSaveVotesPromptLobby('Morning lobby');
+      render(<SaveVotesSheet />);
+      act(() => openSaveVotesPrompt('threshold'));
+
+      expect(lobbySheet()).toHaveTextContent('You’ll stay in Morning lobby, and your audio keeps playing.');
+    });
   });
 
   // Copilot on #2785: an ask that opens on its own uses one up, return visits included.
