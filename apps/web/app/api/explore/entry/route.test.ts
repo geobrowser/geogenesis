@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { DEBATE_CLAIMS_PROPERTY_ID, DEBATE_TYPE_ID } from '~/core/debates/ontology';
+import { DEBATE_TYPE_ID } from '~/core/debates/ontology';
 
 import { GET } from './route';
 
-const mocks = vi.hoisted(() => ({ context: vi.fn(), feed: vi.fn(), playable: vi.fn(), spaces: vi.fn() }));
+const mocks = vi.hoisted(() => ({ context: vi.fn(), feed: vi.fn(), playable: vi.fn(), spaces: vi.fn(), ids: vi.fn() }));
 vi.mock('~/core/explore/resolve-explore-feed-request-context', () => ({
   resolveExploreFeedRequestContext: mocks.context,
 }));
@@ -13,6 +13,8 @@ vi.mock('~/core/explore/fetch-explore-feed', () => ({
   debateHasProcessedVideo: mocks.playable,
   exploreBrowseSpaceIds: mocks.spaces,
 }));
+
+vi.mock('~/core/explore/fetch-explore-entry-ids', () => ({ fetchExploreEntryIds: mocks.ids }));
 
 const ID = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const DEBATE = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
@@ -31,6 +33,7 @@ beforeEach(() => {
   mocks.feed.mockResolvedValue({ items: [claim, debate] });
   mocks.playable.mockResolvedValue(true);
   mocks.spaces.mockReturnValue([SPACE]);
+  mocks.ids.mockResolvedValue([ID, DEBATE]);
 });
 describe('selected Explore entry', () => {
   it('rejects invalid ids before querying the graph', async () => {
@@ -41,6 +44,7 @@ describe('selected Explore entry', () => {
     const response = await GET(request());
     expect(await response.json()).toEqual({ item: debate });
     expect(response.headers.get('cache-control')).toBe('private, no-store');
+    expect(mocks.ids).toHaveBeenCalledWith(ID, [SPACE]);
     expect(mocks.feed).toHaveBeenCalledWith(
       expect.objectContaining({
         browse: { featured: [] },
@@ -48,21 +52,7 @@ describe('selected Explore entry', () => {
         viewerMemberSpaceId: 'personal',
         spaceFilterIds: null,
         time: 'all',
-        entityFilter: {
-          or: [
-            { id: { is: ID } },
-            {
-              typeIds: { overlaps: [DEBATE_TYPE_ID] },
-              relations: {
-                some: {
-                  typeId: { is: DEBATE_CLAIMS_PROPERTY_ID },
-                  toEntityId: { is: ID },
-                  spaceId: { in: [SPACE] },
-                },
-              },
-            },
-          ],
-        },
+        entityFilter: { id: { in: [ID, DEBATE] } },
       })
     );
   });

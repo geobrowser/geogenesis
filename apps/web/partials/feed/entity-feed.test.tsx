@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   entryItem: null as Record<string, unknown> | null,
   entryQueryOptions: null as Record<string, unknown> | null,
   entryPending: false,
+  hasNextPage: false,
   queryOptions: null as Record<string, unknown> | null,
   facetQueryOptions: null as Record<string, unknown> | null,
   /** The public first page a signed-in reader paints from while their own page loads. */
@@ -74,7 +75,7 @@ vi.mock('@tanstack/react-query', () => ({
       isFetchingNextPage: false,
       isPlaceholderData: mocks.isPlaceholderData,
       fetchNextPage: vi.fn(),
-      hasNextPage: false,
+      hasNextPage: mocks.hasNextPage,
       error: mocks.error,
     };
   },
@@ -137,6 +138,7 @@ beforeEach(() => {
   mocks.itemAt = {};
   mocks.entryItem = null;
   mocks.entryPending = false;
+  mocks.hasNextPage = false;
   mocks.entryQueryOptions = null;
   mocks.queryKeys = [];
   mocks.error = null;
@@ -1042,6 +1044,31 @@ describe('marketing selection', () => {
     mocks.entryPending = true;
     render(<EntityFeed {...props} />);
     expect(mocks.itemAt[1]).toBeUndefined();
+  });
+  it('does not load invisible next pages while waiting for the selected card', () => {
+    const observe = vi.fn();
+    vi.stubGlobal(
+      'IntersectionObserver',
+      class {
+        observe = observe;
+        disconnect = vi.fn();
+      }
+    );
+    mocks.pages = [{ items: [card('ranked')] }];
+    mocks.hasNextPage = true;
+    mocks.entryPending = true;
+    const { rerender } = render(<EntityFeed {...props} />);
+    expect(observe).not.toHaveBeenCalled();
+    mocks.entryPending = false;
+    rerender(<EntityFeed {...props} />);
+    expect(observe).toHaveBeenCalledOnce();
+  });
+  it('keeps loaded cards visible when a later feed page fails', () => {
+    mocks.pages = [{ items: [card('ranked')] }];
+    mocks.error = new Error('next page unavailable');
+    render(<EntityFeed {...props} />);
+    expect(mocks.itemAt[1]?.entityId).toBe('ranked');
+    expect(screen.queryByText('Could not load the feed.')).toBeNull();
   });
   it('falls back to the normal feed when the selection is unavailable', () => {
     mocks.pages = [{ items: [card('ranked')] }];
