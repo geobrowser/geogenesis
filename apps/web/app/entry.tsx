@@ -52,6 +52,7 @@ import { stepAtom as onboardingStepAtom } from '~/partials/onboarding/onboarding
 import { shouldMountOnboardingDialog } from '~/partials/onboarding/onboarding-dialog-visibility';
 import { PendingActionsRunner } from '~/partials/pending-actions-runner';
 import { LocalVotesSaver } from '~/partials/save-votes/local-votes-saver';
+import { SignInBoxGate } from '~/partials/sign-in/sign-in-box-gate';
 
 import { PageViewTracker } from '~/app/page-view-tracker';
 import {
@@ -145,13 +146,6 @@ const PostAuthRedirect = dynamic(
 const DeepLinkHandler = dynamic(
   () => import('~/partials/deep-links/deep-link-handler').then(m => ({ default: m.DeepLinkHandler })),
   { ssr: false }
-);
-
-const SignInBoxHost = dynamic(
-  () => import('~/partials/sign-in/sign-in-box').then(m => ({ default: m.SignInBoxHost })),
-  {
-    ssr: false,
-  }
 );
 
 const CodeStepRecovery = dynamic(
@@ -286,8 +280,8 @@ function DeepLinkGate() {
 
 // A page that may pick up a code step another page left (GEO-3573). Read once, at mount.
 // Loaded up front for a browser with the flag on, so a press paints the box without fetching it.
-function SignInBoxGate() {
-  return useFeatureFlag('ourSignInBox') ? <SignInBoxHost /> : null;
+function SignInBoxFlagGate() {
+  return useFeatureFlag('ourSignInBox') ? <SignInBoxGate /> : null;
 }
 
 function CodeStepRecoveryGate() {
@@ -393,7 +387,7 @@ export function App({ children }: { children: React.ReactNode }) {
           <React.Suspense fallback={null}>
             <DeepLinkGate />
             <CodeStepRecoveryGate />
-            <SignInBoxGate />
+            <SignInBoxFlagGate />
           </React.Suspense>
           <Toast />
           <GovernanceReopenEditLoadingBar />
