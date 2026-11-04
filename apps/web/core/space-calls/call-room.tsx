@@ -15,9 +15,10 @@ import { useIsPhoneLayout } from '~/core/hooks/use-is-phone-layout';
 import { useFeatureFlag } from '~/core/state/feature-flags';
 
 import { PreJoinDeviceCheck } from '~/partials/community-calls/pre-join';
-import { SpaceChatPanel } from '~/partials/space-chat/space-chat-panel';
+import { SpaceChatAlsoPostsTo, SpaceChatPanel } from '~/partials/space-chat/space-chat-panel';
 
 import { CallScreenStage } from './call-screen-stage';
+import { useChatUnreadMark } from './chat-unread';
 import { callRecordingOf } from './recording/api';
 import { CallRecordingBar, PreJoinRecordingNote, StageRecordingPrompt } from './recording/call-recording-room';
 import { useStageRecordingNotice } from './recording/stage-notice';
@@ -54,6 +55,8 @@ export function CallRoom({
     viewer !== null &&
     (viewer.hosting || viewer.role === 'host' || viewer.role === 'speaker');
   const stageNotice = useStageRecordingNotice(lobby.lobby_id, recording, onStage);
+  // A phone shows the chat only on its tab; a desktop keeps it beside the people.
+  const chatUnread = useChatUnreadMark(!phone || tab === 'aside');
 
   return (
     <LobbyRoomShell
@@ -80,11 +83,13 @@ export function CallRoom({
           ? {
               tab: 'Chat',
               label: 'Space chat',
-              mark: false,
+              mark: chatUnread.mark,
               content: (
                 <SpaceChatPanel
                   spaceId={chatSpaceId}
                   roomId={lobby.call?.chat_room_id ?? null}
+                  subtitle={<SpaceChatAlsoPostsTo spaceId={chatSpaceId} />}
+                  onArrival={chatUnread.onArrival}
                   className="max-md:h-[60dvh] min-h-0 flex-1"
                 />
               ),
