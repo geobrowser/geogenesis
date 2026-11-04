@@ -22,6 +22,12 @@ const mocks = vi.hoisted(() => ({
   isModalOpen: false,
   accountSteps: [] as { email: string; analytics: unknown }[],
   googleSignIn: undefined as undefined | ((properties: Record<string, unknown>) => Promise<void>),
+  startAnalyticsSoon: vi.fn(),
+}));
+
+vi.mock('~/core/analytics', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/analytics')>()),
+  startAnalyticsSoon: () => mocks.startAnalyticsSoon(),
 }));
 
 vi.mock('~/core/auth/google-oauth', () => ({ useGoogleOAuthSignIn: () => mocks.googleSignIn }));
@@ -76,6 +82,7 @@ beforeEach(() => {
   mocks.isModalOpen = false;
   mocks.accountSteps = [];
   mocks.googleSignIn = undefined;
+  mocks.startAnalyticsSoon.mockReset();
   localStorage.clear();
   sessionStorage.clear();
   resetAuthAttempt();
@@ -113,6 +120,14 @@ describe('SignInBox', () => {
     render(<SignInBoxHost />);
     const { attempt } = open();
     expect(readAuthAttempt(attempt.id)?.openedAt).toEqual(expect.any(Number));
+  });
+
+  it('starts the analytics runtime after its first paint', async () => {
+    render(<SignInBoxHost />);
+    open();
+    expect(mocks.startAnalyticsSoon).not.toHaveBeenCalled();
+    await act(() => new Promise(resolve => requestAnimationFrame(() => resolve(undefined))));
+    expect(mocks.startAnalyticsSoon).toHaveBeenCalledTimes(1);
   });
 
   it("hands a likely address to the code step under the press's attribution", () => {

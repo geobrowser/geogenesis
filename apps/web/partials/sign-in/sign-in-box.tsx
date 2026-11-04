@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import { startAnalyticsSoon } from '~/core/analytics';
 import { isSignedInOutcome, openAuthAttempt, readAuthAttempt, subscribeAuthAttempts } from '~/core/auth-attempt';
 import { isGoogleSignInStarting, useContinueWithGoogle } from '~/core/auth/continue-with-google';
 import { type SignInBoxRequest, closeSignInBox, useSignInBoxRequest } from '~/core/auth/sign-in-box/sign-in-box-store';
@@ -46,6 +47,10 @@ function SignInBox({ request }: { request: SignInBoxRequest }) {
   // The box on screen is the prompt being viewed.
   React.useEffect(() => {
     openAuthAttempt(requestRef.current.attribution);
+    // Its step events must reach the collector if the visitor leaves; the frame after paint keeps the
+    // runtime off the box's own first frame.
+    const frame = requestAnimationFrame(() => startAnalyticsSoon());
+    return () => cancelAnimationFrame(frame);
   }, []);
 
   // The press's continuation runs once its attempt ends signed in, however the box got there.
