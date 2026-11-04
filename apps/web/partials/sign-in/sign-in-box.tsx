@@ -132,7 +132,12 @@ function SignInBox({ request }: { request: SignInBoxRequest }) {
         submitDisabled={!canSend || googleStarting}
         submitLabel={editing ? SAVE_VOTES_RESEND_LABEL : SIGN_IN_BOX_COPY.submit}
         google={google}
-        onGoogle={() => void google?.start({ ...request.attribution, auth_control: 'continue_with_google' }, 'box')}
+        onGoogle={() =>
+          void google?.start(
+            { ...request.attribution, auth_control: 'continue_with_google' },
+            { surface: 'box', attemptId: request.attemptId }
+          )
+        }
         finePrint={SAVE_VOTES_FINE_PRINT}
         analytics={request.attribution as AccountStepAnalytics}
         error={unavailable ? SIGN_IN_UNAVAILABLE_COPY : null}

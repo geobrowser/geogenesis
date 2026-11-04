@@ -282,7 +282,7 @@ export function SaveVotesSheet() {
       onGoogle={() =>
         void google?.start(
           saveVotesSignInProperties('continue_with_google', count, attempt ? attempt.reason : reason),
-          'save_votes'
+          { surface: 'save_votes' }
         )
       }
       finePrint={SAVE_VOTES_FINE_PRINT}

@@ -32,9 +32,9 @@ describe('useContinueWithGoogle', () => {
     mocks.signIn = signIn;
     const { result } = renderHook(() => useContinueWithGoogle());
 
-    act(() => void result.current!.start({ component: 'save_votes_prompt' }, 'save_votes'));
+    act(() => void result.current!.start({ component: 'save_votes_prompt' }, { surface: 'save_votes' }));
 
-    expect(signIn).toHaveBeenCalledWith({ component: 'save_votes_prompt' }, 'save_votes');
+    expect(signIn).toHaveBeenCalledWith({ component: 'save_votes_prompt' }, { surface: 'save_votes' });
     expect(result.current!.status).toBe('starting');
   });
 

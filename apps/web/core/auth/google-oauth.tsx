@@ -46,21 +46,29 @@ function GoogleOAuthCompleter() {
       initGoogleOAuth = null;
     };
   }, [initOAuth]);
+  const returnError = state.status === 'error' ? state.error : undefined;
   // A failed start rejects to its caller; only a failed return is reported here, once.
   useEffect(() => {
     if (!isReturn || settled.current || state.status !== 'error') return;
     settled.current = true;
     if (returnAttemptId) {
-      const authError = authErrorCode(state.error);
+      const authError = authErrorCode(returnError);
       tagAuthAttempt(returnAttemptId, { lastAuthError: authError });
       if (currentAuthAttempt()?.id === returnAttemptId)
         captureAuthStep('google_failed', { sign_in_method: 'google', auth_error: authError });
       failRedirectedPrivyAuth(returnAttemptId);
     }
     setToast(<>Google sign-in didn't complete. Try again.</>);
-  }, [isReturn, returnAttemptId, state.status, state.error, setToast]);
+  }, [isReturn, returnAttemptId, state.status, returnError, setToast]);
   return null;
 }
+
+/** Where a Google start comes from. */
+export type GoogleStartOptions = {
+  surface?: SignInSurface;
+  /** An open attempt to carry on, rather than start a new one: our sign-in box's, so its press hears the outcome. */
+  attemptId?: string;
+};
 
 /**
  * Starts Google sign-in from our own UI, saving the attempt first so attribution survives the redirect.
@@ -70,9 +78,12 @@ export function useGoogleOAuthSignIn() {
   const offered = useGoogleSignInOffered();
   const prepareOnboarding = usePrepareOnboarding();
   const signIn = useCallback(
-    async (properties: AnalyticsProperties, surface?: SignInSurface) => {
-      prepareOnboarding();
-      const attempt = beginPrivyAuth(properties);
+    async (properties: AnalyticsProperties, { surface, attemptId }: GoogleStartOptions = {}) => {
+      const open = currentAuthAttempt();
+      const resumed = attemptId && open?.id === attemptId && !open.endedAt ? open : undefined;
+      // A resumed press already set onboarding and its return address.
+      if (!resumed) prepareOnboarding();
+      const attempt = resumed ?? beginPrivyAuth(properties);
       tagAuthAttempt(attempt.id, { signInMethod: 'google', ...(surface ? { signInSurface: surface } : {}) });
       captureAuthStep('google_started', { sign_in_method: 'google' });
       try {
@@ -84,7 +95,8 @@ export function useGoogleOAuthSignIn() {
           const authError = authErrorCode(error);
           tagAuthAttempt(attempt.id, { lastAuthError: authError });
           captureAuthStep('google_failed', { sign_in_method: 'google', auth_error: authError });
-          cancelPrivyAuth();
+          // A resumed attempt stays open: its surface says the start failed and email still works.
+          if (!resumed) cancelPrivyAuth();
         }
         throw error;
       }

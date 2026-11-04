@@ -21,7 +21,7 @@ const mocks = vi.hoisted(() => ({
   authenticated: false,
   isModalOpen: false,
   accountSteps: [] as { email: string; analytics: unknown }[],
-  googleSignIn: undefined as undefined | ((properties: Record<string, unknown>, surface?: string) => Promise<void>),
+  googleSignIn: undefined as undefined | ((properties: Record<string, unknown>, options?: unknown) => Promise<void>),
   startAnalyticsSoon: vi.fn(),
   steps: [] as { step: string; extra: Record<string, unknown> }[],
 }));
@@ -183,6 +183,17 @@ describe('SignInBox', () => {
     ]);
   });
 
+  it('does not count a Google redirect as leaving', () => {
+    mocks.googleSignIn = vi.fn(() => new Promise<void>(() => {}));
+    render(<SignInBoxHost />);
+    open();
+    fireEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
+    act(() => void window.dispatchEvent(new Event('pagehide')));
+    expect(mocks.steps).toEqual([]);
+    // The start stays pending across tests; the bfcache return clears it.
+    act(() => void window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true })));
+  });
+
   it('reports no leaving once its attempt has ended', () => {
     render(<SignInBoxHost />);
     const { attempt } = open();
@@ -241,7 +252,7 @@ describe('SignInBox', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
     expect(mocks.googleSignIn).toHaveBeenCalledWith(
       { ...request.attribution, auth_control: 'continue_with_google' },
-      'box'
+      { surface: 'box', attemptId: request.attemptId }
     );
     // A starting redirect cannot be withdrawn.
     fireEvent.click(screen.getByRole('button', { name: SIGN_IN_BOX_COPY.close }));

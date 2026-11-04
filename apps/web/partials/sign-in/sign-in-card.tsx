@@ -8,7 +8,11 @@ import cx from 'classnames';
 
 import { currentAuthAttempt } from '~/core/auth-attempt';
 import { captureAuthStep } from '~/core/auth/code-step';
-import { ContinueWithGoogleButton, type useContinueWithGoogle } from '~/core/auth/continue-with-google';
+import {
+  ContinueWithGoogleButton,
+  isGoogleSignInStarting,
+  type useContinueWithGoogle,
+} from '~/core/auth/continue-with-google';
 import { Z_LAYER_CLASS } from '~/core/z-layers';
 
 import { ArrowLeft } from '~/design-system/icons/arrow-left';
@@ -44,7 +48,8 @@ function useLeftPageStep(attemptId: string | undefined, phase: 'email' | 'code')
     if (!attemptId) return;
     const onPageHide = () => {
       const attempt = currentAuthAttempt();
-      if (attempt?.id !== attemptId || attempt.endedAt) return;
+      // A Google redirect leaving the page is the sign-in going on, not the visitor leaving.
+      if (attempt?.id !== attemptId || attempt.endedAt || isGoogleSignInStarting()) return;
       captureAuthStep('left_page', { box_phase: phaseRef.current });
     };
     // Capture phase: queued before the analytics runtime's own `pagehide` flush.

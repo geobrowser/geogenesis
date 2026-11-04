@@ -411,7 +411,7 @@ function EmailCapturePopup() {
                       onClick={() =>
                         void google.start(
                           { ...ACCOUNT_ANALYTICS, auth_control: 'continue_with_google' },
-                          'email_capture'
+                          { surface: 'email_capture' }
                         )
                       }
                       className={GOOGLE_BUTTON_CLASS}

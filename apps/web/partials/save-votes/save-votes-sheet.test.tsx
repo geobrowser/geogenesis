@@ -504,7 +504,7 @@ describe('SaveVotesSheet', () => {
           local_vote_count: 2,
           prompt_reason: 'threshold',
         },
-        'save_votes'
+        { surface: 'save_votes' }
       );
       // Google's own sign-in starts the attempt; the email path's is not started as well.
       expect(mocks.beginPrivyAuth).not.toHaveBeenCalled();

@@ -19,12 +19,14 @@ const mocks = vi.hoisted(() => ({
   failRedirectedPrivyAuth: vi.fn(),
   attemptId: undefined as string | undefined,
   cancelPrivyAuth: vi.fn(),
+  beginPrivyAuth: vi.fn(),
+  prepareOnboarding: vi.fn(),
   steps: [] as { step: string; extra: Record<string, unknown> }[],
   tags: [] as { id: string | undefined; tags: Record<string, unknown> }[],
 }));
 
 vi.mock('~/core/wallet/auth-hooks', () => ({ useLoginWithOAuth: mocks.useLoginWithOAuth }));
-vi.mock('~/core/hooks/use-prepare-onboarding', () => ({ usePrepareOnboarding: () => vi.fn() }));
+vi.mock('~/core/hooks/use-prepare-onboarding', () => ({ usePrepareOnboarding: () => mocks.prepareOnboarding }));
 vi.mock('~/core/auth-attempt', () => ({
   currentAuthAttempt: () => (mocks.attemptId ? { id: mocks.attemptId } : undefined),
   tagAuthAttempt: (id: string | undefined, tags: Record<string, unknown>) => mocks.tags.push({ id, tags }),
@@ -34,7 +36,10 @@ vi.mock('~/core/auth/code-step', () => ({
 }));
 vi.mock('~/core/hooks/use-toast', () => ({ useSetToast: () => mocks.setToast }));
 vi.mock('~/core/privy-auth-events', () => ({
-  beginPrivyAuth: vi.fn(() => ({ id: mocks.attemptId })),
+  beginPrivyAuth: (...args: unknown[]) => {
+    mocks.beginPrivyAuth(...args);
+    return { id: mocks.attemptId };
+  },
   cancelPrivyAuth: mocks.cancelPrivyAuth,
   failRedirectedPrivyAuth: mocks.failRedirectedPrivyAuth,
 }));
@@ -197,13 +202,40 @@ describe('Google sign-in steps (GEO-3550)', () => {
     const { result } = renderHook(() => useGoogleOAuthSignIn(), {
       wrapper: ({ children }) => <Provider store={host.store}>{children}</Provider>,
     });
-    await act(() => expect(result.current!({}, 'box')).rejects.toThrow());
+    await act(() => expect(result.current!({}, { surface: 'box' })).rejects.toThrow());
     expect(mocks.tags[0]).toEqual({ id: 'attempt-a', tags: { signInMethod: 'google', signInSurface: 'box' } });
     expect(mocks.steps).toEqual([
       { step: 'google_started', extra: { sign_in_method: 'google' } },
       { step: 'google_failed', extra: { sign_in_method: 'google', auth_error: 'oauth_init_failed' } },
     ]);
     expect(JSON.stringify(mocks.steps)).not.toContain('@');
+  });
+
+  // The box's press must hear the outcome, and a failed start leaves the box open to say so.
+  it("carries on the sign-in box's open attempt, and leaves it open when the start fails", async () => {
+    mocks.attemptId = 'box-attempt';
+    mocks.initOAuth.mockRejectedValueOnce(Object.assign(new Error('blocked'), { privyErrorCode: 'oauth_init_failed' }));
+    const host = renderHost(true);
+    const { result } = renderHook(() => useGoogleOAuthSignIn(), {
+      wrapper: ({ children }) => <Provider store={host.store}>{children}</Provider>,
+    });
+    await act(() => expect(result.current!({}, { surface: 'box', attemptId: 'box-attempt' })).rejects.toThrow());
+    expect(mocks.beginPrivyAuth).not.toHaveBeenCalled();
+    expect(mocks.prepareOnboarding).not.toHaveBeenCalled();
+    expect(mocks.cancelPrivyAuth).not.toHaveBeenCalled();
+    expect(mocks.tags.map(tag => tag.id)).toEqual(['box-attempt', 'box-attempt']);
+    expect(mocks.steps.map(entry => entry.step)).toEqual(['google_started', 'google_failed']);
+  });
+
+  it('starts its own attempt when the one named has been replaced', async () => {
+    mocks.attemptId = 'newer';
+    const host = renderHost(true);
+    const { result } = renderHook(() => useGoogleOAuthSignIn(), {
+      wrapper: ({ children }) => <Provider store={host.store}>{children}</Provider>,
+    });
+    await act(() => result.current!({ component: 'navbar' }, { surface: 'box', attemptId: 'box-attempt' }));
+    expect(mocks.beginPrivyAuth).toHaveBeenCalledWith({ component: 'navbar' });
+    expect(mocks.prepareOnboarding).toHaveBeenCalledTimes(1);
   });
 
   it('reports a failed return to the attempt it returned to', () => {
