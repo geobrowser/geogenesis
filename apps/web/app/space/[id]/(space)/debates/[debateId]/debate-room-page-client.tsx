@@ -1723,6 +1723,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     },
   });
   const { takeOver: claimVoice, claimUntilHeld: claimVoiceUntilHeld, announceYieldable } = tabVoice;
+  // True whenever another tab holds voice, including when this tab's first claim lost and it never
+  // held it — the case `voiceYielded` (set from `onYield`) misses.
+  const voiceHeldElsewhere = tabVoice.ownership === 'elsewhere';
   // Re-checked when status or room state changes; the owner reads the live policy and announces only
   // while this tab holds voice.
   const roomHeld = roomState !== 'idle';
@@ -2443,9 +2446,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   );
 
   const retryRoomConnection = React.useCallback(() => {
-    if (voiceYielded) void resumeVoice();
+    if (voiceYielded || voiceHeldElsewhere) void resumeVoice();
     else retryConnection();
-  }, [resumeVoice, retryConnection, voiceYielded]);
+  }, [resumeVoice, retryConnection, voiceYielded, voiceHeldElsewhere]);
 
   const toggleAudioMuted = React.useCallback(() => {
     const next = { audioMuted: !audioMuted, videoEnabled };
@@ -3424,7 +3427,12 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
             previewState={previewState}
             previewBusy={previewBusy}
             switchingDevice={replacingPreview}
-            error={roomError ?? deviceError?.message ?? (previewState === 'ready' ? previewError : null)}
+            error={
+              roomError ??
+              (voiceHeldElsewhere ? 'Voice is on in another tab' : null) ??
+              deviceError?.message ??
+              (previewState === 'ready' ? previewError : null)
+            }
             mediaError={previewError}
             audioInputDevices={audioInputDevices}
             audioOutputDevices={audioOutputDevices}
@@ -3442,9 +3450,12 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
               Boolean(preScreenLocalParticipant?.ready_at) || roomState === 'connecting' || roomState === 'reconnecting'
             }
             connectionSettling={roomState === 'connecting' || roomState === 'reconnecting' || publishingMedia}
-            canRetryConnection={roomState === 'idle' && roomError !== null && !connectionConflict}
+            canRetryConnection={
+              (roomState === 'idle' && roomError !== null && !connectionConflict) ||
+              (voiceHeldElsewhere && !connectionConflict)
+            }
             onRetryConnection={retryRoomConnection}
-            retryConnectionLabel={voiceYielded ? 'Use voice here' : undefined}
+            retryConnectionLabel={voiceYielded || voiceHeldElsewhere ? 'Use voice here' : undefined}
             canTakeOverConnection={connectionConflict && canTakeOverConnection}
             onTakeOverConnection={takeOverConnection}
             readyBusy={markReady.isPending}

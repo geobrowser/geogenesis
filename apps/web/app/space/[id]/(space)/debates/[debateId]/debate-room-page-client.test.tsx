@@ -119,6 +119,10 @@ const mocks = vi.hoisted(() => ({
   // Not reset per test: the tab voice owner can outlive a test and keep its coordinator.
   voiceTakeoverHandler: null as null | ((context: DebateRoomTakeoverContext) => boolean | Promise<boolean>),
   ownershipCoordinationMode: 'lock-and-broadcast' as 'lock-and-broadcast' | 'lock-only' | 'livekit-fallback',
+  voiceCoordinationMode: 'livekit-fallback' as 'lock-and-broadcast' | 'lock-only' | 'livekit-fallback',
+  voiceOwnsConnection: vi.fn(),
+  voiceRequestTakeover: vi.fn(),
+  voiceLastRefusedBy: vi.fn(),
   useRealRoomOwnership: false,
   deviceChangeHandler: null as null | (() => void),
   debate: null as Debate | null,
@@ -278,18 +282,19 @@ vi.mock('~/core/debates/debate-room-ownership', async importOriginal => {
     createDebateRoomOwnershipCoordinator: (
       options: Parameters<typeof actual.createDebateRoomOwnershipCoordinator>[0]
     ) => {
-      // The tab's cross-surface voice lock: never contested here (as without Web Locks).
+      // The tab's cross-surface voice lock: not contested by default (as without Web Locks); a test
+      // can override `mocks.voice*` to make the first claim lose instead.
       if (options.debateId === 'voice') {
         mocks.voiceTakeoverHandler = options.onTakeoverRequested;
         return {
           instanceId: 'voice-instance',
-          coordinationMode: 'livekit-fallback' as const,
+          coordinationMode: mocks.voiceCoordinationMode,
           acquire: async () => ({ acquired: true, waitedForLocalRelease: false }),
-          requestTakeover: async () => true,
+          requestTakeover: mocks.voiceRequestTakeover,
           release: async () => undefined,
           close: () => undefined,
-          ownsConnection: () => true,
-          lastRefusedBy: () => undefined,
+          ownsConnection: mocks.voiceOwnsConnection,
+          lastRefusedBy: mocks.voiceLastRefusedBy,
         };
       }
       if (mocks.useRealRoomOwnership) return actual.createDebateRoomOwnershipCoordinator(options);
@@ -516,6 +521,10 @@ beforeEach(() => {
   mocks.ownershipClose.mockReset();
   mocks.ownershipTakeoverHandler = null;
   mocks.ownershipCoordinationMode = 'lock-and-broadcast';
+  mocks.voiceCoordinationMode = 'livekit-fallback';
+  mocks.voiceOwnsConnection.mockReset().mockReturnValue(true);
+  mocks.voiceRequestTakeover.mockReset().mockResolvedValue(true);
+  mocks.voiceLastRefusedBy.mockReset().mockReturnValue(undefined);
   mocks.useRealRoomOwnership = false;
   mocks.deviceChangeHandler = null;
   mocks.debate = completedDebate();
@@ -3270,6 +3279,31 @@ describe('DebateRoomPageClient', () => {
     expect(mocks.createLocalTracks).toHaveBeenCalledTimes(previewsBefore);
 
     fireEvent.click(screen.getByRole('button', { name: 'Use voice here' }));
+    await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalledTimes(2));
+  });
+
+  it('offers to take voice back when another tab already holds it before the intro ever connects', async () => {
+    // Unlike the test above, this tab never holds voice in the first place — its own first claim
+    // in `connect` loses, which `onYield` has no occasion to fire for.
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+    mocks.voiceCoordinationMode = 'lock-and-broadcast';
+    mocks.voiceOwnsConnection.mockReturnValue(false);
+    mocks.voiceRequestTakeover.mockResolvedValue(false);
+    mocks.voiceLastRefusedBy.mockReturnValue('lobby');
+    const claimUntilHeld = vi.spyOn(tabVoiceOwner(mocks.currentUserId!), 'claimUntilHeld').mockResolvedValue(true);
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    // The room connects anyway — losing the very first claim is not a connection failure.
+    await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
+    expect(claimUntilHeld).toHaveBeenCalledWith(expect.objectContaining({ kind: 'debate' }));
+
+    expect(await screen.findByText('Voice is on in another tab')).toBeInTheDocument();
+    const useVoiceHere = screen.getByRole('button', { name: 'Use voice here' });
+
+    // The other tab now yields.
+    mocks.voiceRequestTakeover.mockResolvedValue(true);
+    fireEvent.click(useVoiceHere);
     await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalledTimes(2));
   });
 
