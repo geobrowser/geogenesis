@@ -1827,22 +1827,25 @@ describe('DebateGatewayClient', () => {
       expect(sockets).toHaveLength(1);
     });
 
-    it('resends a rate-limited SUBSCRIBE after the stated delay instead of reconnecting', async () => {
+    it('reconnects after the stated delay when a SUBSCRIBE is rate limited, and resubscribes there', async () => {
+      const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
       anonymous.retainScope(roomScope);
       sockets[0]!.open();
       sockets[0]!.receive('READY', readyPayload([]));
-      const subscribes = () => sockets[0]!.sent.filter(frame => frame.op === 'SUBSCRIBE').length;
-      expect(subscribes()).toBe(1);
       sockets[0]!.receive('ERROR', { code: 'rate_limited', message: 'limit', retry_after_seconds: 7 });
+      expect(sockets[0]!.readyState).toBe(FakeWebSocket.CLOSED);
+      expect(anonymous.getSnapshot()).toMatchObject({ paused: true, pauseReason: 'rate_limited' });
       await vi.advanceTimersByTimeAsync(6_999);
-      expect(subscribes()).toBe(1);
-      await vi.advanceTimersByTimeAsync(1);
-      expect(subscribes()).toBe(2);
       expect(sockets).toHaveLength(1);
-      expect(sockets[0]!.readyState).toBe(FakeWebSocket.OPEN);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(sockets).toHaveLength(2);
+      sockets[1]!.open();
+      sockets[1]!.receive('READY', readyPayload([]));
+      expect(sockets[1]!.sent.filter(frame => frame.op === 'SUBSCRIBE')).toHaveLength(1);
+      error.mockRestore();
     });
 
-    it('waits out a rate limit before reconnecting when a limited heartbeat closes the socket', async () => {
+    it('waits out a rate limit before reconnecting when a limited heartbeat is followed by the server close', async () => {
       anonymous.retainScope(roomScope);
       sockets[0]!.open();
       sockets[0]!.receive('READY', readyPayload([echo]));
@@ -1850,7 +1853,7 @@ describe('DebateGatewayClient', () => {
         code: 'rate_limited',
         message: 'gateway command limit `x` exceeded; retry after 20 seconds',
       });
-      sockets[0]!.serverClose();
+      sockets[0]!.serverCloseWith(1008);
       await vi.advanceTimersByTimeAsync(19_999);
       expect(sockets).toHaveLength(1);
       await vi.advanceTimersByTimeAsync(1);

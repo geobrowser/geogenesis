@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { SPACE_CHAT_COPY, SpaceChatPanel } from './space-chat-panel';
+import { MEMBER_RECHECK_MS, SPACE_CHAT_COPY, SpaceChatPanel } from './space-chat-panel';
 import { SPACE_CHAT_VIEW_COPY } from './space-chat-view';
 
 const SPACE = '0243bd171b651379954685365870e6a6';
@@ -160,14 +160,19 @@ describe('SpaceChatPanel composer', () => {
     expect(mocks.refetchRooms).toHaveBeenCalled();
   });
 
-  it('re-checks a not-yet-synced member at 15s, 30s, then every 60s', () => {
-    vi.useFakeTimers();
-    try {
+  describe('a member geo-chat has not synced yet', () => {
+    const member = () => {
       mocks.authenticated = true;
       mocks.access = { isMember: true, isEditor: false, canEdit: false, isLoading: false };
+    };
+    const after = (ms: number) => act(() => void vi.advanceTimersByTime(ms));
+    beforeEach(() => void vi.useFakeTimers());
+    afterEach(() => void vi.useRealTimers());
+
+    it('is re-checked at 15s, 30s, then every 60s, and no more after the last step', () => {
+      member();
       render(<SpaceChatPanel spaceId={SPACE} />);
       mocks.refetchRooms.mockClear();
-      const after = (ms: number) => act(() => void vi.advanceTimersByTime(ms));
       after(14_999);
       expect(mocks.refetchRooms).toHaveBeenCalledTimes(0);
       after(1);
@@ -178,11 +183,36 @@ describe('SpaceChatPanel composer', () => {
       expect(mocks.refetchRooms).toHaveBeenCalledTimes(2);
       after(1);
       expect(mocks.refetchRooms).toHaveBeenCalledTimes(3);
-      after(60_000);
-      expect(mocks.refetchRooms).toHaveBeenCalledTimes(4);
-    } finally {
-      vi.useRealTimers();
-    }
+      const total = MEMBER_RECHECK_MS.reduce((sum, ms) => sum + ms, 0);
+      after(total - 105_000);
+      expect(mocks.refetchRooms).toHaveBeenCalledTimes(MEMBER_RECHECK_MS.length);
+      after(60 * 60_000);
+      expect(mocks.refetchRooms).toHaveBeenCalledTimes(MEMBER_RECHECK_MS.length);
+    });
+
+    it('still refetches on window focus once the schedule has stopped', () => {
+      member();
+      render(<SpaceChatPanel spaceId={SPACE} />);
+      after(60 * 60_000);
+      mocks.refetchRooms.mockClear();
+      act(() => void window.dispatchEvent(new Event('focus')));
+      expect(mocks.refetchRooms).toHaveBeenCalledTimes(1);
+    });
+
+    it('is not re-checked while the account is setting up, and is once geo-chat accepts it', () => {
+      member();
+      mocks.settingUp = true;
+      const { rerender } = render(<SpaceChatPanel spaceId={SPACE} />);
+      act(() => void window.dispatchEvent(new Event('focus')));
+      after(60 * 60_000);
+      expect(mocks.refetchRooms).not.toHaveBeenCalled();
+
+      mocks.settingUp = false;
+      rerender(<SpaceChatPanel spaceId={SPACE} />);
+      expect(mocks.refetchRooms).toHaveBeenCalledTimes(1);
+      after(15_000);
+      expect(mocks.refetchRooms).toHaveBeenCalledTimes(2);
+    });
   });
 
   it('gives a member who can post the composer', () => {

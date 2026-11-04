@@ -257,8 +257,6 @@ export class DebateGatewayClient {
   private connectionGeneration = 0;
   /** Signed out and turned away for load; see `retryAfterFocus`. */
   private parked = false;
-  /** A reconnect after a rate-limited command waits until then. */
-  private rateLimitedUntil = 0;
 
   constructor(options: DebateGatewayClientOptions) {
     this.queryClient = options.queryClient;
@@ -348,7 +346,6 @@ export class DebateGatewayClient {
     const accountKey = this.accountKey;
     this.enabled = false;
     this.parked = false;
-    this.rateLimitedUntil = 0;
     this.getPrivyIdentityToken = null;
     this.accountKey = null;
     this.hasReachedReady = false;
@@ -523,13 +520,11 @@ export class DebateGatewayClient {
           this.queueBroadReconcile();
         } else if (this.anonymous && isAnonymousCapacityError(envelope.payload)) {
           this.parkForCapacity();
-        } else if (this.anonymous && isRateLimited(envelope.payload)) {
-          // The socket stays open for a limited SUBSCRIBE, so resend unconfirmed rooms after the
-          // delay. A limited HEARTBEAT closes the socket, and the reconnect waits the same delay.
-          this.retryUnconfirmedScopesAfter(rateLimitRetryDelayMs(envelope.payload));
         } else if (this.anonymous && this.refuseScope(envelope.payload, 'subscription_limit_reached')) {
           // That room alone polls; the socket and its other rooms stay up.
         } else if (isRateLimited(envelope.payload)) {
+          // Signed out, geo-chat closes the socket after any limited command, so reconnecting is the
+          // only recovery either way; READY on the new socket resends every room.
           const retryDelayMs = rateLimitRetryDelayMs(envelope.payload);
           // Loud on purpose, and distinct from every other pause. This one is *our* fault: we sent
           // more gateway commands than `gateway_commands_by_session` allows, so waiting does not fix
@@ -1319,7 +1314,7 @@ export class DebateGatewayClient {
       return;
     }
     this.setSnapshot({ status: 'degraded', paused: true, pauseReason: 'disconnected' });
-    this.scheduleReconnect(Math.max(0, this.rateLimitedUntil - Date.now()));
+    this.scheduleReconnect();
   }
 
   /** Turned away for load: no reconnects until `retryAfterFocus`. Readers poll meanwhile. */
@@ -1337,22 +1332,6 @@ export class DebateGatewayClient {
     this.parked = false;
     this.setSnapshot({ status: 'connecting', paused: false, pauseReason: null });
     void this.connect();
-  }
-
-  private retryUnconfirmedScopesAfter(delayMs: number) {
-    this.rateLimitedUntil = Date.now() + delayMs;
-    for (const key of [...this.sentScopes]) {
-      if (this.confirmedScopes.has(key)) continue;
-      this.sentScopes.delete(key);
-      const retry = this.subscriptionRetries.get(key) ?? { attempt: 0, timer: null };
-      if (retry.timer) clearTimeout(retry.timer);
-      retry.timer = setTimeout(() => {
-        retry.timer = null;
-        const retained = this.scopes.get(key);
-        if (retained) this.sendSubscription(retained.scope, 'SUBSCRIBE');
-      }, delayMs);
-      this.subscriptionRetries.set(key, retry);
-    }
   }
 
   private forceReconnect(socket: WebSocketLike, minimumDelayMs = 0, reason: DebateGatewayPauseReason = 'disconnected') {

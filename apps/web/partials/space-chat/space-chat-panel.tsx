@@ -65,7 +65,7 @@ export function SpaceChatPanel({
   const { settingUp } = useSpaceChatAuth();
   const viewerId = useCurrentGeoChatUserId();
   const rooms = useSpaceChatRooms(spaceId, true);
-  const membership = useChatMembership(spaceId, rooms.memberRoom?.can_post === true, rooms.refetch);
+  const membership = useChatMembership(spaceId, rooms.memberRoom?.can_post === true, settingUp, rooms.refetch);
   const listed = rooms.memberRoom;
   const room = React.useMemo(
     () => listed ?? (knownRoomId ? { id: knownRoomId, space_id: spaceId, kind: 'member' as const } : null),
@@ -190,10 +190,15 @@ function recentPeople(state: SpaceChatState | undefined, people: Map<string, Cha
   return [...seen.values()];
 }
 
-const MEMBER_RECHECK_MS = [15_000, 30_000, 60_000];
+/** Backs off, then stops: 5m45s in all, past one of geo-chat's 5-minute member syncs. */
+export const MEMBER_RECHECK_MS = [15_000, 30_000, 60_000, 60_000, 60_000, 60_000, 60_000];
 
-/** The shared join path, plus a room-list refetch whenever membership may have landed: geo-chat learns members through its own sync. */
-function useChatMembership(spaceId: string, canPost: boolean, refetchRooms: () => unknown) {
+/**
+ * The shared join path, plus a room-list refetch whenever membership may have landed: geo-chat
+ * learns members through its own sync. Not while the account is setting up: acceptance moves the
+ * panel to the account's own room list.
+ */
+function useChatMembership(spaceId: string, canPost: boolean, settingUp: boolean, refetchRooms: () => unknown) {
   const { space } = useSpace(spaceId);
   const spaceName = space?.entity?.name || null;
   const { join, status, optimisticRequested } = useJoinSpace({
@@ -204,24 +209,25 @@ function useChatMembership(spaceId: string, canPost: boolean, refetchRooms: () =
   const access = useAccessControl(spaceId);
   const joined = access.isMember || access.isEditor;
 
+  const checking = !canPost && !settingUp;
   const wasPending = React.useRef(pending);
   React.useEffect(() => {
-    if (wasPending.current && !pending && !canPost) void refetchRooms();
+    if (wasPending.current && !pending && checking) void refetchRooms();
     wasPending.current = pending;
-  }, [canPost, pending, refetchRooms]);
+  }, [checking, pending, refetchRooms]);
   React.useEffect(() => {
-    if (joined && !canPost) void refetchRooms();
-  }, [canPost, joined, refetchRooms]);
+    if (joined && checking) void refetchRooms();
+  }, [checking, joined, refetchRooms]);
   React.useEffect(() => {
-    if (canPost) return;
+    if (!checking) return;
     const onFocus = () => void refetchRooms();
     window.addEventListener('focus', onFocus);
-    // geo-chat syncs members every 5 minutes, so a known member is re-checked on a backing-off beat.
     let timer: number | undefined;
     const recheck = (step: number) => {
+      if (step >= MEMBER_RECHECK_MS.length) return;
       timer = window.setTimeout(() => {
         onFocus();
-        recheck(Math.min(step + 1, MEMBER_RECHECK_MS.length - 1));
+        recheck(step + 1);
       }, MEMBER_RECHECK_MS[step]);
     };
     if (joined) recheck(0);
@@ -229,7 +235,7 @@ function useChatMembership(spaceId: string, canPost: boolean, refetchRooms: () =
       window.removeEventListener('focus', onFocus);
       window.clearTimeout(timer);
     };
-  }, [canPost, joined, refetchRooms]);
+  }, [checking, joined, refetchRooms]);
 
   const state: 'idle' | 'sending' | 'requested' | 'error' =
     status === 'success' || optimisticRequested || pending
