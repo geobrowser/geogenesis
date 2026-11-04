@@ -7,11 +7,16 @@
  * zone the grid can honestly draw. Saving then changes nothing they did not change.
  */
 import { type AvailabilityBlock, DAY_END_HOUR, SLOT_MINUTES, mergeBlocks } from './blocks';
-import { zonedClock, zonedWallClockInstant } from './peer-schedule';
+import { DAY_MS, zonedClock, zonedOffsetMinutes, zonedWallClockInstant } from './peer-schedule';
 
 const UTC_ZONES = new Set(['UTC', 'Etc/UTC', 'Etc/GMT', 'GMT']);
 const DAY_MINUTES = DAY_END_HOUR * 60;
-const DAY_MS = 86_400_000;
+
+/** `Madrid` from `Europe/Madrid`, `New York` from `America/New_York`: a zone as people say it. */
+export function zoneCity(timezone: string): string {
+  const city = timezone.split('/').at(-1) ?? timezone;
+  return city.replace(/_/g, ' ');
+}
 
 /**
  * A zone as a person would name it — `Eastern Time (New York)`. The raw id alone means little to
@@ -21,7 +26,7 @@ const DAY_MS = 86_400_000;
 export function timezoneLabel(zone: string): string {
   if (zone === 'local') return 'your local time';
   if (UTC_ZONES.has(zone)) return 'UTC';
-  const city = (zone.split('/').at(-1) ?? zone).replace(/_/g, ' ');
+  const city = zoneCity(zone);
   try {
     const name = new Intl.DateTimeFormat('en-US', { timeZone: zone, timeZoneName: 'longGeneric' })
       .formatToParts(new Date())
@@ -32,31 +37,18 @@ export function timezoneLabel(zone: string): string {
   }
 }
 
-/** The zone's offset from UTC at `at`, as `Intl` writes it (`GMT-05:00`); `undefined` if unreadable. */
-function offsetAt(zone: string, at: Date): string | undefined {
-  try {
-    return new Intl.DateTimeFormat('en-US', { timeZone: zone, timeZoneName: 'longOffset' })
-      .formatToParts(at)
-      .find(part => part.type === 'timeZoneName')?.value;
-  } catch {
-    return undefined;
-  }
-}
-
 /**
  * Whether hours saved in `saved` mean something else in `current`. Two ids for the same clock
  * (`America/Detroit`, `America/New_York`) do not: checked in January and July, so a zone that only
- * matches outside daylight saving still counts as different. An unreadable zone is left alone,
- * since there is nothing to convert it with.
+ * matches outside daylight saving still counts as different. `local` and unreadable zones read as
+ * the browser's own, as everywhere else the schedule is resolved.
  */
 export function timezoneChanges(saved: string | undefined, current: string): boolean {
-  if (!saved || saved === current || saved === 'local' || current === 'local') return false;
+  if (!saved || saved === current) return false;
   const year = new Date().getUTCFullYear();
-  return [new Date(Date.UTC(year, 0, 15)), new Date(Date.UTC(year, 6, 15))].some(at => {
-    const savedOffset = offsetAt(saved, at);
-    const currentOffset = offsetAt(current, at);
-    return savedOffset !== undefined && currentOffset !== undefined && savedOffset !== currentOffset;
-  });
+  return [Date.UTC(year, 0, 15), Date.UTC(year, 6, 15)].some(
+    at => zonedOffsetMinutes(at, saved) !== zonedOffsetMinutes(at, current)
+  );
 }
 
 /** `2026-11-03` as the UTC midnight of that date, so dates can be stepped and weekdays read. */
@@ -110,9 +102,12 @@ function convertSpan(date: string, start: number, end: number, from: string, to:
 /**
  * A schedule saved in `from`, as the same instants drawn in `to`.
  *
- * Dated blocks and exceptions convert on their own date. A weekly block has no date, so it converts
- * on this week's — exact until one of the two zones changes clocks, when it is out by that hour
- * until the person saves again.
+ * A weekly block has no date, so it converts on this week's — exact until one of the two zones
+ * changes clocks, when it is out by that hour until the person saves again. An exception only
+ * exists to cut time out of a weekly block, so it converts on this week's matching day too and
+ * moves back to its own date: converted on its own date, a clock change between the two would
+ * leave it an hour off the block it cancels, offering time the person said they don't have.
+ * Dated blocks stand alone and convert on their own date, exactly.
  */
 export function convertBlocks(
   blocks: AvailabilityBlock[],
@@ -125,12 +120,20 @@ export function convertBlocks(
 
   let sequence = 0;
   const converted = blocks.flatMap((block): AvailabilityBlock[] => {
-    const date = block.kind === 'recurring' ? isoOf(monday + block.weekday * DAY_MS) : block.date;
+    const thisWeek = (weekday: number) => isoOf(monday + weekday * DAY_MS);
+    const date =
+      block.kind === 'recurring'
+        ? thisWeek(block.weekday)
+        : block.kind === 'exception'
+          ? thisWeek(weekdayOf(block.date))
+          : block.date;
+    // Days from the date converted on to the date the block belongs on: zero but for exceptions.
+    const shift = block.kind === 'exception' ? dateMs(block.date) - dateMs(date) : 0;
     return convertSpan(date, block.start, block.end, from, to).map(piece => {
       const id = `${block.id}-${sequence++}`;
       return block.kind === 'recurring'
         ? { id, kind: 'recurring', weekday: weekdayOf(piece.date), start: piece.start, end: piece.end }
-        : { id, kind: block.kind, date: piece.date, start: piece.start, end: piece.end };
+        : { id, kind: block.kind, date: isoOf(dateMs(piece.date) + shift), start: piece.start, end: piece.end };
     });
   });
   // Snapping or a clock change can leave two pieces touching; they read as one window.

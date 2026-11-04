@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { AvailabilityBlock } from './blocks';
+import { type AvailabilityBlock, effectiveAvailability, localTimezone } from './blocks';
 import { convertBlocks, scheduleTimezoneNote, timezoneChanges, timezoneLabel } from './schedule-zone';
 
 const at = (hour: number, minute = 0) => hour * 60 + minute;
@@ -30,7 +30,9 @@ describe('timezoneChanges', () => {
     expect(timezoneChanges('America/Detroit', 'America/New_York')).toBe(false);
     expect(timezoneChanges('America/New_York', 'America/New_York')).toBe(false);
     expect(timezoneChanges(undefined, 'America/New_York')).toBe(false);
-    expect(timezoneChanges('Nowhere/Made_Up', 'America/New_York')).toBe(false);
+    // Unreadable, so read as the browser's own zone, which is the zone it is compared against.
+    expect(timezoneChanges('Nowhere/Made_Up', localTimezone())).toBe(false);
+    expect(timezoneChanges('local', localTimezone())).toBe(false);
   });
 
   // Phoenix and Denver share a clock in winter only; summer hours still mean different instants.
@@ -82,6 +84,24 @@ describe('convertBlocks', () => {
       { kind: 'exception', date: '2026-11-11', start: at(23), end: at(24) },
       { kind: 'exception', date: '2026-11-12', start: at(0), end: at(2) },
     ]);
+  });
+
+  // Saved in Los Angeles as Tuesdays 9–10am but not 6 July, opened in Tokyo in November: the
+  // weekly block converts at the winter offset (17h), so the exception has to as well, or it lands
+  // an hour off and 6 July's slot comes back.
+  it('keeps an exception on the weekly block it cancels across a clock change', () => {
+    const blocks: AvailabilityBlock[] = [
+      { id: 'r', kind: 'recurring', weekday: 1, start: at(9), end: at(10) },
+      { id: 'x', kind: 'exception', date: '2027-07-06', start: at(9), end: at(10) },
+    ];
+    const converted = convertBlocks(blocks, LA, 'Asia/Tokyo', NOW);
+
+    expect(spans(converted)).toEqual([
+      { kind: 'recurring', weekday: 2, start: at(2), end: at(3) },
+      { kind: 'exception', date: '2027-07-07', start: at(2), end: at(3) },
+    ]);
+    const week = ['2027-07-05', '2027-07-06', '2027-07-07', '2027-07-08', '2027-07-09', '2027-07-10', '2027-07-11'];
+    expect(effectiveAvailability(converted, week).flatMap(day => day.ranges)).toEqual([]);
   });
 
   // A dated block converts on its own date, so a summer date uses summer offsets.
