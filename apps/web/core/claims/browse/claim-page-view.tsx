@@ -738,7 +738,7 @@ function ClaimPositionSection({
         promptForComment={control.isConnected}
         disabled={!control.canRespond}
         pending={control.isResponseSubmitting}
-        announcing={control.isResponsePending}
+        announcing={control.isResponseConfirming}
         announceRunId={control.responseRunId}
         titleFor={control.actionTitle}
         noteFor={position => (

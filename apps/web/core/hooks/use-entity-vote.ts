@@ -42,6 +42,7 @@ import {
   entityResponseIndexingQueryKey,
   getResponseActionMethod,
   isAwaitingResponseSubmission,
+  isResponseConfirming,
   responseKindToVoteKind,
   userEntityResponseQueryKey,
   voteOutcomeProperties,
@@ -778,6 +779,8 @@ export function useEntityResponse({ entityId, entityName, spaceId, responseKind 
     isSubmittingResponse: isAwaitingResponseSubmission(indexingState),
     isProcessingResponse:
       responseMutation.isPending || indexingState.status === 'reconciling' || indexingState.status === 'delayed',
+    /** The bundler has the write; only the index is still catching up. See `isResponseConfirming`. */
+    isResponseConfirming: isResponseConfirming(indexingState),
     /** The submission in flight, for the screen-reader confirmation to re-announce on a switch or retraction. */
     responseRunId: indexingState.runId,
     isResponseIndexingDelayed: indexingState.status === 'delayed',

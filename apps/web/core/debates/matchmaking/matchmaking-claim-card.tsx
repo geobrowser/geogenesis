@@ -30,6 +30,7 @@ import {
   RESPONSE_LOCAL_ONLY_COPY,
   type ResponseKind,
   isAwaitingResponseSubmission,
+  isResponseConfirming,
   responseErrorMessage,
   responsePositionLabel,
 } from '~/core/responses/entity-response';
@@ -762,10 +763,12 @@ export function useClaimPositionControl({
     isConnected,
     /**
      * The viewer's response is on its way to the chain and not yet indexed. For readers deciding
-     * whether to trust the index, and for the one screen-reader confirmation, spoken for the length
-     * of it — not for the pills' presses, which use `isResponseSubmitting`.
+     * whether to trust the index — not for the pills' presses, which use `isResponseSubmitting`, nor
+     * the screen-reader confirmation, which waits for `isResponseConfirming`.
      */
     isResponsePending,
+    /** The bundler has the write; only the index is still catching up. What the screen-reader confirmation waits on. */
+    isResponseConfirming: isResponseConfirming(responseIndexing),
     /** The submission in flight, for the screen-reader confirmation to re-announce on a switch or retraction. */
     responseRunId: responseIndexing.runId,
     /** The viewer's response has not reached the bundler yet; the pills ignore presses until it has. */
@@ -958,7 +961,7 @@ function RespondableControls({
     actionTitle,
     responseError,
     canRespond,
-    isResponsePending,
+    isResponseConfirming,
     responseRunId,
     isResponseSubmitting,
     localVoteSide,
@@ -1015,7 +1018,7 @@ function RespondableControls({
         // retraction nobody meant; after it, the response is made (GEO-2889).
         disabled={!canRespond}
         pending={isResponseSubmitting}
-        announcing={isResponsePending}
+        announcing={isResponseConfirming}
         announceKey={responseAnnouncerKey(claim.claim_entity_id, claim.space_id, CLAIM_RESPONSE_KIND)}
         announceRunId={responseRunId}
         titleFor={actionTitle}

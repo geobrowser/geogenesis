@@ -173,7 +173,7 @@ function EntityResponseButtons({
     submitResponseAsync,
     optimisticResponse,
     isSubmittingResponse,
-    isProcessingResponse,
+    isResponseConfirming,
     responseRunId,
     isConnected,
     personalSpaceId,
@@ -512,7 +512,7 @@ function EntityResponseButtons({
   // dedupes it against the same claim shown on another surface. See the `compact` prop's note.
   const confirmingAnnouncement = (
     <ResponseConfirmingAnnouncement
-      active={!compact && isProcessingResponse}
+      active={!compact && isResponseConfirming}
       announceKey={compact ? undefined : responseAnnouncerKey(entityId, spaceId, responseKind)}
       announceRunId={responseRunId}
     />

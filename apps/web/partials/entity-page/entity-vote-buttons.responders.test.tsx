@@ -59,6 +59,7 @@ vi.mock('~/core/hooks/use-entity-vote', () => ({
     isResponseIndexingDelayed: mocks.indexingDelayed,
     isSubmittingResponse: mocks.processing,
     isProcessingResponse: mocks.processing,
+    isResponseConfirming: mocks.processing,
     isConnected: true,
     personalSpaceId: 'profile-1',
   }),

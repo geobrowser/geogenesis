@@ -967,7 +967,7 @@ function TickerClaimHeader({
           No error text here — it would make the card grow while the reader is part-way through it. */}
       <span className={cx('flex shrink-0 items-center gap-1', compactLine && '@max-md:order-3')}>
         <ResponseConfirmingAnnouncement
-          active={control.isResponsePending}
+          active={control.isResponseConfirming}
           announceKey={responseAnnouncerKey(claimId, spaceId, responseKind)}
           announceRunId={control.responseRunId}
         />

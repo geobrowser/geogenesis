@@ -58,7 +58,7 @@ export function DebateClaimControls({
           onRespond={control.respond}
           disabled={!control.canRespond}
           pending={control.isResponseSubmitting}
-          announcing={control.isResponsePending}
+          announcing={control.isResponseConfirming}
           announceKey={responseAnnouncerKey(claimId, spaceId, responseKind)}
           announceRunId={control.responseRunId}
           titleFor={control.actionTitle}

@@ -242,6 +242,7 @@ vi.mock('~/core/debates/matchmaking/matchmaking-claim-card', () => ({
     isConnected: false,
     isResponsePending: mocks.isResponsePending,
     isResponseSubmitting: mocks.isResponseSubmitting,
+    isResponseConfirming: mocks.isResponsePending && !mocks.isResponseSubmitting,
   }),
 }));
 vi.mock('./claim-position-comment', () => ({
@@ -758,20 +759,21 @@ describe('ClaimPageView position', () => {
 
   // The claim page is where a confirming response was pressed again and published a retraction. It
   // hands the pills two flags: `pending`, which drops the undo-ing press until the bundler has the
-  // write, and `announcing`, the single screen-reader confirmation, which runs for the whole
-  // confirming window so it is not dropped and re-fired on an indexing retry. There is no visible
-  // sentence; the announcement is `sr-only` inside the pills.
-  it('marks the pills pending and announcing until the response reaches the bundler', () => {
+  // write, and `announcing`, the single screen-reader confirmation. `announcing` waits for the
+  // bundler too — announcing "submitted" before the write has reached it would speak a fact that
+  // might never become true, and go silent on a failure with nothing said at all.
+  it('marks the pills pending and stays silent until the response reaches the bundler', () => {
     mocks.isResponsePending = true;
     mocks.isResponseSubmitting = true;
     render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
 
     expect(mocks.positionControl?.pending).toBe(true);
-    expect(mocks.positionControl?.announcing).toBe(true);
+    expect(mocks.positionControl?.announcing).toBe(false);
   });
 
-  // GEO-2889: inclusion is the slow part (p90 ~30s), and the pills no longer wait on it.
-  it('releases the pills once the response is submitted, before it lands', () => {
+  // GEO-2889: inclusion is the slow part (p90 ~30s), and the pills no longer wait on it. The
+  // announcement starts exactly here too, once "submitted" is actually true.
+  it('releases the pills and starts announcing once the response is submitted, before it lands', () => {
     mocks.isResponsePending = true;
     mocks.isResponseSubmitting = false;
     render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
