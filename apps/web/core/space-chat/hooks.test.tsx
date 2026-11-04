@@ -26,7 +26,7 @@ vi.mock('~/core/debates/hooks', () => ({
 vi.mock('~/core/debates/debate-gateway', () => ({
   useSpaceChatRoomScope: (...args: unknown[]) => {
     mocks.scope(...args);
-    return { status: mocks.gateway };
+    return mocks.gateway === 'ready';
   },
 }));
 vi.mock('~/core/debates/debate-attention', () => ({ useDebateVisibility: () => mocks.visible }));

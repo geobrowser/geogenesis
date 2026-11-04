@@ -271,6 +271,11 @@ export class DebateGatewayClient {
 
   getSnapshot = () => this.snapshot;
 
+  /** Events reach `scope`: the socket is ready and READY confirmed it. Listeners hear each change. */
+  isScopeLive(scope: DebateGatewayScope) {
+    return this.snapshot.status === 'ready' && this.readyForDebates && this.confirmedScopes.has(scopeKey(scope));
+  }
+
   subscribe = (listener: () => void) => {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
@@ -379,10 +384,8 @@ export class DebateGatewayClient {
       this.scopes.set(key, { scope, count: 1 });
       this.sendSubscription(scope, 'SUBSCRIBE');
     }
-    if (this.anonymous) {
-      if (!this.enabled) this.startAnonymous();
-      else this.updateAnonymousStatus();
-    }
+    if (this.anonymous && !this.enabled) this.startAnonymous();
+    else this.scopesChanged();
 
     let released = false;
     return () => {
@@ -402,7 +405,7 @@ export class DebateGatewayClient {
       }
       // The server never held a refused scope, so there is nothing to unsubscribe.
       if (!this.refusedScopes.delete(key)) this.sendSubscription(scope, 'UNSUBSCRIBE');
-      if (this.anonymous) this.updateAnonymousStatus();
+      this.scopesChanged();
     };
   }
 
@@ -410,6 +413,12 @@ export class DebateGatewayClient {
     this.enabled = true;
     this.setSnapshot({ status: 'connecting', paused: false, pauseReason: null });
     void this.connect();
+  }
+
+  /** A scope was confirmed, refused or dropped: `isScopeLive` readers re-read. */
+  private scopesChanged() {
+    if (this.anonymous) this.updateAnonymousStatus();
+    for (const listener of this.listeners) listener();
   }
 
   /** Signed out, `ready` means every retained room is confirmed; a refused one degrades it. */
@@ -619,7 +628,7 @@ export class DebateGatewayClient {
     }
 
     for (const { scope } of this.scopes.values()) this.sendSubscription(scope, 'SUBSCRIBE');
-    if (this.anonymous) this.updateAnonymousStatus();
+    this.scopesChanged();
   }
 
   /** A space chat room's message event (GEO-3422): applied to the cached room, never refetched. */
@@ -1371,7 +1380,7 @@ export class DebateGatewayClient {
     this.confirmedScopes.delete(key);
     this.clearSubscriptionRetry(key);
     if (this.scopes.has(key)) this.refusedScopes.add(key);
-    if (this.anonymous) this.updateAnonymousStatus();
+    this.scopesChanged();
     return true;
   }
 
@@ -1382,6 +1391,7 @@ export class DebateGatewayClient {
     const key = scopeKey(scope);
     this.sentScopes.delete(key);
     this.confirmedScopes.delete(key);
+    this.scopesChanged();
     if (!this.scopes.has(key)) return true;
 
     const retry = this.subscriptionRetries.get(key) ?? { attempt: 0, timer: null };
@@ -1615,7 +1625,7 @@ export function useDebateGatewayScope(scope: DebateGatewayScope, enabled: boolea
 
 /**
  * Holds a space chat room's subscription (GEO-3422) while `enabled`: on the account's gateway
- * signed in, on `publicChatGateway` signed out. Returns that gateway's snapshot.
+ * signed in, on `publicChatGateway` signed out. Returns whether the room's events are arriving.
  */
 export function useSpaceChatRoomScope(
   room: { space_id: string; id: string; kind: 'member' | 'editor' } | null,
@@ -1636,7 +1646,14 @@ export function useSpaceChatRoomScope(
     window.addEventListener('focus', retry);
     return () => window.removeEventListener('focus', retry);
   }, [enabled, signedIn]);
-  return React.useSyncExternalStore(gateway.subscribe, gateway.getSnapshot, gateway.getSnapshot);
+  const live = React.useCallback(
+    () =>
+      enabled && spaceId !== null && roomId !== null && roomKind !== null
+        ? gateway.isScopeLive({ scope: 'chat-room', space_id: spaceId, room_id: roomId, room_kind: roomKind })
+        : false,
+    [enabled, gateway, roomId, roomKind, spaceId]
+  );
+  return React.useSyncExternalStore(gateway.subscribe, live, live);
 }
 
 /**

@@ -99,7 +99,7 @@ export type SpaceChatRoomView = {
 
 /**
  * One room's messages (GEO-3422). Signed in, the gateway's room events patch the cache; signed
- * out, or while the gateway is down, it polls while the page is visible.
+ * out, or while the room is not confirmed on a ready gateway, it polls while the page is visible.
  */
 export function useSpaceChatRoom(
   room: Pick<SpaceChatRoom, 'id' | 'space_id' | 'kind'> | null,
@@ -119,12 +119,12 @@ export function useSpaceChatRoom(
           : spaceChatQueryKeys.public(roomId),
     [auth, roomId]
   );
-  const gateway = useSpaceChatRoomScope(
+  // Live only once this room is confirmed: a refused or pending room polls like a dropped socket.
+  const live = useSpaceChatRoomScope(
     room,
     enabled && ready && (auth !== null || (visible && room?.kind === 'member')),
     auth !== null
   );
-  const live = gateway.status === 'ready';
   const lastFullReadAt = React.useRef(0);
 
   const query = useQuery({

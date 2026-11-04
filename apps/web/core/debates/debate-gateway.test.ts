@@ -1579,6 +1579,40 @@ describe('DebateGatewayClient', () => {
     expect(sockets[0]!.sent).toContainEqual(expect.objectContaining({ op: 'UNSUBSCRIBE', payload: roomPayload }));
   });
 
+  it('reports a chat room live only once READY confirms it, and not while it is refused', async () => {
+    const roomId = '0192aaaa-0000-7000-8000-000000000001';
+    const dashless = '0192aaaa000070008000000000000001';
+    const scope = { scope: 'chat-room', space_id: 'space-1', room_id: roomId, room_kind: 'member' } as const;
+    const echo = { space_id: 'space-1', room_id: dashless, room_kind: 'member', resume_after_seq: null };
+    const listener = vi.fn();
+    client.subscribe(listener);
+    client.retainScope(scope);
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    await flushInvalidations();
+    // The gateway is ready, but the room is still pending.
+    expect(client.getSnapshot().status).toBe('ready');
+    expect(client.isScopeLive(scope)).toBe(false);
+
+    listener.mockClear();
+    sockets[0]!.receive('READY', readyPayload([echo]));
+    await flushInvalidations();
+    expect(client.isScopeLive(scope)).toBe(true);
+    expect(listener).toHaveBeenCalled();
+
+    // Refused later, say once membership is revoked: the room polls while the gateway stays ready.
+    listener.mockClear();
+    sockets[0]!.receive('ERROR', { code: 'subscription_forbidden', subscription: echo });
+    expect(client.getSnapshot().status).toBe('ready');
+    expect(client.isScopeLive(scope)).toBe(false);
+    expect(listener).toHaveBeenCalled();
+  });
+
   it('resubscribes a chat room on the new token’s socket after a refresh closes the old one, and refetches it', async () => {
     const roomId = '0192aaaa-0000-7000-8000-000000000001';
     const dashless = '0192aaaa000070008000000000000001';
