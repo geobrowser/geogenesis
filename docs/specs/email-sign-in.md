@@ -112,7 +112,6 @@ was about votes changes:
 | Close button label (screen readers) | Not now | **Close** |
 | Everything else | the sheet's: placeholder, "Send code" after Change, Google button and its error, fine print `SAVE_VOTES_FINE_PRINT`, "Check your email", the code step's lines and its error | the same |
 
-If the dashboard requires terms consent (Q5), the consent line goes under the fine print.
 
 ## 5. Mockup
 
@@ -254,7 +253,7 @@ they do. The query should start its comparison two weeks after the marker ships.
 - Fine print: `SAVE_VOTES_FINE_PRINT`.
 - Flag: `enabledByDefault: false` everywhere. Testing uses the flags dialog.
 - Code lifetime: `CODE_LIFETIME_MS` = 10 min, to be confirmed by Bryan's test.
-- Terms consent: built as if off. Room is kept for a consent line under the fine print.
+- Terms consent: off. Privy has no terms link set, so the box has no consent line and keeps `SAVE_VOTES_FINE_PRINT`.
 
 Open:
 - The submit label "Continue" (the sheet's own are votes-specific: "Save votes" / "Log in").
