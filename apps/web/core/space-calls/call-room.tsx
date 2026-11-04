@@ -79,7 +79,7 @@ export function CallRoom({
       }
       // The space's chat as the call's aside (GEO-3422), so the conversation outlives the call.
       aside={
-        capabilities.chat && chatEnabled && chatSpaceId
+        capabilities.spaceChat && chatEnabled && chatSpaceId
           ? {
               tab: 'Chat',
               label: 'Space chat',

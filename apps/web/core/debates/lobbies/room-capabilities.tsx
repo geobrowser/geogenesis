@@ -30,7 +30,7 @@ export type RoomCapabilities = {
   recording: boolean;
   screenShare: boolean;
   /** A call shows its space's member-room chat (GEO-3422). */
-  chat: boolean;
+  spaceChat: boolean;
 };
 
 export function roomCapabilities(purpose: LobbyRoomPurpose): RoomCapabilities {
@@ -42,7 +42,7 @@ export function roomCapabilities(purpose: LobbyRoomPurpose): RoomCapabilities {
       nextLobby: false,
       recording: true,
       screenShare: true,
-      chat: true,
+      spaceChat: true,
     };
   }
   return {
@@ -52,7 +52,7 @@ export function roomCapabilities(purpose: LobbyRoomPurpose): RoomCapabilities {
     nextLobby: true,
     recording: false,
     screenShare: true,
-    chat: false,
+    spaceChat: false,
   };
 }
 
