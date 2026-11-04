@@ -59,7 +59,7 @@ export function SpaceChatPanel({
   onArrival?: () => void;
   className?: string;
 }) {
-  const { authenticated } = useGeoChatAuth();
+  const { ready: authReady, authenticated } = useGeoChatAuth();
   const viewerId = useCurrentGeoChatUserId();
   const rooms = useSpaceChatRooms(spaceId, true);
   const membership = useChatMembership(spaceId, rooms.memberRoom?.can_post === true, rooms.refetch);
@@ -99,18 +99,20 @@ export function SpaceChatPanel({
   const canPost = authenticated && listed?.can_post === true;
   const composer: ChatViewComposer = canPost
     ? { kind: 'post', onSend: chat.send, maxLength: SPACE_CHAT_COPY.maxLength, mentionCandidates: participants }
-    : !authenticated
-      ? { kind: 'sign_in', label: SPACE_CHAT_COPY.signedOut(membership.spaceName), onSignIn: () => void signIn() }
-      : !listed || membership.access.isLoading
-        ? { kind: 'none' }
-        : membership.access.isMember || membership.access.isEditor
-          ? { kind: 'closed', reason: SPACE_CHAT_COPY.joining }
-          : {
-              kind: 'join',
-              label: SPACE_CHAT_COPY.nonMember(membership.spaceName),
-              state: membership.state,
-              onJoin: membership.join,
-            };
+    : !authReady
+      ? { kind: 'none' }
+      : !authenticated
+        ? { kind: 'sign_in', label: SPACE_CHAT_COPY.signedOut(membership.spaceName), onSignIn: () => void signIn() }
+        : !listed || membership.access.isLoading
+          ? { kind: 'none' }
+          : membership.access.isMember || membership.access.isEditor
+            ? { kind: 'closed', reason: SPACE_CHAT_COPY.joining }
+            : {
+                kind: 'join',
+                label: SPACE_CHAT_COPY.nonMember(membership.spaceName),
+                state: membership.state,
+                onJoin: membership.join,
+              };
 
   return (
     <SpaceChatView

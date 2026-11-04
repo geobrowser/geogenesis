@@ -9,6 +9,7 @@ import { SPACE_CHAT_VIEW_COPY } from './space-chat-view';
 const SPACE = '0243bd171b651379954685365870e6a6';
 
 const mocks = vi.hoisted(() => ({
+  ready: true,
   authenticated: false,
   canPost: false,
   canModerate: false,
@@ -21,7 +22,9 @@ const mocks = vi.hoisted(() => ({
   messages: [] as unknown[],
 }));
 
-vi.mock('~/core/debates/hooks', () => ({ useGeoChatAuth: () => ({ authenticated: mocks.authenticated }) }));
+vi.mock('~/core/debates/hooks', () => ({
+  useGeoChatAuth: () => ({ ready: mocks.ready, authenticated: mocks.authenticated }),
+}));
 vi.mock('~/core/debates/use-current-geo-chat-user-id', () => ({
   useCurrentGeoChatUserId: () => (mocks.authenticated ? 'viewer' : null),
 }));
@@ -63,6 +66,7 @@ vi.mock('~/core/space-chat/hooks', () => ({
 }));
 
 beforeEach(() => {
+  mocks.ready = true;
   mocks.authenticated = false;
   mocks.canPost = false;
   mocks.canModerate = false;
@@ -86,6 +90,14 @@ describe('SpaceChatPanel composer', () => {
     fireEvent.click(screen.getByRole('button', { name: SPACE_CHAT_VIEW_COPY.logIn }));
     expect(mocks.signIn).toHaveBeenCalled();
     expect(mocks.join).not.toHaveBeenCalled();
+  });
+
+  it('offers no prompt until sign-in has resolved', () => {
+    mocks.ready = false;
+    render(<SpaceChatPanel spaceId={SPACE} />);
+    expect(screen.queryByRole('button', { name: SPACE_CHAT_VIEW_COPY.logIn })).not.toBeInTheDocument();
+    expect(screen.queryByText('Log in and join Geo to chat.')).not.toBeInTheDocument();
+    expect(joinButton()).not.toBeInTheDocument();
   });
 
   it('offers a signed-in non-member Join space', () => {
