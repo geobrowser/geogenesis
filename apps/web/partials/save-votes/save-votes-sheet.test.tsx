@@ -147,15 +147,17 @@ describe('copy', () => {
 
 describe('SaveVotesSheet', () => {
   it.each([
-    ['feed', 'threshold', true, null],
-    ['feed', 'threshold', false, null],
-    ['single', 'single_claim', true, null],
-    ['single', 'single_claim', false, null],
-    ['feed', 'threshold', true, 'Onboarding with Adam'],
-    ['feed', 'threshold', false, 'Onboarding with Adam'],
+    ['feed', 'threshold', true, null, 'stance', 'positive'],
+    ['feed', 'threshold', false, null, 'stance', 'negative'],
+    ['single', 'single_claim', true, null, 'stance', 'positive'],
+    ['single', 'single_claim', false, null, 'stance', 'negative'],
+    ['feed', 'threshold', true, 'Onboarding with Adam', 'stance', 'positive'],
+    ['feed', 'threshold', false, 'Onboarding with Adam', 'stance', 'negative'],
+    ['feed', 'threshold', true, null, 'curation', 'positive'],
+    ['feed', 'threshold', false, null, 'curation', 'negative'],
   ] as const)(
-    'asks once after the first %s vote (%s, already mounted: %s, lobby: %s)',
-    (surface, reason, alreadyMounted, lobbyName) => {
+    'asks once after the first %s vote (%s, already mounted: %s, lobby: %s, %s %s)',
+    (surface, reason, alreadyMounted, lobbyName, responseKind, firstDirection) => {
       if (lobbyName) setSaveVotesPromptLobby(lobbyName);
       const label = lobbyName ? 'Join the discussion' : 'Save your votes';
       const cast = (entityId: string, direction: 'positive' | 'negative' = 'positive') =>
@@ -163,7 +165,7 @@ describe('SaveVotesSheet', () => {
           castLocalVote({
             entityId,
             spaceId: 'space-1',
-            responseKind: 'stance',
+            responseKind,
             direction,
             title: entityId,
             surface,
@@ -179,19 +181,23 @@ describe('SaveVotesSheet', () => {
       );
       const view = alreadyMounted ? render(sheet) : null;
 
-      cast('a');
+      cast('a', firstDirection);
       if (!alreadyMounted) render(sheet);
 
-      const region = screen.getByRole('region', { name: label });
-      expect(region).toHaveTextContent(lobbyName ?? 'Save your vote');
-      expect(screen.queryByRole('dialog', { name: label })).not.toBeInTheDocument();
+      const dialog = screen.getByRole('dialog', { name: label });
+      expect(dialog).toHaveTextContent(lobbyName ?? 'Save your vote');
+      expect(screen.queryByRole('region', { name: label })).not.toBeInTheDocument();
+      expect(readLocalVotes().votes).toEqual([
+        expect.objectContaining({ entityId: 'a', responseKind, direction: firstDirection }),
+      ]);
       expect(mocks.impression.mock.calls).toEqual([[reason, 1]]);
       expect(readLocalVotes().prompt.shownCount).toBe(1);
       view?.rerender(sheet);
       expect(mocks.impression).toHaveBeenCalledOnce();
 
       fireEvent.click(screen.getByRole('button', { name: 'Not now' }));
-      cast('a', 'negative');
+      expect(readLocalVotes().votes).toHaveLength(1);
+      cast('a', firstDirection === 'positive' ? 'negative' : 'positive');
       expect(readSaveVotesPrompt()).toBeNull();
       for (const entityId of ['b', 'c', 'd']) {
         cast(entityId);
@@ -219,14 +225,14 @@ describe('SaveVotesSheet', () => {
     vote('a', 'Couples should keep separate finances');
     markPromptedThisSession();
     // Pages after the landing: the URL no longer carries `ref_email`, the session still knows. An ask
-    // that isn't the vote link's own keeps the corner card, with the login wording.
+    // after voting still uses the centred sheet, with the login wording.
     window.history.replaceState(null, '', '/explore');
     render(<SaveVotesSheet />);
 
     act(() => openSaveVotesPrompt('single_claim'));
-    const region = screen.getByRole('region', { name: 'Save your votes' });
-    expect(region).toHaveTextContent('Log in to save your vote');
-    expect(region).toHaveTextContent('Log in to make it count.');
+    const dialog = screen.getByRole('dialog', { name: 'Save your votes' });
+    expect(dialog).toHaveTextContent('Log in to save your vote');
+    expect(dialog).toHaveTextContent('Log in to make it count.');
     expect(screen.getByRole('button', { name: 'Log in' })).toBeInTheDocument();
   });
 
@@ -277,15 +283,15 @@ describe('SaveVotesSheet', () => {
     render(<SaveVotesSheet />);
 
     act(() => openSaveVotesPrompt('single_claim', { lobbyName: 'Onboarding with Adam' }));
-    const region = screen.getByRole('region', { name: 'Join the discussion' });
-    expect(region).toHaveTextContent('Join the discussion');
-    expect(region).toHaveTextContent('You’ll stay in Onboarding with Adam, and your audio keeps playing.');
-    expect(region).toHaveTextContent('Saved for after sign-up');
+    const dialog = screen.getByRole('dialog', { name: 'Join the discussion' });
+    expect(dialog).toHaveTextContent('Join the discussion');
+    expect(dialog).toHaveTextContent('You’ll stay in Onboarding with Adam, and your audio keeps playing.');
+    expect(dialog).toHaveTextContent('Saved for after sign-up');
     expect(screen.getByRole('list', { name: 'Your votes' })).toHaveTextContent('Couples should keep separate finances');
 
     act(() => closeSaveVotesPrompt());
     act(() => openSaveVotesPrompt('single_claim'));
-    expect(screen.getByRole('region', { name: 'Save your votes' })).not.toHaveTextContent('Join the discussion');
+    expect(screen.getByRole('dialog', { name: 'Save your votes' })).not.toHaveTextContent('Join the discussion');
     expect(screen.getByText('Save your vote')).toBeInTheDocument();
   });
 
@@ -357,7 +363,7 @@ describe('SaveVotesSheet', () => {
     render(<SaveVotesSheet />);
     act(() => openSaveVotesPrompt('single_claim'));
 
-    expect(screen.getByRole('region', { name: 'Save your votes' })).toHaveTextContent(
+    expect(screen.getByRole('dialog', { name: 'Save your votes' })).toHaveTextContent(
       'We’ll email you a 6-digit code. No password.'
     );
   });
@@ -368,7 +374,7 @@ describe('SaveVotesSheet', () => {
       vote('b');
       markPromptedThisSession();
       render(<SaveVotesSheet />);
-      act(() => openSaveVotesPrompt('threshold'));
+      act(() => openSaveVotesPrompt('inline_save'));
       fireEvent.change(screen.getByRole('textbox', { name: 'Email address' }), { target: { value: address } });
       fireEvent.click(screen.getByRole('button', { name: 'Save votes' }));
     }
@@ -404,7 +410,7 @@ describe('SaveVotesSheet', () => {
       expect(screen.getByText('Enter the code we sent to sam@hey.com')).toBeInTheDocument();
       expect(mocks.accountStepMounts).toBe(2);
       expect(mocks.beginPrivyAuth).toHaveBeenCalledTimes(2);
-      expect(mocks.beginPrivyAuth).toHaveBeenLastCalledWith(expect.objectContaining({ prompt_reason: 'threshold' }));
+      expect(mocks.beginPrivyAuth).toHaveBeenLastCalledWith(expect.objectContaining({ prompt_reason: 'inline_save' }));
       expect(readLocalVotes().votes).toHaveLength(2);
     });
 
@@ -621,7 +627,7 @@ describe('SaveVotesSheet', () => {
     markPromptedThisSession();
     mocks.anyModalOpen = true;
     const { rerender } = render(<SaveVotesSheet />);
-    act(() => openSaveVotesPrompt('threshold'));
+    act(() => openSaveVotesPrompt('return_visit'));
 
     expect(screen.queryByRole('region', { name: 'Save your votes' })).not.toBeInTheDocument();
     expect(readLocalVotes().prompt.shownCount).toBe(0);
@@ -652,7 +658,7 @@ describe('SaveVotesSheet', () => {
         <SaveVotesSheet />
       </>
     );
-    act(() => openSaveVotesPrompt('threshold'));
+    act(() => openSaveVotesPrompt('return_visit'));
     expect(screen.queryByRole('region', { name: 'Save your votes' })).not.toBeInTheDocument();
     expect(mocks.impression).not.toHaveBeenCalled();
 
@@ -667,7 +673,7 @@ describe('SaveVotesSheet', () => {
     markPromptedThisSession();
     render(<SaveVotesSheet />);
     act(() => openSaveVotesPrompt('threshold'));
-    expect(screen.getByRole('region', { name: 'Save your votes' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Save your votes' })).toBeInTheDocument();
 
     act(() => {
       removeLocalVote({ entityId: 'a', spaceId: 'space-1', responseKind: 'stance' });
@@ -677,7 +683,7 @@ describe('SaveVotesSheet', () => {
       vote('c');
     });
 
-    expect(screen.queryByRole('region', { name: 'Save your votes' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Save your votes' })).not.toBeInTheDocument();
     expect(readSaveVotesPrompt()).toBeNull();
   });
 
@@ -687,7 +693,7 @@ describe('SaveVotesSheet', () => {
     vote('c', 'Third claim');
     markPromptedThisSession();
     render(<SaveVotesSheet />);
-    act(() => openSaveVotesPrompt('threshold'));
+    act(() => openSaveVotesPrompt('return_visit'));
 
     const chips = screen.getByRole('list', { name: 'Your votes' });
     // One row in the corner card, the "+1" on it.
@@ -837,7 +843,7 @@ describe('SaveVotesSheet from the navbar', () => {
     vote('b');
     markPromptedThisSession();
     render(<SaveVotesSheet />);
-    act(() => openSaveVotesPrompt('threshold'));
+    act(() => openSaveVotesPrompt('return_visit'));
     fireEvent.change(screen.getByRole('textbox', { name: 'Email address' }), { target: { value: 'sam@hey.com' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save votes' }));
     expect(mocks.accountStepMounts).toBe(1);
@@ -900,7 +906,7 @@ describe('SaveVotesSheet from the navbar', () => {
     vote('b');
     markPromptedThisSession();
     render(<SaveVotesSheet />);
-    act(() => openSaveVotesPrompt('threshold'));
+    act(() => openSaveVotesPrompt('return_visit'));
     expect(screen.getByRole('region', { name: 'Save your votes' })).toBeInTheDocument();
 
     act(() => openSaveVotesPrompt(reason));
