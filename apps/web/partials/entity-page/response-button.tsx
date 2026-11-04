@@ -136,14 +136,52 @@ export function ResponseButton({
  * `announceKey` identifies the response so that the same claim shown in several controls at once
  * speaks once, not once per control: only the elected announcer for a key fills its region, the
  * rest stay empty. Omit it and the control always announces for itself.
+ *
+ * `announceRunId` identifies the submission, so a switch or retraction mid-window re-announces.
  */
-export function ResponseConfirmingAnnouncement({ active, announceKey }: { active: boolean; announceKey?: string }) {
+export function ResponseConfirmingAnnouncement({
+  active,
+  announceKey,
+  announceRunId,
+}: {
+  active: boolean;
+  announceKey?: string;
+  announceRunId?: string | null;
+}) {
   const isAnnouncer = useIsResponseAnnouncer(announceKey);
+  const text = useConfirmingAnnouncementText(active && isAnnouncer, announceRunId ?? null);
   return (
     <span aria-live="polite" className="sr-only">
-      {active && isAnnouncer ? RESPONSE_CONFIRMING_COPY : null}
+      {text}
     </span>
   );
+}
+
+/** Re-announces on each new runId by blanking the text a frame before restoring it. */
+function useConfirmingAnnouncementText(speaking: boolean, runId: string | null): string | null {
+  const [text, setText] = React.useState<string | null>(null);
+  const spokenRunIdRef = React.useRef<string | null | undefined>(undefined);
+
+  React.useEffect(() => {
+    if (!speaking) {
+      spokenRunIdRef.current = undefined;
+      setText(null);
+      return;
+    }
+    if (spokenRunIdRef.current === runId) return;
+    const isReAnnounce = spokenRunIdRef.current !== undefined;
+    spokenRunIdRef.current = runId;
+
+    if (!isReAnnounce || typeof requestAnimationFrame === 'undefined') {
+      setText(RESPONSE_CONFIRMING_COPY);
+      return;
+    }
+    setText('');
+    const frame = requestAnimationFrame(() => setText(RESPONSE_CONFIRMING_COPY));
+    return () => cancelAnimationFrame(frame);
+  }, [speaking, runId]);
+
+  return text;
 }
 
 /** Elects one announcer per response identity among the controls mounted for it. */

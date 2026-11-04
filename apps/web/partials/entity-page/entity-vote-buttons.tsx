@@ -174,6 +174,7 @@ function EntityResponseButtons({
     optimisticResponse,
     isSubmittingResponse,
     isProcessingResponse,
+    responseRunId,
     isConnected,
     personalSpaceId,
   } = useEntityResponse({ entityId, entityName: entity?.name, spaceId, responseKind });
@@ -513,6 +514,7 @@ function EntityResponseButtons({
     <ResponseConfirmingAnnouncement
       active={!compact && isProcessingResponse}
       announceKey={compact ? undefined : responseAnnouncerKey(entityId, spaceId, responseKind)}
+      announceRunId={responseRunId}
     />
   );
 

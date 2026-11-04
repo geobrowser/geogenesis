@@ -44,6 +44,7 @@ export function ClaimPositionCommentControl({
   disabled,
   pending,
   announcing,
+  announceRunId,
   titleFor,
   noteFor,
   localSide,
@@ -75,6 +76,8 @@ export function ClaimPositionCommentControl({
   pending?: boolean;
   /** Speak the confirming sentence once, hidden. See `PositionRow`. */
   announcing?: boolean;
+  /** The submission in flight, so a switch or retraction mid-window re-announces. See `PositionRow`. */
+  announceRunId?: string | null;
   titleFor?: (position: boolean) => string;
   noteFor?: (position: boolean) => React.ReactNode;
   /** The side held only on this device; see `PositionRow`. */
@@ -187,6 +190,7 @@ export function ClaimPositionCommentControl({
           pending={pending}
           announcing={announcing}
           announceKey={responseAnnouncerKey(entityId, spaceId, responseKind)}
+          announceRunId={announceRunId}
           titleFor={titleFor}
           noteFor={noteFor}
           localSide={localSide}

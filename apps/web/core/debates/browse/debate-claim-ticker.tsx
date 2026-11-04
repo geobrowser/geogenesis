@@ -969,6 +969,7 @@ function TickerClaimHeader({
         <ResponseConfirmingAnnouncement
           active={control.isResponsePending}
           announceKey={responseAnnouncerKey(claimId, spaceId, responseKind)}
+          announceRunId={control.responseRunId}
         />
         <ClaimIconButton
           responseKind={responseKind}

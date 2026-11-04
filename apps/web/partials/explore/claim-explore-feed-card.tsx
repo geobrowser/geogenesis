@@ -330,6 +330,7 @@ export function ClaimExploreFeedCard({
             disabled={!control.canRespond}
             pending={control.isResponseSubmitting}
             announcing={control.isResponsePending}
+            announceRunId={control.responseRunId}
             titleFor={control.actionTitle}
             noteFor={responseNote ? noteFor : undefined}
             localSide={control.localVoteSide}

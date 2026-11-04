@@ -60,6 +60,7 @@ export function DebateClaimControls({
           pending={control.isResponseSubmitting}
           announcing={control.isResponsePending}
           announceKey={responseAnnouncerKey(claimId, spaceId, responseKind)}
+          announceRunId={control.responseRunId}
           titleFor={control.actionTitle}
           localSide={control.localVoteSide}
           showParticipants={showParticipants}

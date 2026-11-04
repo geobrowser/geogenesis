@@ -766,6 +766,8 @@ export function useClaimPositionControl({
      * of it — not for the pills' presses, which use `isResponseSubmitting`.
      */
     isResponsePending,
+    /** The submission in flight, for the screen-reader confirmation to re-announce on a switch or retraction. */
+    responseRunId: responseIndexing.runId,
     /** The viewer's response has not reached the bundler yet; the pills ignore presses until it has. */
     isResponseSubmitting,
     /**
@@ -957,6 +959,7 @@ function RespondableControls({
     responseError,
     canRespond,
     isResponsePending,
+    responseRunId,
     isResponseSubmitting,
     localVoteSide,
   } = useClaimPositionControl({
@@ -1014,6 +1017,7 @@ function RespondableControls({
         pending={isResponseSubmitting}
         announcing={isResponsePending}
         announceKey={responseAnnouncerKey(claim.claim_entity_id, claim.space_id, CLAIM_RESPONSE_KIND)}
+        announceRunId={responseRunId}
         titleFor={actionTitle}
         noteFor={noteFor}
         showParticipants={showParticipants}
@@ -1268,6 +1272,7 @@ export function PositionRow({
   pending,
   announcing = false,
   announceKey,
+  announceRunId,
   titleFor,
   noteFor,
   localSide = null,
@@ -1300,6 +1305,8 @@ export function PositionRow({
   announcing?: boolean;
   /** Claim identity, so the confirming sentence is spoken once across duplicate controls. */
   announceKey?: string;
+  /** The submission in flight, so a switch or retraction mid-window re-announces. */
+  announceRunId?: string | null;
   titleFor?: (position: boolean) => string;
   /**
    * Something to say under one of the two buttons — on a profile, which side
@@ -1353,7 +1360,7 @@ export function PositionRow({
   // PositionRow stack while the comments pill remains stranded beside it.
   return (
     <div className={compactMobileActions ? '@container/debate-actions' : '@container'}>
-      <ResponseConfirmingAnnouncement active={announcing} announceKey={announceKey} />
+      <ResponseConfirmingAnnouncement active={announcing} announceKey={announceKey} announceRunId={announceRunId} />
       <div
         className={cx(
           'grid gap-2',
