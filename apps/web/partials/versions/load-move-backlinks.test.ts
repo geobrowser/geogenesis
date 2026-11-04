@@ -19,8 +19,10 @@ const mocks = vi.hoisted(() => ({
 const CONCURRENCY = vi.hoisted(() => 3);
 
 vi.mock('~/core/sync/use-store', () => ({
-  getRelations: ({ selector }: { selector?: (r: any) => boolean }) =>
-    mocks.relations.filter(r => (selector ? selector(r) : true)),
+  getRelations: ({ selector, mergeWith = [] }: { selector?: (r: any) => boolean; mergeWith?: any[] }) =>
+    [...mocks.relations, ...mergeWith.filter(m => !mocks.relations.some(r => r.id === m.id))].filter(r =>
+      selector ? selector(r) : true
+    ),
   getValues: () => [],
 }));
 
@@ -117,6 +119,31 @@ describe('loadMoveBacklinks', () => {
     mocks.failBacklinks = true;
 
     await expect(run()).rejects.toThrow();
+  });
+
+  it('looks up backlinks to a block that was only loaded', async () => {
+    const loaded = [
+      {
+        id: ENTITY,
+        values: [],
+        relations: [relation({ id: 'has-tab', from: ENTITY, to: 'tab', typeId: SystemIds.TABS_PROPERTY })],
+      },
+      {
+        id: 'tab',
+        values: [],
+        relations: [relation({ id: 'tab-holds-block', from: 'tab', to: 'block', typeId: SystemIds.BLOCKS })],
+      },
+    ];
+
+    await loadMoveBacklinks({
+      entityId: ENTITY,
+      sourceSpaceId: SOURCE,
+      store: {} as any,
+      cache: {} as any,
+      loaded: loaded as any,
+    });
+
+    expect([...mocks.requested].sort()).toEqual([ENTITY, 'block', 'tab'].sort());
   });
 
   it('runs only a few lookups at a time on a long page, and still looks up every block once', async () => {

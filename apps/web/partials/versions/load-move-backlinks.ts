@@ -5,7 +5,7 @@ import { Effect } from 'effect';
 import { ENTITY_ID_BATCH_CONCURRENCY, getEntityBacklinks } from '~/core/io/queries';
 import { E } from '~/core/sync/orm';
 import type { GeoStore } from '~/core/sync/store';
-import type { Relation } from '~/core/types';
+import type { Entity, Relation } from '~/core/types';
 
 import { collectSubtree } from './clone-entity-into-space';
 
@@ -14,13 +14,15 @@ export async function loadMoveBacklinks({
   sourceSpaceId,
   store,
   cache,
+  loaded = [],
 }: {
   entityId: string;
   sourceSpaceId: string;
   store: GeoStore;
   cache: QueryClient;
+  loaded?: Entity[];
 }): Promise<Relation[]> {
-  const { entityIds: subtreeIds } = collectSubtree(entityId, sourceSpaceId);
+  const { entityIds: subtreeIds } = collectSubtree(entityId, sourceSpaceId, loaded);
 
   const backlinks = await Effect.runPromise(
     Effect.forEach([...subtreeIds], id => getEntityBacklinks(id), { concurrency: ENTITY_ID_BATCH_CONCURRENCY })

@@ -11,6 +11,10 @@ const mocks = vi.hoisted(() => ({
   push: vi.fn(),
   cloneEntityIntoSpace: vi.fn(),
   loadMoveBacklinks: vi.fn(),
+  loadMoveSubtree: vi.fn(),
+  collectMoveDeletions: vi.fn(),
+  deleteValues: vi.fn(),
+  deleteRelations: vi.fn(),
 }));
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: mocks.push }) }));
@@ -27,7 +31,9 @@ vi.mock('~/core/hooks/use-spaces-where-member', () => ({
   ],
 }));
 vi.mock('~/core/sync/use-mutate', () => ({
-  useMutate: () => ({ storage: { values: { deleteMany: vi.fn() }, relations: { deleteMany: vi.fn() } } }),
+  useMutate: () => ({
+    storage: { values: { deleteMany: mocks.deleteValues }, relations: { deleteMany: mocks.deleteRelations } },
+  }),
 }));
 vi.mock('~/core/sync/use-sync-engine', () => ({ useSyncEngine: () => ({ store: {}, stream: { emit: vi.fn() } }) }));
 vi.mock('~/design-system/geo-image', () => ({ GeoImage: () => null }));
@@ -36,22 +42,19 @@ vi.mock('~/partials/versions/clone-entity-into-space', () => ({
   collectHydrationTargetIds: () => [],
 }));
 vi.mock('~/partials/versions/load-move-backlinks', () => ({ loadMoveBacklinks: mocks.loadMoveBacklinks }));
-vi.mock('~/partials/versions/move-entity-deletions', () => ({
-  collectMoveDeletions: () => ({ values: [], relations: [] }),
-}));
+vi.mock('~/partials/versions/load-move-subtree', () => ({ loadMoveSubtree: mocks.loadMoveSubtree }));
+vi.mock('~/partials/versions/move-entity-deletions', () => ({ collectMoveDeletions: mocks.collectMoveDeletions }));
 vi.mock('~/partials/versions/retarget-move-backlinks', () => ({ retargetMoveBacklinks: vi.fn() }));
 
 function deferBacklinks() {
   let resolve!: () => void;
   let reject!: (error: Error) => void;
-  mocks.loadMoveBacklinks.mockImplementationOnce(
-    () =>
-      new Promise((res, rej) => {
-        resolve = () => res([]);
-        reject = rej;
-      })
-  );
-  return { resolve: () => resolve(), reject: (error: Error) => reject(error) };
+  const pending = new Promise<[]>((res, rej) => {
+    resolve = () => res([]);
+    reject = rej;
+  });
+  mocks.loadMoveBacklinks.mockImplementationOnce(() => pending);
+  return { resolve, reject };
 }
 
 function renderList() {
@@ -78,6 +81,10 @@ beforeEach(() => {
   mocks.push.mockReset();
   mocks.cloneEntityIntoSpace.mockReset();
   mocks.loadMoveBacklinks.mockReset().mockResolvedValue([]);
+  mocks.loadMoveSubtree.mockReset().mockResolvedValue([]);
+  mocks.collectMoveDeletions.mockReset().mockReturnValue({ values: [], relations: [] });
+  mocks.deleteValues.mockReset();
+  mocks.deleteRelations.mockReset();
 });
 
 afterEach(cleanup);
@@ -137,5 +144,38 @@ describe('the Move to list', () => {
     expect(mocks.loadMoveBacklinks).toHaveBeenCalledTimes(2);
     expect(mocks.cloneEntityIntoSpace).toHaveBeenCalledTimes(1);
     expect(onDone).toHaveBeenCalledTimes(1);
+  });
+
+  it('loads the subtree first, and hands it to every step of the move', async () => {
+    const tab = { id: 'tab', values: [], relations: [] };
+    mocks.loadMoveSubtree.mockResolvedValue([tab]);
+    const { spaceA } = renderList();
+
+    await act(async () => {
+      fireEvent.click(spaceA);
+    });
+
+    expect(mocks.loadMoveSubtree.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.loadMoveBacklinks.mock.invocationCallOrder[0]!
+    );
+    expect(mocks.loadMoveBacklinks.mock.calls[0]![0].loaded).toEqual([tab]);
+    expect(mocks.cloneEntityIntoSpace.mock.calls[0]![4]).toContain(tab);
+    expect(mocks.collectMoveDeletions.mock.calls[0]![3]).toEqual([tab]);
+  });
+
+  it('writes nothing when the subtree fails to load', async () => {
+    mocks.loadMoveSubtree.mockRejectedValue(new Error('network'));
+    const { onDone, spaceA } = renderList();
+
+    await act(async () => {
+      fireEvent.click(spaceA);
+    });
+
+    expect(mocks.loadMoveBacklinks).not.toHaveBeenCalled();
+    expect(mocks.cloneEntityIntoSpace).not.toHaveBeenCalled();
+    expect(mocks.deleteValues).not.toHaveBeenCalled();
+    expect(mocks.deleteRelations).not.toHaveBeenCalled();
+    expect(onDone).not.toHaveBeenCalled();
+    expect(spaceA).toBeEnabled();
   });
 });

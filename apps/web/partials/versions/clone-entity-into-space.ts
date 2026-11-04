@@ -31,7 +31,8 @@ function signatureOf(relation: Relation): string {
  * - relationFromIds: entityIds plus each containment relation's *relation
  *   entity* id, which is where the data block view/shown-columns config hangs.
  */
-export function collectSubtree(rootEntityId: string, sourceSpaceId: string) {
+export function collectSubtree(rootEntityId: string, sourceSpaceId: string, loaded: Entity[] = []) {
+  const loadedRelations = loaded.flatMap(entity => entity.relations);
   const entityIds = new Set<string>([rootEntityId]);
   const relationFromIds = new Set<string>([rootEntityId]);
   const queue = [rootEntityId];
@@ -40,6 +41,7 @@ export function collectSubtree(rootEntityId: string, sourceSpaceId: string) {
     const entityId = queue.pop()!;
 
     const containment = getRelations({
+      mergeWith: loadedRelations,
       selector: r =>
         r.fromEntity.id === entityId &&
         r.spaceId === sourceSpaceId &&
@@ -65,14 +67,15 @@ function isMediaUrl(value: string | undefined): value is string {
   return typeof value === 'string' && (value.startsWith('ipfs://') || value.startsWith('http'));
 }
 
-function collectCopyTargets(entityId: string, sourceSpaceId: string) {
-  const { entityIds, relationFromIds } = collectSubtree(entityId, sourceSpaceId);
+function collectCopyTargets(entityId: string, sourceSpaceId: string, loaded: Entity[]) {
+  const { entityIds, relationFromIds } = collectSubtree(entityId, sourceSpaceId, loaded);
 
   // Cover/avatar/image properties point at a standalone image or video entity
   // that holds the ipfs:// url, and values are space-scoped. Cloning the
   // relation alone leaves the target space pointing at media it can't resolve,
   // so carry those entities' own data across too.
   const mediaRelations = getRelations({
+    mergeWith: loaded.flatMap(entity => entity.relations),
     selector: relation =>
       relationFromIds.has(relation.fromEntity.id) &&
       relation.spaceId === sourceSpaceId &&
@@ -84,8 +87,8 @@ function collectCopyTargets(entityId: string, sourceSpaceId: string) {
   return { entityIds, relationFromIds, mediaRelations, mediaEntityIds };
 }
 
-export function collectHydrationTargetIds(entityId: string, sourceSpaceId: string): string[] {
-  return [...collectCopyTargets(entityId, sourceSpaceId).mediaEntityIds];
+export function collectHydrationTargetIds(entityId: string, sourceSpaceId: string, loaded: Entity[] = []): string[] {
+  return [...collectCopyTargets(entityId, sourceSpaceId, loaded).mediaEntityIds];
 }
 
 export function cloneEntityIntoSpace(
@@ -95,7 +98,11 @@ export function cloneEntityIntoSpace(
   storage: Mutator,
   loaded: Entity[] = []
 ) {
-  const { entityIds, relationFromIds, mediaRelations, mediaEntityIds } = collectCopyTargets(entityId, sourceSpaceId);
+  const { entityIds, relationFromIds, mediaRelations, mediaEntityIds } = collectCopyTargets(
+    entityId,
+    sourceSpaceId,
+    loaded
+  );
 
   const loadedValues = loaded.flatMap(entity => entity.values);
   const loadedRelations = loaded.flatMap(entity => entity.relations);

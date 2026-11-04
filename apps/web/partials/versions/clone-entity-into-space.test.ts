@@ -170,6 +170,35 @@ describe('cloneEntityIntoSpace — related entities', () => {
   });
 });
 
+describe('cloneEntityIntoSpace — a subtree the store has not taken in', () => {
+  // A tab nobody opened: the store has the link to it, and nothing below.
+  const unopenedTab = () => {
+    store.relations = [relation({ id: 'has-tab', from: ENTITY, to: 'tab', typeId: SystemIds.TABS_PROPERTY })];
+    return [
+      {
+        id: 'tab',
+        values: [value('tab', SOURCE, 'tab-v')],
+        relations: [relation({ id: 'tab-holds-block', from: 'tab', to: 'block', typeId: SystemIds.BLOCKS })],
+      },
+      { id: 'block', values: [value('block', SOURCE, 'block-v')], relations: [] },
+    ];
+  };
+
+  it('copies the blocks under a tab that was only loaded', () => {
+    const written = run(unopenedTab());
+
+    expect(written.values.map(v => v.entity.id).sort()).toEqual(['block', 'tab']);
+    expect(written.relations.map(r => r.toEntity.id)).toContain('block');
+  });
+
+  it('finds the media under a tab that was only loaded', () => {
+    const loaded = unopenedTab();
+    loaded[1]!.relations = [relation({ id: 'cover', from: 'block', to: 'an-image', renderableType: 'IMAGE' })];
+
+    expect(collectHydrationTargetIds(ENTITY, SOURCE, loaded as any)).toEqual(['an-image']);
+  });
+});
+
 describe('collectHydrationTargetIds', () => {
   const unloaded = () => collectHydrationTargetIds(ENTITY, SOURCE);
 

@@ -25,6 +25,7 @@ import { Input } from '~/design-system/input';
 
 import { cloneEntityIntoSpace, collectHydrationTargetIds } from '~/partials/versions/clone-entity-into-space';
 import { loadMoveBacklinks } from '~/partials/versions/load-move-backlinks';
+import { loadMoveSubtree } from '~/partials/versions/load-move-subtree';
 import { collectMoveDeletions } from '~/partials/versions/move-entity-deletions';
 import { retargetMoveBacklinks } from '~/partials/versions/retarget-move-backlinks';
 
@@ -79,10 +80,20 @@ export const MoveEntityToSpace = ({
   const moveEntityToSpace = async (targetSpaceId: string) => {
     if (!targetSpaceId || targetSpaceId === sourceSpaceId) return false;
 
-    // 0. Load the media the clone copies. A media entity nobody opened is not in the store, so it
+    // 0. Load the blocks and tabs under the entity. A tab nobody opened is not in the store, so the
+    // move would copy it empty and leave its blocks behind.
+    let subtree: Entity[];
+
+    try {
+      subtree = await loadMoveSubtree({ entityId, sourceSpaceId, store, cache });
+    } catch {
+      return false;
+    }
+
+    // Load the media the clone copies. A media entity nobody opened is not in the store, so it
     // would be copied as nothing. The clone reads them from `loaded`: the store only takes them in
     // on a later microtask.
-    const hydrationIds = collectHydrationTargetIds(entityId, sourceSpaceId);
+    const hydrationIds = collectHydrationTargetIds(entityId, sourceSpaceId, subtree);
     let loaded: Entity[] = [];
 
     if (hydrationIds.length > 0) {
@@ -108,20 +119,20 @@ export const MoveEntityToSpace = ({
     let backlinks: Relation[];
 
     try {
-      backlinks = await loadMoveBacklinks({ entityId, sourceSpaceId, store, cache });
+      backlinks = await loadMoveBacklinks({ entityId, sourceSpaceId, store, cache, loaded: subtree });
     } catch {
       return false;
     }
 
     // 1. Clone entity into target space
-    cloneEntityIntoSpace(entityId, sourceSpaceId, targetSpaceId, storage, loaded);
+    cloneEntityIntoSpace(entityId, sourceSpaceId, targetSpaceId, storage, [...subtree, ...loaded]);
 
     // 2. Delete entity from source space. The clone walked the BLOCKS/TABS
     // subtree, so tear down the same subtree here: the root always goes, and
     // each descendant goes unless something outside the subtree still points at
     // it (a shared block). What that comes to is decided in `collectMoveDeletions`,
     // where it can be tested.
-    const { values, relations } = collectMoveDeletions(entityId, sourceSpaceId, backlinks);
+    const { values, relations } = collectMoveDeletions(entityId, sourceSpaceId, backlinks, subtree);
 
     storage.values.deleteMany(values);
     storage.relations.deleteMany(relations);
