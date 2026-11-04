@@ -9,7 +9,10 @@ const mocks = vi.hoisted(() => ({
   relations: [] as any[],
   /** What the network has, by id. */
   remote: {} as Record<string, any>,
+  /** What a page-by-page read of one entity returns, by id. */
+  drained: {} as Record<string, any>,
   requests: [] as string[][],
+  reloads: [] as string[],
   fail: false,
 }));
 
@@ -26,7 +29,15 @@ vi.mock('~/core/sync/orm', () => ({
     syncMany: async ({ where }: { where: { id: { in: string[] } } }) => {
       mocks.requests.push([...where.id.in].sort());
       if (mocks.fail) throw new Error('network');
-      return { merged: where.id.in.flatMap(id => (mocks.remote[id] ? [mocks.remote[id]] : [])), remote: [] };
+      const found = where.id.in.flatMap(id => (mocks.remote[id] ? [mocks.remote[id]] : []));
+      return { merged: found, remote: found };
+    },
+    syncOne: async ({ id }: { id: string }) => {
+      mocks.reloads.push(id);
+      const drained = mocks.drained[id];
+      if (drained instanceof Error) throw drained;
+      // The store's copy still comes back when the network finds nothing.
+      return { merged: drained ?? entity(id), remote: drained ?? null };
     },
   },
 }));
@@ -50,7 +61,9 @@ const run = () => loadMoveSubtree({ entityId: ENTITY, sourceSpaceId: SOURCE, sto
 beforeEach(() => {
   mocks.relations = [];
   mocks.remote = {};
+  mocks.drained = {};
   mocks.requests = [];
+  mocks.reloads = [];
   mocks.fail = false;
 });
 
@@ -98,6 +111,52 @@ describe('loadMoveSubtree', () => {
 
   it('rejects when a level fails to load, so the move can stop before writing', async () => {
     mocks.fail = true;
+
+    await expect(run()).rejects.toThrow();
+  });
+
+  it('reloads a tab with more relations than a batch read returns, and keeps the blocks past the cap', async () => {
+    mocks.remote = {
+      [ENTITY]: entity(ENTITY, [contains(ENTITY, 'tab', SystemIds.TABS_PROPERTY)]),
+      tab: { ...entity('tab', [contains('tab', 'block-1')]), relationsTotalCount: 1500 },
+      'block-1': entity('block-1'),
+      'block-1001': entity('block-1001'),
+    };
+    mocks.drained = { tab: entity('tab', [contains('tab', 'block-1'), contains('tab', 'block-1001')]) };
+
+    const loaded = await run();
+
+    expect(mocks.reloads).toEqual(['tab']);
+    expect(loaded.map(e => e.id).sort()).toEqual([ENTITY, 'block-1', 'block-1001', 'tab'].sort());
+    expect(loaded.find(e => e.id === 'tab')).toBe(mocks.drained.tab);
+  });
+
+  it('does not reload an entity whose relations all fit in a batch read', async () => {
+    mocks.remote = {
+      [ENTITY]: { ...entity(ENTITY, [contains(ENTITY, 'block')]), relationsTotalCount: 1000 },
+      block: entity('block'),
+    };
+
+    expect((await run()).map(e => e.id).sort()).toEqual([ENTITY, 'block'].sort());
+    expect(mocks.reloads).toEqual([]);
+  });
+
+  it('loads an entity with a dangling relation as usual', async () => {
+    mocks.remote = {
+      [ENTITY]: { ...entity(ENTITY, [contains(ENTITY, 'block')]), relationsTotalCount: 2, relationsComplete: false },
+      block: entity('block'),
+    };
+
+    expect((await run()).map(e => e.id).sort()).toEqual([ENTITY, 'block'].sort());
+    expect(mocks.reloads).toEqual([]);
+  });
+
+  it.each([
+    ['finds nothing on the network', undefined],
+    ['fails', new Error('network')],
+  ])('rejects when the reload of a cut-off entity %s', async (_, drained) => {
+    mocks.remote = { [ENTITY]: { ...entity(ENTITY), relationsTotalCount: 1500 } };
+    mocks.drained = { [ENTITY]: drained };
 
     await expect(run()).rejects.toThrow();
   });

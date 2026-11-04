@@ -1,5 +1,6 @@
 import type { QueryClient } from '@tanstack/react-query';
 
+import { ENTITY_LIST_LIMIT } from '~/core/io/entity-list-limit';
 import { E } from '~/core/sync/orm';
 import type { GeoStore } from '~/core/sync/store';
 import type { Entity } from '~/core/types';
@@ -30,7 +31,17 @@ export async function loadMoveSubtree({
     if (next.length === 0) return loaded;
 
     next.forEach(id => requested.add(id));
-    const { merged } = await E.syncMany({ store, cache, where: { id: { in: next } }, first: next.length });
-    loaded.push(...merged);
+    const { merged, remote } = await E.syncMany({ store, cache, where: { id: { in: next } }, first: next.length });
+
+    const truncated = new Set(remote.filter(e => (e.relationsTotalCount ?? 0) > ENTITY_LIST_LIMIT).map(e => e.id));
+    const reloaded = await Promise.all(
+      [...truncated].map(async id => {
+        const one = await E.syncOne({ id, store, cache });
+        if (!one.remote || !one.merged) throw new Error(`could not load every relation of ${id}`);
+        return one.merged;
+      })
+    );
+
+    loaded.push(...merged.filter(e => !truncated.has(e.id)), ...reloaded);
   }
 }
