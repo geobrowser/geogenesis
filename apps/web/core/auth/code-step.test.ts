@@ -28,8 +28,8 @@ function leave() {
 }
 
 function steps() {
-  return analytics.devLog.mock.calls
-    .filter(([label]) => label === '[auth_step]')
+  return analytics.capture.mock.calls
+    .filter(([event]) => event === 'auth_step')
     .map(([, props]) => props as Record<string, unknown>);
 }
 
@@ -396,13 +396,14 @@ describe('code step', () => {
     expect(steps().at(-1)).toMatchObject({ auth_step: 'left_code_screen', code_age_ms: 0 });
   });
 
-  // The collector rejects tagged events with no registry contract, so nothing goes out yet.
-  it('sends no step events until auth_step is registered', async () => {
+  it('sends steps as the registered auth_step, under growth-v2, never with the address', async () => {
     const { step } = await load();
     step.codeScreenShown('a@b.co');
     expect(steps()).toHaveLength(1);
+    expect(steps()[0]).toMatchObject({ auth_step: 'code_screen_shown', measurement_version: 'growth-v2' });
+    expect(Number.isInteger(steps()[0]?.code_age_ms)).toBe(true);
     expect(analytics.captureExperimental).not.toHaveBeenCalled();
-    expect(analytics.capture).not.toHaveBeenCalled();
+    expect(JSON.stringify(analytics.capture.mock.calls)).not.toContain('@');
   });
 
   it('forgets a code older than the window', async () => {

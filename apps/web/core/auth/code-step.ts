@@ -34,7 +34,7 @@ export const LINK_RECOVERY_WINDOW_MS = 5 * 60 * 1000;
 /** The triggers of a sign-in that a link opened. */
 const LINK_TRIGGERS = new Set(['deep_link', 'invite_link']);
 
-export const AUTH_STEP_EVENT = 'experimental.auth_step';
+export const AUTH_STEP_EVENT = 'auth_step';
 
 /** How long a Privy code works. A rejection after this is reported as expired. */
 export const CODE_LIFETIME_MS = 10 * 60 * 1000;

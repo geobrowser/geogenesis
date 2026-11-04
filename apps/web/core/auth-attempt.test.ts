@@ -367,15 +367,17 @@ describe('funnel tags', () => {
     expect(readAuthAttempt(attempt.id)?.signInSurface).toBeUndefined();
   });
 
-  it('keeps them off the attempt events while the send switch is off', () => {
+  it('carries them on the attempt events, with the error code on a close', () => {
     const attempt = beginAuthAttempt({ component: 'navbar' });
     tagAuthAttempt(attempt.id, { signInSurface: 'box', lastAuthError: 'invalid_credentials' });
     openAuthAttempt();
     finishAuthAttempt('closed');
-    for (const [, properties] of capture.mock.calls) {
-      expect(properties).not.toHaveProperty('sign_in_surface');
-      expect(properties).not.toHaveProperty('likely_returning');
-      expect(properties).not.toHaveProperty('last_auth_error');
-    }
+    const completed = capture.mock.calls.find(([event]) => event === 'auth_attempt_completed')?.[1];
+    expect(completed).toMatchObject({
+      sign_in_surface: 'box',
+      likely_returning: expect.any(Boolean),
+      last_auth_error: 'invalid_credentials',
+    });
+    expect(JSON.stringify(capture.mock.calls)).not.toContain('@');
   });
 });

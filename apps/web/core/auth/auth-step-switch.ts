@@ -1,8 +1,8 @@
 /**
- * GEO-3550's send switch for `auth_step` and the attempt events' funnel properties. Off until the
- * registry contract deploys: the collector fails a batch holding an event it has no contract for.
+ * GEO-3550's send switch for `auth_step` and the attempt events' funnel properties. The collector
+ * fails a whole batch holding an event it has no contract for, so this is the way to stop sending.
  */
-export const SEND_AUTH_STEP = false;
+export const SEND_AUTH_STEP = true;
 
 /** Which sign-in UI the visitor was in. */
 export type SignInSurface = 'box' | 'save_votes' | 'email_capture' | 'privy_modal';
