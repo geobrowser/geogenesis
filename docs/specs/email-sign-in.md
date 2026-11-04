@@ -230,7 +230,9 @@ they do. The query should start its comparison two weeks after the marker ships.
 ## 9. Overlap with open PRs
 
 - **#3052 `signin-recovery`** (unmerged): `use-tracked-login.ts`, `use-privy-sign-in.ts`, `auth-attempt.ts`,
-  `email-capture-account-step.tsx`, `feature-flags.ts`, `auth-root.tsx`, `app/layout.tsx`, code-step files.
+  `email-capture-account-step.tsx`, `feature-flags.ts`, `auth-root.tsx`, `app/layout.tsx`, `app/entry.tsx`,
+  `core/analytics.ts`, `core/providers.tsx`, `styles/styles.css`, code-step files. Mounting the box
+  (`entry.tsx`) and starting the analytics runtime (`analytics.ts`) also wait for the merge.
   The box touches `use-tracked-login.ts`, `auth-attempt.ts`, `email-capture-account-step.tsx` and
   `feature-flags.ts` too. Build order: the box's own new files first. Edits to the shared files wait for
   #3052 to merge and for a master merge.
