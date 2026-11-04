@@ -1,10 +1,11 @@
 import '@testing-library/jest-dom/vitest';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import * as React from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { ResizeObserverStub } from '../resize-observer-fixtures';
 import type { CalloutClaim } from '../todays-claims/todays-callout';
 import type { TodaysCallout } from '../todays-claims/use-todays-callout';
 
@@ -52,6 +53,9 @@ vi.mock('../debate-claim-card-surface', () => ({
     return <>{props.children}</>;
   },
 }));
+
+// The card area eases its height through `ResizableContainer`, which needs one.
+vi.stubGlobal('ResizeObserver', ResizeObserverStub);
 
 const { TodaysClaimsCallout, CALLOUT_ADVANCE_DELAY_MS } = await import('./todays-claims-callout');
 
@@ -134,6 +138,65 @@ describe('TodaysClaimsCallout', () => {
 
     act(() => vi.advanceTimersByTime(CALLOUT_ADVANCE_DELAY_MS));
     expect(value.markAnswered).toHaveBeenCalledWith('a');
+  });
+
+  it('lets the answered card leave before the next claim comes in, and takes no input on its way out', async () => {
+    const { rerender } = render(<TodaysClaimsCallout callout={callout()} onFindDebate={vi.fn()} />);
+
+    const next = callout({
+      step: { current: CLAIMS[1]!, currentIndex: 1, done: [true, false, false], allAnswered: false },
+    });
+    rerender(<TodaysClaimsCallout callout={next} onFindDebate={vi.fn()} />);
+
+    const leaving = screen.getByTestId('claim-card');
+    expect(leaving).toHaveTextContent('Claim A');
+    // Inert, not just unclickable: a pill still focused on it can't take Enter either.
+    expect(leaving.closest('[inert]')).not.toBeNull();
+
+    await waitFor(() => expect(screen.getByTestId('claim-card')).toHaveTextContent('Claim B'));
+    expect(screen.getAllByTestId('claim-card')).toHaveLength(1);
+  });
+
+  it('holds Skip until the next claim is on screen, so a second tap cannot skip one never seen', async () => {
+    const { rerender } = render(<TodaysClaimsCallout callout={callout()} onFindDebate={vi.fn()} />);
+    expect(screen.getByRole('button', { name: 'Skip' })).toBeEnabled();
+
+    const next = callout({
+      step: { current: CLAIMS[1]!, currentIndex: 1, done: [false, false, false], allAnswered: false },
+    });
+    rerender(<TodaysClaimsCallout callout={next} onFindDebate={vi.fn()} />);
+
+    // Claim A is still leaving: B isn't up yet.
+    expect(screen.getByTestId('claim-card')).toHaveTextContent('Claim A');
+    fireEvent.click(screen.getByRole('button', { name: 'Skip' }));
+    expect(next.skip).not.toHaveBeenCalled();
+
+    await waitFor(() => expect(screen.getByTestId('claim-card')).toHaveTextContent('Claim B'));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Skip' })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: 'Skip' }));
+    expect(next.skip).toHaveBeenCalledWith('b');
+  });
+
+  it('holds Skip while the claim is still loading, so nothing unseen can be skipped', () => {
+    const loading = callout({ entityOf: () => undefined, entitiesSettled: false });
+    const { rerender } = render(<TodaysClaimsCallout callout={loading} onFindDebate={vi.fn()} />);
+    expect(screen.queryByTestId('claim-card')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Skip' })).toBeDisabled();
+
+    rerender(<TodaysClaimsCallout callout={callout()} onFindDebate={vi.fn()} />);
+    expect(screen.getByTestId('claim-card')).toHaveTextContent('Claim A');
+    expect(screen.getByRole('button', { name: 'Skip' })).toBeEnabled();
+  });
+
+  it('lets the last card leave once the set is done, and offers Matches', async () => {
+    const last = { current: CLAIMS[2]!, currentIndex: 2, done: [true, true, false], allAnswered: false };
+    const { rerender } = render(<TodaysClaimsCallout callout={callout({ step: last })} onFindDebate={vi.fn()} />);
+
+    const done = callout({ step: { current: null, currentIndex: 3, done: [true, true, true], allAnswered: true } });
+    rerender(<TodaysClaimsCallout callout={done} onFindDebate={vi.fn()} />);
+
+    expect(screen.getByRole('button', { name: 'Find a debate' })).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByTestId('claim-card')).not.toBeInTheDocument());
   });
 
   // Review: a write still on its way to the bundler can fail, and the card has to be there to say so.

@@ -9,6 +9,7 @@ import { useEntityResponseIndexingSnapshot } from '~/core/hooks/use-entity-vote'
 import { CLAIM_RESPONSE_KIND, isAwaitingResponseSubmission } from '~/core/responses/entity-response';
 
 import { CloseSmall } from '~/design-system/icons/close-small';
+import { ResizableContainer } from '~/design-system/resizable-container';
 
 import { trustedIndexedPosition } from '../backfill-readiness-for-held-position';
 import { DebateClaimCardSurface } from '../debate-claim-card-surface';
@@ -17,6 +18,7 @@ import { todaysCardScope } from '../todays-claims/todays-claims-attribution';
 import type { TodaysCallout } from '../todays-claims/use-todays-callout';
 import { hubAnalyticsAttributes } from './hub-analytics';
 import { HUB_CALLOUT_CLASS_NAME, HubCalloutTitle } from './hub-callout';
+import { HUB_STEP_TRANSITION, HubSwap } from './hub-motion';
 import { HUB_ICON_BUTTON_CLASS_NAME, HubPillButton } from './hub-pill-button';
 import { HubScrollSelectorProvider } from './hub-scroll';
 import { MatchmakingClaimCard } from './matchmaking-claim-card';
@@ -42,6 +44,10 @@ type Props = {
  */
 export function TodaysClaimsCallout({ callout, onFindDebate }: Props) {
   const { step, claims } = callout;
+  // The claim whose card is on screen. During the step from one claim to the next the answered card
+  // is still leaving and the next isn't up yet, so Skip waits for it: a second tap would otherwise
+  // skip a claim the viewer never saw, and a skipped claim doesn't come back that day.
+  const [arrivedClaimId, setArrivedClaimId] = React.useState<string | null>(null);
   if (!step) return null;
 
   const current = step.current;
@@ -56,7 +62,7 @@ export function TodaysClaimsCallout({ callout, onFindDebate }: Props) {
           key={claim.claimId}
           aria-hidden
           className={cx(
-            'size-1.5 rounded-full',
+            'size-1.5 rounded-full transition-colors duration-200',
             step.done[index] || index === step.currentIndex ? 'bg-text' : 'bg-grey-03'
           )}
         />
@@ -76,6 +82,7 @@ export function TodaysClaimsCallout({ callout, onFindDebate }: Props) {
   ) : (
     <button
       type="button"
+      disabled={arrivedClaimId !== current.claimId}
       onClick={() => callout.skip(current.claimId)}
       {...hubAnalyticsAttributes('Todays claims callout skip')}
       className="text-metadata text-grey-04 transition-colors hover:text-text"
@@ -95,7 +102,13 @@ export function TodaysClaimsCallout({ callout, onFindDebate }: Props) {
     </button>
   );
   const card = current ? (
-    <CalloutCard key={current.claimId} callout={callout} claim={current} position={step.currentIndex + 1} />
+    <CalloutCard
+      key={current.claimId}
+      callout={callout}
+      claim={current}
+      position={step.currentIndex + 1}
+      onArrive={setArrivedClaimId}
+    />
   ) : null;
 
   return (
@@ -107,7 +120,13 @@ export function TodaysClaimsCallout({ callout, onFindDebate }: Props) {
       <HubCalloutTitle as="h3" title={title}>
         {dismiss}
       </HubCalloutTitle>
-      {card ? <div className="mt-3">{card}</div> : null}
+      {/* The answered card steps out before the next comes in, and the height eases to the next
+          claim's — or to nothing once the set is done — so the tabs below glide rather than jump. */}
+      <ResizableContainer transition={HUB_STEP_TRANSITION} growOnMount={false}>
+        <HubSwap activeKey={current?.claimId ?? 'done'} variant="step">
+          {card ? <div className="pt-3">{card}</div> : null}
+        </HubSwap>
+      </ResizableContainer>
       <div className="mt-3 flex items-center justify-between gap-3">
         {dots}
         {action}
@@ -124,9 +143,29 @@ export function TodaysClaimsCallout({ callout, onFindDebate }: Props) {
  * told then), which moves the card on before the bundler does; that optimism is wanted (Preston,
  * 30 Oct), so a write that fails after that doesn't keep this card up.
  */
-function CalloutCard({ callout, claim, position }: { callout: TodaysCallout; claim: CalloutClaim; position: number }) {
+function CalloutCard({
+  callout,
+  claim,
+  position,
+  onArrive,
+}: {
+  callout: TodaysCallout;
+  claim: CalloutClaim;
+  position: number;
+  /**
+   * Told once the card is up: `HubSwap` mounts it only after the previous card has left, and it
+   * draws nothing until the claim's entity has loaded.
+   */
+  onArrive: (claimId: string) => void;
+}) {
   const { markAnswered, skip } = callout;
   const entity = callout.entityOf(claim.claimId);
+
+  const shown = Boolean(entity);
+  React.useEffect(() => {
+    if (shown) onArrive(claim.claimId);
+  }, [claim.claimId, onArrive, shown]);
+
   const target = {
     entityId: claim.claimId,
     entityName: entity?.name ?? '',
