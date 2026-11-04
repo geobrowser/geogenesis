@@ -182,6 +182,8 @@ with the fold, after #3052 merges.
 | Tab hidden at code step / back | `left_code_screen` / `returned_to_code_screen` (existing) |
 | Left the page with the box open | `auth_step: left_page` + `box_phase` (email/code), on `pagehide` **(new value)**. Distinct from `closed`. Not a finish: a back/forward-cache return continues the attempt and sends `returned_to_code_screen`. |
 | Finished | `auth_step: finished` + `outcome`, and `auth_attempt_completed` (existing). `closed` carries `last_auth_error` (null if none); error = closed with an error. |
+| Google started | `auth_step: google_started`, when the redirect begins (`useContinueWithGoogle`, so the sheet and the email capture send it too) |
+| Google failed | `auth_step: google_failed` + `auth_error`: the start rejected (`useContinueWithGoogle` status `failed`), or the return came back failed (`GoogleOAuthCompleter`, on the return page, where the box is not mounted) |
 | Recovery | `recovery_offered`, `returned_to_code_screen` (`returned_to: new_page`) (existing) |
 
 New attempt properties: `sign_in_surface` (`box` / `save_votes` / `email_capture` / `privy_modal`),
@@ -194,6 +196,7 @@ New attempt properties: `sign_in_surface` (`box` / `save_votes` / `email_capture
 they do. The query should start its comparison two weeks after the marker ships.
 
 Payload rules (registry branch `signin-box-events`):
+- `sign_in_method` (`email` | `google`) on every `auth_step` and on the attempt events (analytics #148).
 - `sign_in_surface` is one of `box`, `save_votes`, `email_capture`, `privy_modal`.
 - `auth_error` and `last_auth_error` are Privy error codes (`privyErrorCode`, e.g. `invalid_credentials`)
   or a fixed fallback, never an error message, which can contain the address. Tested, alongside the
