@@ -93,7 +93,7 @@ vi.mock('../rooms/scheduling-hooks', () => ({
   useNoTimeWorks: () => ({ mutate: vi.fn(), reset: vi.fn(), isPending: false, error: null }),
 }));
 
-// The strip, the nudge and the Requests schedule have their own suites; here it only matters that
+// The strip, the nudge and the Schedule timeline have their own suites; here it only matters that
 // the panel draws them where it should.
 vi.mock('./hub-live-strip', () => ({
   HubLiveStrip: ({ lineup, todaysCallout }: { lineup: { live: unknown[] }; todaysCallout?: React.ReactNode }) => (
@@ -421,14 +421,18 @@ describe('DebatesHubPanel', () => {
   // Every atom the bar holds, not a sample of them: this is the isolation test, so an atom left out
   // of `resetDebatesHubFiltersAtom` has to fail here rather than quietly hand B one of A's filters.
   // GEO-3463. Four tabs, People first. "Live" became Matches and "My positions" one of Explore's Shows.
-  it('offers People, Matches, Explore and Requests, in that order', () => {
+  it('offers People, Matches, Explore and Schedule, in that order', () => {
     renderOpen('explore');
 
-    const order = ['People', 'Matches', 'Explore', 'Requests'];
+    const order = ['People', 'Matches', 'Explore', 'Schedule'];
     const row = screen.getByRole('button', { name: /^People/ }).closest('.overflow-x-auto');
     const labels = [...(row?.querySelectorAll('button') ?? [])].map(button => button.textContent?.trim());
 
     expect(labels).toEqual(order);
+    expect(screen.getByRole('button', { name: 'Schedule' })).toHaveAttribute(
+      'data-geo-analytics-label',
+      'Debate hub Schedule tab'
+    );
     expect(screen.queryByRole('button', { name: /^Live/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^My positions/ })).not.toBeInTheDocument();
   });
@@ -634,7 +638,7 @@ describe('DebatesHubPanel', () => {
   it('renders every tab and switches between them', async () => {
     renderOpen();
 
-    for (const label of ['Requests', 'Matches', 'Explore', 'People']) {
+    for (const label of ['Schedule', 'Matches', 'Explore', 'People']) {
       expect(screen.getByRole('button', { name: new RegExp(`^${label}`) })).toBeInTheDocument();
     }
 
@@ -645,7 +649,7 @@ describe('DebatesHubPanel', () => {
     expect(row).not.toBeNull();
 
     // Order, not just presence: the labels alone stayed green through a reorder.
-    const order = ['People', 'Matches', 'Explore', 'Requests'];
+    const order = ['People', 'Matches', 'Explore', 'Schedule'];
     const rendered = order.map(label => screen.getByRole('button', { name: new RegExp(`^${label}`) }));
     for (const [index, tab] of rendered.slice(0, -1).entries()) {
       const next = rendered[index + 1];
@@ -760,13 +764,13 @@ describe('DebatesHubPanel', () => {
     expect(screen.getByRole('button', { name: 'People' })).toHaveAttribute('aria-current', 'true');
   });
 
-  // Matches and Requests are a particular person's, so signed out they have no possible contents.
-  it('leaves Matches and Requests out of the row when signed out', () => {
+  // Matches and Schedule are a particular person's, so signed out they have no possible contents.
+  it('leaves Matches and Schedule out of the row when signed out', () => {
     mocks.authenticated = false;
     renderOpen();
 
     expect(screen.queryByRole('button', { name: /Matches/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Requests/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Schedule/ })).not.toBeInTheDocument();
     // My positions joins them (GEO-2863). It was a source inside Explore's picker and left that menu
     // signed out for exactly this reason, so promoting it to a tab promotes the rule with it.
     expect(screen.queryByRole('button', { name: /positions/i })).not.toBeInTheDocument();
@@ -791,7 +795,7 @@ describe('DebatesHubPanel', () => {
   });
 
   // `authenticated` is false while Privy restores, so a row drawn before then is the signed-out
-  // one — a returning viewer would watch Matches and Requests appear and their selected tab jump.
+  // one — a returning viewer would watch Matches and Schedule appear and their selected tab jump.
   it('hides the tab row until Privy has resolved, rather than drawing the signed-out one', () => {
     mocks.ready = false;
     mocks.authenticated = false;
@@ -900,12 +904,12 @@ describe('DebatesHubPanel', () => {
   });
 });
 
-// Accepting a request from the Requests tab walks the viewer into the debate room; the panel would
+// Accepting a request from the Schedule tab walks the viewer into the debate room; the panel would
 // otherwise stay mounted on top of it, covering the pre-screen. This is the one navigation that
 // still closes it, and the reason the effect exists at all.
 it('closes itself on the way into a debate room', () => {
   const store = renderOpen('requests');
-  expect(screen.getByRole('button', { name: /^Requests/ })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /^Schedule/ })).toBeInTheDocument();
 
   mocks.pathname = '/space/space-1/debates/debate-1';
   store.rerender();
@@ -1296,8 +1300,8 @@ describe('the filters the expand link carries', () => {
   });
 });
 
-// The Requests tab's badge counts scheduled requests from activity.
-describe('Requests badge', () => {
+// The Schedule tab's badge counts scheduled requests from activity.
+describe('Schedule badge', () => {
   function renderRequestsButton() {
     const store = createStore();
     store.set(debatesHubAtom, { tab: 'explore' });
@@ -1306,7 +1310,7 @@ describe('Requests badge', () => {
         <DebatesHubPanel />
       </Provider>
     );
-    return screen.getByRole('button', { name: /^Requests/ });
+    return screen.getByRole('button', { name: /^Schedule/ });
   }
 
   it('counts scheduled requests waiting on an answer', () => {

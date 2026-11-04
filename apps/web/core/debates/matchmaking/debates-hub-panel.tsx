@@ -67,7 +67,8 @@ const TABS: { id: DebatesHubTab; label: string }[] = [
   { id: 'people', label: 'People' },
   { id: 'lobby', label: 'Matches' },
   { id: 'explore', label: 'Explore' },
-  { id: 'requests', label: 'Requests' },
+  // Keep the tab ID for existing email, notification and saved links (GEO-3518).
+  { id: 'requests', label: 'Schedule' },
 ];
 
 // Which tabs exist signed out, and why, is in `./signed-out-tabs`: the debates link reads it too.
@@ -339,7 +340,7 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
               `overflow-hidden` — so on a narrow phone whichever tab sits last would simply be cut
               off. It scrolls instead, with a fade and an arrow on whichever side has more (GEO-3148).
               The four tabs (GEO-3463) fit the panel's 400px at the design's 18px gap with the
-              Requests badge showing, so the arrows only appear on a very narrow phone. */}
+              Schedule badge showing, so the arrows only appear on a very narrow phone. */}
           <ScrollableTabRow activeKey={activeTab} analyticsLabelPrefix="Debate hub" className="gap-4.5">
             {tabs.map(tab => (
               <button
