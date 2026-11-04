@@ -6,8 +6,8 @@
  * converts the saved hours into the current zone on the way in: the same instants, drawn in the only
  * zone the grid can honestly draw. Saving then changes nothing they did not change.
  */
-import { type AvailabilityBlock, DAY_END_HOUR, SLOT_MINUTES, localTimezone, mergeBlocks } from './blocks';
-import { DAY_MS, zonedClock, zonedOffsetMinutes, zonedWallClockInstant } from './peer-schedule';
+import { type AvailabilityBlock, DAY_END_HOUR, SLOT_MINUTES, mergeBlocks } from './blocks';
+import { DAY_MS, zonedClock, zonedWallClockInstant } from './peer-schedule';
 
 const UTC_ZONES = new Set(['UTC', 'Etc/UTC', 'Etc/GMT', 'GMT']);
 const DAY_MINUTES = DAY_END_HOUR * 60;
@@ -37,20 +37,6 @@ export function timezoneLabel(zone: string): string {
   } catch {
     return city;
   }
-}
-
-/**
- * Whether hours saved in `saved` mean something else in `current`. Two ids for the same clock
- * (`America/Detroit`, `America/New_York`) do not: checked in January and July, so a zone that only
- * matches outside daylight saving still counts as different. `local` and unreadable zones read as
- * the browser's own, as everywhere else the schedule is resolved.
- */
-export function timezoneChanges(saved: string | undefined, current: string): boolean {
-  if (!saved || saved === current) return false;
-  const year = new Date().getUTCFullYear();
-  return [Date.UTC(year, 0, 15), Date.UTC(year, 6, 15)].some(
-    at => zonedOffsetMinutes(at, saved) !== zonedOffsetMinutes(at, current)
-  );
 }
 
 /** `2026-11-03` as the UTC midnight of that date, so dates can be stepped and weekdays read. */
@@ -142,20 +128,42 @@ export function convertBlocks(
   return mergeBlocks(converted);
 }
 
+/** A block's kind, day and span: what it means, without the id the editor gives it. */
+function spanKey(block: AvailabilityBlock) {
+  const day = block.kind === 'recurring' ? block.weekday : block.date;
+  return `${block.kind}|${day}|${block.start}|${block.end}`;
+}
+
+function sameSpans(a: AvailabilityBlock[], b: AvailabilityBlock[]) {
+  const keys = (blocks: AvailabilityBlock[]) => blocks.map(spanKey).sort().join(',');
+  return keys(a) === keys(b);
+}
+
 /**
  * A saved schedule as the person sees it: converted into the zone they are in now, or as saved
  * where that changes nothing. The one place the decision is made, so the editor and the summaries
  * that open it can never show one slot at two different hours.
+ *
+ * Converted whenever the zones differ, and counted as converted only if a block moved. Comparing the
+ * zones' offsets instead, on any fixed set of dates, misses pairs that part only for a few weeks
+ * (Casablanca leaves Algiers' clock for Ramadan) — and a dated block in those weeks then keeps
+ * hours that name another instant. Converting already resolves each block on its own day.
+ *
+ * `currentTimezone` is required, not defaulted, so a caller that memoises this has the zone in
+ * hand to list as a dependency.
  */
 export function scheduleInCurrentZone(
   blocks: AvailabilityBlock[],
   savedTimezone: string | undefined,
-  currentTimezone: string = localTimezone()
+  currentTimezone: string,
+  now: Date = new Date()
 ): { blocks: AvailabilityBlock[]; converted: boolean } {
-  const converted = blocks.length > 0 && savedTimezone !== undefined && timezoneChanges(savedTimezone, currentTimezone);
-  return converted
-    ? { blocks: convertBlocks(blocks, savedTimezone, currentTimezone), converted }
-    : { blocks, converted };
+  if (blocks.length === 0 || !savedTimezone || savedTimezone === currentTimezone) {
+    return { blocks, converted: false };
+  }
+  const converted = convertBlocks(blocks, savedTimezone, currentTimezone, now);
+  // Unmoved, the saved blocks themselves: the editor tells edits apart by reference.
+  return sameSpans(converted, blocks) ? { blocks, converted: false } : { blocks: converted, converted: true };
 }
 
 /**

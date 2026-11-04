@@ -1,13 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { type AvailabilityBlock, effectiveAvailability, localTimezone } from './blocks';
-import {
-  convertBlocks,
-  scheduleInCurrentZone,
-  scheduleTimezoneNote,
-  timezoneChanges,
-  timezoneLabel,
-} from './schedule-zone';
+import { convertBlocks, scheduleInCurrentZone, scheduleTimezoneNote, timezoneLabel } from './schedule-zone';
 
 const at = (hour: number, minute = 0) => hour * 60 + minute;
 // A Wednesday after both the US and the EU have left daylight saving: Los Angeles is 10 hours
@@ -30,23 +24,6 @@ describe('timezoneLabel', () => {
 
   it('falls back to the city for a zone Intl cannot read', () => {
     expect(timezoneLabel('Nowhere/Made_Up')).toBe('Made Up');
-  });
-});
-
-describe('timezoneChanges', () => {
-  it('treats two ids for the same clock as no change', () => {
-    expect(timezoneChanges('America/Detroit', 'America/New_York')).toBe(false);
-    expect(timezoneChanges('America/New_York', 'America/New_York')).toBe(false);
-    expect(timezoneChanges(undefined, 'America/New_York')).toBe(false);
-    // Unreadable, so read as the browser's own zone, which is the zone it is compared against.
-    expect(timezoneChanges('Nowhere/Made_Up', localTimezone())).toBe(false);
-    expect(timezoneChanges('local', localTimezone())).toBe(false);
-  });
-
-  // Phoenix and Denver share a clock in winter only; summer hours still mean different instants.
-  it('counts a zone that differs only in daylight saving as a change', () => {
-    expect(timezoneChanges('America/Phoenix', 'America/Denver')).toBe(true);
-    expect(timezoneChanges(LA, VILNIUS)).toBe(true);
   });
 });
 
@@ -144,19 +121,44 @@ describe('scheduleInCurrentZone', () => {
   const weekly: AvailabilityBlock[] = [{ id: 'r', kind: 'recurring', weekday: 1, start: at(9), end: at(10) }];
 
   it('hands back the same blocks when the zone has not changed', () => {
-    expect(scheduleInCurrentZone(weekly, VILNIUS, VILNIUS)).toEqual({ blocks: weekly, converted: false });
-    expect(scheduleInCurrentZone(weekly, undefined, VILNIUS).blocks).toBe(weekly);
+    expect(scheduleInCurrentZone(weekly, VILNIUS, VILNIUS, NOW)).toEqual({ blocks: weekly, converted: false });
+    expect(scheduleInCurrentZone(weekly, undefined, VILNIUS, NOW).blocks).toBe(weekly);
+    // Two ids for one clock move nothing, so the saved blocks come back as they are.
+    expect(scheduleInCurrentZone(weekly, 'America/Detroit', 'America/New_York', NOW).blocks).toBe(weekly);
+    // Unreadable, so read as the browser's own zone, which is the zone it is compared against.
+    expect(scheduleInCurrentZone(weekly, 'Nowhere/Made_Up', localTimezone(), NOW).converted).toBe(false);
+    expect(scheduleInCurrentZone(weekly, 'local', localTimezone(), NOW).converted).toBe(false);
   });
 
   it('converts a schedule saved elsewhere', () => {
-    const { blocks, converted } = scheduleInCurrentZone(weekly, LA, VILNIUS);
+    const { blocks, converted } = scheduleInCurrentZone(weekly, LA, VILNIUS, NOW);
     expect(converted).toBe(true);
-    expect(blocks).toEqual([expect.objectContaining({ weekday: 1 })]);
-    expect(blocks).not.toBe(weekly);
+    expect(spans(blocks)).toEqual([{ kind: 'recurring', weekday: 1, start: at(19), end: at(20) }]);
+  });
+
+  // Phoenix and Denver share a clock in winter only: a weekly block moves in summer and not in
+  // winter, and only a block that moved counts as converted.
+  it('counts as converted only when a block moved', () => {
+    const winter = scheduleInCurrentZone(weekly, 'America/Phoenix', 'America/Denver', NOW);
+    expect(winter).toEqual({ blocks: weekly, converted: false });
+
+    const summer = scheduleInCurrentZone(weekly, 'America/Phoenix', 'America/Denver', new Date('2026-07-15T12:00:00Z'));
+    expect(summer.converted).toBe(true);
+    expect(spans(summer.blocks)).toEqual([{ kind: 'recurring', weekday: 1, start: at(10), end: at(11) }]);
+  });
+
+  // Casablanca keeps Algiers' clock in January and July but drops an hour for Ramadan, so a date
+  // in those weeks names another instant — however the two zones compare on other days.
+  it('converts a dated block in the weeks two otherwise-matching zones part', () => {
+    const ramadan: AvailabilityBlock[] = [{ id: 'd', kind: 'dated', date: '2026-02-25', start: at(9), end: at(10) }];
+
+    const { blocks, converted } = scheduleInCurrentZone(ramadan, 'Africa/Casablanca', 'Africa/Algiers', NOW);
+    expect(converted).toBe(true);
+    expect(spans(blocks)).toEqual([{ kind: 'dated', date: '2026-02-25', start: at(10), end: at(11) }]);
   });
 
   it('has nothing to convert in an empty week', () => {
-    expect(scheduleInCurrentZone([], LA, VILNIUS).converted).toBe(false);
+    expect(scheduleInCurrentZone([], LA, VILNIUS, NOW).converted).toBe(false);
   });
 });
 

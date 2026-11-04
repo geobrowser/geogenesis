@@ -8,6 +8,7 @@ import cx from 'classnames';
 
 import { useActionContext } from '~/core/action-context-provider';
 import { copyAvailabilityLink } from '~/core/availability/availability-deep-link';
+import { localTimezone } from '~/core/availability/blocks';
 import { summarizeSchedule } from '~/core/availability/schedule-summary';
 import { scheduleInCurrentZone } from '~/core/availability/schedule-zone';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
@@ -88,9 +89,11 @@ function AvailabilityMenu({
   const openerRef = triggerRef ?? ownRef;
 
   // In the zone the editor this row opens draws it in, or a traveler reads one slot at two hours.
+  // Read per render, like the editor, so a zone change on the next render reaches both.
+  const currentTimezone = localTimezone();
   const summary = React.useMemo(
-    () => (isSet && blocks ? summarizeSchedule(scheduleInCurrentZone(blocks, timezone).blocks) : null),
-    [isSet, blocks, timezone]
+    () => (isSet && blocks ? summarizeSchedule(scheduleInCurrentZone(blocks, timezone, currentTimezone).blocks) : null),
+    [isSet, blocks, timezone, currentTimezone]
   );
 
   if (!authenticated) return null;

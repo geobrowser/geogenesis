@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   available: false,
   blocks: [] as AvailabilityBlock[],
   timezone: undefined as string | undefined,
+  browserZone: 'Europe/Vilnius',
   saveSurfaces: [] as string[],
   updateAvailability: vi.fn(),
   canHost: false,
@@ -53,7 +54,7 @@ vi.mock('../lobbies/open-lobby-dialog', () => ({
 // The browser's zone, which the machine running the tests would otherwise decide.
 vi.mock('~/core/availability/blocks', async importOriginal => ({
   ...(await importOriginal<typeof import('~/core/availability/blocks')>()),
-  localTimezone: () => 'Europe/Vilnius',
+  localTimezone: () => mocks.browserZone,
 }));
 
 const { HubHeaderControls } = await import('./hub-header-controls');
@@ -69,6 +70,7 @@ beforeAll(() => {
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
   Object.assign(mocks, {
     isSet: false,
     loaded: true,
@@ -76,6 +78,7 @@ afterEach(() => {
     available: false,
     blocks: [],
     timezone: undefined,
+    browserZone: 'Europe/Vilnius',
     saveSurfaces: [],
     canHost: false,
   });
@@ -154,6 +157,10 @@ describe('HubHeaderControls', () => {
 
   // Saved in Los Angeles, read in Vilnius: the row says the hours the editor it opens will draw.
   it('summarises a schedule saved in another zone in the current one (GEO-3582)', async () => {
+    // Pinned: Los Angeles and Vilnius are 10 hours apart now, but 9 in the weeks only one of them
+    // has changed clocks. Only `Date`, so the popover's own timers still run.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-04T12:00:00Z'));
     mocks.isSet = true;
     mocks.timezone = 'America/Los_Angeles';
     mocks.blocks = [{ id: 'r1', kind: 'recurring', weekday: 1, start: 9 * 60, end: 10 * 60 }];
@@ -163,6 +170,24 @@ describe('HubHeaderControls', () => {
     await user.click(pill());
     const menu = await screen.findByRole('dialog', { name: 'Your availability' });
     expect(within(menu).getByRole('button', { name: /^Edit my times/ })).toHaveTextContent(/Tue 7 – 8pm/);
+  });
+
+  // A laptop that crosses a border: the next render, for whatever reason, says the new zone's hours,
+  // as the editor it opens would. Tokyo is 17 hours ahead of Los Angeles.
+  it('re-summarises in a new zone on the next render', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-04T12:00:00Z'));
+    mocks.isSet = true;
+    mocks.timezone = 'America/Los_Angeles';
+    mocks.blocks = [{ id: 'r1', kind: 'recurring', weekday: 1, start: 9 * 60, end: 10 * 60 }];
+    const user = userEvent.setup();
+    const { rerender } = render(<HubHeaderControls />);
+
+    mocks.browserZone = 'Asia/Tokyo';
+    rerender(<HubHeaderControls />);
+    await user.click(pill());
+    const menu = await screen.findByRole('dialog', { name: 'Your availability' });
+    expect(within(menu).getByRole('button', { name: /^Edit my times/ })).toHaveTextContent(/Wed 2 – 3am/);
   });
 
   it("labels its clicks as the surface it sits on, the hub's by default", async () => {

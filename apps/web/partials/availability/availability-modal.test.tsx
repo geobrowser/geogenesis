@@ -159,4 +159,30 @@ describe('AvailabilityModal time zone (GEO-3582)', () => {
       expect.objectContaining({ kind: 'recurring', weekday: 1, start: 19 * 60, end: 20 * 60 }),
     ]);
   });
+
+  // Save stamps whatever zone the browser is in at the time, so a grid still holding the old
+  // zone's hours would publish them an hour (or a day) off. Tokyo is 17 hours ahead of LA here.
+  it('redraws the grid in the new zone if the browser changes zone while it is open', async () => {
+    const onSave = vi.fn();
+    const user = userEvent.setup();
+    const props = {
+      open: true,
+      onOpenChange: () => {},
+      blocks: saved,
+      savedTimezone: 'America/Los_Angeles',
+      onSave,
+    };
+    const { rerender } = render(<AvailabilityModal {...props} />);
+    await screen.findByRole('dialog');
+
+    mocks.zone = 'Asia/Tokyo';
+    rerender(<AvailabilityModal {...props} />);
+
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByText(/^Times are in Japan Standard Time \(Tokyo\)/)).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'Save schedule' }));
+    expect(onSave.mock.calls[0][0]).toEqual([
+      expect.objectContaining({ kind: 'recurring', weekday: 2, start: 2 * 60, end: 3 * 60 }),
+    ]);
+  });
 });

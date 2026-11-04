@@ -116,6 +116,9 @@ export function AvailabilityModal({
       ) : null}
       {open && shown !== undefined && (
         <AvailabilityCalendar
+          // The grid reads `initialBlocks` once. If the browser's zone changes while it is open, a
+          // fresh grid in the new zone beats Save stamping the old zone's hours with the new one.
+          key={currentTimezone}
           className="min-h-0 flex-1"
           initialBlocks={shown}
           onChange={setDraft}

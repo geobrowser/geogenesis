@@ -335,14 +335,6 @@ function wallClockInstant(wallAsUtc: number, zone: string | undefined): Date {
 
 export const DAY_MS = 86_400_000;
 
-/**
- * Minutes `zone` is ahead of UTC at `instant`, for a zone as stored: the same fallback as
- * {@link zonedWallClockInstant}.
- */
-export function zonedOffsetMinutes(instant: Date | number, zone: string | undefined): number {
-  return zoneOffsetMinutes(new Date(instant), usableZone(zone));
-}
-
 function zoneOffsetMinutes(instant: Date, zone: string | undefined): number {
   return wallMinutes(zonedParts(instant, zone)) - wallMinutes(zonedParts(instant, 'UTC'));
 }
