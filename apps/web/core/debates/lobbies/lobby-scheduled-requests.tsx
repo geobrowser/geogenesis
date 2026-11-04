@@ -23,11 +23,8 @@ export function LobbyScheduledRequests({ lobby }: { lobby: LobbyPageView }) {
   const query = useScheduledDebates();
   const open = useOpenScheduledRequests(query.data?.requests);
   const incoming = React.useMemo(() => open.filter(request => request.viewer_must_answer), [open]);
-  const ids = React.useMemo(
-    () => incoming.flatMap(request => request.participants.map(person => person.user_id)),
-    [incoming]
-  );
-  const summaries = useGeoChatUserSummaries(ids, incoming.length > 0);
+  const participants = React.useMemo(() => incoming.flatMap(request => request.participants), [incoming]);
+  const summaries = useGeoChatUserSummaries(participants, incoming.length > 0);
   const [dismissed, setDismissed] = React.useState<Set<string>>(() => new Set());
   const visible = incoming.filter(request => !dismissed.has(requestVersion(request)));
   const lookUp = (id: string | null): DebateParticipantSummary | null =>

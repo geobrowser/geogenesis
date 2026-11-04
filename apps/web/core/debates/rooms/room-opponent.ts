@@ -32,12 +32,17 @@ export function requestById(requests: ScheduledDebateRequest[] | undefined, requ
   return (requests ?? []).find(request => sameId(request.request_id, requestId));
 }
 
-/** Who the viewer is debating in a scheduled request, named from the graph. `null` until both land. */
+/** Who the viewer is debating in a scheduled request, with their profile. `null` until both land. */
 export function useRequestOpponent(request: ScheduledDebateRequest | undefined): DebateParticipantSummary | null {
   const viewerId = useCurrentGeoChatUserId();
   const opponentUserId = opponentOf(request, viewerId);
-  const ids = React.useMemo(() => (opponentUserId ? [opponentUserId] : []), [opponentUserId]);
-  const summaries = useGeoChatUserSummaries(ids, opponentUserId !== null);
+  const opponent = React.useMemo(() => {
+    if (!opponentUserId) return [];
+    return [
+      request?.participants.find(person => sameId(person.user_id, opponentUserId)) ?? { user_id: opponentUserId },
+    ];
+  }, [opponentUserId, request]);
+  const summaries = useGeoChatUserSummaries(opponent, opponentUserId !== null);
 
   return summaries.find(person => opponentUserId !== null && sameId(person.user_id, opponentUserId)) ?? null;
 }

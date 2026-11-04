@@ -16,6 +16,9 @@ import { PUBLIC_BEST_FEED_PATH } from '~/core/explore/explore-feed-params';
 import { EntityFeed, buildFeedQuery, leadFirst } from './entity-feed';
 
 const mocks = vi.hoisted(() => ({
+  entryItem: null as Record<string, unknown> | null,
+  entryQueryOptions: null as Record<string, unknown> | null,
+  entryPending: false,
   queryOptions: null as Record<string, unknown> | null,
   facetQueryOptions: null as Record<string, unknown> | null,
   /** The public first page a signed-in reader paints from while their own page loads. */
@@ -76,6 +79,10 @@ vi.mock('@tanstack/react-query', () => ({
     };
   },
   useQuery: (options: Record<string, unknown>) => {
+    if ((options.queryKey as unknown[])[0] === 'explore-entry') {
+      mocks.entryQueryOptions = options;
+      return { data: options.enabled ? mocks.entryItem : undefined, isPending: mocks.entryPending };
+    }
     if ((options.queryKey as unknown[])[1] === 'public') {
       mocks.publicQueryOptions = options;
       return { data: options.enabled ? (mocks.publicPage ?? undefined) : undefined };
@@ -128,6 +135,9 @@ beforeEach(() => {
   mocks.pages = null;
   mocks.cardProps = null;
   mocks.itemAt = {};
+  mocks.entryItem = null;
+  mocks.entryPending = false;
+  mocks.entryQueryOptions = null;
   mocks.queryKeys = [];
   mocks.error = null;
   mocks.browseSidebar = null;
@@ -1002,5 +1012,68 @@ describe('EntityFeed interleave', () => {
     render(<EntityFeed apiEndpoint="/api/activity/feed" lockedSpaceId="space-1" interleave={interleave} />);
 
     expect(screen.queryByText(/extra after/)).toBeNull();
+  });
+});
+
+describe('marketing selection', () => {
+  const card = (entityId: string) => ({ entityId, spaceId: 's', name: entityId });
+  const props = {
+    apiEndpoint: '/api/explore/feed',
+    initialSort: 'best' as const,
+    showSortFilter: true,
+    entryEntityId: 'selected',
+  };
+
+  it('leads with an explicit selection outside the ranked window', () => {
+    mocks.pages = [{ items: [card('ranked')] }];
+    mocks.entryItem = card('selected');
+    render(<EntityFeed {...props} />);
+    expect([1, 2].map(position => mocks.itemAt[position]?.entityId)).toEqual(['selected', 'ranked']);
+  });
+  it('removes the selected card from its later ranked position', () => {
+    mocks.pages = [{ items: [card('ranked'), card('selected')] }];
+    mocks.entryItem = card('selected');
+    render(<EntityFeed {...props} />);
+    expect([1, 2].map(position => mocks.itemAt[position]?.entityId)).toEqual(['selected', 'ranked']);
+    expect(mocks.itemAt[3]).toBeUndefined();
+  });
+  it('holds the ranked lead until the selection lookup settles', () => {
+    mocks.pages = [{ items: [card('ranked')] }];
+    mocks.entryPending = true;
+    render(<EntityFeed {...props} />);
+    expect(mocks.itemAt[1]).toBeUndefined();
+  });
+  it('falls back to the normal feed when the selection is unavailable', () => {
+    mocks.pages = [{ items: [card('ranked')] }];
+    render(<EntityFeed {...props} />);
+    expect(mocks.itemAt[1]?.entityId).toBe('ranked');
+  });
+  it('keeps a resolved selection available when the ranked feed fails', () => {
+    mocks.error = new Error('ranking unavailable');
+    mocks.entryItem = card('selected');
+    render(<EntityFeed {...props} />);
+    expect(mocks.itemAt[1]?.entityId).toBe('selected');
+    expect(screen.queryByText('Could not load the feed.')).toBeNull();
+  });
+  it('shows a resolved selection without waiting for the personalized feed identity token', () => {
+    mocks.entryItem = card('selected');
+    render(
+      <EntityFeed
+        {...props}
+        initialSort="for-you"
+        followedTopicIds={[]}
+        walletAddress="0x00000000000000000000000000000000000000aa"
+        sendIdentityToken
+      />
+    );
+    expect(mocks.itemAt[1]?.entityId).toBe('selected');
+  });
+  it('stops pinning the selection after the visitor changes sort', () => {
+    mocks.pages = [{ items: [card('ranked')] }];
+    mocks.entryItem = card('selected');
+    render(<EntityFeed {...props} />);
+    pickOption('New');
+    expect(mocks.entryQueryOptions?.enabled).toBe(false);
+    expect(mocks.itemAt[1]?.entityId).toBe('ranked');
   });
 });

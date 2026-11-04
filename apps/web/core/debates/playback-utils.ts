@@ -5,7 +5,6 @@ import type {
   DebateMediaArtifactKind,
   DebateMediaResponse,
   DebateMediaTurnSegment,
-  DebateParticipant,
   ParticipantSlot,
 } from './api';
 
@@ -288,9 +287,7 @@ export function orderedParticipants(debate: Debate) {
   return [...debate.participants].sort((a, b) => a.participant_slot - b.participant_slot);
 }
 
-export function speakerLabel(participant: Pick<DebateParticipant, 'display_name' | 'profile_space_id'>) {
-  return participant.display_name || participant.profile_space_id;
-}
+export { speakerLabel } from './debater-name';
 
 /** The two elements this helper needs, so tests do not have to build a whole `HTMLVideoElement`. */
 export type PlayableVideo = Pick<HTMLVideoElement, 'muted' | 'paused'> & { play: () => Promise<void> };
