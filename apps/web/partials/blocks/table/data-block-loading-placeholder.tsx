@@ -24,10 +24,13 @@ type Props = {
   mediaFrame?: BlockMediaFrame;
 };
 
-/** How many rows to actually reserve: the real item count where it's known, capped at the page size. */
+/**
+ * How many rows to actually reserve: the real item count where it's known, capped at the page size.
+ * `undefined` is unknown and reserves the page; 0 is a known empty collection.
+ */
 function reservedItemCount(items?: number, itemCount?: number): number | undefined {
-  if (itemCount && itemCount > 0) return Math.min(itemCount, items ?? itemCount);
-  return items;
+  if (itemCount === undefined) return items;
+  return Math.min(itemCount, items ?? itemCount);
 }
 
 /**
@@ -40,6 +43,8 @@ function reservedItemCount(items?: number, itemCount?: number): number | undefin
  */
 export function DataBlockLoadingPlaceholder({ view, items, itemCount, mediaFrame }: Props) {
   const reserved = reservedItemCount(items, itemCount);
+
+  if (reserved === 0) return <TableBlockLoadingPlaceholder rows={0} />;
 
   switch (view) {
     case 'GALLERY':

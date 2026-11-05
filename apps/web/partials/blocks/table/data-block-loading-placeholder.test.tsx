@@ -126,6 +126,24 @@ describe('DataBlockLoadingPlaceholder', () => {
     expect(container.querySelectorAll('tbody tr')).toHaveLength(3);
   });
 
+  it.each(['TABLE', 'LIST', 'BULLETED_LIST', 'GALLERY', 'EXPLORE'] as const)(
+    'reserves only the header row for a known empty collection in %s',
+    view => {
+      const { container } = render(<DataBlockLoadingPlaceholder view={view} items={6} itemCount={0} />);
+
+      expect(container.querySelectorAll('thead tr')).toHaveLength(1);
+      expect(container.querySelectorAll('tbody tr')).toHaveLength(0);
+      expect(screen.queryByTestId('explore-view-skeleton-card')).toBeNull();
+      expect(screen.queryAllByText('•')).toHaveLength(0);
+    }
+  );
+
+  it('reserves the full page when the item count is unknown', () => {
+    render(<DataBlockLoadingPlaceholder view="EXPLORE" items={6} itemCount={undefined} />);
+
+    expect(screen.getAllByTestId('explore-view-skeleton-card')).toHaveLength(6);
+  });
+
   it('keeps the page size when the known item count exceeds it', () => {
     const { container } = render(<DataBlockLoadingPlaceholder view="TABLE" items={5} itemCount={20} />);
 

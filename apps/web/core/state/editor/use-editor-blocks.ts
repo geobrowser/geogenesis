@@ -24,6 +24,7 @@ import {
   resolveRankingDate,
 } from '../../blocks/ranking/ranking-block-dates';
 import { isRankingBlockEntity, isRankingSetupConfigured } from '../../blocks/ranking/ranking-block-state';
+import { placeholderCollectionItemCount } from './data-block-placeholder-sizing';
 import { useActiveTabIdForEditor, useEditorBlocks, useEditorInstance } from './editor-provider';
 import {
   PROFILE_OVERVIEW_TAIL_BLOCK_SENTINEL,
@@ -248,16 +249,12 @@ export function useEditorBlockModels() {
         const isQuerySource =
           dataSourceType === SystemIds.QUERY_DATA_SOURCE || dataSourceType === SystemIds.ALL_OF_GEO_DATA_SOURCE;
 
-        // A collection knows its length from its item relations, so its placeholder can reserve
-        // exactly that. A query block has no count yet, so `itemCount` stays undefined.
-        const itemCount = isQuerySource
-          ? undefined
-          : blockRelationRows.filter(
-              r =>
-                r.fromEntity.id === block.block.id &&
-                r.type.id === SystemIds.COLLECTION_ITEM_RELATION_TYPE &&
-                !r.isDeleted
-            ).length;
+        const itemCount = placeholderCollectionItemCount({
+          blockId: block.block.id,
+          isQuerySource,
+          initialBlockEntities,
+          relations: blockRelationRows,
+        });
 
         const server: ServerBlock = {
           type: 'data',

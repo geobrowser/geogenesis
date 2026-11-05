@@ -1,8 +1,11 @@
 'use client';
 
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
+
 import * as React from 'react';
 
 import type { BlockMediaFrame } from '~/core/hooks/use-block-media-dimensions';
+import type { Entity, Relation } from '~/core/types';
 
 import type { ServerBlock } from '~/partials/editor/server-content';
 
@@ -14,6 +17,23 @@ export type DataBlockPlaceholderSizing = {
   itemCount?: number;
   mediaFrame?: BlockMediaFrame;
 };
+
+export function placeholderCollectionItemCount({
+  blockId,
+  isQuerySource,
+  initialBlockEntities,
+  relations,
+}: {
+  blockId: string;
+  isQuerySource: boolean;
+  initialBlockEntities: Pick<Entity, 'id'>[];
+  relations: Relation[];
+}): number | undefined {
+  if (isQuerySource || !initialBlockEntities.some(entity => entity.id === blockId)) return undefined;
+  return relations.filter(
+    r => r.fromEntity.id === blockId && r.type.id === SystemIds.COLLECTION_ITEM_RELATION_TYPE && !r.isDeleted
+  ).length;
+}
 
 const DataBlockPlaceholderSizingContext = React.createContext<Map<string, DataBlockPlaceholderSizing> | null>(null);
 
@@ -43,7 +63,9 @@ export function DataBlockPlaceholderSizingProvider({
   sizing: Map<string, DataBlockPlaceholderSizing>;
   children: React.ReactNode;
 }) {
-  return <DataBlockPlaceholderSizingContext.Provider value={sizing}>{children}</DataBlockPlaceholderSizingContext.Provider>;
+  return (
+    <DataBlockPlaceholderSizingContext.Provider value={sizing}>{children}</DataBlockPlaceholderSizingContext.Provider>
+  );
 }
 
 export function useDataBlockPlaceholderSizing(blockId: string): DataBlockPlaceholderSizing | undefined {

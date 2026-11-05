@@ -593,6 +593,7 @@ const ConfiguredTableBlock = ({
     relations,
     collectionRelations,
     collectionLength,
+    collectionLengthKnown,
     pageSize,
     view,
     placeholder,
@@ -1291,7 +1292,7 @@ const ConfiguredTableBlock = ({
             <DataBlockLoadingPlaceholder
               view={view}
               items={pageSize}
-              itemCount={source.type === 'COLLECTION' ? collectionLength : undefined}
+              itemCount={collectionLengthKnown ? collectionLength : undefined}
               mediaFrame={mediaFrame}
             />
           ) : (
