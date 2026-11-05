@@ -18,10 +18,10 @@ const mocks = vi.hoisted(() => ({
   readGeoChatSessionProfile: vi.fn(),
   getToken: vi.fn(),
   capture: vi.fn(),
-  devLog: vi.fn(),
   createdAt: new Date(0) as Date,
   isRegistered: false,
   retryNow: vi.fn(),
+  accountKey: 'user-a',
 }));
 
 vi.mock('./api', () => ({
@@ -32,13 +32,12 @@ vi.mock('./hooks', () => ({
   useGeoChatAuth: () => ({
     ready: true,
     authenticated: true,
-    accountKey: 'user-a',
+    accountKey: mocks.accountKey,
     getPrivyIdentityToken: mocks.getToken,
   }),
 }));
 vi.mock('~/core/wallet/auth-hooks', () => ({ usePrivy: () => ({ user: { createdAt: mocks.createdAt } }) }));
 vi.mock('~/core/analytics', () => ({ capture: mocks.capture }));
-vi.mock('~/core/utils/dev-log', () => ({ devLog: mocks.devLog }));
 vi.mock('./debate-gateway', () => ({ debateGateway: { retryNow: mocks.retryNow } }));
 vi.mock('~/core/hooks/use-personal-space-id', () => ({
   usePersonalSpaceId: () => ({ isRegistered: mocks.isRegistered }),
@@ -84,7 +83,7 @@ function renderHookOnce() {
   return view;
 }
 
-const outcomes = () => mocks.devLog.mock.calls.map(([, payload]) => (payload as { outcome: string }).outcome);
+const outcomes = () => mocks.capture.mock.calls.map(([, payload]) => (payload as { outcome: string }).outcome);
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -92,17 +91,16 @@ beforeEach(() => {
   mocks.getGeoChatSession.mockReset().mockRejectedValue(new Error('refused'));
   mocks.readGeoChatSessionProfile.mockReset().mockResolvedValue({ state: 'pending' });
   mocks.capture.mockReset();
-  mocks.devLog.mockReset();
   mocks.createdAt = new Date(0);
   mocks.isRegistered = false;
   mocks.retryNow.mockReset();
+  mocks.accountKey = 'user-a';
   getDefaultStore().set(stepAtom, 'start' as never);
   window.localStorage.clear();
 });
 
 afterEach(() => {
-  // Outcomes are computed but not sent until `debates_session_outcome` is registered.
-  expect(mocks.capture).not.toHaveBeenCalled();
+  for (const [event] of mocks.capture.mock.calls) expect(event).toBe('debates_session_outcome');
 });
 
 afterEach(() => {
@@ -111,6 +109,22 @@ afterEach(() => {
 });
 
 describe('useGeoChatAccountRecovery', () => {
+  it('reports an account once per load, across a switch away and back', () => {
+    const view = renderHookOnce();
+    act(() => setGeoChatAccountStatus('user-a', refused));
+    mocks.accountKey = 'user-b';
+    view.rerender();
+    act(() => setGeoChatAccountStatus('user-b', refused));
+    mocks.accountKey = 'user-a';
+    view.rerender();
+    act(() => setGeoChatAccountStatus('user-a', { ...refused, code: 'other' }));
+    expect(outcomes()).toEqual(['session_refused', 'session_refused']);
+    expect(mocks.capture.mock.calls.map(([, payload]) => (payload as { refusal_code: string }).refusal_code)).toEqual([
+      'no_personal_space',
+      'no_personal_space',
+    ]);
+  });
+
   it('leaves retrying a refused exchange to the gateway', async () => {
     render();
     act(() => setGeoChatAccountStatus('user-a', refused));
@@ -161,8 +175,8 @@ describe('useGeoChatAccountRecovery', () => {
 
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['debates'] });
     expect(outcomes()).toEqual(['session_refused', 'session_accepted']);
-    expect(mocks.devLog).toHaveBeenLastCalledWith(
-      expect.any(String),
+    expect(mocks.capture).toHaveBeenLastCalledWith(
+      'debates_session_outcome',
       expect.objectContaining({
         outcome: 'session_accepted',
         profile_state: 'attached',
@@ -222,8 +236,8 @@ describe('useGeoChatAccountRecovery', () => {
     act(() => setGeoChatAccountStatus('user-a', accepted('attached')));
 
     expect(outcomes()).toEqual(['session_accepted']);
-    expect(mocks.devLog).toHaveBeenLastCalledWith(
-      expect.any(String),
+    expect(mocks.capture).toHaveBeenLastCalledWith(
+      'debates_session_outcome',
       expect.objectContaining({ outcome: 'session_accepted', refused_ms: 0, ms_since_sign_up: 60_000 })
     );
   });
@@ -246,13 +260,13 @@ describe('useGeoChatAccountRecovery', () => {
     render();
     act(() => setGeoChatAccountStatus('user-a', accepted('attached')));
 
-    expect(mocks.devLog).not.toHaveBeenCalled();
+    expect(mocks.capture).not.toHaveBeenCalled();
   });
 
   it('records nothing for an established account', () => {
     render();
     act(() => setGeoChatAccountStatus('user-a', accepted('attached')));
 
-    expect(mocks.devLog).not.toHaveBeenCalled();
+    expect(mocks.capture).not.toHaveBeenCalled();
   });
 });

@@ -29,7 +29,8 @@ export type RoomCapabilities = {
   /** Recording surfaces apply. Whether one runs is server state (`callRecordingOf`), never this. */
   recording: boolean;
   screenShare: boolean;
-  chat: boolean;
+  /** A call shows its space's member-room chat (GEO-3422). */
+  spaceChat: boolean;
 };
 
 export function roomCapabilities(purpose: LobbyRoomPurpose): RoomCapabilities {
@@ -41,7 +42,7 @@ export function roomCapabilities(purpose: LobbyRoomPurpose): RoomCapabilities {
       nextLobby: false,
       recording: true,
       screenShare: true,
-      chat: false,
+      spaceChat: true,
     };
   }
   return {
@@ -51,7 +52,7 @@ export function roomCapabilities(purpose: LobbyRoomPurpose): RoomCapabilities {
     nextLobby: true,
     recording: false,
     screenShare: true,
-    chat: false,
+    spaceChat: false,
   };
 }
 

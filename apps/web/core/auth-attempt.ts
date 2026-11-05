@@ -1,8 +1,16 @@
 'use client';
 
 import { ACTION_CONTEXT_FIELDS, pageContext } from './action-context';
-import { type AnalyticsEventName, type AnalyticsProperties, capture } from './analytics';
+import {
+  type AnalyticsEventName,
+  type AnalyticsProperties,
+  type ExperimentalEventName,
+  capture,
+  captureExperimental,
+} from './analytics';
 import { isAnalyticsEnabled, readAnalyticsContext } from './analytics-context';
+import { SEND_AUTH_STEP, type SignInMethod, type SignInSurface } from './auth/auth-step-switch';
+import { wasSignedInBefore } from './auth/signed-in-before';
 import { equals } from './id/normalize';
 import { pushMarketingEvent } from './marketing-events';
 
@@ -27,13 +35,23 @@ export type AuthAttempt = {
   id: string;
   startedAt: number;
   openedAt?: number;
+  /** Ms since navigation start when the prompt opened; queued events are stamped at flush, not capture. */
+  openedPageMs?: number;
   endedAt?: number;
   outcome?: AuthAttemptOutcome;
   properties: AnalyticsProperties;
   actionSucceeded?: boolean;
   /** `step:outcome` pairs of onboarding already reported for this attempt; see `trackAuthOnboarding`. */
   onboardingReported?: string[];
+  /** GEO-3550: this browser had signed in before the attempt began. */
+  likelyReturning?: boolean;
+  signInSurface?: SignInSurface;
+  signInMethod?: SignInMethod;
+  /** The last sign-in error code the attempt hit, for a close that followed it. */
+  lastAuthError?: string;
 };
+
+type AuthAttemptTags = Pick<AuthAttempt, 'signInSurface' | 'signInMethod' | 'lastAuthError'>;
 let memory: AuthAttempt | undefined;
 // sessionStorage can be copied into another tab. Only this document's own presses
 // can be closed/superseded here; persisted pointers are also used for OAuth recovery.
@@ -56,6 +74,9 @@ const fields = new Set<string>([
   // Why the save sheet was open when that sign-in started: the navbar's centred sheet and the corner
   // card share one email field, so this is what tells their sign-ins apart (GEO-3400).
   'prompt_reason',
+  // A sign-in reopened after the tab reloaded at the code step (GEO-3573), and the attempt it resumes.
+  'auth_recovery',
+  'recovered_attempt_id',
 ]);
 
 const sourceIdentifierFields = new Set(['link_source', 'marketing_page', 'marketing_cta', 'marketing_handoff_id']);
@@ -117,9 +138,11 @@ export function readAuthAttempt(id: string) {
   return read(id);
 }
 
-export function captureAuthEvent(event: AnalyticsEventName, properties: AnalyticsProperties) {
+export function captureAuthEvent(event: AnalyticsEventName | ExperimentalEventName, properties: AnalyticsProperties) {
   try {
-    capture(event, { ...properties, measurement_version: 'growth-v2' });
+    const tagged = { ...properties, measurement_version: 'growth-v2' };
+    if (event.startsWith('experimental.')) captureExperimental(event as ExperimentalEventName, tagged);
+    else capture(event as AnalyticsEventName, tagged);
   } catch {
     /* Never block authentication or a queued action. */
   }
@@ -162,6 +185,11 @@ function saveQuietly(attempt: AuthAttempt, activate: boolean) {
     }
   }
 }
+/** Ms since this document's navigation start; undefined where there is no `performance`. */
+function pageMs() {
+  return typeof performance === 'undefined' ? undefined : Math.round(performance.now());
+}
+
 /** Prefer this tab's attempt. A new tab can inherit only an unambiguous active attempt. */
 export function currentAuthAttempt(recoverFromOtherTab = false): AuthAttempt | undefined {
   if (memory && Date.now() - memory.startedAt < TTL) return read(memory.id);
@@ -188,6 +216,28 @@ export function currentAuthAttempt(recoverFromOtherTab = false): AuthAttempt | u
 export function attemptProperties(attempt: AuthAttempt): AnalyticsProperties {
   return { ...attempt.properties, auth_attempt_id: attempt.id };
 }
+
+/** GEO-3550's funnel split, for `auth_step`. The attempt events carry it once `SEND_AUTH_STEP` is on. */
+export function funnelProperties(attempt: AuthAttempt): AnalyticsProperties {
+  return {
+    ...(attempt.likelyReturning !== undefined ? { likely_returning: attempt.likelyReturning } : {}),
+    ...(attempt.signInSurface ? { sign_in_surface: attempt.signInSurface } : {}),
+    ...(attempt.signInMethod ? { sign_in_method: attempt.signInMethod } : {}),
+  };
+}
+
+function attemptEventProperties(attempt: AuthAttempt): AnalyticsProperties {
+  return { ...attemptProperties(attempt), ...(SEND_AUTH_STEP ? funnelProperties(attempt) : {}) };
+}
+
+/** Records which UI and method an attempt is in, and its last error. */
+export function tagAuthAttempt(id: string | undefined, tags: AuthAttemptTags) {
+  const attempt = read(id ?? null);
+  if (!attempt || attempt.endedAt) return;
+  // In place as well: a caller may still hold the attempt it later finishes.
+  if (memory?.id === attempt.id) Object.assign(memory, tags);
+  save({ ...attempt, ...tags }, false);
+}
 export function beginAuthAttempt(properties: AnalyticsProperties = {}) {
   for (const [id, attempt] of unpersisted) {
     if (Date.now() - attempt.startedAt >= TTL) unpersisted.delete(id);
@@ -205,10 +255,11 @@ export function beginAuthAttempt(properties: AnalyticsProperties = {}) {
     id: crypto.randomUUID(),
     startedAt: Date.now(),
     properties: authProperties(properties),
+    likelyReturning: wasSignedInBefore(),
   };
   ownedAttemptId = attempt.id;
   save(attempt);
-  captureAuthEvent('auth_attempt_started', attemptProperties(attempt));
+  captureAuthEvent('auth_attempt_started', { ...attemptEventProperties(attempt), attempt_started_page_ms: pageMs() });
   pushMarketingEvent('geo_sign_up_start');
   return attempt;
 }
@@ -217,8 +268,12 @@ export function openAuthAttempt(properties: AnalyticsProperties = { auth_trigger
   if (!attempt || attempt.endedAt || attempt.id !== ownedAttemptId) attempt = beginAuthAttempt(properties);
   if (attempt.openedAt !== undefined) return;
   attempt.openedAt = Date.now();
+  attempt.openedPageMs = pageMs();
   save(attempt);
-  captureAuthEvent('auth_prompt_viewed', attemptProperties(attempt));
+  captureAuthEvent('auth_prompt_viewed', {
+    ...attemptEventProperties(attempt),
+    prompt_opened_page_ms: attempt.openedPageMs,
+  });
 }
 /**
  * On a redirect's return, takes over this tab's attempt `id` so the return can end it as its starter
@@ -238,6 +293,37 @@ const ENDED_BY_LEAVING: ReadonlySet<AuthAttemptOutcome> = new Set([
   'left_after_sign_in',
 ]);
 
+/** What a press does once its attempt ends. */
+export type AuthAttemptContinuation = {
+  /** The attempt ended signed in. */
+  signedIn?: () => void;
+  /** The attempt was dismissed, or left after Privy had signed someone in. */
+  abandoned?: () => void;
+};
+
+const continuations = new Map<string, AuthAttemptContinuation[]>();
+
+/**
+ * Registers what a press runs when attempt `id` ends, held here rather than by the control so it
+ * outlives it. `finishAuthAttempt` runs it once; a superseded attempt drops it.
+ */
+export function continueAuthAttempt(id: string, continuation: AuthAttemptContinuation) {
+  continuations.set(id, [...(continuations.get(id) ?? []), continuation]);
+}
+
+function runContinuations(id: string, outcome: AuthAttemptOutcome) {
+  const pending = continuations.get(id);
+  continuations.delete(id);
+  if (!pending || outcome === 'superseded') return;
+  for (const continuation of pending) {
+    try {
+      (isSignedInOutcome(outcome) ? continuation.signedIn : continuation.abandoned)?.();
+    } catch {
+      /* One press's continuation never blocks another's, or the sign-in. */
+    }
+  }
+}
+
 export function finishAuthAttempt(outcome: AuthAttemptOutcome, attempt = currentAuthAttempt()) {
   if (!attempt || attempt.endedAt) return;
   if (ENDED_BY_LEAVING.has(outcome) && attempt.id !== ownedAttemptId) return;
@@ -245,11 +331,14 @@ export function finishAuthAttempt(outcome: AuthAttemptOutcome, attempt = current
   attempt.outcome = outcome;
   save(attempt);
   captureAuthEvent('auth_attempt_completed', {
-    ...attemptProperties(attempt),
+    ...attemptEventProperties(attempt),
+    ...(SEND_AUTH_STEP && outcome === 'closed' ? { last_auth_error: attempt.lastAuthError ?? null } : {}),
     outcome,
     auth_duration_ms: Math.max(0, attempt.endedAt - (attempt.openedAt ?? attempt.startedAt)),
     prompt_seen: attempt.openedAt !== undefined,
+    prompt_opened_page_ms: attempt.openedPageMs,
   });
+  runContinuations(attempt.id, outcome);
 }
 export function recoverAuthAttempt(properties?: AnalyticsProperties) {
   const attempt: AuthAttempt = {
@@ -262,6 +351,7 @@ export function recoverAuthAttempt(properties?: AnalyticsProperties) {
 }
 
 export function resetAuthAttempt() {
+  continuations.clear();
   memory = undefined;
   ownedAttemptId = undefined;
   unpersisted.clear();

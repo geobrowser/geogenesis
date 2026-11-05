@@ -593,6 +593,7 @@ const ConfiguredTableBlock = ({
     relations,
     collectionRelations,
     collectionLength,
+    collectionLengthKnown,
     pageSize,
     view,
     placeholder,
@@ -1288,7 +1289,12 @@ const ConfiguredTableBlock = ({
 
         <motion.div layout="position" transition={{ duration: 0.15 }}>
           {showLoadingPlaceholder ? (
-            <DataBlockLoadingPlaceholder view={view} items={pageSize} mediaFrame={mediaFrame} />
+            <DataBlockLoadingPlaceholder
+              view={view}
+              items={pageSize}
+              itemCount={collectionLengthKnown ? collectionLength : undefined}
+              mediaFrame={mediaFrame}
+            />
           ) : (
             EntriesComponent
           )}

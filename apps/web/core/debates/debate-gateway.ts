@@ -21,6 +21,12 @@ import {
   spaceCallsRefetch,
   withSpaceCallPatch,
 } from '~/core/space-calls/space-calls-patch';
+import {
+  type SpaceChatState,
+  parseSpaceChatRoomEvent,
+  spaceChatQueryKeys,
+  withRoomEvent,
+} from '~/core/space-chat/state';
 
 import {
   type DebateLobbiesResponse,
@@ -31,6 +37,7 @@ import {
   type GeoChatSession,
   type GetPrivyIdentityToken,
   dashlessId,
+  getCurrentGeoChatUserId,
   getGeoChatApiBaseUrl,
   getGeoChatSession,
   getStoredGeoChatAccessToken,
@@ -52,7 +59,12 @@ export type DebateGatewayScope =
   | { scope: 'space'; space_id: string }
   | { scope: 'debate'; debate_id: string }
   /** Subscribed only while the matchmaking hub is open, so presence fan-out stays narrow. */
-  | { scope: 'matchmaking' };
+  | { scope: 'matchmaking' }
+  /**
+   * A space chat room (GEO-3422). Sent in geo-chat's original room shape, without `scope`, and
+   * echoed that way in READY and ERROR.
+   */
+  | { scope: 'chat-room'; space_id: string; room_id: string; room_kind: 'member' | 'editor' };
 
 export type MatchmakingSection = 'people' | 'claims' | 'matches';
 
@@ -71,9 +83,10 @@ export type MatchmakingSection = 'people' | 'claims' | 'matches';
  * - `disconnected` and `session` are ordinary transport trouble that a reconnect resolves.
  * - `unsupported` means the server never advertised the debate capability, so nothing will recover
  *   it without a deploy.
+ * - `capacity`: geo-chat turned a signed-out socket away for load; it waits for window focus.
  */
 export type DebateGatewayPauseReason =
-  'disconnected' | 'session' | 'rate_limited' | 'subscription_limit' | 'unsupported' | 'error';
+  'disconnected' | 'session' | 'rate_limited' | 'subscription_limit' | 'unsupported' | 'error' | 'capacity';
 
 export type DebateGatewaySnapshot = {
   status: 'idle' | 'connecting' | 'ready' | 'degraded';
@@ -117,6 +130,8 @@ type GatewayEnvelope = {
   v: number;
   op: string;
   seq?: number | null;
+  /** Set on a room's events. */
+  room_id?: string | null;
   payload: unknown;
 };
 
@@ -130,7 +145,7 @@ type WebSocketLike = {
   onopen: (() => void) | null;
   onmessage: ((event: { data: unknown }) => void) | null;
   onerror: (() => void) | null;
-  onclose: (() => void) | null;
+  onclose: ((event?: { code?: number }) => void) | null;
   send(value: string): void;
   close(): void;
 };
@@ -141,6 +156,11 @@ type DebateGatewayClientOptions = {
   getApiBaseUrl: () => string;
   createWebSocket?: (url: string) => WebSocketLike;
   random?: () => number;
+  /**
+   * Signed out: connects without a token, carries only member chat rooms, writes their public
+   * cache, and runs only while one is retained.
+   */
+  anonymous?: boolean;
 };
 
 type InvalidationFilters = NonNullable<Parameters<QueryClient['invalidateQueries']>[0]>;
@@ -171,6 +191,7 @@ export class DebateGatewayClient {
   private readonly getApiBaseUrl: DebateGatewayClientOptions['getApiBaseUrl'];
   private readonly createWebSocket: NonNullable<DebateGatewayClientOptions['createWebSocket']>;
   private readonly random: () => number;
+  private readonly anonymous: boolean;
   private readonly listeners = new Set<() => void>();
   private readonly scopes = new Map<string, { scope: DebateGatewayScope; count: number }>();
   private readonly sentScopes = new Set<string>();
@@ -234,6 +255,8 @@ export class DebateGatewayClient {
   private invalidationTimer: ReturnType<typeof setTimeout> | null = null;
   private invalidationRetryTimers = new Set<ReturnType<typeof setTimeout>>();
   private connectionGeneration = 0;
+  /** Signed out and turned away for load; see `retryAfterFocus`. */
+  private parked = false;
 
   constructor(options: DebateGatewayClientOptions) {
     this.queryClient = options.queryClient;
@@ -241,9 +264,15 @@ export class DebateGatewayClient {
     this.getApiBaseUrl = options.getApiBaseUrl;
     this.createWebSocket = options.createWebSocket ?? (url => new WebSocket(url) as unknown as WebSocketLike);
     this.random = options.random ?? Math.random;
+    this.anonymous = options.anonymous ?? false;
   }
 
   getSnapshot = () => this.snapshot;
+
+  /** Events reach `scope`: the socket is ready and READY confirmed it. Listeners hear each change. */
+  isScopeLive(scope: DebateGatewayScope) {
+    return this.snapshot.status === 'ready' && this.readyForDebates && this.confirmedScopes.has(scopeKey(scope));
+  }
 
   subscribe = (listener: () => void) => {
     this.listeners.add(listener);
@@ -251,6 +280,7 @@ export class DebateGatewayClient {
   };
 
   start(getPrivyIdentityToken: GetPrivyIdentityToken, accountKey: string, debatePresence?: boolean) {
+    if (this.anonymous) return;
     if (this.enabled && this.accountKey !== accountKey) this.stop();
     if (debatePresence !== undefined) this.setDebatePresence(debatePresence);
     this.getPrivyIdentityToken = getPrivyIdentityToken;
@@ -315,6 +345,7 @@ export class DebateGatewayClient {
   stop() {
     const accountKey = this.accountKey;
     this.enabled = false;
+    this.parked = false;
     this.getPrivyIdentityToken = null;
     this.accountKey = null;
     this.hasReachedReady = false;
@@ -341,6 +372,7 @@ export class DebateGatewayClient {
   }
 
   retainScope(scope: DebateGatewayScope) {
+    if (this.anonymous && (scope.scope !== 'chat-room' || scope.room_kind !== 'member')) return () => undefined;
     const key = scopeKey(scope);
     const retained = this.scopes.get(key);
     if (retained) {
@@ -349,6 +381,8 @@ export class DebateGatewayClient {
       this.scopes.set(key, { scope, count: 1 });
       this.sendSubscription(scope, 'SUBSCRIBE');
     }
+    if (this.anonymous && !this.enabled) this.startAnonymous();
+    else this.scopesChanged();
 
     let released = false;
     return () => {
@@ -362,13 +396,46 @@ export class DebateGatewayClient {
       this.sentScopes.delete(key);
       this.confirmedScopes.delete(key);
       this.clearSubscriptionRetry(key);
+      if (this.anonymous && this.scopes.size === 0) {
+        this.stop();
+        return;
+      }
       // The server never held a refused scope, so there is nothing to unsubscribe.
-      if (this.refusedScopes.delete(key)) return;
-      this.sendSubscription(scope, 'UNSUBSCRIBE');
+      if (!this.refusedScopes.delete(key)) this.sendSubscription(scope, 'UNSUBSCRIBE');
+      this.scopesChanged();
     };
   }
 
+  private startAnonymous() {
+    this.enabled = true;
+    this.setSnapshot({ status: 'connecting', paused: false, pauseReason: null });
+    void this.connect();
+  }
+
+  /** A scope was confirmed, refused or dropped: `isScopeLive` readers re-read. */
+  private scopesChanged() {
+    if (this.anonymous) this.updateAnonymousStatus();
+    for (const listener of this.listeners) listener();
+  }
+
+  /** Signed out, `ready` means every retained room is confirmed; a refused one degrades it. */
+  private updateAnonymousStatus() {
+    if (!this.enabled || !this.readyForDebates) return;
+    const keys = [...this.scopes.keys()];
+    if (keys.some(key => this.refusedScopes.has(key))) {
+      this.setSnapshot({ status: 'degraded', paused: true, pauseReason: 'error' });
+    } else if (keys.every(key => this.confirmedScopes.has(key))) {
+      this.setSnapshot({ status: 'ready', paused: false, pauseReason: null });
+    } else {
+      this.setSnapshot({ status: 'connecting', paused: false, pauseReason: null });
+    }
+  }
+
   private async connect() {
+    if (this.anonymous) {
+      this.connectAnonymous();
+      return;
+    }
     const getPrivyIdentityToken = this.getPrivyIdentityToken;
     const accountKey = this.accountKey;
     if (!this.enabled || !getPrivyIdentityToken || !accountKey || this.socket) return;
@@ -400,6 +467,23 @@ export class DebateGatewayClient {
     }
   }
 
+  private connectAnonymous() {
+    if (!this.enabled || this.socket || this.parked) return;
+    ++this.connectionGeneration;
+    const socket = this.createWebSocket(gatewayWebSocketUrl(this.getApiBaseUrl(), null));
+    this.socket = socket;
+    this.socketAccessToken = null;
+    this.readyForDebates = false;
+    this.sentScopes.clear();
+    this.confirmedScopes.clear();
+    this.refusedScopes.clear();
+    this.handshakeTimer = setTimeout(() => this.forceReconnect(socket), HANDSHAKE_TIMEOUT_MS);
+    socket.onopen = () => undefined;
+    socket.onmessage = event => this.handleMessage(socket, event.data);
+    socket.onerror = () => this.forceReconnect(socket);
+    socket.onclose = event => this.handleClose(socket, event?.code);
+  }
+
   private handleMessage(socket: WebSocketLike, value: unknown) {
     if (socket !== this.socket || typeof value !== 'string') return;
 
@@ -421,7 +505,8 @@ export class DebateGatewayClient {
         this.handleReady(envelope.payload);
         break;
       case 'EVENT':
-        this.handleEvent(envelope.payload);
+        if (typeof envelope.room_id === 'string') this.handleRoomEvent(envelope.room_id, envelope.payload);
+        else if (!this.anonymous) this.handleEvent(envelope.payload);
         break;
       case 'HEARTBEAT_ACK':
         this.heartbeatsAwaitingAck = 0;
@@ -433,7 +518,13 @@ export class DebateGatewayClient {
       case 'ERROR':
         if (isEventsLagged(envelope.payload)) {
           this.queueBroadReconcile();
+        } else if (this.anonymous && isAnonymousCapacityError(envelope.payload)) {
+          this.parkForCapacity();
+        } else if (this.anonymous && this.refuseScope(envelope.payload, 'subscription_limit_reached')) {
+          // That room alone polls; the socket and its other rooms stay up.
         } else if (isRateLimited(envelope.payload)) {
+          // Signed out, geo-chat closes the socket after any limited command, so reconnecting is the
+          // only recovery either way; READY on the new socket resends every room.
           const retryDelayMs = rateLimitRetryDelayMs(envelope.payload);
           // Loud on purpose, and distinct from every other pause. This one is *our* fault: we sent
           // more gateway commands than `gateway_commands_by_session` allows, so waiting does not fix
@@ -501,9 +592,10 @@ export class DebateGatewayClient {
 
     const firstReadyForSocket = !this.readyForDebates;
     this.readyForDebates = true;
-    this.setSnapshot({ status: 'ready', paused: false, pauseReason: null });
+    if (!this.anonymous) this.setSnapshot({ status: 'ready', paused: false, pauseReason: null });
 
-    if (firstReadyForSocket) {
+    // Signed out, each room refetches once READY confirms it, below.
+    if (firstReadyForSocket && !this.anonymous) {
       this.queueBroadReconcile();
       if (this.hasReachedReady) {
         if (this.lastSequence !== null) this.sendEnvelope('RESUME', {}, this.lastSequence);
@@ -531,6 +623,18 @@ export class DebateGatewayClient {
     }
 
     for (const { scope } of this.scopes.values()) this.sendSubscription(scope, 'SUBSCRIBE');
+    this.scopesChanged();
+  }
+
+  /** A space chat room's message event (GEO-3422): applied to the cached room, never refetched. */
+  private handleRoomEvent(roomId: string, payload: unknown) {
+    const event = parseSpaceChatRoomEvent(payload);
+    const key = this.chatRoomQueryKey(roomId);
+    if (!event || !key) return;
+    const viewerId = this.anonymous ? null : getCurrentGeoChatUserId();
+    this.queryClient.setQueryData<SpaceChatState>(key, current =>
+      current ? withRoomEvent(current, event, viewerId) : current
+    );
   }
 
   private handleEvent(payload: unknown) {
@@ -816,6 +920,12 @@ export class DebateGatewayClient {
       this.queueQuery(spaceCallKeys.past(scope.space_id));
       return;
     }
+    if (scope.scope === 'chat-room') {
+      // Room events are not replayed across a reconnect.
+      const key = this.chatRoomQueryKey(scope.room_id);
+      if (key) this.queueQuery(key);
+      return;
+    }
     if (scope.scope === 'matchmaking') {
       this.queueMatchmakingSections();
       // `debate.lobbies_changed` rides this scope too.
@@ -830,6 +940,10 @@ export class DebateGatewayClient {
   }
 
   private queueBroadReconcile() {
+    if (this.anonymous) {
+      for (const { scope } of this.scopes.values()) this.queueScopeReconcile(scope);
+      return;
+    }
     this.queueInvalidation(BROAD_INVALIDATION_KEY, {
       predicate: query => {
         const root = query.queryKey[0];
@@ -862,6 +976,7 @@ export class DebateGatewayClient {
       | 'scheduled-debates'
       | 'upcoming-rooms'
       | 'room'
+      | 'space-chat'
       | 'lobbies'
       | 'lobby'
       | 'lobby-claims'
@@ -875,6 +990,11 @@ export class DebateGatewayClient {
     if (!queryKey) return;
     if (kind === 'history' && historyRouteMissing(this.queryClient.getQueryState(queryKey))) return;
     this.queueQuery(queryKey);
+  }
+
+  /** The room's cache: public signed out, under the account signed in. */
+  private chatRoomQueryKey(roomId: string): QueryKey | null {
+    return this.anonymous ? spaceChatQueryKeys.public(roomId) : this.accountQueryKey('space-chat', dashlessId(roomId));
   }
 
   /** This account's key for `kind`, as `debateQueryKeys` spells it; `null` signed out. */
@@ -1087,7 +1207,7 @@ export class DebateGatewayClient {
       // The socket authenticates with the same session the refetch just used, and
       // `getGeoChatSession` hands back the stored session until it is close to expiry. Without an
       // explicit reset the reconnect would re-present the very credentials the server rejected.
-      if (recovery === 'reauthenticate') resetGeoChatSession();
+      if (recovery === 'reauthenticate' && !this.anonymous) resetGeoChatSession();
       this.recentEventIds.clear();
       this.recentEventIdOrder.length = 0;
       if (this.socket) this.forceReconnect(this.socket);
@@ -1129,6 +1249,11 @@ export class DebateGatewayClient {
       if (this.sentScopes.has(key) || this.refusedScopes.has(key) || this.subscriptionRetries.get(key)?.timer) return;
       this.sentScopes.add(key);
     }
+    if (scope.scope === 'chat-room') {
+      const { space_id, room_id, room_kind } = scope;
+      this.sendEnvelope(op, { space_id, room_id, room_kind, resume_after_seq: null });
+      return;
+    }
     this.sendEnvelope(op, scope);
   }
 
@@ -1143,9 +1268,12 @@ export class DebateGatewayClient {
     this.presenceTransitionPending = false;
     this.sendEnvelope(
       'HEARTBEAT',
-      this.tabVisible === null
-        ? { debate_presence: this.debatePresence }
-        : { debate_presence: this.debatePresence, debate_visible: this.tabVisible },
+      // No presence signed out: geo-chat keeps none for an anonymous connection.
+      this.anonymous
+        ? {}
+        : this.tabVisible === null
+          ? { debate_presence: this.debatePresence }
+          : { debate_presence: this.debatePresence, debate_visible: this.tabVisible },
       this.lastSequence
     );
     this.heartbeatTimer = setTimeout(() => this.sendHeartbeat(), this.heartbeatIntervalMs);
@@ -1175,14 +1303,35 @@ export class DebateGatewayClient {
     }, delay);
   }
 
-  private handleClose(socket: WebSocketLike) {
+  private handleClose(socket: WebSocketLike, code?: number) {
     if (socket !== this.socket) return;
     this.socket = null;
     this.readyForDebates = false;
     this.clearConnectionTimers();
     if (!this.enabled) return;
+    if (this.anonymous && code === ANONYMOUS_CAPACITY_CLOSE_CODE) {
+      this.parkForCapacity();
+      return;
+    }
     this.setSnapshot({ status: 'degraded', paused: true, pauseReason: 'disconnected' });
     this.scheduleReconnect();
+  }
+
+  /** Turned away for load: no reconnects until `retryAfterFocus`. Readers poll meanwhile. */
+  private parkForCapacity() {
+    this.parked = true;
+    this.clearTimer('reconnect');
+    this.disposeSocket();
+    this.clearConnectionTimers();
+    this.setSnapshot({ status: 'degraded', paused: true, pauseReason: 'capacity' });
+  }
+
+  /** Signed out, on window focus: one more try after a capacity refusal. */
+  retryAfterFocus() {
+    if (!this.anonymous || !this.enabled || !this.parked) return;
+    this.parked = false;
+    this.setSnapshot({ status: 'connecting', paused: false, pauseReason: null });
+    void this.connect();
   }
 
   private forceReconnect(socket: WebSocketLike, minimumDelayMs = 0, reason: DebateGatewayPauseReason = 'disconnected') {
@@ -1199,13 +1348,18 @@ export class DebateGatewayClient {
 
   /** `false` when the ERROR names no scope (older geo-chat, or a room), leaving the generic path. */
   private refuseForbiddenScope(payload: unknown) {
-    const scope = subscriptionErrorScope(payload, 'subscription_forbidden');
+    return this.refuseScope(payload, 'subscription_forbidden');
+  }
+
+  private refuseScope(payload: unknown, code: 'subscription_forbidden' | 'subscription_limit_reached') {
+    const scope = subscriptionErrorScope(payload, code);
     if (!scope) return false;
     const key = scopeKey(scope);
     this.sentScopes.delete(key);
     this.confirmedScopes.delete(key);
     this.clearSubscriptionRetry(key);
     if (this.scopes.has(key)) this.refusedScopes.add(key);
+    this.scopesChanged();
     return true;
   }
 
@@ -1216,6 +1370,7 @@ export class DebateGatewayClient {
     const key = scopeKey(scope);
     this.sentScopes.delete(key);
     this.confirmedScopes.delete(key);
+    this.scopesChanged();
     if (!this.scopes.has(key)) return true;
 
     const retry = this.subscriptionRetries.get(key) ?? { attempt: 0, timer: null };
@@ -1394,6 +1549,14 @@ export const debateGateway = new DebateGatewayClient({
   getApiBaseUrl: getGeoChatApiBaseUrl,
 });
 
+/** Signed-out member-room chat: its own connection, opened while a room is retained. */
+export const publicChatGateway = new DebateGatewayClient({
+  queryClient,
+  getSession: () => Promise.reject(new Error('The public chat gateway has no session')),
+  getApiBaseUrl: getGeoChatApiBaseUrl,
+  anonymous: true,
+});
+
 export function useDebateGateway(
   enabled: boolean,
   getPrivyIdentityToken: GetPrivyIdentityToken,
@@ -1437,6 +1600,39 @@ export function useDebateGatewayScope(scope: DebateGatewayScope, enabled: boolea
       scopeType === 'space' ? { scope: 'space', space_id: scopeId } : { scope: 'debate', debate_id: scopeId }
     );
   }, [enabled, scopeId, scopeType]);
+}
+
+/**
+ * Holds a space chat room's subscription (GEO-3422) while `enabled`: on the account's gateway
+ * signed in, on `publicChatGateway` signed out. Returns whether the room's events are arriving.
+ */
+export function useSpaceChatRoomScope(
+  room: { space_id: string; id: string; kind: 'member' | 'editor' } | null,
+  enabled: boolean,
+  signedIn: boolean
+) {
+  const gateway = signedIn ? debateGateway : publicChatGateway;
+  const spaceId = room?.space_id ?? null;
+  const roomId = room?.id ?? null;
+  const roomKind = room?.kind ?? null;
+  React.useEffect(() => {
+    if (!enabled || !spaceId || !roomId || !roomKind) return;
+    return gateway.retainScope({ scope: 'chat-room', space_id: spaceId, room_id: roomId, room_kind: roomKind });
+  }, [enabled, gateway, roomId, roomKind, spaceId]);
+  React.useEffect(() => {
+    if (signedIn || !enabled) return;
+    const retry = () => publicChatGateway.retryAfterFocus();
+    window.addEventListener('focus', retry);
+    return () => window.removeEventListener('focus', retry);
+  }, [enabled, signedIn]);
+  const live = React.useCallback(
+    () =>
+      enabled && spaceId !== null && roomId !== null && roomKind !== null
+        ? gateway.isScopeLive({ scope: 'chat-room', space_id: spaceId, room_id: roomId, room_kind: roomKind })
+        : false,
+    [enabled, gateway, roomId, roomKind, spaceId]
+  );
+  return React.useSyncExternalStore(gateway.subscribe, live, live);
 }
 
 /**
@@ -1504,12 +1700,12 @@ export function useDebateGatewaySnapshot() {
  * debate-queue behavior until the backend ships GEO-2514.
  */
 
-function gatewayWebSocketUrl(apiBaseUrl: string, accessToken: string) {
+function gatewayWebSocketUrl(apiBaseUrl: string, accessToken: string | null) {
   const url = new URL(apiBaseUrl);
   url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
   url.pathname = `${url.pathname.replace(/\/+$/, '')}/gateway/ws`;
   url.search = '';
-  url.searchParams.set('access_token', accessToken);
+  if (accessToken) url.searchParams.set('access_token', accessToken);
   return url.toString();
 }
 
@@ -1520,6 +1716,7 @@ function gatewayWebSocketUrl(apiBaseUrl: string, accessToken: string) {
 function scopeKey(scope: DebateGatewayScope) {
   if (scope.scope === 'space') return `space:${canonicalSpaceId(scope.space_id)}`;
   if (scope.scope === 'matchmaking') return 'matchmaking';
+  if (scope.scope === 'chat-room') return `chat-room:${dashlessId(scope.room_id.trim().toLowerCase())}`;
   return `debate:${dashlessId(scope.debate_id.trim())}`;
 }
 
@@ -1544,11 +1741,22 @@ function parseScope(value: unknown): DebateGatewayScope | null {
   if (value.scope === 'matchmaking') {
     return { scope: 'matchmaking' };
   }
+  if (
+    value.scope === undefined &&
+    typeof value.room_id === 'string' &&
+    typeof value.space_id === 'string' &&
+    (value.room_kind === 'member' || value.room_kind === 'editor')
+  ) {
+    return { scope: 'chat-room', space_id: value.space_id, room_id: value.room_id, room_kind: value.room_kind };
+  }
   return null;
 }
 
 /** The scope a subscription ERROR names, when geo-chat echoes one this client can send. */
-function subscriptionErrorScope(payload: unknown, code: 'subscription_forbidden' | 'subscription_check_failed') {
+function subscriptionErrorScope(
+  payload: unknown,
+  code: 'subscription_forbidden' | 'subscription_check_failed' | 'subscription_limit_reached'
+) {
   if (!isRecord(payload) || payload.code !== code) return null;
   return parseScope(payload.subscription);
 }
@@ -1561,6 +1769,13 @@ function isEventsLagged(payload: unknown) {
   return isRecord(payload) && payload.code === 'events_lagged';
 }
 
+const ANONYMOUS_CAPACITY_CLOSE_CODE = 4429;
+
+/** geo-chat's per-address and per-replica caps on signed-out sockets. */
+function isAnonymousCapacityError(payload: unknown) {
+  return isRecord(payload) && (payload.code === 'anonymous_connection_limit' || payload.code === 'anonymous_capacity');
+}
+
 function isRateLimited(payload: unknown) {
   return isRecord(payload) && payload.code === 'rate_limited';
 }
@@ -1570,6 +1785,9 @@ function isSubscriptionLimitReached(payload: unknown) {
 }
 
 function rateLimitRetryDelayMs(payload: unknown) {
+  if (isRecord(payload) && typeof payload.retry_after_seconds === 'number' && payload.retry_after_seconds > 0) {
+    return payload.retry_after_seconds * 1_000;
+  }
   if (!isRecord(payload) || typeof payload.message !== 'string') return 1_000;
   const seconds = payload.message.match(/retry after (\d+) seconds/)?.[1];
   return seconds ? Number(seconds) * 1_000 : 1_000;

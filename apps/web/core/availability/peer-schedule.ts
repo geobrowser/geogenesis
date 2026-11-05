@@ -333,7 +333,7 @@ function wallClockInstant(wallAsUtc: number, zone: string | undefined): Date {
   return new Date(real.length > 0 ? Math.min(...real) : Math.max(...candidates));
 }
 
-const DAY_MS = 86_400_000;
+export const DAY_MS = 86_400_000;
 
 function zoneOffsetMinutes(instant: Date, zone: string | undefined): number {
   return wallMinutes(zonedParts(instant, zone)) - wallMinutes(zonedParts(instant, 'UTC'));

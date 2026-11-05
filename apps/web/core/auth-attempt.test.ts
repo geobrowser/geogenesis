@@ -7,11 +7,13 @@ import {
   completeAuthAction,
   currentAuthAttempt,
   finishAuthAttempt,
+  funnelProperties,
   marketingAuthProperties,
   openAuthAttempt,
   readAuthAttempt,
   recoverAuthAttempt,
   resetAuthAttempt,
+  tagAuthAttempt,
   trackAuthOnboarding,
 } from './auth-attempt';
 import { saveVotesSignInProperties } from './save-votes-analytics';
@@ -320,4 +322,62 @@ it.each([
       }),
     ],
   ]);
+});
+
+// GEO-3569: queued events are stamped at flush, so the wait for the dialog travels on the events.
+describe('page-relative timing', () => {
+  it('records when the attempt started and the prompt opened, in ms since navigation start', () => {
+    vi.spyOn(performance, 'now').mockReturnValueOnce(1200.4).mockReturnValueOnce(3400.6);
+    const attempt = beginAuthAttempt(entry);
+    openAuthAttempt();
+    finishAuthAttempt('closed', readAuthAttempt(attempt.id));
+    const props = (name: string) => capture.mock.calls.find(([event]) => event === name)?.[1];
+    expect(props('auth_attempt_started')).toMatchObject({ attempt_started_page_ms: 1200 });
+    expect(props('auth_prompt_viewed')).toMatchObject({ prompt_opened_page_ms: 3401 });
+    expect(props('auth_attempt_completed')).toMatchObject({ prompt_opened_page_ms: 3401 });
+    vi.restoreAllMocks();
+  });
+});
+
+// GEO-3550: kept on the attempt so they survive a redirect, sent with `auth_step` only.
+describe('funnel tags', () => {
+  it('records the surface, method and last error, and whether this browser signed in before', () => {
+    localStorage.setItem('geo:signed-in-before:v1', '1');
+    const attempt = beginAuthAttempt({ component: 'navbar' });
+    tagAuthAttempt(attempt.id, { signInSurface: 'box', signInMethod: 'google' });
+    tagAuthAttempt(attempt.id, { lastAuthError: 'invalid_credentials' });
+    const saved = readAuthAttempt(attempt.id)!;
+    expect(saved).toMatchObject({ likelyReturning: true, signInSurface: 'box', lastAuthError: 'invalid_credentials' });
+    expect(currentAuthAttempt()?.id).toBe(attempt.id);
+    expect(funnelProperties(saved)).toEqual({
+      likely_returning: true,
+      sign_in_surface: 'box',
+      sign_in_method: 'google',
+    });
+  });
+
+  it('counts a browser that never signed in as new', () => {
+    expect(beginAuthAttempt({ component: 'navbar' }).likelyReturning).toBe(false);
+  });
+
+  it('leaves an ended attempt as it was', () => {
+    const attempt = beginAuthAttempt({ component: 'navbar' });
+    finishAuthAttempt('closed', attempt);
+    tagAuthAttempt(attempt.id, { signInSurface: 'box' });
+    expect(readAuthAttempt(attempt.id)?.signInSurface).toBeUndefined();
+  });
+
+  it('carries them on the attempt events, with the error code on a close', () => {
+    const attempt = beginAuthAttempt({ component: 'navbar' });
+    tagAuthAttempt(attempt.id, { signInSurface: 'box', lastAuthError: 'invalid_credentials' });
+    openAuthAttempt();
+    finishAuthAttempt('closed');
+    const completed = capture.mock.calls.find(([event]) => event === 'auth_attempt_completed')?.[1];
+    expect(completed).toMatchObject({
+      sign_in_surface: 'box',
+      likely_returning: expect.any(Boolean),
+      last_auth_error: 'invalid_credentials',
+    });
+    expect(JSON.stringify(capture.mock.calls)).not.toContain('@');
+  });
 });
