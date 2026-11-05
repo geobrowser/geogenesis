@@ -26,7 +26,7 @@ const mocks = vi.hoisted(() => ({
   push: vi.fn(),
   /** The room view the page at `/debate/{id}` loaded, read by the coordinator from the cache. */
   roomAtPath: null as { kind: 'debate' | 'lobby' } | null,
-  myLobby: { current_lobby_id: null, stepped_out: false } as DebateMyLobby,
+  myLobby: { current_lobby_id: null, stepped_out: false } as DebateMyLobby | undefined,
   activity: null as DebateActivity | null,
   requests: { outbound: null, incoming: [] } as DebateRequestsResponse,
   acceptRequestMutate: vi.fn(),
@@ -114,7 +114,7 @@ vi.mock('./rooms/hooks', () => ({
 }));
 
 vi.mock('./lobbies/hooks', () => ({
-  useMyDebateLobby: () => ({ data: mocks.myLobby }),
+  useMyDebateLobby: () => ({ data: mocks.myLobby, isLoading: mocks.myLobby === undefined }),
 }));
 
 // The banner names the opponent from the request that booked the room; that read is its own concern.
@@ -1536,6 +1536,21 @@ describe('DebateCoordinator', () => {
       expect(await screen.findByRole('dialog', { name: 'Your debate is ready to share!' })).toBeInTheDocument();
     }
   );
+
+  it('waits for lobby membership to load before showing a cached share prompt', async () => {
+    showSharePrompt();
+    mocks.myLobby = undefined;
+    const view = render(<DebateCoordinator />);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    mocks.myLobby = { current_lobby_id: 'lobby-1', stepped_out: false };
+    view.rerender(<DebateCoordinator />);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    mocks.myLobby = { current_lobby_id: null, stepped_out: false };
+    view.rerender(<DebateCoordinator />);
+    expect(await screen.findByRole('dialog', { name: 'Your debate is ready to share!' })).toBeInTheDocument();
+  });
 
   it.each([false, true])('waits for lobby membership to end across tabs (stepped out: %s)', async steppedOut => {
     showSharePrompt();

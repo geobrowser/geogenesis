@@ -214,7 +214,7 @@ export function DebateCoordinator() {
   const myLobby = useMyDebateLobby();
   // A step-out to debate is still part of the lobby session, including in other tabs. Wait until
   // the viewer leaves its roster. The path also covers arrival before the room/lobby reads land.
-  const deferSharePrompts = roomIdAtPath !== null || Boolean(myLobby.data?.current_lobby_id);
+  const deferSharePrompts = roomIdAtPath !== null || myLobby.isLoading || Boolean(myLobby.data?.current_lobby_id);
   const sharePromptsQuery = useDebateSharePrompts(Boolean(activity) && !activeFlow && !deferSharePrompts);
   const queriedSharePrompt =
     activeFlow || deferSharePrompts || sharePromptsQuery.isFetching
