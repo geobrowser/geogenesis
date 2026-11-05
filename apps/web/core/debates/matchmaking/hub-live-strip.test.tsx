@@ -250,6 +250,50 @@ describe('HubLiveStrip', () => {
       }
     });
 
+    // GEO-3586 Copilot: the stack's order coming back must not bring back a card brought forward
+    // before it changed.
+    it('forgets a card brought forward once the stack changes, even if it changes back', async () => {
+      mocks.week = [upcoming({ lobby_id: 'tonight', name: 'AI policy night' })];
+      const { rerender } = render(<HubLiveStrip lineup={EMPTY} todaysCallout={callout} />);
+      fireEvent.click(screen.getByRole('button', { name: 'Show Today’s claims' }));
+      await waitFor(() => expect(screen.getByRole('region', { name: 'Today’s claims' })).toBeInTheDocument());
+
+      rerender(<HubLiveStrip lineup={{ ...EMPTY, live: [lobby()] }} todaysCallout={callout} />);
+      await waitFor(() => expect(screen.getByTestId('lobby-spotlight')).toBeInTheDocument());
+      rerender(<HubLiveStrip lineup={EMPTY} todaysCallout={callout} />);
+      await waitFor(() => expect(screen.getByRole('region', { name: 'Upcoming lobby' })).toBeInTheDocument());
+      expect(edgeNames()).toEqual(['Show Today’s claims']);
+    });
+
+    // GEO-3586 Copilot: a press that changed nothing left the stack ready to take focus, so a card
+    // leaving long after (a lobby going live) pulled focus back from wherever the viewer was.
+    it('takes no focus for a card that leaves long after a press in the stack', async () => {
+      const now = vi.spyOn(Date, 'now');
+      try {
+        now.mockReturnValue(1_000_000);
+        mocks.week = [upcoming({ lobby_id: 'tonight', name: 'AI policy night' })];
+        const { rerender } = render(<HubLiveStrip lineup={EMPTY} todaysCallout={callout} />);
+        fireEvent.click(screen.getByRole('region', { name: 'Upcoming lobby' }));
+
+        now.mockReturnValue(1_000_000 + 60_000);
+        rerender(<HubLiveStrip lineup={{ ...EMPTY, live: [lobby()] }} todaysCallout={callout} />);
+        await waitFor(() => expect(screen.getByTestId('lobby-spotlight')).toBeInTheDocument());
+        expect(document.activeElement).toBe(document.body);
+      } finally {
+        now.mockRestore();
+      }
+    });
+
+    // GEO-3586 Copilot: the last card was dropped at once, with no exit, the tabs jumping up under it.
+    it('lets the last card play its exit before the stack draws nothing', async () => {
+      mocks.week = [upcoming({ lobby_id: 'tonight', name: 'AI policy night' })];
+      const { container } = render(<HubLiveStrip lineup={EMPTY} />);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Dismiss upcoming lobby' }));
+      expect(screen.getByRole('region', { name: 'Upcoming lobby' })).toBeInTheDocument();
+      await waitFor(() => expect(container).toBeEmptyDOMElement());
+    });
+
     it('puts later lobbies after Today’s claims', () => {
       mocks.week = [
         upcoming({ lobby_id: 'fri', name: 'Friday hot takes', starts_at: inDays(3) }),

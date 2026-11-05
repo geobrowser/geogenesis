@@ -37,6 +37,12 @@ const EDGE_INSET_PX = 10;
 const EDGE_TAP_PX = 8;
 
 /**
+ * How long after a press in the stack a card leaving still counts as that press's doing: the RSVP
+ * pause and an exit, with room to spare.
+ */
+const PRESS_FOCUS_WINDOW_MS = 2_000;
+
+/**
  * Each edge on its card's own surface (`HUB_CALLOUT_SURFACE_CLASS_NAME`), a shade off so two of the
  * same kind still part. Behind a dark card, a lighter dark: the live card's own black would read as
  * the card running on.
@@ -63,7 +69,10 @@ export function HubCalloutStack({ cards }: { cards: HubStackCard[] }) {
   // The card brought forward from its edge, and the stack's own order when it was. Any change to that
   // order — a lobby going live, a card dismissed or added — puts the stack's own first card back on
   // top, so a card brought forward can't hold a live lobby under it.
+  // Cleared, not just ignored, so the order coming back (a card added, then gone again) can't put the
+  // card brought forward back on top long after it was.
   const [front, setFront] = React.useState<{ id: string; order: string } | null>(null);
+  if (front !== null && front.order !== order) setFront(null);
   const frontId = front?.order === order ? front.id : null;
   const ordered = React.useMemo(() => {
     const index = frontId === null ? -1 : cards.findIndex(card => card.id === frontId);
@@ -71,30 +80,39 @@ export function HubCalloutStack({ cards }: { cards: HubStackCard[] }) {
     return [cards[index], ...cards.slice(0, index), ...cards.slice(index + 1)];
   }, [cards, frontId]);
 
-  // A press in the stack (an edge, or a card's own X) takes the focused control away with the card:
-  // focus then goes to the card that comes up, once the leaving one has gone (`mode="wait"`), rather
-  // than to the page.
-  const pressed = React.useRef(false);
+  // A press in the stack (an edge, a card's own X, an RSVP that sends the card on) takes the focused
+  // control away with the card: focus then goes to the card that comes up, once the leaving one has
+  // gone (`mode="wait"`), rather than to the page. Only for a card leaving soon after the press, so a
+  // press that changed nothing can't pull focus back here when something else moves the stack later.
+  const pressedAt = React.useRef<number | null>(null);
   const claimFocus = React.useRef(false);
-  const focusArrivingCard = () => {
+
+  const [top, ...rest] = ordered;
+  const edges = rest.slice(0, HUB_STACK_MAX_EDGES);
+
+  // The last card plays its exit too, before the stack draws nothing at all.
+  const [drained, setDrained] = React.useState(!top);
+  if (top && drained) setDrained(false);
+
+  const onExitComplete = () => {
     // Lost, or still on the leaving card's control: it is inert, and on its way out of the page.
     const active = document.activeElement;
     const lost =
       active === null || active === document.body || !active.isConnected || active.closest('[inert]') !== null;
-    claimFocus.current = pressed.current && lost;
-    pressed.current = false;
+    const recent = pressedAt.current !== null && Date.now() - pressedAt.current < PRESS_FOCUS_WINDOW_MS;
+    claimFocus.current = recent && lost;
+    pressedAt.current = null;
+    if (!top) setDrained(true);
   };
 
-  const [top, ...rest] = ordered;
-  const edges = rest.slice(0, HUB_STACK_MAX_EDGES);
-  if (!top) return null;
+  if (!top && drained) return null;
 
   return (
     <div
-      className={cx('mx-4 shrink-0', edges.length > 0 ? 'mb-1' : 'mb-3')}
+      className={cx('mx-4 shrink-0', !top ? 'mb-0' : edges.length > 0 ? 'mb-1' : 'mb-3')}
       data-testid="hub-callout-stack"
       onClickCapture={() => {
-        pressed.current = true;
+        pressedAt.current = Date.now();
       }}
     >
       <ResizableContainer transition={HUB_STEP_TRANSITION} growOnMount={false}>
@@ -104,10 +122,12 @@ export function HubCalloutStack({ cards }: { cards: HubStackCard[] }) {
         >
           {/* `custom` reaches a leaving card: one still in the stack was sent back under, rather than
               dismissed, and sinks rather than sliding away. */}
-          <AnimatePresence mode="wait" initial={false} custom={ids} onExitComplete={focusArrivingCard}>
-            <StackTop key={top.id} id={top.id} claimFocus={claimFocus}>
-              {top.content}
-            </StackTop>
+          <AnimatePresence mode="wait" initial={false} custom={ids} onExitComplete={onExitComplete}>
+            {top ? (
+              <StackTop key={top.id} id={top.id} claimFocus={claimFocus}>
+                {top.content}
+              </StackTop>
+            ) : null}
           </AnimatePresence>
           {/* After the top card, so it is read and tabbed to first; stacked under it by z-index. */}
           {edges.map((card, index) => {
