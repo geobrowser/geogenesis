@@ -179,8 +179,7 @@ const NO_CLAIMS: DebateRematchClaim[] = [];
  *
  * `debate` is GEO-2870 phase 2, "From this debate": the claims extracted from the debate that just
  * finished, read from geo-chat's fast path (GEO-2868 option C) rather than waiting ~27 minutes for
- * the graph. Offered whenever the session came out of a debate, including while extraction is still
- * running, because the list filling in is the point.
+ * the graph. Hidden from the picker for now (GEO-3585).
  *
  * `matches` is GEO-3148: the claims the two of you hold opposite sides on and have not debated, so
  * every one of them can be requested from its card. It replaced the "Matches only" switch that used
@@ -206,8 +205,8 @@ function listLandingState(pending: boolean, rows: number): LandingState {
  * always has something — when none does.
  *
  * Matches first, because a claim the two of you can debate right now is what the page is for. Then
- * the debate that just finished, then its neighbours, then everything the opponent has taken a side
- * on, where a match is one press away.
+ * the related claims, then everything the opponent has taken a side on, where a match is one press
+ * away.
  *
  * `null` while an earlier tab has not answered. Landing on a later one in that window would be
  * landing on a guess, and the landing is taken once: a tab whose answer arrives afterwards must not
@@ -215,6 +214,9 @@ function listLandingState(pending: boolean, rows: number): LandingState {
  */
 /** How many topics a search may match claims through on Explore. See `searchTopicIds`. */
 const SEARCH_TOPIC_LIMIT = 20;
+
+// GEO-3585: keep the previous-debate claims tab hidden, including its landing and data requests.
+const PREVIOUS_DEBATE_CLAIMS_ENABLED = false;
 
 const NO_IDS: string[] = [];
 
@@ -569,12 +571,14 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    * the reader a minute later.
    * ---------------------------------------------------------------------------------------------*/
   const sourceDebateId = session?.source_debate_id ?? null;
-  const extractedClaimsQuery = useDebateExtractedClaims(sourceDebateId ?? '', sourceDebateId !== null);
-  const notInterested = useNotInterestedClaimIds(sourceDebateId !== null);
+  const debateOffered = PREVIOUS_DEBATE_CLAIMS_ENABLED && sourceDebateId !== null;
+  const extractedClaimsQuery = useDebateExtractedClaims(sourceDebateId ?? '', debateOffered);
+  const notInterested = useNotInterestedClaimIds(debateOffered);
   const notInterestedIds = React.useMemo(() => new Set(notInterested.ids.map(normId)), [notInterested.ids]);
   const debateCandidates = React.useMemo(
-    () => (extractedClaimsQuery.data ? fromThisDebateCandidates(extractedClaimsQuery.data.payload) : null),
-    [extractedClaimsQuery.data]
+    () =>
+      debateOffered && extractedClaimsQuery.data ? fromThisDebateCandidates(extractedClaimsQuery.data.payload) : null,
+    [debateOffered, extractedClaimsQuery.data]
   );
   // A claim somebody has a request open on stays listed even if the final pass drops it (D4).
   const openRequestClaimId =
@@ -600,7 +604,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   );
   const debateRowsQuery = useDebateRematchClaimsForIds(sessionId, publishedDebateClaimIds);
   /** Extraction can still add claims: the media job has not reached its last write. */
-  const debateExtractionRunning = sourceDebateId !== null && extractedClaimsQuery.data?.final !== true;
+  const debateExtractionRunning = debateOffered && extractedClaimsQuery.data?.final !== true;
 
   // The whole chain, enumerated once, so the gates below cannot each wait on a different subset of
   // it — the mistake that let one gate pass while another was still waiting. The source debate is
@@ -1674,8 +1678,6 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       null,
     [participants]
   );
-  /** Offered whenever there is a debate behind the session — empty while extraction runs is the point. */
-  const debateOffered = sourceDebateId !== null;
 
   /**
    * Whether the tab is offered — and so, below, whether it is where the pair land.
