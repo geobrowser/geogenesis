@@ -397,6 +397,21 @@ describe('DebateLobbyPage for a visitor without an account', () => {
     expect(mocks.guestEndsAs?.()).toBe('handover_failed');
   });
 
+  // Copilot on #3065: the signed-in path can fail before any member room renders, which also drops
+  // the guest room. That is a failed handover too.
+  it('ends the guest room as a failed handover when the signed-in path fails first', async () => {
+    const { rerender } = render(<DebateLobbyPage lobbyId="lobby1" />);
+    await screen.findByTestId('guest-room');
+    const endsAs = mocks.guestEndsAs;
+
+    mocks.authenticated = true;
+    mocks.memberLobby = memberView;
+    mocks.presenceStatus = 'failed';
+    rerender(<DebateLobbyPage lobbyId="lobby1" />);
+    await waitFor(() => expect(screen.queryByTestId('guest-room')).not.toBeInTheDocument());
+    expect(endsAs?.()).toBe('handover_failed');
+  });
+
   // geo-chat's upgrade order: join (ends the guest), member token, member room up, then guest room down.
   it('keeps the guest room playing through sign-in until the member room is audible', async () => {
     const { rerender } = render(<DebateLobbyPage lobbyId="lobby1" />);

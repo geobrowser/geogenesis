@@ -121,17 +121,23 @@ export function useVoiceCallTelemetry(
       stop = startVoiceCallTelemetry(room, surface, callId, role ? { call_role: role } : undefined);
     } catch (error) {
       // Setup leaves nothing registered when it throws (see its catch), so only the report remains.
-      reportError(error, { tags: { voice_call_telemetry: 'setup_failed', call_surface: surface } });
+      reportTelemetryFailure(error, 'setup_failed', surface);
       return;
     }
     return () => {
       try {
         stop?.(endsAsRef.current?.() ?? 'left');
-      } catch {
-        // The call's own teardown carries on.
+      } catch (error) {
+        // The summary has gone out and every other step ran; the call's own teardown carries on.
+        reportTelemetryFailure(error, 'cleanup_failed', surface);
       }
     };
   }, [callId, role, room, surface]);
+}
+
+/** Diagnostics failing is worth knowing about, never worth failing a call over. */
+function reportTelemetryFailure(error: unknown, stage: 'setup_failed' | 'cleanup_failed', surface: VoiceCallSurface) {
+  reportError(error, { tags: { voice_call_telemetry: stage, call_surface: surface } });
 }
 
 /** Imperative entry for the debate room, whose Room is owned by its connection lifecycle. */
@@ -296,12 +302,13 @@ export function startVoiceCallTelemetry(
     }
   };
 
-  const finish = (endReason: CallEnd | 'disconnected' | 'page_closed') => {
-    if (ended) return;
+  /** Ends the call once. Returns a cleanup failure, which never stops the summary going out. */
+  const finish = (endReason: CallEnd | 'disconnected' | 'page_closed'): unknown => {
+    if (ended) return undefined;
     ended = true;
-    cleanup();
+    const failure = cleanup();
     // A call that never came up has nothing to summarise; its failure is the disconnect event.
-    if (connectedAt === null) return;
+    if (connectedAt === null) return failure;
     settleQuality();
     captureSafely('debate_voice_ended', {
       ...base,
@@ -317,6 +324,7 @@ export function startVoiceCallTelemetry(
       send_transport: sendTransport.current(),
       recv_transport: recvTransport.current(),
     });
+    return failure;
   };
 
   // Timed from the connection, not from mount: a slow join would otherwise miss the early sample,
@@ -426,27 +434,47 @@ export function startVoiceCallTelemetry(
     }
   } catch (error) {
     // Setup can fail after registering only some listeners. Leave none behind when the
-    // optional debate integration falls back to a no-op (or a hook reports the error).
+    // optional debate integration falls back to a no-op (or a hook reports the error). A failure
+    // tidying up is dropped: the setup's own error is the one worth reporting.
     ended = true;
     cleanup();
     throw error;
   }
 
-  function cleanup() {
-    clearTimeout(first);
-    clearInterval(every);
-    room.off(RoomEvent.ConnectionStateChanged, onConnectionState);
-    room.off(RoomEvent.Disconnected, onDisconnected);
-    room.off(RoomEvent.ActiveDeviceChanged, onActiveDevice);
-    room.off(RoomEvent.LocalTrackPublished, onLocalTrackPublished);
-    room.off(RoomEvent.AudioPlaybackStatusChanged, onAudioPlayback);
-    local.off(ParticipantEvent.ConnectionQualityChanged, onQuality);
-    local.off(ParticipantEvent.TrackMuted, onMuteChange);
-    local.off(ParticipantEvent.TrackUnmuted, onMuteChange);
-    window.removeEventListener('pagehide', onPageHide);
-    probe?.stop();
+  /**
+   * Every step runs even when one throws, so one stuck listener cannot leave the rest behind or cost
+   * the call its summary. The first failure comes back for the caller to report.
+   */
+  function cleanup(): unknown {
+    let failure: unknown;
+    for (const step of [
+      () => clearTimeout(first),
+      () => clearInterval(every),
+      () => room.off(RoomEvent.ConnectionStateChanged, onConnectionState),
+      () => room.off(RoomEvent.Disconnected, onDisconnected),
+      () => room.off(RoomEvent.ActiveDeviceChanged, onActiveDevice),
+      () => room.off(RoomEvent.LocalTrackPublished, onLocalTrackPublished),
+      () => room.off(RoomEvent.AudioPlaybackStatusChanged, onAudioPlayback),
+      () => local.off(ParticipantEvent.ConnectionQualityChanged, onQuality),
+      () => local.off(ParticipantEvent.TrackMuted, onMuteChange),
+      () => local.off(ParticipantEvent.TrackUnmuted, onMuteChange),
+      () => window.removeEventListener('pagehide', onPageHide),
+      () => probe?.stop(),
+    ]) {
+      try {
+        step();
+      } catch (error) {
+        failure ??= error;
+      }
+    }
+    return failure;
   }
-  return (endReason: CallEnd = 'left') => finish(endReason);
+  // Only this caller hears about a failed cleanup: `finish` also runs inside LiveKit's own event
+  // handlers, where a throw would land in its emitter.
+  return (endReason: CallEnd = 'left') => {
+    const failure = finish(endReason);
+    if (failure !== undefined) throw failure;
+  };
 }
 
 /**

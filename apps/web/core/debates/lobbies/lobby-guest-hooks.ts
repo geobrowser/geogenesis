@@ -14,6 +14,7 @@ import {
   startDebateLobbyGuest,
 } from '../api';
 import { debateQueryNetworkOptions } from '../hooks';
+import type { CallEnd } from '../use-voice-call-telemetry';
 import { HELD_CALL_REFETCH_MS, rateLimitDelayMs } from './hooks';
 import { isGuestListeningOff, lobbyErrorMessage } from './lobby-format';
 import { clearGuestSecret, readGuestSecret, storeGuestSecret } from './lobby-guest-secret';
@@ -148,6 +149,25 @@ export function useLobbyGuestSession(
     [runCommand]
   );
 
+  // GEO-3340: why the guest room went, for its call quality. Every way it goes passes through here,
+  // and the room asks at unmount: it goes in the same render that learns why. A leave unless an
+  // event below dropped it.
+  const guestEndRef = React.useRef<CallEnd>('left');
+  const guestToken = state.status === 'listening' || state.status === 'handingOver' ? state.session.voice?.token : null;
+  React.useEffect(() => {
+    if (guestToken) guestEndRef.current = 'left';
+  }, [guestToken]);
+  /** Sends an event that may drop the guest room, and records why only if it did. */
+  const dropGuestRoom = React.useCallback(
+    (event: GuestSessionEvent, reason: CallEnd) => {
+      const before = stateRef.current.status;
+      send(event);
+      const playing = before === 'listening' || before === 'handingOver';
+      if (playing && stateRef.current.status === 'released') guestEndRef.current = reason;
+    },
+    [send]
+  );
+
   // Starts only with this browser's listening lock; without it, waits on a press (`retry`). A hidden
   // tab, such as a link opened in the background, waits until it is shown.
   const status = state.status;
@@ -208,8 +228,9 @@ export function useLobbyGuestSession(
 
   React.useEffect(() => {
     if (member === 'joined') send({ type: 'memberJoined' });
-    else if (member === 'failed' && signedIn) send({ type: 'abandon' });
-  }, [member, send, signedIn, status]);
+    // Signed in, but the member side failed before any member room: the person's audio stops.
+    else if (member === 'failed' && signedIn) dropGuestRoom({ type: 'abandon' }, 'handover_failed');
+  }, [dropGuestRoom, member, send, signedIn, status]);
 
   // One request per `starting` attempt.
   const startingAttempt = state.status === 'starting' ? state.attempt : null;
@@ -336,8 +357,12 @@ export function useLobbyGuestSession(
     otherTabListening,
     /** A fresh token for a full reconnect, on the same guest. */
     reconnect: React.useCallback(() => send({ type: 'restart' }), [send]),
-    /** The member room is up, or will not come up: drop the guest room. */
-    roomDone: React.useCallback(() => send({ type: 'roomDone' }), [send]),
+    /** The member room is up: drop the guest room, which handed over. */
+    handedOver: React.useCallback(() => dropGuestRoom({ type: 'roomDone' }, 'handed_over'), [dropGuestRoom]),
+    /** The member room will not come up: drop the guest room, whose handover failed. */
+    handoverFailed: React.useCallback(() => dropGuestRoom({ type: 'roomDone' }, 'handover_failed'), [dropGuestRoom]),
+    /** Why the guest room went, asked by its call quality when it unmounts. */
+    guestEndsAs: React.useCallback(() => guestEndRef.current, []),
     /** The server removed this tab's room: ask the session why (superseded, removed, ended). */
     checkNow: React.useCallback(() => beatNowRef.current?.(), []),
   };

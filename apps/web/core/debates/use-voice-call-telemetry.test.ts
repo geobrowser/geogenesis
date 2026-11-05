@@ -180,6 +180,55 @@ describe('useVoiceCallTelemetry (GEO-3340)', () => {
     stop();
   });
 
+  // Copilot on #3065: one cleanup step that threw cut cleanup short and lost the summary with it.
+  it('still summarises the call and removes every other listener when one cleanup step throws', () => {
+    const call = fakeRoom();
+    const stop = startVoiceCallTelemetry(call.room, 'lobby', 'lobby-1');
+    const off = call.raw.off;
+    const failure = new Error('listener already gone');
+    call.raw.off = (event: string, listener: Listener) => {
+      if (event === RoomEvent.ConnectionStateChanged) throw failure;
+      off(event, listener);
+    };
+
+    // The failure still comes back, so the caller can report it.
+    expect(() => stop()).toThrow(failure);
+    expect(events('debate_voice_ended')).toEqual([expect.objectContaining({ end_reason: 'left' })]);
+    expect(call.roomListeners.get(RoomEvent.Disconnected)?.size ?? 0).toBe(0);
+    expect(call.roomListeners.get(RoomEvent.ActiveDeviceChanged)?.size ?? 0).toBe(0);
+  });
+
+  // The error worth reporting is the setup's, not one from tidying up after it.
+  it('keeps the setup error when tidying up after a failed setup throws too', () => {
+    const call = fakeRoom();
+    const setupFailure = new Error('listener table full');
+    let registered = 0;
+    const on = call.raw.on;
+    call.raw.on = (event: string, listener: Listener) => {
+      registered += 1;
+      if (registered === 3) throw setupFailure;
+      on(event, listener);
+    };
+    call.raw.off = () => {
+      throw new Error('already torn down');
+    };
+    expect(() => startVoiceCallTelemetry(call.room, 'lobby', 'lobby-1')).toThrow(setupFailure);
+  });
+
+  it('reports a failed teardown instead of dropping it', () => {
+    const call = fakeRoom();
+    const { unmount } = renderHook(() => useVoiceCallTelemetry(call.room, 'lobby', 'lobby-1'));
+    const failure = new Error('already torn down');
+    call.raw.off = () => {
+      throw failure;
+    };
+    reportError.mockClear();
+    unmount();
+    expect(reportError).toHaveBeenCalledWith(failure, {
+      tags: { voice_call_telemetry: 'cleanup_failed', call_surface: 'lobby' },
+    });
+  });
+
   it('never fails the call it measures when cleaning up throws', () => {
     const call = fakeRoom();
     const { unmount } = renderHook(() => useVoiceCallTelemetry(call.room, 'lobby', 'lobby-1'));
