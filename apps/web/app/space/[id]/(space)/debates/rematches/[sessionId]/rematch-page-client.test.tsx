@@ -337,10 +337,10 @@ vi.mock('~/core/debates/hooks', () => ({
   useDebateExtractedClaims: (debateId: string, enabled: boolean) => {
     mocks.extractedClaimsAskedFor.push({ debateId, enabled });
     return {
-      data:
-        enabled && !mocks.extractedClaimsLoading
-          ? { payload: mocks.extractedClaims, final: mocks.extractedClaimsFinal }
-          : undefined,
+      // Disabled TanStack queries can still return a cached payload.
+      data: !mocks.extractedClaimsLoading
+        ? { payload: mocks.extractedClaims, final: mocks.extractedClaimsFinal }
+        : undefined,
       isLoading: enabled && mocks.extractedClaimsLoading,
       error: null,
     };
@@ -5828,6 +5828,7 @@ describe('where the pair land', () => {
     expect(screen.getByRole('button', { name: /^Their positions/ })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.queryByRole('button', { name: /^From this debate/ })).toBeNull();
     expect(screen.queryByText('Coffee dates save everyone’s time')).toBeNull();
+    expect(mocks.entityIdLookups.flat()).not.toContain('d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4');
   });
 
   /**
