@@ -26,6 +26,7 @@ describe('feature flags', () => {
     // GEO-2914 hid the Explore side panel behind this rather than deleting it, so off is the
     // shipped state rather than a developer convenience — see the explore-page test.
     expect(defaultFeatureFlags.exploreSidePanel).toBe(false);
+    expect(defaultFeatureFlags.previousDebateClaims).toBe(false);
     expect(defaultFeatureFlags.lobbyHosting).toBe(false);
     expect(defaultFeatureFlags.spaceCalls).toBe(false);
     expect(defaultFeatureFlags.spaceChat).toBe(false);
@@ -42,6 +43,7 @@ describe('feature flags', () => {
       debateDebugging: false,
       debateFormatSelector: false,
       exploreSidePanel: false,
+      previousDebateClaims: false,
       forYouFeed: false,
       lobbyHosting: false,
       spaceCalls: false,
@@ -76,6 +78,7 @@ describe('feature flags', () => {
       debateDebugging: true,
       debateFormatSelector: false,
       exploreSidePanel: false,
+      previousDebateClaims: false,
       forYouFeed: false,
       lobbyHosting: false,
       spaceCalls: false,
