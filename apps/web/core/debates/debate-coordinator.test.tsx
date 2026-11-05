@@ -3,7 +3,13 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { DebateActivity, DebateRequestsResponse, DebateSharePrompt, UpcomingDebateRoom } from './api';
+import type {
+  DebateActivity,
+  DebateMyLobby,
+  DebateRequestsResponse,
+  DebateSharePrompt,
+  UpcomingDebateRoom,
+} from './api';
 import { DebateCoordinator } from './debate-coordinator';
 import { clearEnteringDebate, markEnteringDebate, markEnteringPendingDebate } from './debate-entry-intent';
 import { registerLobbyStepOut } from './lobbies/step-out';
@@ -20,6 +26,7 @@ const mocks = vi.hoisted(() => ({
   push: vi.fn(),
   /** The room view the page at `/debate/{id}` loaded, read by the coordinator from the cache. */
   roomAtPath: null as { kind: 'debate' | 'lobby' } | null,
+  myLobby: { current_lobby_id: null, stepped_out: false } as DebateMyLobby,
   activity: null as DebateActivity | null,
   requests: { outbound: null, incoming: [] } as DebateRequestsResponse,
   acceptRequestMutate: vi.fn(),
@@ -104,6 +111,10 @@ vi.mock('./rooms/hooks', () => ({
   }),
   useFinishedRoomIds: () => mocks.finishedRoomIds,
   useDebateRoom: () => ({ data: mocks.roomAtPath ?? undefined }),
+}));
+
+vi.mock('./lobbies/hooks', () => ({
+  useMyDebateLobby: () => ({ data: mocks.myLobby }),
 }));
 
 // The banner names the opponent from the request that booked the room; that read is its own concern.
@@ -216,6 +227,7 @@ vi.mock('~/core/state/feature-flags', async importOriginal => ({
 beforeEach(() => {
   sessionStorage.clear();
   mocks.roomAtPath = null;
+  mocks.myLobby = { current_lobby_id: null, stepped_out: false };
   mocks.media = { artifacts: [{ kind: 'social_video' }] };
   mocks.push.mockReset();
   mocks.mediaMutate.mockReset();
@@ -1503,6 +1515,57 @@ describe('DebateCoordinator', () => {
 
     await waitFor(() => expect(mocks.push).not.toHaveBeenCalled());
     expect(screen.queryByText('Your debate is ready')).not.toBeInTheDocument();
+  });
+
+  it.each([null, { kind: 'lobby' as const }])(
+    'defers cached share prompts until leaving the lobby page (room view: %s)',
+    async room => {
+      showSharePrompt();
+      mocks.pathname = '/debate/lobby-1';
+      mocks.roomAtPath = room;
+      const view = render(<DebateCoordinator />);
+
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(mocks.mediaMutate).not.toHaveBeenCalled();
+      expect(mocks.handleMutate).not.toHaveBeenCalled();
+
+      mocks.pathname = '/explore';
+      mocks.roomAtPath = null;
+      view.rerender(<DebateCoordinator />);
+
+      expect(await screen.findByRole('dialog', { name: 'Your debate is ready to share!' })).toBeInTheDocument();
+    }
+  );
+
+  it.each([false, true])('waits for lobby membership to end across tabs (stepped out: %s)', async steppedOut => {
+    showSharePrompt();
+    mocks.myLobby = { current_lobby_id: 'lobby-1', stepped_out: steppedOut };
+    const view = render(<DebateCoordinator />);
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(mocks.handleMutate).not.toHaveBeenCalled();
+
+    mocks.myLobby = { current_lobby_id: null, stepped_out: false };
+    view.rerender(<DebateCoordinator />);
+
+    expect(await screen.findByRole('dialog', { name: 'Your debate is ready to share!' })).toBeInTheDocument();
+  });
+
+  it('hides a retained share prompt on lobby entry and restores it after exit', async () => {
+    showSharePrompt();
+    const view = render(<DebateCoordinator />);
+    expect(await screen.findByRole('dialog', { name: 'Your debate is ready to share!' })).toBeInTheDocument();
+
+    mocks.pathname = '/debate/lobby-1';
+    mocks.roomAtPath = { kind: 'lobby' };
+    view.rerender(<DebateCoordinator />);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(mocks.handleMutate).not.toHaveBeenCalled();
+
+    mocks.pathname = '/explore';
+    mocks.roomAtPath = null;
+    view.rerender(<DebateCoordinator />);
+    expect(await screen.findByRole('dialog', { name: 'Your debate is ready to share!' })).toBeInTheDocument();
   });
 
   it('requests the exact social preview and starts preparing the MP4 on open', async () => {

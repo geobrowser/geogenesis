@@ -39,6 +39,7 @@ import {
   useLeaveDebateRematch,
   useRejectDebateChallenge,
 } from './hooks';
+import { useMyDebateLobby } from './lobbies/hooks';
 import { useLobbyDebateAnalytics } from './lobbies/lobby-analytics';
 import { routeIntoDebate } from './lobbies/step-out';
 import { useDebateRequests } from './matchmaking/hooks';
@@ -210,9 +211,15 @@ export function DebateCoordinator() {
   const atRoom = roomIdAtPath !== null && !atLobby;
   const atDebateFlowPage = pathname.includes('/debates/rematches/') || atRoom;
   const activeFlow = Boolean(debate || activity?.rematch || challenge);
-  const sharePromptsQuery = useDebateSharePrompts(Boolean(activity) && !activeFlow);
+  const myLobby = useMyDebateLobby();
+  // A step-out to debate is still part of the lobby session, including in other tabs. Wait until
+  // the viewer leaves its roster. The path also covers arrival before the room/lobby reads land.
+  const deferSharePrompts = roomIdAtPath !== null || Boolean(myLobby.data?.current_lobby_id);
+  const sharePromptsQuery = useDebateSharePrompts(Boolean(activity) && !activeFlow && !deferSharePrompts);
   const queriedSharePrompt =
-    activeFlow || sharePromptsQuery.isFetching ? null : (sharePromptsQuery.data?.prompts[0] ?? null);
+    activeFlow || deferSharePrompts || sharePromptsQuery.isFetching
+      ? null
+      : (sharePromptsQuery.data?.prompts[0] ?? null);
   const [retainedSharePrompt, setRetainedSharePrompt] = React.useState<DebateSharePrompt | null>(null);
   const [closedSharePromptId, setClosedSharePromptId] = React.useState<string | null>(null);
 
@@ -509,8 +516,10 @@ export function DebateCoordinator() {
     router,
   ]);
 
-  const visibleSharePrompt =
-    retainedSharePrompt ?? (queriedSharePrompt?.id === closedSharePromptId ? null : queriedSharePrompt);
+  // Hide even a prompt retained before entering the lobby, without dismissing it on the server.
+  const visibleSharePrompt = deferSharePrompts
+    ? null
+    : (retainedSharePrompt ?? (queriedSharePrompt?.id === closedSharePromptId ? null : queriedSharePrompt));
 
   return (
     <>
