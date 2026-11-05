@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   replace: vi.fn(),
   view: undefined as object | undefined,
-  purpose: null as unknown,
+  capabilities: null as unknown,
 }));
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ replace: mocks.replace, push: vi.fn() }) }));
@@ -14,10 +14,10 @@ vi.mock('~/core/debates/hooks', () => ({ useGeoChatAuth: () => ({ ready: true, a
 vi.mock('~/core/debates/lobbies/hooks', () => ({ useDebateLobby: () => ({ data: mocks.view }) }));
 vi.mock('~/core/debates/lobbies/lobby-guest-hooks', () => ({ useDebateLobbyGuestView: () => ({ data: undefined }) }));
 vi.mock('~/core/debates/lobbies/lobby-page', async () => {
-  const { useLobbyRoomPurpose } = await import('~/core/debates/lobbies/lobby-purpose');
+  const { useRoomCapabilities } = await import('~/core/debates/lobbies/room-capabilities');
   return {
     DebateLobbyPage: ({ lobbyId }: { lobbyId: string }) => {
-      mocks.purpose = useLobbyRoomPurpose();
+      mocks.capabilities = useRoomCapabilities();
       return <div>lobby page {lobbyId}</div>;
     },
   };
@@ -29,7 +29,7 @@ afterEach(() => {
   cleanup();
   mocks.replace.mockReset();
   mocks.view = undefined;
-  mocks.purpose = null;
+  mocks.capabilities = null;
 });
 
 describe('SpaceCallPage', () => {
@@ -38,7 +38,7 @@ describe('SpaceCallPage', () => {
     render(<SpaceCallPage spaceId="space1" callId="call1" />);
 
     expect(screen.getByText('lobby page call1')).toBeInTheDocument();
-    expect(mocks.purpose).toEqual({ purpose: 'call', spaceId: 'space1', exitHref: '/space/space1' });
+    expect(mocks.capabilities).toMatchObject({ noun: 'call', space: { id: 'space1', exitHref: '/space/space1' } });
     expect(mocks.replace).not.toHaveBeenCalled();
   });
 

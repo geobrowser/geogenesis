@@ -405,7 +405,7 @@ export function BrowseSidebar(props: BrowseSidebarProps = {}) {
         )}
       >
         <Link
-          href={NavUtils.toRoot()}
+          href={NavUtils.toExplore()}
           aria-label="Geo"
           className={mobile ? cx('-ml-3', mobileHeaderActionClass) : undefined}
         >

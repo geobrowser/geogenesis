@@ -122,7 +122,7 @@ describe('a vote from a signed-out visitor', () => {
       { entityId: 'entity-1', responseKind: 'curation', direction: 'positive' },
     ]);
     expect(queued()).toHaveLength(0);
-    expect(upvote()).toHaveAttribute('title', 'Only on this device. Save it to count.');
+    expect(upvote()).toHaveAttribute('aria-label', 'Only on this device. Save it to count.');
     expect(readSaveVotesPrompt()).toBe('threshold');
     // 2 up, 1 down: still 1, because a vote on this device isn't counted until it is saved.
     expect(screen.getByText('1')).toBeInTheDocument();

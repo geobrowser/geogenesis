@@ -620,8 +620,8 @@ describe('PrivyAuthTracker', () => {
     const first = vi.fn();
     const second = vi.fn();
     const controls = renderHook(() => ({
-      first: useTrackedLogin({ onError: first }),
-      second: useTrackedLogin({ onError: second }),
+      first: useTrackedLogin({ onAbandoned: first }),
+      second: useTrackedLogin({ onAbandoned: second }),
     }));
     act(() => controls.result.current.first.login());
     act(() => controls.result.current.second.login());
@@ -629,7 +629,7 @@ describe('PrivyAuthTracker', () => {
       for (const listener of mocks.listeners) listener.onError?.('exited_auth_flow');
     });
     expect(first).not.toHaveBeenCalled();
-    expect(second).toHaveBeenCalledExactlyOnceWith('exited_auth_flow');
+    expect(second).toHaveBeenCalledOnce();
   });
 
   it('runs only the control belonging to the completing attempt', () => {

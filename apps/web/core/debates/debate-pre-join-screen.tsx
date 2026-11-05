@@ -9,6 +9,7 @@ import type { Room } from 'livekit-client';
 
 import { useIsMobileCallLayout } from '~/core/community-calls/use-is-mobile-call-layout';
 import type { DebateParticipant } from '~/core/debates/api';
+import { speakerLabel } from '~/core/debates/debater-name';
 import type { MediaDeviceOption, PreJoinMediaState } from '~/core/debates/media-session';
 
 import { Avatar } from '~/design-system/avatar';
@@ -168,9 +169,7 @@ export function DebatePreScreen({
     sortedParticipants.find(participant => participant.user_id !== localParticipant?.user_id) ??
     sortedParticipants[1] ??
     null;
-  const remoteName = remoteParticipant
-    ? remoteParticipant.display_name || remoteParticipant.profile_space_id
-    : 'the other speaker';
+  const remoteName = remoteParticipant ? speakerLabel(remoteParticipant) : 'the other speaker';
   const mediaReady = previewState === 'ready';
 
   const controlsAvailable = mediaReady || previewState === 'idle';

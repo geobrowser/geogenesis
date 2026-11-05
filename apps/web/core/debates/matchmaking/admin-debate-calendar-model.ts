@@ -202,11 +202,8 @@ export function adminDebatesByCell(debates: AdminDebate[], days: Date[]): Map<st
   return byCell;
 }
 
-/** `Madrid` from `Europe/Madrid`, `New York` from `America/New_York`: a zone as people say it. */
-export function zoneCity(timezone: string): string {
-  const city = timezone.split('/').at(-1) ?? timezone;
-  return city.replace(/_/g, ' ');
-}
+// Lives with the rest of zone naming; re-exported for the admin views that already import it here.
+export { zoneCity } from '~/core/availability/schedule-zone';
 
 /** `7:00 PM`, in `timezone`. Falls back to the viewer's zone for a zone the browser cannot read. */
 export function timeIn(at: number, timezone: string | undefined): string {

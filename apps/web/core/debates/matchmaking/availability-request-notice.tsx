@@ -2,6 +2,8 @@
 
 import * as React from 'react';
 
+import { accountSetupMessage } from '~/core/debates/account-setup-copy';
+
 import { Text } from '~/design-system/text';
 
 import { AvailabilityModal } from '~/partials/availability/availability-modal';
@@ -39,7 +41,7 @@ function copyFor(request: AvailabilityRequest) {
 /** Opens the person's own week, the same editor the People tab's Set availability opens. */
 export function AvailabilityRequestNotice({ requests }: { requests: AvailabilityRequest[] }) {
   const [open, setOpen] = React.useState(false);
-  const { blocks, isError, refetch } = useDebateSchedule();
+  const { blocks, timezone, isError, error: scheduleError, refetch } = useDebateSchedule();
   const saveSchedule = useSaveDebateSchedule({ surface: 'requests_tab' });
   const openerRef = React.useRef<HTMLElement | null>(null);
 
@@ -69,7 +71,9 @@ export function AvailabilityRequestNotice({ requests }: { requests: Availability
           open={open}
           onOpenChange={setOpen}
           blocks={blocks}
+          savedTimezone={timezone}
           error={isError}
+          errorMessage={accountSetupMessage(scheduleError)}
           onRetry={() => refetch()}
           onSave={nextBlocks => saveSchedule.mutate(nextBlocks)}
           openerRef={openerRef}

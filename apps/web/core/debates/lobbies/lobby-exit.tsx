@@ -11,9 +11,9 @@ import { lastPageOutsideDebates, rememberLastPageOutsideDebates } from '../debat
 import type { LobbyPresenceState } from './hooks';
 import { type LobbyExit, lobbyLeft } from './lobby-analytics';
 import type { GuestSessionState } from './lobby-guest-session';
-import { useLobbyRoomPurpose } from './lobby-purpose';
 import { LOBBY_STATE_COPY } from './lobby-state-cards';
 import type { LobbyPageView } from './lobby-view';
+import { useRoomCapabilities } from './room-capabilities';
 
 /** Mounted once in the app shell: records each page outside the debate surfaces. */
 export function LastPageOutsideDebatesTracker() {
@@ -39,10 +39,10 @@ export function LastPageOutsideDebatesTracker() {
  * mounts, or Explore when the tab came straight to the lobby.
  */
 export function useLobbyExitHref() {
-  const purpose = useLobbyRoomPurpose();
+  const { space } = useRoomCapabilities();
   const [href] = React.useState(() => lastPageOutsideDebates() ?? NavUtils.toExplore());
   // A space call goes back to its space.
-  return purpose.purpose === 'call' ? purpose.exitHref : href;
+  return space?.exitHref ?? href;
 }
 
 type LobbyExitReason = 'left' | 'ended' | 'closed' | 'removed' | 'banned';

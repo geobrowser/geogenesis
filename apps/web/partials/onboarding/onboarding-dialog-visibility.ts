@@ -19,3 +19,8 @@ export function shouldOpenOnboardingDialog(isOnboardingVisible: boolean, step: O
   if (step === 'done') return false;
   return isOnboardingVisible || step === 'completed';
 }
+
+/** Mounted whenever onboarding is needed, even at a persisted `done`: the dialog itself resets `done` to `start`. */
+export function shouldMountOnboardingDialog(isOnboardingVisible: boolean, step: OnboardingStep): boolean {
+  return isOnboardingVisible || shouldOpenOnboardingDialog(isOnboardingVisible, step);
+}
