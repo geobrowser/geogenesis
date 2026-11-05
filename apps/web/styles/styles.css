@@ -889,3 +889,48 @@ body[data-slide-up-open] [data-radix-popper-content-wrapper] {
     scale: 1;
   }
 }
+
+/* GEO-3569: "Opening sign-in…" from first paint; shown by core/auth/sign-in-pending.ts. Taps pass
+   through, so a dialog that never comes cannot lock the page. Below Privy's dialog. */
+#sign-in-pending {
+  display: none;
+}
+html[data-sign-in-pending] #sign-in-pending {
+  position: fixed;
+  inset: 0;
+  z-index: 10010;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgb(0 0 0 / 0.3);
+  pointer-events: none;
+}
+#sign-in-pending > div {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-radius: 12px;
+  background: #fff;
+  padding: 16px 20px;
+  font-size: 16px;
+  color: var(--color-text);
+  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+}
+#sign-in-pending span {
+  width: 16px;
+  height: 16px;
+  border-radius: 9999px;
+  border: 2px solid var(--color-grey-02);
+  border-top-color: var(--color-text);
+  animation: sign-in-pending-spin 1s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  #sign-in-pending span {
+    animation: none;
+  }
+}
+@keyframes sign-in-pending-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

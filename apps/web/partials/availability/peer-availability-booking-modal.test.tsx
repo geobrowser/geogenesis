@@ -24,6 +24,7 @@ const mocks = vi.hoisted(() => ({
     request_id: string;
     status: string;
     scheduled_start_at: string;
+    scheduled_end_at?: string;
     room_id: string | null;
     viewer_must_answer?: boolean;
   }[],
@@ -97,6 +98,7 @@ vi.mock('./peer-availability', async importOriginal => ({
       mode?: string;
       requestId?: string | null;
       moving?: { startsAt: string; agreed: boolean } | null;
+      minutes?: number;
       disabled?: boolean;
       noTimeWorks?: {
         action: 'cancel' | 'decline';
@@ -110,6 +112,7 @@ vi.mock('./peer-availability', async importOriginal => ({
   }) => (
     <>
       <output aria-label="mode">{booking?.mode ?? ''}</output>
+      <output aria-label="minutes">{booking?.minutes ?? ''}</output>
       <output aria-label="moving">{booking?.requestId ?? ''}</output>
       <button
         type="button"
@@ -393,6 +396,34 @@ describe('choosing a different time for an existing request', () => {
     expect(screen.getByLabelText('mode')).toHaveTextContent('reschedule');
     // Named to the week too, so its analytics can say which debate was being moved (GEO-3432).
     expect(screen.getByLabelText('moving')).toHaveTextContent(REQUEST_ID);
+  });
+
+  it('keeps an hour-long debate an hour when it moves (GEO-3544)', async () => {
+    const user = userEvent.setup();
+    mocks.requests = [
+      {
+        request_id: REQUEST_ID,
+        status: 'pending',
+        scheduled_start_at: '2026-09-23T13:00:00Z',
+        scheduled_end_at: '2026-09-23T14:00:00Z',
+        room_id: null,
+      },
+    ];
+    render(
+      <PeerAvailabilityBookingModal
+        open
+        userId="user-them"
+        peerName="Ada"
+        rescheduleRequestId={REQUEST_ID}
+        onClose={vi.fn()}
+      />
+    );
+
+    // The week offers only starts a whole hour fits from, not the half-hours a new request takes.
+    expect(screen.getByLabelText('minutes')).toHaveTextContent('60');
+    await user.click(screen.getByRole('button', { name: 'pick' }));
+
+    expect(mocks.reschedule.mock.calls[0][0].minutes).toBe(60);
   });
 
   it('books a new request when no request is named', async () => {

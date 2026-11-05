@@ -550,6 +550,9 @@ export function useEntityResponse({ entityId, entityName, spaceId, responseKind 
     }
   };
 
+  const isLatestResponseRun = (context: { retryKey: string; runOrder: number }) =>
+    responseIndexingRegistry.latestRunOrders.get(context.retryKey) === context.runOrder;
+
   const responseMutation = useMutation({
     mutationFn: ({ direction, run }: ResponseMutationVariables) => executeResponse(direction, run.runId),
     onMutate: ({ direction, attribution, run: { runId, runOrder } }) => {
@@ -657,8 +660,7 @@ export function useEntityResponse({ entityId, entityName, spaceId, responseKind 
       const failure = classifyOperationFailure(_error);
       context?.operation.failed(failure, queueTimeoutMetrics(_error));
       // Only `unavailable` proves nothing was submitted; retrying `unknown` could double-submit.
-      const isLatestVote =
-        context !== undefined && responseIndexingRegistry.latestRunOrders.get(context.retryKey) === context.runOrder;
+      const isLatestVote = context !== undefined && isLatestResponseRun(context);
       if (failure === 'unavailable' && context?.personalSpaceId && isLatestVote) {
         const { retryKey } = context;
         recordFailedResponse(retryKey, {
@@ -768,11 +770,24 @@ export function useEntityResponse({ entityId, entityName, spaceId, responseKind 
       ? undefined
       : indexingState.pending.expectedResponse;
 
+  type ResponseMutateOptions = Parameters<typeof responseMutation.mutate>[1];
+  const reportingOnlyLatest = (options?: ResponseMutateOptions): ResponseMutateOptions | undefined => {
+    const onError = options?.onError;
+    if (!onError) return options;
+    return {
+      ...options,
+      onError: (error, variables, context, mutationContext) => {
+        if (context && !isLatestResponseRun(context)) return;
+        onError(error, variables, context, mutationContext);
+      },
+    };
+  };
+
   return {
-    submitResponse: (direction: ResponseDirection, options?: Parameters<typeof responseMutation.mutate>[1]) =>
-      responseMutation.mutate(responseMutationVariables(direction, getContext()), options),
-    submitResponseAsync: (direction: ResponseDirection, options?: Parameters<typeof responseMutation.mutateAsync>[1]) =>
-      responseMutation.mutateAsync(responseMutationVariables(direction, getContext()), options),
+    submitResponse: (direction: ResponseDirection, options?: ResponseMutateOptions) =>
+      responseMutation.mutate(responseMutationVariables(direction, getContext()), reportingOnlyLatest(options)),
+    submitResponseAsync: (direction: ResponseDirection, options?: ResponseMutateOptions) =>
+      responseMutation.mutateAsync(responseMutationVariables(direction, getContext()), reportingOnlyLatest(options)),
     optimisticResponse,
     /** Still on its way to the bundler — see `isAwaitingResponseSubmission`. */
     isSubmittingResponse: isAwaitingResponseSubmission(indexingState),

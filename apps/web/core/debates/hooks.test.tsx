@@ -1815,6 +1815,7 @@ describe('useDebateSchedule', () => {
     const { result, rerender } = renderHook(() => useDebateSchedule(), { wrapper });
     await waitFor(() => expect(result.current.blocks).toHaveLength(1));
     const first = result.current.blocks;
+    expect(result.current.timezone).toBe('UTC');
 
     rerender();
     expect(result.current.blocks).toBe(first);

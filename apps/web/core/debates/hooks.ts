@@ -688,6 +688,8 @@ export function useDebateSchedule() {
     blocks,
     /** Whether they have ever saved one, which several surfaces gate on. */
     isSet: query.data?.is_set ?? false,
+    /** The zone `blocks` were saved in, which the editor converts from (GEO-3582). */
+    timezone: query.data?.schedule.timezone,
   };
 }
 

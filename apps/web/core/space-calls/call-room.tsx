@@ -9,12 +9,16 @@ import { type LobbyPhoneTab, LobbyRoomShell } from '~/core/debates/lobbies/lobby
 import { LobbyPeople } from '~/core/debates/lobbies/lobby-roster';
 import { type LobbyPageView, isMemberView } from '~/core/debates/lobbies/lobby-view';
 import type { LobbyVoiceJoinChoice } from '~/core/debates/lobbies/lobby-voice';
+import { useRoomCapabilities } from '~/core/debates/lobbies/room-capabilities';
 import { useCurrentGeoChatUserId } from '~/core/debates/use-current-geo-chat-user-id';
 import { useIsPhoneLayout } from '~/core/hooks/use-is-phone-layout';
+import { useFeatureFlag } from '~/core/state/feature-flags';
 
 import { PreJoinDeviceCheck } from '~/partials/community-calls/pre-join';
+import { SpaceChatAlsoPostsTo, SpaceChatPanel } from '~/partials/space-chat/space-chat-panel';
 
 import { CallScreenStage } from './call-screen-stage';
+import { useChatUnreadMark } from './chat-unread';
 import { callRecordingOf } from './recording/api';
 import { CallRecordingBar, PreJoinRecordingNote, StageRecordingPrompt } from './recording/call-recording-room';
 import { useStageRecordingNotice } from './recording/stage-notice';
@@ -39,8 +43,10 @@ export function CallRoom({
 }) {
   const phone = useIsPhoneLayout();
   const currentUserId = useCurrentGeoChatUserId();
-  // No aside, so no phone tabs; the shell still wants the state.
   const [tab, setTab] = React.useState<LobbyPhoneTab>('people');
+  const capabilities = useRoomCapabilities();
+  const chatEnabled = useFeatureFlag('spaceChat');
+  const chatSpaceId = lobby.call?.space_id ?? capabilities.space?.id ?? null;
   // Everyone is told from the server's state, whatever this browser's flag says.
   const recording = callRecordingOf(lobby)?.status === 'recording';
   const viewer = isMemberView(lobby) ? lobby.viewer : null;
@@ -49,6 +55,8 @@ export function CallRoom({
     viewer !== null &&
     (viewer.hosting || viewer.role === 'host' || viewer.role === 'speaker');
   const stageNotice = useStageRecordingNotice(lobby.lobby_id, recording, onStage);
+  // A phone shows the chat only on its tab; a desktop keeps it beside the people.
+  const chatUnread = useChatUnreadMark(!phone || tab === 'aside');
 
   return (
     <LobbyRoomShell
@@ -68,6 +76,25 @@ export function CallRoom({
             <LobbyPeople lobby={lobby} viewerId={currentUserId} ownAvailable={undefined} disagreements={null} />
           </CallScreenStage>
         </>
+      }
+      // The space's chat as the call's aside (GEO-3422), so the conversation outlives the call.
+      aside={
+        capabilities.spaceChat && chatEnabled && chatSpaceId
+          ? {
+              tab: 'Chat',
+              label: 'Space chat',
+              mark: chatUnread.mark,
+              content: (
+                <SpaceChatPanel
+                  spaceId={chatSpaceId}
+                  roomId={lobby.call?.chat_room_id ?? null}
+                  subtitle={<SpaceChatAlsoPostsTo spaceId={chatSpaceId} />}
+                  onArrival={chatUnread.onArrival}
+                  className="max-md:h-[60dvh] min-h-0 flex-1"
+                />
+              ),
+            }
+          : undefined
       }
       tab={tab}
       onTab={setTab}

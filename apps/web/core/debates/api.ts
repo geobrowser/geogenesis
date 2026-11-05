@@ -372,7 +372,7 @@ export type OpenRoundsPhase = 'speaking' | 'deciding' | 'result' | 'finished';
 export type OpenRoundResolution = 'both_picked' | 'deadline';
 export type OpenRoundTurnRole = 'opening' | 'rebuttal';
 
-/** A slot's pick once its round has resolved. `null` means it never picked, which counted as End. */
+/** A slot's pick once its round has resolved. `null` means it never picked, which goes along with the other pick. */
 export type OpenRoundRevealedPick = {
   participant_slot: ParticipantSlot;
   pick: OpenRoundPick | null;
@@ -2953,6 +2953,8 @@ export type DebateLobbyPerson = {
 export type DebateLobbyCallDetails = {
   space_id: string;
   space_name: string | null;
+  /** The space's member chat room (GEO-3422); absent from geo-chat without space chat. */
+  chat_room_id?: string | null;
   started_by: DebateLobbyPerson | null;
   /** GEO-3421; the same for every viewer. Absent from geo-chat without recording. */
   recording?: CallRecordingState | null;
@@ -4358,16 +4360,23 @@ export async function retryDebatePhaseBoundaryRequest<T>(request: () => Promise<
 async function requestError(response: Response) {
   let code: string | null = null;
   let details: Record<string, unknown> | null = null;
+  let retryAfterSeconds: number | null = null;
   let message = `${response.status} ${response.statusText}`;
   try {
     const responseBody = (await response.text()).trim();
     if (responseBody) {
       try {
         const body = JSON.parse(responseBody) as {
-          error?: { code?: string; message?: string; details?: Record<string, unknown> };
+          error?: {
+            code?: string;
+            message?: string;
+            details?: Record<string, unknown>;
+            retry_after_seconds?: unknown;
+          };
         };
         code = body.error?.code ?? null;
         details = body.error?.details ?? null;
+        if (typeof body.error?.retry_after_seconds === 'number') retryAfterSeconds = body.error.retry_after_seconds;
         message = body.error?.message || message;
       } catch {
         message = responseBody;
@@ -4380,7 +4389,9 @@ async function requestError(response: Response) {
     message,
     code,
     response.status,
-    retryAfterMs(response.headers?.get('retry-after')),
+    // Cross-origin, `Retry-After` is unreadable unless geo-chat exposes it; the body says it too.
+    retryAfterMs(response.headers?.get('retry-after')) ??
+      (retryAfterSeconds === null ? null : Math.max(0, retryAfterSeconds * 1000)),
     details
   );
 }

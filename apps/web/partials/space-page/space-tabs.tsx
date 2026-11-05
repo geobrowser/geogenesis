@@ -10,6 +10,8 @@ import { profileDebateNavigationCount } from '~/core/profile/profile-debate-visi
 import { hasRecordToShow } from '~/core/profile/profile-proposer';
 import { useSpaceCalls } from '~/core/space-calls/hooks';
 import { spaceCallsTabPath } from '~/core/space-calls/routes';
+import { useSpaceChatRooms } from '~/core/space-chat/hooks';
+import { spaceChatTabPath } from '~/core/space-chat/routes';
 import { useEditable } from '~/core/state/editable-store';
 import { useDebugDebatesPageEnabled, useFeatureFlag } from '~/core/state/feature-flags';
 import { useRelations, useValues } from '~/core/sync/use-store';
@@ -278,6 +280,7 @@ export function SpaceTabs({
   const { editable } = useEditable();
   const isDebugDebatesPageEnabled = useDebugDebatesPageEnabled();
   const isSpaceCallsEnabled = useFeatureFlag('spaceCalls');
+  const isSpaceChatEnabled = useFeatureFlag('spaceChat');
   const { personalSpaceId } = usePersonalSpaceId();
   const isOwner = Boolean(personalSpaceId && ID.equals(personalSpaceId, spaceId));
 
@@ -328,6 +331,11 @@ export function SpaceTabs({
   const showCalls = showCommunity && isSpaceCallsEnabled && callsQuery.data?.supported !== false;
   const callsTab = showCalls ? [{ label: 'Calls', href: spaceCallsTabPath(spaceId) }] : [];
   systemTabsBefore.push(...callsTab);
+  // Chat follows Calls (GEO-3422), except where geo-chat says the space has no rooms.
+  const chatRooms = useSpaceChatRooms(spaceId, showCommunity && isSpaceChatEnabled);
+  const showChat = showCommunity && isSpaceChatEnabled && chatRooms.data?.supported !== false;
+  const chatTab = showChat ? [{ label: 'Chat', href: spaceChatTabPath(spaceId) }] : [];
+  systemTabsBefore.push(...chatTab);
 
   const systemTabsAfter: SystemTab[] = [];
 
@@ -420,6 +428,7 @@ export function SpaceTabs({
         ...baseTabs.slice(0, leadingTabs.length),
         { label: 'Community', href: `/space/${spaceId}/community`, priority: 1 as const },
         ...callsTab.map(tab => ({ ...tab, priority: 1 as const })),
+        ...chatTab.map(tab => ({ ...tab, priority: 1 as const })),
         ...baseTabs.slice(leadingTabs.length),
       ]
     : baseTabs;
