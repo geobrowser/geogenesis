@@ -57,8 +57,9 @@ export function publishes(member: Pick<DebateLobbyMember, 'role' | 'acting_host'
 }
 
 /**
- * The People side (GEO-3131): debates in progress, speaker tiles, then who is listening. Anyone in
- * a pair card is left out of the tiles and chips below it.
+ * The People side (GEO-3131): speaker tiles, who is listening, then debates in progress. Debates
+ * come last (GEO-3587) so a busy lobby doesn't push the people you can talk to down the page.
+ * Anyone in a pair card is left out of the tiles and chips above it.
  */
 export function LobbyPeople({
   lobby,
@@ -103,7 +104,6 @@ export function LobbyPeople({
 
   return (
     <>
-      {debates ? <LobbyDebatePairs pairs={pairs} members={lobby.members} lobby={lobby} viewerId={viewerId} /> : null}
       {speakers.length > 0 ? <SpeakerVideoGrid speakers={speakers} personProps={personProps} /> : null}
       {listeners.length + guests > 0 ? (
         <section className="flex flex-col gap-2.5 md:gap-2" aria-label="Listening">
@@ -122,6 +122,7 @@ export function LobbyPeople({
           </ul>
         </section>
       ) : null}
+      {debates ? <LobbyDebatePairs pairs={pairs} members={lobby.members} lobby={lobby} viewerId={viewerId} /> : null}
     </>
   );
 }
