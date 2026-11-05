@@ -30,6 +30,7 @@ import {
 } from './lobby-format';
 import { LobbyGuestCount } from './lobby-guest';
 import { LobbyPersonMenu, personMenuAnalyticsAttributes } from './lobby-person-menu';
+import { SectionHeading } from './lobby-section-heading';
 import { LobbyShowPeopleContext, LobbySlot } from './lobby-slots';
 import {
   EMPTY_VIDEO_GRID,
@@ -125,10 +126,6 @@ export function LobbyPeople({
       {debates ? <LobbyDebatePairs pairs={pairs} members={lobby.members} lobby={lobby} viewerId={viewerId} /> : null}
     </>
   );
-}
-
-export function SectionHeading({ children }: { children: React.ReactNode }) {
-  return <h2 className="text-[17px] leading-[22px] font-semibold text-text">{children}</h2>;
 }
 
 type PersonProps = {
