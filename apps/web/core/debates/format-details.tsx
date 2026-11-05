@@ -168,7 +168,7 @@ function FormatRow({
   );
 }
 
-/** The dashed row: optional rounds added when both debaters pick Extend. */
+/** The dashed row: optional rounds, added when one debater picks Extend and neither picks End. */
 function OpenRoundsRebuttalRow({
   rebuttalTurnMs,
   extendableRounds,
@@ -197,7 +197,7 @@ function OpenRoundsRebuttalRow({
           Then extend, round by round
         </Text>
         <Text as="div" variant="metadata" color="grey-04">
-          Both of you must pick Extend to add a round.
+          A round happens if one of you picks Extend and neither picks End.
           {cap}
         </Text>
       </div>

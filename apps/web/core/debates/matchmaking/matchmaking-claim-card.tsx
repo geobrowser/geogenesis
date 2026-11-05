@@ -762,7 +762,7 @@ export function useClaimPositionControl({
     isConnected,
     /**
      * The viewer's response is on its way to the chain and not yet indexed. For readers deciding
-     * whether to trust the index — not for the pills, which use `isResponseSubmitting`.
+     * whether to trust the index — not for the pills' presses, which use `isResponseSubmitting`.
      */
     isResponsePending,
     /** The viewer's response has not reached the bundler yet; the pills ignore presses until it has. */
