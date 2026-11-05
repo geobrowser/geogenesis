@@ -305,8 +305,12 @@ export function createTabVoiceOwner({
         .requestTakeover({
           automatic,
           requesterLabel: kind,
-          onTookOverFromOtherTab: () =>
-            captureSafely('voice_moved_to_other_tab', { to_surface: kind, from_surface: takenFrom, automatic }),
+          onTookOverFromOtherTab: from =>
+            captureSafely('voice_moved_to_other_tab', {
+              to_surface: kind,
+              from_surface: asSurfaceKind(from) ?? takenFrom,
+              automatic,
+            }),
         })
         .then(owned => {
           if (coordinator !== active) return false;

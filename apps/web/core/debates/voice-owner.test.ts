@@ -427,6 +427,23 @@ describe('tab voice owner', () => {
     expect(lobbyTab.owner.getState()).toEqual({ ownership: 'elsewhere', heldBy: 'debate' });
   });
 
+  it('records where voice moved from on a first claim, from what the releasing tab says it was', async () => {
+    const lobbyTab = openTab('lobby', 2);
+    lobbyTab.surface('lobby');
+    await lobbyTab.claim('lobby', true);
+
+    const debateTab = openTab('debate', 0);
+    debateTab.surface('debate', 'refuse');
+    expect(debateTab.owner.getState().heldBy).toBeNull();
+    await expect(debateTab.claim('debate')).resolves.toBe(true);
+
+    expect(captureSafely).toHaveBeenCalledWith('voice_moved_to_other_tab', {
+      to_surface: 'debate',
+      from_surface: 'lobby',
+      automatic: false,
+    });
+  });
+
   it('records a move when a claim takes voice from another tab', async () => {
     const left = openTab('left', 2);
     left.surface('lobby');
@@ -643,6 +660,12 @@ describe('tab voice owner', () => {
     await expect(claim).resolves.toBe(true);
 
     expect(debateTab.owner.getState()).toEqual({ ownership: 'owned', heldBy: null });
+    // A frozen tab never says what it was, so the move is recorded without a source.
+    expect(captureSafely).toHaveBeenCalledWith('voice_moved_to_other_tab', {
+      to_surface: 'debate',
+      from_surface: null,
+      automatic: false,
+    });
 
     expect(lobbyTab.yields).toBe(1);
     expect(lobbyTab.owner.getState()).toEqual({ ownership: 'elsewhere', heldBy: null });

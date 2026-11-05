@@ -18,7 +18,7 @@ type TakeoverResponse = {
   requestId: string;
   requesterId: string;
   released: boolean;
-  /** What the owner is, when it refused. */
+  /** What the owner is: the one that refused, or the one that released. */
   ownerLabel?: string;
 };
 
@@ -41,7 +41,7 @@ export type DebateRoomTakeoverOptions = {
   /** The tab is reclaiming the room because the viewer turned to it, not because they asked. */
   automatic?: boolean;
   requesterLabel?: string;
-  onTookOverFromOtherTab?: () => void;
+  onTookOverFromOtherTab?: (from?: string) => void;
 };
 
 type CreateDebateRoomOwnershipCoordinatorOptions = {
@@ -133,7 +133,7 @@ export function createDebateRoomOwnershipCoordinator({
   let releaseRequest: Promise<void> | null = null;
   let acquisition: Promise<DebateRoomOwnershipAcquireResult> | null = null;
   let activeAcquisitionAttempt: { cancelled: boolean } | null = null;
-  const pendingTakeovers = new Map<string, (released: boolean) => void>();
+  const pendingTakeovers = new Map<string, (released: boolean, ownerLabel?: string) => void>();
   const pendingAcks = new Map<string, () => void>();
   let lastRefusedBy: string | undefined;
 
@@ -160,7 +160,7 @@ export function createDebateRoomOwnershipCoordinator({
     channel = null;
   };
 
-  const postTakeoverResponse = (message: TakeoverRequest, released: boolean) => {
+  const postTakeoverResponse = (message: TakeoverRequest, released: boolean, ownerLabel: string | undefined) => {
     if (!channel || closed) return;
     try {
       channel.postMessage({
@@ -168,7 +168,7 @@ export function createDebateRoomOwnershipCoordinator({
         requestId: message.requestId,
         requesterId: message.requesterId,
         released,
-        ownerLabel: released ? undefined : describeOwner?.(),
+        ownerLabel,
       } satisfies TakeoverResponse);
     } catch {
       // The channel may close while an async takeover decision is finishing. The requester will
@@ -367,7 +367,7 @@ export function createDebateRoomOwnershipCoordinator({
 
       if (message.type === 'takeover-response' && message.requesterId === instanceId) {
         if (pendingTakeovers.has(message.requestId)) lastRefusedBy = message.released ? undefined : message.ownerLabel;
-        pendingTakeovers.get(message.requestId)?.(message.released);
+        pendingTakeovers.get(message.requestId)?.(message.released, message.ownerLabel);
         return;
       }
 
@@ -385,15 +385,17 @@ export function createDebateRoomOwnershipCoordinator({
           requesterId: message.requesterId,
         } satisfies TakeoverAck);
       } catch {}
+      // Read before the handover, while this tab is still what holds it.
+      const ownerLabel = describeOwner?.();
       takeoversInFlight += 1;
       void Promise.resolve(onTakeoverRequested(takeoverContext))
         .then(async released => {
           if (released) await release();
-          postTakeoverResponse(message, released);
+          postTakeoverResponse(message, released, ownerLabel);
           return released;
         })
         .catch(() => {
-          postTakeoverResponse(message, false);
+          postTakeoverResponse(message, false, ownerLabel);
           return false;
         })
         .then(released => {
@@ -428,6 +430,7 @@ export function createDebateRoomOwnershipCoordinator({
       const takeoverChannel = channel;
 
       const requestId = createInstanceId();
+      let releasedBy: string | undefined;
       type TakeoverOutcome = 'released' | 'refused' | 'unanswered' | 'timeout';
       const outcome = await new Promise<TakeoverOutcome>(resolve => {
         const settle = (value: TakeoverOutcome) => {
@@ -442,7 +445,10 @@ export function createDebateRoomOwnershipCoordinator({
           window.clearTimeout(timeout);
           timeout = window.setTimeout(() => settle('unanswered'), takeoverAckedResponseTimeoutMs);
         });
-        pendingTakeovers.set(requestId, released => settle(released ? 'released' : 'refused'));
+        pendingTakeovers.set(requestId, (released, ownerLabel) => {
+          if (released) releasedBy = ownerLabel;
+          settle(released ? 'released' : 'refused');
+        });
         try {
           takeoverChannel.postMessage({
             type: 'takeover-request',
@@ -460,7 +466,7 @@ export function createDebateRoomOwnershipCoordinator({
       if (outcome === 'refused' || outcome === 'unanswered') return false;
       if (outcome === 'released') {
         const acquired = (await acquireLock(true)).acquired;
-        if (acquired) onTookOverFromOtherTab?.();
+        if (acquired) onTookOverFromOtherTab?.(releasedBy);
         return acquired;
       }
       // Only an explicit claim steals.
