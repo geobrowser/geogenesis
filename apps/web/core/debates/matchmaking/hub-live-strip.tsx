@@ -15,10 +15,11 @@ import { LobbyReminderError, useLobbyReminderPress } from '../lobbies/lobby-remi
 import { LiveLobbySpotlight, SPOTLIGHT_SECONDARY_PILL_CLASS_NAME } from '../lobbies/lobby-spotlight';
 import { LobbyRsvpPill, lobbyBadgeTime, lobbyDayLabel, lobbyWhenLabel } from '../lobbies/upcoming-lobbies';
 import { useMinuteNow } from '../lobbies/use-minute-now';
+import { sameId } from '../rooms/room-presence';
 import { claimCalendarPicks, personCalendarPicks } from './debate-calendar-route';
 import { debateAnalyticsLabel, hubAnalyticsAttributes } from './hub-analytics';
 import { useHubAskState } from './hub-ask-context';
-import { HubCalloutTitle } from './hub-callout';
+import { HUB_LIGHT_CALLOUT_CLASS_NAME, HubCalloutTitle } from './hub-callout';
 import { HubCalloutStack, type HubStackCard } from './hub-callout-stack';
 import { HUB_ICON_BUTTON_CLASS_NAME, hubPillClassName } from './hub-pill-button';
 import { LobbyDetailsPopover } from './lobby-details-popover';
@@ -66,7 +67,11 @@ export function HubLiveStrip({
   if (ended) return <EndedAskStrip ended={ended} onDismiss={dismissEnded} />;
 
   const live = lineup.live.filter(lobby => !isDismissed(stackLiveLobbyNoticeId(lobby.lobby_id)));
-  const [soonest, ...later] = upcoming.lobbies;
+  // Signed out, the list and the week are polled apart, so a lobby that has just opened can still be
+  // upcoming in the week: it is the live card's, never both.
+  const [soonest, ...later] = upcoming.lobbies.filter(
+    lobby => !lineup.live.some(open => sameId(open.lobby_id, lobby.lobby_id))
+  );
   const lobbyCard = (lobby: DebateLobbySummary): HubStackCard => ({
     id: `lobby:${lobby.lobby_id}`,
     surface: 'light',
@@ -219,7 +224,7 @@ function UpcomingLobbyCallout({ lobby, onDismiss }: { lobby: DebateLobbySummary;
     <section
       aria-label="Upcoming lobby"
       data-testid="hub-callout-upcoming-lobby"
-      className="rounded-lg border border-grey-02 bg-white p-4"
+      className={HUB_LIGHT_CALLOUT_CLASS_NAME}
     >
       <HubCalloutTitle as="h3" title="Upcoming lobby">
         <button

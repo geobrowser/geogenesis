@@ -187,6 +187,19 @@ describe('HubLiveStrip', () => {
       expect(edgeNames()).toEqual(['Show upcoming lobby AI policy night', 'Show Today’s claims']);
     });
 
+    // GEO-3586 review: a card brought forward used to stay on top whatever arrived after it.
+    it('puts the stack’s own first card back on top once the stack changes, so a new live lobby leads', async () => {
+      mocks.week = [upcoming({ lobby_id: 'tonight', name: 'AI policy night' })];
+      const { rerender } = render(<HubLiveStrip lineup={EMPTY} todaysCallout={callout} />);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Show Today’s claims' }));
+      await waitFor(() => expect(screen.getByRole('region', { name: 'Today’s claims' })).toBeInTheDocument());
+
+      rerender(<HubLiveStrip lineup={{ ...EMPTY, live: [lobby()] }} todaysCallout={callout} />);
+      await waitFor(() => expect(screen.getByTestId('lobby-spotlight')).toBeInTheDocument());
+      expect(edgeNames()).toEqual(['Show upcoming lobby AI policy night', 'Show Today’s claims']);
+    });
+
     it('puts later lobbies after Today’s claims', () => {
       mocks.week = [
         upcoming({ lobby_id: 'fri', name: 'Friday hot takes', starts_at: inDays(3) }),
@@ -293,6 +306,24 @@ describe('HubLiveStrip', () => {
           expect.anything()
         );
         expect(mocks.mutate).not.toHaveBeenCalled();
+      });
+
+      it('leaves out lobbies more than a week out', () => {
+        mocks.week = [upcoming({ lobby_id: 'far', starts_at: inDays(9) })];
+        const { container } = render(<HubLiveStrip lineup={EMPTY} />);
+
+        expect(container).toBeEmptyDOMElement();
+      });
+
+      // GEO-3586 review: the list and the week are polled apart signed out, so the week can still
+      // call a lobby upcoming after the list has it live.
+      it('shows a lobby the list has live only as the live card, even while the week says upcoming', () => {
+        mocks.week = [upcoming({ lobby_id: 'lobby1', name: 'NYC Debates' })];
+        render(<HubLiveStrip lineup={{ ...EMPTY, live: [lobby()] }} />);
+
+        expect(screen.getByTestId('lobby-spotlight')).toHaveTextContent('NYC Debates');
+        expect(screen.queryByRole('region', { name: 'Upcoming lobby' })).not.toBeInTheDocument();
+        expect(edgeNames()).toEqual([]);
       });
 
       it('opens the lobby’s details from its name', () => {

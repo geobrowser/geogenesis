@@ -169,10 +169,19 @@ export function unansweredLobbies(
   if (viewerId === null) return [];
   const shown = new Set(going.map(row => dashlessId(row.lobbyId)));
   return lobbies.filter(lobby => {
-    if (lobby.state !== 'upcoming' || lobby.viewer_reminded || lobby.viewer_dismissed) return false;
+    if (!inUnansweredLobbyWindow(lobby, now) || lobby.viewer_reminded || lobby.viewer_dismissed) return false;
     if (shown.has(dashlessId(lobby.lobby_id))) return false;
-    if (viewerHosts(lobby, viewerId)) return false;
-    const days = localDaysFrom(now, Date.parse(lobby.starts_at));
-    return days >= 0 && days < UNANSWERED_LOBBY_DAYS;
+    return !viewerHosts(lobby, viewerId);
   });
+}
+
+/**
+ * Still to open and starting within {@link UNANSWERED_LOBBY_DAYS} local days: the window both the
+ * Requests timeline and the panel's callout stack (GEO-3586) offer lobbies from, whatever else
+ * each leaves out.
+ */
+export function inUnansweredLobbyWindow(lobby: Pick<DebateLobbyCalendarRow, 'state' | 'starts_at'>, now: number) {
+  if (lobby.state !== 'upcoming') return false;
+  const days = localDaysFrom(now, Date.parse(lobby.starts_at));
+  return days >= 0 && days < UNANSWERED_LOBBY_DAYS;
 }

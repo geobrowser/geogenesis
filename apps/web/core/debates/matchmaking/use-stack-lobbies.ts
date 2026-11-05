@@ -7,10 +7,11 @@ import { useDismissedNotices } from '~/core/hooks/use-dismissed-notice';
 
 import { useGeoChatAuth } from '../hooks';
 import { useDebateLobbyCalendar } from '../lobbies/hooks';
-import { localDaysFrom, startOfLocalDay } from '../lobbies/lobby-format';
+import { startOfLocalDay } from '../lobbies/lobby-format';
 import { useMinuteNow } from '../lobbies/use-minute-now';
+import { sameId } from '../rooms/room-presence';
 import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
-import { UNANSWERED_LOBBY_DAYS, unansweredLobbies, unansweredLobbyRange } from './upcoming-lobby-rows';
+import { inUnansweredLobbyWindow, unansweredLobbies, unansweredLobbyRange } from './upcoming-lobby-rows';
 
 /**
  * How long a lobby's card stays up showing Going after the RSVP lands, before it leaves the stack:
@@ -32,11 +33,11 @@ export function stackLiveLobbyNoticeId(lobbyId: string) {
 }
 
 /**
- * The upcoming lobbies the stack offers: opening within {@link UNANSWERED_LOBBY_DAYS} local days, and
- * not one the viewer RSVP'd to, hosts, or dismissed, from the Requests timeline or from the stack.
+ * The upcoming lobbies the stack offers, soonest first: the Requests timeline's unanswered ones
+ * (`unansweredLobbies`), less the ones dismissed from the stack.
  *
- * Signed out there is no RSVP, hosting or geo-chat dismissal to tell, so it is every lobby still to
- * open in the window, less the ones dismissed from the stack in this browser.
+ * Signed out there is no RSVP, hosting or geo-chat dismissal to tell, so it is every lobby in the
+ * same window, less the ones dismissed from the stack in this browser.
  */
 export function stackLobbies(
   week: DebateLobbyCalendarRow[],
@@ -46,14 +47,8 @@ export function stackLobbies(
 ): DebateLobbyCalendarRow[] {
   const offered = viewer.authenticated
     ? unansweredLobbies(week, [], viewer.viewerId, now)
-    : week.filter(lobby => {
-        if (lobby.state !== 'upcoming') return false;
-        const days = localDaysFrom(now, Date.parse(lobby.starts_at));
-        return days >= 0 && days < UNANSWERED_LOBBY_DAYS;
-      });
-  return offered
-    .filter(lobby => !isDismissed(lobby.lobby_id))
-    .sort((a, b) => Date.parse(a.starts_at) - Date.parse(b.starts_at));
+    : week.filter(lobby => inUnansweredLobbyWindow(lobby, now));
+  return offered.filter(lobby => !isDismissed(lobby.lobby_id)).sort(soonestFirst);
 }
 
 /**
@@ -81,16 +76,20 @@ export function useStackLobbies(): { lobbies: DebateLobbySummary[]; dismiss: (lo
     [authenticated, isDismissed, now, ready, viewerId, week]
   );
 
-  // The lobbies offered last time that the viewer has since RSVP'd to, kept up showing Going.
+  // The lobbies offered last time that the viewer has since RSVP'd to, kept up showing Going. Taken
+  // while rendering rather than in an effect: an effect runs after paint, so the card would be drawn
+  // gone for a frame, and the stack would start sliding it out before it came back.
+  // Compared by which lobbies, not by the array, which is rebuilt whenever its inputs are.
   const [held, setHeld] = React.useState<string[]>([]);
-  const offeredBefore = React.useRef<DebateLobbyCalendarRow[]>([]);
-  React.useEffect(() => {
-    const going = offeredBefore.current.filter(lobby =>
-      week?.some(row => sameLobby(row, lobby) && row.viewer_reminded)
+  const offeredIds = offered.map(lobby => dashlessId(lobby.lobby_id)).join(',');
+  const [before, setBefore] = React.useState({ ids: offeredIds, lobbies: offered });
+  if (before.ids !== offeredIds) {
+    setBefore({ ids: offeredIds, lobbies: offered });
+    const going = before.lobbies.filter(lobby =>
+      week?.some(row => sameId(row.lobby_id, lobby.lobby_id) && row.viewer_reminded)
     );
-    offeredBefore.current = offered;
     if (going.length > 0) setHeld(current => [...current, ...going.map(lobby => dashlessId(lobby.lobby_id))]);
-  }, [offered, week]);
+  }
   React.useEffect(() => {
     if (held.length === 0) return;
     const timer = window.setTimeout(() => setHeld([]), STACK_GOING_HOLD_MS);
@@ -100,9 +99,9 @@ export function useStackLobbies(): { lobbies: DebateLobbySummary[]; dismiss: (lo
   const lobbies = React.useMemo(() => {
     if (held.length === 0) return offered;
     const kept = (week ?? []).filter(
-      row => held.includes(dashlessId(row.lobby_id)) && !offered.some(lobby => sameLobby(lobby, row))
+      row => held.includes(dashlessId(row.lobby_id)) && !offered.some(lobby => sameId(lobby.lobby_id, row.lobby_id))
     );
-    return [...offered, ...kept].sort((a, b) => Date.parse(a.starts_at) - Date.parse(b.starts_at));
+    return [...offered, ...kept].sort(soonestFirst);
   }, [held, offered, week]);
 
   const dismiss = React.useCallback((lobbyId: string) => remember([stackLobbyNoticeId(lobbyId)]), [remember]);
@@ -110,6 +109,6 @@ export function useStackLobbies(): { lobbies: DebateLobbySummary[]; dismiss: (lo
   return { lobbies, dismiss };
 }
 
-function sameLobby(a: Pick<DebateLobbySummary, 'lobby_id'>, b: Pick<DebateLobbySummary, 'lobby_id'>) {
-  return dashlessId(a.lobby_id) === dashlessId(b.lobby_id);
+function soonestFirst(a: Pick<DebateLobbySummary, 'starts_at'>, b: Pick<DebateLobbySummary, 'starts_at'>) {
+  return Date.parse(a.starts_at) - Date.parse(b.starts_at);
 }
