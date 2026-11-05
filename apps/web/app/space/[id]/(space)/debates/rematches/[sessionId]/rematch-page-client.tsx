@@ -141,6 +141,7 @@ import { useLeaveRematchOnExit } from '~/core/debates/use-leave-rematch-on-exit'
 import { useRelatedDebateClaims } from '~/core/debates/use-related-debate-claims';
 import { useEffectOnceWhen } from '~/core/hooks/use-effect-once';
 import { useEntityResponse, useEntityResponseIndexingSnapshot } from '~/core/hooks/use-entity-vote';
+import { useHydrated } from '~/core/hooks/use-hydrated';
 import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sentinel';
 import { useLastSettled } from '~/core/hooks/use-last-settled';
 import { useOpenClaimInSidePanel } from '~/core/hooks/use-open-claim-in-side-panel';
@@ -205,9 +206,8 @@ function listLandingState(pending: boolean, rows: number): LandingState {
  * GEO-3148. Where a pair land: the first of these tabs with something in it, and Explore — which
  * always has something — when none does.
  *
- * Today’s claims first, then Matches, then the related claims, then everything the opponent has
- * taken a side on, where a match is one press away. The previous-debate claims participate only
- * when their feature flag is enabled.
+ * Today’s claims first, then Matches, then previous-debate claims when their flag is enabled,
+ * then Related, then everything the opponent has taken a side on, where a match is one press away.
  *
  * `null` while an earlier tab has not answered. Landing on a later one in that window would be
  * landing on a guess, and the landing is taken once: a tab whose answer arrives afterwards must not
@@ -569,6 +569,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    * the reader a minute later.
    * ---------------------------------------------------------------------------------------------*/
   const sourceDebateId = session?.source_debate_id ?? null;
+  const featureFlagsHydrated = useHydrated();
   const previousDebateClaimsEnabled = useFeatureFlag('previousDebateClaims');
   const debateOffered = previousDebateClaimsEnabled && sourceDebateId !== null;
   const extractedClaimsQuery = useDebateExtractedClaims(sourceDebateId ?? '', debateOffered);
@@ -2197,7 +2198,16 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     ['matches', opponentTabError ? 'empty' : listLandingState(opponentLandingPending, matchClaims.length)],
     // Empty while extraction is still running counts as empty: landing on "pulling the claims out"
     // is a weaker first screen than the next tab with something on it.
-    ['debate', debateOffered ? listLandingState(debateItemsSettling, debateClaimCount) : 'empty'],
+    [
+      'debate',
+      // A stored opt-in is unknown before hydration. Wait here rather than landing and reporting
+      // a later tab too early; Today's claims and Matches can still win without waiting.
+      !featureFlagsHydrated && sourceDebateId !== null
+        ? 'pending'
+        : debateOffered
+          ? listLandingState(debateItemsSettling, debateClaimCount)
+          : 'empty',
+    ],
     ['related', listLandingState(relatedClaimsSettling, relatedClaims.length)],
     // Here a failure *is* something to land on: the tab draws it with a retry, where landing on
     // Explore would hide it.

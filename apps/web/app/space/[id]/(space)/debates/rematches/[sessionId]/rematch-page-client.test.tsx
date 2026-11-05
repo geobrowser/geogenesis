@@ -45,6 +45,7 @@ const mocks = vi.hoisted(() => ({
   /** Bumped to remount the stubbed header's subtree, the way the real one does as voice connects. */
   headerEpoch: 0,
   previousDebateClaimsEnabled: false,
+  featureFlagsHydrated: true,
   /** GEO-3527. Agree / disagree counts by claim id, and whether the counts lookup is in flight. */
   responseCounts: new Map<string, { positive: number; negative: number }>(),
   responseCountsLoading: false,
@@ -334,12 +335,18 @@ vi.mock('~/core/debates/lobbies/lobby-return', async () => {
   };
 });
 
+vi.mock('~/core/hooks/use-hydrated', () => ({
+  useHydrated: () => mocks.featureFlagsHydrated,
+}));
+
 vi.mock('~/core/state/feature-flags', async importOriginal => {
   const actual = await importOriginal<typeof import('~/core/state/feature-flags')>();
   return {
     ...actual,
     useFeatureFlag: (id: FeatureFlagId) =>
-      id === 'previousDebateClaims' ? mocks.previousDebateClaimsEnabled : actual.defaultFeatureFlags[id],
+      id === 'previousDebateClaims'
+        ? mocks.featureFlagsHydrated && mocks.previousDebateClaimsEnabled
+        : actual.defaultFeatureFlags[id],
   };
 });
 
@@ -1068,6 +1075,7 @@ function mutation(mutate = mocks.mutate) {
 
 beforeEach(() => {
   mocks.previousDebateClaimsEnabled = false;
+  mocks.featureFlagsHydrated = true;
   mocks.isPhone = true;
   mocks.responseCounts.clear();
   mocks.responseCountsLoading = false;
@@ -7224,6 +7232,49 @@ describe('From this debate', () => {
       ],
     };
   });
+
+  it('lands on higher-priority matches without waiting for flag hydration', async () => {
+    mocks.featureFlagsHydrated = false;
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /^Matches/ })).toHaveAttribute('aria-pressed', 'true')
+    );
+  });
+
+  it.each([false, true])(
+    'waits for flag hydration before landing and reporting, preserving a manual choice: %s',
+    async chooseManually => {
+      // All queries are settled, including the cached extraction, before the stored flag is read.
+      mocks.featureFlagsHydrated = false;
+      mocks.positions = [];
+      const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await settleTabSwap();
+      const landingReports = () =>
+        mocks.capture.mock.calls.filter(
+          ([event, properties]) =>
+            event === 'feature_exposed' && properties?.feature_id === 'debate-rematch-landing-tab'
+        );
+
+      expect(landingReports()).toHaveLength(0);
+      expect(screen.getByRole('button', { name: 'Explore' })).toHaveAttribute('aria-pressed', 'false');
+      if (chooseManually) {
+        fireEvent.click(screen.getByRole('button', { name: 'Explore' }));
+        await settleTabSwap();
+      }
+
+      mocks.featureFlagsHydrated = true;
+      view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+      await waitFor(() => expect(landingReports()).toHaveLength(1));
+      expect(landingReports()[0][1]).toMatchObject({
+        landing_tab: 'from_this_debate',
+        chose_before_landing: chooseManually,
+      });
+      expect(screen.getByRole('button', { name: chooseManually ? 'Explore' : /^From this debate/ })).toHaveAttribute(
+        'aria-pressed',
+        'true'
+      );
+    }
+  );
 
   it('reads the source debate’s claims, and is offered only when there is a source debate', async () => {
     await openTab();
