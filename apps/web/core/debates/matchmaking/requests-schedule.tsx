@@ -86,6 +86,7 @@ import {
   type UpcomingRoomRow,
   WaitingInviteActions,
   adminArrangedNote,
+  notConfirmedUntil,
   readFailureMessages,
   roomStatusLabel,
   scheduledRequestRoles,
@@ -956,7 +957,7 @@ function InviteItem({
           // GEO-3589: the Geo team's note goes under the waiting line rather than in its place, which
           // left an accepted match reading as booked.
           <>
-            <span className="block font-medium text-text">Not confirmed until {name} accepts</span>
+            <span className="block font-medium text-text">{notConfirmedUntil(opponent)}</span>
             <span className="block">{note}</span>
           </>
         ) : (

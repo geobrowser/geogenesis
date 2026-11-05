@@ -1059,7 +1059,7 @@ describe('RequestsSchedule', () => {
     render(<RequestsSchedule />);
 
     expect(screen.getByText('Debate with Mia')).toBeInTheDocument();
-    expect(screen.getByText('Not confirmed until Mia accepts')).toBeInTheDocument();
+    expect(screen.getByText('Not confirmed until Mia answers')).toBeInTheDocument();
     expect(screen.getByText('Arranged by the Geo team')).toBeInTheDocument();
   });
 
