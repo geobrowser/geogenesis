@@ -9,7 +9,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { currentAuthAttempt, finishAuthAttempt, resetAuthAttempt } from '~/core/auth-attempt';
 import { closeSignInBox, isSignInBoxOpen, readSignInBox } from '~/core/auth/sign-in-box/sign-in-box-store';
 import { cancelPrivyAuth } from '~/core/privy-auth-events';
-import { featureFlagsStorageKey } from '~/core/state/feature-flags';
 
 import { SignInBoxHost } from '~/partials/sign-in/sign-in-box';
 import { SIGN_IN_BOX_COPY } from '~/partials/sign-in/sign-in-box-copy';
@@ -71,7 +70,6 @@ function fallBack(attemptId: string | undefined) {
 beforeEach(() => {
   localStorage.clear();
   sessionStorage.clear();
-  localStorage.setItem(featureFlagsStorageKey, JSON.stringify({ ourSignInBox: true }));
   resetAuthAttempt();
   mocks.login.mockReset();
   mocks.prepareOnboarding.mockReset();
@@ -138,30 +136,6 @@ describe("a press's continuation", () => {
 
     it('withdraws once on dismissal, although the control unmounted', () => {
       const { onComplete, onError, onCancel, control } = pressThenFallBack();
-      control.unmount();
-      dismisses();
-      dismisses();
-      expect(onError).toHaveBeenCalledTimes(1);
-      expect(onCancel).toHaveBeenCalledTimes(1);
-      expect(onComplete).not.toHaveBeenCalled();
-    });
-  });
-
-  describe("on Privy's dialog, with the box off", () => {
-    beforeEach(() => localStorage.setItem(featureFlagsStorageKey, JSON.stringify({ ourSignInBox: false })));
-
-    it('runs once on sign-in, although the control unmounted', () => {
-      const { onComplete, onCancel, control } = press();
-      expect(mocks.login).toHaveBeenCalledTimes(1);
-      control.unmount();
-      signsIn();
-      signsIn();
-      expect(onComplete).toHaveBeenCalledTimes(1);
-      expect(onCancel).not.toHaveBeenCalled();
-    });
-
-    it('withdraws once on dismissal, although the control unmounted', () => {
-      const { onComplete, onError, onCancel, control } = press();
       control.unmount();
       dismisses();
       dismisses();

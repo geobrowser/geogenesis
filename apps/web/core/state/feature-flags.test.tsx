@@ -36,7 +36,6 @@ describe('feature flags', () => {
     expect(defaultFeatureFlags.microsoftCalendar).toBe(false);
     expect(defaultFeatureFlags.bountiesTab).toBe(true);
     expect(defaultFeatureFlags.signInRecoveryAutoOpen).toBe(true);
-    expect(defaultFeatureFlags.ourSignInBox).toBe(false);
     expect(normalizeFeatureFlags(null)).toEqual({
       playbackDiagnostics: false,
       debugDebatesPage: false,
@@ -54,11 +53,10 @@ describe('feature flags', () => {
       microsoftCalendar: false,
       bountiesTab: true,
       signInRecoveryAutoOpen: true,
-      ourSignInBox: false,
     });
   });
 
-  // Claims, debates, scheduling, lobby joining and debate video shipped to everyone. Every browser that ever
+  // Claims, debates, scheduling, lobby joining, debate video and the sign-in box shipped to everyone. Every browser that ever
   // opened the flags dialog still has the retired ids in storage, and they must not survive
   // normalization — a stray `questionsTab` reaching the dialog would render a checkbox for a flag
   // nothing reads.
@@ -70,6 +68,7 @@ describe('feature flags', () => {
         peerAvailability: true,
         lobbyJoining: true,
         debateVideo: true,
+        ourSignInBox: true,
         debateDebugging: true,
       })
     ).toEqual({
@@ -89,7 +88,6 @@ describe('feature flags', () => {
       microsoftCalendar: false,
       bountiesTab: true,
       signInRecoveryAutoOpen: true,
-      ourSignInBox: false,
     });
   });
 
@@ -116,9 +114,19 @@ describe('feature flags', () => {
 
   // A stored complete object holds every default; only its overrides may survive a write.
   it('rewrites an older, complete object to its overrides, so later defaults reach it', () => {
-    const complete = { ...defaultFeatureFlags, ourSignInBox: false, debateDebugging: true };
+    const complete = { ...defaultFeatureFlags, debateDebugging: true };
     expect(setFeatureFlagValue(complete, 'googleSignIn', true)).toEqual({ debateDebugging: true, googleSignIn: true });
     expect(setFeatureFlagValue({ googleSignIn: true }, 'googleSignIn', false)).toEqual({});
+  });
+
+  it('drops a stored ourSignInBox, on or off, at the next write', () => {
+    for (const ourSignInBox of [true, false]) {
+      expect(normalizeFeatureFlags({ ourSignInBox })).toEqual(defaultFeatureFlags);
+      expect(setFeatureFlagValue({ ourSignInBox, debateDebugging: true }, 'googleSignIn', true)).toEqual({
+        debateDebugging: true,
+        googleSignIn: true,
+      });
+    }
   });
 });
 
