@@ -214,8 +214,10 @@ describe('HubLiveStrip', () => {
       fireEvent.click(dismiss);
       const next = await screen.findByRole('region', { name: 'Today’s claims' });
       // The card that came up, not the page: `body` would contain it too.
-      await waitFor(() => expect(document.activeElement).not.toBe(document.body));
-      expect(document.activeElement).toContainElement(next);
+      await waitFor(() => {
+        expect(document.activeElement).not.toBe(document.body);
+        expect(document.activeElement).toContainElement(next);
+      });
     });
 
     it('reads the top card before the edges under it, and gives the lowest edge a taller tap target', () => {
@@ -348,8 +350,9 @@ describe('HubLiveStrip', () => {
       expect(mocks.dismissed).toEqual(['debatesPanelUpcomingLobby:tonight']);
       // Nothing written to geo-chat: the lobby stays on the Requests timeline.
       expect(mocks.mutate).not.toHaveBeenCalled();
-      await waitFor(() => expect(screen.getByRole('region', { name: 'Today’s claims' })).toBeInTheDocument());
-      expect(screen.queryByRole('region', { name: 'Upcoming lobby' })).not.toBeInTheDocument();
+      // The next card is drawn at once, underneath the one sliding off it.
+      expect(screen.getByRole('region', { name: 'Today’s claims' })).toBeInTheDocument();
+      await waitFor(() => expect(screen.queryByRole('region', { name: 'Upcoming lobby' })).not.toBeInTheDocument());
       expect(edgeNames()).toEqual([]);
     });
 

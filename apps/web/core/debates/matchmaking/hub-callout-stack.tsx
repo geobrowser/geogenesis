@@ -9,7 +9,7 @@ import { ResizableContainer } from '~/design-system/resizable-container';
 
 import { hubAnalyticsAttributes } from './hub-analytics';
 import { HUB_CALLOUT_SURFACE_CLASS_NAME } from './hub-callout';
-import { HUB_CARD_EXIT_TRANSITION, HUB_STEP_TRANSITION } from './hub-motion';
+import { HUB_CARD_EXIT_TRANSITION, HUB_EASE, HUB_STEP_TRANSITION } from './hub-motion';
 
 /** The surface a card is drawn on, which its edge behind the top card takes too. */
 export type HubStackSurface = 'light' | 'tint' | 'dark';
@@ -59,8 +59,8 @@ const EDGE_CLASS_NAME: Record<HubStackSurface, string> = {
  * claims are all in view without each taking a card's height.
  *
  * The stack only draws the cards: each one dismisses itself, and leaves `cards` when it does. The
- * top card then slides away and the next comes up in its place, the height easing between them so
- * the tabs below glide. Pressing an edge brings that card to the top, until `cards` changes. One
+ * top card then slides off to the left over the next, which is already drawn in full underneath
+ * and rises into its place from its edge, the height easing between them so the tabs below glide. Pressing an edge brings that card to the top, until `cards` changes. One
  * card is drawn alone, as a single callout always was.
  */
 export function HubCalloutStack({ cards }: { cards: HubStackCard[] }) {
@@ -81,11 +81,11 @@ export function HubCalloutStack({ cards }: { cards: HubStackCard[] }) {
   }, [cards, frontId]);
 
   // A press in the stack (an edge, a card's own X, an RSVP that sends the card on) takes the focused
-  // control away with the card: focus then goes to the card that comes up, once the leaving one has
-  // gone (`mode="wait"`), rather than to the page. Only for a card leaving soon after the press, so a
-  // press that changed nothing can't pull focus back here when something else moves the stack later.
+  // control away with the card: focus then goes to the card that came up, once the leaving one has
+  // gone, rather than to the page. Only for a card leaving soon after the press, so a press that
+  // changed nothing can't pull focus back here when something else moves the stack later.
   const pressedAt = React.useRef<number | null>(null);
-  const claimFocus = React.useRef(false);
+  const topElement = React.useRef<HTMLDivElement | null>(null);
 
   const [top, ...rest] = ordered;
   const edges = rest.slice(0, HUB_STACK_MAX_EDGES);
@@ -100,7 +100,7 @@ export function HubCalloutStack({ cards }: { cards: HubStackCard[] }) {
     const lost =
       active === null || active === document.body || !active.isConnected || active.closest('[inert]') !== null;
     const recent = pressedAt.current !== null && Date.now() - pressedAt.current < PRESS_FOCUS_WINDOW_MS;
-    claimFocus.current = recent && lost;
+    if (recent && lost) topElement.current?.focus({ preventScroll: true });
     pressedAt.current = null;
     if (!top) setDrained(true);
   };
@@ -109,22 +109,25 @@ export function HubCalloutStack({ cards }: { cards: HubStackCard[] }) {
 
   return (
     <div
-      className={cx('mx-4 shrink-0', !top ? 'mb-0' : edges.length > 0 ? 'mb-1' : 'mb-3')}
+      className={cx('shrink-0', !top ? 'mb-0' : edges.length > 0 ? 'mb-1' : 'mb-3')}
       data-testid="hub-callout-stack"
       onClickCapture={() => {
         pressedAt.current = Date.now();
       }}
     >
-      <ResizableContainer transition={HUB_STEP_TRANSITION} growOnMount={false}>
+      {/* The gutters inside the clip rather than outside it, so a dismissed card slides out to the
+          panel's edge instead of being cut off at the card's. */}
+      <ResizableContainer transition={HUB_STEP_TRANSITION} growOnMount={false} className="px-4">
         <div
           className="relative transition-[padding] duration-200"
           style={{ paddingBottom: edges.length > 0 ? edges.length * EDGE_DROP_PX + EDGE_TAP_PX : 0 }}
         >
-          {/* `custom` reaches a leaving card: one still in the stack was sent back under, rather than
-              dismissed, and sinks rather than sliding away. */}
-          <AnimatePresence mode="wait" initial={false} custom={ids} onExitComplete={onExitComplete}>
+          {/* `popLayout`: the leaving card is lifted out of the flow as it starts to go, so the next
+              is drawn underneath it straight away. `custom` reaches a leaving card: one still in the
+              stack was sent back under, rather than dismissed, and sinks rather than sliding away. */}
+          <AnimatePresence mode="popLayout" initial={false} custom={ids} onExitComplete={onExitComplete}>
             {top ? (
-              <StackTop key={top.id} id={top.id} claimFocus={claimFocus}>
+              <StackTop key={top.id} id={top.id} topElement={topElement}>
                 {top.content}
               </StackTop>
             ) : null}
@@ -164,47 +167,82 @@ export function HubCalloutStack({ cards }: { cards: HubStackCard[] }) {
 
 /**
  * The card on top. Inert on its way out, as a step of the Today's claims callout is: a control still
- * focused on it would otherwise take a press it can no longer show. Focused on arrival when the press
- * that brought it up took the focus with the card before it.
+ * focused on it would otherwise take a press it can no longer show.
+ *
+ * Dismissed, it slides off to the left over the card that came up, fading only as it nears the edge,
+ * like a card flicked off a pile. That one starts where its edge was, a little smaller and lower,
+ * and rises into place. One sent back under instead sinks behind the card brought forward.
  */
 function StackTop({
   id,
-  claimFocus,
+  topElement,
+  ref: forwardedRef,
   children,
 }: {
   id: string;
-  claimFocus: React.RefObject<boolean>;
+  /** Points at the card while it is the one on top, for focus to go to. */
+  topElement: React.RefObject<HTMLDivElement | null>;
+  /** `AnimatePresence`'s, which measures a leaving card to lift it out of the flow. */
+  ref?: React.Ref<HTMLDivElement>;
   children: React.ReactNode;
 }) {
   const isPresent = useIsPresent();
-  const ref = React.useRef<HTMLDivElement>(null);
+  const element = React.useRef<HTMLDivElement | null>(null);
+  const ref = React.useCallback(
+    (node: HTMLDivElement | null) => {
+      element.current = node;
+      if (typeof forwardedRef === 'function') forwardedRef(node);
+      else if (forwardedRef) forwardedRef.current = node;
+    },
+    [forwardedRef]
+  );
   React.useEffect(() => {
-    if (!claimFocus.current) return;
-    claimFocus.current = false;
-    ref.current?.focus({ preventScroll: true });
-  }, [claimFocus]);
+    if (isPresent) topElement.current = element.current;
+  }, [isPresent, topElement]);
+
   const variants = {
-    initial: { opacity: 0, y: 6, scale: 0.98 },
-    shown: { opacity: 1, x: 0, y: 0, scale: 1 },
+    // Under the leaving card from the first frame: it is still at 10 until its exit lifts it to 20.
+    rising: { opacity: 1, y: EDGE_DROP_PX, scale: 0.95, zIndex: 1 },
+    shown: { opacity: 1, x: 0, y: 0, scale: 1, rotate: 0, zIndex: 10 },
     leaving: (ids: string[] | undefined) =>
       ids?.includes(id)
-        ? { opacity: 0, y: 6, scale: 0.98, transition: HUB_CARD_EXIT_TRANSITION }
-        : { opacity: 0, x: 24, transition: HUB_CARD_EXIT_TRANSITION },
+        ? { opacity: 0, y: EDGE_DROP_PX, scale: 0.95, zIndex: 0, transition: HUB_CARD_EXIT_TRANSITION }
+        : {
+            x: '-110%',
+            rotate: -3,
+            opacity: 0,
+            zIndex: 20,
+            transition: {
+              x: HUB_CARD_DISMISS_TRANSITION,
+              rotate: HUB_CARD_DISMISS_TRANSITION,
+              opacity: { ...HUB_CARD_DISMISS_TRANSITION, ease: 'easeIn' as const },
+            },
+          },
   };
 
   return (
     <motion.div
+      ref={ref}
       variants={variants}
-      initial="initial"
+      initial="rising"
       animate="shown"
       exit="leaving"
-      transition={HUB_STEP_TRANSITION}
+      transition={HUB_CARD_RISE_TRANSITION}
       inert={!isPresent}
-      ref={ref}
       tabIndex={-1}
-      className="relative z-10 outline-none"
+      style={{ transformOrigin: '50% 100%' }}
+      className="relative outline-none"
     >
       {children}
     </motion.div>
   );
 }
+
+/**
+ * A dismissed card's slide off the stack: long enough to follow, and eased in and out so it travels
+ * the whole way rather than snapping off in the first frames.
+ */
+const HUB_CARD_DISMISS_TRANSITION = { duration: 0.4, ease: HUB_EASE } as const;
+
+/** The card underneath rising into place while the dismissed one slides off it. */
+const HUB_CARD_RISE_TRANSITION = { duration: 0.32, ease: HUB_EASE } as const;
