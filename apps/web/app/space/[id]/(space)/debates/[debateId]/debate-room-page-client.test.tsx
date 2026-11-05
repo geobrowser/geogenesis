@@ -8555,6 +8555,75 @@ describe('opponent-left notice', () => {
     expect(notice()).toBe(false);
   });
 
+  const dropCallDuringThankYou = async (turnEndsAt: string) => {
+    setHistoryLength(2);
+    installRecordingMocks();
+    vi.mocked(Date.now).mockReturnValue(Date.parse('2026-07-02T00:00:15.000Z'));
+    const view = await renderLiveDebate();
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+    act(() => emitRoomEvent('disconnected', 99));
+
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'thanking',
+      turn_started_at: '2026-07-02T00:00:10.000Z',
+      turn_ends_at: turnEndsAt,
+      completed_at: null,
+      rematch_session_id: 'rematch-1',
+    };
+    mocks.rematch = rematchSession('deciding', { localConsented: true });
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    return view;
+  };
+
+  const completeDebate = (view: ReturnType<typeof render>) => {
+    mocks.debate = { ...mocks.debate!, status: 'complete', completed_at: mocks.debate!.turn_ends_at };
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+  };
+
+  const retryUntilBack = async () => {
+    fireEvent.click(await screen.findByRole('button', { name: 'Retry save' }));
+    await waitFor(() => expect(mocks.back).toHaveBeenCalledOnce());
+    expect(mocks.enqueueRecording).toHaveBeenCalledTimes(2);
+    expect(mocks.enqueueRecording.mock.invocationCallOrder[1]).toBeLessThan(mocks.back.mock.invocationCallOrder[0]!);
+    expect(notice()).toBe(true);
+  };
+
+  it('keeps Retry save up when the debate completes after the ended rematch’s save failed', async () => {
+    mocks.enqueueRecording.mockRejectedValueOnce(new Error('Storage unavailable'));
+    const view = await dropCallDuringThankYou('2026-07-02T00:00:40.000Z');
+
+    mocks.rematch = rematchSession('ended', { localConsented: true });
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await screen.findByRole('button', { name: 'Retry save' });
+
+    completeDebate(view);
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(mocks.back).not.toHaveBeenCalled();
+    expect(mocks.replace).not.toHaveBeenCalled();
+    await retryUntilBack();
+  });
+
+  it('saves before leaving when the tab comes back to a completed debate and an ended rematch', async () => {
+    mocks.enqueueRecording.mockRejectedValueOnce(new Error('Storage unavailable'));
+
+    const view = await dropCallDuringThankYou('2026-07-02T00:00:12.000Z');
+
+    mocks.rematch = rematchSession('ended', { localConsented: true });
+    completeDebate(view);
+
+    await screen.findByRole('button', { name: 'Retry save' });
+    expect(mocks.enqueueRecording).toHaveBeenCalledOnce();
+    expect(mocks.back).not.toHaveBeenCalled();
+    expect(mocks.replace).not.toHaveBeenCalled();
+    expect(notice()).toBe(false);
+
+    await retryUntilBack();
+  });
+
   it('does not show the notice when the room loads with an already-ended rematch', async () => {
     mocks.debate = { ...completedDebate(), rematch_session_id: 'rematch-1' };
     mocks.rematch = rematchSession('ended');

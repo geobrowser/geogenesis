@@ -3181,9 +3181,26 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     // Leave marks after this render was committed; re-check so the leaver is not announced.
     if (debate && didLocallyLeaveDebate(debate.id)) return;
     if (debate?.rematch_session_id && didLocallyLeaveRematch(debate.rematch_session_id)) return;
+    if (opponentLeftFromRematchEnd && debate?.status === 'complete') {
+      if (idleSaveFailed) return;
+      void leaveIdleRoom(() => {
+        setOpponentLeftNotice(true);
+        returnFromDebate();
+      });
+      return;
+    }
     setOpponentLeftNotice(true);
     returnFromDebate();
-  }, [shouldAnnounceOpponentLeft, roomState, debate, returnFromDebate, setOpponentLeftNotice]);
+  }, [
+    shouldAnnounceOpponentLeft,
+    opponentLeftFromRematchEnd,
+    idleSaveFailed,
+    leaveIdleRoom,
+    roomState,
+    debate,
+    returnFromDebate,
+    setOpponentLeftNotice,
+  ]);
 
   React.useEffect(() => {
     if (debate && debate.status !== 'complete' && debate.status !== 'cancelled') {
