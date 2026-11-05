@@ -172,6 +172,36 @@ export function revealRebut(): Debate {
   };
 }
 
+/**
+ * 8.7: timed out (Alice Extend, Bob never picked), resolved by the sweep at 20:02:11.3. Bob's missing
+ * pick goes along with Alice's Extend (GEO-3584), so round 1 is appended and starts at 20:02:14.3.
+ */
+export function timedOutExtend(): Debate {
+  const picks: OpenRoundHistoryEntry['picks'] = [
+    { participant_slot: 1, pick: 'extend' },
+    { participant_slot: 2, pick: null },
+  ];
+  return {
+    ...revealRebut(),
+    turn_started_at: '2026-10-06T20:02:14.300Z',
+    turn_ends_at: '2026-10-06T20:02:59.300Z',
+    open_rounds: block({
+      as_of: '2026-10-06T20:02:11.350Z',
+      phase: 'result',
+      can_pick: false,
+      decision_resolved_at: '2026-10-06T20:02:11.300Z',
+      next_phase_starts_at: '2026-10-06T20:02:14.300Z',
+      my_pick: 'extend',
+      opponent_has_picked: false,
+      outcome: 'extend',
+      resolution: 'deadline',
+      revealed_picks: picks,
+      turn_roles: ['opening', 'opening', 'rebuttal', 'rebuttal'],
+      rounds: [{ ...roundZeroRebut, decision_resolved_at: '2026-10-06T20:02:11.300Z', resolution: 'deadline', picks }],
+    }),
+  };
+}
+
 /** What a fetch after 20:02:07.2 returns: round 1 speaking, Alice first. */
 export function roundOneSpeaking(): Debate {
   const debate = revealRebut();
@@ -239,8 +269,8 @@ export function thankingAfterEnd(): Debate {
 }
 
 /**
- * 8.7's timing, but neither debater picked, resolved by the sweep at 20:02:11.3. Since GEO-3584 a
- * missing pick goes along with an Extend, so a timeout that ends the debate is either no picks or an
+ * 8.7's timing, but neither debater picked, so the debate ends. Since GEO-3584 a missing pick goes
+ * along with an Extend (`timedOutExtend`), so a timeout that ends the debate is either no picks or an
  * End against a missing pick.
  */
 export function timedOut(): Debate {
