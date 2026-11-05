@@ -147,6 +147,7 @@ import { useOpenClaimInSidePanel } from '~/core/hooks/use-open-claim-in-side-pan
 import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
 import { equals as idEquals, uuidToHex } from '~/core/id/normalize';
 import { responsePositionLabel } from '~/core/responses/entity-response';
+import { useFeatureFlag } from '~/core/state/feature-flags';
 import { normId } from '~/core/utils/norm-id';
 import { getTopRankedSpaceId } from '~/core/utils/space/space-ranking';
 import { validateSpaceId } from '~/core/utils/utils';
@@ -179,7 +180,7 @@ const NO_CLAIMS: DebateRematchClaim[] = [];
  *
  * `debate` is GEO-2870 phase 2, "From this debate": the claims extracted from the debate that just
  * finished, read from geo-chat's fast path (GEO-2868 option C) rather than waiting ~27 minutes for
- * the graph. Hidden from the picker for now (GEO-3585).
+ * the graph. Hidden from the picker by default (GEO-3585).
  *
  * `matches` is GEO-3148: the claims the two of you hold opposite sides on and have not debated, so
  * every one of them can be requested from its card. It replaced the "Matches only" switch that used
@@ -204,9 +205,9 @@ function listLandingState(pending: boolean, rows: number): LandingState {
  * GEO-3148. Where a pair land: the first of these tabs with something in it, and Explore — which
  * always has something — when none does.
  *
- * Matches first, because a claim the two of you can debate right now is what the page is for. Then
- * the related claims, then everything the opponent has taken a side on, where a match is one press
- * away.
+ * Today’s claims first, then Matches, then the related claims, then everything the opponent has
+ * taken a side on, where a match is one press away. The previous-debate claims participate only
+ * when their feature flag is enabled.
  *
  * `null` while an earlier tab has not answered. Landing on a later one in that window would be
  * landing on a guess, and the landing is taken once: a tab whose answer arrives afterwards must not
@@ -214,9 +215,6 @@ function listLandingState(pending: boolean, rows: number): LandingState {
  */
 /** How many topics a search may match claims through on Explore. See `searchTopicIds`. */
 const SEARCH_TOPIC_LIMIT = 20;
-
-// GEO-3585: keep the previous-debate claims tab hidden, including its landing and data requests.
-const PREVIOUS_DEBATE_CLAIMS_ENABLED = false;
 
 const NO_IDS: string[] = [];
 
@@ -571,7 +569,8 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    * the reader a minute later.
    * ---------------------------------------------------------------------------------------------*/
   const sourceDebateId = session?.source_debate_id ?? null;
-  const debateOffered = PREVIOUS_DEBATE_CLAIMS_ENABLED && sourceDebateId !== null;
+  const previousDebateClaimsEnabled = useFeatureFlag('previousDebateClaims');
+  const debateOffered = previousDebateClaimsEnabled && sourceDebateId !== null;
   const extractedClaimsQuery = useDebateExtractedClaims(sourceDebateId ?? '', debateOffered);
   const notInterested = useNotInterestedClaimIds(debateOffered);
   const notInterestedIds = React.useMemo(() => new Set(notInterested.ids.map(normId)), [notInterested.ids]);
@@ -588,7 +587,11 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     [openRequestClaimId]
   );
   const debateList = useFromThisDebateList(debateCandidates, openRequestClaimIds, sessionId);
-  const debateClaimIds = React.useMemo(() => debateList.map(claim => claim.id), [debateList]);
+  // The list holds its last answer during refetches. Turning the flag off must also stop hydrating it.
+  const debateClaimIds = React.useMemo(
+    () => (debateOffered ? debateList.map(claim => claim.id) : NO_IDS),
+    [debateList, debateOffered]
+  );
   // Polled while any is missing: the early claims publish puts them on the graph a minute or two
   // after geo-chat extracts them (GEO-2870 option A), and each claim joins the list when it lands.
   const debateEntitiesQuery = useClaimEntitiesByIds(debateClaimIds, { pollMissingMs: DEBATE_CLAIM_PUBLISH_POLL_MS });
@@ -3240,8 +3243,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       label: 'Matches',
       count: { value: matchClaims.length, pending: opponentCountPending, pendingLabel: 'Counting matches' },
     },
-    // Offered whenever the session came out of a debate, including while extraction is still
-    // running, because the list filling in is the point (GEO-2870).
+    // Hidden by default; the shared flag gates both this slot and its data requests (GEO-3585).
     ...(debateOffered
       ? [
           {

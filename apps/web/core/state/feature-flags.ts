@@ -41,6 +41,12 @@ export const featureFlagDefinitions = [
     enabledByDefault: false,
   },
   {
+    id: 'previousDebateClaims',
+    label: 'Claims from previous debate',
+    description: 'Show claims extracted from the previous debate in the debate-again picker (GEO-3585).',
+    enabledByDefault: false,
+  },
+  {
     id: 'exploreSidePanel',
     label: 'Explore side panel',
     description:
