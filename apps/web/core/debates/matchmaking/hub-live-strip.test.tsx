@@ -1,10 +1,11 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { DebateLobbySummary } from '../api';
+import type { DebateLobbyCalendarRow, DebateLobbySummary } from '../api';
 import type { LobbyLineup } from '../lobbies/live-lobbies';
+import { ResizeObserverStub } from '../resize-observer-fixtures';
 import type { EndedAsk, OutgoingAsk } from './use-outgoing-ask';
 
 const mocks = vi.hoisted(() => ({
@@ -17,6 +18,9 @@ const mocks = vi.hoisted(() => ({
   signIn: vi.fn(),
   queue: vi.fn(),
   mutate: vi.fn(),
+  week: [] as DebateLobbyCalendarRow[],
+  viewerId: 'viewer' as string | null,
+  dismissed: [] as string[],
 }));
 
 vi.mock('./hub-ask-context', () => ({
@@ -49,14 +53,31 @@ vi.mock('../lobbies/hooks', async importOriginal => ({
   useLobbyReminderSaving: () => false,
   useLobbyReminderError: () => null,
   useDebateLobby: () => ({ data: undefined, refetch: vi.fn() }),
+  useDebateLobbyCalendar: () => ({ data: { lobbies: mocks.week } }),
 }));
+vi.mock('../use-current-geo-chat-user-id', () => ({ useCurrentGeoChatUserId: () => mocks.viewerId }));
+// The browser's dismissals, without the storage under them.
+vi.mock('~/core/hooks/use-dismissed-notice', async () => {
+  const React = await import('react');
+  return {
+    useDismissedNotices: () => {
+      const [, rerender] = React.useReducer((n: number) => n + 1, 0);
+      return {
+        isDismissed: (id: string) => mocks.dismissed.includes(id),
+        remember: (ids: string[]) => {
+          mocks.dismissed.push(...ids);
+          rerender();
+        },
+      };
+    },
+  };
+});
 vi.mock('~/core/hooks/use-privy-sign-in', () => ({ usePrivySignIn: () => mocks.signIn }));
 vi.mock('~/core/state/pending-actions', () => ({
   useQueuedAction: () => ({ intent: undefined, isQueued: false, queue: mocks.queue, cancel: vi.fn() }),
 }));
 
 const { HubLiveStrip, askShareLeft } = await import('./hub-live-strip');
-const { lobbyLineup } = await import('../lobbies/live-lobbies');
 
 const CLAIM = {
   id: 'dc-1',
@@ -85,12 +106,41 @@ function lobby(overrides: Partial<DebateLobbySummary> = {}): DebateLobbySummary 
   };
 }
 
+/** A lobby still to open in the calendar's week, two hours from now unless told otherwise. */
+function upcoming(overrides: Partial<DebateLobbyCalendarRow> = {}): DebateLobbyCalendarRow {
+  const startsAt = new Date(Date.now() + 2 * 60 * 60_000).toISOString();
+  return {
+    ...lobby({ open: false, scheduled: true, starts_at: startsAt, opens_at: startsAt, headcount: 0 }),
+    state: 'upcoming',
+    closed_at: null,
+    ...overrides,
+  };
+}
+
+/** Noon, `days` local days from today. */
+function inDays(days: number) {
+  const at = new Date();
+  at.setDate(at.getDate() + days);
+  at.setHours(12, 0, 0, 0);
+  return at.toISOString();
+}
+
 const EMPTY: LobbyLineup = { live: [], next: null };
 
+/** The names of the edges under the top card, top first. */
+function edgeNames() {
+  return screen.queryAllByRole('button', { name: /^Show / }).map(edge => edge.getAttribute('aria-label'));
+}
+
 beforeEach(() => {
+  // The stack eases its height, which needs one (react-use-measure).
+  vi.stubGlobal('ResizeObserver', ResizeObserverStub);
   mocks.ask = null;
   mocks.ended = null;
   mocks.auth = { ready: true, authenticated: true };
+  mocks.week = [];
+  mocks.viewerId = 'viewer';
+  mocks.dismissed = [];
 });
 
 afterEach(() => {
@@ -110,83 +160,157 @@ describe('HubLiveStrip', () => {
     render(<HubLiveStrip lineup={{ ...EMPTY, live: [lobby()] }} />);
 
     const card = within(screen.getByRole('region', { name: 'Live debate lobby' }));
-    expect(card.getByText('Live')).toBeInTheDocument();
-    expect(card.getByRole('heading', { name: 'NYC Debates' })).toBeInTheDocument();
+    expect(card.getByRole('heading', { name: 'Live lobby' })).toBeInTheDocument();
+    expect(card.getByText('NYC Debates')).toBeInTheDocument();
     expect(card.getByRole('link', { name: 'Join lobby' })).toHaveAttribute('href', '/debate/lobby1');
   });
 
-  // GEO-3519: signed in, the timeline is the place for lobbies still to open. The live card stays.
-  it('shows a signed-in viewer no strip for a lobby still to open, and keeps the live card', () => {
-    const later = lobby({ lobby_id: 'later', open: false, scheduled: true, name: 'AI policy night' });
-    const { container, rerender } = render(<HubLiveStrip lineup={lobbyLineup([later])} />);
-    expect(container).toBeEmptyDOMElement();
-
-    rerender(<HubLiveStrip lineup={lobbyLineup([later, lobby()])} />);
-    expect(screen.getByTestId('lobby-spotlight')).toHaveTextContent('NYC Debates');
-    expect(screen.queryByText('AI policy night')).not.toBeInTheDocument();
-  });
-
-  it('shows a signed-in viewer the Today’s claims callout', () => {
+  it('shows a signed-in viewer the Today’s claims callout, alone', () => {
     render(<HubLiveStrip lineup={EMPTY} todaysCallout={<section aria-label="Today’s claims" />} />);
     expect(screen.getByRole('region', { name: 'Today’s claims' })).toBeInTheDocument();
+    expect(edgeNames()).toEqual([]);
   });
 
-  // Signed out there is no Requests tab, so the next lobby keeps its strip (Preston, 28 Oct).
-  describe('signed out', () => {
-    const later = lobby({ lobby_id: 'later', open: false, scheduled: true, name: 'AI policy night' });
+  // GEO-3586: the callouts as one stack, so an upcoming lobby no longer waits behind Today's claims.
+  describe('the callout stack', () => {
+    const callout = <section aria-label="Today’s claims" />;
 
-    beforeEach(() => {
-      mocks.auth = { ready: true, authenticated: false };
-    });
-
-    it('shows the next lobby still to open, light, with RSVP queuing the sign-up', () => {
-      render(<HubLiveStrip lineup={lobbyLineup([later])} />);
-
-      const strip = screen.getByTestId('hub-strip-next-lobby');
-      expect(strip).toHaveTextContent('AI policy night');
-      expect(strip).toHaveClass('bg-white');
-      fireEvent.click(within(strip).getByRole('button', { name: 'RSVP' }));
-      expect(mocks.queue).toHaveBeenCalledWith('later');
-      expect(mocks.signIn).toHaveBeenCalledWith(
-        expect.objectContaining({ auth_control: 'remind_lobby', target_id: 'later' }),
-        expect.anything()
-      );
-      expect(mocks.mutate).not.toHaveBeenCalled();
-    });
-
-    it('opens the lobby’s details from its name', () => {
-      render(<HubLiveStrip lineup={lobbyLineup([later])} />);
-
-      fireEvent.click(screen.getByRole('button', { name: 'AI policy night, lobby details' }));
-      const details = screen.getByRole('dialog', { name: 'Lobby details' });
-      expect(within(details).getByRole('link', { name: 'Open lobby page' })).toHaveAttribute('href', '/debate/later');
-    });
-
-    it('leads with a live lobby over the next one', () => {
-      render(<HubLiveStrip lineup={lobbyLineup([later, lobby()])} />);
+    it('leads with the live lobby, then the soonest lobby, Today’s claims, then later lobbies', () => {
+      mocks.week = [
+        upcoming({ lobby_id: 'fri', name: 'Friday hot takes', starts_at: inDays(3) }),
+        upcoming({ lobby_id: 'tonight', name: 'AI policy night' }),
+      ];
+      render(<HubLiveStrip lineup={{ ...EMPTY, live: [lobby()] }} todaysCallout={callout} />);
 
       expect(screen.getByTestId('lobby-spotlight')).toHaveTextContent('NYC Debates');
-      expect(screen.queryByTestId('hub-strip-next-lobby')).not.toBeInTheDocument();
+      // Two edges under the top card; the fourth waits out of sight.
+      expect(edgeNames()).toEqual(['Show upcoming lobby AI policy night', 'Show Today’s claims']);
     });
 
-    // GEO-3498: a live lobby takes the slot and the callout waits; a scheduled one does not push it out.
-    it('puts the Today’s claims callout after a live lobby and ahead of the next one', () => {
-      const callout = <section aria-label="Today’s claims" />;
+    it('puts later lobbies after Today’s claims', () => {
+      mocks.week = [
+        upcoming({ lobby_id: 'fri', name: 'Friday hot takes', starts_at: inDays(3) }),
+        upcoming({ lobby_id: 'tonight', name: 'AI policy night' }),
+      ];
+      render(<HubLiveStrip lineup={EMPTY} todaysCallout={callout} />);
 
-      const { rerender } = render(<HubLiveStrip lineup={lobbyLineup([later])} todaysCallout={callout} />);
-      expect(screen.getByRole('region', { name: 'Today’s claims' })).toBeInTheDocument();
-      expect(screen.queryByTestId('hub-strip-next-lobby')).not.toBeInTheDocument();
-
-      rerender(<HubLiveStrip lineup={lobbyLineup([later, lobby()])} todaysCallout={callout} />);
-      expect(screen.getByTestId('lobby-spotlight')).toHaveTextContent('NYC Debates');
-      expect(screen.queryByRole('region', { name: 'Today’s claims' })).not.toBeInTheDocument();
+      expect(screen.getByRole('region', { name: 'Upcoming lobby' })).toHaveTextContent('AI policy night');
+      expect(edgeNames()).toEqual(['Show Today’s claims', 'Show upcoming lobby Friday hot takes']);
     });
 
-    it('shows nothing while auth is still resolving, so a signed-in viewer never sees it flash', () => {
-      mocks.auth = { ready: false, authenticated: false };
-      const { container } = render(<HubLiveStrip lineup={lobbyLineup([later])} />);
+    it('shows an upcoming lobby the viewer hasn’t answered, light, with its RSVP', () => {
+      mocks.week = [upcoming({ lobby_id: 'tonight', name: 'AI policy night' })];
+      render(<HubLiveStrip lineup={EMPTY} todaysCallout={callout} />);
+
+      const card = screen.getByRole('region', { name: 'Upcoming lobby' });
+      expect(card).toHaveClass('bg-white');
+      expect(within(card).getByRole('heading', { name: 'Upcoming lobby' })).toBeInTheDocument();
+      expect(card).toHaveTextContent('AI policy night');
+      fireEvent.click(within(card).getByRole('button', { name: 'RSVP' }));
+      expect(mocks.mutate).toHaveBeenCalledWith({ lobbyId: 'tonight', reminded: true });
+      expect(edgeNames()).toEqual(['Show Today’s claims']);
+    });
+
+    it('leaves out lobbies RSVP’d to, hosted, dismissed in Requests, or more than a week out', () => {
+      const me = { user_id: 'viewer', profile_space_id: 's', display_name: 'Me', avatar_cid: null };
+      mocks.week = [
+        upcoming({ lobby_id: 'going', viewer_reminded: true }),
+        upcoming({ lobby_id: 'hosting', hosts: [me] }),
+        upcoming({ lobby_id: 'dismissed', viewer_dismissed: true }),
+        upcoming({ lobby_id: 'far', starts_at: inDays(9) }),
+      ];
+      const { container } = render(<HubLiveStrip lineup={EMPTY} />);
 
       expect(container).toBeEmptyDOMElement();
+    });
+
+    it('brings a card forward from its edge', async () => {
+      mocks.week = [upcoming({ lobby_id: 'tonight', name: 'AI policy night' })];
+      render(<HubLiveStrip lineup={EMPTY} todaysCallout={callout} />);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Show Today’s claims' }));
+      expect(edgeNames()).toEqual(['Show upcoming lobby AI policy night']);
+      await waitFor(() => expect(screen.getByRole('region', { name: 'Today’s claims' })).toBeInTheDocument());
+    });
+
+    it('takes a dismissed lobby out of the stack only, and the next card comes up', async () => {
+      mocks.week = [upcoming({ lobby_id: 'tonight', name: 'AI policy night' })];
+      render(<HubLiveStrip lineup={EMPTY} todaysCallout={callout} />);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Dismiss upcoming lobby' }));
+      expect(mocks.dismissed).toEqual(['debatesPanelUpcomingLobby:tonight']);
+      // Nothing written to geo-chat: the lobby stays on the Requests timeline.
+      expect(mocks.mutate).not.toHaveBeenCalled();
+      await waitFor(() => expect(screen.getByRole('region', { name: 'Today’s claims' })).toBeInTheDocument());
+      expect(screen.queryByRole('region', { name: 'Upcoming lobby' })).not.toBeInTheDocument();
+      expect(edgeNames()).toEqual([]);
+    });
+
+    it('dismisses the live lobbies on screen from the live card’s X', async () => {
+      render(<HubLiveStrip lineup={{ ...EMPTY, live: [lobby()] }} todaysCallout={callout} />);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Dismiss live lobby' }));
+      expect(mocks.dismissed).toEqual(['debatesPanelLiveLobby:lobby1']);
+      await waitFor(() => expect(screen.queryByTestId('lobby-spotlight')).not.toBeInTheDocument());
+      expect(screen.getByRole('region', { name: 'Today’s claims' })).toBeInTheDocument();
+    });
+
+    it('keeps a lobby up showing Going for a moment once RSVP’d, then lets it leave', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      try {
+        mocks.week = [upcoming({ lobby_id: 'tonight', name: 'AI policy night' })];
+        const { rerender } = render(<HubLiveStrip lineup={EMPTY} todaysCallout={callout} />);
+
+        mocks.week = [upcoming({ lobby_id: 'tonight', name: 'AI policy night', viewer_reminded: true })];
+        rerender(<HubLiveStrip lineup={EMPTY} todaysCallout={callout} />);
+        expect(screen.getByRole('region', { name: 'Upcoming lobby' })).toHaveTextContent('Going');
+
+        await act(async () => {
+          vi.advanceTimersByTime(800);
+        });
+        await waitFor(() => expect(screen.queryByRole('region', { name: 'Upcoming lobby' })).not.toBeInTheDocument());
+        expect(screen.getByRole('region', { name: 'Today’s claims' })).toBeInTheDocument();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    describe('signed out', () => {
+      beforeEach(() => {
+        mocks.auth = { ready: true, authenticated: false };
+        mocks.viewerId = null;
+      });
+
+      it('offers the week’s lobbies, with RSVP queuing the sign-up', () => {
+        mocks.week = [upcoming({ lobby_id: 'later', name: 'AI policy night' })];
+        render(<HubLiveStrip lineup={EMPTY} />);
+
+        const card = screen.getByRole('region', { name: 'Upcoming lobby' });
+        fireEvent.click(within(card).getByRole('button', { name: 'RSVP' }));
+        expect(mocks.queue).toHaveBeenCalledWith('later');
+        expect(mocks.signIn).toHaveBeenCalledWith(
+          expect.objectContaining({ auth_control: 'remind_lobby', target_id: 'later' }),
+          expect.anything()
+        );
+        expect(mocks.mutate).not.toHaveBeenCalled();
+      });
+
+      it('opens the lobby’s details from its name', () => {
+        mocks.week = [upcoming({ lobby_id: 'later', name: 'AI policy night' })];
+        render(<HubLiveStrip lineup={EMPTY} />);
+
+        fireEvent.click(screen.getByRole('button', { name: /AI policy night, lobby details/ }));
+        const details = screen.getByRole('dialog', { name: 'Lobby details' });
+        expect(within(details).getByRole('link', { name: 'Open lobby page' })).toHaveAttribute('href', '/debate/later');
+      });
+
+      it('shows nothing while auth is still resolving, so a signed-in viewer never sees it flash', () => {
+        mocks.auth = { ready: false, authenticated: false };
+        mocks.week = [upcoming({ lobby_id: 'later' })];
+        const { container } = render(<HubLiveStrip lineup={EMPTY} />);
+
+        expect(container).toBeEmptyDOMElement();
+      });
     });
   });
 
