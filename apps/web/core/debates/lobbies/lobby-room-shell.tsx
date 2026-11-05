@@ -262,6 +262,8 @@ export function LobbyRoomShell({
               {guestVoice ? (
                 <LobbyGuestVoice
                   key={guestVoice.token}
+                  lobbyId={lobby.lobby_id}
+                  endsAs={guestSession.guestEndsAs}
                   token={guestVoice}
                   onStates={setGuestVoiceStates}
                   onReconnect={guestSession.reconnect}
@@ -278,8 +280,8 @@ export function LobbyRoomShell({
                   joined={state.status === 'joined'}
                   currentUserId={currentUserId}
                   onConnectedChange={voice.setVoiceConnected}
-                  onAudible={guestVoice ? guestSession.roomDone : undefined}
-                  onUnavailable={guestVoice ? guestSession.roomDone : undefined}
+                  onAudible={guestVoice ? guestSession.handedOver : undefined}
+                  onUnavailable={guestVoice ? guestSession.handoverFailed : undefined}
                   screenShare={screenShare}
                   {...voiceExtras}
                 >

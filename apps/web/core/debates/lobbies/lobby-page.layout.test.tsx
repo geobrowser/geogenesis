@@ -72,7 +72,9 @@ vi.mock('./lobby-guest-hooks', async importOriginal => ({
     retry: vi.fn(),
     reconnect: vi.fn(),
     checkNow: vi.fn(),
-    roomDone: vi.fn(),
+    handedOver: vi.fn(),
+    handoverFailed: vi.fn(),
+    guestEndsAs: vi.fn(() => 'left' as const),
   }),
 }));
 vi.mock('./lobby-voice', async () => {

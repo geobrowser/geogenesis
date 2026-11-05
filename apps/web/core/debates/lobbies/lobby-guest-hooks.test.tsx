@@ -348,7 +348,7 @@ describe('useLobbyGuestSession', () => {
     expect(mocks.heartbeat).not.toHaveBeenCalled();
     expect(readGuestSecret('lobby1')).toBe('secret-1');
 
-    act(() => result.current.roomDone());
+    act(() => result.current.handedOver());
     expect(result.current.state.status).toBe('released');
     expect(readGuestSecret('lobby1')).toBeNull();
     unmount();
@@ -374,6 +374,53 @@ describe('useLobbyGuestSession', () => {
     rerender({ listen: false, signedIn: true, member: 'joined' });
     expect(result.current.state.status).toBe('released');
     expect(readGuestSecret('lobby1')).toBeNull();
+  });
+});
+
+// GEO-3340: why the guest room went, for its call quality. The session sees every way it can go,
+// so it is the one to answer; the room asks when it unmounts.
+describe('why the guest room went', () => {
+  it('says left until something else happens', async () => {
+    const { result } = renderSession();
+    await waitFor(() => expect(result.current.state.status).toBe('listening'));
+    expect(result.current.guestEndsAs()).toBe('left');
+  });
+
+  it('says handed over once the member room is up', async () => {
+    const { result, rerender } = renderSession();
+    await waitFor(() => expect(result.current.state.status).toBe('listening'));
+    rerender({ listen: false, signedIn: true, member: 'joined' });
+    act(() => result.current.handedOver());
+    expect(result.current.state.status).toBe('released');
+    expect(result.current.guestEndsAs()).toBe('handed_over');
+  });
+
+  it('says the handover failed when the member room cannot come up', async () => {
+    const { result, rerender } = renderSession();
+    await waitFor(() => expect(result.current.state.status).toBe('listening'));
+    rerender({ listen: false, signedIn: true, member: 'joined' });
+    act(() => result.current.handoverFailed());
+    expect(result.current.state.status).toBe('released');
+    expect(result.current.guestEndsAs()).toBe('handover_failed');
+  });
+
+  // Copilot on #3065: the signed-in path failing before the member room exists drops the guest
+  // room too, and the person's audio with it.
+  it('says the handover failed when the signed-in path fails before the member room', async () => {
+    const { result, rerender } = renderSession();
+    await waitFor(() => expect(result.current.state.status).toBe('listening'));
+    rerender({ listen: false, signedIn: true, member: 'failed' });
+    expect(result.current.state.status).toBe('released');
+    expect(result.current.guestEndsAs()).toBe('handover_failed');
+  });
+
+  // An outcome only counts while handing over: the reducer ignores it otherwise, and the room stays.
+  it('ignores a member room outcome while not handing over', async () => {
+    const { result } = renderSession();
+    await waitFor(() => expect(result.current.state.status).toBe('listening'));
+    act(() => result.current.handedOver());
+    expect(result.current.state.status).toBe('listening');
+    expect(result.current.guestEndsAs()).toBe('left');
   });
 });
 

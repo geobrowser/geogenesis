@@ -6,6 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const capture = vi.hoisted(() => vi.fn());
 vi.mock('~/core/analytics', () => ({ capture }));
+const reportError = vi.hoisted(() => vi.fn());
+vi.mock('~/core/telemetry/logger', () => ({ reportError }));
 
 const { VOICE_FIRST_SAMPLE_MS, VOICE_SAMPLE_MS, startVoiceCallTelemetry, useVoiceCallTelemetry } =
   await import('./use-voice-call-telemetry');
@@ -114,6 +116,126 @@ describe('useVoiceCallTelemetry (GEO-3340)', () => {
     // test's events.
     cleanup();
     vi.useRealTimers();
+  });
+
+  // GEO-3340. The picker and lobby run this in their own call trees, which must never fail because
+  // diagnostics did: the same rule the debate room keeps.
+  it('never fails the call it measures when setting up throws, and reports why', () => {
+    const call = fakeRoom();
+    const failure = new Error('listener table full');
+    call.raw.on = () => {
+      throw failure;
+    };
+    reportError.mockClear();
+    expect(() => renderHook(() => useVoiceCallTelemetry(call.room, 'picker', 'session-1'))).not.toThrow();
+    expect(reportError).toHaveBeenCalledWith(failure, {
+      tags: { voice_call_telemetry: 'setup_failed', call_surface: 'picker' },
+    });
+  });
+
+  // Review on #3065: a lobby has a guest room and a member room, both live during a sign-in's
+  // handover, and nothing in the data said which room an event came from.
+  it('tags every event with the room role it is given', () => {
+    const call = fakeRoom();
+    const { unmount } = renderHook(() => useVoiceCallTelemetry(call.room, 'lobby', 'lobby-1', { role: 'guest' }));
+    act(() => call.emitLocal(ParticipantEvent.ConnectionQualityChanged, ConnectionQuality.Poor));
+    unmount();
+    expect(events('debate_voice_changed')).toEqual([expect.objectContaining({ call_role: 'guest' })]);
+    expect(events('debate_voice_ended')).toEqual([expect.objectContaining({ call_role: 'guest' })]);
+  });
+
+  // The room's owner says why it went, asked at unmount: the outcome that closes a lobby's guest
+  // room is only known in the render that removes it.
+  it.each(['handed_over', 'handover_failed'] as const)('ends a room as its owner says it went: %s', reason => {
+    const call = fakeRoom();
+    let outcome: 'left' | 'handed_over' | 'handover_failed' = 'left';
+    const { unmount } = renderHook(() =>
+      useVoiceCallTelemetry(call.room, 'lobby', 'lobby-1', { role: 'guest', endsAs: () => outcome })
+    );
+    outcome = reason;
+    unmount();
+    expect(events('debate_voice_ended')).toEqual([expect.objectContaining({ end_reason: reason })]);
+  });
+
+  it('ends a room as a leave when nothing says otherwise', () => {
+    const call = fakeRoom();
+    const { unmount } = renderHook(() =>
+      useVoiceCallTelemetry(call.room, 'lobby', 'lobby-1', { role: 'guest', endsAs: () => 'left' })
+    );
+    unmount();
+    expect(events('debate_voice_ended')).toEqual([expect.objectContaining({ end_reason: 'left' })]);
+  });
+
+  // Review on #3065: checked by tsc, not at run time. A debate's context and a lobby room's role
+  // never describe the same call, so passing both must not compile.
+  it('keeps a debate’s context and a room role apart', () => {
+    const call = fakeRoom();
+    const stop = startVoiceCallTelemetry(
+      call.room,
+      'lobby',
+      'lobby-1',
+      // @ts-expect-error A room role with debate fields.
+      { call_role: 'guest', debate_id: 'debate-1' }
+    );
+    stop();
+  });
+
+  // Copilot on #3065: one cleanup step that threw cut cleanup short and lost the summary with it.
+  it('still summarises the call and removes every other listener when one cleanup step throws', () => {
+    const call = fakeRoom();
+    const stop = startVoiceCallTelemetry(call.room, 'lobby', 'lobby-1');
+    const off = call.raw.off;
+    const failure = new Error('listener already gone');
+    call.raw.off = (event: string, listener: Listener) => {
+      if (event === RoomEvent.ConnectionStateChanged) throw failure;
+      off(event, listener);
+    };
+
+    // The failure still comes back, so the caller can report it.
+    expect(() => stop()).toThrow(failure);
+    expect(events('debate_voice_ended')).toEqual([expect.objectContaining({ end_reason: 'left' })]);
+    expect(call.roomListeners.get(RoomEvent.Disconnected)?.size ?? 0).toBe(0);
+    expect(call.roomListeners.get(RoomEvent.ActiveDeviceChanged)?.size ?? 0).toBe(0);
+  });
+
+  // The error worth reporting is the setup's, not one from tidying up after it.
+  it('keeps the setup error when tidying up after a failed setup throws too', () => {
+    const call = fakeRoom();
+    const setupFailure = new Error('listener table full');
+    let registered = 0;
+    const on = call.raw.on;
+    call.raw.on = (event: string, listener: Listener) => {
+      registered += 1;
+      if (registered === 3) throw setupFailure;
+      on(event, listener);
+    };
+    call.raw.off = () => {
+      throw new Error('already torn down');
+    };
+    expect(() => startVoiceCallTelemetry(call.room, 'lobby', 'lobby-1')).toThrow(setupFailure);
+  });
+
+  it('reports a failed teardown instead of dropping it', () => {
+    const call = fakeRoom();
+    const { unmount } = renderHook(() => useVoiceCallTelemetry(call.room, 'lobby', 'lobby-1'));
+    const failure = new Error('already torn down');
+    call.raw.off = () => {
+      throw failure;
+    };
+    reportError.mockClear();
+    unmount();
+    expect(reportError).toHaveBeenCalledWith(failure, {
+      tags: { voice_call_telemetry: 'cleanup_failed', call_surface: 'lobby' },
+    });
+  });
+
+  it('never fails the call it measures when cleaning up throws', () => {
+    const call = fakeRoom();
+    const { unmount } = renderHook(() => useVoiceCallTelemetry(call.room, 'lobby', 'lobby-1'));
+    call.raw.off = () => {
+      throw new Error('already torn down');
+    };
+    expect(() => unmount()).not.toThrow();
   });
 
   it('samples quality, loss each way and the mic, every interval while connected', async () => {
