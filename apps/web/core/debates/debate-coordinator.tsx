@@ -214,11 +214,19 @@ export function DebateCoordinator() {
   const myLobby = useMyDebateLobby();
   // A step-out to debate is still part of the lobby session, including in other tabs. Wait until
   // the viewer leaves its roster. The path also covers arrival before the room/lobby reads land.
+  // Background reads can replace cached "no lobby" membership, so wait for those as well.
   const deferSharePrompts =
-    activeFlow || roomIdAtPath !== null || myLobby.isLoading || Boolean(myLobby.data?.current_lobby_id);
+    activeFlow ||
+    roomIdAtPath !== null ||
+    myLobby.isLoading ||
+    myLobby.isFetching ||
+    Boolean(myLobby.data?.current_lobby_id);
   const sharePromptsQuery = useDebateSharePrompts(Boolean(activity) && !deferSharePrompts);
+  // Failed refetches keep cached data; only a successful read may open a new dialog.
   const queriedSharePrompt =
-    deferSharePrompts || sharePromptsQuery.isFetching ? null : (sharePromptsQuery.data?.prompts[0] ?? null);
+    deferSharePrompts || sharePromptsQuery.isFetching || sharePromptsQuery.isError
+      ? null
+      : (sharePromptsQuery.data?.prompts[0] ?? null);
   const [retainedSharePrompt, setRetainedSharePrompt] = React.useState<DebateSharePrompt | null>(null);
   const [closedSharePromptId, setClosedSharePromptId] = React.useState<string | null>(null);
 
