@@ -272,4 +272,9 @@ export function isPrivyLoaded() {
   return realPrivyReady();
 }
 
+/** `isPrivyLoaded`, re-rendering when it changes. */
+export function usePrivyLoaded() {
+  return React.useSyncExternalStore(subscribe, isPrivyLoaded, () => false);
+}
+
 export { restartAuthHost } from './auth-store';

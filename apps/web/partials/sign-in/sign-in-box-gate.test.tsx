@@ -10,6 +10,9 @@ const mocks = vi.hoisted(() => ({
   pendingImport: null as null | { promise: Promise<unknown>; resolve: () => void },
   imported: 0,
   privy: { ready: true, authenticated: false },
+  privyLoaded: true,
+  privyListeners: new Set<() => void>(),
+  requestRealAuth: vi.fn(),
   idle: undefined as undefined | (() => void),
   login: vi.fn(),
 }));
@@ -22,7 +25,25 @@ vi.mock('~/core/wallet/auth-root', () => ({
   },
 }));
 vi.mock('~/core/hooks/use-tracked-login', () => ({ useTrackedLogin: () => ({ login: mocks.login }) }));
-vi.mock('~/core/wallet/auth-hooks', () => ({ usePrivy: () => mocks.privy }));
+vi.mock('~/core/wallet/auth-hooks', async () => {
+  const { useSyncExternalStore } = await import('react');
+  const subscribe = (listener: () => void) => {
+    mocks.privyListeners.add(listener);
+    return () => void mocks.privyListeners.delete(listener);
+  };
+  const isPrivyLoaded = () => mocks.privyLoaded;
+  return {
+    usePrivy: () => mocks.privy,
+    isPrivyLoaded,
+    usePrivyLoaded: () => useSyncExternalStore(subscribe, isPrivyLoaded),
+  };
+});
+vi.mock('~/core/wallet/auth-store', () => ({ requestRealAuth: mocks.requestRealAuth }));
+
+function privyLoads() {
+  mocks.privyLoaded = true;
+  mocks.privyListeners.forEach(listener => listener());
+}
 
 const box = { SignInBoxHost: () => <p>the box</p> };
 
@@ -57,6 +78,9 @@ beforeEach(() => {
   mocks.imported = 0;
   mocks.idle = undefined;
   mocks.privy = { ready: true, authenticated: false };
+  mocks.privyLoaded = true;
+  mocks.privyListeners.clear();
+  mocks.requestRealAuth.mockReset();
   mocks.login.mockReset();
 });
 afterEach(() => {
@@ -127,7 +151,7 @@ describe('SignInBoxGate', () => {
   describe('a slow download', () => {
     beforeEach(() => vi.useFakeTimers());
 
-    it("opens Privy's dialog once when the box never loads", async () => {
+    it("opens Privy's dialog once at the deadline when the box never loads and Privy is up", async () => {
       holdImport();
       const { SIGN_IN_BOX_LOAD_TIMEOUT_MS } = await import('./sign-in-box-gate');
       const store = await setup();
@@ -183,6 +207,70 @@ describe('SignInBoxGate', () => {
       await advance(SIGN_IN_BOX_LOAD_TIMEOUT_MS * 2);
       expect(mocks.imported).toBe(1);
       expect(mocks.login).not.toHaveBeenCalled();
+    });
+
+    describe('with Privy not loaded at the deadline', () => {
+      beforeEach(() => {
+        mocks.privyLoaded = false;
+      });
+
+      it('keeps the request open, starts Privy, and shows the box when it arrives first', async () => {
+        const pending = holdImport();
+        const { SIGN_IN_BOX_LOAD_TIMEOUT_MS } = await import('./sign-in-box-gate');
+        const store = await setup();
+        await press(store);
+        await advance(SIGN_IN_BOX_LOAD_TIMEOUT_MS);
+        expect(store.isSignInBoxOpen()).toBe(true);
+        expect(mocks.requestRealAuth).toHaveBeenCalledTimes(1);
+        await act(async () => pending.resolve());
+        await advance(0);
+        expect(screen.getByText('the box')).toBeInTheDocument();
+        // Privy arriving after the box changes nothing.
+        act(() => privyLoads());
+        await advance(SIGN_IN_BOX_LOAD_TIMEOUT_MS);
+        expect(store.isSignInBoxOpen()).toBe(true);
+        expect(mocks.login).not.toHaveBeenCalled();
+      });
+
+      it("opens Privy's dialog once when Privy arrives first", async () => {
+        const pending = holdImport();
+        const { SIGN_IN_BOX_LOAD_TIMEOUT_MS } = await import('./sign-in-box-gate');
+        const store = await setup();
+        await press(store);
+        await advance(SIGN_IN_BOX_LOAD_TIMEOUT_MS * 3);
+        expect(mocks.login).not.toHaveBeenCalled();
+        act(() => privyLoads());
+        await advance(0);
+        expect(store.isSignInBoxOpen()).toBe(false);
+        expect(mocks.login).toHaveBeenCalledExactlyOnceWith(undefined, undefined, {
+          fallbackFor: 'a',
+          prefillEmail: 'a@b.co',
+        });
+        // The box arriving after the fallback shows nothing on that attempt.
+        await act(async () => pending.resolve());
+        await advance(SIGN_IN_BOX_LOAD_TIMEOUT_MS);
+        expect(screen.queryByText('the box')).not.toBeInTheDocument();
+        expect(mocks.login).toHaveBeenCalledTimes(1);
+      });
+
+      it('leaves a newer press alone when Privy loads after an older one was replaced', async () => {
+        holdImport();
+        const { SIGN_IN_BOX_LOAD_TIMEOUT_MS } = await import('./sign-in-box-gate');
+        const store = await setup();
+        await press(store, 'a');
+        await advance(SIGN_IN_BOX_LOAD_TIMEOUT_MS);
+        await press(store, 'b');
+        act(() => privyLoads());
+        await advance(0);
+        expect(mocks.login).not.toHaveBeenCalled();
+        expect(store.readSignInBox()?.attemptId).toBe('b');
+        // The newer press's own deadline then falls back as usual.
+        await advance(SIGN_IN_BOX_LOAD_TIMEOUT_MS);
+        expect(mocks.login).toHaveBeenCalledExactlyOnceWith(undefined, undefined, {
+          fallbackFor: 'b',
+          prefillEmail: 'a@b.co',
+        });
+      });
     });
   });
 });

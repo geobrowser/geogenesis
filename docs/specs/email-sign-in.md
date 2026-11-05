@@ -65,10 +65,12 @@ core/auth/signed-in-before.ts        "this browser has signed in" marker for lik
   reports ready and signed out. A reader with a restored session never schedules the idle download; if
   the session turns out invalid, Privy reports signed out and the idle download is scheduled then.
 - **Slow or failed chunk.** If the chunk fails to load, or a press has waited
-  `SIGN_IN_BOX_LOAD_TIMEOUT_MS` (5 s) for it, the gate closes that request and calls `login` with
-  `fallbackFor` once, so the press gets Privy's dialog on the same attempt. A chunk that arrives later
-  sets the host, which shows nothing until the next press. Only a waiting press has the deadline; the
-  idle download has none.
+  `SIGN_IN_BOX_LOAD_TIMEOUT_MS` (5 s) for it while Privy is loaded (`isPrivyLoaded`), the gate closes
+  that request and calls `login` with `fallbackFor` once, so the press gets Privy's dialog on the same
+  attempt. With Privy not loaded at the deadline, the gate starts Privy (`requestRealAuth`) and keeps
+  the request open: the box shows if its chunk arrives first, and the fallback runs once if Privy does.
+  A chunk that arrives after a fallback sets the host, which shows nothing until the next press. Only
+  a waiting press has the deadline; the idle download has none.
 - **First paint without Privy.** The card imports nothing from `@geogenesis/auth`. `auth-hooks`'
   `useLoginWithEmail` queues calls until Privy is up (`invokeInstance` → `whenReady`, 20 s). While it
   waits, the code step shows the sheet's own pending state: "Sending a 6-digit code to", boxes disabled.

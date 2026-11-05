@@ -5,16 +5,18 @@ import * as React from 'react';
 import { closeSignInBox, readSignInBox, useSignInBoxRequest } from '~/core/auth/sign-in-box/sign-in-box-store';
 import { signInExpectedOnLoad } from '~/core/auth/sign-in-on-load';
 import { useTrackedLogin } from '~/core/hooks/use-tracked-login';
-import { usePrivy } from '~/core/wallet/auth-hooks';
+import { isPrivyLoaded, usePrivy, usePrivyLoaded } from '~/core/wallet/auth-hooks';
 import { scheduleIdleLoad } from '~/core/wallet/auth-root';
+import { requestRealAuth } from '~/core/wallet/auth-store';
 
 /** How long after mount an idle page fetches the box, so a first press finds it loaded. */
 export const SIGN_IN_BOX_IDLE_DELAY_MS = 2_000;
 
 /**
- * How long a press waits for a box that has not loaded before it gets Privy's dialog instead. The
- * chunk is small and usually preloaded, so a wait this long means a stalled download; past it a
- * press reads as a dead button, and Privy's dialog has its own download still to make.
+ * How long a press waits for a box that has not loaded before it gets Privy's dialog instead, if
+ * Privy is up by then. The chunk is small and usually preloaded, so a wait this long means a stalled
+ * download; past it a press reads as a dead button. With Privy not up either, the press takes
+ * whichever of the two arrives first.
  */
 export const SIGN_IN_BOX_LOAD_TIMEOUT_MS = 5_000;
 
@@ -35,7 +37,7 @@ export function loadSignInBox() {
 /**
  * Loads the box at the first press, at once on a page that opens sign-in by itself, or at idle once
  * the reader is known to be signed out. A press whose box cannot load, or has not loaded within
- * `SIGN_IN_BOX_LOAD_TIMEOUT_MS`, gets Privy's dialog on the same attempt.
+ * `SIGN_IN_BOX_LOAD_TIMEOUT_MS` while Privy has, gets Privy's dialog on the same attempt.
  */
 export function SignInBoxGate() {
   const request = useSignInBoxRequest();
@@ -46,6 +48,9 @@ export function SignInBoxGate() {
   // reader never needs the box, so it downloads only at a press.
   const { ready, authenticated } = usePrivy();
   const signedOut = ready && !authenticated;
+  const privyLoaded = usePrivyLoaded();
+  // The attempt whose deadline passed before Privy loaded: it falls back once Privy does.
+  const [overdue, setOverdue] = React.useState<string | null>(null);
   const loginRef = React.useRef(login);
   loginRef.current = login;
 
@@ -82,13 +87,25 @@ export function SignInBoxGate() {
     };
   }, [wanted, Host, request, fallBack]);
 
-  // Only while a press waits; an idle download has no deadline.
+  // Only while a press waits; an idle download has no deadline. Without Privy the fallback has
+  // nothing to show, so the request stays open for the box or Privy, whichever comes first.
   const waitingFor = Host ? undefined : request?.attemptId;
   React.useEffect(() => {
     if (waitingFor === undefined) return;
-    const timer = setTimeout(() => fallBack(waitingFor), SIGN_IN_BOX_LOAD_TIMEOUT_MS);
+    const timer = setTimeout(() => {
+      if (isPrivyLoaded()) {
+        fallBack(waitingFor);
+        return;
+      }
+      requestRealAuth();
+      setOverdue(waitingFor);
+    }, SIGN_IN_BOX_LOAD_TIMEOUT_MS);
     return () => clearTimeout(timer);
   }, [waitingFor, fallBack]);
+
+  React.useEffect(() => {
+    if (overdue !== null && overdue === waitingFor && privyLoaded) fallBack(overdue);
+  }, [overdue, waitingFor, privyLoaded, fallBack]);
 
   return Host ? <Host /> : null;
 }
