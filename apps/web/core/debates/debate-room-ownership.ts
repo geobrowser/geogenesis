@@ -22,7 +22,13 @@ type TakeoverResponse = {
   ownerLabel?: string;
 };
 
-type OwnershipMessage = TakeoverRequest | TakeoverResponse;
+type TakeoverAck = {
+  type: 'takeover-ack';
+  requestId: string;
+  requesterId: string;
+};
+
+type OwnershipMessage = TakeoverRequest | TakeoverResponse | TakeoverAck;
 
 export type DebateRoomTakeoverContext = {
   requesterPriority: DebateRoomTabPriority;
@@ -87,6 +93,7 @@ export function debateRoomTabPriority(): DebateRoomTabPriority {
 const acquisitionStaggerMs: Record<DebateRoomTabPriority, number> = { 0: 700, 1: 250, 2: 0 };
 
 const takeoverResponseTimeoutMs = 1_500;
+const takeoverAckedResponseTimeoutMs = 10_000;
 const localReleaseBarriers = new Map<string, Promise<void>>();
 
 export function debateRoomCoordinationName(debateId: string, userId: string) {
@@ -127,7 +134,24 @@ export function createDebateRoomOwnershipCoordinator({
   let acquisition: Promise<DebateRoomOwnershipAcquireResult> | null = null;
   let activeAcquisitionAttempt: { cancelled: boolean } | null = null;
   const pendingTakeovers = new Map<string, (released: boolean) => void>();
+  const pendingAcks = new Map<string, () => void>();
   let lastRefusedBy: string | undefined;
+
+  let takeoversInFlight = 0;
+  let lostDuringTakeover = false;
+  let releasedDuringTakeover = false;
+
+  // Another tab stole our lock. Mid-handover, report it only if the handover did not release.
+  const handleLockLost = () => {
+    if (!ownsConnection) return;
+    ownsConnection = false;
+    releaseLock = null;
+    if (takeoversInFlight > 0) {
+      lostDuringTakeover = true;
+      return;
+    }
+    onOwnershipLost?.();
+  };
 
   const fallBackToLiveKitIdentity = () => {
     lockRequestsAvailable = false;
@@ -239,11 +263,7 @@ export function createDebateRoomOwnershipCoordinator({
         const activeRequest = request.then(
           () => undefined,
           () => {
-            if (ownsConnection) {
-              ownsConnection = false;
-              releaseLock = null;
-              onOwnershipLost?.();
-            }
+            handleLockLost();
             resolve('unavailable');
           }
         );
@@ -297,7 +317,7 @@ export function createDebateRoomOwnershipCoordinator({
     await barrier;
   };
 
-  // Takes the lock from a frozen holder that never answered. Only reached on a timeout, never a refusal.
+  // Takes the lock from a frozen holder that never acked.
   const stealLock = () =>
     new Promise<boolean>(resolve => {
       if (!lockManager || closed) return resolve(false);
@@ -325,11 +345,7 @@ export function createDebateRoomOwnershipCoordinator({
       const activeRequest = request.then(
         () => undefined,
         () => {
-          if (ownsConnection) {
-            ownsConnection = false;
-            releaseLock = null;
-            onOwnershipLost?.();
-          }
+          handleLockLost();
           settle(false);
         }
       );
@@ -344,6 +360,11 @@ export function createDebateRoomOwnershipCoordinator({
       const message = event.data as OwnershipMessage;
       if (!message || typeof message !== 'object') return;
 
+      if (message.type === 'takeover-ack') {
+        if (message.requesterId === instanceId) pendingAcks.get(message.requestId)?.();
+        return;
+      }
+
       if (message.type === 'takeover-response' && message.requesterId === instanceId) {
         if (pendingTakeovers.has(message.requestId)) lastRefusedBy = message.released ? undefined : message.ownerLabel;
         pendingTakeovers.get(message.requestId)?.(message.released);
@@ -357,13 +378,32 @@ export function createDebateRoomOwnershipCoordinator({
         automatic: message.automatic === true,
         requesterLabel: message.requesterLabel,
       };
+      try {
+        channel?.postMessage({
+          type: 'takeover-ack',
+          requestId: message.requestId,
+          requesterId: message.requesterId,
+        } satisfies TakeoverAck);
+      } catch {}
+      takeoversInFlight += 1;
       void Promise.resolve(onTakeoverRequested(takeoverContext))
         .then(async released => {
           if (released) await release();
           postTakeoverResponse(message, released);
+          return released;
         })
         .catch(() => {
           postTakeoverResponse(message, false);
+          return false;
+        })
+        .then(released => {
+          if (released) releasedDuringTakeover = true;
+          takeoversInFlight -= 1;
+          if (takeoversInFlight > 0) return;
+          const lost = lostDuringTakeover && !releasedDuringTakeover;
+          lostDuringTakeover = false;
+          releasedDuringTakeover = false;
+          if (lost) onOwnershipLost?.();
         });
     };
   }
@@ -388,16 +428,21 @@ export function createDebateRoomOwnershipCoordinator({
       const takeoverChannel = channel;
 
       const requestId = createInstanceId();
-      const outcome = await new Promise<'released' | 'refused' | 'timeout'>(resolve => {
-        const timeout = window.setTimeout(() => {
-          pendingTakeovers.delete(requestId);
-          resolve('timeout');
-        }, takeoverResponseTimeoutMs);
-        pendingTakeovers.set(requestId, released => {
+      type TakeoverOutcome = 'released' | 'refused' | 'unanswered' | 'timeout';
+      const outcome = await new Promise<TakeoverOutcome>(resolve => {
+        const settle = (value: TakeoverOutcome) => {
           window.clearTimeout(timeout);
           pendingTakeovers.delete(requestId);
-          resolve(released ? 'released' : 'refused');
+          pendingAcks.delete(requestId);
+          resolve(value);
+        };
+        let timeout = window.setTimeout(() => settle('timeout'), takeoverResponseTimeoutMs);
+        pendingAcks.set(requestId, () => {
+          pendingAcks.delete(requestId);
+          window.clearTimeout(timeout);
+          timeout = window.setTimeout(() => settle('unanswered'), takeoverAckedResponseTimeoutMs);
         });
+        pendingTakeovers.set(requestId, released => settle(released ? 'released' : 'refused'));
         try {
           takeoverChannel.postMessage({
             type: 'takeover-request',
@@ -408,18 +453,18 @@ export function createDebateRoomOwnershipCoordinator({
             requesterLabel,
           } satisfies TakeoverRequest);
         } catch {
-          window.clearTimeout(timeout);
-          pendingTakeovers.delete(requestId);
-          resolve('timeout');
+          settle('timeout');
         }
       });
 
-      if (outcome === 'refused') return false;
+      if (outcome === 'refused' || outcome === 'unanswered') return false;
       if (outcome === 'released') {
         const acquired = (await acquireLock(true)).acquired;
         if (acquired) onTookOverFromOtherTab?.();
         return acquired;
       }
+      // Only an explicit claim steals.
+      if (automatic) return false;
       const stolen = await stealLock();
       if (stolen) onTookOverFromOtherTab?.();
       return stolen;
@@ -430,6 +475,7 @@ export function createDebateRoomOwnershipCoordinator({
       void release();
       for (const resolve of pendingTakeovers.values()) resolve(false);
       pendingTakeovers.clear();
+      pendingAcks.clear();
       channel?.close();
     },
     ownsConnection: () => ownsConnection,

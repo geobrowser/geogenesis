@@ -116,6 +116,8 @@ const mocks = vi.hoisted(() => ({
   ownershipRelease: vi.fn(),
   ownershipClose: vi.fn(),
   ownershipTakeoverHandler: null as null | ((context: DebateRoomTakeoverContext) => boolean | Promise<boolean>),
+  // What the connection coordinator calls when a frozen-then-thawed tab finds its lock stolen.
+  ownershipLostHandler: null as null | (() => void),
   // Not reset per test: the tab voice owner can outlive a test and keep its coordinator.
   voiceTakeoverHandler: null as null | ((context: DebateRoomTakeoverContext) => boolean | Promise<boolean>),
   ownershipCoordinationMode: 'lock-and-broadcast' as 'lock-and-broadcast' | 'lock-only' | 'livekit-fallback',
@@ -299,6 +301,7 @@ vi.mock('~/core/debates/debate-room-ownership', async importOriginal => {
       }
       if (mocks.useRealRoomOwnership) return actual.createDebateRoomOwnershipCoordinator(options);
       mocks.ownershipTakeoverHandler = options.onTakeoverRequested;
+      mocks.ownershipLostHandler = options.onOwnershipLost ?? null;
       return {
         instanceId: 'connection-instance-1',
         coordinationMode: mocks.ownershipCoordinationMode,
@@ -520,6 +523,7 @@ beforeEach(() => {
   mocks.ownershipRelease.mockReset();
   mocks.ownershipClose.mockReset();
   mocks.ownershipTakeoverHandler = null;
+  mocks.ownershipLostHandler = null;
   mocks.ownershipCoordinationMode = 'lock-and-broadcast';
   mocks.voiceCoordinationMode = 'livekit-fallback';
   mocks.voiceOwnsConnection.mockReset().mockReturnValue(true);
@@ -3630,6 +3634,30 @@ describe('DebateRoomPageClient', () => {
     expect(mocks.roomDisconnect).toHaveBeenCalled();
     // The debate moved to another tab of the same person, so it is not counted as a leave or a drop.
     expect(mocks.stopVoiceCallTelemetry).toHaveBeenCalledWith('handover');
+  });
+
+  it('goes off the air as a handover when another tab steals the room from it', async () => {
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.markJoinedMutateAsync).toHaveBeenCalled());
+    expect(mocks.ownershipLostHandler).toEqual(expect.any(Function));
+    mocks.capture.mockClear();
+
+    act(() => mocks.ownershipLostHandler?.());
+
+    expect(mocks.roomDisconnect).toHaveBeenCalled();
+    expect(mocks.stopVoiceCallTelemetry).toHaveBeenCalledWith('handover');
+    expect(mocks.capture).toHaveBeenCalledOnce();
+    expect(mocks.capture).toHaveBeenCalledWith(
+      'debate_room_connection_conflict',
+      expect.objectContaining({ source: 'ownership_released' })
+    );
   });
 
   it('does not allow a secondary tab to take over an active debate recording', async () => {

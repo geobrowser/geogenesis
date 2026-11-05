@@ -13,7 +13,7 @@ import {
 const captureSafely = vi.hoisted(() => vi.fn());
 vi.mock('~/core/analytics-capture-safely', () => ({ captureSafely }));
 
-type Held = { name: string; mode: LockMode; tab: string | null; release: () => void };
+type Held = { name: string; mode: LockMode; tab: string | null; release: () => void; steal: () => void };
 type Queued = {
   name: string;
   mode: LockMode;
@@ -34,6 +34,11 @@ class FakeLockManager {
 
   request(name: string, options: LockOptions, callback: (lock: Lock | null) => Promise<void> | void) {
     const mode = options.mode ?? 'exclusive';
+
+    if (options.steal) {
+      for (const lock of this.held.filter(candidate => candidate.name === name)) lock.steal();
+      return this.run(name, mode, this.currentTab, callback);
+    }
     const queuedHere = this.queue.some(request => request.name === name);
     if (!queuedHere && this.grantable(name, mode)) return this.run(name, mode, this.currentTab, callback);
     if (options.ifAvailable) return Promise.resolve(callback(null));
@@ -80,14 +85,19 @@ class FakeLockManager {
     callback: (lock: Lock | null) => unknown,
     queued = false
   ) {
-    const held: Held = { name, mode, tab, release: () => {} };
+    const held: Held = { name, mode, tab, release: () => {}, steal: () => {} };
     this.held.push(held);
-    return new Promise<void>(resolve => {
+    return new Promise<void>((resolve, reject) => {
       held.release = () => {
         if (!this.held.includes(held)) return;
         this.held = this.held.filter(lock => lock !== held);
         resolve();
         this.drain(name);
+      };
+      held.steal = () => {
+        if (!this.held.includes(held)) return;
+        this.held = this.held.filter(lock => lock !== held);
+        reject(new DOMException('lock stolen', 'AbortError'));
       };
       const invoke = () => void Promise.resolve(callback({ name, mode })).then(held.release, held.release);
       if (queued) setTimeout(invoke, 0);
@@ -192,6 +202,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
   Object.defineProperty(navigator, 'locks', { configurable: true, value: undefined });
@@ -616,6 +627,43 @@ describe('tab voice owner', () => {
     await flush();
     await flush();
     expect(lobbyTab.owner.getState()).toEqual({ ownership: 'elsewhere', heldBy: null });
+  });
+
+  it('steals voice from a frozen tab on "Use voice here", and takes it off the air', async () => {
+    const lobbyTab = openTab('lobby', 2);
+    lobbyTab.surface('lobby');
+    await lobbyTab.claim('lobby', true);
+    FakeBroadcastChannel.crash('lobby');
+
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const debateTab = openTab('debate', 2);
+    debateTab.surface('debate', 'explicit-only');
+    const claim = debateTab.claim('debate');
+    await vi.advanceTimersByTimeAsync(1_500);
+    await expect(claim).resolves.toBe(true);
+
+    expect(debateTab.owner.getState()).toEqual({ ownership: 'owned', heldBy: null });
+
+    expect(lobbyTab.yields).toBe(1);
+    expect(lobbyTab.owner.getState()).toEqual({ ownership: 'elsewhere', heldBy: null });
+    expect(locks.heldCount()).toBe(1);
+  });
+
+  it('never steals voice from a frozen tab on an automatic claim', async () => {
+    const lobbyTab = openTab('lobby', 0);
+    lobbyTab.surface('lobby');
+    await lobbyTab.claim('lobby', true);
+    FakeBroadcastChannel.crash('lobby');
+
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const pickerTab = openTab('picker', 2);
+    pickerTab.surface('picker');
+    const claim = pickerTab.claim('picker', true);
+    await vi.advanceTimersByTimeAsync(1_500);
+    await expect(claim).resolves.toBe(false);
+
+    expect(lobbyTab.yields).toBe(0);
+    expect(lobbyTab.owner.getState()).toEqual({ ownership: 'owned', heldBy: null });
   });
 
   it('frees voice when the owning tab crashes', async () => {
