@@ -568,30 +568,6 @@ describe('tab voice owner', () => {
     await expect(reloaded.claim('debate')).resolves.toBe(true);
   });
 
-  it('keeps claiming for a debate until it holds voice', async () => {
-    // A lock held by a tab that never answers, e.g. a frozen tab's granted request.
-    let letGo = () => {};
-    void locks.request('geo:debate-room:voice:user-a', {}, () => new Promise<void>(resolve => (letGo = resolve)));
-    const debateTab = openTab('debate', 2);
-    debateTab.surface('debate', 'refuse');
-    await expect(debateTab.claim('debate')).resolves.toBe(false);
-
-    const held = asTab('debate', () => debateTab.owner.claimUntilHeld({ kind: 'debate', stop: () => false }));
-    letGo();
-    await expect(held).resolves.toBe(true);
-    expect(debateTab.owner.getState()).toEqual({ ownership: 'owned', heldBy: null });
-  }, 10_000);
-
-  it('stops claiming once the debate no longer needs voice', async () => {
-    void locks.request('geo:debate-room:voice:user-a', {}, () => new Promise<void>(() => {}));
-    const debateTab = openTab('debate', 2);
-    debateTab.surface('debate', 'refuse');
-    let stopped = false;
-    const held = asTab('debate', () => debateTab.owner.claimUntilHeld({ kind: 'debate', stop: () => stopped }));
-    stopped = true;
-    await expect(held).resolves.toBe(false);
-  }, 10_000);
-
   it('checks again every few seconds while a waiting tab is on screen', async () => {
     vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
     const debateTab = openTab('debate', 0);

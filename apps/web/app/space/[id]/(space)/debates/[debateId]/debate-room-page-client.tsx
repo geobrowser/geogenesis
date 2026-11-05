@@ -1231,6 +1231,32 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
 
   React.useEffect(() => {
     if (!currentUserId) return;
+    // Hands the room to another tab: stop sending and settle idle. Shared by a yield and a steal.
+    const releaseRoomToOtherTab = () => {
+      const generation = connectionGenerationRef.current + 1;
+      connectionGenerationRef.current = generation;
+      disconnectConnectingRoom(connectingRoomRef);
+      disconnectRoom(roomRef, localTracksRef, localVideoRef, remoteMediaRef, 'handover');
+      localMediaStreamRef.current = null;
+      setRemoteVideoReady(false);
+      setRemotePresence('absent');
+      setConnectionConflictSource('ownership_released');
+      setRoomError('This debate moved to another tab.');
+      const releasedFrom = roomStateRef.current;
+      // Now, not on the next render: the taking tab's voice claim may reach this tab first.
+      roomStateRef.current = 'idle';
+      setRoomState('idle');
+      logDebateConnectionDiagnostic('ownership-released', {
+        debateId,
+        instanceId: connectionInstanceIdRef.current,
+        roomState: releasedFrom,
+      });
+      reportConnectionConflict(
+        generation,
+        'ownership_released',
+        ownershipRef.current?.coordinationMode ?? 'livekit-fallback'
+      );
+    };
     const coordinator = createDebateRoomOwnershipCoordinator({
       debateId,
       userId: currentUserId,
@@ -1243,7 +1269,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         // Once recording starts the owner keeps the room: releasing would tear down an in-flight
         // MediaRecorder, which cannot finish persisting inside the takeover budget. The status gate
         // inside also protects live debates whose recording never managed to start
-        // (recordingStartedAtRef stays null when MediaRecorder is unavailable).
+        // (recordingStartedAtRef stays null when MediaRecorder is unavailable). Refusing here in time
+        // is also what keeps a live recorder from being stolen from — only a frozen tab is.
         const canReleaseOwnership = shouldReleaseDebateRoom({
           ...takeover,
           status,
@@ -1252,31 +1279,10 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         });
         if (!canReleaseOwnership) return false;
 
-        const generation = connectionGenerationRef.current + 1;
-        connectionGenerationRef.current = generation;
-        disconnectConnectingRoom(connectingRoomRef);
-        disconnectRoom(roomRef, localTracksRef, localVideoRef, remoteMediaRef, 'handover');
-        localMediaStreamRef.current = null;
-        setRemoteVideoReady(false);
-        setRemotePresence('absent');
-        setConnectionConflictSource('ownership_released');
-        setRoomError('This debate moved to another tab.');
-        setRoomState('idle');
-        const releasedFrom = roomStateRef.current;
-        // Now, not on the next render: the taking tab's voice claim may reach this tab first.
-        roomStateRef.current = 'idle';
-        logDebateConnectionDiagnostic('ownership-released', {
-          debateId,
-          instanceId: connectionInstanceIdRef.current,
-          roomState: releasedFrom,
-        });
-        reportConnectionConflict(
-          generation,
-          'ownership_released',
-          ownershipRef.current?.coordinationMode ?? 'livekit-fallback'
-        );
+        releaseRoomToOtherTab();
         return true;
       },
+      onOwnershipLost: releaseRoomToOtherTab,
     });
     connectionInstanceIdRef.current = coordinator.instanceId;
     ownershipRef.current = coordinator;
@@ -1724,7 +1730,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       setRoomState('idle');
     },
   });
-  const { takeOver: claimVoice, claimUntilHeld: claimVoiceUntilHeld, announceYieldable } = tabVoice;
+  const { takeOver: claimVoice, announceYieldable } = tabVoice;
   // True whenever another tab holds voice, including when this tab's first claim lost and it never
   // held it — the case `voiceYielded` (set from `onYield`) misses.
   const voiceHeldElsewhere = tabVoice.ownership === 'elsewhere';
@@ -1780,11 +1786,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
 
       // Counts as holding the room from here: a nearer tab's automatic claim must not cut this connect.
       voiceClaimGenerationRef.current = generation;
-      // A live room must hold voice: if the first claim loses a race, keep asking (in the background,
-      // so the room is not held up) until it holds it or this connection is superseded.
-      if (!(await claimVoice())) {
-        void claimVoiceUntilHeld(() => !isCurrent() || debateVoicePolicy(debateStatusRef.current, true) === 'yield');
-      }
+      // One claim is enough now: a responsive holder yields, a frozen one is stolen from. No poll.
+      await claimVoice();
       if (!isCurrent()) {
         if (connectStartingGenerationRef.current === generation) setConnectStarting(false);
         return;
@@ -2206,7 +2209,6 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       audioOutputSelectionPromiseRef,
       audioOutputSupportedRef,
       claimVoice,
-      claimVoiceUntilHeld,
       debateId,
       initializeNoiseFilter,
       liveKitJoin,

@@ -20,12 +20,27 @@ class FakeLockManager {
   private held = false;
   private queue: QueuedLock[] = [];
   private pausedRequests = 0;
+  private currentRun: { reject: (error: unknown) => void; aborted: boolean } | null = null;
 
   pauseNextRequest() {
     this.pausedRequests += 1;
   }
 
-  request(_name: string, options: LockOptions, callback: (lock: Lock | null) => Promise<void> | void): Promise<void> {
+  request(
+    _name: string,
+    options: LockOptions & { steal?: boolean },
+    callback: (lock: Lock | null) => Promise<void> | void
+  ): Promise<void> {
+    if (options.steal) {
+      if (this.currentRun) {
+        this.currentRun.aborted = true;
+        this.currentRun.reject(new DOMException('lock stolen', 'AbortError'));
+        this.currentRun = null;
+      }
+      this.held = false;
+      return new Promise<void>((resolve, reject) => void this.run({ callback, resolve, reject }));
+    }
+
     if (options.ifAvailable && this.held) {
       return Promise.resolve(callback(null));
     }
@@ -61,15 +76,20 @@ class FakeLockManager {
 
   private async run(queued: QueuedLock) {
     this.held = true;
+    const run = { reject: queued.reject, aborted: false };
+    this.currentRun = run;
     try {
       await queued.callback({ name: 'debate-room', mode: 'exclusive' });
-      queued.resolve();
+      if (!run.aborted) queued.resolve();
     } catch (error) {
-      queued.reject(error);
+      if (!run.aborted) queued.reject(error);
     } finally {
-      this.held = false;
-      const next = this.queue.shift();
-      if (next) void this.run(next);
+      if (!run.aborted) {
+        this.held = false;
+        if (this.currentRun === run) this.currentRun = null;
+        const next = this.queue.shift();
+        if (next) void this.run(next);
+      }
     }
   }
 }
@@ -203,6 +223,64 @@ describe('debate room ownership', () => {
     await expect(second.requestTakeover()).resolves.toBe(true);
 
     await closeCoordinators(first, second);
+  });
+
+  it('steals the lock from a frozen tab that never answers, and tells it so', async () => {
+    vi.useFakeTimers();
+    const onOwnershipLost = vi.fn();
+    const frozen = createDebateRoomOwnershipCoordinator({
+      debateId: 'debate-1',
+      userId: 'user-a',
+      onTakeoverRequested: () => new Promise<boolean>(() => {}),
+      onOwnershipLost,
+    });
+    const requester = createDebateRoomOwnershipCoordinator({
+      debateId: 'debate-1',
+      userId: 'user-a',
+      onTakeoverRequested: () => true,
+    });
+    await frozen.acquire();
+    await requester.acquire();
+    expect(frozen.ownsConnection()).toBe(true);
+
+    const takeover = requester.requestTakeover();
+
+    await vi.advanceTimersByTimeAsync(1_500);
+    await expect(takeover).resolves.toBe(true);
+
+    expect(requester.ownsConnection()).toBe(true);
+    expect(frozen.ownsConnection()).toBe(false);
+    expect(onOwnershipLost).toHaveBeenCalledOnce();
+
+    await closeCoordinators(frozen, requester);
+  });
+
+  it('does not steal from a tab that answers in time, even to refuse', async () => {
+    vi.useFakeTimers();
+    const onOwnershipLost = vi.fn();
+    const refusing = createDebateRoomOwnershipCoordinator({
+      debateId: 'debate-1',
+      userId: 'user-a',
+      onTakeoverRequested: () => false,
+      onOwnershipLost,
+    });
+    const requester = createDebateRoomOwnershipCoordinator({
+      debateId: 'debate-1',
+      userId: 'user-a',
+      onTakeoverRequested: () => true,
+    });
+    await refusing.acquire();
+    await requester.acquire();
+
+    const takeover = requester.requestTakeover();
+    await vi.advanceTimersByTimeAsync(1_500);
+    await expect(takeover).resolves.toBe(false);
+
+    expect(refusing.ownsConnection()).toBe(true);
+    expect(requester.ownsConnection()).toBe(false);
+    expect(onOwnershipLost).not.toHaveBeenCalled();
+
+    await closeCoordinators(refusing, requester);
   });
 
   it('waits for an immediate same-tab predecessor to close before acquiring', async () => {

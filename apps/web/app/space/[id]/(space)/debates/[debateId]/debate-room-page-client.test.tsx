@@ -3294,13 +3294,11 @@ describe('DebateRoomPageClient', () => {
     mocks.voiceOwnsConnection.mockReturnValue(false);
     mocks.voiceRequestTakeover.mockResolvedValue(false);
     mocks.voiceLastRefusedBy.mockReturnValue('lobby');
-    const claimUntilHeld = vi.spyOn(tabVoiceOwner(mocks.currentUserId!), 'claimUntilHeld').mockResolvedValue(true);
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     // The room connects anyway — losing the very first claim is not a connection failure.
     await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
-    expect(claimUntilHeld).toHaveBeenCalledWith(expect.objectContaining({ kind: 'debate' }));
 
     expect(await screen.findByText('Voice is on in another tab')).toBeInTheDocument();
     const useVoiceHere = screen.getByRole('button', { name: 'Use voice here' });
@@ -3434,10 +3432,9 @@ describe('DebateRoomPageClient', () => {
     await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
   });
 
-  it('keeps asking for voice when a starting debate loses its first claim', async () => {
+  it('claims voice once for a starting debate and connects without polling for it', async () => {
     const owner = tabVoiceOwner(mocks.currentUserId!);
-    vi.spyOn(owner, 'claim').mockResolvedValueOnce(false);
-    const claimUntilHeld = vi.spyOn(owner, 'claimUntilHeld').mockResolvedValue(true);
+    const claim = vi.spyOn(owner, 'claim');
     mocks.debate = {
       ...readyDebate({ localReady: true, remoteReady: true }),
       status: 'connecting',
@@ -3448,11 +3445,10 @@ describe('DebateRoomPageClient', () => {
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
     await waitFor(() => expect(mocks.markJoinedMutateAsync).toHaveBeenCalled());
 
-    expect(claimUntilHeld).toHaveBeenCalledWith(expect.objectContaining({ kind: 'debate' }));
-    // The room goes ahead meanwhile, and still refuses to hand voice over.
+    expect(claim).toHaveBeenCalledWith(expect.objectContaining({ kind: 'debate' }));
+    // The room goes ahead; there is no separate poll to keep re-asking.
     expect(mocks.roomConnect).toHaveBeenCalled();
-    const [{ stop }] = claimUntilHeld.mock.calls[0]!;
-    expect(stop()).toBe(false);
+    expect(claim).toHaveBeenCalledTimes(1);
   });
 
   it('keeps voice from another tab while the debate is under way', async () => {
