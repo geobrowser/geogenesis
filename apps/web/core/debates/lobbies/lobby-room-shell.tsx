@@ -17,6 +17,7 @@ import { HubPillButton, hubPillClassName } from '../matchmaking/hub-pill-button'
 import { HUB_SCROLL_SELECTOR, HubScrollSelectorProvider } from '../matchmaking/hub-scroll';
 import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
 import { useScrollLock } from '../use-scroll-lock';
+import type { CallEnd } from '../use-voice-call-telemetry';
 import { type LobbyPresenceState, MAX_TIMEOUT_MS } from './hooks';
 import { LobbyControlBar, LobbyHandControl } from './lobby-control-bar';
 import { hostAfterChange, hostWhoLeft, isAlone, isHosting } from './lobby-format';
@@ -130,6 +131,25 @@ export function LobbyRoomShell({
     guestSession.state.status === 'listening' || guestSession.state.status === 'handingOver'
       ? guestSession.state.session.voice
       : null;
+  // GEO-3340: why the guest room goes, for its call quality. The member room's outcome closes it in
+  // the same render, so the room asks at unmount instead of being told by prop. Anything else that
+  // closes it (removed, lobby over, leaving) is a leave.
+  const guestEndRef = React.useRef<CallEnd>('left');
+  const guestToken = guestVoice?.token;
+  React.useEffect(() => {
+    if (guestToken) guestEndRef.current = 'left';
+  }, [guestToken]);
+  const guestEndsAs = React.useCallback(() => guestEndRef.current, []);
+  // Stable, like `roomDone` itself: the member room calls these from effects keyed on them.
+  const { roomDone } = guestSession;
+  const memberRoomAudible = React.useCallback(() => {
+    guestEndRef.current = 'handed_over';
+    roomDone();
+  }, [roomDone]);
+  const memberRoomUnavailable = React.useCallback(() => {
+    guestEndRef.current = 'handover_failed';
+    roomDone();
+  }, [roomDone]);
   // An ended guest session in a lobby that is still open means guests were turned off here. Read
   // after a fresh guest view, so a lobby that ended shows its closed notice instead.
   const { dataUpdatedAt: guestViewAt, refetch: refetchGuestView } = useDebateLobbyGuestView(lobby.lobby_id, {
@@ -263,6 +283,7 @@ export function LobbyRoomShell({
                 <LobbyGuestVoice
                   key={guestVoice.token}
                   lobbyId={lobby.lobby_id}
+                  endsAs={guestEndsAs}
                   token={guestVoice}
                   onStates={setGuestVoiceStates}
                   onReconnect={guestSession.reconnect}
@@ -279,8 +300,8 @@ export function LobbyRoomShell({
                   joined={state.status === 'joined'}
                   currentUserId={currentUserId}
                   onConnectedChange={voice.setVoiceConnected}
-                  onAudible={guestVoice ? guestSession.roomDone : undefined}
-                  onUnavailable={guestVoice ? guestSession.roomDone : undefined}
+                  onAudible={guestVoice ? memberRoomAudible : undefined}
+                  onUnavailable={guestVoice ? memberRoomUnavailable : undefined}
                   screenShare={screenShare}
                   {...voiceExtras}
                 >

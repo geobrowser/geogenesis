@@ -25,6 +25,8 @@ const mocks = vi.hoisted(() => ({
   heartbeat: vi.fn(),
   leave: vi.fn(async () => undefined),
   onAudible: null as (() => void) | null,
+  onUnavailable: null as (() => void) | null,
+  guestEndsAs: null as (() => string) | null,
   onAutoReconnect: null as (() => boolean) | null,
   onGuestStates: null as
     | ((states: {
@@ -135,12 +137,14 @@ vi.mock('./lobby-voice', async () => {
     LobbyGuestVoice: ({
       token,
       quiet,
+      endsAs,
       onAutoReconnect,
       onStates,
       onRemoved,
     }: {
       token: { token: string };
       quiet?: boolean;
+      endsAs?: () => string;
       onAutoReconnect: () => boolean;
       onStates: (states: {
         speaking: Set<string>;
@@ -151,6 +155,7 @@ vi.mock('./lobby-voice', async () => {
       onRemoved: () => void;
     }) => {
       mocks.onAutoReconnect = onAutoReconnect;
+      mocks.guestEndsAs = endsAs ?? null;
       mocks.onGuestStates = onStates;
       mocks.onGuestRemoved = onRemoved;
       // Reports the room's connection as the real room does; tests change it through `mocks.onGuestStates`.
@@ -165,8 +170,17 @@ vi.mock('./lobby-voice', async () => {
         </div>
       );
     },
-    LobbyVoice: ({ onAudible, children }: { onAudible?: () => void; children: React.ReactNode }) => {
+    LobbyVoice: ({
+      onAudible,
+      onUnavailable,
+      children,
+    }: {
+      onAudible?: () => void;
+      onUnavailable?: () => void;
+      children: React.ReactNode;
+    }) => {
       mocks.onAudible = onAudible ?? null;
+      mocks.onUnavailable = onUnavailable ?? null;
       return <div data-testid="member-room">{children}</div>;
     },
   };
@@ -348,6 +362,39 @@ describe('DebateLobbyPage for a visitor without an account', () => {
     await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/s1/e1'));
     expect(mocks.replace).toHaveBeenCalledTimes(1);
     expect(screen.queryByText('A host removed you from this lobby.')).not.toBeInTheDocument();
+  });
+
+  /** Signs a listening guest in, up to the member room joined and the guest room still playing. */
+  async function signInToHandover() {
+    const view = render(<DebateLobbyPage lobbyId="lobby1" />);
+    await screen.findByTestId('guest-room');
+    mocks.authenticated = true;
+    mocks.memberLobby = memberView;
+    mocks.presenceStatus = 'joined';
+    view.rerender(<DebateLobbyPage lobbyId="lobby1" />);
+    expect(screen.getByTestId('guest-room')).toHaveAttribute('data-quiet', 'yes');
+    return view;
+  }
+
+  // GEO-3340: the guest room's end says what happened to the person's audio. Read at unmount, so the
+  // shell answers after the outcome that closed it.
+  it('ends the guest room as handed over once the member room is audible', async () => {
+    await signInToHandover();
+    expect(mocks.guestEndsAs?.()).toBe('left');
+
+    act(() => mocks.onAudible?.());
+    await waitFor(() => expect(screen.queryByTestId('guest-room')).not.toBeInTheDocument());
+    expect(mocks.guestEndsAs?.()).toBe('handed_over');
+  });
+
+  // Review on #3065: a member room that never came up closed the guest room too, and its end read
+  // as a handover. Nothing took over, so the data must say so.
+  it('ends the guest room as a failed handover when the member room cannot come up', async () => {
+    await signInToHandover();
+
+    act(() => mocks.onUnavailable?.());
+    await waitFor(() => expect(screen.queryByTestId('guest-room')).not.toBeInTheDocument());
+    expect(mocks.guestEndsAs?.()).toBe('handover_failed');
   });
 
   // geo-chat's upgrade order: join (ends the guest), member token, member room up, then guest room down.

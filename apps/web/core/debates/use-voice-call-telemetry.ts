@@ -41,6 +41,12 @@ export type VoiceCallSurface = 'picker' | 'lobby' | 'space_call' | 'debate';
 /** Which of a lobby's two rooms an event came from (see `useVoiceCallTelemetry`). */
 export type CallRole = 'guest' | 'member';
 
+/**
+ * How a room's owner says it went. `handed_over`: another of the person's rooms took over (a guest
+ * signing in). `handover_failed`: that room never came up, so the person's audio stopped.
+ */
+export type CallEnd = 'left' | 'handed_over' | 'handover_failed';
+
 export type ReportCallChange = (change: Record<string, unknown>) => void;
 
 /** Surface-specific measurements added to each sample; changes go through the call's own reporter. */
@@ -92,19 +98,22 @@ export function useVoiceCallTelemetry(
   callId: string,
   {
     role,
-    handingOver = false,
+    endsAs,
   }: {
     /** A lobby's listen-only guest room or its member room, both live while a guest signs in. */
     role?: CallRole;
-    /** The room is going because another of this person's rooms took over: its end is no leave. */
-    handingOver?: boolean;
+    /**
+     * Why the room went, asked at unmount: whoever closes it may only learn the outcome in the same
+     * render (a lobby's guest room goes when the member room takes over, or fails to). A leave unless
+     * it says otherwise.
+     */
+    endsAs?: () => CallEnd;
   } = {}
 ) {
-  // Read at unmount, so the end reports what was true when the room went.
-  const handingOverRef = React.useRef(handingOver);
+  const endsAsRef = React.useRef(endsAs);
   React.useEffect(() => {
-    handingOverRef.current = handingOver;
-  }, [handingOver]);
+    endsAsRef.current = endsAs;
+  }, [endsAs]);
 
   React.useEffect(() => {
     let stop: ReturnType<typeof startVoiceCallTelemetry> | undefined;
@@ -117,7 +126,7 @@ export function useVoiceCallTelemetry(
     }
     return () => {
       try {
-        stop?.(handingOverRef.current ? 'handed_over' : 'left');
+        stop?.(endsAsRef.current?.() ?? 'left');
       } catch {
         // The call's own teardown carries on.
       }
@@ -130,9 +139,10 @@ export function startVoiceCallTelemetry(
   room: Room,
   surface: VoiceCallSurface,
   callId: string,
+  // Exclusive: a debate's context and a lobby room's role never describe the same call.
   context:
-    | { debate_id: string; participant_slot: number; call_session_id: string }
-    | { call_role: CallRole }
+    | { debate_id: string; participant_slot: number; call_session_id: string; call_role?: never }
+    | { call_role: CallRole; debate_id?: never; participant_slot?: never; call_session_id?: never }
     | undefined = undefined,
   options: { probe?: (report: ReportCallChange) => CallProbe } = {}
 ) {
@@ -286,7 +296,7 @@ export function startVoiceCallTelemetry(
     }
   };
 
-  const finish = (endReason: 'left' | 'handed_over' | 'disconnected' | 'page_closed') => {
+  const finish = (endReason: CallEnd | 'disconnected' | 'page_closed') => {
     if (ended) return;
     ended = true;
     cleanup();
@@ -436,7 +446,7 @@ export function startVoiceCallTelemetry(
     window.removeEventListener('pagehide', onPageHide);
     probe?.stop();
   }
-  return (endReason: 'left' | 'handed_over' = 'left') => finish(endReason);
+  return (endReason: CallEnd = 'left') => finish(endReason);
 }
 
 /**

@@ -43,7 +43,7 @@ import { CameraIcon, MicrophoneIcon } from '../debate-room-controls';
 import { useGeoChatAuth } from '../hooks';
 import { tokenAllowsCamera } from '../livekit-grant';
 import { HubPillButton } from '../matchmaking/hub-pill-button';
-import { type VoiceCallSurface, useVoiceCallTelemetry } from '../use-voice-call-telemetry';
+import { type CallEnd, type VoiceCallSurface, useVoiceCallTelemetry } from '../use-voice-call-telemetry';
 import { useVoiceOwnership } from '../voice-owner';
 import { createLobbyCamera } from './lobby-camera';
 import { lobbyErrorMessage } from './lobby-format';
@@ -746,6 +746,7 @@ export const LOBBY_GUEST_VOICE_COPY = {
  * it while the member room plays; speaking state goes up through `onStates`.
  */
 export function LobbyGuestVoice({
+  endsAs,
   lobbyId,
   token,
   onStates,
@@ -756,6 +757,8 @@ export function LobbyGuestVoice({
   screenShare = false,
 }: {
   /** The lobby, or the space call, this room listens to. */
+  /** Why this room went, asked when it goes: the shell knows whether the member room took over. */
+  endsAs?: () => CallEnd;
   lobbyId: string;
   token: DebateLobbyVoiceToken;
   onStates: (states: LobbyVoiceStates) => void;
@@ -809,6 +812,7 @@ export function LobbyGuestVoice({
       <ConnectedGuestVoice
         callSurface={callSurface}
         callId={dashlessId(lobbyId)}
+        endsAs={endsAs}
         onStates={onStates}
         onReconnect={onReconnect}
         onNeverConnected={handleNeverConnected}
@@ -824,6 +828,7 @@ export function LobbyGuestVoice({
 function ConnectedGuestVoice({
   callSurface,
   callId,
+  endsAs,
   onStates,
   onReconnect,
   onNeverConnected,
@@ -833,6 +838,7 @@ function ConnectedGuestVoice({
 }: {
   callSurface: VoiceCallSurface;
   callId: string;
+  endsAs?: () => CallEnd;
   onStates: (states: LobbyVoiceStates) => void;
   onReconnect: () => void;
   onNeverConnected: () => void;
@@ -842,8 +848,7 @@ function ConnectedGuestVoice({
 }) {
   const room = useRoomContext();
   // GEO-3340: what a signed-out listener hears is half of what a choppy room is.
-  // Quiet is the member room taking over, so this room's end is a handover, not a leave.
-  useVoiceCallTelemetry(room, callSurface, callId, { role: 'guest', handingOver: quiet });
+  useVoiceCallTelemetry(room, callSurface, callId, { role: 'guest', endsAs });
   // Removed by the server: no Try again, which would take the session back; the page asks why.
   const [removed, setRemoved] = React.useState(false);
   useRoomEnding(room, {

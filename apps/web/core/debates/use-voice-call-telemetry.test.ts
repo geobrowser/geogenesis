@@ -144,25 +144,40 @@ describe('useVoiceCallTelemetry (GEO-3340)', () => {
     expect(events('debate_voice_ended')).toEqual([expect.objectContaining({ call_role: 'guest' })]);
   });
 
-  // The guest room goes when the member room takes over: the person stayed, so it is no leave.
-  it('ends a room that is handing over as handed over, not as a leave', () => {
+  // The room's owner says why it went, asked at unmount: the outcome that closes a lobby's guest
+  // room is only known in the render that removes it.
+  it.each(['handed_over', 'handover_failed'] as const)('ends a room as its owner says it went: %s', reason => {
     const call = fakeRoom();
-    const { rerender, unmount } = renderHook(
-      ({ handingOver }) => useVoiceCallTelemetry(call.room, 'lobby', 'lobby-1', { role: 'guest', handingOver }),
-      { initialProps: { handingOver: false } }
+    let outcome: 'left' | 'handed_over' | 'handover_failed' = 'left';
+    const { unmount } = renderHook(() =>
+      useVoiceCallTelemetry(call.room, 'lobby', 'lobby-1', { role: 'guest', endsAs: () => outcome })
     );
-    rerender({ handingOver: true });
+    outcome = reason;
     unmount();
-    expect(events('debate_voice_ended')).toEqual([expect.objectContaining({ end_reason: 'handed_over' })]);
+    expect(events('debate_voice_ended')).toEqual([expect.objectContaining({ end_reason: reason })]);
   });
 
-  it('ends a room that is not handing over as a leave', () => {
+  it('ends a room as a leave when nothing says otherwise', () => {
     const call = fakeRoom();
     const { unmount } = renderHook(() =>
-      useVoiceCallTelemetry(call.room, 'lobby', 'lobby-1', { role: 'guest', handingOver: false })
+      useVoiceCallTelemetry(call.room, 'lobby', 'lobby-1', { role: 'guest', endsAs: () => 'left' })
     );
     unmount();
     expect(events('debate_voice_ended')).toEqual([expect.objectContaining({ end_reason: 'left' })]);
+  });
+
+  // Review on #3065: checked by tsc, not at run time. A debate's context and a lobby room's role
+  // never describe the same call, so passing both must not compile.
+  it('keeps a debate’s context and a room role apart', () => {
+    const call = fakeRoom();
+    const stop = startVoiceCallTelemetry(
+      call.room,
+      'lobby',
+      'lobby-1',
+      // @ts-expect-error A room role with debate fields.
+      { call_role: 'guest', debate_id: 'debate-1' }
+    );
+    stop();
   });
 
   it('never fails the call it measures when cleaning up throws', () => {

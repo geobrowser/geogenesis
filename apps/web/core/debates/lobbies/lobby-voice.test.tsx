@@ -974,14 +974,13 @@ describe('LobbyGuestVoice', () => {
         onRemoved={vi.fn()}
       />
     );
-    expect(mocks.useVoiceCallTelemetry).toHaveBeenLastCalledWith(fakeRoom, 'lobby', 'lobby1', {
-      role: 'guest',
-      handingOver: false,
-    });
+    expect(mocks.useVoiceCallTelemetry).toHaveBeenLastCalledWith(fakeRoom, 'lobby', 'lobby1', { role: 'guest' });
   });
 
-  // Quiet is the member room taking over: this room's end is a handover, not a leave.
-  it('marks a listener room handing over to the member room', () => {
+  // The shell knows why the guest room went (a handover, a failed one, or neither); the room only
+  // passes its answer through to the telemetry.
+  it('passes the shell’s account of why the listener room went through to call quality', () => {
+    const endsAs = () => 'handed_over' as const;
     render(
       <LobbyGuestVoice
         lobbyId="lobby1"
@@ -990,12 +989,12 @@ describe('LobbyGuestVoice', () => {
         onReconnect={vi.fn()}
         onAutoReconnect={() => false}
         onRemoved={vi.fn()}
-        quiet
+        endsAs={endsAs}
       />
     );
     expect(mocks.useVoiceCallTelemetry).toHaveBeenLastCalledWith(fakeRoom, 'lobby', 'lobby1', {
       role: 'guest',
-      handingOver: true,
+      endsAs,
     });
   });
 
@@ -1014,10 +1013,7 @@ describe('LobbyGuestVoice', () => {
       fakeRoom,
       'lobby',
       'aaaaaaaabbbb4ccc8dddeeeeeeeeeeee',
-      {
-        role: 'guest',
-        handingOver: false,
-      }
+      { role: 'guest' }
     );
   });
 
