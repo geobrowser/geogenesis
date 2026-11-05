@@ -37,7 +37,8 @@ const mocks = vi.hoisted(() => ({
   /** What the stub player reports through `onPlaybackState`. */
   playerState: { ready: false, playing: false, autoplayBlocked: false, error: false },
   captured: [] as Array<{ event: string; properties: Record<string, unknown> }>,
-  /** The page's query string, for the deep links the feed reads. */
+  /** The page's path and query string, for the deep links the feed reads. */
+  pathname: '/space/space-1/debate-1',
   search: '',
 }));
 
@@ -89,7 +90,7 @@ vi.mock('next/navigation', async () => {
   return {
     ...actual,
     useRouter: () => ({ prefetch: vi.fn(), push: vi.fn(), replace: vi.fn(), back: vi.fn() }),
-    usePathname: () => '/space/space-1/debate-1',
+    usePathname: () => mocks.pathname,
     useSearchParams: () => new URLSearchParams(mocks.search),
   };
 });
@@ -220,6 +221,7 @@ beforeEach(() => {
   mocks.playerState = { ready: false, playing: false, autoplayBlocked: false, error: false };
   mocks.captured.length = 0;
   mocks.search = '';
+  mocks.pathname = '/space/space-1/debate-1';
 
   class MockIntersectionObserver implements IntersectionObserver {
     readonly root = null;
@@ -1482,6 +1484,63 @@ describe('DebatesBrowseFeed comments deep link', () => {
     backlinks.remove();
 
     expect(page.scrollTop).toBe(900);
+  });
+
+  // The space's debates tab, linked without a debate: the feed writes the one it opens on into the
+  // URL, and clearing the trigger must not write it back out.
+  it('keeps the debate it opened on in the URL when it clears the trigger on the debates tab', () => {
+    mocks.pathname = '/space/space-1/debates';
+    mocks.search = 'modal=comments&ref_email=reply';
+    window.history.replaceState(null, '', '/space/space-1/debates?modal=comments&ref_email=reply');
+    render(
+      <Provider store={createStore()}>
+        <DebatesBrowseFeed spaceId="space-1" />
+      </Provider>
+    );
+
+    expect(screen.getByText('Comments panel for debate-1')).toBeInTheDocument();
+    const params = new URLSearchParams(window.location.search);
+    expect(params.get('debate')).not.toBeNull();
+    expect(params.get('modal')).toBeNull();
+    expect(params.get('ref_email')).toBe('reply');
+  });
+
+  it('scrolls to the inline comments again when the link arrives again on the same page', () => {
+    mocks.search = 'modal=comments';
+    const page = document.documentElement;
+    page.scrollTop = 0;
+    const feed = () => (
+      <Provider store={createStore()}>
+        <DebatesBrowseFeed
+          spaceId="space-1"
+          initialDebateId="not-in-this-space"
+          fallback={
+            <div
+              id="entity-comments"
+              ref={el => {
+                if (el) el.getBoundingClientRect = () => ({ top: 600 - page.scrollTop }) as DOMRect;
+              }}
+            />
+          }
+        />
+      </Provider>
+    );
+    const view = render(feed());
+    expect(page.scrollTop).toBe(600);
+
+    // The reader scrolls away, which lets the first hold go.
+    act(() => {
+      page.dispatchEvent(new Event('wheel'));
+    });
+    page.scrollTop = 0;
+
+    // The trigger is cleared, then the same link is followed again without a remount.
+    mocks.search = '';
+    view.rerender(feed());
+    mocks.search = 'modal=comments';
+    view.rerender(feed());
+
+    expect(page.scrollTop).toBe(600);
   });
 
   it('leaves the comments closed without it', () => {

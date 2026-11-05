@@ -381,6 +381,27 @@ export function DebatesBrowseFeed({
     setPinnedIds(visibleDebates.slice(0, pinThrough).map(debate => debate.id));
   }, [pinThrough, pinnedCount, visibleDebates]);
 
+  // `?modal=comments` (the reply email's Reply, GEO-3381) opens the comments of the debate the link
+  // landed on, once the feed is showing it. A debate the feed can't play falls back to its entity
+  // page, whose comments are inline: scroll to them there instead. Not by rewriting the URL to
+  // `#entity-comments` — the comments section reads the hash once, when it mounts, which is before
+  // this runs. Declared before the URL sync below so the trigger is cleared first: that sync writes
+  // the debate the feed opened on into the URL, and a later clear would write it back out.
+  const commentsLink = useDeepLinkParams(DEEP_LINK_MODALS.comments);
+  // A count, not a flag: each arrival of the link scrolls again.
+  const [inlineCommentsRequests, setInlineCommentsRequests] = React.useState(0);
+  useDeepLinkEffect({
+    requested: commentsLink.requested,
+    cleanUrl: commentsLink.cleanUrl,
+    enabled: !rendersFeed || activeIndex >= 0,
+    run: () => (rendersFeed ? setFeedPanel('comments') : setInlineCommentsRequests(n => n + 1)),
+  });
+  React.useEffect(() => {
+    const page = document.scrollingElement;
+    if (!inlineCommentsRequests || !(page instanceof HTMLElement)) return;
+    return holdCommentsInView(page);
+  }, [inlineCommentsRequests]);
+
   // The URL follows the debate on screen, the way a short-video feed's does: reloading, copying the
   // address bar, or coming Back lands on what was being watched rather than on whichever debate the
   // feed was opened at. `replaceState`, not a push, so Back leaves the feed instead of stepping back
@@ -392,25 +413,6 @@ export function DebatesBrowseFeed({
     if (href == null) return;
     window.history.replaceState(null, '', href);
   }, [activeId, rendersFeed, spaceId, surface]);
-
-  // `?modal=comments` (the reply email's Reply, GEO-3381) opens the comments of the debate the link
-  // landed on, once the feed is showing it. A debate the feed can't play falls back to its entity
-  // page, whose comments are inline: scroll to them there instead. Not by rewriting the URL to
-  // `#entity-comments` — the comments section reads the hash once, when it mounts, which is before
-  // this runs.
-  const commentsLink = useDeepLinkParams(DEEP_LINK_MODALS.comments);
-  const [scrollToInlineComments, setScrollToInlineComments] = React.useState(false);
-  useDeepLinkEffect({
-    requested: commentsLink.requested,
-    cleanUrl: commentsLink.cleanUrl,
-    enabled: !rendersFeed || activeIndex >= 0,
-    run: () => (rendersFeed ? setFeedPanel('comments') : setScrollToInlineComments(true)),
-  });
-  React.useEffect(() => {
-    const page = document.scrollingElement;
-    if (!scrollToInlineComments || !(page instanceof HTMLElement)) return;
-    return holdCommentsInView(page);
-  }, [scrollToInlineComments]);
 
   // Where the linked debate has got to, for the visit's outcome, in the same order the render
   // below decides what to show.
