@@ -319,10 +319,10 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
           </HubHeaderControls>
         </div>
 
-        {/* At most one thing before the tabs, and nothing when there is nothing to say (GEO-3463): a
-            44px strip, or the live lobby card. The lobby spotlight, the upcoming lobbies card and the
-            schedule banner used to stack here, about 520px at an 800px window before the first person
-            or claim. */}
+        {/* One card's height before the tabs, and nothing when there is nothing to say (GEO-3463): a
+            44px strip, or the callout stack, whose other cards are edges under the first (GEO-3586).
+            The lobby spotlight, the upcoming lobbies card and the schedule banner used to stack here
+            in full, about 520px at an 800px window before the first person or claim. */}
         <HubLiveStrip
           lineup={lobbyLineup}
           todaysCallout={
