@@ -766,7 +766,7 @@ describe('DebateCalendar', () => {
     expect(mocks.openHub).toHaveBeenCalledWith('requests');
   });
 
-  it('says the Geo team arranged a pending match on the week, after the viewer has accepted too', () => {
+  it('says a Geo-team match the viewer accepted is not confirmed on the week, not that they requested it', () => {
     mocks.scheduled = [
       {
         request_id: 'admin-1',
@@ -787,7 +787,8 @@ describe('DebateCalendar', () => {
     ];
     render(<DebateCalendar />);
 
-    expect(screen.getByRole('button', { name: /Arranged by the Geo team · Elena/ })).toBeInTheDocument();
+    // GEO-3589: the viewer accepted it, so it says it isn't booked yet rather than who arranged it.
+    expect(screen.getByRole('button', { name: /Not confirmed · Elena/ })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Requested/ })).not.toBeInTheDocument();
   });
 

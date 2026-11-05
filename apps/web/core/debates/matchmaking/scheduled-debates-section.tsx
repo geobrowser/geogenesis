@@ -746,6 +746,9 @@ export function ScheduledAnswerButtons({
  * GEO-3229: a match the Geo team arranged says so on the card for as long as it is pending, including
  * after one debater has accepted, so it never reads as the other debater having asked. Once a time
  * has been moved, it also says which debater proposed the new one. Null for a request between people.
+ *
+ * GEO-3589: to a viewer who still has to answer, it also says when the other debater has already
+ * accepted, since the viewer's answer is then the one that books it.
  */
 export function adminArrangedNote(
   request: ScheduledDebateRequest,
@@ -755,7 +758,13 @@ export function adminArrangedNote(
   if (!request.created_by_admin) return null;
   const arranged = 'Arranged by the Geo team';
   const proposer = request.proposed_by_user_id;
-  if (request.reschedule_count === 0 || proposer === null) return arranged;
+  if (request.reschedule_count === 0 || proposer === null) {
+    const otherAccepted =
+      request.viewer_must_answer &&
+      viewerId !== null &&
+      request.participants.some(entry => entry.accepted === true && !sameId(entry.user_id, viewerId));
+    return otherAccepted ? `${opponentName(opponent)} accepted · ${arranged}` : arranged;
+  }
   if (viewerId !== null && sameId(proposer, viewerId)) return `${arranged} · You proposed this time`;
   return `${arranged} · ${opponentName(opponent)} proposed this time`;
 }
