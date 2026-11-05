@@ -54,7 +54,6 @@ import { usePreOpenHosts } from './lobby-host-lobbies';
 import { EndPickerLeftBehind } from './lobby-left-picker';
 import { LobbyHostLists, LobbyRemovedNotice } from './lobby-moderation';
 import { LobbyClaimListNames, LobbyGoing, LobbyHostedBy } from './lobby-pre-open-details';
-import { type LobbyRoomNoun, useIsCallRoom, useLobbyRoomPurpose } from './lobby-purpose';
 import { LobbyQueuedRequestProvider, useLobbyQueuedRequest } from './lobby-queued-request';
 import { LobbyAnalyticsScope } from './lobby-room-analytics';
 import { useDebateLobbyClaims } from './lobby-room-claims-hooks';
@@ -71,6 +70,7 @@ import {
   LobbyClosedCard,
 } from './lobby-state-cards';
 import { type LobbyPageView, isMemberView, lobbyViewForGuest, lobbyViewForMember } from './lobby-view';
+import { type LobbyRoomNoun, useRoomCapabilities } from './room-capabilities';
 import { useMinuteNow } from './use-minute-now';
 
 export const LOBBY_COPY = {
@@ -144,9 +144,9 @@ export function DebateLobbyPage({ lobbyId }: { lobbyId: string }) {
   useMatchmakingScope(waitingOutside);
   // Only where the page shows the guest banner, which is how a closed prompt is opened again. A
   // scheduled call's pre-call page has none: it asks on Remind me, or once the call is open.
-  const callRoom = useIsCallRoom();
+  const { space } = useRoomCapabilities();
   const spaceCalls = useFeatureFlag('spaceCalls');
-  const preCallPage = callRoom && spaceCalls;
+  const preCallPage = space !== null && spaceCalls;
   const notYetOpen = lobby?.access.status === 'not_yet_open';
   useLobbySignInPrompt(lobbyId, signedOut && (admitted || (notYetOpen && !preCallPage)));
   const exitHref = useLobbyExitHref();
@@ -232,30 +232,27 @@ function LobbyAccess({
   onEdit: () => void;
 }) {
   const guest = useIsLobbyGuest();
-  const purpose = useLobbyRoomPurpose();
+  const { noun, space, recording } = useRoomCapabilities();
   // Scheduled calls (GEO-3420) are the community calls feature; off, a call page reads as before.
   const spaceCalls = useFeatureFlag('spaceCalls');
   // A call gone from geo-chat leaves quietly, never showing a cached copy.
-  if (missing && purpose.purpose === 'call' && spaceCalls) {
+  if (missing && space && spaceCalls) {
     return (
-      <LobbyNotice action={{ href: spaceCallsTabPath(purpose.spaceId), label: CALL_STATE_COPY.backToCalls }}>
+      <LobbyNotice action={{ href: spaceCallsTabPath(space.id), label: CALL_STATE_COPY.backToCalls }}>
         {CALL_STATE_COPY.unavailable}
       </LobbyNotice>
     );
   }
   if (!lobby) {
-    const call = purpose.purpose === 'call';
     return failed ? (
       <LobbyNotice
-        action={
-          call ? { href: NavUtils.toSpace(purpose.spaceId), label: CALL_STATE_COPY.backToSpace } : findDebateAction
-        }
+        action={space ? { href: NavUtils.toSpace(space.id), label: CALL_STATE_COPY.backToSpace } : findDebateAction}
         onRetry={onRetry}
       >
-        {call ? 'Could not open this call.' : 'Could not open this lobby.'}
+        {`Could not open this ${noun}.`}
       </LobbyNotice>
     ) : (
-      <LobbyNotice busy>{call ? 'Opening the call…' : 'Opening the lobby…'}</LobbyNotice>
+      <LobbyNotice busy>{`Opening the ${noun}…`}</LobbyNotice>
     );
   }
 
@@ -270,7 +267,7 @@ function LobbyAccess({
           cancelled={lobby.access.reason === 'cancelled'}
           after={
             <>
-              {purpose.purpose === 'call' ? <EndedCallRecording lobby={lobby} /> : null}
+              {recording ? <EndedCallRecording lobby={lobby} /> : null}
               {/* Hosts can still look up who was banned and what was done. */}
               {isMemberView(lobby) && lobby.viewer.role === 'host' ? (
                 <div className="w-full max-w-xl">
@@ -282,11 +279,7 @@ function LobbyAccess({
         />
       );
     case 'not_yet_open':
-      return purpose.purpose === 'call' && spaceCalls ? (
-        <CallPreOpen lobby={lobby} />
-      ) : (
-        <NotYetOpen lobby={lobby} onEdit={onEdit} />
-      );
+      return space && spaceCalls ? <CallPreOpen lobby={lobby} /> : <NotYetOpen lobby={lobby} onEdit={onEdit} />;
     case 'admitted':
       if (guest && guestSession.state.status === 'removed') {
         return (
@@ -295,7 +288,7 @@ function LobbyAccess({
             <LobbyGuestBanner
               lobbyId={lobby.lobby_id}
               message={{
-                title: purpose.purpose === 'call' ? LOBBY_COPY.guestRemovedFromCall : LOBBY_COPY.guestRemoved,
+                title: noun === 'call' ? LOBBY_COPY.guestRemovedFromCall : LOBBY_COPY.guestRemoved,
                 detail: LOBBY_COPY.guestRemovedInvite,
               }}
             />
@@ -413,7 +406,7 @@ function AdmittedLobby({
   exitHref: string;
 }) {
   const { state, join, leave, leaveSteppedOut, connectionId, setVoiceConnected, voiceAwayAt } = presence;
-  const purpose = useLobbyRoomPurpose();
+  const { debates } = useRoomCapabilities();
 
   // Removed before this visit, or unbanned since. Dropped while in the lobby, and Leave, take the
   // page back to where it was opened from (`useExitLobbyWhenOut`) before this renders.
@@ -448,8 +441,8 @@ function AdmittedLobby({
     guestSession,
     exitHref,
   };
-  // A space call (GEO-3419): no lobby analytics, schedule or queued debate requests.
-  if (purpose.purpose === 'call') return <CallRoom {...room} />;
+  // Without debates (a space call, GEO-3419): no lobby analytics, schedule or queued debate requests.
+  if (!debates) return <CallRoom {...room} />;
 
   return (
     <LobbyAnalyticsScope lobby={lobby}>
@@ -473,7 +466,7 @@ function ConfirmLeaveOtherLobby({
   onJoin: () => void;
 }) {
   const other = useDebateLobby(otherLobbyId ?? '', otherLobbyId !== null).data;
-  const calls = useIsCallRoom() || other?.purpose === 'call';
+  const calls = useRoomCapabilities().noun === 'call' || other?.purpose === 'call';
 
   return (
     <LobbyShell>
@@ -623,12 +616,9 @@ function LobbyRoom({
       availability={availability}
       queuedOutcome={queuedRequest.outcome}
       onDismissQueuedOutcome={queuedRequest.dismissOutcome}
-      voiceExtras={LOBBY_VOICE_EXTRAS}
     />
   );
 }
-
-const LOBBY_VOICE_EXTRAS = { screenShare: true };
 
 function LobbyTitle({ lobby }: { lobby: LobbyPageView }) {
   return (

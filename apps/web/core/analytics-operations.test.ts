@@ -79,6 +79,14 @@ describe('operation failure classification', () => {
     expect(classifyOperationFailure(new Error('receipt timeout'))).toBe('unknown');
     expect(classifyOperationFailure(new Error('network unavailable'))).toBe('unknown');
   });
+  it('counts a refused geo-chat session as unavailable, since nothing was sent', () => {
+    const refused = new Error('no personal space');
+    refused.name = 'GeoChatSessionError';
+    expect(classifyOperationFailure(refused)).toBe('unavailable');
+    const resource = new Error('Unauthorized');
+    resource.name = 'GeoChatRequestError';
+    expect(classifyOperationFailure(resource)).toBe('unknown');
+  });
   it('bounds cyclic causes and handles non-errors conservatively', () => {
     const cycle: { cause?: unknown } = {};
     cycle.cause = cycle;

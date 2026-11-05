@@ -83,7 +83,26 @@ describe('DataBlockLoadingPlaceholder', () => {
     expect(screen.getAllByText('•')).toHaveLength(4);
   });
 
-  it.each(['TABLE', 'EXPLORE', 'PILL'] as const)('falls back to the table placeholder for %s', view => {
+  it('renders a feed of explore-card placeholders for an explore block rather than a table', () => {
+    const { container } = render(<DataBlockLoadingPlaceholder view="EXPLORE" items={3} />);
+
+    expect(container.querySelector('table')).toBeNull();
+    expect(screen.getAllByTestId('explore-view-skeleton-card')).toHaveLength(3);
+  });
+
+  it('sizes each explore card like a claim card, switching at the same container width', () => {
+    render(<DataBlockLoadingPlaceholder view="EXPLORE" items={2} />);
+
+    for (const card of screen.getAllByTestId('explore-view-skeleton-card')) {
+      expect(card).toHaveClass('@container', 'py-4', 'border-b');
+    }
+    for (const body of screen.getAllByTestId('explore-view-skeleton-body')) {
+      expect(body).toHaveClass('h-[107px]', 'claim-card-narrow:h-[175px]');
+      expect(body).not.toHaveClass('min-h-[140px]');
+    }
+  });
+
+  it.each(['TABLE', 'PILL'] as const)('falls back to the table placeholder for %s', view => {
     const { container } = render(<DataBlockLoadingPlaceholder view={view} items={3} />);
 
     expect(container.querySelector('table')).not.toBeNull();
@@ -99,5 +118,35 @@ describe('DataBlockLoadingPlaceholder', () => {
     const { container } = render(<DataBlockLoadingPlaceholder view="TABLE" />);
 
     expect(container.querySelectorAll('tbody tr')).toHaveLength(10);
+  });
+
+  it('caps the reserved rows at a known item count that is under the page size', () => {
+    const { container } = render(<DataBlockLoadingPlaceholder view="TABLE" items={10} itemCount={3} />);
+
+    expect(container.querySelectorAll('tbody tr')).toHaveLength(3);
+  });
+
+  it.each(['TABLE', 'LIST', 'BULLETED_LIST', 'GALLERY', 'EXPLORE'] as const)(
+    'reserves only the header row for a known empty collection in %s',
+    view => {
+      const { container } = render(<DataBlockLoadingPlaceholder view={view} items={6} itemCount={0} />);
+
+      expect(container.querySelectorAll('thead tr')).toHaveLength(1);
+      expect(container.querySelectorAll('tbody tr')).toHaveLength(0);
+      expect(screen.queryByTestId('explore-view-skeleton-card')).toBeNull();
+      expect(screen.queryAllByText('•')).toHaveLength(0);
+    }
+  );
+
+  it('reserves the full page when the item count is unknown', () => {
+    render(<DataBlockLoadingPlaceholder view="EXPLORE" items={6} itemCount={undefined} />);
+
+    expect(screen.getAllByTestId('explore-view-skeleton-card')).toHaveLength(6);
+  });
+
+  it('keeps the page size when the known item count exceeds it', () => {
+    const { container } = render(<DataBlockLoadingPlaceholder view="TABLE" items={5} itemCount={20} />);
+
+    expect(container.querySelectorAll('tbody tr')).toHaveLength(5);
   });
 });

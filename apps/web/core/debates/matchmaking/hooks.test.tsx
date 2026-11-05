@@ -225,23 +225,17 @@ describe('viewer-relative reads and a backend catching up', () => {
     expect(mocks.listMatchmakingMatches).toHaveBeenCalledTimes(1);
   });
 
-  /**
-   * A 401 is two different things, told apart by whether we have an identity at all.
-   *
-   * With one, it is geo-chat not having registered this viewer yet — true of every account for a
-   * minute or two after sign-up, and the reported bug. Without one, it is the plain refusal it looks
-   * like: the hub asks for its anonymous lists without a token, and waiting a minute for that would
-   * be waiting for something that is not coming.
-   */
-  it('waits out a refusal aimed at a viewer it has an identity for', async () => {
-    mocks.listMatchmakingMatches
-      .mockRejectedValueOnce(new GeoChatSessionError(new GeoChatRequestError('not yet', null, 401)))
-      .mockResolvedValue({ matches: [] });
+  // The account recovery retries the exchange and refetches; the read itself settles at once so
+  // the hub shows the setup state instead of a skeleton.
+  it('leaves a refusal aimed at a viewer it has an identity for to the account recovery', async () => {
+    mocks.listMatchmakingMatches.mockRejectedValue(
+      new GeoChatSessionError(new GeoChatRequestError('not yet', null, 401))
+    );
 
     const { result } = renderHook(() => useMatchmakingMatches(true), { wrapper: retryingWrapper });
 
-    await waitFor(() => expect(result.current.data).toEqual({ matches: [] }));
-    expect(mocks.listMatchmakingMatches).toHaveBeenCalledTimes(2);
+    await waitFor(() => expect(result.current.error).toBeTruthy());
+    expect(mocks.listMatchmakingMatches).toHaveBeenCalledTimes(1);
   });
 
   // Through People, which is one of the two lists the hub asks for without a token — the matches

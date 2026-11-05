@@ -30,7 +30,7 @@ import {
 } from './lobby-format';
 import { LobbyGuestCount } from './lobby-guest';
 import { LobbyPersonMenu, personMenuAnalyticsAttributes } from './lobby-person-menu';
-import { useIsCallRoom } from './lobby-purpose';
+import { SectionHeading } from './lobby-section-heading';
 import { LobbyShowPeopleContext, LobbySlot } from './lobby-slots';
 import {
   EMPTY_VIDEO_GRID,
@@ -42,6 +42,7 @@ import {
 } from './lobby-video-grid';
 import type { LobbyPageView } from './lobby-view';
 import { type LobbyVoiceStates, useLobbyVoiceStates } from './lobby-voice';
+import { useRoomCapabilities } from './room-capabilities';
 
 export const LOBBY_ROSTER_COPY = {
   empty: 'Nobody’s here right now.',
@@ -57,8 +58,9 @@ export function publishes(member: Pick<DebateLobbyMember, 'role' | 'acting_host'
 }
 
 /**
- * The People side (GEO-3131): debates in progress, speaker tiles, then who is listening. Anyone in
- * a pair card is left out of the tiles and chips below it.
+ * The People side (GEO-3131): speaker tiles, who is listening, then debates in progress. Debates
+ * come last (GEO-3587) so a busy lobby doesn't push the people you can talk to down the page.
+ * Anyone in a pair card is left out of the tiles and chips above it.
  */
 export function LobbyPeople({
   lobby,
@@ -72,9 +74,9 @@ export function LobbyPeople({
   ownAvailable: boolean | undefined;
   disagreements: DebateLobbyClaims['disagreements'];
 }) {
-  // A space call has no debates: no pairs, availability or disagreements on anyone.
-  const call = useIsCallRoom();
-  const pairs = call ? [] : (lobby.debate_pairs ?? []);
+  // Without debates (a space call): no pairs, availability or disagreements on anyone.
+  const { debates } = useRoomCapabilities();
+  const pairs = debates ? (lobby.debate_pairs ?? []) : [];
   const inPairs = new Set(pairs.flatMap(pair => pair.people.map(person => dashlessId(person.user_id))));
   const roster = rosterOrder(lobby.members).filter(member => !inPairs.has(dashlessId(member.user_id)));
   const speakers = roster.filter(publishes);
@@ -96,14 +98,13 @@ export function LobbyPeople({
       member,
       isSelf,
       viewerId,
-      status: call ? null : memberStatus(member, isSelf ? ownAvailable : undefined),
-      disagreements: isSelf || call ? null : disagreementCount(disagreements, member.user_id),
+      status: debates ? memberStatus(member, isSelf ? ownAvailable : undefined) : null,
+      disagreements: isSelf || !debates ? null : disagreementCount(disagreements, member.user_id),
     };
   };
 
   return (
     <>
-      {call ? null : <LobbyDebatePairs pairs={pairs} members={lobby.members} lobby={lobby} viewerId={viewerId} />}
       {speakers.length > 0 ? <SpeakerVideoGrid speakers={speakers} personProps={personProps} /> : null}
       {listeners.length + guests > 0 ? (
         <section className="flex flex-col gap-2.5 md:gap-2" aria-label="Listening">
@@ -122,12 +123,9 @@ export function LobbyPeople({
           </ul>
         </section>
       ) : null}
+      {debates ? <LobbyDebatePairs pairs={pairs} members={lobby.members} lobby={lobby} viewerId={viewerId} /> : null}
     </>
   );
-}
-
-export function SectionHeading({ children }: { children: React.ReactNode }) {
-  return <h2 className="text-[17px] leading-[22px] font-semibold text-text">{children}</h2>;
 }
 
 type PersonProps = {
@@ -375,9 +373,9 @@ function SpeakingBars() {
 function PersonTags({ member, small }: { member: DebateLobbyMember; small: boolean }) {
   // The phone's size beside a name at the phone's size (a phone, or a compact tile).
   const size = small ? 'text-[12px]' : 'text-[14px]';
-  // "New" means no completed debate yet, which says nothing in a space call.
-  const call = useIsCallRoom();
-  const newcomer = Boolean(member.newcomer) && !call;
+  // "New" means no completed debate yet, which says nothing in a room without debates.
+  const { debates } = useRoomCapabilities();
+  const newcomer = Boolean(member.newcomer) && debates;
   return (
     <>
       {isHosting(member) ? (
@@ -411,8 +409,8 @@ function ListenerChip({
   'data-testid': testId = 'lobby-listener-chip',
 }: PersonProps & { voice?: SpeakerVoice; 'data-testid'?: string }) {
   const name = personName(member);
-  const call = useIsCallRoom();
-  const newcomer = Boolean(member.newcomer) && !call;
+  const { debates } = useRoomCapabilities();
+  const newcomer = Boolean(member.newcomer) && debates;
   const moved =
     Boolean(member.moved_to_listeners) ||
     (isSelf && lobby.viewer.kind === 'member' && lobby.viewer.last_moderation?.action === 'move_to_listeners');

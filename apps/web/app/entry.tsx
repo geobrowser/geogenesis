@@ -8,6 +8,7 @@ import { useAtomValue } from 'jotai';
 import dynamic from 'next/dynamic';
 import { usePathname, useSearchParams } from 'next/navigation';
 
+import { codeRecoveryExpected } from '~/core/auth/code-step';
 import { DebateCoordinator } from '~/core/debates/debate-coordinator';
 import { LastPageOutsideDebatesTracker } from '~/core/debates/lobbies/lobby-exit';
 import { useDebatesHub } from '~/core/debates/matchmaking/use-debates-hub';
@@ -27,6 +28,7 @@ import { ResponseConfirmingAnnouncement } from '~/core/responses/response-confir
 import { browseSidebarShownAtom } from '~/core/state/browse-sidebar-state';
 import { useDiff } from '~/core/state/diff-store';
 import { useEditable } from '~/core/state/editable-store';
+import { useFeatureFlag } from '~/core/state/feature-flags';
 import { useLocalVotes } from '~/core/state/local-votes';
 import { pendingCreatedSpaceAtom } from '~/core/state/pending-created-space';
 import { pendingPersonalSpaceAtom } from '~/core/state/pending-personal-space';
@@ -48,9 +50,10 @@ import { GovernanceReopenEditLoadingBar } from '~/partials/governance/governance
 import { Main } from '~/partials/main';
 import { Navbar } from '~/partials/navbar/navbar';
 import { stepAtom as onboardingStepAtom } from '~/partials/onboarding/onboarding-atoms';
-import { shouldOpenOnboardingDialog } from '~/partials/onboarding/onboarding-dialog-visibility';
+import { shouldMountOnboardingDialog } from '~/partials/onboarding/onboarding-dialog-visibility';
 import { PendingActionsRunner } from '~/partials/pending-actions-runner';
 import { LocalVotesSaver } from '~/partials/save-votes/local-votes-saver';
+import { SignInBoxGate } from '~/partials/sign-in/sign-in-box-gate';
 
 import { PageViewTracker } from '~/app/page-view-tracker';
 import {
@@ -146,6 +149,11 @@ const DeepLinkHandler = dynamic(
   { ssr: false }
 );
 
+const CodeStepRecovery = dynamic(
+  () => import('~/core/auth/code-step-recovery').then(m => ({ default: m.CodeStepRecovery })),
+  { ssr: false }
+);
+
 const ReviewChanges = dynamic(
   () => import('~/partials/review/review-changes').then(m => ({ default: m.ReviewChanges })),
   { ssr: false }
@@ -236,7 +244,7 @@ function SaveVotesGate() {
 function OnboardingGate() {
   const { isOnboardingVisible } = useOnboarding();
   const step = useAtomValue(onboardingStepAtom);
-  return useSticky(shouldOpenOnboardingDialog(isOnboardingVisible, step)) ? <OnboardingDialog /> : null;
+  return useSticky(shouldMountOnboardingDialog(isOnboardingVisible, step)) ? <OnboardingDialog /> : null;
 }
 
 function PendingPersonalSpaceGate() {
@@ -269,6 +277,17 @@ function PostAuthRedirectGate() {
 function DeepLinkGate() {
   const searchParams = useSearchParams();
   return useSticky(requestsAnyModal(searchParams)) ? <DeepLinkHandler /> : null;
+}
+
+// A page that may pick up a code step another page left (GEO-3573). Read once, at mount.
+// Loaded up front for a browser with the flag on, so a press paints the box without fetching it.
+function SignInBoxFlagGate() {
+  return useFeatureFlag('ourSignInBox') ? <SignInBoxGate /> : null;
+}
+
+function CodeStepRecoveryGate() {
+  const [reloaded] = React.useState(codeRecoveryExpected);
+  return reloaded ? <CodeStepRecovery /> : null;
 }
 
 function DebatesHubGate() {
@@ -368,6 +387,8 @@ export function App({ children }: { children: React.ReactNode }) {
           <PostAuthRedirectGate />
           <React.Suspense fallback={null}>
             <DeepLinkGate />
+            <CodeStepRecoveryGate />
+            <SignInBoxFlagGate />
           </React.Suspense>
           <Toast />
           <ResponseConfirmingAnnouncement />

@@ -138,6 +138,13 @@ function renderPeople(view: LobbyPageView, speaking: string[] = []) {
 }
 
 describe('LobbyPeople on desktop', () => {
+  it('lists debates in progress after the speakers and listeners (GEO-3587)', () => {
+    renderPeople(lobby(roster, { debate_pairs: pairs, guest_count: 2 }));
+
+    const headings = screen.getAllByRole('heading', { level: 2 }).map(heading => heading.textContent);
+    expect(headings).toEqual(['Speakers · 4', expect.stringMatching(/^Listening/), 'In a debate · 1']);
+  });
+
   it('draws speaker tiles with tags, statuses and disagreements, leaving pairs to their card', () => {
     renderPeople(lobby(roster, { debate_pairs: pairs, guest_count: 2 }), ['adam']);
 

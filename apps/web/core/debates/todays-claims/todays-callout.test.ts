@@ -82,18 +82,25 @@ describe('todaysClaimsInOrder', () => {
     ]);
   });
 
-  // Review: a space's newest agenda can be days old; the callout is about today's.
-  it('leaves out spaces whose newest agenda is older than the newest agenda day', () => {
+  // GEO-3547: a space whose current agenda is days old follows today's, newest day first, and a
+  // claim on both keeps today's listing.
+  it('lists older current agendas after the newest day’s, newest first', () => {
     const ordered = todaysClaimsInOrder(
       agendas([
-        { spaceId: 'fresh', sections: [{ id: 'f1', claimIds: ['today'] }] },
-        { spaceId: 'stale', listedOn: '2026-10-24', sections: [{ id: 's1', claimIds: ['old'] }] },
+        { spaceId: 'fresh', sections: [{ id: 'f1', claimIds: ['today', 'shared'] }] },
+        { spaceId: 'oldest', listedOn: '2026-10-24', sections: [{ id: 'o1', claimIds: ['oldest'] }] },
+        { spaceId: 'older', listedOn: '2026-10-27', sections: [{ id: 's1', claimIds: ['shared', 'older'] }] },
       ]),
-      ['stale', 'fresh'],
+      ['oldest', 'older', 'fresh'],
       () => undefined
     );
 
-    expect(ordered.map(item => item.claimId)).toEqual(['today']);
+    expect(ordered.map(item => [item.claimId, item.listedOn])).toEqual([
+      ['today', '2026-10-29'],
+      ['shared', '2026-10-29'],
+      ['older', '2026-10-27'],
+      ['oldest', '2026-10-24'],
+    ]);
   });
 
   it('counts a story by its heading across spaces, and an unnamed section by its own id', () => {
@@ -148,6 +155,76 @@ describe('pickCalloutClaims', () => {
 
     // a3 fills Election's three, a6 is a's fourth; a4, a5 and a7 wait for the caps.
     expect(ids(picked)).toEqual(['a1', 'a2', 'a3', 'a6', 'b1', 'b2', 'c1', 'd1', 'd2', 'e1']);
+  });
+
+  // GEO-3547.
+  it('asks about the viewer’s own spaces first, each group highest-ranked first', () => {
+    const ordered = [
+      claim('a1', 'a', 'Election'),
+      claim('a2', 'a', 'Economy'),
+      claim('m1', 'm', 'AI'),
+      claim('b1', 'b', 'Health'),
+      claim('m2', 'm', 'Crypto'),
+    ];
+    const picked = pickCalloutClaims(
+      ordered,
+      () => false,
+      scored({ a1: 99, a2: 90, b1: 95, m1: 10, m2: 20 }),
+      spaceId => spaceId === 'm'
+    );
+
+    expect(ids(picked)).toEqual(['m2', 'm1', 'a1', 'b1', 'a2']);
+  });
+
+  it('keeps the caps for a member space while other spaces have claims to ask about', () => {
+    const ordered = [
+      ...['m1', 'm2', 'm3', 'm4', 'm5', 'm6'].map(id => claim(id, 'm', 'Election')),
+      ...['o1', 'o2', 'o3', 'o4', 'o5', 'o6'].map(id => claim(id, `space-${id}`, `topic-${id}`)),
+    ];
+    const picked = pickCalloutClaims(
+      ordered,
+      () => false,
+      scored({}),
+      spaceId => spaceId === 'm'
+    );
+
+    // Three from the member space's one story, every other space's claim, then the relaxed pass
+    // tops the set up from the member space before anywhere else.
+    expect(ids(picked)).toEqual(['m1', 'm2', 'm3', 'm4', 'o1', 'o2', 'o3', 'o4', 'o5', 'o6']);
+  });
+
+  // GEO-3547: older agendas only top the set up.
+  it('fills from today’s agendas before taking any older one', () => {
+    const today = ['t1', 't2', 't3', 't4', 't5', 't6', 't7'].map(id => claim(id, 'today-space', 'AI'));
+    const older = ['o1', 'o2', 'o3', 'o4', 'o5'].map(id => ({
+      ...claim(id, `older-${id}`, `older-${id}`),
+      listedOn: '2026-10-28',
+    }));
+    // The older claims rank higher and sit in the viewer's own spaces; today's still come first.
+    const picked = pickCalloutClaims(
+      [...older, ...today],
+      () => false,
+      scored({ o1: 99, o2: 98, o3: 97, o4: 96, o5: 95 }),
+      spaceId => spaceId.startsWith('older-')
+    );
+
+    expect(ids(picked)).toEqual(['t1', 't2', 't3', 't4', 't5', 't6', 't7', 'o1', 'o2', 'o3']);
+  });
+
+  it('tops a short day up from older agendas, keeping the caps across days', () => {
+    const today = ['t1', 't2'].map(id => claim(id, 'ai', 'AI'));
+    const older = [
+      ...['w1', 'w2', 'w3', 'w4', 'w5'].map(id => ({ ...claim(id, 'world', 'Brazil'), listedOn: '2026-10-28' })),
+      ...['v1', 'v2'].map(id => ({ ...claim(id, 'world', 'Israel'), listedOn: '2026-10-28' })),
+      ...['a3', 'a4'].map(id => ({ ...claim(id, 'old-ai', 'AI'), listedOn: '2026-10-28' })),
+      { ...claim('d1', 'debates', 'Top three'), listedOn: '2026-10-28' },
+    ];
+    const picked = pickCalloutClaims([...today, ...older], () => false, scored({}));
+
+    // AI already has two from today, so one more until the caps relax; world takes four, Brazil
+    // three; then the space cap relaxes for v2 and the topic cap for w4. Asked today's first, then
+    // the older day in its order.
+    expect(ids(picked)).toEqual(['t1', 't2', 'w1', 'w2', 'w3', 'w4', 'v1', 'v2', 'a3', 'd1']);
   });
 
   it('caps a topic across spaces', () => {

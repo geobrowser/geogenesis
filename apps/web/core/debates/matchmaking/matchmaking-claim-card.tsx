@@ -718,11 +718,12 @@ export function useClaimPositionControl({
     if (localPosition !== null) removeLocalVote(localVoteKey);
     // No confirming-window guard here on purpose. Until the bundler has the write, the held pill is
     // this client's guess and pressing a held pill means "remove", so a double-click — or a press on
-    // a side that has not reached the bundler — published a retraction nobody asked for. That gate
-    // now lives once in `ResponseButton` (`acceptsPress: !pending`), and every surface that calls
-    // `respond` — the claim pills, the explore card, the debate overlay and the ticker — reaches it
-    // through that button, so the press never arrives here. A new caller that skips `ResponseButton`
-    // must carry the gate itself.
+    // a side that has not reached the bundler — published a retraction nobody asked for. The gate
+    // lives at the press instead: `ResponseButton` (`acceptsPress: !pending`) for the pills and icon
+    // buttons, and `VoteNote`'s `pending` for the email vote's Undo. `useEmailVoteLink` calls this
+    // with no gate and needs none: it only casts when the reader holds no side (`viewerPosition` is
+    // null, so `heldPosition` is too), which can never send a retraction. A new caller must carry the
+    // gate itself, or be as sure.
     setResponseError(null);
     // A failed publish silently rolls the optimistic state back, which reads as the response
     // simply vanishing. Catch it here so the reason is visible.

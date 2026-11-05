@@ -19,6 +19,7 @@ import { HUB_CARD_EXIT_TRANSITION } from '~/core/debates/matchmaking/hub-motion'
 import type { ParticipantPosition } from '~/core/debates/participant-positions';
 import { DebateRoomProvider } from '~/core/debates/rooms/room-context';
 import type { DebateRoomPresence, DebateRoomPresenceState } from '~/core/debates/rooms/room-presence';
+import { type FeatureFlagId } from '~/core/state/feature-flags';
 
 import { DebateRematchPageClient, resolveLandingTab } from './rematch-page-client';
 
@@ -43,6 +44,8 @@ const { SPACE_1, SPACE_2, CLAIM_SHARED, CLAIM_MORE, CLAIM_SOURCE, CLAIM_FRESH, N
 const mocks = vi.hoisted(() => ({
   /** Bumped to remount the stubbed header's subtree, the way the real one does as voice connects. */
   headerEpoch: 0,
+  previousDebateClaimsEnabled: false,
+  featureFlagsHydrated: true,
   /** GEO-3527. Agree / disagree counts by claim id, and whether the counts lookup is in flight. */
   responseCounts: new Map<string, { positive: number; negative: number }>(),
   responseCountsLoading: false,
@@ -332,15 +335,30 @@ vi.mock('~/core/debates/lobbies/lobby-return', async () => {
   };
 });
 
+vi.mock('~/core/hooks/use-hydrated', () => ({
+  useHydrated: () => mocks.featureFlagsHydrated,
+}));
+
+vi.mock('~/core/state/feature-flags', async importOriginal => {
+  const actual = await importOriginal<typeof import('~/core/state/feature-flags')>();
+  return {
+    ...actual,
+    useFeatureFlag: (id: FeatureFlagId) =>
+      id === 'previousDebateClaims'
+        ? mocks.featureFlagsHydrated && mocks.previousDebateClaimsEnabled
+        : actual.defaultFeatureFlags[id],
+  };
+});
+
 vi.mock('~/core/debates/hooks', () => ({
   useDebateRematch: () => ({ data: mocks.session, isLoading: mocks.sessionLoading, error: null }),
   useDebateExtractedClaims: (debateId: string, enabled: boolean) => {
     mocks.extractedClaimsAskedFor.push({ debateId, enabled });
     return {
-      data:
-        enabled && !mocks.extractedClaimsLoading
-          ? { payload: mocks.extractedClaims, final: mocks.extractedClaimsFinal }
-          : undefined,
+      // Disabled TanStack queries can still return a cached payload.
+      data: !mocks.extractedClaimsLoading
+        ? { payload: mocks.extractedClaims, final: mocks.extractedClaimsFinal }
+        : undefined,
       isLoading: enabled && mocks.extractedClaimsLoading,
       error: null,
     };
@@ -1056,6 +1074,8 @@ function mutation(mutate = mocks.mutate) {
 }
 
 beforeEach(() => {
+  mocks.previousDebateClaimsEnabled = false;
+  mocks.featureFlagsHydrated = true;
   mocks.isPhone = true;
   mocks.responseCounts.clear();
   mocks.responseCountsLoading = false;
@@ -5741,7 +5761,7 @@ describe('Hide my positions', () => {
 });
 
 /**
- * GEO-3148. Where a pair land: the first of Matches, From this debate, Related and their positions
+ * GEO-3148. Where a pair land: the first of Matches, Related and their positions
  * with something in it, and Explore when none has. Decided once, after every earlier tab has
  * answered, so a later answer never moves someone already reading a list.
  */
@@ -5766,14 +5786,13 @@ describe('where the pair land', () => {
     expect(
       resolveLandingTab([
         ['matches', 'empty'],
-        ['debate', 'filled'],
         ['related', 'filled'],
       ])
-    ).toBe('debate');
+    ).toBe('related');
     expect(
       resolveLandingTab([
         ['matches', 'empty'],
-        ['debate', 'empty'],
+        ['related', 'empty'],
       ])
     ).toBe('explore');
   });
@@ -5782,14 +5801,14 @@ describe('where the pair land', () => {
     expect(
       resolveLandingTab([
         ['matches', 'pending'],
-        ['debate', 'filled'],
+        ['related', 'filled'],
       ])
     ).toBeNull();
     // A later tab still out does not hold up an earlier one that is filled.
     expect(
       resolveLandingTab([
         ['matches', 'filled'],
-        ['debate', 'pending'],
+        ['related', 'pending'],
       ])
     ).toBe('matches');
   });
@@ -5802,12 +5821,13 @@ describe('where the pair land', () => {
     expect(screen.getByRole('button', { name: /^Their positions/ })).toHaveAttribute('aria-pressed', 'true');
   });
 
-  it('lands on the debate’s own claims ahead of their positions when there is no match', async () => {
+  it('skips the hidden previous-debate claims and lands on their positions when there is no match', async () => {
     nothingToRematch();
+    const extractedClaimId = 'd4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4';
     // Published, so the tab has a card with controls to land on (GEO-3312).
     mocks.entities.push({
       ...sharedEntity(),
-      id: 'd4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4',
+      id: extractedClaimId,
       name: 'Coffee dates save everyone’s time',
     });
     mocks.extractedClaims = {
@@ -5818,17 +5838,18 @@ describe('where the pair land', () => {
           is_factual: false,
           turn_index: 0,
           existing_entity_id: null,
-          entity_id: 'd4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4',
+          entity_id: extractedClaimId,
           is_contestable: true,
         },
       ],
     };
     render(<DebateRematchPageClient sessionId="rematch-1" />);
 
-    expect(await screen.findByText('Coffee dates save everyone’s time')).toBeInTheDocument();
-    const tab = screen.getByRole('button', { name: /^From this debate/ });
-    expect(tab).toHaveAttribute('aria-pressed', 'true');
-    expect(within(tab).getByText('1')).toBeInTheDocument();
+    expect(await screen.findByText('A claim only Salina answered')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Their positions/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByRole('button', { name: /^From this debate/ })).toBeNull();
+    expect(screen.queryByText('Coffee dates save everyone’s time')).toBeNull();
+    expect(mocks.entityIdLookups.flat()).not.toContain(extractedClaimId);
   });
 
   /**
@@ -6151,12 +6172,11 @@ describe('the Related tab', () => {
       .filter(button => button.hasAttribute('aria-pressed'))
       .map(button => button.textContent ?? '');
     expect(tabs[0]).toMatch(/^Matches/);
-    // GEO-2870: the debate's own claims sit beside Related, its other continuation.
-    expect(tabs[1]).toMatch(/^From this debate/);
-    expect(tabs[2]).toBe('Related');
-    expect(tabs[3]).toMatch(/^Their positions/);
-    expect(tabs[4]).toBe('Explore');
-    expect(tabs[5]).toMatch(/^My positions/);
+    expect(tabs[1]).toBe('Related');
+    expect(tabs[2]).toMatch(/^Their positions/);
+    expect(tabs[3]).toBe('Explore');
+    expect(tabs[4]).toMatch(/^My positions/);
+    expect(tabs).toHaveLength(5);
   });
 
   /**
@@ -7016,7 +7036,7 @@ describe('claims the pair have already debated', () => {
 
   /**
    * And the landing deliberately does not count that fold. Every landing rule counts what is new —
-   * Matches, From this debate and Related all leave debated claims out — and a tab whose only rows
+   * Matches and Related both leave debated claims out — and a tab whose only rows
    * are folded under "already debated every claim here" is the dead end the landing exists to skip.
    */
   it('lands past their positions when everything of theirs is already debated', async () => {
@@ -7130,6 +7150,20 @@ describe('claims the pair have already debated', () => {
   });
 });
 
+/** GEO-3585: previous-debate claims are hidden from the picker. */
+describe('hidden previous-debate claims', () => {
+  it.each([false, true])('keeps the tab hidden while extraction final is %s', async final => {
+    mocks.extractedClaimsFinal = final;
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await settleTabSwap();
+
+    expect(screen.queryByRole('button', { name: /^From this debate/ })).toBeNull();
+    expect(mocks.extractedClaimsAskedFor.length).toBeGreaterThan(0);
+    expect(mocks.extractedClaimsAskedFor.every(query => !query.enabled)).toBe(true);
+    expect(screen.getByRole('button', { name: /^Matches/ })).toHaveAttribute('aria-pressed', 'true');
+  });
+});
+
 /**
  * GEO-2870 phase 2. "From this debate": the claims geo-chat extracted from the debate this session
  * came out of, read from its fast path. A claim the graph already has is a full card; one it does
@@ -7180,6 +7214,7 @@ describe('From this debate', () => {
   }
 
   beforeEach(() => {
+    mocks.previousDebateClaimsEnabled = true;
     roomTurns(turns.length);
     mocks.entities = [matchedEntity()];
     mocks.claims = [sharedClaim()];
@@ -7197,6 +7232,49 @@ describe('From this debate', () => {
       ],
     };
   });
+
+  it('lands on higher-priority matches without waiting for flag hydration', async () => {
+    mocks.featureFlagsHydrated = false;
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /^Matches/ })).toHaveAttribute('aria-pressed', 'true')
+    );
+  });
+
+  it.each([false, true])(
+    'waits for flag hydration before landing and reporting, preserving a manual choice: %s',
+    async chooseManually => {
+      // All queries are settled, including the cached extraction, before the stored flag is read.
+      mocks.featureFlagsHydrated = false;
+      mocks.positions = [];
+      const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await settleTabSwap();
+      const landingReports = () =>
+        mocks.capture.mock.calls.filter(
+          ([event, properties]) =>
+            event === 'feature_exposed' && properties?.feature_id === 'debate-rematch-landing-tab'
+        );
+
+      expect(landingReports()).toHaveLength(0);
+      expect(screen.getByRole('button', { name: 'Explore' })).toHaveAttribute('aria-pressed', 'false');
+      if (chooseManually) {
+        fireEvent.click(screen.getByRole('button', { name: 'Explore' }));
+        await settleTabSwap();
+      }
+
+      mocks.featureFlagsHydrated = true;
+      view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+      await waitFor(() => expect(landingReports()).toHaveLength(1));
+      expect(landingReports()[0][1]).toMatchObject({
+        landing_tab: 'from_this_debate',
+        chose_before_landing: chooseManually,
+      });
+      expect(screen.getByRole('button', { name: chooseManually ? 'Explore' : /^From this debate/ })).toHaveAttribute(
+        'aria-pressed',
+        'true'
+      );
+    }
+  );
 
   it('reads the source debate’s claims, and is offered only when there is a source debate', async () => {
     await openTab();
@@ -7418,6 +7496,25 @@ describe('From this debate', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Already debated with Salina/ }));
     expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
+  });
+
+  it('stops hydrating the retained list when the flag is turned off', async () => {
+    mocks.entities = [matchedEntity(), publishedEntity(MINTED, 'Coffee dates save everyone’s time')];
+    const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    fireEvent.click(await screen.findByRole('button', { name: /^From this debate/ }));
+    await settleTabSwap();
+    expect(screen.getByText('Coffee dates save everyone’s time')).toBeInTheDocument();
+
+    const lookupsBefore = mocks.entityIdLookups.length;
+    const rowsBefore = mocks.rematchClaimIds.length;
+    mocks.previousDebateClaimsEnabled = false;
+    view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+    await settleTabSwap();
+
+    expect(screen.queryByRole('button', { name: /^From this debate/ })).toBeNull();
+    expect(mocks.extractedClaimsAskedFor.at(-1)?.enabled).toBe(false);
+    expect(mocks.entityIdLookups.slice(lookupsBefore).flat()).not.toContain(MINTED);
+    expect(mocks.rematchClaimIds.slice(rowsBefore).flat()).not.toContain(MINTED);
   });
 });
 

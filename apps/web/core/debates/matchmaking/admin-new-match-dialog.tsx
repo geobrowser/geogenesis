@@ -6,8 +6,9 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import { SLOT_MINUTES, formatTime24, parseTime24 } from '~/core/availability/blocks';
+import { formatTime24, parseTime24 } from '~/core/availability/blocks';
 import { windowStart } from '~/core/availability/peer-schedule';
+import { usePersonalSpacesByPageIds } from '~/core/hooks/use-personal-spaces-by-page-ids';
 import { useSearch } from '~/core/hooks/use-search';
 import { type SpaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
 import { normId } from '~/core/utils/norm-id';
@@ -21,12 +22,14 @@ import { Text } from '~/design-system/text';
 import { MUTUAL_SLOT, SELECTED_SLOT } from '~/partials/availability/peer-availability';
 import { ScheduleDialog } from '~/partials/availability/schedule-dialog';
 
-import { type DebatePerson, GeoChatRequestError, isDebateProfileMissing } from '../api';
+import { type DebatePerson, GeoChatRequestError, isDebateProfileLookupMissing, isDebateProfileMissing } from '../api';
+import { useDebateProfilesBySpace } from '../hooks';
 import { speakerLabel } from '../playback-utils';
 import { dayShift, timeIn, zoneCity } from './admin-debate-calendar-model';
 import { DebaterFace, POSITIVE_TEXT_CLASS, debaterFirstName } from './admin-debate-parts';
 import {
   ADMIN_MATCH_DAYS,
+  type AdminMatchMinutes,
   useAdminAvailabilityPrompt,
   useAdminDebaterAvailability,
   useAdminDebaters,
@@ -128,6 +131,8 @@ type Props = {
  *   each one's side. With spaces selected, the count, the list and the order cover those spaces
  *   alone, and gaia's fit stands aside: it scores the pair across every space, so it would rank and
  *   explain a pair by disagreements the admin has filtered out.
+ * - **30 or 60 minutes** (GEO-3544), kept between pairs: an hour is recommended only where both are
+ *   free for all of it, and a time either is busy for part of is Off-hours.
  * - **Recommended** offers the half-hours both are free; **Pick any time** is the override, kept a
  *   separate mode so nobody drifts into it. Every time shows both debaters' own clocks.
  * - **Both people's availability** sits above the time picker (GEO-3231), so a thin or empty
@@ -208,19 +213,37 @@ function NewMatchBody({ onClose, onSent }: { onClose: () => void; onSent: (note:
 
   // Everyone with availability, read once and kept: the roster the facts below are keyed on, so a
   // keystroke never re-reads it or blanks the list while it loads.
-  const roster = useGeoChatUserSummaries(availableIds, availableIds.length > 0);
+  // Keyed dashless, as everything below is.
+  const rosterRows = React.useMemo(
+    () => (debatersQuery.data ?? []).map(debater => ({ ...debater, user_id: normId(debater.user_id) })),
+    [debatersQuery.data]
+  );
+  const roster = useGeoChatUserSummaries(rosterRows, availableIds.length > 0);
   const rosterPeople = React.useMemo(() => roster.map(offlinePerson), [roster]);
 
-  // Geo search for people by name: how anyone without availability is found at all. A geo-chat user
-  // id is the page entity of their personal space, so a person hit is a candidate id as it stands;
-  // the summaries lookup keeps only the hits that front a personal space.
+  // Geo search for people by name: how anyone without availability is found at all. A hit is a graph
+  // Person, not a geo-chat user: its personal space, then geo-chat's account for that space, gives
+  // the user id. A person with no account cannot be matched, so is left out.
   const search = useSearch({ filterByTypes: [SystemIds.PERSON_TYPE], restrictToFilterTypes: true });
   const searchTerm = search.query.trim().toLowerCase();
-  const hitIds = React.useMemo(
-    () => (searchTerm ? search.results.map(result => normId(result.id)).filter(id => !isAvailable.has(id)) : []),
-    [isAvailable, search.results, searchTerm]
+  const hitPageIds = React.useMemo(
+    () => (searchTerm ? search.results.map(result => normId(result.id)) : []),
+    [search.results, searchTerm]
   );
-  const hits = useGeoChatUserSummaries(hitIds, hitIds.length > 0);
+  const hitSpaces = usePersonalSpacesByPageIds(hitPageIds, hitPageIds.length > 0);
+  const hitSpaceIds = React.useMemo(() => [...(hitSpaces.data?.values() ?? [])], [hitSpaces.data]);
+  const hitAccounts = useDebateProfilesBySpace(hitSpaceIds, hitSpaceIds.length > 0);
+  // An older geo-chat has no lookup; there a hit's page id is its user id.
+  const legacyHits = isDebateProfileLookupMissing(hitAccounts.error);
+  const hitLookupFailed = Boolean(hitAccounts.error) && !legacyHits;
+  const hitUsers = React.useMemo(
+    () =>
+      (legacyHits ? hitPageIds.map(user_id => ({ user_id })) : (hitAccounts.data ?? [])).filter(
+        person => !isAvailable.has(normId(person.user_id))
+      ),
+    [hitAccounts.data, hitPageIds, isAvailable, legacyHits]
+  );
+  const hits = useGeoChatUserSummaries(hitUsers, hitUsers.length > 0);
   const hitPeople = React.useMemo(() => hits.map(offlinePerson), [hits]);
 
   const facts = usePersonFacts(rosterPeople, {
@@ -343,11 +366,12 @@ function NewMatchBody({ onClose, onSent }: { onClose: () => void; onSent: (note:
   };
 
   const [chosen, setChosen] = React.useState<Choice | null>(null);
+  const [minutes, setMinutes] = React.useState<AdminMatchMinutes>(30);
   const create = useCreateAdminMatch();
   const send = () => {
     if (!first || !second || !chosen) return;
     create.mutate(
-      { firstUserId: first.userId, secondUserId: second.userId, start: new Date(chosen.start) },
+      { firstUserId: first.userId, secondUserId: second.userId, start: new Date(chosen.start), minutes },
       {
         onSuccess: () => onSent(`Invites sent to ${speakerLabel(first.person)} and ${speakerLabel(second.person)}.`),
       }
@@ -439,13 +463,25 @@ function NewMatchBody({ onClose, onSent }: { onClose: () => void; onSent: (note:
             ) : debatersQuery.isPending && listedRoster.length === 0 ? (
               <EmptyRow>Loading people…</EmptyRow>
             ) : listedRoster.length === 0 && listedHits.length === 0 ? (
-              <EmptyRow>{searchTerm && search.isLoading ? 'Searching…' : 'Nobody matches that.'}</EmptyRow>
+              hitLookupFailed ? null : (
+                <EmptyRow>{searchTerm && search.isLoading ? 'Searching…' : 'Nobody matches that.'}</EmptyRow>
+              )
             ) : (
               <>
                 {listedRoster.map(person => option(person, true))}
                 {listedHits.map(person => option(person, false))}
               </>
             )}
+            {hitLookupFailed ? (
+              <li className="flex flex-wrap items-center gap-2 border-b border-grey-02 py-4">
+                <Text as="p" variant="metadata" color="grey-04">
+                  Couldn&rsquo;t look up the people found by name.
+                </Text>
+                <HubPillButton analyticsSurface="calendar" onClick={() => void hitAccounts.refetch()}>
+                  Try again
+                </HubPillButton>
+              </li>
+            ) : null}
           </ul>
         </div>
 
@@ -455,6 +491,8 @@ function NewMatchBody({ onClose, onSent }: { onClose: () => void; onSent: (note:
           second={second}
           zone={zone}
           onZoneChange={setZone}
+          minutes={minutes}
+          onMinutesChange={setMinutes}
           zoneOf={zoneOf}
           firstAvailability={firstAvailability}
           secondAvailability={secondAvailability}
@@ -472,7 +510,8 @@ function NewMatchBody({ onClose, onSent }: { onClose: () => void; onSent: (note:
                 {speakerLabel(first.person)} vs {speakerLabel(second.person)}
               </Text>
               <Text as="p" variant="footnote" color="grey-04">
-                {dateLabels(dateIn(chosen.start, zone)).full} · {spanIn(chosen.start, chosen.start + SLOT_MS, zone)}
+                {dateLabels(dateIn(chosen.start, zone)).full} ·{' '}
+                {spanIn(chosen.start, chosen.start + minutes * 60_000, zone)}
               </Text>
               <Text as="p" variant="footnote" color="grey-04">
                 {[first, second]
@@ -783,6 +822,22 @@ const MODE_OPTIONS = [
   { value: 'any', label: 'Pick any time' },
 ] as const;
 
+const LENGTH_OPTIONS = [
+  { value: '30', label: '30 min' },
+  { value: '60', label: '60 min' },
+] as const;
+
+/**
+ * Whether shared half-hours cover all of `[start, start + length)`. They tile the pair's free time
+ * with no gaps, so it is enough that each half-hour step and the last moment sit inside one.
+ */
+function sharedThroughout(sharedStarts: number[], start: number, length: number) {
+  const points: number[] = [];
+  for (let at = start; at < start + length; at += SLOT_MS) points.push(at);
+  points.push(start + length - 1);
+  return points.every(at => sharedStarts.some(shared => shared <= at && at < shared + SLOT_MS));
+}
+
 /**
  * Choose a time: Recommended (the half-hours both are free) or Pick any time (the override), under
  * both people's availability. Every time is in the zone the admin picked, with each debater's own
@@ -793,6 +848,8 @@ function TimePicker({
   second,
   zone,
   onZoneChange,
+  minutes,
+  onMinutesChange,
   zoneOf,
   firstAvailability,
   secondAvailability,
@@ -804,6 +861,8 @@ function TimePicker({
   second: Picked | null;
   zone: string;
   onZoneChange: (zone: string) => void;
+  minutes: AdminMatchMinutes;
+  onMinutesChange: (minutes: AdminMatchMinutes) => void;
   /** A debater's zone: the roster's, or their own read's for anyone the roster missed. */
   zoneOf: (userId: string) => string | undefined;
   firstAvailability: AvailabilityRead;
@@ -850,7 +909,12 @@ function TimePicker({
     () => (anyUnset ? [] : (candidate?.slots ?? []).map(slot => Date.parse(slot.start))),
     [anyUnset, candidate]
   );
-  const slots = React.useMemo(() => sharedStarts.filter(start => start > now), [now, sharedStarts]);
+  const length = minutes * 60_000;
+  // The shared half-hours a whole match fits from: for an hour, those followed by another.
+  const slots = React.useMemo(
+    () => sharedStarts.filter(start => start > now && sharedThroughout(sharedStarts, start, length)),
+    [length, now, sharedStarts]
+  );
   const mutual = React.useMemo(() => new Set(slots), [slots]);
   // Whether a time is outside their availability is only known once the overlap has answered in
   // full, or once either is known to be unset; until then the override says nothing rather than
@@ -863,19 +927,16 @@ function TimePicker({
   const onShownDay = React.useCallback((start: number) => shownDays.has(dateIn(start, zone)), [shownDays, zone]);
   const anyStart = onShownDay(anyAt) ? anyAt : null;
   const anyInside = anyStart !== null && mutual.has(anyStart);
-  // A custom start like 9:15 is never a shared half-hour, but they're free for all of it when it
-  // starts and ends inside shared half-hours, which tile their free time with no gaps. Every shared
-  // half-hour counts here, the one already under way included: 9:15 sits in 9:00's.
+  // A custom start like 9:15 is never a shared half-hour, but they're free for all of the match
+  // when shared half-hours cover it. Every shared half-hour counts here, the one already under way
+  // included: 9:15 sits in 9:00's.
   const anyFreeOffGrid =
-    overlapKnown &&
-    anyStart !== null &&
-    !anyInside &&
-    [anyStart, anyStart + SLOT_MS - 1].every(at => sharedStarts.some(start => start <= at && at < start + SLOT_MS));
+    overlapKnown && anyStart !== null && !anyInside && sharedThroughout(sharedStarts, anyStart, length);
+  // The pick that still stands: one the length or the clock has since ruled out is dropped, from the
+  // footer and the strip alike, but kept in `selected` so switching back brings it back.
+  const recommendedPick = selected !== null && mutual.has(selected) && onShownDay(selected) ? selected : null;
   React.useEffect(() => {
-    if (mode === 'recommended')
-      onChoose(
-        selected !== null && selected > now && onShownDay(selected) ? { start: selected, outside: false } : null
-      );
+    if (mode === 'recommended') onChoose(recommendedPick !== null ? { start: recommendedPick, outside: false } : null);
     else
       onChoose(
         anyStart !== null && anyStart > now
@@ -886,7 +947,7 @@ function TimePicker({
             }
           : null
       );
-  }, [anyFreeOffGrid, anyInside, anyStart, mode, now, onChoose, onShownDay, overlapKnown, selected]);
+  }, [anyFreeOffGrid, anyInside, anyStart, mode, now, onChoose, overlapKnown, recommendedPick]);
 
   // The zone alone wherever a label spans the fortnight; a single time carries its own offset.
   const zoneTitle = zoneName(zone);
@@ -1011,7 +1072,11 @@ function TimePicker({
     } else if (slots.length === 0) {
       body = (
         <NoSharedTime
-          title={`${a} and ${b} have both set availability, but it never overlaps in the next two weeks.`}
+          title={
+            minutes === 60
+              ? `${a} and ${b} are never both free for a whole hour in the next two weeks.`
+              : `${a} and ${b} have both set availability, but it never overlaps in the next two weeks.`
+          }
           asked={[first, second]}
           prompts={prompts}
           request={{
@@ -1027,7 +1092,8 @@ function TimePicker({
       body = (
         <>
           <Text as="p" variant="footnote" color="grey-04">
-            Half-hours they&rsquo;re both free. The large time is {zoneTitle}; under it, each debater&rsquo;s own.
+            {minutes === 60 ? 'Starts where they’re both free for the whole hour.' : 'Half-hours they’re both free.'}{' '}
+            The large time is {zoneTitle}; under it, each debater&rsquo;s own.
           </Text>
           <div className="grid auto-cols-[minmax(7rem,1fr)] grid-flow-col gap-2 overflow-x-auto pb-1">
             {days
@@ -1124,9 +1190,6 @@ function TimePicker({
               className={NATIVE_FIELD_CLASS}
             />
           </label>
-          <Text as="span" variant="footnote" color="grey-04" className="pb-2.5">
-            {SLOT_MINUTES} minutes
-          </Text>
         </div>
         {anyStart !== null && !future ? (
           <Text as="p" variant="footnote" className="text-red-01">
@@ -1200,11 +1263,18 @@ function TimePicker({
           error: Boolean(secondAvailability.error),
           onRetry: () => void secondAvailability.refetch(),
         }}
-        selected={mode === 'recommended' ? selected : anyStart}
+        selected={mode === 'recommended' ? recommendedPick : anyStart}
+        selectedLength={length}
         onPick={pickFromStrip}
       />
-      <div className="border-t border-grey-02 pt-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-grey-02 pt-3">
         <SegmentedControl label="How to pick a time" options={MODE_OPTIONS} value={mode} onChange={setMode} />
+        <SegmentedControl
+          label="Debate length"
+          options={LENGTH_OPTIONS}
+          value={String(minutes) as '30' | '60'}
+          onChange={value => onMinutesChange(Number(value) as AdminMatchMinutes)}
+        />
       </div>
       {body}
     </>

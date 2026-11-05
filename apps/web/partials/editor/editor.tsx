@@ -14,6 +14,10 @@ import { capture } from '~/core/analytics';
 import { recordAction, runObservedAction } from '~/core/analytics-operations';
 import { useToast } from '~/core/hooks/use-toast';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
+import {
+  DataBlockPlaceholderSizingProvider,
+  buildDataBlockPlaceholderSizingMap,
+} from '~/core/state/editor/data-block-placeholder-sizing';
 import { useEditorStore } from '~/core/state/editor/use-editor';
 import { removeIdAttributes } from '~/core/state/editor/utils';
 import { EntitySidePanelEditContext } from '~/core/state/entity-side-panel-edit-context';
@@ -37,6 +41,7 @@ import { BlockReorder } from './block-reorder';
 import { createCommandExtension } from './command-extension';
 import { createEntityMentionExtension, entityMentionPluginKey } from './entity-mention-extension';
 import { tiptapExtensions } from './extensions';
+import { focusEditorAtClick } from './focus-editor-at-click';
 import { createGraphLinkHoverExtension } from './graph-link-hover-extension';
 import { createIdExtension, ensureUniqueNodeIds } from './id-extension';
 import { normalizeEditorContent } from './normalize-editor-content';
@@ -75,6 +80,10 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null }: 
     setHasContent,
   } = useEditorStore();
   const editable = useUserIsEditing(spaceId);
+  const placeholderSizing = React.useMemo(
+    () => buildDataBlockPlaceholderSizingMap(blockIds, serverBlocks),
+    [blockIds, serverBlocks]
+  );
   const [, setToast] = useToast();
   const editorContentVersion = useAtomValue(editorContentVersionAtom);
   const sidePanelCtx = React.useContext(EntitySidePanelEditContext);
@@ -561,7 +570,7 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null }: 
 
       // Only focus when clicking on the editor wrapper itself, not inner content.
       if (e.target === e.currentTarget) {
-        editor.commands.focus();
+        focusEditorAtClick(editor, e);
       }
     },
     [editor, editable]
@@ -581,22 +590,25 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null }: 
         style={editable ? { minHeight: '8rem' } : undefined}
       >
         {editor ? (
-          <BlockReorder
-            editor={editor}
-            editorWrapperRef={editorWrapperRef}
-            enabled={editable}
-            onReorder={persistReorderedBlocks}
-            onCopyLink={copyLinkToBlock}
-            onCopyBlock={copyBlock}
-            onDuplicateBlock={duplicateBlock}
-          >
-            <EditorContent editor={editor} />
-          </BlockReorder>
+          <DataBlockPlaceholderSizingProvider sizing={placeholderSizing}>
+            <BlockReorder
+              editor={editor}
+              editorWrapperRef={editorWrapperRef}
+              enabled={editable}
+              onReorder={persistReorderedBlocks}
+              onCopyLink={copyLinkToBlock}
+              onCopyBlock={copyBlock}
+              onDuplicateBlock={duplicateBlock}
+            >
+              <EditorContent editor={editor} />
+            </BlockReorder>
+          </DataBlockPlaceholderSizingProvider>
         ) : (
           <ServerContent blocks={serverBlocks} />
         )}
 
-        {shouldHandleOwnSpacing && editable && <Spacer height={60} />}
+        {/* Clicks pass through to the wrapper, so they focus the editor like the space above. */}
+        {shouldHandleOwnSpacing && editable && <Spacer height={60} className="pointer-events-none" />}
       </div>
     </LayoutGroup>
   );

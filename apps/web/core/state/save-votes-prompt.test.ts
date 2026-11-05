@@ -6,10 +6,22 @@ import {
   clearSaveVotesPromptLobby,
   closeSaveVotesPrompt,
   openSaveVotesPrompt,
+  opensSaveVotesCentered,
   readSaveVotesPrompt,
   savePromptReasonAfterVote,
   useSaveVotesPromptLobbyName,
 } from './save-votes-prompt';
+
+describe('save-votes presentation', () => {
+  it.each(['threshold', 'single_claim', 'repeat', 'navbar', 'debate_feed_bar', 'email_link'] as const)(
+    'opens %s as the centred save-votes dialog',
+    reason => expect(opensSaveVotesCentered(reason)).toBe(true)
+  );
+
+  it.each(['return_visit', 'inline_save', null] as const)('keeps %s out of the centred dialog', reason =>
+    expect(opensSaveVotesCentered(reason)).toBe(false)
+  );
+});
 
 describe('savePromptReasonAfterVote', () => {
   it('asks on the first vote in a feed', () => {

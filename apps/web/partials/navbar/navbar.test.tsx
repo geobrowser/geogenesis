@@ -101,7 +101,8 @@ describe('Navbar', () => {
     render(<Navbar onBrowseClick={vi.fn()} onSearchClick={vi.fn()} showBrowseButton={false} />);
 
     expect(screen.queryByRole('button', { name: 'Open browse menu' })).not.toBeInTheDocument();
-    expect(screen.getByRole('link')).not.toHaveClass('mobile:hidden');
+    expect(screen.getByRole('link', { name: 'Geo' })).not.toHaveClass('mobile:hidden');
+    expect(screen.getByRole('link', { name: 'Geo' })).toHaveAttribute('href', '/explore');
   });
 
   it('uses the debate bar on mobile Explore', () => {

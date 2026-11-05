@@ -8,8 +8,8 @@ import { ConnectionState, DisconnectReason, Track } from 'livekit-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DebateLobbyVoiceToken } from '../api';
-import { LobbyPurposeProvider } from './lobby-purpose';
 import type { MemberLobbyPageView } from './lobby-view';
+import { RoomCapabilitiesProvider } from './room-capabilities';
 import {
   type LobbyCapture,
   carryLobbyJoinChoice,
@@ -1245,7 +1245,7 @@ describe('LobbyVoice in a space call', () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     return render(
       <QueryClientProvider client={client}>
-        <LobbyPurposeProvider value={CALL}>
+        <RoomCapabilitiesProvider purpose={CALL}>
           <LobbyVoice
             lobby={lobby()}
             connectionId="conn-1"
@@ -1256,7 +1256,7 @@ describe('LobbyVoice in a space call', () => {
           >
             <Speaking />
           </LobbyVoice>
-        </LobbyPurposeProvider>
+        </RoomCapabilitiesProvider>
       </QueryClientProvider>
     );
   }

@@ -53,6 +53,10 @@ const mocks = vi.hoisted(() => ({
   summaryKindCalls: [] as string[],
   positive: 0,
   negative: 0,
+  /** The counts are still on their way. */
+  summaryLoading: false,
+  /** The counts read came back without an answer (it failed). */
+  summaryFailed: false,
   commentCount: 0,
   notifyClaimResponseIndexed: vi.fn(),
 }));
@@ -102,8 +106,8 @@ vi.mock('~/core/claims/browse/claim-response-summary', async importOriginal => {
       mocks.summaryKindCalls.push(_kind);
       return {
         ...actual.summarizeClaimResponses(mocks.positive, mocks.negative),
-        isLoading: false,
-        hasCounts: true,
+        isLoading: mocks.summaryLoading,
+        hasCounts: !mocks.summaryLoading && !mocks.summaryFailed,
         viewerDirection: null,
         viewerSpaceId: null,
       };
@@ -271,6 +275,8 @@ beforeEach(() => {
   mocks.summaryKindCalls = [];
   mocks.positive = 0;
   mocks.negative = 0;
+  mocks.summaryLoading = false;
+  mocks.summaryFailed = false;
   mocks.commentCount = 0;
   mocks.notifyClaimResponseIndexed.mockClear();
 
@@ -443,12 +449,71 @@ describe('ClaimExploreFeedCard', () => {
   });
 
   it('draws no verdict, and no rule, on a claim nobody has answered', () => {
+    mocks.entity = factualClaim();
     render(<ClaimExploreFeedCard item={item} />);
     scrollIntoRange();
 
     expect(screen.queryByText(/agree$/i)).toBeNull();
     // An empty 220px cell behind a vertical rule reads as something failing to load.
     expect(document.querySelector('.border-l')).toBeNull();
+  });
+
+  describe('the verdict while its counts are on their way', () => {
+    const placeholder = () => screen.queryByTestId('claim-verdict-placeholder');
+    const grid = () => document.querySelector('article div.grid');
+
+    it('keeps the verdict space before the card is near the viewport, at the mounted verdict size', () => {
+      mocks.entity = factualClaim();
+      render(<ClaimExploreFeedCard item={item} />);
+
+      expect(placeholder()).toHaveClass('h-[108px]', 'claim-card-narrow:h-[37px]');
+      expect(grid()).toHaveClass('grid-cols-[minmax(0,1fr)_220px]');
+      expect(document.querySelector('.border-l')).not.toBeNull();
+    });
+
+    it("keeps it near the viewport while the claim's own data is still on its way", () => {
+      render(<ClaimExploreFeedCard item={item} />);
+      scrollIntoRange();
+
+      expect(placeholder()).not.toBeNull();
+      expect(grid()).toHaveClass('grid-cols-[minmax(0,1fr)_220px]');
+    });
+
+    it('keeps it while the counts load', () => {
+      mocks.entity = factualClaim();
+      mocks.summaryLoading = true;
+      render(<ClaimExploreFeedCard item={item} />);
+      scrollIntoRange();
+
+      expect(placeholder()).not.toBeNull();
+      expect(grid()).toHaveClass('grid-cols-[minmax(0,1fr)_220px]');
+    });
+
+    it('swaps it for the verdict in the same cell once the counts arrive', () => {
+      mocks.positive = 3;
+      mocks.negative = 1;
+      render(<ClaimExploreFeedCard item={item} />);
+      scrollIntoRange();
+
+      expect(placeholder()).toBeNull();
+      expect(screen.getAllByText(/agree$/i).length).toBeGreaterThan(0);
+      expect(grid()).toHaveClass('grid-cols-[minmax(0,1fr)_220px]');
+    });
+
+    it.each([
+      ['nobody has answered', false],
+      ['the read failed', true],
+    ])('gives the space back when %s', (_, failed) => {
+      mocks.entity = factualClaim();
+      mocks.positive = failed ? 3 : 0;
+      mocks.summaryFailed = failed;
+      render(<ClaimExploreFeedCard item={item} />);
+      scrollIntoRange();
+
+      expect(placeholder()).toBeNull();
+      expect(document.querySelector('.border-l')).toBeNull();
+      expect(grid()).toHaveClass('grid-cols-1');
+    });
   });
 
   it('keeps the card as the root element, so its host and its siblings can reach it', () => {

@@ -46,9 +46,9 @@ import { HubPillButton } from '../matchmaking/hub-pill-button';
 import { useVoiceOwnership } from '../voice-owner';
 import { createLobbyCamera } from './lobby-camera';
 import { lobbyErrorMessage } from './lobby-format';
-import { useLobbyRoomNoun } from './lobby-purpose';
 import { LobbySlot } from './lobby-slots';
 import type { MemberLobbyPageView } from './lobby-view';
+import { useRoomCapabilities } from './room-capabilities';
 import { registerLobbyCapture, reportLobbyCamera, reportLobbyMic } from './step-out';
 
 type OwnershipState = 'pending' | 'owned' | 'elsewhere';
@@ -153,7 +153,7 @@ export function LobbyVoice({
   const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
   const queryClient = useQueryClient();
   const devices = useInitialMediaDevices();
-  const room = useLobbyRoomNoun();
+  const room = useRoomCapabilities().noun;
   // Before the first connect only: changing options later would rebuild the room.
   const [joinChoice, setJoinChoice] = React.useState<LobbyVoiceJoinChoice | null>(null);
   const roomOptions = React.useMemo(
