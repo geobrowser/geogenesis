@@ -354,6 +354,10 @@ export function tabVoiceOwner(userId: string): TabVoiceOwner {
   return owner;
 }
 
+export function resetTabVoiceOwnersForTest() {
+  tabOwners.clear();
+}
+
 type UseVoiceOwnershipOptions = {
   userId: string | null | undefined;
   kind: VoiceSurfaceKind;

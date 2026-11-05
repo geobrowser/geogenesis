@@ -152,6 +152,7 @@ import { REMOTE_OVERRUN_WINDOW_MS, opponentTurnState, useTurnOverrun } from '~/c
 import { usePrefetchClaimSpaceAllowlist } from '~/core/debates/use-prefetch-claim-space-allowlist';
 import { useRelatedDebateClaims } from '~/core/debates/use-related-debate-claims';
 import { useScrollLock } from '~/core/debates/use-scroll-lock';
+import type { VoiceCallEndReason } from '~/core/debates/use-voice-call-telemetry';
 import { debateVoicePolicy, useVoiceOwnership } from '~/core/debates/voice-owner';
 import { disconnectReasonName } from '~/core/livekit/disconnect-reason';
 import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
@@ -1703,7 +1704,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       const status = debateStatusRef.current;
       connectionGenerationRef.current += 1;
       disconnectConnectingRoom(connectingRoomRef);
-      disconnectRoom(roomRef, localTracksRef, localVideoRef, remoteMediaRef);
+      // Voice moved to another tab, so the call telemetry records a handover, not a leave or a drop.
+      disconnectRoom(roomRef, localTracksRef, localVideoRef, remoteMediaRef, 'handover');
       localMediaStreamRef.current = null;
       // Closes every device and settles the preview as idle, so its toggles stay usable.
       await ensureLocalPreview({ audio: false, video: false }).catch(() => undefined);
@@ -4664,9 +4666,9 @@ async function publishTrackWithRetry(room: RoomLike, track: LocalTrackLike, isCu
 /** Cleanup belongs to each Room, including ones superseded before joining finishes. */
 const roomTelemetry = new WeakMap<RoomLike, DebateRoomTelemetry>();
 
-function disconnectLiveKitRoom(room: RoomLike | null, stopTracks?: boolean) {
+function disconnectLiveKitRoom(room: RoomLike | null, stopTracks?: boolean, endReason?: VoiceCallEndReason) {
   if (!room) return;
-  roomTelemetry.get(room)?.stop();
+  roomTelemetry.get(room)?.stop(endReason);
   roomTelemetry.delete(room);
   room.disconnect(stopTracks);
 }
@@ -4675,10 +4677,11 @@ function disconnectRoom(
   roomRef: React.MutableRefObject<RoomLike | null>,
   localTracksRef: React.MutableRefObject<LocalTrackLike[]>,
   localVideoRef: React.RefObject<HTMLVideoElement | null>,
-  remoteMediaRef: React.RefObject<HTMLDivElement | null>
+  remoteMediaRef: React.RefObject<HTMLDivElement | null>,
+  endReason?: VoiceCallEndReason
 ) {
   stopLocalTracks(localTracksRef);
-  disconnectLiveKitRoom(roomRef.current);
+  disconnectLiveKitRoom(roomRef.current, undefined, endReason);
   roomRef.current = null;
   if (localVideoRef.current) {
     localVideoRef.current.srcObject = null;

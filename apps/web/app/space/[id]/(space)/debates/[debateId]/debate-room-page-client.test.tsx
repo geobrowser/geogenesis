@@ -37,7 +37,7 @@ import {
 } from '~/core/debates/open-rounds-fixtures';
 import { clearRematchJoinIntents, rememberRematchJoinIntent } from '~/core/debates/rematch-join-intent';
 import { DebateRequestMediaPreview } from '~/core/debates/request-media-preview';
-import { tabVoiceOwner } from '~/core/debates/voice-owner';
+import { resetTabVoiceOwnersForTest, tabVoiceOwner } from '~/core/debates/voice-owner';
 import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
 import { readMediaDevicePreference, rememberMediaDevice } from '~/core/media/device-preferences';
 
@@ -610,6 +610,9 @@ function setDocumentVisibility(state: DocumentVisibilityState) {
 
 afterEach(async () => {
   cleanup();
+  // The voice owner is a per-user singleton that outlives one React tree, so a test that left it
+  // `elsewhere` (or spied on it) would otherwise hand that to the next.
+  resetTabVoiceOwnersForTest();
   // Drops the own property, restoring jsdom's prototype getter.
   delete (document as { visibilityState?: DocumentVisibilityState }).visibilityState;
   window.localStorage.clear();
@@ -3270,6 +3273,7 @@ describe('DebateRoomPageClient', () => {
     });
     expect(released).toBe(true);
     expect(mocks.roomDisconnect).toHaveBeenCalled();
+    expect(mocks.stopVoiceCallTelemetry).toHaveBeenCalledWith('handover');
     expect(await screen.findByText('Voice is on in another tab')).toBeInTheDocument();
     expect(mocks.roomConnect).toHaveBeenCalledOnce();
     // Nor are the camera and mic opened again behind the other tab's back.
