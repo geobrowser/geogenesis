@@ -1534,6 +1534,9 @@ export function useDebateSharePrompts(enabled = true) {
     queryKey: debateQueryKeys.sharePrompts(accountKey),
     queryFn: ({ signal }) => listDebateSharePrompts(getPrivyIdentityToken, accountKey, signal),
     enabled: enabled && authenticated,
+    // Recheck after a lobby/debate even within the app's cache freshness window: another tab
+    // may have handled a prompt before its gateway notification reaches this one.
+    staleTime: 0,
   });
 }
 
