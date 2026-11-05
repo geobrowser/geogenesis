@@ -728,9 +728,6 @@ describe('ClaimPageView description', () => {
 });
 
 describe('ClaimPageView position', () => {
-  // The claim page is where a confirming response was pressed again and published a retraction.
-  // The pills guard against that quietly: the side reads as taken at once, with no note or wait
-  // cursor, and only the presses that would undo it are dropped until it lands.
   it('names the claim for the vote control, so a vote kept on the device has a save-sheet chip', () => {
     mocks.entity = claimEntity(null);
     render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
@@ -759,25 +756,18 @@ describe('ClaimPageView position', () => {
     expect(screen.getByRole('button', { name: 'Undo' })).toHaveAttribute('aria-disabled', 'true');
   });
 
-  it('marks the pills pending until the response reaches the bundler, without announcing a wait', () => {
-    mocks.isResponsePending = true;
+  // Pending drops the undo-ing press until the bundler has the write (GEO-2889); the screen-reader
+  // confirmation for the same submission is a global region fired straight from `useEntityResponse`
+  // (`markResponseSubmitted`), not a prop threaded through this page — see `use-entity-vote.test.tsx`.
+  it('marks the pills pending while the write is still reaching the bundler', () => {
     mocks.isResponseSubmitting = true;
     render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
 
     expect(mocks.positionControl?.pending).toBe(true);
-    expect(screen.queryByText(/waiting for confirmation/i)).toBeNull();
   });
 
-  // GEO-2889: inclusion is the slow part (p90 ~30s), and the pills no longer wait on it.
   it('releases the pills once the response is submitted, before it lands', () => {
-    mocks.isResponsePending = true;
     mocks.isResponseSubmitting = false;
-    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
-
-    expect(mocks.positionControl?.pending).toBe(false);
-  });
-
-  it('releases the pills once it has landed', () => {
     render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
 
     expect(mocks.positionControl?.pending).toBe(false);

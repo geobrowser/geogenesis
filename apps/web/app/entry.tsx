@@ -24,6 +24,7 @@ import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
 import { useOnboarding } from '~/core/hooks/use-onboarding';
 import { useSticky } from '~/core/hooks/use-sticky';
 import { Toast } from '~/core/hooks/use-toast';
+import { ResponseConfirmingAnnouncement } from '~/core/responses/response-confirming-announcement';
 import { browseSidebarShownAtom } from '~/core/state/browse-sidebar-state';
 import { useDiff } from '~/core/state/diff-store';
 import { useEditable } from '~/core/state/editable-store';
@@ -390,6 +391,7 @@ export function App({ children }: { children: React.ReactNode }) {
             <SignInBoxFlagGate />
           </React.Suspense>
           <Toast />
+          <ResponseConfirmingAnnouncement />
           <GovernanceReopenEditLoadingBar />
           <FlowBarGate />
           <StatusBarGate />
