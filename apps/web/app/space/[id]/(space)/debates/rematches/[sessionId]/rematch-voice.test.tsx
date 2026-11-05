@@ -111,6 +111,12 @@ const mocks = vi.hoisted(() => ({
   } | null,
 }));
 
+// GEO-3340. Covered on its own in `use-voice-call-telemetry.test`; here only that the picker wires it.
+const telemetryCalls = vi.hoisted(() => [] as unknown[][]);
+vi.mock('~/core/debates/use-voice-call-telemetry', () => ({
+  useVoiceCallTelemetry: (...args: unknown[]) => void telemetryCalls.push(args),
+}));
+
 vi.mock('@livekit/components-react', () => ({
   LiveKitRoom: (props: Record<string, unknown>) => {
     mocks.livekitRoomProps.push(props);
@@ -555,6 +561,14 @@ describe('RematchVoiceHeader', () => {
     await flushOwnership();
     expect(screen.getByText('Voice is unavailable')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+  });
+
+  // GEO-3340: a choppy-audio report from the picker has call quality to be checked against.
+  it('reports call quality for the picker room under its session', async () => {
+    telemetryCalls.length = 0;
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+    expect(telemetryCalls.at(-1)?.slice(1)).toEqual(['picker', 'session-1']);
   });
 
   it('connects the room and waits for the opponent when they have not joined yet', async () => {

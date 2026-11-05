@@ -34,7 +34,8 @@ import {
   voiceSampleMetrics,
 } from './voice-call-stats';
 
-export type VoiceCallSurface = 'picker' | 'lobby' | 'debate';
+/** `space_call` is a space's call, which runs on the lobby stack (GEO-3419). */
+export type VoiceCallSurface = 'picker' | 'lobby' | 'space_call' | 'debate';
 
 export type ReportCallChange = (change: Record<string, unknown>) => void;
 
@@ -76,8 +77,27 @@ const NOTABLE_QUALITIES = new Set<ConnectionQuality>([ConnectionQuality.Poor, Co
  * Runs on local counters and room events, never React state: a call that re-rendered on every stats read
  * would be the kind of cost this exists to find.
  */
+/**
+ * For the picker and lobby, whose rooms belong to their call trees. Diagnostics are optional, so
+ * setting up or tearing down never throws into the call, as `loadDebateRoomTelemetry` keeps it for
+ * the debate room.
+ */
 export function useVoiceCallTelemetry(room: Room, surface: VoiceCallSurface, callId: string) {
-  React.useEffect(() => startVoiceCallTelemetry(room, surface, callId), [callId, room, surface]);
+  React.useEffect(() => {
+    let stop: (() => void) | undefined;
+    try {
+      stop = startVoiceCallTelemetry(room, surface, callId);
+    } catch {
+      return;
+    }
+    return () => {
+      try {
+        stop?.();
+      } catch {
+        // The call's own teardown carries on.
+      }
+    };
+  }, [callId, room, surface]);
 }
 
 /** Imperative entry for the debate room, whose Room is owned by its connection lifecycle. */

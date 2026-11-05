@@ -116,6 +116,25 @@ describe('useVoiceCallTelemetry (GEO-3340)', () => {
     vi.useRealTimers();
   });
 
+  // GEO-3340. The picker and lobby run this in their own call trees, which must never fail because
+  // diagnostics did: the same rule the debate room keeps.
+  it('never fails the call it measures when setting up throws', () => {
+    const call = fakeRoom();
+    call.raw.on = () => {
+      throw new Error('listener table full');
+    };
+    expect(() => renderHook(() => useVoiceCallTelemetry(call.room, 'picker', 'session-1'))).not.toThrow();
+  });
+
+  it('never fails the call it measures when cleaning up throws', () => {
+    const call = fakeRoom();
+    const { unmount } = renderHook(() => useVoiceCallTelemetry(call.room, 'lobby', 'lobby-1'));
+    call.raw.off = () => {
+      throw new Error('already torn down');
+    };
+    expect(() => unmount()).not.toThrow();
+  });
+
   it('samples quality, loss each way and the mic, every interval while connected', async () => {
     const call = fakeRoom();
     call.mic.stats = [

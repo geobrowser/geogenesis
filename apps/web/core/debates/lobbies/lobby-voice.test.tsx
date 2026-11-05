@@ -156,6 +156,12 @@ vi.mock('../debate-room-ownership', async importOriginal => ({
   },
 }));
 
+// GEO-3340. Covered on its own in `use-voice-call-telemetry.test`; here only that the room wires it.
+const telemetryCalls = vi.hoisted(() => [] as unknown[][]);
+vi.mock('../use-voice-call-telemetry', () => ({
+  useVoiceCallTelemetry: (...args: unknown[]) => void telemetryCalls.push(args),
+}));
+
 vi.mock('@livekit/components-react', () => ({
   LiveKitRoom: (props: Record<string, unknown> & { children: React.ReactNode }) => {
     mocks.roomProps = props;
@@ -291,6 +297,14 @@ describe('LobbyVoice', () => {
       'acct'
     );
     expect(mocks.roomProps).toMatchObject({ token: 'jwt', serverUrl: 'wss://livekit.test', audio: true });
+  });
+
+  // GEO-3340: a choppy-audio report from a lobby has call quality to be checked against.
+  it('reports call quality for a debate lobby under the lobby', async () => {
+    telemetryCalls.length = 0;
+    renderVoice();
+    await screen.findByRole('button', { name: /Unmute|Mute/ });
+    expect(telemetryCalls.at(-1)).toEqual([fakeRoom, 'lobby', 'lobby1']);
   });
 
   it('honours start_muted and unmutes on the button', async () => {
@@ -1260,6 +1274,14 @@ describe('LobbyVoice in a space call', () => {
       </QueryClientProvider>
     );
   }
+
+  // GEO-3340: a space call runs on the lobby stack but is its own kind of call in the data.
+  it('reports a space call’s quality as a space call', async () => {
+    telemetryCalls.length = 0;
+    renderCall();
+    await screen.findByRole('button', { name: /Unmute|Mute/ });
+    expect(telemetryCalls.at(-1)).toEqual([fakeRoom, 'space_call', 'lobby1']);
+  });
 
   it('offers no screen share without the option, whatever the token says', async () => {
     mocks.getDebateLobbyVoiceToken.mockResolvedValue(token({ can_share_screen: true }));

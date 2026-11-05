@@ -43,6 +43,7 @@ import { CameraIcon, MicrophoneIcon } from '../debate-room-controls';
 import { useGeoChatAuth } from '../hooks';
 import { tokenAllowsCamera } from '../livekit-grant';
 import { HubPillButton } from '../matchmaking/hub-pill-button';
+import { useVoiceCallTelemetry } from '../use-voice-call-telemetry';
 import { useVoiceOwnership } from '../voice-owner';
 import { createLobbyCamera } from './lobby-camera';
 import { lobbyErrorMessage } from './lobby-format';
@@ -363,6 +364,7 @@ export function LobbyVoice({
       className="contents"
     >
       <ConnectedVoice
+        callId={lobbyId}
         canPublish={data.can_publish}
         canShareScreen={screenShare}
         tokenSharesScreen={Boolean(data.can_share_screen)}
@@ -405,6 +407,7 @@ type VoiceNotice = {
 };
 
 function ConnectedVoice({
+  callId,
   canPublish,
   canShareScreen,
   tokenSharesScreen,
@@ -424,6 +427,8 @@ function ConnectedVoice({
   onReplaced,
   children,
 }: {
+  /** The lobby, or the space call, this room is. */
+  callId: string;
   canPublish: boolean;
   /** The room offers sharing; the grant decides who. */
   canShareScreen: boolean;
@@ -446,6 +451,10 @@ function ConnectedVoice({
   children: React.ReactNode;
 }) {
   const room = useRoomContext();
+  // GEO-3340: call quality, so a choppy-audio report has something to be checked against. A space
+  // call runs on this same room but is its own kind of call in the data.
+  const { noun } = useRoomCapabilities();
+  useVoiceCallTelemetry(room, noun === 'call' ? 'space_call' : 'lobby', callId);
   useRoomEnding(room, {
     onNeverConnected,
     // Another tab or device took this identity; reconnecting would only take it back and forth.
