@@ -16,6 +16,7 @@ import { sameId } from '../rooms/room-presence';
 import { LobbyDebateSubject } from './lobby-debate-subject';
 import { pairRoundLabel, pairSubject, personName } from './lobby-format';
 import { LobbyPersonMenu, personMenuAnalyticsAttributes } from './lobby-person-menu';
+import { SectionHeading } from './lobby-section-heading';
 import type { LobbyPageView } from './lobby-view';
 
 /** A card per debate a lobby member is in (GEO-3131). Nothing when nobody is debating. */
@@ -33,7 +34,7 @@ export function LobbyDebatePairs({
   if (pairs.length === 0) return null;
   return (
     <section className="flex flex-col gap-2.5 md:gap-2" aria-label="In a debate">
-      <h2 className="text-[17px] leading-[22px] font-semibold text-text">In a debate · {pairs.length}</h2>
+      <SectionHeading>In a debate · {pairs.length}</SectionHeading>
       <ul className="flex flex-col gap-2">
         {pairs.map(pair => (
           <li
