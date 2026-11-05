@@ -3614,6 +3614,28 @@ describe('DebateRoomPageClient', () => {
     pendingConnection.resolve();
   });
 
+  it('records a connection handed to another tab as a handover, not a leave', async () => {
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    // markJoined runs only once the room has connected and the telemetry is attached.
+    await waitFor(() => expect(mocks.markJoinedMutateAsync).toHaveBeenCalled());
+
+    let released: boolean | undefined;
+    await act(async () => {
+      released = await mocks.ownershipTakeoverHandler?.({ requesterPriority: 2, ownerPriority: 2, automatic: false });
+    });
+    expect(released).toBe(true);
+    expect(mocks.roomDisconnect).toHaveBeenCalled();
+    // The debate moved to another tab of the same person, so it is not counted as a leave or a drop.
+    expect(mocks.stopVoiceCallTelemetry).toHaveBeenCalledWith('handover');
+  });
+
   it('does not allow a secondary tab to take over an active debate recording', async () => {
     mocks.ownershipAcquire.mockResolvedValue({ acquired: false, waitedForLocalRelease: false });
     mocks.debate = {

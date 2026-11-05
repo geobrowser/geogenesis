@@ -1255,7 +1255,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         const generation = connectionGenerationRef.current + 1;
         connectionGenerationRef.current = generation;
         disconnectConnectingRoom(connectingRoomRef);
-        disconnectRoom(roomRef, localTracksRef, localVideoRef, remoteMediaRef);
+        disconnectRoom(roomRef, localTracksRef, localVideoRef, remoteMediaRef, 'handover');
         localMediaStreamRef.current = null;
         setRemoteVideoReady(false);
         setRemotePresence('absent');
