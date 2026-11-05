@@ -3,16 +3,24 @@ import { IdUtils, SystemIds } from '@geoprotocol/geo-sdk';
 import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { RELATION_ENTITY_RELATIONSHIP_TYPE } from '~/core/constants';
+import { DATA_TYPE_PROPERTY, RELATION_ENTITY_RELATIONSHIP_TYPE, RENDERABLE_TYPE_PROPERTY } from '~/core/constants';
 import type { Relation } from '~/core/types';
 import { prepareLocalDataForPublishing } from '~/core/utils/publish/publish';
 
 const store = vi.hoisted(() => ({ relations: [] as any[], values: [] as any[], written: [] as any[] }));
 
 vi.mock('~/core/sync/use-store', () => ({
-  getRelations: ({ selector, mergeWith = [] }: { selector?: (r: any) => boolean; mergeWith?: any[] }) =>
-    [...store.relations, ...mergeWith.filter(m => !store.relations.some(r => r.id === m.id))].filter(r =>
-      selector ? selector(r) : true
+  getRelations: ({
+    selector,
+    mergeWith = [],
+    includeDeleted = false,
+  }: {
+    selector?: (r: any) => boolean;
+    mergeWith?: any[];
+    includeDeleted?: boolean;
+  }) =>
+    [...store.relations, ...mergeWith.filter(m => !store.relations.some(r => r.id === m.id))].filter(
+      r => (selector ? selector(r) : true) && (includeDeleted || !r.isDeleted)
     ),
   getValues: ({ selector }: { selector?: (v: any) => boolean }) =>
     store.values.filter(v => (selector ? selector(v) : true)),
@@ -34,6 +42,8 @@ const SCHEMA_RELATION_TYPES = [
   ['a Types relation', SystemIds.TYPES_PROPERTY],
   ["a property's relation value type", SystemIds.RELATION_VALUE_RELATIONSHIP_TYPE],
   ["a property's relation entity type", RELATION_ENTITY_RELATIONSHIP_TYPE],
+  ["a property's data type", DATA_TYPE_PROPERTY],
+  ["a property's renderable type", RENDERABLE_TYPE_PROPERTY],
 ];
 
 const SOURCE = IdUtils.generate();
@@ -94,6 +104,23 @@ describe('retargetMoveBacklinks', () => {
     retargetMoveBacklinks(ENTITY, SOURCE, TARGET, storage, backlinks as any);
 
     expect(store.written.map(r => [r.id, r.toSpaceId])).toEqual([['unopened', TARGET]]);
+  });
+
+  it('retargets a link back from a kept block known only from the loaded subtree', () => {
+    const loaded = [relation({ id: 'kept-block-link', from: 'kept-block', to: ENTITY })];
+
+    retargetMoveBacklinks(ENTITY, SOURCE, TARGET, storage, loaded as any);
+
+    expect(store.written.map(r => [r.id, r.toSpaceId])).toEqual([['kept-block-link', TARGET]]);
+  });
+
+  it('leaves a loaded link alone when the move already deleted it in the store', () => {
+    const link = relation({ id: 'removed-block-link', from: 'removed-block', to: ENTITY });
+    store.relations = [{ ...link, isDeleted: true }];
+
+    retargetMoveBacklinks(ENTITY, SOURCE, TARGET, storage, [link] as any);
+
+    expect(store.written).toEqual([]);
   });
 
   it('leaves a backlink held in another space alone', () => {

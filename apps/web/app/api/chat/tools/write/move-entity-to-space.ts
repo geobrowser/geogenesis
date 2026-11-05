@@ -11,9 +11,7 @@ type MoveEntityToSpaceInput = {
 };
 
 export const moveEntityToSpace = tool({
-  description: `Move an entity from one space to another. Mirrors the editor's "Move to existing space": clones every value and outgoing relation from the source space into the target space, then tombstones them in the source. Backlinks (incoming relations from other entities) stay in their original spaces. Caller must be a member of BOTH spaces.
-
-NOTE: child blocks are NOT cascaded — only the entity's own values and outgoing relations are moved. If the entity has block children, they remain in the source space and the page will appear blank in the target. The editor has the same behavior; warn the user if the entity has blocks. Use \`cloneEntityToSpace\` if you want to keep a copy in the source.`,
+  description: `Move an entity from one space to another. Same as the editor's "Move to existing space": the entity's values and outgoing relations, and its blocks and tabs, are copied into the target space and removed from the source. Related entities are not copied; links to them keep pointing at the source space. Links to the moved entity stay where they are, and ones in the source space are pointed at the target. A block another entity still uses stays in the source. Caller must be a member of BOTH spaces. Use \`cloneEntityToSpace\` if you want to keep a copy in the source.`,
   inputSchema: jsonSchema<MoveEntityToSpaceInput>({
     type: 'object',
     properties: {
@@ -34,7 +32,7 @@ type CloneEntityToSpaceInput = {
 
 export const cloneEntityToSpace = tool({
   description:
-    'Clone an entity from one space into another. Same as `moveEntityToSpace` minus the source-side delete — the entity ends up in BOTH spaces with its own per-space data. Caller must be a member of both spaces. Same child-block limitation as `moveEntityToSpace`: blocks are not cascaded.',
+    'Clone an entity from one space into another. Same as `moveEntityToSpace` minus the source-side delete — the entity ends up in BOTH spaces with its own per-space data. Caller must be a member of both spaces. Only the entity itself is copied: its blocks and tabs are not, so a page can appear blank in the target.',
   inputSchema: jsonSchema<CloneEntityToSpaceInput>({
     type: 'object',
     properties: {

@@ -56,6 +56,7 @@ const mocks = vi.hoisted(() => ({
   ensureSpaceMembership: vi.fn(),
   /** Every send the hook builds, so a test can play the bundler accepting it. */
   tx: vi.fn<(args: { to: string; data: string; onSubmitted?: (hash: `0x${string}`) => void }) => void>(),
+  announceResponseConfirmed: vi.fn(),
 }));
 
 vi.mock('~/core/analytics', () => ({ capture: mocks.capture, analyticsContextRevision: () => 0 }));
@@ -127,6 +128,10 @@ vi.mock('~/core/telemetry/effect-runtime', () => ({
   runEffectEither: (...args: unknown[]) => mocks.runEffectEither(...args),
 }));
 
+vi.mock('~/core/responses/response-confirming-announcement', () => ({
+  useAnnounceResponseConfirmed: () => mocks.announceResponseConfirmed,
+}));
+
 beforeEach(() => {
   vi.useFakeTimers();
   mocks.capture.mockReset();
@@ -141,6 +146,7 @@ beforeEach(() => {
   mocks.ensureSpaceMembership.mockReset();
   mocks.ensureSpaceMembership.mockResolvedValue(false);
   mocks.tx.mockReset();
+  mocks.announceResponseConfirmed.mockReset();
   resetFailedResponses();
 });
 
@@ -1074,6 +1080,7 @@ describe('useEntityResponse publishes on submission', () => {
     // Pressed, not yet at the bundler: drawn on its side, but still waiting.
     expect(result.current.response.optimisticResponse).toBe('positive');
     expect(result.current.response.isSubmittingResponse).toBe(true);
+    expect(mocks.announceResponseConfirmed).not.toHaveBeenCalled();
 
     submit();
 
@@ -1083,6 +1090,24 @@ describe('useEntityResponse publishes on submission', () => {
     expect(result.current.response.optimisticResponse).toBe('positive');
     expect(result.current.response.isProcessingResponse).toBe(true);
     expect(mocks.tx).toHaveBeenCalledTimes(1);
+    expect(mocks.announceResponseConfirmed).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not announce twice for one run when the success handler marks it submitted again', async () => {
+    const transaction = deferred<unknown>();
+    mocks.runEffectEither.mockReturnValueOnce(transaction.promise);
+    const { result } = renderResponse();
+
+    act(() => result.current.response.submitResponse('positive'));
+    await act(async () => Promise.resolve());
+    submit();
+    expect(mocks.announceResponseConfirmed).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      transaction.resolve({ _tag: 'Right', right: '0xtransaction' });
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(mocks.announceResponseConfirmed).toHaveBeenCalledTimes(1);
   });
 
   it('rolls the response back, and says so, when it fails after submission', async () => {
@@ -1211,9 +1236,11 @@ describe('useEntityResponse publishes on submission', () => {
     submit(0);
     expect(result.current.response.optimisticResponse).toBe('negative');
     expect(result.current.response.isSubmittingResponse).toBe(true);
+    expect(mocks.announceResponseConfirmed).not.toHaveBeenCalled();
 
     submit(1);
     expect(result.current.response.isSubmittingResponse).toBe(false);
+    expect(mocks.announceResponseConfirmed).toHaveBeenCalledTimes(1);
   });
 
   it('keeps an included response published while the index is re-checked', async () => {
