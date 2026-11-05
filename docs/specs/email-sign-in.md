@@ -1,6 +1,6 @@
 # Our own sign-in box (GEO-3569 part 2, GEO-3550)
 
-Status: built on branch `email-sign-in` behind `ourSignInBox` (off by default). This doc describes the code as built.
+Status: shipped in #3062 behind `ourSignInBox`, on for everyone since the flag was removed. This doc describes the code as built.
 
 ## Why
 
@@ -51,18 +51,24 @@ core/auth/signed-in-before.ts        "this browser has signed in" marker for lik
   `useLoginWithEmail` and falls back to Privy's own dialog when a send fails. The box uses it unchanged,
   so the GEO-3550 steps go into `AccountStep` once and cover all three surfaces.
 - **Opening.** `useTrackedLogin` begins the attempt (`beginPrivyAuth`) and registers the press's
-  continuation on it (`continueAuthAttempt`). It then reads `readStoredFeatureFlag('ourSignInBox')`:
-  on, `openSignInBox({ attemptId, attribution, heading, prefillEmail })`; off, Privy's `login()`.
+  continuation on it (`continueAuthAttempt`), then calls
+  `openSignInBox({ attemptId, attribution, heading, prefillEmail })`. Privy's `login()` opens only for
+  `fallbackFor`, on the box's own attempt.
 - **Continuation (one owner).** `finishAuthAttempt` runs each continuation registered on the attempt
   once: `signedIn` on a signed-in end, `abandoned` (the caller's `onError` and `onCancel`) on any other,
   nothing when a newer press supersedes it. It is held by the attempt, not by the control, so it runs
-  after the control unmounts, on the box, on Privy's fallback dialog and with the flag off. Whatever
-  ends the attempt (`AccountStep`'s headless `completePrivyAuth`, `PrivyAuthTracker` for Privy's dialog,
+  after the control unmounts, on the box and on Privy's fallback dialog. Whatever ends the attempt (`AccountStep`'s headless `completePrivyAuth`, `PrivyAuthTracker` for Privy's dialog,
   the box's close) is all it takes, in whatever order Privy reports.
-- **Loading the box.** `SignInBoxGate` (mounted with the flag on) downloads the box's chunk at idle
-  (2 s after mount, then `requestIdleCallback`), at the first press if that is sooner, or at once on a
-  page that opens sign-in by itself (`signInExpectedOnLoad`: the sign-in link or a code step to pick
-  up). If the chunk fails to load, the press gets Privy's dialog on the same attempt.
+- **Loading the box.** `SignInBoxGate` (mounted in `entry.tsx`) downloads the box's chunk at the first
+  press, at once on a page that opens sign-in by itself (`signInExpectedOnLoad`: the sign-in link or a
+  code step to pick up), or at idle (2 s after mount, then `requestIdleCallback`) once `usePrivy()`
+  reports ready and signed out. A reader with a restored session never schedules the idle download; if
+  the session turns out invalid, Privy reports signed out and the idle download is scheduled then.
+- **Slow or failed chunk.** If the chunk fails to load, or a press has waited
+  `SIGN_IN_BOX_LOAD_TIMEOUT_MS` (5 s) for it, the gate closes that request and calls `login` with
+  `fallbackFor` once, so the press gets Privy's dialog on the same attempt. A chunk that arrives later
+  sets the host, which shows nothing until the next press. Only a waiting press has the deadline; the
+  idle download has none.
 - **First paint without Privy.** The card imports nothing from `@geogenesis/auth`. `auth-hooks`'
   `useLoginWithEmail` queues calls until Privy is up (`invokeInstance` → `whenReady`, 20 s). While it
   waits, the code step shows the sheet's own pending state: "Sending a 6-digit code to", boxes disabled.
@@ -250,19 +256,12 @@ Payload rules (registry branch `signin-box-events`):
 
 ## 8. Rollout
 
-- Flag `ourSignInBox` in `featureFlagDefinitions`, `enabledByDefault: false`. Flags are per-browser
-  localStorage with no remote or per-environment default, so "Bryan flips it" means a one-line change to
-  `enabledByDefault` (or a per-environment default, Q2). Testers turn it on in the flags dialog.
-- Flag off: Privy's dialog exactly as today. Flag on: the box everywhere, with Privy's dialog as the
-  fallback for captcha or unknown send failures.
-- `sign_in_surface` lets the funnel compare the box against Privy's dialog during the rollout.
-- Flipping the default. The flags dialog used to store every flag's value on any toggle, which froze each
-  default in that browser. `ourSignInBox` was never in any such object (it is new here), and
-  `setFeatureFlagValue` now stores only flags set away from their default, rewriting an older complete
-  object on its next toggle. So flipping `enabledByDefault` reaches every browser except those that set
-  `ourSignInBox` off explicitly. Other flags' frozen defaults stay frozen until that browser toggles
-  something; that is safe because only internal browsers use the dialog.
-- The marketing link's conversion (41% now, 57% before) is the success measure: two weeks on the box.
+- Shipped behind `ourSignInBox` (#3062), tested in production with the flag on, then the flag was
+  removed. `ourSignInBox` is a retired key in `StoredFeatureFlags`: a stored `true` or `false` is ignored
+  and dropped at the next write.
+- `sign_in_surface` tells the box (`box`) from Privy's fallback dialog (`privy_modal`) in the funnel.
+- The marketing link's conversion (41% before the box, 57% before 15 Oct) is the success measure: two
+  weeks on the box.
 
 ## 9. Overlap with open PRs
 
@@ -289,7 +288,7 @@ Payload rules (registry branch `signin-box-events`):
 - Look: the sheet's UX exactly. Only the heading ("Log in or sign up", or the caller's), the submit label
   and the close label differ, and there are no votes or newsletter parts.
 - Fine print: `SAVE_VOTES_FINE_PRINT`.
-- Flag: `enabledByDefault: false` everywhere. Testing uses the flags dialog.
+- Flag: removed; the box is on for everyone.
 - Code lifetime: `CODE_LIFETIME_MS` = 10 min, to be confirmed by Bryan's test.
 - Terms consent: off. Privy has no terms link set, so the box has no consent line and keeps `SAVE_VOTES_FINE_PRINT`.
 - Google redirect (Bryan, 2026-11-04): Google stays beside email on every surface behind `googleSignIn`. A
