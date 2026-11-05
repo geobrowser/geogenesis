@@ -1566,8 +1566,9 @@ describe('DebateCoordinator', () => {
     expect(await screen.findByRole('dialog', { name: 'Your debate is ready to share!' })).toBeInTheDocument();
   });
 
-  it('hides a retained share prompt on lobby entry and restores it after exit', async () => {
+  it.each([false, true])('refreshes a retained share prompt after lobby exit (still pending: %s)', async pending => {
     showSharePrompt();
+    const prompts = mocks.prompts;
     const view = render(<DebateCoordinator />);
     expect(await screen.findByRole('dialog', { name: 'Your debate is ready to share!' })).toBeInTheDocument();
 
@@ -1579,8 +1580,20 @@ describe('DebateCoordinator', () => {
 
     mocks.pathname = '/explore';
     mocks.roomAtPath = null;
+    mocks.promptsFetching = true;
     view.rerender(<DebateCoordinator />);
-    expect(await screen.findByRole('dialog', { name: 'Your debate is ready to share!' })).toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    // Another tab may have shared or dismissed it while this tab was in the lobby.
+    mocks.prompts = pending ? prompts : [];
+    mocks.promptsFetching = false;
+    view.rerender(<DebateCoordinator />);
+    if (pending) {
+      expect(await screen.findByRole('dialog', { name: 'Your debate is ready to share!' })).toBeInTheDocument();
+    } else {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    }
+    expect(mocks.handleMutate).not.toHaveBeenCalled();
   });
 
   it('requests the exact social preview and starts preparing the MP4 on open', async () => {

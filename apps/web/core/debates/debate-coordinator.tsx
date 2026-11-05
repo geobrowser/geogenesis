@@ -214,12 +214,11 @@ export function DebateCoordinator() {
   const myLobby = useMyDebateLobby();
   // A step-out to debate is still part of the lobby session, including in other tabs. Wait until
   // the viewer leaves its roster. The path also covers arrival before the room/lobby reads land.
-  const deferSharePrompts = roomIdAtPath !== null || myLobby.isLoading || Boolean(myLobby.data?.current_lobby_id);
-  const sharePromptsQuery = useDebateSharePrompts(Boolean(activity) && !activeFlow && !deferSharePrompts);
+  const deferSharePrompts =
+    activeFlow || roomIdAtPath !== null || myLobby.isLoading || Boolean(myLobby.data?.current_lobby_id);
+  const sharePromptsQuery = useDebateSharePrompts(Boolean(activity) && !deferSharePrompts);
   const queriedSharePrompt =
-    activeFlow || deferSharePrompts || sharePromptsQuery.isFetching
-      ? null
-      : (sharePromptsQuery.data?.prompts[0] ?? null);
+    deferSharePrompts || sharePromptsQuery.isFetching ? null : (sharePromptsQuery.data?.prompts[0] ?? null);
   const [retainedSharePrompt, setRetainedSharePrompt] = React.useState<DebateSharePrompt | null>(null);
   const [closedSharePromptId, setClosedSharePromptId] = React.useState<string | null>(null);
 
@@ -434,8 +433,9 @@ export function DebateCoordinator() {
   }, [closedSharePromptId, queriedSharePrompt, retainedSharePrompt]);
 
   React.useEffect(() => {
-    if (activeFlow) setRetainedSharePrompt(null);
-  }, [activeFlow]);
+    // Re-read pending prompts after the flow: another tab may have handled the retained one.
+    if (deferSharePrompts) setRetainedSharePrompt(null);
+  }, [deferSharePrompts]);
 
   React.useEffect(() => {
     if (!activity) return;
@@ -516,7 +516,7 @@ export function DebateCoordinator() {
     router,
   ]);
 
-  // Hide even a prompt retained before entering the lobby, without dismissing it on the server.
+  // Hide immediately on entry; the effect clears retention without dismissing anything on the server.
   const visibleSharePrompt = deferSharePrompts
     ? null
     : (retainedSharePrompt ?? (queriedSharePrompt?.id === closedSharePromptId ? null : queriedSharePrompt));
@@ -627,7 +627,7 @@ export function DebateCoordinator() {
           onNotNow={() => setSnoozedRequestIds(current => [...current, promptedRequest.id])}
         />
       )}
-      {!activeFlow && !promptedRequest && !nudgeOpen && visibleSharePrompt && (
+      {!promptedRequest && !nudgeOpen && visibleSharePrompt && (
         <DebateSharePromptDialog
           key={visibleSharePrompt.id}
           prompt={visibleSharePrompt}
