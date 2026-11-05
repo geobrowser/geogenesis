@@ -18,6 +18,7 @@ import {
 
 import { captureSafely } from '~/core/analytics-capture-safely';
 import { disconnectCause, disconnectReasonName } from '~/core/livekit/disconnect-reason';
+import { reportError } from '~/core/telemetry/logger';
 import { resolveWithin } from '~/core/utils/resolve-within';
 
 import { type VideoSnapshot, videoSampleMetrics } from './video-call-stats';
@@ -71,23 +72,25 @@ const NOTABLE_QUALITIES = new Set<ConnectionQuality>([ConnectionQuality.Poor, Co
  * - `debate_voice_ended` once per call: seconds connected, seconds at poor and lost quality,
  *   reconnects, the worst loss and concealment seen, and the last transport each way.
  *
- * All three carry `call_surface` and `call_id` (the rematch session, lobby or debate), so all
- * surfaces read with the same queries. Device labels never leave the browser: only their kind does.
+ * All three carry `call_surface` and `call_id` (the rematch session, lobby, space call or debate),
+ * so all surfaces read with the same queries. Device labels never leave the browser: only their kind
+ * does.
  *
  * Runs on local counters and room events, never React state: a call that re-rendered on every stats read
  * would be the kind of cost this exists to find.
- */
-/**
- * For the picker and lobby, whose rooms belong to their call trees. Diagnostics are optional, so
- * setting up or tearing down never throws into the call, as `loadDebateRoomTelemetry` keeps it for
- * the debate room.
+ *
+ * This hook is the picker's and lobby's entry, whose rooms belong to their call trees. Diagnostics
+ * are optional, so setting up or tearing down never throws into the call, as
+ * `loadDebateRoomTelemetry` keeps it for the debate room; a failed setup is reported, not lost.
  */
 export function useVoiceCallTelemetry(room: Room, surface: VoiceCallSurface, callId: string) {
   React.useEffect(() => {
     let stop: (() => void) | undefined;
     try {
       stop = startVoiceCallTelemetry(room, surface, callId);
-    } catch {
+    } catch (error) {
+      // Setup leaves nothing registered when it throws (see its catch), so only the report remains.
+      reportError(error, { tags: { voice_call_telemetry: 'setup_failed', call_surface: surface } });
       return;
     }
     return () => {

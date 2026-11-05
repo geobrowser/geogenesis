@@ -6,6 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const capture = vi.hoisted(() => vi.fn());
 vi.mock('~/core/analytics', () => ({ capture }));
+const reportError = vi.hoisted(() => vi.fn());
+vi.mock('~/core/telemetry/logger', () => ({ reportError }));
 
 const { VOICE_FIRST_SAMPLE_MS, VOICE_SAMPLE_MS, startVoiceCallTelemetry, useVoiceCallTelemetry } =
   await import('./use-voice-call-telemetry');
@@ -118,12 +120,17 @@ describe('useVoiceCallTelemetry (GEO-3340)', () => {
 
   // GEO-3340. The picker and lobby run this in their own call trees, which must never fail because
   // diagnostics did: the same rule the debate room keeps.
-  it('never fails the call it measures when setting up throws', () => {
+  it('never fails the call it measures when setting up throws, and reports why', () => {
     const call = fakeRoom();
+    const failure = new Error('listener table full');
     call.raw.on = () => {
-      throw new Error('listener table full');
+      throw failure;
     };
+    reportError.mockClear();
     expect(() => renderHook(() => useVoiceCallTelemetry(call.room, 'picker', 'session-1'))).not.toThrow();
+    expect(reportError).toHaveBeenCalledWith(failure, {
+      tags: { voice_call_telemetry: 'setup_failed', call_surface: 'picker' },
+    });
   });
 
   it('never fails the call it measures when cleaning up throws', () => {

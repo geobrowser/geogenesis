@@ -262,6 +262,7 @@ export function LobbyRoomShell({
               {guestVoice ? (
                 <LobbyGuestVoice
                   key={guestVoice.token}
+                  lobbyId={lobby.lobby_id}
                   token={guestVoice}
                   onStates={setGuestVoiceStates}
                   onReconnect={guestSession.reconnect}
