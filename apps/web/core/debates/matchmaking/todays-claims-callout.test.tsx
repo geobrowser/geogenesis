@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 import * as React from 'react';
 
@@ -33,17 +33,17 @@ vi.mock('~/core/claims/browse/claim-response-summary', () => ({
 vi.mock('./matchmaking-claim-card', () => ({
   MatchmakingClaimCard: (props: {
     claim: { claim: string };
-    hideEndSlot?: boolean;
+    endSlot?: React.ReactNode;
     hideSummary?: boolean;
     showParticipants?: boolean;
   }) => (
     <article
       data-testid="claim-card"
-      data-hide-end-slot={props.hideEndSlot}
       data-hide-summary={props.hideSummary}
       data-show-participants={String(props.showParticipants)}
     >
       {props.claim.claim}
+      {props.endSlot}
     </article>
   ),
 }));
@@ -110,7 +110,8 @@ describe('TodaysClaimsCallout', () => {
     expect(region).toHaveTextContent('Today’s claims');
     expect(screen.getByTestId('claim-card')).toHaveTextContent('Claim B');
     expect(screen.getByTestId('claim-card')).toHaveAttribute('data-hide-summary', 'true');
-    expect(screen.getByTestId('claim-card')).toHaveAttribute('data-hide-end-slot', 'true');
+    // GEO-3586: Skip in the card's top corner, where its offer would be, and the progress by the title.
+    expect(within(screen.getByTestId('claim-card')).getByRole('button', { name: 'Skip' })).toBeInTheDocument();
     expect(screen.getByTestId('claim-card')).toHaveAttribute('data-show-participants', 'false');
     expect(screen.getByRole('list', { name: '1 of 3 answered' })).toBeInTheDocument();
     expect(mocks.surfaces[0]).toMatchObject({
@@ -177,11 +178,12 @@ describe('TodaysClaimsCallout', () => {
     expect(next.skip).toHaveBeenCalledWith('b');
   });
 
-  it('holds Skip while the claim is still loading, so nothing unseen can be skipped', () => {
+  // Skip rides on the card now, so there is none to press until the claim is drawn.
+  it('offers no Skip while the claim is still loading, so nothing unseen can be skipped', () => {
     const loading = callout({ entityOf: () => undefined, entitiesSettled: false });
     const { rerender } = render(<TodaysClaimsCallout callout={loading} onFindDebate={vi.fn()} />);
     expect(screen.queryByTestId('claim-card')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Skip' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Skip' })).not.toBeInTheDocument();
 
     rerender(<TodaysClaimsCallout callout={callout()} onFindDebate={vi.fn()} />);
     expect(screen.getByTestId('claim-card')).toHaveTextContent('Claim A');

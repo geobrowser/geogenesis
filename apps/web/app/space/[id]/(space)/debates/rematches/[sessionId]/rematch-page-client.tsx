@@ -146,12 +146,14 @@ import { useLeaveRematchOnExit } from '~/core/debates/use-leave-rematch-on-exit'
 import { useRelatedDebateClaims } from '~/core/debates/use-related-debate-claims';
 import { useEffectOnceWhen } from '~/core/hooks/use-effect-once';
 import { useEntityResponse, useEntityResponseIndexingSnapshot } from '~/core/hooks/use-entity-vote';
+import { useHydrated } from '~/core/hooks/use-hydrated';
 import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sentinel';
 import { useLastSettled } from '~/core/hooks/use-last-settled';
 import { useOpenClaimInSidePanel } from '~/core/hooks/use-open-claim-in-side-panel';
 import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
 import { equals as idEquals, uuidToHex } from '~/core/id/normalize';
 import { responsePositionLabel } from '~/core/responses/entity-response';
+import { useFeatureFlag } from '~/core/state/feature-flags';
 import { normId } from '~/core/utils/norm-id';
 import { getTopRankedSpaceId } from '~/core/utils/space/space-ranking';
 import { validateSpaceId } from '~/core/utils/utils';
@@ -184,8 +186,7 @@ const NO_CLAIMS: DebateRematchClaim[] = [];
  *
  * `debate` is GEO-2870 phase 2, "From this debate": the claims extracted from the debate that just
  * finished, read from geo-chat's fast path (GEO-2868 option C) rather than waiting ~27 minutes for
- * the graph. Offered whenever the session came out of a debate, including while extraction is still
- * running, because the list filling in is the point.
+ * the graph. Hidden from the picker by default (GEO-3585).
  *
  * `matches` is GEO-3148: the claims the two of you hold opposite sides on and have not debated, so
  * every one of them can be requested from its card. It replaced the "Matches only" switch that used
@@ -210,9 +211,8 @@ function listLandingState(pending: boolean, rows: number): LandingState {
  * GEO-3148. Where a pair land: the first of these tabs with something in it, and Explore — which
  * always has something — when none does.
  *
- * Matches first, because a claim the two of you can debate right now is what the page is for. Then
- * the debate that just finished, then its neighbours, then everything the opponent has taken a side
- * on, where a match is one press away.
+ * Today’s claims first, then Matches, then previous-debate claims when their flag is enabled,
+ * then Related, then everything the opponent has taken a side on, where a match is one press away.
  *
  * `null` while an earlier tab has not answered. Landing on a later one in that window would be
  * landing on a guess, and the landing is taken once: a tab whose answer arrives afterwards must not
@@ -576,12 +576,16 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    * the reader a minute later.
    * ---------------------------------------------------------------------------------------------*/
   const sourceDebateId = session?.source_debate_id ?? null;
-  const extractedClaimsQuery = useDebateExtractedClaims(sourceDebateId ?? '', sourceDebateId !== null);
-  const notInterested = useNotInterestedClaimIds(sourceDebateId !== null);
+  const featureFlagsHydrated = useHydrated();
+  const previousDebateClaimsEnabled = useFeatureFlag('previousDebateClaims');
+  const debateOffered = previousDebateClaimsEnabled && sourceDebateId !== null;
+  const extractedClaimsQuery = useDebateExtractedClaims(sourceDebateId ?? '', debateOffered);
+  const notInterested = useNotInterestedClaimIds(debateOffered);
   const notInterestedIds = React.useMemo(() => new Set(notInterested.ids.map(normId)), [notInterested.ids]);
   const debateCandidates = React.useMemo(
-    () => (extractedClaimsQuery.data ? fromThisDebateCandidates(extractedClaimsQuery.data.payload) : null),
-    [extractedClaimsQuery.data]
+    () =>
+      debateOffered && extractedClaimsQuery.data ? fromThisDebateCandidates(extractedClaimsQuery.data.payload) : null,
+    [debateOffered, extractedClaimsQuery.data]
   );
   // A claim somebody has a request open on stays listed even if the final pass drops it (D4).
   const openRequestClaimId =
@@ -591,7 +595,11 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     [openRequestClaimId]
   );
   const debateList = useFromThisDebateList(debateCandidates, openRequestClaimIds, sessionId);
-  const debateClaimIds = React.useMemo(() => debateList.map(claim => claim.id), [debateList]);
+  // The list holds its last answer during refetches. Turning the flag off must also stop hydrating it.
+  const debateClaimIds = React.useMemo(
+    () => (debateOffered ? debateList.map(claim => claim.id) : NO_IDS),
+    [debateList, debateOffered]
+  );
   // Polled while any is missing: the early claims publish puts them on the graph a minute or two
   // after geo-chat extracts them (GEO-2870 option A), and each claim joins the list when it lands.
   const debateEntitiesQuery = useClaimEntitiesByIds(debateClaimIds, { pollMissingMs: DEBATE_CLAIM_PUBLISH_POLL_MS });
@@ -607,7 +615,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   );
   const debateRowsQuery = useDebateRematchClaimsForIds(sessionId, publishedDebateClaimIds);
   /** Extraction can still add claims: the media job has not reached its last write. */
-  const debateExtractionRunning = sourceDebateId !== null && extractedClaimsQuery.data?.final !== true;
+  const debateExtractionRunning = debateOffered && extractedClaimsQuery.data?.final !== true;
 
   // The whole chain, enumerated once, so the gates below cannot each wait on a different subset of
   // it — the mistake that let one gate pass while another was still waiting. The source debate is
@@ -1681,8 +1689,6 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       null,
     [participants]
   );
-  /** Offered whenever there is a debate behind the session — empty while extraction runs is the point. */
-  const debateOffered = sourceDebateId !== null;
 
   /**
    * Whether the tab is offered — and so, below, whether it is where the pair land.
@@ -2199,7 +2205,16 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     ['matches', opponentTabError ? 'empty' : listLandingState(opponentLandingPending, matchClaims.length)],
     // Empty while extraction is still running counts as empty: landing on "pulling the claims out"
     // is a weaker first screen than the next tab with something on it.
-    ['debate', debateOffered ? listLandingState(debateItemsSettling, debateClaimCount) : 'empty'],
+    [
+      'debate',
+      // A stored opt-in is unknown before hydration. Wait here rather than landing and reporting
+      // a later tab too early; Today's claims and Matches can still win without waiting.
+      !featureFlagsHydrated && sourceDebateId !== null
+        ? 'pending'
+        : debateOffered
+          ? listLandingState(debateItemsSettling, debateClaimCount)
+          : 'empty',
+    ],
     ['related', listLandingState(relatedClaimsSettling, relatedClaims.length)],
     // Here a failure *is* something to land on: the tab draws it with a retry, where landing on
     // Explore would hide it.
@@ -3273,8 +3288,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       label: 'Matches',
       count: { value: matchClaims.length, pending: opponentCountPending, pendingLabel: 'Counting matches' },
     },
-    // Offered whenever the session came out of a debate, including while extraction is still
-    // running, because the list filling in is the point (GEO-2870).
+    // Hidden by default; the shared flag gates both this slot and its data requests (GEO-3585).
     ...(debateOffered
       ? [
           {

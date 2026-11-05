@@ -320,7 +320,7 @@ describe('useOpenRoundReveal', () => {
       phase: { ...resolvedRebut, outcome: 'end', nextPhaseStartsAtMs: 3_000 },
       elapsedMs: 2_000,
     });
-    expect(current.result).toEqual({ kind: 'wrap', note: "Bob didn't pick in time" });
+    expect(current.result).toEqual({ kind: 'wrap', note: 'No picks in time' });
     expect(current.remotePick).toEqual({ participant_slot: 2, pick: null });
   });
 

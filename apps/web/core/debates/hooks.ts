@@ -96,13 +96,13 @@ import { markEnteringDebate, markEnteringPendingDebate } from './debate-entry-in
 import { useDebateGatewayScope, useDebateGatewaySnapshot, useDebateGatewaySpaceScopes } from './debate-gateway';
 import { isLiveGeoChatAccount, refusedRetryDelayMs } from './geo-chat-account-status';
 import { lobbyDebateRequested } from './lobbies/lobby-analytics';
-import { markAskWithdrawn, unmarkAskWithdrawn } from './matchmaking/ask-withdrawals';
 import {
   markLocalDebateLeave,
   markLocalRematchLeave,
   unmarkLocalDebateLeave,
   unmarkLocalRematchLeave,
 } from './local-debate-leave';
+import { markAskWithdrawn, unmarkAskWithdrawn } from './matchmaking/ask-withdrawals';
 import {
   type ParticipantAvatarMapper,
   type ParticipantAvatarSource,
@@ -1552,6 +1552,9 @@ export function useDebateSharePrompts(enabled = true) {
     queryKey: debateQueryKeys.sharePrompts(accountKey),
     queryFn: ({ signal }) => listDebateSharePrompts(getPrivyIdentityToken, accountKey, signal),
     enabled: enabled && authenticated,
+    // Recheck after a lobby/debate even within the app's cache freshness window: another tab
+    // may have handled a prompt before its gateway notification reaches this one.
+    staleTime: 0,
   });
 }
 

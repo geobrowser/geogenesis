@@ -9,7 +9,6 @@ import { continueAuthAttempt, currentAuthAttempt, tagAuthAttempt } from '~/core/
 import { useGoogleSignInOptions } from '~/core/auth/google-sign-in';
 import { openSignInBox } from '~/core/auth/sign-in-box/sign-in-box-store';
 import { beginPrivyAuth } from '~/core/privy-auth-events';
-import { readStoredFeatureFlag } from '~/core/state/feature-flags';
 import { useGeoLogin, usePrivy } from '~/core/wallet/auth-hooks';
 
 type TrackedLoginParams = {
@@ -26,8 +25,8 @@ export type TrackedLoginExtras = {
   /** The sign-in box's heading, for an entry with its own ask. */
   heading?: string;
   /**
-   * Opens Privy's own dialog on this open attempt, with or without `ourSignInBox`: the code step's
-   * fallback for a send it could not make. Opens nothing once that attempt is not current.
+   * Opens Privy's own dialog on this open attempt instead of the box: the fallback for a box that
+   * could not load or a code it could not send. Opens nothing once that attempt is not current.
    */
   fallbackFor?: string;
 };
@@ -101,17 +100,13 @@ export function useTrackedLogin(params: TrackedLoginParams = {}) {
         context.component === 'sign_in_prompt' ? (properties?.component ?? context.component) : context.component;
       const attempt = beginPrivyAuth({ ...context, auth_trigger: 'control', ...properties, component }, options);
       continueAuthAttempt(attempt.id, continuation);
-      if (readStoredFeatureFlag('ourSignInBox')) {
-        tagAuthAttempt(attempt.id, { signInSurface: 'box' });
-        openSignInBox({
-          attemptId: attempt.id,
-          attribution: { ...attempt.properties, component: String(attempt.properties.component) },
-          heading: extras?.heading,
-          prefillEmail: extras?.prefillEmail,
-        });
-        return attempt;
-      }
-      openPrivyDialog(attempt.id, extras?.prefillEmail);
+      tagAuthAttempt(attempt.id, { signInSurface: 'box' });
+      openSignInBox({
+        attemptId: attempt.id,
+        attribution: { ...attempt.properties, component: String(attempt.properties.component) },
+        heading: extras?.heading,
+        prefillEmail: extras?.prefillEmail,
+      });
       return attempt;
     },
     [getContext, openPrivyDialog]

@@ -13,6 +13,7 @@ import {
   resetAuthAttempt,
   trackAuthOnboarding,
 } from './auth-attempt';
+import { closeSignInBox, readSignInBox } from './auth/sign-in-box/sign-in-box-store';
 import { usePrivySignIn } from './hooks/use-privy-sign-in';
 import { useTrackedLogin } from './hooks/use-tracked-login';
 import { beginPrivyAuth, completePrivyAuth, resetPrivyAuthSession } from './privy-auth-events';
@@ -105,7 +106,10 @@ beforeEach(() => {
   localStorage.clear();
   sessionStorage.clear();
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  closeSignInBox();
+});
 
 const dismiss = () =>
   act(() => {
@@ -667,6 +671,7 @@ describe('a sign-in pressed while already signed in', () => {
     });
 
     expect(mocks.login).not.toHaveBeenCalled();
+    expect(readSignInBox()).toBeNull();
     expect(currentAuthAttempt()).toBeUndefined();
     expect(mocks.capture).not.toHaveBeenCalledWith('auth_attempt_started', expect.anything());
   });
@@ -679,6 +684,7 @@ describe('a sign-in pressed while already signed in', () => {
     });
 
     expect(mocks.login).not.toHaveBeenCalled();
+    expect(readSignInBox()).toBeNull();
     expect(currentAuthAttempt()).toBeUndefined();
     expect(mocks.capture).not.toHaveBeenCalledWith('auth_attempt_started', expect.anything());
     expect(onCancel).not.toHaveBeenCalled();
@@ -693,7 +699,7 @@ describe('a sign-in pressed while already signed in', () => {
       control.result.current.login({ component: 'navbar', auth_control: 'sign_in' });
     });
 
-    expect(mocks.login).toHaveBeenCalledOnce();
+    expect(readSignInBox()).toMatchObject({ attemptId: currentAuthAttempt()?.id });
     expect(currentAuthAttempt()).toBeDefined();
   });
 });

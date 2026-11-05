@@ -3,7 +3,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 import { useRouter } from 'next/navigation';
 
@@ -11,11 +11,8 @@ import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSpace } from '~/core/hooks/use-space';
 import { useSpacesWhereMember } from '~/core/hooks/use-spaces-where-member';
 import { EntityId } from '~/core/io/substream-schema';
-import { E } from '~/core/sync/orm';
-import { GeoEventStream } from '~/core/sync/stream';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
-import type { Entity, Relation } from '~/core/types';
 import { sortSpaceListByRankNameId } from '~/core/utils/space/browse-space-list-sort';
 import { NavUtils, hasName } from '~/core/utils/utils';
 
@@ -23,10 +20,7 @@ import { GeoImage } from '~/design-system/geo-image';
 import { ArrowLeft } from '~/design-system/icons/arrow-left';
 import { Input } from '~/design-system/input';
 
-import { cloneEntityIntoSpace, collectHydrationTargetIds } from '~/partials/versions/clone-entity-into-space';
-import { loadMoveBacklinks } from '~/partials/versions/load-move-backlinks';
-import { collectMoveDeletions } from '~/partials/versions/move-entity-deletions';
-import { retargetMoveBacklinks } from '~/partials/versions/retarget-move-backlinks';
+import { moveEntity } from '~/partials/versions/move-entity';
 
 type MoveEntityToSpaceProps = {
   entityId: EntityId;
@@ -54,6 +48,9 @@ export const MoveEntityToSpace = ({
 
   const [query, setQuery] = useState<string>('');
 
+  const movingRef = useRef(false);
+  const [movingToSpaceId, setMovingToSpaceId] = useState<string | null>(null);
+
   const allSpaces = React.useMemo(() => {
     const others = memberSpaces.filter(s => s.id !== personalSpace?.id && s.id !== sourceSpaceId);
     const sortKeyed = others.map(s => ({
@@ -73,69 +70,34 @@ export const MoveEntityToSpace = ({
       ? namedSpaces
       : namedSpaces.filter(space => space?.entity?.name?.toLowerCase()?.includes(query.toLowerCase()));
 
-  const moveEntityToSpace = async (targetSpaceId: string) => {
-    if (!targetSpaceId || targetSpaceId === sourceSpaceId) return false;
+  const selectSpace = async (targetSpaceId: string) => {
+    if (movingRef.current) return;
+    movingRef.current = true;
+    setMovingToSpaceId(targetSpaceId);
 
-    // 0. Load the media the clone copies. A media entity nobody opened is not in the store, so it
-    // would be copied as nothing. The clone reads them from `loaded`: the store only takes them in
-    // on a later microtask.
-    const hydrationIds = collectHydrationTargetIds(entityId, sourceSpaceId);
-    let loaded: Entity[] = [];
-
-    if (hydrationIds.length > 0) {
-      try {
-        const { merged, remote } = await E.syncMany({
-          store,
-          cache,
-          where: { id: { in: hydrationIds } },
-          first: hydrationIds.length,
-        });
-
-        loaded = merged;
-
-        if (merged.length > 0) {
-          stream.emit({ type: GeoEventStream.ENTITIES_SYNCED, entities: merged, remoteEntities: remote });
-        }
-      } catch {
-        return false;
+    let moved = false;
+    try {
+      moved = await moveEntity({ entityId, sourceSpaceId, targetSpaceId, storage, store, cache, stream });
+    } finally {
+      // A failed move can be tried again. A finished one stays locked: the menu closes behind it.
+      if (!moved) {
+        movingRef.current = false;
+        setMovingToSpaceId(null);
       }
     }
 
-    // Backlinks from every space, which the store only holds for entities someone opened.
-    let backlinks: Relation[];
-
-    try {
-      backlinks = await loadMoveBacklinks({ entityId, sourceSpaceId, store, cache });
-    } catch {
-      return false;
-    }
-
-    // 1. Clone entity into target space
-    cloneEntityIntoSpace(entityId, sourceSpaceId, targetSpaceId, storage, loaded);
-
-    // 2. Delete entity from source space. The clone walked the BLOCKS/TABS
-    // subtree, so tear down the same subtree here: the root always goes, and
-    // each descendant goes unless something outside the subtree still points at
-    // it (a shared block). What that comes to is decided in `collectMoveDeletions`,
-    // where it can be tested.
-    const { values, relations } = collectMoveDeletions(entityId, sourceSpaceId, backlinks);
-
-    storage.values.deleteMany(values);
-    storage.relations.deleteMany(relations);
-
-    // 3. Point this space's backlinks at where the data went. They survive the move untouched —
-    // the entity id has not changed — but one that resolves to the source space now resolves to a
-    // space the entity's data just left.
-    retargetMoveBacklinks(entityId, sourceSpaceId, targetSpaceId, storage, backlinks);
-
-    return true;
+    if (!moved) return;
+    router.push(NavUtils.toEntity(targetSpaceId, entityId, true, entityName));
+    onDone?.();
   };
+
+  const isMoving = movingToSpaceId !== null;
 
   return (
     <div className="bg-white">
       <div className="border-grey flex items-center justify-between border-b border-grey-02">
         <div className="flex-1 p-2">
-          <button onClick={() => setIsMovingEntity(false)}>
+          <button onClick={() => setIsMovingEntity(false)} disabled={isMoving}>
             <ArrowLeft />
           </button>
         </div>
@@ -150,12 +112,9 @@ export const MoveEntityToSpace = ({
           <MoveSpaceItem
             key={space.id}
             space={space}
-            onSelect={async () => {
-              const moved = await moveEntityToSpace(space.id);
-              if (!moved) return;
-              router.push(NavUtils.toEntity(space.id, entityId, true, entityName));
-              onDone?.();
-            }}
+            disabled={isMoving}
+            isMovingHere={movingToSpaceId === space.id}
+            onSelect={() => selectSpace(space.id)}
           />
         ))}
       </div>
@@ -165,21 +124,26 @@ export const MoveEntityToSpace = ({
 
 type MoveSpaceItemProps = {
   space: ReturnType<typeof useSpacesWhereMember>[number];
+  disabled: boolean;
+  isMovingHere: boolean;
   onSelect: () => void;
 };
 
-const MoveSpaceItem = ({ space, onSelect }: MoveSpaceItemProps) => {
+const MoveSpaceItem = ({ space, disabled, isMovingHere, onSelect }: MoveSpaceItemProps) => {
   return (
     <button
       onClick={() => {
         onSelect();
       }}
-      className="flex cursor-pointer items-center gap-2 rounded p-1 transition-colors duration-150 ease-in-out hover:bg-grey-01"
+      disabled={disabled}
+      aria-busy={isMovingHere || undefined}
+      className="flex cursor-pointer items-center gap-2 rounded p-1 transition-colors duration-150 ease-in-out hover:bg-grey-01 disabled:cursor-default disabled:hover:bg-transparent"
     >
       <div className="relative size-4 rounded bg-grey-01">
         <GeoImage value={space.entity.image} fill style={{ objectFit: 'cover' }} alt="" />
       </div>
       <div className="text-button text-text">{space.entity.name}</div>
+      {isMovingHere && <div className="text-button text-grey-04">Moving…</div>}
     </button>
   );
 };

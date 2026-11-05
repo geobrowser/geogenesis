@@ -7690,21 +7690,20 @@ describe('DebateRoomPageClient', () => {
       expect(reveal('remote')).toHaveClass('opacity-100');
     });
 
-    it('shows a missing pick as no pick, and says why the debate ended', async () => {
-      // Alice Extend, Bob never picked; resolved by the sweep at 20:02:11.3.
+    it('shows missing picks as no pick, and says why the debate ended', async () => {
+      // Neither picked; resolved by the sweep at 20:02:11.3.
       vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt('20:02:11.400'));
       const view = await renderLiveDebate(openRoundsTimedOut());
 
       await waitFor(() => expect(reveal('remote')).toHaveAttribute('data-open-round-reveal', 'none'));
+      expect(reveal('local')).toHaveAttribute('data-open-round-reveal', 'none');
       expect(reveal('remote')).toHaveTextContent('No pick');
-      // A missing pick is neither choice; this payload ended because geo-chat counted it as End.
+      // A missing pick is neither choice; this debate ended because neither debater picked.
       expect(reveal('remote')).not.toHaveTextContent(/\bEnd\b/);
 
       rerenderAt(view, '20:02:12.800', openRoundsTimedOut());
-      await waitFor(() => expect(result()).toHaveTextContent("Bob didn't pick in time"));
-      expect(openRoundAnnouncement()).toHaveTextContent(
-        "You: Extend. Bob: no pick. That's a wrap. Bob didn't pick in time."
-      );
+      await waitFor(() => expect(result()).toHaveTextContent('No picks in time'));
+      expect(openRoundAnnouncement()).toHaveTextContent("You: no pick. Bob: no pick. That's a wrap. No picks in time.");
     });
 
     it('says the debate hit the maximum after the cap round, then hands over to the picker', async () => {

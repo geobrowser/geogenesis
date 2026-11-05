@@ -24,6 +24,7 @@ import {
   resolveRankingDate,
 } from '../../blocks/ranking/ranking-block-dates';
 import { isRankingBlockEntity, isRankingSetupConfigured } from '../../blocks/ranking/ranking-block-state';
+import { placeholderCollectionItemCount } from './data-block-placeholder-sizing';
 import { useActiveTabIdForEditor, useEditorBlocks, useEditorInstance } from './editor-provider';
 import {
   PROFILE_OVERVIEW_TAIL_BLOCK_SENTINEL,
@@ -238,13 +239,6 @@ export function useEditorBlockModels() {
             !r.isDeleted
         );
 
-        const server: ServerBlock = {
-          type: 'data',
-          view: dataBlockViewFromRelations(viewRelations),
-          pageSize: readBlockPageSizeFromValues(blockRelationEntity?.values, spaceId),
-          mediaFrame: blockMediaFrame(readBlockMediaDimensions(block.entityId, mediaPropertySource)),
-        };
-
         const dataSourceType = blockRelationRows.filter(
           r =>
             r.fromEntity.id === block.block.id &&
@@ -254,6 +248,21 @@ export function useEditorBlockModels() {
         )[0]?.toEntity.id;
         const isQuerySource =
           dataSourceType === SystemIds.QUERY_DATA_SOURCE || dataSourceType === SystemIds.ALL_OF_GEO_DATA_SOURCE;
+
+        const itemCount = placeholderCollectionItemCount({
+          blockId: block.block.id,
+          isQuerySource,
+          initialBlockEntities,
+          relations: blockRelationRows,
+        });
+
+        const server: ServerBlock = {
+          type: 'data',
+          view: dataBlockViewFromRelations(viewRelations),
+          pageSize: readBlockPageSizeFromValues(blockRelationEntity?.values, spaceId),
+          itemCount,
+          mediaFrame: blockMediaFrame(readBlockMediaDimensions(block.entityId, mediaPropertySource)),
+        };
         const configuredShownColumns = blockRelationRows.filter(
           r =>
             r.fromEntity.id === block.entityId &&

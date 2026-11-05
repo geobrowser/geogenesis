@@ -24,10 +24,10 @@ import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
 import { useOnboarding } from '~/core/hooks/use-onboarding';
 import { useSticky } from '~/core/hooks/use-sticky';
 import { Toast } from '~/core/hooks/use-toast';
+import { ResponseConfirmingAnnouncement } from '~/core/responses/response-confirming-announcement';
 import { browseSidebarShownAtom } from '~/core/state/browse-sidebar-state';
 import { useDiff } from '~/core/state/diff-store';
 import { useEditable } from '~/core/state/editable-store';
-import { useFeatureFlag } from '~/core/state/feature-flags';
 import { useLocalVotes } from '~/core/state/local-votes';
 import { pendingCreatedSpaceAtom } from '~/core/state/pending-created-space';
 import { pendingPersonalSpaceAtom } from '~/core/state/pending-personal-space';
@@ -279,11 +279,6 @@ function DeepLinkGate() {
 }
 
 // A page that may pick up a code step another page left (GEO-3573). Read once, at mount.
-// Loaded up front for a browser with the flag on, so a press paints the box without fetching it.
-function SignInBoxFlagGate() {
-  return useFeatureFlag('ourSignInBox') ? <SignInBoxGate /> : null;
-}
-
 function CodeStepRecoveryGate() {
   const [reloaded] = React.useState(codeRecoveryExpected);
   return reloaded ? <CodeStepRecovery /> : null;
@@ -387,9 +382,10 @@ export function App({ children }: { children: React.ReactNode }) {
           <React.Suspense fallback={null}>
             <DeepLinkGate />
             <CodeStepRecoveryGate />
-            <SignInBoxFlagGate />
+            <SignInBoxGate />
           </React.Suspense>
           <Toast />
+          <ResponseConfirmingAnnouncement />
           <GovernanceReopenEditLoadingBar />
           <FlowBarGate />
           <StatusBarGate />
