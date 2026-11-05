@@ -1,7 +1,7 @@
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { getRelations, getValues } from '~/core/sync/use-store';
-import type { Relation, Value } from '~/core/types';
+import type { Entity, Relation, Value } from '~/core/types';
 
 import { collectSubtree } from './clone-entity-into-space';
 
@@ -13,15 +13,21 @@ import { collectSubtree } from './clone-entity-into-space';
  *
  * `backlinks` are relations aimed at the subtree that the store may not hold, from
  * `loadMoveBacklinks`. A block stays when any of them still resolves to the source space.
+ *
+ * `loaded` is the subtree from `loadMoveSubtree`, so blocks the store never took in are torn down too.
  */
 export function collectMoveDeletions(
   entityId: string,
   sourceSpaceId: string,
-  backlinks: Relation[] = []
+  backlinks: Relation[] = [],
+  loaded: Entity[] = []
 ): { values: Value[]; relations: Relation[] } {
-  const { entityIds: subtreeIds } = collectSubtree(entityId, sourceSpaceId);
+  const { entityIds: subtreeIds } = collectSubtree(entityId, sourceSpaceId, loaded);
+  const loadedValues = loaded.flatMap(entity => entity.values);
+  const loadedRelations = loaded.flatMap(entity => entity.relations);
 
   const containmentRelations = getRelations({
+    mergeWith: loadedRelations,
     selector: r =>
       subtreeIds.has(r.fromEntity.id) &&
       r.spaceId === sourceSpaceId &&
@@ -33,7 +39,7 @@ export function collectMoveDeletions(
     if (id === entityId) return false;
 
     const externalRefs = getRelations({
-      mergeWith: backlinks,
+      mergeWith: [...backlinks, ...loadedRelations],
       selector: r =>
         r.toEntity.id === id && (r.toSpaceId ?? r.spaceId) === sourceSpaceId && !containmentRelationIds.has(r.id),
     });
@@ -55,6 +61,7 @@ export function collectMoveDeletions(
   const orphanedDescendantIds = [...subtreeIds].filter(id => id !== entityId && !keptSubtreeIds.has(id));
 
   const values = getValues({
+    mergeWith: loadedValues,
     selector: value => value.entity.id === entityId && value.spaceId === sourceSpaceId,
   });
 
@@ -67,12 +74,16 @@ export function collectMoveDeletions(
   };
 
   getRelations({
+    mergeWith: loadedRelations,
     selector: r => r.fromEntity.id === entityId && r.spaceId === sourceSpaceId,
   }).forEach(pushRelation);
 
   for (const id of orphanedDescendantIds) {
-    values.push(...getValues({ selector: v => v.entity.id === id && v.spaceId === sourceSpaceId }));
+    values.push(
+      ...getValues({ mergeWith: loadedValues, selector: v => v.entity.id === id && v.spaceId === sourceSpaceId })
+    );
     getRelations({
+      mergeWith: loadedRelations,
       selector: r => (r.fromEntity.id === id || r.toEntity.id === id) && r.spaceId === sourceSpaceId,
     }).forEach(pushRelation);
   }

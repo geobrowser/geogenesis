@@ -2,7 +2,7 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { RELATION_ENTITY_RELATIONSHIP_TYPE } from '~/core/constants';
+import { DATA_TYPE_PROPERTY, RELATION_ENTITY_RELATIONSHIP_TYPE, RENDERABLE_TYPE_PROPERTY } from '~/core/constants';
 
 import { cloneEntityIntoSpace, collectHydrationTargetIds } from './clone-entity-into-space';
 
@@ -24,6 +24,8 @@ const SCHEMA_RELATION_TYPES = [
   ['a Types relation', SystemIds.TYPES_PROPERTY],
   ["a property's relation value type", SystemIds.RELATION_VALUE_RELATIONSHIP_TYPE],
   ["a property's relation entity type", RELATION_ENTITY_RELATIONSHIP_TYPE],
+  ["a property's data type", DATA_TYPE_PROPERTY],
+  ["a property's renderable type", RENDERABLE_TYPE_PROPERTY],
 ];
 
 const SOURCE = 'space-source';
@@ -165,6 +167,58 @@ describe('cloneEntityIntoSpace — related entities', () => {
     ];
 
     expect(run().relations.some(r => r.toEntity.id === 'related')).toBe(false);
+  });
+});
+
+describe('cloneEntityIntoSpace — a subtree the store has not taken in', () => {
+  // A tab nobody opened: the store has the link to it, and nothing below.
+  const unopenedTab = () => {
+    store.relations = [relation({ id: 'has-tab', from: ENTITY, to: 'tab', typeId: SystemIds.TABS_PROPERTY })];
+    return [
+      {
+        id: 'tab',
+        values: [value('tab', SOURCE, 'tab-v')],
+        relations: [relation({ id: 'tab-holds-block', from: 'tab', to: 'block', typeId: SystemIds.BLOCKS })],
+      },
+      { id: 'block', values: [value('block', SOURCE, 'block-v')], relations: [] },
+    ];
+  };
+
+  it('copies the blocks under a tab that was only loaded', () => {
+    const written = run(unopenedTab());
+
+    expect(written.values.map(v => v.entity.id).sort()).toEqual(['block', 'tab']);
+    expect(written.relations.map(r => r.toEntity.id)).toContain('block');
+  });
+
+  it("copies a data block's view and shown columns when its relation entity was only loaded", () => {
+    const loaded = [
+      ...unopenedTab(),
+      {
+        id: 'tab-holds-block',
+        values: [],
+        relations: [
+          relation({ id: 'view', from: 'tab-holds-block', to: 'table-view', typeId: SystemIds.VIEW_PROPERTY }),
+          relation({ id: 'column', from: 'tab-holds-block', to: 'name-column', typeId: SystemIds.SHOWN_COLUMNS }),
+        ],
+      },
+    ];
+
+    const written = run(loaded).relations;
+    const holdsBlock = written.find(r => r.type.id === SystemIds.BLOCKS);
+    const config = written.filter(r => r.fromEntity.id === holdsBlock?.entityId);
+
+    expect(config.map(r => [r.type.id, r.toEntity.id, r.spaceId])).toEqual([
+      [SystemIds.VIEW_PROPERTY, 'table-view', TARGET],
+      [SystemIds.SHOWN_COLUMNS, 'name-column', TARGET],
+    ]);
+  });
+
+  it('finds the media under a tab that was only loaded', () => {
+    const loaded = unopenedTab();
+    loaded[1]!.relations = [relation({ id: 'cover', from: 'block', to: 'an-image', renderableType: 'IMAGE' })];
+
+    expect(collectHydrationTargetIds(ENTITY, SOURCE, loaded as any)).toEqual(['an-image']);
   });
 });
 
