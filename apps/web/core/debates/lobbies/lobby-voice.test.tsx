@@ -301,14 +301,21 @@ describe('LobbyVoice', () => {
   it('reports call quality for a debate lobby under the lobby', async () => {
     renderVoice();
     await screen.findByRole('button', { name: /Unmute|Mute/ });
-    expect(mocks.useVoiceCallTelemetry).toHaveBeenLastCalledWith(fakeRoom, 'lobby', 'lobby1');
+    expect(mocks.useVoiceCallTelemetry).toHaveBeenLastCalledWith(fakeRoom, 'lobby', 'lobby1', { role: 'member' });
   });
 
   // Lobby analytics write the id dashless; call quality must join them however the id arrives.
   it('reports a hyphenated lobby id dashless', async () => {
     renderVoice({ ...lobby(), lobby_id: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee' });
     await screen.findByRole('button', { name: /Unmute|Mute/ });
-    expect(mocks.useVoiceCallTelemetry).toHaveBeenLastCalledWith(fakeRoom, 'lobby', 'aaaaaaaabbbb4ccc8dddeeeeeeeeeeee');
+    expect(mocks.useVoiceCallTelemetry).toHaveBeenLastCalledWith(
+      fakeRoom,
+      'lobby',
+      'aaaaaaaabbbb4ccc8dddeeeeeeeeeeee',
+      {
+        role: 'member',
+      }
+    );
   });
 
   it('honours start_muted and unmutes on the button', async () => {
@@ -967,7 +974,29 @@ describe('LobbyGuestVoice', () => {
         onRemoved={vi.fn()}
       />
     );
-    expect(mocks.useVoiceCallTelemetry).toHaveBeenLastCalledWith(fakeRoom, 'lobby', 'lobby1');
+    expect(mocks.useVoiceCallTelemetry).toHaveBeenLastCalledWith(fakeRoom, 'lobby', 'lobby1', {
+      role: 'guest',
+      handingOver: false,
+    });
+  });
+
+  // Quiet is the member room taking over: this room's end is a handover, not a leave.
+  it('marks a listener room handing over to the member room', () => {
+    render(
+      <LobbyGuestVoice
+        lobbyId="lobby1"
+        token={guestToken}
+        onStates={vi.fn()}
+        onReconnect={vi.fn()}
+        onAutoReconnect={() => false}
+        onRemoved={vi.fn()}
+        quiet
+      />
+    );
+    expect(mocks.useVoiceCallTelemetry).toHaveBeenLastCalledWith(fakeRoom, 'lobby', 'lobby1', {
+      role: 'guest',
+      handingOver: true,
+    });
   });
 
   it('reports a listener under the dashless lobby id', () => {
@@ -981,7 +1010,15 @@ describe('LobbyGuestVoice', () => {
         onRemoved={vi.fn()}
       />
     );
-    expect(mocks.useVoiceCallTelemetry).toHaveBeenLastCalledWith(fakeRoom, 'lobby', 'aaaaaaaabbbb4ccc8dddeeeeeeeeeeee');
+    expect(mocks.useVoiceCallTelemetry).toHaveBeenLastCalledWith(
+      fakeRoom,
+      'lobby',
+      'aaaaaaaabbbb4ccc8dddeeeeeeeeeeee',
+      {
+        role: 'guest',
+        handingOver: false,
+      }
+    );
   });
 
   // iOS: one tap to start audio.
@@ -1326,7 +1363,7 @@ describe('LobbyVoice in a space call', () => {
   it('reports a space call’s quality as a space call', async () => {
     renderCall();
     await screen.findByRole('button', { name: /Unmute|Mute/ });
-    expect(mocks.useVoiceCallTelemetry).toHaveBeenLastCalledWith(fakeRoom, 'space_call', 'lobby1');
+    expect(mocks.useVoiceCallTelemetry).toHaveBeenLastCalledWith(fakeRoom, 'space_call', 'lobby1', { role: 'member' });
   });
 
   it('offers no screen share without the option, whatever the token says', async () => {

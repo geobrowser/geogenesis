@@ -133,6 +133,38 @@ describe('useVoiceCallTelemetry (GEO-3340)', () => {
     });
   });
 
+  // Review on #3065: a lobby has a guest room and a member room, both live during a sign-in's
+  // handover, and nothing in the data said which room an event came from.
+  it('tags every event with the room role it is given', () => {
+    const call = fakeRoom();
+    const { unmount } = renderHook(() => useVoiceCallTelemetry(call.room, 'lobby', 'lobby-1', { role: 'guest' }));
+    act(() => call.emitLocal(ParticipantEvent.ConnectionQualityChanged, ConnectionQuality.Poor));
+    unmount();
+    expect(events('debate_voice_changed')).toEqual([expect.objectContaining({ call_role: 'guest' })]);
+    expect(events('debate_voice_ended')).toEqual([expect.objectContaining({ call_role: 'guest' })]);
+  });
+
+  // The guest room goes when the member room takes over: the person stayed, so it is no leave.
+  it('ends a room that is handing over as handed over, not as a leave', () => {
+    const call = fakeRoom();
+    const { rerender, unmount } = renderHook(
+      ({ handingOver }) => useVoiceCallTelemetry(call.room, 'lobby', 'lobby-1', { role: 'guest', handingOver }),
+      { initialProps: { handingOver: false } }
+    );
+    rerender({ handingOver: true });
+    unmount();
+    expect(events('debate_voice_ended')).toEqual([expect.objectContaining({ end_reason: 'handed_over' })]);
+  });
+
+  it('ends a room that is not handing over as a leave', () => {
+    const call = fakeRoom();
+    const { unmount } = renderHook(() =>
+      useVoiceCallTelemetry(call.room, 'lobby', 'lobby-1', { role: 'guest', handingOver: false })
+    );
+    unmount();
+    expect(events('debate_voice_ended')).toEqual([expect.objectContaining({ end_reason: 'left' })]);
+  });
+
   it('never fails the call it measures when cleaning up throws', () => {
     const call = fakeRoom();
     const { unmount } = renderHook(() => useVoiceCallTelemetry(call.room, 'lobby', 'lobby-1'));

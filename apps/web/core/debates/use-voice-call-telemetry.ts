@@ -38,6 +38,9 @@ import {
 /** `space_call` is a space's call, which runs on the lobby stack (GEO-3419). */
 export type VoiceCallSurface = 'picker' | 'lobby' | 'space_call' | 'debate';
 
+/** Which of a lobby's two rooms an event came from (see `useVoiceCallTelemetry`). */
+export type CallRole = 'guest' | 'member';
+
 export type ReportCallChange = (change: Record<string, unknown>) => void;
 
 /** Surface-specific measurements added to each sample; changes go through the call's own reporter. */
@@ -83,11 +86,30 @@ const NOTABLE_QUALITIES = new Set<ConnectionQuality>([ConnectionQuality.Poor, Co
  * are optional, so setting up or tearing down never throws into the call, as
  * `loadDebateRoomTelemetry` keeps it for the debate room; a failed setup is reported, not lost.
  */
-export function useVoiceCallTelemetry(room: Room, surface: VoiceCallSurface, callId: string) {
+export function useVoiceCallTelemetry(
+  room: Room,
+  surface: VoiceCallSurface,
+  callId: string,
+  {
+    role,
+    handingOver = false,
+  }: {
+    /** A lobby's listen-only guest room or its member room, both live while a guest signs in. */
+    role?: CallRole;
+    /** The room is going because another of this person's rooms took over: its end is no leave. */
+    handingOver?: boolean;
+  } = {}
+) {
+  // Read at unmount, so the end reports what was true when the room went.
+  const handingOverRef = React.useRef(handingOver);
   React.useEffect(() => {
-    let stop: (() => void) | undefined;
+    handingOverRef.current = handingOver;
+  }, [handingOver]);
+
+  React.useEffect(() => {
+    let stop: ReturnType<typeof startVoiceCallTelemetry> | undefined;
     try {
-      stop = startVoiceCallTelemetry(room, surface, callId);
+      stop = startVoiceCallTelemetry(room, surface, callId, role ? { call_role: role } : undefined);
     } catch (error) {
       // Setup leaves nothing registered when it throws (see its catch), so only the report remains.
       reportError(error, { tags: { voice_call_telemetry: 'setup_failed', call_surface: surface } });
@@ -95,12 +117,12 @@ export function useVoiceCallTelemetry(room: Room, surface: VoiceCallSurface, cal
     }
     return () => {
       try {
-        stop?.();
+        stop?.(handingOverRef.current ? 'handed_over' : 'left');
       } catch {
         // The call's own teardown carries on.
       }
     };
-  }, [callId, room, surface]);
+  }, [callId, role, room, surface]);
 }
 
 /** Imperative entry for the debate room, whose Room is owned by its connection lifecycle. */
@@ -108,7 +130,10 @@ export function startVoiceCallTelemetry(
   room: Room,
   surface: VoiceCallSurface,
   callId: string,
-  context: { debate_id: string; participant_slot: number; call_session_id: string } | undefined = undefined,
+  context:
+    | { debate_id: string; participant_slot: number; call_session_id: string }
+    | { call_role: CallRole }
+    | undefined = undefined,
   options: { probe?: (report: ReportCallChange) => CallProbe } = {}
 ) {
   const base = { call_surface: surface, call_id: callId, ...context };
@@ -261,7 +286,7 @@ export function startVoiceCallTelemetry(
     }
   };
 
-  const finish = (endReason: 'left' | 'disconnected' | 'page_closed') => {
+  const finish = (endReason: 'left' | 'handed_over' | 'disconnected' | 'page_closed') => {
     if (ended) return;
     ended = true;
     cleanup();
@@ -411,7 +436,7 @@ export function startVoiceCallTelemetry(
     window.removeEventListener('pagehide', onPageHide);
     probe?.stop();
   }
-  return () => finish('left');
+  return (endReason: 'left' | 'handed_over' = 'left') => finish(endReason);
 }
 
 /**

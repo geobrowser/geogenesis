@@ -460,7 +460,7 @@ function ConnectedVoice({
 }) {
   const room = useRoomContext();
   // GEO-3340: call quality, so a choppy-audio report has something to be checked against.
-  useVoiceCallTelemetry(room, callSurface, callId);
+  useVoiceCallTelemetry(room, callSurface, callId, { role: 'member' });
   useRoomEnding(room, {
     onNeverConnected,
     // Another tab or device took this identity; reconnecting would only take it back and forth.
@@ -842,7 +842,8 @@ function ConnectedGuestVoice({
 }) {
   const room = useRoomContext();
   // GEO-3340: what a signed-out listener hears is half of what a choppy room is.
-  useVoiceCallTelemetry(room, callSurface, callId);
+  // Quiet is the member room taking over, so this room's end is a handover, not a leave.
+  useVoiceCallTelemetry(room, callSurface, callId, { role: 'guest', handingOver: quiet });
   // Removed by the server: no Try again, which would take the session back; the page asks why.
   const [removed, setRemoved] = React.useState(false);
   useRoomEnding(room, {
