@@ -575,7 +575,7 @@ describe('ScheduledDebateNoticeDialog', () => {
   });
 
   describe('a debate that is no longer on', () => {
-    it('says it moved, and points at Requests', () => {
+    it('says it moved, and points at Schedule', () => {
       state.requests = {
         data: { requests: [agreed({ status: 'pending', room_id: null })] },
         isPending: false,
@@ -583,7 +583,11 @@ describe('ScheduledDebateNoticeDialog', () => {
       };
       open('late');
       expect(screen.getByText(/has moved to a new time/)).toBeInTheDocument();
-      expect(screen.getByRole('link', { name: 'Open Requests' })).toBeInTheDocument();
+      expect(screen.getByText(/You’ll find it under Schedule/)).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Open Schedule' })).toHaveAttribute(
+        'href',
+        '/explore?modal=debates&modalTarget=requests'
+      );
       expect(screen.queryByRole('button', { name: 'Tell Maya' })).not.toBeInTheDocument();
     });
 

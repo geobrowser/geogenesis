@@ -34,7 +34,7 @@ export function HubLiveRail() {
   );
 }
 
-/** Signed out: keep People, explain Requests instead of an empty heading. */
+/** Signed out: keep People, explain Schedule instead of an empty heading. */
 function SignedOutRail() {
   const promptSignIn = usePrivySignIn();
 
@@ -42,7 +42,7 @@ function SignedOutRail() {
     <>
       <section className="flex flex-col gap-2 rounded-lg border border-grey-02 bg-white p-4">
         <Text as="h3" variant="footnoteMedium" color="text">
-          Requests
+          Schedule
         </Text>
         <Text as="p" variant="footnote" color="grey-04">
           Sign in to see debate requests sent to you.
