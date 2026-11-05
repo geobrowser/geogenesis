@@ -21,8 +21,10 @@ import { useEditable } from '~/core/state/editable-store';
 import { getRelationForBlockType } from '~/core/state/editor/block-types';
 import { E } from '~/core/sync/orm';
 import { storage } from '~/core/sync/use-mutate';
-import { store } from '~/core/sync/use-sync-engine';
+import { store, stream } from '~/core/sync/use-sync-engine';
 import type { Entity, Relation } from '~/core/types';
+
+import { moveEntity } from '~/partials/versions/move-entity';
 
 import { enqueue } from './apply-queue';
 import {
@@ -880,8 +882,7 @@ async function applyDeleteProperty(intent: Extract<EditIntent, { kind: 'deletePr
 }
 
 // Copies values + outgoing relations from source to target, deduping against
-// existing target data. Mirrors the editor's cloneEntityIntoSpace; used by
-// both move and clone.
+// existing target data. Used by clone; move goes through `moveEntity`.
 async function copyEntityIntoSpace(
   entityId: string,
   sourceSpaceId: string,
@@ -946,18 +947,25 @@ async function applyCloneEntityToSpace(
   return { ok: true };
 }
 
+// The same move as the editor's Move to menu: blocks and tabs go with the entity, and links into
+// the source space are kept and pointed at the target.
 async function applyMoveEntityToSpace(
   intent: Extract<EditIntent, { kind: 'moveEntityToSpace' }>
 ): Promise<ApplyResult> {
-  // Editor parity: clone, then tombstone in source (orphan-block cascade
-  // included). Child blocks are intentionally NOT cloned.
   const sourceEntity = await resolveEntity(intent.entityId, intent.spaceId);
   if (!sourceEntity) {
     return applyFailed(`entity ${intent.entityId} not found in space ${intent.spaceId}`);
   }
-  await copyEntityIntoSpace(intent.entityId, intent.spaceId, intent.targetSpaceId, sourceEntity);
-  // scopeBacklinksToSpace=true so only source-space backlinks tombstone.
-  return applyDeleteEntityRecursive(intent.entityId, intent.spaceId, 0, new Set(), true);
+  const moved = await moveEntity({
+    entityId: intent.entityId,
+    sourceSpaceId: intent.spaceId,
+    targetSpaceId: intent.targetSpaceId,
+    storage,
+    store,
+    cache: queryClient,
+    stream,
+  });
+  return moved ? { ok: true } : applyFailed(`could not load ${intent.entityId} to move it; nothing was changed`);
 }
 
 async function applyChangePropertyDataType(
