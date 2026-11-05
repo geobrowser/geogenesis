@@ -5,7 +5,6 @@ import * as React from 'react';
 import type { ScheduledDebateRequest } from '~/core/debates/api';
 import { useSetToast } from '~/core/hooks/use-toast';
 
-import { opponentName } from '../rooms/room-opponent';
 import { useRespondToScheduledDebate } from '../rooms/scheduling-hooks';
 import { formatDebateTime } from './scheduled-debate-format';
 
@@ -14,12 +13,13 @@ export type ScheduledDebateAnswer = (requestId: string, accepted: boolean, onFai
 /**
  * GEO-3589: an acceptance that books nothing yet, because the other debater of a Geo-team match has
  * not answered. Accepting a debater's invite books it, so only an admin match is ever left pending.
- * Names who it is waiting on, or null when the acceptance booked the debate.
+ * Names who it is waiting on, mid-sentence, or null when the acceptance booked the debate.
  */
 export function stillWaitingOn(request: ScheduledDebateRequest): string | null {
-  if (request.status !== 'pending') return null;
+  if (!request.created_by_admin || request.status !== 'pending') return null;
   const waiting = request.participants.find(participant => participant.accepted === null);
-  return waiting ? opponentName({ display_name: waiting.display_name ?? null }) : null;
+  // Not `opponentName`: its stand-in starts a sentence ("Your opponent"), and this goes in one.
+  return waiting ? waiting.display_name || 'the other debater' : null;
 }
 
 /** The Requests tab and the lobby give the same answer and explain the same scheduling conflicts. */

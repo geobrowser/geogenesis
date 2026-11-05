@@ -144,38 +144,49 @@ describe('stillWaitingOn', () => {
   it('is null once the acceptance booked the debate', () => {
     expect(stillWaitingOn(adminMatch('accepted', true))).toBeNull();
   });
+
+  it('names an unnamed debater in words that fit mid-sentence', () => {
+    const unnamed = adminMatch('pending', null);
+    unnamed.participants[1] = { user_id: 'peer', accepted: null, display_name: null };
+    expect(stillWaitingOn(unnamed)).toBe('the other debater');
+  });
+
+  it('is null for a debater’s invite, which an acceptance books', () => {
+    expect(stillWaitingOn({ ...adminMatch('pending', null), created_by_admin: false })).toBeNull();
+  });
 });
 
-function AcceptAndShowToast() {
+function AnswerAndShowToast({ accepted }: { accepted: boolean }) {
   const { answer } = useScheduledDebateAnswer();
   const [toast] = useToast();
   return (
     <>
-      <button type="button" onClick={() => answer('M', true)}>
-        Accept
+      <button type="button" onClick={() => answer('M', accepted)}>
+        Answer
       </button>
       <div data-testid="toast">{toast}</div>
     </>
   );
 }
 
-describe('the toast after accepting', () => {
+describe('the toast after answering', () => {
   it.each([
-    ['a Geo-team match still waiting on the other debater', adminMatch('pending', null), true],
-    ['a debate the acceptance booked', adminMatch('accepted', true), false],
-  ])('on %s', async (_, result, toasts) => {
+    ['accepting a Geo-team match still waiting on the other debater', true, adminMatch('pending', null), true],
+    ['accepting a debate the acceptance booked', true, adminMatch('accepted', true), false],
+    ['declining a Geo-team match', false, adminMatch('pending', null), false],
+  ])('on %s', async (_, accepted, result, toasts) => {
     vi.spyOn(api, 'respondToScheduledDebate').mockResolvedValue({ ...result, outcome: 'recorded' });
     const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
     // A store of its own: the toast atom otherwise carries one case's toast into the next.
     render(
       <JotaiProvider>
         <QueryClientProvider client={client}>
-          <AcceptAndShowToast />
+          <AnswerAndShowToast accepted={accepted} />
         </QueryClientProvider>
       </JotaiProvider>
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Answer' }));
 
     await waitFor(() => expect(api.respondToScheduledDebate).toHaveBeenCalled());
     if (toasts) {

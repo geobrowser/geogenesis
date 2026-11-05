@@ -588,14 +588,14 @@ function DebateBlock({
   const name = opponentName(debate.opponentUserId);
   // A match the Geo team arranged says so while it is pending, whoever has answered so far, so it
   // does not read as the other debater having asked (GEO-3229). Once the viewer has accepted one, it
-  // says it is not booked yet instead (GEO-3589): the block is too narrow for both.
+  // also says it is not booked yet, first, since the block truncates (GEO-3589).
   const pendingLead =
     debate.state === 'asked'
       ? debate.arrangedByAdmin
         ? 'Geo team invite'
         : 'Asked'
       : debate.arrangedByAdmin
-        ? 'Not confirmed'
+        ? 'Not confirmed · Geo team'
         : 'Requested';
   const label =
     debate.state === 'booked'
