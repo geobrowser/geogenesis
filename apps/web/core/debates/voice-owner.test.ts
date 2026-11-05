@@ -10,6 +10,9 @@ import {
   shouldYieldVoice,
 } from './voice-owner';
 
+const captureSafely = vi.hoisted(() => vi.fn());
+vi.mock('~/core/analytics-capture-safely', () => ({ captureSafely }));
+
 type Held = { name: string; mode: LockMode; tab: string | null; release: () => void };
 type Queued = {
   name: string;
@@ -179,6 +182,7 @@ function openTab(name: string, priority: DebateRoomTabPriority = 2): FakeTab {
 const flush = () => new Promise(resolve => setTimeout(resolve, 0));
 
 beforeEach(() => {
+  captureSafely.mockClear();
   FakeBroadcastChannel.channels.clear();
   locks = new FakeLockManager();
   Object.defineProperty(navigator, 'locks', { configurable: true, value: locks });
@@ -410,6 +414,41 @@ describe('tab voice owner', () => {
     debateTab.surface('debate', 'refuse');
     await expect(debateTab.claim('debate')).resolves.toBe(true);
     expect(lobbyTab.owner.getState()).toEqual({ ownership: 'elsewhere', heldBy: 'debate' });
+  });
+
+  it('records a move when a claim takes voice from another tab', async () => {
+    const left = openTab('left', 2);
+    left.surface('lobby');
+    await left.claim('lobby', true);
+    expect(captureSafely).not.toHaveBeenCalled();
+
+    const right = openTab('right', 1);
+    right.surface('picker');
+    await expect(right.claim('picker', true)).resolves.toBe(false);
+    expect(captureSafely).not.toHaveBeenCalled();
+
+    left.priority = 1;
+    await expect(right.claim('picker')).resolves.toBe(true);
+
+    expect(captureSafely).toHaveBeenCalledWith('voice_moved_to_other_tab', {
+      to_surface: 'picker',
+      from_surface: 'lobby',
+      automatic: false,
+    });
+    expect(captureSafely).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not record a move when a refused claim leaves voice where it is', async () => {
+    const debateTab = openTab('debate', 0);
+    debateTab.surface('debate', 'refuse');
+    await debateTab.claim('debate');
+    captureSafely.mockClear();
+
+    const lobbyTab = openTab('lobby', 2);
+    lobbyTab.surface('lobby');
+    await expect(lobbyTab.claim('lobby')).resolves.toBe(false);
+
+    expect(captureSafely).not.toHaveBeenCalled();
   });
 
   it('asks again as explicit when "Use voice here" lands behind a page-open claim', async () => {

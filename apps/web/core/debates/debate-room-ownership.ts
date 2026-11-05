@@ -35,6 +35,7 @@ export type DebateRoomTakeoverOptions = {
   /** The tab is reclaiming the room because the viewer turned to it, not because they asked. */
   automatic?: boolean;
   requesterLabel?: string;
+  onTookOverFromOtherTab?: () => void;
 };
 
 type CreateDebateRoomOwnershipCoordinatorOptions = {
@@ -321,7 +322,11 @@ export function createDebateRoomOwnershipCoordinator({
       return coordinationMode;
     },
     acquire: () => acquireLock(),
-    requestTakeover: async ({ automatic = false, requesterLabel }: DebateRoomTakeoverOptions = {}) => {
+    requestTakeover: async ({
+      automatic = false,
+      requesterLabel,
+      onTookOverFromOtherTab,
+    }: DebateRoomTakeoverOptions = {}) => {
       lastRefusedBy = undefined;
       if (ownsConnection) return true;
       if (!lockManager || !lockRequestsAvailable) return (await acquireLock(true)).acquired;
@@ -357,7 +362,9 @@ export function createDebateRoomOwnershipCoordinator({
         }
       });
       if (!released) return false;
-      return (await acquireLock(true)).acquired;
+      const acquired = (await acquireLock(true)).acquired;
+      if (acquired) onTookOverFromOtherTab?.();
+      return acquired;
     },
     release,
     close: () => {

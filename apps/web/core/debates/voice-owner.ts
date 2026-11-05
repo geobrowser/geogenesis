@@ -1,5 +1,7 @@
 import * as React from 'react';
 
+import { captureSafely } from '~/core/analytics-capture-safely';
+
 import {
   type DebateRoomOwnershipCoordinator,
   type DebateRoomTabPriority,
@@ -296,8 +298,15 @@ export function createTabVoiceOwner({
         if (automatic || !inflight.automatic) return inflight.owned;
         return inflight.owned.then(owned => owned || claim({ automatic: false, kind }));
       }
+
+      const takenFrom = state.heldBy;
       const attempt = active
-        .requestTakeover({ automatic, requesterLabel: kind })
+        .requestTakeover({
+          automatic,
+          requesterLabel: kind,
+          onTookOverFromOtherTab: () =>
+            captureSafely('voice_moved_to_other_tab', { to_surface: kind, from_surface: takenFrom, automatic }),
+        })
         .then(owned => {
           if (coordinator !== active) return false;
           setState(owned ? OWNED : { ownership: 'elsewhere', heldBy: asSurfaceKind(active.lastRefusedBy()) });
