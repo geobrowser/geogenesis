@@ -1,5 +1,7 @@
 'use client';
 
+import * as React from 'react';
+
 import cx from 'classnames';
 import Link from 'next/link';
 
@@ -61,7 +63,10 @@ export function HubLiveStrip({
 }) {
   const { ask, ended, cancel, cancelling, dismissEnded } = useHubAskState();
   const { isDismissed, remember } = useDismissedNotices();
-  const upcoming = useStackLobbies();
+  // The lobby whose details are open, held here rather than on its card: an RSVP inside them takes
+  // the card out of the stack, and the details stay open on it until closed (`useStackLobbies`).
+  const [detailsLobbyId, setDetailsLobbyId] = React.useState<string | null>(null);
+  const upcoming = useStackLobbies(detailsLobbyId);
 
   if (ask) return <AskStrip ask={ask} onCancel={cancel} cancelling={cancelling} />;
   if (ended) return <EndedAskStrip ended={ended} onDismiss={dismissEnded} />;
@@ -76,7 +81,18 @@ export function HubLiveStrip({
     id: `lobby:${lobby.lobby_id}`,
     surface: 'light',
     label: `upcoming lobby ${lobby.name}`,
-    content: <UpcomingLobbyCallout lobby={lobby} onDismiss={() => upcoming.dismiss(lobby.lobby_id)} />,
+    content: (
+      <UpcomingLobbyCallout
+        lobby={lobby}
+        onDismiss={() => upcoming.dismiss(lobby.lobby_id)}
+        detailsOpen={detailsLobbyId !== null && sameId(detailsLobbyId, lobby.lobby_id)}
+        onDetailsOpenChange={open =>
+          setDetailsLobbyId(current =>
+            open ? lobby.lobby_id : current !== null && sameId(current, lobby.lobby_id) ? null : current
+          )
+        }
+      />
+    ),
   });
 
   const cards: HubStackCard[] = [
@@ -208,9 +224,24 @@ function EndedAskStrip({ ended, onDismiss }: { ended: EndedAsk; onDismiss: () =>
  * Once it lands the card leaves the stack (`useStackLobbies`); the lobby stays in Requests as one
  * the viewer is going to.
  */
-function UpcomingLobbyCallout({ lobby, onDismiss }: { lobby: DebateLobbySummary; onDismiss: () => void }) {
+function UpcomingLobbyCallout({
+  lobby,
+  onDismiss,
+  detailsOpen,
+  onDetailsOpenChange,
+}: {
+  lobby: DebateLobbySummary;
+  onDismiss: () => void;
+  detailsOpen: boolean;
+  onDetailsOpenChange: (open: boolean) => void;
+}) {
   const remind = useLobbyReminderPress(lobby);
   const now = useMinuteNow();
+  // Sent under the stack with its details open (another card came on top), they close: they would
+  // otherwise open again by themselves when it next came up.
+  const closeDetails = React.useRef(onDetailsOpenChange);
+  closeDetails.current = onDetailsOpenChange;
+  React.useEffect(() => () => closeDetails.current(false), []);
 
   // One press for both copies of it: the card's and the details'.
   const rsvp = (
@@ -250,6 +281,8 @@ function UpcomingLobbyCallout({ lobby, onDismiss }: { lobby: DebateLobbySummary;
             lobby={lobby}
             now={now}
             rsvp={rsvp}
+            open={detailsOpen}
+            onOpenChange={onDetailsOpenChange}
             className="min-w-0 truncate text-left text-metadataMedium underline-offset-2 hover:underline"
           >
             <span className="sr-only">{lobbyWhenLabel(lobby.starts_at, ' · ')}: </span>

@@ -31,6 +31,12 @@ const EDGE_DROP_PX = 7;
 const EDGE_INSET_PX = 10;
 
 /**
+ * Taken from the stack's bottom margin (12px, as a single callout's) for the lowest edge's tap target,
+ * so the tabs sit where they would without it.
+ */
+const EDGE_TAP_PX = 8;
+
+/**
  * Each edge on its card's own surface (`HUB_CALLOUT_SURFACE_CLASS_NAME`), a shade off so two of the
  * same kind still part. Behind a dark card, a lighter dark: the live card's own black would read as
  * the card running on.
@@ -65,19 +71,48 @@ export function HubCalloutStack({ cards }: { cards: HubStackCard[] }) {
     return [cards[index], ...cards.slice(0, index), ...cards.slice(index + 1)];
   }, [cards, frontId]);
 
+  // A press in the stack (an edge, or a card's own X) takes the focused control away with the card:
+  // focus then goes to the card that comes up, once the leaving one has gone (`mode="wait"`), rather
+  // than to the page.
+  const pressed = React.useRef(false);
+  const claimFocus = React.useRef(false);
+  const focusArrivingCard = () => {
+    // Lost, or still on the leaving card's control: it is inert, and on its way out of the page.
+    const active = document.activeElement;
+    const lost =
+      active === null || active === document.body || !active.isConnected || active.closest('[inert]') !== null;
+    claimFocus.current = pressed.current && lost;
+    pressed.current = false;
+  };
+
   const [top, ...rest] = ordered;
   const edges = rest.slice(0, HUB_STACK_MAX_EDGES);
   if (!top) return null;
 
   return (
-    <div className="mx-4 mb-3 shrink-0" data-testid="hub-callout-stack">
+    <div
+      className={cx('mx-4 shrink-0', edges.length > 0 ? 'mb-1' : 'mb-3')}
+      data-testid="hub-callout-stack"
+      onClickCapture={() => {
+        pressed.current = true;
+      }}
+    >
       <ResizableContainer transition={HUB_STEP_TRANSITION} growOnMount={false}>
         <div
           className="relative transition-[padding] duration-200"
-          style={{ paddingBottom: edges.length * EDGE_DROP_PX }}
+          style={{ paddingBottom: edges.length > 0 ? edges.length * EDGE_DROP_PX + EDGE_TAP_PX : 0 }}
         >
+          {/* `custom` reaches a leaving card: one still in the stack was sent back under, rather than
+              dismissed, and sinks rather than sliding away. */}
+          <AnimatePresence mode="wait" initial={false} custom={ids} onExitComplete={focusArrivingCard}>
+            <StackTop key={top.id} id={top.id} claimFocus={claimFocus}>
+              {top.content}
+            </StackTop>
+          </AnimatePresence>
+          {/* After the top card, so it is read and tabbed to first; stacked under it by z-index. */}
           {edges.map((card, index) => {
             const depth = index + 1;
+            const last = depth === edges.length;
             return (
               <button
                 key={card.id}
@@ -87,24 +122,20 @@ export function HubCalloutStack({ cards }: { cards: HubStackCard[] }) {
                 {...hubAnalyticsAttributes('Callout stack show card')}
                 className={cx(
                   'absolute top-0 rounded-lg transition-[left,right,bottom,background-color,filter] duration-200',
-                  EDGE_CLASS_NAME[card.surface]
+                  EDGE_CLASS_NAME[card.surface],
+                  // The lowest edge reaches on down into the gap under the stack, so its tap target
+                  // is more than the sliver that shows.
+                  last && 'after:absolute after:inset-x-0 after:top-full after:h-2'
                 )}
                 style={{
                   left: depth * EDGE_INSET_PX,
                   right: depth * EDGE_INSET_PX,
-                  bottom: (edges.length - depth) * EDGE_DROP_PX,
+                  bottom: (edges.length - depth) * EDGE_DROP_PX + EDGE_TAP_PX,
                   zIndex: HUB_STACK_MAX_EDGES - index,
                 }}
               />
             );
           })}
-          {/* `custom` reaches a leaving card: one still in the stack was sent back under, rather than
-              dismissed, and sinks rather than sliding away. */}
-          <AnimatePresence mode="wait" initial={false} custom={ids}>
-            <StackTop key={top.id} id={top.id}>
-              {top.content}
-            </StackTop>
-          </AnimatePresence>
         </div>
       </ResizableContainer>
     </div>
@@ -113,10 +144,25 @@ export function HubCalloutStack({ cards }: { cards: HubStackCard[] }) {
 
 /**
  * The card on top. Inert on its way out, as a step of the Today's claims callout is: a control still
- * focused on it would otherwise take a press it can no longer show.
+ * focused on it would otherwise take a press it can no longer show. Focused on arrival when the press
+ * that brought it up took the focus with the card before it.
  */
-function StackTop({ id, children }: { id: string; children: React.ReactNode }) {
+function StackTop({
+  id,
+  claimFocus,
+  children,
+}: {
+  id: string;
+  claimFocus: React.RefObject<boolean>;
+  children: React.ReactNode;
+}) {
   const isPresent = useIsPresent();
+  const ref = React.useRef<HTMLDivElement>(null);
+  React.useEffect(() => {
+    if (!claimFocus.current) return;
+    claimFocus.current = false;
+    ref.current?.focus({ preventScroll: true });
+  }, [claimFocus]);
   const variants = {
     initial: { opacity: 0, y: 6, scale: 0.98 },
     shown: { opacity: 1, x: 0, y: 0, scale: 1 },
@@ -134,7 +180,9 @@ function StackTop({ id, children }: { id: string; children: React.ReactNode }) {
       exit="leaving"
       transition={HUB_STEP_TRANSITION}
       inert={!isPresent}
-      className="relative z-10"
+      ref={ref}
+      tabIndex={-1}
+      className="relative z-10 outline-none"
     >
       {children}
     </motion.div>

@@ -56,13 +56,18 @@ export function stackLobbies(
  *
  * Read from the calendar's next seven days, the range the Requests timeline reads, so the two share
  * one query and an RSVP or a dismissal written by either shows in both. A lobby just RSVP'd to stays
- * for {@link STACK_GOING_HOLD_MS}, showing Going, so the press is seen before its card leaves.
+ * for {@link STACK_GOING_HOLD_MS}, showing Going, so the press is seen before its card leaves, and
+ * for as long as `detailsLobbyId` is it: an RSVP from inside the lobby's details would otherwise close
+ * them under the viewer, as the Requests timeline also takes care not to.
  */
-export function useStackLobbies(): { lobbies: DebateLobbySummary[]; dismiss: (lobbyId: string) => void } {
+export function useStackLobbies(detailsLobbyId: string | null = null): {
+  lobbies: DebateLobbySummary[];
+  dismiss: (lobbyId: string) => void;
+} {
   const now = useMinuteNow();
   const today = startOfLocalDay(now);
   const range = React.useMemo(() => unansweredLobbyRange(today), [today]);
-  const { ready, authenticated } = useGeoChatAuth();
+  const { ready, authenticated, accountKey } = useGeoChatAuth();
   const viewerId = useCurrentGeoChatUserId();
   const { data } = useDebateLobbyCalendar(range.from, range.to, true, { signedOut: true, keepPreviousRange: true });
   const week = data?.lobbies;
@@ -79,15 +84,18 @@ export function useStackLobbies(): { lobbies: DebateLobbySummary[]; dismiss: (lo
   // The lobbies offered last time that the viewer has since RSVP'd to, kept up showing Going. Taken
   // while rendering rather than in an effect: an effect runs after paint, so the card would be drawn
   // gone for a frame, and the stack would start sliding it out before it came back.
-  // Compared by which lobbies, not by the array, which is rebuilt whenever its inputs are.
+  // Compared by which lobbies, not by the array, which is rebuilt whenever its inputs are. Only for
+  // the same account: signing in swaps the signed-out week for the account's, and the lobbies it
+  // had already RSVP'd to leaving then are not presses to show.
   const [held, setHeld] = React.useState<string[]>([]);
   const offeredIds = offered.map(lobby => dashlessId(lobby.lobby_id)).join(',');
-  const [before, setBefore] = React.useState({ ids: offeredIds, lobbies: offered });
-  if (before.ids !== offeredIds) {
-    setBefore({ ids: offeredIds, lobbies: offered });
-    const going = before.lobbies.filter(lobby =>
-      week?.some(row => sameId(row.lobby_id, lobby.lobby_id) && row.viewer_reminded)
-    );
+  const [before, setBefore] = React.useState({ accountKey, ids: offeredIds, lobbies: offered });
+  if (before.ids !== offeredIds || before.accountKey !== accountKey) {
+    setBefore({ accountKey, ids: offeredIds, lobbies: offered });
+    const going =
+      before.accountKey === accountKey
+        ? before.lobbies.filter(lobby => week?.some(row => sameId(row.lobby_id, lobby.lobby_id) && row.viewer_reminded))
+        : [];
     if (going.length > 0) setHeld(current => [...current, ...going.map(lobby => dashlessId(lobby.lobby_id))]);
   }
   React.useEffect(() => {
@@ -97,12 +105,16 @@ export function useStackLobbies(): { lobbies: DebateLobbySummary[]; dismiss: (lo
   }, [held]);
 
   const lobbies = React.useMemo(() => {
-    if (held.length === 0) return offered;
+    if (held.length === 0 && detailsLobbyId === null) return offered;
+    const keeps = (row: DebateLobbyCalendarRow) =>
+      held.includes(dashlessId(row.lobby_id)) || (detailsLobbyId !== null && sameId(row.lobby_id, detailsLobbyId));
+    // Still in the window: one that opened meanwhile is the live card's, not an upcoming one.
     const kept = (week ?? []).filter(
-      row => held.includes(dashlessId(row.lobby_id)) && !offered.some(lobby => sameId(lobby.lobby_id, row.lobby_id))
+      row =>
+        keeps(row) && inUnansweredLobbyWindow(row, now) && !offered.some(lobby => sameId(lobby.lobby_id, row.lobby_id))
     );
-    return [...offered, ...kept].sort(soonestFirst);
-  }, [held, offered, week]);
+    return kept.length === 0 ? offered : [...offered, ...kept].sort(soonestFirst);
+  }, [detailsLobbyId, held, now, offered, week]);
 
   const dismiss = React.useCallback((lobbyId: string) => remember([stackLobbyNoticeId(lobbyId)]), [remember]);
 

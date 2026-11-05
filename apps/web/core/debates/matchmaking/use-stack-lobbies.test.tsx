@@ -6,9 +6,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { DebateLobbyCalendarRow } from '../api';
 
-const mocks = vi.hoisted(() => ({ week: [] as DebateLobbyCalendarRow[] }));
+const mocks = vi.hoisted(() => ({
+  week: [] as DebateLobbyCalendarRow[],
+  auth: { ready: true, authenticated: true, accountKey: 'acct' as string | null },
+}));
 
-vi.mock('../hooks', () => ({ useGeoChatAuth: () => ({ ready: true, authenticated: true }) }));
+vi.mock('../hooks', () => ({ useGeoChatAuth: () => mocks.auth }));
 vi.mock('../lobbies/hooks', () => ({ useDebateLobbyCalendar: () => ({ data: { lobbies: mocks.week } }) }));
 vi.mock('../use-current-geo-chat-user-id', () => ({ useCurrentGeoChatUserId: () => 'viewer' }));
 vi.mock('~/core/hooks/use-dismissed-notice', () => ({
@@ -41,7 +44,21 @@ function upcoming(overrides: Partial<DebateLobbyCalendarRow> = {}): DebateLobbyC
 
 afterEach(() => {
   vi.useRealTimers();
+  mocks.auth = { ready: true, authenticated: true, accountKey: 'acct' };
 });
+
+/** Renders the hook, recording the lobby ids of every committed render. */
+function renderCommitted(detailsLobbyId: { current: string | null } = { current: null }) {
+  const committed: string[][] = [];
+  const view = renderHook(() => {
+    const stack = useStackLobbies(detailsLobbyId.current);
+    React.useLayoutEffect(() => {
+      committed.push(stack.lobbies.map(lobby => lobby.lobby_id));
+    });
+    return stack;
+  });
+  return { ...view, committed };
+}
 
 describe('useStackLobbies', () => {
   // GEO-3586 review: held from an effect, the lobby was committed gone for a frame after the RSVP,
@@ -63,6 +80,47 @@ describe('useStackLobbies', () => {
     expect(committed).toEqual([['tonight'], ['tonight']]);
 
     vi.advanceTimersByTime(700);
+    rerender();
+    expect(committed.at(-1)).toEqual([]);
+  });
+
+  // GEO-3586 review: signing in swaps the signed-out week for the account's, and every lobby the
+  // account had already RSVP'd to left the stack as a fresh RSVP would, showing Going first.
+  it('lets lobbies RSVP’d before signing in leave at once, without the Going pause', () => {
+    mocks.auth = { ready: true, authenticated: false, accountKey: null };
+    mocks.week = [upcoming()];
+    const { rerender, committed } = renderCommitted();
+
+    mocks.auth = { ready: true, authenticated: true, accountKey: 'acct' };
+    mocks.week = [upcoming({ viewer_reminded: true })];
+    rerender();
+    expect(committed.at(-1)).toEqual([]);
+  });
+
+  // GEO-3586 review: a held lobby that opened meanwhile was still drawn as an upcoming card.
+  it('drops a held lobby that opens during its Going pause', () => {
+    mocks.week = [upcoming()];
+    const { rerender, committed } = renderCommitted();
+
+    mocks.week = [upcoming({ viewer_reminded: true, open: true, state: 'open' })];
+    rerender();
+    expect(committed.at(-1)).toEqual([]);
+  });
+
+  // GEO-3586 review: an RSVP from inside the lobby's details took the card, and the details, away.
+  it('keeps a just-RSVP’d lobby while its details are open, and lets it go once they close', () => {
+    vi.useFakeTimers();
+    const details = { current: 'tonight' as string | null };
+    mocks.week = [upcoming()];
+    const { rerender, committed } = renderCommitted(details);
+
+    mocks.week = [upcoming({ viewer_reminded: true })];
+    rerender();
+    vi.advanceTimersByTime(800);
+    rerender();
+    expect(committed.at(-1)).toEqual(['tonight']);
+
+    details.current = null;
     rerender();
     expect(committed.at(-1)).toEqual([]);
   });

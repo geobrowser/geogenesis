@@ -54,6 +54,7 @@ vi.mock('../lobbies/hooks', async importOriginal => ({
   useLobbyReminderError: () => null,
   useDebateLobby: () => ({ data: undefined, refetch: vi.fn() }),
   useDebateLobbyCalendar: () => ({ data: { lobbies: mocks.week } }),
+  useFindCalendarLobby: () => () => undefined,
 }));
 vi.mock('../use-current-geo-chat-user-id', () => ({ useCurrentGeoChatUserId: () => mocks.viewerId }));
 // The browser's dismissals, without the storage under them.
@@ -78,6 +79,9 @@ vi.mock('~/core/state/pending-actions', () => ({
 }));
 
 const { HubLiveStrip, askShareLeft } = await import('./hub-live-strip');
+// Real timers for the Going pause: Framer's frame loop, scheduled on fake ones, stalls every later
+// test's exits once they are put back.
+const { STACK_GOING_HOLD_MS } = await import('./use-stack-lobbies');
 
 const CLAIM = {
   id: 'dc-1',
@@ -200,6 +204,52 @@ describe('HubLiveStrip', () => {
       expect(edgeNames()).toEqual(['Show upcoming lobby AI policy night', 'Show Today’s claims']);
     });
 
+    // GEO-3586 review: the pressed control left with its card, and focus fell to the page.
+    it('hands focus to the card that comes up when a press takes the top one away', async () => {
+      mocks.week = [upcoming({ lobby_id: 'tonight', name: 'AI policy night' })];
+      render(<HubLiveStrip lineup={EMPTY} todaysCallout={callout} />);
+
+      const dismiss = screen.getByRole('button', { name: 'Dismiss upcoming lobby' });
+      dismiss.focus();
+      fireEvent.click(dismiss);
+      const next = await screen.findByRole('region', { name: 'Today’s claims' });
+      // The card that came up, not the page: `body` would contain it too.
+      await waitFor(() => expect(document.activeElement).not.toBe(document.body));
+      expect(document.activeElement).toContainElement(next);
+    });
+
+    it('reads the top card before the edges under it, and gives the lowest edge a taller tap target', () => {
+      mocks.week = [
+        upcoming({ lobby_id: 'tonight', name: 'AI policy night' }),
+        upcoming({ lobby_id: 'fri', name: 'Friday hot takes', starts_at: inDays(3) }),
+      ];
+      render(<HubLiveStrip lineup={EMPTY} todaysCallout={callout} />);
+
+      const card = screen.getByRole('region', { name: 'Upcoming lobby' });
+      const [first, last] = screen.getAllByRole('button', { name: /^Show / });
+      expect(card.compareDocumentPosition(first!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(last).toHaveClass('after:h-2');
+      expect(first).not.toHaveClass('after:h-2');
+    });
+
+    // GEO-3586 review: the card left 0.7 s after an RSVP made inside its details, taking them along.
+    it('keeps a lobby’s details open after an RSVP made in them, and lets the card go once closed', async () => {
+      {
+        mocks.week = [upcoming({ lobby_id: 'tonight', name: 'AI policy night' })];
+        const { rerender } = render(<HubLiveStrip lineup={EMPTY} todaysCallout={callout} />);
+        fireEvent.click(screen.getByRole('button', { name: /AI policy night, lobby details/ }));
+        expect(screen.getByRole('dialog', { name: 'Lobby details' })).toBeInTheDocument();
+
+        mocks.week = [upcoming({ lobby_id: 'tonight', name: 'AI policy night', viewer_reminded: true })];
+        rerender(<HubLiveStrip lineup={EMPTY} todaysCallout={callout} />);
+        await act(() => new Promise(resolve => setTimeout(resolve, STACK_GOING_HOLD_MS + 100)));
+        expect(screen.getByRole('dialog', { name: 'Lobby details' })).toBeInTheDocument();
+
+        fireEvent.keyDown(screen.getByRole('dialog', { name: 'Lobby details' }), { key: 'Escape' });
+        await waitFor(() => expect(screen.queryByRole('region', { name: 'Upcoming lobby' })).not.toBeInTheDocument());
+      }
+    });
+
     it('puts later lobbies after Today’s claims', () => {
       mocks.week = [
         upcoming({ lobby_id: 'fri', name: 'Friday hot takes', starts_at: inDays(3) }),
@@ -269,8 +319,7 @@ describe('HubLiveStrip', () => {
     });
 
     it('keeps a lobby up showing Going for a moment once RSVP’d, then lets it leave', async () => {
-      vi.useFakeTimers({ shouldAdvanceTime: true });
-      try {
+      {
         mocks.week = [upcoming({ lobby_id: 'tonight', name: 'AI policy night' })];
         const { rerender } = render(<HubLiveStrip lineup={EMPTY} todaysCallout={callout} />);
 
@@ -278,13 +327,9 @@ describe('HubLiveStrip', () => {
         rerender(<HubLiveStrip lineup={EMPTY} todaysCallout={callout} />);
         expect(screen.getByRole('region', { name: 'Upcoming lobby' })).toHaveTextContent('Going');
 
-        await act(async () => {
-          vi.advanceTimersByTime(800);
-        });
+        await act(() => new Promise(resolve => setTimeout(resolve, STACK_GOING_HOLD_MS + 100)));
         await waitFor(() => expect(screen.queryByRole('region', { name: 'Upcoming lobby' })).not.toBeInTheDocument());
         expect(screen.getByRole('region', { name: 'Today’s claims' })).toBeInTheDocument();
-      } finally {
-        vi.useRealTimers();
       }
     });
 

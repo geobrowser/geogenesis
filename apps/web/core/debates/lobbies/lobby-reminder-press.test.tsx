@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => ({
   cancel: vi.fn(),
   intent: undefined as string | undefined,
   lobbies: [] as DebateLobbySummary[],
+  calendar: [] as DebateLobbySummary[],
   config: undefined as QueuedConfig | undefined,
   error: null as unknown,
   errorFor: [] as unknown[],
@@ -40,6 +41,8 @@ vi.mock('./hooks', () => ({
   }),
   useDebateLobbyReminder: () => ({ mutate: mocks.mutate, mutateAsync: mocks.mutateAsync, isPending: false }),
   useLobbyReminderSaving: () => mocks.savingElsewhere,
+  useFindCalendarLobby: () => (lobbyId: string) =>
+    mocks.calendar.find(row => row.lobby_id.replaceAll('-', '') === lobbyId.replaceAll('-', '')),
   useLobbyReminderError: (_reminder: unknown, target: unknown) => {
     mocks.errorFor.push(target);
     return mocks.error;
@@ -71,6 +74,7 @@ beforeEach(() => {
   mocks.savingElsewhere = false;
   mocks.intent = undefined;
   mocks.lobbies = [];
+  mocks.calendar = [];
   mocks.config = undefined;
   mocks.error = null;
   mocks.errorFor = [];
@@ -155,6 +159,22 @@ describe('useLobbyReminderPress', () => {
     await act(() => runReplay('set'));
     await act(() => runReplay('live'));
     await act(() => runReplay('gone'));
+    expect(mocks.mutateAsync).not.toHaveBeenCalled();
+  });
+
+  // GEO-3586 review: the callout stack offers the calendar week's lobbies, which the capped list can
+  // leave out. Read from the list alone, an RSVP queued on one was dropped after sign-up.
+  it('sets a reminder on replay for a lobby the list leaves out but a calendar week has', async () => {
+    mocks.mutateAsync.mockResolvedValue(undefined);
+    mocks.lobbies = [lobby()];
+    mocks.calendar = [lobby({ lobby_id: 'third-of-a-creator' }), lobby({ lobby_id: 'opened', open: true })];
+    renderHook(() => useLobbyReminderReplay());
+
+    await act(() => runReplay('thirdofacreator'));
+    expect(mocks.mutateAsync).toHaveBeenCalledWith({ lobbyId: 'third-of-a-creator', reminded: true });
+
+    mocks.mutateAsync.mockClear();
+    await act(() => runReplay('opened'));
     expect(mocks.mutateAsync).not.toHaveBeenCalled();
   });
 

@@ -14,6 +14,7 @@ import * as React from 'react';
 
 import {
   type CreateDebateLobbyRequest,
+  type DebateLobbyCalendarResponse,
   type DebateLobbyHeartbeat,
   type DebateLobbyMember,
   type DebateLobbySummary,
@@ -144,6 +145,33 @@ export function useDebateLobbyCalendar(
     ...(authenticated ? {} : { refetchInterval: SIGNED_OUT_LOBBIES_POLL_MS }),
     ...(keepPreviousRange ? { placeholderData: keepPreviousData } : {}),
   });
+}
+
+/**
+ * Finds a lobby in any calendar week already read, this account's first. For a lobby the capped
+ * side panel list does not return, which a week can hold: the panel's callout stack offers the week's
+ * lobbies (GEO-3586), and the debate hours page lists them.
+ */
+export function useFindCalendarLobby() {
+  const queryClient = useQueryClient();
+  const { accountKey } = useGeoChatAuth();
+  return React.useCallback(
+    (lobbyId: string): DebateLobbySummary | undefined => {
+      const weeks = queryClient.getQueriesData<DebateLobbyCalendarResponse>({
+        predicate: query => {
+          const key = query.queryKey;
+          return key[0] === 'debates' && key[1] === 'account' && key[3] === 'lobbies' && key[4] === 'calendar';
+        },
+      });
+      const ordered = [...weeks].sort(([a], [b]) => Number(b[2] === accountKey) - Number(a[2] === accountKey));
+      for (const [, week] of ordered) {
+        const row = week?.lobbies.find(lobby => sameId(lobby.lobby_id, lobbyId));
+        if (row) return row;
+      }
+      return undefined;
+    },
+    [accountKey, queryClient]
+  );
 }
 
 /** The lobby the viewer is on the roster of, across tabs; see `DebateMyLobby`. */
