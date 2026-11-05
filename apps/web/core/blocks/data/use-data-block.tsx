@@ -203,6 +203,7 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     isFetched: isCollectionFetched,
     isLoading: isCollectionLoading,
     collectionLength,
+    collectionLengthKnown,
     filterSuggestionEntityIds: collectionFilterSuggestionEntityIds,
     endCursor: collectionEndCursor,
     hasNextPage: collectionHasNextPage,
@@ -541,6 +542,7 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     setName,
     totalPages,
     collectionLength: collectionData.totalCount,
+    collectionLengthKnown: source.type === 'COLLECTION' && collectionLengthKnown,
 
     relations: entity?.relations,
     collectionRelations: source.type === 'COLLECTION' ? collectionData.relations : undefined,

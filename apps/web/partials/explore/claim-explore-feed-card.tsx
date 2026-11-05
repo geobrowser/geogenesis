@@ -207,6 +207,8 @@ export function ClaimExploreFeedCard({
   const noteFor = React.useCallback((position: boolean) => responseNote?.(position), [responseNote]);
 
   const hasVerdict = !summary.isLoading && summary.hasCounts && summary.total > 0;
+  const verdictPending = !nearViewport || !isResponseKindResolved || summary.isLoading;
+  const reservesVerdict = hasVerdict || verdictPending;
   const matchesDebatePanelOnMobile = variant === 'debate-panel-mobile';
 
   return (
@@ -263,7 +265,7 @@ export function ClaimExploreFeedCard({
           // No verdict, no column, no rule. A claim nobody has answered has nothing to report, and
           // an empty 220px cell behind a vertical line reads as something having failed to load —
           // where the claim simply taking the full width reads as a claim nobody has answered.
-          hasVerdict ? 'grid-cols-[minmax(0,1fr)_220px] gap-x-6' : 'grid-cols-1'
+          reservesVerdict ? 'grid-cols-[minmax(0,1fr)_220px] gap-x-6' : 'grid-cols-1'
         )}
       >
         {/* The same row every other explore card draws, through the same component. It was a copy
@@ -356,19 +358,36 @@ export function ClaimExploreFeedCard({
         {/* Spans all three rows in the wide arrangement, which is what makes the rule full-height.
             The narrow variant drops the rule rather than rotating it — see the note on the
             component. */}
-        {hasVerdict ? (
+        {reservesVerdict ? (
           <div className="col-start-2 row-span-3 row-start-1 border-l border-divider pl-6 claim-card-narrow:col-start-1 claim-card-narrow:row-span-1 claim-card-narrow:row-start-4 claim-card-narrow:border-l-0 claim-card-narrow:pl-0">
-            <ClaimVerdictColumn
-              entityId={item.entityId}
-              spaceId={item.spaceId}
-              responseKind={responseKind}
-              summary={summary}
-              matchDebatePanelOnMobile={matchesDebatePanelOnMobile}
-            />
+            {hasVerdict ? (
+              <ClaimVerdictColumn
+                entityId={item.entityId}
+                spaceId={item.spaceId}
+                responseKind={responseKind}
+                summary={summary}
+                matchDebatePanelOnMobile={matchesDebatePanelOnMobile}
+              />
+            ) : (
+              <ClaimVerdictPlaceholder />
+            )}
           </div>
         ) : null}
       </div>
     </ActionSurfaceArticle>
+  );
+}
+
+function ClaimVerdictPlaceholder() {
+  return (
+    <div
+      aria-hidden
+      data-testid="claim-verdict-placeholder"
+      className="h-[108px] animate-pulse claim-card-narrow:h-[37px]"
+    >
+      <div className="h-8 w-20 rounded-sm bg-grey-02 claim-card-narrow:hidden" />
+      <div className="mt-3 h-1.5 w-full rounded-full bg-grey-02 claim-card-narrow:mt-0 claim-card-narrow:h-full claim-card-narrow:rounded-none claim-card-narrow:bg-grey-01" />
+    </div>
   );
 }
 
