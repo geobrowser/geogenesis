@@ -31,16 +31,13 @@ const EDGE_DROP_PX = 7;
 const EDGE_INSET_PX = 10;
 
 /**
- * Taken from the stack's bottom margin (12px, as a single callout's) for the lowest edge's tap target,
- * so the tabs sit where they would without it.
+ * Taken from the stack's bottom spacing (12px, as a single callout's) for the lowest edge's tap
+ * target, so the tabs sit where they would without it.
  */
 const EDGE_TAP_PX = 8;
 
-/**
- * How long after a press in the stack a card leaving still counts as that press's doing: the RSVP
- * pause and an exit, with room to spare.
- */
-const PRESS_FOCUS_WINDOW_MS = 2_000;
+/** How long the stack's height takes to ease to nothing once the last card has gone. */
+const DRAIN_MS = HUB_STEP_TRANSITION.duration * 1000 + 40;
 
 /**
  * Each edge on its card's own surface (`HUB_CALLOUT_SURFACE_CLASS_NAME`), a shade off so two of the
@@ -80,85 +77,129 @@ export function HubCalloutStack({ cards }: { cards: HubStackCard[] }) {
     return [cards[index], ...cards.slice(0, index), ...cards.slice(index + 1)];
   }, [cards, frontId]);
 
-  // A press in the stack (an edge, a card's own X, an RSVP that sends the card on) takes the focused
-  // control away with the card: focus then goes to the card that came up, once the leaving one has
-  // gone, rather than to the page. Only for a card leaving soon after the press, so a press that
-  // changed nothing can't pull focus back here when something else moves the stack later.
-  const pressedAt = React.useRef<number | null>(null);
-  const topElement = React.useRef<HTMLDivElement | null>(null);
-
   const [top, ...rest] = ordered;
   const edges = rest.slice(0, HUB_STACK_MAX_EDGES);
+  const topId = top?.id ?? null;
 
-  // The last card plays its exit too, before the stack draws nothing at all.
+  // A card leaving keeps its room until it has slid off. `popLayout` lifts it out of the flow, so
+  // the box would otherwise ease to the card coming up, or to nothing, and the clip would cut the
+  // leaving card off part way. Held at the height from before it left; let go once it has gone.
+  const box = React.useRef<HTMLDivElement>(null);
+  const settledHeight = React.useRef(0);
+  const [shownTopId, setShownTopId] = React.useState(topId);
+  const [heldHeight, setHeldHeight] = React.useState<number | null>(null);
+  if (shownTopId !== topId) {
+    setShownTopId(topId);
+    if (shownTopId !== null && heldHeight === null) setHeldHeight(settledHeight.current);
+  }
+  // Measured after every commit while nothing is held, so the height from before a change is to hand.
+  React.useLayoutEffect(() => {
+    if (heldHeight === null && box.current) settledHeight.current = box.current.offsetHeight;
+  });
+
+  // The last card plays its exit too, and the height eases to nothing, before the stack draws
+  // nothing at all.
   const [drained, setDrained] = React.useState(!top);
   if (top && drained) setDrained(false);
+  const drainTimer = React.useRef<number | null>(null);
+  React.useEffect(() => () => window.clearTimeout(drainTimer.current ?? undefined), []);
+
+  // A press in the stack (an edge, a card's own X, an RSVP that sends the card on) takes the focused
+  // control away with the card: focus then goes to the card that came up, rather than to the page.
+  // Only while focus was in the stack: it counts as out once it moves to anything outside, or the
+  // viewer presses outside, but not when the focused control is merely removed or made inert.
+  const root = React.useRef<HTMLDivElement>(null);
+  const focusInside = React.useRef(false);
+  const topElement = React.useRef<HTMLDivElement | null>(null);
+  React.useEffect(() => {
+    const pressedOutside = (event: PointerEvent) => {
+      if (!(event.target instanceof Node) || !root.current?.contains(event.target)) focusInside.current = false;
+    };
+    document.addEventListener('pointerdown', pressedOutside, true);
+    return () => document.removeEventListener('pointerdown', pressedOutside, true);
+  }, []);
 
   const onExitComplete = () => {
     // Lost, or still on the leaving card's control: it is inert, and on its way out of the page.
     const active = document.activeElement;
     const lost =
       active === null || active === document.body || !active.isConnected || active.closest('[inert]') !== null;
-    const recent = pressedAt.current !== null && Date.now() - pressedAt.current < PRESS_FOCUS_WINDOW_MS;
-    if (recent && lost) topElement.current?.focus({ preventScroll: true });
-    pressedAt.current = null;
-    if (!top) setDrained(true);
+    if (focusInside.current && lost) topElement.current?.focus({ preventScroll: true });
+    setHeldHeight(null);
+    if (!top) drainTimer.current = window.setTimeout(() => setDrained(true), DRAIN_MS);
   };
 
   if (!top && drained) return null;
 
   return (
+    // The spacing above and below sits inside the clip, eased with the height rather than jumping,
+    // and the space above gives a dismissed card room to tilt without its corner being cut off;
+    // the negative margin keeps the stack where its first card would be.
     <div
-      className={cx('shrink-0', !top ? 'mb-0' : edges.length > 0 ? 'mb-1' : 'mb-3')}
+      ref={root}
+      className="-mt-3 shrink-0"
       data-testid="hub-callout-stack"
-      onClickCapture={() => {
-        pressedAt.current = Date.now();
+      onFocus={() => {
+        focusInside.current = true;
+      }}
+      onBlur={event => {
+        const next = event.relatedTarget;
+        if (next instanceof Node && !root.current?.contains(next)) focusInside.current = false;
       }}
     >
-      {/* The gutters inside the clip rather than outside it, so a dismissed card slides out to the
-          panel's edge instead of being cut off at the card's. */}
-      <ResizableContainer transition={HUB_STEP_TRANSITION} growOnMount={false} className="px-4">
-        <div
-          className="relative transition-[padding] duration-200"
-          style={{ paddingBottom: edges.length > 0 ? edges.length * EDGE_DROP_PX + EDGE_TAP_PX : 0 }}
-        >
-          {/* `popLayout`: the leaving card is lifted out of the flow as it starts to go, so the next
+      {/* The gutters inside the clip too, so a dismissed card slides out to the panel's edge instead
+          of being cut off at the card's. */}
+      <ResizableContainer
+        transition={HUB_STEP_TRANSITION}
+        growOnMount={false}
+        className={cx('px-4 pt-3', !top ? 'pb-0' : edges.length > 0 ? 'pb-1' : 'pb-3')}
+      >
+        {/* The room is held around the stack, not on it: the edges hang from the stack's own height,
+            which is the card that came up, and would stretch to the held height with it. */}
+        <div style={{ minHeight: heldHeight ?? undefined }} data-testid="hub-callout-stack-room">
+          <div
+            ref={box}
+            className="relative transition-[padding] duration-200"
+            style={{ paddingBottom: edges.length > 0 ? edges.length * EDGE_DROP_PX + EDGE_TAP_PX : 0 }}
+          >
+            {/* `popLayout`: the leaving card is lifted out of the flow as it starts to go, so the next
               is drawn underneath it straight away. `custom` reaches a leaving card: one still in the
               stack was sent back under, rather than dismissed, and sinks rather than sliding away. */}
-          <AnimatePresence mode="popLayout" initial={false} custom={ids} onExitComplete={onExitComplete}>
-            {top ? (
-              <StackTop key={top.id} id={top.id} topElement={topElement}>
-                {top.content}
-              </StackTop>
-            ) : null}
-          </AnimatePresence>
-          {/* After the top card, so it is read and tabbed to first; stacked under it by z-index. */}
-          {edges.map((card, index) => {
-            const depth = index + 1;
-            const last = depth === edges.length;
-            return (
-              <button
-                key={card.id}
-                type="button"
-                aria-label={`Show ${card.label}`}
-                onClick={() => setFront({ id: card.id, order })}
-                {...hubAnalyticsAttributes('Callout stack show card')}
-                className={cx(
-                  'absolute top-0 rounded-lg transition-[left,right,bottom,background-color,filter] duration-200',
-                  EDGE_CLASS_NAME[card.surface],
-                  // The lowest edge reaches on down into the gap under the stack, so its tap target
-                  // is more than the sliver that shows.
-                  last && 'after:absolute after:inset-x-0 after:top-full after:h-2'
-                )}
-                style={{
-                  left: depth * EDGE_INSET_PX,
-                  right: depth * EDGE_INSET_PX,
-                  bottom: (edges.length - depth) * EDGE_DROP_PX + EDGE_TAP_PX,
-                  zIndex: HUB_STACK_MAX_EDGES - index,
-                }}
-              />
-            );
-          })}
+            <AnimatePresence mode="popLayout" initial={false} custom={ids} onExitComplete={onExitComplete}>
+              {top ? (
+                <StackTop key={top.id} id={top.id} topElement={topElement}>
+                  {top.content}
+                </StackTop>
+              ) : null}
+            </AnimatePresence>
+            {/* After the top card, so it is read and tabbed to first; stacked under it by z-index. */}
+            {edges.map((card, index) => {
+              const depth = index + 1;
+              const last = depth === edges.length;
+              return (
+                <button
+                  key={card.id}
+                  type="button"
+                  aria-label={`Show ${card.label}`}
+                  onClick={() => setFront({ id: card.id, order })}
+                  {...hubAnalyticsAttributes('Callout stack show card')}
+                  className={cx(
+                    'absolute top-0 rounded-lg transition-[left,right,bottom,background-color,filter] duration-200',
+                    EDGE_CLASS_NAME[card.surface],
+                    // The lowest edge reaches on down into the gap under the stack, so its tap target
+                    // is more than the sliver that shows.
+                    last && 'after:absolute after:inset-x-0 after:top-full after:h-2'
+                  )}
+                  style={{
+                    left: depth * EDGE_INSET_PX,
+                    right: depth * EDGE_INSET_PX,
+                    bottom: (edges.length - depth) * EDGE_DROP_PX + EDGE_TAP_PX,
+                    zIndex: HUB_STACK_MAX_EDGES - index,
+                  }}
+                />
+              );
+            })}
+          </div>
         </div>
       </ResizableContainer>
     </div>

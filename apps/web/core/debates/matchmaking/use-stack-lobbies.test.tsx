@@ -7,12 +7,15 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DebateLobbyCalendarRow } from '../api';
 
 const mocks = vi.hoisted(() => ({
-  week: [] as DebateLobbyCalendarRow[],
+  week: [] as DebateLobbyCalendarRow[] | null,
   auth: { ready: true, authenticated: true, accountKey: 'acct' as string | null },
 }));
 
 vi.mock('../hooks', () => ({ useGeoChatAuth: () => mocks.auth }));
-vi.mock('../lobbies/hooks', () => ({ useDebateLobbyCalendar: () => ({ data: { lobbies: mocks.week } }) }));
+// `null` is a week still loading: no data, and no error.
+vi.mock('../lobbies/hooks', () => ({
+  useDebateLobbyCalendar: () => ({ data: mocks.week === null ? undefined : { lobbies: mocks.week }, isError: false }),
+}));
 vi.mock('../use-current-geo-chat-user-id', () => ({ useCurrentGeoChatUserId: () => 'viewer' }));
 vi.mock('~/core/hooks/use-dismissed-notice', () => ({
   useDismissedNotices: () => ({ isDismissed: () => false, remember: vi.fn() }),
@@ -121,6 +124,24 @@ describe('useStackLobbies', () => {
     expect(committed.at(-1)).toEqual(['tonight']);
 
     details.current = null;
+    rerender();
+    expect(committed.at(-1)).toEqual([]);
+  });
+
+  // GEO-3586 review: with the calendar drawing nothing of another account's week, signing in emptied
+  // the stack until the account's week loaded, sliding every card off as dismissed and back again.
+  it('keeps the signed-out lobbies while the account’s week loads after signing in', () => {
+    mocks.auth = { ready: true, authenticated: false, accountKey: null };
+    mocks.week = [upcoming()];
+    const { rerender, committed } = renderCommitted();
+
+    mocks.auth = { ready: true, authenticated: true, accountKey: 'acct' };
+    mocks.week = null;
+    rerender();
+    rerender();
+    expect(committed.every(ids => ids.includes('tonight'))).toBe(true);
+
+    mocks.week = [upcoming({ viewer_reminded: true })];
     rerender();
     expect(committed.at(-1)).toEqual([]);
   });

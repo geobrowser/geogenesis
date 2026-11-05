@@ -296,6 +296,71 @@ describe('HubLiveStrip', () => {
       await waitFor(() => expect(container).toBeEmptyDOMElement());
     });
 
+    // GEO-3586 review: focus followed a press only within 2 s, so a card sent on by an RSVP that took
+    // a moment to land left focus on the page.
+    it('hands focus on when an RSVP sends the focused card on, however long the RSVP took', async () => {
+      const now = vi.spyOn(Date, 'now');
+      try {
+        now.mockReturnValue(1_000_000);
+        mocks.week = [upcoming({ lobby_id: 'tonight', name: 'AI policy night' })];
+        const { rerender } = render(<HubLiveStrip lineup={EMPTY} todaysCallout={callout} />);
+        const rsvp = within(screen.getByRole('region', { name: 'Upcoming lobby' })).getByRole('button', {
+          name: 'RSVP',
+        });
+        rsvp.focus();
+        fireEvent.click(rsvp);
+
+        now.mockReturnValue(1_000_000 + 5_000);
+        mocks.week = [upcoming({ lobby_id: 'tonight', name: 'AI policy night', viewer_reminded: true })];
+        rerender(<HubLiveStrip lineup={EMPTY} todaysCallout={callout} />);
+        const next = await screen.findByRole('region', { name: 'Today’s claims' }, { timeout: 3000 });
+        await waitFor(
+          () => {
+            expect(document.activeElement).not.toBe(document.body);
+            expect(document.activeElement).toContainElement(next);
+          },
+          { timeout: 3000 }
+        );
+      } finally {
+        now.mockRestore();
+      }
+    });
+
+    it('hands focus to the card brought forward from its edge', async () => {
+      mocks.week = [upcoming({ lobby_id: 'tonight', name: 'AI policy night' })];
+      render(<HubLiveStrip lineup={EMPTY} todaysCallout={callout} />);
+
+      const edge = screen.getByRole('button', { name: 'Show Today’s claims' });
+      edge.focus();
+      fireEvent.click(edge);
+      const next = screen.getByRole('region', { name: 'Today’s claims' });
+      await waitFor(() => {
+        expect(document.activeElement).not.toBe(document.body);
+        expect(document.activeElement).toContainElement(next);
+      });
+    });
+
+    // GEO-3586 review: with the leaving card lifted out of the flow, the box eased to the next card's
+    // height under it and the clip cut it off mid-slide.
+    it('keeps the leaving card’s room until it has gone', async () => {
+      const height = vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(180);
+      try {
+        mocks.week = [upcoming({ lobby_id: 'tonight', name: 'AI policy night' })];
+        render(<HubLiveStrip lineup={EMPTY} todaysCallout={callout} />);
+        const box = () => screen.getByTestId('hub-callout-stack-room');
+        // Held around the stack, not on it, so the edges under the new card don't stretch with it.
+        const stack = () => screen.getByTestId('hub-callout-stack').querySelector<HTMLElement>('.relative')!;
+        expect(box().style.minHeight).toBe('');
+
+        fireEvent.click(screen.getByRole('button', { name: 'Dismiss upcoming lobby' }));
+        expect(box().style.minHeight).toBe('180px');
+        expect(stack().style.minHeight).toBe('');
+        await waitFor(() => expect(box().style.minHeight).toBe(''));
+      } finally {
+        height.mockRestore();
+      }
+    });
+
     it('puts later lobbies after Today’s claims', () => {
       mocks.week = [
         upcoming({ lobby_id: 'fri', name: 'Friday hot takes', starts_at: inDays(3) }),

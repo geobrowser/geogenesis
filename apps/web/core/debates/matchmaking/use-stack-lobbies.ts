@@ -69,11 +69,14 @@ export function useStackLobbies(detailsLobbyId: string | null = null): {
   const range = React.useMemo(() => unansweredLobbyRange(today), [today]);
   const { ready, authenticated, accountKey } = useGeoChatAuth();
   const viewerId = useCurrentGeoChatUserId();
-  const { data } = useDebateLobbyCalendar(range.from, range.to, true, { signedOut: true, keepPreviousRange: true });
+  const { data, isError } = useDebateLobbyCalendar(range.from, range.to, true, {
+    signedOut: true,
+    keepPreviousRange: true,
+  });
   const week = data?.lobbies;
   const { isDismissed, remember } = useDismissedNotices();
 
-  const offered = React.useMemo(
+  const fromWeek = React.useMemo(
     () =>
       ready && week
         ? stackLobbies(week, { authenticated, viewerId }, now, id => isDismissed(stackLobbyNoticeId(id)))
@@ -88,9 +91,18 @@ export function useStackLobbies(detailsLobbyId: string | null = null): {
   // the same account: signing in swaps the signed-out week for the account's, and the lobbies it
   // had already RSVP'd to leaving then are not presses to show.
   const [held, setHeld] = React.useState<string[]>([]);
+  const [before, setBefore] = React.useState(() => ({
+    accountKey,
+    ids: fromWeek.map(lobby => dashlessId(lobby.lobby_id)).join(','),
+    lobbies: fromWeek,
+  }));
+  // Signing in, the calendar draws nothing of the signed-out week while the account's loads (it is
+  // not the account's). The stack keeps the cards it had meanwhile, rather than sliding every one
+  // off as dismissed and bringing them back a moment later.
+  const awaitingAccountWeek = before.accountKey !== accountKey && !week && !isError;
+  const offered = awaitingAccountWeek ? before.lobbies : fromWeek;
   const offeredIds = offered.map(lobby => dashlessId(lobby.lobby_id)).join(',');
-  const [before, setBefore] = React.useState({ accountKey, ids: offeredIds, lobbies: offered });
-  if (before.ids !== offeredIds || before.accountKey !== accountKey) {
+  if (!awaitingAccountWeek && (before.ids !== offeredIds || before.accountKey !== accountKey)) {
     setBefore({ accountKey, ids: offeredIds, lobbies: offered });
     const going =
       before.accountKey === accountKey
