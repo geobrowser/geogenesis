@@ -2876,9 +2876,13 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
           rematchSeenLiveRef.current === debate.rematch_session_id &&
           !didLocallyLeaveRematch(debate.rematch_session_id)
         ) {
-          setOpponentLeftNotice(true);
+          void leaveIdleRoom(() => {
+            setOpponentLeftNotice(true);
+            returnFromDebate();
+          });
+        } else {
+          void leaveIdleRoom(returnFromDebate);
         }
-        void leaveIdleRoom(returnFromDebate);
       }
       return;
     }

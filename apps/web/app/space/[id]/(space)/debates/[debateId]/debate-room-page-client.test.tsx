@@ -8596,6 +8596,7 @@ describe('opponent-left notice', () => {
     mocks.rematch = rematchSession('ended', { localConsented: true });
     view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
     await screen.findByRole('button', { name: 'Retry save' });
+    expect(notice()).toBe(false);
 
     completeDebate(view);
     await act(async () => {
