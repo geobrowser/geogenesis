@@ -119,9 +119,9 @@ export const ROOM_NUDGE_POPUP = {
 export const ROOM_CANT_MAKE_IT = {
   cancelled: (opponentName: string) => `${opponentName} can’t make it, so the debate is cancelled.`,
   rescheduled: (opponentName: string) =>
-    `${opponentName} can’t make it and proposed a new time. You’ll find it under Requests.`,
+    `${opponentName} can’t make it and proposed a new time. You’ll find it under Schedule.`,
   /** Moved without a Can't make it: by the one waiting, say, or from Requests days before. */
-  moved: 'This debate moved to a new time. You’ll find it under Requests.',
+  moved: 'This debate moved to a new time. You’ll find it under Schedule.',
   findSomeone: 'Find someone else',
   seeNewTime: 'See the new time',
 } as const;
@@ -239,11 +239,11 @@ export const SCHEDULED_NOTICE_COPY = {
   },
   loading: 'Loading your debate…',
   state: {
-    moved: 'This debate has moved to a new time. You’ll find it under Requests.',
+    moved: 'This debate has moved to a new time. You’ll find it under Schedule.',
     over: 'This debate is no longer on.',
     missing: 'We couldn’t find this debate. It may have been for another account.',
     error: 'Couldn’t load your debate. Try again in a moment.',
-    requests: 'Open Requests',
+    requests: 'Open Schedule',
   },
 } as const;
 

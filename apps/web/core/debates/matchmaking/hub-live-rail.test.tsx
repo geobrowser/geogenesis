@@ -84,15 +84,15 @@ describe('HubLiveRail', () => {
     expect(screen.getByTestId('people-tab')).toBeInTheDocument();
   });
 
-  // Its sections name themselves ("Upcoming debates", "Sent", "Received"), so a "Requests" heading
+  // Its sections name themselves ("Upcoming debates", "Sent", "Received"), so a "Schedule" heading
   // above them only said the same thing twice.
-  it('heads the people list "People" and draws no Requests heading of its own', () => {
+  it('heads the people list "People" and draws no Schedule heading of its own', () => {
     mocks.requestsHasContent = true;
     render(<HubLiveRail />);
 
     expect(screen.getByRole('heading', { name: 'People' })).toBeInTheDocument();
     expect(screen.queryByText('Available now')).not.toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'Requests' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Schedule' })).not.toBeInTheDocument();
   });
 
   // Signed out the rail loses two of its three lists. Two empty headings would say nothing, so it
@@ -103,6 +103,7 @@ describe('HubLiveRail', () => {
 
     expect(screen.getByTestId('people-tab')).toBeInTheDocument();
     expect(screen.queryByTestId('requests-tab')).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Schedule' })).toBeInTheDocument();
     expect(screen.getByText(/debate requests sent to you/)).toBeInTheDocument();
   });
 
