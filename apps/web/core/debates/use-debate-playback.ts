@@ -5,6 +5,7 @@ import * as React from 'react';
 import { atom, useAtom } from 'jotai';
 
 import { reportEvent } from '~/core/telemetry/logger';
+import { gestureUnlocksEachMediaElement } from '~/core/utils/video/gesture-media-pool';
 
 import type { Debate } from './api';
 import { useDebateMedia, useDebateTranscript, useRecordingPlaybackUrl } from './hooks';
@@ -234,7 +235,26 @@ export function useDebatePlayback(
   // Feed debates autoplay muted (TikTok-style): the browser blocks unmuted
   // autoplay without a user gesture, so unmuting the active speaker mid-autoplay
   // would pause and desync that video. Start muted; the viewer unmutes on tap.
-  const [mutedByUser, setMutedByUser] = useAtom(feedMutedAtom);
+  const [mutedPreference, setMutedPreference] = useAtom(feedMutedAtom);
+  /*
+   * The browser made this debate play muted, though the viewer wants sound (GEO-3594).
+   *
+   * This debate's alone. It used to be written into the shared preference, so one card the browser
+   * forced muted turned the sound off for every card after it — on iOS, where each new card's
+   * elements start without the tap that grants sound, that was every card. The preference stays
+   * on, and the next debate asks the browser again.
+   */
+  const [soundBlocked, setSoundBlocked] = React.useState(false);
+  const mutedByUser = mutedPreference || soundBlocked;
+  /** The Mute control. Unmuting also lifts this debate's forced mute; muting sets the preference. */
+  const setMutedByUser = React.useCallback(
+    (next: React.SetStateAction<boolean>) => {
+      const muted = typeof next === 'function' ? next(mutedByUser) : next;
+      if (!muted) setSoundBlocked(false);
+      setMutedPreference(muted);
+    },
+    [mutedByUser, setMutedPreference]
+  );
   const [playheadSeconds, setPlayheadSeconds] = React.useState(0);
   const [turnState, setTurnState] = React.useState<TurnState>(null);
   const slot1VideoRef = React.useRef<HTMLVideoElement | null>(null);
@@ -617,6 +637,7 @@ export function useDebatePlayback(
      */
     setAutoplayBlocked(false);
     setUserPaused(false);
+    setSoundBlocked(false);
     /*
      * And nothing still in flight may write either of them back.
      *
@@ -1104,6 +1125,23 @@ export function useDebatePlayback(
     ) {
       const stillPlaying = primaryVideo.paused ? secondaryVideo : primaryVideo;
       stillPlaying.pause();
+      /*
+       * On iOS this is usually the browser refusing sound, not stopping playback (GEO-3594).
+       *
+       * iOS answers an unmute it does not allow by pausing the element, and the speaker's element is
+       * unmuted on a media tick once the pair is running — outside any gesture. A card whose
+       * elements no tap has reached therefore split here the moment it started, and stopped on a
+       * Play button. Play it muted instead, with Unmute showing: the autoplay effect restarts it,
+       * since this is not recorded as a pause. Only while sound was wanted, so a second split on
+       * the now-muted card falls through to the stop below rather than looping.
+       */
+      if (!mutedByUserRef.current && gestureUnlocksEachMediaElement()) {
+        mutedByUserRef.current = true;
+        setSoundBlocked(true);
+        setPlaying(false);
+        setTurnState(null);
+        return;
+      }
       // The browser stopped playback on us — surface it as a paused state so the
       // controls reappear and auto-resume stands down (it would just get blocked
       // again), rather than leaving the UI believing playback is still running.
@@ -1325,17 +1363,17 @@ export function useDebatePlayback(
         }
         return;
       }
-      // The browser only allowed it muted (GEO-2783) — record that so the unmute control is honest
-      // and later autoplays stop being blocked the same way. The viewer's next tap is a gesture and
-      // will be allowed.
-      if (outcome === 'playing-muted') setMutedByUser(true);
+      // The browser only allowed it muted (GEO-2783) — record that so the unmute control is honest.
+      // The viewer's next tap is a gesture and will be allowed. For this debate only: the next one
+      // may well be allowed sound, and the viewer asked for it (GEO-3594).
+      if (outcome === 'playing-muted') setSoundBlocked(true);
       playingGenerationRef.current = generation;
       setPlaying(true);
       setUserPaused(false);
       // Whatever refused last time has stopped refusing.
       setAutoplayBlocked(false);
     },
-    [offsets, seekVideosTo, setMutedByUser, timelineSeconds]
+    [offsets, seekVideosTo, timelineSeconds]
   );
 
   const holdForTransition = React.useCallback(() => {

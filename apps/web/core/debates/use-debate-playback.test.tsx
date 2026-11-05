@@ -15,9 +15,14 @@ const mocks = vi.hoisted(() => ({
   condensedBreaks: [] as DebateMediaCondensedBreak[],
   mediaPending: false,
   reportEvent: vi.fn(),
+  /** Whether the device grants sound element by element, as iOS does (GEO-3594). */
+  gestureUnlocksEachMediaElement: false,
 }));
 
 vi.mock('~/core/telemetry/logger', () => ({ reportEvent: mocks.reportEvent }));
+vi.mock('~/core/utils/video/gesture-media-pool', () => ({
+  gestureUnlocksEachMediaElement: () => mocks.gestureUnlocksEachMediaElement,
+}));
 
 // The hook imports exactly these three from './hooks'. Mocking the module blanks everything
 // else in it, so anything omitted here arrives as undefined.
@@ -2507,4 +2512,147 @@ describe('automatic cut playback hold', () => {
       if (action !== 'replay') expect(pair.map(video => video.paused)).toEqual([true, true]);
     }
   );
+});
+
+describe('useDebatePlayback — sound carries to the next debate (GEO-3594)', () => {
+  const flush = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+  beforeEach(() => {
+    mocks.turnSegments = [];
+    mocks.condensedBreaks = [];
+    mocks.gestureUnlocksEachMediaElement = false;
+    mocks.recordingUrl.mockReset();
+    mocks.recordingUrl.mockImplementation(({ filename }: { filename: string }) =>
+      Promise.resolve({ url: `https://cdn.test/${filename}?sig=abc` })
+    );
+  });
+
+  afterEach(() => {
+    mocks.gestureUnlocksEachMediaElement = false;
+    vi.restoreAllMocks();
+  });
+
+  /** A card with both elements attached. The mute preference is shared, so each test puts it back. */
+  async function card() {
+    const hook = renderHook(() => useDebatePlayback(debateFixture(), true));
+    await waitFor(() => expect(hook.result.current.urls.slot1).not.toBeNull());
+    const slot1 = fakeVideo();
+    const slot2 = fakeVideo();
+    hook.result.current.slot1VideoRef.current = slot1;
+    hook.result.current.slot2VideoRef.current = slot2;
+    return { ...hook, slot1, slot2 };
+  }
+
+  async function start(
+    result: { current: ReturnType<typeof useDebatePlayback> },
+    slot1: ReturnType<typeof fakeVideo>,
+    slot2: ReturnType<typeof fakeVideo>
+  ) {
+    await act(async () => {
+      void result.current.resumeBoth();
+      await Promise.resolve();
+      slot1.settlePlay();
+      slot2.settlePlay();
+      await flush(50);
+    });
+  }
+
+  it('keeps a forced mute on the debate the browser muted, not on the next one', async () => {
+    const first = await card();
+    const next = await card();
+    act(() => first.result.current.setMutedByUser(false)); // the viewer turned sound on
+    try {
+      // The speaker is unmuted, and the browser will not start it with sound.
+      first.slot1.muted = false;
+      await act(async () => {
+        void first.result.current.resumeBoth();
+        await Promise.resolve();
+        first.slot1.rejectPlay();
+        first.slot2.settlePlay();
+        await flush(400);
+        // The muted retry.
+        first.slot1.settlePlay();
+        first.slot2.settlePlay();
+        await flush(400);
+      });
+
+      expect(first.result.current.playing).toBe(true);
+      expect(first.result.current.mutedByUser).toBe(true);
+      // The viewer still wants sound, so the next debate asks for it.
+      expect(next.result.current.mutedByUser).toBe(false);
+    } finally {
+      act(() => first.result.current.setMutedByUser(true));
+    }
+  });
+
+  it('lifts the forced mute when the viewer taps Unmute', async () => {
+    const first = await card();
+    act(() => first.result.current.setMutedByUser(false));
+    try {
+      first.slot1.muted = false;
+      await act(async () => {
+        void first.result.current.resumeBoth();
+        await Promise.resolve();
+        first.slot1.rejectPlay();
+        first.slot2.settlePlay();
+        await flush(400);
+        first.slot1.settlePlay();
+        first.slot2.settlePlay();
+        await flush(400);
+      });
+      expect(first.result.current.mutedByUser).toBe(true);
+
+      // The Mute control toggles from what it shows.
+      act(() => first.result.current.setMutedByUser(current => !current));
+
+      expect(first.result.current.mutedByUser).toBe(false);
+    } finally {
+      act(() => first.result.current.setMutedByUser(true));
+    }
+  });
+
+  it('on iOS, plays on muted when the browser pauses the speaker it would not unmute', async () => {
+    mocks.gestureUnlocksEachMediaElement = true;
+    const first = await card();
+    const next = await card();
+    act(() => first.result.current.setMutedByUser(false));
+    try {
+      await start(first.result, first.slot1, first.slot2);
+      expect(first.result.current.playing).toBe(true);
+
+      // iOS refusing the unmute: it pauses the element, with no pause() of ours.
+      first.slot1.browserPause();
+      act(() => first.result.current.onPlaybackTick());
+
+      expect(first.slot2.paused).toBe(true);
+      expect(first.result.current.playing).toBe(false);
+      // Not a pause by the viewer, so autoplay starts it again — muted, with Unmute showing.
+      expect(first.result.current.userPaused).toBe(false);
+      expect(first.result.current.mutedByUser).toBe(true);
+      expect(next.result.current.mutedByUser).toBe(false);
+
+      // Once muted, a second split is a real stop.
+      await start(first.result, first.slot1, first.slot2);
+      first.slot1.browserPause();
+      act(() => first.result.current.onPlaybackTick());
+      expect(first.result.current.userPaused).toBe(true);
+    } finally {
+      act(() => first.result.current.setMutedByUser(true));
+    }
+  });
+
+  it('elsewhere, a split pair with sound on still stops on Play', async () => {
+    const first = await card();
+    act(() => first.result.current.setMutedByUser(false));
+    try {
+      await start(first.result, first.slot1, first.slot2);
+      first.slot1.browserPause();
+      act(() => first.result.current.onPlaybackTick());
+
+      expect(first.result.current.userPaused).toBe(true);
+      expect(first.result.current.mutedByUser).toBe(false);
+    } finally {
+      act(() => first.result.current.setMutedByUser(true));
+    }
+  });
 });

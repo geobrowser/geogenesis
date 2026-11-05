@@ -43,6 +43,7 @@ import { markDebateWatched } from '~/core/debates/watched-debates';
 import { FollowButton } from '~/core/follows/follow-button';
 import { validateSpaceId } from '~/core/io/rest/validation';
 import { responsePositionLabel } from '~/core/responses/entity-response';
+import { gestureUnlocksEachMediaElement } from '~/core/utils/video/gesture-media-pool';
 import { reattachVideoSource, releaseVideo } from '~/core/utils/video/release-video';
 
 import { Avatar } from '~/design-system/avatar';
@@ -55,6 +56,7 @@ import { ClaimScrubberMarkers, DebateClaimTickerStack, useDebateClaimTicker } fr
 import { DebateEndCard } from './debate-end-card';
 import { DebateRoundBadge, DebateRoundBanner, DebateRoundCard } from './debate-round-cues';
 import { type DebatePreviewClips, debatePreviewClips, feedFullPlaybackStartedAtom } from './feed-full-playback';
+import { FeedVideo } from './feed-video';
 import { Pause, Play, Speaker, SpeakerMuted } from './icons';
 import { PLAYER_EXIT_MS, PLAYER_FURNITURE_OPACITY } from './player-overlay-styles';
 import { useAnnouncementFocus } from './use-announcement-focus';
@@ -1490,6 +1492,9 @@ function DebaterVideo({
   }, [onStreamFailed]);
   // Asked once per element: Safari and iOS play the manifest as `src`, everything else through hls.js.
   const nativeHls = React.useMemo(() => canPlayNativeHls(), []);
+  // Where sound is granted element by element (iOS), the elements come from a pool that taps unlock,
+  // so the debate the viewer scrolls to can play with sound (GEO-3594).
+  const pooledVideo = React.useMemo(() => gestureUnlocksEachMediaElement(), []);
   const hlsManaged = stream && !nativeHls;
   React.useLayoutEffect(() => {
     const video = videoRef.current;
@@ -1714,8 +1719,9 @@ function DebaterVideo({
           />
         )}
         {src ? (
-          <video
-            ref={videoRef}
+          <FeedVideo
+            pooled={pooledVideo}
+            videoRef={videoRef}
             // Both tiles fade in together, and only once both have a frame — see `concealed`.
             // `relative` so it stacks above the absolutely positioned still; a static video paints
             // under any positioned sibling whatever the DOM order.
@@ -1726,7 +1732,6 @@ function DebaterVideo({
               'relative h-full w-full object-cover transition-opacity',
               concealed ? 'opacity-0 duration-200' : 'opacity-100 duration-500'
             )}
-            playsInline
             // `metadata` by default: enough to paint a frame and know the shape of the recording,
             // without pulling a multi-megabyte file down for a card nobody has reached yet — the
             // feed keeps several of these mounted at once. `auto` for the active card and the one
