@@ -12,8 +12,10 @@ vi.mock('~/core/sync/use-store', () => ({
     [...store.relations, ...mergeWith.filter(m => !store.relations.some(r => r.id === m.id))].filter(r =>
       selector ? selector(r) : true
     ),
-  getValues: ({ selector }: { selector?: (v: any) => boolean }) =>
-    store.values.filter(v => (selector ? selector(v) : true)),
+  getValues: ({ selector, mergeWith = [] }: { selector?: (v: any) => boolean; mergeWith?: any[] }) =>
+    [...store.values, ...mergeWith.filter(m => !store.values.some(v => v.id === m.id))].filter(v =>
+      selector ? selector(v) : true
+    ),
 }));
 
 const SOURCE = 'space-source';
@@ -191,5 +193,37 @@ describe('collectMoveDeletions', () => {
     const { values } = collectMoveDeletions(ENTITY, SOURCE);
 
     expect(values.map(v => v.id)).toEqual(['block-v']);
+  });
+
+  it('clears the blocks under a tab that was only loaded', () => {
+    store.relations = [relation({ id: 'has-tab', from: ENTITY, to: 'tab', typeId: SystemIds.TABS_PROPERTY })];
+    const loaded = [
+      {
+        id: 'tab',
+        values: [value('tab', SOURCE, 'tab-v')],
+        relations: [relation({ id: 'tab-holds-block', from: 'tab', to: 'block', typeId: SystemIds.BLOCKS })],
+      },
+      { id: 'block', values: [value('block', SOURCE, 'block-v')], relations: [] },
+    ];
+
+    const { values, relations } = collectMoveDeletions(ENTITY, SOURCE, [], loaded as any);
+
+    expect(values.map(v => v.id).sort()).toEqual(['block-v', 'tab-v']);
+    expect(relations.map(r => r.id).sort()).toEqual(['has-tab', 'tab-holds-block']);
+  });
+
+  it('reads a relation from the store over the loaded copy of it', () => {
+    store.relations = [
+      relation({ id: 'contains-block', from: ENTITY, to: 'block', typeId: SystemIds.BLOCKS }),
+      { ...relation({ id: 'block-link', from: 'block', to: 'somewhere' }), spaceId: OTHER },
+    ];
+
+    const loaded = [
+      { id: 'block', values: [], relations: [relation({ id: 'block-link', from: 'block', to: 'somewhere' })] },
+    ];
+
+    const { relations } = collectMoveDeletions(ENTITY, SOURCE, [], loaded as any);
+
+    expect(relations.map(r => r.id)).not.toContain('block-link');
   });
 });

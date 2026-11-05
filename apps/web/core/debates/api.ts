@@ -372,7 +372,7 @@ export type OpenRoundsPhase = 'speaking' | 'deciding' | 'result' | 'finished';
 export type OpenRoundResolution = 'both_picked' | 'deadline';
 export type OpenRoundTurnRole = 'opening' | 'rebuttal';
 
-/** A slot's pick once its round has resolved. `null` means it never picked, which counted as End. */
+/** A slot's pick once its round has resolved. `null` means it never picked, which goes along with the other pick. */
 export type OpenRoundRevealedPick = {
   participant_slot: ParticipantSlot;
   pick: OpenRoundPick | null;

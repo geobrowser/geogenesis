@@ -15,6 +15,7 @@ import {
   roundOneSpeaking,
   thankingAfterEnd,
   timedOut,
+  timedOutExtend,
 } from '~/core/debates/open-rounds-fixtures';
 
 import {
@@ -470,7 +471,24 @@ describe('open rounds clock', () => {
     });
   });
 
-  it('8.7 timed out: the reveal runs from the late resolution', () => {
+  it('8.7 timed out on one Extend: the reveal runs from the late resolution, then round 1', () => {
+    const debate = timedOutExtend();
+    expect(countdownAt(debate, at('20:02:11.000')).openRounds).toMatchObject({ phase: 'deciding' });
+    expect(countdownAt(debate, at('20:02:12.000'))).toMatchObject({
+      effectiveStatus: 'in_progress',
+      remainingSeconds: 3,
+      openRounds: { phase: 'result', outcome: 'extend', resolvedAtMs: at('20:02:11.300') },
+    });
+    expect(countdownAt(debate, at('20:02:14.300'))).toMatchObject({
+      effectiveStatus: 'in_progress',
+      activeSlot: 1,
+      turnIndex: 2,
+      remainingSeconds: 45,
+      openRounds: { phase: 'speaking', roundIndex: 1 },
+    });
+  });
+
+  it('timed out with no picks: the reveal runs from the late resolution', () => {
     const debate = timedOut();
     expect(countdownAt(debate, at('20:02:11.000')).openRounds).toMatchObject({ phase: 'deciding' });
     expect(countdownAt(debate, at('20:02:12.000'))).toMatchObject({
