@@ -90,6 +90,18 @@ describe('DataBlockLoadingPlaceholder', () => {
     expect(screen.getAllByTestId('explore-view-skeleton-card')).toHaveLength(3);
   });
 
+  it('sizes each explore card like a claim card, switching at the same container width', () => {
+    render(<DataBlockLoadingPlaceholder view="EXPLORE" items={2} />);
+
+    for (const card of screen.getAllByTestId('explore-view-skeleton-card')) {
+      expect(card).toHaveClass('@container', 'py-4', 'border-b');
+    }
+    for (const body of screen.getAllByTestId('explore-view-skeleton-body')) {
+      expect(body).toHaveClass('h-[107px]', 'claim-card-narrow:h-[175px]');
+      expect(body).not.toHaveClass('min-h-[140px]');
+    }
+  });
+
   it.each(['TABLE', 'PILL'] as const)('falls back to the table placeholder for %s', view => {
     const { container } = render(<DataBlockLoadingPlaceholder view={view} items={3} />);
 
