@@ -43,6 +43,24 @@ describe('createDebatePageOutcome', () => {
     ]);
   });
 
+  it('counts the opening clip starting as the play, and says it was the clip (GEO-3578)', () => {
+    const { outcome, events, advance } = setup();
+    outcome.feed({ kind: 'shown' });
+    outcome.player({ ...idle, ready: true });
+    advance(400);
+    outcome.player({ ...idle, ready: true, openingClipPlaying: true });
+    outcome.player({ ...idle, ready: true, openingClipPlaying: true, playing: true });
+
+    expect(events).toEqual([expect.objectContaining({ outcome: 'played', played_via: 'opening_clip' })]);
+  });
+
+  it('says a play without the clip was the debate itself', () => {
+    const { outcome, events } = setup();
+    outcome.player({ ...idle, ready: true, playing: true });
+
+    expect(events).toEqual([expect.objectContaining({ outcome: 'played', played_via: 'debate' })]);
+  });
+
   it('never sends measurement_version, which makes the collector reject an event with no measurement contract', () => {
     const { outcome, events } = setup();
     outcome.leave('pagehide');

@@ -6,16 +6,23 @@ import { type AnalyticsEventName, capture } from '~/core/analytics';
 import { WATCH_DEBATE_MS, pushMarketingEvent } from '~/core/marketing-events';
 
 import type { Debate } from './api';
+import type { DebateOpening } from './browse/opening-clip';
 import { createPlaybackMeasurement } from './playback-analytics';
 import { recordingWindowOffsetsSeconds } from './playback-utils';
 import type { DebatePlaybackController } from './use-debate-playback';
 
-/** `mediaAttached` re-binds the measurement when the player swaps its <video> elements (GEO-3067). */
+/**
+ * `mediaAttached` re-binds the measurement when the player swaps its <video> elements (GEO-3067).
+ *
+ * `opening` is what this play opened on (GEO-3578): the debate's opening clip, or the title card.
+ * Read at each event rather than bound, so the clip starting does not re-bind the measurement.
+ */
 export function usePlaybackAnalytics(
   debate: Debate,
   active: boolean,
   controller: DebatePlaybackController,
-  mediaAttached = true
+  mediaAttached = true,
+  opening: DebateOpening = 'title_card'
 ) {
   const playbackInstance = React.useRef(crypto.randomUUID());
   // Which media this instance has already reported exposed, so re-binding to re-attached elements
@@ -27,8 +34,8 @@ export function usePlaybackAnalytics(
   // Interval numbering continues across re-binds for the same media, like the exposure latch.
   const intervalSequence = React.useRef({ key: '', count: 0 });
   const elementRef = React.useRef<HTMLDivElement>(null);
-  const latest = React.useRef({ active, controller });
-  latest.current = { active, controller };
+  const latest = React.useRef({ active, controller, opening });
+  latest.current = { active, controller, opening };
   const trigger = React.useRef<'manual' | 'autoplay'>('autoplay');
   const controlRef = React.useRef<(control: string) => void>(() => {});
   const recordings = [1, 2].map(slot => debate.recordings.find(recording => recording.participant_slot === slot));
@@ -74,7 +81,7 @@ export function usePlaybackAnalytics(
     };
     const emit = (event: AnalyticsEventName, properties: Record<string, unknown>) => {
       try {
-        capture(event, { ...context, ...properties });
+        capture(event, { ...context, opening: latest.current.opening, ...properties });
       } catch {
         /* Playback stays usable. */
       }

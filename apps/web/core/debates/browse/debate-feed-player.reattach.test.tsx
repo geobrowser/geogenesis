@@ -12,6 +12,20 @@ const mocks = vi.hoisted(() => ({
 }));
 
 // Follow (GEO-3236) writes through the account and reads follows; both have their own suites.
+// The opening clip (GEO-3578) reads a moment list through react-query; these suites test the
+// player as it plays without one, so the opening is off. `debate-opening-clip.test` covers it.
+vi.mock('~/core/debates/browse/debate-opening-clip', () => ({
+  DebateOpeningClip: () => null,
+  useOpeningClip: () => ({
+    phase: 'off',
+    moment: null,
+    holdsDebate: false,
+    opening: 'title_card',
+    markStarted: () => {},
+    finish: () => {},
+  }),
+}));
+
 vi.mock('~/core/follows/follow-button', () => ({ FollowButton: () => null }));
 vi.mock('~/core/follows/person-follow-counts', () => ({
   usePersonFollowerCount: () => null,
