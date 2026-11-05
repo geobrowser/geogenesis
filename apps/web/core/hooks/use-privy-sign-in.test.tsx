@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ActionContextProvider } from '~/core/action-context-provider';
 import { beginAuthAttempt, finishAuthAttempt, resetAuthAttempt } from '~/core/auth-attempt';
+import { closeSignInBox, readSignInBox } from '~/core/auth/sign-in-box/sign-in-box-store';
 
 import { usePrivySignIn } from './use-privy-sign-in';
 
@@ -62,6 +63,7 @@ beforeEach(() => {
   localStorage.clear();
   sessionStorage.clear();
   resetAuthAttempt();
+  closeSignInBox();
 });
 
 // What `PrivyAuthTracker` does with Privy's callbacks: a sign-in or a dismissal ends the attempt.
@@ -79,7 +81,7 @@ describe('usePrivySignIn', () => {
       properties: { component: 'save_votes', link_source: 'x' },
     };
     mocks.takeCodeRecovery.mockReturnValue(pending);
-    mocks.beginPrivyAuth.mockReturnValue({ id: 'recovery' });
+    mocks.beginPrivyAuth.mockReturnValue({ id: 'recovery', properties: { component: 'debate_matchmaking' } });
     const { result } = renderHook(() => usePrivySignIn(undefined, { analytics: { component: 'debate_matchmaking' } }));
 
     act(() => void result.current());
@@ -92,7 +94,7 @@ describe('usePrivySignIn', () => {
       }),
       { resume: undefined }
     );
-    expect(mocks.login).toHaveBeenCalledWith(expect.objectContaining({ prefill: { type: 'email', value: 'a@b.co' } }));
+    expect(readSignInBox()).toMatchObject({ attemptId: 'recovery', prefillEmail: 'a@b.co' });
     expect(mocks.codeRecoveryOffered).toHaveBeenCalledWith(pending, 'recovery');
     // Whether this sign-in may pick it up depends on its own trigger, so it is handed its properties.
     expect(mocks.takeCodeRecovery).toHaveBeenCalledWith({ component: 'debate_matchmaking' });
@@ -115,7 +117,7 @@ describe('usePrivySignIn', () => {
     const { result } = renderHook(() => usePrivySignIn(onComplete));
 
     act(() => result.current());
-    expect(mocks.login).toHaveBeenCalledOnce();
+    expect(readSignInBox()).not.toBeNull();
     expect(onComplete).not.toHaveBeenCalled();
 
     act(() => privySignsIn());
@@ -302,10 +304,10 @@ describe('usePrivySignIn', () => {
       { resume: undefined }
     );
   });
-  it('passes the resume option when opening the modal for an email attempt', () => {
+  it('passes the resume option when opening sign-in for an email attempt', () => {
     const { result } = renderHook(() => usePrivySignIn(undefined, { resumeAuthAttempt: true }));
     act(() => result.current());
     expect(mocks.beginPrivyAuth).toHaveBeenCalledWith(expect.any(Object), { resume: true });
-    expect(mocks.login).toHaveBeenCalledOnce();
+    expect(readSignInBox()).not.toBeNull();
   });
 });

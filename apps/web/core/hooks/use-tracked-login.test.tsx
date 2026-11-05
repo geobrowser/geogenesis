@@ -40,50 +40,7 @@ afterEach(() => {
   closeSignInBox();
 });
 
-// GEO-3139: Privy's login() is only called here, so the flag here is the one gate on the Google redirect.
 describe('useTrackedLogin', () => {
-  it('adds Google with the flag on', () => {
-    const { login } = renderLogin();
-    login({ component: 'test' });
-    expect(mocks.login).toHaveBeenCalledWith({ loginMethods: ['email', 'google'] });
-  });
-
-  // Google redirects and drops the queue; the flag accepts that rather than hiding Google.
-  it('adds Google with a pending action queued', () => {
-    const { store, login } = renderLogin();
-    store.set(pendingActionsAtom, [{ id: 'vote', label: 'Vote', requires: 'auth', run: () => {} }]);
-    login({ component: 'test' });
-    expect(mocks.login).toHaveBeenCalledWith({ loginMethods: ['email', 'google'] });
-  });
-
-  it('opens the config modal with no arguments with the flag off', () => {
-    window.localStorage.setItem(featureFlagsStorageKey, JSON.stringify({ googleSignIn: false }));
-    const { login } = renderLogin();
-    login({ component: 'test' });
-    expect(mocks.login.mock.calls[0]).toEqual([]);
-  });
-
-  // GEO-3573: a sign-in picked up after a reload fills the address back in.
-  it('prefills the email beside Google', () => {
-    const { login } = renderLogin();
-    login({ component: 'test' }, undefined, { prefillEmail: 'a@b.co' });
-    expect(mocks.login).toHaveBeenCalledWith({
-      loginMethods: ['email', 'google'],
-      prefill: { type: 'email', value: 'a@b.co' },
-    });
-  });
-
-  it('prefills the email with the flag off', () => {
-    window.localStorage.setItem(featureFlagsStorageKey, JSON.stringify({ googleSignIn: false }));
-    const { login } = renderLogin();
-    login({ component: 'test' }, undefined, { prefillEmail: 'a@b.co' });
-    expect(mocks.login).toHaveBeenCalledWith({ prefill: { type: 'email', value: 'a@b.co' } });
-  });
-});
-
-describe('useTrackedLogin with ourSignInBox on', () => {
-  beforeEach(() => window.localStorage.setItem(featureFlagsStorageKey, JSON.stringify({ ourSignInBox: true })));
-
   it("opens our box with the attempt, its attribution, the prefill and the heading, not Privy's dialog", () => {
     const { login } = renderLogin();
     login({ component: 'test' }, undefined, { prefillEmail: 'a@b.co', heading: 'Join the discussion' });
@@ -94,6 +51,15 @@ describe('useTrackedLogin with ourSignInBox on', () => {
       prefillEmail: 'a@b.co',
       heading: 'Join the discussion',
     });
+  });
+
+  // The retired flag, still in some browsers' storage, no longer decides anything.
+  it.each([true, false])('opens our box with a stored ourSignInBox: %s', ourSignInBox => {
+    window.localStorage.setItem(featureFlagsStorageKey, JSON.stringify({ ourSignInBox, googleSignIn: true }));
+    const { login } = renderLogin();
+    login({ component: 'test' });
+    expect(mocks.login).not.toHaveBeenCalled();
+    expect(readSignInBox()).toMatchObject({ attemptId: 'attempt' });
   });
 
   it("opens Privy's dialog for the box's own fallback, on its attempt", () => {
@@ -110,5 +76,48 @@ describe('useTrackedLogin with ourSignInBox on', () => {
     expect(login({ component: 'test' }, undefined, { fallbackFor: 'older' })).toBeUndefined();
     expect(mocks.login).not.toHaveBeenCalled();
     expect(readSignInBox()).toBeNull();
+  });
+});
+
+// GEO-3139: Privy's login() is only called here, so the flag here is the one gate on the Google redirect.
+describe("useTrackedLogin's Privy fallback", () => {
+  const fallback = { fallbackFor: 'attempt' };
+
+  it('adds Google with the flag on', () => {
+    const { login } = renderLogin();
+    login({ component: 'test' }, undefined, fallback);
+    expect(mocks.login).toHaveBeenCalledWith({ loginMethods: ['email', 'google'] });
+  });
+
+  // Google redirects and drops the queue; the flag accepts that rather than hiding Google.
+  it('adds Google with a pending action queued', () => {
+    const { store, login } = renderLogin();
+    store.set(pendingActionsAtom, [{ id: 'vote', label: 'Vote', requires: 'auth', run: () => {} }]);
+    login({ component: 'test' }, undefined, fallback);
+    expect(mocks.login).toHaveBeenCalledWith({ loginMethods: ['email', 'google'] });
+  });
+
+  it('opens the config modal with no arguments with the flag off', () => {
+    window.localStorage.setItem(featureFlagsStorageKey, JSON.stringify({ googleSignIn: false }));
+    const { login } = renderLogin();
+    login({ component: 'test' }, undefined, fallback);
+    expect(mocks.login.mock.calls[0]).toEqual([]);
+  });
+
+  // GEO-3573: a sign-in picked up after a reload fills the address back in.
+  it('prefills the email beside Google', () => {
+    const { login } = renderLogin();
+    login({ component: 'test' }, undefined, { ...fallback, prefillEmail: 'a@b.co' });
+    expect(mocks.login).toHaveBeenCalledWith({
+      loginMethods: ['email', 'google'],
+      prefill: { type: 'email', value: 'a@b.co' },
+    });
+  });
+
+  it('prefills the email with the flag off', () => {
+    window.localStorage.setItem(featureFlagsStorageKey, JSON.stringify({ googleSignIn: false }));
+    const { login } = renderLogin();
+    login({ component: 'test' }, undefined, { ...fallback, prefillEmail: 'a@b.co' });
+    expect(mocks.login).toHaveBeenCalledWith({ prefill: { type: 'email', value: 'a@b.co' } });
   });
 });
