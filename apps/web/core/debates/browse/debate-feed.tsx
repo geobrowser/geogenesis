@@ -12,6 +12,8 @@ import { isRemovedDebateAnswer } from '~/core/debates/debate-removal';
 import { useDebate, useProcessedVideoDebateIds, useSpaceDebates } from '~/core/debates/hooks';
 import { isWatchableDebate } from '~/core/debates/playback-utils';
 import { type DebatePageOutcome, useDebatePageOutcome } from '~/core/debates/use-debate-page-outcome';
+import { DEEP_LINK_MODALS } from '~/core/deep-links/modal-deep-link';
+import { useDeepLinkEffect, useDeepLinkParams } from '~/core/deep-links/use-deep-link';
 import { useComments } from '~/core/hooks/use-comments';
 import { useOpenClaimInSidePanel } from '~/core/hooks/use-open-claim-in-side-panel';
 import { useSpace } from '~/core/hooks/use-space';
@@ -25,6 +27,7 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
 
 import { EntityCommentsPanel } from '~/partials/comments/entity-comments-panel';
+import { holdCommentsInView } from '~/partials/comments/hold-comments-in-view';
 import { EXPLORE_CARD_TITLE_CLASS_NAME } from '~/partials/explore/explore-card-title';
 
 import {
@@ -377,6 +380,27 @@ export function DebatesBrowseFeed({
     if (pinThrough <= pinnedCount) return;
     setPinnedIds(visibleDebates.slice(0, pinThrough).map(debate => debate.id));
   }, [pinThrough, pinnedCount, visibleDebates]);
+
+  // `?modal=comments` (the reply email's Reply, GEO-3381) opens the comments of the debate the link
+  // landed on, once the feed is showing it. A debate the feed can't play falls back to its entity
+  // page, whose comments are inline: scroll to them there instead. Not by rewriting the URL to
+  // `#entity-comments` — the comments section reads the hash once, when it mounts, which is before
+  // this runs. Declared before the URL sync below so the trigger is cleared first: that sync writes
+  // the debate the feed opened on into the URL, and a later clear would write it back out.
+  const commentsLink = useDeepLinkParams(DEEP_LINK_MODALS.comments);
+  // A count, not a flag: each arrival of the link scrolls again.
+  const [inlineCommentsRequests, setInlineCommentsRequests] = React.useState(0);
+  useDeepLinkEffect({
+    requested: commentsLink.requested,
+    cleanUrl: commentsLink.cleanUrl,
+    enabled: !rendersFeed || activeIndex >= 0,
+    run: () => (rendersFeed ? setFeedPanel('comments') : setInlineCommentsRequests(n => n + 1)),
+  });
+  React.useEffect(() => {
+    const page = document.scrollingElement;
+    if (!inlineCommentsRequests || !(page instanceof HTMLElement)) return;
+    return holdCommentsInView(page);
+  }, [inlineCommentsRequests]);
 
   // The URL follows the debate on screen, the way a short-video feed's does: reloading, copying the
   // address bar, or coming Back lands on what was being watched rather than on whichever debate the

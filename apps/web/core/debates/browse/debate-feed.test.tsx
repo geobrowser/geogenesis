@@ -37,6 +37,9 @@ const mocks = vi.hoisted(() => ({
   /** What the stub player reports through `onPlaybackState`. */
   playerState: { ready: false, playing: false, autoplayBlocked: false, error: false },
   captured: [] as Array<{ event: string; properties: Record<string, unknown> }>,
+  /** The page's path and query string, for the deep links the feed reads. */
+  pathname: '/space/space-1/debate-1',
+  search: '',
 }));
 
 vi.mock('~/core/analytics', () => ({
@@ -84,7 +87,12 @@ vi.mock('~/core/sync/use-sync-engine', () => ({
 }));
 vi.mock('next/navigation', async () => {
   const actual = await vi.importActual<typeof import('next/navigation')>('next/navigation');
-  return { ...actual, useRouter: () => ({ prefetch: vi.fn(), push: vi.fn(), replace: vi.fn(), back: vi.fn() }) };
+  return {
+    ...actual,
+    useRouter: () => ({ prefetch: vi.fn(), push: vi.fn(), replace: vi.fn(), back: vi.fn() }),
+    usePathname: () => mocks.pathname,
+    useSearchParams: () => new URLSearchParams(mocks.search),
+  };
 });
 
 vi.mock('~/core/sync/use-store', () => ({
@@ -212,6 +220,8 @@ beforeEach(() => {
   mocks.mediaError = false;
   mocks.playerState = { ready: false, playing: false, autoplayBlocked: false, error: false };
   mocks.captured.length = 0;
+  mocks.search = '';
+  mocks.pathname = '/space/space-1/debate-1';
 
   class MockIntersectionObserver implements IntersectionObserver {
     readonly root = null;
@@ -1383,5 +1393,163 @@ describe('DebatesBrowseFeed — nothing is inserted above what the viewer has re
     mocks.mediaLoading = true;
     view.rerender(<DebatesBrowseFeed spaceId="space-1" />);
     expect(headings()).toEqual(['Debate a', 'Debate b']);
+  });
+});
+
+// GEO-3381: the reply email's Reply on a debate links here with `?modal=comments`.
+describe('DebatesBrowseFeed comments deep link', () => {
+  beforeEach(() => {
+    // jsdom has no `scrollingElement`; a browser in standards mode reports the root element.
+    Object.defineProperty(document, 'scrollingElement', { configurable: true, get: () => document.documentElement });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    Reflect.deleteProperty(document, 'scrollingElement');
+    document.documentElement.scrollTop = 0;
+  });
+
+  it('opens the debate it landed on with its comments, and clears the trigger', () => {
+    mocks.search = 'modal=comments&ref_email=reply';
+    const replaceState = vi.spyOn(window.history, 'replaceState');
+    render(
+      <Provider store={createStore()}>
+        <DebatesBrowseFeed spaceId="space-1" initialDebateId="debate-1" />
+      </Provider>
+    );
+
+    expect(screen.getByText('Comments panel for debate-1')).toBeInTheDocument();
+    expect(replaceState).toHaveBeenCalledWith(null, '', '/space/space-1/debate-1?ref_email=reply');
+  });
+
+  it('waits for the linked debate before opening its comments', () => {
+    mocks.search = 'modal=comments&ref_email=reply';
+    // The linked debate's readiness lookup is still in flight.
+    mocks.processedIds = [];
+    mocks.mediaLoading = true;
+    const replaceState = vi.spyOn(window.history, 'replaceState');
+    const feed = () => (
+      <Provider store={createStore()}>
+        <DebatesBrowseFeed spaceId="space-1" initialDebateId="debate-1" fallback={<div>Entity page</div>} />
+      </Provider>
+    );
+    const view = render(feed());
+
+    // Still resolving: the trigger is kept, so it can fire once the debate is on screen.
+    expect(screen.queryByText(/Comments panel for/)).not.toBeInTheDocument();
+    expect(replaceState).not.toHaveBeenCalledWith(null, '', '/space/space-1/debate-1?ref_email=reply');
+
+    mocks.processedIds = ['debate-1'];
+    mocks.mediaLoading = false;
+    view.rerender(feed());
+    expect(screen.getByText('Comments panel for debate-1')).toBeInTheDocument();
+    expect(replaceState).toHaveBeenCalledWith(null, '', '/space/space-1/debate-1?ref_email=reply');
+  });
+
+  // A debate the feed can't play shows its entity page, with the comments inline.
+  it('scrolls to the inline comments on the fallback entity page, and keeps them in view as it fills in', async () => {
+    mocks.search = 'modal=comments&ref_email=reply';
+    const replaceState = vi.spyOn(window.history, 'replaceState');
+    const page = document.documentElement;
+    page.scrollTop = 0;
+    // jsdom does no layout: the section reports where it sits on the page, less the scroll.
+    let offset = 600;
+    render(
+      <Provider store={createStore()}>
+        <DebatesBrowseFeed
+          spaceId="space-1"
+          initialDebateId="not-in-this-space"
+          fallback={
+            <div
+              id="entity-comments"
+              ref={el => {
+                if (el) el.getBoundingClientRect = () => ({ top: offset - page.scrollTop }) as DOMRect;
+              }}
+            />
+          }
+        />
+      </Provider>
+    );
+
+    expect(page.scrollTop).toBe(600);
+    expect(replaceState).toHaveBeenCalledWith(null, '', '/space/space-1/debate-1?ref_email=reply');
+
+    // The backlinks above the section load and push it down.
+    offset = 900;
+    const backlinks = document.createElement('div');
+    await act(async () => {
+      document.body.prepend(backlinks);
+      await Promise.resolve();
+    });
+    backlinks.remove();
+
+    expect(page.scrollTop).toBe(900);
+  });
+
+  // The space's debates tab, linked without a debate: the feed writes the one it opens on into the
+  // URL, and clearing the trigger must not write it back out.
+  it('keeps the debate it opened on in the URL when it clears the trigger on the debates tab', () => {
+    mocks.pathname = '/space/space-1/debates';
+    mocks.search = 'modal=comments&ref_email=reply';
+    window.history.replaceState(null, '', '/space/space-1/debates?modal=comments&ref_email=reply');
+    render(
+      <Provider store={createStore()}>
+        <DebatesBrowseFeed spaceId="space-1" />
+      </Provider>
+    );
+
+    expect(screen.getByText('Comments panel for debate-1')).toBeInTheDocument();
+    const params = new URLSearchParams(window.location.search);
+    expect(params.get('debate')).not.toBeNull();
+    expect(params.get('modal')).toBeNull();
+    expect(params.get('ref_email')).toBe('reply');
+  });
+
+  it('scrolls to the inline comments again when the link arrives again on the same page', () => {
+    mocks.search = 'modal=comments';
+    const page = document.documentElement;
+    page.scrollTop = 0;
+    const feed = () => (
+      <Provider store={createStore()}>
+        <DebatesBrowseFeed
+          spaceId="space-1"
+          initialDebateId="not-in-this-space"
+          fallback={
+            <div
+              id="entity-comments"
+              ref={el => {
+                if (el) el.getBoundingClientRect = () => ({ top: 600 - page.scrollTop }) as DOMRect;
+              }}
+            />
+          }
+        />
+      </Provider>
+    );
+    const view = render(feed());
+    expect(page.scrollTop).toBe(600);
+
+    // The reader scrolls away, which lets the first hold go.
+    act(() => {
+      page.dispatchEvent(new Event('wheel'));
+    });
+    page.scrollTop = 0;
+
+    // The trigger is cleared, then the same link is followed again without a remount.
+    mocks.search = '';
+    view.rerender(feed());
+    mocks.search = 'modal=comments';
+    view.rerender(feed());
+
+    expect(page.scrollTop).toBe(600);
+  });
+
+  it('leaves the comments closed without it', () => {
+    render(
+      <Provider store={createStore()}>
+        <DebatesBrowseFeed spaceId="space-1" initialDebateId="debate-1" />
+      </Provider>
+    );
+
+    expect(screen.queryByText(/Comments panel for/)).not.toBeInTheDocument();
   });
 });

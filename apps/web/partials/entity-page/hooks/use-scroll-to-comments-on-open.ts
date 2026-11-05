@@ -4,21 +4,7 @@ import * as React from 'react';
 
 import { useEntitySidePanelActiveTab } from '~/core/state/entity-side-panel-active-tab';
 
-import { ENTITY_COMMENTS_ANCHOR_ID } from '~/partials/comments/entity-comments-anchor';
-
-/**
- * An attribute selector rather than `#entity-comments`, for the case this hook scopes its lookup for:
- * the same id earlier in the document, on the page behind the panel. Browsers handle both forms (checked
- * in Chromium and WebKit), but jsdom's `#id` fast path returns null for a scoped query once the id
- * appears earlier in the document, which would leave that case untestable.
- */
-const ANCHOR_SELECTOR = `[id="${ENTITY_COMMENTS_ANCHOR_ID}"]`;
-
-/** How long to wait for the section to render at all: the panel first loads the entity, then the body. */
-const WAIT_FOR_SECTION_MS = 10_000;
-
-/** How long to keep the section in place once it is there, while the content above it fills in. */
-const HOLD_POSITION_MS = 2_000;
+import { holdCommentsInView } from '~/partials/comments/hold-comments-in-view';
 
 /**
  * Scrolls a side panel to the entity's comments — a claim's Activity — when it is opened asking for them.
@@ -54,55 +40,6 @@ export function useScrollToCommentsOnOpen(container: HTMLElement | null, request
   React.useEffect(() => {
     if (!container || !request) return;
     selectTab?.(null);
-
-    let found = false;
-    let stopped = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-
-    const align = () => {
-      const anchor = container.querySelector<HTMLElement>(ANCHOR_SELECTOR);
-      if (!anchor) return;
-      const top = anchor.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop;
-      if (Math.abs(container.scrollTop - top) > 1) container.scrollTop = top;
-      if (!found) {
-        found = true;
-        clearTimeout(timer);
-        timer = setTimeout(stop, HOLD_POSITION_MS);
-      }
-    };
-
-    // Size changes that add no nodes — an image loading, text reflowing — reach it through the
-    // resize observer, which watches whatever the container holds now: the loading state is replaced
-    // by the body, so the children are re-observed on every change rather than once.
-    const resizeObserver = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(align);
-    const observeChildren = () => {
-      for (const child of Array.from(container.children)) resizeObserver?.observe(child);
-    };
-    const observer =
-      typeof MutationObserver === 'undefined'
-        ? null
-        : new MutationObserver(() => {
-            observeChildren();
-            align();
-          });
-
-    const userEvents = ['wheel', 'touchstart', 'pointerdown', 'keydown'] as const;
-
-    function stop() {
-      if (stopped) return;
-      stopped = true;
-      clearTimeout(timer);
-      observer?.disconnect();
-      resizeObserver?.disconnect();
-      for (const type of userEvents) container?.removeEventListener(type, stop);
-    }
-
-    for (const type of userEvents) container.addEventListener(type, stop, { passive: true });
-    observer?.observe(container, { childList: true, subtree: true });
-    observeChildren();
-    timer = setTimeout(stop, WAIT_FOR_SECTION_MS);
-    align();
-
-    return stop;
+    return holdCommentsInView(container);
   }, [container, request, selectTab]);
 }
