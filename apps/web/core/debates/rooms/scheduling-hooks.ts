@@ -40,7 +40,7 @@ const SCHEDULED_POLL_MS = 60_000;
 type AnalyticsRevision = ReturnType<typeof snapshotAnalyticsRevision>;
 
 /** A slot as geo-chat takes it: an instant and a length become a start and an end. */
-function slotPayload(startsAt: Date, minutes: number) {
+export function slotPayload(startsAt: Date, minutes: number) {
   return {
     scheduled_start_at: startsAt.toISOString(),
     scheduled_end_at: new Date(startsAt.getTime() + minutes * 60_000).toISOString(),

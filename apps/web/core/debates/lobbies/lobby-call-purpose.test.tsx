@@ -53,7 +53,7 @@ window.ResizeObserver ??= ResizeObserverStub as unknown as typeof ResizeObserver
 const { LobbyPeople } = await import('./lobby-roster');
 const { LobbyPersonCard } = await import('./lobby-person-menu');
 const { LobbyClosedCard, LobbyEmptyRoom } = await import('./lobby-state-cards');
-const { LobbyPurposeProvider } = await import('./lobby-purpose');
+const { RoomCapabilitiesProvider } = await import('./room-capabilities');
 const { memberActions, otherLobbyIdFrom } = await import('./lobby-format');
 
 const CALL = { purpose: 'call' as const, spaceId: 'space1', exitHref: '/space/space1' };
@@ -108,7 +108,7 @@ function view(members: DebateLobbyMember[], extra: Partial<LobbyPageView> = {}):
 }
 
 function inCall(children: React.ReactNode) {
-  return <LobbyPurposeProvider value={CALL}>{children}</LobbyPurposeProvider>;
+  return <RoomCapabilitiesProvider purpose={CALL}>{children}</RoomCapabilitiesProvider>;
 }
 
 describe('the roster in a space call', () => {

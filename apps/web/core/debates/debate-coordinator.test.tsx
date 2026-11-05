@@ -177,6 +177,8 @@ vi.mock('./debate-gateway', () => ({
   useDebateGatewayScope: () => undefined,
 }));
 
+vi.mock('./use-geo-chat-account-recovery', () => ({ useGeoChatAccountRecovery: () => undefined }));
+
 vi.mock('./matchmaking/hooks', () => ({
   useDebateRequests: () => ({ data: mocks.requests, isLoading: false, error: null }),
   useAcceptDebateRequest: () => ({ mutate: mocks.acceptRequestMutate, isPending: false, error: null }),

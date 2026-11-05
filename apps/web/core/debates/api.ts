@@ -3,6 +3,14 @@
 import type { AvailabilityPayload } from '~/core/availability/blocks';
 import { capSearchQuery } from '~/core/io/search-query';
 
+import {
+  type GeoChatProfileState,
+  type GeoChatRefusalReason,
+  type GeoChatSessionProfile,
+  acceptedStatus,
+  sessionRefusalReason,
+  setGeoChatAccountStatus,
+} from './geo-chat-account-status';
 import { getGeoChatApiBaseUrl } from './geo-chat-public-base-url';
 import type { DebateExtractedClaimsResponse } from './server/extracted-claims';
 import type { RecordingUrlVariant } from './stream-playback';
@@ -1119,6 +1127,8 @@ export type GeoChatSession = {
   access_token: string;
   refresh_token: string;
   expires_at: string;
+  /** Absent on geo-chat builds before GEO-3553; read as attached. */
+  profile?: GeoChatSessionProfile | null;
 };
 
 export type GetPrivyIdentityToken = () => Promise<string | null | undefined>;
@@ -2085,6 +2095,34 @@ export async function rejectDebateRematchRequest(
   });
 }
 
+/**
+ * geo-chat accounts by profile space, in request order; spaces with no account are left out. At
+ * most {@link DEBATE_PROFILE_LOOKUP_MAX} ids.
+ */
+export async function lookupDebateProfiles(
+  profileSpaceIds: string[],
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  signal?: AbortSignal
+) {
+  const response = await geoChatRequest<{ people: DebateParticipantSummary[] }>('/debate-profiles/lookup', {
+    method: 'POST',
+    body: { profile_space_ids: profileSpaceIds },
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    signal,
+  });
+  return response.people;
+}
+
+export const DEBATE_PROFILE_LOOKUP_MAX = 100;
+
+/** A geo-chat older than `profile_space_id` has no lookup route: a 404 with no error code. */
+export function isDebateProfileLookupMissing(error: unknown) {
+  return error instanceof GeoChatRequestError && error.status === 404 && error.code === null;
+}
+
 export async function getDebateProfile(
   profileSpaceId: string,
   getPrivyIdentityToken: GetPrivyIdentityToken,
@@ -2230,6 +2268,11 @@ export type DebateRoomView = {
   scheduled_end_at: string | null;
   /** The access list, as user ids. Empty for a viewer who is not admitted. */
   participants: string[];
+  /**
+   * Everyone the view mentions by user id, once each. Join by `sameId`: these ids are dashless, and
+   * other fields may be dashed. Absent from geo-chat before GEO-3553.
+   */
+  people?: DebateParticipantSummary[];
   /** Everyone currently inside, per connection rather than per user. Empty unless admitted. */
   occupants: string[];
   /** `null` once both sides are present, and for a viewer not in the room themselves. */
@@ -2362,6 +2405,10 @@ export type ScheduledDebateStatus =
 export type ScheduledDebateParticipant = {
   user_id: string;
   accepted: boolean | null;
+  /** Absent from geo-chat before GEO-3553. Dashless. */
+  profile_space_id?: string;
+  display_name?: string | null;
+  avatar_cid?: string | null;
 };
 
 export type ScheduledDebateRequest = {
@@ -2460,6 +2507,10 @@ export type AdminScheduledDebater = {
   /** Their IANA zone. */
   timezone: string;
   block_count: number;
+  /** Absent from geo-chat before GEO-3553. Dashless. */
+  profile_space_id?: string;
+  display_name?: string | null;
+  avatar_cid?: string | null;
 };
 
 export type AdminDebateSchedulesResponse = {
@@ -2872,6 +2923,8 @@ export type DebateLobbyView = {
     /** Host powers now: a host, or the acting host. Gate host tools on this, not `role`. */
     hosting: boolean;
     reminded: boolean;
+    /** Said not interested (GEO-3519); cleared by an RSVP. Absent from a geo-chat that predates it. */
+    dismissed?: boolean;
     /** While in this lobby's voice: when voice stops holding off Away without input. */
     voice_away_at: string | null;
     /** This viewer has a live connection here; `false` while stepped out. */
@@ -2900,6 +2953,8 @@ export type DebateLobbyPerson = {
 export type DebateLobbyCallDetails = {
   space_id: string;
   space_name: string | null;
+  /** The space's member chat room (GEO-3422); absent from geo-chat without space chat. */
+  chat_room_id?: string | null;
   started_by: DebateLobbyPerson | null;
   /** GEO-3421; the same for every viewer. Absent from geo-chat without recording. */
   recording?: CallRecordingState | null;
@@ -2972,6 +3027,11 @@ export type DebateLobbySummary = {
   debating_count: number;
   reminder_count: number;
   viewer_reminded: boolean;
+  /**
+   * The viewer said they are not interested (GEO-3519), so the Requests timeline leaves it out. An
+   * RSVP clears it. Absent from a geo-chat that predates dismissals, which reads as not dismissed.
+   */
+  viewer_dismissed?: boolean;
   /** On the roster, stepped out included. */
   viewer_on_roster: boolean;
   /** When this row was read; orders card patches. `null` before the lobby's first broadcast; absent from older geo-chat. */
@@ -3619,6 +3679,25 @@ export async function endDebateLobby(
   });
 }
 
+/**
+ * One of the viewer's own marks on a lobby: `PUT` sets it, `DELETE` clears it, and either answers
+ * with the lobby's view.
+ */
+function setDebateLobbyViewerMark(
+  lobbyId: string,
+  mark: 'reminder' | 'dismissal',
+  on: boolean,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<DebateLobbyView>(`/debate-lobbies/${lobbyId}/${mark}`, {
+    method: on ? 'PUT' : 'DELETE',
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
 /** Remind me. Setting it is `409 lobby_already_open` or `409 lobby_closed` when too late. */
 export async function setDebateLobbyReminder(
   lobbyId: string,
@@ -3626,12 +3705,20 @@ export async function setDebateLobbyReminder(
   getPrivyIdentityToken: GetPrivyIdentityToken,
   accountKey: string | null
 ) {
-  return geoChatRequest<DebateLobbyView>(`/debate-lobbies/${lobbyId}/reminder`, {
-    method: reminded ? 'PUT' : 'DELETE',
-    auth: true,
-    getPrivyIdentityToken,
-    accountKey,
-  });
+  return setDebateLobbyViewerMark(lobbyId, 'reminder', reminded, getPrivyIdentityToken, accountKey);
+}
+
+/**
+ * Not interested (GEO-3519): the lobby leaves the viewer's Requests timeline, on every device. The
+ * same answers as {@link setDebateLobbyReminder}; an RSVP clears it on geo-chat's side.
+ */
+export async function setDebateLobbyDismissal(
+  lobbyId: string,
+  dismissed: boolean,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return setDebateLobbyViewerMark(lobbyId, 'dismissal', dismissed, getPrivyIdentityToken, accountKey);
 }
 
 /* -------------------------------------------------------------------------------------------------
@@ -4206,7 +4293,13 @@ export function isDebateProfileMissing(error: unknown) {
  * and the query layer to know a failure is worth asking about again.
  */
 export function isAccountWarmingUp(error: unknown) {
-  return error instanceof GeoChatSessionError && error.status === 401;
+  return accountRefusalReason(error) !== null;
+}
+
+/** Why the session exchange refused, for a refusal that clears by itself. See `sessionRefusalReason`. */
+export function accountRefusalReason(error: unknown): GeoChatRefusalReason | null {
+  if (!(error instanceof GeoChatSessionError)) return null;
+  return sessionRefusalReason(error.status, error.code);
 }
 
 /**
@@ -4267,16 +4360,23 @@ export async function retryDebatePhaseBoundaryRequest<T>(request: () => Promise<
 async function requestError(response: Response) {
   let code: string | null = null;
   let details: Record<string, unknown> | null = null;
+  let retryAfterSeconds: number | null = null;
   let message = `${response.status} ${response.statusText}`;
   try {
     const responseBody = (await response.text()).trim();
     if (responseBody) {
       try {
         const body = JSON.parse(responseBody) as {
-          error?: { code?: string; message?: string; details?: Record<string, unknown> };
+          error?: {
+            code?: string;
+            message?: string;
+            details?: Record<string, unknown>;
+            retry_after_seconds?: unknown;
+          };
         };
         code = body.error?.code ?? null;
         details = body.error?.details ?? null;
+        if (typeof body.error?.retry_after_seconds === 'number') retryAfterSeconds = body.error.retry_after_seconds;
         message = body.error?.message || message;
       } catch {
         message = responseBody;
@@ -4289,7 +4389,9 @@ async function requestError(response: Response) {
     message,
     code,
     response.status,
-    retryAfterMs(response.headers?.get('retry-after')),
+    // Cross-origin, `Retry-After` is unreadable unless geo-chat exposes it; the body says it too.
+    retryAfterMs(response.headers?.get('retry-after')) ??
+      (retryAfterSeconds === null ? null : Math.max(0, retryAfterSeconds * 1000)),
     details
   );
 }
@@ -4335,6 +4437,7 @@ export async function getGeoChatSession(
   const effectiveAccountKey = accountKey ?? geoChatSessionAccountKey ?? loadStoredSession()?.account_key ?? null;
   const stored = loadSession(effectiveAccountKey);
   if (stored && new Date(stored.expires_at).getTime() > Date.now() + 30_000) {
+    setGeoChatAccountStatus(effectiveAccountKey, acceptedStatus(stored.profile));
     return stored;
   }
 
@@ -4349,6 +4452,7 @@ export async function getGeoChatSession(
         const refreshed = await refreshGeoChatSession(stored.refresh_token);
         assertCurrentGeoChatSessionEpoch(issuedForEpoch);
         saveSession(refreshed, effectiveAccountKey);
+        setGeoChatAccountStatus(effectiveAccountKey, acceptedStatus(refreshed.profile));
         return refreshed;
       } catch {
         assertCurrentGeoChatSessionEpoch(issuedForEpoch);
@@ -4361,9 +4465,23 @@ export async function getGeoChatSession(
       throw new Error('Sign in to use debates.');
     }
 
-    const session = await createGeoChatSession(privyIdentityToken);
+    let session: GeoChatSession;
+    try {
+      session = await createGeoChatSession(privyIdentityToken);
+    } catch (error) {
+      const reason = accountRefusalReason(error);
+      if (reason && issuedForEpoch === geoChatSessionEpoch) {
+        setGeoChatAccountStatus(effectiveAccountKey, {
+          kind: 'refused',
+          reason,
+          code: (error as GeoChatSessionError).code,
+        });
+      }
+      throw error;
+    }
     assertCurrentGeoChatSessionEpoch(issuedForEpoch);
     saveSession(session, effectiveAccountKey);
+    setGeoChatAccountStatus(effectiveAccountKey, acceptedStatus(session.profile));
     return session;
   })().finally(() => {
     if (geoChatSessionRequests.get(requestKey) === request) {
@@ -4373,6 +4491,75 @@ export async function getGeoChatSession(
 
   geoChatSessionRequests.set(requestKey, request);
   return request;
+}
+
+export type GeoChatProfileRead =
+  | { state: GeoChatProfileState }
+  /** No usable session, or the read failed. `retryAfterMs` is geo-chat's, when it rate limited. */
+  | { state: null; retryAfterMs: number | null };
+
+/**
+ * The profile state from `GET /auth/profile`, which never rotates the session, so the gateway
+ * socket stays up. On a 401 the session is refreshed once and the read retried.
+ */
+export async function readGeoChatSessionProfile(
+  accountKey: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken
+): Promise<GeoChatProfileRead> {
+  const inFlight = geoChatSessionRequests.get(accountKey);
+  if (inFlight) {
+    return inFlight.then(
+      session => ({ state: session.profile?.state ?? 'attached' }),
+      () => ({ state: null, retryAfterMs: null })
+    );
+  }
+
+  const issuedForEpoch = geoChatSessionEpoch;
+  const failed = (error: unknown): GeoChatProfileRead => ({
+    state: null,
+    retryAfterMs: error instanceof GeoChatRequestError ? error.retryAfterMs : null,
+  });
+  const read = async (session: GeoChatSession): Promise<GeoChatProfileRead> => {
+    const response = await fetchGeoChatSession(`${getGeoChatApiBaseUrl()}/auth/profile`, {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    });
+    if (!response.ok) throw await requestError(response);
+    const { profile } = (await response.json()) as { profile: GeoChatSessionProfile | null };
+    // A refresh can land while this is in flight; its session, and the status it set, are newer.
+    const latest = loadSession(accountKey);
+    if (issuedForEpoch === geoChatSessionEpoch && latest?.access_token === session.access_token) {
+      saveSession({ ...latest, profile }, accountKey);
+      setGeoChatAccountStatus(accountKey, acceptedStatus(profile));
+    }
+    return { state: profile?.state ?? 'attached' };
+  };
+
+  const session = loadSession(accountKey);
+  if (!session) return { state: null, retryAfterMs: null };
+  try {
+    return await read(session);
+  } catch (error) {
+    const rejected =
+      error instanceof GeoChatRequestError &&
+      error.status === 401 &&
+      (error.code === 'invalid_access_token' || error.code === 'missing_authorization');
+    if (!rejected) return failed(error);
+  }
+  try {
+    // Renewed the usual way, so it joins any exchange already in flight.
+    expireStoredSession(session.access_token);
+    return await read(await getGeoChatSession(getPrivyIdentityToken, accountKey));
+  } catch (error) {
+    return failed(error);
+  }
+}
+
+/** Marks the stored session expired if it still holds `accessToken`, so the next exchange renews it. */
+function expireStoredSession(accessToken: string) {
+  const stored = loadStoredSession();
+  if (stored?.session.access_token !== accessToken) return;
+  saveSession({ ...stored.session, expires_at: new Date(0).toISOString() }, stored.account_key);
 }
 
 /** The access token every tab and request currently shares, if one is stored. */

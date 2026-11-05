@@ -605,6 +605,18 @@ describe('analytics', () => {
       expect(loader()).toHaveLength(1);
     });
 
+    it('requests it at once when a flow asks, and only once', async () => {
+      const { initAnalytics, startAnalyticsSoon } = await import('./analytics');
+      startAnalyticsSoon();
+      expect(loader()).toHaveLength(0);
+      initAnalytics();
+      startAnalyticsSoon();
+      expect(loader()).toHaveLength(1);
+      startAnalyticsSoon();
+      window.dispatchEvent(new Event('keydown'));
+      expect(loader()).toHaveLength(1);
+    });
+
     it('holds events fired before the load and delivers them after it', async () => {
       const { initAnalytics, capture } = await import('./analytics');
       initAnalytics();

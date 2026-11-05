@@ -48,12 +48,19 @@ async function LeadPosterPreload() {
   );
 }
 
-export default async function ExploreRoutePage() {
+export default async function ExploreRoutePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ entry?: string | string[] }>;
+}) {
+  const entry = (await searchParams).entry;
+  const normalizedEntry = typeof entry === 'string' ? entry.replace(/-/g, '').toLowerCase() : '';
+  const entryEntityId = /^[0-9a-f]{32}$/.test(normalizedEntry) ? normalizedEntry : null;
   const wallet = (await cookies()).get(WALLET_ADDRESS)?.value;
   // A signed-in reader's Best request carries an identity token while interleaving is on, and a
   // preload can't send one, so the feed's fetch would ignore it and the request would run twice.
   const bestSendsIdentityToken = wallet !== undefined && process.env.NEXT_PUBLIC_FEED_INTERLEAVING_ENABLED === 'true';
-  const opensOnBest = process.env.NEXT_PUBLIC_FOR_YOU_ENABLED !== 'true';
+  const opensOnBest = entryEntityId !== null || process.env.NEXT_PUBLIC_FOR_YOU_ENABLED !== 'true';
   if (opensOnBest) {
     // Every reader gets the CDN-cached public page: a signed-in reader's feed paints from it while
     // their own page is built (`EntityFeed`'s `cdnFirstPage`), which is most of a second later.
@@ -74,8 +81,9 @@ export default async function ExploreRoutePage() {
           </React.Suspense>
         }
         walletAddress={wallet || null}
+        entryEntityId={entryEntityId}
       />
-      {opensOnBest ? (
+      {opensOnBest && !entryEntityId ? (
         <React.Suspense fallback={null}>
           <LeadPosterPreload />
         </React.Suspense>

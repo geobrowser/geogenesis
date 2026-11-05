@@ -5200,12 +5200,100 @@ describe('DebateRoomPageClient', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'End turn' }));
     expect(audioTrack.mediaStreamTrack.enabled).toBe(false);
-    await act(async () => pendingEnd.reject(new Error('Could not end the turn.')));
+    await act(async () =>
+      pendingEnd.reject(new GeoChatRequestError('the requested turn is not active', 'turn_yield_stale', 400))
+    );
 
     expect(mocks.refetchDebate).toHaveBeenCalledOnce();
-    expect(screen.getByText('Could not end the turn.')).toBeInTheDocument();
+    expect(screen.getByText('Could not end the turn. Try again.')).toBeInTheDocument();
+    expect(screen.queryByText(/requested turn/)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'End turn' })).toBeEnabled();
     expect(audioTrack.mediaStreamTrack.enabled).toBe(true);
+  });
+
+  describe('End turn at the buzzer', () => {
+    const turnEndsAtMs = Date.parse('2026-07-02T00:00:30.000Z');
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+      vi.setSystemTime(turnEndsAtMs - 1_000);
+      mocks.getServerTime.mockRejectedValue(new Error('Clock endpoint unavailable'));
+      mocks.debate = {
+        ...completedDebate(),
+        status: 'in_progress',
+        current_turn_index: 0,
+        current_speaker_slot: 1,
+        started_at: '2026-07-02T00:00:00.000Z',
+        turn_started_at: '2026-07-02T00:00:00.000Z',
+        turn_ends_at: '2026-07-02T00:00:30.000Z',
+        completed_at: null,
+      };
+      mocks.refetchDebate.mockResolvedValue({ data: mocks.debate });
+    });
+
+    async function renderSpeaking() {
+      render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      return screen.getByRole('button', { name: 'End turn' });
+    }
+
+    function expectTurnHandedToOpponent() {
+      expect(screen.queryByRole('button', { name: 'End turn' })).not.toBeInTheDocument();
+      expect(debateVideoTile('remote')).toHaveAttribute('data-active-speaker', 'true');
+    }
+
+    it('treats a press after the turn ran out as the timer ending it', async () => {
+      const endTurn = await renderSpeaking();
+      vi.setSystemTime(turnEndsAtMs + 35);
+
+      fireEvent.click(endTurn);
+
+      expect(mocks.endTurnMutateAsync).not.toHaveBeenCalled();
+      await act(() => vi.advanceTimersByTimeAsync(500));
+      expect(mocks.endTurnMutateAsync).not.toHaveBeenCalled();
+      expect(screen.queryByText(/Could not end the turn|ended_at_ms/)).not.toBeInTheDocument();
+      expectTurnHandedToOpponent();
+    });
+
+    it('treats a press after an Open debates turn ran out as the timer ending it', async () => {
+      const roundTurnEndsAtMs = openRoundsAt('20:02:52.200');
+      vi.setSystemTime(roundTurnEndsAtMs - 1_000);
+      mocks.debate = openRoundsRoundOneSpeaking();
+      const endTurn = await renderSpeaking();
+      vi.setSystemTime(roundTurnEndsAtMs + 35);
+
+      fireEvent.click(endTurn);
+
+      expect(mocks.endTurnMutateAsync).not.toHaveBeenCalled();
+      await act(() => vi.advanceTimersByTimeAsync(500));
+      expect(mocks.endTurnMutateAsync).not.toHaveBeenCalled();
+      expect(screen.queryByText(/Could not end the turn|ended_at_ms/)).not.toBeInTheDocument();
+      expectTurnHandedToOpponent();
+    });
+
+    it('shows nothing when the server refuses a press it clocked past the turn’s end', async () => {
+      const pendingEnd = deferred<Debate>();
+      mocks.endTurnMutateAsync.mockReturnValue(pendingEnd.promise);
+      const endTurn = await renderSpeaking();
+      vi.setSystemTime(turnEndsAtMs - 10);
+
+      fireEvent.click(endTurn);
+      expect(mocks.endTurnMutateAsync).toHaveBeenCalledOnce();
+      vi.setSystemTime(turnEndsAtMs + 40);
+      await act(async () =>
+        pendingEnd.reject(
+          new GeoChatRequestError('ended_at_ms does not fall inside the requested turn', 'invalid_turn_yield', 400)
+        )
+      );
+      await act(() => vi.advanceTimersByTimeAsync(500));
+
+      expect(mocks.refetchDebate).toHaveBeenCalledOnce();
+      expect(screen.queryByText(/Could not end the turn|ended_at_ms/)).not.toBeInTheDocument();
+      expectTurnHandedToOpponent();
+    });
   });
 
   it('reconciles a committed turn yield after the mutation response is lost', async () => {

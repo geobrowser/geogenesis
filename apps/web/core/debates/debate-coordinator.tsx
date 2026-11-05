@@ -64,6 +64,7 @@ import {
 } from './social-video-share';
 import { useCurrentGeoChatUserId } from './use-current-geo-chat-user-id';
 import { useDebateInteractionReporter } from './use-debate-interaction-reporter';
+import { useGeoChatAccountRecovery } from './use-geo-chat-account-recovery';
 import { useScrollLock } from './use-scroll-lock';
 import { opponentLeftNoticeAtom } from '~/atoms';
 
@@ -164,6 +165,7 @@ export function DebateCoordinator() {
     debatePresence
   );
   useDebateGatewayPauseLog(gateway.paused, gateway.pauseReason);
+  useGeoChatAccountRecovery();
   useClaimResponseIndexedNotifier(
     geoChatAuth.ready && geoChatAuth.authenticated,
     geoChatAuth.getPrivyIdentityToken,

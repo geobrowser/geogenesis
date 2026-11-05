@@ -14,6 +14,7 @@ import { Text } from '~/design-system/text';
 import { OwnScheduleModal } from '~/partials/availability/own-schedule-modal';
 
 import { debateAnalyticsLabel } from './hub-analytics';
+import { HUB_CALLOUT_CLASS_NAME, HubCalloutTitle } from './hub-callout';
 import { HubPillButton } from './hub-pill-button';
 
 /**
@@ -111,13 +112,10 @@ function Banner({ scheduleButtonRef, surface = 'hub', className }: Props) {
   // Retired mid-edit, only the callout goes. The modal keeps its place in the tree, so React keeps
   // the one already open rather than mounting a fresh one.
   return (
-    <div className={noTimes ? cx(className ?? 'mx-4 mb-3', 'rounded-lg bg-purple-tint p-4') : 'contents'}>
+    <div className={noTimes ? cx(className ?? 'mx-4 mb-3', HUB_CALLOUT_CLASS_NAME) : 'contents'}>
       {noTimes ? (
         <>
-          <div className="flex items-center justify-between gap-3">
-            <Text as={surface === 'calendar' ? 'h2' : 'h3'} variant="smallTitle">
-              Debate schedule
-            </Text>
+          <HubCalloutTitle as={surface === 'calendar' ? 'h2' : 'h3'} title="Debate schedule">
             <HubPillButton
               ref={openerRef}
               variant="primary"
@@ -128,7 +126,7 @@ function Banner({ scheduleButtonRef, surface = 'hub', className }: Props) {
             >
               Set my schedule
             </HubPillButton>
-          </div>
+          </HubCalloutTitle>
 
           <Text as="p" variant="metadata" className="mt-2">
             Set the times you’re free for debates. Others can check your availability and request a time that works for

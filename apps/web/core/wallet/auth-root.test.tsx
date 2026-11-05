@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useGeoLogin, useLoginWithOAuth, usePrivy } from './auth-hooks';
 import { getIdentityToken } from './auth-hooks';
-import { AuthRoot, IDLE_LOAD_DELAY_MS, scheduleIdleLoad } from './auth-root';
+import { AuthRoot, IDLE_LOAD_DELAY_MS, scheduleIdleLoad, startAuthForPage } from './auth-root';
 import { getState, resetAuthStore, restartAuthHost } from './auth-store';
 import { PRIVY_REFRESH_TOKEN_KEY } from './privy-session';
 
@@ -169,6 +169,28 @@ describe('visitor with a Privy session', () => {
     await waitFor(() => expect(mocks.providerMounts).toBe(1));
     await waitFor(() => expect(screen.getByTestId('state')).toHaveTextContent('ready/out'));
     expect(getState().requested).toBe(false);
+  });
+});
+
+// GEO-3569: the sign-in link's dialog waited for Privy's chunk and start-up after hydration.
+describe('a page that opens sign-in by itself', () => {
+  it('mounts Privy straight away for the sign-in link', async () => {
+    window.history.replaceState({}, '', '/explore?modal=signin&via=marketing');
+    startAuthForPage();
+    renderApp();
+
+    await waitFor(() => expect(mocks.providerMounts).toBe(1));
+    // Signed out the whole time: nothing on the page flips to loading.
+    expect(screen.getByTestId('state')).toHaveTextContent('ready/out');
+  });
+
+  it('leaves other links to load Privy on demand', async () => {
+    window.history.replaceState({}, '', '/explore?modal=debates');
+    startAuthForPage();
+    renderApp();
+
+    await waitFor(() => expect(screen.getByTestId('state')).toHaveTextContent('ready/out'));
+    expect(mocks.providerMounts).toBe(0);
   });
 });
 

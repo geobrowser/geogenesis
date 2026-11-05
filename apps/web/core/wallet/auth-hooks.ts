@@ -267,4 +267,9 @@ export function retryEmbeddedWalletSetup() {
   void import('@geogenesis/auth').then(auth => auth.retryEmbeddedWalletSetup());
 }
 
+/** Privy has loaded and started. False after a load that failed or timed out. */
+export function isPrivyLoaded() {
+  return realPrivyReady();
+}
+
 export { restartAuthHost } from './auth-store';

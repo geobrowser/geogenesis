@@ -26,6 +26,8 @@ import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 import { ElevatedPopoverPortalContext } from '~/design-system/use-elevated-popover-portal';
 
+import { ResponseButton } from '~/partials/entity-page/response-button';
+
 import type { DebatePerson } from '../api';
 import { useDebateClaimResponse } from '../browse/use-debate-claim-response';
 import { useDebateClaims } from '../hooks';
@@ -629,19 +631,19 @@ function SidePills({
     );
     if (!vote) return <span className={className}>{content}</span>;
     return (
-      <button
-        type="button"
-        aria-pressed={mine}
-        aria-label={`${responsePositionLabel(position)}: ${vote.claimName}`}
-        title={vote.titleFor(position)}
-        {...debateActionAnalyticsAttributes('calendar', responsePositionLabel(position), 'vote')}
-        disabled={vote.disabled || vote.pending}
-        aria-busy={vote.pending || undefined}
-        onClick={() => vote.onRespond(position)}
-        className={cx(className, 'pointer-events-auto transition-colors hover:border-text disabled:opacity-60')}
+      <ResponseButton
+        selected={mine}
+        pending={vote.pending}
+        disabled={vote.disabled}
+        actionTitle={vote.titleFor(position)}
+        ariaLabel={`${responsePositionLabel(position)}: ${vote.claimName}`}
+        onPress={() => vote.onRespond(position)}
+        buttonProps={debateActionAnalyticsAttributes('calendar', responsePositionLabel(position), 'vote')}
+        className={cx(className, 'pointer-events-auto transition-colors disabled:opacity-60')}
+        hoverClassName="hover:border-text"
       >
         {content}
-      </button>
+      </ResponseButton>
     );
   };
 

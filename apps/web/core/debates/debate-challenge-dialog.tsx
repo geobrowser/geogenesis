@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import { speakerLabel } from '~/core/debates/debater-name';
 import { debateActionAnalyticsAttributes } from '~/core/debates/matchmaking/hub-analytics';
 
 import { Avatar } from '~/design-system/avatar';
@@ -164,5 +165,5 @@ function ChallengeParticipant({ participant, label }: { participant: DebateParti
 }
 
 function participantName(participant: DebateParticipantSummary) {
-  return participant.display_name || 'Debater';
+  return speakerLabel(participant);
 }

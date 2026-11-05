@@ -26,6 +26,8 @@ const mocks = vi.hoisted(() => ({
   },
   guestViewEnabled: [] as boolean[],
   notices: [] as unknown[],
+  people: undefined as unknown[] | undefined,
+  participants: ['jordan', 'maya'],
   viewerId: 'jordan' as string | null,
   /** The room is a space call, which `useSpaceCallRedirect` sends to its own page. */
   toCall: false,
@@ -41,8 +43,13 @@ vi.mock('~/core/space-calls/space-call-page', () => ({
 
 vi.mock('~/core/debates/use-current-geo-chat-user-id', () => ({ useCurrentGeoChatUserId: () => mocks.viewerId }));
 vi.mock('~/core/debates/matchmaking/use-geo-chat-user-summaries', () => ({
-  useGeoChatUserSummaries: (ids: string[]) =>
-    ids.map(id => ({ user_id: id, profile_space_id: `${id}-space`, display_name: 'Maya', avatar_cid: null })),
+  useGeoChatUserSummaries: (people: { user_id: string; profile_space_id?: string; display_name?: string | null }[]) =>
+    people.map(person => ({
+      user_id: person.user_id,
+      profile_space_id: person.profile_space_id ?? `${person.user_id}-space`,
+      display_name: person.display_name ?? 'Maya',
+      avatar_cid: null,
+    })),
 }));
 
 vi.mock('~/core/debates/lobbies/lobby-guest-hooks', () => ({
@@ -81,11 +88,12 @@ vi.mock('~/core/debates/rooms/hooks', () => ({
       starts_at: '2026-09-24T13:00:00.000Z',
       opens_at: '2026-09-24T12:50:00.000Z',
       scheduled_end_at: null,
-      participants: ['jordan', 'maya'],
+      participants: mocks.participants,
       occupants: [],
       waiting: null,
       rematch_session_id: 'session-1',
       notices: mocks.notices,
+      people: mocks.people,
     },
     error: null,
     isError: false,
@@ -120,6 +128,8 @@ afterEach(() => {
   mocks.guestView = { data: undefined, isPending: true, fetchStatus: 'idle' };
   mocks.guestViewEnabled = [];
   mocks.notices = [];
+  mocks.people = undefined;
+  mocks.participants = ['jordan', 'maya'];
   mocks.viewerId = 'jordan';
 });
 
@@ -352,6 +362,24 @@ describe('DebateRoomPageClient: the other debater can’t make it', () => {
     at: '2026-09-24T13:02:00.000Z',
     expected_at: null,
     note,
+  });
+
+  // The notice's id is dashed and `people` spells it dashless; they are the same person.
+  it('names them from the room’s own people', () => {
+    mocks.access = { status: 'closed', reason: 'cancelled' } as typeof mocks.access;
+    mocks.participants = ['jordan', '0195f0c2-a9e4-7b6c-8d1e-2f3a4b5c6d7e'];
+    mocks.notices = [cantMakeIt('0195f0c2-a9e4-7b6c-8d1e-2f3a4b5c6d7e')];
+    mocks.people = [
+      {
+        user_id: '0195f0c2a9e47b6c8d1e2f3a4b5c6d7e',
+        profile_space_id: 'space-nia',
+        display_name: 'Nia',
+        avatar_cid: null,
+      },
+    ];
+    render(<DebateRoomPageClient roomId="room-1" />);
+
+    expect(screen.getByRole('status')).toHaveTextContent('Nia can’t make it, so the debate is cancelled.');
   });
 
   it('says they can’t make it, with what they wrote, and offers someone else', () => {

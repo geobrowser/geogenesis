@@ -1,7 +1,6 @@
 'use client';
 
 import {
-  type Query,
   type QueryClient,
   type UseQueryResult,
   useMutation,
@@ -20,10 +19,13 @@ import { fromPayload, localTimezone, toPayload } from '~/core/availability/block
 import { PEER_SCHEDULE_DAYS, toPeerSchedule } from '~/core/availability/peer-schedule';
 import { type ScheduleEditorSurface, debateScheduleSaved } from '~/core/availability/schedule-analytics';
 import { useObservedMutation } from '~/core/hooks/use-observed-mutation';
+import { useSetToast } from '~/core/hooks/use-toast';
+import { validateSpaceId } from '~/core/io/rest/validation';
 import { usePrivy } from '~/core/wallet/auth-hooks';
 
 import {
   type CreateDebateChallengeBody,
+  DEBATE_PROFILE_LOOKUP_MAX,
   type Debate,
   type DebateActivity,
   type DebateClaimsResponse,
@@ -76,6 +78,7 @@ import {
   listDebateSharePrompts,
   listNotInterestedClaims,
   listSpaceDebates,
+  lookupDebateProfiles,
   markDebateCapturing,
   markDebateJoined,
   markDebateReady,
@@ -91,6 +94,7 @@ import { claimResponseIndexedEvent } from './claim-response-indexed-notifier';
 import { useDebateAttention, useDebateVisibility } from './debate-attention';
 import { markEnteringDebate, markEnteringPendingDebate } from './debate-entry-intent';
 import { useDebateGatewayScope, useDebateGatewaySnapshot, useDebateGatewaySpaceScopes } from './debate-gateway';
+import { isLiveGeoChatAccount, refusedRetryDelayMs } from './geo-chat-account-status';
 import { lobbyDebateRequested } from './lobbies/lobby-analytics';
 import { markAskWithdrawn, unmarkAskWithdrawn } from './matchmaking/ask-withdrawals';
 import {
@@ -252,6 +256,8 @@ export const debateQueryKeys = {
   sharePrompts: (accountKey: string | null) => ['debates', 'account', accountKey, 'share-prompts'] as const,
   profile: (accountKey: string | null, profileSpaceId: string) =>
     ['debates', 'account', accountKey, 'profile', profileSpaceId] as const,
+  profileLookup: (accountKey: string | null, profileSpaceIds: readonly string[]) =>
+    ['debates', 'account', accountKey, 'profile-lookup', profileSpaceIds] as const,
   people: (accountKey: string | null) => ['debates', 'account', accountKey, 'people'] as const,
   /** Prefix covering every filter combination of the claims list. */
   matchmakingClaimsRoot: (accountKey: string | null) =>
@@ -367,25 +373,6 @@ function withOnlineChoiceAvatars<T extends { online_choices: Array<{ participant
  * `claims` comes back in no particular order: batches are keyed by sorted id so their query keys
  * survive the caller reordering or prepending ids. Key the result by `claim_entity_id`.
  */
-/** How often a refused claim-rows lookup asks again while geo-chat registers the account. */
-const VIEWER_ANSWER_RECOVERY_POLL_MS = 10_000;
-
-/**
- * And how many times, because a wait that never ends is not a wait.
- *
- * Registration finishes in a minute or two, so nine polls at ten seconds covers it — the same
- * ninety seconds `WARMING_UP_RETRIES` gives the matchmaking reads, which is deliberate: they are
- * waiting for the same event, and a viewer should not find one half of the hub still trying while
- * the other gave up. Unbounded, an account that never registers left every failed batch asking
- * every ten seconds for the life of the tab, once per space, each one a fresh session exchange.
- *
- * Counted off `errorUpdateCount`, which is react-query's own and accumulates. Emphatically not
- * `fetchFailureCount`, which was the obvious choice and is wrong: that one counts retries *within*
- * a fetch and resets when the next one starts, so with `retry: false` it never exceeds one and the
- * bound never bites. The test for this caught exactly that — sixty polls where ten were expected.
- */
-const VIEWER_ANSWER_RECOVERY_POLLS = 9;
-
 export function useDebateClaimsBySpaces(groups: Array<{ spaceId: string; claimIds: string[] }>) {
   const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
 
@@ -443,33 +430,8 @@ export function useDebateClaimsBySpaces(groups: Array<{ spaceId: string; claimId
           signal
         ),
       enabled: authenticated && group.claimIds.length > 0,
-      /**
-       * How a claim's answers recover from a refusal, rather than staying refused for the visit.
-       *
-       * `answersReady` is a "not yet" that is supposed to clear itself — until it does, every pill on the
-       * card is unpressable, which is right while the lookup is out and wrong the moment it could succeed.
-       * With `retry: false` and nothing to trigger a refetch, a viewer whose account geo-chat had not yet
-       * registered kept a panel of dead pills for the rest of the visit while the same claims in the main
-       * feed took positions perfectly well. The account had finished registering; nothing asked again.
-       *
-       * So: poll, but only while being refused, and only for the reason that resolves on its own.
-       * `refetchInterval` returns `false` on success and on every other failure, which makes this a wait
-       * for one specific event and not a background poll — a real outage still fails once and stays
-       * failed, and a settled lookup is never asked twice.
-       *
-       * Ten seconds against a wait that runs a minute or two: short enough that the pills come alive
-       * while the viewer is still looking at them, long enough that a slow registration costs a handful
-       * of requests rather than a stream of them.
-       */
-      refetchInterval: (query: Query<DebateClaimsResponse, Error>) =>
-        query.state.status === 'error' &&
-        isAccountWarmingUp(query.state.error) &&
-        query.state.errorUpdateCount <= VIEWER_ANSWER_RECOVERY_POLLS
-          ? VIEWER_ANSWER_RECOVERY_POLL_MS
-          : false,
-      // Same reason `useClaimSpaceAllowlist` sets it: a tab nobody is looking at should not spend
-      // requests, and a refocus refetches this anyway.
-      refetchIntervalInBackground: false,
+      // A refused session exchange recovers through `useGeoChatAccountRecovery`, which refetches
+      // these rows once geo-chat accepts the account.
     })),
     combine,
   });
@@ -719,6 +681,8 @@ export function useDebateSchedule() {
     queryKey: debateQueryKeys.schedule(accountKey),
     // Signed out there is no schedule to fetch, and asking would 401 on every render.
     enabled: accountKey !== null,
+    // A refused session exchange is left to `useGeoChatAccountRecovery`, which refetches this.
+    retry: (failureCount, error) => !isAccountWarmingUp(error) && failureCount < 3,
     queryFn: () => getDebateSchedule(getPrivyIdentityToken, accountKey),
   });
 
@@ -730,6 +694,8 @@ export function useDebateSchedule() {
     blocks,
     /** Whether they have ever saved one, which several surfaces gate on. */
     isSet: query.data?.is_set ?? false,
+    /** The zone `blocks` were saved in, which the editor converts from (GEO-3582). */
+    timezone: query.data?.schedule.timezone,
   };
 }
 
@@ -739,14 +705,41 @@ export function useDebateSchedule() {
  * The timezone is read at save time rather than stored with the editor's state: a schedule means
  * "18:00 where I am", and the zone that matters is the one they were in when they said so.
  */
+/** About five minutes of `refusedRetryDelayMs` (2 s doubling to 30 s). */
+export const SCHEDULE_SAVE_REFUSED_RETRIES = 13;
+
+/** A save for an account that is not the signed-in one. Never retried and never reported. */
+class ScheduleSaveAbandonedError extends Error {
+  constructor() {
+    super('The account that saved this schedule is no longer signed in.');
+    this.name = 'ScheduleSaveAbandonedError';
+  }
+}
+
 export function useSaveDebateSchedule({ surface }: { surface: ScheduleEditorSurface }) {
   const queryClient = useQueryClient();
+  const setToast = useSetToast();
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
   const scheduleKey = debateQueryKeys.schedule(accountKey);
 
   return useMutation({
-    mutationFn: (blocks: AvailabilityBlock[]) =>
-      replaceDebateSchedule(toPayload(blocks, localTimezone()), getPrivyIdentityToken, accountKey),
+    // Retries outlive the editor, so every attempt checks the saving account is still signed in:
+    // the token getter is shared and would otherwise sign the next account's request.
+    mutationFn: (blocks: AvailabilityBlock[]) => {
+      if (!isLiveGeoChatAccount(accountKey)) return Promise.reject(new ScheduleSaveAbandonedError());
+      return replaceDebateSchedule(toPayload(blocks, localTimezone()), getPrivyIdentityToken, accountKey);
+    },
+    // One at a time per account, in order, so an older save still retrying cannot land last.
+    scope: { id: `debate-schedule:${accountKey}` },
+    // The editor closes on Save, so a refused session is waited out for a while rather than dropped.
+    retry: (failureCount, error) =>
+      isAccountWarmingUp(error) && failureCount < SCHEDULE_SAVE_REFUSED_RETRIES && isLiveGeoChatAccount(accountKey),
+    retryDelay: refusedRetryDelayMs,
+    onError: (error, _blocks, isCurrent) => {
+      if (error instanceof ScheduleSaveAbandonedError || isCurrent?.() === false) return;
+      if (!isLiveGeoChatAccount(accountKey)) return;
+      setToast(React.createElement('span', null, 'We couldn’t save your availability. Please try again.'));
+    },
     // Taken at Save: the answer can arrive after a sign-out or account switch, and it is not the
     // next account's schedule.
     onMutate: snapshotAnalyticsRevision,
@@ -1442,6 +1435,35 @@ export function useDebateProfile(
   }, [foreground, query.refetch, queryEnabled]);
 
   return query;
+}
+
+/**
+ * The geo-chat accounts behind these profile spaces, for people found in the graph. Spaces with no
+ * account are left out: they cannot be debated or matched.
+ */
+export function useDebateProfilesBySpace(profileSpaceIds: readonly string[], enabled = true) {
+  const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
+  const ids = React.useMemo(
+    () => [...new Set(profileSpaceIds.flatMap(id => validateSpaceId(id) ?? []))].sort(),
+    [profileSpaceIds]
+  );
+  return useQuery({
+    ...debateQueryNetworkOptions,
+    queryKey: debateQueryKeys.profileLookup(accountKey, ids),
+    queryFn: async ({ signal }) => {
+      const pages: string[][] = [];
+      for (let i = 0; i < ids.length; i += DEBATE_PROFILE_LOOKUP_MAX) {
+        pages.push(ids.slice(i, i + DEBATE_PROFILE_LOOKUP_MAX));
+      }
+      const found = await Promise.all(
+        pages.map(page => lookupDebateProfiles(page, getPrivyIdentityToken, accountKey, signal))
+      );
+      return found.flat();
+    },
+    enabled: enabled && authenticated && ids.length > 0,
+    // Which account a space belongs to does not change under it.
+    staleTime: 10 * 60_000,
+  });
 }
 
 export function useCreateDebateChallenge() {
