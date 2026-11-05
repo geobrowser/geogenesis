@@ -6,6 +6,7 @@ import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { setCachedIdentityToken } from '~/core/auth/identity-token';
+import { queryClient as appQueryClient } from '~/core/query-client';
 import { entityResponseIndexingQueryKey } from '~/core/responses/entity-response';
 
 import {
@@ -37,6 +38,7 @@ import {
   useDebateRematchClaims,
   useDebateRematchClaimsForIds,
   useDebateSchedule,
+  useDebateSharePrompts,
   useEndDebateTurn,
   useForgetEndedRematch,
   useGeoChatAuth,
@@ -1536,6 +1538,45 @@ describe('useClearDebateActivity', () => {
 });
 
 describe('debate query refresh behavior', () => {
+  it('refreshes pending shares when re-enabled within the app cache freshness window', async () => {
+    mocks.authenticated = true;
+    mocks.identityToken.mockReturnValue(null);
+    setCachedIdentityToken(null);
+    let resolvePrompts!: (value: { prompts: [] }) => void;
+    mocks.listDebateSharePrompts.mockReset().mockReturnValue(
+      new Promise(resolve => {
+        resolvePrompts = resolve;
+      })
+    );
+    const client = new QueryClient({ defaultOptions: appQueryClient.getDefaultOptions() });
+    client.setQueryData(debateQueryKeys.sharePrompts('user-a'), {
+      prompts: [
+        {
+          id: 'prompt-1',
+          debate_id: 'debate-1',
+          source_space_id: 'space-1',
+          claim: 'Debates are useful',
+          created_at: '2026-07-02T00:00:00.000Z',
+        },
+      ],
+    });
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+    const { result, rerender } = renderHook(({ enabled }) => useDebateSharePrompts(enabled), {
+      wrapper,
+      initialProps: { enabled: false },
+    });
+    expect(mocks.listDebateSharePrompts).not.toHaveBeenCalled();
+
+    rerender({ enabled: true });
+
+    await waitFor(() => expect(mocks.listDebateSharePrompts).toHaveBeenCalledTimes(1));
+    expect(result.current.isFetching).toBe(true);
+    await act(async () => resolvePrompts({ prompts: [] }));
+    await waitFor(() => expect(result.current.data).toEqual({ prompts: [] }));
+  });
+
   it('hydrates debate and rematch detail caches from activity responses', async () => {
     window.localStorage.setItem(
       'geo:chat-session',
