@@ -226,10 +226,14 @@ describe.each(entries)('sign-in from the $name, new visitor', entry => {
     await startPrivy(NEVER);
     await advance(PRIVY_READY_TIMEOUT_MS);
 
-    const [report, ...rest] = reportsNamed('sign_in_load_failed');
-    expect(rest).toEqual([]);
-    expect(report).toMatchObject({ level: 'error', tags: { privy_loaded: false, privy_requested: true } });
-    expect(['never_ready', 'call_timeout']).toContain(report.extra?.reason);
+    expect(reportsNamed('sign_in_privy_not_ready')).toHaveLength(1);
+    expect(reportsNamed('sign_in_load_failed')).toEqual([
+      expect.objectContaining({
+        level: 'error',
+        tags: expect.objectContaining({ privy_loaded: false, privy_requested: true, reason: 'call_timeout' }),
+        extra: expect.objectContaining({ call: 'send_code' }),
+      }),
+    ]);
     expect(mocks.sendCode).not.toHaveBeenCalled();
     expect(screen.getByRole('alert')).toHaveTextContent('Couldn’t reach sign-in');
   });

@@ -95,18 +95,30 @@ describe('sign_in_prompt_timeout', () => {
 });
 
 describe('sign_in_load_failed', () => {
-  it('reports never_ready once when Privy has not started 20 s after the attempt began', () => {
+  it('reports never_ready as its own issue, apart from a call that then gave up', () => {
     requestRealAuth();
     const attempt = beginAuthAttempt({ component: 'sign_in_deep_link', link_source: 'marketing' });
     openAuthAttempt();
     vi.advanceTimersByTime(PRIVY_READY_TIMEOUT_MS);
     reportSignInLoadFailed('call_timeout', { call: 'send_code' });
+    reportSignInLoadFailed('call_timeout', { call: 'send_code' });
     expect(mocks.reports).toEqual([
+      expect.objectContaining({
+        name: 'sign_in_privy_not_ready',
+        level: 'warning',
+        tags: expect.objectContaining({
+          privy_loaded: false,
+          privy_requested: true,
+          link_source: 'marketing',
+          reason: 'never_ready',
+        }),
+        extra: expect.objectContaining({ reason: 'never_ready', auth_attempt_id: attempt.id }),
+      }),
       expect.objectContaining({
         name: 'sign_in_load_failed',
         level: 'error',
-        tags: expect.objectContaining({ privy_loaded: false, privy_requested: true, link_source: 'marketing' }),
-        extra: expect.objectContaining({ reason: 'never_ready', auth_attempt_id: attempt.id }),
+        tags: expect.objectContaining({ reason: 'call_timeout' }),
+        extra: expect.objectContaining({ call: 'send_code' }),
       }),
     ]);
   });
@@ -115,8 +127,10 @@ describe('sign_in_load_failed', () => {
     beginAuthAttempt({ component: 'navbar' });
     openAuthAttempt();
     reportSignInLoadFailed('chunk_load', { error: new TypeError('Failed to fetch dynamically imported module') });
+    reportSignInLoadFailed('call_timeout', { call: 'login' });
     vi.advanceTimersByTime(PRIVY_READY_TIMEOUT_MS);
-    expect(mocks.reports).toEqual([
+    expect(names()).toEqual(['sign_in_load_failed', 'sign_in_privy_not_ready']);
+    expect(mocks.reports.slice(0, 1)).toEqual([
       expect.objectContaining({
         name: 'sign_in_load_failed',
         extra: expect.objectContaining({
@@ -196,9 +210,12 @@ describe('a page hidden during the attempt', () => {
     expect(names()).toEqual([]);
   });
 
-  it('still reports a Privy chunk that failed to load', () => {
+  it('reports a failed Privy chunk once the page is visible, but not from a page being left', () => {
     setVisibility('hidden');
     beginAuthAttempt({ component: 'navbar' });
+    reportSignInLoadFailed('chunk_load');
+    expect(names()).toEqual([]);
+    setVisibility('visible');
     reportSignInLoadFailed('chunk_load');
     expect(mocks.reports).toEqual([
       expect.objectContaining({
@@ -214,6 +231,6 @@ describe('a page hidden during the attempt', () => {
     vi.advanceTimersByTime(1);
     beginAuthAttempt({ component: 'navbar' });
     vi.advanceTimersByTime(PRIVY_READY_TIMEOUT_MS);
-    expect(names()).toEqual(['sign_in_prompt_timeout', 'sign_in_load_failed']);
+    expect(names()).toEqual(['sign_in_prompt_timeout', 'sign_in_privy_not_ready']);
   });
 });

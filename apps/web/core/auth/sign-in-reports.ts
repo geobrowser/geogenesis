@@ -2,7 +2,7 @@
 
 import { type AuthAttempt, currentAuthAttempt, readAuthAttempt, subscribeAuthAttempts } from '~/core/auth-attempt';
 import { reportEvent } from '~/core/telemetry/logger';
-import { getState, realPrivyReady } from '~/core/wallet/auth-store';
+import { READY_TIMEOUT_MS, getState, realPrivyReady } from '~/core/wallet/auth-store';
 
 /**
  * Sentry reports for a sign-in a visitor asked for and did not get. At most once per attempt, and
@@ -11,15 +11,19 @@ import { getState, realPrivyReady } from '~/core/wallet/auth-store';
 
 /** No box or dialog on screen this long after an attempt began. */
 export const PROMPT_TIMEOUT_MS = 8_000;
-/** Privy not started this long after an attempt began: any sign-in call would have given up by now. */
-export const PRIVY_READY_TIMEOUT_MS = 20_000;
+/**
+ * Privy not started this long after an attempt began. A call made later still waits its own
+ * `READY_TIMEOUT_MS`, so this can fire for a load that is slow but works.
+ */
+export const PRIVY_READY_TIMEOUT_MS = READY_TIMEOUT_MS;
 /** A code send that has neither resolved nor rejected. */
 export const CODE_SEND_TIMEOUT_MS = 30_000;
 /** Only an attempt begun this recently is watched: an older one was restored from storage. */
 const FRESH_ATTEMPT_MS = 1_000;
 
 export type SignInLoadFailure = 'chunk_load' | 'never_ready' | 'call_timeout';
-type ReportName = 'sign_in_load_failed' | 'sign_in_prompt_timeout' | 'sign_in_code_send_timeout';
+type ReportName =
+  'sign_in_load_failed' | 'sign_in_privy_not_ready' | 'sign_in_prompt_timeout' | 'sign_in_code_send_timeout';
 
 const reported = new Map<string, Set<ReportName>>();
 
@@ -50,9 +54,9 @@ function send(
   attempt: AuthAttempt,
   level: 'warning' | 'error',
   extra: Record<string, unknown>,
-  { evenIfHidden = false } = {}
+  { reason, hiddenNowOnly = false }: { reason?: SignInLoadFailure; hiddenNowOnly?: boolean } = {}
 ) {
-  if (!evenIfHidden && hiddenDuring(attempt)) return;
+  if (hiddenNowOnly ? document.visibilityState === 'hidden' : hiddenDuring(attempt)) return;
   const sent = reported.get(attempt.id) ?? new Set<ReportName>();
   if (sent.has(name)) return;
   sent.add(name);
@@ -69,6 +73,7 @@ function send(
       privy_loaded: realPrivyReady(),
       privy_requested: state.requested,
       privy_host_failed: state.hostFailed,
+      ...(reason ? { reason } : {}),
     },
     extra: { auth_attempt_id: attempt.id, elapsed_ms: Date.now() - attempt.startedAt, ...extra },
   });
@@ -81,17 +86,22 @@ function errorSummary(error: unknown) {
   return error === undefined ? {} : { error_message: String(error) };
 }
 
-/** Privy could not be loaded or started for the open attempt. */
+/**
+ * Privy could not be loaded or started for the open attempt. `never_ready` is its own Sentry issue
+ * (`sign_in_privy_not_ready`): it can be a slow load that worked, so it alerts on a count.
+ */
 export function reportSignInLoadFailed(reason: SignInLoadFailure, details: { call?: string; error?: unknown } = {}) {
   const attempt = openAttempt();
   if (!attempt) return;
+  const notReady = reason === 'never_ready';
   send(
-    'sign_in_load_failed',
+    notReady ? 'sign_in_privy_not_ready' : 'sign_in_load_failed',
     attempt,
-    'error',
+    notReady ? 'warning' : 'error',
     { reason, ...(details.call ? { call: details.call } : {}), ...errorSummary(details.error) },
-    // A failed import is real in a background tab too; the timeouts are not.
-    { evenIfHidden: reason === 'chunk_load' }
+    // A failed import counts from a background tab, but not from one being left: Safari aborts
+    // loads on unload.
+    { reason, hiddenNowOnly: reason === 'chunk_load' }
   );
 }
 
