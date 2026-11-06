@@ -2,20 +2,35 @@ import '@testing-library/jest-dom/vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { Provider } from 'jotai';
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Debate } from '~/core/debates/api';
 import { store } from '~/core/state/jotai-store';
 
 import { CombinedDebatePlayer } from './combined-debate-player';
 import { DebateFeedPlayer } from './debate-feed-player';
-import { inlinePlaybackUnavailableAtom, useInlinePlaybackUnavailable } from './inline-playback';
+import { inlinePlaybackUnavailableAtom, isTikTokInAppBrowser, useInlinePlaybackUnavailable } from './inline-playback';
+
+const TIKTOK_IOS =
+  'Mozilla/5.0 (iPhone; CPU iPhone OS 26_6_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 Safari/604.1 musical_ly_47.5.0 BytedanceWebview/d8a21c6';
+const SAFARI_IOS =
+  'Mozilla/5.0 (iPhone; CPU iPhone OS 26_6_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.6 Mobile/15E148 Safari/604.1';
+
+function setUserAgent(value: string) {
+  Object.defineProperty(window.navigator, 'userAgent', { configurable: true, value });
+}
 
 const mocks = vi.hoisted(() => ({
   media: { data: undefined as { artifacts: { kind: string }[] } | undefined, isError: false },
   play: vi.fn(() => Promise.resolve()),
   pause: vi.fn(),
   load: vi.fn(),
+  capture: vi.fn(),
+}));
+
+vi.mock('~/core/analytics', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/analytics')>()),
+  capture: mocks.capture,
 }));
 
 vi.mock('~/core/debates/hooks', async importOriginal => ({
@@ -31,6 +46,7 @@ beforeEach(() => {
   mocks.play.mockClear();
   mocks.pause.mockClear();
   mocks.load.mockClear();
+  mocks.capture.mockClear();
   for (const [name, value] of Object.entries({ play: mocks.play, pause: mocks.pause, load: mocks.load })) {
     Object.defineProperty(HTMLMediaElement.prototype, name, { configurable: true, value });
   }
@@ -134,7 +150,54 @@ function renderProbe() {
   return tile;
 }
 
+describe('isTikTokInAppBrowser', () => {
+  it('matches TikTok only', () => {
+    expect(isTikTokInAppBrowser(TIKTOK_IOS)).toBe(true);
+    expect(isTikTokInAppBrowser('Mozilla/5.0 (iPhone) Mobile/15E148 trill_34.1.0 JsSdk/2.0')).toBe(true);
+    for (const other of [
+      SAFARI_IOS,
+      'Mozilla/5.0 (iPhone) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/131.0 Mobile/15E148 Safari/604.1',
+      'Mozilla/5.0 (iPhone) Mobile/15E148 Instagram 350.0.0',
+      'Mozilla/5.0 (iPhone) Mobile/15E148 [FBAN/FBIOS;FBAV/480.0]',
+      'Mozilla/5.0 (Linux; Android 10; wv) Chrome/75.0 aweme_230400 BytedanceWebview/d8a21c6',
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15',
+    ]) {
+      expect(isTikTokInAppBrowser(other)).toBe(false);
+    }
+  });
+
+  it('never switches outside TikTok, even when a tile enters full screen', async () => {
+    vi.resetModules();
+    setUserAgent(SAFARI_IOS);
+    const fresh = await import('./inline-playback');
+    const { store: freshStore } = await import('~/core/state/jotai-store');
+    function FreshProbe() {
+      fresh.useInlinePlaybackUnavailable();
+      return (
+        <div data-debate-slot="1">
+          <video data-testid="fresh-tile" />
+        </div>
+      );
+    }
+    vi.useFakeTimers();
+    render(<FreshProbe />);
+    const tile = screen.getByTestId('fresh-tile') as FullscreenVideo;
+    tile.webkitDisplayingFullscreen = false;
+
+    act(() => {
+      tile.dispatchEvent(new Event('webkitbeginfullscreen'));
+      vi.advanceTimersByTime(2_000);
+    });
+
+    expect(freshStore.get(fresh.inlinePlaybackUnavailableAtom)).toBe(false);
+    expect(mocks.pause).not.toHaveBeenCalled();
+    setUserAgent(TIKTOK_IOS);
+  });
+});
+
 describe('useInlinePlaybackUnavailable', () => {
+  beforeAll(() => setUserAgent(TIKTOK_IOS));
+
   it('turns on once a debater tile that entered full screen has left it', () => {
     vi.useFakeTimers();
     const tile = renderProbe();
@@ -155,6 +218,11 @@ describe('useInlinePlaybackUnavailable', () => {
     });
     expect(attempts).toBe(2);
     expect(screen.getByRole('status')).toHaveTextContent('unavailable');
+    expect(mocks.capture).toHaveBeenCalledTimes(1);
+    expect(mocks.capture).toHaveBeenCalledWith(
+      'component_impression',
+      expect.objectContaining({ component: 'debate_combined_player', fallback_reason: 'inline_playback_unavailable' })
+    );
   });
 
   it('past the retry limit, waits for the viewer to close the native player', () => {

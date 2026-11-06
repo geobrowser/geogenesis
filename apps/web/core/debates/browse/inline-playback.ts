@@ -2,11 +2,13 @@ import * as React from 'react';
 
 import { atom, useAtomValue } from 'jotai';
 
+import { snapshotActionContext } from '~/core/action-context';
+import { capture } from '~/core/analytics';
 import { store } from '~/core/state/jotai-store';
 
 /**
- * Set when a debater tile enters full screen, which the players never request: the webview (e.g.
- * TikTok on iOS) has inline playback off, so feed players switch to the combined video.
+ * Set when, in TikTok's in-app browser, a debater tile enters full screen, which the players never
+ * request: inline playback is off there, so feed players switch to the combined video.
  */
 export const inlinePlaybackUnavailableAtom = atom(false);
 
@@ -23,6 +25,11 @@ const EXIT_RETRY_LIMIT = 20;
 
 let listening = false;
 const closing = new WeakSet<HTMLVideoElement>();
+
+/** TikTok's in-app browser: `musical_ly_` (global app) or `trill_` (regional app) in the user agent. */
+export function isTikTokInAppBrowser(userAgent = typeof navigator === 'undefined' ? '' : navigator.userAgent) {
+  return /\b(musical_ly|trill)_\d/i.test(userAgent);
+}
 
 /** Whether this full-screen start is iOS refusing inline playback on a debater tile. */
 export function isDebaterTileFullscreen(target: EventTarget | null): target is WebKitVideo {
@@ -42,7 +49,9 @@ function onBeginFullscreen(event: Event) {
   const finish = () => {
     video.removeEventListener('webkitendfullscreen', finish);
     closing.delete(video);
+    if (store.get(inlinePlaybackUnavailableAtom)) return;
     store.set(inlinePlaybackUnavailableAtom, true);
+    captureFallbackShown();
   };
   let attempts = 0;
   const exit = () => {
@@ -60,9 +69,24 @@ function onBeginFullscreen(event: Event) {
   setTimeout(exit, EXIT_DELAY_MS);
 }
 
-/** Installed once for the page. The event does not bubble, hence capture. */
+/** One `component_impression` per page when the feed switches to the combined player. */
+function captureFallbackShown() {
+  try {
+    capture('component_impression', {
+      ...snapshotActionContext('debate_combined_player', 'application', 'genesis', {}, {}, { ignoreEventContext: true }),
+      presentation_instance_id: crypto.randomUUID(),
+      action_context_version: 'v1',
+      measurement_version: 'growth-v2',
+      fallback_reason: 'inline_playback_unavailable',
+    });
+  } catch {
+    // Analytics never blocks the switch.
+  }
+}
+
+/** Installed once, and only in TikTok's browser. The event does not bubble, hence capture. */
 function listen() {
-  if (listening || typeof document === 'undefined') return;
+  if (listening || typeof document === 'undefined' || !isTikTokInAppBrowser()) return;
   listening = true;
   document.addEventListener('webkitbeginfullscreen', onBeginFullscreen, true);
 }
