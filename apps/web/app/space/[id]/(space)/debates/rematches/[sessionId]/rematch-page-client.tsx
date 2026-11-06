@@ -142,7 +142,7 @@ import { useCanPublishDebateIn } from '~/core/debates/use-can-publish-debate-in'
 import { useClaimSpaceAllowlist } from '~/core/debates/use-claim-space-allowlist';
 import { useCurrentGeoChatUserId } from '~/core/debates/use-current-geo-chat-user-id';
 import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '~/core/debates/use-debate-publishable-spaces';
-import { useLeaveRematchOnExit } from '~/core/debates/use-leave-rematch-on-exit';
+import { rematchBrowsingWindowLapsed, useLeaveRematchOnExit } from '~/core/debates/use-leave-rematch-on-exit';
 import { useRelatedDebateClaims } from '~/core/debates/use-related-debate-claims';
 import { useEffectOnceWhen } from '~/core/hooks/use-effect-once';
 import { useEntityResponse, useEntityResponseIndexingSnapshot } from '~/core/hooks/use-entity-vote';
@@ -2926,9 +2926,11 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
         // viewer left themselves: `returnFromSession` runs on their own Leave too, which sets
         // `leaveRequestedRef`, and the local mark outlives the ref when Back remounts the page into
         // the session they ended. Both terminal statuses count — a tab the opponent closed surfaces
-        // as `expired` after ~90 seconds, not `ended`. Only for a session this mount saw live.
+        // as `expired` after ~90 seconds, not `ended`. Only for a session this mount saw live, and
+        // not when the browsing window ran out with both people still here.
         if (
           sessionSeenLiveRef.current === session.id &&
+          !rematchBrowsingWindowLapsed(session) &&
           !leaveRequestedRef.current &&
           !didLocallyLeaveRematch(session.id)
         ) {
@@ -2970,7 +2972,11 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const leaveButtonRef = React.useRef<HTMLButtonElement>(null);
   // GEO-3428: out of a scheduled room onto the People tab, who is free to debate now, rather than
   // Explore: someone giving up on a no-show still came to debate.
-  const leaveRoom = () => router.push(toDebatesPanel({ tab: 'people' }));
+  // Marked here, not in `leave`: a cancelled confirmation must not read as having left.
+  const leaveRoom = () => {
+    markLocalRematchLeave(sessionId);
+    router.push(toDebatesPanel({ tab: 'people' }));
+  };
 
   // Once confirming no longer applies (they left, never came, or presence dropped), the request is
   // dropped too, so the dialog cannot reopen by itself when presence comes back.
@@ -2980,9 +2986,6 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   }, [leaveNeedsConfirm]);
 
   const leave = () => {
-    // Durable so a Back-remount into the ended session doesn't read the viewer's own Leave as the
-    // opponent leaving; cleared again if the leave request fails.
-    markLocalRematchLeave(sessionId);
     // `leaveDebateRematch` ends the session for *both* people and puts both on a cooldown. In a
     // room that is the wrong verb: leaving is per person and the room stays open to come back to,
     // so this walks out and lets `useRoomPresence` report the departure on unmount.
@@ -2992,6 +2995,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       else leaveRoom();
       return;
     }
+    // Durable so a Back-remount into the ended session doesn't read the viewer's own Leave as the
+    // opponent leaving; cleared again if the leave request fails.
+    markLocalRematchLeave(sessionId);
     leaveRequestedRef.current = true;
     leaveSession.mutate(undefined, {
       onSuccess: returnFromSession,
