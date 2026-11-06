@@ -92,7 +92,7 @@ describe('AvailabilityCalendar', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Clear all' })).toBeDisabled());
   });
 
-  it('shades calendar busy time under the blocks, with a legend', async () => {
+  it('shades calendar busy time over the blocks, with a legend', async () => {
     const monday = thisMonday();
     const tuesdayAt = (hour: number) =>
       new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 1, hour).toISOString();
@@ -107,7 +107,32 @@ describe('AvailabilityCalendar', () => {
     expect(busy.style.top).toBe(`${13 * 2 * 24}px`);
     expect(busy.style.height).toBe(`${4 * 24}px`);
     expect(busy).toHaveClass('pointer-events-none');
+    // Over every block, so the hours it takes out show on the block (GEO-3595).
+    const blockZ = Array.from(container.querySelectorAll<HTMLElement>('[data-block-id]')).map(b =>
+      Number(b.style.zIndex)
+    );
+    expect(Number(busy.style.zIndex)).toBeGreaterThan(Math.max(...blockZ));
+    expect(busy).toHaveTextContent('Busy');
     expect(screen.getByText('Busy on your calendar')).toBeInTheDocument();
+  });
+
+  it('labels only busy time of an hour or more', async () => {
+    const monday = thisMonday();
+    const tuesdayAt = (hour: number, minute = 0) =>
+      new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 1, hour, minute).toISOString();
+    const { container } = render(
+      <AvailabilityCalendar
+        busyIntervals={[
+          { start: tuesdayAt(9), end: tuesdayAt(9, 30) },
+          { start: tuesdayAt(13), end: tuesdayAt(14) },
+        ]}
+      />
+    );
+
+    await waitFor(() => expect(container.querySelectorAll('[data-busy]')).toHaveLength(2));
+    const [short, hour] = Array.from(container.querySelectorAll<HTMLElement>('[data-busy]'));
+    expect(short).toHaveTextContent('');
+    expect(hour).toHaveTextContent('Busy');
   });
 
   it('draws no busy shading or legend without busy intervals', async () => {

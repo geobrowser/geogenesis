@@ -186,3 +186,55 @@ describe('AvailabilityModal time zone (GEO-3582)', () => {
     ]);
   });
 });
+
+describe('AvailabilityModal with a calendar section', () => {
+  // A calendar connect leaves the page, so it saves the grid as it stands first (GEO-3595).
+  it('hands the section a save of the current edits that leaves the dialog open', async () => {
+    const onSaveDraft = vi.fn(() => Promise.resolve());
+    const onOpenChange = vi.fn();
+    const seen: { unsavedChanges: boolean; saveDraft?: () => Promise<unknown> }[] = [];
+    const user = userEvent.setup();
+
+    render(
+      <AvailabilityModal
+        open
+        onOpenChange={onOpenChange}
+        blocks={saved}
+        onSave={vi.fn()}
+        onSaveDraft={onSaveDraft}
+        calendarSection={state => {
+          seen.push(state);
+          return null;
+        }}
+      />
+    );
+
+    await user.click(await screen.findByRole('button', { name: /^Delete/ }));
+    const latest = seen[seen.length - 1];
+    expect(latest.unsavedChanges).toBe(true);
+
+    await latest.saveDraft?.();
+
+    expect(onSaveDraft).toHaveBeenCalledWith([]);
+    expect(onOpenChange).not.toHaveBeenCalled();
+  });
+
+  it('offers no save to a section whose caller cannot save without closing', async () => {
+    const seen: { saveDraft?: () => Promise<unknown> }[] = [];
+    render(
+      <AvailabilityModal
+        open
+        onOpenChange={() => {}}
+        blocks={saved}
+        onSave={vi.fn()}
+        calendarSection={state => {
+          seen.push(state);
+          return null;
+        }}
+      />
+    );
+
+    await screen.findByRole('dialog');
+    expect(seen.every(state => state.saveDraft === undefined)).toBe(true);
+  });
+});

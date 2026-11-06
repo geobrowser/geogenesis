@@ -27,8 +27,14 @@ type Props = {
   openerRef?: React.RefObject<HTMLElement | null>;
   /** Beside the close button — the "copy my availability link" control, where the caller has one. */
   headerAction?: React.ReactNode;
-  /** Between the title and the grid: the viewer's connected calendar, in their own editor only. */
-  calendarSection?: (state: { unsavedChanges: boolean }) => React.ReactNode;
+  /**
+   * Between the title and the grid: the viewer's connected calendar, in their own editor only.
+   * `saveDraft` saves the grid as it stands without closing, for a calendar connect that leaves the
+   * page (GEO-3595); absent where the caller gave no `onSaveDraft`.
+   */
+  calendarSection?: (state: { unsavedChanges: boolean; saveDraft?: () => Promise<unknown> }) => React.ReactNode;
+  /** Saves `blocks` and settles with the outcome, leaving the dialog open. */
+  onSaveDraft?: (blocks: AvailabilityBlock[]) => Promise<unknown>;
   /** The viewer's own calendar busy time, shaded on the grid. */
   busyIntervals?: BusyInterval[];
   /** The zone `blocks` were saved in. Drawn converted into the browser's zone where they differ. */
@@ -56,6 +62,7 @@ export function AvailabilityModal({
   openerRef,
   headerAction,
   calendarSection,
+  onSaveDraft,
   busyIntervals,
   savedTimezone,
 }: Props) {
@@ -84,7 +91,10 @@ export function AvailabilityModal({
       openerRef={openerRef}
     >
       {/* The grid echoes `shown` back on mount, so any other draft is an edit. */}
-      {calendarSection?.({ unsavedChanges: shown !== undefined && draft !== shown })}
+      {calendarSection?.({
+        unsavedChanges: shown !== undefined && draft !== shown,
+        saveDraft: onSaveDraft && (() => onSaveDraft(draft)),
+      })}
       {/* Remounted per opening so a discarded draft cannot survive into the next one. The
           footer buttons ride in the calendar's own action row, beside its Clear all.
 
