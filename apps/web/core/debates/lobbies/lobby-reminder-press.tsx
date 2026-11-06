@@ -10,7 +10,13 @@ import { Text } from '~/design-system/text';
 import { type DebateLobbySummary, GeoChatRequestError, dashlessId } from '../api';
 import { useGeoChatAuth } from '../hooks';
 import { sameId } from '../rooms/room-presence';
-import { useDebateLobbies, useDebateLobbyReminder, useLobbyReminderError, useLobbyReminderSaving } from './hooks';
+import {
+  useDebateLobbies,
+  useDebateLobbyReminder,
+  useFindCalendarLobby,
+  useLobbyReminderError,
+  useLobbyReminderSaving,
+} from './hooks';
 import { RSVP_FAILED, lobbyErrorMessage } from './lobby-format';
 
 /** Stands in for no lobby, so the hooks below run the same either way; an open one shows no error. */
@@ -26,8 +32,10 @@ const QUEUED_REMINDER_ID = 'lobby-reminder';
  * The queued reminder, replayed by whichever copy is mounted when the account can carry it out.
  * Each decides from the account's own lobby list, by id, rather than from the card that was pressed:
  * that list loading says geo-chat knows the new account, and it still answers once the card is gone
- * (the panel closed, or the lobby opened and its card became Join). Set unless that list says it
- * already is, the lobby opened, or it is no longer listed. Any other failure is thrown for the
+ * (the panel closed, or the lobby opened and its card became Join). The list caps how many lobbies
+ * it returns, so one it leaves out is looked for in the calendar weeks already read, which the
+ * panel's callout stack offers from (GEO-3586). Set unless that says it already is, the lobby
+ * opened, or neither lists it. Any other failure is thrown for the
  * runner's Retry, since the copy replaying it may show no error for this lobby. A list that failed
  * for good (after its warm-up retries) is read again here, so Retry reads it again too. Taken back
  * while waiting (`isCurrent`), it is never set.
@@ -39,6 +47,7 @@ function useQueuedLobbyReminder(reminder: ReturnType<typeof useDebateLobbyRemind
   const list = useDebateLobbies(false);
   const lobbies = list.data?.lobbies;
   const { refetch } = list;
+  const findCalendarLobby = useFindCalendarLobby();
 
   return useQueuedAction({
     id: QUEUED_REMINDER_ID,
@@ -54,7 +63,7 @@ function useQueuedLobbyReminder(reminder: ReturnType<typeof useDebateLobbyRemind
         rows = read.data?.lobbies;
         if (!rows) throw read.error ?? new Error('The lobby list could not be read.');
       }
-      const target = intent ? rows.find(row => sameId(row.lobby_id, intent)) : undefined;
+      const target = intent ? (rows.find(row => sameId(row.lobby_id, intent)) ?? findCalendarLobby(intent)) : undefined;
       if (!target || target.open || target.viewer_reminded || !isCurrent()) return;
       try {
         await mutateAsync({ lobbyId: target.lobby_id, reminded: true });

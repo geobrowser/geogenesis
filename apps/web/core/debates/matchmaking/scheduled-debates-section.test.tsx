@@ -412,6 +412,25 @@ describe('calling a scheduled debate off', () => {
     expect(screen.getAllByText('Arranged by the Geo team')).toHaveLength(2);
   });
 
+  // GEO-3589: the viewer's answer is the one that books it, so the card says the other already accepted.
+  it('says the other debater of an arranged match already accepted, to a viewer who still has to answer', () => {
+    setup({
+      answerable: [
+        request({
+          created_by_admin: true,
+          invited_by_user_id: null,
+          proposed_by_user_id: null,
+          participants: [
+            { user_id: 'user-me', accepted: null },
+            { user_id: 'user-them', accepted: true },
+          ],
+        }),
+      ],
+    });
+
+    expect(screen.getByText(/ accepted · Arranged by the Geo team$/)).toBeInTheDocument();
+  });
+
   it('says which debater proposed a moved time on a Geo-arranged match, and nothing on a peer request', () => {
     setup({
       answerable: [
