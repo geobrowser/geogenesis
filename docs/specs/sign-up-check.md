@@ -1,153 +1,123 @@
-# Sign-up check (GEO-3571)
+# Sign-in failure reporting (GEO-3571)
 
-A scheduled browser check that signs up a brand-new visitor on production through each sign-in
-entry point, and reports a Sentry event naming the path that broke.
+From 20 to 22 Oct the marketing "Sign in / Sign up" link opened nothing, and nothing told us. This
+adds three things: Sentry reports from real visitors' browsers when sign-in fails to appear or to
+send a code, regression tests at the seam that broke, and (design only) a daily funnel-drop check
+on the analytics warehouse. No synthetic accounts, nothing run against production.
 
-## What runs
+## What broke
 
-One Playwright test per path, in `apps/web/e2e/sign-up-check/`, under its own config
-(`playwright.sign-up-check.config.ts`): Chromium only, one worker, no `webServer`, `baseURL` from
-`SIGN_UP_CHECK_URL` (default `https://www.geobrowser.io`).
+At bd13e6b7c (#2930) a signed-out visitor got `ready: true` from the auth shim at once
+(`core/wallet/auth-hooks.ts`), so the `?modal=signin` deep link fired immediately and called the
+shim's `login()`. That only then requested Privy. If Privy took more than 20 s to start,
+`whenReady` (`core/wallet/auth-store.ts`) rejected, and `swallowing()` turned the rejection into
+`console.error('[auth] could not load sign-in')`. No dialog, no attempt outcome, no Sentry event.
 
-| Path id          | Opens                                   | How the box is reached                           |
-| ---------------- | --------------------------------------- | ------------------------------------------------ |
-| `marketing_link` | `/explore?modal=signin&via=marketing`   | Opens on load (`useSignInDeepLink`)              |
-| `navbar_login`   | `/explore`                              | Press navbar "Log in"                            |
-| `save_votes`     | `/explore`                              | Cast one vote on a feed card; the save-votes sheet opens after the first vote |
+Today the box (#3062/#3072) appears without Privy and #3052 starts Privy early for the link, but the
+code send still goes through `invokeInstance` → `whenReady` with the same silent 20 s cliff, and
+nothing in `core/auth`, `core/wallet` or `partials/sign-in` reports to Sentry.
 
-Each path runs in a fresh browser context (no storage, so a new visitor), then:
+The tests missed it because every deep-link and sign-in test mocks `~/core/wallet/auth-hooks`, and
+`auth-root.test.tsx`'s Privy stand-in is ready on mount.
 
-1. **box_shown**: our sign-in box (`Sign in box` form, or the save-votes card's account step) is
-   visible within 30 s. Time from navigation to visible is recorded.
-2. **code_sent**: enter a fresh throwaway address, submit, the code step appears.
-3. **code_received**: poll the inbox for the code (up to 120 s).
-4. **signed_in**: enter the code; the app shows the visitor signed in: the navbar "Log in" button is
-   gone and onboarding's profile step is up (a brand-new account always lands there). Time from
-   navigation to signed in is recorded.
-5. **account_exists**: the page holds a Privy access token whose subject is a `did:privy:` id, and
-   Privy's identity token for it lists the address we signed up with (both read from the page, no
-   server secret).
+## 1. Sentry reports
 
-Provider is a parameter of each path (`email` now). Google is a second provider implementation
-added after GEO-3583; the steps above stay the same, only 2 and 3 differ.
+All through the existing helpers in `core/telemetry/logger.ts` (`reportError` for exceptions,
+`reportEvent` for counted messages). Same DSN and project as the rest of the web app; nothing new
+to configure. Both helpers are no-ops when telemetry is off, so tests and local runs stay quiet.
 
-### How far it goes
+Shared tags, from the current auth attempt (`core/auth-attempt.ts`), low cardinality only:
+`sign_in_surface` (box / save_votes / email_capture / privy_modal / unknown), `component`,
+`auth_trigger`, `link_source`, `privy_loaded`, `privy_requested`. The attempt id and elapsed times go
+in `extra`. Built by one small helper in `core/auth/` so every report carries the same set.
 
-It stops at onboarding's profile step. Finishing onboarding creates a personal space on-chain and
-publishes a profile, which is slow, costs gas and adds a public entity per run. Not worth it.
+**a. Load and invoke failures** (`sign_in_load_failed`, exception, level error). Where
+`invokeInstance`/`invokePrivy` hand a call to `whenReady`, a rejection is reported once, tagged with
+the call (`login`, `send_code`, `login_with_code`, `init_oauth`, `logout`...), then handled as it is
+today (swallowed for fire-and-forget calls, rethrown for headless ones). Also reported: the Privy
+chunk failing to import (`markHostFailed`). `getIdentityToken`'s bounded wait is not a sign-in and
+stays unreported.
 
-The `save_votes` path casts one local vote before signing in, and `LocalVotesSaver` would publish
-it once the account is set up. The check removes the vote (press the same pill again) before
-submitting the code, so nothing is published; the sheet stays open. If removing it turns out to
-close the sheet, the fallback is to stop that path at `signed_in` and close the tab before the
-saver can run (it waits on the personal space, which never exists for these accounts).
+**b. Prompt never appeared** (`sign_in_prompt_timeout`, message, level warning). `beginAuthAttempt`
+arms an 8 s timer for that attempt. `openAuthAttempt` (the box or dialog on screen, which already
+sends `auth_prompt_viewed`) and `finishAuthAttempt` disarm it. If it fires while the attempt is
+still current, unopened and unfinished, one event is sent with the tags above and `elapsed_ms`.
+Visitors who leave send nothing: the timer dies with the tab, and it is disarmed if the page becomes
+hidden before the deadline (a background tab throttles rendering, so a late box there is not a bug).
+One timer per attempt, so at most one event per attempt.
 
-**Created per run, per path:** one Privy user with an email account and an embedded wallet (Privy
-side only; the smart account is counterfactual, nothing on-chain), and whatever geo-chat records at
-sign-in. No Geo entities, no space, no votes.
+**c. Code send never settled** (`sign_in_code_send_timeout`, message, level warning). In the
+account step's `requestCode` (`partials/explore/email-capture-account-step.tsx`), a send that has
+neither resolved nor rejected after 30 s sends one event per attempt (tags above, `elapsed_ms`). A
+send that rejects is already covered by (a) when Privy never loaded; other rejections (captcha, bad
+address) are visitor-level and stay in the `auth_step` funnel only.
 
-**Volume:** about 3 accounts per production deploy plus 3 per daily run. At ~10 deploys a day that
-is ~1,000 accounts a month. Privy bills by monthly active users, so this needs Bryan's OK on cost.
-Levers if it is too many: one run per hour of deploys (GitHub `concurrency` plus a skip when the
-last successful run is under an hour old), or running `navbar_login` and `save_votes` daily only.
+### Alert rules to create (not created by this work)
 
-**Cleanup:** accounts are kept, not deleted. Deleting through Privy's API needs the app secret in
-GitHub, and would race the analytics Privy ingest, which is what applies the exclusion label below.
-They are bounded by volume, findable by email prefix, and can be bulk-deleted later.
+In the web app's Sentry project, environment `production`:
 
-## Keeping test accounts out of metrics
+- **"Sign-in not appearing"**: issue alert on message `sign_in_prompt_timeout`, when the issue is
+  seen more than 3 times in 1 hour; notify the team channel and Bryan; action interval 1 hour.
+- **"Sign-in failed to load"**: same, for issue `sign_in_load_failed`.
+- **"Sign-in code not sending"**: same, for `sign_in_code_send_timeout`.
 
-Checked against `analytics` main (c995517):
+The alert's event shows the tags, so the notification says which entry point and surface broke.
+The threshold of 3 is a starting point: one slow phone network should not page, and the 20 Oct
+break hit every marketing visitor (33 in two days).
 
-- Every metric reads `analytics.events_for_metrics`, including the sign-in funnel
-  (`docs/analytics/signin-steps.sql`, `auth_step`). The view does **not** filter on the
-  `is_automated` property. It does drop events whose user agent contains `headless` or `playwright`,
-  and events of accounts with an active `exclude_from_metrics` row in `privy_account_labels`.
-- `ops/labels/privy-account-rules.json` already has rule `signup-tests`: any Privy account whose
-  email local part starts with `geo-signin-test-` is labelled `test` and excluded, applied every
-  5-minute dashboard refresh, capped at 100 new labels per run.
+## 2. Regression tests at the real seam
 
-So the one label is the email prefix: every address is `geo-signin-test-<run id>-<path>@<mail.tm
-domain>`. That covers events tied to the account, including server-side ones with no user agent
-(Privy webhook `signed_up`). Events from before the account exists (page views, the funnel's early
-`auth_step` steps) are anonymous; those are dropped by the user-agent filter. The check keeps
-Playwright's `HeadlessChrome` user agent and appends ` geo-sign-up-check`, so it stays caught even if
-the browser stops sending `HeadlessChrome`.
+New test files under `apps/web/core/auth/` running the real `auth-hooks`, `auth-store`, `AuthRoot`,
+`privy-host`, `DeepLinkHandler`, `SignInBoxHost` and account step. Only `@geogenesis/auth` is faked:
+a Privy whose `ready` flips at a time the test picks (or never), whose `login` and `useLoginWithEmail`
+are spies, built on the reviewer's repro. The telemetry logger is mocked to capture reports.
 
-No analytics repo change is needed. One gap to note, not fix here: the 100-label cap is per refresh,
-far above this check's rate.
+For each entry point, marketing link (`/explore?modal=signin&via=marketing`), navbar Log in, and the
+save-votes prompt (open after a first local vote):
 
-## Throwaway inbox
+- Privy ready after 5 s: the box is on screen within 1 s of the trigger, and after typing an address
+  `sendCode` is called once Privy is ready, with no Sentry report.
+- Privy never ready: the box still shows; submitting reports `sign_in_load_failed` with
+  `call: send_code` and the entry's tags once the 20 s wait ends, and the box falls back to its
+  "sign-in unavailable" message.
+- The attempt opened but no box rendered (a box host not mounted): `sign_in_prompt_timeout` after
+  8 s, exactly once.
 
-mail.tm API (domains, create account, token, list messages, read message). mail.gw is the same API
-on other domains and is the fallback. Each inbox call retries 3 times with backoff on 429/5xx.
+**Against the 20 Oct build.** The marketing-link test's core assertion is written so it can run on
+either version: within 8 s of landing, a sign-in prompt was viewed (`auth_prompt_viewed` captured or
+Privy's `login` called). In a git archive of bd13e6b7c with the same fake Privy (the reviewer's repro
+setup), that assertion fails when Privy starts after 25 s, and passes at 3 s. On this branch it
+passes in both. I'll run it in both trees and paste both results in the PR.
 
-Failure reasons are distinct so a bad inbox never pages as broken sign-up:
+## 3. Daily funnel-drop check (design only)
 
-| Reason             | Means                                              | Pages? |
-| ------------------ | -------------------------------------------------- | ------ |
-| `inbox_unavailable`| Both providers failed to create an inbox or answer | No: warning event, own fingerprint |
-| `box_not_shown`    | No sign-in box within 30 s                         | Yes    |
-| `code_not_sent`    | Submit never reached the code step, or showed an error | Yes |
-| `code_not_received`| Inbox answers, no code in 120 s, after one retry of the path on the other provider | Yes |
-| `code_rejected`    | Code entered, not signed in within 30 s            | Yes    |
-| `account_missing`  | Signed-in UI but no matching Privy session         | Yes    |
+Runs in the analytics repo, the way its other health checks run: a Kubernetes CronJob in
+`infra/kubernetes/` (as `debate-warehouse-freshness-cronjob.yaml`), with a ClickHouse user that can
+read only `analytics.events_for_metrics`. That view already drops headless/Playwright traffic and
+accounts labelled by `ops/labels/privy-account-rules.json` (`geo-signin-test-`).
 
-`code_not_received` is a real failure when the inbox works (Privy's email or our Privy config), so
-it pages, but only after the second provider also got nothing. A path that fails once at any step is
-retried once from scratch; it reports only if the retry also fails, with the retry's reason.
+Daily at 07:00 UTC, for the previous UTC day, per entry point (marketing link, navbar, save-votes,
+other), counting attempts by `auth_attempt_id` with the entry-point definition `signin-steps.sql`
+already uses:
 
-## Alerts (Sentry)
+- **started**: `auth_attempt_started`
+- **shown**: `auth_prompt_viewed`
+- **signed in**: `auth_attempt_completed` with outcome `signed_up` or `signed_in`
 
-The runner (`@sentry/node`, DSN from a `SENTRY_SIGN_UP_CHECK_DSN` secret) sends one event per
-failed path after its retry:
+against the mean of the 7 days before it. It alerts when, for an entry point with at least 5 starts
+a day on average over the baseline:
 
-- message `Sign-up check failed: <path> (<reason>)`, level `error` (`warning` for `inbox_unavailable`)
-- fingerprint `['sign-up-check', <path>]` (`['sign-up-check', 'inbox']` for the inbox)
-- tags `check=sign-up`, `path`, `reason`, `provider`, `trigger` (`deploy`/`schedule`), `sha`
-- context: timings, the GitHub run URL (screenshots and trace are uploaded there as artifacts)
+- shown or signed in is 0 while started is above 0 (the 20 Oct pattern); or
+- shown/started or signed-in/started falls below half of its baseline ratio; or
+- started falls below a quarter of its baseline (a link that stopped starting attempts at all).
 
-Plus a Sentry Cron Monitor check-in (`sign-up-check`, daily schedule, 2 h margin) so a check that
-stops running alerts too.
+Alerting: the Job exits non-zero, so the cluster's existing `KubeJobFailed` alert fires as it does
+for the other freshness jobs, and it also posts one Sentry message (`sign_in_funnel_drop`, tagged by
+entry point and which rule tripped) to the web project through the DSN's store endpoint, so all
+sign-in alerts land in one place. Where `KubeJobFailed` routes is not in the repo; to confirm when
+that worktree starts.
 
-**Alert rule to create** (not created by this work), in the project the DSN belongs to:
+## Out of scope
 
-- Issue alert "Sign-up broken": when *a new issue is created* OR *the issue changes state from
-  resolved to unresolved* OR *the issue is seen more than 0 times in 1 hour*; filter tag `check`
-  equals `sign-up` and level equals `error`; action: notify the team channel and Bryan; action
-  interval 60 minutes.
-- The cron monitor's built-in missed/failed check-in alert, same recipients.
-
-The issue title carries the path, so the notification names what broke. Each path is its own issue
-because of the fingerprint.
-
-## Triggers
-
-Vercel posts GitHub deployments to `geobrowser/geogenesis` as `vercel[bot]`, environment
-`Production`, with a `success` status whose `environment_url` is the deployment URL. Workflow
-`.github/workflows/sign-up-check.yml`:
-
-- `deployment_status`, running only when `state == 'success'` and environment is `Production`.
-  It targets the canonical production domain, not the deployment URL: Privy only allows our real
-  origins, and the domain is what visitors see. Vercel assigns the domain before it reports a
-  production deployment successful, so no wait is needed; the run records the sha it was triggered
-  for.
-- `schedule` once a day (14:00 UTC), and `workflow_dispatch` with an optional URL.
-- `concurrency: sign-up-check`, not cancelling in progress, so deploys in a burst queue up rather
-  than run in parallel.
-
-"Within an hour": a deploy-triggered failure reports in ~10 minutes. A break between deploys (a
-third-party setting) is caught by the daily run only; an hourly schedule would meet the hour for
-those too at ~70 extra accounts a day. Daily is the default; Bryan's call.
-
-Timings (load to box, load to signed in, per path) go to the job summary and a JSON artifact, for
-GEO-3551.
-
-## Replaying 20 Oct (criterion 5)
-
-Build `bd13e6b7c` (#2930) locally with production-like env, `next start`, run the check with
-`SIGN_UP_CHECK_URL=http://localhost:3000` and `marketing_link` only. Expected: `box_not_shown`.
-That build predates our box (its sign-in was Privy's window), so for this replay the check also
-accepts Privy's dialog as "box shown"; the bug was that neither appeared. As the control, the same
-run against a local build of `da444dce4` passes `box_shown` (it needs a Privy app that allows
-localhost, so the dev app id; sign-up is optional there). Both results go in the PR.
+Google sign-in (flag off; the tags above already carry `sign_in_surface`, and `init_oauth` is
+covered by (a)). Changing the 20 s wait itself. The analytics repo change, which gets its own branch.
