@@ -54,7 +54,7 @@ function syncingProviders(data: CalendarConnections | undefined) {
   return PROVIDERS.filter(provider => isCalendarSyncing(data?.[provider])).join(',');
 }
 
-/** The viewer's connected calendars. `enabled` is a calendar flag and the editor being open. */
+/** The viewer's connected calendars. `enabled` is the editor being open. */
 export function useCalendarConnections(enabled: boolean) {
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
   const invalidate = useInvalidateCalendarReads();

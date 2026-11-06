@@ -70,6 +70,12 @@ const mocks = vi.hoisted(() => ({
   sidePanelListeners: new Set<() => void>(),
 }));
 
+// The schedule editor reads the viewer's calendars; this suite isn't about them, so geo-chat has them off.
+vi.mock('~/core/debates/calendar-hooks', () => ({
+  useCalendarConnections: () => ({ disabled: true }),
+  useCalendarBusy: () => ({ intervals: undefined }),
+}));
+
 // Follow (GEO-3236) writes through the account and reads follows; both have their own suites.
 vi.mock('~/core/follows/follow-button', () => ({ FollowButton: () => null }));
 vi.mock('~/core/follows/person-follow-counts', () => ({

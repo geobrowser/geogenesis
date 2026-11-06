@@ -48,6 +48,12 @@ const mocks = vi.hoisted(() => ({
   } as Record<string, unknown> | null,
 }));
 
+// The schedule editor reads the viewer's calendars; this suite isn't about them, so geo-chat has them off.
+vi.mock('~/core/debates/calendar-hooks', () => ({
+  useCalendarConnections: () => ({ disabled: true }),
+  useCalendarBusy: () => ({ intervals: undefined }),
+}));
+
 vi.mock('~/core/wallet/auth-hooks', () => ({
   useLogout: () => ({ logout: mocks.logout }),
   usePrivy: () => ({ ready: true, authenticated: mocks.authenticated, user: mocks.privyUser }),
