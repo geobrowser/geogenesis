@@ -1,13 +1,14 @@
 # Sign-in failure reporting (GEO-3571)
 
 From 20 to 22 Oct the marketing "Sign in / Sign up" link opened nothing, and nothing told us. This
-adds three things: Sentry reports from real visitors' browsers when sign-in fails to appear or to
-send a code, regression tests at the seam that broke, and (design only) a daily funnel-drop check
-on the analytics warehouse. No synthetic accounts, nothing run against production.
+adds Sentry reports from real visitors' browsers when sign-in fails to load, to appear or to send a
+code, and regression tests at the seam that broke. No synthetic accounts, nothing run against
+production.
 
 ## What broke
 
-At bd13e6b7c (#2930) a signed-out visitor got `ready: true` from the auth shim at once
+The most likely cause, reproduced locally but not proven in production (a Privy that was blocked or
+never became ready fits the data too, which is why the reports below cover all three). At bd13e6b7c (#2930) a signed-out visitor got `ready: true` from the auth shim at once
 (`core/wallet/auth-hooks.ts`), so the `?modal=signin` deep link fired immediately and called the
 shim's `login()`. That only then requested Privy. If Privy took more than 20 s to start,
 `whenReady` (`core/wallet/auth-store.ts`) rejected, and `swallowing()` turned the rejection into
@@ -26,44 +27,48 @@ All through the existing helpers in `core/telemetry/logger.ts` (`reportError` fo
 `reportEvent` for counted messages). Same DSN and project as the rest of the web app; nothing new
 to configure. Both helpers are no-ops when telemetry is off, so tests and local runs stay quiet.
 
-Shared tags, from the current auth attempt (`core/auth-attempt.ts`), low cardinality only:
-`sign_in_surface` (box / save_votes / email_capture / privy_modal / unknown), `component`,
-`auth_trigger`, `link_source`, `privy_loaded`, `privy_requested`. The attempt id and elapsed times go
-in `extra`. Built by one small helper in `core/auth/` so every report carries the same set.
+All three live in `core/auth/sign-in-reports.ts`. Each is a `reportEvent` message (a constant name,
+so one Sentry issue per report), sent at most once per attempt and only while a sign-in attempt is
+open: Privy loading in the background for a visitor who never asked to sign in is not reported. The
+watchdogs hang off the existing attempt lifecycle (`subscribeAuthAttempts` in `core/auth-attempt.ts`),
+installed by `auth-root.tsx`.
 
-**a. Load and invoke failures** (`sign_in_load_failed`, exception, level error). Where
-`invokeInstance`/`invokePrivy` hand a call to `whenReady`, a rejection is reported once, tagged with
-the call (`login`, `send_code`, `login_with_code`, `init_oauth`, `logout`...), then handled as it is
-today (swallowed for fire-and-forget calls, rethrown for headless ones). Also reported: the Privy
-chunk failing to import (`markHostFailed`). `getIdentityToken`'s bounded wait is not a sign-in and
-stays unreported.
+Shared tags, low cardinality only: `sign_in_surface` (box / save_votes / email_capture / privy_modal
+/ unknown), `component`, `auth_trigger`, `link_source`, `privy_loaded`, `privy_requested`,
+`privy_host_failed`. The attempt id, elapsed time and error go in `extra`.
 
-**b. Prompt never appeared** (`sign_in_prompt_timeout`, message, level warning). `beginAuthAttempt`
-arms an 8 s timer for that attempt. `openAuthAttempt` (the box or dialog on screen, which already
-sends `auth_prompt_viewed`) and `finishAuthAttempt` disarm it. If it fires while the attempt is
-still current, unopened and unfinished, one event is sent with the tags above and `elapsed_ms`.
-Visitors who leave send nothing: the timer dies with the tab, and it is disarmed if the page becomes
-hidden before the deadline (a background tab throttles rendering, so a late box there is not a bug).
-One timer per attempt, so at most one event per attempt.
+**a. Privy could not be loaded or started** (`sign_in_load_failed`, level error), with `extra.reason`:
+- `chunk_load`: the Privy chunk failed to import (`AuthRoot`, next to `markHostFailed`).
+- `never_ready`: Privy not started 20 s after the attempt began, whether slow, blocked or hung. This
+  fires even if the visitor has not pressed anything yet.
+- `call_timeout`: a sign-in call (`login`, `send_code`, `login_with_code`, `init_oauth`...) gave up
+  waiting in `whenReady`; `extra.call` names it. Handled as before afterwards (swallowed for
+  fire-and-forget calls, rethrown for headless ones). `getIdentityToken`'s bounded wait is not a
+  sign-in and stays unreported.
 
-**c. Code send never settled** (`sign_in_code_send_timeout`, message, level warning). In the
-account step's `requestCode` (`partials/explore/email-capture-account-step.tsx`), a send that has
-neither resolved nor rejected after 30 s sends one event per attempt (tags above, `elapsed_ms`). A
-send that rejects is already covered by (a) when Privy never loaded; other rejections (captcha, bad
-address) are visitor-level and stay in the `auth_step` funnel only.
+**b. Prompt never appeared** (`sign_in_prompt_timeout`, level warning). An attempt begun with no box
+or dialog opened (`openAuthAttempt`, which also sends `auth_prompt_viewed`) after 8 s. A superseded
+or finished attempt is not reported. Visitors who leave send nothing: the timer dies with the tab,
+and all watchdogs are disarmed when the page goes hidden (a background tab throttles rendering).
+
+**c. Code send never settled** (`sign_in_code_send_timeout`, level warning). In the account step's
+`requestCode`, a send that has neither resolved nor rejected after 30 s. A send that rejects because
+Privy never loaded is (a); other rejections (captcha, bad address) are visitor-level and stay in the
+`auth_step` funnel.
 
 ### Alert rules to create (not created by this work)
 
-In the web app's Sentry project, environment `production`:
+In the web app's Sentry project, environment `production`, all notifying the team channel and Bryan:
 
-- **"Sign-in not appearing"**: issue alert on message `sign_in_prompt_timeout`, when the issue is
-  seen more than 3 times in 1 hour; notify the team channel and Bryan; action interval 1 hour.
-- **"Sign-in failed to load"**: same, for issue `sign_in_load_failed`.
-- **"Sign-in code not sending"**: same, for `sign_in_code_send_timeout`.
+- **"Sign-in failed to load"**: issue alert on message `sign_in_load_failed`, when a new issue is
+  created or the issue changes state from resolved to unresolved. It should never happen, so the
+  first event alerts. Action interval 1 hour.
+- **"Sign-in not appearing"**: message `sign_in_prompt_timeout`, when the issue is seen 3 or more
+  times in 24 hours (Sentry's "more than 2 times in 1 day"). Action interval 24 hours.
+- **"Sign-in code not sending"**: the same, for `sign_in_code_send_timeout`.
 
-The alert's event shows the tags, so the notification says which entry point and surface broke.
-The threshold of 3 is a starting point: one slow phone network should not page, and the 20 Oct
-break hit every marketing visitor (33 in two days).
+Hourly thresholds would never fire at our traffic (33 marketing visitors in two days). The event's
+tags say which entry point and surface broke.
 
 ## 2. Regression tests at the real seam
 
@@ -72,52 +77,41 @@ New test files under `apps/web/core/auth/` running the real `auth-hooks`, `auth-
 a Privy whose `ready` flips at a time the test picks (or never), whose `login` and `useLoginWithEmail`
 are spies, built on the reviewer's repro. The telemetry logger is mocked to capture reports.
 
-For each entry point, marketing link (`/explore?modal=signin&via=marketing`), navbar Log in, and the
-save-votes prompt (open after a first local vote):
+`core/auth/sign-in-seam.test.tsx`, for each entry point, marketing link
+(`/explore?modal=signin&via=marketing`), navbar Log in, and the save-votes prompt (opened by a first
+local vote):
 
 - Privy ready after 5 s: the box is on screen within 1 s of the trigger, and after typing an address
   `sendCode` is called once Privy is ready, with no Sentry report.
-- Privy never ready: the box still shows; submitting reports `sign_in_load_failed` with
-  `call: send_code` and the entry's tags once the 20 s wait ends, and the box falls back to its
-  "sign-in unavailable" message.
-- The attempt opened but no box rendered (a box host not mounted): `sign_in_prompt_timeout` after
-  8 s, exactly once.
+- Privy never ready: the box still shows; exactly one `sign_in_load_failed` is reported, and the box
+  falls back to its "Couldn't reach sign-in" message.
+
+Plus: navbar Log in with no box host mounted reports `sign_in_prompt_timeout` exactly once. The
+watchdog rules (once per attempt, superseded, closed, hidden tab, no open attempt) are unit tests in
+`core/auth/sign-in-reports.test.ts`, and a Privy chunk that fails to import is
+`core/wallet/auth-root.chunk-failure.test.tsx`.
 
 **Against the 20 Oct build.** The marketing-link test's core assertion is written so it can run on
 either version: within 8 s of landing, a sign-in prompt was viewed (`auth_prompt_viewed` captured or
 Privy's `login` called). In a git archive of bd13e6b7c with the same fake Privy (the reviewer's repro
 setup), that assertion fails when Privy starts after 25 s, and passes at 3 s. On this branch it
-passes in both. I'll run it in both trees and paste both results in the PR.
+passes in both. Checked: the same assertion, on the reviewer's repro setup in an archive of
+bd13e6b7c, passes at 3 s and fails at 25 s; on this branch the 25 s case passes.
 
-## 3. Daily funnel-drop check (design only)
+## Possible follow-up: daily funnel-drop check
 
-Runs in the analytics repo, the way its other health checks run: a Kubernetes CronJob in
-`infra/kubernetes/` (as `debate-warehouse-freshness-cronjob.yaml`), with a ClickHouse user that can
-read only `analytics.events_for_metrics`. That view already drops headless/Playwright traffic and
-accounts labelled by `ops/labels/privy-account-rules.json` (`geo-signin-test-`).
-
-Daily at 07:00 UTC, for the previous UTC day, per entry point (marketing link, navbar, save-votes,
-other), counting attempts by `auth_attempt_id` with the entry-point definition `signin-steps.sql`
-already uses:
-
-- **started**: `auth_attempt_started`
-- **shown**: `auth_prompt_viewed`
-- **signed in**: `auth_attempt_completed` with outcome `signed_up` or `signed_in`
-
-against the mean of the 7 days before it. It alerts when, for an entry point with at least 5 starts
-a day on average over the baseline:
-
-- shown or signed in is 0 while started is above 0 (the 20 Oct pattern); or
-- shown/started or signed-in/started falls below half of its baseline ratio; or
-- started falls below a quarter of its baseline (a link that stopped starting attempts at all).
-
-Alerting: the Job exits non-zero, so the cluster's existing `KubeJobFailed` alert fires as it does
-for the other freshness jobs, and it also posts one Sentry message (`sign_in_funnel_drop`, tagged by
-entry point and which rule tripped) to the web project through the DSN's store endpoint, so all
-sign-in alerts land in one place. Where `KubeJobFailed` routes is not in the repo; to confirm when
-that worktree starts.
+Not built. A daily job on the analytics warehouse (`events_for_metrics`, which already drops
+headless traffic and `geo-signin-test-` accounts) comparing, per entry point, attempts started
+(`auth_attempt_started`) against prompts shown (`auth_prompt_viewed`) and sign-ins
+(`auth_attempt_completed` signed up or in) over a 7-day baseline, alerting on a drop to zero or a
+large fall. It would catch breaks the browser cannot report, such as a link that stops starting
+attempts at all. It would run as a Kubernetes CronJob in the analytics repo, like its existing
+freshness checks.
 
 ## Out of scope
 
 Google sign-in (flag off; the tags above already carry `sign_in_surface`, and `init_oauth` is
-covered by (a)). Changing the 20 s wait itself. The analytics repo change, which gets its own branch.
+covered by (a)). Changing the 20 s wait itself.
+
+Known gap: the save-votes sheet starts its attempt at the email submit, not when it opens, so a
+sheet that never appears after a vote is not caught by (b). The follow-up above would catch it.
