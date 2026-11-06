@@ -45,12 +45,10 @@ const STALE = 'Calendar hasn’t synced recently, so busy times aren’t being t
  * their availability; it never adds time.
  */
 export function CalendarSection({
-  providers,
   unsavedChanges = false,
   saveDraft,
   returned = null,
 }: {
-  providers: CalendarProvider[];
   /** The grid has edits that connecting, which leaves the page, would otherwise drop. */
   unsavedChanges?: boolean;
   /** Saves those edits without closing the editor; a connect runs it first. */
@@ -79,8 +77,8 @@ export function CalendarSection({
     );
   }
 
-  // Flagged on here and configured in geo-chat, in geo-chat's order.
-  const shown = (connections.providers ?? []).filter(provider => providers.includes(provider));
+  // Configured in geo-chat, in geo-chat's order.
+  const shown = connections.providers ?? [];
   if (shown.length === 0) return null;
   const anyUnconnected = shown.some(provider => !connections[provider]);
 

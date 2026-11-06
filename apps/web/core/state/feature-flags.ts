@@ -90,20 +90,6 @@ export const featureFlagDefinitions = [
     enabledByDefault: false,
   },
   {
-    id: 'googleCalendar',
-    label: 'Google Calendar',
-    description:
-      'Connect Google Calendar in your debate schedule, so busy times are taken out of your availability (GEO-3139). Needs geo-chat with Google Calendar configured.',
-    enabledByDefault: false,
-  },
-  {
-    id: 'microsoftCalendar',
-    label: 'Outlook Calendar',
-    description:
-      'Connect Outlook Calendar in your debate schedule, so busy times are taken out of your availability (GEO-3139). Needs geo-chat with Microsoft Calendar configured.',
-    enabledByDefault: false,
-  },
-  {
     id: 'bountiesTab',
     label: 'Bounties',
     description: 'Bounty board, space bounty tabs, and bounty detail surfaces. On by default; testnet only.',
@@ -124,8 +110,9 @@ export type FeatureFlags = Record<FeatureFlagId, boolean>;
 // renamed from) are no longer flags; nor is `peerAvailability`, since scheduling did too, nor
 // `lobbyJoining`, since finding and joining lobbies did (GEO-3306), nor `debateVideo`, since video in
 // the claim picker and lobbies did (GEO-3414), nor `ourSignInBox`, since every sign-in opens the box
-// (GEO-3569). All of them are still sitting in browsers' stored flag objects; normalizing drops them
-// on the next write rather than reading them back.
+// (GEO-3569), nor `googleCalendar` and `microsoftCalendar`, since connecting a calendar did
+// (GEO-3598). All of them are still sitting in browsers' stored flag objects; normalizing drops
+// them on the next write rather than reading them back.
 export type StoredFeatureFlags = Partial<
   Record<
     | FeatureFlagId
@@ -134,7 +121,9 @@ export type StoredFeatureFlags = Partial<
     | 'peerAvailability'
     | 'lobbyJoining'
     | 'debateVideo'
-    | 'ourSignInBox',
+    | 'ourSignInBox'
+    | 'googleCalendar'
+    | 'microsoftCalendar',
     boolean
   >
 >;
