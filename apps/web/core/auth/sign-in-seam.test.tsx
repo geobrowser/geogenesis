@@ -6,10 +6,8 @@ import * as React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
- * The sign-in entry points against the real auth seam: `auth-hooks`, `auth-store`, `AuthRoot` and
- * the Privy host, the deep-link handler, the sign-in box and the account step. Only Privy itself is
- * faked, with a start-up time each test picks, because a Privy that is ready on mount is how the
- * 20 Oct break (a slow or blocked Privy behind a signed-out `ready: true`) got past every test.
+ * Sign-in entry points against the real auth seam. Only Privy is faked, with a start-up time each
+ * test picks: a Privy that is ready on mount hides a slow or blocked one.
  */
 
 const mocks = vi.hoisted(() => ({

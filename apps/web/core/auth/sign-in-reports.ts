@@ -5,9 +5,8 @@ import { reportEvent } from '~/core/telemetry/logger';
 import { getState, realPrivyReady } from '~/core/wallet/auth-store';
 
 /**
- * Sentry reports for a sign-in that a visitor asked for and did not get (GEO-3571). Each is sent at
- * most once per attempt, and only while an attempt is open: a page that loads Privy in the
- * background for nobody is not a broken sign-in.
+ * Sentry reports for a sign-in a visitor asked for and did not get. At most once per attempt, and
+ * only while one is open: Privy loading in the background for nobody is not a broken sign-in.
  */
 
 /** No box or dialog on screen this long after an attempt began. */
