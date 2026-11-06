@@ -27,7 +27,7 @@ All through the existing helpers in `core/telemetry/logger.ts` (`reportError` fo
 `reportEvent` for counted messages). Same DSN and project as the rest of the web app; nothing new
 to configure. Both helpers are no-ops when telemetry is off, so tests and local runs stay quiet.
 
-All three live in `core/auth/sign-in-reports.ts`. Each is a `reportEvent` message (a constant name,
+All of them live in `core/auth/sign-in-reports.ts`. Each is a `reportEvent` message (a constant name,
 so one Sentry issue per report), sent at most once per attempt and only while a sign-in attempt is
 open: Privy loading in the background for a visitor who never asked to sign in is not reported. The
 watchdogs hang off the existing attempt lifecycle (`subscribeAuthAttempts` in `core/auth-attempt.ts`),
@@ -35,17 +35,22 @@ installed by `auth-root.tsx`.
 
 A background tab throttles timers and loading, so no timeout (`never_ready`, `call_timeout`, the
 prompt and code-send timeouts) is reported for an attempt whose page was hidden at any point since it
-began, including a link opened in a background tab. `chunk_load` is reported regardless.
+began, including a link opened in a background tab. `chunk_load` is reported from a background tab,
+but not while the page is hidden at the moment it fails: Safari aborts loads on a page being left.
 
 Shared tags, low cardinality only: `sign_in_surface` (box / save_votes / email_capture / privy_modal
 / unknown), `component`, `auth_trigger`, `link_source`, `privy_loaded`, `privy_requested`,
-`privy_host_failed`. The attempt id, elapsed time and error go in `extra`.
+`privy_host_failed`, and `reason` on the load reports. The attempt id, elapsed time and error go in
+`extra`.
 
-**a. Privy could not be loaded or started** (`sign_in_load_failed`, level error), with `extra.reason`:
-- `chunk_load`: the Privy chunk failed to import (`AuthRoot`, next to `markHostFailed`).
-- `never_ready`: Privy not started 20 s after the attempt began, whether slow, blocked or hung. This
-  fires even if the visitor has not pressed anything yet.
-- `call_timeout`: a sign-in call (`login`, `send_code`, `login_with_code`, `init_oauth`...) gave up
+**a. Privy could not be loaded or started**, with `reason`:
+- `chunk_load` (`sign_in_load_failed`, level error): the Privy chunk failed to import (`AuthRoot`,
+  next to `markHostFailed`).
+- `never_ready` (`sign_in_privy_not_ready`, level warning, its own issue): Privy not started
+  `READY_TIMEOUT_MS` (20 s, shared with `auth-store.ts`) after the attempt began, whether slow,
+  blocked or hung, even if the visitor has not pressed anything yet. A call made later still waits
+  its own 20 s, so this can also be a slow load that worked; hence a count threshold, not a page.
+- `call_timeout` (`sign_in_load_failed`, level error): a sign-in call (`login`, `send_code`, `login_with_code`, `init_oauth`...) gave up
   waiting in `whenReady`; `extra.call` names it. Handled as before afterwards (swallowed for
   fire-and-forget calls, rethrown for headless ones). `getIdentityToken`'s bounded wait is not a
   sign-in and stays unreported.
@@ -63,15 +68,22 @@ Privy never loaded is (a); other rejections (captcha, bad address) are visitor-l
 
 In the web app's Sentry project, environment `production`, all notifying the team channel and Bryan:
 
-- **"Sign-in failed to load"**: issue alert on message `sign_in_load_failed`, when a new issue is
-  created or the issue changes state from resolved to unresolved. It should never happen, so the
-  first event alerts. Action interval 1 hour.
-- **"Sign-in not appearing"**: message `sign_in_prompt_timeout`, when the issue is seen 3 or more
-  times in 24 hours (Sentry's "more than 2 times in 1 day"). Action interval 24 hours.
+Every rule is an issue alert filtered to environment `production` (filter "The event's environment
+is production"), notifying the team channel and Bryan:
+
+- **"Sign-in failed to load"**: message `sign_in_load_failed`, when the issue is seen more than 0
+  times in 1 hour; action interval 1 hour. It should never happen, so any event pages, every hour it
+  keeps happening. Not "new issue / regression": that fires once per issue state, so after one
+  stray event left unresolved a later real outage would not page.
+- **"Privy not starting"**: message `sign_in_privy_not_ready`, when the issue is seen more than 2
+  times in 1 day (3 or more in 24 hours); action interval 24 hours.
+- **"Sign-in not appearing"**: the same, for `sign_in_prompt_timeout`.
 - **"Sign-in code not sending"**: the same, for `sign_in_code_send_timeout`.
 
-Hourly thresholds would never fire at our traffic (33 marketing visitors in two days). The event's
-tags say which entry point and surface broke.
+The count rules use a 24-hour action interval because their 24-hour window stays over the threshold
+for a day after a burst; an hourly interval would re-notify for that whole day. Hourly thresholds
+would never fire at our traffic (33 marketing visitors in two days). The event's tags say which
+entry point and surface broke.
 
 ## 2. Regression tests at the real seam
 
@@ -86,8 +98,9 @@ local vote):
 
 - Privy ready after 5 s: the box is on screen within 1 s of the trigger, and after typing an address
   `sendCode` is called once Privy is ready, with no Sentry report.
-- Privy never ready: the box still shows; exactly one `sign_in_load_failed` is reported, and the box
-  falls back to its "Couldn't reach sign-in" message.
+- Privy never ready: the box still shows; one `sign_in_privy_not_ready` and one
+  `sign_in_load_failed` (`call_timeout`, `send_code`) are reported, and the box falls back to its
+  "Couldn't reach sign-in" message.
 
 Plus: navbar Log in with no box host mounted reports `sign_in_prompt_timeout` exactly once. The
 watchdog rules (once per attempt, superseded, closed, hidden tab, no open attempt) are unit tests in
