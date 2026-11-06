@@ -30,9 +30,8 @@ export function isDebaterTileFullscreen(target: EventTarget | null): target is W
 }
 
 /**
- * Pause and close the tile's video, then set the flag once it has left full screen: replacing the
- * player while its video is still full screen leaves iOS black. Past the retry limit the viewer's
- * own close (`webkitendfullscreen`) still sets it.
+ * Close the tile's video, and set the flag only once it has left full screen (by our exit or the
+ * viewer's): unmounting a player whose video is full screen leaves iOS black.
  */
 function onBeginFullscreen(event: Event) {
   const video = event.target;
