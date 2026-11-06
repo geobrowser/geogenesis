@@ -152,6 +152,7 @@ import { REMOTE_OVERRUN_WINDOW_MS, opponentTurnState, useTurnOverrun } from '~/c
 import { usePrefetchClaimSpaceAllowlist } from '~/core/debates/use-prefetch-claim-space-allowlist';
 import { useRelatedDebateClaims } from '~/core/debates/use-related-debate-claims';
 import { useScrollLock } from '~/core/debates/use-scroll-lock';
+import type { VoiceCallEndReason } from '~/core/debates/use-voice-call-telemetry';
 import { debateVoicePolicy, useVoiceOwnership } from '~/core/debates/voice-owner';
 import { disconnectReasonName } from '~/core/livekit/disconnect-reason';
 import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
@@ -1230,6 +1231,32 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
 
   React.useEffect(() => {
     if (!currentUserId) return;
+    // Hands the room to another tab: stop sending and settle idle. Shared by a yield and a steal.
+    const releaseRoomToOtherTab = () => {
+      const generation = connectionGenerationRef.current + 1;
+      connectionGenerationRef.current = generation;
+      disconnectConnectingRoom(connectingRoomRef);
+      disconnectRoom(roomRef, localTracksRef, localVideoRef, remoteMediaRef, 'handover');
+      localMediaStreamRef.current = null;
+      setRemoteVideoReady(false);
+      setRemotePresence('absent');
+      setConnectionConflictSource('ownership_released');
+      setRoomError('This debate moved to another tab.');
+      const releasedFrom = roomStateRef.current;
+      // Now, not on the next render: the taking tab's voice claim may reach this tab first.
+      roomStateRef.current = 'idle';
+      setRoomState('idle');
+      logDebateConnectionDiagnostic('ownership-released', {
+        debateId,
+        instanceId: connectionInstanceIdRef.current,
+        roomState: releasedFrom,
+      });
+      reportConnectionConflict(
+        generation,
+        'ownership_released',
+        ownershipRef.current?.coordinationMode ?? 'livekit-fallback'
+      );
+    };
     const coordinator = createDebateRoomOwnershipCoordinator({
       debateId,
       userId: currentUserId,
@@ -1242,7 +1269,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         // Once recording starts the owner keeps the room: releasing would tear down an in-flight
         // MediaRecorder, which cannot finish persisting inside the takeover budget. The status gate
         // inside also protects live debates whose recording never managed to start
-        // (recordingStartedAtRef stays null when MediaRecorder is unavailable).
+        // (recordingStartedAtRef stays null when MediaRecorder is unavailable). Refusing here in time
+        // is also what keeps a live recorder from being stolen from — only a frozen tab is.
         const canReleaseOwnership = shouldReleaseDebateRoom({
           ...takeover,
           status,
@@ -1251,31 +1279,10 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         });
         if (!canReleaseOwnership) return false;
 
-        const generation = connectionGenerationRef.current + 1;
-        connectionGenerationRef.current = generation;
-        disconnectConnectingRoom(connectingRoomRef);
-        disconnectRoom(roomRef, localTracksRef, localVideoRef, remoteMediaRef);
-        localMediaStreamRef.current = null;
-        setRemoteVideoReady(false);
-        setRemotePresence('absent');
-        setConnectionConflictSource('ownership_released');
-        setRoomError('This debate moved to another tab.');
-        setRoomState('idle');
-        const releasedFrom = roomStateRef.current;
-        // Now, not on the next render: the taking tab's voice claim may reach this tab first.
-        roomStateRef.current = 'idle';
-        logDebateConnectionDiagnostic('ownership-released', {
-          debateId,
-          instanceId: connectionInstanceIdRef.current,
-          roomState: releasedFrom,
-        });
-        reportConnectionConflict(
-          generation,
-          'ownership_released',
-          ownershipRef.current?.coordinationMode ?? 'livekit-fallback'
-        );
+        releaseRoomToOtherTab();
         return true;
       },
+      onOwnershipLost: releaseRoomToOtherTab,
     });
     connectionInstanceIdRef.current = coordinator.instanceId;
     ownershipRef.current = coordinator;
@@ -1703,7 +1710,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       const status = debateStatusRef.current;
       connectionGenerationRef.current += 1;
       disconnectConnectingRoom(connectingRoomRef);
-      disconnectRoom(roomRef, localTracksRef, localVideoRef, remoteMediaRef);
+      // Voice moved to another tab, so the call telemetry records a handover, not a leave or a drop.
+      disconnectRoom(roomRef, localTracksRef, localVideoRef, remoteMediaRef, 'handover');
       localMediaStreamRef.current = null;
       // Closes every device and settles the preview as idle, so its toggles stay usable.
       await ensureLocalPreview({ audio: false, video: false }).catch(() => undefined);
@@ -1722,7 +1730,10 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       setRoomState('idle');
     },
   });
-  const { takeOver: claimVoice, claimUntilHeld: claimVoiceUntilHeld, announceYieldable } = tabVoice;
+  const { takeOver: claimVoice, announceYieldable } = tabVoice;
+  // True whenever another tab holds voice, including when this tab's first claim lost and it never
+  // held it — the case `voiceYielded` (set from `onYield`) misses.
+  const voiceHeldElsewhere = tabVoice.ownership === 'elsewhere';
   // Re-checked when status or room state changes; the owner reads the live policy and announces only
   // while this tab holds voice.
   const roomHeld = roomState !== 'idle';
@@ -1775,11 +1786,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
 
       // Counts as holding the room from here: a nearer tab's automatic claim must not cut this connect.
       voiceClaimGenerationRef.current = generation;
-      // A live room must hold voice: if the first claim loses a race, keep asking (in the background,
-      // so the room is not held up) until it holds it or this connection is superseded.
-      if (!(await claimVoice())) {
-        void claimVoiceUntilHeld(() => !isCurrent() || debateVoicePolicy(debateStatusRef.current, true) === 'yield');
-      }
+      // One claim is enough now: a responsive holder yields, a frozen one is stolen from. No poll.
+      await claimVoice();
       if (!isCurrent()) {
         if (connectStartingGenerationRef.current === generation) setConnectStarting(false);
         return;
@@ -2201,7 +2209,6 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       audioOutputSelectionPromiseRef,
       audioOutputSupportedRef,
       claimVoice,
-      claimVoiceUntilHeld,
       debateId,
       initializeNoiseFilter,
       liveKitJoin,
@@ -2443,9 +2450,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   );
 
   const retryRoomConnection = React.useCallback(() => {
-    if (voiceYielded) void resumeVoice();
+    if (voiceYielded || voiceHeldElsewhere) void resumeVoice();
     else retryConnection();
-  }, [resumeVoice, retryConnection, voiceYielded]);
+  }, [resumeVoice, retryConnection, voiceYielded, voiceHeldElsewhere]);
 
   const toggleAudioMuted = React.useCallback(() => {
     const next = { audioMuted: !audioMuted, videoEnabled };
@@ -3424,7 +3431,12 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
             previewState={previewState}
             previewBusy={previewBusy}
             switchingDevice={replacingPreview}
-            error={roomError ?? deviceError?.message ?? (previewState === 'ready' ? previewError : null)}
+            error={
+              roomError ??
+              (voiceHeldElsewhere ? 'Voice is on in another tab' : null) ??
+              deviceError?.message ??
+              (previewState === 'ready' ? previewError : null)
+            }
             mediaError={previewError}
             audioInputDevices={audioInputDevices}
             audioOutputDevices={audioOutputDevices}
@@ -3442,9 +3454,12 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
               Boolean(preScreenLocalParticipant?.ready_at) || roomState === 'connecting' || roomState === 'reconnecting'
             }
             connectionSettling={roomState === 'connecting' || roomState === 'reconnecting' || publishingMedia}
-            canRetryConnection={roomState === 'idle' && roomError !== null && !connectionConflict}
+            canRetryConnection={
+              (roomState === 'idle' && roomError !== null && !connectionConflict) ||
+              (voiceHeldElsewhere && !connectionConflict)
+            }
             onRetryConnection={retryRoomConnection}
-            retryConnectionLabel={voiceYielded ? 'Use voice here' : undefined}
+            retryConnectionLabel={voiceYielded || voiceHeldElsewhere ? 'Use voice here' : undefined}
             canTakeOverConnection={connectionConflict && canTakeOverConnection}
             onTakeOverConnection={takeOverConnection}
             readyBusy={markReady.isPending}
@@ -4653,9 +4668,9 @@ async function publishTrackWithRetry(room: RoomLike, track: LocalTrackLike, isCu
 /** Cleanup belongs to each Room, including ones superseded before joining finishes. */
 const roomTelemetry = new WeakMap<RoomLike, DebateRoomTelemetry>();
 
-function disconnectLiveKitRoom(room: RoomLike | null, stopTracks?: boolean) {
+function disconnectLiveKitRoom(room: RoomLike | null, stopTracks?: boolean, endReason?: VoiceCallEndReason) {
   if (!room) return;
-  roomTelemetry.get(room)?.stop();
+  roomTelemetry.get(room)?.stop(endReason);
   roomTelemetry.delete(room);
   room.disconnect(stopTracks);
 }
@@ -4664,10 +4679,11 @@ function disconnectRoom(
   roomRef: React.MutableRefObject<RoomLike | null>,
   localTracksRef: React.MutableRefObject<LocalTrackLike[]>,
   localVideoRef: React.RefObject<HTMLVideoElement | null>,
-  remoteMediaRef: React.RefObject<HTMLDivElement | null>
+  remoteMediaRef: React.RefObject<HTMLDivElement | null>,
+  endReason?: VoiceCallEndReason
 ) {
   stopLocalTracks(localTracksRef);
-  disconnectLiveKitRoom(roomRef.current);
+  disconnectLiveKitRoom(roomRef.current, undefined, endReason);
   roomRef.current = null;
   if (localVideoRef.current) {
     localVideoRef.current.srcObject = null;

@@ -37,7 +37,7 @@ import {
 } from '~/core/debates/open-rounds-fixtures';
 import { clearRematchJoinIntents, rememberRematchJoinIntent } from '~/core/debates/rematch-join-intent';
 import { DebateRequestMediaPreview } from '~/core/debates/request-media-preview';
-import { tabVoiceOwner } from '~/core/debates/voice-owner';
+import { resetTabVoiceOwnersForTest, tabVoiceOwner } from '~/core/debates/voice-owner';
 import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
 import { readMediaDevicePreference, rememberMediaDevice } from '~/core/media/device-preferences';
 
@@ -116,9 +116,15 @@ const mocks = vi.hoisted(() => ({
   ownershipRelease: vi.fn(),
   ownershipClose: vi.fn(),
   ownershipTakeoverHandler: null as null | ((context: DebateRoomTakeoverContext) => boolean | Promise<boolean>),
+  // What the connection coordinator calls when a frozen-then-thawed tab finds its lock stolen.
+  ownershipLostHandler: null as null | (() => void),
   // Not reset per test: the tab voice owner can outlive a test and keep its coordinator.
   voiceTakeoverHandler: null as null | ((context: DebateRoomTakeoverContext) => boolean | Promise<boolean>),
   ownershipCoordinationMode: 'lock-and-broadcast' as 'lock-and-broadcast' | 'lock-only' | 'livekit-fallback',
+  voiceCoordinationMode: 'livekit-fallback' as 'lock-and-broadcast' | 'lock-only' | 'livekit-fallback',
+  voiceOwnsConnection: vi.fn(),
+  voiceRequestTakeover: vi.fn(),
+  voiceLastRefusedBy: vi.fn(),
   useRealRoomOwnership: false,
   deviceChangeHandler: null as null | (() => void),
   debate: null as Debate | null,
@@ -278,22 +284,24 @@ vi.mock('~/core/debates/debate-room-ownership', async importOriginal => {
     createDebateRoomOwnershipCoordinator: (
       options: Parameters<typeof actual.createDebateRoomOwnershipCoordinator>[0]
     ) => {
-      // The tab's cross-surface voice lock: never contested here (as without Web Locks).
+      // The tab's cross-surface voice lock: not contested by default (as without Web Locks); a test
+      // can override `mocks.voice*` to make the first claim lose instead.
       if (options.debateId === 'voice') {
         mocks.voiceTakeoverHandler = options.onTakeoverRequested;
         return {
           instanceId: 'voice-instance',
-          coordinationMode: 'livekit-fallback' as const,
+          coordinationMode: mocks.voiceCoordinationMode,
           acquire: async () => ({ acquired: true, waitedForLocalRelease: false }),
-          requestTakeover: async () => true,
+          requestTakeover: mocks.voiceRequestTakeover,
           release: async () => undefined,
           close: () => undefined,
-          ownsConnection: () => true,
-          lastRefusedBy: () => undefined,
+          ownsConnection: mocks.voiceOwnsConnection,
+          lastRefusedBy: mocks.voiceLastRefusedBy,
         };
       }
       if (mocks.useRealRoomOwnership) return actual.createDebateRoomOwnershipCoordinator(options);
       mocks.ownershipTakeoverHandler = options.onTakeoverRequested;
+      mocks.ownershipLostHandler = options.onOwnershipLost ?? null;
       return {
         instanceId: 'connection-instance-1',
         coordinationMode: mocks.ownershipCoordinationMode,
@@ -515,7 +523,12 @@ beforeEach(() => {
   mocks.ownershipRelease.mockReset();
   mocks.ownershipClose.mockReset();
   mocks.ownershipTakeoverHandler = null;
+  mocks.ownershipLostHandler = null;
   mocks.ownershipCoordinationMode = 'lock-and-broadcast';
+  mocks.voiceCoordinationMode = 'livekit-fallback';
+  mocks.voiceOwnsConnection.mockReset().mockReturnValue(true);
+  mocks.voiceRequestTakeover.mockReset().mockResolvedValue(true);
+  mocks.voiceLastRefusedBy.mockReset().mockReturnValue(undefined);
   mocks.useRealRoomOwnership = false;
   mocks.deviceChangeHandler = null;
   mocks.debate = completedDebate();
@@ -601,6 +614,9 @@ function setDocumentVisibility(state: DocumentVisibilityState) {
 
 afterEach(async () => {
   cleanup();
+  // The voice owner is a per-user singleton that outlives one React tree, so a test that left it
+  // `elsewhere` (or spied on it) would otherwise hand that to the next.
+  resetTabVoiceOwnersForTest();
   // Drops the own property, restoring jsdom's prototype getter.
   delete (document as { visibilityState?: DocumentVisibilityState }).visibilityState;
   window.localStorage.clear();
@@ -3261,6 +3277,7 @@ describe('DebateRoomPageClient', () => {
     });
     expect(released).toBe(true);
     expect(mocks.roomDisconnect).toHaveBeenCalled();
+    expect(mocks.stopVoiceCallTelemetry).toHaveBeenCalledWith('handover');
     expect(await screen.findByText('Voice is on in another tab')).toBeInTheDocument();
     expect(mocks.roomConnect).toHaveBeenCalledOnce();
     // Nor are the camera and mic opened again behind the other tab's back.
@@ -3270,6 +3287,29 @@ describe('DebateRoomPageClient', () => {
     expect(mocks.createLocalTracks).toHaveBeenCalledTimes(previewsBefore);
 
     fireEvent.click(screen.getByRole('button', { name: 'Use voice here' }));
+    await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalledTimes(2));
+  });
+
+  it('offers to take voice back when another tab already holds it before the intro ever connects', async () => {
+    // Unlike the test above, this tab never holds voice in the first place — its own first claim
+    // in `connect` loses, which `onYield` has no occasion to fire for.
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+    mocks.voiceCoordinationMode = 'lock-and-broadcast';
+    mocks.voiceOwnsConnection.mockReturnValue(false);
+    mocks.voiceRequestTakeover.mockResolvedValue(false);
+    mocks.voiceLastRefusedBy.mockReturnValue('lobby');
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    // The room connects anyway — losing the very first claim is not a connection failure.
+    await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
+
+    expect(await screen.findByText('Voice is on in another tab')).toBeInTheDocument();
+    const useVoiceHere = screen.getByRole('button', { name: 'Use voice here' });
+
+    // The other tab now yields.
+    mocks.voiceRequestTakeover.mockResolvedValue(true);
+    fireEvent.click(useVoiceHere);
     await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalledTimes(2));
   });
 
@@ -3396,10 +3436,9 @@ describe('DebateRoomPageClient', () => {
     await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
   });
 
-  it('keeps asking for voice when a starting debate loses its first claim', async () => {
+  it('claims voice once for a starting debate and connects without polling for it', async () => {
     const owner = tabVoiceOwner(mocks.currentUserId!);
-    vi.spyOn(owner, 'claim').mockResolvedValueOnce(false);
-    const claimUntilHeld = vi.spyOn(owner, 'claimUntilHeld').mockResolvedValue(true);
+    const claim = vi.spyOn(owner, 'claim');
     mocks.debate = {
       ...readyDebate({ localReady: true, remoteReady: true }),
       status: 'connecting',
@@ -3410,11 +3449,10 @@ describe('DebateRoomPageClient', () => {
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
     await waitFor(() => expect(mocks.markJoinedMutateAsync).toHaveBeenCalled());
 
-    expect(claimUntilHeld).toHaveBeenCalledWith(expect.objectContaining({ kind: 'debate' }));
-    // The room goes ahead meanwhile, and still refuses to hand voice over.
+    expect(claim).toHaveBeenCalledWith(expect.objectContaining({ kind: 'debate' }));
+    // The room goes ahead; there is no separate poll to keep re-asking.
     expect(mocks.roomConnect).toHaveBeenCalled();
-    const [{ stop }] = claimUntilHeld.mock.calls[0]!;
-    expect(stop()).toBe(false);
+    expect(claim).toHaveBeenCalledTimes(1);
   });
 
   it('keeps voice from another tab while the debate is under way', async () => {
@@ -3574,6 +3612,52 @@ describe('DebateRoomPageClient', () => {
     );
 
     pendingConnection.resolve();
+  });
+
+  it('records a connection handed to another tab as a handover, not a leave', async () => {
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    // markJoined runs only once the room has connected and the telemetry is attached.
+    await waitFor(() => expect(mocks.markJoinedMutateAsync).toHaveBeenCalled());
+
+    let released: boolean | undefined;
+    await act(async () => {
+      released = await mocks.ownershipTakeoverHandler?.({ requesterPriority: 2, ownerPriority: 2, automatic: false });
+    });
+    expect(released).toBe(true);
+    expect(mocks.roomDisconnect).toHaveBeenCalled();
+    // The debate moved to another tab of the same person, so it is not counted as a leave or a drop.
+    expect(mocks.stopVoiceCallTelemetry).toHaveBeenCalledWith('handover');
+  });
+
+  it('goes off the air as a handover when another tab steals the room from it', async () => {
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.markJoinedMutateAsync).toHaveBeenCalled());
+    expect(mocks.ownershipLostHandler).toEqual(expect.any(Function));
+    mocks.capture.mockClear();
+
+    act(() => mocks.ownershipLostHandler?.());
+
+    expect(mocks.roomDisconnect).toHaveBeenCalled();
+    expect(mocks.stopVoiceCallTelemetry).toHaveBeenCalledWith('handover');
+    expect(mocks.capture).toHaveBeenCalledOnce();
+    expect(mocks.capture).toHaveBeenCalledWith(
+      'debate_room_connection_conflict',
+      expect.objectContaining({ source: 'ownership_released' })
+    );
   });
 
   it('does not allow a secondary tab to take over an active debate recording', async () => {

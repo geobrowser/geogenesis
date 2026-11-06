@@ -10,7 +10,10 @@ import {
   shouldYieldVoice,
 } from './voice-owner';
 
-type Held = { name: string; mode: LockMode; tab: string | null; release: () => void };
+const captureSafely = vi.hoisted(() => vi.fn());
+vi.mock('~/core/analytics-capture-safely', () => ({ captureSafely }));
+
+type Held = { name: string; mode: LockMode; tab: string | null; release: () => void; steal: () => void };
 type Queued = {
   name: string;
   mode: LockMode;
@@ -31,6 +34,11 @@ class FakeLockManager {
 
   request(name: string, options: LockOptions, callback: (lock: Lock | null) => Promise<void> | void) {
     const mode = options.mode ?? 'exclusive';
+
+    if (options.steal) {
+      for (const lock of this.held.filter(candidate => candidate.name === name)) lock.steal();
+      return this.run(name, mode, this.currentTab, callback);
+    }
     const queuedHere = this.queue.some(request => request.name === name);
     if (!queuedHere && this.grantable(name, mode)) return this.run(name, mode, this.currentTab, callback);
     if (options.ifAvailable) return Promise.resolve(callback(null));
@@ -77,14 +85,19 @@ class FakeLockManager {
     callback: (lock: Lock | null) => unknown,
     queued = false
   ) {
-    const held: Held = { name, mode, tab, release: () => {} };
+    const held: Held = { name, mode, tab, release: () => {}, steal: () => {} };
     this.held.push(held);
-    return new Promise<void>(resolve => {
+    return new Promise<void>((resolve, reject) => {
       held.release = () => {
         if (!this.held.includes(held)) return;
         this.held = this.held.filter(lock => lock !== held);
         resolve();
         this.drain(name);
+      };
+      held.steal = () => {
+        if (!this.held.includes(held)) return;
+        this.held = this.held.filter(lock => lock !== held);
+        reject(new DOMException('lock stolen', 'AbortError'));
       };
       const invoke = () => void Promise.resolve(callback({ name, mode })).then(held.release, held.release);
       if (queued) setTimeout(invoke, 0);
@@ -179,6 +192,7 @@ function openTab(name: string, priority: DebateRoomTabPriority = 2): FakeTab {
 const flush = () => new Promise(resolve => setTimeout(resolve, 0));
 
 beforeEach(() => {
+  captureSafely.mockClear();
   FakeBroadcastChannel.channels.clear();
   locks = new FakeLockManager();
   Object.defineProperty(navigator, 'locks', { configurable: true, value: locks });
@@ -188,6 +202,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
   Object.defineProperty(navigator, 'locks', { configurable: true, value: undefined });
@@ -412,6 +427,58 @@ describe('tab voice owner', () => {
     expect(lobbyTab.owner.getState()).toEqual({ ownership: 'elsewhere', heldBy: 'debate' });
   });
 
+  it('records where voice moved from on a first claim, from what the releasing tab says it was', async () => {
+    const lobbyTab = openTab('lobby', 2);
+    lobbyTab.surface('lobby');
+    await lobbyTab.claim('lobby', true);
+
+    const debateTab = openTab('debate', 0);
+    debateTab.surface('debate', 'refuse');
+    expect(debateTab.owner.getState().heldBy).toBeNull();
+    await expect(debateTab.claim('debate')).resolves.toBe(true);
+
+    expect(captureSafely).toHaveBeenCalledWith('voice_moved_to_other_tab', {
+      to_surface: 'debate',
+      from_surface: 'lobby',
+      automatic: false,
+    });
+  });
+
+  it('records a move when a claim takes voice from another tab', async () => {
+    const left = openTab('left', 2);
+    left.surface('lobby');
+    await left.claim('lobby', true);
+    expect(captureSafely).not.toHaveBeenCalled();
+
+    const right = openTab('right', 1);
+    right.surface('picker');
+    await expect(right.claim('picker', true)).resolves.toBe(false);
+    expect(captureSafely).not.toHaveBeenCalled();
+
+    left.priority = 1;
+    await expect(right.claim('picker')).resolves.toBe(true);
+
+    expect(captureSafely).toHaveBeenCalledWith('voice_moved_to_other_tab', {
+      to_surface: 'picker',
+      from_surface: 'lobby',
+      automatic: false,
+    });
+    expect(captureSafely).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not record a move when a refused claim leaves voice where it is', async () => {
+    const debateTab = openTab('debate', 0);
+    debateTab.surface('debate', 'refuse');
+    await debateTab.claim('debate');
+    captureSafely.mockClear();
+
+    const lobbyTab = openTab('lobby', 2);
+    lobbyTab.surface('lobby');
+    await expect(lobbyTab.claim('lobby')).resolves.toBe(false);
+
+    expect(captureSafely).not.toHaveBeenCalled();
+  });
+
   it('asks again as explicit when "Use voice here" lands behind a page-open claim', async () => {
     const left = openTab('left', 2);
     left.surface('lobby');
@@ -529,30 +596,6 @@ describe('tab voice owner', () => {
     await expect(reloaded.claim('debate')).resolves.toBe(true);
   });
 
-  it('keeps claiming for a debate until it holds voice', async () => {
-    // A lock held by a tab that never answers, e.g. a frozen tab's granted request.
-    let letGo = () => {};
-    void locks.request('geo:debate-room:voice:user-a', {}, () => new Promise<void>(resolve => (letGo = resolve)));
-    const debateTab = openTab('debate', 2);
-    debateTab.surface('debate', 'refuse');
-    await expect(debateTab.claim('debate')).resolves.toBe(false);
-
-    const held = asTab('debate', () => debateTab.owner.claimUntilHeld({ kind: 'debate', stop: () => false }));
-    letGo();
-    await expect(held).resolves.toBe(true);
-    expect(debateTab.owner.getState()).toEqual({ ownership: 'owned', heldBy: null });
-  }, 10_000);
-
-  it('stops claiming once the debate no longer needs voice', async () => {
-    void locks.request('geo:debate-room:voice:user-a', {}, () => new Promise<void>(() => {}));
-    const debateTab = openTab('debate', 2);
-    debateTab.surface('debate', 'refuse');
-    let stopped = false;
-    const held = asTab('debate', () => debateTab.owner.claimUntilHeld({ kind: 'debate', stop: () => stopped }));
-    stopped = true;
-    await expect(held).resolves.toBe(false);
-  }, 10_000);
-
   it('checks again every few seconds while a waiting tab is on screen', async () => {
     vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
     const debateTab = openTab('debate', 0);
@@ -601,6 +644,49 @@ describe('tab voice owner', () => {
     await flush();
     await flush();
     expect(lobbyTab.owner.getState()).toEqual({ ownership: 'elsewhere', heldBy: null });
+  });
+
+  it('steals voice from a frozen tab on "Use voice here", and takes it off the air', async () => {
+    const lobbyTab = openTab('lobby', 2);
+    lobbyTab.surface('lobby');
+    await lobbyTab.claim('lobby', true);
+    FakeBroadcastChannel.crash('lobby');
+
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const debateTab = openTab('debate', 2);
+    debateTab.surface('debate', 'explicit-only');
+    const claim = debateTab.claim('debate');
+    await vi.advanceTimersByTimeAsync(1_500);
+    await expect(claim).resolves.toBe(true);
+
+    expect(debateTab.owner.getState()).toEqual({ ownership: 'owned', heldBy: null });
+    // A frozen tab never says what it was, so the move is recorded without a source.
+    expect(captureSafely).toHaveBeenCalledWith('voice_moved_to_other_tab', {
+      to_surface: 'debate',
+      from_surface: null,
+      automatic: false,
+    });
+
+    expect(lobbyTab.yields).toBe(1);
+    expect(lobbyTab.owner.getState()).toEqual({ ownership: 'elsewhere', heldBy: null });
+    expect(locks.heldCount()).toBe(1);
+  });
+
+  it('never steals voice from a frozen tab on an automatic claim', async () => {
+    const lobbyTab = openTab('lobby', 0);
+    lobbyTab.surface('lobby');
+    await lobbyTab.claim('lobby', true);
+    FakeBroadcastChannel.crash('lobby');
+
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const pickerTab = openTab('picker', 2);
+    pickerTab.surface('picker');
+    const claim = pickerTab.claim('picker', true);
+    await vi.advanceTimersByTimeAsync(1_500);
+    await expect(claim).resolves.toBe(false);
+
+    expect(lobbyTab.yields).toBe(0);
+    expect(lobbyTab.owner.getState()).toEqual({ ownership: 'owned', heldBy: null });
   });
 
   it('frees voice when the owning tab crashes', async () => {
