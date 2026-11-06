@@ -78,6 +78,22 @@ export function AvailabilityModal({
   const shown = local?.blocks;
   const converted = local?.converted ?? false;
   const [draft, setDraft] = React.useState<AvailabilityBlock[]>(shown ?? []);
+  // The draft a calendar connect last saved without closing. Saved is not unsaved: without this a
+  // connect that failed after its save would save the same week again on every retry.
+  const [savedDraft, setSavedDraft] = React.useState<AvailabilityBlock[] | null>(null);
+  // Read after the save answers, so an edit made while it ran is not left behind when the page leaves.
+  const latestDraft = React.useRef(draft);
+  latestDraft.current = draft;
+  const saveDraft = onSaveDraft
+    ? async () => {
+        let saving: AvailabilityBlock[];
+        do {
+          saving = latestDraft.current;
+          await onSaveDraft(saving);
+        } while (latestDraft.current !== saving);
+        setSavedDraft(saving);
+      }
+    : undefined;
   const timezoneNote = scheduleTimezoneNote({ savedTimezone, currentTimezone, converted });
 
   return (
@@ -92,8 +108,8 @@ export function AvailabilityModal({
     >
       {/* The grid echoes `shown` back on mount, so any other draft is an edit. */}
       {calendarSection?.({
-        unsavedChanges: shown !== undefined && draft !== shown,
-        saveDraft: onSaveDraft && (() => onSaveDraft(draft)),
+        unsavedChanges: shown !== undefined && draft !== shown && draft !== savedDraft,
+        saveDraft,
       })}
       {/* Remounted per opening so a discarded draft cannot survive into the next one. The
           footer buttons ride in the calendar's own action row, beside its Clear all.

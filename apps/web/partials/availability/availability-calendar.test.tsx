@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import * as React from 'react';
@@ -133,6 +133,8 @@ describe('AvailabilityCalendar', () => {
     const [short, hour] = Array.from(container.querySelectorAll<HTMLElement>('[data-busy]'));
     expect(short).toHaveTextContent('');
     expect(hour).toHaveTextContent('Busy');
+    // In the bottom corner, clear of a block's time label and × along its top.
+    expect(within(hour).getByText('Busy')).toHaveClass('absolute', 'bottom-0.5', 'right-1');
   });
 
   it('draws no busy shading or legend without busy intervals', async () => {

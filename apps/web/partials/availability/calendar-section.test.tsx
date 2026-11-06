@@ -296,6 +296,29 @@ describe('CalendarSection with Google alone', () => {
     expect(mocks.disconnect.google.mutate).toHaveBeenCalled();
   });
 
+  it('keeps focus in the menu as it switches to the confirm and back', async () => {
+    mocks.connections.google = connection();
+    render(<CalendarSection providers={['google']} />);
+
+    const menu = await openMenu('Google Calendar');
+    await userEvent.click(within(menu).getByRole('button', { name: 'Disconnect' }));
+    expect(within(menu).getByRole('button', { name: 'Keep' })).toHaveFocus();
+
+    await userEvent.click(within(menu).getByRole('button', { name: 'Keep' }));
+    expect(within(menu).getByRole('button', { name: 'Disconnect' })).toHaveFocus();
+  });
+
+  it('offers no second sync while one is running, and says it is syncing', async () => {
+    mocks.connections.google = connection();
+    mocks.refresh.google = { ...mutation(), isPending: true };
+    render(<CalendarSection providers={['google']} />);
+
+    const menu = await openMenu('Google Calendar');
+    expect(within(menu).getByText('Syncing…')).toBeInTheDocument();
+    expect(within(menu).queryByRole('button', { name: 'Sync now' })).not.toBeInTheDocument();
+    expect(within(menu).getByRole('button', { name: 'Disconnect' })).toBeInTheDocument();
+  });
+
   it('says why a disconnect was refused, in the popover', async () => {
     mocks.connections.google = connection();
     mocks.disconnect.google = { ...mutation(), isError: true, error: new Error('x') };

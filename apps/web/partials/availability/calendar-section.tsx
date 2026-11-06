@@ -233,6 +233,7 @@ function ConnectedChip({
   const disconnect = useDisconnectCalendar(provider);
   const [open, setOpen] = React.useState(false);
   const [confirmingDisconnect, setConfirmingDisconnect] = React.useState(false);
+  const view = useFocusOnViewSwitch(confirmingDisconnect);
   const needsReconnect = connection.status === 'needs_reconnect';
   // Reconnecting the same account would fail the same way.
   const needsOtherAccount = connection.last_error === 'mailbox_unavailable';
@@ -276,7 +277,7 @@ function ConnectedChip({
         }
       >
         {confirmingDisconnect ? (
-          <div className="flex flex-col gap-2 p-3">
+          <div ref={view} className="flex flex-col gap-2 p-3">
             <Text as="p" variant="metadataMedium">
               Disconnect {name}?
             </Text>
@@ -307,23 +308,24 @@ function ConnectedChip({
             </div>
           </div>
         ) : (
-          <>
+          <div ref={view}>
             <Text as="p" variant="footnote" color="grey-04" className="border-b border-divider px-3 py-2.5">
-              {isCalendarSyncing(connection) ? 'Syncing…' : syncedAgo(connection.last_success_at)}
+              {refresh.isPending || isCalendarSyncing(connection) ? 'Syncing…' : syncedAgo(connection.last_success_at)}
             </Text>
-            {/* Sync does nothing while access is gone; Reconnect on the chip takes its place. */}
-            {needsReconnect ? null : (
+            {/* Sync does nothing while access is gone, where Reconnect on the chip takes its place,
+                and is not offered again while one is running. */}
+            {needsReconnect || refresh.isPending ? null : (
               <MenuItem
                 onClick={() => {
                   refresh.mutate();
                   setOpen(false);
                 }}
               >
-                {refresh.isPending ? 'Syncing…' : 'Sync now'}
+                Sync now
               </MenuItem>
             )}
             <MenuItem onClick={() => setConfirmingDisconnect(true)}>Disconnect</MenuItem>
-          </>
+          </div>
         )}
       </Menu>
       {needsReconnect ? (
@@ -342,6 +344,23 @@ function ConnectedChip({
       ) : null}
     </div>
   );
+}
+
+/**
+ * Disconnect and Keep swap the menu's content, which unmounts the focused button and drops focus to
+ * the dialog. Lands it on the new view instead: Keep, the safe choice, on the confirm; Disconnect,
+ * where it came from, on the way back. Not on the first render, where Radix focuses the menu.
+ */
+function useFocusOnViewSwitch(confirming: boolean) {
+  const view = React.useRef<HTMLDivElement>(null);
+  const previous = React.useRef(confirming);
+  React.useEffect(() => {
+    if (previous.current === confirming) return;
+    previous.current = confirming;
+    const buttons = view.current?.querySelectorAll<HTMLButtonElement>('button');
+    (confirming ? buttons?.[0] : buttons?.[buttons.length - 1])?.focus();
+  }, [confirming]);
+  return view;
 }
 
 const LINK = 'underline underline-offset-2 hover:text-text';

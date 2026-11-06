@@ -497,8 +497,12 @@ export function AvailabilityCalendar({
                       zIndex: BUSY_Z_INDEX,
                     }}
                   >
+                    {/* Bottom right: a block's own time label and × sit along its top, and busy time
+                        starting with the block would print over them. */}
                     {segment.end - segment.start >= BUSY_LABEL_MIN_MINUTES && (
-                      <span className="block truncate px-1.5 py-0.5 text-footnoteMedium text-grey-05">Busy</span>
+                      <span className="absolute right-1 bottom-0.5 rounded-sm bg-white/85 px-1 text-footnoteMedium text-grey-05">
+                        Busy
+                      </span>
                     )}
                   </div>
                 ))}
