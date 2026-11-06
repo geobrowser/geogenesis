@@ -1,10 +1,15 @@
-import { act, cleanup, fireEvent, render, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 import { getDefaultStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Debate, DebateMediaTurnSegment, DebateParticipant } from '~/core/debates/api';
 import type { ClaimMarker } from '~/core/debates/claim-ticker';
+import {
+  RESUME_STORAGE_KEY,
+  readDebateResumeSeconds,
+  rememberDebatePosition,
+} from '~/core/debates/debate-resume-positions';
 import { PAIR_HOLD_TIMEOUT_MS, SUSPEND_GRACE_MS } from '~/core/debates/pair-readiness';
 import { turnSpansForDurations, turnSpansFromSegments, turnStateFromSegments } from '~/core/debates/playback-utils';
 import { turnTimerScale } from '~/core/debates/recording-countdown-ring';
@@ -348,6 +353,7 @@ beforeEach(() => {
   mocks.bylines = new Map();
   mocks.livePosition = null;
   mocks.stackOpens = [];
+  window.localStorage.removeItem(RESUME_STORAGE_KEY);
   vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
   vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {});
 });
@@ -1366,6 +1372,169 @@ describe('a seek asked for by the link that brought the reader here', () => {
   });
 });
 
+describe('resuming where this browser left a debate', () => {
+  function renderResumable({
+    initialSeekSeconds = null,
+    ready = true,
+    releaseMedia = false,
+    playheadSeconds = 5,
+    playing = true,
+  }: {
+    initialSeekSeconds?: number | null;
+    ready?: boolean;
+    releaseMedia?: boolean;
+    playheadSeconds?: number;
+    playing?: boolean;
+  } = {}) {
+    const seeks: number[] = [];
+    const makeSeek = () => vi.fn((seconds: number) => void seeks.push(seconds));
+    let props = { initialSeekSeconds, ready, releaseMedia, playheadSeconds, playing, debateId: debate.id };
+
+    const element = () => (
+      <DebateFeedPlayer
+        debate={props.debateId === debate.id ? debate : ({ ...debate, id: props.debateId } as typeof debate)}
+        active
+        releaseMedia={props.releaseMedia}
+        initialSeekSeconds={props.initialSeekSeconds}
+      />
+    );
+    const fixture = () =>
+      controllerFixture({
+        mutedByUser: true,
+        turnSlot: 1,
+        ready: props.ready,
+        playing: props.playing,
+        playheadSeconds: props.playheadSeconds,
+        seekBoth: makeSeek(),
+      });
+
+    mocks.controller = fixture();
+    const view = render(element());
+
+    return {
+      seeks,
+      controller: () => mocks.controller as ReturnType<typeof controllerFixture>,
+      update(next: Partial<typeof props> = {}) {
+        props = { ...props, ...next };
+        mocks.controller = fixture();
+        view.rerender(element());
+      },
+      unmount: view.unmount,
+    };
+  }
+
+  const startOver = () => screen.queryByRole('button', { name: 'Start over' });
+
+  it('opens a debate watched part of the way a few seconds before where the viewer stopped', () => {
+    rememberDebatePosition(debate.id, 80, 120);
+
+    const player = renderResumable();
+
+    expect(player.seeks).toEqual([75]);
+    expect(startOver()).not.toBeNull();
+  });
+
+  it('starts a debate never watched at the beginning, with no Start over', () => {
+    const player = renderResumable();
+
+    expect(player.seeks).toEqual([]);
+    expect(startOver()).toBeNull();
+  });
+
+  it('waits for the media to be seekable and attached rather than seeking a held card', () => {
+    rememberDebatePosition(debate.id, 80, 120);
+    const player = renderResumable({ ready: false });
+    expect(player.seeks).toEqual([]);
+
+    player.update({ ready: true, releaseMedia: true });
+    expect(player.seeks).toEqual([]);
+    // Playing at 0 while the resume waits must not save over the position it is waiting to apply.
+    expect(readDebateResumeSeconds(debate.id)).toBe(75);
+
+    player.update({ releaseMedia: false });
+    expect(player.seeks).toEqual([75]);
+  });
+
+  it('does not chase its own saves back while the debate plays on', () => {
+    rememberDebatePosition(debate.id, 80, 120);
+    const player = renderResumable({ playheadSeconds: 75 });
+
+    // Each of these is saved, so a resume read live would seek again every few seconds.
+    for (const seconds of [76, 82, 90, 101]) player.update({ playheadSeconds: seconds });
+
+    expect(player.seeks).toEqual([75]);
+    expect(readDebateResumeSeconds(debate.id)).toBe(96);
+  });
+
+  it('lets a link that named a moment win, and does not resume once that link is dropped', () => {
+    rememberDebatePosition(debate.id, 80, 120);
+    const player = renderResumable({ initialSeekSeconds: 30 });
+
+    expect(player.seeks).toEqual([30]);
+    expect(startOver()).toBeNull();
+
+    // Browser Back to the same debate without `?t=`: the viewer is already where the link put them.
+    player.update({ initialSeekSeconds: null });
+    expect(player.seeks).toEqual([30]);
+  });
+
+  it('reads its own position for a different debate on the same card', () => {
+    rememberDebatePosition(debate.id, 80, 120);
+    rememberDebatePosition('debate-2', 50, 120);
+    const player = renderResumable({ playing: false });
+
+    player.update({ debateId: 'debate-2' });
+
+    expect(player.seeks).toEqual([75, 45]);
+  });
+
+  it('Start over plays from the beginning and forgets the position', () => {
+    rememberDebatePosition(debate.id, 80, 120);
+    const player = renderResumable({ playing: false });
+
+    fireEvent.click(startOver()!);
+
+    expect(player.controller().playFromStart).toHaveBeenCalledOnce();
+    expect(readDebateResumeSeconds(debate.id)).toBeNull();
+    expect(startOver()).toBeNull();
+  });
+
+  it('saves where the viewer stopped when they pause', () => {
+    const player = renderResumable({ playheadSeconds: 40 });
+    player.update({ playheadSeconds: 43 });
+    expect(readDebateResumeSeconds(debate.id)).toBe(35);
+
+    // Under the save interval while playing; written once playback stops.
+    player.update({ playheadSeconds: 43, playing: false });
+    expect(readDebateResumeSeconds(debate.id)).toBe(38);
+  });
+
+  it('saves where the viewer stopped when the player goes away', () => {
+    const player = renderResumable({ playheadSeconds: 40 });
+    player.update({ playheadSeconds: 44 });
+
+    player.unmount();
+
+    expect(readDebateResumeSeconds(debate.id)).toBe(39);
+  });
+
+  it('saves nothing for a viewer who watched only the first few seconds', () => {
+    const player = renderResumable({ playheadSeconds: 3 });
+    player.update({ playheadSeconds: 12, playing: false });
+
+    expect(readDebateResumeSeconds(debate.id)).toBeNull();
+  });
+
+  it('forgets the position once the debate is finished', () => {
+    rememberDebatePosition(debate.id, 80, 120);
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1, playing: false, playbackEnded: true });
+
+    render(<DebateFeedPlayer debate={debate} active />);
+
+    expect(readDebateResumeSeconds(debate.id)).toBeNull();
+  });
+});
+
 describe('the round it is playing', () => {
   const at = (playheadSeconds: number, extra: { playing?: boolean } = {}) =>
     controllerFixture({ mutedByUser: false, turnSlot: 1, playheadSeconds, ...extra });
@@ -2172,6 +2341,8 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
       expect(seekBoth).toHaveBeenCalledWith(70.8, { preserveTransitionHold: true });
 
       cleanup();
+
+      window.localStorage.removeItem(RESUME_STORAGE_KEY);
       const pausedSeek = vi.fn();
       renderAt(62.3, { playbackBreaks: breaks({ breaks: [extendBreak] }), seekBoth: pausedSeek, playing: false });
       vi.advanceTimersByTime(5_000);

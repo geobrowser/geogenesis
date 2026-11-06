@@ -10,6 +10,11 @@ import { ActionSurface } from '~/core/action-context-provider';
 import type { Debate, DebateParticipant } from '~/core/debates/api';
 import type { ClaimMarker } from '~/core/debates/claim-ticker';
 import type { DebatePagePlayerState } from '~/core/debates/debate-page-outcome';
+import {
+  forgetDebatePosition,
+  readDebateResumeSeconds,
+  useRememberDebatePosition,
+} from '~/core/debates/debate-resume-positions';
 import { DebatePositionChip } from '~/core/debates/debate-video-tile';
 import { isOpenRoundsDebate } from '~/core/debates/open-rounds';
 import { usePairReadiness } from '~/core/debates/pair-readiness';
@@ -318,9 +323,11 @@ export function DebateFeedPlayer({
     setStartedDebateId(debate.id);
     if (!active) onPlaybackRequest?.();
   };
-  const playFromStart = () => {
-    measurement.control('replay');
+  const playFromStart = (control: 'replay' | 'start_over' = 'replay') => {
+    measurement.control(control);
     resetAnimationSeek();
+    setStartOverId(null);
+    forgetDebatePosition(debate.id);
     pair.release();
     void playFromStartRaw();
   };
@@ -406,6 +413,46 @@ export function DebateFeedPlayer({
     resetAnimationSeek();
     seekBothRaw(initialSeekSeconds);
   }, [debate.id, initialSeekSeconds, ready, seekBothRaw]);
+
+  /**
+   * Pick up where this browser's viewer stopped, once per debate.
+   *
+   * Read when the player first holds the debate and kept: the position is rewritten as the debate
+   * plays, and following it would seek the viewer back to their own last save. A link that named a
+   * moment wins, and is not followed by a resume once it is dropped (browser Back), which the
+   * `?t=` latch alone would allow.
+   *
+   * Waits for the elements as well as `ready`, so the seek lands on them rather than waiting as a
+   * pending seek on a held card. Placed before the autoplay effect, which runs in the same commit:
+   * the pair starts from here, not from the top.
+   */
+  const [resume, setResume] = React.useState(() => ({
+    debateId: debate.id,
+    seconds: readDebateResumeSeconds(debate.id),
+  }));
+  const currentResume =
+    resume.debateId === debate.id ? resume : { debateId: debate.id, seconds: readDebateResumeSeconds(debate.id) };
+  if (currentResume !== resume) setResume(currentResume);
+  const resumeSeconds = currentResume.seconds;
+  const [resumeSettledId, setResumeSettledId] = React.useState<string | null>(null);
+
+  const [startOverId, setStartOverId] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    if (resumeSettledId === debate.id) return;
+    if (initialSeekSeconds == null && resumeSeconds != null) {
+      if (!ready || detached) return;
+      resetAnimationSeek();
+      seekBothRaw(resumeSeconds);
+      setStartOverId(debate.id);
+    }
+    setResumeSettledId(debate.id);
+  }, [debate.id, detached, initialSeekSeconds, ready, resumeSeconds, resumeSettledId, seekBothRaw]);
+  useRememberDebatePosition({
+    debateId: debate.id,
+    playheadSeconds,
+    timelineSeconds,
+    recording: active && ready && playing && !isScrubbing && resumeSettledId === debate.id,
+  });
 
   /**
    * Stopped, and only a tap will start it.
@@ -679,8 +726,11 @@ export function DebateFeedPlayer({
     : roundBadge;
   // Watched to the end, whichever layout it ended in — a compact tile never shows the end card, and
   // a debate finished there must not come back as a suggestion.
+  // Finished, too, is where a resume stops: the next visit opens at the beginning.
   React.useEffect(() => {
-    if (showReplay) markDebateWatched(debate.id);
+    if (!showReplay) return;
+    markDebateWatched(debate.id);
+    forgetDebatePosition(debate.id);
   }, [showReplay, debate.id]);
   // Loaded while the debate is the active one, so its numbers are there when the video ends rather
   // than drawing empty bars and filling them in.
@@ -1066,6 +1116,19 @@ export function DebateFeedPlayer({
                 >
                   {mutedByUser ? <SpeakerMuted /> : <Speaker />}
                 </ControlCircle>
+                {startOverId === debate.id && (
+                  <button
+                    type="button"
+                    onClick={event => {
+                      event.stopPropagation();
+                      playFromStart('start_over');
+                    }}
+                    className="flex h-10.5 items-center gap-1 rounded-full bg-white px-3 text-smallButton text-text shadow-light"
+                  >
+                    <RetrySmall />
+                    Start over
+                  </button>
+                )}
               </div>
             ) : null
           }
@@ -1234,7 +1297,7 @@ export function DebateFeedPlayer({
           <button
             type="button"
             aria-label={showReplay ? 'Replay debate' : 'Resume debate'}
-            onClick={showReplay ? playFromStart : togglePlayback}
+            onClick={showReplay ? () => playFromStart() : togglePlayback}
             className={cx(
               CENTERED_PLAYBACK_CONTROL_CLASS,
               'z-30',
