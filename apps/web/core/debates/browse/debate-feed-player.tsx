@@ -186,6 +186,8 @@ export function DebateFeedPlayer(props: DebateFeedPlayerProps) {
     return (
       <CombinedDebatePlayer
         debate={props.debate}
+        enabled={props.active || Boolean(props.preload)}
+        onPlaybackState={props.onPlaybackState}
         framed={props.framed}
         reducedOverlays={props.reducedOverlays}
         stills={props.stills}
