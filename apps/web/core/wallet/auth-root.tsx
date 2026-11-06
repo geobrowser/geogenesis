@@ -3,6 +3,7 @@
 import * as React from 'react';
 
 import { signInExpectedOnLoad } from '~/core/auth/sign-in-on-load';
+import { installSignInReports, reportSignInLoadFailed } from '~/core/auth/sign-in-reports';
 
 import { getState, isRealAuthWanted, markHostFailed, requestRealAuth, subscribe } from './auth-store';
 
@@ -34,7 +35,10 @@ export function startAuthForPage() {
   if (isRealAuthWanted()) void loadHost();
 }
 
-if (typeof window !== 'undefined') startAuthForPage();
+if (typeof window !== 'undefined') {
+  installSignInReports();
+  startAuthForPage();
+}
 
 export function scheduleIdleLoad(onIdle: () => void, delayMs = IDLE_LOAD_DELAY_MS) {
   let idleHandle: number | undefined;
@@ -81,6 +85,7 @@ export function AuthRoot() {
         console.error('[auth] could not load Privy', error);
         hostModule = null;
         markHostFailed();
+        reportSignInLoadFailed('chunk_load', { error });
       }
     );
     return () => {
