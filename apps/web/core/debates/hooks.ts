@@ -97,6 +97,12 @@ import { markEnteringDebate, markEnteringPendingDebate } from './debate-entry-in
 import { useDebateGatewayScope, useDebateGatewaySnapshot, useDebateGatewaySpaceScopes } from './debate-gateway';
 import { isLiveGeoChatAccount, refusedRetryDelayMs } from './geo-chat-account-status';
 import { lobbyDebateRequested } from './lobbies/lobby-analytics';
+import {
+  markLocalDebateLeave,
+  markLocalRematchLeave,
+  unmarkLocalDebateLeave,
+  unmarkLocalRematchLeave,
+} from './local-debate-leave';
 import { markAskWithdrawn, unmarkAskWithdrawn } from './matchmaking/ask-withdrawals';
 import {
   type ParticipantAvatarMapper,
@@ -1051,6 +1057,12 @@ export function useAbortDebate(debateId: string) {
 
   return useMutation({
     mutationFn: () => abortDebate(debateId, getPrivyIdentityToken, accountKey),
+    onMutate: () => {
+      markLocalDebateLeave(debateId);
+    },
+    onError: () => {
+      unmarkLocalDebateLeave(debateId);
+    },
     onSuccess: debate => {
       queryClient.setQueryData(debateQueryKeys.debate(debate.id), debate);
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.debate(debate.id) });
@@ -1171,6 +1183,12 @@ export function useLeaveDebateRematch(sessionId: string) {
 
   return useMutation({
     mutationFn: () => leaveDebateRematch(sessionId, getPrivyIdentityToken, accountKey),
+    onMutate: () => {
+      markLocalRematchLeave(sessionId);
+    },
+    onError: () => {
+      unmarkLocalRematchLeave(sessionId);
+    },
     onSuccess: session => {
       queryClient.setQueryData(debateQueryKeys.rematch(accountKey, session.id), session);
       forgetEndedRematch(queryClient, accountKey, session);
