@@ -21,13 +21,13 @@ const mocks = vi.hoisted(() => ({
   canHost: false,
 }));
 
-// The pill reads `../hooks`; the schedule editor it opens reads the same module by its alias.
 // The schedule editor reads the viewer's calendars; this suite isn't about them, so geo-chat has them off.
 vi.mock('~/core/debates/calendar-hooks', () => ({
   useCalendarConnections: () => ({ disabled: true }),
   useCalendarBusy: () => ({ intervals: undefined }),
 }));
 
+// The pill reads `../hooks`; the schedule editor it opens reads the same module by its alias.
 vi.mock('~/core/debates/hooks', () => ({
   useDebateSchedule: () => ({
     data: mocks.loaded ? { is_set: mocks.isSet } : undefined,

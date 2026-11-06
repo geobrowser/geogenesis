@@ -6,7 +6,7 @@ import cx from 'classnames';
 
 import type { CalendarConnectSource } from '~/core/availability/calendar-analytics';
 import { SCHEDULE_SAVE_FAILED_COPY } from '~/core/availability/schedule-save-copy';
-import type { CalendarConnection, CalendarProvider } from '~/core/debates/api';
+import { type CalendarConnection, type CalendarProvider, isAccountWarmingUpQuery } from '~/core/debates/api';
 import {
   isCalendarSyncing,
   useCalendarConnections,
@@ -41,7 +41,7 @@ const STALE = 'Calendar hasn’t synced recently, so busy times aren’t being t
 
 /**
  * Connected calendars in the viewer's schedule editor, as one row of chips above the grid (GEO-3595):
- * one per flagged provider, connected or not. geo-chat reads only busy times and takes them out of
+ * one per provider geo-chat has configured, connected or not. geo-chat reads only busy times and takes them out of
  * their availability; it never adds time.
  */
 export function CalendarSection({
@@ -64,7 +64,8 @@ export function CalendarSection({
   if (connections.disabled) return null;
 
   if (connections.google === undefined) {
-    if (!connections.isError) return null;
+    // A session geo-chat hasn't finished setting up: the editor already says so, and it clears by itself.
+    if (!connections.isError || isAccountWarmingUpQuery(connections)) return null;
     return (
       <div className="flex shrink-0 items-center gap-3">
         <Text as="p" variant="footnote" color="grey-04">

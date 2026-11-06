@@ -4,7 +4,8 @@ import userEvent from '@testing-library/user-event';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { type CalendarConnection, GeoChatRequestError } from '~/core/debates/api';
+import { ACCOUNT_SETUP_MESSAGE } from '~/core/debates/account-setup-copy';
+import { type CalendarConnection, GeoChatRequestError, GeoChatSessionError } from '~/core/debates/api';
 
 import { CalendarSection } from './calendar-section';
 
@@ -25,6 +26,7 @@ const mocks = vi.hoisted(() => ({
     microsoft: undefined as CalendarConnection | null | undefined,
     providers: undefined as string[] | undefined,
     isError: false,
+    error: null as unknown,
     disabled: false,
     refetch: () => {},
   },
@@ -73,6 +75,7 @@ beforeEach(() => {
     microsoft: null,
     providers: ['google'],
     isError: false,
+    error: null,
     disabled: false,
     refetch: () => {},
   };
@@ -494,5 +497,48 @@ describe('CalendarSection with Outlook', () => {
     expect(screen.getByRole('status')).toHaveTextContent(
       'Your organization’s IT admin must approve Geo before you can connect this calendar. Personal Microsoft accounts work without approval.'
     );
+  });
+});
+
+describe('CalendarSection when the calendar can’t be read', () => {
+  const refused = () => new GeoChatSessionError(new GeoChatRequestError('Unauthorized', 'no_personal_space', 401));
+
+  it('offers Try again for a failed read', async () => {
+    const refetch = vi.fn();
+    mocks.connections = {
+      ...mocks.connections,
+      google: undefined,
+      providers: undefined,
+      isError: true,
+      error: new GeoChatRequestError('Bad gateway', null, 502),
+      refetch,
+    };
+    render(<CalendarSection />);
+
+    expect(screen.getByText('We couldn’t load your calendar.')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(refetch).toHaveBeenCalled();
+  });
+
+  // The editor already says "Setting up your account" for the same refusal, and it clears by itself.
+  it('draws nothing while geo-chat is still setting the account up', () => {
+    mocks.connections = {
+      ...mocks.connections,
+      google: undefined,
+      providers: undefined,
+      isError: true,
+      error: refused(),
+    };
+    const { container } = render(<CalendarSection />);
+
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it('says the account is being set up when a sync is refused for it', () => {
+    mocks.connections.google = connection();
+    mocks.refresh.google = { ...mutation(), isError: true, error: refused() };
+    render(<CalendarSection />);
+
+    expect(screen.getByRole('alert')).toHaveTextContent(ACCOUNT_SETUP_MESSAGE);
   });
 });
