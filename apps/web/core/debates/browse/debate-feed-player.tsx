@@ -43,7 +43,7 @@ import { markDebateWatched } from '~/core/debates/watched-debates';
 import { FollowButton } from '~/core/follows/follow-button';
 import { validateSpaceId } from '~/core/io/rest/validation';
 import { responsePositionLabel } from '~/core/responses/entity-response';
-import { gestureUnlocksEachMediaElement } from '~/core/utils/video/gesture-media-pool';
+import { gestureUnlocksEachMediaElement, markGestureVideoUnlocked } from '~/core/utils/video/gesture-media-pool';
 import { reattachVideoSource, releaseVideo } from '~/core/utils/video/release-video';
 
 import { Avatar } from '~/design-system/avatar';
@@ -353,6 +353,8 @@ export function DebateFeedPlayer({
     const generation = ++activatingRef.current;
     const plays = running.map(video => {
       video.pause();
+      // This tap unlocks the element for sound, so a later card the pool hands it to has it too.
+      markGestureVideoUnlocked(video);
       return video.play();
     });
     const release = () => {

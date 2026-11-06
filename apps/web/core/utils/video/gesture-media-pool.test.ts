@@ -2,8 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   acquireGestureVideo,
+  forgetGestureVideoUnlock,
   gestureUnlocksEachMediaElement,
   isGestureVideoUnlocked,
+  markGestureVideoUnlocked,
   releaseGestureVideo,
   resetGestureVideoPoolForTests,
   unlockGestureVideos,
@@ -12,13 +14,18 @@ import {
 describe('gesture media pool (GEO-3594)', () => {
   let play: ReturnType<typeof vi.spyOn>;
   let pause: ReturnType<typeof vi.spyOn>;
+  let load: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     resetGestureVideoPoolForTests();
     play = vi.spyOn(HTMLMediaElement.prototype, 'play').mockImplementation(() => Promise.resolve());
     pause = vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
-    vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {});
+    load = vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {});
   });
+
+  /** An element that has played, as the current card's has. */
+  const played = (video: HTMLVideoElement) =>
+    vi.spyOn(video, 'played', 'get').mockReturnValue({ length: 1 } as unknown as TimeRanges);
 
   afterEach(() => {
     resetGestureVideoPoolForTests();
@@ -37,23 +44,97 @@ describe('gesture media pool (GEO-3594)', () => {
     expect(gestureUnlocksEachMediaElement()).toBe(false);
   });
 
-  it('unlocks a card’s element on a tap, and hands it to the next card once it is given back', async () => {
-    const first = acquireGestureVideo();
-    expect(isGestureVideoUnlocked(first)).toBe(false);
+  it('applies to an iPad, which reports itself as a Mac with touch', () => {
+    vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue(
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15'
+    );
+    vi.spyOn(navigator, 'platform', 'get').mockReturnValue('MacIntel');
+    const setTouchPoints = (value: number) =>
+      Object.defineProperty(navigator, 'maxTouchPoints', { configurable: true, value });
+    try {
+      setTouchPoints(5);
+      expect(gestureUnlocksEachMediaElement()).toBe(true);
+      setTouchPoints(0);
+      expect(gestureUnlocksEachMediaElement()).toBe(false);
+    } finally {
+      delete (navigator as { maxTouchPoints?: number }).maxTouchPoints;
+    }
+  });
+
+  it('unlocks a card’s element on a tap', () => {
+    const video = acquireGestureVideo();
+    expect(isGestureVideoUnlocked(video)).toBe(false);
 
     document.body.dispatchEvent(new Event('touchend', { bubbles: true }));
 
-    expect(isGestureVideoUnlocked(first)).toBe(true);
+    expect(isGestureVideoUnlocked(video)).toBe(true);
     expect(play).toHaveBeenCalled();
     expect(pause).toHaveBeenCalled();
+  });
 
+  it('hands a released element to the next card, unlocked and without its source', async () => {
+    const first = acquireGestureVideo();
+    markGestureVideoUnlocked(first);
     first.setAttribute('src', 'https://cdn.test/a.webm');
+
     releaseGestureVideo(first);
     await Promise.resolve();
+
     expect(first.hasAttribute('src')).toBe(false);
     expect(first.muted).toBe(true);
-    // The next card gets an unlocked element, without another tap.
-    expect(isGestureVideoUnlocked(acquireGestureVideo())).toBe(true);
+    const next = acquireGestureVideo();
+    expect(next).toBe(first);
+    expect(isGestureVideoUnlocked(next)).toBe(true);
+  });
+
+  it('leaves the source alone when the next card takes the element back in the same commit', async () => {
+    const first = acquireGestureVideo();
+    first.setAttribute('src', 'https://cdn.test/a.webm');
+
+    releaseGestureVideo(first);
+    const next = acquireGestureVideo();
+    next.setAttribute('src', 'https://cdn.test/b.webm');
+    await Promise.resolve();
+
+    expect(next).toBe(first);
+    expect(next.getAttribute('src')).toBe('https://cdn.test/b.webm');
+  });
+
+  it('reloads a waiting card’s source after unlocking it, so it buffers as it did before', () => {
+    const waiting = acquireGestureVideo();
+    waiting.setAttribute('src', 'https://stream.test/a.m3u8');
+
+    unlockGestureVideos();
+
+    expect(isGestureVideoUnlocked(waiting)).toBe(true);
+    expect(waiting.getAttribute('src')).toBe('https://stream.test/a.m3u8');
+    // `reattachVideoSource`: dropped, then loaded again from scratch.
+    expect(load).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not touch an element that has played, nor one fed through a MediaSource', () => {
+    const paused = acquireGestureVideo();
+    played(paused);
+    const mse = acquireGestureVideo();
+    mse.setAttribute('src', 'blob:https://geobrowser.io/1');
+
+    unlockGestureVideos();
+
+    expect(isGestureVideoUnlocked(paused)).toBe(false);
+    expect(isGestureVideoUnlocked(mse)).toBe(false);
+    expect(play.mock.contexts).not.toContain(paused);
+    expect(play.mock.contexts).not.toContain(mse);
+  });
+
+  it('tries an element again after the browser refused it sound', () => {
+    const video = acquireGestureVideo();
+    unlockGestureVideos();
+    forgetGestureVideoUnlock(video);
+    expect(isGestureVideoUnlocked(video)).toBe(false);
+
+    unlockGestureVideos();
+
+    expect(isGestureVideoUnlocked(video)).toBe(true);
   });
 
   it('keeps unlocked spares ready after a tap for the cards not created yet', () => {

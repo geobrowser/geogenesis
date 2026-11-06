@@ -1,3 +1,5 @@
+import { reattachVideoSource, releaseVideo } from './release-video';
+
 /**
  * Video elements that a tap has already unlocked for sound, shared across the debate feed (GEO-3594).
  *
@@ -61,20 +63,39 @@ function inUserGesture(): boolean {
 
 function unlock(video: HTMLVideoElement) {
   // `play()` inside the gesture is what lifts the restriction, synchronously. The `pause()` straight
-  // after puts the element back as it was; the play's promise then rejects with an AbortError.
+  // after stops it; the play's promise then rejects with an AbortError.
   const started = video.play();
   video.pause();
   void started?.catch(() => {});
   unlocked.add(video);
+  /*
+   * But `play()` also prepares the loaded source to play, and on iOS that switches it to full
+   * buffering, which the `pause()` does not undo. A native-HLS source must not be seeked in that
+   * state before it plays (see the feed player's `preload`), so load it again from scratch under
+   * its own `preload`. The unlock belongs to the element and survives the reload.
+   */
+  const src = video.getAttribute('src');
+  if (src) reattachVideoSource(video, src);
+}
+
+/**
+ * Whether a tap may unlock this element now.
+ *
+ * Not one that is playing: it is the current card's, and its own controls handle it in the same
+ * tap (`activateBothInGesture`). Not one that has played either: reloading it to undo the unlock's
+ * side effect would lose the viewer's place, and a tap that played it has already unlocked it.
+ */
+function mayUnlock(video: HTMLVideoElement): boolean {
+  // Nor one hls.js feeds through a MediaSource: its `blob:` source cannot be reloaded as a URL.
+  if (video.getAttribute('src')?.startsWith('blob:')) return false;
+  return !unlocked.has(video) && video.paused && video.played.length === 0;
 }
 
 /** Unlock every element still waiting for a tap, and top up the spares. */
 export function unlockGestureVideos() {
   if (!inUserGesture()) return;
   for (const video of [...idle, ...inUse]) {
-    // A playing element is the current card's, and its own controls handle it in the same tap
-    // (`activateBothInGesture`). Pausing it here would interrupt what the viewer is watching.
-    if (!unlocked.has(video) && video.paused) unlock(video);
+    if (mayUnlock(video)) unlock(video);
   }
   while (idle.filter(video => unlocked.has(video)).length < SPARE_ELEMENTS) {
     const video = createVideo();
@@ -114,13 +135,21 @@ export function releaseGestureVideo(video: HTMLVideoElement) {
   video.remove();
   if (idle.length >= MAX_IDLE_ELEMENTS) return;
   idle.push(video);
-  // After the commit, because the card normally drops the source itself in the same commit
-  // (`releaseVideo`), and a second `load()` would only repeat it. Not if a card took it back first.
+  // After the commit, because the card normally drops the source itself in the same commit, and a
+  // second `load()` would only repeat it. Not if a card took it back first.
   queueMicrotask(() => {
-    if (inUse.has(video) || !video.hasAttribute('src')) return;
-    video.removeAttribute('src');
-    video.load();
+    if (!inUse.has(video) && video.hasAttribute('src')) releaseVideo(video);
   });
+}
+
+/** Record an unlock made elsewhere: a `play()` from inside a tap, such as the Unmute control's. */
+export function markGestureVideoUnlocked(video: HTMLVideoElement) {
+  unlocked.add(video);
+}
+
+/** The browser refused this element sound after all, so let the next tap try it again. */
+export function forgetGestureVideoUnlock(video: HTMLVideoElement) {
+  unlocked.delete(video);
 }
 
 /** Whether a tap has unlocked this element. */

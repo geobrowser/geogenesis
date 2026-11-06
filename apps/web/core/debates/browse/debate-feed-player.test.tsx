@@ -9,6 +9,7 @@ import { PAIR_HOLD_TIMEOUT_MS, SUSPEND_GRACE_MS } from '~/core/debates/pair-read
 import { turnSpansForDurations, turnSpansFromSegments, turnStateFromSegments } from '~/core/debates/playback-utils';
 import { turnTimerScale } from '~/core/debates/recording-countdown-ring';
 import type { DebatePlaybackController } from '~/core/debates/use-debate-playback';
+import { isGestureVideoUnlocked } from '~/core/utils/video/gesture-media-pool';
 
 import { DebateFeedPlayer } from './debate-feed-player';
 import { feedFullPlaybackStartedAtom } from './feed-full-playback';
@@ -656,6 +657,17 @@ describe('the Unmute tap and iOS gesture activation (GEO-3115)', () => {
     expect(
       within(slot1.closest('[data-debate-slot]') as HTMLElement).getByRole('button', { name: 'Pause debate' })
     ).toBeTruthy();
+  });
+
+  it('records the elements the Unmute tap unlocked, so the next card the pool hands them to has sound (GEO-3594)', () => {
+    const { slot1, slot2 } = renderPlayer({ mutedByUser: true, turnSlot: 1 });
+    running(slot1);
+    running(slot2);
+
+    fireEvent.click(muteButton(slot1, 'Unmute'));
+
+    expect(isGestureVideoUnlocked(slot1)).toBe(true);
+    expect(isGestureVideoUnlocked(slot2)).toBe(true);
   });
 
   it('holds the pause events it causes from the playback tick, then ticks once the plays settle', async () => {

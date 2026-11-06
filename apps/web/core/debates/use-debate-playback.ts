@@ -5,7 +5,7 @@ import * as React from 'react';
 import { atom, useAtom } from 'jotai';
 
 import { reportEvent } from '~/core/telemetry/logger';
-import { gestureUnlocksEachMediaElement } from '~/core/utils/video/gesture-media-pool';
+import { forgetGestureVideoUnlock } from '~/core/utils/video/gesture-media-pool';
 
 import type { Debate } from './api';
 import { useDebateMedia, useDebateTranscript, useRecordingPlaybackUrl } from './hooks';
@@ -66,6 +66,14 @@ const MIN_SYNC_SEEK_INTERVAL_MS = 2_000;
  * Same reasoning as the seek floor: a browser that re-stops it must not cost a seek per tick.
  */
 const MIN_BACKGROUND_RESTART_INTERVAL_MS = 2_000;
+
+/**
+ * How soon after an element is unmuted a pause from the browser counts as it refusing the sound
+ * (GEO-3594). iOS pauses the element in the same task as the unmute, so the pause tick lands within
+ * one media tick of it; a second covers a slow device without catching a pause the viewer made from
+ * the system controls during ordinary playback.
+ */
+const UNMUTE_REFUSAL_WINDOW_MS = 1_000;
 /**
  * How many consecutive refusals before the off-screen restart gives up.
  *
@@ -287,6 +295,13 @@ export function useDebatePlayback(
    */
   const mutedByUserRef = React.useRef(mutedByUser);
   const lastSyncSeekAtRef = React.useRef(0);
+  /**
+   * The mute each element had at the last tick, and when it last went from muted to unmuted.
+   *
+   * Read off the element, because the render owns `muted` (see `DebateFeedPlayer`) and this hook
+   * never learns when it writes it. Per element, so a card that is handed new elements starts over.
+   */
+  const unmuteSeenRef = React.useRef(new WeakMap<HTMLVideoElement, { muted: boolean; unmutedAt: number }>());
   /** See MIN_BACKGROUND_RESTART_INTERVAL_MS. */
   const lastBackgroundRestartAtRef = React.useRef(0);
   /** Consecutive refusals of the off-screen restart. See MAX_BACKGROUND_RESTART_ATTEMPTS. */
@@ -1028,6 +1043,18 @@ export function useDebatePlayback(
     // with slower still.
     const pairIsSettled = !hidden && resumesInFlightRef.current === 0 && recoveringSlotsRef.current === 0;
 
+    for (const video of [primaryVideo, secondaryVideo]) {
+      if (!video) continue;
+      const seen = unmuteSeenRef.current.get(video);
+      // Elements start muted, so an element first seen unmuted has just been unmuted.
+      if (seen === undefined || seen.muted !== video.muted) {
+        unmuteSeenRef.current.set(video, {
+          muted: video.muted,
+          unmutedAt: video.muted ? (seen?.unmutedAt ?? -Infinity) : now,
+        });
+      }
+    }
+
     for (const [video, progressRef] of [
       [primaryVideo, primaryProgressRef],
       [secondaryVideo, secondaryProgressRef],
@@ -1124,18 +1151,31 @@ export function useDebatePlayback(
       playhead < timelineSeconds
     ) {
       const stillPlaying = primaryVideo.paused ? secondaryVideo : primaryVideo;
+      const stopped = primaryVideo.paused ? primaryVideo : secondaryVideo;
       stillPlaying.pause();
       /*
-       * On iOS this is usually the browser refusing sound, not stopping playback (GEO-3594).
+       * Unless the browser was refusing sound rather than stopping playback (GEO-3594).
        *
-       * iOS answers an unmute it does not allow by pausing the element, and the speaker's element is
-       * unmuted on a media tick once the pair is running — outside any gesture. A card whose
-       * elements no tap has reached therefore split here the moment it started, and stopped on a
-       * Play button. Play it muted instead, with Unmute showing: the autoplay effect restarts it,
-       * since this is not recorded as a pause. Only while sound was wanted, so a second split on
-       * the now-muted card falls through to the stop below rather than looping.
+       * A browser that will not let an element make sound answers the unmute by pausing it — iOS
+       * always, for an element no tap has played, and desktop Safari under "Stop media with sound".
+       * The speaker's element is unmuted on a media tick once the pair is running, outside any
+       * gesture, so such a card split here the moment it started and stopped on a Play button.
+       * Play it muted instead, with Unmute showing: the autoplay effect restarts it, since this is
+       * not recorded as a pause.
+       *
+       * Recognised by the element that stopped having just been unmuted. A pause from the system
+       * media controls mid-playback is a pause, and stops the card as before. Only while sound was
+       * wanted, so a second split on the now-muted card falls through to the stop below.
        */
-      if (!mutedByUserRef.current && gestureUnlocksEachMediaElement()) {
+      const seen = unmuteSeenRef.current.get(stopped);
+      if (
+        !mutedByUserRef.current &&
+        !stopped.muted &&
+        seen !== undefined &&
+        now - seen.unmutedAt <= UNMUTE_REFUSAL_WINDOW_MS
+      ) {
+        // Whatever a tap did for this element, it was not enough; let the next tap try again.
+        forgetGestureVideoUnlock(stopped);
         mutedByUserRef.current = true;
         setSoundBlocked(true);
         setPlaying(false);

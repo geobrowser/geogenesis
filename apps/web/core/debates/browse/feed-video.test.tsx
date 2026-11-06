@@ -6,8 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   isGestureVideoUnlocked,
+  markGestureVideoUnlocked,
   resetGestureVideoPoolForTests,
-  unlockGestureVideos,
 } from '~/core/utils/video/gesture-media-pool';
 
 import { FeedVideo } from './feed-video';
@@ -74,13 +74,39 @@ describe('FeedVideo (GEO-3594)', () => {
   it('gives the element a tap unlocked to the next card', () => {
     const first = render(<Tile pooled />);
     const unlockedVideo = first.getByTestId('tile').querySelector('video')!;
-    unlockGestureVideos();
-    expect(isGestureVideoUnlocked(unlockedVideo)).toBe(true);
+    markGestureVideoUnlocked(unlockedVideo);
 
     first.unmount();
     const next = render(<Tile pooled />);
 
-    expect(isGestureVideoUnlocked(next.getByTestId('tile').querySelector('video')!)).toBe(true);
+    const reused = next.getByTestId('tile').querySelector('video')!;
+    expect(reused).toBe(unlockedVideo);
+    expect(isGestureVideoUnlocked(reused)).toBe(true);
+  });
+
+  it('moves the element to a new ref without giving it up, as React does for `ref`', () => {
+    const refs: Array<React.RefObject<HTMLVideoElement | null>> = [];
+    function Swapping({ which }: { which: number }) {
+      refs[0] ??= React.createRef<HTMLVideoElement>();
+      refs[1] ??= React.createRef<HTMLVideoElement>();
+      return <FeedVideo pooled videoRef={refs[which]} preload="metadata" src="https://cdn.test/a.webm" muted />;
+    }
+    const { rerender } = render(<Swapping which={0} />);
+    const video = refs[0].current;
+
+    rerender(<Swapping which={1} />);
+
+    expect(refs[1].current).toBe(video);
+    expect(refs[0].current).toBeNull();
+  });
+
+  it('ends a StrictMode double mount holding one element, with the ref on it', () => {
+    let ref: React.RefObject<HTMLVideoElement | null> | undefined;
+    const { getByTestId } = render(<Tile pooled refOut={r => (ref = r)} />, { reactStrictMode: true });
+
+    const videos = getByTestId('tile').querySelectorAll('video');
+    expect(videos).toHaveLength(1);
+    expect(ref?.current).toBe(videos[0]);
   });
 
   it('renders a plain element when unpooled', () => {
