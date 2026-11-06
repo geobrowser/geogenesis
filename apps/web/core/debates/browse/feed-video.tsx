@@ -5,6 +5,7 @@ import * as React from 'react';
 import { acquireGestureVideo, releaseGestureVideo } from '~/core/utils/video/gesture-media-pool';
 
 type FeedVideoHandlers = {
+  onEmptied?: () => void;
   onEnded?: () => void;
   onError?: () => void;
   onLoadedMetadata?: () => void;
@@ -45,6 +46,7 @@ export function FeedVideo({ pooled, videoRef, className, preload, src, muted, ..
         preload={preload}
         src={src}
         muted={muted}
+        onEmptied={handlers.onEmptied}
         onEnded={handlers.onEnded}
         onError={handlers.onError}
         onLoadedMetadata={handlers.onLoadedMetadata}
@@ -67,6 +69,7 @@ export function FeedVideo({ pooled, videoRef, className, preload, src, muted, ..
 }
 
 const EVENTS = [
+  ['emptied', 'onEmptied'],
   ['ended', 'onEnded'],
   ['error', 'onError'],
   ['loadedmetadata', 'onLoadedMetadata'],

@@ -31,6 +31,7 @@ describe('FeedVideo (GEO-3594)', () => {
     src?: string;
     muted?: boolean;
     onPlay?: () => void;
+    onEmptied?: () => void;
     refOut?: (ref: React.RefObject<HTMLVideoElement | null>) => void;
   }) {
     const videoRef = React.useRef<HTMLVideoElement | null>(null);
@@ -45,6 +46,7 @@ describe('FeedVideo (GEO-3594)', () => {
           src={props.src ?? 'https://cdn.test/a.webm'}
           muted={props.muted ?? true}
           onPlay={props.onPlay}
+          onEmptied={props.onEmptied}
         />
       </div>
     );
@@ -53,7 +55,10 @@ describe('FeedVideo (GEO-3594)', () => {
   it('renders a pooled element in place, with the props a plain one would have', () => {
     let ref: React.RefObject<HTMLVideoElement | null> | undefined;
     const onPlay = vi.fn();
-    const { getByTestId, rerender } = render(<Tile pooled onPlay={onPlay} refOut={r => (ref = r)} />);
+    const onEmptied = vi.fn();
+    const { getByTestId, rerender } = render(
+      <Tile pooled onPlay={onPlay} onEmptied={onEmptied} refOut={r => (ref = r)} />
+    );
 
     const video = getByTestId('tile').querySelector('video')!;
     expect(ref?.current).toBe(video);
@@ -65,6 +70,8 @@ describe('FeedVideo (GEO-3594)', () => {
 
     video.dispatchEvent(new Event('play'));
     expect(onPlay).toHaveBeenCalledTimes(1);
+    video.dispatchEvent(new Event('emptied'));
+    expect(onEmptied).toHaveBeenCalledTimes(1);
 
     rerender(<Tile pooled onPlay={onPlay} muted={false} src="https://cdn.test/b.webm" />);
     expect(video.muted).toBe(false);

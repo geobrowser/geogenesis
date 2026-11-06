@@ -299,6 +299,7 @@ function controllerFixture(overrides: {
     activeSlot: speakingSlot,
     subtitle: overrides.subtitle ?? null,
     onPlaybackTick: vi.fn(),
+    onMediaEmptied: vi.fn(),
     resyncSlot: vi.fn(),
     refreshSlotUrl: vi.fn(),
     togglePlayback: vi.fn(),

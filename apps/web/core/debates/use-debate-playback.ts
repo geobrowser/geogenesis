@@ -1166,6 +1166,11 @@ export function useDebatePlayback(
        * Recognised by the element that stopped having just been unmuted. A pause from the system
        * media controls mid-playback is a pause, and stops the card as before. Only while sound was
        * wanted, so a second split on the now-muted card falls through to the stop below.
+       *
+       * The window does catch one real pause: one from the system controls within a second of a
+       * turn handoff, which plays on muted rather than stopping. Telling the two apart by whether a
+       * tap had unlocked the element would cost more — an element wrongly thought unlocked would
+       * then stop on Play every time and never be retried — so the rare case is accepted.
        */
       const seen = unmuteSeenRef.current.get(stopped);
       if (
@@ -1174,7 +1179,8 @@ export function useDebatePlayback(
         seen !== undefined &&
         now - seen.unmutedAt <= UNMUTE_REFUSAL_WINDOW_MS
       ) {
-        // Whatever a tap did for this element, it was not enough; let the next tap try again.
+        // Whatever a tap did for this element, it was not enough. Once it goes back to the pool a
+        // later tap tries it again; on this card, the Unmute tap does (`activateBothInGesture`).
         forgetGestureVideoUnlock(stopped);
         mutedByUserRef.current = true;
         setSoundBlocked(true);
@@ -1493,6 +1499,26 @@ export function useDebatePlayback(
    * these recordings carry no Cues, so seeking is a parse walk (GEO-2828) and asking for one over
    * data the element does not yet hold is how the pipeline died in the first place.
    */
+  /**
+   * An element lost its media, so a pair that has never played may need positioning again
+   * (GEO-3594).
+   *
+   * The preposition (`needsPrepositionRef`) is spent once it has run, and a reload sends the element
+   * back to the start of its recording. The feed reloads a waiting card's elements when a tap unlocks
+   * them for sound (`gesture-media-pool.ts`), and that card's pair would then start from two
+   * elements at zero and seek both just before playing — the uneven start GEO-2965 removed. Only
+   * for a pair that has never played: one that has is put back in step by `resyncSlot` or by the
+   * next `resumeBoth`, and positioning it here would be a needless parse walk (GEO-2828).
+   */
+  const onMediaEmptied = React.useCallback(() => {
+    const primaryVideo = slot1VideoRef.current;
+    const secondaryVideo = slot2VideoRef.current;
+    if (!primaryVideo || !secondaryVideo) return;
+    if (primaryVideo.played.length === 0 && secondaryVideo.played.length === 0) {
+      needsPrepositionRef.current = true;
+    }
+  }, []);
+
   const resyncSlot = React.useCallback(
     (slot: 1 | 2) => {
       const recoveredVideo = slot === 1 ? slot1VideoRef.current : slot2VideoRef.current;
@@ -1821,6 +1847,7 @@ export function useDebatePlayback(
     activeSlot,
     subtitle,
     onPlaybackTick: updateTurnState,
+    onMediaEmptied,
     resyncSlot,
     refreshSlotUrl,
     togglePlayback,

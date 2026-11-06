@@ -126,6 +126,29 @@ describe('gesture media pool (GEO-3594)', () => {
     expect(play.mock.contexts).not.toContain(mse);
   });
 
+  it('makes room for an unlocked element in a full pool by dropping a locked one', () => {
+    const locked = Array.from({ length: 10 }, () => acquireGestureVideo());
+    const unlockedVideo = acquireGestureVideo();
+    locked.forEach(releaseGestureVideo);
+    markGestureVideoUnlocked(unlockedVideo);
+
+    releaseGestureVideo(unlockedVideo);
+
+    expect(acquireGestureVideo()).toBe(unlockedVideo);
+  });
+
+  it('tops up spares only while the pool has room', () => {
+    // Ten waiting elements a tap cannot unlock, because they have played.
+    const waiting = Array.from({ length: 10 }, () => acquireGestureVideo());
+    waiting.forEach(played);
+    waiting.forEach(releaseGestureVideo);
+
+    unlockGestureVideos();
+
+    const handedOut = Array.from({ length: 11 }, () => acquireGestureVideo());
+    expect(handedOut.filter(isGestureVideoUnlocked)).toEqual([]);
+  });
+
   it('tries an element again after the browser refused it sound', () => {
     const video = acquireGestureVideo();
     unlockGestureVideos();

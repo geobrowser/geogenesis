@@ -330,6 +330,8 @@ function fakeVideo() {
      * leaves it paused either way — but whether anything asked it to start again at all.
      */
     plays: 0,
+    /** What the element has played; empty until it first runs. */
+    played: { length: 0 },
     play() {
       video.plays += 1;
       return new Promise<void>((resolve, reject) => {
@@ -2138,6 +2140,41 @@ describe('useDebatePlayback — a fresh pair is positioned before it is started 
     expect(slot2.seeks).toEqual([expect.closeTo(4.489, 6)]);
   });
 
+  it('positions a never-played pair again after a reload empties it (GEO-3594)', async () => {
+    const { result, slot1, slot2 } = await mounted();
+    act(() => result.current.onPlaybackTick());
+    // A tap unlocks both for sound and reloads them: back to the start of each recording.
+    slot1.video.currentTime = 0;
+    slot2.video.currentTime = 0;
+    slot1.seeks.length = 0;
+    slot2.seeks.length = 0;
+
+    act(() => {
+      result.current.onMediaEmptied();
+      result.current.onPlaybackTick();
+    });
+
+    expect(slot1.seeks).toEqual([expect.closeTo(4.969, 6)]);
+    expect(slot2.seeks).toEqual([expect.closeTo(4.489, 6)]);
+  });
+
+  it('leaves a pair that has played to its own realignment when one is emptied', async () => {
+    const { result, slot1, slot2 } = await mounted();
+    act(() => result.current.onPlaybackTick());
+    slot1.seeks.length = 0;
+    slot2.seeks.length = 0;
+    Object.assign(slot1.video, { played: { length: 1 } });
+    Object.assign(slot2.video, { played: { length: 1 } });
+
+    act(() => {
+      result.current.onMediaEmptied();
+      result.current.onPlaybackTick();
+    });
+
+    expect(slot1.seeks).toEqual([]);
+    expect(slot2.seeks).toEqual([]);
+  });
+
   it('waits for both to have metadata, since a seek before that has nothing to land on', async () => {
     const { result, slot1, slot2 } = await mounted(HTMLMediaElement.HAVE_NOTHING);
     act(() => result.current.onPlaybackTick());
@@ -2614,6 +2651,22 @@ describe('useDebatePlayback — sound carries to the next debate (GEO-3594)', ()
     first.slot1.browserPause();
     act(() => first.result.current.onPlaybackTick());
     expect(first.result.current.userPaused).toBe(true);
+  });
+
+  it('plays on muted when the browser refuses the next speaker at a turn handoff', async () => {
+    const first = await soundOn();
+    await startPair(first.result, first.slot1, first.slot2);
+    act(() => first.result.current.onPlaybackTick());
+
+    // Slot 2's turn: the render unmutes it, and the browser pauses it.
+    first.slot2.muted = false;
+    first.slot2.browserPause();
+    act(() => first.result.current.onPlaybackTick());
+
+    expect(first.slot1.paused).toBe(true);
+    expect(first.result.current.userPaused).toBe(false);
+    expect(first.result.current.mutedByUser).toBe(true);
+    expect(mocks.forgetGestureVideoUnlock).toHaveBeenCalledWith(first.slot2);
   });
 
   it('still stops on Play for a pause well after the unmute, such as one from the system controls', async () => {

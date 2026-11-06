@@ -249,6 +249,7 @@ export function DebateFeedPlayer({
     playbackBreaks,
     subtitle,
     onPlaybackTick,
+    onMediaEmptied,
     resyncSlot,
     refreshSlotUrl,
     togglePlayback: togglePlaybackRaw,
@@ -1023,6 +1024,7 @@ export function DebateFeedPlayer({
           isResuming={isResuming}
           onPlaybackTick={onPlaybackTick}
           onPauseTick={onPauseTick}
+          onEmptied={onMediaEmptied}
           onRecovered={() => resyncSlot(1)}
           onExhausted={() => void refreshSlotUrl(1)}
           onToggle={toggleFromVideo}
@@ -1101,6 +1103,7 @@ export function DebateFeedPlayer({
           isResuming={isResuming}
           onPlaybackTick={onPlaybackTick}
           onPauseTick={onPauseTick}
+          onEmptied={onMediaEmptied}
           onRecovered={() => resyncSlot(2)}
           onExhausted={() => void refreshSlotUrl(2)}
           onToggle={toggleFromVideo}
@@ -1342,6 +1345,7 @@ function DebaterVideo({
   isResuming,
   onPlaybackTick,
   onPauseTick = onPlaybackTick,
+  onEmptied,
   onRecovered,
   onExhausted,
   onToggle,
@@ -1420,6 +1424,8 @@ function DebaterVideo({
   onPlaybackTick: () => void;
   /** What a `pause` event runs; the player holds it while it re-plays both inside a gesture. */
   onPauseTick?: () => void;
+  /** This tile's element lost its media: a source dropped or reloaded. */
+  onEmptied?: () => void;
   /** This tile's recording was rebuilt after its pipeline died — put it back in step with its
    * partner. See {@link MAX_MEDIA_RECOVERY_ATTEMPTS}. */
   onRecovered?: () => void;
@@ -1747,6 +1753,7 @@ function DebaterVideo({
             src={hlsManaged ? undefined : src}
             // The viewer's own mute — plus the listening debater's, where `volume` is a no-op.
             muted={muted}
+            onEmptied={onEmptied}
             onEnded={onPlaybackTick}
             onError={onMediaError}
             onLoadedMetadata={onPlaybackTick}

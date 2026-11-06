@@ -97,7 +97,7 @@ export function unlockGestureVideos() {
   for (const video of [...idle, ...inUse]) {
     if (mayUnlock(video)) unlock(video);
   }
-  while (idle.filter(video => unlocked.has(video)).length < SPARE_ELEMENTS) {
+  while (idle.length < MAX_IDLE_ELEMENTS && idle.filter(video => unlocked.has(video)).length < SPARE_ELEMENTS) {
     const video = createVideo();
     unlock(video);
     idle.push(video);
@@ -133,7 +133,12 @@ export function releaseGestureVideo(video: HTMLVideoElement) {
   video.muted = true;
   video.removeAttribute('class');
   video.remove();
-  if (idle.length >= MAX_IDLE_ELEMENTS) return;
+  if (idle.length >= MAX_IDLE_ELEMENTS) {
+    // Full: make room by dropping a locked element, which is worth less than an unlocked one.
+    const locked = idle.findIndex(waiting => !unlocked.has(waiting));
+    if (locked < 0 || !unlocked.has(video)) return;
+    idle.splice(locked, 1);
+  }
   idle.push(video);
   // After the commit, because the card normally drops the source itself in the same commit, and a
   // second `load()` would only repeat it. Not if a card took it back first.
@@ -147,7 +152,10 @@ export function markGestureVideoUnlocked(video: HTMLVideoElement) {
   unlocked.add(video);
 }
 
-/** The browser refused this element sound after all, so let the next tap try it again. */
+/**
+ * The browser refused this element sound after all. It has played, so no tap retries it while its
+ * card holds it; once it is back in the pool, the next tap does.
+ */
 export function forgetGestureVideoUnlock(video: HTMLVideoElement) {
   unlocked.delete(video);
 }
