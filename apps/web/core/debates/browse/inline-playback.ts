@@ -3,14 +3,8 @@ import * as React from 'react';
 import { atom, useAtomValue, useSetAtom } from 'jotai';
 
 /**
- * Whether this page cannot play video inline, so the feed players show the combined debate video
- * instead of the two debaters side by side.
- *
- * Some in-app browsers (TikTok on iOS) host the page in a WKWebView with inline playback off. iOS
- * then ignores `playsinline` and opens every `play()` in its native full-screen player, which
- * shows one debater with none of the player's overlays. Nothing reports the setting, so it is
- * learned from the first debater video that enters full screen: the players never ask for it.
- * Kept for the rest of the page's life.
+ * Set when a debater tile enters full screen, which the players never request: the webview (e.g.
+ * TikTok on iOS) has inline playback off, so feed players switch to the combined video.
  */
 export const inlinePlaybackUnavailableAtom = atom(false);
 
@@ -34,12 +28,8 @@ export function isDebaterTileFullscreen(target: EventTarget | null): target is W
 }
 
 /**
- * Reads the flag, and sets it when a debater tile's video enters full screen.
- *
- * The event does not bubble, so it is caught on the capture phase. The video is paused and closed,
- * and the flag is set only once it has left full screen: iOS ignores an exit asked for while it is
- * still entering, so the exit is retried, and replacing the player while its video is full screen
- * leaves a black full-screen view with nothing in it.
+ * Reads the flag; sets it once a debater tile that entered full screen has been closed. The event
+ * does not bubble, hence capture. Unmounting the player while still full screen leaves iOS black.
  */
 export function useInlinePlaybackUnavailable(): boolean {
   const unavailable = useAtomValue(inlinePlaybackUnavailableAtom);

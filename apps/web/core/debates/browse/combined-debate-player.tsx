@@ -20,14 +20,8 @@ type CombinedDebatePlayerProps = {
 };
 
 /**
- * The feed player for a page that cannot play video inline (see `inline-playback.ts`).
- *
- * Laid out as the two-tile player, with each debater's still and one Play control. The tap plays
- * the combined debate video, which iOS opens full screen with both debaters in it. `play()` runs
- * inside the tap, against the durable artifact route (it redirects to a fresh signed URL), because
- * these webviews refuse a start that is not part of a gesture.
- *
- * The HEVC copy is preferred: iOS plays it natively and it is about a third the size of the WebM.
+ * Feed player where video cannot play inline (see `inline-playback.ts`). `play()` must run inside
+ * the tap, so `src` is the durable artifact route, set up front. HEVC first: iOS plays it natively.
  */
 export function CombinedDebatePlayer({ debate, framed = false, reducedOverlays = false, stills }: CombinedDebatePlayerProps) {
   const videoRef = React.useRef<HTMLVideoElement | null>(null);
