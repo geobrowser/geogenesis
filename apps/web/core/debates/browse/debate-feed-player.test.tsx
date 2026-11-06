@@ -249,6 +249,8 @@ function controllerFixture(overrides: {
   seekBoth?: ReturnType<typeof vi.fn>;
   /** Where the playhead sits, which is all a round cue reads. */
   playheadSeconds?: number;
+  /** The debate's length; 0 before its turn timings are known. */
+  timelineSeconds?: number;
   /** A condensed Open rounds render's breaks and picks (GEO-3277); none by default. */
   playbackBreaks?: DebatePlaybackController['playbackBreaks'];
   turnSegments?: DebateMediaTurnSegment[];
@@ -291,7 +293,7 @@ function controllerFixture(overrides: {
     setMutedByUser: vi.fn(),
     playheadSeconds,
     // Four 30s turns, so the whole timeline is 120s.
-    timelineSeconds: 120,
+    timelineSeconds: overrides.timelineSeconds ?? 120,
     turnState: { slot: speakingSlot, seconds: 10, progress: 0.5 },
     turnSpans,
     // The format's count, which is what names a round. Equal to the spans here because nothing was
@@ -1379,16 +1381,26 @@ describe('resuming where this browser left a debate', () => {
     releaseMedia = false,
     playheadSeconds = 5,
     playing = true,
+    timelineSeconds = 120,
   }: {
     initialSeekSeconds?: number | null;
     ready?: boolean;
     releaseMedia?: boolean;
     playheadSeconds?: number;
     playing?: boolean;
+    timelineSeconds?: number;
   } = {}) {
     const seeks: number[] = [];
     const makeSeek = () => vi.fn((seconds: number) => void seeks.push(seconds));
-    let props = { initialSeekSeconds, ready, releaseMedia, playheadSeconds, playing, debateId: debate.id };
+    let props = {
+      initialSeekSeconds,
+      ready,
+      releaseMedia,
+      playheadSeconds,
+      playing,
+      timelineSeconds,
+      debateId: debate.id,
+    };
 
     const element = () => (
       <DebateFeedPlayer
@@ -1405,6 +1417,7 @@ describe('resuming where this browser left a debate', () => {
         ready: props.ready,
         playing: props.playing,
         playheadSeconds: props.playheadSeconds,
+        timelineSeconds: props.timelineSeconds,
         seekBoth: makeSeek(),
       });
 
@@ -1453,6 +1466,21 @@ describe('resuming where this browser left a debate', () => {
 
     player.update({ releaseMedia: false });
     expect(player.seeks).toEqual([75]);
+  });
+
+  it("waits for the debate's length before resuming", () => {
+    rememberDebatePosition(debate.id, 80, 120);
+    const player = renderResumable({ timelineSeconds: 0 });
+
+    expect(player.seeks).toEqual([]);
+    expect(screen.queryByRole('button', { name: 'Start over' })).toBeNull();
+    // Playing from 0 while it waits must not forget the position either.
+    player.update({ playheadSeconds: 8, playing: false });
+    expect(readDebateResumeSeconds(debate.id)).toBe(75);
+
+    player.update({ timelineSeconds: 120 });
+    expect(player.seeks).toEqual([75]);
+    expect(screen.queryByRole('button', { name: 'Start over' })).not.toBeNull();
   });
 
   it('does not chase its own saves back while the debate plays on', () => {
