@@ -5,6 +5,7 @@ import { Provider } from 'jotai';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Debate } from '~/core/debates/api';
+import { readWatchedDebateIds } from '~/core/debates/watched-debates';
 import { store } from '~/core/state/jotai-store';
 
 import { CombinedDebatePlayer } from './combined-debate-player';
@@ -108,6 +109,39 @@ describe('CombinedDebatePlayer', () => {
     fireEvent.playing(container.querySelector('video')!);
 
     expect(onPlaybackState).toHaveBeenLastCalledWith({ ready: true, playing: true, autoplayBlocked: false, error: false });
+  });
+
+  it('asks to become active from the tap, and pauses once another card is', () => {
+    mocks.media = { data: { artifacts: [{ kind: 'final_video_hevc' }] }, isError: false };
+    const onPlaybackRequest = vi.fn();
+    const { rerender } = render(
+      <CombinedDebatePlayer debate={debate} enabled active={false} onPlaybackRequest={onPlaybackRequest} />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Play combined debate video' }));
+    expect(onPlaybackRequest).toHaveBeenCalledTimes(1);
+    expect(mocks.play).toHaveBeenCalledTimes(1);
+
+    rerender(<CombinedDebatePlayer debate={debate} enabled active onPlaybackRequest={onPlaybackRequest} />);
+    mocks.pause.mockClear();
+    rerender(<CombinedDebatePlayer debate={debate} enabled active={false} onPlaybackRequest={onPlaybackRequest} />);
+    expect(mocks.pause).toHaveBeenCalledTimes(1);
+  });
+
+  it('detaches the video when the feed releases its media', () => {
+    mocks.media = { data: { artifacts: [{ kind: 'final_video_hevc' }] }, isError: false };
+    const { container } = render(<CombinedDebatePlayer debate={debate} enabled releaseMedia />);
+
+    expect(container.querySelector('video')?.hasAttribute('src')).toBe(false);
+  });
+
+  it('marks the debate watched when it ends', () => {
+    mocks.media = { data: { artifacts: [{ kind: 'final_video_hevc' }] }, isError: false };
+    const { container } = render(<CombinedDebatePlayer debate={debate} enabled />);
+
+    fireEvent.ended(container.querySelector('video')!);
+
+    expect(readWatchedDebateIds().has(debate.id)).toBe(true);
   });
 });
 

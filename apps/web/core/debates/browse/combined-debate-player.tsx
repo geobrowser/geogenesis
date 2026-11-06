@@ -9,6 +9,7 @@ import type { DebatePagePlayerState } from '~/core/debates/debate-page-outcome';
 import { useDebateMedia } from '~/core/debates/hooks';
 import { hasMediaArtifact } from '~/core/debates/playback-utils';
 import { debateArtifactContentUrl, fallBackToDurableStill, speakerStillContentUrl } from '~/core/debates/speaker-still';
+import { markDebateWatched } from '~/core/debates/watched-debates';
 
 import { Play } from './icons';
 
@@ -16,6 +17,11 @@ type CombinedDebatePlayerProps = {
   debate: Debate;
   /** Load the media list; the feed passes its active and preloading cards. */
   enabled: boolean;
+  /** As for `DebateFeedPlayer`: playback pauses when the card stops being the active one. */
+  active?: boolean;
+  /** Detach the video from its element, as for `DebateFeedPlayer`. */
+  releaseMedia?: boolean;
+  onPlaybackRequest?: () => void;
   onPlaybackState?: (state: DebatePagePlayerState) => void;
   /** The host draws the frame, as for `DebateFeedPlayer`. */
   framed?: boolean;
@@ -30,6 +36,9 @@ type CombinedDebatePlayerProps = {
 export function CombinedDebatePlayer({
   debate,
   enabled,
+  active = true,
+  releaseMedia = false,
+  onPlaybackRequest,
   onPlaybackState,
   framed = false,
   reducedOverlays = false,
@@ -40,12 +49,16 @@ export function CombinedDebatePlayer({
   const [failed, setFailed] = React.useState(false);
   const media = useDebateMedia(debate.id, enabled);
   const kind = hasMediaArtifact(media.data, 'final_video_hevc') ? 'final_video_hevc' : 'final_video';
-  const src = media.data ? debateArtifactContentUrl(debate.id, kind) : undefined;
+  const src = media.data && !releaseMedia ? debateArtifactContentUrl(debate.id, kind) : undefined;
   const error = failed || media.isError;
 
   React.useEffect(() => {
     onPlaybackState?.({ ready: src !== undefined, playing, autoplayBlocked: false, error });
   }, [onPlaybackState, src, playing, error]);
+
+  React.useEffect(() => {
+    if (!active) videoRef.current?.pause();
+  }, [active]);
 
   const toggle = () => {
     const video = videoRef.current;
@@ -54,6 +67,7 @@ export function CombinedDebatePlayer({
       video.pause();
       return;
     }
+    if (!active) onPlaybackRequest?.();
     setFailed(false);
     // A failed element does not reselect its source on `play()`.
     if (video.error) video.load();
@@ -77,6 +91,7 @@ export function CombinedDebatePlayer({
         preload="none"
         onPlaying={() => setPlaying(true)}
         onPause={() => setPlaying(false)}
+        onEnded={() => markDebateWatched(debate.id)}
         onError={() => setFailed(true)}
         className={cx('absolute inset-0 size-full object-contain', !playing && 'invisible')}
       />
