@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 
 import * as React from 'react';
 
@@ -7,6 +7,7 @@ import { Provider, createStore, getDefaultStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { beginAuthAttempt, currentAuthAttempt, readAuthAttempt, resetAuthAttempt } from '~/core/auth-attempt';
+import { useContinueWithGoogle } from '~/core/auth/continue-with-google';
 import { GoogleOAuthHost } from '~/core/auth/google-oauth';
 import type { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { isChatOpenAtom } from '~/core/state/chat-store';
@@ -38,6 +39,7 @@ const mocks = vi.hoisted(() => ({
   trackPrivyAuth: vi.fn(),
   capture: vi.fn(),
   initOAuth: vi.fn(),
+  privyLoaded: true,
 }));
 
 vi.mock('~/core/analytics', () => ({
@@ -47,6 +49,7 @@ vi.mock('~/core/analytics', () => ({
 }));
 
 vi.mock('~/core/wallet/auth-hooks', () => ({
+  isPrivyLoaded: () => mocks.privyLoaded,
   usePrivy: () => ({ ready: mocks.ready, authenticated: mocks.authenticated, isModalOpen: mocks.isModalOpen }),
   useLoginWithEmail: (args?: unknown) => {
     mocks.useGeoLoginWithEmail();
@@ -103,6 +106,7 @@ beforeEach(() => {
   mocks.isDebatesHubOpen = false;
   store.set(isChatOpenAtom, false);
   store.set(entitySidePanelAtom, null);
+  mocks.privyLoaded = true;
   mocks.sendCode.mockReset().mockResolvedValue(undefined);
   mocks.loginWithCode.mockReset().mockResolvedValue(undefined);
   mocks.openPrivyModal.mockReset();
@@ -119,6 +123,9 @@ beforeEach(() => {
   mocks.fetch.mockResolvedValue({ json: async () => ({ result: 'subscribed' }) });
   vi.stubGlobal('fetch', mocks.fetch);
   window.scrollY = 0;
+  const restored = renderHook(() => useContinueWithGoogle());
+  act(() => window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true })));
+  restored.unmount();
 });
 
 afterEach(() => {
@@ -615,6 +622,26 @@ describe('ExploreEmailCapturePopup', () => {
       // No second email field anywhere in the card.
       expect(screen.queryByRole('textbox', { name: 'Email address' })).toBeNull();
       expect(screen.getByRole('textbox', { name: 'Verification code' })).toBeInTheDocument();
+    });
+
+    it("goes back to the account choice saying sign-in couldn't be reached when Privy never loaded", async () => {
+      mocks.privyLoaded = false;
+      mocks.sendCode.mockRejectedValue(new Error('Timed out waiting for sign-in to load'));
+      await subscribeSuccessfully();
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+      });
+      expect(screen.getByRole('alert')).toHaveTextContent('Couldn’t reach sign-in. Try again.');
+      expect(mocks.openPrivyModal).not.toHaveBeenCalled();
+      expect(screen.queryByRole('textbox', { name: 'Verification code' })).toBeNull();
+      // Trying again sends again, and the line goes.
+      mocks.privyLoaded = true;
+      mocks.sendCode.mockResolvedValue(undefined);
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+      });
+      expect(mocks.sendCode).toHaveBeenCalledTimes(2);
+      expect(screen.queryByText('Couldn’t reach sign-in. Try again.')).not.toBeInTheDocument();
     });
 
     // Reported from the browser: the code verified, the session existed, and then nothing — no
@@ -1292,6 +1319,50 @@ describe('ExploreEmailCapturePopup Google sign-in', () => {
       component: 'explore_email_capture',
       auth_control: 'continue_with_google',
     });
+  });
+
+  it('keeps the email account action off while Google is starting', async () => {
+    mocks.initOAuth.mockImplementationOnce(() => new Promise<void>(() => {}));
+    await subscribeWithGoogleFlag(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
+    const attemptId = currentAuthAttempt()?.id;
+    expect(screen.getByRole('button', { name: 'Create account' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+    expect(currentAuthAttempt()?.id).toBe(attemptId);
+    expect(currentAuthAttempt()?.properties.auth_control).toBe('continue_with_google');
+  });
+
+  it('blocks email when the save sheet starts Google, even before React renders', async () => {
+    mocks.initOAuth.mockImplementationOnce(() => new Promise<void>(() => {}));
+    await subscribeWithGoogleFlag(true);
+    const store = createStore();
+    const sheet = renderHook(() => useContinueWithGoogle(), {
+      wrapper: ({ children }) => <Provider store={store}>{children}</Provider>,
+    });
+    let attemptId: string | undefined;
+
+    act(() => {
+      void sheet.result.current!.start({ component: 'save_votes_prompt' });
+      attemptId = currentAuthAttempt()?.id;
+      fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+    });
+
+    expect(currentAuthAttempt()?.id).toBe(attemptId);
+    expect(currentAuthAttempt()?.properties.component).toBe('save_votes_prompt');
+    expect(screen.getByRole('button', { name: 'Create account' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Continue with Google' })).toBeDisabled();
+  });
+
+  it('closing the popup preserves the pending Google redirect attribution', async () => {
+    mocks.initOAuth.mockImplementationOnce(() => new Promise<void>(() => {}));
+    await subscribeWithGoogleFlag(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
+    const attempt = currentAuthAttempt();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss newsletter signup' }));
+
+    expect(popup()).not.toBeInTheDocument();
+    expect(currentAuthAttempt()).toEqual(attempt);
   });
 
   // Privy refuses Google in in-app browsers, and a retry there can never work.

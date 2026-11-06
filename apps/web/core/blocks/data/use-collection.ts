@@ -224,6 +224,7 @@ export function useCollection({ source, first, pageNumber = 0, after, offset, wh
     isLoading: hasData ? false : isCollectionItemsLoading,
     isFetched: hasData ? true : !isCollectionItemsLoading,
     collectionLength: hasFilters ? filteredRelations.length : collectionRelations.length,
+    collectionLengthKnown: effectiveEntity !== null && !hasFilters,
     filterSuggestionEntityIds,
     endCursor,
     hasNextPage,

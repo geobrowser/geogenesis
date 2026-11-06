@@ -9,6 +9,8 @@ import {
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { SpaceChatState } from '~/core/space-chat/state';
+
 import { GeoChatRequestError, getStoredGeoChatAccessToken, resetGeoChatSession } from './api';
 import { DebateGatewayClient, type DebateGatewaySession } from './debate-gateway';
 import { type LobbyHighlightsState, settleFetchedLobbyHighlights } from './lobbies/lobby-highlights-state';
@@ -72,6 +74,12 @@ class FakeWebSocket {
     this.close();
   }
 
+  serverCloseWith(code: number) {
+    if (this.readyState === FakeWebSocket.CLOSED) return;
+    this.readyState = FakeWebSocket.CLOSED;
+    (this.onclose as ((event?: { code?: number }) => void) | null)?.({ code });
+  }
+
   send(value: string) {
     this.sent.push(JSON.parse(value) as Record<string, unknown>);
   }
@@ -121,6 +129,30 @@ describe('DebateGatewayClient', () => {
     client.stop();
     vi.useRealTimers();
     vi.restoreAllMocks();
+  });
+
+  it('retryNow runs a waiting session retry at once, and does nothing while connected', async () => {
+    getSession.mockRejectedValue(new Error('refused'));
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.advanceTimersByTimeAsync(0);
+    expect(getSession).toHaveBeenCalledTimes(1);
+    // Backed off to a long wait.
+    for (let i = 0; i < 6; i += 1) await vi.advanceTimersByTimeAsync(30_000);
+    const waited = getSession.mock.calls.length;
+
+    getSession.mockImplementation(async () => session);
+    client.retryNow();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(getSession).toHaveBeenCalledTimes(waited + 1);
+    expect(sockets).toHaveLength(1);
+
+    // Connected: nothing to retry.
+    client.retryNow();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(getSession).toHaveBeenCalledTimes(waited + 1);
   });
 
   it('authenticates, reference-counts scopes, and reconciles the subscribe/READY race', async () => {
@@ -1482,6 +1514,392 @@ describe('DebateGatewayClient', () => {
     );
   });
 
+  it('subscribes a space chat room in the room shape and applies its events to the cached room', async () => {
+    const roomId = '0192aaaa-0000-7000-8000-000000000001';
+    const dashless = '0192aaaa000070008000000000000001';
+    const key = ['debates', 'account', 'user-a', 'space-chat', dashless];
+    queryClient.setQueryData<SpaceChatState>(key, { messages: [], nextBefore: null, pending: [] });
+    const release = client.retainScope({
+      scope: 'chat-room',
+      space_id: 'space-1',
+      room_id: roomId,
+      room_kind: 'member',
+    });
+
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    await flushInvalidations();
+
+    const roomPayload = { space_id: 'space-1', room_id: roomId, room_kind: 'member', resume_after_seq: null };
+    expect(sockets[0]!.sent).toContainEqual(expect.objectContaining({ op: 'SUBSCRIBE', payload: roomPayload }));
+    invalidateQueries.mockClear();
+
+    // READY echoes it dashless; the confirmation refetches the room's first page.
+    sockets[0]!.receive(
+      'READY',
+      readyPayload([{ space_id: 'space-1', room_id: dashless, room_kind: 'member', resume_after_seq: null }])
+    );
+    await flushInvalidations();
+    expectInvalidated(invalidateQueries, { queryKey: key, refetchType: 'active' });
+
+    const message = {
+      id: '0195000000007000800000000000beef',
+      room_id: dashless,
+      room_kind: 'member',
+      author_id: 'author',
+      client_nonce: 'c-1',
+      reply_to_message_id: null,
+      body: 'hello',
+      attachment_ids: [],
+      created_at: '2026-07-20T12:00:01Z',
+      edited_at: null,
+      deleted_at: null,
+      reactions: [],
+    };
+    sockets[0]!.receiveRaw(
+      JSON.stringify({
+        v: 1,
+        op: 'EVENT',
+        seq: 7,
+        request_id: null,
+        space_id: 'space-1',
+        room_id: dashless,
+        room_kind: 'member',
+        payload: { event_type: 'message.created', payload: { message } },
+      })
+    );
+    expect(queryClient.getQueryData<SpaceChatState>(key)?.messages.map(item => item.body)).toEqual(['hello']);
+
+    release();
+    expect(sockets[0]!.sent).toContainEqual(expect.objectContaining({ op: 'UNSUBSCRIBE', payload: roomPayload }));
+  });
+
+  it('reports a chat room live only once READY confirms it, and not while it is refused', async () => {
+    const roomId = '0192aaaa-0000-7000-8000-000000000001';
+    const dashless = '0192aaaa000070008000000000000001';
+    const scope = { scope: 'chat-room', space_id: 'space-1', room_id: roomId, room_kind: 'member' } as const;
+    const echo = { space_id: 'space-1', room_id: dashless, room_kind: 'member', resume_after_seq: null };
+    const listener = vi.fn();
+    client.subscribe(listener);
+    client.retainScope(scope);
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    await flushInvalidations();
+    // The gateway is ready, but the room is still pending.
+    expect(client.getSnapshot().status).toBe('ready');
+    expect(client.isScopeLive(scope)).toBe(false);
+
+    listener.mockClear();
+    sockets[0]!.receive('READY', readyPayload([echo]));
+    await flushInvalidations();
+    expect(client.isScopeLive(scope)).toBe(true);
+    expect(listener).toHaveBeenCalled();
+
+    // Refused later, say once membership is revoked: the room polls while the gateway stays ready.
+    listener.mockClear();
+    sockets[0]!.receive('ERROR', { code: 'subscription_forbidden', subscription: echo });
+    expect(client.getSnapshot().status).toBe('ready');
+    expect(client.isScopeLive(scope)).toBe(false);
+    expect(listener).toHaveBeenCalled();
+  });
+
+  it('resubscribes a chat room on the new token’s socket after a refresh closes the old one, and refetches it', async () => {
+    const roomId = '0192aaaa-0000-7000-8000-000000000001';
+    const dashless = '0192aaaa000070008000000000000001';
+    const key = ['debates', 'account', 'user-a', 'space-chat', dashless];
+    const roomPayload = { space_id: 'space-1', room_id: roomId, room_kind: 'member', resume_after_seq: null };
+    const echo = { space_id: 'space-1', room_id: dashless, room_kind: 'member', resume_after_seq: null };
+    queryClient.setQueryData<SpaceChatState>(key, { messages: [], nextBefore: null, pending: [] });
+    client.retainScope({ scope: 'chat-room', space_id: 'space-1', room_id: roomId, room_kind: 'member' });
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([echo]));
+    await flushInvalidations();
+    expect(client.getSnapshot().status).toBe('ready');
+
+    // geo-chat closes the socket opened with the old token once it is refreshed.
+    session = { ...session, access_token: 'refreshed-token' };
+    sockets[0]!.serverClose();
+    expect(client.getSnapshot()).toMatchObject({ status: 'degraded', pauseReason: 'disconnected' });
+    invalidateQueries.mockClear();
+
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(sockets).toHaveLength(2);
+    expect(sockets[1]!.url).toContain('access_token=refreshed-token');
+    sockets[1]!.open();
+    sockets[1]!.receive('READY', readyPayload([]));
+    await flushInvalidations();
+    expect(sockets[1]!.sent).toContainEqual(expect.objectContaining({ op: 'SUBSCRIBE', payload: roomPayload }));
+
+    sockets[1]!.receive('READY', readyPayload([echo]));
+    await flushInvalidations();
+    expect(client.getSnapshot().status).toBe('ready');
+    // Room events are not replayed, so the confirmation refetches the room.
+    expectInvalidated(invalidateQueries, { queryKey: key, refetchType: 'active' });
+  });
+
+  describe('signed out (anonymous)', () => {
+    const roomId = '0192aaaa-0000-7000-8000-000000000001';
+    const dashless = '0192aaaa000070008000000000000001';
+    const publicKey = ['space-chat-public', dashless];
+    const roomScope = { scope: 'chat-room', space_id: 'space-1', room_id: roomId, room_kind: 'member' } as const;
+    const echo = { space_id: 'space-1', room_id: dashless, room_kind: 'member', resume_after_seq: null };
+    let anonymous: DebateGatewayClient;
+
+    beforeEach(() => {
+      anonymous = new DebateGatewayClient({
+        queryClient,
+        getSession,
+        getApiBaseUrl: () => 'https://chat.example.com/',
+        createWebSocket: url => {
+          const socket = new FakeWebSocket(url);
+          sockets.push(socket);
+          return socket;
+        },
+        random: () => 0,
+        anonymous: true,
+      });
+    });
+    afterEach(() => anonymous.stop());
+
+    const roomEvent = (body: string) =>
+      JSON.stringify({
+        v: 1,
+        op: 'EVENT',
+        seq: 3,
+        request_id: null,
+        space_id: 'space-1',
+        room_id: dashless,
+        room_kind: 'member',
+        payload: {
+          event_type: 'message.created',
+          payload: {
+            message: {
+              id: '0195000000007000800000000000beef',
+              room_id: dashless,
+              room_kind: 'member',
+              author_id: 'author',
+              client_nonce: 'c-1',
+              reply_to_message_id: null,
+              body,
+              attachment_ids: [],
+              created_at: '2026-07-20T12:00:01Z',
+              edited_at: null,
+              deleted_at: null,
+              reactions: [],
+            },
+          },
+        },
+      });
+
+    it('connects without a token while a member room is retained, and applies its events to the public cache', async () => {
+      queryClient.setQueryData<SpaceChatState>(publicKey, { messages: [], nextBefore: null, pending: [] });
+      const release = anonymous.retainScope(roomScope);
+      expect(sockets).toHaveLength(1);
+      expect(new URL(sockets[0]!.url).searchParams.has('access_token')).toBe(false);
+      expect(new URL(sockets[0]!.url).pathname).toBe('/gateway/ws');
+      expect(getSession).not.toHaveBeenCalled();
+
+      sockets[0]!.open();
+      sockets[0]!.receive('HELLO', { heartbeat_interval_ms: 30_000 });
+      expect(sockets[0]!.sent).toContainEqual(expect.objectContaining({ op: 'HEARTBEAT', payload: {} }));
+      sockets[0]!.receive('READY', readyPayload([]));
+      await flushInvalidations();
+      expect(sockets[0]!.sent).toContainEqual(
+        expect.objectContaining({ op: 'SUBSCRIBE', payload: { ...echo, room_id: roomId } })
+      );
+      expect(anonymous.getSnapshot().status).toBe('connecting');
+      expect(invalidateQueries).not.toHaveBeenCalled();
+
+      sockets[0]!.receive('READY', readyPayload([echo]));
+      await flushInvalidations();
+      expect(anonymous.getSnapshot().status).toBe('ready');
+      expectInvalidated(invalidateQueries, { queryKey: publicKey, refetchType: 'active' });
+
+      sockets[0]!.receiveRaw(roomEvent('hello'));
+      expect(queryClient.getQueryData<SpaceChatState>(publicKey)?.messages.map(item => item.body)).toEqual(['hello']);
+
+      // A lag refetches the room, not every debate query.
+      invalidateQueries.mockClear();
+      sockets[0]!.receive('ERROR', { code: 'events_lagged' });
+      await flushInvalidations();
+      expectInvalidated(invalidateQueries, { queryKey: publicKey, refetchType: 'active' });
+      expect(invalidateQueries).toHaveBeenCalledTimes(1);
+
+      release();
+      expect(sockets[0]!.readyState).toBe(FakeWebSocket.CLOSED);
+      expect(anonymous.getSnapshot().status).toBe('idle');
+    });
+
+    it('never carries anything but a member room', () => {
+      anonymous.retainScope({ scope: 'space', space_id: 'space-1' })();
+      anonymous.retainScope({ scope: 'matchmaking' })();
+      anonymous.retainScope({ ...roomScope, room_kind: 'editor' })();
+      anonymous.start(
+        vi.fn(async () => 'privy-token'),
+        'user-a'
+      );
+      expect(sockets).toHaveLength(0);
+    });
+
+    it('degrades when the room is refused, so the reader falls back to polling', async () => {
+      anonymous.retainScope(roomScope);
+      sockets[0]!.open();
+      sockets[0]!.receive('READY', readyPayload([]));
+      sockets[0]!.receive('ERROR', { code: 'subscription_forbidden', subscription: echo });
+      expect(anonymous.getSnapshot()).toMatchObject({ status: 'degraded', paused: true });
+    });
+
+    it('refetches the room once a reconnect confirms it again', async () => {
+      anonymous.retainScope(roomScope);
+      sockets[0]!.open();
+      sockets[0]!.receive('READY', readyPayload([echo]));
+      await flushInvalidations();
+      invalidateQueries.mockClear();
+
+      sockets[0]!.serverClose();
+      expect(anonymous.getSnapshot().status).toBe('degraded');
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(sockets).toHaveLength(2);
+      sockets[1]!.open();
+      sockets[1]!.receive('READY', readyPayload([echo]));
+      await flushInvalidations();
+      expect(anonymous.getSnapshot().status).toBe('ready');
+      expectInvalidated(invalidateQueries, { queryKey: publicKey, refetchType: 'active' });
+    });
+
+    it('stops reconnecting on a capacity close, polls, and tries once more on focus', async () => {
+      anonymous.retainScope(roomScope);
+      sockets[0]!.open();
+      sockets[0]!.receive('ERROR', { code: 'anonymous_connection_limit', message: 'too many' });
+      expect(anonymous.getSnapshot()).toMatchObject({ status: 'degraded', pauseReason: 'capacity' });
+      expect(sockets[0]!.readyState).toBe(FakeWebSocket.CLOSED);
+      await vi.advanceTimersByTimeAsync(120_000);
+      expect(sockets).toHaveLength(1);
+
+      anonymous.retryAfterFocus();
+      expect(sockets).toHaveLength(2);
+      // Refused again by the close code alone (the per-replica cap): parked once more.
+      sockets[1]!.open();
+      sockets[1]!.serverCloseWith(4429);
+      expect(anonymous.getSnapshot().pauseReason).toBe('capacity');
+      await vi.advanceTimersByTimeAsync(120_000);
+      expect(sockets).toHaveLength(2);
+
+      anonymous.retryAfterFocus();
+      sockets[2]!.open();
+      sockets[2]!.receive('READY', readyPayload([echo]));
+      expect(anonymous.getSnapshot().status).toBe('ready');
+      // A focus while connected does nothing.
+      anonymous.retryAfterFocus();
+      expect(sockets).toHaveLength(3);
+    });
+
+    it('treats the per-replica capacity error the same way', () => {
+      anonymous.retainScope(roomScope);
+      sockets[0]!.open();
+      sockets[0]!.receive('ERROR', { code: 'anonymous_capacity' });
+      expect(anonymous.getSnapshot().pauseReason).toBe('capacity');
+    });
+
+    it('degrades a room past the room cap without dropping the socket', async () => {
+      anonymous.retainScope(roomScope);
+      sockets[0]!.open();
+      sockets[0]!.receive('READY', readyPayload([]));
+      sockets[0]!.receive('ERROR', { code: 'subscription_limit_reached', subscription: echo });
+      expect(anonymous.getSnapshot()).toMatchObject({ status: 'degraded', paused: true });
+      expect(sockets[0]!.readyState).toBe(FakeWebSocket.OPEN);
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(sockets).toHaveLength(1);
+    });
+
+    it('reconnects after the stated delay when a SUBSCRIBE is rate limited, and resubscribes there', async () => {
+      const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      anonymous.retainScope(roomScope);
+      sockets[0]!.open();
+      sockets[0]!.receive('READY', readyPayload([]));
+      sockets[0]!.receive('ERROR', { code: 'rate_limited', message: 'limit', retry_after_seconds: 7 });
+      expect(sockets[0]!.readyState).toBe(FakeWebSocket.CLOSED);
+      expect(anonymous.getSnapshot()).toMatchObject({ paused: true, pauseReason: 'rate_limited' });
+      await vi.advanceTimersByTimeAsync(6_999);
+      expect(sockets).toHaveLength(1);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(sockets).toHaveLength(2);
+      sockets[1]!.open();
+      sockets[1]!.receive('READY', readyPayload([]));
+      expect(sockets[1]!.sent.filter(frame => frame.op === 'SUBSCRIBE')).toHaveLength(1);
+      error.mockRestore();
+    });
+
+    it('waits out a rate limit before reconnecting when a limited heartbeat is followed by the server close', async () => {
+      anonymous.retainScope(roomScope);
+      sockets[0]!.open();
+      sockets[0]!.receive('READY', readyPayload([echo]));
+      sockets[0]!.receive('ERROR', {
+        code: 'rate_limited',
+        message: 'gateway command limit `x` exceeded; retry after 20 seconds',
+      });
+      sockets[0]!.serverCloseWith(1008);
+      await vi.advanceTimersByTimeAsync(19_999);
+      expect(sockets).toHaveLength(1);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(sockets).toHaveLength(2);
+    });
+
+    it('keeps the signed-in and signed-out caches apart across a sign-in', async () => {
+      const accountKey = ['debates', 'account', 'user-a', 'space-chat', dashless];
+      queryClient.setQueryData<SpaceChatState>(publicKey, { messages: [], nextBefore: null, pending: [] });
+      queryClient.setQueryData<SpaceChatState>(accountKey, { messages: [], nextBefore: null, pending: [] });
+      const releasePublic = anonymous.retainScope(roomScope);
+      sockets[0]!.open();
+      sockets[0]!.receive('READY', readyPayload([echo]));
+
+      // Signing in moves the room to the account connection and closes the public one.
+      releasePublic();
+      expect(sockets[0]!.readyState).toBe(FakeWebSocket.CLOSED);
+      const releaseAccount = client.retainScope(roomScope);
+      client.start(
+        vi.fn(async () => 'privy-token'),
+        'user-a'
+      );
+      await vi.runAllTicks();
+      sockets[1]!.open();
+      sockets[1]!.receive('READY', readyPayload([echo]));
+      sockets[1]!.receiveRaw(roomEvent('signed in'));
+      expect(queryClient.getQueryData<SpaceChatState>(accountKey)?.messages.map(item => item.body)).toEqual([
+        'signed in',
+      ]);
+      expect(queryClient.getQueryData<SpaceChatState>(publicKey)?.messages).toEqual([]);
+
+      // Signing out: the account connection stops and the public one takes the room back.
+      releaseAccount();
+      client.stop();
+      anonymous.retainScope(roomScope);
+      expect(sockets).toHaveLength(3);
+      sockets[2]!.open();
+      sockets[2]!.receive('READY', readyPayload([echo]));
+      sockets[2]!.receiveRaw(roomEvent('signed out'));
+      expect(queryClient.getQueryData<SpaceChatState>(publicKey)?.messages.map(item => item.body)).toEqual([
+        'signed out',
+      ]);
+      expect(sockets.filter(socket => socket.readyState === FakeWebSocket.OPEN)).toHaveLength(1);
+    });
+  });
+
   it('exposes the advertised capabilities so surfaces can detect matchmaking support', async () => {
     client.start(
       vi.fn(async () => 'privy-token'),
@@ -2754,11 +3172,11 @@ describe('DebateGatewayClient', () => {
     sockets[0]!.open();
     sockets[0]!.receive('READY', readyPayload([]));
 
-    // A room subscription, which this client never sends and cannot map to a scope.
+    // A subscription this client never sends and cannot map to a scope.
     sockets[0]!.receive('ERROR', {
       code: 'subscription_forbidden',
       message: 'not authorized',
-      subscription: { space_id: 'space-1', room_id: 'room-1', room_kind: 'member', resume_after_seq: null },
+      subscription: { scope: 'lobby', lobby_id: 'lobby-1' },
     });
 
     expect(sockets[0]!.readyState).toBe(FakeWebSocket.CLOSED);

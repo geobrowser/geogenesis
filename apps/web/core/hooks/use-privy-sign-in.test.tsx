@@ -3,34 +3,32 @@ import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ActionContextProvider } from '~/core/action-context-provider';
-import { runSignInAbandoned } from '~/core/auth/sign-in-abandoned';
+import { beginAuthAttempt, finishAuthAttempt, resetAuthAttempt } from '~/core/auth-attempt';
+import { closeSignInBox, readSignInBox } from '~/core/auth/sign-in-box/sign-in-box-store';
 
 import { usePrivySignIn } from './use-privy-sign-in';
 
 const mocks = vi.hoisted(() => ({
   login: vi.fn(),
-  /** Whatever the hook handed Privy, so a restore can be fired without a login. */
-  privyOnComplete: undefined as undefined | ((args: unknown) => void),
-  /** Privy's exit path: a failed attempt, or the viewer dismissing the modal. */
-  privyOnError: undefined as undefined | ((error: unknown) => void),
   beginPrivyAuth: vi.fn(),
   setStep: vi.fn(),
+  takeCodeRecovery: vi.fn(),
+  codeRecoveryOffered: vi.fn(),
+}));
+
+vi.mock('~/core/auth/code-step', () => ({
+  takeCodeRecovery: mocks.takeCodeRecovery,
+  codeRecoveryOffered: mocks.codeRecoveryOffered,
+  codeRecoveryProperties: (pending: { attemptId?: string }) => ({
+    auth_recovery: 'reloaded_code_step',
+    recovered_attempt_id: pending.attemptId,
+  }),
 }));
 
 vi.mock('~/core/wallet/auth-hooks', () => ({
   // `usePrepareOnboarding` reads it to leave a signed-in user's onboarding alone.
   usePrivy: () => ({ authenticated: false }),
-  useGeoLogin: ({
-    onComplete,
-    onError,
-  }: {
-    onComplete: (args: unknown) => void;
-    onError?: (error: unknown) => void;
-  }) => {
-    mocks.privyOnComplete = onComplete;
-    mocks.privyOnError = onError;
-    return { login: mocks.login };
-  },
+  useGeoLogin: () => ({ login: mocks.login }),
 }));
 
 vi.mock('next/navigation', () => ({
@@ -38,7 +36,7 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams(''),
 }));
 
-vi.mock('~/core/auth-attempt', () => ({ currentAuthAttempt: () => ({ id: undefined }) }));
+vi.mock('~/core/analytics', () => ({ capture: vi.fn(), captureExperimental: vi.fn() }));
 
 vi.mock('~/core/privy-auth-events', () => ({ beginPrivyAuth: mocks.beginPrivyAuth }));
 
@@ -59,18 +57,56 @@ vi.mock('~/partials/onboarding/onboarding-atoms', async () => {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.privyOnComplete = undefined;
-  mocks.privyOnError = undefined;
+  mocks.takeCodeRecovery.mockReset();
+  mocks.beginPrivyAuth.mockReset();
+  mocks.beginPrivyAuth.mockImplementation(properties => beginAuthAttempt(properties));
+  localStorage.clear();
+  sessionStorage.clear();
+  resetAuthAttempt();
+  closeSignInBox();
 });
 
+// What `PrivyAuthTracker` does with Privy's callbacks: a sign-in or a dismissal ends the attempt.
+const privySignsIn = () => finishAuthAttempt('signed_in');
+const privyReports = (error: string) => {
+  if (error === 'exited_auth_flow') finishAuthAttempt('closed');
+};
+
 describe('usePrivySignIn', () => {
+  // GEO-3573: the first sign-in a new page opens picks up a code step left by an earlier page.
+  it('picks up a code step from an earlier page, keeping its own attribution and destination', () => {
+    const pending = {
+      attemptId: 'original',
+      email: 'a@b.co',
+      properties: { component: 'save_votes', link_source: 'x' },
+    };
+    mocks.takeCodeRecovery.mockReturnValue(pending);
+    mocks.beginPrivyAuth.mockReturnValue({ id: 'recovery', properties: { component: 'debate_matchmaking' } });
+    const { result } = renderHook(() => usePrivySignIn(undefined, { analytics: { component: 'debate_matchmaking' } }));
+
+    act(() => void result.current());
+    expect(mocks.beginPrivyAuth).toHaveBeenCalledWith(
+      expect.objectContaining({
+        component: 'debate_matchmaking',
+        link_source: 'x',
+        auth_recovery: 'reloaded_code_step',
+        recovered_attempt_id: 'original',
+      }),
+      { resume: undefined }
+    );
+    expect(readSignInBox()).toMatchObject({ attemptId: 'recovery', prefillEmail: 'a@b.co' });
+    expect(mocks.codeRecoveryOffered).toHaveBeenCalledWith(pending, 'recovery');
+    // Whether this sign-in may pick it up depends on its own trigger, so it is handed its properties.
+    expect(mocks.takeCodeRecovery).toHaveBeenCalledWith({ component: 'debate_matchmaking' });
+  });
+
   // Privy fires onComplete when it restores an existing session — opening a second tab does it —
   // so an unarmed callback would run the consumer's intent with nobody having pressed anything.
   it('ignores a completion the caller never asked for', () => {
     const onComplete = vi.fn();
     renderHook(() => usePrivySignIn(onComplete));
 
-    act(() => mocks.privyOnComplete?.({}));
+    act(() => privySignsIn());
 
     expect(onComplete).not.toHaveBeenCalled();
     expect(mocks.login).not.toHaveBeenCalled();
@@ -81,14 +117,14 @@ describe('usePrivySignIn', () => {
     const { result } = renderHook(() => usePrivySignIn(onComplete));
 
     act(() => result.current());
-    expect(mocks.login).toHaveBeenCalledOnce();
+    expect(readSignInBox()).not.toBeNull();
     expect(onComplete).not.toHaveBeenCalled();
 
-    act(() => mocks.privyOnComplete?.({}));
+    act(() => privySignsIn());
     expect(onComplete).toHaveBeenCalledOnce();
 
     // Disarmed again, so a later restore in this tab does not replay the intent.
-    act(() => mocks.privyOnComplete?.({}));
+    act(() => privySignsIn());
     expect(onComplete).toHaveBeenCalledOnce();
   });
 
@@ -96,11 +132,11 @@ describe('usePrivySignIn', () => {
   it('starts tracking only when sign-in is requested', () => {
     const { result } = renderHook(() => usePrivySignIn());
 
-    act(() => mocks.privyOnComplete?.({}));
+    act(() => privySignsIn());
     expect(mocks.beginPrivyAuth).not.toHaveBeenCalled();
 
     act(() => result.current());
-    act(() => mocks.privyOnComplete?.({}));
+    act(() => privySignsIn());
     expect(mocks.beginPrivyAuth).toHaveBeenCalledOnce();
     expect(mocks.beginPrivyAuth).toHaveBeenCalledWith(
       expect.objectContaining({ component: 'sign_in_prompt', auth_trigger: 'control' }),
@@ -125,7 +161,7 @@ describe('usePrivySignIn', () => {
     // The URL is cleaned, the handler rerenders, the source is gone.
     rerender({ analytics: { link_source: undefined } });
 
-    act(() => mocks.privyOnComplete?.({}));
+    act(() => privySignsIn());
 
     expect(mocks.beginPrivyAuth.mock.calls[0]?.[0]).toMatchObject({
       link_source: 'marketing',
@@ -139,11 +175,11 @@ describe('usePrivySignIn', () => {
     );
 
     act(() => result.current());
-    act(() => mocks.privyOnError?.('exited_auth_flow'));
+    act(() => privyReports('exited_auth_flow'));
 
     rerender({ analytics: undefined });
     act(() => result.current());
-    act(() => mocks.privyOnComplete?.({}));
+    act(() => privySignsIn());
 
     expect(mocks.beginPrivyAuth).toHaveBeenLastCalledWith(expect.not.objectContaining({ link_source: 'marketing' }), {
       resume: undefined,
@@ -157,24 +193,48 @@ describe('usePrivySignIn', () => {
     const { result } = renderHook(() => usePrivySignIn(onComplete));
 
     act(() => result.current());
-    act(() => mocks.privyOnError?.('exited_auth_flow'));
-    act(() => mocks.privyOnComplete?.({}));
+    act(() => privyReports('exited_auth_flow'));
+    act(() => privySignsIn());
 
     expect(onComplete).not.toHaveBeenCalled();
   });
 
-  // A control that queued the viewer's choice at the press withdraws it if they walk away. The
-  // withdrawal is registered with the app-level attempt, so it outlives this hook — when it fires
-  // (dismissal) and when it is dropped (completion, a new attempt) is covered with the tracker.
-  it("registers a press's own cancel with the sign-in attempt", () => {
+  // A control that queued the viewer's choice at the press withdraws it if they walk away, even
+  // after it unmounted.
+  it("withdraws a press's own cancel once its attempt is dismissed, after the control unmounted", () => {
+    const onCancel = vi.fn();
+    const { result, unmount } = renderHook(() => usePrivySignIn());
+
+    act(() => result.current(undefined, { onCancel }));
+    unmount();
+    expect(onCancel).not.toHaveBeenCalled();
+
+    act(() => privyReports('exited_auth_flow'));
+    act(() => privyReports('exited_auth_flow'));
+    expect(onCancel).toHaveBeenCalledOnce();
+  });
+
+  it("drops a press's cancel when it signs in, or a newer press replaces it", () => {
     const onCancel = vi.fn();
     const { result } = renderHook(() => usePrivySignIn());
 
     act(() => result.current(undefined, { onCancel }));
+    act(() => privySignsIn());
+    act(() => result.current(undefined, { onCancel }));
+    act(() => result.current());
+    act(() => privyReports('exited_auth_flow'));
     expect(onCancel).not.toHaveBeenCalled();
+  });
 
-    act(() => runSignInAbandoned());
-    expect(onCancel).toHaveBeenCalledOnce();
+  it('runs the continuation once although the control unmounted while Privy was open', () => {
+    const onComplete = vi.fn();
+    const { result, unmount } = renderHook(() => usePrivySignIn(onComplete));
+
+    act(() => result.current());
+    unmount();
+    act(() => privySignsIn());
+    act(() => privySignsIn());
+    expect(onComplete).toHaveBeenCalledOnce();
   });
 
   it('notifies the initiating surface when the modal is dismissed or fails', () => {
@@ -184,7 +244,7 @@ describe('usePrivySignIn', () => {
     );
 
     act(() => result.current());
-    act(() => mocks.privyOnError?.('exited_auth_flow'));
+    act(() => privyReports('exited_auth_flow'));
 
     expect(onError).toHaveBeenCalledOnce();
   });
@@ -193,7 +253,7 @@ describe('usePrivySignIn', () => {
     const onError = vi.fn();
     renderHook(() => usePrivySignIn(undefined, { onError }));
 
-    act(() => mocks.privyOnError?.('exited_auth_flow'));
+    act(() => privyReports('exited_auth_flow'));
 
     expect(onError).not.toHaveBeenCalled();
   });
@@ -201,8 +261,8 @@ describe('usePrivySignIn', () => {
     const onComplete = vi.fn();
     const { result } = renderHook(() => usePrivySignIn(onComplete));
     act(() => result.current());
-    act(() => mocks.privyOnError?.('invalid_credentials'));
-    act(() => mocks.privyOnComplete?.({}));
+    act(() => privyReports('invalid_credentials'));
+    act(() => privySignsIn());
     expect(onComplete).toHaveBeenCalledOnce();
   });
   it('uses the same inherited surface as the signed-in action', () => {
@@ -244,10 +304,10 @@ describe('usePrivySignIn', () => {
       { resume: undefined }
     );
   });
-  it('passes the resume option when opening the modal for an email attempt', () => {
+  it('passes the resume option when opening sign-in for an email attempt', () => {
     const { result } = renderHook(() => usePrivySignIn(undefined, { resumeAuthAttempt: true }));
     act(() => result.current());
     expect(mocks.beginPrivyAuth).toHaveBeenCalledWith(expect.any(Object), { resume: true });
-    expect(mocks.login).toHaveBeenCalledOnce();
+    expect(readSignInBox()).not.toBeNull();
   });
 });

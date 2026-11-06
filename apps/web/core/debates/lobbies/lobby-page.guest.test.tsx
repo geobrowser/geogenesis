@@ -107,6 +107,7 @@ vi.mock('./hooks', () => ({
       voiceAwayAt: null,
     };
   },
+  useFindCalendarLobby: () => () => undefined,
   useDebateLobbyReminder: () => ({ mutate: vi.fn(), isPending: false }),
   useLobbyReminderError: () => null,
   useLobbyReminderSaving: () => false,

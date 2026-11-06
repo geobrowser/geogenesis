@@ -28,7 +28,6 @@ import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
 import {
   type ActiveResponseDirection,
   ENTITY_RESPONSE_COPY,
-  RESPONSE_CONFIRMING_COPY,
   RESPONSE_LOCAL_ONLY_COPY,
   type ResponseKind,
   entityResponderProfilesQueryKey,
@@ -73,31 +72,13 @@ type EntityVoteButtonsProps = {
   /**
    * A surface with no room for prose: the sticky entity header's 48px row.
    *
-   * Three of this control's states are sentences rather than controls — the indexing notice beside
-   * the buttons, and the two that stand in for the control entirely. Each is wider than a phone can
-   * spare next to a name and a set of thumbs: measured at 390px, the indexing notice alone pushed
-   * the row 94px past its own width and gave the document a horizontal scrollbar.
+   * Two of this control's states are sentences rather than controls, each wider than a phone can
+   * spare next to a name and a set of thumbs. They describe *state* — that an unpublished type edit
+   * is blocking responses, or that there is no response kind — and the page explains that state too,
+   * so a reader who finds nothing in the bar has somewhere else to find it.
    *
    * Dropped rather than truncated, because a sentence cut to "Response s…" tells nobody anything,
    * and dropped rather than wrapped, because the bar is one fixed-height line by design.
-   *
-   * Two of the three are dropped outright. They describe *state* — that an unpublished type edit is
-   * blocking responses, or that there is no response kind — and the page explains that state too, so
-   * a reader who finds nothing in the bar has somewhere else to find it.
-   *
-   * **The indexing notice is not dropped.** It is the only `aria-live` a vote gets, it announces an
-   * event the reader just caused, and the vote can be cast from the bar itself. It goes `sr-only`
-   * instead: absolutely positioned and clipped, so it takes no width and cannot overflow the row,
-   * which is the whole of what `compact` needs from it. Do not "finish the job" by removing it — an
-   * earlier version of this comment claimed the page's own copy announced instead, and that is false
-   * where it matters most. `ClaimPageView` answers a claim with `ClaimPositionCommentControl`, which
-   * puts this same sentence in a `title`: read on focus, never announced.
-   *
-   * Known and accepted: on surfaces whose page control *is* an `EntityVoteButtons` — generic, topic,
-   * profile — both live regions are inserted at once and the confirmation can be announced twice.
-   * Deduplicating needs the two surfaces to know about each other, and this component renders once
-   * per claim on a list, where a subscription is a cost its own comments already weigh. A duplicate
-   * announcement is the better failure than none.
    */
   compact?: boolean;
   /** Draw a failed vote's message beside the arrows. */
@@ -183,7 +164,6 @@ function EntityResponseButtons({
     submitResponseAsync,
     optimisticResponse,
     isSubmittingResponse,
-    isResponseIndexingDelayed,
     isConnected,
     personalSpaceId,
   } = useEntityResponse({ entityId, entityName: entity?.name, spaceId, responseKind });
@@ -561,19 +541,6 @@ function EntityResponseButtons({
         <ResponsePositionIcon responseKind={queryResponseKind} position={false} selected={negativeActive} />
       </ResponseButton>
       {claimResponderAvatarsPosition === 'trailing' ? claimResponderAvatarsTrigger('trailing') : null}
-      {isResponseIndexingDelayed ? (
-        // Hidden from layout in the bar, not removed from the page. This is the only `aria-live`
-        // confirmation a vote gets, and a vote can be cast from the bar — so dropping the node
-        // dropped the announcement with it. `sr-only` is absolutely positioned and clipped, so it
-        // takes no width and cannot overflow the row, which is all `compact` ever needed from it.
-        //
-        // I had claimed the page's own copy still announced. It does not on the surface that matters
-        // most: `ClaimPageView` answers a claim with `ClaimPositionCommentControl`, which puts this
-        // same sentence in a `title` attribute — read on focus, never announced as a live update.
-        <span aria-live="polite" className={cx(compact ? 'sr-only' : 'ml-1 text-metadata text-grey-04')}>
-          {RESPONSE_CONFIRMING_COPY}
-        </span>
-      ) : null}
       {responseError ? (
         <span role="alert" className={cx(showInlineError && !compact ? 'ml-1 text-metadata text-red-01' : 'sr-only')}>
           {responseError}

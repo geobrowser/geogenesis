@@ -5,6 +5,7 @@ import * as React from 'react';
 import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
+import { ACCOUNT_SETUP_MESSAGE, accountSetupMessage } from '../account-setup-copy';
 import { GeoChatRequestError, isAccountWarmingUpQuery, isGeoChatRefusal } from '../api';
 import type { DebateAnalyticsSurface } from './hub-analytics';
 import { HubSwap } from './hub-motion';
@@ -149,9 +150,6 @@ export function HubQueryState({
    * on underneath.
    */
   const warmingUp = !signInAction && isAccountWarmingUpQuery({ error, failureReason });
-  // Settled, rather than still being waited out. `error` is only set once react-query has given up;
-  // a refusal that is still being retried reaches us through `failureReason` alone.
-  const retriesSpent = Boolean(error);
   const state = needsSignIn
     ? 'sign-in'
     : warmingUp
@@ -177,25 +175,8 @@ export function HubQueryState({
           {signInAction!.message}
         </HubMessage>
       ) : state === 'warming-up' ? (
-        // Deliberately not "Something went wrong", which is wrong about something going right, and
-        // not the sign-in prompt, which is wrong at somebody who just did.
-        //
-        // The button appears only once the retries are spent. While they are still running,
-        // `refetch()` joins the in-flight retry rather than starting a request, so the button would
-        // have been a control that visibly does nothing — worse than no control, because a reader
-        // who presses it and sees no change concludes the page is broken rather than busy. Until
-        // then the message is the whole state, and the reads are getting on with it.
-        <HubMessage
-          action={
-            retriesSpent && onRetry ? (
-              <HubPillButton analyticsSurface={analyticsSurface} onClick={onRetry}>
-                Try again
-              </HubPillButton>
-            ) : null
-          }
-        >
-          Setting up your account. Check back in a minute.
-        </HubMessage>
+        // No "Try again": `useGeoChatAccountRecovery` retries and refetches this read by itself.
+        <HubMessage>{accountSetupMessage(error ?? failureReason) ?? ACCOUNT_SETUP_MESSAGE}</HubMessage>
       ) : state === 'error' ? (
         <HubMessage
           action={

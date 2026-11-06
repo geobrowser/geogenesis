@@ -34,6 +34,7 @@ import { Text } from '~/design-system/text';
 
 import { PeerAvailabilityBookingModal } from '~/partials/availability/peer-availability-booking-modal';
 
+import { accountSetupMessage } from '../account-setup-copy';
 import { useDebatePeople } from './hooks';
 import { type DebateAnalyticsSurface, debateAnalyticsLabel, hubAnalyticsAttributes } from './hub-analytics';
 import { HubCardList, hubCardMotion } from './hub-motion';
@@ -141,11 +142,11 @@ export function ScheduledDebatesSection({ content }: { content: ScheduledContent
  * section and on the panel's timeline (GEO-3463), which lists them together above its now-line.
  */
 export const READ_FAILURE_COPY = {
-  rooms: (error: Error) => `Could not read your upcoming debates: ${error.message}`,
-  requests: (error: Error) => `Could not read your scheduled debates: ${error.message}`,
-  lobbies: (error: Error) => `Could not read your lobbies: ${error.message}`,
+  rooms: (error: Error) => accountSetupMessage(error) ?? 'Could not read your upcoming debates.',
+  requests: (error: Error) => accountSetupMessage(error) ?? 'Could not read your scheduled debates.',
+  lobbies: (error: Error) => accountSetupMessage(error) ?? 'Could not read your lobbies.',
   /** The timeline's read of the next seven days' lobbies (GEO-3519). */
-  week: (error: Error) => `Could not read this week’s lobbies: ${error.message}`,
+  week: (error: Error) => accountSetupMessage(error) ?? 'Could not read this week’s lobbies.',
 };
 
 /** Every read that failed, in the timeline's order; `weekError` only where the week is read. */
@@ -168,14 +169,26 @@ type Rescheduling = { requestId: string; opponentUserId: string; opponentName: s
  * it, and so may anyone who has already accepted it (GEO-3233: in an admin match neither debater
  * proposed it). Someone who has not answered declines instead. Shared by this section's card and the
  * panel's schedule (GEO-3463), so the two cannot offer different actions on one request.
+ * `otherAccepted`: the other debater has accepted it (GEO-3589).
  */
 export function scheduledRequestRoles(request: ScheduledDebateRequest, viewerId: string | null) {
+  const acceptedBy = (viewer: boolean) =>
+    viewerId !== null &&
+    request.participants.some(entry => entry.accepted === true && sameId(entry.user_id, viewerId) === viewer);
   const proposedByViewer =
     viewerId !== null && request.proposed_by_user_id !== null && sameId(request.proposed_by_user_id, viewerId);
-  const viewerAccepted =
-    viewerId !== null && request.participants.some(entry => entry.accepted === true && sameId(entry.user_id, viewerId));
+  const viewerAccepted = acceptedBy(true);
+  const otherAccepted = acceptedBy(false);
   const withdrawable = !request.viewer_must_answer && (proposedByViewer || viewerAccepted);
-  return { proposedByViewer, viewerAccepted, withdrawable };
+  return { proposedByViewer, viewerAccepted, otherAccepted, withdrawable };
+}
+
+/**
+ * A pending request the viewer accepted and the other debater has not answered, in words. The card's
+ * status and the panel's timeline both say it (GEO-3589), so they read the same.
+ */
+export function notConfirmedUntil(opponent: DebateParticipantSummary | null) {
+  return `Not confirmed until ${opponentName(opponent)} answers`;
 }
 
 /**
@@ -362,11 +375,8 @@ export function useScheduledContent(week?: DebateLobbyCalendarRow[]): ScheduledC
   );
 
   // The viewer included: their own side of the strip needs a face too.
-  const participantIds = React.useMemo(
-    () => (rows ?? []).flatMap(request => request.participants.map(participant => participant.user_id)),
-    [rows]
-  );
-  const people = useGeoChatUserSummaries(participantIds, true);
+  const participants = React.useMemo(() => (rows ?? []).flatMap(request => request.participants), [rows]);
+  const people = useGeoChatUserSummaries(participants, true);
 
   return {
     answerable,
@@ -383,9 +393,8 @@ export function useScheduledContent(week?: DebateLobbyCalendarRow[]): ScheduledC
 const LOBBY_LIST_STALE_MS = 30_000;
 
 /**
- * Names come from the graph, since a geo-chat user id is their personal space's page entity. The
- * roster is only a fallback while that loads: it covers people who are online, and whoever invited
- * you usually is not.
+ * Names come from the requests' own people and their graph profiles. The roster is only a fallback
+ * while those load: it covers people who are online, and whoever invited you usually is not.
  */
 export function useParticipantLookup(enabled: boolean, requestPeople: DebateParticipantSummary[]) {
   const roster = useDebatePeople(enabled);
@@ -479,7 +488,7 @@ export function ScheduledRow({
         request.viewer_must_answer
           ? 'Waiting on your answer'
           : viewerAccepted
-            ? `Not confirmed until ${opponentName(opponent)} answers`
+            ? notConfirmedUntil(opponent)
             : 'Waiting on their answer'
       } · ${expiry}`}
       note={adminArrangedNote(request, opponent, viewerId)}
@@ -749,6 +758,9 @@ export function ScheduledAnswerButtons({
  * GEO-3229: a match the Geo team arranged says so on the card for as long as it is pending, including
  * after one debater has accepted, so it never reads as the other debater having asked. Once a time
  * has been moved, it also says which debater proposed the new one. Null for a request between people.
+ *
+ * GEO-3589: to a viewer who still has to answer, it also says when the other debater has already
+ * accepted, since the viewer's answer is then the one that books it.
  */
 export function adminArrangedNote(
   request: ScheduledDebateRequest,
@@ -758,7 +770,10 @@ export function adminArrangedNote(
   if (!request.created_by_admin) return null;
   const arranged = 'Arranged by the Geo team';
   const proposer = request.proposed_by_user_id;
-  if (request.reschedule_count === 0 || proposer === null) return arranged;
+  if (request.reschedule_count === 0 || proposer === null) {
+    const { otherAccepted } = scheduledRequestRoles(request, viewerId);
+    return request.viewer_must_answer && otherAccepted ? `${opponentName(opponent)} accepted · ${arranged}` : arranged;
+  }
   if (viewerId !== null && sameId(proposer, viewerId)) return `${arranged} · You proposed this time`;
   return `${arranged} · ${opponentName(opponent)} proposed this time`;
 }

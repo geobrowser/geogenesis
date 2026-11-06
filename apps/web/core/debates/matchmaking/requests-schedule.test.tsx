@@ -795,7 +795,8 @@ describe('RequestsSchedule', () => {
       mocks.calendarError = new Error('down');
       render(<RequestsSchedule />);
 
-      expect(screen.getByText('Could not read this week’s lobbies: down')).toBeInTheDocument();
+      expect(screen.getByText('Could not read this week’s lobbies.')).toBeInTheDocument();
+      expect(screen.queryByText(/down/)).not.toBeInTheDocument();
       expect(screen.queryByText('Any debate requests you’ll receive will appear here.')).not.toBeInTheDocument();
     });
 
@@ -1047,6 +1048,33 @@ describe('RequestsSchedule', () => {
     expect(screen.getByText('Debate with Mia')).toBeInTheDocument();
   });
 
+  // GEO-3589: the Geo team's note used to replace the waiting line, so an accepted match read as booked.
+  it('says an arranged match the viewer accepted is not confirmed until the other debater accepts', () => {
+    mocks.scheduled = {
+      ...EMPTY_SCHEDULED,
+      answerable: [
+        invite('s2', false, { invited_by_user_id: null, created_by_admin: true, proposed_by_user_id: null }),
+      ],
+    };
+    render(<RequestsSchedule />);
+
+    expect(screen.getByText('Debate with Mia')).toBeInTheDocument();
+    expect(screen.getByText('Not confirmed until Mia answers')).toBeInTheDocument();
+    expect(screen.getByText('Arranged by the Geo team')).toBeInTheDocument();
+  });
+
+  it('says when the other debater of an arranged match has already accepted', () => {
+    mocks.scheduled = {
+      ...EMPTY_SCHEDULED,
+      answerable: [
+        { ...invite('s1', true), invited_by_user_id: null, created_by_admin: true, proposed_by_user_id: null },
+      ],
+    };
+    render(<RequestsSchedule />);
+
+    expect(screen.getByText('Mia accepted · Arranged by the Geo team')).toBeInTheDocument();
+  });
+
   // Saying "Any debate requests…" under a failure contradicts it; over history still loading, it shows
   // for a moment and then swaps out for the timeline, taking the now-line with it.
   it('does not call the tab empty when a read failed or the past is still loading', () => {
@@ -1059,7 +1087,7 @@ describe('RequestsSchedule', () => {
     mocks.requestsError = null;
     mocks.scheduled = { ...EMPTY_SCHEDULED, roomsError: new Error('rooms are down') };
     view.rerender(<RequestsSchedule />);
-    expect(screen.getByText('Could not read your upcoming debates: rooms are down')).toBeInTheDocument();
+    expect(screen.getByText('Could not read your upcoming debates.')).toBeInTheDocument();
     expect(empty()).not.toBeInTheDocument();
     // There may well be something coming up: the failure says so, not "Nothing coming up".
     expect(screen.queryByTestId('requests-nothing-ahead')).not.toBeInTheDocument();

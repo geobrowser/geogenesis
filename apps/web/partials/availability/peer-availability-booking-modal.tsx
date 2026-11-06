@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import { debatesErrorMessage } from '~/core/debates/account-setup-copy';
 import { GeoChatRequestError, type ScheduledDebateRequest } from '~/core/debates/api';
 import { usePeerSchedule } from '~/core/debates/hooks';
 import { useRequestRoom } from '~/core/debates/rooms/request-room';
@@ -32,6 +33,16 @@ export const CLOSE_WAIT_MS = 2500;
 
 /** A slot is 30 minutes, so a booking is one slot. */
 const SCHEDULED_DEBATE_MINUTES = 30;
+
+/**
+ * A move keeps the debate's length: an admin can book an hour (GEO-3544), which a reschedule must
+ * not cut to the half-hour a new request takes.
+ */
+function debateMinutes(request: ScheduledDebateRequest | undefined) {
+  if (!request) return SCHEDULED_DEBATE_MINUTES;
+  const minutes = Math.round((Date.parse(request.scheduled_end_at) - Date.parse(request.scheduled_start_at)) / 60_000);
+  return Number.isFinite(minutes) && minutes > 0 ? minutes : SCHEDULED_DEBATE_MINUTES;
+}
 
 type Props = Omit<React.ComponentProps<typeof PeerAvailabilityModal>, 'booking'> & {
   /**
@@ -196,6 +207,9 @@ export function PeerAvailabilityBookingModal({
     );
   }
 
+  // What the week offers and what is sent: a move keeps the debate's length, a request is a half-hour.
+  const minutes = rescheduleRequestId ? debateMinutes(active) : SCHEDULED_DEBATE_MINUTES;
+
   return (
     <>
       <PeerAvailabilityModal
@@ -207,6 +221,7 @@ export function PeerAvailabilityBookingModal({
           mode,
           requestId: rescheduleRequestId,
           moving: active ? { startsAt: active.scheduled_start_at, agreed } : null,
+          minutes,
           // Kept while its refusal shows: the refetch it triggers can resolve the request, and the
           // error is the only thing saying why the screen changed.
           noTimeWorks:
@@ -237,7 +252,7 @@ export function PeerAvailabilityBookingModal({
             if (rescheduleRequestId && !active) return;
             const slot = {
               startsAt: new Date(startsAt),
-              minutes: SCHEDULED_DEBATE_MINUTES,
+              minutes,
               analytics: { entry, viewerIsFree: pick.viewerIsFree },
             };
             const callbacks = {
@@ -252,7 +267,7 @@ export function PeerAvailabilityBookingModal({
           error: mutation.error
             ? rescheduleRequestId
               ? rescheduleFailureMessage(mutation.error)
-              : mutation.error.message
+              : debatesErrorMessage(mutation.error)
             : null,
         }}
       />

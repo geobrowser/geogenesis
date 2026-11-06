@@ -30,6 +30,7 @@ import {
   roundOneSpeaking,
   thankingAfterEnd,
   timedOut,
+  timedOutExtend,
 } from './open-rounds-fixtures';
 
 const naturalTurnEnd = (_turnIndex: number, turnStartMs: number, durationMs: number) => turnStartMs + durationMs;
@@ -175,7 +176,31 @@ describe('open rounds: what follows a round', () => {
     });
   });
 
-  it('8.7 timed out: the reveal runs from the late resolution, not the deadline', () => {
+  it('8.7 timed out on one Extend: the reveal runs from the late resolution, then the next round', () => {
+    const debate = timedOutExtend();
+    // Past the deadline, but the sweep has not resolved it yet.
+    expect(openRoundGapAfterTurn(debate, 1, roundZeroEnd, at('20:02:11.000'))).toMatchObject({
+      kind: 'hold',
+      phase: { phase: 'deciding' },
+    });
+    expect(openRoundGapAfterTurn(debate, 1, roundZeroEnd, at('20:02:12.000'))).toEqual({
+      kind: 'hold',
+      phase: {
+        phase: 'result',
+        roundIndex: 0,
+        isFinalRound: false,
+        outcome: 'extend',
+        resolvedAtMs: at('20:02:11.300'),
+        nextPhaseStartsAtMs: at('20:02:14.300'),
+      },
+    });
+    expect(openRoundGapAfterTurn(debate, 1, roundZeroEnd, at('20:02:14.300'))).toEqual({
+      kind: 'continue',
+      nextTurnStartsAtMs: at('20:02:14.300'),
+    });
+  });
+
+  it('timed out with no picks: the reveal runs from the late resolution, then thanking', () => {
     const debate = timedOut();
     expect(openRoundGapAfterTurn(debate, 1, roundZeroEnd, at('20:02:12.000'))).toMatchObject({
       kind: 'hold',

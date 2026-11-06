@@ -7,6 +7,7 @@ import * as React from 'react';
 import { Provider as JotaiProvider } from 'jotai';
 
 import { AnalyticsUserIdentifier } from './analytics-user-identifier';
+import { CodeStepTracker } from './auth/code-step-tracker';
 import { GoogleOAuthHost } from './auth/google-oauth';
 import { BrowserTimezoneReporter } from './debates/browser-timezone';
 import { EmailClickReporter } from './notifications/email-click';
@@ -29,6 +30,7 @@ export function Providers({ children }: Props) {
     <>
       <AuthRoot />
       <PrivyAuthTracker />
+      <CodeStepTracker />
       <ReactQueryProvider>
         <AnalyticsUserIdentifier />
         <NotificationRegistration />

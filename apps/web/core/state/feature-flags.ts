@@ -41,6 +41,12 @@ export const featureFlagDefinitions = [
     enabledByDefault: false,
   },
   {
+    id: 'previousDebateClaims',
+    label: 'Claims from previous debate',
+    description: 'Show claims extracted from the previous debate in the debate-again picker (GEO-3585).',
+    enabledByDefault: false,
+  },
+  {
     id: 'exploreSidePanel',
     label: 'Explore side panel',
     description:
@@ -70,6 +76,13 @@ export const featureFlagDefinitions = [
     enabledByDefault: false,
   },
   {
+    id: 'spaceChat',
+    label: 'Space chat',
+    description:
+      'A Chat tab on every DAO space, readable signed out, with replies, reactions and mentions, and the same chat inside the space’s calls (GEO-3422). Needs geo-chat with space chat.',
+    enabledByDefault: false,
+  },
+  {
     id: 'googleSignIn',
     label: 'Google sign-in',
     description:
@@ -96,6 +109,13 @@ export const featureFlagDefinitions = [
     description: 'Bounty board, space bounty tabs, and bounty detail surfaces. On by default; testnet only.',
     enabledByDefault: true,
   },
+  {
+    id: 'signInRecoveryAutoOpen',
+    label: 'Reopen sign-in after a reload at the code step',
+    description:
+      'A page opened while an email code is outstanding from a page that is gone reopens sign-in, prefilled (GEO-3573). Turn off to stop the dialog opening by itself.',
+    enabledByDefault: true,
+  },
 ] as const;
 
 export type FeatureFlagId = (typeof featureFlagDefinitions)[number]['id'];
@@ -103,10 +123,20 @@ export type FeatureFlags = Record<FeatureFlagId, boolean>;
 // Claims and debates shipped to everyone, so `questionsTab` (and `debatesTab`, the id it was
 // renamed from) are no longer flags; nor is `peerAvailability`, since scheduling did too, nor
 // `lobbyJoining`, since finding and joining lobbies did (GEO-3306), nor `debateVideo`, since video in
-// the claim picker and lobbies did (GEO-3414). All of them are still sitting in browsers' stored flag
-// objects; normalizing drops them on the next write rather than reading them back.
-type StoredFeatureFlags = Partial<
-  Record<FeatureFlagId | 'questionsTab' | 'debatesTab' | 'peerAvailability' | 'lobbyJoining' | 'debateVideo', boolean>
+// the claim picker and lobbies did (GEO-3414), nor `ourSignInBox`, since every sign-in opens the box
+// (GEO-3569). All of them are still sitting in browsers' stored flag objects; normalizing drops them
+// on the next write rather than reading them back.
+export type StoredFeatureFlags = Partial<
+  Record<
+    | FeatureFlagId
+    | 'questionsTab'
+    | 'debatesTab'
+    | 'peerAvailability'
+    | 'lobbyJoining'
+    | 'debateVideo'
+    | 'ourSignInBox',
+    boolean
+  >
 >;
 
 /**
@@ -131,14 +161,24 @@ export function normalizeFeatureFlags(flags: StoredFeatureFlags | null | undefin
   ) as FeatureFlags;
 }
 
-export function setFeatureFlagValue(flags: FeatureFlags, id: FeatureFlagId, enabled: boolean): FeatureFlags {
-  return {
-    ...flags,
-    [id]: enabled,
-  };
+/**
+ * What to store after setting `id`: only the flags set away from their default, so a default that
+ * later flips reaches every browser that did not override it. Rewrites an older, complete object.
+ */
+export function setFeatureFlagValue(
+  flags: StoredFeatureFlags | null | undefined,
+  id: FeatureFlagId,
+  enabled: boolean
+): StoredFeatureFlags {
+  const next = { ...normalizeFeatureFlags(flags), [id]: enabled };
+  return Object.fromEntries(
+    featureFlagDefinitions
+      .filter(definition => next[definition.id] !== definition.enabledByDefault)
+      .map(definition => [definition.id, next[definition.id]])
+  );
 }
 
-export const featureFlagsAtom = atomWithStorage<FeatureFlags>(featureFlagsStorageKey, defaultFeatureFlags, undefined, {
+export const featureFlagsAtom = atomWithStorage<StoredFeatureFlags>(featureFlagsStorageKey, {}, undefined, {
   getOnInit: true,
 });
 
@@ -212,7 +252,7 @@ export function useFeatureFlags() {
   const normalizedFlags = normalizeFeatureFlags(flags);
 
   const setFeatureFlag = (id: FeatureFlagId, enabled: boolean) => {
-    setFlags(currentFlags => setFeatureFlagValue(normalizeFeatureFlags(currentFlags), id, enabled));
+    setFlags(currentFlags => setFeatureFlagValue(currentFlags, id, enabled));
   };
 
   return {

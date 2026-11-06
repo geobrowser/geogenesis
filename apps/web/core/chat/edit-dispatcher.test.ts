@@ -50,7 +50,8 @@ const localStore = {
   // empty; tests stub per-case.
   getRelationsToEntity: vi.fn<(entityId: string, spaceId?: string, includeDeleted?: boolean) => Relation[]>(() => []),
 };
-vi.mock('~/core/sync/use-sync-engine', () => ({ store: localStore }));
+const localStream = { emit: vi.fn() };
+vi.mock('~/core/sync/use-sync-engine', () => ({ store: localStore, stream: localStream }));
 vi.mock('~/core/query-client', () => ({
   queryClient: {
     fetchQuery: vi.fn(({ queryFn }: { queryKey: unknown[]; queryFn: (ctx: { signal: unknown }) => Promise<unknown> }) =>
@@ -87,6 +88,9 @@ vi.mock('~/core/io/queries', () => ({
 
 const findOne = vi.fn<(args: { id: string; spaceId?: string }) => Promise<Entity | null>>();
 vi.mock('~/core/sync/orm', () => ({ E: { findOne } }));
+
+const moveEntity = vi.fn<(args: Record<string, unknown>) => Promise<boolean>>();
+vi.mock('~/partials/versions/move-entity', () => ({ moveEntity }));
 
 // Import AFTER the mocks are registered.
 const { applyIntent, useEditDispatcher } = await import('./edit-dispatcher');
@@ -145,6 +149,8 @@ beforeEach(() => {
   localStore.getResolvedRelations.mockReturnValue([]);
   localStore.getRelationsToEntity.mockReset();
   localStore.getRelationsToEntity.mockReturnValue([]);
+  moveEntity.mockReset();
+  moveEntity.mockResolvedValue(true);
 });
 
 describe('toggleEditMode', () => {
@@ -864,53 +870,55 @@ describe('moveEntityToSpace / cloneEntityToSpace', () => {
     expect(storage.relations.delete).not.toHaveBeenCalled();
   });
 
-  it('moveEntityToSpace clones AND tombstones source values + outgoing relations', async () => {
-    const value = makeValue({
-      id: 'v-1',
-      entity: { id: ENTITY, name: 'X' },
-      spaceId: SOURCE,
-    });
-    const outgoing = makeRelation({
-      id: 'r-out',
-      fromEntity: { id: ENTITY, name: null },
-      type: { id: 'some-type', name: null },
-      toEntity: { id: 'target-entity', name: null, value: 'target-entity' },
-      spaceId: SOURCE,
-    });
-    findOne.mockResolvedValue(makeEntity({ id: ENTITY, values: [value], relations: [outgoing] }));
-    localStore.getRelationsToEntity.mockReturnValue([]);
+  it('moveEntityToSpace runs the editor move with the shared storage, store and cache', async () => {
+    const { queryClient } = await import('~/core/query-client');
+    findOne.mockResolvedValue(makeEntity({ id: ENTITY, values: [], relations: [] }));
 
-    await applyIntent({ kind: 'moveEntityToSpace', entityId: ENTITY, spaceId: SOURCE, targetSpaceId: TARGET }, ctx);
+    const result = await applyIntent(
+      { kind: 'moveEntityToSpace', entityId: ENTITY, spaceId: SOURCE, targetSpaceId: TARGET },
+      ctx
+    );
 
-    // Cloned into target.
-    const valueSets = storage.values.set.mock.calls.map(c => c[0]);
-    expect(valueSets.some(v => v.spaceId === TARGET)).toBe(true);
-    // Source-side tombstoned.
-    expect(storage.values.delete).toHaveBeenCalledWith(value);
-    expect(storage.relations.delete).toHaveBeenCalledWith(outgoing);
+    expect(result).toEqual({ ok: true });
+    expect(moveEntity).toHaveBeenCalledTimes(1);
+    expect(moveEntity).toHaveBeenCalledWith({
+      entityId: ENTITY,
+      sourceSpaceId: SOURCE,
+      targetSpaceId: TARGET,
+      storage,
+      store: localStore,
+      cache: queryClient,
+      stream: localStream,
+    });
+    // The old chat-only cascade wrote here directly; the move now writes through `moveEntity` alone.
+    expect(storage.values.set).not.toHaveBeenCalled();
+    expect(storage.relations.set).not.toHaveBeenCalled();
+    expect(storage.values.delete).not.toHaveBeenCalled();
+    expect(storage.relations.delete).not.toHaveBeenCalled();
   });
 
-  it('moveEntityToSpace does not tombstone backlinks in OTHER spaces', async () => {
-    const otherSpaceBacklink = makeRelation({
-      id: 'r-other-space',
-      fromEntity: { id: 'unrelated', name: null },
-      type: { id: 'mentions', name: null },
-      toEntity: { id: ENTITY, name: null, value: ENTITY },
-      // Backlink lives in a different space than the move source.
-      spaceId: 'pppp3333pppp3333pppp3333pppp3333',
-    });
+  it('moveEntityToSpace fails when the move could not load what it needs', async () => {
     findOne.mockResolvedValue(makeEntity({ id: ENTITY, values: [], relations: [] }));
-    // Space-scoped lookup (the move uses scopeBacklinksToSpace = true) — we
-    // verify that ONLY relations matching the source space are returned to
-    // the cascade by mocking the 2-arg form.
-    localStore.getRelationsToEntity.mockImplementation((_id, scope) => {
-      if (scope === SOURCE) return [];
-      return [otherSpaceBacklink];
-    });
+    moveEntity.mockResolvedValue(false);
 
-    await applyIntent({ kind: 'moveEntityToSpace', entityId: ENTITY, spaceId: SOURCE, targetSpaceId: TARGET }, ctx);
+    const result = await applyIntent(
+      { kind: 'moveEntityToSpace', entityId: ENTITY, spaceId: SOURCE, targetSpaceId: TARGET },
+      ctx
+    );
 
-    expect(storage.relations.delete).not.toHaveBeenCalledWith(otherSpaceBacklink);
+    expect(result).toMatchObject({ ok: false, error: 'apply_failed' });
+  });
+
+  it('moveEntityToSpace fails without moving when the entity is not in the source space', async () => {
+    findOne.mockResolvedValue(null);
+
+    const result = await applyIntent(
+      { kind: 'moveEntityToSpace', entityId: ENTITY, spaceId: SOURCE, targetSpaceId: TARGET },
+      ctx
+    );
+
+    expect(result).toMatchObject({ ok: false, error: 'apply_failed' });
+    expect(moveEntity).not.toHaveBeenCalled();
   });
 });
 

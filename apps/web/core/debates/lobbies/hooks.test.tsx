@@ -42,6 +42,7 @@ const {
   useDebateLobbies,
   useDebateLobby,
   useDebateLobbyCalendar,
+  useFindCalendarLobby,
   useDebateLobbyDismissal,
   useDebateLobbyReminder,
   useEndDebateLobby,
@@ -914,7 +915,7 @@ it('drops the account’s lobbies once the viewer signs out, for the anonymous l
 
 // Copilot on #2863: a brand-new account is refused for a minute or two. The list waits that out
 // like the account's other reads, so the navbar and a queued reminder do not sit on a failed read.
-it('waits out a new account’s warm-up signed in, and reads once signed out', async () => {
+it('leaves a new account’s warm-up to the recovery refetch signed in, and reads once signed out', async () => {
   const warmingUp = new GeoChatSessionError(new GeoChatRequestError('Unauthorized', null, 401));
   api.listDebateLobbies.mockRejectedValueOnce(warmingUp).mockResolvedValueOnce({ lobbies: [] });
   const client = new QueryClient();
@@ -924,7 +925,11 @@ it('waits out a new account’s warm-up signed in, and reads once signed out', a
 
   try {
     const signedIn = renderHook(() => useDebateLobbies(), { wrapper });
-    await waitFor(() => expect(signedIn.result.current.isSuccess).toBe(true), { timeout: 3_000 });
+    await waitFor(() => expect(signedIn.result.current.isError).toBe(true));
+    expect(api.listDebateLobbies).toHaveBeenCalledTimes(1);
+    // What `useGeoChatAccountRecovery` does once the account is accepted.
+    await act(() => client.invalidateQueries({ queryKey: ['debates'] }));
+    await waitFor(() => expect(signedIn.result.current.isSuccess).toBe(true));
     expect(api.listDebateLobbies).toHaveBeenCalledTimes(2);
     signedIn.unmount();
 
@@ -1292,6 +1297,54 @@ it.each([
   } finally {
     api.listDebateLobbyCalendar.mockReset();
   }
+});
+
+// GEO-3586 Copilot: the last range is kept only for the same account. Signing in moved the key to the
+// account's week, and the signed-out rows were drawn as the account's (no RSVPs, hosting or dismissals).
+it('with keepPreviousRange, draws nothing from another account’s week while this one’s loads', async () => {
+  api.listDebateLobbyCalendar.mockResolvedValueOnce({ lobbies: [{ lobby_id: 'anon-row' }] });
+  api.listDebateLobbyCalendar.mockReturnValueOnce(new Promise(() => undefined));
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const wrapper = ({ children }: { children: React.ReactNode }) => (
+    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  );
+  const from = new Date(2026, 9, 28);
+  const to = new Date(2026, 10, 4);
+  try {
+    Object.assign(auth, { authenticated: false, accountKey: null });
+    const { result, rerender } = renderHook(
+      () => useDebateLobbyCalendar(from, to, true, { signedOut: true, keepPreviousRange: true }),
+      { wrapper }
+    );
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    Object.assign(auth, { authenticated: true, accountKey: 'acct' });
+    rerender();
+    await waitFor(() => expect(api.listDebateLobbyCalendar).toHaveBeenCalledTimes(2));
+    expect(result.current.data).toBeUndefined();
+  } finally {
+    Object.assign(auth, { authenticated: true, accountKey: 'acct' });
+    api.listDebateLobbyCalendar.mockReset();
+  }
+});
+
+// GEO-3586 Copilot: another account's week says a lobby exists and whether it is open, not whether
+// this account RSVP'd to it.
+it('finds a lobby in any account’s calendar week, this one’s first, and never takes another’s RSVP', () => {
+  const client = new QueryClient();
+  const wrapper = ({ children }: { children: React.ReactNode }) => (
+    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  );
+  const row = (lobby_id: string, viewer_reminded: boolean) => ({ lobby_id, open: false, viewer_reminded });
+  client.setQueryData(debateQueryKeys.lobbyCalendar('someone-else', 1, 2), {
+    lobbies: [row('both', true), row('theirs', true)],
+  });
+  client.setQueryData(debateQueryKeys.lobbyCalendar('acct', 1, 2), { lobbies: [row('both', true)] });
+
+  const { result } = renderHook(() => useFindCalendarLobby(), { wrapper });
+  expect(result.current('theirs')).toMatchObject({ lobby_id: 'theirs', viewer_reminded: false });
+  expect(result.current('both')).toMatchObject({ lobby_id: 'both', viewer_reminded: true });
+  expect(result.current('nowhere')).toBeUndefined();
 });
 
 // GEO-3517. The debate hours page reads the week signed out; the Calendar still waits for an account.

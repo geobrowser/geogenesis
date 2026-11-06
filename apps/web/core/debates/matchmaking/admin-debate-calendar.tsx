@@ -69,7 +69,7 @@ import {
 import { HubPillButton } from './hub-pill-button';
 import { HubQueryState } from './hub-states';
 import { formatTimeRange } from './scheduled-debate-format';
-import { useGeoChatUserSummaries } from './use-geo-chat-user-summaries';
+import { type GeoChatPersonRef, useGeoChatUserSummaries } from './use-geo-chat-user-summaries';
 
 /** Names, first names and zones for the debaters on the calendar, from one lookup each. */
 type Debaters = {
@@ -584,8 +584,8 @@ export function AdminDebatesDayList({
 }
 
 /** Names, first names and zones for a set of debaters, keyed by geo-chat user id. */
-export function useDebaters(userIds: string[], timezoneByUser: ReadonlyMap<string, string>): Debaters {
-  const summaries = useGeoChatUserSummaries(userIds, userIds.length > 0);
+export function useDebaters(people: GeoChatPersonRef[], timezoneByUser: ReadonlyMap<string, string>): Debaters {
+  const summaries = useGeoChatUserSummaries(people, people.length > 0);
   return React.useMemo(() => {
     const byUser = new Map(summaries.map(summary => [normId(summary.user_id), summary]));
     const nameOf = (userId: string) => byUser.get(normId(userId)) ?? null;
@@ -635,11 +635,8 @@ export function AdminDebatesBody({
   const visible = React.useMemo(() => thisWeek.filter(debate => shown.has(debate.state)), [shown, thisWeek]);
 
   const { timezoneByUser } = useAdminDebaters(true);
-  const userIds = React.useMemo(
-    () => [...new Set(all.flatMap(debate => debate.debaters.map(debater => debater.userId)))],
-    [all]
-  );
-  const debaters = useDebaters(userIds, timezoneByUser);
+  const people = React.useMemo(() => (admin.data?.matches ?? []).flatMap(match => match.participants), [admin.data]);
+  const debaters = useDebaters(people, timezoneByUser);
 
   const goToWeek = (next: number) => setWeekOffset(Math.max(0, Math.min(CALENDAR_WEEKS - 1, next)));
   const toggle = (state: MatchState) =>

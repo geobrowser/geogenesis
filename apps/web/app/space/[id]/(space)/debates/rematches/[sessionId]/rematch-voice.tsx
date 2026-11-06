@@ -29,6 +29,7 @@ import { AudioSettings, MobileSettingsSheet } from '~/core/debates/audio-setting
 import { useOpenDebaterProfile } from '~/core/debates/browse/use-open-debater-profile';
 import { cameraFailureMessage } from '~/core/debates/camera-failure';
 import { CameraIcon, MicrophoneIcon } from '~/core/debates/debate-room-controls';
+import { speakerLabel } from '~/core/debates/debater-name';
 import { DeviceOptionGroup } from '~/core/debates/device-option-group';
 import { debateQueryKeys, useGeoChatAuth, useRematchLiveKitJoin } from '~/core/debates/hooks';
 import { tokenAllowsCamera } from '~/core/debates/livekit-grant';
@@ -517,7 +518,7 @@ function SessionRematchVoiceHeader({
     devices.audioInputId || undefined
   );
 
-  const opponentName = opponent ? opponent.display_name || opponent.profile_space_id : '';
+  const opponentName = opponent ? speakerLabel(opponent) : '';
 
   // The opponent card opens their personal space rather than navigating to it: this picker is a
   // fixed layer over the app, and leaving it would drop the pair out of the session they are in.

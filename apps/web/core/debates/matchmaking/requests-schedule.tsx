@@ -70,7 +70,7 @@ import {
   historyTitle,
   historyWatchable,
   isSettledHistoryItem,
-  unnamedHistoryUserIds,
+  unnamedHistoryPeople,
   useDebateHistory,
   useRefreshHistoryWhenLiveEnds,
 } from './request-history';
@@ -86,6 +86,7 @@ import {
   type UpcomingRoomRow,
   WaitingInviteActions,
   adminArrangedNote,
+  notConfirmedUntil,
   readFailureMessages,
   roomStatusLabel,
   scheduledRequestRoles,
@@ -146,8 +147,8 @@ export function RequestsSchedule({ focusedRequestId = null }: { focusedRequestId
   const pastDebates = usePersonDebates(personalSpaceId ?? '', history.unavailable);
 
   // geo-chat names history's people itself; only anyone it could not name is looked up.
-  const historyUserIds = React.useMemo(() => unnamedHistoryUserIds(history.items), [history.items]);
-  const historyPeople = useGeoChatUserSummaries(historyUserIds, historyUserIds.length > 0);
+  const unnamedHistory = React.useMemo(() => unnamedHistoryPeople(history.items), [history.items]);
+  const historyPeople = useGeoChatUserSummaries(unnamedHistory, unnamedHistory.length > 0);
   const people = React.useMemo(() => [...scheduled.people, ...historyPeople], [historyPeople, scheduled.people]);
   // The roster only for the invites and booked debates that show who is online, as on the section:
   // history's people are named by geo-chat and the summaries above.
@@ -951,7 +952,18 @@ function InviteItem({
       focused={focused}
       time={formatTime(request.scheduled_start_at)}
       title={viewerAccepted && !proposedByViewer ? `Debate with ${name}` : `Invite to ${name}`}
-      sub={note ?? `Waiting on their answer · ${slot}`}
+      sub={
+        note ? (
+          // GEO-3589: the Geo team's note goes under the waiting line rather than in its place, which
+          // left an accepted match reading as booked.
+          <>
+            <span className="block font-medium text-text">{notConfirmedUntil(opponent)}</span>
+            <span className="block">{note}</span>
+          </>
+        ) : (
+          `Waiting on their answer · ${slot}`
+        )
+      }
       // Decided here rather than left to the actions, which draw nothing when the invite can't be
       // taken back: handed that, the row still kept a gap for them.
       actions={
