@@ -65,10 +65,11 @@ function ScheduleEditorWithCalendar({ providers, ...props }: Props & { providers
       calendarSection={
         disabled
           ? undefined
-          : ({ unsavedChanges }) => (
+          : ({ unsavedChanges, saveDraft }) => (
               <CalendarSection
                 providers={providers}
                 unsavedChanges={unsavedChanges}
+                saveDraft={saveDraft}
                 returned={props.calendarReturn ?? null}
               />
             )
@@ -105,6 +106,8 @@ function ScheduleEditor({
         saveSchedule.mutate(nextBlocks);
         onSaved?.(nextBlocks);
       }}
+      // Not `onSaved`: the editor stays open, and the page is about to leave for the provider.
+      onSaveDraft={nextBlocks => saveSchedule.mutateAsync(nextBlocks)}
       openerRef={openerRef}
       headerAction={<CopyOwnAvailabilityLinkButton />}
       calendarSection={calendarSection}
