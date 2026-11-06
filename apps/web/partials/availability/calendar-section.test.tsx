@@ -56,10 +56,18 @@ const chip = (name: 'Google Calendar' | 'Outlook Calendar') =>
 
 const openMenu = async (name: 'Google Calendar' | 'Outlook Calendar') => {
   await userEvent.click(chip(name));
-  return screen.findByRole('dialog', { name });
+  return screen.findByRole('dialog');
 };
 
+// The menu's placement hook observes the trigger, and JSDOM has no ResizeObserver.
+class ResizeObserverStub {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+
 beforeEach(() => {
+  window.ResizeObserver = ResizeObserverStub as unknown as typeof ResizeObserver;
   mocks.connections = {
     google: null,
     microsoft: null,

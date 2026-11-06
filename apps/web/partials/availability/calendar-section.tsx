@@ -1,12 +1,11 @@
 'use client';
 
-import { Anchor, Content, Root, Trigger } from '@radix-ui/react-popover';
-
 import * as React from 'react';
 
 import cx from 'classnames';
 
 import type { CalendarConnectSource } from '~/core/availability/calendar-analytics';
+import { SCHEDULE_SAVE_FAILED_COPY } from '~/core/availability/schedule-save-copy';
 import type { CalendarConnection, CalendarProvider } from '~/core/debates/api';
 import {
   isCalendarSyncing,
@@ -18,6 +17,7 @@ import {
 
 import { CheckCircleSmall } from '~/design-system/icons/check-circle-small';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
+import { Menu, MenuItem } from '~/design-system/menu';
 import { Text } from '~/design-system/text';
 
 import {
@@ -37,11 +37,6 @@ const SECONDARY_BUTTON =
   'rounded-full border border-grey-02 px-3 py-1 text-metadata text-grey-04 transition-colors hover:text-text disabled:pointer-events-none disabled:opacity-40';
 const TEXT_BUTTON = 'rounded-full px-3 py-1 text-metadata text-grey-04 transition-colors hover:text-text';
 const CHIP = 'inline-flex shrink-0 items-center rounded-full border text-metadata';
-const MENU_ITEM =
-  'block w-full px-3 py-1.5 text-left text-metadata text-text transition-colors hover:bg-grey-01 disabled:pointer-events-none disabled:opacity-40';
-
-/** The save hook's own wording, for the save a connect runs first. */
-const SAVE_FAILED = 'We couldn’t save your availability. Please try again.';
 const STALE = 'Calendar hasn’t synced recently, so busy times aren’t being taken out of your availability.';
 
 /**
@@ -93,11 +88,9 @@ export function CalendarSection({
   // the connection itself.
   const lines = shown.flatMap(provider => {
     const connection = connections[provider];
-    const requestError = connect.errorFor(provider) ?? (refresh[provider].isError ? refresh[provider].error : null);
-    if (requestError) {
-      const text = requestError === SAVE_BEFORE_CONNECT_FAILED ? SAVE_FAILED : requestErrorCopy(requestError);
-      return [{ provider, text, alert: true }];
-    }
+    const requestLine =
+      connect.errorLine(provider) ?? (refresh[provider].isError ? requestErrorCopy(refresh[provider].error) : null);
+    if (requestLine) return [{ provider, text: requestLine, alert: true }];
     const problem = connection ? connectionProblem(provider, connection) : null;
     return problem ? [{ provider, text: problem, alert: false }] : [];
   });
@@ -172,9 +165,6 @@ function connectionProblem(provider: CalendarProvider, connection: CalendarConne
   return null;
 }
 
-/** Stands in for the error of a connect whose save, run first, failed. */
-const SAVE_BEFORE_CONNECT_FAILED = new Error('save_before_connect_failed');
-
 type Connect = ReturnType<typeof useConnect>;
 
 /**
@@ -218,9 +208,10 @@ function useConnect({ unsavedChanges, saveDraft }: { unsavedChanges: boolean; sa
     /** Nothing can be started: one is under way, or there are edits with no way to save them. */
     blocked: pending || (unsavedChanges && !saveDraft),
     pendingProvider: saving ?? (leaving ? connect.variables?.provider : undefined),
-    errorFor: (provider: CalendarProvider): unknown => {
-      if (saveFailed === provider) return SAVE_BEFORE_CONNECT_FAILED;
-      return connect.isError && connect.variables?.provider === provider ? connect.error : null;
+    /** Why the last connect of `provider` went nowhere, as the line to show, or null. */
+    errorLine: (provider: CalendarProvider) => {
+      if (saveFailed === provider) return SCHEDULE_SAVE_FAILED_COPY;
+      return connect.isError && connect.variables?.provider === provider ? requestErrorCopy(connect.error) : null;
     },
   };
 }
@@ -248,65 +239,41 @@ function ConnectedChip({
   const name = calendarName(provider);
 
   return (
-    <Root
-      open={open}
-      onOpenChange={next => {
-        setOpen(next);
-        if (!next) setConfirmingDisconnect(false);
-      }}
+    <div
+      data-calendar-provider={provider}
+      data-calendar-status={connection.status}
+      className={cx(
+        CHIP,
+        needsReconnect ? 'border-red-03 bg-red-02' : open ? 'border-text bg-white' : 'border-grey-02 bg-white'
+      )}
     >
-      <Anchor asChild>
-        <div
-          data-calendar-provider={provider}
-          data-calendar-status={connection.status}
-          className={cx(
-            CHIP,
-            needsReconnect ? 'border-red-03 bg-red-02' : open ? 'border-text bg-white' : 'border-grey-02 bg-white'
-          )}
-        >
-          <Trigger asChild>
-            <button type="button" className="flex min-w-0 items-center gap-2 rounded-full py-1 pr-2.5 pl-1.5 text-text">
-              <CalendarProviderLogo provider={provider} />
-              <span className="sr-only">{name}</span>
-              <span className="max-w-[16rem] truncate">{connection.account_email ?? name}</span>
-              {connection.status === 'ok' ? null : (
-                <span aria-hidden className="block size-1.5 shrink-0 rounded-full bg-red-01" />
-              )}
-              {justConnected ? (
-                <span className="shrink-0 text-[#1f9e78]" role="img" aria-label="Connected">
-                  <CheckCircleSmall />
-                </span>
-              ) : null}
-              <span aria-hidden className="shrink-0 text-grey-04">
-                <ChevronDownSmall />
-              </span>
-            </button>
-          </Trigger>
-          {/* Sync does nothing while access is gone, so Reconnect sits on the chip itself. */}
-          {needsReconnect ? (
-            <button
-              type="button"
-              onClick={() => connect.start(provider, 'reconnect')}
-              disabled={connect.blocked}
-              className="mr-1 shrink-0 rounded-full bg-[#151515] px-2.5 py-0.5 text-smallButton text-white transition-opacity hover:opacity-90 disabled:pointer-events-none disabled:opacity-40"
-            >
-              {connect.pendingProvider === provider
-                ? `Opening ${signInName(provider)}…`
-                : needsOtherAccount
-                  ? 'Use another account'
-                  : 'Reconnect'}
-            </button>
-          ) : null}
-        </div>
-      </Anchor>
-
-      {/* Not portalled: inside the dialog's own layer and focus trap, so Escape closes this first. */}
-      <Content
+      <Menu
+        open={open}
+        onOpenChange={next => {
+          setOpen(next);
+          if (!next) setConfirmingDisconnect(false);
+        }}
+        asChild
         align="start"
-        sideOffset={6}
-        collisionPadding={16}
-        aria-label={name}
-        className="z-50 w-[min(20rem,calc(100vw-2rem))] rounded-lg border border-grey-02 bg-white shadow-lg focus:outline-hidden"
+        className="w-[320px]! max-w-[calc(100vw-2rem)]"
+        trigger={
+          <button type="button" className="flex min-w-0 items-center gap-2 rounded-full py-1 pr-2.5 pl-1.5 text-text">
+            <CalendarProviderLogo provider={provider} />
+            <span className="sr-only">{name}</span>
+            <span className="max-w-[16rem] truncate">{connection.account_email ?? name}</span>
+            {connection.status === 'ok' ? null : (
+              <span aria-hidden className="block size-1.5 shrink-0 rounded-full bg-red-01" />
+            )}
+            {justConnected ? (
+              <span className="shrink-0 text-[#1f9e78]" role="img" aria-label="Connected">
+                <CheckCircleSmall />
+              </span>
+            ) : null}
+            <span aria-hidden className="shrink-0 text-grey-04">
+              <ChevronDownSmall />
+            </span>
+          </button>
+        }
       >
         {confirmingDisconnect ? (
           <div className="flex flex-col gap-2 p-3">
@@ -340,32 +307,40 @@ function ConnectedChip({
             </div>
           </div>
         ) : (
-          <div className="py-1.5">
-            <Text as="p" variant="footnote" color="grey-04" className="border-b border-divider px-3 pt-1.5 pb-2">
+          <>
+            <Text as="p" variant="footnote" color="grey-04" className="border-b border-divider px-3 py-2.5">
               {isCalendarSyncing(connection) ? 'Syncing…' : syncedAgo(connection.last_success_at)}
             </Text>
-            <div className="pt-1">
-              {needsReconnect ? null : (
-                <button
-                  type="button"
-                  onClick={() => {
-                    refresh.mutate();
-                    setOpen(false);
-                  }}
-                  disabled={refresh.isPending}
-                  className={MENU_ITEM}
-                >
-                  {refresh.isPending ? 'Syncing…' : 'Sync now'}
-                </button>
-              )}
-              <button type="button" onClick={() => setConfirmingDisconnect(true)} className={MENU_ITEM}>
-                Disconnect
-              </button>
-            </div>
-          </div>
+            {/* Sync does nothing while access is gone; Reconnect on the chip takes its place. */}
+            {needsReconnect ? null : (
+              <MenuItem
+                onClick={() => {
+                  refresh.mutate();
+                  setOpen(false);
+                }}
+              >
+                {refresh.isPending ? 'Syncing…' : 'Sync now'}
+              </MenuItem>
+            )}
+            <MenuItem onClick={() => setConfirmingDisconnect(true)}>Disconnect</MenuItem>
+          </>
         )}
-      </Content>
-    </Root>
+      </Menu>
+      {needsReconnect ? (
+        <button
+          type="button"
+          onClick={() => connect.start(provider, 'reconnect')}
+          disabled={connect.blocked}
+          className="mr-1 shrink-0 rounded-full bg-[#151515] px-2.5 py-0.5 text-smallButton text-white transition-opacity hover:opacity-90 disabled:pointer-events-none disabled:opacity-40"
+        >
+          {connect.pendingProvider === provider
+            ? `Opening ${signInName(provider)}…`
+            : needsOtherAccount
+              ? 'Use another account'
+              : 'Reconnect'}
+        </button>
+      ) : null}
+    </div>
   );
 }
 

@@ -18,6 +18,7 @@ import type { AvailabilityBlock } from '~/core/availability/blocks';
 import { fromPayload, localTimezone, toPayload } from '~/core/availability/blocks';
 import { PEER_SCHEDULE_DAYS, toPeerSchedule } from '~/core/availability/peer-schedule';
 import { type ScheduleEditorSurface, debateScheduleSaved } from '~/core/availability/schedule-analytics';
+import { SCHEDULE_SAVE_FAILED_COPY } from '~/core/availability/schedule-save-copy';
 import { useObservedMutation } from '~/core/hooks/use-observed-mutation';
 import { useSetToast } from '~/core/hooks/use-toast';
 import { validateSpaceId } from '~/core/io/rest/validation';
@@ -732,7 +733,7 @@ export function useSaveDebateSchedule({ surface }: { surface: ScheduleEditorSurf
     onError: (error, _blocks, isCurrent) => {
       if (error instanceof ScheduleSaveAbandonedError || isCurrent?.() === false) return;
       if (!isLiveGeoChatAccount(accountKey)) return;
-      setToast(React.createElement('span', null, 'We couldn’t save your availability. Please try again.'));
+      setToast(React.createElement('span', null, SCHEDULE_SAVE_FAILED_COPY));
     },
     // Taken at Save: the answer can arrive after a sign-out or account switch, and it is not the
     // next account's schedule.
