@@ -171,6 +171,15 @@ describe('CalendarSection with Google alone', () => {
     expect(within(menu).queryByText('Not synced yet')).not.toBeInTheDocument();
   });
 
+  it('does not offer Sync now while the first sync is running', async () => {
+    mocks.connections.google = connection({ stale: true, last_success_at: null });
+    render(<CalendarSection providers={['google']} />);
+
+    const menu = await openMenu('Google Calendar');
+    expect(within(menu).queryByRole('button', { name: 'Sync now' })).not.toBeInTheDocument();
+    expect(within(menu).getByRole('button', { name: 'Disconnect' })).toBeInTheDocument();
+  });
+
   it('says a failed first sync was never synced, in one line under the chip', async () => {
     mocks.connections.google = connection({
       status: 'error',
@@ -458,6 +467,18 @@ describe('CalendarSection with Outlook', () => {
     expect(screen.getByRole('status')).toHaveTextContent(
       'Calendar connections aren’t available right now. Try again later.'
     );
+  });
+
+  it('shows a failed return in place of the connection’s own problem, as its one line', () => {
+    mocks.connections.google = connection({ status: 'needs_reconnect', last_error: 'invalid_grant' });
+    const { container } = render(
+      <CalendarSection providers={['google']} returned={{ provider: 'google', outcome: 'error', reason: 'denied' }} />
+    );
+
+    const lines = container.querySelectorAll('[data-calendar-line]');
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toHaveTextContent('Google Calendar wasn’t connected.');
+    expect(screen.getAllByRole('status')).toHaveLength(1);
   });
 
   it('explains the admin approval a work account needs', () => {

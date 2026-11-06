@@ -84,15 +84,18 @@ export function CalendarSection({
   if (shown.length === 0) return null;
   const anyUnconnected = shown.some(provider => !connections[provider]);
 
-  // One line per calendar at most: what just went wrong with a request, else what is wrong with
-  // the connection itself.
-  const lines = shown.flatMap(provider => {
+  // One line per calendar at most: what just went wrong with a request, else how coming back from
+  // the provider went wrong, else what is wrong with the connection itself.
+  const lines = shown.flatMap((provider): CalendarLine[] => {
     const connection = connections[provider];
     const requestLine =
       connect.errorLine(provider) ?? (refresh[provider].isError ? requestErrorCopy(refresh[provider].error) : null);
-    if (requestLine) return [{ provider, text: requestLine, alert: true }];
+    if (requestLine) return [{ provider, text: requestLine, role: 'alert' }];
+    if (returned?.outcome === 'error' && returned.provider === provider) {
+      return [{ provider, text: calendarReturnCopy(provider, 'error', returned.reason), role: 'status' }];
+    }
     const problem = connection ? connectionProblem(provider, connection) : null;
-    return problem ? [{ provider, text: problem, alert: false }] : [];
+    return problem ? [{ provider, text: problem }] : [];
   });
 
   return (
@@ -141,7 +144,7 @@ export function CalendarSection({
       {lines.map(line => (
         <p
           key={line.provider}
-          role={line.alert ? 'alert' : undefined}
+          role={line.role}
           data-calendar-line={line.provider}
           className="px-1 text-footnote text-red-01"
         >
@@ -149,14 +152,16 @@ export function CalendarSection({
         </p>
       ))}
 
-      {returned ? (
-        <p role="status" className={cx('px-1 text-footnote', returned.outcome === 'error' && 'text-red-01')}>
-          {calendarReturnCopy(returned.provider, returned.outcome, returned.reason)}
+      {returned?.outcome === 'connected' ? (
+        <p role="status" className="px-1 text-footnote">
+          {calendarReturnCopy(returned.provider, 'connected', null)}
         </p>
       ) : null}
     </section>
   );
 }
+
+type CalendarLine = { provider: CalendarProvider; text: string; role?: 'alert' | 'status' };
 
 /** What the line under the row says about a connection, or nothing while it is fine. */
 function connectionProblem(provider: CalendarProvider, connection: CalendarConnection) {
@@ -235,6 +240,7 @@ function ConnectedChip({
   const [confirmingDisconnect, setConfirmingDisconnect] = React.useState(false);
   const view = useFocusOnViewSwitch(confirmingDisconnect);
   const needsReconnect = connection.status === 'needs_reconnect';
+  const syncing = refresh.isPending || isCalendarSyncing(connection);
   // Reconnecting the same account would fail the same way.
   const needsOtherAccount = connection.last_error === 'mailbox_unavailable';
   const name = calendarName(provider);
@@ -310,11 +316,11 @@ function ConnectedChip({
         ) : (
           <div ref={view}>
             <Text as="p" variant="footnote" color="grey-04" className="border-b border-divider px-3 py-2.5">
-              {refresh.isPending || isCalendarSyncing(connection) ? 'Syncing…' : syncedAgo(connection.last_success_at)}
+              {syncing ? 'Syncing…' : syncedAgo(connection.last_success_at)}
             </Text>
             {/* Sync does nothing while access is gone, where Reconnect on the chip takes its place,
-                and is not offered again while one is running. */}
-            {needsReconnect || refresh.isPending ? null : (
+                and is not offered while one is running, a first sync included. */}
+            {needsReconnect || syncing ? null : (
               <MenuItem
                 onClick={() => {
                   refresh.mutate();
