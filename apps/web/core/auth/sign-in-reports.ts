@@ -34,7 +34,25 @@ function stringProperty(attempt: AuthAttempt, key: string) {
   return typeof value === 'string' && value ? value : 'unknown';
 }
 
-function send(name: ReportName, attempt: AuthAttempt, level: 'warning' | 'error', extra: Record<string, unknown>) {
+/** Last time this page was hidden; -Infinity if never. Kept up by `onVisibilityChange`. */
+let lastHiddenAt = Number.NEGATIVE_INFINITY;
+
+/**
+ * The page was hidden at some point since `attempt` began. A background tab throttles timers and
+ * loading, so a timeout there says nothing about sign-in.
+ */
+function hiddenDuring(attempt: AuthAttempt) {
+  return document.visibilityState === 'hidden' || lastHiddenAt >= attempt.startedAt;
+}
+
+function send(
+  name: ReportName,
+  attempt: AuthAttempt,
+  level: 'warning' | 'error',
+  extra: Record<string, unknown>,
+  { evenIfHidden = false } = {}
+) {
+  if (!evenIfHidden && hiddenDuring(attempt)) return;
   const sent = reported.get(attempt.id) ?? new Set<ReportName>();
   if (sent.has(name)) return;
   sent.add(name);
@@ -67,11 +85,14 @@ function errorSummary(error: unknown) {
 export function reportSignInLoadFailed(reason: SignInLoadFailure, details: { call?: string; error?: unknown } = {}) {
   const attempt = openAttempt();
   if (!attempt) return;
-  send('sign_in_load_failed', attempt, 'error', {
-    reason,
-    ...(details.call ? { call: details.call } : {}),
-    ...errorSummary(details.error),
-  });
+  send(
+    'sign_in_load_failed',
+    attempt,
+    'error',
+    { reason, ...(details.call ? { call: details.call } : {}), ...errorSummary(details.error) },
+    // A failed import is real in a background tab too; the timeouts are not.
+    { evenIfHidden: reason === 'chunk_load' }
+  );
 }
 
 /**
@@ -81,7 +102,6 @@ export function reportSignInLoadFailed(reason: SignInLoadFailure, details: { cal
 export function watchCodeSend(attemptId: string | undefined): () => void {
   if (typeof window === 'undefined' || !attemptId) return () => {};
   const timer = setTimeout(() => {
-    if (document.visibilityState === 'hidden') return;
     const attempt = openAttempt(attemptId);
     if (attempt) send('sign_in_code_send_timeout', attempt, 'warning', { timeout_ms: CODE_SEND_TIMEOUT_MS });
   }, CODE_SEND_TIMEOUT_MS);
@@ -121,10 +141,13 @@ function onAttemptsChanged() {
   arm(attempt);
 }
 
-/** A background tab throttles rendering and timers, so nothing it does late is reported. */
+let pageHidden = false;
+
+/** Records the moments the page was hidden: going hidden, and coming back from it. */
 function onVisibilityChange() {
-  if (document.visibilityState !== 'hidden') return;
-  for (const id of [...watched.keys()]) disarm(id);
+  const hidden = document.visibilityState === 'hidden';
+  if (hidden || pageHidden) lastHiddenAt = Date.now();
+  pageHidden = hidden;
 }
 
 let installed = false;
@@ -133,6 +156,7 @@ let installed = false;
 export function installSignInReports() {
   if (installed || typeof window === 'undefined') return;
   installed = true;
+  pageHidden = document.visibilityState === 'hidden';
   subscribeAuthAttempts(onAttemptsChanged);
   document.addEventListener('visibilitychange', onVisibilityChange);
 }
@@ -141,4 +165,6 @@ export function installSignInReports() {
 export function resetSignInReports() {
   for (const id of [...watched.keys()]) disarm(id);
   reported.clear();
+  lastHiddenAt = Number.NEGATIVE_INFINITY;
+  pageHidden = typeof document !== 'undefined' && document.visibilityState === 'hidden';
 }

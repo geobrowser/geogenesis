@@ -33,6 +33,10 @@ open: Privy loading in the background for a visitor who never asked to sign in i
 watchdogs hang off the existing attempt lifecycle (`subscribeAuthAttempts` in `core/auth-attempt.ts`),
 installed by `auth-root.tsx`.
 
+A background tab throttles timers and loading, so no timeout (`never_ready`, `call_timeout`, the
+prompt and code-send timeouts) is reported for an attempt whose page was hidden at any point since it
+began, including a link opened in a background tab. `chunk_load` is reported regardless.
+
 Shared tags, low cardinality only: `sign_in_surface` (box / save_votes / email_capture / privy_modal
 / unknown), `component`, `auth_trigger`, `link_source`, `privy_loaded`, `privy_requested`,
 `privy_host_failed`. The attempt id, elapsed time and error go in `extra`.
@@ -48,8 +52,7 @@ Shared tags, low cardinality only: `sign_in_surface` (box / save_votes / email_c
 
 **b. Prompt never appeared** (`sign_in_prompt_timeout`, level warning). An attempt begun with no box
 or dialog opened (`openAuthAttempt`, which also sends `auth_prompt_viewed`) after 8 s. A superseded
-or finished attempt is not reported. Visitors who leave send nothing: the timer dies with the tab,
-and all watchdogs are disarmed when the page goes hidden (a background tab throttles rendering).
+or finished attempt is not reported. Visitors who leave send nothing: the timer dies with the tab.
 
 **c. Code send never settled** (`sign_in_code_send_timeout`, level warning). In the account step's
 `requestCode`, a send that has neither resolved nor rejected after 30 s. A send that rejects because

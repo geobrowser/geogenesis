@@ -46,8 +46,9 @@ beforeEach(() => {
   sessionStorage.clear();
   resetAuthStore();
   resetAuthAttempt();
-  resetSignInReports();
+  // Visible first: coming back from a previous test's hidden page counts as hidden.
   setVisibility('visible');
+  resetSignInReports();
 });
 
 afterEach(() => {
@@ -79,13 +80,6 @@ describe('sign_in_prompt_timeout', () => {
     vi.advanceTimersByTime(PROMPT_TIMEOUT_MS);
     beginAuthAttempt({ component: 'navbar' });
     finishAuthAttempt('closed');
-    vi.advanceTimersByTime(PRIVY_READY_TIMEOUT_MS);
-    expect(names()).toEqual([]);
-  });
-
-  it('stays quiet for a tab hidden before the deadline', () => {
-    beginAuthAttempt({ component: 'navbar' });
-    setVisibility('hidden');
     vi.advanceTimersByTime(PRIVY_READY_TIMEOUT_MS);
     expect(names()).toEqual([]);
   });
@@ -175,5 +169,51 @@ describe('sign_in_code_send_timeout', () => {
     finishAuthAttempt('closed');
     vi.advanceTimersByTime(CODE_SEND_TIMEOUT_MS);
     expect(names()).toEqual([]);
+  });
+});
+
+describe('a page hidden during the attempt', () => {
+  it('reports no timeout for an attempt begun in a background tab, made visible after the timeouts', () => {
+    setVisibility('hidden');
+    const attempt = beginAuthAttempt({ component: 'sign_in_deep_link', link_source: 'marketing' });
+    watchCodeSend(attempt.id);
+    vi.advanceTimersByTime(CODE_SEND_TIMEOUT_MS);
+    setVisibility('visible');
+    reportSignInLoadFailed('call_timeout', { call: 'login' });
+    vi.advanceTimersByTime(CODE_SEND_TIMEOUT_MS);
+    expect(names()).toEqual([]);
+  });
+
+  it('reports no timeout for an attempt whose tab was hidden for a moment mid-way', () => {
+    const attempt = beginAuthAttempt({ component: 'navbar' });
+    watchCodeSend(attempt.id);
+    vi.advanceTimersByTime(1_000);
+    setVisibility('hidden');
+    vi.advanceTimersByTime(1_000);
+    setVisibility('visible');
+    vi.advanceTimersByTime(CODE_SEND_TIMEOUT_MS);
+    reportSignInLoadFailed('call_timeout', { call: 'send_code' });
+    expect(names()).toEqual([]);
+  });
+
+  it('still reports a Privy chunk that failed to load', () => {
+    setVisibility('hidden');
+    beginAuthAttempt({ component: 'navbar' });
+    reportSignInLoadFailed('chunk_load');
+    expect(mocks.reports).toEqual([
+      expect.objectContaining({
+        name: 'sign_in_load_failed',
+        extra: expect.objectContaining({ reason: 'chunk_load' }),
+      }),
+    ]);
+  });
+
+  it('reports the next attempt begun after the page came back', () => {
+    setVisibility('hidden');
+    setVisibility('visible');
+    vi.advanceTimersByTime(1);
+    beginAuthAttempt({ component: 'navbar' });
+    vi.advanceTimersByTime(PRIVY_READY_TIMEOUT_MS);
+    expect(names()).toEqual(['sign_in_prompt_timeout', 'sign_in_load_failed']);
   });
 });
