@@ -50,6 +50,7 @@ import { Avatar } from '~/design-system/avatar';
 import { RetrySmall } from '~/design-system/icons/retry-small';
 import { Text } from '~/design-system/text';
 
+import { CombinedDebatePlayer } from './combined-debate-player';
 import { DebateBreakOverlay, DebateEarlyEndLabels, useBreakCuts } from './debate-break-cues';
 import { DebateClaimCounter } from './debate-claim-counter';
 import { ClaimScrubberMarkers, DebateClaimTickerStack, useDebateClaimTicker } from './debate-claim-ticker';
@@ -57,6 +58,7 @@ import { DebateEndCard } from './debate-end-card';
 import { DebateRoundBadge, DebateRoundBanner, DebateRoundCard } from './debate-round-cues';
 import { type DebatePreviewClips, debatePreviewClips, feedFullPlaybackStartedAtom } from './feed-full-playback';
 import { FeedVideo } from './feed-video';
+import { useInlinePlaybackUnavailable } from './inline-playback';
 import { Pause, Play, Speaker, SpeakerMuted } from './icons';
 import { PLAYER_EXIT_MS, PLAYER_FURNITURE_OPACITY } from './player-overlay-styles';
 import { useAnnouncementFocus } from './use-announcement-focus';
@@ -174,7 +176,26 @@ type DebateFeedPlayerProps = {
 /** The longest `activateBothInGesture` holds pause ticks while its re-plays settle. */
 const ACTIVATION_HOLD_MAX_MS = 1_500;
 
-export function DebateFeedPlayer({
+/**
+ * Both debaters side by side, or the combined debate video where this page cannot play video
+ * inline (see `inline-playback.ts`).
+ */
+export function DebateFeedPlayer(props: DebateFeedPlayerProps) {
+  const inlineUnavailable = useInlinePlaybackUnavailable();
+  if (inlineUnavailable) {
+    return (
+      <CombinedDebatePlayer
+        debate={props.debate}
+        framed={props.framed}
+        reducedOverlays={props.reducedOverlays}
+        stills={props.stills}
+      />
+    );
+  }
+  return <PairedDebateFeedPlayer {...props} />;
+}
+
+function PairedDebateFeedPlayer({
   debate,
   active,
   preload = false,
