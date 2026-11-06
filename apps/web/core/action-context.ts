@@ -28,6 +28,7 @@ export const ACTION_COMPONENTS = [
   'create_space',
   'explore_feed_card',
   'debate_player',
+  'debate_combined_player',
   'debate_claim_ticker',
   'debate_end_card',
   'debate_claims_panel',

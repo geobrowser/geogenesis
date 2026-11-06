@@ -42,6 +42,8 @@ vi.mock('~/core/sdk/geo-client', () => ({ uploadGeoImage: vi.fn() }));
 vi.mock('~/core/wallet/auth-hooks', () => ({ useLogout: () => ({ logout: vi.fn() }) }));
 vi.mock('~/core/analytics', () => ({ capture: vi.fn() }));
 vi.mock('~/core/auth-attempt', () => ({ trackAuthOnboarding: vi.fn() }));
+// The assistant is temporarily switched off app-wide; these tests cover its onboarding hand-off.
+vi.mock('~/partials/chat/assistant-visibility', () => ({ ASSISTANT_DISABLED: false }));
 
 function match(): SearchResult {
   return {

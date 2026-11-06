@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import pluralize from 'pluralize';
 
+import { useLeaveSpace } from '~/core/hooks/use-leave-space';
 import { type ActiveMemberRequest } from '~/core/io/subgraph/fetch-proposed-members';
 import { type SpaceParticipantsPage } from '~/core/space-members/fetch-space-participants-page';
 import {
@@ -35,6 +36,7 @@ export function SpaceMembersContent({
   memberRequest,
   initialParticipantsPage,
 }: Props) {
+  const { leaveSpace, status: leaveStatus } = useLeaveSpace(spaceId, isMember);
   const { participants, totalCount, isLoading, isFetchingNextPage, hasNextPage, fetchNextPage } =
     useSpaceParticipantsInfinite({
       spaceId,
@@ -66,8 +68,14 @@ export function SpaceMembersContent({
         {isPublicSpace && (
           <>
             {isMember ? (
-              <button className="text-smallButton text-grey-04 transition-colors duration-75 hover:text-text">
-                Leave space
+              <button
+                type="button"
+                onClick={() => leaveSpace()}
+                disabled={leaveStatus === 'pending' || leaveStatus === 'success'}
+                aria-busy={leaveStatus === 'pending'}
+                className="text-smallButton text-grey-04 transition-colors duration-75 hover:text-text disabled:cursor-default"
+              >
+                {leaveStatus === 'pending' ? 'Leaving…' : leaveStatus === 'success' ? 'Left space' : 'Leave space'}
               </button>
             ) : isEditor ? null : (
               <SpaceMembersPopoverMemberRequestButton

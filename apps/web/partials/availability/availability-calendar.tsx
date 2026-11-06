@@ -54,8 +54,21 @@ const KIND_COLORS: Record<BlockKind, string> = {
   exception: '#FFA998',
 };
 
-/** Hatching for busy time from the viewer's calendar: not a block kind, and not draggable. */
-const BUSY_PATTERN = 'repeating-linear-gradient(135deg, rgba(21, 21, 21, 0.1) 0 4px, transparent 4px 8px)';
+/**
+ * Hatching for busy time from the viewer's calendar: not a block kind, and not draggable. The light
+ * stripes wash out a block's colour under it, so a cut-out block reads as cut out.
+ */
+const BUSY_PATTERN =
+  'repeating-linear-gradient(135deg, rgba(21, 21, 21, 0.16) 0 4px, rgba(255, 255, 255, 0.35) 4px 8px)';
+
+/**
+ * Above every block (stacked at `depth + 1`) and below the grid's sticky hour column (z-20) and day
+ * headings (z-30), which busy time must scroll under like everything else.
+ */
+const BUSY_Z_INDEX = 19;
+
+/** Shorter busy time has no room for a label beside a block's own. */
+const BUSY_LABEL_MIN_MINUTES = 60;
 
 const minutesToTop = (minutes: number) => ((minutes - DAY_START_HOUR * 60) / SLOT_MINUTES) * SLOT_PX;
 
@@ -464,23 +477,34 @@ export function AvailabilityCalendar({
                   <div key={hour} className="border-b border-grey-02/60" style={{ height: SLOT_PX * ROWS_PER_HOUR }} />
                 ))}
 
-                {/* Under the blocks and out of the pointer's way: a drag over busy time still draws. */}
+                {columns[weekday]?.map(({ block, depth }) => (
+                  <Block key={block.id} block={block} depth={depth} onDelete={() => removeBlock(block.id)} />
+                ))}
+
+                {/* Over the blocks, so the hours a calendar takes out of a block show on the block
+                    itself (GEO-3595), and out of the pointer's way: a drag, a resize or a delete
+                    over busy time still reaches what is under it. */}
                 {busyColumns?.[weekday]?.map(segment => (
                   <div
                     key={`${segment.start}-${segment.end}`}
                     aria-hidden
                     data-busy
-                    className="pointer-events-none absolute inset-x-0"
+                    className="pointer-events-none absolute inset-x-0 border-y border-[#151515]/20"
                     style={{
                       top: minutesToTop(segment.start),
                       height: ((segment.end - segment.start) / SLOT_MINUTES) * SLOT_PX,
                       backgroundImage: BUSY_PATTERN,
+                      zIndex: BUSY_Z_INDEX,
                     }}
-                  />
-                ))}
-
-                {columns[weekday]?.map(({ block, depth }) => (
-                  <Block key={block.id} block={block} depth={depth} onDelete={() => removeBlock(block.id)} />
+                  >
+                    {/* Bottom right: a block's own time label and × sit along its top, and busy time
+                        starting with the block would print over them. */}
+                    {segment.end - segment.start >= BUSY_LABEL_MIN_MINUTES && (
+                      <span className="absolute right-1 bottom-0.5 rounded-sm bg-white/85 px-1 text-footnoteMedium text-grey-05">
+                        Busy
+                      </span>
+                    )}
+                  </div>
                 ))}
 
                 {drag?.type === 'create' && drag.weekday === weekday && <Ghost drag={drag} mode={mode} />}

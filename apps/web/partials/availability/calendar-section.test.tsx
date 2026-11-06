@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -50,7 +50,24 @@ const connection = (overrides: Partial<CalendarConnection> = {}): CalendarConnec
   ...overrides,
 });
 
+/** A connected calendar's chip, which opens its menu. */
+const chip = (name: 'Google Calendar' | 'Outlook Calendar') =>
+  screen.getByRole('button', { name: new RegExp(`^${name}`) });
+
+const openMenu = async (name: 'Google Calendar' | 'Outlook Calendar') => {
+  await userEvent.click(chip(name));
+  return screen.findByRole('dialog');
+};
+
+// The menu's placement hook observes the trigger, and JSDOM has no ResizeObserver.
+class ResizeObserverStub {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+
 beforeEach(() => {
+  window.ResizeObserver = ResizeObserverStub as unknown as typeof ResizeObserver;
   mocks.connections = {
     google: null,
     microsoft: null,
@@ -64,7 +81,10 @@ beforeEach(() => {
   mocks.disconnect = { google: mutation(), microsoft: mutation() };
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 describe('CalendarSection with Google alone', () => {
   it('draws nothing when geo-chat has the feature off', () => {
@@ -78,6 +98,7 @@ describe('CalendarSection with Google alone', () => {
     vi.stubGlobal('location', { ...window.location, href: 'https://www.geobrowser.io/explore?tab=x', assign });
     render(<CalendarSection providers={['google']} />);
 
+    expect(screen.getByText('Geo only sees when you’re busy, never your events.')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Connect Google Calendar' }));
 
     expect(mocks.connect.mutate).toHaveBeenCalledWith(
@@ -87,129 +108,243 @@ describe('CalendarSection with Google alone', () => {
     const { onSuccess } = mocks.connect.mutate.mock.calls[0][1];
     onSuccess({ authorization_url: 'https://accounts.google.com/o/oauth2/v2/auth?x=1' });
     expect(assign).toHaveBeenCalledWith('https://accounts.google.com/o/oauth2/v2/auth?x=1');
-    vi.unstubAllGlobals();
   });
 
-  it('shows the account, last sync, Refresh and Disconnect when connected', async () => {
+  it('draws a connected calendar as one chip, with sync and disconnect in its menu', async () => {
     mocks.connections.google = connection();
     render(<CalendarSection providers={['google']} />);
 
-    expect(screen.getByText('ada@example.com')).toBeInTheDocument();
-    expect(screen.getByText('Synced 4 min ago')).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Refresh' }));
-    expect(mocks.refresh.google.mutate).toHaveBeenCalled();
-    expect(screen.getByRole('button', { name: 'Disconnect' })).toBeInTheDocument();
+    expect(chip('Google Calendar')).toHaveTextContent('ada@example.com');
+    // A healthy calendar says nothing else, and offers nothing to connect.
+    expect(screen.queryByText('Synced 4 min ago')).not.toBeInTheDocument();
+    expect(screen.queryByText(/never your events/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Refresh' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Reconnect' })).not.toBeInTheDocument();
+
+    const menu = await openMenu('Google Calendar');
+    expect(within(menu).getByText('Synced 4 min ago')).toBeInTheDocument();
+    expect(within(menu).getByRole('button', { name: 'Disconnect' })).toBeInTheDocument();
+    await userEvent.click(within(menu).getByRole('button', { name: 'Sync now' }));
+    expect(mocks.refresh.google.mutate).toHaveBeenCalled();
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   });
 
-  it('offers Reconnect instead of Refresh when access is gone', async () => {
+  it('puts Reconnect on the chip when access is gone, with one line saying why', async () => {
     mocks.connections.google = connection({ status: 'needs_reconnect', last_error: 'invalid_grant', stale: true });
-    render(<CalendarSection providers={['google']} />);
+    const { container } = render(<CalendarSection providers={['google']} />);
 
     await userEvent.click(screen.getByRole('button', { name: 'Reconnect' }));
     expect(mocks.connect.mutate).toHaveBeenCalledWith(
       expect.objectContaining({ provider: 'google', source: 'reconnect' }),
       expect.anything()
     );
-    expect(screen.queryByRole('button', { name: 'Refresh' })).not.toBeInTheDocument();
+    expect(container.querySelector('[data-calendar-status="needs_reconnect"]')).toHaveClass('bg-red-02');
+    expect(container.querySelectorAll('[data-calendar-line]')).toHaveLength(1);
     expect(screen.getByText(/no longer has access/)).toBeInTheDocument();
     // The reconnect line already says busy time has stopped; the stale line would repeat it.
     expect(screen.queryByText(/hasn’t synced recently/)).not.toBeInTheDocument();
+
+    // Sync does nothing while access is gone.
+    const menu = await openMenu('Google Calendar');
+    expect(within(menu).queryByRole('button', { name: 'Sync now' })).not.toBeInTheDocument();
   });
 
-  it('warns when busy time has stopped applying', () => {
+  it('warns in one line when busy time has stopped applying', async () => {
     mocks.connections.google = connection({
       stale: true,
       last_success_at: new Date(Date.now() - 3 * 24 * 60 * 60_000).toISOString(),
     });
-    render(<CalendarSection providers={['google']} />);
+    const { container } = render(<CalendarSection providers={['google']} />);
 
-    expect(screen.getByText('Synced 3 days ago')).toBeInTheDocument();
+    expect(container.querySelectorAll('[data-calendar-line]')).toHaveLength(1);
     expect(screen.getByText(/hasn’t synced recently/)).toBeInTheDocument();
+    expect(within(await openMenu('Google Calendar')).getByText('Synced 3 days ago')).toBeInTheDocument();
   });
 
-  it('reads a connection whose first sync has not landed as syncing, not stale', () => {
+  it('reads a connection whose first sync has not landed as syncing, not stale', async () => {
     mocks.connections.google = connection({ stale: true, last_success_at: null });
     render(<CalendarSection providers={['google']} />);
 
-    expect(screen.getByText('Syncing…')).toBeInTheDocument();
     expect(screen.queryByText(/hasn’t synced recently/)).not.toBeInTheDocument();
-    expect(screen.queryByText('Not synced yet')).not.toBeInTheDocument();
+    const menu = await openMenu('Google Calendar');
+    expect(within(menu).getByText('Syncing…')).toBeInTheDocument();
+    expect(within(menu).queryByText('Not synced yet')).not.toBeInTheDocument();
   });
 
-  it('says a failed first sync was never synced', () => {
+  it('does not offer Sync now while the first sync is running', async () => {
+    mocks.connections.google = connection({ stale: true, last_success_at: null });
+    render(<CalendarSection providers={['google']} />);
+
+    const menu = await openMenu('Google Calendar');
+    expect(within(menu).queryByRole('button', { name: 'Sync now' })).not.toBeInTheDocument();
+    expect(within(menu).getByRole('button', { name: 'Disconnect' })).toBeInTheDocument();
+  });
+
+  it('says a failed first sync was never synced, in one line under the chip', async () => {
     mocks.connections.google = connection({
       status: 'error',
       last_error: 'unknown',
       stale: true,
       last_success_at: null,
     });
-    render(<CalendarSection providers={['google']} />);
+    const { container } = render(<CalendarSection providers={['google']} />);
 
-    expect(screen.getByText('Not synced yet')).toBeInTheDocument();
-    expect(screen.queryByText('Syncing…')).not.toBeInTheDocument();
+    expect(container.querySelectorAll('[data-calendar-line]')).toHaveLength(1);
+    const menu = await openMenu('Google Calendar');
+    expect(within(menu).getByText('Not synced yet')).toBeInTheDocument();
+    expect(within(menu).queryByText('Syncing…')).not.toBeInTheDocument();
   });
 
-  it('keeps Refresh, not Reconnect, when geo-chat’s own client was refused', () => {
+  it('keeps Sync now, not Reconnect, when geo-chat’s own client was refused', async () => {
     mocks.connections.google = connection({ status: 'error', last_error: 'provider_misconfigured' });
     render(<CalendarSection providers={['google']} />);
 
     expect(screen.getByText('Calendar connections aren’t available right now. Try again later.')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Refresh' })).toBeEnabled();
     expect(screen.queryByRole('button', { name: 'Reconnect' })).not.toBeInTheDocument();
+    expect(within(await openMenu('Google Calendar')).getByRole('button', { name: 'Sync now' })).toBeEnabled();
   });
 
-  it('says why a refresh was refused', () => {
-    mocks.connections.google = connection();
+  it('says why a refresh was refused, in place of the connection’s own line', () => {
+    mocks.connections.google = connection({ stale: true, last_success_at: '2020-01-01T00:00:00Z' });
     mocks.refresh.google = { ...mutation(), isError: true, error: new GeoChatRequestError('x', 'rate_limited', 429) };
-    render(<CalendarSection providers={['google']} />);
+    const { container } = render(<CalendarSection providers={['google']} />);
 
     expect(screen.getByRole('alert')).toHaveTextContent('You just refreshed. Try again in a minute.');
+    expect(container.querySelectorAll('[data-calendar-line]')).toHaveLength(1);
   });
 
-  it('holds Connect while the grid has unsaved edits', () => {
-    render(<CalendarSection providers={['google']} unsavedChanges />);
+  it('saves unsaved edits, then connects', async () => {
+    const order: string[] = [];
+    const saveDraft = vi.fn(async () => {
+      order.push('save');
+    });
+    mocks.connect.mutate.mockImplementation(() => order.push('connect'));
+    render(<CalendarSection providers={['google']} unsavedChanges saveDraft={saveDraft} />);
 
-    expect(screen.getByRole('button', { name: 'Connect Google Calendar' })).toBeDisabled();
-    expect(screen.getByText('Save your hours first.')).toBeInTheDocument();
+    expect(screen.queryByText('Save your hours first.')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Connect Google Calendar' }));
+
+    await waitFor(() => expect(order).toEqual(['save', 'connect']));
   });
 
-  it('holds Reconnect while the grid has unsaved edits, but not Disconnect', () => {
+  it('labels the pressed button while the save runs, and holds the rest', async () => {
+    let finish = () => {};
+    const saveDraft = () => new Promise<void>(resolve => (finish = resolve));
+    render(<CalendarSection providers={['google', 'microsoft']} unsavedChanges saveDraft={saveDraft} />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Connect Google Calendar' }));
+
+    expect(screen.getByRole('button', { name: 'Opening Google…' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Connect Outlook Calendar' })).toBeDisabled();
+    expect(mocks.connect.mutate).not.toHaveBeenCalled();
+    finish();
+    await waitFor(() => expect(mocks.connect.mutate).toHaveBeenCalled());
+  });
+
+  it('stays here, without connecting, when the save fails', async () => {
+    const saveDraft = vi.fn(() => Promise.reject(new Error('down')));
+    render(<CalendarSection providers={['google']} unsavedChanges saveDraft={saveDraft} />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Connect Google Calendar' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('We couldn’t save your availability. Please try again.');
+    expect(mocks.connect.mutate).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Connect Google Calendar' })).toBeEnabled();
+  });
+
+  it('saves first on Reconnect too', async () => {
     mocks.connections.google = connection({ status: 'needs_reconnect', last_error: 'invalid_grant' });
-    render(<CalendarSection providers={['google']} unsavedChanges />);
+    const saveDraft = vi.fn(() => Promise.resolve());
+    render(<CalendarSection providers={['google']} unsavedChanges saveDraft={saveDraft} />);
 
-    expect(screen.getByRole('button', { name: 'Reconnect' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Disconnect' })).toBeEnabled();
-    expect(screen.getByText('Save your hours first.')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Reconnect' }));
+
+    expect(saveDraft).toHaveBeenCalled();
+    await waitFor(() =>
+      expect(mocks.connect.mutate).toHaveBeenCalledWith(
+        expect.objectContaining({ provider: 'google', source: 'reconnect' }),
+        expect.anything()
+      )
+    );
   });
 
-  it('says how connecting went when reopened on the way back', () => {
+  it('connects straight away when there is nothing to save', async () => {
+    const saveDraft = vi.fn(() => Promise.resolve());
+    render(<CalendarSection providers={['google']} saveDraft={saveDraft} />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Connect Google Calendar' }));
+
+    expect(saveDraft).not.toHaveBeenCalled();
+    expect(mocks.connect.mutate).toHaveBeenCalled();
+  });
+
+  it('marks the calendar just connected and says how it went, when reopened on the way back', () => {
     mocks.connections.google = connection();
     render(
       <CalendarSection providers={['google']} returned={{ provider: 'google', outcome: 'connected', reason: null }} />
     );
 
+    expect(within(chip('Google Calendar')).getByRole('img', { name: 'Connected' })).toBeInTheDocument();
     expect(screen.getByRole('status')).toHaveTextContent(/^Google Calendar connected/);
   });
 
-  it('confirms before disconnecting', async () => {
+  it('confirms before disconnecting, in the chip’s popover', async () => {
     mocks.connections.google = connection();
     render(<CalendarSection providers={['google']} />);
 
-    await userEvent.click(screen.getByRole('button', { name: 'Disconnect' }));
+    const menu = await openMenu('Google Calendar');
+    await userEvent.click(within(menu).getByRole('button', { name: 'Disconnect' }));
     expect(mocks.disconnect.google.mutate).not.toHaveBeenCalled();
-    await userEvent.click(screen.getByRole('button', { name: 'Disconnect calendar' }));
+    expect(within(menu).getByText('Disconnect Google Calendar?')).toBeInTheDocument();
+
+    await userEvent.click(within(menu).getByRole('button', { name: 'Keep' }));
+    expect(within(menu).getByRole('button', { name: 'Sync now' })).toBeInTheDocument();
+
+    await userEvent.click(within(menu).getByRole('button', { name: 'Disconnect' }));
+    await userEvent.click(within(menu).getByRole('button', { name: 'Disconnect calendar' }));
     expect(mocks.disconnect.google.mutate).toHaveBeenCalled();
+  });
+
+  it('keeps focus in the menu as it switches to the confirm and back', async () => {
+    mocks.connections.google = connection();
+    render(<CalendarSection providers={['google']} />);
+
+    const menu = await openMenu('Google Calendar');
+    await userEvent.click(within(menu).getByRole('button', { name: 'Disconnect' }));
+    expect(within(menu).getByRole('button', { name: 'Keep' })).toHaveFocus();
+
+    await userEvent.click(within(menu).getByRole('button', { name: 'Keep' }));
+    expect(within(menu).getByRole('button', { name: 'Disconnect' })).toHaveFocus();
+  });
+
+  it('offers no second sync while one is running, and says it is syncing', async () => {
+    mocks.connections.google = connection();
+    mocks.refresh.google = { ...mutation(), isPending: true };
+    render(<CalendarSection providers={['google']} />);
+
+    const menu = await openMenu('Google Calendar');
+    expect(within(menu).getByText('Syncing…')).toBeInTheDocument();
+    expect(within(menu).queryByRole('button', { name: 'Sync now' })).not.toBeInTheDocument();
+    expect(within(menu).getByRole('button', { name: 'Disconnect' })).toBeInTheDocument();
+  });
+
+  it('says why a disconnect was refused, in the popover', async () => {
+    mocks.connections.google = connection();
+    mocks.disconnect.google = { ...mutation(), isError: true, error: new Error('x') };
+    render(<CalendarSection providers={['google']} />);
+
+    const menu = await openMenu('Google Calendar');
+    await userEvent.click(within(menu).getByRole('button', { name: 'Disconnect' }));
+    expect(within(menu).getByRole('alert')).toHaveTextContent('Something went wrong. Try again.');
   });
 });
 
 describe('CalendarSection with Outlook', () => {
-  it('offers both, in geo-chat order, in one card', () => {
+  it('offers both, in geo-chat order, in one row', () => {
     mocks.connections.providers = ['microsoft', 'google'];
     render(<CalendarSection providers={['google', 'microsoft']} />);
 
     expect(screen.getByRole('region', { name: 'Calendars' })).toBeInTheDocument();
-    expect(screen.getByText(/busy on your calendar\./)).toBeInTheDocument();
     expect(screen.getAllByRole('button').map(button => button.textContent)).toEqual([
       'Connect Outlook Calendar',
       'Connect Google Calendar',
@@ -248,7 +383,6 @@ describe('CalendarSection with Outlook', () => {
     const { onSuccess } = mocks.connect.mutate.mock.calls[0][1];
     onSuccess({ authorization_url: 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize?x=1' });
     expect(assign).toHaveBeenCalledWith('https://login.microsoftonline.com/common/oauth2/v2.0/authorize?x=1');
-    vi.unstubAllGlobals();
   });
 
   it('labels only the pressed button while the browser leaves', () => {
@@ -259,26 +393,40 @@ describe('CalendarSection with Outlook', () => {
     expect(screen.getByRole('button', { name: 'Connect Google Calendar' })).toBeDisabled();
   });
 
-  it('shows both connected rows, each refreshing its own provider', async () => {
+  it('says why a connect was refused under the row, for that calendar', () => {
+    mocks.connect = {
+      ...mutation(),
+      isError: true,
+      error: new Error('x'),
+      variables: { provider: 'microsoft' },
+    } as Mutation;
+    const { container } = render(<CalendarSection providers={['google', 'microsoft']} />);
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Something went wrong. Try again.');
+    expect(container.querySelector('[data-calendar-line="microsoft"]')).toBeInTheDocument();
+  });
+
+  it('shows both connected chips, each syncing its own provider', async () => {
     mocks.connections.google = connection();
     mocks.connections.microsoft = connection({ account_email: 'ada@contoso.com' });
     render(<CalendarSection providers={['google', 'microsoft']} />);
 
-    const outlook = screen.getByText('Outlook Calendar').closest('[data-calendar-provider]') as HTMLElement;
-    expect(within(outlook).getByText('ada@contoso.com')).toBeInTheDocument();
-    await userEvent.click(within(outlook).getByRole('button', { name: 'Refresh' }));
+    expect(chip('Outlook Calendar')).toHaveTextContent('ada@contoso.com');
+    const menu = await openMenu('Outlook Calendar');
+    await userEvent.click(within(menu).getByRole('button', { name: 'Sync now' }));
     expect(mocks.refresh.microsoft.mutate).toHaveBeenCalled();
     expect(mocks.refresh.google.mutate).not.toHaveBeenCalled();
     expect(screen.queryByRole('button', { name: /^Connect/ })).not.toBeInTheDocument();
+    expect(screen.queryByText(/never your events/)).not.toBeInTheDocument();
   });
 
   it('keeps Connect Google beside a connected Outlook', () => {
     mocks.connections.microsoft = connection();
     render(<CalendarSection providers={['google', 'microsoft']} />);
 
-    expect(screen.getByText('Outlook Calendar')).toBeInTheDocument();
-    expect(screen.getByText(/busy on Google Calendar\./)).toBeInTheDocument();
+    expect(chip('Outlook Calendar')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Connect Google Calendar' })).toBeInTheDocument();
+    expect(screen.getByText('Geo only sees when you’re busy, never your events.')).toBeInTheDocument();
   });
 
   it('asks for another account when the mailbox cannot be read', async () => {
@@ -297,13 +445,14 @@ describe('CalendarSection with Outlook', () => {
     mocks.connections.microsoft = connection();
     render(<CalendarSection providers={['microsoft']} />);
 
-    await userEvent.click(screen.getByRole('button', { name: 'Disconnect' }));
-    expect(screen.getByRole('link', { name: 'your app permissions' })).toHaveAttribute(
+    const menu = await openMenu('Outlook Calendar');
+    await userEvent.click(within(menu).getByRole('button', { name: 'Disconnect' }));
+    expect(within(menu).getByRole('link', { name: 'your app permissions' })).toHaveAttribute(
       'href',
       'https://account.live.com/consent/Manage'
     );
-    expect(screen.getByRole('link', { name: 'My Apps' })).toHaveAttribute('href', 'https://myapps.microsoft.com');
-    await userEvent.click(screen.getByRole('button', { name: 'Disconnect calendar' }));
+    expect(within(menu).getByRole('link', { name: 'My Apps' })).toHaveAttribute('href', 'https://myapps.microsoft.com');
+    await userEvent.click(within(menu).getByRole('button', { name: 'Disconnect calendar' }));
     expect(mocks.disconnect.microsoft.mutate).toHaveBeenCalled();
   });
 
@@ -318,6 +467,18 @@ describe('CalendarSection with Outlook', () => {
     expect(screen.getByRole('status')).toHaveTextContent(
       'Calendar connections aren’t available right now. Try again later.'
     );
+  });
+
+  it('shows a failed return in place of the connection’s own problem, as its one line', () => {
+    mocks.connections.google = connection({ status: 'needs_reconnect', last_error: 'invalid_grant' });
+    const { container } = render(
+      <CalendarSection providers={['google']} returned={{ provider: 'google', outcome: 'error', reason: 'denied' }} />
+    );
+
+    const lines = container.querySelectorAll('[data-calendar-line]');
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toHaveTextContent('Google Calendar wasn’t connected.');
+    expect(screen.getAllByRole('status')).toHaveLength(1);
   });
 
   it('explains the admin approval a work account needs', () => {

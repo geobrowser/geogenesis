@@ -18,6 +18,8 @@ const mocks = vi.hoisted(() => ({
   connected: true,
   disabled: false,
   blocks: [] as AvailabilityBlock[],
+  mutate: vi.fn(),
+  mutateAsync: vi.fn(),
 }));
 
 vi.mock('~/core/state/feature-flags', () => ({
@@ -27,7 +29,7 @@ vi.mock('~/core/state/feature-flags', () => ({
 
 vi.mock('~/core/debates/hooks', () => ({
   useDebateSchedule: () => ({ blocks: mocks.blocks, isError: false, refetch: vi.fn() }),
-  useSaveDebateSchedule: () => ({ mutate: vi.fn() }),
+  useSaveDebateSchedule: () => ({ mutate: mocks.mutate, mutateAsync: mocks.mutateAsync }),
 }));
 
 vi.mock('~/core/debates/calendar-hooks', () => ({
@@ -49,10 +51,12 @@ vi.mock('./calendar-section', () => ({
   CalendarSection: ({
     providers,
     unsavedChanges,
+    saveDraft,
     returned,
   }: {
     providers: unknown;
     unsavedChanges: boolean;
+    saveDraft?: () => Promise<unknown>;
     returned: unknown;
   }) => {
     mocks.sectionProviders.push(providers);
@@ -61,7 +65,11 @@ vi.mock('./calendar-section', () => ({
         aria-label="Google Calendar"
         data-unsaved={String(unsavedChanges)}
         data-returned={JSON.stringify(returned)}
-      />
+      >
+        <button type="button" onClick={() => void saveDraft?.()}>
+          Save draft
+        </button>
+      </section>
     );
   },
 }));
@@ -78,6 +86,8 @@ beforeEach(() => {
   mocks.connectionsEnabled = [];
   mocks.busyRanges = [];
   mocks.blocks = [];
+  mocks.mutate = vi.fn();
+  mocks.mutateAsync = vi.fn(() => Promise.resolve());
 });
 
 afterEach(cleanup);
@@ -120,6 +130,25 @@ describe('OwnScheduleModal Google Calendar', () => {
       outcome: 'connected',
       reason: null,
     });
+  });
+
+  // A connect awaits this save before leaving the page, so it must be the promise of the save itself
+  // (GEO-3595): `mutate` returns nothing, and the browser would leave with the save in flight.
+  it('saves the draft for the section by awaiting the save, without closing or reporting a Save', async () => {
+    mocks.flagOn = true;
+    mocks.blocks = [{ id: 'b1', kind: 'recurring', weekday: 1, start: 9 * 60, end: 10 * 60 }];
+    const onSaved = vi.fn();
+    const onOpenChange = vi.fn();
+    render(<OwnScheduleModal open onOpenChange={onOpenChange} onSaved={onSaved} surface="navbar" />);
+
+    const dialog = await screen.findByRole('dialog');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Clear all' }));
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save draft' }));
+
+    expect(mocks.mutateAsync).toHaveBeenCalledWith([]);
+    expect(mocks.mutate).not.toHaveBeenCalled();
+    expect(onSaved).not.toHaveBeenCalled();
+    expect(onOpenChange).not.toHaveBeenCalled();
   });
 
   it('marks the draft unsaved once the grid changes', async () => {
