@@ -118,6 +118,12 @@ function useDebateGatewayPauseLog(paused: boolean, reason: DebateGatewayPauseRea
   }, [paused, reason]);
 }
 
+/** `/space/{id}/debates/{debateId}` exactly: the debate itself, not its recording or the tab. */
+export function isDebatePagePath(pathname: string): boolean {
+  const segments = pathname.split(/[?#]/, 1)[0].split('/').filter(Boolean);
+  return segments.length === 4 && segments[0] === 'space' && segments[2] === 'debates' && segments[3] !== 'rematches';
+}
+
 export function DebateCoordinator() {
   const router = useRouter();
   const pathname = usePathname();
@@ -217,6 +223,9 @@ export function DebateCoordinator() {
   const atLobby = useDebateRoom(roomIdAtPath ?? '', false).data?.kind === 'lobby';
   const atRoom = roomIdAtPath !== null && !atLobby;
   const atDebateFlowPage = pathname.includes('/debates/rematches/') || atRoom;
+  // Raised on the way out of a debate, picker or room, so it waits until the page has left one:
+  // drawn over the exit it flashes there, and closing it in that window loses it.
+  const showOpponentLeftNotice = opponentLeftNotice && !atDebateFlowPage && !isDebatePagePath(pathname);
   const activeFlow = Boolean(debate || activity?.rematch || challenge);
   const myLobby = useMyDebateLobby();
   // A step-out to debate is still part of the lobby session, including in other tabs. Wait until
@@ -538,7 +547,7 @@ export function DebateCoordinator() {
 
   return (
     <>
-      {opponentLeftNotice && (
+      {showOpponentLeftNotice && (
         <OpponentLeftDialog
           onClose={() => setOpponentLeftNotice(false)}
           onFindDebate={() => {
@@ -572,7 +581,7 @@ export function DebateCoordinator() {
           !activeFlow &&
           !promptedRequest &&
           !visibleSharePrompt &&
-          !opponentLeftNotice
+          !showOpponentLeftNotice
         }
         onOpenChange={setNudgeOpen}
       />
@@ -651,7 +660,7 @@ export function DebateCoordinator() {
       {/* Behind a nudge popup that is being answered (one that is not steps aside for this). Behind
           the opponent-left notice too: it says why the viewer is here, and is one click to close.
           A request mounted under it would sit hidden, and could expire there. */}
-      {promptedRequest && currentUserId && !nudgeOpen && !opponentLeftNotice && (
+      {promptedRequest && currentUserId && !nudgeOpen && !showOpponentLeftNotice && (
         <IncomingRequestPopup
           key={promptedRequest.id}
           request={promptedRequest}
@@ -659,7 +668,7 @@ export function DebateCoordinator() {
           onNotNow={() => setSnoozedRequestIds(current => [...current, promptedRequest.id])}
         />
       )}
-      {!promptedRequest && !nudgeOpen && !opponentLeftNotice && visibleSharePrompt && (
+      {!promptedRequest && !nudgeOpen && !showOpponentLeftNotice && visibleSharePrompt && (
         <DebateSharePromptDialog
           key={visibleSharePrompt.id}
           prompt={visibleSharePrompt}

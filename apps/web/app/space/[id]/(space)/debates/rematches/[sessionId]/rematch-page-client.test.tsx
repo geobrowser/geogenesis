@@ -15,7 +15,7 @@ import {
   rememberDebateReturnDestination,
   rememberLobbyReturnDestination,
 } from '~/core/debates/debate-return-navigation';
-import { unmarkLocalRematchLeave } from '~/core/debates/local-debate-leave';
+import { didLocallyLeaveRematch, unmarkLocalRematchLeave } from '~/core/debates/local-debate-leave';
 import { HUB_CARD_EXIT_TRANSITION } from '~/core/debates/matchmaking/hub-motion';
 import type { ParticipantPosition } from '~/core/debates/participant-positions';
 import { DebateRoomProvider } from '~/core/debates/rooms/room-context';
@@ -1386,6 +1386,37 @@ describe('DebateRematchPageClient', () => {
       expect(view.store.get(opponentLeftNoticeAtom)).toBe(true);
     }
   );
+
+  it('announces a session that expired before its browsing deadline, which is someone going offline', async () => {
+    unmarkLocalRematchLeave('rematch-1');
+    const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    mocks.session = session({
+      status: 'expired',
+      browsing_expires_at: '2026-09-24T18:00:00Z',
+      updated_at: '2026-09-24T17:20:00Z',
+    });
+    view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith(`/space/${SPACE_1}/debates`));
+    expect(view.store.get(opponentLeftNoticeAtom)).toBe(true);
+  });
+
+  // geo-chat's overrun sweep ends a session only once `browsing_expires_at` has passed.
+  it('boots out of a rematch whose browsing window ran out without announcing', async () => {
+    unmarkLocalRematchLeave('rematch-1');
+    const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    mocks.session = session({
+      status: 'expired',
+      browsing_expires_at: '2026-09-24T18:00:00Z',
+      updated_at: '2026-09-24T18:00:04.123456Z',
+    });
+    view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith(`/space/${SPACE_1}/debates`));
+    expect(view.store.get(opponentLeftNoticeAtom)).toBe(false);
+  });
 
   it.each([['ended'], ['expired']] as const)(
     'boots out of a picker that loads onto an %s rematch without announcing',
@@ -6729,6 +6760,7 @@ describe('inside a debate room', () => {
     it.each([['arrived_early'], ['waiting'], ['waiting_elsewhere'], ['present']] as const)(
       'asks before leaving when %s, and Stay keeps you in the room',
       async state => {
+        unmarkLocalRematchLeave('rematch-1');
         render(withPresence(state, <DebateRematchPageClient sessionId="rematch-1" />));
 
         const leaveButton = screen.getByRole('button', { name: 'Leave' });
@@ -6743,10 +6775,13 @@ describe('inside a debate room', () => {
         await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
         expect(mocks.push).not.toHaveBeenCalled();
         expect(leaveButton).toHaveFocus();
+        // Not marked as left, or the opponent leaving this session later would go unannounced.
+        expect(didLocallyLeaveRematch('rematch-1')).toBe(false);
       }
     );
 
     it('leaves for the People tab once confirmed', async () => {
+      unmarkLocalRematchLeave('rematch-1');
       render(withPresence('waiting', <DebateRematchPageClient sessionId="rematch-1" />));
 
       fireEvent.click(screen.getByRole('button', { name: 'Leave' }));
@@ -6755,6 +6790,7 @@ describe('inside a debate room', () => {
 
       expect(mocks.push).toHaveBeenCalledWith(PEOPLE_TAB);
       expect(mocks.leaveMutate).not.toHaveBeenCalled();
+      expect(didLocallyLeaveRematch('rematch-1')).toBe(true);
       await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     });
 
