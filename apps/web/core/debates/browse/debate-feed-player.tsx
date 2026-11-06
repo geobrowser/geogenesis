@@ -43,6 +43,7 @@ import { markDebateWatched } from '~/core/debates/watched-debates';
 import { FollowButton } from '~/core/follows/follow-button';
 import { validateSpaceId } from '~/core/io/rest/validation';
 import { responsePositionLabel } from '~/core/responses/entity-response';
+import { gestureUnlocksEachMediaElement, markGestureVideoUnlocked } from '~/core/utils/video/gesture-media-pool';
 import { reattachVideoSource, releaseVideo } from '~/core/utils/video/release-video';
 
 import { Avatar } from '~/design-system/avatar';
@@ -55,6 +56,7 @@ import { ClaimScrubberMarkers, DebateClaimTickerStack, useDebateClaimTicker } fr
 import { DebateEndCard } from './debate-end-card';
 import { DebateRoundBadge, DebateRoundBanner, DebateRoundCard } from './debate-round-cues';
 import { type DebatePreviewClips, debatePreviewClips, feedFullPlaybackStartedAtom } from './feed-full-playback';
+import { FeedVideo } from './feed-video';
 import { Pause, Play, Speaker, SpeakerMuted } from './icons';
 import { PLAYER_EXIT_MS, PLAYER_FURNITURE_OPACITY } from './player-overlay-styles';
 import { useAnnouncementFocus } from './use-announcement-focus';
@@ -247,6 +249,7 @@ export function DebateFeedPlayer({
     playbackBreaks,
     subtitle,
     onPlaybackTick,
+    onMediaEmptied,
     resyncSlot,
     refreshSlotUrl,
     togglePlayback: togglePlaybackRaw,
@@ -351,6 +354,8 @@ export function DebateFeedPlayer({
     const generation = ++activatingRef.current;
     const plays = running.map(video => {
       video.pause();
+      // This tap unlocks the element for sound, so a later card the pool hands it to has it too.
+      markGestureVideoUnlocked(video);
       return video.play();
     });
     const release = () => {
@@ -1019,6 +1024,7 @@ export function DebateFeedPlayer({
           isResuming={isResuming}
           onPlaybackTick={onPlaybackTick}
           onPauseTick={onPauseTick}
+          onEmptied={onMediaEmptied}
           onRecovered={() => resyncSlot(1)}
           onExhausted={() => void refreshSlotUrl(1)}
           onToggle={toggleFromVideo}
@@ -1097,6 +1103,7 @@ export function DebateFeedPlayer({
           isResuming={isResuming}
           onPlaybackTick={onPlaybackTick}
           onPauseTick={onPauseTick}
+          onEmptied={onMediaEmptied}
           onRecovered={() => resyncSlot(2)}
           onExhausted={() => void refreshSlotUrl(2)}
           onToggle={toggleFromVideo}
@@ -1338,6 +1345,7 @@ function DebaterVideo({
   isResuming,
   onPlaybackTick,
   onPauseTick = onPlaybackTick,
+  onEmptied,
   onRecovered,
   onExhausted,
   onToggle,
@@ -1416,6 +1424,8 @@ function DebaterVideo({
   onPlaybackTick: () => void;
   /** What a `pause` event runs; the player holds it while it re-plays both inside a gesture. */
   onPauseTick?: () => void;
+  /** This tile's element lost its media: a source dropped or reloaded. */
+  onEmptied?: () => void;
   /** This tile's recording was rebuilt after its pipeline died — put it back in step with its
    * partner. See {@link MAX_MEDIA_RECOVERY_ATTEMPTS}. */
   onRecovered?: () => void;
@@ -1490,6 +1500,9 @@ function DebaterVideo({
   }, [onStreamFailed]);
   // Asked once per element: Safari and iOS play the manifest as `src`, everything else through hls.js.
   const nativeHls = React.useMemo(() => canPlayNativeHls(), []);
+  // Where sound is granted element by element (iOS), the elements come from a pool that taps unlock,
+  // so the debate the viewer scrolls to can play with sound (GEO-3594).
+  const pooledVideo = React.useMemo(() => gestureUnlocksEachMediaElement(), []);
   const hlsManaged = stream && !nativeHls;
   React.useLayoutEffect(() => {
     const video = videoRef.current;
@@ -1714,8 +1727,9 @@ function DebaterVideo({
           />
         )}
         {src ? (
-          <video
-            ref={videoRef}
+          <FeedVideo
+            pooled={pooledVideo}
+            videoRef={videoRef}
             // Both tiles fade in together, and only once both have a frame — see `concealed`.
             // `relative` so it stacks above the absolutely positioned still; a static video paints
             // under any positioned sibling whatever the DOM order.
@@ -1726,7 +1740,6 @@ function DebaterVideo({
               'relative h-full w-full object-cover transition-opacity',
               concealed ? 'opacity-0 duration-200' : 'opacity-100 duration-500'
             )}
-            playsInline
             // `metadata` by default: enough to paint a frame and know the shape of the recording,
             // without pulling a multi-megabyte file down for a card nobody has reached yet — the
             // feed keeps several of these mounted at once. `auto` for the active card and the one
@@ -1740,6 +1753,7 @@ function DebaterVideo({
             src={hlsManaged ? undefined : src}
             // The viewer's own mute — plus the listening debater's, where `volume` is a no-op.
             muted={muted}
+            onEmptied={onEmptied}
             onEnded={onPlaybackTick}
             onError={onMediaError}
             onLoadedMetadata={onPlaybackTick}

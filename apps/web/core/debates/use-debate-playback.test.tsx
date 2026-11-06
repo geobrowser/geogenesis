@@ -15,9 +15,13 @@ const mocks = vi.hoisted(() => ({
   condensedBreaks: [] as DebateMediaCondensedBreak[],
   mediaPending: false,
   reportEvent: vi.fn(),
+  forgetGestureVideoUnlock: vi.fn(),
 }));
 
 vi.mock('~/core/telemetry/logger', () => ({ reportEvent: mocks.reportEvent }));
+vi.mock('~/core/utils/video/gesture-media-pool', () => ({
+  forgetGestureVideoUnlock: mocks.forgetGestureVideoUnlock,
+}));
 
 // The hook imports exactly these three from './hooks'. Mocking the module blanks everything
 // else in it, so anything omitted here arrives as undefined.
@@ -326,6 +330,8 @@ function fakeVideo() {
      * leaves it paused either way — but whether anything asked it to start again at all.
      */
     plays: 0,
+    /** What the element has played; empty until it first runs. */
+    played: { length: 0 },
     play() {
       video.plays += 1;
       return new Promise<void>((resolve, reject) => {
@@ -424,6 +430,34 @@ function fakeVideo() {
   };
 }
 
+type FakeVideo = ReturnType<typeof fakeVideo>;
+
+/** A mounted hook with both elements attached, not yet started. `rerender` takes a new debate. */
+async function mountedPair(debate = debateFixture()) {
+  const hook = renderHook(({ debate }) => useDebatePlayback(debate, true), { initialProps: { debate } });
+  await waitFor(() => expect(hook.result.current.urls.slot1).not.toBeNull());
+  const slot1 = fakeVideo();
+  const slot2 = fakeVideo();
+  hook.result.current.slot1VideoRef.current = slot1;
+  hook.result.current.slot2VideoRef.current = slot2;
+  return { ...hook, slot1, slot2 };
+}
+
+/** Start the pair and let both elements play. */
+async function startPair(
+  result: { current: ReturnType<typeof useDebatePlayback> },
+  slot1: FakeVideo,
+  slot2: FakeVideo
+) {
+  await act(async () => {
+    void result.current.resumeBoth();
+    await Promise.resolve();
+    slot1.settlePlay();
+    slot2.settlePlay();
+    await new Promise(resolve => setTimeout(resolve, 50));
+  });
+}
+
 describe('useDebatePlayback — an interrupted resume must not report failure (GEO-2895)', () => {
   beforeEach(() => {
     mocks.recordingUrl.mockReset();
@@ -431,16 +465,6 @@ describe('useDebatePlayback — an interrupted resume must not report failure (G
       Promise.resolve({ url: `https://cdn.test/${filename}?sig=abc` })
     );
   });
-
-  async function mounted() {
-    const { result } = renderHook(() => useDebatePlayback(debateFixture(), true));
-    await waitFor(() => expect(result.current.urls.slot1).not.toBeNull());
-    const slot1 = fakeVideo();
-    const slot2 = fakeVideo();
-    result.current.slot1VideoRef.current = slot1;
-    result.current.slot2VideoRef.current = slot2;
-    return { result, slot1, slot2 };
-  }
 
   /**
    * THE REGRESSION Preston hit. `resumeBoth` awaits confirmation that both elements really
@@ -450,7 +474,7 @@ describe('useDebatePlayback — an interrupted resume must not report failure (G
    * happened.
    */
   it('stays silent when the card is scrolled away mid-resume', async () => {
-    const { result, slot1, slot2 } = await mounted();
+    const { result, slot1, slot2 } = await mountedPair();
 
     await act(async () => {
       void result.current.resumeBoth();
@@ -484,7 +508,7 @@ describe('useDebatePlayback — an interrupted resume must not report failure (G
    * the second started it — the two-tap sequence this was reported as.
    */
   it('offers the play control when the browser refuses to autoplay', async () => {
-    const { result, slot1, slot2 } = await mounted();
+    const { result, slot1, slot2 } = await mountedPair();
 
     await act(async () => {
       void result.current.resumeBoth();
@@ -511,7 +535,7 @@ describe('useDebatePlayback — an interrupted resume must not report failure (G
    * discards its own answer and the next one asks again.
    */
   it('records a refusal even when a newer resume supersedes the attempt', async () => {
-    const { result, slot1, slot2 } = await mounted();
+    const { result, slot1, slot2 } = await mountedPair();
 
     await act(async () => {
       void result.current.resumeBoth();
@@ -534,7 +558,7 @@ describe('useDebatePlayback — an interrupted resume must not report failure (G
    * even after the viewer's tap — which is allowed, being a gesture.
    */
   it('clears the refusal once playback actually starts', async () => {
-    const { result, slot1, slot2 } = await mounted();
+    const { result, slot1, slot2 } = await mountedPair();
 
     await act(async () => {
       void result.current.resumeBoth();
@@ -567,7 +591,7 @@ describe('useDebatePlayback — an interrupted resume must not report failure (G
    * change exists to remove.
    */
   it('does not let a stale refusal contradict a newer resume that started', async () => {
-    const { result, slot1, slot2 } = await mounted();
+    const { result, slot1, slot2 } = await mountedPair();
 
     await act(async () => {
       void result.current.resumeBoth();
@@ -598,7 +622,7 @@ describe('useDebatePlayback — an interrupted resume must not report failure (G
    * stalled card would sit behind a button that does nothing, with no reason given.
    */
   it('keeps the error, and the retry, for a start that stalls rather than being refused', async () => {
-    const { result, slot1, slot2 } = await mounted();
+    const { result, slot1, slot2 } = await mountedPair();
 
     await act(async () => {
       void result.current.resumeBoth();
@@ -623,7 +647,7 @@ describe('useDebatePlayback — an interrupted resume must not report failure (G
    * exact failure this change exists to remove, caused by the fix for it.
    */
   it('does not read an interruption that mentions the user agent as a refusal', async () => {
-    const { result, slot1, slot2 } = await mounted();
+    const { result, slot1, slot2 } = await mountedPair();
 
     await act(async () => {
       void result.current.resumeBoth();
@@ -658,7 +682,7 @@ describe('useDebatePlayback — an interrupted resume must not report failure (G
    * a Play that would not have helped, as though policy were still the cause.
    */
   it('releases the refusal when the browser accepts the next attempt but it stalls', async () => {
-    const { result, slot1, slot2 } = await mounted();
+    const { result, slot1, slot2 } = await mountedPair();
 
     await act(async () => {
       void result.current.resumeBoth();
@@ -785,7 +809,7 @@ describe('useDebatePlayback — an interrupted resume must not report failure (G
 
   /** The positive control: an uninterrupted resume still reports playback. */
   it('reports playing when nothing interrupts it', async () => {
-    const { result, slot1, slot2 } = await mounted();
+    const { result, slot1, slot2 } = await mountedPair();
 
     await act(async () => {
       void result.current.resumeBoth();
@@ -806,7 +830,7 @@ describe('useDebatePlayback — an interrupted resume must not report failure (G
    * (GEO-2947). Cancellation has to reach inside the helper, not just guard what comes after it.
    */
   it('does not restart the videos when the viewer grabs the scrubber mid-resume', async () => {
-    const { result, slot1, slot2 } = await mounted();
+    const { result, slot1, slot2 } = await mountedPair();
     // Unmuted, so the helper would otherwise take its force-mute-and-retry path.
     slot1.muted = false;
     slot2.muted = false;
@@ -829,7 +853,7 @@ describe('useDebatePlayback — an interrupted resume must not report failure (G
 
   /** Same for a card scrolled off screen mid-confirm — `suspend` takes ownership too. */
   it('does not restart the videos when the card is scrolled away mid-resume', async () => {
-    const { result, slot1, slot2 } = await mounted();
+    const { result, slot1, slot2 } = await mountedPair();
     slot1.muted = false;
     slot2.muted = false;
 
@@ -856,7 +880,7 @@ describe('useDebatePlayback — an interrupted resume must not report failure (G
    * start it is meant to help (GEO-2828).
    */
   it('does not correct drift against a video that is still starting', async () => {
-    const { result, slot1, slot2 } = await mounted();
+    const { result, slot1, slot2 } = await mountedPair();
 
     await act(async () => {
       void result.current.resumeBoth();
@@ -876,7 +900,7 @@ describe('useDebatePlayback — an interrupted resume must not report failure (G
 
   /** The control: once the resume has settled, ordinary drift is corrected as before. */
   it('still corrects drift once the resume has settled', async () => {
-    const { result, slot1, slot2 } = await mounted();
+    const { result, slot1, slot2 } = await mountedPair();
 
     await act(async () => {
       void result.current.resumeBoth();
@@ -905,7 +929,7 @@ describe('useDebatePlayback — an interrupted resume must not report failure (G
    * muted, inline and fully buffered; iOS simply wants to be asked by a person.
    */
   it('turns a genuine block into a play control rather than an error', async () => {
-    const { result, slot1, slot2 } = await mounted();
+    const { result, slot1, slot2 } = await mountedPair();
 
     await act(async () => {
       void result.current.resumeBoth();
@@ -930,7 +954,7 @@ describe('useDebatePlayback — an interrupted resume must not report failure (G
    * trying to remove rather than relocate.
    */
   it('lets the newer of two overlapping resumes finish (not the older)', async () => {
-    const { result, slot1, slot2 } = await mounted();
+    const { result, slot1, slot2 } = await mountedPair();
 
     await act(async () => {
       void result.current.resumeBoth(); // first attempt, superseded below
@@ -1250,21 +1274,8 @@ describe('useDebatePlayback — playback survives a backgrounded tab (GEO-2947)'
 
   /** Mounted, both elements attached, and actually playing — the state a viewer leaves behind. */
   async function playing() {
-    const { result } = renderHook(() => useDebatePlayback(debateFixture(), true));
-    await waitFor(() => expect(result.current.urls.slot1).not.toBeNull());
-    const slot1 = fakeVideo();
-    const slot2 = fakeVideo();
-    result.current.slot1VideoRef.current = slot1;
-    result.current.slot2VideoRef.current = slot2;
-
-    await act(async () => {
-      void result.current.resumeBoth();
-      await Promise.resolve();
-      slot1.settlePlay();
-      slot2.settlePlay();
-      await new Promise(resolve => setTimeout(resolve, 50));
-    });
-
+    const { result, slot1, slot2 } = await mountedPair();
+    await startPair(result, slot1, slot2);
     expect(result.current.playing).toBe(true);
     return { result, slot1, slot2 };
   }
@@ -1801,18 +1812,8 @@ describe('useDebatePlayback — a rebuilt recording rejoins the pair (GEO-2985)'
     );
   });
 
-  async function mounted() {
-    const { result } = renderHook(() => useDebatePlayback(debateFixture(), true));
-    await waitFor(() => expect(result.current.urls.slot1).not.toBeNull());
-    const slot1 = fakeVideo();
-    const slot2 = fakeVideo();
-    result.current.slot1VideoRef.current = slot1;
-    result.current.slot2VideoRef.current = slot2;
-    return { result, slot1, slot2 };
-  }
-
   it('seeks the rebuilt recording to its partner and starts it', async () => {
-    const { result, slot1, slot2 } = await mounted();
+    const { result, slot1, slot2 } = await mountedPair();
     // Slot 2 carried on while slot 1 was rebuilt, so it is the only record of the position.
     slot2.browserResume();
     slot2.currentTime = 12.5;
@@ -1827,7 +1828,7 @@ describe('useDebatePlayback — a rebuilt recording rejoins the pair (GEO-2985)'
   // happens during preload. Seeking here would buy nothing and cost a demuxer parse walk on a
   // cue-less recording (GEO-2828); the card's next resume aligns both anyway.
   it('leaves a paused pair alone', async () => {
-    const { result, slot1, slot2 } = await mounted();
+    const { result, slot1, slot2 } = await mountedPair();
     slot2.browserPause();
 
     act(() => result.current.resyncSlot(1));
@@ -1837,7 +1838,7 @@ describe('useDebatePlayback — a rebuilt recording rejoins the pair (GEO-2985)'
   });
 
   it('waits for decoded data before seeking the rebuilt element', async () => {
-    const { result, slot1, slot2 } = await mounted();
+    const { result, slot1, slot2 } = await mountedPair();
     slot2.browserResume();
     slot2.currentTime = 8;
     slot1.readyState = 0; // straight out of load(), nothing opened yet
@@ -1862,7 +1863,7 @@ describe('useDebatePlayback — a rebuilt recording rejoins the pair (GEO-2985)'
    * undo it: a blank tile traded for a stopped debate.
    */
   it('does not let the split pair pause the half that is still playing', async () => {
-    const { result, slot1, slot2 } = await mounted();
+    const { result, slot1, slot2 } = await mountedPair();
     slot2.browserResume();
     slot2.currentTime = 12;
     slot1.readyState = 0; // rebuilding
@@ -1880,7 +1881,7 @@ describe('useDebatePlayback — a rebuilt recording rejoins the pair (GEO-2985)'
   // the pair is still split between the call and the first frame — wider here than anywhere else,
   // because a rebuilt cue-less recording is the slowest thing in this file to start.
   it('holds the guard until the rebuilt recording is actually running', async () => {
-    const { result, slot1, slot2 } = await mounted();
+    const { result, slot1, slot2 } = await mountedPair();
     slot2.browserResume();
     slot2.currentTime = 12;
     slot1.readyState = 0;
@@ -1895,7 +1896,7 @@ describe('useDebatePlayback — a rebuilt recording rejoins the pair (GEO-2985)'
   });
 
   it('polices the pair again once the rebuild is running', async () => {
-    const { result, slot1, slot2 } = await mounted();
+    const { result, slot1, slot2 } = await mountedPair();
     slot2.browserResume();
     slot2.currentTime = 12;
     slot1.readyState = 0;
@@ -1918,7 +1919,7 @@ describe('useDebatePlayback — a rebuilt recording rejoins the pair (GEO-2985)'
   // A rebuild is allowed to fail. What it may not do is hold the pair's corrections down until
   // the backstop while it is already known to have failed.
   it('lets go as soon as the rebuild fails again', async () => {
-    const { result, slot1, slot2 } = await mounted();
+    const { result, slot1, slot2 } = await mountedPair();
     slot2.browserResume();
     slot1.readyState = 0;
 
@@ -1960,7 +1961,7 @@ describe('useDebatePlayback — a rebuilt recording rejoins the pair (GEO-2985)'
   // `onError` fired. The preload case — both paused — is where the original failure was observed,
   // and it is the case where `resumeBoth` most needs to know a rebuild is under way.
   it('guards the rebuild even while the partner is paused', async () => {
-    const { result, slot1, slot2 } = await mounted();
+    const { result, slot1, slot2 } = await mountedPair();
     slot2.browserPause();
     slot1.readyState = 0;
 
@@ -2050,7 +2051,7 @@ describe('useDebatePlayback — a rebuilt recording rejoins the pair (GEO-2985)'
    * stopped debate: a strictly worse outcome than the bug.
    */
   it('leaves the healthy half playing when a recording cannot be revived', async () => {
-    const { result, slot1, slot2 } = await mounted();
+    const { result, slot1, slot2 } = await mountedPair();
     slot2.browserResume();
     slot2.currentTime = 12;
     // Out of attempts: paused, holding a MediaError, with no rebuild in flight to hide behind.
@@ -2137,6 +2138,41 @@ describe('useDebatePlayback — a fresh pair is positioned before it is started 
 
     expect(slot1.seeks).toEqual([expect.closeTo(4.969, 6)]);
     expect(slot2.seeks).toEqual([expect.closeTo(4.489, 6)]);
+  });
+
+  it('positions a never-played pair again after a reload empties it (GEO-3594)', async () => {
+    const { result, slot1, slot2 } = await mounted();
+    act(() => result.current.onPlaybackTick());
+    // A tap unlocks both for sound and reloads them: back to the start of each recording.
+    slot1.video.currentTime = 0;
+    slot2.video.currentTime = 0;
+    slot1.seeks.length = 0;
+    slot2.seeks.length = 0;
+
+    act(() => {
+      result.current.onMediaEmptied();
+      result.current.onPlaybackTick();
+    });
+
+    expect(slot1.seeks).toEqual([expect.closeTo(4.969, 6)]);
+    expect(slot2.seeks).toEqual([expect.closeTo(4.489, 6)]);
+  });
+
+  it('leaves a pair that has played to its own realignment when one is emptied', async () => {
+    const { result, slot1, slot2 } = await mounted();
+    act(() => result.current.onPlaybackTick());
+    slot1.seeks.length = 0;
+    slot2.seeks.length = 0;
+    Object.assign(slot1.video, { played: { length: 1 } });
+    Object.assign(slot2.video, { played: { length: 1 } });
+
+    act(() => {
+      result.current.onMediaEmptied();
+      result.current.onPlaybackTick();
+    });
+
+    expect(slot1.seeks).toEqual([]);
+    expect(slot2.seeks).toEqual([]);
   });
 
   it('waits for both to have metadata, since a seek before that has nothing to land on', async () => {
@@ -2507,4 +2543,145 @@ describe('automatic cut playback hold', () => {
       if (action !== 'replay') expect(pair.map(video => video.paused)).toEqual([true, true]);
     }
   );
+});
+
+describe('useDebatePlayback — sound carries to the next debate (GEO-3594)', () => {
+  const flush = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+  /** Every hook shares the mute preference, so a test that turns sound on hands it back. */
+  let restore: (() => void) | null = null;
+
+  beforeEach(() => {
+    mocks.turnSegments = [];
+    mocks.condensedBreaks = [];
+    mocks.forgetGestureVideoUnlock.mockReset();
+    mocks.recordingUrl.mockReset();
+    mocks.recordingUrl.mockImplementation(({ filename }: { filename: string }) =>
+      Promise.resolve({ url: `https://cdn.test/${filename}?sig=abc` })
+    );
+  });
+
+  afterEach(() => {
+    restore?.();
+    restore = null;
+    vi.restoreAllMocks();
+  });
+
+  /** A card whose viewer has turned sound on. */
+  async function soundOn(debate = debateFixture()) {
+    const card = await mountedPair(debate);
+    act(() => card.result.current.setMutedByUser(false));
+    restore = () => act(() => card.result.current.setMutedByUser(true));
+    return card;
+  }
+
+  /** The browser refuses to start the speaker with sound, so the pair plays muted. */
+  async function forcedMuted({ result, slot1, slot2 }: Awaited<ReturnType<typeof mountedPair>>) {
+    slot1.muted = false;
+    await act(async () => {
+      void result.current.resumeBoth();
+      await Promise.resolve();
+      slot1.rejectPlay();
+      slot2.settlePlay();
+      await flush(400);
+      // The muted retry.
+      slot1.settlePlay();
+      slot2.settlePlay();
+      await flush(400);
+    });
+    expect(result.current.playing).toBe(true);
+    expect(result.current.mutedByUser).toBe(true);
+  }
+
+  /** What the render does once the speaker's turn starts, as the tick sees it: muted, then not. */
+  function unmuteSpeaker(card: Awaited<ReturnType<typeof mountedPair>>) {
+    act(() => card.result.current.onPlaybackTick());
+    card.slot1.muted = false;
+  }
+
+  it('keeps a forced mute on the debate the browser muted, not on the next one', async () => {
+    const first = await soundOn();
+    const next = await mountedPair();
+
+    await forcedMuted(first);
+
+    // The viewer still wants sound, so the next debate asks for it.
+    expect(next.result.current.mutedByUser).toBe(false);
+  });
+
+  it('lifts the forced mute when the viewer taps Unmute', async () => {
+    const first = await soundOn();
+    await forcedMuted(first);
+
+    // The Mute control toggles from what it shows.
+    act(() => first.result.current.setMutedByUser(current => !current));
+
+    expect(first.result.current.mutedByUser).toBe(false);
+  });
+
+  it('drops the forced mute when the card is handed a different debate', async () => {
+    const first = await soundOn();
+    await forcedMuted(first);
+
+    first.rerender({ debate: debateFixture('debate-2') });
+
+    expect(first.result.current.mutedByUser).toBe(false);
+  });
+
+  it('plays on muted when the browser pauses the speaker it was just asked to unmute', async () => {
+    const first = await soundOn();
+    const next = await mountedPair();
+    await startPair(first.result, first.slot1, first.slot2);
+
+    unmuteSpeaker(first);
+    // A browser refusing the sound pauses the element, with no pause() of ours.
+    first.slot1.browserPause();
+    act(() => first.result.current.onPlaybackTick());
+
+    expect(first.slot2.paused).toBe(true);
+    expect(first.result.current.playing).toBe(false);
+    // Not a pause by the viewer, so autoplay starts it again — muted, with Unmute showing.
+    expect(first.result.current.userPaused).toBe(false);
+    expect(first.result.current.mutedByUser).toBe(true);
+    expect(next.result.current.mutedByUser).toBe(false);
+    // The next tap may try that element again.
+    expect(mocks.forgetGestureVideoUnlock).toHaveBeenCalledWith(first.slot1);
+
+    // Once muted, a second split is a real stop.
+    await startPair(first.result, first.slot1, first.slot2);
+    first.slot1.browserPause();
+    act(() => first.result.current.onPlaybackTick());
+    expect(first.result.current.userPaused).toBe(true);
+  });
+
+  it('plays on muted when the browser refuses the next speaker at a turn handoff', async () => {
+    const first = await soundOn();
+    await startPair(first.result, first.slot1, first.slot2);
+    act(() => first.result.current.onPlaybackTick());
+
+    // Slot 2's turn: the render unmutes it, and the browser pauses it.
+    first.slot2.muted = false;
+    first.slot2.browserPause();
+    act(() => first.result.current.onPlaybackTick());
+
+    expect(first.slot1.paused).toBe(true);
+    expect(first.result.current.userPaused).toBe(false);
+    expect(first.result.current.mutedByUser).toBe(true);
+    expect(mocks.forgetGestureVideoUnlock).toHaveBeenCalledWith(first.slot2);
+  });
+
+  it('still stops on Play for a pause well after the unmute, such as one from the system controls', async () => {
+    const first = await soundOn();
+    await startPair(first.result, first.slot1, first.slot2);
+    unmuteSpeaker(first);
+    act(() => first.result.current.onPlaybackTick());
+
+    const later = Date.now() + 5_000;
+    vi.spyOn(Date, 'now').mockReturnValue(later);
+    first.slot1.browserPause();
+    act(() => first.result.current.onPlaybackTick());
+
+    expect(first.result.current.userPaused).toBe(true);
+    expect(first.result.current.mutedByUser).toBe(false);
+    expect(mocks.forgetGestureVideoUnlock).not.toHaveBeenCalled();
+  });
 });
