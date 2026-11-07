@@ -1,9 +1,17 @@
 import * as React from 'react';
 
+import { heldPairMayResume } from '~/core/debates/pair-readiness';
+
 // Finish comfortably inside the round title's held middle, before its 300ms exit starts.
 const CUT_FADE_MS = 400;
 
-/** Cover an automatic edit with the outgoing frames until both incoming recordings can paint. */
+/**
+ * Cover an automatic edit with the outgoing frames until both incoming recordings can play on.
+ *
+ * "Can play on" is `heldPairMayResume`, not "has a frame": released at its first frame, a pair on a
+ * slow connection starved again straight after the break, and the drift that opened up between the
+ * two froze one of them over and over (GEO-3603).
+ */
 export function useVideoCutTransition({
   slot1VideoRef,
   slot2VideoRef,
@@ -46,7 +54,8 @@ export function useVideoCutTransition({
       const hidden = () => document.visibilityState === 'hidden';
       const animations: Animation[] = [];
       let hold: ReturnType<NonNullable<typeof holdForTransition>> | undefined;
-      const canPaint = () => pair.every(({ video }) => !video.seeking && video.readyState >= 2);
+      const heldAt = Date.now();
+      const mayResume = () => heldPairMayResume(pair[0].video, pair[1].video, Date.now() - heldAt);
       const clear = () => {
         if (disposed) return;
         disposed = true;
@@ -70,7 +79,7 @@ export function useVideoCutTransition({
         if (disposed) return;
         // A decoder or sync correction can start seeking again during the presentation frames.
         // Keep both stills until readiness is reported again rather than uncovering one early.
-        if (!canPaint()) {
+        if (!mayResume()) {
           releasing = false;
           ready();
           return;
@@ -98,8 +107,8 @@ export function useVideoCutTransition({
         cancelAnimationFrame(frame);
         clearTimeout(timer);
         // Decoders may recover with only `canplay`, or without another completion event.
-        // Keep one cancellable check alive until both incoming frames are available.
-        if (!canPaint()) {
+        // Keep one cancellable check alive until both can play on, or the hold runs out.
+        if (!mayResume()) {
           if (hidden()) timer = setTimeout(ready, 50);
           else frame = requestAnimationFrame(ready);
           return;

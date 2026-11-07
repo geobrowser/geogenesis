@@ -45,7 +45,7 @@ function fixture(enabled = true) {
       videoHeight: 480,
       clientWidth: 480,
       clientHeight: 289,
-      readyState: 2,
+      readyState: 3,
       seeking: false,
     })) {
       Object.defineProperty(video, key, { value, writable: true, configurable: true });
@@ -153,10 +153,53 @@ describe('automatic video cut transition', () => {
     tick();
     tick();
     expect(canvases[0].animate).not.toHaveBeenCalled();
-    Object.defineProperty(videos[1], 'readyState', { value: 2 });
+    Object.defineProperty(videos[1], 'readyState', { value: 3 });
     act(() => videos[1].dispatchEvent(new Event('loadeddata')));
     tick();
     tick();
+    expect(canvases[0].animate).toHaveBeenCalledOnce();
+  });
+
+  /**
+   * GEO-3603. Released at its first frame, a pair on a slow connection had nothing after it: one
+   * recording starved straight after the break, and the drift that opened froze the other again.
+   */
+  it('keeps playback held while an incoming recording has a frame but nothing to play on', () => {
+    const { cut, arrive, videos, hold, canvases } = fixture();
+    cut();
+    Object.defineProperty(videos[1], 'readyState', { value: 2 });
+    arrive(0);
+    arrive(1);
+    tick();
+    tick();
+    tick();
+    expect(hold.release).not.toHaveBeenCalled();
+    expect(canvases[0].animate).not.toHaveBeenCalled();
+    Object.defineProperty(videos[1], 'readyState', { value: 3 });
+    act(() => videos[1].dispatchEvent(new Event('canplay')));
+    tick();
+    tick();
+    expect(hold.release).toHaveBeenCalledOnce();
+    expect(canvases[0].animate).toHaveBeenCalledOnce();
+  });
+
+  /** A browser that never buffers a paused element must not leave the break frozen on its stills. */
+  it('plays on after the hold backstop even when a recording never reports it can play', () => {
+    const { cut, arrive, videos, hold, canvases } = fixture();
+    cut();
+    Object.defineProperty(videos[1], 'readyState', { value: 2 });
+    arrive(0);
+    arrive(1);
+    tick();
+    act(() => vi.advanceTimersByTime(2_900));
+    tick();
+    tick();
+    expect(hold.release).not.toHaveBeenCalled();
+    act(() => vi.advanceTimersByTime(200));
+    tick();
+    tick();
+    tick();
+    expect(hold.release).toHaveBeenCalledOnce();
     expect(canvases[0].animate).toHaveBeenCalledOnce();
   });
 
@@ -197,7 +240,7 @@ describe('automatic video cut transition', () => {
     tick();
     tick();
     expect(canvases[0].animate).not.toHaveBeenCalled();
-    Object.defineProperty(videos[1], 'readyState', { value: 2 });
+    Object.defineProperty(videos[1], 'readyState', { value: 3 });
     if (event === 'canplay') act(() => videos[1].dispatchEvent(new Event('canplay')));
     tick();
     tick();
