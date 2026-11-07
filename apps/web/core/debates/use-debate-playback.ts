@@ -11,6 +11,7 @@ import type { Debate } from './api';
 import { useDebateMedia, useDebateTranscript, useRecordingPlaybackUrl } from './hooks';
 import { type RecordingPlaybackVariant, recordingPlaybackVariant } from './mobile-rendition';
 import { debateRoundRoleForDebate, isOpenRoundsDebate } from './open-rounds';
+import { bufferedAheadSeconds, heldPairMayResume } from './pair-readiness';
 import { breaksEndMs, playbackBreaksFrom } from './playback-breaks';
 import {
   PLAYBACK_END_EPSILON_SECONDS,
@@ -61,6 +62,16 @@ const SYNC_SEEK_DRIFT_SECONDS = 0.75;
 const SYNC_NUDGE_RATE = 0.03;
 /** Floor between hard seeks, so a seek that itself causes drift cannot start a storm. */
 const MIN_SYNC_SEEK_INTERVAL_MS = 2_000;
+/**
+ * How much the follower must already hold past a sync seek's target for that seek to go ahead on its
+ * own (GEO-3603). Short of this the seek lands where there is nothing to play, the follower stalls
+ * for longer than the floor above while the leader runs on, and arrives behind enough to be seeked
+ * again: on Stream after a break's cut, slot 2 froze four times in eight seconds. Such a seek is made
+ * with the pair held instead, so it costs one wait rather than a run of them.
+ */
+const SYNC_SEEK_BUFFERED_SECONDS = 1;
+/** How often a held resync looks again at whether the pair may play. */
+const HELD_RESYNC_POLL_MS = 50;
 /**
  * Floor between attempts to restart an element the browser stopped while the tab is off screen.
  * Same reasoning as the seek floor: a browser that re-stops it must not cost a seek per tick.
@@ -120,6 +131,14 @@ const STALL_EPSILON_SECONDS = 0.001;
  * wrong here — playback needs the instant a tab goes off screen, not "recently on screen".
  */
 const documentIsHidden = () => typeof document !== 'undefined' && document.visibilityState === 'hidden';
+
+/** Physical playback paused by the player itself, without changing the viewer's play/pause intent. */
+type TransitionHold = {
+  /** Whether this is still the hold in force: a pause, scrub, suspend or new debate supersedes it. */
+  active: () => boolean;
+  release: () => void;
+  cancel: () => void;
+};
 
 /** Closer than this, a paused element is already where it is being sent. */
 const SEEK_NOOP_EPSILON_SECONDS = 0.001;
@@ -270,6 +289,10 @@ export function useDebatePlayback(
   const pendingSeekSecondsRef = React.useRef<number | null>(null);
   // An automatic cut holds physical playback without changing the viewer's play/pause intent.
   const transitionHoldRef = React.useRef<{ resume: boolean } | null>(null);
+  /** `holdForTransition`, for the drift correction, which runs in a callback declared before it. */
+  const holdForTransitionRef = React.useRef<(() => TransitionHold) | null>(null);
+  /** Stops a held resync still waiting on the pair. See `resyncFollowerHeld`. */
+  const stopHeldResyncRef = React.useRef<(() => void) | null>(null);
   /**
    * The pair still needs moving to where playback will start (GEO-2965).
    *
@@ -740,6 +763,7 @@ export function useDebatePlayback(
   React.useEffect(
     () => () => {
       transitionHoldRef.current = null;
+      stopHeldResyncRef.current?.();
       cancelRecoveries();
     },
     [cancelRecoveries]
@@ -948,6 +972,47 @@ export function useDebatePlayback(
     [noteDeliberateSeek, offsets]
   );
 
+  /**
+   * Bring a follower that fell far behind (or ahead) back into step with the pair held (GEO-3603):
+   * pause both, move the follower, and play both again once both can play on. Used where the
+   * follower holds nothing at its target, so a seek made while the leader ran on would only stall
+   * it behind again. The hold is the same one a break's cut takes, so a viewer's pause, scrub,
+   * suspend or a new debate supersedes it, and `heldPairMayResume` bounds how long it can last.
+   */
+  const resyncFollowerHeld = React.useCallback((follower: HTMLVideoElement, seconds: number) => {
+    const hold = holdForTransitionRef.current?.();
+    follower.currentTime = seconds;
+    follower.playbackRate = 1;
+    if (!hold) return;
+    stopHeldResyncRef.current?.();
+    const heldAt = Date.now();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const stop = () => {
+      clearTimeout(timer);
+      if (stopHeldResyncRef.current === stop) stopHeldResyncRef.current = null;
+    };
+    const check = () => {
+      if (!hold.active()) return stop();
+      const primaryVideo = slot1VideoRef.current;
+      const secondaryVideo = slot2VideoRef.current;
+      if (!primaryVideo || !secondaryVideo) {
+        stop();
+        hold.cancel();
+        return;
+      }
+      if (!heldPairMayResume(primaryVideo, secondaryVideo, Date.now() - heldAt)) {
+        timer = setTimeout(check, HELD_RESYNC_POLL_MS);
+        return;
+      }
+      stop();
+      // The wait was the seek's cost, not drift: the floor runs from when the pair plays again.
+      lastSyncSeekAtRef.current = Date.now();
+      hold.release();
+    };
+    stopHeldResyncRef.current = stop;
+    timer = setTimeout(check, HELD_RESYNC_POLL_MS);
+  }, []);
+
   const updateTurnState = React.useCallback(() => {
     const primaryVideo = slot1VideoRef.current;
     const secondaryVideo = slot2VideoRef.current;
@@ -1096,9 +1161,14 @@ export function useDebatePlayback(
       const absDrift = Math.abs(drift);
 
       if (absDrift > SYNC_SEEK_DRIFT_SECONDS && now - lastSyncSeekAtRef.current > MIN_SYNC_SEEK_INTERVAL_MS) {
-        follower.currentTime = Math.max(0, leader.currentTime - followerDelta);
-        follower.playbackRate = 1;
+        const target = Math.max(0, leader.currentTime - followerDelta);
         lastSyncSeekAtRef.current = now;
+        if (bufferedAheadSeconds(follower, target) >= SYNC_SEEK_BUFFERED_SECONDS) {
+          follower.currentTime = target;
+          follower.playbackRate = 1;
+        } else {
+          resyncFollowerHeld(follower, target);
+        }
       } else if (absDrift > SYNC_NUDGE_DRIFT_SECONDS) {
         // Small enough that a rate change closes it within a few seconds, and far enough from 1
         // to actually converge. On the muted element, so the pitch shift is not heard at all.
@@ -1255,7 +1325,7 @@ export function useDebatePlayback(
         });
       }
     }
-  }, [offsets, seekVideosTo, timelineSeconds, turnStateAt]);
+  }, [offsets, resyncFollowerHeld, seekVideosTo, timelineSeconds, turnStateAt]);
 
   const pauseBoth = React.useCallback(() => {
     if (transitionHoldRef.current) transitionHoldRef.current.resume = false;
@@ -1422,7 +1492,7 @@ export function useDebatePlayback(
     [offsets, seekVideosTo, timelineSeconds]
   );
 
-  const holdForTransition = React.useCallback(() => {
+  const holdForTransition = React.useCallback((): TransitionHold => {
     const hold = {
       resume:
         transitionHoldRef.current?.resume ??
@@ -1433,6 +1503,7 @@ export function useDebatePlayback(
     resumeGenerationRef.current++;
     for (const video of videos()) video.pause();
     return {
+      active: () => transitionHoldRef.current === hold,
       release: () => {
         if (transitionHoldRef.current !== hold) return;
         transitionHoldRef.current = null;
@@ -1453,6 +1524,9 @@ export function useDebatePlayback(
       },
     };
   }, [offsets, playing, resumeBoth, timelineSeconds, videos]);
+  React.useLayoutEffect(() => {
+    holdForTransitionRef.current = holdForTransition;
+  }, [holdForTransition]);
 
   const playFromStart = React.useCallback(async () => {
     transitionHoldRef.current = null;

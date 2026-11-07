@@ -238,3 +238,27 @@ export function usePairReadiness({
     release,
   };
 }
+
+/**
+ * Whether a pair the player paused itself may play again (GEO-3603): under a break's captured
+ * frames, or while a follower that fell far behind is brought back into step.
+ *
+ * The same rule the first start uses (`pairMayStart`), not "both have a frame": a pair let go at its
+ * first presentable frame has nothing after it on a slow connection, so one element starves a moment
+ * later while the other runs on, and the drift that opens up turns into the next freeze. Past
+ * `PAIR_HOLD_TIMEOUT_MS` the pair plays whatever is ready, so a browser that never reports more
+ * (one that holds back buffering a paused element) cannot freeze playback for good.
+ */
+export function heldPairMayResume(slot1: PairMember, slot2: PairMember, heldForMs: number): boolean {
+  return pairMayStart(slot1, slot2) || heldForMs >= PAIR_HOLD_TIMEOUT_MS;
+}
+
+/** How many seconds `video` holds from `seconds` onward; 0 when `seconds` is not buffered. */
+export function bufferedAheadSeconds(video: Pick<HTMLMediaElement, 'buffered'>, seconds: number): number {
+  const ranges = video.buffered;
+  if (!ranges) return 0;
+  for (let index = 0; index < ranges.length; index++) {
+    if (seconds >= ranges.start(index) && seconds <= ranges.end(index)) return ranges.end(index) - seconds;
+  }
+  return 0;
+}
