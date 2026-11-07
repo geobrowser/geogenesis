@@ -2273,6 +2273,11 @@ describe('useDebatePlayback — a fresh pair is positioned before it is started 
  * re-primes its audio pipeline; on a phone both are heard as crackle. So the audible recording
  * leads at rate 1 and the other follows it.
  */
+/** What a recording has buffered: one range, as a browser reports a contiguous buffer. */
+function bufferRange(video: { buffered?: unknown }, start: number, end: number) {
+  video.buffered = { length: 1, start: () => start, end: () => end };
+}
+
 describe('useDebatePlayback — drift correction leaves the audible recording alone', () => {
   let now = 1_700_000_000_000;
 
@@ -2334,6 +2339,7 @@ describe('useDebatePlayback — drift correction leaves the audible recording al
 
     slot2.currentTime = 41;
     slot1.currentTime = 43;
+    bufferRange(slot1, 30, 50);
     act(() => result.current.onPlaybackTick());
 
     expect(slot1.currentTime).toBe(41);
@@ -2385,9 +2391,76 @@ describe('useDebatePlayback — drift correction leaves the audible recording al
     expect(slot1.playbackRate).toBe(1);
 
     slot2.currentTime = 43;
+    bufferRange(slot2, 30, 50);
     act(() => result.current.onPlaybackTick());
     expect(slot2.currentTime).toBe(41);
     expect(slot1.currentTime).toBe(41);
+  });
+
+  /**
+   * GEO-3603. Seeked forward on its own to where nothing was buffered, the follower stalled for
+   * longer than the floor between seeks while the leader ran on, arrived behind again, and was
+   * seeked again: slot 2 froze four times in eight seconds after a break. Holding the pair for that
+   * one seek costs a single wait.
+   */
+  it('holds the pair for a sync seek to where the follower has nothing buffered, then plays both together', async () => {
+    const { result, slot1, slot2 } = await playingAt(10, { unmuted: false });
+    slot1.currentTime = 14;
+    slot2.currentTime = 12;
+    bufferRange(slot2, 5, 12.5);
+    slot2.readyState = 1;
+    const playsBefore = [slot1.plays, slot2.plays];
+
+    act(() => result.current.onPlaybackTick());
+
+    expect(slot2.currentTime).toBe(14);
+    expect(slot1.paused).toBe(true);
+    expect(slot2.paused).toBe(true);
+    // Still waiting on slot 2: neither is asked to play, and later ticks do not seek again.
+    await act(() => new Promise(resolve => setTimeout(resolve, 120)));
+    slot2.currentTime = 14.01;
+    now += 3_000;
+    act(() => result.current.onPlaybackTick());
+    expect(slot2.currentTime).toBe(14.01);
+    expect([slot1.plays, slot2.plays]).toEqual(playsBefore);
+    expect(result.current.playing).toBe(true);
+
+    slot2.readyState = 4;
+    await act(() => new Promise(resolve => setTimeout(resolve, 120)));
+    expect(slot1.plays).toBe(playsBefore[0] + 1);
+    expect(slot2.plays).toBe(playsBefore[1] + 1);
+  });
+
+  it('lets a held sync seek go after the hold backstop when the follower never reports it can play', async () => {
+    const { result, slot1, slot2 } = await playingAt(10, { unmuted: false });
+    slot1.currentTime = 14;
+    slot2.currentTime = 12;
+    slot2.readyState = 2;
+    const playsBefore = slot1.plays;
+
+    act(() => result.current.onPlaybackTick());
+    await act(() => new Promise(resolve => setTimeout(resolve, 120)));
+    expect(slot1.plays).toBe(playsBefore);
+
+    now += 3_000;
+    await act(() => new Promise(resolve => setTimeout(resolve, 120)));
+    expect(slot1.plays).toBe(playsBefore + 1);
+  });
+
+  it('leaves the pair held by a sync seek paused when the viewer pauses during the wait', async () => {
+    const { result, slot1, slot2 } = await playingAt(10, { unmuted: false });
+    slot1.currentTime = 14;
+    slot2.currentTime = 12;
+    slot2.readyState = 1;
+    const playsBefore = slot1.plays;
+
+    act(() => result.current.onPlaybackTick());
+    act(() => result.current.togglePlayback());
+    slot2.readyState = 4;
+    await act(() => new Promise(resolve => setTimeout(resolve, 120)));
+
+    expect(slot1.plays).toBe(playsBefore);
+    expect(result.current.playing).toBe(false);
   });
 });
 

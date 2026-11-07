@@ -37,6 +37,11 @@ function tick() {
   act(() => callbacks.forEach(callback => callback(0)));
 }
 
+/** One buffered range, as a browser reports a contiguous buffer. */
+function ranges(start: number, end: number) {
+  return { length: 1, start: () => start, end: () => end } as unknown as TimeRanges;
+}
+
 function fixture(enabled = true) {
   const videos = [document.createElement('video'), document.createElement('video')];
   for (const video of videos) {
@@ -45,8 +50,10 @@ function fixture(enabled = true) {
       videoHeight: 480,
       clientWidth: 480,
       clientHeight: 289,
-      readyState: 2,
+      readyState: 3,
       seeking: false,
+      currentTime: 72,
+      buffered: ranges(0, 200),
     })) {
       Object.defineProperty(video, key, { value, writable: true, configurable: true });
     }
@@ -153,10 +160,74 @@ describe('automatic video cut transition', () => {
     tick();
     tick();
     expect(canvases[0].animate).not.toHaveBeenCalled();
-    Object.defineProperty(videos[1], 'readyState', { value: 2 });
+    Object.defineProperty(videos[1], 'readyState', { value: 3 });
     act(() => videos[1].dispatchEvent(new Event('loadeddata')));
     tick();
     tick();
+    expect(canvases[0].animate).toHaveBeenCalledOnce();
+  });
+
+  /**
+   * GEO-3603. Released at its first frame, a pair on a slow connection had nothing after it: one
+   * recording starved straight after the break, and the drift that opened froze the other again.
+   */
+  it('keeps playback held while an incoming recording has a frame but nothing to play on', () => {
+    const { cut, arrive, videos, hold, canvases } = fixture();
+    cut();
+    Object.defineProperty(videos[1], 'readyState', { value: 2 });
+    arrive(0);
+    arrive(1);
+    tick();
+    tick();
+    tick();
+    expect(hold.release).not.toHaveBeenCalled();
+    expect(canvases[0].animate).not.toHaveBeenCalled();
+    Object.defineProperty(videos[1], 'readyState', { value: 3 });
+    act(() => videos[1].dispatchEvent(new Event('canplay')));
+    tick();
+    tick();
+    expect(hold.release).toHaveBeenCalledOnce();
+    expect(canvases[0].animate).toHaveBeenCalledOnce();
+  });
+
+  /**
+   * The cut jumps into what was buffered, so a pair that can play there may have a second left.
+   * Measured on Stream at 4 Mbps: slot 1 starved mid-sentence 2.4 s after the break (GEO-3603).
+   */
+  it('keeps playback held until both incoming recordings have a few seconds buffered past the cut', () => {
+    const { cut, arrive, videos, hold } = fixture();
+    cut();
+    Object.defineProperty(videos[1], 'buffered', { value: ranges(60, 73.5) });
+    arrive(0);
+    arrive(1);
+    tick();
+    tick();
+    tick();
+    expect(hold.release).not.toHaveBeenCalled();
+    Object.defineProperty(videos[1], 'buffered', { value: ranges(60, 76) });
+    tick();
+    tick();
+    tick();
+    expect(hold.release).toHaveBeenCalledOnce();
+  });
+
+  /** A browser that never buffers a paused element must not leave the break frozen on its stills. */
+  it('plays on after the hold backstop even when a recording never reports it can play', () => {
+    const { cut, arrive, videos, hold, canvases } = fixture();
+    cut();
+    Object.defineProperty(videos[1], 'readyState', { value: 2 });
+    arrive(0);
+    arrive(1);
+    tick();
+    act(() => vi.advanceTimersByTime(2_900));
+    tick();
+    tick();
+    expect(hold.release).not.toHaveBeenCalled();
+    act(() => vi.advanceTimersByTime(200));
+    tick();
+    tick();
+    tick();
+    expect(hold.release).toHaveBeenCalledOnce();
     expect(canvases[0].animate).toHaveBeenCalledOnce();
   });
 
@@ -197,7 +268,7 @@ describe('automatic video cut transition', () => {
     tick();
     tick();
     expect(canvases[0].animate).not.toHaveBeenCalled();
-    Object.defineProperty(videos[1], 'readyState', { value: 2 });
+    Object.defineProperty(videos[1], 'readyState', { value: 3 });
     if (event === 'canplay') act(() => videos[1].dispatchEvent(new Event('canplay')));
     tick();
     tick();
