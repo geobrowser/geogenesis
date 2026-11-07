@@ -37,6 +37,11 @@ function tick() {
   act(() => callbacks.forEach(callback => callback(0)));
 }
 
+/** One buffered range, as a browser reports a contiguous buffer. */
+function ranges(start: number, end: number) {
+  return { length: 1, start: () => start, end: () => end } as unknown as TimeRanges;
+}
+
 function fixture(enabled = true) {
   const videos = [document.createElement('video'), document.createElement('video')];
   for (const video of videos) {
@@ -47,6 +52,8 @@ function fixture(enabled = true) {
       clientHeight: 289,
       readyState: 3,
       seeking: false,
+      currentTime: 72,
+      buffered: ranges(0, 200),
     })) {
       Object.defineProperty(video, key, { value, writable: true, configurable: true });
     }
@@ -181,6 +188,27 @@ describe('automatic video cut transition', () => {
     tick();
     expect(hold.release).toHaveBeenCalledOnce();
     expect(canvases[0].animate).toHaveBeenCalledOnce();
+  });
+
+  /**
+   * The cut jumps into what was buffered, so a pair that can play there may have a second left.
+   * Measured on Stream at 4 Mbps: slot 1 starved mid-sentence 2.4 s after the break (GEO-3603).
+   */
+  it('keeps playback held until both incoming recordings have a few seconds buffered past the cut', () => {
+    const { cut, arrive, videos, hold } = fixture();
+    cut();
+    Object.defineProperty(videos[1], 'buffered', { value: ranges(60, 73.5) });
+    arrive(0);
+    arrive(1);
+    tick();
+    tick();
+    tick();
+    expect(hold.release).not.toHaveBeenCalled();
+    Object.defineProperty(videos[1], 'buffered', { value: ranges(60, 76) });
+    tick();
+    tick();
+    tick();
+    expect(hold.release).toHaveBeenCalledOnce();
   });
 
   /** A browser that never buffers a paused element must not leave the break frozen on its stills. */
