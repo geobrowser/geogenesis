@@ -10,8 +10,6 @@ import { Check } from '~/design-system/icons/check';
 import { ChevronRight } from '~/design-system/icons/chevron-right';
 import { ChevronUpBig } from '~/design-system/icons/chevron-up-big';
 
-import { ASSISTANT_DISABLED } from '~/partials/chat/assistant-visibility';
-
 type BlockLinkIngestionContextValue = {
   spaceId: string;
   enabled: boolean;
@@ -41,8 +39,7 @@ export function BlockLinkIngestionProvider({ spaceId, children }: ProviderProps)
   const value = React.useMemo(
     () => ({
       spaceId,
-      // URL ingestion runs through the assistant, so it is off while the assistant is.
-      enabled: hasLinkIngestionTool && !ASSISTANT_DISABLED,
+      enabled: hasLinkIngestionTool,
       expanded,
       setExpanded,
     }),

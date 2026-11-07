@@ -12,8 +12,6 @@ import { ChevronRight } from '~/design-system/icons/chevron-right';
 import { ChevronUpBig } from '~/design-system/icons/chevron-up-big';
 import { RightArrowLongSmall } from '~/design-system/icons/right-arrow-long-small';
 
-import { ASSISTANT_DISABLED } from '~/partials/chat/assistant-visibility';
-
 type Props = {
   spaceId: string;
 };
@@ -26,7 +24,7 @@ export function AddDataPanel({ spaceId }: Props) {
     onComplete: () => setExpanded(false),
   });
 
-  if (ASSISTANT_DISABLED || !canEdit || !expanded) return null;
+  if (!canEdit || !expanded) return null;
 
   return (
     <div className="relative h-[10.0625rem] w-full overflow-hidden rounded-[0.75rem] bg-[#E9E9E9]">
@@ -78,7 +76,7 @@ export function AddDataChip({ spaceId }: Props) {
   const canEdit = useCanUserEdit(spaceId);
   const [expanded, setExpanded] = useAtom(addDataPanelExpandedAtom);
 
-  if (ASSISTANT_DISABLED || !canEdit || expanded) return null;
+  if (!canEdit || expanded) return null;
 
   return (
     <button
