@@ -50,7 +50,21 @@ export type DebatePageLeave = 'hidden' | 'pagehide' | 'unmount';
 
 type Emit = (properties: Record<string, unknown>) => void;
 
-export function createDebatePageOutcome({ debateId, emit, now }: { debateId: string; emit: Emit; now: () => number }) {
+export function createDebatePageOutcome({
+  debateId,
+  emit,
+  now,
+  startedVisible = true,
+  userActivated = () => null,
+}: {
+  debateId: string;
+  emit: Emit;
+  now: () => number;
+  /** Whether the page was visible when the visit began. In-app browsers may load it before showing it. */
+  startedVisible?: boolean;
+  /** Whether the page has had a user gesture (`navigator.userActivation.hasBeenActive`), null where unknown. */
+  userActivated?: () => boolean | null;
+}) {
   const startedAt = now();
   let feed: DebatePageFeedState = { kind: 'loading', stage: 'debate_list' };
   let player: DebatePagePlayerState | null = null;
@@ -58,6 +72,16 @@ export function createDebatePageOutcome({ debateId, emit, now }: { debateId: str
   let readyAt: number | null = null;
   let movedOn = false;
   let done = false;
+  /*
+   * What tells a refused autoplay apart from a viewer who started it (GEO-3602): when the browser
+   * first refused, whether the page had had a gesture by then, the visitor's first touch anywhere,
+   * and when a page loaded out of sight was first shown. A play with `blocked_ms` set came after a
+   * refusal, so something the visitor did started it.
+   */
+  let blockedAt: number | null = null;
+  let activatedAtBlock: boolean | null = null;
+  let touchedAt: number | null = null;
+  let visibleAt: number | null = startedVisible ? startedAt : null;
 
   const elapsed = (at: number | null) => (at === null ? null : Math.max(0, Math.round(at - startedAt)));
 
@@ -71,6 +95,12 @@ export function createDebatePageOutcome({ debateId, emit, now }: { debateId: str
         debate_id: debateId,
         shown_ms: elapsed(shownAt),
         ready_ms: elapsed(readyAt),
+        blocked_ms: elapsed(blockedAt),
+        activated_at_block: activatedAtBlock,
+        touched_ms: elapsed(touchedAt),
+        started_visible: startedVisible,
+        visible_ms: elapsed(visibleAt),
+        activated: userActivated(),
         ...properties,
       });
     } catch {
@@ -103,8 +133,22 @@ export function createDebatePageOutcome({ debateId, emit, now }: { debateId: str
       if (done) return;
       player = next;
       if (next.ready && readyAt === null) readyAt = now();
+      if (next.autoplayBlocked && blockedAt === null) {
+        blockedAt = now();
+        activatedAtBlock = userActivated();
+      }
       if (next.playing)
         send({ outcome: 'played', played_ms: elapsed(now()), left_via: null, reason: null, detail: null });
+    },
+    /** The visitor's first touch or press anywhere on the page. */
+    touched() {
+      if (done || touchedAt !== null) return;
+      touchedAt = now();
+    },
+    /** The page became visible. Only the first time counts. */
+    visible() {
+      if (done || visibleAt !== null) return;
+      visibleAt = now();
     },
     /** Another debate became the active one before this one played. */
     movedOn() {
