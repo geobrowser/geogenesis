@@ -72,12 +72,7 @@ export function createDebatePageOutcome({
   let readyAt: number | null = null;
   let movedOn = false;
   let done = false;
-  /*
-   * What tells a refused autoplay apart from a viewer who started it (GEO-3602): when the browser
-   * first refused, whether the page had had a gesture by then, the visitor's first touch anywhere,
-   * and when a page loaded out of sight was first shown. A play with `blocked_ms` set came after a
-   * refusal, so something the visitor did started it.
-   */
+  // A play with `blocked_ms` set came after a refusal, so the visitor started it (GEO-3602).
   let blockedAt: number | null = null;
   let activatedAtBlock: boolean | null = null;
   let touchedAt: number | null = null;
