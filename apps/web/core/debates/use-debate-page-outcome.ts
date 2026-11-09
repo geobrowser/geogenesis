@@ -4,9 +4,39 @@ import * as React from 'react';
 
 import { capture } from '~/core/analytics';
 
-import { createDebatePageOutcome } from './debate-page-outcome';
+import { type DebatePageNavigation, createDebatePageOutcome } from './debate-page-outcome';
 
 export type DebatePageOutcome = ReturnType<typeof createDebatePageOutcome>;
+
+/** The debate whose visit was the document's landing page, once one has claimed it. */
+let landingDebateId: string | null = null;
+
+/**
+ * Whether this visit is the page the document was loaded for (GEO-3604): the navigation entry's URL
+ * names it, and only one debate can claim it. A later in-app return to that debate still reads as landing.
+ */
+export function readDebatePageNavigation(debateId: string): DebatePageNavigation | null {
+  try {
+    const entry = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined;
+    if (!entry) return null;
+    const landedHere = new URL(entry.name).pathname === window.location.pathname;
+    // Keyed on the debate rather than a one-shot flag: Strict Mode builds the memo below twice.
+    const landing = landedHere && (landingDebateId === null || landingDebateId === debateId);
+    if (landing) landingDebateId = debateId;
+    return {
+      entry: landing ? 'landing' : 'in_app',
+      type: entry.type ?? null,
+      activationStart: (entry as PerformanceNavigationTiming & { activationStart?: number }).activationStart ?? 0,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** Test seam: forget which debate claimed the landing. */
+export function resetDebatePageLandingForTests() {
+  landingDebateId = null;
+}
 
 /**
  * One `debate_page_outcome` per visit to a debate's page. Null when the feed is not anchored to a
@@ -23,6 +53,7 @@ export function useDebatePageOutcome(debateId: string | undefined): DebatePageOu
             debateId,
             emit: properties => capture('debate_page_outcome', properties),
             now: () => performance.now(),
+            navigation: readDebatePageNavigation(debateId),
             startedVisible: typeof document === 'undefined' || document.visibilityState !== 'hidden',
             userActivated: () =>
               (navigator as Navigator & { userActivation?: { hasBeenActive: boolean } }).userActivation
