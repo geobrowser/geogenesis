@@ -249,18 +249,24 @@ export function usePairReadiness({
  */
 export const HELD_PAIR_RUNWAY_SECONDS = 3;
 
+/**
+ * How close to the end a buffer counts as reaching it. Wider than `PLAYBACK_END_EPSILON_SECONDS`: a
+ * buffer ends on a segment boundary, which can fall a little short of `duration`.
+ */
+const RUNWAY_END_SLACK_SECONDS = 0.25;
+
 /** A held element: `PairMember`, plus what its runway is read from. */
 export type HeldPairMember = PairMember & Partial<Pick<HTMLMediaElement, 'buffered' | 'currentTime' | 'duration'>>;
 
 /** Enough buffered ahead to play on, or buffered to the end of the recording. */
 function hasRunway(video: HeldPairMember) {
   if (!video.buffered || video.currentTime === undefined) return true;
-  const ahead = bufferedAheadSeconds({ buffered: video.buffered }, video.currentTime);
+  const ahead = bufferedAheadSeconds(video, video.currentTime);
   if (ahead >= HELD_PAIR_RUNWAY_SECONDS) return true;
   return (
     video.duration !== undefined &&
     Number.isFinite(video.duration) &&
-    video.currentTime + ahead >= video.duration - 0.25
+    video.currentTime + ahead >= video.duration - RUNWAY_END_SLACK_SECONDS
   );
 }
 
@@ -280,8 +286,17 @@ export function heldPairMayResume(slot1: HeldPairMember, slot2: HeldPairMember, 
   return pairMayStart(slot1, slot2) && hasRunway(slot1) && hasRunway(slot2);
 }
 
+/**
+ * `heldPairMayResume` for one hold, on a clock that starts now. Every hold the player takes (a
+ * break's cut, a held resync) asks through this, so the backstop has one owner.
+ */
+export function heldPairGate(slot1: HeldPairMember, slot2: HeldPairMember): () => boolean {
+  const heldAt = Date.now();
+  return () => heldPairMayResume(slot1, slot2, Date.now() - heldAt);
+}
+
 /** How many seconds `video` holds from `seconds` onward; 0 when `seconds` is not buffered. */
-export function bufferedAheadSeconds(video: Pick<HTMLMediaElement, 'buffered'>, seconds: number): number {
+export function bufferedAheadSeconds(video: Partial<Pick<HTMLMediaElement, 'buffered'>>, seconds: number): number {
   const ranges = video.buffered;
   if (!ranges) return 0;
   for (let index = 0; index < ranges.length; index++) {

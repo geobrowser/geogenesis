@@ -2,6 +2,8 @@ import { act, renderHook } from '@testing-library/react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { timeRanges } from '~/core/debates/time-ranges-fixtures';
+
 import { useVideoCutTransition } from './use-video-cut-transition';
 
 const frames = new Map<number, FrameRequestCallback>();
@@ -37,11 +39,6 @@ function tick() {
   act(() => callbacks.forEach(callback => callback(0)));
 }
 
-/** One buffered range, as a browser reports a contiguous buffer. */
-function ranges(start: number, end: number) {
-  return { length: 1, start: () => start, end: () => end } as unknown as TimeRanges;
-}
-
 function fixture(enabled = true) {
   const videos = [document.createElement('video'), document.createElement('video')];
   for (const video of videos) {
@@ -53,7 +50,7 @@ function fixture(enabled = true) {
       readyState: 3,
       seeking: false,
       currentTime: 72,
-      buffered: ranges(0, 200),
+      buffered: timeRanges(0, 200),
     })) {
       Object.defineProperty(video, key, { value, writable: true, configurable: true });
     }
@@ -64,7 +61,7 @@ function fixture(enabled = true) {
     canvas.animate = vi.fn(() => animations[index] as unknown as Animation);
   });
   const videoRefs = videos.map(current => ({ current }));
-  const hold = { release: vi.fn(), cancel: vi.fn() };
+  const hold = { active: vi.fn(() => true), release: vi.fn(), cancel: vi.fn() };
   const holdForTransition = vi.fn(() => hold);
   const seek = vi.fn(() => videos.forEach(video => Object.defineProperty(video, 'seeking', { value: true })));
   const hook = renderHook(
@@ -197,14 +194,14 @@ describe('automatic video cut transition', () => {
   it('keeps playback held until both incoming recordings have a few seconds buffered past the cut', () => {
     const { cut, arrive, videos, hold } = fixture();
     cut();
-    Object.defineProperty(videos[1], 'buffered', { value: ranges(60, 73.5) });
+    Object.defineProperty(videos[1], 'buffered', { value: timeRanges(60, 73.5) });
     arrive(0);
     arrive(1);
     tick();
     tick();
     tick();
     expect(hold.release).not.toHaveBeenCalled();
-    Object.defineProperty(videos[1], 'buffered', { value: ranges(60, 76) });
+    Object.defineProperty(videos[1], 'buffered', { value: timeRanges(60, 76) });
     tick();
     tick();
     tick();

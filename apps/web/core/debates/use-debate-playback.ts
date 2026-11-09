@@ -11,7 +11,7 @@ import type { Debate } from './api';
 import { useDebateMedia, useDebateTranscript, useRecordingPlaybackUrl } from './hooks';
 import { type RecordingPlaybackVariant, recordingPlaybackVariant } from './mobile-rendition';
 import { debateRoundRoleForDebate, isOpenRoundsDebate } from './open-rounds';
-import { bufferedAheadSeconds, heldPairMayResume } from './pair-readiness';
+import { bufferedAheadSeconds, heldPairGate } from './pair-readiness';
 import { breaksEndMs, playbackBreaksFrom } from './playback-breaks';
 import {
   PLAYBACK_END_EPSILON_SECONDS,
@@ -133,7 +133,7 @@ const STALL_EPSILON_SECONDS = 0.001;
 const documentIsHidden = () => typeof document !== 'undefined' && document.visibilityState === 'hidden';
 
 /** Physical playback paused by the player itself, without changing the viewer's play/pause intent. */
-type TransitionHold = {
+export type TransitionHold = {
   /** Whether this is still the hold in force: a pause, scrub, suspend or new debate supersedes it. */
   active: () => boolean;
   release: () => void;
@@ -985,7 +985,13 @@ export function useDebatePlayback(
     follower.playbackRate = 1;
     if (!hold) return;
     stopHeldResyncRef.current?.();
-    const heldAt = Date.now();
+    const primaryVideo = slot1VideoRef.current;
+    const secondaryVideo = slot2VideoRef.current;
+    if (!primaryVideo || !secondaryVideo) {
+      hold.cancel();
+      return;
+    }
+    const mayResume = heldPairGate(primaryVideo, secondaryVideo);
     let timer: ReturnType<typeof setTimeout> | undefined;
     const stop = () => {
       clearTimeout(timer);
@@ -993,14 +999,13 @@ export function useDebatePlayback(
     };
     const check = () => {
       if (!hold.active()) return stop();
-      const primaryVideo = slot1VideoRef.current;
-      const secondaryVideo = slot2VideoRef.current;
-      if (!primaryVideo || !secondaryVideo) {
+      // A replaced element is a new source, which takes its own hold; this one has nothing to wait on.
+      if (slot1VideoRef.current !== primaryVideo || slot2VideoRef.current !== secondaryVideo) {
         stop();
         hold.cancel();
         return;
       }
-      if (!heldPairMayResume(primaryVideo, secondaryVideo, Date.now() - heldAt)) {
+      if (!mayResume()) {
         timer = setTimeout(check, HELD_RESYNC_POLL_MS);
         return;
       }

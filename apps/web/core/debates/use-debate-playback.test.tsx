@@ -5,6 +5,7 @@ import * as React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Debate, DebateMediaCondensedBreak, DebateMediaTurnSegment } from './api';
+import { timeRanges } from './time-ranges-fixtures';
 import { useDebatePlayback } from './use-debate-playback';
 
 const mocks = vi.hoisted(() => ({
@@ -2273,11 +2274,6 @@ describe('useDebatePlayback — a fresh pair is positioned before it is started 
  * re-primes its audio pipeline; on a phone both are heard as crackle. So the audible recording
  * leads at rate 1 and the other follows it.
  */
-/** What a recording has buffered: one range, as a browser reports a contiguous buffer. */
-function bufferRange(video: { buffered?: unknown }, start: number, end: number) {
-  video.buffered = { length: 1, start: () => start, end: () => end };
-}
-
 describe('useDebatePlayback — drift correction leaves the audible recording alone', () => {
   let now = 1_700_000_000_000;
 
@@ -2339,7 +2335,7 @@ describe('useDebatePlayback — drift correction leaves the audible recording al
 
     slot2.currentTime = 41;
     slot1.currentTime = 43;
-    bufferRange(slot1, 30, 50);
+    Object.assign(slot1, { buffered: timeRanges(30, 50) });
     act(() => result.current.onPlaybackTick());
 
     expect(slot1.currentTime).toBe(41);
@@ -2391,7 +2387,7 @@ describe('useDebatePlayback — drift correction leaves the audible recording al
     expect(slot1.playbackRate).toBe(1);
 
     slot2.currentTime = 43;
-    bufferRange(slot2, 30, 50);
+    Object.assign(slot2, { buffered: timeRanges(30, 50) });
     act(() => result.current.onPlaybackTick());
     expect(slot2.currentTime).toBe(41);
     expect(slot1.currentTime).toBe(41);
@@ -2407,7 +2403,7 @@ describe('useDebatePlayback — drift correction leaves the audible recording al
     const { result, slot1, slot2 } = await playingAt(10, { unmuted: false });
     slot1.currentTime = 14;
     slot2.currentTime = 12;
-    bufferRange(slot2, 5, 12.5);
+    Object.assign(slot2, { buffered: timeRanges(5, 12.5) });
     slot2.readyState = 1;
     const playsBefore = [slot1.plays, slot2.plays];
 

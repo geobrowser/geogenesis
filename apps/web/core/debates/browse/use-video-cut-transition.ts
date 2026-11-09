@@ -1,6 +1,7 @@
 import * as React from 'react';
 
-import { heldPairMayResume } from '~/core/debates/pair-readiness';
+import { heldPairGate } from '~/core/debates/pair-readiness';
+import type { TransitionHold } from '~/core/debates/use-debate-playback';
 
 // Finish comfortably inside the round title's held middle, before its 300ms exit starts.
 const CUT_FADE_MS = 400;
@@ -23,7 +24,7 @@ export function useVideoCutTransition({
   slot1VideoRef: React.RefObject<HTMLVideoElement | null>;
   slot2VideoRef: React.RefObject<HTMLVideoElement | null>;
   seek: (seconds: number) => void;
-  holdForTransition?: () => { release: () => void; cancel: () => void };
+  holdForTransition?: () => TransitionHold;
   enabled: boolean;
   resetKey: string;
 }) {
@@ -54,8 +55,7 @@ export function useVideoCutTransition({
       const hidden = () => document.visibilityState === 'hidden';
       const animations: Animation[] = [];
       let hold: ReturnType<NonNullable<typeof holdForTransition>> | undefined;
-      const heldAt = Date.now();
-      const mayResume = () => heldPairMayResume(pair[0].video, pair[1].video, Date.now() - heldAt);
+      const mayResume = heldPairGate(pair[0].video, pair[1].video);
       const clear = () => {
         if (disposed) return;
         disposed = true;
