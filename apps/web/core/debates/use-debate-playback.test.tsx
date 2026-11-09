@@ -2443,6 +2443,24 @@ describe('useDebatePlayback — drift correction leaves the audible recording al
     expect(slot1.plays).toBe(playsBefore + 1);
   });
 
+  it('cancels a held sync seek when a recording is replaced during the wait, rather than gating on the old one', async () => {
+    const { result, slot1, slot2 } = await playingAt(10, { unmuted: false });
+    slot1.currentTime = 14;
+    slot2.currentTime = 12;
+    slot2.readyState = 1;
+    const playsBefore = slot1.plays;
+
+    act(() => result.current.onPlaybackTick());
+    // `DebaterVideo` rebuilds slot 2 after an error: a new element, which takes its own hold.
+    const rebuilt = fakeVideo();
+    result.current.slot2VideoRef.current = rebuilt;
+    await act(() => new Promise(resolve => setTimeout(resolve, 120)));
+
+    expect(result.current.playing).toBe(false);
+    expect(slot1.plays).toBe(playsBefore);
+    expect(rebuilt.plays).toBe(0);
+  });
+
   it('leaves the pair held by a sync seek paused when the viewer pauses during the wait', async () => {
     const { result, slot1, slot2 } = await playingAt(10, { unmuted: false });
     slot1.currentTime = 14;
