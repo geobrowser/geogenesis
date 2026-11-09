@@ -41,7 +41,8 @@ const EAGER_CARD_COUNT = 4;
 
 // A refetch rebuilds every loaded page from a re-ranked page one, so pages never go stale by age.
 // A failed first load has no data and stays stale, so focus and reconnect still retry it.
-const FEED_SESSION_OPTIONS = { staleTime: Infinity } as const;
+const FEED_SESSION_GC_MS = 30 * 60_000;
+const FEED_SESSION_OPTIONS = { staleTime: Infinity, gcTime: FEED_SESSION_GC_MS } as const;
 
 // A reader still within a screen of the top gets a fresh feed on return; one who has scrolled keeps theirs.
 // The age matches the app's default staleTime (`core/query-client.tsx`).

@@ -210,6 +210,42 @@ describe('resuming an Explore feed', () => {
     expect(screen.queryByText('Re-ranked lead')).toBeNull();
   });
 
+  it('keeps loaded pages for 30 minutes after the reader leaves', async () => {
+    const first = mountFeed();
+    await screen.findByText('Original lead');
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    first.unmount();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(29 * 60_000);
+    });
+    vi.useRealTimers();
+    now += 29 * 60_000;
+    fetchPage.mockResolvedValue(page('Re-ranked lead'));
+    mountFeed();
+    await screen.findByText('Original lead');
+
+    expect(fetchPage).toHaveBeenCalledTimes(1);
+  });
+
+  it('starts fresh after 30 minutes away', async () => {
+    const first = mountFeed();
+    await screen.findByText('Original lead');
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    first.unmount();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(31 * 60_000);
+    });
+    vi.useRealTimers();
+    now += 31 * 60_000;
+    fetchPage.mockResolvedValue(page('Re-ranked lead'));
+    mountFeed();
+
+    await screen.findByText('Re-ranked lead');
+    expect(fetchPage).toHaveBeenCalledTimes(2);
+  });
+
   it.each<ResumeTrigger>(['focus', 'reconnect'])(
     'recovers a failed first load on %s wherever the page is scrolled',
     async trigger => {
@@ -230,6 +266,24 @@ describe('resuming an Explore feed', () => {
       expect(fetchPage).toHaveBeenCalledTimes(4);
     }
   );
+
+  it('keeps the default 5 minutes for the activity feed, which does not opt in', async () => {
+    const props = { apiEndpoint: '/api/activity/feed', lockedSpaceId: 'space', preserveSession: undefined };
+    const first = mountFeed(props);
+    await screen.findByText('Original lead');
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    first.unmount();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(6 * 60_000);
+    });
+    vi.useRealTimers();
+    fetchPage.mockResolvedValue(page('Updated activity'));
+    mountFeed(props);
+
+    await screen.findByText('Updated activity');
+    expect(fetchPage).toHaveBeenCalledTimes(2);
+  });
 
   it('still refreshes the activity feed on focus, which does not opt in', async () => {
     mountFeed({ apiEndpoint: '/api/activity/feed', lockedSpaceId: 'space', preserveSession: undefined });
