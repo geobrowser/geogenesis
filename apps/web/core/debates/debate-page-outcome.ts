@@ -48,18 +48,49 @@ export type DebatePageNotPlayedReason =
 
 export type DebatePageLeave = 'hidden' | 'pagehide' | 'unmount';
 
+/**
+ * How the visit relates to the document's navigation (GEO-3604).
+ *
+ * `landing`: the debate page is the page the browser navigated to, so `now()` (`performance.now()`)
+ * already counts from the moment the link was opened, and the `*_nav_ms` fields are that wait.
+ * `in_app`: reached by a client-side navigation, where navigation start is some earlier page's, and
+ * the `*_nav_ms` fields are null.
+ */
+export type DebatePageNavigation = {
+  entry: 'landing' | 'in_app';
+  /** `PerformanceNavigationTiming.type`: `navigate`, `reload`, `back_forward` or `prerender`. */
+  type: string | null;
+  /** When a prerendered page was shown, on `now()`'s clock; the visitor's wait starts there. 0 otherwise. */
+  activationStart: number;
+};
+
 type Emit = (properties: Record<string, unknown>) => void;
 
-export function createDebatePageOutcome({ debateId, emit, now }: { debateId: string; emit: Emit; now: () => number }) {
+export function createDebatePageOutcome({
+  debateId,
+  emit,
+  now,
+  navigation = null,
+}: {
+  debateId: string;
+  emit: Emit;
+  now: () => number;
+  navigation?: DebatePageNavigation | null;
+}) {
   const startedAt = now();
   let feed: DebatePageFeedState = { kind: 'loading', stage: 'debate_list' };
   let player: DebatePagePlayerState | null = null;
   let shownAt: number | null = null;
   let readyAt: number | null = null;
+  let blockedAt: number | null = null;
+  let stillAt: number | null = null;
   let movedOn = false;
   let done = false;
 
   const elapsed = (at: number | null) => (at === null ? null : Math.max(0, Math.round(at - startedAt)));
+  /** From the moment the link was opened. Only on a landing visit, the one place that clock means that. */
+  const sinceNavigation = (at: number | null) =>
+    at === null || navigation?.entry !== 'landing' ? null : Math.max(0, Math.round(at - navigation.activationStart));
 
   const send = (properties: Record<string, unknown>) => {
     done = true;
@@ -71,6 +102,17 @@ export function createDebatePageOutcome({ debateId, emit, now }: { debateId: str
         debate_id: debateId,
         shown_ms: elapsed(shownAt),
         ready_ms: elapsed(readyAt),
+        still_ms: elapsed(stillAt),
+        // GEO-3604: the same moments on the visitor's clock, which starts when the link was opened.
+        // `started_ms` is when the feed began counting, i.e. what the `*_ms` fields above leave out.
+        entry: navigation?.entry ?? null,
+        navigation_type: navigation?.type ?? null,
+        started_ms: sinceNavigation(startedAt),
+        still_nav_ms: sinceNavigation(stillAt),
+        shown_nav_ms: sinceNavigation(shownAt),
+        ready_nav_ms: sinceNavigation(readyAt),
+        // A blocked autoplay's ready-to-tap frame: the still is up and only a tap will start it.
+        blocked_nav_ms: sinceNavigation(blockedAt),
         ...properties,
       });
     } catch {
@@ -103,8 +145,23 @@ export function createDebatePageOutcome({ debateId, emit, now }: { debateId: str
       if (done) return;
       player = next;
       if (next.ready && readyAt === null) readyAt = now();
-      if (next.playing)
-        send({ outcome: 'played', played_ms: elapsed(now()), left_via: null, reason: null, detail: null });
+      if (next.autoplayBlocked && blockedAt === null) blockedAt = now();
+      if (next.playing) {
+        const at = now();
+        send({
+          outcome: 'played',
+          played_ms: elapsed(at),
+          played_nav_ms: sinceNavigation(at),
+          left_via: null,
+          reason: null,
+          detail: null,
+        });
+      }
+    },
+    /** The linked debate's still frames have painted, at `at` on `now()`'s clock (possibly before this was created). */
+    stillShown(at: number) {
+      if (done || stillAt !== null) return;
+      stillAt = at;
     },
     /** Another debate became the active one before this one played. */
     movedOn() {
@@ -113,7 +170,16 @@ export function createDebatePageOutcome({ debateId, emit, now }: { debateId: str
     },
     leave(via: DebatePageLeave) {
       if (done) return;
-      send({ outcome: 'not_played', played_ms: null, left_via: via, ...reason(), left_ms: elapsed(now()) });
+      const at = now();
+      send({
+        outcome: 'not_played',
+        played_ms: null,
+        played_nav_ms: null,
+        left_via: via,
+        ...reason(),
+        left_ms: elapsed(at),
+        left_nav_ms: sinceNavigation(at),
+      });
     },
   };
 }

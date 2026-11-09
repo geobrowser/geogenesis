@@ -43,6 +43,7 @@ import { DebateScrollHint, scrollHintBounceProps, useDebateScrollHint } from './
 import { DEBATE_FEED_HOLDS_FULL_PLAYBACK } from './feed-full-playback';
 import { DebateShareDialog } from './lazy-share-dialog';
 import { useLineClampOverflow } from './line-clamp-overflow';
+import { useStillFrameShown } from './still-frame-timing';
 import { useDebateShareAction } from './use-debate-share-action';
 import { useDebatesBestOrder } from './use-debates-best-order';
 import { debateFeedPanelAtom, debateFullscreenActiveAtom, openDebateFeedPanelAtom } from '~/atoms';
@@ -466,6 +467,9 @@ export function DebatesBrowseFeed({
           onPlaybackState={
             initialDebateId != null && ID.equals(debate.id, initialDebateId) ? pageOutcome?.player : undefined
           }
+          onStillShown={
+            initialDebateId != null && ID.equals(debate.id, initialDebateId) ? pageOutcome?.stillShown : undefined
+          }
           // Resolve the next debates' recordings while the viewer is still on this one. Each
           // debate needs two signed URLs, and until they land the player shows "Loading…"
           // instead of a video, which is what makes arriving at a card feel glitchy
@@ -571,6 +575,7 @@ function DebateFeedItem({
   onOpenComments,
   onPlaybackRequest,
   onPlaybackState,
+  onStillShown,
 }: {
   debate: Debate;
   spaceId: string;
@@ -592,8 +597,10 @@ function DebateFeedItem({
   /** Replay on a debate that is not the active one makes it the active one, like its other controls. */
   onPlaybackRequest: () => void;
   onPlaybackState?: DebatePageOutcome['player'];
+  onStillShown?: DebatePageOutcome['stillShown'];
 }) {
   const itemRef = React.useRef<HTMLElement | null>(null);
+  useStillFrameShown(itemRef, onStillShown);
   const share = useDebateShareAction();
   // Comments live on the Debate entity — same query key as the panel, so posting
   // there updates this count without a refetch of our own.
