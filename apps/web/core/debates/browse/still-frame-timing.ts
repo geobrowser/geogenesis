@@ -5,9 +5,8 @@ import * as React from 'react';
 const POSTER_SELECTOR = 'img[data-debate-poster]';
 
 /**
- * When an already-loaded still painted, on `performance.now()`'s clock. A still from the server HTML
- * can finish before the app hydrates, so its `load` event is gone: its resource entry's
- * `responseEnd` survives (exposed cross-origin too), and nothing paints before first paint.
+ * When an already-loaded still painted. A still from the server HTML may load before hydration, so
+ * it is dated by its resource entry's `responseEnd`, no earlier than first paint.
  */
 function loadedAt(img: HTMLImageElement, fallback: number): number {
   try {

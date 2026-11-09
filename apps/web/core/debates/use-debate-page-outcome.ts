@@ -12,10 +12,8 @@ export type DebatePageOutcome = ReturnType<typeof createDebatePageOutcome>;
 let landingDebateId: string | null = null;
 
 /**
- * Whether this visit is the page the browser navigated to (GEO-3604). The navigation entry names
- * the URL the document was loaded for; a client-side navigation leaves it naming an earlier page.
- * Only one debate can be the landing, so returning to it in-app later reads as landing again only
- * for that same debate: its `*_nav_ms` would then be very large, which `started_ms` shows.
+ * Whether this visit is the page the document was loaded for (GEO-3604): the navigation entry's URL
+ * names it, and only one debate can claim it. A later in-app return to that debate still reads as landing.
  */
 export function readDebatePageNavigation(debateId: string): DebatePageNavigation | null {
   try {

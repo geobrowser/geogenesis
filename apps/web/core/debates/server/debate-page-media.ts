@@ -8,11 +8,8 @@ import { geoChatBaseUrl } from './geo-chat-base-url';
 type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
 
 /**
- * The linked debate's media readiness, read on the server beside the removal check (GEO-3604).
- *
- * In the browser it is one of the lookups the feed waits on before it shows the linked debate, and
- * it only starts after hydration. Anonymous and uncached like the removal check; null on any
- * failure, which leaves the browser to fetch it as before.
+ * The linked debate's media readiness, read on the server so the feed need not wait for it after
+ * hydration (GEO-3604). Anonymous and uncached; null on failure, leaving the browser to fetch it.
  */
 export async function fetchDebatePageMedia(
   entityId: string,

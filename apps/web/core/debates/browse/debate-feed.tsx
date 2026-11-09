@@ -175,11 +175,8 @@ export function DebatesBrowseFeed({
   // still free to settle: nothing there is on screen.
   const [pinnedIds, setPinnedIds] = React.useState<readonly string[]>([]);
 
-  // An anchored feed shows the anchor on its own row and readiness, before the listing, the ranking
-  // and the other debates' readiness are in (GEO-3604): those are a 50-row list and one lookup per
-  // row, and only the anchor is on screen. The rest joins below it once, when all of that has
-  // settled, so the next cards arrive in their final order. Latched: a later refetch that sets a
-  // lookup pending again must not take the rest away.
+  // An anchored feed shows the anchor alone until the listing, ranking and readiness settle, then the
+  // rest joins below it in final order (GEO-3604). Latched, so a later refetch never removes the rest.
   const restSettled = !debatesQuery.isLoading && !bestOrderLoading && !mediaLoading;
   const [restShown, setRestShown] = React.useState(restSettled);
   if (restSettled && !restShown) setRestShown(true);

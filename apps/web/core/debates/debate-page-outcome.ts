@@ -49,12 +49,8 @@ export type DebatePageNotPlayedReason =
 export type DebatePageLeave = 'hidden' | 'pagehide' | 'unmount';
 
 /**
- * How the visit relates to the document's navigation (GEO-3604).
- *
- * `landing`: the debate page is the page the browser navigated to, so `now()` (`performance.now()`)
- * already counts from the moment the link was opened, and the `*_nav_ms` fields are that wait.
- * `in_app`: reached by a client-side navigation, where navigation start is some earlier page's, and
- * the `*_nav_ms` fields are null.
+ * How the visit relates to the document's navigation (GEO-3604). On a `landing` visit `now()` counts
+ * from the link being opened; on `in_app` it counts from an earlier page, so `*_nav_ms` are null.
  */
 export type DebatePageNavigation = {
   entry: 'landing' | 'in_app';
