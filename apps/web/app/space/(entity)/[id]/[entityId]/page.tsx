@@ -10,6 +10,7 @@ import { WALLET_ADDRESS } from '~/core/cookie';
 import { DebateEntityView } from '~/core/debates/browse/debate-entity-view';
 import { DebateRemovedView } from '~/core/debates/browse/debate-removed-view';
 import { isDebateEntity } from '~/core/debates/is-debate-entity';
+import { debatePageStillPreloads } from '~/core/debates/speaker-still';
 import { isHiddenEntity } from '~/core/moderation/hidden';
 import { entityBrowseViewFromTypes } from '~/core/utils/entity-browse-view';
 import { entityHasOnlyPostType } from '~/core/utils/entity/entities';
@@ -75,14 +76,26 @@ export default async function EntityTemplateStrategy(props: Props) {
       return <DebateRemovedView spaceId={params.id} debateId={params.entityId} />;
     }
 
+    // The linked debate's stills, named in the HTML so they load while the bundle does: they are
+    // the first picture of the debate, before any video (GEO-3604). Same hrefs as the card's `<img>`s.
+    const stills = debatePageStillPreloads(params.entityId, media?.artifacts);
+    // Same-origin in a dev setup that proxies geo-chat, where there is nothing to warm.
+    const stillOrigin = stills[0] && URL.canParse(stills[0]) ? new URL(stills[0]).origin : null;
+
     return (
-      <DebateEntityView
-        spaceId={params.id}
-        debateId={params.entityId}
-        seed={{ debate, media, signedIn: cookieStore.get(WALLET_ADDRESS) !== undefined }}
-        editView={<DefaultEntityPage params={params} searchParams={searchParams} />}
-        removedView={<DebateRemovedView spaceId={params.id} debateId={params.entityId} reportOutcome={false} />}
-      />
+      <>
+        {stillOrigin && <link rel="preconnect" href={stillOrigin} />}
+        {stills.map(href => (
+          <link key={href} rel="preload" as="image" href={href} fetchPriority="high" />
+        ))}
+        <DebateEntityView
+          spaceId={params.id}
+          debateId={params.entityId}
+          seed={{ debate, media, signedIn: cookieStore.get(WALLET_ADDRESS) !== undefined }}
+          editView={<DefaultEntityPage params={params} searchParams={searchParams} />}
+          removedView={<DebateRemovedView spaceId={params.id} debateId={params.entityId} reportOutcome={false} />}
+        />
+      </>
     );
   }
 
