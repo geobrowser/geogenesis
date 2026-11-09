@@ -128,14 +128,12 @@ export function DebatesBrowseFeed({
   // viewer who participated in any incomplete debate there pushes their own count over and loses
   // the oldest few. The next completed debate in that space tips it for everyone at once.
   //
-  // So fetch the anchor by id instead of requiring it to appear. Gated on the listing having
-  // settled without it, which keeps the common case at one request — this only fires where the
-  // feed would otherwise have silently rendered the wrong page.
+  // So fetch the anchor by id instead of requiring it to appear, and alongside the listing rather
+  // than after it (GEO-3604): the anchor is shown from its own row as soon as it is ready, and the
+  // listing is 50 rows. On the debate page the server has usually seeded it already. Stops asking
+  // once the listing has it.
   const anchorListed = initialDebateId != null && listedDebates.some(debate => ID.equals(debate.id, initialDebateId));
-  const anchorQuery = useDebate(
-    initialDebateId ?? '',
-    initialDebateId != null && !debatesQuery.isLoading && !anchorListed
-  );
+  const anchorQuery = useDebate(initialDebateId ?? '', initialDebateId != null && !anchorListed);
 
   // Two-stage gate (GEO-2412). `isWatchableDebate` only proves both raw recordings exist; a debate
   // whose media job failed or never ran still passes it, so readiness decides what renders.
@@ -172,14 +170,28 @@ export function DebatesBrowseFeed({
   // still free to settle: nothing there is on screen.
   const [pinnedIds, setPinnedIds] = React.useState<readonly string[]>([]);
 
+  // An anchored feed shows the anchor on its own row and readiness, before the listing, the ranking
+  // and the other debates' readiness are in (GEO-3604): those are a 50-row list and one lookup per
+  // row, and only the anchor is on screen. The rest joins below it once, when all of that has
+  // settled, so the next cards arrive in their final order. Latched: a later refetch that sets a
+  // lookup pending again must not take the rest away.
+  const restSettled = !debatesQuery.isLoading && !bestOrderLoading && !mediaLoading;
+  const [restShown, setRestShown] = React.useState(restSettled);
+  if (restSettled && !restShown) setRestShown(true);
+
   const rankedDebates = React.useMemo(() => {
+    const processed = new Set(processedIds);
+    if (initialDebateId != null && !restShown) {
+      const anchor = candidates.find(debate => ID.equals(debate.id, initialDebateId) && processed.has(debate.id));
+      return anchor ? [anchor] : [];
+    }
+
     // Held back the way the media lookups hold it back — by having nothing to show yet rather than
     // by a flag, since the flag below only drives the empty and anchor states. Painting in recency
     // order first would move the next debate out from under someone already scrolling. A ranking
     // that fails rather than loads leaves this empty, so the feed falls through to recency.
     if (bestOrderLoading) return [];
 
-    const processed = new Set(processedIds);
     // Recency is the tiebreak, not the rule: the ranking covers published, named debates, so
     // anything it hasn't scored still plays — after the ranked ones, newest first, exactly as the
     // whole feed used to be ordered.
@@ -194,7 +206,7 @@ export function DebatesBrowseFeed({
     if (anchorIndex <= 0) return sorted;
     const [anchor] = sorted.splice(anchorIndex, 1);
     return [anchor, ...sorted];
-  }, [candidates, processedIds, initialDebateId, rankByDebateId, bestOrderLoading]);
+  }, [candidates, processedIds, initialDebateId, rankByDebateId, bestOrderLoading, restShown]);
 
   const { debates, pinnedCount } = React.useMemo(() => {
     if (pinnedIds.length === 0) return { debates: rankedDebates, pinnedCount: 0 };

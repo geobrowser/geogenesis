@@ -34,6 +34,10 @@ const mocks = vi.hoisted(() => ({
   anchorDebate: null as ReturnType<typeof completedDebate> | null,
   anchorLoading: false,
   anchorError: null as Error | null,
+  /** Whether the feed asked for the anchor by id on its last render. */
+  anchorEnabled: false,
+  /** The space listing still loading. */
+  listLoading: false,
   /** What the stub player reports through `onPlaybackState`. */
   playerState: { ready: false, playing: false, autoplayBlocked: false, error: false },
   captured: [] as Array<{ event: string; properties: Record<string, unknown> }>,
@@ -52,13 +56,19 @@ type ObserverRecord = {
 let observers: ObserverRecord[] = [];
 
 vi.mock('~/core/debates/hooks', () => ({
-  useSpaceDebates: () => ({ data: { debates: mocks.debates }, isLoading: false, error: null }),
+  useSpaceDebates: () =>
+    mocks.listLoading
+      ? { data: undefined, isLoading: true, error: null }
+      : { data: { debates: mocks.debates }, isLoading: false, error: null },
   useProcessedVideoDebateIds: () => ({
     processedIds: mocks.processedIds ?? mocks.debates.map(debate => debate.id),
     isLoading: mocks.mediaLoading,
     hasError: mocks.mediaError,
   }),
-  useDebate: () => ({ data: mocks.anchorDebate, isLoading: mocks.anchorLoading, error: mocks.anchorError }),
+  useDebate: (_id: string, enabled: boolean) => {
+    mocks.anchorEnabled = enabled;
+    return { data: mocks.anchorDebate, isLoading: mocks.anchorLoading, error: mocks.anchorError };
+  },
 }));
 
 vi.mock('./use-debates-best-order', async () => {
@@ -205,6 +215,8 @@ beforeEach(() => {
   mocks.anchorDebate = null;
   mocks.anchorLoading = false;
   mocks.anchorError = null;
+  mocks.anchorEnabled = false;
+  mocks.listLoading = false;
   mocks.bestOrderIds = [];
   mocks.bestOrderLoading = false;
   mocks.canRemove = false;
@@ -1003,6 +1015,80 @@ function completedDebate(id: string, claim: string, completedAt: string): Debate
     recording_cancelled_by: null,
   };
 }
+
+describe('DebatesBrowseFeed — the linked debate does not wait for the rest of the feed (GEO-3604)', () => {
+  const linked = () => completedDebate('debate-2', 'Linked debate', '2026-07-01T00:01:10.000Z');
+  const others = () => [
+    completedDebate('debate-1', 'Newest debate', '2026-07-03T00:01:10.000Z'),
+    completedDebate('debate-3', 'Older debate', '2026-06-30T00:01:10.000Z'),
+  ];
+
+  it('asks for the linked debate while the listing is still loading', () => {
+    mocks.listLoading = true;
+    render(<DebatesBrowseFeed spaceId="space-1" initialDebateId="debate-2" />);
+    expect(mocks.anchorEnabled).toBe(true);
+  });
+
+  it('stops asking once the listing has it', () => {
+    mocks.debates = [linked(), ...others()];
+    render(<DebatesBrowseFeed spaceId="space-1" initialDebateId="debate-2" />);
+    expect(mocks.anchorEnabled).toBe(false);
+  });
+
+  it('shows the linked debate from its own row before the listing, ranking and other readiness land', () => {
+    mocks.listLoading = true;
+    mocks.bestOrderLoading = true;
+    mocks.mediaLoading = true;
+    mocks.anchorDebate = linked();
+    mocks.processedIds = ['debate-2'];
+    render(<DebatesBrowseFeed spaceId="space-1" initialDebateId="debate-2" fallback={<div>Entity page</div>} />);
+
+    const players = screen.getAllByTestId(/^player-/);
+    expect(players).toHaveLength(1);
+    expect(players[0]).toHaveAttribute('data-testid', 'player-debate-2');
+    expect(players[0]).toHaveAttribute('data-active', 'true');
+    expect(screen.queryByText('Entity page')).not.toBeInTheDocument();
+  });
+
+  it('still waits while the linked debate’s own readiness is unknown', () => {
+    mocks.listLoading = true;
+    mocks.mediaLoading = true;
+    mocks.anchorDebate = linked();
+    mocks.processedIds = [];
+    render(<DebatesBrowseFeed spaceId="space-1" initialDebateId="debate-2" fallback={<div>Entity page</div>} />);
+
+    expect(screen.getByText('Loading debates…')).toBeInTheDocument();
+    expect(screen.queryByText('Entity page')).not.toBeInTheDocument();
+  });
+
+  it('adds the rest below it once, in ranked order, when everything has settled', () => {
+    mocks.debates = [linked(), ...others()];
+    mocks.anchorDebate = linked();
+    mocks.processedIds = ['debate-2', 'debate-1'];
+    mocks.mediaLoading = true;
+    mocks.bestOrderIds = ['debate-3', 'debate-1'];
+    // A fresh element each time: re-rendering the same one lets React skip the feed.
+    const feed = () => <DebatesBrowseFeed spaceId="space-1" initialDebateId="debate-2" />;
+    const view = render(feed());
+
+    // debate-1's readiness is in, but the rest waits until it all is.
+    expect(screen.getAllByTestId(/^player-/).map(el => el.dataset.testid)).toEqual(['player-debate-2']);
+
+    mocks.processedIds = null;
+    mocks.mediaLoading = false;
+    view.rerender(feed());
+    expect(screen.getAllByTestId(/^player-/).map(el => el.dataset.testid)).toEqual([
+      'player-debate-2',
+      'player-debate-3',
+      'player-debate-1',
+    ]);
+
+    // A later lookup going pending again does not take the rest away.
+    mocks.mediaLoading = true;
+    view.rerender(feed());
+    expect(screen.getAllByTestId(/^player-/)).toHaveLength(3);
+  });
+});
 
 describe('DebatesBrowseFeed ordering', () => {
   // What plays after the debate you opened is what the explore page's "Best" sort would have

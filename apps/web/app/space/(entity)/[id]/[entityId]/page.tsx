@@ -1,10 +1,12 @@
 import { IdUtils } from '@geoprotocol/geo-sdk/lite';
 
+import { cookies } from 'next/headers';
 import { notFound } from 'next/navigation';
 
 import { bountiesEnabledForNetwork, isBountyEntity } from '~/core/bounties/config';
 import { EVENT_SCHEMA } from '~/core/community-calls/constants';
 import { getRecordingUrls } from '~/core/community-calls/recordings';
+import { WALLET_ADDRESS } from '~/core/cookie';
 import { DebateEntityView } from '~/core/debates/browse/debate-entity-view';
 import { DebateRemovedView } from '~/core/debates/browse/debate-removed-view';
 import { isDebateEntity } from '~/core/debates/is-debate-entity';
@@ -16,7 +18,7 @@ import { BountyDetailHeader } from '~/partials/bounties/bounty-detail-header';
 import { BountyDetailSections } from '~/partials/bounties/bounty-detail-sections';
 import { CommunityCallRecording } from '~/partials/community-calls/community-call-recording';
 
-import { cachedFetchDebateVisibility, cachedFetchEntityPage } from './cached-fetch-entity';
+import { cachedFetchDebatePageMedia, cachedFetchEntityPage, cachedReadDebateVisibility } from './cached-fetch-entity';
 import DefaultEntityPage from './default-entity-page';
 import PostEntityPage from './post-entity-page';
 import { ProfileEntityServerContainer } from './profile-entity-server-container';
@@ -61,7 +63,15 @@ export default async function EntityTemplateStrategy(props: Props) {
     // reach the browser — including in edit mode, whose raw entity page carries the video too. An
     // unreachable or ambiguous geo-chat answers `unknown` and the debate renders as before: an
     // outage must not blank every debate. See `fetchDebateVisibility`.
-    if ((await cachedFetchDebateVisibility(params.entityId)) === 'removed') {
+    //
+    // The same read's body, and the debate's media readiness fetched beside it, go to the feed so
+    // the linked debate can render, on the server too, without its own lookups (GEO-3604).
+    const [{ visibility, debate }, media, cookieStore] = await Promise.all([
+      cachedReadDebateVisibility(params.entityId),
+      cachedFetchDebatePageMedia(params.entityId),
+      cookies(),
+    ]);
+    if (visibility === 'removed') {
       return <DebateRemovedView spaceId={params.id} debateId={params.entityId} />;
     }
 
@@ -69,6 +79,7 @@ export default async function EntityTemplateStrategy(props: Props) {
       <DebateEntityView
         spaceId={params.id}
         debateId={params.entityId}
+        seed={{ debate, media, signedIn: cookieStore.get(WALLET_ADDRESS) !== undefined }}
         editView={<DefaultEntityPage params={params} searchParams={searchParams} />}
         removedView={<DebateRemovedView spaceId={params.id} debateId={params.entityId} reportOutcome={false} />}
       />

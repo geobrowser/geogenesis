@@ -3,7 +3,7 @@ import { cleanup, render, screen } from '@testing-library/react';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { DebateEntityView } from './debate-entity-view';
+import { DebateEntityView, debatePageSeedEntries } from './debate-entity-view';
 
 const mocks = vi.hoisted(() => ({
   pathname: '/space/space-1/debate-1',
@@ -109,5 +109,34 @@ describe('DebateEntityView server views after the URL has moved on', () => {
 
     expect(mocks.feedViews?.fallback).toBe(editView);
     expect(mocks.feedViews?.removedView).toBe(removedView);
+  });
+});
+
+describe('debatePageSeedEntries (GEO-3604)', () => {
+  const debate = { id: '01a0448a61d371018434a20fdadf6f97' } as never;
+  const media = { job: null, artifacts: [] } as never;
+
+  it('seeds the row and the readiness under the keys the feed reads', () => {
+    expect(debatePageSeedEntries('01a0448a61d371018434a20fdadf6f97', { debate, media, signedIn: false })).toEqual([
+      { queryKey: ['debates', 'detail', '01a0448a61d371018434a20fdadf6f97'], data: debate },
+      { queryKey: ['debates', 'media', '01a0448a61d371018434a20fdadf6f97'], data: media },
+    ]);
+  });
+
+  it('seeds a signed-in reader’s row already stale, since it lacks their own fields', () => {
+    const [row, readiness] = debatePageSeedEntries('01a0448a61d371018434a20fdadf6f97', {
+      debate,
+      media,
+      signedIn: true,
+    });
+    expect(row).toMatchObject({ updatedAt: 0 });
+    expect(readiness).not.toHaveProperty('updatedAt');
+  });
+
+  it('seeds nothing it was not given, nor a row for another debate', () => {
+    expect(debatePageSeedEntries('01a0448a61d371018434a20fdadf6f97', undefined)).toEqual([]);
+    expect(debatePageSeedEntries('01a0448a61d371018434a20fdadf6f00', { debate, media: null, signedIn: false })).toEqual(
+      []
+    );
   });
 });
