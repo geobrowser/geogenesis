@@ -122,7 +122,8 @@ export function forgetDebatePosition(debateId: string): void {
 /**
  * Saves the position every few seconds while playing, and again when playback stops or the page closes.
  *
- * The last save uses what the effect saw, because a reused card may already hold the next debate.
+ * The last save uses the newest position of the same debate. A pause can bring a newer position in
+ * the same render, and a reused card may already hold the next debate.
  */
 export function useRememberDebatePosition({
   debateId,
@@ -137,6 +138,10 @@ export function useRememberDebatePosition({
 }) {
   const seenRef = React.useRef<{ debateId: string; seconds: number; timelineSeconds: number } | null>(null);
   const writtenRef = React.useRef<{ debateId: string; seconds: number } | null>(null);
+  const latestRef = React.useRef({ debateId, seconds: playheadSeconds, timelineSeconds });
+  React.useLayoutEffect(() => {
+    latestRef.current = { debateId, seconds: playheadSeconds, timelineSeconds };
+  });
 
   const write = React.useCallback(() => {
     const seen = seenRef.current;
@@ -162,6 +167,7 @@ export function useRememberDebatePosition({
     window.addEventListener('pagehide', write);
     return () => {
       window.removeEventListener('pagehide', write);
+      if (seenRef.current?.debateId === latestRef.current.debateId) seenRef.current = latestRef.current;
       write();
     };
   }, [debateId, recording, write]);

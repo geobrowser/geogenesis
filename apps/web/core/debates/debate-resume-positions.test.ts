@@ -165,6 +165,23 @@ describe('useRememberDebatePosition', () => {
     expect(readDebateResumeSeconds('debate-1')).toBe(98);
   });
 
+  it('writes the position a pause brings with it', () => {
+    const hook = renderRemember(at(50));
+
+    hook.rerender(at(53, { recording: false }));
+
+    expect(readDebateResumeSeconds('debate-1')).toBe(48);
+  });
+
+  it('forgets the position when a pause brings it into the last ten seconds', () => {
+    const hook = renderRemember(at(105, { timelineSeconds: 120 }));
+    hook.rerender(at(109.9, { timelineSeconds: 120 }));
+
+    hook.rerender(at(110.1, { timelineSeconds: 120, recording: false }));
+
+    expect(readDebateResumeSeconds('debate-1')).toBeNull();
+  });
+
   it('writes the last position when the page goes away', () => {
     renderRemember(at(100)).rerender(at(103));
 
@@ -185,7 +202,7 @@ describe('useRememberDebatePosition', () => {
     const hook = renderRemember(at(100));
     hook.rerender(at(103));
 
-    hook.rerender(at(103, { debateId: 'debate-2', recording: false }));
+    hook.rerender(at(0, { debateId: 'debate-2', recording: false }));
 
     expect(readDebateResumeSeconds('debate-1')).toBe(98);
     expect(readDebateResumeSeconds('debate-2')).toBeNull();
