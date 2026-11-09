@@ -42,6 +42,7 @@ import {
 import { type CursorPage, collectCursorPages } from '~/core/sync/collect-cursor-pages';
 import { INTERESTED_VOTE_KIND } from '~/core/topics/interested';
 import { Entity, SearchResult } from '~/core/types';
+import { chunk } from '~/core/utils/chunk';
 import { spacesFromRoutingProjections } from '~/core/utils/entity/entities';
 import { sortSpaceIdsByRank } from '~/core/utils/space/space-ranking';
 
@@ -104,14 +105,7 @@ const ENTITIES_CONNECTION_MAX_FIRST = 1000;
 
 /** `ids` in consecutive batches of at most `size`, for `id: { in }` style filters. */
 export function batchEntityIds(ids: readonly string[], size = ENTITY_ID_BATCH_SIZE): string[][] {
-  // Zero or negative never advances the loop below, and a fraction slices at truncated offsets.
-  if (!Number.isInteger(size) || size < 1)
-    throw new RangeError(`batchEntityIds: size must be a positive integer, got ${size}`);
-  const batches: string[][] = [];
-  for (let start = 0; start < ids.length; start += size) {
-    batches.push(ids.slice(start, start + size));
-  }
-  return batches;
+  return chunk(ids, size);
 }
 
 // @TODO(migration): Can we somehow bind the querying patterns to the sync store?
