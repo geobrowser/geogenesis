@@ -16,11 +16,8 @@ export function tapMayStartBlockedDebate(target: EventTarget | null): boolean {
   return target.closest(OWN_ACTION) === null;
 }
 
-/**
- * While `enabled`, a tap that `tapMayStartBlockedDebate` allows calls `start` inside the gesture,
- * the only place a browser that refused autoplay accepts `play()`. On `window` in capture, so it runs
- * before the gesture pool's `document` listener reloads the card's elements; a touch tap's `click` is skipped.
- */
+// While `enabled`, an allowed tap calls `start` inside the gesture, where a refused `play()` is accepted.
+// Window capture runs before the gesture pool's `document` listener, which would reload the elements.
 export function useBlockedPageTap(enabled: boolean, start: () => void) {
   const onStart = React.useEffectEvent(start);
   React.useEffect(() => {

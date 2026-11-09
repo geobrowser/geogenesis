@@ -397,11 +397,7 @@ function PairedDebateFeedPlayer({
   const onPauseTick = () => {
     if (activatingRef.current === 0) onPlaybackTick();
   };
-  /*
-   * A tap anywhere on the page starts a debate the browser refused to autoplay (GEO-3602), with
-   * sound: the `play()` inside the tap unlocks both elements for it, and the preference is what the
-   * next card reads.
-   */
+  // A tap anywhere starts a refused debate with sound (GEO-3602); the next card reads the preference.
   useBlockedPageTap(active && autoplayBlocked && !userPaused && !playing && !detached, () => {
     togglePlayback();
     for (const video of [slot1VideoRef.current, slot2VideoRef.current]) {
