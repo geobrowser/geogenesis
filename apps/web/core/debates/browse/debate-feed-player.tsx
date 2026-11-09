@@ -737,37 +737,40 @@ export function DebateFeedPlayer({
   // than drawing empty bars and filling them in.
 
   /*
-   * Replay from the end card, held until this player may play.
+   * Replay from the end card, or Start over on a resumed debate, held until this player may play.
    *
    * In a row of cards only one holds playback, and pressing Replay on another first hands playback
    * over — which `active` reports a render later. Playing at once would run this debate beside the
    * one still holding playback; dropping the press made Replay take two taps, because an ended
    * debate does not resume by itself once it is handed playback. So the press asks for playback,
-   * is kept, and is carried out the moment playback arrives. It lapses if the debate stops being
-   * ended in the meantime.
+   * is kept, and is carried out the moment playback arrives. A Replay lapses if the debate stops
+   * being ended in the meantime; a Start over if it ends, or the card moves to another debate.
    */
-  const [replayPending, setReplayPending] = React.useState(false);
-  const replayFromEndCard = () => {
+  const [restartPending, setRestartPending] = React.useState<'replay' | 'start_over' | null>(null);
+  const restartWhenActive = (control: 'replay' | 'start_over') => {
     if (active) {
-      playFromStart();
+      playFromStart(control);
       return;
     }
-    setReplayPending(true);
+    setRestartPending(control);
     onPlaybackRequest?.();
   };
-  // An effect event, so the effect runs on the three facts that decide it rather than on every render
+  const replayFromEndCard = () => restartWhenActive('replay');
+  // An effect event, so the effect runs on the facts that decide it rather than on every render
   // for a `playFromStart` that is a fresh function each time.
-  const replayNow = React.useEffectEvent(() => playFromStart());
+  const restartNow = React.useEffectEvent((control: 'replay' | 'start_over') => playFromStart(control));
+  const startOverOffered = startOverId === debate.id;
   React.useEffect(() => {
-    if (!replayPending) return;
-    if (!playbackEnded) {
-      setReplayPending(false);
+    if (restartPending == null) return;
+    const lapsed = restartPending === 'replay' ? !playbackEnded : playbackEnded || !startOverOffered;
+    if (lapsed) {
+      setRestartPending(null);
       return;
     }
     if (!active) return;
-    setReplayPending(false);
-    replayNow();
-  }, [active, playbackEnded, replayPending]);
+    setRestartPending(null);
+    restartNow(restartPending);
+  }, [active, playbackEnded, restartPending, startOverOffered]);
   const showControls = ready && (awaitingTap || showReplay);
   // An ended debate always offers a replay; a stopped one shows the paused glyph.
   const showPausedGlyph = ready && awaitingTap && !playbackEnded && !held;
@@ -1117,12 +1120,12 @@ export function DebateFeedPlayer({
                 >
                   {mutedByUser ? <SpeakerMuted /> : <Speaker />}
                 </ControlCircle>
-                {startOverId === debate.id && (
+                {startOverOffered && (
                   <button
                     type="button"
                     onClick={event => {
                       event.stopPropagation();
-                      playFromStart('start_over');
+                      restartWhenActive('start_over');
                     }}
                     className="flex h-10.5 items-center gap-1 rounded-full bg-white px-3 text-smallButton text-text shadow-light"
                   >

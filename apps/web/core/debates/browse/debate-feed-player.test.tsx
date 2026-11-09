@@ -1382,7 +1382,13 @@ describe('resuming where this browser left a debate', () => {
     playheadSeconds = 5,
     playing = true,
     timelineSeconds = 120,
+    active = true,
+    playbackEnded = false,
+    onPlaybackRequest,
   }: {
+    active?: boolean;
+    playbackEnded?: boolean;
+    onPlaybackRequest?: () => void;
     initialSeekSeconds?: number | null;
     ready?: boolean;
     releaseMedia?: boolean;
@@ -1399,13 +1405,16 @@ describe('resuming where this browser left a debate', () => {
       playheadSeconds,
       playing,
       timelineSeconds,
+      active,
+      playbackEnded,
       debateId: debate.id,
     };
 
     const element = () => (
       <DebateFeedPlayer
         debate={props.debateId === debate.id ? debate : ({ ...debate, id: props.debateId } as typeof debate)}
-        active
+        active={props.active}
+        onPlaybackRequest={onPlaybackRequest}
         releaseMedia={props.releaseMedia}
         initialSeekSeconds={props.initialSeekSeconds}
       />
@@ -1418,6 +1427,7 @@ describe('resuming where this browser left a debate', () => {
         playing: props.playing,
         playheadSeconds: props.playheadSeconds,
         timelineSeconds: props.timelineSeconds,
+        playbackEnded: props.playbackEnded,
         seekBoth: makeSeek(),
       });
 
@@ -1525,6 +1535,49 @@ describe('resuming where this browser left a debate', () => {
     expect(player.controller().playFromStart).toHaveBeenCalledOnce();
     expect(readDebateResumeSeconds(debate.id)).toBeNull();
     expect(startOver()).toBeNull();
+  });
+
+  it('Start over on a card that does not hold playback asks for it, and starts over once handed it', () => {
+    rememberDebatePosition(debate.id, 80, 120);
+    const onPlaybackRequest = vi.fn();
+    const player = renderResumable({ active: false, playing: false, onPlaybackRequest });
+
+    fireEvent.click(startOver()!);
+
+    // Playing now would run beside the card that holds playback, then be paused by it.
+    expect(onPlaybackRequest).toHaveBeenCalledOnce();
+    expect(player.controller().playFromStart).not.toHaveBeenCalled();
+    expect(readDebateResumeSeconds(debate.id)).toBe(75);
+    expect(startOver()).not.toBeNull();
+
+    player.update({ active: true });
+
+    expect(player.controller().playFromStart).toHaveBeenCalledOnce();
+    expect(readDebateResumeSeconds(debate.id)).toBeNull();
+    expect(startOver()).toBeNull();
+  });
+
+  it('drops a held Start over once the card moves to another debate', () => {
+    rememberDebatePosition(debate.id, 80, 120);
+    const player = renderResumable({ active: false, playing: false, onPlaybackRequest: vi.fn() });
+    fireEvent.click(startOver()!);
+
+    player.update({ debateId: 'debate-2' });
+    player.update({ active: true });
+
+    expect(player.controller().playFromStart).not.toHaveBeenCalled();
+    expect(readDebateResumeSeconds(debate.id)).toBe(75);
+  });
+
+  it('drops a held Start over once the debate ends', () => {
+    rememberDebatePosition(debate.id, 80, 120);
+    const player = renderResumable({ active: false, playing: false, onPlaybackRequest: vi.fn() });
+    fireEvent.click(startOver()!);
+
+    player.update({ playbackEnded: true });
+    player.update({ active: true });
+
+    expect(player.controller().playFromStart).not.toHaveBeenCalled();
   });
 
   it('saves where the viewer stopped when they pause', () => {
