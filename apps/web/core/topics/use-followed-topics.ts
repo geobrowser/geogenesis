@@ -4,6 +4,7 @@ import { queryOptions, useQuery } from '@tanstack/react-query';
 
 import * as React from 'react';
 
+import { FEED_SESSION_GC_MS } from '~/core/explore/explore-constants';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { fetchInterestedTopics, interestedTopicsQueryKey } from '~/core/io/subgraph/fetch-interested-topics';
 import { normId } from '~/core/utils/norm-id';
@@ -16,6 +17,7 @@ export function interestedTopicsQueryOptions(spaceId: string) {
     queryKey: interestedTopicsQueryKey(spaceId),
     queryFn: ({ signal }) => fetchInterestedTopics(spaceId, signal),
     staleTime: 60_000,
+    gcTime: FEED_SESSION_GC_MS,
   });
 }
 

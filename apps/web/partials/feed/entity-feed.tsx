@@ -13,6 +13,7 @@ import { useCachedBrowseSidebarData } from '~/core/browse/use-browse-sidebar-cac
 import { keepSelectableSpaces } from '~/core/debates/claim-space-allowlist';
 import { type HubFilterOption, HubMultiFilterMenu, pickerLabel } from '~/core/debates/matchmaking/hub-filter-menu';
 import { keepSelectableTopics, orderFacetOptions, toggleId } from '~/core/debates/matchmaking/topic-facets';
+import { FEED_SESSION_GC_MS } from '~/core/explore/explore-constants';
 import { type ExplorePageSort, PUBLIC_FEED_PARAM } from '~/core/explore/explore-feed-params';
 import type { ExploreFeedResult, ExploreTime } from '~/core/explore/fetch-explore-feed';
 import { composeSeenPages } from '~/core/explore/seen-demotion/hide-seen';
@@ -41,7 +42,6 @@ const EAGER_CARD_COUNT = 4;
 
 // A refetch rebuilds every loaded page from a re-ranked page one, so pages never go stale by age.
 // A failed first load has no data and stays stale, so focus and reconnect still retry it.
-const FEED_SESSION_GC_MS = 30 * 60_000;
 const FEED_SESSION_OPTIONS = { staleTime: Infinity, gcTime: FEED_SESSION_GC_MS } as const;
 
 // A reader still within a screen of the top gets a fresh feed on return; one who has scrolled keeps theirs.
