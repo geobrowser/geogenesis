@@ -7,7 +7,7 @@ import { useAtomValue, useSetAtom, useStore } from 'jotai';
 
 import { capture } from '~/core/analytics';
 import { type Debate, GeoChatRequestError } from '~/core/debates/api';
-import type { DebatePageFeedState } from '~/core/debates/debate-page-outcome';
+import type { DebatePageFeedState, DebatePagePlayerState } from '~/core/debates/debate-page-outcome';
 import { isRemovedDebateAnswer } from '~/core/debates/debate-removal';
 import { useDebate, useProcessedVideoDebateIds, useSpaceDebates } from '~/core/debates/hooks';
 import { isWatchableDebate } from '~/core/debates/playback-utils';
@@ -51,6 +51,11 @@ import { debateFeedPanelAtom, debateFullscreenActiveAtom, openDebateFeedPanelAto
 const PAGE_SIZE = 5;
 /** How many cards past the active one open their recordings. See the `preload` prop below. */
 const PRELOAD_AHEAD = 2;
+/**
+ * The longest the debate page holds the next cards' preloading for the linked debate to start. A
+ * backstop: the linked card reports a start, a refused autoplay or an error well before this.
+ */
+const LINKED_START_HOLD_MS = 8_000;
 /**
  * How wide the debate card's column may get, which with its fixed-ratio media is really a height
  * budget: grow or shrink the media with the viewport while reserving the navbar, the 20px above the
@@ -379,6 +384,27 @@ export function DebatesBrowseFeed({
   // -1 when nothing is active yet, which preloads nothing rather than the first item.
   const activeIndex = visibleDebates.findIndex(debate => debate.id === activeId);
 
+  // On the debate page, the cards after the linked debate wait for it to start (GEO-3604). Their
+  // stills, signed URLs and buffering otherwise share a cold phone's first seconds of bandwidth
+  // with the one debate on screen. Released once it plays, is refused, fails, or the backstop runs
+  // out, and only ever held while the linked debate is the one being watched.
+  const holdsForLinkedStart = surface === 'debate-page' && initialDebateId != null;
+  const [linkedStarted, setLinkedStarted] = React.useState(!holdsForLinkedStart);
+  React.useEffect(() => {
+    if (linkedStarted) return;
+    const timer = window.setTimeout(() => setLinkedStarted(true), LINKED_START_HOLD_MS);
+    return () => window.clearTimeout(timer);
+  }, [linkedStarted]);
+  const onLinkedPlaybackState = React.useCallback(
+    (state: DebatePagePlayerState) => {
+      pageOutcome?.player(state);
+      if (state.playing || state.autoplayBlocked || state.error) setLinkedStarted(true);
+    },
+    [pageOutcome]
+  );
+  const preloadsAhead =
+    linkedStarted || initialDebateId == null || activeId == null || !ID.equals(activeId, initialDebateId);
+
   // Pin through the active card and the ones preloading after it. Only ever grows, and only as the
   // viewer moves on — what follows the pinned run is still the live ranking. See `pinnedIds`.
   // Capped at what is rendered, or a feed shorter than the window would re-pin forever.
@@ -477,7 +503,9 @@ export function DebatesBrowseFeed({
           }
           // Only the linked debate's card reports: the visit's outcome is about that debate.
           onPlaybackState={
-            initialDebateId != null && ID.equals(debate.id, initialDebateId) ? pageOutcome?.player : undefined
+            initialDebateId != null && ID.equals(debate.id, initialDebateId) && (pageOutcome || holdsForLinkedStart)
+              ? onLinkedPlaybackState
+              : undefined
           }
           onStillShown={
             initialDebateId != null && ID.equals(debate.id, initialDebateId) ? pageOutcome?.stillShown : undefined
@@ -492,8 +520,8 @@ export function DebatesBrowseFeed({
           // card that waits — and a quick double swipe used to land exactly there, on a card
           // nothing had opened. Headers are cheap; buffering is not, so only the very next card
           // buffers, and nothing further than two ahead is touched at all.
-          preload={activeIndex >= 0 && index > activeIndex && index <= activeIndex + PRELOAD_AHEAD}
-          buffer={activeIndex >= 0 && index === activeIndex + 1}
+          preload={preloadsAhead && activeIndex >= 0 && index > activeIndex && index <= activeIndex + PRELOAD_AHEAD}
+          buffer={preloadsAhead && activeIndex >= 0 && index === activeIndex + 1}
           // The debate a link opened is the one the viewer asked for, so it plays as before; the
           // rest of the feed holds its full recordings until the viewer starts one.
           holdFullPlayback={

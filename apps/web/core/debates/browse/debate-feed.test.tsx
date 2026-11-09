@@ -1090,6 +1090,53 @@ describe('DebatesBrowseFeed — the linked debate does not wait for the rest of 
   });
 });
 
+describe('DebatesBrowseFeed — the next cards wait for the linked debate to start (GEO-3604)', () => {
+  beforeEach(() => {
+    mocks.debates = [
+      completedDebate('debate-1', 'Linked debate', '2026-07-03T00:01:10.000Z'),
+      completedDebate('debate-2', 'Next debate', '2026-07-02T00:01:10.000Z'),
+      completedDebate('debate-3', 'After that', '2026-07-01T00:01:10.000Z'),
+    ];
+  });
+  const preloads = () => ['debate-2', 'debate-3'].map(id => screen.getByTestId(`player-${id}`).dataset.preload);
+  const buffers = () => screen.getByTestId('player-debate-2').dataset.buffer;
+  const page = () => <DebatesBrowseFeed spaceId="space-1" initialDebateId="debate-1" />;
+
+  it('holds them until the linked debate plays', () => {
+    const view = render(page());
+    expect(preloads()).toEqual(['false', 'false']);
+    expect(buffers()).toBe('false');
+
+    mocks.playerState = { ready: true, playing: true, autoplayBlocked: false, error: false };
+    view.rerender(page());
+    expect(preloads()).toEqual(['true', 'true']);
+    expect(buffers()).toBe('true');
+  });
+
+  it('lets them go when autoplay is refused, or the linked debate fails', () => {
+    mocks.playerState = { ready: true, playing: false, autoplayBlocked: true, error: false };
+    render(page());
+    expect(preloads()).toEqual(['true', 'true']);
+    cleanup();
+
+    mocks.playerState = { ready: false, playing: false, autoplayBlocked: false, error: true };
+    render(page());
+    expect(preloads()).toEqual(['true', 'true']);
+  });
+
+  it('lets them go after the backstop if the linked debate never reports', () => {
+    render(page());
+    expect(preloads()).toEqual(['false', 'false']);
+    act(() => vi.advanceTimersByTime(8_000));
+    expect(preloads()).toEqual(['true', 'true']);
+  });
+
+  it('does not hold the Debates tab', () => {
+    render(<DebatesBrowseFeed spaceId="space-1" initialDebateId="debate-1" surface="debates-tab" />);
+    expect(preloads()).toEqual(['true', 'true']);
+  });
+});
+
 describe('DebatesBrowseFeed ordering', () => {
   // What plays after the debate you opened is what the explore page's "Best" sort would have
   // shown you, rather than simply the most recent thing in the space.
