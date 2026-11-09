@@ -50,6 +50,7 @@ import { Avatar } from '~/design-system/avatar';
 import { RetrySmall } from '~/design-system/icons/retry-small';
 import { Text } from '~/design-system/text';
 
+import { useBlockedPageTap } from './blocked-page-tap';
 import { CombinedDebatePlayer } from './combined-debate-player';
 import { DebateBreakOverlay, DebateEarlyEndLabels, useBreakCuts } from './debate-break-cues';
 import { DebateClaimCounter } from './debate-claim-counter';
@@ -58,8 +59,8 @@ import { DebateEndCard } from './debate-end-card';
 import { DebateRoundBadge, DebateRoundBanner, DebateRoundCard } from './debate-round-cues';
 import { type DebatePreviewClips, debatePreviewClips, feedFullPlaybackStartedAtom } from './feed-full-playback';
 import { FeedVideo } from './feed-video';
-import { useInlinePlaybackUnavailable } from './inline-playback';
 import { Pause, Play, Speaker, SpeakerMuted } from './icons';
+import { useInlinePlaybackUnavailable } from './inline-playback';
 import { PLAYER_EXIT_MS, PLAYER_FURNITURE_OPACITY } from './player-overlay-styles';
 import { useAnnouncementFocus } from './use-announcement-focus';
 import { useDebateEndCard } from './use-debate-end-card';
@@ -396,6 +397,18 @@ function PairedDebateFeedPlayer({
   const onPauseTick = () => {
     if (activatingRef.current === 0) onPlaybackTick();
   };
+  /*
+   * A tap anywhere on the page starts a debate the browser refused to autoplay (GEO-3602), with
+   * sound: the `play()` inside the tap unlocks both elements for it, and the preference is what the
+   * next card reads.
+   */
+  useBlockedPageTap(active && autoplayBlocked && !userPaused && !playing && !detached, () => {
+    togglePlayback();
+    for (const video of [slot1VideoRef.current, slot2VideoRef.current]) {
+      if (video && !video.paused) markGestureVideoUnlocked(video);
+    }
+    setMutedByUser(false);
+  });
   const seekBoth = (seconds: number) => {
     measurement.control('seek');
     resetAnimationSeek();
