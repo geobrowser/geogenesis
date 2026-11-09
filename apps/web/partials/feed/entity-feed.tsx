@@ -46,10 +46,17 @@ const FEED_SESSION_OPTIONS = { staleTime: Infinity } as const;
 // A reader still within a screen of the top gets a fresh feed on return; one who has scrolled keeps theirs.
 // The age matches the app's default staleTime (`core/query-client.tsx`).
 const TOP_REFRESH_AFTER_MS = 30_000;
+function readerNearTop(): boolean {
+  return window.scrollY < window.innerHeight;
+}
 function refreshAtTop(query: { state: { data: unknown; dataUpdatedAt: number } }): boolean | 'always' {
   if (query.state.data === undefined) return true;
-  const atTop = window.scrollY < window.innerHeight;
-  return atTop && Date.now() - query.state.dataUpdatedAt > TOP_REFRESH_AFTER_MS ? 'always' : false;
+  return readerNearTop() && Date.now() - query.state.dataUpdatedAt > TOP_REFRESH_AFTER_MS ? 'always' : false;
+}
+
+type AppliedFollows = { ids: readonly string[] | null; pending: boolean; viewer: string | null };
+function followsKey(ids: readonly string[] | null, pending: boolean): string | null {
+  return ids === null ? null : `${ids.join(',')}|${pending}`;
 }
 
 const FEED_PAGES_SESSION_OPTIONS = {
@@ -344,6 +351,7 @@ export function EntityFeed({
     : showTopicFilter || Boolean(topicFacetEndpoint);
   const typeSelectionTouchedRef = React.useRef(false);
   const contextualTypeDefaultAppliedRef = React.useRef(false);
+  const [defaultTypeIds, setDefaultTypeIds] = React.useState<string[] | null>(null);
   // A locked space is the whole filter; otherwise whatever the revealed space menu has ticked, and
   // nothing ticked (or the menu put away) means every space the reader may see.
   const requestedSpaceIds = React.useMemo(
@@ -368,12 +376,19 @@ export function EntityFeed({
   );
   const selectsWholePopulation = React.useMemo(() => {
     if (selectedTypeIds.length === typeOptions.length) return true;
-    if (!selectTypesWithResultsByDefault || !nonEmptyTypeIds || nonEmptyTypeIds.length === 0) return false;
+    const population = defaultTypeIds ?? nonEmptyTypeIds;
+    if (!selectTypesWithResultsByDefault || !population || population.length === 0) return false;
     return (
-      selectedTypeIds.length === nonEmptyTypeIds.length &&
-      nonEmptyTypeIds.every(typeId => selectedTypeIdSet.has(normId(typeId)))
+      selectedTypeIds.length === population.length && population.every(typeId => selectedTypeIdSet.has(normId(typeId)))
     );
-  }, [nonEmptyTypeIds, selectTypesWithResultsByDefault, selectedTypeIdSet, selectedTypeIds.length, typeOptions.length]);
+  }, [
+    defaultTypeIds,
+    nonEmptyTypeIds,
+    selectTypesWithResultsByDefault,
+    selectedTypeIdSet,
+    selectedTypeIds.length,
+    typeOptions.length,
+  ]);
   // Two different rules for when the selection goes on the wire, because the two kinds of caller
   // read a missing parameter differently. A contextual feed's route reads it as "every type", so it
   // is omitted when every type is ticked. Explore's route reads it as its *default* types (Debate +
@@ -502,6 +517,7 @@ export function EntityFeed({
       return;
     }
     contextualTypeDefaultAppliedRef.current = true;
+    setDefaultTypeIds(nonEmptyTypeIds);
     if (!typeSelectionTouchedRef.current) setSelectedTypeIds(nonEmptyTypeIds);
   }, [nonEmptyTypeIds, selectTypesWithResultsByDefault, showTypeFilter]);
 
@@ -550,7 +566,22 @@ export function EntityFeed({
   const { viewerAddress, awaitingIdentityToken } = useFeedViewer(walletAddress, usesIdentityToken);
   // Keyed on what is actually sent: two Best feeds differing only in a hidden range are the same
   // request, and caching them apart would refetch on a change the viewer never made.
-  const requestedFollowedTopicIds = isForYou ? (followedTopicIds ?? []) : [];
+  const [appliedFollows, setAppliedFollows] = React.useState<AppliedFollows>(() => ({
+    ids: followedTopicIds,
+    pending: pendingTopicFollows,
+    viewer: viewerAddress,
+  }));
+  const incomingFollowsKey = followsKey(followedTopicIds, pendingTopicFollows);
+  const followsHeld = followsKey(appliedFollows.ids, appliedFollows.pending) !== incomingFollowsKey;
+  const applyFollows = () =>
+    setAppliedFollows({ ids: followedTopicIds, pending: pendingTopicFollows, viewer: viewerAddress });
+  if (
+    (followsHeld || appliedFollows.viewer !== viewerAddress) &&
+    (!isForYou || appliedFollows.ids === null || followedTopicIds === null || appliedFollows.viewer !== viewerAddress)
+  ) {
+    applyFollows();
+  }
+  const requestedFollowedTopicIds = isForYou ? (appliedFollows.ids ?? []) : [];
   const queryKey = [
     apiEndpoint,
     sort,
@@ -560,7 +591,7 @@ export function EntityFeed({
     topicIdsKey,
     fixedParamsKey,
     // Only on For you, so every other sort's key, and so its cache, is unchanged.
-    ...(isForYou ? [requestedFollowedTopicIds.join(','), pendingTopicFollows] : []),
+    ...(isForYou ? [requestedFollowedTopicIds.join(','), appliedFollows.pending] : []),
     // Last, so `placeholderData` below can tell a change of account from a change of filter.
     viewerAddress,
   ];
@@ -573,7 +604,7 @@ export function EntityFeed({
     typeIds,
     topicIds: selectedTopicIds,
     followedTopicIds: requestedFollowedTopicIds,
-    pendingTopicFollows: isForYou && pendingTopicFollows,
+    pendingTopicFollows: isForYou && appliedFollows.pending,
     fixedParams,
   };
 
@@ -606,7 +637,7 @@ export function EntityFeed({
           anonymous: cdnFirstPage && viewerAddress === null && !wantsIdentityToken,
           cursor: pageParam as string | undefined,
         }),
-      enabled: !awaitingIdentityToken && (!isForYou || followedTopicIds !== null),
+      enabled: !awaitingIdentityToken && (!isForYou || appliedFollows.ids !== null),
       // When only the account changed (signing in on the page, or an account that arrived after the
       // wait gave up), keep the cards up while the new page loads instead of dropping to skeletons.
       // Otherwise a signed-in reader sees the public page meanwhile.
@@ -619,6 +650,18 @@ export function EntityFeed({
       retry: 2,
       retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 8000),
     });
+
+  const feedOnScreen = data !== undefined && !isPlaceholderData;
+  const applyHeldFollows = React.useEffectEvent(() => {
+    if (!feedOnScreen || readerNearTop()) applyFollows();
+  });
+  React.useEffect(() => {
+    if (!followsHeld) return;
+    applyHeldFollows();
+    const onScroll = () => applyHeldFollows();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [followsHeld, feedOnScreen, incomingFollowsKey]);
 
   const sentinelRef = React.useRef<HTMLDivElement | null>(null);
 
@@ -853,7 +896,7 @@ export function EntityFeed({
         ) : awaitingEntry ||
           (!entryItem && isLoading) ||
           (!entryItem && awaitingIdentityToken) ||
-          (isForYou && followedTopicIds === null) ? (
+          (isForYou && appliedFollows.ids === null) ? (
           <div className="space-y-4">
             {Array.from({ length: 5 }).map((_, i) => (
               <LoadingSkeleton key={i} />

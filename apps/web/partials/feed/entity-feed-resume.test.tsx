@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider, focusManager, onlineManager } from '@tanstack/react-query';
-import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import * as React from 'react';
 
@@ -239,5 +239,166 @@ describe('resuming an Explore feed', () => {
     await resume('focus');
     await screen.findByText('Updated activity');
     expect(fetchPage).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('For you while the followed topics change', () => {
+  const forYou = (followedTopicIds: string[], pendingTopicFollows = false) =>
+    ({ initialSort: 'for-you', sortOptions: ['for-you', 'best'], followedTopicIds, pendingTopicFollows }) as const;
+  const followsSent = () =>
+    fetchPage.mock.calls.map(([url]) => [
+      url.searchParams.get('followedTopicIds'),
+      url.searchParams.get('pendingTopicFollows'),
+    ]);
+
+  async function loadTwoPages(props: Partial<React.ComponentProps<typeof EntityFeed>>) {
+    const view = mountFeed(props);
+    await screen.findByText('Original lead');
+    fetchPage.mockResolvedValueOnce(page('Second page'));
+    intersect();
+    await screen.findByText('Second page');
+    return view;
+  }
+
+  it('keeps a scrolled feed when a topic is followed elsewhere, and takes it near the top', async () => {
+    const view = await loadTwoPages(forYou(['topic-a']));
+    const cards = screen.getAllByRole('article');
+    scrollTo(2_000);
+
+    fetchPage.mockResolvedValue(page('Re-ranked lead'));
+    view.rerender(feedTree(forYou(['topic-a', 'topic-b'])));
+    await act(async () => window.dispatchEvent(new Event('scroll')));
+
+    expect(fetchPage).toHaveBeenCalledTimes(2);
+    screen.getAllByRole('article').forEach((card, index) => expect(card).toBe(cards[index]));
+
+    scrollTo(400);
+    await act(async () => window.dispatchEvent(new Event('scroll')));
+
+    await screen.findByText('Re-ranked lead');
+    expect(followsSent().at(-1)).toEqual(['topic-a,topic-b', null]);
+
+    expect(fetchPage.mock.calls.at(-1)![0].searchParams.get('cursor')).toBeNull();
+  });
+
+  it('keeps a scrolled feed when onboarding picks finish indexing', async () => {
+    const view = await loadTwoPages(forYou(['topic-a'], true));
+    scrollTo(2_000);
+
+    view.rerender(feedTree(forYou(['topic-a'])));
+    await act(async () => window.dispatchEvent(new Event('scroll')));
+
+    expect(fetchPage).toHaveBeenCalledTimes(2);
+    expect(followsSent()).toEqual([
+      ['topic-a', '1'],
+      ['topic-a', '1'],
+    ]);
+  });
+
+  it('takes the new set at once for a feed read at the top', async () => {
+    const view = await loadTwoPages(forYou(['topic-a']));
+
+    fetchPage.mockResolvedValue(page('Re-ranked lead'));
+    view.rerender(feedTree(forYou(['topic-a', 'topic-b'])));
+
+    await screen.findByText('Re-ranked lead');
+    expect(followsSent().at(-1)).toEqual(['topic-a,topic-b', null]);
+  });
+
+  it('takes the new set on the next visit', async () => {
+    const first = await loadTwoPages(forYou(['topic-a']));
+    first.unmount();
+    scrollTo(2_000);
+
+    fetchPage.mockResolvedValue(page('Re-ranked lead'));
+    mountFeed(forYou(['topic-a', 'topic-b']));
+
+    await screen.findByText('Re-ranked lead');
+    expect(followsSent().at(-1)).toEqual(['topic-a,topic-b', null]);
+  });
+
+  it('asks with the current set when the reader switches to For you from a scrolled Best feed', async () => {
+    const best = { ...forYou(['topic-a']), initialSort: 'best' } as const;
+    const view = await loadTwoPages(best);
+    scrollTo(2_000);
+    view.rerender(feedTree({ ...best, followedTopicIds: ['topic-a', 'topic-b'] }));
+
+    fetchPage.mockResolvedValue(page('For you lead'));
+    fireEvent.click(screen.getByRole('button', { name: 'For you' }));
+
+    await screen.findByText('For you lead');
+    expect(followsSent().slice(2)).toEqual([['topic-a,topic-b', null]]);
+  });
+
+  it("never asks with one account's follows for another account", async () => {
+    state.viewerAddress = '0xfirst';
+    const view = await loadTwoPages(forYou(['topic-a']));
+    scrollTo(2_000);
+
+    fetchPage.mockResolvedValue(page('Second account lead'));
+    state.viewerAddress = '0xsecond';
+    view.rerender(feedTree(forYou(['topic-b'])));
+
+    await screen.findByText('Second account lead');
+    expect(followsSent().slice(2)).toEqual([['topic-b', null]]);
+  });
+
+  it('takes a set that lands a render after the account, while the new feed is still loading', async () => {
+    state.viewerAddress = '0xfirst';
+    const view = await loadTwoPages(forYou(['topic-a']));
+    scrollTo(2_000);
+
+    let land!: (result: ExploreFeedResult) => void;
+    fetchPage.mockReturnValueOnce(new Promise(resolve => (land = resolve)));
+    fetchPage.mockResolvedValue(page('Second account lead'));
+    state.viewerAddress = '0xsecond';
+    view.rerender(feedTree(forYou(['topic-a'])));
+    view.rerender(feedTree(forYou(['topic-b'])));
+    await act(async () => land(page('Stale follows lead')));
+
+    await screen.findByText('Second account lead');
+    expect(followsSent().at(-1)).toEqual(['topic-b', null]);
+  });
+});
+
+describe('resuming a topic feed', () => {
+  const typeOptions = [
+    { id: 'type-a', label: 'A' },
+    { id: 'type-b', label: 'B' },
+    { id: 'type-c', label: 'C' },
+  ];
+  const topicFeed = (bCount: number) =>
+    ({
+      apiEndpoint: '/api/topics/feed',
+      showSortFilter: true,
+      showTimeFilter: false,
+      showTypeFilter: true,
+      typeOptions,
+      initialTypeIds: typeOptions.map(type => type.id),
+      typeCounts: [
+        { id: 'type-a', count: 4 },
+        { id: 'type-b', count: bCount },
+        { id: 'type-c', count: 2 },
+      ],
+      selectTypesWithResultsByDefault: true,
+      fixedParams: { topicId: 'topic' },
+    }) as const;
+
+  it('holds its order when its counts change and the reader returns while scrolled', async () => {
+    const view = mountFeed(topicFeed(0));
+    await screen.findByText('Original lead');
+    fetchPage.mockResolvedValueOnce(page('Second page'));
+    intersect();
+    await screen.findByText('Second page');
+    const cards = screen.getAllByRole('article');
+    scrollTo(2_000);
+
+    fetchPage.mockResolvedValue(page('Re-ranked lead'));
+    // A counts refetch on focus finds the first result of a type the default left out.
+    view.rerender(feedTree(topicFeed(1)));
+    await resume('focus');
+
+    expect(fetchPage).toHaveBeenCalledTimes(2);
+    screen.getAllByRole('article').forEach((card, index) => expect(card).toBe(cards[index]));
   });
 });
