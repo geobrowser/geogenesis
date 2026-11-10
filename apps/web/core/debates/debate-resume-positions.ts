@@ -122,8 +122,10 @@ export function forgetDebatePosition(debateId: string): void {
 /**
  * Saves the position every few seconds while playing, and again when playback stops or the page closes.
  *
- * The last save uses the newest position of the same debate. A pause can bring a newer position in
- * the same render, and a reused card may already hold the next debate.
+ * A stop's own position arrives with it or a render later, as the element's `pause` event, a moment
+ * on from the last one seen. So the first move forward after a stop, shorter than the save interval
+ * and on the same debate, is saved as where the viewer stopped. A scrub or a reset that follows the
+ * stop is not, and neither is a position of the next debate a reused card already holds.
  */
 export function useRememberDebatePosition({
   debateId,
@@ -138,10 +140,7 @@ export function useRememberDebatePosition({
 }) {
   const seenRef = React.useRef<{ debateId: string; seconds: number; timelineSeconds: number } | null>(null);
   const writtenRef = React.useRef<{ debateId: string; seconds: number } | null>(null);
-  const latestRef = React.useRef({ debateId, seconds: playheadSeconds, timelineSeconds });
-  React.useLayoutEffect(() => {
-    latestRef.current = { debateId, seconds: playheadSeconds, timelineSeconds };
-  });
+  const stoppedRef = React.useRef<string | null>(null);
 
   const write = React.useCallback(() => {
     const seen = seenRef.current;
@@ -153,7 +152,17 @@ export function useRememberDebatePosition({
   }, []);
 
   React.useEffect(() => {
-    if (!recording) return;
+    if (!recording) {
+      const seen = seenRef.current;
+      if (stoppedRef.current !== debateId || seen?.debateId !== debateId) return;
+      const ahead = playheadSeconds - seen.seconds;
+      if (ahead <= 0 || ahead >= RESUME_SAVE_EVERY_SECONDS) return;
+      stoppedRef.current = null;
+      seenRef.current = { debateId, seconds: playheadSeconds, timelineSeconds };
+      write();
+      return;
+    }
+    stoppedRef.current = null;
     seenRef.current = { debateId, seconds: playheadSeconds, timelineSeconds };
     const written = writtenRef.current;
     if (written?.debateId === debateId && Math.abs(playheadSeconds - written.seconds) < RESUME_SAVE_EVERY_SECONDS) {
@@ -167,8 +176,8 @@ export function useRememberDebatePosition({
     window.addEventListener('pagehide', write);
     return () => {
       window.removeEventListener('pagehide', write);
-      if (seenRef.current?.debateId === latestRef.current.debateId) seenRef.current = latestRef.current;
       write();
+      stoppedRef.current = debateId;
     };
   }, [debateId, recording, write]);
 }

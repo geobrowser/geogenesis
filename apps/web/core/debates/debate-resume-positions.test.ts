@@ -182,6 +182,27 @@ describe('useRememberDebatePosition', () => {
     expect(readDebateResumeSeconds('debate-1')).toBeNull();
   });
 
+  it('forgets the position when the pause brings it a render after playback stops, as a browser does', () => {
+    const hook = renderRemember(at(105, { timelineSeconds: 120 }));
+    hook.rerender(at(109.9, { timelineSeconds: 120 }));
+
+    hook.rerender(at(109.9, { timelineSeconds: 120, recording: false }));
+    hook.rerender(at(110.1, { timelineSeconds: 120, recording: false }));
+
+    expect(readDebateResumeSeconds('debate-1')).toBeNull();
+  });
+
+  it('keeps where playback stopped when a reset or a scrub follows the stop', () => {
+    const hook = renderRemember(at(100));
+    hook.rerender(at(103));
+    hook.rerender(at(103, { recording: false }));
+
+    hook.rerender(at(0, { recording: false }));
+    hook.rerender(at(200, { recording: false }));
+
+    expect(readDebateResumeSeconds('debate-1')).toBe(98);
+  });
+
   it('writes the last position when the page goes away', () => {
     renderRemember(at(100)).rerender(at(103));
 
