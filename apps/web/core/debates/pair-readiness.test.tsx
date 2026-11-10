@@ -4,7 +4,14 @@ import * as React from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { usePairReadiness } from '~/core/debates/pair-readiness';
+import {
+  HELD_PAIR_RUNWAY_SECONDS,
+  PAIR_HOLD_TIMEOUT_MS,
+  bufferedAheadSeconds,
+  heldPairMayResume,
+  usePairReadiness,
+} from '~/core/debates/pair-readiness';
+import { timeRanges } from '~/core/debates/time-ranges-fixtures';
 
 /**
  * GEO-3110. The hold's backstop (`PAIR_HOLD_TIMEOUT_MS`) is a real `setTimeout`, and
@@ -89,5 +96,71 @@ describe('usePairReadiness cleanup (GEO-3110)', () => {
     expect(vi.getTimerCount()).toBe(0);
     expect(() => vi.advanceTimersByTime(10_000)).not.toThrow();
     expect(vi.getTimerCount()).toBe(0);
+  });
+});
+
+/** Two ranges with a hole between them, as a buffer looks after a seek past what was fetched. */
+function twoRanges(): TimeRanges {
+  const bounds = [
+    [0, 10],
+    [20, 30],
+  ];
+  return { length: 2, start: index => bounds[index][0], end: index => bounds[index][1] };
+}
+
+describe('bufferedAheadSeconds', () => {
+  it('measures from the playhead to the end of the range holding it', () => {
+    expect(bufferedAheadSeconds({ buffered: twoRanges() }, 4)).toBe(6);
+    expect(bufferedAheadSeconds({ buffered: twoRanges() }, 25)).toBe(5);
+  });
+
+  it('counts a playhead on a range edge as inside it', () => {
+    expect(bufferedAheadSeconds({ buffered: twoRanges() }, 20)).toBe(10);
+    expect(bufferedAheadSeconds({ buffered: twoRanges() }, 10)).toBe(0);
+  });
+
+  it('is nothing in a hole between ranges, or with no ranges at all', () => {
+    expect(bufferedAheadSeconds({ buffered: twoRanges() }, 15)).toBe(0);
+    expect(bufferedAheadSeconds({}, 15)).toBe(0);
+  });
+});
+
+/** GEO-3603: when a pair the player paused itself (a break's cut, a held resync) may play again. */
+describe('heldPairMayResume', () => {
+  const member = (overrides: Record<string, unknown> = {}) => ({
+    readyState: 4,
+    networkState: 1,
+    error: null,
+    seeking: false,
+    currentTime: 50,
+    duration: 300,
+    buffered: timeRanges(40, 50 + HELD_PAIR_RUNWAY_SECONDS),
+    ...overrides,
+  });
+
+  it('resumes once both can play with the runway buffered, and not a little short of it', () => {
+    expect(heldPairMayResume(member(), member(), 0)).toBe(true);
+    const short = member({ buffered: timeRanges(40, 50 + HELD_PAIR_RUNWAY_SECONDS - 0.1) });
+    expect(heldPairMayResume(member(), short, 0)).toBe(false);
+    expect(heldPairMayResume(member({ seeking: true }), member(), 0)).toBe(false);
+  });
+
+  // A cut near the end-card handoff can never have 3 s ahead; it must not wait out the backstop.
+  it('resumes a recording buffered to its end, short of the runway', () => {
+    const nearEnd = member({ currentTime: 298.5, duration: 300, buffered: timeRanges(290, 299.8) });
+    expect(heldPairMayResume(member(), nearEnd, 0)).toBe(true);
+    const notToEnd = member({ currentTime: 298.5, duration: 300, buffered: timeRanges(290, 299.5) });
+    expect(heldPairMayResume(member(), notToEnd, 0)).toBe(false);
+  });
+
+  it('lets a failed recording go, for its own recovery to rebuild', () => {
+    const failed = member({ readyState: 0, error: { code: 4 } });
+    expect(heldPairMayResume(failed, member(), 0)).toBe(true);
+  });
+
+  it('plays whatever is ready at the backstop', () => {
+    const starved = member({ readyState: 1, buffered: timeRanges(0, 0) });
+    expect(heldPairMayResume(member(), starved, PAIR_HOLD_TIMEOUT_MS - 1)).toBe(false);
+    expect(heldPairMayResume(member(), starved, PAIR_HOLD_TIMEOUT_MS)).toBe(true);
   });
 });
