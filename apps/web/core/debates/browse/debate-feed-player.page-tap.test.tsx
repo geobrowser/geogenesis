@@ -11,6 +11,7 @@ import { DebateFeedPlayer } from './debate-feed-player';
 const mocks = vi.hoisted(() => ({
   lookup: vi.fn(),
   refresh: vi.fn(),
+  control: vi.fn(),
 }));
 
 // Follow (GEO-3236) writes through the account and reads follows; both have their own suites.
@@ -24,7 +25,7 @@ vi.mock('./use-debate-end-card', () => ({ useDebateEndCard: () => ({}) }));
 vi.mock('./debate-end-card', () => ({ DebateEndCard: () => <div data-testid="end-card" /> }));
 vi.mock('~/core/debates/participant-bylines', () => ({ useParticipantBylines: () => new Map() }));
 vi.mock('~/core/debates/use-playback-analytics', () => ({
-  usePlaybackAnalytics: () => ({ elementRef: { current: null }, control: vi.fn() }),
+  usePlaybackAnalytics: () => ({ elementRef: { current: null }, control: mocks.control }),
 }));
 vi.mock('~/core/hooks/use-entity-side-panel', () => ({
   useEntitySidePanel: () => ({ openSidePanel: vi.fn(), closeSidePanel: vi.fn(), sidePanelTarget: null }),
@@ -93,6 +94,7 @@ beforeEach(() => {
   vi.spyOn(Date, 'now').mockImplementation(() => now);
   mocks.lookup.mockReset();
   mocks.refresh.mockReset();
+  mocks.control.mockReset();
   mocks.lookup.mockImplementation(({ filename }: { filename: string }) =>
     Promise.resolve({ url: `https://cdn/${filename}?s=${sig++}` })
   );
@@ -143,6 +145,7 @@ function touchEvent(type: string, y: number) {
   return event;
 }
 
+/** A tap: `click` is a mouse click (or a card control's own press), `touchend` a finger. */
 function tap(target: Element, type: 'click' | 'touchend' = 'click') {
   act(() => {
     if (type === 'touchend') target.dispatchEvent(touchEvent('touchstart', 300));
@@ -213,7 +216,11 @@ describe('tapMayStartBlockedDebate', () => {
     ['<button><svg></svg></button>', false],
     ['<div role="button">x</div>', false],
     ['<input />', false],
-    ['<a href="/claim" data-entity-side-panel-opener=""><span>claim title</span></a>', true],
+    ['<a href="/claim" data-entity-side-panel-opener="" data-debate-claim-title=""><span>claim title</span></a>', true],
+    ['<a href="/other" data-entity-side-panel-opener=""><span>another entity</span></a>', false],
+    ['<div data-entity-side-panel=""><p><span>panel text</span></p></div>', false],
+    ['<div role="dialog"><p><span>dialog text</span></p></div>', false],
+    ['<div data-radix-portal=""><p><span>portal text</span></p></div>', false],
   ])('%s -> %s', (html, expected) => {
     const element = outside(html);
     expect(tapMayStartBlockedDebate(element.querySelector('span, svg') ?? element)).toBe(expected);
@@ -232,25 +239,44 @@ describe('DebateFeedPlayer, refused autoplay started by a tap anywhere', () => {
     await waitFor(() => expect(blockedState(view.container)).toBe('false'), { timeout: 8_000 });
   }, 15_000);
 
-  it('starts it from the claim title that opens the side panel', async () => {
+  it("starts it from the debate's claim title that opens the side panel", async () => {
     const view = await blockedPlayer();
     await untilBlocked(view.container);
 
-    const title = outside('<a href="/claim" data-entity-side-panel-opener="">Claim</a>');
-    title.addEventListener('click', event => event.preventDefault());
-    tap(title);
+    tap(outside('<a href="/claim" data-entity-side-panel-opener="" data-debate-claim-title="">Claim</a>'), 'touchend');
 
     expect(plays).toHaveLength(2);
+  }, 15_000);
+
+  it("leaves another entity's panel link, the side panel, dialogs and portals alone", async () => {
+    const view = await blockedPlayer();
+    await untilBlocked(view.container);
+
+    tap(outside('<a href="/other" data-entity-side-panel-opener="">Other</a>'), 'touchend');
+    tap(outside('<div data-entity-side-panel=""><p>panel text</p></div>').querySelector('p')!, 'touchend');
+    tap(outside('<div role="dialog"><p>dialog text</p></div>').querySelector('p')!, 'touchend');
+    tap(outside('<div data-radix-portal=""><p>portal text</p></div>').querySelector('p')!, 'touchend');
+
+    expect(plays).toHaveLength(0);
+    expect(blockedState(view.container)).toBe('true');
+  }, 15_000);
+
+  it('leaves a mouse click on the page alone', async () => {
+    const view = await blockedPlayer();
+    await untilBlocked(view.container);
+
+    tap(outside('<p>text</p>'), 'click');
+
+    expect(plays).toHaveLength(0);
+    expect(blockedState(view.container)).toBe('true');
   }, 15_000);
 
   it('leaves a tap on a control or link with its own action alone', async () => {
     const view = await blockedPlayer();
     await untilBlocked(view.container);
 
-    tap(outside('<button type="button">Agree</button>'));
-    const link = outside('<a href="/elsewhere">Log in</a>');
-    link.addEventListener('click', event => event.preventDefault());
-    tap(link);
+    tap(outside('<button type="button">Agree</button>'), 'touchend');
+    tap(outside('<a href="/elsewhere">Log in</a>'), 'touchend');
 
     expect(plays).toHaveLength(0);
     expect(blockedState(view.container)).toBe('true');
@@ -259,7 +285,7 @@ describe('DebateFeedPlayer, refused autoplay started by a tap anywhere', () => {
   it('does nothing for a card that is not the active one', async () => {
     const view = renderPlayer(false);
     await act(() => new Promise(resolve => setTimeout(resolve, 300)));
-    tap(outside('<p>text</p>'));
+    tap(outside('<p>text</p>'), 'touchend');
 
     expect(plays).toHaveLength(0);
     expect(blockedState(view.container)).not.toBe('true');
@@ -291,9 +317,10 @@ describe('DebateFeedPlayer, refused autoplay started by a tap anywhere', () => {
     await untilBlocked(view.container);
     expect(view.getByRole('button', { name: 'Unmute' })).toBeTruthy();
 
-    tap(outside('<p>text</p>'));
+    tap(outside('<p>text</p>'), 'touchend');
 
     await waitFor(() => expect(view.getByRole('button', { name: 'Mute' })).toBeTruthy(), { timeout: 8_000 });
+    expect(mocks.control).toHaveBeenCalledWith('unmute', { source: 'page_tap' });
   }, 15_000);
 });
 
@@ -361,6 +388,47 @@ describe('DebateFeedPlayer, muted autoplay given sound by a tap', () => {
     tap(view.getByRole('button', { name: 'Play debate' }));
 
     await waitFor(() => expect(view.getByRole('button', { name: 'Mute' })).toBeTruthy(), { timeout: 8_000 });
+    expect(mocks.control).toHaveBeenCalledWith('unmute', { source: 'play' });
+  }, 15_000);
+
+  it('leaves a mouse click on blank space alone', async () => {
+    const view = await mutedPlaying();
+    plays.length = 0;
+
+    tap(outside('<p>text</p>'), 'click');
+
+    expect(plays).toHaveLength(0);
+    expect(view.getByRole('button', { name: 'Unmute' })).toBeTruthy();
+  }, 15_000);
+
+  it('gives one tap to one card when two are active', async () => {
+    mutedAutoplay = true;
+    const other = {
+      ...debate,
+      id: 'debate-2',
+      recordings: [
+        { participant_slot: 1, filename: 'other1.webm', started_at_ms: 1_700_000_000_000 },
+        { participant_slot: 2, filename: 'other2.webm', started_at_ms: 1_700_000_000_000 },
+      ],
+    } as unknown as Debate;
+    const view = render(
+      <Provider>
+        <DebateFeedPlayer debate={debate} active />
+        <DebateFeedPlayer debate={other} active />
+      </Provider>
+    );
+    await waitFor(() => expect(view.container.querySelectorAll('video')).toHaveLength(4));
+    canplayAll(view.container);
+    await waitFor(() => expect(view.container.querySelectorAll('[data-debate-playing="true"]')).toHaveLength(2), {
+      timeout: 8_000,
+    });
+    await act(async () => {});
+    plays.length = 0;
+
+    tap(outside('<p>text</p>'), 'touchend');
+
+    expect(plays).toHaveLength(2);
+    expect(mocks.control.mock.calls.filter(([name]) => name === 'unmute')).toHaveLength(1);
   }, 15_000);
 
   it('keeps a chosen Mute through taps and Play', async () => {
@@ -412,10 +480,8 @@ describe('DebateFeedPlayer, muted autoplay given sound by a tap', () => {
   it('leaves a tap on a control or link with its own action alone', async () => {
     const view = await mutedPlaying();
 
-    tap(outside('<button type="button">Agree</button>'));
-    const link = outside('<a href="/elsewhere">Log in</a>');
-    link.addEventListener('click', event => event.preventDefault());
-    tap(link);
+    tap(outside('<button type="button">Agree</button>'), 'touchend');
+    tap(outside('<a href="/elsewhere">Log in</a>'), 'touchend');
 
     expect(view.getByRole('button', { name: 'Unmute' })).toBeTruthy();
     expect(videos(view.container).every(video => video.muted)).toBe(true);

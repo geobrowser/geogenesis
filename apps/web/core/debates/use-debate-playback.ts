@@ -44,9 +44,14 @@ type PlaybackUrls = {
 // holds as they scroll to the next — otherwise each debate mounts its own muted-by-default
 // state and they'd have to unmute every single video. Defaults to muted so the cold-start
 // autoplay isn't blocked by the browser's autoplay policy.
-const feedMutedAtom = atom(true);
-/** The viewer pressed Mute, so a tap must not turn the sound on (GEO-3602). Persist it with the preference. */
-const feedMuteChosenAtom = atom(false);
+//
+// `feedSoundChoiceAtom` is what the viewer chose with the Mute control, the part to persist.
+// `feedSoundInferredAtom` is sound turned on by a tap or Play (GEO-3602), for this session only.
+export type FeedSoundChoice = 'default' | 'muted' | 'unmuted';
+const feedSoundChoiceAtom = atom<FeedSoundChoice>('default');
+const feedSoundInferredAtom = atom(false);
+/** `explicit` is the Mute control; `inferred` is a tap or Play taken to mean the viewer wants sound. */
+export type MuteSource = 'explicit' | 'inferred';
 
 /**
  * Drift thresholds for keeping the two recordings in step (GEO-2828).
@@ -245,8 +250,11 @@ export function useDebatePlayback(
   // Feed debates autoplay muted (TikTok-style): the browser blocks unmuted
   // autoplay without a user gesture, so unmuting the active speaker mid-autoplay
   // would pause and desync that video. Start muted; the viewer unmutes on tap.
-  const [mutedPreference, setMutedPreference] = useAtom(feedMutedAtom);
-  const [muteChosen, setMuteChosen] = useAtom(feedMuteChosenAtom);
+  const [soundChoice, setSoundChoice] = useAtom(feedSoundChoiceAtom);
+  const [soundInferred, setSoundInferred] = useAtom(feedSoundInferredAtom);
+  const mutedPreference = soundChoice === 'default' ? !soundInferred : soundChoice === 'muted';
+  /** The viewer pressed Mute, so a tap must not turn the sound on. */
+  const muteChosen = soundChoice === 'muted';
   /*
    * The browser made this debate play muted, though the viewer wants sound (GEO-3594).
    *
@@ -257,15 +265,15 @@ export function useDebatePlayback(
    */
   const [soundBlocked, setSoundBlocked] = React.useState(false);
   const mutedByUser = mutedPreference || soundBlocked;
-  /** The Mute control. Unmuting also lifts this debate's forced mute; muting sets the preference. */
+  /** Unmuting also lifts this debate's forced mute. Only an `explicit` change is stored as the viewer's choice. */
   const setMutedByUser = React.useCallback(
-    (next: React.SetStateAction<boolean>) => {
+    (next: React.SetStateAction<boolean>, source: MuteSource = 'explicit') => {
       const muted = typeof next === 'function' ? next(mutedByUser) : next;
       if (!muted) setSoundBlocked(false);
-      setMutedPreference(muted);
-      setMuteChosen(muted);
+      if (source === 'explicit') setSoundChoice(muted ? 'muted' : 'unmuted');
+      else setSoundInferred(!muted);
     },
-    [mutedByUser, setMutedPreference, setMuteChosen]
+    [mutedByUser, setSoundChoice, setSoundInferred]
   );
   const [playheadSeconds, setPlayheadSeconds] = React.useState(0);
   const [turnState, setTurnState] = React.useState<TurnState>(null);
