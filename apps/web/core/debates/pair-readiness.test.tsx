@@ -190,6 +190,37 @@ describe('usePairReadiness on iOS-style loading (GEO-3604)', () => {
     expect(mayStart()).toBe(true);
   });
 
+  // One slot's pre-roll target is where it already stands, so `moveTo` skips its seek.
+  it('holds an unseeked element while its partner seeks, and starts once the partner can play', () => {
+    const { slot1, slot2, mayStart } = renderHarness();
+    act(() => {
+      setMedia(slot1, { readyState: 1, networkState: 1 }, 'suspend');
+      setMedia(slot2, { readyState: 1, networkState: 1, seeking: true }, 'seeking');
+    });
+    act(() => vi.advanceTimersByTime(SUSPEND_GRACE_MS * 2));
+    expect(mayStart()).toBe(false);
+
+    act(() => setMedia(slot2, { readyState: 2, networkState: 1 }, 'seeked'));
+    act(() => vi.advanceTimersByTime(SUSPEND_GRACE_MS * 2));
+    expect(mayStart()).toBe(false);
+
+    // Slot 1 stays at its metadata: it only loads once played.
+    act(() => setMedia(slot2, { readyState: 3, networkState: 2 }, 'canplay'));
+    expect(mayStart()).toBe(true);
+  });
+
+  it('does not start on a partner that has only just stopped at its metadata', () => {
+    const { slot1, slot2, mayStart } = renderHarness();
+    act(() => setMedia(slot1, { readyState: 1, networkState: 1 }, 'suspend'));
+    act(() => vi.advanceTimersByTime(SUSPEND_GRACE_MS * 2));
+    // The partner's metadata lands; its pre-roll seek may not have begun yet.
+    act(() => setMedia(slot2, { readyState: 1, networkState: 1 }, 'loadedmetadata'));
+    expect(mayStart()).toBe(false);
+    act(() => setMedia(slot2, { readyState: 1, networkState: 1, seeking: true }, 'seeking'));
+    act(() => vi.advanceTimersByTime(SUSPEND_GRACE_MS * 2));
+    expect(mayStart()).toBe(false);
+  });
+
   it('runs out at the backstop if a seek never finishes', () => {
     const { mayStart, both } = renderHarness();
     both({ readyState: 1, networkState: 1, seeking: true }, 'seeking');

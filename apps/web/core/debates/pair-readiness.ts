@@ -27,8 +27,8 @@ import * as React from 'react';
 export const PAIR_HOLD_TIMEOUT_MS = 3_000;
 
 /**
- * How long an element must stay `isStuck` before the pair stops waiting for it. iOS Safari loads a
- * paused element only to its metadata; Chrome is idle for an instant just before `canplay`.
+ * How long an element must stay `isStopped` before it counts as stopped for good. iOS Safari loads
+ * a paused element only to its metadata; Chrome is idle for an instant just before `canplay`.
  */
 export const SUSPEND_GRACE_MS = 250;
 
@@ -45,33 +45,32 @@ export type PairMember = Pick<HTMLMediaElement, 'readyState' | 'networkState' | 
 const canPlay = (video: PairMember) => video.readyState >= 3 /* HAVE_FUTURE_DATA */ && !video.seeking;
 /** A frame to paint. What revealing the pair needs, which is less than what starting it needs. */
 const hasFrame = (video: PairMember) => video.readyState >= 2; /* HAVE_CURRENT_DATA */
-/**
- * Stopped short of a frame with no seek in flight, after the partner's metadata (so the pre-roll
- * seek has had its chance). iOS reports `NETWORK_IDLE` while a paused seek fetches.
- */
-const isStuck = (video: PairMember, partner: PairMember) =>
-  video.readyState < 2 /* HAVE_CURRENT_DATA */ &&
-  !video.seeking &&
-  video.networkState === 1 /* NETWORK_IDLE */ &&
-  partner.readyState >= 1; /* HAVE_METADATA */
+/** Idle short of a frame with no seek in flight. iOS reports `NETWORK_IDLE` while a paused seek fetches. */
+const isStopped = (video: PairMember) =>
+  video.readyState < 2 /* HAVE_CURRENT_DATA */ && !video.seeking && video.networkState === 1; /* NETWORK_IDLE */
 
 /**
  * Whether a held pair may start now.
  *
- * `stuckLongAgo` says that element has been `isStuck` for `SUSPEND_GRACE_MS` without a break; it is
- * read again *now*, so an element that went on to load is not mistaken for one that stopped.
+ * `stoppedLongAgo` says that element has been `isStopped` for `SUSPEND_GRACE_MS` without a break; it
+ * is read again *now*, so an element that went on to load is not mistaken for one that stopped.
  */
 export function pairMayStart(
   slot1: PairMember,
   slot2: PairMember,
-  { stuckLongAgo = [false, false] }: { stuckLongAgo?: [boolean, boolean] } = {}
+  { stoppedLongAgo = [false, false] }: { stoppedLongAgo?: [boolean, boolean] } = {}
 ): boolean {
   if (canPlay(slot1) && canPlay(slot2)) return true;
   // A recording that failed is `DebaterVideo`'s to rebuild, and it cannot rebuild what is never
   // played past. Starting falls back to exactly what the card did before the hold existed.
   if (slot1.error || slot2.error) return true;
-  if (stuckLongAgo[0] && isStuck(slot1, slot2)) return true;
-  if (stuckLongAgo[1] && isStuck(slot2, slot1)) return true;
+  // A stopped element only moves once played, but its partner may still be loading (its pre-roll
+  // seek, or its metadata, after which that seek comes): start once the partner can play, or has
+  // stopped at its metadata too.
+  const stopped = [0, 1].map(i => stoppedLongAgo[i] && isStopped([slot1, slot2][i]));
+  const settled = (video: PairMember, i: number) => canPlay(video) || (stopped[i] && video.readyState >= 1);
+  if (stopped[0] && settled(slot2, 1)) return true;
+  if (stopped[1] && settled(slot1, 0)) return true;
   return false;
 }
 
@@ -168,26 +167,26 @@ export function usePairReadiness({
     if (!slot1 || !slot2) return;
 
     const pair = [slot1, slot2] as const;
-    // Per element: the grace timer running while it is stuck, and whether one has run out.
+    // Per element: the grace timer running while it is stopped, and whether one has run out.
     const graceTimers: [ReturnType<typeof setTimeout> | null, ReturnType<typeof setTimeout> | null] = [null, null];
-    const stuckLongAgo: [boolean, boolean] = [false, false];
+    const stoppedLongAgo: [boolean, boolean] = [false, false];
     const timers = new Set<ReturnType<typeof setTimeout>>();
 
     const evaluate = () => {
       for (const index of [0, 1] as const) {
-        if (isStuck(pair[index], pair[1 - index])) {
-          if (graceTimers[index] !== null || stuckLongAgo[index]) continue;
+        if (isStopped(pair[index])) {
+          if (graceTimers[index] !== null || stoppedLongAgo[index]) continue;
           const timer = setTimeout(() => {
             timers.delete(timer);
             graceTimers[index] = null;
-            stuckLongAgo[index] = true;
+            stoppedLongAgo[index] = true;
             evaluate();
           }, SUSPEND_GRACE_MS);
           graceTimers[index] = timer;
           timers.add(timer);
         } else {
           // Any break starts the grace over: it measures one unbroken stop.
-          stuckLongAgo[index] = false;
+          stoppedLongAgo[index] = false;
           const timer = graceTimers[index];
           if (timer !== null) {
             clearTimeout(timer);
@@ -198,7 +197,7 @@ export function usePairReadiness({
       }
       mark({
         shown: pairMayShow(slot1, slot2),
-        started: active && pairMayStart(slot1, slot2, { stuckLongAgo }),
+        started: active && pairMayStart(slot1, slot2, { stoppedLongAgo }),
       });
     };
 
