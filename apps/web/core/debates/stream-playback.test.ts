@@ -168,6 +168,8 @@ describe('attaching a Stream source', () => {
       video.dispatchEvent(new Event('play'));
 
       expect(hls.instances[0].startLoad).toHaveBeenCalledWith(4.92);
+      // hls.js reads the config when the manifest arrives after a held start.
+      expect(hls.instances[0].config.startPosition).toBe(4.92);
     });
 
     it('passes the position as config when loading was asked for before hls.js arrived', async () => {

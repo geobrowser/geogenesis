@@ -180,7 +180,11 @@ export function attachStreamSource(
   function startLoad() {
     if (started) return;
     started = true;
-    hls?.startLoad(firstPosition());
+    if (!hls) return;
+    const position = firstPosition();
+    // Before the manifest arrives, hls.js only flags the start and loads from `config.startPosition`.
+    hls.config.startPosition = position;
+    hls.startLoad(position);
   }
 
   void load().then(
