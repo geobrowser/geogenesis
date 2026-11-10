@@ -45,6 +45,8 @@ type PlaybackUrls = {
 // state and they'd have to unmute every single video. Defaults to muted so the cold-start
 // autoplay isn't blocked by the browser's autoplay policy.
 const feedMutedAtom = atom(true);
+/** The viewer pressed Mute, so a tap must not turn the sound on (GEO-3602). Persist it with the preference. */
+const feedMuteChosenAtom = atom(false);
 
 /**
  * Drift thresholds for keeping the two recordings in step (GEO-2828).
@@ -244,6 +246,7 @@ export function useDebatePlayback(
   // autoplay without a user gesture, so unmuting the active speaker mid-autoplay
   // would pause and desync that video. Start muted; the viewer unmutes on tap.
   const [mutedPreference, setMutedPreference] = useAtom(feedMutedAtom);
+  const [muteChosen, setMuteChosen] = useAtom(feedMuteChosenAtom);
   /*
    * The browser made this debate play muted, though the viewer wants sound (GEO-3594).
    *
@@ -260,8 +263,9 @@ export function useDebatePlayback(
       const muted = typeof next === 'function' ? next(mutedByUser) : next;
       if (!muted) setSoundBlocked(false);
       setMutedPreference(muted);
+      setMuteChosen(muted);
     },
-    [mutedByUser, setMutedPreference]
+    [mutedByUser, setMutedPreference, setMuteChosen]
   );
   const [playheadSeconds, setPlayheadSeconds] = React.useState(0);
   const [turnState, setTurnState] = React.useState<TurnState>(null);
@@ -1834,6 +1838,7 @@ export function useDebatePlayback(
     isResuming,
     playbackEnded,
     mutedByUser,
+    muteChosen,
     setMutedByUser,
     playheadSeconds,
     livePositionMs,

@@ -1,5 +1,6 @@
 import { act, cleanup, render, waitFor } from '@testing-library/react';
 
+import { Provider } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Debate } from '~/core/debates/api';
@@ -80,12 +81,15 @@ const media = (v: HTMLMediaElement) => {
 };
 
 let inTap = false;
+/** Muted autoplay allowed outside a tap, as in the in-app browsers that autoplay but keep it muted. */
+let mutedAutoplay = false;
 
 beforeEach(() => {
   now = 1_700_000_000_000;
   sig = 0;
   plays.length = 0;
   inTap = false;
+  mutedAutoplay = false;
   vi.spyOn(Date, 'now').mockImplementation(() => now);
   mocks.lookup.mockReset();
   mocks.refresh.mockReset();
@@ -99,7 +103,8 @@ beforeEach(() => {
   // A browser that refuses every `play()` made outside a tap, muted or not, as Meta's iOS in-app
   // browsers do.
   vi.spyOn(HTMLMediaElement.prototype, 'play').mockImplementation(function (this: HTMLMediaElement) {
-    if (!inTap) return Promise.reject(new DOMException('not allowed', 'NotAllowedError'));
+    if (!inTap && !(mutedAutoplay && this.muted))
+      return Promise.reject(new DOMException('not allowed', 'NotAllowedError'));
     plays.push(this.getAttribute('src') ?? 'null');
     media(this).paused = false;
     return Promise.resolve();
@@ -147,8 +152,16 @@ function outside(html: string) {
   return host.firstElementChild as HTMLElement;
 }
 
+// A fresh store per test: the mute preference and the viewer's choice are shared atoms.
+const renderPlayer = (active = true) =>
+  render(
+    <Provider>
+      <DebateFeedPlayer debate={debate} active={active} />
+    </Provider>
+  );
+
 async function blockedPlayer() {
-  const view = render(<DebateFeedPlayer debate={debate} active />);
+  const view = renderPlayer();
   await waitFor(() => expect(view.container.querySelectorAll('video')).toHaveLength(2));
   canplayAll(view.container);
   return view;
@@ -156,6 +169,12 @@ async function blockedPlayer() {
 
 const blockedState = (c: HTMLElement) =>
   c.querySelector('[data-debate-autoplay-blocked]')?.getAttribute('data-debate-autoplay-blocked');
+
+// The attribute is committed before the effect that listens for taps has run, so flush effects too.
+async function untilBlocked(c: HTMLElement) {
+  await waitFor(() => expect(blockedState(c)).toBe('true'), { timeout: 8_000 });
+  await act(async () => {});
+}
 
 describe('tapMayStartBlockedDebate', () => {
   it.each([
@@ -175,7 +194,7 @@ describe('tapMayStartBlockedDebate', () => {
 describe('DebateFeedPlayer, refused autoplay started by a tap anywhere', () => {
   it('starts the refused debate from a tap on plain page content', async () => {
     const view = await blockedPlayer();
-    await waitFor(() => expect(blockedState(view.container)).toBe('true'), { timeout: 8_000 });
+    await untilBlocked(view.container);
 
     tap(outside('<p>Generative AI is making culture less original</p>'), 'touchend');
 
@@ -185,7 +204,7 @@ describe('DebateFeedPlayer, refused autoplay started by a tap anywhere', () => {
 
   it('starts it from the claim title that opens the side panel', async () => {
     const view = await blockedPlayer();
-    await waitFor(() => expect(blockedState(view.container)).toBe('true'), { timeout: 8_000 });
+    await untilBlocked(view.container);
 
     const title = outside('<a href="/claim" data-entity-side-panel-opener="">Claim</a>');
     title.addEventListener('click', event => event.preventDefault());
@@ -196,7 +215,7 @@ describe('DebateFeedPlayer, refused autoplay started by a tap anywhere', () => {
 
   it('leaves a tap on a control or link with its own action alone', async () => {
     const view = await blockedPlayer();
-    await waitFor(() => expect(blockedState(view.container)).toBe('true'), { timeout: 8_000 });
+    await untilBlocked(view.container);
 
     tap(outside('<button type="button">Agree</button>'));
     const link = outside('<a href="/elsewhere">Log in</a>');
@@ -208,7 +227,7 @@ describe('DebateFeedPlayer, refused autoplay started by a tap anywhere', () => {
   }, 15_000);
 
   it('does nothing for a card that is not the active one', async () => {
-    const view = render(<DebateFeedPlayer debate={debate} active={false} />);
+    const view = renderPlayer(false);
     await act(() => new Promise(resolve => setTimeout(resolve, 300)));
     tap(outside('<p>text</p>'));
 
@@ -218,7 +237,7 @@ describe('DebateFeedPlayer, refused autoplay started by a tap anywhere', () => {
 
   it('starts once per tap, though the tap sends both touchend and click', async () => {
     const view = await blockedPlayer();
-    await waitFor(() => expect(blockedState(view.container)).toBe('true'), { timeout: 8_000 });
+    await untilBlocked(view.container);
 
     const text = outside('<p>text</p>');
     tap(text, 'touchend');
@@ -229,10 +248,7 @@ describe('DebateFeedPlayer, refused autoplay started by a tap anywhere', () => {
 
   it('turns the sound on through the shared preference', async () => {
     const view = await blockedPlayer();
-    await waitFor(() => expect(blockedState(view.container)).toBe('true'), { timeout: 8_000 });
-    // The preference is shared across cards, and earlier cases here turned it on.
-    const mute = view.queryByRole('button', { name: 'Mute' });
-    if (mute) act(() => mute.click());
+    await untilBlocked(view.container);
     expect(view.getByRole('button', { name: 'Unmute' })).toBeTruthy();
 
     tap(outside('<p>text</p>'));
@@ -244,9 +260,7 @@ describe('DebateFeedPlayer, refused autoplay started by a tap anywhere', () => {
 describe("DebateFeedPlayer, refused autoplay started by the card's own controls", () => {
   async function mutedBlockedPlayer() {
     const view = await blockedPlayer();
-    await waitFor(() => expect(blockedState(view.container)).toBe('true'), { timeout: 8_000 });
-    const mute = view.queryByRole('button', { name: 'Mute' });
-    if (mute) act(() => mute.click());
+    await untilBlocked(view.container);
     expect(view.getByRole('button', { name: 'Unmute' })).toBeTruthy();
     return view;
   }
@@ -268,5 +282,72 @@ describe("DebateFeedPlayer, refused autoplay started by the card's own controls"
     expect(plays).toHaveLength(2);
     await waitFor(() => expect(blockedState(view.container)).toBe('false'), { timeout: 8_000 });
     expect(view.getByRole('button', { name: 'Mute' })).toBeTruthy();
+  }, 15_000);
+});
+
+const playingState = (c: HTMLElement) => c.querySelector('[data-debate-playing]')?.getAttribute('data-debate-playing');
+
+describe('DebateFeedPlayer, muted autoplay given sound by a tap', () => {
+  async function mutedPlaying() {
+    mutedAutoplay = true;
+    const view = renderPlayer();
+    await waitFor(() => expect(view.container.querySelectorAll('video')).toHaveLength(2));
+    canplayAll(view.container);
+    await waitFor(() => expect(playingState(view.container)).toBe('true'), { timeout: 8_000 });
+    await act(async () => {});
+    expect(view.getByRole('button', { name: 'Unmute' })).toBeTruthy();
+    return view;
+  }
+  const videos = (c: HTMLElement) => Array.from(c.querySelectorAll('video'));
+
+  it('unmutes from a tap anywhere, replaying both elements inside the tap', async () => {
+    const view = await mutedPlaying();
+    plays.length = 0;
+
+    tap(outside('<p>text</p>'), 'touchend');
+
+    // The pause-and-play that unlocks each element for sound happens inside the tap.
+    expect(plays).toHaveLength(2);
+    await waitFor(() => expect(view.getByRole('button', { name: 'Mute' })).toBeTruthy(), { timeout: 8_000 });
+    expect(playingState(view.container)).toBe('true');
+  }, 15_000);
+
+  it('turns the sound on when Play follows a pause', async () => {
+    const view = await mutedPlaying();
+    tap(view.getByRole('button', { name: 'Pause debate' }));
+    await waitFor(() => expect(playingState(view.container)).toBe('false'), { timeout: 8_000 });
+    expect(view.getByRole('button', { name: 'Unmute' })).toBeTruthy();
+
+    tap(view.getByRole('button', { name: 'Play debate' }));
+
+    await waitFor(() => expect(view.getByRole('button', { name: 'Mute' })).toBeTruthy(), { timeout: 8_000 });
+  }, 15_000);
+
+  it('keeps a chosen Mute through taps and Play', async () => {
+    const view = await mutedPlaying();
+    tap(view.getByRole('button', { name: 'Unmute' }));
+    tap(view.getByRole('button', { name: 'Mute' }));
+    expect(view.getByRole('button', { name: 'Unmute' })).toBeTruthy();
+
+    tap(outside('<p>text</p>'), 'touchend');
+    expect(view.getByRole('button', { name: 'Unmute' })).toBeTruthy();
+
+    tap(view.getByRole('button', { name: 'Pause debate' }));
+    await waitFor(() => expect(playingState(view.container)).toBe('false'), { timeout: 8_000 });
+    tap(view.getByRole('button', { name: 'Play debate' }));
+    await waitFor(() => expect(playingState(view.container)).toBe('true'), { timeout: 8_000 });
+    expect(view.getByRole('button', { name: 'Unmute' })).toBeTruthy();
+  }, 15_000);
+
+  it('leaves a tap on a control or link with its own action alone', async () => {
+    const view = await mutedPlaying();
+
+    tap(outside('<button type="button">Agree</button>'));
+    const link = outside('<a href="/elsewhere">Log in</a>');
+    link.addEventListener('click', event => event.preventDefault());
+    tap(link);
+
+    expect(view.getByRole('button', { name: 'Unmute' })).toBeTruthy();
+    expect(videos(view.container).every(video => video.muted)).toBe(true);
   }, 15_000);
 });

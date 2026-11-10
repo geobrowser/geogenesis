@@ -267,6 +267,7 @@ function PairedDebateFeedPlayer({
     isResuming,
     playbackEnded,
     mutedByUser,
+    muteChosen,
     setMutedByUser,
     playheadSeconds,
     timelineSeconds,
@@ -322,9 +323,11 @@ function PairedDebateFeedPlayer({
     slot2Src,
     active,
   });
+  // Muted only because nobody chose otherwise, so a tap may turn the sound on (GEO-3602).
+  const mutedByDefault = mutedByUser && !muteChosen;
   // The hold is for autoplay. A viewer pressing play has chosen not to wait, so every control that
   // starts playback lets the pair go first.
-  const togglePlayback = () => {
+  const togglePlayback = (withSound = mutedByDefault) => {
     measurement.control(playing ? 'pause' : playbackEnded ? 'replay' : 'play');
     if (playbackEnded) resetAnimationSeek();
     if (!playing) {
@@ -332,14 +335,18 @@ function PairedDebateFeedPlayer({
       setStartedDebateId(debate.id);
     }
     pair.release();
-    // Inside a tap a refused play is accepted, and with sound (GEO-3602).
-    const refused = autoplayBlocked && !playing;
+    const starting = !playing;
     togglePlaybackRaw();
-    if (!refused) return;
+    if (!starting) return;
+    // A play inside the tap unlocks the element for sound. Only if it started: on iOS before 16.4
+    // every event counts as a gesture, so a swipe gets here too and is refused.
+    let started = false;
     for (const video of [slot1VideoRef.current, slot2VideoRef.current]) {
-      if (video && !video.paused) markGestureVideoUnlocked(video);
+      if (!video || video.paused) continue;
+      markGestureVideoUnlocked(video);
+      started = true;
     }
-    setMutedByUser(false);
+    if (started && withSound && mutedByUser) setMutedByUser(false);
   };
   /**
    * The viewer asking to watch a held card.
@@ -404,8 +411,17 @@ function PairedDebateFeedPlayer({
   const onPauseTick = () => {
     if (activatingRef.current === 0) onPlaybackTick();
   };
-  // A tap anywhere starts a refused debate with sound (GEO-3602); the next card reads the preference.
-  useBlockedPageTap(active && autoplayBlocked && !userPaused && !playing && !detached, togglePlayback);
+  /** What Unmute does on a running debate, which gives sound on a real iPhone in-app browser. */
+  const unmuteInGesture = () => {
+    activateBothInGesture();
+    setMutedByUser(false);
+  };
+  // A tap anywhere starts a refused debate, or unmutes one muted by default, with sound (GEO-3602).
+  const refusedStart = autoplayBlocked && !userPaused && !playing;
+  useBlockedPageTap(active && !detached && (refusedStart || (playing && mutedByDefault)), () => {
+    if (playing) unmuteInGesture();
+    else togglePlayback();
+  });
   const seekBoth = (seconds: number) => {
     measurement.control('seek');
     resetAnimationSeek();
@@ -1076,7 +1092,7 @@ function PairedDebateFeedPlayer({
                   centred paused glyph and tap-to-toggle instead. */}
                 <ControlCircle
                   ariaLabel={playing ? 'Pause debate' : 'Play debate'}
-                  onClick={togglePlayback}
+                  onClick={() => togglePlayback()}
                   className="md:hidden"
                 >
                   {playing ? <Pause /> : <Play />}
@@ -1096,11 +1112,11 @@ function PairedDebateFeedPlayer({
                     measurement.control(mutedByUser ? 'unmute' : 'mute');
                     // On a refused card, Unmute starts it with sound.
                     if (mutedByUser && autoplayBlocked && !playing) {
-                      togglePlayback();
+                      togglePlayback(true);
                       return;
                     }
-                    if (mutedByUser && playing) activateBothInGesture();
-                    setMutedByUser(current => !current);
+                    if (mutedByUser && playing) unmuteInGesture();
+                    else setMutedByUser(current => !current);
                   }}
                   className={
                     mutedByUser
@@ -1282,7 +1298,7 @@ function PairedDebateFeedPlayer({
           <button
             type="button"
             aria-label={showReplay ? 'Replay debate' : 'Resume debate'}
-            onClick={showReplay ? playFromStart : togglePlayback}
+            onClick={showReplay ? playFromStart : () => togglePlayback()}
             className={cx(
               CENTERED_PLAYBACK_CONTROL_CLASS,
               'z-30',
