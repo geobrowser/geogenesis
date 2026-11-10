@@ -1,6 +1,12 @@
+import { renderHook } from '@testing-library/react';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { readDebatePageNavigation, resetDebatePageLandingForTests } from './use-debate-page-outcome';
+import {
+  readDebatePageNavigation,
+  resetDebatePageLandingForTests,
+  useDebatePageOutcome,
+} from './use-debate-page-outcome';
 
 function navigatedTo(url: string, extra: Record<string, unknown> = {}) {
   vi.spyOn(performance, 'getEntriesByType').mockImplementation(type =>
@@ -31,6 +37,14 @@ describe('readDebatePageNavigation (GEO-3604)', () => {
     expect(readDebatePageNavigation('debate-a')?.entry).toBe('landing');
     window.history.replaceState(null, '', '/space/s1/debate-a');
     expect(readDebatePageNavigation('debate-b')?.entry).toBe('in_app');
+  });
+
+  it('counts a return to the landing debate as in-app once the landing visit has sent its outcome', () => {
+    navigatedTo('https://www.geobrowser.io/space/s1/debate-a');
+    const { result, unmount } = renderHook(() => useDebatePageOutcome('debate-a'));
+    expect(result.current).not.toBeNull();
+    unmount();
+    expect(readDebatePageNavigation('debate-a')?.entry).toBe('in_app');
   });
 
   it('carries a prerendered page’s activation start', () => {
