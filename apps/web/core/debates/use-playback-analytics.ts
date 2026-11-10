@@ -30,7 +30,7 @@ export function usePlaybackAnalytics(
   const latest = React.useRef({ active, controller });
   latest.current = { active, controller };
   const trigger = React.useRef<'manual' | 'autoplay'>('autoplay');
-  const controlRef = React.useRef<(control: string) => void>(() => {});
+  const controlRef = React.useRef<(control: string, properties?: Record<string, unknown>) => void>(() => {});
   const recordings = [1, 2].map(slot => debate.recordings.find(recording => recording.participant_slot === slot));
   // Immutable recording IDs and timing define the media, never signed playback URLs.
   const mediaVersion = JSON.stringify([
@@ -160,10 +160,10 @@ export function usePlaybackAnalytics(
     window.addEventListener('geo-analytics-context-changing', interrupt);
     window.addEventListener('pagehide', hide);
     window.addEventListener('pageshow', show);
-    controlRef.current = control => {
+    controlRef.current = (control, properties) => {
       clock.break();
       trigger.current = 'manual';
-      emit('debate_playback_control', { control, trigger: 'manual' });
+      emit('debate_playback_control', { ...properties, control, trigger: 'manual' });
     };
     return () => {
       disposed = true;
@@ -195,6 +195,6 @@ export function usePlaybackAnalytics(
   return {
     elementRef,
     playbackInstanceId: playbackInstance.current,
-    control: (name: string) => controlRef.current(name),
+    control: (name: string, properties?: Record<string, unknown>) => controlRef.current(name, properties),
   };
 }
