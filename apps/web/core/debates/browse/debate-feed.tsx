@@ -805,6 +805,7 @@ function DebateClaimTitle({ claim }: { claim: Debate['claim'] }) {
         spaceId={spaceId}
         className="hover:underline"
         data-entity-side-panel-opener=""
+        data-debate-claim-title=""
         {...observePanelNavigation(event => {
           if (event.defaultPrevented || isModifiedClick(event)) return;
           event.preventDefault();

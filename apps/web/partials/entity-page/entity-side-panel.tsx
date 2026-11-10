@@ -35,6 +35,7 @@ import {
   shouldSuppressSidePanelPathnameAutoClose,
 } from '~/core/state/personal-profile/create-post-flow';
 import type { Entity } from '~/core/types';
+import { ENTITY_SIDE_PANEL_LAYER_SELECTOR } from '~/core/utils/entity-side-panel-link';
 import type { EntitySidePanelTabSelection } from '~/core/utils/entity-tab-navigation';
 import { hideMainPageScrollbars } from '~/core/utils/hide-main-scrollbars';
 import { NavUtils } from '~/core/utils/utils';
@@ -506,11 +507,7 @@ export function EntitySidePanel() {
       const target = event.target;
       if (!(target instanceof Element)) return;
 
-      if (
-        target.closest(
-          '[data-entity-side-panel], [data-power-tools-entity-panel], [data-entity-side-panel-opener], [data-radix-popper-content-wrapper], [data-radix-portal], [role="dialog"], [role="menu"], [role="listbox"], .elevated-popover, .side-panel-elevated-popover'
-        )
-      ) {
+      if (target.closest(`${ENTITY_SIDE_PANEL_LAYER_SELECTOR}, [data-entity-side-panel-opener]`)) {
         return;
       }
 
