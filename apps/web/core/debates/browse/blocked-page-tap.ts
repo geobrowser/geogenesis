@@ -21,11 +21,8 @@ const TAP_SLOP_PX = 10;
 
 const firstTouch = (event: Event) => (event as TouchEvent).touches?.[0] ?? null;
 
-/*
- * The current touch, tracked once for the page rather than per card: a swipe makes the next card
- * active, and its listener may start mid-touch, after the moves that made it a scroll.
- * iOS can count the touchend that ends a scroll as a gesture, so a scroll must never be a tap.
- */
+// The current touch, for the whole page: a card made active by a swipe starts listening mid-touch.
+// iOS can count a scroll's touchend as a gesture, so a scroll must never be a tap.
 const touch = { start: null as { x: number; y: number } | null, scrolled: false };
 let tracking = false;
 function trackTouches() {
