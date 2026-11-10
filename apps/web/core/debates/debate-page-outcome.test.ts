@@ -366,3 +366,91 @@ describe('createDebatePageOutcome — time since the link was opened (GEO-3604)'
     expect(events[0]).toMatchObject({ still_nav_ms: 1_000 });
   });
 });
+
+describe('createDebatePageOutcome — time since the link was opened (GEO-3604)', () => {
+  function landing(navigation: Parameters<typeof createDebatePageOutcome>[0]['navigation']) {
+    // `now()` is `performance.now()`: on a landing visit it already counts from navigation start.
+    let clock = 2_500;
+    const events: Record<string, unknown>[] = [];
+    const outcome = createDebatePageOutcome({
+      debateId: 'debate-1',
+      emit: e => events.push(e),
+      now: () => clock,
+      navigation,
+    });
+    return { outcome, events, advance: (ms: number) => (clock += ms) };
+  }
+
+  it('reports each stage from navigation start on a landing visit, beside the existing from-mount times', () => {
+    const { outcome, events, advance } = landing({ entry: 'landing', type: 'navigate', activationStart: 0 });
+    outcome.stillShown(1_900);
+    advance(500);
+    outcome.feed({ kind: 'shown' });
+    advance(400);
+    outcome.player({ ...idle, ready: true });
+    advance(600);
+    outcome.player({ ...idle, ready: true, playing: true });
+
+    expect(events[0]).toMatchObject({
+      entry: 'landing',
+      navigation_type: 'navigate',
+      started_ms: 2_500,
+      still_nav_ms: 1_900,
+      still_ms: 0,
+      shown_nav_ms: 3_000,
+      ready_nav_ms: 3_400,
+      played_nav_ms: 4_000,
+      shown_ms: 500,
+      played_ms: 1_500,
+      outcome_version: 'debate-page-v1',
+    });
+  });
+
+  it('counts a prerendered page from when it was shown', () => {
+    const { outcome, events } = landing({ entry: 'landing', type: 'prerender', activationStart: 2_000 });
+    outcome.player({ ...idle, ready: true, playing: true });
+
+    expect(events[0]).toMatchObject({ started_ms: 500, played_nav_ms: 500 });
+  });
+
+  it('times the ready-to-tap frame when autoplay is blocked, and the leave', () => {
+    const { outcome, events, advance } = landing({ entry: 'landing', type: 'navigate', activationStart: 0 });
+    outcome.feed({ kind: 'shown' });
+    advance(300);
+    outcome.player({ ...idle, ready: true, autoplayBlocked: true });
+    advance(5_000);
+    outcome.player({ ...idle, ready: true, autoplayBlocked: true });
+    outcome.leave('hidden');
+
+    expect(events[0]).toMatchObject({
+      outcome: 'not_played',
+      reason: 'autoplay_blocked',
+      blocked_nav_ms: 2_800,
+      left_nav_ms: 7_800,
+      played_nav_ms: null,
+    });
+  });
+
+  it('leaves the navigation times null on an in-app visit, whose navigation start belongs to another page', () => {
+    const { outcome, events } = landing({ entry: 'in_app', type: 'navigate', activationStart: 0 });
+    outcome.stillShown(2_600);
+    outcome.player({ ...idle, ready: true, playing: true });
+
+    expect(events[0]).toMatchObject({
+      entry: 'in_app',
+      started_ms: null,
+      still_nav_ms: null,
+      played_nav_ms: null,
+      still_ms: 100,
+    });
+  });
+
+  it('keeps the first still time', () => {
+    const { outcome, events } = landing({ entry: 'landing', type: 'navigate', activationStart: 0 });
+    outcome.stillShown(1_000);
+    outcome.stillShown(2_000);
+    outcome.leave('pagehide');
+
+    expect(events[0]).toMatchObject({ still_nav_ms: 1_000 });
+  });
+});
