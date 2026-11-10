@@ -45,9 +45,9 @@ export type DebateExtractedClaimsClaim = {
   topics?: { entity_id: string; name: string | null }[] | null;
   /**
    * True when the claim's main assertion is broad enough to hold positions for and
-   * against it. Only these are tagged as debate claims on Geo, because the tag is what
-   * the claim picker lists as candidate motions. Absent on payloads from before the
-   * classification shipped, which read as "not a motion".
+   * against it. Read only by the rematch picker's "From this debate" source, which skips
+   * claims marked false. The publisher ignores it: no extracted claim is tagged Debate
+   * (GEO-3616).
    */
   is_contestable?: boolean | null;
   /**
@@ -139,7 +139,6 @@ export function decodeExtractedClaims(response: DebateExtractedClaimsResponse): 
         : null,
     stableEntityId: decodeStableEntityId(claim.entity_id, droppedStableIds),
     topics: decodeTopics(claim.topics, droppedTopics),
-    isContestable: claim.is_contestable === true,
     timing: decodeTiming(claim.start_ms, claim.end_ms),
     highlightScore: decodeScore('highlight_score', claim.highlight_score, droppedScores),
     relevanceScore: decodeScore('relevance_score', claim.relevance_score, droppedScores),
