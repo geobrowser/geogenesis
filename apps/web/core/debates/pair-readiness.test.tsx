@@ -111,12 +111,7 @@ function setMedia(video: HTMLVideoElement, state: MediaState, event?: string) {
   if (event) fireEvent(video, new Event(event));
 }
 
-/**
- * GEO-3604. iOS Safari with `preload="metadata"`: a paused element loads its playlists, fires
- * `suspend` and goes `NETWORK_IDLE` at `HAVE_METADATA`. The pre-roll seek then fetches the start
- * segment while the element still reports `NETWORK_IDLE`, then lands at `HAVE_CURRENT_DATA`, still
- * idle, a few hundred ms before `canplay`. None of that is an element that has stopped loading.
- */
+/** GEO-3604. iOS paused loading: idle at metadata, idle through the pre-roll seek, then `canplay`. */
 describe('usePairReadiness on iOS-style loading (GEO-3604)', () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());

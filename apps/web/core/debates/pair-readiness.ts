@@ -27,14 +27,8 @@ import * as React from 'react';
 export const PAIR_HOLD_TIMEOUT_MS = 3_000;
 
 /**
- * How long an element must sit stopped short of playable (`isStuck`) before the pair stops waiting
- * for it.
- *
- * iOS Safari ignores `preload`, and data-saver modes do the same: a paused element opens its
- * header, fires `suspend`, goes `NETWORK_IDLE` at `HAVE_METADATA` and loads nothing more until it
- * is played. Holding it would only run out the timeout. The grace is there because Chrome fires
- * `suspend` a millisecond *before* `canplay` on these files, so being idle for an instant proves
- * nothing.
+ * How long an element must stay `isStuck` before the pair stops waiting for it. iOS Safari loads a
+ * paused element only to its metadata; Chrome is idle for an instant just before `canplay`.
  */
 export const SUSPEND_GRACE_MS = 250;
 
@@ -52,13 +46,8 @@ const canPlay = (video: PairMember) => video.readyState >= 3 /* HAVE_FUTURE_DATA
 /** A frame to paint. What revealing the pair needs, which is less than what starting it needs. */
 const hasFrame = (video: PairMember) => video.readyState >= 2; /* HAVE_CURRENT_DATA */
 /**
- * Has stopped loading for good, so only `play()` will move it.
- *
- * Every part counts. A seek in flight is a fetch even though iOS reports `NETWORK_IDLE` while it
- * runs, and an element with a frame at its position got there by fetching: on iOS a paused seek
- * goes `seeking` → `seeked` at `HAVE_CURRENT_DATA` → `canplay`, idle throughout. And until the
- * partner has its metadata too, `useDebatePlayback` has not yet moved the pair to its start, so a
- * seek is still coming.
+ * Stopped short of a frame with no seek in flight, after the partner's metadata (so the pre-roll
+ * seek has had its chance). iOS reports `NETWORK_IDLE` while a paused seek fetches.
  */
 const isStuck = (video: PairMember, partner: PairMember) =>
   video.readyState < 2 /* HAVE_CURRENT_DATA */ &&
