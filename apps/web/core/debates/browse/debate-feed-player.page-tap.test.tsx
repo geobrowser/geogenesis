@@ -391,6 +391,22 @@ describe('DebateFeedPlayer, muted autoplay given sound by a tap', () => {
     expect(mocks.control).toHaveBeenCalledWith('unmute', { source: 'play' });
   }, 15_000);
 
+  it('leaves a tap that dismisses an open dialog alone', async () => {
+    const view = await mutedPlaying();
+    plays.length = 0;
+    // A Radix dialog's backdrop is a bare div; its focus guards are what mark the layer as open.
+    const guard = document.createElement('span');
+    guard.setAttribute('data-radix-focus-guard', '');
+    document.body.prepend(guard);
+    const backdrop = outside('<div></div>');
+
+    tap(backdrop, 'touchend');
+    guard.remove();
+
+    expect(plays).toHaveLength(0);
+    expect(view.getByRole('button', { name: 'Unmute' })).toBeTruthy();
+  }, 15_000);
+
   it('leaves a mouse click on blank space alone', async () => {
     const view = await mutedPlaying();
     plays.length = 0;

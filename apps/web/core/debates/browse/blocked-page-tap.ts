@@ -25,7 +25,13 @@ const firstTouch = (event: Event) => (event as TouchEvent).touches?.[0] ?? null;
 
 // The current touch, for the whole page: a card made active by a swipe starts listening mid-touch.
 // iOS can count a scroll's touchend as a gesture, so a scroll must never be a tap.
-const touch = { start: null as { x: number; y: number } | null, scrolled: false };
+const touch = { start: null as { x: number; y: number } | null, scrolled: false, overLayer: false };
+
+/**
+ * Whether a Radix dialog, popover or menu is open. Their focus guards are mounted only then. Its backdrop
+ * carries no marker of its own, so a tap that only dismisses it would otherwise reach the page.
+ */
+const layerOpen = () => document.querySelector('[data-radix-focus-guard]') !== null;
 
 /** Cards waiting for a tap, in the order they asked. Only the latest gets it, so one tap starts one debate. */
 const claimants: Array<{ current: () => void }> = [];
@@ -41,6 +47,7 @@ function listen() {
       const point = firstTouch(event);
       touch.start = point ? { x: point.clientX, y: point.clientY } : null;
       touch.scrolled = false;
+      touch.overLayer = layerOpen();
     },
     passive
   );
@@ -60,7 +67,7 @@ function listen() {
     'touchend',
     event => {
       const owner = claimants.at(-1);
-      if (!owner || touch.start === null || touch.scrolled) return;
+      if (!owner || touch.start === null || touch.scrolled || touch.overLayer) return;
       if (!inUserGesture() || !tapMayStartBlockedDebate(event.target)) return;
       owner.current();
     },
