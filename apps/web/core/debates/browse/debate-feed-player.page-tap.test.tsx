@@ -145,6 +145,23 @@ function tap(target: Element, type: 'click' | 'touchend' = 'click') {
   });
 }
 
+/** A swipe on `target`: touchstart, a move past the tap slop, touchend, all counted as a gesture. */
+function swipe(target: Element, { scrollInstead = false } = {}) {
+  const touchEvent = (type: string, y: number) => {
+    const event = new Event(type, { bubbles: true, cancelable: true });
+    Object.defineProperty(event, 'touches', { value: type === 'touchend' ? [] : [{ clientX: 100, clientY: y }] });
+    return event;
+  };
+  act(() => {
+    target.dispatchEvent(touchEvent('touchstart', 600));
+    if (scrollInstead) window.dispatchEvent(new Event('scroll'));
+    else target.dispatchEvent(touchEvent('touchmove', 300));
+    inTap = true;
+    target.dispatchEvent(touchEvent('touchend', 300));
+    inTap = false;
+  });
+}
+
 function outside(html: string) {
   const host = document.createElement('div');
   host.innerHTML = html;
@@ -233,6 +250,16 @@ describe('DebateFeedPlayer, refused autoplay started by a tap anywhere', () => {
 
     expect(plays).toHaveLength(0);
     expect(blockedState(view.container)).not.toBe('true');
+  }, 15_000);
+
+  it('does not start it from a scroll', async () => {
+    const view = await blockedPlayer();
+    await untilBlocked(view.container);
+
+    swipe(outside('<p>text</p>'));
+
+    expect(plays).toHaveLength(0);
+    expect(blockedState(view.container)).toBe('true');
   }, 15_000);
 
   it('starts once per tap, though the tap sends both touchend and click', async () => {
@@ -337,6 +364,18 @@ describe('DebateFeedPlayer, muted autoplay given sound by a tap', () => {
     tap(view.getByRole('button', { name: 'Play debate' }));
     await waitFor(() => expect(playingState(view.container)).toBe('true'), { timeout: 8_000 });
     expect(view.getByRole('button', { name: 'Unmute' })).toBeTruthy();
+  }, 15_000);
+
+  it('leaves a scroll alone, so the next card still starts muted', async () => {
+    const view = await mutedPlaying();
+    plays.length = 0;
+
+    swipe(outside('<p>text</p>'));
+    swipe(outside('<p>text</p>'), { scrollInstead: true });
+
+    expect(plays).toHaveLength(0);
+    expect(view.getByRole('button', { name: 'Unmute' })).toBeTruthy();
+    expect(playingState(view.container)).toBe('true');
   }, 15_000);
 
   it('leaves a tap on a control or link with its own action alone', async () => {
