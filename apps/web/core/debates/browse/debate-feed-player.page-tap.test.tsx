@@ -137,29 +137,42 @@ function canplayAll(c: HTMLElement) {
 }
 
 /** A tap on `target`: `play()` is allowed only while its handlers run. */
+function touchEvent(type: string, y: number) {
+  const event = new Event(type, { bubbles: true, cancelable: true });
+  Object.defineProperty(event, 'touches', { value: type === 'touchend' ? [] : [{ clientX: 100, clientY: y }] });
+  return event;
+}
+
 function tap(target: Element, type: 'click' | 'touchend' = 'click') {
   act(() => {
+    if (type === 'touchend') target.dispatchEvent(touchEvent('touchstart', 300));
     inTap = true;
-    target.dispatchEvent(new Event(type, { bubbles: true, cancelable: true }));
+    target.dispatchEvent(type === 'touchend' ? touchEvent('touchend', 300) : new Event(type, { bubbles: true }));
     inTap = false;
   });
 }
 
-/** A swipe on `target`: touchstart, a move past the tap slop, touchend, all counted as a gesture. */
-function swipe(target: Element, { scrollInstead = false } = {}) {
-  const touchEvent = (type: string, y: number) => {
-    const event = new Event(type, { bubbles: true, cancelable: true });
-    Object.defineProperty(event, 'touches', { value: type === 'touchend' ? [] : [{ clientX: 100, clientY: y }] });
-    return event;
-  };
+/** The start of a swipe on `target`: touchstart, then a move past the tap slop (or a scroll). */
+function beginSwipe(target: Element, { scrollInstead = false } = {}) {
   act(() => {
     target.dispatchEvent(touchEvent('touchstart', 600));
     if (scrollInstead) window.dispatchEvent(new Event('scroll'));
     else target.dispatchEvent(touchEvent('touchmove', 300));
+  });
+}
+
+/** The finger lifting, which iOS may count as a gesture. */
+function endSwipe(target: Element) {
+  act(() => {
     inTap = true;
     target.dispatchEvent(touchEvent('touchend', 300));
     inTap = false;
   });
+}
+
+function swipe(target: Element, options: { scrollInstead?: boolean } = {}) {
+  beginSwipe(target, options);
+  endSwipe(target);
 }
 
 function outside(html: string) {
@@ -376,6 +389,24 @@ describe('DebateFeedPlayer, muted autoplay given sound by a tap', () => {
     expect(plays).toHaveLength(0);
     expect(view.getByRole('button', { name: 'Unmute' })).toBeTruthy();
     expect(playingState(view.container)).toBe('true');
+  }, 15_000);
+
+  it('leaves a swipe alone that the card only started listening to halfway through', async () => {
+    // The swipe that brings the next card in: it becomes active and plays before the finger lifts.
+    mutedAutoplay = true;
+    const view = renderPlayer();
+    await waitFor(() => expect(view.container.querySelectorAll('video')).toHaveLength(2));
+    const text = outside('<p>text</p>');
+    beginSwipe(text);
+    canplayAll(view.container);
+    await waitFor(() => expect(playingState(view.container)).toBe('true'), { timeout: 8_000 });
+    await act(async () => {});
+    plays.length = 0;
+
+    endSwipe(text);
+
+    expect(plays).toHaveLength(0);
+    expect(view.getByRole('button', { name: 'Unmute' })).toBeTruthy();
   }, 15_000);
 
   it('leaves a tap on a control or link with its own action alone', async () => {
