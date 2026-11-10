@@ -797,11 +797,8 @@ function PairedDebateFeedPlayer({
     setReplayPending(false);
     replayNow();
   }, [active, playbackEnded, replayPending]);
-  /*
-   * The browser refused to start this debate even muted (GEO-3602): a dimmed frame and one big
-   * "Watch the debate" button, so it does not read as a paused video. The compact gallery tile keeps
-   * the plain controls, as it has no room for the label.
-   */
+  // Refused even muted (GEO-3602): dim the frame and show one "Watch the debate" button so it doesn't
+  // read as paused. Not on compact tiles, which have no room for the label.
   const refusedPrompt = ready && refusedStart && !held && !playbackEnded && !reducedOverlays;
   // Playing muted only by default on a touch screen, where a tap anywhere turns the sound on.
   const soundHint = active && playing && mutedByDefault && touch && !reducedOverlays;
