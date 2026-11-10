@@ -560,17 +560,17 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
         // the reuse policy left after subtracting the graph's current relations. Deduped per
         // (claim, topic): a reused entity can appear behind several extracted claims carrying the
         // same topic, and `relate` does not dedupe.
+        for (const topic of claim.topics ?? []) relateTopic(claimRef, topic, isStable);
         // No Debate tag, on minted or reused claims (GEO-3616): the tag is what lists a claim as
         // a candidate motion in the picker and on Explore, and that list is curated. Extracted
         // claims publish as plain Claims; an entity that already carries the tag keeps it.
         //
-        // One claim per proposition for the stance below. Reused entities and geo-chat's stable
-        // ids (D1) key on the id. A fresh id cannot, because `mintEntityId` returns a new one per
-        // statement, so keying on it would dedupe nothing: two verbatim extractions from an older
-        // payload mint two entities (the long-standing behaviour) but take one stance.
+        // One stance per proposition. Reused entities and geo-chat's stable ids (D1) key on the
+        // id. A fresh id cannot, because `mintEntityId` returns a new one per statement, so
+        // keying on it would dedupe nothing: two verbatim extractions from an older payload mint
+        // two entities (the long-standing behaviour) but take one stance.
         const claimKey =
           existingClaimId || stableClaimId ? normalizeId(claimId) : `text:${claimEntityText.toLowerCase()}`;
-        for (const topic of claim.topics ?? []) relateTopic(claimRef, topic, isStable);
         // Never from the motion to itself: the reuse policy refuses a reference to the motion,
         // but a stable id is not checked against it, and a self-relation is never right.
         if (writesStance && claim.stance && normalizeId(claimId) !== motionKey && !stancedClaims.has(claimKey)) {
@@ -718,8 +718,8 @@ export type DebateClaimsPublishDraft = {
 
 /**
  * GEO-2870 option A: the early claims publish. Describes each claim minted under geo-chat's stable
- * id — Name, Types → Claim, Is factual and its Topics — so it
- * exists on the graph, and can be voted on and requested, long before the debate itself publishes.
+ * id — Name, Types → Claim, Is factual and its Topics — so it exists on the graph, and can be voted
+ * on and requested, long before the debate itself publishes.
  *
  * Writes nothing that names the debate: no transcript block, no Sources edge, no reference to the
  * Debate entity id. The full publish adds those, and its idempotency check is whether the Debate
