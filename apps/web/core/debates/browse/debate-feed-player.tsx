@@ -332,7 +332,14 @@ function PairedDebateFeedPlayer({
       setStartedDebateId(debate.id);
     }
     pair.release();
+    // Inside a tap a refused play is accepted, and with sound (GEO-3602).
+    const refused = autoplayBlocked && !playing;
     togglePlaybackRaw();
+    if (!refused) return;
+    for (const video of [slot1VideoRef.current, slot2VideoRef.current]) {
+      if (video && !video.paused) markGestureVideoUnlocked(video);
+    }
+    setMutedByUser(false);
   };
   /**
    * The viewer asking to watch a held card.
@@ -398,13 +405,7 @@ function PairedDebateFeedPlayer({
     if (activatingRef.current === 0) onPlaybackTick();
   };
   // A tap anywhere starts a refused debate with sound (GEO-3602); the next card reads the preference.
-  useBlockedPageTap(active && autoplayBlocked && !userPaused && !playing && !detached, () => {
-    togglePlayback();
-    for (const video of [slot1VideoRef.current, slot2VideoRef.current]) {
-      if (video && !video.paused) markGestureVideoUnlocked(video);
-    }
-    setMutedByUser(false);
-  });
+  useBlockedPageTap(active && autoplayBlocked && !userPaused && !playing && !detached, togglePlayback);
   const seekBoth = (seconds: number) => {
     measurement.control('seek');
     resetAnimationSeek();
@@ -1093,6 +1094,11 @@ function PairedDebateFeedPlayer({
                   ariaLabel={mutedByUser ? 'Unmute' : 'Mute'}
                   onClick={() => {
                     measurement.control(mutedByUser ? 'unmute' : 'mute');
+                    // On a refused card, Unmute starts it with sound.
+                    if (mutedByUser && autoplayBlocked && !playing) {
+                      togglePlayback();
+                      return;
+                    }
                     if (mutedByUser && playing) activateBothInGesture();
                     setMutedByUser(current => !current);
                   }}

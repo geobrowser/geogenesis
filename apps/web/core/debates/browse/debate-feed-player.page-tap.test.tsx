@@ -240,3 +240,33 @@ describe('DebateFeedPlayer, refused autoplay started by a tap anywhere', () => {
     await waitFor(() => expect(view.getByRole('button', { name: 'Mute' })).toBeTruthy(), { timeout: 8_000 });
   }, 15_000);
 });
+
+describe("DebateFeedPlayer, refused autoplay started by the card's own controls", () => {
+  async function mutedBlockedPlayer() {
+    const view = await blockedPlayer();
+    await waitFor(() => expect(blockedState(view.container)).toBe('true'), { timeout: 8_000 });
+    const mute = view.queryByRole('button', { name: 'Mute' });
+    if (mute) act(() => mute.click());
+    expect(view.getByRole('button', { name: 'Unmute' })).toBeTruthy();
+    return view;
+  }
+
+  it('starts with sound from the play button', async () => {
+    const view = await mutedBlockedPlayer();
+
+    tap(view.getByRole('button', { name: 'Play debate' }));
+
+    expect(plays).toHaveLength(2);
+    await waitFor(() => expect(view.getByRole('button', { name: 'Mute' })).toBeTruthy(), { timeout: 8_000 });
+  }, 15_000);
+
+  it('starts with sound from Unmute, not only turning the sound on', async () => {
+    const view = await mutedBlockedPlayer();
+
+    tap(view.getByRole('button', { name: 'Unmute' }));
+
+    expect(plays).toHaveLength(2);
+    await waitFor(() => expect(blockedState(view.container)).toBe('false'), { timeout: 8_000 });
+    expect(view.getByRole('button', { name: 'Mute' })).toBeTruthy();
+  }, 15_000);
+});
