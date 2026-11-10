@@ -9,6 +9,8 @@ import { geo } from '~/core/sdk/geo-client';
 import { store } from '~/core/state/jotai-store';
 import { requestedMembershipSpacesAtom, upsertRequestedMembershipSpace } from '~/core/state/requested-membership';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
+import { decodeGovernanceRevert } from '~/core/utils/contracts/governance-errors';
+import { readFastPathRestricted } from '~/core/utils/contracts/read-space-membership';
 import { validateSpaceId } from '~/core/utils/utils';
 
 /** The shape `useSmartAccountTransaction` returns — kept structural so this module stays hook-free. */
@@ -17,6 +19,44 @@ export type SendSpaceTransaction = (args: {
   data: `0x${string}`;
   value?: bigint;
 }) => Effect.Effect<unknown, unknown>;
+
+/**
+ * The space won't take a membership request from this account: it holds FAST_PATH_RESTRICTED
+ * there, almost always because it joined and then left a space that restricts new members (see
+ * `readFastPathRestricted`). Terminal: the same request fails the same way every time until an
+ * editor adds the account back, so callers report it once and never retry it.
+ */
+export class MembershipRequestRestrictedError extends Error {
+  constructor(options?: { cause?: unknown }) {
+    super(
+      "This space doesn't take join requests from people who have left it. An editor has to add you back.",
+      options
+    );
+    this.name = 'MembershipRequestRestrictedError';
+  }
+}
+
+/** Whether `error` is the terminal restriction above, by name so a duplicated module instance still matches. */
+export function isMembershipRequestRestrictedError(error: unknown): error is MembershipRequestRestrictedError {
+  return error instanceof Error && error.name === 'MembershipRequestRestrictedError';
+}
+
+/**
+ * Asked of the chain before the request is sent, because the contract's answer otherwise arrives
+ * as the paymaster refusing to sponsor the op: a bare "RPC Request failed" and a dump of the
+ * request, with a Retry that can never work.
+ *
+ * Fails open: a flaky read must not stop a request the account is entitled to make. The contract
+ * still enforces it, and the revert is mapped to the same error after the fact.
+ */
+async function isRequestRestricted(spaceId: string, personalSpaceId: string): Promise<boolean> {
+  try {
+    return await readFastPathRestricted(spaceId, personalSpaceId);
+  } catch (error) {
+    console.warn('Could not read fast-path restriction before requesting membership', { spaceId }, error);
+    return false;
+  }
+}
 
 type MembershipSpaceDisplay = { name?: string; image?: string | null };
 
@@ -41,7 +81,8 @@ type RequestSpaceMembershipArgs = {
  * surfaces that render it hundreds of times (every vote control in a list).
  *
  * Throws on an invalid space id or a failed transaction; callers decide whether
- * that surfaces to the user.
+ * that surfaces to the user. Throws `MembershipRequestRestrictedError`, without
+ * sending anything, when the space won't take a request from this account.
  */
 export async function requestSpaceMembership({
   spaceId,
@@ -52,6 +93,10 @@ export async function requestSpaceMembership({
 }: RequestSpaceMembershipArgs): Promise<void> {
   if (!validateSpaceId(spaceId)) {
     throw new Error('Invalid target space ID');
+  }
+
+  if (await isRequestRestricted(spaceId, personalSpaceId)) {
+    throw new MembershipRequestRestrictedError();
   }
 
   console.log('Requesting to be member', { authorSpaceId: personalSpaceId, spaceId });
@@ -71,6 +116,10 @@ export async function requestSpaceMembership({
 
   if (Either.isLeft(result)) {
     console.error('Failed to request membership', { spaceId, personalSpaceId }, result.left);
+    // The pre-check failed open, or the role was granted since: the revert says the same thing.
+    if (decodeGovernanceRevert(result.left)?.name === 'FastPathRestricted') {
+      throw new MembershipRequestRestrictedError({ cause: result.left });
+    }
     throw result.left;
   }
 
@@ -102,8 +151,9 @@ export async function requestSpaceMembership({
 }
 
 /**
- * Space+account pairs this session has already proposed. Recorded only once a
- * request actually lands, so a request that was skipped (one is already under
+ * Space+account pairs this session has already proposed, or that the space
+ * won't take a request from. Recorded only once a request actually lands (or is
+ * refused for good), so a request that was skipped (one is already under
  * vote) or that failed can still be made later — the caller's next attempt
  * re-runs the checks against current state instead of being suppressed for the
  * rest of the session.
@@ -197,10 +247,12 @@ async function runMembershipCheck(
   try {
     await requestSpaceMembership({ spaceId, personalSpaceId, tx, queryClient });
     autoRequestedMemberships.add(requestKey);
-  } catch {
+  } catch (error) {
     // Already logged by requestSpaceMembership. The user didn't ask for this
     // request, so don't interrupt them with an error they can't act on — and
-    // leave the key unrecorded so a later attempt can retry.
+    // leave the key unrecorded so a later attempt can retry. Except a restricted
+    // request: asking again would re-read the same answer on every vote.
+    if (isMembershipRequestRestrictedError(error)) autoRequestedMemberships.add(requestKey);
   }
 
   return false;

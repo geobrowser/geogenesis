@@ -1,7 +1,7 @@
 import { keccak256, stringToHex, zeroAddress } from 'viem';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { readSpaceMembership } from './read-space-membership';
+import { readFastPathRestricted, readSpaceMembership } from './read-space-membership';
 
 const mocks = vi.hoisted(() => ({ readContract: vi.fn(), assertDeployed: vi.fn() }));
 vi.mock('viem', async importOriginal => ({
@@ -72,5 +72,32 @@ describe('readSpaceMembership', () => {
   ])('rejects invalid identities', async (space, member) => {
     await expect(readSpaceMembership(space, member)).rejects.toThrow('Invalid space ID');
     expect(mocks.readContract).not.toHaveBeenCalled();
+  });
+});
+
+describe('readFastPathRestricted', () => {
+  const RESTRICTED_ROLE = keccak256(stringToHex('FAST_PATH_RESTRICTED'));
+
+  it.each([true, false])(
+    'reads the role (%s) from the registry-resolved DAO, asking the DAO for its id',
+    async held => {
+      mocks.readContract.mockResolvedValueOnce(DAO).mockResolvedValueOnce(RESTRICTED_ROLE).mockResolvedValueOnce(held);
+
+      await expect(readFastPathRestricted(SPACE, MEMBER)).resolves.toBe(held);
+
+      expect(mocks.readContract).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({ address: DAO, functionName: 'FAST_PATH_RESTRICTED' })
+      );
+      expect(mocks.readContract).toHaveBeenNthCalledWith(
+        3,
+        expect.objectContaining({ address: DAO, functionName: 'hasRole', args: [RESTRICTED_ROLE, `0x${MEMBER}`] })
+      );
+    }
+  );
+
+  it('propagates a failed read so the caller picks which way to fail', async () => {
+    mocks.readContract.mockResolvedValueOnce(DAO).mockRejectedValueOnce(new Error('RPC unavailable'));
+    await expect(readFastPathRestricted(SPACE, MEMBER)).rejects.toThrow('RPC unavailable');
   });
 });

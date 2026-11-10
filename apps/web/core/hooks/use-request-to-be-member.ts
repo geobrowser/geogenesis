@@ -6,7 +6,7 @@ import { useCallback } from 'react';
 
 import { Effect, Either } from 'effect';
 
-import { requestSpaceMembership } from '~/core/access/request-space-membership';
+import { isMembershipRequestRestrictedError, requestSpaceMembership } from '~/core/access/request-space-membership';
 import { normalizeSpaceId } from '~/core/access/space-access';
 import { useActionContext } from '~/core/action-context-provider';
 import { readCachedSmartAccount, readRegisteredPersonalSpaceId } from '~/core/hooks/cached-write-identity';
@@ -97,6 +97,14 @@ export function useRequestToBeMember({ spaceId, space }: UseRequestToBeMemberArg
         await requestSpaceMembership({ spaceId, personalSpaceId: requesterSpaceId, tx, queryClient, space });
         pushMarketingEvent('geo_join_space', { space_id: normalizedSpaceId, space_name: space?.name ?? undefined });
       } catch (error) {
+        if (isMembershipRequestRestrictedError(error)) {
+          // Terminal, so no Retry: it would fail the same way until an editor adds them back.
+          dispatch({ type: 'ERROR', payload: error.message });
+          // A queued replay resolves so the queue drops it. Thrown, the runner kept it queued, the
+          // button read "Requested" for a request that can't be made, and the runner re-reported it.
+          if (fromQueue) return;
+          throw error;
+        }
         dispatch({ type: 'ERROR', payload: `${error}`, retry: () => handleRequestToBeMember() });
         // Necessary to propagate error status to useMutation
         throw error;

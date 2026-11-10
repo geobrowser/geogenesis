@@ -33,7 +33,17 @@ vi.mock('~/core/io/queries', () => ({
 vi.mock('~/core/telemetry/effect-runtime', () => ({
   runEffectEither: <A, E>(effect: Effect.Effect<A, E>) => Effect.runPromise(Effect.either(effect)),
 }));
-vi.mock('~/core/access/request-space-membership', () => ({ requestSpaceMembership: mocks.requestSpaceMembership }));
+vi.mock('~/core/access/request-space-membership', () => ({
+  requestSpaceMembership: mocks.requestSpaceMembership,
+  isMembershipRequestRestrictedError: (error: unknown) =>
+    error instanceof Error && error.name === 'MembershipRequestRestrictedError',
+}));
+
+function restrictedError() {
+  const error = new Error('An editor has to add you back.');
+  error.name = 'MembershipRequestRestrictedError';
+  return error;
+}
 vi.mock('~/core/hooks/use-observed-mutation', () => ({ useObservedMutation: (mutation: unknown) => mutation }));
 
 function wrapper({ children }: { children: ReactNode }) {
@@ -98,5 +108,38 @@ describe('useRequestToBeMember', () => {
 
     expect(mocks.dispatch).not.toHaveBeenCalled();
     expect(mocks.requestSpaceMembership).not.toHaveBeenCalled();
+  });
+
+  // GEO-3632: someone who left a space that restricts new members can't request it again.
+  describe('when the space will not take a request from this account', () => {
+    it('reports it on a live press without a Retry that cannot work', async () => {
+      mocks.requestSpaceMembership.mockRejectedValueOnce(restrictedError());
+      const { result } = renderHook(() => useRequestToBeMember({ spaceId: SPACE }), { wrapper });
+
+      await act(() => expect(result.current.requestToBeMemberAsync()).rejects.toThrow(/add you back/));
+
+      expect(mocks.dispatch).toHaveBeenCalledOnce();
+      expect(mocks.dispatch).toHaveBeenCalledWith({ type: 'ERROR', payload: 'An editor has to add you back.' });
+    });
+
+    it('resolves a queued replay so the queue drops it instead of showing it as requested', async () => {
+      mocks.requestSpaceMembership.mockRejectedValueOnce(restrictedError());
+      const { result } = renderHook(() => useRequestToBeMember({ spaceId: SPACE }), { wrapper });
+
+      await act(() => expect(result.current.requestToBeMemberAsync({ fromQueue: true })).resolves.toBeUndefined());
+
+      expect(mocks.dispatch).toHaveBeenCalledWith({ type: 'ERROR', payload: 'An editor has to add you back.' });
+    });
+
+    it('still offers Retry for any other failure', async () => {
+      mocks.requestSpaceMembership.mockRejectedValueOnce(new Error('RPC Request failed.'));
+      const { result } = renderHook(() => useRequestToBeMember({ spaceId: SPACE }), { wrapper });
+
+      await act(() => expect(result.current.requestToBeMemberAsync({ fromQueue: true })).rejects.toThrow('RPC'));
+
+      expect(mocks.dispatch).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'ERROR', retry: expect.any(Function) })
+      );
+    });
   });
 });

@@ -5,8 +5,10 @@ import { atom } from 'jotai';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  MembershipRequestRestrictedError,
   type SendSpaceTransaction,
   ensureSpaceMembership,
+  requestSpaceMembership,
   resetAutoRequestedMemberships,
 } from './request-space-membership';
 
@@ -21,6 +23,12 @@ const mocks = vi.hoisted(() => ({
     (args: { authorSpaceId: string; spaceId: string }) => { to: string; calldata: string }
   >(() => ({ to: '0x1234', calldata: '0xabcd' })),
   spaceType: 'DAO' as string,
+  readFastPathRestricted: vi.fn<(spaceId: string, memberSpaceId: string) => Promise<boolean>>(),
+}));
+
+vi.mock('~/core/utils/contracts/read-space-membership', () => ({
+  readFastPathRestricted: (spaceId: string, memberSpaceId: string) =>
+    mocks.readFastPathRestricted(spaceId, memberSpaceId),
 }));
 
 vi.mock('~/core/access/space-access', async importOriginal => {
@@ -67,6 +75,8 @@ beforeEach(() => {
   mocks.proposeRequestMembership.mockClear();
   mocks.canEdit = false;
   mocks.spaceType = 'DAO';
+  mocks.readFastPathRestricted.mockReset();
+  mocks.readFastPathRestricted.mockResolvedValue(false);
   tx.mockReset();
   tx.mockReturnValue(Effect.succeed('0xtransaction'));
 });
@@ -181,5 +191,52 @@ describe('ensureSpaceMembership', () => {
 
     expect(first).toBe(second);
     expect(mocks.proposeRequestMembership).toHaveBeenCalledOnce();
+  });
+});
+
+// GEO-3632: leaving a space that restricts new members keeps FAST_PATH_RESTRICTED, and the contract
+// refuses a membership request from a holder. Before, that surfaced as the paymaster refusing to
+// sponsor the op: "RPC Request failed" and a request dump, with a Retry that could never work.
+describe('requestSpaceMembership from an account the space restricts', () => {
+  function request() {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    return requestSpaceMembership({ spaceId: DAO_SPACE_ID, personalSpaceId: PERSONAL_SPACE_ID, tx, queryClient });
+  }
+
+  it('refuses before sending anything', async () => {
+    mocks.readFastPathRestricted.mockResolvedValue(true);
+
+    await expect(request()).rejects.toBeInstanceOf(MembershipRequestRestrictedError);
+
+    expect(mocks.readFastPathRestricted).toHaveBeenCalledWith(DAO_SPACE_ID, PERSONAL_SPACE_ID);
+    expect(tx).not.toHaveBeenCalled();
+  });
+
+  it('sends the request when the restriction read fails, and maps the revert if it comes', async () => {
+    mocks.readFastPathRestricted.mockRejectedValue(new Error('RPC unavailable'));
+    tx.mockReturnValue(Effect.fail(new Error('UserOperation reverted during simulation with reason: 0x3a9c66d4')));
+
+    await expect(request()).rejects.toBeInstanceOf(MembershipRequestRestrictedError);
+
+    expect(tx).toHaveBeenCalledOnce();
+  });
+
+  it('passes any other failure through unchanged', async () => {
+    tx.mockReturnValue(Effect.fail(new Error('RPC Request failed.')));
+
+    const error = await request().catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(Error);
+    expect(error).not.toBeInstanceOf(MembershipRequestRestrictedError);
+    expect((error as Error).message).toBe('RPC Request failed.');
+  });
+
+  it('stops background joins asking again this session', async () => {
+    mocks.readFastPathRestricted.mockResolvedValue(true);
+
+    await expect(run()).resolves.toBe(false);
+    await expect(run()).resolves.toBe(false);
+
+    expect(mocks.readFastPathRestricted).toHaveBeenCalledOnce();
+    expect(tx).not.toHaveBeenCalled();
   });
 });
