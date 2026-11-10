@@ -462,6 +462,34 @@ describe('buildDebatePublishDraft', () => {
     expect(topicRelations.find(r => r.fromEntity.id === EXISTING)?.toEntity.name).toBe(TOPIC.name);
   });
 
+  describe('debated claim Debate tag (GEO-3616)', () => {
+    const motionTags = (draft: ReturnType<typeof buildDebatePublishDraft>, claimId: string) =>
+      draft.relations.filter(
+        r => r.fromEntity.id === claimId && r.type.id === TAG_PROPERTY_ID && r.toEntity.id === DEBATE_TAG_ID
+      );
+
+    it('tags the debated claim once when asked, under an id derived from its endpoints', () => {
+      const input = baseInput({ tagClaimAsDebate: true });
+      const draft = buildDebatePublishDraft(input, { createEntityId: idFactory(), createPosition: () => 'a0' });
+      const tags = motionTags(draft, input.claimEntityId);
+      expect(tags).toHaveLength(1);
+      expect(tags[0].id).toBe(stableClaimRelationIds(input.claimEntityId, TAG_PROPERTY_ID, DEBATE_TAG_ID).id);
+      expect(tags[0].spaceId).toBe(input.spaceId);
+    });
+
+    it('leaves the debated claim alone when not asked', () => {
+      const input = baseInput();
+      const draft = buildDebatePublishDraft(input, { createEntityId: idFactory(), createPosition: () => 'a0' });
+      expect(draft.relations.filter(r => r.type.id === TAG_PROPERTY_ID)).toEqual([]);
+    });
+
+    it('never tags the subject of a question debate', () => {
+      const input = baseInput({ tagClaimAsDebate: true, subjectKind: 'question' });
+      const draft = buildDebatePublishDraft(input, { createEntityId: idFactory(), createPosition: () => 'a0' });
+      expect(draft.relations.filter(r => r.type.id === TAG_PROPERTY_ID)).toEqual([]);
+    });
+  });
+
   it('adds no Debate tag to any extracted claim, minted or reused (GEO-3616)', () => {
     const EXISTING = '4f12f5ea073442cbaa0fb10f70a9a876';
     const STABLE = '5e1f0c3a9b2d4e6f8a7b6c5d4e3f2a1b';

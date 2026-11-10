@@ -26,7 +26,7 @@ import { applyClaimReusePolicy } from './claim-reuse';
 import { applyClaimStancePolicy } from './claim-stance';
 import { type DebateExtractedClaimsResponse, decodeExtractedClaims } from './extracted-claims';
 import { geoChatBaseUrl } from './geo-chat-base-url';
-import { loadMotionTopics } from './motion-topics';
+import { loadMotionRelations } from './motion-relations';
 
 const debatePublishSettlementMs = 60_000;
 
@@ -278,8 +278,9 @@ export async function loadDebatePublishSource(debateId: string): Promise<DebateS
     debateId,
   });
 
-  // Like the share card and claims, a failed read degrades to a debate published without topics.
-  const claimTopics = await loadMotionTopics(debate.claim.claim_entity_id, debate.claim.space_id);
+  // Like the share card and claims, a failed read degrades to a debate published without topics,
+  // and leaves the claim's tag alone.
+  const motion = await loadMotionRelations(debate.claim.claim_entity_id, debate.claim.space_id);
 
   const participants: DebatePublishParticipant[] = debate.participants.map(p => ({
     spaceEntityId: p.profile_space_id,
@@ -293,7 +294,8 @@ export async function loadDebatePublishSource(debateId: string): Promise<DebateS
     spaceId: debate.claim.space_id,
     claimEntityId: debate.claim.claim_entity_id,
     claimText: debate.claim.claim,
-    claimTopics,
+    claimTopics: motion.topics,
+    tagClaimAsDebate: motion.debateTagged === false,
     participants,
     videoUrl,
     keyframeUrl,

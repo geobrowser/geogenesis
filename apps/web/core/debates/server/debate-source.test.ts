@@ -15,7 +15,7 @@ import {
   loadDebatePublishSource,
   loadSettledDebate,
 } from './debate-source';
-import { loadMotionTopics } from './motion-topics';
+import { loadMotionRelations } from './motion-relations';
 
 // The reuse policy needs a graph read and its own flag, both covered in `claim-reuse.test.ts`. Here it
 // passes claims through, so what the loader decodes from geo-chat is observable on the input.
@@ -29,10 +29,10 @@ vi.mock('./claim-stance', () => ({
   applyClaimStancePolicy: vi.fn(async (claims: unknown) => claims),
 }));
 
-// The motion's topics are a graph read, covered in `motion-topics.test.ts`. Here it returns none
-// unless a test says otherwise.
-vi.mock('./motion-topics', () => ({
-  loadMotionTopics: vi.fn(async () => []),
+// The motion's relations are a graph read, covered in `motion-relations.test.ts`. Here the claim has
+// no topics and already carries the Debate tag unless a test says otherwise.
+vi.mock('./motion-relations', () => ({
+  loadMotionRelations: vi.fn(async () => ({ topics: [], debateTagged: true })),
 }));
 
 const DEBATE_ID = '019f89dc2124799193daafd5bc4ffa0a';
@@ -289,22 +289,38 @@ describe('loadDebatePublishSource media gating', () => {
 
   it("reads the motion's topics in the debate's space and carries them on the input", async () => {
     const topics = [{ id: 'dddddddddddddddddddddddddddddddd', name: 'Foreign policy' }];
-    vi.mocked(loadMotionTopics).mockResolvedValueOnce(topics);
+    vi.mocked(loadMotionRelations).mockResolvedValueOnce({ topics, debateTagged: true });
     mockGeoChat({ job: { status: 'succeeded' }, artifacts: [{ kind: 'final_video' }] });
 
     const { input } = await loadDebatePublishSource(DEBATE_ID);
 
-    expect(vi.mocked(loadMotionTopics)).toHaveBeenCalledWith('claim-1', 'c9f267dcb0d270718c2a3c45a64afd32');
+    expect(vi.mocked(loadMotionRelations)).toHaveBeenCalledWith('claim-1', 'c9f267dcb0d270718c2a3c45a64afd32');
     expect(input.claimTopics).toEqual(topics);
+  });
+
+  it('asks the draft to tag the motion only when the read confirmed it is untagged', async () => {
+    const tagFor = async (debateTagged: boolean | null) => {
+      vi.mocked(loadMotionRelations).mockResolvedValueOnce({ topics: [], debateTagged });
+      mockGeoChat({ job: { status: 'succeeded' }, artifacts: [{ kind: 'final_video' }] });
+      return (await loadDebatePublishSource(DEBATE_ID)).input.tagClaimAsDebate;
+    };
+
+    expect(await tagFor(false)).toBe(true);
+    expect(await tagFor(true)).toBe(false);
+    // A failed read must not add a second tag to a claim that may already carry one.
+    expect(await tagFor(null)).toBe(false);
   });
 
   it('publishes direct topic edges that satisfy the topic feed predicates', async () => {
     const topicId = 'dddddddddddddddddddddddddddddddd';
     const selectedTopicId = 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
-    vi.mocked(loadMotionTopics).mockResolvedValueOnce([
-      { id: topicId, name: 'Foreign policy' },
-      { id: selectedTopicId, name: 'Iran' },
-    ]);
+    vi.mocked(loadMotionRelations).mockResolvedValueOnce({
+      topics: [
+        { id: topicId, name: 'Foreign policy' },
+        { id: selectedTopicId, name: 'Iran' },
+      ],
+      debateTagged: true,
+    });
     mockGeoChat({ job: { status: 'succeeded' }, artifacts: [{ kind: 'final_video' }] });
 
     const { input } = await loadDebatePublishSource(DEBATE_ID);

@@ -3,6 +3,7 @@ import { Position } from '@geoprotocol/geo-sdk/lite';
 import { v5 as uuidv5 } from 'uuid';
 
 import { CLAIM_IS_FACTUAL_PROPERTY_ID, CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
+import { TAG_PROPERTY_ID } from '~/core/constants';
 import { ID } from '~/core/id';
 import type { DataType, Relation, Value } from '~/core/types';
 
@@ -21,6 +22,7 @@ import {
   DEBATE_OPPOSED_BY_PROPERTY_ID,
   DEBATE_PARTICIPANTS_PROPERTY_ID,
   DEBATE_SUPPORTED_BY_PROPERTY_ID,
+  DEBATE_TAG_ID,
   DEBATE_TRANSCRIPTS_PROPERTY_ID,
   DEBATE_TYPE_ID,
   DEBATE_VIDEOS_PROPERTY_ID,
@@ -167,6 +169,13 @@ export type DebatePublishInput = {
    * Debate with no Topics relations.
    */
   claimTopics?: DebatePublishTopic[];
+  /**
+   * Add the Debate tag to the debated claim (GEO-3616). Extracted claims publish untagged, so one
+   * picked as a motion (the rematch picker's From this debate) joins the tagged list only once it
+   * is actually debated. Set only when a read confirmed the claim lacks the tag in this space, so
+   * a claim that has it never gets a second one. Ignored for a question debate.
+   */
+  tagClaimAsDebate?: boolean;
   participants: DebatePublishParticipant[];
   /**
    * Durable https URL for the rendered final video (the geo-chat `…/media/artifacts/{kind}/content`
@@ -350,6 +359,17 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
   });
   // The Debate is filed under the same topics as the claim it argued.
   for (const topic of input.claimTopics ?? []) relateTopic(debateRef, topic);
+  // A debated claim belongs in the tagged list. The relation's id comes from its endpoints, so two
+  // debates of one untagged claim publishing before either indexes write the same relation, not two.
+  if (input.tagClaimAsDebate && (input.subjectKind ?? 'claim') === 'claim') {
+    relate({
+      fromEntity: { id: input.claimEntityId, name: claimText },
+      propertyId: TAG_PROPERTY_ID,
+      toEntityId: DEBATE_TAG_ID,
+      toEntityName: 'Debate',
+      stable: true,
+    });
+  }
 
   for (const p of bySlot) {
     relate({
@@ -671,7 +691,8 @@ const STABLE_CLAIM_RELATION_NAMESPACE = '6f1d2c8e-3b0a-4f57-9a61-2e870a0c1a1d';
 
 /**
  * GEO-2870 option A. Deterministic ids for one relation describing a claim minted under geo-chat's
- * stable id (D1): its Types, its Topics and its Sources edge to the Debate.
+ * stable id (D1): its Types, its Topics and its Sources edge to the Debate. Also the debated
+ * claim's Debate tag (GEO-3616), for the same reason: one relation however many publishes write it.
  *
  * A claim is now written twice — by the early claims publish minutes after extraction, and again by
  * the full debate publish — and the two writes must not leave two Types or two Topics relations
