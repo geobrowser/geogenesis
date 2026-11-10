@@ -798,8 +798,9 @@ function PairedDebateFeedPlayer({
     replayNow();
   }, [active, playbackEnded, replayPending]);
   // Refused even muted (GEO-3602): dim the frame and show one "Watch the debate" button so it doesn't
-  // read as paused. Not on compact tiles, which have no room for the label.
-  const refusedPrompt = ready && refusedStart && !held && !playbackEnded && !reducedOverlays;
+  // read as paused. Active card only: `autoplayBlocked` outlives scrolling away. Not on compact tiles,
+  // which have no room for the label.
+  const refusedPrompt = active && ready && refusedStart && !held && !playbackEnded && !reducedOverlays;
   // Playing muted only by default on a touch screen, where a tap anywhere turns the sound on.
   const soundHint = active && playing && mutedByDefault && touch && !reducedOverlays;
   const showControls = ready && (awaitingTap || showReplay) && !refusedPrompt;
@@ -1072,6 +1073,7 @@ function PairedDebateFeedPlayer({
       >
         <DebaterVideo
           inert={endCardShown}
+          toggleHidden={refusedPrompt}
           participant={slot1Participant}
           byline={bylineFor(slot1Participant)}
           src={slot1Src}
@@ -1176,6 +1178,7 @@ function PairedDebateFeedPlayer({
         />
         <DebaterVideo
           inert={endCardShown}
+          toggleHidden={refusedPrompt}
           participant={slot2Participant}
           byline={bylineFor(slot2Participant)}
           src={slot2Src}
@@ -1480,6 +1483,7 @@ function DebaterVideo({
   scrubber,
   scrimClassName = 'h-14',
   inert = false,
+  toggleHidden = false,
   stamped = false,
   hideForAnnouncement = false,
 }: {
@@ -1530,6 +1534,8 @@ function DebaterVideo({
    * scrubber, the name's profile link — should take keyboard focus or be read out underneath it.
    */
   inert?: boolean;
+  /** Keep the tile's play/pause surface tappable but out of the tab order and hidden from AT. */
+  toggleHidden?: boolean;
   /** Use the Open rounds playback treatment. */
   stamped?: boolean;
   /** Hide identity and claims in the same frame as the other announcement furniture. */
@@ -1834,7 +1840,14 @@ function DebaterVideo({
       className="relative aspect-480/289 w-full overflow-hidden bg-grey-01"
     >
       {/* Clicking anywhere on the video toggles pause/play. */}
-      <button type="button" aria-label="Pause or play" onClick={onToggle} className="absolute inset-0 z-0">
+      <button
+        type="button"
+        aria-label="Pause or play"
+        tabIndex={toggleHidden ? -1 : undefined}
+        aria-hidden={toggleHidden || undefined}
+        onClick={onToggle}
+        className="absolute inset-0 z-0"
+      >
         {poster && (
           <img
             src={poster}

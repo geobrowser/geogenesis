@@ -563,6 +563,43 @@ describe('DebateFeedPlayer, the Watch the debate prompt on a refused card', () =
     await waitFor(() => expect(watchPrompt(view.container)).toBeNull(), { timeout: 8_000 });
   }, 15_000);
 
+  it('goes when the refused card stops being the active one', async () => {
+    const view = await blockedPlayer();
+    await untilBlocked(view.container);
+    expect(watchPrompt(view.container)).not.toBeNull();
+
+    view.rerender(
+      <Provider>
+        <DebateFeedPlayer debate={debate} active={false} />
+      </Provider>
+    );
+
+    expect(watchPrompt(view.container)).toBeNull();
+    expect(view.container.querySelector('[data-debate-refused-dim]')).toBeNull();
+  }, 15_000);
+
+  it("takes the tiles' play surfaces out of the tab order and from AT, but a tap on one still starts it", async () => {
+    const view = await blockedPlayer();
+    await untilBlocked(view.container);
+
+    const tiles = Array.from(view.container.querySelectorAll<HTMLButtonElement>('[aria-label="Pause or play"]'));
+    expect(tiles).toHaveLength(2);
+    for (const tile of tiles) {
+      expect(tile.tabIndex).toBe(-1);
+      expect(tile.getAttribute('aria-hidden')).toBe('true');
+    }
+    expect(view.queryByRole('button', { name: 'Pause or play' })).toBeNull();
+
+    tap(tiles[0]);
+
+    expect(plays).toHaveLength(2);
+    await waitFor(() => expect(watchPrompt(view.container)).toBeNull(), { timeout: 8_000 });
+    for (const tile of view.container.querySelectorAll('[aria-label="Pause or play"]')) {
+      expect(tile.hasAttribute('tabindex')).toBe(false);
+      expect(tile.hasAttribute('aria-hidden')).toBe(false);
+    }
+  }, 15_000);
+
   it('is not shown on a debate that autoplays', async () => {
     mutedAutoplay = true;
     const view = renderPlayer();
