@@ -41,6 +41,7 @@ import { useDebatePlayback } from '~/core/debates/use-debate-playback';
 import { usePlaybackAnalytics } from '~/core/debates/use-playback-analytics';
 import { markDebateWatched } from '~/core/debates/watched-debates';
 import { FollowButton } from '~/core/follows/follow-button';
+import { useMediaQuery } from '~/core/hooks/use-media-query';
 import { validateSpaceId } from '~/core/io/rest/validation';
 import { responsePositionLabel } from '~/core/responses/entity-response';
 import { gestureUnlocksEachMediaElement, markGestureVideoUnlocked } from '~/core/utils/video/gesture-media-pool';
@@ -96,6 +97,14 @@ const MEDIA_RECOVERY_BACKOFF_MS = 400;
 /** How every big round control in the player looks, wherever it is put. */
 const PLAYBACK_CONTROL_CIRCLE_CLASS = 'size-16 place-items-center rounded-full bg-white text-text shadow-card';
 const CENTERED_PLAYBACK_CONTROL_CLASS = `absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 ${PLAYBACK_CONTROL_CIRCLE_CLASS}`;
+/** Phones and tablets, where a tap on the page gives a debate sound (see `blocked-page-tap.ts`). */
+const TOUCH_QUERY = '(hover: none), (pointer: coarse)';
+
+/** "2 min" for the refused-autoplay prompt: whole minutes, at least one; null when the length is unknown. */
+export function debateLengthLabel(durationMs: number): string | null {
+  if (!(durationMs > 0)) return null;
+  return `${Math.max(1, Math.round(durationMs / 60_000))} min`;
+}
 
 type DebateFeedPlayerProps = {
   debate: Debate;
@@ -430,6 +439,7 @@ function PairedDebateFeedPlayer({
   };
   // A tap anywhere starts a refused debate, or unmutes one muted by default, with sound (GEO-3602).
   const refusedStart = autoplayBlocked && !userPaused && !playing;
+  const touch = useMediaQuery(TOUCH_QUERY);
   useBlockedPageTap(active && !detached && (refusedStart || (playing && mutedByDefault)), () => {
     if (playing) unmuteInGesture('page_tap');
     else togglePlayback(mutedByDefault ? 'page_tap' : null);
@@ -569,6 +579,7 @@ function PairedDebateFeedPlayer({
   );
   const cuts = React.useMemo(() => breakCuts(playbackBreaks), [playbackBreaks]);
   const scrubberTimeline = React.useMemo(() => playbackTimeline(cuts, timelineSeconds * 1000), [cuts, timelineSeconds]);
+  const lengthLabel = debateLengthLabel(scrubberTimeline.durationMs);
   const seekForAutomaticCut = React.useCallback(
     (seconds: number) => seekBothRaw(seconds, { preserveTransitionHold: true }),
     [seekBothRaw]
@@ -786,9 +797,17 @@ function PairedDebateFeedPlayer({
     setReplayPending(false);
     replayNow();
   }, [active, playbackEnded, replayPending]);
-  const showControls = ready && (awaitingTap || showReplay);
+  /*
+   * The browser refused to start this debate even muted (GEO-3602): a dimmed frame and one big
+   * "Watch the debate" button, so it does not read as a paused video. The compact gallery tile keeps
+   * the plain controls, as it has no room for the label.
+   */
+  const refusedPrompt = ready && refusedStart && !held && !playbackEnded && !reducedOverlays;
+  // Playing muted only by default on a touch screen, where a tap anywhere turns the sound on.
+  const soundHint = active && playing && mutedByDefault && touch && !reducedOverlays;
+  const showControls = ready && (awaitingTap || showReplay) && !refusedPrompt;
   // An ended debate always offers a replay; a stopped one shows the paused glyph.
-  const showPausedGlyph = ready && awaitingTap && !playbackEnded && !held;
+  const showPausedGlyph = ready && awaitingTap && !playbackEnded && !held && !refusedPrompt;
   const clips = previewClips ?? (preview.available ? preview.clips : debatePreviewClips(debate));
   /*
    * Stream clips are mounted on every held card near the viewport, at `preload="metadata"`, and
@@ -1102,13 +1121,15 @@ function PairedDebateFeedPlayer({
               <div className="flex items-center gap-2">
                 {/* Desktop: a persistent play/pause beside the mute control. Mobile keeps the
                   centred paused glyph and tap-to-toggle instead. */}
-                <ControlCircle
-                  ariaLabel={playing ? 'Pause debate' : 'Play debate'}
-                  onClick={() => togglePlayback()}
-                  className="md:hidden"
-                >
-                  {playing ? <Pause /> : <Play />}
-                </ControlCircle>
+                {!refusedPrompt && (
+                  <ControlCircle
+                    ariaLabel={playing ? 'Pause debate' : 'Play debate'}
+                    onClick={() => togglePlayback()}
+                    className="md:hidden"
+                  >
+                    {playing ? <Pause /> : <Play />}
+                  </ControlCircle>
+                )}
                 {/* Feed debates autoplay muted, so the unmute control stays visible during
                   playback — otherwise there's no way to hear audio. Once unmuted it recedes
                   to hover-only on desktop; touch has no hover, so on mobile it stays visible
@@ -1141,6 +1162,17 @@ function PairedDebateFeedPlayer({
                 >
                   {mutedByUser ? <SpeakerMuted /> : <Speaker />}
                 </ControlCircle>
+                {/* Not a button, so a tap on it is a page tap and gives sound; Unmute is the control
+                  a screen reader gets. */}
+                {soundHint && (
+                  <span
+                    aria-hidden
+                    data-debate-sound-hint
+                    className="flex h-8 items-center rounded-full bg-white px-3 text-[0.8125rem] leading-none text-text shadow-light"
+                  >
+                    Tap for sound
+                  </span>
+                )}
               </div>
             ) : null
           }
@@ -1186,7 +1218,7 @@ function PairedDebateFeedPlayer({
           // Taller than the top tile's, per the frame.
           scrimClassName="h-[4.625rem]"
           scrubber={
-            ready && !held ? (
+            ready && !held && !refusedPrompt ? (
               // Always available so the viewer can seek. During playback it recedes to
               // hover-only and drops pointer-events so it can't swallow play/pause taps.
               // `pointer-events-none` does not stop keyboard focus reaching the range input, which
@@ -1259,6 +1291,7 @@ function PairedDebateFeedPlayer({
         {subtitle &&
           (stamped ? !announcementShown : !roundCard && !breakCue && !endCardShown) &&
           (!betweenTurns || (stamped && Boolean(breakCue))) &&
+          !refusedPrompt &&
           (!reducedOverlays || (active && playing && mutedByUser)) && (
             <span
               style={stamped ? { opacity: PLAYER_FURNITURE_OPACITY } : undefined}
@@ -1319,6 +1352,30 @@ function PairedDebateFeedPlayer({
           >
             {showReplay ? <RetrySmall /> : <Play />}
           </button>
+        )}
+
+        {refusedPrompt && (
+          <>
+            {/* Under the names and the corner controls (`z-10`), over the video and its scrim. */}
+            <div
+              aria-hidden
+              data-debate-refused-dim
+              className="pointer-events-none absolute inset-0 z-[5] bg-black/50"
+            />
+            <button
+              type="button"
+              data-debate-watch-prompt
+              aria-label={lengthLabel ? `Watch the debate · ${lengthLabel}` : 'Watch the debate'}
+              onClick={() => togglePlayback()}
+              className="absolute top-1/2 left-1/2 z-30 flex h-14 -translate-x-1/2 -translate-y-1/2 items-center gap-2 rounded-full bg-white pr-6 pl-4 text-[1.0625rem] leading-none font-medium whitespace-nowrap text-text shadow-card focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+            >
+              <Play />
+              <span>
+                Watch the debate
+                {lengthLabel && <span className="text-grey-04"> · {lengthLabel}</span>}
+              </span>
+            </button>
+          </>
         )}
 
         {/* A held card's one control, at every width: nothing plays until it is pressed. */}

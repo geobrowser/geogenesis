@@ -842,7 +842,7 @@ describe('a refused autoplay', () => {
       return render(<DebateFeedPlayer debate={{ id: 'debate-1' } as unknown as Debate} active />);
     })();
 
-    expect(container.querySelector('[aria-label="Resume debate"]')).not.toBeNull();
+    expect(container.querySelector('[data-debate-watch-prompt]')).not.toBeNull();
   });
 
   it('shows nothing extra while playback is running normally', () => {
@@ -850,6 +850,7 @@ describe('a refused autoplay', () => {
     const { container } = render(<DebateFeedPlayer debate={{ id: 'debate-1' } as unknown as Debate} active />);
 
     expect(container.querySelector('[aria-label="Resume debate"]')).toBeNull();
+    expect(container.querySelector('[data-debate-watch-prompt]')).toBeNull();
   });
 });
 
