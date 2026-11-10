@@ -27,13 +27,14 @@ import * as React from 'react';
 export const PAIR_HOLD_TIMEOUT_MS = 3_000;
 
 /**
- * How long after a `suspend` an element that still cannot play is taken to have stopped for good.
+ * How long an element must sit stopped short of playable (`isStuck`) before the pair stops waiting
+ * for it.
  *
- * `suspend` means the browser has stopped fetching. Chrome fires it a millisecond *before*
- * `canplay` on these files, so on its own it proves nothing; it is re-checked after this grace. An
- * element that is still short of `HAVE_FUTURE_DATA` and still idle by then is one the browser will
- * not load further until it is played — iOS Safari ignores `preload`, and data-saver modes do the
- * same — and holding it would only run out the timeout for nothing.
+ * iOS Safari ignores `preload`, and data-saver modes do the same: a paused element opens its
+ * header, fires `suspend`, goes `NETWORK_IDLE` at `HAVE_METADATA` and loads nothing more until it
+ * is played. Holding it would only run out the timeout. The grace is there because Chrome fires
+ * `suspend` a millisecond *before* `canplay` on these files, so being idle for an instant proves
+ * nothing.
  */
 export const SUSPEND_GRACE_MS = 250;
 
@@ -50,27 +51,38 @@ export type PairMember = Pick<HTMLMediaElement, 'readyState' | 'networkState' | 
 const canPlay = (video: PairMember) => video.readyState >= 3 /* HAVE_FUTURE_DATA */ && !video.seeking;
 /** A frame to paint. What revealing the pair needs, which is less than what starting it needs. */
 const hasFrame = (video: PairMember) => video.readyState >= 2; /* HAVE_CURRENT_DATA */
-/** Has stopped fetching without being able to play. See `SUSPEND_GRACE_MS`. */
-const isStuck = (video: PairMember) => !canPlay(video) && video.networkState === 1; /* NETWORK_IDLE */
+/**
+ * Has stopped loading for good, so only `play()` will move it.
+ *
+ * Every part counts. A seek in flight is a fetch even though iOS reports `NETWORK_IDLE` while it
+ * runs, and an element with a frame at its position got there by fetching: on iOS a paused seek
+ * goes `seeking` → `seeked` at `HAVE_CURRENT_DATA` → `canplay`, idle throughout. And until the
+ * partner has its metadata too, `useDebatePlayback` has not yet moved the pair to its start, so a
+ * seek is still coming.
+ */
+const isStuck = (video: PairMember, partner: PairMember) =>
+  video.readyState < 2 /* HAVE_CURRENT_DATA */ &&
+  !video.seeking &&
+  video.networkState === 1 /* NETWORK_IDLE */ &&
+  partner.readyState >= 1; /* HAVE_METADATA */
 
 /**
  * Whether a held pair may start now.
  *
- * `suspendedLongAgo` says a `suspend` has been seen on that element at least `SUSPEND_GRACE_MS`
- * ago; `isStuck` is then read off its state *now*, so an element that went on to load is not
- * mistaken for one that stopped.
+ * `stuckLongAgo` says that element has been `isStuck` for `SUSPEND_GRACE_MS` without a break; it is
+ * read again *now*, so an element that went on to load is not mistaken for one that stopped.
  */
 export function pairMayStart(
   slot1: PairMember,
   slot2: PairMember,
-  { suspendedLongAgo = [false, false] }: { suspendedLongAgo?: [boolean, boolean] } = {}
+  { stuckLongAgo = [false, false] }: { stuckLongAgo?: [boolean, boolean] } = {}
 ): boolean {
   if (canPlay(slot1) && canPlay(slot2)) return true;
   // A recording that failed is `DebaterVideo`'s to rebuild, and it cannot rebuild what is never
   // played past. Starting falls back to exactly what the card did before the hold existed.
   if (slot1.error || slot2.error) return true;
-  if (suspendedLongAgo[0] && isStuck(slot1)) return true;
-  if (suspendedLongAgo[1] && isStuck(slot2)) return true;
+  if (stuckLongAgo[0] && isStuck(slot1, slot2)) return true;
+  if (stuckLongAgo[1] && isStuck(slot2, slot1)) return true;
   return false;
 }
 
@@ -81,6 +93,8 @@ export function pairMayShow(slot1: PairMember, slot2: PairMember): boolean {
 
 /** Everything that can move an element's `readyState` or `networkState`, or report it failed. */
 const MEDIA_EVENTS = [
+  'loadstart',
+  'progress',
   'loadedmetadata',
   'loadeddata',
   'canplay',
@@ -164,58 +178,52 @@ export function usePairReadiness({
     const slot2 = slot2Ref.current;
     if (!slot1 || !slot2) return;
 
-    // Per element: whether a `suspend` was seen, and whether its grace has since run out.
-    const suspended: [boolean, boolean] = [false, false];
-    const suspendedLongAgo: [boolean, boolean] = [false, false];
+    const pair = [slot1, slot2] as const;
+    // Per element: the grace timer running while it is stuck, and whether one has run out.
+    const graceTimers: [ReturnType<typeof setTimeout> | null, ReturnType<typeof setTimeout> | null] = [null, null];
+    const stuckLongAgo: [boolean, boolean] = [false, false];
     const timers = new Set<ReturnType<typeof setTimeout>>();
 
     const evaluate = () => {
+      for (const index of [0, 1] as const) {
+        if (isStuck(pair[index], pair[1 - index])) {
+          if (graceTimers[index] !== null || stuckLongAgo[index]) continue;
+          const timer = setTimeout(() => {
+            timers.delete(timer);
+            graceTimers[index] = null;
+            stuckLongAgo[index] = true;
+            evaluate();
+          }, SUSPEND_GRACE_MS);
+          graceTimers[index] = timer;
+          timers.add(timer);
+        } else {
+          // Any break starts the grace over: it measures one unbroken stop.
+          stuckLongAgo[index] = false;
+          const timer = graceTimers[index];
+          if (timer !== null) {
+            clearTimeout(timer);
+            timers.delete(timer);
+            graceTimers[index] = null;
+          }
+        }
+      }
       mark({
         shown: pairMayShow(slot1, slot2),
-        started: active && pairMayStart(slot1, slot2, { suspendedLongAgo }),
+        started: active && pairMayStart(slot1, slot2, { stuckLongAgo }),
       });
     };
 
-    const noteSuspended = (index: 0 | 1) => {
-      if (suspended[index]) return;
-      suspended[index] = true;
-      const timer = setTimeout(() => {
-        timers.delete(timer);
-        if (!suspended[index]) return;
-        suspendedLongAgo[index] = true;
-        evaluate();
-      }, SUSPEND_GRACE_MS);
-      timers.add(timer);
-    };
-
-    const listeners = ([slot1, slot2] as const).map((video, i) => {
-      const index = i as 0 | 1;
-      const onEvent = (event: Event) => {
-        if (event.type === 'suspend') noteSuspended(index);
-        // A reload (`emptied`) is a fresh start for that element, and its earlier suspend is
-        // evidence about a fetch that no longer exists.
-        if (event.type === 'emptied') {
-          suspended[index] = false;
-          suspendedLongAgo[index] = false;
-        }
-        evaluate();
-      };
-      for (const type of MEDIA_EVENTS) video.addEventListener(type, onEvent);
+    const listeners = pair.map(video => {
+      for (const type of MEDIA_EVENTS) video.addEventListener(type, evaluate);
       return () => {
-        for (const type of MEDIA_EVENTS) video.removeEventListener(type, onEvent);
+        for (const type of MEDIA_EVENTS) video.removeEventListener(type, evaluate);
       };
     });
 
-    // An element can have gone idle before this run began listening — a look-ahead card whose
-    // `suspend` fired while it was not yet the active one, which is every card on a browser that
-    // ignores `preload`. No second `suspend` is coming for it, so it is treated as one seen now.
-    // The grace still applies: a card just raised to `preload="auto"` resumes fetching within it
-    // on a browser that honours the raise, and is then no longer idle when it is checked.
-    if (isStuck(slot1)) noteSuspended(0);
-    if (isStuck(slot2)) noteSuspended(1);
-
     // Both may already be there — the look-ahead preload is the usual way a card arrives — in
-    // which case no event is coming and this is the whole wait.
+    // which case no event is coming and this is the whole wait. An element that went idle before
+    // this run began listening (a look-ahead card's, on a browser that ignores `preload`) starts
+    // its grace here, since no second `suspend` is coming for it.
     evaluate();
 
     if (active) {
