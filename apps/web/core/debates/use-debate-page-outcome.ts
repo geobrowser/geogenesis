@@ -60,6 +60,10 @@ export function useDebatePageOutcome(debateId: string | undefined): DebatePageOu
       },
       now: () => performance.now(),
       navigation,
+      startedVisible: typeof document === 'undefined' || document.visibilityState !== 'hidden',
+      userActivated: () =>
+        (navigator as Navigator & { userActivation?: { hasBeenActive: boolean } }).userActivation?.hasBeenActive ??
+        null,
     });
   }, [debateId]);
 
@@ -70,13 +74,19 @@ export function useDebatePageOutcome(debateId: string | undefined): DebatePageOu
     // page load that a visitor who gave up never makes.
     const hidden = () => {
       if (document.visibilityState === 'hidden') outcome.leave('hidden');
+      else outcome.visible();
     };
+    const touched = () => outcome.touched();
     const pagehide = () => outcome.leave('pagehide');
     window.addEventListener('visibilitychange', hidden, { capture: true });
     window.addEventListener('pagehide', pagehide, { capture: true });
+    window.addEventListener('pointerdown', touched, { capture: true, passive: true });
+    window.addEventListener('touchstart', touched, { capture: true, passive: true });
     return () => {
       window.removeEventListener('visibilitychange', hidden, { capture: true });
       window.removeEventListener('pagehide', pagehide, { capture: true });
+      window.removeEventListener('pointerdown', touched, { capture: true });
+      window.removeEventListener('touchstart', touched, { capture: true });
       outcome.leave('unmount');
     };
   }, [outcome]);

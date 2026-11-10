@@ -2,19 +2,25 @@ import { describe, expect, it } from 'vitest';
 
 import { createDebatePageOutcome } from './debate-page-outcome';
 
-function setup() {
+function setup({ startedVisible }: { startedVisible?: boolean } = {}) {
   let clock = 1_000;
+  let activated: boolean | null = false;
   const events: Record<string, unknown>[] = [];
   const outcome = createDebatePageOutcome({
     debateId: 'debate-1',
     emit: event => events.push(event),
     now: () => clock,
+    startedVisible,
+    userActivated: () => activated,
   });
   return {
     outcome,
     events,
     advance: (ms: number) => {
       clock += ms;
+    },
+    activate: () => {
+      activated = true;
     },
   };
 }
@@ -178,6 +184,74 @@ describe('createDebatePageOutcome', () => {
 
     expect(() => outcome.player({ ...idle, ready: true, playing: true })).not.toThrow();
   });
+
+  // GEO-3602: a refused autoplay and a visitor's tap have to be told apart.
+  describe('refusals and taps', () => {
+    it('marks a play that came after a refusal, with when the visitor first touched the page', () => {
+      const { outcome, events, advance, activate } = setup();
+      outcome.feed({ kind: 'shown' });
+      outcome.player({ ...idle, ready: true });
+      advance(400);
+      outcome.player({ ...idle, ready: true, autoplayBlocked: true });
+      advance(3_000);
+      outcome.touched();
+      activate();
+      advance(100);
+      outcome.touched();
+      outcome.player({ ...idle, ready: true, playing: true });
+
+      expect(events).toEqual([
+        expect.objectContaining({
+          outcome: 'played',
+          blocked_ms: 400,
+          activated_at_block: false,
+          touched_ms: 3_400,
+          activated: true,
+          played_ms: 3_500,
+        }),
+      ]);
+    });
+
+    it('leaves the refusal and touch fields empty for a debate that autoplayed untouched', () => {
+      const { outcome, events } = setup();
+      outcome.feed({ kind: 'shown' });
+      outcome.player({ ...idle, ready: true, playing: true });
+
+      expect(events).toEqual([
+        expect.objectContaining({
+          blocked_ms: null,
+          activated_at_block: null,
+          touched_ms: null,
+          started_visible: true,
+          visible_ms: 0,
+        }),
+      ]);
+    });
+
+    it('keeps the first refusal when the player reports it again', () => {
+      const { outcome, events, advance } = setup();
+      outcome.feed({ kind: 'shown' });
+      outcome.player({ ...idle, ready: true, autoplayBlocked: true });
+      advance(2_000);
+      outcome.player({ ...idle, ready: true, autoplayBlocked: true });
+      outcome.leave('hidden');
+
+      expect(events).toEqual([
+        expect.objectContaining({ reason: 'autoplay_blocked', blocked_ms: 0, touched_ms: null }),
+      ]);
+    });
+
+    it('records when a page loaded out of sight was first shown', () => {
+      const { outcome, events, advance } = setup({ startedVisible: false });
+      advance(1_500);
+      outcome.visible();
+      advance(500);
+      outcome.visible();
+      outcome.leave('pagehide');
+
+      expect(events).toEqual([expect.objectContaining({ started_visible: false, visible_ms: 1_500 })]);
+    });
+  });
 });
 
 describe('createDebatePageOutcome — time since the link was opened (GEO-3604)', () => {
@@ -241,6 +315,31 @@ describe('createDebatePageOutcome — time since the link was opened (GEO-3604)'
       blocked_nav_ms: 2_800,
       left_nav_ms: 7_800,
       played_nav_ms: null,
+    });
+  });
+
+  it('times the first touch and a hidden page being shown on the same clock (GEO-3602)', () => {
+    let clock = 2_500;
+    const events: Record<string, unknown>[] = [];
+    const outcome = createDebatePageOutcome({
+      debateId: 'debate-1',
+      emit: e => events.push(e),
+      now: () => clock,
+      navigation: { entry: 'landing', type: 'navigate', activationStart: 0 },
+      startedVisible: false,
+    });
+    clock += 700;
+    outcome.visible();
+    clock += 2_000;
+    outcome.touched();
+    outcome.leave('hidden');
+
+    expect(events[0]).toMatchObject({
+      started_visible: false,
+      visible_ms: 700,
+      visible_nav_ms: 3_200,
+      touched_ms: 2_700,
+      touched_nav_ms: 5_200,
     });
   });
 
