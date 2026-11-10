@@ -51,6 +51,9 @@ export const BREAK_PLAYED_MS: Record<'lead_in' | 'extend' | 'final_end', number>
   final_end: BREAK_SETTLE_MS + 2_300,
 };
 
+/** How far a served slow start may sit from the break it follows and still be folded into it. */
+const SLOW_START_TOLERANCE_MS = 100;
+
 /** A debater's first name for the early-end next-speaker label. */
 export function breakFirstName(participant: Pick<DebateParticipant, 'display_name'> | null | undefined) {
   return firstName(participant?.display_name) ?? 'Debater';
@@ -162,9 +165,28 @@ export function playbackBreaksFrom(
     }
   }
 
+  // The next round's slow start belongs to its break. Cut on its own, it jumped the picture the
+  // moment the title cleared, as the next speaker's turn began; folded in, the one edit falls under
+  // the held title and the title exits on the speaker's first word.
+  const absorbed = new Set<DebateMediaEarlyEndGap>();
+  for (const entry of breaks) {
+    if (entry.nextRoundIndex === null) continue;
+    const firstTurn = entry.nextRoundIndex * 2;
+    const slowStart = media.early_end_gaps?.find(
+      gap =>
+        gap.kind === 'turn_start' &&
+        gap.turn_index === firstTurn &&
+        Math.abs(gap.source_start_ms - entry.endMs) <= SLOW_START_TOLERANCE_MS &&
+        gap.source_end_ms > entry.endMs
+    );
+    if (!slowStart) continue;
+    entry.endMs = slowStart.source_end_ms;
+    absorbed.add(slowStart);
+  }
+
   return {
     breaks: breaks.sort((a, b) => a.decidingStartMs - b.decidingStartMs),
-    earlyEnds: (media.early_end_gaps ?? []).map(gap => ({
+    earlyEnds: (media.early_end_gaps ?? []).filter(gap => !absorbed.has(gap)).map(gap => ({
       ...(gap.kind && { kind: gap.kind }),
       turnIndex: gap.turn_index,
       nextTurnIndex: gap.next_turn_index,
