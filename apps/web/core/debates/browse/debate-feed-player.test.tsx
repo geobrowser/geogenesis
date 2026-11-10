@@ -47,6 +47,42 @@ const previewMocks = vi.hoisted(() => ({
   },
   enabled: [] as boolean[],
 }));
+// The opening clip (GEO-3578) reads a moment list through react-query; these suites test the
+// player as it plays without one, so the opening is off unless a test sets `openingMocks.state`.
+// `debate-opening-clip.test` covers the hook and the overlay themselves.
+const openingMocks = vi.hoisted(() => ({
+  state: null as null | { phase: string; holdsDebate: boolean; preloadsDebate: boolean },
+  end: vi.fn(),
+  finish: vi.fn(),
+  /** The overlay's latest props, so a test can end the clip as the overlay would. */
+  clip: null as null | {
+    handingOver: boolean;
+    leaving: boolean;
+    onEnded: (end: string | null, watchedFraction: number) => void;
+  },
+}));
+vi.mock('~/core/debates/browse/debate-opening-clip', () => ({
+  OPENING_CLIP_FADE_MS: 300,
+  OPENING_HANDOVER_MAX_MS: 8_000,
+  DebateOpeningClip: (props: NonNullable<typeof openingMocks.clip>) => {
+    openingMocks.clip = props;
+    return <div data-opening-clip-stub />;
+  },
+  useOpeningClip: () => {
+    const state = openingMocks.state;
+    return {
+      phase: state?.phase ?? 'off',
+      moment: state ? { id: 'clip-1' } : null,
+      holdsDebate: state?.holdsDebate ?? false,
+      preloadsDebate: state?.preloadsDebate ?? false,
+      opening: state ? 'moment' : 'title_card',
+      markStarted: () => {},
+      end: openingMocks.end,
+      finish: openingMocks.finish,
+    };
+  },
+}));
+
 vi.mock('./use-debate-preview-clips', async importOriginal => {
   const actual = await importOriginal<typeof import('./use-debate-preview-clips')>();
   return {
@@ -342,6 +378,10 @@ function renderPlayer(
 }
 
 beforeEach(() => {
+  openingMocks.state = null;
+  openingMocks.clip = null;
+  openingMocks.end.mockReset();
+  openingMocks.finish.mockReset();
   previewMocks.state = null;
   previewMocks.enabled = [];
   hlsMocks.instances.length = 0;
@@ -1989,6 +2029,7 @@ describe('the pair becomes watchable together (GEO-2965)', () => {
       autoplayBlocked: false,
       error: false,
       pairHeld: true,
+      openingClipPlaying: false,
     });
 
     act(() => {
@@ -3592,5 +3633,107 @@ describe('Cloudflare Stream previews and full playback (NEXT_PUBLIC_DEBATE_STREA
       expect(fullSrcs(container)).toEqual([]);
       expect(getByRole('button', { name: 'Play debate' })).toBeTruthy();
     });
+  });
+});
+
+describe('the opening clip (GEO-3578)', () => {
+  const clipPlaying = { phase: 'clip', holdsDebate: true, preloadsDebate: true };
+  const handingOver = { phase: 'handover', holdsDebate: false, preloadsDebate: true };
+
+  function setMedia(video: HTMLVideoElement, readyState: number, event: string) {
+    Object.defineProperty(video, 'readyState', { configurable: true, value: readyState });
+    Object.defineProperty(video, 'networkState', { configurable: true, value: 2 });
+    fireEvent(video, new Event(event));
+  }
+
+  it('starts nothing under the clip, though both recordings can play', () => {
+    openingMocks.state = clipPlaying;
+    const fixture = controllerFixture({ mutedByUser: true, turnSlot: 1, playing: false });
+    mocks.controller = fixture;
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    const [slot1, slot2] = Array.from(container.querySelectorAll('video'));
+    act(() => setMedia(slot1, 4, 'canplay'));
+    act(() => setMedia(slot2, 4, 'canplay'));
+
+    expect(container.querySelector('[data-opening-clip-stub]')).toBeTruthy();
+    expect(fixture.resumeBoth).not.toHaveBeenCalled();
+  });
+
+  it("attaches a held card's recordings while its clip plays, so they are loaded when it ends", () => {
+    openingMocks.state = clipPlaying;
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1, playing: false });
+    const { container } = render(<DebateFeedPlayer debate={debate} active holdFullPlayback />);
+
+    expect(mocks.mediaAttached.at(-1)).toBe(true);
+    expect(container.querySelectorAll('video')).toHaveLength(2);
+    expect(container.querySelector('[data-debate-full-playback-held="false"]')).toBeTruthy();
+  });
+
+  it('keeps a held card started once its clip ends into the debate', () => {
+    openingMocks.state = clipPlaying;
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1, playing: false });
+    const { container, rerender } = render(<DebateFeedPlayer debate={debate} active holdFullPlayback />);
+
+    act(() => openingMocks.clip?.onEnded('completed', 1));
+    expect(openingMocks.end).toHaveBeenCalledWith('completed', 1);
+    openingMocks.state = null;
+    rerender(<DebateFeedPlayer debate={debate} active holdFullPlayback />);
+
+    expect(container.querySelector('[data-debate-full-playback-held="false"]')).toBeTruthy();
+  });
+
+  it('leaves a held card held when the viewer moved on mid-clip', () => {
+    openingMocks.state = clipPlaying;
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1, playing: false });
+    const { container, rerender } = render(<DebateFeedPlayer debate={debate} active holdFullPlayback />);
+
+    act(() => openingMocks.clip?.onEnded('skipped', 0.3));
+    openingMocks.state = null;
+    rerender(<DebateFeedPlayer debate={debate} active holdFullPlayback />);
+
+    expect(container.querySelector('[data-debate-full-playback-held="true"]')).toBeTruthy();
+  });
+
+  it("holds the clip's last frame until the debate is playing, then fades it and lets it go", () => {
+    vi.useFakeTimers();
+    try {
+      openingMocks.state = handingOver;
+      mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1, playing: false });
+      const { rerender } = render(<DebateFeedPlayer debate={debate} active />);
+      expect(openingMocks.clip?.handingOver).toBe(true);
+      expect(openingMocks.clip?.leaving).toBe(false);
+
+      act(() => vi.advanceTimersByTime(2_000));
+      expect(openingMocks.finish).not.toHaveBeenCalled();
+
+      mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1, playing: true });
+      rerender(<DebateFeedPlayer debate={debate} active />);
+      expect(openingMocks.clip?.leaving).toBe(true);
+      expect(openingMocks.finish).not.toHaveBeenCalled();
+
+      act(() => vi.advanceTimersByTime(300));
+      expect(openingMocks.finish).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('lets the last frame go when the debate cannot start by itself, or never does', () => {
+    vi.useFakeTimers();
+    try {
+      openingMocks.state = handingOver;
+      mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1, playing: false, autoplayBlocked: true });
+      render(<DebateFeedPlayer debate={debate} active />);
+      expect(openingMocks.clip?.leaving).toBe(true);
+      cleanup();
+
+      mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1, playing: false });
+      render(<DebateFeedPlayer debate={debate} active />);
+      expect(openingMocks.clip?.leaving).toBe(false);
+      act(() => vi.advanceTimersByTime(8_000));
+      expect(openingMocks.clip?.leaving).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

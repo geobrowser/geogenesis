@@ -88,6 +88,37 @@ export type DebateExtractedClaimsClaim = {
    * extractor gave none; absent on payloads from before the classification shipped.
    */
   stance?: string | null;
+  /**
+   * GEO-3444: how much a viewer would want to watch this claim as a moment, 0–1, comparable only
+   * within the debate. What the `moments` list is ranked by. Null when the claim was not scored;
+   * absent on payloads from before it shipped.
+   */
+  moment_score?: number | null;
+};
+
+/** One subtitle cue of a moment clip, timed from the clip's own start. */
+export type DebateMomentSubtitle = { start_ms: number; end_ms: number; text: string };
+
+/**
+ * One entry of the payload's `moments` list (GEO-3351): a claim geo-chat cut a ready-made clip file
+ * for. The clip is a single mp4 with both debaters stacked; subtitles are not burned in.
+ */
+export type DebateExtractedMoment = {
+  moment_index: number;
+  /** Index into `claims`, where the moment's text and `moment_score` live. */
+  claim_index: number;
+  entity_id: string | null;
+  participant_slot: number | null;
+  clip_start_ms: number | null;
+  clip_end_ms: number | null;
+  duration_ms: number | null;
+  /** A path on the geo-chat API that redirects to the signed file. */
+  clip_url: string;
+  content_type: string | null;
+  byte_size: number | null;
+  width: number | null;
+  height: number | null;
+  subtitles: DebateMomentSubtitle[] | null;
 };
 
 export type DebateExtractedClaimsResponse = {
@@ -105,6 +136,11 @@ export type DebateExtractedClaimsResponse = {
    * when the pass ends; absent when no pass runs (`EXTRACTION_PER_TURN` off) and on older payloads.
    */
   dedup_pending_until?: string | null;
+  /**
+   * GEO-3351: the moments with a clip file, in play order (`moment_index`), not score order. Empty
+   * when fewer than geo-chat's minimum have a file; absent on payloads from before it shipped.
+   */
+  moments?: DebateExtractedMoment[] | null;
 };
 
 /**
