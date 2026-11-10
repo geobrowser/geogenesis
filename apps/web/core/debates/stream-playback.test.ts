@@ -15,7 +15,7 @@ import {
 
 const hls = vi.hoisted(() => {
   const instances: Array<{
-    config: { autoStartLoad?: boolean; maxMaxBufferLength?: number };
+    config: { autoStartLoad?: boolean; maxMaxBufferLength?: number; startPosition?: number };
     loadSource: ReturnType<typeof vi.fn>;
     attachMedia: ReturnType<typeof vi.fn>;
     startLoad: ReturnType<typeof vi.fn>;
@@ -25,13 +25,13 @@ const hls = vi.hoisted(() => {
   class FakeHls {
     static isSupported = vi.fn(() => true);
     static Events = { ERROR: 'hlsError', MEDIA_ATTACHED: 'hlsMediaAttached' };
-    config: { autoStartLoad?: boolean; maxMaxBufferLength?: number };
+    config: { autoStartLoad?: boolean; maxMaxBufferLength?: number; startPosition?: number };
     loadSource = vi.fn();
     attachMedia = vi.fn();
     startLoad = vi.fn();
     destroy = vi.fn();
     handlers = new Map<string, (event: string, data: { fatal: boolean }) => void>();
-    constructor(config: { autoStartLoad?: boolean; maxMaxBufferLength?: number }) {
+    constructor(config: { autoStartLoad?: boolean; maxMaxBufferLength?: number; startPosition?: number }) {
       this.config = config;
       instances.push(this);
     }
@@ -154,6 +154,53 @@ describe('attaching a Stream source', () => {
     expect(hls.instances[0].config.autoStartLoad).toBe(false);
     video.dispatchEvent(new Event('play'));
     expect(hls.instances[0].startLoad).toHaveBeenCalledTimes(1);
+  });
+
+  describe('where the first segment is fetched from (GEO-3604)', () => {
+    it('starts a held load at the position asked for when loading starts, not when attached', async () => {
+      const video = document.createElement('video');
+      let seconds = 0;
+      attachStreamSource(video, MANIFEST, { nativeHls: false, autoStartLoad: false, startPosition: () => seconds });
+      await vi.waitFor(() => expect(hls.instances).toHaveLength(1));
+      expect(hls.instances[0].config.startPosition).toBe(-1);
+
+      seconds = 4.92;
+      video.dispatchEvent(new Event('play'));
+
+      expect(hls.instances[0].startLoad).toHaveBeenCalledWith(4.92);
+    });
+
+    it('passes the position as config when loading was asked for before hls.js arrived', async () => {
+      const video = document.createElement('video');
+      const attached = attachStreamSource(video, MANIFEST, {
+        nativeHls: false,
+        autoStartLoad: false,
+        startPosition: () => 3.38,
+      });
+      attached.startLoad();
+      await vi.waitFor(() => expect(hls.instances).toHaveLength(1));
+
+      expect(hls.instances[0].config).toMatchObject({ autoStartLoad: true, startPosition: 3.38 });
+      expect(hls.instances[0].startLoad).not.toHaveBeenCalled();
+    });
+
+    it('leaves hls.js its default for no position, zero, or a non-finite one', async () => {
+      for (const position of [null, 0, Number.NaN]) {
+        hls.instances.length = 0;
+        const video = document.createElement('video');
+        attachStreamSource(video, MANIFEST, { nativeHls: false, startPosition: () => position });
+        await vi.waitFor(() => expect(hls.instances).toHaveLength(1));
+        expect(hls.instances[0].config.startPosition).toBe(-1);
+      }
+    });
+
+    it("starts at hls.js's default without a position", async () => {
+      const video = document.createElement('video');
+      attachStreamSource(video, MANIFEST, { nativeHls: false, autoStartLoad: false });
+      await vi.waitFor(() => expect(hls.instances).toHaveLength(1));
+      video.dispatchEvent(new Event('play'));
+      expect(hls.instances[0].startLoad).toHaveBeenCalledWith(-1);
+    });
   });
 
   it('caps the buffer at 30 seconds, where hls.js would otherwise fill 60 MB per element', async () => {
