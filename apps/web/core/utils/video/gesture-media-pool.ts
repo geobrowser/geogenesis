@@ -56,7 +56,7 @@ function createVideo(): HTMLVideoElement {
  * anything. Marking the element unlocked anyway would leave it locked for good, so check the
  * page's activation where the browser reports it (Safari 16.4 and later).
  */
-function inUserGesture(): boolean {
+export function inUserGesture(): boolean {
   const activation = (navigator as Navigator & { userActivation?: { isActive: boolean } }).userActivation;
   return activation ? activation.isActive : true;
 }
