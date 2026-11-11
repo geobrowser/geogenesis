@@ -1,11 +1,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 
 import type { ReactNode } from 'react';
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { useFollowedTopics } from './use-followed-topics';
+import { interestedTopicsQueryOptions, useFollowedTopics } from './use-followed-topics';
 
 const mocks = vi.hoisted(() => ({
   fetchInterestedTopics: vi.fn(),
@@ -32,16 +32,35 @@ function setup() {
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={client}>{children}</QueryClientProvider>
   );
-  return renderHook(() => useFollowedTopics(), { wrapper }).result;
+  return { client, hook: renderHook(() => useFollowedTopics(), { wrapper }) };
 }
 
 describe('useFollowedTopics', () => {
   beforeEach(() => vi.clearAllMocks());
+  afterEach(() => vi.useRealTimers());
 
   it('reads a topic as followed by a current Interested, and leaves followed people out', async () => {
-    const result = setup();
+    const { result } = setup().hook;
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
     expect(result.current.topicIds).toEqual(new Set([TOPIC]));
+  });
+
+  it("keeps the follows as long as Explore's pages after the reader leaves", async () => {
+    const { client, hook } = setup();
+    await waitFor(() => expect(hook.result.current.isLoading).toBe(false));
+    const cached = () => client.getQueryData(interestedTopicsQueryOptions(SPACE).queryKey);
+
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    hook.unmount();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(29 * 60_000);
+    });
+    expect(cached()).toBeDefined();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2 * 60_000);
+    });
+    expect(cached()).toBeUndefined();
   });
 });

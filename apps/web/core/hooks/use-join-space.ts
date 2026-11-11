@@ -1,12 +1,18 @@
 'use client';
 
+import * as React from 'react';
+
+import { useSetAtom } from 'jotai';
+
 import { useAuthResolving } from '~/core/hooks/use-auth-resolving';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
-import { useRequestToBeMember } from '~/core/hooks/use-request-to-be-member';
+import { LOCKED_OUT, useRequestToBeMember } from '~/core/hooks/use-request-to-be-member';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
+import { lockedOutJoinAtom } from '~/core/state/locked-out-join';
 import { useQueuedAction } from '~/core/state/pending-actions';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
+import { readLockedOutLink } from '~/core/utils/add-back-link';
 
 type UseJoinSpaceArgs = {
   spaceId: string;
@@ -17,7 +23,9 @@ type UseJoinSpaceArgs = {
 /**
  * The one press handler every Join control shares, covering the three states a viewer can be in:
  *
- * - Signed in with a registered personal space: request membership now.
+ * - Signed in with a registered personal space: request membership now, unless the viewer is on the
+ *   review path only in this space, which the contract refuses: then the app-level `AskEditorDialog`
+ *   opens with a link to send an editor instead.
  * - Signed out: queue the request and open Privy. `PendingActionsRunner` submits it once the new
  *   account has a personal space; a dismissed sign-in withdraws it.
  * - Signed in, personal space still registering: queue the request the same way.
@@ -31,7 +39,7 @@ type UseJoinSpaceArgs = {
  * persisted membership bridge takes over.
  */
 export function useJoinSpace({ spaceId, space }: UseJoinSpaceArgs) {
-  const { requestToBeMember, requestToBeMemberAsync, status } = useRequestToBeMember({ spaceId, space });
+  const { requestToBeMember, requestToBeMemberAsync, status, reset } = useRequestToBeMember({ spaceId, space });
   const { smartAccount } = useSmartAccount();
   const { personalSpaceId, isRegistered, isLoading: isPersonalSpaceLoading } = usePersonalSpaceId();
   // Signed in without a usable space, the request is held only when one is on its way: being created
@@ -51,16 +59,33 @@ export function useJoinSpace({ spaceId, space }: UseJoinSpaceArgs) {
     id: `join:${spaceId}`,
     component: 'join_space_button',
     label: 'your membership request',
-    run: (_intent, { isCurrent }) => requestToBeMemberAsync({ fromQueue: true, isCurrent }).then(() => {}),
+    // A lock-out opens the Ask-an-editor dialog; put the button back to Join rather than "requested".
+    run: (_intent, { isCurrent }) =>
+      requestToBeMemberAsync({ fromQueue: true, isCurrent }).then(outcome => {
+        if (outcome === LOCKED_OUT) reset();
+      }),
   });
   const optimisticRequested = queuedJoin.isQueued;
 
   const canRequestLive = Boolean(smartAccount && isRegistered && personalSpaceId);
   const authResolving = useAuthResolving();
 
+  // Someone on the review path only can't request membership (see `readLockedOutLink`). Checked fresh
+  // at the press, so every Join control is covered without a read per card. A join queued while signed
+  // out is checked the same way in `useRequestToBeMember` when it replays.
+  const setLockedOut = useSetAtom(lockedOutJoinAtom);
+  const [isChecking, setIsChecking] = React.useState(false);
+
   const join = () => {
-    if (canRequestLive) {
-      requestToBeMember();
+    if (canRequestLive && personalSpaceId) {
+      if (isChecking) return;
+      setIsChecking(true);
+      readLockedOutLink(spaceId, personalSpaceId)
+        .then(link => {
+          if (link) setLockedOut({ link, spaceName: space?.name });
+          else requestToBeMember();
+        })
+        .finally(() => setIsChecking(false));
       return;
     }
     if (!smartAccount) {
@@ -75,5 +100,9 @@ export function useJoinSpace({ spaceId, space }: UseJoinSpaceArgs) {
     if (isAccountSetupPending || isPersonalSpaceLoading) queuedJoin.queue();
   };
 
-  return { join, status, optimisticRequested };
+  return {
+    join,
+    status: isChecking ? ('pending' as const) : status,
+    optimisticRequested,
+  };
 }

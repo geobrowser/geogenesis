@@ -1,7 +1,7 @@
 import { keccak256, stringToHex, zeroAddress } from 'viem';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { readSpaceMembership } from './read-space-membership';
+import { readFastPathRestricted, readSpaceMembership } from './read-space-membership';
 
 const mocks = vi.hoisted(() => ({ readContract: vi.fn(), assertDeployed: vi.fn() }));
 vi.mock('viem', async importOriginal => ({
@@ -72,5 +72,23 @@ describe('readSpaceMembership', () => {
   ])('rejects invalid identities', async (space, member) => {
     await expect(readSpaceMembership(space, member)).rejects.toThrow('Invalid space ID');
     expect(mocks.readContract).not.toHaveBeenCalled();
+  });
+});
+
+describe('readFastPathRestricted', () => {
+  // Resolved through the registry like the writes, so a migrated space's cached address is never read.
+  it('reads FAST_PATH_RESTRICTED from the registry-resolved DAO', async () => {
+    mocks.readContract.mockResolvedValueOnce(DAO).mockResolvedValueOnce(true);
+
+    await expect(readFastPathRestricted(SPACE, MEMBER)).resolves.toBe(true);
+
+    expect(mocks.readContract).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        address: DAO,
+        functionName: 'hasRole',
+        args: [keccak256(stringToHex('FAST_PATH_RESTRICTED')), `0x${MEMBER}`],
+      })
+    );
   });
 });
