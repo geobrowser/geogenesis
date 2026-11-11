@@ -291,7 +291,7 @@ describe('MomentsEditor (GEO-3671)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Return to automatic' }));
     fireEvent.click(screen.getByRole('button', { name: 'Unlock and re-pick' }));
     expect(mocks.mutate).toHaveBeenCalledWith(
-      { unlock: true, reason: 'Moments editor: return to automatic', base: 'v1' },
+      { unlock: true, story: true, reason: 'Moments editor: return to automatic', base: 'v1' },
       expect.any(Object)
     );
   });

@@ -226,7 +226,8 @@ function Editor({ debateId }: { debateId: string }) {
     const base = entry?.reel_version ?? undefined;
     const body =
       kind === 'unlock'
-        ? { unlock: true, reason: 'Moments editor: return to automatic', ...(base && { base }) }
+        ? // `story`: the re-pick is a story reel like every other reel (runbook, "Back to automatic").
+          { unlock: true, story: true, reason: 'Moments editor: return to automatic', ...(base && { base }) }
         : {
             preview: kind === 'preview',
             reason: kind === 'preview' ? 'Moments editor: preview' : 'Moments editor: hand-picked reel',
