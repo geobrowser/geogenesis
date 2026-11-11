@@ -17,7 +17,7 @@ import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
 import { getIsEditorOfSpace, getIsMemberOfSpace } from '~/core/io/queries';
 import { pushMarketingEvent } from '~/core/marketing-events';
-import { lockedOutJoinLinkAtom } from '~/core/state/locked-out-join';
+import { lockedOutJoinAtom } from '~/core/state/locked-out-join';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
@@ -30,6 +30,13 @@ interface UseRequestToBeMemberArgs {
   /** Optional display data so the optimistic "pending" row can render a name/image immediately. */
   space?: { name?: string; image?: string | null };
 }
+
+/**
+ * What a request resolved with, when it didn't send one: the viewer is on the review path only, so
+ * the Ask-an-editor dialog opened instead. Distinct from success, so no Join control reads it as
+ * "requested", and analytics records it as rejected.
+ */
+export const LOCKED_OUT = 'locked_out' as const;
 
 type RequestToBeMemberOptions = {
   /** Replaying a request queued before the account was ready (see `useJoinSpace`). */
@@ -48,10 +55,12 @@ export function useRequestToBeMember({ spaceId, space }: UseRequestToBeMemberArg
   const queryClient = useQueryClient();
 
   const tx = useSmartAccountTransaction();
-  const setLockedOutLink = useSetAtom(lockedOutJoinLinkAtom);
+  const setLockedOut = useSetAtom(lockedOutJoinAtom);
 
   const handleRequestToBeMember = useCallback(
-    async ({ fromQueue = false, isCurrent = () => true }: RequestToBeMemberOptions = {}) => {
+    async ({ fromQueue = false, isCurrent = () => true }: RequestToBeMemberOptions = {}): Promise<
+      typeof LOCKED_OUT | void
+    > => {
       // Through the cache as well as this render. A join queued before sign-up replays through this
       // hook as it was at the press, before the account or space existed; the cache has both by the
       // time the runner fires. Reading only the render failed that replay on every retry.
@@ -99,13 +108,13 @@ export function useRequestToBeMember({ spaceId, space }: UseRequestToBeMemberArg
 
       // A join queued while signed out skipped the press-time check in `useJoinSpace`, and is the usual
       // way someone who left comes back. A restricted requester gets the Ask-an-editor dialog instead
-      // of a request the contract refuses. Done, not failed, so it leaves the queue.
+      // of a request the contract refuses. Resolved rather than thrown, so it leaves the queue.
       if (fromQueue) {
-        const lockedOutLink = await readLockedOutLink(spaceId, requesterSpaceId);
+        const link = await readLockedOutLink(spaceId, requesterSpaceId);
         if (!isCurrent()) return;
-        if (lockedOutLink) {
-          setLockedOutLink(lockedOutLink);
-          return;
+        if (link) {
+          setLockedOut({ link, spaceName: space?.name });
+          return LOCKED_OUT;
         }
       }
 
@@ -128,7 +137,7 @@ export function useRequestToBeMember({ spaceId, space }: UseRequestToBeMemberArg
       space,
       tx,
       queryClient,
-      setLockedOutLink,
+      setLockedOut,
     ]
   );
 
@@ -136,11 +145,17 @@ export function useRequestToBeMember({ spaceId, space }: UseRequestToBeMemberArg
     // `void` as well, so a live press can still call `mutate()` with nothing.
     mutationFn: (options: RequestToBeMemberOptions | void) => handleRequestToBeMember(options ?? undefined),
   });
-  const { mutate, mutateAsync, status } = useObservedMutation(mutation, 'join_space', () => getContext());
+  const { mutate, mutateAsync, status, reset } = useObservedMutation(
+    mutation,
+    'join_space',
+    () => getContext(),
+    data => (data === LOCKED_OUT ? 'rejected' : null)
+  );
 
   return {
     requestToBeMember: mutate,
     requestToBeMemberAsync: mutateAsync,
     status,
+    reset,
   };
 }

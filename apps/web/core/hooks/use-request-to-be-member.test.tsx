@@ -7,7 +7,7 @@ import { Effect } from 'effect';
 import { Provider as JotaiProvider, createStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { lockedOutJoinLinkAtom } from '~/core/state/locked-out-join';
+import { lockedOutJoinAtom } from '~/core/state/locked-out-join';
 
 import { useRequestToBeMember } from './use-request-to-be-member';
 
@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   requestSpaceMembership: vi.fn(),
   alreadyMember: false,
   readFastPathRestricted: vi.fn(),
+  failureOf: undefined as ((data: unknown) => string | null) | undefined,
 }));
 
 vi.mock('~/core/state/status-bar-store', () => ({ useStatusBar: () => ({ state: null, dispatch: mocks.dispatch }) }));
@@ -41,7 +42,12 @@ vi.mock('~/core/access/request-space-membership', () => ({ requestSpaceMembershi
 vi.mock('~/core/utils/contracts/read-space-membership', () => ({
   readFastPathRestricted: mocks.readFastPathRestricted,
 }));
-vi.mock('~/core/hooks/use-observed-mutation', () => ({ useObservedMutation: (mutation: unknown) => mutation }));
+vi.mock('~/core/hooks/use-observed-mutation', () => ({
+  useObservedMutation: (mutation: unknown, _action: unknown, _context: unknown, failureOf: never) => {
+    mocks.failureOf = failureOf;
+    return mutation;
+  },
+}));
 
 let store = createStore();
 function wrapper({ children }: { children: ReactNode }) {
@@ -120,9 +126,15 @@ describe('useRequestToBeMember', () => {
     mocks.readFastPathRestricted.mockResolvedValue(true);
     const { result } = renderHook(() => useRequestToBeMember({ spaceId: SPACE }), { wrapper });
 
-    await act(() => expect(result.current.requestToBeMemberAsync({ fromQueue: true })).resolves.toBeUndefined());
+    await act(() => expect(result.current.requestToBeMemberAsync({ fromQueue: true })).resolves.toBe('locked_out'));
 
-    expect(store.get(lockedOutJoinLinkAtom)).toContain(`/space/${SPACE}?addBack=`);
+    expect(store.get(lockedOutJoinAtom)).toEqual({
+      link: expect.stringContaining(`/space/${SPACE}?addBack=`),
+      spaceName: undefined,
+    });
+    // Recorded as a rejected join rather than a successful one.
+    expect(mocks.failureOf?.('locked_out')).toBe('rejected');
+    expect(mocks.failureOf?.(undefined)).toBeNull();
     expect(mocks.requestSpaceMembership).not.toHaveBeenCalled();
   });
 
@@ -133,6 +145,6 @@ describe('useRequestToBeMember', () => {
     await act(() => result.current.requestToBeMemberAsync({ fromQueue: true }));
 
     expect(mocks.requestSpaceMembership).toHaveBeenCalledOnce();
-    expect(store.get(lockedOutJoinLinkAtom)).toBeNull();
+    expect(store.get(lockedOutJoinAtom)).toBeNull();
   });
 });

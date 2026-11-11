@@ -7,9 +7,9 @@ import { useSetAtom } from 'jotai';
 import { useAuthResolving } from '~/core/hooks/use-auth-resolving';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
-import { useRequestToBeMember } from '~/core/hooks/use-request-to-be-member';
+import { LOCKED_OUT, useRequestToBeMember } from '~/core/hooks/use-request-to-be-member';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
-import { lockedOutJoinLinkAtom } from '~/core/state/locked-out-join';
+import { lockedOutJoinAtom } from '~/core/state/locked-out-join';
 import { useQueuedAction } from '~/core/state/pending-actions';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { readLockedOutLink } from '~/core/utils/add-back-link';
@@ -39,7 +39,7 @@ type UseJoinSpaceArgs = {
  * persisted membership bridge takes over.
  */
 export function useJoinSpace({ spaceId, space }: UseJoinSpaceArgs) {
-  const { requestToBeMember, requestToBeMemberAsync, status } = useRequestToBeMember({ spaceId, space });
+  const { requestToBeMember, requestToBeMemberAsync, status, reset } = useRequestToBeMember({ spaceId, space });
   const { smartAccount } = useSmartAccount();
   const { personalSpaceId, isRegistered, isLoading: isPersonalSpaceLoading } = usePersonalSpaceId();
   // Signed in without a usable space, the request is held only when one is on its way: being created
@@ -59,7 +59,11 @@ export function useJoinSpace({ spaceId, space }: UseJoinSpaceArgs) {
     id: `join:${spaceId}`,
     component: 'join_space_button',
     label: 'your membership request',
-    run: (_intent, { isCurrent }) => requestToBeMemberAsync({ fromQueue: true, isCurrent }).then(() => {}),
+    // A lock-out opens the Ask-an-editor dialog; put the button back to Join rather than "requested".
+    run: (_intent, { isCurrent }) =>
+      requestToBeMemberAsync({ fromQueue: true, isCurrent }).then(outcome => {
+        if (outcome === LOCKED_OUT) reset();
+      }),
   });
   const optimisticRequested = queuedJoin.isQueued;
 
@@ -69,7 +73,7 @@ export function useJoinSpace({ spaceId, space }: UseJoinSpaceArgs) {
   // Someone on the review path only can't request membership (see `readLockedOutLink`). Checked fresh
   // at the press, so every Join control is covered without a read per card. A join queued while signed
   // out is checked the same way in `useRequestToBeMember` when it replays.
-  const setLockedOutLink = useSetAtom(lockedOutJoinLinkAtom);
+  const setLockedOut = useSetAtom(lockedOutJoinAtom);
   const [isChecking, setIsChecking] = React.useState(false);
 
   const join = () => {
@@ -78,7 +82,7 @@ export function useJoinSpace({ spaceId, space }: UseJoinSpaceArgs) {
       setIsChecking(true);
       readLockedOutLink(spaceId, personalSpaceId)
         .then(link => {
-          if (link) setLockedOutLink(link);
+          if (link) setLockedOut({ link, spaceName: space?.name });
           else requestToBeMember();
         })
         .finally(() => setIsChecking(false));

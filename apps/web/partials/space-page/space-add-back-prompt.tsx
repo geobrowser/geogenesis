@@ -74,15 +74,21 @@ function AddBackContent({ spaceId, spaceName, memberSpaceId }: Props & { memberS
   const where = spaceName ?? 'this space';
   const sent = withFastPath.status === 'success' || reviewOnly.status === 'success';
   const { refetch: refetchMembership } = membership;
+  const [sentAt, setSentAt] = React.useState<number | null>(null);
 
   // A fast-path add executes as it's proposed, while a review-path one waits for its vote. Read
-  // membership again rather than guessing which happened.
+  // membership again rather than guessing which happened, and treat anything read before the add as
+  // unknown: the render where `sent` turns true still holds the old answer.
   React.useEffect(() => {
-    if (sent) void refetchMembership();
-  }, [sent, refetchMembership]);
+    if (!sent || sentAt !== null) return;
+    setSentAt(Date.now());
+    void refetchMembership();
+  }, [sent, sentAt, refetchMembership]);
 
   if (sent) {
-    if (membership.isFetching) return <p className="text-body text-grey-04">Checking {name}&apos;s access…</p>;
+    if (sentAt === null || membership.dataUpdatedAt < sentAt || membership.isFetching) {
+      return <p className="text-body text-grey-04">Checking {name}&apos;s access…</p>;
+    }
     return (
       <p className="text-body">
         {membership.data

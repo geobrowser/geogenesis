@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSpace } from '~/core/hooks/use-space';
+import { daoAddressQueryKey } from '~/core/io/query-keys';
 import { readRoleAt, resolveDaoAddress } from '~/core/utils/contracts/read-space-membership';
 import { FAST_PATH_RESTRICTED_ROLE } from '~/core/utils/contracts/space-registry';
 
@@ -64,8 +65,10 @@ export function useViewerVotingMode({ spaceId, isEditor }: { spaceId: string; is
  */
 export function useFastPathRestriction(spaceId?: string, memberSpaceId?: string | null) {
   // One registry lookup per space, shared by every row of a dialog; only the role is read per row.
+  // The address is cached for the session (like `isSpaceActiveOnChain`): a space migrated mid-session
+  // is read at its new DAO after a reload.
   const dao = useQuery({
-    queryKey: ['dao-address', spaceId],
+    queryKey: daoAddressQueryKey(spaceId ?? ''),
     enabled: Boolean(spaceId),
     staleTime: Infinity,
     queryFn: () => resolveDaoAddress(spaceId!),

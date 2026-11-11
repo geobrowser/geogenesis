@@ -145,6 +145,9 @@ describe('SpaceAddBackPrompt', () => {
     memberFastPathMock.status = 'success';
     rerenderPrompt();
 
+    // Never the stale "before" answer: checking first, then the re-read result.
+    expect(screen.getByText("Checking Sam's access…")).toBeInTheDocument();
+
     expect(await screen.findByText('Proposal created. Sam is added once it passes the vote.')).toBeInTheDocument();
   });
 });
