@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { fetchDebateVisibility, isGeoChatDebateId } from './debate-visibility';
+import { fetchDebateVisibility, isGeoChatDebateId, readDebateVisibility } from './debate-visibility';
 
 // A real geo-chat debate id (UUIDv7), as the Debate entity carries it: 32 hex, no dashes.
 const DEBATE_ID = '01a0448a61d371018434a20fdadf6f97';
@@ -77,6 +77,33 @@ describe('fetchDebateVisibility (GEO-2785)', () => {
     await expect(fetchDebateVisibility(DEBATE_ID, { fetchImpl, baseUrl: BASE_URL, timeoutMs: 10 })).resolves.toBe(
       'unknown'
     );
+  });
+});
+
+describe('readDebateVisibility (GEO-3604)', () => {
+  const read = (fetchImpl: (input: string, init?: RequestInit) => Promise<Response>) =>
+    readDebateVisibility(DEBATE_ID, { fetchImpl, baseUrl: BASE_URL, timeoutMs: 50 });
+
+  it('keeps the body of a visible debate for the page to hand on', async () => {
+    const debate = { id: DEBATE_ID, status: 'complete' };
+    await expect(read(vi.fn().mockResolvedValue(json(200, debate)))).resolves.toEqual({
+      visibility: 'visible',
+      debate,
+    });
+  });
+
+  it('is still visible, with nothing to hand on, when the body cannot be read', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(new Response('not json', { status: 200 }));
+    await expect(read(fetchImpl)).resolves.toEqual({ visibility: 'visible', debate: null });
+  });
+
+  it('hands on no debate when removed or unknown', async () => {
+    const removed = vi.fn().mockResolvedValue(json(404, { error: { code: 'debate_not_found' } }));
+    await expect(read(removed)).resolves.toEqual({ visibility: 'removed', debate: null });
+    await expect(read(vi.fn().mockRejectedValue(new Error('down')))).resolves.toEqual({
+      visibility: 'unknown',
+      debate: null,
+    });
   });
 });
 

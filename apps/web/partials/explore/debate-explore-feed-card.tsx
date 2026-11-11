@@ -501,6 +501,7 @@ export function DebateExploreFeedCard({
               opensSidePanel={titleOpensSidePanel}
               clamped
               showFullTextOnHover={compactChrome}
+              debateClaimTitle
             />
           }
           actions={actions}

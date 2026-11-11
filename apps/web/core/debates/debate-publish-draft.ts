@@ -117,13 +117,6 @@ export type DebateClaimInput = {
    */
   topics?: DebatePublishTopic[];
   /**
-   * True when the claim is broad enough to be argued for and against. Tagged `Debate`
-   * so it joins the claim picker's candidate motions; a narrowly verifiable claim
-   * publishes as a Claim like any other, just untagged. For a reused entity the reuse
-   * policy has already cleared this when the entity carries the tag already.
-   */
-  isContestable?: boolean;
-  /**
    * When in the debate this claim was said, in integer milliseconds on the transcript's clock:
    * geo-chat's `start_ms`/`end_ms`, the span of the transcript it was extracted from (GEO-2958).
    * Written onto the block → claim relation entity, where the app reads it as a certainty — so
@@ -176,6 +169,13 @@ export type DebatePublishInput = {
    * Debate with no Topics relations.
    */
   claimTopics?: DebatePublishTopic[];
+  /**
+   * Add the Debate tag to the debated claim (GEO-3616). Extracted claims publish untagged, so one
+   * picked as a motion (the rematch picker's From this debate) joins the tagged list only once it
+   * is actually debated. Set only when a read confirmed the claim lacks the tag in this space, so
+   * a claim that has it never gets a second one. Ignored for a question debate.
+   */
+  tagClaimAsDebate?: boolean;
   participants: DebatePublishParticipant[];
   /**
    * Durable https URL for the rendered final video (the geo-chat `…/media/artifacts/{kind}/content`
@@ -359,6 +359,17 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
   });
   // The Debate is filed under the same topics as the claim it argued.
   for (const topic of input.claimTopics ?? []) relateTopic(debateRef, topic);
+  // A debated claim belongs in the tagged list. The relation's id comes from its endpoints, so two
+  // debates of one untagged claim publishing before either indexes write the same relation, not two.
+  if (input.tagClaimAsDebate && (input.subjectKind ?? 'claim') === 'claim') {
+    relate({
+      fromEntity: { id: input.claimEntityId, name: claimText },
+      propertyId: TAG_PROPERTY_ID,
+      toEntityId: DEBATE_TAG_ID,
+      toEntityName: 'Debate',
+      stable: true,
+    });
+  }
 
   for (const p of bySlot) {
     relate({
@@ -480,11 +491,10 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
     // claim per debate.
     const linkedBlockClaims = new Set<string>();
     const sourcedClaims = new Set<string>();
-    const debateTaggedClaims = new Set<string>();
     const mintedClaims = new Set<string>();
     // One stance relation per (claim, motion), however many statements share the claim entity: a
     // reused entity or a D1 stable id can sit behind several extracted claims. The first statement
-    // in transcript order decides; keyed like `debateTaggedClaims`, so verbatim twins from an
+    // in transcript order decides; keyed by claim (see `claimKey`), so verbatim twins from an
     // older payload (fresh ids) also yield one verdict per text.
     const stancedClaims = new Set<string>();
     const writesStance = (input.subjectKind ?? 'claim') === 'claim';
@@ -570,30 +580,21 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
         // the reuse policy left after subtracting the graph's current relations. Deduped per
         // (claim, topic): a reused entity can appear behind several extracted claims carrying the
         // same topic, and `relate` does not dedupe.
-        // The Debate tag is what makes a claim a candidate motion in the picker, so it
-        // goes on contestable claims only — minted or reused alike, once per entity.
-        // Reused entities and geo-chat's stable ids (D1) key on the id. A fresh id cannot,
-        // because `mintEntityId` returns a new one per statement, so keying on it would
-        // dedupe nothing: two verbatim extractions from an older payload therefore mint two
-        // entities (the long-standing behaviour) but yield a single motion. Near-duplicates
-        // that differ in wording still slip through — matching upstream is what catches those.
-        const tagKey =
-          existingClaimId || stableClaimId ? normalizeId(claimId) : `text:${claimEntityText.toLowerCase()}`;
-        if (claim.isContestable && !debateTaggedClaims.has(tagKey)) {
-          debateTaggedClaims.add(tagKey);
-          relate({
-            fromEntity: claimRef,
-            propertyId: TAG_PROPERTY_ID,
-            toEntityId: DEBATE_TAG_ID,
-            toEntityName: 'Debate',
-            stable: isStable,
-          });
-        }
         for (const topic of claim.topics ?? []) relateTopic(claimRef, topic, isStable);
+        // No Debate tag, on minted or reused claims (GEO-3616): the tag is what lists a claim as
+        // a candidate motion in the picker and on Explore, and that list is curated. Extracted
+        // claims publish as plain Claims; an entity that already carries the tag keeps it.
+        //
+        // One stance per proposition. Reused entities and geo-chat's stable ids (D1) key on the
+        // id. A fresh id cannot, because `mintEntityId` returns a new one per statement, so
+        // keying on it would dedupe nothing: two verbatim extractions from an older payload mint
+        // two entities (the long-standing behaviour) but take one stance.
+        const claimKey =
+          existingClaimId || stableClaimId ? normalizeId(claimId) : `text:${claimEntityText.toLowerCase()}`;
         // Never from the motion to itself: the reuse policy refuses a reference to the motion,
         // but a stable id is not checked against it, and a self-relation is never right.
-        if (writesStance && claim.stance && normalizeId(claimId) !== motionKey && !stancedClaims.has(tagKey)) {
-          stancedClaims.add(tagKey);
+        if (writesStance && claim.stance && normalizeId(claimId) !== motionKey && !stancedClaims.has(claimKey)) {
+          stancedClaims.add(claimKey);
           relate({
             fromEntity: claimRef,
             propertyId: CLAIM_STANCE_PROPERTY_IDS[claim.stance],
@@ -690,11 +691,12 @@ const STABLE_CLAIM_RELATION_NAMESPACE = '6f1d2c8e-3b0a-4f57-9a61-2e870a0c1a1d';
 
 /**
  * GEO-2870 option A. Deterministic ids for one relation describing a claim minted under geo-chat's
- * stable id (D1): its Types, its Debate tag, its Topics and its Sources edge to the Debate.
+ * stable id (D1): its Types, its Topics and its Sources edge to the Debate. Also the debated
+ * claim's Debate tag (GEO-3616), for the same reason: one relation however many publishes write it.
  *
  * A claim is now written twice — by the early claims publish minutes after extraction, and again by
- * the full debate publish — and the two writes must not leave two Types or two Tags relations on
- * the entity. The indexer keys relations on their id and upserts on conflict, so deriving the id
+ * the full debate publish — and the two writes must not leave two Types or two Topics relations
+ * on the entity. The indexer keys relations on their id and upserts on conflict, so deriving the id
  * from (from, property, to) makes the second write an update of the first. It also makes an early
  * publish that ran twice (an overlapping sweep, a retry after an unconfirmed receipt) harmless.
  *
@@ -737,8 +739,8 @@ export type DebateClaimsPublishDraft = {
 
 /**
  * GEO-2870 option A: the early claims publish. Describes each claim minted under geo-chat's stable
- * id — Name, Types → Claim, Is factual, the Debate tag when contestable, and its Topics — so it
- * exists on the graph, and can be voted on and requested, long before the debate itself publishes.
+ * id — Name, Types → Claim, Is factual and its Topics — so it exists on the graph, and can be voted
+ * on and requested, long before the debate itself publishes.
  *
  * Writes nothing that names the debate: no transcript block, no Sources edge, no reference to the
  * Debate entity id. The full publish adds those, and its idempotency check is whether the Debate
@@ -787,7 +789,6 @@ export function buildDebateClaimsDraft(
 
   const claimIds: string[] = [];
   const minted = new Set<string>();
-  const tagged = new Set<string>();
   const topicEdges = new Set<string>();
   let firstClaimText: string | null = null;
 
@@ -826,10 +827,6 @@ export function buildDebateClaimsDraft(
             })
           );
         }
-      }
-      if (claim.isContestable && !tagged.has(key)) {
-        tagged.add(key);
-        relate(claimRef, TAG_PROPERTY_ID, { id: DEBATE_TAG_ID, name: 'Debate' });
       }
       for (const topic of claim.topics ?? []) {
         const edge = `${key}:${normalizeId(topic.id)}`;

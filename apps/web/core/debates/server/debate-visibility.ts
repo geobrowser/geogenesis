@@ -1,3 +1,4 @@
+import type { Debate } from '~/core/debates/api';
 import { ID } from '~/core/id';
 
 import { isGeoChatDebateId, isRemovedDebateAnswer } from '../debate-removal';
@@ -34,26 +35,40 @@ export const DEBATE_VISIBILITY_TIMEOUT_MS = 2_500;
 
 type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
 
-export async function fetchDebateVisibility(
+/** The visibility, and on `visible` the debate geo-chat served, as an anonymous reader sees it. */
+export type DebateVisibilityRead = { visibility: DebateVisibility; debate: Debate | null };
+
+type ReadOptions = {
+  fetchImpl?: FetchLike;
+  baseUrl?: string;
+  timeoutMs?: number;
+  /**
+   * For a statically revalidated caller (the share image), which an uncached fetch would force
+   * dynamic. Omitted, the read is uncached: the page must reflect a removal or restore at once.
+   */
+  revalidateSeconds?: number;
+};
+
+export async function fetchDebateVisibility(entityId: string, options: ReadOptions = {}): Promise<DebateVisibility> {
+  return (await readDebateVisibility(entityId, options)).visibility;
+}
+
+/**
+ * {@link fetchDebateVisibility}, keeping the body it already downloaded: the debate page hands it to
+ * the feed so the linked debate does not wait for its own lookup in the browser (GEO-3604).
+ */
+export async function readDebateVisibility(
   entityId: string,
   {
     fetchImpl = fetch,
     baseUrl = geoChatBaseUrl(),
     timeoutMs = DEBATE_VISIBILITY_TIMEOUT_MS,
     revalidateSeconds,
-  }: {
-    fetchImpl?: FetchLike;
-    baseUrl?: string;
-    timeoutMs?: number;
-    /**
-     * For a statically revalidated caller (the share image), which an uncached fetch would force
-     * dynamic. Omitted, the read is uncached: the page must reflect a removal or restore at once.
-     */
-    revalidateSeconds?: number;
-  } = {}
-): Promise<DebateVisibility> {
+  }: ReadOptions = {}
+): Promise<DebateVisibilityRead> {
+  const unknown = { visibility: 'unknown', debate: null } as const;
   // Nothing geo-chat says about an id it never minted can mean "removed".
-  if (!isGeoChatDebateId(entityId)) return 'unknown';
+  if (!isGeoChatDebateId(entityId)) return unknown;
 
   let response: Response;
   try {
@@ -64,19 +79,28 @@ export async function fetchDebateVisibility(
       signal: AbortSignal.timeout(timeoutMs),
     });
   } catch {
-    return 'unknown';
+    return unknown;
   }
 
-  if (response.ok) return 'visible';
-  if (response.status !== 404) return 'unknown';
+  if (response.ok) {
+    let debate: Debate | null = null;
+    try {
+      const body = (await response.json()) as Debate | null;
+      debate = body && typeof body === 'object' && typeof body.id === 'string' ? body : null;
+    } catch {
+      /* Still visible: an unreadable body only means there is nothing to hand on. */
+    }
+    return { visibility: 'visible', debate };
+  }
+  if (response.status !== 404) return unknown;
 
   // Only geo-chat's own answer counts. A 404 from a proxy or a misrouted base URL carries no
   // `debate_not_found` code, and reading it as "removed" would blank every debate at once.
   try {
     const body = (await response.json()) as { error?: { code?: unknown } } | null;
     const code = typeof body?.error?.code === 'string' ? body.error.code : null;
-    return isRemovedDebateAnswer(entityId, response.status, code) ? 'removed' : 'unknown';
+    return isRemovedDebateAnswer(entityId, response.status, code) ? { visibility: 'removed', debate: null } : unknown;
   } catch {
-    return 'unknown';
+    return unknown;
   }
 }
