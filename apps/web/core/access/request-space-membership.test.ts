@@ -95,6 +95,8 @@ describe('ensureSpaceMembership', () => {
     await expect(run()).resolves.toBe(true);
 
     expect(mocks.proposeRequestMembership).not.toHaveBeenCalled();
+    // Members, personal spaces and pending requesters never pay for the restriction read.
+    expect(mocks.readFastPathRestricted).not.toHaveBeenCalled();
   });
 
   it('does not request membership of a personal space', async () => {
@@ -103,6 +105,8 @@ describe('ensureSpaceMembership', () => {
     await expect(run()).resolves.toBe(false);
 
     expect(mocks.proposeRequestMembership).not.toHaveBeenCalled();
+    // Members, personal spaces and pending requesters never pay for the restriction read.
+    expect(mocks.readFastPathRestricted).not.toHaveBeenCalled();
   });
 
   it('skips the request while an earlier one is still under vote', async () => {
@@ -111,6 +115,8 @@ describe('ensureSpaceMembership', () => {
     await run();
 
     expect(mocks.proposeRequestMembership).not.toHaveBeenCalled();
+    // Members, personal spaces and pending requesters never pay for the restriction read.
+    expect(mocks.readFastPathRestricted).not.toHaveBeenCalled();
   });
 
   it('re-requests when the previous request is stuck past its voting period', async () => {
@@ -141,6 +147,17 @@ describe('ensureSpaceMembership', () => {
     await expect(run()).resolves.toBe(false);
 
     expect(mocks.proposeRequestMembership).toHaveBeenCalledOnce();
+  });
+
+  // A failed read isn't a refusal: it must not suppress the next attempt for the session.
+  it('reads again after a failed restriction read whose request also failed', async () => {
+    mocks.readFastPathRestricted.mockRejectedValueOnce(new Error('rpc down'));
+    tx.mockReturnValueOnce(Effect.fail(new Error('reverted')));
+
+    await run();
+    await run();
+
+    expect(mocks.readFastPathRestricted).toHaveBeenCalledTimes(2);
   });
 
   it('requests once per space and account, however many times it is called', async () => {

@@ -12,13 +12,20 @@ export function addBackLink(origin: string, spaceId: string, personalSpaceId: st
 }
 
 /**
- * The add-back link when `personalSpaceId` can't request to join `spaceId`, else null.
+ * Whether `personalSpaceId` can't request to join `spaceId`: the one rule every membership request
+ * checks (Join, a queued join, and the automatic join after a vote or ranking).
  *
  * Someone on the review path only can't request membership: the contract reverts
  * `FastPathRestricted`, and only an editor's proposal can add them. Read fresh from the chain. Fails
- * open: when the read fails this returns null, and the request is sent as before.
+ * open: when the read fails this returns false, and the request is sent as before.
  */
+export function readIsLockedOut(spaceId: string, personalSpaceId: string): Promise<boolean> {
+  return readFastPathRestricted(spaceId, personalSpaceId).catch(() => false);
+}
+
+/** The add-back link when `personalSpaceId` can't request to join `spaceId` (`readIsLockedOut`), else null. */
 export async function readLockedOutLink(spaceId: string, personalSpaceId: string): Promise<string | null> {
-  const isRestricted = await readFastPathRestricted(spaceId, personalSpaceId).catch(() => false);
-  return isRestricted ? addBackLink(window.location.origin, spaceId, personalSpaceId) : null;
+  return (await readIsLockedOut(spaceId, personalSpaceId))
+    ? addBackLink(window.location.origin, spaceId, personalSpaceId)
+    : null;
 }
