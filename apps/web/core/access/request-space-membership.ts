@@ -9,6 +9,7 @@ import { geo } from '~/core/sdk/geo-client';
 import { store } from '~/core/state/jotai-store';
 import { requestedMembershipSpacesAtom, upsertRequestedMembershipSpace } from '~/core/state/requested-membership';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
+import { readFastPathRestricted } from '~/core/utils/contracts/read-space-membership';
 import { validateSpaceId } from '~/core/utils/utils';
 
 /** The shape `useSmartAccountTransaction` returns — kept structural so this module stays hook-free. */
@@ -193,6 +194,15 @@ async function runMembershipCheck(
   // block a fresh one, otherwise the user is wedged out of the space for good.
   const activeRequest = await fetchActiveMemberRequest(spaceId, personalSpaceId).catch(() => null);
   if (activeRequest != null && !activeRequest.isVotingEnded) return false;
+
+  // Someone on the review path only in this space can't request membership: the contract reverts
+  // `FastPathRestricted`. Skip quietly, as the user asked to vote or rank, not to join (Join shows them
+  // how to ask an editor). Recorded like a landed request so later votes don't read or retry it this
+  // session. A failed read falls through to the request, as before.
+  if (await readFastPathRestricted(spaceId, personalSpaceId).catch(() => false)) {
+    autoRequestedMemberships.add(requestKey);
+    return false;
+  }
 
   try {
     await requestSpaceMembership({ spaceId, personalSpaceId, tx, queryClient });
