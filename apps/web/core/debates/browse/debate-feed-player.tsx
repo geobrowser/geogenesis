@@ -1851,6 +1851,8 @@ function DebaterVideo({
         ) : previewClip ? (
           // Muted, so it may autoplay anywhere; small, so it is fetched whole.
           <PreviewClip
+            // One component per URL, so a re-signed clip is started, and its refusal heard, afresh.
+            key={previewClip}
             src={previewClip}
             active={previewActive}
             videoRef={previewVideoRef}

@@ -3482,6 +3482,28 @@ describe('Cloudflare Stream previews and full playback (NEXT_PUBLIC_DEBATE_STREA
     }
   });
 
+  it('hears a refusal of a re-signed clip too (GEO-3641)', async () => {
+    const refreshed = 'https://stream.test/p2-fresh.mp4';
+    const play = vi.spyOn(HTMLMediaElement.prototype, 'play').mockImplementation(function (this: HTMLMediaElement) {
+      return this.getAttribute('src') === refreshed
+        ? Promise.reject(new DOMException('refused', 'NotAllowedError'))
+        : Promise.resolve();
+    });
+    try {
+      withPreview(bothClips);
+      mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1, playing: false, posters: stills });
+      const { container, rerender } = render(<DebateFeedPlayer debate={debate} active holdFullPlayback />);
+      await vi.waitFor(() => expect(play).toHaveBeenCalledTimes(2));
+      expect(clipSrcs(container)).toEqual([bothClips.slot1, bothClips.slot2]);
+
+      withPreview({ slot1: bothClips.slot1, slot2: refreshed });
+      rerender(<DebateFeedPlayer debate={debate} active holdFullPlayback />);
+      await vi.waitFor(() => expect(clipSrcs(container)).toEqual([]));
+    } finally {
+      play.mockRestore();
+    }
+  });
+
   it('keeps both clips when a play is interrupted rather than refused', async () => {
     const play = vi
       .spyOn(HTMLMediaElement.prototype, 'play')

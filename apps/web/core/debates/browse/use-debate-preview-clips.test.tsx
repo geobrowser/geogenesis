@@ -172,6 +172,23 @@ describe('useDebatePreviewClips', () => {
     expect(mocks.refresh).toHaveBeenCalledTimes(1);
   });
 
+  it('shows neither clip while a failed one re-signs, then both again', async () => {
+    let finishRefresh: (value: unknown) => void = () => {};
+    mocks.refresh.mockImplementation(() => new Promise(resolve => (finishRefresh = resolve)));
+    const { result } = renderHook(() =>
+      useDebatePreviewClips(debateFixture({ preview: true }, { preview: true }), true, { streamEnabled: true })
+    );
+    await waitFor(() => expect(result.current.clips.slot2).not.toBeNull());
+
+    act(() => result.current.refresh(1));
+    expect(result.current.clips).toEqual({ slot1: null, slot2: null });
+
+    await act(async () => finishRefresh({ url: 'https://clip.test/slot1.webm?fresh' }));
+    await waitFor(() => expect(result.current.clips.slot1).toBe('https://clip.test/slot1.webm?fresh'));
+    expect(result.current.clips.slot2).not.toBeNull();
+    expect(mocks.lookup).toHaveBeenCalledTimes(2);
+  });
+
   it('reports the offset between the two clips from started_at_ms and preview_start_seconds', () => {
     const { result } = renderHook(() =>
       useDebatePreviewClips(

@@ -16,7 +16,8 @@ export const PREVIEW_URL_REFRESH_LEAD_MS = 60_000;
 type Slot = 1 | 2;
 type SignedClip = { url: string; expiresAtMs: number | null };
 /** Null until signed; `failed` once a slot has no clip to show, so nothing asks again in a loop. */
-type SlotClip = SignedClip | 'failed' | null;
+/** `refreshing`: its element failed and a fresh URL is on the way; the pair shows stills meanwhile. */
+type SlotClip = SignedClip | 'failed' | 'refreshing' | null;
 
 export type DebatePreviewClipsState = {
   /** Both slots' signed clips, or both null: either not ready, not signed yet, failed, or the flag off. */
@@ -122,8 +123,8 @@ export function useDebatePreviewClips(
   const slot2State = signed.key === key ? signed.slot2 : null;
   const slot1Pending = enabled && slot1Filename !== null && slot1State === null;
   const slot2Pending = enabled && slot2Filename !== null && slot2State === null;
-  const slot1Signed = slot1State === 'failed' ? null : slot1State;
-  const slot2Signed = slot2State === 'failed' ? null : slot2State;
+  const slot1Signed = typeof slot1State === 'object' ? slot1State : null;
+  const slot2Signed = typeof slot2State === 'object' ? slot2State : null;
 
   React.useEffect(() => {
     if (!slot1Pending) return;
@@ -181,6 +182,10 @@ export function useDebatePreviewClips(
         return;
       }
       refreshedSlotsRef.current.add(slotKey);
+      // Off the dead URL at once, so its partner does not loop alone while this one re-signs.
+      setSigned(current =>
+        current.key !== key ? current : { ...current, [slot === 1 ? 'slot1' : 'slot2']: 'refreshing' }
+      );
       sign(slot, true);
     },
     [key, sign]
