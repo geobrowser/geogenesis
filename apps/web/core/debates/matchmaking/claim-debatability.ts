@@ -7,9 +7,9 @@ import { Effect } from 'effect';
 import { parse } from 'graphql';
 
 import { CLAIM_RESPONSE_OBJECT_TYPE, summarizeClaimResponses } from '~/core/claims/browse/claim-response-summary';
-import { chunk } from '~/core/community/community-graphql';
 import { graphql } from '~/core/io/graphql-client';
 import { CLAIM_RESPONSE_KIND, responseKindToVoteKind } from '~/core/responses/entity-response';
+import { chunk } from '~/core/utils/chunk';
 import { normId } from '~/core/utils/norm-id';
 
 export type ClaimResponseCounts = { positive: number; negative: number };

@@ -38,6 +38,7 @@ describe('TopicFeed', () => {
 
     expect(mocks.feed).toMatchObject({
       apiEndpoint: '/api/topics/feed',
+      preserveSession: true,
       initialSort: 'best',
       showSortFilter: true,
       showTimeFilter: false,
@@ -65,6 +66,7 @@ describe('TopicFeed', () => {
 
     expect(mocks.feed).toMatchObject({
       apiEndpoint: '/api/topics/space/feed',
+      preserveSession: true,
       topicFacetEndpoint: '/api/topics/space/facets',
       fixedParams: { spaceId: 'space-1', spaceTopicId: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' },
       initialTypeIds: TOPIC_FEED_ENTITY_TYPE_IDS,

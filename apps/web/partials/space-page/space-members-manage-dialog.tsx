@@ -12,7 +12,8 @@ import { Close } from '~/design-system/icons/close';
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  openerRef: React.RefObject<HTMLButtonElement | null>;
+  /** Where focus returns on close. Omit for a dialog opened from a URL, to keep Radix's default. */
+  openerRef?: React.RefObject<HTMLButtonElement | null>;
   header: React.ReactNode;
   content: React.ReactNode;
 }
@@ -25,6 +26,7 @@ export function SpaceMembersManageDialog(props: Props) {
 
         <Content
           onCloseAutoFocus={event => {
+            if (!props.openerRef) return;
             event.preventDefault();
             props.openerRef.current?.focus();
           }}

@@ -4,6 +4,8 @@ import { useQueries } from '@tanstack/react-query';
 
 import * as React from 'react';
 
+import { chunk } from '~/core/utils/chunk';
+
 import {
   type DebateLobbyClaim,
   type DebateLobbyClaims,
@@ -24,11 +26,7 @@ import { useIsLobbyGuest } from './lobby-guest-hooks';
 export function exploreRoomClaimBatches(entries: readonly { claim: { claim_entity_id: string } }[]): string[][] {
   // Other ids get no room line: the filter refuses them.
   const ids = [...new Set(entries.flatMap(entry => geoChatClaimId(entry.claim.claim_entity_id) ?? []))];
-  const batches: string[][] = [];
-  for (let start = 0; start < ids.length; start += LOBBY_CLAIMS_MAX_IDS) {
-    batches.push(ids.slice(start, start + LOBBY_CLAIMS_MAX_IDS).sort());
-  }
-  return batches;
+  return chunk(ids, LOBBY_CLAIMS_MAX_IDS).map(batch => batch.sort());
 }
 
 /**

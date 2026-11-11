@@ -103,6 +103,7 @@ beforeEach(() => {
       removeEventListener: () => {},
     }),
   });
+  window.localStorage.clear();
   vi.spyOn(Date, 'now').mockImplementation(() => now);
   mocks.lookup.mockReset();
   mocks.refresh.mockReset();

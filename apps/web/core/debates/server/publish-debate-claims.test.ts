@@ -26,7 +26,7 @@ const turns: DebatePublishTurn[] = [
 ];
 
 const claims: DebateClaimInput[] = [
-  { text: 'Claim A.', isFactual: true, turnIndex: 0, stableEntityId: STABLE_A, isContestable: true },
+  { text: 'Claim A.', isFactual: true, turnIndex: 0, stableEntityId: STABLE_A },
   { text: 'Claim B.', isFactual: null, turnIndex: 1, stableEntityId: STABLE_B },
   { text: 'Matched.', isFactual: true, turnIndex: 1, existingClaimEntityId: EXISTING, stableEntityId: null },
 ];
