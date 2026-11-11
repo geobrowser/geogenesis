@@ -15,7 +15,19 @@ import { type EditorClip, MIN_EDIT_CLIP_MS, type ReelWord, snapEdge } from './re
 const FREE_STEP_MS = 100;
 const ZOOMS = [1, 2, 4] as const;
 
-type Drag = { index: number; mode: 'start' | 'end' | 'move'; x0: number; start: number; end: number; pxPerMs: number };
+type Drag = {
+  index: number;
+  mode: 'start' | 'end' | 'move';
+  x0: number;
+  start: number;
+  end: number;
+  pxPerMs: number;
+  /**
+   * The clip's claim when the drag began, sent with every move: the editor drops a claim while the
+   * clip is another debater's, and this gives it back when the drag returns to its speaker.
+   */
+  claim_index: number | null;
+};
 
 /**
  * Where a dragged edge lands: off the middle of any word, outward, so the clip takes whole words
@@ -78,7 +90,7 @@ export function ReelTimeline({
   selected: number;
   readOnly: boolean;
   onSelect: (index: number) => void;
-  onChangeClip: (index: number, span: { start_ms: number; end_ms: number }) => void;
+  onChangeClip: (index: number, span: { start_ms: number; end_ms: number; claim_index: number | null }) => void;
   onSeek: (ms: number) => void;
 }) {
   const [zoom, setZoom] = React.useState<(typeof ZOOMS)[number]>(1);
@@ -103,15 +115,16 @@ export function ReelTimeline({
       start: clips[index].start_ms,
       end: clips[index].end_ms,
       pxPerMs: width / durationMs,
+      claim_index: clips[index].claim_index,
     });
   };
 
   const onPointerMove = (event: React.PointerEvent) => {
     if (!drag || drag.pxPerMs <= 0) return;
-    onChangeClip(
-      drag.index,
-      draggedClip(drag, (event.clientX - drag.x0) / drag.pxPerMs, words, durationMs, event.altKey)
-    );
+    onChangeClip(drag.index, {
+      ...draggedClip(drag, (event.clientX - drag.x0) / drag.pxPerMs, words, durationMs, event.altKey),
+      claim_index: drag.claim_index,
+    });
   };
 
   return (

@@ -57,6 +57,20 @@ describe('reelWarnings (GEO-3672)', () => {
     expect(twentyFive.fix?.kind === 'clips' && twentyFive.fix.clips[3].end_ms).toBe(324_800);
   });
 
+  // A live reel's clip is a cut: its words plus clear room either side. The picker's 18 s and
+  // geo-chat's 22 s are on the words, so a cut a little over them is an automatic pick within them.
+  it('holds a clip to the limits by its words, not its cut', () => {
+    const cuts = [clip(9_700, 28_200), GOOD[1], GOOD[2], clip(309_700, 332_300)];
+    const warnings = reelWarnings(cuts, WORDS, nameOf);
+    // 10.0-27.8 s of words in an 18.5 s cut.
+    expect(warnings.find(w => w.id === 'clip-length-0')).toBeUndefined();
+    // 310.0-331.8 s of words in a 22.6 s cut: over 18 s, not over 22 s.
+    expect(warnings.find(w => w.id === 'clip-length-3')).toMatchObject({
+      severity: 'warn',
+      title: "Clip 4's words run 21.8 s",
+    });
+  });
+
   it('warns about a reel over 70 s, never as more than a warning, and trims its longest clip', () => {
     const long = [clip(10_000, 30_000), GOOD[1], clip(210_000, 228_000), clip(310_000, 328_000)];
     const warning = reelWarnings(long, WORDS, nameOf).find(w => w.id === 'reel-length')!;

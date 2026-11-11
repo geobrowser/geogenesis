@@ -41,13 +41,30 @@ function bare(text: string) {
     .replace(/[^a-z']/g, '');
 }
 
+/** Where a clip's words start: its first whole word, or its start without one. */
+function spokenFrom(clip: Pick<EditorClip, 'start_ms' | 'end_ms'>, words: readonly ReelWord[]) {
+  return wordsIn(words, clip.start_ms, clip.end_ms)[0]?.start_ms ?? clip.start_ms;
+}
+
 /**
- * Where to end a clip so it runs at most `maxMs`: the latest sentence end inside that, or failing one
- * the latest word end, never shorter than {@link CLIP_MIN_MS}. `null` when no word ends there.
+ * How long a clip's words run, first word's start to last word's end: what the picker's 10–18 s and
+ * geo-chat's 22 s measure (`story_moments.rs`), not the cut, which adds clear room either side. A
+ * clip with no whole word is its edges.
+ */
+export function spokenLength(clip: Pick<EditorClip, 'start_ms' | 'end_ms'>, words: readonly ReelWord[]) {
+  const said = wordsIn(words, clip.start_ms, clip.end_ms);
+  return said.length > 0 ? said[said.length - 1].end_ms - said[0].start_ms : clip.end_ms - clip.start_ms;
+}
+
+/**
+ * Where to end a clip so its words run at most `maxMs`: the latest sentence end inside that, or
+ * failing one the latest word end, never shorter than {@link CLIP_MIN_MS}. `null` when no word ends
+ * there.
  */
 export function trimmedEnd(clip: Pick<EditorClip, 'start_ms' | 'end_ms'>, words: readonly ReelWord[], maxMs: number) {
-  const ends = wordsIn(words, clip.start_ms, Math.min(clip.end_ms, clip.start_ms + maxMs)).filter(
-    word => word.end_ms - clip.start_ms >= CLIP_MIN_MS
+  const from = spokenFrom(clip, words);
+  const ends = wordsIn(words, from, Math.min(clip.end_ms, from + maxMs)).filter(
+    word => word.end_ms - from >= CLIP_MIN_MS
   );
   const sentenceEnds = ends.filter(word => /[.?!]["”']?$/.test(word.text.trim()));
   const pick = (sentenceEnds.length > 0 ? sentenceEnds : ends).at(-1);
@@ -61,14 +78,16 @@ export function reelWarnings(
 ): ReelWarning[] {
   const warnings: ReelWarning[] = [];
   const speakers = clips.map(clip => clipSpeaker(words, clip.start_ms, clip.end_ms));
+  // The reel's total is what plays, cuts and all; a clip is held to the picker's limits by its words.
   const length = (clip: EditorClip) => clip.end_ms - clip.start_ms;
+  const spoken = (clip: EditorClip) => spokenLength(clip, words);
   const withClip = (index: number, next: EditorClip) => clips.map((clip, at) => (at === index ? next : clip));
 
   const total = clips.reduce((sum, clip) => sum + length(clip), 0);
   if (total > REEL_TARGET_MS) {
     const longest = clips.reduce((best, clip, index) => (length(clip) > length(clips[best]) ? index : best), 0);
     const end =
-      length(clips[longest]) > CLIP_TARGET_MAX_MS ? trimmedEnd(clips[longest], words, CLIP_TARGET_MAX_MS) : null;
+      spoken(clips[longest]) > CLIP_TARGET_MAX_MS ? trimmedEnd(clips[longest], words, CLIP_TARGET_MAX_MS) : null;
     warnings.push({
       id: 'reel-length',
       severity: 'warn',
@@ -78,7 +97,7 @@ export function reelWarnings(
         end === null
           ? null
           : {
-              label: `Trim clip ${longest + 1} to ${formatSeconds(end - clips[longest].start_ms)}`,
+              label: `Trim clip ${longest + 1} to ${formatSeconds(end - spokenFrom(clips[longest], words))}`,
               kind: 'clips',
               clips: withClip(longest, { ...clips[longest], end_ms: end }),
               select: longest,
@@ -124,23 +143,24 @@ export function reelWarnings(
   });
 
   clips.forEach((clip, index) => {
-    if (length(clip) <= CLIP_TARGET_MAX_MS) return;
-    const over = length(clip) > CLIP_HARD_MAX_MS;
+    if (spoken(clip) <= CLIP_TARGET_MAX_MS) return;
+    const over = spoken(clip) > CLIP_HARD_MAX_MS;
     const end = trimmedEnd(clip, words, CLIP_TARGET_MAX_MS);
+    const from = spokenFrom(clip, words);
     warnings.push({
       id: `clip-length-${index}`,
       severity: over ? 'bad' : 'warn',
-      title: `Clip ${index + 1} runs ${formatSeconds(length(clip))}`,
+      title: `Clip ${index + 1}'s words run ${formatSeconds(spoken(clip))}`,
       recommendation:
         'Feed clips work best at 10–18 s' +
         (over ? '; an automatic pick is never over 22 s, and past that most viewers swipe away' : '') +
         '.' +
-        (end === null ? '' : ` Ending it at ${formatReelTime(end)} makes it ${formatSeconds(end - clip.start_ms)}.`),
+        (end === null ? '' : ` Ending it at ${formatReelTime(end)} makes them ${formatSeconds(end - from)}.`),
       fix:
         end === null
           ? null
           : {
-              label: `Trim to ${formatSeconds(end - clip.start_ms)}`,
+              label: `Trim to ${formatSeconds(end - from)}`,
               kind: 'clips',
               clips: withClip(index, { ...clip, end_ms: end }),
               select: index,

@@ -268,6 +268,35 @@ describe('MomentsEditor (GEO-3671)', () => {
     expect(screen.getByRole('button', { name: /^Publish reel/ })).toBeDisabled();
   });
 
+  // A drag commits every move; one that passes over the other debater's words must not lose the
+  // clip's claim once it is back on its own speaker.
+  it('gives a dragged clip its claim back when the drag returns to its speaker', () => {
+    mocks.plan.data = entry({
+      live_reel: {
+        clock: 'video',
+        clips: [
+          { start_ms: 900, end_ms: 3_000, speaker_slot: 0, claim_index: 0, claim_text: 'Coffee is low stakes' },
+          { start_ms: 4_800, end_ms: 5_600, speaker_slot: 1, claim_index: 1, claim_text: 'Dinner shows effort' },
+        ],
+      },
+    });
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    // The track is as wide in px as the debate is long in ms (5.6 s: the last clip's end).
+    vi.spyOn(screen.getByTestId('reel-track'), 'getBoundingClientRect').mockReturnValue({
+      width: 5_600,
+      left: 0,
+    } as DOMRect);
+    const block = screen.getByRole('button', { name: 'Clip 2' });
+    fireEvent.pointerDown(block, { clientX: 4_800, pointerId: 1 });
+    // Over Susan's words: clip 2 is hers for now, so Urban's claim can't ride along.
+    fireEvent.pointerMove(block, { clientX: 1_300, pointerId: 1 });
+    expect(within(clipRow('Coffee', 1)).getByText(/Live now for/)).toBeInTheDocument();
+    fireEvent.pointerMove(block, { clientX: 4_800, pointerId: 1 });
+    fireEvent.pointerUp(block, { pointerId: 1 });
+
+    expect(within(clipRow('Dinner')).queryByText(/Live now for/)).not.toBeInTheDocument();
+  });
+
   // A poll that fails after the first answer keeps its data; the editor, and what was typed, stay.
   it('keeps the editor and its unsaved edits when a later read fails', () => {
     const { rerender } = render(<MomentsEditor debateId={DEBATE_ID} />);
@@ -335,9 +364,9 @@ describe('MomentsEditor (GEO-3671)', () => {
   });
 });
 
-/** The reel's row for the clip whose quote starts with `word`. */
-function clipRow(word: string) {
-  return screen.getByText(new RegExp(`^${word}`), { selector: 'p' }).closest('li') as HTMLElement;
+/** The reel's row for the clip whose quote starts with `word` (the `nth` such row). */
+function clipRow(word: string, nth = 0) {
+  return screen.getAllByText(new RegExp(`^${word}`), { selector: 'p' })[nth].closest('li') as HTMLElement;
 }
 
 describe('claimsBySpeaker', () => {
