@@ -82,7 +82,7 @@ function CurrentEditor({ editor, spaceId }: CurrentEditorProps) {
     <div key={editor.id} className="flex items-center justify-between transition-colors duration-150 hover:bg-divider">
       <MemberRow user={editor} />
       <div className="flex shrink-0 items-center gap-2">
-        <MemberFastPathControl spaceId={spaceId} memberSpaceId={editor.spaceId} />
+        <MemberFastPathControl spaceId={spaceId} memberSpaceId={editor.spaceId} canRestrict={false} />
         <SmallButton
           disabled={status === 'pending' || status === 'success'}
           onClick={event => {

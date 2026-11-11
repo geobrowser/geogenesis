@@ -2,7 +2,7 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 
 import { Effect, Either } from 'effect';
 
@@ -60,6 +60,8 @@ export function useMemberFastPath({ spaceId, action }: { spaceId: string; action
   const { personalSpaceId, isRegistered } = usePersonalSpaceId();
   const { space } = useSpace(spaceId);
   const tx = useSmartAccountTransaction();
+  // Retry from the status bar through the mutation, so the button tracks it and can't send a duplicate.
+  const retryRef = useRef<(memberSpaceId: string) => void>(() => {});
 
   const run = useCallback(
     async (memberSpaceId: string) => {
@@ -94,7 +96,7 @@ export function useMemberFastPath({ spaceId, action }: { spaceId: string; action
       Either.match(result, {
         onLeft: error => {
           console.error('Failed to change fast-path access', { action, spaceId, memberSpaceId }, error);
-          dispatch({ type: 'ERROR', payload: String(error), retry: () => run(memberSpaceId) });
+          dispatch({ type: 'ERROR', payload: String(error), retry: () => retryRef.current(memberSpaceId) });
           // Necessary to propagate error status to useMutation
           throw error;
         },
@@ -110,6 +112,7 @@ export function useMemberFastPath({ spaceId, action }: { spaceId: string; action
   );
 
   const { mutate, status } = useMutation({ mutationFn: run });
+  retryRef.current = mutate;
 
   return { run: mutate, status };
 }

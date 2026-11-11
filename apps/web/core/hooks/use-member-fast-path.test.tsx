@@ -91,6 +91,19 @@ describe('useMemberFastPath', () => {
     );
   });
 
+  // A retry that bypassed the mutation left the button on "Try again" and able to send a duplicate.
+  it('retries from the status bar through the mutation, so the button tracks it', async () => {
+    mocks.tx.mockReturnValueOnce(Effect.fail(new Error('reverted')));
+    const { result } = renderHook(() => useMemberFastPath({ spaceId: SPACE, action: 'give_fast_path' }), { wrapper });
+
+    act(() => result.current.run(MEMBER));
+    await waitFor(() => expect(result.current.status).toBe('error'));
+
+    const { retry } = mocks.dispatch.mock.calls[0]![0] as { retry: () => void };
+    act(() => retry());
+    await waitFor(() => expect(result.current.status).toBe('success'));
+  });
+
   it('refuses to write when the space has no deployed address', async () => {
     mocks.spaceAddress = undefined;
     const { result } = renderHook(() => useMemberFastPath({ spaceId: SPACE, action: 'make_review_only' }), { wrapper });

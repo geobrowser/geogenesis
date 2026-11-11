@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   readSpaceMembership: vi.fn(),
   restriction: { isRestricted: true as boolean | undefined, isLoading: false, isError: false },
   proposeAddMember: vi.fn(),
+  viewerVotingMode: 'fast' as 'fast' | 'slow',
 }));
 
 vi.mock('next/navigation', () => ({
@@ -26,8 +27,10 @@ vi.mock('next/navigation', () => ({
 }));
 vi.mock('~/core/utils/contracts/read-space-membership', () => ({ readSpaceMembership: mocks.readSpaceMembership }));
 vi.mock('~/core/hooks/use-member-fast-path', () => import('~/core/hooks/use-member-fast-path.mock'));
-vi.mock('~/core/hooks/use-space', () => ({ useSpace: () => ({ space: { address: '0xdao' } }) }));
-vi.mock('~/core/hooks/use-fast-path-restricted', () => ({ useFastPathRestriction: () => mocks.restriction }));
+vi.mock('~/core/hooks/use-fast-path-restricted', () => ({
+  useFastPathRestriction: () => mocks.restriction,
+  useViewerVotingMode: () => mocks.viewerVotingMode,
+}));
 vi.mock('~/core/hooks/use-propose-add-member', () => ({
   useProposeAddMember: () => ({ proposeAddMember: mocks.proposeAddMember, status: 'idle' }),
 }));
@@ -50,6 +53,7 @@ beforeEach(() => {
   mocks.params = new URLSearchParams({ addBack: MEMBER });
   mocks.readSpaceMembership.mockResolvedValue(false);
   mocks.restriction = { isRestricted: true, isLoading: false, isError: false };
+  mocks.viewerVotingMode = 'fast';
 });
 afterEach(cleanup);
 
@@ -69,6 +73,15 @@ describe('SpaceAddBackPrompt', () => {
     expect(memberFastPathMock.runs.add_back_with_fast_path).toHaveBeenCalledWith(MEMBER);
     await user.click(screen.getByRole('button', { name: 'Add back on review only' }));
     expect(mocks.proposeAddMember).toHaveBeenCalledWith({ targetMemberSpaceId: MEMBER, votingMode: 'fast' });
+  });
+
+  // A fast-path proposal from a restricted editor reverts FastPathRestricted.
+  it('adds back on the review path when the editor is restricted themselves', async () => {
+    mocks.viewerVotingMode = 'slow';
+    renderPrompt();
+
+    await userEvent.setup().click(await screen.findByRole('button', { name: 'Add back on review only' }));
+    expect(mocks.proposeAddMember).toHaveBeenCalledWith({ targetMemberSpaceId: MEMBER, votingMode: 'slow' });
   });
 
   // Links are pasted around; a dashed or 0x-prefixed id must reach the same person.

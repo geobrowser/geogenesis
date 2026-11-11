@@ -5,7 +5,7 @@ import * as React from 'react';
 import { useFastPathRestriction } from '~/core/hooks/use-fast-path-restricted';
 import { useMemberFastPath } from '~/core/hooks/use-member-fast-path';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
-import { useSpace } from '~/core/hooks/use-space';
+import { validateSpaceId } from '~/core/io/rest/validation';
 import { type MutationStatusLabels, mutationStatusLabel } from '~/core/utils/mutation-status-label';
 
 import { SmallButton } from '~/design-system/button';
@@ -34,30 +34,36 @@ const MAKE_REVIEW_ONLY: MutationStatusLabels & { title: string; confirm: string 
 /**
  * Shows an editor whether one person is on the review path only, and lets them change it.
  *
- * Making someone review-only is immediate and only a vote can undo it, so it asks for a second
- * press. Giving fast path back is a governance action on the DAO contract, so it creates a
- * review-path proposal, and the button says so. Hidden on the viewer's own row.
+ * Giving fast path back is a governance action on the DAO contract, so it creates a review-path
+ * proposal, and the button says so. Making someone review-only is immediate and only a vote can
+ * undo it, so it asks for a second press, and it's offered for members only (`canRestrict`): the
+ * contract never restricts editors by default, and one editor shouldn't be able to strip the others.
+ * Hidden on the viewer's own row, and until the viewer is known.
  */
-export function MemberFastPathControl({ spaceId, memberSpaceId }: Props) {
-  const { space } = useSpace(spaceId);
+export function MemberFastPathControl({ spaceId, memberSpaceId, canRestrict }: Props & { canRestrict: boolean }) {
   const { personalSpaceId } = usePersonalSpaceId();
-  const isSelf = personalSpaceId === memberSpaceId;
+  const viewer = personalSpaceId ? validateSpaceId(personalSpaceId) : null;
+  const isSelf = viewer !== null && viewer === validateSpaceId(memberSpaceId);
   const { isRestricted, isLoading, isError } = useFastPathRestriction(
-    isSelf ? undefined : space?.address,
+    viewer && !isSelf ? spaceId : undefined,
     memberSpaceId
   );
 
-  if (isSelf || !space?.address || isLoading) return null;
+  if (!viewer || isSelf || isLoading) return null;
   if (isError) return <span className="text-smallButton text-grey-04">Couldn&apos;t check access</span>;
 
-  return isRestricted ? (
-    <div className="flex items-center gap-2">
-      <Tag>Review only</Tag>
-      <FastPathActionButton spaceId={spaceId} memberSpaceId={memberSpaceId} action="give_fast_path" />
-    </div>
-  ) : (
+  if (isRestricted) {
+    return (
+      <div className="flex items-center gap-2">
+        <Tag>Review only</Tag>
+        <FastPathActionButton spaceId={spaceId} memberSpaceId={memberSpaceId} action="give_fast_path" />
+      </div>
+    );
+  }
+
+  return canRestrict ? (
     <FastPathActionButton spaceId={spaceId} memberSpaceId={memberSpaceId} action="make_review_only" />
-  );
+  ) : null;
 }
 
 function FastPathActionButton({

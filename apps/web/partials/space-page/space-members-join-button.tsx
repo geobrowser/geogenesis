@@ -1,13 +1,11 @@
 'use client';
 
 import { useJoinSpace } from '~/core/hooks/use-join-space';
-import { useLockedOutOfSpace } from '~/core/hooks/use-locked-out-of-space';
 import { useIsMembershipPending } from '~/core/hooks/use-pending-memberships';
 import { type ActiveMemberRequest } from '~/core/io/subgraph/fetch-proposed-members';
 
 import { Pending } from '~/design-system/pending';
 
-import { AskEditorToAddBackButton } from './ask-editor-to-add-back-button';
 import { UnderVote } from './request-status-label';
 
 type SpaceMembersJoinButtonProps = {
@@ -26,7 +24,6 @@ export function SpaceMembersJoinButton({ spaceId, spaceName, memberRequest }: Sp
   // Durable + optimistic pending state so a request made anywhere (and surviving
   // refresh) reflects here without waiting on this page's SSR memberRequest.
   const isPending = useIsMembershipPending(spaceId);
-  const lockedOut = useLockedOutOfSpace(spaceId);
 
   // A still-listed request whose vote has ended is busted: executed requests drop
   // off the list, so this one can no longer execute and the vote can't be revived.
@@ -51,8 +48,6 @@ export function SpaceMembersJoinButton({ spaceId, spaceName, memberRequest }: Sp
           <span>
             <UnderVote />
           </span>
-        ) : lockedOut.isLockedOut ? (
-          <AskEditorToAddBackButton link={lockedOut.link} />
         ) : (
           <button
             onClick={handleJoin}

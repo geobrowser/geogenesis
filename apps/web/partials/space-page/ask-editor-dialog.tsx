@@ -2,37 +2,30 @@
 
 import * as React from 'react';
 
+import { useAtom } from 'jotai';
+
+import { lockedOutJoinLinkAtom } from '~/core/state/locked-out-join';
+
 import { SmallButton } from '~/design-system/button';
 import { Input } from '~/design-system/input';
 
 import { SpaceMembersManageDialog } from './space-members-manage-dialog';
 
-interface Props {
-  link: string;
-  className?: string;
-}
-
 /**
- * Stands in for Join when the viewer can only get in through an editor. Opens visible instructions
- * with the link itself, so it works on phones and when the clipboard is unavailable.
+ * Mounted once at app level. Opens when a Join press finds the viewer can only get in through an
+ * editor (`lockedOutJoinLinkAtom`). The instructions and the link are on screen, so it works on
+ * phones and when the clipboard is unavailable.
  */
-export function AskEditorToAddBackButton({ link, className }: Props) {
-  const [open, setOpen] = React.useState(false);
-  const openerRef = React.useRef<HTMLButtonElement>(null);
+export function AskEditorDialog() {
+  const [link, setLink] = useAtom(lockedOutJoinLinkAtom);
 
   return (
-    <>
-      <button ref={openerRef} type="button" onClick={() => setOpen(true)} className={className}>
-        Ask an editor
-      </button>
-      <SpaceMembersManageDialog
-        open={open}
-        onOpenChange={setOpen}
-        openerRef={openerRef}
-        header={<h1 className="text-smallTitle">Ask an editor to add you</h1>}
-        content={<AskEditorInstructions link={link} />}
-      />
-    </>
+    <SpaceMembersManageDialog
+      open={link !== null}
+      onOpenChange={open => (open ? undefined : setLink(null))}
+      header={<h1 className="text-smallTitle">Ask an editor to add you</h1>}
+      content={link ? <AskEditorInstructions link={link} /> : null}
+    />
   );
 }
 

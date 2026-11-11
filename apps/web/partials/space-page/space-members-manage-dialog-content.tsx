@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import { useViewerVotingMode } from '~/core/hooks/use-fast-path-restricted';
 import { useProposeRemoveMember } from '~/core/hooks/use-propose-remove-member';
 import { type SpaceParticipantsPage } from '~/core/space-members/fetch-space-participants-page';
 import {
@@ -86,13 +87,14 @@ function CurrentMember({ member, spaceId, isEditor }: CurrentMemberProps) {
 
   // Fast-path proposals are editor-only on-chain; routing non-editor callers
   // to slow-path avoids an InvalidFromSpace() revert from the DAOSpace contract.
-  const votingMode = isEditor ? 'fast' : 'slow';
+  // A restricted editor is routed to slow-path too, or it reverts FastPathRestricted().
+  const votingMode = useViewerVotingMode({ spaceId, isEditor });
 
   return (
     <div key={member.id} className="flex items-center justify-between transition-colors duration-150 hover:bg-divider">
       <MemberRow user={member} />
       <div className="flex shrink-0 items-center gap-2">
-        {isEditor ? <MemberFastPathControl spaceId={spaceId} memberSpaceId={member.spaceId} /> : null}
+        {isEditor ? <MemberFastPathControl spaceId={spaceId} memberSpaceId={member.spaceId} canRestrict /> : null}
         <SmallButton
           disabled={status === 'pending' || status === 'success'}
           onClick={event => {

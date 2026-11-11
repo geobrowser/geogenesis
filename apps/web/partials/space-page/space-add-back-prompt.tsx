@@ -6,13 +6,12 @@ import * as React from 'react';
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
-import { useFastPathRestriction } from '~/core/hooks/use-fast-path-restricted';
-import { ADD_BACK_PARAM } from '~/core/hooks/use-locked-out-of-space';
+import { useFastPathRestriction, useViewerVotingMode } from '~/core/hooks/use-fast-path-restricted';
 import { useMemberFastPath } from '~/core/hooks/use-member-fast-path';
 import { useProfilesBySpaceIds } from '~/core/hooks/use-profiles-by-space-ids';
 import { useProposeAddMember } from '~/core/hooks/use-propose-add-member';
-import { useSpace } from '~/core/hooks/use-space';
 import { validateSpaceId } from '~/core/io/rest/validation';
+import { ADD_BACK_PARAM } from '~/core/utils/add-back-link';
 import { readSpaceMembership } from '~/core/utils/contracts/read-space-membership';
 import { formatShortAddress } from '~/core/utils/utils';
 
@@ -58,7 +57,6 @@ export function SpaceAddBackPrompt({ spaceId, spaceName }: Props) {
 }
 
 function AddBackContent({ spaceId, spaceName, memberSpaceId }: Props & { memberSpaceId: string }) {
-  const { space } = useSpace(spaceId);
   const memberSpaceIds = React.useMemo(() => [memberSpaceId], [memberSpaceId]);
   const { profilesBySpaceId } = useProfilesBySpaceIds(memberSpaceIds);
   const membership = useQuery({
@@ -66,7 +64,9 @@ function AddBackContent({ spaceId, spaceName, memberSpaceId }: Props & { memberS
     queryFn: () => readSpaceMembership(spaceId, memberSpaceId),
     staleTime: 0,
   });
-  const restriction = useFastPathRestriction(space?.address, memberSpaceId);
+  const restriction = useFastPathRestriction(spaceId, memberSpaceId);
+  // The prompt only mounts for editors.
+  const votingMode = useViewerVotingMode({ spaceId, isEditor: true });
   const withFastPath = useMemberFastPath({ spaceId, action: 'add_back_with_fast_path' });
   const reviewOnly = useProposeAddMember({ spaceId });
 
@@ -81,7 +81,7 @@ function AddBackContent({ spaceId, spaceName, memberSpaceId }: Props & { memberS
     );
   }
 
-  if (!space?.address || membership.isLoading || restriction.isLoading) {
+  if (membership.isLoading || restriction.isLoading) {
     return <p className="text-body text-grey-04">Checking {name}&apos;s access…</p>;
   }
 
@@ -113,12 +113,12 @@ function AddBackContent({ spaceId, spaceName, memberSpaceId }: Props & { memberS
         {name} is on review only in {where}, so they can&apos;t request to join. You can add them with a proposal.
       </p>
       <div className="flex flex-wrap items-center gap-2">
-        <SmallButton variant="primary" disabled={busy} onClick={() => withFastPath.run(memberSpaceId)}>
+        <SmallButton disabled={busy} onClick={() => withFastPath.run(memberSpaceId)}>
           {withFastPath.status === 'pending' ? 'Proposing…' : 'Add back with fast path'}
         </SmallButton>
         <SmallButton
           disabled={busy}
-          onClick={() => reviewOnly.proposeAddMember({ targetMemberSpaceId: memberSpaceId, votingMode: 'fast' })}
+          onClick={() => reviewOnly.proposeAddMember({ targetMemberSpaceId: memberSpaceId, votingMode })}
         >
           {reviewOnly.status === 'pending' ? 'Proposing…' : 'Add back on review only'}
         </SmallButton>
