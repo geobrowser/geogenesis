@@ -201,8 +201,14 @@ function Editor({ debateId }: { debateId: string }) {
   const updateClip = (index: number, update: (clip: EditorClip) => EditorClip) =>
     setClips(current => keepClaimsWithSpeakers(current.map((clip, at) => (at === index ? update(clip) : clip))));
 
-  const [selected, setSelected] = React.useState(0);
-  const selectedIndex = Math.min(selected, Math.max(0, clips.length - 1));
+  // The selected clip by its key, not its place: removing or moving another clip leaves it selected,
+  // rather than handing the transcript's Start/End to whichever clip took its place.
+  const [selectedKey, setSelectedKey] = React.useState<string | null>(null);
+  const selectedIndex = Math.max(
+    0,
+    clips.findIndex(clip => clip.key === selectedKey)
+  );
+  const setSelected = (index: number, list: readonly EditorClip[] = clips) => setSelectedKey(list[index]?.key ?? null);
   const speakers = clipViews.map(view => view.speaker);
   const sentences = React.useMemo(() => reelSentences(transcript.data), [transcript.data]);
   const durationMs = Math.max(
@@ -216,17 +222,18 @@ function Editor({ debateId }: { debateId: string }) {
   const addClipAtPlayhead = () => {
     if (playheadMs === null) return;
     const start = snapEdge(playheadMs, words, 'start');
+    const key = newClipKey();
     setClips(current => [
       ...current,
       {
-        key: newClipKey(),
+        key,
         start_ms: start,
         end_ms: snapEdge(start + NEW_CLIP_MS, words, 'end'),
         claim_index: null,
         live_claim_text: null,
       },
     ]);
-    setSelected(clips.length);
+    setSelectedKey(key);
   };
   const applyFix = (fix: ReelWarningFix) => {
     if (fix.kind === 'add-at-playhead') {
@@ -234,7 +241,7 @@ function Editor({ debateId }: { debateId: string }) {
       return;
     }
     setClips(keepClaimsWithSpeakers(fix.clips));
-    setSelected(fix.select);
+    setSelected(fix.select, fix.clips);
   };
   const moveClip = (index: number, direction: -1 | 1) => {
     const to = index + direction;
@@ -244,7 +251,7 @@ function Editor({ debateId }: { debateId: string }) {
       [next[index], next[to]] = [next[to], next[index]];
       return next;
     });
-    setSelected(to);
+    setSelectedKey(clips[index].key);
   };
 
   const submit = (kind: 'preview' | 'publish' | 'unlock') => {
@@ -403,7 +410,7 @@ function Editor({ debateId }: { debateId: string }) {
             playheadMs={playheadMs}
             selected={selectedIndex}
             readOnly={readOnly}
-            onSelect={setSelected}
+            onSelect={index => setSelected(index)}
             onChangeClip={(index, span) => updateClip(index, clip => ({ ...clip, ...span }))}
             onSeek={seekTo}
           />

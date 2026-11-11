@@ -7,11 +7,10 @@ import cx from 'classnames';
 import { SquareButton } from '~/design-system/button';
 import { Text } from '~/design-system/text';
 
+import { formatTimecode } from '../claim-timing';
 import { SPEAKER_BORDER_CLASS } from './clip-row';
-import { type EditorClip, type ReelWord, snapEdge } from './reel';
+import { type EditorClip, MIN_EDIT_CLIP_MS, type ReelWord, snapEdge } from './reel';
 
-/** The shortest a drag leaves a clip. */
-const MIN_DRAG_CLIP_MS = 1_000;
 /** Where a free (Alt) drag lands: the nearest tenth of a second. */
 const FREE_STEP_MS = 100;
 const ZOOMS = [1, 2, 4] as const;
@@ -28,7 +27,8 @@ export function dragEdge(ms: number, words: readonly ReelWord[], edge: 'start' |
 
 /**
  * A clip moved or trimmed by a drag of `deltaMs`, kept inside the debate and at least a second long.
- * Moving keeps the clip's length; its start snaps, and the end follows.
+ * Moving keeps the clip's length, then snaps both edges out to whole words (with Alt, neither): an
+ * end left mid-word would play that word without its caption.
  */
 export function draggedClip(
   drag: Pick<Drag, 'mode' | 'start' | 'end'>,
@@ -39,15 +39,16 @@ export function draggedClip(
 ): { start_ms: number; end_ms: number } {
   if (drag.mode === 'start') {
     const start = Math.max(0, dragEdge(drag.start + deltaMs, words, 'start', free));
-    return { start_ms: Math.min(start, drag.end - MIN_DRAG_CLIP_MS), end_ms: drag.end };
+    return { start_ms: Math.min(start, drag.end - MIN_EDIT_CLIP_MS), end_ms: drag.end };
   }
   if (drag.mode === 'end') {
     const end = Math.min(durationMs, dragEdge(drag.end + deltaMs, words, 'end', free));
-    return { start_ms: drag.start, end_ms: Math.max(end, drag.start + MIN_DRAG_CLIP_MS) };
+    return { start_ms: drag.start, end_ms: Math.max(end, drag.start + MIN_EDIT_CLIP_MS) };
   }
   const length = drag.end - drag.start;
   const start = Math.max(0, Math.min(durationMs - length, dragEdge(drag.start + deltaMs, words, 'start', free)));
-  return { start_ms: start, end_ms: start + length };
+  const end = free ? start + length : Math.min(durationMs, snapEdge(start + length, words, 'end'));
+  return { start_ms: start, end_ms: Math.max(end, start + MIN_EDIT_CLIP_MS) };
 }
 
 /**
@@ -161,7 +162,7 @@ export function ReelTimeline({
                     className="absolute top-1 -translate-x-1/2 font-mono text-[11px] leading-[13px] text-grey-04 first:translate-x-0"
                     style={{ left: percent(at) }}
                   >
-                    {Math.floor(at / 60_000)}:{String(Math.floor((at % 60_000) / 1000)).padStart(2, '0')}
+                    {formatTimecode(at)}
                   </span>
                 </React.Fragment>
               ))}

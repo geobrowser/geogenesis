@@ -227,6 +227,29 @@ describe('MomentsEditor (GEO-3671)', () => {
     expect(within(clipRow('Dinner')).getByText('no words are said in it')).toBeInTheDocument();
   });
 
+  // The selection follows the clip, not its place: removing an earlier clip must not hand the
+  // transcript's "Start clip N here" to the clip that moved into its place.
+  it('keeps the selected clip selected when an earlier clip is removed', () => {
+    mocks.plan.data = entry({
+      live_reel: {
+        clock: 'video',
+        clips: [
+          { start_ms: 900, end_ms: 1_450, speaker_slot: 0, claim_index: 0, claim_text: null },
+          { start_ms: 1_450, end_ms: 3_000, speaker_slot: 0, claim_index: 0, claim_text: null },
+          { start_ms: 4_800, end_ms: 5_600, speaker_slot: 1, claim_index: 1, claim_text: null },
+        ],
+      },
+    });
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    fireEvent.click(screen.getByText('dates', { selector: 'p' }));
+    expect(clipRow('dates')).toHaveAttribute('aria-current', 'true');
+
+    fireEvent.click(within(clipRow('Coffee')).getByRole('button', { name: 'Remove' }));
+    expect(clipRow('dates')).toHaveAttribute('aria-current', 'true');
+    expect(clipRow('Dinner')).not.toHaveAttribute('aria-current');
+    expect(screen.getByText('Clip 1 selected')).toBeInTheDocument();
+  });
+
   it('snaps a typed edge that falls mid-word out to the whole word', () => {
     render(<MomentsEditor debateId={DEBATE_ID} />);
     fireEvent.change(screen.getByRole('textbox', { name: 'End time' }), { target: { value: '2.0' } });

@@ -12,6 +12,8 @@ import type { LiveReel, ManualClipBody } from './api';
 /** geo-chat's limits on a hand-picked reel (`MANUAL_MAX_CLIPS`, `MANUAL_CLIP_MAX_SECONDS`). */
 export const MANUAL_MAX_CLIPS = 6;
 export const MANUAL_CLIP_MAX_MS = 60_000;
+/** The shortest a clip is left by an edit that moves one edge past the other: a drag, a sentence. */
+export const MIN_EDIT_CLIP_MS = 1_000;
 
 /** A word on the player's clock. */
 export type ReelWord = { slot: ParticipantSlot; start_ms: number; end_ms: number; text: string };

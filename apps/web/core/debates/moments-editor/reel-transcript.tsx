@@ -8,17 +8,16 @@ import { SmallButton } from '~/design-system/button';
 import { Text } from '~/design-system/text';
 
 import type { DebateTranscriptResponse, ParticipantSlot } from '../api';
+import { formatTimecode } from '../claim-timing';
 import { transcriptOnRecordings } from '../recording-clock';
-import { SPEAKER_FILL_CLASS } from './clip-row';
-import { type EditorClip, formatReelTime } from './reel';
+import { SPEAKER_EDGE_CLASS, SPEAKER_FILL_CLASS } from './clip-row';
+import { type EditorClip, MIN_EDIT_CLIP_MS, formatReelTime } from './reel';
 
 /** A sentence (or, from a transcript served without sentences, a line) on the player's clock. */
 export type ReelSentence = { slot: ParticipantSlot; start_ms: number; end_ms: number; text: string };
 
 /** How far a sentence must reach into a clip to count as in it, so a shared edge does not. */
 const OVERLAP_MS = 150;
-/** The shortest a clip is left when one edge is moved from the transcript. */
-const MIN_CLIP_MS = 1_000;
 
 /**
  * The transcript's sentences on the player's clock, in time order: the served `sentences`
@@ -43,13 +42,17 @@ export function sentenceInClip(sentence: ReelSentence, clip: Pick<EditorClip, 's
 /** The clip with its start moved to `sentence`'s start; its end follows if it would come first. */
 export function startClipAt(clip: EditorClip, sentence: ReelSentence): EditorClip {
   const start = sentence.start_ms;
-  return { ...clip, start_ms: start, end_ms: clip.end_ms <= start + MIN_CLIP_MS ? sentence.end_ms : clip.end_ms };
+  return { ...clip, start_ms: start, end_ms: clip.end_ms <= start + MIN_EDIT_CLIP_MS ? sentence.end_ms : clip.end_ms };
 }
 
 /** The clip with its end moved to `sentence`'s end; its start follows if it would come after. */
 export function endClipAt(clip: EditorClip, sentence: ReelSentence): EditorClip {
   const end = sentence.end_ms;
-  return { ...clip, end_ms: end, start_ms: clip.start_ms >= end - MIN_CLIP_MS ? sentence.start_ms : clip.start_ms };
+  return {
+    ...clip,
+    end_ms: end,
+    start_ms: clip.start_ms >= end - MIN_EDIT_CLIP_MS ? sentence.start_ms : clip.start_ms,
+  };
 }
 
 /**
@@ -116,12 +119,11 @@ export function ReelTranscript({
                     className={cx(
                       'group grid grid-cols-[48px_minmax(0,1fr)] gap-2 rounded px-1.5 py-1 text-[14px] leading-[18px] tracking-[-0.1px] hover:bg-grey-01',
                       inClips.includes(selected) && 'bg-ctaTertiary',
-                      firstSpeaker === 1 && 'shadow-[inset_3px_0_0_#6833ff]',
-                      firstSpeaker === 2 && 'shadow-[inset_3px_0_0_#fe31c5]'
+                      firstSpeaker ? SPEAKER_EDGE_CLASS[firstSpeaker] : null
                     )}
                   >
                     <span className="pt-px font-mono text-[12px] text-grey-04 tabular-nums">
-                      {formatReelTime(sentence.start_ms).replace(/\.\d$/, '')}
+                      {formatTimecode(sentence.start_ms)}
                     </span>
                     <div>
                       {sentence.text}

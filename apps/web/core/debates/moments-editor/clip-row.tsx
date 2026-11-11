@@ -13,6 +13,11 @@ import { type EditorClip, type ReelWord, formatReelTime, formatSeconds, parseRee
 
 /** A debater's colours in the editor: the avatar palette's two accents, as the prototype has them. */
 export const SPEAKER_FILL_CLASS = { 1: 'bg-purple', 2: 'bg-pink' } as const;
+/** A sentence's mark in the transcript: a bar in the speaker's colour down its left edge. */
+export const SPEAKER_EDGE_CLASS = {
+  1: 'shadow-[inset_3px_0_0_var(--color-purple)]',
+  2: 'shadow-[inset_3px_0_0_var(--color-pink)]',
+} as const;
 /** A clip block on the timeline: the speaker's colour as its edge, a tint of it as its fill. */
 export const SPEAKER_BORDER_CLASS = {
   1: 'border-purple bg-purple/10 text-purple',

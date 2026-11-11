@@ -132,6 +132,20 @@ describe('draggedClip (GEO-3672)', () => {
     expect(draggedClip({ ...drag, mode: 'move' }, -5_000, words, 7_000, false)).toEqual({ start_ms: 0, end_ms: 2_400 });
   });
 
+  // A move snaps both edges out to whole words: an end left mid-word plays that word uncaptioned.
+  it('moves a clip so its end, too, takes a whole word', () => {
+    const later = [...words, word(2, 4_000, 4_400)];
+    expect(draggedClip({ ...drag, mode: 'move' }, 700, later, 10_000, false)).toEqual({
+      start_ms: 1_700,
+      end_ms: 4_400,
+    });
+    // With Alt held it keeps its length exactly.
+    expect(draggedClip({ ...drag, mode: 'move' }, 700, later, 10_000, true)).toEqual({
+      start_ms: 1_700,
+      end_ms: 4_100,
+    });
+  });
+
   it('never trims a clip under a second', () => {
     expect(draggedClip({ ...drag, mode: 'end' }, -3_000, words, 10_000, true)).toEqual({
       start_ms: 1_000,
