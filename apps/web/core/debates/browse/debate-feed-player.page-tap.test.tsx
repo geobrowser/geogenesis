@@ -91,6 +91,7 @@ beforeEach(() => {
   plays.length = 0;
   inTap = false;
   mutedAutoplay = false;
+  window.localStorage.clear();
   vi.spyOn(Date, 'now').mockImplementation(() => now);
   mocks.lookup.mockReset();
   mocks.refresh.mockReset();
