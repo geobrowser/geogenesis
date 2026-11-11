@@ -12,6 +12,7 @@ import {
 import { exploreCardNodeFields, exploreCardPropertyFragment } from '~/core/explore/explore-card-selection';
 import { ID } from '~/core/id';
 import { graphql } from '~/core/io/graphql-client';
+import { chunk } from '~/core/utils/chunk';
 import { normId } from '~/core/utils/norm-id';
 import { validateSpaceId } from '~/core/utils/utils';
 
@@ -99,15 +100,13 @@ export async function fetchExploreRowsByIds(
   // The same shape `fetchRelationsByToEntityIds` uses for the same reason.
   const entities: ExploreCardEntity[] = [];
 
-  for (let start = 0; start < ids.length; start += ID_BATCH_SIZE) {
-    const chunk = ids.slice(start, start + ID_BATCH_SIZE);
-
+  for (const batch of chunk(ids, ID_BATCH_SIZE)) {
     entities.push(
       ...(await Effect.runPromise(
         graphql({
           query: exploreRowsByIdsDocument,
           decoder: decode,
-          variables: { ids: chunk.map(ID.uuidToHex) },
+          variables: { ids: batch.map(ID.uuidToHex) },
           signal,
         })
       ))

@@ -11,6 +11,7 @@ import { CLAIM_IS_FACTUAL_PROPERTY_ID, CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from 
 import { graphql } from '~/core/io/graphql-client';
 import { POSITION_VOTE_KINDS, POSITION_VOTE_TYPES } from '~/core/profile/profile-facts';
 import { collectCursorPages } from '~/core/sync/collect-cursor-pages';
+import { chunk } from '~/core/utils/chunk';
 import { normId } from '~/core/utils/norm-id';
 
 /**
@@ -212,11 +213,7 @@ export function useClaimEntitiesByIds(
 ) {
   const batches = React.useMemo(() => {
     const sorted = [...new Set(ids)].sort();
-    const chunks: string[][] = [];
-    for (let index = 0; index < sorted.length; index += CLAIM_PICKER_IDS_BATCH_SIZE) {
-      chunks.push(sorted.slice(index, index + CLAIM_PICKER_IDS_BATCH_SIZE));
-    }
-    return chunks;
+    return chunk(sorted, CLAIM_PICKER_IDS_BATCH_SIZE);
   }, [ids]);
 
   const combine = React.useCallback(
