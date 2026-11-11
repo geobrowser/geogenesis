@@ -38,7 +38,10 @@ vi.mock('~/core/io/queries', () => ({
 vi.mock('~/core/telemetry/effect-runtime', () => ({
   runEffectEither: <A, E>(effect: Effect.Effect<A, E>) => Effect.runPromise(Effect.either(effect)),
 }));
-vi.mock('~/core/access/request-space-membership', () => ({ requestSpaceMembership: mocks.requestSpaceMembership }));
+vi.mock('~/core/access/request-space-membership', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/access/request-space-membership')>()),
+  requestSpaceMembership: mocks.requestSpaceMembership,
+}));
 vi.mock('~/core/utils/contracts/read-space-membership', () => ({
   readFastPathRestricted: mocks.readFastPathRestricted,
 }));

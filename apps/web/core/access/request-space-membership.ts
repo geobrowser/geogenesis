@@ -9,7 +9,8 @@ import { geo } from '~/core/sdk/geo-client';
 import { store } from '~/core/state/jotai-store';
 import { requestedMembershipSpacesAtom, upsertRequestedMembershipSpace } from '~/core/state/requested-membership';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
-import { readIsLockedOut } from '~/core/utils/add-back-link';
+import { readFastPathRestricted } from '~/core/utils/contracts/read-space-membership';
+import { devLog } from '~/core/utils/dev-log';
 import { validateSpaceId } from '~/core/utils/utils';
 
 /** The shape `useSmartAccountTransaction` returns — kept structural so this module stays hook-free. */
@@ -100,6 +101,18 @@ export async function requestSpaceMembership({
   // Refetch the durable sources so every surface converges on the server state.
   queryClient.invalidateQueries({ queryKey: ['pending-memberships'] });
   queryClient.invalidateQueries({ queryKey: ['browse-sidebar-data'] });
+}
+
+/**
+ * Whether `personalSpaceId` can't request to join `spaceId`: the one rule every membership request
+ * checks (Join, a queued join, and the automatic join after a vote or ranking).
+ *
+ * Someone on the review path only can't request membership: the contract reverts
+ * `FastPathRestricted`, and only an editor's proposal can add them. Read fresh from the chain. Fails
+ * open: when the read fails this returns false, and the request is sent as before.
+ */
+export function readIsLockedOut(spaceId: string, personalSpaceId: string): Promise<boolean> {
+  return readFastPathRestricted(spaceId, personalSpaceId).catch(() => false);
 }
 
 /**
@@ -200,7 +213,7 @@ async function runMembershipCheck(
   // request so later votes don't read or retry it this session; a restriction lifted mid-session
   // resumes auto-join after a reload. A failed read falls through to the request, as before.
   if (await readIsLockedOut(spaceId, personalSpaceId)) {
-    console.info('Skipping automatic membership request: requester is restricted', { spaceId, personalSpaceId });
+    devLog('Skipping automatic membership request: requester is restricted', { spaceId, personalSpaceId });
     autoRequestedMemberships.add(requestKey);
     return false;
   }
