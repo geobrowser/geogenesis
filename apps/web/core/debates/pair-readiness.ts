@@ -27,13 +27,8 @@ import * as React from 'react';
 export const PAIR_HOLD_TIMEOUT_MS = 3_000;
 
 /**
- * How long after a `suspend` an element that still cannot play is taken to have stopped for good.
- *
- * `suspend` means the browser has stopped fetching. Chrome fires it a millisecond *before*
- * `canplay` on these files, so on its own it proves nothing; it is re-checked after this grace. An
- * element that is still short of `HAVE_FUTURE_DATA` and still idle by then is one the browser will
- * not load further until it is played — iOS Safari ignores `preload`, and data-saver modes do the
- * same — and holding it would only run out the timeout for nothing.
+ * How long an element must stay `isStopped` before it counts as stopped for good. iOS Safari loads
+ * a paused element only to its metadata; Chrome is idle for an instant just before `canplay`.
  */
 export const SUSPEND_GRACE_MS = 250;
 
@@ -50,27 +45,33 @@ export type PairMember = Pick<HTMLMediaElement, 'readyState' | 'networkState' | 
 const canPlay = (video: PairMember) => video.readyState >= 3 /* HAVE_FUTURE_DATA */ && !video.seeking;
 /** A frame to paint. What revealing the pair needs, which is less than what starting it needs. */
 const hasFrame = (video: PairMember) => video.readyState >= 2; /* HAVE_CURRENT_DATA */
-/** Has stopped fetching without being able to play. See `SUSPEND_GRACE_MS`. */
-const isStuck = (video: PairMember) => !canPlay(video) && video.networkState === 1; /* NETWORK_IDLE */
+/** Idle short of a frame with no seek in flight. iOS reports `NETWORK_IDLE` while a paused seek fetches. */
+const isStopped = (video: PairMember) =>
+  video.readyState < 2 /* HAVE_CURRENT_DATA */ && !video.seeking && video.networkState === 1; /* NETWORK_IDLE */
 
 /**
  * Whether a held pair may start now.
  *
- * `suspendedLongAgo` says a `suspend` has been seen on that element at least `SUSPEND_GRACE_MS`
- * ago; `isStuck` is then read off its state *now*, so an element that went on to load is not
- * mistaken for one that stopped.
+ * `stoppedLongAgo` says that element has been `isStopped` for `SUSPEND_GRACE_MS` without a break; it
+ * is read again *now*, so an element that went on to load is not mistaken for one that stopped.
  */
 export function pairMayStart(
   slot1: PairMember,
   slot2: PairMember,
-  { suspendedLongAgo = [false, false] }: { suspendedLongAgo?: [boolean, boolean] } = {}
+  { stoppedLongAgo = [false, false] }: { stoppedLongAgo?: [boolean, boolean] } = {}
 ): boolean {
   if (canPlay(slot1) && canPlay(slot2)) return true;
   // A recording that failed is `DebaterVideo`'s to rebuild, and it cannot rebuild what is never
   // played past. Starting falls back to exactly what the card did before the hold existed.
   if (slot1.error || slot2.error) return true;
-  if (suspendedLongAgo[0] && isStuck(slot1)) return true;
-  if (suspendedLongAgo[1] && isStuck(slot2)) return true;
+  // A stopped element only moves once played, but its partner may still be loading (its pre-roll
+  // seek, or its metadata, after which that seek comes): start once the partner can play, or has
+  // stopped too. A partner stopped short of its metadata (a browser that loads nothing while
+  // paused) is stopped for good as well.
+  const stopped = [0, 1].map(i => stoppedLongAgo[i] && isStopped([slot1, slot2][i]));
+  const settled = (video: PairMember, i: number) => canPlay(video) || stopped[i];
+  if (stopped[0] && settled(slot2, 1)) return true;
+  if (stopped[1] && settled(slot1, 0)) return true;
   return false;
 }
 
@@ -81,6 +82,8 @@ export function pairMayShow(slot1: PairMember, slot2: PairMember): boolean {
 
 /** Everything that can move an element's `readyState` or `networkState`, or report it failed. */
 const MEDIA_EVENTS = [
+  'loadstart',
+  'progress',
   'loadedmetadata',
   'loadeddata',
   'canplay',
@@ -164,58 +167,52 @@ export function usePairReadiness({
     const slot2 = slot2Ref.current;
     if (!slot1 || !slot2) return;
 
-    // Per element: whether a `suspend` was seen, and whether its grace has since run out.
-    const suspended: [boolean, boolean] = [false, false];
-    const suspendedLongAgo: [boolean, boolean] = [false, false];
+    const pair = [slot1, slot2] as const;
+    // Per element: the grace timer running while it is stopped, and whether one has run out.
+    const graceTimers: [ReturnType<typeof setTimeout> | null, ReturnType<typeof setTimeout> | null] = [null, null];
+    const stoppedLongAgo: [boolean, boolean] = [false, false];
     const timers = new Set<ReturnType<typeof setTimeout>>();
 
     const evaluate = () => {
+      for (const index of [0, 1] as const) {
+        if (isStopped(pair[index])) {
+          if (graceTimers[index] !== null || stoppedLongAgo[index]) continue;
+          const timer = setTimeout(() => {
+            timers.delete(timer);
+            graceTimers[index] = null;
+            stoppedLongAgo[index] = true;
+            evaluate();
+          }, SUSPEND_GRACE_MS);
+          graceTimers[index] = timer;
+          timers.add(timer);
+        } else {
+          // Any break starts the grace over: it measures one unbroken stop.
+          stoppedLongAgo[index] = false;
+          const timer = graceTimers[index];
+          if (timer !== null) {
+            clearTimeout(timer);
+            timers.delete(timer);
+            graceTimers[index] = null;
+          }
+        }
+      }
       mark({
         shown: pairMayShow(slot1, slot2),
-        started: active && pairMayStart(slot1, slot2, { suspendedLongAgo }),
+        started: active && pairMayStart(slot1, slot2, { stoppedLongAgo }),
       });
     };
 
-    const noteSuspended = (index: 0 | 1) => {
-      if (suspended[index]) return;
-      suspended[index] = true;
-      const timer = setTimeout(() => {
-        timers.delete(timer);
-        if (!suspended[index]) return;
-        suspendedLongAgo[index] = true;
-        evaluate();
-      }, SUSPEND_GRACE_MS);
-      timers.add(timer);
-    };
-
-    const listeners = ([slot1, slot2] as const).map((video, i) => {
-      const index = i as 0 | 1;
-      const onEvent = (event: Event) => {
-        if (event.type === 'suspend') noteSuspended(index);
-        // A reload (`emptied`) is a fresh start for that element, and its earlier suspend is
-        // evidence about a fetch that no longer exists.
-        if (event.type === 'emptied') {
-          suspended[index] = false;
-          suspendedLongAgo[index] = false;
-        }
-        evaluate();
-      };
-      for (const type of MEDIA_EVENTS) video.addEventListener(type, onEvent);
+    const listeners = pair.map(video => {
+      for (const type of MEDIA_EVENTS) video.addEventListener(type, evaluate);
       return () => {
-        for (const type of MEDIA_EVENTS) video.removeEventListener(type, onEvent);
+        for (const type of MEDIA_EVENTS) video.removeEventListener(type, evaluate);
       };
     });
 
-    // An element can have gone idle before this run began listening — a look-ahead card whose
-    // `suspend` fired while it was not yet the active one, which is every card on a browser that
-    // ignores `preload`. No second `suspend` is coming for it, so it is treated as one seen now.
-    // The grace still applies: a card just raised to `preload="auto"` resumes fetching within it
-    // on a browser that honours the raise, and is then no longer idle when it is checked.
-    if (isStuck(slot1)) noteSuspended(0);
-    if (isStuck(slot2)) noteSuspended(1);
-
     // Both may already be there — the look-ahead preload is the usual way a card arrives — in
-    // which case no event is coming and this is the whole wait.
+    // which case no event is coming and this is the whole wait. An element that went idle before
+    // this run began listening (a look-ahead card's, on a browser that ignores `preload`) starts
+    // its grace here, since no second `suspend` is coming for it.
     evaluate();
 
     if (active) {
