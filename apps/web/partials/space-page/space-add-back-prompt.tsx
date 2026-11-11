@@ -72,6 +72,25 @@ function AddBackContent({ spaceId, spaceName, memberSpaceId }: Props & { memberS
 
   const name = profilesBySpaceId.get(memberSpaceId)?.name ?? formatShortAddress(memberSpaceId);
   const where = spaceName ?? 'this space';
+  const sent = withFastPath.status === 'success' || reviewOnly.status === 'success';
+  const { refetch: refetchMembership } = membership;
+
+  // A fast-path add executes as it's proposed, while a review-path one waits for its vote. Read
+  // membership again rather than guessing which happened.
+  React.useEffect(() => {
+    if (sent) void refetchMembership();
+  }, [sent, refetchMembership]);
+
+  if (sent) {
+    if (membership.isFetching) return <p className="text-body text-grey-04">Checking {name}&apos;s access…</p>;
+    return (
+      <p className="text-body">
+        {membership.data
+          ? `${name} is now a member of ${where}.`
+          : `Proposal created. ${name} is added once it passes the vote.`}
+      </p>
+    );
+  }
 
   if (membership.isError || restriction.isError) {
     return (
@@ -103,9 +122,6 @@ function AddBackContent({ spaceId, spaceName, memberSpaceId }: Props & { memberS
   }
 
   const busy = withFastPath.status === 'pending' || reviewOnly.status === 'pending';
-  if (withFastPath.status === 'success' || reviewOnly.status === 'success') {
-    return <p className="text-body">Proposal created. {name} is added once it passes the vote.</p>;
-  }
 
   return (
     <div className="flex flex-col gap-4">

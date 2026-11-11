@@ -12,8 +12,7 @@ import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { lockedOutJoinLinkAtom } from '~/core/state/locked-out-join';
 import { useQueuedAction } from '~/core/state/pending-actions';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
-import { addBackLink } from '~/core/utils/add-back-link';
-import { readFastPathRestricted } from '~/core/utils/contracts/read-space-membership';
+import { readLockedOutLink } from '~/core/utils/add-back-link';
 
 type UseJoinSpaceArgs = {
   spaceId: string;
@@ -67,9 +66,9 @@ export function useJoinSpace({ spaceId, space }: UseJoinSpaceArgs) {
   const canRequestLive = Boolean(smartAccount && isRegistered && personalSpaceId);
   const authResolving = useAuthResolving();
 
-  // Someone on the review path only can't request membership: the contract reverts
-  // `FastPathRestricted`, and only an editor's proposal can add them. Checked fresh at the press, so
-  // every Join control is covered without a read per card. A failed read sends the request as before.
+  // Someone on the review path only can't request membership (see `readLockedOutLink`). Checked fresh
+  // at the press, so every Join control is covered without a read per card. A join queued while signed
+  // out is checked the same way in `useRequestToBeMember` when it replays.
   const setLockedOutLink = useSetAtom(lockedOutJoinLinkAtom);
   const [isChecking, setIsChecking] = React.useState(false);
 
@@ -77,10 +76,9 @@ export function useJoinSpace({ spaceId, space }: UseJoinSpaceArgs) {
     if (canRequestLive && personalSpaceId) {
       if (isChecking) return;
       setIsChecking(true);
-      readFastPathRestricted(spaceId, personalSpaceId)
-        .catch(() => false)
-        .then(isRestricted => {
-          if (isRestricted) setLockedOutLink(addBackLink(window.location.origin, spaceId, personalSpaceId));
+      readLockedOutLink(spaceId, personalSpaceId)
+        .then(link => {
+          if (link) setLockedOutLink(link);
           else requestToBeMember();
         })
         .finally(() => setIsChecking(false));

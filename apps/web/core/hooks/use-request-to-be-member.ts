@@ -5,6 +5,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
 
 import { Effect, Either } from 'effect';
+import { useSetAtom } from 'jotai';
 
 import { requestSpaceMembership } from '~/core/access/request-space-membership';
 import { normalizeSpaceId } from '~/core/access/space-access';
@@ -16,9 +17,11 @@ import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
 import { getIsEditorOfSpace, getIsMemberOfSpace } from '~/core/io/queries';
 import { pushMarketingEvent } from '~/core/marketing-events';
+import { lockedOutJoinLinkAtom } from '~/core/state/locked-out-join';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
+import { readLockedOutLink } from '~/core/utils/add-back-link';
 import { validateSpaceId } from '~/core/utils/utils';
 
 interface UseRequestToBeMemberArgs {
@@ -45,6 +48,7 @@ export function useRequestToBeMember({ spaceId, space }: UseRequestToBeMemberArg
   const queryClient = useQueryClient();
 
   const tx = useSmartAccountTransaction();
+  const setLockedOutLink = useSetAtom(lockedOutJoinLinkAtom);
 
   const handleRequestToBeMember = useCallback(
     async ({ fromQueue = false, isCurrent = () => true }: RequestToBeMemberOptions = {}) => {
@@ -93,6 +97,18 @@ export function useRequestToBeMember({ spaceId, space }: UseRequestToBeMemberArg
         throw new Error('User is already a member or editor of the space');
       }
 
+      // A join queued while signed out skipped the press-time check in `useJoinSpace`, and is the usual
+      // way someone who left comes back. A restricted requester gets the Ask-an-editor dialog instead
+      // of a request the contract refuses. Done, not failed, so it leaves the queue.
+      if (fromQueue) {
+        const lockedOutLink = await readLockedOutLink(spaceId, requesterSpaceId);
+        if (!isCurrent()) return;
+        if (lockedOutLink) {
+          setLockedOutLink(lockedOutLink);
+          return;
+        }
+      }
+
       try {
         await requestSpaceMembership({ spaceId, personalSpaceId: requesterSpaceId, tx, queryClient, space });
         pushMarketingEvent('geo_join_space', { space_id: normalizedSpaceId, space_name: space?.name ?? undefined });
@@ -102,7 +118,18 @@ export function useRequestToBeMember({ spaceId, space }: UseRequestToBeMemberArg
         throw error;
       }
     },
-    [dispatch, smartAccount, personalSpaceId, isRegistered, isAccountSetupPending, spaceId, space, tx, queryClient]
+    [
+      dispatch,
+      smartAccount,
+      personalSpaceId,
+      isRegistered,
+      isAccountSetupPending,
+      spaceId,
+      space,
+      tx,
+      queryClient,
+      setLockedOutLink,
+    ]
   );
 
   const mutation = useMutation({

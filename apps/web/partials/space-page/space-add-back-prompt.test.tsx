@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   restriction: { isRestricted: true as boolean | undefined, isLoading: false, isError: false },
   proposeAddMember: vi.fn(),
   viewerVotingMode: 'fast' as 'fast' | 'slow',
+  addMemberStatus: 'idle' as 'idle' | 'success',
 }));
 
 vi.mock('next/navigation', () => ({
@@ -32,7 +33,7 @@ vi.mock('~/core/hooks/use-fast-path-restricted', () => ({
   useViewerVotingMode: () => mocks.viewerVotingMode,
 }));
 vi.mock('~/core/hooks/use-propose-add-member', () => ({
-  useProposeAddMember: () => ({ proposeAddMember: mocks.proposeAddMember, status: 'idle' }),
+  useProposeAddMember: () => ({ proposeAddMember: mocks.proposeAddMember, status: mocks.addMemberStatus }),
 }));
 vi.mock('~/core/hooks/use-profiles-by-space-ids', () => ({
   useProfilesBySpaceIds: () => ({ profilesBySpaceId: new Map([[MEMBER, { name: 'Sam' }]]) }),
@@ -40,11 +41,13 @@ vi.mock('~/core/hooks/use-profiles-by-space-ids', () => ({
 
 function renderPrompt() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
+  const tree = () => (
     <QueryClientProvider client={client}>
       <SpaceAddBackPrompt spaceId="abc" spaceName="Debates" />
     </QueryClientProvider>
   );
+  const result = render(tree());
+  return { ...result, rerenderPrompt: () => result.rerender(tree()) };
 }
 
 beforeEach(() => {
@@ -54,6 +57,7 @@ beforeEach(() => {
   mocks.readSpaceMembership.mockResolvedValue(false);
   mocks.restriction = { isRestricted: true, isLoading: false, isError: false };
   mocks.viewerVotingMode = 'fast';
+  mocks.addMemberStatus = 'idle';
 });
 afterEach(cleanup);
 
@@ -120,5 +124,27 @@ describe('SpaceAddBackPrompt', () => {
     renderPrompt();
     await userEvent.setup().click(screen.getByRole('button', { name: 'Close dialog' }));
     expect(mocks.replace).toHaveBeenCalledWith('/space/abc', { scroll: false });
+  });
+
+  // An editor's fast-path add executes as it's proposed; saying "once it passes the vote" was wrong then.
+  it('says the person is a member when the add already went through', async () => {
+    const { rerenderPrompt } = renderPrompt();
+    await screen.findByRole('button', { name: 'Add back on review only' });
+
+    mocks.readSpaceMembership.mockResolvedValue(true);
+    mocks.addMemberStatus = 'success';
+    rerenderPrompt();
+
+    expect(await screen.findByText('Sam is now a member of Debates.')).toBeInTheDocument();
+  });
+
+  it('says a vote is pending when the add is still a proposal', async () => {
+    const { rerenderPrompt } = renderPrompt();
+    await screen.findByRole('button', { name: 'Add back with fast path' });
+
+    memberFastPathMock.status = 'success';
+    rerenderPrompt();
+
+    expect(await screen.findByText('Proposal created. Sam is added once it passes the vote.')).toBeInTheDocument();
   });
 });

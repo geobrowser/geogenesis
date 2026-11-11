@@ -11,13 +11,9 @@ import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
 import { useSpace } from '~/core/hooks/use-space';
+import { geo } from '~/core/sdk/geo-client';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
-import {
-  encodeAddMemberWithFastPathProposal,
-  encodeRestrictMemberFastPath,
-  encodeUnrestrictMemberProposal,
-} from '~/core/utils/contracts/fast-path-calldata';
 import { validateSpaceId } from '~/core/utils/utils';
 
 /**
@@ -28,19 +24,23 @@ import { validateSpaceId } from '~/core/utils/utils';
  */
 export type MemberFastPathAction = 'give_fast_path' | 'make_review_only' | 'add_back_with_fast_path';
 
+type EncodeParams = { authorSpaceId: string; spaceId: string; memberSpaceId: string };
+
 const ACTIONS = {
   give_fast_path: {
-    encode: encodeUnrestrictMemberProposal,
+    encode: ({ memberSpaceId, ...params }: EncodeParams) =>
+      geo.daoSpaces.proposeUnrestrictMember({ ...params, restrictedMemberSpaceId: memberSpaceId }),
     span: 'web.write.createProposal.unrestrictSpace',
     attributes: { 'io.operation': 'create_proposal', 'governance.action': 'proposal_created' },
   },
   make_review_only: {
-    encode: encodeRestrictMemberFastPath,
+    encode: (params: EncodeParams) => geo.daoSpaces.restrictMemberFastPath(params),
     span: 'web.write.restrictSpaceFastPath',
     attributes: { 'io.operation': 'restrict_fast_path', 'governance.action': 'space_fast_path_restricted' },
   },
   add_back_with_fast_path: {
-    encode: encodeAddMemberWithFastPathProposal,
+    encode: ({ memberSpaceId, ...params }: EncodeParams) =>
+      geo.daoSpaces.proposeAddMemberWithFastPath({ ...params, newMemberSpaceId: memberSpaceId }),
     span: 'web.write.createProposal.addMemberWithFastPath',
     attributes: { 'io.operation': 'create_proposal', 'governance.action': 'proposal_created' },
   },
