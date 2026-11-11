@@ -50,7 +50,9 @@ export const NEW_SPACE_DEFAULT_VOTING_SETTINGS: VotingSettingsInput = {
   universalPercentageSupportThreshold: 100,
   flatSupportThreshold: 1,
   quorum: 1,
-  disableFastPathAccessForNewMembers: true,
+  // New members get the fast path. Restricting them by default left every member review-only,
+  // and the restriction outlives membership: someone who leaves can never request to rejoin.
+  disableFastPathAccessForNewMembers: false,
   executionGracePeriodInDays: 14,
   durationInDays: NEW_SPACE_VOTING_DURATION_DAYS,
 };
