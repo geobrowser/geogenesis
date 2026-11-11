@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import { NEW_SPACE_DEFAULT_VOTING_SETTINGS } from '~/core/hooks/use-deploy-space';
+
 import {
   DEFAULT_VOTING_SETTINGS_SNAPSHOT,
   type RawVotingSettings,
@@ -8,6 +10,7 @@ import {
   rawVotingSettingsToSnapshot,
   snapshotToFormState,
   snapshotToHidden,
+  votingSettingsInputToSnapshot,
   votingSettingsWarnings,
 } from './voting-settings';
 
@@ -199,8 +202,18 @@ describe('fast path for new members', () => {
     expect(form.disableFastPathForNewMembers).toBe(false);
   });
 
+  // The create dialog shows the snapshot while the deploy sends the input; they're kept apart so this
+  // module stays free of client-only dependencies, so pin that they agree.
+  it('matches what a new space is actually deployed with', () => {
+    expect(votingSettingsInputToSnapshot(NEW_SPACE_DEFAULT_VOTING_SETTINGS)).toEqual(DEFAULT_VOTING_SETTINGS_SNAPSHOT);
+  });
+
   it('is written from the form rather than carried through unchanged', () => {
-    const result = parseVotingSettingsForm({ ...form, disableFastPathForNewMembers: false }, carried);
+    const restrictedSpace = snapshotToHidden({
+      ...DEFAULT_VOTING_SETTINGS_SNAPSHOT,
+      disableFastPathForNewMembers: true,
+    });
+    const result = parseVotingSettingsForm({ ...form, disableFastPathForNewMembers: false }, restrictedSpace);
 
     expect(result.kind).toBe('ok');
     if (result.kind !== 'ok') return;
