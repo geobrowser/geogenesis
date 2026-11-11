@@ -5,7 +5,7 @@ import type { ReactNode } from 'react';
 import { Provider as JotaiProvider, createStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { lockedOutJoinLinkAtom } from '~/core/state/locked-out-join';
+import { lockedOutJoinAtom } from '~/core/state/locked-out-join';
 import { pendingActionsAtom } from '~/core/state/pending-actions';
 
 import { PendingActionsRunner } from '~/partials/pending-actions-runner';
@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   promptSignIn: vi.fn(),
   requestToBeMember: vi.fn(),
   requestToBeMemberAsync: vi.fn(),
+  reset: vi.fn(),
   smartAccount: null as unknown,
   personalSpace: { personalSpaceId: null as string | null, isRegistered: false, isLoading: false },
   accountSetupPending: false,
@@ -38,10 +39,12 @@ vi.mock('~/core/utils/contracts/read-space-membership', () => ({
 }));
 vi.mock('~/core/state/status-bar-store', () => ({ useReportError: () => vi.fn() }));
 vi.mock('~/core/hooks/use-request-to-be-member', () => ({
+  LOCKED_OUT: 'locked_out',
   useRequestToBeMember: () => ({
     requestToBeMember: mocks.requestToBeMember,
     requestToBeMemberAsync: mocks.requestToBeMemberAsync,
     status: 'idle' as const,
+    reset: mocks.reset,
   }),
 }));
 
@@ -140,6 +143,25 @@ describe('useJoinSpace', () => {
     expect(queued()).toHaveLength(0);
   });
 
+  // A join queued while the space registered resolves as locked out when it replays. Left as success,
+  // every Join control read it as "requested" for a request that was never sent.
+  it('puts the button back to Join when a queued join turns out to be locked out', async () => {
+    mocks.smartAccount = { account: { address: '0xabc' } };
+    mocks.accountSetupPending = true;
+    mocks.requestToBeMemberAsync.mockResolvedValue('locked_out');
+    const runner = renderRunner();
+    const { result, rerender } = renderJoin();
+
+    act(() => result.current.join());
+    mocks.accountSetupPending = false;
+    mocks.personalSpace = { personalSpaceId: 'personal-1', isRegistered: true, isLoading: false };
+    rerender();
+    act(() => runner.rerender());
+
+    await waitFor(() => expect(mocks.reset).toHaveBeenCalledTimes(1));
+    expect(mocks.requestToBeMemberAsync).toHaveBeenCalledWith(expect.objectContaining({ fromQueue: true }));
+  });
+
   describe('for a viewer on the review path only', () => {
     beforeEach(() => {
       mocks.smartAccount = { account: { address: '0xabc' } };
@@ -154,7 +176,10 @@ describe('useJoinSpace', () => {
       act(() => result.current.join());
 
       await waitFor(() =>
-        expect(store.get(lockedOutJoinLinkAtom)).toBe(`${window.location.origin}/space/space-1?addBack=personal-1`)
+        expect(store.get(lockedOutJoinAtom)).toEqual({
+          link: `${window.location.origin}/space/space-1?addBack=personal-1`,
+          spaceName: undefined,
+        })
       );
       expect(mocks.requestToBeMember).not.toHaveBeenCalled();
     });
@@ -167,7 +192,7 @@ describe('useJoinSpace', () => {
       act(() => result.current.join());
 
       await waitFor(() => expect(mocks.requestToBeMember).toHaveBeenCalledTimes(1));
-      expect(store.get(lockedOutJoinLinkAtom)).toBeNull();
+      expect(store.get(lockedOutJoinAtom)).toBeNull();
     });
 
     it('shows the press as pending while it checks, and ignores a second press', async () => {
