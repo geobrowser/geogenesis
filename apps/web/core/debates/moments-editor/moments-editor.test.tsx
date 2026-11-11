@@ -11,6 +11,8 @@ import { MomentsEditor, editingBlockedReason } from './moments-editor';
 
 const DEBATE_ID = '01a0448a-61d3-7101-8434-a20fdadf6f97';
 
+let wordsOverride: unknown[] | null = null;
+
 const mocks = vi.hoisted(() => ({
   backfill: {} as { isPending: boolean; error: unknown; data: { request: unknown; entry: unknown } | undefined },
   plan: {} as { isSuccess: boolean; data: unknown; error: unknown },
@@ -57,7 +59,7 @@ vi.mock('./hooks', () => ({
     isPending: false,
     data: {
       word_timing: true,
-      words: [
+      words: wordsOverride ?? [
         { participant_slot: 1, start_ms: 1_000, end_ms: 1_400, text: 'Coffee' },
         { participant_slot: 1, start_ms: 1_500, end_ms: 2_900, text: 'dates' },
         { participant_slot: 2, start_ms: 5_000, end_ms: 5_400, text: 'Dinner' },
@@ -111,6 +113,7 @@ beforeEach(() => {
   mocks.backfill = { isPending: false, error: null, data: { request: null, entry: null } };
   mocks.plan = { isSuccess: true, data: entry(), error: null };
   mocks.mutate.mockReset();
+  wordsOverride = null;
 });
 afterEach(cleanup);
 
@@ -123,7 +126,7 @@ describe('MomentsEditor (GEO-3671)', () => {
     };
     render(<MomentsEditor debateId={DEBATE_ID} />);
     expect(screen.getByText("Only media admins can edit a debate's moments.")).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Publish reel' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Publish reel/ })).not.toBeInTheDocument();
   });
 
   it('opens on the live cuts when geo-chat serves them, on the player’s clock', () => {
@@ -168,8 +171,9 @@ describe('MomentsEditor (GEO-3671)', () => {
     fireEvent.blur(screen.getByRole('textbox', { name: 'End time' }));
     // 1.45 s is in silence after "Coffee", so it stays.
     expect(screen.getByRole('textbox', { name: 'End time' })).toHaveValue('0:01.5');
-    fireEvent.click(screen.getByRole('button', { name: 'Publish reel' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Publish and lock' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Publish reel/ }));
+    // One clip, so a warning is still open: it never blocks the publish.
+    fireEvent.click(screen.getByRole('button', { name: 'Publish anyway' }));
 
     expect(mocks.mutate).toHaveBeenCalledWith(
       {
@@ -210,5 +214,27 @@ describe('editingBlockedReason', () => {
   it('blocks a transcript without word timings, and a failed check', () => {
     expect(editingBlockedReason({ refusal: null }, false, null)).toMatch(/no word timings/);
     expect(editingBlockedReason(null, true, new Error('x'))).toMatch(/Couldn't check/);
+  });
+});
+
+describe('MomentsEditor warnings (GEO-3672)', () => {
+  it('warns, with a one-click fix, when a clip opens on "So", and the fix moves its start to the next word', () => {
+    mocks.plan.data = entry({
+      live_reel: {
+        clock: 'video',
+        clips: [{ start_ms: 900, end_ms: 3_000, speaker_slot: 0, claim_index: null, claim_text: null }],
+      },
+    });
+    wordsOverride = [
+      { participant_slot: 1, start_ms: 1_000, end_ms: 1_200, text: 'So,' },
+      { participant_slot: 1, start_ms: 1_300, end_ms: 2_900, text: 'coffee.' },
+    ];
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    expect(screen.getByText('Clip 1 opens on “So”')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Start on “coffee.”' }));
+    expect(screen.getByRole('textbox', { name: 'Start time' })).toHaveValue('0:01.3');
+    expect(screen.queryByText('Clip 1 opens on “So”')).not.toBeInTheDocument();
+    // A warning never disables publishing.
+    expect(screen.getByRole('button', { name: /^Publish reel/ })).toBeEnabled();
   });
 });

@@ -180,6 +180,8 @@ export type DebateTranscriptWithWords = DebateTranscriptResponse & {
   /** False for a transcript made before word timing was kept: it has no words until retranscribed. */
   word_timing?: boolean;
   words?: DebateTranscriptWord[];
+  /** Whole sentences with their punctuation, on the same clocks. */
+  sentences?: DebateTranscriptWord[];
 };
 
 export async function getDebateTranscriptWords(
@@ -188,10 +190,13 @@ export async function getDebateTranscriptWords(
   accountKey: string | null,
   signal?: AbortSignal
 ) {
-  return geoChatRequest<DebateTranscriptWithWords>(`/debates/${debateId}/transcript?format=json&include=words`, {
-    auth: true,
-    getPrivyIdentityToken,
-    accountKey,
-    signal,
-  });
+  return geoChatRequest<DebateTranscriptWithWords>(
+    `/debates/${debateId}/transcript?format=json&include=words,sentences`,
+    {
+      auth: true,
+      getPrivyIdentityToken,
+      accountKey,
+      signal,
+    }
+  );
 }
