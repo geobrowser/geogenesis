@@ -173,6 +173,16 @@ describe('usePairReadiness on iOS-style loading (GEO-3604)', () => {
     expect(mayStart()).toBe(true);
   });
 
+  it('lets go of a pair that loads nothing while paused, stopped short of its metadata', () => {
+    const { mayStart, both } = renderHarness();
+    both({ readyState: 0, networkState: 1 }, 'suspend');
+
+    act(() => vi.advanceTimersByTime(SUSPEND_GRACE_MS - 1));
+    expect(mayStart()).toBe(false);
+    act(() => vi.advanceTimersByTime(1));
+    expect(mayStart()).toBe(true);
+  });
+
   it('starts the grace over when a stop is broken, so it times one unbroken stop', () => {
     const { slot1, slot2, mayStart } = renderHarness();
     act(() => setMedia(slot2, { readyState: 1, networkState: 1 }, 'suspend'));

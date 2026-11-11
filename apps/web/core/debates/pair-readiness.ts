@@ -66,9 +66,10 @@ export function pairMayStart(
   if (slot1.error || slot2.error) return true;
   // A stopped element only moves once played, but its partner may still be loading (its pre-roll
   // seek, or its metadata, after which that seek comes): start once the partner can play, or has
-  // stopped at its metadata too.
+  // stopped too. A partner stopped short of its metadata (a browser that loads nothing while
+  // paused) is stopped for good as well.
   const stopped = [0, 1].map(i => stoppedLongAgo[i] && isStopped([slot1, slot2][i]));
-  const settled = (video: PairMember, i: number) => canPlay(video) || (stopped[i] && video.readyState >= 1);
+  const settled = (video: PairMember, i: number) => canPlay(video) || stopped[i];
   if (stopped[0] && settled(slot2, 1)) return true;
   if (stopped[1] && settled(slot1, 0)) return true;
   return false;
