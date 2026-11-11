@@ -2478,6 +2478,70 @@ describe('useDebatePlayback — drift correction leaves the audible recording al
   });
 });
 
+describe('useDebatePlayback — where each Stream recording starts loading (GEO-3604)', () => {
+  beforeEach(() => {
+    vi.spyOn(document, 'visibilityState', 'get').mockImplementation(() => 'visible');
+    mocks.turnSegments = [];
+    mocks.condensedBreaks = [];
+    mocks.recordingUrl.mockReset();
+    mocks.recordingUrl.mockImplementation(({ filename }: { filename: string }) =>
+      Promise.resolve({ url: `https://cdn.test/${filename}?sig=abc` })
+    );
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  /** Recordings that began 4.92s and 3.38s before the debate did. */
+  function preRolledDebate(): Debate {
+    const debate = debateFixture();
+    return {
+      ...debate,
+      recordings: [
+        { participant_slot: 1, filename: 'slot1.webm', started_at_ms: 1_700_000_000_000 - 4_920 },
+        { participant_slot: 2, filename: 'slot2.webm', started_at_ms: 1_700_000_000_000 - 3_380 },
+      ],
+    } as unknown as Debate;
+  }
+
+  it('maps the start of the debate onto each recording', async () => {
+    const { result } = await mountedPair(preRolledDebate());
+    expect(result.current.recordingStartSeconds(1)).toBeCloseTo(4.92);
+    expect(result.current.recordingStartSeconds(2)).toBeCloseTo(3.38);
+  });
+
+  it('starts at a seek asked for before the elements could take it', async () => {
+    const hook = renderHook(() => useDebatePlayback(preRolledDebate(), true));
+    await waitFor(() => expect(hook.result.current.urls.slot1).not.toBeNull());
+    act(() => hook.result.current.seekBoth(20));
+    expect(hook.result.current.recordingStartSeconds(1)).toBeCloseTo(24.92);
+    expect(hook.result.current.recordingStartSeconds(2)).toBeCloseTo(23.38);
+  });
+
+  it('follows the debate once it has moved, so a re-signed slot loads where the pair is', async () => {
+    const { result, slot1, slot2 } = await mountedPair(preRolledDebate());
+    await startPair(result, slot1, slot2);
+    slot1.currentTime = 14.92;
+    act(() => result.current.onPlaybackTick());
+    expect(result.current.recordingStartSeconds(2)).toBeCloseTo(13.38);
+  });
+
+  it('resumes a re-attached pair from where it got to, not from the start', async () => {
+    const { result, slot1, slot2 } = await mountedPair(preRolledDebate());
+    await startPair(result, slot1, slot2);
+    slot1.currentTime = 34.92;
+    act(() => result.current.onPlaybackTick());
+    // Released: fresh elements, back at zero and paused.
+    const fresh1 = fakeVideo();
+    const fresh2 = fakeVideo();
+    result.current.slot1VideoRef.current = fresh1;
+    result.current.slot2VideoRef.current = fresh2;
+    expect(result.current.recordingStartSeconds(1)).toBeCloseTo(34.92);
+    expect(result.current.recordingStartSeconds(2)).toBeCloseTo(33.38);
+  });
+});
+
 describe('automatic cut playback hold', () => {
   beforeEach(() => {
     mocks.turnSegments = [];
