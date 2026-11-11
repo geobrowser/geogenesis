@@ -3350,21 +3350,29 @@ describe('holding the full recordings until the viewer asks (feed bandwidth)', (
     expect(mocks.mediaAttached.at(-1)).toBe(true);
   });
 
-  it('loops a muted preview clip on the active held card when one is supplied, and the still otherwise', () => {
+  it('loops both supplied preview clips on the active held card, and shows both stills for a lone clip', () => {
     mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1, playing: false, posters: stills });
-    const previewClips = { slot1: 'https://cdn.test/preview-1.mp4', slot2: null };
+    const pair = { slot1: 'https://cdn.test/preview-1.mp4', slot2: 'https://cdn.test/preview-2.mp4' };
     const { container, rerender } = render(
-      <DebateFeedPlayer debate={debate} active holdFullPlayback previewClips={previewClips} />
+      <DebateFeedPlayer debate={debate} active holdFullPlayback previewClips={pair} />
     );
 
     const clips = Array.from(container.querySelectorAll<HTMLVideoElement>('video[data-debate-preview-clip]'));
-    expect(clips.map(clip => clip.getAttribute('src'))).toEqual(['https://cdn.test/preview-1.mp4']);
-    expect(clips[0].muted).toBe(true);
-    expect(clips[0].loop).toBe(true);
+    expect(clips.map(clip => clip.getAttribute('src'))).toEqual([pair.slot1, pair.slot2]);
+    for (const clip of clips) {
+      expect(clip.muted).toBe(true);
+      expect(clip.loop).toBe(true);
+    }
     // Only clips: the full recordings are still held.
-    expect(container.querySelectorAll('video')).toHaveLength(1);
+    expect(container.querySelectorAll('video')).toHaveLength(2);
 
-    rerender(<DebateFeedPlayer debate={debate} active={false} holdFullPlayback previewClips={previewClips} />);
+    // GEO-3641: one debater moving beside the other's still reads as broken, so neither moves.
+    rerender(
+      <DebateFeedPlayer debate={debate} active holdFullPlayback previewClips={{ slot1: pair.slot1, slot2: null }} />
+    );
+    expect(container.querySelectorAll('video')).toHaveLength(0);
+
+    rerender(<DebateFeedPlayer debate={debate} active={false} holdFullPlayback previewClips={pair} />);
     expect(container.querySelectorAll('video')).toHaveLength(0);
   });
 
@@ -3439,13 +3447,56 @@ describe('Cloudflare Stream previews and full playback (NEXT_PUBLIC_DEBATE_STREA
     expect(container.querySelector('[data-debate-full-playback-held="true"]')).toBeTruthy();
   });
 
-  it('shows the still beside the one clip that is ready', () => {
+  it('shows both stills, and no clip, when only one clip is ready (GEO-3641)', () => {
     withPreview({ slot1: null, slot2: bothClips.slot2 });
     mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1, playing: false, posters: stills });
-    const { container } = render(<DebateFeedPlayer debate={debate} active holdFullPlayback />);
+    const { container, getByRole } = render(<DebateFeedPlayer debate={debate} active holdFullPlayback />);
 
-    expect(clipSrcs(container)).toEqual([bothClips.slot2]);
-    expect(container.querySelectorAll('[data-debate-poster]').length).toBeGreaterThanOrEqual(1);
+    expect(clipSrcs(container)).toEqual([]);
+    expect(container.querySelectorAll('[data-debate-poster]')).toHaveLength(2);
+    expect(getByRole('button', { name: 'Play debate' })).toBeTruthy();
+  });
+
+  it('drops both clips back to stills when the browser refuses either, and Play still starts the debate (GEO-3641)', async () => {
+    const play = vi.spyOn(HTMLMediaElement.prototype, 'play').mockImplementation(function (this: HTMLMediaElement) {
+      return this.getAttribute('src') === bothClips.slot2
+        ? Promise.reject(new DOMException('refused', 'NotAllowedError'))
+        : Promise.resolve();
+    });
+    try {
+      withPreview(bothClips);
+      mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1, playing: false, posters: stills });
+      const { container, getByRole } = render(<DebateFeedPlayer debate={debate} active holdFullPlayback />);
+
+      expect(clipSrcs(container)).toEqual([bothClips.slot1, bothClips.slot2]);
+      await vi.waitFor(() => expect(clipSrcs(container)).toEqual([]));
+      expect(container.querySelectorAll('[data-debate-poster]')).toHaveLength(2);
+
+      fireEvent.click(getByRole('button', { name: 'Play debate' }));
+      expect(Array.from(container.querySelectorAll('video')).map(video => video.getAttribute('src'))).toEqual([
+        'https://cdn.test/slot1.webm',
+        'https://cdn.test/slot2.webm',
+      ]);
+    } finally {
+      play.mockRestore();
+    }
+  });
+
+  it('keeps both clips when a play is interrupted rather than refused', async () => {
+    const play = vi
+      .spyOn(HTMLMediaElement.prototype, 'play')
+      .mockImplementation(() => Promise.reject(new DOMException('interrupted', 'AbortError')));
+    try {
+      withPreview(bothClips);
+      mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1, playing: false, posters: stills });
+      const { container } = render(<DebateFeedPlayer debate={debate} active holdFullPlayback />);
+
+      await vi.waitFor(() => expect(play).toHaveBeenCalledTimes(2));
+      await Promise.resolve();
+      expect(clipSrcs(container)).toEqual([bothClips.slot1, bothClips.slot2]);
+    } finally {
+      play.mockRestore();
+    }
   });
 
   it('mounts a nearby card’s clips at metadata, and signs nothing for a card far away', () => {

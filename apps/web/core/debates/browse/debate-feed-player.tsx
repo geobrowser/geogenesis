@@ -43,6 +43,7 @@ import { markDebateWatched } from '~/core/debates/watched-debates';
 import { FollowButton } from '~/core/follows/follow-button';
 import { validateSpaceId } from '~/core/io/rest/validation';
 import { responsePositionLabel } from '~/core/responses/entity-response';
+import { errorName } from '~/core/utils/error-name';
 import { gestureUnlocksEachMediaElement, markGestureVideoUnlocked } from '~/core/utils/video/gesture-media-pool';
 import { reattachVideoSource, releaseVideo } from '~/core/utils/video/release-video';
 
@@ -789,7 +790,19 @@ function PairedDebateFeedPlayer({
   const showControls = ready && (awaitingTap || showReplay);
   // An ended debate always offers a replay; a stopped one shows the paused glyph.
   const showPausedGlyph = ready && awaitingTap && !playbackEnded && !held;
-  const clips = previewClips ?? (preview.available ? preview.clips : debatePreviewClips(debate));
+  const offeredClips = previewClips ?? (preview.available ? preview.clips : debatePreviewClips(debate));
+  /*
+   * The two clips play as a pair or not at all (GEO-3641): one debater moving beside the other's
+   * still, under the Play button, reads as a broken card. So a lone clip is dropped, and a clip
+   * the browser refuses to play (Instagram's in-app browser decides per element) takes its partner
+   * down with it, back to both stills.
+   */
+  const offeredPairKey =
+    offeredClips.slot1 !== null && offeredClips.slot2 !== null ? `${offeredClips.slot1}|${offeredClips.slot2}` : null;
+  const [refusedClipPair, setRefusedClipPair] = React.useState<string | null>(null);
+  const clipsPlayable = offeredPairKey !== null && refusedClipPair !== offeredPairKey;
+  const clips = clipsPlayable ? offeredClips : { slot1: null, slot2: null };
+  const onPreviewRefused = React.useCallback(() => setRefusedClipPair(offeredPairKey), [offeredPairKey]);
   /*
    * Stream clips are mounted on every held card near the viewport, at `preload="metadata"`, and
    * play only on the visible one, so reaching the next card does not wait on a fetch. A clip
@@ -1071,6 +1084,7 @@ function PairedDebateFeedPlayer({
           stream={streams?.slot1 ?? false}
           onStreamFailed={() => void refreshSlotUrl(1, { abandonStream: true })}
           previewClip={previewNear ? clips.slot1 : null}
+          onPreviewRefused={onPreviewRefused}
           previewActive={active}
           previewVideoRef={slot1PreviewRef}
           onPreviewError={preview.available ? () => preview.refresh(1) : undefined}
@@ -1159,6 +1173,7 @@ function PairedDebateFeedPlayer({
           stream={streams?.slot2 ?? false}
           onStreamFailed={() => void refreshSlotUrl(2, { abandonStream: true })}
           previewClip={previewNear ? clips.slot2 : null}
+          onPreviewRefused={onPreviewRefused}
           previewActive={active}
           previewVideoRef={slot2PreviewRef}
           onPreviewError={preview.available ? () => preview.refresh(2) : undefined}
@@ -1399,6 +1414,7 @@ function DebaterVideo({
   cutCanvasRef,
   buffer = false,
   previewClip = null,
+  onPreviewRefused,
   previewActive = true,
   previewVideoRef,
   onPreviewError,
@@ -1448,6 +1464,8 @@ function DebaterVideo({
   buffer?: boolean;
   /** A short muted clip to loop while there is no `src`, over the still. See the player's `previewClips`. */
   previewClip?: string | null;
+  /** The browser refused to play `previewClip`. */
+  onPreviewRefused?: () => void;
   /** Whether this card is the visible one: its clip plays and fetches whole. Others wait at metadata. */
   previewActive?: boolean;
   /** The clip element, for the player to keep the pair's two clips in step. */
@@ -1832,7 +1850,13 @@ function DebaterVideo({
           />
         ) : previewClip ? (
           // Muted, so it may autoplay anywhere; small, so it is fetched whole.
-          <PreviewClip src={previewClip} active={previewActive} videoRef={previewVideoRef} onError={onPreviewError} />
+          <PreviewClip
+            src={previewClip}
+            active={previewActive}
+            videoRef={previewVideoRef}
+            onError={onPreviewError}
+            onRefused={onPreviewRefused}
+          />
         ) : (
           <div
             className={cx(
@@ -2294,11 +2318,13 @@ function PreviewClip({
   active,
   videoRef,
   onError,
+  onRefused,
 }: {
   src: string;
   active: boolean;
   videoRef?: React.RefObject<HTMLVideoElement | null>;
   onError?: () => void;
+  onRefused?: () => void;
 }) {
   const ownRef = React.useRef<HTMLVideoElement | null>(null);
   const setRef = React.useCallback(
@@ -2308,9 +2334,14 @@ function PreviewClip({
     },
     [videoRef]
   );
-  // `autoPlay` starts one that mounts visible. One that becomes visible later is started here, and
-  // one scrolled past is stopped, so an off-screen card is not decoding.
-  const wasActiveRef = React.useRef(active);
+  const onRefusedRef = React.useRef(onRefused);
+  React.useEffect(() => {
+    onRefusedRef.current = onRefused;
+  }, [onRefused]);
+  // Started here while visible, including on mount: `autoPlay` alone is refused silently, and a
+  // refusal has to reach the card so it can drop both clips. One scrolled past is stopped, so an
+  // off-screen card is not decoding.
+  const wasActiveRef = React.useRef<boolean | null>(null);
   React.useEffect(() => {
     const video = ownRef.current;
     const wasActive = wasActiveRef.current;
@@ -2318,11 +2349,13 @@ function PreviewClip({
     if (!video || wasActive === active) return;
     if (active) {
       try {
-        void video.play()?.catch(() => {});
+        void video.play()?.catch(reason => {
+          if (errorName(reason) === 'NotAllowedError') onRefusedRef.current?.();
+        });
       } catch {
-        // A refused autoplay leaves the still under it showing.
+        // No promise to report on: the still under it shows.
       }
-    } else {
+    } else if (wasActive !== null) {
       video.pause();
     }
   }, [active]);

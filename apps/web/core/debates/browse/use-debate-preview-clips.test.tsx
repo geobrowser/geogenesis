@@ -77,20 +77,38 @@ describe('useDebatePreviewClips', () => {
     });
   });
 
-  it('signs only the slot whose clip is ready; the other stays null for its still', async () => {
+  it('offers no clips, and signs nothing, when only one slot has a clip (GEO-3641)', async () => {
     const { result } = renderHook(() =>
       useDebatePreviewClips(debateFixture({ preview: false }, { preview: true }), true, { streamEnabled: true })
     );
-    await waitFor(() => expect(result.current.clips.slot2).not.toBeNull());
+    await act(async () => {
+      await Promise.resolve();
+    });
 
-    expect(result.current.available).toBe(true);
-    expect(result.current.clips.slot1).toBeNull();
-    expect(mocks.lookup.mock.calls.map(([request]) => request)).toStrictEqual([
-      { debateId: 'debate-1', filename: 'slot2.webm', variant: 'preview' },
-    ]);
+    expect(result.current.available).toBe(false);
+    expect(result.current.clips).toEqual({ slot1: null, slot2: null });
+    expect(mocks.lookup).not.toHaveBeenCalled();
   });
 
-  it('leaves a slot null when its clip cannot be signed, and does not ask again', async () => {
+  it('offers neither clip while only one is signed', async () => {
+    let finishSlot1: (value: unknown) => void = () => {};
+    mocks.lookup.mockImplementation(({ filename }: { filename: string }) =>
+      filename === 'slot1.webm' ? new Promise(resolve => (finishSlot1 = resolve)) : signed({ filename })
+    );
+    const { result } = renderHook(() =>
+      useDebatePreviewClips(debateFixture({ preview: true }, { preview: true }), true, { streamEnabled: true })
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(result.current.clips).toEqual({ slot1: null, slot2: null });
+
+    await act(async () => finishSlot1(await signed({ filename: 'slot1.webm' })));
+    await waitFor(() => expect(result.current.clips.slot1).not.toBeNull());
+    expect(result.current.clips.slot2).not.toBeNull();
+  });
+
+  it('offers neither clip when one cannot be signed, and does not ask again', async () => {
     mocks.lookup.mockImplementation(({ filename }: { filename: string }) =>
       filename === 'slot1.webm'
         ? Promise.reject(new GeoChatRequestError('no', 'stream_not_configured', 503))
@@ -99,12 +117,12 @@ describe('useDebatePreviewClips', () => {
     const { result } = renderHook(() =>
       useDebatePreviewClips(debateFixture({ preview: true }, { preview: true }), true, { streamEnabled: true })
     );
-    await waitFor(() => expect(result.current.clips.slot2).not.toBeNull());
+    await waitFor(() => expect(mocks.lookup).toHaveBeenCalledTimes(2));
     await act(async () => {
       await Promise.resolve();
     });
 
-    expect(result.current.clips.slot1).toBeNull();
+    expect(result.current.clips).toEqual({ slot1: null, slot2: null });
     expect(mocks.lookup).toHaveBeenCalledTimes(2);
   });
 
@@ -121,7 +139,7 @@ describe('useDebatePreviewClips', () => {
       Promise.resolve({ url: `https://clip.test/${filename}?v=2` })
     );
     const { result } = renderHook(() =>
-      useDebatePreviewClips(debateFixture({ preview: true }, { preview: false }), true, { streamEnabled: true })
+      useDebatePreviewClips(debateFixture({ preview: true }, { preview: true }), true, { streamEnabled: true })
     );
     await waitFor(() => expect(result.current.clips.slot1).toBe('https://clip.test/slot1.webm?v=1'));
     expect(mocks.refresh).not.toHaveBeenCalled();
@@ -133,15 +151,16 @@ describe('useDebatePreviewClips', () => {
     await waitFor(() => expect(result.current.clips.slot1).toBe('https://clip.test/slot1.webm?v=2'));
     expect(mocks.refresh.mock.calls.map(([request]) => request)).toStrictEqual([
       { debateId: 'debate-1', filename: 'slot1.webm', variant: 'preview' },
+      { debateId: 'debate-1', filename: 'slot2.webm', variant: 'preview' },
     ]);
   });
 
-  it('re-signs once when the clip element fails, then gives the slot up to its still', async () => {
+  it('re-signs once when the clip element fails, then gives the pair up to its stills', async () => {
     mocks.refresh.mockImplementation(({ filename }: { filename: string }) =>
       Promise.resolve({ url: `https://clip.test/${filename}?fresh` })
     );
     const { result } = renderHook(() =>
-      useDebatePreviewClips(debateFixture({ preview: true }, { preview: false }), true, { streamEnabled: true })
+      useDebatePreviewClips(debateFixture({ preview: true }, { preview: true }), true, { streamEnabled: true })
     );
     await waitFor(() => expect(result.current.clips.slot1).not.toBeNull());
 
@@ -149,7 +168,7 @@ describe('useDebatePreviewClips', () => {
     await waitFor(() => expect(result.current.clips.slot1).toBe('https://clip.test/slot1.webm?fresh'));
     // The fresh URL failing too is not answered by another signature.
     act(() => result.current.refresh(1));
-    await waitFor(() => expect(result.current.clips.slot1).toBeNull());
+    await waitFor(() => expect(result.current.clips).toEqual({ slot1: null, slot2: null }));
     expect(mocks.refresh).toHaveBeenCalledTimes(1);
   });
 
