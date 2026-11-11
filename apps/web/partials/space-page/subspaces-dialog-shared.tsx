@@ -58,9 +58,7 @@ export function SubspacesDialogShell({ open, onOpenChange, children }: Subspaces
               </Title>
               <SquareButton onClick={() => onOpenChange(false)} icon={<Close />} />
             </div>
-            <div className="no-scrollbar flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pb-10">
-              {children}
-            </div>
+            <div className="no-scrollbar flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pb-10">{children}</div>
           </div>
         </Content>
       </Portal>

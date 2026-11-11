@@ -1,11 +1,13 @@
 'use client';
 
 import { useJoinSpace } from '~/core/hooks/use-join-space';
+import { useLockedOutOfSpace } from '~/core/hooks/use-locked-out-of-space';
 import { useIsMembershipPending } from '~/core/hooks/use-pending-memberships';
 import { type ActiveMemberRequest } from '~/core/io/subgraph/fetch-proposed-members';
 
 import { Pending } from '~/design-system/pending';
 
+import { AskEditorToAddBackButton } from './ask-editor-to-add-back-button';
 import { UnderVote } from './request-status-label';
 
 type SpaceMembersPopoverMemberRequestButtonProps = {
@@ -28,6 +30,7 @@ export function SpaceMembersPopoverMemberRequestButton({
   // Durable + optimistic pending state so a request made anywhere (and surviving
   // refresh) reflects here without waiting on this page's SSR memberRequest.
   const isPending = useIsMembershipPending(spaceId);
+  const { isLockedOut, copied, copyAddBackLink } = useLockedOutOfSpace(spaceId);
 
   // A still-listed request whose vote has ended is busted: executed requests drop
   // off the list, so this one can no longer execute and the vote can't be revived.
@@ -40,6 +43,16 @@ export function SpaceMembersPopoverMemberRequestButton({
       <span className="text-smallButton text-grey-04">
         <UnderVote />
       </span>
+    );
+  }
+
+  if (isLockedOut) {
+    return (
+      <AskEditorToAddBackButton
+        copied={copied}
+        onCopy={copyAddBackLink}
+        className="text-smallButton text-grey-04 transition-colors duration-75 hover:text-text"
+      />
     );
   }
 

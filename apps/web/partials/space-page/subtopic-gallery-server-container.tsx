@@ -1,8 +1,9 @@
-import { cachedFetchSpace } from '~/app/space/[id]/cached-fetch-space';
 import { fetchSubtopics } from '~/core/io/subgraph/fetch-subtopics';
 import { reportError } from '~/core/telemetry/logger';
 
 import { SubtopicGallery } from '~/partials/space-page/subtopic-gallery';
+
+import { cachedFetchSpace } from '~/app/space/[id]/cached-fetch-space';
 
 type SubtopicGalleryServerContainerProps = {
   spaceId: string;

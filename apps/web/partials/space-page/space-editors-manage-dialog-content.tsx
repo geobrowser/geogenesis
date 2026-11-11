@@ -14,6 +14,7 @@ import { SmallButton } from '~/design-system/button';
 import { Input } from '~/design-system/input';
 import { Skeleton } from '~/design-system/skeleton';
 
+import { MemberFastPathControl } from './member-fast-path-control';
 import { MemberRow } from './space-member-row';
 
 interface Props {
@@ -86,15 +87,18 @@ function CurrentEditor({ editor, spaceId }: CurrentEditorProps) {
   return (
     <div key={editor.id} className="flex items-center justify-between transition-colors duration-150 hover:bg-divider">
       <MemberRow user={editor} />
-      <SmallButton
-        disabled={status === 'pending' || status === 'success'}
-        onClick={event => {
-          event.preventDefault();
-          proposeRemoveEditor({ targetEditorSpaceId: editor.spaceId });
-        }}
-      >
-        {buttonText}
-      </SmallButton>
+      <div className="flex shrink-0 items-center gap-2">
+        <MemberFastPathControl spaceId={spaceId} memberSpaceId={editor.spaceId} />
+        <SmallButton
+          disabled={status === 'pending' || status === 'success'}
+          onClick={event => {
+            event.preventDefault();
+            proposeRemoveEditor({ targetEditorSpaceId: editor.spaceId });
+          }}
+        >
+          {buttonText}
+        </SmallButton>
+      </div>
     </div>
   );
 }
