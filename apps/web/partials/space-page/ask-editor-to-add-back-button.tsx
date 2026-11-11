@@ -1,27 +1,72 @@
 'use client';
 
-import cx from 'classnames';
+import * as React from 'react';
 
-const EXPLANATION =
-  "You left this space while on review only, so you can't request to join again. Copy a link and send it to one of its editors. Opening it lets them add you back.";
+import { SmallButton } from '~/design-system/button';
+import { Input } from '~/design-system/input';
+
+import { SpaceMembersManageDialog } from './space-members-manage-dialog';
 
 interface Props {
-  copied: boolean;
-  onCopy: () => void;
+  link: string;
   className?: string;
 }
 
-/** Stands in for Join when the viewer can only get back in through an editor. */
-export function AskEditorToAddBackButton({ copied, onCopy, className }: Props) {
+/**
+ * Stands in for Join when the viewer can only get in through an editor. Opens visible instructions
+ * with the link itself, so it works on phones and when the clipboard is unavailable.
+ */
+export function AskEditorToAddBackButton({ link, className }: Props) {
+  const [open, setOpen] = React.useState(false);
+  const openerRef = React.useRef<HTMLButtonElement>(null);
+
   return (
-    <button
-      type="button"
-      onClick={onCopy}
-      title={EXPLANATION}
-      aria-label={`Ask an editor. ${EXPLANATION}`}
-      className={cx(className)}
-    >
-      {copied ? 'Link copied' : 'Ask an editor'}
-    </button>
+    <>
+      <button ref={openerRef} type="button" onClick={() => setOpen(true)} className={className}>
+        Ask an editor
+      </button>
+      <SpaceMembersManageDialog
+        open={open}
+        onOpenChange={setOpen}
+        openerRef={openerRef}
+        header={<h1 className="text-smallTitle">Ask an editor to add you</h1>}
+        content={<AskEditorInstructions link={link} />}
+      />
+    </>
+  );
+}
+
+function AskEditorInstructions({ link }: { link: string }) {
+  const [copied, setCopied] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!copied) return;
+    const timeout = setTimeout(() => setCopied(false), 3000);
+    return () => clearTimeout(timeout);
+  }, [copied]);
+
+  return (
+    <div className="flex flex-col gap-4">
+      <p className="text-body">
+        You&apos;re on review only in this space, so it can&apos;t accept a join request from you. Send this link to one
+        of its editors. When they open it, they can add you back.
+      </p>
+      <div className="flex items-center gap-2">
+        <Input readOnly value={link} aria-label="Link for an editor" onFocus={event => event.currentTarget.select()} />
+        <SmallButton
+          onClick={async () => {
+            try {
+              await navigator.clipboard.writeText(link);
+              setCopied(true);
+            } catch (error) {
+              // The link is on screen to copy by hand.
+              console.error('Failed to copy add-back link', error);
+            }
+          }}
+        >
+          {copied ? 'Copied!' : 'Copy link'}
+        </SmallButton>
+      </div>
+    </div>
   );
 }

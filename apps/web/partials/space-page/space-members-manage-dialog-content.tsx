@@ -9,6 +9,7 @@ import {
   useInfiniteScrollSentinel,
   useSpaceParticipantsInfinite,
 } from '~/core/space-members/use-space-participants-infinite';
+import { mutationStatusLabel } from '~/core/utils/mutation-status-label';
 
 import { SmallButton } from '~/design-system/button';
 import { Input } from '~/design-system/input';
@@ -77,18 +78,11 @@ interface CurrentMemberProps {
 function CurrentMember({ member, spaceId, isEditor }: CurrentMemberProps) {
   const { proposeRemoveMember, status } = useProposeRemoveMember({ spaceId });
 
-  const buttonText = (() => {
-    switch (status) {
-      case 'pending':
-        return 'Proposing removal...';
-      case 'success':
-        return 'Proposal created';
-      case 'error':
-        return 'Try again';
-      default:
-        return 'Remove member';
-    }
-  })();
+  const buttonText = mutationStatusLabel(status, {
+    idle: 'Remove member',
+    pending: 'Proposing removal...',
+    success: 'Proposal created',
+  });
 
   // Fast-path proposals are editor-only on-chain; routing non-editor callers
   // to slow-path avoids an InvalidFromSpace() revert from the DAOSpace contract.

@@ -30,7 +30,7 @@ export function SpaceMembersPopoverMemberRequestButton({
   // Durable + optimistic pending state so a request made anywhere (and surviving
   // refresh) reflects here without waiting on this page's SSR memberRequest.
   const isPending = useIsMembershipPending(spaceId);
-  const { isLockedOut, copied, copyAddBackLink } = useLockedOutOfSpace(spaceId);
+  const lockedOut = useLockedOutOfSpace(spaceId);
 
   // A still-listed request whose vote has ended is busted: executed requests drop
   // off the list, so this one can no longer execute and the vote can't be revived.
@@ -46,11 +46,10 @@ export function SpaceMembersPopoverMemberRequestButton({
     );
   }
 
-  if (isLockedOut) {
+  if (lockedOut.isLockedOut) {
     return (
       <AskEditorToAddBackButton
-        copied={copied}
-        onCopy={copyAddBackLink}
+        link={lockedOut.link}
         className="text-smallButton text-grey-04 transition-colors duration-75 hover:text-text"
       />
     );

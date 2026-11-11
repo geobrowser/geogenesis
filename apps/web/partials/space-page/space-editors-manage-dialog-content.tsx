@@ -9,6 +9,7 @@ import {
   useInfiniteScrollSentinel,
   useSpaceParticipantsInfinite,
 } from '~/core/space-members/use-space-participants-infinite';
+import { mutationStatusLabel } from '~/core/utils/mutation-status-label';
 
 import { SmallButton } from '~/design-system/button';
 import { Input } from '~/design-system/input';
@@ -71,18 +72,11 @@ interface CurrentEditorProps {
 function CurrentEditor({ editor, spaceId }: CurrentEditorProps) {
   const { proposeRemoveEditor, status } = useProposeRemoveEditor({ spaceId });
 
-  const buttonText = (() => {
-    switch (status) {
-      case 'pending':
-        return 'Proposing removal...';
-      case 'success':
-        return 'Proposal created';
-      case 'error':
-        return 'Try again';
-      default:
-        return 'Remove editor';
-    }
-  })();
+  const buttonText = mutationStatusLabel(status, {
+    idle: 'Remove editor',
+    pending: 'Proposing removal...',
+    success: 'Proposal created',
+  });
 
   return (
     <div key={editor.id} className="flex items-center justify-between transition-colors duration-150 hover:bg-divider">

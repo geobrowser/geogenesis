@@ -26,7 +26,7 @@ export function SpaceMembersJoinButton({ spaceId, spaceName, memberRequest }: Sp
   // Durable + optimistic pending state so a request made anywhere (and surviving
   // refresh) reflects here without waiting on this page's SSR memberRequest.
   const isPending = useIsMembershipPending(spaceId);
-  const { isLockedOut, copied, copyAddBackLink } = useLockedOutOfSpace(spaceId);
+  const lockedOut = useLockedOutOfSpace(spaceId);
 
   // A still-listed request whose vote has ended is busted: executed requests drop
   // off the list, so this one can no longer execute and the vote can't be revived.
@@ -51,8 +51,8 @@ export function SpaceMembersJoinButton({ spaceId, spaceName, memberRequest }: Sp
           <span>
             <UnderVote />
           </span>
-        ) : isLockedOut ? (
-          <AskEditorToAddBackButton copied={copied} onCopy={copyAddBackLink} />
+        ) : lockedOut.isLockedOut ? (
+          <AskEditorToAddBackButton link={lockedOut.link} />
         ) : (
           <button
             onClick={handleJoin}

@@ -4,68 +4,78 @@ import userEvent from '@testing-library/user-event';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { memberFastPathMock, resetMemberFastPathMock } from '~/core/hooks/use-member-fast-path.mock';
+
 import { MemberFastPathControl } from './member-fast-path-control';
 
 const mocks = vi.hoisted(() => ({
-  restricted: false,
-  loading: false,
-  address: '0xdao' as string | undefined,
-  runs: {} as Record<string, ReturnType<typeof vi.fn>>,
-  status: 'idle',
+  restriction: { isRestricted: false as boolean | undefined, isLoading: false, isError: false },
+  viewer: 'viewer',
 }));
 
-vi.mock('~/core/hooks/use-space', () => ({
-  useSpace: () => ({ space: mocks.address ? { address: mocks.address } : null }),
+vi.mock('~/core/hooks/use-member-fast-path', () => import('~/core/hooks/use-member-fast-path.mock'));
+vi.mock('~/core/hooks/use-space', () => ({ useSpace: () => ({ space: { address: '0xdao' } }) }));
+vi.mock('~/core/hooks/use-personal-space-id', () => ({
+  usePersonalSpaceId: () => ({ personalSpaceId: mocks.viewer }),
 }));
-vi.mock('~/core/hooks/use-fast-path-restricted', () => ({
-  useIsFastPathRestricted: () => ({ isFastPathRestricted: mocks.restricted, isLoading: mocks.loading }),
-}));
-vi.mock('~/core/hooks/use-member-fast-path', () => ({
-  useMemberFastPath: ({ action }: { action: string }) => {
-    mocks.runs[action] ??= vi.fn();
-    return { run: mocks.runs[action], status: mocks.status };
-  },
-}));
+vi.mock('~/core/hooks/use-fast-path-restricted', () => ({ useFastPathRestriction: () => mocks.restriction }));
 
 const props = { spaceId: 'space', memberSpaceId: 'member' };
 
 beforeEach(() => {
-  mocks.restricted = false;
-  mocks.loading = false;
-  mocks.address = '0xdao';
-  mocks.runs = {};
-  mocks.status = 'idle';
+  resetMemberFastPathMock();
+  mocks.restriction = { isRestricted: false, isLoading: false, isError: false };
+  mocks.viewer = 'viewer';
 });
 afterEach(cleanup);
 
 describe('MemberFastPathControl', () => {
   it('marks a restricted person as review only and proposes fast path for them', async () => {
-    mocks.restricted = true;
+    mocks.restriction.isRestricted = true;
     render(<MemberFastPathControl {...props} />);
 
     expect(screen.getByText('Review only')).toBeInTheDocument();
     await userEvent.setup().click(screen.getByRole('button', { name: 'Propose fast path' }));
-    expect(mocks.runs.give_fast_path).toHaveBeenCalledWith('member');
+    expect(memberFastPathMock.runs.give_fast_path).toHaveBeenCalledWith('member');
   });
 
-  it('lets an editor put someone with fast path on review only', async () => {
+  // Only a vote can undo it, so a single stray press must not restrict anyone.
+  it('asks for a second press before restricting someone immediately', async () => {
+    render(<MemberFastPathControl {...props} />);
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole('button', { name: 'Make review only' }));
+    expect(memberFastPathMock.runs.make_review_only).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: 'Confirm review only' }));
+    expect(memberFastPathMock.runs.make_review_only).toHaveBeenCalledWith('member');
+  });
+
+  it("doesn't offer editors a way to restrict themselves", () => {
+    mocks.viewer = 'member';
+    const { container } = render(<MemberFastPathControl {...props} />);
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  // Acting on a failed read would send a write that reverts, so no action is offered.
+  it('says when access could not be checked instead of guessing', () => {
+    mocks.restriction = { isRestricted: undefined, isLoading: false, isError: true };
     render(<MemberFastPathControl {...props} />);
 
-    expect(screen.queryByText('Review only')).not.toBeInTheDocument();
-    await userEvent.setup().click(screen.getByRole('button', { name: 'Make review only' }));
-    expect(mocks.runs.make_review_only).toHaveBeenCalledWith('member');
+    expect(screen.getByText("Couldn't check access")).toBeInTheDocument();
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 
   it('says a fast-path proposal was created rather than claiming access changed', () => {
-    mocks.restricted = true;
-    mocks.status = 'success';
+    mocks.restriction.isRestricted = true;
+    memberFastPathMock.status = 'success';
     render(<MemberFastPathControl {...props} />);
 
     expect(screen.getByRole('button', { name: 'Proposal created' })).toBeDisabled();
   });
 
   it('renders nothing until the restriction is known', () => {
-    mocks.loading = true;
+    mocks.restriction.isLoading = true;
     const { container } = render(<MemberFastPathControl {...props} />);
     expect(container).toBeEmptyDOMElement();
   });

@@ -1,22 +1,20 @@
-import { DaoSpaceAbi, SpaceRegistryAbi } from '@geoprotocol/geo-sdk/abis';
-
-import { decodeAbiParameters, decodeFunctionData } from 'viem';
+import { decodeAbiParameters, decodeFunctionData, keccak256, stringToHex } from 'viem';
 import { describe, expect, it } from 'vitest';
 
 import { geo } from '~/core/sdk/geo-client';
+import { SPACE_REGISTRY_ADDRESS_HEX } from '~/core/sdk/geo-network';
 
 import {
-  SPACE_FAST_PATH_RESTRICTED_ACTION,
   encodeAddMemberWithFastPathProposal,
   encodeRestrictMemberFastPath,
   encodeUnrestrictMemberProposal,
 } from './fast-path-calldata';
+import { DAOSpaceAbi, FAST_PATH_RESTRICTED_ROLE, GOVERNANCE_ACTIONS, SpaceRegistryAbi } from './space-registry';
 
-const REGISTRY = '0x0000000000000000000000000000000000000001';
 const AUTHOR = '0eed5491b917cf58b33ac81255fe7ae9';
 const DAO = 'abcdef12345678901234567890abcdef';
 const MEMBER = '22222222222222222222222222222222';
-const PROPOSAL = '11111111111111111111111111111111';
+const params = { authorSpaceId: AUTHOR, spaceId: DAO, memberSpaceId: MEMBER };
 
 function decodeEnter(calldata: `0x${string}`) {
   const decoded = decodeFunctionData({ abi: SpaceRegistryAbi, data: calldata });
@@ -45,24 +43,25 @@ function decodeProposal(data: `0x${string}`) {
   return {
     proposalId,
     votingMode,
-    calls: actions.map(a => ({ ...decodeFunctionData({ abi: DaoSpaceAbi, data: a.data }), toSpaceId: a.toSpaceId })),
+    calls: actions.map(a => ({ ...decodeFunctionData({ abi: DAOSpaceAbi, data: a.data }), toSpaceId: a.toSpaceId })),
   };
 }
 
 describe('fast-path calldata', () => {
-  it('lifts a restriction with a single SLOW unrestrictSpace proposal', () => {
-    const result = encodeUnrestrictMemberProposal({
-      registry: REGISTRY,
-      authorSpaceId: AUTHOR,
-      spaceId: DAO,
-      memberSpaceId: MEMBER,
-      proposalId: PROPOSAL,
-    });
-    const enter = decodeEnter(result.calldata);
-    const { votingMode, calls } = decodeProposal(enter.data);
+  it('pins the contract hashes it relies on', () => {
+    expect(FAST_PATH_RESTRICTED_ROLE).toBe(keccak256(stringToHex('FAST_PATH_RESTRICTED')));
+    expect(GOVERNANCE_ACTIONS.SPACE_FAST_PATH_RESTRICTED).toBe(
+      keccak256(stringToHex('GOVERNANCE.SPACE_FAST_PATH_RESTRICTED'))
+    );
+  });
 
-    expect(result.to).toBe(REGISTRY);
-    expect(result.proposalId).toBe(`0x${PROPOSAL}`);
+  it('lifts a restriction with a single SLOW unrestrictSpace proposal', () => {
+    const result = encodeUnrestrictMemberProposal(params);
+    const enter = decodeEnter(result.calldata);
+    const { proposalId, votingMode, calls } = decodeProposal(enter.data);
+
+    expect(result.to).toBe(SPACE_REGISTRY_ADDRESS_HEX);
+    expect(proposalId).toBe(result.proposalId);
     expect(enter.from).toBe(`0x${AUTHOR}`);
     expect(enter.to).toBe(`0x${DAO}`);
     expect(votingMode).toBe(0);
@@ -73,12 +72,7 @@ describe('fast-path calldata', () => {
 
   // addMember re-applies the restriction in a space that restricts new members, so it has to run first.
   it('re-adds someone with addMember before unrestrictSpace', () => {
-    const result = encodeAddMemberWithFastPathProposal({
-      registry: REGISTRY,
-      authorSpaceId: AUTHOR,
-      spaceId: DAO,
-      memberSpaceId: MEMBER,
-    });
+    const result = encodeAddMemberWithFastPathProposal(params);
     const { votingMode, calls } = decodeProposal(decodeEnter(result.calldata).data);
 
     expect(votingMode).toBe(0);
@@ -87,53 +81,44 @@ describe('fast-path calldata', () => {
   });
 
   it('restricts someone directly, without a proposal', () => {
-    const result = encodeRestrictMemberFastPath({
-      registry: REGISTRY,
-      authorSpaceId: AUTHOR,
-      spaceId: DAO,
-      memberSpaceId: MEMBER,
-    });
+    const result = encodeRestrictMemberFastPath(params);
     const enter = decodeEnter(result.calldata);
     const [target] = decodeAbiParameters([{ type: 'bytes16' }], enter.data);
 
-    expect(enter.action).toBe(SPACE_FAST_PATH_RESTRICTED_ACTION);
+    expect(enter.action).toBe(GOVERNANCE_ACTIONS.SPACE_FAST_PATH_RESTRICTED);
     expect(enter.topic).toBe(`0x${MEMBER}${'0'.repeat(32)}`);
     expect(target).toBe(`0x${MEMBER}`);
     expect('proposalId' in result).toBe(false);
   });
 
-  // The proposal envelope has to match what the SDK builds for its own role proposals, or the
-  // indexer and the contract would read ours differently.
+  // The envelope has to match what the SDK builds for its own role proposals, or the indexer and the
+  // contract would read ours differently.
   it('builds the same proposal envelope as the SDK role helpers', () => {
+    const ours = encodeUnrestrictMemberProposal(params);
     const sdk = geo.daoSpaces.proposeAddMember({
       authorSpaceId: AUTHOR,
       spaceId: DAO,
       newMemberSpaceId: MEMBER,
-      proposalId: PROPOSAL,
+      proposalId: ours.proposalId,
       votingMode: 'SLOW',
-    });
-    const ours = encodeUnrestrictMemberProposal({
-      registry: REGISTRY,
-      authorSpaceId: AUTHOR,
-      spaceId: DAO,
-      memberSpaceId: MEMBER,
-      proposalId: PROPOSAL,
     });
     const sdkEnter = decodeEnter(sdk.calldata);
     const ourEnter = decodeEnter(ours.calldata);
-    const sdkProposal = decodeProposal(sdkEnter.data);
-    const ourProposal = decodeProposal(ourEnter.data);
 
     expect(ourEnter.action).toBe(sdkEnter.action);
     expect(ourEnter.topic).toBe(sdkEnter.topic);
-    expect(ourProposal.proposalId).toBe(sdkProposal.proposalId);
-    expect(ourProposal.votingMode).toBe(sdkProposal.votingMode);
-    expect(ourProposal.calls[0]?.toSpaceId).toBe(sdkProposal.calls[0]?.toSpaceId);
+    expect(decodeProposal(ourEnter.data).calls[0]?.toSpaceId).toBe(decodeProposal(sdkEnter.data).calls[0]?.toSpaceId);
   });
 
-  it('rejects malformed space ids', () => {
-    expect(() =>
-      encodeRestrictMemberFastPath({ registry: REGISTRY, authorSpaceId: AUTHOR, spaceId: DAO, memberSpaceId: '0x12' })
-    ).toThrow('memberSpaceId must be a 32-character hex space id');
+  it('accepts dashed ids and rejects malformed ones', () => {
+    const dashed = '22222222-2222-2222-2222-222222222222';
+    const [target] = decodeAbiParameters(
+      [{ type: 'bytes16' }],
+      decodeEnter(encodeRestrictMemberFastPath({ ...params, memberSpaceId: dashed }).calldata).data
+    );
+    expect(target).toBe(`0x${MEMBER}`);
+    expect(() => encodeRestrictMemberFastPath({ ...params, memberSpaceId: '0x12' })).toThrow(
+      'memberSpaceId must be a 32-character hex space id'
+    );
   });
 });
