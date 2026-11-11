@@ -7,6 +7,8 @@ import * as React from 'react';
 export type QuerySeedEntry = {
   queryKey: readonly unknown[];
   data: unknown;
+  /** When the data was read. `0` seeds it already stale: it paints, and the first subscriber refetches. */
+  updatedAt?: number;
 };
 
 const subscribeNever = () => () => {};
@@ -21,8 +23,9 @@ function useIsPastHydration() {
 }
 
 function seedMissing(client: QueryClient, entries: QuerySeedEntry[]) {
-  for (const { queryKey, data } of entries) {
-    if (client.getQueryData(queryKey) === undefined) client.setQueryData(queryKey, data);
+  for (const { queryKey, data, updatedAt } of entries) {
+    if (client.getQueryData(queryKey) === undefined)
+      client.setQueryData(queryKey, data, updatedAt === undefined ? undefined : { updatedAt });
   }
 }
 

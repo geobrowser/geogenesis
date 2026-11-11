@@ -3,6 +3,7 @@ import * as Either from 'effect/Either';
 
 import { Environment } from '~/core/environment';
 import { isValidUUID } from '~/core/io/rest';
+import { chunk } from '~/core/utils/chunk';
 
 import { graphql } from './graphql';
 
@@ -26,12 +27,6 @@ function normalizeProposalId(id: string): string {
 
 /** The API rejects very large `in` filters, so ask in batches. */
 const CHUNK_SIZE = 100;
-
-function chunk<T>(items: readonly T[], size: number): T[][] {
-  const out: T[][] = [];
-  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
-  return out;
-}
 
 async function fetchChunk(ids: string[]): Promise<[string, number][]> {
   const idList = ids.map(id => `"${id}"`).join(', ');

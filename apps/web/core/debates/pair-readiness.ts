@@ -238,3 +238,69 @@ export function usePairReadiness({
     release,
   };
 }
+
+/**
+ * How much a held pair must have buffered past where it stands before it plays again (GEO-3603).
+ *
+ * A break's cut jumps several seconds into what was buffered, so a pair that can play there may
+ * have only a second or two left. Measured on Stream at 4 Mbps: 2.2 s of runway after the cut, the
+ * next segment 3 s away, and slot 1 starved mid-sentence. Waiting for this much under the held title
+ * absorbs that, and on a fast connection the buffer already runs far past it.
+ */
+export const HELD_PAIR_RUNWAY_SECONDS = 3;
+
+/**
+ * How close to the end a buffer counts as reaching it. Wider than `PLAYBACK_END_EPSILON_SECONDS`: a
+ * buffer ends on a segment boundary, which can fall a little short of `duration`.
+ */
+const RUNWAY_END_SLACK_SECONDS = 0.25;
+
+/** A held element: `PairMember`, plus what its runway is read from. */
+export type HeldPairMember = PairMember & Partial<Pick<HTMLMediaElement, 'buffered' | 'currentTime' | 'duration'>>;
+
+/** Enough buffered ahead to play on, or buffered to the end of the recording. */
+function hasRunway(video: HeldPairMember) {
+  if (!video.buffered || video.currentTime === undefined) return true;
+  const ahead = bufferedAheadSeconds(video, video.currentTime);
+  if (ahead >= HELD_PAIR_RUNWAY_SECONDS) return true;
+  return (
+    video.duration !== undefined &&
+    Number.isFinite(video.duration) &&
+    video.currentTime + ahead >= video.duration - RUNWAY_END_SLACK_SECONDS
+  );
+}
+
+/**
+ * Whether a pair the player paused itself may play again (GEO-3603): under a break's captured
+ * frames, or while a follower that fell far behind is brought back into step.
+ *
+ * The rule the first start uses (`pairMayStart`), plus a runway (`HELD_PAIR_RUNWAY_SECONDS`), not
+ * "both have a frame": a pair let go at its first presentable frame has nothing after it on a slow
+ * connection, so one element starves a moment later while the other runs on, and the drift that
+ * opens up turns into the next freeze. Past `PAIR_HOLD_TIMEOUT_MS` the pair plays whatever is
+ * ready, so a browser that never reports more (one that holds back buffering a paused element)
+ * cannot freeze playback for good.
+ */
+export function heldPairMayResume(slot1: HeldPairMember, slot2: HeldPairMember, heldForMs: number): boolean {
+  if (heldForMs >= PAIR_HOLD_TIMEOUT_MS || slot1.error || slot2.error) return true;
+  return pairMayStart(slot1, slot2) && hasRunway(slot1) && hasRunway(slot2);
+}
+
+/**
+ * `heldPairMayResume` for one hold, on a clock that starts now. Every hold the player takes (a
+ * break's cut, a held resync) asks through this, so the backstop has one owner.
+ */
+export function heldPairGate(slot1: HeldPairMember, slot2: HeldPairMember): () => boolean {
+  const heldAt = Date.now();
+  return () => heldPairMayResume(slot1, slot2, Date.now() - heldAt);
+}
+
+/** How many seconds `video` holds from `seconds` onward; 0 when `seconds` is not buffered. */
+export function bufferedAheadSeconds(video: Partial<Pick<HTMLMediaElement, 'buffered'>>, seconds: number): number {
+  const ranges = video.buffered;
+  if (!ranges) return 0;
+  for (let index = 0; index < ranges.length; index++) {
+    if (seconds >= ranges.start(index) && seconds <= ranges.end(index)) return ranges.end(index) - seconds;
+  }
+  return 0;
+}

@@ -50,6 +50,7 @@ import { Avatar } from '~/design-system/avatar';
 import { RetrySmall } from '~/design-system/icons/retry-small';
 import { Text } from '~/design-system/text';
 
+import { useBlockedPageTap } from './blocked-page-tap';
 import { CombinedDebatePlayer } from './combined-debate-player';
 import { DebateBreakOverlay, DebateEarlyEndLabels, useBreakCuts } from './debate-break-cues';
 import { DebateClaimCounter } from './debate-claim-counter';
@@ -58,8 +59,8 @@ import { DebateEndCard } from './debate-end-card';
 import { DebateRoundBadge, DebateRoundBanner, DebateRoundCard } from './debate-round-cues';
 import { type DebatePreviewClips, debatePreviewClips, feedFullPlaybackStartedAtom } from './feed-full-playback';
 import { FeedVideo } from './feed-video';
-import { useInlinePlaybackUnavailable } from './inline-playback';
 import { Pause, Play, Speaker, SpeakerMuted } from './icons';
+import { useInlinePlaybackUnavailable } from './inline-playback';
 import { PLAYER_EXIT_MS, PLAYER_FURNITURE_OPACITY } from './player-overlay-styles';
 import { useAnnouncementFocus } from './use-announcement-focus';
 import { useDebateEndCard } from './use-debate-end-card';
@@ -200,6 +201,9 @@ export function DebateFeedPlayer(props: DebateFeedPlayerProps) {
   return <PairedDebateFeedPlayer {...props} />;
 }
 
+/** Where a sound-on came from: the Unmute control, or inferred from Play or a tap on the page (GEO-3602). */
+type SoundSource = 'explicit' | 'play' | 'page_tap';
+
 function PairedDebateFeedPlayer({
   debate,
   active,
@@ -266,6 +270,7 @@ function PairedDebateFeedPlayer({
     isResuming,
     playbackEnded,
     mutedByUser,
+    muteChosen,
     setMutedByUser,
     playheadSeconds,
     timelineSeconds,
@@ -321,9 +326,20 @@ function PairedDebateFeedPlayer({
     slot2Src,
     active,
   });
+  // Muted only because nobody chose otherwise, so a tap may turn the sound on (GEO-3602).
+  const mutedByDefault = mutedByUser && !muteChosen;
+  /** Sound on, from the Unmute control (`explicit`) or inferred from Play or a tap on the page. */
+  const soundOn = (source: SoundSource) => {
+    if (source === 'explicit') {
+      setMutedByUser(false);
+      return;
+    }
+    setMutedByUser(false, 'inferred');
+    measurement.control('unmute', { source });
+  };
   // The hold is for autoplay. A viewer pressing play has chosen not to wait, so every control that
   // starts playback lets the pair go first.
-  const togglePlayback = () => {
+  const togglePlayback = (sound: SoundSource | null = mutedByDefault ? 'play' : null) => {
     measurement.control(playing ? 'pause' : playbackEnded ? 'replay' : 'play');
     if (playbackEnded) resetAnimationSeek();
     if (!playing) {
@@ -331,7 +347,18 @@ function PairedDebateFeedPlayer({
       setStartedDebateId(debate.id);
     }
     pair.release();
+    const starting = !playing;
     togglePlaybackRaw();
+    if (!starting) return;
+    // A play inside the tap unlocks the element for sound. Only if it started: on iOS before 16.4
+    // every event counts as a gesture, so a swipe gets here too and is refused.
+    let started = false;
+    for (const video of [slot1VideoRef.current, slot2VideoRef.current]) {
+      if (!video || video.paused) continue;
+      markGestureVideoUnlocked(video);
+      started = true;
+    }
+    if (started && sound && mutedByUser) soundOn(sound);
   };
   /**
    * The viewer asking to watch a held card.
@@ -396,6 +423,17 @@ function PairedDebateFeedPlayer({
   const onPauseTick = () => {
     if (activatingRef.current === 0) onPlaybackTick();
   };
+  /** What Unmute does on a running debate, which gives sound on a real iPhone in-app browser. */
+  const unmuteInGesture = (source: SoundSource) => {
+    activateBothInGesture();
+    soundOn(source);
+  };
+  // A tap anywhere starts a refused debate, or unmutes one muted by default, with sound (GEO-3602).
+  const refusedStart = autoplayBlocked && !userPaused && !playing;
+  useBlockedPageTap(active && !detached && (refusedStart || (playing && mutedByDefault)), () => {
+    if (playing) unmuteInGesture('page_tap');
+    else togglePlayback(mutedByDefault ? 'page_tap' : null);
+  });
   const seekBoth = (seconds: number) => {
     measurement.control('seek');
     resetAnimationSeek();
@@ -1066,7 +1104,7 @@ function PairedDebateFeedPlayer({
                   centred paused glyph and tap-to-toggle instead. */}
                 <ControlCircle
                   ariaLabel={playing ? 'Pause debate' : 'Play debate'}
-                  onClick={togglePlayback}
+                  onClick={() => togglePlayback()}
                   className="md:hidden"
                 >
                   {playing ? <Pause /> : <Play />}
@@ -1084,8 +1122,13 @@ function PairedDebateFeedPlayer({
                   ariaLabel={mutedByUser ? 'Unmute' : 'Mute'}
                   onClick={() => {
                     measurement.control(mutedByUser ? 'unmute' : 'mute');
-                    if (mutedByUser && playing) activateBothInGesture();
-                    setMutedByUser(current => !current);
+                    // On a refused card, Unmute starts it with sound.
+                    if (mutedByUser && autoplayBlocked && !playing) {
+                      togglePlayback('explicit');
+                      return;
+                    }
+                    if (mutedByUser && playing) unmuteInGesture('explicit');
+                    else setMutedByUser(current => !current);
                   }}
                   className={
                     mutedByUser
@@ -1267,7 +1310,7 @@ function PairedDebateFeedPlayer({
           <button
             type="button"
             aria-label={showReplay ? 'Replay debate' : 'Resume debate'}
-            onClick={showReplay ? playFromStart : togglePlayback}
+            onClick={showReplay ? playFromStart : () => togglePlayback()}
             className={cx(
               CENTERED_PLAYBACK_CONTROL_CLASS,
               'z-30',
