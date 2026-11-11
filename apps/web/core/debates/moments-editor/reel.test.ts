@@ -1,0 +1,214 @@
+import { describe, expect, it } from 'vitest';
+
+import { RENDERED_TURN_SEGMENTS } from '../open-rounds-media-fixtures';
+import type { DebateTranscriptWord } from './api';
+import {
+  type EditorClip,
+  type ReelWord,
+  clipProblems,
+  clipQuote,
+  clipSpeaker,
+  clipsFromLiveReel,
+  clipsFromServedMoments,
+  formatReelTime,
+  manualReelClips,
+  parseReelTime,
+  playerWords,
+  reelProblems,
+  snapEdge,
+  stepEdge,
+} from './reel';
+
+const word = (slot: 1 | 2, start: number, end: number, text = 'w'): ReelWord => ({
+  slot,
+  start_ms: start,
+  end_ms: end,
+  text,
+});
+
+const ONE_CLOCK = RENDERED_TURN_SEGMENTS.map(({ source_start_ms: _s, source_end_ms: _e, ...rest }) => rest);
+
+const clip = (start: number, end: number, claim: number | null = null): EditorClip => ({
+  key: `${start}`,
+  start_ms: start,
+  end_ms: end,
+  claim_index: claim,
+  live_claim_text: null,
+});
+
+describe('playerWords', () => {
+  const served = (start: number, end: number, source?: [number, number]): DebateTranscriptWord => ({
+    participant_slot: 1,
+    start_ms: start,
+    end_ms: end,
+    ...(source && { source_start_ms: source[0], source_end_ms: source[1] }),
+    text: `${start}`,
+  });
+
+  it('puts each word on the player’s clock and drops one the render cut', () => {
+    const words = playerWords([served(130_000, 130_400, [136_400, 136_800]), served(120_500, 120_900)]);
+    expect(words.map(w => [w.start_ms, w.end_ms])).toEqual([[136_400, 136_800]]);
+  });
+
+  it('keeps a fixed format’s words where they are, in time order', () => {
+    expect(playerWords([served(2_000, 2_400), served(1_000, 1_400)]).map(w => w.start_ms)).toEqual([1_000, 2_000]);
+  });
+});
+
+describe('clipSpeaker (as geo-chat’s manual_moments decides it)', () => {
+  it('is the debater who says most of the words wholly inside the clip', () => {
+    const words = [word(1, 0, 400), word(2, 500, 900), word(2, 1_000, 1_400)];
+    expect(clipSpeaker(words, 0, 1_500)).toBe(2);
+  });
+
+  it('counts only words wholly inside, not ones crossing an edge', () => {
+    // Slot 2's two words both cross the edges; slot 1's one word is inside.
+    const words = [word(2, 0, 400), word(1, 500, 900), word(2, 1_000, 1_400)];
+    expect(clipSpeaker(words, 200, 1_200)).toBe(1);
+  });
+
+  it('gives a tie to the lower slot', () => {
+    const words = [word(2, 0, 400), word(1, 500, 900)];
+    expect(clipSpeaker(words, 0, 1_000)).toBe(1);
+    expect(clipSpeaker([word(1, 500, 900), word(2, 0, 400)], 0, 1_000)).toBe(1);
+  });
+
+  it('is nobody when no whole word is said', () => {
+    expect(clipSpeaker([word(1, 0, 400)], 100, 300)).toBeNull();
+  });
+});
+
+describe('snapEdge', () => {
+  const words = [word(1, 1_000, 1_400, 'Coffee'), word(1, 1_500, 1_900, 'dates')];
+
+  it('takes the whole word an edge falls in: a start to its start, an end to its end', () => {
+    expect(snapEdge(1_200, words, 'start')).toBe(1_000);
+    expect(snapEdge(1_700, words, 'end')).toBe(1_900);
+  });
+
+  it('leaves an edge in silence, or on a boundary, where it is', () => {
+    expect(snapEdge(1_450, words, 'start')).toBe(1_450);
+    expect(snapEdge(1_400, words, 'end')).toBe(1_400);
+  });
+});
+
+describe('stepEdge', () => {
+  const words = [word(1, 1_000, 1_400), word(1, 1_500, 1_900), word(1, 2_000, 2_400)];
+
+  it('steps a start between word starts and an end between word ends', () => {
+    expect(stepEdge(1_000, words, 'start', 1)).toBe(1_500);
+    expect(stepEdge(1_500, words, 'start', -1)).toBe(1_000);
+    expect(stepEdge(1_400, words, 'end', 1)).toBe(1_900);
+    expect(stepEdge(1_450, words, 'end', -1)).toBe(1_400);
+  });
+
+  it('stays put past the last boundary', () => {
+    expect(stepEdge(2_400, words, 'end', 1)).toBe(2_400);
+    expect(stepEdge(1_000, words, 'start', -1)).toBe(1_000);
+  });
+});
+
+describe('clipQuote', () => {
+  it('is the words said wholly inside the clip', () => {
+    const words = [word(1, 0, 400, 'So'), word(1, 500, 900, 'coffee'), word(1, 1_000, 1_400, 'dates')];
+    expect(clipQuote(words, 450, 1_400)).toBe('coffee dates');
+  });
+});
+
+describe('clipsFromLiveReel', () => {
+  it('puts the live cuts on the player’s clock, with no claim picked', () => {
+    const clips = clipsFromLiveReel(
+      {
+        clock: 'video',
+        clips: [{ start_ms: 130_000, end_ms: 140_000, speaker_slot: 0, claim_index: 3, claim_text: 'Coffee' }],
+      },
+      RENDERED_TURN_SEGMENTS
+    );
+    expect(clips).toMatchObject([{ start_ms: 136_400, end_ms: 146_400, claim_index: null, live_claim_text: 'Coffee' }]);
+  });
+});
+
+describe('clipsFromServedMoments', () => {
+  it('reads the served moments’ word ranges onto the player’s clock and names their claims', () => {
+    const clips = clipsFromServedMoments(
+      [{ claim_index: 1, clip_start_ms: 130_000, clip_end_ms: 140_000 }, { claim_index: 0 }],
+      [{ text: 'A' }, { text: 'B' }],
+      RENDERED_TURN_SEGMENTS
+    );
+    expect(clips).toMatchObject([{ start_ms: 136_400, end_ms: 146_400, claim_index: null, live_claim_text: 'B' }]);
+  });
+});
+
+describe('clipProblems', () => {
+  const words = [word(1, 130_000, 130_400), word(1, 140_000, 140_400)];
+
+  it('finds nothing wrong with a clip inside one turn', () => {
+    expect(clipProblems(clip(129_000, 141_000), words, RENDERED_TURN_SEGMENTS)).toEqual([]);
+  });
+
+  // 120 s to 128 s on the recordings is a condensed break: geo-chat refuses a clip crossing it.
+  it('refuses an edge in a stretch the video cut', () => {
+    expect(clipProblems(clip(124_000, 141_000), words, RENDERED_TURN_SEGMENTS)).toContain(
+      'Its start falls in a stretch the video cut. Move it into a turn.'
+    );
+  });
+
+  it('refuses a clip that crosses a cut, though both its edges are placed', () => {
+    expect(clipProblems(clip(110_000, 131_000), words, RENDERED_TURN_SEGMENTS)).toContain(
+      'It crosses a cut in the video. Keep it inside one stretch.'
+    );
+    // On one clock there is no cut to cross.
+    expect(clipProblems(clip(110_000, 131_000), words, ONE_CLOCK)).toEqual([]);
+  });
+
+  it('refuses a clip longer than geo-chat takes, backwards, or without a whole word', () => {
+    expect(clipProblems(clip(129_000, 190_000), words, ONE_CLOCK)).toContain('It runs over 60 s, the most a clip can.');
+    expect(clipProblems(clip(141_000, 129_000), words, ONE_CLOCK)).toEqual(['It ends before it starts.']);
+    expect(clipProblems(clip(131_000, 139_000), words, ONE_CLOCK)).toEqual(['Nobody says a whole word in it.']);
+  });
+});
+
+describe('reelProblems', () => {
+  const words = [word(1, 1_000, 1_400), word(2, 5_000, 5_400)];
+
+  it('takes 1 to 6 clips', () => {
+    expect(reelProblems([], words)).toEqual(['A reel needs at least one clip.']);
+    expect(
+      reelProblems(
+        Array.from({ length: 7 }, (_, i) => clip(i * 10_000, i * 10_000 + 1)),
+        []
+      )
+    ).toEqual(['A reel has at most 6 clips.']);
+  });
+
+  it('refuses two clips that say exactly the same words, which geo-chat cannot both keep', () => {
+    expect(reelProblems([clip(900, 1_500), clip(800, 1_600), clip(4_900, 5_500)], words)).toEqual([
+      'Clips 1 and 2 say exactly the same words.',
+    ]);
+  });
+});
+
+describe('manualReelClips', () => {
+  it('sends seconds on the player’s clock, and a claim only where the admin picked one', () => {
+    expect(manualReelClips([clip(1_250, 9_000), clip(10_000, 20_500, 4)])).toEqual([
+      { start: 1.25, end: 9 },
+      { start: 10, end: 20.5, claim_index: 4 },
+    ]);
+  });
+});
+
+describe('reel times', () => {
+  it('formats m:ss.s and reads it back, or plain seconds', () => {
+    expect(formatReelTime(75_340)).toBe('1:15.3');
+    expect(formatReelTime(5_000)).toBe('0:05.0');
+    expect(parseReelTime('1:15.3')).toBe(75_300);
+    expect(parseReelTime('75.3')).toBe(75_300);
+    expect(parseReelTime(' 0:05 ')).toBe(5_000);
+  });
+
+  it('reads nothing that is not a time', () => {
+    expect(parseReelTime('1:75')).toBeNull();
+    expect(parseReelTime('soon')).toBeNull();
+    expect(parseReelTime('')).toBeNull();
+  });
+});

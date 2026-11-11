@@ -1,0 +1,214 @@
+import '@testing-library/jest-dom/vitest';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+
+import * as React from 'react';
+
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { GeoChatRequestError } from '../api';
+import type { MomentBackfillEntry, MomentBackfillStatus } from './api';
+import { MomentsEditor, editingBlockedReason } from './moments-editor';
+
+const DEBATE_ID = '01a0448a-61d3-7101-8434-a20fdadf6f97';
+
+const mocks = vi.hoisted(() => ({
+  backfill: {} as { isPending: boolean; error: unknown; data: { request: unknown; entry: unknown } | undefined },
+  plan: {} as { isSuccess: boolean; data: unknown; error: unknown },
+  mutate: vi.fn(),
+  toast: vi.fn(),
+}));
+
+vi.mock('../hooks', () => ({
+  useGeoChatAuth: () => ({ ready: true, authenticated: true, accountKey: 'a', getPrivyIdentityToken: async () => 't' }),
+  useDebate: () => ({
+    data: {
+      id: DEBATE_ID,
+      claim: { claim: 'A coffee date is an acceptable first date', space_id: 's' },
+      participants: [
+        { participant_slot: 1, display_name: 'Susan Winter' },
+        { participant_slot: 2, display_name: 'Urban' },
+      ],
+    },
+  }),
+  useDebateMedia: () => ({ isSuccess: true, data: { turn_segments: [] } }),
+  useDebateExtractedClaims: () => ({
+    isSuccess: true,
+    data: {
+      payload: {
+        turns: [
+          { turn_index: 0, participant_slot: 1 },
+          { turn_index: 1, participant_slot: 2 },
+        ],
+        claims: [
+          { text: 'Coffee is low stakes', turn_index: 0 },
+          { text: 'Dinner shows effort', turn_index: 1 },
+        ],
+        moments: [{ claim_index: 0, clip_start_ms: 1_000, clip_end_ms: 3_000 }],
+      },
+    },
+  }),
+}));
+
+vi.mock('./hooks', () => ({
+  isMediaAdminRefusal: (error: unknown) => error instanceof GeoChatRequestError && error.status === 403,
+  useMomentBackfill: () => mocks.backfill,
+  useMomentReelPlan: () => mocks.plan,
+  useTranscriptWords: () => ({
+    isPending: false,
+    data: {
+      word_timing: true,
+      words: [
+        { participant_slot: 1, start_ms: 1_000, end_ms: 1_400, text: 'Coffee' },
+        { participant_slot: 1, start_ms: 1_500, end_ms: 2_900, text: 'dates' },
+        { participant_slot: 2, start_ms: 5_000, end_ms: 5_400, text: 'Dinner' },
+      ],
+    },
+  }),
+  useQueueMomentReel: () => ({ mutate: mocks.mutate, isPending: false }),
+  useRefreshAfterReel: () => () => {},
+}));
+
+vi.mock('../browse/debate-feed-player', () => ({ DebateFeedPlayer: () => <div data-testid="player" /> }));
+vi.mock('~/core/hooks/use-toast', () => ({ useToast: () => [null, mocks.toast] }));
+
+const entry = (overrides: Partial<MomentBackfillEntry> = {}): MomentBackfillEntry => ({
+  debate_id: DEBATE_ID,
+  refusal: null,
+  path: 'stored',
+  claims: 2,
+  timed_claims: 2,
+  reel_version: 'v1',
+  hand_picked: null,
+  queued: false,
+  request: null,
+  ...overrides,
+});
+
+const status = (overrides: Partial<MomentBackfillStatus>): MomentBackfillStatus => ({
+  debate_id: DEBATE_ID,
+  status: 'queued',
+  requested_by: 'space',
+  reason: 'r',
+  requested_at: '2026-11-11T20:00:00Z',
+  recut: true,
+  preview: false,
+  outcome: null,
+  report: null,
+  last_error: null,
+  completed_at: null,
+  ...overrides,
+});
+
+beforeAll(() => {
+  window.ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  } as unknown as typeof ResizeObserver;
+});
+
+beforeEach(() => {
+  mocks.backfill = { isPending: false, error: null, data: { request: null, entry: null } };
+  mocks.plan = { isSuccess: true, data: entry(), error: null };
+  mocks.mutate.mockReset();
+});
+afterEach(cleanup);
+
+describe('MomentsEditor (GEO-3671)', () => {
+  it('shows nothing of the editor to someone geo-chat refuses as a media admin', () => {
+    mocks.backfill = {
+      isPending: false,
+      error: new GeoChatRequestError('no', 'media_admin_required', 403),
+      data: undefined,
+    };
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    expect(screen.getByText("Only media admins can edit a debate's moments.")).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Publish reel' })).not.toBeInTheDocument();
+  });
+
+  it('opens on the live cuts when geo-chat serves them, on the player’s clock', () => {
+    mocks.plan.data = entry({
+      live_reel: {
+        clock: 'video',
+        clips: [{ start_ms: 900, end_ms: 3_000, speaker_slot: 1, claim_index: 0, claim_text: 'Coffee is low stakes' }],
+      },
+    });
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    expect(screen.getByRole('textbox', { name: 'Start time' })).toHaveValue('0:00.9');
+    expect(screen.getByText('Coffee dates')).toBeInTheDocument();
+    expect(screen.getByText('Susan Winter')).toBeInTheDocument();
+    expect(screen.queryByText(/times are approximate/)).not.toBeInTheDocument();
+  });
+
+  it('falls back to the served moments with a note that their times are approximate', () => {
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    expect(screen.getByText(/start and end times are\s+approximate/)).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Start time' })).toHaveValue('0:01.0');
+  });
+
+  it('is read-only, and says why, when the dry run refuses the debate', () => {
+    mocks.plan.data = entry({ refusal: 'media_job_active' });
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    expect(screen.getByText(/still being processed/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Preview' })).toBeDisabled();
+    expect(screen.getByRole('textbox', { name: 'Start time' })).toBeDisabled();
+  });
+
+  it('never says the reel is live while it is only queued', () => {
+    mocks.backfill.data = { request: status({ status: 'queued' }), entry: null };
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    expect(screen.getByText('Queued · live reel unchanged')).toBeInTheDocument();
+    expect(screen.queryByText(/is live/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Preview' })).toBeDisabled();
+  });
+
+  it('publishes on the player’s clock, from the version it opened on, with no claim unless one was picked', () => {
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    fireEvent.change(screen.getByRole('textbox', { name: 'End time' }), { target: { value: '1.45' } });
+    fireEvent.blur(screen.getByRole('textbox', { name: 'End time' }));
+    // 1.45 s is in silence after "Coffee", so it stays.
+    expect(screen.getByRole('textbox', { name: 'End time' })).toHaveValue('0:01.5');
+    fireEvent.click(screen.getByRole('button', { name: 'Publish reel' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Publish and lock' }));
+
+    expect(mocks.mutate).toHaveBeenCalledWith(
+      {
+        preview: false,
+        reason: 'Moments editor: hand-picked reel',
+        reel: { clock: 'player', clips: [{ start: 1, end: 1.45 }], base: 'v1' },
+      },
+      expect.any(Object)
+    );
+  });
+
+  it('snaps a typed edge that falls mid-word out to the whole word', () => {
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    fireEvent.change(screen.getByRole('textbox', { name: 'End time' }), { target: { value: '2.0' } });
+    fireEvent.blur(screen.getByRole('textbox', { name: 'End time' }));
+    expect(screen.getByRole('textbox', { name: 'End time' })).toHaveValue('0:02.9');
+  });
+
+  it('offers Return to automatic only for a hand-picked reel, and sends the version with it', () => {
+    mocks.plan.data = entry({ hand_picked: { requested_by: 'space', requested_at: '2026-11-11T19:00:00Z' } });
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    expect(screen.getByText('Hand-picked · locked')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Return to automatic' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Unlock and re-pick' }));
+    expect(mocks.mutate).toHaveBeenCalledWith(
+      { unlock: true, reason: 'Moments editor: return to automatic', base: 'v1' },
+      expect.any(Object)
+    );
+  });
+});
+
+describe('editingBlockedReason', () => {
+  it('leaves an editable debate, or one with a request in the queue, editable', () => {
+    expect(editingBlockedReason({ refusal: null }, true, null)).toBeNull();
+    expect(editingBlockedReason({ refusal: 'already_queued' }, true, null)).toBeNull();
+  });
+
+  it('blocks a transcript without word timings, and a failed check', () => {
+    expect(editingBlockedReason({ refusal: null }, false, null)).toMatch(/no word timings/);
+    expect(editingBlockedReason(null, true, new Error('x'))).toMatch(/Couldn't check/);
+  });
+});
