@@ -3,6 +3,7 @@
 import * as React from 'react';
 
 import { atom, useAtom } from 'jotai';
+import { atomWithStorage } from 'jotai/utils';
 
 import { reportEvent } from '~/core/telemetry/logger';
 import { forgetGestureVideoUnlock } from '~/core/utils/video/gesture-media-pool';
@@ -46,10 +47,10 @@ type PlaybackUrls = {
 // state and they'd have to unmute every single video. Defaults to muted so the cold-start
 // autoplay isn't blocked by the browser's autoplay policy.
 //
-// `feedSoundChoiceAtom` is what the viewer chose with the Mute control, the part to persist.
-// `feedSoundInferredAtom` is sound turned on by a tap or Play (GEO-3602), for this session only.
+// `feedSoundChoiceAtom` is what the viewer chose with the Mute control, saved across visits.
+// `feedSoundInferredAtom` is sound turned on by a tap or Play, for this session only.
 export type FeedSoundChoice = 'default' | 'muted' | 'unmuted';
-const feedSoundChoiceAtom = atom<FeedSoundChoice>('default');
+const feedSoundChoiceAtom = atomWithStorage<FeedSoundChoice>('debateFeedSoundChoice', 'default');
 const feedSoundInferredAtom = atom(false);
 /** `explicit` is the Mute control; `inferred` is a tap or Play taken to mean the viewer wants sound. */
 export type MuteSource = 'explicit' | 'inferred';
@@ -271,7 +272,13 @@ export function useDebatePlayback(
   // would pause and desync that video. Start muted; the viewer unmutes on tap.
   const [soundChoice, setSoundChoice] = useAtom(feedSoundChoiceAtom);
   const [soundInferred, setSoundInferred] = useAtom(feedSoundInferredAtom);
-  const mutedPreference = soundChoice === 'default' ? !soundInferred : soundChoice === 'muted';
+  // Arrived by a click (Explore card, link), so the browser allows sound. A cold load stays muted.
+  const [arrivedByGesture, setArrivedByGesture] = React.useState(false);
+  React.useEffect(() => {
+    if (navigator.userActivation?.hasBeenActive) setArrivedByGesture(true);
+  }, []);
+  const mutedPreference =
+    soundChoice === 'default' ? !(soundInferred || arrivedByGesture) : soundChoice === 'muted';
   /** The viewer pressed Mute, so a tap must not turn the sound on. */
   const muteChosen = soundChoice === 'muted';
   /*
