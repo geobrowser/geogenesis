@@ -242,7 +242,9 @@ function PairedDebateFeedPlayer({
   const autoStarted = (active || buffer) && debateStreamsFully(debate.recordings);
   // Signed only while this card is held and near the viewport; nothing at all with the flag off.
   const preview = useDebatePreviewClips(debate, holdFullPlayback && !cardStarted && (active || preload));
-  const held = holdFullPlayback && (preview.available ? !(cardStarted || autoStarted) : !fullPlaybackStarted);
+  // The hold rule keys on either slot having a preview, not on the pair being shown: a one-clip
+  // debate shows stills (GEO-3641) but must not fall back to the tab-wide rule and buffer raw media.
+  const held = holdFullPlayback && (preview.hasAnyPreview ? !(cardStarted || autoStarted) : !fullPlaybackStarted);
   // Loading is deliberately wider than playing. `useDebatePlayback`'s flag gates only the URL
   // fetch and the transcript query — playback is driven by `active` in the effect below — so a
   // preloading card fetches without autoplaying off-screen.

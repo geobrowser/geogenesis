@@ -29,6 +29,12 @@ export type DebatePreviewClipsState = {
    * one clip has none.
    */
   available: boolean;
+  /**
+   * Whether either slot has a preview, from the debate alone. What the card's hold rule keys on, as
+   * it did before clips were shown only as a pair: a one-clip debate still holds per card, and
+   * still autoplays when fully streamed, though it shows stills.
+   */
+  hasAnyPreview: boolean;
   /** How far slot 2's clip runs ahead of slot 1's to show the same instant; see `previewPairOffsetSeconds`. */
   offsetSeconds: number;
   /** A clip element failed: sign that slot again, once; after that the slot shows its still. */
@@ -63,11 +69,12 @@ export function useDebatePreviewClips(
   const recordingUrls = useRecordingPlaybackUrl();
   const slot1Recording = recordingForSlot(debate, 1);
   const slot2Recording = recordingForSlot(debate, 2);
-  const bothHavePreview =
-    recordingHasPreview(slot1Recording, { enabled: streamEnabled }) &&
-    recordingHasPreview(slot2Recording, { enabled: streamEnabled }) &&
-    Boolean(slot1Recording?.filename) &&
-    Boolean(slot2Recording?.filename);
+  const slot1HasPreview =
+    recordingHasPreview(slot1Recording, { enabled: streamEnabled }) && Boolean(slot1Recording?.filename);
+  const slot2HasPreview =
+    recordingHasPreview(slot2Recording, { enabled: streamEnabled }) && Boolean(slot2Recording?.filename);
+  const bothHavePreview = slot1HasPreview && slot2HasPreview;
+  const hasAnyPreview = slot1HasPreview || slot2HasPreview;
   const slot1Filename = bothHavePreview ? (slot1Recording?.filename ?? null) : null;
   const slot2Filename = bothHavePreview ? (slot2Recording?.filename ?? null) : null;
   const available = bothHavePreview;
@@ -197,7 +204,7 @@ export function useDebatePreviewClips(
     () => (pairReady ? { slot1: slot1Url, slot2: slot2Url } : { slot1: null, slot2: null }),
     [pairReady, slot1Url, slot2Url]
   );
-  return { clips, available, offsetSeconds, refresh };
+  return { clips, available, hasAnyPreview, offsetSeconds, refresh };
 }
 
 /** How far apart the two clips may drift before slot 2 is moved back into step, in seconds. */

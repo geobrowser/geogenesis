@@ -42,6 +42,7 @@ const previewMocks = vi.hoisted(() => ({
   state: null as null | {
     clips: { slot1: string | null; slot2: string | null };
     available: boolean;
+    hasAnyPreview: boolean;
     offsetSeconds: number;
     refresh: (slot: 1 | 2) => void;
   },
@@ -57,6 +58,7 @@ vi.mock('./use-debate-preview-clips', async importOriginal => {
         previewMocks.state ?? {
           clips: { slot1: null, slot2: null },
           available: false,
+          hasAnyPreview: false,
           offsetSeconds: 0,
           refresh: () => {},
         }
@@ -3407,7 +3409,7 @@ describe('Cloudflare Stream previews and full playback (NEXT_PUBLIC_DEBATE_STREA
   const stills = { slot1: 'https://cdn.test/still-1.jpg', slot2: 'https://cdn.test/still-2.jpg' };
   const bothClips = { slot1: 'https://stream.test/p1.mp4', slot2: 'https://stream.test/p2.mp4' };
   const withPreview = (clips: { slot1: string | null; slot2: string | null }, refresh = vi.fn()) => {
-    previewMocks.state = { clips, available: true, offsetSeconds: 0.2, refresh };
+    previewMocks.state = { clips, available: true, hasAnyPreview: true, offsetSeconds: 0.2, refresh };
     return refresh;
   };
   const clipSrcs = (container: HTMLElement) =>
@@ -3455,6 +3457,33 @@ describe('Cloudflare Stream previews and full playback (NEXT_PUBLIC_DEBATE_STREA
     expect(clipSrcs(container)).toEqual([]);
     expect(container.querySelectorAll('[data-debate-poster]')).toHaveLength(2);
     expect(getByRole('button', { name: 'Play debate' })).toBeTruthy();
+  });
+
+  it('keeps a one-clip debate held per card: stills after a tap elsewhere, autoplay when fully streamed (GEO-3641)', () => {
+    // The hook offers no clips for a one-clip debate, but it still has a preview.
+    previewMocks.state = {
+      clips: { slot1: null, slot2: null },
+      available: false,
+      hasAnyPreview: true,
+      offsetSeconds: 0,
+      refresh: vi.fn(),
+    };
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1, playing: false, posters: stills });
+    const { container, rerender } = render(<DebateFeedPlayer debate={debate} active holdFullPlayback />);
+    expect(container.querySelectorAll('video')).toHaveLength(0);
+
+    // Another card was played: this one is still held, so it does not attach its raw recordings.
+    act(() => getDefaultStore().set(feedFullPlaybackStartedAtom, true));
+    rerender(<DebateFeedPlayer debate={debate} active holdFullPlayback />);
+    expect(container.querySelectorAll('video')).toHaveLength(0);
+    expect(container.querySelector('[data-debate-full-playback-held="true"]')).toBeTruthy();
+    expect(mocks.mediaAttached.at(-1)).toBe(false);
+
+    // Fully streamed, it starts on its own as before.
+    streamMocks.streamsFully = true;
+    rerender(<DebateFeedPlayer debate={{ ...debate }} active holdFullPlayback />);
+    expect(container.querySelector('[data-debate-full-playback-held="true"]')).toBeFalsy();
+    expect(mocks.mediaAttached.at(-1)).toBe(true);
   });
 
   it('drops both clips back to stills when the browser refuses either, and Play still starts the debate (GEO-3641)', async () => {

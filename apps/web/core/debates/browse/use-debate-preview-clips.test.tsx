@@ -49,6 +49,7 @@ describe('useDebatePreviewClips', () => {
     await Promise.resolve();
 
     expect(result.current.available).toBe(false);
+    expect(result.current.hasAnyPreview).toBe(false);
     expect(result.current.clips).toEqual({ slot1: null, slot2: null });
     expect(mocks.lookup).not.toHaveBeenCalled();
   });
@@ -62,6 +63,7 @@ describe('useDebatePreviewClips', () => {
     await Promise.resolve();
     // Known from the debate alone, so the card holds the same way before and after signing.
     expect(result.current.available).toBe(true);
+    expect(result.current.hasAnyPreview).toBe(true);
     expect(mocks.lookup).not.toHaveBeenCalled();
 
     rerender({ near: true });
@@ -86,6 +88,8 @@ describe('useDebatePreviewClips', () => {
     });
 
     expect(result.current.available).toBe(false);
+    // Still a preview debate for the card's hold rule.
+    expect(result.current.hasAnyPreview).toBe(true);
     expect(result.current.clips).toEqual({ slot1: null, slot2: null });
     expect(mocks.lookup).not.toHaveBeenCalled();
   });
