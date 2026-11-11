@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Debate } from '~/core/debates/api';
 
 import { tapMayStartBlockedDebate } from './blocked-page-tap';
-import { DebateFeedPlayer } from './debate-feed-player';
+import { DebateFeedPlayer, debateLengthLabel } from './debate-feed-player';
 
 const mocks = vi.hoisted(() => ({
   lookup: vi.fn(),
@@ -82,6 +82,8 @@ const media = (v: HTMLMediaElement) => {
 };
 
 let inTap = false;
+/** What `(hover: none), (pointer: coarse)` answers: a phone or tablet. */
+let touchScreen = false;
 /** Muted autoplay allowed outside a tap, as in the in-app browsers that autoplay but keep it muted. */
 let mutedAutoplay = false;
 
@@ -91,6 +93,16 @@ beforeEach(() => {
   plays.length = 0;
   inTap = false;
   mutedAutoplay = false;
+  touchScreen = false;
+  Object.defineProperty(window, 'matchMedia', {
+    configurable: true,
+    value: (query: string) => ({
+      matches: touchScreen,
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    }),
+  });
   window.localStorage.clear();
   vi.spyOn(Date, 'now').mockImplementation(() => now);
   mocks.lookup.mockReset();
@@ -127,6 +139,7 @@ beforeEach(() => {
   });
 });
 afterEach(() => {
+  delete (window as { matchMedia?: unknown }).matchMedia;
   vi.restoreAllMocks();
   cleanup();
   document.body.innerHTML = '';
@@ -333,10 +346,10 @@ describe("DebateFeedPlayer, refused autoplay started by the card's own controls"
     return view;
   }
 
-  it('starts with sound from the play button', async () => {
+  it('starts with sound from the Watch the debate button', async () => {
     const view = await mutedBlockedPlayer();
 
-    tap(view.getByRole('button', { name: 'Play debate' }));
+    tap(view.getByRole('button', { name: /^Watch the debate/ }));
 
     expect(plays).toHaveLength(2);
     await waitFor(() => expect(view.getByRole('button', { name: 'Mute' })).toBeTruthy(), { timeout: 8_000 });
@@ -502,5 +515,151 @@ describe('DebateFeedPlayer, muted autoplay given sound by a tap', () => {
 
     expect(view.getByRole('button', { name: 'Unmute' })).toBeTruthy();
     expect(videos(view.container).every(video => video.muted)).toBe(true);
+  }, 15_000);
+});
+
+describe('debateLengthLabel', () => {
+  it.each([
+    [0, null],
+    [Number.NaN, null],
+    [20_000, '1 min'],
+    [89_000, '1 min'],
+    [91_000, '2 min'],
+    [600_000, '10 min'],
+  ])('%s ms -> %s', (ms, expected) => {
+    expect(debateLengthLabel(ms)).toBe(expected);
+  });
+});
+
+const watchPrompt = (c: HTMLElement) => c.querySelector('[data-debate-watch-prompt]');
+const soundHint = (c: HTMLElement) => c.querySelector('[data-debate-sound-hint]');
+
+describe('DebateFeedPlayer, the Watch the debate prompt on a refused card', () => {
+  it('replaces the paused look while refused, and goes once the debate plays', async () => {
+    const view = await blockedPlayer();
+    await untilBlocked(view.container);
+
+    // Two 5-minute turns.
+    expect(view.getByRole('button', { name: 'Watch the debate · 10 min' })).toBeTruthy();
+    expect(view.container.querySelector('[data-debate-refused-dim]')).not.toBeNull();
+    expect(view.container.querySelector('input[type="range"]')).toBeNull();
+    expect(view.queryByRole('button', { name: 'Play debate' })).toBeNull();
+    expect(view.queryByRole('button', { name: 'Resume debate' })).toBeNull();
+
+    tap(view.getByRole('button', { name: /^Watch the debate/ }));
+
+    expect(plays).toHaveLength(2);
+    await waitFor(() => expect(blockedState(view.container)).toBe('false'), { timeout: 8_000 });
+    await waitFor(() => expect(watchPrompt(view.container)).toBeNull(), { timeout: 8_000 });
+    expect(view.container.querySelector('[data-debate-refused-dim]')).toBeNull();
+    expect(view.getByRole('button', { name: 'Mute' })).toBeTruthy();
+  }, 15_000);
+
+  it('goes too when a tap elsewhere on the page starts it', async () => {
+    const view = await blockedPlayer();
+    await untilBlocked(view.container);
+
+    tap(outside('<p>text</p>'), 'touchend');
+
+    await waitFor(() => expect(watchPrompt(view.container)).toBeNull(), { timeout: 8_000 });
+  }, 15_000);
+
+  it('goes when the refused card stops being the active one', async () => {
+    const view = await blockedPlayer();
+    await untilBlocked(view.container);
+    expect(watchPrompt(view.container)).not.toBeNull();
+
+    view.rerender(
+      <Provider>
+        <DebateFeedPlayer debate={debate} active={false} />
+      </Provider>
+    );
+
+    expect(watchPrompt(view.container)).toBeNull();
+    expect(view.container.querySelector('[data-debate-refused-dim]')).toBeNull();
+  }, 15_000);
+
+  it("takes the tiles' play surfaces out of the tab order and from AT, but a tap on one still starts it", async () => {
+    const view = await blockedPlayer();
+    await untilBlocked(view.container);
+
+    const tiles = Array.from(view.container.querySelectorAll<HTMLButtonElement>('[aria-label="Pause or play"]'));
+    expect(tiles).toHaveLength(2);
+    for (const tile of tiles) {
+      expect(tile.tabIndex).toBe(-1);
+      expect(tile.getAttribute('aria-hidden')).toBe('true');
+    }
+    expect(view.queryByRole('button', { name: 'Pause or play' })).toBeNull();
+
+    tap(tiles[0]);
+
+    expect(plays).toHaveLength(2);
+    await waitFor(() => expect(watchPrompt(view.container)).toBeNull(), { timeout: 8_000 });
+    for (const tile of view.container.querySelectorAll('[aria-label="Pause or play"]')) {
+      expect(tile.hasAttribute('tabindex')).toBe(false);
+      expect(tile.hasAttribute('aria-hidden')).toBe(false);
+    }
+  }, 15_000);
+
+  it('is not shown on a debate that autoplays', async () => {
+    mutedAutoplay = true;
+    const view = renderPlayer();
+    await waitFor(() => expect(view.container.querySelectorAll('video')).toHaveLength(2));
+    canplayAll(view.container);
+    await waitFor(() => expect(playingState(view.container)).toBe('true'), { timeout: 8_000 });
+
+    expect(watchPrompt(view.container)).toBeNull();
+  }, 15_000);
+});
+
+describe('DebateFeedPlayer, the Tap for sound hint', () => {
+  async function mutedPlaying() {
+    mutedAutoplay = true;
+    const view = renderPlayer();
+    await waitFor(() => expect(view.container.querySelectorAll('video')).toHaveLength(2));
+    canplayAll(view.container);
+    await waitFor(() => expect(playingState(view.container)).toBe('true'), { timeout: 8_000 });
+    await act(async () => {});
+    return view;
+  }
+
+  it('shows on a touch screen while muted only by default, and goes once a tap gives sound', async () => {
+    touchScreen = true;
+    const view = await mutedPlaying();
+    expect(soundHint(view.container)?.textContent).toBe('Tap for sound');
+
+    tap(outside('<p>text</p>'), 'touchend');
+
+    await waitFor(() => expect(view.getByRole('button', { name: 'Mute' })).toBeTruthy(), { timeout: 8_000 });
+    expect(soundHint(view.container)).toBeNull();
+  }, 15_000);
+
+  it('goes after Unmute, and stays gone after an explicit Mute', async () => {
+    touchScreen = true;
+    const view = await mutedPlaying();
+    expect(soundHint(view.container)).not.toBeNull();
+
+    tap(view.getByRole('button', { name: 'Unmute' }));
+    expect(soundHint(view.container)).toBeNull();
+    tap(view.getByRole('button', { name: 'Mute' }));
+
+    expect(view.getByRole('button', { name: 'Unmute' })).toBeTruthy();
+    expect(soundHint(view.container)).toBeNull();
+  }, 15_000);
+
+  it('is not shown without a touch screen', async () => {
+    const view = await mutedPlaying();
+
+    expect(view.getByRole('button', { name: 'Unmute' })).toBeTruthy();
+    expect(soundHint(view.container)).toBeNull();
+  }, 15_000);
+
+  it('is not shown on a refused card, which has the prompt instead', async () => {
+    touchScreen = true;
+    const view = await blockedPlayer();
+    await untilBlocked(view.container);
+
+    expect(watchPrompt(view.container)).not.toBeNull();
+    expect(soundHint(view.container)).toBeNull();
   }, 15_000);
 });
