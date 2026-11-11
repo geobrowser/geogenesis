@@ -81,7 +81,11 @@ vi.mock('~/core/debates/stream-playback', async importOriginal => {
 
 // hls.js, for a stream slot in a browser without native HLS (jsdom has none).
 const hlsMocks = vi.hoisted(() => {
-  const instances: Array<{ loadSource: ReturnType<typeof vi.fn>; attachMedia: ReturnType<typeof vi.fn> }> = [];
+  const instances: Array<{
+    loadSource: ReturnType<typeof vi.fn>;
+    attachMedia: ReturnType<typeof vi.fn>;
+    config: { startPosition?: number };
+  }> = [];
   class FakeHls {
     static isSupported = () => true;
     static Events = { ERROR: 'hlsError' };
@@ -89,7 +93,9 @@ const hlsMocks = vi.hoisted(() => {
     attachMedia = vi.fn();
     startLoad = vi.fn();
     destroy = vi.fn();
-    constructor() {
+    config: { startPosition?: number };
+    constructor(config: { startPosition?: number } = {}) {
+      this.config = config;
       instances.push(this);
     }
     on() {}
@@ -311,6 +317,7 @@ function controllerFixture(overrides: {
     suspend: vi.fn(),
     seekBoth: overrides.seekBoth ?? vi.fn(),
     livePositionMs: () => mocks.livePosition?.() ?? null,
+    recordingStartSeconds: () => 0,
     beginScrub: vi.fn(),
     endScrub: vi.fn(),
   };
@@ -844,7 +851,7 @@ describe('a refused autoplay', () => {
       return render(<DebateFeedPlayer debate={{ id: 'debate-1' } as unknown as Debate} active />);
     })();
 
-    expect(container.querySelector('[aria-label="Resume debate"]')).not.toBeNull();
+    expect(container.querySelector('[data-debate-watch-prompt]')).not.toBeNull();
   });
 
   it('shows nothing extra while playback is running normally', () => {
@@ -852,6 +859,7 @@ describe('a refused autoplay', () => {
     const { container } = render(<DebateFeedPlayer debate={{ id: 'debate-1' } as unknown as Debate} active />);
 
     expect(container.querySelector('[aria-label="Resume debate"]')).toBeNull();
+    expect(container.querySelector('[data-debate-watch-prompt]')).toBeNull();
   });
 });
 
@@ -3607,6 +3615,25 @@ describe('Cloudflare Stream previews and full playback (NEXT_PUBLIC_DEBATE_STREA
     await vi.waitFor(() => expect(hlsMocks.instances).toHaveLength(1));
     expect(hlsMocks.instances[0].loadSource).toHaveBeenCalledWith('https://stream.test/v1/manifest/video.m3u8');
     expect(hlsMocks.instances[0].attachMedia).toHaveBeenCalledWith(slot1);
+  });
+
+  it('loads a stream slot from where the controller says its recording starts (GEO-3604)', async () => {
+    const recordingStartSeconds = vi.fn((slot: 1 | 2) => (slot === 1 ? 4.92 : 3.38));
+    mocks.controller = {
+      ...controllerFixture({
+        mutedByUser: true,
+        turnSlot: 1,
+        urls: { slot1: 'https://stream.test/v1/manifest/video.m3u8', slot2: 'https://cdn.test/slot2.webm' },
+      }),
+      streams: { slot1: true, slot2: false },
+      recordingStartSeconds,
+    };
+    render(<DebateFeedPlayer debate={debate} active />);
+
+    await vi.waitFor(() => expect(hlsMocks.instances).toHaveLength(1));
+    // The active card buffers at once, so the position goes in as config.
+    expect(hlsMocks.instances[0].config.startPosition).toBe(4.92);
+    expect(recordingStartSeconds).toHaveBeenCalledWith(1);
   });
 
   it('keeps a native-HLS stream slot at metadata on the active card, where iOS strands a seek made under auto', () => {

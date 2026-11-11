@@ -129,6 +129,9 @@ export function loadHls(): Promise<HlsModule> {
  *
  * `playOnAttach` calls `play()` after the source is attached: attaching restarts the load.
  *
+ * `startPosition`, read when loading starts, is where hls.js fetches its first segment, so a
+ * recording that plays from partway in skips the segments before it. Later seeks are unaffected.
+ *
  * Buffering is capped at `HLS_MAX_BUFFER_SECONDS` ahead. hls.js's own target is the larger of 30
  * seconds and 60 MB at the current bitrate, so a 720p rendition of a few Mbit/s asks for around
  * four minutes: measured in Firefox, ~100 MB in the first 17 seconds of the feed, with both playing
@@ -141,12 +144,15 @@ export function attachStreamSource(
     autoStartLoad = true,
     playOnAttach = false,
     onFatalError,
+    startPosition,
     nativeHls = canPlayNativeHls(),
     load = loadHls,
   }: {
     autoStartLoad?: boolean;
     playOnAttach?: boolean;
     onFatalError?: () => void;
+    /** Seconds into the recording; null or absent starts at hls.js's default. */
+    startPosition?: () => number | null;
     nativeHls?: boolean;
     load?: () => Promise<HlsModule>;
   } = {}
@@ -166,10 +172,19 @@ export function attachStreamSource(
   let started = autoStartLoad;
   let hls: InstanceType<HlsModule['default']> | null = null;
   const onPlay = () => startLoad();
+  // hls.js's own spelling of "its default" is -1.
+  const firstPosition = () => {
+    const seconds = startPosition?.();
+    return seconds != null && Number.isFinite(seconds) && seconds > 0 ? seconds : -1;
+  };
   function startLoad() {
     if (started) return;
     started = true;
-    hls?.startLoad();
+    if (!hls) return;
+    const position = firstPosition();
+    // Before the manifest arrives, hls.js only flags the start and loads from `config.startPosition`.
+    hls.config.startPosition = position;
+    hls.startLoad(position);
   }
 
   void load().then(
@@ -180,7 +195,11 @@ export function attachStreamSource(
         play();
         return;
       }
-      hls = new Hls({ autoStartLoad: started, maxMaxBufferLength: HLS_MAX_BUFFER_SECONDS });
+      hls = new Hls({
+        autoStartLoad: started,
+        startPosition: started ? firstPosition() : -1,
+        maxMaxBufferLength: HLS_MAX_BUFFER_SECONDS,
+      });
       hls.on(Hls.Events.ERROR, (_event, data) => {
         if (data.fatal) onFatalError?.();
       });
