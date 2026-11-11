@@ -2,13 +2,11 @@
 
 import { useQuery } from '@tanstack/react-query';
 
-import { createPublicClient, http } from 'viem';
-
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSpace } from '~/core/hooks/use-space';
-import { readFastPathRestricted } from '~/core/utils/contracts/read-space-membership';
-import { DAOSpaceAbi, FAST_PATH_RESTRICTED_ROLE } from '~/core/utils/contracts/space-registry';
-import { GEOGENESIS } from '~/core/wallet/geo-chain';
+import { daoAddressQueryKey } from '~/core/io/query-keys';
+import { readRoleAt, resolveDaoAddress } from '~/core/utils/contracts/read-space-membership';
+import { FAST_PATH_RESTRICTED_ROLE } from '~/core/utils/contracts/space-registry';
 
 /** Prefix shared by every fast-path restriction read, for invalidation after a change. */
 export const FAST_PATH_RESTRICTED_QUERY_KEY = 'fast-path-restricted';
@@ -39,13 +37,7 @@ export function useIsFastPathRestricted(spaceAddress?: string, authorSpaceId?: s
       if (!spaceAddress || !authorSpaceId) return false;
 
       try {
-        const publicClient = createPublicClient({ chain: GEOGENESIS, transport: http() });
-        return await publicClient.readContract({
-          address: spaceAddress as `0x${string}`,
-          abi: DAOSpaceAbi,
-          functionName: 'hasRole',
-          args: [FAST_PATH_RESTRICTED_ROLE, `0x${authorSpaceId.replace(/-/g, '')}` as `0x${string}`],
-        });
+        return await readRoleAt(spaceAddress as `0x${string}`, authorSpaceId, FAST_PATH_RESTRICTED_ROLE);
       } catch {
         return false;
       }
@@ -72,13 +64,26 @@ export function useViewerVotingMode({ spaceId, isEditor }: { spaceId: string; is
  * read as "unrestricted", because acting on a wrong answer sends a transaction that reverts.
  */
 export function useFastPathRestriction(spaceId?: string, memberSpaceId?: string | null) {
-  const { data, isLoading, isError } = useQuery({
-    queryKey: [FAST_PATH_RESTRICTED_QUERY_KEY, 'fresh', spaceId, memberSpaceId],
-    enabled: Boolean(spaceId) && Boolean(memberSpaceId),
+  // One registry lookup per space, shared by every row of a dialog; only the role is read per row.
+  // The address is cached for the session (like `isSpaceActiveOnChain`): a space migrated mid-session
+  // is read at its new DAO after a reload.
+  const dao = useQuery({
+    queryKey: daoAddressQueryKey(spaceId ?? ''),
+    enabled: Boolean(spaceId),
+    staleTime: Infinity,
+    queryFn: () => resolveDaoAddress(spaceId!),
+  });
+  const role = useQuery({
+    queryKey: [FAST_PATH_RESTRICTED_QUERY_KEY, 'fresh', dao.data, memberSpaceId],
+    enabled: Boolean(dao.data) && Boolean(memberSpaceId),
     staleTime: 0,
     refetchOnWindowFocus: false,
-    queryFn: () => readFastPathRestricted(spaceId!, memberSpaceId!),
+    queryFn: () => readRoleAt(dao.data!, memberSpaceId!, FAST_PATH_RESTRICTED_ROLE),
   });
 
-  return { isRestricted: data, isLoading, isError };
+  return {
+    isRestricted: role.data,
+    isLoading: dao.isLoading || role.isLoading,
+    isError: dao.isError || role.isError,
+  };
 }

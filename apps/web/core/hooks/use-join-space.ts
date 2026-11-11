@@ -7,13 +7,12 @@ import { useSetAtom } from 'jotai';
 import { useAuthResolving } from '~/core/hooks/use-auth-resolving';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
-import { useRequestToBeMember } from '~/core/hooks/use-request-to-be-member';
+import { LOCKED_OUT, useRequestToBeMember } from '~/core/hooks/use-request-to-be-member';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
-import { lockedOutJoinLinkAtom } from '~/core/state/locked-out-join';
+import { lockedOutJoinAtom } from '~/core/state/locked-out-join';
 import { useQueuedAction } from '~/core/state/pending-actions';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
-import { addBackLink } from '~/core/utils/add-back-link';
-import { readFastPathRestricted } from '~/core/utils/contracts/read-space-membership';
+import { readLockedOutLink } from '~/core/utils/add-back-link';
 
 type UseJoinSpaceArgs = {
   spaceId: string;
@@ -40,7 +39,7 @@ type UseJoinSpaceArgs = {
  * persisted membership bridge takes over.
  */
 export function useJoinSpace({ spaceId, space }: UseJoinSpaceArgs) {
-  const { requestToBeMember, requestToBeMemberAsync, status } = useRequestToBeMember({ spaceId, space });
+  const { requestToBeMember, requestToBeMemberAsync, status, reset } = useRequestToBeMember({ spaceId, space });
   const { smartAccount } = useSmartAccount();
   const { personalSpaceId, isRegistered, isLoading: isPersonalSpaceLoading } = usePersonalSpaceId();
   // Signed in without a usable space, the request is held only when one is on its way: being created
@@ -60,27 +59,30 @@ export function useJoinSpace({ spaceId, space }: UseJoinSpaceArgs) {
     id: `join:${spaceId}`,
     component: 'join_space_button',
     label: 'your membership request',
-    run: (_intent, { isCurrent }) => requestToBeMemberAsync({ fromQueue: true, isCurrent }).then(() => {}),
+    // A lock-out opens the Ask-an-editor dialog; put the button back to Join rather than "requested".
+    run: (_intent, { isCurrent }) =>
+      requestToBeMemberAsync({ fromQueue: true, isCurrent }).then(outcome => {
+        if (outcome === LOCKED_OUT) reset();
+      }),
   });
   const optimisticRequested = queuedJoin.isQueued;
 
   const canRequestLive = Boolean(smartAccount && isRegistered && personalSpaceId);
   const authResolving = useAuthResolving();
 
-  // Someone on the review path only can't request membership: the contract reverts
-  // `FastPathRestricted`, and only an editor's proposal can add them. Checked fresh at the press, so
-  // every Join control is covered without a read per card. A failed read sends the request as before.
-  const setLockedOutLink = useSetAtom(lockedOutJoinLinkAtom);
+  // Someone on the review path only can't request membership (see `readLockedOutLink`). Checked fresh
+  // at the press, so every Join control is covered without a read per card. A join queued while signed
+  // out is checked the same way in `useRequestToBeMember` when it replays.
+  const setLockedOut = useSetAtom(lockedOutJoinAtom);
   const [isChecking, setIsChecking] = React.useState(false);
 
   const join = () => {
     if (canRequestLive && personalSpaceId) {
       if (isChecking) return;
       setIsChecking(true);
-      readFastPathRestricted(spaceId, personalSpaceId)
-        .catch(() => false)
-        .then(isRestricted => {
-          if (isRestricted) setLockedOutLink(addBackLink(window.location.origin, spaceId, personalSpaceId));
+      readLockedOutLink(spaceId, personalSpaceId)
+        .then(link => {
+          if (link) setLockedOut({ link, spaceName: space?.name });
           else requestToBeMember();
         })
         .finally(() => setIsChecking(false));

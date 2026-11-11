@@ -113,4 +113,14 @@ describe('useMemberFastPath', () => {
 
     expect(mocks.tx).not.toHaveBeenCalled();
   });
+
+  // The SDK rejects dashed UUIDs; an id in that form from the members list must still go through.
+  it('normalizes dashed ids before encoding', async () => {
+    const { result } = renderHook(() => useMemberFastPath({ spaceId: SPACE, action: 'give_fast_path' }), { wrapper });
+
+    act(() => result.current.run('22222222-2222-2222-2222-222222222222'));
+    await waitFor(() => expect(result.current.status).toBe('success'));
+
+    expect(mocks.tx).toHaveBeenCalledOnce();
+  });
 });

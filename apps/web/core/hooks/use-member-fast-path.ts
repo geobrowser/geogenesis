@@ -11,14 +11,10 @@ import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
 import { useSpace } from '~/core/hooks/use-space';
+import { validateSpaceId } from '~/core/io/rest/validation';
+import { geo } from '~/core/sdk/geo-client';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
-import {
-  encodeAddMemberWithFastPathProposal,
-  encodeRestrictMemberFastPath,
-  encodeUnrestrictMemberProposal,
-} from '~/core/utils/contracts/fast-path-calldata';
-import { validateSpaceId } from '~/core/utils/utils';
 
 /**
  * - `give_fast_path`: SLOW proposal lifting the person's restriction.
@@ -28,19 +24,23 @@ import { validateSpaceId } from '~/core/utils/utils';
  */
 export type MemberFastPathAction = 'give_fast_path' | 'make_review_only' | 'add_back_with_fast_path';
 
+type EncodeParams = { authorSpaceId: string; spaceId: string; memberSpaceId: string };
+
 const ACTIONS = {
   give_fast_path: {
-    encode: encodeUnrestrictMemberProposal,
+    encode: ({ memberSpaceId, ...params }: EncodeParams) =>
+      geo.daoSpaces.proposeUnrestrictMember({ ...params, restrictedMemberSpaceId: memberSpaceId }),
     span: 'web.write.createProposal.unrestrictSpace',
     attributes: { 'io.operation': 'create_proposal', 'governance.action': 'proposal_created' },
   },
   make_review_only: {
-    encode: encodeRestrictMemberFastPath,
+    encode: (params: EncodeParams) => geo.daoSpaces.restrictMemberFastPath(params),
     span: 'web.write.restrictSpaceFastPath',
     attributes: { 'io.operation': 'restrict_fast_path', 'governance.action': 'space_fast_path_restricted' },
   },
   add_back_with_fast_path: {
-    encode: encodeAddMemberWithFastPathProposal,
+    encode: ({ memberSpaceId, ...params }: EncodeParams) =>
+      geo.daoSpaces.proposeAddMemberWithFastPath({ ...params, newMemberSpaceId: memberSpaceId }),
     span: 'web.write.createProposal.addMemberWithFastPath',
     attributes: { 'io.operation': 'create_proposal', 'governance.action': 'proposal_created' },
   },
@@ -72,14 +72,14 @@ export function useMemberFastPath({ spaceId, action }: { spaceId: string; action
 
       if (!smartAccount) return fail('Please connect your wallet first');
       if (!personalSpaceId || !isRegistered) return fail('You need a registered personal space to do this');
-      if (!validateSpaceId(spaceId) || !validateSpaceId(memberSpaceId)) {
-        return fail('Invalid space ID format. Please try again.');
-      }
+      // Normalized (dashless, lowercase): the SDK rejects dashed UUIDs.
+      const [author, dao, member] = [personalSpaceId, spaceId, memberSpaceId].map(validateSpaceId);
+      if (!author || !dao || !member) return fail('Invalid space ID format. Please try again.');
       // No address means the space isn't a resolvable deployed DAO, and the write would be unexecutable.
       if (!space?.address) return fail('No space address found. Please try again.');
 
       const { encode, span, attributes } = ACTIONS[action];
-      const { to, calldata } = encode({ authorSpaceId: personalSpaceId, spaceId, memberSpaceId });
+      const { to, calldata } = encode({ authorSpaceId: author, spaceId: dao, memberSpaceId: member });
 
       const result = await runEffectEither(
         tx({ to, data: calldata }).pipe(

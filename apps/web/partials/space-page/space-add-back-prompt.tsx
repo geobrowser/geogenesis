@@ -72,6 +72,31 @@ function AddBackContent({ spaceId, spaceName, memberSpaceId }: Props & { memberS
 
   const name = profilesBySpaceId.get(memberSpaceId)?.name ?? formatShortAddress(memberSpaceId);
   const where = spaceName ?? 'this space';
+  const sent = withFastPath.status === 'success' || reviewOnly.status === 'success';
+  const { refetch: refetchMembership } = membership;
+  const [sentAt, setSentAt] = React.useState<number | null>(null);
+
+  // A fast-path add executes as it's proposed, while a review-path one waits for its vote. Read
+  // membership again rather than guessing which happened, and treat anything read before the add as
+  // unknown: the render where `sent` turns true still holds the old answer.
+  React.useEffect(() => {
+    if (!sent || sentAt !== null) return;
+    setSentAt(Date.now());
+    void refetchMembership();
+  }, [sent, sentAt, refetchMembership]);
+
+  if (sent) {
+    if (sentAt === null || membership.dataUpdatedAt < sentAt || membership.isFetching) {
+      return <p className="text-body text-grey-04">Checking {name}&apos;s access…</p>;
+    }
+    return (
+      <p className="text-body">
+        {membership.data
+          ? `${name} is now a member of ${where}.`
+          : `Proposal created. ${name} is added once it passes the vote.`}
+      </p>
+    );
+  }
 
   if (membership.isError || restriction.isError) {
     return (
@@ -103,9 +128,6 @@ function AddBackContent({ spaceId, spaceName, memberSpaceId }: Props & { memberS
   }
 
   const busy = withFastPath.status === 'pending' || reviewOnly.status === 'pending';
-  if (withFastPath.status === 'success' || reviewOnly.status === 'success') {
-    return <p className="text-body">Proposal created. {name} is added once it passes the vote.</p>;
-  }
 
   return (
     <div className="flex flex-col gap-4">
