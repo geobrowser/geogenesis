@@ -1,4 +1,4 @@
-import { type GetPrivyIdentityToken, geoChatRequest } from '../api';
+import { type GetPrivyIdentityToken, dashlessId, geoChatRequest } from '../api';
 
 /**
  * geo-chat's admin moment-backfill routes (GEO-3613, GEO-3638, GEO-3658), as the moments editor
@@ -120,7 +120,7 @@ export type MomentBackfillRead = { request: MomentBackfillStatus | null; entry: 
  * Either shape is read here, so the editor keeps working if the GET ever moves to the POST's.
  */
 export function readMomentBackfills(raw: unknown, debateId: string): MomentBackfillRead {
-  const same = (id: unknown) => typeof id === 'string' && dashless(id) === dashless(debateId);
+  const same = (id: unknown) => typeof id === 'string' && dashlessId(id) === dashlessId(debateId);
   if (Array.isArray(raw)) {
     const request = (raw as MomentBackfillStatus[]).find(status => same(status?.debate_id)) ?? null;
     return { request, entry: null };
@@ -128,10 +128,6 @@ export function readMomentBackfills(raw: unknown, debateId: string): MomentBackf
   const debates = (raw as Partial<MomentBackfillResponse> | null)?.debates;
   const entry = Array.isArray(debates) ? (debates.find(candidate => same(candidate?.debate_id)) ?? null) : null;
   return { request: entry?.request ?? null, entry };
-}
-
-function dashless(id: string) {
-  return id.replace(/-/g, '').toLowerCase();
 }
 
 export async function getMomentBackfill(

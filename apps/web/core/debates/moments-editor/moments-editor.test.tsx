@@ -7,7 +7,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 
 import { GeoChatRequestError } from '../api';
 import type { MomentBackfillEntry, MomentBackfillStatus } from './api';
-import { MomentsEditor, editingBlockedReason } from './moments-editor';
+import { MomentsEditor, claimsBySpeaker, editingBlockedReason } from './moments-editor';
 
 const DEBATE_ID = '01a0448a-61d3-7101-8434-a20fdadf6f97';
 
@@ -218,9 +218,63 @@ describe('MomentsEditor (GEO-3671)', () => {
     };
     rerender(<MomentsEditor debateId={DEBATE_ID} />);
     expect(within(clipRow('Dinner')).getByText('no words are said in it')).toBeInTheDocument();
+    expect(screen.getByText(/See clip 2\./)).toBeInTheDocument();
 
     fireEvent.click(within(clipRow('Coffee')).getByRole('button', { name: 'Remove' }));
     expect(within(clipRow('Dinner')).getByText('no words are said in it')).toBeInTheDocument();
+    // The notice numbers it as the reel does now.
+    expect(screen.getByText(/See clip 1\./)).toBeInTheDocument();
+  });
+
+  // Once the reel this visit published is live, the edit is no longer unsaved, and the editor opens
+  // on the reel geo-chat now serves.
+  it('moves on to the live reel once its own publish goes live', () => {
+    const live = (start: number, end: number) => ({
+      clock: 'video' as const,
+      clips: [{ start_ms: start, end_ms: end, speaker_slot: 0, claim_index: 0, claim_text: 'Coffee is low stakes' }],
+    });
+    mocks.plan.data = entry({ live_reel: live(900, 3_000) });
+    const requestedAt = '2026-11-11T21:00:00Z';
+    mocks.mutate.mockImplementation((_body, options: { onSuccess: (entry: unknown) => void }) =>
+      options.onSuccess({ queued: true, refusal: null, request: status({ requested_at: requestedAt }) })
+    );
+    const { rerender } = render(<MomentsEditor debateId={DEBATE_ID} />);
+    fireEvent.change(screen.getByRole('textbox', { name: 'End time' }), { target: { value: '1.45' } });
+    fireEvent.blur(screen.getByRole('textbox', { name: 'End time' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Publish reel' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Publish and lock' }));
+    expect(screen.getByText('Unsaved changes')).toBeInTheDocument();
+
+    mocks.backfill.data = { request: status({ requested_at: requestedAt, status: 'done' }), entry: null };
+    rerender(<MomentsEditor debateId={DEBATE_ID} />);
+    mocks.plan = {
+      ...mocks.plan,
+      data: entry({
+        reel_version: 'v2',
+        hand_picked: { requested_by: 'space', requested_at: requestedAt },
+        live_reel: live(900, 1_800),
+      }),
+    };
+    rerender(<MomentsEditor debateId={DEBATE_ID} />);
+
+    expect(screen.queryByText('Unsaved changes')).not.toBeInTheDocument();
+    expect(screen.getByText('Hand-picked · locked')).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'End time' })).toHaveValue('0:01.8');
+    expect(screen.getByRole('button', { name: 'Publish reel' })).toBeDisabled();
+  });
+
+  // A poll that fails after the first answer keeps its data; the editor, and what was typed, stay.
+  it('keeps the editor and its unsaved edits when a later read fails', () => {
+    const { rerender } = render(<MomentsEditor debateId={DEBATE_ID} />);
+    fireEvent.change(screen.getByRole('textbox', { name: 'End time' }), { target: { value: '1.45' } });
+    fireEvent.blur(screen.getByRole('textbox', { name: 'End time' }));
+
+    mocks.backfill = { ...mocks.backfill, error: new GeoChatRequestError('down', 'unavailable', 503) };
+    mocks.plan = { ...mocks.plan, isSuccess: false, error: new Error('down') };
+    rerender(<MomentsEditor debateId={DEBATE_ID} />);
+
+    expect(screen.getByRole('textbox', { name: 'End time' })).toHaveValue('0:01.5');
+    expect(screen.getByText('Unsaved changes')).toBeInTheDocument();
   });
 
   it('snaps a typed edge that falls mid-word out to the whole word', () => {
@@ -257,6 +311,21 @@ describe('MomentsEditor (GEO-3671)', () => {
 function clipRow(word: string) {
   return screen.getByText(new RegExp(`^${word}`), { selector: 'p' }).closest('li') as HTMLElement;
 }
+
+describe('claimsBySpeaker', () => {
+  // geo-chat's moment_claims skips a retained claim, and refuses a clip that names one.
+  it('leaves out a retained claim', () => {
+    const { bySlot, slot } = claimsBySpeaker({
+      turns: [{ turn_index: 0, participant_slot: 1 }],
+      claims: [
+        { text: 'From an earlier extraction', turn_index: 0, retained: true },
+        { text: 'Coffee is low stakes', turn_index: 0 },
+      ],
+    });
+    expect(bySlot.get(1)).toEqual([{ index: 1, text: 'Coffee is low stakes' }]);
+    expect(slot.has(0)).toBe(false);
+  });
+});
 
 describe('editingBlockedReason', () => {
   it('leaves an editable debate, or one with a request in the queue, editable', () => {

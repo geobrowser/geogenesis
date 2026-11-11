@@ -14,6 +14,7 @@ import {
   manualReelClips,
   parseReelTime,
   playerWords,
+  realSpeedStretches,
   reelProblems,
   snapEdge,
   stepEdge,
@@ -175,6 +176,20 @@ describe('clipProblems', () => {
     ]);
     // On one clock there is no cut to cross.
     expect(clipProblems(clip(110_000, 131_000), across, ONE_CLOCK)).toEqual([]);
+  });
+
+  // geo-chat merges turns that follow one another on the recordings into one real-speed stretch,
+  // so a reply within an Open round can be clipped with the point it answers.
+  it('takes words across a handoff with nothing cut between the turns', () => {
+    const handoff = [word(1, 59_000, 59_600), word(2, 60_400, 61_000)];
+    expect(clipProblems(clip(58_500, 61_500), handoff, RENDERED_TURN_SEGMENTS)).toEqual([]);
+    expect(realSpeedStretches(RENDERED_TURN_SEGMENTS)).toEqual([
+      { start_ms: 0, end_ms: 120_000 },
+      { start_ms: 128_000, end_ms: 218_000 },
+      { start_ms: 229_950, end_ms: 270_944 },
+      // An early end's quiet is cut between turns 4 and 5: they abut on the video, not the recordings.
+      { start_ms: 274_650, end_ms: 321_086 },
+    ]);
   });
 
   it('judges by the edges when there are no words', () => {

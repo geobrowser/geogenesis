@@ -65,11 +65,16 @@ export function MomentsEditor({ debateId }: { debateId: string }) {
 
   if (!ready || (authenticated && backfill.isPending)) return <EditorShell title={null}>Loading…</EditorShell>;
   if (!authenticated) return <EditorShell title={null}>Sign in as a media admin to edit moments.</EditorShell>;
-  if (isMediaAdminRefusal(backfill.error)) {
-    return <EditorShell title={null}>Only media admins can edit a debate&apos;s moments.</EditorShell>;
-  }
-  if (backfill.error) {
-    return <EditorShell title={null}>Couldn&apos;t reach the moments service. Reload to try again.</EditorShell>;
+  // Only before the first answer. A poll that fails later keeps its last data, and swapping the
+  // editor out for an error then would unmount it and lose every unsaved edit.
+  if (backfill.data === undefined) {
+    return (
+      <EditorShell title={null}>
+        {isMediaAdminRefusal(backfill.error)
+          ? "Only media admins can edit a debate's moments."
+          : "Couldn't reach the moments service. Reload to try again."}
+      </EditorShell>
+    );
   }
   return <Editor debateId={debateId} />;
 }
@@ -91,8 +96,12 @@ function Editor({ debateId }: { debateId: string }) {
   const entry = plan.data ?? null;
 
   // The reel the editor opens on: the live cuts where geo-chat serves them, the served moments
-  // (word ranges, so approximate) where it does not yet.
-  const loaded = plan.isSuccess && media.isSuccess && claims.isSuccess;
+  // (word ranges, so approximate) where it does not yet. Loaded once each has answered: a refetch
+  // that fails later keeps its data, and must not take the editor away.
+  const loaded = plan.data !== undefined && media.data !== undefined && claims.data !== undefined;
+  // The served moments matter only without live cuts; with them, a claims refetch that lands before
+  // the plan's would rebuild the reel from the old cuts.
+  const servedMomentsAt = entry?.live_reel ? 0 : claims.dataUpdatedAt;
   const source = React.useMemo(() => {
     if (!loaded) return null;
     if (entry?.live_reel) {
@@ -102,7 +111,7 @@ function Editor({ debateId }: { debateId: string }) {
     return { clips: clipsFromServedMoments(moments, payload?.claims ?? [], turns), approximate: true };
     // Rebuilt only when the reel itself may have changed: its version, whether cuts are served, or
     // the served moments read again.
-  }, [loaded, entry?.reel_version, Boolean(entry?.live_reel), claims.dataUpdatedAt]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [loaded, entry?.reel_version, Boolean(entry?.live_reel), servedMomentsAt]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [saved, setSaved] = React.useState<EditorClip[] | null>(null);
   const [clips, setClips] = React.useState<EditorClip[]>([]);
@@ -151,12 +160,15 @@ function Editor({ debateId }: { debateId: string }) {
     if (ours && request && job.kind === 'done' && !job.preview && reported.current !== request.requested_at) {
       reported.current = request.requested_at;
       setToast(<span>{job.unlock ? 'Back to the automatic reel' : 'Hand-picked reel is live'}</span>);
-      dirtyRef.current = false;
+      // What was sent is live now, so it is no longer an unsaved edit, and the reel read next is
+      // taken. An edit made since sending stays unsaved. (Not via `dirtyRef`: the next render
+      // writes it back from `dirty`.)
+      setSaved(tracked?.sent ?? null);
       refreshAfterReel();
     } else if (finished) {
       refreshAfterReel();
     }
-  }, [inFlight, ours, request, job, setToast, refreshAfterReel]);
+  }, [inFlight, ours, request, job, tracked, setToast, refreshAfterReel]);
 
   const participants = debate.data?.participants ?? [];
   const nameOf = (slot: ParticipantSlot | null) =>
@@ -179,6 +191,15 @@ function Editor({ debateId }: { debateId: string }) {
       problems: [...clipProblems(clip, words, turns), ...reported],
     };
   });
+  // The worker numbers a failed reel's clips as sent; the editor's notices count them as they are now.
+  const flaggedClips =
+    ours && job.kind === 'failed' && tracked
+      ? Object.keys(job.clips)
+          .map(sentAt => clips.findIndex(clip => clip.key === tracked.sent[Number(sentAt)]?.key))
+          .filter(at => at >= 0)
+          .sort((a, b) => a - b)
+          .map(at => at + 1)
+      : [];
   const wholeReelProblems = reelProblems(clips, words);
   const hasProblems = wholeReelProblems.length > 0 || clipViews.some(view => view.problems.length > 0);
   const canQueue = !readOnly && !inFlight && !queue.isPending && !hasProblems && clips.length > 0;
@@ -300,7 +321,7 @@ function Editor({ debateId }: { debateId: string }) {
         </ConfirmCard>
       ) : null}
       {queueError ? <Notice tone="bad">{queueError}</Notice> : null}
-      {showJob && !job.preview ? <JobNotice job={job} /> : null}
+      {showJob && !job.preview ? <JobNotice job={job} flagged={flaggedClips} /> : null}
       {wholeReelProblems.length > 0 ? (
         <Notice tone="bad">
           {wholeReelProblems.map(problem => (
@@ -398,6 +419,7 @@ function Editor({ debateId }: { debateId: string }) {
           stale={tracked !== null && tracked.reelKey !== reelKey(clips)}
           turns={turns}
           clips={tracked?.sent ?? []}
+          flagged={flaggedClips}
           nameOf={nameOf}
         />
       </div>
@@ -437,16 +459,24 @@ function queueErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : 'Something went wrong. Try again.';
 }
 
-/** The debate's claims each debater can link a clip to, and each claim's speaker. */
-function claimsBySpeaker(
+/**
+ * The debate's claims each debater can link a clip to, and each claim's speaker: those geo-chat's
+ * `moment_claims` links to. A `retained` claim (an earlier extraction's, kept for the graph) is not
+ * one, and a clip naming it is refused ("there is no claim N").
+ */
+export function claimsBySpeaker(
   payload:
-    | { turns?: { turn_index: number; participant_slot: number }[]; claims?: { text: string; turn_index: number }[] }
+    | {
+        turns?: { turn_index: number; participant_slot: number }[];
+        claims?: { text: string; turn_index: number; retained?: boolean }[];
+      }
     | undefined
 ) {
   const slotOfTurn = new Map((payload?.turns ?? []).map(turn => [turn.turn_index, turn.participant_slot]));
   const bySlot = new Map<ParticipantSlot, ClaimOption[]>();
   const slot = new Map<number, ParticipantSlot>();
   (payload?.claims ?? []).forEach((claim, index) => {
+    if (claim.retained === true) return;
     const speaker = slotOfTurn.get(claim.turn_index);
     if (speaker !== 1 && speaker !== 2) return;
     slot.set(index, speaker);
@@ -509,8 +539,8 @@ function StatusPill({ job, dirty, handPicked }: { job: ReelJob; dirty: boolean; 
   return <span className={cx(PILL_CLASS, 'bg-grey-01 text-grey-04')}>Auto-picked</span>;
 }
 
-/** What became of a publish or a return to automatic. */
-function JobNotice({ job }: { job: ReelJob }) {
+/** What became of a publish or a return to automatic. `flagged`: the clips it failed on, as numbered now. */
+function JobNotice({ job, flagged }: { job: ReelJob; flagged: readonly number[] }) {
   if (job.kind === 'queued') {
     return (
       <Notice tone="wait">
@@ -540,7 +570,6 @@ function JobNotice({ job }: { job: ReelJob }) {
     );
   }
   if (job.kind === 'failed') {
-    const flagged = Object.keys(job.clips).map(index => Number(index) + 1);
     return (
       <Notice tone="bad">
         <b className="font-medium">Nothing changed.</b> {job.summary}
