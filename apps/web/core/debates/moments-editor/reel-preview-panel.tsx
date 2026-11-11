@@ -25,6 +25,7 @@ export function ReelPreviewPanel({
   stale,
   turns,
   clips,
+  flagged,
   nameOf,
 }: {
   /** The preview this visit queued, or `null` before there is one. */
@@ -34,6 +35,8 @@ export function ReelPreviewPanel({
   turns: readonly DebateMediaTurnSegment[];
   /** The reel as the preview was sent, in that order: what its moments are matched to. */
   clips: readonly EditorClip[];
+  /** The clips a failed preview flagged, as the reel numbers them now. */
+  flagged: readonly number[];
   nameOf: (slot: ParticipantSlot | null) => string | null;
 }) {
   return (
@@ -44,7 +47,7 @@ export function ReelPreviewPanel({
         </Text>
       </div>
       <div className="flex flex-col gap-3 p-3 text-[14px] leading-[18px]">
-        <PreviewBody job={job} stale={stale} turns={turns} clips={clips} nameOf={nameOf} />
+        <PreviewBody job={job} stale={stale} turns={turns} clips={clips} flagged={flagged} nameOf={nameOf} />
       </div>
     </section>
   );
@@ -55,12 +58,14 @@ function PreviewBody({
   stale,
   turns,
   clips,
+  flagged,
   nameOf,
 }: {
   job: ReelJob | null;
   stale: boolean;
   turns: readonly DebateMediaTurnSegment[];
   clips: readonly EditorClip[];
+  flagged: readonly number[];
   nameOf: (slot: ParticipantSlot | null) => string | null;
 }) {
   if (!job || job.kind === 'none') {
@@ -84,7 +89,6 @@ function PreviewBody({
     );
   }
   if (job.kind === 'failed') {
-    const flagged = Object.keys(job.clips).map(index => Number(index) + 1);
     return (
       <div className={NEGATIVE_TEXT_CLASS}>
         <p>

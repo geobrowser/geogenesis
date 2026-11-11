@@ -166,18 +166,38 @@ export function clipProblems(
 
 /**
  * Whether `startMs..endMs` on the player's clock lies in one stretch the render kept whole at real
- * speed (one turn's `source_*` span), as geo-chat requires of a clip's words. A render with one clock
- * has no cut to cross.
+ * speed, as geo-chat requires of a clip's words. A render with one clock has no cut to cross.
  */
 function inOneStretch(startMs: number, endMs: number, turns: readonly DebateMediaTurnSegment[]) {
   if (!turns.some(turn => turn.source_start_ms !== undefined)) return true;
-  return turns.some(
-    turn =>
-      turn.source_start_ms !== undefined &&
-      turn.source_end_ms !== undefined &&
-      startMs >= turn.source_start_ms &&
-      endMs <= turn.source_end_ms
-  );
+  return realSpeedStretches(turns).some(stretch => startMs >= stretch.start_ms && endMs <= stretch.end_ms);
+}
+
+/**
+ * The stretches the render plays at real speed, on the player's clock: turns that follow one another
+ * on both clocks with nothing cut between them are one stretch, as geo-chat's edit plan merges them
+ * (`recording_edit_plan`), so a debater's reply within an Open round is in the same stretch as the
+ * turn it answers. A pick window, break or early end's quiet cut between two turns separates them.
+ */
+export function realSpeedStretches(turns: readonly DebateMediaTurnSegment[]): { start_ms: number; end_ms: number }[] {
+  const placed = turns
+    .flatMap(turn =>
+      turn.source_start_ms !== undefined && turn.source_end_ms !== undefined
+        ? [{ ...turn, source_start_ms: turn.source_start_ms, source_end_ms: turn.source_end_ms }]
+        : []
+    )
+    .sort((a, b) => a.source_start_ms - b.source_start_ms);
+  const stretches: { start_ms: number; end_ms: number; output_end_ms: number }[] = [];
+  for (const turn of placed) {
+    const last = stretches.at(-1);
+    if (last && last.end_ms === turn.source_start_ms && last.output_end_ms === turn.output_start_ms) {
+      last.end_ms = turn.source_end_ms;
+      last.output_end_ms = turn.output_end_ms;
+    } else {
+      stretches.push({ start_ms: turn.source_start_ms, end_ms: turn.source_end_ms, output_end_ms: turn.output_end_ms });
+    }
+  }
+  return stretches.map(({ start_ms, end_ms }) => ({ start_ms, end_ms }));
 }
 
 /** What is wrong with the reel as a whole, rather than with one clip. */
