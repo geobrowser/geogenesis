@@ -1,10 +1,4 @@
-import {
-  type DebateTranscriptResponse,
-  type DebateTranscriptSegment,
-  type GetPrivyIdentityToken,
-  type ParticipantSlot,
-  geoChatRequest,
-} from '../api';
+import { type GetPrivyIdentityToken, geoChatRequest } from '../api';
 
 /**
  * geo-chat's admin moment-backfill routes (GEO-3613, GEO-3638, GEO-3658), as the moments editor
@@ -168,35 +162,4 @@ export async function postMomentBackfill(
     signal,
   });
   return response.debates[0] ?? null;
-}
-
-/** A word as `include=words` serves it (GEO-3349), on both clocks like a transcript line. */
-export type DebateTranscriptWord = Pick<
-  DebateTranscriptSegment,
-  'start_ms' | 'end_ms' | 'source_start_ms' | 'source_end_ms' | 'text'
-> & { participant_slot: ParticipantSlot };
-
-export type DebateTranscriptWithWords = DebateTranscriptResponse & {
-  /** False for a transcript made before word timing was kept: it has no words until retranscribed. */
-  word_timing?: boolean;
-  words?: DebateTranscriptWord[];
-  /** Whole sentences with their punctuation, on the same clocks. */
-  sentences?: DebateTranscriptWord[];
-};
-
-export async function getDebateTranscriptWords(
-  debateId: string,
-  getPrivyIdentityToken: GetPrivyIdentityToken,
-  accountKey: string | null,
-  signal?: AbortSignal
-) {
-  return geoChatRequest<DebateTranscriptWithWords>(
-    `/debates/${debateId}/transcript?format=json&include=words,sentences`,
-    {
-      auth: true,
-      getPrivyIdentityToken,
-      accountKey,
-      signal,
-    }
-  );
 }

@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 
 import * as React from 'react';
 
@@ -18,9 +18,22 @@ const mocks = vi.hoisted(() => ({
   plan: {} as { isSuccess: boolean; data: unknown; error: unknown },
   mutate: vi.fn(),
   toast: vi.fn(),
+  /** The claims payload's `moment_reel_manual`: the reel's lock, whoever published it. */
+  manualReel: false,
 }));
 
 vi.mock('../hooks', () => ({
+  useDebateTranscript: () => ({
+    isPending: false,
+    data: {
+      word_timing: true,
+      words: wordsOverride ?? [
+        { participant_slot: 1, start_ms: 1_000, end_ms: 1_400, text: 'Coffee' },
+        { participant_slot: 1, start_ms: 1_500, end_ms: 2_900, text: 'dates' },
+        { participant_slot: 2, start_ms: 5_000, end_ms: 5_400, text: 'Dinner' },
+      ],
+    },
+  }),
   useGeoChatAuth: () => ({ ready: true, authenticated: true, accountKey: 'a', getPrivyIdentityToken: async () => 't' }),
   useDebate: () => ({
     data: {
@@ -46,6 +59,7 @@ vi.mock('../hooks', () => ({
           { text: 'Dinner shows effort', turn_index: 1 },
         ],
         moments: [{ claim_index: 0, clip_start_ms: 1_000, clip_end_ms: 3_000 }],
+        ...(mocks.manualReel && { moment_reel_manual: true }),
       },
     },
   }),
@@ -55,17 +69,6 @@ vi.mock('./hooks', () => ({
   isMediaAdminRefusal: (error: unknown) => error instanceof GeoChatRequestError && error.status === 403,
   useMomentBackfill: () => mocks.backfill,
   useMomentReelPlan: () => mocks.plan,
-  useTranscriptWords: () => ({
-    isPending: false,
-    data: {
-      word_timing: true,
-      words: wordsOverride ?? [
-        { participant_slot: 1, start_ms: 1_000, end_ms: 1_400, text: 'Coffee' },
-        { participant_slot: 1, start_ms: 1_500, end_ms: 2_900, text: 'dates' },
-        { participant_slot: 2, start_ms: 5_000, end_ms: 5_400, text: 'Dinner' },
-      ],
-    },
-  }),
   useQueueMomentReel: () => ({ mutate: mocks.mutate, isPending: false }),
   useRefreshAfterReel: () => () => {},
 }));
@@ -114,6 +117,7 @@ beforeEach(() => {
   mocks.plan = { isSuccess: true, data: entry(), error: null };
   mocks.mutate.mockReset();
   wordsOverride = null;
+  mocks.manualReel = false;
 });
 afterEach(cleanup);
 
@@ -165,7 +169,7 @@ describe('MomentsEditor (GEO-3671)', () => {
     expect(screen.getByRole('button', { name: 'Preview' })).toBeDisabled();
   });
 
-  it('publishes on the player’s clock, from the version it opened on, with no claim unless one was picked', () => {
+  it('publishes on the player’s clock, from the version it opened on, keeping the claim the clip plays for', () => {
     render(<MomentsEditor debateId={DEBATE_ID} />);
     fireEvent.change(screen.getByRole('textbox', { name: 'End time' }), { target: { value: '1.45' } });
     fireEvent.blur(screen.getByRole('textbox', { name: 'End time' }));
@@ -179,10 +183,48 @@ describe('MomentsEditor (GEO-3671)', () => {
       {
         preview: false,
         reason: 'Moments editor: hand-picked reel',
-        reel: { clock: 'player', clips: [{ start: 1, end: 1.45 }], base: 'v1' },
+        reel: { clock: 'player', clips: [{ start: 1, end: 1.45, claim_index: 0 }], base: 'v1' },
       },
       expect.any(Object)
     );
+  });
+
+  // The worker's `clip N` counts in the reel as sent. A clip removed after the publish failed must
+  // not hand its neighbour's problem to the clip that took its place.
+  it('keeps a failed publish’s clip problem on that clip after an earlier clip is removed', () => {
+    mocks.plan.data = entry({
+      live_reel: {
+        clock: 'video',
+        clips: [
+          { start_ms: 900, end_ms: 3_000, speaker_slot: 0, claim_index: 0, claim_text: 'Coffee is low stakes' },
+          { start_ms: 4_800, end_ms: 5_600, speaker_slot: 1, claim_index: 1, claim_text: 'Dinner shows effort' },
+        ],
+      },
+    });
+    const requestedAt = '2026-11-11T21:00:00Z';
+    mocks.mutate.mockImplementation((_body, options: { onSuccess: (entry: unknown) => void }) =>
+      options.onSuccess({ queued: true, refusal: null, request: status({ requested_at: requestedAt }) })
+    );
+    const { rerender } = render(<MomentsEditor debateId={DEBATE_ID} />);
+    fireEvent.change(screen.getAllByRole('textbox', { name: 'End time' })[0], { target: { value: '1.45' } });
+    fireEvent.blur(screen.getAllByRole('textbox', { name: 'End time' })[0]);
+    fireEvent.click(screen.getByRole('button', { name: /^Publish reel/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Publish (and lock|anyway)$/ }));
+
+    mocks.backfill.data = {
+      request: status({
+        requested_at: requestedAt,
+        status: 'skipped',
+        outcome: 'manual_reel_invalid',
+        report: { story_failed: 'clip 2: no words are said in it' },
+      }),
+      entry: null,
+    };
+    rerender(<MomentsEditor debateId={DEBATE_ID} />);
+    expect(within(clipRow('Dinner')).getByText('no words are said in it')).toBeInTheDocument();
+
+    fireEvent.click(within(clipRow('Coffee')).getByRole('button', { name: 'Remove' }));
+    expect(within(clipRow('Dinner')).getByText('no words are said in it')).toBeInTheDocument();
   });
 
   it('snaps a typed edge that falls mid-word out to the whole word', () => {
@@ -203,7 +245,22 @@ describe('MomentsEditor (GEO-3671)', () => {
       expect.any(Object)
     );
   });
+
+  // geo-chat#351 names the publisher only when it recorded one; an older hand-picked reel is
+  // `hand_picked: null`, and is still locked.
+  it('treats a reel locked before its publisher was recorded as hand-picked', () => {
+    mocks.manualReel = true;
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    expect(screen.getByText('Hand-picked · locked')).toBeInTheDocument();
+    expect(screen.queryByText(/^Hand-picked on/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Return to automatic' })).toBeInTheDocument();
+  });
 });
+
+/** The reel's row for the clip whose quote starts with `word`. */
+function clipRow(word: string) {
+  return screen.getByText(new RegExp(`^${word}`), { selector: 'p' }).closest('li') as HTMLElement;
+}
 
 describe('editingBlockedReason', () => {
   it('leaves an editable debate, or one with a request in the queue, editable', () => {

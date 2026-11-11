@@ -78,6 +78,15 @@ export function ClipRow({
   const claimOptions = [
     { value: AUTOMATIC_CLAIM, label: 'Closest claim (automatic)' },
     ...claims.map(claim => ({ value: String(claim.index), label: truncate(claim.text, 90) })),
+    // The live reel's link, kept when it isn't one of the speaker's claims as the editor counts them.
+    ...(clip.claim_index !== null && !claims.some(claim => claim.index === clip.claim_index)
+      ? [
+          {
+            value: String(clip.claim_index),
+            label: truncate(clip.live_claim_text ?? `Claim ${clip.claim_index + 1}`, 90),
+          },
+        ]
+      : []),
   ];
 
   return (

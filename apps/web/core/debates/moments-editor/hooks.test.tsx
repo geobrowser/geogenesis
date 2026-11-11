@@ -14,7 +14,10 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('../hooks', () => ({
-  debateQueryKeys: { extractedClaims: (id: string) => ['debates', 'extracted-claims', id] },
+  debateQueryKeys: {
+    extractedClaims: (id: string) => ['debates', 'extracted-claims', id],
+    mediaAdmin: (account: string | null) => ['debates', 'account', account, 'media-admin'],
+  },
   debateQueryNetworkOptions: { retry: false, refetchOnReconnect: false, refetchOnWindowFocus: false },
   useGeoChatAuth: () => ({
     ready: true,
@@ -27,7 +30,6 @@ vi.mock('../hooks', () => ({
 vi.mock('./api', () => ({
   getMomentBackfill: mocks.getMomentBackfill,
   postMomentBackfill: vi.fn(),
-  getDebateTranscriptWords: vi.fn(),
 }));
 
 function wrapper({ children }: { children: React.ReactNode }) {
@@ -56,6 +58,30 @@ describe('useIsMediaAdmin (GEO-3671)', () => {
     await waitFor(() => expect(mocks.getMomentBackfill).toHaveBeenCalled());
     await new Promise(resolve => setTimeout(resolve, 20));
     expect(result.current).toBe(false);
+    expect(mocks.getMomentBackfill).toHaveBeenCalledTimes(1);
+  });
+
+  // The feed asks on the active card only, so each debate scrolled to mounts or enables another
+  // observer. A refusal kept as an error (no data) is stale whatever its staleTime, and each one
+  // asked geo-chat again: one 403 per debate per non-admin.
+  it('does not ask again for the next card once geo-chat has refused', async () => {
+    mocks.getMomentBackfill.mockRejectedValue(new GeoChatRequestError('no', 'media_admin_required', 403));
+    const client = new QueryClient({ defaultOptions: { queries: { retryDelay: 0 } } });
+    const shared = ({ children }: { children: React.ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+    const first = renderHook(() => useIsMediaAdmin('debate-1', true), { wrapper: shared });
+    await waitFor(() => expect(mocks.getMomentBackfill).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(first.result.current).toBe(false));
+    first.unmount();
+
+    const next = renderHook(({ active }) => useIsMediaAdmin('debate-2', active), {
+      wrapper: shared,
+      initialProps: { active: false },
+    });
+    next.rerender({ active: true });
+    await new Promise(resolve => setTimeout(resolve, 20));
+    expect(next.result.current).toBe(false);
     expect(mocks.getMomentBackfill).toHaveBeenCalledTimes(1);
   });
 

@@ -7,9 +7,8 @@ import cx from 'classnames';
 import { SmallButton } from '~/design-system/button';
 import { Text } from '~/design-system/text';
 
-import type { ParticipantSlot } from '../api';
+import type { DebateTranscriptResponse, ParticipantSlot } from '../api';
 import { transcriptOnRecordings } from '../recording-clock';
-import type { DebateTranscriptWithWords } from './api';
 import { SPEAKER_FILL_CLASS } from './clip-row';
 import { type EditorClip, formatReelTime } from './reel';
 
@@ -25,7 +24,7 @@ const MIN_CLIP_MS = 1_000;
  * The transcript's sentences on the player's clock, in time order: the served `sentences`
  * (GEO-3349), or its lines where it has none. A sentence the render cut is left out.
  */
-export function reelSentences(transcript: DebateTranscriptWithWords | undefined): ReelSentence[] {
+export function reelSentences(transcript: DebateTranscriptResponse | undefined): ReelSentence[] {
   const sentences = transcript?.sentences?.length ? transcript.sentences : (transcript?.segments ?? []);
   return transcriptOnRecordings(sentences)
     .map(sentence => ({

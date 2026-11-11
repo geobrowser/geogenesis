@@ -32,6 +32,7 @@ export function ReelPreviewPanel({
   /** The reel was edited after the preview was queued. */
   stale: boolean;
   turns: readonly DebateMediaTurnSegment[];
+  /** The reel as the preview was sent, in that order: what its moments are matched to. */
   clips: readonly EditorClip[];
   nameOf: (slot: ParticipantSlot | null) => string | null;
 }) {

@@ -1,6 +1,6 @@
-import type { DebateMediaTurnSegment, ParticipantSlot } from '../api';
+import type { DebateMediaTurnSegment, DebateTranscriptSpan, ParticipantSlot } from '../api';
 import { recordingSpanOf, renderedTimeOf, transcriptOnRecordings } from '../recording-clock';
-import type { DebateTranscriptWord, LiveReel, ManualClipBody } from './api';
+import type { LiveReel, ManualClipBody } from './api';
 
 /**
  * The moments editor's model of a reel (GEO-3671). Everything here is on one clock, the debate
@@ -16,7 +16,11 @@ export const MANUAL_CLIP_MAX_MS = 60_000;
 /** A word on the player's clock. */
 export type ReelWord = { slot: ParticipantSlot; start_ms: number; end_ms: number; text: string };
 
-/** A clip being edited, on the player's clock. `claim_index` is set only when the admin picked one. */
+/**
+ * A clip being edited, on the player's clock. `claim_index` is the claim it is sent with: the live
+ * reel's link for a clip loaded from it, so a clip nobody touched keeps its claim when the reel is
+ * published again, or the admin's pick. `null` leaves it to geo-chat (the speaker's closest claim).
+ */
 export type EditorClip = {
   key: string;
   start_ms: number;
@@ -36,7 +40,7 @@ export function newClipKey() {
  * The transcript's words on the player's clock, in time order. A word the render cut has no player
  * time and is left out, as the player leaves its line out (`transcriptOnRecordings`).
  */
-export function playerWords(words: readonly DebateTranscriptWord[] | undefined): ReelWord[] {
+export function playerWords(words: readonly DebateTranscriptSpan[] | undefined): ReelWord[] {
   return transcriptOnRecordings(words ?? [])
     .map(word => ({ slot: word.participant_slot, start_ms: word.start_ms, end_ms: word.end_ms, text: word.text }))
     .sort((a, b) => a.start_ms - b.start_ms || a.end_ms - b.end_ms);
@@ -87,14 +91,14 @@ export function stepEdge(ms: number, words: readonly ReelWord[], edge: 'start' |
   return previous ?? ms;
 }
 
-/** The live reel's cuts as editor clips, on the player's clock. */
+/** The live reel's cuts as editor clips, on the player's clock, each with the claim it plays for. */
 export function clipsFromLiveReel(live: LiveReel, turns: readonly DebateMediaTurnSegment[]): EditorClip[] {
   return live.clips.map(clip => {
     const span = recordingSpanOf(clip.start_ms, clip.end_ms, turns);
     return {
       key: newClipKey(),
       ...span,
-      claim_index: null,
+      claim_index: typeof clip.claim_index === 'number' ? clip.claim_index : null,
       live_claim_text: clip.claim_text ?? null,
     };
   });
@@ -116,13 +120,19 @@ export function clipsFromServedMoments(
     if (typeof moment.clip_start_ms !== 'number' || typeof moment.clip_end_ms !== 'number') return [];
     const span = recordingSpanOf(moment.clip_start_ms, moment.clip_end_ms, turns);
     const claim = typeof moment.claim_index === 'number' ? claims[moment.claim_index] : undefined;
-    return [{ key: newClipKey(), ...span, claim_index: null, live_claim_text: claim?.text ?? null }];
+    const claimIndex = typeof moment.claim_index === 'number' ? moment.claim_index : null;
+    return [{ key: newClipKey(), ...span, claim_index: claimIndex, live_claim_text: claim?.text ?? null }];
   });
 }
 
 /**
  * What stops geo-chat cutting a clip as given, found before it is sent: the same checks its worker
  * runs (`manual_moments`), so an admin hears about them on the clip rather than after a queue.
+ *
+ * Like the worker, it judges a clip by its words, not its edges: an edge a little into a stretch the
+ * render cut or condensed (the live reel's own edge room does this) is trimmed by geo-chat to the
+ * stretch its words are said in, not refused. Only words from two stretches are. Without words to
+ * go by, the edges are all there is.
  */
 export function clipProblems(
   clip: Pick<EditorClip, 'start_ms' | 'end_ms'>,
@@ -133,6 +143,14 @@ export function clipProblems(
   const problems: string[] = [];
   if (clip.start_ms < 0) problems.push('It starts before the debate does.');
   if (clip.end_ms - clip.start_ms > MANUAL_CLIP_MAX_MS) problems.push('It runs over 60 s, the most a clip can.');
+  const said = wordsIn(words, clip.start_ms, clip.end_ms);
+  if (words.length > 0) {
+    if (said.length === 0) problems.push('Nobody says a whole word in it.');
+    else if (!inOneStretch(said[0].start_ms, said[said.length - 1].end_ms, turns)) {
+      problems.push('Its words cross a cut in the video. Keep them inside one stretch.');
+    }
+    return problems;
+  }
   const start = renderedTimeOf(clip.start_ms, turns, 'start');
   const end = renderedTimeOf(clip.end_ms, turns, 'end');
   if (start === null) problems.push('Its start falls in a stretch the video cut. Move it into a turn.');
@@ -141,10 +159,23 @@ export function clipProblems(
   if (start !== null && end !== null && Math.abs(end - start - (clip.end_ms - clip.start_ms)) > 1) {
     problems.push('It crosses a cut in the video. Keep it inside one stretch.');
   }
-  if (words.length > 0 && wordsIn(words, clip.start_ms, clip.end_ms).length === 0) {
-    problems.push('Nobody says a whole word in it.');
-  }
   return problems;
+}
+
+/**
+ * Whether `startMs..endMs` on the player's clock lies in one stretch the render kept whole at real
+ * speed (one turn's `source_*` span), as geo-chat requires of a clip's words. A render with one clock
+ * has no cut to cross.
+ */
+function inOneStretch(startMs: number, endMs: number, turns: readonly DebateMediaTurnSegment[]) {
+  if (!turns.some(turn => turn.source_start_ms !== undefined)) return true;
+  return turns.some(
+    turn =>
+      turn.source_start_ms !== undefined &&
+      turn.source_end_ms !== undefined &&
+      startMs >= turn.source_start_ms &&
+      endMs <= turn.source_end_ms
+  );
 }
 
 /** What is wrong with the reel as a whole, rather than with one clip. */
