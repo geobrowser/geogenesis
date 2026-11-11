@@ -13,7 +13,7 @@ import { Text } from '~/design-system/text';
 import type { DebateMediaTurnSegment, ParticipantSlot } from '../api';
 import { GeoChatRequestError } from '../api';
 import { DebateFeedPlayer } from '../browse/debate-feed-player';
-import { useDebate, useDebateExtractedClaims, useDebateMedia, useGeoChatAuth } from '../hooks';
+import { useDebate, useDebateExtractedClaims, useDebateMedia, useDebateTranscript, useGeoChatAuth } from '../hooks';
 import { NEGATIVE_TEXT_CLASS, POSITIVE_TEXT_CLASS, WAITING_TEXT_CLASS } from '../matchmaking/admin-debate-parts';
 import { HUB_LIGHT_CALLOUT_CLASS_NAME } from '../matchmaking/hub-callout';
 import type { MomentBackfillEntry } from './api';
@@ -24,7 +24,6 @@ import {
   useMomentReelPlan,
   useQueueMomentReel,
   useRefreshAfterReel,
-  useTranscriptWords,
 } from './hooks';
 import {
   type EditorClip,
@@ -49,6 +48,8 @@ import { type ReelJob, jobInFlight, reelJob, refusalBlocksEditing, refusalMessag
 const NEW_CLIP_MS = 15_000;
 
 const NO_TURNS: DebateMediaTurnSegment[] = [];
+/** The words the editor snaps edges to and counts speakers with (GEO-3349). Stable, as a query key part. */
+const TRANSCRIPT_INCLUDE = ['words'] as const;
 
 /**
  * The moments editor (GEO-3671): a media admin fine-tunes a debate's moment reel, previews exactly
@@ -78,7 +79,7 @@ function Editor({ debateId }: { debateId: string }) {
   const media = useDebateMedia(debateId, true);
   const claims = useDebateExtractedClaims(debateId, true);
   const plan = useMomentReelPlan(debateId, true);
-  const transcript = useTranscriptWords(debateId, true);
+  const transcript = useDebateTranscript(debateId, 'json', true, TRANSCRIPT_INCLUDE);
   const backfill = useMomentBackfill(debateId, true);
   const queue = useQueueMomentReel(debateId);
   const refreshAfterReel = useRefreshAfterReel(debateId);
@@ -125,8 +126,14 @@ function Editor({ debateId }: { debateId: string }) {
 
   const [confirm, setConfirm] = React.useState<'publish' | 'unlock' | null>(null);
   const [queueError, setQueueError] = React.useState<string | null>(null);
-  // The request this visit queued: a finished one is reported only if it is ours.
-  const [tracked, setTracked] = React.useState<{ requestedAt: string; reelKey: string } | null>(null);
+  // The request this visit queued: a finished one is reported only if it is ours. `sent` is the reel
+  // as sent, in that order: the worker's `clip N` and a preview's moments count in it, not in the
+  // reel as edited since (a clip removed or moved shifts every index after it).
+  const [tracked, setTracked] = React.useState<{
+    requestedAt: string;
+    reelKey: string;
+    sent: EditorClip[];
+  } | null>(null);
 
   const request = backfill.data?.request ?? null;
   const job = reelJob(request);
@@ -161,9 +168,10 @@ function Editor({ debateId }: { debateId: string }) {
   const readOnlyReason = editingBlockedReason(entry, transcript.data?.word_timing, plan.error);
   const readOnly = readOnlyReason !== null;
 
-  const clipViews = clips.map((clip, index) => {
+  const clipViews = clips.map(clip => {
     const speaker = clipSpeaker(words, clip.start_ms, clip.end_ms);
-    const reported = ours && job.kind === 'failed' ? (job.clips[index] ?? []) : [];
+    const sentAt = tracked?.sent.findIndex(sent => sent.key === clip.key) ?? -1;
+    const reported = ours && job.kind === 'failed' && sentAt >= 0 ? (job.clips[sentAt] ?? []) : [];
     return {
       clip,
       speaker,
@@ -209,7 +217,7 @@ function Editor({ debateId }: { debateId: string }) {
           setQueueError(refusalMessage(queued?.refusal ?? 'not_queued'));
           return;
         }
-        setTracked({ requestedAt: queued.request.requested_at, reelKey: reelKey(clips) });
+        setTracked({ requestedAt: queued.request.requested_at, reelKey: reelKey(clips), sent: clips });
       },
       onError: error => setQueueError(queueErrorMessage(error)),
     });
@@ -225,7 +233,11 @@ function Editor({ debateId }: { debateId: string }) {
     );
   }
 
+  // geo-chat names who published a hand-picked reel only when it knows (GEO-3666): a reel locked
+  // before it kept that is `hand_picked: null`, though still locked. The payload's flag is the lock.
   const handPicked = entry?.hand_picked ?? null;
+  const locked =
+    handPicked !== null || (payload as { moment_reel_manual?: unknown } | undefined)?.moment_reel_manual === true;
   const showJob = inFlight || (ours && job.kind !== 'none');
 
   return (
@@ -233,14 +245,14 @@ function Editor({ debateId }: { debateId: string }) {
       title={title}
       actions={
         <>
-          <StatusPill job={job} dirty={dirty} handPicked={handPicked !== null} />
+          <StatusPill job={job} dirty={dirty} handPicked={locked} />
           <Button variant="secondary" disabled={!canQueue} onClick={() => submit('preview')}>
             Preview
           </Button>
           <Button variant="secondary" disabled={!dirty || inFlight} onClick={() => saved && setClips(saved)}>
             Discard changes
           </Button>
-          {handPicked && !dirty && !inFlight && !readOnly ? (
+          {locked && !dirty && !inFlight && !readOnly ? (
             <Button variant="secondary" disabled={queue.isPending} onClick={() => setConfirm('unlock')}>
               Return to automatic
             </Button>
@@ -385,7 +397,7 @@ function Editor({ debateId }: { debateId: string }) {
           job={ours && job.preview ? job : null}
           stale={tracked !== null && tracked.reelKey !== reelKey(clips)}
           turns={turns}
-          clips={clips}
+          clips={tracked?.sent ?? []}
           nameOf={nameOf}
         />
       </div>

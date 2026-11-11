@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { GeoChatRequestError } from '../api';
 import { debateQueryKeys, debateQueryNetworkOptions, useGeoChatAuth } from '../hooks';
-import { type MomentBackfillBody, getDebateTranscriptWords, getMomentBackfill, postMomentBackfill } from './api';
+import { type MomentBackfillBody, getMomentBackfill, postMomentBackfill } from './api';
 import { jobInFlight, reelJob } from './reel-status';
 
 /** How often the editor reads a queued or rendering request again. */
@@ -12,16 +12,6 @@ export const REEL_JOB_POLL_MS = 4_000;
 
 /** Media admins rarely change mid-visit; the answer is kept a while so the menu does not re-ask. */
 const MEDIA_ADMIN_STALE_MS = 5 * 60_000;
-
-export const momentsEditorQueryKeys = {
-  /** Per viewer, not per debate: who is a media admin does not depend on the debate asked about. */
-  mediaAdmin: (accountKey: string | null) => ['debates', 'account', accountKey, 'media-admin'] as const,
-  backfill: (debateId: string, accountKey: string | null) =>
-    ['debates', 'account', accountKey, 'moment-backfill', debateId] as const,
-  plan: (debateId: string, accountKey: string | null) =>
-    ['debates', 'account', accountKey, 'moment-reel-plan', debateId] as const,
-  words: (debateId: string) => ['debates', 'transcript-words', debateId] as const,
-};
 
 /**
  * geo-chat's answer that the viewer is not a media admin: off the allowlist (403
@@ -44,16 +34,24 @@ export function useIsMediaAdmin(debateId: string, enabled: boolean) {
   const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
   const query = useQuery({
     ...debateQueryNetworkOptions,
-    queryKey: momentsEditorQueryKeys.mediaAdmin(accountKey),
+    queryKey: debateQueryKeys.mediaAdmin(accountKey),
+    // A refusal is an answer, kept as data like a yes: as an error it would have no data, which
+    // React Query treats as stale whatever `staleTime` says, and every card the feed activates
+    // would ask geo-chat again.
     queryFn: async ({ signal }) => {
-      await getMomentBackfill(debateId, getPrivyIdentityToken, accountKey, signal);
-      return true;
+      try {
+        await getMomentBackfill(debateId, getPrivyIdentityToken, accountKey, signal);
+        return true;
+      } catch (error) {
+        if (isMediaAdminRefusal(error)) return false;
+        throw error;
+      }
     },
     enabled: enabled && authenticated,
     staleTime: MEDIA_ADMIN_STALE_MS,
     retry: (failureCount, error) => !isMediaAdminRefusal(error) && failureCount < 2,
   });
-  return query.data === true && !isMediaAdminRefusal(query.error);
+  return query.data === true;
 }
 
 /**
@@ -64,7 +62,7 @@ export function useMomentBackfill(debateId: string, enabled: boolean) {
   const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
   return useQuery({
     ...debateQueryNetworkOptions,
-    queryKey: momentsEditorQueryKeys.backfill(debateId, accountKey),
+    queryKey: debateQueryKeys.momentBackfill(debateId, accountKey),
     queryFn: ({ signal }) => getMomentBackfill(debateId, getPrivyIdentityToken, accountKey, signal),
     enabled: enabled && authenticated,
     retry: (failureCount, error) => !isMediaAdminRefusal(error) && failureCount < 2,
@@ -82,7 +80,7 @@ export function useMomentReelPlan(debateId: string, enabled: boolean) {
   const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
   return useQuery({
     ...debateQueryNetworkOptions,
-    queryKey: momentsEditorQueryKeys.plan(debateId, accountKey),
+    queryKey: debateQueryKeys.momentReelPlan(debateId, accountKey),
     queryFn: ({ signal }) =>
       postMomentBackfill(
         { debate_ids: [debateId], apply: false, unlock: true },
@@ -92,17 +90,6 @@ export function useMomentReelPlan(debateId: string, enabled: boolean) {
       ),
     enabled: enabled && authenticated,
     retry: (failureCount, error) => !isMediaAdminRefusal(error) && failureCount < 2,
-  });
-}
-
-/** The transcript with its words (GEO-3349), which the editor snaps and counts speakers with. */
-export function useTranscriptWords(debateId: string, enabled: boolean) {
-  const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
-  return useQuery({
-    ...debateQueryNetworkOptions,
-    queryKey: momentsEditorQueryKeys.words(debateId),
-    queryFn: ({ signal }) => getDebateTranscriptWords(debateId, getPrivyIdentityToken, accountKey, signal),
-    enabled: enabled && authenticated,
   });
 }
 
@@ -118,12 +105,12 @@ export function useQueueMomentReel(debateId: string) {
       postMomentBackfill({ ...body, debate_ids: [debateId], apply: true }, getPrivyIdentityToken, accountKey),
     onSuccess: entry => {
       if (entry?.request) {
-        queryClient.setQueryData(momentsEditorQueryKeys.backfill(debateId, accountKey), {
+        queryClient.setQueryData(debateQueryKeys.momentBackfill(debateId, accountKey), {
           request: entry.request,
           entry,
         });
       }
-      void queryClient.invalidateQueries({ queryKey: momentsEditorQueryKeys.backfill(debateId, accountKey) });
+      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.momentBackfill(debateId, accountKey) });
     },
   });
 }
@@ -133,7 +120,7 @@ export function useRefreshAfterReel(debateId: string) {
   const queryClient = useQueryClient();
   const { accountKey } = useGeoChatAuth();
   return () => {
-    void queryClient.invalidateQueries({ queryKey: momentsEditorQueryKeys.plan(debateId, accountKey) });
+    void queryClient.invalidateQueries({ queryKey: debateQueryKeys.momentReelPlan(debateId, accountKey) });
     void queryClient.invalidateQueries({ queryKey: debateQueryKeys.extractedClaims(debateId) });
   };
 }

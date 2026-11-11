@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import type { DebateTranscriptSpan } from '../api';
 import { RENDERED_TURN_SEGMENTS } from '../open-rounds-media-fixtures';
-import type { DebateTranscriptWord } from './api';
 import {
   type EditorClip,
   type ReelWord,
@@ -37,7 +37,7 @@ const clip = (start: number, end: number, claim: number | null = null): EditorCl
 });
 
 describe('playerWords', () => {
-  const served = (start: number, end: number, source?: [number, number]): DebateTranscriptWord => ({
+  const served = (start: number, end: number, source?: [number, number]): DebateTranscriptSpan => ({
     participant_slot: 1,
     start_ms: start,
     end_ms: end,
@@ -116,7 +116,8 @@ describe('clipQuote', () => {
 });
 
 describe('clipsFromLiveReel', () => {
-  it('puts the live cuts on the player’s clock, with no claim picked', () => {
+  // A clip republished untouched must keep the claim it plays for, not go to the closest one.
+  it('puts the live cuts on the player’s clock, keeping the claim each plays for', () => {
     const clips = clipsFromLiveReel(
       {
         clock: 'video',
@@ -124,7 +125,8 @@ describe('clipsFromLiveReel', () => {
       },
       RENDERED_TURN_SEGMENTS
     );
-    expect(clips).toMatchObject([{ start_ms: 136_400, end_ms: 146_400, claim_index: null, live_claim_text: 'Coffee' }]);
+    expect(clips).toMatchObject([{ start_ms: 136_400, end_ms: 146_400, claim_index: 3, live_claim_text: 'Coffee' }]);
+    expect(manualReelClips(clips)).toEqual([{ start: 136.4, end: 146.4, claim_index: 3 }]);
   });
 });
 
@@ -135,7 +137,7 @@ describe('clipsFromServedMoments', () => {
       [{ text: 'A' }, { text: 'B' }],
       RENDERED_TURN_SEGMENTS
     );
-    expect(clips).toMatchObject([{ start_ms: 136_400, end_ms: 146_400, claim_index: null, live_claim_text: 'B' }]);
+    expect(clips).toMatchObject([{ start_ms: 136_400, end_ms: 146_400, claim_index: 1, live_claim_text: 'B' }]);
   });
 });
 
@@ -146,19 +148,42 @@ describe('clipProblems', () => {
     expect(clipProblems(clip(129_000, 141_000), words, RENDERED_TURN_SEGMENTS)).toEqual([]);
   });
 
-  // 120 s to 128 s on the recordings is a condensed break: geo-chat refuses a clip crossing it.
-  it('refuses an edge in a stretch the video cut', () => {
-    expect(clipProblems(clip(124_000, 141_000), words, RENDERED_TURN_SEGMENTS)).toContain(
-      'Its start falls in a stretch the video cut. Move it into a turn.'
-    );
+  // 120 s to 128 s on the recordings is a condensed break. geo-chat trims an edge in it to the
+  // stretch the clip's words are said in, so only words from two stretches are refused.
+  it('takes an edge in a stretch the video cut when its words are in one turn', () => {
+    expect(clipProblems(clip(124_000, 141_000), words, RENDERED_TURN_SEGMENTS)).toEqual([]);
   });
 
-  it('refuses a clip that crosses a cut, though both its edges are placed', () => {
-    expect(clipProblems(clip(110_000, 131_000), words, RENDERED_TURN_SEGMENTS)).toContain(
+  // The live reel's cut at 121.2-131.2 s on the video reaches 0.4 s into the condensed break; it
+  // loads at 127.6 s on the player's clock and must open publishable.
+  it('opens a live reel cut whose edge room reaches into a condensed break as publishable', () => {
+    const [live] = clipsFromLiveReel(
+      {
+        clock: 'video',
+        clips: [{ start_ms: 121_200, end_ms: 131_200, speaker_slot: 0, claim_index: null, claim_text: null }],
+      },
+      RENDERED_TURN_SEGMENTS
+    );
+    expect(live.start_ms).toBe(127_600);
+    expect(clipProblems(live, [word(1, 128_100, 128_500), ...words], RENDERED_TURN_SEGMENTS)).toEqual([]);
+  });
+
+  it('refuses a clip whose words cross a cut', () => {
+    const across = [word(2, 115_000, 115_400), ...words];
+    expect(clipProblems(clip(110_000, 131_000), across, RENDERED_TURN_SEGMENTS)).toEqual([
+      'Its words cross a cut in the video. Keep them inside one stretch.',
+    ]);
+    // On one clock there is no cut to cross.
+    expect(clipProblems(clip(110_000, 131_000), across, ONE_CLOCK)).toEqual([]);
+  });
+
+  it('judges by the edges when there are no words', () => {
+    expect(clipProblems(clip(124_000, 141_000), [], RENDERED_TURN_SEGMENTS)).toContain(
+      'Its start falls in a stretch the video cut. Move it into a turn.'
+    );
+    expect(clipProblems(clip(110_000, 131_000), [], RENDERED_TURN_SEGMENTS)).toContain(
       'It crosses a cut in the video. Keep it inside one stretch.'
     );
-    // On one clock there is no cut to cross.
-    expect(clipProblems(clip(110_000, 131_000), words, ONE_CLOCK)).toEqual([]);
   });
 
   it('refuses a clip longer than geo-chat takes, backwards, or without a whole word', () => {

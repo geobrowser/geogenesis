@@ -149,6 +149,18 @@ describe('per-debate query keys', () => {
     expect(debateQueryKeys.transcript(DASHED_DEBATE_ID, 'json')).toEqual(
       debateQueryKeys.transcript(DASHLESS_DEBATE_ID, 'json')
     );
+    expect(debateQueryKeys.momentBackfill(DASHED_DEBATE_ID, 'a')).toEqual(
+      debateQueryKeys.momentBackfill(DASHLESS_DEBATE_ID, 'a')
+    );
+  });
+
+  // GEO-3671: the moments editor's words are another entry than a plain transcript, under the
+  // prefix the gateway refreshes on a transcript event.
+  it('keys a transcript read with words apart from a plain one, under the same prefix', () => {
+    const plain = debateQueryKeys.transcript(DASHED_DEBATE_ID, 'json');
+    const words = debateQueryKeys.transcript(DASHED_DEBATE_ID, 'json', ['words']);
+    expect(words).not.toEqual(plain);
+    expect(words.slice(0, 3)).toEqual(['debates', 'transcript', DASHLESS_DEBATE_ID]);
   });
 
   it("fetches a debate's media once when callers hold different spellings of its id", async () => {
