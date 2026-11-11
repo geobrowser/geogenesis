@@ -7,6 +7,7 @@ import * as React from 'react';
 import { type CallRecordingState, type DebateLobbyView } from '~/core/debates/api';
 import { debateQueryKeys, debateQueryNetworkOptions, useGeoChatAuth } from '~/core/debates/hooks';
 import { useStoreLobbyView } from '~/core/debates/lobbies/hooks';
+import { FEED_SESSION_GC_MS } from '~/core/explore/explore-constants';
 
 import { spaceCallKeys } from '../query-keys';
 import {
@@ -106,6 +107,7 @@ export function usePastCalls(enabled: boolean) {
     queryFn: ({ signal }) => listPastCalls({ limit: PAST_CALLS_LIMIT }, signal),
     enabled,
     staleTime: PAST_CALLS_STALE_MS,
+    gcTime: FEED_SESSION_GC_MS,
     select: data => data.calls,
   });
 }
