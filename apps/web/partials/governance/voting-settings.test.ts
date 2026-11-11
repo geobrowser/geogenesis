@@ -193,6 +193,12 @@ describe('fast path for new members', () => {
   const form = snapshotToFormState(DEFAULT_VOTING_SETTINGS_SNAPSHOT);
   const carried = snapshotToHidden(DEFAULT_VOTING_SETTINGS_SNAPSHOT);
 
+  // A restricted member who leaves can never request to rejoin (GEO-3632), so new spaces start open.
+  it('is on by default for new spaces', () => {
+    expect(DEFAULT_VOTING_SETTINGS_SNAPSHOT.disableFastPathForNewMembers).toBe(false);
+    expect(form.disableFastPathForNewMembers).toBe(false);
+  });
+
   it('is written from the form rather than carried through unchanged', () => {
     const result = parseVotingSettingsForm({ ...form, disableFastPathForNewMembers: false }, carried);
 
