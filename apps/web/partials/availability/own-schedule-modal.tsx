@@ -5,10 +5,9 @@ import * as React from 'react';
 import type { AvailabilityBlock } from '~/core/availability/blocks';
 import { calendarBusyWindow } from '~/core/availability/calendar-busy';
 import type { ScheduleEditorSurface } from '~/core/availability/schedule-analytics';
-import type { CalendarProvider } from '~/core/debates/api';
+import { accountSetupMessage } from '~/core/debates/account-setup-copy';
 import { useCalendarBusy, useCalendarConnections } from '~/core/debates/calendar-hooks';
 import { useDebateSchedule, useSaveDebateSchedule } from '~/core/debates/hooks';
-import { useFeatureFlag } from '~/core/state/feature-flags';
 
 import { AvailabilityModal } from './availability-modal';
 import type { CalendarReturn } from './calendar-return-url';
@@ -29,26 +28,10 @@ type Props = {
 
 /**
  * "Set your debate schedule", wired to the viewer's saved week — the one editor the navbar, the
- * debates hub's header calendar and banner, and your own availability link all open.
+ * debates hub's header calendar and banner, and your own availability link all open. Connected
+ * calendars sit above the grid, with their merged busy time shaded on it.
  */
 export function OwnScheduleModal(props: Props) {
-  const google = useFeatureFlag('googleCalendar');
-  const microsoft = useFeatureFlag('microsoftCalendar');
-  const providers: CalendarProvider[] = [
-    ...(google ? ['google' as const] : []),
-    ...(microsoft ? ['microsoft' as const] : []),
-  ];
-
-  // A separate component, so the calendar reads are not even set up while both flags are off.
-  return providers.length > 0 ? (
-    <ScheduleEditorWithCalendar {...props} providers={providers} />
-  ) : (
-    <ScheduleEditor {...props} />
-  );
-}
-
-/** Connected calendars above the grid, and their merged busy time shaded on it. */
-function ScheduleEditorWithCalendar({ providers, ...props }: Props & { providers: CalendarProvider[] }) {
   const { google, microsoft, disabled } = useCalendarConnections(props.open);
   // Asked for only once there is a connection to have produced any. Busy time is merged server-side.
   const connected = Boolean(google || microsoft);
@@ -64,10 +47,10 @@ function ScheduleEditorWithCalendar({ providers, ...props }: Props & { providers
       calendarSection={
         disabled
           ? undefined
-          : ({ unsavedChanges }) => (
+          : ({ unsavedChanges, saveDraft }) => (
               <CalendarSection
-                providers={providers}
                 unsavedChanges={unsavedChanges}
+                saveDraft={saveDraft}
                 returned={props.calendarReturn ?? null}
               />
             )
@@ -88,7 +71,7 @@ function ScheduleEditor({
 }: Props & Pick<React.ComponentProps<typeof AvailabilityModal>, 'calendarSection' | 'busyIntervals'>) {
   // `blocks` stays undefined until the read answers, and is passed straight through: the modal has
   // to tell "not read yet" from "an empty week" to avoid saving the latter over the former.
-  const { blocks, isError, refetch } = useDebateSchedule();
+  const { blocks, timezone, isError, error: scheduleError, refetch } = useDebateSchedule();
   const saveSchedule = useSaveDebateSchedule({ surface });
 
   return (
@@ -96,12 +79,16 @@ function ScheduleEditor({
       open={open}
       onOpenChange={onOpenChange}
       blocks={blocks}
+      savedTimezone={timezone}
       error={isError}
+      errorMessage={accountSetupMessage(scheduleError)}
       onRetry={() => refetch()}
       onSave={nextBlocks => {
         saveSchedule.mutate(nextBlocks);
         onSaved?.(nextBlocks);
       }}
+      // Not `onSaved`: the editor stays open, and the page is about to leave for the provider.
+      onSaveDraft={nextBlocks => saveSchedule.mutateAsync(nextBlocks)}
       openerRef={openerRef}
       headerAction={<CopyOwnAvailabilityLinkButton />}
       calendarSection={calendarSection}

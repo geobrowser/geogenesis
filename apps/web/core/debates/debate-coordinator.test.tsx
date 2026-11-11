@@ -1,9 +1,16 @@
 import '@testing-library/jest-dom/vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
+import { Provider, createStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { DebateActivity, DebateRequestsResponse, DebateSharePrompt, UpcomingDebateRoom } from './api';
+import type {
+  DebateActivity,
+  DebateMyLobby,
+  DebateRequestsResponse,
+  DebateSharePrompt,
+  UpcomingDebateRoom,
+} from './api';
 import { DebateCoordinator } from './debate-coordinator';
 import { clearEnteringDebate, markEnteringDebate, markEnteringPendingDebate } from './debate-entry-intent';
 import { registerLobbyStepOut } from './lobbies/step-out';
@@ -13,6 +20,7 @@ import {
   markRematchAnswered,
   readRematchJoinIntent,
 } from './rematch-join-intent';
+import { debatesHubAtom, opponentLeftNoticeAtom } from '~/atoms';
 
 const mocks = vi.hoisted(() => ({
   media: { artifacts: [{ kind: 'social_video' }] } as { artifacts: { kind: string }[] },
@@ -20,6 +28,8 @@ const mocks = vi.hoisted(() => ({
   push: vi.fn(),
   /** The room view the page at `/debate/{id}` loaded, read by the coordinator from the cache. */
   roomAtPath: null as { kind: 'debate' | 'lobby' } | null,
+  myLobby: { current_lobby_id: null, stepped_out: false } as DebateMyLobby | undefined,
+  myLobbyFetching: false,
   activity: null as DebateActivity | null,
   requests: { outbound: null, incoming: [] } as DebateRequestsResponse,
   acceptRequestMutate: vi.fn(),
@@ -34,6 +44,7 @@ const mocks = vi.hoisted(() => ({
   gatewayPresence: vi.fn(),
   prompts: [] as DebateSharePrompt[],
   promptsFetching: false,
+  promptsError: false,
   mediaMutate: vi.fn(),
   handleMutate: vi.fn(),
   acceptChallengeMutate: vi.fn(),
@@ -83,7 +94,11 @@ vi.mock('./api', async importOriginal => {
 vi.mock('./hooks', () => ({
   useGeoChatAuth: () => ({ ready: true, authenticated: mocks.authenticated, getPrivyIdentityToken: vi.fn() }),
   useDebateActivity: () => ({ data: mocks.activity, refetch: mocks.refetch }),
-  useDebateSharePrompts: () => ({ data: { prompts: mocks.prompts }, isFetching: mocks.promptsFetching }),
+  useDebateSharePrompts: () => ({
+    data: { prompts: mocks.prompts },
+    isFetching: mocks.promptsFetching,
+    isError: mocks.promptsError,
+  }),
   useDebateMediaArtifactUrl: () => ({ mutate: mocks.mediaMutate, error: null }),
   useDebateMedia: () => ({ data: mocks.media }),
   useHandleDebateSharePrompt: () => ({ mutate: mocks.handleMutate, isPending: false }),
@@ -104,6 +119,14 @@ vi.mock('./rooms/hooks', () => ({
   }),
   useFinishedRoomIds: () => mocks.finishedRoomIds,
   useDebateRoom: () => ({ data: mocks.roomAtPath ?? undefined }),
+}));
+
+vi.mock('./lobbies/hooks', () => ({
+  useMyDebateLobby: () => ({
+    data: mocks.myLobby,
+    isLoading: mocks.myLobby === undefined,
+    isFetching: mocks.myLobbyFetching || mocks.myLobby === undefined,
+  }),
 }));
 
 // The banner names the opponent from the request that booked the room; that read is its own concern.
@@ -175,6 +198,8 @@ vi.mock('./debate-gateway', () => ({
   useDebateGatewayScope: () => undefined,
 }));
 
+vi.mock('./use-geo-chat-account-recovery', () => ({ useGeoChatAccountRecovery: () => undefined }));
+
 vi.mock('./matchmaking/hooks', () => ({
   useDebateRequests: () => ({ data: mocks.requests, isLoading: false, error: null }),
   useAcceptDebateRequest: () => ({ mutate: mocks.acceptRequestMutate, isPending: false, error: null }),
@@ -214,6 +239,8 @@ vi.mock('~/core/state/feature-flags', async importOriginal => ({
 beforeEach(() => {
   sessionStorage.clear();
   mocks.roomAtPath = null;
+  mocks.myLobby = { current_lobby_id: null, stepped_out: false };
+  mocks.myLobbyFetching = false;
   mocks.media = { artifacts: [{ kind: 'social_video' }] };
   mocks.push.mockReset();
   mocks.mediaMutate.mockReset();
@@ -242,6 +269,7 @@ beforeEach(() => {
   mocks.gatewayPresence.mockReset();
   mocks.prompts = [];
   mocks.promptsFetching = false;
+  mocks.promptsError = false;
   mocks.authenticated = true;
   mocks.gatewayPaused = false;
   mocks.gatewayPauseReason = null;
@@ -511,6 +539,102 @@ describe('DebateCoordinator', () => {
     render(<DebateCoordinator />);
 
     await waitFor(() => expect(mocks.push).not.toHaveBeenCalled());
+  });
+
+  // The room and rematch pages don't draw the opponent-left dialog anymore.
+  it('renders the opponent-left notice from the atom and clears it when dismissed', () => {
+    const store = createStore();
+    store.set(opponentLeftNoticeAtom, true);
+
+    render(
+      <Provider store={store}>
+        <DebateCoordinator />
+      </Provider>
+    );
+
+    expect(screen.getByRole('dialog', { name: 'Opponent left' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+
+    expect(screen.queryByRole('dialog', { name: 'Opponent left' })).not.toBeInTheDocument();
+    expect(store.get(opponentLeftNoticeAtom)).toBe(false);
+  });
+
+  it('opens the debates hub and clears the notice from Find debate', () => {
+    const store = createStore();
+    store.set(opponentLeftNoticeAtom, true);
+
+    render(
+      <Provider store={store}>
+        <DebateCoordinator />
+      </Provider>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Find debate' }));
+
+    // The notice closes and the hub opens on its default tab, the one way back into a debate.
+    expect(screen.queryByRole('dialog', { name: 'Opponent left' })).not.toBeInTheDocument();
+    expect(store.get(opponentLeftNoticeAtom)).toBe(false);
+    expect(store.get(debatesHubAtom)).toEqual({ tab: 'people' });
+  });
+
+  it('holds an incoming request back behind the opponent-left notice', async () => {
+    mocks.activity = { ...idleActivity(), incoming_request_count: 1 };
+    mocks.requests = { outbound: null, incoming: [incomingRequest()] };
+    const store = createStore();
+    store.set(opponentLeftNoticeAtom, true);
+
+    render(
+      <Provider store={store}>
+        <DebateCoordinator />
+      </Provider>
+    );
+
+    expect(screen.getByRole('dialog', { name: 'Opponent left' })).toBeInTheDocument();
+    expect(screen.queryByText('Debate request')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+
+    expect(await screen.findByText('Debate request')).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Opponent left' })).not.toBeInTheDocument();
+  });
+
+  it('keeps the nudge popup off until the opponent-left notice is closed', async () => {
+    nudgePopup.enabled = [];
+    const store = createStore();
+    store.set(opponentLeftNoticeAtom, true);
+
+    render(
+      <Provider store={store}>
+        <DebateCoordinator />
+      </Provider>
+    );
+
+    await waitFor(() => expect(nudgePopup.enabled.length).toBeGreaterThan(0));
+    expect(nudgePopup.enabled).not.toContain(true);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+
+    await waitFor(() => expect(nudgePopup.enabled.at(-1)).toBe(true));
+  });
+
+  it('holds the share prompt back behind the opponent-left notice', async () => {
+    showSharePrompt();
+    const store = createStore();
+    store.set(opponentLeftNoticeAtom, true);
+
+    render(
+      <Provider store={store}>
+        <DebateCoordinator />
+      </Provider>
+    );
+
+    expect(screen.getByRole('dialog', { name: 'Opponent left' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Close share prompt' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+
+    expect(await screen.findByRole('button', { name: 'Close share prompt' })).toBeInTheDocument();
   });
 
   // The rematch the viewer is already looking at, plus the debate it came from still reported in
@@ -1501,6 +1625,161 @@ describe('DebateCoordinator', () => {
 
     await waitFor(() => expect(mocks.push).not.toHaveBeenCalled());
     expect(screen.queryByText('Your debate is ready')).not.toBeInTheDocument();
+  });
+
+  it.each([null, { kind: 'lobby' as const }])(
+    'defers cached share prompts until leaving the lobby page (room view: %s)',
+    async room => {
+      showSharePrompt();
+      mocks.pathname = '/debate/lobby-1';
+      mocks.roomAtPath = room;
+      const view = render(<DebateCoordinator />);
+
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(mocks.mediaMutate).not.toHaveBeenCalled();
+      expect(mocks.handleMutate).not.toHaveBeenCalled();
+
+      mocks.pathname = '/explore';
+      mocks.roomAtPath = null;
+      view.rerender(<DebateCoordinator />);
+
+      expect(await screen.findByRole('dialog', { name: 'Your debate is ready to share!' })).toBeInTheDocument();
+    }
+  );
+
+  it('waits for lobby membership to load before showing a cached share prompt', async () => {
+    showSharePrompt();
+    mocks.myLobby = undefined;
+    const view = render(<DebateCoordinator />);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    mocks.myLobby = { current_lobby_id: 'lobby-1', stepped_out: false };
+    view.rerender(<DebateCoordinator />);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    mocks.myLobby = { current_lobby_id: null, stepped_out: false };
+    view.rerender(<DebateCoordinator />);
+    expect(await screen.findByRole('dialog', { name: 'Your debate is ready to share!' })).toBeInTheDocument();
+  });
+
+  it.each([false, true])('defers shares during a background membership refresh (retained: %s)', async retained => {
+    showSharePrompt();
+    mocks.myLobbyFetching = !retained;
+    const view = render(<DebateCoordinator />);
+    if (retained) {
+      expect(await screen.findByRole('dialog', { name: 'Your debate is ready to share!' })).toBeInTheDocument();
+    }
+
+    // Cached membership still says no lobby while the gateway refreshes it.
+    mocks.myLobbyFetching = true;
+    view.rerender(<DebateCoordinator />);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    mocks.myLobby = { current_lobby_id: 'lobby-1', stepped_out: false };
+    mocks.myLobbyFetching = false;
+    view.rerender(<DebateCoordinator />);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    mocks.myLobby = { current_lobby_id: null, stepped_out: false };
+    mocks.promptsFetching = true;
+    view.rerender(<DebateCoordinator />);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    mocks.promptsFetching = false;
+    view.rerender(<DebateCoordinator />);
+    expect(await screen.findByRole('dialog', { name: 'Your debate is ready to share!' })).toBeInTheDocument();
+    expect(mocks.handleMutate).not.toHaveBeenCalled();
+  });
+
+  it.each([false, true])('waits for lobby membership to end across tabs (stepped out: %s)', async steppedOut => {
+    showSharePrompt();
+    mocks.myLobby = { current_lobby_id: 'lobby-1', stepped_out: steppedOut };
+    const view = render(<DebateCoordinator />);
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(mocks.handleMutate).not.toHaveBeenCalled();
+
+    mocks.myLobby = { current_lobby_id: null, stepped_out: false };
+    view.rerender(<DebateCoordinator />);
+
+    expect(await screen.findByRole('dialog', { name: 'Your debate is ready to share!' })).toBeInTheDocument();
+  });
+
+  it.each([false, true])('refreshes a retained share prompt after lobby exit (still pending: %s)', async pending => {
+    showSharePrompt();
+    const prompts = mocks.prompts;
+    const view = render(<DebateCoordinator />);
+    expect(await screen.findByRole('dialog', { name: 'Your debate is ready to share!' })).toBeInTheDocument();
+
+    mocks.pathname = '/debate/lobby-1';
+    mocks.roomAtPath = { kind: 'lobby' };
+    view.rerender(<DebateCoordinator />);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(mocks.handleMutate).not.toHaveBeenCalled();
+
+    mocks.pathname = '/explore';
+    mocks.roomAtPath = null;
+    mocks.promptsFetching = true;
+    view.rerender(<DebateCoordinator />);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    // Another tab may have shared or dismissed it while this tab was in the lobby.
+    mocks.prompts = pending ? prompts : [];
+    mocks.promptsFetching = false;
+    view.rerender(<DebateCoordinator />);
+    if (pending) {
+      expect(await screen.findByRole('dialog', { name: 'Your debate is ready to share!' })).toBeInTheDocument();
+    } else {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    }
+    expect(mocks.handleMutate).not.toHaveBeenCalled();
+  });
+
+  it.each(['lobby', 'debate'])('does not open cached shares after a failed post-%s refresh', async flow => {
+    showSharePrompt();
+    const idleActivity = mocks.activity;
+    const view = render(<DebateCoordinator />);
+    expect(await screen.findByRole('dialog', { name: 'Your debate is ready to share!' })).toBeInTheDocument();
+
+    mocks.pathname = flow === 'lobby' ? '/debate/lobby-1' : '/space/space-1/debates/debate-1';
+    mocks.roomAtPath = flow === 'lobby' ? { kind: 'lobby' } : null;
+    mocks.activity = flow === 'debate' ? activityWithDebate() : idleActivity;
+    view.rerender(<DebateCoordinator />);
+    expect(screen.queryByRole('dialog', { name: 'Your debate is ready to share!' })).not.toBeInTheDocument();
+
+    mocks.pathname = '/explore';
+    mocks.roomAtPath = null;
+    mocks.activity = idleActivity;
+    mocks.promptsFetching = true;
+    view.rerender(<DebateCoordinator />);
+    expect(screen.queryByRole('dialog', { name: 'Your debate is ready to share!' })).not.toBeInTheDocument();
+
+    // A failed refetch keeps the old successful result in TanStack Query's data.
+    mocks.promptsFetching = false;
+    mocks.promptsError = true;
+    view.rerender(<DebateCoordinator />);
+    expect(screen.queryByRole('dialog', { name: 'Your debate is ready to share!' })).not.toBeInTheDocument();
+
+    mocks.promptsError = false;
+    mocks.prompts = [];
+    view.rerender(<DebateCoordinator />);
+    expect(screen.queryByRole('dialog', { name: 'Your debate is ready to share!' })).not.toBeInTheDocument();
+
+    showSharePrompt();
+    view.rerender(<DebateCoordinator />);
+    expect(await screen.findByRole('dialog', { name: 'Your debate is ready to share!' })).toBeInTheDocument();
+    expect(mocks.handleMutate).not.toHaveBeenCalled();
+  });
+
+  it('keeps an open share dialog mounted through an unrelated share refresh failure', async () => {
+    showSharePrompt();
+    const view = render(<DebateCoordinator />);
+    const dialog = await screen.findByRole('dialog', { name: 'Your debate is ready to share!' });
+
+    mocks.promptsError = true;
+    view.rerender(<DebateCoordinator />);
+
+    expect(screen.getByRole('dialog', { name: 'Your debate is ready to share!' })).toBe(dialog);
   });
 
   it('requests the exact social preview and starts preparing the MP4 on open', async () => {

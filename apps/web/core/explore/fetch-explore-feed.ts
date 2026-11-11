@@ -1389,7 +1389,7 @@ async function serveForYouPage(args: {
  * by, so the lead slot never holds a debate the card would then refuse to play. A Debate entity's id
  * is its geo-chat debate id, hyphenated.
  */
-async function debateHasProcessedVideo(
+export async function debateHasProcessedVideo(
   entityId: string,
   signal: AbortSignal,
   stills?: Map<string, DebatePosters>

@@ -4,6 +4,8 @@ import type * as Auth from '@geogenesis/auth';
 
 import * as React from 'react';
 
+import { reportSignInLoadFailed } from '~/core/auth/sign-in-reports';
+
 import {
   type IdentityTokenValue,
   type InstanceKind,
@@ -45,23 +47,30 @@ const signedOutPrivy = {
   isModalOpen: false,
 } as const;
 
+/** Waits for Privy; a wait that gives up is reported for the open sign-in, then rejects as before. */
+function waitForPrivy<R>(ready: () => R | null, label: string): Promise<R> {
+  requestRealAuth();
+  return whenReady(ready).catch(error => {
+    reportSignInLoadFailed('call_timeout', { call: label, error });
+    throw error;
+  });
+}
+
 /** Run `call` against the real hook result for `id` once Privy is up. Never a dead click. */
-function invokeInstance<R, T>(id: string, call: (result: R) => T): T | Promise<Awaited<T>> {
+function invokeInstance<R, T>(id: string, label: string, call: (result: R) => T): T | Promise<Awaited<T>> {
   const ready = () => (realPrivyReady() ? (getInstanceResult(id) as R | null) : null);
   const now = ready();
   // Already loaded: stay synchronous, so a click that opens a popup is still inside its gesture.
   if (now !== null) return call(now);
-  requestRealAuth();
-  return whenReady(ready).then(result => call(result)) as Promise<Awaited<T>>;
+  return waitForPrivy(ready, label).then(result => call(result)) as Promise<Awaited<T>>;
 }
 
 /** Same, for the actions on the singleton `usePrivy` value. */
-function invokePrivy<T>(call: (privy: PrivyValue) => T): T | Promise<Awaited<T>> {
+function invokePrivy<T>(label: string, call: (privy: PrivyValue) => T): T | Promise<Awaited<T>> {
   const ready = () => (realPrivyReady() ? getState().privy : null);
   const now = ready();
   if (now !== null) return call(now);
-  requestRealAuth();
-  return whenReady(ready).then(privy => call(privy)) as Promise<Awaited<T>>;
+  return waitForPrivy(ready, label).then(privy => call(privy)) as Promise<Awaited<T>>;
 }
 
 function logFailure(error: unknown) {
@@ -79,11 +88,11 @@ const shimPrivy = (ready: boolean) =>
     ...signedOutPrivy,
     ready,
     login: (...args: unknown[]) =>
-      swallowing(invokePrivy(privy => (privy.login as (...a: unknown[]) => unknown)(...args))),
-    logout: () => swallowing(invokePrivy(privy => privy.logout())),
-    getAccessToken: () => invokePrivy(privy => privy.getAccessToken()),
+      swallowing(invokePrivy('login', privy => (privy.login as (...a: unknown[]) => unknown)(...args))),
+    logout: () => swallowing(invokePrivy('logout', privy => privy.logout())),
+    getAccessToken: () => invokePrivy('get_access_token', privy => privy.getAccessToken()),
     exportWallet: (...args: unknown[]) =>
-      invokePrivy(privy => (privy.exportWallet as (...a: unknown[]) => unknown)(...args)),
+      invokePrivy('export_wallet', privy => (privy.exportWallet as (...a: unknown[]) => unknown)(...args)),
   }) as unknown as PrivyValue;
 
 const SIGNED_OUT_PRIVY = shimPrivy(true);
@@ -165,7 +174,11 @@ export function usePrivyLogin(params?: LoginParams): ReturnType<typeof Auth.useP
   const { id } = useInstance('login', params);
   const login = React.useCallback(
     (...args: unknown[]) =>
-      swallowing(invokeInstance<{ login: (...a: unknown[]) => unknown }, unknown>(id, result => result.login(...args))),
+      swallowing(
+        invokeInstance<{ login: (...a: unknown[]) => unknown }, unknown>(id, 'privy_login', result =>
+          result.login(...args)
+        )
+      ),
     [id]
   );
   return React.useMemo(() => ({ login }) as unknown as ReturnType<typeof Auth.usePrivyLogin>, [login]);
@@ -175,7 +188,9 @@ export function useGeoLogin(params: Parameters<typeof Auth.useGeoLogin>[0]): Ret
   const { id } = useInstance('geoLogin', params);
   const login = React.useCallback(
     (...args: unknown[]) =>
-      swallowing(invokeInstance<{ login: (...a: unknown[]) => unknown }, unknown>(id, result => result.login(...args))),
+      swallowing(
+        invokeInstance<{ login: (...a: unknown[]) => unknown }, unknown>(id, 'login', result => result.login(...args))
+      ),
     [id]
   );
   return React.useMemo(() => ({ login }) as unknown as ReturnType<typeof Auth.useGeoLogin>, [login]);
@@ -184,7 +199,7 @@ export function useGeoLogin(params: Parameters<typeof Auth.useGeoLogin>[0]): Ret
 export function useLogout(params?: Parameters<typeof Auth.useLogout>[0]): ReturnType<typeof Auth.useLogout> {
   const { id } = useInstance('logout', params);
   const logout = React.useCallback(
-    () => swallowing(invokeInstance<{ logout: () => unknown }, unknown>(id, result => result.logout())),
+    () => swallowing(invokeInstance<{ logout: () => unknown }, unknown>(id, 'logout', result => result.logout())),
     [id]
   );
   return React.useMemo(() => ({ logout }) as unknown as ReturnType<typeof Auth.useLogout>, [logout]);
@@ -201,12 +216,14 @@ export function useLoginWithEmail(
   // for Privy and then run, and a failure to load rejects like any failed send would.
   const sendCode = React.useCallback(
     (...args: unknown[]) =>
-      invokeInstance<{ sendCode: (...a: unknown[]) => unknown }, unknown>(id, r => r.sendCode(...args)),
+      invokeInstance<{ sendCode: (...a: unknown[]) => unknown }, unknown>(id, 'send_code', r => r.sendCode(...args)),
     [id]
   );
   const loginWithCode = React.useCallback(
     (...args: unknown[]) =>
-      invokeInstance<{ loginWithCode: (...a: unknown[]) => unknown }, unknown>(id, r => r.loginWithCode(...args)),
+      invokeInstance<{ loginWithCode: (...a: unknown[]) => unknown }, unknown>(id, 'login_with_code', r =>
+        r.loginWithCode(...args)
+      ),
     [id]
   );
   return React.useMemo(
@@ -227,7 +244,9 @@ export function useLoginWithOAuth(): Pick<OAuthLogin, 'initOAuth' | 'state'> {
   const state = (result as Partial<OAuthLogin> | null)?.state ?? INITIAL_OAUTH_STATE;
   const initOAuth = React.useCallback(
     (...args: Parameters<OAuthLogin['initOAuth']>) =>
-      Promise.resolve(invokeInstance<OAuthLogin, Promise<void>>(id, r => r.initOAuth(...args))).then(() => undefined),
+      Promise.resolve(invokeInstance<OAuthLogin, Promise<void>>(id, 'init_oauth', r => r.initOAuth(...args))).then(
+        () => undefined
+      ),
     [id]
   );
   return React.useMemo(() => ({ initOAuth, state }), [initOAuth, state]);
@@ -265,6 +284,16 @@ export async function toViemAccount(...args: Parameters<typeof Auth.toViemAccoun
 
 export function retryEmbeddedWalletSetup() {
   void import('@geogenesis/auth').then(auth => auth.retryEmbeddedWalletSetup());
+}
+
+/** Privy has loaded and started. False after a load that failed or timed out. */
+export function isPrivyLoaded() {
+  return realPrivyReady();
+}
+
+/** `isPrivyLoaded`, re-rendering when it changes. */
+export function usePrivyLoaded() {
+  return React.useSyncExternalStore(subscribe, isPrivyLoaded, () => false);
 }
 
 export { restartAuthHost } from './auth-store';

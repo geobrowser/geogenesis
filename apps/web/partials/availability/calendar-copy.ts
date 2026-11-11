@@ -1,3 +1,4 @@
+import { accountSetupMessage } from '~/core/debates/account-setup-copy';
 import { type CalendarConnectionError, type CalendarProvider, GeoChatRequestError } from '~/core/debates/api';
 
 /** The calendar's name in copy. */
@@ -36,6 +37,8 @@ export function connectionErrorCopy(provider: CalendarProvider, code: CalendarCo
 
 /** A refused connect, refresh or disconnect. */
 export function requestErrorCopy(error: unknown) {
+  const setup = accountSetupMessage(error);
+  if (setup) return setup;
   const code = error instanceof GeoChatRequestError ? error.code : null;
   if (code === 'rate_limited') return 'You just refreshed. Try again in a minute.';
   return 'Something went wrong. Try again.';

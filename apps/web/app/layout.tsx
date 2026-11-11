@@ -6,6 +6,7 @@ import cx from 'classnames';
 import localFont from 'next/font/local';
 import 'react-medium-image-zoom/dist/styles.css';
 
+import { SIGN_IN_PENDING_SCRIPT } from '~/core/auth/sign-in-pending';
 import { Providers } from '~/core/providers';
 
 import '../styles/chat.css';
@@ -146,6 +147,14 @@ export default function RootLayout({
             <App>{children}</App>
           </Providers>
         </div>
+        {/* GEO-3569: hidden unless the sign-in link's script below marks <html>; see sign-in-pending. */}
+        <div id="sign-in-pending" role="status" aria-live="polite">
+          <div>
+            <span aria-hidden />
+            Opening sign-in…
+          </div>
+        </div>
+        <script dangerouslySetInnerHTML={{ __html: SIGN_IN_PENDING_SCRIPT }} />
       </body>
     </html>
   );

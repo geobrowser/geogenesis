@@ -8,6 +8,9 @@ export const EMPTY_TOPIC_HEX = '0x0000000000000000000000000000000000000000000000
 
 export const EMPTY_SIGNATURE = '0x' as Hex;
 
+/** keccak256('MEMBER') — the DAO membership role for reads and voluntary leaves. */
+export const SPACE_MEMBER_ROLE = '0xffa60083152bd11704a80cc8c7a409dad8aa74288b454a3ba0e94c0abc7cf168' as Hex;
+
 /**
  * DAOSpace governance action constants (bytes32)
  *

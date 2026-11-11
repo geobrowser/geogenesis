@@ -33,7 +33,12 @@ describe('useCreateAdminMatch', () => {
     });
 
     await act(() =>
-      result.current.mutateAsync({ firstUserId: 'a', secondUserId: 'b', start: new Date(Date.now() + 86_400_000) })
+      result.current.mutateAsync({
+        firstUserId: 'a',
+        secondUserId: 'b',
+        start: new Date(Date.now() + 86_400_000),
+        minutes: 30,
+      })
     );
 
     expect(invalidate.mock.calls.map(([filters]) => filters?.queryKey)).toEqual(
@@ -43,6 +48,26 @@ describe('useCreateAdminMatch', () => {
         debateQueryKeys.peerScheduleRoot('acct'),
       ])
     );
+  });
+
+  it('books the length picked, a whole hour included (GEO-3544)', async () => {
+    const create = vi
+      .spyOn(api, 'createAdminScheduledDebate')
+      .mockResolvedValue({} as Awaited<ReturnType<typeof api.createAdminScheduledDebate>>);
+    const client = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
+    const { result } = renderHook(() => useCreateAdminMatch(), {
+      wrapper: ({ children }: { children: React.ReactNode }) => (
+        <QueryClientProvider client={client}>{children}</QueryClientProvider>
+      ),
+    });
+
+    const start = new Date('2026-11-02T15:00:00.000Z');
+    await act(() => result.current.mutateAsync({ firstUserId: 'a', secondUserId: 'b', start, minutes: 60 }));
+
+    expect(create.mock.calls[0][0]).toMatchObject({
+      scheduled_start_at: '2026-11-02T15:00:00.000Z',
+      scheduled_end_at: '2026-11-02T16:00:00.000Z',
+    });
   });
 
   it('stays pending until the admin calendar has read the new match', async () => {
@@ -64,7 +89,7 @@ describe('useCreateAdminMatch', () => {
 
     let settled = false;
     const created = result.current
-      .mutateAsync({ firstUserId: 'a', secondUserId: 'b', start: new Date(Date.now() + 86_400_000) })
+      .mutateAsync({ firstUserId: 'a', secondUserId: 'b', start: new Date(Date.now() + 86_400_000), minutes: 30 })
       .then(() => (settled = true));
     await act(async () => {
       await new Promise(resolve => setTimeout(resolve, 0));

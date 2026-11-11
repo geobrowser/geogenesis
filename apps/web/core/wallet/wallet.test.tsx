@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { Provider, createStore } from 'jotai';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { closeSignInBox, readSignInBox } from '../auth/sign-in-box/sign-in-box-store';
 import { featureFlagsStorageKey } from '../state/feature-flags';
 import { clearLocalVotes, toggleLocalVote } from '../state/local-votes';
 import { closeSaveVotesPrompt, readSaveVotesPrompt } from '../state/save-votes-prompt';
@@ -29,6 +30,7 @@ afterEach(() => {
   cleanup();
   clearLocalVotes();
   closeSaveVotesPrompt();
+  closeSignInBox();
   window.localStorage.removeItem(featureFlagsStorageKey);
   vi.clearAllMocks();
 });
@@ -56,7 +58,8 @@ describe('GeoConnectButton', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Log in' }));
 
       expect(mocks.prepareOnboarding).toHaveBeenCalledWith({ returnTo: null });
-      expect(mocks.login).toHaveBeenCalled();
+      expect(readSignInBox()).not.toBeNull();
+      expect(mocks.login).not.toHaveBeenCalled();
     });
 
     // GEO-3400: like the navbar's, it opens the save sheet centred, named as the bar.
@@ -91,17 +94,16 @@ describe('GeoConnectButton', () => {
     expect(screen.getByRole('button', { name: 'Save 1 vote' })).toBeInTheDocument();
   });
 
-  // GEO-3139. With the flag off nothing Google reaches Privy: `login()` gets no options, so the
-  // modal shows the config's email-only methods exactly as before.
-  it('opens the email-only modal with the Google flag off', () => {
+  // Log in opens our sign-in box, which offers Google itself, rather than Privy's dialog.
+  it("opens the sign-in box, not Privy's dialog", () => {
     render(<GeoConnectButton />);
     fireEvent.click(screen.getByRole('button', { name: 'Log in' }));
 
-    expect(mocks.login).toHaveBeenCalledTimes(1);
-    expect(mocks.login.mock.calls[0]).toEqual([]);
+    expect(readSignInBox()?.attribution).toMatchObject({ component: 'navbar', auth_intent: 'sign_in' });
+    expect(mocks.login).not.toHaveBeenCalled();
   });
 
-  it('adds Google to the modal with the flag on', () => {
+  it('opens the sign-in box with the Google flag on too', () => {
     window.localStorage.setItem(featureFlagsStorageKey, JSON.stringify({ googleSignIn: true }));
     // A fresh store: the flag atom reads storage when a store first touches it.
     render(
@@ -111,6 +113,7 @@ describe('GeoConnectButton', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: 'Log in' }));
 
-    expect(mocks.login).toHaveBeenCalledWith({ loginMethods: ['email', 'google'] });
+    expect(readSignInBox()).not.toBeNull();
+    expect(mocks.login).not.toHaveBeenCalled();
   });
 });

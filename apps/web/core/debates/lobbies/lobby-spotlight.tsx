@@ -5,6 +5,7 @@ import * as React from 'react';
 import cx from 'classnames';
 import Link from 'next/link';
 
+import { CloseSmall } from '~/design-system/icons/close-small';
 import { Text } from '~/design-system/text';
 
 import type { DebateLobbySummary } from '../api';
@@ -82,25 +83,49 @@ export function joinLabel(lobby: Pick<DebateLobbySummary, 'viewer_on_roster'>, s
 /**
  * The live lobby card at the top of the debates panel (GEO-3268): the busiest live lobby large, every
  * other live one listed under it. Kept over a one-line strip (Preston, 28 Oct): a live lobby is the
- * one thing in the panel worth the room. A lobby that has not opened is the panel's light next-lobby
- * strip instead.
+ * one thing in the panel worth the room. A lobby that has not opened is in the Requests timeline
+ * instead (GEO-3519).
+ *
+ * The top of the panel's callout stack (GEO-3586), so it is titled as the stack's other cards are,
+ * "Live lobby" beside the live dot, and dismissed as they are, from the X. The stack sets its gutters.
  */
-export function LiveLobbySpotlight({ lineup }: { lineup: LobbyLineup }) {
+export function LiveLobbySpotlight({
+  lineup,
+  onDismiss,
+}: {
+  lineup: Pick<LobbyLineup, 'live'>;
+  /** Hides these lobbies from the stack. */
+  onDismiss: () => void;
+}) {
   const [lead, ...others] = lineup.live;
   if (!lead) return null;
   const href = debateRoomPath(lead.lobby_id);
 
   return (
-    <div className="mx-4 mb-3" data-testid="lobby-spotlight">
+    <div data-testid="lobby-spotlight">
       <section
         aria-label={others.length > 0 ? 'Live debate lobbies' : 'Live debate lobby'}
         className={cx('flex flex-col gap-3 rounded-lg p-4', LOBBY_DARK_SURFACE_CLASS_NAME)}
         style={LOBBY_DARK_SURFACE_STYLE}
       >
-        <LiveMark count={others.length + 1} />
+        <div className="flex items-center justify-between gap-3">
+          <Text as="h3" variant="smallTitle" color="white" className="flex items-center gap-2">
+            <LiveDot className="size-2" />
+            {others.length > 0 ? 'Live lobbies' : 'Live lobby'}
+          </Text>
+          <button
+            type="button"
+            aria-label={others.length > 0 ? 'Dismiss live lobbies' : 'Dismiss live lobby'}
+            onClick={onDismiss}
+            {...hubAnalyticsAttributes('Lobby spotlight dismiss')}
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-grey-03 transition-colors hover:bg-white/10 hover:text-white"
+          >
+            <CloseSmall />
+          </button>
+        </div>
 
         <div className="flex min-w-0 flex-col gap-1">
-          <Text as="h3" variant="smallTitle" color="white" className="truncate">
+          <Text as="p" variant="smallTitle" color="white" className="truncate">
             {lead.name}
           </Text>
           {lead.hosts.length > 0 ? (

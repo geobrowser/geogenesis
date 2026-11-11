@@ -108,14 +108,15 @@ function OwnDebateRow({
 }) {
   const { open } = useDebatesHub();
   const name = opponentName(debate.opponentUserId);
-  // A pending match the Geo team arranged says so, whoever has answered so far (GEO-3229).
+  // A pending match the Geo team arranged says so, whoever has answered so far (GEO-3229), and once
+  // the viewer has accepted it, that it is not booked yet (GEO-3589).
   const state =
     debate.state === 'booked'
       ? 'booked'
       : debate.arrangedByAdmin
         ? debate.state === 'asked'
           ? 'invited by the Geo team'
-          : 'arranged by the Geo team'
+          : 'arranged by the Geo team · not confirmed'
         : debate.state === 'asked'
           ? 'asked you'
           : 'requested';

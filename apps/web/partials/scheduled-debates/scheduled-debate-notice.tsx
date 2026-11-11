@@ -37,6 +37,7 @@ import { useHoldScheduledNotice } from '~/core/debates/rooms/scheduled-notice-op
 import { useCantMakeIt, useReportRunningLate } from '~/core/debates/rooms/scheduling-hooks';
 import { noticeFailureMessage } from '~/core/debates/rooms/scheduling-refusals';
 import { useCurrentGeoChatUserId } from '~/core/debates/use-current-geo-chat-user-id';
+import { useGeoChatViewer } from '~/core/debates/use-geo-chat-account-status';
 
 import { Avatar } from '~/design-system/avatar';
 import { ArrowLeft } from '~/design-system/icons/arrow-left';
@@ -439,10 +440,24 @@ function LateStep({
   const report = useReportRunningLate();
   const noteId = React.useId();
   const viewerId = useCurrentGeoChatUserId();
-  const viewerIds = React.useMemo(() => (viewerId ? [viewerId] : []), [viewerId]);
+  const viewerProfile = useGeoChatViewer();
+  // The session's own profile; a user id is not a graph id, so only an older session's is looked up.
+  const viewer = React.useMemo(
+    () =>
+      viewerId
+        ? [
+            {
+              user_id: viewerId,
+              profile_space_id: viewerProfile?.profileSpaceId,
+              display_name: viewerProfile?.displayName,
+            },
+          ]
+        : [],
+    [viewerId, viewerProfile]
+  );
   const fromEmail = variant === 'email';
   // Only board 3's preview names the viewer.
-  const viewerName = useGeoChatUserSummaries(viewerIds, !fromEmail && viewerId !== null)[0]?.display_name || null;
+  const viewerName = useGeoChatUserSummaries(viewer, !fromEmail && viewerId !== null)[0]?.display_name || null;
   const sent = noticeNote(note);
 
   const cantInstead = fromEmail && (

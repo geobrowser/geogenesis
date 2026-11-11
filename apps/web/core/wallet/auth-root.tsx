@@ -2,6 +2,9 @@
 
 import * as React from 'react';
 
+import { signInExpectedOnLoad } from '~/core/auth/sign-in-on-load';
+import { installSignInReports, reportSignInLoadFailed } from '~/core/auth/sign-in-reports';
+
 import { getState, isRealAuthWanted, markHostFailed, requestRealAuth, subscribe } from './auth-store';
 
 /**
@@ -25,8 +28,17 @@ function loadHost() {
 }
 
 // A reader with a session needs Privy as soon as possible, so the chunk starts downloading while
-// the page is still hydrating rather than after it.
-if (typeof window !== 'undefined' && isRealAuthWanted()) void loadHost();
+// the page is still hydrating rather than after it. So does a page about to open sign-in by itself,
+// which also mounts Privy straight away so it has started up by the time the dialog is asked for.
+export function startAuthForPage() {
+  if (signInExpectedOnLoad()) requestRealAuth();
+  if (isRealAuthWanted()) void loadHost();
+}
+
+if (typeof window !== 'undefined') {
+  installSignInReports();
+  startAuthForPage();
+}
 
 export function scheduleIdleLoad(onIdle: () => void, delayMs = IDLE_LOAD_DELAY_MS) {
   let idleHandle: number | undefined;
@@ -73,6 +85,7 @@ export function AuthRoot() {
         console.error('[auth] could not load Privy', error);
         hostModule = null;
         markHostFailed();
+        reportSignInLoadFailed('chunk_load', { error });
       }
     );
     return () => {

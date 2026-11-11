@@ -30,6 +30,7 @@ vi.mock('./hooks', () => ({
       : { data: { lobbies: mocks.lobbies }, isLoading: false, error: null, refetch: vi.fn() };
   },
   useDebateLobbies: () => ({ data: undefined }),
+  useFindCalendarLobby: () => () => undefined,
   useDebateLobbyReminder: () => ({ mutate: mocks.mutate, isPending: false, isError: false }),
   useLobbyReminderError: () => null,
   useLobbyReminderSaving: () => false,

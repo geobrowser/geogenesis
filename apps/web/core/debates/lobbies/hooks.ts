@@ -13,6 +13,7 @@ import * as React from 'react';
 
 import {
   type CreateDebateLobbyRequest,
+  type DebateLobbyCalendarResponse,
   type DebateLobbyHeartbeat,
   type DebateLobbyMember,
   type DebateLobbySummary,
@@ -29,6 +30,7 @@ import {
   listDebateLobbies,
   listDebateLobbyCalendar,
   sendDebateLobbyHeartbeat,
+  setDebateLobbyDismissal,
   setDebateLobbyPresence,
   setDebateLobbyReminder,
   stepOutOfDebateLobby,
@@ -105,8 +107,8 @@ export function useDebateLobbies(enabled = true, { staleTime }: { staleTime?: nu
     ...debateQueryNetworkOptions,
     queryKey: debateQueryKeys.lobbies(accountKey),
     queryFn: ({ signal }) => listDebateLobbies(getPrivyIdentityToken, accountKey, signal),
-    // Signed in it carries the viewer's own reminders and roster, so it waits out a new account
-    // geo-chat does not know yet like the account's other reads. Anonymous, one read.
+    // Signed in it carries the viewer's own reminders and roster, so it retries like the account's
+    // other reads; a refused session is refetched on recovery instead. Anonymous, one read.
     ...(accountKey ? viewerReadRetryOptions(accountKey) : {}),
     enabled: enabled && ready,
     ...(staleTime === undefined ? { refetchOnMount: 'always' as const } : { staleTime }),
@@ -121,22 +123,64 @@ export function useDebateLobbies(enabled = true, { staleTime }: { staleTime?: nu
  *
  * Signed in only, unless `signedOut`: then a visitor without an account reads the range a new account
  * sees (GEO-3517), polled as the list is.
+ *
+ * `keepPreviousRange` draws the last range's lobbies while a new range loads, for a reader that
+ * filters by date itself (the Requests timeline, whose range moves on at midnight), rather than
+ * blinking out. Not the calendar's: its weeks are the viewer's to page through.
  */
 export function useDebateLobbyCalendar(
   from: Date,
   to: Date,
   enabled = true,
-  { signedOut = false }: { signedOut?: boolean } = {}
+  { signedOut = false, keepPreviousRange = false }: { signedOut?: boolean; keepPreviousRange?: boolean } = {}
 ) {
   const { accountKey, authenticated, ready, getPrivyIdentityToken } = useGeoChatAuth();
 
-  return useQuery({
+  return useQuery<DebateLobbyCalendarResponse>({
     ...debateQueryNetworkOptions,
     queryKey: debateQueryKeys.lobbyCalendar(accountKey, from.getTime(), to.getTime()),
     queryFn: ({ signal }) => listDebateLobbyCalendar({ from, to }, getPrivyIdentityToken, accountKey, signal),
     enabled: enabled && ready && (authenticated || signedOut),
     ...(authenticated ? {} : { refetchInterval: SIGNED_OUT_LOBBIES_POLL_MS }),
+    // The last range's rows while a new range loads, but only the same account's: another account's
+    // (the signed-out week, when signing in) would draw its RSVPs, hosting and dismissals as this one's.
+    placeholderData: keepPreviousRange
+      ? (previous: DebateLobbyCalendarResponse | undefined, previousQuery?: { queryKey: readonly unknown[] }) =>
+          previousQuery?.queryKey[2] === accountKey ? previous : undefined
+      : undefined,
   });
+}
+
+/**
+ * Finds a lobby in any calendar week already read, this account's first. For a lobby the capped
+ * side panel list does not return, which a week can hold: the panel's callout stack offers the week's
+ * lobbies (GEO-3586), and the debate hours page lists them.
+ *
+ * Every account's weeks, not just this one's: a reminder queued signed out is replayed right after
+ * sign-up, before the new account's week may have loaded, from the signed-out week it was pressed on.
+ * Another account's row says the lobby exists and whether it is open, which hold for everyone, but
+ * not whether this account RSVP'd, so that is read as not.
+ */
+export function useFindCalendarLobby() {
+  const queryClient = useQueryClient();
+  const { accountKey } = useGeoChatAuth();
+  return React.useCallback(
+    (lobbyId: string): DebateLobbySummary | undefined => {
+      const weeks = queryClient.getQueriesData<DebateLobbyCalendarResponse>({
+        predicate: query => {
+          const key = query.queryKey;
+          return key[0] === 'debates' && key[1] === 'account' && key[3] === 'lobbies' && key[4] === 'calendar';
+        },
+      });
+      const ordered = [...weeks].sort(([a], [b]) => Number(b[2] === accountKey) - Number(a[2] === accountKey));
+      for (const [key, week] of ordered) {
+        const row = week?.lobbies.find(lobby => sameId(lobby.lobby_id, lobbyId));
+        if (row) return key[2] === accountKey ? row : { ...row, viewer_reminded: false };
+      }
+      return undefined;
+    },
+    [accountKey, queryClient]
+  );
 }
 
 /** The lobby the viewer is on the roster of, across tabs; see `DebateMyLobby`. */
@@ -249,26 +293,52 @@ export function useCreateDebateLobby() {
   });
 }
 
-/** `list` with the viewer's reminder on `view`'s row, or the same list when it is not listed. */
-function withReminder<T extends { lobbies: DebateLobbySummary[] }>(list: T, view: DebateLobbyView): T {
-  if (!list.lobbies.some(row => dashlessId(row.lobby_id) === dashlessId(view.lobby_id))) return list;
-  return {
-    ...list,
-    lobbies: list.lobbies.map(row =>
-      dashlessId(row.lobby_id) === dashlessId(view.lobby_id)
-        ? { ...row, viewer_reminded: view.viewer.reminded, reminder_count: view.reminder_count }
-        : row
-    ),
-  };
+/** A cached lobby list, or the calendar's week, which sits under the same key. */
+type ListedLobbies = { lobbies: DebateLobbySummary[] };
+
+/** `list` with `patch` laid over `lobbyId`'s row, or the same list when it is not listed. */
+function patchListedLobby<T extends ListedLobbies>(list: T, lobbyId: string, patch: Partial<DebateLobbySummary>): T {
+  const id = dashlessId(lobbyId);
+  if (!list.lobbies.some(row => dashlessId(row.lobby_id) === id)) return list;
+  return { ...list, lobbies: list.lobbies.map(row => (dashlessId(row.lobby_id) === id ? { ...row, ...patch } : row)) };
+}
+
+/** Lays `patch` over `lobbyId`'s row in every cached list: the side panel's and each calendar week. */
+function useWriteListedLobby() {
+  const queryClient = useQueryClient();
+  const { accountKey } = useGeoChatAuth();
+  return React.useCallback(
+    (lobbyId: string, patch: Partial<DebateLobbySummary>) =>
+      queryClient.setQueriesData<ListedLobbies>(
+        { queryKey: debateQueryKeys.lobbies(accountKey) },
+        list => list && patchListedLobby(list, lobbyId, patch)
+      ),
+    [accountKey, queryClient]
+  );
+}
+
+/** Too late to change: the lobby opened or ended since the list was read, so the list is read again. */
+function useRefetchListOnConflict() {
+  const queryClient = useQueryClient();
+  const { accountKey } = useGeoChatAuth();
+  return React.useCallback(
+    (error: Error) => {
+      if (error instanceof GeoChatRequestError && error.status === 409) {
+        void queryClient.invalidateQueries({ queryKey: debateQueryKeys.lobbies(accountKey) });
+      }
+    },
+    [accountKey, queryClient]
+  );
 }
 
 /** Every reminder write shares it, so one in flight shows on every control for that lobby. */
 const LOBBY_REMINDER_MUTATION_KEY = ['debates', 'lobby-reminder'] as const;
 
 export function useDebateLobbyReminder() {
-  const queryClient = useQueryClient();
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
   const store = useStoreLobbyView();
+  const writeListed = useWriteListedLobby();
+  const refetchOnConflict = useRefetchListOnConflict();
 
   return useMutation({
     mutationKey: LOBBY_REMINDER_MUTATION_KEY,
@@ -277,11 +347,13 @@ export function useDebateLobbyReminder() {
     onSuccess: view => {
       // Remind me draws from the list's row, so the answer is written there now (the calendar's
       // week sits under the same key). Waiting on the refetch `store` starts would show RSVP again
-      // until it lands, and for good if it fails (GEO-3289).
-      queryClient.setQueriesData<{ lobbies: DebateLobbySummary[] }>(
-        { queryKey: debateQueryKeys.lobbies(accountKey) },
-        list => list && withReminder(list, view)
-      );
+      // until it lands, and for good if it fails (GEO-3289). The dismissal too (GEO-3519): an RSVP
+      // clears one in geo-chat, so a lobby dismissed and then RSVP'd elsewhere is not hidden meanwhile.
+      writeListed(view.lobby_id, {
+        viewer_reminded: view.viewer.reminded,
+        reminder_count: view.reminder_count,
+        ...viewerDismissalFrom(view),
+      });
       store(view);
       lobbyRsvpChanged(view.lobby_id, {
         going: view.viewer.reminded,
@@ -289,13 +361,83 @@ export function useDebateLobbyReminder() {
         reminderCount: view.reminder_count,
       });
     },
-    // Too late to set: the lobby opened or ended since the list was read.
-    onError: error => {
-      if (error instanceof GeoChatRequestError && error.status === 409) {
-        void queryClient.invalidateQueries({ queryKey: debateQueryKeys.lobbies(accountKey) });
-      }
+    onError: refetchOnConflict,
+  });
+}
+
+/**
+ * The row's `viewer_dismissed` as a lobby view states it (GEO-3519), for the reminder and the
+ * dismissal alike; nothing from a geo-chat that predates dismissals, which leaves the row as it is.
+ */
+function viewerDismissalFrom(view: DebateLobbyView): Pick<DebateLobbySummary, 'viewer_dismissed'> {
+  return view.viewer.dismissed === undefined ? {} : { viewer_dismissed: view.viewer.dismissed };
+}
+
+/** Every dismissal write shares it, so each row can find its own failure; see {@link useLobbyDismissalError}. */
+const LOBBY_DISMISSAL_MUTATION_KEY = ['debates', 'lobby-dismissal'] as const;
+
+type LobbyDismissalVariables = { lobbyId: string; dismissed: boolean };
+
+/**
+ * Dismiss on an upcoming lobby in the Requests timeline (GEO-3519), or `dismissed: false` to take it
+ * back. Unlike the reminder it is drawn at once: the row leaves on the press, and comes back if the
+ * write fails. Hold it above the rows it removes, so the write outlives the row it hid; each row
+ * reads its own failure with {@link useLobbyDismissalError}.
+ */
+export function useDebateLobbyDismissal() {
+  const queryClient = useQueryClient();
+  const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
+  const writeListed = useWriteListedLobby();
+
+  return useMutation({
+    mutationKey: LOBBY_DISMISSAL_MUTATION_KEY,
+    mutationFn: ({ lobbyId, dismissed }: LobbyDismissalVariables) =>
+      setDebateLobbyDismissal(lobbyId, dismissed, getPrivyIdentityToken, accountKey),
+    onMutate: async ({ lobbyId, dismissed }) => {
+      // A read already on its way would land the old row over this one. Cancelled, it is read again
+      // once the write settles.
+      const queryKey = debateQueryKeys.lobbies(accountKey);
+      const cancelledRead = queryClient.isFetching({ queryKey }) > 0;
+      await queryClient.cancelQueries({ queryKey });
+      writeListed(lobbyId, { viewer_dismissed: dismissed });
+      return { cancelledRead };
+    },
+    // geo-chat's answer over the drawn one, where it gives one.
+    onSuccess: (view, { dismissed }) => {
+      writeListed(view.lobby_id, { viewer_dismissed: dismissed, ...viewerDismissalFrom(view) });
+      queryClient.setQueryData(debateQueryKeys.lobby(accountKey, view.lobby_id), view);
+    },
+    // Only this row put back, rather than a snapshot of the whole list: card patches that landed
+    // while the write was out are kept.
+    onError: (_error, { lobbyId, dismissed }) => writeListed(lobbyId, { viewer_dismissed: !dismissed }),
+    // The list and every calendar week, but only when something is owed: a read cancelled above
+    // (a lobby opening meanwhile, a calendar week on its first load), or a failure such as a 409 (the
+    // lobby opened or ended since). A plain success is already written in.
+    onSettled: (_view, error, _variables, context) => {
+      if (!error && !context?.cancelledRead) return;
+      return queryClient.invalidateQueries({ queryKey: debateQueryKeys.lobbies(accountKey) });
     },
   });
+}
+
+/**
+ * The failure of the last dismissal written for `lobbyId`, from any row, or `null` once a later one
+ * for it is out or saved. From the mutation cache rather than the held mutation, which follows only
+ * its last call: dismissing A and then B must still say A's failure on A.
+ */
+export function useLobbyDismissalError(lobbyId: string): Error | null {
+  const writes = useMutationState({
+    filters: {
+      mutationKey: LOBBY_DISMISSAL_MUTATION_KEY,
+      predicate: mutation => {
+        const variables = mutation.state.variables as LobbyDismissalVariables | undefined;
+        return variables !== undefined && dashlessId(variables.lobbyId) === dashlessId(lobbyId);
+      },
+    },
+    select: mutation => mutation.state.error,
+  });
+  // Oldest first: the last is this lobby's latest write.
+  return writes.at(-1) ?? null;
 }
 
 /**

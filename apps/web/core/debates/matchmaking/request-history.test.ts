@@ -26,7 +26,7 @@ const {
   historyTitle,
   historyWatchable,
   isSettledHistoryItem,
-  unnamedHistoryUserIds,
+  unnamedHistoryPeople,
   useDebateHistory,
 } = await import('./request-history');
 
@@ -143,9 +143,16 @@ describe('historyNames', () => {
     expect(historyNames(entry, () => null)).toEqual(['Your opponent', 'Ben']);
   });
 
-  it('only asks the graph about ids geo-chat did not name', () => {
-    const entries = [item({ other_user_ids: ['a', 'b'], others: [person('a', 'Ana')] })];
-    expect(unnamedHistoryUserIds(entries)).toEqual(['b']);
+  it('asks the graph only about people geo-chat did not name, by profile space where it sent one', () => {
+    const nameless = { ...person('c', ''), display_name: null };
+    const entries = [item({ other_user_ids: ['a', 'b', 'c'], others: [person('a', 'Ana'), nameless] })];
+    expect(unnamedHistoryPeople(entries)).toEqual([{ user_id: 'b' }, nameless]);
+  });
+
+  it('names a person geo-chat sent without a name from the graph', () => {
+    const entry = item({ other_user_ids: ['c'], others: [{ ...person('c', ''), display_name: null }] });
+    expect(historyNames(entry, () => person('c', 'Cleo'))).toEqual(['Cleo']);
+    expect(historyNames(entry, () => null)).toEqual(['Your opponent']);
   });
 });
 

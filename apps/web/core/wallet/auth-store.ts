@@ -63,7 +63,8 @@ const initialState: State = {
   instanceIds: [],
 };
 
-const READY_TIMEOUT_MS = 20_000;
+/** How long a sign-in call, or a restarted host, waits for Privy to start. */
+export const READY_TIMEOUT_MS = 20_000;
 
 let state: State = initialState;
 let restartTimer: ReturnType<typeof setTimeout> | null = null;

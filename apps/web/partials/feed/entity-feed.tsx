@@ -108,6 +108,8 @@ const TIME_OPTIONS: { value: ExploreTime; label: string }[] = [
 type EntityFeedProps = {
   /** REST endpoint this feed fetches from (e.g. `/api/explore/feed` or `/api/activity/feed`). */
   apiEndpoint: string;
+  /** Explicit selection from a marketing card. Only shown while the original feed remains unfiltered. */
+  entryEntityId?: string | null;
   /** Explore's resume policy: loaded pages stay put, refreshing on return only near the top. Explore opts in. */
   preserveSession?: boolean;
   /** When set, the feed is pinned to this space. */
@@ -324,6 +326,7 @@ export function EntityFeed({
   walletAddress = null,
   cdnFirstPage = false,
   interleave,
+  entryEntityId = null,
 }: EntityFeedProps) {
   const [time, setTime] = React.useState<ExploreTime>(initialTime);
   const [sort, setSort] = React.useState<ExplorePageSort>(initialSort);
@@ -619,23 +622,6 @@ export function EntityFeed({
 
   const sentinelRef = React.useRef<HTMLDivElement | null>(null);
 
-  React.useEffect(() => {
-    const el = sentinelRef.current;
-    // A placeholder's cursor belongs to another feed: its next page would be fetched against this
-    // one's key. Wait for the real first page.
-    if (!el || !hasNextPage || isPlaceholderData) return;
-    const io = new IntersectionObserver(
-      entries => {
-        if (entries[0]?.isIntersecting && !isFetchingNextPage) {
-          void fetchNextPage();
-        }
-      },
-      { rootMargin: '8000px' }
-    );
-    io.observe(el);
-    return () => io.disconnect();
-  }, [fetchNextPage, hasNextPage, isFetchingNextPage, isPlaceholderData]);
-
   // GEO-3234. Load what this browser has already shown, once, while the first page is in flight.
   const isBest = sort === 'best';
   React.useEffect(() => {
@@ -648,6 +634,41 @@ export function EntityFeed({
   const pinnedLeadId = pin?.feedKey === feedKey ? pin.entityId : null;
   const setPinnedLeadId = React.useCallback((entityId: string) => setPin({ feedKey, entityId }), [feedKey]);
 
+  const unfiltered = requestedSpaceIds.length === 0 && typeIds === undefined && selectedTopicIds.length === 0;
+  const showEntry = sort === initialSort && unfiltered;
+  const entryQuery = useQuery({
+    queryKey: ['explore-entry', entryEntityId, viewerAddress],
+    enabled: Boolean(entryEntityId) && showEntry,
+    queryFn: async ({ signal }) => {
+      const response = await fetch(`/api/explore/entry?entityId=${entryEntityId}`, {
+        signal: AbortSignal.any([signal, AbortSignal.timeout(10_000)]),
+      });
+      if (!response.ok) throw new Error('Could not load the selected card');
+      return ((await response.json()) as { item: ExploreFeedResult['items'][number] | null }).item;
+    },
+    staleTime: Infinity,
+    retry: 1,
+  });
+  const entryItem = showEntry ? entryQuery.data : null;
+  const awaitingEntry = showEntry && Boolean(entryEntityId) && entryQuery.isPending;
+
+  React.useEffect(() => {
+    const el = sentinelRef.current;
+    // A placeholder's cursor belongs to another feed: its next page would be fetched against this
+    // one's key. Wait for the real first page.
+    if (!el || !hasNextPage || isPlaceholderData || awaitingEntry) return;
+    const io = new IntersectionObserver(
+      entries => {
+        if (entries[0]?.isIntersecting && !isFetchingNextPage) {
+          void fetchNextPage();
+        }
+      },
+      { rootMargin: '8000px' }
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [fetchNextPage, hasNextPage, isFetchingNextPage, isPlaceholderData, awaitingEntry]);
+
   const items = React.useMemo(() => {
     // GEO-3234. Best's pages composed together for this visitor: seen cards hidden, gaps filled from
     // each page's reserve, nothing shown twice. Pages without the config pass through.
@@ -659,6 +680,7 @@ export function EntityFeed({
       })),
       { snapshot: seenStore().snapshot(), nowSec: mountedAtSec }
     );
+    if (entryItem) return [entryItem, ...flat.filter(item => normId(item.entityId) !== normId(entryItem.entityId))];
     if (!isForYou) return leadFirst(flat, pinnedLeadId);
     // For you pages two streams that overlap, so an item served from one can come back later from
     // the other. The first appearance stays.
@@ -669,7 +691,7 @@ export function EntityFeed({
       seen.add(id);
       return true;
     });
-  }, [data?.pages, isForYou, mountedAtSec, pinnedLeadId]);
+  }, [data?.pages, isForYou, mountedAtSec, pinnedLeadId, entryItem]);
 
   // The public page's lead is already playing when the reader's own page replaces it, so it stays on
   // top if that page has it too, rather than the card sliding away under them.
@@ -678,7 +700,6 @@ export function EntityFeed({
     if (placeholderLeadId !== null) setPinnedLeadId(placeholderLeadId);
   }, [placeholderLeadId, setPinnedLeadId]);
 
-  const unfiltered = requestedSpaceIds.length === 0 && typeIds === undefined && selectedTopicIds.length === 0;
   const interleaved = unfiltered ? interleave?.(items.length) : undefined;
 
   const timeLabel = TIME_OPTIONS.find(o => o.value === time)?.label ?? time;
@@ -827,9 +848,12 @@ export function EntityFeed({
 
       {dividerBeforeFeed ? <hr className={cx('border-t border-divider', compactHeader ? 'mt-2' : 'mt-5')} /> : null}
       <div className={feedTopSpacingClassName ?? (showFilterRow ? 'mt-8' : '-mt-1')}>
-        {error ? (
+        {error && items.length === 0 ? (
           <p className="text-browseMenu text-red-01">Could not load the feed.</p>
-        ) : isLoading || awaitingIdentityToken || (isForYou && followedTopicIds === null) ? (
+        ) : awaitingEntry ||
+          (!entryItem && isLoading) ||
+          (!entryItem && awaitingIdentityToken) ||
+          (isForYou && followedTopicIds === null) ? (
           <div className="space-y-4">
             {Array.from({ length: 5 }).map((_, i) => (
               <LoadingSkeleton key={i} />

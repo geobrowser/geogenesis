@@ -1,11 +1,11 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { DebateLobbySummary } from '../api';
 
-const mocks = vi.hoisted(() => ({ markLobbyEntry: vi.fn() }));
+const mocks = vi.hoisted(() => ({ markLobbyEntry: vi.fn(), dismiss: vi.fn() }));
 
 vi.mock('./lobby-analytics', () => ({ markLobbyEntry: mocks.markLobbyEntry }));
 vi.mock('./lobby-people', () => ({
@@ -39,31 +39,31 @@ afterEach(() => {
 });
 
 describe('LiveLobbySpotlight', () => {
-  it('renders nothing with nothing live, even with one opening soon', () => {
-    const soon = lobby({ open: false, scheduled: true });
-    const { container } = render(<LiveLobbySpotlight lineup={{ live: [], soon, later: [] }} />);
+  it('renders nothing with nothing live', () => {
+    const { container } = render(<LiveLobbySpotlight lineup={{ live: [] }} onDismiss={mocks.dismiss} />);
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('leads with the lobby: Live, its name, host, who is there and Join', () => {
-    render(<LiveLobbySpotlight lineup={{ live: [lobby({})], soon: null, later: [] }} />);
+  // GEO-3586: titled as the panel stack's other cards are.
+  it('leads with the lobby: Live lobby, its name, host, who is there and Join', () => {
+    render(<LiveLobbySpotlight lineup={{ live: [lobby({})] }} onDismiss={mocks.dismiss} />);
     const card = within(screen.getByRole('region', { name: 'Live debate lobby' }));
 
-    expect(card.getByText('Live')).toBeInTheDocument();
-    expect(card.getByRole('heading', { name: 'NYC Debates' })).toBeInTheDocument();
+    expect(card.getByRole('heading', { name: 'Live lobby' })).toBeInTheDocument();
+    expect(card.getByText('NYC Debates')).toBeInTheDocument();
     expect(card.getByText('Hosted by Bryan')).toBeInTheDocument();
     expect(card.getByText('14 here · 6 debating')).toBeInTheDocument();
     expect(card.getByRole('link', { name: 'Join lobby' })).toHaveAttribute('href', '/debate/nyc');
   });
 
   it('marks the join as coming from the side panel', () => {
-    render(<LiveLobbySpotlight lineup={{ live: [lobby({})], soon: null, later: [] }} />);
+    render(<LiveLobbySpotlight lineup={{ live: [lobby({})] }} onDismiss={mocks.dismiss} />);
     screen.getByRole('link', { name: 'Join lobby' }).click();
     expect(mocks.markLobbyEntry).toHaveBeenCalledWith('nyc', 'side_panel');
   });
 
   it('offers the way back in, not Join, to someone already in the lobby', () => {
-    render(<LiveLobbySpotlight lineup={{ live: [lobby({ viewer_on_roster: true })], soon: null, later: [] }} />);
+    render(<LiveLobbySpotlight lineup={{ live: [lobby({ viewer_on_roster: true })] }} onDismiss={mocks.dismiss} />);
     expect(screen.getByRole('link', { name: 'Back to lobby' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Join lobby' })).not.toBeInTheDocument();
     expect(screen.getByText('14 here · 6 debating · You’re here')).toBeInTheDocument();
@@ -71,12 +71,18 @@ describe('LiveLobbySpotlight', () => {
 
   it('lists every other live lobby under the lead, each with its own Join', () => {
     const other = lobby({ lobby_id: 'ai', name: 'AI Policy Night', headcount: 5, debating_count: 2 });
-    render(<LiveLobbySpotlight lineup={{ live: [lobby({}), other], soon: null, later: [] }} />);
+    render(<LiveLobbySpotlight lineup={{ live: [lobby({}), other] }} onDismiss={mocks.dismiss} />);
 
     expect(screen.getByRole('region', { name: 'Live debate lobbies' })).toBeInTheDocument();
-    expect(screen.getByText('2 lobbies live')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Live lobbies' })).toBeInTheDocument();
     const row = within(screen.getByTestId('also-live-row'));
     expect(row.getByText('AI Policy Night')).toBeInTheDocument();
     expect(row.getByRole('link', { name: 'Join' })).toHaveAttribute('href', '/debate/ai');
+  });
+
+  it('dismisses from its X', () => {
+    render(<LiveLobbySpotlight lineup={{ live: [lobby({})] }} onDismiss={mocks.dismiss} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss live lobby' }));
+    expect(mocks.dismiss).toHaveBeenCalledTimes(1);
   });
 });

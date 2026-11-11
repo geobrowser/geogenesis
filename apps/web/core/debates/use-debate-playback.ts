@@ -5,11 +5,13 @@ import * as React from 'react';
 import { atom, useAtom } from 'jotai';
 
 import { reportEvent } from '~/core/telemetry/logger';
+import { forgetGestureVideoUnlock } from '~/core/utils/video/gesture-media-pool';
 
 import type { Debate } from './api';
 import { useDebateMedia, useDebateTranscript, useRecordingPlaybackUrl } from './hooks';
 import { type RecordingPlaybackVariant, recordingPlaybackVariant } from './mobile-rendition';
 import { debateRoundRoleForDebate, isOpenRoundsDebate } from './open-rounds';
+import { bufferedAheadSeconds, heldPairGate } from './pair-readiness';
 import { breaksEndMs, playbackBreaksFrom } from './playback-breaks';
 import {
   PLAYBACK_END_EPSILON_SECONDS,
@@ -43,7 +45,14 @@ type PlaybackUrls = {
 // holds as they scroll to the next — otherwise each debate mounts its own muted-by-default
 // state and they'd have to unmute every single video. Defaults to muted so the cold-start
 // autoplay isn't blocked by the browser's autoplay policy.
-const feedMutedAtom = atom(true);
+//
+// `feedSoundChoiceAtom` is what the viewer chose with the Mute control, the part to persist.
+// `feedSoundInferredAtom` is sound turned on by a tap or Play (GEO-3602), for this session only.
+export type FeedSoundChoice = 'default' | 'muted' | 'unmuted';
+const feedSoundChoiceAtom = atom<FeedSoundChoice>('default');
+const feedSoundInferredAtom = atom(false);
+/** `explicit` is the Mute control; `inferred` is a tap or Play taken to mean the viewer wants sound. */
+export type MuteSource = 'explicit' | 'inferred';
 
 /**
  * Drift thresholds for keeping the two recordings in step (GEO-2828).
@@ -61,10 +70,28 @@ const SYNC_NUDGE_RATE = 0.03;
 /** Floor between hard seeks, so a seek that itself causes drift cannot start a storm. */
 const MIN_SYNC_SEEK_INTERVAL_MS = 2_000;
 /**
+ * How much the follower must already hold past a sync seek's target for that seek to go ahead on its
+ * own (GEO-3603). Short of this the seek lands where there is nothing to play, the follower stalls
+ * for longer than the floor above while the leader runs on, and arrives behind enough to be seeked
+ * again: on Stream after a break's cut, slot 2 froze four times in eight seconds. Such a seek is made
+ * with the pair held instead, so it costs one wait rather than a run of them.
+ */
+const SYNC_SEEK_BUFFERED_SECONDS = 1;
+/** How often a held resync looks again at whether the pair may play. */
+const HELD_RESYNC_POLL_MS = 50;
+/**
  * Floor between attempts to restart an element the browser stopped while the tab is off screen.
  * Same reasoning as the seek floor: a browser that re-stops it must not cost a seek per tick.
  */
 const MIN_BACKGROUND_RESTART_INTERVAL_MS = 2_000;
+
+/**
+ * How soon after an element is unmuted a pause from the browser counts as it refusing the sound
+ * (GEO-3594). iOS pauses the element in the same task as the unmute, so the pause tick lands within
+ * one media tick of it; a second covers a slow device without catching a pause the viewer made from
+ * the system controls during ordinary playback.
+ */
+const UNMUTE_REFUSAL_WINDOW_MS = 1_000;
 /**
  * How many consecutive refusals before the off-screen restart gives up.
  *
@@ -111,6 +138,14 @@ const STALL_EPSILON_SECONDS = 0.001;
  * wrong here — playback needs the instant a tab goes off screen, not "recently on screen".
  */
 const documentIsHidden = () => typeof document !== 'undefined' && document.visibilityState === 'hidden';
+
+/** Physical playback paused by the player itself, without changing the viewer's play/pause intent. */
+export type TransitionHold = {
+  /** Whether this is still the hold in force: a pause, scrub, suspend or new debate supersedes it. */
+  active: () => boolean;
+  release: () => void;
+  cancel: () => void;
+};
 
 /** Closer than this, a paused element is already where it is being sent. */
 const SEEK_NOOP_EPSILON_SECONDS = 0.001;
@@ -234,7 +269,31 @@ export function useDebatePlayback(
   // Feed debates autoplay muted (TikTok-style): the browser blocks unmuted
   // autoplay without a user gesture, so unmuting the active speaker mid-autoplay
   // would pause and desync that video. Start muted; the viewer unmutes on tap.
-  const [mutedByUser, setMutedByUser] = useAtom(feedMutedAtom);
+  const [soundChoice, setSoundChoice] = useAtom(feedSoundChoiceAtom);
+  const [soundInferred, setSoundInferred] = useAtom(feedSoundInferredAtom);
+  const mutedPreference = soundChoice === 'default' ? !soundInferred : soundChoice === 'muted';
+  /** The viewer pressed Mute, so a tap must not turn the sound on. */
+  const muteChosen = soundChoice === 'muted';
+  /*
+   * The browser made this debate play muted, though the viewer wants sound (GEO-3594).
+   *
+   * This debate's alone. It used to be written into the shared preference, so one card the browser
+   * forced muted turned the sound off for every card after it — on iOS, where each new card's
+   * elements start without the tap that grants sound, that was every card. The preference stays
+   * on, and the next debate asks the browser again.
+   */
+  const [soundBlocked, setSoundBlocked] = React.useState(false);
+  const mutedByUser = mutedPreference || soundBlocked;
+  /** Unmuting also lifts this debate's forced mute. Only an `explicit` change is stored as the viewer's choice. */
+  const setMutedByUser = React.useCallback(
+    (next: React.SetStateAction<boolean>, source: MuteSource = 'explicit') => {
+      const muted = typeof next === 'function' ? next(mutedByUser) : next;
+      if (!muted) setSoundBlocked(false);
+      if (source === 'explicit') setSoundChoice(muted ? 'muted' : 'unmuted');
+      else setSoundInferred(!muted);
+    },
+    [mutedByUser, setSoundChoice, setSoundInferred]
+  );
   const [playheadSeconds, setPlayheadSeconds] = React.useState(0);
   const [turnState, setTurnState] = React.useState<TurnState>(null);
   const slot1VideoRef = React.useRef<HTMLVideoElement | null>(null);
@@ -242,6 +301,10 @@ export function useDebatePlayback(
   const pendingSeekSecondsRef = React.useRef<number | null>(null);
   // An automatic cut holds physical playback without changing the viewer's play/pause intent.
   const transitionHoldRef = React.useRef<{ resume: boolean } | null>(null);
+  /** `holdForTransition`, for the drift correction, which runs in a callback declared before it. */
+  const holdForTransitionRef = React.useRef<(() => TransitionHold) | null>(null);
+  /** Stops a held resync still waiting on the pair. See `resyncFollowerHeld`. */
+  const stopHeldResyncRef = React.useRef<(() => void) | null>(null);
   /**
    * The pair still needs moving to where playback will start (GEO-2965).
    *
@@ -267,6 +330,13 @@ export function useDebatePlayback(
    */
   const mutedByUserRef = React.useRef(mutedByUser);
   const lastSyncSeekAtRef = React.useRef(0);
+  /**
+   * The mute each element had at the last tick, and when it last went from muted to unmuted.
+   *
+   * Read off the element, because the render owns `muted` (see `DebateFeedPlayer`) and this hook
+   * never learns when it writes it. Per element, so a card that is handed new elements starts over.
+   */
+  const unmuteSeenRef = React.useRef(new WeakMap<HTMLVideoElement, { muted: boolean; unmutedAt: number }>());
   /** See MIN_BACKGROUND_RESTART_INTERVAL_MS. */
   const lastBackgroundRestartAtRef = React.useRef(0);
   /** Consecutive refusals of the off-screen restart. See MAX_BACKGROUND_RESTART_ATTEMPTS. */
@@ -617,6 +687,7 @@ export function useDebatePlayback(
      */
     setAutoplayBlocked(false);
     setUserPaused(false);
+    setSoundBlocked(false);
     /*
      * And nothing still in flight may write either of them back.
      *
@@ -704,6 +775,7 @@ export function useDebatePlayback(
   React.useEffect(
     () => () => {
       transitionHoldRef.current = null;
+      stopHeldResyncRef.current?.();
       cancelRecoveries();
     },
     [cancelRecoveries]
@@ -912,6 +984,52 @@ export function useDebatePlayback(
     [noteDeliberateSeek, offsets]
   );
 
+  /**
+   * Bring a follower that fell far behind (or ahead) back into step with the pair held (GEO-3603):
+   * pause both, move the follower, and play both again once both can play on. Used where the
+   * follower holds nothing at its target, so a seek made while the leader ran on would only stall
+   * it behind again. The hold is the same one a break's cut takes, so a viewer's pause, scrub,
+   * suspend or a new debate supersedes it, and `heldPairMayResume` bounds how long it can last.
+   */
+  const resyncFollowerHeld = React.useCallback((follower: HTMLVideoElement, seconds: number) => {
+    const hold = holdForTransitionRef.current?.();
+    follower.currentTime = seconds;
+    follower.playbackRate = 1;
+    if (!hold) return;
+    stopHeldResyncRef.current?.();
+    const primaryVideo = slot1VideoRef.current;
+    const secondaryVideo = slot2VideoRef.current;
+    if (!primaryVideo || !secondaryVideo) {
+      hold.cancel();
+      return;
+    }
+    const mayResume = heldPairGate(primaryVideo, secondaryVideo);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const stop = () => {
+      clearTimeout(timer);
+      if (stopHeldResyncRef.current === stop) stopHeldResyncRef.current = null;
+    };
+    const check = () => {
+      if (!hold.active()) return stop();
+      // A replaced element is a new source, which takes its own hold; this one has nothing to wait on.
+      if (slot1VideoRef.current !== primaryVideo || slot2VideoRef.current !== secondaryVideo) {
+        stop();
+        hold.cancel();
+        return;
+      }
+      if (!mayResume()) {
+        timer = setTimeout(check, HELD_RESYNC_POLL_MS);
+        return;
+      }
+      stop();
+      // The wait was the seek's cost, not drift: the floor runs from when the pair plays again.
+      lastSyncSeekAtRef.current = Date.now();
+      hold.release();
+    };
+    stopHeldResyncRef.current = stop;
+    timer = setTimeout(check, HELD_RESYNC_POLL_MS);
+  }, []);
+
   const updateTurnState = React.useCallback(() => {
     const primaryVideo = slot1VideoRef.current;
     const secondaryVideo = slot2VideoRef.current;
@@ -1007,6 +1125,18 @@ export function useDebatePlayback(
     // with slower still.
     const pairIsSettled = !hidden && resumesInFlightRef.current === 0 && recoveringSlotsRef.current === 0;
 
+    for (const video of [primaryVideo, secondaryVideo]) {
+      if (!video) continue;
+      const seen = unmuteSeenRef.current.get(video);
+      // Elements start muted, so an element first seen unmuted has just been unmuted.
+      if (seen === undefined || seen.muted !== video.muted) {
+        unmuteSeenRef.current.set(video, {
+          muted: video.muted,
+          unmutedAt: video.muted ? (seen?.unmutedAt ?? -Infinity) : now,
+        });
+      }
+    }
+
     for (const [video, progressRef] of [
       [primaryVideo, primaryProgressRef],
       [secondaryVideo, secondaryProgressRef],
@@ -1048,9 +1178,14 @@ export function useDebatePlayback(
       const absDrift = Math.abs(drift);
 
       if (absDrift > SYNC_SEEK_DRIFT_SECONDS && now - lastSyncSeekAtRef.current > MIN_SYNC_SEEK_INTERVAL_MS) {
-        follower.currentTime = Math.max(0, leader.currentTime - followerDelta);
-        follower.playbackRate = 1;
+        const target = Math.max(0, leader.currentTime - followerDelta);
         lastSyncSeekAtRef.current = now;
+        if (bufferedAheadSeconds(follower, target) >= SYNC_SEEK_BUFFERED_SECONDS) {
+          follower.currentTime = target;
+          follower.playbackRate = 1;
+        } else {
+          resyncFollowerHeld(follower, target);
+        }
       } else if (absDrift > SYNC_NUDGE_DRIFT_SECONDS) {
         // Small enough that a rate change closes it within a few seconds, and far enough from 1
         // to actually converge. On the muted element, so the pitch shift is not heard at all.
@@ -1103,7 +1238,43 @@ export function useDebatePlayback(
       playhead < timelineSeconds
     ) {
       const stillPlaying = primaryVideo.paused ? secondaryVideo : primaryVideo;
+      const stopped = primaryVideo.paused ? primaryVideo : secondaryVideo;
       stillPlaying.pause();
+      /*
+       * Unless the browser was refusing sound rather than stopping playback (GEO-3594).
+       *
+       * A browser that will not let an element make sound answers the unmute by pausing it — iOS
+       * always, for an element no tap has played, and desktop Safari under "Stop media with sound".
+       * The speaker's element is unmuted on a media tick once the pair is running, outside any
+       * gesture, so such a card split here the moment it started and stopped on a Play button.
+       * Play it muted instead, with Unmute showing: the autoplay effect restarts it, since this is
+       * not recorded as a pause.
+       *
+       * Recognised by the element that stopped having just been unmuted. A pause from the system
+       * media controls mid-playback is a pause, and stops the card as before. Only while sound was
+       * wanted, so a second split on the now-muted card falls through to the stop below.
+       *
+       * The window does catch one real pause: one from the system controls within a second of a
+       * turn handoff, which plays on muted rather than stopping. Telling the two apart by whether a
+       * tap had unlocked the element would cost more — an element wrongly thought unlocked would
+       * then stop on Play every time and never be retried — so the rare case is accepted.
+       */
+      const seen = unmuteSeenRef.current.get(stopped);
+      if (
+        !mutedByUserRef.current &&
+        !stopped.muted &&
+        seen !== undefined &&
+        now - seen.unmutedAt <= UNMUTE_REFUSAL_WINDOW_MS
+      ) {
+        // Whatever a tap did for this element, it was not enough. Once it goes back to the pool a
+        // later tap tries it again; on this card, the Unmute tap does (`activateBothInGesture`).
+        forgetGestureVideoUnlock(stopped);
+        mutedByUserRef.current = true;
+        setSoundBlocked(true);
+        setPlaying(false);
+        setTurnState(null);
+        return;
+      }
       // The browser stopped playback on us — surface it as a paused state so the
       // controls reappear and auto-resume stands down (it would just get blocked
       // again), rather than leaving the UI believing playback is still running.
@@ -1171,7 +1342,7 @@ export function useDebatePlayback(
         });
       }
     }
-  }, [offsets, seekVideosTo, timelineSeconds, turnStateAt]);
+  }, [offsets, resyncFollowerHeld, seekVideosTo, timelineSeconds, turnStateAt]);
 
   const pauseBoth = React.useCallback(() => {
     if (transitionHoldRef.current) transitionHoldRef.current.resume = false;
@@ -1325,20 +1496,20 @@ export function useDebatePlayback(
         }
         return;
       }
-      // The browser only allowed it muted (GEO-2783) — record that so the unmute control is honest
-      // and later autoplays stop being blocked the same way. The viewer's next tap is a gesture and
-      // will be allowed.
-      if (outcome === 'playing-muted') setMutedByUser(true);
+      // The browser only allowed it muted (GEO-2783) — record that so the unmute control is honest.
+      // The viewer's next tap is a gesture and will be allowed. For this debate only: the next one
+      // may well be allowed sound, and the viewer asked for it (GEO-3594).
+      if (outcome === 'playing-muted') setSoundBlocked(true);
       playingGenerationRef.current = generation;
       setPlaying(true);
       setUserPaused(false);
       // Whatever refused last time has stopped refusing.
       setAutoplayBlocked(false);
     },
-    [offsets, seekVideosTo, setMutedByUser, timelineSeconds]
+    [offsets, seekVideosTo, timelineSeconds]
   );
 
-  const holdForTransition = React.useCallback(() => {
+  const holdForTransition = React.useCallback((): TransitionHold => {
     const hold = {
       resume:
         transitionHoldRef.current?.resume ??
@@ -1349,6 +1520,7 @@ export function useDebatePlayback(
     resumeGenerationRef.current++;
     for (const video of videos()) video.pause();
     return {
+      active: () => transitionHoldRef.current === hold,
       release: () => {
         if (transitionHoldRef.current !== hold) return;
         transitionHoldRef.current = null;
@@ -1369,6 +1541,9 @@ export function useDebatePlayback(
       },
     };
   }, [offsets, playing, resumeBoth, timelineSeconds, videos]);
+  React.useLayoutEffect(() => {
+    holdForTransitionRef.current = holdForTransition;
+  }, [holdForTransition]);
 
   const playFromStart = React.useCallback(async () => {
     transitionHoldRef.current = null;
@@ -1415,6 +1590,26 @@ export function useDebatePlayback(
    * these recordings carry no Cues, so seeking is a parse walk (GEO-2828) and asking for one over
    * data the element does not yet hold is how the pipeline died in the first place.
    */
+  /**
+   * An element lost its media, so a pair that has never played may need positioning again
+   * (GEO-3594).
+   *
+   * The preposition (`needsPrepositionRef`) is spent once it has run, and a reload sends the element
+   * back to the start of its recording. The feed reloads a waiting card's elements when a tap unlocks
+   * them for sound (`gesture-media-pool.ts`), and that card's pair would then start from two
+   * elements at zero and seek both just before playing — the uneven start GEO-2965 removed. Only
+   * for a pair that has never played: one that has is put back in step by `resyncSlot` or by the
+   * next `resumeBoth`, and positioning it here would be a needless parse walk (GEO-2828).
+   */
+  const onMediaEmptied = React.useCallback(() => {
+    const primaryVideo = slot1VideoRef.current;
+    const secondaryVideo = slot2VideoRef.current;
+    if (!primaryVideo || !secondaryVideo) return;
+    if (primaryVideo.played.length === 0 && secondaryVideo.played.length === 0) {
+      needsPrepositionRef.current = true;
+    }
+  }, []);
+
   const resyncSlot = React.useCallback(
     (slot: 1 | 2) => {
       const recoveredVideo = slot === 1 ? slot1VideoRef.current : slot2VideoRef.current;
@@ -1730,6 +1925,7 @@ export function useDebatePlayback(
     isResuming,
     playbackEnded,
     mutedByUser,
+    muteChosen,
     setMutedByUser,
     playheadSeconds,
     livePositionMs,
@@ -1743,6 +1939,7 @@ export function useDebatePlayback(
     activeSlot,
     subtitle,
     onPlaybackTick: updateTurnState,
+    onMediaEmptied,
     resyncSlot,
     refreshSlotUrl,
     togglePlayback,

@@ -9,6 +9,7 @@ import { PAIR_HOLD_TIMEOUT_MS, SUSPEND_GRACE_MS } from '~/core/debates/pair-read
 import { turnSpansForDurations, turnSpansFromSegments, turnStateFromSegments } from '~/core/debates/playback-utils';
 import { turnTimerScale } from '~/core/debates/recording-countdown-ring';
 import type { DebatePlaybackController } from '~/core/debates/use-debate-playback';
+import { isGestureVideoUnlocked } from '~/core/utils/video/gesture-media-pool';
 
 import { DebateFeedPlayer } from './debate-feed-player';
 import { feedFullPlaybackStartedAtom } from './feed-full-playback';
@@ -298,6 +299,7 @@ function controllerFixture(overrides: {
     activeSlot: speakingSlot,
     subtitle: overrides.subtitle ?? null,
     onPlaybackTick: vi.fn(),
+    onMediaEmptied: vi.fn(),
     resyncSlot: vi.fn(),
     refreshSlotUrl: vi.fn(),
     togglePlayback: vi.fn(),
@@ -409,14 +411,17 @@ describe('player layout', () => {
       [SPACE_2, 'Another affiliation whose width must not place the position chip'],
     ]);
     const { container } = render(<DebateFeedPlayer debate={debate} active />);
-    const { getByText } = within(container);
+    const { getAllByText, getByText } = within(container);
+    // Unnamed participants read as Debater, in slot order.
+    const names = getAllByText('Debater');
+    expect(names).toHaveLength(2);
 
-    for (const [name, position, affiliation] of [
-      [SPACE_1_DASHED, 'Agree', 'A deliberately much longer affiliation than the participant name'],
-      [SPACE_2, 'Disagree', 'Another affiliation whose width must not place the position chip'],
-    ]) {
+    for (const [index, position, affiliation] of [
+      [0, 'Agree', 'A deliberately much longer affiliation than the participant name'],
+      [1, 'Disagree', 'Another affiliation whose width must not place the position chip'],
+    ] as const) {
       const chip = getByText(position);
-      const nameNode = getByText(name);
+      const nameNode = names[index]!;
       const nameRow = nameNode.parentElement;
 
       expect(chip.parentElement).toBe(nameRow);
@@ -653,6 +658,17 @@ describe('the Unmute tap and iOS gesture activation (GEO-3115)', () => {
     expect(
       within(slot1.closest('[data-debate-slot]') as HTMLElement).getByRole('button', { name: 'Pause debate' })
     ).toBeTruthy();
+  });
+
+  it('records the elements the Unmute tap unlocked, so the next card the pool hands them to has sound (GEO-3594)', () => {
+    const { slot1, slot2 } = renderPlayer({ mutedByUser: true, turnSlot: 1 });
+    running(slot1);
+    running(slot2);
+
+    fireEvent.click(muteButton(slot1, 'Unmute'));
+
+    expect(isGestureVideoUnlocked(slot1)).toBe(true);
+    expect(isGestureVideoUnlocked(slot2)).toBe(true);
   });
 
   it('holds the pause events it causes from the playback tick, then ticks once the plays settle', async () => {

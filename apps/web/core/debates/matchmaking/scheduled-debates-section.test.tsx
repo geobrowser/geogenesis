@@ -7,6 +7,7 @@ import * as React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { DebateLobbySummary, ScheduledDebateRequest, UpcomingDebateRoom } from '~/core/debates/api';
+import { GeoChatRequestError, GeoChatSessionError } from '~/core/debates/api';
 import { NavUtils } from '~/core/utils/utils';
 
 import type { UpcomingRoomRow } from './scheduled-debates-section';
@@ -32,6 +33,7 @@ const mocks = vi.hoisted(() => ({
     avatar_cid: string | null;
   }[],
   graphLookupIds: [] as string[],
+  graphLookupPeople: [] as unknown[],
   lobbies: [] as DebateLobbySummary[],
   lobbiesError: null as Error | null,
   requestsLoading: false,
@@ -85,8 +87,9 @@ vi.mock('./hooks', () => ({
 }));
 
 vi.mock('./use-geo-chat-user-summaries', () => ({
-  useGeoChatUserSummaries: (ids: string[]) => {
-    mocks.graphLookupIds = ids;
+  useGeoChatUserSummaries: (people: { user_id: string }[]) => {
+    mocks.graphLookupPeople = people;
+    mocks.graphLookupIds = people.map(person => person.user_id);
     return mocks.graphPeople;
   },
 }));
@@ -407,6 +410,25 @@ describe('calling a scheduled debate off', () => {
     });
 
     expect(screen.getAllByText('Arranged by the Geo team')).toHaveLength(2);
+  });
+
+  // GEO-3589: the viewer's answer is the one that books it, so the card says the other already accepted.
+  it('says the other debater of an arranged match already accepted, to a viewer who still has to answer', () => {
+    setup({
+      answerable: [
+        request({
+          created_by_admin: true,
+          invited_by_user_id: null,
+          proposed_by_user_id: null,
+          participants: [
+            { user_id: 'user-me', accepted: null },
+            { user_id: 'user-them', accepted: true },
+          ],
+        }),
+      ],
+    });
+
+    expect(screen.getByText(/ accepted · Arranged by the Geo team$/)).toBeInTheDocument();
   });
 
   it('says which debater proposed a moved time on a Geo-arranged match, and nothing on a peer request', () => {
@@ -736,13 +758,18 @@ describe('pairing a room with the request that booked it', () => {
     expect(result.current.upcoming.map(row => row.room.room_id)).toEqual(['room-open']);
   });
 
-  it('looks up both sides in the graph, the viewer included', () => {
-    mocks.requests = [request(), request({ request_id: 'request-2' })];
+  it('looks up both sides, the viewer included, with the profile geo-chat sent for each', () => {
+    const them = { user_id: 'user-them', accepted: null, profile_space_id: 'space-them', display_name: null };
+    mocks.requests = [
+      request({ participants: [{ user_id: 'user-me', accepted: true }, them] }),
+      request({ request_id: 'request-2' }),
+    ];
     mocks.graphPeople = [ADA];
 
     const { result } = renderHook(() => useScheduledContent());
 
     expect(mocks.graphLookupIds).toEqual(['user-me', 'user-them', 'user-me', 'user-them']);
+    expect(mocks.graphLookupPeople[1]).toEqual(them);
     expect(result.current.people).toEqual([ADA]);
   });
 
@@ -782,7 +809,7 @@ describe('a schedule that could not be read', () => {
   it('says so rather than rendering as nothing scheduled', () => {
     setup({ requestsError: new Error('Service unavailable.') });
 
-    expect(screen.getByText(/Could not read your scheduled debates: Service unavailable./)).toBeInTheDocument();
+    expect(screen.getByText('Could not read your scheduled debates.')).toBeInTheDocument();
   });
 
   it('reports a failed room read too, not only a failed request read', () => {
@@ -838,6 +865,7 @@ describe('lobbies among the upcoming debates (GEO-3292)', () => {
     hosts: [{ user_id: 'user-host', profile_space_id: 'space-host', display_name: 'Bryan', avatar_cid: null }],
     hosting: false,
     onRoster: false,
+    summary: null,
     ...overrides,
   });
 
@@ -933,7 +961,19 @@ describe('lobbies among the upcoming debates (GEO-3292)', () => {
     setup({ lobbiesError: new Error('boom') });
 
     expect(screen.getByText('Upcoming lobbies')).toBeInTheDocument();
-    expect(screen.getByText('Could not read your lobbies: boom')).toBeInTheDocument();
+    expect(screen.getByText('Could not read your lobbies.')).toBeInTheDocument();
+  });
+
+  // GEO-3553: a refused session is the account being set up, never geo-chat's raw message.
+  it('says the account is being set up when the session exchange is refused', () => {
+    setup({
+      requestsError: new GeoChatSessionError(
+        new GeoChatRequestError('no connected wallet or Knowledge Graph account', 'no_personal_space', 401)
+      ),
+    });
+
+    expect(screen.getByText('Setting up your account. This updates on its own.')).toBeInTheDocument();
+    expect(screen.queryByText(/Knowledge Graph/)).toBeNull();
   });
 
   it('carries a failed lobby list read out of the hook', () => {

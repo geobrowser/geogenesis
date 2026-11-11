@@ -7,7 +7,7 @@ import { useAtomValue, useSetAtom, useStore } from 'jotai';
 
 import { capture } from '~/core/analytics';
 import { type Debate, GeoChatRequestError } from '~/core/debates/api';
-import type { DebatePageFeedState } from '~/core/debates/debate-page-outcome';
+import type { DebatePageFeedState, DebatePagePlayerState } from '~/core/debates/debate-page-outcome';
 import { isRemovedDebateAnswer } from '~/core/debates/debate-removal';
 import { useDebate, useProcessedVideoDebateIds, useSpaceDebates } from '~/core/debates/hooks';
 import { isWatchableDebate } from '~/core/debates/playback-utils';
@@ -46,6 +46,7 @@ import { DebateScrollHint, scrollHintBounceProps, useDebateScrollHint } from './
 import { DEBATE_FEED_HOLDS_FULL_PLAYBACK } from './feed-full-playback';
 import { DebateShareDialog } from './lazy-share-dialog';
 import { useLineClampOverflow } from './line-clamp-overflow';
+import { useStillFrameShown } from './still-frame-timing';
 import { useDebateShareAction } from './use-debate-share-action';
 import { useDebatesBestOrder } from './use-debates-best-order';
 import { debateFeedPanelAtom, debateFullscreenActiveAtom, openDebateFeedPanelAtom } from '~/atoms';
@@ -53,6 +54,11 @@ import { debateFeedPanelAtom, debateFullscreenActiveAtom, openDebateFeedPanelAto
 const PAGE_SIZE = 5;
 /** How many cards past the active one open their recordings. See the `preload` prop below. */
 const PRELOAD_AHEAD = 2;
+/**
+ * The longest the debate page holds the next cards' preloading for the linked debate to start. A
+ * backstop: the linked card reports a start, a refused autoplay or an error well before this.
+ */
+const LINKED_START_HOLD_MS = 8_000;
 /**
  * How wide the debate card's column may get, which with its fixed-ratio media is really a height
  * budget: grow or shrink the media with the viewport while reserving the navbar, the 20px above the
@@ -130,14 +136,12 @@ export function DebatesBrowseFeed({
   // viewer who participated in any incomplete debate there pushes their own count over and loses
   // the oldest few. The next completed debate in that space tips it for everyone at once.
   //
-  // So fetch the anchor by id instead of requiring it to appear. Gated on the listing having
-  // settled without it, which keeps the common case at one request — this only fires where the
-  // feed would otherwise have silently rendered the wrong page.
+  // So fetch the anchor by id instead of requiring it to appear, and alongside the listing rather
+  // than after it (GEO-3604): the anchor is shown from its own row as soon as it is ready, and the
+  // listing is 50 rows. On the debate page the server has usually seeded it already. Stops asking
+  // once the listing has it.
   const anchorListed = initialDebateId != null && listedDebates.some(debate => ID.equals(debate.id, initialDebateId));
-  const anchorQuery = useDebate(
-    initialDebateId ?? '',
-    initialDebateId != null && !debatesQuery.isLoading && !anchorListed
-  );
+  const anchorQuery = useDebate(initialDebateId ?? '', initialDebateId != null && !anchorListed);
 
   // Two-stage gate (GEO-2412). `isWatchableDebate` only proves both raw recordings exist; a debate
   // whose media job failed or never ran still passes it, so readiness decides what renders.
@@ -174,14 +178,25 @@ export function DebatesBrowseFeed({
   // still free to settle: nothing there is on screen.
   const [pinnedIds, setPinnedIds] = React.useState<readonly string[]>([]);
 
+  // An anchored feed shows the anchor alone until the listing, ranking and readiness settle, then the
+  // rest joins below it in final order (GEO-3604). Latched, so a later refetch never removes the rest.
+  const restSettled = !debatesQuery.isLoading && !bestOrderLoading && !mediaLoading;
+  const [restShown, setRestShown] = React.useState(restSettled);
+  if (restSettled && !restShown) setRestShown(true);
+
   const rankedDebates = React.useMemo(() => {
+    const processed = new Set(processedIds);
+    if (initialDebateId != null && !restShown) {
+      const anchor = candidates.find(debate => ID.equals(debate.id, initialDebateId) && processed.has(debate.id));
+      return anchor ? [anchor] : [];
+    }
+
     // Held back the way the media lookups hold it back — by having nothing to show yet rather than
     // by a flag, since the flag below only drives the empty and anchor states. Painting in recency
     // order first would move the next debate out from under someone already scrolling. A ranking
     // that fails rather than loads leaves this empty, so the feed falls through to recency.
     if (bestOrderLoading) return [];
 
-    const processed = new Set(processedIds);
     // Recency is the tiebreak, not the rule: the ranking covers published, named debates, so
     // anything it hasn't scored still plays — after the ranked ones, newest first, exactly as the
     // whole feed used to be ordered.
@@ -196,7 +211,7 @@ export function DebatesBrowseFeed({
     if (anchorIndex <= 0) return sorted;
     const [anchor] = sorted.splice(anchorIndex, 1);
     return [anchor, ...sorted];
-  }, [candidates, processedIds, initialDebateId, rankByDebateId, bestOrderLoading]);
+  }, [candidates, processedIds, initialDebateId, rankByDebateId, bestOrderLoading, restShown]);
 
   const { debates, pinnedCount } = React.useMemo(() => {
     if (pinnedIds.length === 0) return { debates: rankedDebates, pinnedCount: 0 };
@@ -369,6 +384,27 @@ export function DebatesBrowseFeed({
   // -1 when nothing is active yet, which preloads nothing rather than the first item.
   const activeIndex = visibleDebates.findIndex(debate => debate.id === activeId);
 
+  // On the debate page, the cards after the linked debate wait for it to start (GEO-3604). Their
+  // stills, signed URLs and buffering otherwise share a cold phone's first seconds of bandwidth
+  // with the one debate on screen. Released once it plays, is refused, fails, or the backstop runs
+  // out, and only ever held while the linked debate is the one being watched.
+  const holdsForLinkedStart = surface === 'debate-page' && initialDebateId != null;
+  const [linkedStarted, setLinkedStarted] = React.useState(!holdsForLinkedStart);
+  React.useEffect(() => {
+    if (linkedStarted) return;
+    const timer = window.setTimeout(() => setLinkedStarted(true), LINKED_START_HOLD_MS);
+    return () => window.clearTimeout(timer);
+  }, [linkedStarted]);
+  const onLinkedPlaybackState = React.useCallback(
+    (state: DebatePagePlayerState) => {
+      pageOutcome?.player(state);
+      if (state.playing || state.autoplayBlocked || state.error) setLinkedStarted(true);
+    },
+    [pageOutcome]
+  );
+  const preloadsAhead =
+    linkedStarted || initialDebateId == null || activeId == null || !ID.equals(activeId, initialDebateId);
+
   // Pin through the active card and the ones preloading after it. Only ever grows, and only as the
   // viewer moves on — what follows the pinned run is still the live ranking. See `pinnedIds`.
   // Capped at what is rendered, or a feed shorter than the window would re-pin forever.
@@ -488,7 +524,12 @@ export function DebatesBrowseFeed({
           }
           // Only the linked debate's card reports: the visit's outcome is about that debate.
           onPlaybackState={
-            initialDebateId != null && ID.equals(debate.id, initialDebateId) ? pageOutcome?.player : undefined
+            initialDebateId != null && ID.equals(debate.id, initialDebateId) && (pageOutcome || holdsForLinkedStart)
+              ? onLinkedPlaybackState
+              : undefined
+          }
+          onStillShown={
+            initialDebateId != null && ID.equals(debate.id, initialDebateId) ? pageOutcome?.stillShown : undefined
           }
           // Resolve the next debates' recordings while the viewer is still on this one. Each
           // debate needs two signed URLs, and until they land the player shows "Loading…"
@@ -500,8 +541,8 @@ export function DebatesBrowseFeed({
           // card that waits — and a quick double swipe used to land exactly there, on a card
           // nothing had opened. Headers are cheap; buffering is not, so only the very next card
           // buffers, and nothing further than two ahead is touched at all.
-          preload={activeIndex >= 0 && index > activeIndex && index <= activeIndex + PRELOAD_AHEAD}
-          buffer={activeIndex >= 0 && index === activeIndex + 1}
+          preload={preloadsAhead && activeIndex >= 0 && index > activeIndex && index <= activeIndex + PRELOAD_AHEAD}
+          buffer={preloadsAhead && activeIndex >= 0 && index === activeIndex + 1}
           // The debate a link opened is the one the viewer asked for, so it plays as before; the
           // rest of the feed holds its full recordings until the viewer starts one.
           holdFullPlayback={
@@ -595,6 +636,7 @@ function DebateFeedItem({
   onOpenComments,
   onPlaybackRequest,
   onPlaybackState,
+  onStillShown,
 }: {
   debate: Debate;
   spaceId: string;
@@ -616,8 +658,10 @@ function DebateFeedItem({
   /** Replay on a debate that is not the active one makes it the active one, like its other controls. */
   onPlaybackRequest: () => void;
   onPlaybackState?: DebatePageOutcome['player'];
+  onStillShown?: DebatePageOutcome['stillShown'];
 }) {
   const itemRef = React.useRef<HTMLElement | null>(null);
+  useStillFrameShown(itemRef, onStillShown);
   const share = useDebateShareAction();
   // Comments live on the Debate entity — same query key as the panel, so posting
   // there updates this count without a refetch of our own.
@@ -785,6 +829,7 @@ function DebateClaimTitle({ claim }: { claim: Debate['claim'] }) {
         spaceId={spaceId}
         className="hover:underline"
         data-entity-side-panel-opener=""
+        data-debate-claim-title=""
         {...observePanelNavigation(event => {
           if (event.defaultPrevented || isModifiedClick(event)) return;
           event.preventDefault();

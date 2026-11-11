@@ -7,9 +7,10 @@ import { DEBATE_PARTICIPANTS_PROPERTY_ID, DEBATE_TYPE_ID } from '~/core/debates/
 import { ID } from '~/core/id';
 import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
 import { RANKING_BLOCK_TYPE_ID, SUBMITTED_TO_PROPERTY_ID } from '~/core/ranking-block-ids';
+import { chunk } from '~/core/utils/chunk';
 import { mapWithConcurrency } from '~/core/utils/map-with-concurrency';
 
-import { ID_CHUNK_SIZE, afterArg, chunk, collectConnection, gqlId, gqlIdList, runQuery } from './community-graphql';
+import { ID_CHUNK_SIZE, afterArg, collectConnection, gqlId, gqlIdList, runQuery } from './community-graphql';
 import { isExcludedCurator } from './curator-leaderboard-exclusions';
 import { type CuratorLeaderboardWindow, curatorLeaderboardWindow } from './curator-leaderboard-period';
 import type {

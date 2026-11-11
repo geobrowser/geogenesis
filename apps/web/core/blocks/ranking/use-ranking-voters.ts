@@ -11,6 +11,7 @@ import { Space } from '~/core/io/dto/spaces';
 import { getSpaces } from '~/core/io/queries';
 import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
 import type { Profile } from '~/core/types';
+import { chunk } from '~/core/utils/chunk';
 
 import type { AggregatedRankingSubmitterRef } from './ranking-block-relations';
 import { useRankEntitySpaceById } from './use-ranking-submitter-space-ids';
@@ -31,14 +32,6 @@ const EMPTY_SPACE_MAP = new Map<string, Space>();
 
 function usableAvatarUrl(url: string | null | undefined): string | null {
   return url && url !== PLACEHOLDER_SPACE_IMAGE ? url : null;
-}
-
-function chunkSpaceIds(spaceIds: string[]): string[][] {
-  const batches: string[][] = [];
-  for (let start = 0; start < spaceIds.length; start += SPACE_ID_REQUEST_LIMIT) {
-    batches.push(spaceIds.slice(start, start + SPACE_ID_REQUEST_LIMIT));
-  }
-  return batches;
 }
 
 export function useRankingVoters(refs: AggregatedRankingSubmitterRef[]) {
@@ -63,7 +56,7 @@ export function useRankingVoters(refs: AggregatedRankingSubmitterRef[]) {
     enabled: spaceIds.length > 0,
     staleTime: 60_000,
     queryFn: async () => {
-      const batches = chunkSpaceIds(spaceIds);
+      const batches = chunk(spaceIds, SPACE_ID_REQUEST_LIMIT);
       const results = await Promise.all(batches.map(batch => Effect.runPromise(fetchProfilesBySpaceIds(batch))));
       const map = new Map<string, Profile>();
       for (const profiles of results) {
@@ -86,7 +79,7 @@ export function useRankingVoters(refs: AggregatedRankingSubmitterRef[]) {
     enabled: !isLoadingProfiles && spaceIdsNeedingImage.length > 0,
     staleTime: 60_000,
     queryFn: async ({ signal }) => {
-      const batches = chunkSpaceIds(spaceIdsNeedingImage);
+      const batches = chunk(spaceIdsNeedingImage, SPACE_ID_REQUEST_LIMIT);
       const results = await Promise.all(
         batches.map(batch => Effect.runPromise(getSpaces({ spaceIds: batch }, signal)))
       );

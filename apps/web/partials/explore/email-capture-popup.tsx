@@ -7,7 +7,11 @@ import { useAtomValue } from 'jotai';
 
 import { signupCompleted } from '~/core/analytics';
 import { currentAuthAttempt, finishAuthAttempt } from '~/core/auth-attempt';
-import { useGoogleOAuthSignIn } from '~/core/auth/google-oauth';
+import {
+  ContinueWithGoogleButton,
+  isGoogleSignInStarting,
+  useContinueWithGoogle,
+} from '~/core/auth/continue-with-google';
 import { useDebatesHub } from '~/core/debates/matchmaking/use-debates-hub';
 import { useAnyModalOpen } from '~/core/hooks/use-any-modal-open';
 import { useDismissedNotice } from '~/core/hooks/use-dismissed-notice';
@@ -21,9 +25,8 @@ import { usePrivy } from '~/core/wallet/auth-hooks';
 
 import { ClientOnly } from '~/design-system/client-only';
 import { CloseSmall } from '~/design-system/icons/close-small';
-import { GoogleMark } from '~/design-system/icons/google-mark';
 
-import { ACCOUNT_ANALYTICS, AccountStep } from './email-capture-account-step';
+import { ACCOUNT_ANALYTICS, AccountStep, SIGN_IN_UNAVAILABLE_COPY } from './email-capture-account-step';
 import { useMarkEmailCaptureShowing } from './email-capture-presence';
 import {
   CARD_CLASS,
@@ -117,6 +120,8 @@ function EmailCapturePopup() {
   // The address as accepted, so the account is created against what was actually subscribed rather
   // than whatever is in the field if they keep typing.
   const [subscribedEmail, setSubscribedEmail] = React.useState(() => resumed?.email ?? '');
+  /** The account step could not reach Privy; shown under the choice until it is tried again. */
+  const [signInUnavailable, setSignInUnavailable] = React.useState(false);
 
   // Watched only while the popup could still appear. The observer covers the whole body on a page
   // holding an infinite feed, so leaving it on after the card is dismissed, closed, or made moot by
@@ -165,7 +170,10 @@ function EmailCapturePopup() {
     return () => window.removeEventListener('scroll', check);
   }, [authenticated, dismissed, scrolledEnough]);
 
-  /** What the close button does: remember it, and take it off the screen now. */
+  // Undefined with the `googleSignIn` flag off, which hides the button.
+  const google = useContinueWithGoogle();
+  const googleStarting = google?.status === 'starting';
+
   /**
    * Hands over to the account step, which owns the OTP flow from here.
    *
@@ -176,31 +184,22 @@ function EmailCapturePopup() {
    * actually signing up.
    */
   const startAccount = React.useCallback(() => {
+    if (isGoogleSignInStarting()) return;
+    setSignInUnavailable(false);
     beginPrivyAuth(ACCOUNT_ANALYTICS);
     prepareOnboarding();
     writePendingSignup(subscribedEmail);
     setWantsAccount(true);
   }, [prepareOnboarding, subscribedEmail]);
 
-  // Undefined with the `googleSignIn` flag off, which hides the button.
-  const googleSignIn = useGoogleOAuthSignIn();
-  const [googleStatus, setGoogleStatus] = React.useState<'idle' | 'starting' | 'failed'>('idle');
-  const startGoogle = React.useCallback(async () => {
-    if (!googleSignIn) return;
-    setGoogleStatus('starting');
-    try {
-      // Redirects away on success, so nothing after this runs.
-      await googleSignIn({ ...ACCOUNT_ANALYTICS, auth_control: 'continue_with_google' });
-    } catch {
-      setGoogleStatus('failed');
-    }
-  }, [googleSignIn]);
-
   const close = React.useCallback(() => {
-    if (currentAuthAttempt()?.properties.component === 'explore_email_capture') finishAuthAttempt('closed');
+    // Closing cannot abort Google's redirect; retain its attribution until it completes or fails.
+    if (!isGoogleSignInStarting() && currentAuthAttempt()?.properties.component === 'explore_email_capture') {
+      finishAuthAttempt('closed');
+    }
     // Closing is a decision, so the attempt should not follow them to the next page.
     clearPendingSignup();
-    if (wantsAccount) cancelPrivyAuth();
+    if (wantsAccount && !isGoogleSignInStarting()) cancelPrivyAuth();
     rememberDismissed();
     setClosed(true);
   }, [rememberDismissed, wantsAccount]);
@@ -376,6 +375,12 @@ function EmailCapturePopup() {
                   setWantsAccount(false);
                   close();
                 }}
+                onSignInUnavailable={() => {
+                  // Back to the choice; a reload must not resume a send that never went out.
+                  clearPendingSignup();
+                  setSignInUnavailable(true);
+                  setWantsAccount(false);
+                }}
               />
             ) : (
               <>
@@ -392,27 +397,38 @@ function EmailCapturePopup() {
                     Laid out as the subscribe row is after the restyle: a column with the same
                     spacing and width, so the card keeps one shape whichever state it is in. */}
                 <div className={FORM_STACK_CLASS}>
-                  <button type="button" onClick={startAccount} className={PRIMARY_BUTTON_CLASS}>
+                  <button
+                    type="button"
+                    onClick={startAccount}
+                    disabled={googleStarting}
+                    className={PRIMARY_BUTTON_CLASS}
+                  >
                     Create account
                   </button>
-                  {googleSignIn ? (
-                    <button
-                      type="button"
-                      onClick={() => void startGoogle()}
-                      disabled={googleStatus === 'starting'}
+                  {google ? (
+                    <ContinueWithGoogleButton
+                      status={google.status}
+                      onClick={() =>
+                        void google.start(
+                          { ...ACCOUNT_ANALYTICS, auth_control: 'continue_with_google' },
+                          { surface: 'email_capture' }
+                        )
+                      }
                       className={GOOGLE_BUTTON_CLASS}
-                    >
-                      <GoogleMark />
-                      Continue with Google
-                    </button>
+                    />
                   ) : null}
                   <button type="button" onClick={close} className={SECONDARY_BUTTON_CLASS}>
                     Skip
                   </button>
                 </div>
-                {googleStatus === 'failed' ? (
+                {google?.status === 'failed' ? (
                   <p role="alert" className={ERROR_CLASS}>
                     Google sign-in did not start. Try again, or create an account with your email.
+                  </p>
+                ) : null}
+                {signInUnavailable ? (
+                  <p role="alert" className={ERROR_CLASS}>
+                    {SIGN_IN_UNAVAILABLE_COPY}
                   </p>
                 ) : null}
               </>
