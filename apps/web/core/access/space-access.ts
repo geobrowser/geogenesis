@@ -3,6 +3,7 @@ import { Effect } from 'effect';
 import type { Space } from '~/core/io/dto/spaces';
 import { getIsEditorOfSpace, getIsMemberOfSpace, getSpaceRolesForParticipants } from '~/core/io/queries';
 import { validateSpaceId } from '~/core/io/rest/validation';
+import { chunk } from '~/core/utils/chunk';
 
 export type SpaceAccess = {
   isEditor: boolean;
@@ -147,14 +148,11 @@ export function getSpaceRoles(
     }
 
     const toAsk = normalizedIds.filter(id => id !== normalizedSpaceId);
-    const chunks: string[][] = [];
-    for (let index = 0; index < toAsk.length; index += ROLE_LOOKUP_CHUNK) {
-      chunks.push(toAsk.slice(index, index + ROLE_LOOKUP_CHUNK));
-    }
+    const chunks = chunk(toAsk, ROLE_LOOKUP_CHUNK);
 
     const pages = yield* Effect.forEach(
       chunks,
-      chunk => getSpaceRolesForParticipants(normalizedSpaceId, chunk, signal),
+      batch => getSpaceRolesForParticipants(normalizedSpaceId, batch, signal),
       { concurrency: 4 }
     );
 

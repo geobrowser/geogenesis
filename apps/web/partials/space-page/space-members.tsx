@@ -8,6 +8,7 @@ import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 
 import { getSpaceMemberRequest } from '~/partials/space-page/get-space-member-request';
 
+import { SpaceAddBackPrompt } from './space-add-back-prompt';
 import { SpaceMembersChip } from './space-members-chip';
 import { SpaceMembersJoinButton } from './space-members-join-button';
 import { SpaceMembersManageDialogContent } from './space-members-manage-dialog-content';
@@ -75,6 +76,7 @@ export async function SpaceMembers({ spaceId }: Props) {
           }
           trigger={<ChevronDownSmall color="grey-04" />}
         />
+        {isEditor ? <SpaceAddBackPrompt spaceId={spaceId} spaceName={space.entity.name ?? undefined} /> : null}
       </div>
     );
   }

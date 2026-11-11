@@ -22,6 +22,7 @@ import { SCHEDULE_SAVE_FAILED_COPY } from '~/core/availability/schedule-save-cop
 import { useObservedMutation } from '~/core/hooks/use-observed-mutation';
 import { useSetToast } from '~/core/hooks/use-toast';
 import { validateSpaceId } from '~/core/io/rest/validation';
+import { chunk } from '~/core/utils/chunk';
 import { usePrivy } from '~/core/wallet/auth-hooks';
 
 import {
@@ -1452,10 +1453,7 @@ export function useDebateProfilesBySpace(profileSpaceIds: readonly string[], ena
     ...debateQueryNetworkOptions,
     queryKey: debateQueryKeys.profileLookup(accountKey, ids),
     queryFn: async ({ signal }) => {
-      const pages: string[][] = [];
-      for (let i = 0; i < ids.length; i += DEBATE_PROFILE_LOOKUP_MAX) {
-        pages.push(ids.slice(i, i + DEBATE_PROFILE_LOOKUP_MAX));
-      }
+      const pages = chunk(ids, DEBATE_PROFILE_LOOKUP_MAX);
       const found = await Promise.all(
         pages.map(page => lookupDebateProfiles(page, getPrivyIdentityToken, accountKey, signal))
       );

@@ -53,6 +53,7 @@ import { shouldMountOnboardingDialog } from '~/partials/onboarding/onboarding-di
 import { PendingActionsRunner } from '~/partials/pending-actions-runner';
 import { LocalVotesSaver } from '~/partials/save-votes/local-votes-saver';
 import { SignInBoxGate } from '~/partials/sign-in/sign-in-box-gate';
+import { AskEditorDialog } from '~/partials/space-page/ask-editor-dialog';
 
 import { PageViewTracker } from '~/app/page-view-tracker';
 import {
@@ -375,6 +376,7 @@ export function App({ children }: { children: React.ReactNode }) {
           <PendingPersonalSpaceGate />
           <PendingTopicFollowsGate />
           <PendingActionsRunner />
+          <AskEditorDialog />
           <LocalVotesSaver />
           <CreateSpaceDialogGate />
           <PendingCreatedSpaceGate />

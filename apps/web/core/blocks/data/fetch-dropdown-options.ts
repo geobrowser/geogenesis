@@ -13,6 +13,7 @@ import {
   relationFacetDocument,
 } from '~/core/io/relation-facet';
 import type { WhereCondition } from '~/core/sync/experimental_query-layer';
+import { chunk } from '~/core/utils/chunk';
 
 /**
  * Where a dropdown's population comes from:
@@ -99,9 +100,8 @@ export async function fetchDropdownOptionNames(
   signal?: AbortSignal
 ): Promise<Map<string, string | null>> {
   const names = new Map<string, string | null>();
-  for (let start = 0; start < ids.length; start += NAME_BATCH_SIZE) {
-    const chunk = ids.slice(start, start + NAME_BATCH_SIZE);
-    const rows = await Effect.runPromise(getEntityNames(chunk, signal));
+  for (const batch of chunk(ids, NAME_BATCH_SIZE)) {
+    const rows = await Effect.runPromise(getEntityNames(batch, signal));
     for (const row of rows) names.set(uuidToHex(row.id), row.name);
   }
   return names;
