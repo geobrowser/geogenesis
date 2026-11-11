@@ -293,6 +293,7 @@ function PairedDebateFeedPlayer({
     suspend,
     seekBoth: seekBothRaw,
     livePositionMs,
+    recordingStartSeconds,
     beginScrub,
     endScrub,
   } = controller;
@@ -1084,6 +1085,7 @@ function PairedDebateFeedPlayer({
           // A Stream slot loads its opening segments, which is what lets it start on arrival.
           buffer={active || (buffer && !renditions.slot1)}
           stream={streams?.slot1 ?? false}
+          streamStartSeconds={() => recordingStartSeconds(1)}
           onStreamFailed={() => void refreshSlotUrl(1, { abandonStream: true })}
           previewClip={previewNear ? clips.slot1 : null}
           onPreviewRefused={onPreviewRefused}
@@ -1173,6 +1175,7 @@ function PairedDebateFeedPlayer({
           cutCanvasRef={stamped ? slot2CanvasRef : undefined}
           buffer={active || (buffer && !renditions.slot2)}
           stream={streams?.slot2 ?? false}
+          streamStartSeconds={() => recordingStartSeconds(2)}
           onStreamFailed={() => void refreshSlotUrl(2, { abandonStream: true })}
           previewClip={previewNear ? clips.slot2 : null}
           onPreviewRefused={onPreviewRefused}
@@ -1421,6 +1424,7 @@ function DebaterVideo({
   previewVideoRef,
   onPreviewError,
   stream = false,
+  streamStartSeconds,
   onStreamFailed,
   held = false,
   concealed = false,
@@ -1476,6 +1480,8 @@ function DebaterVideo({
   onPreviewError?: () => void;
   /** `src` is a Cloudflare Stream HLS manifest; see `attachStreamSource`. */
   stream?: boolean;
+  /** Where in the recording the Stream source loads first, read when it starts loading. */
+  streamStartSeconds?: () => number | null;
   /** hls.js gave up on the Stream source: play this slot without Stream instead. */
   onStreamFailed?: () => void;
   /** The player is holding the full recording: no `src` is coming until the viewer asks, so say nothing is loading. */
@@ -1584,9 +1590,11 @@ function DebaterVideo({
    */
   const streamRef = React.useRef<AttachedStream | null>(null);
   const onStreamFailedRef = React.useRef(onStreamFailed);
+  const streamStartSecondsRef = React.useRef(streamStartSeconds);
   React.useEffect(() => {
     onStreamFailedRef.current = onStreamFailed;
-  }, [onStreamFailed]);
+    streamStartSecondsRef.current = streamStartSeconds;
+  }, [onStreamFailed, streamStartSeconds]);
   // Asked once per element: Safari and iOS play the manifest as `src`, everything else through hls.js.
   const nativeHls = React.useMemo(() => canPlayNativeHls(), []);
   // Where sound is granted element by element (iOS), the elements come from a pool that taps unlock,
@@ -1604,6 +1612,7 @@ function DebaterVideo({
       const attached = attachStreamSource(video, src, {
         autoStartLoad: false,
         nativeHls,
+        startPosition: () => streamStartSecondsRef.current?.() ?? null,
         onFatalError: () => {
           if (failed) return;
           failed = true;

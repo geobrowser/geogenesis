@@ -1894,6 +1894,20 @@ export function useDebatePlayback(
    * pair's clock, with its offset added, as `pairPlayhead` reads it. Unlike the playhead it stops
    * when a stall does, so a decision that must not run ahead of the media (a break's cut) can wait.
    */
+  /**
+   * Where a slot's recording should begin loading, in its own seconds: the debate's position (a
+   * pending seek first) mapped onto that recording. Read when a Stream source starts loading.
+   */
+  const recordingStartSeconds = React.useCallback(
+    (slot: 1 | 2) => {
+      const playhead =
+        pendingSeekSecondsRef.current ??
+        pairPlayhead(slot1VideoRef.current, slot2VideoRef.current, offsets, lastRunningPlayheadRef.current).seconds;
+      return Math.max(0, clampSeconds(playhead, timelineSeconds) - (slot === 1 ? offsets.slot1 : offsets.slot2));
+    },
+    [offsets, timelineSeconds]
+  );
+
   const livePositionMs = React.useCallback(() => {
     const primary = slot1VideoRef.current;
     return primary ? pairPlayhead(primary, slot2VideoRef.current, offsets).seconds * 1_000 : null;
@@ -1936,6 +1950,7 @@ export function useDebatePlayback(
     setMutedByUser,
     playheadSeconds,
     livePositionMs,
+    recordingStartSeconds,
     timelineSeconds,
     turnState,
     turnSpans,
