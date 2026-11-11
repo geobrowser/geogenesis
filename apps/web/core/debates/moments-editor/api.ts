@@ -108,6 +108,8 @@ export type MomentBackfillBody = {
   reason?: string;
   reel?: { clock: 'player' | 'video'; clips: ManualClipBody[]; base?: string };
   unlock?: boolean;
+  /** Pick the reel as a story (GEO-3638); sent with `unlock` so the re-pick is a story reel. */
+  story?: boolean;
   /** With `unlock`: refused (`reel_changed`) if the reel moved on since `base`. */
   base?: string;
 };
