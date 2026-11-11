@@ -1,4 +1,4 @@
-import { fireEvent, render } from '@testing-library/react';
+import { act, fireEvent, render } from '@testing-library/react';
 
 import * as React from 'react';
 
@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   HELD_PAIR_RUNWAY_SECONDS,
   PAIR_HOLD_TIMEOUT_MS,
+  SUSPEND_GRACE_MS,
   bufferedAheadSeconds,
   heldPairMayResume,
   usePairReadiness,
@@ -33,7 +34,7 @@ import { timeRanges } from '~/core/debates/time-ranges-fixtures';
 function Harness({ timeoutMs, active = true }: { timeoutMs?: number; active?: boolean } = {}) {
   const slot1Ref = React.useRef<HTMLVideoElement | null>(null);
   const slot2Ref = React.useRef<HTMLVideoElement | null>(null);
-  usePairReadiness({
+  const { mayStart } = usePairReadiness({
     pairKey: 'debate-1',
     slot1Ref,
     slot2Ref,
@@ -43,7 +44,7 @@ function Harness({ timeoutMs, active = true }: { timeoutMs?: number; active?: bo
     timeoutMs,
   });
   return (
-    <div>
+    <div data-may-start={String(mayStart)}>
       <video ref={slot1Ref} />
       <video ref={slot2Ref} />
     </div>
@@ -83,19 +84,161 @@ describe('usePairReadiness cleanup (GEO-3110)', () => {
   });
 
   it('clears the shorter suspend-grace timer too, not only the backstop', () => {
-    // A `suspend` event on either element starts `noteSuspended`'s own 250ms grace timer,
-    // independent of (and shorter than) the 3s backstop — both must be swept on unmount.
+    // An element stuck at its metadata starts its own 250ms grace timer, independent of (and
+    // shorter than) the 3s backstop — both must be swept on unmount.
     const { container, unmount } = render(<Harness />);
-    const [slot1] = Array.from(container.querySelectorAll('video'));
+    const [slot1, slot2] = Array.from(container.querySelectorAll('video'));
 
-    fireEvent(slot1, new Event('suspend'));
-    expect(vi.getTimerCount()).toBeGreaterThan(0);
+    setMedia(slot2, { readyState: 1, networkState: 1 });
+    setMedia(slot1, { readyState: 1, networkState: 1 }, 'suspend');
+    // The backstop, plus a grace for each element.
+    expect(vi.getTimerCount()).toBe(3);
 
     unmount();
 
     expect(vi.getTimerCount()).toBe(0);
     expect(() => vi.advanceTimersByTime(10_000)).not.toThrow();
     expect(vi.getTimerCount()).toBe(0);
+  });
+});
+
+type MediaState = { readyState: number; networkState?: number; seeking?: boolean };
+
+function setMedia(video: HTMLVideoElement, state: MediaState, event?: string) {
+  Object.defineProperty(video, 'readyState', { configurable: true, value: state.readyState });
+  Object.defineProperty(video, 'networkState', { configurable: true, value: state.networkState ?? 2 });
+  Object.defineProperty(video, 'seeking', { configurable: true, value: state.seeking ?? false });
+  if (event) fireEvent(video, new Event(event));
+}
+
+/** GEO-3604. iOS paused loading: idle at metadata, idle through the pre-roll seek, then `canplay`. */
+describe('usePairReadiness on iOS-style loading (GEO-3604)', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  function renderHarness() {
+    const view = render(<Harness />);
+    const [slot1, slot2] = Array.from(view.container.querySelectorAll('video'));
+    const mayStart = () => (view.container.firstElementChild as HTMLElement).dataset.mayStart === 'true';
+    const both = (state: MediaState, event?: string) =>
+      act(() => {
+        setMedia(slot1, state, event);
+        setMedia(slot2, state, event);
+      });
+    return { slot1, slot2, mayStart, both };
+  }
+
+  it('holds through a paused seek that reports idle, and starts both on canplay', () => {
+    const { slot1, slot2, mayStart, both } = renderHarness();
+    both({ readyState: 1, networkState: 1 }, 'loadedmetadata');
+    both({ readyState: 1, networkState: 1 }, 'suspend');
+    both({ readyState: 1, networkState: 1, seeking: true }, 'seeking');
+
+    act(() => vi.advanceTimersByTime(SUSPEND_GRACE_MS * 2));
+    expect(mayStart()).toBe(false);
+
+    both({ readyState: 2, networkState: 1 }, 'seeked');
+    act(() => vi.advanceTimersByTime(SUSPEND_GRACE_MS * 2));
+    expect(mayStart()).toBe(false);
+
+    act(() => setMedia(slot1, { readyState: 3, networkState: 2 }, 'canplay'));
+    expect(mayStart()).toBe(false);
+    act(() => setMedia(slot2, { readyState: 4, networkState: 2 }, 'canplay'));
+    expect(mayStart()).toBe(true);
+  });
+
+  it('holds an element at its metadata while its partner has not reached its own', () => {
+    const { slot1, slot2, mayStart } = renderHarness();
+    act(() => setMedia(slot1, { readyState: 1, networkState: 1 }, 'suspend'));
+    act(() => vi.advanceTimersByTime(SUSPEND_GRACE_MS * 2));
+    expect(mayStart()).toBe(false);
+
+    // The partner's metadata is what lets the playback hook seek both to the start.
+    act(() => {
+      setMedia(slot2, { readyState: 1, networkState: 1 }, 'loadedmetadata');
+      setMedia(slot1, { readyState: 1, networkState: 1, seeking: true }, 'seeking');
+      setMedia(slot2, { readyState: 1, networkState: 1, seeking: true }, 'seeking');
+    });
+    act(() => vi.advanceTimersByTime(SUSPEND_GRACE_MS * 2));
+    expect(mayStart()).toBe(false);
+  });
+
+  it('still lets go of a pair stopped at its metadata with no seek coming', () => {
+    const { mayStart, both } = renderHarness();
+    both({ readyState: 1, networkState: 1 }, 'suspend');
+
+    act(() => vi.advanceTimersByTime(SUSPEND_GRACE_MS - 1));
+    expect(mayStart()).toBe(false);
+    act(() => vi.advanceTimersByTime(1));
+    expect(mayStart()).toBe(true);
+  });
+
+  it('lets go of a pair that loads nothing while paused, stopped short of its metadata', () => {
+    const { mayStart, both } = renderHarness();
+    both({ readyState: 0, networkState: 1 }, 'suspend');
+
+    act(() => vi.advanceTimersByTime(SUSPEND_GRACE_MS - 1));
+    expect(mayStart()).toBe(false);
+    act(() => vi.advanceTimersByTime(1));
+    expect(mayStart()).toBe(true);
+  });
+
+  it('starts the grace over when a stop is broken, so it times one unbroken stop', () => {
+    const { slot1, slot2, mayStart } = renderHarness();
+    act(() => setMedia(slot2, { readyState: 1, networkState: 1 }, 'suspend'));
+    act(() => setMedia(slot1, { readyState: 1, networkState: 1 }, 'suspend'));
+    act(() => vi.advanceTimersByTime(SUSPEND_GRACE_MS - 50));
+    act(() => setMedia(slot1, { readyState: 1, networkState: 1, seeking: true }, 'seeking'));
+    act(() => setMedia(slot2, { readyState: 1, networkState: 1, seeking: true }, 'seeking'));
+    // The seek ends with nothing fetched, which leaves both stopped again.
+    act(() => setMedia(slot1, { readyState: 1, networkState: 1 }, 'seeked'));
+    act(() => setMedia(slot2, { readyState: 1, networkState: 1 }, 'seeked'));
+
+    act(() => vi.advanceTimersByTime(SUSPEND_GRACE_MS - 1));
+    expect(mayStart()).toBe(false);
+    act(() => vi.advanceTimersByTime(1));
+    expect(mayStart()).toBe(true);
+  });
+
+  // One slot's pre-roll target is where it already stands, so `moveTo` skips its seek.
+  it('holds an unseeked element while its partner seeks, and starts once the partner can play', () => {
+    const { slot1, slot2, mayStart } = renderHarness();
+    act(() => {
+      setMedia(slot1, { readyState: 1, networkState: 1 }, 'suspend');
+      setMedia(slot2, { readyState: 1, networkState: 1, seeking: true }, 'seeking');
+    });
+    act(() => vi.advanceTimersByTime(SUSPEND_GRACE_MS * 2));
+    expect(mayStart()).toBe(false);
+
+    act(() => setMedia(slot2, { readyState: 2, networkState: 1 }, 'seeked'));
+    act(() => vi.advanceTimersByTime(SUSPEND_GRACE_MS * 2));
+    expect(mayStart()).toBe(false);
+
+    // Slot 1 stays at its metadata: it only loads once played.
+    act(() => setMedia(slot2, { readyState: 3, networkState: 2 }, 'canplay'));
+    expect(mayStart()).toBe(true);
+  });
+
+  it('does not start on a partner that has only just stopped at its metadata', () => {
+    const { slot1, slot2, mayStart } = renderHarness();
+    act(() => setMedia(slot1, { readyState: 1, networkState: 1 }, 'suspend'));
+    act(() => vi.advanceTimersByTime(SUSPEND_GRACE_MS * 2));
+    // The partner's metadata lands; its pre-roll seek may not have begun yet.
+    act(() => setMedia(slot2, { readyState: 1, networkState: 1 }, 'loadedmetadata'));
+    expect(mayStart()).toBe(false);
+    act(() => setMedia(slot2, { readyState: 1, networkState: 1, seeking: true }, 'seeking'));
+    act(() => vi.advanceTimersByTime(SUSPEND_GRACE_MS * 2));
+    expect(mayStart()).toBe(false);
+  });
+
+  it('runs out at the backstop if a seek never finishes', () => {
+    const { mayStart, both } = renderHarness();
+    both({ readyState: 1, networkState: 1, seeking: true }, 'seeking');
+
+    act(() => vi.advanceTimersByTime(PAIR_HOLD_TIMEOUT_MS - 1));
+    expect(mayStart()).toBe(false);
+    act(() => vi.advanceTimersByTime(1));
+    expect(mayStart()).toBe(true);
   });
 });
 
