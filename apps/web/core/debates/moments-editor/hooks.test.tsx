@@ -6,7 +6,7 @@ import * as React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { GeoChatRequestError } from '../api';
-import { useIsMediaAdmin } from './hooks';
+import { useIsMediaAdmin, useRefreshAfterReel } from './hooks';
 
 const mocks = vi.hoisted(() => ({
   authenticated: true,
@@ -16,6 +16,8 @@ const mocks = vi.hoisted(() => ({
 vi.mock('../hooks', () => ({
   debateQueryKeys: {
     extractedClaims: (id: string) => ['debates', 'extracted-claims', id],
+    media: (id: string) => ['debates', 'media', id],
+    momentReelPlan: (id: string, account: string | null) => ['debates', 'account', account, 'moment-reel-plan', id],
     mediaAdmin: (account: string | null) => ['debates', 'account', account, 'media-admin'],
   },
   debateQueryNetworkOptions: { retry: false, refetchOnReconnect: false, refetchOnWindowFocus: false },
@@ -97,5 +99,25 @@ describe('useIsMediaAdmin (GEO-3671)', () => {
     const { result } = renderHook(() => useIsMediaAdmin('debate', true), { wrapper });
     expect(result.current).toBe(false);
     expect(mocks.getMomentBackfill).not.toHaveBeenCalled();
+  });
+});
+
+describe('useRefreshAfterReel (GEO-3671)', () => {
+  // A re-render moves the video, and the editor maps every live cut onto the player's clock through
+  // the media's turns: they are read again with the plan.
+  it('reads the plan, the served moments and the media again', () => {
+    const client = new QueryClient();
+    const invalidate = vi.spyOn(client, 'invalidateQueries');
+    const { result } = renderHook(() => useRefreshAfterReel('debate'), {
+      wrapper: ({ children }: { children: React.ReactNode }) => (
+        <QueryClientProvider client={client}>{children}</QueryClientProvider>
+      ),
+    });
+    result.current();
+    expect(invalidate.mock.calls.map(([filters]) => filters?.queryKey)).toEqual([
+      ['debates', 'account', 'account', 'moment-reel-plan', 'debate'],
+      ['debates', 'extracted-claims', 'debate'],
+      ['debates', 'media', 'debate'],
+    ]);
   });
 });

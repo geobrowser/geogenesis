@@ -23,6 +23,8 @@ const mocks = vi.hoisted(() => ({
   transcriptFailed: false,
   /** The claims hold a retained claim of Susan's (index 2), as a re-extraction keeps a published one. */
   retainedClaim: false,
+  /** The media's turn segments: the map from the video's clock onto the player's. */
+  turns: [] as unknown[],
 }));
 
 vi.mock('../hooks', () => ({
@@ -51,7 +53,7 @@ vi.mock('../hooks', () => ({
       ],
     },
   }),
-  useDebateMedia: () => ({ isSuccess: true, data: { turn_segments: [] } }),
+  useDebateMedia: () => ({ isSuccess: true, data: { turn_segments: mocks.turns } }),
   useDebateExtractedClaims: () => ({
     isSuccess: true,
     data: {
@@ -127,6 +129,7 @@ beforeEach(() => {
   mocks.manualReel = false;
   mocks.transcriptFailed = false;
   mocks.retainedClaim = false;
+  mocks.turns = [];
 });
 afterEach(cleanup);
 
@@ -500,6 +503,98 @@ describe('MomentsEditor (GEO-3671)', () => {
     expect(screen.getByText(/carried this hand-picked reel over since you opened it/)).toBeInTheDocument();
     expect(screen.queryByText(/Reload/)).not.toBeInTheDocument();
     expect(mocks.refresh).toHaveBeenCalled();
+  });
+
+  // The refused edit is kept, and Return to automatic waits until it is discarded: the reason says so.
+  it('says to discard a refused edit before returning a carried reel to automatic', () => {
+    mocks.manualReel = true;
+    mocks.mutate.mockImplementation((_body, options: { onSuccess: (entry: unknown) => void }) =>
+      options.onSuccess({ queued: false, refusal: 'reel_being_reapplied', request: null })
+    );
+    const { rerender } = render(<MomentsEditor debateId={DEBATE_ID} />);
+    fireEvent.change(screen.getByRole('textbox', { name: 'End time' }), { target: { value: '1.45' } });
+    fireEvent.blur(screen.getByRole('textbox', { name: 'End time' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Publish reel' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Publish and lock' }));
+
+    // The plan read again: the reel is carried now, and nothing is queued to cut it again.
+    mocks.plan = {
+      ...mocks.plan,
+      data: entry({
+        reel_version: 'v2',
+        live_reel: {
+          clock: 'video',
+          carried: true,
+          clips: [
+            { start_ms: 900, end_ms: 3_000, speaker_slot: 0, claim_index: 0, claim_text: 'Coffee is low stakes' },
+          ],
+        },
+      }),
+    };
+    rerender(<MomentsEditor debateId={DEBATE_ID} />);
+    expect(screen.getByText(/still cut on the video from before it/)).toHaveTextContent(
+      /discard your changes, then return it to automatic/
+    );
+    expect(screen.queryByRole('button', { name: 'Return to automatic' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Discard changes' }));
+    expect(screen.getByText(/still cut on the video from before it/)).not.toHaveTextContent(/discard your changes/);
+    expect(screen.getByRole('button', { name: 'Return to automatic' })).toBeInTheDocument();
+  });
+
+  // geo-chat#352 queues the worker's re-submit of the lost reel with the re-render that loses it.
+  // Until it is done, neither way out can be taken, so the notice offers neither.
+  it('offers no way out of a debate locked without a reel while a request for it is in the queue', () => {
+    const resubmit = status({
+      status: 'queued',
+      manual_reel: { clock: 'video', clips: [], reapplied: { job_id: 'job', quotes: ['Coffee dates'] } },
+    });
+    mocks.manualReel = true;
+    mocks.plan.data = entry({ reel_unlinkable: true, live_reel: null, refusal: 'already_queued' });
+    mocks.backfill.data = { request: resubmit, entry: null };
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    const notice = screen.getByText(/couldn.t be carried over after a re-render/).closest('[role="status"]');
+    expect(notice).toHaveTextContent(/in the queue; you can pick new clips or return to automatic once it's done/);
+    expect(notice).not.toHaveTextContent('Pick new clips, or return to automatic.');
+    expect(screen.queryByRole('button', { name: 'Return to automatic' })).not.toBeInTheDocument();
+  });
+
+  it('leaves the way out of a debate locked without a reel to the read-only reason', () => {
+    mocks.manualReel = true;
+    mocks.transcriptFailed = true;
+    mocks.plan.data = entry({ reel_unlinkable: true, live_reel: null });
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    const notice = screen.getByText(/couldn.t be carried over after a re-render/).closest('[role="status"]');
+    expect(notice).not.toHaveTextContent(/Pick new clips|return to automatic/);
+    expect(screen.getByText(/Couldn't load this debate's transcript/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Return to automatic' })).not.toBeInTheDocument();
+  });
+
+  // A re-render moves the video, and the turns map the live cuts onto the player's clock: when they
+  // are read again, the reel is mapped again, even if the plan's answer landed first.
+  it('maps the live reel again when the turns move', () => {
+    const turn = (source: number) => ({
+      turn_index: 0,
+      participant_slot: 1,
+      output_start_ms: 0,
+      output_end_ms: 10_000,
+      duration_ms: 10_000,
+      source_start_ms: source,
+      source_end_ms: source + 10_000,
+    });
+    mocks.turns = [turn(500)];
+    mocks.plan.data = entry({
+      live_reel: {
+        clock: 'video',
+        clips: [{ start_ms: 900, end_ms: 3_000, speaker_slot: 0, claim_index: 0, claim_text: 'Coffee is low stakes' }],
+      },
+    });
+    const { rerender } = render(<MomentsEditor debateId={DEBATE_ID} />);
+    expect(screen.getByRole('textbox', { name: 'Start time' })).toHaveValue('0:01.4');
+
+    mocks.turns = [turn(0)];
+    rerender(<MomentsEditor debateId={DEBATE_ID} />);
+    expect(screen.getByRole('textbox', { name: 'Start time' })).toHaveValue('0:00.9');
   });
 
   // geo-chat#352 links a carried clip to its own published claim, which a re-extraction may keep as
