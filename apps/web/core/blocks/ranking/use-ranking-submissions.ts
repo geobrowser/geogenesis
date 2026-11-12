@@ -361,6 +361,7 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
 
         const rankEntity = published.rankEntity;
         if (rankEntity && !validateEntityId(rankEntity.id)) {
+          operation.failed('invalid_input');
           console.error('[useRankingSubmissions] Invalid rank entity id:', rankEntity.id);
           reportError(`Failed to publish ranking: invalid rank id "${rankEntity.id}"`);
           return null;
