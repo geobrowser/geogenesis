@@ -149,12 +149,12 @@ describe('push-down copy', () => {
   it('promises nothing about the feed before the cutover', () => {
     expect(pushDownChoiceDescription(false)).not.toMatch(/feed/i);
     expect(pushDownToastCopy({ rankingLive: false, noteSeen: false })).not.toMatch(/feed/i);
-    expect(pushDownToastCopy({ rankingLive: false, noteSeen: false })).toBe('Pushed down.');
+    expect(pushDownToastCopy({ rankingLive: false, noteSeen: false })).toBe('Down ranked.');
   });
 
   it('shows the live note once the ranking is live, the first time only', () => {
     expect(pushDownChoiceDescription(true)).toContain(PUSH_DOWN_LIVE_NOTE);
     expect(pushDownToastCopy({ rankingLive: true, noteSeen: false })).toBe(PUSH_DOWN_LIVE_NOTE);
-    expect(pushDownToastCopy({ rankingLive: true, noteSeen: true })).toBe('Pushed down.');
+    expect(pushDownToastCopy({ rankingLive: true, noteSeen: true })).toBe('Down ranked.');
   });
 });

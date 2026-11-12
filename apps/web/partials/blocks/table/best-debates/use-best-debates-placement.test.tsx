@@ -252,7 +252,7 @@ describe('placing a debate by comparison', () => {
     render(<Harness initial={list(3)} startWith={{ id: 'new', origin: 'team' }} pushDown={{ onSelect: vi.fn() }} />);
     fireEvent.click(screen.getByText('start'));
     expect(screen.getByText('Which was the better debate?')).toBeTruthy();
-    expect(screen.queryByRole('button', { name: /Rank it|Push it down/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Rank it|Push it down|Down rank/ })).toBeNull();
   });
 
   it('places the first debate of an empty ranking at #1 with no comparison', () => {

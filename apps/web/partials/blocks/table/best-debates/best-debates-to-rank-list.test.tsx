@@ -92,11 +92,11 @@ describe('To rank', () => {
     const onPlace = vi.fn();
     const onPushDown = vi.fn();
     renderList({ onPlace, onPushDown });
-    const button = screen.getByRole('button', { name: 'Push Newest down' });
-    expect(button.getAttribute('title')).toBe('Push it down');
+    const button = screen.getByRole('button', { name: 'Down rank Newest' });
+    expect(button.getAttribute('title')).toBe('Down rank');
     // Inline, straight after the ranked-by badge, with a visible label.
     expect(button.previousElementSibling?.textContent).toBe('Nobody has ranked this yet');
-    expect(button.textContent).toBe('Push down');
+    expect(button.textContent).toBe('Down rank');
     fireEvent.click(button);
     expect(onPushDown).toHaveBeenCalledWith('d1');
     expect(onPlace).not.toHaveBeenCalled();
@@ -107,7 +107,7 @@ describe('To rank', () => {
       onPushDown: vi.fn(),
       rankers: rankers({ status: 'loading', rankerCount: () => null, rankersOf: () => null }),
     });
-    const button = screen.getByRole('button', { name: 'Push Newest down' });
+    const button = screen.getByRole('button', { name: 'Down rank Newest' });
     expect(button.previousElementSibling).toBeNull();
   });
 

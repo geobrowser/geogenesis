@@ -71,9 +71,9 @@ describe('RankingComposePushedDown', () => {
       />
     );
 
-    expect(screen.getByText('You pushed down · 2')).toBeTruthy();
+    expect(screen.getByText('Down ranked · 2')).toBeTruthy();
     expect(screen.getByText('First debate')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Undo push down: Second debate' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Undo down rank: Second debate' }));
     expect(mocks.undo).toHaveBeenCalledTimes(1);
   });
 
@@ -138,8 +138,8 @@ describe('RankingComposePushedDown', () => {
         onRetryLoad={() => {}}
       />
     );
-    expect(screen.getByText('You pushed down · 2')).toBeTruthy();
+    expect(screen.getByText('Down ranked · 2')).toBeTruthy();
     expect(screen.getByText('Cast elsewhere')).toBeTruthy();
-    expect(screen.getAllByRole('button', { name: /Undo push down/ })).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: /Undo down rank/ })).toHaveLength(2);
   });
 });

@@ -101,8 +101,8 @@ export function BestDebatesTeamRowContent({
               {onPushDown && !myRank ? (
                 <button
                   type="button"
-                  aria-label={`Push ${name} down`}
-                  title="Push it down"
+                  aria-label={`Down rank ${name}`}
+                  title="Down rank"
                   onClick={event => {
                     event.stopPropagation();
                     onPushDown();
@@ -115,7 +115,7 @@ export function BestDebatesTeamRowContent({
                   )}
                 >
                   <PushDownIcon />
-                  Push down
+                  Down rank
                 </button>
               ) : null}
             </div>

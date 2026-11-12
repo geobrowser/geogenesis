@@ -127,7 +127,7 @@ const DISABLED: PushDownRunResult = {
   ok: false,
   step: 'vote',
   partly: false,
-  message: 'Push down isn’t available yet.',
+  message: 'Down rank isn’t available yet.',
 };
 const BUSY: PushDownRunResult = { ok: false, step: 'vote', partly: false, message: 'Already working on it.' };
 const CHECK_FAILED: PushDownRunResult = { ok: false, step: 'vote', partly: false, message: VOTE_CHECK_FAILED_COPY };

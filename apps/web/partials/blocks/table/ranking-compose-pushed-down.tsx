@@ -26,17 +26,17 @@ export function RankingComposePushedDown({ blockId, debates, isError, onRetryLoa
   if (debates.length === 0 && !isError) return null;
 
   return (
-    <section aria-label="Debates you pushed down" className="mt-4 flex flex-col">
+    <section aria-label="Debates you down ranked" className="mt-4 flex flex-col">
       {/* The red rule the mockups draw between your ranking and what you pushed down. */}
       <div className="flex items-center gap-3 pb-1 text-footnoteMedium text-red-01">
         <span className="h-px flex-1 bg-red-01/50" aria-hidden />
-        <span>You pushed down · {debates.length}</span>
+        <span>Down ranked · {debates.length}</span>
         <span className="h-px flex-1 bg-red-01/50" aria-hidden />
       </div>
       {BEST_DEBATES_RANKING_LIVE ? <p className="mt-2 text-metadata text-grey-04">{PUSH_DOWN_LIVE_NOTE}</p> : null}
       {isError ? (
         <p className="mt-2 text-metadata text-grey-04">
-          Couldn’t load the debates you pushed down.{' '}
+          Couldn’t load the debates you down ranked.{' '}
           <button type="button" className="underline" onClick={onRetryLoad}>
             Try again
           </button>
@@ -74,7 +74,7 @@ function PushedDownRow({ blockId, debate }: { blockId: string; debate: PushedDow
                 Retry
               </SmallButton>
             ) : null}
-            <SmallButton onClick={() => void undo()} disabled={isWorking} aria-label={`Undo push down: ${debate.name}`}>
+            <SmallButton onClick={() => void undo()} disabled={isWorking} aria-label={`Undo down rank: ${debate.name}`}>
               {isWorking ? 'Working…' : 'Undo'}
             </SmallButton>
             <RowStatus state={state} isInBallot={isInBallot} />

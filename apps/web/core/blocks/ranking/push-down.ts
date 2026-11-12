@@ -142,7 +142,8 @@ export function debateOwnSpaceId(
 // ---------------------------------------------------------------------------------------------
 
 /** The one-time note, shown only once the ranking drives the feed. */
-export const PUSH_DOWN_LIVE_NOTE = 'As a Debates member, your downvote pushes a debate down in the feed for everyone.';
+export const PUSH_DOWN_LIVE_NOTE =
+  'As a Debates member, when you down rank a debate it moves down the feed for everyone.';
 
 /** What Push it down does, for team and To rank rows. */
 export function pushDownChoiceDescription(rankingLive: boolean): string {
@@ -152,20 +153,20 @@ export function pushDownChoiceDescription(rankingLive: boolean): string {
 /** Confirmation after a push-down: the live note the first time once the ranking is live. */
 export function pushDownToastCopy({ rankingLive, noteSeen }: { rankingLive: boolean; noteSeen: boolean }): string {
   if (rankingLive && !noteSeen) return PUSH_DOWN_LIVE_NOTE;
-  return 'Pushed down.';
+  return 'Down ranked.';
 }
 
 export const PUSH_DOWN_UNDONE_COPY = 'Downvote removed.';
 
 export const PUSH_DOWN_VOTE_FAILED_COPY = 'Your downvote didn’t go through. Try again.';
-export const PUSH_DOWN_BALLOT_FAILED_COPY = 'Pushed down, but it’s still in your ranking. Retry to take it out.';
-export const RANK_BALLOT_FAILED_COPY = 'Your ranking didn’t publish, so this debate is still pushed down. Try again.';
+export const PUSH_DOWN_BALLOT_FAILED_COPY = 'Down ranked, but it’s still in your ranking. Retry to take it out.';
+export const RANK_BALLOT_FAILED_COPY = 'Your ranking didn’t publish, so this debate is still down ranked. Try again.';
 export const RANK_CLEAR_FAILED_COPY = 'Ranked, but your downvote is still on it. Retry to clear it.';
 export const VOTE_CHECK_FAILED_COPY = 'Couldn’t check your vote on this debate. Try again.';
 export const UNDO_FAILED_COPY = 'Your downvote is still there. Try again.';
 /** `saveMySubmission` can't publish an empty ballot, so the last debate on it stays until another joins. */
 export const PUSH_DOWN_LAST_BALLOT_ITEM_COPY =
-  'Pushed down, but it’s the only debate in your ranking, and a ranking can’t be empty. Rank another debate, then retry.';
+  'Down ranked, but it’s the only debate in your ranking, and a ranking can’t be empty. Rank another debate, then retry.';
 
 /** Session-scoped "already saw the note" flag; per-viewer convenience, safe when storage is blocked. */
 const NOTE_SEEN_STORAGE_KEY = 'geo:best-debates:push-down-note-seen';
