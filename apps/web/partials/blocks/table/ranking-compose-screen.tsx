@@ -826,7 +826,10 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
                 title: 'Your ranking',
                 hideSidePanel: true,
                 hideMobileHeading: true,
-                emptyText: 'Drag debates here from the team ranking, or click one to compare.',
+                // No dragging between tabs on a phone: a tap is the way in there.
+                emptyText: isMobile
+                  ? 'Tap a debate in Team ranking to compare it and place it here.'
+                  : 'Drag debates here from the team ranking, or click one to compare.',
                 onDropEntity: bestDebates.dropEntity,
               }
             : {})}
