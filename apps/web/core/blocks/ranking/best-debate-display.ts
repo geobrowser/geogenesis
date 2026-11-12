@@ -1,3 +1,4 @@
+import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import {
   DEBATE_OPPOSED_BY_PROPERTY_ID,
   DEBATE_SUPPORTED_BY_PROPERTY_ID,
@@ -24,6 +25,8 @@ export type BestDebateDisplay = {
   /** The debate's own space (where it is typed a Debate), or null when none is known. */
   ownSpaceId: string | null;
   createdAtMs: number | null;
+  /** The debate's Topics relations (the ones the topic page lists debates by), named. */
+  topics: { id: string; name: string }[];
 };
 
 const DEBATE_TYPE = normId(DEBATE_TYPE_ID);
@@ -61,7 +64,20 @@ export function bestDebateDisplayFromEntity(entity: Entity): BestDebateDisplay {
     // falls back to the spaces it is in at all.
     ownSpaceId: debateOwnSpaceId(typedSpaceIds.length > 0 ? typedSpaceIds : (entity.spaces ?? [])),
     createdAtMs: createdAtMs(entity.createdAt),
+    topics: topicsOf(entity),
   };
+}
+
+function topicsOf(entity: Entity): { id: string; name: string }[] {
+  const topics = normId(TOPICS_PROPERTY_ID);
+  const seen = new Map<string, string>();
+  for (const relation of entity.relations) {
+    if (relation.isDeleted === true || normId(relation.type.id) !== topics) continue;
+    const id = normId(relation.toEntity.id);
+    const name = relation.toEntity.name?.trim();
+    if (id && name && !seen.has(id)) seen.set(id, name);
+  }
+  return [...seen].map(([id, name]) => ({ id, name }));
 }
 
 /** `createdAt` is unix seconds or ISO 8601 depending on the backend (see `debateCreatedDate`). */

@@ -23,6 +23,12 @@ import { SpaceThumb } from '~/partials/explore/space-thumb';
  */
 export const BestDebateDisplaysContext = React.createContext<ReadonlyMap<string, BestDebateRowData> | null>(null);
 
+/**
+ * Opens a debate to watch, from its poster (Preston, 12 Nov): provided by the block and the ranking
+ * screen, which draw the watch dialog. Without it the poster is only a picture.
+ */
+export const BestDebateWatchContext = React.createContext<((entityId: string) => void) | null>(null);
+
 export function useBestDebateRowData(entityId: string): BestDebateRowData | null | undefined {
   const displays = React.useContext(BestDebateDisplaysContext);
   if (!displays) return undefined;
@@ -43,21 +49,51 @@ const PLAY_ICON = (
 export function BestDebateThumb({
   entityId,
   keyframeUrl,
+  label,
   className,
 }: {
   entityId: string;
   keyframeUrl: string | null;
+  /** The debate's title, for the Watch control's name. */
+  label?: string;
   className?: string;
 }) {
   const [stillFailed, setStillFailed] = React.useState(false);
+  const watch = React.useContext(BestDebateWatchContext);
+  // A span with a button's role rather than a <button>: the poster sits inside rows that are
+  // buttons themselves, and a button may not hold another. Its press stops there, so the row's own
+  // action (place it, open the side panel) doesn't run as well.
+  const interactive = watch
+    ? {
+        role: 'button' as const,
+        tabIndex: 0,
+        'aria-label': `Watch ${label ?? 'this debate'}`,
+        title: 'Watch',
+        onClick: (event: React.MouseEvent) => {
+          event.preventDefault();
+          event.stopPropagation();
+          watch(entityId);
+        },
+        onKeyDown: (event: React.KeyboardEvent) => {
+          if (event.key !== 'Enter' && event.key !== ' ') return;
+          event.preventDefault();
+          event.stopPropagation();
+          watch(entityId);
+        },
+        onPointerDown: (event: React.PointerEvent) => event.stopPropagation(),
+        draggable: false,
+      }
+    : { 'aria-hidden': true };
   return (
     <span
       className={cx(
         'relative grid aspect-[27/41] w-12 shrink-0 place-items-center overflow-hidden rounded-md bg-grey-02',
+        watch &&
+          'cursor-pointer transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-text',
         className
       )}
       data-testid="best-debate-thumb"
-      aria-hidden
+      {...interactive}
     >
       {keyframeUrl ? (
         <GeoImage value={keyframeUrl} alt="" fill sizes="48px" className="object-cover" />
@@ -194,7 +230,7 @@ export function BestDebateRow({
           {rank == null ? '–' : rank}
         </span>
       )}
-      {showThumb ? <BestDebateThumb entityId={entityId} keyframeUrl={data?.keyframeUrl ?? null} /> : null}
+      {showThumb ? <BestDebateThumb entityId={entityId} keyframeUrl={data?.keyframeUrl ?? null} label={title} /> : null}
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <span className={cx(TITLE_CLASS, titleClassName)} title={title}>
           {title}

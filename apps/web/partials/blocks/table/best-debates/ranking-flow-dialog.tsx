@@ -18,6 +18,8 @@ type Props = {
   /** The accessible name when `title` isn't plain text. */
   ariaLabel?: string;
   wide?: boolean;
+  /** `narrow` for one player on its own (the watch dialog). */
+  size?: 'narrow';
   children: React.ReactNode;
   footer?: React.ReactNode;
   onKeyDown?: (event: React.KeyboardEvent) => void;
@@ -38,6 +40,7 @@ export function RankingFlowDialog({
   subtitle,
   ariaLabel,
   wide = false,
+  size,
   children,
   footer,
   onKeyDown,
@@ -52,7 +55,7 @@ export function RankingFlowDialog({
             onKeyDown={onKeyDown}
             className={cx(
               'mt-16 flex w-full flex-col gap-4 rounded-xl bg-white p-6 shadow-dropdown focus:outline-hidden md:mt-0 md:min-h-full md:rounded-none md:p-4',
-              wide ? 'max-w-[1350px]' : 'max-w-[880px]'
+              wide ? 'max-w-[1350px]' : size === 'narrow' ? 'max-w-[560px]' : 'max-w-[880px]'
             )}
           >
             <div className="flex items-start justify-between gap-4">

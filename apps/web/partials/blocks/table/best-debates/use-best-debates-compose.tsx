@@ -18,6 +18,8 @@ import { normId } from '~/core/utils/norm-id';
 
 import type { RankingComposeTeamMode, RankingComposeTeamView } from '../ranking-compose-global-ranking';
 import type { RankingComposeMobileTab, RankingComposeMobileTabs } from '../ranking-compose-layout';
+import { BestDebatesTeamRowContent } from './best-debates-team-row';
+import { useBestDebatesTeamTools } from './best-debates-team-tools';
 import { BestDebatesToRankList } from './best-debates-to-rank-list';
 import type { PushDownSlot } from './rank-choice-dialog';
 import { type PlacementOrigin, useBestDebatesPlacement } from './use-best-debates-placement';
@@ -41,6 +43,8 @@ export type UseBestDebatesComposeArgs = {
    * share images there, and folds the published ballot back into its draft).
    */
   onPublished?: (published: RankingSubmissionPublishResult, sentIds: string[]) => void;
+  /** The team column's search, which To rank filters by too. */
+  searchQuery?: string;
   /** Open the team column on To rank (the screen was opened with `?team=to-rank`, GEO-3677). */
   openOnToRank?: boolean;
   /** GEO-3679 fills this: Push it down in the Rank choice, and the debates to keep out of To rank. */
@@ -68,7 +72,9 @@ export function useBestDebatesCompose({
   onPublished,
   openOnToRank = false,
   pushDown,
+  searchQuery = '',
 }: UseBestDebatesComposeArgs) {
+  const tools = useBestDebatesTeamTools();
   const [, setToast] = useToast();
   const [teamMode, setTeamMode] = React.useState<RankingComposeTeamMode>(openOnToRank ? 'to_rank' : 'all');
   const [mobileTab, setMobileTab] = React.useState<RankingComposeMobileTab>('global');
@@ -171,6 +177,20 @@ export function useBestDebatesCompose({
     mode: teamMode,
     onModeChange: setTeamMode,
     toRankCount: toRank.isLoading || toRank.error ? null : toRankIds.length,
+    tools,
+    toRankIds,
+    // All and To rank draw the same row (Preston, 12 Nov): badge, rank mark or "You: #N", grip.
+    renderRow: ({ entityId, name, rank, spaceId: rowSpaceId, isInMyRanking }) => (
+      <BestDebatesTeamRowContent
+        entityId={entityId}
+        name={name}
+        spaceId={rowSpaceId}
+        rank={rank}
+        rankers={rankers}
+        myRank={isInMyRanking ? orderedIds.indexOf(entityId) + 1 || null : null}
+        draggable={!isMobile && !isInMyRanking}
+      />
+    ),
     toRankPanel: (
       <BestDebatesToRankList
         debates={toRank.debates}
@@ -180,6 +200,9 @@ export function useBestDebatesCompose({
         entriesById={toRankEntriesById}
         onPlace={entityId => startPlacement(entityId, 'to_rank')}
         draggable={!isMobile}
+        query={searchQuery}
+        topicIds={tools.topicIds}
+        groupBySpace={tools.groupBySpace}
       />
     ),
   };

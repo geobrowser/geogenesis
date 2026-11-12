@@ -150,6 +150,9 @@ vi.mock('./ranking-block-ui', () => ({
   RankingGlobalDesktopRow: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 vi.mock('~/core/blocks/ranking/use-best-debate-displays', () => ({ useBestDebateDisplays: () => new Map() }));
+vi.mock('./best-debates/best-debate-watch', () => ({
+  BestDebateWatchProvider: ({ children }: { children: React.ReactNode }) => children,
+}));
 vi.mock('./best-debates/best-debate-row', () => ({
   BestDebateRow: ({ rank, fallbackName }: { rank?: number | null; fallbackName: string }) => (
     <div data-testid="row">

@@ -6,17 +6,22 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { filterTeamIds } from '~/core/blocks/ranking/best-debates-team-filters';
 import { getRowDescription, getRowDisplayName } from '~/core/blocks/ranking/ranking-rankable-list';
 import { rankingSearchHasExactNameMatch } from '~/core/blocks/ranking/ranking-search-exact-name';
 import type { RankingEntryDisplay } from '~/core/blocks/ranking/use-ranking-entry-entities';
 import { useVoteTabEntities } from '~/core/blocks/ranking/use-vote-tab-entities';
 import { useInfiniteScrollSentinel } from '~/core/space-members/use-space-participants-infinite';
 import type { Row, SearchResult } from '~/core/types';
+import { normId } from '~/core/utils/norm-id';
 
 import { Button } from '~/design-system/button';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Search } from '~/design-system/icons/search';
 
+import { BestDebateDisplaysContext } from './best-debates/best-debate-row';
+import { BestDebatesGroupedRows } from './best-debates/best-debates-team-row';
+import { BestDebatesTeamToolbar, type BestDebatesTeamTools } from './best-debates/best-debates-team-tools';
 import { RankingGlobalDesktopRow } from './ranking-block-ui';
 import { useRankingComposeScrollRoot, useRankingComposeScrollRootRef } from './ranking-compose-layout';
 import { RankingComposeSwipeableRow } from './ranking-compose-swipeable-row';
@@ -218,6 +223,7 @@ function RankingComposePickRow({
   pending = false,
   draggable = false,
   myRank = null,
+  content,
 }: {
   rank?: number;
   name: string;
@@ -232,6 +238,8 @@ function RankingComposePickRow({
   draggable?: boolean;
   /** Best debates: the debate's place in your ranking, shown as "You: #14". */
   myRank?: number | null;
+  /** Best debates: the team row both lists share, in place of the generic row. */
+  content?: React.ReactNode;
 }) {
   const handleKeyDown = (event: React.KeyboardEvent) => {
     if (isInMyRanking) return;
@@ -257,26 +265,28 @@ function RankingComposePickRow({
         isInMyRanking ? 'cursor-default' : 'cursor-pointer'
       )}
     >
-      <RankingEntryRow
-        rank={rank}
-        rankStyle="leading"
-        linkToEntity={false}
-        pending={pending}
-        entry={{
-          entityId,
-          name,
-          description,
-          image: imageUrl,
-        }}
-        spaceId={spaceId}
-        debateAside={
-          myRank ? (
-            <span className="text-[14px] leading-[15px] whitespace-nowrap text-grey-04 tabular-nums">
-              You: #{myRank}
-            </span>
-          ) : null
-        }
-      />
+      {content ?? (
+        <RankingEntryRow
+          rank={rank}
+          rankStyle="leading"
+          linkToEntity={false}
+          pending={pending}
+          entry={{
+            entityId,
+            name,
+            description,
+            image: imageUrl,
+          }}
+          spaceId={spaceId}
+          debateAside={
+            myRank ? (
+              <span className="text-[14px] leading-[15px] whitespace-nowrap text-grey-04 tabular-nums">
+                You: #{myRank}
+              </span>
+            ) : null
+          }
+        />
+      )}
     </div>
   );
 }
@@ -330,6 +340,18 @@ export type RankingComposeTeamView = {
   /** Shown on the To rank switch once known. */
   toRankCount: number | null;
   toRankPanel: React.ReactNode;
+  /** The To rank list's debates, for the topic menu's options. */
+  toRankIds?: readonly string[];
+  /** Topic filter and Group by space, for All and To rank alike. */
+  tools?: BestDebatesTeamTools;
+  /** The row both lists draw, in place of the generic ranking row. */
+  renderRow?: (args: {
+    entityId: string;
+    name: string;
+    rank?: number;
+    spaceId: string;
+    isInMyRanking: boolean;
+  }) => React.ReactNode;
 };
 
 function RankingComposeTeamHeader({ isMobile, teamView }: { isMobile: boolean; teamView: RankingComposeTeamView }) {
@@ -647,6 +669,7 @@ export function RankingComposeGlobalRanking({
     const row = rowsByEntityId.get(id);
     const searchHit = searchResultsById.get(id);
     const isInMyRanking = orderedIds.includes(id);
+    const rowName = entry?.name ?? (row ? getRowDisplayName(row) : searchHit?.name?.trim() || 'Untitled');
     const pickRow = (
       <RankingComposePickRow
         entityId={id}
@@ -660,6 +683,7 @@ export function RankingComposeGlobalRanking({
         pending={pendingEntityIds.has(id)}
         draggable={draggableRows && !isMobile}
         myRank={teamView && isInMyRanking ? orderedIds.indexOf(id) + 1 : null}
+        content={teamView?.renderRow?.({ entityId: id, name: rowName, rank: globalRank, spaceId, isInMyRanking })}
       />
     );
 
@@ -751,6 +775,16 @@ export function RankingComposeGlobalRanking({
     </>
   );
 
+  // Best debates: the topic filter, then Group by space, over each section of the team column.
+  const teamDisplays = React.useContext(BestDebateDisplaysContext);
+  const teamTools = teamView?.tools;
+  const toolListIds = isToRank ? (teamView?.toRankIds ?? []) : [...tabFilteredRankedIds, ...tabFilteredUnrankedIds];
+  const renderSection = (ids: string[], render: (id: string) => React.ReactNode) => {
+    if (!teamTools) return ids.map(render);
+    const kept = filterTeamIds(ids, id => teamDisplays?.get(normId(id)), { query: '', topicIds: teamTools.topicIds });
+    return <BestDebatesGroupedRows ids={kept} grouped={teamTools.groupBySpace} render={render} />;
+  };
+
   const searchResultList = (
     <>
       {showCreateNewPrompt ? (
@@ -759,7 +793,7 @@ export function RankingComposeGlobalRanking({
       {showCreateNewPrompt && tabFilteredRankedIds.length > 0 ? (
         <RankingComposeSectionDivider label="Other ranked results" />
       ) : null}
-      {tabFilteredRankedIds.map(id => renderPickEntity(id, globalRankByEntityId.get(id)))}
+      {renderSection(tabFilteredRankedIds, id => renderPickEntity(id, globalRankByEntityId.get(id)))}
       {tabShowRankedUnrankedDivider ? (
         showCreateNewPrompt ? (
           <RankingComposeSectionDivider label="Other unranked results" />
@@ -767,7 +801,7 @@ export function RankingComposeGlobalRanking({
           <RankingComposeSectionDivider label="Unranked" />
         )
       ) : null}
-      {tabFilteredUnrankedIds.map(id => renderPickEntity(id))}
+      {renderSection(tabFilteredUnrankedIds, id => renderPickEntity(id))}
       {loadMoreFooter}
       {pendingDisclosure}
       {membershipSentinel}
@@ -779,9 +813,9 @@ export function RankingComposeGlobalRanking({
       {browseTab !== 'global' && tabShowRankedUnrankedDivider ? (
         <RankingComposeSectionDivider label="Already ranked" />
       ) : null}
-      {tabFilteredRankedIds.map(id => renderPickEntity(id, globalRankByEntityId.get(id)))}
+      {renderSection(tabFilteredRankedIds, id => renderPickEntity(id, globalRankByEntityId.get(id)))}
       {tabShowRankedUnrankedDivider ? <RankingComposeSectionDivider label="Unranked" /> : null}
-      {tabFilteredUnrankedIds.map(id => renderPickEntity(id))}
+      {renderSection(tabFilteredUnrankedIds, id => renderPickEntity(id))}
       {loadMoreFooter}
       {pendingDisclosure}
       {membershipSentinel}
@@ -845,8 +879,8 @@ export function RankingComposeGlobalRanking({
             ))}
           </div>
         </div>
-        <div className={cx('shrink-0', isMobile && 'mt-2')} hidden={isToRank}>
-          <div className="relative flex items-center">
+        <div className={cx('flex shrink-0 items-center gap-2', isMobile && 'mt-2')}>
+          <div className="relative flex min-w-0 flex-1 items-center">
             <span className="pointer-events-none absolute left-2 flex">
               <Search color="grey-04" />
             </span>
@@ -859,6 +893,7 @@ export function RankingComposeGlobalRanking({
               className="h-8 w-full rounded border border-grey-02 bg-white py-1 pr-2 pl-8 text-metadata text-text outline-hidden focus-visible:border-text"
             />
           </div>
+          {teamView?.tools ? <BestDebatesTeamToolbar tools={teamView.tools} listIds={toolListIds} /> : null}
         </div>
       </div>
       {/* One panel shared by all three tabs, so it is labelled by whichever is

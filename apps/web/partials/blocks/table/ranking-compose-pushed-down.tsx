@@ -65,7 +65,6 @@ function PushedDownRow({ blockId, debate }: { blockId: string; debate: PushedDow
   return (
     <li className="w-full py-3" data-testid={`pushed-down-${debate.entityId}`}>
       <RankingEntryRow
-        debateThumb={false}
         entry={debate}
         spaceId={debate.debateSpaceId ?? debate.downvotedSpaceIds[0] ?? ''}
         actions={

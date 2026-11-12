@@ -190,8 +190,6 @@ export function RankingComposeMyRanking({
                   entry={entryDisplay}
                   spaceId={spaceId}
                   imageUrl={overlayImageUrl}
-                  // Best debates: your column lists claims without posters (mockup 07).
-                  debateThumb={false}
                 />
               );
 

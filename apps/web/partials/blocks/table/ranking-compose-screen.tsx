@@ -56,6 +56,7 @@ import { useRankingOpportunity } from '~/core/use-ranking-opportunity';
 import { stepAtom } from '~/partials/onboarding/onboarding-atoms';
 
 import { BestDebateDisplaysContext } from './best-debates/best-debate-row';
+import { BestDebateWatchProvider } from './best-debates/best-debate-watch';
 import { useBestDebatesCompose } from './best-debates/use-best-debates-compose';
 import { useBestDebatesPushDownSlot } from './best-debates/use-best-debates-push-down-slot';
 import { RankingBallotReadError } from './ranking-ballot-read-error';
@@ -638,6 +639,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
       generateOgImagesOnceIndexed(published);
     },
     openOnToRank: searchParams?.get(BEST_DEBATES_TEAM_VIEW_PARAM) === BEST_DEBATES_TEAM_VIEW_TO_RANK,
+    searchQuery,
   });
 
   // Every debate the screen can show (team column, To rank, yours, pushed down), resolved once for
@@ -881,62 +883,69 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
 
   return (
     <BestDebateDisplaysContext.Provider value={isBestDebates ? bestDebateDisplays : null}>
-      <RankingComposeBallotContext.Provider value={composeBallot}>
-        <RankingComposeCreateEntityPanel onFinished={addToMyRanking} rankingName={displayName} />
-        <RankingComposeEntitySheet target={entitySheetTarget} onClose={() => setEntitySheetTarget(null)} />
-        {isBestDebates ? bestDebates.dialogs : null}
-        {pushDown.binding(isBestDebates ? bestDebates.activeEntityId : null)}
-        <div ref={rankingOpportunity.root} className="contents">
-          <RankingComposeFullscreen coverNavbar={isMobile}>
-            {isMobile ? (
-              <>
-                <div className="shrink-0 bg-white px-4 py-2">
-                  <RankingComposePinnedToolbar
-                    isMobile={isMobile}
-                    onBack={handleBack}
-                    showPublishButton
-                    canPublish={canPublish}
-                    isSaving={isPublishBusy}
-                    onPublish={() => void handlePublish()}
-                  />
-                </div>
-
-                <div
-                  ref={mobilePageScrollRef}
-                  data-ranking-compose-mobile-scroll=""
-                  data-app-scroll-surface
-                  className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-4"
-                >
-                  <div className="pt-2 pb-4">
-                    {titleMetadata}
-                    {ballotReadAlert}
+      <MaybeWatch on={isBestDebates}>
+        <RankingComposeBallotContext.Provider value={composeBallot}>
+          <RankingComposeCreateEntityPanel onFinished={addToMyRanking} rankingName={displayName} />
+          <RankingComposeEntitySheet target={entitySheetTarget} onClose={() => setEntitySheetTarget(null)} />
+          {isBestDebates ? bestDebates.dialogs : null}
+          {pushDown.binding(isBestDebates ? bestDebates.activeEntityId : null)}
+          <div ref={rankingOpportunity.root} className="contents">
+            <RankingComposeFullscreen coverNavbar={isMobile}>
+              {isMobile ? (
+                <>
+                  <div className="shrink-0 bg-white px-4 py-2">
+                    <RankingComposePinnedToolbar
+                      isMobile={isMobile}
+                      onBack={handleBack}
+                      showPublishButton
+                      canPublish={canPublish}
+                      isSaving={isPublishBusy}
+                      onPublish={() => void handlePublish()}
+                    />
                   </div>
-                  <div className="relative flex min-h-0 flex-col">{rankingLayout}</div>
-                </div>
-              </>
-            ) : (
-              <div className="mx-auto flex h-full min-h-0 w-full max-w-[1200px] flex-col overflow-hidden px-4">
-                <div className="shrink-0 py-2">
-                  <RankingComposePinnedToolbar
-                    isMobile={isMobile}
-                    onBack={handleBack}
-                    showPublishButton={false}
-                    canPublish={canPublish}
-                    isSaving={isPublishBusy}
-                    onPublish={() => void handlePublish()}
-                  />
-                  <div className="mt-3 pb-4">
-                    {titleMetadata}
-                    {ballotReadAlert}
-                  </div>
-                </div>
 
-                <div className="relative min-h-0 flex-1">{rankingLayout}</div>
-              </div>
-            )}
-          </RankingComposeFullscreen>
-        </div>
-      </RankingComposeBallotContext.Provider>
+                  <div
+                    ref={mobilePageScrollRef}
+                    data-ranking-compose-mobile-scroll=""
+                    data-app-scroll-surface
+                    className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-4"
+                  >
+                    <div className="pt-2 pb-4">
+                      {titleMetadata}
+                      {ballotReadAlert}
+                    </div>
+                    <div className="relative flex min-h-0 flex-col">{rankingLayout}</div>
+                  </div>
+                </>
+              ) : (
+                <div className="mx-auto flex h-full min-h-0 w-full max-w-[1200px] flex-col overflow-hidden px-4">
+                  <div className="shrink-0 py-2">
+                    <RankingComposePinnedToolbar
+                      isMobile={isMobile}
+                      onBack={handleBack}
+                      showPublishButton={false}
+                      canPublish={canPublish}
+                      isSaving={isPublishBusy}
+                      onPublish={() => void handlePublish()}
+                    />
+                    <div className="mt-3 pb-4">
+                      {titleMetadata}
+                      {ballotReadAlert}
+                    </div>
+                  </div>
+
+                  <div className="relative min-h-0 flex-1">{rankingLayout}</div>
+                </div>
+              )}
+            </RankingComposeFullscreen>
+          </div>
+        </RankingComposeBallotContext.Provider>
+      </MaybeWatch>
     </BestDebateDisplaysContext.Provider>
   );
+}
+
+/** Best debates posters open their debate to watch; no other ranking block has them. */
+function MaybeWatch({ on, children }: { on: boolean; children: React.ReactNode }) {
+  return on ? <BestDebateWatchProvider>{children}</BestDebateWatchProvider> : <>{children}</>;
 }

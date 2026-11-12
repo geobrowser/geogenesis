@@ -45,6 +45,9 @@ vi.mock('~/core/blocks/ranking/use-ranking-entry-entities', () => ({
   useRankingEntryEntities: () => ({ entries: [], isLoading: false }),
 }));
 vi.mock('~/core/blocks/ranking/use-best-debate-displays', () => ({ useBestDebateDisplays: () => new Map() }));
+vi.mock('./best-debates/best-debate-watch', () => ({
+  BestDebateWatchProvider: ({ children }: { children: React.ReactNode }) => children,
+}));
 vi.mock('./best-debates/best-debate-row', () => ({
   BestDebateRow: ({
     rank,

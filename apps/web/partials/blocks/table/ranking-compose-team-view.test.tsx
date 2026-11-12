@@ -101,7 +101,8 @@ describe('the team column (Best debates)', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /To rank/ }));
     expect(screen.getByText('to rank panel')).toBeTruthy();
-    expect(screen.queryByRole('searchbox')).toBeNull();
+    // Search stays on To rank (Preston, 12 Nov): it filters the To rank list.
+    expect(screen.getByRole('searchbox')).toBeTruthy();
     expect(screen.queryByText('Debate a')).toBeNull();
   });
 

@@ -37,6 +37,7 @@ import { normId } from '~/core/utils/norm-id';
 import { Button } from '~/design-system/button';
 
 import { BestDebateRow, RankerAvatars } from './best-debates/best-debate-row';
+import { BestDebateWatchProvider } from './best-debates/best-debate-watch';
 import { RankingGlobalDesktopRow } from './ranking-block-ui';
 import { RankingEntryRowSkeleton } from './ranking-entry-row';
 
@@ -252,110 +253,114 @@ export function BestDebatesBlock({
   };
 
   return (
-    <div className="flex w-full min-w-0 flex-col gap-4" data-testid="best-debates-block">
-      <CoverageLine
-        counts={windowQuery.data ? coverageCounts : null}
-        loading={windowQuery.isLoading}
-        rankers={rankers}
-        onRankTheRest={canRank ? rankTheRest : null}
-      />
-
-      <div className="flex flex-col gap-2">
-        {renderHeader(
-          canRank ? (
-            <Button
-              variant="primary"
-              className="h-8 shrink-0 !rounded-full border-text bg-text !px-3.5 text-[16px] whitespace-nowrap text-white hover:bg-text/90 focus-visible:border-text focus-visible:shadow-inner-text"
-              onClick={() => onOpenCompose('edit')}
-            >
-              Rank
-            </Button>
-          ) : null
-        )}
-        {belowHeader}
-        <div className="w-[300px] md:w-full">
-          <SegmentedControl
-            label="Period"
-            variant="tinted"
-            options={BEST_DEBATES_VIEWS}
-            value={view}
-            onChange={changeView}
-          />
-        </div>
-      </div>
-
-      {view === 'day' ? (
-        <DayStrip
-          dayKeys={dayKeys}
-          todayKey={todayKey}
-          selectedDayKey={dayKey}
-          coverage={windowQuery.data ? coverage : null}
-          countsKnown={rankers.status === 'ready'}
-          onSelect={key => {
-            capture('element_changed', {
-              source: 'best_debates_block',
-              element: 'day',
-              value: key === todayKey ? 'today' : key,
-              block_id: blockId,
-              space_id: spaceId,
-            });
-            setPickedDayKey(key === todayKey ? null : key);
-          }}
+    <BestDebateWatchProvider>
+      <div className="flex w-full min-w-0 flex-col gap-4" data-testid="best-debates-block">
+        <CoverageLine
+          counts={windowQuery.data ? coverageCounts : null}
+          loading={windowQuery.isLoading}
+          rankers={rankers}
+          onRankTheRest={canRank ? rankTheRest : null}
         />
-      ) : null}
 
-      {periodFailed ? (
-        <div className="flex items-center gap-3 rounded-lg bg-grey-01 px-4 py-3">
-          <p className="text-metadata text-grey-04">Couldn&rsquo;t load these debates.</p>
-          <Button variant="secondary" small onClick={() => void periodQuery.refetch()}>
-            Retry
-          </Button>
-        </div>
-      ) : periodLoading ? (
-        <div className="flex flex-col gap-3">
-          {[1, 2, 3].map(rank => (
-            <RankingEntryRowSkeleton key={rank} rank={rank} />
-          ))}
-        </div>
-      ) : (
-        <>
-          {rankedRows.length === 0 ? (
-            rankersFailed ? (
-              <div
-                className="flex items-center gap-3 rounded-lg bg-grey-01 px-4 py-3"
-                data-testid="best-debates-rankers-error"
+        <div className="flex flex-col gap-2">
+          {renderHeader(
+            canRank ? (
+              <Button
+                variant="primary"
+                className="h-8 shrink-0 !rounded-full border-text bg-text !px-3.5 text-[16px] whitespace-nowrap text-white hover:bg-text/90 focus-visible:border-text focus-visible:shadow-inner-text"
+                onClick={() => onOpenCompose('edit')}
               >
-                <p className="text-metadata text-grey-04">Couldn&rsquo;t load who ranked these debates.</p>
-                <Button variant="secondary" small onClick={() => void rankers.retry()}>
-                  Retry
-                </Button>
-              </div>
-            ) : (
-              <p className="text-metadata text-grey-04">{emptyRankedCopy(view, unplacedRows.length > 0)}</p>
-            )
-          ) : (
-            <div className="flex flex-col">{visibleRanked.map(id => renderRow(id, placeOffset.get(id) ?? null))}</div>
+                Rank
+              </Button>
+            ) : null
           )}
-          {rankedRows.length > rankedLimit ? <ShowMore onClick={() => setRankedLimit(limit => limit + PAGE)} /> : null}
+          {belowHeader}
+          <div className="w-[300px] md:w-full">
+            <SegmentedControl
+              label="Period"
+              variant="tinted"
+              options={BEST_DEBATES_VIEWS}
+              value={view}
+              onChange={changeView}
+            />
+          </div>
+        </div>
 
-          {view !== 'all' && unplacedRows.length > 0 ? (
-            <section className="flex flex-col gap-3" aria-label="Not ranked yet">
-              <div className="flex items-center gap-3 pt-2">
-                <span className="text-breadcrumb font-medium whitespace-nowrap text-grey-04">
-                  {rankers.status === 'ready' ? 'Not ranked yet' : 'Not in the team ranking yet'} ·{' '}
-                  {unplacedRows.length}
-                </span>
-                <span className="h-px flex-1 bg-grey-02" aria-hidden />
-              </div>
-              <div className="flex flex-col">{visibleUnplaced.map(id => renderRow(id, null))}</div>
-              {unplacedRows.length > unrankedLimit ? (
-                <ShowMore onClick={() => setUnrankedLimit(limit => limit + PAGE)} />
-              ) : null}
-            </section>
-          ) : null}
-        </>
-      )}
-    </div>
+        {view === 'day' ? (
+          <DayStrip
+            dayKeys={dayKeys}
+            todayKey={todayKey}
+            selectedDayKey={dayKey}
+            coverage={windowQuery.data ? coverage : null}
+            countsKnown={rankers.status === 'ready'}
+            onSelect={key => {
+              capture('element_changed', {
+                source: 'best_debates_block',
+                element: 'day',
+                value: key === todayKey ? 'today' : key,
+                block_id: blockId,
+                space_id: spaceId,
+              });
+              setPickedDayKey(key === todayKey ? null : key);
+            }}
+          />
+        ) : null}
+
+        {periodFailed ? (
+          <div className="flex items-center gap-3 rounded-lg bg-grey-01 px-4 py-3">
+            <p className="text-metadata text-grey-04">Couldn&rsquo;t load these debates.</p>
+            <Button variant="secondary" small onClick={() => void periodQuery.refetch()}>
+              Retry
+            </Button>
+          </div>
+        ) : periodLoading ? (
+          <div className="flex flex-col gap-3">
+            {[1, 2, 3].map(rank => (
+              <RankingEntryRowSkeleton key={rank} rank={rank} />
+            ))}
+          </div>
+        ) : (
+          <>
+            {rankedRows.length === 0 ? (
+              rankersFailed ? (
+                <div
+                  className="flex items-center gap-3 rounded-lg bg-grey-01 px-4 py-3"
+                  data-testid="best-debates-rankers-error"
+                >
+                  <p className="text-metadata text-grey-04">Couldn&rsquo;t load who ranked these debates.</p>
+                  <Button variant="secondary" small onClick={() => void rankers.retry()}>
+                    Retry
+                  </Button>
+                </div>
+              ) : (
+                <p className="text-metadata text-grey-04">{emptyRankedCopy(view, unplacedRows.length > 0)}</p>
+              )
+            ) : (
+              <div className="flex flex-col">{visibleRanked.map(id => renderRow(id, placeOffset.get(id) ?? null))}</div>
+            )}
+            {rankedRows.length > rankedLimit ? (
+              <ShowMore onClick={() => setRankedLimit(limit => limit + PAGE)} />
+            ) : null}
+
+            {view !== 'all' && unplacedRows.length > 0 ? (
+              <section className="flex flex-col gap-3" aria-label="Not ranked yet">
+                <div className="flex items-center gap-3 pt-2">
+                  <span className="text-breadcrumb font-medium whitespace-nowrap text-grey-04">
+                    {rankers.status === 'ready' ? 'Not ranked yet' : 'Not in the team ranking yet'} ·{' '}
+                    {unplacedRows.length}
+                  </span>
+                  <span className="h-px flex-1 bg-grey-02" aria-hidden />
+                </div>
+                <div className="flex flex-col">{visibleUnplaced.map(id => renderRow(id, null))}</div>
+                {unplacedRows.length > unrankedLimit ? (
+                  <ShowMore onClick={() => setUnrankedLimit(limit => limit + PAGE)} />
+                ) : null}
+              </section>
+            ) : null}
+          </>
+        )}
+      </div>
+    </BestDebateWatchProvider>
   );
 }
 

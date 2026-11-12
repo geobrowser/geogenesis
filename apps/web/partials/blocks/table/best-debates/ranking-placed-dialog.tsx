@@ -11,7 +11,7 @@ import { SquareButton } from '~/design-system/button';
 import { ChevronDown } from '~/design-system/icons/chevron-down';
 import { ChevronUp } from '~/design-system/icons/chevron-up';
 
-import { BestDebateMeta, useBestDebateRowData } from './best-debate-row';
+import { BestDebateMeta, BestDebateThumb, useBestDebateRowData } from './best-debate-row';
 import { RankingFlowDialog } from './ranking-flow-dialog';
 
 type Props = {
@@ -145,6 +145,7 @@ function PlacedRow({
       <span className="w-6 shrink-0 text-center text-[17px] leading-[19px] font-medium text-text tabular-nums">
         {place}
       </span>
+      <BestDebateThumb entityId={entityId} keyframeUrl={display?.keyframeUrl ?? null} label={display?.title ?? name} />
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <span className="truncate text-[17px] leading-[21px] font-medium text-text">{display?.title ?? name}</span>
         <BestDebateMeta data={display} showSpace={false} />
