@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { userEntityVotesQueryKey, votedEntityIdsPendingQueryKey } from '~/core/hooks/use-user-voted-entity-ids';
 import { entityResponseCountsQueryKey } from '~/core/responses/entity-response';
 
-import { type MemberVoteRecord, memberCurationDownvotesQueryKey } from './fetch-member-debate-votes';
+import { type MemberVoteRecord, memberDebateDownvotesQueryKey } from './fetch-member-debate-votes';
 import {
   DEBATE_VOTE_OVERLAY_TTL_MS,
   type DebateVoteOverlays,
@@ -15,16 +15,21 @@ import {
   recordsAfterWrite,
 } from './use-debate-downvote';
 
-const mocks = vi.hoisted(() => ({ indexed: true }));
-
-vi.mock('~/core/responses/entity-response', async importOriginal => ({
-  ...(await importOriginal<typeof import('~/core/responses/entity-response')>()),
-  waitForIndexedEntityResponse: async () => mocks.indexed,
+const mocks = vi.hoisted(() => ({
+  reads: [] as MemberVoteRecord[][],
+  readCount: 0,
 }));
-vi.mock('~/core/io/queries', async () => {
-  const { Effect } = await import('effect');
-  return { getUserEntityResponse: () => Effect.succeed(null) };
-});
+
+vi.mock('./fetch-member-debate-votes', async importOriginal => ({
+  ...(await importOriginal<typeof import('./fetch-member-debate-votes')>()),
+  fetchMemberDebateVotes: async () => {
+    const answer = mocks.reads[Math.min(mocks.readCount, mocks.reads.length - 1)] ?? [];
+    mocks.readCount += 1;
+    return answer;
+  },
+}));
+
+const FAST_POLL = { intervalMs: 1, maxAttempts: 5 };
 
 const MEMBER = 'd4bee0928fb5405baba3b1513f085835';
 const S1 = '11111111111111111111111111111111';
@@ -64,7 +69,8 @@ describe('mergeDownvoteOverlays', () => {
 
 describe('catchUpAfterIndexing', () => {
   it('refreshes what reads the vote once indexed, then clears the temporary entries', async () => {
-    mocks.indexed = true;
+    mocks.reads = [[]];
+    mocks.readCount = 0;
     const client = new QueryClient();
     const invalidate = vi.spyOn(client, 'invalidateQueries');
     client.setQueryData(debateVoteOverlaysQueryKey(MEMBER), { [D1]: { records: [], writtenAtMs: 5 } });
@@ -76,37 +82,72 @@ describe('catchUpAfterIndexing', () => {
       authorSpaceId: MEMBER,
       debateId: D1,
       spaceId: S1,
-      expected: null,
+      direction: 'clear',
+      previousVotedAt: '2026-11-01T00:00:00Z',
       writtenAtMs: 5,
       onIndexed,
+      poll: FAST_POLL,
     });
 
     expect(onIndexed).toHaveBeenCalledTimes(1);
     expect(invalidate).toHaveBeenCalledWith({ queryKey: entityResponseCountsQueryKey(D1, S1, 0, 'curation') });
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: memberCurationDownvotesQueryKey(MEMBER) });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: memberDebateDownvotesQueryKey(MEMBER) });
     expect(invalidate).toHaveBeenCalledWith({ queryKey: userEntityVotesQueryKey(MEMBER, 'down') });
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['curator-onboarding-status'] });
     expect(client.getQueryData(votedEntityIdsPendingQueryKey(MEMBER, 'down'))).toEqual({ added: [], removed: [] });
     expect(client.getQueryData(debateVoteOverlaysQueryKey(MEMBER))).toEqual({});
   });
 
-  it('keeps the overlay and touches nothing while the vote isn’t indexed', async () => {
-    mocks.indexed = false;
+  it('waits for a re-sent downvote’s voted_at to move past the old one', async () => {
+    // The first reads still show October's downvote; only the third shows the new one.
+    mocks.reads = [
+      [down(D1, S1, '2026-10-01T00:00:00Z')],
+      [down(D1, S1, '2026-10-01T00:00:00Z')],
+      [down(D1, S1, '2026-11-12T00:00:00Z')],
+    ];
+    mocks.readCount = 0;
+    const onIndexed = vi.fn();
+
+    const indexed = await catchUpAfterIndexing({
+      queryClient: new QueryClient(),
+      authorSpaceId: MEMBER,
+      debateId: D1,
+      spaceId: S1,
+      direction: 'negative',
+      previousVotedAt: '2026-10-01T00:00:00Z',
+      writtenAtMs: 5,
+      onIndexed,
+      poll: FAST_POLL,
+    });
+
+    expect(indexed).toBe(true);
+    expect(mocks.readCount).toBe(3);
+    expect(onIndexed).toHaveBeenCalledTimes(1);
+  });
+
+  it('when indexing never shows, still refreshes the reads and ends the overlay, without claiming it was indexed', async () => {
+    mocks.reads = [[down(D1, S1, '2026-10-01T00:00:00Z')]];
+    mocks.readCount = 0;
     const client = new QueryClient();
     const invalidate = vi.spyOn(client, 'invalidateQueries');
     client.setQueryData(debateVoteOverlaysQueryKey(MEMBER), { [D1]: { records: [], writtenAtMs: 5 } });
+    const onIndexed = vi.fn();
 
     const indexed = await catchUpAfterIndexing({
       queryClient: client,
       authorSpaceId: MEMBER,
       debateId: D1,
       spaceId: S1,
-      expected: 'negative',
+      direction: 'negative',
+      previousVotedAt: '2026-10-01T00:00:00Z',
       writtenAtMs: 5,
+      onIndexed,
+      poll: FAST_POLL,
     });
 
     expect(indexed).toBe(false);
-    expect(invalidate).not.toHaveBeenCalled();
-    expect(client.getQueryData<DebateVoteOverlays>(debateVoteOverlaysQueryKey(MEMBER))?.[D1]).toBeDefined();
+    expect(onIndexed).not.toHaveBeenCalled();
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: memberDebateDownvotesQueryKey(MEMBER) });
+    expect(client.getQueryData(debateVoteOverlaysQueryKey(MEMBER))).toEqual({});
   });
 });

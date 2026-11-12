@@ -6,6 +6,8 @@ import { parse } from 'graphql';
 import { ID } from '~/core/id';
 import { graphql } from '~/core/io/graphql-client';
 
+import { DEBATE_TYPE_ID } from './best-debates';
+
 /**
  * A member's curation votes (vote kind 0, entity objects) with the space each was cast in
  * (GEO-3679). gaia counts a Debates member's downvote by voter, whatever space it was cast in
@@ -46,6 +48,19 @@ type MemberCurationVotesQuery = {
 const memberCurationVotesDocument = parse(MEMBER_CURATION_VOTES_SOURCE) as TypedDocumentNode<
   MemberCurationVotesQuery,
   { filter: Record<string, unknown>; first: number; after?: string | null }
+>;
+
+const DEBATE_IDS_SOURCE = /* GraphQL */ `
+  query DebateIdsAmong($ids: [UUID!]!, $typeId: UUID!, $first: Int!) {
+    entities(filter: { id: { in: $ids }, typeIds: { anyEqualTo: $typeId } }, first: $first) {
+      id
+    }
+  }
+`;
+
+const debateIdsDocument = parse(DEBATE_IDS_SOURCE) as TypedDocumentNode<
+  { entities: Array<{ id: string | null }> | null },
+  { ids: string[]; typeId: string; first: number }
 >;
 
 const CURATION_VOTE_KIND = 0;
@@ -93,24 +108,59 @@ function fetchPage(filter: Record<string, unknown>, after: string | null, signal
   });
 }
 
-/** Pages with cursors until the server says there are no more (offsets cap at 1,000). */
-async function fetchAll(filter: Record<string, unknown>, signal?: AbortSignal): Promise<MemberVoteRecord[]> {
+/** The `votedAt` lower bound for a launch time in epoch seconds. */
+export function votedSinceFilter(sinceSeconds: number | null | undefined) {
+  return sinceSeconds == null ? {} : { votedAt: { greaterThanOrEqualTo: new Date(sinceSeconds * 1000).toISOString() } };
+}
+
+/**
+ * Pages with cursors until the server says there are no more (offsets cap at 1,000). `keep`
+ * filters each page as it lands, so a long history is never held whole.
+ */
+async function fetchAll(
+  filter: Record<string, unknown>,
+  signal?: AbortSignal,
+  keep?: (records: MemberVoteRecord[]) => Promise<MemberVoteRecord[]>
+): Promise<MemberVoteRecord[]> {
   const records: MemberVoteRecord[] = [];
   let after: string | null = null;
   for (let page = 0; page < MAX_PAGES; page++) {
     const result: Page = await Effect.runPromise(fetchPage(filter, after, signal));
-    records.push(...result.records);
+    records.push(...(keep ? await keep(result.records) : result.records));
     if (!result.hasNextPage || !result.endCursor) return records;
     after = result.endCursor;
   }
   return records;
 }
 
-/** Every curation vote the member holds on one debate, in every space. */
+/** Which of `ids` are Debate entities, in one request per page of votes. */
+export async function fetchDebateIdsAmong(ids: readonly string[], signal?: AbortSignal): Promise<Set<string>> {
+  const unique = [...new Set(ids.map(id => ID.uuidToHex(id)))];
+  if (unique.length === 0) return new Set();
+  return Effect.runPromise(
+    graphql({
+      query: debateIdsDocument,
+      variables: { ids: unique, typeId: DEBATE_TYPE_ID, first: unique.length },
+      signal,
+      decoder: data => new Set((data.entities ?? []).flatMap(entity => (entity?.id ? [ID.uuidToHex(entity.id)] : []))),
+    })
+  );
+}
+
+type ReadOptions = {
+  /** Only votes cast at or after this, in epoch seconds (`BEST_DEBATES_PUSHDOWN_SINCE`). */
+  since?: number | null;
+  signal?: AbortSignal;
+};
+
+/**
+ * Every curation vote the member holds on one debate, in every space. With `since`, only those
+ * cast since then; with no `since`, all of them (the index check after a write needs those).
+ */
 export function fetchMemberDebateVotes(
   memberSpaceId: string,
   debateId: string,
-  signal?: AbortSignal
+  { since, signal }: ReadOptions = {}
 ): Promise<MemberVoteRecord[]> {
   return fetchAll(
     {
@@ -118,33 +168,79 @@ export function fetchMemberDebateVotes(
       objectId: { is: debateId },
       voteKind: { is: CURATION_VOTE_KIND },
       objectType: { is: ENTITY_OBJECT_TYPE },
+      ...votedSinceFilter(since),
     },
     signal
   );
 }
 
 /**
- * Every curation downvote the member holds, any entity, any space, newest first, paged until
- * exhausted. Only curation downvotes: claim Disagrees and the like (other kinds) aren't read.
+ * The member's push-downs: curation downvotes on Debate entities cast since `since`, any space,
+ * newest first. gaia counts only those (`voted_at >= ranking_pushdown_since`), which also bounds
+ * the history read. Pages to exhaustion; each page is narrowed to debates as it lands, so newer
+ * downvotes on claims can never crowd a debate out. A null `since` means push-down hasn't
+ * launched: nothing counts, so nothing is read.
  */
-export function fetchMemberCurationDownvotes(memberSpaceId: string, signal?: AbortSignal): Promise<MemberVoteRecord[]> {
+export async function fetchMemberDebateDownvotes(
+  memberSpaceId: string,
+  { since, signal }: ReadOptions
+): Promise<MemberVoteRecord[]> {
+  if (since == null) return [];
   return fetchAll(
     {
       userId: { is: memberSpaceId },
       voteType: { is: DOWNVOTE_TYPE },
       voteKind: { is: CURATION_VOTE_KIND },
       objectType: { is: ENTITY_OBJECT_TYPE },
+      ...votedSinceFilter(since),
     },
-    signal
+    signal,
+    async records => {
+      const debates = await fetchDebateIdsAmong(
+        records.map(record => record.objectId),
+        signal
+      );
+      return records.filter(record => debates.has(ID.uuidToHex(record.objectId)));
+    }
   );
+}
+
+/**
+ * The member's counted downvotes on just these entities (a ballot's debates), for the ranking
+ * screen's Publish: one request for any real ballot, not a walk through the whole history.
+ */
+export async function fetchMemberDownvotesOn(
+  memberSpaceId: string,
+  objectIds: readonly string[],
+  { since, signal }: ReadOptions
+): Promise<MemberVoteRecord[]> {
+  if (since == null || objectIds.length === 0) return [];
+  const unique = [...new Set(objectIds.map(id => ID.uuidToHex(id)))];
+  const records: MemberVoteRecord[] = [];
+  for (let start = 0; start < unique.length; start += PAGE_SIZE) {
+    records.push(
+      ...(await fetchAll(
+        {
+          userId: { is: memberSpaceId },
+          objectId: { in: unique.slice(start, start + PAGE_SIZE) },
+          voteType: { is: DOWNVOTE_TYPE },
+          voteKind: { is: CURATION_VOTE_KIND },
+          objectType: { is: ENTITY_OBJECT_TYPE },
+          ...votedSinceFilter(since),
+        },
+        signal
+      ))
+    );
+  }
+  return records;
 }
 
 export function memberDebateVotesQueryKey(memberSpaceId: string | null | undefined, debateId: string) {
   return ['member-debate-votes', memberSpaceId ? ID.uuidToHex(memberSpaceId) : null, ID.uuidToHex(debateId)] as const;
 }
 
-export function memberCurationDownvotesQueryKey(memberSpaceId: string | null | undefined) {
-  return ['member-curation-downvotes', memberSpaceId ? ID.uuidToHex(memberSpaceId) : null] as const;
+export function memberDebateDownvotesQueryKey(memberSpaceId: string | null | undefined) {
+  return ['member-debate-downvotes', memberSpaceId ? ID.uuidToHex(memberSpaceId) : null] as const;
 }
 
 /** The spaces holding the member's downvote on the debate. */

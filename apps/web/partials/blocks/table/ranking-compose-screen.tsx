@@ -9,7 +9,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import { BEST_DEBATES_BLOCK_ID } from '~/core/blocks/ranking/best-debates';
-import { RankingComposeBallotContext } from '~/core/blocks/ranking/ranking-compose-ballot-context';
+import { RankingComposeBallotContext, useComposeBallot } from '~/core/blocks/ranking/ranking-compose-ballot-context';
 import { resolveRankingSingleTargetSpaceId } from '~/core/blocks/ranking/ranking-compose-publish-spaces';
 import { RANKING_COMPOSE_TAB_MY, rankingComposeHref } from '~/core/blocks/ranking/ranking-compose-url';
 import { generatePersonalRankingOgImages } from '~/core/blocks/ranking/ranking-og-generate-client';
@@ -529,29 +529,55 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
       };
     });
 
+  /** OG images for a published ballot: built from indexed data, so detached until indexing settles. */
+  const regenerateOgImages = (published: NonNullable<Awaited<ReturnType<typeof saveMySubmission>>>) => {
+    const ogVersion = buildRankingOgVersion({
+      rankEntityId: published.rankEntityId,
+      orderedEntityIds: published.orderedEntityIds,
+      rankingName: displayName,
+      rankingStartDate,
+      rankingEndDate,
+      authorName: published.authorName,
+      authorAvatarUrl: published.authorAvatarUrl,
+    });
+    void published.indexingSettled.then(() =>
+      generatePersonalRankingOgImages({
+        rankEntityId: published.rankEntityId,
+        authorSpaceId: published.authorSpaceId,
+        blockEntityId: entityId,
+        blockEntitySpaceId: spaceId,
+        rankingStartDate,
+        rankingEndDate,
+        ogVersion,
+      })
+    );
+    return ogVersion;
+  };
+
   /**
-   * Publishes `ids` as the member's Best debates ballot (GEO-3679), clearing the downvotes on any
-   * debates in it the member pushed down, in the order that never leaves one neither ranked nor
-   * pushed down (`useBestDebatesBallotPublisher`).
+   * Publishes `ids` as the member's Best debates ballot (GEO-3679), the one path both Publish and
+   * push-down's draft edit take: the fresh closed-ranking check, the downvote clears in the order
+   * that never leaves a debate neither ranked nor pushed down (`useBestDebatesBallotPublisher`),
+   * and the OG images. Built every render, so it always revises the newest rank entity and uses
+   * the newest rows; push-down reaches it through `useComposeBallot`'s ref.
    */
-  const publishBestDebatesBallot = (ids: readonly string[]) =>
-    publishBallotClearingDownvotes(ids, () => saveMySubmission(buildSlots(ids), rankingOpportunity.context));
+  const publishBestDebates = async (ids: readonly string[]) => {
+    if (!rankingSubmissionsOpen(getRankingPeriodState(startDate, endDate))) {
+      setToast(<span>This ranking has closed.</span>);
+      return null;
+    }
+    const result = await publishBallotClearingDownvotes(ids, () =>
+      saveMySubmission(buildSlots(ids), rankingOpportunity.context)
+    );
+    if (!result) return null;
+    return { ...result, ogVersion: regenerateOgImages(result.published) };
+  };
 
   /** The draft as the ranking screen's ballot, for push-down to edit (`usePushDown`). */
-  const composeBallot = React.useMemo(
-    () =>
-      bestDebatesBlockId
-        ? {
-            orderedIds,
-            publish: async (ids: string[]) => {
-              setOrderedIds(ids);
-              return Boolean(await publishBestDebatesBallot(ids));
-            },
-          }
-        : null,
-    // `publishBestDebatesBallot` is rebuilt every render; the draft is what this follows.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [bestDebatesBlockId, orderedIds]
+  const composeBallot = useComposeBallot(
+    bestDebatesBlockId
+      ? { orderedIds, setOrderedIds, publish: async ids => Boolean(await publishBestDebates(ids)) }
+      : null
   );
 
   const handlePublish = async () => {
@@ -597,40 +623,23 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
       return;
     }
 
-    let published: Awaited<ReturnType<typeof saveMySubmission>>;
+    let published: NonNullable<Awaited<ReturnType<typeof saveMySubmission>>>;
+    let ogVersion: string;
     if (bestDebatesBlockId) {
-      const result = await publishBestDebatesBallot(orderedIds);
+      const result = await publishBestDebates(orderedIds);
       if (!result) return;
       // Stay on the screen while a pushed-down debate still needs its Retry.
       if (result.failedClears > 0) return;
       published = result.published;
+      ogVersion = result.ogVersion;
     } else {
-      published = await saveMySubmission(slots, rankingOpportunity.context);
+      const saved = await saveMySubmission(slots, rankingOpportunity.context);
+      if (!saved) return;
+      published = saved;
+      // OG images render from indexed data, so generation waits for
+      // `indexingSettled` — detached, since the redirect below must not.
+      ogVersion = regenerateOgImages(saved);
     }
-    if (!published) return;
-
-    const ogVersion = buildRankingOgVersion({
-      rankEntityId: published.rankEntityId,
-      orderedEntityIds: published.orderedEntityIds,
-      rankingName: displayName,
-      rankingStartDate,
-      rankingEndDate,
-      authorName: published.authorName,
-      authorAvatarUrl: published.authorAvatarUrl,
-    });
-    // OG images render from indexed data, so generation waits for
-    // `indexingSettled` — detached, since the redirect below must not.
-    void published.indexingSettled.then(() =>
-      generatePersonalRankingOgImages({
-        rankEntityId: published.rankEntityId,
-        authorSpaceId: published.authorSpaceId,
-        blockEntityId: entityId,
-        blockEntitySpaceId: spaceId,
-        rankingStartDate,
-        rankingEndDate,
-        ogVersion,
-      })
-    );
 
     // After publishing, land on the fullscreen ranking view instead of the parent space page.
     setRankingComposeReturnHref(null);

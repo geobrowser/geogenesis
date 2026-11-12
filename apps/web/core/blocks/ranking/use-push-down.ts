@@ -12,7 +12,12 @@ import { ID } from '~/core/id';
 import { getBatchEntities } from '~/core/io/queries';
 import { useQueryEntity } from '~/core/sync/use-store';
 
-import { BEST_DEBATES_BLOCK_ID, BEST_DEBATES_RANKING_LIVE, DEBATES_SPACE_ID } from './best-debates';
+import {
+  BEST_DEBATES_BLOCK_ID,
+  BEST_DEBATES_PUSHDOWN_SINCE,
+  BEST_DEBATES_RANKING_LIVE,
+  DEBATES_SPACE_ID,
+} from './best-debates';
 import {
   type MemberVoteRecord,
   downvotedSpaceIds,
@@ -163,7 +168,12 @@ export function usePushDown(debateId: string, options: UsePushDownOptions = {}):
     [debateId, personalSpaceId]
   );
   const votesQueryFn = React.useCallback(
-    ({ signal }: { signal?: AbortSignal }) => fetchMemberDebateVotes(personalSpaceId!, debateId, signal),
+    // Only votes since the push-down launch count; before it, nothing does, so only this
+    // session's own writes (the overlay) can show the debate pushed down.
+    async ({ signal }: { signal?: AbortSignal }) =>
+      BEST_DEBATES_PUSHDOWN_SINCE == null
+        ? []
+        : fetchMemberDebateVotes(personalSpaceId!, debateId, { since: BEST_DEBATES_PUSHDOWN_SINCE, signal }),
     [debateId, personalSpaceId]
   );
   const { data: serverRecords } = useQuery({

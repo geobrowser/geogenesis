@@ -37,6 +37,8 @@ const mocks = vi.hoisted(() => ({
       }) => Promise<{ ok: true; records: MemberVoteRecord[] } | { ok: false; message: string }>
     >(),
   setToast: vi.fn(),
+  historyReads: 0,
+  draftReads: [] as string[][],
 }));
 
 vi.mock('~/core/hooks/use-personal-space-id', () => ({
@@ -51,9 +53,15 @@ vi.mock('~/core/sync/use-store', () => ({
 }));
 vi.mock('./fetch-member-debate-votes', async importOriginal => ({
   ...(await importOriginal<typeof import('./fetch-member-debate-votes')>()),
-  fetchMemberCurationDownvotes: async () => {
+  fetchMemberDebateDownvotes: async () => {
+    mocks.historyReads += 1;
     if (mocks.downvotes instanceof Error) throw mocks.downvotes;
     return mocks.downvotes;
+  },
+  fetchMemberDownvotesOn: async (_member: string, objectIds: readonly string[]) => {
+    mocks.draftReads.push([...objectIds]);
+    if (mocks.downvotes instanceof Error) throw mocks.downvotes;
+    return mocks.downvotes.filter(record => objectIds.includes(record.objectId));
   },
 }));
 vi.mock('./use-debate-downvote', async importOriginal => ({
@@ -97,6 +105,8 @@ beforeEach(() => {
   mocks.sendVote.mockReset();
   mocks.sendVote.mockImplementation(async () => ({ ok: true, records: [] }));
   mocks.setToast.mockReset();
+  mocks.historyReads = 0;
+  mocks.draftReads = [];
 });
 
 afterEach(() => cleanup());
@@ -150,6 +160,9 @@ describe('useBestDebatesBallotPublisher', () => {
     });
 
     expect(events).toEqual(['publish', `clear:${CLAIM_SPACE}`, `clear:${DEBATE_SPACE}`]);
+    // Only the ballot's debates are read, never the member's whole history.
+    expect(mocks.draftReads).toEqual([[D1, D2]]);
+    expect(mocks.historyReads).toBe(0);
     expect(outcome).toEqual({ published: { rankEntityId: 'rank1' }, failedClears: 0 });
   });
 

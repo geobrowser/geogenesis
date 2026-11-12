@@ -4,7 +4,7 @@ import { type QueryClient, useQuery, useQueryClient } from '@tanstack/react-quer
 
 import * as React from 'react';
 
-import { Effect, Either } from 'effect';
+import { Either } from 'effect';
 
 import { type ActionKind } from '~/core/action-context';
 import { useActionContext } from '~/core/action-context-provider';
@@ -22,24 +22,23 @@ import {
   votedEntityIdsPendingQueryKey,
 } from '~/core/hooks/use-user-voted-entity-ids';
 import { ID } from '~/core/id';
-import { getUserEntityResponse } from '~/core/io/queries';
 import { marketingVoteDirection, pushMarketingEvent } from '~/core/marketing-events';
 import {
-  type ActiveResponseDirection,
   entityRespondersQueryKey,
   entityResponseCountsQueryKey,
   userEntityResponseQueryKey,
   voteOutcomeProperties,
-  waitForIndexedEntityResponse,
 } from '~/core/responses/entity-response';
 import { geo } from '~/core/sdk/geo-client';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
 import { validateSpaceId } from '~/core/utils/utils';
+import { waitForIndexedValue } from '~/core/utils/wait-for-indexed-value';
 
 import { DEBATES_SPACE_ID } from './best-debates';
 import {
   type MemberVoteRecord,
-  memberCurationDownvotesQueryKey,
+  fetchMemberDebateVotes,
+  memberDebateDownvotesQueryKey,
   memberDebateVotesQueryKey,
   voteInSpace,
 } from './fetch-member-debate-votes';
@@ -286,7 +285,9 @@ export function useDebateVoteWriter() {
         authorSpaceId,
         debateId,
         spaceId,
-        expected: direction === 'negative' ? 'negative' : null,
+        direction,
+        // A re-sent downvote is only indexed once its `voted_at` moves past the old one.
+        previousVotedAt: records.find(record => ID.equals(record.spaceId, spaceId))?.votedAt ?? null,
         writtenAtMs,
         onIndexed: () => operation.outcome('vote_cast', 'indexed', outcome),
       });
@@ -298,33 +299,48 @@ export function useDebateVoteWriter() {
 }
 
 /**
- * Once the indexer has the vote: refresh what reads it, as `useEntityResponse`'s reconciliation
- * does, then drop the overlay so the server answer takes over. A vote that never shows up keeps
- * its overlay until `DEBATE_VOTE_OVERLAY_TTL_MS`.
+ * Waits until the indexer has the write: for a clear, no vote left in that space; for a downvote,
+ * a downvote there newer than the one it replaced (re-sending a downvote only moves `voted_at`).
+ * Polls for as long as the overlay lives. Then, indexed or not, refreshes what reads the vote, as
+ * `useEntityResponse`'s reconciliation does, and ends the overlay, so the screen never falls back
+ * to the cached answer from before the write.
  */
 export async function catchUpAfterIndexing({
   queryClient,
   authorSpaceId,
   debateId,
   spaceId,
-  expected,
+  direction,
+  previousVotedAt,
   writtenAtMs,
   onIndexed,
+  poll = { intervalMs: 2_000, maxAttempts: Math.ceil(DEBATE_VOTE_OVERLAY_TTL_MS / 2_000) },
 }: {
   queryClient: QueryClient;
   authorSpaceId: string;
   debateId: string;
   spaceId: string;
-  expected: ActiveResponseDirection | null;
+  direction: 'negative' | 'clear';
+  previousVotedAt: string | null;
   writtenAtMs: number;
   onIndexed?: () => void;
+  poll?: { intervalMs: number; maxAttempts: number };
 }): Promise<boolean> {
-  const indexed = await waitForIndexedEntityResponse(
-    signal => Effect.runPromise(getUserEntityResponse(authorSpaceId, debateId, spaceId, 'curation', 0, signal)),
-    expected
+  const previousMs = previousVotedAt ? Date.parse(previousVotedAt) : null;
+  const indexed = await waitForIndexedValue(
+    async signal => {
+      const records = await fetchMemberDebateVotes(authorSpaceId, debateId, { signal });
+      const vote = records.find(record => ID.equals(record.spaceId, spaceId));
+      if (direction === 'clear') return !vote;
+      if (vote?.direction !== 'negative') return false;
+      return previousMs == null || Date.parse(vote.votedAt) > previousMs;
+    },
+    true,
+    poll.maxAttempts,
+    poll.intervalMs,
+    5_000
   );
-  if (!indexed) return false;
-  onIndexed?.();
+  if (indexed) onIndexed?.();
 
   try {
     await Promise.all([
@@ -334,14 +350,14 @@ export async function catchUpAfterIndexing({
       }),
       queryClient.invalidateQueries({ queryKey: entityRespondersQueryKey(debateId, spaceId, 0, 'curation') }),
       queryClient.invalidateQueries({ queryKey: memberDebateVotesQueryKey(authorSpaceId, debateId) }),
-      queryClient.invalidateQueries({ queryKey: memberCurationDownvotesQueryKey(authorSpaceId) }),
+      queryClient.invalidateQueries({ queryKey: memberDebateDownvotesQueryKey(authorSpaceId) }),
       ...(['up', 'down'] as const).map(list =>
         queryClient.invalidateQueries({ queryKey: userEntityVotesQueryKey(authorSpaceId, list) })
       ),
     ]);
   } catch {
-    // The vote itself is indexed; a failed refresh only delays the lists. Keep the overlays.
-    return true;
+    // A failed refresh only delays the lists; keep the overlays until it has the answer.
+    return indexed;
   }
   void queryClient.invalidateQueries({ queryKey: ['curator-onboarding-status'] });
   for (const list of ['up', 'down'] as const) {
@@ -351,5 +367,5 @@ export async function catchUpAfterIndexing({
     );
   }
   dropOverlay(queryClient, authorSpaceId, debateId, writtenAtMs);
-  return true;
+  return indexed;
 }

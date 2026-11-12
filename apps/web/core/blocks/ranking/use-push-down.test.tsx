@@ -43,6 +43,8 @@ const mocks = vi.hoisted(() => ({
   serverRecords: [] as MemberVoteRecord[] | Error,
   serverReads: 0,
   gate: null as Promise<void> | null,
+  since: 1_790_000_000 as number | null,
+  readSince: [] as Array<number | null | undefined>,
   orderedEntityIds: [] as string[],
   rankEntity: null as object | null,
   events: [] as string[],
@@ -81,13 +83,17 @@ vi.mock('~/core/io/queries', async () => {
   };
 });
 // Indexing never confirms in these tests, so this session's overlays stay in charge.
-vi.mock('~/core/responses/entity-response', async importOriginal => ({
-  ...(await importOriginal<typeof import('~/core/responses/entity-response')>()),
-  waitForIndexedEntityResponse: async () => false,
+vi.mock('~/core/utils/wait-for-indexed-value', () => ({ waitForIndexedValue: () => new Promise(() => {}) }));
+vi.mock('./best-debates', async importOriginal => ({
+  ...(await importOriginal<typeof import('./best-debates')>()),
+  get BEST_DEBATES_PUSHDOWN_SINCE() {
+    return mocks.since;
+  },
 }));
 vi.mock('./fetch-member-debate-votes', async importOriginal => ({
   ...(await importOriginal<typeof import('./fetch-member-debate-votes')>()),
-  fetchMemberDebateVotes: async () => {
+  fetchMemberDebateVotes: async (_member: string, _debate: string, options?: { since?: number | null }) => {
+    mocks.readSince.push(options?.since);
     mocks.serverReads += 1;
     if (mocks.gate) await mocks.gate;
     if (mocks.serverRecords instanceof Error) throw mocks.serverRecords;
@@ -176,6 +182,8 @@ beforeEach(() => {
   mocks.serverRecords = [];
   mocks.serverReads = 0;
   mocks.gate = null;
+  mocks.since = 1_790_000_000;
+  mocks.readSince = [];
   mocks.orderedEntityIds = [];
   mocks.rankEntity = null;
   mocks.events = [];
@@ -184,6 +192,25 @@ beforeEach(() => {
 afterEach(() => cleanup());
 
 describe('usePushDown', () => {
+  it('reads only votes cast since the push-down launch', async () => {
+    await renderReady();
+    expect(mocks.readSince).toContain(1_790_000_000);
+  });
+
+  it('before push-down launches, only this session’s own push-down shows', async () => {
+    mocks.since = null;
+    mocks.serverRecords = [down(DEBATE_SPACE)];
+    const { result } = await renderReady();
+    // The server's downvote predates the launch, so it doesn't count and isn't even read.
+    expect(mocks.serverReads).toBe(0);
+    expect(result.current.isPushedDown).toBe(false);
+
+    await act(async () => {
+      await result.current.pushDown();
+    });
+    await waitFor(() => expect(result.current.isPushedDown).toBe(true));
+  });
+
   it('stays off until the Best debates block exists', async () => {
     const { result } = renderHook(() => usePushDown(DEBATE, { blockId: null }), { wrapper: wrapper() });
     expect(result.current.enabled).toBe(false);

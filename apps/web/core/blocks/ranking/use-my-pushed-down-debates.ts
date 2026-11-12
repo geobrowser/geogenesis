@@ -9,11 +9,12 @@ import { useSetToast } from '~/core/hooks/use-toast';
 import { ID } from '~/core/id';
 import { useQueryEntities } from '~/core/sync/use-store';
 
-import { BEST_DEBATES_BLOCK_ID, DEBATE_TYPE_ID } from './best-debates';
+import { BEST_DEBATES_BLOCK_ID, BEST_DEBATES_PUSHDOWN_SINCE, DEBATE_TYPE_ID } from './best-debates';
 import {
   type MemberVoteRecord,
-  fetchMemberCurationDownvotes,
-  memberCurationDownvotesQueryKey,
+  fetchMemberDebateDownvotes,
+  fetchMemberDownvotesOn,
+  memberDebateDownvotesQueryKey,
 } from './fetch-member-debate-votes';
 import { type PushDownState, RANK_CLEAR_FAILED_COPY, debateOwnSpaceId } from './push-down';
 import {
@@ -50,19 +51,23 @@ export function groupDownvotesByObject(records: readonly MemberVoteRecord[]): Ma
 }
 
 /**
- * The debates the member pushed down (GEO-3679): every curation downvote they hold on a Debate,
- * in whatever space it was cast, newest first. Read from the votes themselves, paged until
- * exhausted, with this session's unindexed writes laid over them.
+ * The debates the member pushed down (GEO-3679): every downvote gaia counts, meaning curation
+ * downvotes on Debates cast since `BEST_DEBATES_PUSHDOWN_SINCE`, in whatever space, newest first.
+ * Read from the votes themselves, narrowed to debates page by page and paged to the end, with
+ * this session's unindexed writes laid over them.
  */
 export function useMyPushedDownDebates({ blockId = BEST_DEBATES_BLOCK_ID }: { blockId?: string | null } = {}) {
   const { personalSpaceId, isRegistered } = usePersonalSpaceId();
   const enabled = Boolean(blockId) && Boolean(personalSpaceId) && isRegistered;
 
   const query = useQuery({
-    queryKey: memberCurationDownvotesQueryKey(personalSpaceId),
-    queryFn: ({ signal }) => fetchMemberCurationDownvotes(personalSpaceId!, signal),
+    queryKey: memberDebateDownvotesQueryKey(personalSpaceId),
+    queryFn: ({ signal }) =>
+      fetchMemberDebateDownvotes(personalSpaceId!, { since: BEST_DEBATES_PUSHDOWN_SINCE, signal }),
     enabled,
-    staleTime: 30_000,
+    // This session's own writes reach the list through the overlays and a refetch once they are
+    // indexed, so there is no need to re-read the history on every mount.
+    staleTime: 5 * 60_000,
   });
   const overlays = useDebateVoteOverlays();
 
@@ -70,6 +75,8 @@ export function useMyPushedDownDebates({ blockId = BEST_DEBATES_BLOCK_ID }: { bl
     () => groupDownvotesByObject(mergeDownvoteOverlays(enabled ? (query.data ?? []) : [], overlays)),
     [enabled, overlays, query.data]
   );
+  // Already debates only (the reader filters each page by type), so the cap below only bounds the
+  // entity hydration of a member with over 1,000 pushed-down debates.
   const objectIds = React.useMemo(() => [...spacesByObject.keys()].slice(0, MAX_HYDRATED_IDS), [spacesByObject]);
 
   const where = React.useMemo(
@@ -114,8 +121,9 @@ export function useMyPushedDownDebates({ blockId = BEST_DEBATES_BLOCK_ID }: { bl
  * The ranking screen's Publish (GEO-3679). Ranked and pushed down are exclusive per member, so a
  * ballot holding debates the member pushed down has to clear those downvotes too:
  *
- * 1. `readDraftDownvotes` before publishing: a fresh read of every downvote the member holds, so a
- *    Publish never runs on a list that hasn't loaded. Null when it can't be read: don't publish.
+ * 1. `readDraftDownvotes` before publishing: a fresh read of the member's counted downvotes on the
+ *    ballot's debates, so a Publish never runs on a list that hasn't loaded. Null when it can't be
+ *    read: don't publish.
  * 2. Publish the ballot.
  * 3. `clearDraftDownvotes` once it has published: one clear per downvote record, one after
  *    another. A debate whose clear fails is left ranked and pushed down, never neither, and its
@@ -131,11 +139,8 @@ export function useRankingPublishDownvotes() {
       if (!personalSpaceId) return new Map();
       let server: MemberVoteRecord[];
       try {
-        server = await queryClient.fetchQuery({
-          queryKey: memberCurationDownvotesQueryKey(personalSpaceId),
-          queryFn: ({ signal }) => fetchMemberCurationDownvotes(personalSpaceId, signal),
-          staleTime: 0,
-        });
+        // Only the ballot's own debates: one request, not a walk through the history.
+        server = await fetchMemberDownvotesOn(personalSpaceId, draftIds, { since: BEST_DEBATES_PUSHDOWN_SINCE });
       } catch {
         return null;
       }
