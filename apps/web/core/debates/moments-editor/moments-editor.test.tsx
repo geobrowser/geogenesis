@@ -311,6 +311,9 @@ describe('MomentsEditor (GEO-3671)', () => {
     // Over Susan's words: clip 2 is hers for now, so Urban's claim can't ride along.
     fireEvent.pointerMove(block, { clientX: 1_300, pointerId: 1 });
     expect(within(clipRow('Coffee', 1)).getByText(/Live now for/)).toBeInTheDocument();
+    // Still hers on the next move: the claim the drag started with is judged again, not given back.
+    fireEvent.pointerMove(block, { clientX: 1_350, pointerId: 1 });
+    expect(within(clipRow('Coffee', 1)).getByText(/Live now for/)).toBeInTheDocument();
     fireEvent.pointerMove(block, { clientX: 4_800, pointerId: 1 });
     fireEvent.pointerUp(block, { pointerId: 1 });
 
@@ -611,6 +614,12 @@ describe('keepClaimWithSpeaker', () => {
     expect(keepClaimWithSpeaker(clip, moved, words, unplaced).claim_index).toBeNull();
     expect(keepClaimWithSpeaker(clip, moved, words, () => 2).claim_index).toBe(7);
   });
+
+  it('judges a claim the edit sets on whose it is, even on the same speaker', () => {
+    const unset = { ...clip, claim_index: null };
+    expect(keepClaimWithSpeaker(unset, clip, words, unplaced).claim_index).toBeNull();
+    expect(keepClaimWithSpeaker(unset, clip, words, () => 1).claim_index).toBe(7);
+  });
 });
 
 describe('editingBlockedReason', () => {
@@ -654,5 +663,41 @@ describe('MomentsEditor warnings (GEO-3672)', () => {
     expect(screen.queryByText('Clip 1 opens on “So”')).not.toBeInTheDocument();
     // A warning never disables publishing.
     expect(screen.getByRole('button', { name: /^Publish reel/ })).toBeEnabled();
+  });
+
+  // A fix hands back the whole reel; the clips it left alone keep their claims, even one the editor
+  // can't place on a speaker.
+  it('leaves the claims of clips a fix did not touch', () => {
+    mocks.plan.data = entry({
+      live_reel: {
+        clock: 'video',
+        clips: [
+          { start_ms: 900, end_ms: 3_000, speaker_slot: 0, claim_index: null, claim_text: null },
+          { start_ms: 4_900, end_ms: 5_500, speaker_slot: 1, claim_index: 9, claim_text: 'Dinner then a walk' },
+        ],
+      },
+    });
+    wordsOverride = [
+      { participant_slot: 1, start_ms: 1_000, end_ms: 1_200, text: 'So,' },
+      { participant_slot: 1, start_ms: 1_300, end_ms: 2_900, text: 'coffee.' },
+      { participant_slot: 2, start_ms: 5_000, end_ms: 5_400, text: 'Dinner' },
+    ];
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Start on “coffee.”' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Publish reel/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Publish anyway' }));
+    expect(mocks.mutate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reel: {
+          clock: 'player',
+          clips: [
+            { start: 1.3, end: 3 },
+            { start: 4.9, end: 5.5, claim_index: 9 },
+          ],
+          base: 'v1',
+        },
+      }),
+      expect.any(Object)
+    );
   });
 });

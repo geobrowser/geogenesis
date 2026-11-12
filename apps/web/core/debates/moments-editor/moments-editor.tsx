@@ -249,15 +249,20 @@ function Editor({ debateId }: { debateId: string }) {
   }, [confirmAllowed]);
 
   // A claim picked for one speaker never rides along when the clip changes speaker, however the
-  // clip changed: an edge, a drag, a fix, a sentence from the transcript.
-  const keepClaimsWithSpeakers = (next: EditorClip[]) =>
-    next.map(clip =>
-      clip.claim_index !== null && claimSlot(clip.claim_index) !== clipSpeaker(words, clip.start_ms, clip.end_ms)
-        ? { ...clip, claim_index: null }
-        : clip
-    );
+  // clip changed: an edge, a drag, a fix, a sentence from the transcript. Each clip is judged against
+  // itself before the change, so one the change left alone keeps its claim.
+  const keepClaimsWithSpeakers = (previous: readonly EditorClip[], next: EditorClip[]) =>
+    next.map(clip => {
+      const before = previous.find(candidate => candidate.key === clip.key);
+      return before ? keepClaimWithSpeaker(before, clip, words, claimSlot) : clip;
+    });
   const updateClip = (index: number, update: (clip: EditorClip) => EditorClip) =>
-    setClips(current => keepClaimsWithSpeakers(current.map((clip, at) => (at === index ? update(clip) : clip))));
+    setClips(current =>
+      keepClaimsWithSpeakers(
+        current,
+        current.map((clip, at) => (at === index ? update(clip) : clip))
+      )
+    );
 
   // The selected clip by its key, not its place: removing or moving another clip leaves it selected,
   // rather than handing the transcript's Start/End to whichever clip took its place.
@@ -300,7 +305,7 @@ function Editor({ debateId }: { debateId: string }) {
       addClipAtPlayhead();
       return;
     }
-    setClips(keepClaimsWithSpeakers(fix.clips));
+    setClips(current => keepClaimsWithSpeakers(current, fix.clips));
     setSelected(fix.select, fix.clips);
   };
   const moveClip = (index: number, direction: -1 | 1) => {
@@ -601,14 +606,18 @@ function queueErrorMessage(error: unknown) {
  * keeps the claim, so a live link the editor can't place on a speaker isn't silently dropped.
  */
 export function keepClaimWithSpeaker(
-  previous: Pick<EditorClip, 'start_ms' | 'end_ms'>,
+  previous: Pick<EditorClip, 'start_ms' | 'end_ms' | 'claim_index'>,
   next: EditorClip,
   words: readonly ReelWord[],
   claimSlot: (index: number) => ParticipantSlot | null
 ): EditorClip {
   if (next.claim_index === null) return next;
   const speaker = clipSpeaker(words, next.start_ms, next.end_ms);
-  if (speaker === clipSpeaker(words, previous.start_ms, previous.end_ms)) return next;
+  // The clip's own claim, on the same speaker. A claim the edit sets (a pick, or a drag giving back
+  // the claim it started with) is judged on whose it is.
+  if (next.claim_index === previous.claim_index && speaker === clipSpeaker(words, previous.start_ms, previous.end_ms)) {
+    return next;
+  }
   return claimSlot(next.claim_index) === speaker ? next : { ...next, claim_index: null };
 }
 
