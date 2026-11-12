@@ -35,6 +35,8 @@ type Props = {
   onRemove: (entityId: string) => void;
   onView: (entityId: string) => void;
   pendingEntityIds: ReadonlySet<string>;
+  /** Rendered under the list, e.g. the Best debates "You pushed down" section (GEO-3679). */
+  footer?: React.ReactNode;
 };
 
 export function RankingComposeMyRanking({
@@ -54,6 +56,7 @@ export function RankingComposeMyRanking({
   onRemove,
   onView,
   pendingEntityIds,
+  footer,
 }: Props) {
   const isDesktop = !isMobile;
   const [isReordering, setIsReordering] = React.useState(false);
@@ -150,6 +153,7 @@ export function RankingComposeMyRanking({
             }}
           />
         )}
+        {footer}
       </div>
     </div>
   );
