@@ -7,7 +7,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 
 import { GeoChatRequestError } from '../api';
 import type { MomentBackfillEntry, MomentBackfillStatus } from './api';
-import { MomentsEditor, claimsBySpeaker, editingBlockedReason } from './moments-editor';
+import { MomentsEditor, claimsBySpeaker, editingBlockedReason, keepClaimWithSpeaker } from './moments-editor';
 
 const DEBATE_ID = '01a0448a-61d3-7101-8434-a20fdadf6f97';
 
@@ -24,6 +24,8 @@ const mocks = vi.hoisted(() => ({
   transcriptFailed: false,
   /** Where the player says its playhead is, or `null` before it reports one. */
   playheadSeconds: null as number | null,
+  /** The claims hold a retained claim of Susan's (index 2), as a re-extraction keeps a published one. */
+  retainedClaim: false,
 }));
 
 vi.mock('../hooks', () => ({
@@ -64,6 +66,7 @@ vi.mock('../hooks', () => ({
         claims: [
           { text: 'Coffee is low stakes', turn_index: 0 },
           { text: 'Dinner shows effort', turn_index: 1 },
+          ...(mocks.retainedClaim ? [{ text: 'Coffee was the plan', turn_index: 0, retained: true }] : []),
         ],
         moments: [{ claim_index: 0, clip_start_ms: 1_000, clip_end_ms: 3_000 }],
         ...(mocks.manualReel && { moment_reel_manual: true }),
@@ -134,6 +137,7 @@ beforeEach(() => {
   mocks.manualReel = false;
   mocks.transcriptFailed = false;
   mocks.playheadSeconds = null;
+  mocks.retainedClaim = false;
 });
 afterEach(cleanup);
 
@@ -382,9 +386,10 @@ describe('MomentsEditor (GEO-3671)', () => {
     expect(screen.getByText('Clip 1: its words are no longer said there')).toBeInTheDocument();
   });
 
-  // A reel carried onto a re-render's claims plays from cuts on the old video's clock until the
-  // worker has re-applied it, so it is shown but not edited.
-  it('is read-only while a re-render re-applies the hand-picked reel', () => {
+  // A reel carried onto a re-render's claims plays from cuts on the old video's clock, and keeps the
+  // mark after the worker's re-cut fails (geo-chat#352), so it is shown but not edited. Returning it
+  // to automatic, which geo-chat takes on it, is how its clips get picked again.
+  it('keeps a carried reel read-only, and offers Return to automatic as the way to re-pick it', () => {
     mocks.manualReel = true;
     mocks.plan.data = entry({
       live_reel: {
@@ -393,10 +398,55 @@ describe('MomentsEditor (GEO-3671)', () => {
         clips: [{ start_ms: 900, end_ms: 3_000, speaker_slot: 0, claim_index: 0, claim_text: 'Coffee is low stakes' }],
       },
     });
+    mocks.backfill.data = {
+      request: status({
+        status: 'skipped',
+        outcome: 'reel_no_longer_fits',
+        manual_reel: { clock: 'video', clips: [], reapplied: { job_id: 'job', quotes: ['Coffee dates'] } },
+        report: { story_failed: 'clip 1: its speaker has no claim to link it to' },
+      }),
+      entry: null,
+    };
     render(<MomentsEditor debateId={DEBATE_ID} />);
-    expect(screen.getByText(/A re-render is re-applying this reel/)).toBeInTheDocument();
+    expect(screen.getByText(/still cut on the video from before it, so they can't be edited/)).toHaveTextContent(
+      /return it to automatic, then edit the reel that replaces it/
+    );
+    const notice = screen.getByText(/A re-render couldn.t keep this hand-picked reel/).closest('[role="status"]');
+    expect(notice).toHaveTextContent(/Return to automatic, then edit the reel that replaces it/);
     expect(screen.getByRole('textbox', { name: 'End time' })).toBeDisabled();
-    expect(screen.queryByRole('button', { name: 'Return to automatic' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Preview' })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Return to automatic' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Unlock and re-pick' }));
+    expect(mocks.mutate).toHaveBeenCalledWith(
+      { unlock: true, story: true, reason: 'Moments editor: return to automatic', base: 'v1' },
+      expect.any(Object)
+    );
+  });
+
+  // geo-chat#352 links a carried clip to its own published claim, which a re-extraction may keep as
+  // `retained`, and takes it by name. An edit that keeps the clip's speaker keeps that link.
+  it('keeps a clip linked to a retained claim on that claim through an edit, and publishes it so', () => {
+    mocks.retainedClaim = true;
+    mocks.plan.data = entry({
+      live_reel: {
+        clock: 'video',
+        clips: [{ start_ms: 900, end_ms: 3_000, speaker_slot: 0, claim_index: 2, claim_text: 'Coffee was the plan' }],
+      },
+    });
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    expect(screen.getByRole('combobox')).toHaveTextContent('Coffee was the plan (earlier extraction)');
+    fireEvent.change(screen.getByRole('textbox', { name: 'End time' }), { target: { value: '1.45' } });
+    fireEvent.blur(screen.getByRole('textbox', { name: 'End time' }));
+    expect(screen.getByRole('combobox')).toHaveTextContent('Coffee was the plan (earlier extraction)');
+    fireEvent.click(screen.getByRole('button', { name: /^Publish reel/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Publish anyway' }));
+    expect(mocks.mutate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reel: { clock: 'player', clips: [{ start: 0.9, end: 1.45, claim_index: 2 }], base: 'v1' },
+      }),
+      expect.any(Object)
+    );
   });
 
   // Without its words nothing snaps and no clip has a speaker, so a touched clip loses its claim.
@@ -526,8 +576,8 @@ function clipRow(word: string, nth = 0) {
 }
 
 describe('claimsBySpeaker', () => {
-  // geo-chat's moment_claims skips a retained claim, and refuses a clip that names one.
-  it('leaves out a retained claim', () => {
+  // geo-chat#352's manual_moments takes a named retained claim (claims_with_speakers(payload, true)).
+  it('places a retained claim on its speaker, after the fresh ones', () => {
     const { bySlot, slot } = claimsBySpeaker({
       turns: [{ turn_index: 0, participant_slot: 1 }],
       claims: [
@@ -535,8 +585,31 @@ describe('claimsBySpeaker', () => {
         { text: 'Coffee is low stakes', turn_index: 0 },
       ],
     });
-    expect(bySlot.get(1)).toEqual([{ index: 1, text: 'Coffee is low stakes' }]);
-    expect(slot.has(0)).toBe(false);
+    expect(bySlot.get(1)).toEqual([
+      { index: 1, text: 'Coffee is low stakes' },
+      { index: 0, text: 'From an earlier extraction', retained: true },
+    ]);
+    expect(slot.get(0)).toBe(1);
+  });
+});
+
+describe('keepClaimWithSpeaker', () => {
+  const words = [
+    { slot: 1 as const, start_ms: 1_000, end_ms: 1_400, text: 'Coffee' },
+    { slot: 2 as const, start_ms: 5_000, end_ms: 5_400, text: 'Dinner' },
+  ];
+  const clip = { key: 'k', start_ms: 900, end_ms: 1_500, claim_index: 7, live_claim_text: null };
+  // Claim 7 is one the editor can't place on a speaker.
+  const unplaced = () => null;
+
+  it('keeps the claim when the edit keeps the speaker, whatever the editor knows of the claim', () => {
+    expect(keepClaimWithSpeaker(clip, { ...clip, end_ms: 1_450 }, words, unplaced).claim_index).toBe(7);
+  });
+
+  it('drops it when the edit hands the clip to the other debater, unless it is theirs', () => {
+    const moved = { ...clip, start_ms: 4_900, end_ms: 5_500 };
+    expect(keepClaimWithSpeaker(clip, moved, words, unplaced).claim_index).toBeNull();
+    expect(keepClaimWithSpeaker(clip, moved, words, () => 2).claim_index).toBe(7);
   });
 });
 
@@ -549,12 +622,13 @@ describe('editingBlockedReason', () => {
   it('blocks a transcript without word timings, and a failed check', () => {
     expect(editingBlockedReason({ refusal: null }, false, null)).toMatch(/no word timings/);
     expect(editingBlockedReason(null, true, new Error('x'))).toMatch(/Couldn't check/);
-    // geo-chat#352 may land the mark under either name; both block.
-    expect(editingBlockedReason({ refusal: null, reel_carried: true }, true, null)).toMatch(/re-applying this reel/);
+    // geo-chat#352's mark is `live_reel.carried`.
     expect(
       editingBlockedReason({ refusal: null, live_reel: { clock: 'video', clips: [], carried: true } }, true, null)
-    ).toMatch(/re-applying this reel/);
-    expect(editingBlockedReason({ refusal: null, reel_carried: false }, true, null)).toBeNull();
+    ).toMatch(/still cut on the video from before it/);
+    expect(
+      editingBlockedReason({ refusal: null, live_reel: { clock: 'video', clips: [], carried: false } }, true, null)
+    ).toBeNull();
     expect(editingBlockedReason({ refusal: null }, undefined, null, true)).toMatch(
       /Couldn't load this debate's transcript/
     );
