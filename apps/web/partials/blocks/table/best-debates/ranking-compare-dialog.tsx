@@ -89,7 +89,9 @@ export function RankingCompareDialog({
           <span key={index} className={cx('h-1 flex-1 rounded-full', index < search.step ? 'bg-text' : 'bg-grey-02')} />
         ))}
       </div>
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-1">
+      {/* Side by side on a phone too, at half width each, so both debates and the choice fit one
+          screen there as well. */}
+      <div className="grid grid-cols-2 gap-3 md:gap-2">
         {card('new', newDebate, 'This debate', '1')}
         {card('existing', existingDebate, `#${existingRank} in your ranking`, '2')}
       </div>
@@ -107,7 +109,8 @@ export function RankingCompareDialog({
   );
 }
 
-const COMPARE_PLAYER_STYLE: React.CSSProperties = { maxWidth: 'max(240px, calc((100dvh - 420px) * 0.83))' };
+// The frame is 480 × 578 (0.83 wide per unit of height) under a 20px row of moment bars.
+const COMPARE_PLAYER_STYLE: React.CSSProperties = { maxWidth: 'max(220px, calc((100dvh - 460px) * 0.83))' };
 
 /**
  * One side of the compare view (mockup 05): a bordered card with what it is and how old it is, the
@@ -138,7 +141,8 @@ function CompareCard({
   const meta = [display?.debaters, display?.space?.name].filter(Boolean).join(' · ');
   return (
     <div
-      className="flex min-w-0 flex-col gap-2 rounded-lg border border-grey-02 p-3"
+      // The debates app's moment card: white, a hairline border and its 26px rounding.
+      className="flex min-w-0 flex-col gap-2 rounded-[26px] border border-[#e5e5e5] p-4 md:rounded-[18px] md:p-2"
       data-testid={`compare-card-${side}`}
     >
       <div className="flex items-center justify-between gap-2 text-[12px] leading-[16px] text-grey-04">
@@ -151,7 +155,9 @@ function CompareCard({
       <div className="mx-auto w-full" style={COMPARE_PLAYER_STYLE}>
         <Player debateEntityId={debate.entityId} label={title} active={active} onActivate={onActivate} />
       </div>
-      <p className="m-0 mt-1 line-clamp-3 text-[17px] leading-[21px] font-semibold text-text">{title}</p>
+      <p className="m-0 mt-2 line-clamp-3 text-[19px] leading-[23px] font-medium tracking-[-0.5px] text-[#151515] md:text-[15px] md:leading-[19px]">
+        {title}
+      </p>
       {meta ? <p className="m-0 text-[12px] leading-[16px] text-grey-04">{meta}</p> : null}
       <button
         type="button"

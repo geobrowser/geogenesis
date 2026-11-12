@@ -158,7 +158,8 @@ describe('DebateMomentsPlayer', () => {
     Object.defineProperty(full, 'currentTime', { configurable: true, writable: true, value: 0 });
     fireEvent.loadedMetadata(full);
     expect(full.currentTime).toBe(81.75);
-    expect(screen.getByText('1:21 / 5:00')).toBeInTheDocument();
+    expect(screen.getByTestId('debate-elapsed')).toHaveTextContent('1:21');
+    expect(screen.getByTestId('debate-duration')).toHaveTextContent('5:00');
     expect(screen.getAllByRole('button', { name: /^Jump to moment/ })).toHaveLength(3);
 
     fireEvent.click(screen.getByRole('button', { name: 'Jump to moment 3' }));

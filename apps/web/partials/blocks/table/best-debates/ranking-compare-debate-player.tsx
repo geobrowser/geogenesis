@@ -3,6 +3,7 @@
 import * as React from 'react';
 
 import { DebateMomentsPlayer } from '~/core/debates/moments-player/debate-moments-player';
+import { useMomentsSpeakers } from '~/core/debates/moments-player/use-moments-speakers';
 
 /**
  * The compare view's two players share this group, so starting one pauses the other (GEO-3678: one
@@ -30,14 +31,16 @@ type Props = {
  * can't be read), so a debate without moments still plays.
  */
 export function RankingCompareDebatePlayer({ debateEntityId, label, onActivate }: Props) {
+  const speakers = useMomentsSpeakers(debateEntityId);
   return (
     // Capture, so the tap that starts this side also makes it the one the dialog marks as playing.
-    <div className="overflow-hidden rounded-lg" onPointerDownCapture={onActivate}>
+    <div onPointerDownCapture={onActivate}>
       <DebateMomentsPlayer
         debateId={debateEntityId}
         label={label}
         playbackGroup={RANKING_COMPARE_PLAYBACK_GROUP}
         onPlay={onActivate}
+        speakers={speakers}
       />
     </div>
   );

@@ -8,6 +8,7 @@ import { RANKING_COMPARE_PLAYBACK_GROUP, RankingCompareDebatePlayer } from './ra
 
 const mocks = vi.hoisted(() => ({ props: [] as Array<Record<string, unknown>> }));
 
+vi.mock('~/core/debates/moments-player/use-moments-speakers', () => ({ useMomentsSpeakers: () => null }));
 // The moments player itself is covered by its own tests; here only what the compare view hands it.
 vi.mock('~/core/debates/moments-player/debate-moments-player', () => ({
   DebateMomentsPlayer: (props: Record<string, unknown> & { label: string; onPlay?: () => void }) => {
