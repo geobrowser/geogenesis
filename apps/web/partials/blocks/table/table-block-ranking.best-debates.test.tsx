@@ -118,6 +118,10 @@ vi.mock('~/core/blocks/ranking/use-ranking-pending-proposals', () => ({
   useRankingPendingEntities: () => ({ pendingEntriesByEntityId: new Map(), pendingEntityIds: new Set() }),
 }));
 vi.mock('~/core/blocks/ranking/local-ranking-my-draft', () => ({ loadLocalMyRankingDraft: () => null }));
+// The coverage line's own push-downs (GEO-3679) need a signed-in member; none here.
+vi.mock('~/core/blocks/ranking/use-my-pushed-down-debates', () => ({
+  useMyPushedDownDebates: () => ({ debates: [], isError: false, retry: vi.fn() }),
+}));
 vi.mock('~/core/blocks/ranking/use-best-debates', () => ({
   useNyTodayKey: () => '2026-11-11',
   useBestDebatesRankers: () => ({ status: 'ready', rankerCount: () => 1, retry: vi.fn() }),

@@ -239,21 +239,27 @@ export function buildBestDebatesViewRows({
 export type DayCoverage = { dayKey: string; ranked: number; total: number };
 
 /**
- * "N of M ranked" for each day: M is the day's debates, N those with a team place or at least one
- * ranker. Only meaningful on a ready ballot read; callers show M alone otherwise.
+ * "N of M ranked" for each day: M is the day's debates, N those handled: a team place, at least one
+ * ranker, or pushed down (GEO-3679: a pushed-down debate was looked at and kept out on purpose, so
+ * it isn't waiting to be ranked). Only meaningful on a ready ballot read; callers show M alone
+ * otherwise.
  */
 export function buildDayCoverage({
   dayKeys,
   teamOrder,
   periodDebates,
   rankerCount,
+  pushedDownIds = [],
 }: {
   dayKeys: readonly string[];
   teamOrder: readonly string[];
   periodDebates: readonly PeriodDebate[];
   rankerCount: (entityId: string) => number | null;
+  /** Debates pushed down (the viewer's own push-downs: the only ones the web can read). */
+  pushedDownIds?: readonly string[];
 }): DayCoverage[] {
   const placed = new Set(dedupeNormalized(teamOrder));
+  const pushedDown = new Set(dedupeNormalized(pushedDownIds));
   const byDay = new Map<string, { ranked: number; total: number }>(dayKeys.map(key => [key, { ranked: 0, total: 0 }]));
   const seen = new Set<string>();
   for (const debate of periodDebates) {
@@ -263,7 +269,7 @@ export function buildDayCoverage({
     const day = byDay.get(nyDayKey(debate.createdAtMs));
     if (!day) continue;
     day.total += 1;
-    if (placed.has(id) || (rankerCount(id) ?? 0) > 0) day.ranked += 1;
+    if (placed.has(id) || (rankerCount(id) ?? 0) > 0 || pushedDown.has(id)) day.ranked += 1;
   }
   return dayKeys.map(dayKey => ({ dayKey, ...byDay.get(dayKey)! }));
 }

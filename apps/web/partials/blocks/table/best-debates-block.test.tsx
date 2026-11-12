@@ -20,6 +20,8 @@ const mocks = vi.hoisted(() => ({
   window: [] as PeriodDebate[],
   windowLoading: false,
   capture: vi.fn(),
+  pushedDown: [] as { entityId: string }[],
+  pushedDownBlockId: undefined as string | null | undefined,
 }));
 
 vi.mock('~/core/analytics', () => ({ capture: mocks.capture }));
@@ -32,6 +34,12 @@ vi.mock('~/core/blocks/ranking/use-best-debates', () => ({
     error: null,
     refetch: vi.fn(),
   }),
+}));
+vi.mock('~/core/blocks/ranking/use-my-pushed-down-debates', () => ({
+  useMyPushedDownDebates: ({ blockId }: { blockId?: string | null }) => {
+    mocks.pushedDownBlockId = blockId;
+    return { debates: blockId ? mocks.pushedDown : [], isError: false, retry: vi.fn() };
+  },
 }));
 vi.mock('~/core/blocks/ranking/use-ranking-entry-entities', () => ({
   useRankingEntryEntities: () => ({ entries: [], isLoading: false }),
@@ -87,6 +95,8 @@ beforeEach(() => {
   mocks.canEdit = false;
   mocks.windowLoading = false;
   mocks.capture.mockReset();
+  mocks.pushedDown = [];
+  mocks.pushedDownBlockId = undefined;
   mocks.window = [
     { id: 'u1', name: 'Unranked one', createdAtMs: noon(TODAY) },
     { id: 'a', name: 'Debate A', createdAtMs: noon(TODAY) },
@@ -116,6 +126,21 @@ describe('BestDebatesBlock', () => {
       '2 rankers',
       '1 ranker',
     ]);
+  });
+
+  it('counts a debate the ranker pushed down as handled in the coverage line (GEO-3679)', () => {
+    mocks.pushedDown = [{ entityId: 'u1' }];
+    renderBlock({ canRank: true });
+
+    expect(screen.getByTestId('best-debates-coverage')).toHaveTextContent('3 of 4 debates from today are ranked');
+  });
+
+  it('reads no push-downs for a viewer who cannot rank', () => {
+    mocks.pushedDown = [{ entityId: 'u1' }];
+    renderBlock({ canRank: false });
+
+    expect(mocks.pushedDownBlockId).toBeNull();
+    expect(screen.getByTestId('best-debates-coverage')).toHaveTextContent('2 of 4 debates from today are ranked');
   });
 
   it('labels the last seven days with their coverage', () => {

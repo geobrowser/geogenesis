@@ -213,6 +213,24 @@ describe('coverage', () => {
     expect(coverage[0]).toEqual({ dayKey: today, ranked: 2, total: 3 });
     expect(coverage[1]).toEqual({ dayKey: addDays(today, -1), ranked: 0, total: 0 });
     expect(coverage[2]).toEqual({ dayKey: addDays(today, -2), ranked: 0, total: 1 });
+  });
+
+  it('counts a pushed-down debate as handled, once, even when it is also ranked', () => {
+    const today = '2026-11-11';
+    const coverage = buildDayCoverage({
+      dayKeys: recentDayKeys(today),
+      teamOrder: ['a'],
+      periodDebates: [
+        { id: 'a', name: null, createdAtMs: noonNy(today) },
+        { id: 'b', name: null, createdAtMs: noonNy(today) },
+        { id: 'c', name: null, createdAtMs: noonNy(today) },
+      ],
+      rankerCount: () => 0,
+      // b pushed down and unranked; a pushed down as well as placed (counted once).
+      pushedDownIds: ['b', 'a'],
+    });
+
+    expect(coverage[0]).toEqual({ dayKey: today, ranked: 2, total: 3 });
     expect(coverage).toHaveLength(7);
   });
 

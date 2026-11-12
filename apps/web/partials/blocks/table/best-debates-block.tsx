@@ -27,6 +27,7 @@ import {
   useBestDebatesWindow,
   useNyTodayKey,
 } from '~/core/blocks/ranking/use-best-debates';
+import { useMyPushedDownDebates } from '~/core/blocks/ranking/use-my-pushed-down-debates';
 import { type RankingEntryDisplay, useRankingEntryEntities } from '~/core/blocks/ranking/use-ranking-entry-entities';
 import { SegmentedControl } from '~/core/debates/matchmaking/debate-calendar-controls';
 import { normId } from '~/core/utils/norm-id';
@@ -102,11 +103,16 @@ export function BestDebatesBlock({
     periodDebates,
     rankerCount: rankers.rankerCount,
   });
+  // The viewer's own push-downs count as handled in the coverage line (GEO-3679). Only rankers
+  // (flag and membership) have any, so nobody else reads them.
+  const { debates: pushedDownDebates } = useMyPushedDownDebates({ blockId: canRank ? blockId : null });
+  const pushedDownIds = React.useMemo(() => pushedDownDebates.map(debate => debate.entityId), [pushedDownDebates]);
   const coverage = buildDayCoverage({
     dayKeys,
     teamOrder,
     periodDebates: windowQuery.data ?? NO_DEBATES,
     rankerCount: rankers.rankerCount,
+    pushedDownIds,
   });
 
   const [rankedLimit, setRankedLimit] = React.useState(PAGE);
