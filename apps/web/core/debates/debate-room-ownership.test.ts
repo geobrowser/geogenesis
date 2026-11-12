@@ -507,7 +507,7 @@ describe('debate room ownership', () => {
     expect(waiter.ownsConnection()).toBe(false);
 
     await holder.release();
-    
+
     await expect(lobby.acquire()).resolves.toEqual({ acquired: false, waitedForLocalRelease: false });
     await expect(waiting).resolves.toBe(true);
     expect(waiter.ownsConnection()).toBe(true);
