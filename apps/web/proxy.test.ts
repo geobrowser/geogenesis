@@ -289,17 +289,31 @@ describe('old debate URLs open the debates app (GEO-3695)', () => {
   // the debate page and then to the debates app; it goes there at once, on the lookup it made.
   it('sends a published recording link from outside straight to the debates app', async () => {
     const lookup = vi.mocked(publishedDebatePath);
-    lookup.mockResolvedValue(`/space/${VALID_SPACE}/${VALID_ENTITY}?t=42`);
-    const recording = `/space/${VALID_SPACE}/debates/${VALID_ENTITY}/recording?t=42`;
+    lookup.mockResolvedValue(`/space/${VALID_SPACE}/${VALID_ENTITY}?utm_source=x`);
+    const recording = `/space/${VALID_SPACE}/debates/${VALID_ENTITY}/recording?utm_source=x`;
 
     const response = await proxy(request(recording, { headers: FROM_OUTSIDE }));
     const stay = await proxy(request(`${recording}&stay=1`, { headers: FROM_OUTSIDE }));
     lookup.mockReset();
 
     expect(response.status).toBe(307);
-    expect(response.headers.get('location')).toBe(`https://debates.geobrowser.io/debate/${VALID_ENTITY}?time=42`);
-    expect(stay.headers.get('location')).toBe(`https://www.geobrowser.io/space/${VALID_SPACE}/${VALID_ENTITY}?t=42`);
+    expect(response.headers.get('location')).toBe(`https://debates.geobrowser.io/debate/${VALID_ENTITY}?utm_source=x`);
+    expect(stay.headers.get('location')).toBe(
+      `https://www.geobrowser.io/space/${VALID_SPACE}/${VALID_ENTITY}?utm_source=x`
+    );
     expect(redirect).not.toHaveBeenCalled();
+  });
+
+  it('keeps a timestamped recording link on geobrowser.io (its t is on the recordings clock)', async () => {
+    const lookup = vi.mocked(publishedDebatePath);
+    lookup.mockResolvedValue(`/space/${VALID_SPACE}/${VALID_ENTITY}?t=42`);
+    const response = await proxy(
+      request(`/space/${VALID_SPACE}/debates/${VALID_ENTITY}/recording?t=42`, { headers: FROM_OUTSIDE })
+    );
+    lookup.mockReset();
+    expect(response.headers.get('location')).toBe(
+      `https://www.geobrowser.io/space/${VALID_SPACE}/${VALID_ENTITY}?t=42`
+    );
   });
 
   // Review of #3110: the off switch is the rollback, so it must stop the recording link's hop too.

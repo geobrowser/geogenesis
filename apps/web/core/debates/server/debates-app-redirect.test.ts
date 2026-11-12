@@ -91,11 +91,12 @@ describe('debatesAppRedirect', () => {
     expect(fetchEntity).not.toHaveBeenCalled();
   });
 
-  // Review of #3110: a timestamped link (`?t=312`, the claim rows' copy link) keeps its moment.
-  it('carries a start time over as the debates app’s `time`', async () => {
-    await expect(go(vi.fn().mockResolvedValue(entity()), 't=312&utm_source=x')).resolves.toBe(
-      `https://debates.geobrowser.io/debate/${DEBATE_ID}?time=312&utm_source=x`
-    );
+  // Review of #3110: `t` is on the raw recordings' clock; the debates app's `time` is on the
+  // rendered video's, which an edited Open rounds render cuts. A timestamped link stays.
+  it('keeps a timestamped link on geobrowser.io, whose player uses its clock', async () => {
+    const fetchEntity = vi.fn().mockResolvedValue(entity());
+    await expect(go(fetchEntity, 't=312&utm_source=x')).resolves.toBeNull();
+    expect(fetchEntity).not.toHaveBeenCalled();
   });
 
   it('forgets an answer after a few minutes, so a debate hidden since stops redirecting', async () => {
