@@ -107,6 +107,8 @@ export function RankingCompareDialog({
   );
 }
 
+const COMPARE_PLAYER_STYLE: React.CSSProperties = { maxWidth: 'max(240px, calc((100dvh - 420px) * 0.83))' };
+
 /**
  * One side of the compare view (mockup 05): a bordered card with what it is and how old it is, the
  * player, the claim and its debaters and space, and "This one" at the foot so the two line up.
@@ -143,7 +145,12 @@ function CompareCard({
         <span>{label}</span>
         {age ? <span className="tabular-nums">{age}</span> : null}
       </div>
-      <Player debateEntityId={debate.entityId} label={title} active={active} onActivate={onActivate} />
+      {/* Both debates, their titles and "This one" fit one screen (mockup 05): the two stacked
+          480 × 289 tiles are 0.83 as wide as they are tall, so the player is held to that share
+          of the height the rest of the dialog leaves. */}
+      <div className="mx-auto w-full" style={COMPARE_PLAYER_STYLE}>
+        <Player debateEntityId={debate.entityId} label={title} active={active} onActivate={onActivate} />
+      </div>
       <p className="m-0 mt-1 line-clamp-3 text-[17px] leading-[21px] font-semibold text-text">{title}</p>
       {meta ? <p className="m-0 text-[12px] leading-[16px] text-grey-04">{meta}</p> : null}
       <button
