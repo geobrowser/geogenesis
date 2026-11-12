@@ -51,7 +51,7 @@ describe('RankingCompareDialog', () => {
   it('keeps About the same between the sides, with its key', () => {
     const onChoose = renderCompare();
     const same = screen.getByRole('button', { name: 'About the same' });
-    expect(same.getAttribute('aria-keyshortcuts')).toBe('=');
+    expect(same.getAttribute('aria-keyshortcuts')).toBe('ArrowUp');
     fireEvent.click(same);
     expect(onChoose).toHaveBeenCalledWith('same');
   });
@@ -97,5 +97,24 @@ describe('RankingCompareDialog', () => {
     const side = screen.getByTestId('compare-card-new');
     expect(bar.compareDocumentPosition(side) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     window.history.replaceState(null, '', '/');
+  });
+
+  it('picks with the arrows (← left, → right, ↑ same) and shows them on the bar', () => {
+    const onChoose = renderCompare();
+    const dialog = screen.getByRole('dialog');
+    fireEvent.keyDown(dialog, { key: 'ArrowLeft' });
+    expect(onChoose).toHaveBeenLastCalledWith('new');
+    fireEvent.keyDown(dialog, { key: 'ArrowRight' });
+    expect(onChoose).toHaveBeenLastCalledWith('existing');
+    fireEvent.keyDown(dialog, { key: 'ArrowUp' });
+    expect(onChoose).toHaveBeenLastCalledWith('same');
+    expect(screen.getByRole('button', { name: 'New debate was better' }).textContent).toContain('←');
+    expect(screen.getByRole('button', { name: 'Old debate was better' }).textContent).toContain('→');
+  });
+
+  it('leaves arrow keys to the player while one of its controls has focus', () => {
+    const onChoose = renderCompare();
+    fireEvent.keyDown(screen.getAllByRole('button', { name: 'Play' })[0]!, { key: 'ArrowRight' });
+    expect(onChoose).not.toHaveBeenCalled();
   });
 });

@@ -133,7 +133,7 @@ describe('placing a debate by comparison', () => {
     expect(actionNames().at(-1)).toBe('ranking_place_cancelled');
   });
 
-  it('goes back a comparison with its answer undone, by Back or the ← key, and not past the first', () => {
+  it('goes back a comparison with its answer undone, by Back or Backspace, and not past the first', () => {
     render(<Harness initial={list(8)} startWith={{ id: 'new', origin: 'team' }} />);
     fireEvent.click(screen.getByText('start'));
     // Step 1 compares with the middle of eight (#5); no Back yet.
@@ -149,7 +149,7 @@ describe('placing a debate by comparison', () => {
     // Answering the other way from the rewound step takes the other branch.
     fireEvent.keyDown(screen.getByRole('dialog'), { key: '1' });
     expect(screen.getByText('#3 in your ranking')).toBeTruthy();
-    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'ArrowLeft' });
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Backspace' });
     expect(screen.getByText('#5 in your ranking')).toBeTruthy();
     expect(latestOrder).toEqual(list(8));
   });

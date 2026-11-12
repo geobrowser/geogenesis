@@ -51,17 +51,26 @@ export function RankingCompareDialog({
   // A new comparison starts with nothing playing.
   React.useEffect(() => setPlaying(null), [existingDebate.entityId]);
 
+  // ← left was better, → right was better, ↑ about the same; Backspace or ↓ goes back a step
+  // (Preston, 12 Nov). 1, 2 and = still work, unannounced. Keys pressed on the player (its
+  // timeline, its mode pill, its play surface) belong to the player, so scrubbing never picks.
   const onKeyDown = (event: React.KeyboardEvent) => {
-    if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
-    // Backspace or ← goes back a comparison, except on a slider (the full debate's rail seeks with ←).
-    if ((event.key === 'Backspace' || event.key === 'ArrowLeft') && onBack) {
-      if ((event.target as Element).closest?.('[role="slider"]')) return;
+    const target = event.target as Element;
+    if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return;
+    if (target.closest?.('section, [role="slider"]')) return;
+    if ((event.key === 'Backspace' || event.key === 'ArrowDown') && onBack) {
       event.preventDefault();
       onBack();
       return;
     }
     const choice: PlacementChoice | null =
-      event.key === '1' ? 'new' : event.key === '2' ? 'existing' : event.key === '=' ? 'same' : null;
+      event.key === 'ArrowLeft' || event.key === '1'
+        ? 'new'
+        : event.key === 'ArrowRight' || event.key === '2'
+          ? 'existing'
+          : event.key === 'ArrowUp' || event.key === '='
+            ? 'same'
+            : null;
     if (!choice) return;
     event.preventDefault();
     onChoose(choice);
@@ -106,7 +115,7 @@ export function RankingCompareDialog({
           onMouseEnter={() => hover('new')(true)}
           onMouseLeave={() => hover('new')(false)}
           aria-label={`${titleOf(newDebate, newDisplay)} was better`}
-          keyHint="1"
+          keyHint="ArrowLeft"
           onClick={() => onChoose('new')}
         >
           <span className="md:hidden">Left was better</span>
@@ -118,7 +127,7 @@ export function RankingCompareDialog({
           onMouseEnter={() => hover('same')(true)}
           onMouseLeave={() => hover('same')(false)}
           aria-label="About the same"
-          keyHint="="
+          keyHint="ArrowUp"
           onClick={() => onChoose('same')}
         >
           <span className="md:hidden">About the same</span>
@@ -129,7 +138,7 @@ export function RankingCompareDialog({
           onMouseEnter={() => hover('existing')(true)}
           onMouseLeave={() => hover('existing')(false)}
           aria-label={`${titleOf(existingDebate, existingDisplay)} was better`}
-          keyHint="2"
+          keyHint="ArrowRight"
           onClick={() => onChoose('existing')}
         >
           <span className="md:hidden">Right was better</span>
@@ -160,7 +169,7 @@ export function RankingCompareDialog({
             <button
               type="button"
               onClick={onBack}
-              aria-keyshortcuts="Backspace ArrowLeft"
+              aria-keyshortcuts="Backspace ArrowDown"
               className="-ml-1 flex h-6 items-center gap-1 rounded-full px-1.5 text-smallButton text-text transition-colors hover:bg-grey-01"
             >
               <span aria-hidden>←</span> Back
@@ -187,6 +196,8 @@ export function RankingCompareDialog({
     </RankingFlowDialog>
   );
 }
+
+const KEY_GLYPH: Record<string, string> = { ArrowLeft: '←', ArrowUp: '↑', ArrowRight: '→' };
 
 function ChoiceButton({
   filled = false,
@@ -223,7 +234,7 @@ function ChoiceButton({
           filled ? 'border-current text-current opacity-60' : 'border-grey-02 text-grey-04'
         )}
       >
-        {keyHint}
+        {KEY_GLYPH[keyHint] ?? keyHint}
       </span>
     </button>
   );
