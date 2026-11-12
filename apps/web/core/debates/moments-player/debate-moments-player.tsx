@@ -120,10 +120,10 @@ function PlayerFrame({
     <section aria-label={label} className={cx('@container flex w-full justify-center select-none', className)}>
       <div
         className={cx(
-          'relative isolate w-full overflow-hidden rounded-[16px] bg-[#2b2b2b] text-white shadow-[0_1px_0_rgba(0,0,0,0.04),0_8px_22px_rgba(0,0,0,0.12)] md:rounded-[12px]',
+          'relative isolate overflow-hidden rounded-[16px] bg-[#2b2b2b] text-white shadow-[0_1px_0_rgba(0,0,0,0.04),0_8px_22px_rgba(0,0,0,0.12)] md:rounded-[12px]',
           // The full debate is rendered taller (1080 × 1640): its own shape at the same height, so
           // there are no black bands beside it.
-          mode === 'full' ? 'aspect-[1080/1640] w-[79%]' : 'aspect-[480/578]'
+          mode === 'full' ? 'aspect-[1080/1640] w-[79%]' : 'aspect-[480/578] w-full'
         )}
       >
         {children}
