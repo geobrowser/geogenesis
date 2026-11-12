@@ -234,7 +234,10 @@ async function renderSubmissions(expectedSeen: string[] = []) {
   };
 }
 
-type Published = { orderedEntityIds: string[]; indexingSettled: Promise<void> } | null;
+type Published = { orderedEntityIds: string[]; indexingSettled: Promise<unknown> } | null;
+
+const OVERTAKEN =
+  "Your ranking changed on another device while this change was saving. Your change wasn't saved yet — check your ranking and publish again.";
 
 const slot = (id: string) => ({ id, name: null, spaceId: SPACE });
 const slots = (ids: string[]) => ids.map(slot);
@@ -401,7 +404,6 @@ describe('ranking publish safety (GEO-3680)', () => {
     });
 
     expect(results.every(Boolean)).toBe(true);
-    expect(mocks.reportError).not.toHaveBeenCalled();
     // The overtaken placement (1) is folded back in, ahead of the next one (2).
     expect(state.sentBallots[1]).toEqual([item(0), item(9), item(1), item(2)]);
     expect(state.ranks[0].ids).toEqual([item(0), item(9), item(1), item(2)]);
@@ -409,13 +411,71 @@ describe('ranking publish safety (GEO-3680)', () => {
     await waitFor(() =>
       expect(view.result.current.mySubmission?.orderedEntityIds).toEqual([item(0), item(9), item(1), item(2)])
     );
-    // The next placement folded it in, so no separate restore was published.
+    // Only the two placements the ranker made were sent, and nothing is left unpublished.
     await new Promise(resolve => setTimeout(resolve, 50));
     expect(mocks.send).toHaveBeenCalledTimes(2);
+    expect(view.result.current.unsavedDraft).toBeNull();
+    expect(mocks.reportError).not.toHaveBeenCalledWith(expect.stringContaining('still saving'));
     done();
   });
 
-  it('restores a single placement that another device’s edit overtook', async () => {
+  it('hands an overtaken placement back as unpublished changes instead of publishing for the ranker', async () => {
+    state.ranks = [{ id: RANK, createdAt: 1, ids: [item(0)] }];
+    const { view, done } = await renderSubmissions([item(0)]);
+    state.onSent = () => {
+      state.ranks[0].ids = [item(0), item(9)];
+      state.ranks[0].updatedAt = Date.now();
+    };
+
+    let settled: unknown = undefined;
+    await act(async () => {
+      const published = await view.result.current.saveMySubmission(slots([item(0), item(1)]));
+      settled = await published?.indexingSettled;
+    });
+
+    // No share image from a ballot that isn't ours.
+    expect(settled).toBeNull();
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(mocks.send).toHaveBeenCalledTimes(1);
+    expect(state.ranks[0].ids).toEqual([item(0), item(9)]);
+    expect(view.result.current.unsavedDraft).toEqual([item(0), item(9), item(1)]);
+    expect(mocks.reportError).toHaveBeenCalledWith(OVERTAKEN);
+    done();
+  });
+
+  it('keeps the other device’s change when our overtaken edit lands on top of it (review repro 1)', async () => {
+    state.ranks = [{ id: RANK, createdAt: 1, ids: [item(0)] }];
+    const { view, done } = await renderSubmissions([item(0)]);
+    // The other device's [0, 9] is indexed first; ours lands after the poll's first read.
+    state.onSent = edit => {
+      state.ranks[0].ids = [item(0), item(9)];
+      state.ranks[0].updatedAt = Date.now();
+      setTimeout(() => applyToIndex(edit), 30);
+    };
+
+    await act(async () => {
+      const published = await view.result.current.saveMySubmission(slots([item(0), item(1)]));
+      await published?.indexingSettled;
+    });
+    await waitFor(() => expect(state.ranks[0].ids).toEqual([item(0), item(1)]));
+
+    // 9 is not silently gone: both 1 and 9 are in the ranker's draft, and they're told.
+    expect(view.result.current.unsavedDraft).toEqual([item(0), item(9), item(1)]);
+    expect(mocks.reportError).toHaveBeenCalledWith(OVERTAKEN);
+    expect(mocks.send).toHaveBeenCalledTimes(1);
+
+    // Publishing the draft puts both back.
+    await act(async () => {
+      const draft = view.result.current.unsavedDraft ?? [];
+      const published = await view.result.current.saveMySubmission(slots(draft));
+      await published?.indexingSettled;
+    });
+    expect(state.ranks[0].ids).toEqual([item(0), item(9), item(1)]);
+    expect(view.result.current.unsavedDraft).toBeNull();
+    done();
+  });
+
+  it('loses nothing when the other device edits again before the ranker republishes (review repro 2)', async () => {
     state.ranks = [{ id: RANK, createdAt: 1, ids: [item(0)] }];
     const { view, done } = await renderSubmissions([item(0)]);
     state.onSent = () => {
@@ -427,11 +487,35 @@ describe('ranking publish safety (GEO-3680)', () => {
       const published = await view.result.current.saveMySubmission(slots([item(0), item(1)]));
       await published?.indexingSettled;
     });
+    // Nothing is published for the ranker in the meantime.
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(mocks.send).toHaveBeenCalledTimes(1);
+    expect(view.result.current.unsavedDraft).toEqual([item(0), item(9), item(1)]);
 
-    await waitFor(() => expect(state.ranks[0].ids).toEqual([item(0), item(9), item(1)]));
+    // The other device edits again.
+    state.ranks[0].ids = [item(0), item(9), item(8)];
+    state.ranks[0].updatedAt = Date.now();
+
+    await act(async () => {
+      const draft = view.result.current.unsavedDraft ?? [];
+      const published = await view.result.current.saveMySubmission(slots(draft));
+      await published?.indexingSettled;
+    });
     expect(mocks.send).toHaveBeenCalledTimes(2);
-    expect(lastToast()).toContain('We added your change back');
-    expect(mocks.reportError).not.toHaveBeenCalled();
+    expect([...state.ranks[0].ids].sort()).toEqual([item(0), item(1), item(8), item(9)].sort());
+    done();
+  });
+
+  it('resolves indexing with the ballot the index read back, for the share image', async () => {
+    state.ranks = [{ id: RANK, createdAt: 1, ids: [item(0)] }];
+    const { view, done } = await renderSubmissions([item(0)]);
+
+    let settled: unknown = undefined;
+    await act(async () => {
+      const published = await view.result.current.saveMySubmission(slots([item(1), item(0)]));
+      settled = await published?.indexingSettled;
+    });
+    expect(settled).toEqual({ orderedEntityIds: [item(1), item(0)] });
     done();
   });
 
@@ -503,8 +587,7 @@ describe('ranking publish safety (GEO-3680)', () => {
         <QueryClientProvider client={client}>{children}</QueryClientProvider>
       ),
     });
-    const message =
-      "We couldn't load your whole ranking just now, so nothing was changed. Reload the page and try again.";
+    const message = `We can't read your ranking on this block. Contact support with this id: ${RANK}`;
     await waitFor(() => expect(view.result.current.ballotReadError).toBe(message));
 
     await act(async () => {
@@ -512,6 +595,33 @@ describe('ranking publish safety (GEO-3680)', () => {
     });
     expect(mocks.send).not.toHaveBeenCalled();
     expect(mocks.reportError).toHaveBeenCalledWith(message);
+    view.unmount();
+    client.clear();
+  });
+
+  it('lets a rolled-off rolling block publish a new rank over an unreadable one', async () => {
+    state.isRolling = true;
+    state.submissionFrequencyHours = 1;
+    const ids = Array.from({ length: 1_200 }, (_, n) => item(n));
+    state.ranks = [{ id: RANK, createdAt: Date.now() - 2 * 60 * 60 * 1000, ids, unreadable: true }];
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    client.setQueryData(['personal-space', '0xabc'], { personalSpaceId: SPACE, isRegistered: true });
+    const view = renderHook(() => useRankingSubmissions(BLOCK, SPACE, 'Best debates'), {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={client}>{children}</QueryClientProvider>
+      ),
+    });
+    await waitFor(() => expect(view.result.current.isLoading).toBe(false));
+    expect(view.result.current.ballotReadError).toBeNull();
+
+    await act(async () => {
+      const published = await view.result.current.saveMySubmission(slots([item(5_000)]));
+      expect(published).toBeTruthy();
+      await published?.indexingSettled;
+    });
+    expect(state.createdRanks).toBe(1);
+    expect(mocks.update).not.toHaveBeenCalled();
+    expect(state.sentBallots[0]).toEqual([item(5_000)]);
     view.unmount();
     client.clear();
   });

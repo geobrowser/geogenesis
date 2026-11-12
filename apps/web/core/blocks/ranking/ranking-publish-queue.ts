@@ -49,8 +49,8 @@ export const RANKING_CHANGED_ELSEWHERE_ORDER_MESSAGE =
 export const RANKING_NOTHING_LEFT_TO_PUBLISH_MESSAGE =
   "Your ranking changed on another device, so this change wasn't published. Check your ranking and try again.";
 
-export const RANKING_OVERTAKEN_RESTORED_MESSAGE =
-  'Your ranking changed on another device while your change was saving. We added your change back.';
+export const RANKING_OVERTAKEN_MESSAGE =
+  "Your ranking changed on another device while this change was saving. Your change wasn't saved yet — check your ranking and publish again.";
 
 export const RANKING_PREVIOUS_PUBLISH_PENDING_MESSAGE =
   'Your last ranking change is still saving. Try again in a moment.';
@@ -223,9 +223,10 @@ export function classifyReadBack(readBack: BallotSnapshot, own: OwnPublishShape)
 
 /**
  * Another device's edit overtook a publish of ours before the index read ours
- * back, so the published ballot may lack our edit. Fold it back in: the
- * three-way merge of our edit (from its baseline to what we sent) onto what is
- * published now.
+ * back, so the published ballot may lack our edit (or, if ours lands later,
+ * theirs). Fold it back in: the three-way merge of our edit (from its baseline
+ * to what we sent) onto the other ballot. Used for the ranker's next edit and
+ * for the unpublished draft we hand back; never published on its own.
  */
 export function foldOvertakenPublish(own: OwnPublishShape, publishedIds: readonly string[]): BallotMergeResult {
   return mergeBallotOrders({ base: own.baseline.orderedEntityIds, ours: own.orderedEntityIds, theirs: publishedIds });
@@ -254,15 +255,18 @@ export function enqueueRankingPublish<T>(key: string, task: () => Promise<T>): P
 
 export type RankingIndexOutcome = 'ours' | 'superseded' | 'timeout';
 
+export type RankingIndexResult = {
+  outcome: RankingIndexOutcome;
+  /** The ballot the deciding read saw (null on timeout). */
+  seen: string[] | null;
+};
+
 export type OwnRankingPublish = OwnPublishShape & {
   publishedAtMs: number;
-  /** The space perspective each item was voted under, keyed by hex id, so a
-   *  republish that folds this edit back in can vote it the same way. */
-  voteSpaceIds: Record<string, string>;
-  /** Settles once the index reads back our ballot (`ours`), moves past it to
-   *  another device's (`superseded`), or the poll budget runs out (`timeout`).
-   *  Never rejects. */
-  indexed: Promise<RankingIndexOutcome>;
+  /** Settles once the index reads back our ballot (`ours`), shows another
+   *  device's instead (`superseded`), or the poll budget runs out
+   *  (`timeout`). Never rejects. */
+  indexed: Promise<RankingIndexResult>;
 };
 
 const ownPublishes = new Map<string, OwnRankingPublish>();
@@ -273,6 +277,30 @@ export function recordOwnRankingPublish(key: string, publish: OwnRankingPublish)
 
 export function getOwnRankingPublish(key: string): OwnRankingPublish | null {
   return ownPublishes.get(key) ?? null;
+}
+
+/*
+ * Unpublished drafts handed back to the ranker. When another device's edit
+ * overtakes one of ours, nothing is published for them: the overtaken edit,
+ * folded onto the other ballot, goes back to the screens as unpublished
+ * changes, and the ranker publishes it (or not) themselves.
+ */
+const unsavedDrafts = new Map<string, string[]>();
+const draftListeners = new Set<() => void>();
+
+export function getUnsavedRankingDraft(key: string): string[] | null {
+  return unsavedDrafts.get(key) ?? null;
+}
+
+export function setUnsavedRankingDraft(key: string, orderedEntityIds: string[] | null): void {
+  if (orderedEntityIds) unsavedDrafts.set(key, orderedEntityIds);
+  else if (!unsavedDrafts.delete(key)) return;
+  for (const listener of draftListeners) listener();
+}
+
+export function subscribeUnsavedRankingDrafts(listener: () => void): () => void {
+  draftListeners.add(listener);
+  return () => draftListeners.delete(listener);
 }
 
 export const rankingPublishTiming = {
@@ -291,4 +319,5 @@ export const rankingPublishTiming = {
 export function resetRankingPublishStateForTests(): void {
   queues.clear();
   ownPublishes.clear();
+  unsavedDrafts.clear();
 }

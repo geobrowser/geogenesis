@@ -29,16 +29,25 @@ export type MyRankingBallot = { rankEntity: Entity | null; orderedEntityIds: str
 /** Relations the block listing returns per entity (`relationsList(first: 1000)`). */
 const LISTING_RELATIONS_LIMIT = 1000;
 
-export const RANKING_BALLOT_UNREADABLE_MESSAGE =
-  "We couldn't load your whole ranking just now, so nothing was changed. Reload the page and try again.";
+export function rankingBallotUnreadableMessage(rankId: string): string {
+  return `We can't read your ranking on this block. Contact support with this id: ${rankId}`;
+}
 
-/** The ballot is listed but can't be read whole: the full read fails and the
- *  listing's copy may be truncated. Publishing on top of it could drop items,
- *  so the publish path stops and the screens say so. */
+/**
+ * The ballot is listed but can't be read whole: the full read fails (most
+ * likely a decode failure, which a retry won't fix) and the listing's copy may
+ * be truncated. Publishing on top of it could drop items, so the publish path
+ * stops and the screens say so, except where publishing doesn't build on it
+ * (a rolled-off rolling block mints a fresh rank).
+ */
 export class RankingBallotUnreadableError extends Error {
   readonly _tag = 'RankingBallotUnreadableError';
-  constructor(readonly rankId: string) {
-    super(RANKING_BALLOT_UNREADABLE_MESSAGE);
+  constructor(
+    readonly rankId: string,
+    /** The listed rank's `createdAt`, for the rolling-window check. */
+    readonly rankCreatedAt: string | number | null | undefined
+  ) {
+    super(rankingBallotUnreadableMessage(rankId));
     this.name = 'RankingBallotUnreadableError';
   }
 }
@@ -93,7 +102,8 @@ export async function fetchMyRankingBallot(personalSpaceId: string, blockId: str
     if ((listed.relations?.length ?? 0) < LISTING_RELATIONS_LIMIT) {
       return { rankEntity: listed, orderedEntityIds: getMyRankingOrderedEntityIds(listed, personalSpaceId) };
     }
-    throw new RankingBallotUnreadableError(listed.id);
+    console.error('[fetchMyRankingBallot] Ranking is listed but its full read fails:', listed.id);
+    throw new RankingBallotUnreadableError(listed.id, listed.createdAt);
   }
   // `createdAt` (the rolling clock) only comes with the listing.
   return {

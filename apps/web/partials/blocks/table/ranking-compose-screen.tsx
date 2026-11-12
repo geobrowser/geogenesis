@@ -29,7 +29,10 @@ import { useRankingComposeSearch } from '~/core/blocks/ranking/use-ranking-compo
 import { useRankingEntryEntities } from '~/core/blocks/ranking/use-ranking-entry-entities';
 import { useRankingPendingEntities } from '~/core/blocks/ranking/use-ranking-pending-proposals';
 import { useRankingPeriod } from '~/core/blocks/ranking/use-ranking-period';
-import { useRankingSubmissions } from '~/core/blocks/ranking/use-ranking-submissions';
+import {
+  type RankingSubmissionPublishResult,
+  useRankingSubmissions,
+} from '~/core/blocks/ranking/use-ranking-submissions';
 import { useCreateEntityWithFilters } from '~/core/hooks/use-create-entity-with-filters';
 import { useIsMobileLayout } from '~/core/hooks/use-is-mobile-layout';
 import { useOnboarding } from '~/core/hooks/use-onboarding';
@@ -131,6 +134,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
     isLoading: isLoadingMySubmission,
     ballotReadError,
     retryBallotRead,
+    unsavedDraft,
   } = useRankingSubmissions(entityId, spaceId, displayName);
 
   const canCreateNew = Boolean(createNewSpaceId) && !isLoadingCreateAccess && canEditCreateSpace;
@@ -249,10 +253,12 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
 
   const { entries: searchEntries } = useRankingEntryEntities(spaceId, isSearchActive ? searchEntityIds : []);
 
-  const mySubmissionIdsKey = (myLastSubmission?.orderedEntityIds ?? []).join('|');
+  // Changes handed back unpublished (another device's edit overtook them,
+  // GEO-3680) take precedence over the published order until they're published.
+  const mySubmissionIdsKey = (unsavedDraft ?? myLastSubmission?.orderedEntityIds ?? []).join('|');
 
   React.useEffect(() => {
-    const next = myLastSubmission?.orderedEntityIds ?? [];
+    const next = unsavedDraft ?? myLastSubmission?.orderedEntityIds ?? [];
     setOrderedIds(prev => {
       if (prev.length === next.length && prev.every((id, index) => id === next[index])) {
         return prev;
@@ -501,6 +507,34 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
                 : 'unavailable'
   );
 
+  // OG images render from indexed data, so they are built once indexing
+  // settles, from the ballot the index read back, with a version key computed
+  // from that same ballot. Detached: navigation never waits on it. No image when
+  // the index didn't read back our ballot (another device's edit overtook it).
+  const generateOgImagesOnceIndexed = (published: RankingSubmissionPublishResult) => {
+    void published.indexingSettled.then(final => {
+      if (!final) return;
+      const ogVersion = buildRankingOgVersion({
+        rankEntityId: published.rankEntityId,
+        orderedEntityIds: final.orderedEntityIds,
+        rankingName: displayName,
+        rankingStartDate,
+        rankingEndDate,
+        authorName: published.authorName,
+        authorAvatarUrl: published.authorAvatarUrl,
+      });
+      return generatePersonalRankingOgImages({
+        rankEntityId: published.rankEntityId,
+        authorSpaceId: published.authorSpaceId,
+        blockEntityId: entityId,
+        blockEntitySpaceId: spaceId,
+        rankingStartDate,
+        rankingEndDate,
+        ogVersion,
+      });
+    });
+  };
+
   const handlePublish = async () => {
     // `submissionsOpen` comes from the last render. Re-check against a fresh clock:
     if (!rankingSubmissionsOpen(getRankingPeriodState(startDate, endDate))) {
@@ -527,26 +561,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
         run: () =>
           saveMySubmission(slots, rankingOpportunity.context).then(published => {
             if (!published) return;
-            const ogVersion = buildRankingOgVersion({
-              rankEntityId: published.rankEntityId,
-              orderedEntityIds: published.orderedEntityIds,
-              rankingName: displayName,
-              rankingStartDate,
-              rankingEndDate,
-              authorName: published.authorName,
-              authorAvatarUrl: published.authorAvatarUrl,
-            });
-            void published.indexingSettled.then(() =>
-              generatePersonalRankingOgImages({
-                rankEntityId: published.rankEntityId,
-                authorSpaceId: published.authorSpaceId,
-                blockEntityId: entityId,
-                blockEntitySpaceId: spaceId,
-                rankingStartDate,
-                rankingEndDate,
-                ogVersion,
-              })
-            );
+            generateOgImagesOnceIndexed(published);
           }),
       });
       setToast(<span>Your ranking will publish once your personal space is ready.</span>);
@@ -565,19 +580,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
       authorName: published.authorName,
       authorAvatarUrl: published.authorAvatarUrl,
     });
-    // OG images render from indexed data, so generation waits for
-    // `indexingSettled` — detached, since the redirect below must not.
-    void published.indexingSettled.then(() =>
-      generatePersonalRankingOgImages({
-        rankEntityId: published.rankEntityId,
-        authorSpaceId: published.authorSpaceId,
-        blockEntityId: entityId,
-        blockEntitySpaceId: spaceId,
-        rankingStartDate,
-        rankingEndDate,
-        ogVersion,
-      })
-    );
+    generateOgImagesOnceIndexed(published);
 
     // After publishing, land on the fullscreen ranking view instead of the parent space page.
     setRankingComposeReturnHref(null);

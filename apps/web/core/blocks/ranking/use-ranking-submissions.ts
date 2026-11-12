@@ -24,27 +24,35 @@ import type { Entity } from '~/core/types';
 import { toUserFacingError } from '~/core/utils/error-diagnostics';
 import { validateEntityId, validateSpaceId } from '~/core/utils/utils';
 
-import { ballotSnapshot, fetchRankBallot, isRankingBallotUnreadableError } from './fetch-my-ranking-ballot';
+import {
+  type RankingBallotUnreadableError,
+  ballotSnapshot,
+  fetchRankBallot,
+  isRankingBallotUnreadableError,
+} from './fetch-my-ranking-ballot';
 import { clearLocalMyRankingDraft } from './local-ranking-my-draft';
 import {
   type OwnRankingPublish,
   RANKING_CHANGED_ELSEWHERE_MESSAGE,
   RANKING_CHANGED_ELSEWHERE_ORDER_MESSAGE,
   RANKING_NOTHING_LEFT_TO_PUBLISH_MESSAGE,
-  RANKING_OVERTAKEN_RESTORED_MESSAGE,
+  RANKING_OVERTAKEN_MESSAGE,
   RANKING_PREVIOUS_PUBLISH_PENDING_MESSAGE,
-  type RankingIndexOutcome,
+  type RankingIndexResult,
   classifyReadBack,
   enqueueRankingPublish,
   foldOvertakenPublish,
   getOwnRankingPublish,
   getRankingBallotMaxItems,
+  getUnsavedRankingDraft,
   mergeBallotOrders,
   rankingBallotTooLargeMessage,
   rankingPublishKey,
   rankingPublishTiming,
   recordOwnRankingPublish,
   sameBallotOrder,
+  setUnsavedRankingDraft,
+  subscribeUnsavedRankingDrafts,
 } from './ranking-publish-queue';
 import { parseTimestampMs, shouldMintNewRankEntity } from './ranking-rolling';
 import type { RankingSubmissionRecord } from './ranking-submission-types';
@@ -67,10 +75,12 @@ export type RankingSubmissionPublishResult = {
   orderedEntityIds: string[];
   authorName: string | null;
   authorAvatarUrl: string | null;
-  /** Resolves once the indexer reflects the published order (or the poll budget
-   *  lapses). OG-image generation reads indexed data, so callers should chain it
-   *  on this — but never block navigation on it. Never rejects. */
-  indexingSettled: Promise<void>;
+  /** Resolves once the index settles past this publish: with the ballot it
+   *  read back when that ballot is ours, else null (another device's edit
+   *  overtook it, or the poll budget lapsed). OG-image generation reads
+   *  indexed data, so callers build the image from the resolved ballot, and
+   *  only when there is one; never block navigation on it. Never rejects. */
+  indexingSettled: Promise<{ orderedEntityIds: string[] } | null>;
 };
 
 function createdAtToEpochMillis(value: string): number {
@@ -145,7 +155,7 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
     myRankEntity,
     orderedEntityIds: apiRankingEntityIds,
     isLoading: isLoadingMyRanking,
-    readErrorMessage: ballotReadError,
+    readError: unreadableBallot,
     refetchMyRanking,
   } = useMyRanking(blockId);
 
@@ -212,6 +222,23 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
   );
 
   const hasRolledOff = isRolling && Boolean(myRankEntity) && !isSubmissionLive;
+
+  // A ballot that can't be read blocks publishing only while it is the one a
+  // publish would build on: once a rolling window is over, publishing mints a
+  // fresh rank instead.
+  const isRolledOffUnreadable = React.useCallback(
+    (error: RankingBallotUnreadableError) =>
+      isRolling &&
+      !isBallotLive(
+        { createdAt: error.rankCreatedAt ?? undefined } as Entity,
+        isRolling,
+        submissionFrequencyHours,
+        Date.now()
+      ),
+    [isRolling, submissionFrequencyHours]
+  );
+  const ballotReadError =
+    unreadableBallot && !isRolledOffUnreadable(unreadableBallot) ? unreadableBallot.message : null;
 
   // A rolled-off ballot reads as absent to the block's views and to the call to action, so the
   // author is prompted to rank again. `hasRolledOff` still drives that prompt, and publishing
@@ -297,50 +324,44 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
 
       // Runs when every earlier publish of this ballot (from any screen on this
       // page) has finished: one publish at a time, the next waits its turn.
-      //
-      // `restore` re-runs an earlier edit of ours that another device's edit
-      // overtook before the index read ours back, so the index lost it. It
-      // publishes nothing if a newer edit of ours already folded it back in, and
-      // reports no analytics (the original edit already did).
-      const publishInTurn = async (restore?: {
-        of: OwnRankingPublish;
-      }): Promise<RankingSubmissionPublishResult | null> => {
+      const publishInTurn = async (): Promise<RankingSubmissionPublishResult | null> => {
         const rankName = blockName.trim() || 'My ranking';
-        const op: Pick<typeof operation, 'outcome' | 'failed'> = restore
-          ? { outcome: () => undefined, failed: () => undefined }
-          : operation;
-        if (restore && getOwnRankingPublish(publishKey) !== restore.of) return null;
-        const ourIds = restore ? restore.of.orderedEntityIds : filteredSlots.map(slot => slot.id);
-        const basedOn = restore ? restore.of.baseline.orderedEntityIds : basedOnOrderedIds;
-        const slotSpaceIds = restore
-          ? new Map(Object.entries(restore.of.voteSpaceIds))
-          : new Map(filteredSlots.map(slot => [ID.uuidToHex(slot.id), slot.spaceId]));
+        const op = operation;
+        const ourIds = filteredSlots.map(slot => slot.id);
+        const basedOn = basedOnOrderedIds;
+        const slotSpaceIds = new Map(filteredSlots.map(slot => [ID.uuidToHex(slot.id), slot.spaceId]));
 
         // An edit re-sends the whole list and replaces the votes the index holds,
         // so it must be built on what the index holds now. Wait for our previous
         // publish to land, then re-read the published ballot.
         const previous = getOwnRankingPublish(publishKey);
-        const previousOutcome = previous ? await previous.indexed : null;
+        const previousResult = previous ? await previous.indexed : null;
 
         let published: MyRankingBallot;
         try {
           published = await fetchMyRankingBallot(personalSpaceId, blockId);
         } catch (error) {
-          op.failed('unavailable');
-          console.error('[useRankingSubmissions] Re-reading the published ranking failed:', error);
-          if (isRankingBallotUnreadableError(error)) {
-            reportError(error.message);
+          if (isRankingBallotUnreadableError(error) && isRolledOffUnreadable(error)) {
+            // The unreadable ballot's window is over, so this publish mints a
+            // fresh rank and never builds on it.
+            published = { rankEntity: null, orderedEntityIds: [] };
+          } else {
+            op.failed('unavailable');
+            console.error('[useRankingSubmissions] Re-reading the published ranking failed:', error);
+            if (isRankingBallotUnreadableError(error)) {
+              reportError(error.message);
+              return null;
+            }
+            const { message, retry } = toUserFacingError(error, 'Failed to publish ranking: ');
+            reportError(message, retry);
             return null;
           }
-          const { message, retry } = toUserFacingError(error, 'Failed to publish ranking: ');
-          reportError(message, retry);
-          return null;
         }
 
         const previousStanding = previous ? classifyReadBack(ballotSnapshot(published), previous) : null;
         if (
           previous &&
-          previousOutcome === 'timeout' &&
+          previousResult?.outcome === 'timeout' &&
           Date.now() - previous.publishedAtMs < rankingPublishTiming.ownPublishBlocksForMs &&
           previousStanding === 'pending'
         ) {
@@ -353,12 +374,25 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
           return null;
         }
 
-        // If another device's edit overtook our previous one before the index
-        // read ours back, the published ballot may lack it: fold it back in
-        // first, so this edit builds on both.
+        // If another device's edit overtook our previous one, either side may
+        // be missing from what is published now: ours if theirs landed after it,
+        // theirs if ours landed after it. Fold back in whatever is missing (our
+        // previous edit, and the other ballot the poll saw) before this edit
+        // builds on top, so nothing either device placed is dropped.
         const publishedIds = published.orderedEntityIds;
-        const overtaken = previous !== null && previousStanding === 'superseded';
-        const theirIds = overtaken ? foldOvertakenPublish(previous, publishedIds).ids : publishedIds;
+        const overtaken =
+          previous !== null && (previousStanding === 'superseded' || previousResult?.outcome === 'superseded');
+        let theirIds = publishedIds;
+        if (previous && previousStanding === 'superseded') {
+          theirIds = foldOvertakenPublish(previous, theirIds).ids;
+        }
+        if (previous && previousResult?.outcome === 'superseded' && previousResult.seen) {
+          theirIds = mergeBallotOrders({
+            base: previous.baseline.orderedEntityIds,
+            ours: theirIds,
+            theirs: previousResult.seen,
+          }).ids;
+        }
 
         // Merge onto the published ballot when it moved since the caller read
         // it: our own earlier placement (silent) or another device (we say so).
@@ -369,11 +403,6 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
         const mergedIds = merge.ids;
         const changedElsewhere =
           overtaken || (movedSinceRead && !(previous && sameBallotOrder(publishedIds, previous.orderedEntityIds)));
-
-        if (restore && sameBallotOrder(mergedIds, publishedIds)) {
-          // The published ballot already holds the overtaken edit.
-          return null;
-        }
 
         if (mergedIds.length === 0) {
           // Every item this edit kept was removed elsewhere, and vice versa.
@@ -496,19 +525,17 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
         };
         op.outcome('ranking_submitted', 'submitted', outcomeProperties);
         clearLocalMyRankingDraft(spaceId, blockId);
+        // Anything handed back to the ranker is folded into this edit.
+        setUnsavedRankingDraft(publishKey, null);
         setToast(
           React.createElement(
             'span',
             null,
-            restore
-              ? RANKING_OVERTAKEN_RESTORED_MESSAGE
-              : !changedElsewhere
-                ? 'Ranking published!'
-                : `Ranking published. ${
-                    merge.overrodeTheirOrder
-                      ? RANKING_CHANGED_ELSEWHERE_ORDER_MESSAGE
-                      : RANKING_CHANGED_ELSEWHERE_MESSAGE
-                  }`
+            !changedElsewhere
+              ? 'Ranking published!'
+              : `Ranking published. ${
+                  merge.overrodeTheirOrder ? RANKING_CHANGED_ELSEWHERE_ORDER_MESSAGE : RANKING_CHANGED_ELSEWHERE_MESSAGE
+                }`
           )
         );
 
@@ -537,7 +564,7 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
         // An edit to an existing rank polls that rank alone (one paged entity
         // read). A just-created rank first has to surface in the block listing,
         // which is heavier, so that poll backs off.
-        const indexed = (async (): Promise<RankingIndexOutcome> => {
+        const indexed = (async (): Promise<RankingIndexResult> => {
           const timing = rankingPublishTiming;
           const pollStartedAt = Date.now();
           let listingInterval = timing.listingPollIntervalMs;
@@ -550,7 +577,7 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
                 : await fetchMyRankingBallot(personalSpaceId, blockId);
               // A rank that can't be read yet is still pending.
               const standing = readBack ? classifyReadBack(ballotSnapshot(readBack), ownPublish) : 'pending';
-              if (standing !== 'pending') return standing;
+              if (readBack && standing !== 'pending') return { outcome: standing, seen: readBack.orderedEntityIds };
               if (!reuseExistingRank) {
                 interval = listingInterval;
                 listingInterval = Math.min(listingInterval * 1.5, timing.listingPollMaxIntervalMs);
@@ -560,33 +587,31 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
             }
             await new Promise(resolve => setTimeout(resolve, interval));
           }
-          return 'timeout';
+          return { outcome: 'timeout', seen: null };
         })();
-        const ownRecord: OwnRankingPublish = {
-          ...ownPublish,
-          publishedAtMs: Date.now(),
-          voteSpaceIds: Object.fromEntries(votes.map(vote => [ID.uuidToHex(vote.entityId), vote.spaceId])),
-          indexed,
-        };
+        const ownRecord: OwnRankingPublish = { ...ownPublish, publishedAtMs: Date.now(), indexed };
         recordOwnRankingPublish(publishKey, ownRecord);
 
-        const indexingSettled = indexed.then(async outcome => {
+        const indexingSettled = indexed.then(async ({ outcome, seen }) => {
           if (outcome === 'ours') op.outcome('ranking_submitted', 'indexed', outcomeProperties);
           if (outcome !== 'timeout') releasePublishedRankPin(personalSpaceId, blockId, rankId);
-          if (outcome === 'superseded' && !restore) {
+          if (outcome === 'superseded' && seen && getOwnRankingPublish(publishKey) === ownRecord) {
             // Another device's edit overtook this one before the index read it
-            // back. Queue one more publish that folds it back in; it does
-            // nothing if a newer edit of ours already did. (A restore that is
-            // itself overtaken isn't restored again: the next edit folds it.)
-            void enqueueRankingPublish(publishKey, () => publishInTurn({ of: ownRecord })).catch(e => {
-              console.error('[useRankingSubmissions] Restoring an overtaken ranking edit failed:', e);
-            });
+            // back, so one of the two may be lost. Publish nothing on the
+            // ranker's behalf: hand both back as unpublished changes (this edit
+            // folded onto the ballot the poll saw) and tell them. A newer edit
+            // of ours, if one follows, folds it in itself and clears this.
+            setUnsavedRankingDraft(publishKey, foldOvertakenPublish(ownRecord, seen).ids);
+            reportError(RANKING_OVERTAKEN_MESSAGE);
           }
           try {
             await refetchMyRanking();
           } catch (e) {
             console.error('[useRankingSubmissions] Refetch after publish failed:', e);
           }
+          // The share image renders from indexed data, so it is built only
+          // from a ballot the index read back as ours.
+          return outcome === 'ours' && seen ? { orderedEntityIds: seen } : null;
         });
 
         const authorAvatarUrl =
@@ -603,7 +628,7 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
       };
 
       try {
-        return await enqueueRankingPublish(publishKey, () => publishInTurn());
+        return await enqueueRankingPublish(publishKey, publishInTurn);
       } catch (error) {
         operation.failed(classifyOperationFailure(error));
         console.error('[useRankingSubmissions] Publish failed:', error);
@@ -630,7 +655,17 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
       smartAccount,
       spaceId,
       submissionFrequencyHours,
+      isRolledOffUnreadable,
     ]
+  );
+
+  // Changes of ours handed back unpublished after another device's edit
+  // overtook them (see `indexingSettled`). Shared by every screen on the page.
+  const draftKey = personalSpaceId ? rankingPublishKey(personalSpaceId, blockId) : null;
+  const unsavedDraft = React.useSyncExternalStore(
+    subscribeUnsavedRankingDrafts,
+    () => (draftKey ? getUnsavedRankingDraft(draftKey) : null),
+    () => null
   );
 
   return {
@@ -644,6 +679,9 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
      *  of treating them as having no ballot, and don't publish over it. */
     ballotReadError,
     retryBallotRead: refetchMyRanking,
+    /** Unpublished changes handed back after another device's edit overtook
+     *  ours: the screens show them as the ranker's draft, to publish again. */
+    unsavedDraft,
     isSaving,
     personalSpaceId,
     isRolling,

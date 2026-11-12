@@ -7,6 +7,7 @@ import * as React from 'react';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { ID } from '~/core/id';
 import { RANK_TYPE_ID } from '~/core/ranking-block-ids';
+import { reportError as reportTelemetryError } from '~/core/telemetry/logger';
 import type { Entity } from '~/core/types';
 
 import {
@@ -133,7 +134,16 @@ export function useMyRanking(blockId: string) {
       if (!personalSpaceId) {
         return { rankEntity: null, orderedEntityIds: [] as string[] };
       }
-      const indexed = await fetchMyRankingBallot(personalSpaceId, blockId);
+      let indexed: MyRankingBallot;
+      try {
+        indexed = await fetchMyRankingBallot(personalSpaceId, blockId);
+      } catch (error) {
+        if (isRankingBallotUnreadableError(error)) {
+          // Permanent until someone looks at the stored rank: report it with its id.
+          reportTelemetryError(error, { tags: { rank_id: error.rankId } });
+        }
+        throw error;
+      }
       const pin = getFreshPublishedRankPin(personalSpaceId, blockId);
       const { ballot, dropPin } = resolvePinnedBallot(indexed, pin);
       if (dropPin) publishedRankPins.delete(pinKey(personalSpaceId, blockId));
@@ -149,8 +159,8 @@ export function useMyRanking(blockId: string) {
     orderedEntityIds,
     isLoading,
     /** Set when the ballot exists but can't be read whole. The screens show
-     *  this instead of treating the ranker as having no ballot. */
-    readErrorMessage: isRankingBallotUnreadableError(error) ? error.message : null,
+     *  it instead of treating the ranker as having no ballot. */
+    readError: isRankingBallotUnreadableError(error) ? error : null,
     refetchMyRanking: React.useCallback(async () => {
       const result = await refetch();
       if (result.isError) {
