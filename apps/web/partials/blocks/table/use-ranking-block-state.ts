@@ -11,7 +11,7 @@ import { useActionContext } from '~/core/action-context-provider';
 import { observeOperation } from '~/core/analytics-operations';
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import { useFilters } from '~/core/blocks/data/use-filters';
-import { isBestDebatesBlock } from '~/core/blocks/ranking/best-debates-views';
+import { canComposeEditBlock, isBestDebatesBlock } from '~/core/blocks/ranking/best-debates-views';
 import { loadLocalMyRankingDraft, saveLocalMyRankingDraft } from '~/core/blocks/ranking/local-ranking-my-draft';
 import {
   RANKING_COMPOSE_TAB_MY,
@@ -198,7 +198,13 @@ export function useRankingBlockState({
   // buttons the block's own view draws.
   const debateRankingsFlag = useFeatureFlag('debateRankings');
   const isBestDebates = isBestDebatesBlock(entityId, spaceId, bestDebatesBlockId);
-  const canComposeEdit = !isBestDebates || (debateRankingsFlag && Boolean(canEditBlockSpace));
+  const canComposeEdit = canComposeEditBlock({
+    blockId: entityId,
+    spaceId,
+    flagOn: debateRankingsFlag,
+    canEdit: Boolean(canEditBlockSpace),
+    bestDebatesBlockId,
+  });
   const getShareContext = useActionContext('share_dialog', 'ranking', entityId);
   const shareOnX = React.useCallback(
     (shareUrl: string, shareText: string, rankEntityId: string) => {
@@ -987,8 +993,13 @@ export function useRankingBlockState({
     globalDisplayEntityIds: globalRankingListEntityIds,
     /** The whole visible team order, unpaginated (Best debates pages it itself). */
     visibleGlobalRankingEntityIds: visibleGlobalDisplayEntityIds,
-    /** True until the block's team order (RANK_POSITION relations) has loaded. */
-    isLoadingTeamOrder: Boolean(isLoadingTeamOrder) && globalDisplayEntityIds.length === 0,
+    /**
+     * True until the team order is settled: its RANK_POSITION relations have loaded, and so have
+     * the entries that decide which places are hidden as placeholders (until then the visible
+     * order, and every place number after a hidden row, can still shift).
+     */
+    isLoadingTeamOrder:
+      (Boolean(isLoadingTeamOrder) && globalDisplayEntityIds.length === 0) || Boolean(isLoadingGlobalEntries),
     isBestDebates,
     /** False on the Best debates block without the flag and membership: no compose in edit mode. */
     canComposeEdit,

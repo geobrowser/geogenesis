@@ -30,6 +30,8 @@ const mocks = vi.hoisted(() => ({
   ensureAccess: vi.fn(),
   push: vi.fn(),
   window: [] as PeriodDebate[],
+  entriesLoading: false,
+  untitled: new Set<string>(),
   empty: [] as never[],
 }));
 
@@ -98,10 +100,19 @@ vi.mock('~/core/blocks/ranking/use-ranking-block-relations', () => ({
 }));
 vi.mock('~/core/blocks/ranking/use-ranking-entry-entities', () => ({
   // Every placed debate resolves to a name, so none is hidden as a placeholder.
-  useRankingEntryEntities: (_spaceId: string, ids: string[]) => ({
-    entries: ids.map(id => ({ entityId: id, name: `Debate ${id}`, description: null, image: null })),
-    isLoading: false,
-  }),
+  useRankingEntryEntities: (_spaceId: string, ids: string[]) =>
+    mocks.entriesLoading
+      ? { entries: [], isLoading: true }
+      : {
+          entries: ids.map(id => ({
+            entityId: id,
+            // An untitled (deleted or unnamed) placed debate is hidden from the team order.
+            name: mocks.untitled.has(id) ? 'Untitled' : `Debate ${id}`,
+            description: null,
+            image: null,
+          })),
+          isLoading: false,
+        },
 }));
 vi.mock('~/core/blocks/ranking/use-ranking-pending-proposals', () => ({
   useRankingPendingEntities: () => ({ pendingEntriesByEntityId: new Map(), pendingEntityIds: new Set() }),
@@ -152,6 +163,8 @@ beforeEach(() => {
   mocks.member = false;
   mocks.ensureAccess.mockReset();
   mocks.push.mockReset();
+  mocks.entriesLoading = false;
+  mocks.untitled = new Set();
   // Today's only debate is the team's #12.
   mocks.window = [{ id: 'd12', name: 'Debate d12', createdAtMs: noon(TODAY) }];
 });
@@ -176,6 +189,31 @@ describe('Best debates through TableBlockRanking', () => {
     expect(screen.getAllByTestId('name').map(node => node.textContent)).toEqual(['Debate d12']);
     expect(screen.getByTestId('place')).toHaveTextContent('12');
     expect(screen.queryByText(/Not ranked yet/)).not.toBeInTheDocument();
+  });
+});
+
+describe('team places settle before they show', () => {
+  it('shows skeletons, not provisional numbers, while the entries that hide untitled places load', () => {
+    // d01 will turn out untitled, so today's d12 is really #11; until the entries land it would
+    // read #12 from the window read's name.
+    mocks.untitled = new Set(['d01']);
+    mocks.entriesLoading = true;
+    render(<TableBlockRanking spaceId={DEBATES_SPACE} bestDebatesBlockId={BLOCK} />);
+
+    expect(screen.queryAllByTestId('place')).toHaveLength(0);
+    expect(screen.getAllByTestId('skeleton').length).toBeGreaterThan(0);
+  });
+
+  it('numbers the places after an untitled one is hidden', () => {
+    mocks.untitled = new Set(['d01']);
+    render(<TableBlockRanking spaceId={DEBATES_SPACE} bestDebatesBlockId={BLOCK} />);
+
+    fireEvent.click(screen.getByRole('radio', { name: 'All time' }));
+    expect(screen.getAllByTestId('name')[0]).toHaveTextContent('Debate d02');
+    expect(screen.getAllByTestId('place')[0]).toHaveTextContent('1');
+    // Today's d12 is the team's #11 once d01 is hidden, in Day too.
+    fireEvent.click(screen.getByRole('radio', { name: 'Day' }));
+    expect(screen.getByTestId('place')).toHaveTextContent('11');
   });
 });
 

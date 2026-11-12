@@ -160,9 +160,11 @@ export function BestDebatesBlock({
     onOpenCompose('edit', { [BEST_DEBATES_TEAM_VIEW_PARAM]: BEST_DEBATES_TEAM_VIEW_TO_RANK });
   };
 
-  // Nothing is said about who ranked what until the team order and the ballot read are both in:
-  // an empty list off a pending read would read as "Nobody has ranked".
-  const periodLoading = (view !== 'all' && periodQuery.isLoading) || isLoadingTeamOrder || rankers.status === 'loading';
+  // Nothing is said about who ranked what until the reads it rests on are in: an empty list off a
+  // pending read would read as "Nobody has ranked". All time is the team order alone, so only Day
+  // and This week wait for the period and ballot reads; counts fill in on All time as they arrive.
+  const periodLoading =
+    (view !== 'all' && (periodQuery.isLoading || rankers.status === 'loading')) || isLoadingTeamOrder;
   const rankersFailed = rankers.status === 'error';
   const periodFailed = view !== 'all' && Boolean(periodQuery.error) && !periodQuery.data;
   // A row's number is its team place, the same in Day, This week and All time.

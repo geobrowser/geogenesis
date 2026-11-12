@@ -204,6 +204,18 @@ describe('BestDebatesBlock', () => {
     expect(screen.getAllByTestId('skeleton').length).toBeGreaterThan(0);
   });
 
+  it('shows All time from the team order without waiting for the ballot read', () => {
+    mocks.rankers = { status: 'loading', rankerCount: () => null, retry: vi.fn() };
+    renderBlock();
+
+    // Day waits for the ballot read…
+    expect(screen.queryAllByTestId('name')).toHaveLength(0);
+    // …All time doesn't, and its counts fill in later.
+    fireEvent.click(screen.getByRole('radio', { name: 'All time' }));
+    expect(names()).toEqual(['Debate B', 'Yesterday debate', 'Debate A']);
+    expect(screen.queryByTestId('best-debates-ranker-count')).not.toBeInTheDocument();
+  });
+
   it('shows skeletons, not "Nobody has ranked", while the team order is loading', () => {
     renderBlock({ teamOrder: [], isLoadingTeamOrder: true });
 

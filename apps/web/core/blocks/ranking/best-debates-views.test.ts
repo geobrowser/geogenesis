@@ -6,6 +6,7 @@ import {
   addDays,
   buildBestDebatesViewRows,
   buildDayCoverage,
+  canComposeEditBlock,
   coverageSentence,
   dayLabel,
   isBestDebatesBlock,
@@ -33,6 +34,23 @@ describe('isBestDebatesBlock', () => {
   it('matches nothing while the block id is null (before GEO-3685)', () => {
     expect(isBestDebatesBlock(BLOCK, DEBATES_SPACE_ID)).toBe(false);
     expect(isBestDebatesBlock(BLOCK, DEBATES_SPACE_ID, null)).toBe(false);
+  });
+});
+
+describe('canComposeEditBlock', () => {
+  const on = { blockId: BLOCK, spaceId: DEBATES_SPACE_ID, bestDebatesBlockId: BLOCK };
+
+  it('needs the flag and membership on the Best debates block', () => {
+    expect(canComposeEditBlock({ ...on, flagOn: true, canEdit: true })).toBe(true);
+    expect(canComposeEditBlock({ ...on, flagOn: false, canEdit: true })).toBe(false);
+    expect(canComposeEditBlock({ ...on, flagOn: true, canEdit: false })).toBe(false);
+  });
+
+  it('allows every other block, and everything while the block id is null', () => {
+    expect(canComposeEditBlock({ ...on, blockId: 'another', flagOn: false, canEdit: false })).toBe(true);
+    expect(canComposeEditBlock({ blockId: BLOCK, spaceId: DEBATES_SPACE_ID, flagOn: false, canEdit: false })).toBe(
+      true
+    );
   });
 });
 

@@ -50,6 +50,32 @@ export function isBestDebatesBlock(
   return normId(blockId) === normId(bestDebatesBlockId) && normId(spaceId) === normId(DEBATES_SPACE_ID);
 }
 
+/**
+ * The one rule for composing a ballot in edit mode on a ranking block (GEO-3677). On the Best
+ * debates block it needs the `debateRankings` flag and membership of the Debates space (member or
+ * editor); every other block is unaffected. Composing sends a background membership request
+ * (#3099) and publishes a ballot, so every edit entry point checks this: the block's buttons,
+ * `openRankingCompose`, and the compose screen itself (a pasted compose URL).
+ */
+export function canComposeEditBlock({
+  blockId,
+  spaceId,
+  flagOn,
+  canEdit,
+  bestDebatesBlockId = BEST_DEBATES_BLOCK_ID,
+}: {
+  blockId: string | null | undefined;
+  spaceId: string | null | undefined;
+  /** The `debateRankings` feature flag. */
+  flagOn: boolean;
+  /** Member or editor of the block's space (`useAccessControl(spaceId).canEdit`). */
+  canEdit: boolean;
+  /** Tests only: stands in for `BEST_DEBATES_BLOCK_ID`. */
+  bestDebatesBlockId?: string | null;
+}): boolean {
+  return !isBestDebatesBlock(blockId, spaceId, bestDebatesBlockId) || (flagOn && canEdit);
+}
+
 // ---------------------------------------------------------------------------------------------
 // New York days. A day key is 'YYYY-MM-DD'.
 
