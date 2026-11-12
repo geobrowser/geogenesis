@@ -110,6 +110,9 @@ function Editor({ debateId }: { debateId: string }) {
   // The served moments matter only without live cuts; with them, a claims refetch that lands before
   // the plan's would rebuild the reel from the old cuts.
   const servedMomentsAt = entry?.live_reel ? 0 : claims.dataUpdatedAt;
+  // Every clip is mapped onto the player's clock through the turns, which a re-render moves: the
+  // media read again after one may land after the plan's, and must still remap the reel.
+  const turnsKey = React.useMemo(() => turnClockKey(turns), [turns]);
   // Locked with no reel (geo-chat#352): viewers see none, so the editor opens on none. The clip files
   // geo-chat kept are the lost reel's, and the served moments can still name one of them.
   const unlinkable = reelUnlinkable(entry);
@@ -123,8 +126,8 @@ function Editor({ debateId }: { debateId: string }) {
     const moments = ((payload as { moments?: ServedMoment[] } | undefined)?.moments ?? []) as ServedMoment[];
     return { clips: clipsFromServedMoments(moments, payload?.claims ?? [], turns), approximate: true, version };
     // Rebuilt only when the reel itself may have changed: its version, whether cuts are served, or
-    // the served moments read again.
-  }, [loaded, entry?.reel_version, Boolean(entry?.live_reel), unlinkable, servedMomentsAt]); // eslint-disable-line react-hooks/exhaustive-deps
+    // the served moments read again; or when the clock it is mapped through moved.
+  }, [loaded, entry?.reel_version, Boolean(entry?.live_reel), unlinkable, servedMomentsAt, turnsKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [saved, setSaved] = React.useState<EditorClip[] | null>(null);
   const [clips, setClips] = React.useState<EditorClip[]>([]);
@@ -212,7 +215,8 @@ function Editor({ debateId }: { debateId: string }) {
     transcript.data?.word_timing,
     plan.error,
     transcriptFailed,
-    inFlight
+    inFlight,
+    dirty
   );
   const readOnly = readOnlyReason !== null;
   // A carried reel can't be edited, but it can be returned to automatic, which geo-chat doesn't refuse
@@ -436,7 +440,7 @@ function Editor({ debateId }: { debateId: string }) {
         </Notice>
       ) : null}
       {unlinkable ? (
-        <UnlinkableNotice job={reapplyFailed} />
+        <UnlinkableNotice job={reapplyFailed} next={inFlight ? 'wait' : readOnly ? null : 'pick'} />
       ) : reapplyFailed ? (
         <ReapplyFailedNotice job={reapplyFailed} />
       ) : null}
@@ -608,6 +612,15 @@ function reelKey(clips: readonly EditorClip[]) {
   return clips.map(clip => `${clip.start_ms}-${clip.end_ms}-${clip.claim_index ?? ''}`).join('|');
 }
 
+/** The turns' two clocks, which map the video's times onto the player's: equal keys, the same map. */
+function turnClockKey(turns: readonly DebateMediaTurnSegment[]) {
+  return turns
+    .map(
+      turn => `${turn.output_start_ms}-${turn.output_end_ms}-${turn.source_start_ms ?? ''}-${turn.source_end_ms ?? ''}`
+    )
+    .join('|');
+}
+
 /**
  * Why the editor is read-only, or `null`. The dry run's refusal says it for most cases; a transcript
  * without word timings is re-transcribed by every request and is then often skipped
@@ -620,7 +633,9 @@ export function editingBlockedReason(
   /** The transcript never loaded: without its words no edge snaps and no clip has a speaker or claim. */
   transcriptFailed = false,
   /** A request is queued or rendering: for a carried reel, usually the worker's own re-cut of it. */
-  requestInFlight = false
+  requestInFlight = false,
+  /** An unsaved edit is on the reel: Return to automatic waits until it is discarded. */
+  editPending = false
 ): string | null {
   if (planError) return "Couldn't check whether this debate can be edited. Reload to try again.";
   if (transcriptFailed) return "Couldn't load this debate's transcript. Reload to try again.";
@@ -629,8 +644,11 @@ export function editingBlockedReason(
     const carried =
       "A re-render carried this hand-picked reel over, and its clips are still cut on the video from before it, so they can't be edited.";
     // A re-cut on its way may well fit, and returning to automatic would throw the reel away.
-    return requestInFlight
-      ? `${carried} A request for it is in the queue; this page updates when it's done.`
+    if (requestInFlight) return `${carried} A request for it is in the queue; this page updates when it's done.`;
+    // An edit kept from before the carry (a publish refused `reel_being_reapplied`) can never be
+    // published, and Return to automatic is hidden until it is gone.
+    return editPending
+      ? `${carried} Nothing is queued to cut it again. To pick it again, discard your changes, then return it to automatic and edit the reel that replaces it.`
       : `${carried} Nothing is queued to cut it again. To pick it again, return it to automatic, then edit the reel that replaces it.`;
   }
   if (entry && refusalBlocksEditing(entry.refusal))
@@ -831,13 +849,27 @@ function ReapplyFailedNotice({ job }: { job: Extract<ReelJob, { kind: 'failed' }
  * reel, and nothing automatic took its place. `job`: the worker's refused re-submit, whose clips are
  * the lost reel's, not any shown here.
  */
-function UnlinkableNotice({ job }: { job: Extract<ReelJob, { kind: 'failed' }> | null }) {
+function UnlinkableNotice({
+  job,
+  next,
+}: {
+  job: Extract<ReelJob, { kind: 'failed' }> | null;
+  /**
+   * The way out it offers: both (`pick`), none until the request in the queue is done (`wait`: the
+   * worker's re-submit of the lost reel, queued with the re-render), or none (`null`: read-only, and
+   * the reason above says why).
+   */
+  next: 'pick' | 'wait' | null;
+}) {
   return (
     <Notice tone="bad">
       <b className="font-medium">
         This hand-picked reel couldn&apos;t be carried over after a re-render, so the debate has no reel.
-      </b>{' '}
-      Pick new clips, or return to automatic.
+      </b>
+      {next === 'pick' ? ' Pick new clips, or return to automatic.' : null}
+      {next === 'wait'
+        ? " A request for this debate is in the queue; you can pick new clips or return to automatic once it's done."
+        : null}
       {job ? <WorkerProblems job={job} clipLabel="Lost reel, clip" /> : null}
     </Notice>
   );

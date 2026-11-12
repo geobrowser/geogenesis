@@ -115,12 +115,17 @@ export function useQueueMomentReel(debateId: string) {
   });
 }
 
-/** After a reel goes live: the plan's version and live cuts, and the served moments, are stale. */
+/**
+ * After a reel goes live, or the editor learns the reel moved on: the plan's version and live cuts,
+ * and the served moments, are stale. So are the media's turns when a re-render moved the video: the
+ * editor maps every live cut onto the player's clock through them.
+ */
 export function useRefreshAfterReel(debateId: string) {
   const queryClient = useQueryClient();
   const { accountKey } = useGeoChatAuth();
   return () => {
     void queryClient.invalidateQueries({ queryKey: debateQueryKeys.momentReelPlan(debateId, accountKey) });
     void queryClient.invalidateQueries({ queryKey: debateQueryKeys.extractedClaims(debateId) });
+    void queryClient.invalidateQueries({ queryKey: debateQueryKeys.media(debateId) });
   };
 }
