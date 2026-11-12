@@ -2,6 +2,7 @@
 
 import type { AvailabilityPayload } from '~/core/availability/blocks';
 import { capSearchQuery } from '~/core/io/search-query';
+import { chunk } from '~/core/utils/chunk';
 
 import {
   type GeoChatProfileState,
@@ -1648,18 +1649,17 @@ function flushClaimBatch(key: string, spaceId: string) {
   pendingClaimBatches.delete(key);
 
   const ids = [...batch.ids];
-  const chunks: string[][] = [];
   // Re-chunked here rather than trusted from the callers: this coalesces every caller for a space
   // inside the window above, so a batch can hold more ids than any one of them asked for — which is
   // how lists that were each correctly capped still added up to a rejected request.
-  for (let index = 0; index < ids.length; index += GEO_CHAT_CLAIM_IDS_PER_REQUEST) {
-    chunks.push(ids.slice(index, index + GEO_CHAT_CLAIM_IDS_PER_REQUEST));
-  }
+  const chunks = chunk(ids, GEO_CHAT_CLAIM_IDS_PER_REQUEST);
 
   // Deliberately unsignalled. One row unmounting must not abort the request its siblings are
   // waiting on, and a caller that has gone away simply has its own promise settled into a cache
   // entry nobody reads.
-  Promise.all(chunks.map(chunk => fetchDebateClaims(spaceId, chunk, batch.getPrivyIdentityToken, batch.accountKey)))
+  Promise.all(
+    chunks.map(batchIds => fetchDebateClaims(spaceId, batchIds, batch.getPrivyIdentityToken, batch.accountKey))
+  )
     .then(responses => {
       const claims = responses.flatMap(response => response.claims);
       for (const caller of batch.callers) {

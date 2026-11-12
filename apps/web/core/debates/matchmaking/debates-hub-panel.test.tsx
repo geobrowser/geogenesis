@@ -69,6 +69,12 @@ const mocks = vi.hoisted(() => ({
   capture: vi.fn(),
 }));
 
+// The schedule editor reads the viewer's calendars; this suite isn't about them, so geo-chat has them off.
+vi.mock('~/core/debates/calendar-hooks', () => ({
+  useCalendarConnections: () => ({ disabled: true }),
+  useCalendarBusy: () => ({ intervals: undefined }),
+}));
+
 vi.mock('~/core/analytics', async importOriginal => ({
   ...(await importOriginal<typeof import('~/core/analytics')>()),
   capture: mocks.capture,

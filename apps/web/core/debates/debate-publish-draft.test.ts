@@ -462,53 +462,55 @@ describe('buildDebatePublishDraft', () => {
     expect(topicRelations.find(r => r.fromEntity.id === EXISTING)?.toEntity.name).toBe(TOPIC.name);
   });
 
-  it('tags only contestable claims as Debate, minted or reused, once per entity', () => {
-    const EXISTING = '4f12f5ea073442cbaa0fb10f70a9a876';
-    const draft = buildDebatePublishDraft(
-      baseInput({
-        claims: [
-          { text: 'A broad position.', isFactual: false, turnIndex: 0, isContestable: true },
-          // Narrowly verifiable: still published as a Claim, just not offered as a motion.
-          { text: 'A narrow fact.', isFactual: true, turnIndex: 0, isContestable: false },
-          // The same reused entity behind two restatements gets one tag, not two.
-          {
-            text: 'Restated once.',
-            isFactual: null,
-            turnIndex: 1,
-            existingClaimEntityId: EXISTING,
-            isContestable: true,
-          },
-          {
-            text: 'Restated twice.',
-            isFactual: null,
-            turnIndex: 1,
-            existingClaimEntityId: EXISTING,
-            isContestable: true,
-          },
-        ],
-      }),
-      { createEntityId: idFactory(), createPosition: () => 'a0' }
-    );
-    const tags = draft.relations.filter(r => r.type.id === TAG_PROPERTY_ID);
-    expect(tags.map(r => r.fromEntity.id).sort()).toEqual([claimIdByName(draft, 'A broad position.'), EXISTING].sort());
-    expect(tags.every(r => r.toEntity.id === DEBATE_TAG_ID)).toBe(true);
-    // The narrow claim is still published as a Claim, it just carries no Debate tag.
-    expect(claimIdByName(draft, 'A narrow fact.')).toBeTruthy();
+  describe('debated claim Debate tag (GEO-3616)', () => {
+    const motionTags = (draft: ReturnType<typeof buildDebatePublishDraft>, claimId: string) =>
+      draft.relations.filter(
+        r => r.fromEntity.id === claimId && r.type.id === TAG_PROPERTY_ID && r.toEntity.id === DEBATE_TAG_ID
+      );
+
+    it('tags the debated claim once when asked, under an id derived from its endpoints', () => {
+      const input = baseInput({ tagClaimAsDebate: true });
+      const draft = buildDebatePublishDraft(input, { createEntityId: idFactory(), createPosition: () => 'a0' });
+      const tags = motionTags(draft, input.claimEntityId);
+      expect(tags).toHaveLength(1);
+      expect(tags[0].id).toBe(stableClaimRelationIds(input.claimEntityId, TAG_PROPERTY_ID, DEBATE_TAG_ID).id);
+      expect(tags[0].spaceId).toBe(input.spaceId);
+    });
+
+    it('leaves the debated claim alone when not asked', () => {
+      const input = baseInput();
+      const draft = buildDebatePublishDraft(input, { createEntityId: idFactory(), createPosition: () => 'a0' });
+      expect(draft.relations.filter(r => r.type.id === TAG_PROPERTY_ID)).toEqual([]);
+    });
+
+    it('never tags the subject of a question debate', () => {
+      const input = baseInput({ tagClaimAsDebate: true, subjectKind: 'question' });
+      const draft = buildDebatePublishDraft(input, { createEntityId: idFactory(), createPosition: () => 'a0' });
+      expect(draft.relations.filter(r => r.type.id === TAG_PROPERTY_ID)).toEqual([]);
+    });
   });
 
-  it('tags one motion when a proposition is extracted twice and matched to nothing', () => {
+  it('adds no Debate tag to any extracted claim, minted or reused (GEO-3616)', () => {
+    const EXISTING = '4f12f5ea073442cbaa0fb10f70a9a876';
+    const STABLE = '5e1f0c3a9b2d4e6f8a7b6c5d4e3f2a1b';
     const draft = buildDebatePublishDraft(
       baseInput({
         claims: [
-          // Both mint their own entity (long-standing behaviour), but a fresh id per
-          // claim means an id-keyed dedupe would never fire — two rival motions.
-          { text: 'AI chatbots are effective therapy.', isFactual: false, turnIndex: 0, isContestable: true },
-          { text: 'AI chatbots are effective therapy.', isFactual: false, turnIndex: 1, isContestable: true },
+          { text: 'A broad position.', isFactual: false, turnIndex: 0 },
+          { text: 'A narrow fact.', isFactual: true, turnIndex: 0 },
+          { text: 'A stable point.', isFactual: null, turnIndex: 1, stableEntityId: STABLE },
+          { text: 'Restated.', isFactual: null, turnIndex: 1, existingClaimEntityId: EXISTING },
         ],
       }),
       { createEntityId: idFactory(), createPosition: () => 'a0' }
     );
-    expect(draft.relations.filter(r => r.type.id === TAG_PROPERTY_ID)).toHaveLength(1);
+    expect(draft.relations.filter(r => r.type.id === TAG_PROPERTY_ID)).toEqual([]);
+    expect(draft.relations.some(r => r.toEntity.id === DEBATE_TAG_ID)).toBe(false);
+    // Every claim is still published and linked from its transcript block.
+    expect(claimIdByName(draft, 'A broad position.')).toBeTruthy();
+    expect(claimIdByName(draft, 'A narrow fact.')).toBeTruthy();
+    expect(claimIdByName(draft, 'A stable point.')).toBe(STABLE);
+    expect(blockAuthoringClaim(draft, EXISTING)).toBeTruthy();
   });
 
   it('treats dashed and dashless forms of one topic as a single relation', () => {
@@ -611,9 +613,7 @@ describe('buildDebatePublishDraft', () => {
     it("mints an unmatched claim under geo-chat's id instead of a fresh one", () => {
       const draft = buildDebatePublishDraft(
         baseInput({
-          claims: [
-            { text: 'A novel point.', isFactual: true, turnIndex: 0, stableEntityId: STABLE, isContestable: true },
-          ],
+          claims: [{ text: 'A novel point.', isFactual: true, turnIndex: 0, stableEntityId: STABLE }],
         }),
         { createEntityId: idFactory(), createPosition: () => 'a0' }
       );
@@ -627,7 +627,7 @@ describe('buildDebatePublishDraft', () => {
         draft.values.find(v => v.entity.id === STABLE && v.property.id === CLAIM_IS_FACTUAL_PROPERTY_ID)?.value
       ).toBe('true');
       expect(blockAuthoringClaim(draft, STABLE)).toBe(YES_SPACE);
-      expect(draft.relations.some(r => r.fromEntity.id === STABLE && r.type.id === TAG_PROPERTY_ID)).toBe(true);
+      expect(draft.relations.some(r => r.fromEntity.id === STABLE && r.type.id === TAG_PROPERTY_ID)).toBe(false);
     });
 
     it('lets an existing entity win over the stable id, which then goes unused', () => {
@@ -655,8 +655,8 @@ describe('buildDebatePublishDraft', () => {
       const draft = buildDebatePublishDraft(
         baseInput({
           claims: [
-            { text: 'Same point.', isFactual: true, turnIndex: 0, stableEntityId: STABLE, isContestable: true },
-            { text: 'same point', isFactual: false, turnIndex: 1, stableEntityId: STABLE, isContestable: true },
+            { text: 'Same point.', isFactual: true, turnIndex: 0, stableEntityId: STABLE },
+            { text: 'same point', isFactual: false, turnIndex: 1, stableEntityId: STABLE },
           ],
         }),
         { createEntityId: idFactory(), createPosition: () => 'a0' }
@@ -668,7 +668,7 @@ describe('buildDebatePublishDraft', () => {
       const from = (propertyId: string) =>
         draft.relations.filter(r => r.fromEntity.id === STABLE && r.type.id === propertyId);
       expect(from(TYPES_PROPERTY_ID)).toHaveLength(1);
-      expect(from(TAG_PROPERTY_ID)).toHaveLength(1);
+      expect(from(TAG_PROPERTY_ID)).toHaveLength(0);
       expect(from(SOURCES_PROPERTY_ID)).toHaveLength(1);
       const statements = draft.relations.filter(
         r => r.type.id === DEBATE_CLAIMS_PROPERTY_ID && r.toEntity.id === STABLE
@@ -719,10 +719,9 @@ describe('buildDebatePublishDraft', () => {
         isFactual: true,
         turnIndex: 0,
         stableEntityId: STABLE,
-        isContestable: true,
         topics: [{ id: TOPIC, name: 'Foreign policy' }],
       },
-      { text: 'same point', isFactual: false, turnIndex: 1, stableEntityId: STABLE, isContestable: true },
+      { text: 'same point', isFactual: false, turnIndex: 1, stableEntityId: STABLE },
       { text: 'Another point.', isFactual: null, turnIndex: 1, stableEntityId: OTHER_STABLE },
       { text: 'Matched.', isFactual: true, turnIndex: 0, existingClaimEntityId: EXISTING, stableEntityId: null },
       { text: 'Older payload.', isFactual: null, turnIndex: 0, stableEntityId: null },
@@ -762,7 +761,7 @@ describe('buildDebatePublishDraft', () => {
       const from = (id: string, propertyId: string) =>
         draft.relations.filter(r => r.fromEntity.id === id && r.type.id === propertyId);
       expect(from(STABLE, TYPES_PROPERTY_ID)).toHaveLength(1);
-      expect(from(STABLE, TAG_PROPERTY_ID)).toHaveLength(1);
+      expect(from(STABLE, TAG_PROPERTY_ID)).toHaveLength(0);
       expect(from(STABLE, TOPICS_PROPERTY_ID).map(r => r.toEntity.id)).toEqual([TOPIC]);
       expect(from(OTHER_STABLE, TAG_PROPERTY_ID)).toHaveLength(0);
     });
@@ -1233,10 +1232,10 @@ describe('buildDebatePublishDraft ids across republishes', () => {
       ogImageUrl: 'ipfs://bafyogcard',
       claimTopics: [{ id: 'dddddddddddddddddddddddddddddddd', name: 'Foreign policy' }],
       claims: [
-        { text: 'Iran was close to a weapon.', isFactual: true, turnIndex: 0, isContestable: true },
+        { text: 'Iran was close to a weapon.', isFactual: true, turnIndex: 0 },
         // Verbatim twins in one turn: an older payload's fresh-id claims stay two entities.
         { text: 'Iran was close to a weapon.', isFactual: true, turnIndex: 0 },
-        { text: 'Stable claim.', isFactual: null, turnIndex: 1, stableEntityId: STABLE, isContestable: true },
+        { text: 'Stable claim.', isFactual: null, turnIndex: 1, stableEntityId: STABLE },
         { text: 'Matched claim.', isFactual: false, turnIndex: 1, existingClaimEntityId: EXISTING },
       ],
       ...overrides,

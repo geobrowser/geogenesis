@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import { useAtom } from 'jotai';
 import { usePathname, useRouter } from 'next/navigation';
 
 import { isSpaceCallPath } from '~/core/space-calls/routes';
@@ -44,7 +45,9 @@ import { useLobbyDebateAnalytics } from './lobbies/lobby-analytics';
 import { routeIntoDebate } from './lobbies/step-out';
 import { useDebateRequests } from './matchmaking/hooks';
 import { IncomingRequestPopup } from './matchmaking/incoming-request-popup';
+import { useDebatesHub } from './matchmaking/use-debates-hub';
 import { useUnexpiredRequests } from './matchmaking/use-request-countdown';
+import { OpponentLeftDialog } from './opponent-left-dialog';
 import { hasAnsweredRematchJoin, markRematchAnswered, rememberRematchJoinIntent } from './rematch-join-intent';
 import { useDebateRoom, useFinishedRoomIds, useUpcomingDebateRooms } from './rooms/hooks';
 import { DebateRoomJoinPrompt, type RoomJoinPromptNotice } from './rooms/room-join-prompt';
@@ -64,6 +67,7 @@ import { useCurrentGeoChatUserId } from './use-current-geo-chat-user-id';
 import { useDebateInteractionReporter } from './use-debate-interaction-reporter';
 import { useGeoChatAccountRecovery } from './use-geo-chat-account-recovery';
 import { useScrollLock } from './use-scroll-lock';
+import { opponentLeftNoticeAtom } from '~/atoms';
 
 /**
  * What to tell the viewer about a paused gateway, given why it paused.
@@ -117,6 +121,9 @@ function useDebateGatewayPauseLog(paused: boolean, reason: DebateGatewayPauseRea
 export function DebateCoordinator() {
   const router = useRouter();
   const pathname = usePathname();
+
+  const [opponentLeftNotice, setOpponentLeftNotice] = useAtom(opponentLeftNoticeAtom);
+  const debatesHub = useDebatesHub();
   const debateDebuggingEnabled = useFeatureFlag('debateDebugging');
   const geoChatAuth = useGeoChatAuth();
   // Presence, not attention or visibility: being available to debate has to survive looking at
@@ -531,6 +538,15 @@ export function DebateCoordinator() {
 
   return (
     <>
+      {opponentLeftNotice && (
+        <OpponentLeftDialog
+          onClose={() => setOpponentLeftNotice(false)}
+          onFindDebate={() => {
+            setOpponentLeftNotice(false);
+            debatesHub.open();
+          }}
+        />
+      )}
       {gateway.paused && debateDebuggingEnabled && (
         <div
           role="status"
@@ -549,8 +565,14 @@ export function DebateCoordinator() {
         rooms={joinableRooms}
         // Not over an incoming request or the share prompt, which want an answer of their own.
         // Off on any room page, a lobby's or a space call's too: a live room is not the place.
+        // Not over the opponent-left notice either, which goes first: see the request popup below.
         enabled={
-          roomIdAtPath === null && !isSpaceCallPath(pathname) && !activeFlow && !promptedRequest && !visibleSharePrompt
+          roomIdAtPath === null &&
+          !isSpaceCallPath(pathname) &&
+          !activeFlow &&
+          !promptedRequest &&
+          !visibleSharePrompt &&
+          !opponentLeftNotice
         }
         onOpenChange={setNudgeOpen}
       />
@@ -626,8 +648,10 @@ export function DebateCoordinator() {
           onNotNow={() => setSnoozedChallengeId(promptedChallenge.id)}
         />
       )}
-      {/* Behind a nudge popup that is being answered (one that is not steps aside for this). */}
-      {promptedRequest && currentUserId && !nudgeOpen && (
+      {/* Behind a nudge popup that is being answered (one that is not steps aside for this). Behind
+          the opponent-left notice too: it says why the viewer is here, and is one click to close.
+          A request mounted under it would sit hidden, and could expire there. */}
+      {promptedRequest && currentUserId && !nudgeOpen && !opponentLeftNotice && (
         <IncomingRequestPopup
           key={promptedRequest.id}
           request={promptedRequest}
@@ -635,7 +659,7 @@ export function DebateCoordinator() {
           onNotNow={() => setSnoozedRequestIds(current => [...current, promptedRequest.id])}
         />
       )}
-      {!promptedRequest && !nudgeOpen && visibleSharePrompt && (
+      {!promptedRequest && !nudgeOpen && !opponentLeftNotice && visibleSharePrompt && (
         <DebateSharePromptDialog
           key={visibleSharePrompt.id}
           prompt={visibleSharePrompt}

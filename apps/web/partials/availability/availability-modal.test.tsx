@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { act, cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import * as React from 'react';
@@ -184,5 +184,101 @@ describe('AvailabilityModal time zone (GEO-3582)', () => {
     expect(onSave.mock.calls[0][0]).toEqual([
       expect.objectContaining({ kind: 'recurring', weekday: 2, start: 2 * 60, end: 3 * 60 }),
     ]);
+  });
+});
+
+describe('AvailabilityModal with a calendar section', () => {
+  // A calendar connect leaves the page, so it saves the grid as it stands first (GEO-3595).
+  it('hands the section a save of the current edits that leaves the dialog open', async () => {
+    const onSaveDraft = vi.fn(() => Promise.resolve());
+    const onOpenChange = vi.fn();
+    const seen: { unsavedChanges: boolean; saveDraft?: () => Promise<unknown> }[] = [];
+    const user = userEvent.setup();
+
+    render(
+      <AvailabilityModal
+        open
+        onOpenChange={onOpenChange}
+        blocks={saved}
+        onSave={vi.fn()}
+        onSaveDraft={onSaveDraft}
+        calendarSection={state => {
+          seen.push(state);
+          return null;
+        }}
+      />
+    );
+
+    await user.click(await screen.findByRole('button', { name: /^Delete/ }));
+    const latest = seen[seen.length - 1];
+    expect(latest.unsavedChanges).toBe(true);
+
+    await act(() => latest.saveDraft?.());
+
+    expect(onSaveDraft).toHaveBeenCalledWith([]);
+    expect(onOpenChange).not.toHaveBeenCalled();
+    // Saved is not unsaved: a connect that fails after this save must not save the week again.
+    expect(seen[seen.length - 1].unsavedChanges).toBe(false);
+  });
+
+  it('saves again when the grid changed while the save ran', async () => {
+    const two: AvailabilityBlock[] = [
+      { id: 'block-1', kind: 'recurring', weekday: 1, start: 540, end: 600 },
+      { id: 'block-2', kind: 'recurring', weekday: 2, start: 540, end: 600 },
+    ];
+    const seen: { saveDraft?: () => Promise<unknown> }[] = [];
+    const user = userEvent.setup();
+    let finishFirst = () => {};
+    const onSaveDraft = vi
+      .fn<(blocks: AvailabilityBlock[]) => Promise<unknown>>()
+      .mockImplementationOnce(() => new Promise<void>(resolve => (finishFirst = resolve)))
+      .mockResolvedValue(undefined);
+
+    render(
+      <AvailabilityModal
+        open
+        onOpenChange={() => {}}
+        blocks={two}
+        onSave={vi.fn()}
+        onSaveDraft={onSaveDraft}
+        calendarSection={state => {
+          seen.push(state);
+          return null;
+        }}
+      />
+    );
+
+    const [first] = await screen.findAllByRole('button', { name: /^Delete/ });
+    await user.click(first);
+    let done: Promise<unknown> | undefined;
+    act(() => {
+      done = seen[seen.length - 1].saveDraft?.();
+    });
+    // An edit lands while the first save is still out.
+    await user.click(screen.getByRole('button', { name: /^Delete/ }));
+    finishFirst();
+    await act(() => done!);
+
+    expect(onSaveDraft).toHaveBeenCalledTimes(2);
+    expect(onSaveDraft.mock.calls[1][0]).toEqual([]);
+  });
+
+  it('offers no save to a section whose caller cannot save without closing', async () => {
+    const seen: { saveDraft?: () => Promise<unknown> }[] = [];
+    render(
+      <AvailabilityModal
+        open
+        onOpenChange={() => {}}
+        blocks={saved}
+        onSave={vi.fn()}
+        calendarSection={state => {
+          seen.push(state);
+          return null;
+        }}
+      />
+    );
+
+    await screen.findByRole('dialog');
+    expect(seen.every(state => state.saveDraft === undefined)).toBe(true);
   });
 });

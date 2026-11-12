@@ -18,9 +18,11 @@ import type { AvailabilityBlock } from '~/core/availability/blocks';
 import { fromPayload, localTimezone, toPayload } from '~/core/availability/blocks';
 import { PEER_SCHEDULE_DAYS, toPeerSchedule } from '~/core/availability/peer-schedule';
 import { type ScheduleEditorSurface, debateScheduleSaved } from '~/core/availability/schedule-analytics';
+import { SCHEDULE_SAVE_FAILED_COPY } from '~/core/availability/schedule-save-copy';
 import { useObservedMutation } from '~/core/hooks/use-observed-mutation';
 import { useSetToast } from '~/core/hooks/use-toast';
 import { validateSpaceId } from '~/core/io/rest/validation';
+import { chunk } from '~/core/utils/chunk';
 import { usePrivy } from '~/core/wallet/auth-hooks';
 
 import {
@@ -96,6 +98,12 @@ import { markEnteringDebate, markEnteringPendingDebate } from './debate-entry-in
 import { useDebateGatewayScope, useDebateGatewaySnapshot, useDebateGatewaySpaceScopes } from './debate-gateway';
 import { isLiveGeoChatAccount, refusedRetryDelayMs } from './geo-chat-account-status';
 import { lobbyDebateRequested } from './lobbies/lobby-analytics';
+import {
+  markLocalDebateLeave,
+  markLocalRematchLeave,
+  unmarkLocalDebateLeave,
+  unmarkLocalRematchLeave,
+} from './local-debate-leave';
 import { markAskWithdrawn, unmarkAskWithdrawn } from './matchmaking/ask-withdrawals';
 import {
   type ParticipantAvatarMapper,
@@ -732,7 +740,7 @@ export function useSaveDebateSchedule({ surface }: { surface: ScheduleEditorSurf
     onError: (error, _blocks, isCurrent) => {
       if (error instanceof ScheduleSaveAbandonedError || isCurrent?.() === false) return;
       if (!isLiveGeoChatAccount(accountKey)) return;
-      setToast(React.createElement('span', null, 'We couldn’t save your availability. Please try again.'));
+      setToast(React.createElement('span', null, SCHEDULE_SAVE_FAILED_COPY));
     },
     // Taken at Save: the answer can arrive after a sign-out or account switch, and it is not the
     // next account's schedule.
@@ -1050,6 +1058,12 @@ export function useAbortDebate(debateId: string) {
 
   return useMutation({
     mutationFn: () => abortDebate(debateId, getPrivyIdentityToken, accountKey),
+    onMutate: () => {
+      markLocalDebateLeave(debateId);
+    },
+    onError: () => {
+      unmarkLocalDebateLeave(debateId);
+    },
     onSuccess: debate => {
       queryClient.setQueryData(debateQueryKeys.debate(debate.id), debate);
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.debate(debate.id) });
@@ -1170,6 +1184,12 @@ export function useLeaveDebateRematch(sessionId: string) {
 
   return useMutation({
     mutationFn: () => leaveDebateRematch(sessionId, getPrivyIdentityToken, accountKey),
+    onMutate: () => {
+      markLocalRematchLeave(sessionId);
+    },
+    onError: () => {
+      unmarkLocalRematchLeave(sessionId);
+    },
     onSuccess: session => {
       queryClient.setQueryData(debateQueryKeys.rematch(accountKey, session.id), session);
       forgetEndedRematch(queryClient, accountKey, session);
@@ -1433,10 +1453,7 @@ export function useDebateProfilesBySpace(profileSpaceIds: readonly string[], ena
     ...debateQueryNetworkOptions,
     queryKey: debateQueryKeys.profileLookup(accountKey, ids),
     queryFn: async ({ signal }) => {
-      const pages: string[][] = [];
-      for (let i = 0; i < ids.length; i += DEBATE_PROFILE_LOOKUP_MAX) {
-        pages.push(ids.slice(i, i + DEBATE_PROFILE_LOOKUP_MAX));
-      }
+      const pages = chunk(ids, DEBATE_PROFILE_LOOKUP_MAX);
       const found = await Promise.all(
         pages.map(page => lookupDebateProfiles(page, getPrivyIdentityToken, accountKey, signal))
       );

@@ -8,6 +8,7 @@ import cx from 'classnames';
 
 import { Z_LAYER_CLASS } from '~/core/z-layers';
 
+import { ElevatedPopoverPortalContext } from '~/design-system/elevated-popover-portal-context';
 import { Close } from '~/design-system/icons/close';
 import { Text } from '~/design-system/text';
 
@@ -54,6 +55,10 @@ export function ScheduleDialog({
   widthClassName = 'w-[56rem]',
   children,
 }: Props) {
+  // Design-system menus opened inside portal here, within the dialog's layer and focus trap; on
+  // the body they would sit under it (GEO-3595).
+  const [popoverContainer, setPopoverContainer] = React.useState<HTMLDivElement | null>(null);
+
   return (
     <Root open={open} onOpenChange={onOpenChange}>
       <Portal>
@@ -62,6 +67,7 @@ export function ScheduleDialog({
             took the taps meant for Clear all and Save. */}
         <Overlay className={cx('fixed inset-0 bg-text/20', Z_LAYER_CLASS.scheduleDialogBackdrop)} />
         <Content
+          ref={setPopoverContainer}
           // Radix links a `Description` itself. With none, the link is cleared explicitly, which is
           // also what keeps Radix from warning that the dialog is missing one.
           {...(description ? {} : { 'aria-describedby': undefined })}
@@ -126,7 +132,9 @@ export function ScheduleDialog({
                 </button>
               </div>
             </div>
-            {children}
+            <ElevatedPopoverPortalContext.Provider value={popoverContainer}>
+              {children}
+            </ElevatedPopoverPortalContext.Provider>
           </div>
         </Content>
       </Portal>

@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import { uuidToHex } from '~/core/id/normalize';
 import { type EntityScores, entityScoresQueryKey, fetchEntityScores } from '~/core/profile/use-entity-scores';
+import { chunk } from '~/core/utils/chunk';
 
 /**
  * What the Matches sorts need about each claim that geo-chat's match rows do not carry (GEO-3463):
@@ -48,11 +49,7 @@ export function useClaimOrderFacts(claimEntityIds: string[], enabled = true) {
   const signature = [...new Set(claimEntityIds.map(uuidToHex))].join(',');
   const chunks = React.useMemo(() => {
     const ids = signature ? signature.split(',') : [];
-    const runs: string[][] = [];
-    for (let start = 0; start < ids.length; start += CLAIM_ORDER_FACTS_CHUNK) {
-      runs.push(ids.slice(start, start + CLAIM_ORDER_FACTS_CHUNK).sort());
-    }
-    return runs;
+    return chunk(ids, CLAIM_ORDER_FACTS_CHUNK).map(run => run.sort());
   }, [signature]);
 
   // The last run grows as rows arrive, which changes its key. Its claims already listed keep the

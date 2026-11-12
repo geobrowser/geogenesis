@@ -6,10 +6,11 @@ import { useStore } from 'jotai';
 
 import { EntitySidePanelPopoverPortalContext } from '~/core/state/entity-side-panel-popover-portal';
 
+import { ElevatedPopoverPortalContext } from '~/design-system/elevated-popover-portal-context';
+
 import { slideUpPopoverContainerAtom } from '~/atoms';
 
-/** An enclosing overlay can keep popovers within its focus, accessibility, and stacking boundary. */
-export const ElevatedPopoverPortalContext = React.createContext<HTMLElement | null>(null);
+export { ElevatedPopoverPortalContext };
 
 export function useElevatedPopoverPortal() {
   const localPortal = React.useContext(ElevatedPopoverPortalContext);

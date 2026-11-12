@@ -34,9 +34,16 @@ const mocks = vi.hoisted(() => ({
   anchorDebate: null as ReturnType<typeof completedDebate> | null,
   anchorLoading: false,
   anchorError: null as Error | null,
+  /** Whether the feed asked for the anchor by id on its last render. */
+  anchorEnabled: false,
+  /** The space listing still loading. */
+  listLoading: false,
   /** What the stub player reports through `onPlaybackState`. */
   playerState: { ready: false, playing: false, autoplayBlocked: false, error: false },
   captured: [] as Array<{ event: string; properties: Record<string, unknown> }>,
+  /** The page's path and query string, for the deep links the feed reads. */
+  pathname: '/space/space-1/debate-1',
+  search: '',
 }));
 
 vi.mock('~/core/analytics', () => ({
@@ -52,13 +59,19 @@ type ObserverRecord = {
 let observers: ObserverRecord[] = [];
 
 vi.mock('~/core/debates/hooks', () => ({
-  useSpaceDebates: () => ({ data: { debates: mocks.debates }, isLoading: false, error: null }),
+  useSpaceDebates: () =>
+    mocks.listLoading
+      ? { data: undefined, isLoading: true, error: null }
+      : { data: { debates: mocks.debates }, isLoading: false, error: null },
   useProcessedVideoDebateIds: () => ({
     processedIds: mocks.processedIds ?? mocks.debates.map(debate => debate.id),
     isLoading: mocks.mediaLoading,
     hasError: mocks.mediaError,
   }),
-  useDebate: () => ({ data: mocks.anchorDebate, isLoading: mocks.anchorLoading, error: mocks.anchorError }),
+  useDebate: (_id: string, enabled: boolean) => {
+    mocks.anchorEnabled = enabled;
+    return { data: mocks.anchorDebate, isLoading: mocks.anchorLoading, error: mocks.anchorError };
+  },
 }));
 
 vi.mock('./use-debates-best-order', async () => {
@@ -84,7 +97,12 @@ vi.mock('~/core/sync/use-sync-engine', () => ({
 }));
 vi.mock('next/navigation', async () => {
   const actual = await vi.importActual<typeof import('next/navigation')>('next/navigation');
-  return { ...actual, useRouter: () => ({ prefetch: vi.fn(), push: vi.fn(), replace: vi.fn(), back: vi.fn() }) };
+  return {
+    ...actual,
+    useRouter: () => ({ prefetch: vi.fn(), push: vi.fn(), replace: vi.fn(), back: vi.fn() }),
+    usePathname: () => mocks.pathname,
+    useSearchParams: () => new URLSearchParams(mocks.search),
+  };
 });
 
 vi.mock('~/core/sync/use-store', () => ({
@@ -205,6 +223,8 @@ beforeEach(() => {
   mocks.anchorDebate = null;
   mocks.anchorLoading = false;
   mocks.anchorError = null;
+  mocks.anchorEnabled = false;
+  mocks.listLoading = false;
   mocks.bestOrderIds = [];
   mocks.bestOrderLoading = false;
   mocks.canRemove = false;
@@ -212,6 +232,8 @@ beforeEach(() => {
   mocks.mediaError = false;
   mocks.playerState = { ready: false, playing: false, autoplayBlocked: false, error: false };
   mocks.captured.length = 0;
+  mocks.search = '';
+  mocks.pathname = '/space/space-1/debate-1';
 
   class MockIntersectionObserver implements IntersectionObserver {
     readonly root = null;
@@ -1004,6 +1026,127 @@ function completedDebate(id: string, claim: string, completedAt: string): Debate
   };
 }
 
+describe('DebatesBrowseFeed — the linked debate does not wait for the rest of the feed (GEO-3604)', () => {
+  const linked = () => completedDebate('debate-2', 'Linked debate', '2026-07-01T00:01:10.000Z');
+  const others = () => [
+    completedDebate('debate-1', 'Newest debate', '2026-07-03T00:01:10.000Z'),
+    completedDebate('debate-3', 'Older debate', '2026-06-30T00:01:10.000Z'),
+  ];
+
+  it('asks for the linked debate while the listing is still loading', () => {
+    mocks.listLoading = true;
+    render(<DebatesBrowseFeed spaceId="space-1" initialDebateId="debate-2" />);
+    expect(mocks.anchorEnabled).toBe(true);
+  });
+
+  it('stops asking once the listing has it', () => {
+    mocks.debates = [linked(), ...others()];
+    render(<DebatesBrowseFeed spaceId="space-1" initialDebateId="debate-2" />);
+    expect(mocks.anchorEnabled).toBe(false);
+  });
+
+  it('shows the linked debate from its own row before the listing, ranking and other readiness land', () => {
+    mocks.listLoading = true;
+    mocks.bestOrderLoading = true;
+    mocks.mediaLoading = true;
+    mocks.anchorDebate = linked();
+    mocks.processedIds = ['debate-2'];
+    render(<DebatesBrowseFeed spaceId="space-1" initialDebateId="debate-2" fallback={<div>Entity page</div>} />);
+
+    const players = screen.getAllByTestId(/^player-/);
+    expect(players).toHaveLength(1);
+    expect(players[0]).toHaveAttribute('data-testid', 'player-debate-2');
+    expect(players[0]).toHaveAttribute('data-active', 'true');
+    expect(screen.queryByText('Entity page')).not.toBeInTheDocument();
+  });
+
+  it('still waits while the linked debate’s own readiness is unknown', () => {
+    mocks.listLoading = true;
+    mocks.mediaLoading = true;
+    mocks.anchorDebate = linked();
+    mocks.processedIds = [];
+    render(<DebatesBrowseFeed spaceId="space-1" initialDebateId="debate-2" fallback={<div>Entity page</div>} />);
+
+    expect(screen.getByText('Loading debates…')).toBeInTheDocument();
+    expect(screen.queryByText('Entity page')).not.toBeInTheDocument();
+  });
+
+  it('adds the rest below it once, in ranked order, when everything has settled', () => {
+    mocks.debates = [linked(), ...others()];
+    mocks.anchorDebate = linked();
+    mocks.processedIds = ['debate-2', 'debate-1'];
+    mocks.mediaLoading = true;
+    mocks.bestOrderIds = ['debate-3', 'debate-1'];
+    // A fresh element each time: re-rendering the same one lets React skip the feed.
+    const feed = () => <DebatesBrowseFeed spaceId="space-1" initialDebateId="debate-2" />;
+    const view = render(feed());
+
+    // debate-1's readiness is in, but the rest waits until it all is.
+    expect(screen.getAllByTestId(/^player-/).map(el => el.dataset.testid)).toEqual(['player-debate-2']);
+
+    mocks.processedIds = null;
+    mocks.mediaLoading = false;
+    view.rerender(feed());
+    expect(screen.getAllByTestId(/^player-/).map(el => el.dataset.testid)).toEqual([
+      'player-debate-2',
+      'player-debate-3',
+      'player-debate-1',
+    ]);
+
+    // A later lookup going pending again does not take the rest away.
+    mocks.mediaLoading = true;
+    view.rerender(feed());
+    expect(screen.getAllByTestId(/^player-/)).toHaveLength(3);
+  });
+});
+
+describe('DebatesBrowseFeed — the next cards wait for the linked debate to start (GEO-3604)', () => {
+  beforeEach(() => {
+    mocks.debates = [
+      completedDebate('debate-1', 'Linked debate', '2026-07-03T00:01:10.000Z'),
+      completedDebate('debate-2', 'Next debate', '2026-07-02T00:01:10.000Z'),
+      completedDebate('debate-3', 'After that', '2026-07-01T00:01:10.000Z'),
+    ];
+  });
+  const preloads = () => ['debate-2', 'debate-3'].map(id => screen.getByTestId(`player-${id}`).dataset.preload);
+  const buffers = () => screen.getByTestId('player-debate-2').dataset.buffer;
+  const page = () => <DebatesBrowseFeed spaceId="space-1" initialDebateId="debate-1" />;
+
+  it('holds them until the linked debate plays', () => {
+    const view = render(page());
+    expect(preloads()).toEqual(['false', 'false']);
+    expect(buffers()).toBe('false');
+
+    mocks.playerState = { ready: true, playing: true, autoplayBlocked: false, error: false };
+    view.rerender(page());
+    expect(preloads()).toEqual(['true', 'true']);
+    expect(buffers()).toBe('true');
+  });
+
+  it('lets them go when autoplay is refused, or the linked debate fails', () => {
+    mocks.playerState = { ready: true, playing: false, autoplayBlocked: true, error: false };
+    render(page());
+    expect(preloads()).toEqual(['true', 'true']);
+    cleanup();
+
+    mocks.playerState = { ready: false, playing: false, autoplayBlocked: false, error: true };
+    render(page());
+    expect(preloads()).toEqual(['true', 'true']);
+  });
+
+  it('lets them go after the backstop if the linked debate never reports', () => {
+    render(page());
+    expect(preloads()).toEqual(['false', 'false']);
+    act(() => vi.advanceTimersByTime(8_000));
+    expect(preloads()).toEqual(['true', 'true']);
+  });
+
+  it('does not hold the Debates tab', () => {
+    render(<DebatesBrowseFeed spaceId="space-1" initialDebateId="debate-1" surface="debates-tab" />);
+    expect(preloads()).toEqual(['true', 'true']);
+  });
+});
+
 describe('DebatesBrowseFeed ordering', () => {
   // What plays after the debate you opened is what the explore page's "Best" sort would have
   // shown you, rather than simply the most recent thing in the space.
@@ -1383,5 +1526,163 @@ describe('DebatesBrowseFeed — nothing is inserted above what the viewer has re
     mocks.mediaLoading = true;
     view.rerender(<DebatesBrowseFeed spaceId="space-1" />);
     expect(headings()).toEqual(['Debate a', 'Debate b']);
+  });
+});
+
+// GEO-3381: the reply email's Reply on a debate links here with `?modal=comments`.
+describe('DebatesBrowseFeed comments deep link', () => {
+  beforeEach(() => {
+    // jsdom has no `scrollingElement`; a browser in standards mode reports the root element.
+    Object.defineProperty(document, 'scrollingElement', { configurable: true, get: () => document.documentElement });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    Reflect.deleteProperty(document, 'scrollingElement');
+    document.documentElement.scrollTop = 0;
+  });
+
+  it('opens the debate it landed on with its comments, and clears the trigger', () => {
+    mocks.search = 'modal=comments&ref_email=reply';
+    const replaceState = vi.spyOn(window.history, 'replaceState');
+    render(
+      <Provider store={createStore()}>
+        <DebatesBrowseFeed spaceId="space-1" initialDebateId="debate-1" />
+      </Provider>
+    );
+
+    expect(screen.getByText('Comments panel for debate-1')).toBeInTheDocument();
+    expect(replaceState).toHaveBeenCalledWith(null, '', '/space/space-1/debate-1?ref_email=reply');
+  });
+
+  it('waits for the linked debate before opening its comments', () => {
+    mocks.search = 'modal=comments&ref_email=reply';
+    // The linked debate's readiness lookup is still in flight.
+    mocks.processedIds = [];
+    mocks.mediaLoading = true;
+    const replaceState = vi.spyOn(window.history, 'replaceState');
+    const feed = () => (
+      <Provider store={createStore()}>
+        <DebatesBrowseFeed spaceId="space-1" initialDebateId="debate-1" fallback={<div>Entity page</div>} />
+      </Provider>
+    );
+    const view = render(feed());
+
+    // Still resolving: the trigger is kept, so it can fire once the debate is on screen.
+    expect(screen.queryByText(/Comments panel for/)).not.toBeInTheDocument();
+    expect(replaceState).not.toHaveBeenCalledWith(null, '', '/space/space-1/debate-1?ref_email=reply');
+
+    mocks.processedIds = ['debate-1'];
+    mocks.mediaLoading = false;
+    view.rerender(feed());
+    expect(screen.getByText('Comments panel for debate-1')).toBeInTheDocument();
+    expect(replaceState).toHaveBeenCalledWith(null, '', '/space/space-1/debate-1?ref_email=reply');
+  });
+
+  // A debate the feed can't play shows its entity page, with the comments inline.
+  it('scrolls to the inline comments on the fallback entity page, and keeps them in view as it fills in', async () => {
+    mocks.search = 'modal=comments&ref_email=reply';
+    const replaceState = vi.spyOn(window.history, 'replaceState');
+    const page = document.documentElement;
+    page.scrollTop = 0;
+    // jsdom does no layout: the section reports where it sits on the page, less the scroll.
+    let offset = 600;
+    render(
+      <Provider store={createStore()}>
+        <DebatesBrowseFeed
+          spaceId="space-1"
+          initialDebateId="not-in-this-space"
+          fallback={
+            <div
+              id="entity-comments"
+              ref={el => {
+                if (el) el.getBoundingClientRect = () => ({ top: offset - page.scrollTop }) as DOMRect;
+              }}
+            />
+          }
+        />
+      </Provider>
+    );
+
+    expect(page.scrollTop).toBe(600);
+    expect(replaceState).toHaveBeenCalledWith(null, '', '/space/space-1/debate-1?ref_email=reply');
+
+    // The backlinks above the section load and push it down.
+    offset = 900;
+    const backlinks = document.createElement('div');
+    await act(async () => {
+      document.body.prepend(backlinks);
+      await Promise.resolve();
+    });
+    backlinks.remove();
+
+    expect(page.scrollTop).toBe(900);
+  });
+
+  // The space's debates tab, linked without a debate: the feed writes the one it opens on into the
+  // URL, and clearing the trigger must not write it back out.
+  it('keeps the debate it opened on in the URL when it clears the trigger on the debates tab', () => {
+    mocks.pathname = '/space/space-1/debates';
+    mocks.search = 'modal=comments&ref_email=reply';
+    window.history.replaceState(null, '', '/space/space-1/debates?modal=comments&ref_email=reply');
+    render(
+      <Provider store={createStore()}>
+        <DebatesBrowseFeed spaceId="space-1" />
+      </Provider>
+    );
+
+    expect(screen.getByText('Comments panel for debate-1')).toBeInTheDocument();
+    const params = new URLSearchParams(window.location.search);
+    expect(params.get('debate')).not.toBeNull();
+    expect(params.get('modal')).toBeNull();
+    expect(params.get('ref_email')).toBe('reply');
+  });
+
+  it('scrolls to the inline comments again when the link arrives again on the same page', () => {
+    mocks.search = 'modal=comments';
+    const page = document.documentElement;
+    page.scrollTop = 0;
+    const feed = () => (
+      <Provider store={createStore()}>
+        <DebatesBrowseFeed
+          spaceId="space-1"
+          initialDebateId="not-in-this-space"
+          fallback={
+            <div
+              id="entity-comments"
+              ref={el => {
+                if (el) el.getBoundingClientRect = () => ({ top: 600 - page.scrollTop }) as DOMRect;
+              }}
+            />
+          }
+        />
+      </Provider>
+    );
+    const view = render(feed());
+    expect(page.scrollTop).toBe(600);
+
+    // The reader scrolls away, which lets the first hold go.
+    act(() => {
+      page.dispatchEvent(new Event('wheel'));
+    });
+    page.scrollTop = 0;
+
+    // The trigger is cleared, then the same link is followed again without a remount.
+    mocks.search = '';
+    view.rerender(feed());
+    mocks.search = 'modal=comments';
+    view.rerender(feed());
+
+    expect(page.scrollTop).toBe(600);
+  });
+
+  it('leaves the comments closed without it', () => {
+    render(
+      <Provider store={createStore()}>
+        <DebatesBrowseFeed spaceId="space-1" initialDebateId="debate-1" />
+      </Provider>
+    );
+
+    expect(screen.queryByText(/Comments panel for/)).not.toBeInTheDocument();
   });
 });

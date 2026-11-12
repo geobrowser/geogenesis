@@ -1,6 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
+import { Provider, createStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type {
@@ -19,6 +20,7 @@ import {
   markRematchAnswered,
   readRematchJoinIntent,
 } from './rematch-join-intent';
+import { debatesHubAtom, opponentLeftNoticeAtom } from '~/atoms';
 
 const mocks = vi.hoisted(() => ({
   media: { artifacts: [{ kind: 'social_video' }] } as { artifacts: { kind: string }[] },
@@ -537,6 +539,102 @@ describe('DebateCoordinator', () => {
     render(<DebateCoordinator />);
 
     await waitFor(() => expect(mocks.push).not.toHaveBeenCalled());
+  });
+
+  // The room and rematch pages don't draw the opponent-left dialog anymore.
+  it('renders the opponent-left notice from the atom and clears it when dismissed', () => {
+    const store = createStore();
+    store.set(opponentLeftNoticeAtom, true);
+
+    render(
+      <Provider store={store}>
+        <DebateCoordinator />
+      </Provider>
+    );
+
+    expect(screen.getByRole('dialog', { name: 'Opponent left' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+
+    expect(screen.queryByRole('dialog', { name: 'Opponent left' })).not.toBeInTheDocument();
+    expect(store.get(opponentLeftNoticeAtom)).toBe(false);
+  });
+
+  it('opens the debates hub and clears the notice from Find debate', () => {
+    const store = createStore();
+    store.set(opponentLeftNoticeAtom, true);
+
+    render(
+      <Provider store={store}>
+        <DebateCoordinator />
+      </Provider>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Find debate' }));
+
+    // The notice closes and the hub opens on its default tab, the one way back into a debate.
+    expect(screen.queryByRole('dialog', { name: 'Opponent left' })).not.toBeInTheDocument();
+    expect(store.get(opponentLeftNoticeAtom)).toBe(false);
+    expect(store.get(debatesHubAtom)).toEqual({ tab: 'people' });
+  });
+
+  it('holds an incoming request back behind the opponent-left notice', async () => {
+    mocks.activity = { ...idleActivity(), incoming_request_count: 1 };
+    mocks.requests = { outbound: null, incoming: [incomingRequest()] };
+    const store = createStore();
+    store.set(opponentLeftNoticeAtom, true);
+
+    render(
+      <Provider store={store}>
+        <DebateCoordinator />
+      </Provider>
+    );
+
+    expect(screen.getByRole('dialog', { name: 'Opponent left' })).toBeInTheDocument();
+    expect(screen.queryByText('Debate request')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+
+    expect(await screen.findByText('Debate request')).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Opponent left' })).not.toBeInTheDocument();
+  });
+
+  it('keeps the nudge popup off until the opponent-left notice is closed', async () => {
+    nudgePopup.enabled = [];
+    const store = createStore();
+    store.set(opponentLeftNoticeAtom, true);
+
+    render(
+      <Provider store={store}>
+        <DebateCoordinator />
+      </Provider>
+    );
+
+    await waitFor(() => expect(nudgePopup.enabled.length).toBeGreaterThan(0));
+    expect(nudgePopup.enabled).not.toContain(true);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+
+    await waitFor(() => expect(nudgePopup.enabled.at(-1)).toBe(true));
+  });
+
+  it('holds the share prompt back behind the opponent-left notice', async () => {
+    showSharePrompt();
+    const store = createStore();
+    store.set(opponentLeftNoticeAtom, true);
+
+    render(
+      <Provider store={store}>
+        <DebateCoordinator />
+      </Provider>
+    );
+
+    expect(screen.getByRole('dialog', { name: 'Opponent left' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Close share prompt' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+
+    expect(await screen.findByRole('button', { name: 'Close share prompt' })).toBeInTheDocument();
   });
 
   // The rematch the viewer is already looking at, plus the debate it came from still reported in

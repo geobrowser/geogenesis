@@ -2,7 +2,8 @@ import { cache } from 'react';
 
 import { Effect } from 'effect';
 
-import { type DebateVisibility, fetchDebateVisibility } from '~/core/debates/server/debate-visibility';
+import { fetchDebatePageMedia } from '~/core/debates/server/debate-page-media';
+import { type DebateVisibility, readDebateVisibility } from '~/core/debates/server/debate-visibility';
 import { getBatchEntities, getEntity, getEntityPage } from '~/core/io/queries';
 import { Entity, Relation } from '~/core/types';
 
@@ -31,7 +32,12 @@ export const cachedFetchEntitiesBatch = cache(async (entityIds: string[], spaceI
 /**
  * geo-chat's answer on whether a Debate entity was removed (GEO-2785), once per request: the page,
  * its metadata and its share image all ask, and a removed debate must answer the same to each.
+ * The same read's body is the linked debate the page hands its feed (GEO-3604).
  */
-export const cachedFetchDebateVisibility = cache(async (entityId: string): Promise<DebateVisibility> =>
-  fetchDebateVisibility(entityId)
-);
+export const cachedReadDebateVisibility = cache(readDebateVisibility);
+
+export const cachedFetchDebateVisibility = async (entityId: string): Promise<DebateVisibility> =>
+  (await cachedReadDebateVisibility(entityId)).visibility;
+
+/** The linked debate's media readiness, for the page's feed (GEO-3604). */
+export const cachedFetchDebatePageMedia = cache((entityId: string) => fetchDebatePageMedia(entityId));

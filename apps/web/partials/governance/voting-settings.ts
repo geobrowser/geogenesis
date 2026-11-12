@@ -98,7 +98,7 @@ export const DEFAULT_VOTING_SETTINGS_SNAPSHOT: VotingSettingsSnapshot = {
   quorum: 1,
   durationSeconds: SECONDS_PER_DAY,
   graceDays: 14,
-  disableFastPathForNewMembers: true,
+  disableFastPathForNewMembers: false,
 };
 
 /** Convert a VotingSettingsInput (as stored during create-space) back to a snapshot. */

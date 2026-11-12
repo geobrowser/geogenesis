@@ -8,6 +8,12 @@ export const EMPTY_TOPIC_HEX = '0x0000000000000000000000000000000000000000000000
 
 export const EMPTY_SIGNATURE = '0x' as Hex;
 
+/** keccak256('MEMBER') — the DAO membership role for reads and voluntary leaves. */
+export const SPACE_MEMBER_ROLE = '0xffa60083152bd11704a80cc8c7a409dad8aa74288b454a3ba0e94c0abc7cf168' as Hex;
+
+/** keccak256('FAST_PATH_RESTRICTED') — a space holding it can only propose on the review (SLOW) path. */
+export const FAST_PATH_RESTRICTED_ROLE = '0x8c7cfc7d0f6a45921559e012263eab395726a7d2681a4e1677e6318e7338335b' as Hex;
+
 /**
  * DAOSpace governance action constants (bytes32)
  *
@@ -23,6 +29,8 @@ export const GOVERNANCE_ACTIONS = {
   PROPOSAL_VOTED: '0x4ebf5f29676cedf7e2e4d346a8433289278f95a9fda73691dc1ce24574d5819e' as Hex,
   /** keccak256('GOVERNANCE.PROPOSAL_EXECUTED') - executes a passed proposal */
   PROPOSAL_EXECUTED: '0x62a60c0a9681612871e0dafa0f24bb0c83cbdde8be5a6299979c88d382369e96' as Hex,
+  /** keccak256('GOVERNANCE.SPACE_FAST_PATH_RESTRICTED') - an editor restricts a space to the review path, immediately */
+  SPACE_FAST_PATH_RESTRICTED: '0x9d04a400d771d1d5211f97bd557edf5e7d7771cbe77850342fb85e4f7bf91205' as Hex,
 
   // Subspace management actions
   /** keccak256('GOVERNANCE.SUBSPACE_VERIFIED') - marks a subspace as verified */
