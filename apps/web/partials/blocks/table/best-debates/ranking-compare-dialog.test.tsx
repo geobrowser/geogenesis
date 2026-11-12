@@ -17,7 +17,7 @@ const Player = ({ label, badge }: { label: string; badge?: string }) => (
   </section>
 );
 
-function renderCompare(onChoose = vi.fn()) {
+function renderCompare(onChoose = vi.fn(), onPushDown?: () => void) {
   const start = startPlacement(3);
   if (start.done) throw new Error('expected a comparison');
   render(
@@ -28,6 +28,7 @@ function renderCompare(onChoose = vi.fn()) {
       search={start.search}
       onChoose={onChoose}
       onClose={vi.fn()}
+      onPushDown={onPushDown}
       Player={Player as never}
     />
   );
@@ -35,6 +36,14 @@ function renderCompare(onChoose = vi.fn()) {
 }
 
 describe('RankingCompareDialog', () => {
+  it('offers Push it down in the header when given, and it never picks a side', () => {
+    const onPushDown = vi.fn();
+    const onChoose = renderCompare(vi.fn(), onPushDown);
+    fireEvent.click(screen.getByRole('button', { name: /Push it down/ }));
+    expect(onPushDown).toHaveBeenCalledTimes(1);
+    expect(onChoose).not.toHaveBeenCalled();
+  });
+
   it('labels each video on the picture and picks a side from anywhere on it but the player', () => {
     const onChoose = renderCompare();
     expect(screen.getByText('#2 in your ranking')).toBeTruthy();

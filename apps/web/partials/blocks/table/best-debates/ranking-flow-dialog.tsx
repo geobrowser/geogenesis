@@ -33,8 +33,8 @@ type Props = {
 };
 
 /**
- * The frame every step of placing a Best debate shares (GEO-3678): the Rank it / Push it down
- * choice, the compare view and the Placed confirmation. Above the ranking screen (z-50); a phone
+ * The frame every step of placing a Best debate shares (GEO-3678): the compare view and the
+ * Placed confirmation. Above the ranking screen (z-50); a phone
  * gets it full width from the top.
  *
  * The card is the Content, inside the Overlay, so a press on the backdrop dismisses it (an inset-0

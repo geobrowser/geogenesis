@@ -11,10 +11,19 @@ import { BestDebateDisplaysContext } from './best-debate-row';
 import { BestDebatesToRankList } from './best-debates-to-rank-list';
 
 vi.mock('../ranking-entry-row', () => ({
-  RankingEntryRow: ({ entry, actions }: { entry: { name: string }; actions?: React.ReactNode }) => (
+  RankingEntryRow: ({
+    entry,
+    actions,
+    debateAside,
+  }: {
+    entry: { name: string };
+    actions?: React.ReactNode;
+    debateAside?: React.ReactNode;
+  }) => (
     <span>
       {entry.name}
       {actions}
+      {debateAside}
     </span>
   ),
 }));
@@ -77,6 +86,17 @@ describe('To rank', () => {
     const setData = vi.fn();
     fireEvent.dragStart(row, { dataTransfer: { setData, effectAllowed: '' } });
     expect(setData).toHaveBeenCalledWith(RANKING_ENTITY_DRAG_TYPE, 'd1');
+  });
+
+  it('pushes a debate down from its row without placing it', () => {
+    const onPlace = vi.fn();
+    const onPushDown = vi.fn();
+    renderList({ onPlace, onPushDown });
+    const button = screen.getByRole('button', { name: 'Push Newest down' });
+    expect(button.getAttribute('title')).toBe('Push it down');
+    fireEvent.click(button);
+    expect(onPushDown).toHaveBeenCalledWith('d1');
+    expect(onPlace).not.toHaveBeenCalled();
   });
 
   it('says so when nothing is left', () => {

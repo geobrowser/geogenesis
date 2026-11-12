@@ -21,7 +21,7 @@ import type { RankingComposeMobileTab, RankingComposeMobileTabs } from '../ranki
 import { BestDebatesTeamRowContent } from './best-debates-team-row';
 import { useBestDebatesTeamTools } from './best-debates-team-tools';
 import { BestDebatesToRankList } from './best-debates-to-rank-list';
-import type { PushDownSlot } from './rank-choice-dialog';
+import type { PushDownSlot } from './push-down-slot';
 import { type PlacementOrigin, useBestDebatesPlacement } from './use-best-debates-placement';
 
 export type UseBestDebatesComposeArgs = {
@@ -49,7 +49,7 @@ export type UseBestDebatesComposeArgs = {
   searchQuery?: string;
   /** Open the team column on To rank (the screen was opened with `?team=to-rank`, GEO-3677). */
   openOnToRank?: boolean;
-  /** GEO-3679 fills this: Push it down in the Rank choice, and the debates to keep out of To rank. */
+  /** GEO-3679 fills this: Push it down (compare header, team rows), and the debates to keep out of To rank. */
   pushDown?: PushDownSlot & { pushedDownEntityIds?: readonly string[] };
 };
 
@@ -193,6 +193,7 @@ export function useBestDebatesCompose({
         rankers={rankers}
         myRank={isInMyRanking ? orderedIds.indexOf(entityId) + 1 || null : null}
         draggable={!isMobile && !isInMyRanking}
+        onPushDown={pushDown && !isInMyRanking ? () => placement.requestPushDown(entityId) : undefined}
       />
     ),
     toRankPanel: (
@@ -206,6 +207,7 @@ export function useBestDebatesCompose({
         draggable={!isMobile}
         query={searchQuery}
         topicIds={tools.topicIds}
+        onPushDown={pushDown ? placement.requestPushDown : undefined}
       />
     ),
   };

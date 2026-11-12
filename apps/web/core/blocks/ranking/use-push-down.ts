@@ -133,13 +133,13 @@ const BUSY: PushDownRunResult = { ok: false, step: 'vote', partly: false, messag
 const CHECK_FAILED: PushDownRunResult = { ok: false, step: 'vote', partly: false, message: VOTE_CHECK_FAILED_COPY };
 
 /**
- * Push a debate down on the Best debates ranking screen (GEO-3679), the entry point the Rank it /
- * Push it down choice (GEO-3678) calls: `pushDown` for its Push it down option, `rank` around its
- * Rank it publish.
+ * Push a debate down on the Best debates ranking screen (GEO-3679), from the compare header's
+ * Push it down or a team row's ↓ button: `pushDown`, whose toast offers Undo. `rank` wraps a
+ * ballot publish that should also clear the member's downvotes.
  *
  * Every action re-reads the member's votes on the debate first (this session's unindexed writes,
  * else a fresh server read), so it never acts on a stale answer. State is shared per (member,
- * debate) through the query cache, so the choice and the pushed-down list show the same progress.
+ * debate) through the query cache, so every entry point and the pushed-down list show the same progress.
  * Needs a `DataBlockProvider` around it, as the published-ballot write (`useRankingSubmissions`)
  * does.
  */
@@ -257,6 +257,11 @@ export function usePushDown(debateId: string, options: UsePushDownOptions = {}):
     [debateId, sendVote]
   );
 
+  /** The draft order a Push it down just edited, so its toast's Undo can put it back. */
+  const draftBeforePush = React.useRef<string[] | null>(null);
+  /** The newest `undo`, for the toast's Undo button (built before `undo` is). */
+  const undoRef = React.useRef<(() => Promise<PushDownRunResult>) | null>(null);
+
   const removeFromBallot = React.useCallback(async (): Promise<StepResult> => {
     const { publishedIds: published, myRankEntity: rankEntity, editBallot: draft } = latest.current;
 
@@ -265,7 +270,10 @@ export function usePushDown(debateId: string, options: UsePushDownOptions = {}):
       if (!ballotHolds(draft.orderedIds, debateId) && !ballotHolds(published, debateId)) return { ok: true };
       const remaining = ballotWithout(draft.orderedIds, debateId);
       if (remaining.length === 0) return { ok: false, message: PUSH_DOWN_LAST_BALLOT_ITEM_COPY };
-      return (await draft.publish(remaining)) ? { ok: true } : { ok: false, message: PUSH_DOWN_BALLOT_FAILED_COPY };
+      const before = [...draft.orderedIds];
+      if (!(await draft.publish(remaining))) return { ok: false, message: PUSH_DOWN_BALLOT_FAILED_COPY };
+      draftBeforePush.current = before;
+      return { ok: true };
     }
 
     if (!ballotHolds(published, debateId)) return { ok: true };
@@ -308,8 +316,30 @@ export function usePushDown(debateId: string, options: UsePushDownOptions = {}):
       if (action === 'rank') pendingRankPublishes.delete(stateKey.join(':'));
       if (action === 'push-down') {
         const noteSeen = readPushDownNoteSeen();
+        const previousDraft = draftBeforePush.current;
+        draftBeforePush.current = null;
+        // Undo takes back both halves: the draft edit (put back as it was) and the downvote.
+        const onUndo = () => {
+          setToast(null);
+          const draft = latest.current.editBallot;
+          if (previousDraft && draft) void draft.publish(previousDraft);
+          void undoRef.current?.();
+        };
         setToast(
-          React.createElement('span', null, pushDownToastCopy({ rankingLive: BEST_DEBATES_RANKING_LIVE, noteSeen }))
+          React.createElement(
+            'span',
+            { className: 'flex items-center gap-3' },
+            React.createElement('span', null, pushDownToastCopy({ rankingLive: BEST_DEBATES_RANKING_LIVE, noteSeen })),
+            React.createElement(
+              'button',
+              {
+                type: 'button',
+                onClick: onUndo,
+                className: 'shrink-0 rounded px-2 py-1 text-smallButton text-white underline-offset-2 hover:underline',
+              },
+              'Undo'
+            )
+          )
         );
         if (BEST_DEBATES_RANKING_LIVE) markPushDownNoteSeen();
       }
@@ -339,6 +369,7 @@ export function usePushDown(debateId: string, options: UsePushDownOptions = {}):
   const pushDown = React.useCallback(
     () =>
       start('push-down', initial => {
+        draftBeforePush.current = null;
         const current = { records: initial };
         const ownSpace = latest.current.debateSpaceId!;
         const { editBallot: draft, publishedIds: published } = latest.current;
@@ -367,6 +398,7 @@ export function usePushDown(debateId: string, options: UsePushDownOptions = {}):
   );
 
   const undo = React.useCallback(() => start('undo', initial => clearSteps({ records: initial })), [clearSteps, start]);
+  undoRef.current = undo;
 
   const publishRanking = React.useCallback(async (publish: () => Promise<boolean>): Promise<StepResult> => {
     return (await publish()) ? { ok: true } : { ok: false, message: RANK_BALLOT_FAILED_COPY };

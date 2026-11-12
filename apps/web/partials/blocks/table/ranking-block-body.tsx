@@ -193,8 +193,8 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
   const myRankingActionButton = hideEditMyRanking ? null : buildMyRankingActionButton(state);
   const myRankingTabActions = buildMyRankingTabActions(state);
   const SectionHeader = presentation === 'fullscreen' ? RankingFullscreenSectionHeaderRow : RankingSectionHeaderRow;
-  // No row vote arrows on Best debates (GEO-3677): a member's vote there is what Rank it / Push it
-  // down records, so a stray arrow would double-count against the ranking.
+  // No row vote arrows on Best debates (GEO-3677): a member's vote there is what ranking and Push
+  // it down record, so a stray arrow would double-count against the ranking.
   const showVoteControls = !isBestDebatesBlock(state.entityId, spaceId);
 
   // Three tabs are possible in the shared view

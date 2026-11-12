@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { PushDownRunResult } from '~/core/blocks/ranking/push-down';
 
-import type { PushDownSlot } from './rank-choice-dialog';
+import type { PushDownSlot } from './push-down-slot';
 import { useBestDebatesPushDownSlot } from './use-best-debates-push-down-slot';
 
 const mocks = vi.hoisted(() => ({

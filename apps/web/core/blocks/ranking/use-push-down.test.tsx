@@ -1,8 +1,8 @@
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 
-import type { ReactNode } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -318,6 +318,28 @@ describe('usePushDown', () => {
 
     expect(publish).toHaveBeenCalledWith([RANKED_A, DRAFT_ONLY]);
     expect(mocks.save).not.toHaveBeenCalled();
+  });
+
+  it('its toast’s Undo puts the draft back and clears the downvote', async () => {
+    rankedBallot([RANKED_A, DEBATE]);
+    const publish = vi.fn(async (_ids: string[]) => true);
+    const { result } = await renderReady({ orderedIds: [RANKED_A, DEBATE, DRAFT_ONLY], publish });
+
+    await act(async () => {
+      await result.current.pushDown();
+    });
+    const toast = mocks.setToast.mock.calls.at(-1)?.[0] as ReactElement;
+    render(toast);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    });
+
+    expect(publish).toHaveBeenLastCalledWith([RANKED_A, DEBATE, DRAFT_ONLY]);
+    await waitFor(() =>
+      expect(mocks.unvote).toHaveBeenCalledWith({ authorSpaceId: PERSONAL, spaceId: DEBATE_SPACE, entityId: DEBATE })
+    );
+    await waitFor(() => expect(result.current.isPushedDown).toBe(false));
   });
 
   it('keeps a failed ballot edit for a retry that only edits the ballot', async () => {

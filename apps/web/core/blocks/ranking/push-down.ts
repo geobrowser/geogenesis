@@ -144,7 +144,7 @@ export function debateOwnSpaceId(
 /** The one-time note, shown only once the ranking drives the feed. */
 export const PUSH_DOWN_LIVE_NOTE = 'As a Debates member, your downvote pushes a debate down in the feed for everyone.';
 
-/** The line under "Push it down" in the Rank it / Push it down choice (GEO-3678's dialog). */
+/** What Push it down does, for its tooltips in the compare header and on team rows. */
 export function pushDownChoiceDescription(rankingLive: boolean): string {
   return rankingLive ? `Low quality. ${PUSH_DOWN_LIVE_NOTE}` : 'Low quality. Records your downvote on this debate.';
 }

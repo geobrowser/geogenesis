@@ -16,7 +16,7 @@ import {
 } from '~/core/blocks/ranking/ranking-placement';
 import { normId } from '~/core/utils/norm-id';
 
-import { type PushDownSlot, RankChoiceDialog } from './rank-choice-dialog';
+import type { PushDownSlot } from './push-down-slot';
 import { RankingCompareDialog } from './ranking-compare-dialog';
 import { RankingPlacedDialog } from './ranking-placed-dialog';
 
@@ -24,7 +24,6 @@ import { RankingPlacedDialog } from './ranking-placed-dialog';
 export type PlacementOrigin = 'team' | 'to_rank' | 'mine';
 
 type FlowState =
-  | { phase: 'choose'; entityId: string; origin: PlacementOrigin }
   | {
       phase: 'compare';
       entityId: string;
@@ -72,13 +71,14 @@ export type UseBestDebatesPlacementArgs = {
 };
 
 /**
- * Placing one debate on the Best debates ranking (GEO-3678): the Rank it / Push it down choice, the
- * "which was better?" comparisons, then "Placed #N of M".
+ * Placing one debate on the Best debates ranking (GEO-3678): straight into the "which was
+ * better?" comparisons, then "Placed #N of M". Push it down is a side door from the comparison's
+ * header or a team row (`requestPushDown`).
  *
  * Nothing touches the ranker's list until the debate is placed, so leaving the comparison part way
- * changes nothing. Once placed, only Done and Rank the next one publish: the whole list as one edit,
- * with any drags not yet published, and no vote. Closing the confirmation just closes it and leaves
- * the placement as an unpublished change for the screen's Publish button.
+ * changes nothing. With `publishOnDone` off (the ranking screen) Done only keeps the placement in
+ * the draft for the screen's Publish; on, Done and Rank the next one publish the whole list as one
+ * edit, with no vote.
  */
 export function useBestDebatesPlacement({
   blockId,
@@ -149,11 +149,31 @@ export function useBestDebatesPlacement({
           item_count: orderedIdsRef.current.length,
         }
       );
-      if (pushDown) setFlow({ phase: 'choose', entityId, origin });
-      else beginCompare(entityId, origin, justPublished);
+      // Straight to the first comparison (Preston, 12 Nov: no Rank it / Push it down step).
+      beginCompare(entityId, origin, justPublished);
     },
-    [beginCompare, pushDown, record]
+    [beginCompare, record]
   );
+
+  /**
+   * Push it down, from the compare header or a team row's ↓: the same downvote and draft edit the
+   * choice used to start. It waits until the ranker's vote on the debate has been read.
+   */
+  const [pushTarget, setPushTarget] = React.useState<string | null>(null);
+  const requestPushDown = React.useCallback(
+    (entityId: string) => {
+      if (!pushDown) return;
+      setFlow(current => (current && normId(current.entityId) === normId(entityId) ? null : current));
+      setPushTarget(entityId);
+    },
+    [pushDown]
+  );
+  const pushTargetReady = pushTarget ? (pushDown?.isReady ? pushDown.isReady(pushTarget) : true) : false;
+  React.useEffect(() => {
+    if (!pushTarget || !pushTargetReady || !pushDown) return;
+    pushDown.onSelect(pushTarget);
+    setPushTarget(null);
+  }, [pushDown, pushTarget, pushTargetReady]);
 
   const cancel = React.useCallback(() => {
     if (flow && flow.phase !== 'placed') {
@@ -270,18 +290,7 @@ export function useBestDebatesPlacement({
   );
 
   let dialogs: React.ReactNode = null;
-  if (flow?.phase === 'choose') {
-    dialogs = (
-      <RankChoiceDialog
-        entityId={flow.entityId}
-        debateName={nameOf(flow.entityId)}
-        alreadyRanked={orderedIds.some(id => normId(id) === normId(flow.entityId))}
-        onRankIt={() => beginCompare(flow.entityId, flow.origin)}
-        pushDown={pushDown}
-        onClose={cancel}
-      />
-    );
-  } else if (flow?.phase === 'compare') {
+  if (flow?.phase === 'compare') {
     const mid = placementComparisonIndex(flow.search);
     const existingId = flow.list[mid];
     dialogs = (
@@ -292,6 +301,7 @@ export function useBestDebatesPlacement({
         search={flow.search}
         onChoose={choose}
         onBack={flow.history.length > 0 ? back : undefined}
+        onPushDown={pushDown ? () => requestPushDown(flow.entityId) : undefined}
         onClose={cancel}
       />
     );
@@ -326,7 +336,9 @@ export function useBestDebatesPlacement({
     start,
     dialogs,
     isPlacing: flow !== null,
-    /** The debate the choice, comparison or confirmation is about (push-down binds to it). */
-    activeEntityId: flow?.entityId ?? null,
+    /** The debate the comparison or confirmation is about, or one being pushed down (push-down binds to it). */
+    activeEntityId: flow?.entityId ?? pushTarget ?? null,
+    /** Push a debate down without placing it (a team row's ↓). */
+    requestPushDown,
   };
 }

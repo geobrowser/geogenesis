@@ -25,6 +25,8 @@ type Props = {
   query?: string;
   topicIds?: readonly string[];
   groupBySpace?: boolean;
+  /** Push a debate down from its row. */
+  onPushDown?: (entityId: string) => void;
 };
 
 /**
@@ -43,6 +45,7 @@ export function BestDebatesToRankList({
   query = '',
   topicIds = NO_TOPICS,
   groupBySpace = false,
+  onPushDown,
 }: Props) {
   const displays = React.useContext(BestDebateDisplaysContext);
   if (isLoading) return <p className="py-3 text-metadata text-grey-04">Loading debates…</p>;
@@ -86,6 +89,7 @@ export function BestDebatesToRankList({
           rankers={rankers}
           myRank={null}
           draggable={draggable}
+          onPushDown={onPushDown ? () => onPushDown(entityId) : undefined}
         />
       </div>
     );

@@ -12,6 +12,7 @@ import { SpaceThumb } from '~/partials/explore/space-thumb';
 
 import { RankingEntryRow } from '../ranking-entry-row';
 import { BestDebateDisplaysContext } from './best-debate-row';
+import { PushDownIcon } from './ranking-compare-dialog';
 
 /** Who has ranked a debate: the purple "Nobody has ranked this yet", or "Ranked by …". */
 export function RankedByBadge({ rankers, entityId }: { rankers: RankersRead; entityId: string }) {
@@ -58,6 +59,7 @@ export function BestDebatesTeamRowContent({
   rankers,
   myRank,
   draggable,
+  onPushDown,
 }: {
   entityId: string;
   name: string;
@@ -67,6 +69,8 @@ export function BestDebatesTeamRowContent({
   /** The debate's place in your ranking, when it's there. */
   myRank: number | null;
   draggable: boolean;
+  /** Push it down from the row (Preston, 12 Nov), beside the rank mark. */
+  onPushDown?: () => void;
 }) {
   return (
     <div className="flex w-full min-w-0 items-center gap-3" data-testid="best-debates-team-row">
@@ -87,11 +91,28 @@ export function BestDebatesTeamRowContent({
             myRank ? (
               <span className="text-breadcrumb whitespace-nowrap text-grey-04 tabular-nums">You: #{myRank}</span>
             ) : (
-              <span
-                className="grid size-8 place-items-center rounded-md border border-grey-02 bg-white text-text md:size-11"
-                aria-hidden
-              >
-                <RankingChart />
+              <span className="flex items-center gap-1.5">
+                {onPushDown ? (
+                  <button
+                    type="button"
+                    aria-label={`Push ${name} down`}
+                    title="Push it down"
+                    onClick={event => {
+                      event.stopPropagation();
+                      onPushDown();
+                    }}
+                    onKeyDown={event => event.stopPropagation()}
+                    className="grid size-8 place-items-center rounded-md border border-grey-02 bg-white transition-colors hover:border-text md:size-11"
+                  >
+                    <PushDownIcon />
+                  </button>
+                ) : null}
+                <span
+                  className="grid size-8 place-items-center rounded-md border border-grey-02 bg-white text-text md:size-11"
+                  aria-hidden
+                >
+                  <RankingChart />
+                </span>
               </span>
             )
           }

@@ -7,7 +7,7 @@ import { pushDownChoiceDescription } from '~/core/blocks/ranking/push-down';
 import { type UsePushDownResult, usePushDown } from '~/core/blocks/ranking/use-push-down';
 import { normId } from '~/core/utils/norm-id';
 
-import type { PushDownSlot } from './rank-choice-dialog';
+import type { PushDownSlot } from './push-down-slot';
 
 type Report = (debateId: string, pushDown: UsePushDownResult) => void;
 type Release = (debateId: string) => void;
@@ -38,8 +38,8 @@ function PushDownBinding({
 }
 
 /**
- * GEO-3679's push-down as GEO-3678's `PushDownSlot` (the Rank it / Push it down choice and the
- * Placed confirmation's publish), for the Best debates ranking screen.
+ * GEO-3679's push-down as GEO-3678's `PushDownSlot` (Push it down in the compare header and on
+ * team rows, and the Placed confirmation's publish), for the Best debates ranking screen.
  *
  * - `onSelect`: `usePushDown(id).pushDown()` (downvote, then the draft edit).
  * - `rank`: `usePushDown(id).rank(publish)` (publish, then clear a downvote the ranker held). The

@@ -248,19 +248,24 @@ describe('placing a debate by comparison', () => {
     expect(screen.getByText('#1 in your ranking')).toBeTruthy();
   });
 
-  it('asks Rank it or Push it down first when GEO-3679 provides Push it down', () => {
+  it('Rank goes straight to the comparison, with Push it down in its header', () => {
     const onPushDown = vi.fn();
     render(<Harness initial={list(3)} startWith={{ id: 'new', origin: 'team' }} pushDown={{ onSelect: onPushDown }} />);
     fireEvent.click(screen.getByText('start'));
-    expect(screen.getByTestId('rank-choice-dialog')).toBeTruthy();
+    expect(screen.getByText('Which was the better debate?')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Rank it/ })).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: /Push it down/ }));
     expect(onPushDown).toHaveBeenCalledWith('new');
+    expect(screen.queryByRole('dialog')).toBeNull();
     expect(latestOrder).toEqual(list(3));
+  });
 
+  it('places the first debate of an empty ranking at #1 with no comparison', () => {
+    render(<Harness initial={[]} startWith={{ id: 'new', origin: 'team' }} pushDown={{ onSelect: vi.fn() }} />);
     fireEvent.click(screen.getByText('start'));
-    fireEvent.click(screen.getByRole('button', { name: /Rank it/ }));
-    expect(screen.getByText('Which was the better debate?')).toBeTruthy();
+    expect(screen.getByText('Placed #1 of 1')).toBeTruthy();
+    expect(latestOrder).toEqual(['new']);
   });
 
   it("runs the Done publish through Push it down's clearing step when GEO-3679 provides one", async () => {
@@ -275,7 +280,6 @@ describe('placing a debate by comparison', () => {
       />
     );
     fireEvent.click(screen.getByText('start'));
-    fireEvent.click(screen.getByRole('button', { name: /Rank it/ }));
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Done' }));
     });
@@ -327,24 +331,37 @@ describe('placing a debate by comparison', () => {
     expect(screen.getByText('Nudge it if it’s not quite right. Done publishes it.')).toBeTruthy();
   });
 
-  it("waits on both choices until the ranker's vote is known", () => {
-    const { rerender } = render(
-      <Harness
-        initial={[]}
-        startWith={{ id: 'new', origin: 'team' }}
-        pushDown={{ onSelect: vi.fn(), isReady: () => false }}
-      />
-    );
-    fireEvent.click(screen.getByText('start'));
-    expect((screen.getByRole('button', { name: /Rank it/ }) as HTMLButtonElement).disabled).toBe(true);
-    expect((screen.getByRole('button', { name: /Push it down/ }) as HTMLButtonElement).disabled).toBe(true);
-    rerender(
-      <Harness
-        initial={[]}
-        startWith={{ id: 'new', origin: 'team' }}
-        pushDown={{ onSelect: vi.fn(), isReady: () => true }}
-      />
-    );
-    expect((screen.getByRole('button', { name: /Rank it/ }) as HTMLButtonElement).disabled).toBe(false);
+  it("a row's Push it down waits until the ranker's vote is known", () => {
+    const onSelect = vi.fn();
+    function RowHarness({ ready }: { ready: boolean }) {
+      const [orderedIds, setOrderedIds] = React.useState<string[]>([]);
+      const placement = useBestDebatesPlacement({
+        blockId: 'block',
+        orderedIds,
+        setOrderedIds,
+        hasUnpublishedChanges: false,
+        nameOf: id => id,
+        toRankIds: [],
+        publish: async () => true,
+        isSaving: false,
+        pushDown: { onSelect, isReady: () => ready },
+      });
+      return (
+        <>
+          <button type="button" onClick={() => placement.requestPushDown('new')}>
+            push
+          </button>
+          <span data-testid="active">{placement.activeEntityId ?? ''}</span>
+        </>
+      );
+    }
+    const { rerender } = render(<RowHarness ready={false} />);
+    fireEvent.click(screen.getByText('push'));
+    // The debate is bound (active) while its vote loads, and nothing is sent yet.
+    expect(screen.getByTestId('active').textContent).toBe('new');
+    expect(onSelect).not.toHaveBeenCalled();
+    rerender(<RowHarness ready />);
+    expect(onSelect).toHaveBeenCalledWith('new');
+    expect(screen.getByTestId('active').textContent).toBe('');
   });
 });

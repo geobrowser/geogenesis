@@ -26,6 +26,8 @@ type Props = {
   onChoose: (choice: PlacementChoice) => void;
   /** Back to the previous comparison, its answer undone. Left out on step 1. */
   onBack?: () => void;
+  /** Push "This debate" down instead of placing it, and close (Preston, 12 Nov). */
+  onPushDown?: () => void;
   onClose: () => void;
   /** Swappable for tests; the compare view's one player component otherwise. */
   Player?: typeof RankingCompareDebatePlayer;
@@ -43,6 +45,7 @@ export function RankingCompareDialog({
   search,
   onChoose,
   onBack,
+  onPushDown,
   onClose,
   Player = RankingCompareDebatePlayer,
 }: Props) {
@@ -184,6 +187,16 @@ export function RankingCompareDialog({
             ))}
           </span>
           Step {search.step} of about {search.expectedSteps}
+          {onPushDown ? (
+            <button
+              type="button"
+              onClick={onPushDown}
+              title="Low quality: push this debate down instead of ranking it"
+              className="ml-1 flex h-6 items-center gap-1 rounded-full px-1.5 text-smallButton text-grey-04 transition-colors hover:bg-grey-01 hover:text-text"
+            >
+              <PushDownIcon /> Push it down
+            </button>
+          ) : null}
         </span>
       }
     >
@@ -194,6 +207,15 @@ export function RankingCompareDialog({
       </div>
       {barOnTop ? null : choiceBar}
     </RankingFlowDialog>
+  );
+}
+
+/** The red down arrow Push it down has always had. */
+export function PushDownIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden className="shrink-0 text-red-01">
+      <path d="M8 2.5v9M4.5 8L8 11.5 11.5 8M3 13.5h10" stroke="currentColor" strokeWidth="1.3" />
+    </svg>
   );
 }
 
