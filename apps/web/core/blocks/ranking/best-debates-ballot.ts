@@ -1,4 +1,4 @@
-import { Graph, SystemIds } from '@geoprotocol/geo-sdk/lite';
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import type { Entity } from '~/core/types';
 import { normId } from '~/core/utils/norm-id';
@@ -49,24 +49,23 @@ export function rankTypeOf(rankEntity: { values?: Entity['values'] } | null | un
 }
 
 /**
- * Ops that set an existing Rank entity's `Rank type` to the rules' type, when it doesn't already
- * say so. geo-sdk's `ranks.update` re-sends the votes but never rewrites the type (only
- * `ranks.create` writes it), so a ballot first published WEIGHTED on Best debates would otherwise
- * carry ORDINAL votes under a WEIGHTED label. Nothing for the default rules.
+ * Whether a ballot on this block must go out as a fresh Rank rather than an update of the ranker's
+ * existing one: Best debates, and the existing Rank is known to be something other than ORDINAL.
+ *
+ * gaia's ranking indexer reads a Rank's type once, when the Rank is created, and never from a later
+ * edit. ORDINAL votes on a Rank it holds as WEIGHTED carry no weight and drop out of `sum` scoring,
+ * and relabelling the entity wouldn't reach the indexer. A fresh ORDINAL Rank is detected with its
+ * type, and the latest-ballot rule (`ranking-ballot-recency.ts`, by creation time) makes it the one
+ * that counts. An unknown type (e.g. the synthetic entity of a just-published pin) keeps the update,
+ * so a ballot never mints a new Rank on every publish.
  */
-export function rankTypeRewriteOps(
-  rankEntity: { id: string; values?: Entity['values'] } | null | undefined,
+export function mustMintFreshRank(
+  rankEntity: { values?: Entity['values'] } | null | undefined,
   rules: RankingBallotRules
-) {
-  if (!rankEntity || rules.rankType !== 'ORDINAL') return [];
-  if (rankTypeOf(rankEntity) === rules.rankType) return [];
-  return Graph.updateEntity({
-    id: rankEntity.id,
-    values: [
-      // No language: the SDK writes English, as `ranks.create` does, so this replaces that value.
-      { property: SystemIds.RANK_TYPE_PROPERTY, type: 'text', value: rules.rankType },
-    ],
-  }).ops;
+): boolean {
+  if (!rankEntity || rules.rankType !== 'ORDINAL') return false;
+  const type = rankTypeOf(rankEntity);
+  return type != null && type !== rules.rankType;
 }
 
 export type RankingBallotVote =

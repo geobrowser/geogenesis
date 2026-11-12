@@ -127,7 +127,7 @@ describe('ballot rules per block (GEO-3678)', () => {
     );
   });
 
-  it('relabels an existing WEIGHTED Best debates ballot ORDINAL in the same edit', async () => {
+  it('publishes a fresh ORDINAL Rank when the existing Best debates ballot is WEIGHTED', async () => {
     mocks.myRankEntity = {
       id: RANK,
       createdAt: '1',
@@ -139,16 +139,41 @@ describe('ballot rules per block (GEO-3678)', () => {
       await view.result.current.saveMySubmission([{ id: ITEM, name: null, spaceId: DEBATE_SPACE }]);
     });
 
-    expect(mocks.update).toHaveBeenCalledWith(expect.objectContaining({ rankId: RANK, rankType: 'ORDINAL' }));
+    // A create the indexer detects with its type, never an update it would keep scoring as WEIGHTED.
+    expect(mocks.update).not.toHaveBeenCalled();
+    expect(mocks.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        rankType: 'ORDINAL',
+        blockId: BLOCK,
+        votes: [{ entityId: ITEM, spaceId: DEBATE_SPACE }],
+      })
+    );
     expect(mocks.publish).toHaveBeenCalledTimes(1);
-    const { ops } = mocks.publish.mock.calls[0][0] as { ops: unknown[] };
-    expect(ops[0]).toEqual({ op: 'votes' });
-    expect(ops.length).toBeGreaterThan(1);
-    expect(JSON.stringify(ops.slice(1), (_k, v) => (v instanceof Uint8Array ? Array.from(v) : v))).toContain('ORDINAL');
+  });
+
+  it('updates an existing ORDINAL Best debates ballot in place, as before', async () => {
+    mocks.myRankEntity = {
+      id: RANK,
+      createdAt: '1',
+      updatedAt: '1',
+      values: [{ property: { id: '48e01bc8324e48c2a6c9cab3f49290c6' }, value: 'ORDINAL', isDeleted: false }],
+    };
+    const view = renderSubmissions(BLOCK);
+    await act(async () => {
+      await view.result.current.saveMySubmission([{ id: ITEM, name: null, spaceId: DEBATE_SPACE }]);
+    });
+    expect(mocks.create).not.toHaveBeenCalled();
+    expect(mocks.update).toHaveBeenCalledWith(expect.objectContaining({ rankId: RANK, rankType: 'ORDINAL' }));
+    expect((mocks.publish.mock.calls[0][0] as { ops: unknown[] }).ops).toEqual([{ op: 'votes' }]);
   });
 
   it('leaves an existing ballot on another block exactly as before', async () => {
-    mocks.myRankEntity = { id: RANK, createdAt: '1', updatedAt: '1', values: [] };
+    mocks.myRankEntity = {
+      id: RANK,
+      createdAt: '1',
+      updatedAt: '1',
+      values: [{ property: { id: '48e01bc8324e48c2a6c9cab3f49290c6' }, value: 'WEIGHTED', isDeleted: false }],
+    };
     const view = renderSubmissions(OTHER_BLOCK, SPACE);
     await act(async () => {
       await view.result.current.saveMySubmission([{ id: ITEM, name: null, spaceId: DEBATE_SPACE }]);

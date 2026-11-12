@@ -3,7 +3,7 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { describe, expect, it } from 'vitest';
 
 import { DEBATES_SPACE_ID } from './best-debates';
-import { buildRankingVotes, rankTypeOf, rankTypeRewriteOps, rankingBallotRules } from './best-debates-ballot';
+import { buildRankingVotes, mustMintFreshRank, rankTypeOf, rankingBallotRules } from './best-debates-ballot';
 import { rankingVoteWeightFromIndex } from './ranking-vote-weights';
 
 const BEST = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
@@ -55,7 +55,7 @@ describe('which blocks get the Best debates rules', () => {
   });
 });
 
-describe('relabelling an existing ballot ORDINAL', () => {
+describe('when a Best debates ballot needs a fresh Rank', () => {
   const ordinal = rankingBallotRules(BEST, BLOCK_SPACE, BEST);
   const weighted = rankingBallotRules(OTHER_BLOCK, BLOCK_SPACE, BEST);
   const rank = (type: string | null) =>
@@ -69,16 +69,17 @@ describe('relabelling an existing ballot ORDINAL', () => {
     expect(rankTypeOf(rank(null))).toBeNull();
   });
 
-  it('rewrites a WEIGHTED or unknown type to ORDINAL on Best debates', () => {
-    const ops = rankTypeRewriteOps(rank('WEIGHTED'), ordinal);
-    expect(ops.length).toBeGreaterThan(0);
-    expect(JSON.stringify(ops, (_k, v) => (v instanceof Uint8Array ? Array.from(v) : v))).toContain('ORDINAL');
-    expect(rankTypeRewriteOps(rank(null), ordinal).length).toBeGreaterThan(0);
+  it('mints when the existing Rank is known to be another type', () => {
+    expect(mustMintFreshRank(rank('WEIGHTED'), ordinal)).toBe(true);
   });
 
-  it('leaves an ORDINAL ballot and every other block alone', () => {
-    expect(rankTypeRewriteOps(rank('ORDINAL'), ordinal)).toEqual([]);
-    expect(rankTypeRewriteOps(rank('WEIGHTED'), weighted)).toEqual([]);
-    expect(rankTypeRewriteOps(null, ordinal)).toEqual([]);
+  it('updates an ORDINAL Rank, or one whose type is not known yet (a just-published pin)', () => {
+    expect(mustMintFreshRank(rank('ORDINAL'), ordinal)).toBe(false);
+    expect(mustMintFreshRank(rank(null), ordinal)).toBe(false);
+    expect(mustMintFreshRank(null, ordinal)).toBe(false);
+  });
+
+  it('never on other blocks', () => {
+    expect(mustMintFreshRank(rank('WEIGHTED'), weighted)).toBe(false);
   });
 });

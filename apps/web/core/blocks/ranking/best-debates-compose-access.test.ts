@@ -1,21 +1,24 @@
 import { describe, expect, it } from 'vitest';
 
 import { DEBATES_SPACE_ID } from './best-debates';
-import { canComposeEditRanking, showBestDebatesCompose } from './best-debates-compose-access';
+import { bestDebatesComposeMode, canComposeEditRanking } from './best-debates-compose-access';
 
 const BEST = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
 const OTHER_SPACE = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 
 describe('who gets the Best debates ranking screen', () => {
-  const show = (overrides: Partial<Parameters<typeof showBestDebatesCompose>[0]>) =>
-    showBestDebatesCompose({
+  const mode = (overrides: Partial<Parameters<typeof bestDebatesComposeMode>[0]>) =>
+    bestDebatesComposeMode({
       blockId: BEST,
       spaceId: DEBATES_SPACE_ID,
+      hydrated: true,
+      isLoadingAccess: false,
       debateRankingsFlag: true,
       canEdit: true,
       bestDebatesBlockId: BEST,
       ...overrides,
     });
+  const show = (overrides: Partial<Parameters<typeof bestDebatesComposeMode>[0]>) => mode(overrides) === 'best-debates';
 
   it('a Debates member with the flag on, on the Best debates block', () => {
     expect(show({})).toBe(true);
@@ -32,6 +35,17 @@ describe('who gets the Best debates ranking screen', () => {
     expect(show({ spaceId: OTHER_SPACE })).toBe(false);
     expect(show({ bestDebatesBlockId: null })).toBe(false);
     expect(show({ bestDebatesBlockId: undefined })).toBe(false);
+  });
+
+  it('shows the loading state, not the generic screen, until the flag and membership are known', () => {
+    expect(mode({ hydrated: false, debateRankingsFlag: false, canEdit: undefined })).toBe('loading');
+    expect(mode({ isLoadingAccess: true, canEdit: undefined })).toBe('loading');
+    expect(mode({ isLoadingAccess: false, canEdit: false })).toBe('generic');
+    expect(mode({ debateRankingsFlag: false })).toBe('generic');
+    // Other blocks never wait.
+    expect(mode({ blockId: 'cccccccccccccccccccccccccccccccc', hydrated: false, isLoadingAccess: true })).toBe(
+      'generic'
+    );
   });
 
   it('every other block can always compose', () => {

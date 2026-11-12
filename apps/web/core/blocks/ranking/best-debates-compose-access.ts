@@ -22,28 +22,48 @@ export function canComposeEditRanking({
   return !isBestDebates || (debateRankingsFlag && Boolean(canEdit));
 }
 
+export type BestDebatesComposeMode =
+  /** Not the Best debates block, or a viewer who may not compose there: the screen as before. */
+  | 'generic'
+  /**
+   * The Best debates block while the flag (until hydration) or membership is still unknown. The
+   * screen shows its loading state rather than the generic screen, which would flash and could file
+   * items under the block's space.
+   */
+  | 'loading'
+  /** The Best debates ranking screen (GEO-3678). */
+  | 'best-debates';
+
 /**
- * The Best debates ranking screen's additions (GEO-3678) show only on the Debates space's Best
- * debates block, and only when the viewer may compose there. Anyone else gets the generic screen,
- * which #3105's guard sends to the read-only view.
+ * Which compose screen the viewer gets. The additions show only on the Debates space's Best
+ * debates block, and only when the viewer may compose there (`canComposeEditRanking`). Anyone else
+ * gets the generic screen, which #3105's guard sends to the read-only view.
  */
-export function showBestDebatesCompose({
+export function bestDebatesComposeMode({
   blockId,
   spaceId,
+  hydrated,
+  isLoadingAccess,
   debateRankingsFlag,
   canEdit,
   bestDebatesBlockId,
 }: {
   blockId: string;
   spaceId: string;
+  /** False until the client has hydrated, while feature flags still read their defaults. */
+  hydrated: boolean;
+  isLoadingAccess: boolean;
   debateRankingsFlag: boolean;
   canEdit: boolean | undefined;
   /** Tests only: stands in for `BEST_DEBATES_BLOCK_ID`. */
   bestDebatesBlockId?: string | null;
-}): boolean {
+}): BestDebatesComposeMode {
   const isBestDebates =
     bestDebatesBlockId === undefined
       ? isBestDebatesBlock(blockId, spaceId)
       : isBestDebatesBlock(blockId, spaceId, bestDebatesBlockId);
-  return isBestDebates && canComposeEditRanking({ isBestDebates, debateRankingsFlag, canEdit });
+  if (!isBestDebates) return 'generic';
+  if (!hydrated) return 'loading';
+  if (canComposeEditRanking({ isBestDebates, debateRankingsFlag, canEdit })) return 'best-debates';
+  return debateRankingsFlag && isLoadingAccess ? 'loading' : 'generic';
 }

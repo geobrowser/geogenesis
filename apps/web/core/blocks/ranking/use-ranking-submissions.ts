@@ -23,7 +23,7 @@ import { useReportError } from '~/core/state/status-bar-store';
 import { toUserFacingError } from '~/core/utils/error-diagnostics';
 import { validateEntityId } from '~/core/utils/utils';
 
-import { buildRankingVotes, rankTypeRewriteOps, rankingBallotRules } from './best-debates-ballot';
+import { buildRankingVotes, mustMintFreshRank, rankingBallotRules } from './best-debates-ballot';
 import { clearLocalMyRankingDraft } from './local-ranking-my-draft';
 import { getMyRankingOrderedEntityIds } from './my-ranking-entity';
 import { ballotRecencyKey, pickLatestBallot } from './ranking-ballot-recency';
@@ -233,11 +233,14 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
       try {
         const rankName = blockName.trim() || 'My ranking';
 
-        const reuseExistingRank = !shouldMintNewRankEntity({
+        const reuseRankForPeriod = !shouldMintNewRankEntity({
           isRolling,
           hasExistingBallot: Boolean(myRankEntity),
           isSubmissionLive,
         });
+        // Best debates: an existing Rank the indexer holds as another type can't take ORDINAL votes,
+        // so a fresh ORDINAL Rank supersedes it (GEO-3678, `mustMintFreshRank`).
+        const reuseExistingRank = reuseRankForPeriod && !mustMintFreshRank(myRankEntity, ballotRules);
 
         let ops;
         let rankId: string;
@@ -254,8 +257,7 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
                 blockId,
                 votes,
               });
-          // Best debates: also relabel an existing non-ORDINAL ballot, in the same edit (GEO-3678).
-          ops = reuseExistingRank ? [...result.ops, ...rankTypeRewriteOps(myRankEntity, ballotRules)] : result.ops;
+          ops = result.ops;
           rankId = result.id;
         } catch (error) {
           operation.failed('invalid_input');

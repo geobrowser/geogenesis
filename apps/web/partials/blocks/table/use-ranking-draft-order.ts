@@ -13,6 +13,13 @@ import { mergeBallotOrders, sameBallotOrder } from '~/core/blocks/ranking/rankin
  * from is merged onto the new published order instead (three-way, `mergeBallotOrders`): a placement
  * waiting on "Placed #N of M", or drags not yet published, survive a refetch that lands meanwhile
  * (an earlier placement finishing indexing, a window refocus).
+ *
+ * `markPublished(ids)` moves the merge base to what this device just published. Without it the base
+ * stays on the older order until the index catches up, and a drag or removal of a just-published
+ * debate made meanwhile would be undone when the published order lands.
+ *
+ * Stitch note (#3102): its `unsavedDraft` must enter through `setOrderedIds`, never as
+ * `publishedIds`, or the merge would treat an unsaved draft as published.
  */
 export function useRankingDraftOrder(publishedIds: readonly string[], keepLocalChanges: boolean) {
   const [orderedIds, setOrderedIds] = React.useState<string[]>(() => [...publishedIds]);
@@ -39,5 +46,9 @@ export function useRankingDraftOrder(publishedIds: readonly string[], keepLocalC
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [publishedKey]);
 
-  return [orderedIds, setOrderedIds] as const;
+  const markPublished = React.useCallback((ids: readonly string[]) => {
+    baseRef.current = [...ids];
+  }, []);
+
+  return [orderedIds, setOrderedIds, markPublished] as const;
 }

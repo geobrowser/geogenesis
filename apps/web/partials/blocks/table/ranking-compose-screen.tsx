@@ -8,7 +8,7 @@ import { useAtom, useSetAtom } from 'jotai';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
-import { showBestDebatesCompose } from '~/core/blocks/ranking/best-debates-compose-access';
+import { bestDebatesComposeMode } from '~/core/blocks/ranking/best-debates-compose-access';
 import { BEST_DEBATES_TEAM_VIEW_PARAM, BEST_DEBATES_TEAM_VIEW_TO_RANK } from '~/core/blocks/ranking/best-debates-views';
 import { resolveRankingSingleTargetSpaceId } from '~/core/blocks/ranking/ranking-compose-publish-spaces';
 import { RANKING_COMPOSE_TAB_MY, rankingComposeHref } from '~/core/blocks/ranking/ranking-compose-url';
@@ -33,6 +33,7 @@ import { useRankingPendingEntities } from '~/core/blocks/ranking/use-ranking-pen
 import { useRankingPeriod } from '~/core/blocks/ranking/use-ranking-period';
 import { useRankingSubmissions } from '~/core/blocks/ranking/use-ranking-submissions';
 import { useCreateEntityWithFilters } from '~/core/hooks/use-create-entity-with-filters';
+import { useHydrated } from '~/core/hooks/use-hydrated';
 import { useIsMobileLayout } from '~/core/hooks/use-is-mobile-layout';
 import { useOnboarding } from '~/core/hooks/use-onboarding';
 import { rankingComposeNeedsAccountStep, useRankingComposeAccess } from '~/core/hooks/use-ranking-compose-access';
@@ -81,13 +82,17 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   // members with the `debateRankings` flag (#3105's `canComposeEdit` rule). Everyone else, and every
   // other ranking block, gets the screen exactly as before.
   const debateRankingsFlag = useFeatureFlag('debateRankings');
-  const { canEdit: canEditBlockSpace } = useRankingComposeAccess(spaceId, entityId);
-  const isBestDebates = showBestDebatesCompose({
+  const hydrated = useHydrated();
+  const { canEdit: canEditBlockSpace, isLoading: isLoadingBlockAccess } = useRankingComposeAccess(spaceId, entityId);
+  const bestDebatesMode = bestDebatesComposeMode({
     blockId: entityId,
     spaceId,
+    hydrated,
+    isLoadingAccess: isLoadingBlockAccess,
     debateRankingsFlag,
     canEdit: canEditBlockSpace,
   });
+  const isBestDebates = bestDebatesMode === 'best-debates';
 
   const createNewSpaceId = React.useMemo(() => resolveRankingSingleTargetSpaceId(filterState), [filterState]);
 
@@ -197,7 +202,10 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   // `mySubmission`, which is blanked by it. See `myLastSubmission` (GEO-2871).
   // Best debates keeps unpublished placements and drags when the published order changes under
   // them (GEO-3678); every other block re-seeds the draft as before.
-  const [orderedIds, setOrderedIds] = useRankingDraftOrder(myLastSubmission?.orderedEntityIds ?? NO_IDS, isBestDebates);
+  const [orderedIds, setOrderedIds, markDraftPublished] = useRankingDraftOrder(
+    myLastSubmission?.orderedEntityIds ?? NO_IDS,
+    isBestDebates
+  );
   const [searchQuery, setSearchQuery] = React.useState('');
   const [activeSwipeRowKey, setActiveSwipeRowKey] = React.useState<string | null>(null);
   const [entitySheetTarget, setEntitySheetTarget] = React.useState<{
@@ -548,7 +556,10 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
     personalSpaceId,
     saveMySubmission: slots => saveMySubmission(slots, rankingOpportunity.context),
     isSaving,
-    onPublished: generateOgImages,
+    onPublished: published => {
+      markDraftPublished(published.orderedEntityIds);
+      generateOgImages(published);
+    },
     openOnToRank: searchParams?.get(BEST_DEBATES_TEAM_VIEW_PARAM) === BEST_DEBATES_TEAM_VIEW_TO_RANK,
   });
 
@@ -759,6 +770,17 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
 
   if (accessStatus === 'not-found') {
     return <Custom404 />;
+  }
+
+  // Best debates while the flag or membership is unknown: no generic screen to flash or publish from.
+  if (bestDebatesMode === 'loading') {
+    return (
+      <RankingComposeFullscreen coverNavbar={isMobile}>
+        <div className="flex h-full items-center justify-center text-metadata text-grey-04" role="status">
+          Loading ranking…
+        </div>
+      </RankingComposeFullscreen>
+    );
   }
 
   return (
