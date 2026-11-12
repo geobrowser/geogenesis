@@ -394,12 +394,32 @@ async function fetchExploreEntitiesPage(args: {
         after: args.after,
         filter: buildExploreFeedFilter(args),
         orderBy: args.orderBy,
-        spaceIds: { in: args.spaceIds },
+        spaceIds: exploreEntitiesSpaceIdsArg(args),
         typeIds: args.typeIds?.length ? { in: [...args.typeIds] } : undefined,
         spaceIdsForLists: args.spaceIds,
       },
     })
   );
+}
+
+/**
+ * GEO-3703. The `spaceIds` argument, or `undefined` when the filter already scopes the query to the
+ * same spaces.
+ *
+ * gaia compiles a multi-space `spaceIds: { in }` to `id IN (every entity with a value or relation in
+ * any of those spaces)`. Across the ~40 explore spaces that set is ~1.6M entities, and under
+ * `CREATED_AT_DESC` the planner hashes all of it and sequentially scans every entity before it can
+ * return the newest 22: 165s on testnet (11-12), so New and Fresh never answered inside the feed's
+ * budget. The name clause `buildExploreFeedFilter` adds — a non-empty name value in one of these
+ * spaces — implies that membership, and as an `EXISTS` it lets the planner walk
+ * `entities(created_at, id)` newest-first: the same 22 rows in 0.3s. So while that clause is
+ * present the argument is redundant and is dropped; it is sent only when `requireName` is false.
+ */
+export function exploreEntitiesSpaceIdsArg(args: {
+  spaceIds: readonly string[];
+  requireName?: boolean;
+}): { in: string[] } | undefined {
+  return args.requireName === false ? { in: [...args.spaceIds] } : undefined;
 }
 
 /** One Fresh list per scroll and scope, shared by every page request of that scroll. */
