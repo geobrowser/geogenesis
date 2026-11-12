@@ -144,7 +144,11 @@ export type MomentBackfillBody = {
   apply: boolean;
   preview?: boolean;
   reason?: string;
-  reel?: { clock: 'player' | 'video'; clips: ManualClipBody[]; base?: string };
+  /**
+   * `exact` (geo-chat GEO-3683): cut every clip at exactly its edges, not widened into the quiet
+   * beside its words. A geo-chat that predates it ignores it.
+   */
+  reel?: { clock: 'player' | 'video'; clips: ManualClipBody[]; base?: string; exact?: true };
   unlock?: boolean;
   /** Pick the reel as a story (GEO-3638); sent with `unlock` so the re-pick is a story reel. */
   story?: boolean;

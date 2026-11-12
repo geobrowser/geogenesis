@@ -31,7 +31,7 @@ type Drag = {
 
 /**
  * Where a dragged edge lands: off the middle of any word, outward, so the clip takes whole words
- * (`snapEdge`); with Alt held, wherever it was let go, to the tenth.
+ * (`snapEdge`); with Alt held, wherever it was let go, to the tenth, and cut exactly there.
  */
 export function dragEdge(ms: number, words: readonly ReelWord[], edge: 'start' | 'end', free: boolean) {
   return free ? Math.round(ms / FREE_STEP_MS) * FREE_STEP_MS : snapEdge(ms, words, edge);
@@ -48,20 +48,33 @@ export function draggedClip(
   words: readonly ReelWord[],
   durationMs: number,
   free: boolean
-): { start_ms: number; end_ms: number } {
+): DraggedSpan {
   if (drag.mode === 'start') {
-    const start = Math.max(0, dragEdge(drag.start + deltaMs, words, 'start', free));
-    return { start_ms: Math.min(start, drag.end - MIN_EDIT_CLIP_MS), end_ms: drag.end };
+    const start = Math.min(
+      Math.max(0, dragEdge(drag.start + deltaMs, words, 'start', free)),
+      drag.end - MIN_EDIT_CLIP_MS
+    );
+    return { start_ms: start, end_ms: drag.end, ...(free && { free_start_ms: start }) };
   }
   if (drag.mode === 'end') {
-    const end = Math.min(durationMs, dragEdge(drag.end + deltaMs, words, 'end', free));
-    return { start_ms: drag.start, end_ms: Math.max(end, drag.start + MIN_EDIT_CLIP_MS) };
+    const end = Math.max(
+      Math.min(durationMs, dragEdge(drag.end + deltaMs, words, 'end', free)),
+      drag.start + MIN_EDIT_CLIP_MS
+    );
+    return { start_ms: drag.start, end_ms: end, ...(free && { free_end_ms: end }) };
   }
   const length = drag.end - drag.start;
   const start = Math.max(0, Math.min(durationMs - length, dragEdge(drag.start + deltaMs, words, 'start', free)));
-  const end = free ? start + length : Math.min(durationMs, snapEdge(start + length, words, 'end'));
-  return { start_ms: start, end_ms: Math.max(end, start + MIN_EDIT_CLIP_MS) };
+  const snappedEnd = free ? start + length : Math.min(durationMs, snapEdge(start + length, words, 'end'));
+  const end = Math.max(snappedEnd, start + MIN_EDIT_CLIP_MS);
+  return { start_ms: start, end_ms: end, ...(free && { free_start_ms: start, free_end_ms: end }) };
 }
+
+/**
+ * A dragged clip's edges, and with Alt held, where they were placed freely: a free edge is cut
+ * exactly there, not widened into the quiet beside its words (`manualReel`).
+ */
+export type DraggedSpan = Pick<EditorClip, 'start_ms' | 'end_ms' | 'free_start_ms' | 'free_end_ms'>;
 
 /**
  * The reel on the debate's timeline (GEO-3672): each clip a block, coloured by its speaker, that can
@@ -90,7 +103,7 @@ export function ReelTimeline({
   selected: number;
   readOnly: boolean;
   onSelect: (index: number) => void;
-  onChangeClip: (index: number, span: { start_ms: number; end_ms: number; claim_index: number | null }) => void;
+  onChangeClip: (index: number, span: DraggedSpan & { claim_index: number | null }) => void;
   onSeek: (ms: number) => void;
 }) {
   const [zoom, setZoom] = React.useState<(typeof ZOOMS)[number]>(1);

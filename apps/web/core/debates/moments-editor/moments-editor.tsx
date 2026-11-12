@@ -35,8 +35,9 @@ import {
   clipSpeaker,
   clipsFromLiveReel,
   clipsFromServedMoments,
+  edgeIsFree,
   formatReelTime,
-  manualReelClips,
+  manualReel,
   newClipKey,
   playerWords,
   reelProblems,
@@ -368,7 +369,7 @@ function Editor({ debateId }: { debateId: string }) {
         : {
             preview: kind === 'preview',
             reason: kind === 'preview' ? 'Moments editor: preview' : 'Moments editor: hand-picked reel',
-            reel: { clock: 'player' as const, clips: manualReelClips(clips), ...(base && { base }) },
+            reel: { clock: 'player' as const, ...manualReel(clips, words, turns), ...(base && { base }) },
           };
     queue.mutate(body, {
       onSuccess: queued => {
@@ -614,7 +615,9 @@ function Editor({ debateId }: { debateId: string }) {
 
 /** Whether two reels are the same edit: the same cuts and claims, in the same order. */
 function reelKey(clips: readonly EditorClip[]) {
-  return clips.map(clip => `${clip.start_ms}-${clip.end_ms}-${clip.claim_index ?? ''}`).join('|');
+  // A free edge is sent differently from a word edge at the same time (`manualReel`).
+  const free = (clip: EditorClip) => `${edgeIsFree(clip, 'start') ? 's' : ''}${edgeIsFree(clip, 'end') ? 'e' : ''}`;
+  return clips.map(clip => `${clip.start_ms}-${clip.end_ms}-${clip.claim_index ?? ''}-${free(clip)}`).join('|');
 }
 
 /** The turns' two clocks, which map the video's times onto the player's: equal keys, the same map. */

@@ -329,6 +329,47 @@ describe('MomentsEditor (GEO-3671)', () => {
     expect(within(clipRow('Dinner')).queryByText(/Live now for/)).not.toBeInTheDocument();
   });
 
+  // GEO-3672 / GEO-3683: an edge placed with Alt is a time picked by ear. Without `exact`, geo-chat
+  // would widen this one, 200 ms after "dates", out to 3.15 s.
+  it('publishes an edge placed with Alt as exact, with the other edges where geo-chat would widen them', () => {
+    mocks.plan.data = entry({
+      live_reel: {
+        clock: 'video',
+        clips: [
+          { start_ms: 900, end_ms: 3_000, speaker_slot: 0, claim_index: 0, claim_text: 'Coffee is low stakes' },
+          { start_ms: 4_800, end_ms: 5_600, speaker_slot: 1, claim_index: 1, claim_text: 'Dinner shows effort' },
+        ],
+      },
+    });
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    vi.spyOn(screen.getByTestId('reel-track'), 'getBoundingClientRect').mockReturnValue({
+      width: 5_600,
+      left: 0,
+    } as DOMRect);
+    const handle = screen.getByTestId('clip-0-end-handle');
+    fireEvent.pointerDown(handle, { clientX: 3_000, pointerId: 1 });
+    fireEvent.pointerMove(handle, { clientX: 3_100, pointerId: 1, altKey: true });
+    fireEvent.pointerUp(handle, { pointerId: 1 });
+    expect(screen.getAllByRole('textbox', { name: 'End time' })[0]).toHaveValue('0:03.1');
+
+    fireEvent.click(screen.getByRole('button', { name: /^Publish reel/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Publish (and lock|anyway)$/ }));
+    expect(mocks.mutate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reel: {
+          clock: 'player',
+          clips: [
+            { start: 0.75, end: 3.1, claim_index: 0 },
+            { start: 4.75, end: 5.65, claim_index: 1 },
+          ],
+          exact: true,
+          base: 'v1',
+        },
+      }),
+      expect.any(Object)
+    );
+  });
+
   // The reel moved on under the edit (another admin's publish, a worker re-apply). Publishing the
   // edit must still name the version it was made on, so geo-chat refuses it as `reel_changed`.
   it('publishes an edit made while another request ran on the version it was made on', () => {

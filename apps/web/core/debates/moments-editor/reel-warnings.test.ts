@@ -132,9 +132,11 @@ describe('draggedClip (GEO-3672)', () => {
   });
 
   it('places an edge freely, to the tenth, with Alt held', () => {
+    // And says where, so the edge is cut exactly there (`manualReel`).
     expect(draggedClip({ ...drag, mode: 'start' }, 1_234, words, 10_000, true)).toEqual({
       start_ms: 2_200,
       end_ms: 3_400,
+      free_start_ms: 2_200,
     });
   });
 
@@ -142,6 +144,8 @@ describe('draggedClip (GEO-3672)', () => {
     expect(draggedClip({ ...drag, mode: 'move' }, 5_000, words, 7_000, true)).toEqual({
       start_ms: 4_600,
       end_ms: 7_000,
+      free_start_ms: 4_600,
+      free_end_ms: 7_000,
     });
     expect(draggedClip({ ...drag, mode: 'move' }, -5_000, words, 7_000, false)).toEqual({ start_ms: 0, end_ms: 2_400 });
   });
@@ -157,6 +161,8 @@ describe('draggedClip (GEO-3672)', () => {
     expect(draggedClip({ ...drag, mode: 'move' }, 700, later, 10_000, true)).toEqual({
       start_ms: 1_700,
       end_ms: 4_100,
+      free_start_ms: 1_700,
+      free_end_ms: 4_100,
     });
   });
 
@@ -164,6 +170,7 @@ describe('draggedClip (GEO-3672)', () => {
     expect(draggedClip({ ...drag, mode: 'end' }, -3_000, words, 10_000, true)).toEqual({
       start_ms: 1_000,
       end_ms: 2_000,
+      free_end_ms: 2_000,
     });
   });
 });
