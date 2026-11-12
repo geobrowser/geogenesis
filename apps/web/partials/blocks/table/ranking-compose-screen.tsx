@@ -43,6 +43,7 @@ import { useRankingOpportunity } from '~/core/use-ranking-opportunity';
 
 import { stepAtom } from '~/partials/onboarding/onboarding-atoms';
 
+import { RankingBallotReadError } from './ranking-ballot-read-error';
 import { RankingComposeCreateEntityPanel } from './ranking-compose-create-entity-panel';
 import { RankingComposeEntitySheet } from './ranking-compose-entity-sheet';
 import { RankingComposeFullscreen } from './ranking-compose-fullscreen';
@@ -128,6 +129,8 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
     isSaving,
     personalSpaceId,
     isLoading: isLoadingMySubmission,
+    ballotReadError,
+    retryBallotRead,
   } = useRankingSubmissions(entityId, spaceId, displayName);
 
   const canCreateNew = Boolean(createNewSpaceId) && !isLoadingCreateAccess && canEditCreateSpace;
@@ -467,6 +470,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   const hasUnpublishedChanges = draftIdsKey !== publishedIdsKey;
 
   const canPublish =
+    !ballotReadError &&
     orderedIds.length > 0 &&
     hasUnpublishedChanges &&
     submissionsOpen &&
@@ -606,6 +610,14 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   // "Untitled" rows that then jump into "My ranking".
   const isGlobalListResolving = isLoadingMySubmission || isLoadingRankableEntries;
 
+  // The ballot exists but couldn't be read whole (GEO-3680): the list below
+  // would start empty, and publishing it would replace the real one.
+  const ballotReadAlert = ballotReadError ? (
+    <div className="mt-2">
+      <RankingBallotReadError message={ballotReadError} onRetry={retryBallotRead} />
+    </div>
+  ) : null;
+
   const titleMetadata = (
     <RankingComposeTitleMetadata
       isMobile={isMobile}
@@ -715,7 +727,10 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
                 data-app-scroll-surface
                 className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-4"
               >
-                <div className="pt-2 pb-4">{titleMetadata}</div>
+                <div className="pt-2 pb-4">
+                  {titleMetadata}
+                  {ballotReadAlert}
+                </div>
                 <div className="relative flex min-h-0 flex-col">{rankingLayout}</div>
               </div>
             </>
@@ -730,7 +745,10 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
                   isSaving={isSaving}
                   onPublish={() => void handlePublish()}
                 />
-                <div className="mt-3 pb-4">{titleMetadata}</div>
+                <div className="mt-3 pb-4">
+                  {titleMetadata}
+                  {ballotReadAlert}
+                </div>
               </div>
 
               <div className="relative min-h-0 flex-1">{rankingLayout}</div>
