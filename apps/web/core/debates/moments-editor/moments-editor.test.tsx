@@ -565,8 +565,8 @@ describe('MomentsEditor (GEO-3671)', () => {
     const { rerender } = render(<MomentsEditor debateId={DEBATE_ID} />);
     fireEvent.change(screen.getByRole('textbox', { name: 'End time' }), { target: { value: '1.45' } });
     fireEvent.blur(screen.getByRole('textbox', { name: 'End time' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Publish reel' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Publish and lock' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Publish reel/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Publish anyway' }));
 
     // The plan read again: the reel is carried now, and nothing is queued to cut it again.
     mocks.plan = {
