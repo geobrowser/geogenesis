@@ -295,10 +295,14 @@ function Editor({ debateId }: { debateId: string }) {
   const warnings = reelWarnings(clips, words, nameOf);
 
   // The header's button and the warning's fix alike: without a playhead there is nowhere to add it.
-  const canAddAtPlayhead = !readOnly && clips.length < MANUAL_MAX_CLIPS && playheadMs !== null;
-  const addClipAtPlayhead = () => {
-    if (!canAddAtPlayhead) return;
-    const start = snapEdge(playheadMs, words, 'start');
+  // A new clip starts at the playhead or at a transcript sentence. The transcript is the way in when
+  // there is no playhead, as on the combined-video fallback, and no clip to select, as on a debate
+  // locked without a reel.
+  const canAddClip = !readOnly && clips.length < MANUAL_MAX_CLIPS;
+  const canAddAtPlayhead = canAddClip && playheadMs !== null;
+  const addClipAt = (ms: number) => {
+    if (!canAddClip) return;
+    const start = snapEdge(ms, words, 'start');
     const key = newClipKey();
     setClips(current => [
       ...current,
@@ -311,6 +315,9 @@ function Editor({ debateId }: { debateId: string }) {
       },
     ]);
     setSelectedKey(key);
+  };
+  const addClipAtPlayhead = () => {
+    if (canAddAtPlayhead) addClipAt(playheadMs);
   };
   const applyFix = (fix: ReelWarningFix) => {
     if (fix.kind === 'add-at-playhead') {
@@ -531,7 +538,7 @@ function Editor({ debateId }: { debateId: string }) {
             </div>
             {clipViews.length === 0 ? (
               <Text as="p" variant="metadata" color="grey-04" className="p-3">
-                No clips. Add one at the playhead.
+                No clips. Add one at the playhead or from the transcript.
               </Text>
             ) : (
               <ol>
@@ -580,6 +587,8 @@ function Editor({ debateId }: { debateId: string }) {
           />
           <ReelTranscript
             sentences={sentences}
+            canAddClip={canAddClip}
+            onAddClip={addClipAt}
             clips={clips}
             speakers={speakers}
             selected={selectedIndex}

@@ -57,7 +57,7 @@ export function endClipAt(clip: EditorClip, sentence: ReelSentence): EditorClip 
 
 /**
  * The debate's transcript, turn by turn (GEO-3672): which clips each sentence plays in, and from
- * any sentence, start or end the selected clip there, or play from it.
+ * any sentence, start or end the selected clip there, start a new clip there, or play from it.
  */
 export function ReelTranscript({
   sentences,
@@ -65,8 +65,10 @@ export function ReelTranscript({
   speakers,
   selected,
   readOnly,
+  canAddClip,
   nameOf,
   onChangeClip,
+  onAddClip,
   onSeek,
 }: {
   sentences: readonly ReelSentence[];
@@ -74,8 +76,12 @@ export function ReelTranscript({
   speakers: readonly (1 | 2 | null)[];
   selected: number;
   readOnly: boolean;
+  /** Whether a clip can be added: the reel isn't read-only and has room. */
+  canAddClip: boolean;
   nameOf: (slot: ParticipantSlot | null) => string | null;
   onChangeClip: (index: number, clip: EditorClip) => void;
+  /** Adds a clip starting at `ms`, the editor's own way, and selects it. */
+  onAddClip: (ms: number) => void;
   onSeek: (ms: number) => void;
 }) {
   const selectedClip = clips[selected];
@@ -148,6 +154,9 @@ export function ReelTranscript({
                               End clip {selected + 1} here
                             </SmallButton>
                           </>
+                        ) : null}
+                        {canAddClip ? (
+                          <SmallButton onClick={() => onAddClip(sentence.start_ms)}>New clip here</SmallButton>
                         ) : null}
                         <SmallButton
                           aria-label={`Play from ${formatReelTime(sentence.start_ms)}`}

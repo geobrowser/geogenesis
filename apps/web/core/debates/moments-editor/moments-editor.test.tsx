@@ -12,6 +12,8 @@ import { MomentsEditor, claimsBySpeaker, editingBlockedReason, keepClaimWithSpea
 const DEBATE_ID = '01a0448a-61d3-7101-8434-a20fdadf6f97';
 
 let wordsOverride: unknown[] | null = null;
+/** The transcript's `sentences`, served only when a test sets them. */
+let sentencesOverride: unknown[] | null = null;
 
 const mocks = vi.hoisted(() => ({
   backfill: {} as { isPending: boolean; error: unknown; data: { request: unknown; entry: unknown } | undefined },
@@ -42,6 +44,7 @@ vi.mock('../hooks', () => ({
               { participant_slot: 1, start_ms: 1_500, end_ms: 2_900, text: 'dates' },
               { participant_slot: 2, start_ms: 5_000, end_ms: 5_400, text: 'Dinner' },
             ],
+            ...(sentencesOverride && { sentences: sentencesOverride }),
           },
         },
   useGeoChatAuth: () => ({ ready: true, authenticated: true, accountKey: 'a', getPrivyIdentityToken: async () => 't' }),
@@ -135,6 +138,7 @@ beforeEach(() => {
   mocks.plan = { isSuccess: true, data: entry(), error: null };
   mocks.mutate.mockReset();
   wordsOverride = null;
+  sentencesOverride = null;
   mocks.refresh.mockReset();
   mocks.manualReel = false;
   mocks.transcriptFailed = false;
@@ -640,6 +644,36 @@ describe('MomentsEditor (GEO-3671)', () => {
 
     expect(screen.getByRole('textbox', { name: 'End time' })).toHaveValue('0:01.5');
     expect(screen.getByText('Unsaved changes')).toBeInTheDocument();
+  });
+
+  // With no clip to select and no playhead (the combined-video fallback reports none), as on a debate
+  // locked without a reel, the transcript is the way to start one.
+  it('starts a new clip from a transcript sentence when there is no clip and no playhead', () => {
+    sentencesOverride = [
+      { participant_slot: 1, start_ms: 1_000, end_ms: 2_900, text: 'Coffee dates.' },
+      { participant_slot: 2, start_ms: 5_000, end_ms: 5_400, text: 'Dinner.' },
+    ];
+    mocks.manualReel = true;
+    mocks.plan.data = entry({
+      reel_unlinkable: true,
+      live_reel: null,
+      hand_picked: { requested_by: 'yaniv', requested_at: '2026-11-10T12:00:00Z' },
+    });
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    expect(screen.queryByRole('textbox', { name: 'Start time' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '+ Add clip at playhead' })).toBeDisabled();
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'New clip here' })[1]);
+    expect(screen.getByRole('textbox', { name: 'Start time' })).toHaveValue('0:05.0');
+    expect(screen.getByText('Clip 1 selected')).toBeInTheDocument();
+    expect(screen.getByText('Unsaved changes')).toBeInTheDocument();
+  });
+
+  it('offers no new clip from the transcript while the reel is read-only', () => {
+    sentencesOverride = [{ participant_slot: 1, start_ms: 1_000, end_ms: 2_900, text: 'Coffee dates.' }];
+    mocks.plan.data = entry({ refusal: 'media_job_active' });
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    expect(screen.queryByRole('button', { name: 'New clip here' })).not.toBeInTheDocument();
   });
 
   // The selection follows the clip, not its place: removing an earlier clip must not hand the
