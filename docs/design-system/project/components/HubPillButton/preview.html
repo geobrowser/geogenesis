@@ -1,0 +1,30 @@
+<!-- @dsCard group="Actions" height=200 subtitle="The debates pill: primary, secondary, tag; default, compact, large; icon control" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>HubPillButton — static rendition</title>
+</head>
+<body class="bg-white p-4 text-text">
+<div class="flex flex-col gap-4">
+  <div class="flex flex-wrap items-center gap-2">
+    <button type="button" class="inline-flex shrink-0 items-center justify-center rounded-full border whitespace-nowrap transition-colors disabled:opacity-50 h-7 px-3 text-metadata border-transparent bg-text text-white hover:bg-text/90">Debate now</button>
+    <button type="button" class="inline-flex shrink-0 items-center justify-center rounded-full border whitespace-nowrap transition-colors disabled:opacity-50 h-7 px-3 text-metadata border-grey-02 text-text hover:bg-grey-01">Schedule</button>
+    <button type="button" disabled aria-busy="true" class="inline-flex shrink-0 items-center justify-center rounded-full border whitespace-nowrap transition-colors disabled:opacity-50 h-7 px-3 text-metadata border-transparent bg-text text-white hover:bg-text/90">Requesting…</button>
+    <button type="button" disabled class="inline-flex shrink-0 items-center justify-center rounded-full border whitespace-nowrap transition-colors disabled:opacity-50 h-7 px-3 text-metadata border-grey-02 text-text hover:bg-grey-01">In a debate</button>
+    <span class="inline-flex shrink-0 items-center justify-center rounded-full border whitespace-nowrap transition-colors disabled:opacity-50 h-7 px-3 text-metadata border-grey-02 text-text">Today’s claims</span>
+    <button type="button" title="See times" class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-grey-04 transition-colors hover:bg-grey-01 hover:text-text"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="1.5" y="2.5" width="13" height="12" rx="2.5" stroke="currentColor"></rect><path d="M1.5 6.5H14.5" stroke="currentColor"></path><path d="M5 1V4" stroke="currentColor" stroke-linecap="round"></path><path d="M11 1V4" stroke="currentColor" stroke-linecap="round"></path><rect x="4" y="8" width="2" height="2" rx="0.5" fill="currentColor"></rect><rect x="7" y="8" width="2" height="2" rx="0.5" fill="currentColor"></rect><rect x="10" y="8" width="2" height="2" rx="0.5" fill="currentColor"></rect><rect x="4" y="11" width="2" height="2" rx="0.5" fill="currentColor"></rect><rect x="7" y="11" width="2" height="2" rx="0.5" fill="currentColor"></rect></svg></button>
+  </div>
+  <div class="flex flex-wrap items-center gap-2">
+    <button type="button" class="inline-flex shrink-0 items-center justify-center rounded-full border whitespace-nowrap transition-colors disabled:opacity-50 h-6.5 px-2.5 text-breadcrumb md:h-8 md:px-3 border-grey-02 text-text hover:bg-grey-01">Decline</button>
+    <button type="button" class="inline-flex shrink-0 items-center justify-center rounded-full border whitespace-nowrap transition-colors disabled:opacity-50 h-6.5 px-2.5 text-breadcrumb md:h-8 md:px-3 border-transparent bg-text text-white hover:bg-text/90">Accept</button>
+    <button type="button" class="inline-flex shrink-0 items-center justify-center rounded-full border whitespace-nowrap transition-colors disabled:opacity-50 h-7 px-3 text-metadata gap-1.5 border-transparent bg-text text-white hover:bg-text/90">Urbanism <span class="tabular-nums transition-[color,opacity] text-white/70">24</span></button>
+    <button type="button" class="inline-flex shrink-0 items-center justify-center rounded-full border whitespace-nowrap transition-colors disabled:opacity-50 h-7 px-3 text-metadata gap-1.5 border-grey-02 text-text hover:bg-grey-01">Economics <span class="tabular-nums transition-[color,opacity] text-grey-04">9</span></button>
+  </div>
+  <div class="flex w-[340px] flex-col gap-2">
+    <button type="button" class="inline-flex shrink-0 items-center justify-center rounded-full border whitespace-nowrap transition-colors disabled:opacity-50 h-12 px-5 text-button border-transparent bg-text text-white hover:bg-text/90">I’m running late</button>
+    <button type="button" class="inline-flex shrink-0 items-center justify-center rounded-full border whitespace-nowrap transition-colors disabled:opacity-50 h-12 px-5 text-button border-grey-02 text-text hover:bg-grey-01">I can’t make it</button>
+  </div>
+</div>
+</body>
+</html>

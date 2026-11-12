@@ -1,0 +1,55 @@
+<!-- @dsCard height=288 -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Geo Design System</title>
+<style>
+  html, body { margin:0; height:100%; }
+  body { background:var(--white); color:var(--text); font-family:var(--font-calibre); overflow:hidden; }
+  .cover { position:relative; height:288px; overflow:hidden; }
+  .art { position:absolute; top:0; left:480px; width:480px; height:288px; overflow:hidden; }
+  .art svg { display:block; width:480px; height:288px; }
+  .ink { fill:var(--text); }
+  .cta { fill:var(--ctaPrimary); }
+  .line { fill:var(--grey-02); }
+  .agree { fill:var(--green); }
+  .disagree { fill:var(--red-01); }
+  .picked { fill:var(--divider); }
+  .open { fill:none; stroke:var(--text); stroke-width:1; stroke-dasharray:4 3; }
+  .blk { rx:var(--radius-lg); }
+  .pill { rx:var(--radius-lg); }
+  .words { position:absolute; left:var(--spacing-6); bottom:var(--spacing-6); max-width:440px; }
+  .name { margin:0; font-size:72px; line-height:.95; font-weight:600; letter-spacing:-0.5px; color:var(--text); }
+  .tag { margin:var(--spacing-2) 0 0 2px; font-size:14px; line-height:18px; color:var(--grey-04); }
+</style>
+</head>
+<body>
+<div class="cover">
+<div class="art" aria-hidden="true">
+<svg viewBox="0 0 480 288" width="480" height="288">
+<!--
+  blocks      text 168x228 slab bled off the top (Geo's black ink, the debates primary) · ctaPrimary 120x168 (the classic action blue) · grey-02 160x120 bled off the right (the hairline grey) · green + red-01 only as the 24px split pill beneath (agree/disagree is meaning, kept small) — about 35% of 960x288
+  arrangement one tall black slab with satellites, bottoms on one line spacing-6 above the edge, spacing-4 gutters
+  pattern     pills, from "Borders, not shadows ... pills for the actions people take": divider-filled pills cut into the slab (the picked Agree/Disagree fill) and dashed text-outline pills on the grey block (the unpicked state), 24px tall at a spacing-8 pitch
+  scales      sides in spacing-6/-8 multiples; gutters spacing-4; pill height spacing-6 with rx radius-lg (half of 24); block corners radius-lg
+-->
+<rect class="ink blk" x="24" y="-12" width="168" height="228" rx="12"/>
+<rect class="picked pill" x="48" y="112" width="120" height="24" rx="12"/>
+<rect class="picked pill" x="48" y="144" width="96" height="24" rx="12"/>
+<rect class="picked pill" x="48" y="176" width="64" height="24" rx="12"/>
+<rect class="cta blk" x="208" y="48" width="120" height="168" rx="12"/>
+<rect class="line blk" x="344" y="96" width="160" height="120" rx="12"/>
+<rect class="open pill" x="360.5" y="120.5" width="96" height="23" rx="12"/>
+<rect class="open pill" x="360.5" y="160.5" width="72" height="23" rx="12"/>
+<rect class="agree pill" x="24" y="240" width="200" height="24" rx="12"/>
+<rect class="disagree pill" x="232" y="240" width="120" height="24" rx="12"/>
+</svg>
+</div>
+<div class="words">
+<h1 class="name">Geo Design<br>System</h1>
+<p class="tag">Black ink, grey hairlines and pills, from the geogenesis web app.</p>
+</div>
+</div>
+</body>
+</html>

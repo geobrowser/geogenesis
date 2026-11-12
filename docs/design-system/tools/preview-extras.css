@@ -1,0 +1,8 @@
+/* Preview-frame only. The app's body is `overflow-y-scroll` with a stable scrollbar gutter, which
+   inside a small preview frame draws an empty scrollbar track. Everything else is the app's CSS. */
+@layer base {
+  body {
+    overflow-y: auto;
+    scrollbar-gutter: auto;
+  }
+}

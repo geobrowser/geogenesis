@@ -1,0 +1,18 @@
+<!-- @dsCard group="Debates" height=380 subtitle="The modal card: divider ground, white inset, pill actions, quiet underlined escape" -->
+<div class="relative flex h-[340px] items-center justify-center bg-text/45 p-5 backdrop-blur-sm">
+  <section role="dialog" aria-modal="true" class="max-sm:rounded-b-none max-sm:border-b-0 max-sm:px-4 max-sm:py-5 grid w-[min(370px,100%)] gap-4 overflow-hidden rounded-lg bg-divider p-5 text-text shadow-card">
+    <header class="min-w-0 text-center"><h2><span class="text-metadata text-text">Debate request</span></h2></header>
+    <div class="grid min-h-24 grid-cols-[1fr_auto_1fr] items-center gap-2 rounded-lg border border-grey-02 bg-white p-3">
+      <div class="grid min-w-0 justify-items-center gap-2 text-center"><span class="h-5 w-5 overflow-hidden rounded-full">{{avatar:ava:20}}</span><div class="text-metadata text-text max-w-full truncate">You</div></div>
+      <div class="relative grid w-7 place-items-center"><span aria-hidden="true" class="absolute top-1/2 left-1/2 h-18 w-px -translate-x-1/2 -translate-y-1/2 bg-divider"></span><span class="relative grid h-7 w-7 place-items-center rounded-full border border-divider bg-white text-tag text-text">VS</span></div>
+      <div class="grid min-w-0 justify-items-center gap-2 text-center"><span class="h-5 w-5 overflow-hidden rounded-full">{{avatar:ben:20}}</span><div class="text-metadata text-text max-w-full truncate">Ben Okafor</div></div>
+    </div>
+    <footer class="grid gap-5">
+      <div class="grid grid-cols-2 gap-2">
+        <button type="button" class="flex h-7 md:h-11 w-full items-center justify-center rounded-full border border-grey-02 bg-white px-4 text-metadata text-text transition-colors hover:bg-grey-01 disabled:opacity-50">Not now</button>
+        <button type="button" class="flex h-7 md:h-11 w-full items-center justify-center rounded-full bg-text px-4 text-metadata text-white transition-colors hover:bg-text/90 disabled:opacity-50">Explore claims</button>
+      </div>
+      <button type="button" class="mx-auto -mt-3 px-4 py-1 text-metadata text-grey-04 underline hover:text-text disabled:opacity-50">Reject request</button>
+    </footer>
+  </section>
+</div>
