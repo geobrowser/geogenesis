@@ -259,6 +259,81 @@ describe('MomentsEditor (GEO-3671)', () => {
     expect(screen.getByText(/See clip 1\./)).toBeInTheDocument();
   });
 
+  // GEO-3705: a problem the worker reported holds only for the clip as it was sent. Fixing the clip
+  // (its claim, an edge) clears it, so the reel can be published again without a reload.
+  describe('after a failed publish', () => {
+    const failPublish = () => {
+      mocks.plan.data = entry({
+        live_reel: {
+          clock: 'video',
+          clips: [
+            { start_ms: 900, end_ms: 3_000, speaker_slot: 0, claim_index: 0, claim_text: 'Coffee is low stakes' },
+            { start_ms: 4_800, end_ms: 5_600, speaker_slot: 1, claim_index: 1, claim_text: 'Dinner shows effort' },
+          ],
+        },
+      });
+      const requestedAt = '2026-11-11T21:00:00Z';
+      mocks.mutate.mockImplementation((_body, options: { onSuccess: (entry: unknown) => void }) =>
+        options.onSuccess({ queued: true, refusal: null, request: status({ requested_at: requestedAt }) })
+      );
+      const view = render(<MomentsEditor debateId={DEBATE_ID} />);
+      fireEvent.change(screen.getAllByRole('textbox', { name: 'End time' })[0], { target: { value: '1.45' } });
+      fireEvent.blur(screen.getAllByRole('textbox', { name: 'End time' })[0]);
+      fireEvent.click(screen.getByRole('button', { name: /^Publish reel/ }));
+      fireEvent.click(screen.getByRole('button', { name: /^Publish (and lock|anyway)$/ }));
+
+      mocks.backfill.data = {
+        request: status({
+          requested_at: requestedAt,
+          status: 'skipped',
+          outcome: 'manual_reel_invalid',
+          report: {
+            story_failed:
+              'clip 1: its speaker has no claim to link it to; clip 2: its speaker has no claim to link it to',
+          },
+        }),
+        entry: null,
+      };
+      view.rerender(<MomentsEditor debateId={DEBATE_ID} />);
+      expect(within(clipRow('Coffee')).getByText('its speaker has no claim to link it to')).toBeInTheDocument();
+      expect(within(clipRow('Dinner')).getByText('its speaker has no claim to link it to')).toBeInTheDocument();
+      expect(screen.getByText(/See clips 1, 2\./)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^Publish reel/ })).toBeDisabled();
+    };
+
+    it('clears a clip’s reported problem once its claim is changed, and keeps the untouched clip’s', () => {
+      failPublish();
+      pickClaim(clipRow('Coffee'), 'Closest claim (automatic)');
+
+      expect(within(clipRow('Coffee')).queryByText('its speaker has no claim to link it to')).not.toBeInTheDocument();
+      // The clip left alone still blocks, and is the only one the notice points at.
+      expect(within(clipRow('Dinner')).getByText('its speaker has no claim to link it to')).toBeInTheDocument();
+      expect(screen.getByText(/See clip 2\./)).toBeInTheDocument();
+      expect(screen.queryByText(/See clips/)).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^Publish reel/ })).toBeDisabled();
+    });
+
+    it('lets the reel be published again once every flagged clip is changed', () => {
+      failPublish();
+      pickClaim(clipRow('Coffee'), 'Closest claim (automatic)');
+      fireEvent.change(screen.getAllByRole('textbox', { name: 'End time' })[1], { target: { value: '5.5' } });
+      fireEvent.blur(screen.getAllByRole('textbox', { name: 'End time' })[1]);
+
+      expect(screen.queryByText('its speaker has no claim to link it to')).not.toBeInTheDocument();
+      expect(screen.queryByText(/See clip/)).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^Publish reel/ })).toBeEnabled();
+    });
+
+    it('flags a changed clip again once it is changed back to what was sent', () => {
+      failPublish();
+      pickClaim(clipRow('Coffee'), 'Closest claim (automatic)');
+      pickClaim(clipRow('Coffee'), 'Coffee is low stakes');
+
+      expect(within(clipRow('Coffee')).getByText('its speaker has no claim to link it to')).toBeInTheDocument();
+      expect(screen.getByText(/See clips 1, 2\./)).toBeInTheDocument();
+    });
+  });
+
   // Once the reel this visit published is live, the edit is no longer unsaved, and the editor opens
   // on the reel geo-chat now serves.
   it('moves on to the live reel once its own publish goes live', () => {
@@ -1023,6 +1098,12 @@ describe('MomentsEditor (GEO-3671)', () => {
 /** The reel's row for the clip whose quote starts with `word` (the `nth` such row). */
 function clipRow(word: string, nth = 0) {
   return screen.getAllByText(new RegExp(`^${word}`), { selector: 'p' })[nth].closest('li') as HTMLElement;
+}
+
+/** Picks a clip's claim from its menu. */
+function pickClaim(row: HTMLElement, label: string) {
+  fireEvent.keyDown(within(row).getByRole('combobox'), { key: 'Enter' });
+  fireEvent.click(screen.getByRole('option', { name: label }));
 }
 
 describe('claimsBySpeaker', () => {
