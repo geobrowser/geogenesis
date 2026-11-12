@@ -281,6 +281,12 @@ export function coverageSentence({ ranked, total }: { ranked: number; total: num
   return `${ranked} of ${total} debates from today are ranked`;
 }
 
+/** "12 of 86 debates from the last 7 days are ranked": the line when today has none yet. */
+export function weekCoverageSentence({ ranked, total }: { ranked: number; total: number }): string {
+  if (total === 1) return `${ranked} of 1 debate from the last ${BEST_DEBATES_WINDOW_DAYS} days is ranked`;
+  return `${ranked} of ${total} debates from the last ${BEST_DEBATES_WINDOW_DAYS} days are ranked`;
+}
+
 export function rankerCountLabel(count: number): string {
   return count === 1 ? '1 ranker' : `${count} rankers`;
 }

@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import { useBestDebateRowData } from './best-debate-row';
 import { RankingFlowDialog } from './ranking-flow-dialog';
 
 /**
@@ -41,7 +42,20 @@ type Props = {
 };
 
 const OPTION_CLASS =
-  'flex w-full flex-col items-start gap-1 rounded-lg border border-grey-02 bg-white p-4 text-left transition-colors hover:border-text focus-visible:border-text focus-visible:outline-hidden disabled:cursor-default disabled:opacity-50';
+  'flex w-full flex-col items-start gap-1.5 rounded-lg border border-grey-02 bg-white p-4 text-left transition-colors hover:border-text focus-visible:border-text focus-visible:outline-hidden disabled:cursor-default disabled:opacity-50';
+const OPTION_TITLE_CLASS = 'flex items-center gap-2 text-[17px] leading-[21px] font-semibold text-text';
+const OPTION_BODY_CLASS = 'text-[14px] leading-[18px] text-grey-04';
+
+const RISE_ICON = (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden className="shrink-0 text-purple">
+    <path d="M8 13.5v-9M4.5 8L8 4.5 11.5 8M3 2.5h10" stroke="currentColor" strokeWidth="1.3" />
+  </svg>
+);
+const SINK_ICON = (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden className="shrink-0 text-red-01">
+    <path d="M8 2.5v9M4.5 8L8 11.5 11.5 8M3 13.5h10" stroke="currentColor" strokeWidth="1.3" />
+  </svg>
+);
 
 /**
  * Rank asks first: place the debate in your ranking, or push it down (GEO-3591 spec, "Pushing a
@@ -59,12 +73,18 @@ export function RankChoiceDialog({
   onClose,
 }: Props) {
   const ready = pushDown?.isReady ? pushDown.isReady(entityId) : true;
+  // On the Best debates screen: the claim as the title, "debaters · space" under it (mockup 04).
+  const debate = useBestDebateRowData(entityId);
+  const meta = debateMeta ?? ([debate?.debaters, debate?.space?.name].filter(Boolean).join(' · ') || undefined);
   return (
-    <RankingFlowDialog open onClose={onClose} title={debateName} subtitle={debateMeta ?? undefined}>
-      <div className="flex flex-col gap-2" data-testid="rank-choice-dialog">
+    <RankingFlowDialog open onClose={onClose} title={debate?.title ?? debateName} subtitle={meta}>
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-1" data-testid="rank-choice-dialog">
         <button type="button" className={OPTION_CLASS} onClick={onRankIt} disabled={!ready}>
-          <span className="text-button font-medium text-text">{alreadyRanked ? 'Place it again' : 'Rank it'}</span>
-          <span className="text-metadata text-grey-04">
+          <span className={OPTION_TITLE_CLASS}>
+            {RISE_ICON}
+            {alreadyRanked ? 'Place it again' : 'Rank it'}
+          </span>
+          <span className={OPTION_BODY_CLASS}>
             Worth showing more people. A few “which was better?” choices find its place in your ranking.
           </span>
         </button>
@@ -78,8 +98,11 @@ export function RankChoiceDialog({
               pushDown.onSelect(entityId);
             }}
           >
-            <span className="text-button font-medium text-text">Push it down</span>
-            <span className="text-metadata text-grey-04">
+            <span className={OPTION_TITLE_CLASS}>
+              {SINK_ICON}
+              Push it down
+            </span>
+            <span className={OPTION_BODY_CLASS}>
               {pushDown.description ?? 'Low quality. Keep it out of your ranking.'}
             </span>
           </button>

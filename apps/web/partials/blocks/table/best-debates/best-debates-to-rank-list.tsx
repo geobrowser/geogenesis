@@ -6,6 +6,8 @@ import type { RecentDebate } from '~/core/blocks/ranking/best-debates-debates';
 import { type RankersRead, rankedByLabel, rankedByText } from '~/core/blocks/ranking/use-best-debates-to-rank';
 import type { RankingEntryDisplay } from '~/core/blocks/ranking/use-ranking-entry-entities';
 
+import { RankingChart } from '~/design-system/icons/ranking-chart';
+
 import { rankingEntityDragProps } from '../ranking-entity-drag';
 import { RankingEntryRow } from '../ranking-entry-row';
 
@@ -25,13 +27,31 @@ function RankedByBadge({ rankers, entityId }: { rankers: RankersRead; entityId: 
   if (label.kind === 'unknown') return null;
   if (label.kind === 'nobody') {
     return (
-      <span className="inline-flex rounded-full bg-grey-01 px-2 py-0.5 text-footnoteMedium text-text">
+      <span className="inline-flex h-5 items-center rounded-[4px] bg-purple-tint px-1.5 text-[12px] leading-[13px] whitespace-nowrap text-purple">
         Nobody has ranked this yet
       </span>
     );
   }
-  return <span className="text-footnote text-grey-04">{rankedByText(label)}</span>;
+  return (
+    <span className="inline-flex h-5 items-center rounded-[4px] bg-grey-01 px-1.5 text-[12px] leading-[13px] whitespace-nowrap text-grey-04">
+      {rankedByText(label)}
+    </span>
+  );
 }
+
+/** The drag handle the mockups draw on a row that can go into "Your ranking". */
+const GRIP = (
+  <svg width="10" height="16" viewBox="0 0 10 16" aria-hidden className="shrink-0 text-grey-03">
+    <g fill="currentColor">
+      <circle cx="3" cy="3" r="1.2" />
+      <circle cx="7" cy="3" r="1.2" />
+      <circle cx="3" cy="8" r="1.2" />
+      <circle cx="7" cy="8" r="1.2" />
+      <circle cx="3" cy="13" r="1.2" />
+      <circle cx="7" cy="13" r="1.2" />
+    </g>
+  </svg>
+);
 
 /**
  * To rank (GEO-3678): the last 7 days' debates the ranker hasn't placed, nobody-ranked first, each saying
@@ -57,7 +77,7 @@ export function BestDebatesToRankList({ debates, isLoading, error, rankers, entr
             role="button"
             tabIndex={0}
             aria-label={`Rank ${name}`}
-            className="flex w-full cursor-pointer flex-col gap-1 py-3 text-left"
+            className="flex w-full cursor-pointer items-center gap-3 py-3 text-left"
             onClick={() => onPlace(debate.entityId)}
             onKeyDown={event => {
               if (event.key === 'Enter' || event.key === ' ') {
@@ -67,9 +87,23 @@ export function BestDebatesToRankList({ debates, isLoading, error, rankers, entr
             }}
             {...(draggable ? rankingEntityDragProps(debate.entityId) : {})}
           >
+            {draggable ? GRIP : null}
             <RankingEntryRow
               rankStyle="leading"
               linkToEntity={false}
+              actions={
+                <div className="flex">
+                  <RankedByBadge rankers={rankers} entityId={debate.entityId} />
+                </div>
+              }
+              debateAside={
+                <span
+                  className="grid size-8 place-items-center rounded-md border border-grey-02 bg-white text-text"
+                  aria-hidden
+                >
+                  <RankingChart />
+                </span>
+              }
               entry={{
                 entityId: debate.entityId,
                 name,
@@ -78,9 +112,6 @@ export function BestDebatesToRankList({ debates, isLoading, error, rankers, entr
               }}
               spaceId={debate.spaceId}
             />
-            <div className="pl-2">
-              <RankedByBadge rankers={rankers} entityId={debate.entityId} />
-            </div>
           </div>
         );
       })}

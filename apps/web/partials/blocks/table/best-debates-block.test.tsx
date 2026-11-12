@@ -44,22 +44,26 @@ vi.mock('~/core/blocks/ranking/use-my-pushed-down-debates', () => ({
 vi.mock('~/core/blocks/ranking/use-ranking-entry-entities', () => ({
   useRankingEntryEntities: () => ({ entries: [], isLoading: false }),
 }));
-vi.mock('./ranking-entry-row', () => ({
-  RankingEntryRow: ({
+vi.mock('~/core/blocks/ranking/use-best-debate-displays', () => ({ useBestDebateDisplays: () => new Map() }));
+vi.mock('./best-debates/best-debate-row', () => ({
+  BestDebateRow: ({
     rank,
-    entry,
-    actions,
+    fallbackName,
+    aside,
   }: {
-    rank?: number;
-    entry: { name: string };
-    actions?: React.ReactNode;
+    rank?: number | null;
+    fallbackName: string;
+    aside?: React.ReactNode;
   }) => (
     <div>
       <span data-testid="place">{rank ?? '-'}</span>
-      <span data-testid="name">{entry.name}</span>
-      {actions}
+      <span data-testid="name">{fallbackName}</span>
+      {aside}
     </div>
   ),
+  RankerAvatars: () => null,
+}));
+vi.mock('./ranking-entry-row', () => ({
   RankingEntryRowSkeleton: () => <div data-testid="skeleton" />,
 }));
 vi.mock('./ranking-block-ui', () => ({
@@ -152,7 +156,8 @@ describe('BestDebatesBlock', () => {
     expect(days[0]).toHaveTextContent('Today2 of 4 ranked');
     expect(days[1]).toHaveTextContent('Yesterday1 of 1 ranked');
     expect(days[2]).toHaveTextContent('No debates');
-    expect(within(strip).getByLabelText('Pick an earlier day')).toHaveAttribute('max', TODAY);
+    // No calendar for older days (taken out 12 Nov): the seven days are the only way to a day.
+    expect(screen.queryByLabelText('Pick an earlier day')).not.toBeInTheDocument();
   });
 
   it('keeps the same order in This week and All time, and leaves unranked debates out of All time', () => {
@@ -259,12 +264,40 @@ describe('BestDebatesBlock', () => {
     expect(retry).toHaveBeenCalled();
   });
 
-  it('picks an earlier day from the calendar', () => {
-    renderBlock();
+  it('speaks for the last seven days when nothing is from today yet', () => {
+    mocks.window = mocks.window.filter(debate => debate.id === 'yday');
+    mocks.flag = true;
+    mocks.canEdit = true;
+    renderBlock({ teamOrder: [] });
 
-    fireEvent.change(screen.getByLabelText('Pick an earlier day'), { target: { value: '2026-10-01' } });
-    // The older day is read separately; the mock returns the same window, none of it from that day.
-    expect(screen.getByText('No debates were published on this day.')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Picked day/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByTestId('best-debates-coverage')).toHaveTextContent(
+      '1 of 1 debate from the last 7 days is ranked'
+    );
+  });
+
+  it('shows no coverage box when the whole window is empty', () => {
+    mocks.window = [];
+    renderBlock({ teamOrder: [] });
+
+    expect(screen.queryByTestId('best-debates-coverage')).not.toBeInTheDocument();
+  });
+
+  it('puts Rank in the header row the host draws, under the coverage line', () => {
+    mocks.flag = true;
+    mocks.canEdit = true;
+    renderBlock({
+      renderHeader: actions => (
+        <div data-testid="header">
+          <h4>Best debates</h4>
+          {actions}
+        </div>
+      ),
+    });
+
+    const header = screen.getByTestId('header');
+    expect(within(header).getByRole('button', { name: 'Rank' })).toBeInTheDocument();
+    expect(
+      screen.getByTestId('best-debates-coverage').compareDocumentPosition(header) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
   });
 });

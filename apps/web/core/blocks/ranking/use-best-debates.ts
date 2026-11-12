@@ -49,12 +49,19 @@ export type BestDebatesRankers = {
   status: BestDebatesRankersStatus;
   /** Null unless `ready`, so nothing is called unranked off a pending or failed read. */
   rankerCount: (entityId: string) => number | null;
+  /** Who ranked the entity, best place first (their avatars on the row); null unless `ready`. */
+  rankersOf?: UseBlockRankersResult['rankersOf'];
   /** Re-reads the block (Retry after a failed first read). */
   retry: () => Promise<unknown>;
 };
 
 export function toBestDebatesRankers(result: UseBlockRankersResult): BestDebatesRankers {
-  return { status: result.status, rankerCount: result.rankerCount, retry: result.invalidate };
+  return {
+    status: result.status,
+    rankerCount: result.rankerCount,
+    rankersOf: result.rankersOf,
+    retry: result.invalidate,
+  };
 }
 
 export function useBestDebatesRankers({

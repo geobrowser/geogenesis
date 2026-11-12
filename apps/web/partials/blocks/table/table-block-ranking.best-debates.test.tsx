@@ -149,6 +149,18 @@ vi.mock('./ranking-compose-entity-sheet', () => ({ RankingComposeEntitySheet: ()
 vi.mock('./ranking-block-ui', () => ({
   RankingGlobalDesktopRow: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
+vi.mock('~/core/blocks/ranking/use-best-debate-displays', () => ({ useBestDebateDisplays: () => new Map() }));
+vi.mock('./best-debates/best-debate-row', () => ({
+  BestDebateRow: ({ rank, fallbackName }: { rank?: number | null; fallbackName: string }) => (
+    <div data-testid="row">
+      <span data-testid="place">{rank ?? '-'}</span>
+      <span data-testid="name">{fallbackName}</span>
+    </div>
+  ),
+  RankerAvatars: () => null,
+  BestDebateDisplaysContext: { Provider: ({ children }: { children: React.ReactNode }) => children },
+  useBestDebateRowData: () => undefined,
+}));
 vi.mock('./ranking-entry-row', () => ({
   RankingEntryRow: ({ rank, entry }: { rank?: number; entry: { name: string } }) => (
     <div data-testid="row">

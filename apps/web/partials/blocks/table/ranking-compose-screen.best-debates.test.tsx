@@ -150,6 +150,7 @@ vi.mock('~/core/blocks/ranking/use-my-pushed-down-debates', () => ({
 }));
 // GEO-3678's additions: its publish files each debate under its own space, then writes the ballot
 // through the screen's `saveMySubmission` (the downvote-clearing publish above).
+vi.mock('~/core/blocks/ranking/use-best-debate-displays', () => ({ useBestDebateDisplays: () => new Map() }));
 vi.mock('./best-debates/use-best-debates-compose', () => ({
   useBestDebatesCompose: (args: {
     enabled: boolean;
@@ -159,6 +160,7 @@ vi.mock('./best-debates/use-best-debates-compose', () => ({
     return {
       teamView: undefined,
       mobileTabs: undefined,
+      toRankIds: [],
       dialogs: null,
       isPlacing: false,
       activeEntityId: null,

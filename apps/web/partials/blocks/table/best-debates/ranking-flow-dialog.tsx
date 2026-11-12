@@ -51,14 +51,18 @@ export function RankingFlowDialog({
             aria-label={ariaLabel}
             onKeyDown={onKeyDown}
             className={cx(
-              'mt-16 flex w-full flex-col gap-4 rounded-lg bg-white p-5 shadow-dropdown focus:outline-hidden md:mt-0 md:min-h-full md:rounded-none md:p-4',
-              wide ? 'max-w-[900px]' : 'max-w-[480px]'
+              'mt-16 flex w-full flex-col gap-4 rounded-xl bg-white p-6 shadow-dropdown focus:outline-hidden md:mt-0 md:min-h-full md:rounded-none md:p-4',
+              wide ? 'max-w-[1350px]' : 'max-w-[880px]'
             )}
           >
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
-                <Dialog.Title className="m-0 text-smallTitle text-text">{title}</Dialog.Title>
-                {subtitle ? <div className="mt-1 text-metadata text-grey-04">{subtitle}</div> : null}
+                <Dialog.Title className="m-0 text-[24px] leading-[29px] font-semibold tracking-[-0.3px] text-text md:text-[19px] md:leading-[23px]">
+                  {title}
+                </Dialog.Title>
+                {subtitle ? (
+                  <div className="mt-1 text-[16px] leading-[20px] text-grey-04 md:text-metadata">{subtitle}</div>
+                ) : null}
               </div>
               <Dialog.Close asChild>
                 <SquareButton icon={<Close />} aria-label="Close" />

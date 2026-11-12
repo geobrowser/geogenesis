@@ -11,6 +11,7 @@ import { SquareButton } from '~/design-system/button';
 import { ChevronDown } from '~/design-system/icons/chevron-down';
 import { ChevronUp } from '~/design-system/icons/chevron-up';
 
+import { BestDebateMeta, useBestDebateRowData } from './best-debate-row';
 import { RankingFlowDialog } from './ranking-flow-dialog';
 
 type Props = {
@@ -100,36 +101,65 @@ export function RankingPlacedDialog({
           const index = from + offset;
           const isPlaced = index === at;
           return (
-            <li
+            <PlacedRow
               key={id}
-              aria-current={isPlaced ? 'true' : undefined}
-              className={cx(
-                'flex items-center gap-3 rounded-md px-2 py-2',
-                isPlaced ? 'bg-grey-01 font-medium text-text' : 'text-grey-04'
-              )}
-            >
-              <span className="w-8 shrink-0 text-right text-metadata tabular-nums">{index + 1}</span>
-              <span className="min-w-0 flex-1 truncate text-metadata">{nameOf(id)}</span>
-              {isPlaced ? (
-                <span className="flex shrink-0 gap-1">
-                  <SquareButton
-                    icon={<ChevronUp />}
-                    aria-label="Move up"
-                    disabled={isSaving || index === 0}
-                    onClick={() => onNudge(-1)}
-                  />
-                  <SquareButton
-                    icon={<ChevronDown />}
-                    aria-label="Move down"
-                    disabled={isSaving || index === orderedIds.length - 1}
-                    onClick={() => onNudge(1)}
-                  />
-                </span>
-              ) : null}
-            </li>
+              entityId={id}
+              place={index + 1}
+              name={nameOf(id)}
+              isPlaced={isPlaced}
+              canMoveUp={!isSaving && index > 0}
+              canMoveDown={!isSaving && index < orderedIds.length - 1}
+              onNudge={onNudge}
+            />
           );
         })}
       </ol>
     </RankingFlowDialog>
+  );
+}
+
+/** One line of the Placed list (mockup 13): place, claim, debaters · age; the placed one tinted. */
+function PlacedRow({
+  entityId,
+  place,
+  name,
+  isPlaced,
+  canMoveUp,
+  canMoveDown,
+  onNudge,
+}: {
+  entityId: string;
+  place: number;
+  name: string;
+  isPlaced: boolean;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
+  onNudge: (direction: -1 | 1) => void;
+}) {
+  const display = useBestDebateRowData(entityId);
+  return (
+    <li
+      aria-current={isPlaced ? 'true' : undefined}
+      className={cx('flex items-center gap-4 rounded-lg py-3', isPlaced ? 'bg-purple-tint px-3' : 'px-0.5')}
+    >
+      <span className="w-6 shrink-0 text-center text-[17px] leading-[19px] font-medium text-text tabular-nums">
+        {place}
+      </span>
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
+        <span className="truncate text-[17px] leading-[21px] font-medium text-text">{display?.title ?? name}</span>
+        <BestDebateMeta data={display} showSpace={false} />
+      </div>
+      {isPlaced ? (
+        <span className="flex shrink-0 flex-col gap-0.5">
+          <SquareButton icon={<ChevronUp />} aria-label="Move up" disabled={!canMoveUp} onClick={() => onNudge(-1)} />
+          <SquareButton
+            icon={<ChevronDown />}
+            aria-label="Move down"
+            disabled={!canMoveDown}
+            onClick={() => onNudge(1)}
+          />
+        </span>
+      ) : null}
+    </li>
   );
 }

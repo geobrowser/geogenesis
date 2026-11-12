@@ -19,8 +19,10 @@ import {
   dayLabel,
   rankerCountLabel,
   recentDayKeys,
+  weekCoverageSentence,
 } from '~/core/blocks/ranking/best-debates-views';
 import type { RankingComposeMode } from '~/core/blocks/ranking/ranking-compose-url';
+import { useBestDebateDisplays } from '~/core/blocks/ranking/use-best-debate-displays';
 import {
   type BestDebatesRankers,
   useBestDebatesRankers,
@@ -33,11 +35,10 @@ import { SegmentedControl } from '~/core/debates/matchmaking/debate-calendar-con
 import { normId } from '~/core/utils/norm-id';
 
 import { Button } from '~/design-system/button';
-import { Calendar } from '~/design-system/icons/calendar';
-import { RankingChart } from '~/design-system/icons/ranking-chart';
 
+import { BestDebateRow, RankerAvatars } from './best-debates/best-debate-row';
 import { RankingGlobalDesktopRow } from './ranking-block-ui';
-import { RankingEntryRow, RankingEntryRowSkeleton } from './ranking-entry-row';
+import { RankingEntryRowSkeleton } from './ranking-entry-row';
 
 /**
  * The Debates space's Best debates block (GEO-3677): Day, This week and All time over one team
@@ -66,7 +67,17 @@ export type BestDebatesBlockProps = {
   isMobile: boolean;
   onOpenCompose: (mode: RankingComposeMode, extraParams?: Readonly<Record<string, string>>) => void;
   onOpenEntity: (entityId: string) => void;
+  /**
+   * Draws the block's title row with `actions` (the Rank button) at its end. The coverage line sits
+   * above it, as in the mockups, so the block draws the header itself rather than its host.
+   */
+  renderHeader?: (actions: React.ReactNode) => React.ReactNode;
+  /** Between the header and the period control: the host's filter and link panels. */
+  belowHeader?: React.ReactNode;
 };
+
+const defaultHeader = (actions: React.ReactNode) =>
+  actions ? <div className="flex items-center justify-end gap-3">{actions}</div> : null;
 
 export function BestDebatesBlock({
   blockId,
@@ -77,6 +88,8 @@ export function BestDebatesBlock({
   isMobile,
   onOpenCompose,
   onOpenEntity,
+  renderHeader = defaultHeader,
+  belowHeader,
 }: BestDebatesBlockProps) {
   const todayKey = useNyTodayKey();
   const dayKeys = React.useMemo(() => recentDayKeys(todayKey), [todayKey]);
@@ -85,11 +98,11 @@ export function BestDebatesBlock({
   const [view, setView] = React.useState<BestDebatesView>('day');
   const [pickedDayKey, setPickedDayKey] = React.useState<string | null>(null);
   const dayKey = pickedDayKey ?? todayKey;
-  const isOlderDay = view === 'day' && dayKey < oldestWindowDay;
 
+  // The block reads the last seven days only: the day strip is the way to a day (the calendar for
+  // older days was taken out on 12 Nov; it can come back with its own read).
   const windowQuery = useBestDebatesWindow({ fromDayKey: oldestWindowDay, toDayKey: todayKey });
-  const olderDayQuery = useBestDebatesWindow({ fromDayKey: dayKey, toDayKey: dayKey, enabled: isOlderDay });
-  const periodQuery = isOlderDay ? olderDayQuery : windowQuery;
+  const periodQuery = windowQuery;
 
   const rankers = useBestDebatesRankers({ blockId, spaceId });
 
@@ -133,6 +146,7 @@ export function BestDebatesBlock({
   );
   const { entries } = useRankingEntryEntities(spaceId, [...visibleRanked, ...visibleUnplaced]);
   const entryById = React.useMemo(() => new Map(entries.map(entry => [normId(entry.entityId), entry])), [entries]);
+  const displays = useBestDebateDisplays([...visibleRanked, ...visibleUnplaced]);
   const entryFor = (id: string): RankingEntryDisplay | null => {
     const entry = entryById.get(id);
     if (entry) return entry;
@@ -155,13 +169,21 @@ export function BestDebatesBlock({
   };
 
   const today = coverage[0];
+  // With nothing from today yet, the line speaks for the whole window, which is what To rank (Rank
+  // the rest) holds anyway, rather than leaving an empty box.
+  const week = coverage.reduce((sum, day) => ({ ranked: sum.ranked + day.ranked, total: sum.total + day.total }), {
+    ranked: 0,
+    total: 0,
+  });
+  const coverageCounts =
+    today && today.total > 0 ? { ...today, scope: 'today' as const } : { ...week, scope: 'week' as const };
   const rankTheRest = () => {
     capture('element_clicked', {
       source: 'best_debates_block',
       element_action: 'rank_the_rest',
       block_id: blockId,
       space_id: spaceId,
-      unranked_count: today ? today.total - today.ranked : null,
+      unranked_count: coverageCounts.total - coverageCounts.ranked,
     });
     onOpenCompose('edit', { [BEST_DEBATES_TEAM_VIEW_PARAM]: BEST_DEBATES_TEAM_VIEW_TO_RANK });
   };
@@ -185,41 +207,39 @@ export function BestDebatesBlock({
 
   const renderRow = (id: string, place: number | null) => {
     const entry = entryFor(id);
+    const data = displays.get(id);
     const count = rankers.rankerCount(id);
-    if (!entry) {
+    if (!entry && !data) {
       return (
-        <div key={id} className="w-full">
+        <div key={id} className="w-full py-3">
           <RankingEntryRowSkeleton rank={place ?? undefined} />
         </div>
       );
     }
+    const rankedBy = count != null && count > 0 ? (rankers.rankersOf?.(id) ?? []) : [];
     const row = (
-      <div className="flex w-full min-w-0 items-center gap-4">
-        {place == null ? (
-          <span className="w-5 shrink-0 text-center text-button font-medium text-grey-03" aria-hidden>
-            –
-          </span>
-        ) : null}
-        <div className="min-w-0 flex-1">
-          <RankingEntryRow
-            rank={place ?? undefined}
-            rankStyle="leading"
-            entry={entry}
-            spaceId={spaceId}
-            linkToEntity={!isMobile}
-            actions={
-              count != null && count > 0 ? (
-                <span className="text-[12px] leading-[16px] text-grey-04" data-testid="best-debates-ranker-count">
-                  {rankerCountLabel(count)}
-                </span>
-              ) : null
-            }
-          />
-        </div>
-      </div>
+      <BestDebateRow
+        entityId={id}
+        fallbackName={entry?.name ?? 'Untitled debate'}
+        data={data}
+        rank={place}
+        aside={
+          count != null && count > 0 ? (
+            <>
+              <RankerAvatars rankers={rankedBy} />
+              <span
+                className="text-[14px] leading-[15px] whitespace-nowrap text-grey-04 tabular-nums"
+                data-testid="best-debates-ranker-count"
+              >
+                {rankerCountLabel(count)}
+              </span>
+            </>
+          ) : null
+        }
+      />
     );
     return (
-      <div key={id} className="w-full" data-testid="best-debates-row" data-entity-id={id}>
+      <div key={id} className="w-full py-3" data-testid="best-debates-row" data-entity-id={id}>
         {isMobile ? (
           <button type="button" className="w-full text-left" onClick={() => onOpenEntity(id)}>
             {row}
@@ -234,13 +254,25 @@ export function BestDebatesBlock({
   return (
     <div className="flex w-full min-w-0 flex-col gap-4" data-testid="best-debates-block">
       <CoverageLine
-        today={windowQuery.data ? today : null}
+        counts={windowQuery.data ? coverageCounts : null}
         loading={windowQuery.isLoading}
         rankers={rankers}
         onRankTheRest={canRank ? rankTheRest : null}
       />
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-col gap-2">
+        {renderHeader(
+          canRank ? (
+            <Button
+              variant="primary"
+              className="h-8 shrink-0 !rounded-full border-text bg-text !px-3.5 text-[16px] whitespace-nowrap text-white hover:bg-text/90 focus-visible:border-text focus-visible:shadow-inner-text"
+              onClick={() => onOpenCompose('edit')}
+            >
+              Rank
+            </Button>
+          ) : null
+        )}
+        {belowHeader}
         <div className="w-[300px] md:w-full">
           <SegmentedControl
             label="Period"
@@ -250,16 +282,6 @@ export function BestDebatesBlock({
             onChange={changeView}
           />
         </div>
-        {canRank ? (
-          <Button
-            variant="primary"
-            className="h-8 shrink-0 !rounded-full border-grey-02 bg-text !px-3 text-[16px] whitespace-nowrap text-white hover:bg-text/90 focus-visible:border-text focus-visible:shadow-inner-text"
-            icon={<RankingChart color="white" />}
-            onClick={() => onOpenCompose('edit')}
-          >
-            Rank
-          </Button>
-        ) : null}
       </div>
 
       {view === 'day' ? (
@@ -312,9 +334,7 @@ export function BestDebatesBlock({
               <p className="text-metadata text-grey-04">{emptyRankedCopy(view, unplacedRows.length > 0)}</p>
             )
           ) : (
-            <div className="flex flex-col gap-3">
-              {visibleRanked.map(id => renderRow(id, placeOffset.get(id) ?? null))}
-            </div>
+            <div className="flex flex-col">{visibleRanked.map(id => renderRow(id, placeOffset.get(id) ?? null))}</div>
           )}
           {rankedRows.length > rankedLimit ? <ShowMore onClick={() => setRankedLimit(limit => limit + PAGE)} /> : null}
 
@@ -327,7 +347,7 @@ export function BestDebatesBlock({
                 </span>
                 <span className="h-px flex-1 bg-grey-02" aria-hidden />
               </div>
-              <div className="flex flex-col gap-3">{visibleUnplaced.map(id => renderRow(id, null))}</div>
+              <div className="flex flex-col">{visibleUnplaced.map(id => renderRow(id, null))}</div>
               {unplacedRows.length > unrankedLimit ? (
                 <ShowMore onClick={() => setUnrankedLimit(limit => limit + PAGE)} />
               ) : null}
@@ -360,17 +380,17 @@ function ShowMore({ onClick }: { onClick: () => void }) {
 }
 
 function CoverageLine({
-  today,
+  counts,
   loading,
   rankers,
   onRankTheRest,
 }: {
-  today: { ranked: number; total: number } | null;
+  counts: { ranked: number; total: number; scope: 'today' | 'week' } | null;
   loading: boolean;
   rankers: BestDebatesRankers;
   onRankTheRest: (() => void) | null;
 }) {
-  if (loading || !today) return null;
+  if (loading || !counts) return null;
 
   if (rankers.status === 'error') {
     return (
@@ -384,21 +404,23 @@ function CoverageLine({
   }
   // Counts need a ready read; until then a placed-only count would undercount.
   if (rankers.status !== 'ready') return null;
+  // Nothing in the whole window: no line at all rather than an empty box.
+  if (counts.total === 0) return null;
 
-  const share = today.total ? (today.ranked / today.total) * 100 : 0;
+  const share = (counts.ranked / counts.total) * 100;
   return (
     <div className="flex flex-wrap items-center gap-3 rounded-lg bg-grey-01 p-3" data-testid="best-debates-coverage">
-      <span className="text-metadata text-text">{coverageSentence(today)}</span>
-      {today.total > 0 ? (
-        <span className="h-1.5 min-w-[120px] flex-1 overflow-hidden rounded-full bg-grey-02" aria-hidden>
-          <span className="block h-full bg-text" style={{ width: `${share}%` }} />
-        </span>
-      ) : null}
-      {onRankTheRest && today.ranked < today.total ? (
+      <span className="text-[16px] leading-[20px] text-text">
+        {counts.scope === 'today' ? coverageSentence(counts) : weekCoverageSentence(counts)}
+      </span>
+      <span className="h-1.5 min-w-[120px] flex-1 overflow-hidden rounded-full bg-grey-02" aria-hidden>
+        <span className="block h-full bg-text" style={{ width: `${share}%` }} />
+      </span>
+      {onRankTheRest && counts.ranked < counts.total ? (
         <Button
           variant="primary"
           small
-          className="!rounded-full bg-text text-white hover:bg-text/90"
+          className="!rounded-full border-text bg-text text-white hover:bg-text/90"
           onClick={onRankTheRest}
         >
           Rank the rest
@@ -424,7 +446,6 @@ function DayStrip({
   onSelect: (dayKey: string) => void;
 }) {
   const byDay = new Map(coverage?.map(day => [day.dayKey, day]) ?? []);
-  const olderSelected = !dayKeys.includes(selectedDayKey);
 
   const caption = (key: string) => {
     const day = byDay.get(key);
@@ -450,24 +471,6 @@ function DayStrip({
           onClick={() => onSelect(key)}
         />
       ))}
-      {olderSelected ? (
-        <DayButton label={dayLabel(selectedDayKey, todayKey)} caption="Picked day" pressed onClick={() => undefined} />
-      ) : null}
-      <label className="flex shrink-0 cursor-pointer items-center rounded-lg border border-grey-02 px-2 text-grey-04 hover:text-text">
-        <Calendar />
-        <span className="sr-only">Pick an earlier day</span>
-        <input
-          type="date"
-          className="w-0 opacity-0 focus:w-auto focus:opacity-100"
-          max={todayKey}
-          value={selectedDayKey}
-          aria-label="Pick an earlier day"
-          onChange={event => {
-            const key = event.target.value;
-            if (/^\d{4}-\d{2}-\d{2}$/.test(key) && key <= todayKey) onSelect(key);
-          }}
-        />
-      </label>
     </div>
   );
 }
@@ -493,7 +496,7 @@ function DayButton({
         pressed ? 'border-text bg-white' : 'border-grey-02 bg-white hover:border-grey-03'
       )}
     >
-      <span className="text-metadata font-medium text-text">{label}</span>
+      <span className="text-[16px] leading-[20px] font-medium text-text">{label}</span>
       <span className="text-[11px] leading-[13px] text-grey-04">{caption}</span>
     </button>
   );

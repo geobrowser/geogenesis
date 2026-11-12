@@ -26,9 +26,12 @@ export function RankingComposePushedDown({ blockId, debates, isError, onRetryLoa
   if (debates.length === 0 && !isError) return null;
 
   return (
-    <section aria-label="Debates you pushed down" className="mt-6 flex flex-col">
-      <div className="flex items-center gap-2 border-b border-grey-02 pb-2 text-metadata text-grey-04">
+    <section aria-label="Debates you pushed down" className="mt-4 flex flex-col">
+      {/* The red rule the mockups draw between your ranking and what you pushed down. */}
+      <div className="flex items-center gap-3 pb-1 text-[12px] leading-[16px] font-medium text-red-01">
+        <span className="h-px flex-1 bg-red-01/50" aria-hidden />
         <span>You pushed down · {debates.length}</span>
+        <span className="h-px flex-1 bg-red-01/50" aria-hidden />
       </div>
       {BEST_DEBATES_RANKING_LIVE ? <p className="mt-2 text-metadata text-grey-04">{PUSH_DOWN_LIVE_NOTE}</p> : null}
       {isError ? (
@@ -62,6 +65,7 @@ function PushedDownRow({ blockId, debate }: { blockId: string; debate: PushedDow
   return (
     <li className="w-full py-3" data-testid={`pushed-down-${debate.entityId}`}>
       <RankingEntryRow
+        debateThumb={false}
         entry={debate}
         spaceId={debate.debateSpaceId ?? debate.downvotedSpaceIds[0] ?? ''}
         actions={

@@ -4,10 +4,12 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { debateAgeLabel } from '~/core/blocks/ranking/best-debate-display';
 import type { PlacementChoice, PlacementSearch } from '~/core/blocks/ranking/ranking-placement';
 
 import { DIALOG_ACTION_BUTTON_CLASS_NAME, DIALOG_SECONDARY_ACTION_BUTTON_CLASS_NAME } from '~/design-system/button';
 
+import { useBestDebateRowData } from './best-debate-row';
 import { RankingCompareDebatePlayer } from './ranking-compare-debate-player';
 import { RankingFlowDialog } from './ranking-flow-dialog';
 
@@ -56,27 +58,17 @@ export function RankingCompareDialog({
   };
 
   const card = (side: Side, debate: CompareDebate, label: string, keyHint: string) => (
-    <div className="flex min-w-0 flex-1 flex-col gap-3" data-testid={`compare-card-${side}`}>
-      <div className="flex items-center justify-between text-footnote text-grey-04 uppercase">
-        <span>{label}</span>
-      </div>
-      <Player
-        debateEntityId={debate.entityId}
-        label={debate.name}
-        active={playing === side}
-        onActivate={() => setPlaying(side)}
-      />
-      <p className="m-0 line-clamp-3 text-button font-medium text-text">{debate.name}</p>
-      <button
-        type="button"
-        className={cx(side === 'new' ? DIALOG_ACTION_BUTTON_CLASS_NAME : DIALOG_SECONDARY_ACTION_BUTTON_CLASS_NAME)}
-        aria-label={`${debate.name} was better`}
-        aria-keyshortcuts={keyHint}
-        onClick={() => onChoose(side)}
-      >
-        This one
-      </button>
-    </div>
+    <CompareCard
+      key={side}
+      side={side}
+      debate={debate}
+      label={label}
+      keyHint={keyHint}
+      Player={Player}
+      active={playing === side}
+      onActivate={() => setPlaying(side)}
+      onChoose={() => onChoose(side)}
+    />
   );
 
   return (
@@ -97,7 +89,7 @@ export function RankingCompareDialog({
           <span key={index} className={cx('h-1 flex-1 rounded-full', index < search.step ? 'bg-text' : 'bg-grey-02')} />
         ))}
       </div>
-      <div className="flex gap-6 md:flex-col">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-1">
         {card('new', newDebate, 'This debate', '1')}
         {card('existing', existingDebate, `#${existingRank} in your ranking`, '2')}
       </div>
@@ -112,5 +104,60 @@ export function RankingCompareDialog({
         </button>
       </div>
     </RankingFlowDialog>
+  );
+}
+
+/**
+ * One side of the compare view (mockup 05): a bordered card with what it is and how old it is, the
+ * player, the claim and its debaters and space, and "This one" at the foot so the two line up.
+ */
+function CompareCard({
+  side,
+  debate,
+  label,
+  keyHint,
+  Player,
+  active,
+  onActivate,
+  onChoose,
+}: {
+  side: Side;
+  debate: CompareDebate;
+  label: string;
+  keyHint: string;
+  Player: typeof RankingCompareDebatePlayer;
+  active: boolean;
+  onActivate: () => void;
+  onChoose: () => void;
+}) {
+  const display = useBestDebateRowData(debate.entityId);
+  const title = display?.title ?? debate.name;
+  const age = debateAgeLabel(display?.createdAtMs ?? null);
+  const meta = [display?.debaters, display?.space?.name].filter(Boolean).join(' · ');
+  return (
+    <div
+      className="flex min-w-0 flex-col gap-2 rounded-lg border border-grey-02 p-3"
+      data-testid={`compare-card-${side}`}
+    >
+      <div className="flex items-center justify-between gap-2 text-[12px] leading-[16px] text-grey-04">
+        <span>{label}</span>
+        {age ? <span className="tabular-nums">{age}</span> : null}
+      </div>
+      <Player debateEntityId={debate.entityId} label={title} active={active} onActivate={onActivate} />
+      <p className="m-0 mt-1 line-clamp-3 text-[17px] leading-[21px] font-semibold text-text">{title}</p>
+      {meta ? <p className="m-0 text-[12px] leading-[16px] text-grey-04">{meta}</p> : null}
+      <button
+        type="button"
+        className={cx(
+          side === 'new' ? DIALOG_ACTION_BUTTON_CLASS_NAME : DIALOG_SECONDARY_ACTION_BUTTON_CLASS_NAME,
+          'mt-auto'
+        )}
+        aria-label={`${title} was better`}
+        aria-keyshortcuts={keyHint}
+        onClick={onChoose}
+      >
+        This one
+      </button>
+    </div>
   );
 }

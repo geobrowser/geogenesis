@@ -217,6 +217,7 @@ function RankingComposePickRow({
   isInMyRanking,
   pending = false,
   draggable = false,
+  myRank = null,
 }: {
   rank?: number;
   name: string;
@@ -229,6 +230,8 @@ function RankingComposePickRow({
   pending?: boolean;
   /** Can be dragged into "Your ranking" (GEO-3678). */
   draggable?: boolean;
+  /** Best debates: the debate's place in your ranking, shown as "You: #14". */
+  myRank?: number | null;
 }) {
   const handleKeyDown = (event: React.KeyboardEvent) => {
     if (isInMyRanking) return;
@@ -266,6 +269,13 @@ function RankingComposePickRow({
           image: imageUrl,
         }}
         spaceId={spaceId}
+        debateAside={
+          myRank ? (
+            <span className="text-[14px] leading-[15px] whitespace-nowrap text-grey-04 tabular-nums">
+              You: #{myRank}
+            </span>
+          ) : null
+        }
       />
     </div>
   );
@@ -332,7 +342,7 @@ function RankingComposeTeamHeader({ isMobile, teamView }: { isMobile: boolean; t
       <h2 className={cx('m-0 text-text', isMobile ? 'text-[22px] font-medium' : 'text-[17px] font-semibold')}>
         Team ranking
       </h2>
-      <div role="group" aria-label="Show" className="flex shrink-0 rounded-full border border-grey-02 p-0.5">
+      <div role="group" aria-label="Show" className="flex shrink-0 rounded-full bg-grey-01 p-0.5">
         {options.map(option => (
           <button
             key={option.id}
@@ -340,13 +350,17 @@ function RankingComposeTeamHeader({ isMobile, teamView }: { isMobile: boolean; t
             aria-pressed={teamView.mode === option.id}
             onClick={() => teamView.onModeChange(option.id)}
             className={cx(
-              'flex h-6 items-center gap-1 rounded-full px-2.5 text-metadata transition-colors',
-              teamView.mode === option.id ? 'bg-text text-white' : 'text-grey-04 hover:text-text'
+              'flex h-[26px] items-center gap-1.5 rounded-full px-3 text-[14px] leading-[15px] font-medium transition-colors',
+              teamView.mode === option.id
+                ? 'bg-white text-text shadow-[0_1px_2px_rgba(0,0,0,0.12)]'
+                : 'text-grey-04 hover:text-text'
             )}
           >
             {option.label}
             {option.id === 'to_rank' && teamView.toRankCount ? (
-              <span className="tabular-nums">{teamView.toRankCount}</span>
+              <span className="inline-grid h-[18px] min-w-[18px] place-items-center rounded-full bg-purple px-[5px] text-[11px] font-medium text-white tabular-nums">
+                {teamView.toRankCount}
+              </span>
             ) : null}
           </button>
         ))}
@@ -645,6 +659,7 @@ export function RankingComposeGlobalRanking({
         isInMyRanking={isInMyRanking}
         pending={pendingEntityIds.has(id)}
         draggable={draggableRows && !isMobile}
+        myRank={teamView && isInMyRanking ? orderedIds.indexOf(id) + 1 : null}
       />
     );
 

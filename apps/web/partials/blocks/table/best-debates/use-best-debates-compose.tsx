@@ -200,6 +200,8 @@ export function useBestDebatesCompose({
   return {
     teamView,
     mobileTabs,
+    /** The To rank debates, for the screen's row display read. */
+    toRankIds,
     dialogs: placement.dialogs,
     isPlacing: placement.isPlacing,
     activeEntityId: placement.activeEntityId,

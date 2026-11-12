@@ -9,7 +9,12 @@ import { RANKING_ENTITY_DRAG_TYPE } from '../ranking-entity-drag';
 import { BestDebatesToRankList } from './best-debates-to-rank-list';
 
 vi.mock('../ranking-entry-row', () => ({
-  RankingEntryRow: ({ entry }: { entry: { name: string } }) => <span>{entry.name}</span>,
+  RankingEntryRow: ({ entry, actions }: { entry: { name: string }; actions?: React.ReactNode }) => (
+    <span>
+      {entry.name}
+      {actions}
+    </span>
+  ),
 }));
 
 afterEach(cleanup);

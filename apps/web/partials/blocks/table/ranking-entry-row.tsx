@@ -15,6 +15,8 @@ import { Skeleton } from '~/design-system/skeleton';
 
 import { EntityRowActions } from '~/partials/entity-page/entity-row-actions';
 
+import { BestDebateRow, useBestDebateRowData } from './best-debates/best-debate-row';
+
 const ROW_NAME_CLASS = 'block line-clamp-3 tracking-[-0.17px] text-text text-[19px] font-medium leading-[1.3]';
 const ROW_DESCRIPTION_CLASS = 'break-words text-[16px] leading-[24px] text-grey-04';
 
@@ -60,6 +62,13 @@ type Props = {
   actions?: ReactNode;
   /** Show entity vote controls (including claim variants) below the item content. */
   showVotes?: boolean;
+  /**
+   * Best debates only (inside `BestDebateDisplaysContext`): false leaves the poster out, as "Your
+   * ranking" does in the mockups. Defaults to true.
+   */
+  debateThumb?: boolean;
+  /** Best debates only: the row's right column ("You: #14"). */
+  debateAside?: ReactNode;
 };
 
 export function RankingEntryRow({
@@ -73,6 +82,8 @@ export function RankingEntryRow({
   rankStyle = 'avatar-badge',
   actions,
   showVotes = false,
+  debateThumb = true,
+  debateAside,
 }: Props) {
   const { avatarUrl, coverUrl } = useEntityMedia(entry.entityId, spaceId);
   const imageHint = entry.image;
@@ -86,6 +97,32 @@ export function RankingEntryRow({
   const effectiveRankStyle = imageUrl ? rankStyle : 'leading';
   const showLeadingRank = showRank && effectiveRankStyle === 'leading';
   const rowActions = actions ?? (showVotes ? <EntityRowActions entityId={entry.entityId} spaceId={spaceId} /> : null);
+  // Undefined outside the Best debates context; null inside it until the debate has loaded.
+  const debate = useBestDebateRowData(entry.entityId);
+
+  if (debate !== undefined) {
+    return (
+      <BestDebateRow
+        entityId={entry.entityId}
+        fallbackName={entry.name}
+        data={debate}
+        rank={showRank ? rank : undefined}
+        hideRank={!showRank}
+        showThumb={debateThumb}
+        aside={debateAside}
+        footer={
+          pending || rowActions ? (
+            <>
+              {pending ? (
+                <p className="m-0 text-[12px] leading-[16px] font-medium text-grey-04">Pending approval</p>
+              ) : null}
+              {rowActions ? <div onClick={event => event.stopPropagation()}>{rowActions}</div> : null}
+            </>
+          ) : undefined
+        }
+      />
+    );
+  }
 
   const avatar = imageUrl ? (
     <div
