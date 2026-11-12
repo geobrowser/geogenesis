@@ -65,7 +65,8 @@ describe('optional debate room telemetry', () => {
       { debate_id: 'd', participant_slot: 2, call_session_id: expect.any(String) },
       { probe: expect.any(Function) }
     );
-    telemetry.stop();
+    telemetry.stop('handover');
     expect(stop).toHaveBeenCalledOnce();
+    expect(stop).toHaveBeenCalledWith('handover');
   });
 });

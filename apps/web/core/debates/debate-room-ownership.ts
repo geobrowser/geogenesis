@@ -18,11 +18,17 @@ type TakeoverResponse = {
   requestId: string;
   requesterId: string;
   released: boolean;
-  /** What the owner is, when it refused. */
+  /** What the owner is: the one that refused, or the one that released. */
   ownerLabel?: string;
 };
 
-type OwnershipMessage = TakeoverRequest | TakeoverResponse;
+type TakeoverAck = {
+  type: 'takeover-ack';
+  requestId: string;
+  requesterId: string;
+};
+
+type OwnershipMessage = TakeoverRequest | TakeoverResponse | TakeoverAck;
 
 export type DebateRoomTakeoverContext = {
   requesterPriority: DebateRoomTabPriority;
@@ -35,6 +41,7 @@ export type DebateRoomTakeoverOptions = {
   /** The tab is reclaiming the room because the viewer turned to it, not because they asked. */
   automatic?: boolean;
   requesterLabel?: string;
+  onTookOverFromOtherTab?: (from?: string) => void;
 };
 
 type CreateDebateRoomOwnershipCoordinatorOptions = {
@@ -45,6 +52,10 @@ type CreateDebateRoomOwnershipCoordinatorOptions = {
   getTabPriority?: () => DebateRoomTabPriority;
   /** Sent with a refusal so the requester can say what holds it. */
   describeOwner?: () => string | undefined;
+  /** Another tab stole the lock instead of asking for it (we were frozen); stop sending. */
+  onOwnershipLost?: () => void;
+  /** An explicit takeover steals from a holder that never answers. Voice only; the room lock never steals. */
+  stealUnresponsive?: boolean;
 };
 
 export type DebateRoomOwnershipCoordinator = {
@@ -52,6 +63,7 @@ export type DebateRoomOwnershipCoordinator = {
   readonly coordinationMode: DebateRoomOwnershipCoordinationMode;
   acquire: () => Promise<DebateRoomOwnershipAcquireResult>;
   requestTakeover: (options?: DebateRoomTakeoverOptions) => Promise<boolean>;
+  waitForLock: (signal: AbortSignal) => Promise<boolean>;
   release: () => Promise<void>;
   close: () => void;
   ownsConnection: () => boolean;
@@ -84,6 +96,7 @@ export function debateRoomTabPriority(): DebateRoomTabPriority {
 const acquisitionStaggerMs: Record<DebateRoomTabPriority, number> = { 0: 700, 1: 250, 2: 0 };
 
 const takeoverResponseTimeoutMs = 1_500;
+const takeoverAckedResponseTimeoutMs = 10_000;
 const localReleaseBarriers = new Map<string, Promise<void>>();
 
 export function debateRoomCoordinationName(debateId: string, userId: string) {
@@ -96,6 +109,8 @@ export function createDebateRoomOwnershipCoordinator({
   onTakeoverRequested,
   getTabPriority = debateRoomTabPriority,
   describeOwner,
+  onOwnershipLost,
+  stealUnresponsive = false,
 }: CreateDebateRoomOwnershipCoordinatorOptions): DebateRoomOwnershipCoordinator {
   const instanceId = createInstanceId();
   const coordinationName = debateRoomCoordinationName(debateId, userId);
@@ -122,8 +137,27 @@ export function createDebateRoomOwnershipCoordinator({
   let releaseRequest: Promise<void> | null = null;
   let acquisition: Promise<DebateRoomOwnershipAcquireResult> | null = null;
   let activeAcquisitionAttempt: { cancelled: boolean } | null = null;
-  const pendingTakeovers = new Map<string, (released: boolean) => void>();
+  const pendingTakeovers = new Map<string, (released: boolean, ownerLabel?: string) => void>();
+  const pendingAcks = new Map<string, () => void>();
+  const queuedLockAborts = new Set<() => void>();
+  let queuedGrant: Promise<boolean> | null = null;
   let lastRefusedBy: string | undefined;
+
+  let takeoversInFlight = 0;
+  let lostDuringTakeover = false;
+  let releasedDuringTakeover = false;
+
+  // Another tab stole our lock. Mid-handover, report it only if the handover did not release.
+  const handleLockLost = () => {
+    if (!ownsConnection) return;
+    ownsConnection = false;
+    releaseLock = null;
+    if (takeoversInFlight > 0) {
+      lostDuringTakeover = true;
+      return;
+    }
+    onOwnershipLost?.();
+  };
 
   const fallBackToLiveKitIdentity = () => {
     lockRequestsAvailable = false;
@@ -132,7 +166,7 @@ export function createDebateRoomOwnershipCoordinator({
     channel = null;
   };
 
-  const postTakeoverResponse = (message: TakeoverRequest, released: boolean) => {
+  const postTakeoverResponse = (message: TakeoverRequest, released: boolean, ownerLabel: string | undefined) => {
     if (!channel || closed) return;
     try {
       channel.postMessage({
@@ -140,7 +174,7 @@ export function createDebateRoomOwnershipCoordinator({
         requestId: message.requestId,
         requesterId: message.requesterId,
         released,
-        ownerLabel: released ? undefined : describeOwner?.(),
+        ownerLabel,
       } satisfies TakeoverResponse);
     } catch {
       // The channel may close while an async takeover decision is finishing. The requester will
@@ -234,7 +268,10 @@ export function createDebateRoomOwnershipCoordinator({
         }
         const activeRequest = request.then(
           () => undefined,
-          () => resolve('unavailable')
+          () => {
+            handleLockLost();
+            resolve('unavailable');
+          }
         );
         lockRequest = activeRequest;
         void activeRequest.finally(() => {
@@ -286,14 +323,116 @@ export function createDebateRoomOwnershipCoordinator({
     await barrier;
   };
 
+  // Takes the lock from a frozen holder that never acked.
+  const stealLock = () =>
+    new Promise<boolean>(resolve => {
+      if (!lockManager || closed) return resolve(false);
+      let settled = false;
+      const settle = (value: boolean) => {
+        if (settled) return;
+        settled = true;
+        resolve(value);
+      };
+      let request: Promise<void>;
+      try {
+        request = lockManager.request(coordinationName, { steal: true, mode: 'exclusive' }, async lock => {
+          if (closed || !lock) return settle(false);
+          ownsConnection = true;
+          settle(true);
+          await new Promise<void>(release => {
+            releaseLock = release;
+          });
+          releaseLock = null;
+          ownsConnection = false;
+        });
+      } catch {
+        return settle(false);
+      }
+      const activeRequest = request.then(
+        () => undefined,
+        () => {
+          handleLockLost();
+          settle(false);
+        }
+      );
+      lockRequest = activeRequest;
+      void activeRequest.finally(() => {
+        if (lockRequest === activeRequest) lockRequest = null;
+      });
+    });
+
+  // Waits in the lock queue, so it gets the lock as soon as the holder lets go.
+  const waitForLock = (signal: AbortSignal) => {
+    const grant = queueForLock(signal);
+    queuedGrant = grant;
+    void grant.finally(() => {
+      if (queuedGrant === grant) queuedGrant = null;
+    });
+    return grant;
+  };
+
+  const queueForLock = (signal: AbortSignal) =>
+    new Promise<boolean>(resolve => {
+      if (ownsConnection) return resolve(true);
+      if (!lockManager || !lockRequestsAvailable || closed || signal.aborted) return resolve(false);
+      const queue = new AbortController();
+      const abort = () => queue.abort();
+      const stopListening = () => {
+        signal.removeEventListener('abort', abort);
+        queuedLockAborts.delete(abort);
+      };
+      signal.addEventListener('abort', abort, { once: true });
+      queuedLockAborts.add(abort);
+      let granted = false;
+      let activeRequest: Promise<void> | null = null;
+      let request: Promise<void>;
+      try {
+        request = lockManager.request(coordinationName, { mode: 'exclusive', signal: queue.signal }, async lock => {
+          stopListening();
+          if (closed || signal.aborted || !lock) return resolve(false);
+          granted = true;
+          ownsConnection = true;
+          if (activeRequest) lockRequest = activeRequest;
+          resolve(true);
+          await new Promise<void>(release => {
+            releaseLock = release;
+          });
+          releaseLock = null;
+          ownsConnection = false;
+        });
+      } catch {
+        stopListening();
+        return resolve(false);
+      }
+      const settled: Promise<void> = request.then(
+        () => undefined,
+        () => {
+          stopListening();
+          // Only a lock we held can be lost.
+          if (granted) handleLockLost();
+          resolve(false);
+        }
+      );
+      activeRequest = settled;
+      if (granted) lockRequest = settled;
+      void settled.finally(() => {
+        if (lockRequest === settled) lockRequest = null;
+      });
+    });
+
   if (channel) {
     channel.onmessage = event => {
       const message = event.data as OwnershipMessage;
       if (!message || typeof message !== 'object') return;
 
+      if (message.type === 'takeover-ack') {
+        if (message.requesterId === instanceId) pendingAcks.get(message.requestId)?.();
+        return;
+      }
+
       if (message.type === 'takeover-response' && message.requesterId === instanceId) {
         if (pendingTakeovers.has(message.requestId)) lastRefusedBy = message.released ? undefined : message.ownerLabel;
-        pendingTakeovers.get(message.requestId)?.(message.released);
+        pendingTakeovers.get(message.requestId)?.(message.released, message.ownerLabel);
         return;
       }
 
@@ -304,13 +443,34 @@ export function createDebateRoomOwnershipCoordinator({
         automatic: message.automatic === true,
         requesterLabel: message.requesterLabel,
       };
+      try {
+        channel?.postMessage({
+          type: 'takeover-ack',
+          requestId: message.requestId,
+          requesterId: message.requesterId,
+        } satisfies TakeoverAck);
+      } catch {}
+      // Read before the handover, while this tab is still what holds it.
+      const ownerLabel = describeOwner?.();
+      takeoversInFlight += 1;
       void Promise.resolve(onTakeoverRequested(takeoverContext))
         .then(async released => {
           if (released) await release();
-          postTakeoverResponse(message, released);
+          postTakeoverResponse(message, released, ownerLabel);
+          return released;
         })
         .catch(() => {
-          postTakeoverResponse(message, false);
+          postTakeoverResponse(message, false, ownerLabel);
+          return false;
+        })
+        .then(released => {
+          if (released) releasedDuringTakeover = true;
+          takeoversInFlight -= 1;
+          if (takeoversInFlight > 0) return;
+          const lost = lostDuringTakeover && !releasedDuringTakeover;
+          lostDuringTakeover = false;
+          releasedDuringTakeover = false;
+          if (lost) onOwnershipLost?.();
         });
     };
   }
@@ -321,7 +481,11 @@ export function createDebateRoomOwnershipCoordinator({
       return coordinationMode;
     },
     acquire: () => acquireLock(),
-    requestTakeover: async ({ automatic = false, requesterLabel }: DebateRoomTakeoverOptions = {}) => {
+    requestTakeover: async ({
+      automatic = false,
+      requesterLabel,
+      onTookOverFromOtherTab,
+    }: DebateRoomTakeoverOptions = {}) => {
       lastRefusedBy = undefined;
       if (ownsConnection) return true;
       if (!lockManager || !lockRequestsAvailable) return (await acquireLock(true)).acquired;
@@ -331,15 +495,24 @@ export function createDebateRoomOwnershipCoordinator({
       const takeoverChannel = channel;
 
       const requestId = createInstanceId();
-      const released = await new Promise<boolean>(resolve => {
-        const timeout = window.setTimeout(() => {
-          pendingTakeovers.delete(requestId);
-          resolve(false);
-        }, takeoverResponseTimeoutMs);
-        pendingTakeovers.set(requestId, result => {
+      let releasedBy: string | undefined;
+      type TakeoverOutcome = 'released' | 'refused' | 'unanswered' | 'timeout';
+      const outcome = await new Promise<TakeoverOutcome>(resolve => {
+        const settle = (value: TakeoverOutcome) => {
           window.clearTimeout(timeout);
           pendingTakeovers.delete(requestId);
-          resolve(result);
+          pendingAcks.delete(requestId);
+          resolve(value);
+        };
+        let timeout = window.setTimeout(() => settle('timeout'), takeoverResponseTimeoutMs);
+        pendingAcks.set(requestId, () => {
+          pendingAcks.delete(requestId);
+          window.clearTimeout(timeout);
+          timeout = window.setTimeout(() => settle('unanswered'), takeoverAckedResponseTimeoutMs);
+        });
+        pendingTakeovers.set(requestId, (released, ownerLabel) => {
+          if (released) releasedBy = ownerLabel;
+          settle(released ? 'released' : 'refused');
         });
         try {
           takeoverChannel.postMessage({
@@ -351,20 +524,39 @@ export function createDebateRoomOwnershipCoordinator({
             requesterLabel,
           } satisfies TakeoverRequest);
         } catch {
-          window.clearTimeout(timeout);
-          pendingTakeovers.delete(requestId);
-          resolve(false);
+          settle('timeout');
         }
       });
-      if (!released) return false;
-      return (await acquireLock(true)).acquired;
+
+      if (outcome === 'refused') return false;
+      if (outcome === 'released') {
+        let acquired = (await acquireLock(true)).acquired;
+        const waiting = queuedGrant;
+        if (!acquired && waiting) {
+          acquired = await Promise.race([
+            waiting,
+            new Promise<boolean>(resolve => window.setTimeout(() => resolve(false), takeoverResponseTimeoutMs)),
+          ]);
+        }
+        if (acquired) onTookOverFromOtherTab?.(releasedBy);
+        return acquired;
+      }
+      // Never answered (frozen), or acked but never finished handing over: only an explicit claim,
+      // and only where stealing is turned on, takes the lock anyway.
+      if (automatic || !stealUnresponsive) return false;
+      const stolen = await stealLock();
+      if (stolen) onTookOverFromOtherTab?.();
+      return stolen;
     },
+    waitForLock,
     release,
     close: () => {
       closed = true;
+      for (const abort of [...queuedLockAborts]) abort();
       void release();
       for (const resolve of pendingTakeovers.values()) resolve(false);
       pendingTakeovers.clear();
+      pendingAcks.clear();
       channel?.close();
     },
     ownsConnection: () => ownsConnection,

@@ -231,7 +231,10 @@ export const debateQueryKeys = {
   /** Dashless, as `debate.lobby_changed` spells it. */
   lobby: (accountKey: string | null, lobbyId: string) =>
     ['debates', 'account', accountKey, 'lobby', dashlessId(lobbyId)] as const,
-  /** Dashless. Refetched on `debate.lobby_changed`, and after the viewer's own vote is reported. */
+  /**
+   * Dashless. Refetched on `debate.lobby_changed`, after the viewer's own vote is reported, and on
+   * `debate.rematch_changed` (a cancelled publish can undo "debated together").
+   */
   lobbyClaims: (accountKey: string | null, lobbyId: string) =>
     ['debates', 'account', accountKey, 'lobby-claims', dashlessId(lobbyId)] as const,
   /** Dashless. Everyone going, for a host (GEO-3540); read each time the list opens. */

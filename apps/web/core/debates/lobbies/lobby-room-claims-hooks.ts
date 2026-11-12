@@ -11,7 +11,8 @@ const guestClaims = (view: DebateLobbyGuestView) => view.claims ?? undefined;
 
 /**
  * The lobby's "In this room" claims. Refetched on `debate.lobby_changed`, after the viewer's own vote
- * is reported, and on reconnect, so no polling. A failed read retries, since a quiet lobby sends none.
+ * is reported, on `debate.rematch_changed`, and on reconnect, so no polling. A failed read retries,
+ * since a quiet lobby sends none.
  */
 export function useDebateLobbyClaims(lobbyId: string, enabled = true) {
   const { accountKey, authenticated, ready, getPrivyIdentityToken } = useGeoChatAuth();

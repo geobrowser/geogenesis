@@ -398,6 +398,17 @@ describe('useVoiceCallTelemetry (GEO-3340)', () => {
     ]);
   });
 
+  it('summarises voice handed to another tab as a handover, not a leave', () => {
+    const call = fakeRoom();
+    const end = startVoiceCallTelemetry(call.room, 'debate', 'debate-1');
+    act(() => void vi.advanceTimersByTime(5_000));
+    end('handover');
+
+    expect(events('debate_voice_ended')).toEqual([
+      expect.objectContaining({ end_reason: 'handover', seconds_connected: 5 }),
+    ]);
+  });
+
   it('says nothing at the end of a call that never connected', () => {
     const call = fakeRoom();
     call.raw.state = ConnectionState.Connecting;
