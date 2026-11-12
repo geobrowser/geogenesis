@@ -1,6 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { type RefObject, useCallback, useEffect, useRef, useState } from 'react';
+
+import { useStore } from 'jotai';
 
 import { type AnalyticsProperties } from '~/core/analytics';
 import { currentAuthAttempt, tagAuthAttempt } from '~/core/auth-attempt';
@@ -11,7 +13,13 @@ import { readSignInBox } from '~/core/auth/sign-in-box/sign-in-box-store';
 import { usePrepareOnboarding } from '~/core/hooks/use-prepare-onboarding';
 import { useSetToast } from '~/core/hooks/use-toast';
 import { beginPrivyAuth, cancelPrivyAuth, failRedirectedPrivyAuth } from '~/core/privy-auth-events';
-import { useLoginWithOAuth } from '~/core/wallet/auth-hooks';
+import { redirectedPendingActions, restorePendingActions } from '~/core/state/pending-actions';
+import {
+  dropRedirectPendingActions,
+  saveRedirectPendingActions,
+  takeRedirectPendingActions,
+} from '~/core/state/redirect-pending-actions';
+import { useLoginWithOAuth, usePrivy } from '~/core/wallet/auth-hooks';
 import { isReturningFromPrivyRedirect } from '~/core/wallet/privy-session';
 
 /** Set while `GoogleOAuthCompleter` is mounted. */
@@ -38,6 +46,7 @@ function GoogleOAuthCompleter() {
   const [returnAttemptId] = useState(() => (isReturn ? currentAuthAttempt()?.id : undefined));
   // Settled once the return has failed or a new sign-in starts from this page.
   const settled = useRef(false);
+  useRedirectPendingActions(isReturn, returnAttemptId, settled);
   useEffect(() => {
     initGoogleOAuth = () => {
       settled.current = true;
@@ -59,9 +68,48 @@ function GoogleOAuthCompleter() {
         captureAuthStep('google_failed', { sign_in_method: 'google', auth_error: authError });
       failRedirectedPrivyAuth(returnAttemptId);
     }
+    dropRedirectPendingActions();
     setToast(<>Google sign-in didn't complete. Try again.</>);
   }, [isReturn, returnAttemptId, state.status, returnError, setToast]);
   return null;
+}
+
+/**
+ * Keeps the presses queued before a Google sign-in across its redirect (see
+ * `redirect-pending-actions`), whether it was started from Privy's dialog or our sign-in box.
+ *
+ * Saved as the page is left, under the attempt open then: the redirect gives no other notice, and a
+ * press can be queued after the attempt opens. Brought back on the return to that attempt, once
+ * someone is signed in — never into a queue for a visitor the return left signed out. A failed
+ * return, or a load that is not a return, forgets them.
+ */
+function useRedirectPendingActions(
+  isReturn: boolean,
+  returnAttemptId: string | undefined,
+  settled: RefObject<boolean>
+) {
+  const store = useStore();
+  const { authenticated } = usePrivy();
+
+  useEffect(() => {
+    if (!isReturn) dropRedirectPendingActions();
+  }, [isReturn]);
+
+  useEffect(() => {
+    const save = () => {
+      const attempt = currentAuthAttempt();
+      if (attempt && !attempt.endedAt) saveRedirectPendingActions(attempt.id, redirectedPendingActions(store));
+    };
+    window.addEventListener('pagehide', save);
+    return () => window.removeEventListener('pagehide', save);
+  }, [store]);
+
+  const restored = useRef(false);
+  useEffect(() => {
+    if (!isReturn || !returnAttemptId || !authenticated || restored.current || settled.current) return;
+    restored.current = true;
+    restorePendingActions(store, takeRedirectPendingActions(returnAttemptId));
+  }, [isReturn, returnAttemptId, authenticated, settled, store]);
 }
 
 /** Where a Google start comes from. */

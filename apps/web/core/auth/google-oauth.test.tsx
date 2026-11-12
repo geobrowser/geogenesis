@@ -7,6 +7,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { closeSignInBox, openSignInBox } from '~/core/auth/sign-in-box/sign-in-box-store';
 import { featureFlagsStorageKey } from '~/core/state/feature-flags';
+import { type RedirectedPendingAction, pendingActionsAtom, restorePendingActions } from '~/core/state/pending-actions';
+import { REDIRECT_PENDING_ACTIONS_KEY, saveRedirectPendingActions } from '~/core/state/redirect-pending-actions';
 
 import { GoogleOAuthHost, useGoogleOAuthSignIn } from './google-oauth';
 
@@ -19,6 +21,7 @@ const mocks = vi.hoisted(() => ({
   setToast: vi.fn(),
   failRedirectedPrivyAuth: vi.fn(),
   attemptId: undefined as string | undefined,
+  authenticated: false,
   cancelPrivyAuth: vi.fn(),
   beginPrivyAuth: vi.fn(),
   prepareOnboarding: vi.fn(),
@@ -26,7 +29,10 @@ const mocks = vi.hoisted(() => ({
   tags: [] as { id: string | undefined; tags: Record<string, unknown> }[],
 }));
 
-vi.mock('~/core/wallet/auth-hooks', () => ({ useLoginWithOAuth: mocks.useLoginWithOAuth }));
+vi.mock('~/core/wallet/auth-hooks', () => ({
+  useLoginWithOAuth: mocks.useLoginWithOAuth,
+  usePrivy: () => ({ authenticated: mocks.authenticated }),
+}));
 vi.mock('~/core/hooks/use-prepare-onboarding', () => ({ usePrepareOnboarding: () => mocks.prepareOnboarding }));
 vi.mock('~/core/auth-attempt', () => ({
   currentAuthAttempt: () => (mocks.attemptId ? { id: mocks.attemptId } : undefined),
@@ -55,23 +61,32 @@ function renderHost(flag: boolean) {
       <GoogleOAuthHost />
     </Provider>
   );
+  const rerender = () =>
+    view.rerender(
+      <Provider store={store}>
+        <GoogleOAuthHost />
+      </Provider>
+    );
   return {
     /** Re-renders with Privy's flow state moved on, as the host would publish it. */
     setState(state: OAuthState) {
       mocks.state = state;
-      view.rerender(
-        <Provider store={store}>
-          <GoogleOAuthHost />
-        </Provider>
-      );
+      rerender();
+    },
+    /** Re-renders with Privy signed in, as the return's code exchange completes. */
+    signIn() {
+      mocks.authenticated = true;
+      rerender();
     },
     store,
+    unmount: view.unmount,
   };
 }
 
 beforeEach(() => {
   mocks.state = { status: 'initial' };
   mocks.attemptId = 'attempt-a';
+  mocks.authenticated = false;
   mocks.steps = [];
   mocks.tags = [];
   mocks.useLoginWithOAuth.mockImplementation(() => ({ initOAuth: mocks.initOAuth, state: mocks.state }));
@@ -79,6 +94,7 @@ beforeEach(() => {
 
 afterEach(() => {
   window.localStorage.clear();
+  window.sessionStorage.clear();
   window.history.replaceState({}, '', '/');
   vi.clearAllMocks();
   vi.restoreAllMocks();
@@ -277,5 +293,100 @@ describe('Google sign-in steps (GEO-3550)', () => {
     expect(mocks.steps).toEqual([
       { step: 'google_failed', extra: { sign_in_method: 'google', auth_error: 'unknown_error' } },
     ]);
+  });
+});
+
+describe('presses queued before a Google sign-in', () => {
+  const vote: RedirectedPendingAction = {
+    id: 'entity-vote:claim-1:space-1',
+    label: 'your vote',
+    requires: 'personalSpace',
+    intent: 'positive',
+    context: {
+      component: 'entity_vote_buttons',
+      page_path: '/explore',
+      page_type: 'explore',
+      page_view_id: 'pv-1',
+      target_id: 'claim-1',
+      target_type: 'entity',
+    },
+  };
+  const savedRecord = () => window.sessionStorage.getItem(REDIRECT_PENDING_ACTIONS_KEY);
+  const queuedIds = (store: ReturnType<typeof renderHost>['store']) => store.get(pendingActionsAtom).map(a => a.id);
+
+  it('are saved as the page is left for Google, under the attempt open then', () => {
+    const { store } = renderHost(true);
+    restorePendingActions(store, [vote]);
+
+    window.dispatchEvent(new Event('pagehide'));
+
+    expect(JSON.parse(savedRecord()!)).toEqual(expect.objectContaining({ attemptId: 'attempt-a', actions: [vote] }));
+  });
+
+  it('come back once on the return to that attempt, and only once someone is signed in', () => {
+    saveRedirectPendingActions('attempt-a', [vote]);
+    window.history.replaceState({}, '', RETURN_URL);
+    const host = renderHost(true);
+    expect(queuedIds(host.store)).toEqual([]);
+
+    host.signIn();
+
+    expect(queuedIds(host.store)).toEqual([vote.id]);
+    expect(host.store.get(pendingActionsAtom)[0]?.intent).toBe('positive');
+    expect(savedRecord()).toBeNull();
+  });
+
+  it('do not come back on a reload of the return once carried out', () => {
+    saveRedirectPendingActions('attempt-a', [vote]);
+    window.history.replaceState({}, '', RETURN_URL);
+    const first = renderHost(true);
+    first.signIn();
+    // Carried out: the runner takes it off the queue.
+    first.store.set(pendingActionsAtom, []);
+    window.dispatchEvent(new Event('pagehide'));
+    first.unmount();
+
+    const reloaded = renderHost(true);
+    reloaded.signIn();
+
+    expect(queuedIds(reloaded.store)).toEqual([]);
+  });
+
+  it('are left behind on a return to another attempt', () => {
+    saveRedirectPendingActions('attempt-z', [vote]);
+    window.history.replaceState({}, '', RETURN_URL);
+    const host = renderHost(true);
+    host.signIn();
+
+    expect(queuedIds(host.store)).toEqual([]);
+    expect(savedRecord()).toBeNull();
+  });
+
+  it('are forgotten when the return fails, so a later sign-in does not carry them out', () => {
+    saveRedirectPendingActions('attempt-a', [vote]);
+    window.history.replaceState({}, '', RETURN_URL);
+    const host = renderHost(true);
+    host.setState({ status: 'error', error: new Error('invalid code') });
+    host.signIn();
+
+    expect(queuedIds(host.store)).toEqual([]);
+    expect(savedRecord()).toBeNull();
+  });
+
+  it('are forgotten on a load that is not a return from Google', () => {
+    saveRedirectPendingActions('attempt-a', [vote]);
+    renderHost(true).signIn();
+
+    expect(savedRecord()).toBeNull();
+  });
+
+  it('are neither saved nor restored with the flag off', () => {
+    saveRedirectPendingActions('attempt-a', [vote]);
+    window.history.replaceState({}, '', RETURN_URL);
+    mocks.authenticated = true;
+    const { store } = renderHost(false);
+
+    expect(queuedIds(store)).toEqual([]);
+    expect(savedRecord()).not.toBeNull();
   });
 });

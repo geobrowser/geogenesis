@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { atom, useAtomValue, useSetAtom, useStore } from 'jotai';
 import { selectAtom } from 'jotai/utils';
 
-import { type ActionComponent, withActionContext } from '../action-context';
+import { type ActionComponent, type ActionContext, withActionContext } from '../action-context';
 import { useActionContext } from '../action-context-provider';
 import type { AnalyticsProperties } from '../analytics';
 
@@ -38,10 +38,16 @@ export type PendingAction = {
    */
   intent?: string;
   onSignedOut?: SignedOutOutcome;
+  survivesRedirect?: boolean;
 };
 
-/** A queued action as the runner sees it: always runnable. */
-type RunnablePendingAction = PendingAction & { run: () => Promise<void> | void };
+/** A queued action as the runner sees it: always runnable, with the press's analytics context. */
+type RunnablePendingAction = PendingAction & { run: () => Promise<void> | void; context?: ActionContext };
+
+/** What of a queued action outlives a redirect: everything but its closures. */
+export type RedirectedPendingAction = Pick<PendingAction, 'id' | 'label' | 'requires' | 'intent'> & {
+  context: ActionContext;
+};
 
 /** A live handler's answer when its control unmounted before it could act: try another. */
 const HANDLER_GONE = Symbol('handler gone');
@@ -133,6 +139,48 @@ function useLivePendingActionHandler(
 
 export const pendingActionsAtom = atom<RunnablePendingAction[]>([]);
 
+type Store = ReturnType<typeof useStore>;
+
+function runnable(store: Store, action: PendingAction, context: ActionContext): RunnablePendingAction {
+  const queued: RunnablePendingAction = {
+    ...action,
+    context,
+    run: async () => {
+      const isCurrent = () => store.get(pendingActionsAtom).includes(queued);
+      for (;;) {
+        if (!isCurrent()) return;
+        const live = currentLiveHandler(action.id);
+        const fallback = action.run;
+        if (!live && fallback) return withActionContext(context, () => fallback(isCurrent));
+        const handler = live ?? (await waitForLiveHandler(action.id));
+        if (!isCurrent()) return;
+        const outcome = await withActionContext(context, () => handler(action.intent, isCurrent));
+        if (outcome !== HANDLER_GONE) return;
+      }
+    },
+  };
+  return queued;
+}
+
+export function redirectedPendingActions(store: Store): RedirectedPendingAction[] {
+  return store
+    .get(pendingActionsAtom)
+    .flatMap(({ id, label, requires, intent, context, survivesRedirect }) =>
+      survivesRedirect && context ? [{ id, label, requires, intent, context }] : []
+    );
+}
+
+export function restorePendingActions(store: Store, actions: readonly RedirectedPendingAction[]) {
+  if (actions.length === 0) return;
+  store.set(pendingActionsAtom, prev => {
+    const queued = new Set(prev.map(action => action.id));
+    const restored = actions
+      .filter(action => !queued.has(action.id))
+      .map(({ context, ...action }) => runnable(store, { ...action, survivesRedirect: true }, context));
+    return [...prev, ...restored];
+  });
+}
+
 /**
  * The `intent` of queued action `id`, or undefined once it has run (or was never queued).
  *
@@ -155,25 +203,7 @@ export function useEnqueuePendingAction(component: ActionComponent = 'entity_vot
   const getContext = useActionContext(component, 'entity', '');
   return useCallback(
     (action: PendingAction) => {
-      const context = getContext();
-      const queued: RunnablePendingAction = {
-        ...action,
-        run: async () => {
-          // Withdrawn, or replaced by a newer press — checked after every wait below.
-          const isCurrent = () => store.get(pendingActionsAtom).includes(queued);
-          // Until a control carries it out, or none is left to and the press's own `run` does.
-          for (;;) {
-            if (!isCurrent()) return;
-            const live = currentLiveHandler(action.id);
-            const fallback = action.run;
-            if (!live && fallback) return withActionContext(context, () => fallback(isCurrent));
-            const handler = live ?? (await waitForLiveHandler(action.id));
-            if (!isCurrent()) return;
-            const outcome = await withActionContext(context, () => handler(action.intent, isCurrent));
-            if (outcome !== HANDLER_GONE) return;
-          }
-        },
-      };
+      const queued = runnable(store, action, getContext());
       setActions(prev => [...prev.filter(a => a.id !== action.id), queued]);
     },
     [setActions, store, getContext]
@@ -199,6 +229,7 @@ export function useQueuedAction({
   run,
   requires = 'personalSpace',
   liveOnly = false,
+  survivesRedirect = false,
   ready = true,
 }: {
   id: string;
@@ -213,6 +244,7 @@ export function useQueuedAction({
   run: (intent: string | undefined, replay: { live: boolean; isCurrent: () => boolean }) => Promise<void> | void;
   requires?: PendingActionRequirement;
   liveOnly?: boolean;
+  survivesRedirect?: boolean;
   /**
    * Whether this control's own data — what `run` decides from — has loaded. A replay through this
    * control waits for it, so `run` never reads a loading default as an answer.
@@ -239,8 +271,9 @@ export function useQueuedAction({
         intent: nextIntent,
         run: liveOnly ? undefined : isCurrent => runRef.current(nextIntent, { live: false, isCurrent }),
         onSignedOut: options.onSignedOut,
+        survivesRedirect,
       }),
-    [enqueue, id, label, requires, liveOnly]
+    [enqueue, id, label, requires, liveOnly, survivesRedirect]
   );
 
   const cancel = useCallback(() => setActions(prev => prev.filter(a => a.id !== id)), [setActions, id]);
