@@ -103,9 +103,25 @@ export type MomentBackfillEntry = {
   reel_version: string | null;
   hand_picked: { requested_by: string; requested_at: string } | null;
   queued: boolean;
+  /**
+   * The debate's request as it stands. geo-chat#352 also returns it on a dry run. The editor reads
+   * the request only from the GET, which it polls, so it never counts the same request twice.
+   */
   request: MomentBackfillStatus | null;
   live_reel?: LiveReel | null;
+  /**
+   * A re-render couldn't carry the hand-picked reel (geo-chat#352): a clip's claim is gone and its
+   * speaker has none left. The debate stays locked (`hand_picked` still names the lost reel's
+   * publisher) but has no reel, and viewers see none. A new hand-picked reel on `reel_version`, or
+   * an unlock on it, ends the state. Absent from a geo-chat that predates it.
+   */
+  reel_unlinkable?: boolean;
 };
+
+/** Whether the debate is locked with no reel, because a re-render couldn't carry its hand-picked one. */
+export function reelUnlinkable(entry: Pick<MomentBackfillEntry, 'reel_unlinkable'> | null) {
+  return entry?.reel_unlinkable === true;
+}
 
 /**
  * Whether a re-render carried this hand-picked reel onto fresh claims and it is not yet cut again on

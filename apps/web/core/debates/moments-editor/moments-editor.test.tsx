@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   plan: {} as { isSuccess: boolean; data: unknown; error: unknown },
   mutate: vi.fn(),
   toast: vi.fn(),
+  refresh: vi.fn(),
   /** The claims payload's `moment_reel_manual`: the reel's lock, whoever published it. */
   manualReel: false,
   /** The transcript read failed before it ever answered. */
@@ -76,7 +77,7 @@ vi.mock('./hooks', () => ({
   useMomentBackfill: () => mocks.backfill,
   useMomentReelPlan: () => mocks.plan,
   useQueueMomentReel: () => ({ mutate: mocks.mutate, isPending: false }),
-  useRefreshAfterReel: () => () => {},
+  useRefreshAfterReel: () => mocks.refresh,
 }));
 
 vi.mock('../browse/debate-feed-player', () => ({ DebateFeedPlayer: () => <div data-testid="player" /> }));
@@ -122,6 +123,7 @@ beforeEach(() => {
   mocks.backfill = { isPending: false, error: null, data: { request: null, entry: null } };
   mocks.plan = { isSuccess: true, data: entry(), error: null };
   mocks.mutate.mockReset();
+  mocks.refresh.mockReset();
   mocks.manualReel = false;
   mocks.transcriptFailed = false;
   mocks.retainedClaim = false;
@@ -365,10 +367,11 @@ describe('MomentsEditor (GEO-3671)', () => {
     };
     render(<MomentsEditor debateId={DEBATE_ID} />);
     expect(screen.getByText(/still cut on the video from before it, so they can't be edited/)).toHaveTextContent(
-      /return it to automatic, then edit the reel that replaces it/
+      /Nothing is queued to cut it again\. To pick it again, return it to automatic/
     );
-    const notice = screen.getByText(/A re-render couldn.t keep this hand-picked reel/).closest('[role="status"]');
-    expect(notice).toHaveTextContent(/Return to automatic, then edit the reel that replaces it/);
+    // Said once: the worker's notice lists what it found, and leaves the way out to the reason above.
+    expect(screen.getAllByText(/return it to automatic/i)).toHaveLength(1);
+    expect(screen.getByText('Clip 1: its speaker has no claim to link it to')).toBeInTheDocument();
     expect(screen.getByRole('textbox', { name: 'End time' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Preview' })).toBeDisabled();
 
@@ -378,6 +381,125 @@ describe('MomentsEditor (GEO-3671)', () => {
       { unlock: true, story: true, reason: 'Moments editor: return to automatic', base: 'v1' },
       expect.any(Object)
     );
+  });
+
+  // geo-chat#352: right after a re-render the worker's own re-cut of a carried reel is queued. It may
+  // well fit, so the editor waits on it rather than pointing at a Return to automatic it hides.
+  it('waits on a carried reel’s queued re-cut, without pointing to Return to automatic', () => {
+    mocks.manualReel = true;
+    mocks.plan.data = entry({
+      live_reel: {
+        clock: 'video',
+        carried: true,
+        clips: [{ start_ms: 900, end_ms: 3_000, speaker_slot: 0, claim_index: 0, claim_text: 'Coffee is low stakes' }],
+      },
+    });
+    mocks.backfill.data = {
+      request: status({
+        status: 'queued',
+        manual_reel: { clock: 'video', clips: [], reapplied: { job_id: 'job', quotes: ['Coffee dates'] } },
+      }),
+      entry: null,
+    };
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    expect(screen.getByText(/still cut on the video from before it/)).toHaveTextContent(
+      /in the queue; this page updates when it's done/
+    );
+    expect(screen.queryByText(/return it to automatic/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Return to automatic' })).not.toBeInTheDocument();
+  });
+
+  // geo-chat#352 1fb7f11: a re-render that couldn't carry the reel leaves the debate locked with no
+  // reel. The dry run returns the worker's refused re-submit too; the editor reads it from the GET.
+  it('opens a debate locked without a reel on no clips, and offers both ways out', () => {
+    const resubmit = status({
+      status: 'skipped',
+      outcome: 'reel_no_longer_fits',
+      manual_reel: { clock: 'video', clips: [], reapplied: { job_id: 'job', quotes: ['Coffee dates'] } },
+      report: { story_failed: 'clip 1: its speaker has no claim to link it to' },
+    });
+    mocks.manualReel = true;
+    mocks.plan.data = entry({
+      reel_unlinkable: true,
+      live_reel: null,
+      hand_picked: { requested_by: 'yaniv', requested_at: '2026-11-10T12:00:00Z' },
+      request: resubmit,
+    });
+    mocks.backfill.data = { request: resubmit, entry: null };
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+
+    const notice = screen.getByText(/couldn.t be carried over after a re-render/).closest('[role="status"]');
+    expect(notice).toHaveTextContent(
+      "This hand-picked reel couldn't be carried over after a re-render, so the debate has no reel. Pick new clips, or return to automatic."
+    );
+    expect(notice).toHaveTextContent('Lost reel, clip 1: its speaker has no claim to link it to');
+    expect(screen.queryByText(/moved the video/)).not.toBeInTheDocument();
+    // The served moments still name a clip; it is not opened as if it played.
+    expect(screen.queryByRole('textbox', { name: 'Start time' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/times are\s+approximate/)).not.toBeInTheDocument();
+    expect(screen.getByText('Locked · no reel')).toBeInTheDocument();
+    expect(screen.queryByText('Hand-picked · locked')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Return to automatic' }));
+    expect(screen.getByRole('alertdialog')).toHaveTextContent(
+      'The debate has no reel until the new clips are rendered.'
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Unlock and re-pick' }));
+    expect(mocks.mutate).toHaveBeenCalledWith(
+      { unlock: true, story: true, reason: 'Moments editor: return to automatic', base: 'v1' },
+      expect.any(Object)
+    );
+  });
+
+  // The GET is polled and is the request's one source; the dry run's copy is from when it was read.
+  it('reads the request from the GET, not from the dry run’s copy of it', () => {
+    mocks.plan.data = entry({ request: status({ status: 'queued' }) });
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    expect(screen.queryByText('Queued · live reel unchanged')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Preview' })).toBeEnabled();
+  });
+
+  // The reel changed under the edit; Discard goes back to the reel that is live now, on its version.
+  it('discards an edit to the reel that is live now, not the one the page opened on', () => {
+    const live = (start: number, end: number) => ({
+      clock: 'video' as const,
+      clips: [{ start_ms: start, end_ms: end, speaker_slot: 0, claim_index: 0, claim_text: 'Coffee is low stakes' }],
+    });
+    mocks.plan.data = entry({ live_reel: live(900, 3_000) });
+    const { rerender } = render(<MomentsEditor debateId={DEBATE_ID} />);
+    fireEvent.change(screen.getByRole('textbox', { name: 'End time' }), { target: { value: '1.45' } });
+    fireEvent.blur(screen.getByRole('textbox', { name: 'End time' }));
+    mocks.plan = { ...mocks.plan, data: entry({ reel_version: 'v2', live_reel: live(1_000, 2_900) }) };
+    rerender(<MomentsEditor debateId={DEBATE_ID} />);
+    expect(screen.getByRole('textbox', { name: 'End time' })).toHaveValue('0:01.5');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Discard changes' }));
+    expect(screen.getByRole('textbox', { name: 'Start time' })).toHaveValue('0:01.0');
+    expect(screen.queryByText('Unsaved changes')).not.toBeInTheDocument();
+    fireEvent.change(screen.getByRole('textbox', { name: 'End time' }), { target: { value: '1.45' } });
+    fireEvent.blur(screen.getByRole('textbox', { name: 'End time' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Publish reel' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Publish and lock' }));
+    expect(mocks.mutate).toHaveBeenCalledWith(
+      expect.objectContaining({ reel: expect.objectContaining({ base: 'v2' }) }),
+      expect.any(Object)
+    );
+  });
+
+  // A refusal that says the reel moved on means the plan is stale: it is read again, so the editor
+  // shows where the reel stands without a reload.
+  it('reads the plan again when a publish is refused because the reel moved on', () => {
+    mocks.mutate.mockImplementation((_body, options: { onSuccess: (entry: unknown) => void }) =>
+      options.onSuccess({ queued: false, refusal: 'reel_being_reapplied', request: null })
+    );
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    fireEvent.change(screen.getByRole('textbox', { name: 'End time' }), { target: { value: '1.45' } });
+    fireEvent.blur(screen.getByRole('textbox', { name: 'End time' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Publish reel' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Publish and lock' }));
+    expect(screen.getByText(/carried this hand-picked reel over since you opened it/)).toBeInTheDocument();
+    expect(screen.queryByText(/Reload/)).not.toBeInTheDocument();
+    expect(mocks.refresh).toHaveBeenCalled();
   });
 
   // geo-chat#352 links a carried clip to its own published claim, which a re-extraction may keep as
@@ -546,7 +668,16 @@ describe('editingBlockedReason', () => {
     // geo-chat#352's mark is `live_reel.carried`.
     expect(
       editingBlockedReason({ refusal: null, live_reel: { clock: 'video', clips: [], carried: true } }, true, null)
-    ).toMatch(/still cut on the video from before it/);
+    ).toMatch(/Nothing is queued to cut it again/);
+    expect(
+      editingBlockedReason(
+        { refusal: null, live_reel: { clock: 'video', clips: [], carried: true } },
+        true,
+        null,
+        false,
+        true
+      )
+    ).toMatch(/in the queue; this page updates/);
     expect(
       editingBlockedReason({ refusal: null, live_reel: { clock: 'video', clips: [], carried: false } }, true, null)
     ).toBeNull();

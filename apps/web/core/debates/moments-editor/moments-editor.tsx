@@ -16,7 +16,7 @@ import { DebateFeedPlayer } from '../browse/debate-feed-player';
 import { useDebate, useDebateExtractedClaims, useDebateMedia, useDebateTranscript, useGeoChatAuth } from '../hooks';
 import { NEGATIVE_TEXT_CLASS, POSITIVE_TEXT_CLASS, WAITING_TEXT_CLASS } from '../matchmaking/admin-debate-parts';
 import { HUB_LIGHT_CALLOUT_CLASS_NAME } from '../matchmaking/hub-callout';
-import { type MomentBackfillEntry, reelCarried } from './api';
+import { type MomentBackfillEntry, reelCarried, reelUnlinkable } from './api';
 import { type ClaimOption, ClipRow } from './clip-row';
 import {
   isMediaAdminRefusal,
@@ -103,9 +103,13 @@ function Editor({ debateId }: { debateId: string }) {
   // The served moments matter only without live cuts; with them, a claims refetch that lands before
   // the plan's would rebuild the reel from the old cuts.
   const servedMomentsAt = entry?.live_reel ? 0 : claims.dataUpdatedAt;
+  // Locked with no reel (geo-chat#352): viewers see none, so the editor opens on none. The clip files
+  // geo-chat kept are the lost reel's, and the served moments can still name one of them.
+  const unlinkable = reelUnlinkable(entry);
   const source = React.useMemo(() => {
     if (!loaded) return null;
     const version = entry?.reel_version ?? null;
+    if (unlinkable) return { clips: [], approximate: false, version };
     if (entry?.live_reel) {
       return { clips: clipsFromLiveReel(entry.live_reel, turns), approximate: false, version };
     }
@@ -113,7 +117,7 @@ function Editor({ debateId }: { debateId: string }) {
     return { clips: clipsFromServedMoments(moments, payload?.claims ?? [], turns), approximate: true, version };
     // Rebuilt only when the reel itself may have changed: its version, whether cuts are served, or
     // the served moments read again.
-  }, [loaded, entry?.reel_version, Boolean(entry?.live_reel), servedMomentsAt]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [loaded, entry?.reel_version, Boolean(entry?.live_reel), unlinkable, servedMomentsAt]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [saved, setSaved] = React.useState<EditorClip[] | null>(null);
   const [clips, setClips] = React.useState<EditorClip[]>([]);
@@ -196,7 +200,13 @@ function Editor({ debateId }: { debateId: string }) {
 
   // Only before the first answer, like the other reads: a later refetch that fails keeps its words.
   const transcriptFailed = !transcript.isPending && transcript.data === undefined;
-  const readOnlyReason = editingBlockedReason(entry, transcript.data?.word_timing, plan.error, transcriptFailed);
+  const readOnlyReason = editingBlockedReason(
+    entry,
+    transcript.data?.word_timing,
+    plan.error,
+    transcriptFailed,
+    inFlight
+  );
   const readOnly = readOnlyReason !== null;
   // A carried reel can't be edited, but it can be returned to automatic, which geo-chat doesn't refuse
   // (its dry run here is that unlock): that is how its clips get picked again.
@@ -231,7 +241,9 @@ function Editor({ debateId }: { debateId: string }) {
   // before it kept that is `hand_picked: null`, though still locked. The payload's flag is the lock.
   const handPicked = entry?.hand_picked ?? null;
   const locked =
-    handPicked !== null || (payload as { moment_reel_manual?: unknown } | undefined)?.moment_reel_manual === true;
+    handPicked !== null ||
+    unlinkable ||
+    (payload as { moment_reel_manual?: unknown } | undefined)?.moment_reel_manual === true;
   const canPublish = canQueue && dirty;
   const canUnlock = locked && !dirty && !inFlight && (!readOnly || canUnlockCarried);
   // A confirm stays open only while what it confirms can still be sent: an edit made under it can
@@ -245,6 +257,16 @@ function Editor({ debateId }: { debateId: string }) {
     setClips(current =>
       current.map((clip, at) => (at === index ? keepClaimWithSpeaker(clip, update(clip), words, claimSlot) : clip))
     );
+
+  // Back to the reel that is live now, which is not the one the page opened on when it changed under
+  // the edit (another admin's publish, a re-render).
+  const discard = () => {
+    if (!source) return;
+    adoptNextVersion.current = false;
+    setBase(source.version);
+    setSaved(source.clips);
+    setClips(source.clips);
+  };
 
   const submit = (kind: 'preview' | 'publish' | 'unlock') => {
     setConfirm(null);
@@ -263,6 +285,9 @@ function Editor({ debateId }: { debateId: string }) {
       onSuccess: queued => {
         if (!queued?.queued || !queued.request) {
           setQueueError(refusalMessage(queued?.refusal ?? 'not_queued'));
+          // The reel moved on since the plan was read: read it again, so the editor shows where it
+          // stands (a carried reel, say, and its Return to automatic) without a reload.
+          if (queued?.refusal === 'reel_changed' || queued?.refusal === 'reel_being_reapplied') refreshAfterReel();
           return;
         }
         setTracked({ requestedAt: queued.request.requested_at, reelKey: reelKey(clips), sent: clips });
@@ -291,11 +316,11 @@ function Editor({ debateId }: { debateId: string }) {
       title={title}
       actions={
         <>
-          <StatusPill job={job} dirty={dirty} handPicked={locked} />
+          <StatusPill job={job} dirty={dirty} handPicked={locked} noReel={unlinkable} />
           <Button variant="secondary" disabled={!canQueue} onClick={() => submit('preview')}>
             Preview
           </Button>
-          <Button variant="secondary" disabled={!dirty || inFlight} onClick={() => saved && setClips(saved)}>
+          <Button variant="secondary" disabled={!dirty || inFlight} onClick={discard}>
             Discard changes
           </Button>
           {canUnlock ? (
@@ -322,7 +347,11 @@ function Editor({ debateId }: { debateId: string }) {
           approximate. Check them before publishing.
         </Notice>
       ) : null}
-      {reapplyFailed ? <ReapplyFailedNotice job={reapplyFailed} carried={carried} /> : null}
+      {unlinkable ? (
+        <UnlinkableNotice job={reapplyFailed} />
+      ) : reapplyFailed ? (
+        <ReapplyFailedNotice job={reapplyFailed} />
+      ) : null}
       {confirm === 'publish' && confirmAllowed ? (
         <ConfirmCard
           title="Publish this reel?"
@@ -330,8 +359,10 @@ function Editor({ debateId }: { debateId: string }) {
           onCancel={() => setConfirm(null)}
           onConfirm={() => submit('publish')}
         >
-          It&apos;s queued for the media worker, which renders the clips from the recordings. The live moments
-          don&apos;t change until that&apos;s done; then this reel replaces them for everyone and is locked, so
+          It&apos;s queued for the media worker, which renders the clips from the recordings.{' '}
+          {unlinkable
+            ? "The debate has no reel until that's done; then this reel plays for everyone and is locked, so"
+            : "The live moments don't change until that's done; then this reel replaces them for everyone and is locked, so"}{' '}
           automatic picks and re-cuts leave it alone.
         </ConfirmCard>
       ) : null}
@@ -342,12 +373,14 @@ function Editor({ debateId }: { debateId: string }) {
           onCancel={() => setConfirm(null)}
           onConfirm={() => submit('unlock')}
         >
-          This unlocks the reel and queues a fresh automatic pick. The hand-picked reel stays live until the new clips
-          are rendered.
+          This unlocks the reel and queues a fresh automatic pick.{' '}
+          {unlinkable
+            ? 'The debate has no reel until the new clips are rendered.'
+            : 'The hand-picked reel stays live until the new clips are rendered.'}
         </ConfirmCard>
       ) : null}
       {queueError ? <Notice tone="bad">{queueError}</Notice> : null}
-      {showJob && !job.preview ? <JobNotice job={job} flagged={flaggedClips} /> : null}
+      {showJob && !job.preview ? <JobNotice job={job} flagged={flaggedClips} noReel={unlinkable} /> : null}
       {wholeReelProblems.length > 0 ? (
         <Notice tone="bad">
           {wholeReelProblems.map(problem => (
@@ -468,13 +501,20 @@ export function editingBlockedReason(
   wordTiming: boolean | undefined,
   planError: unknown,
   /** The transcript never loaded: without its words no edge snaps and no clip has a speaker or claim. */
-  transcriptFailed = false
+  transcriptFailed = false,
+  /** A request is queued or rendering: for a carried reel, usually the worker's own re-cut of it. */
+  requestInFlight = false
 ): string | null {
   if (planError) return "Couldn't check whether this debate can be edited. Reload to try again.";
   if (transcriptFailed) return "Couldn't load this debate's transcript. Reload to try again.";
   // Its clip times are on the old video's clock until the worker cuts it again on the new one.
   if (entry && reelCarried(entry)) {
-    return "A re-render carried this hand-picked reel over, and its clips are still cut on the video from before it, so they can't be edited. To pick them again, return it to automatic, then edit the reel that replaces it.";
+    const carried =
+      "A re-render carried this hand-picked reel over, and its clips are still cut on the video from before it, so they can't be edited.";
+    // A re-cut on its way may well fit, and returning to automatic would throw the reel away.
+    return requestInFlight
+      ? `${carried} A request for it is in the queue; this page updates when it's done.`
+      : `${carried} Nothing is queued to cut it again. To pick it again, return it to automatic, then edit the reel that replaces it.`;
   }
   if (entry && refusalBlocksEditing(entry.refusal))
     return `Can't edit this reel: ${refusalMessage(entry.refusal ?? '')}`;
@@ -572,11 +612,22 @@ const PILL_CLASS =
   'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[14px] leading-4 font-medium whitespace-nowrap';
 
 /** Where the reel stands, never "published" while it is only queued. */
-function StatusPill({ job, dirty, handPicked }: { job: ReelJob; dirty: boolean; handPicked: boolean }) {
+function StatusPill({
+  job,
+  dirty,
+  handPicked,
+  noReel,
+}: {
+  job: ReelJob;
+  dirty: boolean;
+  handPicked: boolean;
+  /** Locked with no reel (geo-chat#352): viewers see none. */
+  noReel: boolean;
+}) {
   if (job.kind === 'queued') {
     return (
       <span className={cx(PILL_CLASS, 'bg-orange/15', WAITING_TEXT_CLASS)}>
-        {job.preview ? 'Preview queued' : 'Queued · live reel unchanged'}
+        {job.preview ? 'Preview queued' : noReel ? 'Queued · no reel yet' : 'Queued · live reel unchanged'}
       </span>
     );
   }
@@ -589,17 +640,19 @@ function StatusPill({ job, dirty, handPicked }: { job: ReelJob; dirty: boolean; 
     );
   }
   if (dirty) return <span className={cx(PILL_CLASS, 'bg-orange/15', WAITING_TEXT_CLASS)}>Unsaved changes</span>;
+  if (noReel) return <span className={cx(PILL_CLASS, 'bg-red-02', NEGATIVE_TEXT_CLASS)}>Locked · no reel</span>;
   if (handPicked) return <span className={cx(PILL_CLASS, 'bg-text text-white')}>Hand-picked · locked</span>;
   return <span className={cx(PILL_CLASS, 'bg-grey-01 text-grey-04')}>Auto-picked</span>;
 }
 
 /** What became of a publish or a return to automatic. `flagged`: the clips it failed on, as numbered now. */
-function JobNotice({ job, flagged }: { job: ReelJob; flagged: readonly number[] }) {
+function JobNotice({ job, flagged, noReel }: { job: ReelJob; flagged: readonly number[]; noReel: boolean }) {
   if (job.kind === 'queued') {
     return (
       <Notice tone="wait">
-        <b className="font-medium">Queued.</b> The live reel stays as it is until the media worker renders the new
-        clips. The queue can take a while; this page updates when it&apos;s done, and you can leave it.
+        <b className="font-medium">Queued.</b> {noReel ? 'The debate has no reel' : 'The live reel stays as it is'}{' '}
+        until the media worker renders the new clips. The queue can take a while; this page updates when it&apos;s done,
+        and you can leave it.
       </Notice>
     );
   }
@@ -643,22 +696,45 @@ function JobNotice({ job, flagged }: { job: ReelJob; flagged: readonly number[] 
  * A hand-picked reel a re-render could not carry onto the new video (`reel_no_longer_fits`): what the
  * worker found, clip by clip as the reel stood, and that the reel needs picking again.
  */
-function ReapplyFailedNotice({ job, carried }: { job: Extract<ReelJob, { kind: 'failed' }>; carried: boolean }) {
-  const problems = Object.entries(job.clips).flatMap(([at, found]) =>
-    found.map(problem => `Clip ${Number(at) + 1}: ${problem}`)
-  );
+function ReapplyFailedNotice({ job }: { job: Extract<ReelJob, { kind: 'failed' }> }) {
   return (
     <Notice tone="bad">
       <b className="font-medium">A re-render couldn&apos;t keep this hand-picked reel.</b> {job.summary}
-      {carried
-        ? ' The clips below are still cut on the video from before the re-render. Return to automatic, then edit the reel that replaces it.'
-        : ''}
+      <WorkerProblems job={job} clipLabel="Clip" />
+    </Notice>
+  );
+}
+
+/**
+ * Locked with no reel (geo-chat#352, `reel_unlinkable`): a re-render couldn't carry the hand-picked
+ * reel, and nothing automatic took its place. `job`: the worker's refused re-submit, whose clips are
+ * the lost reel's, not any shown here.
+ */
+function UnlinkableNotice({ job }: { job: Extract<ReelJob, { kind: 'failed' }> | null }) {
+  return (
+    <Notice tone="bad">
+      <b className="font-medium">
+        This hand-picked reel couldn&apos;t be carried over after a re-render, so the debate has no reel.
+      </b>{' '}
+      Pick new clips, or return to automatic.
+      {job ? <WorkerProblems job={job} clipLabel="Lost reel, clip" /> : null}
+    </Notice>
+  );
+}
+
+/** The worker's problems with a reel it re-submitted, clip by clip as that reel stood. */
+function WorkerProblems({ job, clipLabel }: { job: Extract<ReelJob, { kind: 'failed' }>; clipLabel: string }) {
+  const problems = Object.entries(job.clips).flatMap(([at, found]) =>
+    found.map(problem => `${clipLabel} ${Number(at) + 1}: ${problem}`)
+  );
+  return (
+    <>
       {[...problems, ...job.other].map(problem => (
         <span key={problem} className="mt-1 block">
           {problem}
         </span>
       ))}
-    </Notice>
+    </>
   );
 }
 
