@@ -133,6 +133,35 @@ const RECENT_DEBATES_SOURCE = /* GraphQL */ `
   }
 `;
 
+const MATCHING_DEBATES_SOURCE = /* GraphQL */ `
+  query BestDebatesMatchingDebates(
+    $typesId: UUID!
+    $debateTypeId: UUID!
+    $fromEntity: EntityFilter
+    $first: Int!
+    $after: Cursor
+  ) {
+    relationsConnection(
+      first: $first
+      after: $after
+      filter: { typeId: { is: $typesId }, toEntityId: { is: $debateTypeId }, fromEntity: $fromEntity }
+    ) {
+      nodes {
+        fromEntityId
+        spaceId
+        fromEntity {
+          name
+          createdAt
+        }
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    }
+  }
+`;
+
 const DEBATE_SPACES_SOURCE = /* GraphQL */ `
   query BestDebatesDebateSpaces($typesId: UUID!, $debateTypeId: UUID!, $ids: [UUID!]!, $first: Int!, $after: Cursor) {
     relationsConnection(
@@ -164,6 +193,16 @@ const recentDebatesDocument = parse(RECENT_DEBATES_SOURCE) as TypedDocumentNode<
   TypeRowsQuery,
   { typesId: string; debateTypeId: string; since: string; first: number; after: string | null }
 >;
+const matchingDebatesDocument = parse(MATCHING_DEBATES_SOURCE) as TypedDocumentNode<
+  TypeRowsQuery,
+  {
+    typesId: string;
+    debateTypeId: string;
+    fromEntity: Record<string, unknown> | null;
+    first: number;
+    after: string | null;
+  }
+>;
 const debateSpacesDocument = parse(DEBATE_SPACES_SOURCE) as TypedDocumentNode<
   TypeRowsQuery,
   { typesId: string; debateTypeId: string; ids: string[]; first: number; after: string | null }
@@ -193,6 +232,11 @@ function typeRowsPage(data: TypeRowsQuery) {
 export type BestDebatesPageFetchers = {
   recent: (sinceSec: number, after: string | undefined) => Promise<ReturnType<typeof typeRowsPage>>;
   spaces: (entityIds: string[], after: string | undefined) => Promise<ReturnType<typeof typeRowsPage>>;
+  /** Debates matching an entity filter (the team column's search and topics). */
+  matching?: (
+    fromEntity: Record<string, unknown> | null,
+    after: string | undefined
+  ) => Promise<ReturnType<typeof typeRowsPage>>;
 };
 
 const request = <TData, TVariables extends Record<string, unknown>>(
@@ -207,6 +251,16 @@ export const graphBestDebatesPageFetchers: BestDebatesPageFetchers = {
         typesId: SystemIds.TYPES_PROPERTY,
         debateTypeId: DEBATE_TYPE_ID,
         since: String(sinceSec),
+        first: PAGE_SIZE,
+        after: after ?? null,
+      })
+    ),
+  matching: async (fromEntity, after) =>
+    typeRowsPage(
+      await request(matchingDebatesDocument, {
+        typesId: SystemIds.TYPES_PROPERTY,
+        debateTypeId: DEBATE_TYPE_ID,
+        fromEntity,
         first: PAGE_SIZE,
         after: after ?? null,
       })
@@ -253,4 +307,39 @@ export async function fetchDebateOwnSpaces(
   ).flat();
 
   return new Map(foldDebateTypeRows(rows).map(debate => [debate.entityId, debate.spaceId]));
+}
+
+/** How many debates a filtered team list reads at most; past it the list says it shows the first. */
+export const MATCHING_DEBATES_CAP = 1000;
+
+/**
+ * Every debate matching the team column's search and topics (Preston, 12 Nov): read in full,
+ * cursor page after cursor page, so the list holds what the Topic menu counts rather than the pages
+ * scrolled to. Capped at {@link MATCHING_DEBATES_CAP}; `capped` says the list stops short.
+ */
+export async function fetchMatchingDebates(
+  fromEntity: Record<string, unknown> | null,
+  fetchers: BestDebatesPageFetchers = graphBestDebatesPageFetchers,
+  cap: number = MATCHING_DEBATES_CAP
+): Promise<{ debates: RecentDebate[]; capped: boolean }> {
+  const matching = fetchers.matching;
+  if (!matching) return { debates: [], capped: false };
+  const rows: DebateTypeRow[] = [];
+  let after: string | undefined;
+  let capped = false;
+  const seen = new Set<string>();
+  while (true) {
+    const page = await matching(fromEntity, after);
+    rows.push(...page.items);
+    for (const row of page.items) seen.add(normId(row.entityId));
+    if (!page.hasNextPage) break;
+    if (seen.size >= cap) {
+      capped = true;
+      break;
+    }
+    if (!page.endCursor || page.endCursor === after) throw new Error('Matching debates: cursor did not advance');
+    after = page.endCursor;
+  }
+  const debates = foldDebateTypeRows(rows);
+  return { debates: debates.slice(0, cap), capped: capped || debates.length > cap };
 }

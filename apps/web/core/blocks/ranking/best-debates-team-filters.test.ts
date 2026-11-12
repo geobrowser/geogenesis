@@ -4,6 +4,7 @@ import {
   type TeamFilterDisplay,
   filterTeamIds,
   groupBySpace,
+  orderMatchingDebates,
   teamTopicFacetEntityFilter,
   toRankTopicCounts,
   topicOptions,
@@ -113,5 +114,22 @@ describe('teamTopicFacetEntityFilter', () => {
         { relations: { some: { typeId: { is: 'top' }, toEntityId: { is: 't1' } } } },
       ],
     });
+  });
+});
+
+describe('orderMatchingDebates', () => {
+  it('puts team places first in place order, then the unplaced newest first', () => {
+    const rank: Record<string, number> = { b: 2, d: 1 };
+    expect(
+      orderMatchingDebates(
+        [
+          { entityId: 'a', createdAtMs: 1 },
+          { entityId: 'b', createdAtMs: 2 },
+          { entityId: 'c', createdAtMs: 3 },
+          { entityId: 'd', createdAtMs: 4 },
+        ],
+        id => rank[id]
+      )
+    ).toEqual({ ranked: ['d', 'b'], unranked: ['c', 'a'] });
   });
 });

@@ -20,6 +20,7 @@ import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Search } from '~/design-system/icons/search';
 
 import { BestDebateDisplaysContext } from './best-debates/best-debate-row';
+import { BestDebatesMatchingList } from './best-debates/best-debates-matching-list';
 import { BestDebatesGroupedRows } from './best-debates/best-debates-team-row';
 import {
   BestDebatesTeamToolbar,
@@ -683,12 +684,12 @@ export function RankingComposeGlobalRanking({
     sentinelEl,
   ]);
 
-  const renderPickEntity = (id: string, globalRank?: number) => {
+  const renderPickEntity = (id: string, globalRank?: number, knownName?: string | null) => {
     const entry = entriesById.get(id);
     const row = rowsByEntityId.get(id);
     const searchHit = searchResultsById.get(id);
     const isInMyRanking = orderedIds.includes(id);
-    const rowName = entry?.name ?? (row ? getRowDisplayName(row) : searchHit?.name?.trim() || 'Untitled');
+    const rowName = entry?.name ?? (row ? getRowDisplayName(row) : searchHit?.name?.trim() || knownName || 'Untitled');
     const pickRow = (
       <RankingComposePickRow
         entityId={id}
@@ -966,6 +967,16 @@ export function RankingComposeGlobalRanking({
         <div ref={setListContainerRef} className={cx(isDesktop && 'min-h-0 flex-1 overflow-x-hidden overflow-y-auto')}>
           {isToRank ? (
             teamView?.toRankPanel
+          ) : teamTools && (teamTools.topicIds.length > 0 || searchQuery.trim()) ? (
+            // A search or topic is on: the whole matching list, not the pages scrolled to, so the
+            // rows agree with the Topic menu's count (Preston, 12 Nov).
+            <BestDebatesMatchingList
+              query={searchQuery}
+              topicIds={teamTools.topicIds}
+              grouped={teamView?.mode === 'by_space'}
+              rankOf={id => globalRankByEntityId.get(id)}
+              render={(id, rank, name) => renderPickEntity(id, rank, name)}
+            />
           ) : isSearchActive ? (
             showSearchLoadingPlaceholder ? (
               <RankingComposeSearchListPlaceholder height={searchListStableHeight} />

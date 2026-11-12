@@ -128,14 +128,49 @@ export function teamTopicFacetEntityFilter({
   // The type as a Types relation rather than `typeIds`: under a relation aggregate's `fromEntity`
   // the `typeIds` clause isn't promoted to the indexed path and the request times out on testnet
   // (measured 12 Nov); the relation form answers in well under a second.
-  const and: Record<string, unknown>[] = [
+  const and = [
     { relations: { some: { typeId: { is: typesPropertyId }, toEntityId: { is: debateTypeId } } } },
+    ...teamSearchEntityClauses({ topicsPropertyId, query, topicIds }),
   ];
+  return { and };
+}
+
+/** The search words and picked topics as entity clauses, for the facet and the full matching list. */
+export function teamSearchEntityClauses({
+  topicsPropertyId,
+  query,
+  topicIds,
+}: {
+  topicsPropertyId: string;
+  query: string;
+  topicIds: readonly string[];
+}): Record<string, unknown>[] {
+  const and: Record<string, unknown>[] = [];
   for (const word of query.trim().split(/\s+/).filter(Boolean)) {
     and.push({ name: { includesInsensitive: word } });
   }
   for (const topicId of topicIds) {
     and.push({ relations: { some: { typeId: { is: topicsPropertyId }, toEntityId: { is: topicId } } } });
   }
-  return { and };
+  return and;
+}
+
+/**
+ * A fully read filtered list in the team column's order: team places first, in place order, then
+ * the unplaced, newest first.
+ */
+export function orderMatchingDebates(
+  debates: readonly { entityId: string; createdAtMs: number }[],
+  rankOf: (entityId: string) => number | undefined
+): { ranked: string[]; unranked: string[] } {
+  const ranked: { id: string; rank: number }[] = [];
+  const unranked: { id: string; createdAtMs: number }[] = [];
+  for (const debate of debates) {
+    const rank = rankOf(debate.entityId);
+    if (rank != null) ranked.push({ id: debate.entityId, rank });
+    else unranked.push({ id: debate.entityId, createdAtMs: debate.createdAtMs });
+  }
+  ranked.sort((a, b) => a.rank - b.rank);
+  unranked.sort((a, b) => b.createdAtMs - a.createdAtMs);
+  return { ranked: ranked.map(row => row.id), unranked: unranked.map(row => row.id) };
 }
