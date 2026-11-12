@@ -21,15 +21,15 @@ import { getEntity } from '~/core/io/queries';
 import { geo } from '~/core/sdk/geo-client';
 import { useReportError } from '~/core/state/status-bar-store';
 import { toUserFacingError } from '~/core/utils/error-diagnostics';
-import { validateEntityId, validateSpaceId } from '~/core/utils/utils';
+import { validateEntityId } from '~/core/utils/utils';
 
+import { buildRankingVotes, rankingBallotRules } from './best-debates-ballot';
 import { clearLocalMyRankingDraft } from './local-ranking-my-draft';
 import { getMyRankingOrderedEntityIds } from './my-ranking-entity';
 import { ballotRecencyKey, pickLatestBallot } from './ranking-ballot-recency';
 import { parseTimestampMs, shouldMintNewRankEntity } from './ranking-rolling';
 import type { RankingSubmissionRecord } from './ranking-submission-types';
 import type { RankingSubmissionSlot } from './ranking-submission-types';
-import { rankingVoteWeightFromIndex } from './ranking-vote-weights';
 import { recordPublishedRank, useMyRanking } from './use-my-ranking';
 import { useRankingBlockConfig } from './use-ranking-block-config';
 
@@ -208,11 +208,10 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
       if (!personalSpaceId) return null;
 
       const filteredSlots = slots.filter(slot => Boolean(slot.id));
-      const votes = filteredSlots.map((slot, index) => ({
-        entityId: slot.id,
-        spaceId: validateSpaceId(slot.spaceId) ? slot.spaceId : spaceId,
-        value: rankingVoteWeightFromIndex(index),
-      }));
+      // Best debates (GEO-3678): ORDINAL, and every item keeps its own space, with no fallback to the
+      // block's. Every other block publishes exactly as before. See `best-debates-ballot.ts`.
+      const ballotRules = rankingBallotRules(blockId);
+      const votes = buildRankingVotes(filteredSlots, ballotRules, spaceId);
 
       if (votes.length === 0) return null;
 
@@ -246,12 +245,12 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
           const result = reuseExistingRank
             ? await geo.ranks.update({
                 rankId: myRankEntity!.id,
-                rankType: 'WEIGHTED',
+                rankType: ballotRules.rankType,
                 votes,
               })
             : Ops.ranks.create({
                 name: rankName,
-                rankType: 'WEIGHTED',
+                rankType: ballotRules.rankType,
                 blockId,
                 votes,
               });

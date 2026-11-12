@@ -65,7 +65,16 @@ export type ActionKind =
   | 'assistant_message'
   | 'assistant_option'
   | 'create_space'
-  | 'filter_claims';
+  | 'filter_claims'
+  /**
+   * GEO-3678. Placing a debate on the Best debates ranking by comparison: the place flow opened, one
+   * "which was better?" answer, the debate placed, or the flow left before it was placed. Canonical
+   * `action_completed` events, so they need no registry change upstream.
+   */
+  | 'ranking_place_started'
+  | 'ranking_compare_step'
+  | 'ranking_placed'
+  | 'ranking_place_cancelled';
 export type ActionContext = {
   component: ActionComponent;
   page_path: string;
