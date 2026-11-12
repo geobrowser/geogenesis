@@ -9,6 +9,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RANK_TYPE_ID, RANK_VOTES_RELATION_TYPE_ID, SUBMITTED_TO_PROPERTY_ID } from '~/core/ranking-block-ids';
 import type { Entity, Relation } from '~/core/types';
 
+import { rankingComposeSeed } from '~/partials/blocks/table/use-ranking-compose-draft';
+
 import { rankingPublishTiming, resetRankingPublishStateForTests } from './ranking-publish-queue';
 import { resetPublishedRankPinsForTests } from './use-my-ranking';
 import { useRankingSubmissions } from './use-ranking-submissions';
@@ -468,7 +470,7 @@ describe('ranking publish safety (GEO-3680)', () => {
     await act(async () => {
       const draft = view.result.current.unsavedDraft;
       const published = await view.result.current.saveMySubmission(slots(draft?.orderedEntityIds ?? []), undefined, {
-        basedOnOrderedIds: draft?.baseOrderedIds,
+        basedOnOrderedIds: rankingComposeSeed(draft, undefined).base,
       });
       await published?.indexingSettled;
     });
@@ -501,7 +503,7 @@ describe('ranking publish safety (GEO-3680)', () => {
     await act(async () => {
       const draft = view.result.current.unsavedDraft;
       const published = await view.result.current.saveMySubmission(slots(draft?.orderedEntityIds ?? []), undefined, {
-        basedOnOrderedIds: draft?.baseOrderedIds,
+        basedOnOrderedIds: rankingComposeSeed(draft, undefined).base,
       });
       await published?.indexingSettled;
     });
@@ -537,7 +539,7 @@ describe('ranking publish safety (GEO-3680)', () => {
     await act(async () => {
       const draft = view.result.current.unsavedDraft;
       const published = await view.result.current.saveMySubmission(slots(draft?.orderedEntityIds ?? []), undefined, {
-        basedOnOrderedIds: draft?.baseOrderedIds,
+        basedOnOrderedIds: rankingComposeSeed(draft, undefined).base,
       });
       await published?.indexingSettled;
     });
@@ -573,6 +575,37 @@ describe('ranking publish safety (GEO-3680)', () => {
     await waitFor(() => expect(view.result.current.unsavedDraft).toBeNull());
     done();
   });
+
+  it.each([
+    ['removes our own item from it', [0, 9, 2], [0, 9, 2]],
+    ['reorders it and drops our item', [9, 0], [9, 0]],
+  ])(
+    'publishes a handed-back draft as edited when the ranker %s (review round 5)',
+    async (_label, edited, expected) => {
+      state.ranks = [{ id: RANK, createdAt: 1, ids: [item(0)] }];
+      const { view, done } = await renderSubmissions([item(0)]);
+      state.onSent = () => {
+        state.ranks[0].ids = [item(0), item(9)];
+        state.ranks[0].updatedAt = Date.now();
+      };
+      await act(async () => {
+        const published = await view.result.current.saveMySubmission(slots([item(0), item(1)]));
+        await published?.indexingSettled;
+      });
+      const draft = view.result.current.unsavedDraft;
+      expect(draft?.orderedEntityIds).toEqual([item(0), item(9), item(1)]);
+
+      // The compose screen seeds from the draft and publishes the ranker's edit of it.
+      await act(async () => {
+        const published = await view.result.current.saveMySubmission(slots(edited.map(item)), undefined, {
+          basedOnOrderedIds: rankingComposeSeed(draft, undefined).base,
+        });
+        await published?.indexingSettled;
+      });
+      expect(state.ranks[0].ids).toEqual(expected.map(item));
+      done();
+    }
+  );
 
   it('resolves indexing with the ballot the index read back, for the share image', async () => {
     state.ranks = [{ id: RANK, createdAt: 1, ids: [item(0)] }];

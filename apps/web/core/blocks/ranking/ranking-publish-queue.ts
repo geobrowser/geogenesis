@@ -286,11 +286,13 @@ export function getOwnRankingPublish(key: string): OwnRankingPublish | null {
  * changes, and the ranker publishes it (or not) themselves.
  */
 export type UnsavedRankingDraft = {
-  /** The ranker's unpublished list. */
+  /** The ranker's unpublished list. Publishing an edit of it passes this list
+   *  itself as `basedOnOrderedIds`: the publish path folds the overtaken edit
+   *  and the other device's ballot into the published side, so they meet this
+   *  list there, and anything the ranker removes from it stays removed. */
   orderedEntityIds: string[];
-  /** The published ballot the list was built on: what publishing it passes as
-   *  `basedOnOrderedIds`, so the three-way merge reads changes made elsewhere
-   *  since then as theirs, not as the ranker's removals. */
+  /** The published ballot the list was built on. Only `rebaseUnsavedDraft`
+   *  uses it, to read later changes to the published ballot as changes. */
   baseOrderedIds: string[];
   /** Our overtaken ballot, which may still land after the hand-back. The index
    *  showing it is not a change made elsewhere (the draft already holds it). */

@@ -11,9 +11,9 @@ const D = 'dddddddddddddddddddddddddddddddd';
 const E = 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
 
 describe('rankingComposeSeed', () => {
-  it('prefers a handed-back draft, based on the ballot it was built on', () => {
+  it('prefers a handed-back draft, based on the draft itself', () => {
     const draft = { orderedEntityIds: [A, D, B], baseOrderedIds: [A, D], overtakenOrderedIds: [A, B] };
-    expect(rankingComposeSeed(draft, [A, B])).toEqual({ ids: [A, D, B], base: [A, D] });
+    expect(rankingComposeSeed(draft, [A, B])).toEqual({ ids: [A, D, B], base: [A, D, B] });
   });
 
   it('falls back to the published ballot, based on itself', () => {
@@ -31,11 +31,14 @@ describe('useRankingComposeDraft (GEO-3680)', () => {
     expect(result.current.orderedIds).toEqual([A, B, E]);
 
     // The draft lands: another device's D, plus our overtaken B.
-    seed = { ids: [A, D, B], base: [A, D] };
+    seed = rankingComposeSeed({ orderedEntityIds: [A, D, B], baseOrderedIds: [A, D], overtakenOrderedIds: [A, B] }, [
+      A,
+      B,
+    ]);
     rerender();
 
     expect(result.current.orderedIds).toEqual([A, D, B, E]);
-    expect(result.current.getBasedOnOrderedIds()).toEqual([A, D]);
+    expect(result.current.getBasedOnOrderedIds()).toEqual([A, D, B]);
   });
 
   it('takes the new seed outright when the ranker has no edits of their own', () => {

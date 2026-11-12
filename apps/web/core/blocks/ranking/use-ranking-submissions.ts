@@ -699,8 +699,8 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
     retryBallotRead: refetchMyRanking,
     /** Unpublished changes handed back after another device's edit overtook
      *  ours, kept current with the published ballot. Screens show
-     *  `orderedEntityIds` as the ranker's draft and publish it with
-     *  `basedOnOrderedIds: baseOrderedIds`. */
+     *  `orderedEntityIds` as the ranker's draft and publish an edit of it with
+     *  `basedOnOrderedIds: orderedEntityIds` (the draft as handed back). */
     unsavedDraft,
     isSaving,
     personalSpaceId,

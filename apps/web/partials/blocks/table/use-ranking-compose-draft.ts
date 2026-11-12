@@ -12,7 +12,10 @@ export type RankingComposeSeed = { ids: string[]; base: string[] };
 /**
  * The seed, in order of precedence (GEO-3680):
  * 1. a draft handed back after another device's edit overtook ours, based on
- *    the ballot it was built on;
+ *    the draft itself: the publish path folds the overtaken edit and the other
+ *    device's ballot into the published side, so basing on anything earlier
+ *    would read the ranker removing an item of the draft as "unchanged" and
+ *    bring it back;
  * 2. otherwise the published ballot, based on itself.
  * The ranker's own unpublished edits are then merged onto whichever it is (see
  * `useRankingComposeDraft`).
@@ -21,7 +24,7 @@ export function rankingComposeSeed(
   unsavedDraft: UnsavedRankingDraft | null,
   publishedIds: string[] | undefined
 ): RankingComposeSeed {
-  if (unsavedDraft) return { ids: unsavedDraft.orderedEntityIds, base: unsavedDraft.baseOrderedIds };
+  if (unsavedDraft) return { ids: unsavedDraft.orderedEntityIds, base: unsavedDraft.orderedEntityIds };
   const ids = publishedIds ?? [];
   return { ids, base: ids };
 }
