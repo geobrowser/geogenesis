@@ -57,5 +57,14 @@ export function useRankingComposeDraft(seed: RankingComposeSeed) {
   /** The published ballot the current list is based on, for `basedOnOrderedIds`. */
   const getBasedOnOrderedIds = React.useCallback(() => seedRef.current.base, []);
 
-  return { orderedIds, setOrderedIds, getBasedOnOrderedIds };
+  /**
+   * Moves the merge base to what this device just published (GEO-3678, Best debates' placements).
+   * Without it the base stays on the older seed until the index catches up, and a drag or removal
+   * of a just-published item made meanwhile would be undone when the published order lands.
+   */
+  const markPublished = React.useCallback((ids: readonly string[]) => {
+    seedRef.current = { ids: [...ids], base: [...ids] };
+  }, []);
+
+  return { orderedIds, setOrderedIds, getBasedOnOrderedIds, markPublished };
 }
