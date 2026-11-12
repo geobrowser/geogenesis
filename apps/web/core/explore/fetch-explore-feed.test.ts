@@ -305,31 +305,26 @@ describe('an excluded type', () => {
   });
 });
 
-describe('New filters by type here, not in the query (GEO-3703)', () => {
-  it('sends no typeIds and drops rows outside the selection', async () => {
-    windows.queue = [
-      windowOf([entity('c1', CLAIM_TYPE_ID), entity('n1', NEWS_STORY_TYPE_ID), entity('c2', CLAIM_TYPE_ID)], {
-        hasNextPage: false,
-        endCursor: null,
-      }),
-    ];
+describe('New filters by type in the query, without the block exclusion (GEO-3703)', () => {
+  const hasBlockExclusion = (filter: unknown) => JSON.stringify(filter).includes('2ff7ea098b9e50bc9be78a0cafa268d0');
+
+  it('sends the selection and drops the system/block exclusion beside it', async () => {
+    windows.queue = [windowOf([entity('c1', CLAIM_TYPE_ID)], { hasNextPage: false, endCursor: null })];
 
     const result = await fetchExploreFeed({ ...feedArgs, sort: 'new', typeIds: [CLAIM_TYPE_ID] });
 
-    expect(windows.variables[0]?.typeIds).toBeUndefined();
-    expect(result.items.map(i => i.entityId)).toEqual(['c1', 'c2']);
+    expect(windows.variables[0]?.typeIds).toEqual({ in: [CLAIM_TYPE_ID] });
+    expect(hasBlockExclusion(windows.variables[0]?.filter)).toBe(false);
+    expect(result.items.map(i => i.entityId)).toEqual(['c1']);
   });
 
-  it('scans on past a window holding none of the selected types', async () => {
-    windows.queue = [
-      windowOf([entity('n1', NEWS_STORY_TYPE_ID)], { hasNextPage: true, endCursor: 'w1' }),
-      windowOf([entity('c1', CLAIM_TYPE_ID)], { hasNextPage: false, endCursor: null }),
-    ];
+  it('keeps the exclusion when nothing narrows the types', async () => {
+    windows.queue = [windowOf([entity('n1', NEWS_STORY_TYPE_ID)], { hasNextPage: false, endCursor: null })];
 
-    const result = await fetchExploreFeed({ ...feedArgs, sort: 'new', typeIds: [CLAIM_TYPE_ID] });
+    await fetchExploreFeed({ ...feedArgs, sort: 'new', typeIds: [] });
 
-    expect(windows.variables.map(v => v.typeIds)).toEqual([undefined, undefined]);
-    expect(result.items.map(i => i.entityId)).toEqual(['c1']);
+    expect(windows.variables[0]?.typeIds).toBeUndefined();
+    expect(hasBlockExclusion(windows.variables[0]?.filter)).toBe(true);
   });
 });
 
@@ -1112,10 +1107,11 @@ describe('the topics clauses reaching the query', () => {
     expect(sentFilter()?.and).toEqual([topicClause(PHILOSOPHY)]);
   });
 
+  // No type selection here: with one, New drops the block exclusion on purpose (GEO-3703).
   it.each(filterPaths)('keeps the feed exclusions alongside the topics on the $name path', async ({ args }) => {
     windows.queue = [windowOf([entity('c1', CLAIM_TYPE_ID)], { hasNextPage: false, endCursor: null })];
 
-    await fetchExploreFeed({ ...feedArgs, ...args, topicIds: [PHILOSOPHY] });
+    await fetchExploreFeed({ ...feedArgs, ...args, typeIds: [], topicIds: [PHILOSOPHY] });
 
     expect(sentFilter()?.relations).toBeDefined();
     expect(sentFilter()?.and).toEqual([topicClause(PHILOSOPHY)]);
