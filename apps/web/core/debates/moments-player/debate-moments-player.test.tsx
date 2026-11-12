@@ -19,6 +19,11 @@ const mocks = vi.hoisted(() => ({
   pause: vi.fn(function (this: HTMLMediaElement) {
     this.dispatchEvent(new Event('pause'));
   }),
+  /** As a browser does: a reload starts the resource over, at 0. Records the src it reloaded with. */
+  load: vi.fn(function (this: HTMLMediaElement) {
+    if (Object.getOwnPropertyDescriptor(this, 'currentTime')?.writable) this.currentTime = 0;
+    return this.getAttribute('src');
+  }),
 }));
 
 vi.mock('../api', () => ({ getDebateExtractedClaims: mocks.getDebateExtractedClaims }));
@@ -26,7 +31,14 @@ vi.mock('../api', () => ({ getDebateExtractedClaims: mocks.getDebateExtractedCla
 const DEBATE = '01a0b080-9a14-7c71-887b-d65ea3df4706';
 
 const payload = {
-  claims: [{ text: 'one' }, { text: 'two' }, { text: 'three' }],
+  // Picked moments: each file was cut 250 ms before its claim's clip (`clip_lead_ms`).
+  claims: [0, 1, 2].map(i => ({
+    text: ['one', 'two', 'three'][i],
+    clip_start_ms: 20_000 + i * 60_000,
+    clip_end_ms: 35_000 + i * 60_000,
+    clip_lead_ms: 250,
+    clip_tail_ms: 250,
+  })),
   moments: [0, 1, 2].map(i => ({
     moment_index: i,
     claim_index: i,
@@ -46,8 +58,9 @@ function renderWithQuery(ui: React.ReactElement) {
   return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
 }
 
+/** The player's visible element; the next clip's preload is a second, hidden one. */
 function videoOf(player: HTMLElement): HTMLVideoElement {
-  const video = player.querySelector('video');
+  const video = player.querySelector<HTMLVideoElement>('video:not([data-preload])');
   if (!video) throw new Error('no video');
   return video;
 }
@@ -64,9 +77,10 @@ beforeEach(() => {
   mocks.getDebateExtractedClaims.mockReset();
   mocks.play.mockClear();
   mocks.pause.mockClear();
+  mocks.load.mockClear();
   Object.defineProperty(HTMLMediaElement.prototype, 'play', { configurable: true, value: mocks.play });
   Object.defineProperty(HTMLMediaElement.prototype, 'pause', { configurable: true, value: mocks.pause });
-  Object.defineProperty(HTMLMediaElement.prototype, 'load', { configurable: true, value: vi.fn() });
+  Object.defineProperty(HTMLMediaElement.prototype, 'load', { configurable: true, value: mocks.load });
 });
 
 afterEach(cleanup);
@@ -129,17 +143,17 @@ describe('DebateMomentsPlayer', () => {
     );
     expect(onModeChange).toHaveBeenLastCalledWith('full');
 
-    // The full video's metadata arrives: it seeks to moment 2's start plus the 2 s watched.
-    Object.defineProperty(full, 'readyState', { configurable: true, value: 1 });
+    // The full video's metadata arrives: it seeks to where moment 2's file starts in the debate
+    // (its claim's clip at 80 s, less the 250 ms lead the file was cut with), plus the 2 s watched.
     Object.defineProperty(full, 'duration', { configurable: true, value: 300 });
     Object.defineProperty(full, 'currentTime', { configurable: true, writable: true, value: 0 });
     fireEvent.loadedMetadata(full);
-    expect(full.currentTime).toBe(82);
-    expect(screen.getByText('1:22 / 5:00')).toBeInTheDocument();
+    expect(full.currentTime).toBe(81.75);
+    expect(screen.getByText('1:21 / 5:00')).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: /^Jump to moment/ })).toHaveLength(3);
 
     fireEvent.click(screen.getByRole('button', { name: 'Jump to moment 3' }));
-    expect(full.currentTime).toBe(140);
+    expect(full.currentTime).toBe(139.75);
 
     fireEvent.click(screen.getByRole('button', { name: 'Back to moments' }));
     expect(onModeChange).toHaveBeenLastCalledWith('moments');
@@ -195,5 +209,119 @@ describe('DebateMomentsPlayer', () => {
       b.dispatchEvent(new Event('play'));
     });
     expect(mocks.pause.mock.contexts).toEqual([a]);
+  });
+  it('keeps one element for the whole reel, so a tap-granted play carries to the next moment, and preloads the next clip', () => {
+    render(<DebateMomentsPlayer debateId={DEBATE} label="Debate A" moments={MOMENTS} />);
+    const player = screen.getByRole('region', { name: 'Debate A' });
+    const element = videoOf(player);
+    const preload = () => player.querySelector('video[data-preload]');
+
+    expect(preload()).toHaveAttribute('src', expect.stringContaining('/moments/clip-1/content'));
+    expect(preload()).toHaveAttribute('preload', 'auto');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+    fireEvent.ended(element);
+    expect(videoOf(player)).toBe(element);
+    expect(element.getAttribute('src')).toContain('/moments/clip-1/content');
+    expect(mocks.play.mock.contexts).toEqual([element, element]);
+    expect(preload()).toHaveAttribute('src', expect.stringContaining('/moments/clip-2/content'));
+
+    // The full debate plays in the same element too.
+    fireEvent.click(screen.getByRole('button', { name: 'Watch the full debate' }));
+    expect(videoOf(player)).toBe(element);
+    expect(element.getAttribute('src')).toContain('/media/artifacts/final_video/content');
+    expect(preload()).toBeNull();
+  });
+
+  it("clears a failed clip's error when the viewer steps on, and leaves the play control up", () => {
+    render(<DebateMomentsPlayer debateId={DEBATE} label="Debate A" moments={MOMENTS} />);
+    const player = screen.getByRole('region', { name: 'Debate A' });
+
+    fireEvent.error(videoOf(player));
+    expect(screen.getByText('Couldn’t play this moment.')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next moment' }));
+    expect(screen.queryByText('Couldn’t play this moment.')).not.toBeInTheDocument();
+    expect(screen.getByTestId('play-indicator')).toBeInTheDocument();
+
+    fireEvent.error(videoOf(player));
+    fireEvent.click(screen.getByRole('button', { name: 'Watch the full debate' }));
+    expect(screen.queryByText('Couldn’t play this debate.')).not.toBeInTheDocument();
+  });
+
+  it('retries the full debate from where it failed, not from the top', () => {
+    render(<DebateMomentsPlayer debateId={DEBATE} label="Debate B" moments={[]} />);
+    const video = videoOf(screen.getByRole('region', { name: 'Debate B' }));
+    Object.defineProperty(video, 'duration', { configurable: true, value: 300 });
+    Object.defineProperty(video, 'currentTime', { configurable: true, writable: true, value: 0 });
+    fireEvent.loadedMetadata(video);
+    video.currentTime = 95;
+    fireEvent.timeUpdate(video);
+
+    fireEvent.error(video);
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(mocks.load).toHaveBeenCalled();
+    expect(video.currentTime).toBe(0);
+    fireEvent.loadedMetadata(video);
+    expect(video.currentTime).toBe(95);
+    expect(mocks.play.mock.contexts).toContain(video);
+  });
+
+  it('releases its media when it unmounts', () => {
+    const { unmount } = render(<DebateMomentsPlayer debateId={DEBATE} label="Debate A" moments={MOMENTS} />);
+    const player = screen.getByRole('region', { name: 'Debate A' });
+    const element = videoOf(player);
+    const preload = player.querySelector('video[data-preload]') as HTMLVideoElement;
+
+    unmount();
+    // `releaseVideo`: paused, src removed, then reloaded empty.
+    expect(mocks.pause.mock.contexts).toContain(element);
+    expect(mocks.load.mock.contexts).toEqual(expect.arrayContaining([element, preload]));
+    expect(element).not.toHaveAttribute('src');
+    expect(preload).not.toHaveAttribute('src');
+  });
+
+  it("keeps its media through StrictMode's rehearsal unmount", () => {
+    render(
+      <React.StrictMode>
+        <DebateMomentsPlayer debateId={DEBATE} label="Debate A" moments={MOMENTS} />
+      </React.StrictMode>
+    );
+    const player = screen.getByRole('region', { name: 'Debate A' });
+    expect(videoOf(player).getAttribute('src')).toContain('/moments/clip-0/content');
+    expect(player.querySelector('video[data-preload]')?.getAttribute('src')).toContain('/moments/clip-1/content');
+  });
+
+  it('keeps the moment dots outside the slider, as labelled buttons, and seeks with Home and End', () => {
+    render(<DebateMomentsPlayer debateId={DEBATE} label="Debate A" moments={MOMENTS} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Watch the full debate' }));
+    const video = videoOf(screen.getByRole('region', { name: 'Debate A' }));
+    Object.defineProperty(video, 'duration', { configurable: true, value: 300 });
+    Object.defineProperty(video, 'currentTime', { configurable: true, writable: true, value: 0 });
+    fireEvent.loadedMetadata(video);
+
+    const slider = screen.getByRole('slider', { name: 'Debate position' });
+    const dots = screen.getAllByRole('button', { name: /^Jump to moment/ });
+    expect(dots).toHaveLength(3);
+    for (const dot of dots) {
+      expect(slider).not.toContainElement(dot);
+      expect(dot).toHaveClass('size-6');
+    }
+
+    fireEvent.keyDown(slider, { key: 'End' });
+    expect(video.currentTime).toBe(300);
+    fireEvent.keyDown(slider, { key: 'Home' });
+    expect(video.currentTime).toBe(0);
+  });
+
+  it('moves focus to the control that replaces expand or close, never to the page', () => {
+    render(<DebateMomentsPlayer debateId={DEBATE} label="Debate A" moments={MOMENTS} />);
+    const expand = screen.getByRole('button', { name: 'Watch the full debate' });
+    expand.focus();
+    fireEvent.click(expand);
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Back to moments' }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Back to moments' }));
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Watch the full debate' }));
   });
 });
