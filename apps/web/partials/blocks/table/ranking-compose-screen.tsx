@@ -8,7 +8,7 @@ import { useAtom, useSetAtom } from 'jotai';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
-import { isBestDebatesBlock } from '~/core/blocks/ranking/best-debates-ballot';
+import { showBestDebatesCompose } from '~/core/blocks/ranking/best-debates-compose-access';
 import { BEST_DEBATES_TEAM_VIEW_PARAM, BEST_DEBATES_TEAM_VIEW_TO_RANK } from '~/core/blocks/ranking/best-debates-views';
 import { resolveRankingSingleTargetSpaceId } from '~/core/blocks/ranking/ranking-compose-publish-spaces';
 import { RANKING_COMPOSE_TAB_MY, rankingComposeHref } from '~/core/blocks/ranking/ranking-compose-url';
@@ -38,6 +38,7 @@ import { useOnboarding } from '~/core/hooks/use-onboarding';
 import { rankingComposeNeedsAccountStep, useRankingComposeAccess } from '~/core/hooks/use-ranking-compose-access';
 import { useToast } from '~/core/hooks/use-toast';
 import { ID } from '~/core/id';
+import { useFeatureFlag } from '~/core/state/feature-flags';
 import { useEnqueuePendingAction } from '~/core/state/pending-actions';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import type { SearchResult } from '~/core/types';
@@ -53,10 +54,13 @@ import { RankingComposeGlobalRanking } from './ranking-compose-global-ranking';
 import { RankingComposePinnedToolbar, RankingComposeTitleMetadata } from './ranking-compose-header';
 import { RankingComposeLayout } from './ranking-compose-layout';
 import { RankingComposeMyRanking } from './ranking-compose-my-ranking';
+import { useRankingDraftOrder } from './use-ranking-draft-order';
 import Custom404 from '~/app/not-found';
 import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
 import { rankingComposeCreateEntityAtom } from '~/atoms/ranking-compose-create-entity';
 import { rankingComposeReturnHrefAtom } from '~/atoms/ranking-compose-return';
+
+const NO_IDS: string[] = [];
 
 type Props = {
   spaceId: string;
@@ -72,9 +76,18 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   const relationId = searchParams?.get('relationId') ?? '';
   const { name, entityId, filterState } = useDataBlock();
   const displayName = name?.trim() || 'Untitled ranking';
-  // Best debates (GEO-3678) adds To rank, placing by comparison, drag-in and phone tabs. Every other
-  // ranking block renders exactly as before.
-  const isBestDebates = isBestDebatesBlock(entityId);
+
+  // Best debates (GEO-3678) adds To rank, placing by comparison, drag-in and phone tabs, for Debates
+  // members with the `debateRankings` flag (#3105's `canComposeEdit` rule). Everyone else, and every
+  // other ranking block, gets the screen exactly as before.
+  const debateRankingsFlag = useFeatureFlag('debateRankings');
+  const { canEdit: canEditBlockSpace } = useRankingComposeAccess(spaceId, entityId);
+  const isBestDebates = showBestDebatesCompose({
+    blockId: entityId,
+    spaceId,
+    debateRankingsFlag,
+    canEdit: canEditBlockSpace,
+  });
 
   const createNewSpaceId = React.useMemo(() => resolveRankingSingleTargetSpaceId(filterState), [filterState]);
 
@@ -182,7 +195,9 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
 
   // Seeded from the author's last ballot, which survives roll-off, rather than from
   // `mySubmission`, which is blanked by it. See `myLastSubmission` (GEO-2871).
-  const [orderedIds, setOrderedIds] = React.useState<string[]>(myLastSubmission?.orderedEntityIds ?? []);
+  // Best debates keeps unpublished placements and drags when the published order changes under
+  // them (GEO-3678); every other block re-seeds the draft as before.
+  const [orderedIds, setOrderedIds] = useRankingDraftOrder(myLastSubmission?.orderedEntityIds ?? NO_IDS, isBestDebates);
   const [searchQuery, setSearchQuery] = React.useState('');
   const [activeSwipeRowKey, setActiveSwipeRowKey] = React.useState<string | null>(null);
   const [entitySheetTarget, setEntitySheetTarget] = React.useState<{
@@ -251,22 +266,6 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   const filteredUnrankedIds = isSearchActive ? searchUnrankedIds : browseUnrankedIds;
 
   const { entries: searchEntries } = useRankingEntryEntities(spaceId, isSearchActive ? searchEntityIds : []);
-
-  const mySubmissionIdsKey = (myLastSubmission?.orderedEntityIds ?? []).join('|');
-
-  React.useEffect(() => {
-    const next = myLastSubmission?.orderedEntityIds ?? [];
-    setOrderedIds(prev => {
-      if (prev.length === next.length && prev.every((id, index) => id === next[index])) {
-        return prev;
-      }
-      return next;
-    });
-    // `mySubmissionIdsKey` is the joined signature of `myLastSubmission?.orderedEntityIds`, and
-    // stands in for it: the array is rebuilt on every render of the query, and this only wants to
-    // re-seed when the submitted order actually changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mySubmissionIdsKey]);
 
   const displayMyEntityIds = orderedIds;
 

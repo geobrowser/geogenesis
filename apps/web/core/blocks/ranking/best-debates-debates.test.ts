@@ -51,9 +51,18 @@ describe("a debate's own space", () => {
 });
 
 describe('To rank', () => {
-  it("holds the last 7 days' debates, newest first", () => {
+  it("holds the last 7 days' debates, newest first while who ranked what isn't known", () => {
     const list = selectToRank([debate('old', 8), debate('d3', 3), debate('d0', 0), debate('d6', 6.9)], [], NOW);
     expect(list.map(d => d.entityId)).toEqual(['d0', 'd3', 'd6']);
+  });
+
+  it('puts debates nobody has ranked first, then newest', () => {
+    const counts: Record<string, number | null> = { d0: 2, d3: 0, d5: 0, d1: null };
+    const list = selectToRank([debate('d0', 0), debate('d1', 1), debate('d3', 3), debate('d5', 5)], [], NOW, {
+      rankerCount: id => (id in counts ? counts[id] : 0),
+    });
+    // An unknown (null) count is never "nobody".
+    expect(list.map(d => d.entityId)).toEqual(['d3', 'd5', 'd0', 'd1']);
   });
 
   it('leaves out what the ranker has placed, in any spelling', () => {

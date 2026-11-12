@@ -15,6 +15,8 @@ const mocks = vi.hoisted(() => ({
   publish: vi.fn(),
   reportError: vi.fn(),
   create: vi.fn(),
+  update: vi.fn(),
+  myRankEntity: null as unknown,
 }));
 const SPACE = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const BLOCK = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
@@ -36,10 +38,12 @@ vi.mock('~/core/hooks/use-geo-profile', () => ({ useGeoProfile: () => ({ profile
 vi.mock('~/core/hooks/use-toast', () => ({ useToast: () => [null, vi.fn()] }));
 vi.mock('~/core/io/queries', () => ({ getEntity: () => ({}) }));
 vi.mock('~/core/state/status-bar-store', () => ({ useReportError: () => mocks.reportError }));
-vi.mock('~/core/sdk/geo-client', () => ({ geo: { personalSpaces: { publishEdit: mocks.publish } } }));
+vi.mock('~/core/sdk/geo-client', () => ({
+  geo: { personalSpaces: { publishEdit: mocks.publish }, ranks: { update: mocks.update } },
+}));
 vi.mock('./use-my-ranking', () => ({
   useMyRanking: () => ({
-    myRankEntity: null,
+    myRankEntity: mocks.myRankEntity,
     orderedEntityIds: [],
     isLoading: false,
     refetchMyRanking: vi.fn().mockResolvedValue(undefined),
@@ -61,6 +65,9 @@ vi.mock('@geoprotocol/geo-sdk', async importOriginal => {
 });
 
 const OTHER_BLOCK = 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
+// Best debates is the Debates space's block only.
+const DEBATES_SPACE = '9284477c8fe746368698994e2e517b32';
+const RANK = '44444444444444444444444444444444';
 const DEBATE_SPACE = 'ffffffffffffffffffffffffffffffff';
 const ITEM_2 = '12121212121212121212121212121212';
 
@@ -69,12 +76,14 @@ beforeEach(() => {
   mocks.send.mockResolvedValue('0xhash');
   mocks.publish.mockResolvedValue({ to: '0xabc', calldata: '0x01' });
   mocks.create.mockReturnValue({ id: 'dddddddddddddddddddddddddddddddd', ops: [{ op: 'noop' }] });
+  mocks.update.mockResolvedValue({ id: RANK, ops: [{ op: 'votes' }] });
+  mocks.myRankEntity = null;
 });
 
-function renderSubmissions(blockId: string) {
+function renderSubmissions(blockId: string, blockSpaceId = DEBATES_SPACE) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   client.setQueryData(['personal-space', '0xabc'], { personalSpaceId: SPACE, isRegistered: true });
-  return renderHook(() => useRankingSubmissions(blockId, SPACE, 'Best debates'), {
+  return renderHook(() => useRankingSubmissions(blockId, blockSpaceId, 'Best debates'), {
     wrapper: ({ children }: { children: ReactNode }) => (
       <QueryClientProvider client={client}>{children}</QueryClientProvider>
     ),
@@ -105,7 +114,7 @@ describe('ballot rules per block (GEO-3678)', () => {
   });
 
   it('keeps every other block WEIGHTED, falling back to the block space as before', async () => {
-    const view = renderSubmissions(OTHER_BLOCK);
+    const view = renderSubmissions(OTHER_BLOCK, SPACE);
     await act(async () => {
       await view.result.current.saveMySubmission([{ id: ITEM_2, name: null, spaceId: undefined }]);
     });
@@ -116,5 +125,43 @@ describe('ballot rules per block (GEO-3678)', () => {
         votes: [{ entityId: ITEM_2, spaceId: SPACE, value: expect.any(Number) }],
       })
     );
+  });
+
+  it('relabels an existing WEIGHTED Best debates ballot ORDINAL in the same edit', async () => {
+    mocks.myRankEntity = {
+      id: RANK,
+      createdAt: '1',
+      updatedAt: '1',
+      values: [{ property: { id: '48e01bc8324e48c2a6c9cab3f49290c6' }, value: 'WEIGHTED', isDeleted: false }],
+    };
+    const view = renderSubmissions(BLOCK);
+    await act(async () => {
+      await view.result.current.saveMySubmission([{ id: ITEM, name: null, spaceId: DEBATE_SPACE }]);
+    });
+
+    expect(mocks.update).toHaveBeenCalledWith(expect.objectContaining({ rankId: RANK, rankType: 'ORDINAL' }));
+    expect(mocks.publish).toHaveBeenCalledTimes(1);
+    const { ops } = mocks.publish.mock.calls[0][0] as { ops: unknown[] };
+    expect(ops[0]).toEqual({ op: 'votes' });
+    expect(ops.length).toBeGreaterThan(1);
+    expect(JSON.stringify(ops.slice(1), (_k, v) => (v instanceof Uint8Array ? Array.from(v) : v))).toContain('ORDINAL');
+  });
+
+  it('leaves an existing ballot on another block exactly as before', async () => {
+    mocks.myRankEntity = { id: RANK, createdAt: '1', updatedAt: '1', values: [] };
+    const view = renderSubmissions(OTHER_BLOCK, SPACE);
+    await act(async () => {
+      await view.result.current.saveMySubmission([{ id: ITEM, name: null, spaceId: DEBATE_SPACE }]);
+    });
+    expect(mocks.update).toHaveBeenCalledWith(expect.objectContaining({ rankType: 'WEIGHTED' }));
+    expect((mocks.publish.mock.calls[0][0] as { ops: unknown[] }).ops).toEqual([{ op: 'votes' }]);
+  });
+
+  it('treats the Best debates block id in another space as an ordinary block', async () => {
+    const view = renderSubmissions(BLOCK, SPACE);
+    await act(async () => {
+      await view.result.current.saveMySubmission([{ id: ITEM_2, name: null, spaceId: undefined }]);
+    });
+    expect(mocks.create).toHaveBeenCalledWith(expect.objectContaining({ rankType: 'WEIGHTED' }));
   });
 });

@@ -20,9 +20,14 @@ type Props = {
   nameOf: (entityId: string) => string;
   /** The list had drags or placements nobody had published yet; Done publishes them too. */
   withOtherChanges: boolean;
+  /** The last Done or Rank the next one didn't go out; the placement is still in the draft. */
+  publishFailed: boolean;
   isSaving: boolean;
   onNudge: (direction: -1 | 1) => void;
+  /** Publishes, then closes. */
   onDone: () => void;
+  /** Closes without publishing: the placement stays as an unpublished change. Never blocked. */
+  onClose: () => void;
   /** Present only when the ranker started from To rank and more are waiting there. */
   next?: { remaining: number; onRankNext: () => void };
 };
@@ -33,16 +38,19 @@ const NEIGHBOURS = 2;
 /**
  * "Placed #21 of 26" (GEO-3678): where the debate landed, with its neighbours and a nudge either
  * way. Done publishes the ballot, nudges and all, as one edit; so does Rank the next one, before it
- * moves on.
+ * moves on. Close, Escape and the backdrop only close it: the placement stays in the draft and the
+ * screen's Publish sends it.
  */
 export function RankingPlacedDialog({
   entityId,
   orderedIds,
   nameOf,
   withOtherChanges,
+  publishFailed,
   isSaving,
   onNudge,
   onDone,
+  onClose,
   next,
 }: Props) {
   const at = indexOfEntity(orderedIds, entityId);
@@ -52,9 +60,7 @@ export function RankingPlacedDialog({
   return (
     <RankingFlowDialog
       open
-      onClose={() => {
-        if (!isSaving) onDone();
-      }}
+      onClose={onClose}
       title={`Placed #${at + 1} of ${orderedIds.length}`}
       subtitle={
         withOtherChanges
@@ -84,6 +90,11 @@ export function RankingPlacedDialog({
         </>
       }
     >
+      {publishFailed ? (
+        <p role="alert" className="m-0 text-metadata text-red-01">
+          Your ranking wasn’t published. Try again, or close this and publish it later.
+        </p>
+      ) : null}
       <ol className="m-0 flex list-none flex-col p-0" data-testid="placed-neighbours">
         {orderedIds.slice(from, to).map((id, offset) => {
           const index = from + offset;

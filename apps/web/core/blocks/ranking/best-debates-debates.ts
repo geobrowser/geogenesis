@@ -74,7 +74,13 @@ export function foldDebateTypeRows(rows: readonly DebateTypeRow[]): RecentDebate
 }
 
 /**
- * To rank: the last 7 days' debates the ranker hasn't placed, newest first.
+ * To rank: the last 7 days' debates the ranker hasn't placed. Debates nobody has ranked come first,
+ * to spread the team's work (goal: a ranker for every new debate within two days), then newest
+ * first. "Rank the next one" takes the head of this list, so it follows the same order.
+ *
+ * `rankerCount` is the shared ballot reader's count; pass it only while that read is `ready`. Without
+ * it the list is newest first, so it doesn't reshuffle while the read loads. A null count (unknown)
+ * never counts as "nobody".
  *
  * `excludeEntityIds` is everything the ranker has already dealt with: their ranking (including
  * unpublished drags and placements), and whatever else the caller wants out of the queue, such as
@@ -84,13 +90,19 @@ export function selectToRank(
   debates: readonly RecentDebate[],
   excludeEntityIds: Iterable<string>,
   nowMs: number,
-  windowDays: number = TO_RANK_WINDOW_DAYS
+  {
+    windowDays = TO_RANK_WINDOW_DAYS,
+    rankerCount,
+  }: { windowDays?: number; rankerCount?: (entityId: string) => number | null } = {}
 ): RecentDebate[] {
   const excluded = new Set([...excludeEntityIds].map(normId));
   const since = nowMs - windowDays * DAY_MS;
+  const nobodyFirst = (debate: RecentDebate) => (rankerCount?.(debate.entityId) === 0 ? 0 : 1);
   return debates
     .filter(debate => debate.createdAtMs >= since && !excluded.has(normId(debate.entityId)))
-    .sort((a, b) => b.createdAtMs - a.createdAtMs || (a.entityId < b.entityId ? -1 : 1));
+    .sort(
+      (a, b) => nobodyFirst(a) - nobodyFirst(b) || b.createdAtMs - a.createdAtMs || (a.entityId < b.entityId ? -1 : 1)
+    );
 }
 
 // Hand-written, so codegen can't check them; ids are UUID columns and must be typed as such.

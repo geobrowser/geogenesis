@@ -34,7 +34,7 @@ function RankedByBadge({ rankers, entityId }: { rankers: RankersRead; entityId: 
 }
 
 /**
- * To rank (GEO-3678): the last 7 days' debates the ranker hasn't placed, newest first, each saying
+ * To rank (GEO-3678): the last 7 days' debates the ranker hasn't placed, nobody-ranked first, each saying
  * who has ranked it, so the team can spread out. A tap places one by comparison; on a desktop a row
  * can also be dragged straight into the ranking. There is no skip: the window empties itself.
  */
@@ -46,7 +46,7 @@ export function BestDebatesToRankList({ debates, isLoading, error, rankers, entr
   return (
     <div className="flex flex-col" data-testid="best-debates-to-rank">
       <p className="m-0 pb-2 text-metadata text-grey-04">
-        Published in the last 7 days and not in your ranking. Anything older drops off.
+        Published in the last 7 days and not in your ranking, nobody-ranked first. Anything older drops off.
       </p>
       {debates.map(debate => {
         const entry = entriesById.get(debate.entityId);

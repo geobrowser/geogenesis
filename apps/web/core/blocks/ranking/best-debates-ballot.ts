@@ -1,24 +1,13 @@
+import { Graph, SystemIds } from '@geoprotocol/geo-sdk/lite';
+
+import type { Entity } from '~/core/types';
 import { normId } from '~/core/utils/norm-id';
 import { validateSpaceId } from '~/core/utils/utils';
 
 import { BEST_DEBATES_BLOCK_ID } from './best-debates';
+import { isBestDebatesBlock } from './best-debates-views';
 import type { RankingSubmissionSlot } from './ranking-submission-types';
 import { rankingVoteWeightFromIndex } from './ranking-vote-weights';
-
-/**
- * Whether `blockId` is the Best debates ranking block (GEO-3591). Everything Best-debates-only on
- * the ranking screen (GEO-3678) hangs off this, so every other ranking block behaves as before.
- *
- * `bestDebatesBlockId` defaults to the shared constant, which stays null until GEO-3685 creates the
- * block; tests pass their own.
- */
-export function isBestDebatesBlock(
-  blockId: string | null | undefined,
-  bestDebatesBlockId: string | null = BEST_DEBATES_BLOCK_ID
-): boolean {
-  if (!blockId || !bestDebatesBlockId) return false;
-  return normId(blockId) === normId(bestDebatesBlockId);
-}
 
 export type RankingBallotRules = {
   /**
@@ -38,11 +27,46 @@ export type RankingBallotRules = {
 const DEFAULT_RULES: RankingBallotRules = { rankType: 'WEIGHTED', requireItemSpace: false };
 const BEST_DEBATES_RULES: RankingBallotRules = { rankType: 'ORDINAL', requireItemSpace: true };
 
+/**
+ * The rules for a ballot on `blockId`, which lives in `blockSpaceId`. Best debates is the Debates
+ * space's block only (`isBestDebatesBlock`, shared with GEO-3677); every other block keeps the
+ * defaults. `bestDebatesBlockId` is injectable for tests.
+ */
 export function rankingBallotRules(
   blockId: string,
+  blockSpaceId: string,
   bestDebatesBlockId: string | null = BEST_DEBATES_BLOCK_ID
 ): RankingBallotRules {
-  return isBestDebatesBlock(blockId, bestDebatesBlockId) ? BEST_DEBATES_RULES : DEFAULT_RULES;
+  return isBestDebatesBlock(blockId, blockSpaceId, bestDebatesBlockId) ? BEST_DEBATES_RULES : DEFAULT_RULES;
+}
+
+const rankTypePropertyKey = normId(SystemIds.RANK_TYPE_PROPERTY);
+
+/** The Rank entity's `Rank type` text, or null when it isn't known (e.g. a just-published pin). */
+export function rankTypeOf(rankEntity: { values?: Entity['values'] } | null | undefined): string | null {
+  const value = rankEntity?.values?.find(v => normId(v.property.id) === rankTypePropertyKey && !v.isDeleted);
+  return value?.value?.trim() || null;
+}
+
+/**
+ * Ops that set an existing Rank entity's `Rank type` to the rules' type, when it doesn't already
+ * say so. geo-sdk's `ranks.update` re-sends the votes but never rewrites the type (only
+ * `ranks.create` writes it), so a ballot first published WEIGHTED on Best debates would otherwise
+ * carry ORDINAL votes under a WEIGHTED label. Nothing for the default rules.
+ */
+export function rankTypeRewriteOps(
+  rankEntity: { id: string; values?: Entity['values'] } | null | undefined,
+  rules: RankingBallotRules
+) {
+  if (!rankEntity || rules.rankType !== 'ORDINAL') return [];
+  if (rankTypeOf(rankEntity) === rules.rankType) return [];
+  return Graph.updateEntity({
+    id: rankEntity.id,
+    values: [
+      // No language: the SDK writes English, as `ranks.create` does, so this replaces that value.
+      { property: SystemIds.RANK_TYPE_PROPERTY, type: 'text', value: rules.rankType },
+    ],
+  }).ops;
 }
 
 export type RankingBallotVote =

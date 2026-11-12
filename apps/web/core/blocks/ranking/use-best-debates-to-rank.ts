@@ -50,15 +50,18 @@ const HOUR_MS = 60 * 60 * 1000;
 
 /**
  * The To rank list for the Best debates ranking screen: the last 7 days' debates not in
- * `excludeEntityIds`, newest first. The window is read once an hour; the list itself follows the
+ * `excludeEntityIds`, nobody-ranked first, then newest (see `selectToRank`). The window is read once an hour; the list itself follows the
  * ranker's draft as they place debates.
  */
 export function useBestDebatesToRank({
   enabled,
   excludeEntityIds,
+  rankers,
 }: {
   enabled: boolean;
   excludeEntityIds: readonly string[];
+  /** Orders debates nobody has ranked first, once its read is ready. */
+  rankers: RankersRead;
 }): { debates: RecentDebate[]; isLoading: boolean; error: Error | null } {
   // Rounded to the hour so the query key, and with it the cache, holds steady between renders.
   const nowHour = Math.floor(Date.now() / HOUR_MS) * HOUR_MS;
@@ -71,9 +74,10 @@ export function useBestDebatesToRank({
   });
 
   const recent = query.data;
+  const rankerCount = rankers.status === 'ready' ? rankers.rankerCount : undefined;
   const debates = React.useMemo(
-    () => (recent ? selectToRank(recent, excludeEntityIds, Date.now()) : []),
-    [recent, excludeEntityIds]
+    () => (recent ? selectToRank(recent, excludeEntityIds, Date.now(), { rankerCount }) : []),
+    [recent, excludeEntityIds, rankerCount]
   );
 
   return {

@@ -222,4 +222,48 @@ describe('placing a debate by comparison', () => {
     expect(rankAfterClearing).toHaveBeenCalledWith('new', expect.any(Function));
     expect(publish).toHaveBeenCalledTimes(1);
   });
+
+  it('closes the confirmation without publishing, and keeps the placement as a draft change', () => {
+    const publish = vi.fn(async (_ids: string[]) => true);
+    render(<Harness initial={['d1']} startWith={{ id: 'new', origin: 'team' }} publish={publish} />);
+    fireEvent.click(screen.getByText('start'));
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: '1' });
+    expect(screen.getByText('Placed #1 of 2')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(publish).not.toHaveBeenCalled();
+    expect(latestOrder).toEqual(['new', 'd1']);
+  });
+
+  it('says so when Done fails, and can still be closed', async () => {
+    const publish = vi.fn(async (_ids: string[]) => false);
+    render(<Harness initial={[]} startWith={{ id: 'new', origin: 'team' }} publish={publish} />);
+    fireEvent.click(screen.getByText('start'));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    });
+    expect(screen.getByRole('alert').textContent).toContain('wasn’t published');
+    expect(screen.getByRole('dialog')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(publish).toHaveBeenCalledTimes(1);
+    expect(latestOrder).toEqual(['new']);
+  });
+
+  it('after Rank the next one, the next placement has no other changes to mention', async () => {
+    // The parent still reports unpublished changes from the render before the publish landed.
+    render(
+      <Harness initial={[]} startWith={{ id: 'new', origin: 'to_rank' }} toRankIds={['next']} hasUnpublishedChanges />
+    );
+    fireEvent.click(screen.getByText('start'));
+    expect(screen.getByText('Done publishes it with your other unpublished changes.')).toBeTruthy();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Rank the next one · 1 left' }));
+    });
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: '1' });
+    expect(screen.getByText('Placed #1 of 2')).toBeTruthy();
+    expect(screen.getByText('Nudge it if it’s not quite right. Done publishes it.')).toBeTruthy();
+  });
 });

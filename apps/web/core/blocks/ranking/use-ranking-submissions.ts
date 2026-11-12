@@ -23,7 +23,7 @@ import { useReportError } from '~/core/state/status-bar-store';
 import { toUserFacingError } from '~/core/utils/error-diagnostics';
 import { validateEntityId } from '~/core/utils/utils';
 
-import { buildRankingVotes, rankingBallotRules } from './best-debates-ballot';
+import { buildRankingVotes, rankTypeRewriteOps, rankingBallotRules } from './best-debates-ballot';
 import { clearLocalMyRankingDraft } from './local-ranking-my-draft';
 import { getMyRankingOrderedEntityIds } from './my-ranking-entity';
 import { ballotRecencyKey, pickLatestBallot } from './ranking-ballot-recency';
@@ -210,7 +210,7 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
       const filteredSlots = slots.filter(slot => Boolean(slot.id));
       // Best debates (GEO-3678): ORDINAL, and every item keeps its own space, with no fallback to the
       // block's. Every other block publishes exactly as before. See `best-debates-ballot.ts`.
-      const ballotRules = rankingBallotRules(blockId);
+      const ballotRules = rankingBallotRules(blockId, spaceId);
       const votes = buildRankingVotes(filteredSlots, ballotRules, spaceId);
 
       if (votes.length === 0) return null;
@@ -254,7 +254,8 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
                 blockId,
                 votes,
               });
-          ops = result.ops;
+          // Best debates: also relabel an existing non-ORDINAL ballot, in the same edit (GEO-3678).
+          ops = reuseExistingRank ? [...result.ops, ...rankTypeRewriteOps(myRankEntity, ballotRules)] : result.ops;
           rankId = result.id;
         } catch (error) {
           operation.failed('invalid_input');

@@ -76,7 +76,7 @@ export function useBestDebatesCompose({
     () => [...orderedIds, ...(pushDown?.pushedDownEntityIds ?? [])],
     [orderedIds, pushDown?.pushedDownEntityIds]
   );
-  const toRank = useBestDebatesToRank({ enabled, excludeEntityIds: excludeFromToRank });
+  const toRank = useBestDebatesToRank({ enabled, excludeEntityIds: excludeFromToRank, rankers });
   const toRankIds = React.useMemo(() => toRank.debates.map(debate => debate.entityId), [toRank.debates]);
   const { entries: toRankEntries } = useRankingEntryEntities(blockSpaceId, enabled ? toRankIds : []);
   const toRankEntriesById = React.useMemo(

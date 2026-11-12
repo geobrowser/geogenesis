@@ -8,6 +8,7 @@ import {
   type PlacementChoice,
   type PlacementSearch,
   choosePlacement,
+  indexOfEntity,
   insertAt,
   nudge,
   placementComparisonIndex,
@@ -33,7 +34,16 @@ type FlowState =
       search: PlacementSearch;
       withOtherChanges: boolean;
     }
-  | { phase: 'placed'; entityId: string; origin: PlacementOrigin; withOtherChanges: boolean };
+  | {
+      phase: 'placed';
+      entityId: string;
+      origin: PlacementOrigin;
+      /** Where it was placed, to put it back if the draft lost it before Done (see `publishPlaced`). */
+      placedIndex: number;
+      withOtherChanges: boolean;
+      /** The last Done or Rank the next one didn't go out. */
+      publishFailed?: boolean;
+    };
 
 export type UseBestDebatesPlacementArgs = {
   blockId: string;
@@ -57,8 +67,9 @@ export type UseBestDebatesPlacementArgs = {
  * "which was better?" comparisons, then "Placed #N of M".
  *
  * Nothing touches the ranker's list until the debate is placed, so leaving the comparison part way
- * changes nothing. Done publishes the whole list as one edit, with any drags not yet published, and
- * casts no vote.
+ * changes nothing. Once placed, only Done and Rank the next one publish: the whole list as one edit,
+ * with any drags not yet published, and no vote. Closing the confirmation just closes it and leaves
+ * the placement as an unpublished change for the screen's Publish button.
  */
 export function useBestDebatesPlacement({
   blockId,
@@ -77,6 +88,9 @@ export function useBestDebatesPlacement({
   // Done and Rank the next one publish whatever the list is when pressed, nudges included.
   const orderedIdsRef = React.useRef(orderedIds);
   orderedIdsRef.current = orderedIds;
+  // Read when a placement starts, which can be right after a publish, before this hook re-renders.
+  const hasUnpublishedChangesRef = React.useRef(hasUnpublishedChanges);
+  hasUnpublishedChangesRef.current = hasUnpublishedChanges;
 
   const record = React.useCallback(
     (
@@ -99,23 +113,24 @@ export function useBestDebatesPlacement({
   );
 
   const beginCompare = React.useCallback(
-    (entityId: string, origin: PlacementOrigin) => {
+    (entityId: string, origin: PlacementOrigin, justPublished = false) => {
       const list = orderedIdsRef.current.filter(id => normId(id) !== normId(entityId));
-      const withOtherChanges = hasUnpublishedChanges;
+      // Right after Rank the next one's publish the draft is clean, whatever the last render said.
+      const withOtherChanges = !justPublished && hasUnpublishedChangesRef.current;
       const start = startPlacement(list.length);
       if (start.done) {
         setOrderedIds(insertAt(list, entityId, start.index));
         record('ranking_placed', entityId, { item_position: start.index + 1, variant: origin }, { item_count: 1 });
-        setFlow({ phase: 'placed', entityId, origin, withOtherChanges });
+        setFlow({ phase: 'placed', entityId, origin, placedIndex: start.index, withOtherChanges });
         return;
       }
       setFlow({ phase: 'compare', entityId, origin, list, search: start.search, withOtherChanges });
     },
-    [hasUnpublishedChanges, record, setOrderedIds]
+    [record, setOrderedIds]
   );
 
   const start = React.useCallback(
-    (entityId: string, origin: PlacementOrigin) => {
+    (entityId: string, origin: PlacementOrigin, justPublished = false) => {
       record(
         'ranking_place_started',
         entityId,
@@ -125,7 +140,7 @@ export function useBestDebatesPlacement({
         }
       );
       if (pushDown) setFlow({ phase: 'choose', entityId, origin });
-      else beginCompare(entityId, origin);
+      else beginCompare(entityId, origin, justPublished);
     },
     [beginCompare, pushDown, record]
   );
@@ -168,34 +183,52 @@ export function useBestDebatesPlacement({
         phase: 'placed',
         entityId: flow.entityId,
         origin: flow.origin,
+        placedIndex: result.index,
         withOtherChanges: flow.withOtherChanges,
       });
     },
     [flow, record, setOrderedIds]
   );
 
-  /** Publishes the list as it stands, through GEO-3679's clearing step when it is wired in. */
+  /**
+   * Publishes the list as it stands, through GEO-3679's clearing step when it is wired in. The
+   * screen merges a refetched ballot into the draft rather than replacing it, so the placed debate
+   * should always still be there; if it isn't, it goes back where it was placed before publishing.
+   */
   const publishPlaced = React.useCallback(
-    (entityId: string) => {
-      const run = () => publish(orderedIdsRef.current);
+    (entityId: string, placedIndex: number) => {
+      let ids = orderedIdsRef.current;
+      if (indexOfEntity(ids, entityId) < 0) {
+        ids = insertAt(ids, entityId, placedIndex);
+        setOrderedIds(ids);
+      }
+      const run = () => publish(ids);
       return pushDown?.rankAfterClearing ? pushDown.rankAfterClearing(entityId, run) : run();
     },
-    [publish, pushDown]
+    [publish, pushDown, setOrderedIds]
   );
 
+  const markPublishFailed = React.useCallback(() => {
+    setFlow(current => (current?.phase === 'placed' ? { ...current, publishFailed: true } : current));
+  }, []);
+
   const done = React.useCallback(
-    async (entityId: string) => {
-      if (await publishPlaced(entityId)) setFlow(null);
+    async (entityId: string, placedIndex: number) => {
+      if (await publishPlaced(entityId, placedIndex)) setFlow(null);
+      else markPublishFailed();
     },
-    [publishPlaced]
+    [markPublishFailed, publishPlaced]
   );
 
   const rankNext = React.useCallback(
-    async (entityId: string, nextId: string) => {
-      if (!(await publishPlaced(entityId))) return;
-      start(nextId, 'to_rank');
+    async (entityId: string, placedIndex: number, nextId: string) => {
+      if (!(await publishPlaced(entityId, placedIndex))) {
+        markPublishFailed();
+        return;
+      }
+      start(nextId, 'to_rank', true);
     },
-    [publishPlaced, start]
+    [markPublishFailed, publishPlaced, start]
   );
 
   let dialogs: React.ReactNode = null;
@@ -232,12 +265,17 @@ export function useBestDebatesPlacement({
         orderedIds={orderedIds}
         nameOf={nameOf}
         withOtherChanges={flow.withOtherChanges}
+        publishFailed={Boolean(flow.publishFailed)}
         isSaving={isSaving}
         onNudge={direction => setOrderedIds(nudge(orderedIdsRef.current, placedId, direction))}
-        onDone={() => void done(placedId)}
+        onDone={() => void done(placedId, flow.placedIndex)}
+        onClose={() => setFlow(null)}
         next={
           flow.origin === 'to_rank' && remaining.length > 0
-            ? { remaining: remaining.length, onRankNext: () => void rankNext(placedId, remaining[0]) }
+            ? {
+                remaining: remaining.length,
+                onRankNext: () => void rankNext(placedId, flow.placedIndex, remaining[0]),
+              }
             : undefined
         }
       />
