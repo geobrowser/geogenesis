@@ -1,17 +1,12 @@
 import { uuidToHex } from '~/core/id/normalize';
 
 import { debatesAppDebateUrl } from '../debates-app-url';
-import {
-  type DebateEntity,
-  PUBLISHED_DEBATE_LOOKUP_TIMEOUT_MS,
-  fetchEntityFromGraph,
-  isVisibleDebate,
-} from './published-debate-path';
+import { type DebateEntity, fetchEntityFromGraph, isVisibleDebate } from './published-debate-path';
 
 /**
  * The redirect sits in front of every entity page a person opens from outside geobrowser.io, so a
  * slow graph may cost the page only a moment before it renders as usual (the recording link's
- * lookup, {@link PUBLISHED_DEBATE_LOOKUP_TIMEOUT_MS}, guards a far rarer path).
+ * longer lookup budget guards a far rarer path).
  */
 export const DEBATES_APP_REDIRECT_TIMEOUT_MS = 400;
 
