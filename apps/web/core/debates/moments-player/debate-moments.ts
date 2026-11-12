@@ -147,7 +147,8 @@ export function decodeDebateMoments(payload: DebateMomentsPayload | null | undef
  *
  * 1. A story reel's entry for the same moment and range: its stored `cut_start_ms`/`cut_end_ms`.
  * 2. The moment's claim, when the moment is that claim's own clip range (a picked reel): the range
- *    widened by the claim's `clip_lead_ms`/`clip_tail_ms`, the rule geo-chat cut the file by.
+ *    widened by the claim's `clip_lead_ms`/`clip_tail_ms` (0 when absent), the rule geo-chat cut the
+ *    file by.
  * 3. Otherwise geo-chat's default edge room on each side.
  */
 function cutOf(
@@ -175,8 +176,10 @@ function cutOf(
   const claim =
     Array.isArray(payload?.claims) && isFiniteNumber(moment.claim_index) ? payload.claims[moment.claim_index] : null;
   const ownRange = claim && claim.clip_start_ms === start && claim.clip_end_ms === end;
-  const lead = ownRange ? (nonNegative(claim.clip_lead_ms) ?? DEFAULT_CLIP_EDGE_MS) : DEFAULT_CLIP_EDGE_MS;
-  const tail = ownRange ? (nonNegative(claim.clip_tail_ms) ?? DEFAULT_CLIP_EDGE_MS) : DEFAULT_CLIP_EDGE_MS;
+  // geo-chat reads a missing lead or tail as 0 (`moments.rs`, `unwrap_or(0)`), so a claim without
+  // them was cut at its own edges. 250 ms is only for a moment that is not its claim's own range.
+  const lead = ownRange ? (nonNegative(claim.clip_lead_ms) ?? 0) : DEFAULT_CLIP_EDGE_MS;
+  const tail = ownRange ? (nonNegative(claim.clip_tail_ms) ?? 0) : DEFAULT_CLIP_EDGE_MS;
   return { start: Math.max(0, start - lead), end: end === null ? null : end + tail };
 }
 

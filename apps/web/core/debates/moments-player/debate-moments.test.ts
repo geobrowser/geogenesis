@@ -107,7 +107,19 @@ describe('decodeDebateMoments', () => {
     );
     expect([noClaimRange.cutStartMs, noClaimRange.cutEndMs]).toEqual([9750, 20_250]);
     expect([otherRange.cutStartMs, otherRange.cutEndMs]).toEqual([29_750, 35_250]);
-    expect([zeroLead.cutStartMs, zeroLead.cutEndMs]).toEqual([40_000, 50_250]);
+    // A claim without lead or tail was cut at its own edges: geo-chat reads a missing one as 0.
+    expect([zeroLead.cutStartMs, zeroLead.cutEndMs]).toEqual([40_000, 50_000]);
+  });
+
+  it('cuts a claim with no edge fields at its own range', () => {
+    const [moment] = decodeDebateMoments(
+      {
+        claims: [{ text: 'old', clip_start_ms: 40_000, clip_end_ms: 50_000 }],
+        moments: [{ moment_index: 0, claim_index: 0, clip_url: '/a', clip_start_ms: 40_000, clip_end_ms: 50_000 }],
+      },
+      BASE
+    );
+    expect([moment.cutStartMs, moment.cutEndMs]).toEqual([40_000, 50_000]);
   });
 
   it('drops entries it cannot play and keeps the rest, in play order', () => {

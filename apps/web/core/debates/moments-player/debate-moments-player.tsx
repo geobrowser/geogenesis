@@ -40,7 +40,9 @@ import { type DebateMomentsState, useDebateMoments } from './use-debate-moments'
  * One `<video>` for the life of the player carries every moment and the full debate, changing only
  * its `src`. iOS WebKit grants sound per element, from a tap on that element, and the grant survives
  * a `src` change (see `gesture-media-pool.ts`): a fresh element per moment would stop the reel on a
- * Play button after the first one. The next clip preloads in a second, hidden element.
+ * Play button after the first one. Nothing is fetched ahead: geo-chat signs each clip redirect
+ * afresh, so a second element's download could never be reused, and before a press the element
+ * reads only metadata.
  *
  * Fluid: it fills its container's width at a fixed 4:5 and sizes its type to that width, so it
  * holds up at half a phone's width.
@@ -60,7 +62,10 @@ export type DebateMomentsPlayerProps = {
   playbackGroup?: string;
   /** Called on every switch between the moments and the full debate, and once with the opening mode. */
   onModeChange?: (mode: PlayerMode) => void;
-  /** Called whenever this player starts playing. */
+  /**
+   * Called when the viewer starts this player: once per press of play, not again as the reel plays
+   * on into the next moment or into the full debate.
+   */
   onPlay?: () => void;
 };
 
@@ -129,13 +134,14 @@ function MomentsStory({
   const pendingSeekRef = React.useRef<number | null>(null);
   /** The src whose metadata the element has loaded; null while a new one is loading. */
   const metadataSrcRef = React.useRef<string | null>(null);
+  /** Set when the viewer presses play, so the `play` that follows is reported to the host once. */
+  const viewerStartRef = React.useRef(false);
   /** Set by expand and close, so the control that replaces the pressed one takes focus. */
   const moveFocusRef = React.useRef(false);
   const expandRef = React.useRef<HTMLButtonElement | null>(null);
   const collapseRef = React.useRef<HTMLButtonElement | null>(null);
 
   const moment = story.mode === 'moments' ? moments[story.index] : undefined;
-  const next = story.mode === 'moments' ? moments[story.index + 1] : undefined;
   const fullSrc = fullDebateVideoUrl(debateId, getGeoChatApiBaseUrl());
   const src = moment ? moment.clipUrl : fullSrc;
 
@@ -163,6 +169,7 @@ function MomentsStory({
     setFailed(false);
     video.play()?.catch(() => {
       // Refused (autoplay policy) or interrupted by a step: the big play control stays up.
+      viewerStartRef.current = false;
       setPlaying(false);
     });
   }, []);
@@ -194,12 +201,16 @@ function MomentsStory({
     if (metadataSrcRef.current === fullSrc) applyPendingSeek();
   }, [story.mode, story.seekRequest, story.fullStartMs, fullSrc, applyPendingSeek]);
 
-  // Release what this player holds when it goes: React has nulled the ref by cleanup time.
+  // Stop and release what this player holds when it goes: React has nulled the ref by cleanup time.
+  // Always pause: an `<Activity mode="hidden">` cleans effects up but keeps the element, which would
+  // otherwise play on unheard of by the exclusive-playback group. Drop the source only once the
+  // element has really left the page: StrictMode's rehearsal unmount keeps it, and comes back.
   React.useEffect(() => {
     const video = videoRef.current;
     return () => {
-      // Only once it has really left the page: StrictMode's rehearsal unmount keeps the element.
-      if (video && !video.isConnected) releaseVideo(video);
+      if (!video) return;
+      video.pause();
+      if (!video.isConnected) releaseVideo(video);
     };
   }, []);
 
@@ -208,6 +219,7 @@ function MomentsStory({
     if (!video) return;
     if (story.mode === 'moments' && story.finished) {
       autoplayRef.current = true;
+      viewerStartRef.current = true;
       dispatch({ type: 'restart' });
       if (story.index === 0) {
         video.currentTime = 0;
@@ -217,9 +229,11 @@ function MomentsStory({
     }
     if (video.paused) {
       autoplayRef.current = true;
+      viewerStartRef.current = true;
       start(video);
     } else {
       autoplayRef.current = false;
+      viewerStartRef.current = false;
       video.pause();
     }
   };
@@ -283,7 +297,7 @@ function MomentsStory({
         ref={videoRef}
         src={src}
         playsInline
-        preload={story.mode === 'moments' ? 'auto' : 'metadata'}
+        preload="metadata"
         aria-label={
           story.mode === 'moments' ? `${label}: moment ${story.index + 1} of ${story.count}` : `${label}: full debate`
         }
@@ -315,7 +329,13 @@ function MomentsStory({
         onPlay={() => {
           claim();
           setPlaying(true);
-          onPlay?.();
+          // Only a start the viewer pressed reaches the host. The reel playing on into the next
+          // moment, or into the full debate, is the same viewing: a clip that ends fires `pause`
+          // before `ended`, so the `playing` state cannot tell these apart.
+          if (viewerStartRef.current) {
+            viewerStartRef.current = false;
+            onPlay?.();
+          }
         }}
         onPause={() => setPlaying(false)}
         onError={() => {
@@ -323,7 +343,6 @@ function MomentsStory({
           setFailed(true);
         }}
       />
-      {next && <PreloadClip key={next.clipUrl} src={next.clipUrl} />}
 
       {/* Tap zones. The middle plays and pauses; in the moments the edges step. */}
       {story.mode === 'moments' && (
@@ -433,24 +452,6 @@ function MomentsStory({
         </div>
       )}
     </PlayerFrame>
-  );
-}
-
-/**
- * The next moment's clip, fetched ahead into a hidden element so stepping on does not wait on a
- * cold redirect and fetch. Keyed by its src, so each one is released when it is no longer next.
- */
-function PreloadClip({ src }: { src: string }) {
-  const ref = React.useRef<HTMLVideoElement | null>(null);
-  React.useEffect(() => {
-    const video = ref.current;
-    return () => {
-      // Only once it has really left the page: StrictMode's rehearsal unmount keeps the element.
-      if (video && !video.isConnected) releaseVideo(video);
-    };
-  }, []);
-  return (
-    <video ref={ref} data-preload="" aria-hidden="true" src={src} preload="auto" muted playsInline className="hidden" />
   );
 }
 

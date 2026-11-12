@@ -13,10 +13,12 @@ import { DebateMomentsPlayer } from './debate-moments-player';
 const mocks = vi.hoisted(() => ({
   getDebateExtractedClaims: vi.fn(),
   play: vi.fn(function (this: HTMLMediaElement) {
+    Object.defineProperty(this, 'paused', { configurable: true, value: false });
     this.dispatchEvent(new Event('play'));
     return Promise.resolve();
   }),
   pause: vi.fn(function (this: HTMLMediaElement) {
+    Object.defineProperty(this, 'paused', { configurable: true, value: true });
     this.dispatchEvent(new Event('pause'));
   }),
   /** As a browser does: a reload starts the resource over, at 0. Records the src it reloaded with. */
@@ -58,9 +60,9 @@ function renderWithQuery(ui: React.ReactElement) {
   return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
 }
 
-/** The player's visible element; the next clip's preload is a second, hidden one. */
+/** The player's one element. */
 function videoOf(player: HTMLElement): HTMLVideoElement {
-  const video = player.querySelector<HTMLVideoElement>('video:not([data-preload])');
+  const video = player.querySelector<HTMLVideoElement>('video');
   if (!video) throw new Error('no video');
   return video;
 }
@@ -71,6 +73,13 @@ function advance(video: HTMLVideoElement, seconds: number, duration = 15) {
   Object.defineProperty(video, 'currentTime', { configurable: true, writable: true, value: seconds });
   fireEvent.loadedMetadata(video);
   fireEvent.timeUpdate(video);
+}
+
+/** A clip reaching its end, as a browser reports it: paused, `pause`, then `ended`. */
+function playToEnd(video: HTMLVideoElement) {
+  Object.defineProperty(video, 'paused', { configurable: true, value: true });
+  fireEvent.pause(video);
+  fireEvent.ended(video);
 }
 
 beforeEach(() => {
@@ -210,27 +219,46 @@ describe('DebateMomentsPlayer', () => {
     });
     expect(mocks.pause.mock.contexts).toEqual([a]);
   });
-  it('keeps one element for the whole reel, so a tap-granted play carries to the next moment, and preloads the next clip', () => {
+  it('keeps one element for the whole reel, so a tap-granted play carries to the next moment, and fetches nothing ahead', () => {
     render(<DebateMomentsPlayer debateId={DEBATE} label="Debate A" moments={MOMENTS} />);
     const player = screen.getByRole('region', { name: 'Debate A' });
     const element = videoOf(player);
-    const preload = () => player.querySelector('video[data-preload]');
 
-    expect(preload()).toHaveAttribute('src', expect.stringContaining('/moments/clip-1/content'));
-    expect(preload()).toHaveAttribute('preload', 'auto');
+    // geo-chat signs each clip redirect afresh, so a second element fetching ahead could never
+    // share its bytes with this one: one element, and only metadata before a press.
+    expect(player.querySelectorAll('video')).toHaveLength(1);
+    expect(element).toHaveAttribute('preload', 'metadata');
 
     fireEvent.click(screen.getByRole('button', { name: 'Play' }));
     fireEvent.ended(element);
     expect(videoOf(player)).toBe(element);
     expect(element.getAttribute('src')).toContain('/moments/clip-1/content');
     expect(mocks.play.mock.contexts).toEqual([element, element]);
-    expect(preload()).toHaveAttribute('src', expect.stringContaining('/moments/clip-2/content'));
+    expect(player.querySelectorAll('video')).toHaveLength(1);
 
     // The full debate plays in the same element too.
     fireEvent.click(screen.getByRole('button', { name: 'Watch the full debate' }));
     expect(videoOf(player)).toBe(element);
     expect(element.getAttribute('src')).toContain('/media/artifacts/final_video/content');
-    expect(preload()).toBeNull();
+  });
+
+  it('tells the host once per start the viewer makes, not once per moment it plays on into', () => {
+    const onPlay = vi.fn();
+    render(<DebateMomentsPlayer debateId={DEBATE} label="Debate A" moments={MOMENTS} onPlay={onPlay} />);
+    const element = videoOf(screen.getByRole('region', { name: 'Debate A' }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+    playToEnd(element);
+    playToEnd(element);
+    fireEvent.click(screen.getByRole('button', { name: 'Watch the full debate' }));
+    act(() => {
+      element.dispatchEvent(new Event('play'));
+    });
+    expect(onPlay).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Pause' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+    expect(onPlay).toHaveBeenCalledTimes(2);
   });
 
   it("clears a failed clip's error when the viewer steps on, and leaves the play control up", () => {
@@ -271,14 +299,29 @@ describe('DebateMomentsPlayer', () => {
     const { unmount } = render(<DebateMomentsPlayer debateId={DEBATE} label="Debate A" moments={MOMENTS} />);
     const player = screen.getByRole('region', { name: 'Debate A' });
     const element = videoOf(player);
-    const preload = player.querySelector('video[data-preload]') as HTMLVideoElement;
 
     unmount();
     // `releaseVideo`: paused, src removed, then reloaded empty.
     expect(mocks.pause.mock.contexts).toContain(element);
-    expect(mocks.load.mock.contexts).toEqual(expect.arrayContaining([element, preload]));
+    expect(mocks.load.mock.contexts).toContain(element);
     expect(element).not.toHaveAttribute('src');
-    expect(preload).not.toHaveAttribute('src');
+  });
+
+  it('pauses, but keeps its source, when hidden by an Activity that leaves the element in place', () => {
+    const view = (mode: 'visible' | 'hidden') => (
+      <React.Activity mode={mode}>
+        <DebateMomentsPlayer debateId={DEBATE} label="Debate A" moments={MOMENTS} />
+      </React.Activity>
+    );
+    const { rerender, container } = render(view('visible'));
+    const element = container.querySelector('video') as HTMLVideoElement;
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+    mocks.pause.mockClear();
+
+    rerender(view('hidden'));
+    expect(element.isConnected).toBe(true);
+    expect(mocks.pause.mock.contexts).toContain(element);
+    expect(element.getAttribute('src')).toContain('/moments/clip-0/content');
   });
 
   it("keeps its media through StrictMode's rehearsal unmount", () => {
@@ -289,7 +332,6 @@ describe('DebateMomentsPlayer', () => {
     );
     const player = screen.getByRole('region', { name: 'Debate A' });
     expect(videoOf(player).getAttribute('src')).toContain('/moments/clip-0/content');
-    expect(player.querySelector('video[data-preload]')?.getAttribute('src')).toContain('/moments/clip-1/content');
   });
 
   it('keeps the moment dots outside the slider, as labelled buttons, and seeks with Home and End', () => {
