@@ -55,6 +55,21 @@ describe('reelJob', () => {
     });
   });
 
+  it('says a hand-picked reel a re-render could not re-apply needs picking again', () => {
+    const job = reelJob(
+      request({
+        status: 'skipped',
+        outcome: 'reel_no_longer_fits',
+        report: { story_failed: 'clip 3: its words are no longer said there' },
+      })
+    );
+    expect(job).toMatchObject({
+      kind: 'failed',
+      summary: expect.stringContaining('Pick its clips again'),
+      clips: { 2: ['its words are no longer said there'] },
+    });
+  });
+
   it('reads a failed request with the worker’s error', () => {
     const job = reelJob(
       request({ status: 'failed', outcome: 'error', last_error: 'a hand-picked clip did not render; nothing written' })
