@@ -87,11 +87,18 @@ export function BestDebatesTeamRowContent({
               <RankedByBadge rankers={rankers} entityId={entityId} />
             </div>
           }
+          // Rank mark first, then Push it down to its right (Preston, 12 Nov).
           debateAside={
             myRank ? (
               <span className="text-breadcrumb whitespace-nowrap text-grey-04 tabular-nums">You: #{myRank}</span>
             ) : (
               <span className="flex items-center gap-1.5">
+                <span
+                  className="grid size-8 place-items-center rounded-md border border-grey-02 bg-white text-text md:size-11"
+                  aria-hidden
+                >
+                  <RankingChart />
+                </span>
                 {onPushDown ? (
                   <button
                     type="button"
@@ -107,12 +114,6 @@ export function BestDebatesTeamRowContent({
                     <PushDownIcon />
                   </button>
                 ) : null}
-                <span
-                  className="grid size-8 place-items-center rounded-md border border-grey-02 bg-white text-text md:size-11"
-                  aria-hidden
-                >
-                  <RankingChart />
-                </span>
               </span>
             )
           }
