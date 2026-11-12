@@ -18,20 +18,25 @@ const mocks = vi.hoisted(() => ({
   toast: vi.fn(),
   /** The claims payload's `moment_reel_manual`: the reel's lock, whoever published it. */
   manualReel: false,
+  /** The transcript read failed before it ever answered. */
+  transcriptFailed: false,
 }));
 
 vi.mock('../hooks', () => ({
-  useDebateTranscript: () => ({
-    isPending: false,
-    data: {
-      word_timing: true,
-      words: [
-        { participant_slot: 1, start_ms: 1_000, end_ms: 1_400, text: 'Coffee' },
-        { participant_slot: 1, start_ms: 1_500, end_ms: 2_900, text: 'dates' },
-        { participant_slot: 2, start_ms: 5_000, end_ms: 5_400, text: 'Dinner' },
-      ],
-    },
-  }),
+  useDebateTranscript: () =>
+    mocks.transcriptFailed
+      ? { isPending: false, data: undefined, error: new Error('down') }
+      : {
+          isPending: false,
+          data: {
+            word_timing: true,
+            words: [
+              { participant_slot: 1, start_ms: 1_000, end_ms: 1_400, text: 'Coffee' },
+              { participant_slot: 1, start_ms: 1_500, end_ms: 2_900, text: 'dates' },
+              { participant_slot: 2, start_ms: 5_000, end_ms: 5_400, text: 'Dinner' },
+            ],
+          },
+        },
   useGeoChatAuth: () => ({ ready: true, authenticated: true, accountKey: 'a', getPrivyIdentityToken: async () => 't' }),
   useDebate: () => ({
     data: {
@@ -115,6 +120,7 @@ beforeEach(() => {
   mocks.plan = { isSuccess: true, data: entry(), error: null };
   mocks.mutate.mockReset();
   mocks.manualReel = false;
+  mocks.transcriptFailed = false;
 });
 afterEach(cleanup);
 
@@ -263,6 +269,117 @@ describe('MomentsEditor (GEO-3671)', () => {
     expect(screen.getByRole('button', { name: 'Publish reel' })).toBeDisabled();
   });
 
+  // The reel moved on under the edit (another admin's publish, a worker re-apply). Publishing the
+  // edit must still name the version it was made on, so geo-chat refuses it as `reel_changed`.
+  it('publishes an edit made while another request ran on the version it was made on', () => {
+    const requestedAt = '2026-11-11T19:00:00Z';
+    mocks.backfill.data = { request: status({ status: 'running', requested_at: requestedAt }), entry: null };
+    const { rerender } = render(<MomentsEditor debateId={DEBATE_ID} />);
+    fireEvent.change(screen.getByRole('textbox', { name: 'End time' }), { target: { value: '1.45' } });
+    fireEvent.blur(screen.getByRole('textbox', { name: 'End time' }));
+
+    mocks.backfill.data = { request: status({ status: 'done', requested_at: requestedAt }), entry: null };
+    rerender(<MomentsEditor debateId={DEBATE_ID} />);
+    mocks.plan = { ...mocks.plan, data: entry({ reel_version: 'v2' }) };
+    rerender(<MomentsEditor debateId={DEBATE_ID} />);
+    expect(screen.getByText('Unsaved changes')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Publish reel' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Publish and lock' }));
+    expect(mocks.mutate).toHaveBeenCalledWith(
+      expect.objectContaining({ reel: expect.objectContaining({ base: 'v1' }) }),
+      expect.any(Object)
+    );
+  });
+
+  // An edit made after this visit's publish was sent sits on the reel that then goes live.
+  it('makes an edit made after its own publish on the version that publish made', () => {
+    const requestedAt = '2026-11-11T21:00:00Z';
+    mocks.mutate.mockImplementation((_body, options: { onSuccess: (entry: unknown) => void }) =>
+      options.onSuccess({ queued: true, refusal: null, request: status({ requested_at: requestedAt }) })
+    );
+    const { rerender } = render(<MomentsEditor debateId={DEBATE_ID} />);
+    fireEvent.change(screen.getByRole('textbox', { name: 'End time' }), { target: { value: '1.45' } });
+    fireEvent.blur(screen.getByRole('textbox', { name: 'End time' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Publish reel' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Publish and lock' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Start time' }), { target: { value: '0.5' } });
+    fireEvent.blur(screen.getByRole('textbox', { name: 'Start time' }));
+
+    mocks.backfill.data = { request: status({ requested_at: requestedAt, status: 'done' }), entry: null };
+    rerender(<MomentsEditor debateId={DEBATE_ID} />);
+    mocks.plan = { ...mocks.plan, data: entry({ reel_version: 'v2' }) };
+    rerender(<MomentsEditor debateId={DEBATE_ID} />);
+    mocks.mutate.mockReset();
+    fireEvent.click(screen.getByRole('button', { name: 'Publish reel' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Publish and lock' }));
+    expect(mocks.mutate).toHaveBeenCalledWith(
+      expect.objectContaining({ reel: expect.objectContaining({ base: 'v2' }) }),
+      expect.any(Object)
+    );
+  });
+
+  // geo-chat#352: the worker re-applies a hand-picked reel after a re-render, so the request is
+  // never this visit's; that it no longer fits is said all the same.
+  it('says when a re-render could not keep the hand-picked reel', () => {
+    mocks.manualReel = true;
+    mocks.backfill.data = {
+      request: status({
+        status: 'skipped',
+        outcome: 'reel_no_longer_fits',
+        manual_reel: { clock: 'video', clips: [], reapplied: { job_id: 'job', quotes: ['Coffee dates'] } },
+        report: { story_failed: 'clip 1: its words are no longer said there' },
+      }),
+      entry: null,
+    };
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    const notice = screen.getByText(/A re-render couldn.t keep this hand-picked reel/).closest('[role="status"]');
+    expect(notice).toHaveTextContent(/Pick its clips again/);
+    expect(screen.getByText('Clip 1: its words are no longer said there')).toBeInTheDocument();
+  });
+
+  // Without its words nothing snaps and no clip has a speaker, so a touched clip loses its claim.
+  it('is read-only when the transcript never loaded', () => {
+    mocks.transcriptFailed = true;
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    expect(screen.getByText(/Couldn't load this debate's transcript/)).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'End time' })).toBeDisabled();
+  });
+
+  it('closes the publish confirm when an edit under it breaks a clip', () => {
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    fireEvent.change(screen.getByRole('textbox', { name: 'End time' }), { target: { value: '1.45' } });
+    fireEvent.blur(screen.getByRole('textbox', { name: 'End time' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Publish reel' }));
+    expect(screen.getByRole('alertdialog', { name: 'Publish this reel?' })).toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'End time' }), { target: { value: '0.5' } });
+    fireEvent.blur(screen.getByRole('textbox', { name: 'End time' }));
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(mocks.mutate).not.toHaveBeenCalled();
+  });
+
+  it('closes the return-to-automatic confirm once the reel is edited', () => {
+    mocks.manualReel = true;
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Return to automatic' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'End time' }), { target: { value: '1.45' } });
+    fireEvent.blur(screen.getByRole('textbox', { name: 'End time' }));
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+  });
+
+  it('shows the edge as it stands when a typed time snaps back to it', () => {
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    const end = () => screen.getByRole('textbox', { name: 'End time' });
+    fireEvent.change(end(), { target: { value: '2.0' } });
+    fireEvent.blur(end());
+    expect(end()).toHaveValue('0:02.9');
+    // Mid-"dates" again: it snaps to the same end, so nothing changes, and the box says so.
+    fireEvent.change(end(), { target: { value: '2.5' } });
+    fireEvent.blur(end());
+    expect(end()).toHaveValue('0:02.9');
+  });
+
   // A poll that fails after the first answer keeps its data; the editor, and what was typed, stay.
   it('keeps the editor and its unsaved edits when a later read fails', () => {
     const { rerender } = render(<MomentsEditor debateId={DEBATE_ID} />);
@@ -336,5 +453,8 @@ describe('editingBlockedReason', () => {
   it('blocks a transcript without word timings, and a failed check', () => {
     expect(editingBlockedReason({ refusal: null }, false, null)).toMatch(/no word timings/);
     expect(editingBlockedReason(null, true, new Error('x'))).toMatch(/Couldn't check/);
+    expect(editingBlockedReason({ refusal: null }, undefined, null, true)).toMatch(
+      /Couldn't load this debate's transcript/
+    );
   });
 });
