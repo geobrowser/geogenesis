@@ -225,10 +225,20 @@ function Editor({ debateId }: { debateId: string }) {
   const carried = reelCarried(entry);
   const canUnlockCarried = carried && !plan.error && !refusalBlocksEditing(entry?.refusal);
 
+  // What the worker reported on a failed reel, clip by clip as sent. A problem stays on a clip only
+  // while the clip is still as it was sent: one changed since (an edge, its claim) or replaced is
+  // judged afresh, so fixing it lets the reel be published again (GEO-3705). Clips left alone keep
+  // theirs until the next publish.
+  const failedSent = ours && job.kind === 'failed' && tracked ? { job, sent: tracked.sent } : null;
+  const reportedOn = (clip: EditorClip): string[] => {
+    if (!failedSent) return [];
+    const sentAt = failedSent.sent.findIndex(sent => sent.key === clip.key);
+    if (sentAt < 0 || clipKey(failedSent.sent[sentAt]) !== clipKey(clip)) return [];
+    return failedSent.job.clips[sentAt] ?? [];
+  };
   const clipViews = clips.map(clip => {
     const speaker = clipSpeaker(words, clip.start_ms, clip.end_ms);
-    const sentAt = tracked?.sent.findIndex(sent => sent.key === clip.key) ?? -1;
-    const reported = ours && job.kind === 'failed' && sentAt >= 0 ? (job.clips[sentAt] ?? []) : [];
+    const reported = reportedOn(clip);
     return {
       clip,
       speaker,
@@ -239,15 +249,9 @@ function Editor({ debateId }: { debateId: string }) {
       problems: carried ? reported : [...clipProblems(clip, words, turns), ...reported],
     };
   });
-  // The worker numbers a failed reel's clips as sent; the editor's notices count them as they are now.
-  const flaggedClips =
-    ours && job.kind === 'failed' && tracked
-      ? Object.keys(job.clips)
-          .map(sentAt => clips.findIndex(clip => clip.key === tracked.sent[Number(sentAt)]?.key))
-          .filter(at => at >= 0)
-          .sort((a, b) => a - b)
-          .map(at => at + 1)
-      : [];
+  // The worker numbers a failed reel's clips as sent; the editor's notices count them as they are now,
+  // and name only the clips still flagged.
+  const flaggedClips = clips.flatMap((clip, at) => (reportedOn(clip).length > 0 ? [at + 1] : []));
   const wholeReelProblems = carried ? [] : reelProblems(clips, words);
   const hasProblems = wholeReelProblems.length > 0 || clipViews.some(view => view.problems.length > 0);
   const canQueue = !readOnly && !inFlight && !queue.isPending && !hasProblems && clips.length > 0;
@@ -613,11 +617,16 @@ function Editor({ debateId }: { debateId: string }) {
   );
 }
 
+/** Whether two clips are sent the same: the same cuts and claim. */
+function clipKey(clip: EditorClip) {
+  // A free edge is sent differently from a word edge at the same time (`manualReel`).
+  const free = `${edgeIsFree(clip, 'start') ? 's' : ''}${edgeIsFree(clip, 'end') ? 'e' : ''}`;
+  return `${clip.start_ms}-${clip.end_ms}-${clip.claim_index ?? ''}-${free}`;
+}
+
 /** Whether two reels are the same edit: the same cuts and claims, in the same order. */
 function reelKey(clips: readonly EditorClip[]) {
-  // A free edge is sent differently from a word edge at the same time (`manualReel`).
-  const free = (clip: EditorClip) => `${edgeIsFree(clip, 'start') ? 's' : ''}${edgeIsFree(clip, 'end') ? 'e' : ''}`;
-  return clips.map(clip => `${clip.start_ms}-${clip.end_ms}-${clip.claim_index ?? ''}-${free(clip)}`).join('|');
+  return clips.map(clipKey).join('|');
 }
 
 /** The turns' two clocks, which map the video's times onto the player's: equal keys, the same map. */
