@@ -94,6 +94,20 @@ export function readDebateResumeSeconds(debateId: string): number | null {
   return Math.max(RESUME_MIN_SECONDS, entry.p - RESUME_REWIND_SECONDS);
 }
 
+/**
+ * Where to resume this debate, read once per debate and kept: the position is rewritten as the
+ * debate plays, and following it would seek the viewer back to their own last save.
+ *
+ * Read while rendering, not in an effect, so it is known on the debate's first render, for anything
+ * that decides how the debate opens from there.
+ */
+export function useDebateResume(debateId: string): number | null {
+  const [resume, setResume] = React.useState(() => ({ debateId, seconds: readDebateResumeSeconds(debateId) }));
+  const current = resume.debateId === debateId ? resume : { debateId, seconds: readDebateResumeSeconds(debateId) };
+  if (current !== resume) setResume(current);
+  return current.seconds;
+}
+
 /** Saves the position. Near the start or the end, forgets it instead. */
 export function rememberDebatePosition(debateId: string, seconds: number, timelineSeconds: number): void {
   if (!Number.isFinite(seconds)) return;

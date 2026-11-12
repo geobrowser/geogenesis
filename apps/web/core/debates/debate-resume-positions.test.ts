@@ -9,6 +9,7 @@ import {
   pruneResumePositions,
   readDebateResumeSeconds,
   rememberDebatePosition,
+  useDebateResume,
   useRememberDebatePosition,
 } from './debate-resume-positions';
 
@@ -127,6 +128,30 @@ describe('debate resume positions', () => {
       throw new Error('QuotaExceededError');
     });
     expect(() => rememberDebatePosition('debate-1', 300, 1_200)).not.toThrow();
+  });
+});
+
+describe('useDebateResume', () => {
+  it('has the saved position on the first render, and keeps it while the debate saves a new one', () => {
+    rememberDebatePosition('debate-1', 300, 1_200);
+    const seen: Array<number | null> = [];
+    const { result, rerender } = renderHook(() => {
+      const seconds = useDebateResume('debate-1');
+      seen.push(seconds);
+      return seconds;
+    });
+    expect(seen[0]).toBe(295);
+    rememberDebatePosition('debate-1', 400, 1_200);
+    rerender();
+    expect(result.current).toBe(295);
+  });
+
+  it('reads again when the player is handed another debate', () => {
+    rememberDebatePosition('debate-2', 200, 1_200);
+    const { result, rerender } = renderHook(({ id }) => useDebateResume(id), { initialProps: { id: 'debate-1' } });
+    expect(result.current).toBeNull();
+    rerender({ id: 'debate-2' });
+    expect(result.current).toBe(195);
   });
 });
 

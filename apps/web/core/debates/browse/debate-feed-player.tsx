@@ -12,7 +12,7 @@ import type { ClaimMarker } from '~/core/debates/claim-ticker';
 import type { DebatePagePlayerState } from '~/core/debates/debate-page-outcome';
 import {
   forgetDebatePosition,
-  readDebateResumeSeconds,
+  useDebateResume,
   useRememberDebatePosition,
 } from '~/core/debates/debate-resume-positions';
 import { DebatePositionChip } from '~/core/debates/debate-video-tile';
@@ -193,6 +193,8 @@ export function DebateFeedPlayer({
   previewClips,
   stills,
 }: DebateFeedPlayerProps) {
+  // Read first, so whatever decides how the debate opens can see a saved position.
+  const resumeSeconds = useDebateResume(debate.id);
   const [fullPlaybackStarted, setFullPlaybackStarted] = useAtom(feedFullPlaybackStartedAtom);
   /*
    * A card with Stream preview clips is held until it is tapped itself, not until any card is.
@@ -415,26 +417,15 @@ export function DebateFeedPlayer({
   }, [debate.id, initialSeekSeconds, ready, seekBothRaw]);
 
   /**
-   * Pick up where this browser's viewer stopped, once per debate.
-   *
-   * Read when the player first holds the debate and kept: the position is rewritten as the debate
-   * plays, and following it would seek the viewer back to their own last save. A link that named a
-   * moment wins, and is not followed by a resume once it is dropped (browser Back), which the
-   * `?t=` latch alone would allow.
+   * Pick up where this browser's viewer stopped (`resumeSeconds`, read at the top), once per debate.
+   * A link that named a moment wins, and is not followed by a resume once it is dropped (browser
+   * Back), which the `?t=` latch alone would allow.
    *
    * Waits for the elements as well as `ready`, so the seek lands on them rather than waiting as a
    * pending seek on a held card. Waits for the debate's length too: a seek is capped at it, so
    * before it is known the resume would land at 0. Placed before the autoplay effect, which runs in the same commit:
    * the pair starts from here, not from the top.
    */
-  const [resume, setResume] = React.useState(() => ({
-    debateId: debate.id,
-    seconds: readDebateResumeSeconds(debate.id),
-  }));
-  const currentResume =
-    resume.debateId === debate.id ? resume : { debateId: debate.id, seconds: readDebateResumeSeconds(debate.id) };
-  if (currentResume !== resume) setResume(currentResume);
-  const resumeSeconds = currentResume.seconds;
   const [resumeSettledId, setResumeSettledId] = React.useState<string | null>(null);
 
   const [startOverId, setStartOverId] = React.useState<string | null>(null);
