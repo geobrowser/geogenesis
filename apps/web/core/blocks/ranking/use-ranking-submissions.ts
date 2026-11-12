@@ -25,6 +25,7 @@ import { validateEntityId, validateSpaceId } from '~/core/utils/utils';
 
 import { clearLocalMyRankingDraft } from './local-ranking-my-draft';
 import { getMyRankingOrderedEntityIds } from './my-ranking-entity';
+import { ballotRecencyKey, pickLatestBallot } from './ranking-ballot-recency';
 import { parseTimestampMs, shouldMintNewRankEntity } from './ranking-rolling';
 import type { RankingSubmissionRecord } from './ranking-submission-types';
 import type { RankingSubmissionSlot } from './ranking-submission-types';
@@ -46,20 +47,22 @@ export type RankingSubmissionPublishResult = {
   indexingSettled: Promise<void>;
 };
 
-function createdAtToEpochMillis(value: string): number {
-  return /^\d+$/.test(value) ? Number(value) * 1000 : Date.parse(value) || 0;
-}
-
-/** One ballot per author — avoids double-counting duplicate ballots per author. */
+/**
+ * One ballot per author — avoids double-counting duplicate ballots per author. The latest is
+ * picked by the shared rule in `ranking-ballot-recency.ts`; a record carries only its
+ * `createdAt`, so a same-second tie falls to the ballot id.
+ */
 export function dedupeSubmissionsByAuthor(submissions: RankingSubmissionRecord[]): RankingSubmissionRecord[] {
-  const byAuthor = new Map<string, RankingSubmissionRecord>();
+  const byAuthor = new Map<string, RankingSubmissionRecord[]>();
   for (const submission of submissions) {
-    const existing = byAuthor.get(submission.authorSpaceId);
-    if (!existing || createdAtToEpochMillis(submission.createdAt) >= createdAtToEpochMillis(existing.createdAt)) {
-      byAuthor.set(submission.authorSpaceId, submission);
-    }
+    const list = byAuthor.get(submission.authorSpaceId);
+    if (list) list.push(submission);
+    else byAuthor.set(submission.authorSpaceId, [submission]);
   }
-  return [...byAuthor.values()];
+  return [...byAuthor.values()].flatMap(list => {
+    const latest = pickLatestBallot(list, record => ballotRecencyKey(record.id, record.createdAt, null));
+    return latest ? [latest] : [];
+  });
 }
 
 function retrySchedule(label: string, maxDuration: Duration.DurationInput) {
