@@ -14,6 +14,7 @@ import { usePrepareOnboarding } from '~/core/hooks/use-prepare-onboarding';
 import { useSetToast } from '~/core/hooks/use-toast';
 import { beginPrivyAuth, cancelPrivyAuth, failRedirectedPrivyAuth } from '~/core/privy-auth-events';
 import { redirectedPendingActions, restorePendingActions } from '~/core/state/pending-actions';
+import { pendingCommentComposerAtom } from '~/core/state/pending-comment-intents';
 import {
   dropRedirectPendingActions,
   saveRedirectPendingActions,
@@ -75,8 +76,9 @@ function GoogleOAuthCompleter() {
 }
 
 /**
- * Keeps the presses queued before a Google sign-in across its redirect (see
- * `redirect-pending-actions`), whether it was started from Privy's dialog or our sign-in box.
+ * Keeps the presses queued before a Google sign-in, and the comment box asked for, across its
+ * redirect (see `redirect-pending-actions`), whether it was started from Privy's dialog or our
+ * sign-in box.
  *
  * Saved as the page is left, under the attempt open then: the redirect gives no other notice, and a
  * press can be queued after the attempt opens. Brought back on the return to that attempt, once
@@ -98,7 +100,8 @@ function useRedirectPendingActions(
   useEffect(() => {
     const save = () => {
       const attempt = currentAuthAttempt();
-      if (attempt && !attempt.endedAt) saveRedirectPendingActions(attempt.id, redirectedPendingActions(store));
+      if (!attempt || attempt.endedAt) return;
+      saveRedirectPendingActions(attempt.id, redirectedPendingActions(store), store.get(pendingCommentComposerAtom));
     };
     window.addEventListener('pagehide', save);
     return () => window.removeEventListener('pagehide', save);
@@ -108,7 +111,11 @@ function useRedirectPendingActions(
   useEffect(() => {
     if (!isReturn || !returnAttemptId || !authenticated || restored.current || settled.current) return;
     restored.current = true;
-    restorePendingActions(store, takeRedirectPendingActions(returnAttemptId));
+    const { actions, commentComposer } = takeRedirectPendingActions(returnAttemptId);
+    restorePendingActions(store, actions);
+
+    if (commentComposer && !store.get(pendingCommentComposerAtom))
+      store.set(pendingCommentComposerAtom, commentComposer);
   }, [isReturn, returnAttemptId, authenticated, settled, store]);
 }
 

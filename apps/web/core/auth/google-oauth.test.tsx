@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { closeSignInBox, openSignInBox } from '~/core/auth/sign-in-box/sign-in-box-store';
 import { featureFlagsStorageKey } from '~/core/state/feature-flags';
 import { type RedirectedPendingAction, pendingActionsAtom, restorePendingActions } from '~/core/state/pending-actions';
+import { pendingCommentComposerAtom } from '~/core/state/pending-comment-intents';
 import { REDIRECT_PENDING_ACTIONS_KEY, saveRedirectPendingActions } from '~/core/state/redirect-pending-actions';
 
 import { GoogleOAuthHost, useGoogleOAuthSignIn } from './google-oauth';
@@ -388,5 +389,43 @@ describe('presses queued before a Google sign-in', () => {
 
     expect(queuedIds(store)).toEqual([]);
     expect(savedRecord()).not.toBeNull();
+  });
+});
+
+describe('a comment box asked for before a Google sign-in', () => {
+  const reply = { entityId: 'debate-1', replyToCommentId: 'comment-1' };
+
+  it('is saved as the page is left for Google', () => {
+    const { store } = renderHost(true);
+    store.set(pendingCommentComposerAtom, reply);
+
+    window.dispatchEvent(new Event('pagehide'));
+
+    const saved = JSON.parse(window.sessionStorage.getItem(REDIRECT_PENDING_ACTIONS_KEY)!);
+    expect(saved).toEqual(expect.objectContaining({ attemptId: 'attempt-a', actions: [], commentComposer: reply }));
+  });
+
+  it('is asked for again on the return, once signed in, and only once', () => {
+    saveRedirectPendingActions('attempt-a', [], reply);
+    window.history.replaceState({}, '', RETURN_URL);
+    const host = renderHost(true);
+    expect(host.store.get(pendingCommentComposerAtom)).toBeNull();
+
+    host.signIn();
+
+    expect(host.store.get(pendingCommentComposerAtom)).toEqual(reply);
+    expect(window.sessionStorage.getItem(REDIRECT_PENDING_ACTIONS_KEY)).toBeNull();
+  });
+
+  it('gives way to a comment box pressed on the return page since', () => {
+    saveRedirectPendingActions('attempt-a', [], reply);
+    window.history.replaceState({}, '', RETURN_URL);
+    const host = renderHost(true);
+    const newer = { entityId: 'debate-2', replyToCommentId: null };
+    host.store.set(pendingCommentComposerAtom, newer);
+
+    host.signIn();
+
+    expect(host.store.get(pendingCommentComposerAtom)).toEqual(newer);
   });
 });
