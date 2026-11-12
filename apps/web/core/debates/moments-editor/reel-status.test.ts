@@ -108,6 +108,7 @@ describe('refusalBlocksEditing', () => {
 
   it('says why in words, and names an unknown code as it came', () => {
     expect(refusalMessage('media_job_failed')).toMatch(/media job failed/);
+    expect(refusalMessage('reel_being_reapplied')).toMatch(/re-applying this hand-picked reel/);
     expect(refusalMessage('something_new')).toBe('geo-chat refused it: something_new.');
   });
 });

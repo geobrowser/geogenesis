@@ -86,6 +86,8 @@ export type LiveReel = {
     claim_index: number | null;
     claim_text: string | null;
   }[];
+  /** Carried onto a re-render's claims and being re-applied (geo-chat#352, pending): see `reelBeingReapplied`. */
+  carried?: boolean;
 };
 
 export type MomentBackfillEntry = {
@@ -100,7 +102,18 @@ export type MomentBackfillEntry = {
   queued: boolean;
   request: MomentBackfillStatus | null;
   live_reel?: LiveReel | null;
+  /** The same mark as `live_reel.carried`, under the other name geo-chat#352 may give it. */
+  reel_carried?: boolean;
 };
+
+/**
+ * Whether a re-render carried this hand-picked reel onto fresh claims and the worker is re-applying
+ * it to the new video (geo-chat#352). Its `live_reel` times are then on the old video's clock, so it
+ * must not be edited until that is done. Read under either name the backend may land.
+ */
+export function reelBeingReapplied(entry: Pick<MomentBackfillEntry, 'live_reel' | 'reel_carried'> | null) {
+  return entry?.reel_carried === true || entry?.live_reel?.carried === true;
+}
 
 export type MomentBackfillResponse = { applied: boolean; debates: MomentBackfillEntry[] };
 

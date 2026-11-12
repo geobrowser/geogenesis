@@ -382,6 +382,23 @@ describe('MomentsEditor (GEO-3671)', () => {
     expect(screen.getByText('Clip 1: its words are no longer said there')).toBeInTheDocument();
   });
 
+  // A reel carried onto a re-render's claims plays from cuts on the old video's clock until the
+  // worker has re-applied it, so it is shown but not edited.
+  it('is read-only while a re-render re-applies the hand-picked reel', () => {
+    mocks.manualReel = true;
+    mocks.plan.data = entry({
+      live_reel: {
+        clock: 'video',
+        carried: true,
+        clips: [{ start_ms: 900, end_ms: 3_000, speaker_slot: 0, claim_index: 0, claim_text: 'Coffee is low stakes' }],
+      },
+    });
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    expect(screen.getByText(/A re-render is re-applying this reel/)).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'End time' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Return to automatic' })).not.toBeInTheDocument();
+  });
+
   // Without its words nothing snaps and no clip has a speaker, so a touched clip loses its claim.
   it('is read-only when the transcript never loaded', () => {
     mocks.transcriptFailed = true;
@@ -532,6 +549,12 @@ describe('editingBlockedReason', () => {
   it('blocks a transcript without word timings, and a failed check', () => {
     expect(editingBlockedReason({ refusal: null }, false, null)).toMatch(/no word timings/);
     expect(editingBlockedReason(null, true, new Error('x'))).toMatch(/Couldn't check/);
+    // geo-chat#352 may land the mark under either name; both block.
+    expect(editingBlockedReason({ refusal: null, reel_carried: true }, true, null)).toMatch(/re-applying this reel/);
+    expect(
+      editingBlockedReason({ refusal: null, live_reel: { clock: 'video', clips: [], carried: true } }, true, null)
+    ).toMatch(/re-applying this reel/);
+    expect(editingBlockedReason({ refusal: null, reel_carried: false }, true, null)).toBeNull();
     expect(editingBlockedReason({ refusal: null }, undefined, null, true)).toMatch(
       /Couldn't load this debate's transcript/
     );
