@@ -54,6 +54,8 @@ type CreateDebateRoomOwnershipCoordinatorOptions = {
   describeOwner?: () => string | undefined;
   /** Another tab stole the lock instead of asking for it (we were frozen); stop sending. */
   onOwnershipLost?: () => void;
+  /** An explicit takeover steals from a holder that never answers. Voice only; the room lock never steals. */
+  stealUnresponsive?: boolean;
 };
 
 export type DebateRoomOwnershipCoordinator = {
@@ -107,6 +109,7 @@ export function createDebateRoomOwnershipCoordinator({
   getTabPriority = debateRoomTabPriority,
   describeOwner,
   onOwnershipLost,
+  stealUnresponsive = false,
 }: CreateDebateRoomOwnershipCoordinatorOptions): DebateRoomOwnershipCoordinator {
   const instanceId = createInstanceId();
   const coordinationName = debateRoomCoordinationName(debateId, userId);
@@ -469,8 +472,8 @@ export function createDebateRoomOwnershipCoordinator({
         if (acquired) onTookOverFromOtherTab?.(releasedBy);
         return acquired;
       }
-      // Only an explicit claim steals.
-      if (automatic) return false;
+      // Only an explicit claim, and only where stealing is turned on, steals from a frozen holder.
+      if (automatic || !stealUnresponsive) return false;
       const stolen = await stealLock();
       if (stolen) onTookOverFromOtherTab?.();
       return stolen;

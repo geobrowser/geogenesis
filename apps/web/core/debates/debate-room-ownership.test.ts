@@ -256,6 +256,7 @@ describe('debate room ownership', () => {
       debateId: 'debate-1',
       userId: 'user-a',
       onTakeoverRequested: () => true,
+      stealUnresponsive: true,
     });
     await frozen.acquire();
     await requester.acquire();
@@ -273,6 +274,35 @@ describe('debate room ownership', () => {
     await closeCoordinators(frozen, requester);
   });
 
+  it('never steals without stealUnresponsive, as on the room lock, even from a frozen tab', async () => {
+    vi.useFakeTimers();
+    const onOwnershipLost = vi.fn();
+    const frozen = createDebateRoomOwnershipCoordinator({
+      debateId: 'debate-1',
+      userId: 'user-a',
+      onTakeoverRequested: () => new Promise<boolean>(() => {}),
+      onOwnershipLost,
+    });
+    freezeChannels();
+    const requester = createDebateRoomOwnershipCoordinator({
+      debateId: 'debate-1',
+      userId: 'user-a',
+      onTakeoverRequested: () => true,
+    });
+    await frozen.acquire();
+    await requester.acquire();
+
+    const takeover = requester.requestTakeover();
+    await vi.advanceTimersByTimeAsync(1_500);
+    await expect(takeover).resolves.toBe(false);
+
+    expect(frozen.ownsConnection()).toBe(true);
+    expect(requester.ownsConnection()).toBe(false);
+    expect(onOwnershipLost).not.toHaveBeenCalled();
+
+    await closeCoordinators(frozen, requester);
+  });
+
   it('does not steal from a tab that answers in time, even to refuse', async () => {
     vi.useFakeTimers();
     const onOwnershipLost = vi.fn();
@@ -286,6 +316,7 @@ describe('debate room ownership', () => {
       debateId: 'debate-1',
       userId: 'user-a',
       onTakeoverRequested: () => true,
+      stealUnresponsive: true,
     });
     await refusing.acquire();
     await requester.acquire();
@@ -315,6 +346,7 @@ describe('debate room ownership', () => {
       debateId: 'debate-1',
       userId: 'user-a',
       onTakeoverRequested: () => true,
+      stealUnresponsive: true,
     });
     await frozen.acquire();
     await requester.acquire();

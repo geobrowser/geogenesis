@@ -249,6 +249,7 @@ export function createTabVoiceOwner({
         void Promise.allSettled([...surfaces].map(surface => Promise.resolve().then(surface.onYield)));
         setState({ ownership: 'elsewhere', heldBy: null });
       },
+      stealUnresponsive: true,
     });
     coordinator = created;
     return created;
