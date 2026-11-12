@@ -466,13 +466,14 @@ export function createDebateRoomOwnershipCoordinator({
         }
       });
 
-      if (outcome === 'refused' || outcome === 'unanswered') return false;
+      if (outcome === 'refused') return false;
       if (outcome === 'released') {
         const acquired = (await acquireLock(true)).acquired;
         if (acquired) onTookOverFromOtherTab?.(releasedBy);
         return acquired;
       }
-      // Only an explicit claim, and only where stealing is turned on, steals from a frozen holder.
+      // Never answered (frozen), or acked but never finished handing over: only an explicit claim,
+      // and only where stealing is turned on, takes the lock anyway.
       if (automatic || !stealUnresponsive) return false;
       const stolen = await stealLock();
       if (stolen) onTookOverFromOtherTab?.();
