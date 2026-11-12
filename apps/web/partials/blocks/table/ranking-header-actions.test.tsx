@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { RankingHeaderActions } from './ranking-header-actions';
 import type { RankingBlockState } from './use-ranking-block-state';
 
-function state(hasMySubmission: boolean, isRollingRolledOff = false): RankingBlockState {
+function state(hasMySubmission: boolean, isRollingRolledOff = false, canComposeEdit = true): RankingBlockState {
   return {
     periodState: 'in-progress',
     periodLabel: null,
@@ -12,6 +12,7 @@ function state(hasMySubmission: boolean, isRollingRolledOff = false): RankingBlo
     isRollingRolledOff,
     isSaving: false,
     openRankingCompose: vi.fn(),
+    canComposeEdit,
   } as unknown as RankingBlockState;
 }
 
@@ -44,5 +45,12 @@ describe('RankingHeaderActions', () => {
     expect(markup).toContain('Rank');
     expect(markup).not.toContain('View');
     expect(markup).toContain('!bg-[#151515]');
+  });
+
+  it('draws no Rank button on the Best debates block without the flag and membership (GEO-3677)', () => {
+    const markup = renderToStaticMarkup(<RankingHeaderActions state={state(false, false, false)} />);
+
+    expect(markup).not.toContain('Rank');
+    expect(markup).not.toContain('!bg-[#151515]');
   });
 });

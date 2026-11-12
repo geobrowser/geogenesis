@@ -11,6 +11,7 @@ import { useActionContext } from '~/core/action-context-provider';
 import { observeOperation } from '~/core/analytics-operations';
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import { useFilters } from '~/core/blocks/data/use-filters';
+import { isBestDebatesBlock } from '~/core/blocks/ranking/best-debates-views';
 import { loadLocalMyRankingDraft, saveLocalMyRankingDraft } from '~/core/blocks/ranking/local-ranking-my-draft';
 import {
   RANKING_COMPOSE_TAB_MY,
@@ -53,6 +54,7 @@ import { useCanUserEdit } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { useEditorInstance } from '~/core/state/editor/editor-provider';
 import { useEditorStoreLite } from '~/core/state/editor/use-editor-blocks';
+import { useFeatureFlag } from '~/core/state/feature-flags';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import type { Row } from '~/core/types';
 
@@ -94,6 +96,8 @@ type UseRankingBlockStateParams = {
   initialGlobalRanking?: InitialGlobalRanking;
   /** Server-resolved shared submission, seeds the my/shared ranking on first paint. */
   initialSharedRanking?: InitialSharedRanking;
+  /** Tests only: stands in for `BEST_DEBATES_BLOCK_ID`, which is null until GEO-3685. */
+  bestDebatesBlockId?: string | null;
 };
 
 // Stable empty fallbacks so absent SSR seeds don't produce a fresh `[]` each
@@ -159,6 +163,7 @@ export function useRankingBlockState({
   sharedOgVersion = '',
   initialGlobalRanking,
   initialSharedRanking,
+  bestDebatesBlockId,
 }: UseRankingBlockStateParams) {
   const isMobile = useIsMobileLayout();
   const router = useRouter();
@@ -180,7 +185,20 @@ export function useRankingBlockState({
     view: stateView,
     viewRelation: stateViewRelation,
   } = useDataBlock();
-  const { promptLogin, ensureAccess, status: composeAccessStatus } = useRankingComposeAccess(spaceId, entityId);
+  const {
+    promptLogin,
+    ensureAccess,
+    status: composeAccessStatus,
+    canEdit: canEditBlockSpace,
+  } = useRankingComposeAccess(spaceId, entityId);
+
+  // The Debates space's Best debates block (GEO-3677): composing a ballot there needs the
+  // `debateRankings` flag and membership. Composing sends a background membership request
+  // (`ensureAccess`, #3099), so every edit entry point on that block checks this, not only the
+  // buttons the block's own view draws.
+  const debateRankingsFlag = useFeatureFlag('debateRankings');
+  const isBestDebates = isBestDebatesBlock(entityId, spaceId, bestDebatesBlockId);
+  const canComposeEdit = !isBestDebates || (debateRankingsFlag && Boolean(canEditBlockSpace));
   const getShareContext = useActionContext('share_dialog', 'ranking', entityId);
   const shareOnX = React.useCallback(
     (shareUrl: string, shareText: string, rankEntityId: string) => {
@@ -253,8 +271,13 @@ export function useRankingBlockState({
   // publish, so preferring it here showed the pre-edit order until a hard refresh.
   const displayedSubmission = isSharedRankingView ? sharedSubmission : (mySubmission ?? sharedSubmission);
 
-  const { globalRankingEntityIds, aggregatedSubmitterRefs, aggregatedSubmitterSpaceIds, aggregatedRankingCount } =
-    useRankingBlockRelations();
+  const {
+    isLoadingRelations: isLoadingTeamOrder,
+    globalRankingEntityIds,
+    aggregatedSubmitterRefs,
+    aggregatedSubmitterSpaceIds,
+    aggregatedRankingCount,
+  } = useRankingBlockRelations();
 
   const initialOrderedIds = initialGlobalRanking?.orderedEntityIds ?? EMPTY_ENTITY_IDS;
   const initialGlobalEntries = initialGlobalRanking?.entries ?? EMPTY_RANKING_ENTRIES;
@@ -742,6 +765,8 @@ export function useRankingBlockState({
       });
       const href = extraQuery ? `${baseHref}&${extraQuery}` : baseHref;
 
+      if (mode !== 'view' && !canComposeEdit) return;
+
       if (composeAccessStatus === 'not-found') {
         return;
       }
@@ -774,6 +799,7 @@ export function useRankingBlockState({
       router.push(href);
     },
     [
+      canComposeEdit,
       composeAccessStatus,
       ensureAccess,
       promptLogin,
@@ -959,6 +985,13 @@ export function useRankingBlockState({
     aggregatedSubmitterSpaceIds,
     aggregatedRankingCount,
     globalDisplayEntityIds: globalRankingListEntityIds,
+    /** The whole visible team order, unpaginated (Best debates pages it itself). */
+    visibleGlobalRankingEntityIds: visibleGlobalDisplayEntityIds,
+    /** True until the block's team order (RANK_POSITION relations) has loaded. */
+    isLoadingTeamOrder: Boolean(isLoadingTeamOrder) && globalDisplayEntityIds.length === 0,
+    isBestDebates,
+    /** False on the Best debates block without the flag and membership: no compose in edit mode. */
+    canComposeEdit,
     totalGlobalRankingEntityCount: visibleGlobalDisplayEntityIds.length,
     globalRankByEntityId,
     showEmbeddedGlobalPagination,

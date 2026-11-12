@@ -63,7 +63,10 @@ vi.mock('./ranking-my-ranking-dnd', () => ({
   ),
 }));
 
-function state(activeTab: 'global' | 'my', block: { blockId?: string; spaceId?: string } = {}): RankingBlockState {
+function state(
+  activeTab: 'global' | 'my',
+  block: { blockId?: string; spaceId?: string; canComposeEdit?: boolean; showEditRankingButton?: boolean } = {}
+): RankingBlockState {
   const entityId = `${activeTab}-entity`;
   const entry = { entityId, name: `${activeTab} entry`, description: null, image: null };
 
@@ -118,7 +121,8 @@ function state(activeTab: 'global' | 'my', block: { blockId?: string; spaceId?: 
     entitySheetTarget: null,
     setEntitySheetTarget: vi.fn(),
     pageSize: 10,
-    showEditRankingButton: false,
+    showEditRankingButton: block.showEditRankingButton ?? false,
+    canComposeEdit: block.canComposeEdit ?? true,
     isRollingRolledOff: false,
     isSaving: false,
     openRankingCompose: vi.fn(),
@@ -155,5 +159,39 @@ describe('RankingBlockBody votes', () => {
     );
 
     expect(markup).toContain('data-vote-actions="true"');
+  });
+});
+
+describe('RankingBlockBody compose buttons (GEO-3677)', () => {
+  const COMPOSE_LABELS = ['Add my ranking', 'Edit my ranking', '>Edit<'];
+
+  it.each(['global', 'my'] as const)(
+    'draws no compose button on the fullscreen Best debates page without the flag and membership (%s)',
+    activeTab => {
+      for (const showEditRankingButton of [false, true]) {
+        const markup = renderToStaticMarkup(
+          <RankingBlockBody
+            presentation="fullscreen"
+            state={state(activeTab, {
+              blockId: BEST_DEBATES_BLOCK,
+              spaceId: DEBATES_SPACE,
+              canComposeEdit: false,
+              showEditRankingButton,
+            })}
+          />
+        );
+        for (const label of COMPOSE_LABELS) expect(markup).not.toContain(label);
+      }
+    }
+  );
+
+  it('still draws them when composing is allowed', () => {
+    const markup = renderToStaticMarkup(
+      <RankingBlockBody
+        presentation="fullscreen"
+        state={state('my', { canComposeEdit: true, showEditRankingButton: true })}
+      />
+    );
+    expect(markup).toContain('>Edit<');
   });
 });

@@ -9,7 +9,6 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { produce } from 'immer';
 
 import { filterGroupKey } from '~/core/blocks/data/filter-state-to-where';
-import { isBestDebatesBlock } from '~/core/blocks/ranking/best-debates-views';
 import { DATA_BLOCK_VIEW_EXPLORE_ID } from '~/core/data-block-ids';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
@@ -51,7 +50,13 @@ type Props = {
 };
 
 export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDate = '', bestDebatesBlockId }: Props) {
-  const state = useRankingBlockState({ spaceId, rankingStartDate, rankingEndDate, paginateEmbeddedRanking: true });
+  const state = useRankingBlockState({
+    spaceId,
+    rankingStartDate,
+    rankingEndDate,
+    paginateEmbeddedRanking: true,
+    bestDebatesBlockId,
+  });
   const isEditing = useUserIsEditing(spaceId);
   const {
     filterState,
@@ -95,10 +100,7 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
   );
 
   // The Debates space's Best debates block draws its own Day / This week / All time body (GEO-3677).
-  const isBestDebates =
-    bestDebatesBlockId === undefined
-      ? isBestDebatesBlock(entityId, spaceId)
-      : isBestDebatesBlock(entityId, spaceId, bestDebatesBlockId);
+  const isBestDebates = state.isBestDebates;
 
   const showHeaderActions = isExploreView || isBulletedListView || isPillView || isGalleryView;
 
@@ -280,7 +282,9 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
             <BestDebatesBlock
               blockId={entityId}
               spaceId={spaceId}
-              teamOrder={state.globalDisplayEntityIds}
+              teamOrder={state.visibleGlobalRankingEntityIds}
+              isLoadingTeamOrder={state.isLoadingTeamOrder}
+              canRank={state.canComposeEdit}
               isMobile={state.isMobile}
               onOpenCompose={(mode, extraParams) => void openRankingCompose(mode, extraParams)}
               onOpenEntity={state.openEntitySheet}

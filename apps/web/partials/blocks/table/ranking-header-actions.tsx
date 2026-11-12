@@ -17,7 +17,15 @@ const ACTION_BUTTON_CLASS =
  * with the block title rather than sitting above the entries.
  */
 export function RankingHeaderActions({ state }: Props) {
-  const { periodState, periodLabel, hasMySubmission, isRollingRolledOff, isSaving, openRankingCompose } = state;
+  const {
+    periodState,
+    periodLabel,
+    hasMySubmission,
+    isRollingRolledOff,
+    isSaving,
+    openRankingCompose,
+    canComposeEdit,
+  } = state;
 
   // A rolled-off rolling ballot is treated as absent (useRankingSubmissions
   // blanks mySubmission, so hasMySubmission is already false then) — the CTA
@@ -43,7 +51,7 @@ export function RankingHeaderActions({ state }: Props) {
         >
           View
         </Button>
-      ) : (
+      ) : canComposeEdit ? (
         <Button
           variant="primary"
           className={`${ACTION_BUTTON_CLASS} !border-transparent !bg-[#151515] !text-white hover:!bg-[#151515]`}
@@ -52,7 +60,7 @@ export function RankingHeaderActions({ state }: Props) {
         >
           Rank
         </Button>
-      )}
+      ) : null}
     </>
   );
 }

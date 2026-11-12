@@ -22,10 +22,6 @@ const mocks = vi.hoisted(() => ({
   capture: vi.fn(),
 }));
 
-vi.mock('~/core/state/feature-flags', () => ({ useFeatureFlag: () => mocks.flag }));
-vi.mock('~/core/hooks/use-access-control', () => ({
-  useAccessControl: () => ({ canEdit: mocks.canEdit, isMember: mocks.canEdit, isEditor: false, isLoading: false }),
-}));
 vi.mock('~/core/analytics', () => ({ capture: mocks.capture }));
 vi.mock('~/core/blocks/ranking/use-best-debates', () => ({
   useNyTodayKey: () => TODAY,
@@ -73,6 +69,8 @@ function renderBlock(props: Partial<BestDebatesBlockProps> = {}) {
       blockId={BLOCK}
       spaceId={SPACE}
       teamOrder={['old', 'b', 'yday', 'a']}
+      // The block state's canComposeEdit: the flag and membership (tested in its own suite).
+      canRank={mocks.flag && mocks.canEdit}
       isMobile={false}
       onOpenCompose={onOpenCompose}
       onOpenEntity={vi.fn()}
@@ -106,7 +104,7 @@ describe('BestDebatesBlock', () => {
     renderBlock();
 
     expect(names()).toEqual(['Debate B', 'Debate A', 'Unranked one', 'Unranked two']);
-    expect(screen.getAllByTestId('place').map(node => node.textContent)).toEqual(['1', '2', '-', '-']);
+    expect(screen.getAllByTestId('place').map(node => node.textContent)).toEqual(['2', '4', '-', '-']);
     expect(screen.getByText(/Not ranked yet · 2/)).toBeInTheDocument();
   });
 
@@ -196,12 +194,32 @@ describe('BestDebatesBlock', () => {
     );
   });
 
-  it('shows no coverage line while the ballot read is loading', () => {
+  it('shows skeletons, not "Nobody has ranked", while the ballot read is loading', () => {
     mocks.rankers = { status: 'loading', rankerCount: () => null, retry: vi.fn() };
-    renderBlock();
+    renderBlock({ teamOrder: [] });
 
     expect(screen.queryByTestId('best-debates-coverage')).not.toBeInTheDocument();
     expect(screen.queryByText(/Not ranked yet/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Nobody has ranked/)).not.toBeInTheDocument();
+    expect(screen.getAllByTestId('skeleton').length).toBeGreaterThan(0);
+  });
+
+  it('shows skeletons, not "Nobody has ranked", while the team order is loading', () => {
+    renderBlock({ teamOrder: [], isLoadingTeamOrder: true });
+
+    fireEvent.click(screen.getByRole('radio', { name: 'All time' }));
+    expect(screen.queryByText(/Nobody has ranked/)).not.toBeInTheDocument();
+    expect(screen.getAllByTestId('skeleton').length).toBeGreaterThan(0);
+  });
+
+  it('offers Retry, not "Nobody has ranked", when the ballot read failed and nothing is placed', () => {
+    const retry = vi.fn().mockResolvedValue(undefined);
+    mocks.rankers = { status: 'error', rankerCount: () => null, retry };
+    renderBlock({ teamOrder: [] });
+
+    expect(screen.queryByText(/Nobody has ranked/)).not.toBeInTheDocument();
+    fireEvent.click(within(screen.getByTestId('best-debates-rankers-error')).getByRole('button', { name: 'Retry' }));
+    expect(retry).toHaveBeenCalled();
   });
 
   it('picks an earlier day from the calendar', () => {

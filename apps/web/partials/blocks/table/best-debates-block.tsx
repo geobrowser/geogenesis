@@ -29,8 +29,6 @@ import {
 } from '~/core/blocks/ranking/use-best-debates';
 import { type RankingEntryDisplay, useRankingEntryEntities } from '~/core/blocks/ranking/use-ranking-entry-entities';
 import { SegmentedControl } from '~/core/debates/matchmaking/debate-calendar-controls';
-import { useAccessControl } from '~/core/hooks/use-access-control';
-import { useFeatureFlag } from '~/core/state/feature-flags';
 import { normId } from '~/core/utils/norm-id';
 
 import { Button } from '~/design-system/button';
@@ -55,8 +53,15 @@ const PAGE = 10;
 export type BestDebatesBlockProps = {
   blockId: string;
   spaceId: string;
-  /** The block's team order (RANK_POSITION), all time. */
+  /** The block's whole team order (RANK_POSITION), all time, unpaginated. */
   teamOrder: readonly string[];
+  /** True until the team order has loaded. */
+  isLoadingTeamOrder?: boolean;
+  /**
+   * The `debateRankings` flag and Debates membership, from the block state (`canComposeEdit`),
+   * which also guards `openRankingCompose` itself.
+   */
+  canRank: boolean;
   isMobile: boolean;
   onOpenCompose: (mode: RankingComposeMode, extraParams?: Readonly<Record<string, string>>) => void;
   onOpenEntity: (entityId: string) => void;
@@ -66,14 +71,12 @@ export function BestDebatesBlock({
   blockId,
   spaceId,
   teamOrder,
+  isLoadingTeamOrder = false,
+  canRank,
   isMobile,
   onOpenCompose,
   onOpenEntity,
 }: BestDebatesBlockProps) {
-  const flagOn = useFeatureFlag('debateRankings');
-  const { canEdit } = useAccessControl(spaceId);
-  const canRank = flagOn && canEdit;
-
   const todayKey = useNyTodayKey();
   const dayKeys = React.useMemo(() => recentDayKeys(todayKey), [todayKey]);
   const oldestWindowDay = dayKeys[dayKeys.length - 1];
@@ -157,9 +160,20 @@ export function BestDebatesBlock({
     onOpenCompose('edit', { [BEST_DEBATES_TEAM_VIEW_PARAM]: BEST_DEBATES_TEAM_VIEW_TO_RANK });
   };
 
-  const periodLoading = view !== 'all' && periodQuery.isLoading;
+  // Nothing is said about who ranked what until the team order and the ballot read are both in:
+  // an empty list off a pending read would read as "Nobody has ranked".
+  const periodLoading = (view !== 'all' && periodQuery.isLoading) || isLoadingTeamOrder || rankers.status === 'loading';
+  const rankersFailed = rankers.status === 'error';
   const periodFailed = view !== 'all' && Boolean(periodQuery.error) && !periodQuery.data;
-  const placeOffset = new Map(rows.ranked.map((id, index) => [id, index + 1] as const));
+  // A row's number is its team place, the same in Day, This week and All time.
+  const placeOffset = React.useMemo(() => {
+    const places = new Map<string, number>();
+    teamOrder.forEach(raw => {
+      const id = normId(raw);
+      if (id && !places.has(id)) places.set(id, places.size + 1);
+    });
+    return places;
+  }, [teamOrder]);
 
   const renderRow = (id: string, place: number | null) => {
     const entry = entryFor(id);
@@ -276,7 +290,19 @@ export function BestDebatesBlock({
       ) : (
         <>
           {rankedRows.length === 0 ? (
-            <p className="text-metadata text-grey-04">{emptyRankedCopy(view, unplacedRows.length > 0)}</p>
+            rankersFailed ? (
+              <div
+                className="flex items-center gap-3 rounded-lg bg-grey-01 px-4 py-3"
+                data-testid="best-debates-rankers-error"
+              >
+                <p className="text-metadata text-grey-04">Couldn&rsquo;t load who ranked these debates.</p>
+                <Button variant="secondary" small onClick={() => void rankers.retry()}>
+                  Retry
+                </Button>
+              </div>
+            ) : (
+              <p className="text-metadata text-grey-04">{emptyRankedCopy(view, unplacedRows.length > 0)}</p>
+            )
           ) : (
             <div className="flex flex-col gap-3">
               {visibleRanked.map(id => renderRow(id, placeOffset.get(id) ?? null))}
