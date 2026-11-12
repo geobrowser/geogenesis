@@ -255,17 +255,19 @@ describe('old debate URLs open the debates app (GEO-3695)', () => {
   });
 
   it('sends a person arriving from outside to the debates app with a 307, query and all', async () => {
-    redirect.mockResolvedValue(`https://debates.geobrowser.io/debate/${VALID_ENTITY}?utm_source=x`);
+    redirect.mockResolvedValue(`https://debates.geobrowser.io/explore?debate=${VALID_ENTITY}&utm_source=x`);
 
     const response = await proxy(request(`${PAGE}?utm_source=x`, { headers: FROM_OUTSIDE }));
 
     expect(response.status).toBe(307);
-    expect(response.headers.get('location')).toBe(`https://debates.geobrowser.io/debate/${VALID_ENTITY}?utm_source=x`);
+    expect(response.headers.get('location')).toBe(
+      `https://debates.geobrowser.io/explore?debate=${VALID_ENTITY}&utm_source=x`
+    );
     expect(redirect).toHaveBeenCalledWith(VALID_SPACE, VALID_ENTITY, new URLSearchParams('utm_source=x'));
   });
 
   it('counts a typed URL or bookmark (no site) as arriving from outside', async () => {
-    redirect.mockResolvedValue(`https://debates.geobrowser.io/debate/${VALID_ENTITY}`);
+    redirect.mockResolvedValue(`https://debates.geobrowser.io/explore?debate=${VALID_ENTITY}`);
     const response = await proxy(request(PAGE, { headers: { ...NAVIGATION, 'sec-fetch-site': 'none' } }));
     expect(response.status).toBe(307);
   });
@@ -297,7 +299,9 @@ describe('old debate URLs open the debates app (GEO-3695)', () => {
     lookup.mockReset();
 
     expect(response.status).toBe(307);
-    expect(response.headers.get('location')).toBe(`https://debates.geobrowser.io/debate/${VALID_ENTITY}?utm_source=x`);
+    expect(response.headers.get('location')).toBe(
+      `https://debates.geobrowser.io/explore?debate=${VALID_ENTITY}&utm_source=x`
+    );
     expect(stay.headers.get('location')).toBe(
       `https://www.geobrowser.io/space/${VALID_SPACE}/${VALID_ENTITY}?utm_source=x`
     );
