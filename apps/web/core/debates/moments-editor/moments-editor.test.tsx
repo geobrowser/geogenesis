@@ -22,6 +22,8 @@ const mocks = vi.hoisted(() => ({
   manualReel: false,
   /** The transcript read failed before it ever answered. */
   transcriptFailed: false,
+  /** Where the player says its playhead is, or `null` before it reports one. */
+  playheadSeconds: null as number | null,
 }));
 
 vi.mock('../hooks', () => ({
@@ -78,7 +80,14 @@ vi.mock('./hooks', () => ({
   useRefreshAfterReel: () => () => {},
 }));
 
-vi.mock('../browse/debate-feed-player', () => ({ DebateFeedPlayer: () => <div data-testid="player" /> }));
+vi.mock('../browse/debate-feed-player', () => ({
+  DebateFeedPlayer: ({ onPlayheadChange }: { onPlayheadChange?: (seconds: number) => void }) => {
+    React.useEffect(() => {
+      if (mocks.playheadSeconds !== null) onPlayheadChange?.(mocks.playheadSeconds);
+    }, [onPlayheadChange]);
+    return <div data-testid="player" />;
+  },
+}));
 vi.mock('~/core/hooks/use-toast', () => ({ useToast: () => [null, mocks.toast] }));
 
 const entry = (overrides: Partial<MomentBackfillEntry> = {}): MomentBackfillEntry => ({
@@ -124,6 +133,7 @@ beforeEach(() => {
   wordsOverride = null;
   mocks.manualReel = false;
   mocks.transcriptFailed = false;
+  mocks.playheadSeconds = null;
 });
 afterEach(cleanup);
 
@@ -412,6 +422,18 @@ describe('MomentsEditor (GEO-3671)', () => {
     fireEvent.change(end(), { target: { value: '2.5' } });
     fireEvent.blur(end());
     expect(end()).toHaveValue('0:02.9');
+  });
+
+  // The "Only 1 clip" fix adds at the playhead, so before the player reports one it can't run.
+  it('offers the add-a-clip fix only once there is a playhead to add at', () => {
+    const { unmount } = render(<MomentsEditor debateId={DEBATE_ID} />);
+    expect(screen.getByRole('button', { name: 'Add clip at playhead' })).toBeDisabled();
+    unmount();
+
+    mocks.playheadSeconds = 4;
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Add clip at playhead' }));
+    expect(screen.getAllByRole('textbox', { name: 'Start time' })).toHaveLength(2);
   });
 
   // A poll that fails after the first answer keeps its data; the editor, and what was typed, stay.

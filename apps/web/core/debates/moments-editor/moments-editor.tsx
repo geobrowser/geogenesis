@@ -272,8 +272,10 @@ function Editor({ debateId }: { debateId: string }) {
   );
   const warnings = reelWarnings(clips, words, nameOf);
 
+  // The header's button and the warning's fix alike: without a playhead there is nowhere to add it.
+  const canAddAtPlayhead = !readOnly && clips.length < MANUAL_MAX_CLIPS && playheadMs !== null;
   const addClipAtPlayhead = () => {
-    if (playheadMs === null) return;
+    if (!canAddAtPlayhead) return;
     const start = snapEdge(playheadMs, words, 'start');
     const key = newClipKey();
     setClips(current => [
@@ -432,7 +434,14 @@ function Editor({ debateId }: { debateId: string }) {
           ))}
         </Notice>
       ) : null}
-      {clips.length > 0 ? <ReelWarningsPanel warnings={warnings} readOnly={readOnly} onFix={applyFix} /> : null}
+      {clips.length > 0 ? (
+        <ReelWarningsPanel
+          warnings={warnings}
+          readOnly={readOnly}
+          canAddAtPlayhead={canAddAtPlayhead}
+          onFix={applyFix}
+        />
+      ) : null}
 
       <div className="grid grid-cols-[minmax(0,1fr)_360px] items-start gap-6">
         <div className="flex min-w-0 flex-col gap-4">
@@ -473,12 +482,7 @@ function Editor({ debateId }: { debateId: string }) {
               <Text as="h2" variant="smallTitle">
                 Reel, in play order
               </Text>
-              <Button
-                small
-                variant="secondary"
-                disabled={readOnly || clips.length >= MANUAL_MAX_CLIPS || playheadMs === null}
-                onClick={addClipAtPlayhead}
-              >
+              <Button small variant="secondary" disabled={!canAddAtPlayhead} onClick={addClipAtPlayhead}>
                 + Add clip at playhead
               </Button>
             </div>

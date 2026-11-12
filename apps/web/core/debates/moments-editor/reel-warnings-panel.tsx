@@ -18,10 +18,13 @@ import type { ReelWarning, ReelWarningFix } from './reel-warnings';
 export function ReelWarningsPanel({
   warnings,
   readOnly,
+  canAddAtPlayhead,
   onFix,
 }: {
   warnings: readonly ReelWarning[];
   readOnly: boolean;
+  /** Whether a clip can be added at the playhead now: there is one, and the reel has room. */
+  canAddAtPlayhead: boolean;
   onFix: (fix: ReelWarningFix) => void;
 }) {
   if (warnings.length === 0) {
@@ -54,7 +57,10 @@ export function ReelWarningsPanel({
               </Text>
             </div>
             {warning.fix ? (
-              <SmallButton disabled={readOnly} onClick={() => warning.fix && onFix(warning.fix)}>
+              <SmallButton
+                disabled={readOnly || (warning.fix.kind === 'add-at-playhead' && !canAddAtPlayhead)}
+                onClick={() => warning.fix && onFix(warning.fix)}
+              >
                 {warning.fix.label}
               </SmallButton>
             ) : null}
