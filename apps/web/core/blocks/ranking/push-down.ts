@@ -1,9 +1,7 @@
-import { SystemIds } from '@geoprotocol/geo-sdk/lite';
-
 import { ID } from '~/core/id';
 import { RANK_VOTES_RELATION_TYPE_ID } from '~/core/ranking-block-ids';
 import type { Relation } from '~/core/types';
-import { getTopRankedSpaceId } from '~/core/utils/space/space-ranking';
+import { entityHomeSpaceId } from '~/core/utils/space/entity-home-space';
 
 import { DEBATES_SPACE_ID } from './best-debates';
 
@@ -12,16 +10,21 @@ import { DEBATES_SPACE_ID } from './best-debates';
  * place. Everything here is pure; the writes live in `use-push-down.ts` and the member's list in
  * `use-my-pushed-down-debates.ts`.
  *
- * Ranked and pushed down are exclusive per member, so each switch is two writes: the vote, then the
+ * Ranked and pushed down are exclusive per member, so each switch is two writes, a vote and a
  * ballot edit. They are separate user operations that race for the smart-account nonce if sent
- * together (see `use-entity-vote.ts`), so the second only starts once the first has landed, and a
- * failed second step is held for a retry instead of being undone.
+ * together (see `use-entity-vote.ts`), so the second only starts once the first has landed. The
+ * order is chosen so a failure never leaves a debate neither ranked nor pushed down:
+ *
+ * - **Push it down:** downvote, then take it off the ballot. A failed ballot edit leaves it both.
+ * - **Rank it:** publish the ballot, then clear the downvotes. A failed clear leaves it both.
+ *
+ * "Both" is visible and retryable; "neither" would silently lose the member's judgement.
  */
 
 /** What the member asked for: push it down, take the downvote back, or rank it after all. */
 export type PushDownAction = 'push-down' | 'undo' | 'rank';
 
-/** Which of the two writes is in flight or failed. */
+/** Which kind of write is in flight or failed. */
 export type PushDownStep = 'vote' | 'ballot';
 
 export type PushDownState =
@@ -30,12 +33,13 @@ export type PushDownState =
   | {
       status: 'failed';
       action: PushDownAction;
-      /**
-       * `vote`: nothing changed, the whole action can be tried again. `ballot`: the vote landed and
-       * only the ballot edit is left, so the debate shows as both pushed down and ranked (or neither)
-       * until a retry finishes it.
-       */
+      /** The write that failed. */
       step: PushDownStep;
+      /**
+       * True when an earlier step of the action already landed, so the debate shows as both pushed
+       * down and ranked until a retry finishes the rest. Retry then runs only what's left.
+       */
+      partly: boolean;
       message: string;
     }
   | { status: 'done'; action: PushDownAction };
@@ -44,30 +48,25 @@ export const IDLE_PUSH_DOWN_STATE: PushDownState = { status: 'idle' };
 
 export type StepResult = { ok: true } | { ok: false; message: string };
 
-export type PushDownRunResult = { ok: true } | { ok: false; step: PushDownStep; message: string };
+export type PushDownRunResult = { ok: true } | { ok: false; step: PushDownStep; partly: boolean; message: string };
+
+export type PushDownStepRun = { step: PushDownStep; run: () => Promise<StepResult> };
 
 /**
- * Runs the vote and then, only once it has landed, the ballot edit. `ballot` is skipped when it is
- * null (the debate isn't on the member's ballot), and never starts when the vote failed.
+ * Runs the steps strictly one after another: each starts only once the one before it has
+ * resolved, and nothing after a failed step runs. `null` steps (nothing to do) are skipped.
  */
-export async function runVoteThenBallot({
-  vote,
-  ballot,
-  onStep,
-}: {
-  vote: (() => Promise<StepResult>) | null;
-  ballot: (() => Promise<StepResult>) | null;
-  onStep?: (step: PushDownStep) => void;
-}): Promise<PushDownRunResult> {
-  if (vote) {
-    onStep?.('vote');
-    const voted = await settle(vote);
-    if (!voted.ok) return { ok: false, step: 'vote', message: voted.message };
-  }
-  if (ballot) {
-    onStep?.('ballot');
-    const edited = await settle(ballot);
-    if (!edited.ok) return { ok: false, step: 'ballot', message: edited.message };
+export async function runInOrder(
+  steps: ReadonlyArray<PushDownStepRun | null>,
+  onStep?: (step: PushDownStep) => void
+): Promise<PushDownRunResult> {
+  let landed = 0;
+  for (const step of steps) {
+    if (!step) continue;
+    onStep?.(step.step);
+    const result = await settle(step.run);
+    if (!result.ok) return { ok: false, step: step.step, partly: landed > 0, message: result.message };
+    landed += 1;
   }
   return { ok: true };
 }
@@ -114,39 +113,27 @@ export function ballotVoteSpaceIds(
   return spaces;
 }
 
-type SpaceScopedDebate = {
-  spaces?: string[];
-  values?: Array<{ isDeleted?: boolean; property: { id: string }; spaceId: string; value: unknown }>;
-};
+type SpaceScopedDebate = Parameters<typeof entityHomeSpaceId>[0];
 
 /**
- * The debate's own space: where the downvote is recorded, and where it is cleared.
+ * The debate's own space: where a new downvote is recorded.
  *
- * Every vote on a debate has to use the same space as its ballot items (Patrick, 11 Nov): scores
- * are keyed by (block, entity, space). It is never the member's personal space and never the
- * Debates space, which only hosts the ranking block; a debate named in neither of those comes back
- * null, and nothing is sent.
+ * Every vote on a debate should use the same space as its ballot items (Patrick, 11 Nov): scores
+ * are keyed by (block, entity, space). This is `entityHomeSpaceId` with two spaces taken out first:
+ * the member's personal space and the Debates space, which only hosts the ranking block. A debate
+ * that lives in neither comes back null, and nothing is sent.
  */
 export function debateOwnSpaceId(
   debate: SpaceScopedDebate | null | undefined,
   personalSpaceId: string | null | undefined
 ): string | null {
   if (!debate) return null;
-  const excluded = (spaceId: string) =>
-    ID.equals(spaceId, DEBATES_SPACE_ID) || (Boolean(personalSpaceId) && ID.equals(spaceId, personalSpaceId!));
-
-  const named = new Set<string>();
-  for (const value of debate.values ?? []) {
-    if (value.isDeleted) continue;
-    if (!ID.equals(value.property.id, SystemIds.NAME_PROPERTY)) continue;
-    if (typeof value.value !== 'string' || value.value.trim().length === 0) continue;
-    if (excluded(value.spaceId)) continue;
-    named.add(value.spaceId);
-  }
-
-  return (
-    getTopRankedSpaceId([...named]) ?? getTopRankedSpaceId((debate.spaces ?? []).filter(id => !excluded(id))) ?? null
-  );
+  const allowed = (spaceId: string) =>
+    !ID.equals(spaceId, DEBATES_SPACE_ID) && !(personalSpaceId && ID.equals(spaceId, personalSpaceId));
+  return entityHomeSpaceId({
+    spaces: (debate.spaces ?? []).filter(allowed),
+    values: (debate.values ?? []).filter(value => allowed(value.spaceId)),
+  });
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -172,8 +159,9 @@ export const PUSH_DOWN_UNDONE_COPY = 'Downvote removed.';
 
 export const PUSH_DOWN_VOTE_FAILED_COPY = 'Your downvote didn’t go through. Try again.';
 export const PUSH_DOWN_BALLOT_FAILED_COPY = 'Pushed down, but it’s still in your ranking. Retry to take it out.';
-export const RANK_BALLOT_FAILED_COPY =
-  'Your downvote is cleared, but your ranking didn’t publish. Retry to publish it.';
+export const RANK_BALLOT_FAILED_COPY = 'Your ranking didn’t publish, so this debate is still pushed down. Try again.';
+export const RANK_CLEAR_FAILED_COPY = 'Ranked, but your downvote is still on it. Retry to clear it.';
+export const VOTE_CHECK_FAILED_COPY = 'Couldn’t check your vote on this debate. Try again.';
 export const UNDO_FAILED_COPY = 'Your downvote is still there. Try again.';
 /** `saveMySubmission` can't publish an empty ballot, so the last debate on it stays until another joins. */
 export const PUSH_DOWN_LAST_BALLOT_ITEM_COPY =

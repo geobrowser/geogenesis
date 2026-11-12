@@ -48,6 +48,7 @@ const debate = (id: string, name: string): PushedDownDebate => ({
   description: null,
   image: null,
   debateSpaceId: '1234567890abcdef1234567890abcdef',
+  downvotedSpaceIds: ['1234567890abcdef1234567890abcdef'],
 });
 
 beforeEach(() => {
@@ -101,7 +102,13 @@ describe('RankingComposePushedDown', () => {
 
   it('shows a failed second step with Retry, and the debate as still ranked', () => {
     mocks.byDebate.d1 = {
-      state: { status: 'failed', action: 'push-down', step: 'ballot', message: 'Still in your ranking. Retry.' },
+      state: {
+        status: 'failed',
+        action: 'push-down',
+        step: 'ballot',
+        partly: true,
+        message: 'Still in your ranking. Retry.',
+      },
       isInBallot: true,
       isPushedDown: true,
     };
@@ -121,17 +128,18 @@ describe('RankingComposePushedDown', () => {
     expect(screen.getByText('Still in your ranking')).toBeTruthy();
   });
 
-  it('drops a row once its Undo has landed', () => {
-    mocks.byDebate.d1 = { state: { status: 'done', action: 'undo' }, isInBallot: false, isPushedDown: false };
+  it('renders a row for every counted downvote, so the count matches the rows', () => {
+    mocks.byDebate.d1 = { state: { status: 'idle' }, isInBallot: false, isPushedDown: false };
     render(
       <RankingComposePushedDown
         blockId="block"
-        debates={[debate('d1', 'Gone'), debate('d2', 'Kept')]}
+        debates={[debate('d1', 'Cast elsewhere'), debate('d2', 'Kept')]}
         isError={false}
         onRetryLoad={() => {}}
       />
     );
-    expect(screen.queryByText('Gone')).toBeNull();
-    expect(screen.getByText('Kept')).toBeTruthy();
+    expect(screen.getByText('You pushed down · 2')).toBeTruthy();
+    expect(screen.getByText('Cast elsewhere')).toBeTruthy();
+    expect(screen.getAllByRole('button', { name: /Undo push down/ })).toHaveLength(2);
   });
 });

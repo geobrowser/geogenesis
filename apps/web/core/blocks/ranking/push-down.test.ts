@@ -13,7 +13,7 @@ import {
   debateOwnSpaceId,
   pushDownChoiceDescription,
   pushDownToastCopy,
-  runVoteThenBallot,
+  runInOrder,
 } from './push-down';
 
 const PERSONAL = 'd4bee0928fb5405baba3b1513f085835';
@@ -26,11 +26,14 @@ function deferred() {
   return { promise, resolve };
 }
 
-describe('runVoteThenBallot', () => {
-  it('starts the ballot edit only after the vote has landed', async () => {
+describe('runInOrder', () => {
+  it('starts each step only after the one before it has landed', async () => {
     const vote = deferred();
     const ballot = vi.fn(async () => ({ ok: true as const }));
-    const running = runVoteThenBallot({ vote: () => vote.promise, ballot });
+    const running = runInOrder([
+      { step: 'vote', run: () => vote.promise },
+      { step: 'ballot', run: ballot },
+    ]);
 
     await Promise.resolve();
     await Promise.resolve();
@@ -41,39 +44,47 @@ describe('runVoteThenBallot', () => {
     expect(ballot).toHaveBeenCalledTimes(1);
   });
 
-  it('never edits the ballot when the vote failed', async () => {
+  it('runs nothing after a failed step, and says nothing had landed yet', async () => {
     const ballot = vi.fn(async () => ({ ok: true as const }));
-    const result = await runVoteThenBallot({ vote: async () => ({ ok: false, message: 'nope' }), ballot });
-    expect(result).toEqual({ ok: false, step: 'vote', message: 'nope' });
+    const result = await runInOrder([
+      { step: 'vote', run: async () => ({ ok: false, message: 'nope' }) },
+      { step: 'ballot', run: ballot },
+    ]);
+    expect(result).toEqual({ ok: false, step: 'vote', partly: false, message: 'nope' });
     expect(ballot).not.toHaveBeenCalled();
   });
 
-  it('reports a failed ballot step as such, so only that step is retried', async () => {
-    const result = await runVoteThenBallot({
-      vote: async () => ({ ok: true }),
-      ballot: async () => ({ ok: false, message: 'ballot down' }),
-    });
-    expect(result).toEqual({ ok: false, step: 'ballot', message: 'ballot down' });
+  it('marks a failure after an earlier step landed as partly done', async () => {
+    const result = await runInOrder([
+      { step: 'vote', run: async () => ({ ok: true }) },
+      { step: 'ballot', run: async () => ({ ok: false, message: 'ballot down' }) },
+    ]);
+    expect(result).toEqual({ ok: false, step: 'ballot', partly: true, message: 'ballot down' });
   });
 
-  it('treats a thrown step as a failure of that step', async () => {
-    const result = await runVoteThenBallot({
-      vote: null,
-      ballot: async () => {
-        throw new Error('boom');
+  it('skips empty steps and treats a thrown step as a failure of that step', async () => {
+    const result = await runInOrder([
+      null,
+      {
+        step: 'ballot',
+        run: async () => {
+          throw new Error('boom');
+        },
       },
-    });
-    expect(result).toEqual({ ok: false, step: 'ballot', message: 'boom' });
+    ]);
+    expect(result).toEqual({ ok: false, step: 'ballot', partly: false, message: 'boom' });
   });
 
   it('reports each step as it starts', async () => {
     const steps: string[] = [];
-    await runVoteThenBallot({
-      vote: async () => ({ ok: true }),
-      ballot: async () => ({ ok: true }),
-      onStep: step => steps.push(step),
-    });
-    expect(steps).toEqual(['vote', 'ballot']);
+    await runInOrder(
+      [
+        { step: 'ballot', run: async () => ({ ok: true }) },
+        { step: 'vote', run: async () => ({ ok: true }) },
+      ],
+      step => steps.push(step)
+    );
+    expect(steps).toEqual(['ballot', 'vote']);
   });
 });
 

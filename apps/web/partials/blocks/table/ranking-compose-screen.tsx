@@ -9,6 +9,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import { BEST_DEBATES_BLOCK_ID } from '~/core/blocks/ranking/best-debates';
+import { RankingComposeBallotContext } from '~/core/blocks/ranking/ranking-compose-ballot-context';
 import { resolveRankingSingleTargetSpaceId } from '~/core/blocks/ranking/ranking-compose-publish-spaces';
 import { RANKING_COMPOSE_TAB_MY, rankingComposeHref } from '~/core/blocks/ranking/ranking-compose-url';
 import { generatePersonalRankingOgImages } from '~/core/blocks/ranking/ranking-og-generate-client';
@@ -24,7 +25,7 @@ import {
   splitRankableEntityIds,
 } from '~/core/blocks/ranking/ranking-rankable-list';
 import {
-  useClearPushedDownBeforeRanking,
+  useBestDebatesBallotPublisher,
   useMyPushedDownDebates,
 } from '~/core/blocks/ranking/use-my-pushed-down-debates';
 import { useRankingAccumulatedRows } from '~/core/blocks/ranking/use-ranking-accumulated-rows';
@@ -144,7 +145,8 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
     isError: isPushedDownError,
     retry: retryPushedDown,
   } = useMyPushedDownDebates({ blockId: bestDebatesBlockId });
-  const clearPushedDownBeforeRanking = useClearPushedDownBeforeRanking(pushedDownDebates);
+  const { publish: publishBallotClearingDownvotes, isPublishing: isPublishingRanking } =
+    useBestDebatesBallotPublisher();
 
   const canCreateNew = Boolean(createNewSpaceId) && !isLoadingCreateAccess && canEditCreateSpace;
 
@@ -482,16 +484,18 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   const draftIdsKey = orderedIds.map(id => ID.uuidToHex(id)).join('|');
   const hasUnpublishedChanges = draftIdsKey !== publishedIdsKey;
 
+  const isPublishBusy = isSaving || isPublishingRanking;
+
   const canPublish =
     orderedIds.length > 0 &&
     hasUnpublishedChanges &&
     submissionsOpen &&
     (Boolean(personalSpaceId) || isAccountSetupPending) &&
-    !isSaving;
+    !isPublishBusy;
 
   const rankingOpportunity = useRankingOpportunity(
     entityId,
-    !submissionsOpen || !hasUnpublishedChanges || orderedIds.length === 0 || isSaving
+    !submissionsOpen || !hasUnpublishedChanges || orderedIds.length === 0 || isPublishBusy
       ? 'ineligible'
       : !personalSpaceId
         ? 'authentication_required'
@@ -504,7 +508,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
         ? 'empty'
         : !hasUnpublishedChanges
           ? 'unchanged'
-          : isSaving
+          : isPublishBusy
             ? 'saving'
             : !personalSpaceId
               ? 'sign_in'
@@ -513,14 +517,8 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
                 : 'unavailable'
   );
 
-  const handlePublish = async () => {
-    // `submissionsOpen` comes from the last render. Re-check against a fresh clock:
-    if (!rankingSubmissionsOpen(getRankingPeriodState(startDate, endDate))) {
-      setToast(<span>This ranking has closed.</span>);
-      return;
-    }
-
-    const slots = orderedIds.map(id => {
+  const buildSlots = (ids: readonly string[]) =>
+    ids.map(id => {
       const row = rowsByEntityId.get(id);
       const entry = displayRankableEntriesById.get(id) ?? myEntriesById.get(id);
       const searchPreview = getSearchResultPreview(searchResultsById.get(id));
@@ -530,6 +528,40 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
         spaceId: row?.columns[SystemIds.NAME_PROPERTY]?.space ?? searchPreview.spaceId ?? spaceId,
       };
     });
+
+  /**
+   * Publishes `ids` as the member's Best debates ballot (GEO-3679), clearing the downvotes on any
+   * debates in it the member pushed down, in the order that never leaves one neither ranked nor
+   * pushed down (`useBestDebatesBallotPublisher`).
+   */
+  const publishBestDebatesBallot = (ids: readonly string[]) =>
+    publishBallotClearingDownvotes(ids, () => saveMySubmission(buildSlots(ids), rankingOpportunity.context));
+
+  /** The draft as the ranking screen's ballot, for push-down to edit (`usePushDown`). */
+  const composeBallot = React.useMemo(
+    () =>
+      bestDebatesBlockId
+        ? {
+            orderedIds,
+            publish: async (ids: string[]) => {
+              setOrderedIds(ids);
+              return Boolean(await publishBestDebatesBallot(ids));
+            },
+          }
+        : null,
+    // `publishBestDebatesBallot` is rebuilt every render; the draft is what this follows.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [bestDebatesBlockId, orderedIds]
+  );
+
+  const handlePublish = async () => {
+    // `submissionsOpen` comes from the last render. Re-check against a fresh clock:
+    if (!rankingSubmissionsOpen(getRankingPeriodState(startDate, endDate))) {
+      setToast(<span>This ranking has closed.</span>);
+      return;
+    }
+
+    const slots = buildSlots(orderedIds);
 
     if (!personalSpaceId) {
       enqueuePendingAction({
@@ -565,11 +597,16 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
       return;
     }
 
-    // Downvote first, ballot second, never together: a pushed-down debate being ranked loses its
-    // downvote before the publish starts, and a failed clear stops the publish (GEO-3679).
-    if (bestDebatesBlockId && !(await clearPushedDownBeforeRanking(orderedIds))) return;
-
-    const published = await saveMySubmission(slots, rankingOpportunity.context);
+    let published: Awaited<ReturnType<typeof saveMySubmission>>;
+    if (bestDebatesBlockId) {
+      const result = await publishBestDebatesBallot(orderedIds);
+      if (!result) return;
+      // Stay on the screen while a pushed-down debate still needs its Retry.
+      if (result.failedClears > 0) return;
+      published = result.published;
+    } else {
+      published = await saveMySubmission(slots, rankingOpportunity.context);
+    }
     if (!published) return;
 
     const ogVersion = buildRankingOgVersion({
@@ -654,7 +691,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
           searchResultsById={searchResultsById}
           rowsByEntityId={rowsByEntityId}
           canPublish={canPublish}
-          isSaving={isSaving}
+          isSaving={isPublishBusy}
           hidePublishButton={isEntityPreviewOpen}
           activeSwipeRowKey={activeSwipeRowKey}
           onActiveSwipeRowKeyChange={setActiveSwipeRowKey}
@@ -721,7 +758,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   }
 
   return (
-    <>
+    <RankingComposeBallotContext.Provider value={composeBallot}>
       <RankingComposeCreateEntityPanel onFinished={addToMyRanking} rankingName={displayName} />
       <RankingComposeEntitySheet target={entitySheetTarget} onClose={() => setEntitySheetTarget(null)} />
       <div ref={rankingOpportunity.root} className="contents">
@@ -734,7 +771,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
                   onBack={handleBack}
                   showPublishButton
                   canPublish={canPublish}
-                  isSaving={isSaving}
+                  isSaving={isPublishBusy}
                   onPublish={() => void handlePublish()}
                 />
               </div>
@@ -757,7 +794,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
                   onBack={handleBack}
                   showPublishButton={false}
                   canPublish={canPublish}
-                  isSaving={isSaving}
+                  isSaving={isPublishBusy}
                   onPublish={() => void handlePublish()}
                 />
                 <div className="mt-3 pb-4">{titleMetadata}</div>
@@ -768,6 +805,6 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
           )}
         </RankingComposeFullscreen>
       </div>
-    </>
+    </RankingComposeBallotContext.Provider>
   );
 }

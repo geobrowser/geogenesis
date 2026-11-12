@@ -9,18 +9,23 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RANK_VOTES_RELATION_TYPE_ID } from '~/core/ranking-block-ids';
 
 import { DEBATES_SPACE_ID } from './best-debates';
+import type { MemberVoteRecord } from './fetch-member-debate-votes';
 import { PUSH_DOWN_LAST_BALLOT_ITEM_COPY } from './push-down';
+import { type ComposeBallot, RankingComposeBallotContext } from './ranking-compose-ballot-context';
 import { usePushDown } from './use-push-down';
 
 const PERSONAL = 'd4bee0928fb5405baba3b1513f085835';
 const DEBATE_SPACE = '1234567890abcdef1234567890abcdef';
+const CLAIM_SPACE = 'c1a1c1a1c1a1c1a1c1a1c1a1c1a1c1a1';
 const OTHER_SPACE = 'abcdefabcdefabcdefabcdefabcdefab';
 const BLOCK = 'b10cb10cb10cb10cb10cb10cb10cb10c';
 const DEBATE = 'deba7e00deba7e00deba7e00deba7e00';
 const RANKED_A = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const RANKED_B = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+const DRAFT_ONLY = 'dddddddddddddddddddddddddddddddd';
 
 type Either = { _tag: 'Right'; right: string } | { _tag: 'Left'; left: Error };
+type VoteParams = { authorSpaceId: string; spaceId: string; entityId: string };
 
 const mocks = vi.hoisted(() => ({
   capture: vi.fn(),
@@ -35,7 +40,9 @@ const mocks = vi.hoisted(() => ({
     calldata: '0x02' as const,
   })),
   save: vi.fn<(slots: Array<{ id: string; spaceId?: string }>) => Promise<object | null>>(),
-  serverResponse: null as 'positive' | 'negative' | null,
+  serverRecords: [] as MemberVoteRecord[] | Error,
+  serverReads: 0,
+  gate: null as Promise<void> | null,
   orderedEntityIds: [] as string[],
   rankEntity: null as object | null,
   events: [] as string[],
@@ -51,18 +58,16 @@ vi.mock('~/core/hooks/use-smart-account-transaction', async () => {
   const { Effect } = await import('effect');
   return { useSmartAccountTransaction: () => () => Effect.succeed('0xtx') };
 });
-vi.mock('~/core/telemetry/effect-runtime', () => ({
-  runEffectEither: () => mocks.runEffectEither(),
-}));
+vi.mock('~/core/telemetry/effect-runtime', () => ({ runEffectEither: () => mocks.runEffectEither() }));
 vi.mock('~/core/sdk/geo-client', () => ({
   geo: {
     responses: {
-      downvote: (params: { authorSpaceId: string; spaceId: string; entityId: string }) => {
-        mocks.events.push('downvote');
+      downvote: (params: VoteParams) => {
+        mocks.events.push(`downvote:${params.spaceId}`);
         return mocks.downvote(params);
       },
-      unvote: (params: { authorSpaceId: string; spaceId: string; entityId: string }) => {
-        mocks.events.push('unvote');
+      unvote: (params: VoteParams) => {
+        mocks.events.push(`unvote:${params.spaceId}`);
         return mocks.unvote(params);
       },
     },
@@ -71,10 +76,24 @@ vi.mock('~/core/sdk/geo-client', () => ({
 vi.mock('~/core/io/queries', async () => {
   const { Effect } = await import('effect');
   return {
-    getUserEntityResponse: () => Effect.succeed(mocks.serverResponse),
+    getUserEntityResponse: () => Effect.succeed(null),
     getBatchEntities: () => Effect.succeed([]),
   };
 });
+// Indexing never confirms in these tests, so this session's overlays stay in charge.
+vi.mock('~/core/responses/entity-response', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/responses/entity-response')>()),
+  waitForIndexedEntityResponse: async () => false,
+}));
+vi.mock('./fetch-member-debate-votes', async importOriginal => ({
+  ...(await importOriginal<typeof import('./fetch-member-debate-votes')>()),
+  fetchMemberDebateVotes: async () => {
+    mocks.serverReads += 1;
+    if (mocks.gate) await mocks.gate;
+    if (mocks.serverRecords instanceof Error) throw mocks.serverRecords;
+    return mocks.serverRecords;
+  },
+}));
 vi.mock('~/core/sync/use-store', () => ({
   useQueryEntity: () => ({
     entity: {
@@ -96,6 +115,14 @@ vi.mock('./use-ranking-submissions', () => ({
   }),
 }));
 
+const down = (spaceId: string): MemberVoteRecord => ({
+  objectId: DEBATE,
+  spaceId,
+  direction: 'negative',
+  votedAt: '2026-11-01T00:00:00Z',
+});
+const up = (spaceId: string): MemberVoteRecord => ({ ...down(spaceId), direction: 'positive' });
+
 function voteRelation(to: string, toSpaceId: string) {
   return {
     id: `r-${to}`,
@@ -116,10 +143,12 @@ function rankedBallot(ids: string[]) {
   };
 }
 
-function wrapper() {
+function wrapper(ballot: ComposeBallot | null = null) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return ({ children }: { children: ReactNode }) => (
-    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    <QueryClientProvider client={client}>
+      <RankingComposeBallotContext.Provider value={ballot}>{children}</RankingComposeBallotContext.Provider>
+    </QueryClientProvider>
   );
 }
 
@@ -127,6 +156,12 @@ function deferredEither() {
   let resolve!: (value: Either) => void;
   const promise = new Promise<Either>(r => (resolve = r));
   return { promise, resolve };
+}
+
+async function renderReady(ballot: ComposeBallot | null = null) {
+  const view = renderHook(() => usePushDown(DEBATE, { blockId: BLOCK }), { wrapper: wrapper(ballot) });
+  await waitFor(() => expect(view.result.current.enabled).toBe(true));
+  return view;
 }
 
 beforeEach(() => {
@@ -138,7 +173,9 @@ beforeEach(() => {
   mocks.unvote.mockClear();
   mocks.save.mockReset();
   mocks.save.mockResolvedValue({ rankEntityId: 'rank1', indexingSettled: Promise.resolve() });
-  mocks.serverResponse = null;
+  mocks.serverRecords = [];
+  mocks.serverReads = 0;
+  mocks.gate = null;
   mocks.orderedEntityIds = [];
   mocks.rankEntity = null;
   mocks.events = [];
@@ -154,47 +191,81 @@ describe('usePushDown', () => {
       await result.current.pushDown();
     });
     expect(mocks.downvote).not.toHaveBeenCalled();
-    expect(mocks.save).not.toHaveBeenCalled();
   });
 
-  it('downvotes in the debate’s own space, never the Debates or the member’s space', async () => {
+  it('waits for the member’s current vote before it can be used', async () => {
+    let release!: () => void;
+    mocks.gate = new Promise<void>(r => (release = r));
     const { result } = renderHook(() => usePushDown(DEBATE, { blockId: BLOCK }), { wrapper: wrapper() });
-    expect(result.current.enabled).toBe(true);
-    expect(result.current.debateSpaceId).toBe(DEBATE_SPACE);
+    // Before the read resolves nothing is known, so the entry points are off.
+    expect(result.current.isVoteKnown).toBe(false);
+    expect(result.current.enabled).toBe(false);
+    // A press now waits on the read: nothing is sent until the vote is known.
+    let running!: Promise<unknown>;
+    act(() => {
+      running = result.current.pushDown();
+    });
+    await new Promise(r => setTimeout(r, 20));
+    expect(mocks.downvote).not.toHaveBeenCalled();
+    release();
+    await act(async () => {
+      await running;
+    });
+    expect(mocks.downvote).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(result.current.enabled).toBe(true));
+  });
+
+  it('downvotes in the debate’s own space, and reads the vote fresh at the press', async () => {
+    const { result } = await renderReady();
+    const readsBefore = mocks.serverReads;
 
     await act(async () => {
       await result.current.pushDown();
     });
 
+    expect(mocks.serverReads).toBeGreaterThan(readsBefore);
     expect(mocks.downvote).toHaveBeenCalledWith({ authorSpaceId: PERSONAL, spaceId: DEBATE_SPACE, entityId: DEBATE });
     expect(mocks.save).not.toHaveBeenCalled();
     await waitFor(() => expect(result.current.isPushedDown).toBe(true));
     await waitFor(() => expect(result.current.state).toEqual({ status: 'done', action: 'push-down' }));
-    expect(mocks.setToast).toHaveBeenCalled();
     expect(mocks.capture).toHaveBeenCalledWith(
       'action_completed',
-      expect.objectContaining({
-        action_kind: 'push_down',
-        target_type: 'debate',
-        target_id: DEBATE,
-        outcome: 'succeeded',
-      })
+      expect.objectContaining({ action_kind: 'push_down', target_type: 'debate', target_id: DEBATE })
     );
   });
 
-  it('takes a ranked debate off the ballot only after the downvote has landed', async () => {
+  it('sends the downvote even when one already shows, so a stale answer never skips it', async () => {
+    mocks.serverRecords = [down(DEBATE_SPACE)];
+    const { result } = await renderReady();
+    await act(async () => {
+      await result.current.pushDown();
+    });
+    expect(mocks.downvote).toHaveBeenCalledTimes(1);
+  });
+
+  it('logs pushing down an upvoted debate as a switch', async () => {
+    mocks.serverRecords = [up(DEBATE_SPACE)];
+    const { result } = await renderReady();
+    await act(async () => {
+      await result.current.pushDown();
+    });
+    expect(mocks.capture).toHaveBeenCalledWith(
+      'vote_cast',
+      expect.objectContaining({ vote_action: 'switch', previous_vote_direction: 'up', vote_direction: 'down' })
+    );
+  });
+
+  it('takes a ranked debate off the published ballot only after the downvote has landed', async () => {
     rankedBallot([RANKED_A, DEBATE, RANKED_B]);
+    const { result } = await renderReady();
     const vote = deferredEither();
     mocks.runEffectEither.mockReturnValueOnce(vote.promise);
-
-    const { result } = renderHook(() => usePushDown(DEBATE, { blockId: BLOCK }), { wrapper: wrapper() });
-    await waitFor(() => expect(result.current.isInBallot).toBe(true));
 
     let running!: Promise<unknown>;
     act(() => {
       running = result.current.pushDown();
     });
-    await waitFor(() => expect(result.current.state).toMatchObject({ status: 'working', step: 'vote' }));
+    await waitFor(() => expect(mocks.downvote).toHaveBeenCalled());
     expect(mocks.save).not.toHaveBeenCalled();
 
     await act(async () => {
@@ -202,30 +273,45 @@ describe('usePushDown', () => {
       await running;
     });
 
-    expect(mocks.events).toEqual(['downvote', 'ballot']);
-    // Every other vote keeps the space it was ranked in.
+    expect(mocks.events).toEqual([`downvote:${DEBATE_SPACE}`, 'ballot']);
     expect(mocks.save).toHaveBeenCalledWith([
       { id: RANKED_A, name: null, spaceId: DEBATE_SPACE },
       { id: RANKED_B, name: null, spaceId: OTHER_SPACE },
     ]);
-    await waitFor(() => expect(result.current.state).toEqual({ status: 'done', action: 'push-down' }));
   });
 
-  it('keeps a failed ballot edit for a retry, without sending the downvote again', async () => {
+  it('on the ranking screen, edits and publishes the draft rather than the published ballot', async () => {
     rankedBallot([RANKED_A, DEBATE]);
-    mocks.save.mockResolvedValueOnce(null);
+    const publish = vi.fn(async (_ids: string[]) => true);
+    const { result } = await renderReady({ orderedIds: [RANKED_A, DEBATE, DRAFT_ONLY], publish });
 
-    const { result } = renderHook(() => usePushDown(DEBATE, { blockId: BLOCK }), { wrapper: wrapper() });
     await act(async () => {
       await result.current.pushDown();
     });
 
+    expect(publish).toHaveBeenCalledWith([RANKED_A, DRAFT_ONLY]);
+    expect(mocks.save).not.toHaveBeenCalled();
+  });
+
+  it('keeps a failed ballot edit for a retry that only edits the ballot', async () => {
+    rankedBallot([RANKED_A, DEBATE]);
+    mocks.save.mockResolvedValueOnce(null);
+    const { result } = await renderReady();
+
+    await act(async () => {
+      await result.current.pushDown();
+    });
     await waitFor(() =>
-      expect(result.current.state).toMatchObject({ status: 'failed', action: 'push-down', step: 'ballot' })
+      expect(result.current.state).toMatchObject({
+        status: 'failed',
+        action: 'push-down',
+        step: 'ballot',
+        partly: true,
+      })
     );
     // Shows as both until the retry finishes.
-    await waitFor(() => expect(result.current.isPushedDown).toBe(true));
-    await waitFor(() => expect(result.current.isInBallot).toBe(true));
+    expect(result.current.isPushedDown).toBe(true);
+    expect(result.current.isInBallot).toBe(true);
 
     await act(async () => {
       await result.current.retry();
@@ -235,23 +321,33 @@ describe('usePushDown', () => {
     await waitFor(() => expect(result.current.state).toEqual({ status: 'done', action: 'push-down' }));
   });
 
-  it('does not touch the ballot when the downvote fails', async () => {
+  it('does not touch the ballot when the downvote fails, and reports it as a failure', async () => {
     rankedBallot([RANKED_A, DEBATE]);
-    mocks.runEffectEither.mockResolvedValueOnce({ _tag: 'Left', left: new Error('rejected') });
+    mocks.runEffectEither.mockResolvedValueOnce({ _tag: 'Left', left: new Error('User rejected the request') });
+    const { result } = await renderReady();
 
-    const { result } = renderHook(() => usePushDown(DEBATE, { blockId: BLOCK }), { wrapper: wrapper() });
     await act(async () => {
       await result.current.pushDown();
     });
 
     expect(mocks.save).not.toHaveBeenCalled();
+    await waitFor(() => expect(result.current.state).toMatchObject({ status: 'failed', step: 'vote', partly: false }));
+    expect(mocks.capture).toHaveBeenCalledWith('action_failed', expect.objectContaining({ action_kind: 'push_down' }));
+  });
+
+  it('fails without writing when the vote can’t be read', async () => {
+    const { result } = await renderReady();
+    mocks.serverRecords = new Error('down');
+    await act(async () => {
+      await result.current.pushDown();
+    });
+    expect(mocks.downvote).not.toHaveBeenCalled();
     await waitFor(() => expect(result.current.state).toMatchObject({ status: 'failed', step: 'vote' }));
-    await waitFor(() => expect(result.current.isPushedDown).toBe(false));
   });
 
   it('can’t empty the ballot, and says so', async () => {
     rankedBallot([DEBATE]);
-    const { result } = renderHook(() => usePushDown(DEBATE, { blockId: BLOCK }), { wrapper: wrapper() });
+    const { result } = await renderReady();
     await act(async () => {
       await result.current.pushDown();
     });
@@ -265,71 +361,95 @@ describe('usePushDown', () => {
     );
   });
 
-  it('ranking a pushed-down debate clears the downvote first, then publishes', async () => {
-    mocks.serverResponse = 'negative';
-    const clear = deferredEither();
-    mocks.runEffectEither.mockReturnValueOnce(clear.promise);
+  it('Rank it publishes first, then clears every downvote the member holds, wherever it was cast', async () => {
+    mocks.serverRecords = [down(DEBATE_SPACE), down(CLAIM_SPACE)];
     const publish = vi.fn(async () => {
       mocks.events.push('publish');
       return true;
     });
-
-    const { result } = renderHook(() => usePushDown(DEBATE, { blockId: BLOCK }), { wrapper: wrapper() });
-    await waitFor(() => expect(result.current.isPushedDown).toBe(true));
-
-    let running!: Promise<unknown>;
-    act(() => {
-      running = result.current.rankAfterClearing(publish);
-    });
-    await waitFor(() => expect(result.current.state).toMatchObject({ status: 'working', step: 'vote' }));
-    expect(publish).not.toHaveBeenCalled();
+    const { result } = await renderReady();
+    await waitFor(() => expect(result.current.downvotedSpaceIds).toEqual([DEBATE_SPACE, CLAIM_SPACE]));
 
     await act(async () => {
-      clear.resolve({ _tag: 'Right', right: '0xop' });
-      await running;
+      await result.current.rank(publish);
     });
-    expect(mocks.events).toEqual(['unvote', 'publish']);
-    expect(mocks.unvote).toHaveBeenCalledWith({ authorSpaceId: PERSONAL, spaceId: DEBATE_SPACE, entityId: DEBATE });
+
+    expect(mocks.events).toEqual(['publish', `unvote:${DEBATE_SPACE}`, `unvote:${CLAIM_SPACE}`]);
     await waitFor(() => expect(result.current.isPushedDown).toBe(false));
     await waitFor(() => expect(result.current.state).toEqual({ status: 'done', action: 'rank' }));
   });
 
-  it('retries only the publish when ranking’s second step failed', async () => {
-    mocks.serverResponse = 'negative';
-    const publish = vi.fn<() => Promise<boolean>>().mockResolvedValueOnce(false).mockResolvedValueOnce(true);
-
-    const { result } = renderHook(() => usePushDown(DEBATE, { blockId: BLOCK }), { wrapper: wrapper() });
-    await waitFor(() => expect(result.current.isPushedDown).toBe(true));
+  it('a failed Rank it publish leaves the downvote alone, so the debate is never neither', async () => {
+    mocks.serverRecords = [down(DEBATE_SPACE)];
+    const { result } = await renderReady();
     await act(async () => {
-      await result.current.rankAfterClearing(publish);
+      await result.current.rank(async () => false);
+    });
+    expect(mocks.unvote).not.toHaveBeenCalled();
+    await waitFor(() =>
+      expect(result.current.state).toMatchObject({ status: 'failed', action: 'rank', step: 'ballot', partly: false })
+    );
+  });
+
+  it('after a published Rank it whose clear failed, Retry only clears', async () => {
+    mocks.serverRecords = [down(DEBATE_SPACE)];
+    const publish = vi.fn(async () => true);
+    const { result } = await renderReady();
+    mocks.runEffectEither.mockResolvedValueOnce({ _tag: 'Left', left: new Error('rejected') });
+
+    await act(async () => {
+      await result.current.rank(publish);
     });
     await waitFor(() =>
-      expect(result.current.state).toMatchObject({ status: 'failed', action: 'rank', step: 'ballot' })
+      expect(result.current.state).toMatchObject({ status: 'failed', action: 'rank', step: 'vote', partly: true })
     );
 
     await act(async () => {
       await result.current.retry();
     });
-    expect(mocks.unvote).toHaveBeenCalledTimes(1);
-    expect(publish).toHaveBeenCalledTimes(2);
+    expect(publish).toHaveBeenCalledTimes(1);
+    expect(mocks.unvote).toHaveBeenCalledTimes(2);
     await waitFor(() => expect(result.current.state).toEqual({ status: 'done', action: 'rank' }));
   });
 
-  it('Undo clears the downvote and leaves the ballot alone', async () => {
-    mocks.serverResponse = 'negative';
-    const { result } = renderHook(() => usePushDown(DEBATE, { blockId: BLOCK }), { wrapper: wrapper() });
-    await waitFor(() => expect(result.current.isPushedDown).toBe(true));
+  it('Undo clears the downvote in each space it was cast in, and leaves the ballot alone', async () => {
+    mocks.serverRecords = [down(CLAIM_SPACE), down(DEBATE_SPACE)];
+    const { result } = await renderReady();
 
     await act(async () => {
       await result.current.undo();
     });
 
-    expect(mocks.unvote).toHaveBeenCalledWith({ authorSpaceId: PERSONAL, spaceId: DEBATE_SPACE, entityId: DEBATE });
+    expect(mocks.unvote).toHaveBeenNthCalledWith(1, {
+      authorSpaceId: PERSONAL,
+      spaceId: CLAIM_SPACE,
+      entityId: DEBATE,
+    });
+    expect(mocks.unvote).toHaveBeenNthCalledWith(2, {
+      authorSpaceId: PERSONAL,
+      spaceId: DEBATE_SPACE,
+      entityId: DEBATE,
+    });
     expect(mocks.save).not.toHaveBeenCalled();
     await waitFor(() => expect(result.current.isPushedDown).toBe(false));
     expect(mocks.capture).toHaveBeenCalledWith(
       'action_completed',
       expect.objectContaining({ action_kind: 'undo_push_down', target_id: DEBATE })
+    );
+  });
+
+  it('keeps an overlay over a stale read only in the spaces it wrote', async () => {
+    mocks.serverRecords = [down(CLAIM_SPACE)];
+    const { result } = await renderReady();
+    await act(async () => {
+      await result.current.pushDown();
+    });
+    // The server still lags; the next action sees both the new and the old downvote.
+    await act(async () => {
+      await result.current.undo();
+    });
+    expect(mocks.unvote.mock.calls.map(([params]) => params.spaceId).sort()).toEqual(
+      [CLAIM_SPACE, DEBATE_SPACE].sort()
     );
   });
 });

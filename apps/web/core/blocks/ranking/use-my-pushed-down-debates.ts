@@ -1,119 +1,241 @@
 'use client';
 
-import { keepPreviousData } from '@tanstack/react-query';
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSetToast } from '~/core/hooks/use-toast';
-import { useUserVotedEntityIds } from '~/core/hooks/use-user-voted-entity-ids';
 import { ID } from '~/core/id';
 import { useQueryEntities } from '~/core/sync/use-store';
 
 import { BEST_DEBATES_BLOCK_ID, DEBATE_TYPE_ID } from './best-debates';
-import { debateOwnSpaceId } from './push-down';
-import { useDebateDownvoteWriter } from './use-debate-downvote';
+import {
+  type MemberVoteRecord,
+  fetchMemberCurationDownvotes,
+  memberCurationDownvotesQueryKey,
+} from './fetch-member-debate-votes';
+import { type PushDownState, RANK_CLEAR_FAILED_COPY, debateOwnSpaceId } from './push-down';
+import {
+  type DebateVoteOverlays,
+  debateVoteOverlaysQueryKey,
+  mergeDownvoteOverlays,
+  useDebateVoteOverlays,
+  useDebateVoteWriter,
+} from './use-debate-downvote';
+import { pushDownStateQueryKey } from './use-push-down';
 import { type RankingEntryDisplay, toRankingEntryDisplay } from './use-ranking-entry-entities';
 
-/** Curation votes are kind 0; anything else on the Downvoted list is a stance, not a push-down. */
-const CURATION_VOTE_KIND = 0;
-
-/**
- * How many pages of the member's downvotes (50 each, every entity type) to walk for debates.
- * Downvotes come newest first, so this bounds an old history, not recent push-downs.
- */
-const MAX_DOWNVOTE_PAGES = 10;
+/** `useQueryEntities` names at most this many ids in one request. */
+const MAX_HYDRATED_IDS = 1000;
 
 export type PushedDownDebate = RankingEntryDisplay & {
-  /** The debate's own space: where the downvote was recorded and is cleared. */
-  debateSpaceId: string;
+  /** Where a new downvote would go; null when the debate lives only in the Debates or the member's space. */
+  debateSpaceId: string | null;
+  /** Every space the member's downvote on it was cast in. gaia counts any of them. */
+  downvotedSpaceIds: string[];
 };
 
+/** Downvote records grouped by debate, newest first, each with the spaces holding a downvote. */
+export function groupDownvotesByObject(records: readonly MemberVoteRecord[]): Map<string, string[]> {
+  const byObject = new Map<string, string[]>();
+  for (const record of records) {
+    if (record.direction !== 'negative') continue;
+    const key = ID.uuidToHex(record.objectId);
+    const spaces = byObject.get(key) ?? [];
+    if (!spaces.some(space => ID.equals(space, record.spaceId))) spaces.push(record.spaceId);
+    byObject.set(key, spaces);
+  }
+  return byObject;
+}
+
 /**
- * The debates the member pushed down (GEO-3679): their curation downvotes on Debate entities,
- * newest first. Read from the same Downvoted list the profile tabs use, so a push-down from this
- * session shows at once through its pending overrides, and an Undo drops out at once.
+ * The debates the member pushed down (GEO-3679): every curation downvote they hold on a Debate,
+ * in whatever space it was cast, newest first. Read from the votes themselves, paged until
+ * exhausted, with this session's unindexed writes laid over them.
  */
 export function useMyPushedDownDebates({ blockId = BEST_DEBATES_BLOCK_ID }: { blockId?: string | null } = {}) {
-  const enabled = Boolean(blockId);
-  const { personalSpaceId } = usePersonalSpaceId();
-  const { ids, voteKindById, isLoading, hasNextPage, isFetchingNextPage, fetchNextPage, isError, refetch } =
-    useUserVotedEntityIds('down', enabled);
+  const { personalSpaceId, isRegistered } = usePersonalSpaceId();
+  const enabled = Boolean(blockId) && Boolean(personalSpaceId) && isRegistered;
 
-  const pagesFetched = React.useRef(1);
-  React.useEffect(() => {
-    if (!enabled || !hasNextPage || isFetchingNextPage || isError) return;
-    if (pagesFetched.current >= MAX_DOWNVOTE_PAGES) return;
-    pagesFetched.current += 1;
-    void fetchNextPage();
-  }, [enabled, fetchNextPage, hasNextPage, isError, isFetchingNextPage]);
+  const query = useQuery({
+    queryKey: memberCurationDownvotesQueryKey(personalSpaceId),
+    queryFn: ({ signal }) => fetchMemberCurationDownvotes(personalSpaceId!, signal),
+    enabled,
+    staleTime: 30_000,
+  });
+  const overlays = useDebateVoteOverlays();
 
-  const curationIds = React.useMemo(
-    () => ids.filter(id => (voteKindById.get(ID.uuidToHex(id)) ?? CURATION_VOTE_KIND) === CURATION_VOTE_KIND),
-    [ids, voteKindById]
+  const spacesByObject = React.useMemo(
+    () => groupDownvotesByObject(mergeDownvoteOverlays(enabled ? (query.data ?? []) : [], overlays)),
+    [enabled, overlays, query.data]
   );
+  const objectIds = React.useMemo(() => [...spacesByObject.keys()].slice(0, MAX_HYDRATED_IDS), [spacesByObject]);
 
   const where = React.useMemo(
-    () => ({ id: { in: curationIds }, types: [{ id: { equals: DEBATE_TYPE_ID } }] }),
-    [curationIds]
+    () => ({ id: { in: objectIds }, types: [{ id: { equals: DEBATE_TYPE_ID } }] }),
+    [objectIds]
   );
   const { entities, isLoading: isLoadingEntities } = useQueryEntities({
     where,
-    first: curationIds.length || undefined,
-    enabled: enabled && curationIds.length > 0,
+    first: objectIds.length || undefined,
+    enabled: enabled && objectIds.length > 0,
     placeholderData: keepPreviousData,
   });
 
   const debates = React.useMemo((): PushedDownDebate[] => {
     if (!enabled) return [];
-    const order = new Map(curationIds.map((id, index) => [ID.uuidToHex(id), index]));
+    const order = new Map(objectIds.map((id, index) => [id, index]));
     return entities
       .filter(entity => order.has(ID.uuidToHex(entity.id)))
       .filter(entity => entity.types.some(type => ID.equals(type.id, DEBATE_TYPE_ID)))
-      .flatMap(entity => {
+      .map(entity => {
+        const spaces = spacesByObject.get(ID.uuidToHex(entity.id)) ?? [];
         const debateSpaceId = debateOwnSpaceId(entity, personalSpaceId);
-        if (!debateSpaceId) return [];
-        return [{ ...toRankingEntryDisplay(entity, debateSpaceId), debateSpaceId }];
+        return {
+          ...toRankingEntryDisplay(entity, debateSpaceId ?? spaces[0] ?? ''),
+          debateSpaceId,
+          downvotedSpaceIds: spaces,
+        };
       })
       .sort((a, b) => order.get(ID.uuidToHex(a.entityId))! - order.get(ID.uuidToHex(b.entityId))!);
-  }, [curationIds, enabled, entities, personalSpaceId]);
+  }, [enabled, entities, objectIds, personalSpaceId, spacesByObject]);
 
   return {
     debates,
-    isLoading: enabled && (isLoading || (curationIds.length > 0 && isLoadingEntities && debates.length === 0)),
-    isError,
-    retry: refetch,
+    /** True until the member's downvotes and the debates among them have loaded. */
+    isLoading: enabled && (query.isLoading || (objectIds.length > 0 && isLoadingEntities && debates.length === 0)),
+    isError: query.isError,
+    retry: query.refetch,
   };
 }
 
 /**
- * Before the ranking screen publishes a ballot holding debates the member pushed down, clear each
- * of those downvotes, one after another, and only then let the publish go: ranked and pushed down
- * are exclusive per member, and the two writes must not race for the smart-account nonce. Resolves
- * false (and says why) when a clear fails, so the publish doesn't run.
+ * The ranking screen's Publish (GEO-3679). Ranked and pushed down are exclusive per member, so a
+ * ballot holding debates the member pushed down has to clear those downvotes too:
+ *
+ * 1. `readDraftDownvotes` before publishing: a fresh read of every downvote the member holds, so a
+ *    Publish never runs on a list that hasn't loaded. Null when it can't be read: don't publish.
+ * 2. Publish the ballot.
+ * 3. `clearDraftDownvotes` once it has published: one clear per downvote record, one after
+ *    another. A debate whose clear fails is left ranked and pushed down, never neither, and its
+ *    pushed-down row offers Retry.
  */
-export function useClearPushedDownBeforeRanking(debates: readonly PushedDownDebate[]) {
-  const sendVote = useDebateDownvoteWriter();
-  const setToast = useSetToast();
+export function useRankingPublishDownvotes() {
+  const queryClient = useQueryClient();
+  const { personalSpaceId } = usePersonalSpaceId();
+  const sendVote = useDebateVoteWriter();
 
-  return React.useCallback(
-    async (draftEntityIds: readonly string[]): Promise<boolean> => {
-      const toClear = debates.filter(debate => draftEntityIds.some(id => ID.equals(id, debate.entityId)));
-      for (const debate of toClear) {
-        const cleared = await sendVote({
-          debateId: debate.entityId,
-          spaceId: debate.debateSpaceId,
-          direction: 'clear',
-          analyticsAction: 'undo_push_down',
-          previousResponse: 'negative',
+  const readDraftDownvotes = React.useCallback(
+    async (draftIds: readonly string[]): Promise<Map<string, MemberVoteRecord[]> | null> => {
+      if (!personalSpaceId) return new Map();
+      let server: MemberVoteRecord[];
+      try {
+        server = await queryClient.fetchQuery({
+          queryKey: memberCurationDownvotesQueryKey(personalSpaceId),
+          queryFn: ({ signal }) => fetchMemberCurationDownvotes(personalSpaceId, signal),
+          staleTime: 0,
         });
-        if (!cleared.ok) {
-          setToast(React.createElement('span', null, `${debate.name}: ${cleared.message}`));
-          return false;
+      } catch {
+        return null;
+      }
+      const merged = mergeDownvoteOverlays(
+        server,
+        queryClient.getQueryData<DebateVoteOverlays>(debateVoteOverlaysQueryKey(personalSpaceId))
+      );
+      const draft = new Set(draftIds.map(id => ID.uuidToHex(id)));
+      const byDebate = new Map<string, MemberVoteRecord[]>();
+      for (const record of merged) {
+        const key = ID.uuidToHex(record.objectId);
+        if (!draft.has(key)) continue;
+        byDebate.set(key, [...(byDebate.get(key) ?? []), record]);
+      }
+      return byDebate;
+    },
+    [personalSpaceId, queryClient]
+  );
+
+  /** Resolves with the debates whose downvote could not be cleared. */
+  const clearDraftDownvotes = React.useCallback(
+    async (downvotes: ReadonlyMap<string, MemberVoteRecord[]>): Promise<string[]> => {
+      const failed: string[] = [];
+      for (const [debateId, initial] of downvotes) {
+        let records = initial;
+        for (const spaceId of [...new Set(initial.map(record => record.spaceId))]) {
+          const result = await sendVote({
+            debateId,
+            spaceId,
+            direction: 'clear',
+            analyticsAction: 'undo_push_down',
+            records,
+          });
+          if (!result.ok) {
+            failed.push(debateId);
+            const failedState: PushDownState = {
+              status: 'failed',
+              action: 'rank',
+              step: 'vote',
+              partly: true,
+              message: RANK_CLEAR_FAILED_COPY,
+            };
+            queryClient.setQueryData<PushDownState>(pushDownStateQueryKey(personalSpaceId, debateId), failedState);
+            break;
+          }
+          records = result.records;
         }
       }
-      return true;
+      return failed;
     },
-    [debates, sendVote, setToast]
+    [personalSpaceId, queryClient, sendVote]
   );
+
+  return { readDraftDownvotes, clearDraftDownvotes };
+}
+
+export type BallotPublishResult<T> = { published: T; failedClears: number };
+
+/**
+ * Publishes a Best debates ballot from the ranking screen in the order that never leaves a debate
+ * neither ranked nor pushed down (see `useRankingPublishDownvotes`), and says so when a clear is
+ * left over. One publish at a time: a second press while one runs does nothing, and `isPublishing`
+ * stays true across the whole sequence, not just the ballot write.
+ */
+export function useBestDebatesBallotPublisher() {
+  const { readDraftDownvotes, clearDraftDownvotes } = useRankingPublishDownvotes();
+  const setToast = useSetToast();
+  const [isPublishing, setIsPublishing] = React.useState(false);
+  const inFlight = React.useRef(false);
+
+  const publish = React.useCallback(
+    async <T>(ids: readonly string[], save: () => Promise<T | null>): Promise<BallotPublishResult<T> | null> => {
+      if (inFlight.current) return null;
+      inFlight.current = true;
+      setIsPublishing(true);
+      try {
+        const downvotes = await readDraftDownvotes(ids);
+        if (!downvotes) {
+          setToast(React.createElement('span', null, BALLOT_DOWNVOTE_CHECK_FAILED_COPY));
+          return null;
+        }
+        const published = await save();
+        if (!published) return null;
+        const failedClears = (await clearDraftDownvotes(downvotes)).length;
+        if (failedClears > 0) setToast(React.createElement('span', null, ballotClearsLeftCopy(failedClears)));
+        return { published, failedClears };
+      } finally {
+        inFlight.current = false;
+        setIsPublishing(false);
+      }
+    },
+    [clearDraftDownvotes, readDraftDownvotes, setToast]
+  );
+
+  return { publish, isPublishing };
+}
+
+export const BALLOT_DOWNVOTE_CHECK_FAILED_COPY =
+  'Couldn’t check which debates you pushed down, so your ranking didn’t publish. Try again.';
+
+export function ballotClearsLeftCopy(count: number): string {
+  return `Ranking published, but ${count === 1 ? '1 debate still carries' : `${count} debates still carry`} your downvote. Retry under “You pushed down”.`;
 }

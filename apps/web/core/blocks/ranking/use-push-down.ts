@@ -9,11 +9,16 @@ import { Effect } from 'effect';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSetToast } from '~/core/hooks/use-toast';
 import { ID } from '~/core/id';
-import { getBatchEntities, getUserEntityResponse } from '~/core/io/queries';
-import { type ActiveResponseDirection, userEntityResponseQueryKey } from '~/core/responses/entity-response';
+import { getBatchEntities } from '~/core/io/queries';
 import { useQueryEntity } from '~/core/sync/use-store';
 
 import { BEST_DEBATES_BLOCK_ID, BEST_DEBATES_RANKING_LIVE, DEBATES_SPACE_ID } from './best-debates';
+import {
+  type MemberVoteRecord,
+  downvotedSpaceIds,
+  fetchMemberDebateVotes,
+  memberDebateVotesQueryKey,
+} from './fetch-member-debate-votes';
 import {
   IDLE_PUSH_DOWN_STATE,
   PUSH_DOWN_BALLOT_FAILED_COPY,
@@ -22,8 +27,10 @@ import {
   type PushDownAction,
   type PushDownRunResult,
   type PushDownState,
+  type PushDownStepRun,
   RANK_BALLOT_FAILED_COPY,
   type StepResult,
+  VOTE_CHECK_FAILED_COPY,
   ballotHolds,
   ballotVoteSpaceIds,
   ballotWithout,
@@ -31,22 +38,38 @@ import {
   markPushDownNoteSeen,
   pushDownToastCopy,
   readPushDownNoteSeen,
-  runVoteThenBallot,
+  runInOrder,
 } from './push-down';
+import { type ComposeBallot, useRankingComposeBallot } from './ranking-compose-ballot-context';
 import { invalidateBlockRankers } from './use-block-rankers';
-import { useDebateDownvoteOverride, useDebateDownvoteWriter } from './use-debate-downvote';
+import {
+  type DebateVoteOverlays,
+  debateVoteOverlaysQueryKey,
+  freshOverlay,
+  useDebateVoteOverlays,
+  useDebateVoteWriter,
+} from './use-debate-downvote';
 import { useMyRanking } from './use-my-ranking';
 import { useRankingSubmissions } from './use-ranking-submissions';
 
 const BEST_DEBATES_BLOCK_NAME = 'Best debates';
+
+/** Overlay records, plus the server's records in spaces the overlay doesn't cover. */
+export function combineRecords(
+  overlay: readonly MemberVoteRecord[],
+  server: readonly MemberVoteRecord[]
+): MemberVoteRecord[] {
+  const covered = new Set(overlay.map(record => ID.uuidToHex(record.spaceId)));
+  return [...overlay, ...server.filter(record => !covered.has(ID.uuidToHex(record.spaceId)))];
+}
 
 export function pushDownStateQueryKey(personalSpaceId: string | null | undefined, debateId: string) {
   return ['push-down-state', personalSpaceId ?? null, ID.uuidToHex(debateId)] as const;
 }
 
 /**
- * The ballot publish a "Rank it" was waiting on when its second step failed, kept so Retry can
- * re-run it. Module scope because it is a function, and one debate has one at a time.
+ * The ballot publish a "Rank it" was given, kept so Retry can re-run it. Module scope because it
+ * is a function, and one debate has one at a time.
  */
 const pendingRankPublishes = new Map<string, () => Promise<boolean>>();
 
@@ -58,42 +81,62 @@ export type UsePushDownOptions = {
    * debate entity with `debateOwnSpaceId`.
    */
   debateSpaceId?: string | null;
+  /**
+   * The ballot Push it down edits. Defaults to the ranking screen's draft
+   * (`RankingComposeBallotContext`) when there is one, else the member's published ballot.
+   */
+  ballot?: ComposeBallot | null;
 };
 
 export type UsePushDownResult = {
-  /** False until the block exists, the member has a personal space and the debate's space is known. */
+  /**
+   * False until the block exists, the member has a personal space, the debate's own space is known
+   * and the member's current vote on it has loaded. Push it down and Rank it wait for this.
+   */
   enabled: boolean;
-  /** The member's downvote is on the debate (or was just sent from this session). */
+  /** The member's current vote on the debate has loaded (or was just written here). */
+  isVoteKnown: boolean;
+  /** The member holds a downvote on the debate, in any space (gaia counts every one). */
   isPushedDown: boolean;
-  /** The debate is on the member's Best debates ballot. Both true = a failed second step. */
+  /** The spaces those downvotes were cast in. */
+  downvotedSpaceIds: string[];
+  /** The debate is on the ballot being edited, or the published one. With `isPushedDown`: a step to finish. */
   isInBallot: boolean;
-  /** The space the vote is recorded in: the debate's own, never the member's or the Debates space. */
+  /** Where a new downvote goes: the debate's own space, never the member's or the Debates space. */
   debateSpaceId: string | null;
   state: PushDownState;
   /** Push it down: downvote first, then, once that lands, take it off the ballot if it's there. */
   pushDown: () => Promise<PushDownRunResult>;
-  /** Undo in the pushed-down list: clears the downvote. Leaves the ballot alone. */
+  /** Undo in the pushed-down list: clears every downvote the member holds on it. Leaves the ballot alone. */
   undo: () => Promise<PushDownRunResult>;
   /**
-   * Rank a debate: clears the member's downvote first if there is one, then runs `publish`, the
-   * caller's ballot publish (the compare flow's placement). `publish` resolves true once published.
+   * Rank it: runs `publish` (the caller's ballot publish, resolving true once published) and then,
+   * only once it has, clears the member's downvotes on the debate.
    */
-  rankAfterClearing: (publish: () => Promise<boolean>) => Promise<PushDownRunResult>;
-  /** Re-runs the step that failed: the whole action after a failed vote, the ballot step otherwise. */
+  rank: (publish: () => Promise<boolean>) => Promise<PushDownRunResult>;
+  /** Re-runs what failed: only the clears when a Rank it already published, else the whole action. */
   retry: () => Promise<PushDownRunResult>;
 };
 
-const DISABLED: PushDownRunResult = { ok: false, step: 'vote', message: 'Push down isn’t available here.' };
-const BUSY: PushDownRunResult = { ok: false, step: 'vote', message: 'Already working on it.' };
+const DISABLED: PushDownRunResult = {
+  ok: false,
+  step: 'vote',
+  partly: false,
+  message: 'Push down isn’t available yet.',
+};
+const BUSY: PushDownRunResult = { ok: false, step: 'vote', partly: false, message: 'Already working on it.' };
+const CHECK_FAILED: PushDownRunResult = { ok: false, step: 'vote', partly: false, message: VOTE_CHECK_FAILED_COPY };
 
 /**
  * Push a debate down on the Best debates ranking screen (GEO-3679), the entry point the Rank it /
- * Push it down choice (GEO-3678) calls: `pushDown` for its Push it down option, `rankAfterClearing`
- * around its Rank it publish.
+ * Push it down choice (GEO-3678) calls: `pushDown` for its Push it down option, `rank` around its
+ * Rank it publish.
  *
- * State is shared per (member, debate) through the query cache, so the choice dialog and the
- * pushed-down list read the same progress. Needs to sit inside a `DataBlockProvider`, as the ballot
- * write (`useRankingSubmissions`) does.
+ * Every action re-reads the member's votes on the debate first (this session's unindexed writes,
+ * else a fresh server read), so it never acts on a stale answer. State is shared per (member,
+ * debate) through the query cache, so the choice and the pushed-down list show the same progress.
+ * Needs a `DataBlockProvider` around it, as the published-ballot write (`useRankingSubmissions`)
+ * does.
  */
 export function usePushDown(debateId: string, options: UsePushDownOptions = {}): UsePushDownResult {
   const blockId = options.blockId === undefined ? BEST_DEBATES_BLOCK_ID : options.blockId;
@@ -101,6 +144,8 @@ export function usePushDown(debateId: string, options: UsePushDownOptions = {}):
   const queryClient = useQueryClient();
   const setToast = useSetToast();
   const { personalSpaceId, isRegistered } = usePersonalSpaceId();
+  const composeBallot = useRankingComposeBallot();
+  const editBallot = options.ballot === undefined ? composeBallot : options.ballot;
 
   const { entity: debateEntity } = useQueryEntity({
     id: debateId,
@@ -108,22 +153,33 @@ export function usePushDown(debateId: string, options: UsePushDownOptions = {}):
   });
   const debateSpaceId = options.debateSpaceId ?? debateOwnSpaceId(debateEntity, personalSpaceId);
 
-  const { myRankEntity, orderedEntityIds } = useMyRanking(blockId ?? '');
+  const { myRankEntity, orderedEntityIds: publishedIds } = useMyRanking(blockId ?? '');
   const { saveMySubmission } = useRankingSubmissions(blockId ?? '', DEBATES_SPACE_ID, BEST_DEBATES_BLOCK_NAME);
-  const sendVote = useDebateDownvoteWriter();
-  const override = useDebateDownvoteOverride(debateId);
+  const sendVote = useDebateVoteWriter();
 
-  const enabled = isBlockSet && Boolean(personalSpaceId) && isRegistered && Boolean(debateSpaceId);
-
-  const { data: serverResponse } = useQuery<ActiveResponseDirection | null>({
-    queryKey: userEntityResponseQueryKey(personalSpaceId, debateId, debateSpaceId ?? '', 0, 'curation'),
-    queryFn: () => Effect.runPromise(getUserEntityResponse(personalSpaceId!, debateId, debateSpaceId!, 'curation', 0)),
-    enabled,
+  const canRead = isBlockSet && Boolean(personalSpaceId) && isRegistered;
+  const votesKey = React.useMemo(
+    () => memberDebateVotesQueryKey(personalSpaceId, debateId),
+    [debateId, personalSpaceId]
+  );
+  const votesQueryFn = React.useCallback(
+    ({ signal }: { signal?: AbortSignal }) => fetchMemberDebateVotes(personalSpaceId!, debateId, signal),
+    [debateId, personalSpaceId]
+  );
+  const { data: serverRecords } = useQuery({
+    queryKey: votesKey,
+    queryFn: votesQueryFn,
+    enabled: canRead,
     staleTime: 30_000,
   });
+  const overlay = freshOverlay(useDebateVoteOverlays(), debateId);
+  const records = overlay?.records ?? (canRead ? serverRecords : undefined) ?? null;
+  const spaces = React.useMemo(() => (records ? downvotedSpaceIds(records) : []), [records]);
 
-  const isPushedDown = override === 'pushed' || (override !== 'cleared' && serverResponse === 'negative');
-  const isInBallot = ballotHolds(orderedEntityIds, debateId);
+  const isVoteKnown = records !== null;
+  const isPushedDown = spaces.length > 0;
+  const isInBallot = ballotHolds(editBallot?.orderedIds ?? [], debateId) || ballotHolds(publishedIds, debateId);
+  const enabled = canRead && Boolean(debateSpaceId) && isVoteKnown;
 
   const stateKey = React.useMemo(() => pushDownStateQueryKey(personalSpaceId, debateId), [debateId, personalSpaceId]);
   const { data: state = IDLE_PUSH_DOWN_STATE } = useQuery<PushDownState>({
@@ -135,87 +191,104 @@ export function usePushDown(debateId: string, options: UsePushDownOptions = {}):
     gcTime: Infinity,
   });
 
-  // The writes below run across several renders; they read the newest ballot and vote, not the
-  // ones captured when the press happened.
-  const latest = React.useRef({ orderedEntityIds, myRankEntity, isPushedDown, isInBallot, debateSpaceId, enabled });
-  latest.current = { orderedEntityIds, myRankEntity, isPushedDown, isInBallot, debateSpaceId, enabled };
+  // The writes below run across several renders; they read the newest values, not the ones
+  // captured when the press happened.
+  const latest = React.useRef({ publishedIds, myRankEntity, editBallot, debateSpaceId, canRead });
+  latest.current = { publishedIds, myRankEntity, editBallot, debateSpaceId, canRead };
 
   const setState = React.useCallback(
     (next: PushDownState) => queryClient.setQueryData<PushDownState>(stateKey, next),
     [queryClient, stateKey]
   );
-  const isWorking = () => queryClient.getQueryData<PushDownState>(stateKey)?.status === 'working';
-
-  const downvote = React.useCallback(
-    () =>
-      sendVote({
-        debateId,
-        spaceId: latest.current.debateSpaceId!,
-        direction: 'negative',
-        analyticsAction: 'push_down',
-        previousResponse: null,
-      }),
-    [debateId, sendVote]
+  const isWorking = React.useCallback(
+    () => queryClient.getQueryData<PushDownState>(stateKey)?.status === 'working',
+    [queryClient, stateKey]
   );
-  const clearDownvote = React.useCallback(
-    () =>
-      sendVote({
-        debateId,
-        spaceId: latest.current.debateSpaceId!,
-        direction: 'clear',
-        analyticsAction: 'undo_push_down',
-        previousResponse: 'negative',
-      }),
+
+  /**
+   * The member's votes on the debate, read fresh from the server for every action (never the
+   * render-time answer), with this session's unindexed writes laid over it: the overlay wins in
+   * the spaces it covers, and a space the server still shows downvoted stays in, so a clear reaches
+   * it (unvote is idempotent). Null when neither can be had.
+   */
+  const readRecords = React.useCallback(async (): Promise<MemberVoteRecord[] | null> => {
+    const overlay = freshOverlay(
+      queryClient.getQueryData<DebateVoteOverlays>(debateVoteOverlaysQueryKey(personalSpaceId)),
+      debateId
+    );
+    let server: MemberVoteRecord[] | null = null;
+    try {
+      server = await queryClient.fetchQuery({ queryKey: votesKey, queryFn: votesQueryFn, staleTime: 0 });
+    } catch {
+      server = null;
+    }
+    if (!overlay) return server;
+    if (!server) return overlay.records;
+    return combineRecords(overlay.records, server);
+  }, [debateId, personalSpaceId, queryClient, votesKey, votesQueryFn]);
+
+  /** One clear per space holding a downvote, one after another. */
+  const clearSteps = React.useCallback(
+    (current: { records: MemberVoteRecord[] }): PushDownStepRun[] =>
+      downvotedSpaceIds(current.records).map(spaceId => ({
+        step: 'vote' as const,
+        run: async (): Promise<StepResult> => {
+          const result = await sendVote({
+            debateId,
+            spaceId,
+            direction: 'clear',
+            analyticsAction: 'undo_push_down',
+            records: current.records,
+          });
+          if (result.ok) current.records = result.records;
+          return result;
+        },
+      })),
     [debateId, sendVote]
   );
 
   const removeFromBallot = React.useCallback(async (): Promise<StepResult> => {
-    const { orderedEntityIds: ballot, myRankEntity: rankEntity } = latest.current;
-    if (!ballotHolds(ballot, debateId)) return { ok: true };
-    const remaining = ballotWithout(ballot, debateId);
+    const { publishedIds: published, myRankEntity: rankEntity, editBallot: draft } = latest.current;
+
+    if (draft) {
+      // On the ranking screen: edit the draft and publish it, so nothing unpublished is lost.
+      if (!ballotHolds(draft.orderedIds, debateId) && !ballotHolds(published, debateId)) return { ok: true };
+      const remaining = ballotWithout(draft.orderedIds, debateId);
+      if (remaining.length === 0) return { ok: false, message: PUSH_DOWN_LAST_BALLOT_ITEM_COPY };
+      return (await draft.publish(remaining)) ? { ok: true } : { ok: false, message: PUSH_DOWN_BALLOT_FAILED_COPY };
+    }
+
+    if (!ballotHolds(published, debateId)) return { ok: true };
+    const remaining = ballotWithout(published, debateId);
     if (remaining.length === 0) return { ok: false, message: PUSH_DOWN_LAST_BALLOT_ITEM_COPY };
 
     // Every other vote is re-sent, so each keeps the space it was ranked in.
-    const spaces =
+    const voteSpaces =
       rankEntity && personalSpaceId
         ? ballotVoteSpaceIds(rankEntity.relations ?? [], rankEntity.id, personalSpaceId)
         : new Map<string, string>();
-    const unknown = remaining.filter(id => !spaces.has(ID.uuidToHex(id)));
+    const unknown = remaining.filter(id => !voteSpaces.has(ID.uuidToHex(id)));
     if (unknown.length > 0) {
       const entities = await Effect.runPromise(getBatchEntities(unknown));
       for (const entity of entities) {
         const own = debateOwnSpaceId(entity, personalSpaceId);
-        if (own) spaces.set(ID.uuidToHex(entity.id), own);
+        if (own) voteSpaces.set(ID.uuidToHex(entity.id), own);
       }
     }
-    const slots = remaining.map(id => ({ id, name: null, spaceId: spaces.get(ID.uuidToHex(id)) }));
+    const slots = remaining.map(id => ({ id, name: null, spaceId: voteSpaces.get(ID.uuidToHex(id)) }));
     if (slots.some(slot => !slot.spaceId)) return { ok: false, message: PUSH_DOWN_BALLOT_FAILED_COPY };
 
-    const published = await saveMySubmission(slots);
-    if (!published) return { ok: false, message: PUSH_DOWN_BALLOT_FAILED_COPY };
+    const submission = await saveMySubmission(slots);
+    if (!submission) return { ok: false, message: PUSH_DOWN_BALLOT_FAILED_COPY };
     // Ranker counts come from indexed ballots, so refresh them once indexing has settled.
-    void published.indexingSettled.then(() => invalidateBlockRankers(queryClient, blockId!, DEBATES_SPACE_ID));
+    void submission.indexingSettled.then(() => invalidateBlockRankers(queryClient, blockId!, DEBATES_SPACE_ID));
     return { ok: true };
   }, [blockId, debateId, personalSpaceId, queryClient, saveMySubmission]);
 
-  const publishRanking = React.useCallback(async (publish: () => Promise<boolean>): Promise<StepResult> => {
-    const published = await publish();
-    if (!published) return { ok: false, message: RANK_BALLOT_FAILED_COPY };
-    // The caller's publish owns its indexing wait; counts refresh when it invalidates them.
-    return { ok: true };
-  }, []);
-
-  const run = React.useCallback(
-    async (
-      action: PushDownAction,
-      steps: { vote: (() => Promise<StepResult>) | null; ballot: (() => Promise<StepResult>) | null }
-    ): Promise<PushDownRunResult> => {
-      const result = await runVoteThenBallot({
-        ...steps,
-        onStep: step => setState({ status: 'working', action, step }),
-      });
+  const finish = React.useCallback(
+    (action: PushDownAction, result: PushDownRunResult): PushDownRunResult => {
       if (!result.ok) {
-        setState({ status: 'failed', action, step: result.step, message: result.message });
+        setState({ status: 'failed', action, step: result.step, partly: result.partly, message: result.message });
         setToast(React.createElement('span', null, result.message));
         return result;
       }
@@ -234,60 +307,96 @@ export function usePushDown(debateId: string, options: UsePushDownOptions = {}):
     [setState, setToast, stateKey]
   );
 
-  const pushDown = React.useCallback(async () => {
-    if (!latest.current.enabled) return DISABLED;
-    if (isWorking()) return BUSY;
-    const { isPushedDown: alreadyDown, isInBallot: ranked } = latest.current;
-    return run('push-down', { vote: alreadyDown ? null : downvote, ballot: ranked ? removeFromBallot : null });
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `isWorking` reads the cache directly.
-  }, [downvote, removeFromBallot, run]);
-
-  const undo = React.useCallback(async () => {
-    if (!latest.current.enabled) return DISABLED;
-    if (isWorking()) return BUSY;
-    return run('undo', { vote: latest.current.isPushedDown ? clearDownvote : null, ballot: null });
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `isWorking` reads the cache directly.
-  }, [clearDownvote, run]);
-
-  const rankAfterClearing = React.useCallback(
-    async (publish: () => Promise<boolean>) => {
-      if (!latest.current.enabled) return DISABLED;
+  const start = React.useCallback(
+    async (
+      action: PushDownAction,
+      plan: (records: MemberVoteRecord[]) => ReadonlyArray<PushDownStepRun | null>
+    ): Promise<PushDownRunResult> => {
+      // Only a new downvote needs the debate's own space; clears go wherever the downvotes are.
+      if (!latest.current.canRead || (action === 'push-down' && !latest.current.debateSpaceId)) return DISABLED;
       if (isWorking()) return BUSY;
-      pendingRankPublishes.set(stateKey.join(':'), publish);
-      return run('rank', {
-        vote: latest.current.isPushedDown ? clearDownvote : null,
-        ballot: () => publishRanking(publish),
-      });
+      setState({ status: 'working', action, step: 'vote' });
+      const records = await readRecords();
+      if (!records) return finish(action, CHECK_FAILED);
+      const result = await runInOrder(plan(records), step => setState({ status: 'working', action, step }));
+      return finish(action, result);
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `isWorking` reads the cache directly.
-    [clearDownvote, publishRanking, run, stateKey]
+    [finish, isWorking, readRecords, setState]
+  );
+
+  const pushDown = React.useCallback(
+    () =>
+      start('push-down', initial => {
+        const current = { records: initial };
+        const ownSpace = latest.current.debateSpaceId!;
+        const { editBallot: draft, publishedIds: published } = latest.current;
+        const onBallot = ballotHolds(draft?.orderedIds ?? [], debateId) || ballotHolds(published, debateId);
+        return [
+          // Sent even when a downvote already shows: a downvote is idempotent, and a stale answer
+          // must never turn Push it down into a ballot edit with no vote behind it.
+          {
+            step: 'vote',
+            run: async () => {
+              const result = await sendVote({
+                debateId,
+                spaceId: ownSpace,
+                direction: 'negative',
+                analyticsAction: 'push_down',
+                records: current.records,
+              });
+              if (result.ok) current.records = result.records;
+              return result;
+            },
+          },
+          onBallot ? { step: 'ballot', run: removeFromBallot } : null,
+        ];
+      }),
+    [debateId, removeFromBallot, sendVote, start]
+  );
+
+  const undo = React.useCallback(() => start('undo', initial => clearSteps({ records: initial })), [clearSteps, start]);
+
+  const publishRanking = React.useCallback(async (publish: () => Promise<boolean>): Promise<StepResult> => {
+    return (await publish()) ? { ok: true } : { ok: false, message: RANK_BALLOT_FAILED_COPY };
+  }, []);
+
+  const rank = React.useCallback(
+    (publish: () => Promise<boolean>) => {
+      pendingRankPublishes.set(stateKey.join(':'), publish);
+      return start('rank', initial => [
+        { step: 'ballot', run: () => publishRanking(publish) },
+        ...clearSteps({ records: initial }),
+      ]);
+    },
+    [clearSteps, publishRanking, start, stateKey]
   );
 
   const retry = React.useCallback(async (): Promise<PushDownRunResult> => {
     const current = queryClient.getQueryData<PushDownState>(stateKey);
     if (!current || current.status !== 'failed') return { ok: true };
-    if (current.step === 'vote') {
-      if (current.action === 'push-down') return pushDown();
-      if (current.action === 'undo') return undo();
-      const publish = pendingRankPublishes.get(stateKey.join(':'));
-      return publish ? rankAfterClearing(publish) : { ok: true };
+    // The downvote already landed: only the ballot edit is left.
+    if (current.action === 'push-down' && current.partly) {
+      return start('push-down', () => [{ step: 'ballot', run: removeFromBallot }]);
     }
-    // The vote already landed: only the ballot step is left.
-    if (current.action === 'push-down') return run('push-down', { vote: null, ballot: removeFromBallot });
+    if (current.action === 'push-down') return pushDown();
+    if (current.action === 'undo') return undo();
+    // Rank it already published: only the clears are left.
+    if (current.partly) return start('rank', initial => clearSteps({ records: initial }));
     const publish = pendingRankPublishes.get(stateKey.join(':'));
-    if (current.action === 'rank' && publish) return run('rank', { vote: null, ballot: () => publishRanking(publish) });
-    return { ok: true };
-  }, [publishRanking, pushDown, queryClient, rankAfterClearing, removeFromBallot, run, stateKey, undo]);
+    return publish ? rank(publish) : { ok: true };
+  }, [clearSteps, pushDown, queryClient, rank, removeFromBallot, start, stateKey, undo]);
 
   return {
     enabled,
+    isVoteKnown,
     isPushedDown,
+    downvotedSpaceIds: spaces,
     isInBallot,
     debateSpaceId,
     state,
     pushDown,
     undo,
-    rankAfterClearing,
+    rank,
     retry,
   };
 }

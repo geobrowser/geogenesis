@@ -49,13 +49,12 @@ export function RankingComposePushedDown({ blockId, debates, isError, onRetryLoa
 }
 
 function PushedDownRow({ blockId, debate }: { blockId: string; debate: PushedDownDebate }) {
-  const { state, isInBallot, isPushedDown, undo, retry } = usePushDown(debate.entityId, {
+  // Every row is a downvote gaia counts, so every row renders: the header's count is the rows.
+  // An Undo that lands drops the debate from the list itself.
+  const { state, isInBallot, undo, retry } = usePushDown(debate.entityId, {
     blockId,
     debateSpaceId: debate.debateSpaceId,
   });
-
-  // An Undo that landed drops the row from the list; until the list catches up, hide it here.
-  if (!isPushedDown && state.status !== 'working' && state.status !== 'failed') return null;
 
   const isWorking = state.status === 'working';
   const failure = state.status === 'failed' ? state : null;
@@ -64,7 +63,7 @@ function PushedDownRow({ blockId, debate }: { blockId: string; debate: PushedDow
     <li className="w-full py-3" data-testid={`pushed-down-${debate.entityId}`}>
       <RankingEntryRow
         entry={debate}
-        spaceId={debate.debateSpaceId}
+        spaceId={debate.debateSpaceId ?? debate.downvotedSpaceIds[0] ?? ''}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             {failure ? (

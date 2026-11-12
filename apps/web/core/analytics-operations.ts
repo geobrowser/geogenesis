@@ -185,7 +185,8 @@ export function observeOperation(
     failed(code: OperationFailureCode, metrics?: Record<string, number>) {
       if (completed) return;
       complete(code === 'unknown' ? 'unknown' : 'failed', { ...metrics, failure_code: code });
-      if (['vote', 'ranking', 'publish'].includes(action))
+      // GEO-3679: push-down and its undo are votes too, so their failures are reported like one.
+      if (['vote', 'ranking', 'publish', 'push_down', 'undo_push_down'].includes(action))
         emit(code === 'unknown' ? 'action_outcome_unknown' : 'action_failed', code, {
           ...metrics,
           failure_code: code,

@@ -1,29 +1,41 @@
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
-import { act, cleanup, renderHook } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
+
+import type { ReactNode } from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DEBATES_SPACE_ID, DEBATE_TYPE_ID } from './best-debates';
-import type { StepResult } from './push-down';
+import type { MemberVoteRecord } from './fetch-member-debate-votes';
+import { RANK_CLEAR_FAILED_COPY } from './push-down';
 import {
-  type PushedDownDebate,
-  useClearPushedDownBeforeRanking,
+  BALLOT_DOWNVOTE_CHECK_FAILED_COPY,
+  ballotClearsLeftCopy,
+  useBestDebatesBallotPublisher,
   useMyPushedDownDebates,
 } from './use-my-pushed-down-debates';
+import { pushDownStateQueryKey } from './use-push-down';
 
 const PERSONAL = 'd4bee0928fb5405baba3b1513f085835';
 const DEBATE_SPACE = '1234567890abcdef1234567890abcdef';
+const CLAIM_SPACE = 'c1a1c1a1c1a1c1a1c1a1c1a1c1a1c1a1';
 const D1 = 'd1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1';
 const D2 = 'd2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2';
 const CLAIM = 'c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1';
-const STANCE_DEBATE = 'd3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3';
 
 const mocks = vi.hoisted(() => ({
-  votedIds: [] as string[],
-  voteKinds: new Map<string, number>(),
+  downvotes: [] as MemberVoteRecord[] | Error,
   entities: [] as object[],
   queryWhere: null as unknown,
-  sendVote: vi.fn<(args: { debateId: string; spaceId: string; direction: string }) => Promise<StepResult>>(),
+  sendVote:
+    vi.fn<
+      (args: {
+        debateId: string;
+        spaceId: string;
+        direction: string;
+      }) => Promise<{ ok: true; records: MemberVoteRecord[] } | { ok: false; message: string }>
+    >(),
   setToast: vi.fn(),
 }));
 
@@ -31,25 +43,34 @@ vi.mock('~/core/hooks/use-personal-space-id', () => ({
   usePersonalSpaceId: () => ({ personalSpaceId: PERSONAL, isRegistered: true }),
 }));
 vi.mock('~/core/hooks/use-toast', () => ({ useSetToast: () => mocks.setToast }));
-vi.mock('~/core/hooks/use-user-voted-entity-ids', () => ({
-  useUserVotedEntityIds: () => ({
-    ids: mocks.votedIds,
-    voteKindById: mocks.voteKinds,
-    isLoading: false,
-    hasNextPage: false,
-    isFetchingNextPage: false,
-    isError: false,
-    refetch: vi.fn(),
-    fetchNextPage: vi.fn(),
-  }),
-}));
 vi.mock('~/core/sync/use-store', () => ({
   useQueryEntities: ({ where }: { where: unknown }) => {
     mocks.queryWhere = where;
     return { entities: mocks.entities, isLoading: false };
   },
 }));
-vi.mock('./use-debate-downvote', () => ({ useDebateDownvoteWriter: () => mocks.sendVote }));
+vi.mock('./fetch-member-debate-votes', async importOriginal => ({
+  ...(await importOriginal<typeof import('./fetch-member-debate-votes')>()),
+  fetchMemberCurationDownvotes: async () => {
+    if (mocks.downvotes instanceof Error) throw mocks.downvotes;
+    return mocks.downvotes;
+  },
+}));
+vi.mock('./use-debate-downvote', async importOriginal => ({
+  ...(await importOriginal<typeof import('./use-debate-downvote')>()),
+  useDebateVoteWriter: () => mocks.sendVote,
+}));
+// The real hook module pulls in the ballot writers; only its state key is used here.
+vi.mock('./use-push-down', () => ({
+  pushDownStateQueryKey: (member: string | null, debateId: string) => ['push-down-state', member, debateId],
+}));
+
+const record = (objectId: string, spaceId: string, votedAt: string): MemberVoteRecord => ({
+  objectId,
+  spaceId,
+  direction: 'negative',
+  votedAt,
+});
 
 function entity(id: string, typeId: string, spaceId = DEBATE_SPACE) {
   return {
@@ -62,82 +83,154 @@ function entity(id: string, typeId: string, spaceId = DEBATE_SPACE) {
   };
 }
 
+function harness() {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  );
+  return { client, wrapper };
+}
+
 beforeEach(() => {
-  mocks.votedIds = [];
-  mocks.voteKinds = new Map();
+  mocks.downvotes = [];
   mocks.entities = [];
   mocks.sendVote.mockReset();
+  mocks.sendVote.mockImplementation(async () => ({ ok: true, records: [] }));
   mocks.setToast.mockReset();
 });
 
 afterEach(() => cleanup());
 
 describe('useMyPushedDownDebates', () => {
-  it('lists only the member’s curation downvotes on debates, newest first, with each debate’s own space', () => {
-    mocks.votedIds = [D2, CLAIM, STANCE_DEBATE, D1];
-    mocks.voteKinds = new Map([
-      [D2, 0],
-      [CLAIM, 0],
-      [STANCE_DEBATE, 1],
-      [D1, 0],
-    ]);
+  it('lists every debate the member downvoted, in any space, newest first, with each space', async () => {
+    mocks.downvotes = [
+      record(D2, CLAIM_SPACE, '2026-11-03'),
+      record(CLAIM, DEBATE_SPACE, '2026-11-02'),
+      record(D1, DEBATE_SPACE, '2026-11-01'),
+      record(D2, DEBATE_SPACE, '2026-10-01'),
+    ];
     mocks.entities = [entity(D1, DEBATE_TYPE_ID), entity(CLAIM, 'someclaimtype'), entity(D2, DEBATE_TYPE_ID)];
 
-    const { result } = renderHook(() => useMyPushedDownDebates({ blockId: 'block' }));
+    const { wrapper } = harness();
+    const { result } = renderHook(() => useMyPushedDownDebates({ blockId: 'block' }), { wrapper });
 
-    expect(result.current.debates.map(debate => debate.entityId)).toEqual([D2, D1]);
+    await waitFor(() => expect(result.current.debates.map(debate => debate.entityId)).toEqual([D2, D1]));
+    expect(result.current.debates[0].downvotedSpaceIds).toEqual([CLAIM_SPACE, DEBATE_SPACE]);
     expect(result.current.debates[0].debateSpaceId).toBe(DEBATE_SPACE);
     expect(mocks.queryWhere).toMatchObject({ types: [{ id: { equals: DEBATE_TYPE_ID } }] });
   });
 
-  it('is empty until the block exists', () => {
-    mocks.votedIds = [D1];
+  it('is empty until the block exists', async () => {
+    mocks.downvotes = [record(D1, DEBATE_SPACE, '2026-11-01')];
     mocks.entities = [entity(D1, DEBATE_TYPE_ID)];
-    const { result } = renderHook(() => useMyPushedDownDebates({ blockId: null }));
+    const { wrapper } = harness();
+    const { result } = renderHook(() => useMyPushedDownDebates({ blockId: null }), { wrapper });
     expect(result.current.debates).toEqual([]);
   });
 });
 
-describe('useClearPushedDownBeforeRanking', () => {
-  const pushed = (id: string): PushedDownDebate => ({
-    entityId: id,
-    name: id,
-    description: null,
-    image: null,
-    debateSpaceId: DEBATE_SPACE,
+describe('useBestDebatesBallotPublisher', () => {
+  it('reads the downvotes, publishes, then clears each downvote record one by one', async () => {
+    mocks.downvotes = [record(D1, CLAIM_SPACE, '2026-11-02'), record(D1, DEBATE_SPACE, '2026-11-01')];
+    const events: string[] = [];
+    mocks.sendVote.mockImplementation(async ({ spaceId }) => {
+      events.push(`clear:${spaceId}`);
+      return { ok: true, records: [] };
+    });
+    const save = vi.fn(async () => {
+      events.push('publish');
+      return { rankEntityId: 'rank1' };
+    });
+
+    const { wrapper } = harness();
+    const { result } = renderHook(() => useBestDebatesBallotPublisher(), { wrapper });
+    let outcome: unknown;
+    await act(async () => {
+      outcome = await result.current.publish([D1, D2], save);
+    });
+
+    expect(events).toEqual(['publish', `clear:${CLAIM_SPACE}`, `clear:${DEBATE_SPACE}`]);
+    expect(outcome).toEqual({ published: { rankEntityId: 'rank1' }, failedClears: 0 });
   });
 
-  it('clears the downvote of each pushed-down debate in the ballot, one at a time, before publishing', async () => {
-    const order: string[] = [];
-    mocks.sendVote.mockImplementation(async ({ debateId }) => {
-      order.push(debateId);
-      return { ok: true };
-    });
-    const { result } = renderHook(() => useClearPushedDownBeforeRanking([pushed(D1), pushed(D2)]));
+  it('publishes nothing when the downvotes can’t be read', async () => {
+    mocks.downvotes = new Error('down');
+    const save = vi.fn(async () => ({ rankEntityId: 'rank1' }));
+    const { wrapper } = harness();
+    const { result } = renderHook(() => useBestDebatesBallotPublisher(), { wrapper });
 
-    let ok: boolean | undefined;
+    let outcome: unknown;
     await act(async () => {
-      ok = await result.current([D2, 'unrelated']);
+      outcome = await result.current.publish([D1], save);
     });
 
-    expect(ok).toBe(true);
-    expect(order).toEqual([D2]);
-    expect(mocks.sendVote).toHaveBeenCalledWith(
-      expect.objectContaining({ debateId: D2, spaceId: DEBATE_SPACE, direction: 'clear' })
+    expect(outcome).toBeNull();
+    expect(save).not.toHaveBeenCalled();
+    expect(mocks.setToast).toHaveBeenCalledWith(
+      expect.objectContaining({ props: { children: BALLOT_DOWNVOTE_CHECK_FAILED_COPY } })
     );
   });
 
-  it('stops the publish when a clear fails', async () => {
-    mocks.sendVote.mockResolvedValueOnce({ ok: false, message: 'nope' });
-    const { result } = renderHook(() => useClearPushedDownBeforeRanking([pushed(D1), pushed(D2)]));
-
-    let ok: boolean | undefined;
+  it('clears nothing when the publish fails, so no debate ends up neither ranked nor pushed down', async () => {
+    mocks.downvotes = [record(D1, DEBATE_SPACE, '2026-11-01')];
+    const { wrapper } = harness();
+    const { result } = renderHook(() => useBestDebatesBallotPublisher(), { wrapper });
     await act(async () => {
-      ok = await result.current([D1, D2]);
+      await result.current.publish([D1], async () => null);
+    });
+    expect(mocks.sendVote).not.toHaveBeenCalled();
+  });
+
+  it('a failed clear leaves that debate ranked and pushed down, with Retry, and says so', async () => {
+    mocks.downvotes = [record(D1, DEBATE_SPACE, '2026-11-02'), record(D2, DEBATE_SPACE, '2026-11-01')];
+    mocks.sendVote.mockImplementation(async ({ debateId }) =>
+      debateId === D1 ? { ok: false, message: 'nope' } : { ok: true, records: [] }
+    );
+    const { client, wrapper } = harness();
+    const { result } = renderHook(() => useBestDebatesBallotPublisher(), { wrapper });
+
+    let outcome: unknown;
+    await act(async () => {
+      outcome = await result.current.publish([D1, D2], async () => ({ rankEntityId: 'rank1' }));
     });
 
-    expect(ok).toBe(false);
-    expect(mocks.sendVote).toHaveBeenCalledTimes(1);
-    expect(mocks.setToast).toHaveBeenCalled();
+    expect(outcome).toMatchObject({ failedClears: 1 });
+    expect(mocks.sendVote).toHaveBeenCalledTimes(2);
+    expect(client.getQueryData(pushDownStateQueryKey(PERSONAL, D1))).toEqual({
+      status: 'failed',
+      action: 'rank',
+      step: 'vote',
+      partly: true,
+      message: RANK_CLEAR_FAILED_COPY,
+    });
+    expect(mocks.setToast).toHaveBeenCalledWith(
+      expect.objectContaining({ props: { children: ballotClearsLeftCopy(1) } })
+    );
+  });
+
+  it('ignores a second press while a publish is running, and reports it as busy throughout', async () => {
+    let finishSave!: (value: { rankEntityId: string }) => void;
+    const save = vi.fn(() => new Promise<{ rankEntityId: string }>(r => (finishSave = r)));
+    const { wrapper } = harness();
+    const { result } = renderHook(() => useBestDebatesBallotPublisher(), { wrapper });
+
+    let first!: Promise<unknown>;
+    let second: unknown;
+    act(() => {
+      first = result.current.publish([D1], save);
+    });
+    await waitFor(() => expect(result.current.isPublishing).toBe(true));
+    await act(async () => {
+      second = await result.current.publish([D1], save);
+    });
+
+    expect(second).toBeNull();
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      finishSave({ rankEntityId: 'rank1' });
+      await first;
+    });
+    expect(save).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(result.current.isPublishing).toBe(false));
   });
 });
