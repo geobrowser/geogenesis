@@ -705,6 +705,24 @@ describe('MomentsEditor (GEO-3671)', () => {
     expect(screen.queryByText('Nobody says a whole word in it.')).not.toBeInTheDocument();
   });
 
+  // A carried reel's warnings would be about its old-video cuts at the new video's places, on a reel
+  // that can't be edited: the panel isn't shown for it.
+  it('shows no warnings for a carried reel', () => {
+    mocks.manualReel = true;
+    mocks.plan.data = entry({
+      live_reel: {
+        clock: 'video',
+        carried: true,
+        clips: [{ start_ms: 900, end_ms: 3_000, speaker_slot: 0, claim_index: 0, claim_text: 'Coffee is low stakes' }],
+      },
+    });
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    expect(screen.getByRole('textbox', { name: 'Start time' })).toBeInTheDocument();
+    expect(screen.queryByText(/Only 1 clip/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/to check/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/No warnings/)).not.toBeInTheDocument();
+  });
+
   // Return to automatic waits until an edit is gone, so a debate locked without a reel and with an
   // edit on it points to publishing the edit or discarding it, not to a button it hides.
   it('points a debate locked without a reel, with an edit on it, to publishing or discarding it', () => {

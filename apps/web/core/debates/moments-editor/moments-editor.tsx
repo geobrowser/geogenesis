@@ -299,7 +299,9 @@ function Editor({ debateId }: { debateId: string }) {
     ...(words.length > 0 ? [words[words.length - 1].end_ms] : []),
     ...clips.map(clip => clip.end_ms)
   );
-  const warnings = reelWarnings(clips, words, nameOf);
+  // None for a carried reel: like its clip checks, they would read its old-video cuts at the places
+  // the new video's turns map them to, and it is read-only, so there is nothing to fix.
+  const warnings = carried ? [] : reelWarnings(clips, words, nameOf);
 
   // The header's button and the warning's fix alike: without a playhead there is nowhere to add it.
   // A new clip starts at the playhead or at a transcript sentence. The transcript is the way in when
@@ -491,7 +493,7 @@ function Editor({ debateId }: { debateId: string }) {
           ))}
         </Notice>
       ) : null}
-      {clips.length > 0 ? (
+      {clips.length > 0 && !carried ? (
         <ReelWarningsPanel
           warnings={warnings}
           readOnly={readOnly}
