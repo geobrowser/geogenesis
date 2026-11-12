@@ -1,5 +1,6 @@
 import { uuidToHex } from '~/core/id/normalize';
 
+import { DEBATE_TIME_PARAM } from '../debate-timecode';
 import { debatesAppDebateUrl } from '../debates-app-url';
 import { type DebateEntity, fetchEntityFromGraph, isVisibleDebate } from './published-debate-path';
 
@@ -34,18 +35,16 @@ export function couldBeDebateId(id: string): boolean {
 const EMAIL_PARAMS = ['ref_email', 'ref_send', 'ref_link'];
 
 /**
- * Query parameters that ask geobrowser.io for something the debates app doesn't have, on a link
- * that comes back from outside: a panel (`modal`, e.g. the reply email's `?modal=comments`, the
- * calendar connect's return `?modal=schedule&calendar=…`) or a calendar connect's result.
+ * Query parameters a link keeps the geobrowser.io page for, because the debates app can't do what
+ * they ask:
+ * - a panel or flow (`modal`, e.g. the reply email's `?modal=comments`, the calendar connect's
+ *   return `?modal=schedule&calendar=…`) or a calendar connect's result (`calendar`);
+ * - a start time ({@link DEBATE_TIME_PARAM}), on the raw recordings' clock that geobrowser.io's
+ *   player plays; the debates app's `time` is on the rendered video's, which an edited Open
+ *   rounds render cuts;
+ * - an email's tags ({@link EMAIL_PARAMS}).
  */
-/**
- * A start time (`t`) is on the raw recordings' clock, which geobrowser.io's player plays; the
- * debates app's `time` is on the rendered video's, and an edited Open rounds render differs from it.
- * A timestamped link stays where its moment is right.
- */
-const START_TIME_PARAM = 't';
-
-const STAYING_PARAMS = [STAY_PARAM, 'modal', 'calendar', START_TIME_PARAM, ...EMAIL_PARAMS];
+const STAYING_PARAMS = [STAY_PARAM, 'modal', 'calendar', DEBATE_TIME_PARAM, ...EMAIL_PARAMS];
 
 /**
  * Whether a request must stay where it is whatever the page: `?stay=1`, a geobrowser.io panel or
