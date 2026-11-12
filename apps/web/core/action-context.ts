@@ -65,7 +65,10 @@ export type ActionKind =
   | 'assistant_message'
   | 'assistant_option'
   | 'create_space'
-  | 'filter_claims';
+  | 'filter_claims'
+  // GEO-3679: a Debates member pushing a debate down in the Best debates ranking, and taking it back.
+  | 'push_down'
+  | 'undo_push_down';
 export type ActionContext = {
   component: ActionComponent;
   page_path: string;
