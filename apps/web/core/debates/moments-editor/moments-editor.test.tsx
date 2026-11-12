@@ -731,8 +731,8 @@ describe('MomentsEditor (GEO-3671)', () => {
   });
 
   // The carry ends when the worker's re-cut lands, with no reload: the plan read again says so, and
-  // the editor judges the reel's clips again from then on.
-  it('runs its clip checks again once a carried reel is cut again', () => {
+  // the editor judges the reel's clips, and warns about it, again from then on.
+  it('runs its clip checks and warnings again once a carried reel is cut again', () => {
     mocks.manualReel = true;
     const clips = [
       { start_ms: 3_100, end_ms: 4_900, speaker_slot: 0, claim_index: 0, claim_text: 'Coffee is low stakes' },
@@ -740,11 +740,13 @@ describe('MomentsEditor (GEO-3671)', () => {
     mocks.plan.data = entry({ live_reel: { clock: 'video', carried: true, clips } });
     const { rerender } = render(<MomentsEditor debateId={DEBATE_ID} />);
     expect(screen.queryByText('Nobody says a whole word in it.')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Only 1 clip/)).not.toBeInTheDocument();
 
     mocks.plan.data = entry({ reel_version: 'v2', live_reel: { clock: 'video', clips } });
     rerender(<MomentsEditor debateId={DEBATE_ID} />);
     expect(screen.queryByText(/still cut on the video from before it/)).not.toBeInTheDocument();
     expect(screen.getByText('Nobody says a whole word in it.')).toBeInTheDocument();
+    expect(screen.getByText(/Only 1 clip/)).toBeInTheDocument();
   });
 
   // Return to automatic waits until an edit is gone, so a debate locked without a reel and with an
