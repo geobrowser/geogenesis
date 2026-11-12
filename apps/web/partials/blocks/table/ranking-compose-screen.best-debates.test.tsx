@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => ({
   flag: false,
   member: false,
   accessLoading: false,
+  authResolving: false,
   ensureAccess: vi.fn(),
   replace: vi.fn(),
   saveMySubmission: vi.fn(),
@@ -46,6 +47,7 @@ vi.mock('jotai', async importOriginal => ({
 }));
 vi.mock('~/core/state/feature-flags', () => ({ useFeatureFlag: () => mocks.flag }));
 vi.mock('~/core/hooks/use-hydrated', () => ({ useHydrated: () => true }));
+vi.mock('~/core/hooks/use-auth-resolving', () => ({ useAuthResolving: () => mocks.authResolving }));
 vi.mock('~/core/hooks/use-access-control', () => ({
   useAccessControl: () => ({
     canEdit: mocks.member,
@@ -203,6 +205,7 @@ beforeEach(() => {
   mocks.publish = null;
   mocks.canPublish = null;
   mocks.bestDebatesEnabled = null;
+  mocks.authResolving = false;
 });
 
 afterEach(cleanup);
@@ -258,6 +261,35 @@ describe('RankingComposeScreen on the Best debates block', () => {
       expect.anything(),
       { basedOnOrderedIds: ['d1'] }
     );
+  });
+
+  it('keeps a member who deep-links in edit mode when their sign-in resolves late', () => {
+    // A pasted compose URL: sign-in is still starting, so access reads as none and not loading.
+    mocks.flag = true;
+    mocks.member = false;
+    mocks.authResolving = true;
+    const { rerender } = renderScreen();
+    expect(screen.getByRole('status')).toHaveTextContent('Loading ranking');
+    expect(mocks.replace).not.toHaveBeenCalled();
+
+    // The account and the membership arrive.
+    mocks.authResolving = false;
+    mocks.member = true;
+    rerender(<RankingComposeScreen spaceId={DEBATES_SPACE} />);
+    expect(mocks.replace).not.toHaveBeenCalled();
+    expect(mocks.bestDebatesEnabled).toBe(true);
+  });
+
+  it('downgrades a non-member to view once sign-in has resolved, not before', () => {
+    mocks.flag = true;
+    mocks.authResolving = true;
+    const { rerender } = renderScreen();
+    expect(mocks.replace).not.toHaveBeenCalled();
+
+    mocks.authResolving = false;
+    rerender(<RankingComposeScreen spaceId={DEBATES_SPACE} />);
+    expect(mocks.replace).toHaveBeenCalledTimes(1);
+    expect(new URL(mocks.replace.mock.calls[0][0] as string, 'https://geo.test').searchParams.get('mode')).toBe('view');
   });
 
   it('shows a loading state, not the generic screen, until the access read settles', () => {
