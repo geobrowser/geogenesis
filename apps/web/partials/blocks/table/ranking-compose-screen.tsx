@@ -8,10 +8,8 @@ import { useAtom, useSetAtom } from 'jotai';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
-import { BEST_DEBATES_BLOCK_ID } from '~/core/blocks/ranking/best-debates';
-import { RankingComposeBallotContext, useComposeBallot } from '~/core/blocks/ranking/ranking-compose-ballot-context';
-import { bestDebatesComposeMode } from '~/core/blocks/ranking/best-debates-compose-access';
 import { BEST_DEBATES_TEAM_VIEW_PARAM, BEST_DEBATES_TEAM_VIEW_TO_RANK } from '~/core/blocks/ranking/best-debates-views';
+import { RankingComposeBallotContext, useComposeBallot } from '~/core/blocks/ranking/ranking-compose-ballot-context';
 import { resolveRankingSingleTargetSpaceId } from '~/core/blocks/ranking/ranking-compose-publish-spaces';
 import { RANKING_COMPOSE_TAB_MY, rankingComposeHref } from '~/core/blocks/ranking/ranking-compose-url';
 import { generatePersonalRankingOgImages } from '~/core/blocks/ranking/ranking-og-generate-client';
@@ -26,6 +24,7 @@ import {
   getRowDisplayName,
   splitRankableEntityIds,
 } from '~/core/blocks/ranking/ranking-rankable-list';
+import type { RankingSubmissionSlot } from '~/core/blocks/ranking/ranking-submission-types';
 import { useComposeEditGuard } from '~/core/blocks/ranking/use-compose-edit-guard';
 import {
   useBestDebatesBallotPublisher,
@@ -43,13 +42,11 @@ import {
   useRankingSubmissions,
 } from '~/core/blocks/ranking/use-ranking-submissions';
 import { useCreateEntityWithFilters } from '~/core/hooks/use-create-entity-with-filters';
-import { useHydrated } from '~/core/hooks/use-hydrated';
 import { useIsMobileLayout } from '~/core/hooks/use-is-mobile-layout';
 import { useOnboarding } from '~/core/hooks/use-onboarding';
 import { rankingComposeNeedsAccountStep, useRankingComposeAccess } from '~/core/hooks/use-ranking-compose-access';
 import { useToast } from '~/core/hooks/use-toast';
 import { ID } from '~/core/id';
-import { useFeatureFlag } from '~/core/state/feature-flags';
 import { useEnqueuePendingAction } from '~/core/state/pending-actions';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import type { SearchResult } from '~/core/types';
@@ -57,8 +54,9 @@ import { useRankingOpportunity } from '~/core/use-ranking-opportunity';
 
 import { stepAtom } from '~/partials/onboarding/onboarding-atoms';
 
-import { RankingBallotReadError } from './ranking-ballot-read-error';
 import { useBestDebatesCompose } from './best-debates/use-best-debates-compose';
+import { useBestDebatesPushDownSlot } from './best-debates/use-best-debates-push-down-slot';
+import { RankingBallotReadError } from './ranking-ballot-read-error';
 import { RankingComposeCreateEntityPanel } from './ranking-compose-create-entity-panel';
 import { RankingComposeEntitySheet } from './ranking-compose-entity-sheet';
 import { RankingComposeFullscreen } from './ranking-compose-fullscreen';
@@ -88,21 +86,18 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   const { name, entityId, filterState } = useDataBlock();
   const displayName = name?.trim() || 'Untitled ranking';
 
-  // Best debates (GEO-3678) adds To rank, placing by comparison, drag-in and phone tabs, for Debates
-  // members with the `debateRankings` flag (#3105's `canComposeEdit` rule). Everyone else, and every
-  // other ranking block, gets the screen exactly as before.
-  const debateRankingsFlag = useFeatureFlag('debateRankings');
-  const hydrated = useHydrated();
-  const { canEdit: canEditBlockSpace, isLoading: isLoadingBlockAccess } = useRankingComposeAccess(spaceId, entityId);
-  const bestDebatesMode = bestDebatesComposeMode({
-    blockId: entityId,
-    spaceId,
-    hydrated,
-    isLoadingAccess: isLoadingBlockAccess,
-    debateRankingsFlag,
-    canEdit: canEditBlockSpace,
-  });
-  const isBestDebates = bestDebatesMode === 'best-debates';
+  // Best debates (GEO-3677): composing needs the `debateRankings` flag and Debates membership. A
+  // pasted compose URL lands here without the block's buttons, so the screen checks it too: no
+  // membership request, and once that's settled, the read-only view.
+  const composeEditGuard = useComposeEditGuard({ blockId: entityId, spaceId });
+  const composeEditRefused = composeEditGuard.isBestDebates && !composeEditGuard.allowed;
+  // Best debates (GEO-3678/3679) adds To rank, placing by comparison, push down, drag-in and phone
+  // tabs, only for whoever may compose there. Every other ranking block gets the screen as before.
+  // Until the guard settles (flags hydrating, membership loading) the screen shows a loading state:
+  // the generic screen would flash, and could file items under the block's space.
+  const isBestDebates = composeEditGuard.isBestDebates && composeEditGuard.allowed;
+  const isBestDebatesLoading = composeEditGuard.isBestDebates && !composeEditGuard.settled;
+  const bestDebatesBlockId = isBestDebates ? entityId : null;
 
   const createNewSpaceId = React.useMemo(() => resolveRankingSingleTargetSpaceId(filterState), [filterState]);
 
@@ -136,11 +131,6 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
     router.back();
   }, [rankingComposeReturnHref, router, setRankingComposeReturnHref]);
 
-  // Best debates (GEO-3677): composing needs the `debateRankings` flag and Debates membership. A
-  // pasted compose URL lands here without the block's buttons, so the screen checks it too: no
-  // membership request, and once that's settled, the read-only view.
-  const composeEditGuard = useComposeEditGuard({ blockId: entityId, spaceId });
-  const composeEditRefused = composeEditGuard.isBestDebates && !composeEditGuard.allowed;
   React.useEffect(() => {
     if (!composeEditRefused || !composeEditGuard.settled) return;
     const params = new URLSearchParams(searchParams?.toString() ?? '');
@@ -189,8 +179,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   } = useRankingSubmissions(entityId, spaceId, displayName);
 
   // GEO-3679: the Best debates block lists what the member pushed down, and ranking one of those
-  // clears its downvote before the ballot publishes.
-  const bestDebatesBlockId = BEST_DEBATES_BLOCK_ID && ID.equals(entityId, BEST_DEBATES_BLOCK_ID) ? entityId : null;
+  // clears its downvote once the ballot publishes.
   const {
     debates: pushedDownDebates,
     isError: isPushedDownError,
@@ -249,7 +238,14 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   // ours) over the published ballot, with the ranker's own unpublished edits
   // merged onto whichever it is. See `useRankingComposeDraft`.
   const composeSeed = rankingComposeSeed(unsavedDraft, myLastSubmission?.orderedEntityIds);
-  const { orderedIds, setOrderedIds, getBasedOnOrderedIds } = useRankingComposeDraft(composeSeed);
+  // Best debates' placements and drags also merge through it, and each of its publishes moves the
+  // merge base (`markDraftPublished`), so a refetch landing mid-placement keeps the placement.
+  const {
+    orderedIds,
+    setOrderedIds,
+    getBasedOnOrderedIds,
+    markPublished: markDraftPublished,
+  } = useRankingComposeDraft(composeSeed);
   const [searchQuery, setSearchQuery] = React.useState('');
   const [activeSwipeRowKey, setActiveSwipeRowKey] = React.useState<string | null>(null);
   const [entitySheetTarget, setEntitySheetTarget] = React.useState<{
@@ -594,6 +590,31 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
     return searchResultsById.get(id)?.name?.trim() || null;
   };
 
+  /**
+   * One Best debates ballot write (GEO-3678 + GEO-3679), for `useBestDebatesCompose`'s publish (which
+   * files every item under its debate's own space first): the fresh closed-ranking check, then the
+   * order that never leaves a debate neither ranked nor pushed down (`useBestDebatesBallotPublisher`:
+   * read the ballot's downvotes, publish, clear them), built on the ballot the draft is based on.
+   */
+  const saveBestDebatesBallot = async (slots: RankingSubmissionSlot[]) => {
+    if (composeEditRefused) return null;
+    if (!rankingSubmissionsOpen(getRankingPeriodState(startDate, endDate))) {
+      setToast(<span>This ranking has closed.</span>);
+      return null;
+    }
+    const result = await publishBallotClearingDownvotes(
+      slots.map(slot => slot.id),
+      () => saveMySubmission(slots, rankingOpportunity.context, { basedOnOrderedIds: getBasedOnOrderedIds() })
+    );
+    return result?.published ?? null;
+  };
+
+  const pushedDownEntityIds = React.useMemo(
+    () => pushedDownDebates.map(debate => debate.entityId),
+    [pushedDownDebates]
+  );
+  const pushDown = useBestDebatesPushDownSlot({ blockId: bestDebatesBlockId, pushedDownEntityIds });
+
   const bestDebates = useBestDebatesCompose({
     enabled: isBestDebates,
     blockId: entityId,
@@ -607,9 +628,11 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
     hasUnpublishedChanges,
     nameOf,
     personalSpaceId,
-    saveMySubmission: slots => saveMySubmission(slots, rankingOpportunity.context),
-    isSaving,
+    saveMySubmission: saveBestDebatesBallot,
+    isSaving: isPublishBusy,
+    pushDown: pushDown.slot,
     onPublished: published => {
+      markDraftPublished(published.orderedEntityIds);
       generateOgImagesOnceIndexed(published);
     },
     openOnToRank: searchParams?.get(BEST_DEBATES_TEAM_VIEW_PARAM) === BEST_DEBATES_TEAM_VIEW_TO_RANK,
@@ -641,34 +664,13 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
     });
   };
 
-  /**
-   * Publishes `ids` as the member's Best debates ballot (GEO-3679), the one path both Publish and
-   * push-down's draft edit take: the fresh closed-ranking check, the downvote clears in the order
-   * that never leaves a debate neither ranked nor pushed down (`useBestDebatesBallotPublisher`),
-   * and the OG images. Built every render, so it always revises the newest rank entity and uses
-   * the newest rows; push-down reaches it through `useComposeBallot`'s ref.
-   */
-  const publishBestDebates = async (ids: readonly string[]) => {
-    if (composeEditRefused) return null;
-    if (!rankingSubmissionsOpen(getRankingPeriodState(startDate, endDate))) {
-      setToast(<span>This ranking has closed.</span>);
-      return null;
-    }
-    const result = await publishBallotClearingDownvotes(ids, () =>
-      saveMySubmission(buildSlots(ids), rankingOpportunity.context, { basedOnOrderedIds: getBasedOnOrderedIds() })
-    );
-    if (!result) return null;
-    return { ...result, ogVersion: regenerateOgImages(result.published) };
-  };
-
   /** The draft as the ranking screen's ballot, for push-down to edit (`usePushDown`). */
   const composeBallot = useComposeBallot(
-    bestDebatesBlockId
-      ? { orderedIds, setOrderedIds, publish: async ids => Boolean(await publishBestDebates(ids)) }
-      : null
+    bestDebatesBlockId ? { orderedIds, setOrderedIds, publish: ids => bestDebates.publish(ids) } : null
   );
 
   const handlePublish = async () => {
+    if (composeEditRefused) return;
     // `submissionsOpen` comes from the last render. Re-check against a fresh clock:
     if (!rankingSubmissionsOpen(getRankingPeriodState(startDate, endDate))) {
       setToast(<span>This ranking has closed.</span>);
@@ -698,25 +700,13 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
       return;
     }
 
-    let published: NonNullable<Awaited<ReturnType<typeof saveMySubmission>>>;
-    let ogVersion: string;
-    if (bestDebatesBlockId) {
-      const result = await publishBestDebates(orderedIds);
-      if (!result) return;
-      // Stay on the screen while a pushed-down debate still needs its Retry.
-      if (result.failedClears > 0) return;
-      published = result.published;
-      ogVersion = result.ogVersion;
-    } else {
-      const saved = await saveMySubmission(slots, rankingOpportunity.context, {
-        basedOnOrderedIds: getBasedOnOrderedIds(),
-      });
-      if (!saved) return;
-      published = saved;
-      // OG images render from indexed data, so generation waits for
-      // `indexingSettled` — detached, since the redirect below must not.
-      ogVersion = regenerateOgImages(saved);
-    }
+    const published = await saveMySubmission(slots, rankingOpportunity.context, {
+      basedOnOrderedIds: getBasedOnOrderedIds(),
+    });
+    if (!published) return;
+    // OG images render from indexed data, so generation waits for
+    // `indexingSettled` — detached, since the redirect below must not.
+    const ogVersion = regenerateOgImages(published);
 
     // After publishing, land on the fullscreen ranking view instead of the parent space page.
     setRankingComposeReturnHref(null);
@@ -862,7 +852,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   }
 
   // Best debates while the flag or membership is unknown: no generic screen to flash or publish from.
-  if (bestDebatesMode === 'loading') {
+  if (isBestDebatesLoading) {
     return (
       <RankingComposeFullscreen coverNavbar={isMobile}>
         <div className="flex h-full items-center justify-center text-metadata text-grey-04" role="status">
@@ -877,6 +867,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
       <RankingComposeCreateEntityPanel onFinished={addToMyRanking} rankingName={displayName} />
       <RankingComposeEntitySheet target={entitySheetTarget} onClose={() => setEntitySheetTarget(null)} />
       {isBestDebates ? bestDebates.dialogs : null}
+      {pushDown.binding(isBestDebates ? bestDebates.activeEntityId : null)}
       <div ref={rankingOpportunity.root} className="contents">
         <RankingComposeFullscreen coverNavbar={isMobile}>
           {isMobile ? (

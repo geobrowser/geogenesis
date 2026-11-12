@@ -288,7 +288,9 @@ export function usePushDown(debateId: string, options: UsePushDownOptions = {}):
     const slots = remaining.map(id => ({ id, name: null, spaceId: voteSpaces.get(ID.uuidToHex(id)) }));
     if (slots.some(slot => !slot.spaceId)) return { ok: false, message: PUSH_DOWN_BALLOT_FAILED_COPY };
 
-    const submission = await saveMySubmission(slots);
+    // Built on the ballot just read (useMyRanking's paged read, GEO-3680), so the publish path merges
+    // in anything that moved since rather than dropping it.
+    const submission = await saveMySubmission(slots, undefined, { basedOnOrderedIds: published });
     if (!submission) return { ok: false, message: PUSH_DOWN_BALLOT_FAILED_COPY };
     // Ranker counts come from indexed ballots, so refresh them once indexing has settled.
     void submission.indexingSettled.then(() => invalidateBlockRankers(queryClient, blockId!, DEBATES_SPACE_ID));

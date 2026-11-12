@@ -28,6 +28,7 @@ const mocks = vi.hoisted(() => ({
   publish: null as null | (() => void),
   canPublish: null as null | boolean,
   empty: [] as never[],
+  bestDebatesEnabled: null as null | boolean,
 }));
 
 vi.mock('~/core/blocks/ranking/best-debates', async importOriginal => ({
@@ -136,6 +137,39 @@ vi.mock('~/core/use-ranking-opportunity', () => ({
   useRankingOpportunity: () => ({ root: vi.fn(), context: {} }),
 }));
 vi.mock('~/partials/onboarding/onboarding-atoms', () => ({ stepAtom: {} }));
+// GEO-3679's reads and the downvote-clearing publish: the publish runs the ballot write straight.
+vi.mock('~/core/blocks/ranking/use-my-pushed-down-debates', () => ({
+  useMyPushedDownDebates: () => ({ debates: mocks.empty, isError: false, retry: vi.fn() }),
+  useBestDebatesBallotPublisher: () => ({
+    publish: async (_ids: readonly string[], save: () => Promise<unknown>) => {
+      const published = await save();
+      return published ? { published, failedClears: 0 } : null;
+    },
+    isPublishing: false,
+  }),
+}));
+// GEO-3678's additions: its publish files each debate under its own space, then writes the ballot
+// through the screen's `saveMySubmission` (the downvote-clearing publish above).
+vi.mock('./best-debates/use-best-debates-compose', () => ({
+  useBestDebatesCompose: (args: {
+    enabled: boolean;
+    saveMySubmission: (slots: { id: string; name: string | null; spaceId?: string }[]) => Promise<unknown>;
+  }) => {
+    mocks.bestDebatesEnabled = args.enabled;
+    return {
+      teamView: undefined,
+      mobileTabs: undefined,
+      dialogs: null,
+      isPlacing: false,
+      activeEntityId: null,
+      placeFromTeam: vi.fn(),
+      dropEntity: vi.fn(),
+      publish: async (ids: string[]) =>
+        Boolean(await args.saveMySubmission(ids.map(id => ({ id, name: null, spaceId: 'debate-space' })))),
+    };
+  },
+}));
+vi.mock('./ranking-compose-pushed-down', () => ({ RankingComposePushedDown: () => null }));
 vi.mock('~/app/not-found', () => ({ default: () => <div>404</div> }));
 
 // The screen's children: only the toolbar matters here, for its publish handler.
@@ -166,6 +200,7 @@ beforeEach(() => {
   mocks.saveMySubmission.mockReset().mockResolvedValue(null);
   mocks.publish = null;
   mocks.canPublish = null;
+  mocks.bestDebatesEnabled = null;
 });
 
 afterEach(cleanup);
@@ -212,8 +247,25 @@ describe('RankingComposeScreen on the Best debates block', () => {
 
     expect(mocks.replace).not.toHaveBeenCalled();
     expect(mocks.canPublish).toBe(true);
+    expect(mocks.bestDebatesEnabled).toBe(true);
     await act(async () => mocks.publish?.());
+    // Through the Best debates publish (own spaces), built on the ballot the draft came from.
     expect(mocks.saveMySubmission).toHaveBeenCalledTimes(1);
+    expect(mocks.saveMySubmission).toHaveBeenCalledWith(
+      [{ id: 'd1', name: null, spaceId: 'debate-space' }],
+      expect.anything(),
+      { basedOnOrderedIds: ['d1'] }
+    );
+  });
+
+  it('shows a loading state, not the generic screen, until the access read settles', () => {
+    mocks.flag = true;
+    mocks.member = true;
+    mocks.accessLoading = true;
+    renderScreen();
+
+    expect(screen.getByRole('status')).toHaveTextContent('Loading ranking');
+    expect(screen.queryByTestId('toolbar')).toBeNull();
   });
 });
 
@@ -224,6 +276,7 @@ describe('RankingComposeScreen on any other block', () => {
 
     expect(mocks.ensureAccess).toHaveBeenCalledTimes(1);
     expect(mocks.replace).not.toHaveBeenCalled();
+    expect(mocks.bestDebatesEnabled).toBe(false);
     await act(async () => mocks.publish?.());
     expect(mocks.saveMySubmission).toHaveBeenCalledTimes(1);
   });

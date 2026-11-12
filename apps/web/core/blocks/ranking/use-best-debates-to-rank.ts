@@ -42,7 +42,7 @@ export function rankedByText(label: Extract<RankedByLabel, { kind: 'ranked' }>):
 }
 
 /** Re-reads who ranked what once a publish has been indexed, never before (see `invalidate`). */
-export function refreshRankersAfterIndexing(rankers: RankersRead, indexingSettled: Promise<void>) {
+export function refreshRankersAfterIndexing(rankers: RankersRead, indexingSettled: Promise<unknown>) {
   void indexingSettled.then(() => rankers.invalidate()).catch(() => {});
 }
 

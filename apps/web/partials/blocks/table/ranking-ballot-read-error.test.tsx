@@ -11,6 +11,8 @@ function state(ballotReadError: string | null): RankingBlockState {
     showEditRankingButton: false,
     isSaving: false,
     openRankingCompose: vi.fn(),
+    // Any block but Best debates without the flag or membership (GEO-3677).
+    canComposeEdit: true,
   } as unknown as RankingBlockState;
 }
 

@@ -5,6 +5,7 @@ import type { ReactNode } from 'react';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { resetRankingPublishStateForTests } from './ranking-publish-queue';
 import { useRankingSubmissions } from './use-ranking-submissions';
 
 // The Best debates block id is unset until GEO-3685; inject one so its rules can be exercised.
@@ -49,6 +50,9 @@ vi.mock('./use-my-ranking', () => ({
     refetchMyRanking: vi.fn().mockResolvedValue(undefined),
   }),
   recordPublishedRank: vi.fn(),
+  releasePublishedRankPin: vi.fn(),
+  // The publish path re-reads the ballot from the index before it builds the edit (GEO-3680).
+  fetchMyRankingBallot: vi.fn(async () => ({ rankEntity: mocks.myRankEntity, orderedEntityIds: [] })),
 }));
 vi.mock('./use-ranking-block-config', () => ({
   useRankingBlockConfig: () => ({ isRolling: false, submissionFrequencyHours: null }),
@@ -73,6 +77,8 @@ const ITEM_2 = '12121212121212121212121212121212';
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // Each test publishes on its own: no earlier test's publish for the queue to wait on.
+  resetRankingPublishStateForTests();
   mocks.send.mockResolvedValue('0xhash');
   mocks.publish.mockResolvedValue({ to: '0xabc', calldata: '0x01' });
   mocks.create.mockReturnValue({ id: 'dddddddddddddddddddddddddddddddd', ops: [{ op: 'noop' }] });

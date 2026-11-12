@@ -282,5 +282,11 @@ export function useBestDebatesPlacement({
     );
   }
 
-  return { start, dialogs, isPlacing: flow !== null };
+  return {
+    start,
+    dialogs,
+    isPlacing: flow !== null,
+    /** The debate the choice, comparison or confirmation is about (push-down binds to it). */
+    activeEntityId: flow?.entityId ?? null,
+  };
 }

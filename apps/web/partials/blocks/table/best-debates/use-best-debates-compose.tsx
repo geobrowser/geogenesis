@@ -196,6 +196,7 @@ export function useBestDebatesCompose({
     mobileTabs,
     dialogs: placement.dialogs,
     isPlacing: placement.isPlacing,
+    activeEntityId: placement.activeEntityId,
     /** A press on a team row places it by comparison instead of appending it. */
     placeFromTeam: (entityId: string) => startPlacement(entityId, 'team'),
     dropEntity,

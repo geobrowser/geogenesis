@@ -32,6 +32,7 @@ import {
   isRankingBallotUnreadableError,
 } from './fetch-my-ranking-ballot';
 import { clearLocalMyRankingDraft } from './local-ranking-my-draft';
+import { ballotRecencyKey, pickLatestBallot } from './ranking-ballot-recency';
 import {
   type OwnRankingPublish,
   RANKING_CHANGED_ELSEWHERE_MESSAGE,
@@ -56,7 +57,6 @@ import {
   setUnsavedRankingDraft,
   subscribeUnsavedRankingDrafts,
 } from './ranking-publish-queue';
-import { ballotRecencyKey, pickLatestBallot } from './ranking-ballot-recency';
 import { parseTimestampMs, shouldMintNewRankEntity } from './ranking-rolling';
 import type { RankingSubmissionRecord } from './ranking-submission-types';
 import type { RankingSubmissionSlot } from './ranking-submission-types';
