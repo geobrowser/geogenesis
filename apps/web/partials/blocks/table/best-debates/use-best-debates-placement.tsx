@@ -191,7 +191,7 @@ export function useBestDebatesPlacement({
   );
 
   /**
-   * Publishes the list as it stands, through GEO-3679's clearing step when it is wired in. The
+   * Publishes the list as it stands, through GEO-3679's `rank` (publish, then clear a downvote) when it is wired in. The
    * screen merges a refetched ballot into the draft rather than replacing it, so the placed debate
    * should always still be there; if it isn't, it goes back where it was placed before publishing.
    */
@@ -203,7 +203,7 @@ export function useBestDebatesPlacement({
         setOrderedIds(ids);
       }
       const run = () => publish(ids);
-      return pushDown?.rankAfterClearing ? pushDown.rankAfterClearing(entityId, run) : run();
+      return pushDown?.rank ? pushDown.rank(entityId, run) : run();
     },
     [publish, pushDown, setOrderedIds]
   );

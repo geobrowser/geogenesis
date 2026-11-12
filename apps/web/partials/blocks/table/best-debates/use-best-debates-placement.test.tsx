@@ -205,13 +205,13 @@ describe('placing a debate by comparison', () => {
 
   it("runs the Done publish through Push it down's clearing step when GEO-3679 provides one", async () => {
     const publish = vi.fn(async (_ids: string[]) => true);
-    const rankAfterClearing = vi.fn(async (_id: string, run: () => Promise<boolean>) => run());
+    const rank = vi.fn(async (_id: string, run: () => Promise<boolean>) => run());
     render(
       <Harness
         initial={[]}
         startWith={{ id: 'new', origin: 'team' }}
         publish={publish}
-        pushDown={{ onSelect: vi.fn(), rankAfterClearing }}
+        pushDown={{ onSelect: vi.fn(), rank }}
       />
     );
     fireEvent.click(screen.getByText('start'));
@@ -219,7 +219,7 @@ describe('placing a debate by comparison', () => {
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Done' }));
     });
-    expect(rankAfterClearing).toHaveBeenCalledWith('new', expect.any(Function));
+    expect(rank).toHaveBeenCalledWith('new', expect.any(Function));
     expect(publish).toHaveBeenCalledTimes(1);
   });
 
@@ -265,5 +265,26 @@ describe('placing a debate by comparison', () => {
     fireEvent.keyDown(screen.getByRole('dialog'), { key: '1' });
     expect(screen.getByText('Placed #1 of 2')).toBeTruthy();
     expect(screen.getByText('Nudge it if it’s not quite right. Done publishes it.')).toBeTruthy();
+  });
+
+  it("waits on both choices until the ranker's vote is known", () => {
+    const { rerender } = render(
+      <Harness
+        initial={[]}
+        startWith={{ id: 'new', origin: 'team' }}
+        pushDown={{ onSelect: vi.fn(), isReady: () => false }}
+      />
+    );
+    fireEvent.click(screen.getByText('start'));
+    expect((screen.getByRole('button', { name: /Rank it/ }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: /Push it down/ }) as HTMLButtonElement).disabled).toBe(true);
+    rerender(
+      <Harness
+        initial={[]}
+        startWith={{ id: 'new', origin: 'team' }}
+        pushDown={{ onSelect: vi.fn(), isReady: () => true }}
+      />
+    );
+    expect((screen.getByRole('button', { name: /Rank it/ }) as HTMLButtonElement).disabled).toBe(false);
   });
 });

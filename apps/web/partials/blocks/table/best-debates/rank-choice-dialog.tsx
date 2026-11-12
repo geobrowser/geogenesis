@@ -16,11 +16,16 @@ export type PushDownSlot = {
   /** The line under "Push it down" (GEO-3679: `pushDownChoiceDescription(BEST_DEBATES_RANKING_LIVE)`). */
   description?: string;
   /**
-   * Wraps the publish that ranks a debate, so a debate this ranker pushed down has its downvote
-   * cleared before the ballot goes out (GEO-3679's `usePushDown(debateId).rankAfterClearing`).
-   * Resolves to what `publish` resolved to; false keeps the Placed confirmation open.
+   * Runs the publish that ranks a debate (GEO-3679's `usePushDown(debateId).rank(publish)`): it
+   * publishes first, then clears the ranker's downvote on a debate they had pushed down. Resolves to
+   * whether the ranking went out; false keeps the Placed confirmation open.
    */
-  rankAfterClearing?: (entityId: string, publish: () => Promise<boolean>) => Promise<boolean>;
+  rank?: (entityId: string, publish: () => Promise<boolean>) => Promise<boolean>;
+  /**
+   * False while the ranker's vote on the debate is still being read (`usePushDown(...).isVoteKnown`):
+   * both choices wait, so neither acts on a vote it doesn't know yet. Defaults to true.
+   */
+  isReady?: (entityId: string) => boolean;
 };
 
 type Props = {
@@ -36,7 +41,7 @@ type Props = {
 };
 
 const OPTION_CLASS =
-  'flex w-full flex-col items-start gap-1 rounded-lg border border-grey-02 bg-white p-4 text-left transition-colors hover:border-text focus-visible:border-text focus-visible:outline-hidden';
+  'flex w-full flex-col items-start gap-1 rounded-lg border border-grey-02 bg-white p-4 text-left transition-colors hover:border-text focus-visible:border-text focus-visible:outline-hidden disabled:cursor-default disabled:opacity-50';
 
 /**
  * Rank asks first: place the debate in your ranking, or push it down (GEO-3591 spec, "Pushing a
@@ -53,10 +58,11 @@ export function RankChoiceDialog({
   pushDown,
   onClose,
 }: Props) {
+  const ready = pushDown?.isReady ? pushDown.isReady(entityId) : true;
   return (
     <RankingFlowDialog open onClose={onClose} title={debateName} subtitle={debateMeta ?? undefined}>
       <div className="flex flex-col gap-2" data-testid="rank-choice-dialog">
-        <button type="button" className={OPTION_CLASS} onClick={onRankIt}>
+        <button type="button" className={OPTION_CLASS} onClick={onRankIt} disabled={!ready}>
           <span className="text-button font-medium text-text">{alreadyRanked ? 'Place it again' : 'Rank it'}</span>
           <span className="text-metadata text-grey-04">
             Worth showing more people. A few “which was better?” choices find its place in your ranking.
@@ -66,6 +72,7 @@ export function RankChoiceDialog({
           <button
             type="button"
             className={OPTION_CLASS}
+            disabled={!ready}
             onClick={() => {
               onClose();
               pushDown.onSelect(entityId);
