@@ -46,4 +46,4 @@ function WatchDebateDialog({ entityId, onClose }: { entityId: string; onClose: (
   );
 }
 
-const WATCH_PLAYER_STYLE: React.CSSProperties = { maxWidth: 'max(240px, calc((100dvh - 230px) * 0.83))' };
+const WATCH_PLAYER_STYLE: React.CSSProperties = { maxWidth: 'max(240px, calc((100dvh - 300px) * 0.83))' };

@@ -65,6 +65,7 @@ vi.mock('./best-debates/best-debate-row', () => ({
     </div>
   ),
   RankerAvatars: () => null,
+  BestDebateDisplaysContext: { Provider: ({ children }: { children: React.ReactNode }) => children },
 }));
 vi.mock('./ranking-entry-row', () => ({
   RankingEntryRowSkeleton: () => <div data-testid="skeleton" />,
