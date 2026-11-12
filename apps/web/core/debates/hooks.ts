@@ -164,6 +164,8 @@ export const debateQueryKeys = {
   ) => ['debates', 'recording-url', debateId, filename, accountKey, variant] as const,
   transcript: (debateId: string, format: TranscriptFormat, include: readonly TranscriptInclude[] = []) =>
     ['debates', 'transcript', dashlessId(debateId), format, include.join(',')] as const,
+  /** Every read of one debate's transcript, whatever its format and `include`: a prefix to invalidate. */
+  transcripts: (debateId: string) => ['debates', 'transcript', dashlessId(debateId)] as const,
   /**
    * GEO-3671. Whether the viewer is a media admin: per viewer, not per debate, since the allowlist
    * does not depend on the debate it is asked about.

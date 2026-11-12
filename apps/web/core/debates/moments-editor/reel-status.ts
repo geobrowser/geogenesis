@@ -99,7 +99,10 @@ export function refusalMessage(code: string): string {
     case 'media_job_active':
       return "The debate's media is still being processed. Try again when it's done.";
     case 'media_job_failed':
-      return "The debate's media job failed, so its media never fully published.";
+      // The latest job: a failed first render never published, a failed re-render (geo-chat#352,
+      // say a failed read of the stored claims) kept the media and reel it had. Either way geo-chat
+      // takes no reel until the media is processed again.
+      return "The debate's latest media job failed, so its reel can't be changed until the media is processed again.";
     case 'no_media_job':
       return 'The debate has no media yet.';
     case 'recording_cancelled':

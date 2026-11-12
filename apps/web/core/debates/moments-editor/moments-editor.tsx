@@ -232,7 +232,10 @@ function Editor({ debateId }: { debateId: string }) {
       clip,
       speaker,
       quote: clipQuote(words, clip.start_ms, clip.end_ms),
-      problems: [...clipProblems(clip, words, turns), ...reported],
+      // A carried reel's cuts are on the old video's clock, mapped here through the new one's turns:
+      // checked against the new words they would flag spans its clips don't play (it is read-only,
+      // so nothing is gated on them).
+      problems: carried ? reported : [...clipProblems(clip, words, turns), ...reported],
     };
   });
   // The worker numbers a failed reel's clips as sent; the editor's notices count them as they are now.
@@ -244,7 +247,7 @@ function Editor({ debateId }: { debateId: string }) {
           .sort((a, b) => a - b)
           .map(at => at + 1)
       : [];
-  const wholeReelProblems = reelProblems(clips, words);
+  const wholeReelProblems = carried ? [] : reelProblems(clips, words);
   const hasProblems = wholeReelProblems.length > 0 || clipViews.some(view => view.problems.length > 0);
   const canQueue = !readOnly && !inFlight && !queue.isPending && !hasProblems && clips.length > 0;
 
@@ -440,7 +443,7 @@ function Editor({ debateId }: { debateId: string }) {
         </Notice>
       ) : null}
       {unlinkable ? (
-        <UnlinkableNotice job={reapplyFailed} next={inFlight ? 'wait' : readOnly ? null : 'pick'} />
+        <UnlinkableNotice job={reapplyFailed} next={inFlight ? 'wait' : readOnly ? null : dirty ? 'publish' : 'pick'} />
       ) : reapplyFailed ? (
         <ReapplyFailedNotice job={reapplyFailed} />
       ) : null}
@@ -642,7 +645,7 @@ export function editingBlockedReason(
   // Its clip times are on the old video's clock until the worker cuts it again on the new one.
   if (entry && reelCarried(entry)) {
     const carried =
-      "A re-render carried this hand-picked reel over, and its clips are still cut on the video from before it, so they can't be edited.";
+      "A re-render carried this hand-picked reel over, and its clips are still cut on the video from before it, so they can't be edited, and the times and words shown for them are approximate.";
     // A re-cut on its way may well fit, and returning to automatic would throw the reel away.
     if (requestInFlight) return `${carried} A request for it is in the queue; this page updates when it's done.`;
     // An edit kept from before the carry (a publish refused `reel_being_reapplied`) can never be
@@ -855,11 +858,12 @@ function UnlinkableNotice({
 }: {
   job: Extract<ReelJob, { kind: 'failed' }> | null;
   /**
-   * The way out it offers: both (`pick`), none until the request in the queue is done (`wait`: the
-   * worker's re-submit of the lost reel, queued with the re-render), or none (`null`: read-only, and
-   * the reason above says why).
+   * The way out it offers: both (`pick`), the picked clips or discarding them (`publish`: an edit is
+   * on the reel, and Return to automatic waits until it is gone), none until the request in the
+   * queue is done (`wait`: the worker's re-submit of the lost reel, queued with the re-render), or
+   * none (`null`: read-only, and the reason above says why).
    */
-  next: 'pick' | 'wait' | null;
+  next: 'pick' | 'publish' | 'wait' | null;
 }) {
   return (
     <Notice tone="bad">
@@ -867,6 +871,7 @@ function UnlinkableNotice({
         This hand-picked reel couldn&apos;t be carried over after a re-render, so the debate has no reel.
       </b>
       {next === 'pick' ? ' Pick new clips, or return to automatic.' : null}
+      {next === 'publish' ? " Publish the clips you've picked, or discard them to return to automatic." : null}
       {next === 'wait'
         ? " A request for this debate is in the queue; you can pick new clips or return to automatic once it's done."
         : null}

@@ -17,6 +17,7 @@ vi.mock('../hooks', () => ({
   debateQueryKeys: {
     extractedClaims: (id: string) => ['debates', 'extracted-claims', id],
     media: (id: string) => ['debates', 'media', id],
+    transcripts: (id: string) => ['debates', 'transcript', id],
     momentReelPlan: (id: string, account: string | null) => ['debates', 'account', account, 'moment-reel-plan', id],
     mediaAdmin: (account: string | null) => ['debates', 'account', account, 'media-admin'],
   },
@@ -104,8 +105,9 @@ describe('useIsMediaAdmin (GEO-3671)', () => {
 
 describe('useRefreshAfterReel (GEO-3671)', () => {
   // A re-render moves the video, and the editor maps every live cut onto the player's clock through
-  // the media's turns: they are read again with the plan.
-  it('reads the plan, the served moments and the media again', () => {
+  // the media's turns, and snaps and judges clips by the transcript's words, which a re-render that
+  // re-extracts has changed: all are read again with the plan.
+  it('reads the plan, the served moments, the media and the transcript again', () => {
     const client = new QueryClient();
     const invalidate = vi.spyOn(client, 'invalidateQueries');
     const { result } = renderHook(() => useRefreshAfterReel('debate'), {
@@ -118,6 +120,7 @@ describe('useRefreshAfterReel (GEO-3671)', () => {
       ['debates', 'account', 'account', 'moment-reel-plan', 'debate'],
       ['debates', 'extracted-claims', 'debate'],
       ['debates', 'media', 'debate'],
+      ['debates', 'transcript', 'debate'],
     ]);
   });
 });
