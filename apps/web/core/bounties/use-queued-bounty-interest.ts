@@ -40,6 +40,7 @@ export function useQueuedBountyInterest(
     component: 'bounty_interest',
     label: 'your interest in this bounty',
     liveOnly: true,
+    survivesRedirect: true,
     ready,
     run: async () => {
       // Both settle it without a write: what the press asked for is already true, or no longer can be.
