@@ -2,6 +2,8 @@
 
 import * as React from 'react';
 
+import cx from 'classnames';
+
 import { type SpaceGroup, groupBySpace } from '~/core/blocks/ranking/best-debates-team-filters';
 import { type RankersRead, rankedByLabel, rankedByText } from '~/core/blocks/ranking/use-best-debates-to-rank';
 import { normId } from '~/core/utils/norm-id';
@@ -48,7 +50,7 @@ const GRIP = (
 /** The red down arrow Push it down has always had. */
 function PushDownIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden className="shrink-0 text-red-01">
+    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden className="shrink-0 text-red-01">
       <path d="M8 2.5v9M4.5 8L8 11.5 11.5 8M3 13.5h10" stroke="currentColor" strokeWidth="1.3" />
     </svg>
   );
@@ -57,7 +59,7 @@ function PushDownIcon() {
 /**
  * One row of the team column, the same in All and To rank (mockups 07 and 08): the grip where it
  * can be dragged, the team place in All, the poster, claim and meta, who has ranked it, and on the
- * right either "You: #N" or the rank mark. The row itself is the button that places it.
+ * right either "You: #N" or the rank mark; Push down follows the badge. The row itself is the button that places it.
  */
 export function BestDebatesTeamRowContent({
   entityId,
@@ -77,7 +79,7 @@ export function BestDebatesTeamRowContent({
   /** The debate's place in your ranking, when it's there. */
   myRank: number | null;
   draggable: boolean;
-  /** Push it down from the row (Preston, 12 Nov), beside the rank mark. */
+  /** Push it down from the row (Preston, 12 Nov), inline after the ranked-by badge. */
   onPushDown?: () => void;
 }) {
   return (
@@ -91,37 +93,41 @@ export function BestDebatesTeamRowContent({
           entry={{ entityId, name, description: null, image: null }}
           spaceId={spaceId}
           actions={
-            <div className="flex">
+            // Push it down sits inline after the ranked-by badge (Preston, 12 Nov), at the start of the
+            // line when there is no badge, so it is always in the same place.
+            <div className="flex items-center gap-2">
               <RankedByBadge rankers={rankers} entityId={entityId} />
+              {onPushDown && !myRank ? (
+                <button
+                  type="button"
+                  aria-label={`Push ${name} down`}
+                  title="Push it down"
+                  onClick={event => {
+                    event.stopPropagation();
+                    onPushDown();
+                  }}
+                  onKeyDown={event => event.stopPropagation()}
+                  className={cx(
+                    'relative inline-flex h-5 shrink-0 items-center gap-1 rounded-[4px] px-1.5 text-tag whitespace-nowrap text-grey-04 transition-colors hover:bg-grey-01 hover:text-text focus-visible:ring-2 focus-visible:ring-text focus-visible:outline-none',
+                    // A 44px hit area on a phone without a taller row.
+                    'md:after:absolute md:after:-inset-x-1 md:after:-inset-y-3'
+                  )}
+                >
+                  <PushDownIcon />
+                  Push down
+                </button>
+              ) : null}
             </div>
           }
-          // Rank mark first, then Push it down to its right (Preston, 12 Nov).
           debateAside={
             myRank ? (
               <span className="text-breadcrumb whitespace-nowrap text-grey-04 tabular-nums">You: #{myRank}</span>
             ) : (
-              <span className="flex items-center gap-1.5">
-                <span
-                  className="grid size-8 place-items-center rounded-md border border-grey-02 bg-white text-text md:size-11"
-                  aria-hidden
-                >
-                  <RankingChart />
-                </span>
-                {onPushDown ? (
-                  <button
-                    type="button"
-                    aria-label={`Push ${name} down`}
-                    title="Push it down"
-                    onClick={event => {
-                      event.stopPropagation();
-                      onPushDown();
-                    }}
-                    onKeyDown={event => event.stopPropagation()}
-                    className="grid size-8 place-items-center rounded-md border border-grey-02 bg-white transition-colors hover:border-text md:size-11"
-                  >
-                    <PushDownIcon />
-                  </button>
-                ) : null}
+              <span
+                className="grid size-8 place-items-center rounded-md border border-grey-02 bg-white text-text md:size-11"
+                aria-hidden
+              >
+                <RankingChart />
               </span>
             )
           }

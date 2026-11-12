@@ -94,9 +94,21 @@ describe('To rank', () => {
     renderList({ onPlace, onPushDown });
     const button = screen.getByRole('button', { name: 'Push Newest down' });
     expect(button.getAttribute('title')).toBe('Push it down');
+    // Inline, straight after the ranked-by badge, with a visible label.
+    expect(button.previousElementSibling?.textContent).toBe('Nobody has ranked this yet');
+    expect(button.textContent).toBe('Push down');
     fireEvent.click(button);
     expect(onPushDown).toHaveBeenCalledWith('d1');
     expect(onPlace).not.toHaveBeenCalled();
+  });
+
+  it('starts the line with Push down when a row has no badge yet', () => {
+    renderList({
+      onPushDown: vi.fn(),
+      rankers: rankers({ status: 'loading', rankerCount: () => null, rankersOf: () => null }),
+    });
+    const button = screen.getByRole('button', { name: 'Push Newest down' });
+    expect(button.previousElementSibling).toBeNull();
   });
 
   it('says so when nothing is left', () => {
