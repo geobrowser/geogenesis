@@ -302,6 +302,20 @@ describe('old debate URLs open the debates app (GEO-3695)', () => {
     expect(redirect).not.toHaveBeenCalled();
   });
 
+  // Review of #3110: the off switch is the rollback, so it must stop the recording link's hop too.
+  it('keeps the recording link on geobrowser.io when DEBATE_PAGE_REDIRECT=off', async () => {
+    const lookup = vi.mocked(publishedDebatePath);
+    lookup.mockResolvedValue(`/space/${VALID_SPACE}/${VALID_ENTITY}`);
+    enabled.mockReturnValue(false);
+
+    const response = await proxy(
+      request(`/space/${VALID_SPACE}/debates/${VALID_ENTITY}/recording`, { headers: FROM_OUTSIDE })
+    );
+    lookup.mockReset();
+
+    expect(response.headers.get('location')).toBe(`https://www.geobrowser.io/space/${VALID_SPACE}/${VALID_ENTITY}`);
+  });
+
   it('is off when DEBATE_PAGE_REDIRECT=off', async () => {
     enabled.mockReturnValue(false);
     const response = await proxy(request(PAGE, { headers: FROM_OUTSIDE }));

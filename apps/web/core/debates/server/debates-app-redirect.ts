@@ -27,13 +27,20 @@ export function couldBeDebateId(id: string): boolean {
 }
 
 /**
- * Whether a request must stay where it is whatever the page: `?stay=1`, or a sign-in provider
- * returning to the page it started from (Privy's `privy_oauth_*` parameters), whose code belongs
- * to geobrowser.io.
+ * Query parameters that ask geobrowser.io for something the debates app doesn't have, on a link
+ * that comes back from outside: a panel (`modal`, e.g. the reply email's `?modal=comments`, the
+ * calendar connect's return `?modal=schedule&calendar=…`) or a calendar connect's result.
+ */
+const STAYING_PARAMS = [STAY_PARAM, 'modal', 'calendar'];
+
+/**
+ * Whether a request must stay where it is whatever the page: `?stay=1`, a geobrowser.io panel or
+ * flow it returns to ({@link STAYING_PARAMS}), or a sign-in provider returning to the page it
+ * started from (Privy's `privy_oauth_*` parameters), whose code belongs to geobrowser.io.
  */
 export function mustStay(searchParams: URLSearchParams): boolean {
-  if (searchParams.has(STAY_PARAM)) return true;
-  for (const key of searchParams.keys()) if (key.startsWith('privy_oauth_')) return true;
+  for (const key of searchParams.keys())
+    if (STAYING_PARAMS.includes(key) || key.startsWith('privy_oauth_')) return true;
   return false;
 }
 

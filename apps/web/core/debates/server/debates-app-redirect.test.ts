@@ -72,6 +72,16 @@ describe('debatesAppRedirect', () => {
     expect(fetchEntity).not.toHaveBeenCalled();
   });
 
+  // Review of #3110: the reply email's Reply button (geo-notifications, `?modal=comments`) and a
+  // calendar connect's return (`?modal=schedule&calendar=connected`) come back from outside.
+  it('keeps links that open a geobrowser.io panel or return from a calendar connect', async () => {
+    const fetchEntity = vi.fn().mockResolvedValue(entity());
+    for (const query of ['modal=comments', 'modal=schedule&calendar=connected', 'calendar=error']) {
+      await expect(go(fetchEntity, query)).resolves.toBeNull();
+    }
+    expect(fetchEntity).not.toHaveBeenCalled();
+  });
+
   it('forgets an answer after a few minutes, so a debate hidden since stops redirecting', async () => {
     const fetchEntity = vi
       .fn()
