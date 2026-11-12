@@ -34,7 +34,7 @@ import { runEffectEither } from '~/core/telemetry/effect-runtime';
 import { validateSpaceId } from '~/core/utils/utils';
 import { waitForIndexedValue } from '~/core/utils/wait-for-indexed-value';
 
-import { DEBATES_SPACE_ID } from './best-debates';
+import { BEST_DEBATES_PUSHDOWN_SINCE, DEBATES_SPACE_ID } from './best-debates';
 import {
   type MemberVoteRecord,
   fetchMemberDebateVotes,
@@ -43,6 +43,9 @@ import {
   voteInSpace,
 } from './fetch-member-debate-votes';
 import { PUSH_DOWN_VOTE_FAILED_COPY, type StepResult, UNDO_FAILED_COPY } from './push-down';
+
+/** How far the indexer's `voted_at` may trail this client's clock, for the pre-launch check. */
+const CLOCK_SKEW_MARGIN_S = 120;
 
 /** Curation votes are kind 0. */
 const CURATION_VOTE_KIND = 0;
@@ -286,8 +289,10 @@ export function useDebateVoteWriter() {
         debateId,
         spaceId,
         direction,
-        // A re-sent downvote is only indexed once its `voted_at` moves past the old one.
+        // A re-sent downvote is only indexed once its `voted_at` moves past the old one. `records`
+        // came from reads bounded by the same launch time the check uses.
         previousVotedAt: records.find(record => ID.equals(record.spaceId, spaceId))?.votedAt ?? null,
+        since: BEST_DEBATES_PUSHDOWN_SINCE,
         writtenAtMs,
         onIndexed: () => operation.outcome('vote_cast', 'indexed', outcome),
       });
@@ -313,6 +318,7 @@ export async function catchUpAfterIndexing({
   direction,
   previousVotedAt,
   writtenAtMs,
+  since,
   onIndexed,
   poll = { intervalMs: 2_000, maxAttempts: Math.ceil(DEBATE_VOTE_OVERLAY_TTL_MS / 2_000) },
 }: {
@@ -323,13 +329,20 @@ export async function catchUpAfterIndexing({
   direction: 'negative' | 'clear';
   previousVotedAt: string | null;
   writtenAtMs: number;
+  /**
+   * The push-down launch time (`BEST_DEBATES_PUSHDOWN_SINCE`): the check reads with the same bound
+   * as every other read, so a downvote from before it can't pass for the new one. Before launch
+   * (null) it is bounded by the write itself, less a margin for clock skew.
+   */
+  since: number | null;
   onIndexed?: () => void;
   poll?: { intervalMs: number; maxAttempts: number };
 }): Promise<boolean> {
   const previousMs = previousVotedAt ? Date.parse(previousVotedAt) : null;
+  const checkSince = since ?? Math.floor(writtenAtMs / 1000) - CLOCK_SKEW_MARGIN_S;
   const indexed = await waitForIndexedValue(
     async signal => {
-      const records = await fetchMemberDebateVotes(authorSpaceId, debateId, { signal });
+      const records = await fetchMemberDebateVotes(authorSpaceId, debateId, { since: checkSince, signal });
       const vote = records.find(record => ID.equals(record.spaceId, spaceId));
       if (direction === 'clear') return !vote;
       if (vote?.direction !== 'negative') return false;

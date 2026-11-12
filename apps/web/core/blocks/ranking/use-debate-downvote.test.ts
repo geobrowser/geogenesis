@@ -18,14 +18,18 @@ import {
 const mocks = vi.hoisted(() => ({
   reads: [] as MemberVoteRecord[][],
   readCount: 0,
+  sinces: [] as Array<number | null | undefined>,
 }));
 
 vi.mock('./fetch-member-debate-votes', async importOriginal => ({
   ...(await importOriginal<typeof import('./fetch-member-debate-votes')>()),
-  fetchMemberDebateVotes: async () => {
+  // Answers like the server: only votes at or after `since`.
+  fetchMemberDebateVotes: async (_member: string, _debate: string, options?: { since?: number | null }) => {
     const answer = mocks.reads[Math.min(mocks.readCount, mocks.reads.length - 1)] ?? [];
     mocks.readCount += 1;
-    return answer;
+    mocks.sinces.push(options?.since);
+    const since = options?.since;
+    return since == null ? answer : answer.filter(record => Date.parse(record.votedAt) >= since * 1000);
   },
 }));
 
@@ -85,6 +89,7 @@ describe('catchUpAfterIndexing', () => {
       direction: 'clear',
       previousVotedAt: '2026-11-01T00:00:00Z',
       writtenAtMs: 5,
+      since: null,
       onIndexed,
       poll: FAST_POLL,
     });
@@ -116,6 +121,7 @@ describe('catchUpAfterIndexing', () => {
       direction: 'negative',
       previousVotedAt: '2026-10-01T00:00:00Z',
       writtenAtMs: 5,
+      since: null,
       onIndexed,
       poll: FAST_POLL,
     });
@@ -123,6 +129,56 @@ describe('catchUpAfterIndexing', () => {
     expect(indexed).toBe(true);
     expect(mocks.readCount).toBe(3);
     expect(onIndexed).toHaveBeenCalledTimes(1);
+  });
+
+  it('a pre-launch downvote can’t pass for the new one: the check reads with the launch bound', async () => {
+    const LAUNCH = Date.parse('2026-11-05T00:00:00Z') / 1000;
+    // October's downvote predates the launch, so the bounded reads before the write saw nothing.
+    const october = down(D1, S1, '2026-10-01T00:00:00Z');
+    mocks.reads = [[october], [october], [down(D1, S1, '2026-11-12T00:00:00Z')]];
+    mocks.readCount = 0;
+    mocks.sinces = [];
+    const client = new QueryClient();
+    client.setQueryData(debateVoteOverlaysQueryKey(MEMBER), { [D1]: { records: [], writtenAtMs: 5 } });
+    const onIndexed = vi.fn();
+
+    const indexed = await catchUpAfterIndexing({
+      queryClient: client,
+      authorSpaceId: MEMBER,
+      debateId: D1,
+      spaceId: S1,
+      direction: 'negative',
+      previousVotedAt: null,
+      writtenAtMs: 5,
+      since: LAUNCH,
+      onIndexed,
+      poll: FAST_POLL,
+    });
+
+    // Not on the first read (which only held October's vote), only once the new vote showed.
+    expect(indexed).toBe(true);
+    expect(mocks.readCount).toBe(3);
+    expect(mocks.sinces.every(since => since === LAUNCH)).toBe(true);
+  });
+
+  it('before launch, bounds the check by the write itself', async () => {
+    const writtenAtMs = Date.parse('2026-11-12T00:00:00Z');
+    mocks.reads = [[down(D1, S1, '2026-10-01T00:00:00Z')]];
+    mocks.readCount = 0;
+    mocks.sinces = [];
+    const indexed = await catchUpAfterIndexing({
+      queryClient: new QueryClient(),
+      authorSpaceId: MEMBER,
+      debateId: D1,
+      spaceId: S1,
+      direction: 'negative',
+      previousVotedAt: null,
+      writtenAtMs,
+      since: null,
+      poll: FAST_POLL,
+    });
+    expect(indexed).toBe(false);
+    expect(mocks.sinces[0]).toBe(writtenAtMs / 1000 - 120);
   });
 
   it('when indexing never shows, still refreshes the reads and ends the overlay, without claiming it was indexed', async () => {
@@ -141,6 +197,7 @@ describe('catchUpAfterIndexing', () => {
       direction: 'negative',
       previousVotedAt: '2026-10-01T00:00:00Z',
       writtenAtMs: 5,
+      since: null,
       onIndexed,
       poll: FAST_POLL,
     });

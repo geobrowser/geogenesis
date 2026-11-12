@@ -370,15 +370,31 @@ export function usePushDown(debateId: string, options: UsePushDownOptions = {}):
     return (await publish()) ? { ok: true } : { ok: false, message: RANK_BALLOT_FAILED_COPY };
   }, []);
 
+  /**
+   * Rank it's second step. Planned only after the publish has landed, from a fresh read: the
+   * publish it wraps (the ranking screen's) may have cleared the downvotes itself, and clearing
+   * them again would double the unvotes and contradict its toast.
+   */
+  const clearRemaining = React.useCallback(
+    (): PushDownStepRun => ({
+      step: 'vote',
+      run: async (): Promise<StepResult> => {
+        const records = await readRecords();
+        if (!records) return { ok: false, message: VOTE_CHECK_FAILED_COPY };
+        return runInOrder(clearSteps({ records })).then(result =>
+          result.ok ? result : { ok: false, message: result.message }
+        );
+      },
+    }),
+    [clearSteps, readRecords]
+  );
+
   const rank = React.useCallback(
     (publish: () => Promise<boolean>) => {
       pendingRankPublishes.set(stateKey.join(':'), publish);
-      return start('rank', initial => [
-        { step: 'ballot', run: () => publishRanking(publish) },
-        ...clearSteps({ records: initial }),
-      ]);
+      return start('rank', () => [{ step: 'ballot', run: () => publishRanking(publish) }, clearRemaining()]);
     },
-    [clearSteps, publishRanking, start, stateKey]
+    [clearRemaining, publishRanking, start, stateKey]
   );
 
   const retry = React.useCallback(async (): Promise<PushDownRunResult> => {
@@ -391,10 +407,10 @@ export function usePushDown(debateId: string, options: UsePushDownOptions = {}):
     if (current.action === 'push-down') return pushDown();
     if (current.action === 'undo') return undo();
     // Rank it already published: only the clears are left.
-    if (current.partly) return start('rank', initial => clearSteps({ records: initial }));
+    if (current.partly) return start('rank', () => [clearRemaining()]);
     const publish = pendingRankPublishes.get(stateKey.join(':'));
     return publish ? rank(publish) : { ok: true };
-  }, [clearSteps, pushDown, queryClient, rank, removeFromBallot, start, stateKey, undo]);
+  }, [clearRemaining, pushDown, queryClient, rank, removeFromBallot, start, stateKey, undo]);
 
   return {
     enabled,

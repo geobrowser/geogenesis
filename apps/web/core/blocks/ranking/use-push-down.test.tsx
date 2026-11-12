@@ -406,6 +406,24 @@ describe('usePushDown', () => {
     await waitFor(() => expect(result.current.state).toEqual({ status: 'done', action: 'rank' }));
   });
 
+  it('Rank it skips its own clears when the publish it wraps already cleared the downvotes', async () => {
+    mocks.serverRecords = [down(DEBATE_SPACE)];
+    const { result } = await renderReady();
+    // The ranking screen's publish clears the downvotes itself.
+    const publish = vi.fn(async () => {
+      mocks.serverRecords = [];
+      return true;
+    });
+
+    await act(async () => {
+      await result.current.rank(publish);
+    });
+
+    expect(publish).toHaveBeenCalledTimes(1);
+    expect(mocks.unvote).not.toHaveBeenCalled();
+    await waitFor(() => expect(result.current.state).toEqual({ status: 'done', action: 'rank' }));
+  });
+
   it('a failed Rank it publish leaves the downvote alone, so the debate is never neither', async () => {
     mocks.serverRecords = [down(DEBATE_SPACE)];
     const { result } = await renderReady();
