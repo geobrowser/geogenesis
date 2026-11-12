@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { type TeamFilterDisplay, filterTeamIds, groupBySpace, topicOptions } from './best-debates-team-filters';
+import {
+  type TeamFilterDisplay,
+  filterTeamIds,
+  groupBySpace,
+  teamTopicFacetEntityFilter,
+  toRankTopicCounts,
+  topicOptions,
+} from './best-debates-team-filters';
 
 const politics = { id: 'sp-pol', name: 'US Politics', image: null };
 const dating = { id: 'sp-rel', name: 'Relationships', image: null };
@@ -22,14 +29,10 @@ describe('filterTeamIds', () => {
     expect(filterTeamIds(['a', 'b', 'c', 'd'], displayOf, { query: 'relationships id', topicIds: [] })).toEqual(['c']);
   });
 
-  it('keeps a debate carrying any picked topic, and combines with search', () => {
+  it('keeps a debate carrying every picked topic, and combines with search', () => {
     expect(filterTeamIds(['a', 'b', 'c', 'd'], displayOf, { query: '', topicIds: ['tlaw'] })).toEqual(['b', 'c']);
-    expect(filterTeamIds(['a', 'b', 'c', 'd'], displayOf, { query: '', topicIds: ['tlaw', 'tecon'] })).toEqual([
-      'a',
-      'b',
-      'c',
-      'd',
-    ]);
+    expect(filterTeamIds(['a', 'b', 'c', 'd'], displayOf, { query: '', topicIds: ['tlaw', 'tlove'] })).toEqual(['c']);
+    expect(filterTeamIds(['a', 'b', 'c', 'd'], displayOf, { query: '', topicIds: ['tlaw', 'tecon'] })).toEqual([]);
     expect(filterTeamIds(['a', 'b', 'c', 'd'], displayOf, { query: 'dating', topicIds: ['tlaw'] })).toEqual(['c']);
   });
 
@@ -70,5 +73,45 @@ describe('groupBySpace', () => {
 
   it('has no groups for an empty list', () => {
     expect(groupBySpace([], displayOf)).toEqual([]);
+  });
+});
+
+describe('toRankTopicCounts', () => {
+  it('counts the whole To rank set, not the rows drawn, narrowed by search and picked topics', () => {
+    const all = ['a', 'b', 'c', 'd'];
+    // The same answer whichever slice of the list happens to be on screen: it never sees one.
+    expect(toRankTopicCounts(all, displayOf, { query: '', topicIds: [] })).toEqual(topicOptions(all, displayOf));
+    expect(toRankTopicCounts(all, displayOf, { query: '', topicIds: ['tlaw'] })).toEqual([
+      { id: 'tlaw', name: 'Law', count: 2 },
+      { id: 'tlove', name: 'Dating', count: 1 },
+    ]);
+    expect(toRankTopicCounts(all, displayOf, { query: 'economy', topicIds: [] })).toEqual([
+      { id: 'tecon', name: 'Economy', count: 2 },
+    ]);
+  });
+
+  it('is pending, not partial, while any debate in the set is still loading', () => {
+    expect(toRankTopicCounts(['a', 'x'], id => displays[id], { query: '', topicIds: [] })).toBeNull();
+  });
+});
+
+describe('teamTopicFacetEntityFilter', () => {
+  it('counts every Debate, narrowed by each search word and each picked topic', () => {
+    expect(
+      teamTopicFacetEntityFilter({
+        debateTypeId: 'deb',
+        typesPropertyId: 'types',
+        topicsPropertyId: 'top',
+        query: ' tariff  power ',
+        topicIds: ['t1'],
+      })
+    ).toEqual({
+      and: [
+        { relations: { some: { typeId: { is: 'types' }, toEntityId: { is: 'deb' } } } },
+        { name: { includesInsensitive: 'tariff' } },
+        { name: { includesInsensitive: 'power' } },
+        { relations: { some: { typeId: { is: 'top' }, toEntityId: { is: 't1' } } } },
+      ],
+    });
   });
 });

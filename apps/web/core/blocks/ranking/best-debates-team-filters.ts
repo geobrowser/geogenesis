@@ -13,7 +13,10 @@ export type TeamFilterDisplay = {
 
 export type TeamFilters = {
   query: string;
-  /** Any of these (OR): a debate is usually tagged with one or two topics, so AND would empty the list. */
+  /**
+   * Every one of these (AND), as the Debates panel's Claims tab filters topics (GEO-2696): the
+   * menu's counts are then co-occurrence, so nothing it offers can lead to an empty list.
+   */
   topicIds: readonly string[];
 };
 
@@ -38,7 +41,8 @@ export function filterTeamIds(
     const display = displayOf(id);
     if (!matchesQuery(filters.query, display, nameOf(id))) return false;
     if (topics.size === 0) return true;
-    return Boolean(display?.topics.some(topic => topics.has(normId(topic.id))));
+    const carried = new Set((display?.topics ?? []).map(topic => normId(topic.id)));
+    return [...topics].every(topic => carried.has(topic));
   });
 }
 
@@ -86,4 +90,52 @@ export function groupBySpace(ids: readonly string[], displayOf: DisplayLookup): 
   const out = [...groups.values()];
   if (unknown.length > 0) out.push({ space: null, ids: unknown });
   return out;
+}
+
+/**
+ * The topic counts for To rank: over the whole To rank set (every debate fetched for it, not the
+ * rows drawn so far), narrowed by the search and the picked topics as the list is. Null while any
+ * debate in the set has no display data yet, so a partial count is never shown as the count.
+ */
+export function toRankTopicCounts(
+  ids: readonly string[],
+  displayOf: DisplayLookup,
+  filters: TeamFilters,
+  nameOf: (entityId: string) => string | null = () => null
+): TopicOption[] | null {
+  if (ids.some(id => !displayOf(id))) return null;
+  return topicOptions(filterTeamIds(ids, displayOf, filters, nameOf), displayOf);
+}
+
+/**
+ * The entity filter for the All / By space topic counts: every Debate (the Best debates block's
+ * own filter, Types is Debate), the search on the debate's name, and one clause per picked topic.
+ * Counted on the server over the whole set, as the Claims tab's topic facet is.
+ */
+export function teamTopicFacetEntityFilter({
+  debateTypeId,
+  typesPropertyId,
+  topicsPropertyId,
+  query,
+  topicIds,
+}: {
+  debateTypeId: string;
+  typesPropertyId: string;
+  topicsPropertyId: string;
+  query: string;
+  topicIds: readonly string[];
+}) {
+  // The type as a Types relation rather than `typeIds`: under a relation aggregate's `fromEntity`
+  // the `typeIds` clause isn't promoted to the indexed path and the request times out on testnet
+  // (measured 12 Nov); the relation form answers in well under a second.
+  const and: Record<string, unknown>[] = [
+    { relations: { some: { typeId: { is: typesPropertyId }, toEntityId: { is: debateTypeId } } } },
+  ];
+  for (const word of query.trim().split(/\s+/).filter(Boolean)) {
+    and.push({ name: { includesInsensitive: word } });
+  }
+  for (const topicId of topicIds) {
+    and.push({ relations: { some: { typeId: { is: topicsPropertyId }, toEntityId: { is: topicId } } } });
+  }
+  return { and };
 }

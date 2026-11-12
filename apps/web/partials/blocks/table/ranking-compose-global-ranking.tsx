@@ -21,7 +21,12 @@ import { Search } from '~/design-system/icons/search';
 
 import { BestDebateDisplaysContext } from './best-debates/best-debate-row';
 import { BestDebatesGroupedRows } from './best-debates/best-debates-team-row';
-import { BestDebatesTeamToolbar, type BestDebatesTeamTools } from './best-debates/best-debates-team-tools';
+import {
+  BestDebatesTeamToolbar,
+  type BestDebatesTeamTools,
+  BestDebatesTopicSearchRow,
+} from './best-debates/best-debates-team-tools';
+import { type BestDebatesTopicFacet, useBestDebatesTopicFacet } from './best-debates/use-best-debates-topic-facet';
 import { RankingGlobalDesktopRow } from './ranking-block-ui';
 import { useRankingComposeScrollRoot, useRankingComposeScrollRootRef } from './ranking-compose-layout';
 import { RankingComposeSwipeableRow } from './ranking-compose-swipeable-row';
@@ -333,6 +338,18 @@ type Props = {
 };
 
 /** All, the same list grouped by space (Preston, 12 Nov), or To rank. */
+const NO_TOPIC_IDS: readonly string[] = [];
+
+/** Mounts the topic counts only where the team column has its tools (and so a query client). */
+function TopicFacetScope({
+  children,
+  ...args
+}: Omit<Parameters<typeof useBestDebatesTopicFacet>[0], 'enabled'> & {
+  children: (facet: BestDebatesTopicFacet) => React.ReactNode;
+}) {
+  return <>{children(useBestDebatesTopicFacet({ ...args, enabled: true }))}</>;
+}
+
 export type RankingComposeTeamMode = 'all' | 'by_space' | 'to_rank';
 
 export type RankingComposeTeamView = {
@@ -782,7 +799,7 @@ export function RankingComposeGlobalRanking({
   // Best debates: the topic filter, then Group by space, over each section of the team column.
   const teamDisplays = React.useContext(BestDebateDisplaysContext);
   const teamTools = teamView?.tools;
-  const toolListIds = isToRank ? (teamView?.toRankIds ?? []) : [...tabFilteredRankedIds, ...tabFilteredUnrankedIds];
+  // Counted over the whole list the picker shows, never the rows drawn so far (Preston, 12 Nov).
   const renderSection = (ids: string[], render: (id: string) => React.ReactNode) => {
     if (!teamView) return ids.map(render);
     const kept = teamTools
@@ -790,6 +807,35 @@ export function RankingComposeGlobalRanking({
       : ids;
     return <BestDebatesGroupedRows ids={kept} grouped={teamView.mode === 'by_space'} render={render} />;
   };
+
+  const renderSearchRow = (topicFacet: BestDebatesTopicFacet | null) => (
+    <>
+      <div className={cx('flex shrink-0 items-center gap-2', isMobile && 'mt-2')}>
+        <div className="relative flex min-w-0 flex-1 items-center">
+          <span className="pointer-events-none absolute left-2 flex">
+            <Search color="grey-04" />
+          </span>
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={e => handleSearchQueryChange(e.target.value)}
+            placeholder={teamView?.tools ? 'Search debates and topics' : 'Search'}
+            aria-label={teamView?.tools ? 'Search debates and topics' : 'Search rankable entities'}
+            className="h-8 w-full rounded border border-grey-02 bg-white py-1 pr-2 pl-8 text-metadata text-text outline-hidden focus-visible:border-text"
+          />
+        </div>
+        {teamView?.tools && topicFacet ? <BestDebatesTeamToolbar tools={teamView.tools} facet={topicFacet} /> : null}
+      </div>
+      {teamView?.tools && topicFacet ? (
+        <BestDebatesTopicSearchRow
+          query={searchQuery}
+          facet={topicFacet}
+          tools={teamView.tools}
+          onPicked={() => handleSearchQueryChange('')}
+        />
+      ) : null}
+    </>
+  );
 
   const searchResultList = (
     <>
@@ -885,22 +931,20 @@ export function RankingComposeGlobalRanking({
             ))}
           </div>
         </div>
-        <div className={cx('flex shrink-0 items-center gap-2', isMobile && 'mt-2')}>
-          <div className="relative flex min-w-0 flex-1 items-center">
-            <span className="pointer-events-none absolute left-2 flex">
-              <Search color="grey-04" />
-            </span>
-            <input
-              type="search"
-              value={searchQuery}
-              onChange={e => handleSearchQueryChange(e.target.value)}
-              placeholder="Search"
-              aria-label="Search rankable entities"
-              className="h-8 w-full rounded border border-grey-02 bg-white py-1 pr-2 pl-8 text-metadata text-text outline-hidden focus-visible:border-text"
-            />
-          </div>
-          {teamView?.tools ? <BestDebatesTeamToolbar tools={teamView.tools} listIds={toolListIds} /> : null}
-        </div>
+        {teamTools ? (
+          // Counted over the whole list the picker shows, never the rows drawn so far (Preston, 12 Nov).
+          <TopicFacetScope
+            scope={isToRank ? 'to_rank' : 'team'}
+            query={searchQuery}
+            topicIds={teamTools.topicIds}
+            toRankIds={teamView?.toRankIds ?? NO_TOPIC_IDS}
+            displays={teamDisplays}
+          >
+            {topicFacet => renderSearchRow(topicFacet)}
+          </TopicFacetScope>
+        ) : (
+          renderSearchRow(null)
+        )}
       </div>
       {/* One panel shared by all three tabs, so it is labelled by whichever is
           active rather than being remounted per tab. */}
