@@ -216,6 +216,9 @@ function EdgeControl({
       return;
     }
     setInvalid(false);
+    // Back to the edge as it stands: a time that snaps to it changes nothing, and would otherwise
+    // stay in the box. A real change replaces this through the effect above.
+    setDraft(formatted);
     onSet(parsed, true);
   };
 

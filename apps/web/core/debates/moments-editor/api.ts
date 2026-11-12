@@ -54,7 +54,13 @@ export type MomentBackfillStatus = {
   preview: boolean;
   reextract?: boolean;
   story?: boolean;
-  manual_reel?: { clock?: string; clips?: StoredManualClip[]; base?: string } | null;
+  manual_reel?: {
+    clock?: string;
+    clips?: StoredManualClip[];
+    base?: string;
+    /** A reel the media worker sent again itself after a re-render re-extracted claims (geo-chat#352). */
+    reapplied?: { job_id: string; quotes?: string[] } | null;
+  } | null;
   unlock?: boolean;
   attempt_count?: number;
   /** The worker's skip code, or `error` once a failure is final. */
