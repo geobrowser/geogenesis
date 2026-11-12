@@ -7,6 +7,7 @@ import {
   useBestDebatesBallotPublisher,
   useMyPushedDownDebates,
 } from '~/core/blocks/ranking/use-my-pushed-down-debates';
+import { useRankingEntryEntities } from '~/core/blocks/ranking/use-ranking-entry-entities';
 import { useRankingSubmissions } from '~/core/blocks/ranking/use-ranking-submissions';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { normId } from '~/core/utils/norm-id';
@@ -56,6 +57,10 @@ export function useBestDebatesBlockRanking({
     return result?.published ?? null;
   };
 
+  // The compare view names the debate it shows from your ranking; the block's rows don't hold them.
+  const { entries } = useRankingEntryEntities(spaceId, enabled ? orderedIds : []);
+  const nameById = React.useMemo(() => new Map(entries.map(entry => [normId(entry.entityId), entry.name])), [entries]);
+
   const compose = useBestDebatesCompose({
     enabled,
     blockId,
@@ -64,7 +69,7 @@ export function useBestDebatesBlockRanking({
     orderedIds,
     setOrderedIds,
     hasUnpublishedChanges: false,
-    nameOf: () => null,
+    nameOf: entityId => nameById.get(normId(entityId)) ?? null,
     personalSpaceId,
     saveMySubmission: save,
     isSaving: isSaving || isPublishing,
