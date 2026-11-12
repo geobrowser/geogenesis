@@ -305,6 +305,34 @@ describe('an excluded type', () => {
   });
 });
 
+describe('New filters by type here, not in the query (GEO-3703)', () => {
+  it('sends no typeIds and drops rows outside the selection', async () => {
+    windows.queue = [
+      windowOf([entity('c1', CLAIM_TYPE_ID), entity('n1', NEWS_STORY_TYPE_ID), entity('c2', CLAIM_TYPE_ID)], {
+        hasNextPage: false,
+        endCursor: null,
+      }),
+    ];
+
+    const result = await fetchExploreFeed({ ...feedArgs, sort: 'new', typeIds: [CLAIM_TYPE_ID] });
+
+    expect(windows.variables[0]?.typeIds).toBeUndefined();
+    expect(result.items.map(i => i.entityId)).toEqual(['c1', 'c2']);
+  });
+
+  it('scans on past a window holding none of the selected types', async () => {
+    windows.queue = [
+      windowOf([entity('n1', NEWS_STORY_TYPE_ID)], { hasNextPage: true, endCursor: 'w1' }),
+      windowOf([entity('c1', CLAIM_TYPE_ID)], { hasNextPage: false, endCursor: null }),
+    ];
+
+    const result = await fetchExploreFeed({ ...feedArgs, sort: 'new', typeIds: [CLAIM_TYPE_ID] });
+
+    expect(windows.variables.map(v => v.typeIds)).toEqual([undefined, undefined]);
+    expect(result.items.map(i => i.entityId)).toEqual(['c1']);
+  });
+});
+
 describe('a type selection filters server-side (GEO-2885)', () => {
   const sent = () => windows.variables[0] ?? {};
 
