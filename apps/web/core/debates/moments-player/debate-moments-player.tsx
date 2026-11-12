@@ -128,6 +128,13 @@ function MomentsStory({
   const [fullMs, setFullMs] = React.useState(0);
   const [fullDurationMs, setFullDurationMs] = React.useState(0);
   const [failed, setFailed] = React.useState(false);
+  /**
+   * The reel is moving on to its next moment on its own. A clip that ends fires `pause` before
+   * `ended`, and the next one takes a signed redirect and some buffering to start, so `playing` is
+   * false for that stretch. It is still one viewing: no Play control over the black frame.
+   */
+  const [advancing, setAdvancing] = React.useState(false);
+  const active = playing || advancing;
   /** Whether the next media to load should start playing: set by every step taken while playing. */
   const autoplayRef = React.useRef(false);
   /** The full debate's seek waiting for its metadata, in ms. */
@@ -170,6 +177,7 @@ function MomentsStory({
     video.play()?.catch(() => {
       // Refused (autoplay policy) or interrupted by a step: the big play control stays up.
       viewerStartRef.current = false;
+      setAdvancing(false);
       setPlaying(false);
     });
   }, []);
@@ -209,6 +217,9 @@ function MomentsStory({
     const video = videoRef.current;
     return () => {
       if (!video) return;
+      // Forget any intent to play on, so a player shown again (Activity) comes back paused.
+      autoplayRef.current = false;
+      viewerStartRef.current = false;
       video.pause();
       if (!video.isConnected) releaseVideo(video);
     };
@@ -227,6 +238,14 @@ function MomentsStory({
       }
       return;
     }
+    if (advancing) {
+      // Pause pressed while the next moment loads: it stays loaded and doesn't start.
+      autoplayRef.current = false;
+      viewerStartRef.current = false;
+      setAdvancing(false);
+      video.pause();
+      return;
+    }
     if (video.paused) {
       autoplayRef.current = true;
       viewerStartRef.current = true;
@@ -239,7 +258,7 @@ function MomentsStory({
   };
 
   const step = (direction: -1 | 1) => {
-    autoplayRef.current = playing;
+    autoplayRef.current = active;
     const atEdge = direction === 1 ? story.index >= story.count - 1 : story.index === 0;
     if (atEdge) {
       // The first card's left edge replays it, as in a story; the last card's right edge holds.
@@ -254,19 +273,19 @@ function MomentsStory({
   };
 
   const expand = () => {
-    autoplayRef.current = playing;
+    autoplayRef.current = active;
     moveFocusRef.current = true;
     dispatch({ type: 'expand', atMs: moment ? debateTimeForMoment(moment, clipMs) : null });
   };
 
   const collapse = () => {
-    autoplayRef.current = playing;
+    autoplayRef.current = active;
     moveFocusRef.current = true;
     dispatch({ type: 'collapse' });
   };
 
   const seekFull = (atMs: number, index?: number) => {
-    autoplayRef.current = playing;
+    autoplayRef.current = active;
     dispatch({ type: 'seekFull', atMs, index });
   };
 
@@ -274,6 +293,7 @@ function MomentsStory({
     const video = videoRef.current;
     if (!video) return;
     autoplayRef.current = true;
+    viewerStartRef.current = true;
     metadataSrcRef.current = null;
     reattachVideoSource(video, src);
     if (story.mode === 'full') {
@@ -323,11 +343,13 @@ function MomentsStory({
         onEnded={() => {
           if (story.mode !== 'moments') return;
           autoplayRef.current = story.index < story.count - 1;
+          setAdvancing(autoplayRef.current);
           if (clipLengthMs !== null) setClipMs(clipLengthMs);
           dispatch({ type: 'clipEnded' });
         }}
         onPlay={() => {
           claim();
+          setAdvancing(false);
           setPlaying(true);
           // Only a start the viewer pressed reaches the host. The reel playing on into the next
           // moment, or into the full debate, is the same viewing: a clip that ends fires `pause`
@@ -339,6 +361,7 @@ function MomentsStory({
         }}
         onPause={() => setPlaying(false)}
         onError={() => {
+          setAdvancing(false);
           setPlaying(false);
           setFailed(true);
         }}
@@ -363,7 +386,7 @@ function MomentsStory({
       )}
       <button
         type="button"
-        aria-label={playing ? 'Pause' : 'Play'}
+        aria-label={active ? 'Pause' : 'Play'}
         onClick={togglePlay}
         className={cx(
           zoneClass,
@@ -371,7 +394,18 @@ function MomentsStory({
         )}
       />
 
-      {!playing && !failed && (
+      {advancing && !failed && (
+        // Only if the next clip is slow: it fades in after a beat, so a quick hand-off shows nothing.
+        <span
+          aria-hidden="true"
+          data-testid="advancing-indicator"
+          className="pointer-events-none absolute top-1/2 left-1/2 z-20 size-7 -translate-x-1/2 -translate-y-1/2 animate-[fadeIn_200ms_400ms_ease-out_both]"
+        >
+          <span className="block size-full animate-spin rounded-full border-2 border-white/30 border-t-white/90" />
+        </span>
+      )}
+
+      {!active && !failed && (
         <span
           aria-hidden="true"
           data-testid="play-indicator"

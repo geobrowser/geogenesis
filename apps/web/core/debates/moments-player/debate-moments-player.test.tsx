@@ -295,6 +295,67 @@ describe('DebateMomentsPlayer', () => {
     expect(mocks.play.mock.contexts).toContain(video);
   });
 
+  it('keeps the play control down while the reel moves on to a slow next clip, with a quiet loading mark', () => {
+    render(<DebateMomentsPlayer debateId={DEBATE} label="Debate A" moments={MOMENTS} />);
+    const element = videoOf(screen.getByRole('region', { name: 'Debate A' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+
+    // The next clip has not started yet: its redirect and buffering take a while.
+    mocks.play.mockImplementationOnce(function (this: HTMLMediaElement) {
+      return new Promise<void>(() => {});
+    });
+    playToEnd(element);
+    expect(screen.queryByTestId('play-indicator')).not.toBeInTheDocument();
+    expect(screen.getByTestId('advancing-indicator')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Pause' })).toBeInTheDocument();
+
+    act(() => {
+      Object.defineProperty(element, 'paused', { configurable: true, value: false });
+      element.dispatchEvent(new Event('play'));
+    });
+    expect(screen.queryByTestId('advancing-indicator')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('play-indicator')).not.toBeInTheDocument();
+  });
+
+  it('stops the hand-off when Pause is pressed while the next moment loads', () => {
+    render(<DebateMomentsPlayer debateId={DEBATE} label="Debate A" moments={MOMENTS} />);
+    const element = videoOf(screen.getByRole('region', { name: 'Debate A' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+    mocks.play.mockImplementationOnce(function (this: HTMLMediaElement) {
+      return new Promise<void>(() => {});
+    });
+    playToEnd(element);
+    mocks.pause.mockClear();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Pause' }));
+    expect(mocks.pause.mock.contexts).toContain(element);
+    expect(screen.queryByTestId('advancing-indicator')).not.toBeInTheDocument();
+    expect(screen.getByTestId('play-indicator')).toBeInTheDocument();
+  });
+
+  it('reports a Retry as a start the viewer made', () => {
+    const onPlay = vi.fn();
+    render(<DebateMomentsPlayer debateId={DEBATE} label="Debate A" moments={MOMENTS} onPlay={onPlay} />);
+    fireEvent.error(videoOf(screen.getByRole('region', { name: 'Debate A' })));
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(onPlay).toHaveBeenCalledTimes(1);
+  });
+
+  it('comes back paused when an Activity shows it again, not playing on by itself', () => {
+    const view = (mode: 'visible' | 'hidden') => (
+      <React.Activity mode={mode}>
+        <DebateMomentsPlayer debateId={DEBATE} label="Debate A" moments={MOMENTS} />
+      </React.Activity>
+    );
+    const { rerender } = render(view('visible'));
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+    rerender(view('hidden'));
+    mocks.play.mockClear();
+
+    rerender(view('visible'));
+    expect(mocks.play).not.toHaveBeenCalled();
+  });
+
   it('releases its media when it unmounts', () => {
     const { unmount } = render(<DebateMomentsPlayer debateId={DEBATE} label="Debate A" moments={MOMENTS} />);
     const player = screen.getByRole('region', { name: 'Debate A' });
