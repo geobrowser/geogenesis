@@ -38,9 +38,23 @@ describe('debatesAppRedirect', () => {
   it('sends a visible debate to the debates app, carrying the query over', async () => {
     const fetchEntity = vi.fn().mockResolvedValue(entity());
     await expect(go(fetchEntity, 'utm_source=x&utm_medium=share')).resolves.toBe(
-      `https://debates.geobrowser.io/debate/${DEBATE_ID}?utm_source=x&utm_medium=share`
+      `https://debates.geobrowser.io/explore?debate=${DEBATE_ID}&utm_source=x&utm_medium=share`
     );
     expect(fetchEntity).toHaveBeenCalledWith(DEBATE_ID, SPACE_ID, expect.any(AbortSignal));
+  });
+
+  it('keeps the debate first in the feed link, forwarding other params and never an incoming debate', async () => {
+    const fetchEntity = vi.fn().mockResolvedValue(entity());
+    const destination = new URL(
+      (await go(fetchEntity, `debate=${OTHER_ID}&utm_source=x&ref=a&ref=b&debate=zz`)) as string
+    );
+    expect(destination.pathname).toBe('/explore');
+    expect([...destination.searchParams]).toEqual([
+      ['debate', DEBATE_ID],
+      ['utm_source', 'x'],
+      ['ref', 'a'],
+      ['ref', 'b'],
+    ]);
   });
 
   it('keeps the page for ?stay=1, without asking the graph', async () => {
