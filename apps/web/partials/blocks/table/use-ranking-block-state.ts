@@ -724,11 +724,14 @@ export function useRankingBlockState({
   }, [blockRelations, entityId, relationId]);
 
   const openRankingCompose = React.useCallback(
-    async (mode: RankingComposeMode = 'edit') => {
+    async (mode: RankingComposeMode = 'edit', extraParams?: Readonly<Record<string, string>>) => {
       const effectiveRelationId = resolveBlockRelationId();
       if (!effectiveRelationId) return;
 
-      const href = rankingComposeHref({
+      // `extraParams` lets a block-specific surface open the screen on a given view, such as Best
+      // debates' "Rank the rest" opening the team column's To rank list (GEO-3677).
+      const extraQuery = extraParams ? new URLSearchParams(extraParams).toString() : '';
+      const baseHref = rankingComposeHref({
         spaceId,
         blockEntityId: entityId,
         relationId: effectiveRelationId,
@@ -737,6 +740,7 @@ export function useRankingBlockState({
         rankingEndDate,
         mode,
       });
+      const href = extraQuery ? `${baseHref}&${extraQuery}` : baseHref;
 
       if (composeAccessStatus === 'not-found') {
         return;

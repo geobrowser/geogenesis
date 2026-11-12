@@ -9,6 +9,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { produce } from 'immer';
 
 import { filterGroupKey } from '~/core/blocks/data/filter-state-to-where';
+import { isBestDebatesBlock } from '~/core/blocks/ranking/best-debates-views';
 import { DATA_BLOCK_VIEW_EXPLORE_ID } from '~/core/data-block-ids';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
@@ -18,6 +19,7 @@ import { IconButton } from '~/design-system/button';
 import { FilterTable } from '~/design-system/icons/filter-table';
 import { FilterTableWithFilters } from '~/design-system/icons/filter-table-with-filters';
 
+import { BestDebatesBlock } from './best-debates-block';
 import {
   BlockLinkIngestionChip,
   BlockLinkIngestionPanel,
@@ -27,6 +29,7 @@ import { DataBlockExpandControl } from './data-block-expand-control';
 import { DataBlockScopeDropdown } from './data-block-scope-dropdown';
 import { DataBlockViewMenu } from './data-block-view-menu';
 import { RankingBlockBody } from './ranking-block-body';
+import { RankingComposeEntitySheet } from './ranking-compose-entity-sheet';
 import { RankingExploreView } from './ranking-explore-view';
 import { RankingGalleryView } from './ranking-gallery-view';
 import { RankingHeaderActions } from './ranking-header-actions';
@@ -43,9 +46,11 @@ type Props = {
   spaceId: string;
   rankingStartDate?: string;
   rankingEndDate?: string;
+  /** Tests only: stands in for `BEST_DEBATES_BLOCK_ID`, which is null until GEO-3685. */
+  bestDebatesBlockId?: string | null;
 };
 
-export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDate = '' }: Props) {
+export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDate = '', bestDebatesBlockId }: Props) {
   const state = useRankingBlockState({ spaceId, rankingStartDate, rankingEndDate, paginateEmbeddedRanking: true });
   const isEditing = useUserIsEditing(spaceId);
   const {
@@ -88,6 +93,12 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
     (stateViewRelation && ID.equals(stateViewRelation.toEntity.id, DATA_BLOCK_VIEW_EXPLORE_ID)) ||
     stateView === 'EXPLORE'
   );
+
+  // The Debates space's Best debates block draws its own Day / This week / All time body (GEO-3677).
+  const isBestDebates =
+    bestDebatesBlockId === undefined
+      ? isBestDebatesBlock(entityId, spaceId)
+      : isBestDebatesBlock(entityId, spaceId, bestDebatesBlockId);
 
   const showHeaderActions = isExploreView || isBulletedListView || isPillView || isGalleryView;
 
@@ -260,6 +271,21 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
           <RankingPillView state={state} />
         ) : isExploreView ? (
           <RankingExploreView state={state} />
+        ) : isBestDebates ? (
+          <>
+            <RankingComposeEntitySheet
+              target={state.entitySheetTarget}
+              onClose={() => state.setEntitySheetTarget(null)}
+            />
+            <BestDebatesBlock
+              blockId={entityId}
+              spaceId={spaceId}
+              teamOrder={state.globalDisplayEntityIds}
+              isMobile={state.isMobile}
+              onOpenCompose={(mode, extraParams) => void openRankingCompose(mode, extraParams)}
+              onOpenEntity={state.openEntitySheet}
+            />
+          </>
         ) : (
           <RankingBlockBody state={state} presentation="embedded" />
         )}

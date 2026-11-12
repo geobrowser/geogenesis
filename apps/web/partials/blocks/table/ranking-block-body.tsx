@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { isBestDebatesBlock } from '~/core/blocks/ranking/best-debates-views';
 import { isPlaceholderRankingEntry } from '~/core/blocks/ranking/ranking-pending-proposal-entries';
 
 import { Button } from '~/design-system/button';
@@ -180,6 +181,9 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
   const myRankingActionButton = hideEditMyRanking ? null : buildMyRankingActionButton(state);
   const myRankingTabActions = buildMyRankingTabActions(state);
   const SectionHeader = presentation === 'fullscreen' ? RankingFullscreenSectionHeaderRow : RankingSectionHeaderRow;
+  // No row vote arrows on Best debates (GEO-3677): a member's vote there is what Rank it / Push it
+  // down records, so a stray arrow would double-count against the ranking.
+  const showVoteControls = !isBestDebatesBlock(state.entityId, spaceId);
 
   // Three tabs are possible in the shared view
   const isMyTab = showMyRankingSection && activeTab === 'my';
@@ -274,7 +278,11 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
                   spaceId={spaceId}
                   linkToEntity={!isMobile}
                   pending={pendingEntityIds.has(entityId)}
-                  actions={<RankingEntryVoteControls entityId={entityId} spaceId={resolveEntitySpaceId(entityId)} />}
+                  actions={
+                    showVoteControls ? (
+                      <RankingEntryVoteControls entityId={entityId} spaceId={resolveEntitySpaceId(entityId)} />
+                    ) : null
+                  }
                 />
               );
               return (
@@ -355,7 +363,7 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
                   imageUrl={overlayImageUrl}
                   pending={pendingEntityIds.has(entityId)}
                   actions={
-                    !isDragActive ? (
+                    !isDragActive && showVoteControls ? (
                       <RankingEntryVoteControls entityId={entityId} spaceId={resolveEntitySpaceId(entityId)} />
                     ) : null
                   }

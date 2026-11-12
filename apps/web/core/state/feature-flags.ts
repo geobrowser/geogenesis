@@ -22,6 +22,13 @@ export const featureFlagDefinitions = [
     enabledByDefault: false,
   },
   {
+    id: 'debateRankings',
+    label: 'Best debates ranking',
+    description:
+      'Rank and Rank the rest on the Debates space’s Best debates block (GEO-3591). Off, or for non-members, the block still shows the team order.',
+    enabledByDefault: false,
+  },
+  {
     id: 'debateFormatSelector',
     label: 'Debate format selector',
     description: 'Allow the first matched debater to choose a format before accepting.',
