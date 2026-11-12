@@ -438,7 +438,7 @@ describe('ranking publish safety (GEO-3680)', () => {
     await new Promise(resolve => setTimeout(resolve, 50));
     expect(mocks.send).toHaveBeenCalledTimes(1);
     expect(state.ranks[0].ids).toEqual([item(0), item(9)]);
-    expect(view.result.current.unsavedDraft).toEqual([item(0), item(9), item(1)]);
+    expect(view.result.current.unsavedDraft?.orderedEntityIds).toEqual([item(0), item(9), item(1)]);
     expect(mocks.reportError).toHaveBeenCalledWith(OVERTAKEN);
     done();
   });
@@ -460,14 +460,16 @@ describe('ranking publish safety (GEO-3680)', () => {
     await waitFor(() => expect(state.ranks[0].ids).toEqual([item(0), item(1)]));
 
     // 9 is not silently gone: both 1 and 9 are in the ranker's draft, and they're told.
-    expect(view.result.current.unsavedDraft).toEqual([item(0), item(9), item(1)]);
+    expect(view.result.current.unsavedDraft?.orderedEntityIds).toEqual([item(0), item(9), item(1)]);
     expect(mocks.reportError).toHaveBeenCalledWith(OVERTAKEN);
     expect(mocks.send).toHaveBeenCalledTimes(1);
 
     // Publishing the draft puts both back.
     await act(async () => {
-      const draft = view.result.current.unsavedDraft ?? [];
-      const published = await view.result.current.saveMySubmission(slots(draft));
+      const draft = view.result.current.unsavedDraft;
+      const published = await view.result.current.saveMySubmission(slots(draft?.orderedEntityIds ?? []), undefined, {
+        basedOnOrderedIds: draft?.baseOrderedIds,
+      });
       await published?.indexingSettled;
     });
     expect(state.ranks[0].ids).toEqual([item(0), item(9), item(1)]);
@@ -490,19 +492,85 @@ describe('ranking publish safety (GEO-3680)', () => {
     // Nothing is published for the ranker in the meantime.
     await new Promise(resolve => setTimeout(resolve, 50));
     expect(mocks.send).toHaveBeenCalledTimes(1);
-    expect(view.result.current.unsavedDraft).toEqual([item(0), item(9), item(1)]);
+    expect(view.result.current.unsavedDraft?.orderedEntityIds).toEqual([item(0), item(9), item(1)]);
 
     // The other device edits again.
     state.ranks[0].ids = [item(0), item(9), item(8)];
     state.ranks[0].updatedAt = Date.now();
 
     await act(async () => {
-      const draft = view.result.current.unsavedDraft ?? [];
-      const published = await view.result.current.saveMySubmission(slots(draft));
+      const draft = view.result.current.unsavedDraft;
+      const published = await view.result.current.saveMySubmission(slots(draft?.orderedEntityIds ?? []), undefined, {
+        basedOnOrderedIds: draft?.baseOrderedIds,
+      });
       await published?.indexingSettled;
     });
     expect(mocks.send).toHaveBeenCalledTimes(2);
     expect([...state.ranks[0].ids].sort()).toEqual([item(0), item(1), item(8), item(9)].sort());
+    done();
+  });
+
+  it('keeps a third device’s addition when the draft is published after a refetch (review round 4)', async () => {
+    state.ranks = [{ id: RANK, createdAt: 1, ids: [item(0)] }];
+    const { view, done } = await renderSubmissions([item(0)]);
+    state.onSent = () => {
+      state.ranks[0].ids = [item(0), item(9)];
+      state.ranks[0].updatedAt = Date.now();
+    };
+    await act(async () => {
+      const published = await view.result.current.saveMySubmission(slots([item(0), item(1)]));
+      await published?.indexingSettled;
+    });
+    expect(view.result.current.unsavedDraft?.orderedEntityIds).toEqual([item(0), item(9), item(1)]);
+
+    // A third device publishes [0, 9, 8], and this tab refetches.
+    state.ranks[0].ids = [item(0), item(9), item(8)];
+    state.ranks[0].updatedAt = Date.now();
+    await act(async () => {
+      await view.result.current.retryBallotRead();
+    });
+    // The draft is re-merged onto it.
+    await waitFor(() =>
+      expect(view.result.current.unsavedDraft?.orderedEntityIds).toEqual([item(0), item(9), item(8), item(1)])
+    );
+
+    await act(async () => {
+      const draft = view.result.current.unsavedDraft;
+      const published = await view.result.current.saveMySubmission(slots(draft?.orderedEntityIds ?? []), undefined, {
+        basedOnOrderedIds: draft?.baseOrderedIds,
+      });
+      await published?.indexingSettled;
+    });
+    expect(state.ranks[0].ids).toEqual([item(0), item(9), item(8), item(1)]);
+    expect(view.result.current.unsavedDraft).toBeNull();
+    done();
+  });
+
+  it('honours a removal made elsewhere after the hand-back, and drops the draft once it is published elsewhere', async () => {
+    state.ranks = [{ id: RANK, createdAt: 1, ids: [item(0)] }];
+    const { view, done } = await renderSubmissions([item(0)]);
+    state.onSent = () => {
+      state.ranks[0].ids = [item(0), item(9)];
+      state.ranks[0].updatedAt = Date.now();
+    };
+    await act(async () => {
+      const published = await view.result.current.saveMySubmission(slots([item(0), item(1)]));
+      await published?.indexingSettled;
+    });
+
+    // Another device removes 9.
+    state.ranks[0].ids = [item(0)];
+    await act(async () => {
+      await view.result.current.retryBallotRead();
+    });
+    await waitFor(() => expect(view.result.current.unsavedDraft?.orderedEntityIds).toEqual([item(0), item(1)]));
+
+    // Another tab publishes exactly that: nothing is left unsaved.
+    state.ranks[0].ids = [item(0), item(1)];
+    await act(async () => {
+      await view.result.current.retryBallotRead();
+    });
+    await waitFor(() => expect(view.result.current.unsavedDraft).toBeNull());
     done();
   });
 

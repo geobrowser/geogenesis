@@ -285,17 +285,68 @@ export function getOwnRankingPublish(key: string): OwnRankingPublish | null {
  * folded onto the other ballot, goes back to the screens as unpublished
  * changes, and the ranker publishes it (or not) themselves.
  */
-const unsavedDrafts = new Map<string, string[]>();
+export type UnsavedRankingDraft = {
+  /** The ranker's unpublished list. */
+  orderedEntityIds: string[];
+  /** The published ballot the list was built on: what publishing it passes as
+   *  `basedOnOrderedIds`, so the three-way merge reads changes made elsewhere
+   *  since then as theirs, not as the ranker's removals. */
+  baseOrderedIds: string[];
+  /** Our overtaken ballot, which may still land after the hand-back. The index
+   *  showing it is not a change made elsewhere (the draft already holds it). */
+  overtakenOrderedIds: string[];
+};
+
+const unsavedDrafts = new Map<string, UnsavedRankingDraft>();
 const draftListeners = new Set<() => void>();
 
-export function getUnsavedRankingDraft(key: string): string[] | null {
+export function getUnsavedRankingDraft(key: string): UnsavedRankingDraft | null {
   return unsavedDrafts.get(key) ?? null;
 }
 
-export function setUnsavedRankingDraft(key: string, orderedEntityIds: string[] | null): void {
-  if (orderedEntityIds) unsavedDrafts.set(key, orderedEntityIds);
+export function setUnsavedRankingDraft(key: string, draft: UnsavedRankingDraft | null): void {
+  if (draft) unsavedDrafts.set(key, draft);
   else if (!unsavedDrafts.delete(key)) return;
   for (const listener of draftListeners) listener();
+}
+
+/** How far two ballots are apart: items in one but not the other. */
+function membershipDistance(a: readonly string[], b: readonly string[]): number {
+  const aKeys = new Set(a.map(norm));
+  const bKeys = new Set(b.map(norm));
+  let distance = 0;
+  for (const key of aKeys) if (!bKeys.has(key)) distance += 1;
+  for (const key of bKeys) if (!aKeys.has(key)) distance += 1;
+  return distance;
+}
+
+/**
+ * Brings a handed-back draft up to date with what is published now, so
+ * publishing it never undoes a change made elsewhere since the hand-back.
+ * Returns the same draft when nothing moved, null when the published ballot
+ * already holds everything in it (published from another tab or device, or
+ * re-made by hand), else the draft re-merged onto the published ballot.
+ *
+ * The published ballot may descend from either side of the overtake: the
+ * other device's ballot (the draft's base) or ours, if it landed after. The
+ * merge uses whichever of the two it is closer to as its base, so a later
+ * edit on either lineage is read as a change, not ours being dropped.
+ */
+export function rebaseUnsavedDraft(
+  draft: UnsavedRankingDraft,
+  publishedIds: readonly string[]
+): UnsavedRankingDraft | null {
+  if (sameBallotOrder(publishedIds, draft.orderedEntityIds)) return null;
+  if (sameBallotOrder(publishedIds, draft.baseOrderedIds) || sameBallotOrder(publishedIds, draft.overtakenOrderedIds)) {
+    return draft;
+  }
+  const base =
+    membershipDistance(publishedIds, draft.overtakenOrderedIds) < membershipDistance(publishedIds, draft.baseOrderedIds)
+      ? draft.overtakenOrderedIds
+      : draft.baseOrderedIds;
+  const merged = mergeBallotOrders({ base, ours: draft.orderedEntityIds, theirs: publishedIds }).ids;
+  if (sameBallotOrder(merged, publishedIds)) return null;
+  return { orderedEntityIds: merged, baseOrderedIds: [...publishedIds], overtakenOrderedIds: [...publishedIds] };
 }
 
 export function subscribeUnsavedRankingDrafts(listener: () => void): () => void {

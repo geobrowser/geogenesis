@@ -54,6 +54,7 @@ import { RankingComposeGlobalRanking } from './ranking-compose-global-ranking';
 import { RankingComposePinnedToolbar, RankingComposeTitleMetadata } from './ranking-compose-header';
 import { RankingComposeLayout } from './ranking-compose-layout';
 import { RankingComposeMyRanking } from './ranking-compose-my-ranking';
+import { rankingComposeSeed, useRankingComposeDraft } from './use-ranking-compose-draft';
 import Custom404 from '~/app/not-found';
 import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
 import { rankingComposeCreateEntityAtom } from '~/atoms/ranking-compose-create-entity';
@@ -183,7 +184,11 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
 
   // Seeded from the author's last ballot, which survives roll-off, rather than from
   // `mySubmission`, which is blanked by it. See `myLastSubmission` (GEO-2871).
-  const [orderedIds, setOrderedIds] = React.useState<string[]>(myLastSubmission?.orderedEntityIds ?? []);
+  // Precedence (GEO-3680): a handed-back draft (another device's edit overtook
+  // ours) over the published ballot, with the ranker's own unpublished edits
+  // merged onto whichever it is. See `useRankingComposeDraft`.
+  const composeSeed = rankingComposeSeed(unsavedDraft, myLastSubmission?.orderedEntityIds);
+  const { orderedIds, setOrderedIds, getBasedOnOrderedIds } = useRankingComposeDraft(composeSeed);
   const [searchQuery, setSearchQuery] = React.useState('');
   const [activeSwipeRowKey, setActiveSwipeRowKey] = React.useState<string | null>(null);
   const [entitySheetTarget, setEntitySheetTarget] = React.useState<{
@@ -252,24 +257,6 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   const filteredUnrankedIds = isSearchActive ? searchUnrankedIds : browseUnrankedIds;
 
   const { entries: searchEntries } = useRankingEntryEntities(spaceId, isSearchActive ? searchEntityIds : []);
-
-  // Changes handed back unpublished (another device's edit overtook them,
-  // GEO-3680) take precedence over the published order until they're published.
-  const mySubmissionIdsKey = (unsavedDraft ?? myLastSubmission?.orderedEntityIds ?? []).join('|');
-
-  React.useEffect(() => {
-    const next = unsavedDraft ?? myLastSubmission?.orderedEntityIds ?? [];
-    setOrderedIds(prev => {
-      if (prev.length === next.length && prev.every((id, index) => id === next[index])) {
-        return prev;
-      }
-      return next;
-    });
-    // `mySubmissionIdsKey` is the joined signature of `myLastSubmission?.orderedEntityIds`, and
-    // stands in for it: the array is rebuilt on every render of the query, and this only wants to
-    // re-seed when the submitted order actually changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mySubmissionIdsKey]);
 
   const displayMyEntityIds = orderedIds;
 
@@ -568,7 +555,9 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
       return;
     }
 
-    const published = await saveMySubmission(slots, rankingOpportunity.context);
+    const published = await saveMySubmission(slots, rankingOpportunity.context, {
+      basedOnOrderedIds: getBasedOnOrderedIds(),
+    });
     if (!published) return;
 
     const ogVersion = buildRankingOgVersion({

@@ -49,6 +49,7 @@ import {
   rankingBallotTooLargeMessage,
   rankingPublishKey,
   rankingPublishTiming,
+  rebaseUnsavedDraft,
   recordOwnRankingPublish,
   sameBallotOrder,
   setUnsavedRankingDraft,
@@ -601,7 +602,11 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
             // ranker's behalf: hand both back as unpublished changes (this edit
             // folded onto the ballot the poll saw) and tell them. A newer edit
             // of ours, if one follows, folds it in itself and clears this.
-            setUnsavedRankingDraft(publishKey, foldOvertakenPublish(ownRecord, seen).ids);
+            setUnsavedRankingDraft(publishKey, {
+              orderedEntityIds: foldOvertakenPublish(ownRecord, seen).ids,
+              baseOrderedIds: seen,
+              overtakenOrderedIds: ownRecord.orderedEntityIds,
+            });
             reportError(RANKING_OVERTAKEN_MESSAGE);
           }
           try {
@@ -668,6 +673,19 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
     () => null
   );
 
+  // Keep the draft current with what is published: re-merge it when the
+  // published order changes (another tab or device), and drop it once the
+  // published ballot holds all of it. Every hook instance runs this; it is
+  // idempotent, so the first to see a change wins and the rest no-op.
+  const publishedOrderKey = apiRankingEntityIds.join('|');
+  React.useEffect(() => {
+    if (!draftKey || !unsavedDraft || isLoadingMyRanking || unreadableBallot) return;
+    const rebased = rebaseUnsavedDraft(unsavedDraft, apiRankingEntityIds);
+    if (rebased !== unsavedDraft) setUnsavedRankingDraft(draftKey, rebased);
+    // `publishedOrderKey` stands in for `apiRankingEntityIds`, rebuilt each render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftKey, unsavedDraft, publishedOrderKey, isLoadingMyRanking, unreadableBallot]);
+
   return {
     submissions: [] as RankingSubmissionRecord[],
     mySubmission,
@@ -680,7 +698,9 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
     ballotReadError,
     retryBallotRead: refetchMyRanking,
     /** Unpublished changes handed back after another device's edit overtook
-     *  ours: the screens show them as the ranker's draft, to publish again. */
+     *  ours, kept current with the published ballot. Screens show
+     *  `orderedEntityIds` as the ranker's draft and publish it with
+     *  `basedOnOrderedIds: baseOrderedIds`. */
     unsavedDraft,
     isSaving,
     personalSpaceId,

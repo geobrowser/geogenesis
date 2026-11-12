@@ -8,6 +8,7 @@ import {
   mergeBallotOrders,
   parseRankingBallotMaxItems,
   rankingBallotTooLargeMessage,
+  rebaseUnsavedDraft,
   resetRankingPublishStateForTests,
   sameBallotOrder,
 } from './ranking-publish-queue';
@@ -136,6 +137,33 @@ describe('foldOvertakenPublish', () => {
   it('adds an overtaken edit back onto the ballot that replaced it', () => {
     const own = { rankId: E, orderedEntityIds: [A, B], baseline: { rankId: E, orderedEntityIds: [A] } };
     expect(foldOvertakenPublish(own, [A, D]).ids).toEqual([A, D, B]);
+  });
+});
+
+describe('rebaseUnsavedDraft', () => {
+  // Base [A]; ours [A, B] was overtaken by the other device's [A, D]; draft [A, D, B].
+  const draft = { orderedEntityIds: [A, D, B], baseOrderedIds: [A, D], overtakenOrderedIds: [A, B] };
+
+  it('leaves the draft alone while the index shows either side of the overtake', () => {
+    expect(rebaseUnsavedDraft(draft, [A, D])).toBe(draft);
+    expect(rebaseUnsavedDraft(draft, [A, B])).toBe(draft);
+  });
+
+  it('re-merges onto a later edit from the other device’s lineage', () => {
+    expect(rebaseUnsavedDraft(draft, [A, D, C])?.orderedEntityIds).toEqual([A, D, C, B]);
+  });
+
+  it('re-merges onto a later edit from our lineage without dropping the other device’s item', () => {
+    expect(rebaseUnsavedDraft(draft, [A, B, C])?.orderedEntityIds).toEqual([A, D, B, C]);
+  });
+
+  it('honours a removal made elsewhere', () => {
+    expect(rebaseUnsavedDraft(draft, [A])?.orderedEntityIds).toEqual([A, B]);
+  });
+
+  it('drops the draft once the published ballot holds all of it', () => {
+    expect(rebaseUnsavedDraft(draft, [A, D, B])).toBeNull();
+    expect(rebaseUnsavedDraft(draft, [D, B, A])).toBeNull();
   });
 });
 
