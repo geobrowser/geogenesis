@@ -17,6 +17,7 @@ import {
   selectCountingBallots,
   summarizeBlockRankers,
 } from './block-rankers';
+import { parseTimestampMs } from './ranking-ballot-recency';
 
 /**
  * The reads behind `useBlockRankers` (GEO-3686): every ballot submitted to a ranking block, the
@@ -144,6 +145,7 @@ const BALLOT_ITEMS_SOURCE = /* GraphQL */ `
     ) {
       nodes {
         toEntityId
+        toSpaceId
         position
       }
       pageInfo {
@@ -156,7 +158,7 @@ const BALLOT_ITEMS_SOURCE = /* GraphQL */ `
 
 type BallotItemsQuery = {
   relationsConnection: {
-    nodes: Array<{ toEntityId: string | null; position: string | null } | null>;
+    nodes: Array<{ toEntityId: string | null; toSpaceId: string | null; position: string | null } | null>;
     pageInfo: PageInfo;
   } | null;
 };
@@ -165,15 +167,6 @@ const ballotItemsDocument = parse(BALLOT_ITEMS_SOURCE) as TypedDocumentNode<
   BallotItemsQuery,
   { rankEntityId: string; spaceId: string; typeId: string; first: number; after: string | null }
 >;
-
-/** The API serves entity times as unix seconds; tolerate ms and ISO strings too. */
-export function timestampToMs(value: string | number | null | undefined): number {
-  if (value == null || value === '') return 0;
-  const asNumber = Number(value);
-  if (Number.isFinite(asNumber)) return asNumber < 1_000_000_000_000 ? asNumber * 1000 : asNumber;
-  const parsed = Date.parse(String(value));
-  return Number.isNaN(parsed) ? 0 : parsed;
-}
 
 const rankTypeKey = normId(RANK_TYPE_ID);
 
@@ -186,8 +179,8 @@ export function decodeBallotHead(
   return {
     rankEntityId: node.fromEntityId,
     authorSpaceId: node.spaceId,
-    createdAtMs: timestampToMs(node.fromEntity.createdAt),
-    updatedAtMs: timestampToMs(node.fromEntity.updatedAt),
+    createdAtMs: parseTimestampMs(node.fromEntity.createdAt),
+    updatedAtMs: parseTimestampMs(node.fromEntity.updatedAt),
   };
 }
 
@@ -249,7 +242,9 @@ export function createBlockRankersPageFetchers(
         after: after ?? null,
       });
       return connectionPage(data.relationsConnection, node =>
-        node.toEntityId ? { entityId: node.toEntityId, position: node.position ?? null } : null
+        node.toEntityId
+          ? { entityId: node.toEntityId, toSpaceId: node.toSpaceId ?? null, position: node.position ?? null }
+          : null
       );
     },
   };

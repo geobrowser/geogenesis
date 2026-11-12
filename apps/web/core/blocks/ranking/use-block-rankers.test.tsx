@@ -41,10 +41,10 @@ function fetchers(): BlockRankersPageFetchers & { calls: number } {
       page(
         rankEntityId === 'rank-a'
           ? [
-              { entityId: OTHER, position: 'a0' },
-              { entityId: DEBATE, position: 'a1' },
+              { entityId: OTHER, toSpaceId: 'debates', position: 'a0' },
+              { entityId: DEBATE, toSpaceId: 'debates', position: 'a1' },
             ]
-          : [{ entityId: DEBATE, position: 'a0' }]
+          : [{ entityId: DEBATE, toSpaceId: 'debates', position: 'a0' }]
       ),
   };
   return state;

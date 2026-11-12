@@ -4,12 +4,14 @@ import { normId } from '~/core/utils/norm-id';
 
 import {
   type RankBallot,
-  compareBallotRecency,
+  ballotHeadRecencyKey,
   orderedBallotEntityIds,
   selectCountingBallots,
   summarizeBlockRankers,
 } from './block-rankers';
+import { compareBallotRecency } from './ranking-ballot-recency';
 
+const DEBATES_SPACE = '9284477c8fe746368698994e2e517b32';
 const hex = (n: number) => n.toString(16).padStart(32, '0');
 const dashed = (id: string) =>
   `${id.slice(0, 8)}-${id.slice(8, 12)}-${id.slice(12, 16)}-${id.slice(16, 20)}-${id.slice(20)}`;
@@ -28,7 +30,7 @@ function ballot(
     authorSpaceId,
     createdAtMs: createdAt * 1000,
     updatedAtMs: updatedAt * 1000,
-    items: entityIds.map((entityId, i) => ({ entityId, position: pos(i) })),
+    items: entityIds.map((entityId, i) => ({ entityId, toSpaceId: DEBATES_SPACE, position: pos(i) })),
   };
 }
 
@@ -60,14 +62,15 @@ describe('compareBallotRecency', () => {
     // r1 was superseded at block 20, then its Aggregated-rankings backlink was rewritten at 30.
     const superseded = ballot('r1', 'alice', [], { createdAt: 10, updatedAt: 30 });
     const current = ballot('r2', 'alice', [], { createdAt: 20, updatedAt: 25 });
-    expect(compareBallotRecency(current, superseded)).toBeGreaterThan(0);
+    expect(compareBallotRecency(ballotHeadRecencyKey(current), ballotHeadRecencyKey(superseded))).toBeGreaterThan(0);
   });
 
   it('breaks exact ties deterministically', () => {
     const a = ballot('aa', 'alice', [], { createdAt: 10 });
     const b = ballot('bb', 'alice', [], { createdAt: 10 });
-    expect(Math.sign(compareBallotRecency(a, b))).toBe(-Math.sign(compareBallotRecency(b, a)));
-    expect(compareBallotRecency(a, b)).not.toBe(0);
+    const [ka, kb] = [ballotHeadRecencyKey(a), ballotHeadRecencyKey(b)];
+    expect(Math.sign(compareBallotRecency(ka, kb))).toBe(-Math.sign(compareBallotRecency(kb, ka)));
+    expect(compareBallotRecency(ka, kb)).not.toBe(0);
   });
 });
 
@@ -76,12 +79,21 @@ describe('orderedBallotEntityIds', () => {
     const id = hex(1);
     expect(
       orderedBallotEntityIds([
-        { entityId: 'c', position: pos(2) },
-        { entityId: dashed(id), position: pos(0) },
-        { entityId: id, position: pos(3) },
-        { entityId: 'b', position: pos(1) },
+        { entityId: 'c', toSpaceId: DEBATES_SPACE, position: pos(2) },
+        { entityId: dashed(id), toSpaceId: DEBATES_SPACE, position: pos(0) },
+        { entityId: id, toSpaceId: DEBATES_SPACE, position: pos(3) },
+        { entityId: 'b', toSpaceId: DEBATES_SPACE, position: pos(1) },
       ])
     ).toEqual([id, 'b', 'c']);
+  });
+
+  it('skips a vote with no to_space, as detect.rs does', () => {
+    expect(
+      orderedBallotEntityIds([
+        { entityId: 'a', toSpaceId: null, position: pos(0) },
+        { entityId: 'b', toSpaceId: DEBATES_SPACE, position: pos(1) },
+      ])
+    ).toEqual(['b']);
   });
 });
 
@@ -146,7 +158,7 @@ describe('fixture block: counts match the indexer', () => {
     { id: 'd2', spaceId: space.dave, updatedAtBlock: 40, updateIndex: 0, items: [] },
     // erin: published with dashed ids.
     { id: 'e1', spaceId: space.erin, updatedAtBlock: 18, updateIndex: 1, items: [debate.d1] },
-    // frank: both member and editor.
+    // frank: both member and editor. His d5 vote had no to_space, so it was never stored.
     { id: 'f1', spaceId: space.frank, updatedAtBlock: 22, updateIndex: 0, items: [debate.d4] },
   ];
 
@@ -183,7 +195,14 @@ describe('fixture block: counts match the indexer', () => {
     ballot('d1', space.dave, [debate.d1], { createdAt: 5 }),
     ballot('d2', space.dave, [], { createdAt: 40 }),
     ballot('e1', dashed(space.erin), [dashed(debate.d1)], { createdAt: 18 }),
-    ballot('f1', space.frank, [debate.d4], { createdAt: 22 }),
+    // frank's client also voted d5 without a to_space; detect.rs never stored that item.
+    {
+      ...ballot('f1', space.frank, [debate.d4], { createdAt: 22 }),
+      items: [
+        { entityId: debate.d4, toSpaceId: DEBATES_SPACE, position: pos(0) },
+        { entityId: debate.d5, toSpaceId: null, position: pos(1) },
+      ],
+    },
   ];
 
   const graphEligible = [...members.map(dashed), ...editors];

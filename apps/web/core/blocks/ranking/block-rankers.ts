@@ -2,6 +2,8 @@ import { Position } from '@geoprotocol/geo-sdk/lite';
 
 import { normId } from '~/core/utils/norm-id';
 
+import { type BallotRecencyKey, compareBallotRecency } from './ranking-ballot-recency';
+
 /**
  * Who ranked what on a ranking block, worked out from the ballots themselves (GEO-3686).
  *
@@ -12,6 +14,7 @@ import { normId } from '~/core/utils/norm-id';
  *
  * 1. **Latest ballot per person** (`dedup.rs`): one ballot per (block, personal space). The
  *    superseded ones don't count, even when the latest one is empty.
+ *    Which ballot is latest follows the shared rule in `ranking-ballot-recency.ts`.
  * 2. **Members and editors only** (`eligibility.rs`): the author's personal space must be a member
  *    or an editor of the block's space.
  *
@@ -27,15 +30,20 @@ export type RankBallotHead = {
   rankEntityId: string;
   /** The personal space the ballot was published in: its author. */
   authorSpaceId: string;
-  /** When the ballot's entity was created, in ms. */
+  /** When the ballot's entity was created, in ms; 0 when unknown (then `updatedAtMs` stands in). */
   createdAtMs: number;
-  /** When the entity last changed, in ms; only a tie-break (see `compareBallotRecency`). */
+  /** When the entity last changed, in ms; a fallback and tie-break (`ranking-ballot-recency.ts`). */
   updatedAtMs: number;
 };
 
 /** One RANK_VOTES relation on a ballot: an entity the author placed. */
 export type RankBallotItem = {
   entityId: string;
+  /**
+   * The vote's `to_space`: the space of the entity it ranks. The indexer drops a vote without one
+   * (`detect.rs`: "RANK_VOTES relation missing to_space; skipping item"), and so does this.
+   */
+  toSpaceId: string | null;
   /** Fractional-index position of the vote; null sorts last. */
   position: string | null;
 };
@@ -60,25 +68,9 @@ export type BlockRankersSummary = {
   countingBallots: Array<{ rankEntityId: string; spaceId: string; ballotSize: number }>;
 };
 
-/**
- * Positive when `a` is the later ballot.
- *
- * The indexer orders by `(updated_at_block, update_index)` of the edits that wrote the ballot's
- * votes. The graph's `updatedAt` is not that: it moves whenever anything touches the entity,
- * including the indexer's own `Aggregated rankings` provenance relation pointing at it, so it can
- * make a superseded ballot look newest. Creation order is what the two agree on in practice: the
- * web edits a ballot in place until it mints a new one, and never edits the older one again.
- * `updatedAt` and the entity id only break exact ties, so the choice is deterministic.
- *
- * Times, not block numbers: testnet's block numbers restarted at a chain reset, so on live data a
- * ballot from August carries a higher `createdAtBlock` than one from November.
- */
-export function compareBallotRecency(a: RankBallotHead, b: RankBallotHead): number {
-  return (
-    a.createdAtMs - b.createdAtMs ||
-    a.updatedAtMs - b.updatedAtMs ||
-    normId(a.rankEntityId).localeCompare(normId(b.rankEntityId))
-  );
+/** A ballot head as the shared recency rule's key (`ranking-ballot-recency.ts`). */
+export function ballotHeadRecencyKey(head: RankBallotHead): BallotRecencyKey {
+  return { id: head.rankEntityId, createdAtMs: head.createdAtMs, updatedAtMs: head.updatedAtMs };
 }
 
 /**
@@ -96,7 +88,8 @@ export function selectCountingBallots<T extends RankBallotHead>(
   for (const ballot of ballots) {
     const author = normId(ballot.authorSpaceId);
     const existing = latestByAuthor.get(author);
-    if (!existing || compareBallotRecency(ballot, existing) > 0) latestByAuthor.set(author, ballot);
+    if (!existing || compareBallotRecency(ballotHeadRecencyKey(ballot), ballotHeadRecencyKey(existing)) > 0)
+      latestByAuthor.set(author, ballot);
   }
 
   return [...latestByAuthor.entries()]
@@ -105,12 +98,16 @@ export function selectCountingBallots<T extends RankBallotHead>(
     .map(([, ballot]) => ballot);
 }
 
-/** A ballot's distinct entity ids in ballot order (the first vote for an entity wins). */
+/**
+ * A ballot's distinct entity ids in ballot order (the first vote for an entity wins), without the
+ * votes the indexer skips for having no `to_space`.
+ */
 export function orderedBallotEntityIds(items: readonly RankBallotItem[]): string[] {
   const seen = new Set<string>();
   const ordered: string[] = [];
   const sorted = [...items].sort((a, b) => Position.compare(a.position ?? null, b.position ?? null));
   for (const item of sorted) {
+    if (!item.toSpaceId) continue;
     const id = normId(item.entityId);
     if (!id || seen.has(id)) continue;
     seen.add(id);

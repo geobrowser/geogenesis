@@ -1,16 +1,20 @@
+import { print } from 'graphql';
 import { describe, expect, it } from 'vitest';
 
-import { RANK_TYPE_ID } from '~/core/ranking-block-ids';
+import { RANK_TYPE_ID, RANK_VOTES_RELATION_TYPE_ID, SUBMITTED_TO_PROPERTY_ID } from '~/core/ranking-block-ids';
 import type { CursorPage } from '~/core/sync/collect-cursor-pages';
 
 import type { RankBallotHead, RankBallotItem } from './block-rankers';
 import {
   BLOCK_RANKERS_PAGE_SIZE,
   type BlockRankersPageFetchers,
+  type BlockRankersRequest,
+  createBlockRankersPageFetchers,
   decodeBallotHead,
   readBlockRankers,
 } from './fetch-block-rankers';
 
+const DEBATES = '9284477c8fe746368698994e2e517b32';
 const hex = (n: number) => n.toString(16).padStart(32, '0');
 const pos = (i: number) => `a${String(i).padStart(5, '0')}`;
 
@@ -60,7 +64,11 @@ function head(rankEntityId: string, authorSpaceId: string, createdAt: number): R
 }
 
 const debates = (count: number, offset = 0) =>
-  Array.from({ length: count }, (_, i) => ({ entityId: hex(0x100000 + offset + i), position: pos(i) }));
+  Array.from({ length: count }, (_, i) => ({
+    entityId: hex(0x100000 + offset + i),
+    toSpaceId: DEBATES,
+    position: pos(i),
+  }));
 
 /** `rankers` people, each with one ballot of `itemsPerBallot` debates (overlapping, shifted by 100). */
 function bigBlock(rankers: number, itemsPerBallot: number): FakeBlock {
@@ -164,5 +172,111 @@ describe('decodeBallotHead', () => {
 
   it('skips a SUBMITTED_TO relation from something other than a Rank', () => {
     expect(decodeBallotHead(node(['someothertype']))).toBeNull();
+  });
+});
+
+/**
+ * The documents and variables the real page fetchers send, through a mocked transport. The
+ * queries are hand-written (codegen can't check them), so this pins every filter that decides
+ * what is counted.
+ */
+describe('createBlockRankersPageFetchers', () => {
+  type Sent = { query: string; variables: Record<string, unknown> };
+  /** Whitespace- and comma-free, so a check doesn't depend on how `print` lays the query out. */
+  const squash = (text: string) => text.replace(/[\s,]+/g, '');
+
+  function transport(respond: (sent: Sent) => unknown) {
+    const sent: Sent[] = [];
+    const request: BlockRankersRequest = async (document, variables) => {
+      const call = { query: squash(print(document)), variables };
+      sent.push(call);
+      return respond(call) as never;
+    };
+    return { sent, fetchers: createBlockRankersPageFetchers(request) };
+  }
+
+  const pageInfo = (endCursor: string | null) => ({ hasNextPage: endCursor !== null, endCursor });
+
+  it('asks for SUBMITTED_TO relations into the block, following the cursor', async () => {
+    const { sent, fetchers } = transport(() => ({
+      relationsConnection: {
+        nodes: [
+          {
+            fromEntityId: 'rank',
+            spaceId: 'author',
+            fromEntity: { typeIds: [RANK_TYPE_ID], createdAt: '1793875856', updatedAt: '1793875900' },
+          },
+        ],
+        pageInfo: pageInfo('cursor-2'),
+      },
+    }));
+
+    const page = await fetchers.ballotHeads('block-id', 'cursor-1');
+
+    expect(sent[0].query).toContain(squash('filter: { typeId: { is: $typeId }, toEntityId: { is: $blockId } }'));
+    expect(sent[0].variables).toEqual({
+      blockId: 'block-id',
+      typeId: SUBMITTED_TO_PROPERTY_ID,
+      first: BLOCK_RANKERS_PAGE_SIZE,
+      after: 'cursor-1',
+    });
+    expect(page).toEqual({
+      items: [
+        { rankEntityId: 'rank', authorSpaceId: 'author', createdAtMs: 1793875856000, updatedAtMs: 1793875900000 },
+      ],
+      endCursor: 'cursor-2',
+      hasNextPage: true,
+    });
+  });
+
+  it('reads members and editors of the space from their own connections', async () => {
+    const { sent, fetchers } = transport(({ query }) => {
+      const key = query.includes('membersConnection') ? 'membersConnection' : 'editorsConnection';
+      return { [key]: { nodes: [{ memberSpaceId: key }], pageInfo: pageInfo(null) } };
+    });
+
+    expect((await fetchers.membership('members', 'space-id', undefined)).items).toEqual(['membersConnection']);
+    expect((await fetchers.membership('editors', 'space-id', 'c')).items).toEqual(['editorsConnection']);
+    expect(sent[0].query).toContain(
+      squash('membersConnection(first: $first, after: $after, filter: { spaceId: { is: $spaceId } })')
+    );
+    expect(sent[1].query).toContain(
+      squash('editorsConnection(first: $first, after: $after, filter: { spaceId: { is: $spaceId } })')
+    );
+    expect(sent.map(call => call.variables)).toEqual([
+      { spaceId: 'space-id', first: BLOCK_RANKERS_PAGE_SIZE, after: null },
+      { spaceId: 'space-id', first: BLOCK_RANKERS_PAGE_SIZE, after: 'c' },
+    ]);
+  });
+
+  it("reads one ballot's RANK_VOTES in the author's space, with each vote's to_space", async () => {
+    const { sent, fetchers } = transport(() => ({
+      relationsConnection: {
+        nodes: [
+          { toEntityId: 'debate', toSpaceId: DEBATES, position: 'a0' },
+          { toEntityId: 'other', toSpaceId: null, position: 'a1' },
+          null,
+        ],
+        pageInfo: pageInfo(null),
+      },
+    }));
+
+    const page = await fetchers.ballotItems('rank-id', 'author-space', undefined);
+
+    expect(sent[0].query).toContain(
+      squash('filter: { fromEntityId: { is: $rankEntityId }, spaceId: { is: $spaceId }, typeId: { is: $typeId } }')
+    );
+    expect(sent[0].query).toContain(squash('nodes { toEntityId toSpaceId position }'));
+    expect(sent[0].variables).toEqual({
+      rankEntityId: 'rank-id',
+      spaceId: 'author-space',
+      typeId: RANK_VOTES_RELATION_TYPE_ID,
+      first: BLOCK_RANKERS_PAGE_SIZE,
+      after: null,
+    });
+    expect(page.items).toEqual([
+      { entityId: 'debate', toSpaceId: DEBATES, position: 'a0' },
+      { entityId: 'other', toSpaceId: null, position: 'a1' },
+    ]);
   });
 });
