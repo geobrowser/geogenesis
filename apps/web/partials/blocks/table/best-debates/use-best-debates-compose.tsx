@@ -38,6 +38,8 @@ export type UseBestDebatesComposeArgs = {
   isSaving: boolean;
   /** Runs after each publish that went out (the screen generates its share images there). */
   onPublished?: (published: RankingSubmissionPublishResult) => void;
+  /** Open the team column on To rank (the screen was opened with `?team=to-rank`, GEO-3677). */
+  openOnToRank?: boolean;
   /** GEO-3679 fills this: Push it down in the Rank choice, and the debates to keep out of To rank. */
   pushDown?: PushDownSlot & { pushedDownEntityIds?: readonly string[] };
 };
@@ -61,10 +63,11 @@ export function useBestDebatesCompose({
   saveMySubmission,
   isSaving,
   onPublished,
+  openOnToRank = false,
   pushDown,
 }: UseBestDebatesComposeArgs) {
   const [, setToast] = useToast();
-  const [teamMode, setTeamMode] = React.useState<RankingComposeTeamMode>('all');
+  const [teamMode, setTeamMode] = React.useState<RankingComposeTeamMode>(openOnToRank ? 'to_rank' : 'all');
   const [mobileTab, setMobileTab] = React.useState<RankingComposeMobileTab>('global');
 
   const rankers: RankersRead = useBlockRankers({ blockId: enabled ? blockId : null, spaceId: blockSpaceId });

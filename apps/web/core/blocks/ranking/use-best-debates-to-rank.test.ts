@@ -3,45 +3,30 @@ import { describe, expect, it, vi } from 'vitest';
 import { type RankersRead, rankedByLabel, rankedByText, refreshRankersAfterIndexing } from './use-best-debates-to-rank';
 import type { BlockRanker } from './use-block-rankers';
 
-const ranker = (name: string | null): BlockRanker =>
-  ({
-    spaceId: name ?? 'x',
-    rankEntityId: 'r',
-    position: 1,
-    ballotSize: 3,
-    name,
-    avatarUrl: null,
-  }) as unknown as BlockRanker;
+const ranker = (name: string | null) => ({ name }) as unknown as BlockRanker;
 
-function read(overrides: Partial<RankersRead> & { counts?: Record<string, number | null> }): RankersRead {
-  const counts = overrides.counts ?? {};
+function read(status: RankersRead['status'], counts: Record<string, number | null> = {}): RankersRead {
+  const ready = status === 'ready';
   return {
+    status,
+    rankerCount: id => (!ready ? null : id in counts ? counts[id] : 0),
     rankersOf: id =>
-      counts[id] ? Array.from({ length: counts[id]! }, (_, i) => ranker(['Ana', 'Ben', 'Cy'][i] ?? null)) : [],
-    rankerCount: id => (id in counts ? counts[id] : 0),
-    isLoading: false,
-    error: null,
-    refetch: vi.fn(async () => undefined),
-    ...overrides,
+      !ready ? null : Array.from({ length: counts[id] ?? 0 }, (_, i) => ranker(['Ana', 'Ben', 'Cy'][i] ?? null)),
+    invalidate: vi.fn(async () => undefined),
   };
 }
 
 describe('who has ranked a debate', () => {
-  it('says "Nobody" only off a finished read', () => {
-    expect(rankedByLabel(read({}), 'd')).toEqual({ kind: 'nobody' });
-    expect(rankedByLabel(read({ isLoading: true }), 'd')).toEqual({ kind: 'unknown' });
-    expect(rankedByLabel(read({ error: new Error('down') }), 'd')).toEqual({ kind: 'unknown' });
-  });
-
-  it("follows the reviewed reader's status and null counts", () => {
-    expect(rankedByLabel(read({ status: 'loading', counts: { d: null } }), 'd')).toEqual({ kind: 'unknown' });
-    expect(rankedByLabel(read({ status: 'error' }), 'd')).toEqual({ kind: 'unknown' });
-    expect(rankedByLabel(read({ status: 'ready', counts: { d: null } }), 'd')).toEqual({ kind: 'unknown' });
-    expect(rankedByLabel(read({ status: 'ready', counts: { d: 0 } }), 'd')).toEqual({ kind: 'nobody' });
+  it('says "Nobody" only when the read is ready and the count is 0', () => {
+    expect(rankedByLabel(read('ready'), 'd')).toEqual({ kind: 'nobody' });
+    expect(rankedByLabel(read('loading'), 'd')).toEqual({ kind: 'unknown' });
+    expect(rankedByLabel(read('error'), 'd')).toEqual({ kind: 'unknown' });
+    expect(rankedByLabel(read('disabled'), 'd')).toEqual({ kind: 'unknown' });
+    expect(rankedByLabel(read('ready', { d: null }), 'd')).toEqual({ kind: 'unknown' });
   });
 
   it('names who has ranked it', () => {
-    const label = rankedByLabel(read({ counts: { d: 3 } }), 'd');
+    const label = rankedByLabel(read('ready', { d: 3 }), 'd');
     expect(label).toEqual({ kind: 'ranked', names: ['Ana', 'Ben', 'Cy'], count: 3 });
     if (label.kind !== 'ranked') throw new Error('expected ranked');
     expect(rankedByText(label)).toBe('Ranked by Ana, Ben and 1 other');
@@ -50,15 +35,14 @@ describe('who has ranked a debate', () => {
     expect(rankedByText({ kind: 'ranked', names: [], count: 2 })).toBe('Ranked by 2 people');
   });
 
-  it('re-reads after indexing, preferring invalidate', async () => {
-    const invalidate = vi.fn();
-    const rankers = read({ invalidate });
+  it('re-reads only once indexing has settled', async () => {
+    const rankers = read('ready');
     let settle!: () => void;
     refreshRankersAfterIndexing(rankers, new Promise<void>(resolve => (settle = resolve)));
-    expect(invalidate).not.toHaveBeenCalled();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(rankers.invalidate).not.toHaveBeenCalled();
     settle();
     await new Promise(resolve => setTimeout(resolve, 0));
-    expect(invalidate).toHaveBeenCalledTimes(1);
-    expect(rankers.refetch).not.toHaveBeenCalled();
+    expect(rankers.invalidate).toHaveBeenCalledTimes(1);
   });
 });

@@ -11,7 +11,7 @@ import { normId } from '~/core/utils/norm-id';
 import { getTopRankedSpaceId } from '~/core/utils/space/space-ranking';
 
 import { DEBATE_TYPE_ID } from './best-debates';
-import { timestampToMs } from './fetch-block-rankers';
+import { parseTimestampMs } from './ranking-ballot-recency';
 
 /**
  * The debates side of the Best debates ranking screen (GEO-3678): which debates are new enough for
@@ -167,7 +167,7 @@ function typeRowsPage(data: TypeRowsQuery) {
               entityId: node.fromEntityId,
               spaceId: node.spaceId,
               name: node.fromEntity?.name?.trim() || null,
-              createdAtMs: timestampToMs(node.fromEntity?.createdAt),
+              createdAtMs: parseTimestampMs(node.fromEntity?.createdAt),
             },
           ]
         : []

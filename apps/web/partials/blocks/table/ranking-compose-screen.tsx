@@ -9,6 +9,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import { isBestDebatesBlock } from '~/core/blocks/ranking/best-debates-ballot';
+import { BEST_DEBATES_TEAM_VIEW_PARAM, BEST_DEBATES_TEAM_VIEW_TO_RANK } from '~/core/blocks/ranking/best-debates-views';
 import { resolveRankingSingleTargetSpaceId } from '~/core/blocks/ranking/ranking-compose-publish-spaces';
 import { RANKING_COMPOSE_TAB_MY, rankingComposeHref } from '~/core/blocks/ranking/ranking-compose-url';
 import { generatePersonalRankingOgImages } from '~/core/blocks/ranking/ranking-og-generate-client';
@@ -549,6 +550,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
     saveMySubmission: slots => saveMySubmission(slots, rankingOpportunity.context),
     isSaving,
     onPublished: generateOgImages,
+    openOnToRank: searchParams?.get(BEST_DEBATES_TEAM_VIEW_PARAM) === BEST_DEBATES_TEAM_VIEW_TO_RANK,
   });
 
   const handlePublish = async () => {

@@ -5,34 +5,10 @@ import { useQuery } from '@tanstack/react-query';
 import * as React from 'react';
 
 import { type RecentDebate, TO_RANK_WINDOW_DAYS, fetchRecentDebates, selectToRank } from './best-debates-debates';
-import type { BlockRanker } from './use-block-rankers';
+import type { UseBlockRankersResult } from './use-block-rankers';
 
-/**
- * The parts of `useBlockRankers` (GEO-3686) the ranking screen reads.
- *
- * Written against both shapes of the reader: the one on the base branch (`isLoading`, `error`,
- * counts that read 0 until ready) and the reviewed one (`status`, `rankerCount` returning null until
- * ready, `invalidate`). Once the reviewed reader lands everywhere, `status` and `invalidate` stop
- * being optional and the fallbacks below go.
- */
-export type RankersRead = {
-  rankersOf: (entityId: string) => BlockRanker[];
-  rankerCount: (entityId: string) => number | null;
-  isLoading: boolean;
-  error: Error | null;
-  status?: 'disabled' | 'loading' | 'error' | 'ready';
-  refetch: () => Promise<unknown>;
-  invalidate?: () => Promise<unknown> | void;
-};
-
-export type RankersStatus = NonNullable<RankersRead['status']>;
-
-export function rankersStatus(rankers: RankersRead): RankersStatus {
-  if (rankers.status) return rankers.status;
-  if (rankers.error) return 'error';
-  if (rankers.isLoading) return 'loading';
-  return 'ready';
-}
+/** The parts of `useBlockRankers` (GEO-3686) the ranking screen reads. */
+export type RankersRead = Pick<UseBlockRankersResult, 'status' | 'rankerCount' | 'rankersOf' | 'invalidate'>;
 
 export type RankedByLabel =
   | { kind: 'nobody' }
@@ -42,15 +18,14 @@ export type RankedByLabel =
 
 /**
  * What To rank says under a debate: "Nobody has ranked this yet", who has, or nothing. "Nobody" is
- * only ever said off a finished read; a loading or failed read counts 0 and must not claim it.
+ * said only off a finished read whose count is 0; anything else unknown shows no badge.
  */
 export function rankedByLabel(rankers: RankersRead, entityId: string): RankedByLabel {
-  if (rankersStatus(rankers) !== 'ready') return { kind: 'unknown' };
+  if (rankers.status !== 'ready') return { kind: 'unknown' };
   const count = rankers.rankerCount(entityId);
   if (count == null) return { kind: 'unknown' };
   if (count === 0) return { kind: 'nobody' };
-  const names = rankers
-    .rankersOf(entityId)
+  const names = (rankers.rankersOf(entityId) ?? [])
     .map(ranker => ranker.name?.trim())
     .filter((name): name is string => Boolean(name));
   return { kind: 'ranked', names, count };
@@ -66,9 +41,9 @@ export function rankedByText(label: Extract<RankedByLabel, { kind: 'ranked' }>):
   return `Ranked by ${shown.join(', ')} and ${others} ${others === 1 ? 'other' : 'others'}`;
 }
 
-/** Re-reads who ranked what once a publish has been indexed. */
+/** Re-reads who ranked what once a publish has been indexed, never before (see `invalidate`). */
 export function refreshRankersAfterIndexing(rankers: RankersRead, indexingSettled: Promise<void>) {
-  void indexingSettled.then(() => (rankers.invalidate ? rankers.invalidate() : rankers.refetch())).catch(() => {});
+  void indexingSettled.then(() => rankers.invalidate()).catch(() => {});
 }
 
 const HOUR_MS = 60 * 60 * 1000;

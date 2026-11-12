@@ -21,11 +21,10 @@ const debates: RecentDebate[] = [
 
 function rankers(overrides: Partial<RankersRead> = {}): RankersRead {
   return {
+    status: 'ready',
     rankersOf: id => (id === 'd2' ? [{ name: 'Preston' } as never] : []),
     rankerCount: id => (id === 'd2' ? 1 : 0),
-    isLoading: false,
-    error: null,
-    refetch: async () => undefined,
+    invalidate: async () => undefined,
     ...overrides,
   };
 }
@@ -54,13 +53,10 @@ describe('To rank', () => {
   });
 
   it('never says "Nobody" while the read is loading or has failed', () => {
-    renderList({ rankers: rankers({ isLoading: true }) });
+    renderList({ rankers: rankers({ status: 'loading', rankerCount: () => null, rankersOf: () => null }) });
     expect(screen.queryByText('Nobody has ranked this yet')).toBeNull();
     cleanup();
-    renderList({ rankers: rankers({ error: new Error('down') }) });
-    expect(screen.queryByText('Nobody has ranked this yet')).toBeNull();
-    cleanup();
-    renderList({ rankers: rankers({ status: 'loading', rankerCount: () => null }) });
+    renderList({ rankers: rankers({ status: 'error', rankerCount: () => null, rankersOf: () => null }) });
     expect(screen.queryByText('Nobody has ranked this yet')).toBeNull();
   });
 
