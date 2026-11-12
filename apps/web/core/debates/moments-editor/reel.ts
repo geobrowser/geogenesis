@@ -31,15 +31,15 @@ export type EditorClip = {
   /** The claim the live reel links the clip to, shown until the admin picks another. */
   live_claim_text: string | null;
   /**
-   * Where an edge was last placed freely, with Alt (GEO-3672): the edge is free while it is still
-   * there, so any other change to it (a snapped drag, a step, a typed time, a fix) makes it a word
-   * edge again without having to say so. See `manualReel`.
+   * Where an edge was last placed freely, with Alt, or where the live reel cut it (GEO-3672): the
+   * edge is free while it is still there, so any other change to it (a snapped drag, a step, a
+   * typed time, a fix) makes it a word edge again without having to say so. See `manualReel`.
    */
   free_start_ms?: number;
   free_end_ms?: number;
 };
 
-/** Whether a clip's edge sits where it was placed freely, with Alt. */
+/** Whether a clip's edge sits where it was placed freely, with Alt, or where the live reel cut it. */
 export function edgeIsFree(clip: EditorClip, edge: 'start' | 'end'): boolean {
   return edge === 'start' ? clip.free_start_ms === clip.start_ms : clip.free_end_ms === clip.end_ms;
 }
@@ -296,11 +296,12 @@ function geoChatCut(
 /**
  * The reel as geo-chat takes it (GEO-3672, GEO-3683). An edge placed with Alt is a time picked by
  * ear, which geo-chat would widen by up to 250 ms when it sits in the quiet just beside a word: it
- * is sent `exact`, so it is cut where it was placed. `exact` is the whole reel's, and the editor's
- * other edges snap to words, where the widening is wanted (a word's first sound), so with `exact`
- * every other edge is sent where geo-chat would have widened it to, and every edge is trimmed to
- * the stretch the recordings can cut, as it would have been (`exact` refuses an edge outside it).
- * A reel whose free edges would not move, the usual case, is sent as before, without `exact`.
+ * is sent `exact`, so it is cut where it was placed, as is a live cut left alone. `exact` is the
+ * whole reel's, and the editor's other edges snap to words, where the widening is wanted (a word's
+ * first sound), so with `exact` every other edge is sent where geo-chat would have widened it to,
+ * and every edge is trimmed to the stretch the recordings can cut, as it would have been (`exact`
+ * refuses an edge outside it). A reel whose free edges would not move, the usual case, is sent as
+ * before, without `exact`.
  */
 export function manualReel(
   clips: readonly EditorClip[],
