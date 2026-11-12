@@ -8,6 +8,7 @@ import { useAtom, useSetAtom } from 'jotai';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
+import { BEST_DEBATES_BLOCK_ID } from '~/core/blocks/ranking/best-debates';
 import { resolveRankingSingleTargetSpaceId } from '~/core/blocks/ranking/ranking-compose-publish-spaces';
 import { RANKING_COMPOSE_TAB_MY, rankingComposeHref } from '~/core/blocks/ranking/ranking-compose-url';
 import { generatePersonalRankingOgImages } from '~/core/blocks/ranking/ranking-og-generate-client';
@@ -22,6 +23,10 @@ import {
   getRowDisplayName,
   splitRankableEntityIds,
 } from '~/core/blocks/ranking/ranking-rankable-list';
+import {
+  useClearPushedDownBeforeRanking,
+  useMyPushedDownDebates,
+} from '~/core/blocks/ranking/use-my-pushed-down-debates';
 import { useRankingAccumulatedRows } from '~/core/blocks/ranking/use-ranking-accumulated-rows';
 import { useRankingBlockDates } from '~/core/blocks/ranking/use-ranking-block-dates';
 import { useRankingBlockRelations } from '~/core/blocks/ranking/use-ranking-block-relations';
@@ -50,6 +55,7 @@ import { RankingComposeGlobalRanking } from './ranking-compose-global-ranking';
 import { RankingComposePinnedToolbar, RankingComposeTitleMetadata } from './ranking-compose-header';
 import { RankingComposeLayout } from './ranking-compose-layout';
 import { RankingComposeMyRanking } from './ranking-compose-my-ranking';
+import { RankingComposePushedDown } from './ranking-compose-pushed-down';
 import Custom404 from '~/app/not-found';
 import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
 import { rankingComposeCreateEntityAtom } from '~/atoms/ranking-compose-create-entity';
@@ -129,6 +135,16 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
     personalSpaceId,
     isLoading: isLoadingMySubmission,
   } = useRankingSubmissions(entityId, spaceId, displayName);
+
+  // GEO-3679: the Best debates block lists what the member pushed down, and ranking one of those
+  // clears its downvote before the ballot publishes.
+  const bestDebatesBlockId = BEST_DEBATES_BLOCK_ID && ID.equals(entityId, BEST_DEBATES_BLOCK_ID) ? entityId : null;
+  const {
+    debates: pushedDownDebates,
+    isError: isPushedDownError,
+    retry: retryPushedDown,
+  } = useMyPushedDownDebates({ blockId: bestDebatesBlockId });
+  const clearPushedDownBeforeRanking = useClearPushedDownBeforeRanking(pushedDownDebates);
 
   const canCreateNew = Boolean(createNewSpaceId) && !isLoadingCreateAccess && canEditCreateSpace;
 
@@ -549,6 +565,10 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
       return;
     }
 
+    // Downvote first, ballot second, never together: a pushed-down debate being ranked loses its
+    // downvote before the publish starts, and a failed clear stops the publish (GEO-3679).
+    if (bestDebatesBlockId && !(await clearPushedDownBeforeRanking(orderedIds))) return;
+
     const published = await saveMySubmission(slots, rankingOpportunity.context);
     if (!published) return;
 
@@ -643,6 +663,16 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
           onRemove={removeFromMyRanking}
           onView={openEntitySheet}
           pendingEntityIds={pendingEntityIds}
+          footer={
+            bestDebatesBlockId ? (
+              <RankingComposePushedDown
+                blockId={bestDebatesBlockId}
+                debates={pushedDownDebates}
+                isError={isPushedDownError}
+                onRetryLoad={() => void retryPushedDown()}
+              />
+            ) : null
+          }
         />
       }
       globalRanking={
