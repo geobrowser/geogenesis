@@ -53,6 +53,8 @@ function Harness({ initial, startWith, ...rest }: HarnessProps) {
     toRankIds: [],
     publish: async () => true,
     isSaving: false,
+    // Most of these cover the publish-on-Done path; the ranking screen's default is tested below.
+    publishOnDone: true,
     ...rest,
   });
   return (
@@ -124,6 +126,38 @@ describe('placing a debate by comparison', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(latestOrder).toEqual(list(4));
     expect(actionNames().at(-1)).toBe('ranking_place_cancelled');
+  });
+
+  it('on the ranking screen, Done and Rank the next one only change the draft', async () => {
+    const publish = vi.fn(async (_ids: string[]) => true);
+    render(
+      <Harness
+        initial={list(2)}
+        startWith={{ id: 'new', origin: 'to_rank' }}
+        toRankIds={['next']}
+        publish={publish}
+        publishOnDone={false}
+      />
+    );
+    fireEvent.click(screen.getByText('start'));
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: '1' });
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: '1' });
+    expect(screen.getByText(/Added to your draft, not published yet/)).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Rank the next one/ }));
+    });
+    expect(publish).not.toHaveBeenCalled();
+    expect(latestOrder).toEqual(['new', 'd1', 'd2']);
+    // The next debate's comparison is open; finishing it and pressing Done still publishes nothing.
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: '2' });
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: '2' });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    });
+    expect(publish).not.toHaveBeenCalled();
+    expect(latestOrder).toEqual(['new', 'd1', 'd2', 'next']);
+    expect(screen.queryByRole('dialog')).toBeNull();
   });
 
   it('publishes once on Done, with nudges, as one edit', async () => {

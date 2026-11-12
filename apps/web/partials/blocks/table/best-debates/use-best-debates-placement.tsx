@@ -60,6 +60,13 @@ export type UseBestDebatesPlacementArgs = {
   isSaving: boolean;
   /** GEO-3679's Push it down. Without it, Rank goes straight to the comparison. */
   pushDown?: PushDownSlot;
+  /**
+   * Whether Done and Rank the next one publish the ballot. Off on the ranking screen (Preston,
+   * 12 Nov): placing only changes the draft, and the screen's Publish sends every change at once.
+   * On for a future single-debate entry point (the Explore card's Rank), where there is no screen
+   * to publish from.
+   */
+  publishOnDone?: boolean;
 };
 
 /**
@@ -81,6 +88,7 @@ export function useBestDebatesPlacement({
   publish,
   isSaving,
   pushDown,
+  publishOnDone = false,
 }: UseBestDebatesPlacementArgs) {
   const [flow, setFlow] = React.useState<FlowState | null>(null);
   const getContext = useActionContext('ranking_composer', 'ranking', blockId);
@@ -212,23 +220,42 @@ export function useBestDebatesPlacement({
     setFlow(current => (current?.phase === 'placed' ? { ...current, publishFailed: true } : current));
   }, []);
 
+  /** Without publishing: makes sure the placed debate is still in the draft where it was placed. */
+  const keepPlaced = React.useCallback(
+    (entityId: string, placedIndex: number) => {
+      const ids = orderedIdsRef.current;
+      if (indexOfEntity(ids, entityId) < 0) setOrderedIds(insertAt(ids, entityId, placedIndex));
+    },
+    [setOrderedIds]
+  );
+
   const done = React.useCallback(
     async (entityId: string, placedIndex: number) => {
+      if (!publishOnDone) {
+        keepPlaced(entityId, placedIndex);
+        setFlow(null);
+        return;
+      }
       if (await publishPlaced(entityId, placedIndex)) setFlow(null);
       else markPublishFailed();
     },
-    [markPublishFailed, publishPlaced]
+    [keepPlaced, markPublishFailed, publishOnDone, publishPlaced]
   );
 
   const rankNext = React.useCallback(
     async (entityId: string, placedIndex: number, nextId: string) => {
+      if (!publishOnDone) {
+        keepPlaced(entityId, placedIndex);
+        start(nextId, 'to_rank');
+        return;
+      }
       if (!(await publishPlaced(entityId, placedIndex))) {
         markPublishFailed();
         return;
       }
       start(nextId, 'to_rank', true);
     },
-    [markPublishFailed, publishPlaced, start]
+    [keepPlaced, markPublishFailed, publishOnDone, publishPlaced, start]
   );
 
   let dialogs: React.ReactNode = null;
@@ -265,6 +292,7 @@ export function useBestDebatesPlacement({
         orderedIds={orderedIds}
         nameOf={nameOf}
         withOtherChanges={flow.withOtherChanges}
+        publishesOnDone={publishOnDone}
         publishFailed={Boolean(flow.publishFailed)}
         isSaving={isSaving}
         onNudge={direction => setOrderedIds(nudge(orderedIdsRef.current, placedId, direction))}

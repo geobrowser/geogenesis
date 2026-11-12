@@ -32,6 +32,21 @@ describe('useComposeBallot', () => {
     expect(setOrderedIds).toHaveBeenCalledWith(['a']);
   });
 
+  it('only edits the draft when publishing waits for the screen (a push-down on Best debates)', async () => {
+    const publish = vi.fn(async (_ids: string[]) => true);
+    const setOrderedIds = vi.fn();
+    const { result } = renderHook(() =>
+      useComposeBallot({ orderedIds: ['a', 'b'], setOrderedIds, publish, deferPublish: true })
+    );
+    let ok = false;
+    await act(async () => {
+      ok = await result.current!.publish(['a']);
+    });
+    expect(ok).toBe(true);
+    expect(setOrderedIds).toHaveBeenCalledWith(['a']);
+    expect(publish).not.toHaveBeenCalled();
+  });
+
   it('is off without a source', () => {
     const { result } = renderHook(() => useComposeBallot(null));
     expect(result.current).toBeNull();

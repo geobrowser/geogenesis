@@ -13,6 +13,7 @@ import { BEST_DEBATES_TEAM_VIEW_PARAM, BEST_DEBATES_TEAM_VIEW_TO_RANK } from '~/
 import { RankingComposeBallotContext, useComposeBallot } from '~/core/blocks/ranking/ranking-compose-ballot-context';
 import { resolveRankingSingleTargetSpaceId } from '~/core/blocks/ranking/ranking-compose-publish-spaces';
 import { RANKING_COMPOSE_TAB_MY, rankingComposeHref } from '~/core/blocks/ranking/ranking-compose-url';
+import { countBallotChanges, unpublishedChangesLabel } from '~/core/blocks/ranking/ranking-draft-changes';
 import { generatePersonalRankingOgImages } from '~/core/blocks/ranking/ranking-og-generate-client';
 import { buildRankingOgVersion } from '~/core/blocks/ranking/ranking-og-version';
 import {
@@ -62,6 +63,7 @@ import { BestDebateDisplaysContext } from './best-debates/best-debate-row';
 import { BestDebateWatchProvider } from './best-debates/best-debate-watch';
 import { useBestDebatesCompose } from './best-debates/use-best-debates-compose';
 import { useBestDebatesPushDownSlot } from './best-debates/use-best-debates-push-down-slot';
+import { useUnpublishedLeaveGuard } from './best-debates/use-unpublished-leave-guard';
 import { RankingBallotReadError } from './ranking-ballot-read-error';
 import { RankingComposeCreateEntityPanel } from './ranking-compose-create-entity-panel';
 import { RankingComposeEntitySheet } from './ranking-compose-entity-sheet';
@@ -131,7 +133,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   const enqueuePendingAction = useEnqueuePendingAction('ranking_composer');
   const { isPending: isAccountSetupPending } = usePendingPersonalSpace();
 
-  const handleBack = React.useCallback(() => {
+  const handleBackNow = React.useCallback(() => {
     if (rankingComposeReturnHref) {
       setRankingComposeReturnHref(null);
       router.replace(rankingComposeReturnHref);
@@ -140,6 +142,8 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
 
     router.back();
   }, [rankingComposeReturnHref, router, setRankingComposeReturnHref]);
+  const handleBackRef = React.useRef<() => void>(handleBackNow);
+  const handleBack = React.useCallback(() => handleBackRef.current(), []);
 
   React.useEffect(() => {
     if (!composeEditRefused || !composeEditGuard.settled) return;
@@ -530,6 +534,10 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   const hasUnpublishedChanges = draftIdsKey !== publishedIdsKey;
 
   const isPublishBusy = isSaving || isPublishingRanking;
+  // Best debates saves every placement at once (Preston, 12 Nov): how many are waiting.
+  const unpublishedCount = hasUnpublishedChanges
+    ? countBallotChanges(mySubmission?.orderedEntityIds ?? [], orderedIds)
+    : 0;
 
   const canPublish =
     !ballotReadError &&
@@ -539,6 +547,16 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
     (Boolean(personalSpaceId) || isAccountSetupPending) &&
     !isPublishBusy &&
     !composeEditRefused;
+
+  // Leaving with unpublished changes asks first (Preston, 12 Nov). The draft lives in this screen
+  // only, so leaving without publishing loses it; the prompt says so.
+  const leaveGuard = useUnpublishedLeaveGuard({
+    active: isBestDebates && unpublishedCount > 0,
+    count: unpublishedCount,
+    isPublishing: isPublishBusy,
+    onPublish: async () => Boolean(await handlePublish()),
+  });
+  handleBackRef.current = () => leaveGuard.guard(handleBackNow);
 
   const rankingOpportunity = useRankingOpportunity(
     entityId,
@@ -692,21 +710,22 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
 
   /** The draft as the ranking screen's ballot, for push-down to edit (`usePushDown`). */
   const composeBallot = useComposeBallot(
-    bestDebatesBlockId ? { orderedIds, setOrderedIds, publish: ids => bestDebates.publish(ids) } : null
+    bestDebatesBlockId
+      ? { orderedIds, setOrderedIds, publish: ids => bestDebates.publish(ids), deferPublish: true }
+      : null
   );
 
-  const handlePublish = async () => {
-    if (composeEditRefused) return;
+  const handlePublish = async (): Promise<boolean | undefined> => {
+    if (composeEditRefused) return false;
     // `submissionsOpen` comes from the last render. Re-check against a fresh clock:
     if (!rankingSubmissionsOpen(getRankingPeriodState(startDate, endDate))) {
       setToast(<span>This ranking has closed.</span>);
-      return;
+      return false;
     }
 
     // Best debates stays on the ranking screen after a publish: rankers place debate after debate.
     if (isBestDebates) {
-      await bestDebates.publish(orderedIds);
-      return;
+      return bestDebates.publish(orderedIds);
     }
 
     const slots = buildSlots(orderedIds);
@@ -825,6 +844,10 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
             ? {
                 title: 'Your ranking',
                 hideSidePanel: true,
+                publishLabel:
+                  unpublishedCount > 0
+                    ? `Publish ${unpublishedCount === 1 ? '1 change' : `${unpublishedCount} changes`}`
+                    : undefined,
                 hideMobileHeading: true,
                 // No dragging between tabs on a phone: a tap is the way in there.
                 emptyText: isMobile
@@ -900,6 +923,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
           <RankingComposeCreateEntityPanel onFinished={addToMyRanking} rankingName={displayName} />
           <RankingComposeEntitySheet target={entitySheetTarget} onClose={() => setEntitySheetTarget(null)} />
           {isBestDebates ? bestDebates.dialogs : null}
+          {leaveGuard.dialog}
           {pushDown.binding(isBestDebates ? bestDebates.activeEntityId : null)}
           <div ref={rankingOpportunity.root} className="contents">
             <RankingComposeFullscreen coverNavbar={isMobile}>
@@ -937,7 +961,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
                     >
                       <div className="flex items-center gap-3">
                         <span className="min-w-0 flex-1 text-[13px] leading-[17px] text-grey-04">
-                          Your ranking has changes you haven’t published.
+                          {unpublishedChangesLabel(unpublishedCount)}
                         </span>
                         <Button
                           variant="primary"

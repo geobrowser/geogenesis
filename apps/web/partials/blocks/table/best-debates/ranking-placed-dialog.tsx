@@ -21,6 +21,11 @@ type Props = {
   nameOf: (entityId: string) => string;
   /** The list had drags or placements nobody had published yet; Done publishes them too. */
   withOtherChanges: boolean;
+  /**
+   * Done publishes (a single-debate entry point). Off on the ranking screen, where the placement
+   * goes into the draft and the screen's Publish sends it with everything else.
+   */
+  publishesOnDone?: boolean;
   /** The last Done or Rank the next one didn't go out; the placement is still in the draft. */
   publishFailed: boolean;
   isSaving: boolean;
@@ -47,6 +52,7 @@ export function RankingPlacedDialog({
   orderedIds,
   nameOf,
   withOtherChanges,
+  publishesOnDone = false,
   publishFailed,
   isSaving,
   onNudge,
@@ -65,9 +71,11 @@ export function RankingPlacedDialog({
       onClose={onClose}
       title={`Placed #${at + 1} of ${orderedIds.length}`}
       subtitle={
-        withOtherChanges
-          ? 'Done publishes it with your other unpublished changes.'
-          : 'Nudge it if it’s not quite right. Done publishes it.'
+        !publishesOnDone
+          ? 'Added to your draft, not published yet. Nudge it if it’s not quite right, then publish when you’re done ranking.'
+          : withOtherChanges
+            ? 'Done publishes it with your other unpublished changes.'
+            : 'Nudge it if it’s not quite right. Done publishes it.'
       }
       footer={
         <>
@@ -75,7 +83,7 @@ export function RankingPlacedDialog({
             <button
               type="button"
               className={cx(DIALOG_SECONDARY_ACTION_BUTTON_CLASS_NAME, '!w-auto md:!w-full')}
-              disabled={isSaving}
+              disabled={publishesOnDone && isSaving}
               onClick={next.onRankNext}
             >
               Rank the next one · {next.remaining} left
@@ -84,10 +92,10 @@ export function RankingPlacedDialog({
           <button
             type="button"
             className={cx(DIALOG_ACTION_BUTTON_CLASS_NAME, '!w-auto md:!w-full')}
-            disabled={isSaving}
+            disabled={publishesOnDone && isSaving}
             onClick={onDone}
           >
-            {isSaving ? 'Publishing…' : 'Done'}
+            {publishesOnDone && isSaving ? 'Publishing…' : 'Done'}
           </button>
         </>
       }

@@ -45,6 +45,8 @@ type Props = {
   pendingEntityIds: ReadonlySet<string>;
   /** Rendered under the list, e.g. the Best debates "You pushed down" section (GEO-3679). */
   footer?: React.ReactNode;
+  /** The publish button's label in place of "Publish ranking" (Best debates: "Publish 3 changes"). */
+  publishLabel?: string;
   /** Phones with the Team / Your ranking tabs: the tab names the column, so no heading or rule. */
   hideMobileHeading?: boolean;
   /** The column's heading; "My ranking" unless the block says otherwise (Best debates: "Your ranking"). */
@@ -116,6 +118,7 @@ export function RankingComposeMyRanking({
   footer,
   title = 'My ranking',
   hideMobileHeading = false,
+  publishLabel,
   emptyText = 'Add or search global ranking list to get started',
   onDropEntity,
 }: Props) {
@@ -154,7 +157,7 @@ export function RankingComposeMyRanking({
             onClick={onPublish}
             data-analytics-feature="ranking-submit"
           >
-            {isSaving ? 'Publishing…' : 'Publish ranking'}
+            {isSaving ? 'Publishing…' : (publishLabel ?? 'Publish ranking')}
           </Button>
         ) : null}
       </div>

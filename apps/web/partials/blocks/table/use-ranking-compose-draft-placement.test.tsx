@@ -42,6 +42,8 @@ function Screen({
       return Boolean(result);
     },
     isSaving: false,
+    // These cover the publish-on-Done path a single-debate entry point would use.
+    publishOnDone: true,
   });
   return (
     <>

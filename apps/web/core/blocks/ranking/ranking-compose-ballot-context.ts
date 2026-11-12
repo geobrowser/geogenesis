@@ -36,6 +36,11 @@ export function useComposeBallot(
     orderedIds: readonly string[];
     setOrderedIds: (ids: string[]) => void;
     publish: (ids: string[]) => Promise<boolean>;
+    /**
+     * Edits stay in the draft until the screen's Publish (the Best debates screen, Preston 12 Nov):
+     * `publish` then only sets the draft, so a push-down's ballot edit waits with everything else.
+     */
+    deferPublish?: boolean;
   } | null
 ): ComposeBallot | null {
   const latest = React.useRef(source);
@@ -51,6 +56,7 @@ export function useComposeBallot(
         const current = latest.current;
         if (!current) return false;
         current.setOrderedIds(ids);
+        if (current.deferPublish) return true;
         return current.publish(ids);
       },
     };

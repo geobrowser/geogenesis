@@ -43,6 +43,8 @@ export type UseBestDebatesComposeArgs = {
    * share images there, and folds the published ballot back into its draft).
    */
   onPublished?: (published: RankingSubmissionPublishResult, sentIds: string[]) => void;
+  /** Done publishes (see `useBestDebatesPlacement`). Off here: the screen's Publish sends everything. */
+  publishOnDone?: boolean;
   /** The team column's search, which To rank filters by too. */
   searchQuery?: string;
   /** Open the team column on To rank (the screen was opened with `?team=to-rank`, GEO-3677). */
@@ -73,6 +75,7 @@ export function useBestDebatesCompose({
   openOnToRank = false,
   pushDown,
   searchQuery = '',
+  publishOnDone = false,
 }: UseBestDebatesComposeArgs) {
   const tools = useBestDebatesTeamTools();
   const [, setToast] = useToast();
@@ -166,6 +169,7 @@ export function useBestDebatesCompose({
     publish,
     isSaving,
     pushDown,
+    publishOnDone,
   });
 
   const startPlacement = React.useCallback(
