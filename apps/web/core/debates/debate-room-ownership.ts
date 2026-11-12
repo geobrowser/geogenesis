@@ -63,6 +63,7 @@ export type DebateRoomOwnershipCoordinator = {
   readonly coordinationMode: DebateRoomOwnershipCoordinationMode;
   acquire: () => Promise<DebateRoomOwnershipAcquireResult>;
   requestTakeover: (options?: DebateRoomTakeoverOptions) => Promise<boolean>;
+  waitForLock: (signal: AbortSignal) => Promise<boolean>;
   release: () => Promise<void>;
   close: () => void;
   ownsConnection: () => boolean;
@@ -138,6 +139,8 @@ export function createDebateRoomOwnershipCoordinator({
   let activeAcquisitionAttempt: { cancelled: boolean } | null = null;
   const pendingTakeovers = new Map<string, (released: boolean, ownerLabel?: string) => void>();
   const pendingAcks = new Map<string, () => void>();
+  const queuedLockAborts = new Set<() => void>();
+  let queuedGrant: Promise<boolean> | null = null;
   let lastRefusedBy: string | undefined;
 
   let takeoversInFlight = 0;
@@ -358,6 +361,65 @@ export function createDebateRoomOwnershipCoordinator({
       });
     });
 
+  // Waits in the lock queue, so it gets the lock as soon as the holder lets go.
+  const waitForLock = (signal: AbortSignal) => {
+    const grant = queueForLock(signal);
+    queuedGrant = grant;
+    void grant.finally(() => {
+      if (queuedGrant === grant) queuedGrant = null;
+    });
+    return grant;
+  };
+
+  const queueForLock = (signal: AbortSignal) =>
+    new Promise<boolean>(resolve => {
+      if (ownsConnection) return resolve(true);
+      if (!lockManager || !lockRequestsAvailable || closed || signal.aborted) return resolve(false);
+      const queue = new AbortController();
+      const abort = () => queue.abort();
+      const stopListening = () => {
+        signal.removeEventListener('abort', abort);
+        queuedLockAborts.delete(abort);
+      };
+      signal.addEventListener('abort', abort, { once: true });
+      queuedLockAborts.add(abort);
+      let granted = false;
+      let activeRequest: Promise<void> | null = null;
+      let request: Promise<void>;
+      try {
+        request = lockManager.request(coordinationName, { mode: 'exclusive', signal: queue.signal }, async lock => {
+          stopListening();
+          if (closed || signal.aborted || !lock) return resolve(false);
+          granted = true;
+          ownsConnection = true;
+          if (activeRequest) lockRequest = activeRequest;
+          resolve(true);
+          await new Promise<void>(release => {
+            releaseLock = release;
+          });
+          releaseLock = null;
+          ownsConnection = false;
+        });
+      } catch {
+        stopListening();
+        return resolve(false);
+      }
+      const settled: Promise<void> = request.then(
+        () => undefined,
+        () => {
+          stopListening();
+          // Only a lock we held can be lost.
+          if (granted) handleLockLost();
+          resolve(false);
+        }
+      );
+      activeRequest = settled;
+      if (granted) lockRequest = settled;
+      void settled.finally(() => {
+        if (lockRequest === settled) lockRequest = null;
+      });
+    });
+
   if (channel) {
     channel.onmessage = event => {
       const message = event.data as OwnershipMessage;
@@ -468,7 +530,14 @@ export function createDebateRoomOwnershipCoordinator({
 
       if (outcome === 'refused') return false;
       if (outcome === 'released') {
-        const acquired = (await acquireLock(true)).acquired;
+        let acquired = (await acquireLock(true)).acquired;
+        const waiting = queuedGrant;
+        if (!acquired && waiting) {
+          acquired = await Promise.race([
+            waiting,
+            new Promise<boolean>(resolve => window.setTimeout(() => resolve(false), takeoverResponseTimeoutMs)),
+          ]);
+        }
         if (acquired) onTookOverFromOtherTab?.(releasedBy);
         return acquired;
       }
@@ -479,9 +548,11 @@ export function createDebateRoomOwnershipCoordinator({
       if (stolen) onTookOverFromOtherTab?.();
       return stolen;
     },
+    waitForLock,
     release,
     close: () => {
       closed = true;
+      for (const abort of [...queuedLockAborts]) abort();
       void release();
       for (const resolve of pendingTakeovers.values()) resolve(false);
       pendingTakeovers.clear();

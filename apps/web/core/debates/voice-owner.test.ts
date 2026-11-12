@@ -329,6 +329,74 @@ describe('tab voice owner', () => {
     expect(debateTab.owner.getState()).toEqual({ ownership: 'elsewhere', heldBy: 'lobby' });
   });
 
+  it('gives a live debate that lost voice to another live debate the voice once that one ends', async () => {
+    const first = openTab('first', 0);
+    const firstDebate = first.surface('debate', 'refuse');
+    await first.claim('debate');
+    const second = openTab('second', 2);
+    second.surface('debate', 'refuse');
+    await expect(second.claim('debate')).resolves.toBe(false);
+
+    asTab('second', () => second.owner.waitForVoice({ kind: 'debate', signal: new AbortController().signal }));
+    await flush();
+    expect(second.owner.getState().ownership).toBe('elsewhere');
+
+    firstDebate.policy = 'yield';
+    first.owner.announceYieldable();
+    for (let i = 0; i < 4; i += 1) await flush();
+
+    expect(second.owner.getState()).toEqual({ ownership: 'owned', heldBy: null });
+    expect(first.yields).toBe(1);
+    expect(locks.heldCount()).toBe(1);
+    expect(locks.queue).toHaveLength(0);
+    expect(captureSafely).toHaveBeenCalledWith('voice_moved_to_other_tab', {
+      to_surface: 'debate',
+      from_surface: 'debate',
+      automatic: false,
+    });
+  });
+
+  it('gives a waiting live debate the voice as soon as the holder lets go, before a lobby can claim it', async () => {
+    const first = openTab('first', 0);
+    first.surface('debate', 'refuse');
+    await first.claim('debate');
+    const second = openTab('second', 2);
+    second.surface('debate', 'refuse');
+    await expect(second.claim('debate')).resolves.toBe(false);
+    asTab('second', () => second.owner.waitForVoice({ kind: 'debate', signal: new AbortController().signal }));
+
+    // The holding tab goes away (closed, or a slow handover finally letting go).
+    locks.crash('first');
+    FakeBroadcastChannel.crash('first');
+    await flush();
+    expect(second.owner.getState()).toEqual({ ownership: 'owned', heldBy: null });
+
+    const lobby = openTab('lobby', 2);
+    lobby.surface('lobby');
+    await expect(lobby.claim('lobby', true)).resolves.toBe(false);
+    expect(locks.heldCount()).toBe(1);
+  });
+
+  it('stops waiting for voice once the wait is called off', async () => {
+    const first = openTab('first', 0);
+    const firstDebate = first.surface('debate', 'refuse');
+    await first.claim('debate');
+    const second = openTab('second', 2);
+    second.surface('debate', 'refuse');
+    await expect(second.claim('debate')).resolves.toBe(false);
+    const controller = new AbortController();
+    asTab('second', () => second.owner.waitForVoice({ kind: 'debate', signal: controller.signal }));
+    controller.abort();
+    expect(locks.queue).toHaveLength(0);
+
+    firstDebate.policy = 'yield';
+    first.owner.announceYieldable();
+    for (let i = 0; i < 4; i += 1) await flush();
+
+    expect(second.owner.getState().ownership).toBe('elsewhere');
+    expect(first.yields).toBe(0);
+  });
+
   it('gives a debate in its intro to "Use voice here" but not to a remount', async () => {
     const debateTab = openTab('debate', 0);
     debateTab.surface('debate', 'explicit-only');

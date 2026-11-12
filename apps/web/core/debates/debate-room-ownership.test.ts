@@ -484,6 +484,93 @@ describe('debate room ownership', () => {
     await closeCoordinators(stuck, requester);
   });
 
+  it('gives a queued waiter the lock the moment the holder lets go, ahead of a later claim', async () => {
+    const holder = createDebateRoomOwnershipCoordinator({
+      debateId: 'debate-1',
+      userId: 'user-a',
+      onTakeoverRequested: () => false,
+    });
+    const waiter = createDebateRoomOwnershipCoordinator({
+      debateId: 'debate-1',
+      userId: 'user-a',
+      onTakeoverRequested: () => false,
+    });
+    const lobby = createDebateRoomOwnershipCoordinator({
+      debateId: 'debate-1',
+      userId: 'user-a',
+      onTakeoverRequested: () => true,
+    });
+    await holder.acquire();
+
+    const waiting = waiter.waitForLock(new AbortController().signal);
+    await flushMicrotasks();
+    expect(waiter.ownsConnection()).toBe(false);
+
+    await holder.release();
+    
+    await expect(lobby.acquire()).resolves.toEqual({ acquired: false, waitedForLocalRelease: false });
+    await expect(waiting).resolves.toBe(true);
+    expect(waiter.ownsConnection()).toBe(true);
+
+    await closeCoordinators(holder, waiter, lobby);
+  });
+
+  it('stops waiting on abort without counting it as a lost lock, and lets the holder release', async () => {
+    const onOwnershipLost = vi.fn();
+    const holder = createDebateRoomOwnershipCoordinator({
+      debateId: 'debate-1',
+      userId: 'user-a',
+      onTakeoverRequested: () => false,
+    });
+    const waiter = createDebateRoomOwnershipCoordinator({
+      debateId: 'debate-1',
+      userId: 'user-a',
+      onTakeoverRequested: () => false,
+      onOwnershipLost,
+    });
+    await holder.acquire();
+
+    const controller = new AbortController();
+    const waiting = waiter.waitForLock(controller.signal);
+    await flushMicrotasks();
+    // A release() of the waiter's own (never granted) request must not hang on it.
+    await waiter.release();
+    controller.abort();
+    await expect(waiting).resolves.toBe(false);
+    expect(onOwnershipLost).not.toHaveBeenCalled();
+
+    await holder.release();
+    await flushMicrotasks();
+    expect(waiter.ownsConnection()).toBe(false);
+
+    await closeCoordinators(holder, waiter);
+  });
+
+  it('stops waiting when the coordinator closes', async () => {
+    const holder = createDebateRoomOwnershipCoordinator({
+      debateId: 'debate-1',
+      userId: 'user-a',
+      onTakeoverRequested: () => false,
+    });
+    const waiter = createDebateRoomOwnershipCoordinator({
+      debateId: 'debate-1',
+      userId: 'user-a',
+      onTakeoverRequested: () => false,
+    });
+    await holder.acquire();
+
+    const waiting = waiter.waitForLock(new AbortController().signal);
+    await flushMicrotasks();
+    waiter.close();
+    await expect(waiting).resolves.toBe(false);
+
+    await holder.release();
+    await flushMicrotasks();
+    expect(waiter.ownsConnection()).toBe(false);
+
+    await closeCoordinators(holder, waiter);
+  });
+
   it('does not report a lost lock twice when a steal lands while it is already handing over', async () => {
     const onOwnershipLost = vi.fn();
     const handover = deferredBoolean();

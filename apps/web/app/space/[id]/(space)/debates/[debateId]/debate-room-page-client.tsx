@@ -1765,7 +1765,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       setRoomState('idle');
     },
   });
-  const { takeOver: claimVoice, announceYieldable } = tabVoice;
+  const { takeOver: claimVoice, announceYieldable, waitForVoice } = tabVoice;
   // True whenever another tab holds voice, including when this tab's first claim lost and it never
   // held it — the case `voiceYielded` (set from `onYield`) misses.
   const voiceHeldElsewhere = tabVoice.ownership === 'elsewhere';
@@ -1775,6 +1775,16 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   React.useEffect(() => {
     announceYieldable();
   }, [announceYieldable, countdown.effectiveStatus, roomHeld]);
+
+  // Live room without voice: take voice as soon as it frees up.
+  const waitingForVoice =
+    roomHeld && voiceHeldElsewhere && debateVoicePolicy(countdown.effectiveStatus, true) !== 'yield';
+  React.useEffect(() => {
+    if (!waitingForVoice) return;
+    const controller = new AbortController();
+    waitForVoice(controller.signal);
+    return () => controller.abort();
+  }, [waitingForVoice, waitForVoice]);
 
   const connect = React.useCallback(
     async (options: { takeover?: boolean; automatic?: boolean } = {}) => {

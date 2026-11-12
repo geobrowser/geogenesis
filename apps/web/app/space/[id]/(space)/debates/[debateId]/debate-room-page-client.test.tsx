@@ -127,6 +127,7 @@ const mocks = vi.hoisted(() => ({
   voiceCoordinationMode: 'livekit-fallback' as 'lock-and-broadcast' | 'lock-only' | 'livekit-fallback',
   voiceOwnsConnection: vi.fn(),
   voiceRequestTakeover: vi.fn(),
+  voiceWaitForLock: vi.fn(),
   voiceLastRefusedBy: vi.fn(),
   useRealRoomOwnership: false,
   deviceChangeHandler: null as null | (() => void),
@@ -296,6 +297,7 @@ vi.mock('~/core/debates/debate-room-ownership', async importOriginal => {
           coordinationMode: mocks.voiceCoordinationMode,
           acquire: async () => ({ acquired: true, waitedForLocalRelease: false }),
           requestTakeover: mocks.voiceRequestTakeover,
+          waitForLock: mocks.voiceWaitForLock,
           release: async () => undefined,
           close: () => undefined,
           ownsConnection: mocks.voiceOwnsConnection,
@@ -310,6 +312,7 @@ vi.mock('~/core/debates/debate-room-ownership', async importOriginal => {
         coordinationMode: mocks.ownershipCoordinationMode,
         acquire: mocks.ownershipAcquire,
         requestTakeover: mocks.ownershipRequestTakeover,
+        waitForLock: async () => false,
         release: mocks.ownershipRelease,
         close: mocks.ownershipClose,
         ownsConnection: () => true,
@@ -531,6 +534,12 @@ beforeEach(() => {
   mocks.voiceCoordinationMode = 'livekit-fallback';
   mocks.voiceOwnsConnection.mockReset().mockReturnValue(true);
   mocks.voiceRequestTakeover.mockReset().mockResolvedValue(true);
+  // Queued until the wait is called off, as when the holder never lets go.
+  mocks.voiceWaitForLock
+    .mockReset()
+    .mockImplementation(
+      (signal: AbortSignal) => new Promise<boolean>(resolve => signal.addEventListener('abort', () => resolve(false)))
+    );
   mocks.voiceLastRefusedBy.mockReset().mockReturnValue(undefined);
   mocks.useRealRoomOwnership = false;
   mocks.deviceChangeHandler = null;
@@ -3314,6 +3323,44 @@ describe('DebateRoomPageClient', () => {
     mocks.voiceRequestTakeover.mockResolvedValue(true);
     fireEvent.click(useVoiceHere);
     await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalledTimes(2));
+  });
+
+  it('waits for voice, without polling, while its room is up but another tab holds voice', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+    mocks.voiceCoordinationMode = 'lock-and-broadcast';
+    mocks.voiceOwnsConnection.mockReturnValue(false);
+    mocks.voiceRequestTakeover.mockResolvedValue(false);
+    mocks.voiceLastRefusedBy.mockReturnValue('debate');
+
+    const { unmount } = render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
+
+    await waitFor(() => expect(mocks.voiceWaitForLock).toHaveBeenCalledOnce());
+    const signal = mocks.voiceWaitForLock.mock.calls[0]![0] as AbortSignal;
+    expect(signal.aborted).toBe(false);
+    expect(mocks.voiceRequestTakeover).toHaveBeenCalledOnce();
+
+    unmount();
+    expect(signal.aborted).toBe(true);
+  });
+
+  it('does not wait for voice after handing it over in the intro, leaving that to "Use voice here"', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+    mocks.voiceCoordinationMode = 'lock-and-broadcast';
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
+    await act(async () => {
+      await mocks.voiceTakeoverHandler?.({
+        requesterPriority: 2,
+        ownerPriority: 0,
+        automatic: false,
+        requesterLabel: 'lobby',
+      });
+    });
+    expect(await screen.findByText('Voice is on in another tab')).toBeInTheDocument();
+
+    expect(mocks.voiceWaitForLock).not.toHaveBeenCalled();
   });
 
   it('takes voice back when the camera is turned on after giving it up in the intro', async () => {

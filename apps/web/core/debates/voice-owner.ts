@@ -93,6 +93,7 @@ const DEBATE_RECHECK_MS = 3_000;
 export type TabVoiceOwner = {
   register: (surface: VoiceSurface) => () => void;
   claim: (options: VoiceClaimOptions) => Promise<boolean>;
+  waitForVoice: (options: { kind: VoiceSurfaceKind; signal: AbortSignal }) => void;
   /** Whether another tab holds voice right now, without asking for it. */
   heldElsewhere: () => Promise<boolean>;
   /** Tells waiting tabs this one would now yield, e.g. a debate that ended; only if it holds voice and its surfaces say so. */
@@ -122,6 +123,8 @@ export function createTabVoiceOwner({
   let yielding: Promise<void> | null = null;
   let notices: BroadcastChannel | null = null;
   let debateWatch: ReturnType<typeof setInterval> | null = null;
+
+  const waiters = new Set<() => void>();
   const lockName = debateRoomCoordinationName(VOICE_SCOPE, userId);
   const lockManager = () => (typeof navigator !== 'undefined' ? navigator.locks : undefined);
 
@@ -191,7 +194,11 @@ export function createTabVoiceOwner({
     }
     notices.onmessage = event => {
       const type = (event.data as { type?: string } | null)?.type;
-      if (type === 'yieldable') return restoreButton();
+      if (type === 'yieldable') {
+        restoreButton();
+        [...waiters].forEach(reclaim => reclaim());
+        return;
+      }
       // Another tab took voice without asking this one (it held nothing): a surface using devices
       // here without a claim, like a card preview, closes them.
       if (type === 'held' && state.ownership === 'pending' && !coordinator?.ownsConnection()) {
@@ -325,6 +332,28 @@ export function createTabVoiceOwner({
       inflight = { automatic, owned: attempt };
       return attempt;
     },
+    waitForVoice: ({ kind, signal }) => {
+      if (signal.aborted) return;
+      const active = ensureCoordinator();
+      if (active.coordinationMode !== 'lock-and-broadcast') return;
+      // Ends the wait however voice arrives, so the queued request cannot take the lock back later.
+      const done = new AbortController();
+      signal.addEventListener('abort', () => done.abort(), { once: true });
+      const reclaim = () => {
+        if (done.signal.aborted || active.ownsConnection()) return;
+        void owner.claim({ kind }).then(owned => {
+          if (owned) done.abort();
+        });
+      };
+      waiters.add(reclaim);
+      done.signal.addEventListener('abort', () => waiters.delete(reclaim), { once: true });
+      void active.waitForLock(done.signal).then(owned => {
+        done.abort();
+        if (!owned || coordinator !== active) return;
+        setState(OWNED);
+        announceHeld();
+      });
+    },
     heldElsewhere: async () => {
       if (state.ownership === 'owned') return false;
       if (state.ownership === 'elsewhere') return true;
@@ -381,6 +410,7 @@ type UseVoiceOwnershipOptions = {
 export type VoiceOwnershipHandle = VoiceTabState & {
   /** An explicit claim: "Use voice here", or turning a device on. */
   takeOver: () => Promise<boolean>;
+  waitForVoice: (signal: AbortSignal) => void;
   /** For a connection replaced outside the lock (another device): shown as elsewhere until taken back. */
   markElsewhere: () => void;
   heldElsewhere: () => Promise<boolean>;
@@ -427,6 +457,7 @@ export function useVoiceOwnership({
     if (owned) setReplaced(false);
     return owned;
   }, [kind, owner]);
+  const waitForVoice = React.useCallback((signal: AbortSignal) => owner?.waitForVoice({ kind, signal }), [kind, owner]);
   const markElsewhere = React.useCallback(() => setReplaced(true), []);
   const heldElsewhere = React.useCallback(() => owner?.heldElsewhere() ?? Promise.resolve(false), [owner]);
   const announceYieldable = React.useCallback(() => owner?.announceYieldable(), [owner]);
@@ -436,7 +467,7 @@ export function useVoiceOwnership({
     : replaced && tabState.ownership === 'owned'
       ? { ...tabState, ownership: 'elsewhere' }
       : tabState;
-  return { ...state, takeOver, markElsewhere, heldElsewhere, announceYieldable };
+  return { ...state, takeOver, waitForVoice, markElsewhere, heldElsewhere, announceYieldable };
 }
 
 const noopSubscribe = () => () => {};
