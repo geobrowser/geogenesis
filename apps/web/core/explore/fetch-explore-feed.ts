@@ -976,7 +976,7 @@ export async function fetchExploreFeed(args: {
                 limit: windowSize,
                 after: windowAfter,
                 orderBy: [EntitiesOrderBy.CreatedAtDesc],
-                typeIds: args.typeIds,
+                // `typeIds` is deliberately NOT sent; `windowRows` filters New by type (GEO-3703).
                 topicIds: args.topicIds,
                 requireName: args.requireName,
                 requireDebateTagOnClaims: args.requireDebateTagOnClaims,
@@ -992,8 +992,8 @@ export async function fetchExploreFeed(args: {
         ? builtRows.filter(row => !entityMatchesExploreTypeIds(row, excludeTypeIds))
         : builtRows;
 
-    // Best filters by type here rather than in the query (see `fetchBestEntitiesPage`). The other
-    // sorts already came back filtered, so re-checking them would be redundant — and worse than
+    // Best and New filter by type here rather than in the query (see `fetchBestEntitiesPage`, and
+    // GEO-3703 below). Top already came back filtered, so re-checking them would be redundant — and worse than
     // redundant: a card's types are the TYPES relations *in its display space*, while the server's
     // predicate is not space-scoped, so the two can disagree at the margin. Applying it only where
     // the server no longer does keeps exactly one source of truth per sort.
@@ -1004,7 +1004,14 @@ export async function fetchExploreFeed(args: {
     // pass is what keeps the rendered card and the selection agreeing, and it can only ever
     // narrow — the yield problem it used to cause is gone because the server now supplies a full
     // page of the right type rather than whatever happened to be in the window.
-    return args.sort === 'best' && (args.typeIds?.length ?? 0) > 0
+    //
+    // New filters here too (GEO-3703). gaia compiles `typeIds` to an EXISTS on the TYPES relation,
+    // which the planner pulls up into a semi-join: next to the feed filter's name and exclusion
+    // clauses it hashes every Debate and Claim (~133k rows) and sorts them, past the gateway's 15s,
+    // where the bare newest-first walk takes 0.5s. Measured on testnet 11-12: 54 of the 90 newest
+    // rows carry a default type, so a 30-row window still yields most of a page, and a thin
+    // stretch is what the empty-window scan below exists for.
+    return (args.sort === 'best' || args.sort === 'new') && (args.typeIds?.length ?? 0) > 0
       ? allRows.filter(row => entityMatchesExploreTypeIds(row, args.typeIds ?? []))
       : allRows;
   };
