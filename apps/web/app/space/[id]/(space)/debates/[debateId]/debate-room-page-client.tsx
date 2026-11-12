@@ -1776,6 +1776,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     announceYieldable();
   }, [announceYieldable, countdown.effectiveStatus, roomHeld]);
 
+  const offerVoiceHere = !roomHeld && voiceHeldElsewhere;
+
   // Live room without voice: take voice as soon as it frees up.
   const waitingForVoice =
     roomHeld && voiceHeldElsewhere && debateVoicePolicy(countdown.effectiveStatus, true) !== 'yield';
@@ -2495,9 +2497,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   );
 
   const retryRoomConnection = React.useCallback(() => {
-    if (voiceYielded || voiceHeldElsewhere) void resumeVoice();
+    if (offerVoiceHere) void resumeVoice();
     else retryConnection();
-  }, [resumeVoice, retryConnection, voiceYielded, voiceHeldElsewhere]);
+  }, [offerVoiceHere, resumeVoice, retryConnection]);
 
   const toggleAudioMuted = React.useCallback(() => {
     const next = { audioMuted: !audioMuted, videoEnabled };
@@ -3569,7 +3571,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
             switchingDevice={replacingPreview}
             error={
               roomError ??
-              (voiceHeldElsewhere ? 'Voice is on in another tab' : null) ??
+              (offerVoiceHere ? 'Voice is on in another tab' : null) ??
               deviceError?.message ??
               (previewState === 'ready' ? previewError : null)
             }
@@ -3590,12 +3592,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
               Boolean(preScreenLocalParticipant?.ready_at) || roomState === 'connecting' || roomState === 'reconnecting'
             }
             connectionSettling={roomState === 'connecting' || roomState === 'reconnecting' || publishingMedia}
-            canRetryConnection={
-              (roomState === 'idle' && roomError !== null && !connectionConflict) ||
-              (voiceHeldElsewhere && !connectionConflict)
-            }
+            canRetryConnection={!connectionConflict && (offerVoiceHere || (roomState === 'idle' && roomError !== null))}
             onRetryConnection={retryRoomConnection}
-            retryConnectionLabel={voiceYielded || voiceHeldElsewhere ? 'Use voice here' : undefined}
+            retryConnectionLabel={offerVoiceHere ? 'Use voice here' : undefined}
             canTakeOverConnection={connectionConflict && canTakeOverConnection}
             onTakeOverConnection={takeOverConnection}
             readyBusy={markReady.isPending}

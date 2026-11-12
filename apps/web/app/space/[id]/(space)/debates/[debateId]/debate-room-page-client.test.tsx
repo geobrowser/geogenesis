@@ -3302,9 +3302,8 @@ describe('DebateRoomPageClient', () => {
     await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalledTimes(2));
   });
 
-  it('offers to take voice back when another tab already holds it before the intro ever connects', async () => {
-    // Unlike the test above, this tab never holds voice in the first place — its own first claim
-    // in `connect` loses, which `onYield` has no occasion to fire for.
+  it('does not offer "Use voice here" while its room is up, even with voice in another tab', async () => {
+    // This tab's first claim in `connect` loses, and the room connects anyway.
     mocks.debate = readyDebate({ localReady: false, remoteReady: false });
     mocks.voiceCoordinationMode = 'lock-and-broadcast';
     mocks.voiceOwnsConnection.mockReturnValue(false);
@@ -3312,17 +3311,12 @@ describe('DebateRoomPageClient', () => {
     mocks.voiceLastRefusedBy.mockReturnValue('lobby');
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
-
-    // The room connects anyway — losing the very first claim is not a connection failure.
     await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
+    await waitFor(() => expect(mocks.voiceWaitForLock).toHaveBeenCalled());
 
-    expect(await screen.findByText('Voice is on in another tab')).toBeInTheDocument();
-    const useVoiceHere = screen.getByRole('button', { name: 'Use voice here' });
-
-    // The other tab now yields.
-    mocks.voiceRequestTakeover.mockResolvedValue(true);
-    fireEvent.click(useVoiceHere);
-    await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalledTimes(2));
+    expect(screen.queryByText('Voice is on in another tab')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Use voice here' })).not.toBeInTheDocument();
+    expect(mocks.roomConnect).toHaveBeenCalledOnce();
   });
 
   it('waits for voice, without polling, while its room is up but another tab holds voice', async () => {
