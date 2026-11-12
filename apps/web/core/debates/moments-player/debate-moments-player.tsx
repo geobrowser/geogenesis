@@ -106,10 +106,27 @@ function StoryFor(props: StoryProps) {
  * control sits on the picture: the moment bars along the top, the full debate's rail along the
  * bottom, a label pill top-left, the mode switch top-right.
  */
-function PlayerFrame({ label, className, children }: { label: string; className?: string; children: React.ReactNode }) {
+function PlayerFrame({
+  label,
+  className,
+  mode = 'moments',
+  children,
+}: {
+  label: string;
+  className?: string;
+  mode?: PlayerMode;
+  children: React.ReactNode;
+}) {
   return (
-    <section aria-label={label} className={cx('@container w-full select-none', className)}>
-      <div className="relative isolate aspect-[480/578] w-full overflow-hidden rounded-[20px] bg-[#151515] text-white shadow-[0_8px_28px_rgba(0,0,0,0.18)]">
+    <section aria-label={label} className={cx('@container flex w-full justify-center select-none', className)}>
+      <div
+        className={cx(
+          'relative isolate w-full overflow-hidden rounded-[20px] bg-[#151515] text-white shadow-[0_8px_28px_rgba(0,0,0,0.18)]',
+          // The full debate is rendered taller (1080 × 1640): its own shape at the same height, so
+          // there are no black bands beside it.
+          mode === 'full' ? 'aspect-[1080/1640] w-[79%]' : 'aspect-[480/578]'
+        )}
+      >
         {children}
       </div>
     </section>
@@ -321,7 +338,7 @@ function MomentsStory({
   const speakingSlot = story.mode === 'moments' ? (moment?.participantSlot ?? null) : null;
 
   return (
-    <PlayerFrame label={label} className={className}>
+    <PlayerFrame label={label} className={className} mode={story.mode}>
       <video
         ref={videoRef}
         src={src}
@@ -332,7 +349,7 @@ function MomentsStory({
         }
         // The moment clips are the two debaters stacked, the frame's own shape; the full debate is
         // rendered taller, with names and captions burned in, so it is shown whole.
-        className={cx('absolute inset-0 size-full', story.mode === 'moments' ? 'object-cover' : 'object-contain')}
+        className="absolute inset-0 size-full object-cover"
         onTimeUpdate={event => {
           const ms = event.currentTarget.currentTime * 1000;
           if (story.mode === 'moments') setClipMs(ms);
