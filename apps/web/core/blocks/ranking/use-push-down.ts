@@ -33,6 +33,7 @@ import {
   readPushDownNoteSeen,
   runVoteThenBallot,
 } from './push-down';
+import { invalidateBlockRankers } from './use-block-rankers';
 import { useDebateDownvoteOverride, useDebateDownvoteWriter } from './use-debate-downvote';
 import { useMyRanking } from './use-my-ranking';
 import { useRankingSubmissions } from './use-ranking-submissions';
@@ -192,19 +193,17 @@ export function usePushDown(debateId: string, options: UsePushDownOptions = {}):
 
     const published = await saveMySubmission(slots);
     if (!published) return { ok: false, message: PUSH_DOWN_BALLOT_FAILED_COPY };
-    void queryClient.invalidateQueries({ queryKey: ['block-rankers'] });
+    // Ranker counts come from indexed ballots, so refresh them once indexing has settled.
+    void published.indexingSettled.then(() => invalidateBlockRankers(queryClient, blockId!, DEBATES_SPACE_ID));
     return { ok: true };
-  }, [debateId, personalSpaceId, queryClient, saveMySubmission]);
+  }, [blockId, debateId, personalSpaceId, queryClient, saveMySubmission]);
 
-  const publishRanking = React.useCallback(
-    async (publish: () => Promise<boolean>): Promise<StepResult> => {
-      const published = await publish();
-      if (!published) return { ok: false, message: RANK_BALLOT_FAILED_COPY };
-      void queryClient.invalidateQueries({ queryKey: ['block-rankers'] });
-      return { ok: true };
-    },
-    [queryClient]
-  );
+  const publishRanking = React.useCallback(async (publish: () => Promise<boolean>): Promise<StepResult> => {
+    const published = await publish();
+    if (!published) return { ok: false, message: RANK_BALLOT_FAILED_COPY };
+    // The caller's publish owns its indexing wait; counts refresh when it invalidates them.
+    return { ok: true };
+  }, []);
 
   const run = React.useCallback(
     async (

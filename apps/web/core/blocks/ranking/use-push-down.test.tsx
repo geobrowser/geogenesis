@@ -137,7 +137,7 @@ beforeEach(() => {
   mocks.downvote.mockClear();
   mocks.unvote.mockClear();
   mocks.save.mockReset();
-  mocks.save.mockResolvedValue({ rankEntityId: 'rank1' });
+  mocks.save.mockResolvedValue({ rankEntityId: 'rank1', indexingSettled: Promise.resolve() });
   mocks.serverResponse = null;
   mocks.orderedEntityIds = [];
   mocks.rankEntity = null;
