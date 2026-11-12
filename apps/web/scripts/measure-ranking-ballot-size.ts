@@ -10,7 +10,9 @@
  *   build    building the ops (for update: paging the existing votes off the API)
  *   upload   `personalSpaces.publishEdit` (the IPFS upload of the edit)
  *   send     the user operation, until its receipt
- *   index    until the API reads back every vote of the new ballot
+ *   index    until the app's own read (`fetchMyRankingBallot`: block listing,
+ *            then the rank's votes paged) returns the new ballot in order.
+ *            That is the wait a ranker sees between placements.
  *
  * It refuses to run against anything but testnet, and does nothing unless
  * DRY_RUN=0. Use a throwaway ranking block, never the live Best debates block:
@@ -35,8 +37,9 @@ import { Ops } from '@geoprotocol/geo-sdk';
 
 import { privateKeyToAccount } from 'viem/accounts';
 
+import { fetchMyRankingBallot } from '~/core/blocks/ranking/fetch-my-ranking-ballot';
+import { sameBallotOrder } from '~/core/blocks/ranking/ranking-publish-queue';
 import { rankingVoteWeightFromIndex } from '~/core/blocks/ranking/ranking-vote-weights';
-import { RANK_VOTES_RELATION_TYPE_ID } from '~/core/ranking-block-ids';
 import { geo } from '~/core/sdk/geo-client';
 import { GEO_NETWORK, IS_TESTNET } from '~/core/sdk/geo-network';
 
@@ -118,26 +121,6 @@ async function fetchItemIds(spaceId: string, count: number): Promise<string[]> {
   return ids.slice(0, count);
 }
 
-/** How many votes the API holds for the rank, and whether `mustInclude` is one of them. */
-async function readVotes(rankId: string, mustInclude: string): Promise<{ total: number; includes: boolean }> {
-  const data = await graphql<{ all: { totalCount: number }; probe: { totalCount: number } }>(
-    `
-      query Votes($rankId: UUID!, $typeId: UUID!, $item: UUID!) {
-        all: relationsConnection(filter: { fromEntityId: { is: $rankId }, typeId: { is: $typeId } }) {
-          totalCount
-        }
-        probe: relationsConnection(
-          filter: { fromEntityId: { is: $rankId }, typeId: { is: $typeId }, toEntityId: { is: $item } }
-        ) {
-          totalCount
-        }
-      }
-    `,
-    { rankId, typeId: RANK_VOTES_RELATION_TYPE_ID, item: mustInclude }
-  );
-  return { total: data.all.totalCount, includes: data.probe.totalCount > 0 };
-}
-
 async function timed<T>(fn: () => Promise<T>): Promise<{ value: T; ms: number }> {
   const started = performance.now();
   const value = await fn();
@@ -190,7 +173,7 @@ async function main() {
 
   const rows: Row[] = [];
 
-  const publish = async (row: Row, ops: unknown[], rankId: string, probeItem: string, size: number) => {
+  const publish = async (row: Row, ops: unknown[], rankId: string, expectedIds: string[], size: number) => {
     row.ops = ops.length;
     if (!smartAccount) {
       console.log(`  [dry run] ${row.kind} ${size}: ${ops.length} ops`);
@@ -217,8 +200,15 @@ async function main() {
       const started = Date.now();
       for (;;) {
         try {
-          const { total, includes } = await readVotes(rankId, probeItem);
-          if (total === size && includes) return;
+          // The app's own read: the block listing, then the rank's votes paged
+          // in full. The ballot counts as indexed once it returns this rank in
+          // exactly this order, as the publish path's poll decides.
+          const readBack = await fetchMyRankingBallot(personalSpaceId, blockId);
+          if (
+            readBack.rankEntity?.id.replaceAll('-', '') === rankId.replaceAll('-', '') &&
+            sameBallotOrder(readBack.orderedEntityIds, expectedIds)
+          )
+            return;
         } catch (error) {
           console.warn(`    poll: ${String(error)}`);
         }
@@ -252,7 +242,7 @@ async function main() {
       );
       createRow.build = built.ms;
       rankId = built.value.id;
-      await publish(createRow, built.value.ops, rankId, createItems[size - 1], size);
+      await publish(createRow, built.value.ops, rankId, createItems, size);
     } catch (error) {
       createRow.error = String(error instanceof Error ? error.message : error);
       console.error(`  create ${size} failed:`, error);
@@ -273,7 +263,7 @@ async function main() {
         geo.ranks.update({ rankId: rankId!, rankType: 'WEIGHTED', votes: toVotes(updateItems) })
       );
       updateRow.build = built.ms;
-      await publish(updateRow, built.value.ops, rankId, updateItems[0], size);
+      await publish(updateRow, built.value.ops, rankId, updateItems, size);
     } catch (error) {
       updateRow.error = String(error instanceof Error ? error.message : error);
       console.error(`  update ${size} failed:`, error);
