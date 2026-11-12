@@ -331,6 +331,8 @@ export function DebateExploreFeedCard({
     const onEndCard = target instanceof Element && target.closest('[data-debate-end-card]') !== null;
     const isReplay = target instanceof Element && target.closest('[data-end-card-replay]') !== null;
     if (onEndCard && !isReplay) return;
+    // The combined player opens the native full-screen player, so it cannot play over another card.
+    if (target instanceof Element && target.closest('[data-debate-combined-player]') !== null) return;
     if (!onPlaybackRequest) {
       // Let the player's handler keep the play request, but leave activation to visibility. Forcing
       // this card active in place could play it over the previous card, and a toolbar resize would
@@ -499,6 +501,7 @@ export function DebateExploreFeedCard({
               opensSidePanel={titleOpensSidePanel}
               clamped
               showFullTextOnHover={compactChrome}
+              debateClaimTitle
             />
           }
           actions={actions}

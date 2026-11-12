@@ -10,6 +10,7 @@ import { CLAIM_RESPONSE_KIND, isAwaitingResponseSubmission } from '~/core/respon
 
 import { CloseSmall } from '~/design-system/icons/close-small';
 import { ResizableContainer } from '~/design-system/resizable-container';
+import { Text } from '~/design-system/text';
 
 import { trustedIndexedPosition } from '../backfill-readiness-for-held-position';
 import { DebateClaimCardSurface } from '../debate-claim-card-surface';
@@ -17,7 +18,7 @@ import type { CalloutClaim } from '../todays-claims/todays-callout';
 import { todaysCardScope } from '../todays-claims/todays-claims-attribution';
 import type { TodaysCallout } from '../todays-claims/use-todays-callout';
 import { hubAnalyticsAttributes } from './hub-analytics';
-import { HUB_CALLOUT_CLASS_NAME, HubCalloutTitle } from './hub-callout';
+import { HUB_CALLOUT_CLASS_NAME } from './hub-callout';
 import { HUB_STEP_TRANSITION, HubSwap } from './hub-motion';
 import { HUB_ICON_BUTTON_CLASS_NAME, HubPillButton } from './hub-pill-button';
 import { HubScrollSelectorProvider } from './hub-scroll';
@@ -69,7 +70,7 @@ export function TodaysClaimsCallout({ callout, onFindDebate }: Props) {
       ))}
     </ol>
   );
-  const action = finished ? (
+  const findDebate = finished ? (
     <HubPillButton
       variant="primary"
       analyticsSurface="hub"
@@ -79,17 +80,7 @@ export function TodaysClaimsCallout({ callout, onFindDebate }: Props) {
     >
       Find a debate
     </HubPillButton>
-  ) : (
-    <button
-      type="button"
-      disabled={arrivedClaimId !== current.claimId}
-      onClick={() => callout.skip(current.claimId)}
-      {...hubAnalyticsAttributes('Todays claims callout skip')}
-      className="text-metadata text-grey-04 transition-colors hover:text-text"
-    >
-      Skip
-    </button>
-  );
+  ) : null;
   const dismiss = (
     <button
       type="button"
@@ -108,18 +99,36 @@ export function TodaysClaimsCallout({ callout, onFindDebate }: Props) {
       claim={current}
       position={step.currentIndex + 1}
       onArrive={setArrivedClaimId}
+      skip={
+        <button
+          type="button"
+          disabled={arrivedClaimId !== current.claimId}
+          onClick={() => callout.skip(current.claimId)}
+          {...hubAnalyticsAttributes('Todays claims callout skip')}
+          className="shrink-0 text-metadata text-grey-04 transition-colors hover:text-text"
+        >
+          Skip
+        </button>
+      }
     />
   ) : null;
 
+  // One row above the claim and nothing under it (GEO-3586): the progress beside the title, Skip on
+  // the claim card itself, and Find a debate beside dismiss once the set is done.
   return (
-    <section
-      aria-label="Today’s claims"
-      data-testid="todays-claims-callout"
-      className={cx(HUB_CALLOUT_CLASS_NAME, 'mx-4 mb-3 shrink-0')}
-    >
-      <HubCalloutTitle as="h3" title={title}>
-        {dismiss}
-      </HubCalloutTitle>
+    <section aria-label="Today’s claims" data-testid="todays-claims-callout" className={HUB_CALLOUT_CLASS_NAME}>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <Text as="h3" variant="smallTitle" className="truncate">
+            {title}
+          </Text>
+          {dots}
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          {findDebate}
+          {dismiss}
+        </div>
+      </div>
       {/* The answered card steps out before the next comes in, and the height eases to the next
           claim's — or to nothing once the set is done — so the tabs below glide rather than jump. */}
       <ResizableContainer transition={HUB_STEP_TRANSITION} growOnMount={false}>
@@ -127,10 +136,6 @@ export function TodaysClaimsCallout({ callout, onFindDebate }: Props) {
           {card ? <div className="pt-3">{card}</div> : null}
         </HubSwap>
       </ResizableContainer>
-      <div className="mt-3 flex items-center justify-between gap-3">
-        {dots}
-        {action}
-      </div>
     </section>
   );
 }
@@ -148,6 +153,7 @@ function CalloutCard({
   claim,
   position,
   onArrive,
+  skip: skipButton,
 }: {
   callout: TodaysCallout;
   claim: CalloutClaim;
@@ -157,6 +163,8 @@ function CalloutCard({
    * draws nothing until the claim's entity has loaded.
    */
   onArrive: (claimId: string) => void;
+  /** Skip, in the card's top corner where its offer would be (GEO-3586). */
+  skip: React.ReactNode;
 }) {
   const { markAnswered, skip } = callout;
   const entity = callout.entityOf(claim.claimId);
@@ -214,7 +222,7 @@ function CalloutCard({
           activeDebate={entry.active_debate}
           answersReady={callout.answersReadyIn(claim.spaceId)}
           answersMayComeFromIndex
-          hideEndSlot
+          endSlot={skipButton}
           hideSummary
           // Just the two sides to take: who stands ready on each is the lists' to show.
           showParticipants={false}

@@ -26,39 +26,35 @@ describe('feature flags', () => {
     // GEO-2914 hid the Explore side panel behind this rather than deleting it, so off is the
     // shipped state rather than a developer convenience — see the explore-page test.
     expect(defaultFeatureFlags.exploreSidePanel).toBe(false);
+    expect(defaultFeatureFlags.previousDebateClaims).toBe(false);
     expect(defaultFeatureFlags.lobbyHosting).toBe(false);
     expect(defaultFeatureFlags.spaceCalls).toBe(false);
     expect(defaultFeatureFlags.spaceChat).toBe(false);
     expect(defaultFeatureFlags.debateDeviceSwitchRecording).toBe(false);
     expect(defaultFeatureFlags.googleSignIn).toBe(false);
-    expect(defaultFeatureFlags.googleCalendar).toBe(false);
-    expect(defaultFeatureFlags.microsoftCalendar).toBe(false);
     expect(defaultFeatureFlags.bountiesTab).toBe(true);
     expect(defaultFeatureFlags.signInRecoveryAutoOpen).toBe(true);
-    expect(defaultFeatureFlags.ourSignInBox).toBe(false);
     expect(normalizeFeatureFlags(null)).toEqual({
       playbackDiagnostics: false,
       debugDebatesPage: false,
       debateDebugging: false,
       debateFormatSelector: false,
       exploreSidePanel: false,
+      previousDebateClaims: false,
       forYouFeed: false,
       lobbyHosting: false,
       spaceCalls: false,
       spaceChat: false,
       debateDeviceSwitchRecording: false,
       googleSignIn: false,
-      googleCalendar: false,
-      microsoftCalendar: false,
       bountiesTab: true,
       signInRecoveryAutoOpen: true,
-      ourSignInBox: false,
     });
   });
 
-  // Claims, debates, scheduling, lobby joining and debate video shipped to everyone. Every browser that ever
-  // opened the flags dialog still has the retired ids in storage, and they must not survive
-  // normalization — a stray `questionsTab` reaching the dialog would render a checkbox for a flag
+  // Claims, debates, scheduling, lobby joining, debate video, the sign-in box and calendar
+  // connections shipped to everyone. Every browser that ever opened the flags dialog still has the
+  // retired ids in storage, and they must not survive normalization — a stray `questionsTab` reaching the dialog would render a checkbox for a flag
   // nothing reads.
   it('drops the retired flags that are still in storage', () => {
     expect(
@@ -68,6 +64,9 @@ describe('feature flags', () => {
         peerAvailability: true,
         lobbyJoining: true,
         debateVideo: true,
+        ourSignInBox: true,
+        googleCalendar: true,
+        microsoftCalendar: true,
         debateDebugging: true,
       })
     ).toEqual({
@@ -76,17 +75,15 @@ describe('feature flags', () => {
       debateDebugging: true,
       debateFormatSelector: false,
       exploreSidePanel: false,
+      previousDebateClaims: false,
       forYouFeed: false,
       lobbyHosting: false,
       spaceCalls: false,
       spaceChat: false,
       debateDeviceSwitchRecording: false,
       googleSignIn: false,
-      googleCalendar: false,
-      microsoftCalendar: false,
       bountiesTab: true,
       signInRecoveryAutoOpen: true,
-      ourSignInBox: false,
     });
   });
 
@@ -113,9 +110,19 @@ describe('feature flags', () => {
 
   // A stored complete object holds every default; only its overrides may survive a write.
   it('rewrites an older, complete object to its overrides, so later defaults reach it', () => {
-    const complete = { ...defaultFeatureFlags, ourSignInBox: false, debateDebugging: true };
+    const complete = { ...defaultFeatureFlags, debateDebugging: true };
     expect(setFeatureFlagValue(complete, 'googleSignIn', true)).toEqual({ debateDebugging: true, googleSignIn: true });
     expect(setFeatureFlagValue({ googleSignIn: true }, 'googleSignIn', false)).toEqual({});
+  });
+
+  it('drops a stored ourSignInBox, on or off, at the next write', () => {
+    for (const ourSignInBox of [true, false]) {
+      expect(normalizeFeatureFlags({ ourSignInBox })).toEqual(defaultFeatureFlags);
+      expect(setFeatureFlagValue({ ourSignInBox, debateDebugging: true }, 'googleSignIn', true)).toEqual({
+        debateDebugging: true,
+        googleSignIn: true,
+      });
+    }
   });
 });
 

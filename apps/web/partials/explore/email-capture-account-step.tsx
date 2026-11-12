@@ -13,6 +13,7 @@ import {
   forgetAnnouncedCodeEmail,
   ownCodeAgeMs,
 } from '~/core/auth/code-step';
+import { watchCodeSend } from '~/core/auth/sign-in-reports';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { beginPrivyAuth, completePrivyAuth } from '~/core/privy-auth-events';
 import { isPrivyLoaded, useLoginWithEmail } from '~/core/wallet/auth-hooks';
@@ -194,6 +195,7 @@ export function AccountStep({
     rejectionsRef.current = 0;
     if (sendsRef.current === 1) captureAuthStep('email_entered');
     else captureAuthStep('code_resent', { code_resends: sendsRef.current - 1 });
+    const stopWatching = watchCodeSend(ownAttemptIdRef.current);
     try {
       // Privy's flow state does not carry the address; the code-step tracker needs it for a reload.
       announceCodeEmail(email);
@@ -212,6 +214,7 @@ export function AccountStep({
       // Keep the step mounted while hidden so the modal's error callback can close the card.
       openPrivyModalRef.current(undefined, { fallbackFor: ownAttemptIdRef.current });
     } finally {
+      stopWatching();
       if (mountedRef.current) setSending(false);
     }
   }, [email]);

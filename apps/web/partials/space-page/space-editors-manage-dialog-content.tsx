@@ -9,11 +9,13 @@ import {
   useInfiniteScrollSentinel,
   useSpaceParticipantsInfinite,
 } from '~/core/space-members/use-space-participants-infinite';
+import { mutationStatusLabel } from '~/core/utils/mutation-status-label';
 
 import { SmallButton } from '~/design-system/button';
 import { Input } from '~/design-system/input';
 import { Skeleton } from '~/design-system/skeleton';
 
+import { MemberFastPathControl } from './member-fast-path-control';
 import { MemberRow } from './space-member-row';
 
 interface Props {
@@ -70,31 +72,27 @@ interface CurrentEditorProps {
 function CurrentEditor({ editor, spaceId }: CurrentEditorProps) {
   const { proposeRemoveEditor, status } = useProposeRemoveEditor({ spaceId });
 
-  const buttonText = (() => {
-    switch (status) {
-      case 'pending':
-        return 'Proposing removal...';
-      case 'success':
-        return 'Proposal created';
-      case 'error':
-        return 'Try again';
-      default:
-        return 'Remove editor';
-    }
-  })();
+  const buttonText = mutationStatusLabel(status, {
+    idle: 'Remove editor',
+    pending: 'Proposing removal...',
+    success: 'Proposal created',
+  });
 
   return (
     <div key={editor.id} className="flex items-center justify-between transition-colors duration-150 hover:bg-divider">
       <MemberRow user={editor} />
-      <SmallButton
-        disabled={status === 'pending' || status === 'success'}
-        onClick={event => {
-          event.preventDefault();
-          proposeRemoveEditor({ targetEditorSpaceId: editor.spaceId });
-        }}
-      >
-        {buttonText}
-      </SmallButton>
+      <div className="flex shrink-0 items-center gap-2">
+        <MemberFastPathControl spaceId={spaceId} memberSpaceId={editor.spaceId} canRestrict={false} />
+        <SmallButton
+          disabled={status === 'pending' || status === 'success'}
+          onClick={event => {
+            event.preventDefault();
+            proposeRemoveEditor({ targetEditorSpaceId: editor.spaceId });
+          }}
+        >
+          {buttonText}
+        </SmallButton>
+      </div>
     </div>
   );
 }

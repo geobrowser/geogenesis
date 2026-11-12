@@ -2,7 +2,6 @@
 
 import {
   type UseQueryResult,
-  keepPreviousData,
   replaceEqualDeep,
   useMutation,
   useMutationState,
@@ -14,6 +13,7 @@ import * as React from 'react';
 
 import {
   type CreateDebateLobbyRequest,
+  type DebateLobbyCalendarResponse,
   type DebateLobbyHeartbeat,
   type DebateLobbyMember,
   type DebateLobbySummary,
@@ -136,14 +136,51 @@ export function useDebateLobbyCalendar(
 ) {
   const { accountKey, authenticated, ready, getPrivyIdentityToken } = useGeoChatAuth();
 
-  return useQuery({
+  return useQuery<DebateLobbyCalendarResponse>({
     ...debateQueryNetworkOptions,
     queryKey: debateQueryKeys.lobbyCalendar(accountKey, from.getTime(), to.getTime()),
     queryFn: ({ signal }) => listDebateLobbyCalendar({ from, to }, getPrivyIdentityToken, accountKey, signal),
     enabled: enabled && ready && (authenticated || signedOut),
     ...(authenticated ? {} : { refetchInterval: SIGNED_OUT_LOBBIES_POLL_MS }),
-    ...(keepPreviousRange ? { placeholderData: keepPreviousData } : {}),
+    // The last range's rows while a new range loads, but only the same account's: another account's
+    // (the signed-out week, when signing in) would draw its RSVPs, hosting and dismissals as this one's.
+    placeholderData: keepPreviousRange
+      ? (previous: DebateLobbyCalendarResponse | undefined, previousQuery?: { queryKey: readonly unknown[] }) =>
+          previousQuery?.queryKey[2] === accountKey ? previous : undefined
+      : undefined,
   });
+}
+
+/**
+ * Finds a lobby in any calendar week already read, this account's first. For a lobby the capped
+ * side panel list does not return, which a week can hold: the panel's callout stack offers the week's
+ * lobbies (GEO-3586), and the debate hours page lists them.
+ *
+ * Every account's weeks, not just this one's: a reminder queued signed out is replayed right after
+ * sign-up, before the new account's week may have loaded, from the signed-out week it was pressed on.
+ * Another account's row says the lobby exists and whether it is open, which hold for everyone, but
+ * not whether this account RSVP'd, so that is read as not.
+ */
+export function useFindCalendarLobby() {
+  const queryClient = useQueryClient();
+  const { accountKey } = useGeoChatAuth();
+  return React.useCallback(
+    (lobbyId: string): DebateLobbySummary | undefined => {
+      const weeks = queryClient.getQueriesData<DebateLobbyCalendarResponse>({
+        predicate: query => {
+          const key = query.queryKey;
+          return key[0] === 'debates' && key[1] === 'account' && key[3] === 'lobbies' && key[4] === 'calendar';
+        },
+      });
+      const ordered = [...weeks].sort(([a], [b]) => Number(b[2] === accountKey) - Number(a[2] === accountKey));
+      for (const [key, week] of ordered) {
+        const row = week?.lobbies.find(lobby => sameId(lobby.lobby_id, lobbyId));
+        if (row) return key[2] === accountKey ? row : { ...row, viewer_reminded: false };
+      }
+      return undefined;
+    },
+    [accountKey, queryClient]
+  );
 }
 
 /** The lobby the viewer is on the roster of, across tabs; see `DebateMyLobby`. */

@@ -2,12 +2,15 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@testing-library/jest-dom/vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
+import { Provider as JotaiProvider } from 'jotai';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import { useToast } from '~/core/hooks/use-toast';
 
 import * as api from '../api';
 import type { ScheduledDebateRequest, ScheduledDebateResponseResult } from '../api';
 import { ScheduledRow } from './scheduled-debates-section';
-import { useScheduledDebateAnswer } from './use-scheduled-debate-answer';
+import { stillWaitingOn, useScheduledDebateAnswer } from './use-scheduled-debate-answer';
 
 vi.mock('~/core/analytics', () => ({ capture: vi.fn(), analyticsContextRevision: () => 0 }));
 vi.mock('../hooks', async original => ({
@@ -114,5 +117,87 @@ describe('overlapping scheduled answers', () => {
     await waitFor(() => expect(button('A')).toBeEnabled());
     fireEvent.click(button('A'));
     await waitFor(() => expect(respond.mock.calls.filter(([id]) => id === 'A')).toHaveLength(2));
+  });
+});
+
+// GEO-3589: accepting a Geo-team match the other debater hasn't answered books nothing yet.
+function adminMatch(status: ScheduledDebateRequest['status'], otherAccepted: boolean | null): ScheduledDebateRequest {
+  return {
+    ...request('M'),
+    status,
+    invited_by_user_id: null,
+    created_by_admin: true,
+    proposed_by_user_id: null,
+    participants: [
+      { user_id: 'me', accepted: true },
+      { user_id: 'peer', accepted: otherAccepted, display_name: 'Alex Rivera' },
+    ],
+    viewer_must_answer: false,
+  };
+}
+
+describe('stillWaitingOn', () => {
+  it('names the debater a pending acceptance is waiting on', () => {
+    expect(stillWaitingOn(adminMatch('pending', null))).toBe('Alex Rivera');
+  });
+
+  it('is null once the acceptance booked the debate', () => {
+    expect(stillWaitingOn(adminMatch('accepted', true))).toBeNull();
+  });
+
+  it('names an unnamed debater in words that fit mid-sentence', () => {
+    const unnamed = adminMatch('pending', null);
+    unnamed.participants[1] = { user_id: 'peer', accepted: null, display_name: null };
+    expect(stillWaitingOn(unnamed)).toBe('the other debater');
+  });
+
+  it('is null for a debater’s invite, which an acceptance books', () => {
+    expect(stillWaitingOn({ ...adminMatch('pending', null), created_by_admin: false })).toBeNull();
+  });
+});
+
+function AnswerAndShowToast({ accepted }: { accepted: boolean }) {
+  const { answer } = useScheduledDebateAnswer();
+  const [toast] = useToast();
+  return (
+    <>
+      <button type="button" onClick={() => answer('M', accepted)}>
+        Answer
+      </button>
+      <div data-testid="toast">{toast}</div>
+    </>
+  );
+}
+
+describe('the toast after answering', () => {
+  it.each([
+    ['accepting a Geo-team match still waiting on the other debater', true, adminMatch('pending', null), true],
+    ['accepting a debate the acceptance booked', true, adminMatch('accepted', true), false],
+    ['declining a Geo-team match', false, adminMatch('pending', null), false],
+  ])('on %s', async (_, accepted, result, toasts) => {
+    vi.spyOn(api, 'respondToScheduledDebate').mockResolvedValue({ ...result, outcome: 'recorded' });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+    // A store of its own: the toast atom otherwise carries one case's toast into the next.
+    render(
+      <JotaiProvider>
+        <QueryClientProvider client={client}>
+          <AnswerAndShowToast accepted={accepted} />
+        </QueryClientProvider>
+      </JotaiProvider>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Answer' }));
+
+    await waitFor(() => expect(api.respondToScheduledDebate).toHaveBeenCalled());
+    if (toasts) {
+      await waitFor(() =>
+        expect(screen.getByTestId('toast')).toHaveTextContent(
+          'Accepted. We’ll add it to your calendar once Alex Rivera accepts.'
+        )
+      );
+    } else {
+      await act(async () => {});
+      expect(screen.getByTestId('toast')).toBeEmptyDOMElement();
+    }
   });
 });

@@ -41,6 +41,12 @@ export const featureFlagDefinitions = [
     enabledByDefault: false,
   },
   {
+    id: 'previousDebateClaims',
+    label: 'Claims from previous debate',
+    description: 'Show claims extracted from the previous debate in the debate-again picker (GEO-3585).',
+    enabledByDefault: false,
+  },
+  {
     id: 'exploreSidePanel',
     label: 'Explore side panel',
     description:
@@ -84,20 +90,6 @@ export const featureFlagDefinitions = [
     enabledByDefault: false,
   },
   {
-    id: 'googleCalendar',
-    label: 'Google Calendar',
-    description:
-      'Connect Google Calendar in your debate schedule, so busy times are taken out of your availability (GEO-3139). Needs geo-chat with Google Calendar configured.',
-    enabledByDefault: false,
-  },
-  {
-    id: 'microsoftCalendar',
-    label: 'Outlook Calendar',
-    description:
-      'Connect Outlook Calendar in your debate schedule, so busy times are taken out of your availability (GEO-3139). Needs geo-chat with Microsoft Calendar configured.',
-    enabledByDefault: false,
-  },
-  {
     id: 'bountiesTab',
     label: 'Bounties',
     description: 'Bounty board, space bounty tabs, and bounty detail surfaces. On by default; testnet only.',
@@ -110,13 +102,6 @@ export const featureFlagDefinitions = [
       'A page opened while an email code is outstanding from a page that is gone reopens sign-in, prefilled (GEO-3573). Turn off to stop the dialog opening by itself.',
     enabledByDefault: true,
   },
-  {
-    id: 'ourSignInBox',
-    label: 'Our own sign-in box',
-    description:
-      'Every sign-in opens our own email box, which shows before Privy has loaded, instead of Privy’s dialog (GEO-3569).',
-    enabledByDefault: false,
-  },
 ] as const;
 
 export type FeatureFlagId = (typeof featureFlagDefinitions)[number]['id'];
@@ -124,10 +109,23 @@ export type FeatureFlags = Record<FeatureFlagId, boolean>;
 // Claims and debates shipped to everyone, so `questionsTab` (and `debatesTab`, the id it was
 // renamed from) are no longer flags; nor is `peerAvailability`, since scheduling did too, nor
 // `lobbyJoining`, since finding and joining lobbies did (GEO-3306), nor `debateVideo`, since video in
-// the claim picker and lobbies did (GEO-3414). All of them are still sitting in browsers' stored flag
-// objects; normalizing drops them on the next write rather than reading them back.
+// the claim picker and lobbies did (GEO-3414), nor `ourSignInBox`, since every sign-in opens the box
+// (GEO-3569), nor `googleCalendar` and `microsoftCalendar`, since connecting a calendar did
+// (GEO-3598). All of them are still sitting in browsers' stored flag objects; normalizing drops
+// them on the next write rather than reading them back.
 export type StoredFeatureFlags = Partial<
-  Record<FeatureFlagId | 'questionsTab' | 'debatesTab' | 'peerAvailability' | 'lobbyJoining' | 'debateVideo', boolean>
+  Record<
+    | FeatureFlagId
+    | 'questionsTab'
+    | 'debatesTab'
+    | 'peerAvailability'
+    | 'lobbyJoining'
+    | 'debateVideo'
+    | 'ourSignInBox'
+    | 'googleCalendar'
+    | 'microsoftCalendar',
+    boolean
+  >
 >;
 
 /**

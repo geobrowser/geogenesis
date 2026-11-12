@@ -32,7 +32,7 @@ import { roundLabel } from './round-cues';
  * `decision_resolved_at`.
  *
  * - `flip`: each debater's pick appears on their tile.
- * - `result`: what the picks mean, for the rest of the window. Two Extends: "Round N" and who opens
+ * - `result`: what the picks mean, for the rest of the window. An Extend: "Round N" and who opens
  *   it, with the picks subdued behind the title. Anything else: "That's a wrap", with the picks
  *   left up so the split explains itself.
  * - `countIn`: Extend only, after the window. The opener gets the room's 3 s count-in, which

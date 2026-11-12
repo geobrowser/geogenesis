@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import { useAtom } from 'jotai';
 import { usePathname, useRouter } from 'next/navigation';
 
 import { isSpaceCallPath } from '~/core/space-calls/routes';
@@ -39,11 +40,14 @@ import {
   useLeaveDebateRematch,
   useRejectDebateChallenge,
 } from './hooks';
+import { useMyDebateLobby } from './lobbies/hooks';
 import { useLobbyDebateAnalytics } from './lobbies/lobby-analytics';
 import { routeIntoDebate } from './lobbies/step-out';
 import { useDebateRequests } from './matchmaking/hooks';
 import { IncomingRequestPopup } from './matchmaking/incoming-request-popup';
+import { useDebatesHub } from './matchmaking/use-debates-hub';
 import { useUnexpiredRequests } from './matchmaking/use-request-countdown';
+import { OpponentLeftDialog } from './opponent-left-dialog';
 import { hasAnsweredRematchJoin, markRematchAnswered, rememberRematchJoinIntent } from './rematch-join-intent';
 import { useDebateRoom, useFinishedRoomIds, useUpcomingDebateRooms } from './rooms/hooks';
 import { DebateRoomJoinPrompt, type RoomJoinPromptNotice } from './rooms/room-join-prompt';
@@ -63,6 +67,7 @@ import { useCurrentGeoChatUserId } from './use-current-geo-chat-user-id';
 import { useDebateInteractionReporter } from './use-debate-interaction-reporter';
 import { useGeoChatAccountRecovery } from './use-geo-chat-account-recovery';
 import { useScrollLock } from './use-scroll-lock';
+import { opponentLeftNoticeAtom } from '~/atoms';
 
 /**
  * What to tell the viewer about a paused gateway, given why it paused.
@@ -116,6 +121,9 @@ function useDebateGatewayPauseLog(paused: boolean, reason: DebateGatewayPauseRea
 export function DebateCoordinator() {
   const router = useRouter();
   const pathname = usePathname();
+
+  const [opponentLeftNotice, setOpponentLeftNotice] = useAtom(opponentLeftNoticeAtom);
+  const debatesHub = useDebatesHub();
   const debateDebuggingEnabled = useFeatureFlag('debateDebugging');
   const geoChatAuth = useGeoChatAuth();
   // Presence, not attention or visibility: being available to debate has to survive looking at
@@ -210,9 +218,22 @@ export function DebateCoordinator() {
   const atRoom = roomIdAtPath !== null && !atLobby;
   const atDebateFlowPage = pathname.includes('/debates/rematches/') || atRoom;
   const activeFlow = Boolean(debate || activity?.rematch || challenge);
-  const sharePromptsQuery = useDebateSharePrompts(Boolean(activity) && !activeFlow);
+  const myLobby = useMyDebateLobby();
+  // A step-out to debate is still part of the lobby session, including in other tabs. Wait until
+  // the viewer leaves its roster. The path also covers arrival before the room/lobby reads land.
+  // Background reads can replace cached "no lobby" membership, so wait for those as well.
+  const deferSharePrompts =
+    activeFlow ||
+    roomIdAtPath !== null ||
+    myLobby.isLoading ||
+    myLobby.isFetching ||
+    Boolean(myLobby.data?.current_lobby_id);
+  const sharePromptsQuery = useDebateSharePrompts(Boolean(activity) && !deferSharePrompts);
+  // Failed refetches keep cached data; only a successful read may open a new dialog.
   const queriedSharePrompt =
-    activeFlow || sharePromptsQuery.isFetching ? null : (sharePromptsQuery.data?.prompts[0] ?? null);
+    deferSharePrompts || sharePromptsQuery.isFetching || sharePromptsQuery.isError
+      ? null
+      : (sharePromptsQuery.data?.prompts[0] ?? null);
   const [retainedSharePrompt, setRetainedSharePrompt] = React.useState<DebateSharePrompt | null>(null);
   const [closedSharePromptId, setClosedSharePromptId] = React.useState<string | null>(null);
 
@@ -427,8 +448,9 @@ export function DebateCoordinator() {
   }, [closedSharePromptId, queriedSharePrompt, retainedSharePrompt]);
 
   React.useEffect(() => {
-    if (activeFlow) setRetainedSharePrompt(null);
-  }, [activeFlow]);
+    // Re-read pending prompts after the flow: another tab may have handled the retained one.
+    if (deferSharePrompts) setRetainedSharePrompt(null);
+  }, [deferSharePrompts]);
 
   React.useEffect(() => {
     if (!activity) return;
@@ -509,11 +531,22 @@ export function DebateCoordinator() {
     router,
   ]);
 
-  const visibleSharePrompt =
-    retainedSharePrompt ?? (queriedSharePrompt?.id === closedSharePromptId ? null : queriedSharePrompt);
+  // Hide immediately on entry; the effect clears retention without dismissing anything on the server.
+  const visibleSharePrompt = deferSharePrompts
+    ? null
+    : (retainedSharePrompt ?? (queriedSharePrompt?.id === closedSharePromptId ? null : queriedSharePrompt));
 
   return (
     <>
+      {opponentLeftNotice && (
+        <OpponentLeftDialog
+          onClose={() => setOpponentLeftNotice(false)}
+          onFindDebate={() => {
+            setOpponentLeftNotice(false);
+            debatesHub.open();
+          }}
+        />
+      )}
       {gateway.paused && debateDebuggingEnabled && (
         <div
           role="status"
@@ -532,8 +565,14 @@ export function DebateCoordinator() {
         rooms={joinableRooms}
         // Not over an incoming request or the share prompt, which want an answer of their own.
         // Off on any room page, a lobby's or a space call's too: a live room is not the place.
+        // Not over the opponent-left notice either, which goes first: see the request popup below.
         enabled={
-          roomIdAtPath === null && !isSpaceCallPath(pathname) && !activeFlow && !promptedRequest && !visibleSharePrompt
+          roomIdAtPath === null &&
+          !isSpaceCallPath(pathname) &&
+          !activeFlow &&
+          !promptedRequest &&
+          !visibleSharePrompt &&
+          !opponentLeftNotice
         }
         onOpenChange={setNudgeOpen}
       />
@@ -609,8 +648,10 @@ export function DebateCoordinator() {
           onNotNow={() => setSnoozedChallengeId(promptedChallenge.id)}
         />
       )}
-      {/* Behind a nudge popup that is being answered (one that is not steps aside for this). */}
-      {promptedRequest && currentUserId && !nudgeOpen && (
+      {/* Behind a nudge popup that is being answered (one that is not steps aside for this). Behind
+          the opponent-left notice too: it says why the viewer is here, and is one click to close.
+          A request mounted under it would sit hidden, and could expire there. */}
+      {promptedRequest && currentUserId && !nudgeOpen && !opponentLeftNotice && (
         <IncomingRequestPopup
           key={promptedRequest.id}
           request={promptedRequest}
@@ -618,7 +659,7 @@ export function DebateCoordinator() {
           onNotNow={() => setSnoozedRequestIds(current => [...current, promptedRequest.id])}
         />
       )}
-      {!activeFlow && !promptedRequest && !nudgeOpen && visibleSharePrompt && (
+      {!promptedRequest && !nudgeOpen && !opponentLeftNotice && visibleSharePrompt && (
         <DebateSharePromptDialog
           key={visibleSharePrompt.id}
           prompt={visibleSharePrompt}
