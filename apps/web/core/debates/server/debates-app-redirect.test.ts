@@ -1,0 +1,90 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import { HIDDEN_PROPERTY_ID } from '~/core/moderation/hidden';
+
+import { DEBATE_TYPE_ID } from '../ontology';
+import {
+  couldBeDebateId,
+  debatesAppRedirect,
+  debatesAppRedirectEnabled,
+  forgetDebateLookups,
+} from './debates-app-redirect';
+
+// GEO-3695: an old geobrowser.io debate URL opened from outside goes to the debates app.
+
+const SPACE_ID = '4582fbbee28a16589154f7e36f1ee3c5';
+const DEBATE_ID = '01a1d0d9443075708464dc8bf6c812bd';
+const OTHER_ID = '3970e24854164ed5a4792d3e418088ef';
+
+const entity = (extra: { types?: { id: string }[]; values?: unknown[] } = {}) => ({
+  types: extra.types ?? [{ id: DEBATE_TYPE_ID }],
+  values: extra.values ?? [],
+});
+type Fetch = NonNullable<Parameters<typeof debatesAppRedirect>[3]>['fetchEntity'];
+const go = (fetchEntity: (...args: never[]) => Promise<unknown>, query = '', id = DEBATE_ID, timeoutMs?: number) =>
+  debatesAppRedirect(SPACE_ID, id, new URLSearchParams(query), { fetchEntity: fetchEntity as Fetch, timeoutMs });
+
+afterEach(() => forgetDebateLookups());
+
+describe('debatesAppRedirect', () => {
+  it('sends a visible debate to the debates app, carrying the query over', async () => {
+    const fetchEntity = vi.fn().mockResolvedValue(entity());
+    await expect(go(fetchEntity, 'utm_source=x&utm_medium=share')).resolves.toBe(
+      `https://debates.geobrowser.io/debate/${DEBATE_ID}?utm_source=x&utm_medium=share`
+    );
+    expect(fetchEntity).toHaveBeenCalledWith(DEBATE_ID, SPACE_ID, expect.any(AbortSignal));
+  });
+
+  it('keeps the page for ?stay=1, without asking the graph', async () => {
+    const fetchEntity = vi.fn().mockResolvedValue(entity());
+    await expect(go(fetchEntity, 'stay=1')).resolves.toBeNull();
+    expect(fetchEntity).not.toHaveBeenCalled();
+  });
+
+  it('never asks the graph about an id that cannot be a debate’s', async () => {
+    const fetchEntity = vi.fn().mockResolvedValue(entity());
+    await expect(go(fetchEntity, '', OTHER_ID)).resolves.toBeNull();
+    expect(fetchEntity).not.toHaveBeenCalled();
+  });
+
+  it('keeps the page for something that is not a debate, or a hidden one', async () => {
+    await expect(go(vi.fn().mockResolvedValue(entity({ types: [{ id: 'x' }] })))).resolves.toBeNull();
+    forgetDebateLookups();
+    await expect(go(vi.fn().mockResolvedValue(null))).resolves.toBeNull();
+    forgetDebateLookups();
+    const hidden = entity({ values: [{ property: { id: HIDDEN_PROPERTY_ID }, value: 'true' }] });
+    await expect(go(vi.fn().mockResolvedValue(hidden))).resolves.toBeNull();
+  });
+
+  it('remembers an answer, but not a failed lookup', async () => {
+    const failing = vi.fn().mockRejectedValue(new Error('graph down'));
+    await expect(go(failing)).resolves.toBeNull();
+    const fetchEntity = vi.fn().mockResolvedValue(entity());
+    await expect(go(fetchEntity)).resolves.not.toBeNull();
+    await expect(go(fetchEntity)).resolves.not.toBeNull();
+    expect(fetchEntity).toHaveBeenCalledTimes(1);
+  });
+
+  it('gives up on a slow graph and keeps the page', async () => {
+    const slow = vi.fn(
+      (_id: string, _space: string, signal: AbortSignal) =>
+        new Promise((_resolve, reject) => signal.addEventListener('abort', () => reject(signal.reason)))
+    );
+    await expect(go(slow, '', DEBATE_ID, 5)).resolves.toBeNull();
+  });
+});
+
+describe('the switch and the id check', () => {
+  it('is on unless DEBATE_PAGE_REDIRECT=off', () => {
+    expect(debatesAppRedirectEnabled({})).toBe(true);
+    expect(debatesAppRedirectEnabled({ DEBATE_PAGE_REDIRECT: 'on' })).toBe(true);
+    expect(debatesAppRedirectEnabled({ DEBATE_PAGE_REDIRECT: 'off' })).toBe(false);
+    expect(debatesAppRedirectEnabled({ DEBATE_PAGE_REDIRECT: ' OFF ' })).toBe(false);
+  });
+
+  it('treats only version-7 UUIDs as possible debate ids', () => {
+    expect(couldBeDebateId(DEBATE_ID)).toBe(true);
+    expect(couldBeDebateId('01a1d0d9-4430-7570-8464-dc8bf6c812bd')).toBe(true);
+    expect(couldBeDebateId(OTHER_ID)).toBe(false);
+  });
+});

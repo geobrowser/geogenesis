@@ -58,7 +58,11 @@ export default function proxy(request: NextRequest): NextResponse | Promise<Next
   const possible = isPossibleSpacePath(request.nextUrl.pathname) && (!recording || isValidId(recording.debateId));
 
   if (possible) {
-    return recording ? openPublishedDebate(request, recording.spaceId, recording.debateId) : NextResponse.next();
+    if (recording) return openPublishedDebate(request, recording.spaceId, recording.debateId);
+    const entityPage = entityPageFromPath(request.nextUrl.pathname);
+    return entityPage && arrivesFromOutside(request)
+      ? openInDebatesApp(request, entityPage.spaceId, entityPage.entityId)
+      : NextResponse.next();
   }
 
   if (!isBrowserNavigation(request)) {
@@ -87,6 +91,42 @@ async function openPublishedDebate(request: NextRequest, spaceId: string, debate
     debatePage = null;
   }
   return debatePage ? NextResponse.redirect(new URL(debatePage, request.url), 307) : NextResponse.next();
+}
+
+/** `/space/<space>/<entity>` exactly: an entity's own page, not one of its tabs. */
+function entityPageFromPath(pathname: string): { spaceId: string; entityId: string } | null {
+  const segments = pathname.split('/').filter(Boolean);
+  if (segments.length !== 3 || segments[0] !== 'space') return null;
+  const [, spaceId, entityId] = segments;
+  return isValidId(spaceId) && isValidId(entityId) ? { spaceId, entityId } : null;
+}
+
+/**
+ * A person opening the page from outside geobrowser.io: a shared link, a bookmark or a typed URL.
+ * Clicks inside geobrowser.io are same-origin (and in-app navigations are not `navigate` at all);
+ * crawlers and link previews do not navigate.
+ */
+function arrivesFromOutside(request: NextRequest): boolean {
+  return isBrowserNavigation(request) && request.headers.get('sec-fetch-site') !== 'same-origin';
+}
+
+/**
+ * Old geobrowser.io debate URLs open the debate in the debates app (GEO-3695), for now: until the
+ * debates app's links are what people share. `DEBATE_PAGE_REDIRECT=off` turns it off; `?stay=1`
+ * keeps the page. Anything that is not a visible debate, or a graph that does not answer in time,
+ * renders the page as before.
+ */
+async function openInDebatesApp(request: NextRequest, spaceId: string, entityId: string): Promise<NextResponse> {
+  let destination: string | null = null;
+  try {
+    const { debatesAppRedirect, debatesAppRedirectEnabled } =
+      await import('~/core/debates/server/debates-app-redirect');
+    if (debatesAppRedirectEnabled())
+      destination = await debatesAppRedirect(spaceId, entityId, request.nextUrl.searchParams);
+  } catch {
+    destination = null;
+  }
+  return destination ? NextResponse.redirect(destination, 307) : NextResponse.next();
 }
 
 /**

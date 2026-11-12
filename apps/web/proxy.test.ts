@@ -3,12 +3,17 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { debatesAppRedirect, debatesAppRedirectEnabled } from '~/core/debates/server/debates-app-redirect';
 import { publishedDebatePath } from '~/core/debates/server/published-debate-path';
 import { createShareLink } from '~/core/sharing/share-link';
 
 import proxy, { config } from './proxy';
 
 vi.mock('~/core/debates/server/published-debate-path', () => ({ publishedDebatePath: vi.fn() }));
+vi.mock('~/core/debates/server/debates-app-redirect', () => ({
+  debatesAppRedirect: vi.fn(),
+  debatesAppRedirectEnabled: vi.fn(() => true),
+}));
 
 /**
  * `proxy.ts` had no tests, which is part of why the cost of its 404 went
@@ -233,5 +238,66 @@ describe('short share links (GEO-3485)', () => {
 
   it('only routes /debate through the proxy when it carries a short code', () => {
     expect(config.matcher).toContainEqual({ source: '/debate/:path*', has: [{ type: 'query', key: 'si' }] });
+  });
+});
+
+describe('old debate URLs open the debates app (GEO-3695)', () => {
+  const PAGE = `/space/${VALID_SPACE}/${VALID_ENTITY}`;
+  const redirect = vi.mocked(debatesAppRedirect);
+  const enabled = vi.mocked(debatesAppRedirectEnabled);
+  const FROM_OUTSIDE = { ...NAVIGATION, 'sec-fetch-site': 'cross-site' };
+  afterEach(() => {
+    redirect.mockReset();
+    enabled.mockReset().mockReturnValue(true);
+  });
+
+  it('sends a person arriving from outside to the debates app with a 307, query and all', async () => {
+    redirect.mockResolvedValue(`https://debates.geobrowser.io/debate/${VALID_ENTITY}?utm_source=x`);
+
+    const response = await proxy(request(`${PAGE}?utm_source=x`, { headers: FROM_OUTSIDE }));
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get('location')).toBe(`https://debates.geobrowser.io/debate/${VALID_ENTITY}?utm_source=x`);
+    expect(redirect).toHaveBeenCalledWith(VALID_SPACE, VALID_ENTITY, new URLSearchParams('utm_source=x'));
+  });
+
+  it('counts a typed URL or bookmark (no site) as arriving from outside', async () => {
+    redirect.mockResolvedValue(`https://debates.geobrowser.io/debate/${VALID_ENTITY}`);
+    const response = await proxy(request(PAGE, { headers: { ...NAVIGATION, 'sec-fetch-site': 'none' } }));
+    expect(response.status).toBe(307);
+  });
+
+  it('leaves clicks inside geobrowser.io, crawlers and link previews on the page, without a lookup', async () => {
+    const inside = await proxy(request(PAGE, { headers: { ...NAVIGATION, 'sec-fetch-site': 'same-origin' } }));
+    const crawler = await proxy(request(PAGE, { headers: CRAWLER }));
+    expect(inside.status).toBe(200);
+    expect(crawler.status).toBe(200);
+    expect(redirect).not.toHaveBeenCalled();
+  });
+
+  it('renders the page as before when the entity is not a debate or the lookup fails', async () => {
+    redirect.mockResolvedValueOnce(null);
+    expect((await proxy(request(PAGE, { headers: FROM_OUTSIDE }))).headers.get('location')).toBeNull();
+    redirect.mockRejectedValueOnce(new Error('graph down'));
+    expect((await proxy(request(PAGE, { headers: FROM_OUTSIDE }))).headers.get('location')).toBeNull();
+  });
+
+  it('is off when DEBATE_PAGE_REDIRECT=off', async () => {
+    enabled.mockReturnValue(false);
+    const response = await proxy(request(PAGE, { headers: FROM_OUTSIDE }));
+    expect(response.headers.get('location')).toBeNull();
+    expect(redirect).not.toHaveBeenCalled();
+  });
+
+  it('only considers an entity’s own page, not its tabs or the space', async () => {
+    for (const path of [`${PAGE}/activity`, `/space/${VALID_SPACE}`, `/space/${VALID_SPACE}/activity`]) {
+      await proxy(request(path, { headers: FROM_OUTSIDE }));
+    }
+    expect(redirect).not.toHaveBeenCalled();
+  });
+
+  it('loads the lookup only on demand', () => {
+    const source = fs.readFileSync(path.join(__dirname, 'proxy.ts'), 'utf8');
+    expect(source).not.toMatch(/^import[^;]*debates-app-redirect/m);
   });
 });
