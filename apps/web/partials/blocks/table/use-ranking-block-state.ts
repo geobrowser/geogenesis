@@ -225,6 +225,8 @@ export function useRankingBlockState({
     personalSpaceId,
     isRolling,
     hasRolledOff,
+    ballotReadError,
+    retryBallotRead,
   } = useRankingSubmissions(entityId, spaceId, displayName);
 
   const [sharedRankOverride, setSharedRankOverride] = React.useState<{
@@ -993,6 +995,8 @@ export function useRankingBlockState({
     showEditRankingButton,
     isRolling,
     isRollingRolledOff: hasRolledOff,
+    ballotReadError: isSharedRankingView ? null : ballotReadError,
+    retryBallotRead,
     canSharePersonalRanking,
     sharePersonalRanking,
     globalSharePath,

@@ -29,7 +29,10 @@ import { useRankingComposeSearch } from '~/core/blocks/ranking/use-ranking-compo
 import { useRankingEntryEntities } from '~/core/blocks/ranking/use-ranking-entry-entities';
 import { useRankingPendingEntities } from '~/core/blocks/ranking/use-ranking-pending-proposals';
 import { useRankingPeriod } from '~/core/blocks/ranking/use-ranking-period';
-import { useRankingSubmissions } from '~/core/blocks/ranking/use-ranking-submissions';
+import {
+  type RankingSubmissionPublishResult,
+  useRankingSubmissions,
+} from '~/core/blocks/ranking/use-ranking-submissions';
 import { useCreateEntityWithFilters } from '~/core/hooks/use-create-entity-with-filters';
 import { useIsMobileLayout } from '~/core/hooks/use-is-mobile-layout';
 import { useOnboarding } from '~/core/hooks/use-onboarding';
@@ -43,6 +46,7 @@ import { useRankingOpportunity } from '~/core/use-ranking-opportunity';
 
 import { stepAtom } from '~/partials/onboarding/onboarding-atoms';
 
+import { RankingBallotReadError } from './ranking-ballot-read-error';
 import { RankingComposeCreateEntityPanel } from './ranking-compose-create-entity-panel';
 import { RankingComposeEntitySheet } from './ranking-compose-entity-sheet';
 import { RankingComposeFullscreen } from './ranking-compose-fullscreen';
@@ -50,6 +54,7 @@ import { RankingComposeGlobalRanking } from './ranking-compose-global-ranking';
 import { RankingComposePinnedToolbar, RankingComposeTitleMetadata } from './ranking-compose-header';
 import { RankingComposeLayout } from './ranking-compose-layout';
 import { RankingComposeMyRanking } from './ranking-compose-my-ranking';
+import { rankingComposeSeed, useRankingComposeDraft } from './use-ranking-compose-draft';
 import Custom404 from '~/app/not-found';
 import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
 import { rankingComposeCreateEntityAtom } from '~/atoms/ranking-compose-create-entity';
@@ -128,6 +133,9 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
     isSaving,
     personalSpaceId,
     isLoading: isLoadingMySubmission,
+    ballotReadError,
+    retryBallotRead,
+    unsavedDraft,
   } = useRankingSubmissions(entityId, spaceId, displayName);
 
   const canCreateNew = Boolean(createNewSpaceId) && !isLoadingCreateAccess && canEditCreateSpace;
@@ -176,7 +184,11 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
 
   // Seeded from the author's last ballot, which survives roll-off, rather than from
   // `mySubmission`, which is blanked by it. See `myLastSubmission` (GEO-2871).
-  const [orderedIds, setOrderedIds] = React.useState<string[]>(myLastSubmission?.orderedEntityIds ?? []);
+  // Precedence (GEO-3680): a handed-back draft (another device's edit overtook
+  // ours) over the published ballot, with the ranker's own unpublished edits
+  // merged onto whichever it is. See `useRankingComposeDraft`.
+  const composeSeed = rankingComposeSeed(unsavedDraft, myLastSubmission?.orderedEntityIds);
+  const { orderedIds, setOrderedIds, getBasedOnOrderedIds } = useRankingComposeDraft(composeSeed);
   const [searchQuery, setSearchQuery] = React.useState('');
   const [activeSwipeRowKey, setActiveSwipeRowKey] = React.useState<string | null>(null);
   const [entitySheetTarget, setEntitySheetTarget] = React.useState<{
@@ -245,22 +257,6 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   const filteredUnrankedIds = isSearchActive ? searchUnrankedIds : browseUnrankedIds;
 
   const { entries: searchEntries } = useRankingEntryEntities(spaceId, isSearchActive ? searchEntityIds : []);
-
-  const mySubmissionIdsKey = (myLastSubmission?.orderedEntityIds ?? []).join('|');
-
-  React.useEffect(() => {
-    const next = myLastSubmission?.orderedEntityIds ?? [];
-    setOrderedIds(prev => {
-      if (prev.length === next.length && prev.every((id, index) => id === next[index])) {
-        return prev;
-      }
-      return next;
-    });
-    // `mySubmissionIdsKey` is the joined signature of `myLastSubmission?.orderedEntityIds`, and
-    // stands in for it: the array is rebuilt on every render of the query, and this only wants to
-    // re-seed when the submitted order actually changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mySubmissionIdsKey]);
 
   const displayMyEntityIds = orderedIds;
 
@@ -467,6 +463,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   const hasUnpublishedChanges = draftIdsKey !== publishedIdsKey;
 
   const canPublish =
+    !ballotReadError &&
     orderedIds.length > 0 &&
     hasUnpublishedChanges &&
     submissionsOpen &&
@@ -497,6 +494,34 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
                 : 'unavailable'
   );
 
+  // OG images render from indexed data, so they are built once indexing
+  // settles, from the ballot the index read back, with a version key computed
+  // from that same ballot. Detached: navigation never waits on it. No image when
+  // the index didn't read back our ballot (another device's edit overtook it).
+  const generateOgImagesOnceIndexed = (published: RankingSubmissionPublishResult) => {
+    void published.indexingSettled.then(final => {
+      if (!final) return;
+      const ogVersion = buildRankingOgVersion({
+        rankEntityId: published.rankEntityId,
+        orderedEntityIds: final.orderedEntityIds,
+        rankingName: displayName,
+        rankingStartDate,
+        rankingEndDate,
+        authorName: published.authorName,
+        authorAvatarUrl: published.authorAvatarUrl,
+      });
+      return generatePersonalRankingOgImages({
+        rankEntityId: published.rankEntityId,
+        authorSpaceId: published.authorSpaceId,
+        blockEntityId: entityId,
+        blockEntitySpaceId: spaceId,
+        rankingStartDate,
+        rankingEndDate,
+        ogVersion,
+      });
+    });
+  };
+
   const handlePublish = async () => {
     // `submissionsOpen` comes from the last render. Re-check against a fresh clock:
     if (!rankingSubmissionsOpen(getRankingPeriodState(startDate, endDate))) {
@@ -523,33 +548,16 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
         run: () =>
           saveMySubmission(slots, rankingOpportunity.context).then(published => {
             if (!published) return;
-            const ogVersion = buildRankingOgVersion({
-              rankEntityId: published.rankEntityId,
-              orderedEntityIds: published.orderedEntityIds,
-              rankingName: displayName,
-              rankingStartDate,
-              rankingEndDate,
-              authorName: published.authorName,
-              authorAvatarUrl: published.authorAvatarUrl,
-            });
-            void published.indexingSettled.then(() =>
-              generatePersonalRankingOgImages({
-                rankEntityId: published.rankEntityId,
-                authorSpaceId: published.authorSpaceId,
-                blockEntityId: entityId,
-                blockEntitySpaceId: spaceId,
-                rankingStartDate,
-                rankingEndDate,
-                ogVersion,
-              })
-            );
+            generateOgImagesOnceIndexed(published);
           }),
       });
       setToast(<span>Your ranking will publish once your personal space is ready.</span>);
       return;
     }
 
-    const published = await saveMySubmission(slots, rankingOpportunity.context);
+    const published = await saveMySubmission(slots, rankingOpportunity.context, {
+      basedOnOrderedIds: getBasedOnOrderedIds(),
+    });
     if (!published) return;
 
     const ogVersion = buildRankingOgVersion({
@@ -561,19 +569,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
       authorName: published.authorName,
       authorAvatarUrl: published.authorAvatarUrl,
     });
-    // OG images render from indexed data, so generation waits for
-    // `indexingSettled` — detached, since the redirect below must not.
-    void published.indexingSettled.then(() =>
-      generatePersonalRankingOgImages({
-        rankEntityId: published.rankEntityId,
-        authorSpaceId: published.authorSpaceId,
-        blockEntityId: entityId,
-        blockEntitySpaceId: spaceId,
-        rankingStartDate,
-        rankingEndDate,
-        ogVersion,
-      })
-    );
+    generateOgImagesOnceIndexed(published);
 
     // After publishing, land on the fullscreen ranking view instead of the parent space page.
     setRankingComposeReturnHref(null);
@@ -605,6 +601,14 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   // column shows its skeleton during a throttled refresh instead of flashing
   // "Untitled" rows that then jump into "My ranking".
   const isGlobalListResolving = isLoadingMySubmission || isLoadingRankableEntries;
+
+  // The ballot exists but couldn't be read whole (GEO-3680): the list below
+  // would start empty, and publishing it would replace the real one.
+  const ballotReadAlert = ballotReadError ? (
+    <div className="mt-2">
+      <RankingBallotReadError message={ballotReadError} onRetry={retryBallotRead} />
+    </div>
+  ) : null;
 
   const titleMetadata = (
     <RankingComposeTitleMetadata
@@ -715,7 +719,10 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
                 data-app-scroll-surface
                 className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-4"
               >
-                <div className="pt-2 pb-4">{titleMetadata}</div>
+                <div className="pt-2 pb-4">
+                  {titleMetadata}
+                  {ballotReadAlert}
+                </div>
                 <div className="relative flex min-h-0 flex-col">{rankingLayout}</div>
               </div>
             </>
@@ -730,7 +737,10 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
                   isSaving={isSaving}
                   onPublish={() => void handlePublish()}
                 />
-                <div className="mt-3 pb-4">{titleMetadata}</div>
+                <div className="mt-3 pb-4">
+                  {titleMetadata}
+                  {ballotReadAlert}
+                </div>
               </div>
 
               <div className="relative min-h-0 flex-1">{rankingLayout}</div>
