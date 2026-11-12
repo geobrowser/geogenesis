@@ -20,6 +20,7 @@ import { Search } from '~/design-system/icons/search';
 import { RankingGlobalDesktopRow } from './ranking-block-ui';
 import { useRankingComposeScrollRoot, useRankingComposeScrollRootRef } from './ranking-compose-layout';
 import { RankingComposeSwipeableRow } from './ranking-compose-swipeable-row';
+import { rankingEntityDragProps } from './ranking-entity-drag';
 import { RankingEntryRow } from './ranking-entry-row';
 
 type ComposeBrowseTab = 'global' | 'upvoted' | 'downvoted';
@@ -215,6 +216,7 @@ function RankingComposePickRow({
   onAdd,
   isInMyRanking,
   pending = false,
+  draggable = false,
 }: {
   rank?: number;
   name: string;
@@ -225,6 +227,8 @@ function RankingComposePickRow({
   onAdd: () => void;
   isInMyRanking: boolean;
   pending?: boolean;
+  /** Can be dragged into "Your ranking" (GEO-3678). */
+  draggable?: boolean;
 }) {
   const handleKeyDown = (event: React.KeyboardEvent) => {
     if (isInMyRanking) return;
@@ -244,6 +248,7 @@ function RankingComposePickRow({
         if (!isInMyRanking) onAdd();
       }}
       onKeyDown={handleKeyDown}
+      {...(draggable && !isInMyRanking ? rankingEntityDragProps(entityId) : {})}
       className={cx(
         'flex w-full items-center py-3 text-left transition',
         isInMyRanking ? 'cursor-default' : 'cursor-pointer'
@@ -298,7 +303,57 @@ type Props = {
   activeSwipeRowKey: string | null;
   onActiveSwipeRowKeyChange: (key: string | null) => void;
   onViewEntity: (entityId: string) => void;
+  /**
+   * Best debates (GEO-3678): this column is the team ranking, with an All / To rank switch in place
+   * of the browse tabs. Other blocks leave it out and keep the tabs.
+   */
+  teamView?: RankingComposeTeamView;
+  /** Rows can be dragged into "Your ranking" (desktop only; GEO-3678). */
+  draggableRows?: boolean;
 };
+
+export type RankingComposeTeamMode = 'all' | 'to_rank';
+
+export type RankingComposeTeamView = {
+  mode: RankingComposeTeamMode;
+  onModeChange: (mode: RankingComposeTeamMode) => void;
+  /** Shown on the To rank switch once known. */
+  toRankCount: number | null;
+  toRankPanel: React.ReactNode;
+};
+
+function RankingComposeTeamHeader({ isMobile, teamView }: { isMobile: boolean; teamView: RankingComposeTeamView }) {
+  const options: Array<{ id: RankingComposeTeamMode; label: string }> = [
+    { id: 'all', label: 'All' },
+    { id: 'to_rank', label: 'To rank' },
+  ];
+  return (
+    <div className="flex w-full min-w-0 items-center justify-between gap-3">
+      <h2 className={cx('m-0 text-text', isMobile ? 'text-[22px] font-medium' : 'text-[17px] font-semibold')}>
+        Team ranking
+      </h2>
+      <div role="group" aria-label="Show" className="flex shrink-0 rounded-full border border-grey-02 p-0.5">
+        {options.map(option => (
+          <button
+            key={option.id}
+            type="button"
+            aria-pressed={teamView.mode === option.id}
+            onClick={() => teamView.onModeChange(option.id)}
+            className={cx(
+              'flex h-6 items-center gap-1 rounded-full px-2.5 text-metadata transition-colors',
+              teamView.mode === option.id ? 'bg-text text-white' : 'text-grey-04 hover:text-text'
+            )}
+          >
+            {option.label}
+            {option.id === 'to_rank' && teamView.toRankCount ? (
+              <span className="tabular-nums">{teamView.toRankCount}</span>
+            ) : null}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export function RankingComposeGlobalRanking({
   isMobile,
@@ -331,10 +386,15 @@ export function RankingComposeGlobalRanking({
   activeSwipeRowKey,
   onActiveSwipeRowKeyChange,
   onViewEntity,
+  teamView,
+  draggableRows = false,
 }: Props) {
   const isDesktop = !isMobile;
 
-  const [browseTab, setBrowseTab] = React.useState<ComposeBrowseTab>('global');
+  const [browseTabState, setBrowseTab] = React.useState<ComposeBrowseTab>('global');
+  // The team column has no vote tabs.
+  const browseTab: ComposeBrowseTab = teamView ? 'global' : browseTabState;
+  const isToRank = teamView?.mode === 'to_rank';
 
   const tabsId = React.useId();
   const browseHeadingId = `${tabsId}-browse-heading`;
@@ -584,6 +644,7 @@ export function RankingComposeGlobalRanking({
         onAdd={() => onAddToMyRanking(id)}
         isInMyRanking={isInMyRanking}
         pending={pendingEntityIds.has(id)}
+        draggable={draggableRows && !isMobile}
       />
     );
 
@@ -731,12 +792,14 @@ export function RankingComposeGlobalRanking({
         style={{ scrollMarginTop: MOBILE_SEARCH_VISIBLE_TOP_OFFSET_PX }}
       >
         <div className={cx('w-full min-w-0', isDesktop && 'pb-4')}>
+          {teamView ? <RankingComposeTeamHeader isMobile={isMobile} teamView={teamView} /> : null}
           <h2 id={browseHeadingId} className="sr-only">
             Browse entities to rank
           </h2>
           {/* Typography matches the "My ranking" heading; the active tab is picked out
               by colour rather than an underline. */}
           <div
+            hidden={Boolean(teamView)}
             role="tablist"
             aria-labelledby={browseHeadingId}
             onKeyDown={onTabKeyDown}
@@ -767,7 +830,7 @@ export function RankingComposeGlobalRanking({
             ))}
           </div>
         </div>
-        <div className={cx('shrink-0', isMobile && 'mt-2')}>
+        <div className={cx('shrink-0', isMobile && 'mt-2')} hidden={isToRank}>
           <div className="relative flex items-center">
             <span className="pointer-events-none absolute left-2 flex">
               <Search color="grey-04" />
@@ -787,12 +850,15 @@ export function RankingComposeGlobalRanking({
           active rather than being remounted per tab. */}
       <div
         id={browsePanelId}
-        role="tabpanel"
-        aria-labelledby={tabButtonId(browseTab)}
+        role={teamView ? 'region' : 'tabpanel'}
+        aria-label={teamView ? (isToRank ? 'To rank' : 'Team ranking') : undefined}
+        aria-labelledby={teamView ? undefined : tabButtonId(browseTab)}
         className={cx('flex min-h-0 flex-1 flex-col', isDesktop && 'pt-4')}
       >
         <div ref={setListContainerRef} className={cx(isDesktop && 'min-h-0 flex-1 overflow-x-hidden overflow-y-auto')}>
-          {isSearchActive ? (
+          {isToRank ? (
+            teamView?.toRankPanel
+          ) : isSearchActive ? (
             showSearchLoadingPlaceholder ? (
               <RankingComposeSearchListPlaceholder height={searchListStableHeight} />
             ) : isSearchingWithNoResults ? (

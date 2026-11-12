@@ -23,6 +23,7 @@ describe('feature flags', () => {
     expect(defaultFeatureFlags.debugDebatesPage).toBe(false);
     expect(defaultFeatureFlags.debateDebugging).toBe(false);
     expect(defaultFeatureFlags.debateFormatSelector).toBe(false);
+    expect(defaultFeatureFlags.debateRankings).toBe(false);
     // GEO-2914 hid the Explore side panel behind this rather than deleting it, so off is the
     // shipped state rather than a developer convenience — see the explore-page test.
     expect(defaultFeatureFlags.exploreSidePanel).toBe(false);
@@ -38,6 +39,7 @@ describe('feature flags', () => {
       playbackDiagnostics: false,
       debugDebatesPage: false,
       debateDebugging: false,
+      debateRankings: false,
       debateFormatSelector: false,
       exploreSidePanel: false,
       previousDebateClaims: false,
@@ -73,6 +75,7 @@ describe('feature flags', () => {
       playbackDiagnostics: false,
       debugDebatesPage: false,
       debateDebugging: true,
+      debateRankings: false,
       debateFormatSelector: false,
       exploreSidePanel: false,
       previousDebateClaims: false,
