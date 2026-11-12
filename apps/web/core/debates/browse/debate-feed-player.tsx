@@ -182,6 +182,12 @@ type DebateFeedPlayerProps = {
    * resolving its own and fetching each image a second time.
    */
   stills?: { slot1: string | null; slot2: string | null };
+  /**
+   * Told where the playhead is, in seconds on the recordings' clock (`recording-clock.ts`), as it
+   * moves: the moments editor (GEO-3671) sets a clip's edges from it. Only the paired player
+   * reports it; the combined fallback plays the rendered video, which is on another clock.
+   */
+  onPlayheadChange?: (seconds: number) => void;
 };
 
 /** The longest `activateBothInGesture` holds pause ticks while its re-plays settle. */
@@ -226,6 +232,7 @@ function PairedDebateFeedPlayer({
   onPlaybackRequest,
   initialSeekSeconds = null,
   onPlaybackState,
+  onPlayheadChange,
   holdFullPlayback = false,
   previewClips,
   stills,
@@ -534,6 +541,9 @@ function PairedDebateFeedPlayer({
   React.useEffect(() => {
     onPlaybackState?.({ ready, playing, autoplayBlocked, error: hasError, pairHeld });
   }, [onPlaybackState, ready, playing, autoplayBlocked, hasError, pairHeld]);
+  React.useEffect(() => {
+    onPlayheadChange?.(playheadSeconds);
+  }, [onPlayheadChange, playheadSeconds]);
 
   // The live claim layer. Loaded alongside the recordings so a card is ready the moment the claim
   // it belongs to is spoken, rather than appearing a beat late on the first one.

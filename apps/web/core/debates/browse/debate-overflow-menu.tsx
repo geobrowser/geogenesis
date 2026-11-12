@@ -5,9 +5,11 @@ import { Content, Description, Overlay, Portal, Root, Title } from '@radix-ui/re
 import * as React from 'react';
 
 import cx from 'classnames';
+import Link from 'next/link';
 
 import { DEBATE_HIDE_REASON_MAX_CHARS, type Debate, GeoChatRequestError } from '~/core/debates/api';
 import { canRemoveDebate, debateVisibilityErrorMessage } from '~/core/debates/debate-removal';
+import { momentsEditorPath } from '~/core/debates/debate-routes';
 import { useCurrentGeoChatUserId } from '~/core/debates/use-current-geo-chat-user-id';
 import { useRemoveDebate } from '~/core/debates/use-debate-removal';
 import { useAccessControl } from '~/core/hooks/use-access-control';
@@ -17,6 +19,7 @@ import { useToast } from '~/core/hooks/use-toast';
 import { Button } from '~/design-system/button';
 import { Ellipsis } from '~/design-system/icons/ellipsis';
 import { Menu } from '~/design-system/menu';
+import { Tag } from '~/design-system/tag';
 import { Text } from '~/design-system/text';
 
 import { PILL_ACTION_CLASS } from './pill-action';
@@ -40,11 +43,20 @@ export function useCanRemoveDebate(debate: Debate): boolean {
 
 /**
  * The "…" beside a debate's actions. Holds only what a few viewers can do — removing the debate
- * (GEO-2785) — so its host draws it only where {@link useCanRemoveDebate} says so, and the row reads
- * as it always has for everyone else. The host asks rather than this, because the row makes room
- * for the menu on the same answer, and two answers could disagree.
+ * (GEO-2785), and for media admins editing its moments (GEO-3671) — so its host draws it only where
+ * {@link useCanRemoveDebate} or `useIsMediaAdmin` says so, and the row reads as it always has for
+ * everyone else. The host asks rather than this, because the row makes room for the menu on the same
+ * answer, and two answers could disagree.
  */
-export function DebateOverflowMenu({ debate }: { debate: Debate }) {
+export function DebateOverflowMenu({
+  debate,
+  canRemove = true,
+  canEditMoments = false,
+}: {
+  debate: Debate;
+  canRemove?: boolean;
+  canEditMoments?: boolean;
+}) {
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [confirmOpen, setConfirmOpen] = React.useState(false);
   const triggerRef = React.useRef<HTMLButtonElement | null>(null);
@@ -73,18 +85,33 @@ export function DebateOverflowMenu({ debate }: { debate: Debate }) {
         triggerRef={triggerRef}
         trigger={trigger}
       >
-        <button
-          type="button"
-          data-geo-analytics-label="Remove debate"
-          data-geo-analytics-intent="debate_action"
-          onClick={() => {
-            setMenuOpen(false);
-            setConfirmOpen(true);
-          }}
-          className="flex w-full cursor-pointer items-center bg-white px-3 py-2.5 text-left text-button text-red-01 hover:bg-bg"
-        >
-          Remove debate
-        </button>
+        {canEditMoments ? (
+          // Desktop only: the editor has no phone layout. The server checks the admin again on every
+          // read and write the editor makes.
+          <Link
+            href={momentsEditorPath(debate)}
+            data-geo-analytics-label="Edit moments"
+            data-geo-analytics-intent="debate_action"
+            onClick={() => setMenuOpen(false)}
+            className="flex w-full cursor-pointer items-center gap-2 bg-white px-3 py-2.5 text-left text-button text-text hover:bg-bg md:hidden"
+          >
+            Edit moments <Tag>Admin</Tag>
+          </Link>
+        ) : null}
+        {canRemove ? (
+          <button
+            type="button"
+            data-geo-analytics-label="Remove debate"
+            data-geo-analytics-intent="debate_action"
+            onClick={() => {
+              setMenuOpen(false);
+              setConfirmOpen(true);
+            }}
+            className="flex w-full cursor-pointer items-center bg-white px-3 py-2.5 text-left text-button text-red-01 hover:bg-bg"
+          >
+            Remove debate
+          </button>
+        ) : null}
       </Menu>
       <RemoveDebateDialog
         debateId={debate.id}

@@ -2,7 +2,13 @@ import { describe, expect, it } from 'vitest';
 
 import type { DebateMediaTurnSegment, DebateTranscriptSegment } from './api';
 import { RENDERED_SOURCE_TURNS, RENDERED_TURN_SEGMENTS } from './open-rounds-media-fixtures';
-import { recordingTimeOf, transcriptOnRecordings, turnOnRecordings } from './recording-clock';
+import {
+  recordingSpanOf,
+  recordingTimeOf,
+  renderedTimeOf,
+  transcriptOnRecordings,
+  turnOnRecordings,
+} from './recording-clock';
 
 const line = (start: number, end: number, source?: [number, number]) =>
   ({
@@ -116,5 +122,43 @@ describe('recordingTimeOf', () => {
         'start'
       )
     ).toBe(130_000);
+  });
+});
+
+const FIXED_FORMAT_TURNS = RENDERED_TURN_SEGMENTS.map(({ source_start_ms: _s, source_end_ms: _e, ...rest }) => rest);
+
+describe('recordingSpanOf (GEO-3671)', () => {
+  it('moves both edges of a span by the turn holding its middle', () => {
+    // Turn 2 is rendered from 121.6 s and recorded from 128 s: a 6.4 s shift.
+    expect(recordingSpanOf(130_000, 140_000, RENDERED_TURN_SEGMENTS)).toEqual({ start_ms: 136_400, end_ms: 146_400 });
+  });
+
+  // A cut's clear room reaches 0.4 s before turn 2 into the condensed break. Mapped edge by edge the
+  // start would land in turn 1 on the recordings, 8 s from the rest of the clip.
+  it('keeps a cut that reaches past its turn’s rendered edge the length it is', () => {
+    expect(recordingSpanOf(121_200, 131_200, RENDERED_TURN_SEGMENTS)).toEqual({ start_ms: 127_600, end_ms: 137_600 });
+  });
+
+  it('leaves a span where it is when the clocks agree', () => {
+    expect(recordingSpanOf(130_000, 140_000, FIXED_FORMAT_TURNS)).toEqual({ start_ms: 130_000, end_ms: 140_000 });
+  });
+});
+
+describe('renderedTimeOf (GEO-3671)', () => {
+  it('is the inverse of recordingTimeOf inside a turn', () => {
+    expect(renderedTimeOf(136_400, RENDERED_TURN_SEGMENTS, 'start')).toBe(130_000);
+    expect(
+      recordingTimeOf(renderedTimeOf(146_400, RENDERED_TURN_SEGMENTS, 'end')!, RENDERED_TURN_SEGMENTS, 'end')
+    ).toBe(146_400);
+  });
+
+  // 120 s to 128 s on the recordings is the break the render condensed: no clip edge can sit in it.
+  it('has no rendered time for a stretch the render cut or condensed', () => {
+    expect(renderedTimeOf(124_000, RENDERED_TURN_SEGMENTS, 'start')).toBeNull();
+    expect(renderedTimeOf(124_000, RENDERED_TURN_SEGMENTS, 'end')).toBeNull();
+  });
+
+  it('is the same time on a render with one clock', () => {
+    expect(renderedTimeOf(124_000, FIXED_FORMAT_TURNS, 'start')).toBe(124_000);
   });
 });
