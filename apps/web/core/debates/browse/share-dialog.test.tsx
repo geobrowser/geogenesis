@@ -246,7 +246,7 @@ it.each([
   const text = composer.searchParams.get('text')!;
   expect(destination.searchParams.has('si')).toBe(false);
   expect(parseShareLink(destination)).toMatchObject({ method: 'x', share_content_id: realDebate.id });
-  expect(destination.href).toMatch(/^https:\/\/debates\.geobrowser\.io\/explore\?debate=/);
+  expect(destination.href).toMatch(/^https:\/\/debates\.geobrowser\.io\/debate\//);
   expect(text).toContain('Sharing knowledge helps people make better decisions together');
   expect(text).toMatch(/\. Watch the debate on Geo!$/);
   expect(text.length + 1 + 23).toBeLessThanOrEqual(280);
@@ -511,8 +511,7 @@ it.each([...cases.slice(0, 3), ['Copy link', 'copy_link']] as const)(
       );
     }
     expect(destination.origin).toBe('https://debates.geobrowser.io');
-    expect(destination.pathname).toBe('/explore');
-    expect(destination.searchParams.get('debate')).toBe(realDebate.id);
+    expect(destination.pathname).toBe(`/debate/${realDebate.id}`);
     // The debates app has no proxy to expand the short code; it reads the campaign tags directly.
     expect(destination.searchParams.has('si')).toBe(false);
     expect(destination.searchParams.get('utm_medium')).toBe('share');

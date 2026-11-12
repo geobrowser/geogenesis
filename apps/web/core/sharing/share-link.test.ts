@@ -138,7 +138,7 @@ describe('share URLs', () => {
 describe('tagged share links for other sites (GEO-3695)', () => {
   it('always carries the long tags, even when the path ends in the content id', () => {
     const link = createTaggedShareLink(
-      `https://debates.geobrowser.io/explore?debate=${target}&utm_source=old&si=xx`,
+      `https://debates.geobrowser.io/debate/${target}?utm_source=old&si=xx`,
       'debate',
       target,
       'reddit',
@@ -146,9 +146,6 @@ describe('tagged share links for other sites (GEO-3695)', () => {
     );
     const url = new URL(link.url);
     expect(url.searchParams.has('si')).toBe(false);
-    // The tags join the feed link's own `debate` parameter rather than replacing it.
-    expect([...url.searchParams.keys()][0]).toBe('debate');
-    expect(url.searchParams.get('debate')).toBe(target);
     expect(url.searchParams.get('utm_source')).toBe('reddit');
     expect(url.searchParams.get('utm_content')).toBe(
       `v1:debate:4c81561d1f9541319cdddd20ab831ba2:${shareId.replace(/-/g, '')}`
@@ -159,7 +156,7 @@ describe('tagged share links for other sites (GEO-3695)', () => {
   });
 
   it('shares the plain destination when the ids are invalid', () => {
-    const url = 'https://debates.geobrowser.io/explore?debate=x';
+    const url = 'https://debates.geobrowser.io/debate/x';
     expect(createTaggedShareLink(url, 'debate', 'invalid', 'x')).toEqual({ url, attribution: null });
   });
 });
