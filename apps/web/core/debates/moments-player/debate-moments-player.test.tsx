@@ -95,6 +95,21 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('DebateMomentsPlayer', () => {
+  it('keeps both debaters in full colour, whoever is speaking', () => {
+    render(<DebateMomentsPlayer debateId={DEBATE} label="Debate A" moments={MOMENTS} />);
+    const player = screen.getByRole('region', { name: 'Debate A' });
+    expect(player.querySelector('[class*="mix-blend"], [class*="808080"]')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Next moment' }));
+    expect(player.querySelector('[class*="mix-blend"], [class*="808080"]')).toBeNull();
+  });
+
+  it('draws no fill over the picture when a tap zone has focus', () => {
+    render(<DebateMomentsPlayer debateId={DEBATE} label="Debate A" moments={MOMENTS} />);
+    for (const name of ['Play', 'Previous moment', 'Next moment']) {
+      expect(screen.getByRole('button', { name }).className).not.toMatch(/focus-visible:bg-/);
+    }
+  });
+
   it('shows one bar per moment and steps with the left and right edges', () => {
     render(<DebateMomentsPlayer debateId={DEBATE} label="Debate A" moments={MOMENTS} />);
     const player = screen.getByRole('region', { name: 'Debate A' });

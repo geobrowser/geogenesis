@@ -120,7 +120,7 @@ function PlayerFrame({
     <section aria-label={label} className={cx('@container flex w-full justify-center select-none', className)}>
       <div
         className={cx(
-          'group/player relative isolate aspect-[480/578] w-full overflow-hidden rounded-[16px] bg-[#2b2b2b] text-white shadow-[0_1px_0_rgba(0,0,0,0.04),0_8px_22px_rgba(0,0,0,0.12)] md:rounded-[12px]',
+          'group/player relative isolate aspect-[480/578] w-full overflow-hidden rounded-[16px] bg-[#2b2b2b] text-white shadow-[0_1px_0_rgba(0,0,0,0.04),0_8px_22px_rgba(0,0,0,0.12)] has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-text md:rounded-[12px]',
           // One box in both modes, so two players side by side are always the same size (Preston,
           // 12 Nov). The full debate is taller than this box and is shown whole inside it: cropping
           // would cut its burned-in names.
@@ -341,9 +341,9 @@ function MomentsStory({
 
   const clipLengthMs = clipDurationMs ?? moment?.durationMs ?? null;
   const caption = moment ? momentCaptionAt(moment.captions, clipMs) : null;
-  const zoneClass = 'absolute top-0 z-10 cursor-pointer focus-visible:bg-white/10 focus-visible:outline-none';
-  // Whose moment it is: the other debater's half goes grey, as the debates app does (slot 1 above).
-  const speakingSlot = story.mode === 'moments' ? (moment?.participantSlot ?? null) : null;
+  // No fill on focus: the middle zone is 30–70% wide, so one showed as a pale band down the video
+  // (Preston, 12 Nov). The frame's ring marks keyboard focus instead.
+  const zoneClass = 'absolute top-0 z-10 cursor-pointer focus-visible:outline-none';
 
   return (
     <PlayerFrame label={label} className={className} mode={story.mode}>
@@ -405,18 +405,10 @@ function MomentsStory({
 
       {/* The debaters, as the debates app labels each half: face, name, side and byline. The full
           debate has them burned in. */}
+      {/* Both halves stay in full colour: debates.geobrowser.io's moment cards never grey the one
+          not speaking (Preston, 12 Nov). */}
       {story.mode === 'moments' && (
         <>
-          {speakingSlot !== null && (
-            <span
-              aria-hidden
-              data-testid="inactive-speaker"
-              className={cx(
-                'pointer-events-none absolute inset-x-0 z-[1] h-1/2 bg-[#808080] mix-blend-saturation',
-                speakingSlot === 1 ? 'bottom-0' : 'top-0'
-              )}
-            />
-          )}
           {speakers ? (
             <>
               <SpeakerBand speaker={speakers.top} className="top-0" />

@@ -239,13 +239,11 @@ export function BestDebateRow({
       {showThumb ? <BestDebateThumb entityId={entityId} keyframeUrl={data?.keyframeUrl ?? null} label={title} /> : null}
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         {href ? (
-          <Link href={href} className={cx(TITLE_CLASS, 'hover:underline', titleClassName)} title={title}>
+          <Link href={href} className={cx(TITLE_CLASS, 'hover:underline', titleClassName)}>
             {title}
           </Link>
         ) : (
-          <span className={cx(TITLE_CLASS, titleClassName)} title={title}>
-            {title}
-          </span>
+          <span className={cx(TITLE_CLASS, titleClassName)}>{title}</span>
         )}
         <BestDebateMeta data={data} showDebaters={showDebaters} />
         {footer}

@@ -49,7 +49,7 @@ export type UseBestDebatesComposeArgs = {
   searchQuery?: string;
   /** Open the team column on To rank (the screen was opened with `?team=to-rank`, GEO-3677). */
   openOnToRank?: boolean;
-  /** GEO-3679 fills this: Push it down (compare header, team rows), and the debates to keep out of To rank. */
+  /** GEO-3679 fills this: Push it down (team and To rank rows), and the debates to keep out of To rank. */
   pushDown?: PushDownSlot & { pushedDownEntityIds?: readonly string[] };
 };
 

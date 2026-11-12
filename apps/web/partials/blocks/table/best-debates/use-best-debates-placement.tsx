@@ -72,8 +72,8 @@ export type UseBestDebatesPlacementArgs = {
 
 /**
  * Placing one debate on the Best debates ranking (GEO-3678): straight into the "which was
- * better?" comparisons, then "Placed #N of M". Push it down is a side door from the comparison's
- * header or a team row (`requestPushDown`).
+ * better?" comparisons, then "Placed #N of M". Push it down lives only on team and To rank rows
+ * (`requestPushDown`).
  *
  * Nothing touches the ranker's list until the debate is placed, so leaving the comparison part way
  * changes nothing. With `publishOnDone` off (the ranking screen) Done only keeps the placement in
@@ -301,7 +301,6 @@ export function useBestDebatesPlacement({
         search={flow.search}
         onChoose={choose}
         onBack={flow.history.length > 0 ? back : undefined}
-        onPushDown={pushDown ? () => requestPushDown(flow.entityId) : undefined}
         onClose={cancel}
       />
     );

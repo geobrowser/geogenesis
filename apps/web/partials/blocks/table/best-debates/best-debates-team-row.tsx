@@ -12,7 +12,6 @@ import { SpaceThumb } from '~/partials/explore/space-thumb';
 
 import { RankingEntryRow } from '../ranking-entry-row';
 import { BestDebateDisplaysContext } from './best-debate-row';
-import { PushDownIcon } from './ranking-compare-dialog';
 
 /** Who has ranked a debate: the purple "Nobody has ranked this yet", or "Ranked by …". */
 export function RankedByBadge({ rankers, entityId }: { rankers: RankersRead; entityId: string }) {
@@ -45,6 +44,15 @@ const GRIP = (
     </g>
   </svg>
 );
+
+/** The red down arrow Push it down has always had. */
+function PushDownIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden className="shrink-0 text-red-01">
+      <path d="M8 2.5v9M4.5 8L8 11.5 11.5 8M3 13.5h10" stroke="currentColor" strokeWidth="1.3" />
+    </svg>
+  );
+}
 
 /**
  * One row of the team column, the same in All and To rank (mockups 07 and 08): the grip where it

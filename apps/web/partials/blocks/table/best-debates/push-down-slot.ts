@@ -1,7 +1,6 @@
 /**
- * GEO-3679's Push it down as the placement flow uses it (GEO-3678): from the compare dialog's
- * header and the team rows' ↓ button, since the Rank it / Push it down choice was removed
- * (Preston, 12 Nov).
+ * GEO-3679's Push it down as the placement flow uses it (GEO-3678): only from the ↓ button on
+ * team and To rank rows, since the Rank it / Push it down choice was removed (Preston, 12 Nov).
  *
  * `onSelect` is handed the debate and owns everything from there (the downvote, then the ballot
  * edit, in that order).

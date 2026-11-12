@@ -38,8 +38,8 @@ function PushDownBinding({
 }
 
 /**
- * GEO-3679's push-down as GEO-3678's `PushDownSlot` (Push it down in the compare header and on
- * team rows, and the Placed confirmation's publish), for the Best debates ranking screen.
+ * GEO-3679's push-down as GEO-3678's `PushDownSlot` (Push it down on team and To rank rows,
+ * and the Placed confirmation's publish), for the Best debates ranking screen.
  *
  * - `onSelect`: `usePushDown(id).pushDown()` (downvote, then the draft edit).
  * - `rank`: `usePushDown(id).rank(publish)` (publish, then clear a downvote the ranker held). The

@@ -146,22 +146,18 @@ export function RankingEntryRow({
       {avatar}
       <div className={cx('flex min-w-0 flex-1 flex-col justify-center gap-1', imageUrl && 'min-h-16')}>
         {linkToEntity ? (
-          <Link href={href} className={cx(ROW_NAME_CLASS, 'hover:underline')} title={entry.name}>
+          <Link href={href} className={cx(ROW_NAME_CLASS, 'hover:underline')}>
             {entry.name}
           </Link>
         ) : (
-          <span className={ROW_NAME_CLASS} title={entry.name}>
-            {entry.name}
-          </span>
+          <span className={ROW_NAME_CLASS}>{entry.name}</span>
         )}
         {/* TODO(competition-points): Enable via RANKING_POINTS_UI_ENABLED when root competition points at this block. */}
         {RANKING_POINTS_UI_ENABLED && score != null ? (
           <p className="text-[12px] leading-[16px] text-grey-04">{score} points</p>
         ) : null}
         {entry.description ? (
-          <div className={cx(ROW_DESCRIPTION_CLASS, 'line-clamp-2')} title={entry.description}>
-            {entry.description}
-          </div>
+          <div className={cx(ROW_DESCRIPTION_CLASS, 'line-clamp-2')}>{entry.description}</div>
         ) : null}
         {pending ? <p className="text-[12px] leading-[16px] font-medium text-grey-04">Pending approval</p> : null}
         {rowActions ? (

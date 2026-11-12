@@ -133,8 +133,8 @@ const BUSY: PushDownRunResult = { ok: false, step: 'vote', partly: false, messag
 const CHECK_FAILED: PushDownRunResult = { ok: false, step: 'vote', partly: false, message: VOTE_CHECK_FAILED_COPY };
 
 /**
- * Push a debate down on the Best debates ranking screen (GEO-3679), from the compare header's
- * Push it down or a team row's ↓ button: `pushDown`, whose toast offers Undo. `rank` wraps a
+ * Push a debate down on the Best debates ranking screen (GEO-3679), from a team or To rank row's
+ * ↓ button: `pushDown`, whose toast offers Undo. `rank` wraps a
  * ballot publish that should also clear the member's downvotes.
  *
  * Every action re-reads the member's votes on the debate first (this session's unindexed writes,

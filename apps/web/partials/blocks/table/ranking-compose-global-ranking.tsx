@@ -378,9 +378,9 @@ function RankingComposeTeamHeader({ isMobile, teamView }: { isMobile: boolean; t
     { id: 'to_rank', label: 'To rank' },
   ];
   return (
-    <div className="flex w-full min-w-0 items-center justify-between gap-3">
-      {/* On a phone the Team ranking / Your ranking tabs already say it. */}
-      {isMobile ? null : <h2 className="m-0 text-button text-text">Team ranking</h2>}
+    // No "Team ranking" heading (Preston, 12 Nov): the picker leads the row, on the same 32px line as
+    // "Your ranking" and its Publish button; the column's region carries the name. A phone's tabs say it.
+    <div className="flex min-h-8 w-full min-w-0 items-center justify-start gap-3">
       <div
         role="group"
         aria-label="Show"
@@ -887,6 +887,8 @@ export function RankingComposeGlobalRanking({
   return (
     <div
       ref={globalSectionRef}
+      role={teamView ? 'region' : undefined}
+      aria-label={teamView ? 'Team ranking' : undefined}
       className={cx('flex flex-col', isDesktop && 'min-h-0 flex-1')}
       style={{ scrollMarginTop: MOBILE_SEARCH_VISIBLE_TOP_OFFSET_PX }}
     >
@@ -960,7 +962,7 @@ export function RankingComposeGlobalRanking({
               ? 'To rank'
               : teamView.mode === 'by_space'
                 ? 'Team ranking by space'
-                : 'Team ranking'
+                : 'All debates'
             : undefined
         }
         aria-labelledby={teamView ? undefined : tabButtonId(browseTab)}

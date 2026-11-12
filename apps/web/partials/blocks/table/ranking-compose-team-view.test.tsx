@@ -92,7 +92,9 @@ describe('the team column (Best debates)', () => {
   it('switches between All and To rank in place of the browse tabs', () => {
     const onAdd = vi.fn();
     render(<TeamColumn onAdd={onAdd} />);
-    expect(screen.getByText('Team ranking')).toBeTruthy();
+    // No visible heading on desktop; the column is named for screen readers.
+    expect(screen.queryByText('Team ranking')).toBeNull();
+    expect(screen.getByRole('region', { name: 'Team ranking' })).toBeTruthy();
     expect(screen.queryByRole('tab', { name: 'Upvoted' })).toBeNull();
 
     const row = screen.getByRole('button', { name: 'Add Debate a to my ranking' });
@@ -144,7 +146,7 @@ describe('the team column (Best debates)', () => {
   it('leaves other blocks with their browse tabs and undraggable rows', () => {
     render(<Column />);
     expect(screen.getByRole('tab', { name: 'Global ranking' })).toBeTruthy();
-    expect(screen.queryByText('Team ranking')).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Team ranking' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Add Debate a to my ranking' }).getAttribute('draggable')).toBeNull();
   });
 });

@@ -248,17 +248,11 @@ describe('placing a debate by comparison', () => {
     expect(screen.getByText('#1 in your ranking')).toBeTruthy();
   });
 
-  it('Rank goes straight to the comparison, with Push it down in its header', () => {
-    const onPushDown = vi.fn();
-    render(<Harness initial={list(3)} startWith={{ id: 'new', origin: 'team' }} pushDown={{ onSelect: onPushDown }} />);
+  it('Rank goes straight to the comparison, which has no Push it down', () => {
+    render(<Harness initial={list(3)} startWith={{ id: 'new', origin: 'team' }} pushDown={{ onSelect: vi.fn() }} />);
     fireEvent.click(screen.getByText('start'));
     expect(screen.getByText('Which was the better debate?')).toBeTruthy();
-    expect(screen.queryByRole('button', { name: /Rank it/ })).toBeNull();
-
-    fireEvent.click(screen.getByRole('button', { name: /Push it down/ }));
-    expect(onPushDown).toHaveBeenCalledWith('new');
-    expect(screen.queryByRole('dialog')).toBeNull();
-    expect(latestOrder).toEqual(list(3));
+    expect(screen.queryByRole('button', { name: /Rank it|Push it down/ })).toBeNull();
   });
 
   it('places the first debate of an empty ranking at #1 with no comparison', () => {
