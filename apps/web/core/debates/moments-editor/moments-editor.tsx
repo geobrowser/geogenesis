@@ -16,7 +16,7 @@ import { DebateFeedPlayer } from '../browse/debate-feed-player';
 import { useDebate, useDebateExtractedClaims, useDebateMedia, useDebateTranscript, useGeoChatAuth } from '../hooks';
 import { NEGATIVE_TEXT_CLASS, POSITIVE_TEXT_CLASS, WAITING_TEXT_CLASS } from '../matchmaking/admin-debate-parts';
 import { HUB_LIGHT_CALLOUT_CLASS_NAME } from '../matchmaking/hub-callout';
-import type { MomentBackfillEntry } from './api';
+import { type MomentBackfillEntry, reelBeingReapplied } from './api';
 import { type ClaimOption, ClipRow } from './clip-row';
 import {
   isMediaAdminRefusal,
@@ -470,7 +470,8 @@ function reelKey(clips: readonly EditorClip[]) {
  * (`transcript_differs`), so it is read-only until that is fixed (GEO-3642).
  */
 export function editingBlockedReason(
-  entry: Pick<MomentBackfillEntry, 'refusal'> | null,
+  entry:
+    (Pick<MomentBackfillEntry, 'refusal'> & Partial<Pick<MomentBackfillEntry, 'live_reel' | 'reel_carried'>>) | null,
   wordTiming: boolean | undefined,
   planError: unknown,
   /** The transcript never loaded: without its words no edge snaps and no clip has a speaker or claim. */
@@ -478,6 +479,10 @@ export function editingBlockedReason(
 ): string | null {
   if (planError) return "Couldn't check whether this debate can be edited. Reload to try again.";
   if (transcriptFailed) return "Couldn't load this debate's transcript. Reload to try again.";
+  // Its clip times are on the old video's clock until the re-apply is done.
+  if (entry && reelBeingReapplied(entry)) {
+    return "A re-render is re-applying this reel to the new video, so its clips aren't where they'll play. Reload when it's done.";
+  }
   if (entry && refusalBlocksEditing(entry.refusal))
     return `Can't edit this reel: ${refusalMessage(entry.refusal ?? '')}`;
   if (wordTiming === false) {
