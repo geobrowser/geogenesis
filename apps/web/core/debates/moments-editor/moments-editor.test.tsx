@@ -648,9 +648,9 @@ describe('MomentsEditor (GEO-3671)', () => {
     expect(screen.getByRole('textbox', { name: 'Start time' })).toHaveValue('0:00.9');
   });
 
-  // An edit is the admin's: turns that move under it (a media read landing after a re-render) never
-  // remap it away, and it is still sent on the version it was made on.
-  it('keeps an unsaved edit, and its base, when the turns move under it', () => {
+  // An edit is the admin's: turns that move under it (a media read landing after a re-render, with
+  // the plan's new version) never remap it away, and it is still sent on the version it was made on.
+  it('keeps an unsaved edit, and its base, when the turns and the version move under it', () => {
     const turn = (source: number) => ({
       turn_index: 0,
       participant_slot: 1,
@@ -674,6 +674,13 @@ describe('MomentsEditor (GEO-3671)', () => {
     expect(screen.getByRole('textbox', { name: 'End time' })).toHaveValue('0:03.3');
 
     mocks.turns = [turn(0)];
+    mocks.plan.data = entry({
+      reel_version: 'v2',
+      live_reel: {
+        clock: 'video',
+        clips: [{ start_ms: 900, end_ms: 3_000, speaker_slot: 0, claim_index: 0, claim_text: 'Coffee is low stakes' }],
+      },
+    });
     rerender(<MomentsEditor debateId={DEBATE_ID} />);
     expect(screen.getByRole('textbox', { name: 'Start time' })).toHaveValue('0:01.4');
     expect(screen.getByRole('textbox', { name: 'End time' })).toHaveValue('0:03.3');
@@ -721,6 +728,23 @@ describe('MomentsEditor (GEO-3671)', () => {
     expect(screen.queryByText(/Only 1 clip/)).not.toBeInTheDocument();
     expect(screen.queryByText(/to check/)).not.toBeInTheDocument();
     expect(screen.queryByText(/No warnings/)).not.toBeInTheDocument();
+  });
+
+  // The carry ends when the worker's re-cut lands, with no reload: the plan read again says so, and
+  // the editor judges the reel's clips again from then on.
+  it('runs its clip checks again once a carried reel is cut again', () => {
+    mocks.manualReel = true;
+    const clips = [
+      { start_ms: 3_100, end_ms: 4_900, speaker_slot: 0, claim_index: 0, claim_text: 'Coffee is low stakes' },
+    ];
+    mocks.plan.data = entry({ live_reel: { clock: 'video', carried: true, clips } });
+    const { rerender } = render(<MomentsEditor debateId={DEBATE_ID} />);
+    expect(screen.queryByText('Nobody says a whole word in it.')).not.toBeInTheDocument();
+
+    mocks.plan.data = entry({ reel_version: 'v2', live_reel: { clock: 'video', clips } });
+    rerender(<MomentsEditor debateId={DEBATE_ID} />);
+    expect(screen.queryByText(/still cut on the video from before it/)).not.toBeInTheDocument();
+    expect(screen.getByText('Nobody says a whole word in it.')).toBeInTheDocument();
   });
 
   // Return to automatic waits until an edit is gone, so a debate locked without a reel and with an
