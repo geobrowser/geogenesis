@@ -127,6 +127,14 @@ describe('DebateMomentsPlayer', () => {
     expect(screen.getByTestId('moment-segment-0')).toHaveStyle({ width: '20%' });
     expect(screen.getByText('Caption of moment 1')).toBeInTheDocument();
 
+    // Paused, the caption gives way to the play disc, which sits over the middle of the picture.
+    fireEvent.pause(videoOf(player));
+    expect(screen.queryByText('Caption of moment 1')).not.toBeInTheDocument();
+    expect(screen.getByTestId('play-indicator')).toBeInTheDocument();
+    fireEvent.play(videoOf(player));
+    expect(screen.getByText('Caption of moment 1')).toBeInTheDocument();
+    expect(screen.queryByTestId('play-indicator')).not.toBeInTheDocument();
+
     advance(videoOf(player), 6);
     expect(screen.queryByText('Caption of moment 1')).not.toBeInTheDocument();
 

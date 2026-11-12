@@ -120,7 +120,7 @@ function PlayerFrame({
     <section aria-label={label} className={cx('@container flex w-full justify-center select-none', className)}>
       <div
         className={cx(
-          'relative isolate aspect-[480/578] w-full overflow-hidden rounded-[16px] bg-[#2b2b2b] text-white shadow-[0_1px_0_rgba(0,0,0,0.04),0_8px_22px_rgba(0,0,0,0.12)] md:rounded-[12px]',
+          'group/player relative isolate aspect-[480/578] w-full overflow-hidden rounded-[16px] bg-[#2b2b2b] text-white shadow-[0_1px_0_rgba(0,0,0,0.04),0_8px_22px_rgba(0,0,0,0.12)] md:rounded-[12px]',
           // One box in both modes, so two players side by side are always the same size (Preston,
           // 12 Nov). The full debate is taller than this box and is shown whole inside it: cropping
           // would cut its burned-in names.
@@ -132,6 +132,10 @@ function PlayerFrame({
     </section>
   );
 }
+
+/** The play / pause disc: solid enough to read on any footage, with a white ring and a shadow. */
+const TRANSPORT_DISC_CLASS =
+  'pointer-events-none absolute top-1/2 left-1/2 grid size-14 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-[rgba(20,20,20,0.7)] text-white shadow-[0_4px_14px_rgba(0,0,0,0.35)] ring-2 ring-white/85 md:size-11';
 
 /** D1's mode pill: small, blurred, top-right under the moment bars; hidden on a phone. */
 const MODE_PILL_CLASS =
@@ -480,14 +484,26 @@ function MomentsStory({
       )}
 
       {!active && !failed && (
-        // The debates app's transport button: a dark disc with a white glyph over the picture.
+        // Paused, in either mode: the picture dims a little and a solid disc with a white ring sits
+        // above everything else on it, so it reads on light and dark footage alike (12 Nov).
+        <>
+          <span aria-hidden className="pointer-events-none absolute inset-0 z-[24] bg-black/20" />
+          <span aria-hidden="true" data-testid="play-indicator" className={cx(TRANSPORT_DISC_CLASS, 'z-[35]')}>
+            <svg viewBox="0 0 24 24" className="ml-[6%] size-[42%]" aria-hidden>
+              <path fill="currentColor" d="M7 4L21 12L7 20Z" />
+            </svg>
+          </span>
+        </>
+      )}
+      {active && !advancing && !failed && (
+        // Playing: the same disc, as Pause, only while the pointer is over the picture.
         <span
           aria-hidden="true"
-          data-testid="play-indicator"
-          className="pointer-events-none absolute top-1/2 left-1/2 z-20 grid size-[44px] -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-[rgba(20,20,20,0.5)] text-white backdrop-blur-[6px] md:size-[34px]"
+          data-testid="pause-indicator"
+          className={cx(TRANSPORT_DISC_CLASS, 'z-[35] opacity-0 transition-opacity group-hover/player:opacity-100')}
         >
-          <svg viewBox="0 0 24 24" className="size-[45%]" aria-hidden>
-            <path fill="currentColor" d="M7 4L21 12L7 20Z" />
+          <svg viewBox="0 0 24 24" className="size-[40%]" aria-hidden>
+            <path fill="currentColor" d="M6 4H10V20H6ZM14 4H18V20H14Z" />
           </svg>
         </span>
       )}
@@ -523,7 +539,8 @@ function MomentsStory({
         </div>
       )}
 
-      {story.mode === 'moments' && caption && (
+      {/* Captions only while playing: paused, the disc has the middle of the picture. */}
+      {story.mode === 'moments' && caption && active && (
         // As the debates app captions a moment: a black box at the seam between the two debaters.
         <p className="pointer-events-none absolute inset-x-3 top-1/2 z-20 m-0 flex -translate-y-1/2 justify-center">
           <span className="line-clamp-3 rounded-[5px] bg-black/80 px-[7px] py-1 text-center text-[clamp(9px,3.6cqw,13px)] leading-[1.3] font-semibold text-white">
