@@ -7,7 +7,6 @@ import cx from 'classnames';
 import { reattachVideoSource, releaseVideo } from '~/core/utils/video/release-video';
 
 import { Avatar } from '~/design-system/avatar';
-import { CloseSmall } from '~/design-system/icons/close-small';
 
 import { getGeoChatApiBaseUrl } from '../geo-chat-public-base-url';
 import {
@@ -121,7 +120,7 @@ function PlayerFrame({
     <section aria-label={label} className={cx('@container flex w-full justify-center select-none', className)}>
       <div
         className={cx(
-          'relative isolate w-full overflow-hidden rounded-[20px] bg-[#151515] text-white shadow-[0_8px_28px_rgba(0,0,0,0.18)]',
+          'relative isolate w-full overflow-hidden rounded-[16px] bg-[#2b2b2b] text-white shadow-[0_1px_0_rgba(0,0,0,0.04),0_8px_22px_rgba(0,0,0,0.12)] md:rounded-[12px]',
           // The full debate is rendered taller (1080 × 1640): its own shape at the same height, so
           // there are no black bands beside it.
           mode === 'full' ? 'aspect-[1080/1640] w-[79%]' : 'aspect-[480/578]'
@@ -132,6 +131,10 @@ function PlayerFrame({
     </section>
   );
 }
+
+/** D1's mode pill: small, blurred, top-right under the moment bars; hidden on a phone. */
+const MODE_PILL_CLASS =
+  'absolute top-5 right-2.5 z-30 rounded-full bg-[rgba(20,20,20,0.5)] px-2 py-[3px] text-[10px] leading-[14px] font-bold text-white backdrop-blur-[6px] transition-colors hover:bg-[rgba(20,20,20,0.7)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-white md:hidden';
 
 type StoryProps = Omit<DebateMomentsPlayerProps, 'moments'> & { moments: DebateMoment[] };
 
@@ -419,11 +422,11 @@ function MomentsStory({
       )}
 
       {/* Along the top: the moment bars (moments only), then the label pill. */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex flex-col gap-2 bg-gradient-to-b from-black/35 to-transparent px-3 pt-2.5 pb-6">
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex flex-col gap-2 bg-gradient-to-b from-black/30 to-transparent px-2.5 pt-[9px] pb-6">
         {story.mode === 'moments' && story.count > 0 ? (
-          <div className="flex gap-1" data-testid="moment-segments">
+          <div className="flex gap-[3px]" data-testid="moment-segments">
             {moments.map((m, i) => (
-              <span key={m.id} className="h-[3px] flex-1 overflow-hidden rounded-full bg-white/35">
+              <span key={m.id} className="h-[3px] flex-1 overflow-hidden rounded-full bg-white/[0.38]">
                 <span
                   data-testid={`moment-segment-${i}`}
                   className="block h-full rounded-full bg-white"
@@ -480,7 +483,7 @@ function MomentsStory({
         <span
           aria-hidden="true"
           data-testid="play-indicator"
-          className="pointer-events-none absolute top-1/2 left-1/2 z-20 grid size-[clamp(32px,13cqw,44px)] -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-black/45 text-white backdrop-blur-sm"
+          className="pointer-events-none absolute top-1/2 left-1/2 z-20 grid size-[44px] -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-[rgba(20,20,20,0.5)] text-white backdrop-blur-[6px] md:size-[34px]"
         >
           <svg viewBox="0 0 24 24" className="size-[45%]" aria-hidden>
             <path fill="currentColor" d="M7 4L21 12L7 20Z" />
@@ -488,40 +491,33 @@ function MomentsStory({
         </span>
       )}
 
-      {story.mode === 'moments' && (
+      {/* The switch between the moments and the full debate: a small pill top-right, on a desktop
+          only (Preston's D1, 12 Nov). Only when there are moments to switch back to. */}
+      {story.mode === 'moments' && story.count > 0 && (
         <button
           ref={expandRef}
           type="button"
           aria-label="Watch the full debate"
-          title="Full debate"
           onClick={expand}
-          className="absolute top-6 right-3 z-30 grid size-[clamp(28px,10cqw,36px)] place-items-center rounded-full bg-[#161616]/40 text-white backdrop-blur-md transition-colors hover:bg-[#161616]/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
+          className={MODE_PILL_CLASS}
         >
-          <svg viewBox="0 0 22 22" className="size-[55%]" aria-hidden>
-            <path
-              fill="currentColor"
-              fillRule="evenodd"
-              d="M11 5.27c0-.38.31-.69.69-.69h5.04c.38 0 .69.31.69.69v5.04a.69.69 0 0 1-1.38 0V5.96h-4.35a.69.69 0 0 1-.69-.69ZM5.27 11c.38 0 .69.31.69.69v4.35h4.35a.69.69 0 0 1 0 1.38H5.27a.69.69 0 0 1-.69-.69v-5.04c0-.38.31-.69.69-.69Z"
-            />
-          </svg>
+          Full debate
         </button>
       )}
-
       {story.mode === 'full' && story.count > 0 && (
         <button
           ref={collapseRef}
           type="button"
           aria-label="Back to moments"
-          title="Moments"
           onClick={collapse}
-          className="absolute top-3 right-3 z-30 grid size-[clamp(28px,10cqw,36px)] place-items-center rounded-full bg-[#161616]/40 text-white backdrop-blur-md transition-colors hover:bg-[#161616]/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
+          className={MODE_PILL_CLASS}
         >
-          <CloseSmall />
+          Moments
         </button>
       )}
       {story.mode === 'full' && (
         // The full debate's rail, thin along the bottom of the picture, as the debates app draws it.
-        <div className="absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-black/50 to-transparent px-3 pt-6 pb-2">
+        <div className="absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-black/45 to-transparent px-2.5 pt-6 pb-1.5">
           <FullTimeline elapsedMs={fullMs} durationMs={fullDurationMs} moments={moments} onSeek={seekFull} />
         </div>
       )}
@@ -529,7 +525,7 @@ function MomentsStory({
       {story.mode === 'moments' && caption && (
         // As the debates app captions a moment: a black box at the seam between the two debaters.
         <p className="pointer-events-none absolute inset-x-3 top-1/2 z-20 m-0 flex -translate-y-1/2 justify-center">
-          <span className="line-clamp-3 rounded-[4px] bg-black px-2 py-[7px] text-center text-[clamp(12px,5cqw,16px)] leading-[1.3] font-semibold text-white">
+          <span className="line-clamp-3 rounded-[5px] bg-black/80 px-[7px] py-1 text-center text-[clamp(9px,3.6cqw,13px)] leading-[1.3] font-semibold text-white">
             {caption}
           </span>
         </p>
@@ -621,12 +617,14 @@ function FullTimeline({
   const seekTo = (ms: number) => onSeek(Math.max(0, Math.min(durationMs, ms)));
 
   return (
-    // The debates app's full-view rail: elapsed, the bar with a dot per moment, the length.
-    <div className="flex min-w-0 flex-1 items-center gap-2 text-[clamp(10px,3.6cqw,13px)] leading-none tabular-nums">
-      <span data-testid="debate-elapsed" className="@max-[200px]:hidden">
-        {formatPlaybackTime(elapsedMs)}
+    // A thin rail along the bottom of the picture with the time above its right end (D1).
+    <div className="flex min-w-0 flex-1 flex-col items-stretch text-[10px] leading-none font-semibold tabular-nums [text-shadow:0_1px_2px_rgba(0,0,0,0.5)]">
+      <span className="self-end @max-[160px]:hidden">
+        <span data-testid="debate-elapsed">{formatPlaybackTime(elapsedMs)}</span>
+        {' / '}
+        <span data-testid="debate-duration">{known ? formatPlaybackTime(durationMs) : '–:––'}</span>
       </span>
-      <div className="relative h-6 min-w-0 flex-1">
+      <div className="relative h-4 min-w-0">
         <div
           ref={trackRef}
           role="slider"
@@ -655,10 +653,10 @@ function FullTimeline({
           }}
           className="absolute inset-0 cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
         >
-          <span className="absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 rounded-full bg-white/20" />
+          <span className="absolute inset-x-0 top-1/2 h-[3px] -translate-y-1/2 rounded-full bg-white/35" />
           <span
             data-testid="debate-progress"
-            className="absolute top-1/2 left-0 h-1 -translate-y-1/2 rounded-full bg-white"
+            className="absolute top-1/2 left-0 h-[3px] -translate-y-1/2 rounded-full bg-white"
             style={{ width: `${fraction * 100}%` }}
           />
         </div>
@@ -678,14 +676,11 @@ function FullTimeline({
               className="absolute top-1/2 grid size-6 -translate-x-1/2 -translate-y-1/2 cursor-pointer place-items-center rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
               style={{ left: `${marker.fraction * 100}%` }}
             >
-              <span className="size-2 rounded-full bg-white" />
+              <span className="size-1.5 rounded-full bg-white" />
             </button>
           );
         })}
       </div>
-      <span data-testid="debate-duration" className="@max-[200px]:hidden">
-        {known ? formatPlaybackTime(durationMs) : '–:––'}
-      </span>
     </div>
   );
 }

@@ -7,6 +7,8 @@ import cx from 'classnames';
 import { debateAgeLabel } from '~/core/blocks/ranking/best-debate-display';
 import type { PlacementChoice, PlacementSearch } from '~/core/blocks/ranking/ranking-placement';
 
+import { SpaceThumb } from '~/partials/explore/space-thumb';
+
 import { useBestDebateRowData } from './best-debate-row';
 import { RankingCompareDebatePlayer } from './ranking-compare-debate-player';
 import { RankingFlowDialog } from './ranking-flow-dialog';
@@ -55,144 +57,205 @@ export function RankingCompareDialog({
     onChoose(choice);
   };
 
-  const card = (side: Side, debate: CompareDebate, label: string, keyHint: string) => (
-    <CompareCard
-      key={side}
-      side={side}
+  const [hovered, setHovered] = React.useState<Side | null>(null);
+  const newDisplay = useBestDebateRowData(newDebate.entityId);
+  const existingDisplay = useBestDebateRowData(existingDebate.entityId);
+  const titleOf = (debate: CompareDebate, display: ReturnType<typeof useBestDebateRowData>) =>
+    display?.title ?? debate.name;
+
+  const side = (which: Side, debate: CompareDebate, display: ReturnType<typeof useBestDebateRowData>) => (
+    <CompareSide
+      key={which}
+      side={which}
       debate={debate}
-      label={label}
-      keyHint={keyHint}
+      display={display}
+      rankLabel={which === 'new' ? 'This debate' : `#${existingRank} in your ranking`}
+      shortRankLabel={which === 'new' ? 'This debate' : `Your #${existingRank}`}
       Player={Player}
-      active={playing === side}
-      onActivate={() => setPlaying(side)}
-      onChoose={() => onChoose(side)}
+      active={playing === which}
+      hovered={hovered === which}
+      onHover={next => setHovered(next ? which : current => (current === which ? null : current))}
+      onActivate={() => setPlaying(which)}
+      onChoose={() => onChoose(which)}
     />
   );
 
   return (
     <RankingFlowDialog
       open
-      wide
+      size="compare"
       phoneSheet
+      roundClose
       onClose={onClose}
       onKeyDown={onKeyDown}
-      title="Which was the better debate?"
+      ariaLabel="Which was the better debate?"
+      title={
+        <>
+          <span className="md:hidden">Which was the better debate?</span>
+          <span className="hidden md:inline">Which was better?</span>
+        </>
+      }
       subtitle={
-        <span aria-live="polite">
-          Step {search.step} of about {search.expectedSteps}
-          {/* No keyboard on a phone. */}
-          <span className="text-grey-03 md:hidden" title="Keys 1 and 2 pick a side, = for about the same">
-            {' '}
-            · 1 / 2 / =
+        <span className="flex items-center gap-2.5" aria-live="polite">
+          <span className="flex gap-1" aria-hidden>
+            {Array.from({ length: search.expectedSteps }, (_, index) => (
+              <i
+                key={index}
+                className={cx('h-1 w-[18px] rounded-[2px]', index < search.step ? 'bg-text' : 'bg-[#E9E9E4]')}
+              />
+            ))}
           </span>
+          Step {search.step} of about {search.expectedSteps}
         </span>
       }
     >
-      <div className="flex gap-1" aria-hidden>
-        {Array.from({ length: search.expectedSteps }, (_, index) => (
-          <span
-            key={index}
-            className={cx('h-[3px] flex-1 rounded-full', index < search.step ? 'bg-text' : 'bg-grey-02')}
-          />
-        ))}
+      <div className="grid grid-cols-2 gap-5 pt-1 md:gap-2.5">
+        {side('new', newDebate, newDisplay)}
+        {side('existing', existingDebate, existingDisplay)}
       </div>
-      {/* Two sides with "About the same" between them, like a "vs": side by side on a phone too. */}
-      <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-start gap-5 md:grid-cols-[minmax(0,1fr)_40px_minmax(0,1fr)] md:gap-1">
-        {card('new', newDebate, 'This debate', '1')}
-        <div className="flex flex-col items-center gap-2 self-center md:mt-[calc((100vw-80px)*0.3)] md:gap-1 md:self-start">
-          <span className="text-[12px] text-grey-04 md:hidden">or</span>
-          <button
-            type="button"
-            aria-label="About the same"
-            aria-keyshortcuts="="
-            onClick={() => onChoose('same')}
-            className="flex h-8 items-center rounded-full border border-grey-02 bg-white px-3.5 text-[14px] whitespace-nowrap text-text shadow-[0_1px_2px_rgba(0,0,0,0.08)] transition-colors hover:border-text md:size-10 md:justify-center md:px-0 md:text-[16px]"
-          >
-            <span className="md:hidden">About the same</span>
-            <span className="hidden md:inline" aria-hidden>
-              =
-            </span>
-          </button>
-          <span className="hidden text-[10px] text-grey-04 md:inline" aria-hidden>
-            Same
-          </span>
-        </div>
-        {card('existing', existingDebate, `#${existingRank} in your ranking`, '2')}
+      {/* One bar for the choice under both sides, so it never falls below the fold (D1). */}
+      <div className="grid shrink-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2.5 pt-1 md:gap-1.5">
+        <ChoiceButton
+          filled={hovered === 'new'}
+          aria-label={`${titleOf(newDebate, newDisplay)} was better`}
+          keyHint="1"
+          onClick={() => onChoose('new')}
+        >
+          <span className="md:hidden">Left was better</span>
+          <span className="hidden md:inline">Left</span>
+        </ChoiceButton>
+        <ChoiceButton same aria-label="About the same" keyHint="=" onClick={() => onChoose('same')}>
+          <span className="md:hidden">About the same</span>
+          <span className="hidden md:inline">Same</span>
+        </ChoiceButton>
+        <ChoiceButton
+          filled={hovered === 'existing'}
+          aria-label={`${titleOf(existingDebate, existingDisplay)} was better`}
+          keyHint="2"
+          onClick={() => onChoose('existing')}
+        >
+          <span className="md:hidden">Right was better</span>
+          <span className="hidden md:inline">Right</span>
+        </ChoiceButton>
       </div>
     </RankingFlowDialog>
   );
 }
 
-/**
- * The video's width from the height the dialog leaves it (Preston, 12 Nov: sized from height, not
- * width): the frame is 480 × 578, 0.83 as wide as it is tall, and the header, the claim, its meta
- * line and the button take about 380px around it.
- */
-const COMPARE_PLAYER_STYLE: React.CSSProperties = { maxWidth: 'max(200px, calc((100dvh - 380px) * 0.83))' };
+function ChoiceButton({
+  filled = false,
+  same = false,
+  keyHint,
+  children,
+  ...rest
+}: React.ButtonHTMLAttributes<HTMLButtonElement> & { filled?: boolean; same?: boolean; keyHint: string }) {
+  return (
+    <button
+      type="button"
+      aria-keyshortcuts={keyHint}
+      className={cx(
+        'flex h-[46px] items-center justify-center gap-2 rounded-[14px] border text-[14px] font-semibold whitespace-nowrap transition-colors md:h-[42px] md:gap-1 md:rounded-[12px] md:text-[12px]',
+        filled ? 'border-text bg-text text-white' : 'border-[#DCDCD6] bg-white text-text hover:border-text',
+        same && 'px-4 text-[#77776F] md:px-2.5'
+      )}
+      {...rest}
+    >
+      {children}
+      <span
+        aria-hidden
+        className={cx(
+          'rounded-[5px] border px-[5px] text-[10px] leading-4 font-bold md:hidden',
+          filled ? 'border-current text-current opacity-60' : 'border-[#DCDCD6] text-[#77776F]'
+        )}
+      >
+        {keyHint}
+      </span>
+    </button>
+  );
+}
 
 /**
- * One side: the video as the card, its label on it, then the claim (two lines reserved, so both
- * sides' meta lines and buttons line up), debaters · space · age, and a compact "This one". The whole
- * side picks it except the player's own controls.
+ * The video's width from the height the dialog leaves it (sized from height, not width): the frame
+ * is 480 × 578, 0.83 as wide as it is tall, and the header, eyebrow, claim and choice bar take about
+ * 330px around it.
  */
-function CompareCard({
+const COMPARE_PLAYER_STYLE: React.CSSProperties = { maxWidth: 'max(180px, calc((100dvh - 330px) * 0.83))' };
+
+/**
+ * One side (D1): an eyebrow (rank chip, space, age), the claim with two lines reserved so both sides
+ * line up, then the video as the card. No names or meta under it: the video shows who's debating.
+ * Hovering tints the side and fills its button in the bar; a click anywhere on it but the player's
+ * controls picks it.
+ */
+function CompareSide({
   side,
   debate,
-  label,
-  keyHint,
+  display,
+  rankLabel,
+  shortRankLabel,
   Player,
   active,
+  hovered,
+  onHover,
   onActivate,
   onChoose,
 }: {
   side: Side;
   debate: CompareDebate;
-  label: string;
-  keyHint: string;
+  display: ReturnType<typeof useBestDebateRowData>;
+  rankLabel: string;
+  shortRankLabel: string;
   Player: typeof RankingCompareDebatePlayer;
   active: boolean;
+  hovered: boolean;
+  onHover: (hovered: boolean) => void;
   onActivate: () => void;
   onChoose: () => void;
 }) {
-  const display = useBestDebateRowData(debate.entityId);
   const title = display?.title ?? debate.name;
   const age = debateAgeLabel(display?.createdAtMs ?? null);
-  const meta = [display?.debaters, display?.space?.name, age].filter(Boolean).join(' · ');
   return (
     <div
-      className="group mx-auto flex w-full min-w-0 cursor-pointer flex-col gap-3 rounded-[24px] p-1.5 ring-2 ring-transparent transition-shadow hover:ring-grey-02 md:gap-2 md:p-0.5"
-      style={COMPARE_PLAYER_STYLE}
+      className={cx(
+        '-m-2.5 flex min-w-0 cursor-pointer flex-col gap-2.5 rounded-[18px] p-2.5 transition-colors md:-m-1.5 md:gap-[7px] md:rounded-[14px] md:p-1.5',
+        hovered && 'bg-[#F2F2EE]'
+      )}
       data-testid={`compare-card-${side}`}
+      onMouseEnter={() => onHover(true)}
+      onMouseLeave={() => onHover(false)}
       onClick={event => {
         // The player's own controls play, step and switch; everywhere else on the side picks it.
         if ((event.target as Element).closest('section, button')) return;
         onChoose();
       }}
     >
-      <Player debateEntityId={debate.entityId} label={title} badge={label} active={active} onActivate={onActivate} />
-      <div className="flex flex-col gap-1 px-0.5">
-        <p className="m-0 line-clamp-2 min-h-[46px] text-[19px] leading-[23px] font-medium tracking-[-0.5px] text-[#151515] md:min-h-[36px] md:text-[14px] md:leading-[18px]">
+      <div className="mx-auto flex w-full min-w-0 flex-col gap-2.5 md:gap-[7px]" style={COMPARE_PLAYER_STYLE}>
+        <div className="flex items-center gap-1.5 overflow-hidden text-[11px] whitespace-nowrap text-[#77776F] md:text-[10px]">
+          <span className="rounded-full bg-[#F2F2EE] px-[7px] py-0.5 font-bold text-text">
+            <span className="md:hidden">{rankLabel}</span>
+            <span className="hidden md:inline">{shortRankLabel}</span>
+          </span>
+          {display?.space ? (
+            <span className="flex min-w-0 items-center gap-1.5 md:hidden">
+              <SpaceThumb
+                image={display.space.image}
+                name={display.space.name}
+                className="!size-[9px] !rounded-[3px]"
+              />
+              <span className="truncate">{display.space.name}</span>
+            </span>
+          ) : null}
+          {age ? (
+            <span>
+              <span className="md:hidden">{display?.space ? '· ' : ''}</span>
+              {age}
+            </span>
+          ) : null}
+        </div>
+        <p className="m-0 line-clamp-2 min-h-[2.5em] text-[17px] leading-[1.25] font-bold tracking-[-0.01em] text-balance text-text md:text-[13px]">
           {title}
         </p>
-        {meta ? (
-          <p className="m-0 line-clamp-2 text-[13px] leading-[17px] text-grey-04 md:text-[11px] md:leading-[14px]">
-            {meta}
-          </p>
-        ) : null}
-        <button
-          type="button"
-          className={cx(
-            'mt-1.5 h-9 self-start rounded-full border px-4 text-[15px] font-medium transition-colors md:h-9 md:self-stretch md:text-[14px]',
-            side === 'new'
-              ? 'border-text bg-text text-white hover:bg-text/90'
-              : 'border-grey-02 bg-white text-text hover:border-text'
-          )}
-          aria-label={`${title} was better`}
-          aria-keyshortcuts={keyHint}
-          onClick={onChoose}
-        >
-          This one
-        </button>
+        <Player debateEntityId={debate.entityId} label={title} active={active} onActivate={onActivate} />
       </div>
     </div>
   );

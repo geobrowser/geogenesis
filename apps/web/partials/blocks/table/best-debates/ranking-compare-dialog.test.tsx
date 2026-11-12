@@ -55,4 +55,15 @@ describe('RankingCompareDialog', () => {
     fireEvent.click(same);
     expect(onChoose).toHaveBeenCalledWith('same');
   });
+
+  it('fills the bar button for the side being hovered, and has no per-side buttons', () => {
+    renderCompare();
+    const left = screen.getByRole('button', { name: 'New debate was better' });
+    expect(left.className).not.toContain('bg-text');
+    fireEvent.mouseEnter(screen.getByTestId('compare-card-new'));
+    expect(left.className).toContain('bg-text');
+    fireEvent.mouseLeave(screen.getByTestId('compare-card-new'));
+    expect(left.className).not.toContain('bg-text');
+    expect(screen.queryByText('This one')).toBeNull();
+  });
 });

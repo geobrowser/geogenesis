@@ -18,8 +18,10 @@ type Props = {
   /** The accessible name when `title` isn't plain text. */
   ariaLabel?: string;
   wide?: boolean;
-  /** `narrow` for one player on its own (the watch dialog). */
-  size?: 'narrow';
+  /** `narrow` for one player on its own (the watch dialog); `compare` for the compare view (D1). */
+  size?: 'narrow' | 'compare';
+  /** D1's round close button. */
+  roundClose?: boolean;
   /**
    * On a phone, a sheet along the bottom that is only as tall as its content (the Rank choice and
    * Placed), rather than a full-screen page with most of it empty.
@@ -47,6 +49,7 @@ export function RankingFlowDialog({
   wide = false,
   size,
   phoneSheet = false,
+  roundClose = false,
   children,
   footer,
   onKeyDown,
@@ -79,20 +82,52 @@ export function RankingFlowDialog({
               phoneSheet
                 ? 'md:rounded-t-2xl md:max-h-[calc(100vh-12px)] md:rounded-b-none md:pb-[max(16px,env(safe-area-inset-bottom))] supports-[height:100svh]:md:max-h-[calc(100svh-env(safe-area-inset-top)-12px)]'
                 : 'md:h-screen md:max-h-none md:rounded-none supports-[height:100dvh]:md:h-[100dvh] supports-[height:100dvh]:md:max-h-none',
-              wide ? 'max-w-[1350px]' : size === 'narrow' ? 'max-w-[560px]' : 'max-w-[880px]'
+              size === 'compare'
+                ? 'w-auto max-w-[min(100%,960px)] min-w-[min(100%,560px)] rounded-[20px] px-[26px] pt-6 pb-[22px] md:w-full md:min-w-0 md:px-3.5 md:pt-[18px]'
+                : wide
+                  ? 'max-w-[1350px]'
+                  : size === 'narrow'
+                    ? 'max-w-[560px]'
+                    : 'max-w-[880px]'
             )}
           >
             <div className="flex shrink-0 items-start justify-between gap-4">
               <div className="min-w-0">
-                <Dialog.Title className="m-0 text-[24px] leading-[29px] font-semibold tracking-[-0.3px] text-text md:text-[19px] md:leading-[23px]">
+                <Dialog.Title
+                  className={cx(
+                    'm-0 text-text',
+                    size === 'compare'
+                      ? 'text-[19px] leading-[24px] font-bold tracking-[-0.015em] md:text-[16px] md:leading-[20px]'
+                      : 'text-[24px] leading-[29px] font-semibold tracking-[-0.3px] md:text-[19px] md:leading-[23px]'
+                  )}
+                >
                   {title}
                 </Dialog.Title>
                 {subtitle ? (
-                  <div className="mt-1 text-[16px] leading-[20px] text-grey-04 md:text-metadata">{subtitle}</div>
+                  <div
+                    className={cx(
+                      'text-grey-04',
+                      size === 'compare'
+                        ? 'mt-1.5 text-[12px] leading-4'
+                        : 'mt-1 text-[16px] leading-[20px] md:text-metadata'
+                    )}
+                  >
+                    {subtitle}
+                  </div>
                 ) : null}
               </div>
               <Dialog.Close asChild>
-                <SquareButton icon={<Close />} aria-label="Close" />
+                {roundClose ? (
+                  <button
+                    type="button"
+                    aria-label="Close"
+                    className="grid size-8 shrink-0 place-items-center rounded-full bg-[#F2F2EE] text-text transition-colors hover:bg-grey-02"
+                  >
+                    <Close />
+                  </button>
+                ) : (
+                  <SquareButton icon={<Close />} aria-label="Close" />
+                )}
               </Dialog.Close>
             </div>
             {/* The only part that scrolls. */}
