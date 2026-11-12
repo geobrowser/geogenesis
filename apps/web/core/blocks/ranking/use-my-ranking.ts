@@ -18,6 +18,7 @@ import {
   getMyRankingOrderedEntityIds,
   pickMostRecentlyCreatedRankingEntity,
 } from './my-ranking-entity';
+import { sameBallotOrder } from './ranking-publish-queue';
 
 // A ballot we just published is the ground truth regardless of what the index
 // says: the list query below is filtered by the SUBMITTED_TO relation, which
@@ -25,8 +26,9 @@ import {
 // derived from `mySubmission` (Share link, My ranking views, the rolling clock)
 // would otherwise sit stale for that window. `recordPublishedRank` pins the
 // published ballot per (author space, block); the query prefers it until the
-// index catches up, then deletes the pin so indexed data takes over. TTL-bounded
-// so an indexing failure can't pin a phantom ballot forever.
+// index reads back the pinned ballot (same rank, same order), then deletes the
+// pin so indexed data takes over. TTL-bounded so an indexing failure can't pin a
+// phantom ballot forever.
 type PublishedRankPin = {
   rankId: string;
   orderedEntityIds: string[];
@@ -66,7 +68,7 @@ function getFreshPublishedRankPin(personalSpaceId: string, blockId: string): Pub
 
 /** Minimal stand-in until the index returns the real entity. `createdAt` is the
  *  publish time in ms, which the rolling-submission clock parses directly. */
-function syntheticRankEntity(pin: PublishedRankPin): Entity {
+function syntheticRankEntity(pin: Pick<PublishedRankPin, 'rankId' | 'publishedAtMs'>): Entity {
   return {
     id: pin.rankId,
     name: null,
@@ -80,6 +82,69 @@ function syntheticRankEntity(pin: PublishedRankPin): Entity {
   };
 }
 
+export type MyRankingBallot = { rankEntity: Entity | null; orderedEntityIds: string[] };
+
+/**
+ * Reads the author's current ballot for a block straight from the index (no
+ * pin, no cache). The publish path re-reads with this right before building an
+ * edit, so the edit starts from what is published now (GEO-3680).
+ */
+export async function fetchMyRankingBallot(personalSpaceId: string, blockId: string): Promise<MyRankingBallot> {
+  const { entities } = await Effect.runPromise(
+    getAllEntities({
+      spaceId: personalSpaceId,
+      typeId: RANK_TYPE_ID,
+      filter: buildMyRankingEntityFilter(blockId),
+      orderBy: [EntitiesOrderBy.CreatedAtDesc],
+      limit: 100,
+    })
+  );
+
+  const rankEntity = pickMostRecentlyCreatedRankingEntity(entities);
+  if (!rankEntity) return { rankEntity: null, orderedEntityIds: [] };
+  return { rankEntity, orderedEntityIds: getMyRankingOrderedEntityIds(rankEntity, personalSpaceId) };
+}
+
+/**
+ * The pin hands over to the index only once the index reads back the pinned
+ * ballot itself: the same rank entity *and* the same order. Matching the rank
+ * id alone isn't enough — an in-place edit keeps the id, so the index matched
+ * it while still holding the previous order, and a placement made in that
+ * window was built from the stale order and dropped the one before it
+ * (GEO-3680).
+ */
+export function resolvePinnedBallot(
+  indexed: MyRankingBallot,
+  pin: Pick<PublishedRankPin, 'rankId' | 'orderedEntityIds' | 'publishedAtMs'> | null
+): { ballot: MyRankingBallot; dropPin: boolean } {
+  if (!pin) return { ballot: indexed, dropPin: false };
+  const caughtUp =
+    indexed.rankEntity !== null &&
+    ID.equals(indexed.rankEntity.id, pin.rankId) &&
+    sameBallotOrder(indexed.orderedEntityIds, pin.orderedEntityIds);
+  if (caughtUp) return { ballot: indexed, dropPin: true };
+  // The index hasn't read back the just-published ballot yet; answer from what
+  // we know was published so the UI never shows the stale (or blanked
+  // rolled-off) predecessor in the meantime.
+  return { ballot: { rankEntity: syntheticRankEntity(pin), orderedEntityIds: pin.orderedEntityIds }, dropPin: false };
+}
+
+/** Drops the pin once the publish path has confirmed the index holds the
+ *  published ballot, so a later edit from another device shows through. Only
+ *  the pin for that exact publish is dropped, never a newer one. */
+export function releasePublishedRankPin(
+  personalSpaceId: string,
+  blockId: string,
+  rankId: string,
+  orderedEntityIds: string[]
+): void {
+  const key = pinKey(personalSpaceId, blockId);
+  const pin = publishedRankPins.get(key);
+  if (pin && ID.equals(pin.rankId, rankId) && sameBallotOrder(pin.orderedEntityIds, orderedEntityIds)) {
+    publishedRankPins.delete(key);
+  }
+}
+
 export function useMyRanking(blockId: string) {
   const { personalSpaceId } = usePersonalSpaceId();
 
@@ -91,40 +156,11 @@ export function useMyRanking(blockId: string) {
       if (!personalSpaceId) {
         return { rankEntity: null, orderedEntityIds: [] as string[] };
       }
-
-      const { entities } = await Effect.runPromise(
-        getAllEntities({
-          spaceId: personalSpaceId,
-          typeId: RANK_TYPE_ID,
-          filter: buildMyRankingEntityFilter(blockId),
-          orderBy: [EntitiesOrderBy.CreatedAtDesc],
-          limit: 100,
-        })
-      );
-
-      const rankEntity = pickMostRecentlyCreatedRankingEntity(entities);
-
+      const indexed = await fetchMyRankingBallot(personalSpaceId, blockId);
       const pin = getFreshPublishedRankPin(personalSpaceId, blockId);
-      if (pin) {
-        if (rankEntity && ID.equals(rankEntity.id, pin.rankId)) {
-          // The index caught up with the published ballot — it takes over.
-          publishedRankPins.delete(pinKey(personalSpaceId, blockId));
-        } else {
-          // The list hasn't surfaced the just-published ballot yet; answer from
-          // what we know was published so the UI never shows the stale (or
-          // blanked rolled-off) predecessor in the meantime.
-          return { rankEntity: syntheticRankEntity(pin), orderedEntityIds: pin.orderedEntityIds };
-        }
-      }
-
-      if (!rankEntity) {
-        return { rankEntity: null, orderedEntityIds: [] as string[] };
-      }
-
-      return {
-        rankEntity,
-        orderedEntityIds: getMyRankingOrderedEntityIds(rankEntity, personalSpaceId),
-      };
+      const { ballot, dropPin } = resolvePinnedBallot(indexed, pin);
+      if (dropPin) publishedRankPins.delete(pinKey(personalSpaceId, blockId));
+      return ballot;
     },
   });
 

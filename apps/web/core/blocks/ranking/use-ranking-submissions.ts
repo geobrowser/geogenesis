@@ -17,19 +17,39 @@ import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useToast } from '~/core/hooks/use-toast';
 import { ID } from '~/core/id';
-import { getEntity } from '~/core/io/queries';
+import { RANK_VOTES_RELATION_TYPE_ID } from '~/core/ranking-block-ids';
 import { geo } from '~/core/sdk/geo-client';
 import { useReportError } from '~/core/state/status-bar-store';
+import type { Entity } from '~/core/types';
 import { toUserFacingError } from '~/core/utils/error-diagnostics';
 import { validateEntityId, validateSpaceId } from '~/core/utils/utils';
 
 import { clearLocalMyRankingDraft } from './local-ranking-my-draft';
-import { getMyRankingOrderedEntityIds } from './my-ranking-entity';
+import {
+  OWN_PUBLISH_BLOCKS_FOR_MS,
+  RANKING_CHANGED_ELSEWHERE_MESSAGE,
+  RANKING_PREVIOUS_PUBLISH_PENDING_MESSAGE,
+  enqueueRankingPublish,
+  getOwnRankingPublish,
+  getRankingBallotMaxItems,
+  mergeBallotOrders,
+  rankingBallotTooLargeMessage,
+  rankingPublishKey,
+  rankingPublishTiming,
+  recordOwnRankingPublish,
+  sameBallotOrder,
+} from './ranking-publish-queue';
 import { parseTimestampMs, shouldMintNewRankEntity } from './ranking-rolling';
 import type { RankingSubmissionRecord } from './ranking-submission-types';
 import type { RankingSubmissionSlot } from './ranking-submission-types';
 import { rankingVoteWeightFromIndex } from './ranking-vote-weights';
-import { recordPublishedRank, useMyRanking } from './use-my-ranking';
+import {
+  type MyRankingBallot,
+  fetchMyRankingBallot,
+  recordPublishedRank,
+  releasePublishedRankPin,
+  useMyRanking,
+} from './use-my-ranking';
 import { useRankingBlockConfig } from './use-ranking-block-config';
 
 const MS_PER_HOUR = 60 * 60 * 1000;
@@ -70,6 +90,40 @@ function retrySchedule(label: string, maxDuration: Duration.DurationInput) {
   );
 }
 
+/**
+ * Whether a ballot is still inside its submission window. Purely clock-based:
+ * the window runs from the rank entity's creation time, mirroring the indexer's
+ * `submitted_at` (frozen at the edit that created the entity). `updatedAt` is
+ * only a fallback for older entities indexed without a `createdAt`.
+ */
+function isBallotLive(
+  rankEntity: Entity | null,
+  isRolling: boolean,
+  submissionFrequencyHours: number | null | undefined,
+  nowMs: number
+): boolean {
+  if (!isRolling || !rankEntity) return true;
+  const submittedAtMs = parseTimestampMs(rankEntity.createdAt ?? rankEntity.updatedAt);
+  if (submissionFrequencyHours == null || submittedAtMs === 0) return true;
+  return nowMs < submittedAtMs + submissionFrequencyHours * MS_PER_HOUR;
+}
+
+/** The space perspective an item was voted under in the published ballot, for
+ *  items a merge brings in from it. */
+function publishedVoteSpaceId(published: MyRankingBallot, entityId: string, authorSpaceId: string): string | null {
+  const rankEntity = published.rankEntity;
+  if (!rankEntity) return null;
+  const relation = rankEntity.relations.find(
+    r =>
+      !r.isDeleted &&
+      ID.equals(r.spaceId, authorSpaceId) &&
+      ID.equals(r.fromEntity.id, rankEntity.id) &&
+      ID.equals(r.type.id, RANK_VOTES_RELATION_TYPE_ID) &&
+      ID.equals(r.toEntity.id, entityId)
+  );
+  return relation?.toSpaceId ?? null;
+}
+
 export function useRankingSubmissions(blockId: string, spaceId: string, blockName: string) {
   const getContext = useActionContext('ranking_composer', 'ranking', blockId);
   const { personalSpaceId } = usePersonalSpaceId();
@@ -79,8 +133,6 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
   const { profile } = useGeoProfile(walletAddress);
   const [, setToast] = useToast();
   const reportError = useReportError();
-
-  const publishQueueRef = React.useRef<Promise<unknown>>(Promise.resolve());
 
   const {
     myRankEntity,
@@ -146,11 +198,10 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
   // does not expire ballots at all — an old one is weighted down, never dropped —
   // so "rolled off" now means only "time to rank again", never "your ranking
   // stopped counting".
-  const isSubmissionLive = React.useMemo(() => {
-    if (!isRolling || !myRankEntity) return true;
-    if (submissionFrequencyHours == null || submittedAtMs === 0) return true;
-    return Date.now() < submittedAtMs + submissionFrequencyHours * MS_PER_HOUR;
-  }, [isRolling, myRankEntity, submissionFrequencyHours, submittedAtMs]);
+  const isSubmissionLive = React.useMemo(
+    () => isBallotLive(myRankEntity, isRolling, submissionFrequencyHours, Date.now()),
+    [isRolling, myRankEntity, submissionFrequencyHours]
+  );
 
   const hasRolledOff = isRolling && Boolean(myRankEntity) && !isSubmissionLive;
 
@@ -191,10 +242,19 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
   // `submitted_at`, and `shouldMintNewRankEntity` already does.
   const myLastSubmission = apiMySubmission;
 
+  // Counts this hook's publishes that are queued or in flight, so `isSaving`
+  // stays true until the last one finishes.
+  const pendingSavesRef = React.useRef(0);
+
   const saveMySubmission = React.useCallback(
     async (
       slots: RankingSubmissionSlot[],
-      opportunity?: OperationContext
+      opportunity?: OperationContext,
+      options?: {
+        /** The published order the caller built `slots` from. Defaults to the
+         *  ballot this hook last read, which is what the screens edit. */
+        basedOnOrderedIds?: string[];
+      }
     ): Promise<RankingSubmissionPublishResult | null> => {
       const account = readCachedSmartAccount(queryClient, smartAccount);
       if (!account) {
@@ -205,36 +265,111 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
       if (!personalSpaceId) return null;
 
       const filteredSlots = slots.filter(slot => Boolean(slot.id));
-      const votes = filteredSlots.map((slot, index) => ({
-        entityId: slot.id,
-        spaceId: validateSpaceId(slot.spaceId) ? slot.spaceId : spaceId,
-        value: rankingVoteWeightFromIndex(index),
-      }));
+      if (filteredSlots.length === 0) return null;
 
-      if (votes.length === 0) return null;
-
-      const invalidVote = votes.find(vote => !validateEntityId(vote.entityId));
-      if (invalidVote) {
-        console.error('[useRankingSubmissions] Invalid vote entity id:', invalidVote.entityId);
-        reportError(`Failed to publish ranking: invalid entity id "${invalidVote.entityId}"`);
+      const invalidSlot = filteredSlots.find(slot => !validateEntityId(slot.id));
+      if (invalidSlot) {
+        console.error('[useRankingSubmissions] Invalid vote entity id:', invalidSlot.id);
+        reportError(`Failed to publish ranking: invalid entity id "${invalidSlot.id}"`);
         return null;
       }
 
-      if (myRankEntity && !validateEntityId(myRankEntity.id)) {
-        console.error('[useRankingSubmissions] Invalid rank entity id:', myRankEntity.id);
-        reportError(`Failed to publish ranking: invalid rank id "${myRankEntity.id}"`);
+      const maxItems = getRankingBallotMaxItems();
+      if (filteredSlots.length > maxItems) {
+        reportError(rankingBallotTooLargeMessage(filteredSlots.length, maxItems));
         return null;
       }
 
+      const basedOnOrderedIds = options?.basedOnOrderedIds ?? apiRankingEntityIds;
+      const publishKey = rankingPublishKey(personalSpaceId, blockId);
+
+      pendingSavesRef.current += 1;
       setIsSaving(true);
       const operation = observeOperation('ranking', 'ranking', blockId, opportunity, getContext());
-      try {
+
+      // Runs when every earlier publish of this ballot (from any screen on this
+      // page) has finished: one publish at a time, the next waits its turn.
+      const publishInTurn = async (): Promise<RankingSubmissionPublishResult | null> => {
         const rankName = blockName.trim() || 'My ranking';
+
+        // An edit re-sends the whole list and replaces the votes the index holds,
+        // so it must be built on what the index holds now. Wait for our previous
+        // publish to land, then re-read the published ballot.
+        const previous = getOwnRankingPublish(publishKey);
+        const previousIndexed = previous ? await previous.indexed : true;
+
+        let published: MyRankingBallot;
+        try {
+          published = await fetchMyRankingBallot(personalSpaceId, blockId);
+        } catch (error) {
+          operation.failed('unavailable');
+          console.error('[useRankingSubmissions] Re-reading the published ranking failed:', error);
+          const { message, retry } = toUserFacingError(error, 'Failed to publish ranking: ');
+          reportError(message, retry);
+          return null;
+        }
+
+        if (
+          previous &&
+          !previousIndexed &&
+          Date.now() - previous.publishedAtMs < OWN_PUBLISH_BLOCKS_FOR_MS &&
+          !(
+            published.rankEntity &&
+            ID.equals(published.rankEntity.id, previous.rankId) &&
+            sameBallotOrder(published.orderedEntityIds, previous.orderedEntityIds)
+          )
+        ) {
+          // Building on an index that hasn't caught up would drop the previous
+          // placement (or update a rank the index can't see yet).
+          operation.failed('conflict');
+          reportError(RANKING_PREVIOUS_PUBLISH_PENDING_MESSAGE);
+          return null;
+        }
+
+        // Merge onto the published ballot when it moved since the caller read
+        // it: our own earlier placement (silent) or another device (we say so).
+        const ourIds = filteredSlots.map(slot => slot.id);
+        const publishedIds = published.orderedEntityIds;
+        const movedSinceRead = !sameBallotOrder(publishedIds, basedOnOrderedIds);
+        const mergedIds = movedSinceRead
+          ? mergeBallotOrders({ base: basedOnOrderedIds, ours: ourIds, theirs: publishedIds })
+          : ourIds;
+        const changedElsewhere =
+          movedSinceRead && !(previous && sameBallotOrder(publishedIds, previous.orderedEntityIds));
+
+        if (mergedIds.length === 0) {
+          operation.failed('conflict');
+          reportError(RANKING_CHANGED_ELSEWHERE_MESSAGE);
+          return null;
+        }
+        if (mergedIds.length > maxItems) {
+          operation.failed('invalid_input');
+          reportError(rankingBallotTooLargeMessage(mergedIds.length, maxItems));
+          return null;
+        }
+
+        const slotSpaceIds = new Map(filteredSlots.map(slot => [ID.uuidToHex(slot.id), slot.spaceId]));
+        const votes = mergedIds.map((entityId, index) => {
+          const slotSpaceId =
+            slotSpaceIds.get(ID.uuidToHex(entityId)) ?? publishedVoteSpaceId(published, entityId, personalSpaceId);
+          return {
+            entityId,
+            spaceId: slotSpaceId && validateSpaceId(slotSpaceId) ? slotSpaceId : spaceId,
+            value: rankingVoteWeightFromIndex(index),
+          };
+        });
+
+        const rankEntity = published.rankEntity;
+        if (rankEntity && !validateEntityId(rankEntity.id)) {
+          console.error('[useRankingSubmissions] Invalid rank entity id:', rankEntity.id);
+          reportError(`Failed to publish ranking: invalid rank id "${rankEntity.id}"`);
+          return null;
+        }
 
         const reuseExistingRank = !shouldMintNewRankEntity({
           isRolling,
-          hasExistingBallot: Boolean(myRankEntity),
-          isSubmissionLive,
+          hasExistingBallot: Boolean(rankEntity),
+          isSubmissionLive: isBallotLive(rankEntity, isRolling, submissionFrequencyHours, Date.now()),
         });
 
         let ops;
@@ -242,7 +377,7 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
         try {
           const result = reuseExistingRank
             ? await geo.ranks.update({
-                rankId: myRankEntity!.id,
+                rankId: rankEntity!.id,
                 rankType: 'WEIGHTED',
                 votes,
               })
@@ -294,12 +429,7 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
           return txHash;
         });
 
-        const previousPublish = publishQueueRef.current;
-        const thisPublish = previousPublish
-          .catch(() => undefined)
-          .then(() => Effect.runPromise(Effect.either(publish)));
-        publishQueueRef.current = thisPublish.catch(() => undefined);
-        const result = await thisPublish;
+        const result = await Effect.runPromise(Effect.either(publish));
 
         if (Either.isLeft(result)) {
           const err = result.left;
@@ -313,67 +443,75 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
           return null;
         }
 
+        const publishedEntityIds = votes.map(vote => vote.entityId);
         const outcomeProperties = {
           ranking_id: blockId,
           rank_id: rankId,
-          mutation_kind: reuseExistingRank ? 'revision' : myRankEntity ? 'new_period' : 'first_submission',
+          mutation_kind: reuseExistingRank ? 'revision' : rankEntity ? 'new_period' : 'first_submission',
           user_operation_hash: result.right,
           item_count: votes.length,
         };
         operation.outcome('ranking_submitted', 'submitted', outcomeProperties);
         clearLocalMyRankingDraft(spaceId, blockId);
-        setToast(React.createElement('span', null, 'Ranking published!'));
+        setToast(
+          React.createElement(
+            'span',
+            null,
+            changedElsewhere ? `Ranking published. ${RANKING_CHANGED_ELSEWHERE_MESSAGE}` : 'Ranking published!'
+          )
+        );
 
         // The published ballot is fully known client-side, so surface it now:
         // pin it for useMyRanking and nudge the query. The Share button and My
         // ranking views flip immediately instead of waiting out the indexer.
-        recordPublishedRank(
-          personalSpaceId,
-          blockId,
-          rankId,
-          votes.map(vote => vote.entityId)
-        );
+        recordPublishedRank(personalSpaceId, blockId, rankId, publishedEntityIds);
         void refetchMyRanking().catch(e => {
           console.error('[useRankingSubmissions] Refetch after pinning published rank failed:', e);
         });
 
-        // Everything past this point is index convergence: the published ballot
-        // is already live in the UI via the pin, so the caller (and its
-        // post-publish redirect) must not wait on it. `indexingSettled` polls
-        // until the indexer reflects the exact order we just submitted (bounded
-        // by a time budget) — the earliest point OG images can be generated from
-        // indexed data — then refetches so the pinned query converges onto
-        // indexed truth. It never rejects.
-        const indexingSettled = (async () => {
-          const INITIAL_DELAY_MS = 500;
-          const POLL_INTERVAL_MS = 750;
-          const MAX_POLL_DURATION_MS = 60_000;
-
-          const expectedOrderKey = votes.map(vote => ID.uuidToHex(vote.entityId)).join('|');
-          const matchesExpectedOrder = (ids: string[]) =>
-            ids.map(id => ID.uuidToHex(id)).join('|') === expectedOrderKey;
-
+        // Polls the same read the next publish starts from until it returns
+        // exactly this ballot (bounded by a time budget). The next publish of
+        // this ballot waits on it; OG images, which render from indexed data,
+        // chain on `indexingSettled`. Never rejects.
+        const indexed = (async () => {
+          const { initialDelayMs, pollIntervalMs, maxPollMs } = rankingPublishTiming;
           const pollStartedAt = Date.now();
-          await new Promise(resolve => setTimeout(resolve, INITIAL_DELAY_MS));
-          while (Date.now() - pollStartedAt < MAX_POLL_DURATION_MS) {
+          await new Promise(resolve => setTimeout(resolve, initialDelayMs));
+          while (Date.now() - pollStartedAt < maxPollMs) {
             try {
-              const rankEntity = await Effect.runPromise(getEntity(rankId, personalSpaceId));
-              if (rankEntity && matchesExpectedOrder(getMyRankingOrderedEntityIds(rankEntity, personalSpaceId))) {
-                operation.outcome('ranking_submitted', 'indexed', outcomeProperties);
-                break;
+              const readBack = await fetchMyRankingBallot(personalSpaceId, blockId);
+              if (
+                readBack.rankEntity &&
+                ID.equals(readBack.rankEntity.id, rankId) &&
+                sameBallotOrder(readBack.orderedEntityIds, publishedEntityIds)
+              ) {
+                return true;
               }
             } catch (e) {
               console.error('[useRankingSubmissions] Poll for indexed ranking order failed:', e);
             }
-            await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
+            await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
           }
+          return false;
+        })();
+        recordOwnRankingPublish(publishKey, {
+          rankId,
+          orderedEntityIds: publishedEntityIds,
+          publishedAtMs: Date.now(),
+          indexed,
+        });
 
+        const indexingSettled = indexed.then(async isIndexed => {
+          if (isIndexed) {
+            operation.outcome('ranking_submitted', 'indexed', outcomeProperties);
+            releasePublishedRankPin(personalSpaceId, blockId, rankId, publishedEntityIds);
+          }
           try {
             await refetchMyRanking();
           } catch (e) {
             console.error('[useRankingSubmissions] Refetch after publish failed:', e);
           }
-        })();
+        });
 
         const authorAvatarUrl =
           profile?.avatarUrl && profile.avatarUrl !== PLACEHOLDER_SPACE_IMAGE ? profile.avatarUrl : null;
@@ -381,22 +519,32 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
         return {
           rankEntityId: rankId,
           authorSpaceId: personalSpaceId,
-          orderedEntityIds: votes.map(vote => vote.entityId),
+          orderedEntityIds: publishedEntityIds,
           authorName: profile?.name ?? null,
           authorAvatarUrl,
           indexingSettled,
         };
+      };
+
+      try {
+        return await enqueueRankingPublish(publishKey, publishInTurn);
+      } catch (error) {
+        operation.failed(classifyOperationFailure(error));
+        console.error('[useRankingSubmissions] Publish failed:', error);
+        const { message, retry } = toUserFacingError(error, 'Failed to publish ranking: ');
+        reportError(message, retry);
+        return null;
       } finally {
-        setIsSaving(false);
+        pendingSavesRef.current -= 1;
+        if (pendingSavesRef.current === 0) setIsSaving(false);
       }
     },
     [
+      apiRankingEntityIds,
       getContext,
       blockId,
       blockName,
       isRolling,
-      isSubmissionLive,
-      myRankEntity,
       queryClient,
       profile?.avatarUrl,
       profile?.name,
@@ -405,6 +553,7 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
       setToast,
       smartAccount,
       spaceId,
+      submissionFrequencyHours,
     ]
   );
 
