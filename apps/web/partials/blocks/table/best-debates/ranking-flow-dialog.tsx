@@ -72,14 +72,17 @@ export function RankingFlowDialog({
             }}
             tabIndex={-1}
             className={cx(
-              'mt-16 flex w-full flex-col gap-4 rounded-xl bg-white p-6 shadow-dropdown focus:outline-hidden md:mt-0 md:p-4',
+              // Never taller than what's visible (an iPhone SE cut Placed's title off, 12 Nov): the
+              // header and footer stay put and the middle scrolls. `vh` first, `dvh`/`svh` where the
+              // browser has them, so the toolbar of a mobile browser can't push the top off screen.
+              'mt-16 flex max-h-[calc(100vh-5rem)] w-full flex-col gap-4 rounded-xl bg-white p-6 shadow-dropdown focus:outline-hidden supports-[height:100dvh]:max-h-[calc(100dvh-5rem)] md:mt-0 md:p-4',
               phoneSheet
-                ? 'md:rounded-t-2xl md:rounded-b-none md:pb-[max(16px,env(safe-area-inset-bottom))]'
-                : 'md:min-h-full md:rounded-none',
+                ? 'md:rounded-t-2xl md:max-h-[calc(100vh-12px)] md:rounded-b-none md:pb-[max(16px,env(safe-area-inset-bottom))] supports-[height:100svh]:md:max-h-[calc(100svh-env(safe-area-inset-top)-12px)]'
+                : 'md:h-screen md:max-h-none md:rounded-none supports-[height:100dvh]:md:h-[100dvh] supports-[height:100dvh]:md:max-h-none',
               wide ? 'max-w-[1350px]' : size === 'narrow' ? 'max-w-[560px]' : 'max-w-[880px]'
             )}
           >
-            <div className="flex items-start justify-between gap-4">
+            <div className="flex shrink-0 items-start justify-between gap-4">
               <div className="min-w-0">
                 <Dialog.Title className="m-0 text-[24px] leading-[29px] font-semibold tracking-[-0.3px] text-text md:text-[19px] md:leading-[23px]">
                   {title}
@@ -92,8 +95,14 @@ export function RankingFlowDialog({
                 <SquareButton icon={<Close />} aria-label="Close" />
               </Dialog.Close>
             </div>
-            {children}
-            {footer ? <div className="flex justify-end gap-2 md:flex-col-reverse">{footer}</div> : null}
+            {/* The only part that scrolls. */}
+            <div
+              className="-mx-6 flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain px-6 md:-mx-4 md:px-4"
+              data-testid="ranking-flow-dialog-body"
+            >
+              {children}
+            </div>
+            {footer ? <div className="flex shrink-0 justify-end gap-2 md:flex-col-reverse">{footer}</div> : null}
           </Dialog.Content>
         </Dialog.Overlay>
       </Dialog.Portal>

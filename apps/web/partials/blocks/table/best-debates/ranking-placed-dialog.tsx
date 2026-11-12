@@ -40,6 +40,24 @@ type Props = {
 
 /** How many debates either side of the placed one the confirmation shows. */
 const NEIGHBOURS = 2;
+/** On a short screen (an iPhone SE is 667px): one either side, so the sheet fits without scrolling. */
+const SHORT_SCREEN_NEIGHBOURS = 1;
+const SHORT_SCREEN_QUERY = '(max-height: 720px)';
+
+function useNeighbourCount(): number {
+  const [short, setShort] = React.useState(
+    () => typeof window !== 'undefined' && Boolean(window.matchMedia?.(SHORT_SCREEN_QUERY).matches)
+  );
+  React.useEffect(() => {
+    const query = window.matchMedia?.(SHORT_SCREEN_QUERY);
+    if (!query) return;
+    const update = () => setShort(query.matches);
+    update();
+    query.addEventListener?.('change', update);
+    return () => query.removeEventListener?.('change', update);
+  }, []);
+  return short ? SHORT_SCREEN_NEIGHBOURS : NEIGHBOURS;
+}
 
 /**
  * "Placed #21 of 26" (GEO-3678): where the debate landed, with its neighbours and a nudge either
@@ -60,9 +78,10 @@ export function RankingPlacedDialog({
   onClose,
   next,
 }: Props) {
+  const neighbours = useNeighbourCount();
   const at = indexOfEntity(orderedIds, entityId);
-  const from = Math.max(0, at - NEIGHBOURS);
-  const to = Math.min(orderedIds.length, at + NEIGHBOURS + 1);
+  const from = Math.max(0, at - neighbours);
+  const to = Math.min(orderedIds.length, at + neighbours + 1);
 
   return (
     <RankingFlowDialog
@@ -146,8 +165,14 @@ function PlacedRow({
   onNudge: (direction: -1 | 1) => void;
 }) {
   const display = useBestDebateRowData(entityId);
+  const ref = React.useRef<HTMLLIElement | null>(null);
+  // If the list still scrolls, the placed row is the one in view (and stays so through nudges).
+  React.useEffect(() => {
+    if (isPlaced) ref.current?.scrollIntoView?.({ block: 'nearest' });
+  }, [isPlaced, place]);
   return (
     <li
+      ref={ref}
       aria-current={isPlaced ? 'true' : undefined}
       className={cx('flex items-center gap-4 rounded-lg py-3', isPlaced ? 'bg-purple-tint px-3' : 'px-0.5')}
     >
