@@ -17,16 +17,21 @@ vi.mock('~/core/analytics-operations', () => ({ recordAction: mocks.recordAction
 vi.mock('./ranking-compare-debate-player', () => ({
   RankingCompareDebatePlayer: ({
     label,
+    badge,
     active,
     onActivate,
   }: {
     label: string;
+    badge?: string;
     active: boolean;
     onActivate: () => void;
   }) => (
-    <button type="button" data-testid="player" data-active={String(active)} onClick={onActivate}>
-      play {label}
-    </button>
+    <>
+      <span>{badge}</span>
+      <button type="button" data-testid="player" data-active={String(active)} onClick={onActivate}>
+        play {label}
+      </button>
+    </>
   ),
 }));
 

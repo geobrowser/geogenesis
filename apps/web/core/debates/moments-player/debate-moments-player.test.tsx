@@ -179,7 +179,9 @@ describe('DebateMomentsPlayer', () => {
     expect(videoOf(player).getAttribute('src')).toContain('/media/artifacts/final_video/content');
     expect(screen.queryByRole('button', { name: 'Back to moments' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Next moment' })).not.toBeInTheDocument();
-    expect(screen.getByText('No moments for this debate yet')).toBeInTheDocument();
+    // No moments: it just plays the full debate, with no note about it and no moment bars.
+    expect(screen.queryByText(/No moments/)).not.toBeInTheDocument();
+    expect(screen.queryByTestId('moment-segments')).not.toBeInTheDocument();
     // Read unsigned: the reel is public.
     expect(mocks.getDebateExtractedClaims).toHaveBeenCalledWith(DEBATE, undefined, null, expect.anything());
   });

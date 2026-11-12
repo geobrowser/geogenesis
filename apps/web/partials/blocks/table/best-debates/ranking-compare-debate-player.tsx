@@ -23,6 +23,8 @@ type Props = {
   active: boolean;
   /** The viewer reached for this side, by tapping it or pressing its Play. */
   onActivate: () => void;
+  /** The side's label on the picture ("#2 in your ranking"). */
+  badge?: string;
 };
 
 /**
@@ -30,7 +32,7 @@ type Props = {
  * It opens on the debate's moments, and on the full debate when the debate has none (or its reel
  * can't be read), so a debate without moments still plays.
  */
-export function RankingCompareDebatePlayer({ debateEntityId, label, onActivate }: Props) {
+export function RankingCompareDebatePlayer({ debateEntityId, label, badge, onActivate }: Props) {
   const speakers = useMomentsSpeakers(debateEntityId);
   return (
     // Capture, so the tap that starts this side also makes it the one the dialog marks as playing.
@@ -41,6 +43,7 @@ export function RankingCompareDebatePlayer({ debateEntityId, label, onActivate }
         playbackGroup={RANKING_COMPARE_PLAYBACK_GROUP}
         onPlay={onActivate}
         speakers={speakers}
+        badge={badge}
       />
     </div>
   );

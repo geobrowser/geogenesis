@@ -70,6 +70,8 @@ export type DebateMomentsPlayerProps = {
    * debates app does. Left out, the halves go unlabelled.
    */
   speakers?: { top: MomentsSpeaker | null; bottom: MomentsSpeaker | null } | null;
+  /** A small label on the picture, top-left (the compare view's "#2 in your ranking"). */
+  badge?: string | null;
 };
 
 export function DebateMomentsPlayer({ moments, ...props }: DebateMomentsPlayerProps) {
@@ -99,35 +101,15 @@ function StoryFor(props: StoryProps) {
 }
 
 /**
- * The debates app's card chrome (debates-react-native `MomentCard`, `FullControls`): the moments'
- * bars above the picture on the light card, or, for the full debate, a dark surface with the
- * timeline above it. The picture is a 480 × 578 frame, the shape of a moment clip, with the app's
- * 20px rounding, in both modes, so switching never moves the dialog around it.
+ * The video is the card (Preston, 12 Nov): a 480 × 578 frame, the shape of a moment clip, with
+ * 20px rounding and a soft shadow, the same in both modes so switching never moves anything. Every
+ * control sits on the picture: the moment bars along the top, the full debate's rail along the
+ * bottom, a label pill top-left, the mode switch top-right.
  */
-function PlayerFrame({
-  label,
-  className,
-  mode = 'moments',
-  header,
-  children,
-}: {
-  label: string;
-  className?: string;
-  mode?: PlayerMode;
-  header?: React.ReactNode;
-  children: React.ReactNode;
-}) {
+function PlayerFrame({ label, className, children }: { label: string; className?: string; children: React.ReactNode }) {
   return (
-    <section
-      aria-label={label}
-      className={cx(
-        '@container flex w-full flex-col gap-2 select-none',
-        mode === 'full' ? 'rounded-[24px] bg-[#151515] p-2 text-white' : 'py-0',
-        className
-      )}
-    >
-      {header ? <div className={mode === 'moments' ? 'py-2' : 'pt-1'}>{header}</div> : null}
-      <div className="relative isolate aspect-[480/578] w-full overflow-hidden rounded-[20px] bg-[#151515] text-white">
+    <section aria-label={label} className={cx('@container w-full select-none', className)}>
+      <div className="relative isolate aspect-[480/578] w-full overflow-hidden rounded-[20px] bg-[#151515] text-white shadow-[0_8px_28px_rgba(0,0,0,0.18)]">
         {children}
       </div>
     </section>
@@ -145,6 +127,7 @@ function MomentsStory({
   onModeChange,
   onPlay,
   speakers,
+  badge,
 }: StoryProps) {
   const [story, dispatch] = React.useReducer(storyReducer, moments.length, initialStoryState);
   const videoRef = React.useRef<HTMLVideoElement | null>(null);
@@ -338,47 +321,7 @@ function MomentsStory({
   const speakingSlot = story.mode === 'moments' ? (moment?.participantSlot ?? null) : null;
 
   return (
-    <PlayerFrame
-      label={label}
-      className={className}
-      mode={story.mode}
-      header={
-        story.mode === 'moments' ? (
-          <div className="mx-auto flex w-[90%] gap-2" data-testid="moment-segments">
-            {moments.map((m, i) => (
-              <span key={m.id} className="h-1 flex-1 overflow-hidden rounded-full bg-[#ebebeb]">
-                <span
-                  data-testid={`moment-segment-${i}`}
-                  className="block h-full rounded-full bg-[#151515]"
-                  style={{ width: `${segmentFill(i, story.index, clipMs, clipLengthMs) * 100}%` }}
-                />
-              </span>
-            ))}
-          </div>
-        ) : (
-          <div className="flex flex-col gap-1 px-1">
-            <div className="flex items-center gap-2">
-              <FullTimeline elapsedMs={fullMs} durationMs={fullDurationMs} moments={moments} onSeek={seekFull} />
-              {story.count > 0 && (
-                <button
-                  ref={collapseRef}
-                  type="button"
-                  aria-label="Back to moments"
-                  title="Moments"
-                  onClick={collapse}
-                  className="grid size-9 shrink-0 place-items-center rounded-full bg-white/[0.08] text-white transition-colors hover:bg-white/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
-                >
-                  <CloseSmall />
-                </button>
-              )}
-            </div>
-            {story.count === 0 ? (
-              <p className="m-0 text-[clamp(10px,3.6cqw,12px)] text-white/70">No moments for this debate yet</p>
-            ) : null}
-          </div>
-        )
-      }
-    >
+    <PlayerFrame label={label} className={className}>
       <video
         ref={videoRef}
         src={src}
@@ -458,6 +401,28 @@ function MomentsStory({
         </>
       )}
 
+      {/* Along the top: the moment bars (moments only), then the label pill. */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex flex-col gap-2 bg-gradient-to-b from-black/35 to-transparent px-3 pt-2.5 pb-6">
+        {story.mode === 'moments' && story.count > 0 ? (
+          <div className="flex gap-1" data-testid="moment-segments">
+            {moments.map((m, i) => (
+              <span key={m.id} className="h-[3px] flex-1 overflow-hidden rounded-full bg-white/35">
+                <span
+                  data-testid={`moment-segment-${i}`}
+                  className="block h-full rounded-full bg-white"
+                  style={{ width: `${segmentFill(i, story.index, clipMs, clipLengthMs) * 100}%` }}
+                />
+              </span>
+            ))}
+          </div>
+        ) : null}
+        {badge ? (
+          <span className="self-start rounded-full bg-black/55 px-2 py-[3px] text-[clamp(10px,3.6cqw,12px)] leading-[1.3] font-semibold text-white backdrop-blur-md">
+            {badge}
+          </span>
+        ) : null}
+      </div>
+
       {/* Tap zones. The middle plays and pauses; in the moments the edges step. */}
       {story.mode === 'moments' && (
         <>
@@ -498,7 +463,7 @@ function MomentsStory({
         <span
           aria-hidden="true"
           data-testid="play-indicator"
-          className="pointer-events-none absolute top-1/2 left-1/2 z-20 grid size-[clamp(40px,18cqw,56px)] -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-black/40 text-white"
+          className="pointer-events-none absolute top-1/2 left-1/2 z-20 grid size-[clamp(32px,13cqw,44px)] -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-black/45 text-white backdrop-blur-sm"
         >
           <svg viewBox="0 0 24 24" className="size-[45%]" aria-hidden>
             <path fill="currentColor" d="M7 4L21 12L7 20Z" />
@@ -513,7 +478,7 @@ function MomentsStory({
           aria-label="Watch the full debate"
           title="Full debate"
           onClick={expand}
-          className="absolute top-3 right-3 z-20 grid size-[clamp(32px,12cqw,44px)] place-items-center rounded-full bg-[#161616]/30 text-white backdrop-blur-md transition-colors hover:bg-[#161616]/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
+          className="absolute top-6 right-3 z-30 grid size-[clamp(28px,10cqw,36px)] place-items-center rounded-full bg-[#161616]/40 text-white backdrop-blur-md transition-colors hover:bg-[#161616]/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
         >
           <svg viewBox="0 0 22 22" className="size-[55%]" aria-hidden>
             <path
@@ -523,6 +488,25 @@ function MomentsStory({
             />
           </svg>
         </button>
+      )}
+
+      {story.mode === 'full' && story.count > 0 && (
+        <button
+          ref={collapseRef}
+          type="button"
+          aria-label="Back to moments"
+          title="Moments"
+          onClick={collapse}
+          className="absolute top-3 right-3 z-30 grid size-[clamp(28px,10cqw,36px)] place-items-center rounded-full bg-[#161616]/40 text-white backdrop-blur-md transition-colors hover:bg-[#161616]/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
+        >
+          <CloseSmall />
+        </button>
+      )}
+      {story.mode === 'full' && (
+        // The full debate's rail, thin along the bottom of the picture, as the debates app draws it.
+        <div className="absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-black/50 to-transparent px-3 pt-6 pb-2">
+          <FullTimeline elapsedMs={fullMs} durationMs={fullDurationMs} moments={moments} onSeek={seekFull} />
+        </div>
       )}
 
       {story.mode === 'moments' && caption && (
