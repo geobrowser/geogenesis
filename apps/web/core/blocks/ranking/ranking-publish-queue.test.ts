@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import {
   RANKING_BALLOT_MAX_ITEMS_DEFAULT,
+  classifyReadBack,
   enqueueRankingPublish,
   mergeBallotOrders,
   parseRankingBallotMaxItems,
@@ -18,42 +19,103 @@ const E = 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
 
 afterEach(() => resetRankingPublishStateForTests());
 
+const merge = (args: { base: string[]; ours: string[]; theirs: string[] }) => mergeBallotOrders(args).ids;
+
 describe('mergeBallotOrders', () => {
   it('returns ours when nothing moved underneath', () => {
-    expect(mergeBallotOrders({ base: [A, B], ours: [B, A, C], theirs: [A, B] })).toEqual([B, A, C]);
+    expect(merge({ base: [A, B], ours: [B, A, C], theirs: [A, B] })).toEqual([B, A, C]);
   });
 
   it('keeps a placement the edit was built without (back to back on one device)', () => {
     // Placement 1 published [A]; placement 2 was built from the empty list.
-    expect(mergeBallotOrders({ base: [], ours: [B], theirs: [A] })).toEqual([B, A]);
+    expect(merge({ base: [], ours: [B], theirs: [A] })).toEqual([A, B]);
   });
 
-  it('keeps five placements each built from the same stale list', () => {
+  it('keeps five placements each built from the same stale list, in the order they were made', () => {
     let published: string[] = [];
     for (const id of [A, B, C, D, E]) {
-      published = mergeBallotOrders({ base: [], ours: [id], theirs: published });
+      published = merge({ base: [], ours: [id], theirs: published });
     }
-    expect([...published].sort()).toEqual([A, B, C, D, E]);
+    expect(published).toEqual([A, B, C, D, E]);
   });
 
-  it('keeps both devices’ additions, placing theirs next to its neighbour', () => {
-    expect(mergeBallotOrders({ base: [A, B], ours: [A, B, C], theirs: [A, D, B] })).toEqual([A, D, B, C]);
+  it('keeps the other device’s reorder when this edit only removed an item', () => {
+    // Phone reordered [A, B, C] to [C, B, A]; the laptop, still on [A, B, C], removed B.
+    expect(mergeBallotOrders({ base: [A, B, C], ours: [A, C], theirs: [C, B, A] })).toEqual({
+      ids: [C, A],
+      overrodeTheirOrder: false,
+    });
+  });
+
+  it('keeps the other device’s reorder when this edit only added, placing the addition by its neighbour', () => {
+    // Laptop inserted D after A in [A, B, C]; the phone had reordered to [C, A, B].
+    expect(merge({ base: [A, B, C], ours: [A, D, B, C], theirs: [C, A, B] })).toEqual([C, A, D, B]);
+  });
+
+  it('lets our order win when only this edit reordered', () => {
+    expect(mergeBallotOrders({ base: [A, B, C], ours: [C, B, A], theirs: [A, B, C, D] })).toEqual({
+      // D was added after C, and stays after C.
+      ids: [C, D, B, A],
+      overrodeTheirOrder: false,
+    });
+  });
+
+  it('says so when both edits reordered and ours won', () => {
+    expect(mergeBallotOrders({ base: [A, B, C], ours: [C, B, A], theirs: [B, A, C] })).toEqual({
+      ids: [C, B, A],
+      overrodeTheirOrder: true,
+    });
+  });
+
+  it('keeps additions both sides made after the same item in the order they landed', () => {
+    expect(merge({ base: [A], ours: [A, C], theirs: [A, B] })).toEqual([A, B, C]);
+  });
+
+  it('keeps both devices’ additions', () => {
+    expect(merge({ base: [A, B], ours: [A, B, C], theirs: [A, D, B] })).toEqual([A, D, B, C]);
   });
 
   it('honours a removal on either side', () => {
     // We removed B; they removed A and added D.
-    expect(mergeBallotOrders({ base: [A, B, C], ours: [A, C], theirs: [B, C, D] })).toEqual([C, D]);
+    expect(merge({ base: [A, B, C], ours: [A, C], theirs: [B, C, D] })).toEqual([C, D]);
+  });
+
+  it('can leave nothing when each side removed what the other kept', () => {
+    expect(merge({ base: [A, B], ours: [A], theirs: [B] })).toEqual([]);
   });
 
   it('does not duplicate an item both sides added', () => {
-    expect(mergeBallotOrders({ base: [A], ours: [A, C], theirs: [C, A] })).toEqual([A, C]);
+    expect(merge({ base: [A], ours: [A, C], theirs: [C, A] })).toEqual([C, A]);
   });
 
   it('compares ids in any spelling', () => {
     const dashed = 'AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA';
-    expect(mergeBallotOrders({ base: [dashed], ours: [A, B], theirs: [A] })).toEqual([A, B]);
+    expect(merge({ base: [dashed], ours: [A, B], theirs: [A] })).toEqual([A, B]);
     expect(sameBallotOrder([dashed, B], [A, B])).toBe(true);
     expect(sameBallotOrder([B, A], [A, B])).toBe(false);
+  });
+});
+
+describe('classifyReadBack', () => {
+  const own = { rankId: E, orderedEntityIds: [A, B], baseline: { rankId: E, orderedEntityIds: [A] } };
+
+  it('is ours once the index holds our ballot', () => {
+    expect(classifyReadBack({ rankId: E, orderedEntityIds: [A, B] }, own)).toBe('ours');
+  });
+
+  it('is pending while the index still holds the ballot we replaced', () => {
+    expect(classifyReadBack({ rankId: E, orderedEntityIds: [A] }, own)).toBe('pending');
+  });
+
+  it('is superseded once the index holds anything else', () => {
+    expect(classifyReadBack({ rankId: E, orderedEntityIds: [A, C] }, own)).toBe('superseded');
+    expect(classifyReadBack({ rankId: D, orderedEntityIds: [A] }, own)).toBe('superseded');
+  });
+
+  it('treats a first ballot as pending until it surfaces', () => {
+    const first = { rankId: E, orderedEntityIds: [A], baseline: { rankId: null, orderedEntityIds: [] } };
+    expect(classifyReadBack({ rankId: null, orderedEntityIds: [] }, first)).toBe('pending');
+    expect(classifyReadBack({ rankId: E, orderedEntityIds: [A] }, first)).toBe('ours');
   });
 });
 

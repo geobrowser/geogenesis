@@ -43,6 +43,12 @@ export function rankingBallotTooLargeMessage(count: number, max: number): string
 export const RANKING_CHANGED_ELSEWHERE_MESSAGE =
   'Your ranking changed on another device. We kept the changes from both.';
 
+export const RANKING_CHANGED_ELSEWHERE_ORDER_MESSAGE =
+  "Your ranking changed on another device. We kept what both added and removed, in this device's order.";
+
+export const RANKING_NOTHING_LEFT_TO_PUBLISH_MESSAGE =
+  "Your ranking changed on another device, so this change wasn't published. Check your ranking and try again.";
+
 export const RANKING_PREVIOUS_PUBLISH_PENDING_MESSAGE =
   'Your last ranking change is still saving. Try again in a moment.';
 
@@ -52,19 +58,30 @@ export function sameBallotOrder(a: readonly string[], b: readonly string[]): boo
   return a.length === b.length && a.every((id, index) => norm(id) === norm(b[index]));
 }
 
+export type BallotMergeResult = {
+  ids: string[];
+  /** Both sides reordered shared items; this device's order was kept. */
+  overrodeTheirOrder: boolean;
+};
+
 /**
  * Three-way merge of ordered ballots.
  *
- * - `base`: the published list the edit was made from.
+ * - `base`: the published list this device's edit was made from.
  * - `ours`: the list this edit wants to publish.
  * - `theirs`: the list published now (another device's edit, or our own
  *   earlier placement the edit was built without).
  *
- * Nothing either side added is lost, and nothing either side removed comes
- * back: an item is kept unless one side removed it from `base`. Our order wins
- * for the items we hold; an item only `theirs` added goes right after its
- * nearest predecessor in `theirs` that survived (else before its nearest
- * survivor that follows, else at the end).
+ * Membership: base, plus what either side added, minus what either side
+ * removed. Nothing either side added is lost and nothing either side removed
+ * comes back.
+ *
+ * Order: an edit that didn't change the relative order of the base items it
+ * kept (an add or a removal) leaves the published order alone, and its own
+ * additions go next to their neighbours from `ours`. Only when this edit did
+ * reorder does its order win; the other side's additions then go next to their
+ * neighbours from `theirs`. When both sides reordered, `overrodeTheirOrder`
+ * says so, so the ranker can be told.
  */
 export function mergeBallotOrders({
   base,
@@ -74,33 +91,102 @@ export function mergeBallotOrders({
   base: readonly string[];
   ours: readonly string[];
   theirs: readonly string[];
-}): string[] {
+}): BallotMergeResult {
   const baseSet = new Set(base.map(norm));
-  const theirSet = new Set(theirs.map(norm));
   const ourSet = new Set(ours.map(norm));
+  const theirSet = new Set(theirs.map(norm));
 
-  const result = ours.filter(id => !(baseSet.has(norm(id)) && !theirSet.has(norm(id))));
-
-  for (let index = 0; index < theirs.length; index++) {
-    const id = theirs[index];
+  const keep = (id: string) => {
     const key = norm(id);
-    if (baseSet.has(key) || ourSet.has(key)) continue;
+    return baseSet.has(key) ? ourSet.has(key) && theirSet.has(key) : ourSet.has(key) || theirSet.has(key);
+  };
+  const reordered = (list: readonly string[], listSet: Set<string>) =>
+    !sameBallotOrder(
+      list.filter(id => baseSet.has(norm(id))),
+      base.filter(id => listSet.has(norm(id)))
+    );
+
+  const weReordered = reordered(ours, ourSet);
+  const theyReordered = reordered(theirs, theirSet);
+  const [primary, secondary] = weReordered ? [ours, theirs] : [theirs, ours];
+  const secondarySet = weReordered ? theirSet : ourSet;
+
+  const result: string[] = [];
+  const inResult = new Set<string>();
+  for (const id of primary) {
+    if (keep(id) && !inResult.has(norm(id))) {
+      result.push(id);
+      inResult.add(norm(id));
+    }
+  }
+
+  for (let index = 0; index < secondary.length; index++) {
+    const id = secondary[index];
+    if (!keep(id) || inResult.has(norm(id))) continue;
 
     const resultKeys = result.map(norm);
     let insertAt = -1;
     for (let back = index - 1; back >= 0 && insertAt === -1; back--) {
-      const at = resultKeys.indexOf(norm(theirs[back]));
-      if (at !== -1) insertAt = at + 1;
+      const at = resultKeys.indexOf(norm(secondary[back]));
+      if (at !== -1) {
+        insertAt = at + 1;
+        // Both sides added right after the same item: the primary side's
+        // additions stay first, so additions read in the order they landed.
+        while (
+          insertAt < resultKeys.length &&
+          !baseSet.has(resultKeys[insertAt]) &&
+          !secondarySet.has(resultKeys[insertAt])
+        ) {
+          insertAt += 1;
+        }
+      }
     }
-    for (let ahead = index + 1; ahead < theirs.length && insertAt === -1; ahead++) {
-      const at = resultKeys.indexOf(norm(theirs[ahead]));
+    for (let ahead = index + 1; ahead < secondary.length && insertAt === -1; ahead++) {
+      const at = resultKeys.indexOf(norm(secondary[ahead]));
       if (at !== -1) insertAt = at;
     }
     if (insertAt === -1) insertAt = result.length;
     result.splice(insertAt, 0, id);
+    inResult.add(norm(id));
   }
 
-  return result;
+  return { ids: result, overrodeTheirOrder: weReordered && theyReordered };
+}
+
+/** The published ballot before a publish of ours, and the ballot it sent. */
+export type OwnPublishShape = {
+  rankId: string;
+  orderedEntityIds: string[];
+  baseline: { rankId: string | null; orderedEntityIds: string[] };
+};
+
+/**
+ * Where a read of the index stands against a publish of ours:
+ * - `ours`: it holds exactly the ballot we sent;
+ * - `pending`: it still holds the ballot from before we sent (the indexer
+ *   hasn't got to our edit yet), so building on it would drop our edit;
+ * - `superseded`: it holds something else, i.e. another device's edit landed
+ *   (before or after ours). Nothing of ours is pending any more: the merge
+ *   takes it from here.
+ *
+ * Decided on ids and order only. The rank's `updatedAt` isn't a safe signal:
+ * it also moves when something merely links to the rank.
+ */
+export function classifyReadBack(
+  readBack: { rankId: string | null; orderedEntityIds: readonly string[] },
+  own: OwnPublishShape
+): 'ours' | 'pending' | 'superseded' {
+  const sameRank = (a: string | null, b: string | null) => (a && b ? norm(a) === norm(b) : a === b);
+  if (sameRank(readBack.rankId, own.rankId) && sameBallotOrder(readBack.orderedEntityIds, own.orderedEntityIds)) {
+    return 'ours';
+  }
+  if (
+    sameRank(readBack.rankId, own.baseline.rankId) &&
+    sameBallotOrder(readBack.orderedEntityIds, own.baseline.orderedEntityIds)
+  ) {
+    return 'pending';
+  }
+  return 'superseded';
 }
 
 export function rankingPublishKey(personalSpaceId: string, blockId: string): string {
@@ -124,20 +210,17 @@ export function enqueueRankingPublish<T>(key: string, task: () => Promise<T>): P
   return next;
 }
 
-export type OwnRankingPublish = {
-  rankId: string;
-  orderedEntityIds: string[];
+export type RankingIndexOutcome = 'ours' | 'superseded' | 'timeout';
+
+export type OwnRankingPublish = OwnPublishShape & {
   publishedAtMs: number;
-  /** Resolves true once the index reads back exactly this ballot, false if the
-   *  poll budget ran out first. Never rejects. */
-  indexed: Promise<boolean>;
+  /** Settles once the index reads back our ballot (`ours`), moves past it to
+   *  another device's (`superseded`), or the poll budget runs out (`timeout`).
+   *  Never rejects. */
+  indexed: Promise<RankingIndexOutcome>;
 };
 
 const ownPublishes = new Map<string, OwnRankingPublish>();
-
-/** How long an unindexed publish of ours keeps blocking the next one. Past
- *  this, an indexer stall shouldn't lock the ranker out for good. */
-export const OWN_PUBLISH_BLOCKS_FOR_MS = 5 * 60 * 1000;
 
 export function recordOwnRankingPublish(key: string, publish: OwnRankingPublish): void {
   ownPublishes.set(key, publish);
@@ -149,8 +232,15 @@ export function getOwnRankingPublish(key: string): OwnRankingPublish | null {
 
 export const rankingPublishTiming = {
   initialDelayMs: 500,
+  /** Polling the rank itself (one paged entity read). */
   pollIntervalMs: 750,
+  /** Polling the block listing for a just-created rank: starts here, backs off. */
+  listingPollIntervalMs: 1_000,
+  listingPollMaxIntervalMs: 5_000,
   maxPollMs: 60_000,
+  /** How long a publish of ours that the index never read back keeps blocking
+   *  the next one. Past this, an indexer stall shouldn't lock the ranker out. */
+  ownPublishBlocksForMs: 5 * 60 * 1000,
 };
 
 export function resetRankingPublishStateForTests(): void {

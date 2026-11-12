@@ -24,11 +24,15 @@ import type { Entity } from '~/core/types';
 import { toUserFacingError } from '~/core/utils/error-diagnostics';
 import { validateEntityId, validateSpaceId } from '~/core/utils/utils';
 
+import { fetchRankBallot } from './fetch-my-ranking-ballot';
 import { clearLocalMyRankingDraft } from './local-ranking-my-draft';
 import {
-  OWN_PUBLISH_BLOCKS_FOR_MS,
   RANKING_CHANGED_ELSEWHERE_MESSAGE,
+  RANKING_CHANGED_ELSEWHERE_ORDER_MESSAGE,
+  RANKING_NOTHING_LEFT_TO_PUBLISH_MESSAGE,
   RANKING_PREVIOUS_PUBLISH_PENDING_MESSAGE,
+  type RankingIndexOutcome,
+  classifyReadBack,
   enqueueRankingPublish,
   getOwnRankingPublish,
   getRankingBallotMaxItems,
@@ -296,7 +300,7 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
         // so it must be built on what the index holds now. Wait for our previous
         // publish to land, then re-read the published ballot.
         const previous = getOwnRankingPublish(publishKey);
-        const previousIndexed = previous ? await previous.indexed : true;
+        const previousOutcome = previous ? await previous.indexed : null;
 
         let published: MyRankingBallot;
         try {
@@ -311,16 +315,17 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
 
         if (
           previous &&
-          !previousIndexed &&
-          Date.now() - previous.publishedAtMs < OWN_PUBLISH_BLOCKS_FOR_MS &&
-          !(
-            published.rankEntity &&
-            ID.equals(published.rankEntity.id, previous.rankId) &&
-            sameBallotOrder(published.orderedEntityIds, previous.orderedEntityIds)
-          )
+          previousOutcome === 'timeout' &&
+          Date.now() - previous.publishedAtMs < rankingPublishTiming.ownPublishBlocksForMs &&
+          classifyReadBack(
+            { rankId: published.rankEntity?.id ?? null, orderedEntityIds: published.orderedEntityIds },
+            previous
+          ) === 'pending'
         ) {
-          // Building on an index that hasn't caught up would drop the previous
-          // placement (or update a rank the index can't see yet).
+          // The index still holds the ballot our previous publish replaced.
+          // Building on it would drop that placement (or update a rank the
+          // index can't see yet). If it has moved on to anything else, ours or
+          // another device's, the merge below handles it.
           operation.failed('conflict');
           reportError(RANKING_PREVIOUS_PUBLISH_PENDING_MESSAGE);
           return null;
@@ -331,15 +336,21 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
         const ourIds = filteredSlots.map(slot => slot.id);
         const publishedIds = published.orderedEntityIds;
         const movedSinceRead = !sameBallotOrder(publishedIds, basedOnOrderedIds);
-        const mergedIds = movedSinceRead
+        const merge = movedSinceRead
           ? mergeBallotOrders({ base: basedOnOrderedIds, ours: ourIds, theirs: publishedIds })
-          : ourIds;
+          : { ids: ourIds, overrodeTheirOrder: false };
+        const mergedIds = merge.ids;
         const changedElsewhere =
           movedSinceRead && !(previous && sameBallotOrder(publishedIds, previous.orderedEntityIds));
 
         if (mergedIds.length === 0) {
+          // Every item this edit kept was removed elsewhere, and vice versa.
+          // Nothing to publish; show the ranker what is published now.
           operation.failed('conflict');
-          reportError(RANKING_CHANGED_ELSEWHERE_MESSAGE);
+          reportError(RANKING_NOTHING_LEFT_TO_PUBLISH_MESSAGE);
+          void refetchMyRanking().catch(e => {
+            console.error('[useRankingSubmissions] Refetch after an empty merge failed:', e);
+          });
           return null;
         }
         if (mergedIds.length > maxItems) {
@@ -458,55 +469,68 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
           React.createElement(
             'span',
             null,
-            changedElsewhere ? `Ranking published. ${RANKING_CHANGED_ELSEWHERE_MESSAGE}` : 'Ranking published!'
+            !changedElsewhere
+              ? 'Ranking published!'
+              : `Ranking published. ${
+                  merge.overrodeTheirOrder ? RANKING_CHANGED_ELSEWHERE_ORDER_MESSAGE : RANKING_CHANGED_ELSEWHERE_MESSAGE
+                }`
           )
         );
 
         // The published ballot is fully known client-side, so surface it now:
         // pin it for useMyRanking and nudge the query. The Share button and My
         // ranking views flip immediately instead of waiting out the indexer.
-        recordPublishedRank(personalSpaceId, blockId, rankId, publishedEntityIds);
+        const baseline = { rankId: rankEntity?.id ?? null, orderedEntityIds: publishedIds };
+        const ownPublish = { rankId, orderedEntityIds: publishedEntityIds, baseline };
+        recordPublishedRank(personalSpaceId, blockId, rankId, publishedEntityIds, baseline);
         void refetchMyRanking().catch(e => {
           console.error('[useRankingSubmissions] Refetch after pinning published rank failed:', e);
         });
 
-        // Polls the same read the next publish starts from until it returns
-        // exactly this ballot (bounded by a time budget). The next publish of
-        // this ballot waits on it; OG images, which render from indexed data,
+        // Polls the index until it settles past this publish: it reads back
+        // exactly this ballot (`ours`) or moves on to another device's
+        // (`superseded`), bounded by a time budget (`timeout`). The next publish
+        // of this ballot waits on it; OG images, which render from indexed data,
         // chain on `indexingSettled`. Never rejects.
-        const indexed = (async () => {
-          const { initialDelayMs, pollIntervalMs, maxPollMs } = rankingPublishTiming;
+        //
+        // An edit to an existing rank polls that rank alone (one paged entity
+        // read). A just-created rank first has to surface in the block listing,
+        // which is heavier, so that poll backs off.
+        const indexed = (async (): Promise<RankingIndexOutcome> => {
+          const timing = rankingPublishTiming;
           const pollStartedAt = Date.now();
-          await new Promise(resolve => setTimeout(resolve, initialDelayMs));
-          while (Date.now() - pollStartedAt < maxPollMs) {
+          let listingInterval = timing.listingPollIntervalMs;
+          await new Promise(resolve => setTimeout(resolve, timing.initialDelayMs));
+          while (Date.now() - pollStartedAt < timing.maxPollMs) {
+            let interval = timing.pollIntervalMs;
             try {
-              const readBack = await fetchMyRankingBallot(personalSpaceId, blockId);
-              if (
-                readBack.rankEntity &&
-                ID.equals(readBack.rankEntity.id, rankId) &&
-                sameBallotOrder(readBack.orderedEntityIds, publishedEntityIds)
-              ) {
-                return true;
+              const readBack = reuseExistingRank
+                ? await fetchRankBallot(rankId, personalSpaceId)
+                : await fetchMyRankingBallot(personalSpaceId, blockId);
+              const standing = classifyReadBack(
+                {
+                  rankId: readBack?.rankEntity?.id ?? baseline.rankId,
+                  orderedEntityIds: readBack?.orderedEntityIds ?? baseline.orderedEntityIds,
+                },
+                ownPublish
+              );
+              if (standing !== 'pending') return standing;
+              if (!reuseExistingRank) {
+                interval = listingInterval;
+                listingInterval = Math.min(listingInterval * 1.5, timing.listingPollMaxIntervalMs);
               }
             } catch (e) {
               console.error('[useRankingSubmissions] Poll for indexed ranking order failed:', e);
             }
-            await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
+            await new Promise(resolve => setTimeout(resolve, interval));
           }
-          return false;
+          return 'timeout';
         })();
-        recordOwnRankingPublish(publishKey, {
-          rankId,
-          orderedEntityIds: publishedEntityIds,
-          publishedAtMs: Date.now(),
-          indexed,
-        });
+        recordOwnRankingPublish(publishKey, { ...ownPublish, publishedAtMs: Date.now(), indexed });
 
-        const indexingSettled = indexed.then(async isIndexed => {
-          if (isIndexed) {
-            operation.outcome('ranking_submitted', 'indexed', outcomeProperties);
-            releasePublishedRankPin(personalSpaceId, blockId, rankId, publishedEntityIds);
-          }
+        const indexingSettled = indexed.then(async outcome => {
+          if (outcome === 'ours') operation.outcome('ranking_submitted', 'indexed', outcomeProperties);
+          if (outcome !== 'timeout') releasePublishedRankPin(personalSpaceId, blockId, rankId);
           try {
             await refetchMyRanking();
           } catch (e) {
