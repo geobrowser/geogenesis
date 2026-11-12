@@ -21,10 +21,18 @@ const entity = (extra: { types?: { id: string }[]; values?: unknown[] } = {}) =>
   values: extra.values ?? [],
 });
 type Fetch = NonNullable<Parameters<typeof debatesAppRedirect>[3]>['fetchEntity'];
+let clock = 0;
 const go = (fetchEntity: (...args: never[]) => Promise<unknown>, query = '', id = DEBATE_ID, timeoutMs?: number) =>
-  debatesAppRedirect(SPACE_ID, id, new URLSearchParams(query), { fetchEntity: fetchEntity as Fetch, timeoutMs });
+  debatesAppRedirect(SPACE_ID, id, new URLSearchParams(query), {
+    fetchEntity: fetchEntity as Fetch,
+    timeoutMs,
+    now: () => clock,
+  });
 
-afterEach(() => forgetDebateLookups());
+afterEach(() => {
+  forgetDebateLookups();
+  clock = 0;
+});
 
 describe('debatesAppRedirect', () => {
   it('sends a visible debate to the debates app, carrying the query over', async () => {
@@ -54,6 +62,40 @@ describe('debatesAppRedirect', () => {
     forgetDebateLookups();
     const hidden = entity({ values: [{ property: { id: HIDDEN_PROPERTY_ID }, value: 'true' }] });
     await expect(go(vi.fn().mockResolvedValue(hidden))).resolves.toBeNull();
+  });
+
+  // Review of #3110: Google sign-in returns to the page it started from, cross-site, with a code
+  // that belongs to geobrowser.io.
+  it('keeps a sign-in returning to the page, without asking the graph', async () => {
+    const fetchEntity = vi.fn().mockResolvedValue(entity());
+    await expect(go(fetchEntity, 'privy_oauth_code=abc&privy_oauth_state=x')).resolves.toBeNull();
+    expect(fetchEntity).not.toHaveBeenCalled();
+  });
+
+  it('forgets an answer after a few minutes, so a debate hidden since stops redirecting', async () => {
+    const fetchEntity = vi
+      .fn()
+      .mockResolvedValueOnce(entity())
+      .mockResolvedValueOnce(entity({ values: [{ property: { id: HIDDEN_PROPERTY_ID }, value: 'true' }] }));
+    await expect(go(fetchEntity)).resolves.not.toBeNull();
+    clock = 4 * 60_000;
+    await expect(go(fetchEntity)).resolves.not.toBeNull();
+    clock = 6 * 60_000;
+    await expect(go(fetchEntity)).resolves.toBeNull();
+    expect(fetchEntity).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not remember a debate that is not on the graph yet', async () => {
+    const fetchEntity = vi.fn().mockResolvedValueOnce(null).mockResolvedValueOnce(entity());
+    await expect(go(fetchEntity)).resolves.toBeNull();
+    await expect(go(fetchEntity)).resolves.not.toBeNull();
+  });
+
+  it('remembers one answer whichever form the id takes', async () => {
+    const fetchEntity = vi.fn().mockResolvedValue(entity());
+    await go(fetchEntity, '', '01a1d0d9-4430-7570-8464-dc8bf6c812bd');
+    await go(fetchEntity, '', DEBATE_ID);
+    expect(fetchEntity).toHaveBeenCalledTimes(1);
   });
 
   it('remembers an answer, but not a failed lookup', async () => {

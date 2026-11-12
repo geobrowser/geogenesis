@@ -10,7 +10,8 @@ import { createShareLink } from '~/core/sharing/share-link';
 import proxy, { config } from './proxy';
 
 vi.mock('~/core/debates/server/published-debate-path', () => ({ publishedDebatePath: vi.fn() }));
-vi.mock('~/core/debates/server/debates-app-redirect', () => ({
+vi.mock('~/core/debates/server/debates-app-redirect', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/debates/server/debates-app-redirect')>()),
   debatesAppRedirect: vi.fn(),
   debatesAppRedirectEnabled: vi.fn(() => true),
 }));
@@ -128,7 +129,9 @@ describe('debate recording links', () => {
   it('redirects to the debate page with a 307 once the debate is published', async () => {
     lookup.mockResolvedValue(`/space/${VALID_SPACE}/${VALID_ENTITY}?t=42`);
 
-    const response = await proxy(request(`${RECORDING}?t=42`, { headers: NAVIGATION }));
+    const response = await proxy(
+      request(`${RECORDING}?t=42`, { headers: { ...NAVIGATION, 'sec-fetch-site': 'same-origin' } })
+    );
 
     expect(response.status).toBe(307);
     expect(response.headers.get('location')).toBe(
@@ -280,6 +283,23 @@ describe('old debate URLs open the debates app (GEO-3695)', () => {
     expect((await proxy(request(PAGE, { headers: FROM_OUTSIDE }))).headers.get('location')).toBeNull();
     redirect.mockRejectedValueOnce(new Error('graph down'));
     expect((await proxy(request(PAGE, { headers: FROM_OUTSIDE }))).headers.get('location')).toBeNull();
+  });
+
+  // Review of #3110: a recording link from outside (the "Your debate is ready" email) would hop to
+  // the debate page and then to the debates app; it goes there at once, on the lookup it made.
+  it('sends a published recording link from outside straight to the debates app', async () => {
+    const lookup = vi.mocked(publishedDebatePath);
+    lookup.mockResolvedValue(`/space/${VALID_SPACE}/${VALID_ENTITY}?t=42`);
+    const recording = `/space/${VALID_SPACE}/debates/${VALID_ENTITY}/recording?t=42`;
+
+    const response = await proxy(request(recording, { headers: FROM_OUTSIDE }));
+    const stay = await proxy(request(`${recording}&stay=1`, { headers: FROM_OUTSIDE }));
+    lookup.mockReset();
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get('location')).toBe(`https://debates.geobrowser.io/debate/${VALID_ENTITY}?t=42`);
+    expect(stay.headers.get('location')).toBe(`https://www.geobrowser.io/space/${VALID_SPACE}/${VALID_ENTITY}?t=42`);
+    expect(redirect).not.toHaveBeenCalled();
   });
 
   it('is off when DEBATE_PAGE_REDIRECT=off', async () => {

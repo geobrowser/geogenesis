@@ -87,6 +87,14 @@ async function openPublishedDebate(request: NextRequest, spaceId: string, debate
     // A failure to load falls back to the recording page like any other, rather than failing it.
     const { publishedDebatePath } = await import('~/core/debates/server/published-debate-path');
     debatePage = await publishedDebatePath(spaceId, debateId, request.nextUrl.searchParams);
+    // From outside geobrowser.io the debate page would send the person on to the debates app
+    // (GEO-3695); go there in one hop, with the one lookup already made.
+    if (debatePage && arrivesFromOutside(request)) {
+      const { debatesAppDestination, debatesAppRedirectEnabled, mustStay } =
+        await import('~/core/debates/server/debates-app-redirect');
+      if (debatesAppRedirectEnabled() && !mustStay(request.nextUrl.searchParams))
+        return NextResponse.redirect(debatesAppDestination(debateId, request.nextUrl.searchParams), 307);
+    }
   } catch {
     debatePage = null;
   }

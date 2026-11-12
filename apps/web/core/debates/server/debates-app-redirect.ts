@@ -1,17 +1,17 @@
-import { Effect } from 'effect';
-
-import { getEntityPage } from '~/core/io/queries';
-import { isHiddenEntity } from '~/core/moderation/hidden';
-import type { Entity } from '~/core/types';
+import { uuidToHex } from '~/core/id/normalize';
 
 import { debatesAppDebateUrl } from '../debates-app-url';
-import { isDebateEntity } from '../is-debate-entity';
-
-type DebateEntity = Pick<Entity, 'types' | 'values'>;
+import {
+  type DebateEntity,
+  PUBLISHED_DEBATE_LOOKUP_TIMEOUT_MS,
+  fetchEntityFromGraph,
+  isVisibleDebate,
+} from './published-debate-path';
 
 /**
  * The redirect sits in front of every entity page a person opens from outside geobrowser.io, so a
- * slow graph may cost the page only a moment before it renders as usual.
+ * slow graph may cost the page only a moment before it renders as usual (the recording link's
+ * lookup, {@link PUBLISHED_DEBATE_LOOKUP_TIMEOUT_MS}, guards a far rarer path).
  */
 export const DEBATES_APP_REDIRECT_TIMEOUT_MS = 400;
 
@@ -28,16 +28,42 @@ export function debatesAppRedirectEnabled(env: Record<string, string | undefined
  * could be a debate's is looked up, so other entity pages never wait on the graph for this.
  */
 export function couldBeDebateId(id: string): boolean {
-  return /^[0-9a-f]{12}7[0-9a-f]{19}$/.test(id.replace(/-/g, '').toLowerCase());
+  return /^[0-9a-f]{12}7[0-9a-f]{19}$/.test(uuidToHex(id));
 }
 
-// Whether an entity id is a (visible) debate, by id. Types don't change and a hidden debate stays
-// hidden, so answers are kept; a failed lookup is not. Bounded: oldest first out.
+/**
+ * Whether a request must stay where it is whatever the page: `?stay=1`, or a sign-in provider
+ * returning to the page it started from (Privy's `privy_oauth_*` parameters), whose code belongs
+ * to geobrowser.io.
+ */
+export function mustStay(searchParams: URLSearchParams): boolean {
+  if (searchParams.has(STAY_PARAM)) return true;
+  for (const key of searchParams.keys()) if (key.startsWith('privy_oauth_')) return true;
+  return false;
+}
+
+/** The debates app's link for a debate, the incoming query carried over (campaign tags). */
+export function debatesAppDestination(entityId: string, searchParams: URLSearchParams): string {
+  const url = new URL(debatesAppDebateUrl(entityId));
+  searchParams.forEach((value, key) => url.searchParams.append(key, value));
+  return url.toString();
+}
+
+// Whether an entity is a visible debate, per space and id, for a few minutes: as long as the
+// entity page caches its debate visibility. An entity not on the graph yet is not remembered.
+const REMEMBER_MS = 5 * 60_000;
 const MAX_REMEMBERED = 1000;
-const remembered = new Map<string, boolean>();
-function remember(id: string, isDebate: boolean) {
-  remembered.delete(id);
-  remembered.set(id, isDebate);
+const remembered = new Map<string, { isDebate: boolean; at: number }>();
+function recall(key: string, now: number): boolean | undefined {
+  const entry = remembered.get(key);
+  if (!entry) return undefined;
+  if (now - entry.at < REMEMBER_MS) return entry.isDebate;
+  remembered.delete(key);
+  return undefined;
+}
+function remember(key: string, isDebate: boolean, now: number) {
+  remembered.delete(key);
+  remembered.set(key, { isDebate, at: now });
   if (remembered.size > MAX_REMEMBERED) remembered.delete(remembered.keys().next().value!);
 }
 
@@ -46,14 +72,11 @@ export function forgetDebateLookups() {
   remembered.clear();
 }
 
-const fetchEntityFromGraph = async (entityId: string, spaceId: string, signal: AbortSignal) =>
-  (await Effect.runPromise(getEntityPage(entityId, spaceId, signal), { signal }))?.entity ?? null;
-
 /**
  * Where an old geobrowser.io debate URL (`/space/<space>/<debate>`) sends a person arriving from
  * outside geobrowser.io (GEO-3695, Yaniv): the debate in the debates app, with the link's query
- * (campaign tags) carried over. `null` keeps the page: not a debate, hidden (that page 404s), the
- * graph slow or unreachable, or `?stay=1`.
+ * carried over. `null` keeps the page: not a debate, hidden (that page 404s), the graph slow or
+ * unreachable, or a request that must stay ({@link mustStay}).
  *
  * A removed debate is still sent: removal lives in geo-chat, which this does not ask, and the
  * debates app says the debate isn't available.
@@ -65,13 +88,16 @@ export async function debatesAppRedirect(
   {
     fetchEntity = fetchEntityFromGraph,
     timeoutMs = DEBATES_APP_REDIRECT_TIMEOUT_MS,
+    now = Date.now,
   }: {
     fetchEntity?: (entityId: string, spaceId: string, signal: AbortSignal) => Promise<DebateEntity | null>;
     timeoutMs?: number;
+    now?: () => number;
   } = {}
 ): Promise<string | null> {
-  if (searchParams.has(STAY_PARAM) || !couldBeDebateId(entityId)) return null;
-  let isDebate = remembered.get(entityId);
+  if (mustStay(searchParams) || !couldBeDebateId(entityId)) return null;
+  const key = `${uuidToHex(spaceId)}/${uuidToHex(entityId)}`;
+  let isDebate = recall(key, now());
   if (isDebate === undefined) {
     let entity: DebateEntity | null;
     try {
@@ -79,11 +105,8 @@ export async function debatesAppRedirect(
     } catch {
       return null;
     }
-    isDebate = !!entity && isDebateEntity(entity.types) && !isHiddenEntity(entity);
-    remember(entityId, isDebate);
+    isDebate = isVisibleDebate(entity);
+    if (entity) remember(key, isDebate, now());
   }
-  if (!isDebate) return null;
-  const url = new URL(debatesAppDebateUrl(entityId));
-  searchParams.forEach((value, key) => url.searchParams.append(key, value));
-  return url.toString();
+  return isDebate ? debatesAppDestination(entityId, searchParams) : null;
 }
