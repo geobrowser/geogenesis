@@ -22,8 +22,9 @@ import { geo } from '~/core/sdk/geo-client';
 import { useReportError } from '~/core/state/status-bar-store';
 import type { Entity } from '~/core/types';
 import { toUserFacingError } from '~/core/utils/error-diagnostics';
-import { validateEntityId, validateSpaceId } from '~/core/utils/utils';
+import { validateEntityId } from '~/core/utils/utils';
 
+import { buildRankingVotes, mustMintFreshRank, rankingBallotRules } from './best-debates-ballot';
 import {
   type RankingBallotUnreadableError,
   ballotSnapshot,
@@ -59,7 +60,6 @@ import { ballotRecencyKey, pickLatestBallot } from './ranking-ballot-recency';
 import { parseTimestampMs, shouldMintNewRankEntity } from './ranking-rolling';
 import type { RankingSubmissionRecord } from './ranking-submission-types';
 import type { RankingSubmissionSlot } from './ranking-submission-types';
-import { rankingVoteWeightFromIndex } from './ranking-vote-weights';
 import {
   type MyRankingBallot,
   fetchMyRankingBallot,
@@ -305,6 +305,9 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
 
       const filteredSlots = slots.filter(slot => Boolean(slot.id));
       if (filteredSlots.length === 0) return null;
+      // Best debates (GEO-3678): ORDINAL, and every item keeps its own space, with no fallback to the
+      // block's. Every other block publishes exactly as before. See `best-debates-ballot.ts`.
+      const ballotRules = rankingBallotRules(blockId, spaceId);
 
       const invalidSlot = filteredSlots.find(slot => !validateEntityId(slot.id));
       if (invalidSlot) {
@@ -424,15 +427,27 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
           return null;
         }
 
-        const votes = mergedIds.map((entityId, index) => {
-          const slotSpaceId =
-            slotSpaceIds.get(ID.uuidToHex(entityId)) ?? publishedVoteSpaceId(published, entityId, personalSpaceId);
-          return {
-            entityId,
-            spaceId: slotSpaceId && validateSpaceId(slotSpaceId) ? slotSpaceId : spaceId,
-            value: rankingVoteWeightFromIndex(index),
-          };
-        });
+        // The merged ballot's items keep the space they were placed with (this
+        // edit's slot, else the published vote); `buildRankingVotes` applies the
+        // block's rules (the block's space as fallback, or Best debates' ORDINAL
+        // with own spaces only).
+        const votes = buildRankingVotes(
+          mergedIds.map(entityId => ({
+            id: entityId,
+            name: null,
+            spaceId:
+              slotSpaceIds.get(ID.uuidToHex(entityId)) ??
+              publishedVoteSpaceId(published, entityId, personalSpaceId) ??
+              undefined,
+          })),
+          ballotRules,
+          spaceId
+        );
+        if (votes.length === 0) {
+          op.failed('invalid_input');
+          reportError(RANKING_NOTHING_LEFT_TO_PUBLISH_MESSAGE);
+          return null;
+        }
 
         const rankEntity = published.rankEntity;
         if (rankEntity && !validateEntityId(rankEntity.id)) {
@@ -442,11 +457,14 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
           return null;
         }
 
-        const reuseExistingRank = !shouldMintNewRankEntity({
+        const reuseRankForPeriod = !shouldMintNewRankEntity({
           isRolling,
           hasExistingBallot: Boolean(rankEntity),
           isSubmissionLive: isBallotLive(rankEntity, isRolling, submissionFrequencyHours, Date.now()),
         });
+        // Best debates: an existing Rank the indexer holds as another type can't take ORDINAL votes,
+        // so a fresh ORDINAL Rank supersedes it (GEO-3678, `mustMintFreshRank`).
+        const reuseExistingRank = reuseRankForPeriod && !mustMintFreshRank(rankEntity, ballotRules);
 
         let ops;
         let rankId: string;
@@ -454,12 +472,12 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
           const result = reuseExistingRank
             ? await geo.ranks.update({
                 rankId: rankEntity!.id,
-                rankType: 'WEIGHTED',
+                rankType: ballotRules.rankType,
                 votes,
               })
             : Ops.ranks.create({
                 name: rankName,
-                rankType: 'WEIGHTED',
+                rankType: ballotRules.rankType,
                 blockId,
                 votes,
               });

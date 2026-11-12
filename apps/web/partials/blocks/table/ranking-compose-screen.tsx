@@ -10,6 +10,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import { BEST_DEBATES_BLOCK_ID } from '~/core/blocks/ranking/best-debates';
 import { RankingComposeBallotContext, useComposeBallot } from '~/core/blocks/ranking/ranking-compose-ballot-context';
+import { bestDebatesComposeMode } from '~/core/blocks/ranking/best-debates-compose-access';
+import { BEST_DEBATES_TEAM_VIEW_PARAM, BEST_DEBATES_TEAM_VIEW_TO_RANK } from '~/core/blocks/ranking/best-debates-views';
 import { resolveRankingSingleTargetSpaceId } from '~/core/blocks/ranking/ranking-compose-publish-spaces';
 import { RANKING_COMPOSE_TAB_MY, rankingComposeHref } from '~/core/blocks/ranking/ranking-compose-url';
 import { generatePersonalRankingOgImages } from '~/core/blocks/ranking/ranking-og-generate-client';
@@ -41,11 +43,13 @@ import {
   useRankingSubmissions,
 } from '~/core/blocks/ranking/use-ranking-submissions';
 import { useCreateEntityWithFilters } from '~/core/hooks/use-create-entity-with-filters';
+import { useHydrated } from '~/core/hooks/use-hydrated';
 import { useIsMobileLayout } from '~/core/hooks/use-is-mobile-layout';
 import { useOnboarding } from '~/core/hooks/use-onboarding';
 import { rankingComposeNeedsAccountStep, useRankingComposeAccess } from '~/core/hooks/use-ranking-compose-access';
 import { useToast } from '~/core/hooks/use-toast';
 import { ID } from '~/core/id';
+import { useFeatureFlag } from '~/core/state/feature-flags';
 import { useEnqueuePendingAction } from '~/core/state/pending-actions';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import type { SearchResult } from '~/core/types';
@@ -54,6 +58,7 @@ import { useRankingOpportunity } from '~/core/use-ranking-opportunity';
 import { stepAtom } from '~/partials/onboarding/onboarding-atoms';
 
 import { RankingBallotReadError } from './ranking-ballot-read-error';
+import { useBestDebatesCompose } from './best-debates/use-best-debates-compose';
 import { RankingComposeCreateEntityPanel } from './ranking-compose-create-entity-panel';
 import { RankingComposeEntitySheet } from './ranking-compose-entity-sheet';
 import { RankingComposeFullscreen } from './ranking-compose-fullscreen';
@@ -82,6 +87,22 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   const relationId = searchParams?.get('relationId') ?? '';
   const { name, entityId, filterState } = useDataBlock();
   const displayName = name?.trim() || 'Untitled ranking';
+
+  // Best debates (GEO-3678) adds To rank, placing by comparison, drag-in and phone tabs, for Debates
+  // members with the `debateRankings` flag (#3105's `canComposeEdit` rule). Everyone else, and every
+  // other ranking block, gets the screen exactly as before.
+  const debateRankingsFlag = useFeatureFlag('debateRankings');
+  const hydrated = useHydrated();
+  const { canEdit: canEditBlockSpace, isLoading: isLoadingBlockAccess } = useRankingComposeAccess(spaceId, entityId);
+  const bestDebatesMode = bestDebatesComposeMode({
+    blockId: entityId,
+    spaceId,
+    hydrated,
+    isLoadingAccess: isLoadingBlockAccess,
+    debateRankingsFlag,
+    canEdit: canEditBlockSpace,
+  });
+  const isBestDebates = bestDebatesMode === 'best-debates';
 
   const createNewSpaceId = React.useMemo(() => resolveRankingSingleTargetSpaceId(filterState), [filterState]);
 
@@ -565,6 +586,35 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
     });
   };
 
+  const nameOf = (id: string): string | null => {
+    const entry = myRankingEntriesById.get(id) ?? displayRankableEntriesById.get(id);
+    if (entry && !isPlaceholderRankingEntry(entry)) return entry.name;
+    const row = rowsByEntityId.get(id);
+    if (row) return getRowDisplayName(row);
+    return searchResultsById.get(id)?.name?.trim() || null;
+  };
+
+  const bestDebates = useBestDebatesCompose({
+    enabled: isBestDebates,
+    blockId: entityId,
+    blockSpaceId: spaceId,
+    isMobile,
+    orderedIds,
+    setOrderedIds: ids => {
+      setActiveSwipeRowKey(null);
+      setOrderedIds(ids);
+    },
+    hasUnpublishedChanges,
+    nameOf,
+    personalSpaceId,
+    saveMySubmission: slots => saveMySubmission(slots, rankingOpportunity.context),
+    isSaving,
+    onPublished: published => {
+      generateOgImagesOnceIndexed(published);
+    },
+    openOnToRank: searchParams?.get(BEST_DEBATES_TEAM_VIEW_PARAM) === BEST_DEBATES_TEAM_VIEW_TO_RANK,
+  });
+
   const buildSlots = (ids: readonly string[]) =>
     ids.map(id => {
       const row = rowsByEntityId.get(id);
@@ -622,6 +672,12 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
     // `submissionsOpen` comes from the last render. Re-check against a fresh clock:
     if (!rankingSubmissionsOpen(getRankingPeriodState(startDate, endDate))) {
       setToast(<span>This ranking has closed.</span>);
+      return;
+    }
+
+    // Best debates stays on the ranking screen after a publish: rankers place debate after debate.
+    if (isBestDebates) {
+      await bestDebates.publish(orderedIds);
       return;
     }
 
@@ -720,6 +776,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
     <RankingComposeLayout
       isMobile={isMobile}
       mobilePageScrollRef={isMobile ? mobilePageScrollRef : undefined}
+      mobileTabs={isBestDebates ? bestDebates.mobileTabs : undefined}
       myRanking={
         <RankingComposeMyRanking
           isMobile={isMobile}
@@ -748,6 +805,13 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
               />
             ) : null
           }
+          {...(isBestDebates
+            ? {
+                title: 'Your ranking',
+                emptyText: 'Drag debates here from the team ranking, or click one to compare.',
+                onDropEntity: bestDebates.dropEntity,
+              }
+            : {})}
         />
       }
       globalRanking={
@@ -776,7 +840,9 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
           onFetchNextPage={isSearchActive ? fetchNextSearchPage : fetchNextPage}
           searchQuery={searchQuery}
           onSearchQueryChange={setSearchQuery}
-          onAddToMyRanking={addToMyRanking}
+          onAddToMyRanking={isBestDebates ? bestDebates.placeFromTeam : addToMyRanking}
+          teamView={isBestDebates ? bestDebates.teamView : undefined}
+          draggableRows={isBestDebates}
           onCreateNew={handleCreateNew}
           canCreateNew={canCreateNew}
           isAwaitingMembership={isAwaitingMembership}
@@ -795,10 +861,22 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
     return <Custom404 />;
   }
 
+  // Best debates while the flag or membership is unknown: no generic screen to flash or publish from.
+  if (bestDebatesMode === 'loading') {
+    return (
+      <RankingComposeFullscreen coverNavbar={isMobile}>
+        <div className="flex h-full items-center justify-center text-metadata text-grey-04" role="status">
+          Loading ranking…
+        </div>
+      </RankingComposeFullscreen>
+    );
+  }
+
   return (
     <RankingComposeBallotContext.Provider value={composeBallot}>
       <RankingComposeCreateEntityPanel onFinished={addToMyRanking} rankingName={displayName} />
       <RankingComposeEntitySheet target={entitySheetTarget} onClose={() => setEntitySheetTarget(null)} />
+      {isBestDebates ? bestDebates.dialogs : null}
       <div ref={rankingOpportunity.root} className="contents">
         <RankingComposeFullscreen coverNavbar={isMobile}>
           {isMobile ? (

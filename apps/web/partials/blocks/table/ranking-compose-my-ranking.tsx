@@ -15,6 +15,12 @@ import { Button } from '~/design-system/button';
 import { RankingMyRankingDesktopRow } from './ranking-block-ui';
 import { RANKING_COMPOSE_PUBLISH_BUTTON_CLASS } from './ranking-compose-header';
 import { RankingComposeSwipeableRow } from './ranking-compose-swipeable-row';
+import {
+  RANKING_DROP_ROW_ATTRIBUTE,
+  RANKING_ENTITY_DRAG_TYPE,
+  dropIndexFromPointer,
+  isRankingEntityDrag,
+} from './ranking-entity-drag';
 import { RankingEntryRow } from './ranking-entry-row';
 import { RankingMyRankingDndList } from './ranking-my-ranking-dnd';
 
@@ -37,7 +43,53 @@ type Props = {
   pendingEntityIds: ReadonlySet<string>;
   /** Rendered under the list, e.g. the Best debates "You pushed down" section (GEO-3679). */
   footer?: React.ReactNode;
+  /** The column's heading; "My ranking" unless the block says otherwise (Best debates: "Your ranking"). */
+  title?: string;
+  emptyText?: string;
+  /**
+   * Accept entities dragged in from the other column, at the index they are dropped on (GEO-3678).
+   * Left out, the list takes no drops, as before.
+   */
+  onDropEntity?: (entityId: string, index: number) => void;
 };
+
+/** Native drops onto the list: where the pointer would put the entity, and the drop itself. */
+function useEntityDrop(onDropEntity: Props['onDropEntity']) {
+  const listRef = React.useRef<HTMLDivElement>(null);
+  const [dropIndex, setDropIndex] = React.useState<number | null>(null);
+
+  const indexAt = (clientY: number) => {
+    const rows = listRef.current?.querySelectorAll<HTMLElement>(`[${RANKING_DROP_ROW_ATTRIBUTE}]`) ?? [];
+    const middles = Array.from(rows, row => {
+      const rect = row.getBoundingClientRect();
+      return rect.top + rect.height / 2;
+    });
+    return dropIndexFromPointer(middles, clientY);
+  };
+
+  if (!onDropEntity) return { listRef, dropIndex: null, dropHandlers: {} };
+
+  const dropHandlers: React.HTMLAttributes<HTMLDivElement> = {
+    onDragOver: event => {
+      if (!isRankingEntityDrag(event.dataTransfer)) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'copy';
+      setDropIndex(indexAt(event.clientY));
+    },
+    onDragLeave: event => {
+      if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropIndex(null);
+    },
+    onDrop: event => {
+      const entityId = event.dataTransfer.getData(RANKING_ENTITY_DRAG_TYPE);
+      setDropIndex(null);
+      if (!entityId) return;
+      event.preventDefault();
+      onDropEntity(entityId, indexAt(event.clientY));
+    },
+  };
+
+  return { listRef, dropIndex, dropHandlers };
+}
 
 export function RankingComposeMyRanking({
   isMobile,
@@ -57,9 +109,13 @@ export function RankingComposeMyRanking({
   onView,
   pendingEntityIds,
   footer,
+  title = 'My ranking',
+  emptyText = 'Add or search global ranking list to get started',
+  onDropEntity,
 }: Props) {
   const isDesktop = !isMobile;
   const [isReordering, setIsReordering] = React.useState(false);
+  const { listRef, dropIndex, dropHandlers } = useEntityDrop(onDropEntity);
 
   return (
     <div className={cx('flex flex-col', isDesktop && 'min-h-0 flex-1', isMobile && 'border-t border-grey-02 pt-8')}>
@@ -75,7 +131,7 @@ export function RankingComposeMyRanking({
             isMobile ? 'text-[22px] font-medium' : 'text-[17px] font-semibold'
           )}
         >
-          My ranking
+          {title}
         </h2>
         {isDesktop && !hidePublishButton ? (
           <Button
@@ -89,9 +145,21 @@ export function RankingComposeMyRanking({
           </Button>
         ) : null}
       </div>
-      <div className={cx('flex flex-col', isDesktop && 'min-h-0 flex-1 overflow-y-auto pt-4')}>
+      <div
+        ref={listRef}
+        data-testid={onDropEntity ? 'ranking-drop-target' : undefined}
+        className={cx('flex flex-col', isDesktop && 'min-h-0 flex-1 overflow-y-auto pt-4')}
+        {...dropHandlers}
+      >
         {displayEntityIds.length === 0 ? (
-          <p className="text-metadata text-grey-04">Add or search global ranking list to get started</p>
+          <p
+            className={cx(
+              'text-metadata text-grey-04',
+              dropIndex !== null && 'rounded-md border border-dashed border-text p-4'
+            )}
+          >
+            {emptyText}
+          </p>
         ) : (
           <RankingMyRankingDndList
             entityIds={displayEntityIds}
@@ -149,7 +217,18 @@ export function RankingComposeMyRanking({
                 </RankingComposeSwipeableRow>
               );
 
-              return <div className="w-full py-3">{rowContent}</div>;
+              const dropAttribute = { [RANKING_DROP_ROW_ATTRIBUTE]: entityId };
+              return (
+                <div className="relative w-full py-3" {...dropAttribute}>
+                  {dropIndex === index ? (
+                    <span className="absolute inset-x-0 top-0 h-0.5 rounded-full bg-text" aria-hidden />
+                  ) : null}
+                  {dropIndex === displayEntityIds.length && index === displayEntityIds.length - 1 ? (
+                    <span className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-text" aria-hidden />
+                  ) : null}
+                  {rowContent}
+                </div>
+              );
             }}
           />
         )}
