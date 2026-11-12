@@ -7,7 +7,8 @@ import type { RankingBlockState } from './use-ranking-block-state';
 function state(
   hasMySubmission: boolean,
   isRollingRolledOff = false,
-  ballotReadError: string | null = null
+  ballotReadError: string | null = null,
+  canComposeEdit = true
 ): RankingBlockState {
   return {
     ballotReadError,
@@ -18,6 +19,7 @@ function state(
     isRollingRolledOff,
     isSaving: false,
     openRankingCompose: vi.fn(),
+    canComposeEdit,
   } as unknown as RankingBlockState;
 }
 
@@ -58,5 +60,12 @@ describe('RankingHeaderActions', () => {
     expect(markup).toContain('Couldn&#x27;t load your ranking');
     expect(markup).toContain('Try again');
     expect(markup).not.toContain('Rank<');
+  });
+
+  it('draws no Rank button on the Best debates block without the flag and membership (GEO-3677)', () => {
+    const markup = renderToStaticMarkup(<RankingHeaderActions state={state(false, false, null, false)} />);
+
+    expect(markup).not.toContain('Rank');
+    expect(markup).not.toContain('!bg-[#151515]');
   });
 });

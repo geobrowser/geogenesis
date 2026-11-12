@@ -39,7 +39,7 @@ export function useRankingBlockRelations(options: Options = {}) {
   const { initialBlockEntities } = useEditorStoreLite();
   const initialBlockEntity = initialBlockEntities.find(b => b.id === blockId) ?? null;
 
-  const { entity: blockEntity } = useQueryEntity({
+  const { entity: blockEntity, isLoading: isLoadingBlockEntity } = useQueryEntity({
     spaceId,
     id: blockId,
   });
@@ -68,7 +68,11 @@ export function useRankingBlockRelations(options: Options = {}) {
     [globalRankingEntityIds]
   );
 
+  // True until the block's relations are known: from the store, or seeded from the editor.
+  const isLoadingRelations = isLoadingBlockEntity && !blockEntity && !initialBlockEntity;
+
   return {
+    isLoadingRelations,
     globalRankingEntityIds,
     globalLeaderboard,
     aggregatedSubmitterRefs,

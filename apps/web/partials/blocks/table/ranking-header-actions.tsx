@@ -27,6 +27,7 @@ export function RankingHeaderActions({ state }: Props) {
     openRankingCompose,
     ballotReadError,
     retryBallotRead,
+    canComposeEdit,
   } = state;
 
   // A rolled-off rolling ballot is treated as absent (useRankingSubmissions
@@ -55,7 +56,7 @@ export function RankingHeaderActions({ state }: Props) {
         >
           View
         </Button>
-      ) : (
+      ) : canComposeEdit ? (
         <Button
           variant="primary"
           className={`${ACTION_BUTTON_CLASS} !border-transparent !bg-[#151515] !text-white hover:!bg-[#151515]`}
@@ -64,7 +65,7 @@ export function RankingHeaderActions({ state }: Props) {
         >
           Rank
         </Button>
-      )}
+      ) : null}
     </>
   );
 }

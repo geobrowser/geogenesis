@@ -22,6 +22,7 @@ import {
   getRowDisplayName,
   splitRankableEntityIds,
 } from '~/core/blocks/ranking/ranking-rankable-list';
+import { useComposeEditGuard } from '~/core/blocks/ranking/use-compose-edit-guard';
 import { useRankingAccumulatedRows } from '~/core/blocks/ranking/use-ranking-accumulated-rows';
 import { useRankingBlockDates } from '~/core/blocks/ranking/use-ranking-block-dates';
 import { useRankingBlockRelations } from '~/core/blocks/ranking/use-ranking-block-relations';
@@ -107,7 +108,20 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
     router.back();
   }, [rankingComposeReturnHref, router, setRankingComposeReturnHref]);
 
+  // Best debates (GEO-3677): composing needs the `debateRankings` flag and Debates membership. A
+  // pasted compose URL lands here without the block's buttons, so the screen checks it too: no
+  // membership request, and once that's settled, the read-only view.
+  const composeEditGuard = useComposeEditGuard({ blockId: entityId, spaceId });
+  const composeEditRefused = composeEditGuard.isBestDebates && !composeEditGuard.allowed;
   React.useEffect(() => {
+    if (!composeEditRefused || !composeEditGuard.settled) return;
+    const params = new URLSearchParams(searchParams?.toString() ?? '');
+    params.set('mode', 'view');
+    router.replace(`${window.location.pathname}?${params.toString()}`);
+  }, [composeEditGuard.settled, composeEditRefused, router, searchParams]);
+
+  React.useEffect(() => {
+    if (composeEditRefused) return;
     if (accessStatus === 'ready' || accessStatus === 'not-found') return;
     // If log-in/sign-up is needed, come back to this compose screen
     if (rankingComposeNeedsAccountStep(accessStatus, isAccountSetupPending)) {
@@ -120,7 +134,15 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
     if (accessStatus === 'needs-membership') {
       void ensureAccess();
     }
-  }, [accessStatus, isAccountSetupPending, ensureAccess, setPostOnboardingRedirect, setStep, showOnboarding]);
+  }, [
+    accessStatus,
+    composeEditRefused,
+    isAccountSetupPending,
+    ensureAccess,
+    setPostOnboardingRedirect,
+    setStep,
+    showOnboarding,
+  ]);
 
   const { startDate, endDate } = useRankingBlockDates({ startDate: rankingStartDate, endDate: rankingEndDate });
   const { periodState, periodLabel, submissionsOpen } = useRankingPeriod(startDate, endDate);
@@ -468,7 +490,8 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
     hasUnpublishedChanges &&
     submissionsOpen &&
     (Boolean(personalSpaceId) || isAccountSetupPending) &&
-    !isSaving;
+    !isSaving &&
+    !composeEditRefused;
 
   const rankingOpportunity = useRankingOpportunity(
     entityId,
@@ -523,6 +546,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   };
 
   const handlePublish = async () => {
+    if (composeEditRefused) return;
     // `submissionsOpen` comes from the last render. Re-check against a fresh clock:
     if (!rankingSubmissionsOpen(getRankingPeriodState(startDate, endDate))) {
       setToast(<span>This ranking has closed.</span>);

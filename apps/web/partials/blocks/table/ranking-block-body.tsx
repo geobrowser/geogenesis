@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { isBestDebatesBlock } from '~/core/blocks/ranking/best-debates-views';
 import { isPlaceholderRankingEntry } from '~/core/blocks/ranking/ranking-pending-proposal-entries';
 
 import { Button } from '~/design-system/button';
@@ -34,8 +35,8 @@ type Props = {
 };
 
 function buildMobileFullscreenEditButton(state: RankingBlockState) {
-  const { isSaving, isSharedRankingView, openRankingCompose } = state;
-  if (isSharedRankingView) return null;
+  const { isSaving, isSharedRankingView, openRankingCompose, canComposeEdit } = state;
+  if (isSharedRankingView || !canComposeEdit) return null;
 
   return (
     <Button
@@ -50,7 +51,10 @@ function buildMobileFullscreenEditButton(state: RankingBlockState) {
 }
 
 export function buildMyRankingActionButton(state: RankingBlockState) {
-  const { showEditRankingButton, isSaving, openRankingCompose, ballotReadError, retryBallotRead } = state;
+  const { showEditRankingButton, isSaving, openRankingCompose, ballotReadError, retryBallotRead, canComposeEdit } =
+    state;
+  // Best debates without the flag or membership (GEO-3677): no compose entry point at all.
+  if (!canComposeEdit) return null;
 
   // The ballot exists but couldn't be read whole (GEO-3680). Offering "Add my
   // ranking" here would start an empty ballot over it.
@@ -97,13 +101,15 @@ function buildMyRankingTabActions(state: RankingBlockState) {
     sharePersonalRanking,
     isSaving,
     openRankingCompose,
+    canComposeEdit,
   } = state;
   if (isSharedRankingView) return null;
-  if (!showEditRankingButton && !canSharePersonalRanking) return null;
+  const showEdit = showEditRankingButton && canComposeEdit;
+  if (!showEdit && !canSharePersonalRanking) return null;
 
   return (
     <div className="flex w-full shrink-0 items-center justify-between gap-2">
-      {showEditRankingButton ? (
+      {showEdit ? (
         <Button
           variant="secondary"
           className="h-8 shrink-0 !rounded-full !border-text !bg-white !px-4 text-[16px] whitespace-nowrap !text-text"
@@ -118,7 +124,7 @@ function buildMyRankingTabActions(state: RankingBlockState) {
           variant="primary"
           className={cx(
             'h-8 shrink-0 !rounded-full border-grey-02 bg-text !px-3 text-[16px] whitespace-nowrap text-white hover:bg-text/90 focus-visible:border-text focus-visible:shadow-inner-text',
-            !showEditRankingButton && 'ml-auto'
+            !showEdit && 'ml-auto'
           )}
           onClick={sharePersonalRanking}
         >
@@ -187,6 +193,9 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
   const myRankingActionButton = hideEditMyRanking ? null : buildMyRankingActionButton(state);
   const myRankingTabActions = buildMyRankingTabActions(state);
   const SectionHeader = presentation === 'fullscreen' ? RankingFullscreenSectionHeaderRow : RankingSectionHeaderRow;
+  // No row vote arrows on Best debates (GEO-3677): a member's vote there is what Rank it / Push it
+  // down records, so a stray arrow would double-count against the ranking.
+  const showVoteControls = !isBestDebatesBlock(state.entityId, spaceId);
 
   // Three tabs are possible in the shared view
   const isMyTab = showMyRankingSection && activeTab === 'my';
@@ -281,7 +290,11 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
                   spaceId={spaceId}
                   linkToEntity={!isMobile}
                   pending={pendingEntityIds.has(entityId)}
-                  actions={<RankingEntryVoteControls entityId={entityId} spaceId={resolveEntitySpaceId(entityId)} />}
+                  actions={
+                    showVoteControls ? (
+                      <RankingEntryVoteControls entityId={entityId} spaceId={resolveEntitySpaceId(entityId)} />
+                    ) : null
+                  }
                 />
               );
               return (
@@ -362,7 +375,7 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
                   imageUrl={overlayImageUrl}
                   pending={pendingEntityIds.has(entityId)}
                   actions={
-                    !isDragActive ? (
+                    !isDragActive && showVoteControls ? (
                       <RankingEntryVoteControls entityId={entityId} spaceId={resolveEntitySpaceId(entityId)} />
                     ) : null
                   }
@@ -399,13 +412,15 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
   const viewerRankingBody = (
     <div className="flex flex-col gap-4">
       <div className="flex w-full shrink-0 items-center justify-between gap-2">
-        <Button
-          variant="secondary"
-          className="h-8 shrink-0 !rounded-full !border-text !bg-white !px-4 text-[16px] whitespace-nowrap !text-text"
-          onClick={() => void openRankingCompose('edit')}
-        >
-          Edit
-        </Button>
+        {state.canComposeEdit ? (
+          <Button
+            variant="secondary"
+            className="h-8 shrink-0 !rounded-full !border-text !bg-white !px-4 text-[16px] whitespace-nowrap !text-text"
+            onClick={() => void openRankingCompose('edit')}
+          >
+            Edit
+          </Button>
+        ) : null}
         {canShareViewerOwnRanking ? (
           <Button
             variant="primary"
