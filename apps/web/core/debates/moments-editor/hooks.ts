@@ -118,7 +118,9 @@ export function useQueueMomentReel(debateId: string) {
 /**
  * After a reel goes live, or the editor learns the reel moved on: the plan's version and live cuts,
  * and the served moments, are stale. So are the media's turns when a re-render moved the video: the
- * editor maps every live cut onto the player's clock through them.
+ * editor maps every live cut onto the player's clock through them. And so is the transcript, which a
+ * re-render that re-extracts claims has changed: the editor snaps edges to its words, and counts a
+ * clip's speaker and problems with them (every `include`, by prefix).
  */
 export function useRefreshAfterReel(debateId: string) {
   const queryClient = useQueryClient();
@@ -127,5 +129,6 @@ export function useRefreshAfterReel(debateId: string) {
     void queryClient.invalidateQueries({ queryKey: debateQueryKeys.momentReelPlan(debateId, accountKey) });
     void queryClient.invalidateQueries({ queryKey: debateQueryKeys.extractedClaims(debateId) });
     void queryClient.invalidateQueries({ queryKey: debateQueryKeys.media(debateId) });
+    void queryClient.invalidateQueries({ queryKey: debateQueryKeys.transcripts(debateId) });
   };
 }

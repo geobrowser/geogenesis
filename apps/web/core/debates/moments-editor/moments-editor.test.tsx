@@ -25,6 +25,8 @@ const mocks = vi.hoisted(() => ({
   retainedClaim: false,
   /** The media's turn segments: the map from the video's clock onto the player's. */
   turns: [] as unknown[],
+  /** Where the player says its playhead is, or `null` before it reports one. */
+  playheadSeconds: null as number | null,
 }));
 
 vi.mock('../hooks', () => ({
@@ -82,7 +84,14 @@ vi.mock('./hooks', () => ({
   useRefreshAfterReel: () => mocks.refresh,
 }));
 
-vi.mock('../browse/debate-feed-player', () => ({ DebateFeedPlayer: () => <div data-testid="player" /> }));
+vi.mock('../browse/debate-feed-player', () => ({
+  DebateFeedPlayer: ({ onPlayheadChange }: { onPlayheadChange?: (seconds: number) => void }) => {
+    React.useEffect(() => {
+      if (mocks.playheadSeconds !== null) onPlayheadChange?.(mocks.playheadSeconds);
+    }, [onPlayheadChange]);
+    return <div data-testid="player" />;
+  },
+}));
 vi.mock('~/core/hooks/use-toast', () => ({ useToast: () => [null, mocks.toast] }));
 
 const entry = (overrides: Partial<MomentBackfillEntry> = {}): MomentBackfillEntry => ({
@@ -130,6 +139,7 @@ beforeEach(() => {
   mocks.transcriptFailed = false;
   mocks.retainedClaim = false;
   mocks.turns = [];
+  mocks.playheadSeconds = null;
 });
 afterEach(cleanup);
 
@@ -595,6 +605,80 @@ describe('MomentsEditor (GEO-3671)', () => {
     mocks.turns = [turn(0)];
     rerender(<MomentsEditor debateId={DEBATE_ID} />);
     expect(screen.getByRole('textbox', { name: 'Start time' })).toHaveValue('0:00.9');
+  });
+
+  // An edit is the admin's: turns that move under it (a media read landing after a re-render) never
+  // remap it away, and it is still sent on the version it was made on.
+  it('keeps an unsaved edit, and its base, when the turns move under it', () => {
+    const turn = (source: number) => ({
+      turn_index: 0,
+      participant_slot: 1,
+      output_start_ms: 0,
+      output_end_ms: 10_000,
+      duration_ms: 10_000,
+      source_start_ms: source,
+      source_end_ms: source + 10_000,
+    });
+    mocks.turns = [turn(500)];
+    mocks.plan.data = entry({
+      live_reel: {
+        clock: 'video',
+        clips: [{ start_ms: 900, end_ms: 3_000, speaker_slot: 0, claim_index: 0, claim_text: 'Coffee is low stakes' }],
+      },
+    });
+    const { rerender } = render(<MomentsEditor debateId={DEBATE_ID} />);
+    const end = screen.getByRole('textbox', { name: 'End time' });
+    fireEvent.change(end, { target: { value: '3.3' } });
+    fireEvent.blur(end);
+    expect(screen.getByRole('textbox', { name: 'End time' })).toHaveValue('0:03.3');
+
+    mocks.turns = [turn(0)];
+    rerender(<MomentsEditor debateId={DEBATE_ID} />);
+    expect(screen.getByRole('textbox', { name: 'Start time' })).toHaveValue('0:01.4');
+    expect(screen.getByRole('textbox', { name: 'End time' })).toHaveValue('0:03.3');
+    fireEvent.click(screen.getByRole('button', { name: /Publish reel/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Publish and lock|Publish anyway/ }));
+    expect(mocks.mutate).toHaveBeenCalledWith(
+      expect.objectContaining({ reel: expect.objectContaining({ base: 'v1' }) }),
+      expect.any(Object)
+    );
+  });
+
+  // A carried reel's cuts are on the old video's clock, and the editor maps them through the new
+  // one's turns: its own checks would flag spans the clips don't play, so it runs none on them.
+  it('runs none of its own clip checks on a carried reel, and says its times are approximate', () => {
+    mocks.manualReel = true;
+    mocks.plan.data = entry({
+      live_reel: {
+        clock: 'video',
+        carried: true,
+        clips: [
+          { start_ms: 3_100, end_ms: 4_900, speaker_slot: 0, claim_index: 0, claim_text: 'Coffee is low stakes' },
+        ],
+      },
+    });
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    expect(screen.getByText(/still cut on the video from before it/)).toHaveTextContent(
+      /the times and words shown for them are approximate/
+    );
+    expect(screen.queryByText('Nobody says a whole word in it.')).not.toBeInTheDocument();
+  });
+
+  // Return to automatic waits until an edit is gone, so a debate locked without a reel and with an
+  // edit on it points to publishing the edit or discarding it, not to a button it hides.
+  it('points a debate locked without a reel, with an edit on it, to publishing or discarding it', () => {
+    mocks.manualReel = true;
+    mocks.plan.data = entry({ reel_unlinkable: true, live_reel: null });
+    mocks.playheadSeconds = 1;
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    expect(screen.getByText(/Pick new clips, or return to automatic/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Add clip at playhead/ }));
+    expect(screen.queryByRole('button', { name: 'Return to automatic' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Pick new clips, or return to automatic/)).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/Publish the clips you've picked, or discard them to return to automatic/)
+    ).toBeInTheDocument();
   });
 
   // geo-chat#352 links a carried clip to its own published claim, which a re-extraction may keep as

@@ -107,7 +107,11 @@ describe('refusalBlocksEditing', () => {
   });
 
   it('says why in words, and names an unknown code as it came', () => {
-    expect(refusalMessage('media_job_failed')).toMatch(/media job failed/);
+    // geo-chat#352: a failed re-render keeps the debate's media and reel, so nothing says it never
+    // published; only that the reel waits on the media being processed again.
+    expect(refusalMessage('media_job_failed')).toBe(
+      "The debate's latest media job failed, so its reel can't be changed until the media is processed again."
+    );
     expect(refusalMessage('reel_being_reapplied')).toMatch(/still cut on the old video/);
     expect(refusalMessage('something_new')).toBe('geo-chat refused it: something_new.');
   });
