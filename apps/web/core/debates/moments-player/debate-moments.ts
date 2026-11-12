@@ -12,6 +12,11 @@
  * moment's place in it needs no conversion. (The Explore feed plays the raw recordings instead;
  * placing a moment there would go through `recording-clock.ts`.)
  *
+ * The clip file is not cut at `clip_start_ms` but a little before it: geo-chat widens the range by
+ * edge room (`cut_start_ms`), and the clip's captions are timed from that cut. So position `p` in
+ * the file is `cut_start_ms + p` in the debate. `moments[]` does not carry the cut yet (geo-chat
+ * `moment_json` follow-up); see {@link cutOf} for where it is read from meanwhile.
+ *
  * Pure, so the decoding is tested without a network or a DOM.
  */
 
@@ -33,9 +38,15 @@ export type DebateMoment = {
   clipUrl: string;
   /** The clip file's length. Null when geo-chat did not record one; the element's own then counts. */
   durationMs: number | null;
-  /** Where the moment was cut from, on the full (rendered) debate's clock. Null when not recorded. */
+  /** The spoken range the moment is for, on the full (rendered) debate's clock. Null when not recorded. */
   debateStartMs: number | null;
   debateEndMs: number | null;
+  /**
+   * Where the clip file itself starts and ends on the debate's clock: the range widened by the edge
+   * room it was cut with. Clip position 0 is `cutStartMs`. Null when the moment has no range.
+   */
+  cutStartMs: number | null;
+  cutEndMs: number | null;
   captions: MomentCaption[];
 };
 
@@ -53,9 +64,41 @@ export type DebateMomentPayload = {
 
 /** The slice of the `/claims` payload this module reads. */
 export type DebateMomentsPayload = {
-  claims?: readonly ({ text?: unknown } | null | undefined)[] | null;
+  claims?:
+    | readonly (
+        | {
+            text?: unknown;
+            clip_start_ms?: unknown;
+            clip_end_ms?: unknown;
+            clip_lead_ms?: unknown;
+            clip_tail_ms?: unknown;
+          }
+        | null
+        | undefined
+      )[]
+    | null;
   moments?: readonly (DebateMomentPayload | null | undefined)[] | null;
+  /** A story reel's own list (GEO-3638), stored with each moment's cut. Absent on picked reels. */
+  story_moments?:
+    | readonly (
+        | {
+            moment_index?: unknown;
+            clip_start_ms?: unknown;
+            clip_end_ms?: unknown;
+            cut_start_ms?: unknown;
+            cut_end_ms?: unknown;
+          }
+        | null
+        | undefined
+      )[]
+    | null;
 };
+
+/**
+ * geo-chat's automatic edge room on each side of a clip (`CLIP_EDGE_PAD_MS`), for a moment whose
+ * own cut cannot be found. Story reels use their own, which the payload serves.
+ */
+export const DEFAULT_CLIP_EDGE_MS = 250;
 
 const isFiniteNumber = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
 
@@ -78,6 +121,7 @@ export function decodeDebateMoments(payload: DebateMomentsPayload | null | undef
     const claim = claims[moment.claim_index];
     const start = nonNegative(moment.clip_start_ms);
     const end = nonNegative(moment.clip_end_ms);
+    const cut = cutOf(payload, moment, start, end);
     return [
       {
         id: clipIdOf(moment.clip_url),
@@ -89,11 +133,51 @@ export function decodeDebateMoments(payload: DebateMomentsPayload | null | undef
         durationMs: isFiniteNumber(moment.duration_ms) && moment.duration_ms > 0 ? moment.duration_ms : null,
         debateStartMs: start,
         debateEndMs: start !== null && end !== null && end > start ? end : null,
+        cutStartMs: cut.start,
+        cutEndMs: cut.end,
         captions: decodeCaptions(moment.subtitles),
       },
     ];
   });
   return decoded.sort((a, b) => a.momentIndex - b.momentIndex);
+}
+
+/**
+ * Where a moment's clip file starts and ends in the debate. In order:
+ *
+ * 1. A story reel's entry for the same moment and range: its stored `cut_start_ms`/`cut_end_ms`.
+ * 2. The moment's claim, when the moment is that claim's own clip range (a picked reel): the range
+ *    widened by the claim's `clip_lead_ms`/`clip_tail_ms`, the rule geo-chat cut the file by.
+ * 3. Otherwise geo-chat's default edge room on each side.
+ */
+function cutOf(
+  payload: DebateMomentsPayload | null | undefined,
+  moment: DebateMomentPayload,
+  start: number | null,
+  end: number | null
+): { start: number | null; end: number | null } {
+  if (start === null) return { start: null, end: null };
+  const story = Array.isArray(payload?.story_moments)
+    ? payload.story_moments.find(
+        entry =>
+          entry?.moment_index === moment.moment_index &&
+          entry.clip_start_ms === start &&
+          (end === null || entry.clip_end_ms === end)
+      )
+    : undefined;
+  const storyStart = nonNegative(story?.cut_start_ms);
+  if (story && storyStart !== null) {
+    return {
+      start: storyStart,
+      end: nonNegative(story.cut_end_ms) ?? (end === null ? null : end + DEFAULT_CLIP_EDGE_MS),
+    };
+  }
+  const claim =
+    Array.isArray(payload?.claims) && isFiniteNumber(moment.claim_index) ? payload.claims[moment.claim_index] : null;
+  const ownRange = claim && claim.clip_start_ms === start && claim.clip_end_ms === end;
+  const lead = ownRange ? (nonNegative(claim.clip_lead_ms) ?? DEFAULT_CLIP_EDGE_MS) : DEFAULT_CLIP_EDGE_MS;
+  const tail = ownRange ? (nonNegative(claim.clip_tail_ms) ?? DEFAULT_CLIP_EDGE_MS) : DEFAULT_CLIP_EDGE_MS;
+  return { start: Math.max(0, start - lead), end: end === null ? null : end + tail };
 }
 
 /** `/debates/{id}/moments/{clip_id}/content` → `clip_id`; the whole URL when it is not that shape. */
@@ -125,24 +209,27 @@ export function fullDebateVideoUrl(debateId: string, baseUrl: string): string {
 }
 
 /**
- * Where in the full debate to pick up from a moment: its start in the debate plus how far into
- * its clip the viewer got, never past the moment's own end. Null when the moment has no place.
+ * Where in the full debate to pick up from a moment: where its clip file starts in the debate plus
+ * how far into the file the viewer got, never past the file's end. Null when it has no place.
  */
 export function debateTimeForMoment(moment: DebateMoment, clipPositionMs = 0): number | null {
-  if (moment.debateStartMs === null) return null;
-  const at = moment.debateStartMs + Math.max(0, clipPositionMs);
-  return moment.debateEndMs === null ? at : Math.min(at, moment.debateEndMs);
+  if (moment.cutStartMs === null) return null;
+  const at = moment.cutStartMs + Math.max(0, clipPositionMs);
+  return moment.cutEndMs === null ? at : Math.min(at, moment.cutEndMs);
 }
 
 /** One dot on the full debate's timeline: which moment, and where along the bar (0–1). */
 export type MomentMarker = { momentIndex: number; fraction: number };
 
-/** The timeline's dots, for the moments that have a place inside a known length. */
+/**
+ * The timeline's dots, for the moments that have a place inside a known length. Each sits where
+ * its clip starts, which is where a press on it lands.
+ */
 export function momentMarkers(moments: readonly DebateMoment[], durationMs: number): MomentMarker[] {
   if (!(durationMs > 0)) return [];
   return moments.flatMap(moment =>
-    moment.debateStartMs !== null && moment.debateStartMs < durationMs
-      ? [{ momentIndex: moment.momentIndex, fraction: moment.debateStartMs / durationMs }]
+    moment.cutStartMs !== null && moment.cutStartMs < durationMs
+      ? [{ momentIndex: moment.momentIndex, fraction: moment.cutStartMs / durationMs }]
       : []
   );
 }

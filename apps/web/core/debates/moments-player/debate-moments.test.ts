@@ -15,7 +15,15 @@ const DEBATE = '01a0b080-9a14-7c71-887b-d65ea3df4706';
 
 /** Shaped like testnet's `GET /debates/{id}/claims` for this debate, 11 Nov 2026, trimmed. */
 const payload = {
-  claims: [{ text: 'A high body count says something about a person' }, { text: 'Second claim' }],
+  claims: [
+    { text: 'A high body count says something about a person', clip_start_ms: 8530, clip_end_ms: 14380 },
+    // A picked moment: the claim's own clip range, widened by its edge room when the file was cut.
+    { text: 'Second claim', clip_start_ms: 84330, clip_end_ms: 98240, clip_lead_ms: 180, clip_tail_ms: 250 },
+  ],
+  // A story reel (GEO-3638) serves its own cut beside the list: moment 0 is one of its moments.
+  story_moments: [
+    { moment_index: 0, clip_start_ms: 26330, clip_end_ms: 53690, cut_start_ms: 26250, cut_end_ms: 53940 },
+  ],
   moments: [
     {
       byte_size: 703623,
@@ -63,12 +71,43 @@ describe('decodeDebateMoments', () => {
       durationMs: 27690,
       debateStartMs: 26330,
       debateEndMs: 53690,
+      cutStartMs: 26250,
+      cutEndMs: 53940,
       captions: [
         { startMs: 80, endMs: 2940, text: "I also think there's this funny quote" },
         { startMs: 2940, endMs: 6780, text: 'which is, it can also be something that' },
       ],
     });
-    expect(second).toMatchObject({ id: 'clip-2', participantSlot: 2, captions: [], debateStartMs: 84330 });
+    expect(second).toMatchObject({
+      id: 'clip-2',
+      participantSlot: 2,
+      captions: [],
+      debateStartMs: 84330,
+      cutStartMs: 84330 - 180,
+      cutEndMs: 98240 + 250,
+    });
+  });
+
+  it("places a clip file's start in the debate: the story's cut, else the claim's lead, else the default pad", () => {
+    const [noClaimRange, otherRange, zeroLead] = decodeDebateMoments(
+      {
+        claims: [
+          { text: 'a' },
+          { text: 'b', clip_start_ms: 1000, clip_end_ms: 2000, clip_lead_ms: 50 },
+          { text: 'c', clip_start_ms: 40_000, clip_end_ms: 50_000, clip_lead_ms: 0, clip_tail_ms: null },
+        ],
+        moments: [
+          { moment_index: 0, claim_index: 0, clip_url: '/a', clip_start_ms: 10_000, clip_end_ms: 20_000 },
+          // A range that is not the claim's (a story re-cut) borrows nothing from the claim.
+          { moment_index: 1, claim_index: 1, clip_url: '/b', clip_start_ms: 30_000, clip_end_ms: 35_000 },
+          { moment_index: 2, claim_index: 2, clip_url: '/c', clip_start_ms: 40_000, clip_end_ms: 50_000 },
+        ],
+      },
+      BASE
+    );
+    expect([noClaimRange.cutStartMs, noClaimRange.cutEndMs]).toEqual([9750, 20_250]);
+    expect([otherRange.cutStartMs, otherRange.cutEndMs]).toEqual([29_750, 35_250]);
+    expect([zeroLead.cutStartMs, zeroLead.cutEndMs]).toEqual([40_000, 50_250]);
   });
 
   it('drops entries it cannot play and keeps the rest, in play order', () => {
@@ -111,20 +150,22 @@ describe('moment helpers', () => {
     expect(momentCaptionAt(first.captions, 10)).toBeNull();
   });
 
-  it('picks the full debate up where the viewer was in the moment, never past its end', () => {
-    expect(debateTimeForMoment(first)).toBe(26330);
-    expect(debateTimeForMoment(first, 4000)).toBe(30330);
-    expect(debateTimeForMoment(first, 60_000)).toBe(53690);
-    expect(debateTimeForMoment({ ...first, debateStartMs: null })).toBeNull();
+  it('picks the full debate up where the viewer was in the clip file, which starts at the cut', () => {
+    // Clip position 80 ms is the first caption's first word, said at 26 330 ms in the debate.
+    expect(debateTimeForMoment(first, 80)).toBe(26330);
+    expect(debateTimeForMoment(first)).toBe(26250);
+    expect(debateTimeForMoment(first, 4000)).toBe(30250);
+    expect(debateTimeForMoment(first, 60_000)).toBe(53940);
+    expect(debateTimeForMoment({ ...first, cutStartMs: null })).toBeNull();
   });
 
   it('places a dot per moment along a known length', () => {
     const moments = decodeDebateMoments(payload, BASE);
     expect(momentMarkers(moments, 200_000)).toEqual([
-      { momentIndex: 0, fraction: 26330 / 200_000 },
-      { momentIndex: 1, fraction: 84330 / 200_000 },
+      { momentIndex: 0, fraction: 26250 / 200_000 },
+      { momentIndex: 1, fraction: 84150 / 200_000 },
     ]);
-    expect(momentMarkers(moments, 50_000)).toEqual([{ momentIndex: 0, fraction: 26330 / 50_000 }]);
+    expect(momentMarkers(moments, 50_000)).toEqual([{ momentIndex: 0, fraction: 26250 / 50_000 }]);
     expect(momentMarkers(moments, 0)).toEqual([]);
   });
 
