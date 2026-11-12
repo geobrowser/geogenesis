@@ -19,7 +19,7 @@ const exploreEntitiesConnectionSource = (pageInfo: string) => /* GraphQL */ `
     $after: Cursor
     $filter: EntityFilter
     $orderBy: [EntitiesOrderBy!]
-    $spaceIds: UUIDFilter!
+    $spaceIds: UUIDFilter
     $typeIds: UUIDFilter
     $spaceIdsForLists: [UUID!]!
   ) {
