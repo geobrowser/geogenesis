@@ -82,6 +82,22 @@ describe('debatesAppRedirect', () => {
     expect(fetchEntity).not.toHaveBeenCalled();
   });
 
+  // Review of #3110: geobrowser.io counts an email's click and greets its reader as returning.
+  it('keeps an email’s links on geobrowser.io', async () => {
+    const fetchEntity = vi.fn().mockResolvedValue(entity());
+    for (const query of ['ref_email=welcome', 'ref_send=abc', 'ref_link=watch']) {
+      await expect(go(fetchEntity, query)).resolves.toBeNull();
+    }
+    expect(fetchEntity).not.toHaveBeenCalled();
+  });
+
+  // Review of #3110: a timestamped link (`?t=312`, the claim rows' copy link) keeps its moment.
+  it('carries a start time over as the debates app’s `time`', async () => {
+    await expect(go(vi.fn().mockResolvedValue(entity()), 't=312&utm_source=x')).resolves.toBe(
+      `https://debates.geobrowser.io/debate/${DEBATE_ID}?time=312&utm_source=x`
+    );
+  });
+
   it('forgets an answer after a few minutes, so a debate hidden since stops redirecting', async () => {
     const fetchEntity = vi
       .fn()

@@ -297,7 +297,7 @@ describe('old debate URLs open the debates app (GEO-3695)', () => {
     lookup.mockReset();
 
     expect(response.status).toBe(307);
-    expect(response.headers.get('location')).toBe(`https://debates.geobrowser.io/debate/${VALID_ENTITY}?t=42`);
+    expect(response.headers.get('location')).toBe(`https://debates.geobrowser.io/debate/${VALID_ENTITY}?time=42`);
     expect(stay.headers.get('location')).toBe(`https://www.geobrowser.io/space/${VALID_SPACE}/${VALID_ENTITY}?t=42`);
     expect(redirect).not.toHaveBeenCalled();
   });

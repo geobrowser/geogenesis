@@ -27,11 +27,18 @@ export function couldBeDebateId(id: string): boolean {
 }
 
 /**
+ * geo-notifications tags its links with these. geobrowser.io counts the click (`EmailClickReporter`)
+ * and treats the visitor as returning (`noteEmailArrival`); the debates app does neither yet, so an
+ * email's link stays.
+ */
+const EMAIL_PARAMS = ['ref_email', 'ref_send', 'ref_link'];
+
+/**
  * Query parameters that ask geobrowser.io for something the debates app doesn't have, on a link
  * that comes back from outside: a panel (`modal`, e.g. the reply email's `?modal=comments`, the
  * calendar connect's return `?modal=schedule&calendar=…`) or a calendar connect's result.
  */
-const STAYING_PARAMS = [STAY_PARAM, 'modal', 'calendar'];
+const STAYING_PARAMS = [STAY_PARAM, 'modal', 'calendar', ...EMAIL_PARAMS];
 
 /**
  * Whether a request must stay where it is whatever the page: `?stay=1`, a geobrowser.io panel or
@@ -44,10 +51,13 @@ export function mustStay(searchParams: URLSearchParams): boolean {
   return false;
 }
 
-/** The debates app's link for a debate, the incoming query carried over (campaign tags). */
+/**
+ * The debates app's link for a debate, the incoming query carried over (campaign tags). A start time
+ * is geobrowser.io's `t`; the debates app's is `time`, which opens the debate's full view there.
+ */
 export function debatesAppDestination(entityId: string, searchParams: URLSearchParams): string {
   const url = new URL(debatesAppDebateUrl(entityId));
-  searchParams.forEach((value, key) => url.searchParams.append(key, value));
+  searchParams.forEach((value, key) => url.searchParams.append(key === 't' ? 'time' : key, value));
   return url.toString();
 }
 
