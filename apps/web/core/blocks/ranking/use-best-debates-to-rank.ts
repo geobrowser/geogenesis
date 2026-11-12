@@ -62,7 +62,13 @@ export function useBestDebatesToRank({
   excludeEntityIds: readonly string[];
   /** Orders debates nobody has ranked first, once its read is ready. */
   rankers: RankersRead;
-}): { debates: RecentDebate[]; isLoading: boolean; error: Error | null } {
+}): {
+  debates: RecentDebate[];
+  /** Every debate in the To rank window, before anything is left out: the coverage line's total. */
+  windowCount: number;
+  isLoading: boolean;
+  error: Error | null;
+} {
   // Rounded to the hour so the query key, and with it the cache, holds steady between renders.
   const nowHour = Math.floor(Date.now() / HOUR_MS) * HOUR_MS;
   const query = useQuery({
@@ -80,8 +86,11 @@ export function useBestDebatesToRank({
     [recent, excludeEntityIds, rankerCount]
   );
 
+  const windowCount = React.useMemo(() => (recent ? selectToRank(recent, [], Date.now()).length : 0), [recent]);
+
   return {
     debates,
+    windowCount,
     isLoading: enabled && query.isLoading,
     error: enabled ? (query.error ?? null) : null,
   };

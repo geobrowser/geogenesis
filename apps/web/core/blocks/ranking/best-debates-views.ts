@@ -287,6 +287,21 @@ export function weekCoverageSentence({ ranked, total }: { ranked: number; total:
   return `${ranked} of ${total} debates from the last ${BEST_DEBATES_WINDOW_DAYS} days are ranked`;
 }
 
+/**
+ * The block's line for a ranker (Preston, 12 Nov), in To rank's terms: the debates published in the
+ * last 7 days, and how many of them are in your ranking or down ranked.
+ */
+export function personalCoverageSentence({ ranked, total }: { ranked: number; total: number }): string {
+  return `You've ranked ${ranked} of ${total} ${total === 1 ? 'debate' : 'debates'} from the last ${BEST_DEBATES_WINDOW_DAYS} days`;
+}
+
+/** Everyone else's line: the team's coverage of the same 7 days. */
+export function teamCoverageSentence({ ranked, total }: { ranked: number; total: number }): string {
+  return `${ranked} of ${total} ${total === 1 ? 'debate' : 'debates'} from the last ${BEST_DEBATES_WINDOW_DAYS} days ${
+    total === 1 ? 'is' : 'are'
+  } ranked by the team`;
+}
+
 export function rankerCountLabel(count: number): string {
   return count === 1 ? '1 ranker' : `${count} rankers`;
 }

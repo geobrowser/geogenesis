@@ -12,7 +12,9 @@ import {
   isBestDebatesBlock,
   nyDayKey,
   nyDayStartMs,
+  personalCoverageSentence,
   recentDayKeys,
+  teamCoverageSentence,
 } from './best-debates-views';
 
 const BLOCK = 'b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0';
@@ -236,6 +238,16 @@ describe('coverage', () => {
 
   it('reads like the spec', () => {
     expect(coverageSentence({ ranked: 3, total: 6 })).toBe('3 of 6 debates from today are ranked');
+    expect(personalCoverageSentence({ ranked: 3, total: 34 })).toBe(
+      "You've ranked 3 of 34 debates from the last 7 days"
+    );
+    expect(personalCoverageSentence({ ranked: 0, total: 1 })).toBe("You've ranked 0 of 1 debate from the last 7 days");
+    expect(teamCoverageSentence({ ranked: 2, total: 34 })).toBe(
+      '2 of 34 debates from the last 7 days are ranked by the team'
+    );
+    expect(teamCoverageSentence({ ranked: 1, total: 1 })).toBe(
+      '1 of 1 debate from the last 7 days is ranked by the team'
+    );
     expect(coverageSentence({ ranked: 0, total: 1 })).toBe('0 of 1 debate from today is ranked');
     expect(coverageSentence({ ranked: 0, total: 0 })).toBe('No debates from today yet');
   });

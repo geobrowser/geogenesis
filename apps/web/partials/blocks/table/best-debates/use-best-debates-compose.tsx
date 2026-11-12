@@ -237,5 +237,12 @@ export function useBestDebatesCompose({
     placeFromTeam: (entityId: string) => startPlacement(entityId, 'team'),
     dropEntity,
     publish,
+    /** Down rank from a row (waits for the ranker's vote, then the toast with Undo). */
+    requestPushDown: placement.requestPushDown,
+    /** For a coverage line in To rank's terms: the window's debates, and how many are left to rank. */
+    toRankCoverage:
+      toRank.isLoading || toRank.error
+        ? null
+        : { total: toRank.windowCount, left: Math.min(toRankIds.length, toRank.windowCount) },
   };
 }

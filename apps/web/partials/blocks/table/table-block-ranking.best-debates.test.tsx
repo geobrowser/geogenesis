@@ -119,6 +119,19 @@ vi.mock('~/core/blocks/ranking/use-ranking-pending-proposals', () => ({
 }));
 vi.mock('~/core/blocks/ranking/local-ranking-my-draft', () => ({ loadLocalMyRankingDraft: () => null }));
 // The coverage line's own push-downs (GEO-3679) need a signed-in member; none here.
+// Row ranking on the block has its own tests (best-debates-block.test.tsx).
+vi.mock('./best-debates/use-best-debates-block-ranking', () => ({
+  useBestDebatesBlockRanking: ({ enabled }: { enabled: boolean }) => ({
+    enabled,
+    ready: true,
+    myRankOf: () => null,
+    rank: vi.fn(),
+    downRank: vi.fn(),
+    pushedDownEntityIds: [],
+    coverage: null,
+    dialogs: null,
+  }),
+}));
 vi.mock('~/core/blocks/ranking/use-my-pushed-down-debates', () => ({
   useMyPushedDownDebates: () => ({ debates: [], isError: false, retry: vi.fn() }),
 }));

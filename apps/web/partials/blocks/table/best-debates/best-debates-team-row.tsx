@@ -58,6 +58,49 @@ function PushDownIcon() {
 }
 
 /**
+ * Down rank, inline after the ranked-by badge (or at the start of that line): badge height, with a
+ * 44px hit area on a phone that doesn't make the row taller. Shared by the team rows and the space
+ * page's block rows.
+ */
+export function DownRankButton({ name, onClick }: { name: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      aria-label={`Down rank ${name}`}
+      title="Down rank"
+      onClick={event => {
+        event.stopPropagation();
+        onClick();
+      }}
+      onKeyDown={event => event.stopPropagation()}
+      className={cx(
+        'relative inline-flex h-5 shrink-0 items-center gap-1 self-start rounded-[4px] px-1.5 text-tag whitespace-nowrap text-grey-04 transition-colors hover:bg-grey-01 hover:text-text focus-visible:ring-2 focus-visible:ring-text focus-visible:outline-none',
+        'md:after:absolute md:after:-inset-x-1 md:after:-inset-y-3'
+      )}
+    >
+      <PushDownIcon />
+      Down rank
+    </button>
+  );
+}
+
+/** The rank mark as a button of its own, for rows that aren't one (the space page's block). */
+export function RankButton({ name, onClick, disabled }: { name: string; onClick: () => void; disabled?: boolean }) {
+  return (
+    <button
+      type="button"
+      aria-label={`Rank ${name}`}
+      title="Rank"
+      disabled={disabled}
+      onClick={onClick}
+      className="grid size-8 shrink-0 place-items-center rounded-md border border-grey-02 bg-white text-text transition-colors hover:border-text disabled:cursor-not-allowed disabled:opacity-50 md:size-11"
+    >
+      <RankingChart />
+    </button>
+  );
+}
+
+/**
  * One row of the team column, the same in All and To rank (mockups 07 and 08): the grip where it
  * can be dragged, the team place in All, the poster, claim and meta, who has ranked it, and on the
  * right either "You: #N" or the rank mark; Push down follows the badge. The row itself is the button that places it.
@@ -98,26 +141,7 @@ export function BestDebatesTeamRowContent({
             // line when there is no badge, so it is always in the same place.
             <div className="flex items-center gap-2">
               <RankedByBadge rankers={rankers} entityId={entityId} />
-              {onPushDown && !myRank ? (
-                <button
-                  type="button"
-                  aria-label={`Down rank ${name}`}
-                  title="Down rank"
-                  onClick={event => {
-                    event.stopPropagation();
-                    onPushDown();
-                  }}
-                  onKeyDown={event => event.stopPropagation()}
-                  className={cx(
-                    'relative inline-flex h-5 shrink-0 items-center gap-1 rounded-[4px] px-1.5 text-tag whitespace-nowrap text-grey-04 transition-colors hover:bg-grey-01 hover:text-text focus-visible:ring-2 focus-visible:ring-text focus-visible:outline-none',
-                    // A 44px hit area on a phone without a taller row.
-                    'md:after:absolute md:after:-inset-x-1 md:after:-inset-y-3'
-                  )}
-                >
-                  <PushDownIcon />
-                  Down rank
-                </button>
-              ) : null}
+              {onPushDown && !myRank ? <DownRankButton name={name} onClick={onPushDown} /> : null}
             </div>
           }
           debateAside={

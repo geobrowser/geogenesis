@@ -22,6 +22,16 @@ const mocks = vi.hoisted(() => ({
   capture: vi.fn(),
   pushedDown: [] as { entityId: string }[],
   pushedDownBlockId: undefined as string | null | undefined,
+  ranking: null as unknown as {
+    enabled: boolean;
+    ready: boolean;
+    myRankOf: (id: string) => number | null;
+    rank: ReturnType<typeof vi.fn>;
+    downRank: ReturnType<typeof vi.fn>;
+    pushedDownEntityIds: readonly string[];
+    coverage: { total: number; left: number } | null;
+    dialogs: null;
+  },
 }));
 
 vi.mock('~/core/analytics', () => ({ capture: mocks.capture }));
@@ -41,6 +51,10 @@ vi.mock('~/core/blocks/ranking/use-my-pushed-down-debates', () => ({
     return { debates: blockId ? mocks.pushedDown : [], isError: false, retry: vi.fn() };
   },
 }));
+vi.mock('./best-debates/use-best-debates-block-ranking', () => ({
+  useBestDebatesBlockRanking: ({ enabled }: { enabled: boolean }) => ({ ...mocks.ranking, enabled }),
+}));
+vi.mock('~/core/hooks/use-is-mobile-layout', () => ({ useIsMobileLayout: () => false }));
 vi.mock('~/core/blocks/ranking/use-ranking-entry-entities', () => ({
   useRankingEntryEntities: () => ({ entries: [], isLoading: false }),
 }));
@@ -53,14 +67,17 @@ vi.mock('./best-debates/best-debate-row', () => ({
     rank,
     fallbackName,
     aside,
+    footer,
   }: {
     rank?: number | null;
     fallbackName: string;
     aside?: React.ReactNode;
+    footer?: React.ReactNode;
   }) => (
     <div>
       <span data-testid="place">{rank ?? '-'}</span>
       <span data-testid="name">{fallbackName}</span>
+      {footer}
       {aside}
     </div>
   ),
@@ -103,6 +120,16 @@ beforeEach(() => {
   mocks.capture.mockReset();
   mocks.pushedDown = [];
   mocks.pushedDownBlockId = undefined;
+  mocks.ranking = {
+    enabled: false,
+    ready: true,
+    myRankOf: id => (id === 'b' ? 1 : null),
+    rank: vi.fn(),
+    downRank: vi.fn(),
+    pushedDownEntityIds: [],
+    coverage: { total: 5, left: 2 },
+    dialogs: null,
+  };
   mocks.window = [
     { id: 'u1', name: 'Unranked one', createdAtMs: noon(TODAY) },
     { id: 'a', name: 'Debate A', createdAtMs: noon(TODAY) },
@@ -127,18 +154,63 @@ describe('BestDebatesBlock', () => {
   it('shows the coverage line and each row’s ranker count', () => {
     renderBlock();
 
-    expect(screen.getByTestId('best-debates-coverage')).toHaveTextContent('2 of 4 debates from today are ranked');
+    // Someone who can't rank sees the team's 7 days, with no button.
+    expect(screen.getByTestId('best-debates-coverage')).toHaveTextContent(
+      '3 of 5 debates from the last 7 days are ranked by the team'
+    );
+    expect(screen.queryByRole('button', { name: 'Rank the rest' })).not.toBeInTheDocument();
     expect(screen.getAllByTestId('best-debates-ranker-count').map(node => node.textContent)).toEqual([
       '2 rankers',
       '1 ranker',
     ]);
   });
 
-  it('counts a debate the ranker pushed down as handled in the coverage line (GEO-3679)', () => {
-    mocks.pushedDown = [{ entityId: 'u1' }];
+  it('gives a ranker their own line in To rank terms: N of M from the last 7 days', () => {
+    // M is the To rank window; N is M less what To rank still holds (down ranked counts as done).
     renderBlock({ canRank: true });
 
-    expect(screen.getByTestId('best-debates-coverage')).toHaveTextContent('3 of 4 debates from today are ranked');
+    expect(screen.getByTestId('best-debates-coverage')).toHaveTextContent(
+      "You've ranked 3 of 5 debates from the last 7 days"
+    );
+    expect(screen.getByRole('button', { name: 'Rank the rest' })).toBeInTheDocument();
+  });
+
+  it('hides Rank the rest once the ranker has handled every debate in the window', () => {
+    mocks.ranking.coverage = { total: 5, left: 0 };
+    renderBlock({ canRank: true });
+
+    expect(screen.getByTestId('best-debates-coverage')).toHaveTextContent(
+      "You've ranked 5 of 5 debates from the last 7 days"
+    );
+    expect(screen.queryByRole('button', { name: 'Rank the rest' })).not.toBeInTheDocument();
+  });
+
+  it('gives a ranker Rank and Down rank on rows not in their ranking, and "You: #N" on theirs', () => {
+    renderBlock({ canRank: true });
+
+    expect(screen.getByText('You: #1')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Rank Debate B' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Down rank Debate B' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Rank Debate A' }));
+    expect(mocks.ranking.rank).toHaveBeenCalledWith('a');
+    fireEvent.click(screen.getByRole('button', { name: 'Down rank Unranked one' }));
+    expect(mocks.ranking.downRank).toHaveBeenCalledWith('u1');
+  });
+
+  it('shows no row controls to someone who cannot rank', () => {
+    renderBlock({ canRank: false });
+
+    expect(screen.queryByRole('button', { name: /^Rank Debate/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Down rank/ })).not.toBeInTheDocument();
+    expect(screen.queryByText(/You: #/)).not.toBeInTheDocument();
+  });
+
+  it('waits for the ranker’s own ballot before Rank on a row works', () => {
+    mocks.ranking.ready = false;
+    renderBlock({ canRank: true });
+
+    expect(screen.getByRole('button', { name: 'Rank Debate A' })).toBeDisabled();
   });
 
   it('reads no push-downs for a viewer who cannot rank', () => {
@@ -146,7 +218,9 @@ describe('BestDebatesBlock', () => {
     renderBlock({ canRank: false });
 
     expect(mocks.pushedDownBlockId).toBeNull();
-    expect(screen.getByTestId('best-debates-coverage')).toHaveTextContent('2 of 4 debates from today are ranked');
+    expect(screen.getByTestId('best-debates-coverage')).toHaveTextContent(
+      '3 of 5 debates from the last 7 days are ranked by the team'
+    );
   });
 
   it('labels the last seven days with their coverage', () => {
@@ -266,14 +340,12 @@ describe('BestDebatesBlock', () => {
     expect(retry).toHaveBeenCalled();
   });
 
-  it('speaks for the last seven days when nothing is from today yet', () => {
+  it('speaks for the whole 7 days even when nothing is from today', () => {
     mocks.window = mocks.window.filter(debate => debate.id === 'yday');
-    mocks.flag = true;
-    mocks.canEdit = true;
     renderBlock({ teamOrder: [] });
 
     expect(screen.getByTestId('best-debates-coverage')).toHaveTextContent(
-      '1 of 1 debate from the last 7 days is ranked'
+      '1 of 1 debate from the last 7 days is ranked by the team'
     );
   });
 

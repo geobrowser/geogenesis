@@ -15,11 +15,11 @@ import {
   type PeriodDebate,
   buildBestDebatesViewRows,
   buildDayCoverage,
-  coverageSentence,
   dayLabel,
+  personalCoverageSentence,
   rankerCountLabel,
   recentDayKeys,
-  weekCoverageSentence,
+  teamCoverageSentence,
 } from '~/core/blocks/ranking/best-debates-views';
 import type { RankingComposeMode } from '~/core/blocks/ranking/ranking-compose-url';
 import { useBestDebateDisplays } from '~/core/blocks/ranking/use-best-debate-displays';
@@ -32,6 +32,7 @@ import {
 import { useMyPushedDownDebates } from '~/core/blocks/ranking/use-my-pushed-down-debates';
 import { type RankingEntryDisplay, useRankingEntryEntities } from '~/core/blocks/ranking/use-ranking-entry-entities';
 import { SegmentedControl } from '~/core/debates/matchmaking/debate-calendar-controls';
+import { useIsMobileLayout } from '~/core/hooks/use-is-mobile-layout';
 import { normId } from '~/core/utils/norm-id';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -39,6 +40,8 @@ import { Button } from '~/design-system/button';
 
 import { BestDebateDisplaysContext, BestDebateRow, RankerAvatars } from './best-debates/best-debate-row';
 import { BestDebateWatchProvider } from './best-debates/best-debate-watch';
+import { DownRankButton, RankButton } from './best-debates/best-debates-team-row';
+import { useBestDebatesBlockRanking } from './best-debates/use-best-debates-block-ranking';
 import { RankingEntryRowSkeleton } from './ranking-entry-row';
 
 /**
@@ -102,6 +105,8 @@ export function BestDebatesBlock({
   const periodQuery = windowQuery;
 
   const rankers = useBestDebatesRankers({ blockId, spaceId });
+  const isMobile = useIsMobileLayout();
+  const ranking = useBestDebatesBlockRanking({ enabled: canRank, blockId, spaceId, isMobile });
 
   const period: BestDebatesPeriod =
     view === 'all' ? { view: 'all' } : view === 'week' ? { view: 'week', todayKey } : { view: 'day', dayKey };
@@ -165,22 +170,23 @@ export function BestDebatesBlock({
     setPickedDayKey(null);
   };
 
-  const today = coverage[0];
-  // With nothing from today yet, the line speaks for the whole window, which is what To rank (Rank
-  // the rest) holds anyway, rather than leaving an empty box.
+  // The 7 days To rank covers, whole: a ranker's own progress through them (N of M, with To rank's
+  // rules), or for everyone else the team's (Preston, 12 Nov).
   const week = coverage.reduce((sum, day) => ({ ranked: sum.ranked + day.ranked, total: sum.total + day.total }), {
     ranked: 0,
     total: 0,
   });
-  const coverageCounts =
-    today && today.total > 0 ? { ...today, scope: 'today' as const } : { ...week, scope: 'week' as const };
+  const personal = ranking.coverage
+    ? { ranked: ranking.coverage.total - ranking.coverage.left, total: ranking.coverage.total }
+    : null;
+  const coverageCounts = canRank ? personal : windowQuery.data ? week : null;
   const rankTheRest = () => {
     capture('element_clicked', {
       source: 'best_debates_block',
       element_action: 'rank_the_rest',
       block_id: blockId,
       space_id: spaceId,
-      unranked_count: coverageCounts.total - coverageCounts.ranked,
+      unranked_count: coverageCounts ? coverageCounts.total - coverageCounts.ranked : null,
     });
     onOpenCompose('edit', { [BEST_DEBATES_TEAM_VIEW_PARAM]: BEST_DEBATES_TEAM_VIEW_TO_RANK });
   };
@@ -214,6 +220,16 @@ export function BestDebatesBlock({
       );
     }
     const rankedBy = count != null && count > 0 ? (rankers.rankersOf?.(id) ?? []) : [];
+    const name = data?.title ?? entry?.name ?? 'Untitled debate';
+    // Rank and Down rank for rankers only (flag and membership); a debate already yours says so.
+    const myRank = ranking.enabled ? ranking.myRankOf(id) : null;
+    const isDownRanked = ranking.pushedDownEntityIds.some(other => normId(other) === normId(id));
+    const canDownRank = ranking.enabled && myRank == null && !isDownRanked;
+    const rankControl = !ranking.enabled ? null : myRank != null ? (
+      <span className="ml-1 text-breadcrumb whitespace-nowrap text-grey-04 tabular-nums">You: #{myRank}</span>
+    ) : (
+      <RankButton name={name} disabled={!ranking.ready} onClick={() => ranking.rank(id)} />
+    );
     const row = (
       <BestDebateRow
         entityId={id}
@@ -222,6 +238,10 @@ export function BestDebatesBlock({
         rank={place}
         // A debate opens on its own page, where it plays full screen; the poster plays it here.
         href={NavUtils.toEntity(data?.ownSpaceId ?? spaceId, id)}
+        footer={
+          // Down rank starts the line under the meta (the block's rows carry no badge).
+          canDownRank ? <DownRankButton name={name} onClick={() => ranking.downRank(id)} /> : null
+        }
         aside={
           count != null && count > 0 ? (
             <>
@@ -232,8 +252,11 @@ export function BestDebatesBlock({
               >
                 {rankerCountLabel(count)}
               </span>
+              {rankControl}
             </>
-          ) : null
+          ) : (
+            rankControl
+          )
         }
       />
     );
@@ -249,9 +272,11 @@ export function BestDebatesBlock({
     <BestDebateDisplaysContext.Provider value={displays}>
       <BestDebateWatchProvider>
         <div className="flex w-full min-w-0 flex-col gap-4" data-testid="best-debates-block">
+          {ranking.dialogs}
           <CoverageLine
-            counts={windowQuery.data ? coverageCounts : null}
-            loading={windowQuery.isLoading}
+            counts={coverageCounts}
+            personal={canRank}
+            loading={canRank ? !personal : windowQuery.isLoading}
             rankers={rankers}
             onRankTheRest={canRank ? rankTheRest : null}
           />
@@ -383,11 +408,14 @@ function ShowMore({ onClick }: { onClick: () => void }) {
 
 function CoverageLine({
   counts,
+  personal,
   loading,
   rankers,
   onRankTheRest,
 }: {
-  counts: { ranked: number; total: number; scope: 'today' | 'week' } | null;
+  counts: { ranked: number; total: number } | null;
+  /** The ranker's own line, with Rank the rest; else the team's, with no button. */
+  personal: boolean;
   loading: boolean;
   rankers: BestDebatesRankers;
   onRankTheRest: (() => void) | null;
@@ -413,12 +441,12 @@ function CoverageLine({
   return (
     <div className="flex flex-wrap items-center gap-3 rounded-lg bg-grey-01 p-3" data-testid="best-debates-coverage">
       <span className="text-metadata text-text">
-        {counts.scope === 'today' ? coverageSentence(counts) : weekCoverageSentence(counts)}
+        {personal ? personalCoverageSentence(counts) : teamCoverageSentence(counts)}
       </span>
       <span className="h-1.5 min-w-[120px] flex-1 overflow-hidden rounded-full bg-grey-02" aria-hidden>
         <span className="block h-full bg-text" style={{ width: `${share}%` }} />
       </span>
-      {onRankTheRest && counts.ranked < counts.total ? (
+      {personal && onRankTheRest && counts.ranked < counts.total ? (
         <Button
           variant="primary"
           small
