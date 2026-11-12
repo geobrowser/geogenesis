@@ -381,10 +381,13 @@ function RankingComposeTeamHeader({ isMobile, teamView }: { isMobile: boolean; t
   ];
   return (
     <div className="flex w-full min-w-0 items-center justify-between gap-3">
-      <h2 className={cx('m-0 text-text', isMobile ? 'text-[22px] font-medium' : 'text-[17px] font-semibold')}>
-        Team ranking
-      </h2>
-      <div role="group" aria-label="Show" className="flex shrink-0 rounded-full bg-grey-01 p-0.5">
+      {/* On a phone the Team ranking / Your ranking tabs already say it. */}
+      {isMobile ? null : <h2 className="m-0 text-[17px] font-semibold text-text">Team ranking</h2>}
+      <div
+        role="group"
+        aria-label="Show"
+        className={cx('flex rounded-full bg-grey-01 p-0.5', isMobile ? 'w-full' : 'shrink-0')}
+      >
         {options.map(option => (
           <button
             key={option.id}
@@ -392,7 +395,8 @@ function RankingComposeTeamHeader({ isMobile, teamView }: { isMobile: boolean; t
             aria-pressed={teamView.mode === option.id}
             onClick={() => teamView.onModeChange(option.id)}
             className={cx(
-              'flex h-[26px] items-center gap-1.5 rounded-full px-3 text-[14px] leading-[15px] font-medium transition-colors',
+              'flex items-center justify-center gap-1.5 rounded-full px-3 text-[14px] leading-[15px] font-medium transition-colors',
+              isMobile ? 'h-10 flex-1' : 'h-[26px]',
               teamView.mode === option.id
                 ? 'bg-white text-text shadow-[0_1px_2px_rgba(0,0,0,0.12)]'
                 : 'text-grey-04 hover:text-text'
@@ -822,7 +826,7 @@ export function RankingComposeGlobalRanking({
             onChange={e => handleSearchQueryChange(e.target.value)}
             placeholder={teamView?.tools ? 'Search debates and topics' : 'Search'}
             aria-label={teamView?.tools ? 'Search debates and topics' : 'Search rankable entities'}
-            className="h-8 w-full rounded border border-grey-02 bg-white py-1 pr-2 pl-8 text-metadata text-text outline-hidden focus-visible:border-text"
+            className="h-8 w-full rounded border border-grey-02 bg-white py-1 pr-2 pl-8 text-metadata text-text outline-hidden focus-visible:border-text md:h-10 md:text-[16px]"
           />
         </div>
         {teamView?.tools && topicFacet ? <BestDebatesTeamToolbar tools={teamView.tools} facet={topicFacet} /> : null}

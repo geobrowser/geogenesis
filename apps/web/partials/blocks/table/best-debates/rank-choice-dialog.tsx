@@ -77,7 +77,7 @@ export function RankChoiceDialog({
   const debate = useBestDebateRowData(entityId);
   const meta = debateMeta ?? ([debate?.debaters, debate?.space?.name].filter(Boolean).join(' · ') || undefined);
   return (
-    <RankingFlowDialog open onClose={onClose} title={debate?.title ?? debateName} subtitle={meta}>
+    <RankingFlowDialog open phoneSheet onClose={onClose} title={debate?.title ?? debateName} subtitle={meta}>
       <div className="grid grid-cols-2 gap-3 md:grid-cols-1" data-testid="rank-choice-dialog">
         <button type="button" className={OPTION_CLASS} onClick={onRankIt} disabled={!ready}>
           <span className={OPTION_TITLE_CLASS}>

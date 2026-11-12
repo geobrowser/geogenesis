@@ -48,7 +48,8 @@ function MobileTabBar({ tabs }: { tabs: RankingComposeMobileTabs }) {
     { id: 'my', label: tabs.myLabel },
   ];
   return (
-    <div role="tablist" aria-label="Rankings" className="mb-4 flex shrink-0 gap-1 rounded-full bg-grey-01 p-1">
+    // The team picker's segmented style (equal segments, centred labels), at a 44px phone tap height.
+    <div role="tablist" aria-label="Rankings" className="mb-3 flex shrink-0 rounded-full bg-grey-01 p-0.5">
       {options.map(option => (
         <button
           key={option.id}
@@ -57,8 +58,8 @@ function MobileTabBar({ tabs }: { tabs: RankingComposeMobileTabs }) {
           aria-selected={tabs.active === option.id}
           onClick={() => tabs.onChange(option.id)}
           className={cx(
-            'h-11 flex-1 rounded-full text-metadata transition-colors',
-            tabs.active === option.id ? 'bg-white text-text shadow-light' : 'text-grey-04'
+            'grid h-10 flex-1 place-items-center rounded-full text-center text-[15px] leading-[18px] font-medium transition-colors',
+            tabs.active === option.id ? 'bg-white text-text shadow-[0_1px_2px_rgba(0,0,0,0.12)]' : 'text-grey-04'
           )}
         >
           {option.label}

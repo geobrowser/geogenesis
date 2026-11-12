@@ -61,6 +61,7 @@ export function RankingPlacedDialog({
   return (
     <RankingFlowDialog
       open
+      phoneSheet
       onClose={onClose}
       title={`Placed #${at + 1} of ${orderedIds.length}`}
       subtitle={
@@ -147,17 +148,26 @@ function PlacedRow({
       </span>
       <BestDebateThumb entityId={entityId} keyframeUrl={display?.keyframeUrl ?? null} label={display?.title ?? name} />
       <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <span className="truncate text-[17px] leading-[21px] font-medium text-text">{display?.title ?? name}</span>
+        <span className="line-clamp-2 text-[17px] leading-[21px] font-medium text-text md:text-[15px] md:leading-[19px]">
+          {display?.title ?? name}
+        </span>
         <BestDebateMeta data={display} showSpace={false} />
       </div>
       {isPlaced ? (
         <span className="flex shrink-0 flex-col gap-0.5">
-          <SquareButton icon={<ChevronUp />} aria-label="Move up" disabled={!canMoveUp} onClick={() => onNudge(-1)} />
+          <SquareButton
+            icon={<ChevronUp />}
+            aria-label="Move up"
+            disabled={!canMoveUp}
+            onClick={() => onNudge(-1)}
+            className="md:!size-11"
+          />
           <SquareButton
             icon={<ChevronDown />}
             aria-label="Move down"
             disabled={!canMoveDown}
             onClick={() => onNudge(1)}
+            className="md:!size-11"
           />
         </span>
       ) : null}

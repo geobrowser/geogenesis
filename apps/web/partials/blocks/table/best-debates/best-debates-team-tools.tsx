@@ -101,7 +101,11 @@ export function BestDebatesTopicSearchRow({
   }));
   if (pickedTopics.length === 0 && suggestions.length === 0) return null;
   return (
-    <div className="flex flex-col gap-2 pt-2" data-testid="best-debates-topic-search">
+    // On a phone each row scrolls sideways rather than wrapping into a wall of pills over the list.
+    <div
+      className="flex flex-col gap-2 pt-2 md:[&_[role=group]]:[scrollbar-width:none] md:[&_[role=group]]:flex-nowrap md:[&_[role=group]]:overflow-x-auto"
+      data-testid="best-debates-topic-search"
+    >
       {pickedTopics.length > 0 ? (
         <div role="group" aria-label="Picked topics" className="flex flex-wrap items-center gap-2">
           {pickedTopics.map(topic => (

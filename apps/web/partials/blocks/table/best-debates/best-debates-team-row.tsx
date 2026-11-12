@@ -90,7 +90,7 @@ export function BestDebatesTeamRowContent({
               </span>
             ) : (
               <span
-                className="grid size-8 place-items-center rounded-md border border-grey-02 bg-white text-text"
+                className="grid size-8 place-items-center rounded-md border border-grey-02 bg-white text-text md:size-11"
                 aria-hidden
               >
                 <RankingChart />

@@ -45,6 +45,8 @@ type Props = {
   pendingEntityIds: ReadonlySet<string>;
   /** Rendered under the list, e.g. the Best debates "You pushed down" section (GEO-3679). */
   footer?: React.ReactNode;
+  /** Phones with the Team / Your ranking tabs: the tab names the column, so no heading or rule. */
+  hideMobileHeading?: boolean;
   /** The column's heading; "My ranking" unless the block says otherwise (Best debates: "Your ranking"). */
   title?: string;
   emptyText?: string;
@@ -113,6 +115,7 @@ export function RankingComposeMyRanking({
   pendingEntityIds,
   footer,
   title = 'My ranking',
+  hideMobileHeading = false,
   emptyText = 'Add or search global ranking list to get started',
   onDropEntity,
 }: Props) {
@@ -121,8 +124,15 @@ export function RankingComposeMyRanking({
   const { listRef, dropIndex, dropHandlers } = useEntityDrop(onDropEntity);
 
   return (
-    <div className={cx('flex flex-col', isDesktop && 'min-h-0 flex-1', isMobile && 'border-t border-grey-02 pt-8')}>
+    <div
+      className={cx(
+        'flex flex-col',
+        isDesktop && 'min-h-0 flex-1',
+        isMobile && !hideMobileHeading && 'border-t border-grey-02 pt-8'
+      )}
+    >
       <div
+        hidden={isMobile && hideMobileHeading}
         className={cx(
           'grid w-full min-w-0 shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3',
           isDesktop && 'border-b border-grey-02 pb-4'

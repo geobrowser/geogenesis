@@ -356,20 +356,25 @@ function MomentsStory({
             ))}
           </div>
         ) : (
-          <div className="flex items-center gap-2 px-1">
-            <FullTimeline elapsedMs={fullMs} durationMs={fullDurationMs} moments={moments} onSeek={seekFull} />
-            {story.count > 0 && (
-              <button
-                ref={collapseRef}
-                type="button"
-                aria-label="Back to moments"
-                title="Moments"
-                onClick={collapse}
-                className="grid size-9 shrink-0 place-items-center rounded-full bg-white/[0.08] text-white transition-colors hover:bg-white/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
-              >
-                <CloseSmall />
-              </button>
-            )}
+          <div className="flex flex-col gap-1 px-1">
+            <div className="flex items-center gap-2">
+              <FullTimeline elapsedMs={fullMs} durationMs={fullDurationMs} moments={moments} onSeek={seekFull} />
+              {story.count > 0 && (
+                <button
+                  ref={collapseRef}
+                  type="button"
+                  aria-label="Back to moments"
+                  title="Moments"
+                  onClick={collapse}
+                  className="grid size-9 shrink-0 place-items-center rounded-full bg-white/[0.08] text-white transition-colors hover:bg-white/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
+                >
+                  <CloseSmall />
+                </button>
+              )}
+            </div>
+            {story.count === 0 ? (
+              <p className="m-0 text-[clamp(10px,3.6cqw,12px)] text-white/70">No moments for this debate yet</p>
+            ) : null}
           </div>
         )
       }
@@ -519,11 +524,6 @@ function MomentsStory({
           </svg>
         </button>
       )}
-      {story.mode === 'full' && story.count === 0 && !playing && (
-        <p className="absolute inset-x-3 top-3 z-20 text-center text-[clamp(10px,3.6cqw,13px)] text-white/80">
-          No moments for this debate yet
-        </p>
-      )}
 
       {story.mode === 'moments' && caption && (
         // As the debates app captions a moment: a black box at the seam between the two debaters.
@@ -622,7 +622,9 @@ function FullTimeline({
   return (
     // The debates app's full-view rail: elapsed, the bar with a dot per moment, the length.
     <div className="flex min-w-0 flex-1 items-center gap-2 text-[clamp(10px,3.6cqw,13px)] leading-none tabular-nums">
-      <span data-testid="debate-elapsed">{formatPlaybackTime(elapsedMs)}</span>
+      <span data-testid="debate-elapsed" className="@max-[200px]:hidden">
+        {formatPlaybackTime(elapsedMs)}
+      </span>
       <div className="relative h-6 min-w-0 flex-1">
         <div
           ref={trackRef}
@@ -680,7 +682,9 @@ function FullTimeline({
           );
         })}
       </div>
-      <span data-testid="debate-duration">{known ? formatPlaybackTime(durationMs) : '–:––'}</span>
+      <span data-testid="debate-duration" className="@max-[200px]:hidden">
+        {known ? formatPlaybackTime(durationMs) : '–:––'}
+      </span>
     </div>
   );
 }

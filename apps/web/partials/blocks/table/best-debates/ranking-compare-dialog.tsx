@@ -80,7 +80,9 @@ export function RankingCompareDialog({
       title="Which was the better debate?"
       subtitle={
         <span aria-live="polite">
-          Step {search.step} of about {search.expectedSteps} · keys 1, 2 or = for about the same
+          Step {search.step} of about {search.expectedSteps}
+          {/* No keyboard on a phone. */}
+          <span className="md:hidden"> · keys 1, 2 or = for about the same</span>
         </span>
       }
     >

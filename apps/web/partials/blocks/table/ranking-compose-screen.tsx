@@ -4,6 +4,7 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import * as React from 'react';
 
+import cx from 'classnames';
 import { useAtom, useSetAtom } from 'jotai';
 import { useRouter, useSearchParams } from 'next/navigation';
 
@@ -53,6 +54,8 @@ import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import type { SearchResult } from '~/core/types';
 import { useRankingOpportunity } from '~/core/use-ranking-opportunity';
 
+import { Button } from '~/design-system/button';
+
 import { stepAtom } from '~/partials/onboarding/onboarding-atoms';
 
 import { BestDebateDisplaysContext } from './best-debates/best-debate-row';
@@ -64,7 +67,11 @@ import { RankingComposeCreateEntityPanel } from './ranking-compose-create-entity
 import { RankingComposeEntitySheet } from './ranking-compose-entity-sheet';
 import { RankingComposeFullscreen } from './ranking-compose-fullscreen';
 import { RankingComposeGlobalRanking } from './ranking-compose-global-ranking';
-import { RankingComposePinnedToolbar, RankingComposeTitleMetadata } from './ranking-compose-header';
+import {
+  RANKING_COMPOSE_PUBLISH_BUTTON_CLASS,
+  RankingComposePinnedToolbar,
+  RankingComposeTitleMetadata,
+} from './ranking-compose-header';
 import { RankingComposeLayout } from './ranking-compose-layout';
 import { RankingComposeMyRanking } from './ranking-compose-my-ranking';
 import { RankingComposePushedDown } from './ranking-compose-pushed-down';
@@ -818,6 +825,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
             ? {
                 title: 'Your ranking',
                 hideSidePanel: true,
+                hideMobileHeading: true,
                 emptyText: 'Drag debates here from the team ranking, or click one to compare.',
                 onDropEntity: bestDebates.dropEntity,
               }
@@ -898,7 +906,9 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
                     <RankingComposePinnedToolbar
                       isMobile={isMobile}
                       onBack={handleBack}
-                      showPublishButton
+                      // Best debates on a phone publishes from a bar along the bottom, shown only
+                      // while there is something to publish.
+                      showPublishButton={!isBestDebates}
                       canPublish={canPublish}
                       isSaving={isPublishBusy}
                       onPublish={() => void handlePublish()}
@@ -917,6 +927,27 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
                     </div>
                     <div className="relative flex min-h-0 flex-col">{rankingLayout}</div>
                   </div>
+                  {isBestDebates && canPublish ? (
+                    <div
+                      className="shrink-0 border-t border-grey-02 bg-white px-4 pt-3 pb-[max(12px,env(safe-area-inset-bottom))]"
+                      data-testid="best-debates-mobile-publish"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="min-w-0 flex-1 text-[13px] leading-[17px] text-grey-04">
+                          Your ranking has changes you haven’t published.
+                        </span>
+                        <Button
+                          variant="primary"
+                          className={cx(RANKING_COMPOSE_PUBLISH_BUTTON_CLASS, '!h-11 shrink-0 !px-4')}
+                          disabled={isPublishBusy}
+                          onClick={() => void handlePublish()}
+                          data-analytics-feature="ranking-submit"
+                        >
+                          {isPublishBusy ? 'Publishing…' : 'Publish'}
+                        </Button>
+                      </div>
+                    </div>
+                  ) : null}
                 </>
               ) : (
                 <div className="mx-auto flex h-full min-h-0 w-full max-w-[1200px] flex-col overflow-hidden px-4">

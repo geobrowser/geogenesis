@@ -20,6 +20,11 @@ type Props = {
   wide?: boolean;
   /** `narrow` for one player on its own (the watch dialog). */
   size?: 'narrow';
+  /**
+   * On a phone, a sheet along the bottom that is only as tall as its content (the Rank choice and
+   * Placed), rather than a full-screen page with most of it empty.
+   */
+  phoneSheet?: boolean;
   children: React.ReactNode;
   footer?: React.ReactNode;
   onKeyDown?: (event: React.KeyboardEvent) => void;
@@ -41,6 +46,7 @@ export function RankingFlowDialog({
   ariaLabel,
   wide = false,
   size,
+  phoneSheet = false,
   children,
   footer,
   onKeyDown,
@@ -48,13 +54,28 @@ export function RankingFlowDialog({
   return (
     <Dialog.Root open={open} onOpenChange={next => !next && onClose()}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-[201] flex items-start justify-center overflow-y-auto bg-text/20 p-4 md:p-0">
+        <Dialog.Overlay
+          className={cx(
+            'fixed inset-0 z-[201] flex items-start justify-center overflow-y-auto bg-text/20 p-4 md:p-0',
+            phoneSheet && 'md:items-end'
+          )}
+        >
           <Dialog.Content
             aria-describedby={undefined}
             aria-label={ariaLabel}
             onKeyDown={onKeyDown}
+            // The dialog itself takes focus, not its close button: a ring on the close control is
+            // the first thing a tap-opened dialog showed on a phone.
+            onOpenAutoFocus={event => {
+              event.preventDefault();
+              (event.currentTarget as HTMLElement | null)?.focus();
+            }}
+            tabIndex={-1}
             className={cx(
-              'mt-16 flex w-full flex-col gap-4 rounded-xl bg-white p-6 shadow-dropdown focus:outline-hidden md:mt-0 md:min-h-full md:rounded-none md:p-4',
+              'mt-16 flex w-full flex-col gap-4 rounded-xl bg-white p-6 shadow-dropdown focus:outline-hidden md:mt-0 md:p-4',
+              phoneSheet
+                ? 'md:rounded-t-2xl md:rounded-b-none md:pb-[max(16px,env(safe-area-inset-bottom))]'
+                : 'md:min-h-full md:rounded-none',
               wide ? 'max-w-[1350px]' : size === 'narrow' ? 'max-w-[560px]' : 'max-w-[880px]'
             )}
           >

@@ -93,7 +93,7 @@ export function BestDebatesToRankList({
 
   return (
     <div className="flex flex-col" data-testid="best-debates-to-rank">
-      <p className="m-0 pb-2 text-metadata text-grey-04">
+      <p className="m-0 pb-2 text-metadata text-grey-04 md:pt-1 md:text-[13px] md:leading-[17px]">
         Published in the last 7 days and not in your ranking, nobody-ranked first. Anything older drops off.
       </p>
       {ids.length === 0 ? (
