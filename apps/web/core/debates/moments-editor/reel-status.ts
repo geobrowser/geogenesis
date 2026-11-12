@@ -117,8 +117,8 @@ export function refusalMessage(code: string): string {
     case 'manual_reel_invalid':
       return "Some clips can't be cut or linked as given.";
     case 'reel_being_reapplied':
-      // geo-chat#352 (pending): a reel publish while a re-render's re-apply of the reel is running.
-      return "A re-render is re-applying this hand-picked reel to the new video. Reload when it's done to edit it.";
+      // geo-chat#352: a reel made on a carried reel's version, whose cuts are on the old video's clock.
+      return "A re-render carried this hand-picked reel over, and its clips are still cut on the old video, so it can't be edited. Reload to see where it stands.";
     case 'reel_no_longer_fits':
       // geo-chat#352: a re-render re-extracted the debate and the hand-picked reel it re-applied no longer fits.
       return 'A re-render moved the video, so this hand-picked reel no longer fits. Pick its clips again.';

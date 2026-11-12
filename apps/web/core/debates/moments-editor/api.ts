@@ -86,7 +86,10 @@ export type LiveReel = {
     claim_index: number | null;
     claim_text: string | null;
   }[];
-  /** Carried onto a re-render's claims and being re-applied (geo-chat#352, pending): see `reelBeingReapplied`. */
+  /**
+   * A hand-picked reel a re-render carried onto fresh claims, not yet cut again on the new video
+   * (geo-chat#352): see `reelCarried`. Absent from a geo-chat that predates it.
+   */
   carried?: boolean;
 };
 
@@ -102,17 +105,17 @@ export type MomentBackfillEntry = {
   queued: boolean;
   request: MomentBackfillStatus | null;
   live_reel?: LiveReel | null;
-  /** The same mark as `live_reel.carried`, under the other name geo-chat#352 may give it. */
-  reel_carried?: boolean;
 };
 
 /**
- * Whether a re-render carried this hand-picked reel onto fresh claims and the worker is re-applying
- * it to the new video (geo-chat#352). Its `live_reel` times are then on the old video's clock, so it
- * must not be edited until that is done. Read under either name the backend may land.
+ * Whether a re-render carried this hand-picked reel onto fresh claims and it is not yet cut again on
+ * the new video (geo-chat#352, `live_reel.carried`). Its `live_reel` times are on the old video's
+ * clock, and geo-chat refuses a reel made on them (`reel_being_reapplied`). The mark stays when the
+ * worker's re-cut fails (`reel_no_longer_fits`), so the way to pick the reel again is to return it to
+ * automatic (an unlock, which is not refused) and edit the reel that replaces it.
  */
-export function reelBeingReapplied(entry: Pick<MomentBackfillEntry, 'live_reel' | 'reel_carried'> | null) {
-  return entry?.reel_carried === true || entry?.live_reel?.carried === true;
+export function reelCarried(entry: Pick<MomentBackfillEntry, 'live_reel'> | null) {
+  return entry?.live_reel?.carried === true;
 }
 
 export type MomentBackfillResponse = { applied: boolean; debates: MomentBackfillEntry[] };

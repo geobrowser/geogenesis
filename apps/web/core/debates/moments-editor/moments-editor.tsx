@@ -16,7 +16,7 @@ import { DebateFeedPlayer } from '../browse/debate-feed-player';
 import { useDebate, useDebateExtractedClaims, useDebateMedia, useDebateTranscript, useGeoChatAuth } from '../hooks';
 import { NEGATIVE_TEXT_CLASS, POSITIVE_TEXT_CLASS, WAITING_TEXT_CLASS } from '../matchmaking/admin-debate-parts';
 import { HUB_LIGHT_CALLOUT_CLASS_NAME } from '../matchmaking/hub-callout';
-import { type MomentBackfillEntry, reelBeingReapplied } from './api';
+import { type MomentBackfillEntry, reelCarried } from './api';
 import { type ClaimOption, ClipRow } from './clip-row';
 import {
   isMediaAdminRefusal,
@@ -28,6 +28,7 @@ import {
 import {
   type EditorClip,
   MANUAL_MAX_CLIPS,
+  type ReelWord,
   type ServedMoment,
   clipProblems,
   clipQuote,
@@ -197,6 +198,10 @@ function Editor({ debateId }: { debateId: string }) {
   const transcriptFailed = !transcript.isPending && transcript.data === undefined;
   const readOnlyReason = editingBlockedReason(entry, transcript.data?.word_timing, plan.error, transcriptFailed);
   const readOnly = readOnlyReason !== null;
+  // A carried reel can't be edited, but it can be returned to automatic, which geo-chat doesn't refuse
+  // (its dry run here is that unlock): that is how its clips get picked again.
+  const carried = reelCarried(entry);
+  const canUnlockCarried = carried && !plan.error && !refusalBlocksEditing(entry?.refusal);
 
   const clipViews = clips.map(clip => {
     const speaker = clipSpeaker(words, clip.start_ms, clip.end_ms);
@@ -228,7 +233,7 @@ function Editor({ debateId }: { debateId: string }) {
   const locked =
     handPicked !== null || (payload as { moment_reel_manual?: unknown } | undefined)?.moment_reel_manual === true;
   const canPublish = canQueue && dirty;
-  const canUnlock = locked && !dirty && !inFlight && !readOnly;
+  const canUnlock = locked && !dirty && !inFlight && (!readOnly || canUnlockCarried);
   // A confirm stays open only while what it confirms can still be sent: an edit made under it can
   // break a clip, or turn a return to automatic into one that would throw the edit away.
   const confirmAllowed = confirm === 'publish' ? canPublish : confirm === 'unlock' ? canUnlock : true;
@@ -238,18 +243,7 @@ function Editor({ debateId }: { debateId: string }) {
 
   const updateClip = (index: number, update: (clip: EditorClip) => EditorClip) =>
     setClips(current =>
-      current.map((clip, at) => {
-        if (at !== index) return clip;
-        const next = update(clip);
-        // A claim picked for one speaker never rides along when the clip changes speaker.
-        if (
-          next.claim_index !== null &&
-          claimSlot(next.claim_index) !== clipSpeaker(words, next.start_ms, next.end_ms)
-        ) {
-          return { ...next, claim_index: null };
-        }
-        return next;
-      })
+      current.map((clip, at) => (at === index ? keepClaimWithSpeaker(clip, update(clip), words, claimSlot) : clip))
     );
 
   const submit = (kind: 'preview' | 'publish' | 'unlock') => {
@@ -328,7 +322,7 @@ function Editor({ debateId }: { debateId: string }) {
           approximate. Check them before publishing.
         </Notice>
       ) : null}
-      {reapplyFailed ? <ReapplyFailedNotice job={reapplyFailed} /> : null}
+      {reapplyFailed ? <ReapplyFailedNotice job={reapplyFailed} carried={carried} /> : null}
       {confirm === 'publish' && confirmAllowed ? (
         <ConfirmCard
           title="Publish this reel?"
@@ -470,8 +464,7 @@ function reelKey(clips: readonly EditorClip[]) {
  * (`transcript_differs`), so it is read-only until that is fixed (GEO-3642).
  */
 export function editingBlockedReason(
-  entry:
-    (Pick<MomentBackfillEntry, 'refusal'> & Partial<Pick<MomentBackfillEntry, 'live_reel' | 'reel_carried'>>) | null,
+  entry: (Pick<MomentBackfillEntry, 'refusal'> & Partial<Pick<MomentBackfillEntry, 'live_reel'>>) | null,
   wordTiming: boolean | undefined,
   planError: unknown,
   /** The transcript never loaded: without its words no edge snaps and no clip has a speaker or claim. */
@@ -479,9 +472,9 @@ export function editingBlockedReason(
 ): string | null {
   if (planError) return "Couldn't check whether this debate can be edited. Reload to try again.";
   if (transcriptFailed) return "Couldn't load this debate's transcript. Reload to try again.";
-  // Its clip times are on the old video's clock until the re-apply is done.
-  if (entry && reelBeingReapplied(entry)) {
-    return "A re-render is re-applying this reel to the new video, so its clips aren't where they'll play. Reload when it's done.";
+  // Its clip times are on the old video's clock until the worker cuts it again on the new one.
+  if (entry && reelCarried(entry)) {
+    return "A re-render carried this hand-picked reel over, and its clips are still cut on the video from before it, so they can't be edited. To pick them again, return it to automatic, then edit the reel that replaces it.";
   }
   if (entry && refusalBlocksEditing(entry.refusal))
     return `Can't edit this reel: ${refusalMessage(entry.refusal ?? '')}`;
@@ -500,9 +493,27 @@ function queueErrorMessage(error: unknown) {
 }
 
 /**
- * The debate's claims each debater can link a clip to, and each claim's speaker: those geo-chat's
- * `moment_claims` links to. A `retained` claim (an earlier extraction's, kept for the graph) is not
- * one, and a clip naming it is refused ("there is no claim N").
+ * The claim a clip is sent with after an edit (`next`, from `previous`). A claim picked for one
+ * speaker never rides along when the edit changes the clip's speaker; an edit that keeps the speaker
+ * keeps the claim, so a live link the editor can't place on a speaker isn't silently dropped.
+ */
+export function keepClaimWithSpeaker(
+  previous: Pick<EditorClip, 'start_ms' | 'end_ms'>,
+  next: EditorClip,
+  words: readonly ReelWord[],
+  claimSlot: (index: number) => ParticipantSlot | null
+): EditorClip {
+  if (next.claim_index === null) return next;
+  const speaker = clipSpeaker(words, next.start_ms, next.end_ms);
+  if (speaker === clipSpeaker(words, previous.start_ms, previous.end_ms)) return next;
+  return claimSlot(next.claim_index) === speaker ? next : { ...next, claim_index: null };
+}
+
+/**
+ * The debate's claims each debater can link a clip to, and each claim's speaker, as geo-chat's
+ * `manual_moments` takes a named claim: its fresh claims, then the `retained` ones (an earlier
+ * extraction's, kept because they may be published), which a hand-picked clip may name too
+ * (geo-chat#352: a carried clip keeps the published claim it was made for).
  */
 export function claimsBySpeaker(
   payload:
@@ -515,13 +526,16 @@ export function claimsBySpeaker(
   const slotOfTurn = new Map((payload?.turns ?? []).map(turn => [turn.turn_index, turn.participant_slot]));
   const bySlot = new Map<ParticipantSlot, ClaimOption[]>();
   const slot = new Map<number, ParticipantSlot>();
-  (payload?.claims ?? []).forEach((claim, index) => {
-    if (claim.retained === true) return;
+  const claims = (payload?.claims ?? []).map((claim, index) => ({ claim, index }));
+  const fresh = claims.filter(({ claim }) => claim.retained !== true);
+  const retained = claims.filter(({ claim }) => claim.retained === true);
+  for (const { claim, index } of [...fresh, ...retained]) {
     const speaker = slotOfTurn.get(claim.turn_index);
-    if (speaker !== 1 && speaker !== 2) return;
+    if (speaker !== 1 && speaker !== 2) continue;
     slot.set(index, speaker);
-    bySlot.set(speaker, [...(bySlot.get(speaker) ?? []), { index, text: claim.text }]);
-  });
+    const option: ClaimOption = { index, text: claim.text, ...(claim.retained === true && { retained: true }) };
+    bySlot.set(speaker, [...(bySlot.get(speaker) ?? []), option]);
+  }
   return { bySlot, slot };
 }
 
@@ -629,14 +643,16 @@ function JobNotice({ job, flagged }: { job: ReelJob; flagged: readonly number[] 
  * A hand-picked reel a re-render could not carry onto the new video (`reel_no_longer_fits`): what the
  * worker found, clip by clip as the reel stood, and that the reel needs picking again.
  */
-function ReapplyFailedNotice({ job }: { job: Extract<ReelJob, { kind: 'failed' }> }) {
+function ReapplyFailedNotice({ job, carried }: { job: Extract<ReelJob, { kind: 'failed' }>; carried: boolean }) {
   const problems = Object.entries(job.clips).flatMap(([at, found]) =>
     found.map(problem => `Clip ${Number(at) + 1}: ${problem}`)
   );
   return (
     <Notice tone="bad">
-      <b className="font-medium">A re-render couldn&apos;t keep this hand-picked reel.</b> {job.summary} The clips below
-      were cut on the video from before the re-render, so check each one&apos;s times.
+      <b className="font-medium">A re-render couldn&apos;t keep this hand-picked reel.</b> {job.summary}
+      {carried
+        ? ' The clips below are still cut on the video from before the re-render. Return to automatic, then edit the reel that replaces it.'
+        : ''}
       {[...problems, ...job.other].map(problem => (
         <span key={problem} className="mt-1 block">
           {problem}

@@ -14,8 +14,11 @@ import { type EditorClip, type ReelWord, formatReelTime, formatSeconds, parseRee
 /** A debater's colours in the editor: the avatar palette's two accents, as the prototype has them. */
 export const SPEAKER_FILL_CLASS = { 1: 'bg-purple', 2: 'bg-pink' } as const;
 
-/** A claim the clip can be linked to: its position in the debate's claims, and its text. */
-export type ClaimOption = { index: number; text: string };
+/**
+ * A claim the clip can be linked to: its position in the debate's claims, and its text. `retained`:
+ * an earlier extraction's, kept because it may be published (geo-chat#352 takes it for a clip).
+ */
+export type ClaimOption = { index: number; text: string; retained?: true };
 
 const AUTOMATIC_CLAIM = 'automatic';
 
@@ -61,7 +64,10 @@ export function ClipRow({
   const claimValue = clip.claim_index === null ? AUTOMATIC_CLAIM : String(clip.claim_index);
   const claimOptions = [
     { value: AUTOMATIC_CLAIM, label: 'Closest claim (automatic)' },
-    ...claims.map(claim => ({ value: String(claim.index), label: truncate(claim.text, 90) })),
+    ...claims.map(claim => ({
+      value: String(claim.index),
+      label: claim.retained ? `${truncate(claim.text, 70)} (earlier extraction)` : truncate(claim.text, 90),
+    })),
     // The live reel's link, kept when it isn't one of the speaker's claims as the editor counts them.
     ...(clip.claim_index !== null && !claims.some(claim => claim.index === clip.claim_index)
       ? [
