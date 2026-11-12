@@ -1,7 +1,24 @@
 # Geo Design System: how to rebuild it
 
-This is the source for the claude.ai Design System artifact https://claude.ai/artifact/12jebYC4oHrL47Rurx8PhQ.
-It was built from geobrowser/geogenesis master@e66ee751a (2026-11-12). Everything under `project/` is published as-is; `tools/` holds the generators.
+This folder is the **source of truth** for the Geo Design System. The claude.ai artifact
+https://claude.ai/artifact/12jebYC4oHrL47Rurx8PhQ is only its published view: it is marked
+"synced from code" (`"editing": "code"` in `project/design-system.json`), so its page is read-only.
+
+It was first built from geobrowser/geogenesis master@e66ee751a (2026-11-12). Everything under
+`project/` is published as-is; `tools/` holds the generators.
+
+## Making a change
+
+1. Edit the files here in a PR, never on the artifact page: the brand book is `project/README.md`,
+   tokens are `project/tokens.json` (keep its list shape; every token needs a `usage` note),
+   component guidance is `project/components/<Comp>/README.md`, previews come from
+   `tools/previews/<Comp>.html` (run `tools/build-previews.py`), logos and icons sit under
+   `project/assets/`. If you change a token, regenerate `project/tokens.css` (`tools/build-tokens.py`
+   writes both from the app's CSS; for a hand edit, keep `tokens.css` in step).
+2. Once the PR merges, republish (step 8 below): only the changed `project/` files, then the index.
+   Keep `"editing": "code"` in the index (`tools/build-index.py` sets it).
+3. Where the brand and the app's code disagree, the brand wins here, and the code difference gets
+   its own ticket.
 
 ## Refresh from a newer master
 

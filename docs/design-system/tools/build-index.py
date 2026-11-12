@@ -22,6 +22,8 @@ for g, items in groups.items():
     ag['order'] = [n for n, _, _ in items]
     ag['files'] = {n: {'name': n, 'blob': b, 'size': s, 'type': 'image/svg+xml'} for n, b, s in items}
     idx['assetGroups'][g] = ag
+# The repo is the source of truth: keep the artifact page read-only ("synced from code").
+idx['editing'] = 'code'
 idx['lastChange'] = {'by': 'Preston Mantel', 'at': now, 'via': f'Claude Code · geogenesis@{sha}',
                      'note': f'Built from geobrowser/geogenesis master@{sha}: tokens, fonts, 150 icons + 2 marks, 31 static component cards, cover.'}
 json.dump(idx, open(os.path.join(root, 'project', 'design-system.json'), 'w'), indent=2, ensure_ascii=False)

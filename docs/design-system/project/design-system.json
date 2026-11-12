@@ -1102,8 +1102,9 @@
   },
   "lastChange": {
     "by": "Preston Mantel",
-    "at": "2026-11-12T17:25:36Z",
+    "at": "2026-11-12T17:37:50Z",
     "via": "Claude Code · geogenesis@e66ee751a",
-    "note": "Built from geobrowser/geogenesis master@e66ee751a: tokens, fonts, 150 icons + 2 marks, 31 static component cards, cover."
-  }
+    "note": "Synced from code: the source of truth is geobrowser/geogenesis docs/design-system/ (branch preston/geo-3693-geo-design-system)"
+  },
+  "editing": "code"
 }
