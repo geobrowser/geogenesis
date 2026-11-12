@@ -149,7 +149,7 @@ describe('useBestDebatesBallotPublisher', () => {
     });
     const save = vi.fn(async () => {
       events.push('publish');
-      return { rankEntityId: 'rank1' };
+      return { rankEntityId: 'rank1', orderedEntityIds: [D1, D2] };
     });
 
     const { wrapper } = harness();
@@ -163,12 +163,36 @@ describe('useBestDebatesBallotPublisher', () => {
     // Only the ballot's debates are read, never the member's whole history.
     expect(mocks.draftReads).toEqual([[D1, D2]]);
     expect(mocks.historyReads).toBe(0);
-    expect(outcome).toEqual({ published: { rankEntityId: 'rank1' }, failedClears: 0 });
+    expect(outcome).toEqual({ published: { rankEntityId: 'rank1', orderedEntityIds: [D1, D2] }, failedClears: 0 });
+  });
+
+  it('leaves a debate pushed down when the publish merge dropped it from the ballot', async () => {
+    // Device A pushed D1 down (and took it off the ballot); device B still holds a stale draft with
+    // D1 in it. The publish path merges onto A's ballot and drops D1, so its downvote must stay.
+    mocks.downvotes = [record(D1, DEBATE_SPACE, '2026-11-02'), record(D2, DEBATE_SPACE, '2026-11-01')];
+    const cleared: string[] = [];
+    mocks.sendVote.mockImplementation(async ({ debateId }) => {
+      cleared.push(debateId);
+      return { ok: true, records: [] };
+    });
+    const { wrapper } = harness();
+    const { result } = renderHook(() => useBestDebatesBallotPublisher(), { wrapper });
+
+    let outcome: unknown;
+    await act(async () => {
+      outcome = await result.current.publish([D1, D2], async () => ({
+        rankEntityId: 'rank1',
+        orderedEntityIds: [D2],
+      }));
+    });
+
+    expect(cleared).toEqual([D2]);
+    expect(outcome).toMatchObject({ failedClears: 0 });
   });
 
   it('publishes nothing when the downvotes can’t be read', async () => {
     mocks.downvotes = new Error('down');
-    const save = vi.fn(async () => ({ rankEntityId: 'rank1' }));
+    const save = vi.fn(async () => ({ rankEntityId: 'rank1', orderedEntityIds: [D1] }));
     const { wrapper } = harness();
     const { result } = renderHook(() => useBestDebatesBallotPublisher(), { wrapper });
 
@@ -204,7 +228,10 @@ describe('useBestDebatesBallotPublisher', () => {
 
     let outcome: unknown;
     await act(async () => {
-      outcome = await result.current.publish([D1, D2], async () => ({ rankEntityId: 'rank1' }));
+      outcome = await result.current.publish([D1, D2], async () => ({
+        rankEntityId: 'rank1',
+        orderedEntityIds: [D1, D2],
+      }));
     });
 
     expect(outcome).toMatchObject({ failedClears: 1 });
@@ -222,8 +249,8 @@ describe('useBestDebatesBallotPublisher', () => {
   });
 
   it('ignores a second press while a publish is running, and reports it as busy throughout', async () => {
-    let finishSave!: (value: { rankEntityId: string }) => void;
-    const save = vi.fn(() => new Promise<{ rankEntityId: string }>(r => (finishSave = r)));
+    let finishSave!: (value: { rankEntityId: string; orderedEntityIds: string[] }) => void;
+    const save = vi.fn(() => new Promise<{ rankEntityId: string; orderedEntityIds: string[] }>(r => (finishSave = r)));
     const { wrapper } = harness();
     const { result } = renderHook(() => useBestDebatesBallotPublisher(), { wrapper });
 
@@ -240,7 +267,7 @@ describe('useBestDebatesBallotPublisher', () => {
     expect(second).toBeNull();
     await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
     await act(async () => {
-      finishSave({ rankEntityId: 'rank1' });
+      finishSave({ rankEntityId: 'rank1', orderedEntityIds: [D1] });
       await first;
     });
     expect(save).toHaveBeenCalledTimes(1);

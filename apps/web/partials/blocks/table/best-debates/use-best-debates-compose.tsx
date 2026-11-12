@@ -36,8 +36,11 @@ export type UseBestDebatesComposeArgs = {
   personalSpaceId: string | null | undefined;
   saveMySubmission: (slots: RankingSubmissionSlot[]) => Promise<RankingSubmissionPublishResult | null>;
   isSaving: boolean;
-  /** Runs after each publish that went out (the screen generates its share images there). */
-  onPublished?: (published: RankingSubmissionPublishResult) => void;
+  /**
+   * Runs after each publish that went out, with the ids this device sent (the screen generates its
+   * share images there, and folds the published ballot back into its draft).
+   */
+  onPublished?: (published: RankingSubmissionPublishResult, sentIds: string[]) => void;
   /** Open the team column on To rank (the screen was opened with `?team=to-rank`, GEO-3677). */
   openOnToRank?: boolean;
   /** GEO-3679 fills this: Push it down in the Rank choice, and the debates to keep out of To rank. */
@@ -138,7 +141,10 @@ export function useBestDebatesCompose({
         );
       }
       refreshRankersAfterIndexing(rankers, published.indexingSettled);
-      onPublished?.(published);
+      onPublished?.(
+        published,
+        publishable.map(slot => slot.id)
+      );
       return true;
     },
     [debateName, onPublished, personalSpaceId, rankers, saveMySubmission, setToast]

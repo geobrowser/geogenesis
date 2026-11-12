@@ -631,8 +631,8 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
     saveMySubmission: saveBestDebatesBallot,
     isSaving: isPublishBusy,
     pushDown: pushDown.slot,
-    onPublished: published => {
-      markDraftPublished(published.orderedEntityIds);
+    onPublished: (published, sentIds) => {
+      markDraftPublished(published.orderedEntityIds, sentIds);
       generateOgImagesOnceIndexed(published);
     },
     openOnToRank: searchParams?.get(BEST_DEBATES_TEAM_VIEW_PARAM) === BEST_DEBATES_TEAM_VIEW_TO_RANK,

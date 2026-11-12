@@ -58,12 +58,25 @@ export function useRankingComposeDraft(seed: RankingComposeSeed) {
   const getBasedOnOrderedIds = React.useCallback(() => seedRef.current.base, []);
 
   /**
-   * Moves the merge base to what this device just published (GEO-3678, Best debates' placements).
-   * Without it the base stays on the older seed until the index catches up, and a drag or removal
-   * of a just-published item made meanwhile would be undone when the published order lands.
+   * Moves the merge base to what this device just published (GEO-3678, Best debates' placements),
+   * and folds that ballot into the list. Without the base move, the base stays on the older seed
+   * until the index catches up, and a drag or removal of a just-published item made meanwhile
+   * would be undone when the published order lands.
+   *
+   * `published` is the ballot that went out, which the publish path may have merged onto another
+   * device's changes (GEO-3680), so it can hold items this list never had. They are folded in
+   * (three-way against `sent`, the list this device published), so the list and the base agree:
+   * otherwise the next publish would read another device's addition as removed here. Edits made
+   * since `sent` (a drag while the publish ran) are kept. Without `sent`, the list as it stands
+   * now is taken as what was sent.
    */
-  const markPublished = React.useCallback((ids: readonly string[]) => {
-    seedRef.current = { ids: [...ids], base: [...ids] };
+  const markPublished = React.useCallback((published: readonly string[], sent?: readonly string[]) => {
+    const ids = [...published];
+    seedRef.current = { ids, base: ids };
+    setOrderedIds(current => {
+      const next = mergeBallotOrders({ base: sent ?? current, ours: current, theirs: ids }).ids;
+      return sameBallotOrder(next, current) ? current : next;
+    });
   }, []);
 
   return { orderedIds, setOrderedIds, getBasedOnOrderedIds, markPublished };

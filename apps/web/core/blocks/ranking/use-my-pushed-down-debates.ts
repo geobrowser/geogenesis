@@ -212,7 +212,10 @@ export function useBestDebatesBallotPublisher() {
   const inFlight = React.useRef(false);
 
   const publish = React.useCallback(
-    async <T>(ids: readonly string[], save: () => Promise<T | null>): Promise<BallotPublishResult<T> | null> => {
+    async <T extends { orderedEntityIds: readonly string[] }>(
+      ids: readonly string[],
+      save: () => Promise<T | null>
+    ): Promise<BallotPublishResult<T> | null> => {
       if (inFlight.current) return null;
       inFlight.current = true;
       setIsPublishing(true);
@@ -224,7 +227,13 @@ export function useBestDebatesBallotPublisher() {
         }
         const published = await save();
         if (!published) return null;
-        const failedClears = (await clearDraftDownvotes(downvotes)).length;
+        // Clear only what the published ballot holds. The publish path merges onto the ballot the
+        // index holds now (GEO-3680), so a debate this device sent can be dropped there (another
+        // device pushed it down meanwhile); clearing its downvote would leave it neither ranked nor
+        // pushed down.
+        const onBallot = new Set(published.orderedEntityIds.map(id => ID.uuidToHex(id)));
+        const toClear = new Map([...downvotes].filter(([debateId]) => onBallot.has(ID.uuidToHex(debateId))));
+        const failedClears = (await clearDraftDownvotes(toClear)).length;
         if (failedClears > 0) setToast(React.createElement('span', null, ballotClearsLeftCopy(failedClears)));
         return { published, failedClears };
       } finally {
