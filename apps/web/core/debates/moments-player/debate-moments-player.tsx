@@ -440,8 +440,10 @@ function MomentsStory({
         ) : null}
       </div>
 
-      {/* Tap zones. The middle plays and pauses; in the moments the edges step. */}
-      {story.mode === 'moments' && (
+      {/* Tap zones. While playing, the middle pauses and in the moments the edges step; paused, a tap
+          anywhere plays (Preston, 12 Nov), so the edges only step once it is going, or to get past a
+          clip that failed. */}
+      {story.mode === 'moments' && (active || failed) && (
         <>
           <button
             type="button"
@@ -461,7 +463,10 @@ function MomentsStory({
         type="button"
         aria-label={active ? 'Pause' : 'Play'}
         onClick={togglePlay}
-        className={cx(zoneClass, story.mode === 'moments' ? 'bottom-0 left-[30%] w-[40%]' : 'inset-0')}
+        className={cx(
+          zoneClass,
+          story.mode === 'moments' && (active || failed) ? 'bottom-0 left-[30%] w-[40%]' : 'inset-0'
+        )}
       />
 
       {advancing && !failed && (

@@ -165,5 +165,30 @@ describe('To rank', () => {
       'US Politics',
       'Relationships',
     ]);
+    cleanup();
+
+    // Collapsing: only the header (with its count) stays, it is remembered, and a filter never
+    // opens it again.
+    window.localStorage.removeItem('geo.bestDebates.collapsedSpaces');
+    withDisplays({ groupBySpace: true });
+    const header = screen.getByRole('button', { name: /US Politics · 1/ });
+    expect(header.getAttribute('aria-expanded')).toBe('true');
+    fireEvent.click(header);
+    expect(header.getAttribute('aria-expanded')).toBe('false');
+    expect(screen.queryByRole('button', { name: 'Rank Newest' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Rank Older' })).toBeTruthy();
+    cleanup();
+
+    withDisplays({ groupBySpace: true, query: 'tariffs' });
+    expect(screen.getByRole('button', { name: /US Politics · 1/ }).getAttribute('aria-expanded')).toBe('false');
+    expect(screen.queryByRole('button', { name: 'Rank Newest' })).toBeNull();
+    cleanup();
+
+    withDisplays({ groupBySpace: true });
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse all' }));
+    expect(screen.queryByRole('button', { name: /^Rank / })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Expand all' }));
+    expect(screen.getAllByRole('button', { name: /^Rank / })).toHaveLength(2);
+    window.localStorage.removeItem('geo.bestDebates.collapsedSpaces');
   });
 });

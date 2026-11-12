@@ -99,15 +99,37 @@ describe('DebateMomentsPlayer', () => {
     render(<DebateMomentsPlayer debateId={DEBATE} label="Debate A" moments={MOMENTS} />);
     const player = screen.getByRole('region', { name: 'Debate A' });
     expect(player.querySelector('[class*="mix-blend"], [class*="808080"]')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }));
     fireEvent.click(screen.getByRole('button', { name: 'Next moment' }));
     expect(player.querySelector('[class*="mix-blend"], [class*="808080"]')).toBeNull();
   });
 
   it('draws no fill over the picture when a tap zone has focus', () => {
     render(<DebateMomentsPlayer debateId={DEBATE} label="Debate A" moments={MOMENTS} />);
-    for (const name of ['Play', 'Previous moment', 'Next moment']) {
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+    for (const name of ['Pause', 'Previous moment', 'Next moment']) {
       expect(screen.getByRole('button', { name }).className).not.toMatch(/focus-visible:bg-/);
     }
+  });
+
+  it('plays from a tap on an edge while paused, without changing the moment', () => {
+    render(<DebateMomentsPlayer debateId={DEBATE} label="Debate A" moments={MOMENTS} />);
+    const player = screen.getByRole('region', { name: 'Debate A' });
+    expect(screen.queryByRole('button', { name: 'Next moment' })).not.toBeInTheDocument();
+    // Paused, the play zone covers the whole picture, edges included.
+    expect(screen.getByRole('button', { name: 'Play' }).className).toContain('inset-0');
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+    expect(mocks.play).toHaveBeenCalledTimes(1);
+    expect(videoOf(player).getAttribute('src')).toContain('/moments/clip-0/content');
+  });
+
+  it('skips with a tap on an edge while playing', () => {
+    render(<DebateMomentsPlayer debateId={DEBATE} label="Debate A" moments={MOMENTS} />);
+    const player = screen.getByRole('region', { name: 'Debate A' });
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+    expect(screen.getByRole('button', { name: 'Pause' }).className).not.toContain('inset-0');
+    fireEvent.click(screen.getByRole('button', { name: 'Next moment' }));
+    expect(videoOf(player).getAttribute('src')).toContain('/moments/clip-1/content');
   });
 
   it('shows one bar per moment and steps with the left and right edges', () => {
@@ -117,6 +139,7 @@ describe('DebateMomentsPlayer', () => {
     expect(within(player).getByTestId('moment-segments').children).toHaveLength(3);
     expect(videoOf(player)).toHaveAttribute('src', 'https://chat.test/debates/' + DEBATE + '/moments/clip-0/content');
 
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }));
     fireEvent.click(screen.getByRole('button', { name: 'Next moment' }));
     expect(videoOf(player).getAttribute('src')).toContain('/moments/clip-1/content');
     expect(screen.getByTestId('moment-segment-0')).toHaveStyle({ width: '100%' });
@@ -164,6 +187,7 @@ describe('DebateMomentsPlayer', () => {
     render(<DebateMomentsPlayer debateId={DEBATE} label="Debate A" moments={MOMENTS} onModeChange={onModeChange} />);
     const player = screen.getByRole('region', { name: 'Debate A' });
 
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }));
     fireEvent.click(screen.getByRole('button', { name: 'Next moment' }));
     advance(videoOf(player), 2);
     fireEvent.click(screen.getByRole('button', { name: 'Watch the full debate' }));

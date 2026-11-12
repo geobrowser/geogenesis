@@ -8,6 +8,7 @@ import { type SpaceGroup, groupBySpace } from '~/core/blocks/ranking/best-debate
 import { type RankersRead, rankedByLabel, rankedByText } from '~/core/blocks/ranking/use-best-debates-to-rank';
 import { normId } from '~/core/utils/norm-id';
 
+import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { RankingChart } from '~/design-system/icons/ranking-chart';
 
 import { SpaceThumb } from '~/partials/explore/space-thumb';
@@ -137,23 +138,90 @@ export function BestDebatesTeamRowContent({
   );
 }
 
-/** A space's section in the team column when it is grouped by space. */
-export function SpaceGroupHeader({ group }: { group: SpaceGroup }) {
+const COLLAPSED_SPACES_KEY = 'geo.bestDebates.collapsedSpaces';
+
+function readCollapsedSpaces(): Set<string> {
+  try {
+    const raw = window.localStorage.getItem(COLLAPSED_SPACES_KEY);
+    const parsed: unknown = raw ? JSON.parse(raw) : [];
+    return new Set(Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === 'string') : []);
+  } catch {
+    return new Set();
+  }
+}
+
+/**
+ * Which By space groups the viewer collapsed (Preston, 12 Nov): all open to start, remembered per
+ * viewer by space id. A search or topic filter never opens one; its count still shows.
+ */
+export function useCollapsedSpaces() {
+  const [collapsed, setCollapsed] = React.useState<Set<string>>(() => readCollapsedSpaces());
+  const save = React.useCallback((next: Set<string>) => {
+    setCollapsed(next);
+    try {
+      window.localStorage.setItem(COLLAPSED_SPACES_KEY, JSON.stringify([...next]));
+    } catch {
+      // Private windows and blocked storage: it still works for this visit.
+    }
+  }, []);
+  const toggle = React.useCallback(
+    (key: string) => {
+      const next = new Set(collapsed);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      save(next);
+    },
+    [collapsed, save]
+  );
+  const setAll = React.useCallback(
+    (keys: readonly string[], close: boolean) => {
+      const next = new Set(collapsed);
+      for (const key of keys) {
+        if (close) next.add(key);
+        else next.delete(key);
+      }
+      save(next);
+    },
+    [collapsed, save]
+  );
+  return { collapsed, toggle, setAll };
+}
+
+const groupKey = (group: SpaceGroup) => (group.space ? normId(group.space.id) : 'other');
+
+/** A space's section header in the team column when it is grouped by space: the toggle for it. */
+export function SpaceGroupHeader({
+  group,
+  expanded,
+  onToggle,
+}: {
+  group: SpaceGroup;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
   const name = group.space?.name ?? 'Other';
   return (
-    <div className="flex items-center gap-2 pt-4 pb-1 text-footnoteMedium text-grey-04">
+    <button
+      type="button"
+      aria-expanded={expanded}
+      onClick={onToggle}
+      className="flex w-full items-center gap-2 pt-4 pb-1 text-left text-footnoteMedium text-grey-04 transition-colors hover:text-text md:min-h-11 md:pt-2"
+    >
+      <span className={cx('grid size-3 shrink-0 place-items-center transition-transform', !expanded && '-rotate-90')}>
+        <ChevronDownSmall />
+      </span>
       {group.space ? <SpaceThumb image={group.space.image} name={name} /> : null}
       <span className="whitespace-nowrap">
         {name} · {group.ids.length}
       </span>
       <span className="h-px flex-1 bg-grey-02" aria-hidden />
-    </div>
+    </button>
   );
 }
 
 /**
  * Draws `ids` with `render`, grouped by space when asked: a header per space, rows in their order
- * inside it, and no header for a space with nothing left in it.
+ * inside it, and no header for a space with nothing left in it. Each group collapses to its header.
  */
 export function BestDebatesGroupedRows({
   ids,
@@ -165,16 +233,34 @@ export function BestDebatesGroupedRows({
   render: (entityId: string) => React.ReactNode;
 }) {
   const displays = React.useContext(BestDebateDisplaysContext);
+  const { collapsed, toggle, setAll } = useCollapsedSpaces();
   if (!grouped || !displays) return <>{ids.map(render)}</>;
   const groups = groupBySpace(ids, id => displays.get(normId(id)));
+  const keys = groups.map(groupKey);
+  const allCollapsed = keys.length > 0 && keys.every(key => collapsed.has(key));
   return (
     <>
-      {groups.map(group => (
-        <section key={group.space?.id ?? 'other'} aria-label={group.space?.name ?? 'Other'} data-testid="space-group">
-          <SpaceGroupHeader group={group} />
-          {group.ids.map(render)}
-        </section>
-      ))}
+      {groups.length > 1 ? (
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={() => setAll(keys, !allCollapsed)}
+            className="h-6 rounded px-1 text-smallButton text-grey-04 transition-colors hover:text-text md:h-11"
+          >
+            {allCollapsed ? 'Expand all' : 'Collapse all'}
+          </button>
+        </div>
+      ) : null}
+      {groups.map(group => {
+        const key = groupKey(group);
+        const expanded = !collapsed.has(key);
+        return (
+          <section key={key} aria-label={group.space?.name ?? 'Other'} data-testid="space-group">
+            <SpaceGroupHeader group={group} expanded={expanded} onToggle={() => toggle(key)} />
+            {expanded ? group.ids.map(render) : null}
+          </section>
+        );
+      })}
     </>
   );
 }
