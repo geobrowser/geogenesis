@@ -10,6 +10,7 @@ import {
   clipSpeaker,
   clipsFromLiveReel,
   clipsFromServedMoments,
+  edgeIsFree,
   formatReelTime,
   manualReel,
   manualReelClips,
@@ -130,6 +131,26 @@ describe('clipsFromLiveReel', () => {
     expect(clips).toMatchObject([{ start_ms: 136_400, end_ms: 146_400, claim_index: 3, live_claim_text: 'Coffee' }]);
     expect(manualReelClips(clips)).toEqual([{ start: 136.4, end: 146.4, claim_index: 3 }]);
   });
+
+  // A live cut is where geo-chat cut it: an edge an earlier publish cut `exact` must not be widened
+  // by the next publish, so both edges load as free (`manualReel`).
+  it('loads each live cut with both edges free, so an exact cut stays where it is', () => {
+    const [live] = clipsFromLiveReel(
+      {
+        clock: 'video',
+        clips: [{ start_ms: 750, end_ms: 2_500, speaker_slot: 0, claim_index: 0, claim_text: null }],
+      },
+      ONE_CLOCK
+    );
+    expect(edgeIsFree(live, 'start')).toBe(true);
+    expect(edgeIsFree(live, 'end')).toBe(true);
+    // 100 ms after "dates", where geo-chat would widen to 2.65 s.
+    const words = [word(1, 1_000, 1_400), word(1, 2_000, 2_400), word(2, 3_000, 3_400)];
+    expect(manualReel([live], words, ONE_CLOCK)).toEqual({
+      clips: [{ start: 0.75, end: 2.5, claim_index: 0 }],
+      exact: true,
+    });
+  });
 });
 
 // GEO-3672 / GEO-3683: geo-chat widens an edge in the quiet just beside a word by up to 250 ms,
@@ -169,6 +190,27 @@ describe('manualReel', () => {
   it('counts an edge as free only while it is where Alt left it', () => {
     const moved = { ...freeEnd(1_000, 2_500), end_ms: 2_400 };
     expect(manualReel([moved], words, ONE_CLOCK)).toEqual({ clips: manualReelClips([moved]) });
+  });
+
+  // geo-chat checks a clip's length on the times sent, before its worker would have widened them.
+  it('keeps a widened clip within 60 s, which geo-chat checks on what it is sent', () => {
+    const long = [word(1, 10_000, 10_400), word(1, 69_500, 69_900), word(2, 75_000, 75_400)];
+    const clips = [clip(10_000, 69_900), freeEnd(75_000, 75_500)];
+    const sent = manualReel(clips, long, ONE_CLOCK);
+    expect(sent.exact).toBe(true);
+    const [first] = sent.clips;
+    // Widened, 9.75-70.15 s; the excess comes off the end's room first, then the start's.
+    expect(first).toEqual({ start: 9.901, end: 69.9 });
+    expect(first.end - first.start).toBeLessThanOrEqual(60);
+  });
+
+  // geo-chat's `speech_turns` drops words with no text before it measures the room beside a word.
+  it('measures the room beside a word past a blank word, as geo-chat does', () => {
+    const withBlank = [word(1, 1_000, 1_400), word(1, 2_000, 2_400), word(1, 2_550, 2_600, ' '), word(2, 3_000, 3_400)];
+    expect(manualReel([freeEnd(1_000, 2_500)], withBlank, ONE_CLOCK)).toEqual({
+      clips: [{ start: 0.75, end: 2.5 }],
+      exact: true,
+    });
   });
 
   it('trims every edge to the stretch the recordings can cut, which exact would otherwise refuse', () => {

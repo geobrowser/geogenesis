@@ -330,8 +330,9 @@ describe('MomentsEditor (GEO-3671)', () => {
   });
 
   // GEO-3672 / GEO-3683: an edge placed with Alt is a time picked by ear. Without `exact`, geo-chat
-  // would widen this one, 200 ms after "dates", out to 3.15 s.
-  it('publishes an edge placed with Alt as exact, with the other edges where geo-chat would widen them', () => {
+  // would widen this one, 200 ms after "dates", out to 3.15 s. The live cuts it leaves alone are
+  // already where geo-chat cut them, and go as they are.
+  it('publishes an edge placed with Alt as exact, with the live cuts left where they are', () => {
     mocks.plan.data = entry({
       live_reel: {
         clock: 'video',
@@ -359,7 +360,42 @@ describe('MomentsEditor (GEO-3671)', () => {
         reel: {
           clock: 'player',
           clips: [
-            { start: 0.75, end: 3.1, claim_index: 0 },
+            { start: 0.9, end: 3.1, claim_index: 0 },
+            { start: 4.8, end: 5.6, claim_index: 1 },
+          ],
+          exact: true,
+          base: 'v1',
+        },
+      }),
+      expect.any(Object)
+    );
+  });
+
+  // An earlier publish cut clip 1's end exactly, 100 ms after "dates" (2.9 s), where geo-chat's
+  // widening would put it at 3.15 s. Changing another clip's claim must not widen it.
+  it('keeps a live edge cut exactly where it is when another clip is changed', () => {
+    mocks.plan.data = entry({
+      live_reel: {
+        clock: 'video',
+        clips: [
+          { start_ms: 750, end_ms: 3_000, speaker_slot: 0, claim_index: 0, claim_text: 'Coffee is low stakes' },
+          { start_ms: 4_750, end_ms: 5_650, speaker_slot: 1, claim_index: 1, claim_text: 'Dinner shows effort' },
+        ],
+      },
+    });
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    fireEvent.change(screen.getAllByRole('textbox', { name: 'Start time' })[1], { target: { value: '5.0' } });
+    fireEvent.blur(screen.getAllByRole('textbox', { name: 'Start time' })[1]);
+
+    fireEvent.click(screen.getByRole('button', { name: /^Publish reel/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Publish (and lock|anyway)$/ }));
+    expect(mocks.mutate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reel: {
+          clock: 'player',
+          clips: [
+            { start: 0.75, end: 3, claim_index: 0 },
+            // The moved start, on "Dinner", gets geo-chat's room as before.
             { start: 4.75, end: 5.65, claim_index: 1 },
           ],
           exact: true,
@@ -826,7 +862,8 @@ describe('MomentsEditor (GEO-3671)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Publish anyway' }));
     expect(mocks.mutate).toHaveBeenCalledWith(
       expect.objectContaining({
-        reel: { clock: 'player', clips: [{ start: 0.9, end: 1.45, claim_index: 2 }], base: 'v1' },
+        // The live start, 0.9 s, is kept where it was cut, so the reel goes `exact`.
+        reel: { clock: 'player', clips: [{ start: 0.9, end: 1.45, claim_index: 2 }], exact: true, base: 'v1' },
       }),
       expect.any(Object)
     );
@@ -1109,10 +1146,12 @@ describe('MomentsEditor warnings (GEO-3672)', () => {
       expect.objectContaining({
         reel: {
           clock: 'player',
+          // The fixed start gets geo-chat's room after "So,"; the live cuts stay where they were cut.
           clips: [
-            { start: 1.3, end: 3 },
+            { start: 1.26, end: 3 },
             { start: 4.9, end: 5.5, claim_index: 9 },
           ],
+          exact: true,
           base: 'v1',
         },
       }),

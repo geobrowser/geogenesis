@@ -105,13 +105,21 @@ export function stepEdge(ms: number, words: readonly ReelWord[], edge: 'start' |
   return previous ?? ms;
 }
 
-/** The live reel's cuts as editor clips, on the player's clock, each with the claim it plays for. */
+/**
+ * The live reel's cuts as editor clips, on the player's clock, each with the claim it plays for.
+ * Both edges count as free: they are cuts, not word edges (`edgeIsFree`).
+ */
 export function clipsFromLiveReel(live: LiveReel, turns: readonly DebateMediaTurnSegment[]): EditorClip[] {
   return live.clips.map(clip => {
     const span = recordingSpanOf(clip.start_ms, clip.end_ms, turns);
     return {
       key: newClipKey(),
       ...span,
+      // Each edge is already where geo-chat cut it, room and all, so an edge left alone is sent
+      // where it is (`manualReel`). Without this, an edge an earlier publish cut `exact` would be
+      // widened by the next publish that has no Alt edge of its own.
+      free_start_ms: span.start_ms,
+      free_end_ms: span.end_ms,
       claim_index: typeof clip.claim_index === 'number' ? clip.claim_index : null,
       live_claim_text: clip.claim_text ?? null,
     };
@@ -261,12 +269,14 @@ function geoChatCut(
   words: readonly ReelWord[],
   turns: readonly DebateMediaTurnSegment[]
 ) {
-  const said = wordsIn(words, clip.start_ms, clip.end_ms);
+  // geo-chat reads only words with text (`speech_turns`): a blank one is not the word beside a gap.
+  const spoken = words.filter(word => word.text.trim() !== '');
+  const said = wordsIn(spoken, clip.start_ms, clip.end_ms);
   if (said.length === 0) return null;
   const first = Math.min(...said.map(word => word.start_ms));
   const last = Math.max(...said.map(word => word.end_ms));
-  const before = words.filter(word => word.end_ms <= first).map(word => word.end_ms);
-  const after = words.filter(word => word.start_ms >= last).map(word => word.start_ms);
+  const before = spoken.filter(word => word.end_ms <= first).map(word => word.end_ms);
+  const after = spoken.filter(word => word.start_ms >= last).map(word => word.start_ms);
   const paddedStart = first - edgeRoom(before.length > 0 ? first - Math.max(...before) : null);
   const paddedEnd = last + edgeRoom(after.length > 0 ? Math.min(...after) - last : null);
   const twoClocks = turns.some(turn => turn.source_start_ms !== undefined);
@@ -310,11 +320,18 @@ export function manualReel(
   const sent = clips.map((clip, index) => {
     const cut = cuts[index];
     if (!cut) return clip;
-    return {
-      ...clip,
-      start_ms: edgeIsFree(clip, 'start') ? cut.trimmed.start_ms : cut.widened.start_ms,
-      end_ms: edgeIsFree(clip, 'end') ? cut.trimmed.end_ms : cut.widened.end_ms,
-    };
+    let start = edgeIsFree(clip, 'start') ? cut.trimmed.start_ms : cut.widened.start_ms;
+    let end = edgeIsFree(clip, 'end') ? cut.trimmed.end_ms : cut.widened.end_ms;
+    // geo-chat checks a clip's length as it is sent: the room it would have added in the worker,
+    // after that check, must not take a clip over the limit here. Give it back, end first. 1 ms
+    // under, as the check is on seconds and 60 s apart can come out a hair over in floating point.
+    const excess = end - start - (MANUAL_CLIP_MAX_MS - 1);
+    if (excess > 0) {
+      const fromEnd = Math.min(excess, end - cut.trimmed.end_ms);
+      end -= fromEnd;
+      start += Math.min(excess - fromEnd, cut.trimmed.start_ms - start);
+    }
+    return { ...clip, start_ms: start, end_ms: end };
   });
   return { clips: manualReelClips(sent), exact: true };
 }
