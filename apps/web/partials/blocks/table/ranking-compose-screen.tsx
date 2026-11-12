@@ -61,6 +61,7 @@ import { stepAtom } from '~/partials/onboarding/onboarding-atoms';
 
 import { BestDebateDisplaysContext } from './best-debates/best-debate-row';
 import { BestDebateWatchProvider } from './best-debates/best-debate-watch';
+import { CopyTeamRankingStart } from './best-debates/copy-team-ranking-start';
 import { useBestDebatesCompose } from './best-debates/use-best-debates-compose';
 import { useBestDebatesPushDownSlot } from './best-debates/use-best-debates-push-down-slot';
 import { useUnpublishedLeaveGuard } from './best-debates/use-unpublished-leave-guard';
@@ -205,6 +206,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   const canCreateNew = Boolean(createNewSpaceId) && !isLoadingCreateAccess && canEditCreateSpace;
 
   const {
+    isLoadingRelations,
     globalRankingEntityIds,
     globalLeaderboard,
     aggregatedSubmitterRefs,
@@ -854,6 +856,20 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
                   ? 'Tap a debate in Team ranking to compare it and place it here.'
                   : 'Drag debates here from the team ranking, or click one to compare.',
                 onDropEntity: bestDebates.dropEntity,
+                emptyAction: (
+                  <CopyTeamRankingStart
+                    teamOrder={globalOrderedIds}
+                    isTeamOrderLoading={isLoadingRelations}
+                    hasRanking={
+                      isLoadingMySubmission ||
+                      (myLastSubmission?.orderedEntityIds.length ?? 0) > 0 ||
+                      (mySubmission?.orderedEntityIds.length ?? 0) > 0
+                    }
+                    draftIsEmpty={orderedIds.length === 0}
+                    pushedDownIds={pushedDownEntityIds}
+                    setDraft={setOrderedIds}
+                  />
+                ),
               }
             : {})}
         />

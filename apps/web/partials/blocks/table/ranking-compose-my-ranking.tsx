@@ -52,6 +52,8 @@ type Props = {
   /** The column's heading; "My ranking" unless the block says otherwise (Best debates: "Your ranking"). */
   title?: string;
   emptyText?: string;
+  /** Shown under the empty text, e.g. Best debates' "Start from the team ranking". */
+  emptyAction?: React.ReactNode;
   /**
    * Accept entities dragged in from the other column, at the index they are dropped on (GEO-3678).
    * Left out, the list takes no drops, as before.
@@ -120,6 +122,7 @@ export function RankingComposeMyRanking({
   hideMobileHeading = false,
   publishLabel,
   emptyText = 'Add or search global ranking list to get started',
+  emptyAction,
   onDropEntity,
 }: Props) {
   const isDesktop = !isMobile;
@@ -168,14 +171,17 @@ export function RankingComposeMyRanking({
         {...dropHandlers}
       >
         {displayEntityIds.length === 0 ? (
-          <p
-            className={cx(
-              'text-metadata text-grey-04',
-              dropIndex !== null && 'rounded-md border border-dashed border-text p-4'
-            )}
-          >
-            {emptyText}
-          </p>
+          <div>
+            <p
+              className={cx(
+                'm-0 text-metadata text-grey-04',
+                dropIndex !== null && 'rounded-md border border-dashed border-text p-4'
+              )}
+            >
+              {emptyText}
+            </p>
+            {emptyAction}
+          </div>
         ) : (
           <RankingMyRankingDndList
             entityIds={displayEntityIds}
