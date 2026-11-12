@@ -10,6 +10,7 @@ import { Button } from '~/design-system/button';
 import { RankingChart } from '~/design-system/icons/ranking-chart';
 import { XIcon } from '~/design-system/icons/x';
 
+import { RankingBallotReadError } from './ranking-ballot-read-error';
 import { RankingBlockGlobalPagination } from './ranking-block-global-pagination';
 import {
   RankingFirstSubmissionPrompt,
@@ -48,8 +49,14 @@ function buildMobileFullscreenEditButton(state: RankingBlockState) {
   );
 }
 
-function buildMyRankingActionButton(state: RankingBlockState) {
-  const { showEditRankingButton, isSaving, openRankingCompose } = state;
+export function buildMyRankingActionButton(state: RankingBlockState) {
+  const { showEditRankingButton, isSaving, openRankingCompose, ballotReadError, retryBallotRead } = state;
+
+  // The ballot exists but couldn't be read whole (GEO-3680). Offering "Add my
+  // ranking" here would start an empty ballot over it.
+  if (ballotReadError) {
+    return <RankingBallotReadError message={ballotReadError} onRetry={retryBallotRead} />;
+  }
 
   // A rolled-off ballot is treated as absent (useRankingSubmissions blanks
   // `mySubmission`), so `showEditRankingButton` clears on roll-off and this

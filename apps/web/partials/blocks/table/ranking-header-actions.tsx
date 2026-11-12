@@ -2,6 +2,7 @@
 
 import { Button } from '~/design-system/button';
 
+import { RankingBallotReadError } from './ranking-ballot-read-error';
 import { getRankingPeriodIcon } from './ranking-period-metadata';
 import type { RankingBlockState } from './use-ranking-block-state';
 
@@ -17,7 +18,16 @@ const ACTION_BUTTON_CLASS =
  * with the block title rather than sitting above the entries.
  */
 export function RankingHeaderActions({ state }: Props) {
-  const { periodState, periodLabel, hasMySubmission, isRollingRolledOff, isSaving, openRankingCompose } = state;
+  const {
+    periodState,
+    periodLabel,
+    hasMySubmission,
+    isRollingRolledOff,
+    isSaving,
+    openRankingCompose,
+    ballotReadError,
+    retryBallotRead,
+  } = state;
 
   // A rolled-off rolling ballot is treated as absent (useRankingSubmissions
   // blanks mySubmission, so hasMySubmission is already false then) — the CTA
@@ -34,7 +44,9 @@ export function RankingHeaderActions({ state }: Props) {
           {periodLabel}
         </span>
       ) : null}
-      {showViewAction ? (
+      {ballotReadError ? (
+        <RankingBallotReadError compact message={ballotReadError} onRetry={retryBallotRead} />
+      ) : showViewAction ? (
         <Button
           variant="secondary"
           className={`${ACTION_BUTTON_CLASS} !border-grey-02 !bg-white !text-text hover:!border-grey-02 hover:!bg-white`}
