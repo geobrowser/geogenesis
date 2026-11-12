@@ -326,6 +326,8 @@ export type DebateTranscriptResponse = {
   word_timing?: boolean;
   /** With `include=words`: every word, in time order. */
   words?: DebateTranscriptSpan[];
+  /** With `include=sentences`: whole sentences with their punctuation. */
+  sentences?: DebateTranscriptSpan[];
 };
 
 export type DebateTurnYield = {

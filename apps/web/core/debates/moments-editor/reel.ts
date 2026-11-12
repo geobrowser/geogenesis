@@ -12,6 +12,8 @@ import type { LiveReel, ManualClipBody } from './api';
 /** geo-chat's limits on a hand-picked reel (`MANUAL_MAX_CLIPS`, `MANUAL_CLIP_MAX_SECONDS`). */
 export const MANUAL_MAX_CLIPS = 6;
 export const MANUAL_CLIP_MAX_MS = 60_000;
+/** The shortest a clip is left by an edit that moves one edge past the other: a drag, a sentence. */
+export const MIN_EDIT_CLIP_MS = 1_000;
 
 /** A word on the player's clock. */
 export type ReelWord = { slot: ParticipantSlot; start_ms: number; end_ms: number; text: string };
@@ -28,7 +30,19 @@ export type EditorClip = {
   claim_index: number | null;
   /** The claim the live reel links the clip to, shown until the admin picks another. */
   live_claim_text: string | null;
+  /**
+   * Where an edge was last placed freely, with Alt (GEO-3672): the edge is free while it is still
+   * there, so any other change to it (a snapped drag, a step, a typed time, a fix) makes it a word
+   * edge again without having to say so. See `manualReel`.
+   */
+  free_start_ms?: number;
+  free_end_ms?: number;
 };
+
+/** Whether a clip's edge sits where it was placed freely, with Alt. */
+export function edgeIsFree(clip: EditorClip, edge: 'start' | 'end'): boolean {
+  return edge === 'start' ? clip.free_start_ms === clip.start_ms : clip.free_end_ms === clip.end_ms;
+}
 
 let clipKeySeed = 0;
 export function newClipKey() {
@@ -223,6 +237,86 @@ export function manualReelClips(clips: readonly EditorClip[]): ManualClipBody[] 
     end: clip.end_ms / 1000,
     ...(clip.claim_index !== null && { claim_index: clip.claim_index }),
   }));
+}
+
+/** geo-chat's room for a cut beside its words (`clip_ranges.rs`): `CLIP_EDGE_PAD_MS`, `CLIP_WORD_CLEARANCE_MS`. */
+const CLIP_EDGE_PAD_MS = 250;
+const CLIP_WORD_CLEARANCE_MS = 60;
+
+/** How far geo-chat moves an edge into a gap of `gap` ms beside its words (`edge_room`); `null` is no word. */
+function edgeRoom(gap: number | null): number {
+  if (gap === null) return CLIP_EDGE_PAD_MS;
+  const clearance = Math.min(CLIP_EDGE_PAD_MS, Math.max(0, gap - CLIP_WORD_CLEARANCE_MS));
+  return Math.min(clearance, Math.floor(gap / 2));
+}
+
+/**
+ * Where geo-chat cuts a clip of a reel sent without `exact` (`manual_moments`, `Edges::Widen`): an
+ * edge tight on the words widens into the quiet beside them, an edge set wider stays, and both are
+ * trimmed to the real-speed stretch the words are said in. Also what an edge can be cut at with
+ * `exact` (`trimmed`). `null` when no whole word is said in it: geo-chat refuses it either way.
+ */
+function geoChatCut(
+  clip: Pick<EditorClip, 'start_ms' | 'end_ms'>,
+  words: readonly ReelWord[],
+  turns: readonly DebateMediaTurnSegment[]
+) {
+  const said = wordsIn(words, clip.start_ms, clip.end_ms);
+  if (said.length === 0) return null;
+  const first = Math.min(...said.map(word => word.start_ms));
+  const last = Math.max(...said.map(word => word.end_ms));
+  const before = words.filter(word => word.end_ms <= first).map(word => word.end_ms);
+  const after = words.filter(word => word.start_ms >= last).map(word => word.start_ms);
+  const paddedStart = first - edgeRoom(before.length > 0 ? first - Math.max(...before) : null);
+  const paddedEnd = last + edgeRoom(after.length > 0 ? Math.min(...after) - last : null);
+  const twoClocks = turns.some(turn => turn.source_start_ms !== undefined);
+  const stretch = (twoClocks ? realSpeedStretches(turns) : []).find(
+    candidate => first >= candidate.start_ms && last <= candidate.end_ms
+  ) ?? { start_ms: 0, end_ms: Number.POSITIVE_INFINITY };
+  const trim = (start: number, end: number) => ({
+    start_ms: Math.max(start, stretch.start_ms, 0),
+    end_ms: Math.min(end, stretch.end_ms),
+  });
+  return {
+    widened: trim(Math.min(clip.start_ms, paddedStart), Math.max(clip.end_ms, paddedEnd)),
+    trimmed: trim(clip.start_ms, clip.end_ms),
+  };
+}
+
+/**
+ * The reel as geo-chat takes it (GEO-3672, GEO-3683). An edge placed with Alt is a time picked by
+ * ear, which geo-chat would widen by up to 250 ms when it sits in the quiet just beside a word: it
+ * is sent `exact`, so it is cut where it was placed. `exact` is the whole reel's, and the editor's
+ * other edges snap to words, where the widening is wanted (a word's first sound), so with `exact`
+ * every other edge is sent where geo-chat would have widened it to, and every edge is trimmed to
+ * the stretch the recordings can cut, as it would have been (`exact` refuses an edge outside it).
+ * A reel whose free edges would not move, the usual case, is sent as before, without `exact`.
+ */
+export function manualReel(
+  clips: readonly EditorClip[],
+  words: readonly ReelWord[],
+  turns: readonly DebateMediaTurnSegment[]
+): { clips: ManualClipBody[]; exact?: true } {
+  const cuts = clips.map(clip => geoChatCut(clip, words, turns));
+  const freeEdgeWidens = clips.some((clip, index) => {
+    const cut = cuts[index];
+    if (!cut) return false;
+    return (
+      (edgeIsFree(clip, 'start') && cut.widened.start_ms < cut.trimmed.start_ms) ||
+      (edgeIsFree(clip, 'end') && cut.widened.end_ms > cut.trimmed.end_ms)
+    );
+  });
+  if (!freeEdgeWidens) return { clips: manualReelClips(clips) };
+  const sent = clips.map((clip, index) => {
+    const cut = cuts[index];
+    if (!cut) return clip;
+    return {
+      ...clip,
+      start_ms: edgeIsFree(clip, 'start') ? cut.trimmed.start_ms : cut.widened.start_ms,
+      end_ms: edgeIsFree(clip, 'end') ? cut.trimmed.end_ms : cut.widened.end_ms,
+    };
+  });
+  return { clips: manualReelClips(sent), exact: true };
 }
 
 /** `m:ss.s`, as the editor shows a time. */

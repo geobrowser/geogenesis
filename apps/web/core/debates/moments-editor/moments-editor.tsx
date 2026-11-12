@@ -35,8 +35,9 @@ import {
   clipSpeaker,
   clipsFromLiveReel,
   clipsFromServedMoments,
+  edgeIsFree,
   formatReelTime,
-  manualReelClips,
+  manualReel,
   newClipKey,
   playerWords,
   reelProblems,
@@ -44,13 +45,20 @@ import {
 } from './reel';
 import { ReelPreviewPanel } from './reel-preview-panel';
 import { type ReelJob, jobInFlight, reelJob, refusalBlocksEditing, refusalMessage } from './reel-status';
+import { ReelTimeline } from './reel-timeline';
+import { ReelTranscript, reelSentences } from './reel-transcript';
+import { type ReelWarningFix, reelWarnings } from './reel-warnings';
+import { ReelWarningsPanel } from './reel-warnings-panel';
 
 /** What a new clip at the playhead runs for, before it is trimmed. */
 const NEW_CLIP_MS = 15_000;
 
 const NO_TURNS: DebateMediaTurnSegment[] = [];
-/** The words the editor snaps edges to and counts speakers with (GEO-3349). Stable, as a query key part. */
-const TRANSCRIPT_INCLUDE = ['words'] as const;
+/**
+ * The words the editor snaps edges to and counts speakers with, and the sentences its transcript
+ * lists (GEO-3349). Stable, as a query key part.
+ */
+const TRANSCRIPT_INCLUDE = ['words', 'sentences'] as const;
 
 /**
  * The moments editor (GEO-3671): a media admin fine-tunes a debate's moment reel, previews exactly
@@ -260,10 +268,85 @@ function Editor({ debateId }: { debateId: string }) {
     if (!confirmAllowed) setConfirm(null);
   }, [confirmAllowed]);
 
+  // A claim picked for one speaker never rides along when the clip changes speaker, however the
+  // clip changed: an edge, a drag, a fix, a sentence from the transcript. Each clip is judged against
+  // itself before the change, so one the change left alone keeps its claim.
+  const keepClaimsWithSpeakers = (previous: readonly EditorClip[], next: EditorClip[]) =>
+    next.map(clip => {
+      const before = previous.find(candidate => candidate.key === clip.key);
+      return before ? keepClaimWithSpeaker(before, clip, words, claimSlot) : clip;
+    });
   const updateClip = (index: number, update: (clip: EditorClip) => EditorClip) =>
     setClips(current =>
-      current.map((clip, at) => (at === index ? keepClaimWithSpeaker(clip, update(clip), words, claimSlot) : clip))
+      keepClaimsWithSpeakers(
+        current,
+        current.map((clip, at) => (at === index ? update(clip) : clip))
+      )
     );
+
+  // The selected clip by its key, not its place: removing or moving another clip leaves it selected,
+  // rather than handing the transcript's Start/End to whichever clip took its place.
+  const [selectedKey, setSelectedKey] = React.useState<string | null>(null);
+  const selectedIndex = Math.max(
+    0,
+    clips.findIndex(clip => clip.key === selectedKey)
+  );
+  const setSelected = (index: number, list: readonly EditorClip[] = clips) => setSelectedKey(list[index]?.key ?? null);
+  const speakers = clipViews.map(view => view.speaker);
+  const sentences = React.useMemo(() => reelSentences(transcript.data), [transcript.data]);
+  const durationMs = Math.max(
+    1,
+    ...turns.map(turn => turn.source_end_ms ?? turn.output_end_ms),
+    ...(words.length > 0 ? [words[words.length - 1].end_ms] : []),
+    ...clips.map(clip => clip.end_ms)
+  );
+  // None for a carried reel: like its clip checks, they would read its old-video cuts at the places
+  // the new video's turns map them to, and it is read-only, so there is nothing to fix.
+  const warnings = carried ? [] : reelWarnings(clips, words, nameOf);
+
+  // The header's button and the warning's fix alike: without a playhead there is nowhere to add it.
+  // A new clip starts at the playhead or at a transcript sentence. The transcript is the way in when
+  // there is no playhead, as on the combined-video fallback, and no clip to select, as on a debate
+  // locked without a reel.
+  const canAddClip = !readOnly && clips.length < MANUAL_MAX_CLIPS;
+  const canAddAtPlayhead = canAddClip && playheadMs !== null;
+  const addClipAt = (ms: number) => {
+    if (!canAddClip) return;
+    const start = snapEdge(ms, words, 'start');
+    const key = newClipKey();
+    setClips(current => [
+      ...current,
+      {
+        key,
+        start_ms: start,
+        end_ms: snapEdge(start + NEW_CLIP_MS, words, 'end'),
+        claim_index: null,
+        live_claim_text: null,
+      },
+    ]);
+    setSelectedKey(key);
+  };
+  const addClipAtPlayhead = () => {
+    if (canAddAtPlayhead) addClipAt(playheadMs);
+  };
+  const applyFix = (fix: ReelWarningFix) => {
+    if (fix.kind === 'add-at-playhead') {
+      addClipAtPlayhead();
+      return;
+    }
+    setClips(current => keepClaimsWithSpeakers(current, fix.clips));
+    setSelected(fix.select, fix.clips);
+  };
+  const moveClip = (index: number, direction: -1 | 1) => {
+    const to = index + direction;
+    if (to < 0 || to >= clips.length) return;
+    setClips(current => {
+      const next = [...current];
+      [next[index], next[to]] = [next[to], next[index]];
+      return next;
+    });
+    setSelectedKey(clips[index].key);
+  };
 
   // Back to the reel that is live now, which is not the one the page opened on when it changed under
   // the edit (another admin's publish, a re-render).
@@ -286,7 +369,7 @@ function Editor({ debateId }: { debateId: string }) {
         : {
             preview: kind === 'preview',
             reason: kind === 'preview' ? 'Moments editor: preview' : 'Moments editor: hand-picked reel',
-            reel: { clock: 'player' as const, clips: manualReelClips(clips), ...(base && { base }) },
+            reel: { clock: 'player' as const, ...manualReel(clips, words, turns), ...(base && { base }) },
           };
     queue.mutate(body, {
       onSuccess: queued => {
@@ -337,6 +420,14 @@ function Editor({ debateId }: { debateId: string }) {
           ) : null}
           <Button disabled={!canPublish} onClick={() => setConfirm('publish')}>
             Publish reel
+            {warnings.length > 0 && dirty ? (
+              <span
+                aria-label={`${warnings.length} warning${warnings.length > 1 ? 's' : ''}`}
+                className="ml-1 inline-grid h-[18px] min-w-[18px] place-items-center rounded bg-black px-[5px] text-[12px] text-white"
+              >
+                {warnings.length}
+              </span>
+            ) : null}
           </Button>
         </>
       }
@@ -362,7 +453,7 @@ function Editor({ debateId }: { debateId: string }) {
       {confirm === 'publish' && confirmAllowed ? (
         <ConfirmCard
           title="Publish this reel?"
-          confirmLabel="Publish and lock"
+          confirmLabel={warnings.length > 0 ? 'Publish anyway' : 'Publish and lock'}
           onCancel={() => setConfirm(null)}
           onConfirm={() => submit('publish')}
         >
@@ -371,6 +462,12 @@ function Editor({ debateId }: { debateId: string }) {
             ? "The debate has no reel until that's done; then this reel plays for everyone and is locked, so"
             : "The live moments don't change until that's done; then this reel replaces them for everyone and is locked, so"}{' '}
           automatic picks and re-cuts leave it alone.
+          {warnings.length > 0 ? (
+            <span className={cx('mt-1 block', WAITING_TEXT_CLASS)}>
+              {warnings.length} warning{warnings.length > 1 ? 's' : ''} still open:{' '}
+              {warnings.map(warning => warning.title).join('; ')}.
+            </span>
+          ) : null}
         </ConfirmCard>
       ) : null}
       {confirm === 'unlock' && confirmAllowed ? (
@@ -397,6 +494,14 @@ function Editor({ debateId }: { debateId: string }) {
           ))}
         </Notice>
       ) : null}
+      {clips.length > 0 && !carried ? (
+        <ReelWarningsPanel
+          warnings={warnings}
+          readOnly={readOnly}
+          canAddAtPlayhead={canAddAtPlayhead}
+          onFix={applyFix}
+        />
+      ) : null}
 
       <div className="grid grid-cols-[minmax(0,1fr)_360px] items-start gap-6">
         <div className="flex min-w-0 flex-col gap-4">
@@ -418,36 +523,32 @@ function Editor({ debateId }: { debateId: string }) {
             them.
           </Text>
 
+          <ReelTimeline
+            clips={clips}
+            saved={saved ?? []}
+            speakers={speakers}
+            words={words}
+            durationMs={durationMs}
+            playheadMs={playheadMs}
+            selected={selectedIndex}
+            readOnly={readOnly}
+            onSelect={index => setSelected(index)}
+            onChangeClip={(index, span) => updateClip(index, clip => ({ ...clip, ...span }))}
+            onSeek={seekTo}
+          />
+
           <section className="rounded border border-grey-02 bg-white">
             <div className="flex items-center justify-between gap-2 border-b border-divider p-3">
               <Text as="h2" variant="smallTitle">
                 Reel, in play order
               </Text>
-              <Button
-                small
-                variant="secondary"
-                disabled={readOnly || clips.length >= MANUAL_MAX_CLIPS || playheadMs === null}
-                onClick={() => {
-                  if (playheadMs === null) return;
-                  const start = snapEdge(playheadMs, words, 'start');
-                  setClips(current => [
-                    ...current,
-                    {
-                      key: newClipKey(),
-                      start_ms: start,
-                      end_ms: snapEdge(start + NEW_CLIP_MS, words, 'end'),
-                      claim_index: null,
-                      live_claim_text: null,
-                    },
-                  ]);
-                }}
-              >
+              <Button small variant="secondary" disabled={!canAddAtPlayhead} onClick={addClipAtPlayhead}>
                 + Add clip at playhead
               </Button>
             </div>
             {clipViews.length === 0 ? (
               <Text as="p" variant="metadata" color="grey-04" className="p-3">
-                No clips. Add one at the playhead.
+                No clips. Add one at the playhead or from the transcript.
               </Text>
             ) : (
               <ol>
@@ -464,6 +565,11 @@ function Editor({ debateId }: { debateId: string }) {
                     problems={view.problems}
                     readOnly={readOnly}
                     playheadMs={playheadMs}
+                    selected={index === selectedIndex}
+                    onSelect={() => setSelected(index)}
+                    onMove={direction => moveClip(index, direction)}
+                    isFirst={index === 0}
+                    isLast={index === clipViews.length - 1}
                     onPlay={() => seekTo(view.clip.start_ms)}
                     onRemove={() => setClips(current => current.filter((_, at) => at !== index))}
                     onChangeClaim={claimIndex => updateClip(index, clip => ({ ...clip, claim_index: claimIndex }))}
@@ -480,14 +586,28 @@ function Editor({ debateId }: { debateId: string }) {
           </section>
         </div>
 
-        <ReelPreviewPanel
-          job={ours && job.preview ? job : null}
-          stale={tracked !== null && tracked.reelKey !== reelKey(clips)}
-          turns={turns}
-          clips={tracked?.sent ?? []}
-          flagged={flaggedClips}
-          nameOf={nameOf}
-        />
+        <div className="flex min-w-0 flex-col gap-4">
+          <ReelPreviewPanel
+            job={ours && job.preview ? job : null}
+            stale={tracked !== null && tracked.reelKey !== reelKey(clips)}
+            turns={turns}
+            clips={tracked?.sent ?? []}
+            flagged={flaggedClips}
+            nameOf={nameOf}
+          />
+          <ReelTranscript
+            sentences={sentences}
+            canAddClip={canAddClip}
+            onAddClip={addClipAt}
+            clips={clips}
+            speakers={speakers}
+            selected={selectedIndex}
+            readOnly={readOnly}
+            nameOf={nameOf}
+            onChangeClip={(index, next) => updateClip(index, () => next)}
+            onSeek={seekTo}
+          />
+        </div>
       </div>
     </EditorShell>
   );
@@ -495,7 +615,9 @@ function Editor({ debateId }: { debateId: string }) {
 
 /** Whether two reels are the same edit: the same cuts and claims, in the same order. */
 function reelKey(clips: readonly EditorClip[]) {
-  return clips.map(clip => `${clip.start_ms}-${clip.end_ms}-${clip.claim_index ?? ''}`).join('|');
+  // A free edge is sent differently from a word edge at the same time (`manualReel`).
+  const free = (clip: EditorClip) => `${edgeIsFree(clip, 'start') ? 's' : ''}${edgeIsFree(clip, 'end') ? 'e' : ''}`;
+  return clips.map(clip => `${clip.start_ms}-${clip.end_ms}-${clip.claim_index ?? ''}-${free(clip)}`).join('|');
 }
 
 /** The turns' two clocks, which map the video's times onto the player's: equal keys, the same map. */
@@ -559,14 +681,18 @@ function queueErrorMessage(error: unknown) {
  * keeps the claim, so a live link the editor can't place on a speaker isn't silently dropped.
  */
 export function keepClaimWithSpeaker(
-  previous: Pick<EditorClip, 'start_ms' | 'end_ms'>,
+  previous: Pick<EditorClip, 'start_ms' | 'end_ms' | 'claim_index'>,
   next: EditorClip,
   words: readonly ReelWord[],
   claimSlot: (index: number) => ParticipantSlot | null
 ): EditorClip {
   if (next.claim_index === null) return next;
   const speaker = clipSpeaker(words, next.start_ms, next.end_ms);
-  if (speaker === clipSpeaker(words, previous.start_ms, previous.end_ms)) return next;
+  // The clip's own claim, on the same speaker. A claim the edit sets (a pick, or a drag giving back
+  // the claim it started with) is judged on whose it is.
+  if (next.claim_index === previous.claim_index && speaker === clipSpeaker(words, previous.start_ms, previous.end_ms)) {
+    return next;
+  }
   return claimSlot(next.claim_index) === speaker ? next : { ...next, claim_index: null };
 }
 

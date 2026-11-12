@@ -11,6 +11,10 @@ import { MomentsEditor, claimsBySpeaker, editingBlockedReason, keepClaimWithSpea
 
 const DEBATE_ID = '01a0448a-61d3-7101-8434-a20fdadf6f97';
 
+let wordsOverride: unknown[] | null = null;
+/** The transcript's `sentences`, served only when a test sets them. */
+let sentencesOverride: unknown[] | null = null;
+
 const mocks = vi.hoisted(() => ({
   backfill: {} as { isPending: boolean; error: unknown; data: { request: unknown; entry: unknown } | undefined },
   plan: {} as { isSuccess: boolean; data: unknown; error: unknown },
@@ -21,12 +25,12 @@ const mocks = vi.hoisted(() => ({
   manualReel: false,
   /** The transcript read failed before it ever answered. */
   transcriptFailed: false,
+  /** Where the player says its playhead is, or `null` before it reports one. */
+  playheadSeconds: null as number | null,
   /** The claims hold a retained claim of Susan's (index 2), as a re-extraction keeps a published one. */
   retainedClaim: false,
   /** The media's turn segments: the map from the video's clock onto the player's. */
   turns: [] as unknown[],
-  /** Where the player says its playhead is, or `null` before it reports one. */
-  playheadSeconds: null as number | null,
 }));
 
 vi.mock('../hooks', () => ({
@@ -37,11 +41,12 @@ vi.mock('../hooks', () => ({
           isPending: false,
           data: {
             word_timing: true,
-            words: [
+            words: wordsOverride ?? [
               { participant_slot: 1, start_ms: 1_000, end_ms: 1_400, text: 'Coffee' },
               { participant_slot: 1, start_ms: 1_500, end_ms: 2_900, text: 'dates' },
               { participant_slot: 2, start_ms: 5_000, end_ms: 5_400, text: 'Dinner' },
             ],
+            ...(sentencesOverride && { sentences: sentencesOverride }),
           },
         },
   useGeoChatAuth: () => ({ ready: true, authenticated: true, accountKey: 'a', getPrivyIdentityToken: async () => 't' }),
@@ -134,12 +139,14 @@ beforeEach(() => {
   mocks.backfill = { isPending: false, error: null, data: { request: null, entry: null } };
   mocks.plan = { isSuccess: true, data: entry(), error: null };
   mocks.mutate.mockReset();
+  wordsOverride = null;
+  sentencesOverride = null;
   mocks.refresh.mockReset();
   mocks.manualReel = false;
   mocks.transcriptFailed = false;
+  mocks.playheadSeconds = null;
   mocks.retainedClaim = false;
   mocks.turns = [];
-  mocks.playheadSeconds = null;
 });
 afterEach(cleanup);
 
@@ -152,7 +159,7 @@ describe('MomentsEditor (GEO-3671)', () => {
     };
     render(<MomentsEditor debateId={DEBATE_ID} />);
     expect(screen.getByText("Only media admins can edit a debate's moments.")).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Publish reel' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Publish reel/ })).not.toBeInTheDocument();
   });
 
   it('opens on the live cuts when geo-chat serves them, on the player’s clock', () => {
@@ -197,8 +204,9 @@ describe('MomentsEditor (GEO-3671)', () => {
     fireEvent.blur(screen.getByRole('textbox', { name: 'End time' }));
     // 1.45 s is in silence after "Coffee", so it stays.
     expect(screen.getByRole('textbox', { name: 'End time' })).toHaveValue('0:01.5');
-    fireEvent.click(screen.getByRole('button', { name: 'Publish reel' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Publish and lock' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Publish reel/ }));
+    // One clip, so a warning is still open: it never blocks the publish.
+    fireEvent.click(screen.getByRole('button', { name: 'Publish anyway' }));
 
     expect(mocks.mutate).toHaveBeenCalledWith(
       {
@@ -229,8 +237,8 @@ describe('MomentsEditor (GEO-3671)', () => {
     const { rerender } = render(<MomentsEditor debateId={DEBATE_ID} />);
     fireEvent.change(screen.getAllByRole('textbox', { name: 'End time' })[0], { target: { value: '1.45' } });
     fireEvent.blur(screen.getAllByRole('textbox', { name: 'End time' })[0]);
-    fireEvent.click(screen.getByRole('button', { name: 'Publish reel' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Publish and lock' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Publish reel/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Publish (and lock|anyway)$/ }));
 
     mocks.backfill.data = {
       request: status({
@@ -266,8 +274,9 @@ describe('MomentsEditor (GEO-3671)', () => {
     const { rerender } = render(<MomentsEditor debateId={DEBATE_ID} />);
     fireEvent.change(screen.getByRole('textbox', { name: 'End time' }), { target: { value: '1.45' } });
     fireEvent.blur(screen.getByRole('textbox', { name: 'End time' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Publish reel' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Publish and lock' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Publish reel/ }));
+    // One clip draws the clip-count warning.
+    fireEvent.click(screen.getByRole('button', { name: 'Publish anyway' }));
     expect(screen.getByText('Unsaved changes')).toBeInTheDocument();
 
     mocks.backfill.data = { request: status({ requested_at: requestedAt, status: 'done' }), entry: null };
@@ -285,7 +294,80 @@ describe('MomentsEditor (GEO-3671)', () => {
     expect(screen.queryByText('Unsaved changes')).not.toBeInTheDocument();
     expect(screen.getByText('Hand-picked · locked')).toBeInTheDocument();
     expect(screen.getByRole('textbox', { name: 'End time' })).toHaveValue('0:01.8');
-    expect(screen.getByRole('button', { name: 'Publish reel' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /^Publish reel/ })).toBeDisabled();
+  });
+
+  // A drag commits every move; one that passes over the other debater's words must not lose the
+  // clip's claim once it is back on its own speaker.
+  it('gives a dragged clip its claim back when the drag returns to its speaker', () => {
+    mocks.plan.data = entry({
+      live_reel: {
+        clock: 'video',
+        clips: [
+          { start_ms: 900, end_ms: 3_000, speaker_slot: 0, claim_index: 0, claim_text: 'Coffee is low stakes' },
+          { start_ms: 4_800, end_ms: 5_600, speaker_slot: 1, claim_index: 1, claim_text: 'Dinner shows effort' },
+        ],
+      },
+    });
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    // The track is as wide in px as the debate is long in ms (5.6 s: the last clip's end).
+    vi.spyOn(screen.getByTestId('reel-track'), 'getBoundingClientRect').mockReturnValue({
+      width: 5_600,
+      left: 0,
+    } as DOMRect);
+    const block = screen.getByRole('button', { name: 'Clip 2' });
+    fireEvent.pointerDown(block, { clientX: 4_800, pointerId: 1 });
+    // Over Susan's words: clip 2 is hers for now, so Urban's claim can't ride along.
+    fireEvent.pointerMove(block, { clientX: 1_300, pointerId: 1 });
+    expect(within(clipRow('Coffee', 1)).getByText(/Live now for/)).toBeInTheDocument();
+    // Still hers on the next move: the claim the drag started with is judged again, not given back.
+    fireEvent.pointerMove(block, { clientX: 1_350, pointerId: 1 });
+    expect(within(clipRow('Coffee', 1)).getByText(/Live now for/)).toBeInTheDocument();
+    fireEvent.pointerMove(block, { clientX: 4_800, pointerId: 1 });
+    fireEvent.pointerUp(block, { pointerId: 1 });
+
+    expect(within(clipRow('Dinner')).queryByText(/Live now for/)).not.toBeInTheDocument();
+  });
+
+  // GEO-3672 / GEO-3683: an edge placed with Alt is a time picked by ear. Without `exact`, geo-chat
+  // would widen this one, 200 ms after "dates", out to 3.15 s.
+  it('publishes an edge placed with Alt as exact, with the other edges where geo-chat would widen them', () => {
+    mocks.plan.data = entry({
+      live_reel: {
+        clock: 'video',
+        clips: [
+          { start_ms: 900, end_ms: 3_000, speaker_slot: 0, claim_index: 0, claim_text: 'Coffee is low stakes' },
+          { start_ms: 4_800, end_ms: 5_600, speaker_slot: 1, claim_index: 1, claim_text: 'Dinner shows effort' },
+        ],
+      },
+    });
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    vi.spyOn(screen.getByTestId('reel-track'), 'getBoundingClientRect').mockReturnValue({
+      width: 5_600,
+      left: 0,
+    } as DOMRect);
+    const handle = screen.getByTestId('clip-0-end-handle');
+    fireEvent.pointerDown(handle, { clientX: 3_000, pointerId: 1 });
+    fireEvent.pointerMove(handle, { clientX: 3_100, pointerId: 1, altKey: true });
+    fireEvent.pointerUp(handle, { pointerId: 1 });
+    expect(screen.getAllByRole('textbox', { name: 'End time' })[0]).toHaveValue('0:03.1');
+
+    fireEvent.click(screen.getByRole('button', { name: /^Publish reel/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Publish (and lock|anyway)$/ }));
+    expect(mocks.mutate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reel: {
+          clock: 'player',
+          clips: [
+            { start: 0.75, end: 3.1, claim_index: 0 },
+            { start: 4.75, end: 5.65, claim_index: 1 },
+          ],
+          exact: true,
+          base: 'v1',
+        },
+      }),
+      expect.any(Object)
+    );
   });
 
   // The reel moved on under the edit (another admin's publish, a worker re-apply). Publishing the
@@ -303,8 +385,8 @@ describe('MomentsEditor (GEO-3671)', () => {
     rerender(<MomentsEditor debateId={DEBATE_ID} />);
     expect(screen.getByText('Unsaved changes')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Publish reel' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Publish and lock' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Publish reel/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Publish (and lock|anyway)$/ }));
     expect(mocks.mutate).toHaveBeenCalledWith(
       expect.objectContaining({ reel: expect.objectContaining({ base: 'v1' }) }),
       expect.any(Object)
@@ -320,8 +402,8 @@ describe('MomentsEditor (GEO-3671)', () => {
     const { rerender } = render(<MomentsEditor debateId={DEBATE_ID} />);
     fireEvent.change(screen.getByRole('textbox', { name: 'End time' }), { target: { value: '1.45' } });
     fireEvent.blur(screen.getByRole('textbox', { name: 'End time' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Publish reel' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Publish and lock' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Publish reel/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Publish (and lock|anyway)$/ }));
     fireEvent.change(screen.getByRole('textbox', { name: 'Start time' }), { target: { value: '0.5' } });
     fireEvent.blur(screen.getByRole('textbox', { name: 'Start time' }));
 
@@ -330,8 +412,8 @@ describe('MomentsEditor (GEO-3671)', () => {
     mocks.plan = { ...mocks.plan, data: entry({ reel_version: 'v2' }) };
     rerender(<MomentsEditor debateId={DEBATE_ID} />);
     mocks.mutate.mockReset();
-    fireEvent.click(screen.getByRole('button', { name: 'Publish reel' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Publish and lock' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Publish reel/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Publish (and lock|anyway)$/ }));
     expect(mocks.mutate).toHaveBeenCalledWith(
       expect.objectContaining({ reel: expect.objectContaining({ base: 'v2' }) }),
       expect.any(Object)
@@ -491,8 +573,8 @@ describe('MomentsEditor (GEO-3671)', () => {
     expect(screen.queryByText('Unsaved changes')).not.toBeInTheDocument();
     fireEvent.change(screen.getByRole('textbox', { name: 'End time' }), { target: { value: '1.45' } });
     fireEvent.blur(screen.getByRole('textbox', { name: 'End time' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Publish reel' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Publish and lock' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Publish reel/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Publish (and lock|anyway)$/ }));
     expect(mocks.mutate).toHaveBeenCalledWith(
       expect.objectContaining({ reel: expect.objectContaining({ base: 'v2' }) }),
       expect.any(Object)
@@ -508,8 +590,8 @@ describe('MomentsEditor (GEO-3671)', () => {
     render(<MomentsEditor debateId={DEBATE_ID} />);
     fireEvent.change(screen.getByRole('textbox', { name: 'End time' }), { target: { value: '1.45' } });
     fireEvent.blur(screen.getByRole('textbox', { name: 'End time' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Publish reel' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Publish and lock' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Publish reel/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Publish (and lock|anyway)$/ }));
     expect(screen.getByText(/carried this hand-picked reel over since you opened it/)).toBeInTheDocument();
     expect(screen.queryByText(/Reload/)).not.toBeInTheDocument();
     expect(mocks.refresh).toHaveBeenCalled();
@@ -524,8 +606,8 @@ describe('MomentsEditor (GEO-3671)', () => {
     const { rerender } = render(<MomentsEditor debateId={DEBATE_ID} />);
     fireEvent.change(screen.getByRole('textbox', { name: 'End time' }), { target: { value: '1.45' } });
     fireEvent.blur(screen.getByRole('textbox', { name: 'End time' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Publish reel' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Publish and lock' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Publish reel/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Publish anyway' }));
 
     // The plan read again: the reel is carried now, and nothing is queued to cut it again.
     mocks.plan = {
@@ -671,9 +753,27 @@ describe('MomentsEditor (GEO-3671)', () => {
     expect(screen.queryByText('Nobody says a whole word in it.')).not.toBeInTheDocument();
   });
 
+  // A carried reel's warnings would be about its old-video cuts at the new video's places, on a reel
+  // that can't be edited: the panel isn't shown for it.
+  it('shows no warnings for a carried reel', () => {
+    mocks.manualReel = true;
+    mocks.plan.data = entry({
+      live_reel: {
+        clock: 'video',
+        carried: true,
+        clips: [{ start_ms: 900, end_ms: 3_000, speaker_slot: 0, claim_index: 0, claim_text: 'Coffee is low stakes' }],
+      },
+    });
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    expect(screen.getByRole('textbox', { name: 'Start time' })).toBeInTheDocument();
+    expect(screen.queryByText(/Only 1 clip/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/to check/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/No warnings/)).not.toBeInTheDocument();
+  });
+
   // The carry ends when the worker's re-cut lands, with no reload: the plan read again says so, and
-  // the editor judges the reel's clips again from then on.
-  it('runs its clip checks again once a carried reel is cut again', () => {
+  // the editor judges the reel's clips, and warns about it, again from then on.
+  it('runs its clip checks and warnings again once a carried reel is cut again', () => {
     mocks.manualReel = true;
     const clips = [
       { start_ms: 3_100, end_ms: 4_900, speaker_slot: 0, claim_index: 0, claim_text: 'Coffee is low stakes' },
@@ -681,11 +781,13 @@ describe('MomentsEditor (GEO-3671)', () => {
     mocks.plan.data = entry({ live_reel: { clock: 'video', carried: true, clips } });
     const { rerender } = render(<MomentsEditor debateId={DEBATE_ID} />);
     expect(screen.queryByText('Nobody says a whole word in it.')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Only 1 clip/)).not.toBeInTheDocument();
 
     mocks.plan.data = entry({ reel_version: 'v2', live_reel: { clock: 'video', clips } });
     rerender(<MomentsEditor debateId={DEBATE_ID} />);
     expect(screen.queryByText(/still cut on the video from before it/)).not.toBeInTheDocument();
     expect(screen.getByText('Nobody says a whole word in it.')).toBeInTheDocument();
+    expect(screen.getByText(/Only 1 clip/)).toBeInTheDocument();
   });
 
   // Return to automatic waits until an edit is gone, so a debate locked without a reel and with an
@@ -720,8 +822,8 @@ describe('MomentsEditor (GEO-3671)', () => {
     fireEvent.change(screen.getByRole('textbox', { name: 'End time' }), { target: { value: '1.45' } });
     fireEvent.blur(screen.getByRole('textbox', { name: 'End time' }));
     expect(screen.getByRole('combobox')).toHaveTextContent('Coffee was the plan (earlier extraction)');
-    fireEvent.click(screen.getByRole('button', { name: 'Publish reel' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Publish and lock' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Publish reel/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Publish anyway' }));
     expect(mocks.mutate).toHaveBeenCalledWith(
       expect.objectContaining({
         reel: { clock: 'player', clips: [{ start: 0.9, end: 1.45, claim_index: 2 }], base: 'v1' },
@@ -742,7 +844,7 @@ describe('MomentsEditor (GEO-3671)', () => {
     render(<MomentsEditor debateId={DEBATE_ID} />);
     fireEvent.change(screen.getByRole('textbox', { name: 'End time' }), { target: { value: '1.45' } });
     fireEvent.blur(screen.getByRole('textbox', { name: 'End time' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Publish reel' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Publish reel/ }));
     expect(screen.getByRole('alertdialog', { name: 'Publish this reel?' })).toBeInTheDocument();
 
     fireEvent.change(screen.getByRole('textbox', { name: 'End time' }), { target: { value: '0.5' } });
@@ -772,6 +874,18 @@ describe('MomentsEditor (GEO-3671)', () => {
     expect(end()).toHaveValue('0:02.9');
   });
 
+  // The "Only 1 clip" fix adds at the playhead, so before the player reports one it can't run.
+  it('offers the add-a-clip fix only once there is a playhead to add at', () => {
+    const { unmount } = render(<MomentsEditor debateId={DEBATE_ID} />);
+    expect(screen.getByRole('button', { name: 'Add clip at playhead' })).toBeDisabled();
+    unmount();
+
+    mocks.playheadSeconds = 4;
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Add clip at playhead' }));
+    expect(screen.getAllByRole('textbox', { name: 'Start time' })).toHaveLength(2);
+  });
+
   // A poll that fails after the first answer keeps its data; the editor, and what was typed, stay.
   it('keeps the editor and its unsaved edits when a later read fails', () => {
     const { rerender } = render(<MomentsEditor debateId={DEBATE_ID} />);
@@ -784,6 +898,59 @@ describe('MomentsEditor (GEO-3671)', () => {
 
     expect(screen.getByRole('textbox', { name: 'End time' })).toHaveValue('0:01.5');
     expect(screen.getByText('Unsaved changes')).toBeInTheDocument();
+  });
+
+  // With no clip to select and no playhead (the combined-video fallback reports none), as on a debate
+  // locked without a reel, the transcript is the way to start one.
+  it('starts a new clip from a transcript sentence when there is no clip and no playhead', () => {
+    sentencesOverride = [
+      { participant_slot: 1, start_ms: 1_000, end_ms: 2_900, text: 'Coffee dates.' },
+      { participant_slot: 2, start_ms: 5_000, end_ms: 5_400, text: 'Dinner.' },
+    ];
+    mocks.manualReel = true;
+    mocks.plan.data = entry({
+      reel_unlinkable: true,
+      live_reel: null,
+      hand_picked: { requested_by: 'yaniv', requested_at: '2026-11-10T12:00:00Z' },
+    });
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    expect(screen.queryByRole('textbox', { name: 'Start time' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '+ Add clip at playhead' })).toBeDisabled();
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'New clip here' })[1]);
+    expect(screen.getByRole('textbox', { name: 'Start time' })).toHaveValue('0:05.0');
+    expect(screen.getByText('Clip 1 selected')).toBeInTheDocument();
+    expect(screen.getByText('Unsaved changes')).toBeInTheDocument();
+  });
+
+  it('offers no new clip from the transcript while the reel is read-only', () => {
+    sentencesOverride = [{ participant_slot: 1, start_ms: 1_000, end_ms: 2_900, text: 'Coffee dates.' }];
+    mocks.plan.data = entry({ refusal: 'media_job_active' });
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    expect(screen.queryByRole('button', { name: 'New clip here' })).not.toBeInTheDocument();
+  });
+
+  // The selection follows the clip, not its place: removing an earlier clip must not hand the
+  // transcript's "Start clip N here" to the clip that moved into its place.
+  it('keeps the selected clip selected when an earlier clip is removed', () => {
+    mocks.plan.data = entry({
+      live_reel: {
+        clock: 'video',
+        clips: [
+          { start_ms: 900, end_ms: 1_450, speaker_slot: 0, claim_index: 0, claim_text: null },
+          { start_ms: 1_450, end_ms: 3_000, speaker_slot: 0, claim_index: 0, claim_text: null },
+          { start_ms: 4_800, end_ms: 5_600, speaker_slot: 1, claim_index: 1, claim_text: null },
+        ],
+      },
+    });
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    fireEvent.click(screen.getByText('dates', { selector: 'p' }));
+    expect(clipRow('dates')).toHaveAttribute('aria-current', 'true');
+
+    fireEvent.click(within(clipRow('Coffee')).getByRole('button', { name: 'Remove' }));
+    expect(clipRow('dates')).toHaveAttribute('aria-current', 'true');
+    expect(clipRow('Dinner')).not.toHaveAttribute('aria-current');
+    expect(screen.getByText('Clip 1 selected')).toBeInTheDocument();
   });
 
   it('snaps a typed edge that falls mid-word out to the whole word', () => {
@@ -816,9 +983,9 @@ describe('MomentsEditor (GEO-3671)', () => {
   });
 });
 
-/** The reel's row for the clip whose quote starts with `word`. */
-function clipRow(word: string) {
-  return screen.getByText(new RegExp(`^${word}`), { selector: 'p' }).closest('li') as HTMLElement;
+/** The reel's row for the clip whose quote starts with `word` (the `nth` such row). */
+function clipRow(word: string, nth = 0) {
+  return screen.getAllByText(new RegExp(`^${word}`), { selector: 'p' })[nth].closest('li') as HTMLElement;
 }
 
 describe('claimsBySpeaker', () => {
@@ -857,6 +1024,12 @@ describe('keepClaimWithSpeaker', () => {
     expect(keepClaimWithSpeaker(clip, moved, words, unplaced).claim_index).toBeNull();
     expect(keepClaimWithSpeaker(clip, moved, words, () => 2).claim_index).toBe(7);
   });
+
+  it('judges a claim the edit sets on whose it is, even on the same speaker', () => {
+    const unset = { ...clip, claim_index: null };
+    expect(keepClaimWithSpeaker(unset, clip, words, unplaced).claim_index).toBeNull();
+    expect(keepClaimWithSpeaker(unset, clip, words, () => 1).claim_index).toBe(7);
+  });
 });
 
 describe('editingBlockedReason', () => {
@@ -886,6 +1059,64 @@ describe('editingBlockedReason', () => {
     ).toBeNull();
     expect(editingBlockedReason({ refusal: null }, undefined, null, true)).toMatch(
       /Couldn't load this debate's transcript/
+    );
+  });
+});
+
+describe('MomentsEditor warnings (GEO-3672)', () => {
+  it('warns, with a one-click fix, when a clip opens on "So", and the fix moves its start to the next word', () => {
+    mocks.plan.data = entry({
+      live_reel: {
+        clock: 'video',
+        clips: [{ start_ms: 900, end_ms: 3_000, speaker_slot: 0, claim_index: null, claim_text: null }],
+      },
+    });
+    wordsOverride = [
+      { participant_slot: 1, start_ms: 1_000, end_ms: 1_200, text: 'So,' },
+      { participant_slot: 1, start_ms: 1_300, end_ms: 2_900, text: 'coffee.' },
+    ];
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    expect(screen.getByText('Clip 1 opens on “So”')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Start on “coffee.”' }));
+    expect(screen.getByRole('textbox', { name: 'Start time' })).toHaveValue('0:01.3');
+    expect(screen.queryByText('Clip 1 opens on “So”')).not.toBeInTheDocument();
+    // A warning never disables publishing.
+    expect(screen.getByRole('button', { name: /^Publish reel/ })).toBeEnabled();
+  });
+
+  // A fix hands back the whole reel; the clips it left alone keep their claims, even one the editor
+  // can't place on a speaker.
+  it('leaves the claims of clips a fix did not touch', () => {
+    mocks.plan.data = entry({
+      live_reel: {
+        clock: 'video',
+        clips: [
+          { start_ms: 900, end_ms: 3_000, speaker_slot: 0, claim_index: null, claim_text: null },
+          { start_ms: 4_900, end_ms: 5_500, speaker_slot: 1, claim_index: 9, claim_text: 'Dinner then a walk' },
+        ],
+      },
+    });
+    wordsOverride = [
+      { participant_slot: 1, start_ms: 1_000, end_ms: 1_200, text: 'So,' },
+      { participant_slot: 1, start_ms: 1_300, end_ms: 2_900, text: 'coffee.' },
+      { participant_slot: 2, start_ms: 5_000, end_ms: 5_400, text: 'Dinner' },
+    ];
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Start on “coffee.”' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Publish reel/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Publish anyway' }));
+    expect(mocks.mutate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reel: {
+          clock: 'player',
+          clips: [
+            { start: 1.3, end: 3 },
+            { start: 4.9, end: 5.5, claim_index: 9 },
+          ],
+          base: 'v1',
+        },
+      }),
+      expect.any(Object)
     );
   });
 });

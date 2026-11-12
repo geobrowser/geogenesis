@@ -13,6 +13,16 @@ import { type EditorClip, type ReelWord, formatReelTime, formatSeconds, parseRee
 
 /** A debater's colours in the editor: the avatar palette's two accents, as the prototype has them. */
 export const SPEAKER_FILL_CLASS = { 1: 'bg-purple', 2: 'bg-pink' } as const;
+/** A sentence's mark in the transcript: a bar in the speaker's colour down its left edge. */
+export const SPEAKER_EDGE_CLASS = {
+  1: 'shadow-[inset_3px_0_0_var(--color-purple)]',
+  2: 'shadow-[inset_3px_0_0_var(--color-pink)]',
+} as const;
+/** A clip block on the timeline: the speaker's colour as its edge, a tint of it as its fill. */
+export const SPEAKER_BORDER_CLASS = {
+  1: 'border-purple bg-purple/10 text-purple',
+  2: 'border-pink bg-pink/10 text-[#c5168f]',
+} as const;
 
 /**
  * A claim the clip can be linked to: its position in the debate's claims, and its text. `retained`:
@@ -39,6 +49,12 @@ type Props = {
   onChangeClaim: (claimIndex: number | null) => void;
   onPlay: () => void;
   onRemove: () => void;
+  selected: boolean;
+  onSelect: () => void;
+  /** Moves the clip one place earlier (-1) or later (1) in the reel; absent at that end. */
+  onMove: (direction: -1 | 1) => void;
+  isFirst: boolean;
+  isLast: boolean;
 };
 
 /**
@@ -60,6 +76,11 @@ export function ClipRow({
   onChangeClaim,
   onPlay,
   onRemove,
+  selected,
+  onSelect,
+  onMove,
+  isFirst,
+  isLast,
 }: Props) {
   const claimValue = clip.claim_index === null ? AUTOMATIC_CLAIM : String(clip.claim_index);
   const claimOptions = [
@@ -80,7 +101,17 @@ export function ClipRow({
   ];
 
   return (
-    <li className="grid grid-cols-[28px_minmax(0,1fr)] gap-3 border-b border-divider p-3 last:border-b-0">
+    <li
+      aria-current={selected || undefined}
+      onClick={event => {
+        // A click on the row selects it, for the transcript; one on a control does only what it says.
+        if (!(event.target as Element).closest('button,input,select,[role="combobox"]')) onSelect();
+      }}
+      className={cx(
+        'grid cursor-pointer grid-cols-[28px_minmax(0,1fr)] gap-3 border-b border-divider p-3 last:border-b-0',
+        selected && 'bg-bg'
+      )}
+    >
       <div
         className={cx(
           'grid h-7 w-7 place-items-center rounded-full text-[14px] font-semibold text-white',
@@ -125,6 +156,12 @@ export function ClipRow({
         </div>
         <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
           <SmallButton onClick={onPlay}>Play from start</SmallButton>
+          <SmallButton onClick={() => onMove(-1)} disabled={readOnly || isFirst}>
+            ↑ Earlier
+          </SmallButton>
+          <SmallButton onClick={() => onMove(1)} disabled={readOnly || isLast}>
+            ↓ Later
+          </SmallButton>
           <SmallButton onClick={onRemove} disabled={readOnly}>
             Remove
           </SmallButton>

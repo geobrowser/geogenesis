@@ -11,6 +11,7 @@ import {
   clipsFromLiveReel,
   clipsFromServedMoments,
   formatReelTime,
+  manualReel,
   manualReelClips,
   parseReelTime,
   playerWords,
@@ -128,6 +129,68 @@ describe('clipsFromLiveReel', () => {
     );
     expect(clips).toMatchObject([{ start_ms: 136_400, end_ms: 146_400, claim_index: 3, live_claim_text: 'Coffee' }]);
     expect(manualReelClips(clips)).toEqual([{ start: 136.4, end: 146.4, claim_index: 3 }]);
+  });
+});
+
+// GEO-3672 / GEO-3683: geo-chat widens an edge in the quiet just beside a word by up to 250 ms,
+// unless the reel is sent `exact`, which is the whole reel's.
+describe('manualReel', () => {
+  // 600 ms of quiet either side of "dates": up to 250 ms of room for a cut.
+  const words = [word(1, 1_000, 1_400), word(1, 2_000, 2_400), word(2, 3_000, 3_400)];
+  const freeEnd = (start: number, end: number, claim: number | null = null): EditorClip => ({
+    ...clip(start, end, claim),
+    free_end_ms: end,
+  });
+
+  it('sends a reel with no free edge as it is, without exact', () => {
+    const clips = [clip(1_000, 2_400, 0), clip(3_000, 3_400)];
+    expect(manualReel(clips, words, ONE_CLOCK)).toEqual({ clips: manualReelClips(clips) });
+  });
+
+  it('cuts an edge placed with Alt in the quiet beside a word exactly there, and widens the rest as geo-chat would', () => {
+    // Clip 1's end, 100 ms after "dates", would have widened to 2.65 s.
+    expect(manualReel([freeEnd(1_000, 2_500, 0), clip(3_000, 3_400)], words, ONE_CLOCK)).toEqual({
+      clips: [
+        // The word edges get their room: 250 ms with no word before, or past the end.
+        { start: 0.75, end: 2.5, claim_index: 0 },
+        { start: 2.75, end: 3.65 },
+      ],
+      exact: true,
+    });
+  });
+
+  it('leaves exact off when no free edge would move: one set wider than the room, or mid-word', () => {
+    const wide = [freeEnd(1_000, 2_900), clip(3_000, 3_400)];
+    expect(manualReel(wide, words, ONE_CLOCK)).toEqual({ clips: manualReelClips(wide) });
+    const midWord = [freeEnd(1_000, 3_200)];
+    expect(manualReel(midWord, words, ONE_CLOCK)).toEqual({ clips: manualReelClips(midWord) });
+  });
+
+  it('counts an edge as free only while it is where Alt left it', () => {
+    const moved = { ...freeEnd(1_000, 2_500), end_ms: 2_400 };
+    expect(manualReel([moved], words, ONE_CLOCK)).toEqual({ clips: manualReelClips([moved]) });
+  });
+
+  it('trims every edge to the stretch the recordings can cut, which exact would otherwise refuse', () => {
+    // Two stretches on the player's clock: 0-2.45 s and 2.9-4 s, with a cut between.
+    const turn = (index: number, slot: 1 | 2, output: [number, number], source: [number, number]) => ({
+      turn_index: index,
+      participant_slot: slot,
+      output_start_ms: output[0],
+      output_end_ms: output[1],
+      duration_ms: output[1] - output[0],
+      source_start_ms: source[0],
+      source_end_ms: source[1],
+    });
+    const turns = [turn(0, 1, [0, 2_450], [0, 2_450]), turn(1, 2, [2_450, 3_550], [2_900, 4_000])];
+    expect(manualReel([freeEnd(1_000, 2_430), clip(3_000, 3_400)], words, turns)).toEqual({
+      clips: [
+        { start: 0.75, end: 2.43 },
+        // Widened to 2.75 s, but the stretch starts at 2.9 s.
+        { start: 2.9, end: 3.65 },
+      ],
+      exact: true,
+    });
   });
 });
 
