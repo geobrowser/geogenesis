@@ -13,8 +13,14 @@ import { RankingFlowDialog } from './ranking-flow-dialog';
  */
 export type PushDownSlot = {
   onSelect: (entityId: string) => void;
-  /** The line under "Push it down". */
+  /** The line under "Push it down" (GEO-3679: `pushDownChoiceDescription(BEST_DEBATES_RANKING_LIVE)`). */
   description?: string;
+  /**
+   * Wraps the publish that ranks a debate, so a debate this ranker pushed down has its downvote
+   * cleared before the ballot goes out (GEO-3679's `usePushDown(debateId).rankAfterClearing`).
+   * Resolves to what `publish` resolved to; false keeps the Placed confirmation open.
+   */
+  rankAfterClearing?: (entityId: string, publish: () => Promise<boolean>) => Promise<boolean>;
 };
 
 type Props = {

@@ -174,16 +174,28 @@ export function useBestDebatesPlacement({
     [flow, record, setOrderedIds]
   );
 
-  const done = React.useCallback(async () => {
-    if (await publish(orderedIdsRef.current)) setFlow(null);
-  }, [publish]);
+  /** Publishes the list as it stands, through GEO-3679's clearing step when it is wired in. */
+  const publishPlaced = React.useCallback(
+    (entityId: string) => {
+      const run = () => publish(orderedIdsRef.current);
+      return pushDown?.rankAfterClearing ? pushDown.rankAfterClearing(entityId, run) : run();
+    },
+    [publish, pushDown]
+  );
+
+  const done = React.useCallback(
+    async (entityId: string) => {
+      if (await publishPlaced(entityId)) setFlow(null);
+    },
+    [publishPlaced]
+  );
 
   const rankNext = React.useCallback(
-    async (nextId: string) => {
-      if (!(await publish(orderedIdsRef.current))) return;
+    async (entityId: string, nextId: string) => {
+      if (!(await publishPlaced(entityId))) return;
       start(nextId, 'to_rank');
     },
-    [publish, start]
+    [publishPlaced, start]
   );
 
   let dialogs: React.ReactNode = null;
@@ -222,10 +234,10 @@ export function useBestDebatesPlacement({
         withOtherChanges={flow.withOtherChanges}
         isSaving={isSaving}
         onNudge={direction => setOrderedIds(nudge(orderedIdsRef.current, placedId, direction))}
-        onDone={() => void done()}
+        onDone={() => void done(placedId)}
         next={
           flow.origin === 'to_rank' && remaining.length > 0
-            ? { remaining: remaining.length, onRankNext: () => void rankNext(remaining[0]) }
+            ? { remaining: remaining.length, onRankNext: () => void rankNext(placedId, remaining[0]) }
             : undefined
         }
       />

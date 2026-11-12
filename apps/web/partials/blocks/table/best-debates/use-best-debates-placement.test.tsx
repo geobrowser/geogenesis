@@ -202,4 +202,24 @@ describe('placing a debate by comparison', () => {
     fireEvent.click(screen.getByRole('button', { name: /Rank it/ }));
     expect(screen.getByText('Which was the better debate?')).toBeTruthy();
   });
+
+  it("runs the Done publish through Push it down's clearing step when GEO-3679 provides one", async () => {
+    const publish = vi.fn(async (_ids: string[]) => true);
+    const rankAfterClearing = vi.fn(async (_id: string, run: () => Promise<boolean>) => run());
+    render(
+      <Harness
+        initial={[]}
+        startWith={{ id: 'new', origin: 'team' }}
+        publish={publish}
+        pushDown={{ onSelect: vi.fn(), rankAfterClearing }}
+      />
+    );
+    fireEvent.click(screen.getByText('start'));
+    fireEvent.click(screen.getByRole('button', { name: /Rank it/ }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    });
+    expect(rankAfterClearing).toHaveBeenCalledWith('new', expect.any(Function));
+    expect(publish).toHaveBeenCalledTimes(1);
+  });
 });
