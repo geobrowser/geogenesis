@@ -27,11 +27,11 @@ const BLOCK = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
 const RANK = 'cccccccccccccccccccccccccccccccc';
 const item = (n: number) => `d${n.toString(16).padStart(31, '0')}`;
 
-type FakeRank = { id: string; createdAt: number; ids: string[] };
+type FakeRank = { id: string; createdAt: number; updatedAt?: number; ids: string[]; unreadable?: boolean };
 type FakeEdit = { rankId: string; ids: string[] };
 
 const state = vi.hoisted(() => ({
-  ranks: [] as { id: string; createdAt: number; ids: string[] }[],
+  ranks: [] as { id: string; createdAt: number; updatedAt?: number; ids: string[]; unreadable?: boolean }[],
   indexLagMs: 20,
   /** Replaces what a sent edit does to the index (e.g. another device's edit lands instead). */
   onSent: null as null | ((edit: { rankId: string; ids: string[] }) => void),
@@ -92,7 +92,7 @@ function entityOf(rank: FakeRank, relationLimit?: number): Entity {
     relations: relationsOf(rank, relationLimit),
     values: [],
     createdAt: rank.createdAt,
-    updatedAt: rank.createdAt,
+    updatedAt: rank.updatedAt ?? rank.createdAt,
   } as Entity;
 }
 
@@ -106,7 +106,8 @@ vi.mock('~/core/io/queries', () => ({
     Effect.sync(() => {
       mocks.entityReads();
       const rank = state.ranks.find(r => r.id === id);
-      return rank ? entityOf(rank) : null;
+      // `getEntity` returns null when the entity fails to decode.
+      return rank && !rank.unreadable ? entityOf(rank) : null;
     }),
 }));
 vi.mock('~/core/analytics', () => ({ capture: vi.fn(), analyticsContextRevision: () => 0 }));
@@ -148,8 +149,10 @@ vi.mock('@geoprotocol/geo-sdk', async importOriginal => {
 
 function applyToIndex(edit: FakeEdit) {
   const existing = state.ranks.find(r => r.id === edit.rankId);
-  if (existing) existing.ids = edit.ids;
-  else state.ranks.push({ id: edit.rankId, createdAt: Date.now(), ids: edit.ids });
+  if (existing) {
+    existing.ids = edit.ids;
+    existing.updatedAt = Date.now();
+  } else state.ranks.push({ id: edit.rankId, createdAt: Date.now(), updatedAt: Date.now(), ids: edit.ids });
 }
 
 const savedTiming = { ...rankingPublishTiming };
@@ -399,13 +402,118 @@ describe('ranking publish safety (GEO-3680)', () => {
 
     expect(results.every(Boolean)).toBe(true);
     expect(mocks.reportError).not.toHaveBeenCalled();
-    expect(state.sentBallots[1]).toEqual([item(0), item(9), item(2)]);
-    expect(state.ranks[0].ids).toEqual([item(0), item(9), item(2)]);
+    // The overtaken placement (1) is folded back in, ahead of the next one (2).
+    expect(state.sentBallots[1]).toEqual([item(0), item(9), item(1), item(2)]);
+    expect(state.ranks[0].ids).toEqual([item(0), item(9), item(1), item(2)]);
     expect(lastToast()).toContain('another device');
     await waitFor(() =>
-      expect(view.result.current.mySubmission?.orderedEntityIds).toEqual([item(0), item(9), item(2)])
+      expect(view.result.current.mySubmission?.orderedEntityIds).toEqual([item(0), item(9), item(1), item(2)])
     );
+    // The next placement folded it in, so no separate restore was published.
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(mocks.send).toHaveBeenCalledTimes(2);
     done();
+  });
+
+  it('restores a single placement that another device’s edit overtook', async () => {
+    state.ranks = [{ id: RANK, createdAt: 1, ids: [item(0)] }];
+    const { view, done } = await renderSubmissions([item(0)]);
+    state.onSent = () => {
+      state.ranks[0].ids = [item(0), item(9)];
+      state.ranks[0].updatedAt = Date.now();
+    };
+
+    await act(async () => {
+      const published = await view.result.current.saveMySubmission(slots([item(0), item(1)]));
+      await published?.indexingSettled;
+    });
+
+    await waitFor(() => expect(state.ranks[0].ids).toEqual([item(0), item(9), item(1)]));
+    expect(mocks.send).toHaveBeenCalledTimes(2);
+    expect(lastToast()).toContain('We added your change back');
+    expect(mocks.reportError).not.toHaveBeenCalled();
+    done();
+  });
+
+  it('treats a read older than the ballot it replaced as lagging, not as another device’s edit', async () => {
+    const now = Date.now();
+    state.ranks = [{ id: RANK, createdAt: now - 60_000, updatedAt: now - 1_000, ids: [item(0), item(5)] }];
+    const { view, done } = await renderSubmissions([item(0), item(5)]);
+    state.onSent = edit => {
+      // A lagging read: the rank as it was before the ballot we built on.
+      state.ranks[0].ids = [item(0)];
+      state.ranks[0].updatedAt = now - 30_000;
+      setTimeout(() => applyToIndex(edit), 40);
+    };
+
+    await act(async () => {
+      const published = await view.result.current.saveMySubmission(slots([item(0), item(5), item(1)]));
+      await published?.indexingSettled;
+    });
+
+    expect(state.ranks[0].ids).toEqual([item(0), item(5), item(1)]);
+    expect(mocks.send).toHaveBeenCalledTimes(1);
+    expect(lastToast()).toContain('Ranking published!');
+    done();
+  });
+
+  it('keeps the rolling clock of a ballot edited in place while the index catches up', async () => {
+    state.isRolling = true;
+    state.submissionFrequencyHours = 24;
+    const createdAt = Date.now() - 20 * 60 * 60 * 1000;
+    state.ranks = [{ id: RANK, createdAt, ids: [item(0)] }];
+    state.indexLagMs = 300;
+    const { view, done } = await renderSubmissions([item(0)]);
+    expect(view.result.current.submittedAtMs).toBe(createdAt);
+
+    let published: Published = null;
+    await act(async () => {
+      published = await view.result.current.saveMySubmission(slots([item(1), item(0)]));
+    });
+    await waitFor(() => expect(view.result.current.mySubmission?.orderedEntityIds).toEqual([item(1), item(0)]));
+    expect(state.ranks[0].ids).toEqual([item(0)]);
+    expect(view.result.current.submittedAtMs).toBe(createdAt);
+    await act(async () => {
+      await published?.indexingSettled;
+    });
+    done();
+  });
+
+  it('reads a listed rank from the listing when the full read fails and the listing is whole', async () => {
+    state.ranks = [{ id: RANK, createdAt: 1, ids: [item(0), item(1)], unreadable: true }];
+    const { view, done } = await renderSubmissions([item(0), item(1)]);
+    expect(view.result.current.ballotReadError).toBeNull();
+
+    await act(async () => {
+      const published = await view.result.current.saveMySubmission(slots([item(1), item(0)]));
+      expect(published).toBeTruthy();
+      await published?.indexingSettled;
+    });
+    expect(state.sentBallots[0]).toEqual([item(1), item(0)]);
+    done();
+  });
+
+  it('says the ballot could not be read, and publishes nothing, when the listing may be truncated', async () => {
+    const ids = Array.from({ length: 1_200 }, (_, n) => item(n));
+    state.ranks = [{ id: RANK, createdAt: 1, ids, unreadable: true }];
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    client.setQueryData(['personal-space', '0xabc'], { personalSpaceId: SPACE, isRegistered: true });
+    const view = renderHook(() => useRankingSubmissions(BLOCK, SPACE, 'Best debates'), {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={client}>{children}</QueryClientProvider>
+      ),
+    });
+    const message =
+      "We couldn't load your whole ranking just now, so nothing was changed. Reload the page and try again.";
+    await waitFor(() => expect(view.result.current.ballotReadError).toBe(message));
+
+    await act(async () => {
+      expect(await view.result.current.saveMySubmission(slots([item(5_000)]))).toBeNull();
+    });
+    expect(mocks.send).not.toHaveBeenCalled();
+    expect(mocks.reportError).toHaveBeenCalledWith(message);
+    view.unmount();
+    client.clear();
   });
 
   it('fails fast when the transaction reports failure, and the next placement does not wait on it', async () => {

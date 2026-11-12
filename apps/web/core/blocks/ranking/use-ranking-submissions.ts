@@ -24,16 +24,19 @@ import type { Entity } from '~/core/types';
 import { toUserFacingError } from '~/core/utils/error-diagnostics';
 import { validateEntityId, validateSpaceId } from '~/core/utils/utils';
 
-import { fetchRankBallot } from './fetch-my-ranking-ballot';
+import { ballotSnapshot, fetchRankBallot, isRankingBallotUnreadableError } from './fetch-my-ranking-ballot';
 import { clearLocalMyRankingDraft } from './local-ranking-my-draft';
 import {
+  type OwnRankingPublish,
   RANKING_CHANGED_ELSEWHERE_MESSAGE,
   RANKING_CHANGED_ELSEWHERE_ORDER_MESSAGE,
   RANKING_NOTHING_LEFT_TO_PUBLISH_MESSAGE,
+  RANKING_OVERTAKEN_RESTORED_MESSAGE,
   RANKING_PREVIOUS_PUBLISH_PENDING_MESSAGE,
   type RankingIndexOutcome,
   classifyReadBack,
   enqueueRankingPublish,
+  foldOvertakenPublish,
   getOwnRankingPublish,
   getRankingBallotMaxItems,
   mergeBallotOrders,
@@ -142,6 +145,7 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
     myRankEntity,
     orderedEntityIds: apiRankingEntityIds,
     isLoading: isLoadingMyRanking,
+    readErrorMessage: ballotReadError,
     refetchMyRanking,
   } = useMyRanking(blockId);
 
@@ -293,8 +297,24 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
 
       // Runs when every earlier publish of this ballot (from any screen on this
       // page) has finished: one publish at a time, the next waits its turn.
-      const publishInTurn = async (): Promise<RankingSubmissionPublishResult | null> => {
+      //
+      // `restore` re-runs an earlier edit of ours that another device's edit
+      // overtook before the index read ours back, so the index lost it. It
+      // publishes nothing if a newer edit of ours already folded it back in, and
+      // reports no analytics (the original edit already did).
+      const publishInTurn = async (restore?: {
+        of: OwnRankingPublish;
+      }): Promise<RankingSubmissionPublishResult | null> => {
         const rankName = blockName.trim() || 'My ranking';
+        const op: Pick<typeof operation, 'outcome' | 'failed'> = restore
+          ? { outcome: () => undefined, failed: () => undefined }
+          : operation;
+        if (restore && getOwnRankingPublish(publishKey) !== restore.of) return null;
+        const ourIds = restore ? restore.of.orderedEntityIds : filteredSlots.map(slot => slot.id);
+        const basedOn = restore ? restore.of.baseline.orderedEntityIds : basedOnOrderedIds;
+        const slotSpaceIds = restore
+          ? new Map(Object.entries(restore.of.voteSpaceIds))
+          : new Map(filteredSlots.map(slot => [ID.uuidToHex(slot.id), slot.spaceId]));
 
         // An edit re-sends the whole list and replaces the votes the index holds,
         // so it must be built on what the index holds now. Wait for our previous
@@ -306,47 +326,59 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
         try {
           published = await fetchMyRankingBallot(personalSpaceId, blockId);
         } catch (error) {
-          operation.failed('unavailable');
+          op.failed('unavailable');
           console.error('[useRankingSubmissions] Re-reading the published ranking failed:', error);
+          if (isRankingBallotUnreadableError(error)) {
+            reportError(error.message);
+            return null;
+          }
           const { message, retry } = toUserFacingError(error, 'Failed to publish ranking: ');
           reportError(message, retry);
           return null;
         }
 
+        const previousStanding = previous ? classifyReadBack(ballotSnapshot(published), previous) : null;
         if (
           previous &&
           previousOutcome === 'timeout' &&
           Date.now() - previous.publishedAtMs < rankingPublishTiming.ownPublishBlocksForMs &&
-          classifyReadBack(
-            { rankId: published.rankEntity?.id ?? null, orderedEntityIds: published.orderedEntityIds },
-            previous
-          ) === 'pending'
+          previousStanding === 'pending'
         ) {
           // The index still holds the ballot our previous publish replaced.
           // Building on it would drop that placement (or update a rank the
           // index can't see yet). If it has moved on to anything else, ours or
           // another device's, the merge below handles it.
-          operation.failed('conflict');
+          op.failed('conflict');
           reportError(RANKING_PREVIOUS_PUBLISH_PENDING_MESSAGE);
           return null;
         }
 
+        // If another device's edit overtook our previous one before the index
+        // read ours back, the published ballot may lack it: fold it back in
+        // first, so this edit builds on both.
+        const publishedIds = published.orderedEntityIds;
+        const overtaken = previous !== null && previousStanding === 'superseded';
+        const theirIds = overtaken ? foldOvertakenPublish(previous, publishedIds).ids : publishedIds;
+
         // Merge onto the published ballot when it moved since the caller read
         // it: our own earlier placement (silent) or another device (we say so).
-        const ourIds = filteredSlots.map(slot => slot.id);
-        const publishedIds = published.orderedEntityIds;
-        const movedSinceRead = !sameBallotOrder(publishedIds, basedOnOrderedIds);
+        const movedSinceRead = !sameBallotOrder(theirIds, basedOn);
         const merge = movedSinceRead
-          ? mergeBallotOrders({ base: basedOnOrderedIds, ours: ourIds, theirs: publishedIds })
+          ? mergeBallotOrders({ base: basedOn, ours: ourIds, theirs: theirIds })
           : { ids: ourIds, overrodeTheirOrder: false };
         const mergedIds = merge.ids;
         const changedElsewhere =
-          movedSinceRead && !(previous && sameBallotOrder(publishedIds, previous.orderedEntityIds));
+          overtaken || (movedSinceRead && !(previous && sameBallotOrder(publishedIds, previous.orderedEntityIds)));
+
+        if (restore && sameBallotOrder(mergedIds, publishedIds)) {
+          // The published ballot already holds the overtaken edit.
+          return null;
+        }
 
         if (mergedIds.length === 0) {
           // Every item this edit kept was removed elsewhere, and vice versa.
           // Nothing to publish; show the ranker what is published now.
-          operation.failed('conflict');
+          op.failed('conflict');
           reportError(RANKING_NOTHING_LEFT_TO_PUBLISH_MESSAGE);
           void refetchMyRanking().catch(e => {
             console.error('[useRankingSubmissions] Refetch after an empty merge failed:', e);
@@ -354,12 +386,11 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
           return null;
         }
         if (mergedIds.length > maxItems) {
-          operation.failed('invalid_input');
+          op.failed('invalid_input');
           reportError(rankingBallotTooLargeMessage(mergedIds.length, maxItems));
           return null;
         }
 
-        const slotSpaceIds = new Map(filteredSlots.map(slot => [ID.uuidToHex(slot.id), slot.spaceId]));
         const votes = mergedIds.map((entityId, index) => {
           const slotSpaceId =
             slotSpaceIds.get(ID.uuidToHex(entityId)) ?? publishedVoteSpaceId(published, entityId, personalSpaceId);
@@ -372,7 +403,7 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
 
         const rankEntity = published.rankEntity;
         if (rankEntity && !validateEntityId(rankEntity.id)) {
-          operation.failed('invalid_input');
+          op.failed('invalid_input');
           console.error('[useRankingSubmissions] Invalid rank entity id:', rankEntity.id);
           reportError(`Failed to publish ranking: invalid rank id "${rankEntity.id}"`);
           return null;
@@ -402,7 +433,7 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
           ops = result.ops;
           rankId = result.id;
         } catch (error) {
-          operation.failed('invalid_input');
+          op.failed('invalid_input');
           console.error('[useRankingSubmissions] Building rank ops failed:', error);
           const { message, retry } = toUserFacingError(error, 'Failed to publish ranking: ');
           reportError(message, retry);
@@ -445,7 +476,7 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
 
         if (Either.isLeft(result)) {
           const err = result.left;
-          operation.failed(classifyOperationFailure(err));
+          op.failed(classifyOperationFailure(err));
           if (err instanceof Error && err.message.includes('User rejected')) {
             return null;
           }
@@ -463,24 +494,34 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
           user_operation_hash: result.right,
           item_count: votes.length,
         };
-        operation.outcome('ranking_submitted', 'submitted', outcomeProperties);
+        op.outcome('ranking_submitted', 'submitted', outcomeProperties);
         clearLocalMyRankingDraft(spaceId, blockId);
         setToast(
           React.createElement(
             'span',
             null,
-            !changedElsewhere
-              ? 'Ranking published!'
-              : `Ranking published. ${
-                  merge.overrodeTheirOrder ? RANKING_CHANGED_ELSEWHERE_ORDER_MESSAGE : RANKING_CHANGED_ELSEWHERE_MESSAGE
-                }`
+            restore
+              ? RANKING_OVERTAKEN_RESTORED_MESSAGE
+              : !changedElsewhere
+                ? 'Ranking published!'
+                : `Ranking published. ${
+                    merge.overrodeTheirOrder
+                      ? RANKING_CHANGED_ELSEWHERE_ORDER_MESSAGE
+                      : RANKING_CHANGED_ELSEWHERE_MESSAGE
+                  }`
           )
         );
 
         // The published ballot is fully known client-side, so surface it now:
         // pin it for useMyRanking and nudge the query. The Share button and My
         // ranking views flip immediately instead of waiting out the indexer.
-        const baseline = { rankId: rankEntity?.id ?? null, orderedEntityIds: publishedIds };
+        const publishedSnapshot = ballotSnapshot(published);
+        const baseline = {
+          rankId: publishedSnapshot.rankId,
+          orderedEntityIds: publishedIds,
+          updatedAtMs: publishedSnapshot.updatedAtMs,
+          createdAtMs: publishedSnapshot.createdAtMs,
+        };
         const ownPublish = { rankId, orderedEntityIds: publishedEntityIds, baseline };
         recordPublishedRank(personalSpaceId, blockId, rankId, publishedEntityIds, baseline);
         void refetchMyRanking().catch(e => {
@@ -507,13 +548,8 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
               const readBack = reuseExistingRank
                 ? await fetchRankBallot(rankId, personalSpaceId)
                 : await fetchMyRankingBallot(personalSpaceId, blockId);
-              const standing = classifyReadBack(
-                {
-                  rankId: readBack?.rankEntity?.id ?? baseline.rankId,
-                  orderedEntityIds: readBack?.orderedEntityIds ?? baseline.orderedEntityIds,
-                },
-                ownPublish
-              );
+              // A rank that can't be read yet is still pending.
+              const standing = readBack ? classifyReadBack(ballotSnapshot(readBack), ownPublish) : 'pending';
               if (standing !== 'pending') return standing;
               if (!reuseExistingRank) {
                 interval = listingInterval;
@@ -526,11 +562,26 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
           }
           return 'timeout';
         })();
-        recordOwnRankingPublish(publishKey, { ...ownPublish, publishedAtMs: Date.now(), indexed });
+        const ownRecord: OwnRankingPublish = {
+          ...ownPublish,
+          publishedAtMs: Date.now(),
+          voteSpaceIds: Object.fromEntries(votes.map(vote => [ID.uuidToHex(vote.entityId), vote.spaceId])),
+          indexed,
+        };
+        recordOwnRankingPublish(publishKey, ownRecord);
 
         const indexingSettled = indexed.then(async outcome => {
-          if (outcome === 'ours') operation.outcome('ranking_submitted', 'indexed', outcomeProperties);
+          if (outcome === 'ours') op.outcome('ranking_submitted', 'indexed', outcomeProperties);
           if (outcome !== 'timeout') releasePublishedRankPin(personalSpaceId, blockId, rankId);
+          if (outcome === 'superseded' && !restore) {
+            // Another device's edit overtook this one before the index read it
+            // back. Queue one more publish that folds it back in; it does
+            // nothing if a newer edit of ours already did. (A restore that is
+            // itself overtaken isn't restored again: the next edit folds it.)
+            void enqueueRankingPublish(publishKey, () => publishInTurn({ of: ownRecord })).catch(e => {
+              console.error('[useRankingSubmissions] Restoring an overtaken ranking edit failed:', e);
+            });
+          }
           try {
             await refetchMyRanking();
           } catch (e) {
@@ -552,7 +603,7 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
       };
 
       try {
-        return await enqueueRankingPublish(publishKey, publishInTurn);
+        return await enqueueRankingPublish(publishKey, () => publishInTurn());
       } catch (error) {
         operation.failed(classifyOperationFailure(error));
         console.error('[useRankingSubmissions] Publish failed:', error);
@@ -589,6 +640,10 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
     hasMySubmission,
     saveMySubmission,
     isLoading: isLoadingMyRanking,
+    /** The ranker's ballot exists but couldn't be read whole: show this instead
+     *  of treating them as having no ballot, and don't publish over it. */
+    ballotReadError,
+    retryBallotRead: refetchMyRanking,
     isSaving,
     personalSpaceId,
     isRolling,

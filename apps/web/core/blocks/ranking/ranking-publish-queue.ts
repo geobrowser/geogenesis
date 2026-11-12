@@ -49,6 +49,9 @@ export const RANKING_CHANGED_ELSEWHERE_ORDER_MESSAGE =
 export const RANKING_NOTHING_LEFT_TO_PUBLISH_MESSAGE =
   "Your ranking changed on another device, so this change wasn't published. Check your ranking and try again.";
 
+export const RANKING_OVERTAKEN_RESTORED_MESSAGE =
+  'Your ranking changed on another device while your change was saving. We added your change back.';
+
 export const RANKING_PREVIOUS_PUBLISH_PENDING_MESSAGE =
   'Your last ranking change is still saving. Try again in a moment.';
 
@@ -153,30 +156,46 @@ export function mergeBallotOrders({
   return { ids: result, overrodeTheirOrder: weReordered && theyReordered };
 }
 
+/** A ballot as read from the index. Timestamps are epoch ms when known. */
+export type BallotSnapshot = {
+  rankId: string | null;
+  orderedEntityIds: readonly string[];
+  /** The rank's `updatedAt`. */
+  updatedAtMs?: number | null;
+  /** The rank's `createdAt`. */
+  createdAtMs?: number | null;
+};
+
 /** The published ballot before a publish of ours, and the ballot it sent. */
 export type OwnPublishShape = {
   rankId: string;
   orderedEntityIds: string[];
-  baseline: { rankId: string | null; orderedEntityIds: string[] };
+  baseline: {
+    rankId: string | null;
+    orderedEntityIds: string[];
+    updatedAtMs?: number | null;
+    createdAtMs?: number | null;
+  };
 };
 
 /**
  * Where a read of the index stands against a publish of ours:
  * - `ours`: it holds exactly the ballot we sent;
  * - `pending`: it still holds the ballot from before we sent (the indexer
- *   hasn't got to our edit yet), so building on it would drop our edit;
- * - `superseded`: it holds something else, i.e. another device's edit landed
- *   (before or after ours). Nothing of ours is pending any more: the merge
- *   takes it from here.
+ *   hasn't got to our edit yet), or something older than that (a lagging
+ *   read), so building on it would drop our edit;
+ * - `superseded`: it holds a newer ballot that isn't ours, i.e. another
+ *   device's edit landed. Whatever of ours it lacks has to be folded back in
+ *   (see `foldOvertakenPublish`).
  *
- * Decided on ids and order only. The rank's `updatedAt` isn't a safe signal:
- * it also moves when something merely links to the rank.
+ * "Newer" is decided on ids and order. Timestamps are only used to rule a read
+ * *older* than the baseline (they only move forward): a later `updatedAt`
+ * doesn't prove an edit, since it also moves when something merely links to
+ * the rank.
  */
-export function classifyReadBack(
-  readBack: { rankId: string | null; orderedEntityIds: readonly string[] },
-  own: OwnPublishShape
-): 'ours' | 'pending' | 'superseded' {
+export function classifyReadBack(readBack: BallotSnapshot, own: OwnPublishShape): 'ours' | 'pending' | 'superseded' {
   const sameRank = (a: string | null, b: string | null) => (a && b ? norm(a) === norm(b) : a === b);
+  const older = (read?: number | null, base?: number | null) => Boolean(read && base && read < base);
   if (sameRank(readBack.rankId, own.rankId) && sameBallotOrder(readBack.orderedEntityIds, own.orderedEntityIds)) {
     return 'ours';
   }
@@ -186,7 +205,30 @@ export function classifyReadBack(
   ) {
     return 'pending';
   }
+  // A read that lost the ballot we built on, or shows an older state of it, or
+  // an older rank, is a lagging read, not another device's edit.
+  if (!readBack.rankId && own.baseline.rankId) return 'pending';
+  if (sameRank(readBack.rankId, own.baseline.rankId) && older(readBack.updatedAtMs, own.baseline.updatedAtMs)) {
+    return 'pending';
+  }
+  if (
+    !sameRank(readBack.rankId, own.rankId) &&
+    !sameRank(readBack.rankId, own.baseline.rankId) &&
+    older(readBack.createdAtMs, own.baseline.createdAtMs)
+  ) {
+    return 'pending';
+  }
   return 'superseded';
+}
+
+/**
+ * Another device's edit overtook a publish of ours before the index read ours
+ * back, so the published ballot may lack our edit. Fold it back in: the
+ * three-way merge of our edit (from its baseline to what we sent) onto what is
+ * published now.
+ */
+export function foldOvertakenPublish(own: OwnPublishShape, publishedIds: readonly string[]): BallotMergeResult {
+  return mergeBallotOrders({ base: own.baseline.orderedEntityIds, ours: own.orderedEntityIds, theirs: publishedIds });
 }
 
 export function rankingPublishKey(personalSpaceId: string, blockId: string): string {
@@ -214,6 +256,9 @@ export type RankingIndexOutcome = 'ours' | 'superseded' | 'timeout';
 
 export type OwnRankingPublish = OwnPublishShape & {
   publishedAtMs: number;
+  /** The space perspective each item was voted under, keyed by hex id, so a
+   *  republish that folds this edit back in can vote it the same way. */
+  voteSpaceIds: Record<string, string>;
   /** Settles once the index reads back our ballot (`ours`), moves past it to
    *  another device's (`superseded`), or the poll budget runs out (`timeout`).
    *  Never rejects. */

@@ -45,6 +45,23 @@ describe('resolvePinnedBallot', () => {
     expect(ballot.rankEntity?.id).toBe(RANK);
   });
 
+  it('keeps the edited rank’s own creation time on the stand-in, so a rolling window doesn’t restart', () => {
+    const inPlace = { ...pin, publishedAtMs: 9_000, baseline: { ...pin.baseline, createdAtMs: 1_000 } };
+    const { ballot } = resolvePinnedBallot({ rankEntity: rank, orderedEntityIds: [A] }, inPlace);
+    expect(ballot.rankEntity?.createdAt).toBe(1_000);
+  });
+
+  it('uses the publish time on the stand-in for a new rank', () => {
+    const older = 'dddddddddddddddddddddddddddddddd';
+    const minted = {
+      ...pin,
+      publishedAtMs: 9_000,
+      baseline: { rankId: older, orderedEntityIds: [A], createdAtMs: 1_000 },
+    };
+    const { ballot } = resolvePinnedBallot({ rankEntity: { id: older } as Entity, orderedEntityIds: [A] }, minted);
+    expect(ballot.rankEntity?.createdAt).toBe(9_000);
+  });
+
   it('answers from the index with no pin', () => {
     const indexed = { rankEntity: null, orderedEntityIds: [] };
     expect(resolvePinnedBallot(indexed, null)).toEqual({ ballot: indexed, dropPin: false });

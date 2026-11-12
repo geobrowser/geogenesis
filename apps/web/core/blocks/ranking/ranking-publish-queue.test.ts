@@ -4,6 +4,7 @@ import {
   RANKING_BALLOT_MAX_ITEMS_DEFAULT,
   classifyReadBack,
   enqueueRankingPublish,
+  foldOvertakenPublish,
   mergeBallotOrders,
   parseRankingBallotMaxItems,
   rankingBallotTooLargeMessage,
@@ -112,10 +113,29 @@ describe('classifyReadBack', () => {
     expect(classifyReadBack({ rankId: D, orderedEntityIds: [A] }, own)).toBe('superseded');
   });
 
+  it('treats a read older than the baseline as pending, not as another device’s edit', () => {
+    const timed = { ...own, baseline: { ...own.baseline, updatedAtMs: 2_000, createdAtMs: 1_000 } };
+    // Same rank, an older state of it.
+    expect(classifyReadBack({ rankId: E, orderedEntityIds: [], updatedAtMs: 1_500 }, timed)).toBe('pending');
+    // An older rank than the one we built on.
+    expect(classifyReadBack({ rankId: D, orderedEntityIds: [A], createdAtMs: 500 }, timed)).toBe('pending');
+    // Nothing at all, where there was a ballot.
+    expect(classifyReadBack({ rankId: null, orderedEntityIds: [] }, timed)).toBe('pending');
+    // A newer state that isn't ours is another device's.
+    expect(classifyReadBack({ rankId: E, orderedEntityIds: [A, C], updatedAtMs: 3_000 }, timed)).toBe('superseded');
+  });
+
   it('treats a first ballot as pending until it surfaces', () => {
     const first = { rankId: E, orderedEntityIds: [A], baseline: { rankId: null, orderedEntityIds: [] } };
     expect(classifyReadBack({ rankId: null, orderedEntityIds: [] }, first)).toBe('pending');
     expect(classifyReadBack({ rankId: E, orderedEntityIds: [A] }, first)).toBe('ours');
+  });
+});
+
+describe('foldOvertakenPublish', () => {
+  it('adds an overtaken edit back onto the ballot that replaced it', () => {
+    const own = { rankId: E, orderedEntityIds: [A, B], baseline: { rankId: E, orderedEntityIds: [A] } };
+    expect(foldOvertakenPublish(own, [A, D]).ids).toEqual([A, D, B]);
   });
 });
 

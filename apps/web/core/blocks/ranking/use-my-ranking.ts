@@ -9,10 +9,15 @@ import { ID } from '~/core/id';
 import { RANK_TYPE_ID } from '~/core/ranking-block-ids';
 import type { Entity } from '~/core/types';
 
-import { type MyRankingBallot, fetchMyRankingBallot } from './fetch-my-ranking-ballot';
+import {
+  type MyRankingBallot,
+  ballotSnapshot,
+  fetchMyRankingBallot,
+  isRankingBallotUnreadableError,
+} from './fetch-my-ranking-ballot';
 import { type OwnPublishShape, classifyReadBack } from './ranking-publish-queue';
 
-export { type MyRankingBallot, fetchMyRankingBallot } from './fetch-my-ranking-ballot';
+export { type MyRankingBallot, RankingBallotUnreadableError, fetchMyRankingBallot } from './fetch-my-ranking-ballot';
 
 // A ballot we just published is the ground truth regardless of what the index
 // says: the list query below is filtered by the SUBMITTED_TO relation, which
@@ -66,9 +71,13 @@ function getFreshPublishedRankPin(personalSpaceId: string, blockId: string): Pub
   return pin;
 }
 
-/** Minimal stand-in until the index returns the real entity. `createdAt` is the
- *  publish time in ms, which the rolling-submission clock parses directly. */
-function syntheticRankEntity(pin: Pick<PublishedRankPin, 'rankId' | 'publishedAtMs'>): Entity {
+/** Minimal stand-in until the index returns the real entity. `createdAt` drives
+ *  the rolling-submission clock: for an edit to an existing rank it is that
+ *  rank's own creation time (an in-place edit doesn't restart the window); for
+ *  a new rank it is the publish time in ms. */
+function syntheticRankEntity(pin: Pick<PublishedRankPin, 'rankId' | 'publishedAtMs' | 'baseline'>): Entity {
+  const editedInPlace = pin.baseline.rankId !== null && ID.equals(pin.baseline.rankId, pin.rankId);
+  const createdAt = editedInPlace && pin.baseline.createdAtMs ? pin.baseline.createdAtMs : pin.publishedAtMs;
   return {
     id: pin.rankId,
     name: null,
@@ -77,7 +86,7 @@ function syntheticRankEntity(pin: Pick<PublishedRankPin, 'rankId' | 'publishedAt
     types: [{ id: RANK_TYPE_ID, name: null }],
     relations: [],
     values: [],
-    createdAt: pin.publishedAtMs,
+    createdAt,
     updatedAt: pin.publishedAtMs,
   };
 }
@@ -96,10 +105,7 @@ export function resolvePinnedBallot(
   pin: Pick<PublishedRankPin, 'rankId' | 'orderedEntityIds' | 'baseline' | 'publishedAtMs'> | null
 ): { ballot: MyRankingBallot; dropPin: boolean } {
   if (!pin) return { ballot: indexed, dropPin: false };
-  const standing = classifyReadBack(
-    { rankId: indexed.rankEntity?.id ?? null, orderedEntityIds: indexed.orderedEntityIds },
-    pin
-  );
+  const standing = classifyReadBack(ballotSnapshot(indexed), pin);
   if (standing !== 'pending') return { ballot: indexed, dropPin: true };
   // The index still holds the ballot we replaced; answer from what we know was
   // published so the UI never shows the stale (or blanked rolled-off)
@@ -119,7 +125,7 @@ export function releasePublishedRankPin(personalSpaceId: string, blockId: string
 export function useMyRanking(blockId: string) {
   const { personalSpaceId } = usePersonalSpaceId();
 
-  const { data, isLoading, refetch } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['my-ranking-entity', personalSpaceId, blockId],
     enabled: Boolean(personalSpaceId && blockId),
     staleTime: 30_000,
@@ -142,6 +148,9 @@ export function useMyRanking(blockId: string) {
     myRankEntity,
     orderedEntityIds,
     isLoading,
+    /** Set when the ballot exists but can't be read whole. The screens show
+     *  this instead of treating the ranker as having no ballot. */
+    readErrorMessage: isRankingBallotUnreadableError(error) ? error.message : null,
     refetchMyRanking: React.useCallback(async () => {
       const result = await refetch();
       if (result.isError) {

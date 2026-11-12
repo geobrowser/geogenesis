@@ -10,6 +10,8 @@ import {
   getMyRankingOrderedEntityIds,
   pickMostRecentlyCreatedRankingEntity,
 } from './my-ranking-entity';
+import type { BallotSnapshot } from './ranking-publish-queue';
+import { parseTimestampMs } from './ranking-rolling';
 
 /*
  * Reads of the author's published ballot (GEO-3680). Kept free of React so the
@@ -23,6 +25,37 @@ import {
  */
 
 export type MyRankingBallot = { rankEntity: Entity | null; orderedEntityIds: string[] };
+
+/** Relations the block listing returns per entity (`relationsList(first: 1000)`). */
+const LISTING_RELATIONS_LIMIT = 1000;
+
+export const RANKING_BALLOT_UNREADABLE_MESSAGE =
+  "We couldn't load your whole ranking just now, so nothing was changed. Reload the page and try again.";
+
+/** The ballot is listed but can't be read whole: the full read fails and the
+ *  listing's copy may be truncated. Publishing on top of it could drop items,
+ *  so the publish path stops and the screens say so. */
+export class RankingBallotUnreadableError extends Error {
+  readonly _tag = 'RankingBallotUnreadableError';
+  constructor(readonly rankId: string) {
+    super(RANKING_BALLOT_UNREADABLE_MESSAGE);
+    this.name = 'RankingBallotUnreadableError';
+  }
+}
+
+export function isRankingBallotUnreadableError(error: unknown): error is RankingBallotUnreadableError {
+  return error instanceof RankingBallotUnreadableError;
+}
+
+/** A ballot as `classifyReadBack` compares it. */
+export function ballotSnapshot(ballot: MyRankingBallot): BallotSnapshot {
+  return {
+    rankId: ballot.rankEntity?.id ?? null,
+    orderedEntityIds: ballot.orderedEntityIds,
+    updatedAtMs: ballot.rankEntity ? parseTimestampMs(ballot.rankEntity.updatedAt) || null : null,
+    createdAtMs: ballot.rankEntity ? parseTimestampMs(ballot.rankEntity.createdAt) || null : null,
+  };
+}
 
 /** One rank's full ballot, every vote. `null` when the index doesn't hold the
  *  rank yet. Carries `updatedAt` but not `createdAt` (the entity query doesn't
@@ -54,8 +87,13 @@ export async function fetchMyRankingBallot(personalSpaceId: string, blockId: str
 
   const full = await fetchRankBallot(listed.id, personalSpaceId);
   if (!full?.rankEntity) {
-    // Listed but not readable on its own yet; can't vouch for its votes.
-    throw new Error(`Ranking ${listed.id} is listed but could not be read`);
+    // Listed but the full read returns nothing (it can fail to decode where the
+    // listing doesn't). The listing's own votes are whole as long as its
+    // relations stopped short of the cap; past it, they may be truncated.
+    if ((listed.relations?.length ?? 0) < LISTING_RELATIONS_LIMIT) {
+      return { rankEntity: listed, orderedEntityIds: getMyRankingOrderedEntityIds(listed, personalSpaceId) };
+    }
+    throw new RankingBallotUnreadableError(listed.id);
   }
   // `createdAt` (the rolling clock) only comes with the listing.
   return {
