@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { BestDebateDisplaysContext } from './best-debates/best-debate-row';
 import {
   RankingComposeGlobalRanking,
   type RankingComposeTeamMode,
@@ -104,6 +105,40 @@ describe('the team column (Best debates)', () => {
     // Search stays on To rank (Preston, 12 Nov): it filters the To rank list.
     expect(screen.getByRole('searchbox')).toBeTruthy();
     expect(screen.queryByText('Debate a')).toBeNull();
+  });
+
+  it('groups the All list by space under By space, the middle option, keeping team order inside', () => {
+    const display = (spaceId: string, name: string) => ({
+      entityId: '',
+      title: '',
+      debaterSpaceIds: [],
+      ownSpaceId: spaceId,
+      createdAtMs: null,
+      topics: [],
+      keyframeUrl: null,
+      debaters: null,
+      space: { id: spaceId, name, image: null },
+    });
+    const displays = new Map([
+      ['a', display('sp1', 'US Politics')],
+      ['b', display('sp2', 'Relationships')],
+    ]);
+    render(
+      <BestDebateDisplaysContext.Provider value={displays}>
+        <TeamColumn onAdd={vi.fn()} />
+      </BestDebateDisplaysContext.Provider>
+    );
+
+    const options = screen.getAllByRole('group', { name: 'Show' })[0].querySelectorAll('button');
+    expect([...options].map(option => option.textContent)).toEqual(['All', 'By space', 'To rank4']);
+    expect(screen.queryAllByTestId('space-group')).toHaveLength(0);
+
+    fireEvent.click(screen.getByRole('button', { name: 'By space' }));
+    expect(screen.getAllByTestId('space-group').map(group => group.getAttribute('aria-label'))).toEqual([
+      'US Politics',
+      'Relationships',
+    ]);
+    expect(screen.getByRole('region', { name: 'Team ranking by space' })).toBeTruthy();
   });
 
   it('leaves other blocks with their browse tabs and undraggable rows', () => {

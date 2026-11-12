@@ -12,6 +12,7 @@ import { normId } from '~/core/utils/norm-id';
 
 import { Avatar } from '~/design-system/avatar';
 import { GeoImage } from '~/design-system/geo-image';
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 import { SpaceThumb } from '~/partials/explore/space-thumb';
 
@@ -198,6 +199,8 @@ type BestDebateRowProps = {
   /** The right column: rankers and counts, or "You: #14". */
   aside?: React.ReactNode;
   titleClassName?: string;
+  /** Makes the title a link (the block's rows, to the debate's page). */
+  href?: string;
 };
 
 /**
@@ -215,6 +218,7 @@ export function BestDebateRow({
   footer,
   aside,
   titleClassName,
+  href,
 }: BestDebateRowProps) {
   const title = data?.title ?? fallbackName;
   return (
@@ -232,9 +236,15 @@ export function BestDebateRow({
       )}
       {showThumb ? <BestDebateThumb entityId={entityId} keyframeUrl={data?.keyframeUrl ?? null} label={title} /> : null}
       <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <span className={cx(TITLE_CLASS, titleClassName)} title={title}>
-          {title}
-        </span>
+        {href ? (
+          <Link href={href} className={cx(TITLE_CLASS, 'hover:underline', titleClassName)} title={title}>
+            {title}
+          </Link>
+        ) : (
+          <span className={cx(TITLE_CLASS, titleClassName)} title={title}>
+            {title}
+          </span>
+        )}
         <BestDebateMeta data={data} showDebaters={showDebaters} />
         {footer}
       </div>

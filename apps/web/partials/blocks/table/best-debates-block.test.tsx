@@ -87,9 +87,7 @@ function renderBlock(props: Partial<BestDebatesBlockProps> = {}) {
       teamOrder={['old', 'b', 'yday', 'a']}
       // The block state's canComposeEdit: the flag and membership (tested in its own suite).
       canRank={mocks.flag && mocks.canEdit}
-      isMobile={false}
       onOpenCompose={onOpenCompose}
-      onOpenEntity={vi.fn()}
       {...props}
     />
   );

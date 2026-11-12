@@ -33,12 +33,12 @@ import { useMyPushedDownDebates } from '~/core/blocks/ranking/use-my-pushed-down
 import { type RankingEntryDisplay, useRankingEntryEntities } from '~/core/blocks/ranking/use-ranking-entry-entities';
 import { SegmentedControl } from '~/core/debates/matchmaking/debate-calendar-controls';
 import { normId } from '~/core/utils/norm-id';
+import { NavUtils } from '~/core/utils/utils';
 
 import { Button } from '~/design-system/button';
 
 import { BestDebateDisplaysContext, BestDebateRow, RankerAvatars } from './best-debates/best-debate-row';
 import { BestDebateWatchProvider } from './best-debates/best-debate-watch';
-import { RankingGlobalDesktopRow } from './ranking-block-ui';
 import { RankingEntryRowSkeleton } from './ranking-entry-row';
 
 /**
@@ -65,9 +65,7 @@ export type BestDebatesBlockProps = {
    * which also guards `openRankingCompose` itself.
    */
   canRank: boolean;
-  isMobile: boolean;
   onOpenCompose: (mode: RankingComposeMode, extraParams?: Readonly<Record<string, string>>) => void;
-  onOpenEntity: (entityId: string) => void;
   /**
    * Draws the block's title row with `actions` (the Rank button) at its end. The coverage line sits
    * above it, as in the mockups, so the block draws the header itself rather than its host.
@@ -86,9 +84,7 @@ export function BestDebatesBlock({
   teamOrder,
   isLoadingTeamOrder = false,
   canRank,
-  isMobile,
   onOpenCompose,
-  onOpenEntity,
   renderHeader = defaultHeader,
   belowHeader,
 }: BestDebatesBlockProps) {
@@ -224,6 +220,8 @@ export function BestDebatesBlock({
         fallbackName={entry?.name ?? 'Untitled debate'}
         data={data}
         rank={place}
+        // A debate opens on its own page, where it plays full screen; the poster plays it here.
+        href={NavUtils.toEntity(data?.ownSpaceId ?? spaceId, id)}
         aside={
           count != null && count > 0 ? (
             <>
@@ -241,13 +239,7 @@ export function BestDebatesBlock({
     );
     return (
       <div key={id} className="w-full py-3" data-testid="best-debates-row" data-entity-id={id}>
-        {isMobile ? (
-          <button type="button" className="w-full text-left" onClick={() => onOpenEntity(id)}>
-            {row}
-          </button>
-        ) : (
-          <RankingGlobalDesktopRow onOpenSidePanel={() => onOpenEntity(id)}>{row}</RankingGlobalDesktopRow>
-        )}
+        {row}
       </div>
     );
   };

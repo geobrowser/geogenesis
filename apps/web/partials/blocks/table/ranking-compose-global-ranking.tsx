@@ -332,7 +332,8 @@ type Props = {
   draggableRows?: boolean;
 };
 
-export type RankingComposeTeamMode = 'all' | 'to_rank';
+/** All, the same list grouped by space (Preston, 12 Nov), or To rank. */
+export type RankingComposeTeamMode = 'all' | 'by_space' | 'to_rank';
 
 export type RankingComposeTeamView = {
   mode: RankingComposeTeamMode;
@@ -357,6 +358,7 @@ export type RankingComposeTeamView = {
 function RankingComposeTeamHeader({ isMobile, teamView }: { isMobile: boolean; teamView: RankingComposeTeamView }) {
   const options: Array<{ id: RankingComposeTeamMode; label: string }> = [
     { id: 'all', label: 'All' },
+    { id: 'by_space', label: 'By space' },
     { id: 'to_rank', label: 'To rank' },
   ];
   return (
@@ -687,6 +689,8 @@ export function RankingComposeGlobalRanking({
       />
     );
 
+    // Best debates rows have no side-panel button: the poster opens the debate to watch.
+    if (!isMobile && teamView) return <div key={id}>{pickRow}</div>;
     if (!isMobile) {
       return (
         <RankingGlobalDesktopRow key={id} onOpenSidePanel={() => onViewEntity(id)}>
@@ -780,9 +784,11 @@ export function RankingComposeGlobalRanking({
   const teamTools = teamView?.tools;
   const toolListIds = isToRank ? (teamView?.toRankIds ?? []) : [...tabFilteredRankedIds, ...tabFilteredUnrankedIds];
   const renderSection = (ids: string[], render: (id: string) => React.ReactNode) => {
-    if (!teamTools) return ids.map(render);
-    const kept = filterTeamIds(ids, id => teamDisplays?.get(normId(id)), { query: '', topicIds: teamTools.topicIds });
-    return <BestDebatesGroupedRows ids={kept} grouped={teamTools.groupBySpace} render={render} />;
+    if (!teamView) return ids.map(render);
+    const kept = teamTools
+      ? filterTeamIds(ids, id => teamDisplays?.get(normId(id)), { query: '', topicIds: teamTools.topicIds })
+      : ids;
+    return <BestDebatesGroupedRows ids={kept} grouped={teamView.mode === 'by_space'} render={render} />;
   };
 
   const searchResultList = (
@@ -901,7 +907,15 @@ export function RankingComposeGlobalRanking({
       <div
         id={browsePanelId}
         role={teamView ? 'region' : 'tabpanel'}
-        aria-label={teamView ? (isToRank ? 'To rank' : 'Team ranking') : undefined}
+        aria-label={
+          teamView
+            ? isToRank
+              ? 'To rank'
+              : teamView.mode === 'by_space'
+                ? 'Team ranking by space'
+                : 'Team ranking'
+            : undefined
+        }
         aria-labelledby={teamView ? undefined : tabButtonId(browseTab)}
         className={cx('flex min-h-0 flex-1 flex-col', isDesktop && 'pt-4')}
       >

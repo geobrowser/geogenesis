@@ -202,7 +202,6 @@ export function useBestDebatesCompose({
         draggable={!isMobile}
         query={searchQuery}
         topicIds={tools.topicIds}
-        groupBySpace={tools.groupBySpace}
       />
     ),
   };

@@ -302,9 +302,7 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
               teamOrder={state.visibleGlobalRankingEntityIds}
               isLoadingTeamOrder={state.isLoadingTeamOrder}
               canRank={state.canComposeEdit}
-              isMobile={state.isMobile}
               onOpenCompose={(mode, extraParams) => void openRankingCompose(mode, extraParams)}
-              onOpenEntity={state.openEntitySheet}
               renderHeader={renderHeaderRow}
               belowHeader={belowHeader}
             />

@@ -40,6 +40,8 @@ type Props = {
   onReorder: (entityIds: string[]) => void;
   onRemove: (entityId: string) => void;
   onView: (entityId: string) => void;
+  /** Best debates: no side-panel button on the rows (the poster opens the debate to watch). */
+  hideSidePanel?: boolean;
   pendingEntityIds: ReadonlySet<string>;
   /** Rendered under the list, e.g. the Best debates "You pushed down" section (GEO-3679). */
   footer?: React.ReactNode;
@@ -107,6 +109,7 @@ export function RankingComposeMyRanking({
   onReorder,
   onRemove,
   onView,
+  hideSidePanel = false,
   pendingEntityIds,
   footer,
   title = 'My ranking',
@@ -197,7 +200,7 @@ export function RankingComposeMyRanking({
                 <RankingMyRankingDesktopRow
                   entityName={entryDisplay.name}
                   onRemove={() => onRemove(entityId)}
-                  onOpenSidePanel={() => onView(entityId)}
+                  onOpenSidePanel={hideSidePanel ? undefined : () => onView(entityId)}
                   hideActions={isDragActive}
                 >
                   {entryRow}

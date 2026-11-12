@@ -817,6 +817,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
           {...(isBestDebates
             ? {
                 title: 'Your ranking',
+                hideSidePanel: true,
                 emptyText: 'Drag debates here from the team ranking, or click one to compare.',
                 onDropEntity: bestDebates.dropEntity,
               }
