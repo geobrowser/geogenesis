@@ -286,9 +286,7 @@ function RankingComposePickRow({
           spaceId={spaceId}
           debateAside={
             myRank ? (
-              <span className="text-[14px] leading-[15px] whitespace-nowrap text-grey-04 tabular-nums">
-                You: #{myRank}
-              </span>
+              <span className="text-breadcrumb whitespace-nowrap text-grey-04 tabular-nums">You: #{myRank}</span>
             ) : null
           }
         />
@@ -382,7 +380,7 @@ function RankingComposeTeamHeader({ isMobile, teamView }: { isMobile: boolean; t
   return (
     <div className="flex w-full min-w-0 items-center justify-between gap-3">
       {/* On a phone the Team ranking / Your ranking tabs already say it. */}
-      {isMobile ? null : <h2 className="m-0 text-[17px] font-semibold text-text">Team ranking</h2>}
+      {isMobile ? null : <h2 className="m-0 text-button text-text">Team ranking</h2>}
       <div
         role="group"
         aria-label="Show"
@@ -395,7 +393,7 @@ function RankingComposeTeamHeader({ isMobile, teamView }: { isMobile: boolean; t
             aria-pressed={teamView.mode === option.id}
             onClick={() => teamView.onModeChange(option.id)}
             className={cx(
-              'flex items-center justify-center gap-1.5 rounded-full px-3 text-[14px] leading-[15px] font-medium transition-colors',
+              'flex items-center justify-center gap-1.5 rounded-full px-3 text-breadcrumb transition-colors',
               isMobile ? 'h-10 flex-1' : 'h-[26px]',
               teamView.mode === option.id
                 ? 'bg-white text-text shadow-[0_1px_2px_rgba(0,0,0,0.12)]'
@@ -404,7 +402,7 @@ function RankingComposeTeamHeader({ isMobile, teamView }: { isMobile: boolean; t
           >
             {option.label}
             {option.id === 'to_rank' && teamView.toRankCount ? (
-              <span className="inline-grid h-[18px] min-w-[18px] place-items-center rounded-full bg-purple px-[5px] text-[11px] font-medium text-white tabular-nums">
+              <span className="inline-grid h-[18px] min-w-[18px] place-items-center rounded-full bg-purple px-[5px] text-tag text-white tabular-nums">
                 {teamView.toRankCount}
               </span>
             ) : null}
@@ -826,7 +824,7 @@ export function RankingComposeGlobalRanking({
             onChange={e => handleSearchQueryChange(e.target.value)}
             placeholder={teamView?.tools ? 'Search debates and topics' : 'Search'}
             aria-label={teamView?.tools ? 'Search debates and topics' : 'Search rankable entities'}
-            className="h-8 w-full rounded border border-grey-02 bg-white py-1 pr-2 pl-8 text-metadata text-text outline-hidden focus-visible:border-text md:h-10 md:text-[16px]"
+            className="h-8 w-full rounded border border-grey-02 bg-white py-1 pr-2 pl-8 text-metadata text-text outline-hidden focus-visible:border-text md:h-10 md:text-input"
           />
         </div>
         {teamView?.tools && topicFacet ? <BestDebatesTeamToolbar tools={teamView.tools} facet={topicFacet} /> : null}

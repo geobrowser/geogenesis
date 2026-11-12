@@ -43,8 +43,8 @@ type Props = {
 
 const OPTION_CLASS =
   'flex w-full flex-col items-start gap-1.5 rounded-lg border border-grey-02 bg-white p-4 text-left transition-colors hover:border-text focus-visible:border-text focus-visible:outline-hidden disabled:cursor-default disabled:opacity-50';
-const OPTION_TITLE_CLASS = 'flex items-center gap-2 text-[17px] leading-[21px] font-semibold text-text';
-const OPTION_BODY_CLASS = 'text-[14px] leading-[18px] text-grey-04';
+const OPTION_TITLE_CLASS = 'flex items-center gap-2 text-button text-text';
+const OPTION_BODY_CLASS = 'text-metadata text-grey-04';
 
 const RISE_ICON = (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden className="shrink-0 text-purple">

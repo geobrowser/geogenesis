@@ -32,6 +32,8 @@ type FlowState =
       /** The list the debate is being placed into: the ranker's list without it. */
       list: string[];
       search: PlacementSearch;
+      /** The comparisons answered so far, oldest first: Back rewinds to the last of them. */
+      history: PlacementSearch[];
       withOtherChanges: boolean;
     }
   | {
@@ -132,7 +134,7 @@ export function useBestDebatesPlacement({
         setFlow({ phase: 'placed', entityId, origin, placedIndex: start.index, withOtherChanges });
         return;
       }
-      setFlow({ phase: 'compare', entityId, origin, list, search: start.search, withOtherChanges });
+      setFlow({ phase: 'compare', entityId, origin, list, search: start.search, history: [], withOtherChanges });
     },
     [record, setOrderedIds]
   );
@@ -176,7 +178,7 @@ export function useBestDebatesPlacement({
       );
       const result = choosePlacement(flow.search, choice);
       if (!result.done) {
-        setFlow({ ...flow, search: result.search });
+        setFlow({ ...flow, search: result.search, history: [...flow.history, flow.search] });
         return;
       }
       const next = insertAt(flow.list, flow.entityId, result.index);
@@ -197,6 +199,15 @@ export function useBestDebatesPlacement({
     },
     [flow, record, setOrderedIds]
   );
+
+  /** Back to the previous comparison, its answer undone (Preston, 12 Nov). Nothing on step 1. */
+  const back = React.useCallback(() => {
+    setFlow(current => {
+      if (current?.phase !== 'compare' || current.history.length === 0) return current;
+      const history = current.history.slice(0, -1);
+      return { ...current, search: current.history[current.history.length - 1]!, history };
+    });
+  }, []);
 
   /**
    * Publishes the list as it stands, through GEO-3679's `rank` (publish, then clear a downvote) when it is wired in. The
@@ -280,6 +291,7 @@ export function useBestDebatesPlacement({
         existingRank={mid + 1}
         search={flow.search}
         onChoose={choose}
+        onBack={flow.history.length > 0 ? back : undefined}
         onClose={cancel}
       />
     );

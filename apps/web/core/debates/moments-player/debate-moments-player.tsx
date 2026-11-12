@@ -120,10 +120,11 @@ function PlayerFrame({
     <section aria-label={label} className={cx('@container flex w-full justify-center select-none', className)}>
       <div
         className={cx(
-          'relative isolate overflow-hidden rounded-[16px] bg-[#2b2b2b] text-white shadow-[0_1px_0_rgba(0,0,0,0.04),0_8px_22px_rgba(0,0,0,0.12)] md:rounded-[12px]',
-          // The full debate is rendered taller (1080 × 1640): its own shape at the same height, so
-          // there are no black bands beside it.
-          mode === 'full' ? 'aspect-[1080/1640] w-[79%]' : 'aspect-[480/578] w-full'
+          'relative isolate aspect-[480/578] w-full overflow-hidden rounded-[16px] bg-[#2b2b2b] text-white shadow-[0_1px_0_rgba(0,0,0,0.04),0_8px_22px_rgba(0,0,0,0.12)] md:rounded-[12px]',
+          // One box in both modes, so two players side by side are always the same size (Preston,
+          // 12 Nov). The full debate is taller than this box and is shown whole inside it: cropping
+          // would cut its burned-in names.
+          mode === 'full' && 'bg-[#151515]'
         )}
       >
         {children}
@@ -352,7 +353,7 @@ function MomentsStory({
         }
         // The moment clips are the two debaters stacked, the frame's own shape; the full debate is
         // rendered taller, with names and captions burned in, so it is shown whole.
-        className="absolute inset-0 size-full object-cover"
+        className={cx('absolute inset-0 size-full', story.mode === 'moments' ? 'object-cover' : 'object-contain')}
         onTimeUpdate={event => {
           const ms = event.currentTarget.currentTime * 1000;
           if (story.mode === 'moments') setClipMs(ms);
@@ -533,13 +534,13 @@ function MomentsStory({
 
       {failed && (
         <div className="absolute inset-x-3 top-1/2 z-30 flex -translate-y-1/2 flex-col items-center gap-2 text-center">
-          <span className="text-[clamp(11px,4cqw,14px)] text-white/90">
+          <span className="text-breadcrumb text-white/90">
             {story.mode === 'moments' ? 'Couldn’t play this moment.' : 'Couldn’t play this debate.'}
           </span>
           <button
             type="button"
             onClick={retry}
-            className="rounded bg-white px-3 py-1.5 text-sm font-medium text-text shadow-card"
+            className="rounded bg-white px-3 py-1.5 text-smallButton text-text shadow-card"
           >
             Retry
           </button>

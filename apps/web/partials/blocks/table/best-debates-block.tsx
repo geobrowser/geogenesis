@@ -227,7 +227,7 @@ export function BestDebatesBlock({
             <>
               <RankerAvatars rankers={rankedBy} />
               <span
-                className="text-[14px] leading-[15px] whitespace-nowrap text-grey-04 tabular-nums"
+                className="text-breadcrumb whitespace-nowrap text-grey-04 tabular-nums"
                 data-testid="best-debates-ranker-count"
               >
                 {rankerCountLabel(count)}
@@ -261,7 +261,7 @@ export function BestDebatesBlock({
               canRank ? (
                 <Button
                   variant="primary"
-                  className="h-8 shrink-0 !rounded-full border-text bg-text !px-3.5 text-[16px] whitespace-nowrap text-white hover:bg-text/90 focus-visible:border-text focus-visible:shadow-inner-text"
+                  className="h-8 shrink-0 !rounded-full border-text bg-text !px-3.5 text-button whitespace-nowrap text-white hover:bg-text/90 focus-visible:border-text focus-visible:shadow-inner-text"
                   onClick={() => onOpenCompose('edit')}
                 >
                   Rank
@@ -341,7 +341,7 @@ export function BestDebatesBlock({
               {view !== 'all' && unplacedRows.length > 0 ? (
                 <section className="flex flex-col gap-3" aria-label="Not ranked yet">
                   <div className="flex items-center gap-3 pt-2">
-                    <span className="text-breadcrumb font-medium whitespace-nowrap text-grey-04">
+                    <span className="text-footnoteMedium whitespace-nowrap text-grey-04">
                       {rankers.status === 'ready' ? 'Not ranked yet' : 'Not in the team ranking yet'} ·{' '}
                       {unplacedRows.length}
                     </span>
@@ -412,7 +412,7 @@ function CoverageLine({
   const share = (counts.ranked / counts.total) * 100;
   return (
     <div className="flex flex-wrap items-center gap-3 rounded-lg bg-grey-01 p-3" data-testid="best-debates-coverage">
-      <span className="text-[16px] leading-[20px] text-text">
+      <span className="text-metadata text-text">
         {counts.scope === 'today' ? coverageSentence(counts) : weekCoverageSentence(counts)}
       </span>
       <span className="h-1.5 min-w-[120px] flex-1 overflow-hidden rounded-full bg-grey-02" aria-hidden>
@@ -498,8 +498,8 @@ function DayButton({
         pressed ? 'border-text bg-white' : 'border-grey-02 bg-white hover:border-grey-03'
       )}
     >
-      <span className="text-[16px] leading-[20px] font-medium text-text">{label}</span>
-      <span className="text-[11px] leading-[13px] text-grey-04">{caption}</span>
+      <span className="text-metadataMedium text-text">{label}</span>
+      <span className="text-footnote text-grey-04">{caption}</span>
     </button>
   );
 }

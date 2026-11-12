@@ -28,7 +28,7 @@ export function RankingComposePushedDown({ blockId, debates, isError, onRetryLoa
   return (
     <section aria-label="Debates you pushed down" className="mt-4 flex flex-col">
       {/* The red rule the mockups draw between your ranking and what you pushed down. */}
-      <div className="flex items-center gap-3 pb-1 text-[12px] leading-[16px] font-medium text-red-01">
+      <div className="flex items-center gap-3 pb-1 text-footnoteMedium text-red-01">
         <span className="h-px flex-1 bg-red-01/50" aria-hidden />
         <span>You pushed down · {debates.length}</span>
         <span className="h-px flex-1 bg-red-01/50" aria-hidden />

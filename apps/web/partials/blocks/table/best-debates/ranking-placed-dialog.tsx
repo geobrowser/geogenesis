@@ -176,14 +176,10 @@ function PlacedRow({
       aria-current={isPlaced ? 'true' : undefined}
       className={cx('flex items-center gap-4 rounded-lg py-3', isPlaced ? 'bg-purple-tint px-3' : 'px-0.5')}
     >
-      <span className="w-6 shrink-0 text-center text-[17px] leading-[19px] font-medium text-text tabular-nums">
-        {place}
-      </span>
+      <span className="w-6 shrink-0 text-center text-button text-text tabular-nums">{place}</span>
       <BestDebateThumb entityId={entityId} keyframeUrl={display?.keyframeUrl ?? null} label={display?.title ?? name} />
       <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <span className="line-clamp-2 text-[17px] leading-[21px] font-medium text-text md:text-[15px] md:leading-[19px]">
-          {display?.title ?? name}
-        </span>
+        <span className="line-clamp-2 text-button text-text">{display?.title ?? name}</span>
         <BestDebateMeta data={display} showSpace={false} />
       </div>
       {isPlaced ? (

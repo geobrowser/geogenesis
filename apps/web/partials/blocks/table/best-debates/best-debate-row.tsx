@@ -144,7 +144,7 @@ export function BestDebateMeta({
   if (parts.length === 0) return null;
   return (
     <span
-      className={cx('flex min-w-0 flex-wrap items-center gap-x-1.5 text-[12px] leading-[16px] text-grey-04', className)}
+      className={cx('flex min-w-0 flex-wrap items-center gap-x-1.5 text-footnote text-grey-04', className)}
       data-testid="best-debate-meta"
     >
       {parts.map((part, index) => (
@@ -180,7 +180,9 @@ export function RankerAvatars({ rankers, max = 3 }: { rankers: readonly BlockRan
   );
 }
 
-const TITLE_CLASS = 'line-clamp-3 text-[19px] leading-[1.3] font-medium tracking-[-0.17px] text-text md:text-[17px]';
+/** Claim titles: one token on every Best debates surface (block, team, yours, Placed, compare). */
+export const CLAIM_TITLE_CLASS = 'text-button text-text';
+const TITLE_CLASS = cx('line-clamp-3', CLAIM_TITLE_CLASS);
 
 type BestDebateRowProps = {
   entityId: string;
@@ -226,7 +228,7 @@ export function BestDebateRow({
       {hideRank ? null : (
         <span
           className={cx(
-            'w-5 shrink-0 text-center text-button font-medium tabular-nums',
+            'w-5 shrink-0 text-center text-button tabular-nums',
             rank == null ? 'text-grey-03' : 'text-text'
           )}
           aria-hidden={rank == null}

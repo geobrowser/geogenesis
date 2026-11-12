@@ -24,6 +24,8 @@ type Props = {
   existingRank: number;
   search: PlacementSearch;
   onChoose: (choice: PlacementChoice) => void;
+  /** Back to the previous comparison, its answer undone. Left out on step 1. */
+  onBack?: () => void;
   onClose: () => void;
   /** Swappable for tests; the compare view's one player component otherwise. */
   Player?: typeof RankingCompareDebatePlayer;
@@ -40,6 +42,7 @@ export function RankingCompareDialog({
   existingRank,
   search,
   onChoose,
+  onBack,
   onClose,
   Player = RankingCompareDebatePlayer,
 }: Props) {
@@ -50,6 +53,13 @@ export function RankingCompareDialog({
 
   const onKeyDown = (event: React.KeyboardEvent) => {
     if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
+    // Backspace or ← goes back a comparison, except on a slider (the full debate's rail seeks with ←).
+    if ((event.key === 'Backspace' || event.key === 'ArrowLeft') && onBack) {
+      if ((event.target as Element).closest?.('[role="slider"]')) return;
+      event.preventDefault();
+      onBack();
+      return;
+    }
     const choice: PlacementChoice | null =
       event.key === '1' ? 'new' : event.key === '2' ? 'existing' : event.key === '=' ? 'same' : null;
     if (!choice) return;
@@ -57,7 +67,14 @@ export function RankingCompareDialog({
     onChoose(choice);
   };
 
-  const [hovered, setHovered] = React.useState<Side | null>(null);
+  // One thing hovered at a time: a side (from its selectable area or its bar button) or Same.
+  const [hovered, setHovered] = React.useState<Side | 'same' | null>(null);
+  const hover = (target: Side | 'same') => (on: boolean) =>
+    setHovered(current => (on ? target : current === target ? null : current));
+  // Dev-only, while Preston chooses where the bar goes: `?compareBar=top` puts it under the header.
+  const [barOnTop] = React.useState(
+    () => typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('compareBar') === 'top'
+  );
   const newDisplay = useBestDebateRowData(newDebate.entityId);
   const existingDisplay = useBestDebateRowData(existingDebate.entityId);
   const titleOf = (debate: CompareDebate, display: ReturnType<typeof useBestDebateRowData>) =>
@@ -74,10 +91,52 @@ export function RankingCompareDialog({
       Player={Player}
       active={playing === which}
       hovered={hovered === which}
-      onHover={next => setHovered(next ? which : current => (current === which ? null : current))}
+      onHover={hover(which)}
       onActivate={() => setPlaying(which)}
       onChoose={() => onChoose(which)}
     />
+  );
+
+  const choiceBar = (
+    <>
+      {/* One bar for the choice under both sides, so it never falls below the fold (D1). */}
+      <div className="grid shrink-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2.5 pt-1 md:gap-1.5">
+        <ChoiceButton
+          filled={hovered === 'new'}
+          onMouseEnter={() => hover('new')(true)}
+          onMouseLeave={() => hover('new')(false)}
+          aria-label={`${titleOf(newDebate, newDisplay)} was better`}
+          keyHint="1"
+          onClick={() => onChoose('new')}
+        >
+          <span className="md:hidden">Left was better</span>
+          <span className="hidden md:inline">Left</span>
+        </ChoiceButton>
+        <ChoiceButton
+          same
+          highlighted={hovered === 'same'}
+          onMouseEnter={() => hover('same')(true)}
+          onMouseLeave={() => hover('same')(false)}
+          aria-label="About the same"
+          keyHint="="
+          onClick={() => onChoose('same')}
+        >
+          <span className="md:hidden">About the same</span>
+          <span className="hidden md:inline">Same</span>
+        </ChoiceButton>
+        <ChoiceButton
+          filled={hovered === 'existing'}
+          onMouseEnter={() => hover('existing')(true)}
+          onMouseLeave={() => hover('existing')(false)}
+          aria-label={`${titleOf(existingDebate, existingDisplay)} was better`}
+          keyHint="2"
+          onClick={() => onChoose('existing')}
+        >
+          <span className="md:hidden">Right was better</span>
+          <span className="hidden md:inline">Right</span>
+        </ChoiceButton>
+      </div>
+    </>
   );
 
   return (
@@ -97,11 +156,21 @@ export function RankingCompareDialog({
       }
       subtitle={
         <span className="flex items-center gap-2.5" aria-live="polite">
+          {onBack ? (
+            <button
+              type="button"
+              onClick={onBack}
+              aria-keyshortcuts="Backspace ArrowLeft"
+              className="-ml-1 flex h-6 items-center gap-1 rounded-full px-1.5 text-smallButton text-text transition-colors hover:bg-grey-01"
+            >
+              <span aria-hidden>←</span> Back
+            </button>
+          ) : null}
           <span className="flex gap-1" aria-hidden>
             {Array.from({ length: search.expectedSteps }, (_, index) => (
               <i
                 key={index}
-                className={cx('h-1 w-[18px] rounded-[2px]', index < search.step ? 'bg-text' : 'bg-[#E9E9E4]')}
+                className={cx('h-1 w-[18px] rounded-[2px]', index < search.step ? 'bg-text' : 'bg-grey-02')}
               />
             ))}
           </span>
@@ -109,35 +178,12 @@ export function RankingCompareDialog({
         </span>
       }
     >
+      {barOnTop ? choiceBar : null}
       <div className="grid grid-cols-2 gap-5 pt-1 md:gap-2.5">
         {side('new', newDebate, newDisplay)}
         {side('existing', existingDebate, existingDisplay)}
       </div>
-      {/* One bar for the choice under both sides, so it never falls below the fold (D1). */}
-      <div className="grid shrink-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2.5 pt-1 md:gap-1.5">
-        <ChoiceButton
-          filled={hovered === 'new'}
-          aria-label={`${titleOf(newDebate, newDisplay)} was better`}
-          keyHint="1"
-          onClick={() => onChoose('new')}
-        >
-          <span className="md:hidden">Left was better</span>
-          <span className="hidden md:inline">Left</span>
-        </ChoiceButton>
-        <ChoiceButton same aria-label="About the same" keyHint="=" onClick={() => onChoose('same')}>
-          <span className="md:hidden">About the same</span>
-          <span className="hidden md:inline">Same</span>
-        </ChoiceButton>
-        <ChoiceButton
-          filled={hovered === 'existing'}
-          aria-label={`${titleOf(existingDebate, existingDisplay)} was better`}
-          keyHint="2"
-          onClick={() => onChoose('existing')}
-        >
-          <span className="md:hidden">Right was better</span>
-          <span className="hidden md:inline">Right</span>
-        </ChoiceButton>
-      </div>
+      {barOnTop ? null : choiceBar}
     </RankingFlowDialog>
   );
 }
@@ -145,18 +191,27 @@ export function RankingCompareDialog({
 function ChoiceButton({
   filled = false,
   same = false,
+  highlighted = false,
   keyHint,
   children,
   ...rest
-}: React.ButtonHTMLAttributes<HTMLButtonElement> & { filled?: boolean; same?: boolean; keyHint: string }) {
+}: React.ButtonHTMLAttributes<HTMLButtonElement> & {
+  filled?: boolean;
+  same?: boolean;
+  /** Same's own hover: an outline, no fill and no side tinted. */
+  highlighted?: boolean;
+  keyHint: string;
+}) {
   return (
     <button
       type="button"
       aria-keyshortcuts={keyHint}
       className={cx(
-        'flex h-[46px] items-center justify-center gap-2 rounded-[14px] border text-[14px] font-semibold whitespace-nowrap transition-colors md:h-[42px] md:gap-1 md:rounded-[12px] md:text-[12px]',
-        filled ? 'border-text bg-text text-white' : 'border-[#DCDCD6] bg-white text-text hover:border-text',
-        same && 'px-4 text-[#77776F] md:px-2.5'
+        'flex h-[46px] items-center justify-center gap-2 rounded-[14px] border text-button whitespace-nowrap transition-colors md:h-[42px] md:gap-1 md:rounded-[12px] md:text-smallButton',
+        filled ? 'border-text bg-text text-white' : 'border-grey-02 bg-white text-text',
+        highlighted && 'border-text',
+        same && 'px-4 text-grey-04 md:px-2.5',
+        same && highlighted && 'text-text'
       )}
       {...rest}
     >
@@ -164,8 +219,8 @@ function ChoiceButton({
       <span
         aria-hidden
         className={cx(
-          'rounded-[5px] border px-[5px] text-[10px] leading-4 font-bold md:hidden',
-          filled ? 'border-current text-current opacity-60' : 'border-[#DCDCD6] text-[#77776F]'
+          'rounded-[5px] border px-[5px] text-tag md:hidden',
+          filled ? 'border-current text-current opacity-60' : 'border-grey-02 text-grey-04'
         )}
       >
         {keyHint}
@@ -218,20 +273,22 @@ function CompareSide({
     <div
       className={cx(
         '-m-2.5 flex min-w-0 cursor-pointer flex-col gap-2.5 rounded-[18px] p-2.5 transition-colors md:-m-1.5 md:gap-[7px] md:rounded-[14px] md:p-1.5',
-        hovered && 'bg-[#F2F2EE]'
+        // The video is the player's alone: no picking, no pointer, no tint from it.
+        '[&_section]:cursor-default',
+        hovered && 'bg-grey-01'
       )}
       data-testid={`compare-card-${side}`}
-      onMouseEnter={() => onHover(true)}
+      onMouseOver={event => onHover(!(event.target as Element).closest('section'))}
       onMouseLeave={() => onHover(false)}
       onClick={event => {
-        // The player's own controls play, step and switch; everywhere else on the side picks it.
+        // A click on the video plays or pauses it, and only that; anywhere else on the side picks it.
         if ((event.target as Element).closest('section, button')) return;
         onChoose();
       }}
     >
       <div className="mx-auto flex w-full min-w-0 flex-col gap-2.5 md:gap-[7px]" style={COMPARE_PLAYER_STYLE}>
-        <div className="flex items-center gap-1.5 overflow-hidden text-[11px] whitespace-nowrap text-[#77776F] md:text-[10px]">
-          <span className="rounded-full bg-[#F2F2EE] px-[7px] py-0.5 font-bold text-text">
+        <div className="flex items-center gap-1.5 overflow-hidden text-footnote whitespace-nowrap text-grey-04">
+          <span className="rounded-full bg-grey-01 px-[7px] py-0.5 text-tag text-text">
             <span className="md:hidden">{rankLabel}</span>
             <span className="hidden md:inline">{shortRankLabel}</span>
           </span>
@@ -252,9 +309,7 @@ function CompareSide({
             </span>
           ) : null}
         </div>
-        <p className="m-0 line-clamp-2 min-h-[2.5em] text-[17px] leading-[1.25] font-bold tracking-[-0.01em] text-balance text-text md:text-[13px]">
-          {title}
-        </p>
+        <p className="m-0 line-clamp-2 min-h-[2lh] text-button text-balance text-text md:text-breadcrumb">{title}</p>
         <Player debateEntityId={debate.entityId} label={title} active={active} onActivate={onActivate} />
       </div>
     </div>

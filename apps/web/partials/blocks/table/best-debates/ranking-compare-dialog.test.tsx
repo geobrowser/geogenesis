@@ -66,4 +66,36 @@ describe('RankingCompareDialog', () => {
     expect(left.className).not.toContain('bg-text');
     expect(screen.queryByText('This one')).toBeNull();
   });
+
+  it('fills a side’s button when the button itself is hovered, and Same tints neither side', () => {
+    renderCompare();
+    const right = screen.getByRole('button', { name: 'Old debate was better' });
+    fireEvent.mouseEnter(right);
+    expect(right.className).toContain('bg-text');
+    expect(screen.getByTestId('compare-card-existing').className).toContain('bg-grey-01');
+    fireEvent.mouseLeave(right);
+    const same = screen.getByRole('button', { name: 'About the same' });
+    fireEvent.mouseEnter(same);
+    expect(screen.getByTestId('compare-card-existing').className).not.toContain('bg-grey-01');
+    expect(screen.getByTestId('compare-card-new').className).not.toContain('bg-grey-01');
+    expect(right.className).not.toContain('bg-text');
+  });
+
+  it('never picks from a click on the video, and does not tint the side for it', () => {
+    const onChoose = renderCompare();
+    const video = screen.getByRole('region', { name: 'Old debate' });
+    fireEvent.mouseOver(video);
+    expect(screen.getByTestId('compare-card-existing').className).not.toContain('bg-grey-01');
+    fireEvent.click(video);
+    expect(onChoose).not.toHaveBeenCalled();
+  });
+
+  it('puts the bar above the sides with ?compareBar=top (dev toggle)', () => {
+    window.history.replaceState(null, '', '/?compareBar=top');
+    renderCompare();
+    const bar = screen.getByRole('button', { name: 'About the same' });
+    const side = screen.getByTestId('compare-card-new');
+    expect(bar.compareDocumentPosition(side) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    window.history.replaceState(null, '', '/');
+  });
 });

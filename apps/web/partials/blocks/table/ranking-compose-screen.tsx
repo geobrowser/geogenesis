@@ -960,7 +960,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
                       data-testid="best-debates-mobile-publish"
                     >
                       <div className="flex items-center gap-3">
-                        <span className="min-w-0 flex-1 text-[13px] leading-[17px] text-grey-04">
+                        <span className="min-w-0 flex-1 text-breadcrumb text-grey-04">
                           {unpublishedChangesLabel(unpublishedCount)}
                         </span>
                         <Button

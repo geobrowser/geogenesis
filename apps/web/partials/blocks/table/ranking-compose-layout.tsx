@@ -58,7 +58,7 @@ function MobileTabBar({ tabs }: { tabs: RankingComposeMobileTabs }) {
           aria-selected={tabs.active === option.id}
           onClick={() => tabs.onChange(option.id)}
           className={cx(
-            'grid h-10 flex-1 place-items-center rounded-full text-center text-[15px] leading-[18px] font-medium transition-colors',
+            'grid h-10 flex-1 place-items-center rounded-full text-center text-breadcrumb transition-colors',
             tabs.active === option.id ? 'bg-white text-text shadow-[0_1px_2px_rgba(0,0,0,0.12)]' : 'text-grey-04'
           )}
         >

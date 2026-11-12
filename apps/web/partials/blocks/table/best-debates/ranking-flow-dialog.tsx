@@ -94,23 +94,13 @@ export function RankingFlowDialog({
             <div className="flex shrink-0 items-start justify-between gap-4">
               <div className="min-w-0">
                 <Dialog.Title
-                  className={cx(
-                    'm-0 text-text',
-                    size === 'compare'
-                      ? 'text-[19px] leading-[24px] font-bold tracking-[-0.015em] md:text-[16px] md:leading-[20px]'
-                      : 'text-[24px] leading-[29px] font-semibold tracking-[-0.3px] md:text-[19px] md:leading-[23px]'
-                  )}
+                  className={cx('m-0 text-text', size === 'compare' ? 'text-smallTitle' : 'text-smallTitle')}
                 >
                   {title}
                 </Dialog.Title>
                 {subtitle ? (
                   <div
-                    className={cx(
-                      'text-grey-04',
-                      size === 'compare'
-                        ? 'mt-1.5 text-[12px] leading-4'
-                        : 'mt-1 text-[16px] leading-[20px] md:text-metadata'
-                    )}
+                    className={cx('text-grey-04', size === 'compare' ? 'mt-1.5 text-footnote' : 'mt-1 text-metadata')}
                   >
                     {subtitle}
                   </div>
@@ -121,7 +111,7 @@ export function RankingFlowDialog({
                   <button
                     type="button"
                     aria-label="Close"
-                    className="grid size-8 shrink-0 place-items-center rounded-full bg-[#F2F2EE] text-text transition-colors hover:bg-grey-02"
+                    className="grid size-8 shrink-0 place-items-center rounded-full bg-grey-01 text-text transition-colors hover:bg-grey-02"
                   >
                     <Close />
                   </button>

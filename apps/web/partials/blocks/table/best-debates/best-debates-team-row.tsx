@@ -19,13 +19,13 @@ export function RankedByBadge({ rankers, entityId }: { rankers: RankersRead; ent
   if (label.kind === 'unknown') return null;
   if (label.kind === 'nobody') {
     return (
-      <span className="inline-flex h-5 items-center rounded-[4px] bg-purple-tint px-1.5 text-[12px] leading-[13px] whitespace-nowrap text-purple">
+      <span className="inline-flex h-5 items-center rounded-[4px] bg-purple-tint px-1.5 text-tag whitespace-nowrap text-purple">
         Nobody has ranked this yet
       </span>
     );
   }
   return (
-    <span className="inline-flex h-5 items-center rounded-[4px] bg-grey-01 px-1.5 text-[12px] leading-[13px] whitespace-nowrap text-grey-04">
+    <span className="inline-flex h-5 items-center rounded-[4px] bg-grey-01 px-1.5 text-tag whitespace-nowrap text-grey-04">
       {rankedByText(label)}
     </span>
   );
@@ -85,9 +85,7 @@ export function BestDebatesTeamRowContent({
           }
           debateAside={
             myRank ? (
-              <span className="text-[14px] leading-[15px] whitespace-nowrap text-grey-04 tabular-nums">
-                You: #{myRank}
-              </span>
+              <span className="text-breadcrumb whitespace-nowrap text-grey-04 tabular-nums">You: #{myRank}</span>
             ) : (
               <span
                 className="grid size-8 place-items-center rounded-md border border-grey-02 bg-white text-text md:size-11"
@@ -107,7 +105,7 @@ export function BestDebatesTeamRowContent({
 export function SpaceGroupHeader({ group }: { group: SpaceGroup }) {
   const name = group.space?.name ?? 'Other';
   return (
-    <div className="flex items-center gap-2 pt-4 pb-1 text-[12px] leading-[16px] font-medium text-grey-04">
+    <div className="flex items-center gap-2 pt-4 pb-1 text-footnoteMedium text-grey-04">
       {group.space ? <SpaceThumb image={group.space.image} name={name} /> : null}
       <span className="whitespace-nowrap">
         {name} · {group.ids.length}

@@ -61,7 +61,7 @@ export function BestDebatesMatchingList({
           <>
             {ranked.length > 0 ? (
               <div className="flex items-center gap-3 pt-4 pb-1">
-                <span className="text-breadcrumb font-medium whitespace-nowrap text-grey-04">Unranked</span>
+                <span className="text-footnoteMedium whitespace-nowrap text-grey-04">Unranked</span>
                 <span className="h-px flex-1 bg-grey-02" aria-hidden />
               </div>
             ) : null}
