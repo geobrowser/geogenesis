@@ -52,6 +52,8 @@ type Props = {
   /** The column's heading; "My ranking" unless the block says otherwise (Best debates: "Your ranking"). */
   title?: string;
   emptyText?: string;
+  /** Beside Publish in the header (on a phone, its own row atop the tab): Best debates' Clear. */
+  headerAction?: React.ReactNode;
   /** Shown under the empty text, e.g. Best debates' "Start from the team ranking". */
   emptyAction?: React.ReactNode;
   /**
@@ -123,6 +125,7 @@ export function RankingComposeMyRanking({
   publishLabel,
   emptyText = 'Add or search global ranking list to get started',
   emptyAction,
+  headerAction,
   onDropEntity,
 }: Props) {
   const isDesktop = !isMobile;
@@ -153,17 +156,25 @@ export function RankingComposeMyRanking({
           {title}
         </h2>
         {isDesktop && !hidePublishButton ? (
-          <Button
-            variant="primary"
-            className={cx(RANKING_COMPOSE_PUBLISH_BUTTON_CLASS, 'justify-self-end')}
-            disabled={!canPublish}
-            onClick={onPublish}
-            data-analytics-feature="ranking-submit"
-          >
-            {isSaving ? 'Publishing…' : (publishLabel ?? 'Publish ranking')}
-          </Button>
+          <div className="flex items-center gap-2 justify-self-end">
+            {headerAction}
+            <Button
+              variant="primary"
+              className={RANKING_COMPOSE_PUBLISH_BUTTON_CLASS}
+              disabled={!canPublish}
+              onClick={onPublish}
+              data-analytics-feature="ranking-submit"
+            >
+              {isSaving ? 'Publishing…' : (publishLabel ?? 'Publish ranking')}
+            </Button>
+          </div>
+        ) : isMobile && !hideMobileHeading ? (
+          <div className="justify-self-end">{headerAction}</div>
         ) : null}
       </div>
+      {isMobile && hideMobileHeading && headerAction ? (
+        <div className="-mt-2 mb-2 flex justify-end">{headerAction}</div>
+      ) : null}
       <div
         ref={listRef}
         data-testid={onDropEntity ? 'ranking-drop-target' : undefined}

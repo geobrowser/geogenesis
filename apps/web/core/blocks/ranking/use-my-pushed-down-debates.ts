@@ -136,7 +136,8 @@ export function useRankingPublishDownvotes() {
 
   const readDraftDownvotes = React.useCallback(
     async (draftIds: readonly string[]): Promise<Map<string, MemberVoteRecord[]> | null> => {
-      if (!personalSpaceId) return new Map();
+      // An emptied ranking (Preston, 12 Nov) has no debates to check.
+      if (!personalSpaceId || draftIds.length === 0) return new Map();
       let server: MemberVoteRecord[];
       try {
         // Only the ballot's own debates: one request, not a walk through the history.

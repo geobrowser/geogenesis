@@ -61,6 +61,7 @@ import { stepAtom } from '~/partials/onboarding/onboarding-atoms';
 
 import { BestDebateDisplaysContext } from './best-debates/best-debate-row';
 import { BestDebateWatchProvider } from './best-debates/best-debate-watch';
+import { ClearRankingButton } from './best-debates/clear-ranking-button';
 import { CopyTeamRankingStart } from './best-debates/copy-team-ranking-start';
 import { useBestDebatesCompose } from './best-debates/use-best-debates-compose';
 import { useBestDebatesPushDownSlot } from './best-debates/use-best-debates-push-down-slot';
@@ -543,7 +544,8 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
 
   const canPublish =
     !ballotReadError &&
-    orderedIds.length > 0 &&
+    // Best debates can publish an emptied ranking: it clears the ranker's votes (Preston, 12 Nov).
+    (orderedIds.length > 0 || isBestDebates) &&
     hasUnpublishedChanges &&
     submissionsOpen &&
     (Boolean(personalSpaceId) || isAccountSetupPending) &&
@@ -562,7 +564,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
 
   const rankingOpportunity = useRankingOpportunity(
     entityId,
-    !submissionsOpen || !hasUnpublishedChanges || orderedIds.length === 0 || isPublishBusy
+    !submissionsOpen || !hasUnpublishedChanges || (orderedIds.length === 0 && !isBestDebates) || isPublishBusy
       ? 'ineligible'
       : !personalSpaceId
         ? 'authentication_required'
@@ -571,7 +573,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
           : 'ineligible',
     !submissionsOpen
       ? 'closed'
-      : orderedIds.length === 0
+      : orderedIds.length === 0 && !isBestDebates
         ? 'empty'
         : !hasUnpublishedChanges
           ? 'unchanged'
@@ -856,6 +858,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
                   ? 'Tap a debate in Team ranking to compare it and place it here.'
                   : 'Drag debates here from the team ranking, or click one to compare.',
                 onDropEntity: bestDebates.dropEntity,
+                headerAction: <ClearRankingButton orderedIds={orderedIds} setDraft={setOrderedIds} />,
                 emptyAction: (
                   <CopyTeamRankingStart
                     teamOrder={globalOrderedIds}

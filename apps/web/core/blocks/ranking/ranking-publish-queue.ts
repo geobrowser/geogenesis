@@ -46,6 +46,9 @@ export const RANKING_CHANGED_ELSEWHERE_MESSAGE =
 export const RANKING_CHANGED_ELSEWHERE_ORDER_MESSAGE =
   "Your ranking changed on another device. We kept what both added and removed, in this device's order.";
 
+/** Clearing a ranking that has nothing live to clear for this period. */
+export const RANKING_ALREADY_EMPTY_MESSAGE = 'Your ranking is already empty.';
+
 export const RANKING_NOTHING_LEFT_TO_PUBLISH_MESSAGE =
   "Your ranking changed on another device, so this change wasn't published. Check your ranking and try again.";
 

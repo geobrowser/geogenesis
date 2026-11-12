@@ -164,9 +164,6 @@ export const RANK_BALLOT_FAILED_COPY = 'Your ranking didn’t publish, so this d
 export const RANK_CLEAR_FAILED_COPY = 'Ranked, but your downvote is still on it. Retry to clear it.';
 export const VOTE_CHECK_FAILED_COPY = 'Couldn’t check your vote on this debate. Try again.';
 export const UNDO_FAILED_COPY = 'Your downvote is still there. Try again.';
-/** `saveMySubmission` can't publish an empty ballot, so the last debate on it stays until another joins. */
-export const PUSH_DOWN_LAST_BALLOT_ITEM_COPY =
-  'Down ranked, but it’s the only debate in your ranking, and a ranking can’t be empty. Rank another debate, then retry.';
 
 /** Session-scoped "already saw the note" flag; per-viewer convenience, safe when storage is blocked. */
 const NOTE_SEEN_STORAGE_KEY = 'geo:best-debates:push-down-note-seen';

@@ -803,12 +803,25 @@ export function RankingComposeGlobalRanking({
   const teamDisplays = React.useContext(BestDebateDisplaysContext);
   const teamTools = teamView?.tools;
   // Counted over the whole list the picker shows, never the rows drawn so far (Preston, 12 Nov).
-  const renderSection = (ids: string[], render: (id: string) => React.ReactNode) => {
-    if (!teamView) return ids.map(render);
-    const kept = teamTools
+  const keepTeamIds = (ids: string[]) =>
+    teamTools
       ? filterTeamIds(ids, id => teamDisplays?.get(normId(id)), { query: '', topicIds: teamTools.topicIds })
       : ids;
-    return <BestDebatesGroupedRows ids={kept} grouped={teamView.mode === 'by_space'} render={render} />;
+  // One Collapse all for the column, on the first header of the first section with rows; it covers
+  // the ranked and unranked sections alike.
+  const renderSection = (ids: string[], render: (id: string) => React.ReactNode, section: 'ranked' | 'unranked') => {
+    if (!teamView) return ids.map(render);
+    const kept = keepTeamIds(ids);
+    const rankedKept = keepTeamIds(tabFilteredRankedIds);
+    const carriesCollapseAll = section === 'ranked' || rankedKept.length === 0;
+    return (
+      <BestDebatesGroupedRows
+        ids={kept}
+        grouped={teamView.mode === 'by_space'}
+        render={render}
+        collapseAllIds={carriesCollapseAll ? [...rankedKept, ...keepTeamIds(tabFilteredUnrankedIds)] : null}
+      />
+    );
   };
 
   const renderSearchRow = (topicFacet: BestDebatesTopicFacet | null) => (
@@ -848,7 +861,7 @@ export function RankingComposeGlobalRanking({
       {showCreateNewPrompt && tabFilteredRankedIds.length > 0 ? (
         <RankingComposeSectionDivider label="Other ranked results" />
       ) : null}
-      {renderSection(tabFilteredRankedIds, id => renderPickEntity(id, globalRankByEntityId.get(id)))}
+      {renderSection(tabFilteredRankedIds, id => renderPickEntity(id, globalRankByEntityId.get(id)), 'ranked')}
       {tabShowRankedUnrankedDivider ? (
         showCreateNewPrompt ? (
           <RankingComposeSectionDivider label="Other unranked results" />
@@ -856,7 +869,7 @@ export function RankingComposeGlobalRanking({
           <RankingComposeSectionDivider label="Unranked" />
         )
       ) : null}
-      {renderSection(tabFilteredUnrankedIds, id => renderPickEntity(id))}
+      {renderSection(tabFilteredUnrankedIds, id => renderPickEntity(id), 'unranked')}
       {loadMoreFooter}
       {pendingDisclosure}
       {membershipSentinel}
@@ -868,9 +881,9 @@ export function RankingComposeGlobalRanking({
       {browseTab !== 'global' && tabShowRankedUnrankedDivider ? (
         <RankingComposeSectionDivider label="Already ranked" />
       ) : null}
-      {renderSection(tabFilteredRankedIds, id => renderPickEntity(id, globalRankByEntityId.get(id)))}
+      {renderSection(tabFilteredRankedIds, id => renderPickEntity(id, globalRankByEntityId.get(id)), 'ranked')}
       {tabShowRankedUnrankedDivider ? <RankingComposeSectionDivider label="Unranked" /> : null}
-      {renderSection(tabFilteredUnrankedIds, id => renderPickEntity(id))}
+      {renderSection(tabFilteredUnrankedIds, id => renderPickEntity(id), 'unranked')}
       {loadMoreFooter}
       {pendingDisclosure}
       {membershipSentinel}

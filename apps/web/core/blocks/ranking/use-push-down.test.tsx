@@ -10,7 +10,6 @@ import { RANK_VOTES_RELATION_TYPE_ID } from '~/core/ranking-block-ids';
 
 import { DEBATES_SPACE_ID } from './best-debates';
 import type { MemberVoteRecord } from './fetch-member-debate-votes';
-import { PUSH_DOWN_LAST_BALLOT_ITEM_COPY } from './push-down';
 import { type ComposeBallot, RankingComposeBallotContext } from './ranking-compose-ballot-context';
 import { usePushDown } from './use-push-down';
 
@@ -394,20 +393,25 @@ describe('usePushDown', () => {
     await waitFor(() => expect(result.current.state).toMatchObject({ status: 'failed', step: 'vote' }));
   });
 
-  it('can’t empty the ballot, and says so', async () => {
+  it('down ranking the only ranked debate clears the published ranking', async () => {
     rankedBallot([DEBATE]);
     const { result } = await renderReady();
     await act(async () => {
       await result.current.pushDown();
     });
+    expect(mocks.save).toHaveBeenCalledWith([]);
+    await waitFor(() => expect(result.current.state).toEqual({ status: 'done', action: 'push-down' }));
+  });
+
+  it('down ranking the only debate in the draft just empties the draft', async () => {
+    rankedBallot([DEBATE]);
+    const publish = vi.fn(async (_ids: string[]) => true);
+    const { result } = await renderReady({ orderedIds: [DEBATE], publish });
+    await act(async () => {
+      await result.current.pushDown();
+    });
+    expect(publish).toHaveBeenCalledWith([]);
     expect(mocks.save).not.toHaveBeenCalled();
-    await waitFor(() =>
-      expect(result.current.state).toMatchObject({
-        status: 'failed',
-        step: 'ballot',
-        message: PUSH_DOWN_LAST_BALLOT_ITEM_COPY,
-      })
-    );
   });
 
   it('Rank it publishes first, then clears every downvote the member holds, wherever it was cast', async () => {

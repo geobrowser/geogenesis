@@ -150,40 +150,54 @@ function readCollapsedSpaces(): Set<string> {
   }
 }
 
+// One store for the page, so the ranked and unranked sections of By space (and To rank) fold a
+// space together.
+let collapsedSpaces: Set<string> | null = null;
+const collapsedListeners = new Set<() => void>();
+const getCollapsedSpaces = () => (collapsedSpaces ??= readCollapsedSpaces());
+const EMPTY_SET: Set<string> = new Set();
+function setCollapsedSpaces(next: Set<string>) {
+  collapsedSpaces = next;
+  try {
+    window.localStorage.setItem(COLLAPSED_SPACES_KEY, JSON.stringify([...next]));
+  } catch {
+    // Private windows and blocked storage: it still works for this visit.
+  }
+  collapsedListeners.forEach(listener => listener());
+}
+
+/** For tests: forget the in-memory copy so the next read comes from storage. */
+export function resetCollapsedSpacesForTests() {
+  collapsedSpaces = null;
+}
+
 /**
  * Which By space groups the viewer collapsed (Preston, 12 Nov): all open to start, remembered per
  * viewer by space id. A search or topic filter never opens one; its count still shows.
  */
 export function useCollapsedSpaces() {
-  const [collapsed, setCollapsed] = React.useState<Set<string>>(() => readCollapsedSpaces());
-  const save = React.useCallback((next: Set<string>) => {
-    setCollapsed(next);
-    try {
-      window.localStorage.setItem(COLLAPSED_SPACES_KEY, JSON.stringify([...next]));
-    } catch {
-      // Private windows and blocked storage: it still works for this visit.
-    }
+  const collapsed = React.useSyncExternalStore(
+    listener => {
+      collapsedListeners.add(listener);
+      return () => collapsedListeners.delete(listener);
+    },
+    getCollapsedSpaces,
+    () => EMPTY_SET
+  );
+  const toggle = React.useCallback((key: string) => {
+    const next = new Set(getCollapsedSpaces());
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    setCollapsedSpaces(next);
   }, []);
-  const toggle = React.useCallback(
-    (key: string) => {
-      const next = new Set(collapsed);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      save(next);
-    },
-    [collapsed, save]
-  );
-  const setAll = React.useCallback(
-    (keys: readonly string[], close: boolean) => {
-      const next = new Set(collapsed);
-      for (const key of keys) {
-        if (close) next.add(key);
-        else next.delete(key);
-      }
-      save(next);
-    },
-    [collapsed, save]
-  );
+  const setAll = React.useCallback((keys: readonly string[], close: boolean) => {
+    const next = new Set(getCollapsedSpaces());
+    for (const key of keys) {
+      if (close) next.add(key);
+      else next.delete(key);
+    }
+    setCollapsedSpaces(next);
+  }, []);
   return { collapsed, toggle, setAll };
 }
 
@@ -194,28 +208,34 @@ export function SpaceGroupHeader({
   group,
   expanded,
   onToggle,
+  trailing,
 }: {
   group: SpaceGroup;
   expanded: boolean;
   onToggle: () => void;
+  /** At the row's right end: the first header carries Collapse all / Expand all. */
+  trailing?: React.ReactNode;
 }) {
   const name = group.space?.name ?? 'Other';
   return (
-    <button
-      type="button"
-      aria-expanded={expanded}
-      onClick={onToggle}
-      className="flex w-full items-center gap-2 pt-4 pb-1 text-left text-footnoteMedium text-grey-04 transition-colors hover:text-text md:min-h-11 md:pt-2"
-    >
-      <span className={cx('grid size-3 shrink-0 place-items-center transition-transform', !expanded && '-rotate-90')}>
-        <ChevronDownSmall />
-      </span>
-      {group.space ? <SpaceThumb image={group.space.image} name={name} /> : null}
-      <span className="whitespace-nowrap">
-        {name} · {group.ids.length}
-      </span>
-      <span className="h-px flex-1 bg-grey-02" aria-hidden />
-    </button>
+    <div className="flex items-center gap-2 pt-4 pb-1 md:pt-2">
+      <button
+        type="button"
+        aria-expanded={expanded}
+        onClick={onToggle}
+        className="flex min-w-0 flex-1 items-center gap-2 text-left text-footnoteMedium text-grey-04 transition-colors hover:text-text md:min-h-11"
+      >
+        <span className={cx('grid size-3 shrink-0 place-items-center transition-transform', !expanded && '-rotate-90')}>
+          <ChevronDownSmall />
+        </span>
+        {group.space ? <SpaceThumb image={group.space.image} name={name} /> : null}
+        <span className="whitespace-nowrap">
+          {name} · {group.ids.length}
+        </span>
+        <span className="h-px flex-1 bg-grey-02" aria-hidden />
+      </button>
+      {trailing}
+    </div>
   );
 }
 
@@ -227,36 +247,47 @@ export function BestDebatesGroupedRows({
   ids,
   grouped,
   render,
+  collapseAllIds = ids,
 }: {
   ids: readonly string[];
   grouped: boolean;
   render: (entityId: string) => React.ReactNode;
+  /**
+   * The debates Collapse all / Expand all covers, on this list's first header; `null` leaves it off
+   * (a later section of the same column, whose first section carries it for both).
+   */
+  collapseAllIds?: readonly string[] | null;
 }) {
   const displays = React.useContext(BestDebateDisplaysContext);
   const { collapsed, toggle, setAll } = useCollapsedSpaces();
   if (!grouped || !displays) return <>{ids.map(render)}</>;
   const groups = groupBySpace(ids, id => displays.get(normId(id)));
-  const keys = groups.map(groupKey);
+  const keys = collapseAllIds ? groupBySpace(collapseAllIds, id => displays.get(normId(id))).map(groupKey) : [];
   const allCollapsed = keys.length > 0 && keys.every(key => collapsed.has(key));
   return (
     <>
-      {groups.length > 1 ? (
-        <div className="flex justify-end">
-          <button
-            type="button"
-            onClick={() => setAll(keys, !allCollapsed)}
-            className="h-6 rounded px-1 text-smallButton text-grey-04 transition-colors hover:text-text md:h-11"
-          >
-            {allCollapsed ? 'Expand all' : 'Collapse all'}
-          </button>
-        </div>
-      ) : null}
-      {groups.map(group => {
+      {groups.map((group, index) => {
         const key = groupKey(group);
         const expanded = !collapsed.has(key);
         return (
           <section key={key} aria-label={group.space?.name ?? 'Other'} data-testid="space-group">
-            <SpaceGroupHeader group={group} expanded={expanded} onToggle={() => toggle(key)} />
+            <SpaceGroupHeader
+              group={group}
+              expanded={expanded}
+              onToggle={() => toggle(key)}
+              trailing={
+                // On the first header's row, so it never takes a band of its own (Preston, 12 Nov).
+                index === 0 && keys.length > 1 ? (
+                  <button
+                    type="button"
+                    onClick={() => setAll(keys, !allCollapsed)}
+                    className="h-6 shrink-0 rounded px-1 text-smallButton text-grey-04 transition-colors hover:text-text md:h-11"
+                  >
+                    {allCollapsed ? 'Expand all' : 'Collapse all'}
+                  </button>
+                ) : null
+              }
+            />
             {expanded ? group.ids.map(render) : null}
           </section>
         );

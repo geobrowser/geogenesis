@@ -37,6 +37,7 @@ import {
   type OwnRankingPublish,
   RANKING_CHANGED_ELSEWHERE_MESSAGE,
   RANKING_CHANGED_ELSEWHERE_ORDER_MESSAGE,
+  RANKING_ALREADY_EMPTY_MESSAGE,
   RANKING_NOTHING_LEFT_TO_PUBLISH_MESSAGE,
   RANKING_OVERTAKEN_MESSAGE,
   RANKING_PREVIOUS_PUBLISH_PENDING_MESSAGE,
@@ -304,7 +305,9 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
       if (!personalSpaceId) return null;
 
       const filteredSlots = slots.filter(slot => Boolean(slot.id));
-      if (filteredSlots.length === 0) return null;
+      // An empty list is the ranker clearing their ranking (Preston, 12 Nov): the edit deletes every
+      // vote on their Rank and adds none. The Rank and its block link stay.
+      const clearing = filteredSlots.length === 0;
       // Best debates (GEO-3678): ORDINAL, and every item keeps its own space, with no fallback to the
       // block's. Every other block publishes exactly as before. See `best-debates-ballot.ts`.
       const ballotRules = rankingBallotRules(blockId, spaceId);
@@ -411,7 +414,7 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
         const changedElsewhere =
           overtaken || (movedSinceRead && !(previous && sameBallotOrder(publishedIds, previous.orderedEntityIds)));
 
-        if (mergedIds.length === 0) {
+        if (mergedIds.length === 0 && !clearing) {
           // Every item this edit kept was removed elsewhere, and vice versa.
           // Nothing to publish; show the ranker what is published now.
           op.failed('conflict');
@@ -443,7 +446,7 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
           ballotRules,
           spaceId
         );
-        if (votes.length === 0) {
+        if (votes.length === 0 && mergedIds.length > 0) {
           op.failed('invalid_input');
           reportError(RANKING_NOTHING_LEFT_TO_PUBLISH_MESSAGE);
           return null;
@@ -465,6 +468,17 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
         // Best debates: an existing Rank the indexer holds as another type can't take ORDINAL votes,
         // so a fresh ORDINAL Rank supersedes it (GEO-3678, `mustMintFreshRank`).
         const reuseExistingRank = reuseRankForPeriod && !mustMintFreshRank(rankEntity, ballotRules);
+
+        if (mergedIds.length === 0 && !reuseExistingRank) {
+          // Nothing live to clear: no Rank for this period (or one a fresh Rank would supersede), so
+          // the ranking is already empty here. A Rank with no votes is never minted.
+          op.failed('invalid_input');
+          reportError(RANKING_ALREADY_EMPTY_MESSAGE);
+          void refetchMyRanking().catch(e => {
+            console.error('[useRankingSubmissions] Refetch after an empty clear failed:', e);
+          });
+          return null;
+        }
 
         let ops;
         let rankId: string;
@@ -553,7 +567,9 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
           React.createElement(
             'span',
             null,
-            !changedElsewhere
+            votes.length === 0
+              ? 'Ranking cleared.'
+              : !changedElsewhere
               ? 'Ranking published!'
               : `Ranking published. ${
                   merge.overrodeTheirOrder ? RANKING_CHANGED_ELSEWHERE_ORDER_MESSAGE : RANKING_CHANGED_ELSEWHERE_MESSAGE

@@ -120,7 +120,7 @@ export function useBestDebatesCompose({
         setToast(<span>Finish setting up your account to publish your ranking.</span>);
         return false;
       }
-      if (ids.length === 0) return false;
+      // An empty list is allowed: it clears the ranker's ballot (Preston, 12 Nov).
 
       let spaces: Map<string, string>;
       try {
@@ -134,7 +134,7 @@ export function useBestDebatesCompose({
       const slots = ids.map(id => ({ id, name: debateName(id), spaceId: spaces.get(normId(id)) }));
       const publishable = slots.filter(slot => Boolean(slot.spaceId));
       const leftOut = slots.length - publishable.length;
-      if (publishable.length === 0) {
+      if (slots.length > 0 && publishable.length === 0) {
         setToast(<span>Couldn’t find the spaces of these debates, so nothing was published.</span>);
         return false;
       }

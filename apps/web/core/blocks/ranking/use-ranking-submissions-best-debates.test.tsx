@@ -173,6 +173,39 @@ describe('ballot rules per block (GEO-3678)', () => {
     expect((mocks.publish.mock.calls[0][0] as { ops: unknown[] }).ops).toEqual([{ op: 'votes' }]);
   });
 
+  it('clears a ranking with an edit that only deletes its votes, keeping the Rank', async () => {
+    mocks.myRankEntity = {
+      id: RANK,
+      createdAt: '1',
+      updatedAt: '1',
+      values: [{ property: { id: '48e01bc8324e48c2a6c9cab3f49290c6' }, value: 'ORDINAL', isDeleted: false }],
+    };
+    // The SDK's update with no votes: the deletes of the existing vote relations and nothing else.
+    const deletesOnly = [{ type: 'deleteRelation' }, { type: 'deleteEntity' }];
+    mocks.update.mockResolvedValueOnce({ id: RANK, ops: deletesOnly });
+    const view = renderSubmissions(BLOCK);
+    let result: unknown;
+    await act(async () => {
+      result = await view.result.current.saveMySubmission([]);
+    });
+    expect(result).not.toBeNull();
+    expect(mocks.create).not.toHaveBeenCalled();
+    expect(mocks.update).toHaveBeenCalledWith({ rankId: RANK, rankType: 'ORDINAL', votes: [] });
+    expect((mocks.publish.mock.calls[0][0] as { ops: unknown[] }).ops).toEqual(deletesOnly);
+    expect(mocks.reportError).not.toHaveBeenCalled();
+  });
+
+  it('never mints an empty Rank: with nothing published, clearing publishes nothing', async () => {
+    const view = renderSubmissions(BLOCK);
+    await act(async () => {
+      await view.result.current.saveMySubmission([]);
+    });
+    expect(mocks.create).not.toHaveBeenCalled();
+    expect(mocks.update).not.toHaveBeenCalled();
+    expect(mocks.publish).not.toHaveBeenCalled();
+    expect(mocks.reportError).toHaveBeenCalledWith('Your ranking is already empty.');
+  });
+
   it('leaves an existing ballot on another block exactly as before', async () => {
     mocks.myRankEntity = {
       id: RANK,

@@ -27,7 +27,6 @@ import {
 import {
   IDLE_PUSH_DOWN_STATE,
   PUSH_DOWN_BALLOT_FAILED_COPY,
-  PUSH_DOWN_LAST_BALLOT_ITEM_COPY,
   PUSH_DOWN_UNDONE_COPY,
   type PushDownAction,
   type PushDownRunResult,
@@ -268,8 +267,8 @@ export function usePushDown(debateId: string, options: UsePushDownOptions = {}):
     if (draft) {
       // On the ranking screen: edit the draft and publish it, so nothing unpublished is lost.
       if (!ballotHolds(draft.orderedIds, debateId) && !ballotHolds(published, debateId)) return { ok: true };
+      // Down ranking the only debate just empties the draft (Preston, 12 Nov).
       const remaining = ballotWithout(draft.orderedIds, debateId);
-      if (remaining.length === 0) return { ok: false, message: PUSH_DOWN_LAST_BALLOT_ITEM_COPY };
       const before = [...draft.orderedIds];
       if (!(await draft.publish(remaining))) return { ok: false, message: PUSH_DOWN_BALLOT_FAILED_COPY };
       draftBeforePush.current = before;
@@ -277,8 +276,8 @@ export function usePushDown(debateId: string, options: UsePushDownOptions = {}):
     }
 
     if (!ballotHolds(published, debateId)) return { ok: true };
+    // The only debate down ranked: the edit clears the ranking (an empty ballot publishes).
     const remaining = ballotWithout(published, debateId);
-    if (remaining.length === 0) return { ok: false, message: PUSH_DOWN_LAST_BALLOT_ITEM_COPY };
 
     // Every other vote is re-sent, so each keeps the space it was ranked in.
     const voteSpaces =

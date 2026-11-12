@@ -8,6 +8,7 @@ import type { RankersRead } from '~/core/blocks/ranking/use-best-debates-to-rank
 
 import { RANKING_ENTITY_DRAG_TYPE } from '../ranking-entity-drag';
 import { BestDebateDisplaysContext } from './best-debate-row';
+import { resetCollapsedSpacesForTests } from './best-debates-team-row';
 import { BestDebatesToRankList } from './best-debates-to-rank-list';
 
 vi.mock('../ranking-entry-row', () => ({
@@ -170,6 +171,7 @@ describe('To rank', () => {
     // Collapsing: only the header (with its count) stays, it is remembered, and a filter never
     // opens it again.
     window.localStorage.removeItem('geo.bestDebates.collapsedSpaces');
+    resetCollapsedSpacesForTests();
     withDisplays({ groupBySpace: true });
     const header = screen.getByRole('button', { name: /US Politics · 1/ });
     expect(header.getAttribute('aria-expanded')).toBe('true');
@@ -189,6 +191,19 @@ describe('To rank', () => {
     expect(screen.queryByRole('button', { name: /^Rank / })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Expand all' }));
     expect(screen.getAllByRole('button', { name: /^Rank / })).toHaveLength(2);
+    // Collapse all sits on the first header's row, not a row of its own.
+    expect(
+      screen.getByRole('button', { name: 'Collapse all' }).previousElementSibling?.getAttribute('aria-expanded')
+    ).toBe('true');
+    cleanup();
+
+    // Remembered per viewer: a fresh page reads it back from storage.
+    window.localStorage.setItem('geo.bestDebates.collapsedSpaces', JSON.stringify(['sp2']));
+    resetCollapsedSpacesForTests();
+    withDisplays({ groupBySpace: true });
+    expect(screen.getByRole('button', { name: /Relationships · 1/ }).getAttribute('aria-expanded')).toBe('false');
+    expect(screen.queryByRole('button', { name: 'Rank Older' })).toBeNull();
     window.localStorage.removeItem('geo.bestDebates.collapsedSpaces');
+    resetCollapsedSpacesForTests();
   });
 });

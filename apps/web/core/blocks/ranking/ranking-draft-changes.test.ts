@@ -15,6 +15,10 @@ describe('countBallotChanges', () => {
     expect(countBallotChanges([], ['a', 'b', 'c'])).toBe(3);
   });
 
+  it('counts an emptied ranking as one change per debate removed', () => {
+    expect(countBallotChanges(['a', 'b', 'c'], [])).toBe(3);
+  });
+
   it('labels the count', () => {
     expect(unpublishedChangesLabel(1)).toBe('1 change not published');
     expect(unpublishedChangesLabel(3)).toBe('3 changes not published');
