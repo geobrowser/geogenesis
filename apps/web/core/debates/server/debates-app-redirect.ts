@@ -1,7 +1,7 @@
 import { uuidToHex } from '~/core/id/normalize';
 
 import { DEBATE_TIME_PARAM } from '../debate-timecode';
-import { DEBATES_APP_DEBATE_PARAM, debatesAppDebateUrl } from '../debates-app-url';
+import { debatesAppDebateUrl } from '../debates-app-url';
 import { type DebateEntity, fetchEntityFromGraph, isVisibleDebate } from './published-debate-path';
 
 /**
@@ -57,15 +57,10 @@ export function mustStay(searchParams: URLSearchParams): boolean {
   return false;
 }
 
-/**
- * The debates app's link for a debate, the incoming query carried over (campaign tags). An incoming
- * `debate` parameter is dropped: the link's own names the debate.
- */
+/** The debates app's link for a debate, the incoming query carried over (campaign tags). */
 export function debatesAppDestination(entityId: string, searchParams: URLSearchParams): string {
   const url = new URL(debatesAppDebateUrl(entityId));
-  searchParams.forEach((value, key) => {
-    if (key !== DEBATES_APP_DEBATE_PARAM) url.searchParams.append(key, value);
-  });
+  searchParams.forEach((value, key) => url.searchParams.append(key, value));
   return url.toString();
 }
 
