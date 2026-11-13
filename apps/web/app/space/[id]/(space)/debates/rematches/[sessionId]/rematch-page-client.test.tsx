@@ -65,6 +65,9 @@ const mocks = vi.hoisted(() => ({
   notInterestedIds: [] as string[],
   /** GEO-2758. The Related tab's discovery: the topic query and the source claim's hydration. */
   relatedEntities: [] as any[],
+  /** GEO-3733. `enabled` as each graph entity query was asked, and the curated lookup's debaters. */
+  entityQueryEnabled: [] as Array<boolean | undefined>,
+  recommendedAskedFor: [] as string[][],
   relatedEntitiesLoading: false,
   relatedEntitiesError: null as Error | null,
   relatedWheres: [] as unknown[],
@@ -666,6 +669,7 @@ vi.mock('~/core/sync/use-store', () => ({
     prefetchNextPage?: boolean;
   }) => {
     mocks.relatedWheres.push(where);
+    mocks.entityQueryEnabled.push(enabled);
     mocks.relatedFirsts.push(first);
     mocks.relatedDefers.push(deferUntilFetched);
     mocks.relatedPrefetches.push(prefetchNextPage);
@@ -1015,11 +1019,14 @@ vi.mock('~/core/debates/todays-claims/use-debaters-space-membership', () => ({
 
 // The curated lookup has its own tests; these cover the picker around it.
 vi.mock('~/core/debates/recommended-claims', () => ({
-  useRecommendedClaimSections: () => ({
-    sections: mocks.recommendedSections,
-    claimEntities: mocks.recommendedEntities,
-    isLoading: mocks.recommendedLoading,
-  }),
+  useRecommendedClaimSections: (participantSpaceIds: string[]) => {
+    mocks.recommendedAskedFor.push(participantSpaceIds);
+    return {
+      sections: mocks.recommendedSections,
+      claimEntities: mocks.recommendedEntities,
+      isLoading: mocks.recommendedLoading,
+    };
+  },
 }));
 
 // The acceptor's editor spaces. Null is "unknown", which does not filter — so every case that
@@ -8500,6 +8507,71 @@ describe('agenda-only picker', () => {
 
     await showMyPositions();
     expect(screen.getByText('Something went wrong.')).toBeInTheDocument();
+  });
+
+  it('never offers Related, not even while the source debate is still loading', async () => {
+    mocks.sourceDebateLoading = true;
+    // The claim just argued carries a topic, so Related would search for neighbours if it ran.
+    const withTopic = (id: string, name: string) => ({
+      ...entity(id, name),
+      relations: [
+        {
+          type: { id: TOPICS_PROPERTY_ID },
+          spaceId: SPACE_1.replace(/-/g, ''),
+          toEntity: { id: 'topic-gov', name: 'Governance' },
+          isDeleted: false,
+        },
+      ],
+    });
+    mocks.entities = [sharedEntity(), withTopic(CLAIM_SOURCE, 'The claim just debated')];
+    mocks.relatedEntities = [
+      withTopic(CLAIM_SOURCE, 'The claim just debated'),
+      withTopic(ON_AGENDA_THEIRS, 'A neighbour'),
+    ];
+    mocks.entityQueryEnabled.length = 0;
+    mocks.recommendedAskedFor.length = 0;
+    const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    expect(screen.queryByRole('button', { name: /^Related/ })).toBeNull();
+
+    mocks.sourceDebateLoading = false;
+    rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+    await screen.findByRole('button', { name: /^Today’s claims/, pressed: true });
+    expect(screen.queryByRole('button', { name: /^Related/ })).toBeNull();
+    // Neither Related's neighbour search nor the curated Recommended lookup is asked for anything.
+    expect(mocks.entityQueryEnabled.every(enabled => enabled === false)).toBe(true);
+    expect(mocks.recommendedAskedFor.every(ids => ids.length === 0)).toBe(true);
+  });
+
+  it('reports the landing under the agenda-only version', async () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await screen.findByRole('button', { name: /^Today’s claims/, pressed: true });
+
+    expect(mocks.capture).toHaveBeenCalledWith(
+      'feature_exposed',
+      expect.objectContaining({
+        feature_id: 'debate-rematch-landing-tab',
+        feature_version: 'geo-3733-v1',
+        landing_tab: 'todays_claims',
+      })
+    );
+  });
+
+  it('words the empty position tabs about today’s claims, not about every claim', async () => {
+    mixedPositions();
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await screen.findByRole('button', { name: /^Today’s claims/, pressed: true });
+
+    await showMatches();
+    expect(screen.getByText(/haven’t taken opposite sides on any of today’s claims yet/)).toBeInTheDocument();
+
+    await showOpponentClaims();
+    expect(screen.getByText(/hasn’t taken a side on any of today’s claims yet/)).toBeInTheDocument();
+
+    await showMyPositions();
+    expect(screen.getByText('You haven’t taken a position on any of today’s claims yet.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'See today’s claims' }));
+    await settleTabSwap();
+    expect(tabButton(/^Today’s claims/)).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('still shows a request already made on a claim no agenda lists', async () => {

@@ -1752,7 +1752,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    */
   const relatedRowsFailed = relatedClaimIds.length > 0 && relatedRowsError !== null;
   const relatedOffered =
-    relatedDiscoveryError === null && (relatedClaims.length > 0 || relatedClaimsSettling || relatedRowsFailed);
+    !AGENDA_ONLY_PICKER &&
+    relatedDiscoveryError === null &&
+    (relatedClaims.length > 0 || relatedClaimsSettling || relatedRowsFailed);
 
   // Featured, in the order the tag query ranked it. Built exactly as the curated list is — the
   // entities are the same projection and the rows carry the same session flags — and held the same
@@ -3671,15 +3673,24 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
                         : tab === 'matches'
                           ? debatedMatchCount > 0
                             ? `You’ve already debated every claim you and ${remoteName} disagree on. Pick a side on another of their claims to find a new one.`
-                            : opponentHasPositions
-                              ? `You and ${remoteName} haven’t taken opposite sides on anything yet. Pick a side on one of their claims to start a debate.`
-                              : `You and ${remoteName} haven’t taken opposite sides on anything yet. Once ${remoteName} takes a side on a claim, take the other one to start a debate.`
+                            : // GEO-3733: agenda-only, "anything" would deny positions the tab filtered out.
+                              opponentHasPositions
+                              ? AGENDA_ONLY_PICKER
+                                ? `You and ${remoteName} haven’t taken opposite sides on any of today’s claims yet. Pick a side on one of their claims to start a debate.`
+                                : `You and ${remoteName} haven’t taken opposite sides on anything yet. Pick a side on one of their claims to start a debate.`
+                              : AGENDA_ONLY_PICKER
+                                ? `You and ${remoteName} haven’t taken opposite sides on any of today’s claims yet. Once ${remoteName} takes a side on one, take the other to start a debate.`
+                                : `You and ${remoteName} haven’t taken opposite sides on anything yet. Once ${remoteName} takes a side on a claim, take the other one to start a debate.`
                           : tab === 'opponent'
                             ? opponentClaims.length > 0
                               ? matchClaims.length > 0
                                 ? 'No other positions to show. Check Matches for claims you can debate.'
-                                : 'No other positions to show. Explore more claims to find something to debate.'
-                              : `${remoteName} hasn’t responded yet. When they do, those claims show up here.`
+                                : AGENDA_ONLY_PICKER
+                                  ? 'No other positions to show. Pick a side on today’s claims to find something to debate.'
+                                  : 'No other positions to show. Explore more claims to find something to debate.'
+                              : AGENDA_ONLY_PICKER
+                                ? `${remoteName} hasn’t taken a side on any of today’s claims yet. When they do, those claims show up here.`
+                                : `${remoteName} hasn’t responded yet. When they do, those claims show up here.`
                             : tab === 'debate'
                               ? debateExtractionRunning
                                 ? 'Pulling the claims out of your debate. They appear here as they’re found.'
@@ -3694,7 +3705,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
                                   : source === 'recommended'
                                     ? `Nothing recommended for you and ${remoteName} yet.`
                                     : source === 'mine'
-                                      ? 'You haven’t taken a position on any claims yet.'
+                                      ? AGENDA_ONLY_PICKER
+                                        ? 'You haven’t taken a position on any of today’s claims yet.'
+                                        : 'You haven’t taken a position on any claims yet.'
                                       : 'No other eligible claims are available yet.'
           }
           // Each dead end has its own way out. Ordered by how much the viewer has to give up:
@@ -3731,7 +3744,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
                         : source === 'mine'
                           ? // The same dead end one tab over: a viewer who has answered nothing
                             // cannot fill this list from here, and the whole corpus is next door.
-                            { label: 'Show all claims', onClick: () => setTab('explore') }
+                            AGENDA_ONLY_PICKER
+                            ? seeTodaysOrExplore
+                            : { label: 'Show all claims', onClick: () => setTab('explore') }
                           : undefined
           }
         >
