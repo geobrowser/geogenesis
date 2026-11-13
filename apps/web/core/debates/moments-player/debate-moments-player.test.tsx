@@ -4,7 +4,7 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 
 import * as React from 'react';
 
-import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getGeoChatApiBaseUrl } from '../geo-chat-public-base-url';
 import { type DebateMoment, decodeDebateMoments } from './debate-moments';
@@ -749,6 +749,26 @@ describe('DebateMomentsPlayer speed and jumps', () => {
     expect(onPosition).toHaveBeenLastCalledWith(expect.objectContaining({ mode: 'full', fullMs: 45_000 }));
   });
 
+  it('still jumps straight to a line after an Activity hides and shows it', () => {
+    const controller = React.createRef<DebateMomentsPlayerHandle>();
+    const view = (mode: 'visible' | 'hidden') => (
+      <React.Activity mode={mode}>
+        <DebateMomentsPlayer debateId={DEBATE} label="Debate A" moments={MOMENTS} controllerRef={controller} />
+      </React.Activity>
+    );
+    const { rerender } = render(view('visible'));
+    const element = () => videoOf(screen.getByRole('region', { name: 'Debate A' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+    advance(element(), 1);
+    rerender(view('hidden'));
+    rerender(view('visible'));
+    mocks.play.mockClear();
+    act(() => controller.current?.playMomentAt(0, 6_000));
+    expect(element().currentTime).toBe(6);
+    expect(mocks.play).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId('advancing-indicator')).not.toBeInTheDocument();
+  });
+
   it('lets go of a jump still loading when an Activity hides it', () => {
     const controller = React.createRef<DebateMomentsPlayerHandle>();
     const view = (mode: 'visible' | 'hidden') => (
@@ -763,33 +783,6 @@ describe('DebateMomentsPlayer speed and jumps', () => {
     rerender(view('visible'));
     expect(screen.queryByTestId('advancing-indicator')).not.toBeInTheDocument();
     expect(screen.getByTestId('play-indicator')).toBeInTheDocument();
-  });
-
-  it('on iOS, unlocks an element no tap has played yet inside the press, without counting it as a start', () => {
-    const ios = vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue('Mozilla/5.0 (iPhone)');
-    onTestFinished(() => ios.mockRestore());
-    const onPlay = vi.fn();
-    const { controller, video } = renderPlayer({ onPlay });
-    act(() => controller.current?.playMomentAt(2, 4_000));
-    expect(mocks.play).toHaveBeenCalledTimes(1);
-    expect(mocks.pause).toHaveBeenCalledTimes(1);
-    expect(onPlay).not.toHaveBeenCalled();
-    expect(screen.getByTestId('advancing-indicator')).toBeInTheDocument();
-    metadata(video());
-    expect(video().currentTime).toBe(4);
-    expect(mocks.play).toHaveBeenCalledTimes(2);
-    expect(onPlay).toHaveBeenCalledTimes(1);
-
-    // Once it has played, a jump needs no unlock.
-    mocks.play.mockClear();
-    act(() => controller.current?.playMomentAt(0, 1_000));
-    expect(mocks.play).not.toHaveBeenCalled();
-  });
-
-  it('unlocks nothing where the page’s own activation is enough', () => {
-    const { controller } = renderPlayer();
-    act(() => controller.current?.playMomentAt(2, 4_000));
-    expect(mocks.play).not.toHaveBeenCalled();
   });
 
   it('reports where it is on mount and as it plays', () => {

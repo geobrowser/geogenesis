@@ -4,7 +4,6 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import { gestureUnlocksEachMediaElement } from '~/core/utils/video/gesture-media-pool';
 import { reattachVideoSource, releaseVideo } from '~/core/utils/video/release-video';
 
 import { Avatar } from '~/design-system/avatar';
@@ -206,10 +205,6 @@ function MomentsStory({
    * src so a second press into another clip can't land the first one's time on it.
    */
   const pendingClipSeekRef = React.useRef<{ src: string; ms: number } | null>(null);
-  /** Whether the element has played: on iOS, whether a tap has granted it sound (see below). */
-  const playedRef = React.useRef(false);
-  /** A gesture unlock's `play` and `pause` events, which aren't the viewer's and are skipped. */
-  const unlockingRef = React.useRef(false);
   /** The speed asked for, read by the element's handlers. */
   const rateRef = React.useRef(playbackRate);
   /** The src whose metadata the element has loaded; null while a new one is loading. */
@@ -299,7 +294,9 @@ function MomentsStory({
   // New media in the element (a step, the reel's next moment, expand or close): whatever failed
   // before was the old media's; start the new one over, playing on if it was.
   React.useEffect(() => {
-    metadataSrcRef.current = null;
+    // New media forgets the last one's metadata. An element shown again by an `<Activity>` (or
+    // StrictMode's rehearsal) re-runs this with the media it already holds, loaded: that stands.
+    if (metadataSrcRef.current !== src) metadataSrcRef.current = null;
     setFailed(false);
     // A line pressed into this clip is where it is about to be, not its start.
     setClipPosition({ src, ms: pendingClipSeekRef.current?.src === src ? pendingClipSeekRef.current.ms : 0 });
@@ -430,22 +427,6 @@ function MomentsStory({
     start(video);
   };
 
-  /**
-   * A jump that has to load media plays once that media's metadata is in, outside the press. iOS
-   * refuses that to an element no tap has played yet, so the press unlocks it first, the way the
-   * feed's gesture pool does (`gesture-media-pool.ts`): a `play()` and a `pause()` inside it.
-   */
-  const unlockForLaterPlay = React.useCallback((video: HTMLVideoElement) => {
-    if (playedRef.current || !gestureUnlocksEachMediaElement()) return;
-    // Its `play` and `pause` events are skipped: the viewer didn't start anything. A refused `play()`
-    // leaves the element paused and fires neither, so then there is nothing to skip.
-    unlockingRef.current = true;
-    const started = video.play();
-    if (video.paused) unlockingRef.current = false;
-    video.pause();
-    void started?.catch(() => {});
-  }, []);
-
   React.useImperativeHandle(
     controllerRef,
     () => ({
@@ -480,7 +461,6 @@ function MomentsStory({
         // Another clip, or this one still loading: it plays from the line once loaded. Until then the
         // player shows it is on its way, and a press on it pauses rather than starting from 0:00.
         pendingClipSeekRef.current = { src: target.clipUrl, ms };
-        unlockForLaterPlay(video);
         setAdvancing(true);
         // Where it is going, in the same render as the move, so no report has it at the clip's start.
         setClipPosition({ src: target.clipUrl, ms });
@@ -499,16 +479,13 @@ function MomentsStory({
           setFailed(false);
           reattachVideoSource(video, fullSrc);
         }
-        if (story.mode === 'moments' || metadataSrcRef.current !== fullSrc) {
-          unlockForLaterPlay(video);
-          setAdvancing(true);
-        }
+        if (story.mode === 'moments' || metadataSrcRef.current !== fullSrc) setAdvancing(true);
         // Where it is going, in the same render as the move.
         setFullMs(ms);
         dispatch(story.mode === 'moments' ? { type: 'expand', atMs: ms } : { type: 'seekFull', atMs: ms });
       },
     }),
-    [moments, story.mode, story.index, story.finished, failed, src, fullSrc, start, unlockForLaterPlay]
+    [moments, story.mode, story.index, story.finished, failed, src, fullSrc, start]
   );
 
   const clipLengthMs = clipDurationMs ?? moment?.durationMs ?? null;
@@ -568,8 +545,6 @@ function MomentsStory({
           dispatch({ type: 'clipEnded' });
         }}
         onPlay={() => {
-          if (unlockingRef.current) return;
-          playedRef.current = true;
           claim();
           setAdvancing(false);
           setPlaying(true);
@@ -581,13 +556,7 @@ function MomentsStory({
             onPlay?.();
           }
         }}
-        onPause={() => {
-          if (unlockingRef.current) {
-            unlockingRef.current = false;
-            return;
-          }
-          setPlaying(false);
-        }}
+        onPause={() => setPlaying(false)}
         // iOS can drop a speed set before playback starts; and anything else that moves it is put back.
         onPlaying={event => applyRate(event.currentTarget)}
         onRateChange={event => {
