@@ -269,12 +269,13 @@ function edgeRoom(gap: number | null): number {
  */
 function tailRoom(ownGap: number | null, otherGap: number | null): number {
   const room = (gap: number | null, clearance: number) => (gap === null ? CLIP_EDGE_PAD_MS : gap - clearance);
-  const clearance = Math.min(
-    CLIP_EDGE_PAD_MS,
-    Math.max(0, Math.min(room(ownGap, CLIP_OWN_WORD_CLEARANCE_MS), room(otherGap, CLIP_WORD_CLEARANCE_MS)))
+  const nearest = Math.min(ownGap ?? Infinity, otherGap ?? Infinity);
+  const tail = Math.min(
+    room(ownGap, CLIP_OWN_WORD_CLEARANCE_MS),
+    room(otherGap, CLIP_WORD_CLEARANCE_MS),
+    Math.floor(nearest / 2)
   );
-  const gaps = [ownGap, otherGap].filter((gap): gap is number => gap !== null);
-  return gaps.length > 0 ? Math.min(clearance, Math.floor(Math.min(...gaps) / 2)) : clearance;
+  return Math.min(CLIP_EDGE_PAD_MS, Math.max(0, tail));
 }
 
 /**
@@ -293,13 +294,16 @@ function geoChatCut(
   const said = wordsIn(spoken, clip.start_ms, clip.end_ms);
   if (said.length === 0) return null;
   const first = Math.min(...said.map(word => word.start_ms));
-  const last = Math.max(...said.map(word => word.end_ms));
-  const before = spoken.filter(word => word.end_ms <= first).map(word => word.end_ms);
-  // The end's room is measured from the speaker of the clip's last word, as geo-chat orders them
-  // (by start, then slot): in an exchange it may be the other debater's.
-  const lastSlot = said.reduce((latest, word) =>
+  // The clip's last word as geo-chat takes it (`manual_moments`): the one said last, by start then
+  // slot (`speech_turns`). Its end is where the words end and its speaker is who the end's room is
+  // measured from: in an exchange it may be the other debater, and a word of theirs said inside it
+  // is not the end.
+  const lastWord = said.reduce((latest, word) =>
     word.start_ms > latest.start_ms || (word.start_ms === latest.start_ms && word.slot > latest.slot) ? word : latest
-  ).slot;
+  );
+  const last = lastWord.end_ms;
+  const lastSlot = lastWord.slot;
+  const before = spoken.filter(word => word.end_ms <= first).map(word => word.end_ms);
   const ownAfter = spoken
     .filter(word => word.slot === lastSlot && word.start_ms >= last)
     .map(word => word.start_ms - last);

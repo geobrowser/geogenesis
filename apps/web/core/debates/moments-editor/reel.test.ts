@@ -228,6 +228,33 @@ describe('manualReel', () => {
     });
   });
 
+  it('measures an exchange’s end from the debater who says its last word', () => {
+    // Debater 1's a0-a3 then debater 2's b0-b1, 40 ms apart; the clip ends on b0.
+    const exchange = [
+      word(1, 0, 400),
+      word(1, 440, 840),
+      word(1, 880, 1_280),
+      word(1, 1_320, 1_720),
+      word(2, 1_760, 2_160),
+      word(2, 2_200, 2_600),
+      word(1, 3_000, 3_400),
+    ];
+    expect(manualReel([clip(0, 2_160), freeEnd(3_000, 3_450)], exchange, ONE_CLOCK).clips[0]).toEqual({
+      start: 0,
+      end: 2.18,
+    });
+  });
+
+  it('keeps an end where geo-chat does when the other debater says a word inside the last one', () => {
+    // Debater 1 says 1-1.6 s; debater 2's "mm" (1.2-1.4 s) starts later, so it is the last word,
+    // and debater 1's word said across its end leaves it no room: geo-chat ends at 1.6 s.
+    const nested = [word(1, 1_000, 1_600), word(2, 1_200, 1_400, 'mm'), word(1, 3_000, 3_400)];
+    expect(manualReel([clip(1_000, 1_600), freeEnd(3_000, 3_450)], nested, ONE_CLOCK).clips[0]).toEqual({
+      start: 0.75,
+      end: 1.6,
+    });
+  });
+
   it('gives an end no room over a word the other debater says across it', () => {
     const crosstalk = [word(1, 1_000, 1_400), word(2, 1_300, 1_600), word(1, 2_000, 2_400), word(2, 3_000, 3_400)];
     expect(manualReel([clip(1_000, 1_400), freeEnd(3_000, 3_450)], crosstalk, ONE_CLOCK)).toEqual({
