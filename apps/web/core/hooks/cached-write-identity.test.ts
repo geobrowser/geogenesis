@@ -2,7 +2,9 @@ import { QueryClient } from '@tanstack/react-query';
 
 import { describe, expect, it } from 'vitest';
 
-import { readCachedSmartAccount } from './cached-write-identity';
+import { publishReadinessForTests, resetPublishedReadiness } from '~/core/wallet/account-readiness';
+
+import { awaitSigningAccount, readCachedSmartAccount } from './cached-write-identity';
 import { smartAccountQueryKey } from './use-smart-account';
 
 type Account = Parameters<typeof readCachedSmartAccount>[1];
@@ -30,5 +32,22 @@ describe('readCachedSmartAccount', () => {
     const live = account('0xlive');
 
     expect(readCachedSmartAccount(queryClient, live)).toBe(live);
+  });
+});
+
+describe('awaitSigningAccount', () => {
+  it('waits for an account still being built', async () => {
+    resetPublishedReadiness({ state: 'identified', address: '0xabc' });
+    const waiting = awaitSigningAccount(new QueryClient(), null);
+    const built = account('0xabc');
+    publishReadinessForTests({ state: 'ready_to_write', address: '0xabc', signingAccount: built });
+
+    await expect(waiting).resolves.toBe(built);
+  });
+
+  it('is null for someone signed out, so the caller can ask them to sign in', async () => {
+    resetPublishedReadiness({ state: 'signed_out' });
+
+    await expect(awaitSigningAccount(new QueryClient(), null)).resolves.toBeNull();
   });
 });

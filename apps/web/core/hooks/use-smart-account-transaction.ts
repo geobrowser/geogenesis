@@ -5,7 +5,7 @@ import { useCallback } from 'react';
 import { Duration, Effect } from 'effect';
 
 import { TransactionWriteFailedError } from '../errors';
-import { readCachedSmartAccount } from './cached-write-identity';
+import { awaitSigningAccount } from './cached-write-identity';
 import { useSmartAccount } from './use-smart-account';
 
 type SendTxArgs = {
@@ -53,7 +53,7 @@ export function useSmartAccountTransaction() {
   const sendTransaction = useCallback(
     ({ to, data, value = 0n, onSubmitted }: SendTxArgs) =>
       Effect.gen(function* () {
-        const account = readCachedSmartAccount(queryClient, smartAccount);
+        const account = yield* Effect.promise(() => awaitSigningAccount(queryClient, smartAccount));
 
         if (!account) {
           return yield* Effect.fail(new TransactionWriteFailedError('Missing smart account'));

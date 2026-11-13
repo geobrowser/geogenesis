@@ -11,7 +11,7 @@ import type { CommentEntity } from '~/partials/comments/types';
 // `{ published: false }` before any transaction — the retained path, and the only one this file is
 // about. Nothing here reaches the chain.
 vi.mock('./cached-write-identity', () => ({
-  readCachedSmartAccount: () => ({ account: { address: '0xabc' } }),
+  awaitSigningAccount: async () => ({ account: { address: '0xabc' } }),
   readCachedPersonalSpace: () => ({ personalSpaceId: null }),
 }));
 vi.mock('./use-smart-account', () => ({ useSmartAccount: () => ({ smartAccount: null }) }));

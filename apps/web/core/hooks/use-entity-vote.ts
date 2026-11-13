@@ -59,7 +59,7 @@ import { useQueryEntity } from '~/core/sync/use-store';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
 import { validateSpaceId } from '~/core/utils/utils';
 
-import { readCachedPersonalSpace, readCachedSmartAccount } from './cached-write-identity';
+import { readAccountAddress, readCachedPersonalSpace } from './cached-write-identity';
 
 interface UseEntityResponseArgs {
   entityId: string;
@@ -263,8 +263,7 @@ export function useEntityResponse({ entityId, entityName, spaceId, responseKind 
   // While mounted the reactive value is correct; a queued vote replayed after the button remounted
   const readRegisteredSpace = useCallback((): { personalSpaceId: string | null; isRegistered: boolean } => {
     if (personalSpaceId && isRegistered) return { personalSpaceId, isRegistered };
-    const account = readCachedSmartAccount(queryClient, null);
-    return readCachedPersonalSpace(queryClient, account?.account.address);
+    return readCachedPersonalSpace(queryClient, readAccountAddress(queryClient));
   }, [personalSpaceId, isRegistered, queryClient]);
   // The retry key for the current account and args. Retry replays through the latest mutation
   // options, so it must only run while they still target the vote that failed.

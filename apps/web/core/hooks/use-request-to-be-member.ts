@@ -10,7 +10,7 @@ import { useSetAtom } from 'jotai';
 import { requestSpaceMembership } from '~/core/access/request-space-membership';
 import { normalizeSpaceId } from '~/core/access/space-access';
 import { useActionContext } from '~/core/action-context-provider';
-import { readCachedSmartAccount, readRegisteredPersonalSpaceId } from '~/core/hooks/cached-write-identity';
+import { awaitSigningAccount, readRegisteredPersonalSpaceId } from '~/core/hooks/cached-write-identity';
 import { useObservedMutation } from '~/core/hooks/use-observed-mutation';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
@@ -64,7 +64,7 @@ export function useRequestToBeMember({ spaceId, space }: UseRequestToBeMemberArg
       // Through the cache as well as this render. A join queued before sign-up replays through this
       // hook as it was at the press, before the account or space existed; the cache has both by the
       // time the runner fires. Reading only the render failed that replay on every retry.
-      const account = readCachedSmartAccount(queryClient, smartAccount);
+      const account = await awaitSigningAccount(queryClient, smartAccount);
       if (!account) {
         throw new Error('No smart account available');
       }

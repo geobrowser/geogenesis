@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { Effect } from 'effect';
 
+import { awaitSigningAccount } from '~/core/hooks/cached-write-identity';
 import { needsPersonalProfile } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { getSpace } from '~/core/io/queries';
@@ -41,7 +42,7 @@ type CreatePersonalSpaceArgs = {
 };
 
 export function useCreatePersonalSpace() {
-  const { smartAccount } = useSmartAccount();
+  const { smartAccount: liveSmartAccount } = useSmartAccount();
   const queryClient = useQueryClient();
 
   const mutation = useMutation({
@@ -51,6 +52,7 @@ export function useCreatePersonalSpace() {
       topicId,
       onRegistered,
     }: CreatePersonalSpaceArgs): Promise<string | null> => {
+      const smartAccount = await awaitSigningAccount(queryClient, liveSmartAccount);
       if (!smartAccount) return null;
 
       const walletAddress = smartAccount.account.address;

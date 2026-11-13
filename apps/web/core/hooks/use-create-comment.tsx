@@ -18,7 +18,7 @@ import { toUserFacingError } from '~/core/utils/error-diagnostics';
 
 import type { CommentEntity, CreateCommentParams } from '~/partials/comments/types';
 
-import { readCachedPersonalSpace, readCachedSmartAccount } from './cached-write-identity';
+import { awaitSigningAccount, readCachedPersonalSpace } from './cached-write-identity';
 import { fetchCommentEntitiesForTarget, mergePendingWithServer } from './use-comments';
 import { useGeoProfile } from './use-geo-profile';
 import { usePersonalSpaceId } from './use-personal-space-id';
@@ -152,7 +152,7 @@ export function useCreateComment(targetEntityId: string) {
       onOptimistic,
       commentId: existingCommentId,
     }: CreateCommentInput): Promise<CreateCommentResult | null> => {
-      const account = readCachedSmartAccount(queryClient, smartAccount);
+      const account = await awaitSigningAccount(queryClient, smartAccount);
       if (!account) {
         setToast(<span>Please connect your wallet to comment</span>);
         return null;
@@ -439,7 +439,7 @@ export function useCreateComment(targetEntityId: string) {
       commentSpaceId: string;
       newText: string;
     }): Promise<boolean> => {
-      const account = readCachedSmartAccount(queryClient, smartAccount);
+      const account = await awaitSigningAccount(queryClient, smartAccount);
       if (!account) {
         setToast(<span>Please connect your wallet to edit</span>);
         return false;

@@ -4,7 +4,7 @@ import type { QueryClient } from '@tanstack/react-query';
 
 import { Effect } from 'effect';
 
-import { readCachedSmartAccount, readRegisteredPersonalSpaceId } from '~/core/hooks/cached-write-identity';
+import { readAccountAddress, readRegisteredPersonalSpaceId } from '~/core/hooks/cached-write-identity';
 import { getUserEntityResponse } from '~/core/io/queries';
 
 import type { ResponseKind, ResponseObjectType } from './entity-response';
@@ -25,8 +25,7 @@ export async function readViewerResponseForReplay(
     objectType,
   }: { entityId: string; spaceId: string; responseKind: ResponseKind; objectType: ResponseObjectType }
 ) {
-  const account = readCachedSmartAccount(queryClient, null);
-  const personalSpaceId = readRegisteredPersonalSpaceId(queryClient, account?.account.address, {
+  const personalSpaceId = readRegisteredPersonalSpaceId(queryClient, readAccountAddress(queryClient), {
     personalSpaceId: null,
     isRegistered: false,
   });

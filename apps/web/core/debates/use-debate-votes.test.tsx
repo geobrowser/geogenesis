@@ -45,6 +45,8 @@ const mocks = vi.hoisted(() => ({
   personalSpaceId: null as string | null,
   /** A new account whose personal space is being created in the background. */
   accountSetupPending: false,
+  /** What a write waiting on a signing account that is still being built gets, once it arrives. */
+  signingAccountArrives: new Promise<never>(() => {}) as Promise<unknown>,
 }));
 
 vi.mock('~/core/analytics', () => ({ capture: mocks.capture, analyticsContextRevision: () => 0 }));
@@ -92,6 +94,22 @@ vi.mock('~/core/io/queries', () => ({
 vi.mock('~/core/io/subgraph/fetch-profile', () => ({
   fetchProfilesBySpaceIds: () => Effect.succeed([]),
 }));
+
+vi.mock('~/core/wallet/account-readiness', () => {
+  class SignedOutBeforeWriteError extends Error {}
+  class SigningAccountFailedError extends Error {}
+  return {
+    SignedOutBeforeWriteError,
+    SigningAccountFailedError,
+    publishedAccountAddress: () => null,
+    useAccountAddress: () => (mocks.signedIn ? '0xabc' : null),
+    waitForSigningAccount: () => {
+      if (mocks.accountError) return Promise.reject(new SigningAccountFailedError());
+      if (!mocks.authenticated) return Promise.reject(new SignedOutBeforeWriteError());
+      return mocks.signingAccountArrives;
+    },
+  };
+});
 
 vi.mock('~/core/hooks/use-smart-account', () => ({
   useSmartAccount: () => ({
@@ -224,6 +242,7 @@ beforeEach(() => {
   mocks.accountError = null;
   mocks.authenticated = true;
   mocks.authReady = true;
+  mocks.signingAccountArrives = new Promise<never>(() => {});
   mocks.openPrivySignIn.mockClear();
   mocks.reportError.mockClear();
   mocks.enqueuePendingAction.mockClear();
@@ -361,19 +380,31 @@ describe('useDebateVotes castVote', () => {
     expect(view.result.current.isMyPick(BOB)).toBe(false);
   });
 
-  // `smartAccount` is null while the account restores too, and a login there would clear the
-  // viewer's half-finished onboarding to fix a problem they do not have.
-  it('waits rather than opening the sign-in while the account is still restoring', async () => {
+  it('waits for an account still being built, then publishes the vote', async () => {
     mocks.signedIn = false;
     mocks.accountLoading = true;
+    let arrive!: (account: unknown) => void;
+    mocks.signingAccountArrives = new Promise(resolve => (arrive = resolve));
     const view = await renderVotes();
 
+    let voting!: Promise<void>;
     await act(async () => {
-      await view.result.current.castVote(ALICE);
+      voting = view.result.current.castVote(ALICE);
+      await Promise.resolve();
+    });
+    expect(mocks.openPrivySignIn).not.toHaveBeenCalled();
+    expect(mocks.publishEdit).not.toHaveBeenCalled();
+
+    await act(async () => {
+      arrive({
+        account: { address: '0xabc' },
+        sendUserOperation: (...args: unknown[]) => mocks.sendUserOperation(...args),
+      });
+      await voting;
     });
 
     expect(mocks.openPrivySignIn).not.toHaveBeenCalled();
-    expect(mocks.publishEdit).not.toHaveBeenCalled();
+    expect(publishAt(0).winnerCreates[0]?.toEntity.id).toBe(ALICE_SPACE);
   });
 
   // Null again, and `isLoading` is false by then — the case the hook's own comment calls
