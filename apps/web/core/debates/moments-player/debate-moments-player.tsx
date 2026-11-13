@@ -293,15 +293,19 @@ function MomentsStory({
 
   // New media in the element (a step, the reel's next moment, expand or close): whatever failed
   // before was the old media's; start the new one over, playing on if it was.
+  //
+  // Only for new media. An `<Activity>` shown again (or StrictMode's rehearsal) re-runs this with the
+  // media the element still holds: its load, error and place all stand, so nothing is reset.
+  const effectSrcRef = React.useRef<string | null>(null);
   React.useEffect(() => {
-    // New media forgets the last one's metadata. An element shown again by an `<Activity>` (or
-    // StrictMode's rehearsal) re-runs this with the media it already holds, loaded: that stands.
-    if (metadataSrcRef.current !== src) metadataSrcRef.current = null;
+    applyRate(videoRef.current);
+    if (effectSrcRef.current === src) return;
+    effectSrcRef.current = src;
+    metadataSrcRef.current = null;
     setFailed(false);
     // A line pressed into this clip is where it is about to be, not its start.
     setClipPosition({ src, ms: pendingClipSeekRef.current?.src === src ? pendingClipSeekRef.current.ms : 0 });
     setClipDurationMs(null);
-    applyRate(videoRef.current);
     // A line pressed into this clip starts it once its time is set, not from 0 first. One pressed
     // into a clip the player has since left (a step, the reel moving on) is dropped, or it would
     // land on a later visit to that clip.

@@ -769,6 +769,27 @@ describe('DebateMomentsPlayer speed and jumps', () => {
     expect(screen.queryByTestId('advancing-indicator')).not.toBeInTheDocument();
   });
 
+  it('comes back from an Activity as it was left: its place, and a failed clip still failed', () => {
+    const onPosition = vi.fn();
+    const view = (mode: 'visible' | 'hidden') => (
+      <React.Activity mode={mode}>
+        <DebateMomentsPlayer debateId={DEBATE} label="Debate A" moments={MOMENTS} onPosition={onPosition} />
+      </React.Activity>
+    );
+    const { rerender } = render(view('visible'));
+    const element = () => videoOf(screen.getByRole('region', { name: 'Debate A' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+    advance(element(), 12);
+    rerender(view('hidden'));
+    rerender(view('visible'));
+    expect(onPosition).toHaveBeenLastCalledWith(expect.objectContaining({ mode: 'moments', index: 0, clipMs: 12_000 }));
+
+    fireEvent.error(element());
+    rerender(view('hidden'));
+    rerender(view('visible'));
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+  });
+
   it('lets go of a jump still loading when an Activity hides it', () => {
     const controller = React.createRef<DebateMomentsPlayerHandle>();
     const view = (mode: 'visible' | 'hidden') => (
