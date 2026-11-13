@@ -6,6 +6,7 @@ import { Provider as JotaiProvider, createStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  RESTORED_ACTION_CLAIM_MS,
   type RedirectedPendingAction,
   pendingActionsAtom,
   redirectedPendingActions,
@@ -206,6 +207,26 @@ describe('across a Google redirect', () => {
 
     expect(run).toHaveBeenCalledTimes(1);
     expect(run).toHaveBeenCalledWith('positive', expect.objectContaining({ live: true }));
+  });
+
+  it('drops a restored action no control picks up, and does not run it when the control mounts later', async () => {
+    vi.useFakeTimers();
+    try {
+      restorePendingActions(store, [saved]);
+      const running = Promise.resolve(queued()[0]!.run());
+      await vi.advanceTimersByTimeAsync(RESTORED_ACTION_CLAIM_MS);
+      await running;
+      expect(queued()).toHaveLength(0);
+
+      const run = vi.fn();
+      const { result } = renderControl(run);
+      await act(async () => {});
+
+      expect(run).not.toHaveBeenCalled();
+      expect(result.current.isQueued).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('keeps a press made again on the return page over the restored one', () => {

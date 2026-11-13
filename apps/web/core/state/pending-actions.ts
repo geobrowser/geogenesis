@@ -78,11 +78,26 @@ function currentLiveHandler(id: string) {
   return liveHandlers.get(id)?.at(-1);
 }
 
-function waitForLiveHandler(id: string) {
-  return new Promise<LiveHandler>(resolve => {
+export const RESTORED_ACTION_CLAIM_MS = 5_000;
+
+function waitForLiveHandler(id: string, deadlineMs?: number) {
+  return new Promise<LiveHandler | null>(resolve => {
     const handler = currentLiveHandler(id);
-    if (handler) resolve(handler);
-    else liveHandlerWaiters.set(id, [...(liveHandlerWaiters.get(id) ?? []), resolve]);
+    if (handler) return resolve(handler);
+    const timer =
+      deadlineMs === undefined
+        ? undefined
+        : setTimeout(() => {
+            const remaining = (liveHandlerWaiters.get(id) ?? []).filter(w => w !== waiter);
+            if (remaining.length > 0) liveHandlerWaiters.set(id, remaining);
+            else liveHandlerWaiters.delete(id);
+            resolve(null);
+          }, deadlineMs);
+    const waiter = (live: LiveHandler) => {
+      clearTimeout(timer);
+      resolve(live);
+    };
+    liveHandlerWaiters.set(id, [...(liveHandlerWaiters.get(id) ?? []), waiter]);
   });
 }
 
@@ -141,7 +156,12 @@ export const pendingActionsAtom = atom<RunnablePendingAction[]>([]);
 
 type Store = ReturnType<typeof useStore>;
 
-function runnable(store: Store, action: PendingAction, context: ActionContext): RunnablePendingAction {
+function runnable(
+  store: Store,
+  action: PendingAction,
+  context: ActionContext,
+  { restored = false }: { restored?: boolean } = {}
+): RunnablePendingAction {
   const queued: RunnablePendingAction = {
     ...action,
     context,
@@ -152,7 +172,12 @@ function runnable(store: Store, action: PendingAction, context: ActionContext): 
         const live = currentLiveHandler(action.id);
         const fallback = action.run;
         if (!live && fallback) return withActionContext(context, () => fallback(isCurrent));
-        const handler = live ?? (await waitForLiveHandler(action.id));
+
+        const handler = live ?? (await waitForLiveHandler(action.id, restored ? RESTORED_ACTION_CLAIM_MS : undefined));
+        if (!handler) {
+          store.set(pendingActionsAtom, prev => prev.filter(a => a !== queued));
+          return;
+        }
         if (!isCurrent()) return;
         const outcome = await withActionContext(context, () => handler(action.intent, isCurrent));
         if (outcome !== HANDLER_GONE) return;
@@ -176,7 +201,9 @@ export function restorePendingActions(store: Store, actions: readonly Redirected
     const queued = new Set(prev.map(action => action.id));
     const restored = actions
       .filter(action => !queued.has(action.id))
-      .map(({ context, ...action }) => runnable(store, { ...action, survivesRedirect: true }, context));
+      .map(({ context, ...action }) =>
+        runnable(store, { ...action, survivesRedirect: true }, context, { restored: true })
+      );
     return [...prev, ...restored];
   });
 }

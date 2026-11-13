@@ -229,7 +229,7 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
     id: `debate-winner-vote:${debateEntityId}`,
     component: 'winner_vote_button',
     label: 'your winner vote',
-    survivesRedirect: true,
+    survivesRedirect: false,
     // Held until the viewer's existing vote is known, which a switch needs and a repeat skips.
     ready: haveVotesAnswered && personalSpaceId !== null,
     run: (intent, { live, isCurrent }) => {
