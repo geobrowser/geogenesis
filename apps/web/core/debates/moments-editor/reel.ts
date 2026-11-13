@@ -247,15 +247,36 @@ export function manualReelClips(clips: readonly EditorClip[]): ManualClipBody[] 
   }));
 }
 
-/** geo-chat's room for a cut beside its words (`clip_ranges.rs`): `CLIP_EDGE_PAD_MS`, `CLIP_WORD_CLEARANCE_MS`. */
+/**
+ * geo-chat's room for a cut beside its words (`clip_ranges.rs`): `CLIP_EDGE_PAD_MS`,
+ * `CLIP_WORD_CLEARANCE_MS`, and `CLIP_OWN_WORD_CLEARANCE_MS` after a clip's last word (GEO-3710).
+ */
 const CLIP_EDGE_PAD_MS = 250;
 const CLIP_WORD_CLEARANCE_MS = 60;
+const CLIP_OWN_WORD_CLEARANCE_MS = 10;
 
-/** How far geo-chat moves an edge into a gap of `gap` ms beside its words (`edge_room`); `null` is no word. */
+/** How far geo-chat moves a start edge into a gap of `gap` ms before its words (`edge_room`); `null` is no word. */
 function edgeRoom(gap: number | null): number {
   if (gap === null) return CLIP_EDGE_PAD_MS;
   const clearance = Math.min(CLIP_EDGE_PAD_MS, Math.max(0, gap - CLIP_WORD_CLEARANCE_MS));
   return Math.min(clearance, Math.floor(gap / 2));
+}
+
+/**
+ * How far geo-chat moves an end edge past its last word (`clip_ranges::tail_clearance`, applied in
+ * `clear_room`; GEO-3710), given the gaps to
+ * that speaker's own next word and to the other debater's (`null`: no such word): 10 ms short of
+ * the first, 60 ms short of the second, never past the middle of the gap to the nearer one.
+ */
+function tailClearance(ownGap: number | null, otherGap: number | null): number {
+  const room = (gap: number | null, clearance: number) => (gap === null ? CLIP_EDGE_PAD_MS : gap - clearance);
+  const nearest = Math.min(ownGap ?? Infinity, otherGap ?? Infinity);
+  const tail = Math.min(
+    room(ownGap, CLIP_OWN_WORD_CLEARANCE_MS),
+    room(otherGap, CLIP_WORD_CLEARANCE_MS),
+    Math.floor(nearest / 2)
+  );
+  return Math.min(CLIP_EDGE_PAD_MS, Math.max(0, tail));
 }
 
 /**
@@ -274,11 +295,30 @@ function geoChatCut(
   const said = wordsIn(spoken, clip.start_ms, clip.end_ms);
   if (said.length === 0) return null;
   const first = Math.min(...said.map(word => word.start_ms));
-  const last = Math.max(...said.map(word => word.end_ms));
+  // The clip's last word as geo-chat takes it (`manual_moments`): the one said last, by start then
+  // slot (`speech_turns`), the later of two that tie (its sort is stable). Its end is where the words end and its speaker is who the end's room is
+  // measured from: in an exchange it may be the other debater, and a word of theirs said inside it
+  // is not the end.
+  const lastWord = said.reduce((latest, word) =>
+    word.start_ms > latest.start_ms || (word.start_ms === latest.start_ms && word.slot >= latest.slot) ? word : latest
+  );
+  const last = lastWord.end_ms;
+  const lastSlot = lastWord.slot;
   const before = spoken.filter(word => word.end_ms <= first).map(word => word.end_ms);
-  const after = spoken.filter(word => word.start_ms >= last).map(word => word.start_ms);
+  const ownAfter = spoken
+    .filter(word => word.slot === lastSlot && word.start_ms >= last)
+    .map(word => word.start_ms - last);
+  // Another debater's word said across the end leaves no room (crosstalk).
+  const otherAfter = spoken
+    .filter(word => word.slot !== lastSlot && word.end_ms > last)
+    .map(word => Math.max(0, word.start_ms - last));
   const paddedStart = first - edgeRoom(before.length > 0 ? first - Math.max(...before) : null);
-  const paddedEnd = last + edgeRoom(after.length > 0 ? Math.min(...after) - last : null);
+  const paddedEnd =
+    last +
+    tailClearance(
+      ownAfter.length > 0 ? Math.min(...ownAfter) : null,
+      otherAfter.length > 0 ? Math.min(...otherAfter) : null
+    );
   const twoClocks = turns.some(turn => turn.source_start_ms !== undefined);
   const stretch = (twoClocks ? realSpeedStretches(turns) : []).find(
     candidate => first >= candidate.start_ms && last <= candidate.end_ms
