@@ -15,6 +15,12 @@ import { Button } from '~/design-system/button';
 import { RankingMyRankingDesktopRow } from './ranking-block-ui';
 import { RANKING_COMPOSE_PUBLISH_BUTTON_CLASS } from './ranking-compose-header';
 import { RankingComposeSwipeableRow } from './ranking-compose-swipeable-row';
+import {
+  RANKING_DROP_ROW_ATTRIBUTE,
+  RANKING_ENTITY_DRAG_TYPE,
+  dropIndexFromPointer,
+  isRankingEntityDrag,
+} from './ranking-entity-drag';
 import { RankingEntryRow } from './ranking-entry-row';
 import { RankingMyRankingDndList } from './ranking-my-ranking-dnd';
 
@@ -34,8 +40,66 @@ type Props = {
   onReorder: (entityIds: string[]) => void;
   onRemove: (entityId: string) => void;
   onView: (entityId: string) => void;
+  /** Best debates: no side-panel button on the rows (the poster opens the debate to watch). */
+  hideSidePanel?: boolean;
   pendingEntityIds: ReadonlySet<string>;
+  /** Rendered under the list, e.g. the Best debates "You pushed down" section (GEO-3679). */
+  footer?: React.ReactNode;
+  /** The publish button's label in place of "Publish ranking" (Best debates: "Publish 3 changes"). */
+  publishLabel?: string;
+  /** Phones with the Team / Your ranking tabs: the tab names the column, so no heading or rule. */
+  hideMobileHeading?: boolean;
+  /** The column's heading; "My ranking" unless the block says otherwise (Best debates: "Your ranking"). */
+  title?: string;
+  emptyText?: string;
+  /** Beside Publish in the header (on a phone, its own row atop the tab): Best debates' Clear. */
+  headerAction?: React.ReactNode;
+  /** Shown under the empty text, e.g. Best debates' "Start from the team ranking". */
+  emptyAction?: React.ReactNode;
+  /**
+   * Accept entities dragged in from the other column, at the index they are dropped on (GEO-3678).
+   * Left out, the list takes no drops, as before.
+   */
+  onDropEntity?: (entityId: string, index: number) => void;
 };
+
+/** Native drops onto the list: where the pointer would put the entity, and the drop itself. */
+function useEntityDrop(onDropEntity: Props['onDropEntity']) {
+  const listRef = React.useRef<HTMLDivElement>(null);
+  const [dropIndex, setDropIndex] = React.useState<number | null>(null);
+
+  const indexAt = (clientY: number) => {
+    const rows = listRef.current?.querySelectorAll<HTMLElement>(`[${RANKING_DROP_ROW_ATTRIBUTE}]`) ?? [];
+    const middles = Array.from(rows, row => {
+      const rect = row.getBoundingClientRect();
+      return rect.top + rect.height / 2;
+    });
+    return dropIndexFromPointer(middles, clientY);
+  };
+
+  if (!onDropEntity) return { listRef, dropIndex: null, dropHandlers: {} };
+
+  const dropHandlers: React.HTMLAttributes<HTMLDivElement> = {
+    onDragOver: event => {
+      if (!isRankingEntityDrag(event.dataTransfer)) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'copy';
+      setDropIndex(indexAt(event.clientY));
+    },
+    onDragLeave: event => {
+      if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropIndex(null);
+    },
+    onDrop: event => {
+      const entityId = event.dataTransfer.getData(RANKING_ENTITY_DRAG_TYPE);
+      setDropIndex(null);
+      if (!entityId) return;
+      event.preventDefault();
+      onDropEntity(entityId, indexAt(event.clientY));
+    },
+  };
+
+  return { listRef, dropIndex, dropHandlers };
+}
 
 export function RankingComposeMyRanking({
   isMobile,
@@ -53,14 +117,31 @@ export function RankingComposeMyRanking({
   onReorder,
   onRemove,
   onView,
+  hideSidePanel = false,
   pendingEntityIds,
+  footer,
+  title = 'My ranking',
+  hideMobileHeading = false,
+  publishLabel,
+  emptyText = 'Add or search global ranking list to get started',
+  emptyAction,
+  headerAction,
+  onDropEntity,
 }: Props) {
   const isDesktop = !isMobile;
   const [isReordering, setIsReordering] = React.useState(false);
+  const { listRef, dropIndex, dropHandlers } = useEntityDrop(onDropEntity);
 
   return (
-    <div className={cx('flex flex-col', isDesktop && 'min-h-0 flex-1', isMobile && 'border-t border-grey-02 pt-8')}>
+    <div
+      className={cx(
+        'flex flex-col',
+        isDesktop && 'min-h-0 flex-1',
+        isMobile && !hideMobileHeading && 'border-t border-grey-02 pt-8'
+      )}
+    >
       <div
+        hidden={isMobile && hideMobileHeading}
         className={cx(
           'grid w-full min-w-0 shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3',
           isDesktop && 'border-b border-grey-02 pb-4'
@@ -72,23 +153,46 @@ export function RankingComposeMyRanking({
             isMobile ? 'text-[22px] font-medium' : 'text-[17px] font-semibold'
           )}
         >
-          My ranking
+          {title}
         </h2>
         {isDesktop && !hidePublishButton ? (
-          <Button
-            variant="primary"
-            className={cx(RANKING_COMPOSE_PUBLISH_BUTTON_CLASS, 'justify-self-end')}
-            disabled={!canPublish}
-            onClick={onPublish}
-            data-analytics-feature="ranking-submit"
-          >
-            {isSaving ? 'Publishing…' : 'Publish ranking'}
-          </Button>
+          <div className="flex items-center gap-2 justify-self-end">
+            {headerAction}
+            <Button
+              variant="primary"
+              className={RANKING_COMPOSE_PUBLISH_BUTTON_CLASS}
+              disabled={!canPublish}
+              onClick={onPublish}
+              data-analytics-feature="ranking-submit"
+            >
+              {isSaving ? 'Publishing…' : (publishLabel ?? 'Publish ranking')}
+            </Button>
+          </div>
+        ) : isMobile && !hideMobileHeading ? (
+          <div className="justify-self-end">{headerAction}</div>
         ) : null}
       </div>
-      <div className={cx('flex flex-col', isDesktop && 'min-h-0 flex-1 overflow-y-auto pt-4')}>
+      {isMobile && hideMobileHeading && headerAction ? (
+        <div className="-mt-2 mb-2 flex justify-end">{headerAction}</div>
+      ) : null}
+      <div
+        ref={listRef}
+        data-testid={onDropEntity ? 'ranking-drop-target' : undefined}
+        className={cx('flex flex-col', isDesktop && 'min-h-0 flex-1 overflow-y-auto pt-4')}
+        {...dropHandlers}
+      >
         {displayEntityIds.length === 0 ? (
-          <p className="text-metadata text-grey-04">Add or search global ranking list to get started</p>
+          <div>
+            <p
+              className={cx(
+                'm-0 text-metadata text-grey-04',
+                dropIndex !== null && 'rounded-md border border-dashed border-text p-4'
+              )}
+            >
+              {emptyText}
+            </p>
+            {emptyAction}
+          </div>
         ) : (
           <RankingMyRankingDndList
             entityIds={displayEntityIds}
@@ -126,7 +230,7 @@ export function RankingComposeMyRanking({
                 <RankingMyRankingDesktopRow
                   entityName={entryDisplay.name}
                   onRemove={() => onRemove(entityId)}
-                  onOpenSidePanel={() => onView(entityId)}
+                  onOpenSidePanel={hideSidePanel ? undefined : () => onView(entityId)}
                   hideActions={isDragActive}
                 >
                   {entryRow}
@@ -146,10 +250,22 @@ export function RankingComposeMyRanking({
                 </RankingComposeSwipeableRow>
               );
 
-              return <div className="w-full py-3">{rowContent}</div>;
+              const dropAttribute = { [RANKING_DROP_ROW_ATTRIBUTE]: entityId };
+              return (
+                <div className="relative w-full py-3" {...dropAttribute}>
+                  {dropIndex === index ? (
+                    <span className="absolute inset-x-0 top-0 h-0.5 rounded-full bg-text" aria-hidden />
+                  ) : null}
+                  {dropIndex === displayEntityIds.length && index === displayEntityIds.length - 1 ? (
+                    <span className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-text" aria-hidden />
+                  ) : null}
+                  {rowContent}
+                </div>
+              );
             }}
           />
         )}
+        {footer}
       </div>
     </div>
   );
