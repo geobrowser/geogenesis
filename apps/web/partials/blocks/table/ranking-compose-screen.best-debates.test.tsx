@@ -19,7 +19,6 @@ const OTHER_BLOCK = 'c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1';
 
 const mocks = vi.hoisted(() => ({
   blockId: '',
-  flag: false,
   member: false,
   accessLoading: false,
   authResolving: false,
@@ -45,7 +44,6 @@ vi.mock('jotai', async importOriginal => ({
   useAtom: () => [null, vi.fn()],
   useSetAtom: () => vi.fn(),
 }));
-vi.mock('~/core/state/feature-flags', () => ({ useFeatureFlag: () => mocks.flag }));
 vi.mock('~/core/hooks/use-hydrated', () => ({ useHydrated: () => true }));
 vi.mock('~/core/hooks/use-auth-resolving', () => ({ useAuthResolving: () => mocks.authResolving }));
 vi.mock('~/core/hooks/use-access-control', () => ({
@@ -196,7 +194,6 @@ vi.mock('./ranking-compose-header', () => ({
 
 beforeEach(() => {
   mocks.blockId = BLOCK;
-  mocks.flag = false;
   mocks.member = false;
   mocks.accessLoading = false;
   mocks.ensureAccess.mockReset();
@@ -214,7 +211,6 @@ const renderScreen = () => render(<RankingComposeScreen spaceId={DEBATES_SPACE} 
 
 describe('RankingComposeScreen on the Best debates block', () => {
   it('sends no membership request to a non-member who opens the URL, and switches to view mode', () => {
-    mocks.flag = true;
     renderScreen();
 
     expect(screen.getByTestId('toolbar')).toBeInTheDocument();
@@ -226,18 +222,7 @@ describe('RankingComposeScreen on the Best debates block', () => {
     expect(url.searchParams.get('relationId')).toBe('r');
   });
 
-  it('does not let a member with the flag off publish', async () => {
-    mocks.member = true;
-    renderScreen();
-
-    expect(mocks.canPublish).toBe(false);
-    await act(async () => mocks.publish?.());
-    expect(mocks.saveMySubmission).not.toHaveBeenCalled();
-    expect(mocks.replace).toHaveBeenCalledTimes(1);
-  });
-
   it('waits for the access read before switching a member to view mode', () => {
-    mocks.flag = true;
     mocks.accessLoading = true;
     renderScreen();
 
@@ -245,8 +230,7 @@ describe('RankingComposeScreen on the Best debates block', () => {
     expect(mocks.ensureAccess).not.toHaveBeenCalled();
   });
 
-  it('lets a member with the flag on publish, in edit mode', async () => {
-    mocks.flag = true;
+  it('lets a member publish, in edit mode', async () => {
     mocks.member = true;
     renderScreen();
 
@@ -265,7 +249,6 @@ describe('RankingComposeScreen on the Best debates block', () => {
 
   it('keeps a member who deep-links in edit mode when their sign-in resolves late', () => {
     // A pasted compose URL: sign-in is still starting, so access reads as none and not loading.
-    mocks.flag = true;
     mocks.member = false;
     mocks.authResolving = true;
     const { rerender } = renderScreen();
@@ -281,7 +264,6 @@ describe('RankingComposeScreen on the Best debates block', () => {
   });
 
   it('downgrades a non-member to view once sign-in has resolved, not before', () => {
-    mocks.flag = true;
     mocks.authResolving = true;
     const { rerender } = renderScreen();
     expect(mocks.replace).not.toHaveBeenCalled();
@@ -293,7 +275,6 @@ describe('RankingComposeScreen on the Best debates block', () => {
   });
 
   it('shows a loading state, not the generic screen, until the access read settles', () => {
-    mocks.flag = true;
     mocks.member = true;
     mocks.accessLoading = true;
     renderScreen();
@@ -304,7 +285,7 @@ describe('RankingComposeScreen on the Best debates block', () => {
 });
 
 describe('RankingComposeScreen on any other block', () => {
-  it('still asks a non-member for membership and publishes, flag or not', async () => {
+  it('still asks a non-member for membership and publishes', async () => {
     mocks.blockId = OTHER_BLOCK;
     renderScreen();
 

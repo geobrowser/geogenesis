@@ -100,14 +100,14 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   const { name, entityId, filterState } = useDataBlock();
   const displayName = name?.trim() || 'Untitled ranking';
 
-  // Best debates (GEO-3677): composing needs the `debateRankings` flag and Debates membership. A
+  // Best debates (GEO-3677): composing needs Debates membership. A
   // pasted compose URL lands here without the block's buttons, so the screen checks it too: no
   // membership request, and once that's settled, the read-only view.
   const composeEditGuard = useComposeEditGuard({ blockId: entityId, spaceId });
   const composeEditRefused = composeEditGuard.isBestDebates && !composeEditGuard.allowed;
   // Best debates (GEO-3678/3679) adds To rank, placing by comparison, push down, drag-in and phone
   // tabs, only for whoever may compose there. Every other ranking block gets the screen as before.
-  // Until the guard settles (flags hydrating, membership loading) the screen shows a loading state:
+  // Until the guard settles (hydrating, membership loading) the screen shows a loading state:
   // the generic screen would flash, and could file items under the block's space.
   const isBestDebates = composeEditGuard.isBestDebates && composeEditGuard.allowed;
   const isBestDebatesLoading = composeEditGuard.isBestDebates && !composeEditGuard.settled;

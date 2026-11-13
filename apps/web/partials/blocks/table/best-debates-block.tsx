@@ -49,7 +49,7 @@ import { RankingEntryRowSkeleton } from './ranking-entry-row';
  * order, a coverage line for today, and ranker counts from the shared ballot reader (GEO-3686).
  *
  * The block is graph data everyone sees, so only the actions are gated: Rank and Rank the rest
- * need the `debateRankings` flag and membership of the Debates space. Without both there's no
+ * need membership of the Debates space. Without it there's no
  * compose entry point at all, so nothing here can send the background membership request that
  * composing does (#3099). Rows never carry vote arrows on this block.
  */
@@ -64,7 +64,7 @@ export type BestDebatesBlockProps = {
   /** True until the team order has loaded. */
   isLoadingTeamOrder?: boolean;
   /**
-   * The `debateRankings` flag and Debates membership, from the block state (`canComposeEdit`),
+   * Debates membership, from the block state (`canComposeEdit`),
    * which also guards `openRankingCompose` itself.
    */
   canRank: boolean;

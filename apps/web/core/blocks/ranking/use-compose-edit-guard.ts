@@ -5,7 +5,6 @@ import * as React from 'react';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useAuthResolving } from '~/core/hooks/use-auth-resolving';
 import { useHydrated } from '~/core/hooks/use-hydrated';
-import { useFeatureFlag } from '~/core/state/feature-flags';
 
 import { canComposeEditBlock, isBestDebatesBlock } from './best-debates-views';
 
@@ -33,7 +32,6 @@ export function useComposeEditGuard({
   bestDebatesBlockId?: string | null;
 }): ComposeEditGuard {
   const hydrated = useHydrated();
-  const flagOn = useFeatureFlag('debateRankings');
   const { canEdit, isLoading } = useAccessControl(spaceId);
   // A pasted compose URL loads with sign-in still starting: until the account resolves, the access
   // read answers "no access, not loading", which bounced members to view mode (12 Nov). Wait for it,
@@ -41,7 +39,7 @@ export function useComposeEditGuard({
   const authResolving = useAuthResolving();
   const authGaveUp = useGaveUpAfter(authResolving, AUTH_WAIT_MS);
   const isBestDebates = isBestDebatesBlock(blockId, spaceId, bestDebatesBlockId);
-  const allowed = canComposeEditBlock({ blockId, spaceId, flagOn, canEdit, bestDebatesBlockId });
+  const allowed = canComposeEditBlock({ blockId, spaceId, canEdit, bestDebatesBlockId });
   const settled = !isBestDebates || (hydrated && (!authResolving || authGaveUp) && !isLoading);
   return { isBestDebates, allowed, settled };
 }

@@ -23,7 +23,6 @@ describe('feature flags', () => {
     expect(defaultFeatureFlags.debugDebatesPage).toBe(false);
     expect(defaultFeatureFlags.debateDebugging).toBe(false);
     expect(defaultFeatureFlags.debateFormatSelector).toBe(false);
-    expect(defaultFeatureFlags.debateRankings).toBe(false);
     // GEO-2914 hid the Explore side panel behind this rather than deleting it, so off is the
     // shipped state rather than a developer convenience — see the explore-page test.
     expect(defaultFeatureFlags.exploreSidePanel).toBe(false);
@@ -39,7 +38,6 @@ describe('feature flags', () => {
       playbackDiagnostics: false,
       debugDebatesPage: false,
       debateDebugging: false,
-      debateRankings: false,
       debateFormatSelector: false,
       exploreSidePanel: false,
       previousDebateClaims: false,
@@ -54,8 +52,8 @@ describe('feature flags', () => {
     });
   });
 
-  // Claims, debates, scheduling, lobby joining, debate video, the sign-in box and calendar
-  // connections shipped to everyone. Every browser that ever opened the flags dialog still has the
+  // Claims, debates, scheduling, lobby joining, debate video, the sign-in box, calendar
+  // connections and Best debates ranking shipped to everyone. Every browser that ever opened the flags dialog still has the
   // retired ids in storage, and they must not survive normalization — a stray `questionsTab` reaching the dialog would render a checkbox for a flag
   // nothing reads.
   it('drops the retired flags that are still in storage', () => {
@@ -70,12 +68,12 @@ describe('feature flags', () => {
         googleCalendar: true,
         microsoftCalendar: true,
         debateDebugging: true,
+        debateRankings: true,
       })
     ).toEqual({
       playbackDiagnostics: false,
       debugDebatesPage: false,
       debateDebugging: true,
-      debateRankings: false,
       debateFormatSelector: false,
       exploreSidePanel: false,
       previousDebateClaims: false,
