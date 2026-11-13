@@ -330,6 +330,17 @@ describe('publishMissingDebateClaims', () => {
     expect(submit).not.toHaveBeenCalled();
   });
 
+  it('unattended (the sweep): submits the fresh plan without a reviewed fingerprint, never a rewrite', async () => {
+    const { deps: d, submit } = deps();
+    expect(await publishMissingDebateClaims(DEBATE_ID, { dryRun: false, unattended: true }, d)).toMatchObject({
+      status: 'published',
+    });
+    expect(submit).toHaveBeenCalledTimes(1);
+    await expect(
+      publishMissingDebateClaims(DEBATE_ID, { dryRun: false, unattended: true, blockText: 'rewrite' }, d)
+    ).rejects.toThrow('never unattended');
+  });
+
   it('apply: waits while an earlier late publish of the debate holds the lease', async () => {
     const { deps: d, submit } = deps({ withLease: async () => ({ ran: false }) });
     expect(await publishMissingDebateClaims(DEBATE_ID, { dryRun: false, expect: 'x' }, d)).toEqual({
