@@ -68,7 +68,43 @@ const TRANSCRIPT_INCLUDE = ['words', 'sentences'] as const;
  * geo-chat is the gate: its admin read answers 403 to anyone off the media-admin list, and the page
  * shows nothing of the editor until that read has answered.
  */
-export function MomentsEditor({ debateId }: { debateId: string }) {
+/**
+ * `closeable` (GEO-3742): the editor was opened in a tab of its own, from the Best debates popup, so
+ * its header has a Done that closes the tab and leaves the ranker where they were.
+ */
+export function MomentsEditor({ debateId, closeable = false }: { debateId: string; closeable?: boolean }) {
+  return (
+    <EditorCloseableContext.Provider value={closeable}>
+      <MomentsEditorBody debateId={debateId} />
+    </EditorCloseableContext.Provider>
+  );
+}
+
+const EditorCloseableContext = React.createContext(false);
+
+/** Closes the editor's tab (allowed: the popup opened it with `window.open`). */
+export function closeEditorTab() {
+  window.close();
+}
+
+/** Done, for a tab opened from the popup: off while there are changes not published or discarded. */
+function DoneButton({ dirty = false }: { dirty?: boolean }) {
+  const closeable = React.useContext(EditorCloseableContext);
+  if (!closeable) return null;
+  return (
+    <Button
+      variant="secondary"
+      disabled={dirty}
+      title={dirty ? 'Publish or discard your changes first' : undefined}
+      onClick={closeEditorTab}
+      data-geo-analytics-label="Moments editor done"
+    >
+      Done
+    </Button>
+  );
+}
+
+function MomentsEditorBody({ debateId }: { debateId: string }) {
   const { ready, authenticated } = useGeoChatAuth();
   const backfill = useMomentBackfill(debateId, true);
 
@@ -422,6 +458,7 @@ function Editor({ debateId }: { debateId: string }) {
               Return to automatic
             </Button>
           ) : null}
+          <DoneButton dirty={dirty} />
           <Button disabled={!canPublish} onClick={() => setConfirm('publish')}>
             Publish reel
             {warnings.length > 0 && dirty ? (
@@ -757,7 +794,7 @@ function EditorShell({
             Edit moments
           </Text>
         </div>
-        {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
+        {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : <DoneButton />}
       </div>
       {typeof children === 'string' ? <Text variant="body">{children}</Text> : children}
     </div>

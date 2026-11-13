@@ -6,6 +6,7 @@ import cx from 'classnames';
 import { useAtom } from 'jotai';
 
 import { capture } from '~/core/analytics';
+import { DEBATES_SPACE_ID } from '~/core/blocks/ranking/best-debates';
 import { GeoChatRequestError } from '~/core/debates/api';
 import { useDebateTranscript } from '~/core/debates/hooks';
 import {
@@ -29,6 +30,7 @@ import { ID } from '~/core/id';
 import { BestDebateGradeRow } from './best-debate-grade-row';
 import { type BestDebatesGrading, BestDebatesGradingContext } from './best-debate-grading';
 import { BestDebateWatchContext, type BestDebateWatchEntry, useBestDebateRowData } from './best-debate-row';
+import { EditMomentsMenu, ReelRenderWatcher, captureEditMoments } from './edit-moments';
 import { RankingFlowDialog } from './ranking-flow-dialog';
 import { type WatchTranscriptContent, WatchTranscriptPanel, type WatchTranscriptView } from './watch-transcript-panel';
 import { type BestDebatesWatchSpeed, bestDebatesWatchSpeedAtom, bestDebatesWatchSpeedOf } from '~/atoms';
@@ -64,6 +66,16 @@ export function BestDebateWatchProvider({
   children: React.ReactNode;
 }) {
   const [watching, setWatching] = React.useState<string | null>(null);
+  // Debates opened in the moments editor this visit, and when (GEO-3742): their new reels are
+  // followed even after the popup closes, so the next open plays them.
+  const [editing, setEditing] = React.useState<ReadonlyMap<string, number>>(new Map());
+  const editMoments = React.useCallback(
+    (entityId: string) => {
+      captureEditMoments({ source, entity_id: entityId, block_id: blockId, space_id: spaceId });
+      setEditing(current => (current.has(entityId) ? current : new Map(current).set(entityId, Date.now())));
+    },
+    [source, blockId, spaceId]
+  );
   // A watch is the row's main action on the ranking screen (13 Nov), so it's counted: without it a
   // debate watched and not ranked looks the same as one never opened.
   const watch = React.useCallback(
@@ -82,6 +94,9 @@ export function BestDebateWatchProvider({
   );
   return (
     <BestDebateWatchContext.Provider value={watch}>
+      {[...editing].map(([entityId, sinceMs]) => (
+        <ReelRenderWatcher key={entityId} entityId={entityId} sinceMs={sinceMs} />
+      ))}
       {/* The rows' Grade menus grade through the same surface as the popup (GEO-3729). */}
       <BestDebatesGradingContext.Provider value={grading}>{children}</BestDebatesGradingContext.Provider>
       {watching ? (
@@ -89,6 +104,7 @@ export function BestDebateWatchProvider({
           entityId={watching}
           analytics={{ source, block_id: blockId, space_id: spaceId }}
           grading={grading}
+          onEditMoments={editMoments}
           onClose={() => setWatching(null)}
         />
       ) : null}
@@ -155,11 +171,13 @@ function WatchDebateDialog({
   entityId,
   analytics,
   grading,
+  onEditMoments,
   onClose,
 }: {
   entityId: string;
   analytics: { source: WatchSource; block_id: string; space_id: string };
   grading: BestDebatesGrading | null;
+  onEditMoments: (entityId: string) => void;
   onClose: () => void;
 }) {
   const display = useBestDebateRowData(entityId);
@@ -246,7 +264,21 @@ function WatchDebateDialog({
       : undefined;
 
   return (
-    <RankingFlowDialog open onClose={onClose} title={title} subtitle={meta} size="watch">
+    <RankingFlowDialog
+      open
+      onClose={onClose}
+      title={title}
+      subtitle={meta}
+      size="watch"
+      headerActions={
+        <EditMomentsMenu
+          entityId={entityId}
+          // The editor's path names a space; the route only checks it is one.
+          spaceId={display?.space?.id ?? DEBATES_SPACE_ID}
+          onOpen={onEditMoments}
+        />
+      }
+    >
       <WatchDebateLayout
         player={
           <DebateMomentsPlayer

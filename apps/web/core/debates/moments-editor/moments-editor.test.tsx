@@ -1240,3 +1240,32 @@ describe('MomentsEditor warnings (GEO-3672)', () => {
     );
   });
 });
+
+describe('MomentsEditor in a tab opened from the Best debates popup (GEO-3742)', () => {
+  it('has no Done on its own page', () => {
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    expect(screen.queryByRole('button', { name: 'Done' })).not.toBeInTheDocument();
+  });
+
+  it('closes its tab with Done, which waits for changes to be published or discarded', () => {
+    const close = vi.spyOn(window, 'close').mockImplementation(() => undefined);
+    render(<MomentsEditor debateId={DEBATE_ID} closeable />);
+    fireEvent.change(screen.getByRole('textbox', { name: 'End time' }), { target: { value: '1.45' } });
+    fireEvent.blur(screen.getByRole('textbox', { name: 'End time' }));
+    expect(screen.getByRole('button', { name: 'Done' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Discard changes' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    expect(close).toHaveBeenCalled();
+    close.mockRestore();
+  });
+
+  it('offers Done even when it can’t show the editor', () => {
+    mocks.backfill = {
+      isPending: false,
+      error: new GeoChatRequestError('no', 'media_admin_required', 403),
+      data: undefined,
+    };
+    render(<MomentsEditor debateId={DEBATE_ID} closeable />);
+    expect(screen.getByRole('button', { name: 'Done' })).toBeEnabled();
+  });
+});

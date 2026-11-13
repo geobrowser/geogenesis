@@ -56,7 +56,23 @@ vi.mock('~/core/debates/hooks', async importOriginal => ({
   useDebateTranscript: () => mocks.transcript,
 }));
 vi.mock('./ranking-flow-dialog', () => ({
-  RankingFlowDialog: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  RankingFlowDialog: ({ children, headerActions }: { children: React.ReactNode; headerActions?: React.ReactNode }) => (
+    <div>
+      {headerActions}
+      {children}
+    </div>
+  ),
+}));
+// GEO-3742's "…": a media admin by default, so the menu is there; its watcher stays idle.
+vi.mock('./edit-moments', () => ({
+  EditMomentsMenu: ({ entityId, onOpen }: { entityId: string; onOpen: (id: string) => void }) => (
+    <button type="button" onClick={() => onOpen(entityId)}>
+      Edit moments
+    </button>
+  ),
+  ReelRenderWatcher: ({ entityId }: { entityId: string }) => <span data-testid={`reel-watcher-${entityId}`} />,
+  captureEditMoments: (event: Record<string, unknown>) =>
+    mocks.capture('element_clicked', { ...event, element_action: 'edit_moments' }),
 }));
 
 function moment(i: number, slot: 1 | 2, cues: [number, string][]): DebateMoment {
@@ -330,5 +346,12 @@ describe('the watch popup’s speed', () => {
     openWatch();
     expect(mocks.player?.playbackRate).toBe(1);
     expect(screen.getByRole('radio', { name: '1x' })).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('offers Edit moments in its header, counts the open, and follows the debate’s new reel (GEO-3742)', () => {
+    openWatch();
+    fireEvent.click(screen.getByRole('button', { name: 'Edit moments' }));
+    expect(mocks.capture).toHaveBeenCalledWith('element_clicked', { ...EVENT, element_action: 'edit_moments' });
+    expect(screen.getByTestId('reel-watcher-d1')).toBeInTheDocument();
   });
 });
