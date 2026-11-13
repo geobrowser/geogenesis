@@ -234,6 +234,16 @@ describe('the watch popup’s transcript', () => {
     expect(lines().getByText('Moment 1 of 2')).toBeInTheDocument();
   });
 
+  it('moves the player with the transcript’s switch, the one switch in the popup (GEO-3729)', () => {
+    openWatch();
+    mocks.playFullAt.mockClear();
+    mocks.playMomentAt.mockClear();
+    fireEvent.click(screen.getByRole('radio', { name: 'Full debate' }));
+    expect(mocks.playFullAt).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('radio', { name: 'Moments' }));
+    expect(mocks.playMomentAt).toHaveBeenCalledWith(0, 0);
+  });
+
   it('follows the player into the full debate, highlighting where it plays', () => {
     openWatch();
     act(() => mocks.player?.onModeChange?.('full'));

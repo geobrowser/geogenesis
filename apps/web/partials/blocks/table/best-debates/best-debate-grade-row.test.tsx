@@ -40,7 +40,7 @@ function grading(
   } satisfies BestDebatesGrading;
 }
 
-const pill = (name: string) => screen.getByRole('radio', { name });
+const pill = (name: string) => screen.getByRole('button', { name });
 
 beforeEach(() => {
   mocks.pushDown.isPushedDown = false;
@@ -62,8 +62,8 @@ describe('BestDebateGradeRow (GEO-3729)', () => {
   it('shows the grade and where it landed, with Remove', () => {
     const g = grading({}, { grade: 'B', place: 31 });
     render(<BestDebateGradeRow entityId={DEBATE} grading={g} />);
-    expect(pill('B')).toHaveAttribute('aria-checked', 'true');
-    expect(pill('A')).toHaveAttribute('aria-checked', 'false');
+    expect(pill('B')).toHaveAttribute('aria-pressed', 'true');
+    expect(pill('A')).toHaveAttribute('aria-pressed', 'false');
     expect(screen.getByText('#31 in your ranking')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
     expect(g.remove).toHaveBeenCalledWith(DEBATE);
@@ -101,7 +101,7 @@ describe('BestDebateGradeRow (GEO-3729)', () => {
   it('shows Down ranked with Undo once down ranked', () => {
     mocks.pushDown.isPushedDown = true;
     render(<BestDebateGradeRow entityId={DEBATE} grading={grading()} />);
-    expect(pill('D, Down rank')).toHaveAttribute('aria-checked', 'true');
+    expect(pill('D, Down rank')).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByText('Down ranked')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
     expect(mocks.pushDown.undo).toHaveBeenCalled();

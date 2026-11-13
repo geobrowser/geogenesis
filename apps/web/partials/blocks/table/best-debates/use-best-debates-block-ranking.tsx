@@ -223,10 +223,14 @@ export function useBlockGrading({
 
   const apply = React.useCallback(
     (entityId: string, change: (draft: GradedBallot) => GradedBallot, method: GradeMethod) => {
-      // The latest way it was changed names the change it publishes.
-      methods.current.set(normId(entityId), method);
+      const before = latest.current;
       queued.current.push(change);
-      latest.current = change(latest.current);
+      latest.current = change(before);
+      // The latest way its grade was changed names the change it publishes; a move that keeps the
+      // grade (↑ / ↓ within a tier) names nothing.
+      if (gradeOf(before.grades, entityId) !== gradeOf(latest.current.grades, entityId) || method !== 'nudge') {
+        methods.current.set(normId(entityId), method);
+      }
       setDraft(latest.current.ids, latest.current.grades);
       setSaving(current => new Set(current).add(normId(entityId)));
       void flush();

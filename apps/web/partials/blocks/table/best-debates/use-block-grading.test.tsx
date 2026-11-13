@@ -190,4 +190,17 @@ describe('grading from the block (GEO-3729)', () => {
       [id(2), 'A', 'nudge'],
     ]);
   });
+
+  it('names a published grade for how the grade was given, not for a later move within its tier', async () => {
+    const first = deferred();
+    const publish = vi.fn().mockReturnValueOnce(first.promise).mockResolvedValue(true);
+    const { result } = renderHook(() => useHarness(publish));
+    await act(async () => result.current.grading.grade(id(9), 'A'));
+    // While that goes out: grade 2 from a list row, then nudge it within A.
+    act(() => result.current.grading.grade(id(2), 'A', 'list'));
+    act(() => result.current.grading.move(id(2), 1));
+    await act(async () => first.resolve(true));
+    const second = mocks.record.mock.calls.filter(([entityId]) => entityId === id(2));
+    expect(second.map(([, change]) => change.method)).toEqual(['list']);
+  });
 });

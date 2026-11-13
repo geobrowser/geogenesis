@@ -48,14 +48,14 @@ afterEach(cleanup);
 describe('GradeMenuButton (GEO-3729)', () => {
   it('shows nothing to someone who can’t rank', () => {
     renderWith(null);
-    expect(screen.queryByText('Grade')).toBeNull();
+    expect(screen.queryByRole('button', { name: /Grade/ })).toBeNull();
   });
 
   it('grades from the row like the popup, recorded as from the list, without opening the row', () => {
     const g = grading();
     const { onRowClick } = renderWith(g);
-    fireEvent.click(screen.getByText('Grade'));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'B' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Grade Cats are better than dogs' }));
+    fireEvent.click(screen.getByRole('button', { name: 'B' }));
     expect(g.grade).toHaveBeenCalledWith(DEBATE, 'B', 'list');
     expect(onRowClick).not.toHaveBeenCalled();
   });
@@ -63,16 +63,32 @@ describe('GradeMenuButton (GEO-3729)', () => {
   it('D is Down rank', () => {
     const g = grading();
     renderWith(g);
-    fireEvent.click(screen.getByText('Grade'));
-    fireEvent.click(screen.getByRole('menuitem', { name: /D/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Grade Cats are better than dogs' }));
+    fireEvent.click(screen.getByRole('button', { name: /Down rank/ }));
     expect(g.downRank).toHaveBeenCalledWith(DEBATE);
   });
 
   it('asks for the tier lines first on a ranking with no grades', () => {
     renderWith(grading({ needsTierLines: true }));
-    fireEvent.click(screen.getByText('Grade'));
+    fireEvent.click(screen.getByRole('button', { name: 'Grade Cats are better than dogs' }));
     expect(screen.getByText('Grade your ranking first')).toBeInTheDocument();
-    expect(screen.getByRole('menuitem', { name: 'A' })).toBeDisabled();
-    expect(screen.getByRole('menuitem', { name: /D/ })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'A' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Down rank/ })).toBeEnabled();
+  });
+
+  it('offers Grade it from the menu on a ranking with no grades', () => {
+    const onGradeYourRanking = vi.fn();
+    renderWith(grading({ needsTierLines: true, onGradeYourRanking }));
+    fireEvent.click(screen.getByRole('button', { name: 'Grade Cats are better than dogs' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Grade it' }));
+    expect(onGradeYourRanking).toHaveBeenCalled();
+  });
+
+  it('can’t be dragged with a row', () => {
+    renderWith(grading());
+    expect(screen.getByRole('button', { name: 'Grade Cats are better than dogs' })).toHaveAttribute(
+      'draggable',
+      'false'
+    );
   });
 });

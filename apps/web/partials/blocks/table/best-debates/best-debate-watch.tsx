@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import cx from 'classnames';
 import { useAtom } from 'jotai';
 
 import { capture } from '~/core/analytics';
@@ -115,14 +116,18 @@ export function WatchDebateLayout({
 }) {
   const style = {
     '--watch-below': belowPlayer ? WATCH_BELOW_PLAYER : '0px',
-    // Desktop: the room the dialog leaves (its 5rem margin, then its padding and title), less the row.
-    '--watch-w': 'min(440px, 42vw, calc((min(760px, 100dvh - 5rem) - 148px - var(--watch-below)) * 480 / 578))',
+    // Desktop: the room the dialog leaves (`--watch-room`, its margin taken off; less on a short,
+    // wide screen), less its padding and title and the row, never smaller than a usable picture.
+    '--watch-w': 'max(180px, min(440px, 42vw, calc((var(--watch-room) - 148px - var(--watch-below)) * 480 / 578)))',
     // Phone: the picture takes at most 42% of the screen's height, so the transcript keeps the rest.
     '--watch-w-phone': 'min(100%, calc(42dvh * 480 / 578))',
   } as React.CSSProperties;
   return (
     <div
-      className="flex min-h-0 items-start gap-6 md:h-full md:flex-col md:items-stretch md:gap-3"
+      className={cx(
+        'flex min-h-0 gap-6 md:h-full md:flex-col md:gap-3',
+        '[--watch-room:min(760px,100dvh_-_5rem)] [@media(min-width:768px)_and_(max-height:560px)]:[--watch-room:calc(100dvh_-_2rem)]'
+      )}
       style={style}
       data-testid="best-debate-watch-layout"
     >
@@ -132,15 +137,17 @@ export function WatchDebateLayout({
         </div>
         {belowPlayer ? <div className="w-full md:[width:var(--watch-w-phone)]">{belowPlayer}</div> : null}
       </div>
-      <div className="flex [height:calc(var(--watch-w)*578/480+var(--watch-below))] min-w-0 flex-1 flex-col self-stretch md:h-auto md:min-h-[132px] md:flex-1 md:self-auto">
-        {transcript}
+      {/* Exactly as tall as the player and its row (the column sets the height; the transcript
+          adds none), and it scrolls when longer. On a phone it takes the rest of the screen. */}
+      <div className="relative min-w-0 flex-1 md:min-h-[132px]">
+        <div className="absolute inset-0 flex flex-col">{transcript}</div>
       </div>
     </div>
   );
 }
 
-/** The grade row's height and the gap above it (GEO-3729): the pills and the line under them. */
-const WATCH_BELOW_PLAYER = '96px';
+/** About the grade row's height and the gap above it (GEO-3729), for sizing the picture. */
+const WATCH_BELOW_PLAYER = '84px';
 
 const NO_HIGHLIGHT = { moments: null, full: null };
 
@@ -208,6 +215,11 @@ function WatchDebateDialog({
     if (next === shownView) return;
     capture('element_changed', { ...event, element: 'watch_transcript_view', value: next, previous_value: shownView });
     setView(next);
+    // The picture's own switch is off here (GEO-3729), so this one moves the player too: to the full
+    // debate where the moment playing sits in it, or back to the moment the full debate is in.
+    const at = positionRef.current;
+    if (next === 'full') controller.current?.playFullAt(at?.fullMs ?? 0);
+    else if (momentsOffered) controller.current?.playMomentAt(Math.min(shownMoment, reel.moments.length - 1), 0);
   };
   const changeSpeed = (next: BestDebatesWatchSpeed) => {
     if (next === speed) return;
@@ -246,7 +258,8 @@ function WatchDebateDialog({
             onPosition={onPosition}
             onModeChange={onModeChange}
             controllerRef={controller}
-            // The transcript's Moments / Full debate toggle is the one switch here (GEO-3729).
+            // The transcript's Moments / Full debate toggle switches the player too (GEO-3729), so
+            // the picture's own pill would be a second switch.
             showModePill={false}
           />
         }

@@ -60,8 +60,10 @@ export function BestDebateGradeRow({ entityId, grading }: { entityId: string; gr
     <div className="flex shrink-0 flex-col gap-2" data-testid="best-debate-grade-row">
       <div className="flex items-center gap-3">
         <span className="shrink-0 text-metadataMedium text-text md:hidden">{GRADE_ROW_LABEL}</span>
+        {/* A group of toggle buttons, not a radio group: every press publishes (or edits the draft),
+            so arrow keys mustn't select as they move. */}
         <div
-          role="radiogroup"
+          role="group"
           aria-label={GRADE_ROW_LABEL}
           className="flex min-w-0 flex-1 rounded-full border border-grey-02 p-0.5"
         >
@@ -71,8 +73,7 @@ export function BestDebateGradeRow({ entityId, grading }: { entityId: string; gr
               <button
                 key={option}
                 type="button"
-                role="radio"
-                aria-checked={selected}
+                aria-pressed={selected}
                 disabled={gradesOff}
                 onClick={() => choose(option)}
                 data-geo-analytics-label={`grade_${option.toLowerCase()}`}
@@ -85,15 +86,17 @@ export function BestDebateGradeRow({ entityId, grading }: { entityId: string; gr
           })}
           <button
             type="button"
-            role="radio"
-            aria-checked={downRanked}
+            aria-pressed={downRanked}
             title={GRADE_DOWN_RANK_TITLE}
             aria-label={`D, ${GRADE_DOWN_RANK_TITLE}`}
-            disabled={!grading.ready || pushDownWorking || !pushDown.isVoteKnown || downRanked}
-            onClick={() => grading.downRank(entityId)}
+            // Down ranked stays pressed and readable; Undo below takes it back.
+            disabled={!downRanked && (!grading.ready || pushDownWorking || !pushDown.isVoteKnown)}
+            onClick={() => {
+              if (!downRanked) grading.downRank(entityId);
+            }}
             data-geo-analytics-label="grade_d"
             data-geo-analytics-intent="down_rank"
-            className={cx(SEGMENT_CLASS, downRanked ? cx(SEGMENT_SELECTED, 'disabled:text-white') : SEGMENT_IDLE)}
+            className={cx(SEGMENT_CLASS, downRanked ? SEGMENT_SELECTED : SEGMENT_IDLE)}
           >
             D
           </button>
