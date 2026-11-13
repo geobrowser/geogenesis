@@ -316,7 +316,7 @@ describe('publishMissingDebateClaims', () => {
     expect(result).toMatchObject({ status: 'published', userOpHash: '0xhash' });
     expect(submit).toHaveBeenCalledTimes(1);
     expect(submit.mock.calls[0]?.[1]).toMatchObject({
-      name: '2 claims added to the debate on "The motion"',
+      name: '2 claims added in the debate on "The motion"',
       space: SPACE_ROW,
     });
     const { values } = submitted(prepareOps);
@@ -506,7 +506,9 @@ describe('publishMissingDebateClaims', () => {
       loadClaims: async () => ({ transcriptTurns: turns, claims: [close, far] }),
     });
     const { plan } = await dryPlan(d);
-    expect(plan.held).toEqual([{ claimId: STABLE_A, text: 'Claim A.', bestScore: HOLD_BEST_SCORE }]);
+    expect(plan.held).toEqual([
+      { claimId: STABLE_A, text: 'Claim A.', reason: 'possible_duplicate', bestScore: HOLD_BEST_SCORE },
+    ]);
     expect(plan.statements.map(s => s.claimId)).toEqual([STABLE_B]);
     await publishMissingDebateClaims(DEBATE_ID, { dryRun: false, expect: plan.fingerprint }, d);
     const { values, relations } = submitted(prepareOps);
@@ -534,31 +536,56 @@ describe('publishMissingDebateClaims', () => {
     expect(plan.statements[0]).toMatchObject({ claimId: STABLE_A, minted: false });
   });
 
-  it('skips a new claim on a block that links a claim geo-chat no longer lists (a lost match)', async () => {
-    const { deps: d } = deps({
+  it('mints nothing in a debate that links a claim geo-chat no longer lists, on any turn (a lost match)', async () => {
+    const { deps: d, submit } = deps({
       readBlocks: async () => publishedBlocks({ claimLinks: new Map([[BLOCK_0, [EXISTING]]]) }),
     });
-    const { plan } = await dryPlan(d);
-    expect(plan.unlistedLinks).toEqual([{ turnIndex: 0, claimIds: [EXISTING] }]);
-    expect(plan.skipped).toEqual([
-      { claimId: STABLE_A, turnIndex: 0, text: 'Claim A.', reason: 'block_links_unlisted_claim' },
+    const result = await dryPlan(d);
+    expect(result.plan.unlistedLinks).toEqual([{ turnIndex: 0, claimIds: [EXISTING] }]);
+    // Claim B is on another turn: the lost match may have moved there, so it is held too.
+    expect(result.plan.held).toEqual([
+      { claimId: STABLE_A, text: 'Claim A.', reason: 'unlisted_link', bestScore: null },
+      { claimId: STABLE_B, text: 'Claim B.', reason: 'unlisted_link', bestScore: null },
     ]);
-    expect(plan.statements.map(s => s.claimId)).toEqual([STABLE_B]);
+    expect(result.plan.statements).toEqual([]);
+    expect(result.status).toBe('up_to_date');
+    expect(submit).not.toHaveBeenCalled();
   });
 
-  it('skips an existing or matched claim on such a block too: the unlisted id may be the same sentence', async () => {
+  it('still links existing and matched claims in such a debate, except on the block with the unlisted link', async () => {
     const { deps: d } = deps({
-      loadClaims: async () => ({ transcriptTurns: turns, claims: [claimA, { ...matched, turnIndex: 0 }, claimB] }),
+      loadClaims: async () => ({ transcriptTurns: turns, claims: [claimA, matched, claimB] }),
       readBlocks: async () =>
         publishedBlocks({ claimLinks: new Map([[BLOCK_0, ['ffffffffffffffffffffffffffffffff']]]) }),
-      lookupClaims: async () => [{ id: STABLE_A, spaces: [SPACE], types: [{ id: CLAIM_TYPE_ID }] }],
+      lookupClaims: async () => [
+        { id: STABLE_A, spaces: [SPACE], types: [{ id: CLAIM_TYPE_ID }] },
+        { id: STABLE_B, spaces: [SPACE], types: [{ id: CLAIM_TYPE_ID }] },
+      ],
     });
     const { plan } = await dryPlan(d);
-    expect(plan.skipped.map(s => [s.claimId, s.reason])).toEqual([
-      [STABLE_A, 'block_links_unlisted_claim'],
-      [EXISTING, 'block_links_unlisted_claim'],
+    expect(plan.skipped.map(s => [s.claimId, s.reason])).toEqual([[STABLE_A, 'block_links_unlisted_claim']]);
+    expect(plan.statements.map(s => [s.claimId, s.minted])).toEqual([
+      [EXISTING, false],
+      [STABLE_B, false],
     ]);
-    expect(plan.statements.map(s => s.claimId)).toEqual([STABLE_B]);
+    expect(plan.held).toEqual([]);
+  });
+
+  it('names a rewrite-only edit by its rewrites', async () => {
+    const { deps: d, submit } = deps({
+      readBlocks: async () =>
+        publishedBlocks({
+          claimLinks: new Map([
+            [BLOCK_0, [STABLE_A]],
+            [BLOCK_1, [STABLE_B]],
+          ]),
+        }),
+    });
+    const { plan } = await dryPlan(d, 'rewrite');
+    await publishMissingDebateClaims(DEBATE_ID, { dryRun: false, expect: plan.fingerprint, blockText: 'rewrite' }, d);
+    expect(submit.mock.calls[0]?.[1]).toMatchObject({
+      name: '1 transcript turn updated in the debate on "The motion"',
+    });
   });
 
   it('fingerprint changes when a claim is reworded, restanced or retimed under the same id', async () => {

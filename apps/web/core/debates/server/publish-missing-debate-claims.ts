@@ -100,14 +100,24 @@ export type LateClaimsPlan = {
   debateId: string;
   spaceId: string;
   statements: LateClaimStatement[];
-  held: Array<{ claimId: string; text: string; bestScore: number }>;
+  /**
+   * Claims that would be minted but are left for a person to review: `possible_duplicate` when the
+   * match judge failed next to a near-identical published claim (`bestScore`); `unlisted_link` when
+   * the debate links a claim geo-chat no longer lists, which may be this sentence under its old id.
+   */
+  held: Array<{
+    claimId: string;
+    text: string;
+    reason: 'possible_duplicate' | 'unlisted_link';
+    bestScore: number | null;
+  }>;
   skipped: Array<{ claimId: string | null; turnIndex: number; text: string; reason: LateClaimSkipReason }>;
   /**
    * Claims the graph links from a block that geo-chat no longer lists under that id. A claim that was
    * matched to a published one keeps no id through a re-extraction, so its sentence can come back
    * as a new stable id, and a match the full publish could not verify was minted under a fallback
-   * id. Every statement on such a block is skipped (`block_links_unlisted_claim`) rather than
-   * listing a sentence on the block twice.
+   * id. While any exists, nothing is minted in the debate (`held`, `unlisted_link`), and nothing
+   * else is linked on its block (`block_links_unlisted_claim`).
    */
   unlistedLinks: Array<{ turnIndex: number; claimIds: string[] }>;
   /** Claims already linked from a block of this debate, which geo-chat now also places on turns that do not link them. */
@@ -365,7 +375,12 @@ async function planLateClaims(
       claim.matchBestScore >= HOLD_BEST_SCORE
     ) {
       if (!held.some(h => h.claimId === key(id)))
-        held.push({ claimId: key(id), text: claim.text, bestScore: claim.matchBestScore });
+        held.push({
+          claimId: key(id),
+          text: claim.text,
+          reason: 'possible_duplicate',
+          bestScore: claim.matchBestScore,
+        });
       continue;
     }
     candidates.push(claim);
@@ -408,9 +423,16 @@ async function planLateClaims(
       continue;
     }
     const minted = !claim.existingClaimEntityId && !existingClaims.has(id);
-    // Any statement, minted or not: the unlisted claim may be this sentence under another id (a lost
-    // match, or a match the full publish could not verify and minted under a fallback id), and a
-    // second link would list it twice on the block.
+    // The debate links a claim geo-chat no longer lists (a lost match, or a match the full publish
+    // could not verify and minted under a fallback id), and nothing says which sentence it was or on
+    // which turn geo-chat now puts it. So nothing is minted in this debate: a new id may be that
+    // sentence again. Linking claims that already exist mints nothing and carries on below.
+    if (minted && unlistedByTurn.size > 0) {
+      if (!held.some(h => h.claimId === id))
+        held.push({ claimId: id, text: claim.text, reason: 'unlisted_link', bestScore: null });
+      continue;
+    }
+    // And no second link on the block itself: the unlisted claim may be this one under another id.
     if (unlistedByTurn.has(claim.turnIndex)) {
       skipped.push({ claimId: id, turnIndex: claim.turnIndex, text: claim.text, reason: 'block_links_unlisted_claim' });
       continue;
@@ -627,9 +649,14 @@ function fingerprintOf(values: Value[], relations: Relation[], rewrites: LateCla
 }
 
 function editName(debate: Debate, plan: LateClaimsPlan): string {
-  const count = plan.statements.length;
-  const noun = count === 1 ? 'claim' : 'claims';
-  return `${count} ${noun} added to the debate on "${debate.claim.claim.trim()}"`;
+  const plural = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
+  const parts = [
+    plan.statements.length > 0 ? `${plural(plan.statements.length, 'claim', 'claims')} added` : null,
+    plan.blockRewrites.length > 0
+      ? `${plural(plan.blockRewrites.length, 'transcript turn', 'transcript turns')} updated`
+      : null,
+  ].filter(Boolean);
+  return `${parts.join(', ')} in the debate on "${debate.claim.claim.trim()}"`;
 }
 
 const BLOCK_MARKDOWN_SOURCE = /* GraphQL */ `
