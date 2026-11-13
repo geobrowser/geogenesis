@@ -63,8 +63,11 @@ const renderList = (props: Partial<React.ComponentProps<typeof BestDebatesToRank
 describe('To rank', () => {
   it('lists the debates in the order given, saying who has ranked each', () => {
     renderList();
-    const rows = screen.getAllByRole('button', { name: /^Watch / });
-    expect(rows.map(row => row.getAttribute('aria-label'))).toEqual(['Watch Newest', 'Watch Older']);
+    // The rows aren't buttons (their Rank and Down rank controls are), so these are the only Rank ones.
+    const ranks = screen.getAllByRole('button', { name: /^Rank / });
+    expect(ranks.map(button => button.getAttribute('aria-label'))).toEqual(['Rank Newest', 'Rank Older']);
+    expect(screen.getAllByTestId('best-debates-to-rank-row')).toHaveLength(2);
+    for (const row of screen.getAllByTestId('best-debates-to-rank-row')) expect(row.getAttribute('role')).toBeNull();
     expect(screen.getByText('Nobody has ranked this yet')).toBeTruthy();
     expect(screen.getByText('Ranked by Preston')).toBeTruthy();
   });
@@ -93,7 +96,7 @@ describe('To rank', () => {
         />
       </BestDebateWatchContext.Provider>
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Watch Newest' }));
+    fireEvent.click(screen.getByText('Newest'));
     expect(watch).toHaveBeenCalledWith('d1');
     expect(onPlace).not.toHaveBeenCalled();
 
@@ -109,7 +112,7 @@ describe('To rank', () => {
     renderList({ onPlace });
     fireEvent.click(screen.getByRole('button', { name: 'Rank Newest' }));
     expect(onPlace).toHaveBeenCalledWith('d1');
-    const row = screen.getByRole('button', { name: 'Watch Newest' });
+    const row = screen.getAllByTestId('best-debates-to-rank-row')[0];
 
     const setData = vi.fn();
     fireEvent.dragStart(row, { dataTransfer: { setData, effectAllowed: '' } });

@@ -247,35 +247,47 @@ function RankingComposePickRow({
   /** Best debates: the team row both lists share, in place of the generic row. */
   content?: React.ReactNode;
 }) {
-  // Best debates (Preston, 13 Nov): the row opens the debate to watch, ranked or not, and only the
-  // row's Rank button starts ranking it.
+  // Best debates (Preston, 13 Nov): a press on the row opens the debate to watch, ranked or not,
+  // and only the row's Rank button starts ranking it. The row is not a button itself, so the Rank,
+  // Down rank and poster (Watch) controls inside it stay reachable to keyboards and screen readers;
+  // the poster is the row's Watch control for them.
   const watch = React.useContext(BestDebateWatchContext);
-  const watchOnly = Boolean(content && watch);
-  const inert = !watchOnly && isInMyRanking;
-  const activate = () => {
-    if (watchOnly) watch?.(entityId);
-    else if (!isInMyRanking) onAdd();
-  };
+  if (content && watch) {
+    return (
+      <div
+        data-testid="best-debates-pick-row"
+        onClick={() => watch(entityId)}
+        {...(draggable && !isInMyRanking ? rankingEntityDragProps(entityId) : {})}
+        className="flex w-full cursor-pointer items-center py-3 text-left transition"
+      >
+        {content}
+      </div>
+    );
+  }
+
   const handleKeyDown = (event: React.KeyboardEvent) => {
-    if (inert || event.target !== event.currentTarget) return;
+    if (isInMyRanking || event.target !== event.currentTarget) return;
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
-      activate();
+      onAdd();
     }
   };
 
   return (
     <div
       role="button"
-      tabIndex={inert ? -1 : 0}
-      aria-label={
-        watchOnly ? `Watch ${name}` : isInMyRanking ? `${name} is in your ranking` : `Add ${name} to my ranking`
-      }
-      aria-disabled={inert}
-      onClick={activate}
+      tabIndex={isInMyRanking ? -1 : 0}
+      aria-label={isInMyRanking ? `${name} is in your ranking` : `Add ${name} to my ranking`}
+      aria-disabled={isInMyRanking}
+      onClick={() => {
+        if (!isInMyRanking) onAdd();
+      }}
       onKeyDown={handleKeyDown}
       {...(draggable && !isInMyRanking ? rankingEntityDragProps(entityId) : {})}
-      className={cx('flex w-full items-center py-3 text-left transition', inert ? 'cursor-default' : 'cursor-pointer')}
+      className={cx(
+        'flex w-full items-center py-3 text-left transition',
+        isInMyRanking ? 'cursor-default' : 'cursor-pointer'
+      )}
     >
       {content ?? (
         <RankingEntryRow

@@ -68,20 +68,13 @@ export function BestDebatesToRankList({
     if (!debate) return null;
     const name = nameOf(entityId) ?? 'Untitled debate';
     return (
+      // A press on the row opens the debate to watch (Preston, 13 Nov). The row isn't a button, so
+      // its Rank, Down rank and poster (Watch) controls stay reachable to keyboards and screen readers.
       <div
         key={entityId}
-        role="button"
-        tabIndex={0}
-        aria-label={`Watch ${name}`}
+        data-testid="best-debates-to-rank-row"
         className="flex w-full cursor-pointer items-center py-3 text-left"
         onClick={() => watch?.(entityId)}
-        onKeyDown={event => {
-          if (event.target !== event.currentTarget) return;
-          if (event.key === 'Enter' || event.key === ' ') {
-            event.preventDefault();
-            watch?.(entityId);
-          }
-        }}
         {...(draggable ? rankingEntityDragProps(entityId) : {})}
       >
         <BestDebatesTeamRowContent
