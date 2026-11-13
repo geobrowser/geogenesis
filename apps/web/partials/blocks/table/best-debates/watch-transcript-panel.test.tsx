@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 
 import * as React from 'react';
 
@@ -175,5 +175,19 @@ describe('WatchTranscriptPanel', () => {
     expect(scroller.scrollTop).toBe(140);
     rerender(<Panel highlightKey="m0:1" momentNav={nav(0)} />);
     expect(scroller.scrollTop).toBe(140);
+  });
+
+  it('moves the one tab stop with the arrow keys, and gives it back to the spoken line on leaving', () => {
+    render(<Panel highlightKey="m0:5" momentNav={nav(0)} />);
+    const line = (i: number) => screen.getByRole('button', { name: `Line ${i}` });
+    const tabStops = () => BLOCK.lines.filter((_, i) => line(i).tabIndex === 0).map(l => l.text);
+    expect(tabStops()).toEqual(['Line 5']);
+    line(5).focus();
+    fireEvent.keyDown(line(5), { key: 'ArrowLeft' });
+    fireEvent.keyDown(line(4), { key: 'ArrowLeft' });
+    expect(document.activeElement).toBe(line(3));
+    expect(tabStops()).toEqual(['Line 3']);
+    act(() => line(3).blur());
+    expect(tabStops()).toEqual(['Line 5']);
   });
 });

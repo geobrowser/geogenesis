@@ -94,6 +94,9 @@ export function WatchTranscriptPanel({
   );
   const spokenUpTo = highlightKey === null ? null : (order.get(highlightKey) ?? null);
   const firstKey = blocks?.[0]?.lines[0]?.key ?? null;
+  /** The line with keyboard focus, which holds the lines' one tab stop while focus is among them. */
+  const [focusedKey, setFocusedKey] = React.useState<string | null>(null);
+  const tabStopKey = focusedKey !== null && order.has(focusedKey) ? focusedKey : (highlightKey ?? firstKey);
 
   /** A line works as a button from the keyboard; the arrow keys step to the line before or after. */
   const onLineKeyDown = (event: React.KeyboardEvent<HTMLElement>, block: WatchBlock, line: WatchLine) => {
@@ -174,6 +177,10 @@ export function WatchTranscriptPanel({
           if (event.key === ' ') markReadingUnlessPress(event);
           else markReading();
         }}
+        onBlur={event => {
+          // Leaving the lines: the tab stop goes back to the line being spoken.
+          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setFocusedKey(null);
+        }}
       >
         {content.status === 'loading' ? (
           <p className="m-0 py-4 text-metadata text-grey-04">Loading transcript…</p>
@@ -230,11 +237,12 @@ export function WatchTranscriptPanel({
                           role="button"
                           // One tab stop for the lines: the one being spoken, else the first. The
                           // arrow keys move between them (see `onLineKeyDown`).
-                          tabIndex={line.key === (highlightKey ?? firstKey) ? 0 : -1}
+                          tabIndex={line.key === tabStopKey ? 0 : -1}
                           data-line-key={line.key}
                           data-geo-analytics-label="Best debates watch transcript line"
                           aria-current={line.key === highlightKey ? 'true' : undefined}
                           onClick={() => onLine(block, line)}
+                          onFocus={() => setFocusedKey(line.key)}
                           onKeyDown={event => onLineKeyDown(event, block, line)}
                           className={cx(
                             'cursor-pointer rounded-sm [box-decoration-break:clone] py-0.5 transition-colors hover:bg-grey-01 focus-visible:outline focus-visible:outline-2 focus-visible:outline-text',
