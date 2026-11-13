@@ -213,6 +213,78 @@ describe('manualReel', () => {
     });
   });
 
+  // GEO-3710: after a clip's last word geo-chat keeps only 10 ms clear of the speaker's own next
+  // word (Whisper packs them 40 ms apart), still 60 ms of the other debater's, and none over a word
+  // the other debater says across the end.
+  it('widens an end before the speaker’s own next word into half the gap, but never into a reply', () => {
+    const packed = [word(1, 1_000, 1_400), word(1, 1_440, 1_840), word(2, 1_880, 2_280), word(2, 3_000, 3_400)];
+    expect(manualReel([clip(1_000, 1_400), clip(1_440, 1_840), freeEnd(3_000, 3_450)], packed, ONE_CLOCK)).toEqual({
+      clips: [
+        { start: 0.75, end: 1.42 },
+        { start: 1.44, end: 1.84 },
+        { start: 2.75, end: 3.45 },
+      ],
+      exact: true,
+    });
+  });
+
+  it('measures an exchange’s end from the debater who says its last word', () => {
+    // Debater 1's a0-a3 then debater 2's b0-b1, 40 ms apart; the clip ends on b0.
+    const exchange = [
+      word(1, 0, 400),
+      word(1, 440, 840),
+      word(1, 880, 1_280),
+      word(1, 1_320, 1_720),
+      word(2, 1_760, 2_160),
+      word(2, 2_200, 2_600),
+      word(1, 3_000, 3_400),
+    ];
+    expect(manualReel([clip(0, 2_160), freeEnd(3_000, 3_450)], exchange, ONE_CLOCK).clips[0]).toEqual({
+      start: 0,
+      end: 2.18,
+    });
+  });
+
+  it('keeps an end where geo-chat does when the other debater says a word inside the last one', () => {
+    // Debater 1 says 1-1.6 s; debater 2's "mm" (1.2-1.4 s) starts later, so it is the last word,
+    // and debater 1's word said across its end leaves it no room: geo-chat ends at 1.6 s.
+    const nested = [word(1, 1_000, 1_600), word(2, 1_200, 1_400, 'mm'), word(1, 3_000, 3_400)];
+    expect(manualReel([clip(1_000, 1_600), freeEnd(3_000, 3_450)], nested, ONE_CLOCK).clips[0]).toEqual({
+      start: 0.75,
+      end: 1.6,
+    });
+  });
+
+  it('takes the later of two of a debater’s words that start together as the last, as geo-chat does', () => {
+    // A zero-length "uh" at 1.4 s, then a word from 1.4 s: the end is that word's, with room to 2.4 s.
+    const tied = [word(1, 1_000, 1_400), word(1, 1_400, 1_400, 'uh'), word(1, 1_400, 1_700), word(1, 2_400, 2_800)];
+    expect(manualReel([clip(1_000, 1_700), freeEnd(2_400, 2_850)], tied, ONE_CLOCK).clips[0]).toEqual({
+      start: 0.75,
+      end: 1.95,
+    });
+  });
+
+  it('takes the higher slot as the last of two debaters’ words that start together, as geo-chat does', () => {
+    // Debater 1 says 1-1.3 s; debater 2's "mm" starts with it and ends at 1.2 s. geo-chat orders the
+    // tie by slot, so "mm" is the last word, and debater 1's word across its end leaves no room.
+    const tied = [word(2, 1_000, 1_200, 'mm'), word(1, 1_000, 1_300), word(1, 3_000, 3_400)];
+    expect(manualReel([clip(1_000, 1_300), freeEnd(3_000, 3_450)], tied, ONE_CLOCK).clips[0]).toEqual({
+      start: 0.75,
+      end: 1.3,
+    });
+  });
+
+  it('gives an end no room over a word the other debater says across it', () => {
+    const crosstalk = [word(1, 1_000, 1_400), word(2, 1_300, 1_600), word(1, 2_000, 2_400), word(2, 3_000, 3_400)];
+    expect(manualReel([clip(1_000, 1_400), freeEnd(3_000, 3_450)], crosstalk, ONE_CLOCK)).toEqual({
+      clips: [
+        { start: 0.75, end: 1.4 },
+        { start: 2.75, end: 3.45 },
+      ],
+      exact: true,
+    });
+  });
+
   it('trims every edge to the stretch the recordings can cut, which exact would otherwise refuse', () => {
     // Two stretches on the player's clock: 0-2.45 s and 2.9-4 s, with a cut between.
     const turn = (index: number, slot: 1 | 2, output: [number, number], source: [number, number]) => ({

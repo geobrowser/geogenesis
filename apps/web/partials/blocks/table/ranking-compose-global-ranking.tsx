@@ -6,20 +6,32 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { filterTeamIds } from '~/core/blocks/ranking/best-debates-team-filters';
 import { getRowDescription, getRowDisplayName } from '~/core/blocks/ranking/ranking-rankable-list';
 import { rankingSearchHasExactNameMatch } from '~/core/blocks/ranking/ranking-search-exact-name';
 import type { RankingEntryDisplay } from '~/core/blocks/ranking/use-ranking-entry-entities';
 import { useVoteTabEntities } from '~/core/blocks/ranking/use-vote-tab-entities';
 import { useInfiniteScrollSentinel } from '~/core/space-members/use-space-participants-infinite';
 import type { Row, SearchResult } from '~/core/types';
+import { normId } from '~/core/utils/norm-id';
 
 import { Button } from '~/design-system/button';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Search } from '~/design-system/icons/search';
 
+import { BestDebateDisplaysContext, BestDebateWatchContext } from './best-debates/best-debate-row';
+import { BestDebatesMatchingList } from './best-debates/best-debates-matching-list';
+import { BestDebatesGroupedRows } from './best-debates/best-debates-team-row';
+import {
+  BestDebatesTeamToolbar,
+  type BestDebatesTeamTools,
+  BestDebatesTopicSearchRow,
+} from './best-debates/best-debates-team-tools';
+import { type BestDebatesTopicFacet, useBestDebatesTopicFacet } from './best-debates/use-best-debates-topic-facet';
 import { RankingGlobalDesktopRow } from './ranking-block-ui';
 import { useRankingComposeScrollRoot, useRankingComposeScrollRootRef } from './ranking-compose-layout';
 import { RankingComposeSwipeableRow } from './ranking-compose-swipeable-row';
+import { rankingEntityDragProps } from './ranking-entity-drag';
 import { RankingEntryRow } from './ranking-entry-row';
 
 type ComposeBrowseTab = 'global' | 'upvoted' | 'downvoted';
@@ -215,6 +227,9 @@ function RankingComposePickRow({
   onAdd,
   isInMyRanking,
   pending = false,
+  draggable = false,
+  myRank = null,
+  content,
 }: {
   rank?: number;
   name: string;
@@ -225,9 +240,33 @@ function RankingComposePickRow({
   onAdd: () => void;
   isInMyRanking: boolean;
   pending?: boolean;
+  /** Can be dragged into "Your ranking" (GEO-3678). */
+  draggable?: boolean;
+  /** Best debates: the debate's place in your ranking, shown as "You: #14". */
+  myRank?: number | null;
+  /** Best debates: the team row both lists share, in place of the generic row. */
+  content?: React.ReactNode;
 }) {
+  // Best debates (Preston, 13 Nov): a press on the row opens the debate to watch, ranked or not,
+  // and only the row's Rank button starts ranking it. The row is not a button itself, so the Rank,
+  // Down rank and poster (Watch) controls inside it stay reachable to keyboards and screen readers;
+  // the poster is the row's Watch control for them.
+  const watch = React.useContext(BestDebateWatchContext);
+  if (content && watch) {
+    return (
+      <div
+        data-testid="best-debates-pick-row"
+        onClick={() => watch(entityId, 'row')}
+        {...(draggable && !isInMyRanking ? rankingEntityDragProps(entityId) : {})}
+        className="flex w-full cursor-pointer items-center py-3 text-left transition"
+      >
+        {content}
+      </div>
+    );
+  }
+
   const handleKeyDown = (event: React.KeyboardEvent) => {
-    if (isInMyRanking) return;
+    if (isInMyRanking || event.target !== event.currentTarget) return;
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
       onAdd();
@@ -244,24 +283,32 @@ function RankingComposePickRow({
         if (!isInMyRanking) onAdd();
       }}
       onKeyDown={handleKeyDown}
+      {...(draggable && !isInMyRanking ? rankingEntityDragProps(entityId) : {})}
       className={cx(
         'flex w-full items-center py-3 text-left transition',
         isInMyRanking ? 'cursor-default' : 'cursor-pointer'
       )}
     >
-      <RankingEntryRow
-        rank={rank}
-        rankStyle="leading"
-        linkToEntity={false}
-        pending={pending}
-        entry={{
-          entityId,
-          name,
-          description,
-          image: imageUrl,
-        }}
-        spaceId={spaceId}
-      />
+      {content ?? (
+        <RankingEntryRow
+          rank={rank}
+          rankStyle="leading"
+          linkToEntity={false}
+          pending={pending}
+          entry={{
+            entityId,
+            name,
+            description,
+            image: imageUrl,
+          }}
+          spaceId={spaceId}
+          debateAside={
+            myRank ? (
+              <span className="text-breadcrumb whitespace-nowrap text-grey-04 tabular-nums">You: #{myRank}</span>
+            ) : null
+          }
+        />
+      )}
     </div>
   );
 }
@@ -298,7 +345,91 @@ type Props = {
   activeSwipeRowKey: string | null;
   onActiveSwipeRowKeyChange: (key: string | null) => void;
   onViewEntity: (entityId: string) => void;
+  /**
+   * Best debates (GEO-3678): this column is the team ranking, with an All / To rank switch in place
+   * of the browse tabs. Other blocks leave it out and keep the tabs.
+   */
+  teamView?: RankingComposeTeamView;
+  /** Rows can be dragged into "Your ranking" (desktop only; GEO-3678). */
+  draggableRows?: boolean;
 };
+
+/** All, the same list grouped by space (Preston, 12 Nov), or To rank. */
+const NO_TOPIC_IDS: readonly string[] = [];
+
+/** Mounts the topic counts only where the team column has its tools (and so a query client). */
+function TopicFacetScope({
+  children,
+  ...args
+}: Omit<Parameters<typeof useBestDebatesTopicFacet>[0], 'enabled'> & {
+  children: (facet: BestDebatesTopicFacet) => React.ReactNode;
+}) {
+  return <>{children(useBestDebatesTopicFacet({ ...args, enabled: true }))}</>;
+}
+
+export type RankingComposeTeamMode = 'all' | 'by_space' | 'to_rank';
+
+export type RankingComposeTeamView = {
+  mode: RankingComposeTeamMode;
+  onModeChange: (mode: RankingComposeTeamMode) => void;
+  /** Shown on the To rank switch once known. */
+  toRankCount: number | null;
+  toRankPanel: React.ReactNode;
+  /** The To rank list's debates, for the topic menu's options. */
+  toRankIds?: readonly string[];
+  /** Topic filter and Group by space, for All and To rank alike. */
+  tools?: BestDebatesTeamTools;
+  /** The row both lists draw, in place of the generic ranking row. */
+  renderRow?: (args: {
+    entityId: string;
+    name: string;
+    rank?: number;
+    spaceId: string;
+    isInMyRanking: boolean;
+  }) => React.ReactNode;
+};
+
+function RankingComposeTeamHeader({ isMobile, teamView }: { isMobile: boolean; teamView: RankingComposeTeamView }) {
+  const options: Array<{ id: RankingComposeTeamMode; label: string }> = [
+    { id: 'all', label: 'All' },
+    { id: 'by_space', label: 'By space' },
+    { id: 'to_rank', label: 'To rank' },
+  ];
+  return (
+    // No "Team ranking" heading (Preston, 12 Nov): the picker leads the row, on the same 32px line as
+    // "Your ranking" and its Publish button; the column's region carries the name. A phone's tabs say it.
+    <div className="flex min-h-8 w-full min-w-0 items-center justify-start gap-3">
+      <div
+        role="group"
+        aria-label="Show"
+        className={cx('flex rounded-full bg-grey-01 p-0.5', isMobile ? 'w-full' : 'shrink-0')}
+      >
+        {options.map(option => (
+          <button
+            key={option.id}
+            type="button"
+            aria-pressed={teamView.mode === option.id}
+            onClick={() => teamView.onModeChange(option.id)}
+            className={cx(
+              'flex items-center justify-center gap-1.5 rounded-full px-3 text-breadcrumb transition-colors',
+              isMobile ? 'h-10 flex-1' : 'h-[26px]',
+              teamView.mode === option.id
+                ? 'bg-white text-text shadow-[0_1px_2px_rgba(0,0,0,0.12)]'
+                : 'text-grey-04 hover:text-text'
+            )}
+          >
+            {option.label}
+            {option.id === 'to_rank' && teamView.toRankCount ? (
+              <span className="inline-grid h-[18px] min-w-[18px] place-items-center rounded-full bg-purple px-[5px] text-tag text-white tabular-nums">
+                {teamView.toRankCount}
+              </span>
+            ) : null}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export function RankingComposeGlobalRanking({
   isMobile,
@@ -331,10 +462,15 @@ export function RankingComposeGlobalRanking({
   activeSwipeRowKey,
   onActiveSwipeRowKeyChange,
   onViewEntity,
+  teamView,
+  draggableRows = false,
 }: Props) {
   const isDesktop = !isMobile;
 
-  const [browseTab, setBrowseTab] = React.useState<ComposeBrowseTab>('global');
+  const [browseTabState, setBrowseTab] = React.useState<ComposeBrowseTab>('global');
+  // The team column has no vote tabs.
+  const browseTab: ComposeBrowseTab = teamView ? 'global' : browseTabState;
+  const isToRank = teamView?.mode === 'to_rank';
 
   const tabsId = React.useId();
   const browseHeadingId = `${tabsId}-browse-heading`;
@@ -568,11 +704,12 @@ export function RankingComposeGlobalRanking({
     sentinelEl,
   ]);
 
-  const renderPickEntity = (id: string, globalRank?: number) => {
+  const renderPickEntity = (id: string, globalRank?: number, knownName?: string | null) => {
     const entry = entriesById.get(id);
     const row = rowsByEntityId.get(id);
     const searchHit = searchResultsById.get(id);
     const isInMyRanking = orderedIds.includes(id);
+    const rowName = entry?.name ?? (row ? getRowDisplayName(row) : searchHit?.name?.trim() || knownName || 'Untitled');
     const pickRow = (
       <RankingComposePickRow
         entityId={id}
@@ -584,9 +721,16 @@ export function RankingComposeGlobalRanking({
         onAdd={() => onAddToMyRanking(id)}
         isInMyRanking={isInMyRanking}
         pending={pendingEntityIds.has(id)}
+        draggable={draggableRows && !isMobile}
+        myRank={teamView && isInMyRanking ? orderedIds.indexOf(id) + 1 : null}
+        content={teamView?.renderRow?.({ entityId: id, name: rowName, rank: globalRank, spaceId, isInMyRanking })}
       />
     );
 
+    // Best debates rows have no side-panel button or swipe actions on any screen: a tap opens the
+    // debate to watch and the row's Rank button ranks it (Preston, 13 Nov). A swipe row's tap would
+    // start ranking as well.
+    if (teamView) return <div key={id}>{pickRow}</div>;
     if (!isMobile) {
       return (
         <RankingGlobalDesktopRow key={id} onOpenSidePanel={() => onViewEntity(id)}>
@@ -675,6 +819,60 @@ export function RankingComposeGlobalRanking({
     </>
   );
 
+  // Best debates: the topic filter, then Group by space, over each section of the team column.
+  const teamDisplays = React.useContext(BestDebateDisplaysContext);
+  const teamTools = teamView?.tools;
+  // Counted over the whole list the picker shows, never the rows drawn so far (Preston, 12 Nov).
+  const keepTeamIds = (ids: string[]) =>
+    teamTools
+      ? filterTeamIds(ids, id => teamDisplays?.get(normId(id)), { query: '', topicIds: teamTools.topicIds })
+      : ids;
+  // One Collapse all for the column, on the first header of the first section with rows; it covers
+  // the ranked and unranked sections alike.
+  const renderSection = (ids: string[], render: (id: string) => React.ReactNode, section: 'ranked' | 'unranked') => {
+    if (!teamView) return ids.map(render);
+    const kept = keepTeamIds(ids);
+    const rankedKept = keepTeamIds(tabFilteredRankedIds);
+    const carriesCollapseAll = section === 'ranked' || rankedKept.length === 0;
+    return (
+      <BestDebatesGroupedRows
+        ids={kept}
+        grouped={teamView.mode === 'by_space'}
+        render={render}
+        collapseAllIds={carriesCollapseAll ? [...rankedKept, ...keepTeamIds(tabFilteredUnrankedIds)] : null}
+      />
+    );
+  };
+
+  const renderSearchRow = (topicFacet: BestDebatesTopicFacet | null) => (
+    <>
+      <div className={cx('flex shrink-0 items-center gap-2', isMobile && 'mt-2')}>
+        <div className="relative flex min-w-0 flex-1 items-center">
+          <span className="pointer-events-none absolute left-2 flex">
+            <Search color="grey-04" />
+          </span>
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={e => handleSearchQueryChange(e.target.value)}
+            placeholder={teamView?.tools ? 'Search debates and topics' : 'Search'}
+            aria-label={teamView?.tools ? 'Search debates and topics' : 'Search rankable entities'}
+            className="h-8 w-full rounded border border-grey-02 bg-white py-1 pr-2 pl-8 text-metadata text-text outline-hidden focus-visible:border-text md:h-10 md:text-input"
+          />
+        </div>
+        {teamView?.tools && topicFacet ? <BestDebatesTeamToolbar tools={teamView.tools} facet={topicFacet} /> : null}
+      </div>
+      {teamView?.tools && topicFacet ? (
+        <BestDebatesTopicSearchRow
+          query={searchQuery}
+          facet={topicFacet}
+          tools={teamView.tools}
+          onPicked={() => handleSearchQueryChange('')}
+        />
+      ) : null}
+    </>
+  );
+
   const searchResultList = (
     <>
       {showCreateNewPrompt ? (
@@ -683,7 +881,7 @@ export function RankingComposeGlobalRanking({
       {showCreateNewPrompt && tabFilteredRankedIds.length > 0 ? (
         <RankingComposeSectionDivider label="Other ranked results" />
       ) : null}
-      {tabFilteredRankedIds.map(id => renderPickEntity(id, globalRankByEntityId.get(id)))}
+      {renderSection(tabFilteredRankedIds, id => renderPickEntity(id, globalRankByEntityId.get(id)), 'ranked')}
       {tabShowRankedUnrankedDivider ? (
         showCreateNewPrompt ? (
           <RankingComposeSectionDivider label="Other unranked results" />
@@ -691,7 +889,7 @@ export function RankingComposeGlobalRanking({
           <RankingComposeSectionDivider label="Unranked" />
         )
       ) : null}
-      {tabFilteredUnrankedIds.map(id => renderPickEntity(id))}
+      {renderSection(tabFilteredUnrankedIds, id => renderPickEntity(id), 'unranked')}
       {loadMoreFooter}
       {pendingDisclosure}
       {membershipSentinel}
@@ -703,9 +901,9 @@ export function RankingComposeGlobalRanking({
       {browseTab !== 'global' && tabShowRankedUnrankedDivider ? (
         <RankingComposeSectionDivider label="Already ranked" />
       ) : null}
-      {tabFilteredRankedIds.map(id => renderPickEntity(id, globalRankByEntityId.get(id)))}
+      {renderSection(tabFilteredRankedIds, id => renderPickEntity(id, globalRankByEntityId.get(id)), 'ranked')}
       {tabShowRankedUnrankedDivider ? <RankingComposeSectionDivider label="Unranked" /> : null}
-      {tabFilteredUnrankedIds.map(id => renderPickEntity(id))}
+      {renderSection(tabFilteredUnrankedIds, id => renderPickEntity(id), 'unranked')}
       {loadMoreFooter}
       {pendingDisclosure}
       {membershipSentinel}
@@ -722,6 +920,8 @@ export function RankingComposeGlobalRanking({
   return (
     <div
       ref={globalSectionRef}
+      role={teamView ? 'region' : undefined}
+      aria-label={teamView ? 'Team ranking' : undefined}
       className={cx('flex flex-col', isDesktop && 'min-h-0 flex-1')}
       style={{ scrollMarginTop: MOBILE_SEARCH_VISIBLE_TOP_OFFSET_PX }}
     >
@@ -731,12 +931,14 @@ export function RankingComposeGlobalRanking({
         style={{ scrollMarginTop: MOBILE_SEARCH_VISIBLE_TOP_OFFSET_PX }}
       >
         <div className={cx('w-full min-w-0', isDesktop && 'pb-4')}>
+          {teamView ? <RankingComposeTeamHeader isMobile={isMobile} teamView={teamView} /> : null}
           <h2 id={browseHeadingId} className="sr-only">
             Browse entities to rank
           </h2>
           {/* Typography matches the "My ranking" heading; the active tab is picked out
               by colour rather than an underline. */}
           <div
+            hidden={Boolean(teamView)}
             role="tablist"
             aria-labelledby={browseHeadingId}
             onKeyDown={onTabKeyDown}
@@ -767,32 +969,52 @@ export function RankingComposeGlobalRanking({
             ))}
           </div>
         </div>
-        <div className={cx('shrink-0', isMobile && 'mt-2')}>
-          <div className="relative flex items-center">
-            <span className="pointer-events-none absolute left-2 flex">
-              <Search color="grey-04" />
-            </span>
-            <input
-              type="search"
-              value={searchQuery}
-              onChange={e => handleSearchQueryChange(e.target.value)}
-              placeholder="Search"
-              aria-label="Search rankable entities"
-              className="h-8 w-full rounded border border-grey-02 bg-white py-1 pr-2 pl-8 text-metadata text-text outline-hidden focus-visible:border-text"
-            />
-          </div>
-        </div>
+        {teamTools ? (
+          // Counted over the whole list the picker shows, never the rows drawn so far (Preston, 12 Nov).
+          <TopicFacetScope
+            scope={isToRank ? 'to_rank' : 'team'}
+            query={searchQuery}
+            topicIds={teamTools.topicIds}
+            toRankIds={teamView?.toRankIds ?? NO_TOPIC_IDS}
+            displays={teamDisplays}
+          >
+            {topicFacet => renderSearchRow(topicFacet)}
+          </TopicFacetScope>
+        ) : (
+          renderSearchRow(null)
+        )}
       </div>
       {/* One panel shared by all three tabs, so it is labelled by whichever is
           active rather than being remounted per tab. */}
       <div
         id={browsePanelId}
-        role="tabpanel"
-        aria-labelledby={tabButtonId(browseTab)}
+        role={teamView ? 'region' : 'tabpanel'}
+        aria-label={
+          teamView
+            ? isToRank
+              ? 'To rank'
+              : teamView.mode === 'by_space'
+                ? 'Team ranking by space'
+                : 'All debates'
+            : undefined
+        }
+        aria-labelledby={teamView ? undefined : tabButtonId(browseTab)}
         className={cx('flex min-h-0 flex-1 flex-col', isDesktop && 'pt-4')}
       >
         <div ref={setListContainerRef} className={cx(isDesktop && 'min-h-0 flex-1 overflow-x-hidden overflow-y-auto')}>
-          {isSearchActive ? (
+          {isToRank ? (
+            teamView?.toRankPanel
+          ) : teamTools && (teamTools.topicIds.length > 0 || searchQuery.trim()) ? (
+            // A search or topic is on: the whole matching list, not the pages scrolled to, so the
+            // rows agree with the Topic menu's count (Preston, 12 Nov).
+            <BestDebatesMatchingList
+              query={searchQuery}
+              topicIds={teamTools.topicIds}
+              grouped={teamView?.mode === 'by_space'}
+              rankOf={id => globalRankByEntityId.get(id)}
+              render={(id, rank, name) => renderPickEntity(id, rank, name)}
+            />
+          ) : isSearchActive ? (
             showSearchLoadingPlaceholder ? (
               <RankingComposeSearchListPlaceholder height={searchListStableHeight} />
             ) : isSearchingWithNoResults ? (
