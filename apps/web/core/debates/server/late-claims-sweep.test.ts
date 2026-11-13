@@ -12,6 +12,7 @@ import {
   lateClaimsMarkerKey,
   runLateClaimsSweep,
 } from './late-claims-sweep';
+import { DEBATE_PUBLISH_LEASE_MS } from './publish-lease';
 import type { LateClaimsPlan, PublishMissingDebateClaimsResult } from './publish-missing-debate-claims';
 
 const AT = '2026-11-12T21:40:03.123456Z';
@@ -85,6 +86,7 @@ describe('runLateClaimsSweep', () => {
     const results: Record<string, () => Promise<PublishMissingDebateClaimsResult>> = {
       pub: async () => ({ status: 'published', plan, userOpHash: '0x' }),
       wait: async () => ({ status: 'dedup_pending' }),
+      leased: async () => ({ status: 'submission_pending' }),
       gate: async () => {
         throw new DebateNotPublishableError('not_complete', 'x');
       },
@@ -93,20 +95,21 @@ describe('runLateClaimsSweep', () => {
       },
     };
     const report = await runLateClaimsSweep(['s'], always, {
-      listCandidates: async () => candidates('pub', 'wait', 'gate', 'boom'),
+      listCandidates: async () => candidates('pub', 'wait', 'leased', 'gate', 'boom'),
       markers: store,
       publish: id => results[id]!(),
     });
     expect(store.finish).not.toHaveBeenCalled();
     expect(Object.fromEntries(store.deferred)).toEqual({
-      pub: LATE_CLAIMS_WAIT_BACKOFF_MS,
+      pub: DEBATE_PUBLISH_LEASE_MS,
+      leased: DEBATE_PUBLISH_LEASE_MS,
       wait: LATE_CLAIMS_WAIT_BACKOFF_MS,
       gate: LATE_CLAIMS_WAIT_BACKOFF_MS,
       boom: LATE_CLAIMS_FAILURE_BACKOFF_MS,
     });
     expect(report).toMatchObject({
       published: [{ debateId: 'pub', statements: 2, held: 1 }],
-      waiting: 2,
+      waiting: 3,
       failed: [{ debateId: 'boom', error: 'graph down' }],
     });
   });

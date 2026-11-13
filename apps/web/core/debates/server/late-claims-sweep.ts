@@ -2,6 +2,7 @@ import { readEnv } from './acceptor-config';
 import { upstashRedis } from './acceptor-lock';
 import type { ClaimPublishCandidate } from './claim-publish-candidates';
 import { DebateNotPublishableError } from './debate-source';
+import { DEBATE_PUBLISH_LEASE_MS } from './publish-lease';
 import { type PublishMissingDebateClaimsResult, publishMissingDebateClaims } from './publish-missing-debate-claims';
 
 /**
@@ -164,8 +165,8 @@ export async function runLateClaimsSweep(
         const result = await deps.publish(candidate.debateId);
         if (result.status === 'published') {
           spent.submitted += 1;
-          // Under its publish lease until the edit indexes: nothing to do here for a while.
-          await deps.markers.defer(candidate.debateId, LATE_CLAIMS_WAIT_BACKOFF_MS).catch(() => {});
+          // Under its publish lease until the edit indexes: nothing to do until the lease lapses.
+          await deps.markers.defer(candidate.debateId, DEBATE_PUBLISH_LEASE_MS).catch(() => {});
           report.published.push({
             debateId: candidate.debateId,
             statements: result.plan.statements.length,
@@ -176,7 +177,9 @@ export async function runLateClaimsSweep(
           await deps.markers.finish(candidate.debateId, candidate.claimsGeneratedAt);
         } else {
           report.waiting += 1;
-          await deps.markers.defer(candidate.debateId, LATE_CLAIMS_WAIT_BACKOFF_MS).catch(() => {});
+          // An edit under its lease waits out the lease; anything else is a short wait.
+          const ms = result.status === 'submission_pending' ? DEBATE_PUBLISH_LEASE_MS : LATE_CLAIMS_WAIT_BACKOFF_MS;
+          await deps.markers.defer(candidate.debateId, ms).catch(() => {});
         }
       } catch (error) {
         if (error instanceof DebateNotPublishableError) {
