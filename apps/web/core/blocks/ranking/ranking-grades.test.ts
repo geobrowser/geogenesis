@@ -276,4 +276,24 @@ describe('restoreEntry (Undo of a Down rank on the ranking screen)', () => {
     const now = { ids: ids(1, 2), grades: g([[1, 'A']]) };
     expect(restoreEntry(now, { ids: ids(1, 2), grades: g([[2, 'B']]) }, id(2))).toBe(now);
   });
+
+  it('keeps the tiers when its old place is now in another tier', () => {
+    const before = {
+      ids: ids(1, 2, 3),
+      grades: g([
+        [1, 'A'],
+        [2, 'A'],
+        [3, 'B'],
+      ]),
+    };
+    // 2 was down ranked, then 1 was regraded C.
+    const now = {
+      ids: ids(3, 1),
+      grades: g([
+        [1, 'C'],
+        [3, 'B'],
+      ]),
+    };
+    expect(restoreEntry(now, before, id(2)).ids).toEqual(ids(2, 3, 1));
+  });
 });

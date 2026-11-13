@@ -92,3 +92,26 @@ export function gradeChanges(
     return was === now ? [] : [{ entityId, previousGrade: was, grade: now }];
   });
 }
+
+/**
+ * Runs `fn` one call at a time: each call waits, from its very start, for the one before to
+ * finish. `whenSettled` resolves once nothing is running, including calls made while it waited.
+ */
+export function useSerialRuns<TArgs extends unknown[], TResult>(fn: (...args: TArgs) => Promise<TResult>) {
+  const latestFn = React.useRef(fn);
+  latestFn.current = fn;
+  const chain = React.useRef<Promise<unknown>>(Promise.resolve());
+  const run = React.useCallback((...args: TArgs): Promise<TResult> => {
+    const next = chain.current.then(() => latestFn.current(...args));
+    chain.current = next.catch(() => undefined);
+    return next;
+  }, []);
+  const whenSettled = React.useCallback(async () => {
+    let tail: Promise<unknown>;
+    do {
+      tail = chain.current;
+      await tail;
+    } while (tail !== chain.current);
+  }, []);
+  return { run, whenSettled };
+}

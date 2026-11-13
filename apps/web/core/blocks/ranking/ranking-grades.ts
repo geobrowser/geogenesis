@@ -104,7 +104,7 @@ export function removeEntry(ids: readonly string[], grades: BallotGrades, entity
 
 /**
  * Puts a debate taken out of the ballot back where it was in `before`, with the grade it had
- * there, into the ballot as it is now (later edits kept). Nothing changes when it is already back
+ * there, into the ballot as it is now (later edits kept), within its tier. Nothing changes when it is already back
  * or wasn't in `before`. The ranking screen's Undo of a Down rank from the popup.
  */
 export function restoreEntry(current: GradedBallot, before: GradedBallot, entityId: string): GradedBallot {
@@ -116,7 +116,8 @@ export function restoreEntry(current: GradedBallot, before: GradedBallot, entity
   const grade = before.grades.get(key);
   const grades = new Map(current.grades);
   if (grade) grades.set(key, grade);
-  return { ids, grades };
+  // Its old place may sit in another tier now: the tiers win, the order within them is kept.
+  return { ids: sortIntoTiers(ids, grades), grades };
 }
 
 /**

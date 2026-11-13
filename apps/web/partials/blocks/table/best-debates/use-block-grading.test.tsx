@@ -31,7 +31,7 @@ function useHarness(
     ids,
     grades,
   }),
-  busy: { current: boolean; published?: { ids: string[]; grades: BallotGrades } } = { current: false }
+  busy: { settle?: Promise<void>; published?: { ids: string[]; grades: BallotGrades } } = {}
 ) {
   const published = React.useRef<{ ids: string[]; grades: BallotGrades }>({
     ids: [id(1)],
@@ -46,7 +46,7 @@ function useHarness(
     setDraft: (ids, grades) => setDraftState({ ids, grades }),
     getBasedOnOrderedIds: () => (busy.published ?? published.current).ids,
     getBasedOnGrades: () => (busy.published ?? published.current).grades,
-    otherPublishBusy: busy.current,
+    whenPublishesSettle: () => busy.settle ?? Promise.resolve(),
     publish: async (ids, grades) => {
       const ok = await publish(ids, grades);
       if (ok) published.current = merge(ids, grades ?? new Map());
@@ -66,7 +66,7 @@ describe('grading from the block (GEO-3729)', () => {
     const publish = vi.fn().mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
     const { result } = renderHook(() => useHarness(publish));
 
-    act(() => result.current.grading.grade(id(2), 'B'));
+    await act(async () => result.current.grading.grade(id(2), 'B'));
     expect(publish).toHaveBeenCalledTimes(1);
     expect(result.current.grading.isSaving(id(2))).toBe(true);
     expect(result.current.grading.gradeOf(id(2))).toBe('B');
@@ -136,7 +136,7 @@ describe('grading from the block (GEO-3729)', () => {
         ? { ids, grades }
         : { ids: [...ids, id(5)], grades: new Map([...grades, [id(5), 'C' as const]]) };
     const { result } = renderHook(() => useHarness(publish, merge));
-    act(() => result.current.grading.grade(id(2), 'B'));
+    await act(async () => result.current.grading.grade(id(2), 'B'));
     act(() => result.current.grading.grade(id(3), 'A'));
     await act(async () => first.resolve(true));
     const [ids, grades] = publish.mock.calls[1] as [string[], BallotGrades];
@@ -145,29 +145,25 @@ describe('grading from the block (GEO-3729)', () => {
   });
 
   it('waits for the block’s placement publish, then builds on what it published', async () => {
-    vi.useFakeTimers();
-    try {
-      const publish = vi.fn().mockResolvedValue(true);
-      const busy: { current: boolean; published?: { ids: string[]; grades: BallotGrades } } = { current: true };
-      const { result, rerender } = renderHook(() => useHarness(publish, undefined, busy));
-      act(() => result.current.grading.grade(id(2), 'B'));
-      await act(async () => vi.advanceTimersByTimeAsync(1000));
-      expect(publish).not.toHaveBeenCalled();
-      // The placement publish lands: debate 8, placed as B.
-      busy.current = false;
-      busy.published = {
-        ids: [id(1), id(8)],
-        grades: new Map([
-          [id(1), 'A'],
-          [id(8), 'B'],
-        ]),
-      };
-      rerender();
-      await act(async () => vi.advanceTimersByTimeAsync(500));
-      expect(publish).toHaveBeenCalledTimes(1);
-      expect(publish.mock.calls[0]![0]).toEqual([id(1), id(8), id(2)]);
-    } finally {
-      vi.useRealTimers();
-    }
+    const publish = vi.fn().mockResolvedValue(true);
+    let settle!: () => void;
+    const busy: { settle?: Promise<void>; published?: { ids: string[]; grades: BallotGrades } } = {
+      settle: new Promise<void>(resolve => (settle = resolve)),
+    };
+    const { result } = renderHook(() => useHarness(publish, undefined, busy));
+    act(() => result.current.grading.grade(id(2), 'B'));
+    await act(async () => Promise.resolve());
+    expect(publish).not.toHaveBeenCalled();
+    // The placement publish lands: debate 8, placed as B.
+    busy.published = {
+      ids: [id(1), id(8)],
+      grades: new Map([
+        [id(1), 'A'],
+        [id(8), 'B'],
+      ]),
+    };
+    await act(async () => settle());
+    expect(publish).toHaveBeenCalledTimes(1);
+    expect(publish.mock.calls[0]![0]).toEqual([id(1), id(8), id(2)]);
   });
 });

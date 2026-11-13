@@ -20,6 +20,7 @@ import { normId } from '~/core/utils/norm-id';
 import type { RankingComposeTeamMode, RankingComposeTeamView } from '../ranking-compose-global-ranking';
 import type { RankingComposeMobileTab, RankingComposeMobileTabs } from '../ranking-compose-layout';
 import { gradesForOrder } from '../use-ranking-compose-draft';
+import { useSerialRuns } from './best-debate-grading';
 import { BestDebatesTeamRowContent } from './best-debates-team-row';
 import { useBestDebatesTeamTools } from './best-debates-team-tools';
 import { BestDebatesToRankList } from './best-debates-to-rank-list';
@@ -124,7 +125,7 @@ export function useBestDebatesCompose({
    * `best-debates-debates.ts`); a debate whose space can't be found is left out and the ranker told,
    * never filed under the block's space. No vote is cast.
    */
-  const publish = React.useCallback(
+  const publishNow = React.useCallback(
     async (ids: string[], givenGrades?: BallotGrades): Promise<boolean> => {
       if (!personalSpaceId) {
         setToast(<span>Finish setting up your account to publish your ranking.</span>);
@@ -178,6 +179,11 @@ export function useBestDebatesCompose({
     },
     [debateName, onPublished, personalSpaceId, rankers, saveMySubmission, setToast]
   );
+
+  // One publish at a time from here (GEO-3729): a placement's Done and the popup's grades on the
+  // block both publish through this, and the ballot publisher refuses a second publish while one
+  // is out.
+  const { run: publish, whenSettled: whenPublishesSettle } = useSerialRuns(publishNow);
 
   const placement = useBestDebatesPlacement({
     blockId,
@@ -258,6 +264,7 @@ export function useBestDebatesCompose({
     placeFromTeam: (entityId: string) => startPlacement(entityId, 'team'),
     dropEntity,
     publish,
+    whenPublishesSettle,
     /** Down rank from a row (waits for the ranker's vote, then the toast with Undo). */
     requestPushDown: placement.requestPushDown,
     /** For a coverage line in To rank's terms: the window's debates, and how many are left to rank. */

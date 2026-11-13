@@ -107,7 +107,7 @@ export function useBestDebatesBlockRanking({
     getBasedOnOrderedIds,
     getBasedOnGrades,
     publish: compose.publish,
-    otherPublishBusy: isSaving || isPublishing,
+    whenPublishesSettle: compose.whenPublishesSettle,
     downRank: compose.requestPushDown,
   });
 
@@ -131,9 +131,6 @@ export function useBestDebatesBlockRanking({
   };
 }
 
-/** How often queued grades check whether the block's placement publish has finished. */
-const OTHER_PUBLISH_POLL_MS = 250;
-
 /**
  * Grading from the block's watch popup (GEO-3729). A grade shows at once and publishes straight
  * away. Grades given while a publish is out are sent together in the next one, so a quick run of
@@ -149,7 +146,7 @@ export function useBlockGrading({
   getBasedOnOrderedIds,
   getBasedOnGrades,
   publish,
-  otherPublishBusy = false,
+  whenPublishesSettle = () => Promise.resolve(),
   downRank,
 }: {
   blockId: string;
@@ -161,10 +158,10 @@ export function useBlockGrading({
   getBasedOnGrades: () => BallotGrades;
   publish: (ids: string[], grades?: BallotGrades) => Promise<boolean>;
   /**
-   * Another publish of this ballot is out (the block's placement Done). Grades wait for it, so
-   * they never meet the ballot publisher busy and get dropped, and build on what it published.
+   * Resolves once the block's other publishes (a placement's Done) have finished. Grades wait for
+   * it, then build on what it published, so they never meet the ballot publisher busy.
    */
-  otherPublishBusy?: boolean;
+  whenPublishesSettle?: () => Promise<void>;
   downRank: (entityId: string) => void;
 }): BestDebatesGrading {
   const recordGrade = useRecordGrade(blockId);
@@ -174,8 +171,6 @@ export function useBlockGrading({
   // sends them from a stale copy.
   const queued = React.useRef<Array<(draft: GradedBallot) => GradedBallot>>([]);
   const inFlight = React.useRef(false);
-  const otherBusy = React.useRef(otherPublishBusy);
-  otherBusy.current = otherPublishBusy;
   const [saving, setSaving] = React.useState<ReadonlySet<string>>(new Set());
   if (!inFlight.current) latest.current = { ids: orderedIds, grades };
 
@@ -185,7 +180,7 @@ export function useBlockGrading({
     try {
       let ok = true;
       while (ok && queued.current.length > 0) {
-        while (otherBusy.current) await new Promise(resolve => setTimeout(resolve, OTHER_PUBLISH_POLL_MS));
+        await whenPublishesSettle();
         // Every grade not yet published, replayed onto what is published now (which a placement or
         // this loop's last publish may have just moved, merging in another device's changes).
         const before = { ids: getBasedOnOrderedIds(), grades: getBasedOnGrades() };
@@ -216,7 +211,7 @@ export function useBlockGrading({
       inFlight.current = false;
       setSaving(new Set());
     }
-  }, [getBasedOnGrades, getBasedOnOrderedIds, publish, recordGrade, setDraft]);
+  }, [getBasedOnGrades, getBasedOnOrderedIds, publish, recordGrade, setDraft, whenPublishesSettle]);
 
   const apply = React.useCallback(
     (entityId: string, change: (draft: GradedBallot) => GradedBallot) => {
