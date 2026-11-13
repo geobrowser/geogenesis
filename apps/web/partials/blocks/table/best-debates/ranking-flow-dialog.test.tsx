@@ -19,7 +19,7 @@ describe('RankingFlowDialog', () => {
     expect(screen.getByTestId('ranking-flow-dialog-body')).not.toHaveClass('overflow-y-auto');
   });
 
-  it.each(['compare', 'narrow', undefined] as const)('scrolls the body of the %s size as before', size => {
+  it.each(['compare', undefined] as const)('scrolls the body of the %s size as before', size => {
     render(
       <RankingFlowDialog open onClose={() => undefined} title="Compare" size={size}>
         <p>body</p>

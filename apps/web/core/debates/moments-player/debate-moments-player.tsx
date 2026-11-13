@@ -224,6 +224,8 @@ function MomentsStory({
   const claim = useExclusivePlayback(
     React.useCallback(() => {
       autoplayRef.current = false;
+      // A jump still loading here would otherwise keep its spinner after another player took over.
+      setAdvancing(false);
       videoRef.current?.pause();
     }, []),
     playbackGroup
@@ -286,6 +288,7 @@ function MomentsStory({
     video.currentTime = at / 1000;
     setFullMs(at);
     if (autoplayRef.current) start(video);
+    else setAdvancing(false);
   }, [start]);
 
   // New media in the element (a step, the reel's next moment, expand or close): whatever failed
@@ -293,7 +296,8 @@ function MomentsStory({
   React.useEffect(() => {
     metadataSrcRef.current = null;
     setFailed(false);
-    setClipPosition({ src, ms: 0 });
+    // A line pressed into this clip is where it is about to be, not its start.
+    setClipPosition({ src, ms: pendingClipSeekRef.current?.src === src ? pendingClipSeekRef.current.ms : 0 });
     setClipDurationMs(null);
     applyRate(videoRef.current);
     // A line pressed into this clip starts it once its time is set, not from 0 first. One pressed
@@ -308,6 +312,8 @@ function MomentsStory({
   React.useEffect(() => {
     if (story.mode !== 'full') return;
     pendingSeekRef.current = story.fullStartMs ?? 0;
+    // Where it is about to be, at once: until the seek lands the element reports its old place, or 0.
+    setFullMs(pendingSeekRef.current);
     if (metadataSrcRef.current === fullSrc) applyPendingSeek();
   }, [story.mode, story.seekRequest, story.fullStartMs, fullSrc, applyPendingSeek]);
 
@@ -322,6 +328,7 @@ function MomentsStory({
       // Forget any intent to play on, so a player shown again (Activity) comes back paused.
       autoplayRef.current = false;
       viewerStartRef.current = false;
+      setAdvancing(false);
       video.pause();
       if (!video.isConnected) releaseVideo(video);
     };
@@ -377,7 +384,11 @@ function MomentsStory({
   const expand = () => {
     autoplayRef.current = active;
     moveFocusRef.current = true;
-    dispatch({ type: 'expand', atMs: moment ? debateTimeForMoment(moment, clipMs) : null });
+    const atMs = moment ? debateTimeForMoment(moment, clipMs) : null;
+    // Where it is going, in the same render as the move: a host following the position (GEO-3728)
+    // would otherwise see the full debate at its old place first.
+    setFullMs(atMs ?? 0);
+    dispatch({ type: 'expand', atMs });
   };
 
   const collapse = () => {
@@ -417,35 +428,55 @@ function MomentsStory({
         const ms = Math.max(0, positionMs);
         autoplayRef.current = true;
         viewerStartRef.current = true;
-        if (story.mode === 'moments' && story.index === index && metadataSrcRef.current === target.clipUrl) {
-          // The clip on screen: seek it and play, inside the press.
+        const onScreen = story.mode === 'moments' && story.index === index;
+        if (onScreen && failed) {
+          // The clip on screen failed: load it again, as Retry does, playing inside the press; its
+          // metadata lands the line's time.
+          pendingClipSeekRef.current = { src: target.clipUrl, ms };
+          metadataSrcRef.current = null;
+          setFailed(false);
+          setAdvancing(true);
+          reattachVideoSource(video, target.clipUrl);
+          start(video);
+          return;
+        }
+        if (onScreen && metadataSrcRef.current === target.clipUrl) {
+          // The clip on screen, loaded: seek it and play, inside the press.
           pendingClipSeekRef.current = null;
           video.currentTime = ms / 1000;
-          setClipPosition({ src, ms: ms });
-          setFailed(false);
+          setClipPosition({ src, ms });
           if (story.finished) dispatch({ type: 'goTo', index });
           start(video);
           return;
         }
+        // Another clip, or this one still loading: it plays from the line once loaded. Until then the
+        // player shows it is on its way, and a press on it pauses rather than starting from 0:00.
         pendingClipSeekRef.current = { src: target.clipUrl, ms };
-        if (story.mode === 'moments' && story.index === index && failed) {
-          // The clip on screen failed to load: load it again, as Retry does; its metadata lands the seek.
-          metadataSrcRef.current = null;
-          setFailed(false);
-          reattachVideoSource(video, target.clipUrl);
-          return;
-        }
+        setAdvancing(true);
+        // Where it is going, in the same render as the move, so no report has it at the clip's start.
+        setClipPosition({ src: target.clipUrl, ms });
         dispatch({ type: 'goTo', index });
       },
       playFullAt: atMs => {
+        const video = videoRef.current;
+        if (!video) return;
         const ms = Math.max(0, atMs);
         autoplayRef.current = true;
         viewerStartRef.current = true;
         pendingClipSeekRef.current = null;
+        if (story.mode === 'full' && failed) {
+          // The full debate failed: load it again, as Retry does; the seek waits for its metadata.
+          metadataSrcRef.current = null;
+          setFailed(false);
+          reattachVideoSource(video, fullSrc);
+        }
+        if (story.mode === 'moments' || metadataSrcRef.current !== fullSrc) setAdvancing(true);
+        // Where it is going, in the same render as the move.
+        setFullMs(ms);
         dispatch(story.mode === 'moments' ? { type: 'expand', atMs: ms } : { type: 'seekFull', atMs: ms });
       },
     }),
-    [moments, story.mode, story.index, story.finished, failed, src, start]
+    [moments, story.mode, story.index, story.finished, failed, src, fullSrc, start]
   );
 
   const clipLengthMs = clipDurationMs ?? moment?.durationMs ?? null;
@@ -469,8 +500,10 @@ function MomentsStory({
         className={cx('absolute inset-0 size-full', story.mode === 'moments' ? 'object-cover' : 'object-contain')}
         onTimeUpdate={event => {
           const ms = event.currentTarget.currentTime * 1000;
-          if (story.mode === 'moments') setClipPosition({ src, ms: ms });
-          else setFullMs(ms);
+          // New media reports 0 before a waiting seek lands: the place it is about to be stands.
+          if (story.mode === 'moments') {
+            if (pendingClipSeekRef.current?.src !== src) setClipPosition({ src, ms });
+          } else if (pendingSeekRef.current === null) setFullMs(ms);
         }}
         onLoadedMetadata={event => {
           const video = event.currentTarget;
@@ -487,6 +520,7 @@ function MomentsStory({
               video.currentTime = pending.ms / 1000;
               setClipPosition({ src, ms: pending.ms });
               if (autoplayRef.current) start(video);
+              else setAdvancing(false);
             }
             return;
           }
@@ -519,6 +553,8 @@ function MomentsStory({
           if (event.currentTarget.playbackRate !== rateRef.current) applyRate(event.currentTarget);
         }}
         onError={() => {
+          // Whatever loaded before is gone: a jump into this media now loads it again.
+          metadataSrcRef.current = null;
           setAdvancing(false);
           setPlaying(false);
           setFailed(true);

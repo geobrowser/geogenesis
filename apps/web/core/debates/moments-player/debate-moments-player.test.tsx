@@ -557,8 +557,7 @@ describe('DebateMomentsPlayer speed and jumps', () => {
   it('never lands a jump on a clip it wasn’t for', () => {
     const { controller, video } = renderPlayer();
     act(() => controller.current?.playMomentAt(1, 3_000));
-    // Before its clip loads, the viewer presses Play and steps on to the next moment.
-    fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+    // Before its clip loads, the viewer steps on to the next moment.
     fireEvent.click(screen.getByRole('button', { name: 'Next moment' }));
     expect(video().getAttribute('src')).toContain('/moments/clip-2/content');
     metadata(video());
@@ -568,7 +567,6 @@ describe('DebateMomentsPlayer speed and jumps', () => {
   it('drops a jump into a clip the player left before it loaded', () => {
     const { controller, video } = renderPlayer();
     act(() => controller.current?.playMomentAt(1, 3_000));
-    fireEvent.click(screen.getByRole('button', { name: 'Play' }));
     fireEvent.click(screen.getByRole('button', { name: 'Next moment' }));
     fireEvent.click(screen.getByRole('button', { name: 'Previous moment' }));
     expect(video().getAttribute('src')).toContain('/moments/clip-1/content');
@@ -633,10 +631,94 @@ describe('DebateMomentsPlayer speed and jumps', () => {
     expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
     act(() => controller.current?.playMomentAt(0, 4_000));
     expect(mocks.load).toHaveBeenCalled();
+    // Played inside the press, as Retry does, so a phone lets it start.
+    expect(mocks.play).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument();
     metadata(video());
     expect(video().currentTime).toBe(4);
+  });
+
+  it('reloads a clip that failed mid-play when one of its lines is pressed', () => {
+    const { controller, video } = renderPlayer();
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+    advance(video(), 2);
+    fireEvent.error(video());
+    act(() => controller.current?.playMomentAt(0, 4_000));
+    expect(mocks.load).toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument();
+    metadata(video());
+    expect(video().currentTime).toBe(4);
+    fireEvent.error(video());
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+  });
+
+  it('reloads a full debate that failed, before or after loading, and plays from the line', () => {
+    const { controller, video } = renderPlayer({ moments: [] });
+    fireEvent.error(video());
+    act(() => controller.current?.playFullAt(90_000));
+    expect(mocks.load).toHaveBeenCalled();
+    metadata(video(), 0, 600);
+    expect(video().currentTime).toBe(90);
+    expect(mocks.play).toHaveBeenCalled();
+
+    advance(video(), 95, 600);
+    fireEvent.error(video());
+    mocks.play.mockClear();
+    mocks.load.mockClear();
+    act(() => controller.current?.playFullAt(30_000));
+    expect(mocks.load).toHaveBeenCalled();
+    expect(mocks.play).not.toHaveBeenCalled();
+    metadata(video(), 0, 600);
+    expect(video().currentTime).toBe(30);
     expect(mocks.play).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows a jump on its way while the clip loads, and a press pauses it rather than playing from the start', () => {
+    const { controller, video } = renderPlayer();
+    act(() => controller.current?.playMomentAt(2, 4_000));
+    expect(screen.getByTestId('advancing-indicator')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Pause' }));
+    expect(mocks.play).not.toHaveBeenCalled();
+    expect(screen.getByTestId('play-indicator')).toBeInTheDocument();
+    metadata(video());
+    expect(video().currentTime).toBe(4);
+    expect(mocks.play).not.toHaveBeenCalled();
+  });
+
+  it('lets go of a jump still loading when another player starts', () => {
+    const controller = React.createRef<DebateMomentsPlayerHandle>();
+    render(
+      <>
+        <DebateMomentsPlayer debateId={DEBATE} label="Debate A" moments={MOMENTS} controllerRef={controller} />
+        <DebateMomentsPlayer debateId={DEBATE} label="Debate B" moments={MOMENTS} />
+      </>
+    );
+    act(() => controller.current?.playMomentAt(2, 4_000));
+    const b = screen.getByRole('region', { name: 'Debate B' });
+    fireEvent.click(within(b).getByRole('button', { name: 'Play' }));
+    const a = screen.getByRole('region', { name: 'Debate A' });
+    expect(within(a).queryByTestId('advancing-indicator')).not.toBeInTheDocument();
+    mocks.play.mockClear();
+    metadata(videoOf(a));
+    expect(mocks.play).not.toHaveBeenCalled();
+  });
+
+  it('reports where a jump is going, not 0, while its media loads', () => {
+    const onPosition = vi.fn();
+    const { controller, video } = renderPlayer({ onPosition });
+    act(() => controller.current?.playMomentAt(2, 4_000));
+    Object.defineProperty(video(), 'currentTime', { configurable: true, writable: true, value: 0 });
+    fireEvent.timeUpdate(video());
+    const toClip2 = onPosition.mock.calls.map(([p]) => p).filter(p => p.index === 2);
+    expect(toClip2.length).toBeGreaterThan(0);
+    expect(toClip2.every(p => p.clipMs === 4_000)).toBe(true);
+
+    onPosition.mockClear();
+    act(() => controller.current?.playFullAt(90_000));
+    fireEvent.timeUpdate(video());
+    const full = onPosition.mock.calls.map(([p]) => p).filter(p => p.mode === 'full');
+    expect(full.length).toBeGreaterThan(0);
+    expect(full.every(p => p.fullMs === 90_000)).toBe(true);
   });
 
   it('reports where it is on mount and as it plays', () => {
