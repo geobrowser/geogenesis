@@ -139,13 +139,19 @@ export type ClaimReuseOptions = {
   motionClaimEntityId?: string;
   /** For the log line only. */
   debateId?: string;
+  /**
+   * Throw when the graph read fails instead of dropping every reference. The full publish mints
+   * duplicates as its safe side; the late claims publish (GEO-3635) runs over many debates and
+   * retries later, so for it a failed read is a reason to wait, not to mint.
+   */
+  strict?: boolean;
 };
 
 /**
  * Returns the claims with `existingClaimEntityId` kept only where reuse is enabled AND the entity
  * exists, carries the Claim type and lives in `spaceId`. Every other reference becomes null. Never
- * throws: a failed graph read drops every reference (and says so), because minting duplicates is the
- * pre-matching behaviour and the safe side.
+ * throws unless `strict`: a failed graph read drops every reference (and says so), because minting
+ * duplicates is the pre-matching behaviour and the safe side.
  */
 export async function applyClaimReusePolicy(
   claims: DebateClaimInput[],
@@ -209,6 +215,7 @@ export async function applyClaimReusePolicy(
       existingTopicsByEntity.set(uuidToHex(entity.id), new Set((entity.topicIds ?? []).map(uuidToHex)));
     }
   } catch (error) {
+    if (options.strict) throw error;
     console.warn('[debate-acceptor] could not verify matched claims; minting all of them instead', {
       debateId: options.debateId,
       matched: referenced.length,
