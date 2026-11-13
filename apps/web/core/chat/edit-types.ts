@@ -59,7 +59,14 @@ export type EditIntent =
       spaceId: string;
       propertyId: string;
       propertyName: string | null;
+      /** Empty when the image came from an attachment. */
       sourceUrl: string;
+      /**
+       * The file the user attached, when they attached one instead of naming a
+       * URL. Only the id travels — the intent goes back to the model as a tool
+       * result, and the bytes stay in the tab until the dispatcher reads them.
+       */
+      attachment?: { id: string; fileName: string };
     }
   | {
       kind: 'createProperty';

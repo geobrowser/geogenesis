@@ -8,13 +8,23 @@ import { Property, Relation, RenderableEntityType, Value } from '~/core/types';
 
 import type { UnresolvedImportCell } from './atoms';
 import { parseCheckboxValue } from './checkbox-parse';
-import { splitRelationCell } from './relation-cell';
+import { type RelationSplitRule, splitRelationCell } from './relation-cell';
 
 type PropertyLookup = {
   schema: Property[];
   extraProperties: Record<string, Property>;
   getProperty: (propertyId: string) => Property | null;
 };
+
+/**
+ * Per-column override for how a relation cell reads, keyed by column index.
+ *
+ * Optional throughout: omitting it means `list`, which is what every caller did
+ * before the rule existed. The three functions that split cells must be given
+ * the *same* map, because resolution is keyed on `propertyId::part` — collect
+ * with one rule and read back with another and every lookup misses.
+ */
+export type RelationSplitRules = Record<number, RelationSplitRule>;
 
 export type RelationPropertyMeta = {
   propertyId: string;
@@ -41,6 +51,8 @@ export type BuildRowsInput = {
   getExistingRelations?: (entityId: string) => Relation[];
   /** Manual checkbox overrides keyed by import cell key (`${rowIndex}:${colIdx}`). Value is `'1'` or `'0'`. */
   checkboxOverrides?: Record<string, string>;
+  /** How each relation column's cells split into names. Omitted means `list` throughout. */
+  splitRules?: RelationSplitRules;
 };
 
 export function toImportCellKey(rowIndex: number, csvColumnIndex: number): string {
@@ -57,6 +69,7 @@ export function buildUnresolvedLinksByCell(params: {
   resolvedEntities: Map<string, ResolvedEntity>;
   propertyLookup: PropertyLookup;
   checkboxOverrides?: Record<string, string>;
+  splitRules?: RelationSplitRules;
 }): Record<string, UnresolvedImportCell> {
   const {
     dataRows,
@@ -68,6 +81,7 @@ export function buildUnresolvedLinksByCell(params: {
     resolvedEntities,
     propertyLookup,
     checkboxOverrides = {},
+    splitRules,
   } = params;
   const flags: Record<string, UnresolvedImportCell> = {};
 
@@ -117,7 +131,7 @@ export function buildUnresolvedLinksByCell(params: {
 
       const unresolvedValues: string[] = [];
 
-      for (const part of splitRelationCell(raw)) {
+      for (const part of splitRelationCell(raw, splitRules?.[colIdx])) {
         const resolved = resolvedEntities.get(`${propertyId}::${part}`);
         if (!resolved || resolved.status === 'ambiguous') {
           unresolvedValues.push(part);
@@ -201,8 +215,9 @@ export function collectRelationCells(params: {
   columnMapping: Record<number, string>;
   dataRows: string[][];
   propertyLookup: PropertyLookup;
+  splitRules?: RelationSplitRules;
 }): RelationPropertyMeta[] {
-  const { columnMapping, dataRows, propertyLookup } = params;
+  const { columnMapping, dataRows, propertyLookup, splitRules } = params;
   const relationProps: RelationPropertyMeta[] = [];
 
   for (const [colIdxStr, propertyId] of Object.entries(columnMapping)) {
@@ -218,7 +233,7 @@ export function collectRelationCells(params: {
     for (const row of dataRows) {
       const raw = (row[colIdx] ?? '').trim();
       if (!raw) continue;
-      for (const part of splitRelationCell(raw)) uniqueCellValues.add(part);
+      for (const part of splitRelationCell(raw, splitRules?.[colIdx])) uniqueCellValues.add(part);
     }
 
     const typeIds = property.relationValueTypes?.map(t => t.id) ?? [];
@@ -347,6 +362,7 @@ export function buildGeneratedRows(input: BuildRowsInput): { values: Value[]; re
     propertyLookup,
     getExistingRelations,
     checkboxOverrides = {},
+    splitRules,
   } = input;
 
   // Cache existing relations per entity so we only look them up once.
@@ -446,7 +462,7 @@ export function buildGeneratedRows(input: BuildRowsInput): { values: Value[]; re
 
         const renderableType: RenderableEntityType = property.renderableTypeStrict === 'VIDEO' ? 'VIDEO' : 'RELATION';
 
-        for (const part of splitRelationCell(raw)) {
+        for (const part of splitRelationCell(raw, splitRules?.[colIdx])) {
           const resolved = resolvedEntities.get(`${propertyId}::${part}`);
           if (!resolved || resolved.status === 'ambiguous') continue;
 
@@ -573,6 +589,7 @@ export function buildImportPlan(params: {
   propertyLookup: PropertyLookup;
   getExistingRelations?: (entityId: string) => Relation[];
   checkboxOverrides?: Record<string, string>;
+  splitRules?: RelationSplitRules;
 }): ImportPlan {
   // Clone maps so callers' originals are never mutated
   const resolvedEntities = new Map(params.resolvedEntities);
@@ -601,6 +618,7 @@ export function buildImportPlan(params: {
     resolvedEntities,
     propertyLookup: params.propertyLookup,
     checkboxOverrides: params.checkboxOverrides,
+    splitRules: params.splitRules,
   });
 
   const { values, relations } = buildGeneratedRows({
@@ -615,6 +633,7 @@ export function buildImportPlan(params: {
     propertyLookup: params.propertyLookup,
     getExistingRelations: params.getExistingRelations,
     checkboxOverrides: params.checkboxOverrides,
+    splitRules: params.splitRules,
   });
 
   return {

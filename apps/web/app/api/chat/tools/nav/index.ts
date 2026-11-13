@@ -1,19 +1,22 @@
 import type { ToolSet } from 'ai';
 
 import type { WriteContext } from '../write/context';
+import { buildJoinSpaceTool } from './join-space';
 import { type NavigateToolContext, buildNavigateTool } from './navigate';
 import { buildOpenReviewPanelTool } from './open-review-panel';
 
-export { buildNavigateTool, buildOpenReviewPanelTool };
+export { buildJoinSpaceTool, buildNavigateTool, buildOpenReviewPanelTool };
 export type { NavigateToolContext };
 
-// openReviewPanel only registers for members; guests have no staged edits and
-// the tool would just burn prompt tokens.
+// openReviewPanel and joinSpace only register for members; guests have no
+// staged edits to review and no account to propose a membership with, so for
+// them the tools would just burn prompt tokens.
 export function buildNavTools(navContext: NavigateToolContext, writeContext: WriteContext): ToolSet {
   if (writeContext.kind === 'member') {
     return {
       navigate: buildNavigateTool(navContext),
       openReviewPanel: buildOpenReviewPanelTool(writeContext),
+      joinSpace: buildJoinSpaceTool(),
     };
   }
   return {
@@ -21,4 +24,4 @@ export function buildNavTools(navContext: NavigateToolContext, writeContext: Wri
   };
 }
 
-export type NavToolName = 'navigate' | 'openReviewPanel';
+export type NavToolName = 'navigate' | 'openReviewPanel' | 'joinSpace';

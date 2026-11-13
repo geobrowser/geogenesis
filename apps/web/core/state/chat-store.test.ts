@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { createStore } from 'jotai';
+import { describe, expect, it, vi } from 'vitest';
 
 import { type PersistedChat, updateChatHistorySafely } from './chat-store';
 
@@ -46,5 +47,52 @@ describe('updateChatHistorySafely', () => {
     });
     expect(() => updateChatHistorySafely(store.set, () => [chat('new')])).not.toThrow();
     expect(store.getPersisted()).toEqual([]);
+  });
+});
+
+// `getOnInit` reads localStorage when the atom is *created* — module import,
+// which in the browser is page load, exactly when a previous session's chat is
+// already on disk. So each case has to seed storage and then load the module
+// fresh; reading an already-imported atom would measure the wrong moment.
+async function atomsLoadedWith(seed: Record<string, unknown>) {
+  localStorage.clear();
+  for (const [key, value] of Object.entries(seed)) {
+    localStorage.setItem(key, typeof value === 'string' ? value : JSON.stringify(value));
+  }
+  vi.resetModules();
+  return import('./chat-store');
+}
+
+describe('chat atoms read storage on init', () => {
+  // Without `getOnInit` these atoms start at their initial value and only read
+  // localStorage a beat later. The widget restores in a mount effect, so it saw
+  // `null`, restored nothing, and marked itself hydrated — then the persist
+  // effect found zero messages and wrote `null` over the saved chat. That is the
+  // reload-loses-the-conversation bug, so the first read has to be the real one.
+  it('yields a chat saved before the page loaded', async () => {
+    const saved: PersistedChat = { id: 'chat-1', title: 'Saved', messages: [], updatedAt: 1 };
+    const atoms = await atomsLoadedWith({ 'geo:chat:current': saved });
+
+    expect(createStore().get(atoms.currentChatAtom)).toEqual(saved);
+  });
+
+  it('yields saved history on the first read', async () => {
+    const atoms = await atomsLoadedWith({ 'geo:chat:history': [chat('archived')] });
+
+    expect(createStore().get(atoms.chatHistoryAtom).map(c => c.id)).toEqual(['archived']);
+  });
+
+  it('falls back to the initial value when nothing is stored', async () => {
+    const atoms = await atomsLoadedWith({});
+    const store = createStore();
+
+    expect(store.get(atoms.currentChatAtom)).toBeNull();
+    expect(store.get(atoms.chatHistoryAtom)).toEqual([]);
+  });
+
+  it('falls back to the initial value when the stored JSON is corrupt', async () => {
+    const atoms = await atomsLoadedWith({ 'geo:chat:current': '{not json' });
+
+    expect(createStore().get(atoms.currentChatAtom)).toBeNull();
   });
 });

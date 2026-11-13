@@ -4,12 +4,16 @@
 import { cookies } from 'next/headers';
 
 import { EDIT_TOOL_NAMES, type EditToolFailure, notAuthorized, notSignedIn, rateLimited } from '~/core/chat/edit-types';
+import { IMPORT_WRITE_TOOL_NAMES } from '~/core/chat/import/tool-types';
 import { WALLET_ADDRESS } from '~/core/cookie';
 
 import { buildWriteContext } from '../tools/write/context';
 
 const ENTITY_ID_RE = /^[a-f0-9]{32}$|^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
-const WRITE_TOOL_NAMES = new Set<string>(EDIT_TOOL_NAMES);
+// Edit intents plus the client-dispatched writes that aren't intents — see
+// IMPORT_WRITE_TOOL_NAMES. Both classes stage edits into a space, so both pass
+// the same membership and rate-limit gate.
+const WRITE_TOOL_NAMES = new Set<string>([...EDIT_TOOL_NAMES, ...IMPORT_WRITE_TOOL_NAMES]);
 
 type AuthorizeOutput = { ok: true } | EditToolFailure;
 

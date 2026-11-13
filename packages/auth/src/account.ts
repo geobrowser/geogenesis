@@ -17,9 +17,11 @@ export type GeoWalletClient = {
    * earlier — the moment the bundler accepts the op — so a caller can stop blocking its UI on
    * inclusion while still learning the outcome from the promise. An implementation that cannot
    * tell the two apart may ignore it; callers must treat it as optional.
+   *
+   * The app's queue observes `signal` before submission; an already submitted transaction cannot be undone.
    */
   sendTransaction: (
-    args: { to: Address; data: Hex; value?: bigint },
+    args: { to: Address; data: Hex; value?: bigint; signal?: AbortSignal },
     options?: { onSubmitted?: (userOperationHash: Hex) => void }
   ) => Promise<Hex>;
   sendUserOperation: (args: { calls: ReadonlyArray<{ to: Address; data: Hex; value?: bigint }> }) => Promise<Hex>;

@@ -459,3 +459,75 @@ describe('buildImportPlan', () => {
     expect(built.relations).toHaveLength(0);
   });
 });
+
+describe('per-column relation split rules', () => {
+  const relationProperty = {
+    id: 'prop-rel',
+    name: 'Roles',
+    dataType: 'RELATION' as const,
+    relationValueTypes: [{ id: 'type-role', name: 'Role' }],
+  };
+  const propertyLookup = { schema: [relationProperty], extraProperties: {}, getProperty: () => null };
+  const columnMapping = { 0: SystemIds.NAME_PROPERTY, 1: relationProperty.id };
+
+  it('splits a slash-separated cell into one name per role', () => {
+    const metas = collectRelationCells({
+      columnMapping,
+      dataRows: [['Sam Altman', 'ceo/founder']],
+      propertyLookup,
+      splitRules: { 1: 'slash' },
+    });
+
+    expect([...metas[0].uniqueCellValues].sort()).toEqual(['ceo', 'founder']);
+  });
+
+  it('keeps a comma-bearing name whole under "none"', () => {
+    const metas = collectRelationCells({
+      columnMapping,
+      dataRows: [['Sam Altman', 'Chicago, Illinois, United States']],
+      propertyLookup,
+      splitRules: { 1: 'none' },
+    });
+
+    expect([...metas[0].uniqueCellValues]).toEqual(['Chicago, Illinois, United States']);
+  });
+
+  it('leaves callers that pass no rules on the old behaviour', () => {
+    const metas = collectRelationCells({
+      columnMapping,
+      dataRows: [['Sam Altman', 'ceo/founder']],
+      propertyLookup,
+    });
+
+    expect([...metas[0].uniqueCellValues]).toEqual(['ceo/founder']);
+  });
+
+  it('carries the rule through buildImportPlan, so one cell becomes two relations', () => {
+    // The end of the chain that matters: collection, resolution lookup and
+    // generation all have to split identically, or the keys stop matching and
+    // the column silently comes out empty.
+    const plan = buildImportPlan({
+      dataRows: [['Sam Altman', 'ceo/founder']],
+      columnMapping,
+      nameColIdx: 0,
+      selectedType: null,
+      typesColumnIndex: undefined,
+      resolvedEntities: new Map([
+        ['prop-rel::ceo', { id: 'ceo-id', name: 'ceo', status: 'found' as const }],
+        ['prop-rel::founder', { id: 'founder-id', name: 'founder', status: 'found' as const }],
+      ]),
+      resolvedTypes: new Map(),
+      resolvedRows: new Map([[0, { entityId: 'sam-id', name: 'Sam Altman' }]]),
+      spaceId: 'space-1',
+      propertyLookup,
+      splitRules: { 1: 'slash' },
+    });
+
+    const targets = plan.relations
+      .filter(r => r.type.id === 'prop-rel')
+      .map(r => r.toEntity.id)
+      .sort();
+
+    expect(targets).toEqual(['ceo-id', 'founder-id']);
+  });
+});

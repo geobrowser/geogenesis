@@ -8,6 +8,7 @@ function memberContext(): WriteContext {
     kind: 'member',
     walletAddress: '0xabc',
     personalSpaceId: async () => null,
+    profileEntityId: async () => null,
     isMember: async () => true,
     checkEditRateLimit: async () => ({ ok: true }),
   };
@@ -18,6 +19,7 @@ function guestContext(): WriteContext {
     kind: 'guest',
     walletAddress: null,
     personalSpaceId: null,
+    profileEntityId: null,
     isMember: async () => false,
     checkEditRateLimit: async () => ({ ok: true }),
   };
