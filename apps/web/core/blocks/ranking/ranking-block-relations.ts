@@ -1,5 +1,3 @@
-import { Position } from '@geoprotocol/geo-sdk/lite';
-
 import { ID } from '~/core/id';
 import { AGGREGATED_RANKINGS_PROPERTY_ID } from '~/core/ranking-block-ids';
 import type { Relation } from '~/core/types';
@@ -8,6 +6,20 @@ export type LeaderboardEntry = {
   entityId: string;
   rank: number;
 };
+
+/**
+ * Orders ranking relation positions the way the ranking indexer does: by character code, with
+ * missing positions last. The SDK writes ballot positions with jittered fractional keys that mix
+ * upper and lower case (`a05Fl`, `a0a…`), and those keys sort correctly only by character code.
+ * `Position.compare` uses `localeCompare`, which puts `a0a` before `a0Z`, so a ballot past about a
+ * dozen votes read back with it came out in a different order from the one published and scored.
+ */
+export function compareRankingPositions(a: string | null | undefined, b: string | null | undefined): number {
+  if (!a && !b) return 0;
+  if (!a) return 1;
+  if (!b) return -1;
+  return a < b ? -1 : a > b ? 1 : 0;
+}
 
 export function getOrderedRelationTargetIds(
   relations: Relation[],
@@ -26,7 +38,7 @@ export function getOrderedRelationTargetIds(
         ID.equals(relation.type.id, propertyId) &&
         Boolean(relation.toEntity.id)
     )
-    .sort((a, b) => Position.compare(a.position ?? null, b.position ?? null))
+    .sort((a, b) => compareRankingPositions(a.position, b.position))
     .reduce<string[]>((ids, relation) => {
       const id = relation.toEntity.id;
       if (seen.has(id)) return ids;
@@ -52,7 +64,7 @@ function aggregatedRankingRelations(relations: Relation[], blockId: string, spac
         ID.equals(relation.fromEntity.id, blockId) &&
         ID.equals(relation.type.id, AGGREGATED_RANKINGS_PROPERTY_ID)
     )
-    .sort((a, b) => Position.compare(a.position ?? null, b.position ?? null));
+    .sort((a, b) => compareRankingPositions(a.position, b.position));
 }
 
 /** Total submitted rankings — one relation per ballot on Aggregated rankings. */

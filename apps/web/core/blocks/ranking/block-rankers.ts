@@ -1,8 +1,7 @@
-import { Position } from '@geoprotocol/geo-sdk/lite';
-
 import { normId } from '~/core/utils/norm-id';
 
 import { type BallotRecencyKey, compareBallotRecency } from './ranking-ballot-recency';
+import { compareRankingPositions } from './ranking-block-relations';
 
 /**
  * Who ranked what on a ranking block, worked out from the ballots themselves (GEO-3686).
@@ -105,7 +104,7 @@ export function selectCountingBallots<T extends RankBallotHead>(
 export function orderedBallotEntityIds(items: readonly RankBallotItem[]): string[] {
   const seen = new Set<string>();
   const ordered: string[] = [];
-  const sorted = [...items].sort((a, b) => Position.compare(a.position ?? null, b.position ?? null));
+  const sorted = [...items].sort((a, b) => compareRankingPositions(a.position, b.position));
   for (const item of sorted) {
     if (!item.toSpaceId) continue;
     const id = normId(item.entityId);
