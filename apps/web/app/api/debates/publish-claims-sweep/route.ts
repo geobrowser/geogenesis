@@ -2,8 +2,16 @@ import { NextResponse } from 'next/server';
 
 import { getDebateAcceptorConfig } from '~/core/debates/server/acceptor-config';
 import { withAcceptorLock } from '~/core/debates/server/acceptor-lock';
+import { listClaimPublishCandidates } from '~/core/debates/server/claim-publish-candidates';
 import { DebateNotPublishableError, listEarlyClaimCandidateDebateIds } from '~/core/debates/server/debate-source';
 import { listEditorSpaceIds } from '~/core/debates/server/editor-spaces';
+import {
+  type LateClaimsSweepReport,
+  defaultLateClaimsPublish,
+  isLateClaimSweepEnabled,
+  runLateClaimsSweep,
+  upstashMarkerStore,
+} from '~/core/debates/server/late-claims-sweep';
 import { isEarlyClaimPublishEnabled, publishDebateClaimsEarly } from '~/core/debates/server/publish-debate-claims';
 
 export const maxDuration = 300;
@@ -21,10 +29,19 @@ const PUBLISH_START_DEADLINE_MS = 40_000;
 // left to the full publish, which writes the same claims.
 const RECENT_DEBATE_WINDOW_MS = 3 * 60 * 60 * 1000;
 
+// GEO-3635's late claims pass, after the early one and inside the same deadline: published debates
+// whose claims geo-chat rewrote. Each check is a handful of reads, so they are capped separately
+// from the edits; the first pass over every published debate spreads across ticks this way.
+const MAX_LATE_CLAIM_CHECKS_PER_SWEEP = 20;
+const MAX_LATE_CLAIM_PUBLISHES_PER_SWEEP = 2;
+
 /**
  * GEO-2870 option A: cron sweep that publishes each finished debate's extracted claims to the graph
  * as soon as geo-chat has them, ahead of the full debate publish (`/api/debates/publish-sweep`).
  * See `publishDebateClaimsEarly` for what it writes and why that cannot duplicate the full publish.
+ *
+ * Then, behind `DEBATE_LATE_CLAIM_SWEEP_ENABLED` (GEO-3635), claims geo-chat wrote after a debate was
+ * already published: see `late-claims-sweep.ts`.
  *
  * Same discovery as the full sweep — the spaces the acceptor edits, then each space's recent
  * finished debates — and the same opt-out gate. Skips the run, rather than waiting, when the full
@@ -120,5 +137,37 @@ async function runSweep(acceptorSpaceId: string, startedAt: number) {
     }
   }
 
-  return { ok: true, published, upToDate, noClaims, dedupPending, debatePublished, notEditor, notPublishable, failed };
+  const late = await runLateClaims(spaceIds, startedAt, attempted);
+
+  return {
+    ok: true,
+    published,
+    upToDate,
+    noClaims,
+    dedupPending,
+    debatePublished,
+    notEditor,
+    notPublishable,
+    failed,
+    late,
+  };
+}
+
+async function runLateClaims(
+  spaceIds: string[],
+  startedAt: number,
+  earlyAttempted: number
+): Promise<LateClaimsSweepReport | { skipped: 'disabled' | 'no_marker_store' }> {
+  if (!isLateClaimSweepEnabled()) return { skipped: 'disabled' };
+  const markers = upstashMarkerStore();
+  if (!markers) return { skipped: 'no_marker_store' };
+  return runLateClaimsSweep(
+    spaceIds,
+    spent =>
+      Date.now() - startedAt < PUBLISH_START_DEADLINE_MS &&
+      earlyAttempted + spent.submitted < MAX_PUBLISH_ATTEMPTS_PER_SWEEP &&
+      spent.submitted < MAX_LATE_CLAIM_PUBLISHES_PER_SWEEP &&
+      spent.checked < MAX_LATE_CLAIM_CHECKS_PER_SWEEP,
+    { listCandidates: listClaimPublishCandidates, markers, publish: defaultLateClaimsPublish }
+  );
 }
