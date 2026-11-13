@@ -508,7 +508,10 @@ function Card({ data }: { data: DebateOgCardData }) {
           }}
         >
           <GeoMark size={32} color={CHROME} />
-          <div style={{ display: 'flex', fontSize: 36, fontWeight: 400, letterSpacing: '-0.015em' }}>Geo Debates</div>
+          <div style={{ display: 'flex', fontSize: 36, fontWeight: 400, letterSpacing: '-0.015em' }}>
+            <span>Geo&nbsp;</span>
+            <span style={{ color: '#777777' }}>Debates</span>
+          </div>
         </div>
       </div>
       <div
