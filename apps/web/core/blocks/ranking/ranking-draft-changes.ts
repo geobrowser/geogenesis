@@ -1,11 +1,18 @@
 import { normId } from '~/core/utils/norm-id';
 
+import { type BallotGrades, NO_GRADES } from './ranking-grades';
+
 /**
  * How many changes a draft ranking holds against the published one, as the ranker would count
  * them: each debate added, each removed, and each kept debate that moved (its order among the kept
  * ones changed). Zero means there is nothing to publish.
  */
-export function countBallotChanges(published: readonly string[], draft: readonly string[]): number {
+export function countBallotChanges(
+  published: readonly string[],
+  draft: readonly string[],
+  /** Best debates (GEO-3729): a regrade is a change too, and a regrade that moved counts once. */
+  grades: { published: BallotGrades; draft: BallotGrades } = { published: NO_GRADES, draft: NO_GRADES }
+): number {
   const pub = published.map(normId);
   const dra = draft.map(normId);
   const inPub = new Set(pub);
@@ -16,7 +23,8 @@ export function countBallotChanges(published: readonly string[], draft: readonly
   const keptPub = pub.filter(id => inDraft.has(id));
   const keptDraft = dra.filter(id => inPub.has(id));
   const moved = keptPub.length - longestCommonSubsequence(keptPub, keptDraft);
-  return added + removed + moved;
+  const regraded = keptPub.filter(id => (grades.published.get(id) ?? null) !== (grades.draft.get(id) ?? null)).length;
+  return added + removed + Math.max(moved, regraded);
 }
 
 function longestCommonSubsequence(a: readonly string[], b: readonly string[]): number {

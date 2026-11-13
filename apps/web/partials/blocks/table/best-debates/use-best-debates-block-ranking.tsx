@@ -2,6 +2,14 @@
 
 import * as React from 'react';
 
+import {
+  type BallotGrades,
+  type Grade,
+  gradeInto,
+  gradeOf,
+  hasAnyGrade,
+  removeEntry,
+} from '~/core/blocks/ranking/ranking-grades';
 import type { RankingSubmissionSlot } from '~/core/blocks/ranking/ranking-submission-types';
 import {
   useBestDebatesBallotPublisher,
@@ -13,6 +21,7 @@ import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { normId } from '~/core/utils/norm-id';
 
 import { rankingComposeSeed, useRankingComposeDraft } from '../use-ranking-compose-draft';
+import { type BestDebatesGrading, gradeChanges, useRecordGrade } from './best-debate-grading';
 import { useBestDebatesCompose } from './use-best-debates-compose';
 import { useBestDebatesPushDownSlot } from './use-best-debates-push-down-slot';
 
@@ -38,11 +47,10 @@ export function useBestDebatesBlockRanking({
   isMobile: boolean;
 }) {
   const { personalSpaceId } = usePersonalSpaceId();
-  const { myLastSubmission, saveMySubmission, isSaving, isLoading, ballotReadError, unsavedDraft } =
+  const { myLastSubmission, myGrades, saveMySubmission, isSaving, isLoading, ballotReadError, unsavedDraft } =
     useRankingSubmissions(blockId, spaceId, 'Best debates');
-  const { orderedIds, setOrderedIds, getBasedOnOrderedIds, markPublished } = useRankingComposeDraft(
-    rankingComposeSeed(unsavedDraft, myLastSubmission?.orderedEntityIds)
-  );
+  const { orderedIds, grades, setOrderedIds, setDraft, getBasedOnOrderedIds, getBasedOnGrades, markPublished } =
+    useRankingComposeDraft(rankingComposeSeed(unsavedDraft, myLastSubmission?.orderedEntityIds, myGrades));
 
   const { debates: pushedDown } = useMyPushedDownDebates({ blockId: enabled ? blockId : null });
   const pushedDownEntityIds = React.useMemo(() => pushedDown.map(debate => debate.entityId), [pushedDown]);
@@ -52,7 +60,11 @@ export function useBestDebatesBlockRanking({
   const save = async (slots: RankingSubmissionSlot[]) => {
     const result = await publishClearingDownvotes(
       slots.map(slot => slot.id),
-      () => saveMySubmission(slots, undefined, { basedOnOrderedIds: getBasedOnOrderedIds() })
+      () =>
+        saveMySubmission(slots, undefined, {
+          basedOnOrderedIds: getBasedOnOrderedIds(),
+          basedOnGrades: getBasedOnGrades(),
+        })
     );
     return result?.published ?? null;
   };
@@ -67,6 +79,7 @@ export function useBestDebatesBlockRanking({
     blockSpaceId: spaceId,
     isMobile,
     orderedIds,
+    grades,
     setOrderedIds,
     hasUnpublishedChanges: false,
     nameOf: entityId => nameById.get(normId(entityId)) ?? null,
@@ -74,7 +87,8 @@ export function useBestDebatesBlockRanking({
     saveMySubmission: save,
     isSaving: isSaving || isPublishing,
     pushDown: pushDown.slot,
-    onPublished: (published, sentIds) => markPublished(published.orderedEntityIds, sentIds),
+    onPublished: (published, sentIds, sentGrades) =>
+      markPublished(published.orderedEntityIds, sentIds, published.grades, sentGrades),
     // Nothing else on this page can save the placement, so Done publishes it.
     publishOnDone: true,
   });
@@ -83,12 +97,26 @@ export function useBestDebatesBlockRanking({
   // Until the ranker's own ballot is read whole, a placement would compare against the wrong list.
   const ready = enabled && !isLoading && !ballotReadError;
 
+  const grading = useBlockGrading({
+    blockId,
+    ready,
+    orderedIds,
+    grades,
+    setDraft,
+    getBasedOnOrderedIds,
+    getBasedOnGrades,
+    publish: compose.publish,
+    downRank: compose.requestPushDown,
+  });
+
   return {
     enabled,
     ready,
     myRankOf: (entityId: string) => myRankById.get(normId(entityId)) ?? null,
     rank: (entityId: string) => compose.placeFromTeam(entityId),
     downRank: (entityId: string) => compose.requestPushDown(entityId),
+    /** The watch popup's grade row (GEO-3729): each grade publishes at once. */
+    grading: enabled ? grading : null,
     pushedDownEntityIds: enabled ? pushedDownEntityIds : NO_IDS,
     /** "You've ranked N of M debates from the last 7 days", in To rank's terms. */
     coverage: enabled && compose.toRankCoverage ? compose.toRankCoverage : null,
@@ -98,5 +126,114 @@ export function useBestDebatesBlockRanking({
         {pushDown.binding(compose.activeEntityId)}
       </>
     ) : null,
+  };
+}
+
+/**
+ * Grading from the block's watch popup (GEO-3729). A grade shows at once and publishes straight
+ * away. Grades given while a publish is out are sent together in the next one, so a quick run of
+ * grades never loses a tap and never sends one publish per tap. A failed publish puts the ranking
+ * back as published (its toast says what happened).
+ */
+export function useBlockGrading({
+  blockId,
+  ready,
+  orderedIds,
+  grades,
+  setDraft,
+  getBasedOnOrderedIds,
+  getBasedOnGrades,
+  publish,
+  downRank,
+}: {
+  blockId: string;
+  ready: boolean;
+  orderedIds: string[];
+  grades: BallotGrades;
+  setDraft: (ids: string[], grades: BallotGrades) => void;
+  getBasedOnOrderedIds: () => string[];
+  getBasedOnGrades: () => BallotGrades;
+  publish: (ids: string[], grades?: BallotGrades) => Promise<boolean>;
+  downRank: (entityId: string) => void;
+}): BestDebatesGrading {
+  const recordGrade = useRecordGrade(blockId);
+  // The draft as of the last grade, read by the publish loop (state lags a render behind).
+  const latest = React.useRef({ ids: orderedIds, grades });
+  const inFlight = React.useRef(false);
+  const again = React.useRef(false);
+  const [saving, setSaving] = React.useState<ReadonlySet<string>>(new Set());
+  if (!inFlight.current) latest.current = { ids: orderedIds, grades };
+
+  const flush = React.useCallback(async () => {
+    if (inFlight.current) {
+      again.current = true;
+      return;
+    }
+    inFlight.current = true;
+    try {
+      let ok = true;
+      do {
+        again.current = false;
+        const sent = latest.current;
+        const before = { ids: getBasedOnOrderedIds(), grades: getBasedOnGrades() };
+        ok = await publish(sent.ids, sent.grades);
+        if (ok) {
+          for (const change of gradeChanges(before.ids, before.grades, sent.ids, sent.grades)) {
+            recordGrade(change.entityId, {
+              grade: change.grade,
+              previousGrade: change.previousGrade,
+              method: 'popup',
+              mutationKind: 'published',
+            });
+          }
+        }
+      } while (ok && again.current);
+      if (!ok) {
+        // Back to what is published, so the row never shows a grade that didn't go out.
+        const published = { ids: getBasedOnOrderedIds(), grades: getBasedOnGrades() };
+        latest.current = published;
+        setDraft(published.ids, published.grades);
+      }
+    } finally {
+      inFlight.current = false;
+      setSaving(new Set());
+    }
+  }, [getBasedOnGrades, getBasedOnOrderedIds, publish, recordGrade, setDraft]);
+
+  const apply = React.useCallback(
+    (entityId: string, next: { ids: string[]; grades: BallotGrades }) => {
+      latest.current = next;
+      setDraft(next.ids, next.grades);
+      setSaving(current => new Set(current).add(normId(entityId)));
+      void flush();
+    },
+    [flush, setDraft]
+  );
+
+  const placeById = React.useMemo(() => new Map(orderedIds.map((id, i) => [normId(id), i + 1])), [orderedIds]);
+
+  return {
+    ready,
+    needsTierLines: orderedIds.length > 0 && !hasAnyGrade(orderedIds, grades),
+    gradeOf: entityId => (placeById.has(normId(entityId)) ? gradeOf(grades, entityId) : null),
+    placeOf: entityId => placeById.get(normId(entityId)) ?? null,
+    isSaving: entityId => saving.has(normId(entityId)),
+    grade: (entityId: string, grade: Grade) => {
+      const { ids, grades: current } = latest.current;
+      apply(entityId, gradeInto(ids, current, entityId, grade));
+    },
+    remove: (entityId: string) => {
+      const { ids, grades: current } = latest.current;
+      apply(entityId, removeEntry(ids, current, entityId));
+    },
+    downRank: (entityId: string) => {
+      recordGrade(entityId, {
+        grade: 'D',
+        previousGrade: gradeOf(latest.current.grades, entityId) ?? 'none',
+        method: 'popup',
+        mutationKind: 'published',
+      });
+      downRank(entityId);
+    },
   };
 }

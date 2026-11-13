@@ -13,6 +13,7 @@ import {
   parseGrade,
   placeRegradedEntries,
   pruneGrades,
+  sortIntoTiers,
   removeEntry,
   sameGrades,
   tierAtIndex,
@@ -282,5 +283,11 @@ describe('pruneGrades and sameGrades', () => {
     expect(sameGrades(ids(1), g([[1, 'A']]), g([[1, 'A'], [2, 'B']]))).toBe(true);
     expect(sameGrades(ids(1), g([[1, 'A']]), g([[1, 'B']]))).toBe(false);
     expect(sameGrades(ids(1), g([[1, 'A']]), new Map())).toBe(false);
+  });
+});
+
+describe('sortIntoTiers', () => {
+  it('puts an out-of-order ballot in tier order, keeping the order within each tier', () => {
+    expect(sortIntoTiers(ids(1, 2, 3, 4), g([[1, 'C'], [2, 'A'], [4, 'A']]))).toEqual(ids(2, 4, 1, 3));
   });
 });

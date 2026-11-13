@@ -34,9 +34,46 @@ function readRowImageValue(rowEl: Element | null): string | undefined {
   return value || undefined;
 }
 
+/** A labelled group of the list (Best debates' tiers, GEO-3729), drawn under its own header. */
+export type RankingDndGroup = { key: string; header: React.ReactNode; entityIds: string[] };
+
+const GROUP_HEADER_PREFIX = '__ranking-group:';
+const groupHeaderId = (key: string) => `${GROUP_HEADER_PREFIX}${key}`;
+
+/**
+ * The groups after a drag of the flat list (headers included): each entry belongs to the header
+ * above it, and an entry dragged above the first header joins the first group.
+ */
+export function regroupAfterDrag(
+  flat: readonly string[],
+  groups: ReadonlyArray<Pick<RankingDndGroup, 'key'>>
+): Array<{ key: string; entityIds: string[] }> {
+  const next = groups.map(group => ({ key: group.key, entityIds: [] as string[] }));
+  if (next.length === 0) return next;
+  const byHeader = new Map(next.map(group => [groupHeaderId(group.key), group]));
+  let current = next[0];
+  for (const id of flat) {
+    const header = byHeader.get(id);
+    if (header) current = header;
+    else current.entityIds.push(id);
+  }
+  return next;
+}
+
+function flattenGroups(groups: readonly RankingDndGroup[]): string[] {
+  return groups.flatMap(group => [groupHeaderId(group.key), ...group.entityIds]);
+}
+
 type Props = {
   entityIds: string[];
   onReorder: (entityIds: string[]) => void;
+  /**
+   * Draws the list in groups, each under its header (opt in). A drag can then move an entry into
+   * another group: `onRegroup` gets every group's entries, and `onReorder` isn't called. Headers
+   * never move. `entityIds` must be the groups' entries in order.
+   */
+  groups?: RankingDndGroup[];
+  onRegroup?: (groups: Array<{ key: string; entityIds: string[] }>) => void;
   onDragStart?: () => void;
   onDragEnd?: () => void;
   className?: string;
@@ -106,9 +143,21 @@ function RankingMyRankingSortableItem({
   );
 }
 
+/** A group header: a fixed slot in the sortable list that entries move around, never dragged. */
+function RankingSortableGroupHeader({ id, children }: { id: string; children: React.ReactNode }) {
+  const { setNodeRef, transform, transition } = useSortable({ id, disabled: true });
+  return (
+    <div ref={setNodeRef} style={{ transform: CSS.Translate.toString(transform), transition }}>
+      {children}
+    </div>
+  );
+}
+
 export function RankingMyRankingDndList({
   entityIds,
   onReorder,
+  groups,
+  onRegroup,
   onDragStart,
   onDragEnd,
   className,
@@ -121,11 +170,27 @@ export function RankingMyRankingDndList({
   const renderItemRef = React.useRef(renderItem);
   const entityIdsRef = React.useRef(entityIds);
 
+  const onRegroupRef = React.useRef(onRegroup);
   onReorderRef.current = onReorder;
+  onRegroupRef.current = onRegroup;
   renderItemRef.current = renderItem;
   entityIdsRef.current = entityIds;
+  const grouped = Boolean(groups && onRegroup);
+  const groupsRef = React.useRef(groups);
+  groupsRef.current = groups;
+  const headers = React.useMemo(
+    () => new Map((groups ?? []).map(group => [groupHeaderId(group.key), group.header])),
+    [groups]
+  );
+  const flatIds = React.useMemo(() => (groups && onRegroup ? flattenGroups(groups) : entityIds), [
+    groups,
+    onRegroup,
+    entityIds,
+  ]);
+  const flatIdsRef = React.useRef(flatIds);
+  flatIdsRef.current = flatIds;
 
-  const items = activeDragOrder ?? entityIds;
+  const items = activeDragOrder ?? flatIds;
   const itemsRef = React.useRef(items);
   itemsRef.current = items;
 
@@ -151,7 +216,7 @@ export function RankingMyRankingDndList({
     const rowEl = document.querySelector(`[data-ranking-sortable-id="${draggedId}"]`);
     const imageUrl = readRowImageValue(rowEl);
 
-    setActiveDragOrder([...entityIdsRef.current]);
+    setActiveDragOrder([...flatIdsRef.current]);
     setActiveId(draggedId);
     setDragOverlaySnapshot({
       entityId: draggedId,
@@ -177,6 +242,10 @@ export function RankingMyRankingDndList({
       if (oldIndex < 0 || newIndex < 0 || oldIndex === newIndex) return;
 
       const nextItems = arrayMove([...dragItems], oldIndex, newIndex);
+      if (grouped && groupsRef.current && onRegroupRef.current) {
+        onRegroupRef.current(regroupAfterDrag(nextItems, groupsRef.current));
+        return;
+      }
       onReorderRef.current(nextItems);
     } finally {
       finishDrag();
@@ -187,10 +256,13 @@ export function RankingMyRankingDndList({
     finishDrag();
   };
 
-  if (disabled || items.length < 2) {
+  if (disabled || (!grouped && items.length < 2)) {
     return (
       <div className={className}>
-        {items.map((entityId, index) => {
+        {items.map(entityId => {
+          const header = headers.get(entityId);
+          if (header !== undefined) return <React.Fragment key={entityId}>{header}</React.Fragment>;
+          const index = entityIds.indexOf(entityId);
           const trailing = renderTrailing?.(entityId, index, false);
           return (
             <div key={entityId} className="flex w-full min-w-0 items-center gap-4">
@@ -203,6 +275,9 @@ export function RankingMyRankingDndList({
     );
   }
 
+  // Ranks count entries only, never headers, and follow the order while dragging.
+  const entryIndex = new Map(items.filter(id => !headers.has(id)).map((id, index) => [id, index]));
+
   return (
     <DndContext
       sensors={sensors}
@@ -213,15 +288,26 @@ export function RankingMyRankingDndList({
     >
       <SortableContext items={items} strategy={verticalListSortingStrategy}>
         <div className={className}>
-          {items.map((entityId, index) => (
-            <RankingMyRankingSortableItem
-              key={entityId}
-              id={entityId}
-              trailing={renderTrailing?.(entityId, index, activeId !== null)}
-            >
-              {renderItem(entityId, index, activeId !== null)}
-            </RankingMyRankingSortableItem>
-          ))}
+          {items.map(entityId => {
+            const header = headers.get(entityId);
+            if (header !== undefined) {
+              return (
+                <RankingSortableGroupHeader key={entityId} id={entityId}>
+                  {header}
+                </RankingSortableGroupHeader>
+              );
+            }
+            const index = entryIndex.get(entityId) ?? -1;
+            return (
+              <RankingMyRankingSortableItem
+                key={entityId}
+                id={entityId}
+                trailing={renderTrailing?.(entityId, index, activeId !== null)}
+              >
+                {renderItem(entityId, index, activeId !== null)}
+              </RankingMyRankingSortableItem>
+            );
+          })}
         </div>
       </SortableContext>
 

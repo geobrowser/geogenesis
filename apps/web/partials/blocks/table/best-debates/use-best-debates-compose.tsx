@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import { fetchDebateOwnSpaces } from '~/core/blocks/ranking/best-debates-debates';
 import { insertAt } from '~/core/blocks/ranking/ranking-placement';
+import { type BallotGrades, NO_GRADES, sortIntoTiers } from '~/core/blocks/ranking/ranking-grades';
 import type { RankingSubmissionSlot } from '~/core/blocks/ranking/ranking-submission-types';
 import {
   type RankersRead,
@@ -15,6 +16,8 @@ import { useRankingEntryEntities } from '~/core/blocks/ranking/use-ranking-entry
 import type { RankingSubmissionPublishResult } from '~/core/blocks/ranking/use-ranking-submissions';
 import { useToast } from '~/core/hooks/use-toast';
 import { normId } from '~/core/utils/norm-id';
+
+import { gradesForOrder } from '../use-ranking-compose-draft';
 
 import type { RankingComposeTeamMode, RankingComposeTeamView } from '../ranking-compose-global-ranking';
 import type { RankingComposeMobileTab, RankingComposeMobileTabs } from '../ranking-compose-layout';
@@ -32,6 +35,8 @@ export type UseBestDebatesComposeArgs = {
   blockSpaceId: string;
   isMobile: boolean;
   orderedIds: string[];
+  /** The draft's grades (GEO-3729): every publish sends each entry's grade. */
+  grades?: BallotGrades;
   setOrderedIds: (ids: string[]) => void;
   hasUnpublishedChanges: boolean;
   nameOf: (entityId: string) => string | null;
@@ -42,7 +47,7 @@ export type UseBestDebatesComposeArgs = {
    * Runs after each publish that went out, with the ids this device sent (the screen generates its
    * share images there, and folds the published ballot back into its draft).
    */
-  onPublished?: (published: RankingSubmissionPublishResult, sentIds: string[]) => void;
+  onPublished?: (published: RankingSubmissionPublishResult, sentIds: string[], sentGrades: BallotGrades) => void;
   /** Done publishes (see `useBestDebatesPlacement`). Off here: the screen's Publish sends everything. */
   publishOnDone?: boolean;
   /** The team column's search, which To rank filters by too. */
@@ -65,6 +70,7 @@ export function useBestDebatesCompose({
   blockSpaceId,
   isMobile,
   orderedIds,
+  grades = NO_GRADES,
   setOrderedIds,
   hasUnpublishedChanges,
   nameOf,
@@ -109,13 +115,18 @@ export function useBestDebatesCompose({
     [nameOf, toRankEntriesById, toRankNameById]
   );
 
+  // The draft as it stands, for a publish of an order built from it (a placement's insert).
+  const latestDraft = React.useRef({ ids: orderedIds, grades });
+  latestDraft.current = { ids: orderedIds, grades };
+
   /**
-   * Publishes `ids` as one ballot edit. Each item is filed under the debate's own space (see
+   * Publishes `ids` as one ballot edit, each entry with its grade: `grades` when given, else the
+   * draft's, with a debate that joins taking the tier it lands in (`gradesForOrder`). Each item is filed under the debate's own space (see
    * `best-debates-debates.ts`); a debate whose space can't be found is left out and the ranker told,
    * never filed under the block's space. No vote is cast.
    */
   const publish = React.useCallback(
-    async (ids: string[]): Promise<boolean> => {
+    async (ids: string[], givenGrades?: BallotGrades): Promise<boolean> => {
       if (!personalSpaceId) {
         setToast(<span>Finish setting up your account to publish your ranking.</span>);
         return false;
@@ -131,7 +142,16 @@ export function useBestDebatesCompose({
         return false;
       }
 
-      const slots = ids.map(id => ({ id, name: debateName(id), spaceId: spaces.get(normId(id)) }));
+      const draft = latestDraft.current;
+      const sentGrades = givenGrades ?? gradesForOrder(draft.ids, draft.grades, ids);
+      // Always tier-ordered (GEO-3729): a ballot an agent wrote out of order goes out in tiers.
+      const slots = sortIntoTiers(ids, sentGrades).map(id => ({
+        id,
+        name: debateName(id),
+        spaceId: spaces.get(normId(id)),
+        // Explicit for every entry: this list is the whole ballot, grades included.
+        grade: sentGrades.get(normId(id)) ?? null,
+      }));
       const publishable = slots.filter(slot => Boolean(slot.spaceId));
       const leftOut = slots.length - publishable.length;
       if (slots.length > 0 && publishable.length === 0) {
@@ -152,7 +172,8 @@ export function useBestDebatesCompose({
       refreshRankersAfterIndexing(rankers, published.indexingSettled);
       onPublished?.(
         published,
-        publishable.map(slot => slot.id)
+        publishable.map(slot => slot.id),
+        sentGrades
       );
       return true;
     },

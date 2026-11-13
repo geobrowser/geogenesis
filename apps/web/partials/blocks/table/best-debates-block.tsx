@@ -270,7 +270,12 @@ export function BestDebatesBlock({
   return (
     // The watch dialog names the debate from the same display data the rows draw.
     <BestDebateDisplaysContext.Provider value={displays}>
-      <BestDebateWatchProvider source="best_debates_block" blockId={blockId} spaceId={spaceId}>
+      <BestDebateWatchProvider
+        source="best_debates_block"
+        blockId={blockId}
+        spaceId={spaceId}
+        grading={canRank ? ranking.grading : null}
+      >
         <div className="flex w-full min-w-0 flex-col gap-4" data-testid="best-debates-block">
           {ranking.dialogs}
           <CoverageLine

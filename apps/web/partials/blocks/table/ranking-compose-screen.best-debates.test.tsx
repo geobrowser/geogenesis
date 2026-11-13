@@ -243,7 +243,7 @@ describe('RankingComposeScreen on the Best debates block', () => {
     expect(mocks.saveMySubmission).toHaveBeenCalledWith(
       [{ id: 'd1', name: null, spaceId: 'debate-space' }],
       expect.anything(),
-      { basedOnOrderedIds: ['d1'] }
+      { basedOnOrderedIds: ['d1'], basedOnGrades: expect.any(Map) }
     );
   });
 

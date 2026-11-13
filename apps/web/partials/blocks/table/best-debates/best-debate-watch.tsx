@@ -25,6 +25,8 @@ import {
 } from '~/core/debates/moments-player/watch-transcript';
 import { ID } from '~/core/id';
 
+import { BestDebateGradeRow } from './best-debate-grade-row';
+import type { BestDebatesGrading } from './best-debate-grading';
 import { BestDebateWatchContext, type BestDebateWatchEntry, useBestDebateRowData } from './best-debate-row';
 import { RankingFlowDialog } from './ranking-flow-dialog';
 import { type WatchTranscriptContent, WatchTranscriptPanel, type WatchTranscriptView } from './watch-transcript-panel';
@@ -48,6 +50,7 @@ export function BestDebateWatchProvider({
   source,
   blockId,
   spaceId,
+  grading = null,
   children,
 }: {
   /** The analytics `source` of the watches opened here. */
@@ -55,6 +58,8 @@ export function BestDebateWatchProvider({
   /** The Best debates block and its space, so a watch joins up with that block's placements. */
   blockId: string;
   spaceId: string;
+  /** Rankers grade the debate under the player (GEO-3729); null for everyone else. */
+  grading?: BestDebatesGrading | null;
   children: React.ReactNode;
 }) {
   const [watching, setWatching] = React.useState<string | null>(null);
@@ -81,6 +86,7 @@ export function BestDebateWatchProvider({
         <WatchDebateDialog
           entityId={watching}
           analytics={{ source, block_id: blockId, space_id: spaceId }}
+          grading={grading}
           onClose={() => setWatching(null)}
         />
       ) : null}
@@ -125,10 +131,12 @@ const NO_HIGHLIGHT = { moments: null, full: null };
 function WatchDebateDialog({
   entityId,
   analytics,
+  grading,
   onClose,
 }: {
   entityId: string;
   analytics: { source: WatchSource; block_id: string; space_id: string };
+  grading: BestDebatesGrading | null;
   onClose: () => void;
 }) {
   const display = useBestDebateRowData(entityId);
@@ -224,6 +232,7 @@ function WatchDebateDialog({
             controllerRef={controller}
           />
         }
+        belowPlayer={grading ? <BestDebateGradeRow entityId={entityId} grading={grading} /> : undefined}
         transcript={
           <WatchTranscriptPanel
             view={shownView}

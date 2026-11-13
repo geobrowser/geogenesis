@@ -258,6 +258,14 @@ export function placeRegradedEntries(
   return next.ids;
 }
 
+/** The ballot in tier order (A, B, C, ungraded), keeping the order within each tier. */
+export function sortIntoTiers(ids: readonly string[], grades: BallotGrades): string[] {
+  return ids
+    .map((id, index) => ({ id, index, rank: TIER_RANK[tierOf(grades, id)] }))
+    .sort((a, b) => a.rank - b.rank || a.index - b.index)
+    .map(entry => entry.id);
+}
+
 export function tierCount(ids: readonly string[], grades: BallotGrades, tier: Tier): number {
   return ids.reduce((count, id) => count + (tierOf(grades, id) === tier ? 1 : 0), 0);
 }
