@@ -36,7 +36,7 @@ export type UseBestDebatesComposeArgs = {
   orderedIds: string[];
   /** The draft's grades (GEO-3729): every publish sends each entry's grade. */
   grades?: BallotGrades;
-  setOrderedIds: (ids: string[]) => void;
+  setOrderedIds: (ids: string[], movedId?: string) => void;
   hasUnpublishedChanges: boolean;
   nameOf: (entityId: string) => string | null;
   personalSpaceId: string | null | undefined;

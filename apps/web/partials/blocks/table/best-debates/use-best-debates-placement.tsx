@@ -50,7 +50,8 @@ export type UseBestDebatesPlacementArgs = {
   blockId: string;
   /** The ranker's list as drafted, best first. */
   orderedIds: string[];
-  setOrderedIds: (ids: string[]) => void;
+  /** `movedId`: the debate this change moved, when known, so its grade follows it (GEO-3729). */
+  setOrderedIds: (ids: string[], movedId?: string) => void;
   /** True when the draft already differs from the published ballot. */
   hasUnpublishedChanges: boolean;
   nameOf: (entityId: string) => string;
@@ -129,7 +130,7 @@ export function useBestDebatesPlacement({
       const withOtherChanges = !justPublished && hasUnpublishedChangesRef.current;
       const start = startPlacement(list.length);
       if (start.done) {
-        setOrderedIds(insertAt(list, entityId, start.index));
+        setOrderedIds(insertAt(list, entityId, start.index), entityId);
         record('ranking_placed', entityId, { item_position: start.index + 1, variant: origin }, { item_count: 1 });
         setFlow({ phase: 'placed', entityId, origin, placedIndex: start.index, withOtherChanges });
         return;
@@ -202,7 +203,7 @@ export function useBestDebatesPlacement({
         return;
       }
       const next = insertAt(flow.list, flow.entityId, result.index);
-      setOrderedIds(next);
+      setOrderedIds(next, flow.entityId);
       record(
         'ranking_placed',
         flow.entityId,
@@ -316,7 +317,7 @@ export function useBestDebatesPlacement({
         publishesOnDone={publishOnDone}
         publishFailed={Boolean(flow.publishFailed)}
         isSaving={isSaving}
-        onNudge={direction => setOrderedIds(nudge(orderedIdsRef.current, placedId, direction))}
+        onNudge={direction => setOrderedIds(nudge(orderedIdsRef.current, placedId, direction), placedId)}
         onDone={() => void done(placedId, flow.placedIndex)}
         onClose={() => setFlow(null)}
         next={

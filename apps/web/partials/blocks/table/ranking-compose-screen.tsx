@@ -678,6 +678,8 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   );
   const pushDown = useBestDebatesPushDownSlot({ blockId: bestDebatesBlockId, pushedDownEntityIds });
   const recordGrade = useRecordGrade(entityId);
+  /** The draft as it was before a Down rank from the popup, so the row's Undo can put the debate back. */
+  const draftBeforeDownRank = React.useRef(new Map<string, { ids: string[]; grades: typeof draftGrades }>());
   /** How each draft grade was made (GEO-3729), so its published event says so. */
   const draftGradeMethods = React.useRef(new Map<string, GradeChange['method']>());
 
@@ -688,9 +690,9 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
     isMobile,
     orderedIds,
     grades: draftGrades,
-    setOrderedIds: ids => {
+    setOrderedIds: (ids, movedId) => {
       setActiveSwipeRowKey(null);
-      setOrderedIds(ids);
+      setOrderedIds(ids, movedId);
     },
     hasUnpublishedChanges,
     nameOf,
@@ -802,7 +804,23 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
         grade: (debateId, grade) => gradeInDraft(debateId, gradeInto(orderedIds, draftGrades, debateId, grade), grade),
         remove: debateId => gradeInDraft(debateId, removeEntry(orderedIds, draftGrades, debateId), 'none'),
         // Counted as Down rank's own `push_down` once its downvote lands.
-        downRank: debateId => bestDebates.requestPushDown(debateId),
+        downRank: debateId => {
+          draftBeforeDownRank.current.set(ID.uuidToHex(debateId), { ids: orderedIds, grades: draftGrades });
+          bestDebates.requestPushDown(debateId);
+        },
+        undoDownRank: debateId => {
+          const key = ID.uuidToHex(debateId);
+          const before = draftBeforeDownRank.current.get(key);
+          draftBeforeDownRank.current.delete(key);
+          if (!before || draftPlaces.has(key)) return;
+          const at = before.ids.findIndex(id => ID.uuidToHex(id) === key);
+          if (at < 0) return;
+          const ids = [...orderedIds.slice(0, at), debateId, ...orderedIds.slice(at)];
+          const grade = gradeOf(before.grades, debateId);
+          const grades = new Map(draftGrades);
+          if (grade) grades.set(key, grade);
+          setDraft(ids, grades);
+        },
       }
     : null;
 

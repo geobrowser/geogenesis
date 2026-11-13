@@ -34,6 +34,12 @@ export type BestDebatesGrading = {
   /** D: the existing Down rank (downvote, then off the ranking; its toast offers Undo). Its
    *  analytics are Down rank's own (`push_down`). */
   downRank: (entityId: string) => void;
+  /**
+   * After the row's Undo has cleared the downvote: puts the debate back where it was, with its
+   * grade, where the surface can (the ranking screen's draft). Without it, Undo ends with the
+   * debate out of the ranking, as the block's Down rank always has.
+   */
+  undoDownRank?: (entityId: string) => void;
 };
 
 /** D is Down rank: it is counted by Down rank's own `push_down` action, not here. */

@@ -209,16 +209,28 @@ export function mergeGrades({
 
 /**
  * After a merge, an entry whose grade came from another device (it differs from this edit's) may
- * still sit where this edit had it. Each such entry moves to the bottom of its new tier, as a
- * regrade does, so the ballot the web publishes stays tier-ordered.
+ * still sit where this edit had it. Each such entry moves as a regrade does: to the bottom of its
+ * new tier, or, when its grade was cleared there, to the top of the ungraded entries. So the ballot
+ * the web publishes stays in tiers.
  */
 export function placeRegradedEntries(ids: readonly string[], grades: BallotGrades, ourGrades: BallotGrades): string[] {
   let next: GradedBallot = { ids: [...ids], grades };
   for (const id of ids) {
     const grade = grades.get(normId(id)) ?? null;
-    if (grade && grade !== (ourGrades.get(normId(id)) ?? null)) next = gradeInto(next.ids, next.grades, id, grade);
+    if (grade === (ourGrades.get(normId(id)) ?? null)) continue;
+    next = grade ? gradeInto(next.ids, next.grades, id, grade) : toTopOfUngraded(next, id);
   }
   return next.ids;
+}
+
+function toTopOfUngraded(ballot: GradedBallot, entityId: string): GradedBallot {
+  const key = normId(entityId);
+  const rest = ballot.ids.filter(id => normId(id) !== key);
+  let lastGraded = -1;
+  rest.forEach((id, index) => {
+    if (ballot.grades.has(normId(id))) lastGraded = index;
+  });
+  return { ids: [...rest.slice(0, lastGraded + 1), entityId, ...rest.slice(lastGraded + 1)], grades: ballot.grades };
 }
 
 /** The ballot in tier order (A, B, C, ungraded), keeping the order within each tier. */

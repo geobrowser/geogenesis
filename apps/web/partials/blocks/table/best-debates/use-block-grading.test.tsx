@@ -24,7 +24,14 @@ function deferred() {
 }
 
 /** The block's draft, the way `useRankingComposeDraft` holds it, around `useBlockGrading`. */
-function useHarness(publish: (ids: string[], grades?: BallotGrades) => Promise<boolean>) {
+function useHarness(
+  publish: (ids: string[], grades?: BallotGrades) => Promise<boolean>,
+  /** What the publish path leaves published (it may merge in another device's changes). */
+  merge: (ids: string[], grades: BallotGrades) => { ids: string[]; grades: BallotGrades } = (ids, grades) => ({
+    ids,
+    grades,
+  })
+) {
   const published = React.useRef<{ ids: string[]; grades: BallotGrades }>({
     ids: [id(1)],
     grades: new Map([[id(1), 'A']]),
@@ -40,7 +47,7 @@ function useHarness(publish: (ids: string[], grades?: BallotGrades) => Promise<b
     getBasedOnGrades: () => published.current.grades,
     publish: async (ids, grades) => {
       const ok = await publish(ids, grades);
-      if (ok) published.current = { ids, grades: grades ?? new Map() };
+      if (ok) published.current = merge(ids, grades ?? new Map());
       return ok;
     },
     downRank: vi.fn(),
@@ -116,5 +123,22 @@ describe('grading from the block (GEO-3729)', () => {
       })
     );
     expect(result.current.needsTierLines).toBe(true);
+  });
+
+  it('builds the next publish on what the last one left published, not on a stale copy', async () => {
+    const first = deferred();
+    const publish = vi.fn().mockReturnValueOnce(first.promise).mockResolvedValue(true);
+    // The first publish merges in a debate another device added (5, graded C).
+    const merge = (ids: string[], grades: BallotGrades) =>
+      ids.includes(id(5))
+        ? { ids, grades }
+        : { ids: [...ids, id(5)], grades: new Map([...grades, [id(5), 'C' as const]]) };
+    const { result } = renderHook(() => useHarness(publish, merge));
+    act(() => result.current.grading.grade(id(2), 'B'));
+    act(() => result.current.grading.grade(id(3), 'A'));
+    await act(async () => first.resolve(true));
+    const [ids, grades] = publish.mock.calls[1] as [string[], BallotGrades];
+    expect(ids).toEqual([id(1), id(3), id(2), id(5)]);
+    expect(grades.get(id(5))).toBe('C');
   });
 });

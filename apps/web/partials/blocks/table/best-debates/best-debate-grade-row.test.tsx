@@ -105,6 +105,14 @@ describe('BestDebateGradeRow (GEO-3729)', () => {
     expect(mocks.pushDown.undo).toHaveBeenCalled();
   });
 
+  it('puts the debate back where the surface can, on Undo', () => {
+    mocks.pushDown.isPushedDown = true;
+    const undoDownRank = vi.fn();
+    render(<BestDebateGradeRow entityId={DEBATE} grading={grading({ undoDownRank })} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    expect(undoDownRank).toHaveBeenCalledWith(DEBATE);
+  });
+
   it('shows Saving… while the grade publishes, with the grades held', () => {
     render(
       <BestDebateGradeRow entityId={DEBATE} grading={grading({ isSaving: () => true }, { grade: 'A', place: 1 })} />

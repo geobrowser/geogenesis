@@ -235,6 +235,19 @@ describe('placeRegradedEntries', () => {
     expect(placeRegradedEntries(ids(2, 1, 3), merged, ours)).toEqual(ids(2, 3, 1));
   });
 
+  it('moves an entry whose grade was cleared elsewhere below every graded entry', () => {
+    const merged = g([
+      [1, 'B'],
+      [3, 'B'],
+    ]);
+    const ours = g([
+      [1, 'B'],
+      [2, 'B'],
+      [3, 'B'],
+    ]);
+    expect(placeRegradedEntries(ids(1, 2, 3, 4), merged, ours)).toEqual(ids(1, 3, 2, 4));
+  });
+
   it('leaves a ballot alone when no grade came from elsewhere', () => {
     const grades = g([
       [1, 'A'],

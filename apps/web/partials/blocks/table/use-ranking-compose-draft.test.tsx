@@ -136,4 +136,18 @@ describe('gradesForOrder (GEO-3729)', () => {
     ]);
     expect(gradesForOrder([A, B, D, C], twoB, [A, D, B, C]).get(D)).toBe('B');
   });
+
+  it('regrades the nudged debate, not its neighbour, on a one-step nudge across a line', () => {
+    const X = '12121212121212121212121212121212';
+    const five = new Map([
+      [A, 'A' as const],
+      [B, 'A' as const],
+      [X, 'A' as const],
+      [C, 'B' as const],
+      [D, 'B' as const],
+    ]);
+    const next = gradesForOrder([A, B, X, C, D], five, [A, B, C, X, D], X);
+    expect(next.get(X)).toBe('B');
+    expect(next.get(C)).toBe('B');
+  });
 });

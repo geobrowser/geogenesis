@@ -135,6 +135,8 @@ export function useBestDebatesBlockRanking({
  * grades never loses a tap and never sends one publish per tap. A failed publish puts the ranking
  * back as published (its toast says what happened).
  */
+type GradedDraft = { ids: string[]; grades: BallotGrades };
+
 export function useBlockGrading({
   blockId,
   ready,
@@ -159,21 +161,20 @@ export function useBlockGrading({
   const recordGrade = useRecordGrade(blockId);
   // The draft as of the last grade, read by the publish loop (state lags a render behind).
   const latest = React.useRef({ ids: orderedIds, grades });
+  // Grades tapped since the publish going out was built: replayed onto what that publish leaves
+  // published (it may have merged in another device's changes), never sent from a stale copy.
+  const queued = React.useRef<Array<(draft: GradedDraft) => GradedDraft>>([]);
   const inFlight = React.useRef(false);
-  const again = React.useRef(false);
   const [saving, setSaving] = React.useState<ReadonlySet<string>>(new Set());
   if (!inFlight.current) latest.current = { ids: orderedIds, grades };
 
   const flush = React.useCallback(async () => {
-    if (inFlight.current) {
-      again.current = true;
-      return;
-    }
+    if (inFlight.current) return;
     inFlight.current = true;
     try {
       let ok = true;
-      do {
-        again.current = false;
+      while (ok && queued.current.length > 0) {
+        queued.current = [];
         const sent = latest.current;
         const before = { ids: getBasedOnOrderedIds(), grades: getBasedOnGrades() };
         ok = await publish(sent.ids, sent.grades);
@@ -187,13 +188,14 @@ export function useBlockGrading({
             });
           }
         }
-      } while (ok && again.current);
-      if (!ok) {
-        // Back to what is published, so the row never shows a grade that didn't go out.
+        // What is published now (this publish, merged), plus the grades tapped while it went out.
         const published = { ids: getBasedOnOrderedIds(), grades: getBasedOnGrades() };
-        latest.current = published;
-        setDraft(published.ids, published.grades);
+        latest.current = ok ? queued.current.reduce((draft, apply) => apply(draft), published) : published;
+        setDraft(latest.current.ids, latest.current.grades);
       }
+      // A failed publish puts the ranking back as published, so the row never shows a grade that
+      // didn't go out; grades tapped during it are dropped with it (its toast says what happened).
+      if (!ok) queued.current = [];
     } finally {
       inFlight.current = false;
       setSaving(new Set());
@@ -201,9 +203,10 @@ export function useBlockGrading({
   }, [getBasedOnGrades, getBasedOnOrderedIds, publish, recordGrade, setDraft]);
 
   const apply = React.useCallback(
-    (entityId: string, next: { ids: string[]; grades: BallotGrades }) => {
-      latest.current = next;
-      setDraft(next.ids, next.grades);
+    (entityId: string, change: (draft: GradedDraft) => GradedDraft) => {
+      queued.current.push(change);
+      latest.current = change(latest.current);
+      setDraft(latest.current.ids, latest.current.grades);
       setSaving(current => new Set(current).add(normId(entityId)));
       void flush();
     },
@@ -218,14 +221,9 @@ export function useBlockGrading({
     gradeOf: entityId => (placeById.has(normId(entityId)) ? gradeOf(grades, entityId) : null),
     placeOf: entityId => placeById.get(normId(entityId)) ?? null,
     isSaving: entityId => saving.has(normId(entityId)),
-    grade: (entityId: string, grade: Grade) => {
-      const { ids, grades: current } = latest.current;
-      apply(entityId, gradeInto(ids, current, entityId, grade));
-    },
-    remove: (entityId: string) => {
-      const { ids, grades: current } = latest.current;
-      apply(entityId, removeEntry(ids, current, entityId));
-    },
+    grade: (entityId: string, grade: Grade) =>
+      apply(entityId, draft => gradeInto(draft.ids, draft.grades, entityId, grade)),
+    remove: (entityId: string) => apply(entityId, draft => removeEntry(draft.ids, draft.grades, entityId)),
     // Counted as Down rank's own `push_down` once its downvote lands.
     downRank,
   };

@@ -52,7 +52,9 @@ export function rankingComposeSeed(
 export function gradesForOrder(
   previousIds: readonly string[],
   previousGrades: BallotGrades,
-  nextIds: readonly string[]
+  nextIds: readonly string[],
+  /** The debate the change moved, when the caller knows (a nudge swaps it with a neighbour). */
+  movedId?: string
 ): BallotGrades {
   if (previousGrades.size === 0) return NO_GRADES;
   const before = new Set(previousIds.map(normId));
@@ -60,7 +62,7 @@ export function gradesForOrder(
   for (const id of nextIds) if (!before.has(normId(id))) grades = gradeAtPlace(nextIds, grades, id);
   // A debate moved across a tier line (the placed dialog's nudge) takes the tier it now sits in,
   // so the publish never moves it back. One that still fits between its neighbours keeps its grade.
-  const moved = movedEntries(previousIds, nextIds);
+  const moved = movedEntries(previousIds, nextIds, movedId ? new Set([normId(movedId)]) : undefined);
   if (moved.size === 0) return grades;
   const next = new Map(grades);
   nextIds.forEach((id, index) => {
@@ -115,11 +117,14 @@ export function useRankingComposeDraft(seed: RankingComposeSeed) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [seedKey]);
 
-  /** A new order (or a function of the current one); grades follow it (`gradesForOrder`). */
-  const setOrderedIds = React.useCallback((next: string[] | ((current: string[]) => string[])) => {
+  /**
+   * A new order (or a function of the current one); grades follow it (`gradesForOrder`). `movedId`
+   * names the debate the change moved, when known.
+   */
+  const setOrderedIds = React.useCallback((next: string[] | ((current: string[]) => string[]), movedId?: string) => {
     setDraftState(current => {
       const ids = typeof next === 'function' ? next(current.ids) : next;
-      return { ids, grades: gradesForOrder(current.ids, current.grades, ids) };
+      return { ids, grades: gradesForOrder(current.ids, current.grades, ids, movedId) };
     });
   }, []);
 

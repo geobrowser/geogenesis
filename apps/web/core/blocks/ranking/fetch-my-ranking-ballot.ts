@@ -8,7 +8,7 @@ import type { Entity } from '~/core/types';
 
 import { BEST_DEBATES_BLOCK_ID } from './best-debates';
 import { rankTypeOf } from './best-debates-ballot';
-import { fetchBallotGrades } from './fetch-ballot-grades';
+import { fetchBallotGrades, isBallotGradesPendingError } from './fetch-ballot-grades';
 import {
   buildMyRankingEntityFilter,
   getMyRankingOrderedEntityIds,
@@ -100,11 +100,19 @@ export async function fetchRankBallot(
   personalSpaceId: string,
   { withGrades = false }: { withGrades?: boolean } = {}
 ): Promise<MyRankingBallot | null> {
-  const rankEntity = await Effect.runPromise(getEntity(rankId, personalSpaceId));
-  if (!rankEntity) return null;
-  const orderedEntityIds = getMyRankingOrderedEntityIds(rankEntity, personalSpaceId);
-  const grades = withGrades ? await readGrades(rankEntity, personalSpaceId, orderedEntityIds) : NO_GRADES;
-  return { rankEntity, orderedEntityIds, grades };
+  // A publish landing between the votes read and the grades read leaves them out of step; the
+  // votes are read again once before giving up (GEO-3729).
+  for (let attempt = 0; ; attempt++) {
+    const rankEntity = await Effect.runPromise(getEntity(rankId, personalSpaceId));
+    if (!rankEntity) return null;
+    const orderedEntityIds = getMyRankingOrderedEntityIds(rankEntity, personalSpaceId);
+    if (!withGrades) return { rankEntity, orderedEntityIds, grades: NO_GRADES };
+    try {
+      return { rankEntity, orderedEntityIds, grades: await readGrades(rankEntity, personalSpaceId, orderedEntityIds) };
+    } catch (error) {
+      if (!isBallotGradesPendingError(error) || attempt >= 1) throw error;
+    }
+  }
 }
 
 /**
