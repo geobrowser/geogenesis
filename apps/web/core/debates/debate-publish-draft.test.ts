@@ -14,6 +14,8 @@ import {
   buildDebateClaimsDraft,
   buildDebatePublishDraft,
   debatePublishId,
+  debatePublishIds,
+  debateShareCardEntityId,
   mergeTranscriptSegmentsIntoTurns,
   stableClaimRelationIds,
 } from './debate-publish-draft';
@@ -1224,6 +1226,32 @@ describe('buildDebatePublishDraft', () => {
 // The sweep's "already published" check reads the indexer, so while the indexer lags the same debate
 // is published again. On 2026-10-05 that wrote 11 to 16 copies of three debates. Every id the draft
 // mints is derived from the debate, so a second publish rewrites the first instead of copying it.
+describe('debate publish ids on the graph', () => {
+  // A real published debate ("Mail voting should be available to all voters", testnet): its share
+  // card entity, OG Image relation and relation entity, as the full publish minted them. Any change
+  // to how ids are derived makes a later publish or share card refresh write next to these instead
+  // of over them (GEO-3722).
+  const DEBATE = '01a1d0eca4457d409879e3688b1a556c';
+
+  it('derives the ids a published debate already has', () => {
+    expect(debateShareCardEntityId(DEBATE)).toBe('1d64233bdc7f56beae5f1d437de7010a');
+    expect(
+      debatePublishIds(DEBATE).relationIds(DEBATE, OG_IMAGE_PROPERTY_ID, '1d64233bdc7f56beae5f1d437de7010a')
+    ).toEqual({
+      id: '8120ce129bb8576f99492a81c9d617be',
+      entityId: '28259c8fe55c51a7aa74ea3824b3a7f4',
+    });
+  });
+
+  it('gives a repeated edge its own ids', () => {
+    const ids = debatePublishIds(DEBATE);
+    const first = ids.relationIds(DEBATE, OG_IMAGE_PROPERTY_ID, '1d64233bdc7f56beae5f1d437de7010a');
+    const second = ids.relationIds(DEBATE, OG_IMAGE_PROPERTY_ID, '1d64233bdc7f56beae5f1d437de7010a');
+    expect(second.id).not.toBe(first.id);
+    expect(second.entityId).not.toBe(first.entityId);
+  });
+});
+
 describe('buildDebatePublishDraft ids across republishes', () => {
   const STABLE = '5e1f0c3a9b2d4e6f8a7b6c5d4e3f2a1b';
   const EXISTING = '4f12f5ea073442cbaa0fb10f70a9a876';
