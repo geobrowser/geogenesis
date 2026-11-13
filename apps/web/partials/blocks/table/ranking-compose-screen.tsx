@@ -581,15 +581,18 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
       })
     : 0;
 
-  const canPublish =
+  /** The ranker may write their ballot now (Publish, and "Grade your ranking"'s Save grades). */
+  const canWriteBallot =
     !ballotReadError &&
-    // Best debates can publish an emptied ranking: it clears the ranker's votes (Preston, 12 Nov).
-    (orderedIds.length > 0 || isBestDebates) &&
-    hasUnpublishedChanges &&
     submissionsOpen &&
     (Boolean(personalSpaceId) || isAccountSetupPending) &&
     !isPublishBusy &&
     !composeEditRefused;
+  const canPublish =
+    canWriteBallot &&
+    // Best debates can publish an emptied ranking: it clears the ranker's votes (Preston, 12 Nov).
+    (orderedIds.length > 0 || isBestDebates) &&
+    hasUnpublishedChanges;
 
   // Leaving with unpublished changes asks first (Preston, 12 Nov). The draft lives in this screen
   // only, so leaving without publishing loses it; the prompt says so.
@@ -804,7 +807,6 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   // here" and a "B ends here" line onto their order; Save publishes the same order with the grades.
   // Opened by itself on such a ranking (unless they said Not now), from the popup's Grade it, or by
   // `?grade=tiers` from the block.
-  const canPublishBestDebates = !ballotReadError && submissionsOpen && Boolean(personalSpaceId) && !composeEditRefused;
   const rankingNeedsGrades = isBestDebates && orderedIds.length > 0 && !hasAnyGrade(orderedIds, draftGrades);
   const [tierLinesDismissed, setTierLinesDismissed] = React.useState(false);
   const [tierLines, setTierLines] = React.useState<{ aCount: number; bCount: number } | null>(null);
@@ -850,7 +852,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
           type="button"
           className="h-8 rounded-full bg-text px-3.5 text-metadata font-medium text-white hover:bg-text/90 disabled:opacity-50 md:h-11"
           onClick={() => void saveTierLines()}
-          disabled={isPublishBusy || !canPublishBestDebates}
+          disabled={!canWriteBallot}
           data-geo-analytics-label="tier_lines_save"
         >
           {TIER_LINES_SAVE_LABEL}
