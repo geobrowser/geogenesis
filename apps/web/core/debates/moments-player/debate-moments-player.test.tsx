@@ -4,7 +4,7 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 
 import * as React from 'react';
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import { getGeoChatApiBaseUrl } from '../geo-chat-public-base-url';
 import { type DebateMoment, decodeDebateMoments } from './debate-moments';
@@ -69,6 +69,7 @@ function videoOf(player: HTMLElement): HTMLVideoElement {
 
 /** Report a length and a position, as the element would while playing. */
 function advance(video: HTMLVideoElement, seconds: number, duration = 15) {
+  Object.defineProperty(video, 'readyState', { configurable: true, value: HTMLMediaElement.HAVE_METADATA });
   Object.defineProperty(video, 'duration', { configurable: true, value: duration });
   Object.defineProperty(video, 'currentTime', { configurable: true, writable: true, value: seconds });
   fireEvent.loadedMetadata(video);
@@ -332,6 +333,7 @@ describe('DebateMomentsPlayer', () => {
     const video = videoOf(screen.getByRole('region', { name: 'Debate B' }));
     Object.defineProperty(video, 'duration', { configurable: true, value: 300 });
     Object.defineProperty(video, 'currentTime', { configurable: true, writable: true, value: 0 });
+    Object.defineProperty(video, 'readyState', { configurable: true, value: HTMLMediaElement.HAVE_METADATA });
     fireEvent.loadedMetadata(video);
     video.currentTime = 95;
     fireEvent.timeUpdate(video);
@@ -492,6 +494,7 @@ describe('DebateMomentsPlayer speed and jumps', () => {
 
   /** The element's metadata arriving for the src it now has, at `seconds` in. */
   function metadata(video: HTMLVideoElement, seconds = 0, duration = 15) {
+    Object.defineProperty(video, 'readyState', { configurable: true, value: HTMLMediaElement.HAVE_METADATA });
     Object.defineProperty(video, 'duration', { configurable: true, value: duration });
     Object.defineProperty(video, 'currentTime', { configurable: true, writable: true, value: seconds });
     fireEvent.loadedMetadata(video);
@@ -707,6 +710,8 @@ describe('DebateMomentsPlayer speed and jumps', () => {
     const onPosition = vi.fn();
     const { controller, video } = renderPlayer({ onPosition });
     act(() => controller.current?.playMomentAt(2, 4_000));
+    // The new clip's load reports 0 before its metadata is in.
+    Object.defineProperty(video(), 'readyState', { configurable: true, value: HTMLMediaElement.HAVE_NOTHING });
     Object.defineProperty(video(), 'currentTime', { configurable: true, writable: true, value: 0 });
     fireEvent.timeUpdate(video());
     const toClip2 = onPosition.mock.calls.map(([p]) => p).filter(p => p.index === 2);
@@ -719,6 +724,72 @@ describe('DebateMomentsPlayer speed and jumps', () => {
     const full = onPosition.mock.calls.map(([p]) => p).filter(p => p.mode === 'full');
     expect(full.length).toBeGreaterThan(0);
     expect(full.every(p => p.fullMs === 90_000)).toBe(true);
+  });
+
+  it('keeps its position moving after an Activity hides and shows it in the full debate', () => {
+    const onPosition = vi.fn();
+    const view = (mode: 'visible' | 'hidden') => (
+      <React.Activity mode={mode}>
+        <DebateMomentsPlayer debateId={DEBATE} label="Debate A" moments={[]} onPosition={onPosition} />
+      </React.Activity>
+    );
+    const { rerender } = render(view('visible'));
+    const element = () => videoOf(screen.getByRole('region', { name: 'Debate A' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+    advance(element(), 0, 600);
+    element().currentTime = 40;
+    fireEvent.timeUpdate(element());
+    rerender(view('hidden'));
+    rerender(view('visible'));
+    // Shown again, it is where it was: no seek back to where the full debate was opened.
+    expect(onPosition).toHaveBeenLastCalledWith(expect.objectContaining({ mode: 'full', fullMs: 40_000 }));
+    // The element kept its media, so no new metadata: it just plays on.
+    element().currentTime = 45;
+    fireEvent.timeUpdate(element());
+    expect(onPosition).toHaveBeenLastCalledWith(expect.objectContaining({ mode: 'full', fullMs: 45_000 }));
+  });
+
+  it('lets go of a jump still loading when an Activity hides it', () => {
+    const controller = React.createRef<DebateMomentsPlayerHandle>();
+    const view = (mode: 'visible' | 'hidden') => (
+      <React.Activity mode={mode}>
+        <DebateMomentsPlayer debateId={DEBATE} label="Debate A" moments={MOMENTS} controllerRef={controller} />
+      </React.Activity>
+    );
+    const { rerender } = render(view('visible'));
+    act(() => controller.current?.playMomentAt(2, 4_000));
+    expect(screen.getByTestId('advancing-indicator')).toBeInTheDocument();
+    rerender(view('hidden'));
+    rerender(view('visible'));
+    expect(screen.queryByTestId('advancing-indicator')).not.toBeInTheDocument();
+    expect(screen.getByTestId('play-indicator')).toBeInTheDocument();
+  });
+
+  it('on iOS, unlocks an element no tap has played yet inside the press, without counting it as a start', () => {
+    const ios = vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue('Mozilla/5.0 (iPhone)');
+    onTestFinished(() => ios.mockRestore());
+    const onPlay = vi.fn();
+    const { controller, video } = renderPlayer({ onPlay });
+    act(() => controller.current?.playMomentAt(2, 4_000));
+    expect(mocks.play).toHaveBeenCalledTimes(1);
+    expect(mocks.pause).toHaveBeenCalledTimes(1);
+    expect(onPlay).not.toHaveBeenCalled();
+    expect(screen.getByTestId('advancing-indicator')).toBeInTheDocument();
+    metadata(video());
+    expect(video().currentTime).toBe(4);
+    expect(mocks.play).toHaveBeenCalledTimes(2);
+    expect(onPlay).toHaveBeenCalledTimes(1);
+
+    // Once it has played, a jump needs no unlock.
+    mocks.play.mockClear();
+    act(() => controller.current?.playMomentAt(0, 1_000));
+    expect(mocks.play).not.toHaveBeenCalled();
+  });
+
+  it('unlocks nothing where the page’s own activation is enough', () => {
+    const { controller } = renderPlayer();
+    act(() => controller.current?.playMomentAt(2, 4_000));
+    expect(mocks.play).not.toHaveBeenCalled();
   });
 
   it('reports where it is on mount and as it plays', () => {

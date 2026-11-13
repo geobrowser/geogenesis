@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { gestureUnlocksEachMediaElement } from '~/core/utils/video/gesture-media-pool';
 import { reattachVideoSource, releaseVideo } from '~/core/utils/video/release-video';
 
 import { Avatar } from '~/design-system/avatar';
@@ -205,6 +206,10 @@ function MomentsStory({
    * src so a second press into another clip can't land the first one's time on it.
    */
   const pendingClipSeekRef = React.useRef<{ src: string; ms: number } | null>(null);
+  /** Whether the element has played: on iOS, whether a tap has granted it sound (see below). */
+  const playedRef = React.useRef(false);
+  /** A gesture unlock's `play` and `pause` events, which aren't the viewer's and are skipped. */
+  const unlockingRef = React.useRef(false);
   /** The speed asked for, read by the element's handlers. */
   const rateRef = React.useRef(playbackRate);
   /** The src whose metadata the element has loaded; null while a new one is loading. */
@@ -309,8 +314,15 @@ function MomentsStory({
   }, [src, story.mode, start, applyRate]);
 
   // Entering the full debate, or a dot or retry asking for a time: seek once the metadata is in.
+  // Once per request: an `<Activity>` shown again re-runs this, and must not send the element back.
+  const handledSeekRef = React.useRef<number | null>(null);
   React.useEffect(() => {
-    if (story.mode !== 'full') return;
+    if (story.mode !== 'full') {
+      handledSeekRef.current = null;
+      return;
+    }
+    if (handledSeekRef.current === story.seekRequest) return;
+    handledSeekRef.current = story.seekRequest;
     pendingSeekRef.current = story.fullStartMs ?? 0;
     // Where it is about to be, at once: until the seek lands the element reports its old place, or 0.
     setFullMs(pendingSeekRef.current);
@@ -418,6 +430,22 @@ function MomentsStory({
     start(video);
   };
 
+  /**
+   * A jump that has to load media plays once that media's metadata is in, outside the press. iOS
+   * refuses that to an element no tap has played yet, so the press unlocks it first, the way the
+   * feed's gesture pool does (`gesture-media-pool.ts`): a `play()` and a `pause()` inside it.
+   */
+  const unlockForLaterPlay = React.useCallback((video: HTMLVideoElement) => {
+    if (playedRef.current || !gestureUnlocksEachMediaElement()) return;
+    // Its `play` and `pause` events are skipped: the viewer didn't start anything. A refused `play()`
+    // leaves the element paused and fires neither, so then there is nothing to skip.
+    unlockingRef.current = true;
+    const started = video.play();
+    if (video.paused) unlockingRef.current = false;
+    video.pause();
+    void started?.catch(() => {});
+  }, []);
+
   React.useImperativeHandle(
     controllerRef,
     () => ({
@@ -452,6 +480,7 @@ function MomentsStory({
         // Another clip, or this one still loading: it plays from the line once loaded. Until then the
         // player shows it is on its way, and a press on it pauses rather than starting from 0:00.
         pendingClipSeekRef.current = { src: target.clipUrl, ms };
+        unlockForLaterPlay(video);
         setAdvancing(true);
         // Where it is going, in the same render as the move, so no report has it at the clip's start.
         setClipPosition({ src: target.clipUrl, ms });
@@ -470,13 +499,16 @@ function MomentsStory({
           setFailed(false);
           reattachVideoSource(video, fullSrc);
         }
-        if (story.mode === 'moments' || metadataSrcRef.current !== fullSrc) setAdvancing(true);
+        if (story.mode === 'moments' || metadataSrcRef.current !== fullSrc) {
+          unlockForLaterPlay(video);
+          setAdvancing(true);
+        }
         // Where it is going, in the same render as the move.
         setFullMs(ms);
         dispatch(story.mode === 'moments' ? { type: 'expand', atMs: ms } : { type: 'seekFull', atMs: ms });
       },
     }),
-    [moments, story.mode, story.index, story.finished, failed, src, fullSrc, start]
+    [moments, story.mode, story.index, story.finished, failed, src, fullSrc, start, unlockForLaterPlay]
   );
 
   const clipLengthMs = clipDurationMs ?? moment?.durationMs ?? null;
@@ -499,11 +531,12 @@ function MomentsStory({
         // rendered taller, with names and captions burned in, so it is shown whole.
         className={cx('absolute inset-0 size-full', story.mode === 'moments' ? 'object-cover' : 'object-contain')}
         onTimeUpdate={event => {
+          // New media reports 0 before its metadata (and any seek waiting on it) is in: the place it
+          // is about to be stands until then.
+          if (event.currentTarget.readyState < HTMLMediaElement.HAVE_METADATA) return;
           const ms = event.currentTarget.currentTime * 1000;
-          // New media reports 0 before a waiting seek lands: the place it is about to be stands.
-          if (story.mode === 'moments') {
-            if (pendingClipSeekRef.current?.src !== src) setClipPosition({ src, ms });
-          } else if (pendingSeekRef.current === null) setFullMs(ms);
+          if (story.mode === 'moments') setClipPosition({ src, ms });
+          else setFullMs(ms);
         }}
         onLoadedMetadata={event => {
           const video = event.currentTarget;
@@ -535,6 +568,8 @@ function MomentsStory({
           dispatch({ type: 'clipEnded' });
         }}
         onPlay={() => {
+          if (unlockingRef.current) return;
+          playedRef.current = true;
           claim();
           setAdvancing(false);
           setPlaying(true);
@@ -546,7 +581,13 @@ function MomentsStory({
             onPlay?.();
           }
         }}
-        onPause={() => setPlaying(false)}
+        onPause={() => {
+          if (unlockingRef.current) {
+            unlockingRef.current = false;
+            return;
+          }
+          setPlaying(false);
+        }}
         // iOS can drop a speed set before playback starts; and anything else that moves it is put back.
         onPlaying={event => applyRate(event.currentTarget)}
         onRateChange={event => {
