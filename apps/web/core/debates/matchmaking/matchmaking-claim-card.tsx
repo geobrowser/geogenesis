@@ -562,6 +562,7 @@ export function useClaimPositionControl({
     id: `claim-position:${claim.claim_entity_id}:${claim.space_id}`,
     component: 'claim_position_control',
     label: 'your position',
+    survivesRedirect: true,
     // Held until the viewer's own side is known — the same wait that keeps the pills from
     // republishing a held side — so the check below reads an answer, not a loading default.
     ready: answersReady,

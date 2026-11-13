@@ -20,7 +20,13 @@ const wrapper = ({ children }: { children: ReactNode }) => <JotaiProvider store=
 function renderControl(run: (intent: string | undefined) => Promise<void> | void, ready = true) {
   return renderHook(
     (props: { ready: boolean; run: typeof run }) =>
-      useQueuedAction({ id: 'action-1', component: 'claim_position_control', label: 'x', ...props }),
+      useQueuedAction({
+        id: 'action-1',
+        component: 'claim_position_control',
+        label: 'x',
+        survivesRedirect: false,
+        ...props,
+      }),
     { wrapper, initialProps: { ready, run } }
   );
 }
@@ -167,7 +173,14 @@ describe('across a Google redirect', () => {
       { wrapper }
     );
     const dropped = renderHook(
-      () => useQueuedAction({ id: 'dropped', component: 'claim_position_control', label: 'dropped', run: vi.fn() }),
+      () =>
+        useQueuedAction({
+          id: 'dropped',
+          component: 'claim_position_control',
+          label: 'dropped',
+          run: vi.fn(),
+          survivesRedirect: false,
+        }),
       { wrapper }
     );
     act(() => kept.result.current.queue('negative'));

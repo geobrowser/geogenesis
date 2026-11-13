@@ -229,7 +229,7 @@ export function useQueuedAction({
   run,
   requires = 'personalSpace',
   liveOnly = false,
-  survivesRedirect = false,
+  survivesRedirect,
   ready = true,
 }: {
   id: string;
@@ -244,7 +244,7 @@ export function useQueuedAction({
   run: (intent: string | undefined, replay: { live: boolean; isCurrent: () => boolean }) => Promise<void> | void;
   requires?: PendingActionRequirement;
   liveOnly?: boolean;
-  survivesRedirect?: boolean;
+  survivesRedirect: boolean;
   /**
    * Whether this control's own data — what `run` decides from — has loaded. A replay through this
    * control waits for it, so `run` never reads a loading default as an answer.
