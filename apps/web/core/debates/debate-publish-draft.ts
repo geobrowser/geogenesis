@@ -248,14 +248,7 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
   // lags it publishes again; on 2026-10-05 that left 11 to 16 copies of three debates' Transcript,
   // Video and share card, and of every relation on the Debate. A key repeated within one edit gets
   // its occurrence appended, so ids stay unique however the input repeats itself.
-  const keyOccurrences = new Map<string, number>();
-  const derivedId = (key: string) => {
-    const occurrence = keyOccurrences.get(key) ?? 0;
-    keyOccurrences.set(key, occurrence + 1);
-    return debatePublishId(debateEntityId, occurrence === 0 ? key : `${key}#${occurrence}`);
-  };
-  const mintEntityId = (key: string) =>
-    options.createEntityId ? options.createEntityId() : derivedId(`entity:${key}`);
+  const { entityId: mintEntityId, relationIds } = debatePublishIds(debateEntityId, options.createEntityId);
 
   const bySlot = [...input.participants].sort((a, b) => a.participantSlot - b.participantSlot);
   const debateName = debatePublishName(claimText, input.participants);
@@ -288,13 +281,6 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
     if (list) list.push(claim);
     else claimsByTurnIndex.set(claim.turnIndex, [claim]);
   }
-
-  const relationIds = (fromEntityId: string, propertyId: string, toEntityId: string) => {
-    const edge = `${normalizeId(fromEntityId)}:${normalizeId(propertyId)}:${normalizeId(toEntityId)}`;
-    return options.createEntityId
-      ? { id: options.createEntityId(), entityId: options.createEntityId() }
-      : { id: derivedId(`relation:${edge}`), entityId: derivedId(`relation-entity:${edge}`) };
-  };
 
   const relate = ({
     fromEntity,
@@ -674,6 +660,40 @@ export function debatePublishId(debateEntityId: string, key: string): string {
 }
 
 /**
+ * The ids a debate publish mints, under the key scheme {@link debatePublishId} derives from:
+ * `entity:<key>` for an entity, `relation:<from>:<property>:<to>` and
+ * `relation-entity:<from>:<property>:<to>` for a relation and its relation entity. A key repeated
+ * within one source gets its occurrence appended, so ids stay unique however the input repeats
+ * itself. With `createEntityId` (tests), every id is fresh instead.
+ *
+ * One source per edit: the full publish ({@link buildDebatePublishDraft}) and the share card redraw
+ * ({@link buildDebateShareCardDraft}) both mint through it, so the redraw cannot drift from the ids
+ * a publish would have written.
+ */
+export function debatePublishIds(
+  debateEntityId: string,
+  createEntityId?: () => string
+): {
+  entityId: (key: string) => string;
+  relationIds: (fromEntityId: string, propertyId: string, toEntityId: string) => { id: string; entityId: string };
+} {
+  const keyOccurrences = new Map<string, number>();
+  const derivedId = (key: string) => {
+    const occurrence = keyOccurrences.get(key) ?? 0;
+    keyOccurrences.set(key, occurrence + 1);
+    return debatePublishId(debateEntityId, occurrence === 0 ? key : `${key}#${occurrence}`);
+  };
+  return {
+    entityId: key => (createEntityId ? createEntityId() : derivedId(`entity:${key}`)),
+    relationIds: (fromEntityId, propertyId, toEntityId) => {
+      if (createEntityId) return { id: createEntityId(), entityId: createEntityId() };
+      const edge = `${normalizeId(fromEntityId)}:${normalizeId(propertyId)}:${normalizeId(toEntityId)}`;
+      return { id: derivedId(`relation:${edge}`), entityId: derivedId(`relation-entity:${edge}`) };
+    },
+  };
+}
+
+/**
  * The Transcript entity of a published debate: what the full publish mints as `entity:transcript`.
  * GEO-3635's late claims publish reads the published debate back through these ids.
  */
@@ -692,8 +712,11 @@ export function debateTurnBlockEntityId(debateEntityId: string, turnIndex: numbe
  * relations rather than assuming this one.
  */
 export function debateShareCardEntityId(debateEntityId: string): string {
-  return debatePublishId(debateEntityId, 'entity:og-image');
+  return debatePublishIds(debateEntityId).entityId(SHARE_CARD_KEY);
 }
+
+/** The key the share card Image entity is minted under in every debate publish. */
+const SHARE_CARD_KEY = 'og-image';
 
 /**
  * The Debate entity's Name: "<claim> | <A> vs. <B>". The motion leads, the matchup follows. Names
@@ -708,13 +731,7 @@ export function debatePublishName(claimText: string, participants: DebatePublish
   return `${claimText.trim()} | ${bySlot.map(nameFor).join(' vs. ')}`;
 }
 
-type ShareCardIdSource = {
-  /** The id of the entity the draft names `entity:<key>`. */
-  entityId: (key: string) => string;
-  /** The ids of the relation (from, property, to) and of its relation entity. */
-  relationIds: (fromEntityId: string, propertyId: string, toEntityId: string) => { id: string; entityId: string };
-  position: () => string;
-};
+type ShareCardIdSource = ReturnType<typeof debatePublishIds> & { position: () => string };
 
 /**
  * The share card: an Image entity (Name, Image URL, Types → Image) and the Debate's OG Image
@@ -731,7 +748,7 @@ function shareCardOps(
   }: { debateRef: { id: string; name: string | null }; debateName: string; spaceId: string; imageUrl: string },
   ids: ShareCardIdSource
 ): { shareCardEntityId: string; values: Value[]; relations: Relation[] } {
-  const shareCardEntityId = ids.entityId('og-image');
+  const shareCardEntityId = ids.entityId(SHARE_CARD_KEY);
   const name = `${debateName} | share card`;
   const ref = { id: shareCardEntityId, name };
   const values = [
@@ -794,7 +811,8 @@ export function buildDebateShareCardDraft(
   if (input.participants.length === 0) throw new Error('A debate needs participants to publish.');
   const debateEntityId = ID.uuidToHex(input.debateId);
   const debateName = debatePublishName(claimText, input.participants);
-  // Every key here occurs once in a full draft, so its id there is the bare derived id.
+  // A fresh id source, as the full draft starts with: every key here occurs once there, so both
+  // derive the same ids.
   const card = shareCardOps(
     {
       debateRef: { id: debateEntityId, name: debateName },
@@ -803,16 +821,7 @@ export function buildDebateShareCardDraft(
       imageUrl: input.imageUrl,
     },
     {
-      entityId: key =>
-        options.createEntityId ? options.createEntityId() : debatePublishId(debateEntityId, `entity:${key}`),
-      relationIds: (from, property, to) => {
-        if (options.createEntityId) return { id: options.createEntityId(), entityId: options.createEntityId() };
-        const edge = `${normalizeId(from)}:${normalizeId(property)}:${normalizeId(to)}`;
-        return {
-          id: debatePublishId(debateEntityId, `relation:${edge}`),
-          entityId: debatePublishId(debateEntityId, `relation-entity:${edge}`),
-        };
-      },
+      ...debatePublishIds(debateEntityId, options.createEntityId),
       position: options.createPosition ?? Position.generate,
     }
   );

@@ -1,14 +1,11 @@
 import type { Op } from '@geoprotocol/geo-sdk/lite';
-import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 
 import { Effect } from 'effect';
-import { parse } from 'graphql';
 import { revalidatePath } from 'next/cache';
 
 import type { DebateOgCardData } from '~/core/debates/debate-og-image';
 import { ID } from '~/core/id';
 import { uuidToHex } from '~/core/id/normalize';
-import { graphql } from '~/core/io/graphql-client';
 import { getEntity } from '~/core/io/queries';
 import { isHiddenEntity } from '~/core/moderation/hidden';
 import type { Entity, Relation, Value } from '~/core/types';
@@ -26,6 +23,7 @@ import { IMAGE_URL_PROPERTY_ID, OG_IMAGE_PROPERTY_ID } from '../ontology';
 import { type DebateAcceptorConfig, getDebateAcceptorConfig } from './acceptor-config';
 import { type AcceptorLockOutcome, withAcceptorLock } from './acceptor-lock';
 import {
+  debatePublishParticipants,
   debateShareCardData,
   hasDebateShareCardSources,
   loadDebateMedia,
@@ -34,6 +32,7 @@ import {
 import { type DebateVisibilityRead, readDebateVisibility } from './debate-visibility';
 import { loadAcceptorEditableSpace, submitEditAsAcceptor } from './publish-debate';
 import { type RelationTarget, collectRelationTargets } from './relation-targets';
+import { type TextValue, readTextValues } from './text-values';
 
 /**
  * GEO-3722: redraw the share card of debates that are already on the graph, in the current design.
@@ -401,7 +400,7 @@ export function shareCardEdit({ plan, debate, imageUrl }: { plan: ShareCardPlan;
       debateId: debate.id,
       spaceId: plan.spaceId,
       claimText: debate.claim.claim,
-      participants: publishParticipants(debate),
+      participants: debatePublishParticipants(debate),
       imageUrl,
     });
     return { values, relations };
@@ -414,19 +413,10 @@ export function shareCardEdit({ plan, debate, imageUrl }: { plan: ShareCardPlan;
   };
 }
 
-function publishParticipants(debate: Debate) {
-  return debate.participants.map(p => ({
-    spaceEntityId: p.profile_space_id,
-    displayName: p.display_name,
-    position: p.position,
-    participantSlot: p.participant_slot,
-  }));
-}
-
 function editName(items: Array<{ debate: Debate }>): string {
   if (items.length === 1) {
     const [{ debate }] = items;
-    return `Redraw share card: ${debatePublishName(debate.claim.claim, publishParticipants(debate))}`;
+    return `Redraw share card: ${debatePublishName(debate.claim.claim, debatePublishParticipants(debate))}`;
   }
   return `Redraw the share cards of ${items.length} debates`;
 }
@@ -434,25 +424,6 @@ function editName(items: Array<{ debate: Debate }>): string {
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
-
-const SHARE_CARD_URLS_SOURCE = /* GraphQL */ `
-  query DebateShareCardUrls($ids: [UUID!]!, $propertyId: UUID!, $spaceId: UUID!, $first: Int!) {
-    values(
-      first: $first
-      filter: { entityId: { in: $ids }, propertyId: { is: $propertyId }, spaceId: { is: $spaceId } }
-    ) {
-      entityId
-      text
-    }
-  }
-`;
-
-type ShareCardUrlsQuery = { values: Array<{ entityId: string | null; text: string | null } | null> | null };
-
-const shareCardUrlsDocument = parse(SHARE_CARD_URLS_SOURCE) as TypedDocumentNode<
-  ShareCardUrlsQuery,
-  { ids: string[]; propertyId: string; spaceId: string; first: number }
->;
 
 /**
  * The debate's share cards in the space: each OG Image target and the Image URL it holds there
@@ -465,7 +436,8 @@ export async function readShareCards(
   collect: (
     request: Parameters<typeof collectRelationTargets>[0]
   ) => Promise<RelationTarget[]> = collectRelationTargets,
-  readUrls: (ids: string[], spaceId: string) => Promise<ShareCardUrlsQuery> = readShareCardUrls
+  readUrls: (ids: string[], spaceId: string) => Promise<TextValue[]> = (ids, spaceId) =>
+    readTextValues(ids, IMAGE_URL_PROPERTY_ID, spaceId)
 ): Promise<ShareCardImage[]> {
   const links = await collect({ fromEntityIds: [debateEntityId], typeIds: [OG_IMAGE_PROPERTY_ID], spaceId });
   const targets = [
@@ -480,20 +452,10 @@ export async function readShareCards(
     ),
   ].sort();
   if (targets.length === 0) return [];
-  const data = await readUrls(targets, spaceId);
+  const values = await readUrls(targets, spaceId);
   const urlById = new Map<string, string>();
-  for (const value of data.values ?? []) {
+  for (const value of values) {
     if (value?.entityId && value.text) urlById.set(uuidToHex(value.entityId), value.text);
   }
   return targets.map(entityId => ({ entityId, imageUrl: urlById.get(entityId) ?? null }));
-}
-
-function readShareCardUrls(ids: string[], spaceId: string): Promise<ShareCardUrlsQuery> {
-  return Effect.runPromise(
-    graphql({
-      query: shareCardUrlsDocument,
-      decoder: response => response,
-      variables: { ids, propertyId: IMAGE_URL_PROPERTY_ID, spaceId, first: 100 },
-    })
-  );
 }

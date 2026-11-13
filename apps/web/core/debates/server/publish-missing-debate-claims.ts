@@ -40,11 +40,17 @@ import {
   lookupExistingClaimsInGraph,
 } from './claim-reuse';
 import { applyClaimStancePolicy } from './claim-stance';
-import { loadDebateClaims, loadServedTranscriptTurns, loadSettledDebate } from './debate-source';
+import {
+  debatePublishParticipants,
+  loadDebateClaims,
+  loadServedTranscriptTurns,
+  loadSettledDebate,
+} from './debate-source';
 import { isDedupSettled } from './extracted-claims';
 import { loadAcceptorEditableSpace, submitEditAsAcceptor } from './publish-debate';
 import { withDebatePublishLease } from './publish-lease';
 import { type RelationTarget, collectRelationTargets } from './relation-targets';
+import { TEXT_VALUES_MAX_IDS, type TextValue, readTextValues } from './text-values';
 
 /**
  * GEO-3635: claims geo-chat adds to a debate after the debate is already on the graph.
@@ -485,12 +491,7 @@ async function planLateClaims(
     claimEntityId: motionId,
     claimText: debate.claim.claim,
     subjectKind: 'claim',
-    participants: debate.participants.map(p => ({
-      spaceEntityId: p.profile_space_id,
-      displayName: p.display_name,
-      position: p.position,
-      participantSlot: p.participant_slot,
-    })),
+    participants: debatePublishParticipants(debate),
     videoUrl: null,
     keyframeUrl: null,
     ogImageUrl: null,
@@ -659,15 +660,9 @@ function editName(debate: Debate, plan: LateClaimsPlan): string {
   return `${parts.join(', ')} in the debate on "${debate.claim.claim.trim()}"`;
 }
 
-const BLOCK_MARKDOWN_SOURCE = /* GraphQL */ `
-  query DebateBlockMarkdown($ids: [UUID!]!, $propertyId: UUID!, $spaceId: UUID!, $first: Int!) {
-    values(
-      first: $first
-      filter: { entityId: { in: $ids }, propertyId: { is: $propertyId }, spaceId: { is: $spaceId } }
-    ) {
-      entityId
-      text
-    }
+/** Which of the blocks exist in which spaces; their Markdown is read through `readTextValues`. */
+const BLOCK_SPACES_SOURCE = /* GraphQL */ `
+  query DebateBlockSpaces($ids: [UUID!]!, $first: Int!) {
     entities(first: $first, filter: { id: { in: $ids } }) {
       id
       spaceIds
@@ -676,39 +671,38 @@ const BLOCK_MARKDOWN_SOURCE = /* GraphQL */ `
 `;
 
 type BlockMarkdownQuery = {
-  values: Array<{ entityId: string | null; text: string | null } | null> | null;
+  values: TextValue[] | null;
   entities: Array<{ id: string; spaceIds: Array<string | null> | null } | null> | null;
 };
 
-const blockMarkdownDocument = parse(BLOCK_MARKDOWN_SOURCE) as TypedDocumentNode<
-  BlockMarkdownQuery,
-  { ids: string[]; propertyId: string; spaceId: string; first: number }
+const blockSpacesDocument = parse(BLOCK_SPACES_SOURCE) as TypedDocumentNode<
+  Pick<BlockMarkdownQuery, 'entities'>,
+  { ids: string[]; first: number }
 >;
-
-/** Bounded: a debate has a dozen turns or so. A full page is refused rather than trusted. */
-const MAX_BLOCKS = 200;
 
 /**
  * The debate's published turn blocks, read back from the graph in the publication space. Throws
- * on any failed read: a missing answer must not read as "no block" or "no link".
+ * on any failed read: a missing answer must not read as "no block" or "no link". Bounded: a debate
+ * has a dozen turns or so, and more ids than one values read allows are refused rather than cut.
  */
 export async function readPublishedBlocks(
   debateEntityId: string,
   blockIds: string[],
   spaceId: string
 ): Promise<PublishedBlocks> {
-  if (blockIds.length > MAX_BLOCKS)
+  if (blockIds.length > TEXT_VALUES_MAX_IDS)
     throw new Error(`Debate ${debateEntityId} has more turns than the block read allows.`);
   const ids = blockIds.map(id => uuidToHex(id));
   const transcriptId = debateTranscriptEntityId(debateEntityId);
-  const [data, links] = await Promise.all([
-    blockIds.length === 0
-      ? Promise.resolve<BlockMarkdownQuery>({ values: [], entities: [] })
+  const [values, entities, links] = await Promise.all([
+    readTextValues(ids, MARKDOWN_CONTENT_PROPERTY_ID, spaceId),
+    ids.length === 0
+      ? Promise.resolve<BlockMarkdownQuery['entities']>([])
       : Effect.runPromise(
           graphql({
-            query: blockMarkdownDocument,
-            decoder: response => response,
-            variables: { ids, propertyId: MARKDOWN_CONTENT_PROPERTY_ID, spaceId, first: MAX_BLOCKS },
+            query: blockSpacesDocument,
+            decoder: response => response.entities,
+            variables: { ids, first: TEXT_VALUES_MAX_IDS },
           })
         ),
     collectRelationTargets({
@@ -717,7 +711,7 @@ export async function readPublishedBlocks(
       spaceId,
     }),
   ]);
-  return publishedBlocksFrom(ids, transcriptId, spaceId, data, links);
+  return publishedBlocksFrom(ids, transcriptId, spaceId, { values, entities }, links);
 }
 
 export function publishedBlocksFrom(

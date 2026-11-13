@@ -31,6 +31,20 @@ import { loadMotionRelations } from './motion-relations';
 const debatePublishSettlementMs = 60_000;
 
 /**
+ * geo-chat's participants in the publish draft's shape. One mapping for the full publish, the late
+ * claims publish (GEO-3635) and the share card redraw (GEO-3722), so all three name and order the
+ * participants the same way.
+ */
+export function debatePublishParticipants(debate: Pick<Debate, 'participants'>): DebatePublishParticipant[] {
+  return debate.participants.map(p => ({
+    spaceEntityId: p.profile_space_id,
+    displayName: p.display_name,
+    position: p.position,
+    participantSlot: p.participant_slot,
+  }));
+}
+
+/**
  * The public host published media URLs are built from. Published URLs are written on-chain and
  * opened by browsers, so only `NEXT_PUBLIC_` variables are read; `GEO_CHAT_API_BASE_URL` may be a
  * cluster-internal host. `NEXT_PUBLIC_DEBATE_MEDIA_BASE_URL` allows media to move to its own
@@ -282,12 +296,7 @@ export async function loadDebatePublishSource(debateId: string): Promise<DebateS
   // and leaves the claim's tag alone.
   const motion = await loadMotionRelations(debate.claim.claim_entity_id, debate.claim.space_id);
 
-  const participants: DebatePublishParticipant[] = debate.participants.map(p => ({
-    spaceEntityId: p.profile_space_id,
-    displayName: p.display_name,
-    position: p.position,
-    participantSlot: p.participant_slot,
-  }));
+  const participants = debatePublishParticipants(debate);
 
   const input: DebatePublishInput = {
     debateId: debate.id,

@@ -16,6 +16,7 @@ import {
   OG_IMAGE_PROPERTY_ID,
   TYPES_PROPERTY_ID,
 } from '../ontology';
+import { debatePublishParticipants } from './debate-source';
 import {
   ENTITY_OG_IMAGE_ROUTE_SUFFIX,
   type RefreshShareCardsDeps,
@@ -453,12 +454,7 @@ describe('shareCardEdit', () => {
       spaceId: SPACE,
       claimEntityId: debate.claim.claim_entity_id,
       claimText: debate.claim.claim,
-      participants: debate.participants.map(p => ({
-        spaceEntityId: p.profile_space_id,
-        displayName: p.display_name,
-        position: p.position,
-        participantSlot: p.participant_slot,
-      })),
+      participants: debatePublishParticipants(debate),
       videoUrl: 'https://chat.example/video',
       keyframeUrl: 'https://chat.example/keyframe',
       ogImageUrl: NEW,
@@ -504,7 +500,7 @@ describe('readShareCards', () => {
       { fromEntityId: debate, typeId: OG_IMAGE_PROPERTY_ID, toEntityId: CARD_A },
       { fromEntityId: debate, typeId: OG_IMAGE_PROPERTY_ID, toEntityId: CARD_A },
     ]);
-    const readUrls = vi.fn(async () => ({ values: [{ entityId: CARD_A, text: OLD }] }));
+    const readUrls = vi.fn(async () => [{ entityId: CARD_A, text: OLD }]);
     expect(await readShareCards(debate, SPACE, collect, readUrls)).toEqual([
       { entityId: CARD_A, imageUrl: OLD },
       { entityId: CARD_B, imageUrl: null },
