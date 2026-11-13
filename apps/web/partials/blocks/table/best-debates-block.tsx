@@ -6,6 +6,8 @@ import cx from 'classnames';
 
 import { capture } from '~/core/analytics';
 import {
+  BEST_DEBATES_GRADE_PARAM,
+  BEST_DEBATES_GRADE_TIERS,
   BEST_DEBATES_TEAM_VIEW_PARAM,
   BEST_DEBATES_TEAM_VIEW_TO_RANK,
   BEST_DEBATES_VIEWS,
@@ -278,7 +280,16 @@ export function BestDebatesBlock({
         source="best_debates_block"
         blockId={blockId}
         spaceId={spaceId}
-        grading={canRank ? ranking.grading : null}
+        grading={
+          canRank && ranking.grading
+            ? {
+                ...ranking.grading,
+                // "Grade your ranking" lives on the ranking screen.
+                onGradeYourRanking: () =>
+                  onOpenCompose('edit', { [BEST_DEBATES_GRADE_PARAM]: BEST_DEBATES_GRADE_TIERS }),
+              }
+            : null
+        }
       >
         <div className="flex w-full min-w-0 flex-col gap-4" data-testid="best-debates-block">
           {ranking.dialogs}

@@ -256,6 +256,20 @@ export const GRADE_UNDO_LABEL = 'Undo';
 export const GRADE_RANKING_FIRST_COPY = 'Grade your ranking first';
 export const GRADE_IT_LABEL = 'Grade it';
 export const UNGRADED_SECTION_LABEL = 'Ungraded';
+export const GRADE_YOUR_RANKING_TITLE = 'Grade your ranking';
+export const TIER_LINE_A_LABEL = 'A ends here';
+export const TIER_LINE_B_LABEL = 'B ends here';
+export const TIER_LINES_NOT_NOW_LABEL = 'Not now';
+export const TIER_LINES_SAVE_LABEL = 'Save grades';
+
+/**
+ * Where the tier lines start on a ranking with no grades: A for the top fifth, B for the next two
+ * fifths, as Preston split his own (20 / 40 / 41 of 101). Only a starting point the ranker moves.
+ */
+export function defaultTierLines(count: number): { aCount: number; bCount: number } {
+  const aCount = Math.round(count * 0.2);
+  return { aCount, bCount: Math.min(count - aCount, Math.round(count * 0.4)) };
+}
 
 export function gradePlaceCopy(place: number): string {
   return `#${place} in your ranking`;

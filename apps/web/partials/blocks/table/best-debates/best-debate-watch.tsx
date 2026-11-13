@@ -263,7 +263,25 @@ function WatchDebateDialog({
             showModePill={false}
           />
         }
-        belowPlayer={grading ? <BestDebateGradeRow entityId={entityId} grading={grading} /> : undefined}
+        belowPlayer={
+          grading ? (
+            <BestDebateGradeRow
+              entityId={entityId}
+              grading={
+                // "Grade it" leaves the popup for "Grade your ranking".
+                grading.onGradeYourRanking
+                  ? {
+                      ...grading,
+                      onGradeYourRanking: () => {
+                        onClose();
+                        grading.onGradeYourRanking?.();
+                      },
+                    }
+                  : grading
+              }
+            />
+          ) : undefined
+        }
         transcript={
           <WatchTranscriptPanel
             view={shownView}

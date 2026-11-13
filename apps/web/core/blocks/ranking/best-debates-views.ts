@@ -35,6 +35,9 @@ export const BEST_DEBATES_WINDOW_DAYS = 7;
  */
 export const BEST_DEBATES_TEAM_VIEW_PARAM = 'team';
 export const BEST_DEBATES_TEAM_VIEW_TO_RANK = 'to-rank';
+/** Opens the ranking screen on "Grade your ranking" (GEO-3729): `?grade=tiers`. */
+export const BEST_DEBATES_GRADE_PARAM = 'grade';
+export const BEST_DEBATES_GRADE_TIERS = 'tiers';
 
 /**
  * Whether a ranking block is the Debates space's Best debates block. Both ids must match, so
