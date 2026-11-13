@@ -15,7 +15,6 @@ import { useEntity } from '~/core/database/entities';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePublish } from '~/core/hooks/use-publish';
-import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { ID } from '~/core/id';
 import { TAGLINE_PROPERTY, normalizeTagline } from '~/core/profile/profile-ontology';
 import { useStatusBar } from '~/core/state/status-bar-store';
@@ -25,6 +24,7 @@ import { getRelations, getValues } from '~/core/sync/use-store';
 import { store } from '~/core/sync/use-sync-engine';
 import type { Profile, Relation, Value } from '~/core/types';
 import { findMediaUrlValue, useEntityAvatarUrl, useEntityCoverUrl } from '~/core/utils/use-entity-media';
+import { useAccountAddress } from '~/core/wallet/account-readiness';
 
 import { avatarAtom } from '~/partials/onboarding/onboarding-atoms';
 import type { ProfileImageKind } from '~/partials/profile/profile-edit-rules';
@@ -124,8 +124,7 @@ const IMAGE_PROPERTIES = {
  * modal would leave them behind as phantom pending edits on the personal space.
  */
 export function useEditProfile({ isOpen }: { isOpen: boolean }) {
-  const { smartAccount } = useSmartAccount();
-  const address = smartAccount?.account.address;
+  const address = useAccountAddress() ?? undefined;
   const { personalSpaceId, personalEntityId, isRegistered } = usePersonalSpaceId();
   const { profile } = useGeoProfile(address);
   const { storage } = useMutate();

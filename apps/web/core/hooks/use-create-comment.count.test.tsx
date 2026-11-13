@@ -24,7 +24,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('./cached-write-identity', () => ({
-  readCachedSmartAccount: () => ({
+  awaitSigningAccount: async () => ({
     account: { address: '0xabc' },
     sendUserOperation: mocks.sendUserOperation,
   }),

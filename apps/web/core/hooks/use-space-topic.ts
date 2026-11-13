@@ -6,7 +6,6 @@ import { Effect, Either } from 'effect';
 import { type Hex } from 'viem';
 
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
-import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
 import { useSpace } from '~/core/hooks/use-space';
 import { geo } from '~/core/sdk/geo-client';
@@ -15,6 +14,7 @@ import { useStatusBar } from '~/core/state/status-bar-store';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
 import { buildDaoTopicDeclaredCalldata } from '~/core/utils/contracts/space-topic';
 import { validateEntityId, validateSpaceId } from '~/core/utils/utils';
+import { useAccountAddress } from '~/core/wallet/account-readiness';
 
 interface UseSpaceTopicArgs {
   spaceId: string | null;
@@ -26,14 +26,14 @@ interface SetTopicParams {
 
 export function useSpaceTopic({ spaceId }: UseSpaceTopicArgs) {
   const { dispatch } = useStatusBar();
-  const { smartAccount } = useSmartAccount();
+  const address = useAccountAddress();
   const { personalSpaceId, isRegistered } = usePersonalSpaceId();
   const { space } = useSpace(spaceId ?? undefined);
 
   const tx = useSmartAccountTransaction();
 
   const validatePrerequisites = () => {
-    if (!smartAccount) {
+    if (!address) {
       const message = 'Please connect your wallet to manage this topic';
       dispatch({ type: 'ERROR', payload: message });
       throw new Error(message);

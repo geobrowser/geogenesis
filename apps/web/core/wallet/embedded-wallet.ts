@@ -1,3 +1,5 @@
+import { getAddress, isAddress } from 'viem';
+
 import type { PrivyValue, WalletsValue } from './auth-store';
 
 /** Privy's own embedded wallet, as opposed to a linked external one: the signer `useSmartAccount` needs. */
@@ -15,8 +17,19 @@ export function findEmbeddedWallet(wallets: readonly ConnectedWallet[]): Connect
  * as the user is, before the wallet itself has reached `useWallets()`.
  */
 export function accountHasEmbeddedWallet(user: PrivyValue['user']): boolean {
-  return (user?.linkedAccounts ?? []).some(
-    account =>
-      account.type === 'wallet' && account.walletClientType === EMBEDDED_WALLET_TYPE && account.chainType === 'ethereum'
+  return (user?.linkedAccounts ?? []).some(isEmbeddedEthereumWallet);
+}
+
+type LinkedAccount = NonNullable<PrivyValue['user']>['linkedAccounts'][number];
+
+function isEmbeddedEthereumWallet(account: LinkedAccount) {
+  return (
+    account.type === 'wallet' && account.walletClientType === EMBEDDED_WALLET_TYPE && account.chainType === 'ethereum'
   );
+}
+
+export function embeddedWalletAddress(user: PrivyValue['user']): `0x${string}` | null {
+  const wallet = (user?.linkedAccounts ?? []).find(isEmbeddedEthereumWallet);
+  const address = wallet && 'address' in wallet ? wallet.address : null;
+  return typeof address === 'string' && isAddress(address, { strict: false }) ? getAddress(address) : null;
 }

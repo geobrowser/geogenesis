@@ -23,7 +23,6 @@ import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
 import { useLocalChanges } from '~/core/hooks/use-local-changes';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { type ProposalVotingMode, usePublish } from '~/core/hooks/use-publish';
-import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSpaceId } from '~/core/hooks/use-space-id';
 import { useToast } from '~/core/hooks/use-toast';
 import { useVotingSettings } from '~/core/hooks/use-voting-settings';
@@ -51,6 +50,7 @@ import { useRelations, useValues } from '~/core/sync/use-store';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
 import type { Relation as StoreRelation, Value as StoreValue } from '~/core/types';
 import type { EntityDiff } from '~/core/utils/diff/types';
+import { useAccountAddress } from '~/core/wallet/account-readiness';
 
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
 import { Dropdown } from '~/design-system/dropdown';
@@ -139,8 +139,7 @@ export const ReviewChanges = () => {
   const { openSidePanel } = useEntitySidePanel();
   const { personalSpaceId } = usePersonalSpaceId();
   const { isPending: isPersonalSpacePending } = usePendingPersonalSpace();
-  const { smartAccount } = useSmartAccount();
-  const address = smartAccount?.account.address;
+  const address = useAccountAddress() ?? undefined;
   const { profile } = useGeoProfile(address);
   const personalPageEntityId = profile?.id ?? null;
 

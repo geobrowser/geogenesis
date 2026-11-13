@@ -9,7 +9,7 @@ import { Either } from 'effect';
 import { type ActionKind } from '~/core/action-context';
 import { useActionContext } from '~/core/action-context-provider';
 import { classifyOperationFailure, observeOperation } from '~/core/analytics-operations';
-import { readCachedPersonalSpace, readCachedSmartAccount } from '~/core/hooks/cached-write-identity';
+import { readAccountAddress, readCachedPersonalSpace } from '~/core/hooks/cached-write-identity';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
 import {
@@ -208,8 +208,7 @@ export function useDebateVoteWriter() {
       const authorSpaceId =
         personalSpaceId && isRegistered
           ? personalSpaceId
-          : readCachedPersonalSpace(queryClient, readCachedSmartAccount(queryClient, null)?.account.address)
-              .personalSpaceId;
+          : readCachedPersonalSpace(queryClient, readAccountAddress(queryClient)).personalSpaceId;
       if (!authorSpaceId) return { ok: false, message: 'You need a personal space to vote.' };
       if (!validateSpaceId(spaceId)) return { ok: false, message: failedCopy };
       // A new downvote belongs to the debate's own space: never the Debates space or the voter's

@@ -10,6 +10,7 @@ import { type Hex, createPublicClient, http } from 'viem';
 import type { ActionContext } from '~/core/action-context';
 import { useActionContext } from '~/core/action-context-provider';
 import { classifyOperationFailure, observeOperation } from '~/core/analytics-operations';
+import { awaitSigningAccount } from '~/core/hooks/cached-write-identity';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { geo } from '~/core/sdk/geo-client';
 import { DAO_SPACE_FACTORY_ADDRESS, SPACE_REGISTRY_ADDRESS_HEX } from '~/core/sdk/geo-network';
@@ -81,11 +82,12 @@ async function runWriteEffect<A>(effect: Effect.Effect<A, Error>): Promise<A> {
 
 export function useDeploySpace() {
   const getContext = useActionContext('create_space', 'space_draft', '', { overlay: 'modal' });
-  const { smartAccount } = useSmartAccount();
+  const { smartAccount: liveSmartAccount } = useSmartAccount();
   const queryClient = useQueryClient();
 
   const { mutateAsync } = useMutation({
     mutationFn: async (args: DeployArgs): Promise<string | null> => {
+      const smartAccount = await awaitSigningAccount(queryClient, liveSmartAccount);
       if (!smartAccount) {
         return null;
       }

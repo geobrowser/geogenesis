@@ -4,8 +4,10 @@ import type { GeoWalletClient } from '@geogenesis/auth/account';
 import { RevertedUserOperationError } from '@geogenesis/auth/account';
 import { useQuery } from '@tanstack/react-query';
 
-import { toViemAccount, useWalletClient, useWallets } from '~/core/wallet/auth-hooks';
-import { findEmbeddedWallet } from '~/core/wallet/embedded-wallet';
+import * as React from 'react';
+
+import { toViemAccount, usePrivy, useWallets } from '~/core/wallet/auth-hooks';
+import { embeddedWalletAddress, findEmbeddedWallet } from '~/core/wallet/embedded-wallet';
 
 import { forgetSyncedWalletCookie, syncWalletCookie } from '../cookie/sync-wallet-cookie';
 import { ReceiptConfirmationTimeoutError } from '../errors';
@@ -19,16 +21,41 @@ import {
 } from './smart-account-send-queue';
 import { sendTransactionReportingSubmission } from './smart-account-submission';
 
-export function smartAccountQueryKey(
-  walletAddress: string | null | undefined,
-  embeddedWalletAddress: string | null | undefined
-) {
-  return ['smart-account', walletAddress, embeddedWalletAddress] as const;
+export function smartAccountQueryKey(embeddedWalletAddress: string | null | undefined) {
+  return ['smart-account', embeddedWalletAddress] as const;
 }
 
+export function walletCookieQueryKey(address: string | null | undefined) {
+  return ['wallet-cookie', address] as const;
+}
+
+function useWalletCookieSync(address: `0x${string}` | null) {
+  React.useEffect(() => {
+    if (!address) forgetSyncedWalletCookie();
+  }, [address]);
+
+  const { isSuccess, isError, error } = useQuery({
+    queryKey: walletCookieQueryKey(address),
+    queryFn: async () => {
+      await syncWalletCookie(address!);
+      return address;
+    },
+    enabled: address !== null,
+    staleTime: Infinity,
+  });
+
+  React.useEffect(() => {
+    if (isError) console.error('[SMART-ACCOUNT] wallet cookie sync failed:', error);
+  }, [isError, error]);
+
+  return isSuccess || isError;
+}
+
+/** The signing account, once it is built and the wallet cookie is synced. */
 export function useSmartAccount() {
-  const { data: walletClient, isLoading: isLoadingWallet } = useWalletClient();
+  const { ready, authenticated, user } = usePrivy();
   const { wallets } = useWallets();
+  const cookieSynced = useWalletCookieSync(authenticated ? embeddedWalletAddress(user) : null);
 
   // Privy embedded wallet — the EIP-7702 authority for the configured Geo chain. We need this
   // separately from the wagmi WalletClient because viem's signAuthorization rejects
@@ -36,12 +63,9 @@ export function useSmartAccount() {
   // usable signAuthorization method.
   const embeddedWallet = findEmbeddedWallet(wallets);
 
-  const {
-    data: smartAccount,
-    isLoading,
-    error,
-  } = useQuery({
-    queryKey: smartAccountQueryKey(walletClient?.account.address, embeddedWallet?.address),
+  const { data: builtAccount, error } = useQuery({
+    queryKey: smartAccountQueryKey(embeddedWallet?.address),
+    enabled: Boolean(embeddedWallet),
     queryFn: async () => {
       // ZeroDev EIP-7702 on every Geo chain — the chain identity comes from the
       // env-driven GEO_NETWORK config, so a network flip changes nothing here.
@@ -52,10 +76,7 @@ export function useSmartAccount() {
       // signAuthorization routes through Privy's signing API (the wagmi
       // WalletClient is JSON-RPC and would be rejected by viem's
       // signAuthorization action).
-      if (!embeddedWallet) {
-        forgetSyncedWalletCookie();
-        return null;
-      }
+      if (!embeddedWallet) return null;
 
       const signer = await toViemAccount({ wallet: embeddedWallet });
 
@@ -215,14 +236,10 @@ export function useSmartAccount() {
           ),
       };
 
-      // The EOA address — registry now keys permissions on this directly (no Safe
-      // indirection) so the cookie value matches what `SpaceRegistry.enter` sees.
-      // Skips the Server Action when this tab already sent this address (see `syncWalletCookie`).
-      await syncWalletCookie(wrapped.account.address);
-
       return wrapped;
     },
   });
+  const smartAccount = builtAccount && cookieSynced ? builtAccount : null;
 
   if (error) {
     // Without this, an init failure (Privy signing, ZeroDev RPC, 7702 kernel
@@ -231,5 +248,7 @@ export function useSmartAccount() {
     console.error('[SMART-ACCOUNT] initialization failed:', error);
   }
 
-  return { smartAccount: smartAccount ?? null, isLoading: isLoading || isLoadingWallet, error: error ?? null };
+  const isLoading = !ready || (authenticated && !smartAccount && !error);
+
+  return { smartAccount, isLoading, error: error ?? null };
 }

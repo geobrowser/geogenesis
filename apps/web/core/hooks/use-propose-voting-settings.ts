@@ -1,5 +1,7 @@
 'use client';
 
+import { useQueryClient } from '@tanstack/react-query';
+
 import * as React from 'react';
 
 import { Duration, Effect, Either, Schedule } from 'effect';
@@ -10,6 +12,7 @@ import { runEffectEither } from '~/core/telemetry/effect-runtime';
 
 import type { VotingSettingsInput } from '~/partials/governance/voting-settings';
 
+import { awaitSigningAccount } from './cached-write-identity';
 import { usePersonalSpaceId } from './use-personal-space-id';
 import { useSmartAccount } from './use-smart-account';
 
@@ -28,12 +31,14 @@ type ProposeVotingSettingsArgs = {
  * the at-most-once submission discipline used by usePublish.
  */
 export function useProposeVotingSettings() {
-  const { smartAccount } = useSmartAccount();
+  const { smartAccount: liveSmartAccount } = useSmartAccount();
+  const queryClient = useQueryClient();
   const { personalSpaceId } = usePersonalSpaceId();
   const [isPending, setIsPending] = React.useState(false);
 
   const propose = React.useCallback(
     async ({ spaceId, votingSettings }: ProposeVotingSettingsArgs) => {
+      const smartAccount = await awaitSigningAccount(queryClient, liveSmartAccount);
       if (!smartAccount) {
         throw new TransactionWriteFailedError(
           'Unable to propose: wallet is not connected. Please reconnect and try again.'
@@ -91,7 +96,7 @@ export function useProposeVotingSettings() {
         setIsPending(false);
       }
     },
-    [smartAccount, personalSpaceId]
+    [liveSmartAccount, queryClient, personalSpaceId]
   );
 
   return { propose, isPending };

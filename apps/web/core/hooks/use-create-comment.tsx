@@ -15,10 +15,11 @@ import { commentsFetchedQueryKey } from '~/core/io/query-keys';
 import { geo } from '~/core/sdk/geo-client';
 import { useReportError } from '~/core/state/status-bar-store';
 import { toUserFacingError } from '~/core/utils/error-diagnostics';
+import { useAccountAddress } from '~/core/wallet/account-readiness';
 
 import type { CommentEntity, CreateCommentParams } from '~/partials/comments/types';
 
-import { readCachedPersonalSpace, readCachedSmartAccount } from './cached-write-identity';
+import { awaitSigningAccount, readCachedPersonalSpace } from './cached-write-identity';
 import { fetchCommentEntitiesForTarget, mergePendingWithServer } from './use-comments';
 import { useGeoProfile } from './use-geo-profile';
 import { usePersonalSpaceId } from './use-personal-space-id';
@@ -94,7 +95,7 @@ export function useCreateComment(targetEntityId: string) {
   // in React Query's cache — no extra request. Stored in a ref so createComment can read the
   // latest value without being re-created when the profile eventually loads (otherwise the
   // memoized callback would close over a stale null profile until some other dep changed).
-  const walletAddress = smartAccount?.account.address ?? null;
+  const walletAddress = useAccountAddress();
   const { profile: cachedProfile } = useGeoProfile(walletAddress ?? undefined);
   const cachedProfileRef = React.useRef(cachedProfile);
   React.useEffect(() => {
@@ -152,7 +153,7 @@ export function useCreateComment(targetEntityId: string) {
       onOptimistic,
       commentId: existingCommentId,
     }: CreateCommentInput): Promise<CreateCommentResult | null> => {
-      const account = readCachedSmartAccount(queryClient, smartAccount);
+      const account = await awaitSigningAccount(queryClient, smartAccount);
       if (!account) {
         setToast(<span>Please connect your wallet to comment</span>);
         return null;
@@ -439,7 +440,7 @@ export function useCreateComment(targetEntityId: string) {
       commentSpaceId: string;
       newText: string;
     }): Promise<boolean> => {
-      const account = readCachedSmartAccount(queryClient, smartAccount);
+      const account = await awaitSigningAccount(queryClient, smartAccount);
       if (!account) {
         setToast(<span>Please connect your wallet to edit</span>);
         return false;

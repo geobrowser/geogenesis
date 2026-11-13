@@ -3,7 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
-import { useSmartAccount } from '~/core/hooks/use-smart-account';
+import { useAccountAddress } from '~/core/wallet/account-readiness';
 
 import { browseSidebarQueryOptions } from './browse-sidebar-query-options';
 import type { BrowseSidebarData } from './fetch-browse-sidebar-data';
@@ -26,8 +26,7 @@ export type BrowseSidebarQuerySource = {
  */
 export function useBrowseSidebarQuerySource(): BrowseSidebarQuerySource {
   const { personalSpaceId, isLoading } = usePersonalSpaceId();
-  const { smartAccount } = useSmartAccount();
-  const walletAddress = smartAccount?.account.address;
+  const walletAddress = useAccountAddress() ?? undefined;
 
   return { personalSpaceId, walletAddress, keyInput: personalSpaceId ?? walletAddress ?? null, isLoading };
 }

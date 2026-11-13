@@ -7,11 +7,11 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { RemoveScroll } from 'react-remove-scroll';
 
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
-import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useEditable } from '~/core/state/editable-store';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { ReviewState } from '~/core/types';
 import { collectClientDiagnostics, formatErrorReport } from '~/core/utils/error-diagnostics';
+import { useAccountAddress } from '~/core/wallet/account-readiness';
 import { Z_LAYER_CLASS } from '~/core/z-layers';
 
 import { Button } from '~/design-system/button';
@@ -38,7 +38,7 @@ import { Spinner } from '~/design-system/spinner';
 export const StatusBar = () => {
   const { state, dispatch } = useStatusBar();
   const { editable } = useEditable();
-  const { smartAccount } = useSmartAccount();
+  const accountAddress = useAccountAddress();
   const { personalSpaceId } = usePersonalSpaceId();
 
   const [isCopied, setIsCopied] = React.useState(false);
@@ -50,9 +50,9 @@ export const StatusBar = () => {
   const onCopyError = async () => {
     if (!navigator.clipboard) return;
     const diagnostics = collectClientDiagnostics({
-      loggedIn: !!smartAccount,
+      loggedIn: !!accountAddress,
       editMode: editable,
-      walletAddress: smartAccount?.account.address,
+      walletAddress: accountAddress ?? undefined,
       personalSpaceId,
     });
     const report = formatErrorReport(state.error || '', diagnostics);

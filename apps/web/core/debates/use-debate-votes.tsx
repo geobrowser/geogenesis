@@ -34,8 +34,9 @@ import { useReportError } from '~/core/state/status-bar-store';
 import type { Entity, Relation, Value } from '~/core/types';
 import { toUserFacingError } from '~/core/utils/error-diagnostics';
 import { Publish } from '~/core/utils/publish';
+import { useAccountAddress } from '~/core/wallet/account-readiness';
 
-import { readCachedSmartAccount, readRegisteredPersonalSpaceId } from '../hooks/cached-write-identity';
+import { awaitSigningAccount, readRegisteredPersonalSpaceId } from '../hooks/cached-write-identity';
 import { useGeoProfile } from '../hooks/use-geo-profile';
 import { usePersonalSpaceId } from '../hooks/use-personal-space-id';
 import { useSmartAccount } from '../hooks/use-smart-account';
@@ -191,7 +192,7 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
   // A Debate entity's id is its geo-chat debate id, so votes hang off it without a lookup.
   const debateEntityId = ID.uuidToHex(debate.id);
   const isVoting = useVoteInFlight(debateEntityId);
-  const { profile } = useGeoProfile(smartAccount?.account.address);
+  const { profile } = useGeoProfile(useAccountAddress() ?? undefined);
 
   const { data: votes, isSuccess: haveVotesAnswered } = useQuery({
     queryKey: votesQueryKey(debateEntityId),
@@ -269,7 +270,7 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
       // Read through the cache rather than only from this render. A queued vote replays through a
       // closure taken before sign-up, when neither existed yet; the cache has both by the time the
       // runner fires, the same fallback every other queued write uses.
-      const account = readCachedSmartAccount(queryClient, smartAccount);
+      const account = await awaitSigningAccount(queryClient, smartAccount);
       const voterSpaceId = readRegisteredPersonalSpaceId(queryClient, account?.account.address, {
         personalSpaceId,
         isRegistered,

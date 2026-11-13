@@ -24,7 +24,7 @@ vi.mock('~/core/wallet/auth-hooks', () => ({
   usePrivy: () => ({ ready: true, authenticated: mocks.privyAuthenticated }),
 }));
 vi.mock('~/core/hooks/use-smart-account', () => ({
-  useSmartAccount: () => ({ smartAccount: mocks.authenticated ? {} : null }),
+  useSmartAccount: () => ({ smartAccount: mocks.authenticated ? { account: { address: '0xviewer' } } : null }),
 }));
 vi.mock('~/core/hooks/use-personal-space-id', () => ({
   usePersonalSpaceId: () => ({

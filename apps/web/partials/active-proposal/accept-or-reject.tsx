@@ -9,13 +9,13 @@ import { useRouter } from 'next/navigation';
 
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
-import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useToast } from '~/core/hooks/use-toast';
 import { getStaleProposalVoteToastMessage, useVote } from '~/core/hooks/use-vote';
 import { Proposal, VoteWithProfile } from '~/core/io/dto/proposals';
 import { proposalCommentVotesQueryKey } from '~/core/io/query-keys';
 import { useReportError } from '~/core/state/status-bar-store';
 import { describeGovernanceError } from '~/core/utils/contracts/governance-errors';
+import { useAccountAddress } from '~/core/wallet/account-readiness';
 
 import { Button } from '~/design-system/button';
 import { Check } from '~/design-system/icons/check';
@@ -65,7 +65,7 @@ export function AcceptOrReject({
     proposalVersion,
   });
 
-  const { smartAccount } = useSmartAccount();
+  const accountAddress = useAccountAddress();
   const { personalSpaceId, isLoading: isPersonalSpaceIdLoading } = usePersonalSpaceId();
   const addOptimisticVote = useAddOptimisticVote();
   const optimisticVote = useOptimisticVoteChoice(proposalId);
@@ -210,7 +210,7 @@ export function AcceptOrReject({
       return rejectedBadge;
     }
 
-    if (canExecute && smartAccount) {
+    if (canExecute && accountAddress) {
       return <Execute spaceId={spaceId} proposalId={proposalId} variant="small" />;
     }
 
@@ -234,7 +234,7 @@ export function AcceptOrReject({
   // handler no-ops); the other side is a live button that submits a replacement
   // vote. We wait for the personal-space lookup so a voter reopening the page
   // doesn't briefly see an un-highlighted pair before serverUserVote resolves.
-  if (smartAccount && isEditor && !isPersonalSpaceIdLoading) {
+  if (accountAddress && isEditor && !isPersonalSpaceIdLoading) {
     const hasAccepted = confirmedVote === 'ACCEPT';
     const hasRejected = confirmedVote === 'REJECT';
     return (

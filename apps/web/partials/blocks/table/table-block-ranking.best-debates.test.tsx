@@ -76,6 +76,7 @@ vi.mock('~/core/hooks/use-ranking-compose-access', () => ({
 vi.mock('~/core/hooks/use-smart-account', () => ({
   useSmartAccount: () => ({ smartAccount: { account: { address: '0x1' } } }),
 }));
+vi.mock('~/core/wallet/account-readiness', () => ({ useAccountAddress: () => '0x1' }));
 vi.mock('~/core/hooks/use-geo-profile', () => ({ useGeoProfile: () => ({}) }));
 vi.mock('~/core/blocks/data/use-filters', () => ({
   useFilters: () => ({ filterState: mocks.empty, resolvedFilterState: mocks.empty, modesByColumn: {} }),

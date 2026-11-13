@@ -7,7 +7,6 @@ import * as React from 'react';
 import { useAtomValue } from 'jotai';
 
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
-import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { fetchPendingMembershipSpaceIds } from '~/core/io/subgraph/fetch-pending-membership-space-ids';
 import {
   activeRequestedSpacesForOwner,
@@ -15,6 +14,7 @@ import {
   requestedMembershipSpacesAtom,
 } from '~/core/state/requested-membership';
 import { normId } from '~/core/utils/norm-id';
+import { useAccountAddress } from '~/core/wallet/account-readiness';
 
 export function pendingMembershipsQueryKey(memberSpaceId: string | null | undefined) {
   return ['pending-memberships', memberSpaceId ?? null] as const;
@@ -46,8 +46,7 @@ export function usePendingMembershipSpaceIds() {
  */
 export function usePendingMembershipSet(): Set<string> {
   const { personalSpaceId } = usePersonalSpaceId();
-  const { smartAccount } = useSmartAccount();
-  const address = smartAccount?.account.address;
+  const address = useAccountAddress() ?? undefined;
   const serverSet = usePendingMembershipSpaceIds();
   const requested = useAtomValue(requestedMembershipSpacesAtom);
 

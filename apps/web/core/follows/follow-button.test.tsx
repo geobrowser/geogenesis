@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   authReady: true,
   authenticated: true,
   smartAccount: {} as object | null,
+  identifiedWithoutAccount: false,
   personalSpaceId: 'personal-space' as string | null,
   isRegistered: true,
   isLoadingPersonalSpace: false,
@@ -55,6 +56,23 @@ vi.mock('~/core/topics/use-followed-topics', () => ({
 vi.mock('~/core/hooks/use-smart-account', () => ({
   useSmartAccount: () => ({ smartAccount: mocks.smartAccount }),
 }));
+vi.mock('~/core/wallet/account-readiness', async importOriginal => {
+  const actual = await importOriginal<typeof import('~/core/wallet/account-readiness')>();
+  return {
+    ...actual,
+    useAccountReadiness: () => {
+      const address = mocks.smartAccount || mocks.identifiedWithoutAccount ? '0xviewer' : null;
+      const state = actual.accountReadinessState({
+        privyReady: mocks.authReady,
+        authenticated: mocks.authenticated,
+        address,
+        signingAccount: Boolean(mocks.smartAccount),
+        buildFailed: false,
+      });
+      return { state, address: actual.isIdentified(state) ? address : null };
+    },
+  };
+});
 vi.mock('~/core/hooks/use-personal-space-id', () => ({
   usePersonalSpaceId: () => ({
     personalSpaceId: mocks.personalSpaceId,
@@ -93,6 +111,7 @@ beforeEach(() => {
   mocks.authReady = true;
   mocks.authenticated = true;
   mocks.smartAccount = {};
+  mocks.identifiedWithoutAccount = false;
   mocks.personalSpaceId = 'personal-space';
   mocks.isRegistered = true;
   mocks.isLoadingPersonalSpace = false;
@@ -175,6 +194,18 @@ describe('FollowTopicButton', () => {
     fireEvent.click(button);
     expect(mocks.promptSignIn).not.toHaveBeenCalled();
     expect(mocks.queue).not.toHaveBeenCalled();
+  });
+
+  it('follows while the signing account is still being built', () => {
+    mocks.smartAccount = null;
+    mocks.identifiedWithoutAccount = true;
+    renderButton();
+    const button = screen.getByRole('button');
+
+    expect(button).toBeEnabled();
+    fireEvent.click(button);
+    expect(mocks.follow).toHaveBeenCalled();
+    expect(mocks.promptSignIn).not.toHaveBeenCalled();
   });
 
   it('waits while Privy is still starting', () => {

@@ -8,7 +8,6 @@ import { Effect, Either } from 'effect';
 import { type Hex, createPublicClient, http } from 'viem';
 
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
-import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
 import { geo } from '~/core/sdk/geo-client';
 import {
@@ -24,6 +23,7 @@ import {
   classifyProposalExecutability,
 } from '~/core/utils/contracts/proposal-executability';
 import { validateSpaceId } from '~/core/utils/utils';
+import { useAccountAddress } from '~/core/wallet/account-readiness';
 import { GEOGENESIS } from '~/core/wallet/geo-chain';
 
 interface UseExecuteProposalArgs {
@@ -148,8 +148,7 @@ export function useProposalExecutability({ spaceId, proposalId }: UseExecuteProp
   revert: GovernanceRevert | null;
 } {
   const { personalSpaceId, isRegistered } = usePersonalSpaceId();
-  const { smartAccount } = useSmartAccount();
-  const account = smartAccount?.account.address;
+  const account = useAccountAddress() ?? undefined;
   const canSimulate = Boolean(account && personalSpaceId && isRegistered);
 
   const { data } = useQuery({

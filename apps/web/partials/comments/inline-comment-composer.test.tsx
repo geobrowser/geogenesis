@@ -8,9 +8,7 @@ import { InlineCommentComposer, useInlineComposer } from './inline-comment-compo
 
 const mocks = vi.hoisted(() => ({ signedIn: false, promptSignIn: vi.fn() }));
 
-vi.mock('~/core/hooks/use-smart-account', () => ({
-  useSmartAccount: () => ({ smartAccount: mocks.signedIn ? { account: { address: '0xabc' } } : null }),
-}));
+vi.mock('~/core/wallet/account-readiness', () => ({ useAccountAddress: () => (mocks.signedIn ? '0xabc' : null) }));
 vi.mock('~/core/hooks/use-privy-sign-in', () => ({ usePrivySignIn: () => mocks.promptSignIn }));
 vi.mock('~/core/hooks/use-publish-comment', () => ({
   usePublishComment: () => ({ publishComment: vi.fn(), editComment: vi.fn() }),

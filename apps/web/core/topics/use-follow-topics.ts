@@ -6,7 +6,7 @@ import * as React from 'react';
 
 import { snapshotActionContext } from '~/core/action-context';
 import { observeOperation } from '~/core/analytics-operations';
-import { readCachedSmartAccount } from '~/core/hooks/cached-write-identity';
+import { awaitSigningAccount } from '~/core/hooks/cached-write-identity';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { interestedTopicsQueryKey } from '~/core/io/subgraph/fetch-interested-topics';
@@ -72,7 +72,7 @@ export function useFollowEntities({ kind, source }: { kind: FollowKind; source?:
 
   /** One user operation for every call; resolves false if there is no account or it fails. */
   const sendCalls = async (calls: InterestedCall[]) => {
-    const account = readCachedSmartAccount(queryClient, smartAccount);
+    const account = await awaitSigningAccount(queryClient, smartAccount);
     if (!account) return false;
     try {
       await account.sendUserOperation({ calls: calls.map(call => ({ ...call, value: 0n })) });

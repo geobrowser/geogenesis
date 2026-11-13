@@ -2,6 +2,7 @@
 
 import { isRevertedUserOperationError } from '@geogenesis/auth/account';
 import { Op } from '@geoprotocol/geo-sdk/lite';
+import { useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
@@ -23,6 +24,7 @@ import { describeError, isUserRejection, toUserFacingError } from '../utils/erro
 import { Publish } from '../utils/publish';
 import { repairPagelessSpacePublish } from '../utils/space/space-page';
 import { sleepWithCallback } from '../utils/utils';
+import { awaitSigningAccount } from './cached-write-identity';
 import { usePersonalSpaceId } from './use-personal-space-id';
 import { useSmartAccount } from './use-smart-account';
 
@@ -46,7 +48,8 @@ interface MakeProposalOptions {
 }
 
 export function usePublish() {
-  const { smartAccount } = useSmartAccount();
+  const { smartAccount: liveSmartAccount } = useSmartAccount();
+  const queryClient = useQueryClient();
   const { personalSpaceId } = usePersonalSpaceId();
   const { dispatch } = useStatusBar();
   const { storage } = useMutate();
@@ -70,6 +73,7 @@ export function usePublish() {
       onSuccess,
       onError,
     }: MakeProposalOptions) => {
+      const smartAccount = await awaitSigningAccount(queryClient, liveSmartAccount);
       if (!smartAccount) {
         onError?.();
         dispatch({
@@ -188,7 +192,7 @@ export function usePublish() {
         onSuccess?.();
       }, 3000);
     },
-    [smartAccount, personalSpaceId, dispatch, storage]
+    [liveSmartAccount, queryClient, personalSpaceId, dispatch, storage]
   );
 
   return {
@@ -197,7 +201,8 @@ export function usePublish() {
 }
 
 export function useBulkPublish() {
-  const { smartAccount } = useSmartAccount();
+  const { smartAccount: liveSmartAccount } = useSmartAccount();
+  const queryClient = useQueryClient();
   const { personalSpaceId } = usePersonalSpaceId();
   const { dispatch } = useStatusBar();
   const { storage } = useMutate();
@@ -216,6 +221,7 @@ export function useBulkPublish() {
         });
         return;
       }
+      const smartAccount = await awaitSigningAccount(queryClient, liveSmartAccount);
       if (!smartAccount) {
         onError?.();
         dispatch({
@@ -292,7 +298,7 @@ export function useBulkPublish() {
       // want to show the "complete" state for 3s if it succeeds
       await sleepWithCallback(() => dispatch({ type: 'SET_REVIEW_STATE', payload: 'idle' }), 3000);
     },
-    [smartAccount, personalSpaceId, dispatch, storage]
+    [liveSmartAccount, queryClient, personalSpaceId, dispatch, storage]
   );
 
   return {

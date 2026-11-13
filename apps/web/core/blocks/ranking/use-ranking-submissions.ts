@@ -11,7 +11,7 @@ import { useActionContext } from '~/core/action-context-provider';
 import { type OperationContext, classifyOperationFailure, observeOperation } from '~/core/analytics-operations';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { TransactionWriteFailedError } from '~/core/errors';
-import { readCachedPersonalSpace, readCachedSmartAccount } from '~/core/hooks/cached-write-identity';
+import { awaitSigningAccount, readCachedPersonalSpace } from '~/core/hooks/cached-write-identity';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
@@ -23,6 +23,7 @@ import { useReportError } from '~/core/state/status-bar-store';
 import type { Entity } from '~/core/types';
 import { toUserFacingError } from '~/core/utils/error-diagnostics';
 import { validateEntityId } from '~/core/utils/utils';
+import { useAccountAddress } from '~/core/wallet/account-readiness';
 
 import { buildRankingVotes, mustMintFreshRank, rankingBallotRules } from './best-debates-ballot';
 import {
@@ -35,9 +36,9 @@ import { clearLocalMyRankingDraft } from './local-ranking-my-draft';
 import { ballotRecencyKey, pickLatestBallot } from './ranking-ballot-recency';
 import {
   type OwnRankingPublish,
+  RANKING_ALREADY_EMPTY_MESSAGE,
   RANKING_CHANGED_ELSEWHERE_MESSAGE,
   RANKING_CHANGED_ELSEWHERE_ORDER_MESSAGE,
-  RANKING_ALREADY_EMPTY_MESSAGE,
   RANKING_NOTHING_LEFT_TO_PUBLISH_MESSAGE,
   RANKING_OVERTAKEN_MESSAGE,
   RANKING_PREVIOUS_PUBLISH_PENDING_MESSAGE,
@@ -150,7 +151,7 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
   const getContext = useActionContext('ranking_composer', 'ranking', blockId);
   const { personalSpaceId } = usePersonalSpaceId();
   const { smartAccount } = useSmartAccount();
-  const walletAddress = smartAccount?.account.address;
+  const walletAddress = useAccountAddress() ?? undefined;
   const queryClient = useQueryClient();
   const { profile } = useGeoProfile(walletAddress);
   const [, setToast] = useToast();
@@ -296,7 +297,7 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
         basedOnOrderedIds?: string[];
       }
     ): Promise<RankingSubmissionPublishResult | null> => {
-      const account = readCachedSmartAccount(queryClient, smartAccount);
+      const account = await awaitSigningAccount(queryClient, smartAccount);
       if (!account) {
         setToast(React.createElement('span', null, 'Please connect your wallet to publish your ranking'));
         return null;
@@ -570,10 +571,12 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
             votes.length === 0
               ? 'Ranking cleared.'
               : !changedElsewhere
-              ? 'Ranking published!'
-              : `Ranking published. ${
-                  merge.overrodeTheirOrder ? RANKING_CHANGED_ELSEWHERE_ORDER_MESSAGE : RANKING_CHANGED_ELSEWHERE_MESSAGE
-                }`
+                ? 'Ranking published!'
+                : `Ranking published. ${
+                    merge.overrodeTheirOrder
+                      ? RANKING_CHANGED_ELSEWHERE_ORDER_MESSAGE
+                      : RANKING_CHANGED_ELSEWHERE_MESSAGE
+                  }`
           )
         );
 

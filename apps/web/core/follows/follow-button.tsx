@@ -7,15 +7,14 @@ import cx from 'classnames';
 import { useActionContext } from '~/core/action-context-provider';
 import { runObservedAction } from '~/core/analytics-operations';
 import { tileChipSurface } from '~/core/debates/debate-video-tile';
-import { useAuthResolving } from '~/core/hooks/use-auth-resolving';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
-import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useQueuedAction } from '~/core/state/pending-actions';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { useFollowEntities } from '~/core/topics/use-follow-topics';
 import { useFollowedEntities } from '~/core/topics/use-followed-topics';
 import { normId } from '~/core/utils/norm-id';
+import { useAccountReadiness } from '~/core/wallet/account-readiness';
 
 import { CreateSmall } from '~/design-system/icons/create-small';
 import { TickSmall } from '~/design-system/icons/tick-small';
@@ -133,8 +132,8 @@ export function FollowButton({
   const { follow, unfollow, isPending } = useFollowEntities({ kind: target.kind });
   const { topicIds: followedIds, isLoading: isLoadingFollows } = useFollowedEntities({ kind: target.kind });
 
-  const authResolving = useAuthResolving();
-  const { smartAccount } = useSmartAccount();
+  const { state: accountState, address } = useAccountReadiness();
+  const authResolving = accountState === 'restoring';
   const { personalSpaceId: anyPersonalSpaceId, isRegistered, isLoading: isLoadingPersonalSpace } = usePersonalSpaceId();
   // A follow is an Interested cast from the personal space on chain, so one not yet registered
   // there can't write it.
@@ -218,7 +217,7 @@ export function FollowButton({
   if (isSelf) return null;
 
   const shownFollowed = followed || queuedFollow.isQueued;
-  const signedIn = Boolean(smartAccount);
+  const signedIn = Boolean(address);
   const noPersonalSpace =
     signedIn && !personalSpaceId && !isLoadingPersonalSpace && !isAccountSetupPending && !queuedFollow.isQueued;
   // Until the viewer's own space is known, a person button can't tell whether it is their own row.

@@ -4,13 +4,13 @@ import { useEffect, useState } from 'react';
 
 import { useRouter } from 'next/navigation';
 
-import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useToast } from '~/core/hooks/use-toast';
 import { getStaleProposalVoteToastMessage, useVote } from '~/core/hooks/use-vote';
 import { Proposal } from '~/core/io/dto/proposals';
 import { SubstreamVote } from '~/core/io/substream-schema';
 import { useReportError } from '~/core/state/status-bar-store';
 import { describeGovernanceError } from '~/core/utils/contracts/governance-errors';
+import { useAccountAddress } from '~/core/wallet/account-readiness';
 
 import { SmallButton } from '~/design-system/button';
 import { Check } from '~/design-system/icons/check';
@@ -51,7 +51,7 @@ export function AcceptOrRejectEditor({
 
   const [pendingChoice, setPendingChoice] = useState<'ACCEPT' | 'REJECT' | null>(null);
 
-  const { smartAccount } = useSmartAccount();
+  const accountAddress = useAccountAddress();
   const addOptimisticVote = useAddOptimisticVote();
   const removeOptimisticVote = useRemoveOptimisticVote();
   const reportError = useReportError();
@@ -139,7 +139,7 @@ export function AcceptOrRejectEditor({
       return <div className="rounded bg-errorTertiary px-3 py-2 text-button text-red-01">Rejected</div>;
     }
 
-    if (canExecute && smartAccount) {
+    if (canExecute && accountAddress) {
       return <Execute spaceId={spaceId} proposalId={proposalId} variant="small" />;
     }
 
@@ -153,7 +153,7 @@ export function AcceptOrRejectEditor({
   // While the proposal is open, editors can vote and change their vote. The
   // current choice is shown checked + emphasized and is inert; the other side
   // submits a replacement vote.
-  if (!isProposalEnded && smartAccount) {
+  if (!isProposalEnded && accountAddress) {
     const accepted = currentVote === 'ACCEPT';
     const rejected = currentVote === 'REJECT';
     return (
