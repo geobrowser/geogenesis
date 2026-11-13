@@ -158,6 +158,11 @@ export type PublishMissingDebateClaimsOptions = {
   dryRun?: boolean;
   /** Required to submit: the `fingerprint` of the dry run that was reviewed. */
   expect?: string;
+  /**
+   * The late claims sweep (GEO-3635 PR 3): submit the fresh plan without a reviewed fingerprint.
+   * Only ever with `blockText: 'keep'`; a block rewrite always needs a person to have seen it.
+   */
+  unattended?: boolean;
   /** Default `keep`. */
   blockText?: BlockTextMode;
 };
@@ -232,6 +237,7 @@ export async function publishMissingDebateClaims(
   const d = { ...defaultDeps, ...deps };
   const dryRun = options.dryRun ?? true;
   const blockText = options.blockText ?? 'keep';
+  if (options.unattended && blockText !== 'keep') throw new Error('A block rewrite is never unattended.');
   const config = d.getConfig();
   if (!config) return { status: 'acceptor_not_configured' };
 
@@ -263,7 +269,7 @@ export async function publishMissingDebateClaims(
     // Re-planned under the lease, so what is submitted is what the graph lacks right now.
     const { plan, values, relations } = await build();
     if (plan.opCount === 0) return { status: 'up_to_date', plan } as const;
-    if (options.expect !== plan.fingerprint) {
+    if (!options.unattended && options.expect !== plan.fingerprint) {
       return { status: 'changed_since_dry_run', plan, expected: options.expect ?? '' } as const;
     }
     const ops = await d.prepareOps(values, relations, spaceId);
