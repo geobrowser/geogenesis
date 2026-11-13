@@ -18,8 +18,11 @@ type Props = {
   /** The accessible name when `title` isn't plain text. */
   ariaLabel?: string;
   wide?: boolean;
-  /** `narrow` for one player on its own (the watch dialog); `compare` for the compare view (D1). */
-  size?: 'narrow' | 'compare';
+  /**
+   * `narrow` for one player on its own; `compare` for the compare view (D1); `watch` for the watch
+   * dialog's player beside its transcript (GEO-3728), a fixed height whose columns scroll themselves.
+   */
+  size?: 'narrow' | 'compare' | 'watch';
   /** D1's round close button. */
   roundClose?: boolean;
   /**
@@ -88,7 +91,9 @@ export function RankingFlowDialog({
                   ? 'max-w-[1350px]'
                   : size === 'narrow'
                     ? 'max-w-[560px]'
-                    : 'max-w-[880px]'
+                    : size === 'watch'
+                      ? 'h-[min(760px,calc(100vh-5rem))] max-w-[960px] supports-[height:100dvh]:h-[min(760px,calc(100dvh-5rem))]'
+                      : 'max-w-[880px]'
             )}
           >
             <div className="flex shrink-0 items-start justify-between gap-4">
@@ -122,7 +127,11 @@ export function RankingFlowDialog({
             </div>
             {/* The only part that scrolls. */}
             <div
-              className="-mx-6 flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain px-6 md:-mx-4 md:px-4"
+              className={cx(
+                '-mx-6 flex min-h-0 flex-1 flex-col gap-4 px-6 md:-mx-4 md:px-4',
+                // The watch dialog's transcript scrolls itself, so the player never scrolls away.
+                size === 'watch' ? 'overflow-hidden' : 'overflow-y-auto overscroll-contain'
+              )}
               data-testid="ranking-flow-dialog-body"
             >
               {children}

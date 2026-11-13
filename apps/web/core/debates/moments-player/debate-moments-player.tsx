@@ -71,6 +71,25 @@ export type DebateMomentsPlayerProps = {
   speakers?: { top: MomentsSpeaker | null; bottom: MomentsSpeaker | null } | null;
   /** A small label on the picture, top-left (the compare view's "#2 in your ranking"). */
   badge?: string | null;
+  /**
+   * How fast to play (GEO-3728): 1, 1.5, 2. Held for every moment of the reel and the full debate.
+   * Defaults to 1.
+   */
+  playbackRate?: number;
+  /** Where the player is, on mount and as it plays: which mode, which moment, how far into each. */
+  onPosition?: (position: MomentsPlayerPosition) => void;
+  /** Commands from the host: play a moment, or the full debate, from a given point (a transcript line). */
+  controllerRef?: React.Ref<DebateMomentsPlayerHandle>;
+};
+
+/** Where a moments player is: the moment on screen and its clip position, and the full debate's. */
+export type MomentsPlayerPosition = { mode: PlayerMode; index: number; clipMs: number; fullMs: number };
+
+export type DebateMomentsPlayerHandle = {
+  /** Plays moment `index` from `clipMs` into its clip, from either mode. */
+  playMomentAt: (index: number, clipMs: number) => void;
+  /** Plays the full debate from `atMs`, from either mode. */
+  playFullAt: (atMs: number) => void;
 };
 
 export function DebateMomentsPlayer({ moments, ...props }: DebateMomentsPlayerProps) {
@@ -153,6 +172,9 @@ function MomentsStory({
   onPlay,
   speakers,
   badge,
+  playbackRate = 1,
+  onPosition,
+  controllerRef,
 }: StoryProps) {
   const [story, dispatch] = React.useReducer(storyReducer, moments.length, initialStoryState);
   const videoRef = React.useRef<HTMLVideoElement | null>(null);
@@ -173,6 +195,13 @@ function MomentsStory({
   const autoplayRef = React.useRef(false);
   /** The full debate's seek waiting for its metadata, in ms. */
   const pendingSeekRef = React.useRef<number | null>(null);
+  /**
+   * A moment's seek waiting for its clip's metadata (a transcript line pressed), keyed by the clip's
+   * src so a second press into another clip can't land the first one's time on it.
+   */
+  const pendingClipSeekRef = React.useRef<{ src: string; ms: number } | null>(null);
+  /** The speed asked for, read by the element's handlers. */
+  const rateRef = React.useRef(playbackRate);
   /** The src whose metadata the element has loaded; null while a new one is loading. */
   const metadataSrcRef = React.useRef<string | null>(null);
   /** Set when the viewer presses play, so the `play` that follows is reported to the host once. */
@@ -208,13 +237,40 @@ function MomentsStory({
   const start = React.useCallback((video: HTMLVideoElement | null) => {
     if (!video) return;
     setFailed(false);
-    video.play()?.catch(() => {
+    video.play()?.catch((error: unknown) => {
+      // Interrupted by the next media loading, which starts itself: that start reports its own
+      // outcome, and this one must not mark the new media paused (GEO-3728's line jumps).
+      if (autoplayRef.current && (error as { name?: unknown } | null)?.name === 'AbortError') return;
       // Refused (autoplay policy) or interrupted by a step: the big play control stays up.
       viewerStartRef.current = false;
       setAdvancing(false);
       setPlaying(false);
     });
   }, []);
+
+  /**
+   * The element's speed. Both properties: loading new media (every moment, expand, close, Retry)
+   * resets `playbackRate` to `defaultPlaybackRate`, so the default carries the speed across them.
+   */
+  const applyRate = React.useCallback((video: HTMLVideoElement | null) => {
+    if (!video) return;
+    const rate = rateRef.current;
+    if (video.defaultPlaybackRate !== rate) video.defaultPlaybackRate = rate;
+    if (video.playbackRate !== rate) video.playbackRate = rate;
+  }, []);
+
+  React.useEffect(() => {
+    rateRef.current = playbackRate;
+    applyRate(videoRef.current);
+  }, [playbackRate, applyRate]);
+
+  const onPositionRef = React.useRef(onPosition);
+  React.useEffect(() => {
+    onPositionRef.current = onPosition;
+  }, [onPosition]);
+  React.useEffect(() => {
+    onPositionRef.current?.({ mode: story.mode, index: story.index, clipMs, fullMs });
+  }, [story.mode, story.index, clipMs, fullMs]);
 
   const applyPendingSeek = React.useCallback(() => {
     const video = videoRef.current;
@@ -233,8 +289,11 @@ function MomentsStory({
     setFailed(false);
     setClipMs(0);
     setClipDurationMs(null);
+    applyRate(videoRef.current);
+    // A line pressed into this clip starts it once its time is set, not from 0 first.
+    if (pendingClipSeekRef.current?.src === src) return;
     if (story.mode === 'moments' && autoplayRef.current) start(videoRef.current);
-  }, [src, story.mode, start]);
+  }, [src, story.mode, start, applyRate]);
 
   // Entering the full debate, or a dot or retry asking for a time: seek once the metadata is in.
   React.useEffect(() => {
@@ -339,6 +398,40 @@ function MomentsStory({
     start(video);
   };
 
+  React.useImperativeHandle(
+    controllerRef,
+    () => ({
+      playMomentAt: (index, positionMs) => {
+        const target = moments[index];
+        const video = videoRef.current;
+        if (!target || !video) return;
+        const ms = Math.max(0, positionMs);
+        autoplayRef.current = true;
+        viewerStartRef.current = true;
+        if (story.mode === 'moments' && story.index === index && metadataSrcRef.current === target.clipUrl) {
+          // The clip on screen: seek it and play, inside the press.
+          pendingClipSeekRef.current = null;
+          video.currentTime = ms / 1000;
+          setClipMs(ms);
+          setFailed(false);
+          if (story.finished) dispatch({ type: 'goTo', index });
+          start(video);
+          return;
+        }
+        pendingClipSeekRef.current = { src: target.clipUrl, ms };
+        dispatch({ type: 'goTo', index });
+      },
+      playFullAt: atMs => {
+        const ms = Math.max(0, atMs);
+        autoplayRef.current = true;
+        viewerStartRef.current = true;
+        pendingClipSeekRef.current = null;
+        dispatch(story.mode === 'moments' ? { type: 'expand', atMs: ms } : { type: 'seekFull', atMs: ms });
+      },
+    }),
+    [moments, story.mode, story.index, story.finished, start]
+  );
+
   const clipLengthMs = clipDurationMs ?? moment?.durationMs ?? null;
   const caption = moment ? momentCaptionAt(moment.captions, clipMs) : null;
   // No fill on focus: the middle zone is 30–70% wide, so one showed as a pale band down the video
@@ -369,8 +462,16 @@ function MomentsStory({
           metadataSrcRef.current = src;
           const seconds = video.duration;
           const known = Number.isFinite(seconds) && seconds > 0;
+          applyRate(video);
           if (story.mode === 'moments') {
             if (known) setClipDurationMs(seconds * 1000);
+            const pending = pendingClipSeekRef.current;
+            if (pending?.src === src) {
+              pendingClipSeekRef.current = null;
+              video.currentTime = pending.ms / 1000;
+              setClipMs(pending.ms);
+              if (autoplayRef.current) start(video);
+            }
             return;
           }
           if (known) setFullDurationMs(seconds * 1000);
@@ -396,6 +497,11 @@ function MomentsStory({
           }
         }}
         onPause={() => setPlaying(false)}
+        // iOS can drop a speed set before playback starts; and anything else that moves it is put back.
+        onPlaying={event => applyRate(event.currentTarget)}
+        onRateChange={event => {
+          if (event.currentTarget.playbackRate !== rateRef.current) applyRate(event.currentTarget);
+        }}
         onError={() => {
           setAdvancing(false);
           setPlaying(false);

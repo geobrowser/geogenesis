@@ -2,20 +2,47 @@
 
 import * as React from 'react';
 
+import { useAtom } from 'jotai';
+
 import { capture } from '~/core/analytics';
-import { DebateMomentsPlayer } from '~/core/debates/moments-player/debate-moments-player';
+import { GeoChatRequestError } from '~/core/debates/api';
+import { useDebateTranscript } from '~/core/debates/hooks';
+import {
+  DebateMomentsPlayer,
+  type DebateMomentsPlayerHandle,
+  type MomentsPlayerPosition,
+} from '~/core/debates/moments-player/debate-moments-player';
+import type { PlayerMode } from '~/core/debates/moments-player/story-state';
+import { useDebateMoments } from '~/core/debates/moments-player/use-debate-moments';
 import { useMomentsSpeakers } from '~/core/debates/moments-player/use-moments-speakers';
+import {
+  type WatchBlock,
+  type WatchLine,
+  blockSpeaker,
+  fullDebateBlocks,
+  highlightedLines,
+  momentBlocks,
+} from '~/core/debates/moments-player/watch-transcript';
+import { ID } from '~/core/id';
 
 import { BestDebateWatchContext, type BestDebateWatchEntry, useBestDebateRowData } from './best-debate-row';
 import { RankingFlowDialog } from './ranking-flow-dialog';
+import { type WatchTranscriptContent, WatchTranscriptPanel, type WatchTranscriptView } from './watch-transcript-panel';
+import { type BestDebatesWatchSpeed, bestDebatesWatchSpeedAtom, bestDebatesWatchSpeedOf } from '~/atoms';
 
 /** Its own group, so a watched debate never pauses (or is paused by) the compare view's players. */
 const WATCH_PLAYBACK_GROUP = 'best-debates-watch';
 
+/** The full transcript's sentences (GEO-3349) where served: whole sentences read better than lines. */
+const TRANSCRIPT_INCLUDE = ['sentences'] as const;
+
+type WatchSource = 'best_debates_block' | 'best_debates_ranking';
+
 /**
  * Lets every Best debates poster open its debate to watch (Preston, 12 Nov): a dialog with the same
- * Debates-app player the compare view uses, moments first and the full debate a tap away. On a
- * phone the dialog is a full-screen sheet. Escape, the close button and the backdrop close it.
+ * Debates-app player the compare view uses, moments first and the full debate a tap away, beside
+ * the debate's transcript and at the speed the ranker last chose (GEO-3728). On a phone the dialog
+ * is a full-screen sheet. Escape, the close button and the backdrop close it.
  */
 export function BestDebateWatchProvider({
   source,
@@ -24,7 +51,7 @@ export function BestDebateWatchProvider({
   children,
 }: {
   /** The analytics `source` of the watches opened here. */
-  source: 'best_debates_block' | 'best_debates_ranking';
+  source: WatchSource;
   /** The Best debates block and its space, so a watch joins up with that block's placements. */
   blockId: string;
   spaceId: string;
@@ -50,29 +77,203 @@ export function BestDebateWatchProvider({
   return (
     <BestDebateWatchContext.Provider value={watch}>
       {children}
-      {watching ? <WatchDebateDialog entityId={watching} onClose={() => setWatching(null)} /> : null}
+      {watching ? (
+        <WatchDebateDialog
+          entityId={watching}
+          analytics={{ source, block_id: blockId, space_id: spaceId }}
+          onClose={() => setWatching(null)}
+        />
+      ) : null}
     </BestDebateWatchContext.Provider>
   );
 }
 
-function WatchDebateDialog({ entityId, onClose }: { entityId: string; onClose: () => void }) {
+/**
+ * The watch dialog's frame (GEO-3728): the player, with whatever sits under it, on the left and the
+ * transcript on the right; on a phone, one column with the player at the top, so the transcript
+ * never scrolls it away. `belowPlayer` is where a debate's grade goes (GEO-3729).
+ */
+export function WatchDebateLayout({
+  player,
+  belowPlayer,
+  transcript,
+}: {
+  player: React.ReactNode;
+  belowPlayer?: React.ReactNode;
+  transcript: React.ReactNode;
+}) {
+  return (
+    <div className="flex h-full min-h-0 gap-6 md:flex-col md:gap-3" data-testid="best-debate-watch-layout">
+      <div className="flex h-full w-[min(440px,45%)] shrink-0 flex-col gap-3 md:h-auto md:min-h-[160px] md:w-full md:flex-[0_1_42dvh]">
+        {/* Sized from the room it is given: the 4:5 picture as large as fits, whole. */}
+        <div className="[container-type:size] min-h-0 flex-1">
+          <div className="mx-auto" style={WATCH_PLAYER_STYLE} data-testid="best-debate-watch">
+            {player}
+          </div>
+        </div>
+        {belowPlayer}
+      </div>
+      <div className="flex min-h-[132px] min-w-0 flex-1 flex-col">{transcript}</div>
+    </div>
+  );
+}
+
+const WATCH_PLAYER_STYLE: React.CSSProperties = { width: 'min(100cqw, calc(100cqh * 480 / 578))' };
+
+const NO_HIGHLIGHT = { moments: null, full: null };
+
+function WatchDebateDialog({
+  entityId,
+  analytics,
+  onClose,
+}: {
+  entityId: string;
+  analytics: { source: WatchSource; block_id: string; space_id: string };
+  onClose: () => void;
+}) {
   const display = useBestDebateRowData(entityId);
   const speakers = useMomentsSpeakers(entityId);
+  // The same cached read the player plays, so the Moments transcript is the reel on screen.
+  const reel = useDebateMoments(entityId);
+  // Read as the popup opens, so switching to the full debate's transcript is instant.
+  const transcript = useDebateTranscript(
+    entityId.includes('-') ? entityId : ID.hexToUuid(entityId),
+    'json',
+    true,
+    TRANSCRIPT_INCLUDE
+  );
+  const [storedSpeed, setStoredSpeed] = useAtom(bestDebatesWatchSpeedAtom);
+  const speed = bestDebatesWatchSpeedOf(storedSpeed);
+
   const title = display?.title ?? 'Debate';
   const meta = [display?.debaters, display?.space?.name].filter(Boolean).join(' · ') || undefined;
+  const momentsOffered = reel.moments.length > 0;
+  const [view, setView] = React.useState<WatchTranscriptView>('moments');
+  const shownView: WatchTranscriptView = momentsOffered ? view : 'full';
+
+  const controller = React.useRef<DebateMomentsPlayerHandle | null>(null);
+  const reelBlocks = React.useMemo(() => momentBlocks(reel.moments), [reel.moments]);
+  const fullBlocks = React.useMemo(() => fullDebateBlocks(transcript.data), [transcript.data]);
+
+  // Only the highlighted lines are kept, not the position: the player reports several times a
+  // second, and the dialog re-renders only when the line being spoken changes.
+  const [highlight, setHighlight] = React.useState<{ moments: string | null; full: string | null }>(NO_HIGHLIGHT);
+  // The moment the player is on (kept while it plays the full debate): the one the Moments view shows.
+  const [shownMoment, setShownMoment] = React.useState(0);
+  const positionRef = React.useRef<MomentsPlayerPosition | null>(null);
+  const onPosition = React.useCallback(
+    (position: MomentsPlayerPosition) => {
+      positionRef.current = position;
+      setShownMoment(position.index);
+      const next = highlightedLines(position, reel.moments, reelBlocks, fullBlocks);
+      setHighlight(current => (current.moments === next.moments && current.full === next.full ? current : next));
+    },
+    [reel.moments, reelBlocks, fullBlocks]
+  );
+  // The full transcript can arrive after the player has started: place the highlight in it then.
+  React.useEffect(() => {
+    if (positionRef.current) onPosition(positionRef.current);
+  }, [onPosition]);
+
+  // The transcript follows the video: switching the player shows that view's transcript. The ranker
+  // can still flip the transcript alone, to read ahead.
+  const onModeChange = React.useCallback((mode: PlayerMode) => setView(mode), []);
+
+  const event = { ...analytics, entity_id: entityId };
+  const changeView = (next: WatchTranscriptView) => {
+    if (next === shownView) return;
+    capture('element_changed', { ...event, element: 'watch_transcript_view', value: next, previous_value: shownView });
+    setView(next);
+  };
+  const changeSpeed = (next: BestDebatesWatchSpeed) => {
+    if (next === speed) return;
+    capture('element_changed', { ...event, element: 'watch_playback_speed', value: next, previous_value: speed });
+    setStoredSpeed(next);
+  };
+  const playLine = (block: WatchBlock, line: WatchLine) => {
+    capture('element_clicked', {
+      ...event,
+      element_action: 'watch_transcript_jump',
+      view: shownView,
+      ...(block.momentIndex !== null ? { moment_index: block.momentIndex } : {}),
+    });
+    if (block.momentIndex !== null) controller.current?.playMomentAt(block.momentIndex, line.startMs);
+    else controller.current?.playFullAt(line.startMs);
+  };
+  const stepMoment = (index: number) => {
+    capture('element_clicked', { ...event, element_action: 'watch_transcript_moment', moment_index: index });
+    controller.current?.playMomentAt(index, 0);
+  };
+  const momentNav =
+    shownView === 'moments' && momentsOffered
+      ? { index: Math.min(shownMoment, reel.moments.length - 1), count: reel.moments.length, onStep: stepMoment }
+      : undefined;
+
   return (
-    <RankingFlowDialog open onClose={onClose} title={title} subtitle={meta} size="narrow">
-      {/* Held to the height the screen leaves, so the whole picture shows without scrolling. */}
-      <div className="mx-auto w-full" style={WATCH_PLAYER_STYLE} data-testid="best-debate-watch">
-        <DebateMomentsPlayer
-          debateId={entityId}
-          label={title}
-          playbackGroup={WATCH_PLAYBACK_GROUP}
-          speakers={speakers}
-        />
-      </div>
+    <RankingFlowDialog open onClose={onClose} title={title} subtitle={meta} size="watch">
+      <WatchDebateLayout
+        player={
+          <DebateMomentsPlayer
+            debateId={entityId}
+            label={title}
+            playbackGroup={WATCH_PLAYBACK_GROUP}
+            speakers={speakers}
+            playbackRate={Number(speed)}
+            onPosition={onPosition}
+            onModeChange={onModeChange}
+            controllerRef={controller}
+          />
+        }
+        transcript={
+          <WatchTranscriptPanel
+            view={shownView}
+            momentsOffered={momentsOffered}
+            onViewChange={changeView}
+            speed={speed}
+            onSpeedChange={changeSpeed}
+            content={transcriptContent(
+              shownView,
+              reel.status,
+              reelBlocks,
+              momentNav?.index ?? 0,
+              transcript,
+              fullBlocks
+            )}
+            highlightKey={shownView === 'moments' ? highlight.moments : highlight.full}
+            showTurnTimes={shownView === 'full'}
+            speakerOf={slot => blockSpeaker(slot, speakers, reel.slotNames)}
+            momentNav={momentNav}
+            onLine={playLine}
+          />
+        }
+      />
     </RankingFlowDialog>
   );
 }
 
-const WATCH_PLAYER_STYLE: React.CSSProperties = { maxWidth: 'max(240px, calc((100dvh - 300px) * 0.83))' };
+/** What the transcript shows for the view on screen. */
+function transcriptContent(
+  view: WatchTranscriptView,
+  reelStatus: 'loading' | 'ready' | 'error',
+  reelBlocks: readonly WatchBlock[],
+  momentIndex: number,
+  transcript: Pick<ReturnType<typeof useDebateTranscript>, 'isPending' | 'isError' | 'error' | 'refetch'>,
+  fullBlocks: readonly WatchBlock[]
+): WatchTranscriptContent {
+  if (reelStatus === 'loading') return { status: 'loading' };
+  if (view === 'moments') {
+    // A reel whose clips carry no captions has nothing to read. Otherwise the moment playing, alone.
+    const shown = reelBlocks[momentIndex];
+    return shown && reelBlocks.some(block => block.lines.length > 0)
+      ? { status: 'ready', blocks: [shown] }
+      : { status: 'unavailable' };
+  }
+  if (transcript.isPending) return { status: 'loading' };
+  if (transcript.isError) {
+    // A debate with no transcript is a 404: nothing a second try would fix.
+    return transcript.error instanceof GeoChatRequestError && transcript.error.status === 404
+      ? { status: 'unavailable' }
+      : { status: 'error', onRetry: () => void transcript.refetch() };
+  }
+  return { status: 'ready', blocks: fullBlocks };
+}
