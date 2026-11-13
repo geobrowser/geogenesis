@@ -200,10 +200,11 @@ describe('grades on a Best debates publish (GEO-3729)', () => {
         ]),
       });
     });
+    // Our order led (we swapped 1 and 2), so 1 goes to the top of C, its new tier.
     expect(written()).toEqual([
       [id(2), 'A'],
-      [id(3), 'C'],
       [id(1), 'C'],
+      [id(3), 'C'],
     ]);
   });
 

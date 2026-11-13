@@ -113,38 +113,28 @@ describe('mergeBallots keeps tiers (GEO-3729)', () => {
         (tierRank[grades.get(ids[i - 1]!) ?? ('D' as 'A')] ?? 3) <= (tierRank[grades.get(x) ?? ('D' as 'A')] ?? 3)
     );
 
-  it('moves a debate demoted elsewhere to the bottom of its new tier when this edit reordered', () => {
-    // Base [1 A, 2 A, 3 C, 4 C]. Elsewhere 1 went to C (bottom). Here 2 and 1 swapped.
+  it('moves a debate promoted elsewhere to the top of its new tier when this edit reordered', () => {
+    // Base [1 A, 2 A, 3 C, 4 C]. Elsewhere 4 went to A (top). Here 2 and 1 swapped.
+    const graded = g([
+      [1, 'A'],
+      [2, 'A'],
+      [3, 'C'],
+      [4, 'C'],
+    ]);
     const merged = mergeBallots({
-      base: {
-        ids: [id(1), id(2), id(3), id(4)],
-        grades: g([
-          [1, 'A'],
-          [2, 'A'],
-          [3, 'C'],
-          [4, 'C'],
-        ]),
-      },
-      ours: {
-        ids: [id(2), id(1), id(3), id(4)],
-        grades: g([
-          [1, 'A'],
-          [2, 'A'],
-          [3, 'C'],
-          [4, 'C'],
-        ]),
-      },
+      base: { ids: [id(1), id(2), id(3), id(4)], grades: graded },
+      ours: { ids: [id(2), id(1), id(3), id(4)], grades: graded },
       theirs: {
-        ids: [id(2), id(3), id(4), id(1)],
+        ids: [id(4), id(1), id(2), id(3)],
         grades: g([
-          [1, 'C'],
+          [1, 'A'],
           [2, 'A'],
           [3, 'C'],
-          [4, 'C'],
+          [4, 'A'],
         ]),
       },
     });
-    expect(merged.ids).toEqual([id(2), id(3), id(4), id(1)]);
+    expect(merged.ids).toEqual([id(4), id(2), id(1), id(3)]);
   });
 
   it('keeps where the other device put a debate inside a tier when its order led', () => {
@@ -235,5 +225,21 @@ describe('mergeBallots keeps tiers (GEO-3729)', () => {
       const merged = mergeBallots({ base: side(ids), ours: side(ids), theirs: side(ids) });
       expect(isTierOrdered(merged.ids, merged.grades)).toBe(true);
     }
+  });
+});
+
+describe('whenRankingPublishQueueSettles', () => {
+  it('waits for tasks queued while it waited', async () => {
+    const { enqueueRankingPublish, whenRankingPublishQueueSettles } = await import('./ranking-publish-queue');
+    const order: string[] = [];
+    let release!: () => void;
+    void enqueueRankingPublish('k', () => new Promise<void>(r => (release = r)).then(() => void order.push('first')));
+    const settled = whenRankingPublishQueueSettles('k').then(() => order.push('settled'));
+    void enqueueRankingPublish('k', async () => void order.push('second'));
+    // The first task starts a tick after it is queued.
+    await new Promise(resolve => setTimeout(resolve, 0));
+    release();
+    await settled;
+    expect(order).toEqual(['first', 'second', 'settled']);
   });
 });

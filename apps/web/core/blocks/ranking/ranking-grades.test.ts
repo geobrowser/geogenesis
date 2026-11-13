@@ -44,14 +44,14 @@ describe('gradeInto', () => {
     [4, 'C'],
   ]); // 5 is ungraded
 
-  it('puts a new A below the last A', () => {
+  it('puts a new A at the top of the A tier (Preston, 14 Nov)', () => {
     const next = gradeInto(ballot, grades, id(9), 'A');
-    expect(next.ids).toEqual(ids(1, 2, 9, 3, 4, 5));
+    expect(next.ids).toEqual(ids(9, 1, 2, 3, 4, 5));
     expect(next.grades.get(id(9))).toBe('A');
   });
 
-  it('puts a new C below the last C and above ungraded entries', () => {
-    expect(gradeInto(ballot, grades, id(9), 'C').ids).toEqual(ids(1, 2, 3, 4, 9, 5));
+  it('puts a new C at the top of the C tier, below the B tier', () => {
+    expect(gradeInto(ballot, grades, id(9), 'C').ids).toEqual(ids(1, 2, 3, 9, 4, 5));
   });
 
   it('puts a grade with an empty tier below the higher tiers', () => {
@@ -66,14 +66,14 @@ describe('gradeInto', () => {
     expect(gradeInto(ids(3, 4), g([[3, 'B']]), id(9), 'A').ids).toEqual(ids(9, 3, 4));
   });
 
-  it('moves a regraded entry to the bottom of its new tier', () => {
+  it('moves a regraded entry to the top of its new tier', () => {
     const next = gradeInto(ballot, grades, id(1), 'B');
-    expect(next.ids).toEqual(ids(2, 3, 1, 4, 5));
+    expect(next.ids).toEqual(ids(2, 1, 3, 4, 5));
     expect(next.grades.get(id(1))).toBe('B');
   });
 
-  it('moves an entry to the bottom of its own tier when given the same grade again', () => {
-    expect(gradeInto(ballot, grades, id(1), 'A').ids).toEqual(ids(2, 1, 3, 4, 5));
+  it('moves an entry to the top of its own tier when given the same grade again', () => {
+    expect(gradeInto(ballot, grades, id(2), 'A').ids).toEqual(ids(2, 1, 3, 4, 5));
   });
 
   it('starts an empty ballot', () => {

@@ -79,7 +79,7 @@ describe('grading from the block (GEO-3729)', () => {
     await act(async () => first.resolve(true));
     expect(publish).toHaveBeenCalledTimes(2);
     const [ids, grades] = publish.mock.calls[1] as [string[], BallotGrades];
-    expect(ids).toEqual([id(1), id(3), id(2), id(4)]);
+    expect(ids).toEqual([id(3), id(1), id(2), id(4)]);
     expect([...grades.values()]).toEqual(['A', 'B', 'A', 'C']);
 
     await act(async () => second.resolve(true));
@@ -140,7 +140,7 @@ describe('grading from the block (GEO-3729)', () => {
     act(() => result.current.grading.grade(id(3), 'A'));
     await act(async () => first.resolve(true));
     const [ids, grades] = publish.mock.calls[1] as [string[], BallotGrades];
-    expect(ids).toEqual([id(1), id(3), id(2), id(5)]);
+    expect(ids).toEqual([id(3), id(1), id(2), id(5)]);
     expect(grades.get(id(5))).toBe('C');
   });
 
@@ -164,6 +164,6 @@ describe('grading from the block (GEO-3729)', () => {
     };
     await act(async () => settle());
     expect(publish).toHaveBeenCalledTimes(1);
-    expect(publish.mock.calls[0]![0]).toEqual([id(1), id(8), id(2)]);
+    expect(publish.mock.calls[0]![0]).toEqual([id(1), id(2), id(8)]);
   });
 });

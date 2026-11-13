@@ -66,30 +66,32 @@ export function sameGrades(ids: readonly string[], a: BallotGrades, b: BallotGra
 }
 
 /**
- * Where an entry graded `grade` goes: right after the last entry of that tier, or, when the tier
- * is empty, right after the last entry of a higher tier (so before every lower tier and every
- * ungraded entry). The top of the list when neither exists.
+ * Where an entry graded `grade` goes (Preston, 14 Nov: the top of its tier, so a new A reaches the
+ * head of Best at once rather than queueing behind every older A as place values fade): right
+ * before the first entry of that tier, or, when the tier is empty, right after the last entry of a
+ * higher tier (so before every lower tier and every ungraded entry). The top of the list when
+ * neither exists.
  */
-function bottomOfTierIndex(ids: readonly string[], grades: BallotGrades, grade: Grade): number {
-  let lastSame = -1;
+function topOfTierIndex(ids: readonly string[], grades: BallotGrades, grade: Grade): number {
+  let firstSame = -1;
   let lastHigher = -1;
   ids.forEach((id, index) => {
     const tier = tierOf(grades, id);
-    if (tier === grade) lastSame = index;
+    if (tier === grade && firstSame === -1) firstSame = index;
     else if (TIER_RANK[tier] < TIER_RANK[grade]) lastHigher = index;
   });
-  return (lastSame !== -1 ? lastSame : lastHigher) + 1;
+  return firstSame !== -1 ? firstSame : lastHigher + 1;
 }
 
 export type GradedBallot = { ids: string[]; grades: BallotGrades };
 
-/** Grades a debate and moves it to the bottom of that tier (it joins the ballot if it wasn't on it). */
+/** Grades a debate and moves it to the top of that tier (it joins the ballot if it wasn't on it). */
 export function gradeInto(ids: readonly string[], grades: BallotGrades, entityId: string, grade: Grade): GradedBallot {
   const key = normId(entityId);
   const rest = ids.filter(id => normId(id) !== key);
   const nextGrades = new Map(grades);
   nextGrades.delete(key);
-  const at = bottomOfTierIndex(rest, nextGrades, grade);
+  const at = topOfTierIndex(rest, nextGrades, grade);
   nextGrades.set(key, grade);
   return { ids: [...rest.slice(0, at), entityId, ...rest.slice(at)], grades: nextGrades };
 }
@@ -227,16 +229,16 @@ export function mergeGrades({
 
 /**
  * The ballot in tier order (A, B, C, ungraded), keeping the order within each tier. Entries
- * `toBottom` names go to the bottom of their tier (still in order among themselves).
+ * `toTop` names go to the top of their tier (still in order among themselves).
  */
 export function sortIntoTiers(
   ids: readonly string[],
   grades: BallotGrades,
-  toBottom: (id: string) => boolean = () => false
+  toTop: (id: string) => boolean = () => false
 ): string[] {
   return ids
-    .map((id, index) => ({ id, index, rank: TIER_RANK[tierOf(grades, id)], bottom: toBottom(id) ? 1 : 0 }))
-    .sort((a, b) => a.rank - b.rank || a.bottom - b.bottom || a.index - b.index)
+    .map((id, index) => ({ id, index, rank: TIER_RANK[tierOf(grades, id)], top: toTop(id) ? 0 : 1 }))
+    .sort((a, b) => a.rank - b.rank || a.top - b.top || a.index - b.index)
     .map(entry => entry.id);
 }
 

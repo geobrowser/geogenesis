@@ -5,6 +5,7 @@ import * as React from 'react';
 import { fetchDebateOwnSpaces } from '~/core/blocks/ranking/best-debates-debates';
 import { type BallotGrades, NO_GRADES, sortIntoTiers } from '~/core/blocks/ranking/ranking-grades';
 import { insertAt } from '~/core/blocks/ranking/ranking-placement';
+import { enqueueRankingPublish, whenRankingPublishQueueSettles } from '~/core/blocks/ranking/ranking-publish-queue';
 import type { RankingSubmissionSlot } from '~/core/blocks/ranking/ranking-submission-types';
 import {
   type RankersRead,
@@ -20,7 +21,6 @@ import { normId } from '~/core/utils/norm-id';
 import type { RankingComposeTeamMode, RankingComposeTeamView } from '../ranking-compose-global-ranking';
 import type { RankingComposeMobileTab, RankingComposeMobileTabs } from '../ranking-compose-layout';
 import { gradesForOrder } from '../use-ranking-compose-draft';
-import { useSerialRuns } from './best-debate-grading';
 import { BestDebatesTeamRowContent } from './best-debates-team-row';
 import { useBestDebatesTeamTools } from './best-debates-team-tools';
 import { BestDebatesToRankList } from './best-debates-to-rank-list';
@@ -50,6 +50,12 @@ export type UseBestDebatesComposeArgs = {
   onPublished?: (published: RankingSubmissionPublishResult, sentIds: string[], sentGrades: BallotGrades) => void;
   /** Done publishes (see `useBestDebatesPlacement`). Off here: the screen's Publish sends everything. */
   publishOnDone?: boolean;
+  /**
+   * Publishes take turns (the block, where placements and the popup's grades both publish at once),
+   * and a queued one counts as saving. Off on the ranking screen, whose one Publish is off while
+   * it publishes.
+   */
+  serialPublishes?: boolean;
   /** The team column's search, which To rank filters by too. */
   searchQuery?: string;
   /** Open the team column on To rank (the screen was opened with `?team=to-rank`, GEO-3677). */
@@ -82,6 +88,7 @@ export function useBestDebatesCompose({
   pushDown,
   searchQuery = '',
   publishOnDone = false,
+  serialPublishes = false,
 }: UseBestDebatesComposeArgs) {
   const tools = useBestDebatesTeamTools();
   const [, setToast] = useToast();
@@ -180,10 +187,25 @@ export function useBestDebatesCompose({
     [debateName, onPublished, personalSpaceId, rankers, saveMySubmission, setToast]
   );
 
-  // One publish at a time from here (GEO-3729): a placement's Done and the popup's grades on the
-  // block both publish through this, and the ballot publisher refuses a second publish while one
-  // is out.
-  const { run: publish, whenSettled: whenPublishesSettle } = useSerialRuns(publishNow);
+  // On the block (GEO-3729), a placement's Done and the popup's grades both publish through here,
+  // and the ballot publisher refuses a second publish while one is out: so they take turns, each
+  // waiting from its very start, and the turn shows as saving. The ranking screen keeps one
+  // Publish button that is simply off while it publishes.
+  const queueKey = `best-debates-block-publishes:${blockId}`;
+  const [queued, setQueued] = React.useState(0);
+  const publish = React.useCallback(
+    (ids: string[], givenGrades?: BallotGrades): Promise<boolean> => {
+      if (!serialPublishes) return publishNow(ids, givenGrades);
+      setQueued(count => count + 1);
+      return enqueueRankingPublish(queueKey, () => publishNow(ids, givenGrades)).finally(() =>
+        setQueued(count => count - 1)
+      );
+    },
+    [publishNow, queueKey, serialPublishes]
+  );
+  /** Resolves once no publish queued here is out (the block's grades wait on it). */
+  const whenPublishesSettle = React.useCallback(() => whenRankingPublishQueueSettles(queueKey), [queueKey]);
+  const publishing = isSaving || queued > 0;
 
   const placement = useBestDebatesPlacement({
     blockId,
@@ -193,7 +215,8 @@ export function useBestDebatesCompose({
     nameOf: debateName,
     toRankIds,
     publish,
-    isSaving,
+    // A Done queued behind a grade publish counts as saving too.
+    isSaving: publishing,
     pushDown,
     publishOnDone,
   });

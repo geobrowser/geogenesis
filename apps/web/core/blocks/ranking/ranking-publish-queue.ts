@@ -194,7 +194,7 @@ export type GradedBallotMergeResult = BallotMergeResult & { grades: BallotGrades
  * tiers, keeping the merged order within each tier, so every merge comes out tier-ordered.
  *
  * An entry the other side regraded sits where that side put it when its order led the merge. When
- * this edit's order led, it still sits where this edit had it, so it goes to the bottom of its new
+ * this edit's order led, it still sits where this edit had it, so it goes to the top of its new
  * tier, as a regrade does. Without grades on any side this is exactly `mergeBallotOrders`.
  */
 export function mergeBallots({
@@ -334,6 +334,11 @@ export function enqueueRankingPublish<T>(key: string, task: () => Promise<T>): P
     if (queues.get(key) === tail) queues.delete(key);
   });
   return next;
+}
+
+/** Resolves once nothing is queued for `key`, including tasks queued while it waited. */
+export async function whenRankingPublishQueueSettles(key: string): Promise<void> {
+  for (let tail = queues.get(key); tail; tail = queues.get(key)) await tail;
 }
 
 export type RankingIndexOutcome = 'ours' | 'superseded' | 'timeout';

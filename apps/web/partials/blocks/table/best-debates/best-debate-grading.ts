@@ -27,7 +27,7 @@ export type BestDebatesGrading = {
   placeOf: (entityId: string) => number | null;
   /** A grade of this debate is being published (the block). */
   isSaving: (entityId: string) => boolean;
-  /** A, B or C: the debate goes to the bottom of that tier. */
+  /** A, B or C: the debate goes to the top of that tier. */
   grade: (entityId: string, grade: Grade) => void;
   /** Takes the debate out of the ranking. */
   remove: (entityId: string) => void;
@@ -91,27 +91,4 @@ export function gradeChanges(
     const now = inAfter.has(normId(entityId)) ? (gradeOf(after, entityId) ?? 'none') : 'none';
     return was === now ? [] : [{ entityId, previousGrade: was, grade: now }];
   });
-}
-
-/**
- * Runs `fn` one call at a time: each call waits, from its very start, for the one before to
- * finish. `whenSettled` resolves once nothing is running, including calls made while it waited.
- */
-export function useSerialRuns<TArgs extends unknown[], TResult>(fn: (...args: TArgs) => Promise<TResult>) {
-  const latestFn = React.useRef(fn);
-  latestFn.current = fn;
-  const chain = React.useRef<Promise<unknown>>(Promise.resolve());
-  const run = React.useCallback((...args: TArgs): Promise<TResult> => {
-    const next = chain.current.then(() => latestFn.current(...args));
-    chain.current = next.catch(() => undefined);
-    return next;
-  }, []);
-  const whenSettled = React.useCallback(async () => {
-    let tail: Promise<unknown>;
-    do {
-      tail = chain.current;
-      await tail;
-    } while (tail !== chain.current);
-  }, []);
-  return { run, whenSettled };
 }

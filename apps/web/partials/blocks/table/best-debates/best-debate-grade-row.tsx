@@ -31,7 +31,7 @@ const LINK_CLASS = 'text-text underline underline-offset-2';
 
 /**
  * The watch popup's grade row (GEO-3729, mockup approved 13 Nov): A, B and C place the debate at the
- * bottom of that tier in the ranker's ranking, D is Down rank. Under the pills: where it landed,
+ * top of that tier in the ranker's ranking, D is Down rank. Under the pills: where it landed,
  * with Remove; or Saving…; or Down ranked with Undo; or, on a ranking that has no grades yet,
  * "Grade your ranking first".
  */

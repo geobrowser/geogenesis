@@ -92,6 +92,8 @@ export function useBestDebatesBlockRanking({
       markPublished(published.orderedEntityIds, sentIds, published.grades, sentGrades),
     // Nothing else on this page can save the placement, so Done publishes it.
     publishOnDone: true,
+    // Done and the popup's grades both publish from here, one at a time (GEO-3729).
+    serialPublishes: true,
   });
 
   const myRankById = React.useMemo(() => new Map(orderedIds.map((id, i) => [normId(id), i + 1])), [orderedIds]);
