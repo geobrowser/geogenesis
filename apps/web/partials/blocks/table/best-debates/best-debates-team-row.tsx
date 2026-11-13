@@ -9,12 +9,12 @@ import { type RankersRead, rankedByLabel, rankedByText } from '~/core/blocks/ran
 import { normId } from '~/core/utils/norm-id';
 
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
-import { RankingChart } from '~/design-system/icons/ranking-chart';
 
 import { SpaceThumb } from '~/partials/explore/space-thumb';
 
 import { RankingEntryRow } from '../ranking-entry-row';
 import { BestDebateDisplaysContext } from './best-debate-row';
+import { GradeMenuButton, ROW_ACTION_BUTTON_CLASS } from './grade-menu-button';
 
 /** Who has ranked a debate: the purple "Nobody has ranked this yet", or "Ranked by …". */
 export function RankedByBadge({ rankers, entityId }: { rankers: RankersRead; entityId: string }) {
@@ -100,9 +100,9 @@ export function RankButton({ name, onClick, disabled }: { name: string; onClick:
       onKeyDown={event => event.stopPropagation()}
       onPointerDown={event => event.stopPropagation()}
       draggable={false}
-      className="grid size-8 shrink-0 place-items-center rounded-md border border-grey-02 bg-white text-text transition-colors hover:border-text disabled:cursor-not-allowed disabled:opacity-50 md:size-11"
+      className={ROW_ACTION_BUTTON_CLASS}
     >
-      <RankingChart />
+      Rank
     </button>
   );
 }
@@ -159,7 +159,11 @@ export function BestDebatesTeamRowContent({
             myRank ? (
               <span className="text-breadcrumb whitespace-nowrap text-grey-04 tabular-nums">You: #{myRank}</span>
             ) : onRank ? (
-              <RankButton name={name} onClick={onRank} />
+              // Grade it straight from the row, or Rank it by comparing (GEO-3729).
+              <span className="flex items-center gap-2">
+                <GradeMenuButton entityId={entityId} name={name} />
+                <RankButton name={name} onClick={onRank} />
+              </span>
             ) : null
           }
         />

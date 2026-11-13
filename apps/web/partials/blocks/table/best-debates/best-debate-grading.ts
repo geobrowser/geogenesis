@@ -27,8 +27,15 @@ export type BestDebatesGrading = {
   placeOf: (entityId: string) => number | null;
   /** A grade of this debate is being published (the block). */
   isSaving: (entityId: string) => boolean;
-  /** A, B or C: the debate goes to the top of that tier. */
-  grade: (entityId: string, grade: Grade) => void;
+  /** How many debates the ranking holds (for ↓ at the last place). */
+  count: number;
+  /** A, B or C: the debate goes to the top of that tier. `method` is where it was given. */
+  grade: (entityId: string, grade: Grade, method?: GradeMethod) => void;
+  /**
+   * ↑ / ↓: one place, the way the placed dialog's arrows nudge (`stepEntry`). At a tier's edge it
+   * crosses the line and takes that tier.
+   */
+  move: (entityId: string, direction: -1 | 1) => void;
   /** Takes the debate out of the ranking. */
   remove: (entityId: string) => void;
   /** D: the existing Down rank (downvote, then off the ranking; its toast offers Undo). Its
@@ -42,11 +49,14 @@ export type BestDebatesGrading = {
   undoDownRank?: (entityId: string) => void;
 };
 
+/** Where a grade was given: the popup, a list row's Grade menu, a drag, an arrow, the tier lines. */
+export type GradeMethod = 'popup' | 'list' | 'drag' | 'nudge' | 'tier_lines' | 'ranking_screen';
+
 /** D is Down rank: it is counted by Down rank's own `push_down` action, not here. */
 export type GradeChange = {
   grade: Grade | 'none';
   previousGrade: Grade | 'none';
-  method: 'popup' | 'drag' | 'tier_lines' | 'ranking_screen';
+  method: GradeMethod;
   mutationKind: 'published' | 'draft';
 };
 
@@ -91,4 +101,11 @@ export function gradeChanges(
     const now = inAfter.has(normId(entityId)) ? (gradeOf(after, entityId) ?? 'none') : 'none';
     return was === now ? [] : [{ entityId, previousGrade: was, grade: now }];
   });
+}
+
+/** The grading of the surface rows sit on (the block or the ranking screen), for their Grade menu. */
+export const BestDebatesGradingContext = React.createContext<BestDebatesGrading | null>(null);
+
+export function useBestDebatesGrading(): BestDebatesGrading | null {
+  return React.useContext(BestDebatesGradingContext);
 }

@@ -30,6 +30,9 @@ const mocks = vi.hoisted(() => ({
   empty: [] as never[],
   bestDebatesEnabled: null as null | boolean,
   bestDebatesSerial: undefined as undefined | boolean,
+  lastIds: ['d1'] as string[],
+  myGrades: new Map() as Map<string, 'A' | 'B' | 'C'>,
+  grading: null as null | import('./best-debates/best-debate-grading').BestDebatesGrading,
 }));
 
 vi.mock('~/core/blocks/ranking/best-debates', async importOriginal => ({
@@ -84,7 +87,8 @@ vi.mock('~/core/blocks/ranking/use-ranking-submissions', () => ({
     submissions: mocks.empty,
     mySubmission: null,
     // A draft with one debate, never published: publishable but for the guard.
-    myLastSubmission: { orderedEntityIds: ['d1'] },
+    myLastSubmission: { orderedEntityIds: mocks.lastIds },
+    myGrades: mocks.myGrades,
     saveMySubmission: mocks.saveMySubmission,
     isSaving: false,
     personalSpaceId: 'me',
@@ -174,6 +178,18 @@ vi.mock('./best-debates/use-best-debates-compose', () => ({
     };
   },
 }));
+vi.mock('./best-debates/best-debate-watch', () => ({
+  BestDebateWatchProvider: ({
+    grading,
+    children,
+  }: {
+    grading?: import('./best-debates/best-debate-grading').BestDebatesGrading | null;
+    children: React.ReactNode;
+  }) => {
+    mocks.grading = grading ?? null;
+    return children;
+  },
+}));
 vi.mock('./ranking-compose-pushed-down', () => ({ RankingComposePushedDown: () => null }));
 vi.mock('~/app/not-found', () => ({ default: () => <div>404</div> }));
 
@@ -206,6 +222,9 @@ beforeEach(() => {
   mocks.canPublish = null;
   mocks.bestDebatesEnabled = null;
   mocks.authResolving = false;
+  mocks.lastIds = ['d1'];
+  mocks.myGrades = new Map();
+  mocks.grading = null;
 });
 
 afterEach(cleanup);
@@ -299,5 +318,27 @@ describe('RankingComposeScreen on any other block', () => {
     expect(mocks.bestDebatesEnabled).toBe(false);
     await act(async () => mocks.publish?.());
     expect(mocks.saveMySubmission).toHaveBeenCalledTimes(1);
+  });
+
+  it('puts the popup’s grades and ↑ / ↓ into the draft, never publishing them (GEO-3729)', async () => {
+    mocks.member = true;
+    // IDs are hex, as normId leaves them.
+    const [d1, d2] = ['d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1', 'd2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2'];
+    mocks.lastIds = [d1, d2];
+    mocks.myGrades = new Map([
+      [d1, 'A'],
+      [d2, 'B'],
+    ]);
+    renderScreen();
+    expect(mocks.grading?.needsTierLines).toBe(false);
+    // ↑ from the top of B crosses the line: d2 becomes the bottom A, in place.
+    await act(async () => mocks.grading?.move(d2, -1));
+    expect(mocks.grading?.gradeOf(d2)).toBe('A');
+    expect(mocks.grading?.placeOf(d2)).toBe(2);
+    // A second press moves it within A.
+    await act(async () => mocks.grading?.move(d2, -1));
+    expect(mocks.grading?.placeOf(d2)).toBe(1);
+    expect(mocks.saveMySubmission).not.toHaveBeenCalled();
+    expect(mocks.canPublish).toBe(true);
   });
 });

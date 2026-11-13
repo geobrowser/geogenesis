@@ -41,6 +41,7 @@ import { Button } from '~/design-system/button';
 import { BestDebateDisplaysContext, BestDebateRow, RankerAvatars } from './best-debates/best-debate-row';
 import { BestDebateWatchProvider } from './best-debates/best-debate-watch';
 import { DownRankButton, RankButton } from './best-debates/best-debates-team-row';
+import { GradeMenuButton } from './best-debates/grade-menu-button';
 import { useBestDebatesBlockRanking } from './best-debates/use-best-debates-block-ranking';
 import { RankingEntryRowSkeleton } from './ranking-entry-row';
 
@@ -228,7 +229,10 @@ export function BestDebatesBlock({
     const rankControl = !ranking.enabled ? null : myRank != null ? (
       <span className="ml-1 text-breadcrumb whitespace-nowrap text-grey-04 tabular-nums">You: #{myRank}</span>
     ) : (
-      <RankButton name={name} disabled={!ranking.ready} onClick={() => ranking.rank(id)} />
+      <span className="flex items-center gap-2">
+        <GradeMenuButton entityId={id} name={name} />
+        <RankButton name={name} disabled={!ranking.ready} onClick={() => ranking.rank(id)} />
+      </span>
     );
     const row = (
       <BestDebateRow

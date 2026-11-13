@@ -23,6 +23,7 @@ import {
   removeEntry,
   restoreEntry,
   sameGrades,
+  stepEntry,
   tierSections,
 } from '~/core/blocks/ranking/ranking-grades';
 import { generatePersonalRankingOgImages } from '~/core/blocks/ranking/ranking-og-generate-client';
@@ -780,19 +781,29 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   // The watch popup's grade row on this screen (GEO-3729): a grade goes into the draft, like every
   // other change here, and the screen's Publish sends it.
   const draftPlaces = new Map(orderedIds.map((id, index) => [ID.uuidToHex(id), index + 1]));
-  const gradeInDraft = (
+  // The draft as of the last change here, so presses quicker than a render build on each other.
+  const latestDraft = React.useRef({ ids: orderedIds, grades: draftGrades });
+  latestDraft.current = { ids: orderedIds, grades: draftGrades };
+  const changeDraft = (
     debateId: string,
-    next: { ids: string[]; grades: typeof draftGrades },
-    grade: Grade | 'none'
+    change: (draft: { ids: string[]; grades: typeof draftGrades }) => { ids: string[]; grades: typeof draftGrades },
+    method: GradeChange['method']
   ) => {
     setActiveSwipeRowKey(null);
-    recordGrade(debateId, {
-      grade,
-      previousGrade: gradeOf(draftGrades, debateId) ?? 'none',
-      method: 'popup',
-      mutationKind: 'draft',
-    });
-    draftGradeMethods.current.set(ID.uuidToHex(debateId), 'popup');
+    const before = latestDraft.current;
+    const next = change(before);
+    latestDraft.current = next;
+    // Recorded only when the grade changes (a plain move records nothing, like the placed
+    // dialog's arrows); it is recorded again, as published, when Publish lands.
+    for (const gradeChange of gradeChanges(before.ids, before.grades, next.ids, next.grades)) {
+      recordGrade(gradeChange.entityId, {
+        grade: gradeChange.grade,
+        previousGrade: gradeChange.previousGrade,
+        method,
+        mutationKind: 'draft',
+      });
+      draftGradeMethods.current.set(ID.uuidToHex(gradeChange.entityId), method);
+    }
     setDraft(next.ids, next.grades);
   };
   const composeGrading: BestDebatesGrading | null = isBestDebates
@@ -802,8 +813,12 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
         gradeOf: debateId => (draftPlaces.has(ID.uuidToHex(debateId)) ? gradeOf(draftGrades, debateId) : null),
         placeOf: debateId => draftPlaces.get(ID.uuidToHex(debateId)) ?? null,
         isSaving: () => false,
-        grade: (debateId, grade) => gradeInDraft(debateId, gradeInto(orderedIds, draftGrades, debateId, grade), grade),
-        remove: debateId => gradeInDraft(debateId, removeEntry(orderedIds, draftGrades, debateId), 'none'),
+        count: orderedIds.length,
+        grade: (debateId, grade, method = 'popup') =>
+          changeDraft(debateId, draft => gradeInto(draft.ids, draft.grades, debateId, grade), method),
+        move: (debateId, direction) =>
+          changeDraft(debateId, draft => stepEntry(draft.ids, draft.grades, debateId, direction), 'nudge'),
+        remove: debateId => changeDraft(debateId, draft => removeEntry(draft.ids, draft.grades, debateId), 'popup'),
         // Counted as Down rank's own `push_down` once its downvote lands.
         downRank: debateId => {
           draftBeforeDownRank.current.set(ID.uuidToHex(debateId), { ids: orderedIds, grades: draftGrades });

@@ -10,6 +10,7 @@ import {
   gradeOf,
   hasAnyGrade,
   removeEntry,
+  stepEntry,
 } from '~/core/blocks/ranking/ranking-grades';
 import type { RankingSubmissionSlot } from '~/core/blocks/ranking/ranking-submission-types';
 import {
@@ -22,7 +23,7 @@ import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { normId } from '~/core/utils/norm-id';
 
 import { rankingComposeSeed, useRankingComposeDraft } from '../use-ranking-compose-draft';
-import { type BestDebatesGrading, gradeChanges, useRecordGrade } from './best-debate-grading';
+import { type BestDebatesGrading, type GradeMethod, gradeChanges, useRecordGrade } from './best-debate-grading';
 import { type PublishedBase, useBestDebatesCompose } from './use-best-debates-compose';
 import { useBestDebatesPushDownSlot } from './use-best-debates-push-down-slot';
 
@@ -172,6 +173,8 @@ export function useBlockGrading({
   // sends them from a stale copy.
   const queued = React.useRef<Array<(draft: GradedBallot) => GradedBallot>>([]);
   const inFlight = React.useRef(false);
+  /** How each debate's unsent grade was given, for its published event. */
+  const methods = React.useRef(new Map<string, GradeMethod>());
   const [saving, setSaving] = React.useState<ReadonlySet<string>>(new Set());
   if (!inFlight.current) latest.current = { ids: orderedIds, grades };
 
@@ -187,6 +190,9 @@ export function useBlockGrading({
         const before = { ids: getBasedOnOrderedIds(), grades: getBasedOnGrades() };
         const sent = queued.current.reduce((draft, change) => change(draft), before);
         queued.current = [];
+        // How each change in this publish was made; changes from now on go with the next one.
+        const passMethods = methods.current;
+        methods.current = new Map();
         latest.current = sent;
         setDraft(sent.ids, sent.grades);
         ok = await publish(sent.ids, sent.grades);
@@ -195,7 +201,7 @@ export function useBlockGrading({
             recordGrade(change.entityId, {
               grade: change.grade,
               previousGrade: change.previousGrade,
-              method: 'popup',
+              method: passMethods.get(normId(change.entityId)) ?? 'popup',
               mutationKind: 'published',
             });
           }
@@ -205,6 +211,7 @@ export function useBlockGrading({
         // A failed publish puts the ranking back as published, so the row never shows a grade
         // that didn't go out; grades tapped during it go with it (its toast says what happened).
         queued.current = [];
+        methods.current.clear();
         latest.current = { ids: getBasedOnOrderedIds(), grades: getBasedOnGrades() };
         setDraft(latest.current.ids, latest.current.grades);
       }
@@ -215,7 +222,9 @@ export function useBlockGrading({
   }, [getBasedOnGrades, getBasedOnOrderedIds, publish, recordGrade, setDraft, whenPublishesSettle]);
 
   const apply = React.useCallback(
-    (entityId: string, change: (draft: GradedBallot) => GradedBallot) => {
+    (entityId: string, change: (draft: GradedBallot) => GradedBallot, method: GradeMethod) => {
+      // The latest way it was changed names the change it publishes.
+      methods.current.set(normId(entityId), method);
       queued.current.push(change);
       latest.current = change(latest.current);
       setDraft(latest.current.ids, latest.current.grades);
@@ -233,9 +242,13 @@ export function useBlockGrading({
     gradeOf: entityId => (placeById.has(normId(entityId)) ? gradeOf(grades, entityId) : null),
     placeOf: entityId => placeById.get(normId(entityId)) ?? null,
     isSaving: entityId => saving.has(normId(entityId)),
-    grade: (entityId: string, grade: Grade) =>
-      apply(entityId, draft => gradeInto(draft.ids, draft.grades, entityId, grade)),
-    remove: (entityId: string) => apply(entityId, draft => removeEntry(draft.ids, draft.grades, entityId)),
+    count: orderedIds.length,
+    grade: (entityId: string, grade: Grade, method: GradeMethod = 'popup') =>
+      apply(entityId, draft => gradeInto(draft.ids, draft.grades, entityId, grade), method),
+    // Presses publish like grades, so a run of them goes out as one publish.
+    move: (entityId: string, direction: -1 | 1) =>
+      apply(entityId, draft => stepEntry(draft.ids, draft.grades, entityId, direction), 'nudge'),
+    remove: (entityId: string) => apply(entityId, draft => removeEntry(draft.ids, draft.grades, entityId), 'popup'),
     // Counted as Down rank's own `push_down` once its downvote lands.
     downRank,
   };

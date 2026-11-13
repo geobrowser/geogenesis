@@ -105,6 +105,35 @@ export function removeEntry(ids: readonly string[], grades: BallotGrades, entity
 }
 
 /**
+ * One press of ↑ or ↓ on a graded debate (GEO-3729): it swaps with its neighbour within its tier.
+ * At a tier's edge the press moves it across the line instead, as a drag across a header does: it
+ * takes the neighbour's tier and keeps its place (↑ from the top of B makes it the bottom A).
+ * Nothing changes at either end of the ballot, or for a debate that isn't on it.
+ */
+export function stepEntry(
+  ids: readonly string[],
+  grades: BallotGrades,
+  entityId: string,
+  direction: -1 | 1
+): GradedBallot {
+  const key = normId(entityId);
+  const at = ids.findIndex(id => normId(id) === key);
+  const to = at + direction;
+  if (at < 0 || to < 0 || to >= ids.length) return { ids: [...ids], grades };
+  const neighbourTier = tierOf(grades, ids[to]);
+  if (neighbourTier === tierOf(grades, entityId)) {
+    const next = [...ids];
+    next[at] = ids[to];
+    next[to] = ids[at];
+    return { ids: next, grades };
+  }
+  const nextGrades = new Map(grades);
+  if (neighbourTier === 'ungraded') nextGrades.delete(key);
+  else nextGrades.set(key, neighbourTier);
+  return { ids: [...ids], grades: nextGrades };
+}
+
+/**
  * Puts a debate taken out of the ballot back where it was in `before`, with the grade it had
  * there, into the ballot as it is now (later edits kept), within its tier. Nothing changes when it is already back
  * or wasn't in `before`. The ranking screen's Undo of a Down rank from the popup.

@@ -31,7 +31,9 @@ function grading(
     gradeOf: () => state.grade ?? null,
     placeOf: () => state.place ?? null,
     isSaving: () => false,
+    count: 40,
     grade: vi.fn(),
+    move: vi.fn(),
     remove: vi.fn(),
     downRank: vi.fn(),
     ...overrides,
@@ -113,12 +115,33 @@ describe('BestDebateGradeRow (GEO-3729)', () => {
     expect(undoDownRank).toHaveBeenCalledWith(DEBATE);
   });
 
-  it('shows Saving… while the grade publishes, with the grades held', () => {
-    render(
-      <BestDebateGradeRow entityId={DEBATE} grading={grading({ isSaving: () => true }, { grade: 'A', place: 1 })} />
-    );
+  it('shows Saving… beside the place while the grade publishes, and keeps taking presses', () => {
+    const g = grading({ isSaving: () => true }, { grade: 'A', place: 1 });
+    render(<BestDebateGradeRow entityId={DEBATE} grading={g} />);
     expect(screen.getByText('Saving…')).toBeInTheDocument();
-    expect(pill('B')).toBeDisabled();
+    expect(screen.getByText('#1 in your ranking')).toBeInTheDocument();
+    fireEvent.click(pill('B'));
+    expect(g.grade).toHaveBeenCalledWith(DEBATE, 'B');
+  });
+
+  it('moves the debate one place with ↑ / ↓, and turns them off at the ends', () => {
+    const g = grading({ count: 40 }, { grade: 'B', place: 21 });
+    render(<BestDebateGradeRow entityId={DEBATE} grading={g} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Move up' }));
+    expect(g.move).toHaveBeenCalledWith(DEBATE, -1);
+    fireEvent.click(screen.getByRole('button', { name: 'Move down' }));
+    expect(g.move).toHaveBeenCalledWith(DEBATE, 1);
+    cleanup();
+    render(<BestDebateGradeRow entityId={DEBATE} grading={grading({ count: 40 }, { grade: 'A', place: 1 })} />);
+    expect(screen.getByRole('button', { name: 'Move up' })).toBeDisabled();
+    cleanup();
+    render(<BestDebateGradeRow entityId={DEBATE} grading={grading({ count: 40 }, { grade: 'C', place: 40 })} />);
+    expect(screen.getByRole('button', { name: 'Move down' })).toBeDisabled();
+  });
+
+  it('shows no arrows for a debate that isn’t in the ranking', () => {
+    render(<BestDebateGradeRow entityId={DEBATE} grading={grading()} />);
+    expect(screen.queryByRole('button', { name: 'Move up' })).toBeNull();
   });
 
   it('asks for the tier lines first on a ranking with no grades', () => {
