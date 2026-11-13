@@ -19,7 +19,7 @@
  *
  * Pure, so the decoding is tested without a network or a DOM.
  */
-import { speakerLabel } from '../debater-name';
+import { speakerShortLabel } from '../debater-name';
 
 /** One moment's caption cue, timed from the start of the moment's own clip file. */
 export type MomentCaption = { startMs: number; endMs: number; text: string };
@@ -198,7 +198,7 @@ export function decodeSlotNames(payload: DebateMomentsPayload | null | undefined
   for (const turn of Array.isArray(payload?.turns) ? payload.turns : []) {
     const slot = turn?.participant_slot === 1 ? 1 : turn?.participant_slot === 2 ? 2 : null;
     const raw = typeof turn?.speaker_name === 'string' ? turn.speaker_name.trim() : '';
-    const name = raw ? speakerLabel({ display_name: raw }) : '';
+    const name = raw ? speakerShortLabel({ display_name: raw }) : '';
     if (slot !== null && name && !names[slot]) names[slot] = name;
   }
   return names;

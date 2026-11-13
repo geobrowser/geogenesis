@@ -107,9 +107,17 @@ export function WatchTranscriptPanel({
     if (at === undefined) return;
     const lines = scrollerRef.current?.querySelectorAll<HTMLElement>('[data-line-key]');
     const next = lines?.[at + (event.key === 'ArrowRight' ? 1 : -1)];
-    if (!next) return;
+    const scroller = scrollerRef.current;
+    if (!next || !scroller) return;
     event.preventDefault();
-    next.focus();
+    // Moving through the lines is reading: the panel stops following the video for a while. Only
+    // the lines scroll to show the one focused, never the dialog or the page.
+    markReading();
+    next.focus({ preventScroll: true });
+    const top = next.offsetTop;
+    const bottom = top + next.offsetHeight;
+    if (top < scroller.scrollTop) scroller.scrollTop = top;
+    else if (bottom > scroller.scrollTop + scroller.clientHeight) scroller.scrollTop = bottom - scroller.clientHeight;
   };
 
   // A new moment (the reel moving on, or a step) starts its lines from the top.

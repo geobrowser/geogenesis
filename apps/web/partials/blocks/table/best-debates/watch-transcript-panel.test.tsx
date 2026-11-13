@@ -163,4 +163,17 @@ describe('WatchTranscriptPanel', () => {
     fireEvent.click(lines[5]);
     expect(onLine).toHaveBeenLastCalledWith(BLOCK, BLOCK.lines[5]);
   });
+
+  it('reads ahead with the arrow keys: the lines scroll to the one focused and stop following the video', () => {
+    const { rerender } = render(<Panel highlightKey="m0:0" momentNav={nav(0)} />);
+    const scroller = layOut();
+    const line = (i: number) => screen.getByRole('button', { name: `Line ${i}` });
+    line(0).focus();
+    for (let i = 0; i < 4; i++) fireEvent.keyDown(document.activeElement!, { key: 'ArrowRight' });
+    expect(document.activeElement).toBe(line(4));
+    // Line 4 ends at 240px in a 100px panel: scrolled just enough to show it.
+    expect(scroller.scrollTop).toBe(140);
+    rerender(<Panel highlightKey="m0:1" momentNav={nav(0)} />);
+    expect(scroller.scrollTop).toBe(140);
+  });
 });
