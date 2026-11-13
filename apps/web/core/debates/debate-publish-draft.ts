@@ -258,13 +258,7 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
     options.createEntityId ? options.createEntityId() : derivedId(`entity:${key}`);
 
   const bySlot = [...input.participants].sort((a, b) => a.participantSlot - b.participantSlot);
-  const nameFor = (p: DebatePublishParticipant) => (p.displayName?.trim() ? p.displayName.trim() : 'Anonymous');
-  // "<claim> | <A> vs. <B>": the motion leads, the matchup follows. Names are read in
-  // truncating surfaces — feed cards, side-panel headers, edit titles — where the first
-  // words are the ones that survive, and what a debate is about identifies it far better
-  // than who argued it. `join` rather than a two-name template: the shape is a pair today,
-  // but nothing in the publisher caps participants at two.
-  const debateName = `${claimText} | ${bySlot.map(nameFor).join(' vs. ')}`;
+  const debateName = debatePublishName(claimText, input.participants);
   /**
    * The Video, its keyframe, the share card and the Transcript are named after the debate they
    * belong to, qualified by what they are. One closure so the separator is declared once: it is
@@ -295,6 +289,13 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
     else claimsByTurnIndex.set(claim.turnIndex, [claim]);
   }
 
+  const relationIds = (fromEntityId: string, propertyId: string, toEntityId: string) => {
+    const edge = `${normalizeId(fromEntityId)}:${normalizeId(propertyId)}:${normalizeId(toEntityId)}`;
+    return options.createEntityId
+      ? { id: options.createEntityId(), entityId: options.createEntityId() }
+      : { id: derivedId(`relation:${edge}`), entityId: derivedId(`relation-entity:${edge}`) };
+  };
+
   const relate = ({
     fromEntity,
     propertyId,
@@ -313,12 +314,9 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
      */
     stable?: boolean;
   }): { id: string; name: string | null } => {
-    const edge = `${normalizeId(fromEntity.id)}:${normalizeId(propertyId)}:${normalizeId(toEntityId)}`;
     const ids = stable
       ? stableClaimRelationIds(fromEntity.id, propertyId, toEntityId)
-      : options.createEntityId
-        ? { id: options.createEntityId(), entityId: options.createEntityId() }
-        : { id: derivedId(`relation:${edge}`), entityId: derivedId(`relation-entity:${edge}`) };
+      : relationIds(fromEntity.id, propertyId, toEntityId);
     const entityId = ids.entityId;
     relations.push(
       makeRelation({
@@ -398,27 +396,13 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
   }
 
   // --- Share card (OG image) ---
-  // Same shape as the keyframe block below: an Image entity, then a relation from the debate. It
-  // hangs off the debate rather than the Video because it describes the debate, and because it is
-  // generated once at publish time and never revisited.
   if (input.ogImageUrl) {
-    const ogImageId = mintEntityId('og-image');
-    const ogImageName = derivedName('share card');
-    const ogImageRef = { id: ogImageId, name: ogImageName };
-    setText(ogImageId, ogImageName, NAME_PROPERTY_ID, ogImageName);
-    setText(ogImageId, ogImageName, IMAGE_URL_PROPERTY_ID, input.ogImageUrl);
-    relate({
-      fromEntity: ogImageRef,
-      propertyId: TYPES_PROPERTY_ID,
-      toEntityId: IMAGE_TYPE_ID,
-      toEntityName: 'Image',
-    });
-    relate({
-      fromEntity: debateRef,
-      propertyId: OG_IMAGE_PROPERTY_ID,
-      toEntityId: ogImageId,
-      toEntityName: ogImageName,
-    });
+    const card = shareCardOps(
+      { debateRef, debateName, spaceId: input.spaceId, imageUrl: input.ogImageUrl },
+      { entityId: mintEntityId, relationIds, position: createPosition }
+    );
+    values.push(...card.values);
+    relations.push(...card.relations);
   }
 
   // --- Video entity (+ its Key frame Image) ---
@@ -700,6 +684,161 @@ export function debateTranscriptEntityId(debateEntityId: string): string {
 /** The text block of one transcript turn: what the full publish mints as `entity:block:<turnIndex>`. */
 export function debateTurnBlockEntityId(debateEntityId: string, turnIndex: number): string {
   return debatePublishId(debateEntityId, `entity:block:${turnIndex}`);
+}
+
+/**
+ * The share card Image entity a full publish mints for a debate (`entity:og-image`). Older publishes,
+ * from before every id was derived, used other ids; GEO-3722's redraw reads the debate's OG Image
+ * relations rather than assuming this one.
+ */
+export function debateShareCardEntityId(debateEntityId: string): string {
+  return debatePublishId(debateEntityId, 'entity:og-image');
+}
+
+/**
+ * The Debate entity's Name: "<claim> | <A> vs. <B>". The motion leads, the matchup follows. Names
+ * are read in truncating surfaces — feed cards, side-panel headers, edit titles — where the first
+ * words are the ones that survive, and what a debate is about identifies it far better than who
+ * argued it. `join` rather than a two-name template: the shape is a pair today, but nothing in the
+ * publisher caps participants at two.
+ */
+export function debatePublishName(claimText: string, participants: DebatePublishParticipant[]): string {
+  const bySlot = [...participants].sort((a, b) => a.participantSlot - b.participantSlot);
+  const nameFor = (p: DebatePublishParticipant) => (p.displayName?.trim() ? p.displayName.trim() : 'Anonymous');
+  return `${claimText.trim()} | ${bySlot.map(nameFor).join(' vs. ')}`;
+}
+
+type ShareCardIdSource = {
+  /** The id of the entity the draft names `entity:<key>`. */
+  entityId: (key: string) => string;
+  /** The ids of the relation (from, property, to) and of its relation entity. */
+  relationIds: (fromEntityId: string, propertyId: string, toEntityId: string) => { id: string; entityId: string };
+  position: () => string;
+};
+
+/**
+ * The share card: an Image entity (Name, Image URL, Types → Image) and the Debate's OG Image
+ * relation to it. Same shape as the keyframe block: it hangs off the debate rather than the Video
+ * because it describes the debate. One builder for the full publish and the redraw (GEO-3722), so a
+ * debate that gets its first card from the redraw gets exactly the ops a publish would have written.
+ */
+function shareCardOps(
+  {
+    debateRef,
+    debateName,
+    spaceId,
+    imageUrl,
+  }: { debateRef: { id: string; name: string | null }; debateName: string; spaceId: string; imageUrl: string },
+  ids: ShareCardIdSource
+): { shareCardEntityId: string; values: Value[]; relations: Relation[] } {
+  const shareCardEntityId = ids.entityId('og-image');
+  const name = `${debateName} | share card`;
+  const ref = { id: shareCardEntityId, name };
+  const values = [
+    makeTextValue({
+      entityId: shareCardEntityId,
+      entityName: name,
+      propertyId: NAME_PROPERTY_ID,
+      value: name,
+      spaceId,
+    }),
+    makeTextValue({
+      entityId: shareCardEntityId,
+      entityName: name,
+      propertyId: IMAGE_URL_PROPERTY_ID,
+      value: imageUrl,
+      spaceId,
+    }),
+  ];
+  const relation = (
+    fromEntity: { id: string; name: string | null },
+    propertyId: string,
+    toEntityId: string,
+    toEntityName: string | null
+  ) => {
+    const { id, entityId } = ids.relationIds(fromEntity.id, propertyId, toEntityId);
+    return makeRelation({
+      id,
+      entityId,
+      position: ids.position(),
+      spaceId,
+      propertyId,
+      fromEntity,
+      toEntityId,
+      toEntityName,
+    });
+  };
+  const relations = [
+    relation(ref, TYPES_PROPERTY_ID, IMAGE_TYPE_ID, 'Image'),
+    relation(debateRef, OG_IMAGE_PROPERTY_ID, shareCardEntityId, name),
+  ];
+  return { shareCardEntityId, values, relations };
+}
+
+export type DebateShareCardDraftInput = Pick<
+  DebatePublishInput,
+  'debateId' | 'spaceId' | 'claimText' | 'participants'
+> & { imageUrl: string };
+
+/**
+ * GEO-3722: the share card ops of a full publish, on their own — what a published debate that never
+ * got a card is given when the redraw adds one. Same ids, values and relations as
+ * {@link buildDebatePublishDraft} writes for `ogImageUrl` (only positions are fresh). Pure.
+ */
+export function buildDebateShareCardDraft(
+  input: DebateShareCardDraftInput,
+  options: BuildOptions = {}
+): { debateEntityId: string; debateName: string; shareCardEntityId: string; values: Value[]; relations: Relation[] } {
+  const claimText = input.claimText.trim();
+  if (claimText.length === 0) throw new Error('Debate claim text is required.');
+  if (input.participants.length === 0) throw new Error('A debate needs participants to publish.');
+  const debateEntityId = ID.uuidToHex(input.debateId);
+  const debateName = debatePublishName(claimText, input.participants);
+  // Every key here occurs once in a full draft, so its id there is the bare derived id.
+  const card = shareCardOps(
+    {
+      debateRef: { id: debateEntityId, name: debateName },
+      debateName,
+      spaceId: input.spaceId,
+      imageUrl: input.imageUrl,
+    },
+    {
+      entityId: key =>
+        options.createEntityId ? options.createEntityId() : debatePublishId(debateEntityId, `entity:${key}`),
+      relationIds: (from, property, to) => {
+        if (options.createEntityId) return { id: options.createEntityId(), entityId: options.createEntityId() };
+        const edge = `${normalizeId(from)}:${normalizeId(property)}:${normalizeId(to)}`;
+        return {
+          id: debatePublishId(debateEntityId, `relation:${edge}`),
+          entityId: debatePublishId(debateEntityId, `relation-entity:${edge}`),
+        };
+      },
+      position: options.createPosition ?? Position.generate,
+    }
+  );
+  return { debateEntityId, debateName, ...card };
+}
+
+/**
+ * GEO-3722: the Image URL value that points an existing share card Image entity at a new render.
+ * The only thing the redraw changes on a card that already exists.
+ */
+export function debateShareCardImageUrlValue({
+  shareCardEntityId,
+  spaceId,
+  imageUrl,
+}: {
+  shareCardEntityId: string;
+  spaceId: string;
+  imageUrl: string;
+}): Value {
+  return makeTextValue({
+    entityId: shareCardEntityId,
+    entityName: null,
+    propertyId: IMAGE_URL_PROPERTY_ID,
+    value: imageUrl,
+    spaceId,
+  });
 }
 
 /**

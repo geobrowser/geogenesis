@@ -221,7 +221,7 @@ export async function loadDebateClaimSpaceId(debateId: string): Promise<string> 
 export async function loadDebatePublishSource(debateId: string): Promise<DebateSource> {
   const debate = await loadSettledDebate(debateId);
 
-  const media = await geoChatGet<DebateMediaResponse>(`/debates/${debateId}/media`);
+  const media = await loadDebateMedia(debateId);
   // A failed job has already spent its retries in the worker; it is not coming back on its own.
   if (media.job?.status === 'failed') {
     throw new DebateNotPublishableError(
@@ -384,18 +384,6 @@ async function artifactUrl(debateId: string, kind: DebateMediaArtifactKind): Pro
   return upload.url;
 }
 
-/**
- * Render the share card and pin it, or return null (GEO-2755).
- *
- * Null on any failure, deliberately. This sits in the path that writes the Debate and Video
- * entities on-chain, and a debate that fails to publish is a far worse outcome than one published
- * without a share card.
- *
- * **Both speaker stills are required.** The card is generated once at publish time and never
- * revisited, so falling back to the placeholder panels would bake them in permanently. A debate
- * whose stills are missing — anything rendered before geo-chat learned to produce them — is better
- * off with no card than with a wrong one that can never be corrected.
- */
 type DebateSpeakerLike = Debate['participants'][number];
 
 /** One speaker as the card wants them. Shared so the preview route cannot drift from the real card. */
@@ -412,24 +400,47 @@ function cardSpeaker(participant: DebateSpeakerLike, stillSrc: string): DebateOg
   };
 }
 
-/**
- * Everything the share card needs for one real debate, for the preview route (GEO-2755).
- *
- * The stills are presigned and expire in about fifteen minutes, which is fine here and is exactly
- * why the preview resolves them per request rather than handing anyone a URL with them baked in.
- * Throws `GeoChatRequestError` for an unknown id, and returns null when the debate is real but has
- * no stills — the same bar the published card holds to.
- */
-export async function loadDebateOgPreview(debateId: string): Promise<DebateOgCardData | null> {
-  const debate = await geoChatGet<Debate>(`/debates/${debateId}`);
-  const media = await geoChatGet<DebateMediaResponse>(`/debates/${debateId}/media`);
+/** The debate's media artifacts and job, from geo-chat. Throws on a failed read. */
+export async function loadDebateMedia(debateId: string): Promise<DebateMediaResponse> {
+  return geoChatGet<DebateMediaResponse>(`/debates/${debateId}/media`);
+}
 
+/** The two speakers the card shows, by slot, or null when either is missing. */
+function shareCardSpeakers(debate: Debate): [DebateSpeakerLike, DebateSpeakerLike] | null {
   const bySlot = (slot: number) => debate.participants.find(participant => participant.participant_slot === slot);
   const [first, second] = [bySlot(1), bySlot(2)];
-  if (!first || !second) return null;
+  return first && second ? [first, second] : null;
+}
 
+function hasSpeakerStills(media: DebateMediaResponse): boolean {
   const hasStill = (kind: string) => media.artifacts.some(artifact => artifact.kind === kind);
-  if (!hasStill('speaker_still_slot_1') || !hasStill('speaker_still_slot_2')) return null;
+  return hasStill('speaker_still_slot_1') && hasStill('speaker_still_slot_2');
+}
+
+/**
+ * Whether the debate can have a share card at all: both speakers and both speaker stills. Pure, so a
+ * dry run can answer it without presigning anything.
+ */
+export function hasDebateShareCardSources(debate: Debate, media: DebateMediaResponse): boolean {
+  return shareCardSpeakers(debate) !== null && hasSpeakerStills(media);
+}
+
+/**
+ * Everything the share card needs for one real debate: geo-chat's current claim text, names and
+ * avatars, and both stills, presigned. One helper for the publish, the preview route and the
+ * share card redraw (GEO-3722), so none of them can drift from the others.
+ *
+ * The stills are presigned and expire in about fifteen minutes, so the result is for rendering now,
+ * never for keeping. Null when either speaker or either still is missing.
+ */
+export async function debateShareCardData(
+  debateId: string,
+  debate: Debate,
+  media: DebateMediaResponse
+): Promise<DebateOgCardData | null> {
+  const speakers = shareCardSpeakers(debate);
+  if (!speakers || !hasSpeakerStills(media)) return null;
+  const [first, second] = speakers;
 
   const [stillOne, stillTwo] = await Promise.all([
     artifactUrl(debateId, 'speaker_still_slot_1' as DebateMediaArtifactKind),
@@ -442,34 +453,53 @@ export async function loadDebateOgPreview(debateId: string): Promise<DebateOgCar
   };
 }
 
+/** Render the card and pin it to IPFS, returning its `ipfs://` URI. Throws on failure. */
+export async function renderAndPinDebateShareCard(card: DebateOgCardData): Promise<string> {
+  const response = generateDebateOgImageResponse(card);
+  const blob = new Blob([await response.arrayBuffer()], { type: 'image/png' });
+  const { cid } = await uploadGeoImage({ blob });
+  return cid;
+}
+
+/**
+ * Everything the share card needs for one real debate, for the preview route (GEO-2755).
+ *
+ * The stills are presigned and expire in about fifteen minutes, which is fine here and is exactly
+ * why the preview resolves them per request rather than handing anyone a URL with them baked in.
+ * Throws `GeoChatRequestError` for an unknown id, and returns null when the debate is real but has
+ * no stills — the same bar the published card holds to.
+ */
+export async function loadDebateOgPreview(debateId: string): Promise<DebateOgCardData | null> {
+  const debate = await geoChatGet<Debate>(`/debates/${debateId}`);
+  const media = await loadDebateMedia(debateId);
+  return debateShareCardData(debateId, debate, media);
+}
+
+/**
+ * Render the share card and pin it, or return null (GEO-2755).
+ *
+ * Null on any failure, deliberately. This sits in the path that writes the Debate and Video
+ * entities on-chain, and a debate that fails to publish is a far worse outcome than one published
+ * without a share card.
+ *
+ * **Both speaker stills are required.** The card is generated once at publish time and only
+ * redrawn by hand (GEO-3722), so falling back to the placeholder panels would bake them in permanently. A debate
+ * whose stills are missing — anything rendered before geo-chat learned to produce them — is better
+ * off with no card than with a wrong one that can never be corrected.
+ */
 async function buildDebateShareCard(
   debateId: string,
   debate: Debate,
   media: DebateMediaResponse
 ): Promise<string | null> {
   try {
-    const bySlot = (slot: number) => debate.participants.find(participant => participant.participant_slot === slot);
-    const [first, second] = [bySlot(1), bySlot(2)];
-    if (!first || !second) return null;
-
-    const hasStill = (kind: string) => media.artifacts.some(artifact => artifact.kind === kind);
-    if (!hasStill('speaker_still_slot_1') || !hasStill('speaker_still_slot_2')) {
+    if (!shareCardSpeakers(debate)) return null;
+    if (!hasSpeakerStills(media)) {
       console.warn(`[debate-acceptor] debate ${debateId} has no speaker stills; publishing without a share card.`);
       return null;
     }
-
-    const [stillOne, stillTwo] = await Promise.all([
-      artifactUrl(debateId, 'speaker_still_slot_1' as DebateMediaArtifactKind),
-      artifactUrl(debateId, 'speaker_still_slot_2' as DebateMediaArtifactKind),
-    ]);
-
-    const response = generateDebateOgImageResponse({
-      claim: debate.claim.claim,
-      speakers: [cardSpeaker(first, stillOne), cardSpeaker(second, stillTwo)],
-    });
-    const blob = new Blob([await response.arrayBuffer()], { type: 'image/png' });
-    const { cid } = await uploadGeoImage({ blob });
-    return cid;
+    const card = await debateShareCardData(debateId, debate, media);
+    return card ? await renderAndPinDebateShareCard(card) : null;
   } catch (error) {
     console.warn(`[debate-acceptor] could not build a share card for ${debateId}; publishing without one.`, error);
     return null;
