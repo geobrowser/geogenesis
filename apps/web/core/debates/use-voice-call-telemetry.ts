@@ -18,6 +18,7 @@ import {
 
 import { captureSafely } from '~/core/analytics-capture-safely';
 import { disconnectCause, disconnectReasonName } from '~/core/livekit/disconnect-reason';
+import { reportError } from '~/core/telemetry/logger';
 import { resolveWithin } from '~/core/utils/resolve-within';
 
 import { type VideoSnapshot, videoSampleMetrics } from './video-call-stats';
@@ -34,7 +35,17 @@ import {
   voiceSampleMetrics,
 } from './voice-call-stats';
 
-export type VoiceCallSurface = 'picker' | 'lobby' | 'debate';
+/** `space_call` is a space's call, which runs on the lobby stack (GEO-3419). */
+export type VoiceCallSurface = 'picker' | 'lobby' | 'space_call' | 'debate';
+
+/** Which of a lobby's two rooms an event came from (see `useVoiceCallTelemetry`). */
+export type CallRole = 'guest' | 'member';
+
+/**
+ * How a room's owner says it went. `handed_over`: another of the person's rooms took over (a guest
+ * signing in). `handover_failed`: that room never came up, so the person's audio stopped.
+ */
+export type CallEnd = 'left' | 'handed_over' | 'handover_failed';
 
 export type ReportCallChange = (change: Record<string, unknown>) => void;
 
@@ -70,14 +81,63 @@ const NOTABLE_QUALITIES = new Set<ConnectionQuality>([ConnectionQuality.Poor, Co
  * - `debate_voice_ended` once per call: seconds connected, seconds at poor and lost quality,
  *   reconnects, the worst loss and concealment seen, and the last transport each way.
  *
- * All three carry `call_surface` and `call_id` (the rematch session, lobby or debate), so all
- * surfaces read with the same queries. Device labels never leave the browser: only their kind does.
+ * All three carry `call_surface` and `call_id` (the rematch session, lobby, space call or debate),
+ * so all surfaces read with the same queries. Device labels never leave the browser: only their kind
+ * does.
  *
  * Runs on local counters and room events, never React state: a call that re-rendered on every stats read
  * would be the kind of cost this exists to find.
+ *
+ * This hook is the picker's and lobby's entry, whose rooms belong to their call trees. Diagnostics
+ * are optional, so setting up or tearing down never throws into the call, as
+ * `loadDebateRoomTelemetry` keeps it for the debate room; a failed setup is reported, not lost.
  */
-export function useVoiceCallTelemetry(room: Room, surface: VoiceCallSurface, callId: string) {
-  React.useEffect(() => startVoiceCallTelemetry(room, surface, callId), [callId, room, surface]);
+export function useVoiceCallTelemetry(
+  room: Room,
+  surface: VoiceCallSurface,
+  callId: string,
+  {
+    role,
+    endsAs,
+  }: {
+    /** A lobby's listen-only guest room or its member room, both live while a guest signs in. */
+    role?: CallRole;
+    /**
+     * Why the room went, asked at unmount: whoever closes it may only learn the outcome in the same
+     * render (a lobby's guest room goes when the member room takes over, or fails to). A leave unless
+     * it says otherwise.
+     */
+    endsAs?: () => CallEnd;
+  } = {}
+) {
+  const endsAsRef = React.useRef(endsAs);
+  React.useEffect(() => {
+    endsAsRef.current = endsAs;
+  }, [endsAs]);
+
+  React.useEffect(() => {
+    let stop: ReturnType<typeof startVoiceCallTelemetry> | undefined;
+    try {
+      stop = startVoiceCallTelemetry(room, surface, callId, role ? { call_role: role } : undefined);
+    } catch (error) {
+      // Setup leaves nothing registered when it throws (see its catch), so only the report remains.
+      reportTelemetryFailure(error, 'setup_failed', surface);
+      return;
+    }
+    return () => {
+      try {
+        stop?.(endsAsRef.current?.() ?? 'left');
+      } catch (error) {
+        // The summary has gone out and every other step ran; the call's own teardown carries on.
+        reportTelemetryFailure(error, 'cleanup_failed', surface);
+      }
+    };
+  }, [callId, role, room, surface]);
+}
+
+/** Diagnostics failing is worth knowing about, never worth failing a call over. */
+function reportTelemetryFailure(error: unknown, stage: 'setup_failed' | 'cleanup_failed', surface: VoiceCallSurface) {
+  reportError(error, { tags: { voice_call_telemetry: stage, call_surface: surface } });
 }
 
 /** Imperative entry for the debate room, whose Room is owned by its connection lifecycle. */
@@ -85,7 +145,11 @@ export function startVoiceCallTelemetry(
   room: Room,
   surface: VoiceCallSurface,
   callId: string,
-  context: { debate_id: string; participant_slot: number; call_session_id: string } | undefined = undefined,
+  // Exclusive: a debate's context and a lobby room's role never describe the same call.
+  context:
+    | { debate_id: string; participant_slot: number; call_session_id: string; call_role?: never }
+    | { call_role: CallRole; debate_id?: never; participant_slot?: never; call_session_id?: never }
+    | undefined = undefined,
   options: { probe?: (report: ReportCallChange) => CallProbe } = {}
 ) {
   const base = { call_surface: surface, call_id: callId, ...context };
@@ -238,12 +302,13 @@ export function startVoiceCallTelemetry(
     }
   };
 
-  const finish = (endReason: 'left' | 'disconnected' | 'page_closed') => {
-    if (ended) return;
+  /** Ends the call once. Returns a cleanup failure, which never stops the summary going out. */
+  const finish = (endReason: CallEnd | 'disconnected' | 'page_closed'): unknown => {
+    if (ended) return undefined;
     ended = true;
-    cleanup();
+    const failure = cleanup();
     // A call that never came up has nothing to summarise; its failure is the disconnect event.
-    if (connectedAt === null) return;
+    if (connectedAt === null) return failure;
     settleQuality();
     captureSafely('debate_voice_ended', {
       ...base,
@@ -259,6 +324,7 @@ export function startVoiceCallTelemetry(
       send_transport: sendTransport.current(),
       recv_transport: recvTransport.current(),
     });
+    return failure;
   };
 
   // Timed from the connection, not from mount: a slow join would otherwise miss the early sample,
@@ -368,27 +434,47 @@ export function startVoiceCallTelemetry(
     }
   } catch (error) {
     // Setup can fail after registering only some listeners. Leave none behind when the
-    // optional debate integration falls back to a no-op (or a hook reports the error).
+    // optional debate integration falls back to a no-op (or a hook reports the error). A failure
+    // tidying up is dropped: the setup's own error is the one worth reporting.
     ended = true;
     cleanup();
     throw error;
   }
 
-  function cleanup() {
-    clearTimeout(first);
-    clearInterval(every);
-    room.off(RoomEvent.ConnectionStateChanged, onConnectionState);
-    room.off(RoomEvent.Disconnected, onDisconnected);
-    room.off(RoomEvent.ActiveDeviceChanged, onActiveDevice);
-    room.off(RoomEvent.LocalTrackPublished, onLocalTrackPublished);
-    room.off(RoomEvent.AudioPlaybackStatusChanged, onAudioPlayback);
-    local.off(ParticipantEvent.ConnectionQualityChanged, onQuality);
-    local.off(ParticipantEvent.TrackMuted, onMuteChange);
-    local.off(ParticipantEvent.TrackUnmuted, onMuteChange);
-    window.removeEventListener('pagehide', onPageHide);
-    probe?.stop();
+  /**
+   * Every step runs even when one throws, so one stuck listener cannot leave the rest behind or cost
+   * the call its summary. The first failure comes back for the caller to report.
+   */
+  function cleanup(): unknown {
+    let failure: unknown;
+    for (const step of [
+      () => clearTimeout(first),
+      () => clearInterval(every),
+      () => room.off(RoomEvent.ConnectionStateChanged, onConnectionState),
+      () => room.off(RoomEvent.Disconnected, onDisconnected),
+      () => room.off(RoomEvent.ActiveDeviceChanged, onActiveDevice),
+      () => room.off(RoomEvent.LocalTrackPublished, onLocalTrackPublished),
+      () => room.off(RoomEvent.AudioPlaybackStatusChanged, onAudioPlayback),
+      () => local.off(ParticipantEvent.ConnectionQualityChanged, onQuality),
+      () => local.off(ParticipantEvent.TrackMuted, onMuteChange),
+      () => local.off(ParticipantEvent.TrackUnmuted, onMuteChange),
+      () => window.removeEventListener('pagehide', onPageHide),
+      () => probe?.stop(),
+    ]) {
+      try {
+        step();
+      } catch (error) {
+        failure ??= error;
+      }
+    }
+    return failure;
   }
-  return () => finish('left');
+  // Only this caller hears about a failed cleanup: `finish` also runs inside LiveKit's own event
+  // handlers, where a throw would land in its emitter.
+  return (endReason: CallEnd = 'left') => {
+    const failure = finish(endReason);
+    if (failure !== undefined) throw failure;
+  };
 }
 
 /**

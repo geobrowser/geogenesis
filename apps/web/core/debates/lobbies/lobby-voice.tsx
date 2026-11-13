@@ -43,12 +43,13 @@ import { CameraIcon, MicrophoneIcon } from '../debate-room-controls';
 import { useGeoChatAuth } from '../hooks';
 import { tokenAllowsCamera } from '../livekit-grant';
 import { HubPillButton } from '../matchmaking/hub-pill-button';
+import { type CallEnd, type VoiceCallSurface, useVoiceCallTelemetry } from '../use-voice-call-telemetry';
 import { useVoiceOwnership } from '../voice-owner';
 import { createLobbyCamera } from './lobby-camera';
 import { lobbyErrorMessage } from './lobby-format';
 import { LobbySlot } from './lobby-slots';
 import type { MemberLobbyPageView } from './lobby-view';
-import { useRoomCapabilities } from './room-capabilities';
+import { type LobbyRoomNoun, useRoomCapabilities } from './room-capabilities';
 import { registerLobbyCapture, reportLobbyCamera, reportLobbyMic } from './step-out';
 
 type OwnershipState = 'pending' | 'owned' | 'elsewhere';
@@ -117,6 +118,11 @@ const ROOM_OPTIONS: RoomOptions = {
     videoEncoding: { maxBitrate: 300_000, maxFramerate: 20 },
   },
 };
+
+/** A space call runs on the lobby room but is its own kind of call in call-quality data (GEO-3340). */
+function callSurfaceOf(noun: LobbyRoomNoun): VoiceCallSurface {
+  return noun === 'call' ? 'space_call' : 'lobby';
+}
 
 /**
  * Lobby voice (GEO-3129): one LiveKit room per lobby, joined from one tab per person. Mounted only
@@ -363,6 +369,8 @@ export function LobbyVoice({
       className="contents"
     >
       <ConnectedVoice
+        callSurface={callSurfaceOf(room)}
+        callId={dashlessId(lobbyId)}
         canPublish={data.can_publish}
         canShareScreen={screenShare}
         tokenSharesScreen={Boolean(data.can_share_screen)}
@@ -405,6 +413,8 @@ type VoiceNotice = {
 };
 
 function ConnectedVoice({
+  callSurface,
+  callId,
   canPublish,
   canShareScreen,
   tokenSharesScreen,
@@ -424,6 +434,9 @@ function ConnectedVoice({
   onReplaced,
   children,
 }: {
+  /** The lobby, or the space call, this room is. */
+  callSurface: VoiceCallSurface;
+  callId: string;
   canPublish: boolean;
   /** The room offers sharing; the grant decides who. */
   canShareScreen: boolean;
@@ -446,6 +459,8 @@ function ConnectedVoice({
   children: React.ReactNode;
 }) {
   const room = useRoomContext();
+  // GEO-3340: call quality, so a choppy-audio report has something to be checked against.
+  useVoiceCallTelemetry(room, callSurface, callId, { role: 'member' });
   useRoomEnding(room, {
     onNeverConnected,
     // Another tab or device took this identity; reconnecting would only take it back and forth.
@@ -731,6 +746,8 @@ export const LOBBY_GUEST_VOICE_COPY = {
  * it while the member room plays; speaking state goes up through `onStates`.
  */
 export function LobbyGuestVoice({
+  endsAs,
+  lobbyId,
   token,
   onStates,
   onReconnect,
@@ -739,6 +756,10 @@ export function LobbyGuestVoice({
   quiet = false,
   screenShare = false,
 }: {
+  /** The lobby, or the space call, this room listens to. */
+  /** Why this room went, asked when it goes: the shell knows whether the member room took over. */
+  endsAs?: () => CallEnd;
+  lobbyId: string;
   token: DebateLobbyVoiceToken;
   onStates: (states: LobbyVoiceStates) => void;
   /** A full reconnect needs a fresh token on the same guest. */
@@ -755,6 +776,7 @@ export function LobbyGuestVoice({
   /** Show shared screens. */
   screenShare?: boolean;
 }) {
+  const callSurface = callSurfaceOf(useRoomCapabilities().noun);
   const [connectFailed, setConnectFailed] = React.useState(false);
   const connectedRef = React.useRef(false);
   const handleConnected = React.useCallback(() => {
@@ -788,6 +810,9 @@ export function LobbyGuestVoice({
       className="contents"
     >
       <ConnectedGuestVoice
+        callSurface={callSurface}
+        callId={dashlessId(lobbyId)}
+        endsAs={endsAs}
         onStates={onStates}
         onReconnect={onReconnect}
         onNeverConnected={handleNeverConnected}
@@ -801,6 +826,9 @@ export function LobbyGuestVoice({
 }
 
 function ConnectedGuestVoice({
+  callSurface,
+  callId,
+  endsAs,
   onStates,
   onReconnect,
   onNeverConnected,
@@ -808,6 +836,9 @@ function ConnectedGuestVoice({
   quiet,
   watchScreens,
 }: {
+  callSurface: VoiceCallSurface;
+  callId: string;
+  endsAs?: () => CallEnd;
   onStates: (states: LobbyVoiceStates) => void;
   onReconnect: () => void;
   onNeverConnected: () => void;
@@ -816,6 +847,8 @@ function ConnectedGuestVoice({
   watchScreens: boolean;
 }) {
   const room = useRoomContext();
+  // GEO-3340: what a signed-out listener hears is half of what a choppy room is.
+  useVoiceCallTelemetry(room, callSurface, callId, { role: 'guest', endsAs });
   // Removed by the server: no Try again, which would take the session back; the page asks why.
   const [removed, setRemoved] = React.useState(false);
   useRoomEnding(room, {
