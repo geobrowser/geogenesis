@@ -16,6 +16,7 @@ import {
   fetchMyRankingBallot,
   isRankingBallotUnreadableError,
 } from './fetch-my-ranking-ballot';
+import { type BallotGrades, NO_GRADES } from './ranking-grades';
 import { type OwnPublishShape, classifyReadBack } from './ranking-publish-queue';
 
 export { type MyRankingBallot, RankingBallotUnreadableError, fetchMyRankingBallot } from './fetch-my-ranking-ballot';
@@ -51,11 +52,14 @@ export function recordPublishedRank(
   orderedEntityIds: string[],
   /** The published ballot this publish replaced, so a read still showing it
    *  can be told apart from one showing another device's edit. */
-  baseline: OwnPublishShape['baseline']
+  baseline: OwnPublishShape['baseline'],
+  /** The grades it published (Best debates). */
+  grades?: BallotGrades
 ): void {
   publishedRankPins.set(pinKey(personalSpaceId, blockId), {
     rankId,
     orderedEntityIds,
+    grades,
     baseline,
     publishedAtMs: Date.now(),
   });
@@ -103,7 +107,7 @@ function syntheticRankEntity(pin: Pick<PublishedRankPin, 'rankId' | 'publishedAt
  */
 export function resolvePinnedBallot(
   indexed: MyRankingBallot,
-  pin: Pick<PublishedRankPin, 'rankId' | 'orderedEntityIds' | 'baseline' | 'publishedAtMs'> | null
+  pin: Pick<PublishedRankPin, 'rankId' | 'orderedEntityIds' | 'grades' | 'baseline' | 'publishedAtMs'> | null
 ): { ballot: MyRankingBallot; dropPin: boolean } {
   if (!pin) return { ballot: indexed, dropPin: false };
   const standing = classifyReadBack(ballotSnapshot(indexed), pin);
@@ -111,7 +115,14 @@ export function resolvePinnedBallot(
   // The index still holds the ballot we replaced; answer from what we know was
   // published so the UI never shows the stale (or blanked rolled-off)
   // predecessor in the meantime.
-  return { ballot: { rankEntity: syntheticRankEntity(pin), orderedEntityIds: pin.orderedEntityIds }, dropPin: false };
+  return {
+    ballot: {
+      rankEntity: syntheticRankEntity(pin),
+      orderedEntityIds: pin.orderedEntityIds,
+      grades: pin.grades ?? NO_GRADES,
+    },
+    dropPin: false,
+  };
 }
 
 /** Drops the pin once the publish path has seen the index settle past this
@@ -132,7 +143,7 @@ export function useMyRanking(blockId: string) {
     staleTime: 30_000,
     queryFn: async () => {
       if (!personalSpaceId) {
-        return { rankEntity: null, orderedEntityIds: [] as string[] };
+        return { rankEntity: null, orderedEntityIds: [] as string[], grades: NO_GRADES };
       }
       let indexed: MyRankingBallot;
       try {
@@ -153,10 +164,13 @@ export function useMyRanking(blockId: string) {
 
   const myRankEntity = data?.rankEntity ?? null;
   const orderedEntityIds = data?.orderedEntityIds ?? [];
+  const grades = data?.grades ?? NO_GRADES;
 
   return {
     myRankEntity,
     orderedEntityIds,
+    /** Best debates: the ranker's grade per entry (GEO-3729). */
+    grades,
     isLoading,
     /** Set when the ballot exists but can't be read whole. The screens show
      *  it instead of treating the ranker as having no ballot. */
@@ -169,6 +183,7 @@ export function useMyRanking(blockId: string) {
       return {
         myRankEntity: result.data?.rankEntity ?? null,
         orderedEntityIds: result.data?.orderedEntityIds ?? [],
+        grades: result.data?.grades ?? NO_GRADES,
       };
     }, [refetch]),
   };

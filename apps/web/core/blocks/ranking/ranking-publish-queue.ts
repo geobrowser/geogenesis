@@ -1,5 +1,7 @@
 import { ID } from '~/core/id';
 
+import { type BallotGrades, NO_GRADES, mergeGrades, placeRegradedEntries, sameGrades } from './ranking-grades';
+
 /*
  * Ballot publish safety (GEO-3680).
  *
@@ -62,6 +64,19 @@ const norm = (id: string) => ID.uuidToHex(id);
 
 export function sameBallotOrder(a: readonly string[], b: readonly string[]): boolean {
   return a.length === b.length && a.every((id, index) => norm(id) === norm(b[index]));
+}
+
+/**
+ * Same order and, on Best debates, the same grades (GEO-3729): a regrade can leave the order as it
+ * was (the last A regraded B stays where it is), and that is still a change.
+ */
+export function sameBallot(
+  a: readonly string[],
+  aGrades: BallotGrades | undefined,
+  b: readonly string[],
+  bGrades: BallotGrades | undefined
+): boolean {
+  return sameBallotOrder(a, b) && sameGrades(a, aGrades ?? NO_GRADES, bGrades ?? NO_GRADES);
 }
 
 export type BallotMergeResult = {
@@ -159,10 +174,42 @@ export function mergeBallotOrders({
   return { ids: result, overrodeTheirOrder: weReordered && theyReordered };
 }
 
+export type GradedBallotSide = { ids: readonly string[]; grades?: BallotGrades };
+
+export type GradedBallotMergeResult = BallotMergeResult & { grades: BallotGrades };
+
+/**
+ * `mergeBallotOrders` plus grades (GEO-3729): each entry's grade is merged three-way too (this
+ * edit's where it regraded it, else the published one), and an entry regraded elsewhere moves to
+ * the bottom of its new tier, so the merged ballot stays tier-ordered. Without grades on any side
+ * this is exactly `mergeBallotOrders`.
+ */
+export function mergeBallots({
+  base,
+  ours,
+  theirs,
+}: {
+  base: GradedBallotSide;
+  ours: GradedBallotSide;
+  theirs: GradedBallotSide;
+}): GradedBallotMergeResult {
+  const order = mergeBallotOrders({ base: base.ids, ours: ours.ids, theirs: theirs.ids });
+  const ourGrades = ours.grades ?? NO_GRADES;
+  const grades = mergeGrades({
+    ids: order.ids,
+    base: base.grades ?? NO_GRADES,
+    ours: ourGrades,
+    theirs: theirs.grades ?? NO_GRADES,
+  });
+  return { ...order, ids: placeRegradedEntries(order.ids, grades, ourGrades), grades };
+}
+
 /** A ballot as read from the index. Timestamps are epoch ms when known. */
 export type BallotSnapshot = {
   rankId: string | null;
   orderedEntityIds: readonly string[];
+  /** Best debates only; absent means no grades. */
+  grades?: BallotGrades;
   /** The rank's `updatedAt`. */
   updatedAtMs?: number | null;
   /** The rank's `createdAt`. */
@@ -173,9 +220,11 @@ export type BallotSnapshot = {
 export type OwnPublishShape = {
   rankId: string;
   orderedEntityIds: string[];
+  grades?: BallotGrades;
   baseline: {
     rankId: string | null;
     orderedEntityIds: string[];
+    grades?: BallotGrades;
     updatedAtMs?: number | null;
     createdAtMs?: number | null;
   };
@@ -199,12 +248,15 @@ export type OwnPublishShape = {
 export function classifyReadBack(readBack: BallotSnapshot, own: OwnPublishShape): 'ours' | 'pending' | 'superseded' {
   const sameRank = (a: string | null, b: string | null) => (a && b ? norm(a) === norm(b) : a === b);
   const older = (read?: number | null, base?: number | null) => Boolean(read && base && read < base);
-  if (sameRank(readBack.rankId, own.rankId) && sameBallotOrder(readBack.orderedEntityIds, own.orderedEntityIds)) {
+  if (
+    sameRank(readBack.rankId, own.rankId) &&
+    sameBallot(readBack.orderedEntityIds, readBack.grades, own.orderedEntityIds, own.grades)
+  ) {
     return 'ours';
   }
   if (
     sameRank(readBack.rankId, own.baseline.rankId) &&
-    sameBallotOrder(readBack.orderedEntityIds, own.baseline.orderedEntityIds)
+    sameBallot(readBack.orderedEntityIds, readBack.grades, own.baseline.orderedEntityIds, own.baseline.grades)
   ) {
     return 'pending';
   }
@@ -231,8 +283,16 @@ export function classifyReadBack(readBack: BallotSnapshot, own: OwnPublishShape)
  * to what we sent) onto the other ballot. Used for the ranker's next edit and
  * for the unpublished draft we hand back; never published on its own.
  */
-export function foldOvertakenPublish(own: OwnPublishShape, publishedIds: readonly string[]): BallotMergeResult {
-  return mergeBallotOrders({ base: own.baseline.orderedEntityIds, ours: own.orderedEntityIds, theirs: publishedIds });
+export function foldOvertakenPublish(
+  own: OwnPublishShape,
+  publishedIds: readonly string[],
+  publishedGrades?: BallotGrades
+): GradedBallotMergeResult {
+  return mergeBallots({
+    base: { ids: own.baseline.orderedEntityIds, grades: own.baseline.grades },
+    ours: { ids: own.orderedEntityIds, grades: own.grades },
+    theirs: { ids: publishedIds, grades: publishedGrades },
+  });
 }
 
 export function rankingPublishKey(personalSpaceId: string, blockId: string): string {
@@ -262,6 +322,8 @@ export type RankingIndexResult = {
   outcome: RankingIndexOutcome;
   /** The ballot the deciding read saw (null on timeout). */
   seen: string[] | null;
+  /** Its grades (Best debates). */
+  seenGrades?: BallotGrades;
 };
 
 export type OwnRankingPublish = OwnPublishShape & {
@@ -294,12 +356,16 @@ export type UnsavedRankingDraft = {
    *  and the other device's ballot into the published side, so they meet this
    *  list there, and anything the ranker removes from it stays removed. */
   orderedEntityIds: string[];
+  /** The list's grades (Best debates); published with the list as its `basedOnGrades`. */
+  grades?: BallotGrades;
   /** The published ballot the list was built on. Only `rebaseUnsavedDraft`
    *  uses it, to read later changes to the published ballot as changes. */
   baseOrderedIds: string[];
+  baseGrades?: BallotGrades;
   /** Our overtaken ballot, which may still land after the hand-back. The index
    *  showing it is not a change made elsewhere (the draft already holds it). */
   overtakenOrderedIds: string[];
+  overtakenGrades?: BallotGrades;
 };
 
 const unsavedDrafts = new Map<string, UnsavedRankingDraft>();
@@ -339,19 +405,34 @@ function membershipDistance(a: readonly string[], b: readonly string[]): number 
  */
 export function rebaseUnsavedDraft(
   draft: UnsavedRankingDraft,
-  publishedIds: readonly string[]
+  publishedIds: readonly string[],
+  publishedGrades?: BallotGrades
 ): UnsavedRankingDraft | null {
-  if (sameBallotOrder(publishedIds, draft.orderedEntityIds)) return null;
-  if (sameBallotOrder(publishedIds, draft.baseOrderedIds) || sameBallotOrder(publishedIds, draft.overtakenOrderedIds)) {
+  if (sameBallot(publishedIds, publishedGrades, draft.orderedEntityIds, draft.grades)) return null;
+  if (
+    sameBallot(publishedIds, publishedGrades, draft.baseOrderedIds, draft.baseGrades) ||
+    sameBallot(publishedIds, publishedGrades, draft.overtakenOrderedIds, draft.overtakenGrades)
+  ) {
     return draft;
   }
-  const base =
-    membershipDistance(publishedIds, draft.overtakenOrderedIds) < membershipDistance(publishedIds, draft.baseOrderedIds)
-      ? draft.overtakenOrderedIds
-      : draft.baseOrderedIds;
-  const merged = mergeBallotOrders({ base, ours: draft.orderedEntityIds, theirs: publishedIds }).ids;
-  if (sameBallotOrder(merged, publishedIds)) return null;
-  return { orderedEntityIds: merged, baseOrderedIds: [...publishedIds], overtakenOrderedIds: [...publishedIds] };
+  const useOvertaken =
+    membershipDistance(publishedIds, draft.overtakenOrderedIds) < membershipDistance(publishedIds, draft.baseOrderedIds);
+  const merged = mergeBallots({
+    base: useOvertaken
+      ? { ids: draft.overtakenOrderedIds, grades: draft.overtakenGrades }
+      : { ids: draft.baseOrderedIds, grades: draft.baseGrades },
+    ours: { ids: draft.orderedEntityIds, grades: draft.grades },
+    theirs: { ids: publishedIds, grades: publishedGrades },
+  });
+  if (sameBallot(merged.ids, merged.grades, publishedIds, publishedGrades)) return null;
+  return {
+    orderedEntityIds: merged.ids,
+    grades: merged.grades,
+    baseOrderedIds: [...publishedIds],
+    baseGrades: publishedGrades,
+    overtakenOrderedIds: [...publishedIds],
+    overtakenGrades: publishedGrades,
+  };
 }
 
 export function subscribeUnsavedRankingDrafts(listener: () => void): () => void {
