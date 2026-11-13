@@ -17,13 +17,13 @@ const RANK = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const SPACE = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
 const DEBATE = 'cccccccccccccccccccccccccccccccc';
 
-const rank = (relationId: string) => ({
+const rank = (relationId: string, rankType = 'ORDINAL') => ({
   id: RANK,
   name: null,
   description: null,
   spaces: [SPACE],
   types: [],
-  values: [{ property: { id: '48e01bc8324e48c2a6c9cab3f49290c6' }, value: 'ORDINAL', isDeleted: false }],
+  values: [{ property: { id: '48e01bc8324e48c2a6c9cab3f49290c6' }, value: rankType, isDeleted: false }],
   relations: [
     {
       id: relationId,
@@ -50,5 +50,22 @@ describe('fetchRankBallot with grades (GEO-3729)', () => {
     const ballot = await fetchRankBallot(RANK, SPACE, { withGrades: true });
     expect(mocks.getEntity).toHaveBeenCalledTimes(2);
     expect(ballot?.grades?.get(DEBATE)).toBe('A');
+  });
+
+  it('reads the grades when the Rank type comes back empty, as the entity read decodes it live', async () => {
+    const { Effect } = await import('effect');
+    mocks.getEntity.mockReset().mockReturnValueOnce(Effect.succeed(rank('11111111111111111111111111111111', '')));
+    mocks.fetchBallotGrades.mockReset().mockResolvedValueOnce(new Map([[DEBATE, 'B']]));
+    const ballot = await fetchRankBallot(RANK, SPACE, { withGrades: true });
+    expect(ballot?.grades?.get(DEBATE)).toBe('B');
+  });
+
+  it('reads no grades on a Rank known to be another type', async () => {
+    const { Effect } = await import('effect');
+    mocks.getEntity.mockReset().mockReturnValueOnce(Effect.succeed(rank('11111111111111111111111111111111', 'WEIGHTED')));
+    mocks.fetchBallotGrades.mockReset();
+    const ballot = await fetchRankBallot(RANK, SPACE, { withGrades: true });
+    expect(ballot?.grades?.size).toBe(0);
+    expect(mocks.fetchBallotGrades).not.toHaveBeenCalled();
   });
 });

@@ -42,12 +42,16 @@ export function blockHasGrades(blockId: string, bestDebatesBlockId: string | nul
 }
 
 /**
- * The ballot's grades, when it can carry them: an ORDINAL Rank (a stale non-ORDINAL Rank is never
- * built on, a fresh one is minted) with votes. Throws `BallotGradesPendingError` when the grades
+ * The ballot's grades, when it can carry them: a Rank with votes that isn't known to be anything
+ * but ORDINAL (a stale non-ORDINAL Rank is never built on, a fresh one is minted). Throws `BallotGradesPendingError` when the grades
  * don't line up with the votes yet.
  */
 async function readGrades(rankEntity: Entity, personalSpaceId: string, orderedEntityIds: string[]) {
-  if (orderedEntityIds.length === 0 || rankTypeOf(rankEntity) !== 'ORDINAL') return NO_GRADES;
+  // Only a Rank known to be something else is skipped. The entity read often can't decode the Rank
+  // type's text (it comes back empty), and treating that as "not ORDINAL" read every ballot as
+  // ungraded (GEO-3729, found on the preview).
+  const rankType = rankTypeOf(rankEntity);
+  if (orderedEntityIds.length === 0 || (rankType !== null && rankType !== 'ORDINAL')) return NO_GRADES;
   return fetchBallotGrades(rankEntity, personalSpaceId);
 }
 
