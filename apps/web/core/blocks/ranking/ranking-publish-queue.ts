@@ -1,6 +1,6 @@
 import { ID } from '~/core/id';
 
-import { type BallotGrades, NO_GRADES, mergeGrades, placeRegradedEntries, sameGrades } from './ranking-grades';
+import { type BallotGrades, NO_GRADES, mergeGrades, sameGrades, sortIntoTiers } from './ranking-grades';
 
 /*
  * Ballot publish safety (GEO-3680).
@@ -104,7 +104,17 @@ export type BallotMergeResult = {
  * neighbours from `theirs`. When both sides reordered, `overrodeTheirOrder`
  * says so, so the ranker can be told.
  */
-export function mergeBallotOrders({
+export function mergeBallotOrders(sides: {
+  base: readonly string[];
+  ours: readonly string[];
+  theirs: readonly string[];
+}): BallotMergeResult {
+  const { ids, overrodeTheirOrder } = mergeOrders(sides);
+  return { ids, overrodeTheirOrder };
+}
+
+/** `mergeBallotOrders`, also saying whether this edit's order led the merge (it reordered). */
+function mergeOrders({
   base,
   ours,
   theirs,
@@ -112,7 +122,7 @@ export function mergeBallotOrders({
   base: readonly string[];
   ours: readonly string[];
   theirs: readonly string[];
-}): BallotMergeResult {
+}): BallotMergeResult & { weReordered: boolean } {
   const baseSet = new Set(base.map(norm));
   const ourSet = new Set(ours.map(norm));
   const theirSet = new Set(theirs.map(norm));
@@ -171,7 +181,7 @@ export function mergeBallotOrders({
     inResult.add(norm(id));
   }
 
-  return { ids: result, overrodeTheirOrder: weReordered && theyReordered };
+  return { ids: result, overrodeTheirOrder: weReordered && theyReordered, weReordered };
 }
 
 export type GradedBallotSide = { ids: readonly string[]; grades?: BallotGrades };
@@ -179,10 +189,13 @@ export type GradedBallotSide = { ids: readonly string[]; grades?: BallotGrades }
 export type GradedBallotMergeResult = BallotMergeResult & { grades: BallotGrades };
 
 /**
- * `mergeBallotOrders` plus grades (GEO-3729): each entry's grade is merged three-way too (this
- * edit's where it regraded it, else the published one), and an entry regraded elsewhere moves to
- * the bottom of its new tier, so the merged ballot stays tier-ordered. Without grades on any side
- * this is exactly `mergeBallotOrders`.
+ * `mergeBallotOrders` plus grades (GEO-3729). Each entry's grade is merged three-way too (this
+ * edit's where it regraded it, else the published one), and the merged ballot is then sorted into
+ * tiers, keeping the merged order within each tier, so every merge comes out tier-ordered.
+ *
+ * An entry the other side regraded sits where that side put it when its order led the merge. When
+ * this edit's order led, it still sits where this edit had it, so it goes to the bottom of its new
+ * tier, as a regrade does. Without grades on any side this is exactly `mergeBallotOrders`.
  */
 export function mergeBallots({
   base,
@@ -193,7 +206,7 @@ export function mergeBallots({
   ours: GradedBallotSide;
   theirs: GradedBallotSide;
 }): GradedBallotMergeResult {
-  const order = mergeBallotOrders({ base: base.ids, ours: ours.ids, theirs: theirs.ids });
+  const { weReordered, ...order } = mergeOrders({ base: base.ids, ours: ours.ids, theirs: theirs.ids });
   const ourGrades = ours.grades ?? NO_GRADES;
   const grades = mergeGrades({
     ids: order.ids,
@@ -202,7 +215,13 @@ export function mergeBallots({
     theirs: theirs.grades ?? NO_GRADES,
     theirIds: theirs.ids,
   });
-  return { ...order, ids: placeRegradedEntries(order.ids, grades, ourGrades), grades };
+  const inOurs = new Set(ours.ids.map(norm));
+  const regradedThere = (id: string) =>
+    weReordered &&
+    inOurs.has(norm(id)) &&
+    grades.has(norm(id)) &&
+    grades.get(norm(id)) !== (ourGrades.get(norm(id)) ?? undefined);
+  return { ...order, ids: sortIntoTiers(order.ids, grades, regradedThere), grades };
 }
 
 /** A ballot as read from the index. Timestamps are epoch ms when known. */

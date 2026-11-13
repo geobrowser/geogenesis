@@ -103,6 +103,23 @@ export function removeEntry(ids: readonly string[], grades: BallotGrades, entity
 }
 
 /**
+ * Puts a debate taken out of the ballot back where it was in `before`, with the grade it had
+ * there, into the ballot as it is now (later edits kept). Nothing changes when it is already back
+ * or wasn't in `before`. The ranking screen's Undo of a Down rank from the popup.
+ */
+export function restoreEntry(current: GradedBallot, before: GradedBallot, entityId: string): GradedBallot {
+  const key = normId(entityId);
+  if (current.ids.some(id => normId(id) === key)) return current;
+  const at = before.ids.findIndex(id => normId(id) === key);
+  if (at < 0) return current;
+  const ids = [...current.ids.slice(0, at), entityId, ...current.ids.slice(at)];
+  const grade = before.grades.get(key);
+  const grades = new Map(current.grades);
+  if (grade) grades.set(key, grade);
+  return { ids, grades };
+}
+
+/**
  * The tier a debate placed at `index` of `ids` (a flat position: the compare flow, or a drop from
  * the team column) belongs to: the tier of the entry above it. At the top, the tier of the first
  * entry. A ballot with no grades at all stays ungraded.
@@ -208,36 +225,17 @@ export function mergeGrades({
 }
 
 /**
- * After a merge, an entry whose grade came from another device (it differs from this edit's) may
- * still sit where this edit had it. Each such entry moves as a regrade does: to the bottom of its
- * new tier, or, when its grade was cleared there, to the top of the ungraded entries. So the ballot
- * the web publishes stays in tiers.
+ * The ballot in tier order (A, B, C, ungraded), keeping the order within each tier. Entries
+ * `toBottom` names go to the bottom of their tier (still in order among themselves).
  */
-export function placeRegradedEntries(ids: readonly string[], grades: BallotGrades, ourGrades: BallotGrades): string[] {
-  let next: GradedBallot = { ids: [...ids], grades };
-  for (const id of ids) {
-    const grade = grades.get(normId(id)) ?? null;
-    if (grade === (ourGrades.get(normId(id)) ?? null)) continue;
-    next = grade ? gradeInto(next.ids, next.grades, id, grade) : toTopOfUngraded(next, id);
-  }
-  return next.ids;
-}
-
-function toTopOfUngraded(ballot: GradedBallot, entityId: string): GradedBallot {
-  const key = normId(entityId);
-  const rest = ballot.ids.filter(id => normId(id) !== key);
-  let lastGraded = -1;
-  rest.forEach((id, index) => {
-    if (ballot.grades.has(normId(id))) lastGraded = index;
-  });
-  return { ids: [...rest.slice(0, lastGraded + 1), entityId, ...rest.slice(lastGraded + 1)], grades: ballot.grades };
-}
-
-/** The ballot in tier order (A, B, C, ungraded), keeping the order within each tier. */
-export function sortIntoTiers(ids: readonly string[], grades: BallotGrades): string[] {
+export function sortIntoTiers(
+  ids: readonly string[],
+  grades: BallotGrades,
+  toBottom: (id: string) => boolean = () => false
+): string[] {
   return ids
-    .map((id, index) => ({ id, index, rank: TIER_RANK[tierOf(grades, id)] }))
-    .sort((a, b) => a.rank - b.rank || a.index - b.index)
+    .map((id, index) => ({ id, index, rank: TIER_RANK[tierOf(grades, id)], bottom: toBottom(id) ? 1 : 0 }))
+    .sort((a, b) => a.rank - b.rank || a.bottom - b.bottom || a.index - b.index)
     .map(entry => entry.id);
 }
 

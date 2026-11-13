@@ -30,7 +30,8 @@ function useHarness(
   merge: (ids: string[], grades: BallotGrades) => { ids: string[]; grades: BallotGrades } = (ids, grades) => ({
     ids,
     grades,
-  })
+  }),
+  busy: { current: boolean; published?: { ids: string[]; grades: BallotGrades } } = { current: false }
 ) {
   const published = React.useRef<{ ids: string[]; grades: BallotGrades }>({
     ids: [id(1)],
@@ -43,8 +44,9 @@ function useHarness(
     orderedIds: draft.ids,
     grades: draft.grades,
     setDraft: (ids, grades) => setDraftState({ ids, grades }),
-    getBasedOnOrderedIds: () => published.current.ids,
-    getBasedOnGrades: () => published.current.grades,
+    getBasedOnOrderedIds: () => (busy.published ?? published.current).ids,
+    getBasedOnGrades: () => (busy.published ?? published.current).grades,
+    otherPublishBusy: busy.current,
     publish: async (ids, grades) => {
       const ok = await publish(ids, grades);
       if (ok) published.current = merge(ids, grades ?? new Map());
@@ -140,5 +142,32 @@ describe('grading from the block (GEO-3729)', () => {
     const [ids, grades] = publish.mock.calls[1] as [string[], BallotGrades];
     expect(ids).toEqual([id(1), id(3), id(2), id(5)]);
     expect(grades.get(id(5))).toBe('C');
+  });
+
+  it('waits for the block’s placement publish, then builds on what it published', async () => {
+    vi.useFakeTimers();
+    try {
+      const publish = vi.fn().mockResolvedValue(true);
+      const busy: { current: boolean; published?: { ids: string[]; grades: BallotGrades } } = { current: true };
+      const { result, rerender } = renderHook(() => useHarness(publish, undefined, busy));
+      act(() => result.current.grading.grade(id(2), 'B'));
+      await act(async () => vi.advanceTimersByTimeAsync(1000));
+      expect(publish).not.toHaveBeenCalled();
+      // The placement publish lands: debate 8, placed as B.
+      busy.current = false;
+      busy.published = {
+        ids: [id(1), id(8)],
+        grades: new Map([
+          [id(1), 'A'],
+          [id(8), 'B'],
+        ]),
+      };
+      rerender();
+      await act(async () => vi.advanceTimersByTimeAsync(500));
+      expect(publish).toHaveBeenCalledTimes(1);
+      expect(publish.mock.calls[0]![0]).toEqual([id(1), id(8), id(2)]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

@@ -5,6 +5,7 @@ import * as React from 'react';
 import {
   type BallotGrades,
   type Grade,
+  type GradedBallot,
   gradeInto,
   gradeOf,
   hasAnyGrade,
@@ -106,6 +107,7 @@ export function useBestDebatesBlockRanking({
     getBasedOnOrderedIds,
     getBasedOnGrades,
     publish: compose.publish,
+    otherPublishBusy: isSaving || isPublishing,
     downRank: compose.requestPushDown,
   });
 
@@ -129,14 +131,15 @@ export function useBestDebatesBlockRanking({
   };
 }
 
+/** How often queued grades check whether the block's placement publish has finished. */
+const OTHER_PUBLISH_POLL_MS = 250;
+
 /**
  * Grading from the block's watch popup (GEO-3729). A grade shows at once and publishes straight
  * away. Grades given while a publish is out are sent together in the next one, so a quick run of
  * grades never loses a tap and never sends one publish per tap. A failed publish puts the ranking
  * back as published (its toast says what happened).
  */
-type GradedDraft = { ids: string[]; grades: BallotGrades };
-
 export function useBlockGrading({
   blockId,
   ready,
@@ -146,6 +149,7 @@ export function useBlockGrading({
   getBasedOnOrderedIds,
   getBasedOnGrades,
   publish,
+  otherPublishBusy = false,
   downRank,
 }: {
   blockId: string;
@@ -156,15 +160,22 @@ export function useBlockGrading({
   getBasedOnOrderedIds: () => string[];
   getBasedOnGrades: () => BallotGrades;
   publish: (ids: string[], grades?: BallotGrades) => Promise<boolean>;
+  /**
+   * Another publish of this ballot is out (the block's placement Done). Grades wait for it, so
+   * they never meet the ballot publisher busy and get dropped, and build on what it published.
+   */
+  otherPublishBusy?: boolean;
   downRank: (entityId: string) => void;
 }): BestDebatesGrading {
   const recordGrade = useRecordGrade(blockId);
   // The draft as of the last grade, read by the publish loop (state lags a render behind).
   const latest = React.useRef({ ids: orderedIds, grades });
-  // Grades tapped since the publish going out was built: replayed onto what that publish leaves
-  // published (it may have merged in another device's changes), never sent from a stale copy.
-  const queued = React.useRef<Array<(draft: GradedDraft) => GradedDraft>>([]);
+  // Grades not yet sent: each publish replays them onto what is published at that moment, never
+  // sends them from a stale copy.
+  const queued = React.useRef<Array<(draft: GradedBallot) => GradedBallot>>([]);
   const inFlight = React.useRef(false);
+  const otherBusy = React.useRef(otherPublishBusy);
+  otherBusy.current = otherPublishBusy;
   const [saving, setSaving] = React.useState<ReadonlySet<string>>(new Set());
   if (!inFlight.current) latest.current = { ids: orderedIds, grades };
 
@@ -174,9 +185,14 @@ export function useBlockGrading({
     try {
       let ok = true;
       while (ok && queued.current.length > 0) {
-        queued.current = [];
-        const sent = latest.current;
+        while (otherBusy.current) await new Promise(resolve => setTimeout(resolve, OTHER_PUBLISH_POLL_MS));
+        // Every grade not yet published, replayed onto what is published now (which a placement or
+        // this loop's last publish may have just moved, merging in another device's changes).
         const before = { ids: getBasedOnOrderedIds(), grades: getBasedOnGrades() };
+        const sent = queued.current.reduce((draft, change) => change(draft), before);
+        queued.current = [];
+        latest.current = sent;
+        setDraft(sent.ids, sent.grades);
         ok = await publish(sent.ids, sent.grades);
         if (ok) {
           for (const change of gradeChanges(before.ids, before.grades, sent.ids, sent.grades)) {
@@ -188,14 +204,14 @@ export function useBlockGrading({
             });
           }
         }
-        // What is published now (this publish, merged), plus the grades tapped while it went out.
-        const published = { ids: getBasedOnOrderedIds(), grades: getBasedOnGrades() };
-        latest.current = ok ? queued.current.reduce((draft, apply) => apply(draft), published) : published;
+      }
+      if (!ok) {
+        // A failed publish puts the ranking back as published, so the row never shows a grade
+        // that didn't go out; grades tapped during it go with it (its toast says what happened).
+        queued.current = [];
+        latest.current = { ids: getBasedOnOrderedIds(), grades: getBasedOnGrades() };
         setDraft(latest.current.ids, latest.current.grades);
       }
-      // A failed publish puts the ranking back as published, so the row never shows a grade that
-      // didn't go out; grades tapped during it are dropped with it (its toast says what happened).
-      if (!ok) queued.current = [];
     } finally {
       inFlight.current = false;
       setSaving(new Set());
@@ -203,7 +219,7 @@ export function useBlockGrading({
   }, [getBasedOnGrades, getBasedOnOrderedIds, publish, recordGrade, setDraft]);
 
   const apply = React.useCallback(
-    (entityId: string, change: (draft: GradedDraft) => GradedDraft) => {
+    (entityId: string, change: (draft: GradedBallot) => GradedBallot) => {
       queued.current.push(change);
       latest.current = change(latest.current);
       setDraft(latest.current.ids, latest.current.grades);

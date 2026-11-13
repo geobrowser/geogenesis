@@ -21,6 +21,7 @@ import {
   gradeOf,
   hasAnyGrade,
   removeEntry,
+  restoreEntry,
   sameGrades,
   tierSections,
 } from '~/core/blocks/ranking/ranking-grades';
@@ -812,14 +813,9 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
           const key = ID.uuidToHex(debateId);
           const before = draftBeforeDownRank.current.get(key);
           draftBeforeDownRank.current.delete(key);
-          if (!before || draftPlaces.has(key)) return;
-          const at = before.ids.findIndex(id => ID.uuidToHex(id) === key);
-          if (at < 0) return;
-          const ids = [...orderedIds.slice(0, at), debateId, ...orderedIds.slice(at)];
-          const grade = gradeOf(before.grades, debateId);
-          const grades = new Map(draftGrades);
-          if (grade) grades.set(key, grade);
-          setDraft(ids, grades);
+          if (!before) return;
+          const restored = restoreEntry({ ids: orderedIds, grades: draftGrades }, before, debateId);
+          if (restored.ids !== orderedIds) setDraft(restored.ids, restored.grades);
         },
       }
     : null;

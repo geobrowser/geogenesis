@@ -9,9 +9,9 @@ import {
   gradeInto,
   mergeGrades,
   parseGrade,
-  placeRegradedEntries,
   pruneGrades,
   removeEntry,
+  restoreEntry,
   sameGrades,
   sortIntoTiers,
   tierAtIndex,
@@ -204,59 +204,6 @@ describe('mergeGrades', () => {
   });
 });
 
-describe('placeRegradedEntries', () => {
-  it('moves an entry regraded elsewhere to the bottom of its new tier', () => {
-    // Another device moved 1 from A to C; this device's order still has it among the A's.
-    const merged = g([
-      [1, 'C'],
-      [2, 'A'],
-      [3, 'C'],
-    ]);
-    const ours = g([
-      [1, 'A'],
-      [2, 'A'],
-      [3, 'C'],
-    ]);
-    expect(placeRegradedEntries(ids(1, 2, 3), merged, ours)).toEqual(ids(2, 3, 1));
-  });
-
-  it('moves an entry regraded elsewhere even when the order already looks tier-ordered', () => {
-    // 1 was A here and is C now; it sits at the top of C, and goes to the bottom like any regrade.
-    const merged = g([
-      [2, 'A'],
-      [1, 'C'],
-      [3, 'C'],
-    ]);
-    const ours = g([
-      [2, 'A'],
-      [1, 'A'],
-      [3, 'C'],
-    ]);
-    expect(placeRegradedEntries(ids(2, 1, 3), merged, ours)).toEqual(ids(2, 3, 1));
-  });
-
-  it('moves an entry whose grade was cleared elsewhere below every graded entry', () => {
-    const merged = g([
-      [1, 'B'],
-      [3, 'B'],
-    ]);
-    const ours = g([
-      [1, 'B'],
-      [2, 'B'],
-      [3, 'B'],
-    ]);
-    expect(placeRegradedEntries(ids(1, 2, 3, 4), merged, ours)).toEqual(ids(1, 3, 2, 4));
-  });
-
-  it('leaves a ballot alone when no grade came from elsewhere', () => {
-    const grades = g([
-      [1, 'A'],
-      [2, 'B'],
-    ]);
-    expect(placeRegradedEntries(ids(1, 2), grades, grades)).toEqual(ids(1, 2));
-  });
-});
-
 describe('pruneGrades and sameGrades', () => {
   it('keeps only the ballot’s entries', () => {
     expect([
@@ -298,5 +245,35 @@ describe('sortIntoTiers', () => {
         ])
       )
     ).toEqual(ids(2, 4, 1, 3));
+  });
+});
+
+describe('restoreEntry (Undo of a Down rank on the ranking screen)', () => {
+  it('puts the debate back at its old place with its grade, keeping later edits', () => {
+    const before = {
+      ids: ids(1, 2, 3),
+      grades: g([
+        [1, 'A'],
+        [2, 'B'],
+        [3, 'C'],
+      ]),
+    };
+    // 2 was down ranked, then 3 was regraded B.
+    const now = {
+      ids: ids(1, 3),
+      grades: g([
+        [1, 'A'],
+        [3, 'B'],
+      ]),
+    };
+    const restored = restoreEntry(now, before, id(2));
+    expect(restored.ids).toEqual(ids(1, 2, 3));
+    expect(restored.grades.get(id(2))).toBe('B');
+    expect(restored.grades.get(id(3))).toBe('B');
+  });
+
+  it('changes nothing when the debate is already back', () => {
+    const now = { ids: ids(1, 2), grades: g([[1, 'A']]) };
+    expect(restoreEntry(now, { ids: ids(1, 2), grades: g([[2, 'B']]) }, id(2))).toBe(now);
   });
 });
