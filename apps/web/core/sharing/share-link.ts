@@ -75,6 +75,18 @@ function taggedUrl(destination: string | URL, attribution: ShareAttribution): st
   return url.toString();
 }
 
+function shareAttribution(
+  kind: ShareContentType,
+  contentId: string,
+  method: ShareMethod,
+  shareId: string
+): ShareAttribution | null {
+  const content = shareUuid(contentId);
+  const id = shareUuid(shareId);
+  if (!content || !id) return null;
+  return { share_id: id, share_content_type: kind, share_content_id: content, method };
+}
+
 /** Invalid target IDs still share their original destination; measurement never blocks sharing. */
 export function createShareLink(
   destination: string,
@@ -83,16 +95,32 @@ export function createShareLink(
   method: ShareMethod,
   shareId = crypto.randomUUID()
 ): ShareLink {
-  const content = shareUuid(contentId);
-  const id = shareUuid(shareId);
-  if (!content || !id) return { url: destination, attribution: null };
-  const attribution = { share_id: id, share_content_type: kind, share_content_id: content, method };
+  const attribution = shareAttribution(kind, contentId, method, shareId);
+  if (!attribution) return { url: destination, attribution: null };
+  const content = attribution.share_content_id;
+  const id = attribution.share_id;
   const url = withoutCampaign(destination);
   // The short form recovers the content ID from the path; a destination that does not end in it
   // keeps the long tags rather than losing its content.
   if (shareUuid(lastPathSegment(url)) !== content) return { url: taggedUrl(url, attribution), attribution };
   url.searchParams.set(SHORT_SHARE_PARAM, `${METHOD_CODES[method]}${CONTENT_CODES[kind]}${hexToBase64Url(id)}`);
   return { url: url.toString(), attribution };
+}
+
+/**
+ * A shared link to another site, which has no proxy to expand the short code (debates.geobrowser.io,
+ * GEO-3695): always the long tags, which that site's analytics read from `landing_page_url`.
+ */
+export function createTaggedShareLink(
+  destination: string,
+  kind: ShareContentType,
+  contentId: string,
+  method: ShareMethod,
+  shareId = crypto.randomUUID()
+): ShareLink {
+  const attribution = shareAttribution(kind, contentId, method, shareId);
+  if (!attribution) return { url: destination, attribution: null };
+  return { url: taggedUrl(destination, attribution), attribution };
 }
 
 function parseShortCode(url: URL): ShareAttribution | null {

@@ -1,5 +1,8 @@
 import type { DebateMediaTurnSegment, DebateTranscriptSegment } from './api';
 
+/** Anything placed on both clocks as a transcript line is: a line, or one of its words (GEO-3349). */
+type TimedOnBothClocks = Pick<DebateTranscriptSegment, 'start_ms' | 'end_ms' | 'source_start_ms' | 'source_end_ms'>;
+
 /**
  * The web player's clock: the raw recordings', from the debate's start (GEO-3293).
  *
@@ -32,7 +35,7 @@ export function turnOnRecordings(segment: DebateMediaTurnSegment): DebateMediaTu
  * edited, and a line without one fell in a stretch the render cut: it was never in the video, and
  * on the recordings it is talk between rounds, which the player keeps silent and uncaptioned.
  */
-export function transcriptOnRecordings<T extends DebateTranscriptSegment>(lines: readonly T[]): T[] {
+export function transcriptOnRecordings<T extends TimedOnBothClocks>(lines: readonly T[]): T[] {
   if (!lines.some(line => line.source_start_ms !== undefined)) return [...lines];
   return lines.flatMap(line =>
     line.source_start_ms !== undefined && line.source_end_ms !== undefined
@@ -66,4 +69,60 @@ export function recordingTimeOf(
     .sort((a, b) => a.turn_index - b.turn_index);
   const turn = edge === 'start' ? holding.at(-1) : holding[0];
   return turn?.source_start_ms === undefined ? renderedMs : turn.source_start_ms + (renderedMs - turn.output_start_ms);
+}
+
+/**
+ * A span of the rendered video on the recordings' clock, both edges moved by the turn holding its
+ * middle (GEO-3671): a moment's cut, whose clear room either side of its words can reach past its
+ * turn's rendered edge into the next stretch. Mapping each edge by itself would carry such an edge
+ * across a cut the render made; one shift keeps the span the length it is. A middle outside every
+ * turn falls back to {@link recordingTimeOf} per edge.
+ */
+export function recordingSpanOf(
+  renderedStartMs: number,
+  renderedEndMs: number,
+  turns: readonly DebateMediaTurnSegment[]
+): { start_ms: number; end_ms: number } {
+  const middle = (renderedStartMs + renderedEndMs) / 2;
+  const turn = turns.find(
+    candidate =>
+      candidate.source_start_ms !== undefined &&
+      middle >= candidate.output_start_ms &&
+      middle <= candidate.output_end_ms
+  );
+  if (turn?.source_start_ms === undefined) {
+    return {
+      start_ms: recordingTimeOf(renderedStartMs, turns, 'start'),
+      end_ms: recordingTimeOf(renderedEndMs, turns, 'end'),
+    };
+  }
+  const shift = turn.source_start_ms - turn.output_start_ms;
+  return { start_ms: renderedStartMs + shift, end_ms: renderedEndMs + shift };
+}
+
+/**
+ * A time on the recordings' clock on the rendered video's, or `null` where the render has none: a
+ * stretch it cut or condensed (a pick window, a break, an early end's quiet), which a hand-picked
+ * clip's edge cannot sit in, since geo-chat refuses a clip that crosses a cut (GEO-3671).
+ *
+ * The inverse of {@link recordingTimeOf}: each turn is one stretch the render kept whole, at real
+ * speed, so the offset into it carries straight over. A render with no source times has one clock.
+ */
+export function renderedTimeOf(
+  recordingMs: number,
+  turns: readonly DebateMediaTurnSegment[],
+  edge: 'start' | 'end'
+): number | null {
+  if (!turns.some(turn => turn.source_start_ms !== undefined)) return recordingMs;
+  const holding = turns
+    .filter(
+      turn =>
+        turn.source_start_ms !== undefined &&
+        turn.source_end_ms !== undefined &&
+        recordingMs >= turn.source_start_ms &&
+        recordingMs <= turn.source_end_ms
+    )
+    .sort((a, b) => a.turn_index - b.turn_index);
+  const turn = edge === 'start' ? holding.at(-1) : holding[0];
+  return turn?.source_start_ms === undefined ? null : turn.output_start_ms + (recordingMs - turn.source_start_ms);
 }

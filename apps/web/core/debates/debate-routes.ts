@@ -5,6 +5,11 @@ export function debatePath(debate: Pick<Debate, 'id' | 'claim'>) {
   return `/space/${debate.claim.space_id}/debates/${debate.id}`;
 }
 
+/** The moments editor for a debate (GEO-3671), media admins only. */
+export function momentsEditorPath(debate: Pick<Debate, 'id' | 'claim'>) {
+  return `${debatePath(debate)}/moments`;
+}
+
 /** A debate-again picker lives under the space that created its session. */
 export function debateRematchPath(session: Pick<DebateRematchSession, 'id' | 'source_space_id'>) {
   return `/space/${session.source_space_id}/debates/rematches/${session.id}`;

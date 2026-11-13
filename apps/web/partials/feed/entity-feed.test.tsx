@@ -13,7 +13,7 @@ import {
 } from '~/core/explore/explore-constants';
 import { PUBLIC_BEST_FEED_PATH } from '~/core/explore/explore-feed-params';
 
-import { EntityFeed, buildFeedQuery, leadFirst } from './entity-feed';
+import { EntityFeed, FEED_REQUEST_TIMEOUT_MS, buildFeedQuery, leadFirst } from './entity-feed';
 
 const mocks = vi.hoisted(() => ({
   entryItem: null as Record<string, unknown> | null,
@@ -39,6 +39,10 @@ const mocks = vi.hoisted(() => ({
   itemAt: {} as Record<number, Record<string, unknown>>,
   /** The error the infinite query reports, so the failed-feed message can be rendered. */
   error: null as Error | null,
+  /** Whether the last next-page fetch failed. */
+  isFetchNextPageError: false,
+  refetch: vi.fn(),
+  fetchNextPage: vi.fn(),
   /** What the browse sidebar's cache holds — the space menu's options. */
   browseSidebar: null as {
     featured: { id: string; name: string }[];
@@ -74,9 +78,12 @@ vi.mock('@tanstack/react-query', () => ({
       isLoading: false,
       isFetchingNextPage: false,
       isPlaceholderData: mocks.isPlaceholderData,
-      fetchNextPage: vi.fn(),
+      fetchNextPage: mocks.fetchNextPage,
       hasNextPage: mocks.hasNextPage,
       error: mocks.error,
+      isFetching: false,
+      isFetchNextPageError: mocks.isFetchNextPageError,
+      refetch: mocks.refetch,
     };
   },
   useQuery: (options: Record<string, unknown>) => {
@@ -142,6 +149,9 @@ beforeEach(() => {
   mocks.entryQueryOptions = null;
   mocks.queryKeys = [];
   mocks.error = null;
+  mocks.isFetchNextPageError = false;
+  mocks.refetch.mockReset();
+  mocks.fetchNextPage.mockReset();
   mocks.browseSidebar = null;
   mocks.accountAddress = null;
   mocks.fetch.mockReset();
@@ -483,6 +493,63 @@ describe('a feed request that failed', () => {
 
     expect(screen.getByText('Could not load the feed.')).toBeTruthy();
     expect(screen.queryByText('No entities match these filters yet.')).toBeNull();
+  });
+
+  // GEO-3703: a reader left on the failure message had no way out but reloading the page.
+  it('offers to try again, and trying again refetches the feed', () => {
+    mocks.error = new Error('Feed failed');
+    renderExploreFeed();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+
+    expect(mocks.refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('says when the next page failed and fetches it again on request', () => {
+    mocks.pages = [{ items: [{ entityId: 'a1', spaceId: 's1', types: [], title: 'A' }] }];
+    mocks.hasNextPage = true;
+    mocks.isFetchNextPageError = true;
+    renderExploreFeed();
+
+    expect(screen.getByText('Could not load more.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(mocks.fetchNextPage).toHaveBeenCalledTimes(1);
+  });
+
+  // A request the route never answers would otherwise hold the skeletons up for good.
+  it('gives up on a request that is never answered', async () => {
+    const timeout = vi.spyOn(AbortSignal, 'timeout');
+    renderExploreFeed();
+
+    const queryFn = mocks.queryOptions?.queryFn as (args: {
+      pageParam?: string;
+      signal: AbortSignal;
+    }) => Promise<unknown>;
+    const reactQuery = new AbortController();
+    await queryFn({ pageParam: undefined, signal: reactQuery.signal });
+
+    expect(timeout).toHaveBeenCalledWith(FEED_REQUEST_TIMEOUT_MS);
+    // Still cancelled when react-query drops the request, not only when the clock runs out.
+    const init = mocks.fetch.mock.calls.at(-1)?.[1] as RequestInit;
+    reactQuery.abort();
+    expect(init.signal?.aborted).toBe(true);
+    timeout.mockRestore();
+  });
+
+  it('still loads in a browser without AbortSignal.any (Safari before 17.4)', async () => {
+    const any = AbortSignal.any;
+    // @ts-expect-error -- simulating an older browser
+    delete AbortSignal.any;
+    try {
+      renderExploreFeed();
+      const queryFn = mocks.queryOptions?.queryFn as (args: {
+        pageParam?: string;
+        signal: AbortSignal;
+      }) => Promise<unknown>;
+      await expect(queryFn({ pageParam: undefined, signal: new AbortController().signal })).resolves.toBeTruthy();
+    } finally {
+      AbortSignal.any = any;
+    }
   });
 });
 
@@ -901,9 +968,15 @@ describe('EntityFeed signed-in first paint', () => {
     renderFeed();
     expect(mocks.publicQueryOptions?.enabled).toBe(true);
 
-    await (mocks.publicQueryOptions?.queryFn as () => Promise<unknown>)();
+    await (mocks.publicQueryOptions?.queryFn as (ctx: { signal: AbortSignal }) => Promise<unknown>)({
+      signal: new AbortController().signal,
+    });
     expect(mocks.fetch.mock.calls.at(-1)?.[0]).toBe(PUBLIC_BEST_FEED_PATH);
-    expect(mocks.fetch.mock.calls.at(-1)?.[1]).toEqual({ credentials: 'include' });
+    // A preload is reused only when the request matches it: same URL, same credentials, and no
+    // authorization header. The abort signal is not part of that match.
+    const init = mocks.fetch.mock.calls.at(-1)?.[1] as RequestInit;
+    expect(init.credentials).toBe('include');
+    expect(init.headers).toBeUndefined();
   });
 
   it('shows the public page while the personal one loads', () => {
