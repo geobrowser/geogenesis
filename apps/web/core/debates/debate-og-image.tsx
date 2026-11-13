@@ -4,11 +4,11 @@ import { ImageResponse } from 'next/og';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { initials, seedHue } from '~/core/blocks/ranking/ranking-og-image';
+import { fitWrappedText, initials, measureTextWidth, seedHue } from '~/core/blocks/ranking/ranking-og-image';
 
 import { GeoMark } from '~/design-system/icons/geo-mark';
 
-import { CLAIM_MEASURE_PX, claimLineHeight, fitClaimToBand } from './debate-og-claim-fit';
+import { CLAIM_BAND_HEIGHT_PX, CLAIM_MEASURE_PX, claimLineHeight, fitClaimToBand } from './debate-og-claim-fit';
 
 /**
  * The 1200x630 share card for a published debate (GEO-2755).
@@ -33,14 +33,7 @@ export type DebateOgCardData = {
   speakers: [DebateOgSpeaker, DebateOgSpeaker];
 };
 
-/**
- * Card geometry, exported so the symmetry can be asserted rather than eyeballed.
- *
- * Two rounds of review have gone on where the divider sits, so where it sits is asserted rather
- * than eyeballed: the band is centred where it crosses the *top* edge of the block, and the VS
- * badge is centred on the white bar's right edge. Both are choices among near-neighbours that a
- * later edit could quietly undo — see `SEAM_X` and `BADGE_CENTRE_X` for why each was made.
- */
+/** Geometry shared with the panel-symmetry tests. */
 export const DEBATE_OG_GEOMETRY = {
   get blockWidth() {
     return BLOCK_W;
@@ -76,21 +69,7 @@ export const DEBATE_OG_GEOMETRY = {
       rightBottom: BLOCK_W - (bandLeftBottom + DIVIDER_W),
     };
   },
-  /** Right edge of the white bar, which the VS badge is centred on. */
-  get badgeCentre() {
-    return BADGE_CENTRE_X;
-  },
-  get badgeCentreY() {
-    return BADGE_CENTRE_Y;
-  },
-  get badgeRadius() {
-    return BADGE_R;
-  },
-  /** The white bar's right edge at a given height in the block — the line the badge sits on. */
-  whiteBarRightEdgeAt(y: number) {
-    return SEAM_X + DIVIDER_WHITE_W + ((SEAM_Y - y) / VIDEO_H) * LEAN;
-  },
-  /** The two bars of the divider, as offsets from the seam. Must tile the gap exactly. */
+  /** The two slabs of the divider, as offsets from the seam. Must tile the gap exactly. */
   get bars() {
     return [
       { offset: 0, width: DIVIDER_WHITE_W },
@@ -101,22 +80,23 @@ export const DEBATE_OG_GEOMETRY = {
 
 const CARD_W = 1200;
 const CARD_H = 630;
-const CLAIM_BAND_H = 210;
-const VIDEO_H = 352;
-const FOOTER_H = 68;
+const HEADER_H = 88;
+const BRAND_OFFSET_Y = 10;
+const CLAIM_BAND_H = CLAIM_BAND_HEIGHT_PX;
 const SIDE_MARGIN = 32;
+const VIDEO_H = CARD_H - HEADER_H - CLAIM_BAND_H - SIDE_MARGIN;
 const BLOCK_W = CARD_W - SIDE_MARGIN * 2; // 1136, and the claim measure too
 
-const TEXT = '#202020';
+const TEXT = '#292929';
 const CHROME = '#111111';
-const DIVIDER = '#F0F0F0';
-const RADIUS_XL = 16;
+const DIVIDER = '#F3F3F3';
+const RADIUS_XL = 24;
 
 /**
  * The divider, in coordinates local to the video block.
  *
- * From the design: a 15px white band then a 17px black one, leaning 40px horizontally across the
- * block's 352px height, top edge to the right of the bottom edge. The two panel edges are therefore
+ * Two adjacent white slabs form the divider, leaning 40px horizontally across the
+ * block's height, top edge to the right of the bottom edge. The two panel edges are therefore
  * 32px apart, and the lean is what makes this impossible to express as a straight seam — a 32px
  * band cannot cover a vertical seam across a 40px lean at every height.
  */
@@ -143,23 +123,11 @@ const DIVIDER_BLACK_W = 17;
  * Shrinking `LEAN` is the only way to buy both, and it costs the divider its lean.
  */
 const SEAM_X = BLOCK_W / 2 - DIVIDER_W / 2;
-/**
- * Where the VS badge is centred: on the **right edge of the white bar**.
- *
- * The band leans, so no single x holds the line through the whole badge — the badge can only be
- * centred on the line at its own height, and the lean then carries the line about 6px either way
- * where it enters the badge and where it leaves. Sitting the badge on the white bar's right edge is
- * what makes those two offsets symmetric.
- *
- * The black bar's centre, 8.5px right of here, does not: the line arrived at the top of the badge
- * near enough flush and left the bottom 15px to its left, which read as the divider sliding out
- * from under the badge on its way down rather than as a lean.
- */
-const BADGE_CENTRE_X = SEAM_X + DIVIDER_WHITE_W;
 const SEAM_Y = VIDEO_H / 2;
-/** The speaker pill's inset from its panel's edges, and its height. */
-const PILL_INSET = 14;
-const PILL_H = 40;
+/** The speaker label's inset from its panel's edges, and its height. */
+const LABEL_INSET = 24;
+const LABEL_BOTTOM = 24;
+const LABEL_H = 32;
 /**
  * How far the divider has leaned at a given height, as an offset from its position at `SEAM_Y`.
  *
@@ -169,9 +137,6 @@ const PILL_H = 40;
 function leanOffsetAt(y: number) {
   return ((SEAM_Y - y) / VIDEO_H) * LEAN;
 }
-const BADGE_R = 54;
-/** The badge sits on the pivot, which is what makes the lean's ±6px either side of it symmetric. */
-const BADGE_CENTRE_Y = SEAM_Y;
 /** Positive rotation is clockwise, which sends the bottom of a vertical edge left — the lean. */
 const LEAN_DEG = (Math.atan2(LEAN, VIDEO_H) * 180) / Math.PI;
 
@@ -202,27 +167,17 @@ function readFontData(fileName: string): ArrayBuffer {
   return data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) as ArrayBuffer;
 }
 
-/**
- * Geist only, deliberately.
- *
- * The design asks for Calibre Medium on every piece of UI text, but Calibre ships in this repo as
- * `.woff2` alone and Satori cannot load that format. The existing ranking card registers no Calibre
- * for the same reason. Geist Medium stands in until a `.ttf`/`.otf` cut exists — tracked on the
- * ticket rather than silently substituted.
- */
+// Satori cannot read WOFF2. These TTFs are decompressed copies of the app's Calibre files.
 const debateFonts = [
-  { name: 'Geist', data: readFontData('Geist-Bold.ttf'), weight: 700 as const, style: 'normal' as const },
-  { name: 'Geist', data: readFontData('Geist-Medium.ttf'), weight: 500 as const, style: 'normal' as const },
+  { name: 'Calibre', data: readFontData('calibre-regular.ttf'), weight: 400 as const, style: 'normal' as const },
+  { name: 'Calibre', data: readFontData('calibre-medium.ttf'), weight: 500 as const, style: 'normal' as const },
 ];
 
 /**
- * One bar of the two-tone divider, leaning with the panels.
+ * One slab of the white divider, leaning with the panels.
  *
  * `offset` is measured rightward from `SEAM_X`, because that is the direction the gap between the
- * clipped panels runs — they meet at `SEAM_X..SEAM_X + DIVIDER_W`. Measuring leftward instead put
- * the whole band 32px off: the black bar read as the split while the VS badge sat at the real one,
- * the white bar covered a strip of the left speaker, and bare background showed before the right
- * panel began — which looked like three separate problems and was one.
+ * clipped panels runs — they meet at `SEAM_X..SEAM_X + DIVIDER_W`.
  *
  * Every bar pivots about `SEAM_X` so the band and both panel clips lean as one rigid assembly.
  */
@@ -243,36 +198,38 @@ function Slab({ offset, width, background }: { offset: number; width: number; ba
   );
 }
 
-function SpeakerPill({ speaker, left }: { speaker: DebateOgSpeaker; left: number }) {
+function SpeakerLabel({ speaker, left }: { speaker: DebateOgSpeaker; left: number }) {
+  const stanceWidth = measureTextWidth(speaker.stance, 20);
+  const name = fitWrappedText(speaker.name, 22, 18, 480 - stanceWidth - 50, 1, 'Speaker');
+
   return (
     <div
       style={{
         position: 'absolute',
         left,
-        bottom: PILL_INSET,
+        bottom: LABEL_BOTTOM,
         display: 'flex',
         alignItems: 'center',
-        height: PILL_H,
-        borderRadius: 9999,
-        background: CHROME,
-        padding: '0 6px 0 5px',
+        height: LABEL_H,
         gap: 10,
+        color: '#ffffff',
+        textShadow: '0 1px 4px rgba(0,0,0,0.35)',
       }}
     >
       {speaker.avatarSrc ? (
         <img
           src={speaker.avatarSrc}
-          width={30}
-          height={30}
+          width={28}
+          height={28}
           alt=""
           // `cover`, because a profile photo is almost never square and without this Satori
           // stretches it to fit — a face comes out visibly squeezed on one axis.
           style={{
-            width: 30,
-            height: 30,
+            width: 28,
+            height: 28,
             borderRadius: 9999,
-            border: '2px solid rgba(255,255,255,0.42)',
             objectFit: 'cover',
+            border: '1px solid rgba(255,255,255,0.45)',
           }}
         />
       ) : (
@@ -284,10 +241,9 @@ function SpeakerPill({ speaker, left }: { speaker: DebateOgSpeaker; left: number
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            width: 30,
-            height: 30,
+            width: 28,
+            height: 28,
             borderRadius: 9999,
-            border: '2px solid rgba(255,255,255,0.42)',
             background: `linear-gradient(135deg, hsl(${seedHue(speaker.name)}, 92%, 68%), hsl(${
               (seedHue(speaker.name) + 72) % 360
             }, 92%, 72%))`,
@@ -299,21 +255,19 @@ function SpeakerPill({ speaker, left }: { speaker: DebateOgSpeaker; left: number
           {initials(speaker.name).toUpperCase()}
         </div>
       )}
-      <div style={{ display: 'flex', color: '#ffffff', fontSize: 20, fontWeight: 500 }}>{speaker.name}</div>
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          height: 26,
-          borderRadius: 9999,
-          background: '#ffffff',
-          color: TEXT,
-          padding: '0 12px',
-          fontSize: 15,
-          fontWeight: 500,
-        }}
-      >
-        {speaker.stance}
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
+        <div style={{ display: 'flex', fontSize: name.fontSize, fontWeight: 400, lineHeight: 1 }}>{name.lines[0]}</div>
+        <div
+          style={{
+            display: 'flex',
+            color: '#d9d9d9',
+            fontSize: Math.min(20, name.fontSize - 2),
+            fontWeight: 400,
+            lineHeight: 1,
+          }}
+        >
+          {speaker.stance}
+        </div>
       </div>
     </div>
   );
@@ -343,27 +297,18 @@ function Panel({ side, speaker }: { side: 'left' | 'right'; speaker: DebateOgSpe
   // Where this panel's content sits, in block coordinates, then rebased into the box.
   const contentLeft = isLeft ? 0 : SEAM_X;
   const contentWidth = isLeft ? SEAM_X + DIVIDER_W : BLOCK_W - SEAM_X;
+  // Clip the still and its scrim together so the bottom corners cannot leak dark square pixels.
+  const outerCorner = isLeft ? `${RADIUS_XL}px 0 0 ${RADIUS_XL}px` : `0 ${RADIUS_XL}px ${RADIUS_XL}px 0`;
   /**
-   * The block's outer top corner, carried by the still itself rather than by anything above it.
-   *
-   * It used to come from the block's own `overflow: hidden`, which {@link VideoBlock} can no longer
-   * have, and then from this wrapper's `border-radius` — which drew nothing, because a radius only
-   * rounds what it clips and the wrapper clips nothing: the still is an absolutely sized child that
-   * simply overran the curve and left a square corner. Putting the radius on the still (and on the
-   * placeholder field) rounds the pixels that actually reach that corner. The scrim and the speaker
-   * pill sit at the bottom, so they never meet it.
-   */
-  const outerCorner = isLeft ? `${RADIUS_XL}px 0 0 0` : `0 ${RADIUS_XL}px 0 0`;
-  /**
-   * Where the speaker pill starts, inside this panel's content box.
+   * Where the speaker label starts, inside this panel's content box.
    *
    * The left panel measures from the card edge, so a flat inset is right. The right panel measures
    * from the *divider*, which leans — and its content box starts at `SEAM_X`, back under the band,
-   * so a flat inset put the pill within a couple of pixels of the line. It is measured from the
-   * band's right edge at the pill's own top, which is the closest the two come over the pill's
+   * so a flat inset put the label within a couple of pixels of the line. It is measured from the
+   * band's right edge at the label's own top, which is the closest the two come over the label's
    * height (the band moves right as it rises).
    */
-  const pillLeft = isLeft ? PILL_INSET : DIVIDER_W + leanOffsetAt(VIDEO_H - PILL_INSET - PILL_H) + PILL_INSET;
+  const labelLeft = isLeft ? LABEL_INSET : DIVIDER_W + leanOffsetAt(VIDEO_H - LABEL_BOTTOM - LABEL_H) + LABEL_INSET;
 
   return (
     <div
@@ -387,6 +332,8 @@ function Panel({ side, speaker }: { side: 'left' | 'right'; speaker: DebateOgSpe
           width: contentWidth,
           height: VIDEO_H,
           display: 'flex',
+          borderRadius: outerCorner,
+          overflow: 'hidden',
           transform: `rotate(${-LEAN_DEG}deg)`,
           transformOrigin: `${SEAM_X - contentLeft + ORIGIN_EPSILON}px ${SEAM_Y}px`,
         }}
@@ -413,18 +360,18 @@ function Panel({ side, speaker }: { side: 'left' | 'right'; speaker: DebateOgSpe
             left: 0,
             right: 0,
             bottom: 0,
-            height: 110,
-            background: 'linear-gradient(180deg, rgba(17,17,17,0) 0%, rgba(17,17,17,0.42) 100%)',
+            height: 130,
+            background: 'linear-gradient(180deg, rgba(17,17,17,0) 0%, rgba(17,17,17,0.48) 100%)',
           }}
         />
-        <SpeakerPill speaker={speaker} left={pillLeft} />
+        <SpeakerLabel speaker={speaker} left={labelLeft} />
       </div>
     </div>
   );
 }
 
 /**
- * The two panels, the angled two-tone divider, and the VS badge on the seam.
+ * The two speaker panels with a compact VS medallion on their shared diagonal.
  *
  * Satori has no `clip-path`, so the diagonal cannot be cut out of a panel directly. Instead the
  * divider is drawn as rotated opaque slabs laid over panels that deliberately overrun the seam:
@@ -453,80 +400,81 @@ function VideoBlock({ speakers }: { speakers: [DebateOgSpeaker, DebateOgSpeaker]
           width: BLOCK_W,
           height: VIDEO_H,
           display: 'flex',
-          borderRadius: `${RADIUS_XL}px ${RADIUS_XL}px 0 0`,
+          borderRadius: RADIUS_XL,
           overflow: 'hidden',
         }}
       >
         <Slab offset={0} width={DIVIDER_WHITE_W} background="#ffffff" />
-        <Slab offset={DIVIDER_WHITE_W} width={DIVIDER_BLACK_W} background={CHROME} />
+        <Slab offset={DIVIDER_WHITE_W} width={DIVIDER_BLACK_W} background="#ffffff" />
       </div>
       <div
         style={{
           position: 'absolute',
-          left: BADGE_CENTRE_X - BADGE_R,
-          top: BADGE_CENTRE_Y - BADGE_R,
-          width: BADGE_R * 2,
-          height: BADGE_R * 2,
-          borderRadius: 9999,
-          background: CHROME,
-          border: '11px solid #ffffff',
+          left: BLOCK_W / 2 - 38,
+          top: VIDEO_H / 2 - 38,
+          width: 76,
+          height: 76,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
+          borderRadius: 9999,
+          border: '5px solid #ffffff',
+          background: CHROME,
           color: '#ffffff',
-          fontSize: 50,
-          fontWeight: 700,
+          boxShadow: '0 2px 8px rgba(17,17,17,0.12)',
         }}
       >
-        VS
+        <div
+          style={{
+            display: 'flex',
+            fontSize: 38,
+            fontWeight: 500,
+            letterSpacing: '-0.035em',
+            lineHeight: 1,
+            transform: 'translateY(-1px)',
+          }}
+        >
+          VS
+        </div>
       </div>
     </div>
   );
 }
 
-/**
- * The faint background arcs behind the claim (`#F0F0F0`, 1.5px, from the design's divider token).
- *
- * Segments of very large circles centred off-canvas, which is why they read as gentle sweeps
- * rather than curves: two concentric about a point far below the card, one near-flat horizon, and
- * a steep pair falling in from either side. Reconstructed from the artboard raster — the design
- * canvas records the token and the stroke but not the circles' centres — so the composition
- * matches rather than being transcribed, and radii are cheap to nudge.
- *
- * Clipped to the claim band. Below it the video block covers the card to within a 32px gutter, and
- * arcs surfacing in that sliver would read as a rendering artefact rather than as texture.
- */
-const BACKGROUND_ARCS = [
-  { cx: 450, cy: 1300, r: 1180 },
-  { cx: 450, cy: 1300, r: 1420 },
-  { cx: 600, cy: 4200, r: 4030 },
-  { cx: -1400, cy: 900, r: 1700 },
-  { cx: 2500, cy: 620, r: 1900 },
-];
+/** Fine rays echo the network motif on the Geo landing page. */
+function BackgroundRays() {
+  const ends = [
+    [0, 0],
+    [360, 0],
+    [840, 0],
+    [1200, 0],
+    [0, 120],
+    [1200, 120],
+    [0, 630],
+    [1200, 630],
+  ];
 
-function BackgroundArcs() {
   return (
-    <div style={{ position: 'absolute', left: 0, top: 0, display: 'flex', width: CARD_W, height: CLAIM_BAND_H }}>
-      <svg width={CARD_W} height={CLAIM_BAND_H} viewBox={`0 0 ${CARD_W} ${CLAIM_BAND_H}`} fill="none">
-        {BACKGROUND_ARCS.map((arc, index) => (
-          <circle key={index} cx={arc.cx} cy={arc.cy} r={arc.r} stroke={DIVIDER} strokeWidth={1.5} fill="none" />
+    <div style={{ position: 'absolute', inset: 0, display: 'flex', width: CARD_W, height: HEADER_H + CLAIM_BAND_H }}>
+      <svg
+        width={CARD_W}
+        height={HEADER_H + CLAIM_BAND_H}
+        viewBox={`0 0 ${CARD_W} ${HEADER_H + CLAIM_BAND_H}`}
+        fill="none"
+      >
+        {ends.map(([x, y], index) => (
+          <line
+            key={index}
+            x1={600}
+            y1={HEADER_H / 2 + BRAND_OFFSET_Y}
+            x2={x}
+            y2={y}
+            stroke={DIVIDER}
+            strokeWidth={1}
+          />
         ))}
       </svg>
     </div>
-  );
-}
-
-/**
- * The footer's play mark: a filled white disc with the triangle knocked out in the footer's own
- * black. Drawn rather than typed — the `▶` character renders as a bare triangle whose weight and
- * baseline come from whichever font Satori resolves it in, and the design is a disc.
- */
-function PlayGlyph() {
-  return (
-    <svg width={32} height={32} viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="16" cy="16" r="16" fill="#ffffff" />
-      <path d="M12.5 9.8 L23 16 L12.5 22.2 Z" fill={CHROME} />
-    </svg>
   );
 }
 
@@ -543,9 +491,26 @@ function Card({ data }: { data: DebateOgCardData }) {
         width: CARD_W,
         height: CARD_H,
         background: '#ffffff',
+        fontFamily: 'Calibre',
       }}
     >
-      <BackgroundArcs />
+      <BackgroundRays />
+      <div style={{ display: 'flex', height: HEADER_H, alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            padding: '0 14px',
+            background: '#ffffff',
+            color: CHROME,
+            transform: `translateY(${BRAND_OFFSET_Y}px)`,
+          }}
+        >
+          <GeoMark size={32} color={CHROME} />
+          <div style={{ display: 'flex', fontSize: 36, fontWeight: 400, letterSpacing: '-0.015em' }}>Geo Debates</div>
+        </div>
+      </div>
       <div
         style={{
           display: 'flex',
@@ -553,12 +518,14 @@ function Card({ data }: { data: DebateOgCardData }) {
           justifyContent: 'center',
           alignItems: 'center',
           height: CLAIM_BAND_H,
+          flexShrink: 0,
           width: CLAIM_MEASURE_PX,
           margin: `0 ${SIDE_MARGIN}px`,
           color: TEXT,
-          fontWeight: 700,
+          fontWeight: 500,
           fontSize: claim.fontSize,
           letterSpacing: '-0.022em',
+          transform: 'translateY(-10px)',
         }}
       >
         {/* Pre-wrapped: Satori has no `text-wrap: balance`, so the fitter owns line breaks. */}
@@ -574,26 +541,6 @@ function Card({ data }: { data: DebateOgCardData }) {
 
       <div style={{ display: 'flex', margin: `0 ${SIDE_MARGIN}px` }}>
         <VideoBlock speakers={data.speakers} />
-      </div>
-
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          height: FOOTER_H,
-          background: CHROME,
-          color: '#ffffff',
-          gap: 12,
-        }}
-      >
-        <PlayGlyph />
-        <div style={{ display: 'flex', fontSize: 27, fontWeight: 500 }}>Watch the debate on</div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-          {/* The real mark, shared with the ranking card so the two lockups cannot drift. */}
-          <GeoMark size={24} color="#ffffff" />
-          <div style={{ display: 'flex', fontSize: 27, fontWeight: 500 }}>Geo</div>
-        </div>
       </div>
     </div>
   );
