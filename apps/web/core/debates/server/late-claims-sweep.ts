@@ -1,6 +1,5 @@
-import { Redis } from '@upstash/redis';
-
 import { readEnv } from './acceptor-config';
+import { upstashRedis } from './acceptor-lock';
 import type { ClaimPublishCandidate } from './claim-publish-candidates';
 import { DebateNotPublishableError } from './debate-source';
 import { type PublishMissingDebateClaimsResult, publishMissingDebateClaims } from './publish-missing-debate-claims';
@@ -10,6 +9,9 @@ import { type PublishMissingDebateClaimsResult, publishMissingDebateClaims } fro
  * its own work, asks geo-chat which published debates have claims and when those were written, and
  * runs `publishMissingDebateClaims` unattended on the ones whose claims changed since this sweep
  * last finished them.
+ *
+ * A debate that waits or fails is backed off (10 minutes, an hour) so it does not take every tick's
+ * checks ahead of the others.
  *
  * "Finished" is a per-debate marker in Upstash holding the `claims_generated_at` it was finished at,
  * compared as geo-chat's exact string. A debate is marked only when nothing more can come of it
@@ -28,27 +30,50 @@ export function isLateClaimSweepEnabled(): boolean {
   return /^(true|1|yes|on)$/i.test(readEnv('DEBATE_LATE_CLAIM_SWEEP_ENABLED'));
 }
 
+/** How long a debate that waited (dedup, lease, indexing) is left alone before it is looked at again. */
+export const LATE_CLAIMS_WAIT_BACKOFF_MS = 10 * 60 * 1000;
+/** How long a debate whose publish failed is left alone, so a debate that always fails cannot starve the rest. */
+export const LATE_CLAIMS_FAILURE_BACKOFF_MS = 60 * 60 * 1000;
+
 export type LateClaimsMarkerStore = {
-  get: (debateId: string) => Promise<string | null>;
-  set: (debateId: string, claimsGeneratedAt: string) => Promise<void>;
+  /**
+   * For each debate, in order: the `claims_generated_at` it was finished at, or null, and whether
+   * it is backing off. One round trip per space.
+   */
+  read: (debateIds: string[]) => Promise<Array<{ finishedAt: string | null; deferred: boolean }>>;
+  finish: (debateId: string, claimsGeneratedAt: string) => Promise<void>;
+  defer: (debateId: string, ms: number) => Promise<void>;
 };
 
+const dashless = (id: string) => id.replace(/-/g, '').toLowerCase();
+
 export function lateClaimsMarkerKey(debateId: string): string {
-  return `debate-acceptor:late-claims-checked:${debateId.replace(/-/g, '').toLowerCase()}`;
+  return `debate-acceptor:late-claims-checked:${dashless(debateId)}`;
+}
+
+export function lateClaimsBackoffKey(debateId: string): string {
+  return `debate-acceptor:late-claims-backoff:${dashless(debateId)}`;
 }
 
 export function upstashMarkerStore(): LateClaimsMarkerStore | null {
-  const url = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN;
-  if (!url || !token) return null;
-  const redis = new Redis({ url, token, retry: { retries: 1 }, automaticDeserialization: false });
+  // Raw strings: the marker is compared for equality with geo-chat's text and must come back as sent.
+  const redis = upstashRedis({ automaticDeserialization: false });
+  if (!redis) return null;
   return {
-    get: async debateId => {
-      const value = await redis.get<string>(lateClaimsMarkerKey(debateId));
-      return typeof value === 'string' ? value : null;
+    read: async debateIds => {
+      if (debateIds.length === 0) return [];
+      const keys = debateIds.flatMap(id => [lateClaimsMarkerKey(id), lateClaimsBackoffKey(id)]);
+      const values = await redis.mget<Array<string | null>>(...keys);
+      return debateIds.map((_, index) => ({
+        finishedAt: typeof values[2 * index] === 'string' ? (values[2 * index] as string) : null,
+        deferred: values[2 * index + 1] !== null && values[2 * index + 1] !== undefined,
+      }));
     },
-    set: async (debateId, claimsGeneratedAt) => {
+    finish: async (debateId, claimsGeneratedAt) => {
       await redis.set(lateClaimsMarkerKey(debateId), claimsGeneratedAt);
+    },
+    defer: async (debateId, ms) => {
+      await redis.set(lateClaimsBackoffKey(debateId), '1', { px: ms });
     },
   };
 }
@@ -69,6 +94,7 @@ export type LateClaimsSweepReport = {
   finished: number;
   waiting: number;
   unchanged: number;
+  deferred: number;
   failed: Array<{ debateId: string; error: string }>;
   /** geo-chat has no candidates endpoint yet. */
   unsupported: boolean;
@@ -89,6 +115,7 @@ export async function runLateClaimsSweep(
     finished: 0,
     waiting: 0,
     unchanged: 0,
+    deferred: 0,
     failed: [],
     unsupported: false,
   };
@@ -109,11 +136,27 @@ export async function runLateClaimsSweep(
       report.unsupported = true;
       break;
     }
-    for (const candidate of candidates) {
+    if (candidates.length === 0) continue;
+    let markers: Awaited<ReturnType<LateClaimsMarkerStore['read']>>;
+    try {
+      markers = await deps.markers.read(candidates.map(candidate => candidate.debateId));
+    } catch (error) {
+      // Without the markers every debate would look changed: skip the space this tick.
+      report.failed.push({
+        debateId: `markers:${spaceId}`,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      continue;
+    }
+    for (const [index, candidate] of candidates.entries()) {
       if (!budget(spent)) break;
-      const marker = await deps.markers.get(candidate.debateId).catch(() => null);
-      if (marker === candidate.claimsGeneratedAt) {
+      const marker = markers[index];
+      if (marker?.finishedAt === candidate.claimsGeneratedAt) {
         report.unchanged += 1;
+        continue;
+      }
+      if (marker?.deferred) {
+        report.deferred += 1;
         continue;
       }
       spent.checked += 1;
@@ -121,6 +164,8 @@ export async function runLateClaimsSweep(
         const result = await deps.publish(candidate.debateId);
         if (result.status === 'published') {
           spent.submitted += 1;
+          // Under its publish lease until the edit indexes: nothing to do here for a while.
+          await deps.markers.defer(candidate.debateId, LATE_CLAIMS_WAIT_BACKOFF_MS).catch(() => {});
           report.published.push({
             debateId: candidate.debateId,
             statements: result.plan.statements.length,
@@ -128,16 +173,19 @@ export async function runLateClaimsSweep(
           });
         } else if (isFinished(result)) {
           report.finished += 1;
-          await deps.markers.set(candidate.debateId, candidate.claimsGeneratedAt);
+          await deps.markers.finish(candidate.debateId, candidate.claimsGeneratedAt);
         } else {
           report.waiting += 1;
+          await deps.markers.defer(candidate.debateId, LATE_CLAIMS_WAIT_BACKOFF_MS).catch(() => {});
         }
       } catch (error) {
         if (error instanceof DebateNotPublishableError) {
           report.waiting += 1;
+          await deps.markers.defer(candidate.debateId, LATE_CLAIMS_WAIT_BACKOFF_MS).catch(() => {});
           continue;
         }
-        spent.submitted += 1; // a failure may have spent the time a submit would
+        // Backed off for an hour, so a debate that always fails does not take every tick's checks.
+        await deps.markers.defer(candidate.debateId, LATE_CLAIMS_FAILURE_BACKOFF_MS).catch(() => {});
         console.error(`[debate-acceptor] late claims publish failed for debate ${candidate.debateId}:`, error);
         report.failed.push({
           debateId: candidate.debateId,

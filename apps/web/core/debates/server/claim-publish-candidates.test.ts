@@ -42,6 +42,12 @@ describe('listClaimPublishCandidates (GEO-3635)', () => {
       vi.fn(async () => new Response('', { status: 404 }))
     );
     expect(await listClaimPublishCandidates('space-1')).toBeNull();
+    // geo-chat's own 404 for a space it has no row for is an empty space, not a missing endpoint.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => json({ error: { code: 'space_not_found', message: 'x' } }, 404))
+    );
+    expect(await listClaimPublishCandidates('space-1')).toEqual([]);
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => new Response('', { status: 500 }))

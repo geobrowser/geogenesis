@@ -54,7 +54,8 @@ export async function GET(request: Request) {
     return new NextResponse('Unauthorized', { status: 401 });
   }
 
-  if (!isEarlyClaimPublishEnabled()) {
+  const early = isEarlyClaimPublishEnabled();
+  if (!early && !isLateClaimSweepEnabled()) {
     return NextResponse.json({ ok: true, skipped: 'disabled' });
   }
 
@@ -63,7 +64,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, skipped: 'acceptor_not_configured' });
   }
 
-  const outcome = await withAcceptorLock(() => runSweep(config.spaceId, requestStartedAt), {
+  const outcome = await withAcceptorLock(() => runSweep(config.spaceId, requestStartedAt, early), {
     ttlMs: maxDuration * 1000,
   });
   if (!outcome.ran) {
@@ -72,7 +73,7 @@ export async function GET(request: Request) {
   return NextResponse.json(outcome.value);
 }
 
-async function runSweep(acceptorSpaceId: string, startedAt: number) {
+async function runSweep(acceptorSpaceId: string, startedAt: number, early: boolean) {
   const budgetExhausted = (attempted: number) =>
     attempted >= MAX_PUBLISH_ATTEMPTS_PER_SWEEP || Date.now() - startedAt >= PUBLISH_START_DEADLINE_MS;
 
@@ -87,7 +88,7 @@ async function runSweep(acceptorSpaceId: string, startedAt: number) {
   let notEditor = 0;
   let notPublishable = 0;
 
-  for (const spaceId of spaceIds) {
+  for (const spaceId of early ? spaceIds : []) {
     if (budgetExhausted(attempted)) break;
     let debateIds: string[];
     try {

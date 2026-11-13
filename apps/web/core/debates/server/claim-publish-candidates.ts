@@ -27,8 +27,9 @@ type Page = {
  * written, from geo-chat's `GET /spaces/{id}/debates/claim-publish-candidates`. Paged like
  * `listPublishCandidateDebateIds`.
  *
- * Null when geo-chat answers the first page with 404: a geo-chat deployed before the endpoint, so
- * the late sweep has nothing to go on and skips. Any other failure throws.
+ * Empty for a space geo-chat does not know (`space_not_found`). Null when geo-chat answers the first
+ * page with any other 404: a geo-chat deployed before the endpoint, so the late sweep has nothing to
+ * go on and skips. Any other failure throws.
  */
 export async function listClaimPublishCandidates(
   spaceId: string,
@@ -42,7 +43,15 @@ export async function listClaimPublishCandidates(
     if (cursor) params.set('cursor', cursor);
     const path = `/spaces/${spaceId}/debates/claim-publish-candidates?${params.toString()}`;
     const response = await fetch(`${geoChatBaseUrl()}${path}`, { cache: 'no-store' });
-    if (firstPage && response.status === 404) return null;
+    if (firstPage && response.status === 404) {
+      // geo-chat's own 404 for a space it has no row for (the acceptor's personal space, say):
+      // nothing to publish there. Any other 404 is a geo-chat without the endpoint.
+      const code = await response
+        .json()
+        .then((body: { error?: { code?: unknown } }) => body?.error?.code)
+        .catch(() => null);
+      return code === 'space_not_found' ? [] : null;
+    }
     if (!response.ok) {
       throw new GeoChatRequestError(response.status, `geo-chat ${path} failed (${response.status})`);
     }
