@@ -54,7 +54,6 @@ import { useCanUserEdit } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { useEditorInstance } from '~/core/state/editor/editor-provider';
 import { useEditorStoreLite } from '~/core/state/editor/use-editor-blocks';
-import { useFeatureFlag } from '~/core/state/feature-flags';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import type { Row } from '~/core/types';
 
@@ -192,16 +191,14 @@ export function useRankingBlockState({
     canEdit: canEditBlockSpace,
   } = useRankingComposeAccess(spaceId, entityId);
 
-  // The Debates space's Best debates block (GEO-3677): composing a ballot there needs the
-  // `debateRankings` flag and membership. Composing sends a background membership request
+  // The Debates space's Best debates block (GEO-3677): composing a ballot there needs
+  // membership. Composing sends a background membership request
   // (`ensureAccess`, #3099), so every edit entry point on that block checks this, not only the
   // buttons the block's own view draws.
-  const debateRankingsFlag = useFeatureFlag('debateRankings');
   const isBestDebates = isBestDebatesBlock(entityId, spaceId, bestDebatesBlockId);
   const canComposeEdit = canComposeEditBlock({
     blockId: entityId,
     spaceId,
-    flagOn: debateRankingsFlag,
     canEdit: Boolean(canEditBlockSpace),
     bestDebatesBlockId,
   });

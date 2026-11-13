@@ -25,7 +25,6 @@ const TEAM = Array.from({ length: 12 }, (_, index) => `d${String(index + 1).padS
 
 const mocks = vi.hoisted(() => ({
   blockId: 'b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0',
-  flag: false,
   member: false,
   ensureAccess: vi.fn(),
   push: vi.fn(),
@@ -49,7 +48,6 @@ vi.mock('jotai', async importOriginal => ({
   ...(await importOriginal<typeof import('jotai')>()),
   useSetAtom: () => vi.fn(),
 }));
-vi.mock('~/core/state/feature-flags', () => ({ useFeatureFlag: () => mocks.flag }));
 vi.mock('~/core/blocks/data/use-data-block', () => ({
   useDataBlock: () => ({
     name: 'Best debates',
@@ -191,7 +189,6 @@ const noon = (key: string) => nyDayStartMs(key) + 12 * 3_600_000;
 
 beforeEach(() => {
   mocks.blockId = BLOCK;
-  mocks.flag = false;
   mocks.member = false;
   mocks.ensureAccess.mockReset();
   mocks.push.mockReset();
@@ -253,12 +250,8 @@ describe('compose guard on the Best debates block', () => {
   const state = () =>
     renderHook(() => useRankingBlockState({ spaceId: DEBATES_SPACE, bestDebatesBlockId: BLOCK })).result;
 
-  it.each([
-    ['a non-member with the flag on', { flag: true, member: false }],
-    ['a member with the flag off', { flag: false, member: true }],
-  ])('never requests membership for %s, from any edit entry point', async (_label, who) => {
-    mocks.flag = who.flag;
-    mocks.member = who.member;
+  it('never requests membership for a non-member, from any edit entry point', async () => {
+    mocks.member = false;
     const result = state();
 
     expect(result.current.canComposeEdit).toBe(false);
@@ -273,8 +266,7 @@ describe('compose guard on the Best debates block', () => {
     expect(mocks.ensureAccess).not.toHaveBeenCalled();
   });
 
-  it('lets a member with the flag on compose, with Rank the rest’s To rank param', async () => {
-    mocks.flag = true;
+  it('lets a member compose, with Rank the rest’s To rank param', async () => {
     mocks.member = true;
     const result = state();
 
