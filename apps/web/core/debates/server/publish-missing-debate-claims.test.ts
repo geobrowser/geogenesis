@@ -534,6 +534,53 @@ describe('publishMissingDebateClaims', () => {
     expect(plan.statements[0]).toMatchObject({ claimId: STABLE_A, minted: false });
   });
 
+  it('skips a new claim on a block that links a claim geo-chat no longer lists (a lost match)', async () => {
+    const { deps: d } = deps({
+      readBlocks: async () => publishedBlocks({ claimLinks: new Map([[BLOCK_0, [EXISTING]]]) }),
+    });
+    const { plan } = await dryPlan(d);
+    expect(plan.unlistedLinks).toEqual([{ turnIndex: 0, claimIds: [EXISTING] }]);
+    expect(plan.skipped).toEqual([
+      { claimId: STABLE_A, turnIndex: 0, text: 'Claim A.', reason: 'block_links_unlisted_claim' },
+    ]);
+    expect(plan.statements.map(s => s.claimId)).toEqual([STABLE_B]);
+  });
+
+  it('still links an existing claim entity on such a block, since that mints nothing', async () => {
+    const { deps: d } = deps({
+      readBlocks: async () => publishedBlocks({ claimLinks: new Map([[BLOCK_0, [EXISTING]]]) }),
+      lookupClaims: async () => [{ id: STABLE_A, spaces: [SPACE], types: [{ id: CLAIM_TYPE_ID }] }],
+    });
+    const { plan } = await dryPlan(d);
+    expect(plan.statements.map(s => [s.claimId, s.minted])).toEqual([
+      [STABLE_A, false],
+      [STABLE_B, true],
+    ]);
+  });
+
+  it('fingerprint changes when a claim is reworded, restanced or retimed under the same id', async () => {
+    const base = (await dryPlan(deps().deps)).plan.fingerprint;
+    const variants = [
+      { ...claimA, text: 'Claim A, reworded.' },
+      { ...claimA, stance: 'opposes' as const },
+      { ...claimA, timing: { startMs: 1000, endMs: 5000 } },
+      { ...claimA, topics: [] },
+    ];
+    const prints = await Promise.all(
+      variants.map(
+        async variant =>
+          (
+            await dryPlan(
+              deps({ loadClaims: async () => ({ transcriptTurns: turns, claims: [variant, claimB] }) }).deps
+            )
+          ).plan.fingerprint
+      )
+    );
+    expect(new Set([base, ...prints]).size).toBe(variants.length + 1);
+    // And it is stable across builds of the same plan (positions are left out).
+    expect((await dryPlan(deps().deps)).plan.fingerprint).toBe(base);
+  });
+
   it('skips a claim with no stable id rather than minting a fresh one', async () => {
     const legacy = { ...claimB, stableEntityId: null };
     const { deps: d } = deps({ loadClaims: async () => ({ transcriptTurns: turns, claims: [claimA, legacy] }) });

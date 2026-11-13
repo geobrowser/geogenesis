@@ -89,7 +89,7 @@ export type LateClaimStatement = {
   matched: boolean;
 };
 
-export type LateClaimSkipReason = 'block_structure_mismatch' | 'no_stable_id';
+export type LateClaimSkipReason = 'block_structure_mismatch' | 'block_links_unlisted_claim' | 'no_stable_id';
 
 export type LateClaimsPlan = {
   debateId: string;
@@ -97,6 +97,13 @@ export type LateClaimsPlan = {
   statements: LateClaimStatement[];
   held: Array<{ claimId: string; text: string; bestScore: number }>;
   skipped: Array<{ claimId: string | null; turnIndex: number; text: string; reason: LateClaimSkipReason }>;
+  /**
+   * Claims the graph links from a block that geo-chat no longer lists under that id. A claim that was
+   * matched to a published one keeps no id through a re-extraction, so its sentence can come back
+   * as a new stable id; a would-be-minted claim on such a block is skipped
+   * (`block_links_unlisted_claim`) rather than published as a likely duplicate.
+   */
+  unlistedLinks: Array<{ turnIndex: number; claimIds: string[] }>;
   /** Claims already linked from a block of this debate, which geo-chat now also places on turns that do not link them. */
   turnMoved: Array<{ claimId: string; text: string; linkedTurns: number[]; geoChatTurns: number[] }>;
   /**
@@ -305,6 +312,20 @@ async function planLateClaims(
     }
   }
 
+  const listed = new Set(
+    reused.flatMap(claim => {
+      const id = claim.existingClaimEntityId || claim.stableEntityId;
+      return id ? [key(id)] : [];
+    })
+  );
+  const unlistedByTurn = new Map<number, string[]>();
+  for (const [blockId, claimIds] of published.claimLinks) {
+    const turn = turnByBlock.get(blockId);
+    if (turn === undefined) continue;
+    const unlisted = [...new Set(claimIds.map(key))].filter(id => !listed.has(id));
+    if (unlisted.length > 0) unlistedByTurn.set(turn, unlisted);
+  }
+
   // Which stable ids are already Claims in this space (the early publish, or an earlier run): those
   // get links only, and are never held, since linking them mints nothing.
   const spaceKey = key(spaceId);
@@ -387,11 +408,16 @@ async function planLateClaims(
       skipped.push({ claimId: id, turnIndex: claim.turnIndex, text: claim.text, reason: 'block_structure_mismatch' });
       continue;
     }
+    const minted = !claim.existingClaimEntityId && !existingClaims.has(id);
+    if (minted && unlistedByTurn.has(claim.turnIndex)) {
+      skipped.push({ claimId: id, turnIndex: claim.turnIndex, text: claim.text, reason: 'block_links_unlisted_claim' });
+      continue;
+    }
     statements.push({
       claimId: id,
       turnIndex: claim.turnIndex,
       text: claim.text,
-      minted: !claim.existingClaimEntityId && !existingClaims.has(id),
+      minted,
       matched: Boolean(claim.existingClaimEntityId),
     });
   }
@@ -460,6 +486,9 @@ async function planLateClaims(
     statements,
     held,
     skipped,
+    unlistedLinks: [...unlistedByTurn]
+      .sort(([a], [b]) => a - b)
+      .map(([turnIndex, claimIds]) => ({ turnIndex, claimIds })),
     turnMoved: [...turnMoved.values()].map(entry => ({
       ...entry,
       geoChatTurns: entry.geoChatTurns.sort((a, b) => a - b),
@@ -469,7 +498,7 @@ async function planLateClaims(
     blockRewrites,
     rewriteSkipped,
     driftedTurns,
-    fingerprint: fingerprintOf(statements, blockRewrites),
+    fingerprint: fingerprintOf(values, relations, blockRewrites),
     opCount: values.length + relations.length,
   };
   return { plan, values, relations };
@@ -578,11 +607,19 @@ export function selectLateClaimOps(
   return { values, relations };
 }
 
-function fingerprintOf(statements: LateClaimStatement[], rewrites: LateClaimsPlan['blockRewrites']): string {
+/**
+ * Hash of exactly what the edit writes: every value (id, entity, property, value) and relation (id,
+ * type, endpoints), and the text each rewritten block held before. Positions are left out: they are
+ * minted fresh per build and say nothing about content. So a reworded claim, a changed stance or
+ * topic, new timing, or a block edited since the dry run all change it.
+ */
+function fingerprintOf(values: Value[], relations: Relation[], rewrites: LateClaimsPlan['blockRewrites']): string {
   const sha = (text: string) => createHash('sha256').update(text).digest('hex');
+  const k = (id: string) => uuidToHex(id);
   const body = JSON.stringify({
-    statements: statements.map(s => `${s.turnIndex}:${s.claimId}:${s.minted ? 'minted' : 'linked'}`).sort(),
-    rewrites: rewrites.map(r => `${r.turnIndex}:${sha(r.before)}:${sha(r.after)}`).sort(),
+    values: values.map(v => `${v.id}|${k(v.entity.id)}|${k(v.property.id)}|${v.value}`).sort(),
+    relations: relations.map(r => `${r.id}|${k(r.type.id)}|${k(r.fromEntity.id)}|${k(r.toEntity.id)}`).sort(),
+    before: rewrites.map(r => `${r.turnIndex}:${sha(r.before)}`).sort(),
   });
   return sha(body).slice(0, 16);
 }
