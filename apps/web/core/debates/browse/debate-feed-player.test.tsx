@@ -1,10 +1,15 @@
-import { act, cleanup, fireEvent, render, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 import { getDefaultStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Debate, DebateMediaTurnSegment, DebateParticipant } from '~/core/debates/api';
 import type { ClaimMarker } from '~/core/debates/claim-ticker';
+import {
+  RESUME_STORAGE_KEY,
+  readDebateResumeSeconds,
+  rememberDebatePosition,
+} from '~/core/debates/debate-resume-positions';
 import { PAIR_HOLD_TIMEOUT_MS, SUSPEND_GRACE_MS } from '~/core/debates/pair-readiness';
 import { turnSpansForDurations, turnSpansFromSegments, turnStateFromSegments } from '~/core/debates/playback-utils';
 import { turnTimerScale } from '~/core/debates/recording-countdown-ring';
@@ -253,6 +258,8 @@ function controllerFixture(overrides: {
   seekBoth?: ReturnType<typeof vi.fn>;
   /** Where the playhead sits, which is all a round cue reads. */
   playheadSeconds?: number;
+  /** The debate's length; 0 before its turn timings are known. */
+  timelineSeconds?: number;
   /** A condensed Open rounds render's breaks and picks (GEO-3277); none by default. */
   playbackBreaks?: DebatePlaybackController['playbackBreaks'];
   turnSegments?: DebateMediaTurnSegment[];
@@ -295,7 +302,7 @@ function controllerFixture(overrides: {
     setMutedByUser: vi.fn(),
     playheadSeconds,
     // Four 30s turns, so the whole timeline is 120s.
-    timelineSeconds: 120,
+    timelineSeconds: overrides.timelineSeconds ?? 120,
     turnState: { slot: speakingSlot, seconds: 10, progress: 0.5 },
     turnSpans,
     // The format's count, which is what names a round. Equal to the spans here because nothing was
@@ -359,6 +366,7 @@ beforeEach(() => {
   mocks.bylines = new Map();
   mocks.livePosition = null;
   mocks.stackOpens = [];
+  window.localStorage.removeItem(RESUME_STORAGE_KEY);
   vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
   vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {});
 });
@@ -1389,6 +1397,285 @@ describe('a seek asked for by the link that brought the reader here', () => {
   });
 });
 
+describe('resuming where this browser left a debate', () => {
+  function renderResumable({
+    initialSeekSeconds = null,
+    ready = true,
+    releaseMedia = false,
+    playheadSeconds = 5,
+    playing = true,
+    timelineSeconds = 120,
+    active = true,
+    playbackEnded = false,
+    autoplayBlocked = false,
+    holdFullPlayback = false,
+    onPlaybackRequest,
+  }: {
+    active?: boolean;
+    holdFullPlayback?: boolean;
+    playbackEnded?: boolean;
+    autoplayBlocked?: boolean;
+    onPlaybackRequest?: () => void;
+    initialSeekSeconds?: number | null;
+    ready?: boolean;
+    releaseMedia?: boolean;
+    playheadSeconds?: number;
+    playing?: boolean;
+    timelineSeconds?: number;
+  } = {}) {
+    const seeks: number[] = [];
+    const makeSeek = () => vi.fn((seconds: number) => void seeks.push(seconds));
+    let props = {
+      initialSeekSeconds,
+      ready,
+      releaseMedia,
+      playheadSeconds,
+      playing,
+      timelineSeconds,
+      active,
+      playbackEnded,
+      autoplayBlocked,
+      debateId: debate.id,
+    };
+
+    const element = () => (
+      <DebateFeedPlayer
+        debate={props.debateId === debate.id ? debate : ({ ...debate, id: props.debateId } as typeof debate)}
+        active={props.active}
+        onPlaybackRequest={onPlaybackRequest}
+        releaseMedia={props.releaseMedia}
+        initialSeekSeconds={props.initialSeekSeconds}
+        holdFullPlayback={holdFullPlayback}
+      />
+    );
+    const fixture = () =>
+      controllerFixture({
+        mutedByUser: true,
+        turnSlot: 1,
+        ready: props.ready,
+        playing: props.playing,
+        playheadSeconds: props.playheadSeconds,
+        timelineSeconds: props.timelineSeconds,
+        playbackEnded: props.playbackEnded,
+        autoplayBlocked: props.autoplayBlocked,
+        seekBoth: makeSeek(),
+      });
+
+    mocks.controller = fixture();
+    const view = render(element());
+
+    return {
+      seeks,
+      controller: () => mocks.controller as ReturnType<typeof controllerFixture>,
+      update(next: Partial<typeof props> = {}) {
+        props = { ...props, ...next };
+        mocks.controller = fixture();
+        view.rerender(element());
+      },
+      unmount: view.unmount,
+    };
+  }
+
+  const startOver = () => screen.queryByRole('button', { name: 'Start over' });
+
+  it('opens a debate watched part of the way a few seconds before where the viewer stopped', () => {
+    rememberDebatePosition(debate.id, 80, 120);
+
+    const player = renderResumable();
+
+    expect(player.seeks).toEqual([75]);
+    expect(startOver()).not.toBeNull();
+  });
+
+  it('starts a debate never watched at the beginning, with no Start over', () => {
+    const player = renderResumable();
+
+    expect(player.seeks).toEqual([]);
+    expect(startOver()).toBeNull();
+  });
+
+  it('waits for the recordings to be signed, without saving over the position it waits for', () => {
+    rememberDebatePosition(debate.id, 80, 120);
+    const player = renderResumable({ ready: false });
+    expect(player.seeks).toEqual([]);
+    expect(readDebateResumeSeconds(debate.id)).toBe(75);
+
+    player.update({ ready: true });
+    expect(player.seeks).toEqual([75]);
+  });
+
+  it('seeks a held card to its saved position before its videos attach', () => {
+    getDefaultStore().set(feedFullPlaybackStartedAtom, false);
+    try {
+      rememberDebatePosition(debate.id, 80, 120);
+      const player = renderResumable({ playing: false, holdFullPlayback: true });
+
+      expect(document.querySelectorAll('video')).toHaveLength(0);
+      expect(player.seeks).toEqual([75]);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Play debate' }));
+
+      expect(document.querySelectorAll('video')).toHaveLength(2);
+      expect(player.seeks).toEqual([75]);
+    } finally {
+      getDefaultStore().set(feedFullPlaybackStartedAtom, false);
+    }
+  });
+
+  it("waits for the debate's length before resuming", () => {
+    rememberDebatePosition(debate.id, 80, 120);
+    const player = renderResumable({ timelineSeconds: 0 });
+
+    expect(player.seeks).toEqual([]);
+    expect(screen.queryByRole('button', { name: 'Start over' })).toBeNull();
+    // Playing from 0 while it waits must not forget the position either.
+    player.update({ playheadSeconds: 8, playing: false });
+    expect(readDebateResumeSeconds(debate.id)).toBe(75);
+
+    player.update({ timelineSeconds: 120 });
+    expect(player.seeks).toEqual([75]);
+    expect(screen.queryByRole('button', { name: 'Start over' })).not.toBeNull();
+  });
+
+  it('does not chase its own saves back while the debate plays on', () => {
+    rememberDebatePosition(debate.id, 80, 120);
+    const player = renderResumable({ playheadSeconds: 75 });
+
+    // Each of these is saved, so a resume read live would seek again every few seconds.
+    for (const seconds of [76, 82, 90, 101]) player.update({ playheadSeconds: seconds });
+
+    expect(player.seeks).toEqual([75]);
+    expect(readDebateResumeSeconds(debate.id)).toBe(96);
+  });
+
+  it('lets a link that named a moment win, and does not resume once that link is dropped', () => {
+    rememberDebatePosition(debate.id, 80, 120);
+    const player = renderResumable({ initialSeekSeconds: 30 });
+
+    expect(player.seeks).toEqual([30]);
+    expect(startOver()).toBeNull();
+
+    // Browser Back to the same debate without `?t=`: the viewer is already where the link put them.
+    player.update({ initialSeekSeconds: null });
+    expect(player.seeks).toEqual([30]);
+  });
+
+  it('reads its own position for a different debate on the same card', () => {
+    rememberDebatePosition(debate.id, 80, 120);
+    rememberDebatePosition('debate-2', 50, 120);
+    const player = renderResumable({ playing: false });
+
+    player.update({ debateId: 'debate-2' });
+
+    expect(player.seeks).toEqual([75, 45]);
+  });
+
+  it('Start over plays from the beginning and forgets the position', () => {
+    rememberDebatePosition(debate.id, 80, 120);
+    const player = renderResumable({ playing: false });
+
+    fireEvent.click(startOver()!);
+
+    expect(player.controller().playFromStart).toHaveBeenCalledOnce();
+    expect(readDebateResumeSeconds(debate.id)).toBeNull();
+    expect(startOver()).toBeNull();
+  });
+
+  it('Start over on a card that does not hold playback asks for it, and starts over once handed it', () => {
+    rememberDebatePosition(debate.id, 80, 120);
+    const onPlaybackRequest = vi.fn();
+    const player = renderResumable({ active: false, playing: false, onPlaybackRequest });
+
+    fireEvent.click(startOver()!);
+
+    // Playing now would run beside the card that holds playback, then be paused by it.
+    expect(onPlaybackRequest).toHaveBeenCalledOnce();
+    expect(player.controller().playFromStart).not.toHaveBeenCalled();
+    expect(readDebateResumeSeconds(debate.id)).toBe(75);
+    expect(startOver()).not.toBeNull();
+
+    player.update({ active: true });
+
+    expect(player.controller().playFromStart).toHaveBeenCalledOnce();
+    expect(readDebateResumeSeconds(debate.id)).toBeNull();
+    expect(startOver()).toBeNull();
+  });
+
+  it('leaves a refused card to the Watch the debate prompt, and offers Start over once it plays', () => {
+    rememberDebatePosition(debate.id, 80, 120);
+    const player = renderResumable({ playing: false, autoplayBlocked: true });
+    const prompt = document.querySelector<HTMLElement>('[data-debate-watch-prompt]');
+
+    expect(prompt).not.toBeNull();
+    expect(startOver()).toBeNull();
+
+    fireEvent.click(prompt!);
+    expect(player.controller().togglePlayback).toHaveBeenCalledOnce();
+    player.update({ playing: true, autoplayBlocked: false });
+
+    expect(document.querySelector('[data-debate-watch-prompt]')).toBeNull();
+    expect(startOver()).not.toBeNull();
+  });
+
+  it('drops a held Start over once the card moves to another debate', () => {
+    rememberDebatePosition(debate.id, 80, 120);
+    const player = renderResumable({ active: false, playing: false, onPlaybackRequest: vi.fn() });
+    fireEvent.click(startOver()!);
+
+    player.update({ debateId: 'debate-2' });
+    player.update({ active: true });
+
+    expect(player.controller().playFromStart).not.toHaveBeenCalled();
+    expect(readDebateResumeSeconds(debate.id)).toBe(75);
+  });
+
+  it('drops a held Start over once the debate ends', () => {
+    rememberDebatePosition(debate.id, 80, 120);
+    const player = renderResumable({ active: false, playing: false, onPlaybackRequest: vi.fn() });
+    fireEvent.click(startOver()!);
+
+    player.update({ playbackEnded: true });
+    player.update({ active: true });
+
+    expect(player.controller().playFromStart).not.toHaveBeenCalled();
+  });
+
+  it('saves where the viewer stopped when they pause', () => {
+    const player = renderResumable({ playheadSeconds: 40 });
+    player.update({ playheadSeconds: 43 });
+    expect(readDebateResumeSeconds(debate.id)).toBe(35);
+
+    // Under the save interval while playing; written once playback stops.
+    player.update({ playheadSeconds: 43, playing: false });
+    expect(readDebateResumeSeconds(debate.id)).toBe(38);
+  });
+
+  it('saves where the viewer stopped when the player goes away', () => {
+    const player = renderResumable({ playheadSeconds: 40 });
+    player.update({ playheadSeconds: 44 });
+
+    player.unmount();
+
+    expect(readDebateResumeSeconds(debate.id)).toBe(39);
+  });
+
+  it('saves nothing for a viewer who watched only the first few seconds', () => {
+    const player = renderResumable({ playheadSeconds: 3 });
+    player.update({ playheadSeconds: 12, playing: false });
+
+    expect(readDebateResumeSeconds(debate.id)).toBeNull();
+  });
+
+  it('forgets the position once the debate is finished', () => {
+    rememberDebatePosition(debate.id, 80, 120);
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1, playing: false, playbackEnded: true });
+
+    render(<DebateFeedPlayer debate={debate} active />);
+
+    expect(readDebateResumeSeconds(debate.id)).toBeNull();
+  });
+});
+
 describe('the round it is playing', () => {
   const at = (playheadSeconds: number, extra: { playing?: boolean } = {}) =>
     controllerFixture({ mutedByUser: false, turnSlot: 1, playheadSeconds, ...extra });
@@ -2195,6 +2482,8 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
       expect(seekBoth).toHaveBeenCalledWith(70.8, { preserveTransitionHold: true });
 
       cleanup();
+
+      window.localStorage.removeItem(RESUME_STORAGE_KEY);
       const pausedSeek = vi.fn();
       renderAt(62.3, { playbackBreaks: breaks({ breaks: [extendBreak] }), seekBoth: pausedSeek, playing: false });
       vi.advanceTimersByTime(5_000);
