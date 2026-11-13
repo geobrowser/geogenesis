@@ -616,6 +616,29 @@ describe('DebateMomentsPlayer speed and jumps', () => {
     expect(screen.getByRole('button', { name: 'Play' })).toBeInTheDocument();
   });
 
+  it('never reports a new moment with the last one’s position', () => {
+    const onPosition = vi.fn();
+    const { video } = renderPlayer({ onPosition });
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+    advance(video(), 12);
+    playToEnd(video());
+    const onNext = onPosition.mock.calls.map(([p]) => p).filter(p => p.index === 1);
+    expect(onNext.length).toBeGreaterThan(0);
+    expect(onNext.every(p => p.clipMs === 0)).toBe(true);
+  });
+
+  it('reloads a clip that failed when one of its lines is pressed, then plays from there', () => {
+    const { controller, video } = renderPlayer();
+    fireEvent.error(video());
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+    act(() => controller.current?.playMomentAt(0, 4_000));
+    expect(mocks.load).toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument();
+    metadata(video());
+    expect(video().currentTime).toBe(4);
+    expect(mocks.play).toHaveBeenCalledTimes(1);
+  });
+
   it('reports where it is on mount and as it plays', () => {
     const onPosition = vi.fn();
     const { video } = renderPlayer({ onPosition });

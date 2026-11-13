@@ -179,7 +179,12 @@ function MomentsStory({
   const [story, dispatch] = React.useReducer(storyReducer, moments.length, initialStoryState);
   const videoRef = React.useRef<HTMLVideoElement | null>(null);
   const [playing, setPlaying] = React.useState(false);
-  const [clipMs, setClipMs] = React.useState(0);
+  /**
+   * How far into a clip the element is, with the clip it is for: a new moment's src is set a render
+   * before its position resets, and in that render the old clip's position must not read as the
+   * new one's (a host would place it on the new moment's lines).
+   */
+  const [clipPosition, setClipPosition] = React.useState<{ src: string | null; ms: number }>({ src: null, ms: 0 });
   const [clipDurationMs, setClipDurationMs] = React.useState<number | null>(null);
   const [fullMs, setFullMs] = React.useState(0);
   const [fullDurationMs, setFullDurationMs] = React.useState(0);
@@ -214,6 +219,7 @@ function MomentsStory({
   const moment = story.mode === 'moments' ? moments[story.index] : undefined;
   const fullSrc = fullDebateVideoUrl(debateId, getGeoChatApiBaseUrl());
   const src = moment ? moment.clipUrl : fullSrc;
+  const clipMs = clipPosition.src === src ? clipPosition.ms : 0;
 
   const claim = useExclusivePlayback(
     React.useCallback(() => {
@@ -287,7 +293,7 @@ function MomentsStory({
   React.useEffect(() => {
     metadataSrcRef.current = null;
     setFailed(false);
-    setClipMs(0);
+    setClipPosition({ src, ms: 0 });
     setClipDurationMs(null);
     applyRate(videoRef.current);
     // A line pressed into this clip starts it once its time is set, not from 0 first. One pressed
@@ -360,7 +366,7 @@ function MomentsStory({
       // The first card's left edge replays it, as in a story; the last card's right edge holds.
       if (direction === -1 && videoRef.current) {
         videoRef.current.currentTime = 0;
-        setClipMs(0);
+        setClipPosition({ src, ms: 0 });
         setFailed(false);
       }
       return;
@@ -415,13 +421,20 @@ function MomentsStory({
           // The clip on screen: seek it and play, inside the press.
           pendingClipSeekRef.current = null;
           video.currentTime = ms / 1000;
-          setClipMs(ms);
+          setClipPosition({ src, ms: ms });
           setFailed(false);
           if (story.finished) dispatch({ type: 'goTo', index });
           start(video);
           return;
         }
         pendingClipSeekRef.current = { src: target.clipUrl, ms };
+        if (story.mode === 'moments' && story.index === index && failed) {
+          // The clip on screen failed to load: load it again, as Retry does; its metadata lands the seek.
+          metadataSrcRef.current = null;
+          setFailed(false);
+          reattachVideoSource(video, target.clipUrl);
+          return;
+        }
         dispatch({ type: 'goTo', index });
       },
       playFullAt: atMs => {
@@ -432,7 +445,7 @@ function MomentsStory({
         dispatch(story.mode === 'moments' ? { type: 'expand', atMs: ms } : { type: 'seekFull', atMs: ms });
       },
     }),
-    [moments, story.mode, story.index, story.finished, start]
+    [moments, story.mode, story.index, story.finished, failed, src, start]
   );
 
   const clipLengthMs = clipDurationMs ?? moment?.durationMs ?? null;
@@ -456,7 +469,7 @@ function MomentsStory({
         className={cx('absolute inset-0 size-full', story.mode === 'moments' ? 'object-cover' : 'object-contain')}
         onTimeUpdate={event => {
           const ms = event.currentTarget.currentTime * 1000;
-          if (story.mode === 'moments') setClipMs(ms);
+          if (story.mode === 'moments') setClipPosition({ src, ms: ms });
           else setFullMs(ms);
         }}
         onLoadedMetadata={event => {
@@ -472,7 +485,7 @@ function MomentsStory({
             if (pending?.src === src) {
               pendingClipSeekRef.current = null;
               video.currentTime = pending.ms / 1000;
-              setClipMs(pending.ms);
+              setClipPosition({ src, ms: pending.ms });
               if (autoplayRef.current) start(video);
             }
             return;
@@ -484,7 +497,7 @@ function MomentsStory({
           if (story.mode !== 'moments') return;
           autoplayRef.current = story.index < story.count - 1;
           setAdvancing(autoplayRef.current);
-          if (clipLengthMs !== null) setClipMs(clipLengthMs);
+          if (clipLengthMs !== null) setClipPosition({ src, ms: clipLengthMs });
           dispatch({ type: 'clipEnded' });
         }}
         onPlay={() => {
