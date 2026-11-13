@@ -33,25 +33,53 @@ export async function listPublishCandidateDebateIds(
   spaceId: string,
   maxIds: number = MAX_PUBLISH_CANDIDATES_PER_SPACE
 ): Promise<string[]> {
-  const ids: string[] = [];
+  const ids = await collectGeoChatPages<PublishCandidatesPage, string>({
+    path: `/spaces/${spaceId}/debates/publish-candidates`,
+    maxItems: maxIds,
+    items: page => page.debate_ids,
+    nextCursor: page => page.next_cursor,
+  });
+  return ids ?? listSweepCandidateDebateIds(spaceId);
+}
+
+/**
+ * Every item of one of geo-chat's cursor-paged listings, up to `maxItems`, a page of at most
+ * {@link PAGE_SIZE} at a time. Null when the first page is a 404 that `isMissingEndpoint` says is a
+ * geo-chat deployed before the listing (by default, any 404); the caller decides what that means.
+ * Any other failure throws. Shared by the publish candidates and the late claims candidates
+ * (GEO-3635).
+ */
+export async function collectGeoChatPages<Page, Item>({
+  path,
+  maxItems,
+  items,
+  nextCursor,
+  isMissingEndpoint = async () => true,
+}: {
+  path: string;
+  maxItems: number;
+  items: (page: Page) => Item[];
+  nextCursor: (page: Page) => string | null;
+  isMissingEndpoint?: (response: Response) => Promise<boolean>;
+}): Promise<Item[] | null> {
+  const collected: Item[] = [];
   let cursor: string | null = null;
   let firstPage = true;
-  while (ids.length < maxIds) {
-    const params = new URLSearchParams({ limit: String(Math.min(PAGE_SIZE, maxIds - ids.length)) });
+  while (collected.length < maxItems) {
+    const params = new URLSearchParams({ limit: String(Math.min(PAGE_SIZE, maxItems - collected.length)) });
     if (cursor) params.set('cursor', cursor);
-    const path = `/spaces/${spaceId}/debates/publish-candidates?${params.toString()}`;
-    const response = await fetch(`${geoChatBaseUrl()}${path}`, { cache: 'no-store' });
-    if (firstPage && response.status === 404) {
-      return listSweepCandidateDebateIds(spaceId);
-    }
+    const url = `${path}?${params.toString()}`;
+    const response = await fetch(`${geoChatBaseUrl()}${url}`, { cache: 'no-store' });
+    if (firstPage && response.status === 404 && (await isMissingEndpoint(response))) return null;
     if (!response.ok) {
-      throw new GeoChatRequestError(response.status, `geo-chat ${path} failed (${response.status})`);
+      throw new GeoChatRequestError(response.status, `geo-chat ${url} failed (${response.status})`);
     }
     firstPage = false;
-    const page = (await response.json()) as PublishCandidatesPage;
-    ids.push(...page.debate_ids);
-    if (!page.next_cursor) break;
-    cursor = page.next_cursor;
+    const page = (await response.json()) as Page;
+    collected.push(...items(page));
+    const next = nextCursor(page);
+    if (!next) break;
+    cursor = next;
   }
-  return ids.slice(0, maxIds);
+  return collected.slice(0, maxItems);
 }

@@ -112,6 +112,8 @@ describe('early claims publish sweep', () => {
       notEditor: 0,
       notPublishable: 1,
       failed: [{ debateId: 'd6', error: 'rpc down' }],
+      // GEO-3635's late claims pass is off unless DEBATE_LATE_CLAIM_SWEEP_ENABLED is set.
+      late: { skipped: 'disabled' },
     });
     // Only recent debates are asked about.
     expect(mocks.candidateCalls.map(call => call.recentMs)).toEqual([3 * 60 * 60 * 1000, 3 * 60 * 60 * 1000]);
