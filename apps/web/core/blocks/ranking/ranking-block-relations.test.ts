@@ -1,3 +1,5 @@
+import { Position } from '@geoprotocol/geo-sdk/lite';
+
 import { describe, expect, it } from 'vitest';
 
 import { AGGREGATED_RANKINGS_PROPERTY_ID, RANK_POSITION_PROPERTY_ID } from '~/core/ranking-block-ids';
@@ -5,6 +7,7 @@ import type { Relation } from '~/core/types';
 
 import {
   buildLeaderboardFromOrderedEntityIds,
+  compareRankingPositions,
   getAggregatedRankingSubmissionCount,
   getAggregatedRankingSubmitterRefs,
   getAggregatedRankingSubmitterSpaceIds,
@@ -41,6 +44,36 @@ function relation({
     position,
   } as Relation;
 }
+
+describe('compareRankingPositions', () => {
+  it('orders mixed-case keys by character code, as the indexer does', () => {
+    expect(['a0a', 'aB', 'a0Z', 'aa', null, 'a05Fl'].sort(compareRankingPositions)).toEqual([
+      'a05Fl',
+      'a0Z',
+      'a0a',
+      'aB',
+      'aa',
+      null,
+    ]);
+  });
+
+  it('reads a long ballot written with SDK positions back in the order it was written', () => {
+    const keys: string[] = [];
+    let last: string | null = null;
+    for (let i = 0; i < 120; i++) {
+      last = Position.generateBetween(last, null);
+      keys.push(last);
+    }
+    // The SDK's keys mix case past a dozen or so; localeCompare scrambles them.
+    expect([...keys].sort((a, b) => Position.compare(a, b))).not.toEqual(keys);
+    const relations = [...keys]
+      .reverse()
+      .map((position, i) =>
+        relation({ blockId: 'rank', propertyId: 'votes', toEntityId: `e${keys.length - 1 - i}`, position })
+      );
+    expect(getOrderedRelationTargetIds(relations, 'rank', 'votes', 'space-1')).toEqual(keys.map((_, i) => `e${i}`));
+  });
+});
 
 describe('getOrderedRelationTargetIds', () => {
   it('returns rank position targets in relation position order', () => {
