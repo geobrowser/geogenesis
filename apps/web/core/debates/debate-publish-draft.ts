@@ -146,6 +146,13 @@ export type DebateClaimInput = {
    * policy found already linked to the motion (so a reused entity never gets a second one).
    */
   stance?: ClaimStance | null;
+  /**
+   * geo-chat's matching audit for this claim (`match.verdict`, `match.best_score`): what the judge
+   * said when it compared the claim with the space's published claims. Only GEO-3635's late claims
+   * publish reads it, to hold a claim whose judge call failed while a near-identical claim exists.
+   */
+  matchVerdict?: string | null;
+  matchBestScore?: number | null;
 };
 
 export type DebatePublishInput = {
@@ -680,6 +687,19 @@ const DEBATE_PUBLISH_ID_NAMESPACE = 'b8f4e0a2-5c1d-4e7a-9f3b-6d2c8a1e4f70';
  */
 export function debatePublishId(debateEntityId: string, key: string): string {
   return normalizeId(uuidv5(`${normalizeId(debateEntityId)}:${key}`, DEBATE_PUBLISH_ID_NAMESPACE));
+}
+
+/**
+ * The Transcript entity of a published debate: what the full publish mints as `entity:transcript`.
+ * GEO-3635's late claims publish reads the published debate back through these ids.
+ */
+export function debateTranscriptEntityId(debateEntityId: string): string {
+  return debatePublishId(debateEntityId, 'entity:transcript');
+}
+
+/** The text block of one transcript turn: what the full publish mints as `entity:block:<turnIndex>`. */
+export function debateTurnBlockEntityId(debateEntityId: string, turnIndex: number): string {
+  return debatePublishId(debateEntityId, `entity:block:${turnIndex}`);
 }
 
 /**

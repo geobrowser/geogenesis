@@ -2,7 +2,6 @@ import type { Op } from '@geoprotocol/geo-sdk/lite';
 
 import { Effect } from 'effect';
 
-import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import { ID } from '~/core/id';
 import { uuidToHex } from '~/core/id/normalize';
 import { getEntity } from '~/core/io/queries';
@@ -11,7 +10,12 @@ import { Publish } from '~/core/utils/publish';
 import type { Debate } from '../api';
 import { type DebateClaimInput, type DebatePublishTurn, buildDebateClaimsDraft } from '../debate-publish-draft';
 import { type DebateAcceptorConfig, getDebateAcceptorConfig, readEnv } from './acceptor-config';
-import { type ExistingClaimLookup, applyClaimReusePolicy, lookupExistingClaimsInGraph } from './claim-reuse';
+import {
+  type ExistingClaimLookup,
+  applyClaimReusePolicy,
+  isClaimInSpace,
+  lookupExistingClaimsInGraph,
+} from './claim-reuse';
 import { loadDebateClaims, loadSettledDebate } from './debate-source';
 import { isDedupSettled } from './extracted-claims';
 import { loadAcceptorEditableSpace, submitEditAsAcceptor } from './publish-debate';
@@ -129,15 +133,8 @@ export async function publishDebateClaimsEarly(
   // Which of them the graph already has as Claims in this space. A failed read throws: guessing
   // "none" would re-publish every claim on every tick (harmless to the graph, not to the chain).
   const existing = await d.lookupClaims(draft.claimIds, spaceId);
-  const spaceKey = uuidToHex(spaceId);
   const published = new Set(
-    existing
-      .filter(
-        entity =>
-          entity.types.some(type => uuidToHex(type.id) === uuidToHex(CLAIM_TYPE_ID)) &&
-          entity.spaces.some(space => uuidToHex(space) === spaceKey)
-      )
-      .map(entity => uuidToHex(entity.id))
+    existing.filter(entity => isClaimInSpace(entity, spaceId)).map(entity => uuidToHex(entity.id))
   );
   const missing = draft.claimIds.filter(id => !published.has(id));
   if (missing.length === 0) return { status: 'up_to_date', spaceId };
