@@ -76,11 +76,15 @@ export function WatchTranscriptPanel({
   const scrollerRef = React.useRef<HTMLDivElement | null>(null);
   /** When the ranker last scrolled the lines themselves. */
   const readingAtRef = React.useRef(-Infinity);
-  // Scrolling the lines is reading; pressing one (a jump) or the moment step is not, or every jump
-  // would stop the panel following the line it just started.
-  const markReading = (event: React.SyntheticEvent) => {
-    if (event.target instanceof Element && event.target.closest('button')) return;
+  // Scrolling the lines is reading, wherever the pointer is: over the text, the target is a line.
+  const markReading = () => {
     readingAtRef.current = Date.now();
+  };
+  // Pressing a line (a jump) or the moment step is not reading, or every jump would stop the panel
+  // following the line it just started.
+  const markReadingUnlessPress = (event: React.SyntheticEvent) => {
+    if (event.target instanceof Element && event.target.closest('button')) return;
+    markReading();
   };
 
   const blocks = content.status === 'ready' ? content.blocks : null;
@@ -136,13 +140,13 @@ export function WatchTranscriptPanel({
         className="relative min-h-[72px] flex-1 overflow-y-auto overscroll-contain border-t border-divider"
         data-testid="watch-transcript-lines"
         onWheel={markReading}
-        onTouchStart={markReading}
-        onPointerDown={markReading}
+        onTouchMove={markReading}
+        onPointerDown={markReadingUnlessPress}
         onKeyDown={event => {
           if (!SCROLL_KEYS.has(event.key)) return;
           // Space on a line presses it; the arrow keys still scroll from there.
-          if (event.key === ' ') markReading(event);
-          else readingAtRef.current = Date.now();
+          if (event.key === ' ') markReadingUnlessPress(event);
+          else markReading();
         }}
       >
         {content.status === 'loading' ? (
@@ -183,6 +187,10 @@ export function WatchTranscriptPanel({
                       </span>
                     ) : null}
                   </div>
+                ) : null}
+                {block.lines.length === 0 ? (
+                  // One moment of a reel whose others have captions: its clip came without any.
+                  <p className="m-0 text-metadata text-grey-04">No transcript for this moment.</p>
                 ) : null}
                 <p className="m-0 text-[16px] leading-6 tracking-[-0.1px]">
                   {block.lines.map((line, i) => {

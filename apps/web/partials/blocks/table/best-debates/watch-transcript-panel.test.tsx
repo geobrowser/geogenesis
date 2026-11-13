@@ -84,6 +84,17 @@ describe('WatchTranscriptPanel', () => {
     expect(scroller.scrollTop).toBeCloseTo(320 - 100 / 3);
   });
 
+  it.each([
+    ['a trackpad scroll', (target: Element) => fireEvent.wheel(target)],
+    ['a finger drag', (target: Element) => fireEvent.touchMove(target)],
+  ])('counts %s over the text as reading', (_, scroll) => {
+    const { rerender } = render(<Panel highlightKey={null} momentNav={nav(0)} />);
+    const scroller = layOut();
+    scroll(screen.getByRole('button', { name: 'Line 2' }));
+    rerender(<Panel highlightKey="m0:6" momentNav={nav(0)} />);
+    expect(scroller.scrollTop).toBe(0);
+  });
+
   it('keeps following after the ranker presses a line', () => {
     const { rerender } = render(<Panel highlightKey={null} momentNav={nav(0)} />);
     const scroller = layOut();
@@ -98,5 +109,25 @@ describe('WatchTranscriptPanel', () => {
     scroller.scrollTop = 200;
     rerender(<Panel highlightKey={null} momentNav={nav(1)} />);
     expect(scroller.scrollTop).toBe(0);
+  });
+
+  it('says when the moment on screen has no transcript, keeping its step', () => {
+    render(
+      <WatchTranscriptPanel
+        view="moments"
+        momentsOffered
+        onViewChange={() => undefined}
+        speed="1"
+        onSpeedChange={() => undefined}
+        content={{ status: 'ready', blocks: [{ ...BLOCK, lines: [] }] }}
+        highlightKey={null}
+        showTurnTimes={false}
+        speakerOf={() => ({ name: 'Maya Chen', side: 'Agree', avatarUrl: null, avatarSeed: 'm' })}
+        momentNav={nav(0)}
+        onLine={() => undefined}
+      />
+    );
+    expect(screen.getByText('No transcript for this moment.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Next moment' })).toBeInTheDocument();
   });
 });
