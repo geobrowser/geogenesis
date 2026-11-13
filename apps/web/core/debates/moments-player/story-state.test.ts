@@ -37,4 +37,24 @@ describe('story state', () => {
     const state = initialStoryState(0);
     expect(storyReducer(state, { type: 'collapse' })).toBe(state);
   });
+
+  // GEO-3728: a transcript line plays its moment, whatever the player was showing.
+  it('goes to a moment from the reel, from the full debate and from a finished reel', () => {
+    expect(run(4, { type: 'goTo', index: 2 })).toMatchObject({ mode: 'moments', index: 2, finished: false });
+    expect(run(4, { type: 'expand', atMs: 1_000 }, { type: 'goTo', index: 3 })).toMatchObject({
+      mode: 'moments',
+      index: 3,
+    });
+    const finished = run(2, { type: 'clipEnded' }, { type: 'clipEnded' });
+    expect(finished.finished).toBe(true);
+    expect(storyReducer(finished, { type: 'goTo', index: 1 })).toMatchObject({ index: 1, finished: false });
+  });
+
+  it('ignores a moment the reel does not have', () => {
+    const state = initialStoryState(3);
+    expect(storyReducer(state, { type: 'goTo', index: 3 })).toBe(state);
+    expect(storyReducer(state, { type: 'goTo', index: -1 })).toBe(state);
+    const none = initialStoryState(0);
+    expect(storyReducer(none, { type: 'goTo', index: 0 })).toBe(none);
+  });
 });

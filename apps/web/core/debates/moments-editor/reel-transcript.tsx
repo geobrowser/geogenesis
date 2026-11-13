@@ -10,6 +10,7 @@ import { Text } from '~/design-system/text';
 import type { DebateTranscriptResponse, ParticipantSlot } from '../api';
 import { formatTimecode } from '../claim-timing';
 import { transcriptOnRecordings } from '../recording-clock';
+import { groupTurns, transcriptSpans } from '../transcript-lines';
 import { SPEAKER_EDGE_CLASS, SPEAKER_FILL_CLASS } from './clip-row';
 import { type EditorClip, MIN_EDIT_CLIP_MS, formatReelTime } from './reel';
 
@@ -24,8 +25,7 @@ const OVERLAP_MS = 150;
  * (GEO-3349), or its lines where it has none. A sentence the render cut is left out.
  */
 export function reelSentences(transcript: DebateTranscriptResponse | undefined): ReelSentence[] {
-  const sentences = transcript?.sentences?.length ? transcript.sentences : (transcript?.segments ?? []);
-  return transcriptOnRecordings(sentences)
+  return transcriptOnRecordings(transcriptSpans(transcript))
     .map(sentence => ({
       slot: sentence.participant_slot,
       start_ms: sentence.start_ms,
@@ -85,12 +85,7 @@ export function ReelTranscript({
   onSeek: (ms: number) => void;
 }) {
   const selectedClip = clips[selected];
-  const turns: ReelSentence[][] = [];
-  for (const sentence of sentences) {
-    const last = turns.at(-1);
-    if (last && last[0].slot === sentence.slot) last.push(sentence);
-    else turns.push([sentence]);
-  }
+  const turns = groupTurns(sentences);
 
   return (
     <section className="rounded border border-grey-02 bg-white">

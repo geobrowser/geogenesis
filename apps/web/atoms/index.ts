@@ -577,3 +577,20 @@ export const teamNoticeDismissedAtom = atomWithStorage<RepeatingNotice>('dismiss
 
 export * from './personal-profile-suggested';
 export * from './dismissed-hints';
+
+/** The Best debates watch popup's playback speeds (GEO-3728), as stored. */
+export const BEST_DEBATES_WATCH_SPEEDS = ['1', '1.5', '2'] as const;
+export type BestDebatesWatchSpeed = (typeof BEST_DEBATES_WATCH_SPEEDS)[number];
+
+/**
+ * The speed a ranker last chose in the Best debates watch popup (GEO-3728), kept for the next time
+ * it opens. Read on init so the first frame already plays at it. Read through
+ * `bestDebatesWatchSpeedOf`, which turns anything else stored under the key into 1x.
+ */
+export const bestDebatesWatchSpeedAtom = atomWithStorage<string>('bestDebatesWatchSpeed', '1', undefined, {
+  getOnInit: true,
+});
+
+export function bestDebatesWatchSpeedOf(stored: unknown): BestDebatesWatchSpeed {
+  return BEST_DEBATES_WATCH_SPEEDS.find(speed => speed === stored) ?? '1';
+}

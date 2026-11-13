@@ -19,6 +19,7 @@
  *
  * Pure, so the decoding is tested without a network or a DOM.
  */
+import { speakerShortLabel } from '../debater-name';
 
 /** One moment's caption cue, timed from the start of the moment's own clip file. */
 export type MomentCaption = { startMs: number; endMs: number; text: string };
@@ -78,6 +79,8 @@ export type DebateMomentsPayload = {
       )[]
     | null;
   moments?: readonly (DebateMomentPayload | null | undefined)[] | null;
+  /** The debate's turns, read here only for who spoke in each slot (GEO-3728). */
+  turns?: readonly ({ participant_slot?: unknown; speaker_name?: unknown } | null | undefined)[] | null;
   /** A story reel's own list (GEO-3638), stored with each moment's cut. Absent on picked reels. */
   story_moments?:
     | readonly (
@@ -181,6 +184,24 @@ function cutOf(
   const lead = ownRange ? (nonNegative(claim.clip_lead_ms) ?? 0) : DEFAULT_CLIP_EDGE_MS;
   const tail = ownRange ? (nonNegative(claim.clip_tail_ms) ?? 0) : DEFAULT_CLIP_EDGE_MS;
   return { start: Math.max(0, start - lead), end: end === null ? null : end + tail };
+}
+
+/** Each debater's name by slot, as the payload's turns give it. */
+export type SlotNames = { 1?: string; 2?: string };
+
+/**
+ * Who sits in each slot, from the payload's `turns` (GEO-3728): the first name a slot's turns give.
+ * The watch popup's transcript names its speakers with this when the debate itself can't be read.
+ */
+export function decodeSlotNames(payload: DebateMomentsPayload | null | undefined): SlotNames {
+  const names: SlotNames = {};
+  for (const turn of Array.isArray(payload?.turns) ? payload.turns : []) {
+    const slot = turn?.participant_slot === 1 ? 1 : turn?.participant_slot === 2 ? 2 : null;
+    const raw = typeof turn?.speaker_name === 'string' ? turn.speaker_name.trim() : '';
+    const name = raw ? speakerShortLabel({ display_name: raw }) : '';
+    if (slot !== null && name && !names[slot]) names[slot] = name;
+  }
+  return names;
 }
 
 /** `/debates/{id}/moments/{clip_id}/content` → `clip_id`; the whole URL when it is not that shape. */

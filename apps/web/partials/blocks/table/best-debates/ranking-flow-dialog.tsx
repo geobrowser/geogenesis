@@ -18,8 +18,11 @@ type Props = {
   /** The accessible name when `title` isn't plain text. */
   ariaLabel?: string;
   wide?: boolean;
-  /** `narrow` for one player on its own (the watch dialog); `compare` for the compare view (D1). */
-  size?: 'narrow' | 'compare';
+  /**
+   * `compare` for the compare view (D1); `watch` for the watch dialog's player beside its
+   * transcript (GEO-3728), a fixed height whose columns scroll themselves.
+   */
+  size?: 'compare' | 'watch';
   /** D1's round close button. */
   roundClose?: boolean;
   /**
@@ -86,8 +89,13 @@ export function RankingFlowDialog({
                 ? 'w-auto max-w-[min(100%,960px)] min-w-[min(100%,560px)] rounded-[20px] px-[26px] pt-6 pb-[22px] md:w-full md:min-w-0 md:px-3.5 md:pt-[18px]'
                 : wide
                   ? 'max-w-[1350px]'
-                  : size === 'narrow'
-                    ? 'max-w-[560px]'
+                  : size === 'watch'
+                    ? cx(
+                        'h-[min(760px,calc(100vh-5rem))] max-w-[960px] supports-[height:100dvh]:h-[min(760px,calc(100dvh-5rem))]',
+                        // A short, wide screen (a phone on its side): the whole height, less a margin,
+                        // so the player isn't squeezed by the 64px the dialog usually keeps above it.
+                        '[@media(min-width:768px)_and_(max-height:560px)]:mt-4 [@media(min-width:768px)_and_(max-height:560px)]:h-[calc(100dvh-2rem)] [@media(min-width:768px)_and_(max-height:560px)]:max-h-[calc(100dvh-2rem)]'
+                      )
                     : 'max-w-[880px]'
             )}
           >
@@ -122,7 +130,11 @@ export function RankingFlowDialog({
             </div>
             {/* The only part that scrolls. */}
             <div
-              className="-mx-6 flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain px-6 md:-mx-4 md:px-4"
+              className={cx(
+                '-mx-6 flex min-h-0 flex-1 flex-col gap-4 px-6 md:-mx-4 md:px-4',
+                // The watch dialog's transcript scrolls itself, so the player never scrolls away.
+                size === 'watch' ? 'overflow-hidden' : 'overflow-y-auto overscroll-contain'
+              )}
               data-testid="ranking-flow-dialog-body"
             >
               {children}
