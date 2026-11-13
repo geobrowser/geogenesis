@@ -242,20 +242,67 @@ export function buildFeedQuery(params: FeedQueryParams): string {
   return sp.toString();
 }
 
+/**
+ * GEO-3703. The routes give up at 20s (`FEED_TIME_BUDGET_MS`) and answer 503, so a request still open
+ * past this has been lost somewhere between, and nothing else would ever end it: the reader would sit
+ * on skeletons. Aborting turns it into an ordinary failure, which is retried and then shown.
+ */
+export const FEED_REQUEST_TIMEOUT_MS = 25_000;
+
+/**
+ * React Query's own signal, bounded by the timeout. `AbortSignal.timeout` and `.any` are missing from
+ * Safari before 17.4, where a feed that threw on them would never load at all, so there it falls back
+ * to whichever of the two exists.
+ */
+function feedRequestSignal(signal: AbortSignal | undefined): AbortSignal | undefined {
+  const timeout = typeof AbortSignal.timeout === 'function' ? AbortSignal.timeout(FEED_REQUEST_TIMEOUT_MS) : undefined;
+  if (signal && timeout && typeof AbortSignal.any === 'function') return AbortSignal.any([signal, timeout]);
+  return signal ?? timeout;
+}
+
 async function fetchFeedPage(
   apiEndpoint: string,
   params: FeedQueryParams & {
     identityToken?: string | null;
+    signal?: AbortSignal;
   }
 ): Promise<ExploreFeedResult> {
   const res = await fetch(`${apiEndpoint}?${buildFeedQuery(params)}`, {
     credentials: 'include',
+    signal: feedRequestSignal(params.signal),
     ...(params.identityToken ? { headers: { authorization: `Bearer ${params.identityToken}` } } : {}),
   });
   if (!res.ok) {
     throw new Error('Feed failed');
   }
   return res.json() as Promise<ExploreFeedResult>;
+}
+
+/** GEO-3703. A feed that failed says so and can be asked again, rather than leaving the reader stuck. */
+function FeedRetry({
+  children,
+  onRetry,
+  retrying,
+  className,
+}: {
+  children: React.ReactNode;
+  onRetry: () => void;
+  retrying: boolean;
+  className?: string;
+}) {
+  return (
+    <p role="alert" className={cx('text-browseMenu text-red-01', className)}>
+      {children}{' '}
+      <button
+        type="button"
+        onClick={onRetry}
+        disabled={retrying}
+        className="text-ctaPrimary transition-colors hover:text-ctaHover disabled:text-grey-04"
+      >
+        {retrying ? 'Trying again…' : 'Try again'}
+      </button>
+    </p>
+  );
 }
 
 /** `items` with the card `leadId` names moved to the front, when it is there. */
@@ -621,36 +668,47 @@ export function EntityFeed({
   const publicFirstPage = useQuery({
     ...(preserveSession ? FEED_SESSION_OPTIONS : {}),
     queryKey: [apiEndpoint, PUBLIC_FEED_PARAM],
-    queryFn: () => fetchFeedPage(apiEndpoint, { ...feedParams, cursor: undefined, anonymous: true }),
+    queryFn: ({ signal }) => fetchFeedPage(apiEndpoint, { ...feedParams, cursor: undefined, anonymous: true, signal }),
     enabled: paintsFromPublicPage,
     retry: false,
   });
   const publicPlaceholder = paintsFromPublicPage ? publicFirstPage.data : undefined;
 
-  const { data, isLoading, isFetchingNextPage, isPlaceholderData, fetchNextPage, hasNextPage, error } =
-    useInfiniteQuery({
-      ...(preserveSession ? FEED_PAGES_SESSION_OPTIONS : {}),
-      queryKey,
-      queryFn: async ({ pageParam }) =>
-        fetchFeedPage(apiEndpoint, {
-          ...feedParams,
-          identityToken: wantsIdentityToken ? await getCachedIdentityToken() : null,
-          anonymous: cdnFirstPage && viewerAddress === null && !wantsIdentityToken,
-          cursor: pageParam as string | undefined,
-        }),
-      enabled: !awaitingIdentityToken && (!isForYou || appliedFollows.ids !== null),
-      // When only the account changed (signing in on the page, or an account that arrived after the
-      // wait gave up), keep the cards up while the new page loads instead of dropping to skeletons.
-      // Otherwise a signed-in reader sees the public page meanwhile.
-      placeholderData: (previous, previousQuery) => {
-        if (previousQuery && sameFeedOtherThanAccount(previousQuery.queryKey, queryKey)) return previous;
-        return publicPlaceholder ? { pages: [publicPlaceholder], pageParams: [undefined] } : undefined;
-      },
-      initialPageParam: undefined as string | undefined,
-      getNextPageParam: last => last.nextCursor ?? undefined,
-      retry: 2,
-      retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 8000),
-    });
+  const {
+    data,
+    isLoading,
+    isFetching,
+    isFetchingNextPage,
+    isFetchNextPageError,
+    isPlaceholderData,
+    fetchNextPage,
+    hasNextPage,
+    error,
+    refetch,
+  } = useInfiniteQuery({
+    ...(preserveSession ? FEED_PAGES_SESSION_OPTIONS : {}),
+    queryKey,
+    queryFn: async ({ pageParam, signal }) =>
+      fetchFeedPage(apiEndpoint, {
+        ...feedParams,
+        signal,
+        identityToken: wantsIdentityToken ? await getCachedIdentityToken() : null,
+        anonymous: cdnFirstPage && viewerAddress === null && !wantsIdentityToken,
+        cursor: pageParam as string | undefined,
+      }),
+    enabled: !awaitingIdentityToken && (!isForYou || appliedFollows.ids !== null),
+    // When only the account changed (signing in on the page, or an account that arrived after the
+    // wait gave up), keep the cards up while the new page loads instead of dropping to skeletons.
+    // Otherwise a signed-in reader sees the public page meanwhile.
+    placeholderData: (previous, previousQuery) => {
+      if (previousQuery && sameFeedOtherThanAccount(previousQuery.queryKey, queryKey)) return previous;
+      return publicPlaceholder ? { pages: [publicPlaceholder], pageParams: [undefined] } : undefined;
+    },
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: last => last.nextCursor ?? undefined,
+    retry: 2,
+    retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 8000),
+  });
 
   const feedOnScreen = data !== undefined && !isPlaceholderData;
   const applyHeldFollows = React.useEffectEvent(() => {
@@ -700,7 +758,9 @@ export function EntityFeed({
     const el = sentinelRef.current;
     // A placeholder's cursor belongs to another feed: its next page would be fetched against this
     // one's key. Wait for the real first page.
-    if (!el || !hasNextPage || isPlaceholderData || awaitingEntry) return;
+    // A failed next page waits for the reader's Try again; the sentinel would otherwise re-ask on
+    // every scroll past it.
+    if (!el || !hasNextPage || isPlaceholderData || awaitingEntry || isFetchNextPageError) return;
     const io = new IntersectionObserver(
       entries => {
         if (entries[0]?.isIntersecting && !isFetchingNextPage) {
@@ -711,7 +771,7 @@ export function EntityFeed({
     );
     io.observe(el);
     return () => io.disconnect();
-  }, [fetchNextPage, hasNextPage, isFetchingNextPage, isPlaceholderData, awaitingEntry]);
+  }, [fetchNextPage, hasNextPage, isFetchingNextPage, isPlaceholderData, awaitingEntry, isFetchNextPageError]);
 
   const items = React.useMemo(() => {
     // GEO-3234. Best's pages composed together for this visitor: seen cards hidden, gaps filled from
@@ -893,7 +953,9 @@ export function EntityFeed({
       {dividerBeforeFeed ? <hr className={cx('border-t border-divider', compactHeader ? 'mt-2' : 'mt-5')} /> : null}
       <div className={feedTopSpacingClassName ?? (showFilterRow ? 'mt-8' : '-mt-1')}>
         {error && items.length === 0 ? (
-          <p className="text-browseMenu text-red-01">Could not load the feed.</p>
+          <FeedRetry onRetry={() => void refetch()} retrying={isFetching}>
+            Could not load the feed.
+          </FeedRetry>
         ) : awaitingEntry ||
           (!entryItem && isLoading) ||
           (!entryItem && awaitingIdentityToken) ||
@@ -922,6 +984,11 @@ export function EntityFeed({
           ))
         )}
         <div ref={sentinelRef} className="h-4 w-full" aria-hidden />
+        {isFetchNextPageError && !isFetchingNextPage && items.length > 0 ? (
+          <FeedRetry className="mt-4" onRetry={() => void fetchNextPage()} retrying={false}>
+            Could not load more.
+          </FeedRetry>
+        ) : null}
         {isFetchingNextPage ? (
           <div className="mt-4 space-y-4">
             {Array.from({ length: 3 }).map((_, i) => (
