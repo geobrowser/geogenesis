@@ -1407,10 +1407,12 @@ describe('resuming where this browser left a debate', () => {
     timelineSeconds = 120,
     active = true,
     playbackEnded = false,
+    autoplayBlocked = false,
     onPlaybackRequest,
   }: {
     active?: boolean;
     playbackEnded?: boolean;
+    autoplayBlocked?: boolean;
     onPlaybackRequest?: () => void;
     initialSeekSeconds?: number | null;
     ready?: boolean;
@@ -1430,6 +1432,7 @@ describe('resuming where this browser left a debate', () => {
       timelineSeconds,
       active,
       playbackEnded,
+      autoplayBlocked,
       debateId: debate.id,
     };
 
@@ -1451,6 +1454,7 @@ describe('resuming where this browser left a debate', () => {
         playheadSeconds: props.playheadSeconds,
         timelineSeconds: props.timelineSeconds,
         playbackEnded: props.playbackEnded,
+        autoplayBlocked: props.autoplayBlocked,
         seekBoth: makeSeek(),
       });
 
@@ -1578,6 +1582,22 @@ describe('resuming where this browser left a debate', () => {
     expect(player.controller().playFromStart).toHaveBeenCalledOnce();
     expect(readDebateResumeSeconds(debate.id)).toBeNull();
     expect(startOver()).toBeNull();
+  });
+
+  it('leaves a refused card to the Watch the debate prompt, and offers Start over once it plays', () => {
+    rememberDebatePosition(debate.id, 80, 120);
+    const player = renderResumable({ playing: false, autoplayBlocked: true });
+    const prompt = document.querySelector<HTMLElement>('[data-debate-watch-prompt]');
+
+    expect(prompt).not.toBeNull();
+    expect(startOver()).toBeNull();
+
+    fireEvent.click(prompt!);
+    expect(player.controller().togglePlayback).toHaveBeenCalledOnce();
+    player.update({ playing: true, autoplayBlocked: false });
+
+    expect(document.querySelector('[data-debate-watch-prompt]')).toBeNull();
+    expect(startOver()).not.toBeNull();
   });
 
   it('drops a held Start over once the card moves to another debate', () => {

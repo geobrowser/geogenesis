@@ -1224,7 +1224,7 @@ function PairedDebateFeedPlayer({
                 >
                   {mutedByUser ? <SpeakerMuted /> : <Speaker />}
                 </ControlCircle>
-                {startOverOffered && (
+                {startOverOffered && !refusedPrompt && (
                   <button
                     type="button"
                     onClick={event => {
