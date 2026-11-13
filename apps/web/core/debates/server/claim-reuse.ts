@@ -42,6 +42,15 @@ export type ExistingClaimEntity = {
   topicIds?: string[];
 };
 
+/** Whether a looked-up entity is a Claim with content in `spaceId`: what "already published here" means. */
+export function isClaimInSpace(entity: Pick<ExistingClaimEntity, 'types' | 'spaces'>, spaceId: string): boolean {
+  const spaceKey = uuidToHex(spaceId);
+  return (
+    entity.types.some(type => uuidToHex(type.id) === uuidToHex(CLAIM_TYPE_ID)) &&
+    entity.spaces.some(space => uuidToHex(space) === spaceKey)
+  );
+}
+
 export type ExistingClaimLookup = (entityIds: string[], spaceId: string) => Promise<ExistingClaimEntity[]>;
 
 type ExistingClaimFacts = Omit<ExistingClaimEntity, 'topicIds'>;
@@ -201,16 +210,7 @@ export async function applyClaimReusePolicy(
   const existingTopicsByEntity = new Map<string, Set<string>>();
   try {
     const entities = ids.length > 0 ? await (options.lookup ?? lookupExistingClaimsInGraph)(ids, spaceId) : [];
-    const spaceKey = uuidToHex(spaceId);
-    verified = new Set(
-      entities
-        .filter(
-          entity =>
-            entity.types.some(type => uuidToHex(type.id) === uuidToHex(CLAIM_TYPE_ID)) &&
-            entity.spaces.some(space => uuidToHex(space) === spaceKey)
-        )
-        .map(entity => uuidToHex(entity.id))
-    );
+    verified = new Set(entities.filter(entity => isClaimInSpace(entity, spaceId)).map(entity => uuidToHex(entity.id)));
     for (const entity of entities) {
       existingTopicsByEntity.set(uuidToHex(entity.id), new Set((entity.topicIds ?? []).map(uuidToHex)));
     }

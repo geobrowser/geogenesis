@@ -546,16 +546,19 @@ describe('publishMissingDebateClaims', () => {
     expect(plan.statements.map(s => s.claimId)).toEqual([STABLE_B]);
   });
 
-  it('still links an existing claim entity on such a block, since that mints nothing', async () => {
+  it('skips an existing or matched claim on such a block too: the unlisted id may be the same sentence', async () => {
     const { deps: d } = deps({
-      readBlocks: async () => publishedBlocks({ claimLinks: new Map([[BLOCK_0, [EXISTING]]]) }),
+      loadClaims: async () => ({ transcriptTurns: turns, claims: [claimA, { ...matched, turnIndex: 0 }, claimB] }),
+      readBlocks: async () =>
+        publishedBlocks({ claimLinks: new Map([[BLOCK_0, ['ffffffffffffffffffffffffffffffff']]]) }),
       lookupClaims: async () => [{ id: STABLE_A, spaces: [SPACE], types: [{ id: CLAIM_TYPE_ID }] }],
     });
     const { plan } = await dryPlan(d);
-    expect(plan.statements.map(s => [s.claimId, s.minted])).toEqual([
-      [STABLE_A, false],
-      [STABLE_B, true],
+    expect(plan.skipped.map(s => [s.claimId, s.reason])).toEqual([
+      [STABLE_A, 'block_links_unlisted_claim'],
+      [EXISTING, 'block_links_unlisted_claim'],
     ]);
+    expect(plan.statements.map(s => s.claimId)).toEqual([STABLE_B]);
   });
 
   it('fingerprint changes when a claim is reworded, restanced or retimed under the same id', async () => {

@@ -5,7 +5,7 @@ import { Effect } from 'effect';
 import { parse } from 'graphql';
 import { createHash } from 'node:crypto';
 
-import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
+import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { ID } from '~/core/id';
 import { uuidToHex } from '~/core/id/normalize';
 import { graphql } from '~/core/io/graphql-client';
@@ -33,7 +33,12 @@ import {
 } from '../ontology';
 import { type DebateAcceptorConfig, getDebateAcceptorConfig } from './acceptor-config';
 import { upstashStore } from './acceptor-lock';
-import { type ExistingClaimLookup, applyClaimReusePolicy, lookupExistingClaimsInGraph } from './claim-reuse';
+import {
+  type ExistingClaimLookup,
+  applyClaimReusePolicy,
+  isClaimInSpace,
+  lookupExistingClaimsInGraph,
+} from './claim-reuse';
 import { applyClaimStancePolicy } from './claim-stance';
 import { loadDebateClaims, loadServedTranscriptTurns, loadSettledDebate } from './debate-source';
 import { isDedupSettled } from './extracted-claims';
@@ -100,8 +105,9 @@ export type LateClaimsPlan = {
   /**
    * Claims the graph links from a block that geo-chat no longer lists under that id. A claim that was
    * matched to a published one keeps no id through a re-extraction, so its sentence can come back
-   * as a new stable id; a would-be-minted claim on such a block is skipped
-   * (`block_links_unlisted_claim`) rather than published as a likely duplicate.
+   * as a new stable id, and a match the full publish could not verify was minted under a fallback
+   * id. Every statement on such a block is skipped (`block_links_unlisted_claim`) rather than
+   * listing a sentence on the block twice.
    */
   unlistedLinks: Array<{ turnIndex: number; claimIds: string[] }>;
   /** Claims already linked from a block of this debate, which geo-chat now also places on turns that do not link them. */
@@ -328,7 +334,6 @@ async function planLateClaims(
 
   // Which stable ids are already Claims in this space (the early publish, or an earlier run): those
   // get links only, and are never held, since linking them mints nothing.
-  const spaceKey = key(spaceId);
   const stableIds = [
     ...new Set(
       reused.flatMap(claim => (!claim.existingClaimEntityId && claim.stableEntityId ? [key(claim.stableEntityId)] : []))
@@ -336,13 +341,7 @@ async function planLateClaims(
   ];
   const existing = stableIds.length > 0 ? await d.lookupClaims(stableIds, spaceId) : [];
   const existingClaims = new Set(
-    existing
-      .filter(
-        entity =>
-          entity.types.some(type => key(type.id) === key(CLAIM_TYPE_ID)) &&
-          entity.spaces.some(space => key(space) === spaceKey)
-      )
-      .map(entity => key(entity.id))
+    existing.filter(entity => isClaimInSpace(entity, spaceId)).map(entity => key(entity.id))
   );
 
   const held: LateClaimsPlan['held'] = [];
@@ -409,7 +408,10 @@ async function planLateClaims(
       continue;
     }
     const minted = !claim.existingClaimEntityId && !existingClaims.has(id);
-    if (minted && unlistedByTurn.has(claim.turnIndex)) {
+    // Any statement, minted or not: the unlisted claim may be this sentence under another id (a lost
+    // match, or a match the full publish could not verify and minted under a fallback id), and a
+    // second link would list it twice on the block.
+    if (unlistedByTurn.has(claim.turnIndex)) {
       skipped.push({ claimId: id, turnIndex: claim.turnIndex, text: claim.text, reason: 'block_links_unlisted_claim' });
       continue;
     }
