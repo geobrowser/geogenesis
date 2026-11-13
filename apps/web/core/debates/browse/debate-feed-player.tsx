@@ -504,10 +504,11 @@ function PairedDebateFeedPlayer({
    * A link that named a moment wins, and is not followed by a resume once it is dropped (browser
    * Back), which the `?t=` latch alone would allow.
    *
-   * Waits for the elements as well as `ready`, so the seek lands on them rather than waiting as a
-   * pending seek on a held card. Waits for the debate's length too: a seek is capped at it, so
-   * before it is known the resume would land at 0. Placed before the autoplay effect, which runs in the same commit:
-   * the pair starts from here, not from the top.
+   * Does not wait for the elements: on a held or released card the seek waits as a pending seek,
+   * and the Stream recordings start loading from it when they attach (GEO-3604) rather than from
+   * 0:00 and then seeking. Waits for the debate's length: a seek is capped at it, so before it is
+   * known the resume would land at 0. Placed before the autoplay effect, which runs in the same
+   * commit: the pair starts from here, not from the top.
    */
   const [resumeSettledId, setResumeSettledId] = React.useState<string | null>(null);
 
@@ -515,13 +516,13 @@ function PairedDebateFeedPlayer({
   React.useEffect(() => {
     if (resumeSettledId === debate.id) return;
     if (initialSeekSeconds == null && resumeSeconds != null) {
-      if (!ready || detached || timelineSeconds <= 0) return;
+      if (!ready || timelineSeconds <= 0) return;
       resetAnimationSeek();
       seekBothRaw(resumeSeconds);
       setStartOverId(debate.id);
     }
     setResumeSettledId(debate.id);
-  }, [debate.id, detached, initialSeekSeconds, ready, resumeSeconds, resumeSettledId, seekBothRaw, timelineSeconds]);
+  }, [debate.id, initialSeekSeconds, ready, resumeSeconds, resumeSettledId, seekBothRaw, timelineSeconds]);
   useRememberDebatePosition({
     debateId: debate.id,
     playheadSeconds,

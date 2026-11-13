@@ -1408,9 +1408,11 @@ describe('resuming where this browser left a debate', () => {
     active = true,
     playbackEnded = false,
     autoplayBlocked = false,
+    holdFullPlayback = false,
     onPlaybackRequest,
   }: {
     active?: boolean;
+    holdFullPlayback?: boolean;
     playbackEnded?: boolean;
     autoplayBlocked?: boolean;
     onPlaybackRequest?: () => void;
@@ -1443,6 +1445,7 @@ describe('resuming where this browser left a debate', () => {
         onPlaybackRequest={onPlaybackRequest}
         releaseMedia={props.releaseMedia}
         initialSeekSeconds={props.initialSeekSeconds}
+        holdFullPlayback={holdFullPlayback}
       />
     );
     const fixture = () =>
@@ -1491,18 +1494,32 @@ describe('resuming where this browser left a debate', () => {
     expect(startOver()).toBeNull();
   });
 
-  it('waits for the media to be seekable and attached rather than seeking a held card', () => {
+  it('waits for the recordings to be signed, without saving over the position it waits for', () => {
     rememberDebatePosition(debate.id, 80, 120);
     const player = renderResumable({ ready: false });
     expect(player.seeks).toEqual([]);
-
-    player.update({ ready: true, releaseMedia: true });
-    expect(player.seeks).toEqual([]);
-    // Playing at 0 while the resume waits must not save over the position it is waiting to apply.
     expect(readDebateResumeSeconds(debate.id)).toBe(75);
 
-    player.update({ releaseMedia: false });
+    player.update({ ready: true });
     expect(player.seeks).toEqual([75]);
+  });
+
+  it('seeks a held card to its saved position before its videos attach', () => {
+    getDefaultStore().set(feedFullPlaybackStartedAtom, false);
+    try {
+      rememberDebatePosition(debate.id, 80, 120);
+      const player = renderResumable({ playing: false, holdFullPlayback: true });
+
+      expect(document.querySelectorAll('video')).toHaveLength(0);
+      expect(player.seeks).toEqual([75]);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Play debate' }));
+
+      expect(document.querySelectorAll('video')).toHaveLength(2);
+      expect(player.seeks).toEqual([75]);
+    } finally {
+      getDefaultStore().set(feedFullPlaybackStartedAtom, false);
+    }
   });
 
   it("waits for the debate's length before resuming", () => {
