@@ -76,7 +76,10 @@ export function WatchTranscriptPanel({
   const scrollerRef = React.useRef<HTMLDivElement | null>(null);
   /** When the ranker last scrolled the lines themselves. */
   const readingAtRef = React.useRef(-Infinity);
-  const markReading = () => {
+  // Scrolling the lines is reading; pressing one (a jump) or the moment step is not, or every jump
+  // would stop the panel following the line it just started.
+  const markReading = (event: React.SyntheticEvent) => {
+    if (event.target instanceof Element && event.target.closest('button')) return;
     readingAtRef.current = Date.now();
   };
 
@@ -136,7 +139,10 @@ export function WatchTranscriptPanel({
         onTouchStart={markReading}
         onPointerDown={markReading}
         onKeyDown={event => {
-          if (SCROLL_KEYS.has(event.key)) markReading();
+          if (!SCROLL_KEYS.has(event.key)) return;
+          // Space on a line presses it; the arrow keys still scroll from there.
+          if (event.key === ' ') markReading(event);
+          else readingAtRef.current = Date.now();
         }}
       >
         {content.status === 'loading' ? (

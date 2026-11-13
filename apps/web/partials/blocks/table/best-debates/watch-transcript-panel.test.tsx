@@ -1,0 +1,102 @@
+import '@testing-library/jest-dom/vitest';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+
+import * as React from 'react';
+
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import type { WatchBlock } from '~/core/debates/moments-player/watch-transcript';
+
+import { READING_HOLD_MS, type WatchMomentNav, WatchTranscriptPanel } from './watch-transcript-panel';
+
+const BLOCK: WatchBlock = {
+  key: 'm0',
+  slot: 1,
+  momentIndex: 0,
+  debateStartMs: 0,
+  lines: Array.from({ length: 10 }, (_, i) => ({ key: `m0:${i}`, startMs: i * 1_000, text: `Line ${i}` })),
+};
+
+function Panel({ highlightKey, momentNav }: { highlightKey: string | null; momentNav?: WatchMomentNav }) {
+  return (
+    <WatchTranscriptPanel
+      view="moments"
+      momentsOffered
+      onViewChange={() => undefined}
+      speed="1"
+      onSpeedChange={() => undefined}
+      content={{ status: 'ready', blocks: [BLOCK] }}
+      highlightKey={highlightKey}
+      showTurnTimes={false}
+      speakerOf={() => ({ name: 'Maya Chen', side: 'Agree', avatarUrl: null, avatarSeed: 'm' })}
+      momentNav={momentNav}
+      onLine={() => undefined}
+    />
+  );
+}
+
+/** Lays the lines out as a browser would: 40px each, in a 100px-tall scroller. */
+function layOut() {
+  const scroller = screen.getByTestId('watch-transcript-lines');
+  Object.defineProperty(scroller, 'clientHeight', { configurable: true, value: 100 });
+  Object.defineProperty(scroller, 'scrollTop', { configurable: true, writable: true, value: 0 });
+  BLOCK.lines.forEach((line, i) => {
+    const button = screen.getByRole('button', { name: line.text });
+    Object.defineProperty(button, 'offsetTop', { configurable: true, value: 40 + i * 40 });
+    Object.defineProperty(button, 'offsetHeight', { configurable: true, value: 40 });
+  });
+  return scroller;
+}
+
+let now = 1_000_000;
+
+beforeEach(() => {
+  now = 1_000_000;
+  vi.spyOn(Date, 'now').mockImplementation(() => now);
+});
+
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
+
+const nav = (index: number): WatchMomentNav => ({ index, count: 3, onStep: () => undefined });
+
+describe('WatchTranscriptPanel', () => {
+  it('brings the spoken line into view, and leaves it where it is when it is already in view', () => {
+    const { rerender } = render(<Panel highlightKey={null} momentNav={nav(0)} />);
+    const scroller = layOut();
+    rerender(<Panel highlightKey="m0:0" momentNav={nav(0)} />);
+    expect(scroller.scrollTop).toBe(0);
+    rerender(<Panel highlightKey="m0:6" momentNav={nav(0)} />);
+    // Line 6 sits at 280px: brought to a third of the way down.
+    expect(scroller.scrollTop).toBeCloseTo(280 - 100 / 3);
+  });
+
+  it('stops following for a while after the ranker scrolls the lines', () => {
+    const { rerender } = render(<Panel highlightKey={null} momentNav={nav(0)} />);
+    const scroller = layOut();
+    fireEvent.wheel(scroller);
+    rerender(<Panel highlightKey="m0:6" momentNav={nav(0)} />);
+    expect(scroller.scrollTop).toBe(0);
+    now += READING_HOLD_MS + 1;
+    rerender(<Panel highlightKey="m0:7" momentNav={nav(0)} />);
+    expect(scroller.scrollTop).toBeCloseTo(320 - 100 / 3);
+  });
+
+  it('keeps following after the ranker presses a line', () => {
+    const { rerender } = render(<Panel highlightKey={null} momentNav={nav(0)} />);
+    const scroller = layOut();
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Line 6' }));
+    rerender(<Panel highlightKey="m0:6" momentNav={nav(0)} />);
+    expect(scroller.scrollTop).toBeCloseTo(280 - 100 / 3);
+  });
+
+  it('starts a new moment’s lines from the top', () => {
+    const { rerender } = render(<Panel highlightKey={null} momentNav={nav(0)} />);
+    const scroller = layOut();
+    scroller.scrollTop = 200;
+    rerender(<Panel highlightKey={null} momentNav={nav(1)} />);
+    expect(scroller.scrollTop).toBe(0);
+  });
+});

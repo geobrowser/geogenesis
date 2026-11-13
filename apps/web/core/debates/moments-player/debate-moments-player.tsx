@@ -290,8 +290,11 @@ function MomentsStory({
     setClipMs(0);
     setClipDurationMs(null);
     applyRate(videoRef.current);
-    // A line pressed into this clip starts it once its time is set, not from 0 first.
+    // A line pressed into this clip starts it once its time is set, not from 0 first. One pressed
+    // into a clip the player has since left (a step, the reel moving on) is dropped, or it would
+    // land on a later visit to that clip.
     if (pendingClipSeekRef.current?.src === src) return;
+    pendingClipSeekRef.current = null;
     if (story.mode === 'moments' && autoplayRef.current) start(videoRef.current);
   }, [src, story.mode, start, applyRate]);
 

@@ -92,7 +92,12 @@ export function RankingFlowDialog({
                   : size === 'narrow'
                     ? 'max-w-[560px]'
                     : size === 'watch'
-                      ? 'h-[min(760px,calc(100vh-5rem))] max-w-[960px] supports-[height:100dvh]:h-[min(760px,calc(100dvh-5rem))]'
+                      ? cx(
+                          'h-[min(760px,calc(100vh-5rem))] max-w-[960px] supports-[height:100dvh]:h-[min(760px,calc(100dvh-5rem))]',
+                          // A short, wide screen (a phone on its side): the whole height, less a margin,
+                          // so the player isn't squeezed by the 64px the dialog usually keeps above it.
+                          '[@media(min-width:768px)_and_(max-height:560px)]:mt-4 [@media(min-width:768px)_and_(max-height:560px)]:h-[calc(100dvh-2rem)] [@media(min-width:768px)_and_(max-height:560px)]:max-h-[calc(100dvh-2rem)]'
+                        )
                       : 'max-w-[880px]'
             )}
           >

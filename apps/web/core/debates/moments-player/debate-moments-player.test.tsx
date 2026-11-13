@@ -565,6 +565,17 @@ describe('DebateMomentsPlayer speed and jumps', () => {
     expect(video().currentTime).toBe(0);
   });
 
+  it('drops a jump into a clip the player left before it loaded', () => {
+    const { controller, video } = renderPlayer();
+    act(() => controller.current?.playMomentAt(1, 3_000));
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Next moment' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Previous moment' }));
+    expect(video().getAttribute('src')).toContain('/moments/clip-1/content');
+    metadata(video());
+    expect(video().currentTime).toBe(0);
+  });
+
   it('goes back from the full debate to a moment', () => {
     const { controller, video } = renderPlayer();
     act(() => controller.current?.playFullAt(90_000));
