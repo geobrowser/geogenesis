@@ -2,7 +2,15 @@
 
 import * as React from 'react';
 
-import { type BallotGrades, NO_GRADES, gradeAtPlace, pruneGrades } from '~/core/blocks/ranking/ranking-grades';
+import { movedEntries } from '~/core/blocks/ranking/ranking-draft-changes';
+import {
+  type BallotGrades,
+  NO_GRADES,
+  type Tier,
+  gradeAtPlace,
+  pruneGrades,
+  tierOf,
+} from '~/core/blocks/ranking/ranking-grades';
 import { mergeBallots, sameBallot } from '~/core/blocks/ranking/ranking-publish-queue';
 import type { UnsavedRankingDraft } from '~/core/blocks/ranking/ranking-publish-queue';
 import { normId } from '~/core/utils/norm-id';
@@ -50,8 +58,25 @@ export function gradesForOrder(
   const before = new Set(previousIds.map(normId));
   let grades = pruneGrades(nextIds, previousGrades);
   for (const id of nextIds) if (!before.has(normId(id))) grades = gradeAtPlace(nextIds, grades, id);
-  return grades;
+  // A debate moved across a tier line (the placed dialog's nudge) takes the tier it now sits in,
+  // so the publish never moves it back. One that still fits between its neighbours keeps its grade.
+  const moved = movedEntries(previousIds, nextIds);
+  if (moved.size === 0) return grades;
+  const next = new Map(grades);
+  nextIds.forEach((id, index) => {
+    if (!moved.has(normId(id))) return;
+    const own = TIER_ORDER.indexOf(tierOf(next, id));
+    const above = index > 0 ? TIER_ORDER.indexOf(tierOf(next, nextIds[index - 1])) : -1;
+    const below = index < nextIds.length - 1 ? TIER_ORDER.indexOf(tierOf(next, nextIds[index + 1])) : TIER_ORDER.length;
+    if (own >= above && own <= below) return;
+    const tier = TIER_ORDER[above >= 0 ? above : below];
+    if (tier === 'ungraded') next.delete(normId(id));
+    else next.set(normId(id), tier);
+  });
+  return next;
 }
+
+const TIER_ORDER: readonly Tier[] = ['A', 'B', 'C', 'ungraded'];
 
 type Draft = { ids: string[]; grades: BallotGrades };
 

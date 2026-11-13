@@ -167,6 +167,7 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
     grades: apiGrades = NO_GRADES,
     isLoading: isLoadingMyRanking,
     readError: unreadableBallot,
+    gradesPendingError,
     refetchMyRanking,
   } = useMyRanking(blockId);
 
@@ -249,7 +250,9 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
     [isRolling, submissionFrequencyHours]
   );
   const ballotReadError =
-    unreadableBallot && !isRolledOffUnreadable(unreadableBallot) ? unreadableBallot.message : null;
+    (unreadableBallot && !isRolledOffUnreadable(unreadableBallot) ? unreadableBallot.message : null) ??
+    gradesPendingError?.message ??
+    null;
 
   // A rolled-off ballot reads as absent to the block's views and to the call to action, so the
   // author is prompted to rank again. `hasRolledOff` still drives that prompt, and publishing

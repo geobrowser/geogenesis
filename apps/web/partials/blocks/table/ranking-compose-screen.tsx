@@ -69,7 +69,12 @@ import { Button } from '~/design-system/button';
 
 import { stepAtom } from '~/partials/onboarding/onboarding-atoms';
 
-import { type BestDebatesGrading, gradeChanges, useRecordGrade } from './best-debates/best-debate-grading';
+import {
+  type BestDebatesGrading,
+  type GradeChange,
+  gradeChanges,
+  useRecordGrade,
+} from './best-debates/best-debate-grading';
 import { BestDebateDisplaysContext } from './best-debates/best-debate-row';
 import { BestDebateWatchProvider } from './best-debates/best-debate-watch';
 import { BestDebatesTierHeader } from './best-debates/best-debates-tier-header';
@@ -673,6 +678,8 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   );
   const pushDown = useBestDebatesPushDownSlot({ blockId: bestDebatesBlockId, pushedDownEntityIds });
   const recordGrade = useRecordGrade(entityId);
+  /** How each draft grade was made (GEO-3729), so its published event says so. */
+  const draftGradeMethods = React.useRef(new Map<string, GradeChange['method']>());
 
   const bestDebates = useBestDebatesCompose({
     enabled: isBestDebates,
@@ -692,14 +699,18 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
     isSaving: isPublishBusy,
     pushDown: pushDown.slot,
     onPublished: (published, sentIds, sentGrades) => {
+      // The grades this ranker sent, against the ballot they were based on: never another device's
+      // changes the publish merged in. Each keeps the way it was made (popup, drag).
       const before = { ids: getBasedOnOrderedIds(), grades: getBasedOnGrades() };
-      for (const change of gradeChanges(before.ids, before.grades, published.orderedEntityIds, published.grades)) {
+      for (const change of gradeChanges(before.ids, before.grades, sentIds, sentGrades)) {
+        const key = ID.uuidToHex(change.entityId);
         recordGrade(change.entityId, {
           grade: change.grade,
           previousGrade: change.previousGrade,
-          method: 'ranking_screen',
+          method: draftGradeMethods.current.get(key) ?? 'ranking_screen',
           mutationKind: 'published',
         });
+        draftGradeMethods.current.delete(key);
       }
       markDraftPublished(published.orderedEntityIds, sentIds, published.grades, sentGrades);
       generateOgImagesOnceIndexed(published);
@@ -778,6 +789,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
       method: 'popup',
       mutationKind: 'draft',
     });
+    draftGradeMethods.current.set(ID.uuidToHex(debateId), 'popup');
     setDraft(next.ids, next.grades);
   };
   const composeGrading: BestDebatesGrading | null = isBestDebates
@@ -789,15 +801,8 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
         isSaving: () => false,
         grade: (debateId, grade) => gradeInDraft(debateId, gradeInto(orderedIds, draftGrades, debateId, grade), grade),
         remove: debateId => gradeInDraft(debateId, removeEntry(orderedIds, draftGrades, debateId), 'none'),
-        downRank: debateId => {
-          recordGrade(debateId, {
-            grade: 'D',
-            previousGrade: gradeOf(draftGrades, debateId) ?? 'none',
-            method: 'popup',
-            mutationKind: 'published',
-          });
-          bestDebates.requestPushDown(debateId);
-        },
+        // Counted as Down rank's own `push_down` once its downvote lands.
+        downRank: debateId => bestDebates.requestPushDown(debateId),
       }
     : null;
 
@@ -827,6 +832,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
         method: 'drag',
         mutationKind: 'draft',
       });
+      draftGradeMethods.current.set(ID.uuidToHex(change.entityId), 'drag');
     }
     setDraft(ids, nextGrades);
   };

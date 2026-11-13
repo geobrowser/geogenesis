@@ -143,9 +143,16 @@ function RankingMyRankingSortableItem({
   );
 }
 
+/**
+ * A header never moves, but stays a place to drop: a plain `disabled: true` would also take it out
+ * of the drop targets, so an empty group could never be reached and a debate at a group's edge
+ * would need two drags to cross into the next.
+ */
+export const HEADER_DISABLED = { draggable: true, droppable: false } as const;
+
 /** A group header: a fixed slot in the sortable list that entries move around, never dragged. */
 function RankingSortableGroupHeader({ id, children }: { id: string; children: React.ReactNode }) {
-  const { setNodeRef, transform, transition } = useSortable({ id, disabled: true });
+  const { setNodeRef, transform, transition } = useSortable({ id, disabled: HEADER_DISABLED });
   return (
     <div ref={setNodeRef} style={{ transform: CSS.Translate.toString(transform), transition }}>
       {children}

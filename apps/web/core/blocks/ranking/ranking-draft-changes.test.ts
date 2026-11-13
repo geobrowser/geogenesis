@@ -53,3 +53,18 @@ describe('countBallotChanges with grades (GEO-3729)', () => {
     ).toBe(1);
   });
 });
+
+describe('countBallotChanges: a move and a regrade of different debates (GEO-3729)', () => {
+  const A = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+  const B = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+  const C = 'cccccccccccccccccccccccccccccccc';
+
+  it('counts two changes', () => {
+    expect(
+      countBallotChanges([A, B, C], [B, A, C], {
+        published: new Map([[C, 'B' as const]]),
+        draft: new Map([[C, 'C' as const]]),
+      })
+    ).toBe(2);
+  });
+});

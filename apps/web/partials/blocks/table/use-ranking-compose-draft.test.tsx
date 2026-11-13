@@ -2,7 +2,12 @@ import { act, renderHook } from '@testing-library/react';
 
 import { describe, expect, it } from 'vitest';
 
-import { type RankingComposeSeed, rankingComposeSeed, useRankingComposeDraft } from './use-ranking-compose-draft';
+import {
+  type RankingComposeSeed,
+  gradesForOrder,
+  rankingComposeSeed,
+  useRankingComposeDraft,
+} from './use-ranking-compose-draft';
 
 const A = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const B = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
@@ -105,5 +110,30 @@ describe('grades in the draft (GEO-3729)', () => {
     expect(result.current.orderedIds).toEqual([A, B, E]);
     expect(result.current.grades.get(B)).toBe('A');
     expect(result.current.grades.get(E)).toBe('C');
+  });
+});
+
+describe('gradesForOrder (GEO-3729)', () => {
+  const grades = new Map([
+    [A, 'A' as const],
+    [B, 'B' as const],
+    [C, 'C' as const],
+  ]);
+
+  it('regrades a debate nudged across a tier line so the order stays in tiers', () => {
+    // A nudged down past B into C's place: one of the two takes the other's tier, never both.
+    const next = gradesForOrder([A, B, C, D], new Map([...grades, [D, 'C' as const]]), [B, C, A, D]);
+    expect(next.get(A)).toBe('C');
+    expect(next.get(B)).toBe('B');
+  });
+
+  it('leaves a debate that still fits between its neighbours alone', () => {
+    const twoB = new Map([
+      [A, 'A' as const],
+      [B, 'B' as const],
+      [D, 'B' as const],
+      [C, 'C' as const],
+    ]);
+    expect(gradesForOrder([A, B, D, C], twoB, [A, D, B, C]).get(D)).toBe('B');
   });
 });

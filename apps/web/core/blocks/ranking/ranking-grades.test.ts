@@ -7,9 +7,7 @@ import {
   applyTierLines,
   gradeAtPlace,
   gradeInto,
-  isTierOrdered,
   mergeGrades,
-  moveToTier,
   parseGrade,
   placeRegradedEntries,
   pruneGrades,
@@ -142,72 +140,10 @@ describe('tierSections', () => {
   });
 });
 
-describe('moveToTier', () => {
-  const ballot = ids(1, 2, 3, 4);
-  const grades = g([
-    [1, 'A'],
-    [2, 'B'],
-    [3, 'B'],
-    [4, 'C'],
-  ]);
-
-  it('drags an entry down across a tier line, regrading it', () => {
-    const next = moveToTier(ballot, grades, id(2), 'C', 0);
-    expect(next.ids).toEqual(ids(1, 3, 2, 4));
-    expect(next.grades.get(id(2))).toBe('C');
-  });
-
-  it('drags an entry up across a tier line, regrading it', () => {
-    const next = moveToTier(ballot, grades, id(4), 'A', 0);
-    expect(next.ids).toEqual(ids(4, 1, 2, 3));
-    expect(next.grades.get(id(4))).toBe('A');
-  });
-
-  it('drops into an empty tier', () => {
-    const noB = g([
-      [1, 'A'],
-      [4, 'C'],
-    ]);
-    const next = moveToTier(ids(1, 4), noB, id(1), 'B', 0);
-    expect(next.ids).toEqual(ids(1, 4));
-    expect(next.grades.get(id(1))).toBe('B');
-  });
-
-  it('reorders within a tier without regrading', () => {
-    const next = moveToTier(ballot, grades, id(3), 'B', 0);
-    expect(next.ids).toEqual(ids(1, 3, 2, 4));
-    expect(next.grades.get(id(3))).toBe('B');
-  });
-});
-
 describe('applyTierLines', () => {
   it('grades by the two lines and keeps the order', () => {
     const grades = applyTierLines(ids(1, 2, 3, 4, 5), 1, 2);
     expect([1, 2, 3, 4, 5].map(n => grades.get(id(n)))).toEqual(['A', 'B', 'B', 'C', 'C']);
-  });
-});
-
-describe('isTierOrdered', () => {
-  it('needs A, then B, then C, then ungraded', () => {
-    expect(
-      isTierOrdered(
-        ids(1, 2, 3),
-        g([
-          [1, 'A'],
-          [2, 'B'],
-        ])
-      )
-    ).toBe(true);
-    expect(
-      isTierOrdered(
-        ids(1, 2),
-        g([
-          [1, 'B'],
-          [2, 'A'],
-        ])
-      )
-    ).toBe(false);
-    expect(isTierOrdered(ids(1, 2), g([[2, 'C']]))).toBe(false);
   });
 });
 
@@ -230,6 +166,12 @@ describe('applyGradeEdits', () => {
 });
 
 describe('mergeGrades', () => {
+  it('keeps another device’s clearing of a grade', () => {
+    const base = g([[1, 'A']]);
+    const merged = mergeGrades({ ids: ids(1), base, ours: base, theirs: new Map(), theirIds: ids(1) });
+    expect(merged.has(id(1))).toBe(false);
+  });
+
   it('keeps another device’s regrade of an entry this edit didn’t regrade', () => {
     const base = g([
       [1, 'A'],
@@ -240,18 +182,24 @@ describe('mergeGrades', () => {
       [1, 'C'],
       [2, 'A'],
     ]);
-    const merged = mergeGrades({ ids: ids(2, 1), base, ours, theirs });
+    const merged = mergeGrades({ ids: ids(2, 1), base, ours, theirs, theirIds: ids(1, 2) });
     expect(merged.get(id(1))).toBe('C');
   });
 
   it('keeps this edit’s regrade over the published grade', () => {
     const base = g([[1, 'A']]);
-    const merged = mergeGrades({ ids: ids(1), base, ours: g([[1, 'B']]), theirs: g([[1, 'C']]) });
+    const merged = mergeGrades({ ids: ids(1), base, ours: g([[1, 'B']]), theirs: g([[1, 'C']]), theirIds: ids(1) });
     expect(merged.get(id(1))).toBe('B');
   });
 
   it('keeps this edit’s grade on an entry only it has', () => {
-    const merged = mergeGrades({ ids: ids(9), base: new Map(), ours: g([[9, 'A']]), theirs: new Map() });
+    const merged = mergeGrades({
+      ids: ids(9),
+      base: new Map(),
+      ours: g([[9, 'A']]),
+      theirs: new Map(),
+      theirIds: [],
+    });
     expect(merged.get(id(9))).toBe('A');
   });
 });

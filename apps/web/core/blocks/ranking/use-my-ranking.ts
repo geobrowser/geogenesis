@@ -10,6 +10,7 @@ import { RANK_TYPE_ID } from '~/core/ranking-block-ids';
 import { reportError as reportTelemetryError } from '~/core/telemetry/logger';
 import type { Entity } from '~/core/types';
 
+import { isBallotGradesPendingError } from './fetch-ballot-grades';
 import {
   type MyRankingBallot,
   ballotSnapshot,
@@ -175,6 +176,9 @@ export function useMyRanking(blockId: string) {
     /** Set when the ballot exists but can't be read whole. The screens show
      *  it instead of treating the ranker as having no ballot. */
     readError: isRankingBallotUnreadableError(error) ? error : null,
+    /** Set while the ballot's grades can't be read in step with its votes (Best debates). The
+     *  screens show it and hold publishing, rather than show an empty or ungraded ranking. */
+    gradesPendingError: isBallotGradesPendingError(error) ? error : null,
     refetchMyRanking: React.useCallback(async () => {
       const result = await refetch();
       if (result.isError) {

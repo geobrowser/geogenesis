@@ -65,17 +65,6 @@ export function sameGrades(ids: readonly string[], a: BallotGrades, b: BallotGra
   return ids.every(id => (a.get(normId(id)) ?? null) === (b.get(normId(id)) ?? null));
 }
 
-/** Tiers appear as contiguous blocks in A, B, C, ungraded order. */
-export function isTierOrdered(ids: readonly string[], grades: BallotGrades): boolean {
-  let last = 0;
-  for (const id of ids) {
-    const rank = TIER_RANK[tierOf(grades, id)];
-    if (rank < last) return false;
-    last = rank;
-  }
-  return true;
-}
-
 /**
  * Where an entry graded `grade` goes: right after the last entry of that tier, or, when the tier
  * is empty, right after the last entry of a higher tier (so before every lower tier and every
@@ -166,32 +155,6 @@ export function tierSections(ids: readonly string[], grades: BallotGrades): Tier
 }
 
 /**
- * Moves an entry to `indexInTier` of `tier`'s section, regrading it: a drag on the ranking screen,
- * where the section headers make the tier explicit. Returns the ballot with tiers contiguous.
- */
-export function moveToTier(
-  ids: readonly string[],
-  grades: BallotGrades,
-  entityId: string,
-  tier: Tier,
-  indexInTier: number
-): GradedBallot {
-  const key = normId(entityId);
-  const nextGrades = new Map(grades);
-  if (tier === 'ungraded') nextGrades.delete(key);
-  else nextGrades.set(key, tier);
-  const rest = ids.filter(id => normId(id) !== key);
-  const sections = tierSections(rest, nextGrades);
-  const section = sections.find(s => s.tier === tier);
-  const at = section
-    ? section.start + Math.max(0, Math.min(indexInTier, section.ids.length))
-    : tier === 'ungraded'
-      ? rest.length
-      : bottomOfTierIndex(rest, nextGrades, tier);
-  return { ids: [...rest.slice(0, at), entityId, ...rest.slice(at)], grades: nextGrades };
-}
-
-/**
  * The one-time "Grade your ranking" step: the first `aCount` entries become A, the next `bCount`
  * B, the rest C. The order doesn't change.
  */
@@ -224,17 +187,21 @@ export function mergeGrades({
   base,
   ours,
   theirs,
+  theirIds,
 }: {
   ids: readonly string[];
   base: BallotGrades;
   ours: BallotGrades;
   theirs: BallotGrades;
+  /** The entries of the published ballot `theirs` describes: an entry there with no grade was ungraded there. */
+  theirIds: readonly string[];
 }): BallotGrades {
+  const inTheirs = new Set(theirIds.map(normId));
   const merged = new Map<string, Grade>();
   for (const id of ids) {
     const key = normId(id);
     const our = ours.get(key) ?? null;
-    const grade = our !== (base.get(key) ?? null) ? our : theirs.has(key) ? theirs.get(key)! : our;
+    const grade = our !== (base.get(key) ?? null) || !inTheirs.has(key) ? our : (theirs.get(key) ?? null);
     if (grade) merged.set(key, grade);
   }
   return merged;
@@ -260,10 +227,6 @@ export function sortIntoTiers(ids: readonly string[], grades: BallotGrades): str
     .map((id, index) => ({ id, index, rank: TIER_RANK[tierOf(grades, id)] }))
     .sort((a, b) => a.rank - b.rank || a.index - b.index)
     .map(entry => entry.id);
-}
-
-export function tierCount(ids: readonly string[], grades: BallotGrades, tier: Tier): number {
-  return ids.reduce((count, id) => count + (tierOf(grades, id) === tier ? 1 : 0), 0);
 }
 
 // ---------------------------------------------------------------------------------------------

@@ -79,7 +79,7 @@ export type ActionKind =
   | 'ranking_placed'
   | 'ranking_place_cancelled'
   /**
-   * GEO-3729. Grading a debate on the Best debates ranking (A, B, C, D = Down rank, or taken out).
+   * GEO-3729. Grading a debate on the Best debates ranking (A, B, C, or taken out; D is `push_down`).
    * `mutation_kind` says whether the grade was published (`published`) or only set in the ranking
    * screen's draft (`draft`); grades per ranker per day count the published ones.
    */

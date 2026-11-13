@@ -31,12 +31,14 @@ export type BestDebatesGrading = {
   grade: (entityId: string, grade: Grade) => void;
   /** Takes the debate out of the ranking. */
   remove: (entityId: string) => void;
-  /** D: the existing Down rank (downvote, then off the ranking; its toast offers Undo). */
+  /** D: the existing Down rank (downvote, then off the ranking; its toast offers Undo). Its
+   *  analytics are Down rank's own (`push_down`). */
   downRank: (entityId: string) => void;
 };
 
+/** D is Down rank: it is counted by Down rank's own `push_down` action, not here. */
 export type GradeChange = {
-  grade: Grade | 'D' | 'none';
+  grade: Grade | 'none';
   previousGrade: Grade | 'none';
   method: 'popup' | 'drag' | 'tier_lines' | 'ranking_screen';
   mutationKind: 'published' | 'draft';

@@ -200,6 +200,7 @@ export function mergeBallots({
     base: base.grades ?? NO_GRADES,
     ours: ourGrades,
     theirs: theirs.grades ?? NO_GRADES,
+    theirIds: theirs.ids,
   });
   return { ...order, ids: placeRegradedEntries(order.ids, grades, ourGrades), grades };
 }

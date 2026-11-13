@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   withVoteGrades: vi.fn(),
   published: { rankEntity: null as unknown, orderedEntityIds: [] as string[], grades: new Map() as BallotGrades },
   hookGrades: new Map() as BallotGrades,
+  gradesPendingError: null as Error | null,
 }));
 
 const SPACE = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
@@ -54,6 +55,7 @@ vi.mock('./use-my-ranking', () => ({
     myRankEntity: mocks.published.rankEntity,
     orderedEntityIds: mocks.published.orderedEntityIds,
     grades: mocks.hookGrades,
+    gradesPendingError: mocks.gradesPendingError,
     isLoading: false,
     refetchMyRanking: vi.fn().mockResolvedValue(undefined),
   }),
@@ -119,6 +121,7 @@ beforeEach(() => {
   }));
   mocks.withVoteGrades.mockImplementation((ops: unknown[]) => [...ops, { op: 'grades' }]);
   publishedBallot([], new Map());
+  mocks.gradesPendingError = null;
 });
 
 function render(blockId = BLOCK, blockSpaceId = DEBATES_SPACE) {
@@ -230,5 +233,11 @@ describe('grades on a Best debates publish (GEO-3729)', () => {
       await view.result.current.saveMySubmission([slot(1, 'A')]);
     });
     expect(mocks.withVoteGrades).not.toHaveBeenCalled();
+  });
+
+  it('holds publishing and says so while the grades can’t be read in step with the votes', () => {
+    mocks.gradesPendingError = new Error('Your ranking is still updating. Try again in a moment.');
+    const view = render();
+    expect(view.result.current.ballotReadError).toBe('Your ranking is still updating. Try again in a moment.');
   });
 });

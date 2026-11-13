@@ -226,14 +226,7 @@ export function useBlockGrading({
       const { ids, grades: current } = latest.current;
       apply(entityId, removeEntry(ids, current, entityId));
     },
-    downRank: (entityId: string) => {
-      recordGrade(entityId, {
-        grade: 'D',
-        previousGrade: gradeOf(latest.current.grades, entityId) ?? 'none',
-        method: 'popup',
-        mutationKind: 'published',
-      });
-      downRank(entityId);
-    },
+    // Counted as Down rank's own `push_down` once its downvote lands.
+    downRank,
   };
 }
