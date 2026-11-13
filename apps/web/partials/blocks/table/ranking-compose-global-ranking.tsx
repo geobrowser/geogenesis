@@ -19,7 +19,7 @@ import { Button } from '~/design-system/button';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Search } from '~/design-system/icons/search';
 
-import { BestDebateDisplaysContext } from './best-debates/best-debate-row';
+import { BestDebateDisplaysContext, BestDebateWatchContext } from './best-debates/best-debate-row';
 import { BestDebatesMatchingList } from './best-debates/best-debates-matching-list';
 import { BestDebatesGroupedRows } from './best-debates/best-debates-team-row';
 import {
@@ -247,29 +247,35 @@ function RankingComposePickRow({
   /** Best debates: the team row both lists share, in place of the generic row. */
   content?: React.ReactNode;
 }) {
+  // Best debates (Preston, 13 Nov): the row opens the debate to watch, ranked or not, and only the
+  // row's Rank button starts ranking it.
+  const watch = React.useContext(BestDebateWatchContext);
+  const watchOnly = Boolean(content && watch);
+  const inert = !watchOnly && isInMyRanking;
+  const activate = () => {
+    if (watchOnly) watch?.(entityId);
+    else if (!isInMyRanking) onAdd();
+  };
   const handleKeyDown = (event: React.KeyboardEvent) => {
-    if (isInMyRanking) return;
+    if (inert || event.target !== event.currentTarget) return;
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
-      onAdd();
+      activate();
     }
   };
 
   return (
     <div
       role="button"
-      tabIndex={isInMyRanking ? -1 : 0}
-      aria-label={isInMyRanking ? `${name} is in your ranking` : `Add ${name} to my ranking`}
-      aria-disabled={isInMyRanking}
-      onClick={() => {
-        if (!isInMyRanking) onAdd();
-      }}
+      tabIndex={inert ? -1 : 0}
+      aria-label={
+        watchOnly ? `Watch ${name}` : isInMyRanking ? `${name} is in your ranking` : `Add ${name} to my ranking`
+      }
+      aria-disabled={inert}
+      onClick={activate}
       onKeyDown={handleKeyDown}
       {...(draggable && !isInMyRanking ? rankingEntityDragProps(entityId) : {})}
-      className={cx(
-        'flex w-full items-center py-3 text-left transition',
-        isInMyRanking ? 'cursor-default' : 'cursor-pointer'
-      )}
+      className={cx('flex w-full items-center py-3 text-left transition', inert ? 'cursor-default' : 'cursor-pointer')}
     >
       {content ?? (
         <RankingEntryRow
@@ -709,8 +715,10 @@ export function RankingComposeGlobalRanking({
       />
     );
 
-    // Best debates rows have no side-panel button: the poster opens the debate to watch.
-    if (!isMobile && teamView) return <div key={id}>{pickRow}</div>;
+    // Best debates rows have no side-panel button or swipe actions on any screen: a tap opens the
+    // debate to watch and the row's Rank button ranks it (Preston, 13 Nov). A swipe row's tap would
+    // start ranking as well.
+    if (teamView) return <div key={id}>{pickRow}</div>;
     if (!isMobile) {
       return (
         <RankingGlobalDesktopRow key={id} onOpenSidePanel={() => onViewEntity(id)}>

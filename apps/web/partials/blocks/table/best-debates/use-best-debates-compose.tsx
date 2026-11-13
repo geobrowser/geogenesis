@@ -194,6 +194,7 @@ export function useBestDebatesCompose({
         myRank={isInMyRanking ? orderedIds.indexOf(entityId) + 1 || null : null}
         draggable={!isMobile && !isInMyRanking}
         onPushDown={pushDown && !isInMyRanking ? () => placement.requestPushDown(entityId) : undefined}
+        onRank={isInMyRanking ? undefined : () => startPlacement(entityId, 'team')}
       />
     ),
     toRankPanel: (
