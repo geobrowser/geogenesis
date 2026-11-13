@@ -564,6 +564,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    * GEO-3733. Every claim an agenda lists this week, as the positions tabs are narrowed to. Taken
    * before publishability rather than from `todaysAgendas`, so those tabs wait on the agendas alone
    * and not on every space's type: the rows are still dropped by `canPublishDebateIn` as before.
+   * Deliberately wider than Today's claims by one case: an agenda in a space this pair could not
+   * publish into still admits its claims here, drawn and published in a space they can. gaia already
+   * serves agendas from debate spaces only, so that is a curated claim either way.
    * Already `normId`'d. An outage with no agenda claims in hand goes to those tabs as an error rather
    * than reading as "no positions"; one that leaves claims in hand (a background refetch, a failed
    * batch) keeps what it has, as Today's claims does.
@@ -1248,6 +1251,31 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   }
   const todaysCountsByClaim =
     todaysCountsRef.current?.sessionId === sessionId ? todaysCountsRef.current.byClaimId : todaysDebateCounts.byClaimId;
+  /**
+   * GEO-3733. The agenda attribution for a card on Matches or either positions tab, which agenda-only
+   * are all agenda claims: each claim's first listing, current sections ahead of Earlier this week,
+   * from the same unscoped agendas those tabs are narrowed by. Without it their picks and impressions
+   * read as off-agenda in the warehouse's `on_agenda` measures, which is what this change moves.
+   * Empty with the switch off, where those tabs list more than agenda claims.
+   */
+  const agendaScopeByClaim = React.useMemo(() => {
+    const byClaim = new Map<string, TodaysCardScope>();
+    if (!AGENDA_ONLY_PICKER) return byClaim;
+    const all = todaysAgendasQuery.agendasIn(() => true);
+    const debatesOf = (claimId: string) => todaysCountsByClaim?.get(claimId);
+    for (const space of all.spaces)
+      for (const section of space.sections)
+        for (const claimId of section.claimIds) {
+          const id = normId(claimId);
+          if (!byClaim.has(id))
+            byClaim.set(id, todaysCardScope(section.agendaId, section.listedOn, debatesOf(id), section.id));
+        }
+    for (const listing of all.earlier) {
+      const id = normId(listing.claimId);
+      if (!byClaim.has(id)) byClaim.set(id, todaysCardScope(listing.agendaId, listing.listedOn, debatesOf(id)));
+    }
+    return byClaim;
+  }, [todaysAgendasQuery, todaysCountsByClaim]);
   const todaysAgendaSpaceIds = React.useMemo(
     () => todaysAgendas.spaces.map(space => space.spaceId),
     [todaysAgendas.spaces]
@@ -2174,8 +2202,11 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    * that is correct for every claim already on it. Going back to a skeleton there would flicker
    * the badge on exactly the event that ought to be invisible.
    */
+  // An agenda outage is in here as viewerCountPending's errors are (GEO-3733): it empties Matches and
+  // Their positions, and a `0` beside it would call the outage "none".
   const opponentCountPending =
-    opponentClaims.length === 0 && (sessionQuery.isLoading || positions.isLoading || opponentClaimsSettling);
+    opponentClaims.length === 0 &&
+    (sessionQuery.isLoading || positions.isLoading || opponentClaimsSettling || Boolean(agendaFilterError));
 
   /**
    * The same rule for the same reason: `0` is a claim about the viewer's own backlog, and it is
@@ -3242,7 +3273,12 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
         claimId={claim.claim.claim_entity_id}
         listId={listId}
         position={position}
-        scope={tab === 'todays' ? { ...cardScope, ...todaysScopeByRow.get(claimRowKey(claim)) } : cardScope}
+        scope={{
+          ...cardScope,
+          ...(tab === 'todays'
+            ? todaysScopeByRow.get(claimRowKey(claim))
+            : agendaScopeByClaim.get(normId(claim.claim.claim_entity_id))),
+        }}
       >
         <RematchClaimCard
           // The list can hold an older row while new claims hydrate. Its content stays visible,

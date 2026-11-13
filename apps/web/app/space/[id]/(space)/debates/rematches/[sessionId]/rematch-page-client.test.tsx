@@ -68,6 +68,8 @@ const mocks = vi.hoisted(() => ({
   /** GEO-3733. `enabled` as each graph entity query was asked, and the curated lookup's debaters. */
   entityQueryEnabled: [] as Array<boolean | undefined>,
   recommendedAskedFor: [] as string[][],
+  /** Every claim card's surface props as drawn, so a case can read a card's attribution. */
+  cardSurfaces: [] as Array<{ claimId: string; listId: string; scope?: Record<string, unknown> }>,
   relatedEntitiesLoading: false,
   relatedEntitiesError: null as Error | null,
   relatedWheres: [] as unknown[],
@@ -964,6 +966,18 @@ function listedAtByClaim(agendas: typeof todays.agendas) {
     if (!byClaim.has(listing.claimId)) byClaim.set(listing.claimId, listing.listedAt);
   return byClaim;
 }
+
+// The real surface, with each card's attribution recorded on the way through (GEO-3733).
+vi.mock('~/core/debates/debate-claim-card-surface', async importOriginal => {
+  const actual = await importOriginal<typeof import('~/core/debates/debate-claim-card-surface')>();
+  return {
+    ...actual,
+    DebateClaimCardSurface: (props: Parameters<typeof actual.DebateClaimCardSurface>[0]) => {
+      mocks.cardSurfaces.push({ claimId: props.claimId, listId: props.listId, scope: props.scope });
+      return actual.DebateClaimCardSurface(props);
+    },
+  };
+});
 
 /**
  * GEO-3733. Whether the picker is agenda-only. Off for every suite written before it, which cover the
@@ -8501,6 +8515,9 @@ describe('agenda-only picker', () => {
 
     expect(await screen.findByRole('button', { name: /^Today’s claims/, pressed: true })).toBeInTheDocument();
 
+    // Not a confident zero on the badges either.
+    expect(screen.getByLabelText('Counting matches')).toBeInTheDocument();
+
     await showOpponentClaims();
     expect(screen.getByText('Something went wrong.')).toBeInTheDocument();
     expectNoOffAgendaClaims();
@@ -8572,6 +8589,26 @@ describe('agenda-only picker', () => {
     fireEvent.click(screen.getByRole('button', { name: 'See today’s claims' }));
     await settleTabSwap();
     expect(tabButton(/^Today’s claims/)).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('attributes a positions card to the agenda that lists it, as a Today’s claims card is', async () => {
+    mixedPositions();
+    agendaListing([CLAIM_SHARED, ON_AGENDA_THEIRS]);
+    todays.entities = [sharedEntity(), entity(ON_AGENDA_THEIRS, 'On the agenda, theirs')];
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await screen.findByRole('button', { name: /^Matches/, pressed: true });
+
+    await showOpponentClaims();
+    mocks.cardSurfaces.length = 0;
+    await showMatches();
+    await showOpponentClaims();
+    const card = mocks.cardSurfaces.findLast(surface => surface.claimId === ON_AGENDA_THEIRS);
+    expect(card?.listId).toBe('rematch_their_positions');
+    expect(card?.scope).toMatchObject({
+      agenda_id: 'agenda-today',
+      agenda_date: '2026-11-13',
+      list_section_id: 'block-today',
+    });
   });
 
   it('still shows a request already made on a claim no agenda lists', async () => {
