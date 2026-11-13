@@ -60,6 +60,19 @@ describe('the Moments transcript', () => {
     ]);
   });
 
+  it('reads each cue as clean text, dropping empty ones, so joined cues read as prose', () => {
+    const blocks = momentBlocks([
+      moment(0, 0, 1, [
+        [0, '  more insecure with  '],
+        [1_000, ' '],
+        [2_000, 'themselves\nand they have'],
+      ]),
+    ]);
+    expect(blocks[0].lines.map(line => line.text)).toEqual(['more insecure with', 'themselves and they have']);
+    const full = fullDebateBlocks(transcript({ segments: [segment(0, 1, ' One  two '), segment(1_000, 1, '   ')] }));
+    expect(full[0].lines.map(line => line.text)).toEqual(['One two']);
+  });
+
   it('leaves a moment without a known speaker unattributed', () => {
     expect(momentBlocks([moment(0, 0, null, [[0, 'Hi.']])])[0].slot).toBeNull();
   });
@@ -164,7 +177,7 @@ describe('who said a block', () => {
           { participant_slot: 1, speaker_name: ' Susan Winter ' },
           { participant_slot: 2, speaker_name: '' },
           { participant_slot: 1, speaker_name: 'Someone else' },
-          { participant_slot: 2, speaker_name: 'Kevin' },
+          { participant_slot: 2, speaker_name: 'Kevin (kevin.9)' },
           { participant_slot: 3, speaker_name: 'Nobody' },
           null,
         ],

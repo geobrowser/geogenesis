@@ -130,4 +130,37 @@ describe('WatchTranscriptPanel', () => {
     expect(screen.getByText('No transcript for this moment.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Next moment' })).toBeInTheDocument();
   });
+
+  // GEO-3728, Preston 13 Nov: cues flow as one paragraph of text, not a box each.
+  it('flows the lines as text in one paragraph, one tab stop, the arrow keys moving between them', () => {
+    const onLine = vi.fn();
+    render(
+      <WatchTranscriptPanel
+        view="moments"
+        momentsOffered
+        onViewChange={() => undefined}
+        speed="1"
+        onSpeedChange={() => undefined}
+        content={{ status: 'ready', blocks: [BLOCK] }}
+        highlightKey="m0:2"
+        showTurnTimes={false}
+        speakerOf={() => ({ name: 'Maya Chen', side: 'Agree', avatarUrl: null, avatarSeed: 'm' })}
+        onLine={onLine}
+      />
+    );
+    const lines = BLOCK.lines.map(line => screen.getByRole('button', { name: line.text }));
+    expect(lines.every(line => line.tagName === 'SPAN')).toBe(true);
+    expect(new Set(lines.map(line => line.parentElement)).size).toBe(1);
+    expect(lines.filter(line => line.tabIndex === 0)).toEqual([lines[2]]);
+
+    lines[2].focus();
+    fireEvent.keyDown(lines[2], { key: 'ArrowRight' });
+    expect(document.activeElement).toBe(lines[3]);
+    fireEvent.keyDown(lines[3], { key: 'ArrowLeft' });
+    expect(document.activeElement).toBe(lines[2]);
+    fireEvent.keyDown(lines[2], { key: 'Enter' });
+    expect(onLine).toHaveBeenCalledWith(BLOCK, BLOCK.lines[2]);
+    fireEvent.click(lines[5]);
+    expect(onLine).toHaveBeenLastCalledWith(BLOCK, BLOCK.lines[5]);
+  });
 });

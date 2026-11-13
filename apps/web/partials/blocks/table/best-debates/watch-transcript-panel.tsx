@@ -83,7 +83,7 @@ export function WatchTranscriptPanel({
   // Pressing a line (a jump) or the moment step is not reading, or every jump would stop the panel
   // following the line it just started.
   const markReadingUnlessPress = (event: React.SyntheticEvent) => {
-    if (event.target instanceof Element && event.target.closest('button')) return;
+    if (event.target instanceof Element && event.target.closest('button, [role="button"]')) return;
     markReading();
   };
 
@@ -93,6 +93,24 @@ export function WatchTranscriptPanel({
     [blocks]
   );
   const spokenUpTo = highlightKey === null ? null : (order.get(highlightKey) ?? null);
+  const firstKey = blocks?.[0]?.lines[0]?.key ?? null;
+
+  /** A line works as a button from the keyboard; the arrow keys step to the line before or after. */
+  const onLineKeyDown = (event: React.KeyboardEvent<HTMLElement>, block: WatchBlock, line: WatchLine) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      onLine(block, line);
+      return;
+    }
+    if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;
+    const at = order.get(line.key);
+    if (at === undefined) return;
+    const lines = scrollerRef.current?.querySelectorAll<HTMLElement>('[data-line-key]');
+    const next = lines?.[at + (event.key === 'ArrowRight' ? 1 : -1)];
+    if (!next) return;
+    event.preventDefault();
+    next.focus();
+  };
 
   // A new moment (the reel moving on, or a step) starts its lines from the top.
   const shownMoment = momentNav?.index ?? null;
@@ -192,20 +210,26 @@ export function WatchTranscriptPanel({
                   // One moment of a reel whose others have captions: its clip came without any.
                   <p className="m-0 text-metadata text-grey-04">No transcript for this moment.</p>
                 ) : null}
+                {/* One flowing paragraph per speaker: each cue is a plain inline span, so sentences wrap
+                    as text, not as a box per cue (a `<button>` lays out as an inline-block). */}
                 <p className="m-0 text-[16px] leading-6 tracking-[-0.1px]">
                   {block.lines.map((line, i) => {
                     const index = order.get(line.key) ?? 0;
                     return (
                       <React.Fragment key={line.key}>
                         {i > 0 ? ' ' : null}
-                        <button
-                          type="button"
+                        <span
+                          role="button"
+                          // One tab stop for the lines: the one being spoken, else the first. The
+                          // arrow keys move between them (see `onLineKeyDown`).
+                          tabIndex={line.key === (highlightKey ?? firstKey) ? 0 : -1}
                           data-line-key={line.key}
                           data-geo-analytics-label="Best debates watch transcript line"
                           aria-current={line.key === highlightKey ? 'true' : undefined}
                           onClick={() => onLine(block, line)}
+                          onKeyDown={event => onLineKeyDown(event, block, line)}
                           className={cx(
-                            '-mx-px inline rounded px-0.5 py-px text-left transition-colors hover:bg-grey-01',
+                            'cursor-pointer rounded-sm [box-decoration-break:clone] py-0.5 transition-colors hover:bg-grey-01 focus-visible:outline focus-visible:outline-2 focus-visible:outline-text',
                             line.key === highlightKey
                               ? 'bg-ctaTertiary text-text hover:bg-ctaTertiary'
                               : spokenUpTo !== null && index > spokenUpTo
@@ -214,7 +238,7 @@ export function WatchTranscriptPanel({
                           )}
                         >
                           {line.text}
-                        </button>
+                        </span>
                       </React.Fragment>
                     );
                   })}

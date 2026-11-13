@@ -29,6 +29,11 @@ export type WatchBlock = {
   lines: WatchLine[];
 };
 
+/** A cue or line as read: no stray spaces inside or around it, so joined lines read as prose. */
+export function cleanText(text: string): string {
+  return text.replace(/\s+/g, ' ').trim();
+}
+
 const momentLineKey = (moment: number, cue: number) => `m${moment}:${cue}`;
 const fullLineKey = (line: number) => `f${line}`;
 
@@ -42,15 +47,18 @@ export function momentBlocks(moments: readonly DebateMoment[]): WatchBlock[] {
     slot: moment.participantSlot === 1 || moment.participantSlot === 2 ? moment.participantSlot : null,
     momentIndex: i,
     debateStartMs: moment.cutStartMs,
-    lines: moment.captions.map((cue, c) => ({ key: momentLineKey(i, c), startMs: cue.startMs, text: cue.text })),
+    lines: moment.captions.flatMap((cue, c) => {
+      const text = cleanText(cue.text);
+      return text ? [{ key: momentLineKey(i, c), startMs: cue.startMs, text }] : [];
+    }),
   }));
 }
 
 /** The full debate's lines (sentences, else segments) in time order, grouped into turns. */
 export function fullDebateBlocks(transcript: DebateTranscriptResponse | undefined): WatchBlock[] {
   const lines = transcriptSpans(transcript)
-    .filter(span => span.text.trim().length > 0)
-    .map(span => ({ slot: span.participant_slot, start: span.start_ms, text: span.text.trim() }))
+    .map(span => ({ slot: span.participant_slot, start: span.start_ms, text: cleanText(span.text) }))
+    .filter(line => line.text.length > 0)
     .sort((a, b) => a.start - b.start)
     .map((line, index) => ({ ...line, key: fullLineKey(index) }));
   return groupTurns(lines).map(turn => ({
