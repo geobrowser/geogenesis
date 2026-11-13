@@ -8349,6 +8349,9 @@ describe('agenda-only picker', () => {
   }
 
   /** One agenda in SPACE_1 listing the shared claim and one only the opponent answered. */
+  /** As the agendas hand ids out: normalised (`buildDebateAgendas`). */
+  const bare = (id: string) => id.replace(/-/g, '').toLowerCase();
+
   function agendaListing(claimIds: string[]) {
     todays.agendas = {
       newestDay: '2026-11-13',
@@ -8362,7 +8365,7 @@ describe('agenda-only picker', () => {
               agendaId: 'agenda-today',
               spaceId: SPACE_1,
               name: 'Today',
-              claimIds,
+              claimIds: claimIds.map(bare),
               listedOn: '2026-11-13',
               listedAt: '2026-11-13T05:00:00+00:00',
             },
@@ -8396,6 +8399,16 @@ describe('agenda-only picker', () => {
       position('profile-local', OFF_AGENDA_MINE, SPACE_1, true),
     ];
   }
+
+  /** Waits for the room to land on a tab, whichever it is. */
+  const landed = () =>
+    waitFor(() =>
+      expect(
+        screen
+          .getAllByRole('button')
+          .some(button => button.getAttribute('aria-pressed') === 'true' && button.hasAttribute('data-tab-active'))
+      ).toBe(true)
+    );
 
   const OFF_AGENDA_NAMES = ['Off the agenda, a match', 'Off the agenda, theirs', 'Off the agenda, mine'];
   const expectNoOffAgendaClaims = () => {
@@ -8432,7 +8445,7 @@ describe('agenda-only picker', () => {
     agendaListing([CLAIM_SHARED, ON_AGENDA_THEIRS]);
     todays.entities = [sharedEntity(), entity(ON_AGENDA_THEIRS, 'On the agenda, theirs')];
     render(<DebateRematchPageClient sessionId="rematch-1" />);
-    await screen.findByRole('button', { name: /^Matches/, pressed: true });
+    await landed();
 
     await showMatches();
     expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
@@ -8455,7 +8468,7 @@ describe('agenda-only picker', () => {
     agendaListing([CLAIM_SHARED]);
     todays.entities = [sharedEntity()];
     render(<DebateRematchPageClient sessionId="rematch-1" />);
-    await screen.findByRole('button', { name: /^Matches/, pressed: true });
+    await landed();
 
     expect(screen.queryByRole('button', { name: 'Explore' })).toBeNull();
     expect(screen.queryByRole('button', { name: /^Related/ })).toBeNull();
@@ -8493,7 +8506,7 @@ describe('agenda-only picker', () => {
     todays.entities = [sharedEntity(), entity(ON_AGENDA_THEIRS, 'On the agenda, theirs')];
     todays.loading = false;
     rerender(<DebateRematchPageClient sessionId="rematch-1" />);
-    await screen.findByRole('button', { name: /^Matches/, pressed: true });
+    await landed();
 
     await showOpponentClaims();
     expect(screen.getByText('On the agenda, theirs')).toBeInTheDocument();
@@ -8596,7 +8609,7 @@ describe('agenda-only picker', () => {
     agendaListing([CLAIM_SHARED, ON_AGENDA_THEIRS]);
     todays.entities = [sharedEntity(), entity(ON_AGENDA_THEIRS, 'On the agenda, theirs')];
     render(<DebateRematchPageClient sessionId="rematch-1" />);
-    await screen.findByRole('button', { name: /^Matches/, pressed: true });
+    await landed();
 
     await showOpponentClaims();
     mocks.cardSurfaces.length = 0;
@@ -8608,6 +8621,84 @@ describe('agenda-only picker', () => {
       agenda_id: 'agenda-today',
       agenda_date: '2026-11-13',
       list_section_id: 'block-today',
+    });
+  });
+
+  /** A current section listing `claimIds` in `spaceId`'s agenda, named after the space. */
+  function currentSection(spaceId: string, claimIds: string[]) {
+    return {
+      spaceId,
+      listedOn: '2026-11-13',
+      sections: [
+        {
+          id: `block-${spaceId}`,
+          agendaId: `agenda-${spaceId}`,
+          spaceId,
+          name: `Agenda ${spaceId}`,
+          claimIds: claimIds.map(bare),
+          listedOn: '2026-11-13',
+          listedAt: '2026-11-13T05:00:00+00:00',
+        },
+      ],
+    };
+  }
+
+  /** The attribution of the last card drawn for `claimId` on `listId`. */
+  const lastScope = (claimId: string, listId: string) =>
+    [...mocks.cardSurfaces].reverse().find(surface => surface.claimId === claimId && surface.listId === listId)?.scope;
+
+  it('credits a claim on two agendas to the one Today’s claims lists it under', async () => {
+    mixedPositions();
+    // gaia's order puts SPACE_2 first; Today's claims puts SPACE_1 first, where both debaters are members.
+    todays.agendas = {
+      newestDay: '2026-11-13',
+      spaces: [currentSection(SPACE_2, [ON_AGENDA_THEIRS]), currentSection(SPACE_1, [ON_AGENDA_THEIRS])],
+      earlier: [],
+    };
+    todays.members = { [SPACE_1.replace(/-/g, '').toLowerCase()]: 2 };
+    todays.entities = [entity(ON_AGENDA_THEIRS, 'On the agenda, theirs')];
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await landed();
+    fireEvent.click(screen.getByRole('button', { name: /^Today’s claims/ }));
+    await settleTabSwap();
+    const todaysScope = lastScope(ON_AGENDA_THEIRS, 'todays_claims');
+    expect(todaysScope).toMatchObject({ agenda_id: `agenda-${SPACE_1}` });
+
+    await showOpponentClaims();
+    expect(lastScope(ON_AGENDA_THEIRS, 'rematch_their_positions')).toMatchObject({
+      agenda_id: todaysScope!.agenda_id,
+      list_section_id: todaysScope!.list_section_id,
+    });
+  });
+
+  it('credits a claim Today’s claims does not list to its current listing ahead of Earlier this week', async () => {
+    const PERSONAL = '019fedae-72b6-7ab2-927a-df044d57c599';
+    mocks.spaceTypes[PERSONAL] = 'PERSONAL';
+    mixedPositions();
+    // Current only in a space this pair cannot publish into; earlier in one they can, but debated
+    // since, so Today's claims folds it away and the card falls back to the agendas themselves.
+    todays.agendas = {
+      newestDay: '2026-11-13',
+      spaces: [currentSection(PERSONAL, [ON_AGENDA_THEIRS])],
+      earlier: [
+        {
+          claimId: bare(ON_AGENDA_THEIRS),
+          spaceId: SPACE_1,
+          agendaId: 'agenda-old',
+          listedOn: '2026-11-10',
+          listedAt: '2026-11-10T05:00:00+00:00',
+        },
+      ],
+    };
+    todays.counts = new Map([[bare(ON_AGENDA_THEIRS), 1]]);
+    todays.entities = [entity(ON_AGENDA_THEIRS, 'On the agenda, theirs')];
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await landed();
+
+    await showOpponentClaims();
+    expect(lastScope(ON_AGENDA_THEIRS, 'rematch_their_positions')).toMatchObject({
+      agenda_id: `agenda-${PERSONAL}`,
+      agenda_date: '2026-11-13',
     });
   });
 

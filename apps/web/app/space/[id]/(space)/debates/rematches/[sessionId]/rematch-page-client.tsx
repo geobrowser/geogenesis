@@ -1251,31 +1251,6 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   }
   const todaysCountsByClaim =
     todaysCountsRef.current?.sessionId === sessionId ? todaysCountsRef.current.byClaimId : todaysDebateCounts.byClaimId;
-  /**
-   * GEO-3733. The agenda attribution for a card on Matches or either positions tab, which agenda-only
-   * are all agenda claims: each claim's first listing, current sections ahead of Earlier this week,
-   * from the same unscoped agendas those tabs are narrowed by. Without it their picks and impressions
-   * read as off-agenda in the warehouse's `on_agenda` measures, which is what this change moves.
-   * Empty with the switch off, where those tabs list more than agenda claims.
-   */
-  const agendaScopeByClaim = React.useMemo(() => {
-    const byClaim = new Map<string, TodaysCardScope>();
-    if (!AGENDA_ONLY_PICKER) return byClaim;
-    const all = todaysAgendasQuery.agendasIn(() => true);
-    const debatesOf = (claimId: string) => todaysCountsByClaim?.get(claimId);
-    for (const space of all.spaces)
-      for (const section of space.sections)
-        for (const claimId of section.claimIds) {
-          const id = normId(claimId);
-          if (!byClaim.has(id))
-            byClaim.set(id, todaysCardScope(section.agendaId, section.listedOn, debatesOf(id), section.id));
-        }
-    for (const listing of all.earlier) {
-      const id = normId(listing.claimId);
-      if (!byClaim.has(id)) byClaim.set(id, todaysCardScope(listing.agendaId, listing.listedOn, debatesOf(id)));
-    }
-    return byClaim;
-  }, [todaysAgendasQuery, todaysCountsByClaim]);
   const todaysAgendaSpaceIds = React.useMemo(
     () => todaysAgendas.spaces.map(space => space.spaceId),
     [todaysAgendas.spaces]
@@ -3265,6 +3240,39 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     () => new Map(todaysItems.map(item => [claimRowKey(item.row), item.scope])),
     [todaysItems]
   );
+  /**
+   * GEO-3733. The agenda attribution for a card on Matches or either positions tab, which agenda-only
+   * are all agenda claims. Without it their picks and impressions read as off-agenda in the
+   * warehouse's `on_agenda` measures, which is what this change moves.
+   *
+   * The Today's claims card's own scope wherever that tab lists the claim, so a claim on two spaces'
+   * agendas is credited to the same one on every tab. Otherwise (a space this pair cannot publish in,
+   * or an Earlier this week claim Today's folds away) its first listing in the unscoped agendas,
+   * current sections ahead of Earlier this week. Empty with the switch off, where those tabs list
+   * more than agenda claims.
+   */
+  const agendaScopeByClaim = React.useMemo(() => {
+    const byClaim = new Map<string, TodaysCardScope>();
+    if (!AGENDA_ONLY_PICKER) return byClaim;
+    for (const item of todaysItems) {
+      const id = normId(item.row.claim.claim_entity_id);
+      if (!byClaim.has(id)) byClaim.set(id, item.scope);
+    }
+    const all = todaysAgendasQuery.agendasIn(() => true);
+    const debatesOf = (claimId: string) => todaysCountsByClaim?.get(claimId);
+    for (const space of all.spaces)
+      for (const section of space.sections)
+        for (const claimId of section.claimIds) {
+          const id = normId(claimId);
+          if (!byClaim.has(id))
+            byClaim.set(id, todaysCardScope(section.agendaId, section.listedOn, debatesOf(id), section.id));
+        }
+    for (const listing of all.earlier) {
+      const id = normId(listing.claimId);
+      if (!byClaim.has(id)) byClaim.set(id, todaysCardScope(listing.agendaId, listing.listedOn, debatesOf(id)));
+    }
+    return byClaim;
+  }, [todaysAgendasQuery, todaysCountsByClaim, todaysItems]);
   const renderClaimCard = (claim: DebateRematchClaim, position: number, previouslyDebated = false) => {
     const saidBy = debateSaidByFor(claim);
     return (
