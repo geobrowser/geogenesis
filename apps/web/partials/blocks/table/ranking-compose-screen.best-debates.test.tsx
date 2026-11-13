@@ -29,6 +29,7 @@ const mocks = vi.hoisted(() => ({
   canPublish: null as null | boolean,
   empty: [] as never[],
   bestDebatesEnabled: null as null | boolean,
+  bestDebatesSerial: undefined as undefined | boolean,
 }));
 
 vi.mock('~/core/blocks/ranking/best-debates', async importOriginal => ({
@@ -154,9 +155,11 @@ vi.mock('~/core/blocks/ranking/use-best-debate-displays', () => ({ useBestDebate
 vi.mock('./best-debates/use-best-debates-compose', () => ({
   useBestDebatesCompose: (args: {
     enabled: boolean;
+    serialPublishes?: boolean;
     saveMySubmission: (slots: { id: string; name: string | null; spaceId?: string }[]) => Promise<unknown>;
   }) => {
     mocks.bestDebatesEnabled = args.enabled;
+    mocks.bestDebatesSerial = args.serialPublishes;
     return {
       teamView: undefined,
       mobileTabs: undefined,
@@ -237,6 +240,8 @@ describe('RankingComposeScreen on the Best debates block', () => {
     expect(mocks.replace).not.toHaveBeenCalled();
     expect(mocks.canPublish).toBe(true);
     expect(mocks.bestDebatesEnabled).toBe(true);
+    // The screen's one Publish is off while it publishes; only the block queues publishes (GEO-3729).
+    expect(mocks.bestDebatesSerial).toBeFalsy();
     await act(async () => mocks.publish?.());
     // Through the Best debates publish (own spaces), built on the ballot the draft came from.
     expect(mocks.saveMySubmission).toHaveBeenCalledTimes(1);

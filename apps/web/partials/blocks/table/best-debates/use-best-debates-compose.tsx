@@ -27,6 +27,9 @@ import { BestDebatesToRankList } from './best-debates-to-rank-list';
 import type { PushDownSlot } from './push-down-slot';
 import { type PlacementOrigin, useBestDebatesPlacement } from './use-best-debates-placement';
 
+/** A published ballot an edit was built on: its order and grades. */
+export type PublishedBase = { ids: string[]; grades: BallotGrades };
+
 export type UseBestDebatesComposeArgs = {
   /** False on every other ranking block: every read is off and nothing here is used. */
   enabled: boolean;
@@ -41,7 +44,16 @@ export type UseBestDebatesComposeArgs = {
   hasUnpublishedChanges: boolean;
   nameOf: (entityId: string) => string | null;
   personalSpaceId: string | null | undefined;
-  saveMySubmission: (slots: RankingSubmissionSlot[]) => Promise<RankingSubmissionPublishResult | null>;
+  /**
+   * Writes the ballot. `basedOn` is the published ballot the edit was built on, when the caller
+   * fixed it before the publish had to wait its turn (`serialPublishes`).
+   */
+  saveMySubmission: (
+    slots: RankingSubmissionSlot[],
+    basedOn?: PublishedBase
+  ) => Promise<RankingSubmissionPublishResult | null>;
+  /** The published ballot edits are built on now (with `serialPublishes`). */
+  getPublishedBase?: () => PublishedBase;
   isSaving: boolean;
   /**
    * Runs after each publish that went out, with the ids this device sent (the screen generates its
@@ -89,6 +101,7 @@ export function useBestDebatesCompose({
   searchQuery = '',
   publishOnDone = false,
   serialPublishes = false,
+  getPublishedBase,
 }: UseBestDebatesComposeArgs) {
   const tools = useBestDebatesTeamTools();
   const [, setToast] = useToast();
@@ -133,7 +146,7 @@ export function useBestDebatesCompose({
    * never filed under the block's space. No vote is cast.
    */
   const publishNow = React.useCallback(
-    async (ids: string[], givenGrades?: BallotGrades): Promise<boolean> => {
+    async (ids: string[], givenGrades?: BallotGrades, basedOn?: PublishedBase): Promise<boolean> => {
       if (!personalSpaceId) {
         setToast(<span>Finish setting up your account to publish your ranking.</span>);
         return false;
@@ -166,7 +179,7 @@ export function useBestDebatesCompose({
         return false;
       }
 
-      const published = await saveMySubmission(publishable);
+      const published = await saveMySubmission(publishable, basedOn);
       if (!published) return false;
 
       if (leftOut > 0) {
@@ -196,12 +209,15 @@ export function useBestDebatesCompose({
   const publish = React.useCallback(
     (ids: string[], givenGrades?: BallotGrades): Promise<boolean> => {
       if (!serialPublishes) return publishNow(ids, givenGrades);
+      // Fixed now, with `ids`: a publish ahead of this one may merge in another device's change and
+      // move the base, and building this edit on the moved base would read that change as removed.
+      const basedOn = getPublishedBase?.();
       setQueued(count => count + 1);
-      return enqueueRankingPublish(queueKey, () => publishNow(ids, givenGrades)).finally(() =>
+      return enqueueRankingPublish(queueKey, () => publishNow(ids, givenGrades, basedOn)).finally(() =>
         setQueued(count => count - 1)
       );
     },
-    [publishNow, queueKey, serialPublishes]
+    [getPublishedBase, publishNow, queueKey, serialPublishes]
   );
   /** Resolves once no publish queued here is out (the block's grades wait on it). */
   const whenPublishesSettle = React.useCallback(() => whenRankingPublishQueueSettles(queueKey), [queueKey]);

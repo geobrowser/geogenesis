@@ -23,7 +23,7 @@ import { normId } from '~/core/utils/norm-id';
 
 import { rankingComposeSeed, useRankingComposeDraft } from '../use-ranking-compose-draft';
 import { type BestDebatesGrading, gradeChanges, useRecordGrade } from './best-debate-grading';
-import { useBestDebatesCompose } from './use-best-debates-compose';
+import { type PublishedBase, useBestDebatesCompose } from './use-best-debates-compose';
 import { useBestDebatesPushDownSlot } from './use-best-debates-push-down-slot';
 
 const NO_IDS: readonly string[] = [];
@@ -58,14 +58,12 @@ export function useBestDebatesBlockRanking({
   const pushDown = useBestDebatesPushDownSlot({ blockId: enabled ? blockId : null, pushedDownEntityIds });
   const { publish: publishClearingDownvotes, isPublishing } = useBestDebatesBallotPublisher();
 
-  const save = async (slots: RankingSubmissionSlot[]) => {
+  const getPublishedBase = () => ({ ids: getBasedOnOrderedIds(), grades: getBasedOnGrades() });
+  const save = async (slots: RankingSubmissionSlot[], basedOn?: PublishedBase) => {
+    const base = basedOn ?? getPublishedBase();
     const result = await publishClearingDownvotes(
       slots.map(slot => slot.id),
-      () =>
-        saveMySubmission(slots, undefined, {
-          basedOnOrderedIds: getBasedOnOrderedIds(),
-          basedOnGrades: getBasedOnGrades(),
-        })
+      () => saveMySubmission(slots, undefined, { basedOnOrderedIds: base.ids, basedOnGrades: base.grades })
     );
     return result?.published ?? null;
   };
@@ -94,6 +92,7 @@ export function useBestDebatesBlockRanking({
     publishOnDone: true,
     // Done and the popup's grades both publish from here, one at a time (GEO-3729).
     serialPublishes: true,
+    getPublishedBase,
   });
 
   const myRankById = React.useMemo(() => new Map(orderedIds.map((id, i) => [normId(id), i + 1])), [orderedIds]);

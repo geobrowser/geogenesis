@@ -91,4 +91,51 @@ describe('publishing from the Best debates block (GEO-3729)', () => {
       ['a', 'g'],
     ]);
   });
+
+  it('builds a queued publish on the base it was queued with, not on one a publish ahead moved', async () => {
+    resetRankingPublishStateForTests();
+    const first = deferred();
+    const bases: unknown[] = [];
+    let base = { ids: ['a'], grades: new Map() };
+    const saveMySubmission = vi.fn(async (slots: Array<{ id: string }>, basedOn?: unknown) => {
+      bases.push(basedOn);
+      if (bases.length === 1) await first.promise;
+      return {
+        rankEntityId: 'r',
+        authorSpaceId: 'me',
+        orderedEntityIds: slots.map(slot => slot.id),
+        grades: new Map(),
+        authorName: null,
+        authorAvatarUrl: null,
+        indexingSettled: Promise.resolve(null),
+      };
+    });
+    const { result } = renderHook(() =>
+      useBestDebatesCompose({
+        enabled: true,
+        blockId: 'block2',
+        blockSpaceId: 'debates',
+        isMobile: false,
+        orderedIds: ['a'],
+        setOrderedIds: vi.fn(),
+        hasUnpublishedChanges: false,
+        nameOf: () => null,
+        personalSpaceId: 'me',
+        saveMySubmission,
+        isSaving: false,
+        serialPublishes: true,
+        getPublishedBase: () => base,
+      })
+    );
+    const queuedWith = base;
+    await act(async () => {
+      void result.current.publish(['a', 'g']);
+      void result.current.publish(['a', 'p']);
+    });
+    // The first publish merges in another device's debate and moves the base.
+    base = { ids: ['a', 'y'], grades: new Map() };
+    await act(async () => first.resolve(undefined));
+    await act(async () => Promise.resolve());
+    expect(bases[1]).toBe(queuedWith);
+  });
 });
