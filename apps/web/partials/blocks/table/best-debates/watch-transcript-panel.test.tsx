@@ -190,4 +190,49 @@ describe('WatchTranscriptPanel', () => {
     act(() => line(3).blur());
     expect(tabStops()).toEqual(['Line 5']);
   });
+
+  function MomentPanel({ index, highlightKey = null }: { index: number; highlightKey?: string | null }) {
+    const block: WatchBlock = {
+      ...BLOCK,
+      key: `m${index}`,
+      momentIndex: index,
+      lines: BLOCK.lines.map(line => ({ ...line, key: line.key.replace(/^m0/, `m${index}`) })),
+    };
+    return (
+      <WatchTranscriptPanel
+        view="moments"
+        momentsOffered
+        onViewChange={() => undefined}
+        speed="1"
+        onSpeedChange={() => undefined}
+        content={{ status: 'ready', blocks: [block] }}
+        highlightKey={highlightKey}
+        showTurnTimes={false}
+        speakerOf={() => ({ name: 'Maya Chen', side: 'Agree', avatarUrl: null, avatarSeed: 'm' })}
+        momentNav={nav(index)}
+        onLine={() => undefined}
+      />
+    );
+  }
+
+  it('keeps focus on the moment step as the moment changes', () => {
+    const { rerender } = render(<MomentPanel index={0} />);
+    const next = screen.getByRole('button', { name: 'Next moment' });
+    next.focus();
+    rerender(<MomentPanel index={1} />);
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Next moment' }));
+    expect(screen.getByText('Moment 2 of 3')).toBeInTheDocument();
+  });
+
+  it('gives the tab stop back to the spoken line once a focused line has left the panel', () => {
+    const { rerender } = render(<MomentPanel index={0} highlightKey="m0:1" />);
+    screen.getByRole('button', { name: 'Line 3' }).focus();
+    rerender(<MomentPanel index={1} highlightKey="m1:0" />);
+    act(() => (document.activeElement as HTMLElement | null)?.blur());
+    rerender(<MomentPanel index={0} highlightKey="m0:1" />);
+    const stops = BLOCK.lines
+      .map(line => screen.getByRole('button', { name: line.text }))
+      .filter(el => el.tabIndex === 0);
+    expect(stops.map(el => el.textContent)).toEqual(['Line 1']);
+  });
 });

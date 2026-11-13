@@ -96,6 +96,10 @@ export function WatchTranscriptPanel({
   const firstKey = blocks?.[0]?.lines[0]?.key ?? null;
   /** The line with keyboard focus, which holds the lines' one tab stop while focus is among them. */
   const [focusedKey, setFocusedKey] = React.useState<string | null>(null);
+  // A focused line that left the panel (a new moment, a view switch) fires no blur on the way out.
+  React.useEffect(() => {
+    if (focusedKey !== null && !scrollerRef.current?.contains(document.activeElement)) setFocusedKey(null);
+  }, [blocks, focusedKey]);
   const tabStopKey = focusedKey !== null && order.has(focusedKey) ? focusedKey : (highlightKey ?? firstKey);
 
   /** A line works as a button from the keyboard; the arrow keys step to the line before or after. */
@@ -198,7 +202,9 @@ export function WatchTranscriptPanel({
             const speaker = speakerOf(block.slot);
             const nav = momentNav && block.momentIndex === momentNav.index ? momentNav : null;
             return (
-              <div key={block.key} className="border-b border-divider py-2.5 last:border-b-0">
+              // The Moments view's one block keeps its element as the reel moves on, so the moment
+              // stepper (and keyboard focus on it) stays put rather than being remounted.
+              <div key={nav ? 'moment' : block.key} className="border-b border-divider py-2.5 last:border-b-0">
                 {speaker || nav ? (
                   <div className="mb-1 flex min-h-7 items-center gap-1.5 text-metadataMedium">
                     {speaker ? (
