@@ -15,6 +15,7 @@ import { commentsFetchedQueryKey } from '~/core/io/query-keys';
 import { geo } from '~/core/sdk/geo-client';
 import { useReportError } from '~/core/state/status-bar-store';
 import { toUserFacingError } from '~/core/utils/error-diagnostics';
+import { useAccountAddress } from '~/core/wallet/account-readiness';
 
 import type { CommentEntity, CreateCommentParams } from '~/partials/comments/types';
 
@@ -94,7 +95,7 @@ export function useCreateComment(targetEntityId: string) {
   // in React Query's cache — no extra request. Stored in a ref so createComment can read the
   // latest value without being re-created when the profile eventually loads (otherwise the
   // memoized callback would close over a stale null profile until some other dep changed).
-  const walletAddress = smartAccount?.account.address ?? null;
+  const walletAddress = useAccountAddress();
   const { profile: cachedProfile } = useGeoProfile(walletAddress ?? undefined);
   const cachedProfileRef = React.useRef(cachedProfile);
   React.useEffect(() => {

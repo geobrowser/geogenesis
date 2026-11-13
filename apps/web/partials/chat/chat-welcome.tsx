@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 
-import { useSmartAccount } from '~/core/hooks/use-smart-account';
+import { useAccountReadiness } from '~/core/wallet/account-readiness';
 
 const MEMBER_SUGGESTIONS = [
   'Learn about Geo',
@@ -20,8 +20,9 @@ type Props = {
 };
 
 export function ChatWelcome({ onSuggestion, disabled }: Props) {
-  const { smartAccount, isLoading } = useSmartAccount();
-  const isLoggedIn = Boolean(smartAccount?.account.address);
+  const { state, address } = useAccountReadiness();
+  const isLoading = state === 'restoring';
+  const isLoggedIn = Boolean(address);
   const suggestions = isLoggedIn ? MEMBER_SUGGESTIONS : GUEST_SUGGESTIONS;
 
   if (isLoading) {

@@ -110,6 +110,10 @@ vi.mock('~/core/hooks/use-smart-account', () => ({
     smartAccount: mocks.accountAddress ? { account: { address: mocks.accountAddress } } : null,
   }),
 }));
+vi.mock('~/core/wallet/account-readiness', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/wallet/account-readiness')>()),
+  useAccountAddress: () => mocks.accountAddress ?? null,
+}));
 
 vi.mock('~/design-system/menu', () => ({
   Menu: ({ trigger, children }: { trigger: React.ReactNode; children: React.ReactNode }) => (

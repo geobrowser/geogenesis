@@ -2,8 +2,8 @@
 
 import { useState } from 'react';
 
-import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSpaceId } from '~/core/hooks/use-space-id';
+import { useAccountAddress } from '~/core/wallet/account-readiness';
 
 import { Create } from '~/design-system/icons/create';
 import { Menu, MenuItem } from '~/design-system/menu';
@@ -14,9 +14,9 @@ export function CreateEntityDropdown() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const spaceId = useSpaceId();
   const { canCreateInSpace, createEntity, createProperty, createSpace } = useCreateEntityActions(spaceId);
-  const { smartAccount } = useSmartAccount();
+  const address = useAccountAddress();
 
-  if (!smartAccount?.account.address) {
+  if (!address) {
     return null;
   }
 

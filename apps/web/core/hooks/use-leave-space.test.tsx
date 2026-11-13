@@ -36,8 +36,8 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: mocks.refresh }) }));
 vi.mock('~/core/state/status-bar-store', () => ({ useStatusBar: () => ({ dispatch: mocks.dispatch }) }));
-vi.mock('./use-smart-account', () => ({
-  useSmartAccount: () => ({ smartAccount: mocks.connected ? { account: { address: '0xviewer' } } : null }),
+vi.mock('~/core/wallet/account-readiness', () => ({
+  useAccountAddress: () => (mocks.connected ? '0xviewer' : null),
 }));
 vi.mock('./use-personal-space-id', () => ({
   usePersonalSpaceId: () => ({ personalSpaceId: MEMBER, isRegistered: mocks.registered }),

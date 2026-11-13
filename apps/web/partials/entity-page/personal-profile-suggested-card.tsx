@@ -11,7 +11,6 @@ import { usePathname, useRouter } from 'next/navigation';
 
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
-import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { fetchProfileBySpaceId } from '~/core/io/subgraph/fetch-profile';
 import { useEditable } from '~/core/state/editable-store';
@@ -19,6 +18,7 @@ import { useName } from '~/core/state/entity-page-store/entity-store';
 import { createPostFlowComplete, createPostFlowStart } from '~/core/state/personal-profile/create-post-flow';
 import { ensureProfilePageTab, runPersonalPostCreationFlow } from '~/core/utils/personal-post-flow';
 import { NavUtils } from '~/core/utils/utils';
+import { useAccountAddress } from '~/core/wallet/account-readiness';
 
 import { SmallButton, SquareButton } from '~/design-system/button';
 import { Check } from '~/design-system/icons/check';
@@ -57,8 +57,7 @@ export function PersonalProfileSuggestedCard({ spaceId, entityId, withBottomSpac
   const canEdit = useUserIsEditing(spaceId);
   const setSkillsRowIntent = useSetAtom(personalProfileSkillsRowIntentAtom);
   const { personalSpaceId, isFetched: personalSpaceFetched } = usePersonalSpaceId();
-  const { smartAccount } = useSmartAccount();
-  const address = smartAccount?.account.address;
+  const address = useAccountAddress() ?? undefined;
   const { profile, isFetched: geoProfileFetched } = useGeoProfile(address);
 
   const isMyPersonalSpaceRoute = personalSpaceIdsEqual(personalSpaceId, spaceId);

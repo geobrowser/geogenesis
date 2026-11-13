@@ -2,9 +2,8 @@
 
 import * as React from 'react';
 
+import { useAccountAddress } from '~/core/wallet/account-readiness';
 import { useIdentityToken, usePrivy } from '~/core/wallet/auth-hooks';
-
-import { useSmartAccount } from './use-smart-account';
 
 /** Bounds the wait for a signed-in account, so a stale wallet cookie can't hold the page up. */
 export const SIGNED_IN_ACCOUNT_WAIT_MS = 5_000;
@@ -51,8 +50,7 @@ function useClearStaleWalletCookie(cookieAddress: string | null, signedOut: bool
  * most `SIGNED_IN_ACCOUNT_WAIT_MS`.
  */
 export function useAwaitedSmartAccount(signedIn: boolean) {
-  const { smartAccount } = useSmartAccount();
-  const smartAccountAddress = smartAccount?.account.address ?? null;
+  const smartAccountAddress = useAccountAddress();
   const signedOut = usePrivySignedOut();
 
   const [waitOver, setWaitOver] = React.useState(false);
@@ -71,8 +69,8 @@ export function useAwaitedSmartAccount(signedIn: boolean) {
  *
  * Unlike `useAwaitedSmartAccount`, this does not wait for the account. The feed routes read the
  * wallet cookie themselves, so on the client the address only keys the cache, and the cookie the
- * server rendered the page with holds the very address `useSmartAccount` reports once ZeroDev has
- * built the account (it writes the cookie from it). Seeding the key from the cookie lets the first
+ * server rendered the page with holds the very address `useAccountAddress` reports once Privy has
+ * restored the session (the cookie is written from it). Seeding the key from the cookie lets the first
  * page go out at hydration, and it stays the same key when the account arrives, so nothing refetches.
  *
  * A request that carries a Privy identity token (`needsIdentityToken`) still has to wait, but only
@@ -81,9 +79,10 @@ export function useAwaitedSmartAccount(signedIn: boolean) {
  * has restored and found no session, and clears the stale cookie that started the wait.
  */
 export function useFeedViewer(cookieAddress: string | null, needsIdentityToken: boolean) {
-  const { smartAccount } = useSmartAccount();
   const { identityToken } = useIdentityToken();
-  const smartAccountAddress = smartAccount?.account.address ?? null;
+  const accountAddress = useAccountAddress();
+  const smartAccountAddress =
+    accountAddress && cookieAddress?.toLowerCase() === accountAddress.toLowerCase() ? cookieAddress : accountAddress;
   const signedOut = usePrivySignedOut();
   useClearStaleWalletCookie(cookieAddress, signedOut);
 

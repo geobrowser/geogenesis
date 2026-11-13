@@ -18,13 +18,13 @@ import { runEffectEither } from '~/core/telemetry/effect-runtime';
 import { encodeLeaveSpaceCall } from '~/core/utils/contracts/leave-space';
 import { readSpaceMembership } from '~/core/utils/contracts/read-space-membership';
 import { waitForIndexedValue } from '~/core/utils/wait-for-indexed-value';
+import { useAccountAddress } from '~/core/wallet/account-readiness';
 
 import { usePersonalSpaceId } from './use-personal-space-id';
-import { useSmartAccount } from './use-smart-account';
 import { useSmartAccountTransaction } from './use-smart-account-transaction';
 
 export function useLeaveSpace(spaceId: string, isMember: boolean) {
-  const { smartAccount } = useSmartAccount();
+  const address = useAccountAddress();
   const { personalSpaceId, isRegistered } = usePersonalSpaceId();
   const tx = useSmartAccountTransaction();
   const { dispatch } = useStatusBar();
@@ -40,7 +40,7 @@ export function useLeaveSpace(spaceId: string, isMember: boolean) {
   const mutation = useMutation({
     mutationKey,
     mutationFn: async () => {
-      if (!smartAccount) throw new Error('Please connect your wallet to leave this space');
+      if (!address) throw new Error('Please connect your wallet to leave this space');
       if (!personalSpaceId || !isRegistered) {
         throw new Error('You need a registered personal space to leave this space');
       }

@@ -23,6 +23,7 @@ import { useReportError } from '~/core/state/status-bar-store';
 import type { Entity } from '~/core/types';
 import { toUserFacingError } from '~/core/utils/error-diagnostics';
 import { validateEntityId } from '~/core/utils/utils';
+import { useAccountAddress } from '~/core/wallet/account-readiness';
 
 import { buildRankingVotes, mustMintFreshRank, rankingBallotRules } from './best-debates-ballot';
 import {
@@ -150,7 +151,7 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
   const getContext = useActionContext('ranking_composer', 'ranking', blockId);
   const { personalSpaceId } = usePersonalSpaceId();
   const { smartAccount } = useSmartAccount();
-  const walletAddress = smartAccount?.account.address;
+  const walletAddress = useAccountAddress() ?? undefined;
   const queryClient = useQueryClient();
   const { profile } = useGeoProfile(walletAddress);
   const [, setToast] = useToast();

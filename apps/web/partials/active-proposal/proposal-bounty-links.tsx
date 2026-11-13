@@ -12,7 +12,6 @@ import { BOUNTIES_RELATION_TYPE, BOUNTY_TYPE_ID, PLACEHOLDER_SPACE_IMAGE, PROPOS
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePublish } from '~/core/hooks/use-publish';
-import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { ID } from '~/core/id';
 import {
   getAllEntities,
@@ -25,6 +24,7 @@ import { fetchSpaceWithParents } from '~/core/io/subgraph/fetch-space-with-paren
 import { useStatusBar } from '~/core/state/status-bar-store';
 import type { Relation, Value } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
+import { useAccountAddress } from '~/core/wallet/account-readiness';
 
 import { Button } from '~/design-system/button';
 import { NativeGeoImage } from '~/design-system/geo-image';
@@ -94,8 +94,7 @@ export function ProposalBountiesProvider({
   children,
 }: ProviderProps) {
   const { personalSpaceId } = usePersonalSpaceId();
-  const { smartAccount } = useSmartAccount();
-  const address = smartAccount?.account.address;
+  const address = useAccountAddress() ?? undefined;
   const { profile } = useGeoProfile(address);
   const personalPageEntityId = profile?.id ?? null;
   const { makeProposal } = usePublish();
@@ -440,7 +439,7 @@ export function ProposalBountiesProvider({
   const isLoadingAvailable = isAuthor && (isLoadingSpaces || isLoadingRemote);
 
   const onSave = React.useCallback(async () => {
-    if (!isAuthor || !personalSpaceId || !smartAccount) return;
+    if (!isAuthor || !personalSpaceId || !address) return;
     if (!hasUnsaved) return;
 
     const toRemove = effectiveLinkedIds.filter(id => !draftIds.has(id));
@@ -551,7 +550,7 @@ export function ProposalBountiesProvider({
   }, [
     isAuthor,
     personalSpaceId,
-    smartAccount,
+    address,
     hasUnsaved,
     effectiveLinkedIds,
     draftIds,
@@ -572,7 +571,7 @@ export function ProposalBountiesProvider({
     () => ({
       showBounties,
       isAuthor,
-      smartAccountReady: Boolean(smartAccount),
+      smartAccountReady: Boolean(address),
       hasUnsaved,
       isSaving,
       n,
@@ -591,7 +590,7 @@ export function ProposalBountiesProvider({
     [
       showBounties,
       isAuthor,
-      smartAccount,
+      address,
       hasUnsaved,
       isSaving,
       n,

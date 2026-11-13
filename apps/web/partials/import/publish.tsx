@@ -6,10 +6,10 @@ import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useRouter } from 'next/navigation';
 
 import { useBulkPublish } from '~/core/hooks/use-publish';
-import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { Space } from '~/core/io/dto/spaces';
 import { Entities } from '~/core/utils/entity';
 import { getImagePath } from '~/core/utils/utils';
+import { useAccountAddress } from '~/core/wallet/account-readiness';
 
 import { Button, SquareButton } from '~/design-system/button';
 import { Close } from '~/design-system/icons/close';
@@ -48,11 +48,11 @@ const PublishImport = ({ spaceId, space }: PublishImportProps) => {
   const spaceAvatar = Entities.avatar(space?.entity?.relations);
   const [proposalName, setProposalName] = useState('');
   const isReadyToPublish = proposalName.length > 0;
-  const { smartAccount } = useSmartAccount();
+  const accountAddress = useAccountAddress();
   const { makeBulkProposal } = useBulkPublish();
 
   const handlePublish = async () => {
-    if (!smartAccount) return;
+    if (!accountAddress) return;
     await makeBulkProposal({
       values,
       relations,

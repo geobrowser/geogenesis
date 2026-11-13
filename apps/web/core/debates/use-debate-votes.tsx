@@ -34,6 +34,7 @@ import { useReportError } from '~/core/state/status-bar-store';
 import type { Entity, Relation, Value } from '~/core/types';
 import { toUserFacingError } from '~/core/utils/error-diagnostics';
 import { Publish } from '~/core/utils/publish';
+import { useAccountAddress } from '~/core/wallet/account-readiness';
 
 import { awaitSigningAccount, readRegisteredPersonalSpaceId } from '../hooks/cached-write-identity';
 import { useGeoProfile } from '../hooks/use-geo-profile';
@@ -191,7 +192,7 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
   // A Debate entity's id is its geo-chat debate id, so votes hang off it without a lookup.
   const debateEntityId = ID.uuidToHex(debate.id);
   const isVoting = useVoteInFlight(debateEntityId);
-  const { profile } = useGeoProfile(smartAccount?.account.address);
+  const { profile } = useGeoProfile(useAccountAddress() ?? undefined);
 
   const { data: votes, isSuccess: haveVotesAnswered } = useQuery({
     queryKey: votesQueryKey(debateEntityId),
