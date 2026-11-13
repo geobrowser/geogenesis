@@ -213,6 +213,32 @@ describe('manualReel', () => {
     });
   });
 
+  // GEO-3710: after a clip's last word geo-chat keeps only 10 ms clear of the speaker's own next
+  // word (Whisper packs them 40 ms apart), still 60 ms of the other debater's, and none over a word
+  // the other debater says across the end.
+  it('widens an end before the speaker’s own next word into half the gap, but never into a reply', () => {
+    const packed = [word(1, 1_000, 1_400), word(1, 1_440, 1_840), word(2, 1_880, 2_280), word(2, 3_000, 3_400)];
+    expect(manualReel([clip(1_000, 1_400), clip(1_440, 1_840), freeEnd(3_000, 3_450)], packed, ONE_CLOCK)).toEqual({
+      clips: [
+        { start: 0.75, end: 1.42 },
+        { start: 1.44, end: 1.84 },
+        { start: 2.75, end: 3.45 },
+      ],
+      exact: true,
+    });
+  });
+
+  it('gives an end no room over a word the other debater says across it', () => {
+    const crosstalk = [word(1, 1_000, 1_400), word(2, 1_300, 1_600), word(1, 2_000, 2_400), word(2, 3_000, 3_400)];
+    expect(manualReel([clip(1_000, 1_400), freeEnd(3_000, 3_450)], crosstalk, ONE_CLOCK)).toEqual({
+      clips: [
+        { start: 0.75, end: 1.4 },
+        { start: 2.75, end: 3.45 },
+      ],
+      exact: true,
+    });
+  });
+
   it('trims every edge to the stretch the recordings can cut, which exact would otherwise refuse', () => {
     // Two stretches on the player's clock: 0-2.45 s and 2.9-4 s, with a cut between.
     const turn = (index: number, slot: 1 | 2, output: [number, number], source: [number, number]) => ({
