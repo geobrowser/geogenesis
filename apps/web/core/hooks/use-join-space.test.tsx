@@ -6,7 +6,12 @@ import { Provider as JotaiProvider, createStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { lockedOutJoinAtom } from '~/core/state/locked-out-join';
-import { pendingActionsAtom } from '~/core/state/pending-actions';
+import {
+  type RedirectedPendingAction,
+  pendingActionsAtom,
+  redirectedPendingActions,
+  restorePendingActions,
+} from '~/core/state/pending-actions';
 
 import { PendingActionsRunner } from '~/partials/pending-actions-runner';
 
@@ -22,6 +27,7 @@ const mocks = vi.hoisted(() => ({
   accountSetupPending: false,
   authResolving: false,
   readFastPathRestricted: vi.fn(),
+  reportError: vi.fn(),
 }));
 
 vi.mock('~/core/hooks/use-privy-sign-in', () => ({ usePrivySignIn: () => mocks.promptSignIn }));
@@ -37,7 +43,7 @@ vi.mock('~/core/wallet/auth-hooks', () => ({
 vi.mock('~/core/utils/contracts/read-space-membership', () => ({
   readFastPathRestricted: mocks.readFastPathRestricted,
 }));
-vi.mock('~/core/state/status-bar-store', () => ({ useReportError: () => vi.fn() }));
+vi.mock('~/core/state/status-bar-store', () => ({ useReportError: () => mocks.reportError }));
 vi.mock('~/core/hooks/use-request-to-be-member', () => ({
   LOCKED_OUT: 'locked_out',
   useRequestToBeMember: () => ({
@@ -298,5 +304,59 @@ describe('useJoinSpace', () => {
       expect(queued()).toHaveLength(0);
       expect(renderJoin().result.current.optimisticRequested).toBe(false);
     });
+  });
+});
+
+describe('a join pressed before a Google sign-in', () => {
+  const savedJoin: RedirectedPendingAction = {
+    id: 'join:space-1',
+    label: 'your membership request',
+    requires: 'personalSpace',
+    intent: 'queued',
+    context: {
+      component: 'join_space_button',
+      page_path: '/space/space-1',
+      page_type: 'space',
+      page_view_id: 'pv-1',
+      target_id: 'space-1',
+      target_type: 'space',
+    },
+  };
+  const signedInWithSpace = () => {
+    mocks.smartAccount = { account: { address: '0xabc' } };
+    mocks.personalSpace = { personalSpaceId: 'personal-1', isRegistered: true, isLoading: false };
+  };
+
+  it('is kept for the redirect when pressed signed out', () => {
+    const { result } = renderJoin();
+    act(() => result.current.join());
+
+    expect(redirectedPendingActions(store)).toEqual([
+      expect.objectContaining({ id: 'join:space-1', label: 'your membership request', requires: 'personalSpace' }),
+    ]);
+  });
+
+  it('is sent once on the return, through the Join control on the page, and reads as requested until then', async () => {
+    restorePendingActions(store, [savedJoin]);
+    const { result } = renderJoin();
+    expect(result.current.optimisticRequested).toBe(true);
+
+    signedInWithSpace();
+    renderRunner();
+
+    await waitFor(() => expect(queued()).toHaveLength(0));
+    expect(mocks.requestToBeMemberAsync).toHaveBeenCalledTimes(1);
+    expect(mocks.requestToBeMemberAsync).toHaveBeenCalledWith(expect.objectContaining({ fromQueue: true }));
+  });
+
+  it('is dropped quietly for an account that is already a member', async () => {
+    mocks.requestToBeMemberAsync.mockResolvedValue(undefined);
+    restorePendingActions(store, [savedJoin]);
+    renderJoin();
+    signedInWithSpace();
+    renderRunner();
+
+    await waitFor(() => expect(queued()).toHaveLength(0));
+    expect(mocks.reportError).not.toHaveBeenCalled();
   });
 });

@@ -20,7 +20,11 @@ const mocks = vi.hoisted(() => ({
   queue: vi.fn(),
   cancelQueue: vi.fn(),
   signIn: vi.fn(),
-  queued: null as null | { ready: boolean; run: (intent: string, replay: { isCurrent: () => boolean }) => void },
+  queued: null as null | {
+    ready: boolean;
+    survivesRedirect?: boolean;
+    run: (intent: string, replay: { isCurrent: () => boolean }) => void;
+  },
   booking: null as null | { userId: string; initialSelectedStart?: string; entry?: string; onClose: () => void },
 }));
 vi.mock('../hooks', () => ({
@@ -293,5 +297,11 @@ describe('scheduling from a lobby person menu', () => {
     expect(mocks.queued?.ready).toBe(true);
     act(() => mocks.queued!.run(intent, { isCurrent: () => true }));
     expect(screen.getByRole('dialog', { name: 'Booking confirmation' })).toBeInTheDocument();
+  });
+
+  it('keeps the booking across a Google sign-in’s redirect', () => {
+    mocks.guest = true;
+    render(menu());
+    expect(mocks.queued?.survivesRedirect).toBe(true);
   });
 });

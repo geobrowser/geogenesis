@@ -60,6 +60,7 @@ export function LobbyScheduleProvider({ lobby, children }: { lobby: LobbyPageVie
     component: 'debate_matchmaking',
     label: 'scheduling your debate',
     liveOnly: true,
+    survivesRedirect: true,
     ready: !guest && viewerId !== null,
     run: (intent, { isCurrent }) => {
       if (!intent || !isCurrent()) return;

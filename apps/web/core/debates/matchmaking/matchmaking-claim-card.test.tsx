@@ -15,7 +15,7 @@ import {
   getResponseActionMethod,
 } from '~/core/responses/entity-response';
 import { clearLocalVotes, readLocalVotes } from '~/core/state/local-votes';
-import { pendingActionsAtom } from '~/core/state/pending-actions';
+import { pendingActionsAtom, redirectedPendingActions } from '~/core/state/pending-actions';
 import { closeSaveVotesPrompt, readSaveVotesPrompt } from '~/core/state/save-votes-prompt';
 
 import type { DebateClaimPositionSummary, DebateClaimSummary, MatchmakingReadiness } from '../api';
@@ -1169,6 +1169,18 @@ describe('while a new account is still being set up', () => {
     expect(readLocalVotes().votes).toHaveLength(0);
     expect(queued()).toEqual([expect.objectContaining({ intent: 'positive', requires: 'personalSpace' })]);
     expect(screen.getByRole('button', { name: /^Agree/ })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('keeps a queued side across a Google sign-in redirect', () => {
+    mocks.isConnected = false;
+    mocks.accountSetupPending = true;
+    renderCard(<MatchmakingClaimCard claim={claim} positions={positions} readiness={settingUp} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /^Agree/ }));
+
+    expect(redirectedPendingActions(queueStore)).toEqual([
+      expect.objectContaining({ id: `claim-position:${claim.claim_entity_id}:${claim.space_id}`, intent: 'positive' }),
+    ]);
   });
 
   it('switches the queued side, and takes it back when the same side is pressed again', () => {

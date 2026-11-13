@@ -9,6 +9,7 @@ type QueuedConfig = {
   id: string;
   requires: string;
   liveOnly: boolean;
+  survivesRedirect?: boolean;
   ready: boolean;
   run: (intent: string | undefined, replay: { live: boolean; isCurrent: () => boolean }) => Promise<void>;
 };
@@ -192,6 +193,13 @@ describe('useLobbyReminderPress', () => {
   // Copilot on #2863: the replay may run through the navbar or another lobby's card, neither of
   // which shows this lobby's error. A failure is thrown so the runner keeps it and offers Retry;
   // only a lobby that opened meanwhile (409) settles quietly.
+  // A Google sign-in leaves the page: the reminder comes back with only its lobby id, which is all
+  // the replays above decide from.
+  it('is kept across a Google sign-in’s redirect', () => {
+    renderHook(() => useLobbyReminderPress(null));
+    expect(mocks.config?.survivesRedirect).toBe(true);
+  });
+
   it('throws a failed replay for the runner to retry, and settles quietly on 409', async () => {
     mocks.lobbies = [lobby()];
     renderHook(() => useLobbyReminderReplay());

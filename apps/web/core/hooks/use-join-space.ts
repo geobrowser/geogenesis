@@ -59,6 +59,7 @@ export function useJoinSpace({ spaceId, space }: UseJoinSpaceArgs) {
     id: `join:${spaceId}`,
     component: 'join_space_button',
     label: 'your membership request',
+    survivesRedirect: true,
     // A lock-out opens the Ask-an-editor dialog; put the button back to Join rather than "requested".
     run: (_intent, { isCurrent }) =>
       requestToBeMemberAsync({ fromQueue: true, isCurrent }).then(outcome => {

@@ -8,7 +8,7 @@ import { Effect } from 'effect';
 import { Provider as JotaiProvider, createStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { pendingActionsAtom } from '~/core/state/pending-actions';
+import { type RedirectedPendingAction, pendingActionsAtom, restorePendingActions } from '~/core/state/pending-actions';
 
 import { EntityVoteButtons } from './entity-vote-buttons';
 
@@ -184,6 +184,45 @@ describe('replaying a queued vote with no control on screen', () => {
     answer(null);
     await running;
 
+    expect(mocks.submitResponseAsync).not.toHaveBeenCalled();
+  });
+});
+
+describe('a vote brought back from a Google sign-in', () => {
+  const savedVote: RedirectedPendingAction = {
+    id: `entity-vote:entity-1:${SPACE}`,
+    label: 'your vote',
+    requires: 'personalSpace',
+    intent: 'positive',
+    context: {
+      component: 'entity_vote_buttons',
+      page_path: '/space',
+      page_type: 'entity',
+      page_view_id: 'pv-1',
+      target_id: 'entity-1',
+      target_type: 'entity',
+    },
+  };
+
+  async function returnWithSavedVote() {
+    mocks.personalSpace = { personalSpaceId: 'profile-1', isRegistered: true, isLoading: false };
+    mocks.responseSpaceId = 'profile-1';
+    restorePendingActions(store, [savedVote]);
+    render(<EntityVoteButtons entityId="entity-1" spaceId={SPACE} responseKind="curation" />, { wrapper });
+    await act(() => queued()[0]!.run());
+  }
+
+  it('casts the side pressed, once', async () => {
+    await returnWithSavedVote();
+
+    expect(mocks.submitResponseAsync).toHaveBeenCalledTimes(1);
+    expect(mocks.submitResponseAsync).toHaveBeenCalledWith('positive');
+  });
+
+  it('is dropped quietly for an account that already holds that side', async () => {
+    mocks.serverDirection = 'positive';
+
+    await expect(returnWithSavedVote()).resolves.toBeUndefined();
     expect(mocks.submitResponseAsync).not.toHaveBeenCalled();
   });
 });

@@ -1,8 +1,10 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 
-import { Provider } from 'jotai';
+import { Provider, createStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { pendingCommentComposerAtom } from '~/core/state/pending-comment-intents';
 
 import { InlineCommentComposer, useInlineComposer } from './inline-comment-composer';
 
@@ -73,6 +75,21 @@ describe('InlineCommentComposer across sign-in', () => {
     );
 
     expect(screen.getByTestId('composing')).toHaveTextContent('true');
+  });
+
+  it('opens the box on the return from Google, from the press saved before the redirect', () => {
+    const store = createStore();
+    store.set(pendingCommentComposerAtom, { entityId: 'debate-1', replyToCommentId: null });
+    mocks.signedIn = true;
+
+    render(
+      <Provider store={store}>
+        <Host />
+      </Provider>
+    );
+
+    expect(screen.getByTestId('composing')).toHaveTextContent('true');
+    expect(store.get(pendingCommentComposerAtom)).toBeNull();
   });
 
   // Two composers can target the same debate — its own, and a reply under one of its comments — so the

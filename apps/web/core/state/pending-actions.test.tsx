@@ -5,7 +5,14 @@ import type { ReactNode } from 'react';
 import { Provider as JotaiProvider, createStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { pendingActionsAtom, useQueuedAction } from './pending-actions';
+import {
+  RESTORED_ACTION_CLAIM_MS,
+  type RedirectedPendingAction,
+  pendingActionsAtom,
+  redirectedPendingActions,
+  restorePendingActions,
+  useQueuedAction,
+} from './pending-actions';
 
 let store = createStore();
 const queued = () => store.get(pendingActionsAtom);
@@ -14,7 +21,13 @@ const wrapper = ({ children }: { children: ReactNode }) => <JotaiProvider store=
 function renderControl(run: (intent: string | undefined) => Promise<void> | void, ready = true) {
   return renderHook(
     (props: { ready: boolean; run: typeof run }) =>
-      useQueuedAction({ id: 'action-1', component: 'claim_position_control', label: 'x', ...props }),
+      useQueuedAction({
+        id: 'action-1',
+        component: 'claim_position_control',
+        label: 'x',
+        survivesRedirect: false,
+        ...props,
+      }),
     { wrapper, initialProps: { ready, run } }
   );
 }
@@ -129,5 +142,105 @@ describe('useQueuedAction', () => {
     await running;
 
     expect(run).not.toHaveBeenCalled();
+  });
+});
+
+describe('across a Google redirect', () => {
+  const saved: RedirectedPendingAction = {
+    id: 'action-1',
+    label: 'x',
+    requires: 'personalSpace',
+    intent: 'positive',
+    context: {
+      component: 'claim_position_control',
+      page_path: '/',
+      page_type: 'home',
+      page_view_id: 'pv',
+      target_id: 't',
+      target_type: 'claim',
+    },
+  };
+
+  it('keeps only the actions that opted in, without their closures', () => {
+    const kept = renderHook(
+      () =>
+        useQueuedAction({
+          id: 'kept',
+          component: 'claim_position_control',
+          label: 'kept',
+          run: vi.fn(),
+          survivesRedirect: true,
+        }),
+      { wrapper }
+    );
+    const dropped = renderHook(
+      () =>
+        useQueuedAction({
+          id: 'dropped',
+          component: 'claim_position_control',
+          label: 'dropped',
+          run: vi.fn(),
+          survivesRedirect: false,
+        }),
+      { wrapper }
+    );
+    act(() => kept.result.current.queue('negative'));
+    act(() => dropped.result.current.queue('positive'));
+
+    const redirected = redirectedPendingActions(store);
+    expect(redirected).toEqual([
+      expect.objectContaining({ id: 'kept', label: 'kept', requires: 'personalSpace', intent: 'negative' }),
+    ]);
+    expect(JSON.parse(JSON.stringify(redirected))).toEqual(redirected);
+  });
+
+  it('carries a restored action out through the control that mounts for it', async () => {
+    restorePendingActions(store, [saved]);
+    expect(queued()).toHaveLength(1);
+    const running = Promise.resolve(queued()[0]!.run());
+    await Promise.resolve();
+
+    const run = vi.fn();
+    const { result } = renderControl(run);
+    expect(result.current.intent).toBe('positive');
+    await running;
+
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(run).toHaveBeenCalledWith('positive', expect.objectContaining({ live: true }));
+  });
+
+  it('drops a restored action no control picks up, and does not run it when the control mounts later', async () => {
+    vi.useFakeTimers();
+    try {
+      restorePendingActions(store, [saved]);
+      const running = Promise.resolve(queued()[0]!.run());
+      await vi.advanceTimersByTimeAsync(RESTORED_ACTION_CLAIM_MS);
+      await running;
+      expect(queued()).toHaveLength(0);
+
+      const run = vi.fn();
+      const { result } = renderControl(run);
+      await act(async () => {});
+
+      expect(run).not.toHaveBeenCalled();
+      expect(result.current.isQueued).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps a press made again on the return page over the restored one', () => {
+    const { result } = renderControl(vi.fn());
+    act(() => result.current.queue('negative'));
+
+    restorePendingActions(store, [saved]);
+
+    expect(queued()).toHaveLength(1);
+    expect(result.current.intent).toBe('negative');
+  });
+
+  it('can be restored again after a redirect of its own', () => {
+    restorePendingActions(store, [saved]);
+    expect(redirectedPendingActions(store)).toEqual([saved]);
   });
 });

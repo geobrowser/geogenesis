@@ -739,6 +739,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
         id: `ranking-submit:${entityId}`,
         label: 'your ranking',
         requires: 'personalSpace',
+        survivesRedirect: false,
         run: () =>
           saveMySubmission(slots, rankingOpportunity.context).then(published => {
             if (!published) return;

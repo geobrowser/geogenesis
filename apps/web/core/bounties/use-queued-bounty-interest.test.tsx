@@ -5,7 +5,12 @@ import type { ReactNode } from 'react';
 import { Provider as JotaiProvider, createStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { pendingActionsAtom } from '~/core/state/pending-actions';
+import {
+  type RedirectedPendingAction,
+  pendingActionsAtom,
+  redirectedPendingActions,
+  restorePendingActions,
+} from '~/core/state/pending-actions';
 
 import { useQueuedBountyInterest } from './use-queued-bounty-interest';
 
@@ -129,5 +134,54 @@ describe('useQueuedBountyInterest', () => {
 
     expect(queued()).toHaveLength(0);
     expect(result.current.queued).toBe(false);
+  });
+});
+
+describe('interest pressed before a Google sign-in', () => {
+  const savedInterest: RedirectedPendingAction = {
+    id: 'bounty-interest:bounty-1',
+    label: 'your interest in this bounty',
+    requires: 'personalSpace',
+    intent: 'queued',
+    context: {
+      component: 'bounty_interest',
+      page_path: '/bounties/bounty-1',
+      page_type: 'bounty',
+      page_view_id: 'pv-1',
+      target_id: 'bounty-1',
+      target_type: 'bounty',
+    },
+  };
+
+  it('is kept for the redirect', () => {
+    const { result } = renderInterest(vi.fn());
+    act(() => result.current.queue());
+
+    expect(redirectedPendingActions(store)).toEqual([
+      expect.objectContaining({ id: 'bounty-interest:bounty-1', label: 'your interest in this bounty' }),
+    ]);
+  });
+
+  it('is recorded once on the return, through the card on the page, and drawn as registered until then', async () => {
+    restorePendingActions(store, [savedInterest]);
+    const register = vi.fn().mockResolvedValue(true);
+    const { result } = renderInterest(register);
+    expect(result.current.queued).toBe(true);
+
+    await queued()[0]!.run();
+
+    expect(register).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    ['the account is already interested', { alreadyInterested: true }],
+    ['the bounty no longer takes interest', { eligible: false }],
+  ])('is dropped quietly when %s', async (_case, viewer) => {
+    restorePendingActions(store, [savedInterest]);
+    const register = vi.fn().mockResolvedValue(true);
+    renderInterest(register, viewer);
+
+    await expect(Promise.resolve(queued()[0]!.run())).resolves.toBeUndefined();
+    expect(register).not.toHaveBeenCalled();
   });
 });
