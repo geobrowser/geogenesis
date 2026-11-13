@@ -74,7 +74,7 @@ export function BestDebatesToRankList({
         key={entityId}
         data-testid="best-debates-to-rank-row"
         className="flex w-full cursor-pointer items-center py-3 text-left"
-        onClick={() => watch?.(entityId)}
+        onClick={() => watch?.(entityId, 'row')}
         {...(draggable ? rankingEntityDragProps(entityId) : {})}
       >
         <BestDebatesTeamRowContent

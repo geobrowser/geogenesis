@@ -256,7 +256,7 @@ function RankingComposePickRow({
     return (
       <div
         data-testid="best-debates-pick-row"
-        onClick={() => watch(entityId)}
+        onClick={() => watch(entityId, 'row')}
         {...(draggable && !isInMyRanking ? rankingEntityDragProps(entityId) : {})}
         className="flex w-full cursor-pointer items-center py-3 text-left transition"
       >

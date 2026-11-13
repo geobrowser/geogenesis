@@ -21,7 +21,7 @@ describe('BestDebateThumb', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Watch Tariffs hurt farmers' }));
-    expect(watch).toHaveBeenCalledWith('d1');
+    expect(watch).toHaveBeenCalledWith('d1', 'poster');
     expect(onRow).not.toHaveBeenCalled();
 
     fireEvent.keyDown(screen.getByRole('button', { name: 'Watch Tariffs hurt farmers' }), { key: 'Enter' });

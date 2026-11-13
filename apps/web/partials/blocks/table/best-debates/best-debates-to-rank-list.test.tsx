@@ -97,7 +97,7 @@ describe('To rank', () => {
       </BestDebateWatchContext.Provider>
     );
     fireEvent.click(screen.getByText('Newest'));
-    expect(watch).toHaveBeenCalledWith('d1');
+    expect(watch).toHaveBeenCalledWith('d1', 'row');
     expect(onPlace).not.toHaveBeenCalled();
 
     fireEvent.keyDown(screen.getByRole('button', { name: 'Rank Newest' }), { key: 'Enter' });

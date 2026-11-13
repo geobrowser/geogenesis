@@ -196,7 +196,7 @@ describe('Best debates rows (Preston, 13 Nov)', () => {
     const { watch, onRank, onAdd } = renderRows({ isMobile });
 
     fireEvent.click(screen.getByText('Debate a'));
-    expect(watch).toHaveBeenCalledWith('a');
+    expect(watch).toHaveBeenCalledWith('a', 'row');
     expect(onRank).not.toHaveBeenCalled();
     expect(onAdd).not.toHaveBeenCalled();
 
@@ -219,7 +219,7 @@ describe('Best debates rows (Preston, 13 Nov)', () => {
     const { watch, onAdd } = renderRows({ orderedIds: ['b'] });
     expect(screen.queryByRole('button', { name: 'Rank Debate b' })).toBeNull();
     fireEvent.click(screen.getByText('Debate b'));
-    expect(watch).toHaveBeenCalledWith('b');
+    expect(watch).toHaveBeenCalledWith('b', 'row');
     expect(onAdd).not.toHaveBeenCalled();
   });
 });

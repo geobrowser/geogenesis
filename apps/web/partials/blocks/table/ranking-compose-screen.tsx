@@ -1025,5 +1025,5 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
 
 /** Best debates posters open their debate to watch; no other ranking block has them. */
 function MaybeWatch({ on, children }: { on: boolean; children: React.ReactNode }) {
-  return on ? <BestDebateWatchProvider>{children}</BestDebateWatchProvider> : <>{children}</>;
+  return on ? <BestDebateWatchProvider source="best_debates_ranking">{children}</BestDebateWatchProvider> : <>{children}</>;
 }
