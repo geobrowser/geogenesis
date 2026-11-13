@@ -527,18 +527,8 @@ export async function loadServedTranscriptTurns(debateId: string, debate: Debate
 }
 
 async function loadTranscriptTurns(debateId: string, debate: Debate) {
-  const speakerBySlot = new Map(
-    debate.participants.map(p => [
-      p.participant_slot as number,
-      { spaceEntityId: p.profile_space_id, displayName: p.display_name },
-    ])
-  );
   try {
-    const transcript = await geoChatGet<DebateTranscriptResponse>(`/debates/${debateId}/transcript?format=json`);
-    return mergeTranscriptSegmentsIntoTurns(
-      transcript.segments.map(segment => ({ participantSlot: segment.participant_slot, text: segment.text })),
-      speakerBySlot
-    );
+    return await loadServedTranscriptTurns(debateId, debate);
   } catch (error) {
     // A missing/failed transcript shouldn't block publishing the Debate + Video entities.
     console.warn(`[debate-acceptor] could not load transcript for ${debateId}; publishing without it.`, error);

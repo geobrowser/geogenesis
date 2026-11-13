@@ -252,6 +252,50 @@ describe('selectLateClaimOps', () => {
 });
 
 describe('publishMissingDebateClaims', () => {
+  it('submits the same ids the full publish writes for those claims', async () => {
+    const { deps: d, prepareOps } = deps({
+      loadClaims: async () => ({ transcriptTurns: turns, claims: [claimA, claimB, matched] }),
+    });
+    const { plan } = await dryPlan(d);
+    await publishMissingDebateClaims(DEBATE_ID, { dryRun: false, expect: plan.fingerprint }, d);
+    const late = submitted(prepareOps);
+
+    // What `publishDebateAsAcceptor` would have built for this debate: media, share card, motion
+    // topics and the debate tag included, so nothing about them may shift a claim's ids.
+    const full = buildDebatePublishDraft({
+      debateId: DEBATE_ID,
+      spaceId: SPACE,
+      claimEntityId: MOTION,
+      claimText: 'The motion',
+      participants: [
+        { spaceEntityId: YES, displayName: 'A', position: true, participantSlot: 0 },
+        { spaceEntityId: NO, displayName: 'B', position: false, participantSlot: 1 },
+      ],
+      videoUrl: 'https://example.com/video',
+      keyframeUrl: 'https://example.com/still',
+      ogImageUrl: 'ipfs://card',
+      transcriptTurns: turns,
+      claims: [claimA, claimB, matched],
+      tagClaimAsDebate: true,
+      claimTopics: [{ id: TOPIC, name: 'Topic' }],
+    });
+    const fullRelationIds = new Map(full.relations.map(r => [r.id, relationKey(r)]));
+    const fullValueKeys = new Set(full.values.map(v => `${v.id}|${valueKey(v)}`));
+    expect(late.relations.length).toBeGreaterThan(0);
+    for (const relation of late.relations) expect(fullRelationIds.get(relation.id)).toBe(relationKey(relation));
+    for (const value of late.values) expect(fullValueKeys.has(`${value.id}|${valueKey(value)}`)).toBe(true);
+    // And every claim op of the full publish is in the late edit (matched: no Name/Types).
+    const claimIds = new Set([k(STABLE_A), k(STABLE_B), k(EXISTING)]);
+    const lateIds = new Set(late.relations.map(r => r.id));
+    const missing = full.relations.filter(
+      r =>
+        (claimIds.has(k(r.fromEntity.id)) ||
+          (k(r.type.id) === k(DEBATE_CLAIMS_PROPERTY_ID) && claimIds.has(k(r.toEntity.id)))) &&
+        !lateIds.has(r.id)
+    );
+    expect(missing).toEqual([]);
+  });
+
   it('dry run: lists every missing statement and submits nothing', async () => {
     const { deps: d, submit } = deps();
     const result = await dryPlan(d);
@@ -359,32 +403,60 @@ describe('publishMissingDebateClaims', () => {
     expect(plan.turnMoved).toEqual([{ claimId: STABLE_A, text: 'Claim A.', linkedTurns: [1], geoChatTurns: [0] }]);
   });
 
-  it('writes only the statement that is missing when a claim is said in two turns', async () => {
+  it('links each statement of a claim said in two turns', async () => {
     const twice = { ...claimA, turnIndex: 1 };
     const { deps: d, prepareOps } = deps({
       loadClaims: async () => ({ transcriptTurns: turns, claims: [claimA, twice] }),
-      readBlocks: async () =>
-        publishedBlocks({ markdown: new Map([[BLOCK_1, 'Second turn.']]), transcriptBlocks: [BLOCK_1] }),
     });
     const { plan } = await dryPlan(d);
-    expect(plan.statements).toEqual([
-      { claimId: STABLE_A, turnIndex: 1, text: 'Claim A.', minted: true, matched: false },
+    expect(plan.statements.map(s => [s.turnIndex, s.claimId])).toEqual([
+      [0, STABLE_A],
+      [1, STABLE_A],
     ]);
-    expect(plan.skipped).toEqual([{ claimId: STABLE_A, turnIndex: 0, text: 'Claim A.', reason: 'block_missing' }]);
     await publishMissingDebateClaims(DEBATE_ID, { dryRun: false, expect: plan.fingerprint }, d);
-    const { relations } = submitted(prepareOps);
+    const { relations, values } = submitted(prepareOps);
     const links = relations.filter(r => k(r.type.id) === k(DEBATE_CLAIMS_PROPERTY_ID));
-    expect(links.map(r => k(r.fromEntity.id))).toEqual([k(BLOCK_1)]);
+    expect(links.map(r => k(r.fromEntity.id)).sort()).toEqual([k(BLOCK_0), k(BLOCK_1)].sort());
+    // Minted once.
+    expect(values.filter(v => k(v.entity.id) === STABLE_A && k(v.property.id) === k(NAME_PROPERTY_ID))).toHaveLength(1);
   });
 
-  it('skips a claim whose turn has no published block', async () => {
-    const { deps: d } = deps({
-      readBlocks: async () =>
-        publishedBlocks({ markdown: new Map([[BLOCK_1, 'Second turn.']]), transcriptBlocks: [BLOCK_1] }),
+  it.each([
+    ['a turn with no block', { markdown: new Map([[BLOCK_1, 'Second turn.']]), transcriptBlocks: [BLOCK_1] }],
+    ['an extra block', { transcriptBlocks: [BLOCK_0, BLOCK_1, 'ffffffffffffffffffffffffffffffff'] }],
+    ['a block listed twice', { transcriptBlocks: [BLOCK_0, BLOCK_1, BLOCK_1] }],
+    [
+      'blocks authored by the other speaker (turns shifted by a re-render)',
+      {
+        authors: new Map([
+          [BLOCK_0, [NO]],
+          [BLOCK_1, [YES]],
+        ]),
+      },
+    ],
+    [
+      'a co-author',
+      {
+        authors: new Map([
+          [BLOCK_0, [YES, NO]],
+          [BLOCK_1, [NO]],
+        ]),
+      },
+    ],
+  ])('links and rewrites nothing when the published transcript has %s', async (_, overrides) => {
+    const { deps: d, submit } = deps({
+      readBlocks: async () => publishedBlocks(overrides as Partial<PublishedBlocks>),
     });
-    const { plan } = await dryPlan(d);
-    expect(plan.skipped).toEqual([{ claimId: STABLE_A, turnIndex: 0, text: 'Claim A.', reason: 'block_missing' }]);
-    expect(plan.statements.map(s => s.claimId)).toEqual([STABLE_B]);
+    const result = await dryPlan(d, 'rewrite');
+    expect(result.status).toBe('up_to_date');
+    expect(result.plan.structure).toBe('mismatch');
+    expect(result.plan.statements).toEqual([]);
+    expect(result.plan.skipped.map(s => [s.claimId, s.reason])).toEqual([
+      [STABLE_A, 'block_structure_mismatch'],
+      [STABLE_B, 'block_structure_mismatch'],
+    ]);
+    expect(result.plan.blockRewrites).toEqual([]);
+    expect(submit).not.toHaveBeenCalled();
   });
 
   it('links an existing claim entity without describing it again', async () => {
@@ -451,6 +523,17 @@ describe('publishMissingDebateClaims', () => {
     expect(plan.held).toEqual([]);
   });
 
+  it('does not hold a failed-match claim whose entity is already a Claim in the space (nothing is minted)', async () => {
+    const close = { ...claimA, matchVerdict: 'error', matchBestScore: 0.99 };
+    const { deps: d } = deps({
+      loadClaims: async () => ({ transcriptTurns: turns, claims: [close, claimB] }),
+      lookupClaims: async () => [{ id: STABLE_A, spaces: [SPACE], types: [{ id: CLAIM_TYPE_ID }] }],
+    });
+    const { plan } = await dryPlan(d);
+    expect(plan.held).toEqual([]);
+    expect(plan.statements[0]).toMatchObject({ claimId: STABLE_A, minted: false });
+  });
+
   it('skips a claim with no stable id rather than minting a fresh one', async () => {
     const legacy = { ...claimB, stableEntityId: null };
     const { deps: d } = deps({ loadClaims: async () => ({ transcriptTurns: turns, claims: [claimA, legacy] }) });
@@ -479,7 +562,7 @@ describe('publishMissingDebateClaims', () => {
       const { plan } = await dryPlan(d, 'keep');
       expect(plan.driftedTurns).toEqual([0]);
       expect(plan.blockRewrites).toEqual([]);
-      expect(plan.structure).toBe('not_checked');
+      expect(plan.structure).toBe('lines_up');
     });
 
     it('rewrite: sets a drifted block’s Markdown to geo-chat’s turn text when the structure lines up', async () => {
@@ -513,37 +596,6 @@ describe('publishMissingDebateClaims', () => {
       const { plan } = await dryPlan(d, 'rewrite');
       expect(plan.blockRewrites).toEqual([]);
       expect(plan.rewriteSkipped).toEqual([{ turnIndex: 0, reason: 'edited_on_graph' }]);
-    });
-
-    it.each([
-      ['an extra block', { transcriptBlocks: [BLOCK_0, BLOCK_1, 'ffffffffffffffffffffffffffffffff'] }],
-      ['a block listed twice', { transcriptBlocks: [BLOCK_0, BLOCK_1, BLOCK_1] }],
-      [
-        'another author',
-        {
-          authors: new Map([
-            [BLOCK_0, [NO]],
-            [BLOCK_1, [NO]],
-          ]),
-        },
-      ],
-      [
-        'a co-author',
-        {
-          authors: new Map([
-            [BLOCK_0, [YES, NO]],
-            [BLOCK_1, [NO]],
-          ]),
-        },
-      ],
-    ])('rewrite: rewrites nothing when the published transcript has %s', async (_, overrides) => {
-      const { deps: d } = deps({ readBlocks: async () => publishedBlocks(overrides as Partial<PublishedBlocks>) });
-      const { plan } = await dryPlan(d, 'rewrite');
-      expect(plan.structure).toBe('mismatch');
-      expect(plan.blockRewrites).toEqual([]);
-      expect(plan.rewriteSkipped).toEqual([{ turnIndex: 0, reason: 'structure_mismatch' }]);
-      // The claims are still linked: the blocks exist.
-      expect(plan.statements.map(s => s.claimId)).toEqual([STABLE_A, STABLE_B]);
     });
 
     it('fingerprint changes with the text before and after the rewrite', async () => {

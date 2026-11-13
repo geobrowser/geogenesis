@@ -89,7 +89,7 @@ export type LateClaimStatement = {
   matched: boolean;
 };
 
-export type LateClaimSkipReason = 'block_missing' | 'no_stable_id';
+export type LateClaimSkipReason = 'block_structure_mismatch' | 'no_stable_id';
 
 export type LateClaimsPlan = {
   debateId: string;
@@ -99,8 +99,11 @@ export type LateClaimsPlan = {
   skipped: Array<{ claimId: string | null; turnIndex: number; text: string; reason: LateClaimSkipReason }>;
   /** Claims already linked from a block of this debate, which geo-chat now also places on turns that do not link them. */
   turnMoved: Array<{ claimId: string; text: string; linkedTurns: number[]; geoChatTurns: number[] }>;
-  /** Whether the published transcript lines up with geo-chat's turns one for one. Checked only for `rewrite`. */
-  structure: 'lines_up' | 'mismatch' | 'not_checked';
+  /**
+   * Whether the published transcript lines up with geo-chat's turns one for one. Nothing is linked
+   * to a block, or rewritten, unless it does.
+   */
+  structure: 'lines_up' | 'mismatch';
   structureProblems: string[];
   blockRewrites: Array<{ turnIndex: number; blockId: string; before: string; after: string }>;
   rewriteSkipped: Array<{ turnIndex: number; reason: 'edited_on_graph' | 'structure_mismatch' }>;
@@ -302,6 +305,25 @@ async function planLateClaims(
     }
   }
 
+  // Which stable ids are already Claims in this space (the early publish, or an earlier run): those
+  // get links only, and are never held, since linking them mints nothing.
+  const spaceKey = key(spaceId);
+  const stableIds = [
+    ...new Set(
+      reused.flatMap(claim => (!claim.existingClaimEntityId && claim.stableEntityId ? [key(claim.stableEntityId)] : []))
+    ),
+  ];
+  const existing = stableIds.length > 0 ? await d.lookupClaims(stableIds, spaceId) : [];
+  const existingClaims = new Set(
+    existing
+      .filter(
+        entity =>
+          entity.types.some(type => key(type.id) === key(CLAIM_TYPE_ID)) &&
+          entity.spaces.some(space => key(space) === spaceKey)
+      )
+      .map(entity => key(entity.id))
+  );
+
   const held: LateClaimsPlan['held'] = [];
   const skipped: LateClaimsPlan['skipped'] = [];
   const candidates: DebateClaimInput[] = [];
@@ -312,9 +334,11 @@ async function planLateClaims(
       skipped.push({ claimId: null, turnIndex: claim.turnIndex, text: claim.text, reason: 'no_stable_id' });
       continue;
     }
-    // A claim the debate already links is published, whatever its match said; only new ones are held.
+    // Held only when it would be minted: a claim the debate already links, or whose entity exists,
+    // is on the graph whatever its match said.
     if (
       !linkedTurnsByClaim.has(key(id)) &&
+      !existingClaims.has(key(id)) &&
       !claim.existingClaimEntityId &&
       claim.matchVerdict === 'error' &&
       typeof claim.matchBestScore === 'number' &&
@@ -329,18 +353,12 @@ async function planLateClaims(
   const claims = await d.applyStancePolicy(candidates, spaceId, motionId, { debateId, strict: true });
 
   const claimId = (claim: DebateClaimInput) => key((claim.existingClaimEntityId || claim.stableEntityId) as string);
-  const stableIds = [...new Set(claims.filter(c => !c.existingClaimEntityId).map(claimId))];
-  const existing = stableIds.length > 0 ? await d.lookupClaims(stableIds, spaceId) : [];
-  const spaceKey = key(spaceId);
-  const existingClaims = new Set(
-    existing
-      .filter(
-        entity =>
-          entity.types.some(type => key(type.id) === key(CLAIM_TYPE_ID)) &&
-          entity.spaces.some(space => key(space) === spaceKey)
-      )
-      .map(entity => key(entity.id))
-  );
+
+  // The published transcript must be geo-chat's turns one for one before anything is attached to a
+  // block: a re-render that changed the turns leaves derived blocks that exist but hold another
+  // turn, or another speaker, and a claim linked there would be credited to the wrong words.
+  const structureProblems = checkStructure(turns, blockIdByTurn, published);
+  const structure: LateClaimsPlan['structure'] = structureProblems.length === 0 ? 'lines_up' : 'mismatch';
 
   // Statements: one per (turn, claim). A claim the debate links from any block is left alone.
   const statements: LateClaimStatement[] = [];
@@ -365,9 +383,8 @@ async function planLateClaims(
       }
       continue;
     }
-    const blockId = blockIdByTurn.get(claim.turnIndex) as string;
-    if (!published.markdown.has(blockId)) {
-      skipped.push({ claimId: id, turnIndex: claim.turnIndex, text: claim.text, reason: 'block_missing' });
+    if (structure !== 'lines_up') {
+      skipped.push({ claimId: id, turnIndex: claim.turnIndex, text: claim.text, reason: 'block_structure_mismatch' });
       continue;
     }
     statements.push({
@@ -387,13 +404,9 @@ async function planLateClaims(
       return published.markdown.has(blockId) && norm(published.markdown.get(blockId)) !== norm(turn.text);
     })
     .map(turn => turn.turnIndex);
-  let structure: LateClaimsPlan['structure'] = 'not_checked';
-  const structureProblems: string[] = [];
   const blockRewrites: LateClaimsPlan['blockRewrites'] = [];
   const rewriteSkipped: LateClaimsPlan['rewriteSkipped'] = [];
   if (blockText === 'rewrite' && driftedTurns.length > 0) {
-    structureProblems.push(...checkStructure(turns, blockIdByTurn, published));
-    structure = structureProblems.length === 0 ? 'lines_up' : 'mismatch';
     // The machine text a block was published with: geo-chat's served transcript, merged as the
     // full publish merges it. A block holding anything else was edited on the graph and is kept.
     const served = structure === 'lines_up' ? await d.loadServedTurns(debateId, debate) : [];
