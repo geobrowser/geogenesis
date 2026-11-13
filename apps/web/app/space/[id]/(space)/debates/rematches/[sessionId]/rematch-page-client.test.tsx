@@ -8602,7 +8602,7 @@ describe('agenda-only picker', () => {
     mocks.cardSurfaces.length = 0;
     await showMatches();
     await showOpponentClaims();
-    const card = mocks.cardSurfaces.findLast(surface => surface.claimId === ON_AGENDA_THEIRS);
+    const card = [...mocks.cardSurfaces].reverse().find(surface => surface.claimId === ON_AGENDA_THEIRS);
     expect(card?.listId).toBe('rematch_their_positions');
     expect(card?.scope).toMatchObject({
       agenda_id: 'agenda-today',
