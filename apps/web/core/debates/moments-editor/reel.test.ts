@@ -264,6 +264,16 @@ describe('manualReel', () => {
     });
   });
 
+  it('takes the higher slot as the last of two debaters’ words that start together, as geo-chat does', () => {
+    // Debater 1 says 1-1.3 s; debater 2's "mm" starts with it and ends at 1.2 s. geo-chat orders the
+    // tie by slot, so "mm" is the last word, and debater 1's word across its end leaves no room.
+    const tied = [word(1, 1_000, 1_300), word(2, 1_000, 1_200, 'mm'), word(1, 3_000, 3_400)];
+    expect(manualReel([clip(1_000, 1_300), freeEnd(3_000, 3_450)], tied, ONE_CLOCK).clips[0]).toEqual({
+      start: 0.75,
+      end: 1.3,
+    });
+  });
+
   it('gives an end no room over a word the other debater says across it', () => {
     const crosstalk = [word(1, 1_000, 1_400), word(2, 1_300, 1_600), word(1, 2_000, 2_400), word(2, 3_000, 3_400)];
     expect(manualReel([clip(1_000, 1_400), freeEnd(3_000, 3_450)], crosstalk, ONE_CLOCK)).toEqual({
