@@ -92,7 +92,9 @@ describe("useTrackedLogin's Privy fallback", () => {
   // Google redirects and drops the queue; the flag accepts that rather than hiding Google.
   it('adds Google with a pending action queued', () => {
     const { store, login } = renderLogin();
-    store.set(pendingActionsAtom, [{ id: 'vote', label: 'Vote', requires: 'auth', run: () => {} }]);
+    store.set(pendingActionsAtom, [
+      { id: 'vote', label: 'Vote', requires: 'auth', survivesRedirect: false, run: () => {} },
+    ]);
     login({ component: 'test' }, undefined, fallback);
     expect(mocks.login).toHaveBeenCalledWith({ loginMethods: ['email', 'google'] });
   });

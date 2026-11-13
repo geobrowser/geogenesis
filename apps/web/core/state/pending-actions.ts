@@ -38,7 +38,7 @@ export type PendingAction = {
    */
   intent?: string;
   onSignedOut?: SignedOutOutcome;
-  survivesRedirect?: boolean;
+  survivesRedirect: boolean;
 };
 
 /** A queued action as the runner sees it: always runnable, with the press's analytics context. */
