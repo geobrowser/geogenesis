@@ -92,7 +92,14 @@ export function RankButton({ name, onClick, disabled }: { name: string; onClick:
       aria-label={`Rank ${name}`}
       title="Rank"
       disabled={disabled}
-      onClick={onClick}
+      // Rows on the ranking screen open the debate to watch, so the press stops here.
+      onClick={event => {
+        event.stopPropagation();
+        onClick();
+      }}
+      onKeyDown={event => event.stopPropagation()}
+      onPointerDown={event => event.stopPropagation()}
+      draggable={false}
       className="grid size-8 shrink-0 place-items-center rounded-md border border-grey-02 bg-white text-text transition-colors hover:border-text disabled:cursor-not-allowed disabled:opacity-50 md:size-11"
     >
       <RankingChart />
@@ -103,7 +110,8 @@ export function RankButton({ name, onClick, disabled }: { name: string; onClick:
 /**
  * One row of the team column, the same in All and To rank (mockups 07 and 08): the grip where it
  * can be dragged, the team place in All, the poster, claim and meta, who has ranked it, and on the
- * right either "You: #N" or the rank mark; Push down follows the badge. The row itself is the button that places it.
+ * right either "You: #N" or the Rank button; Down rank follows the badge. The row itself opens the debate to watch
+ * (Preston, 13 Nov), and only the Rank button starts ranking it.
  */
 export function BestDebatesTeamRowContent({
   entityId,
@@ -114,6 +122,7 @@ export function BestDebatesTeamRowContent({
   myRank,
   draggable,
   onPushDown,
+  onRank,
 }: {
   entityId: string;
   name: string;
@@ -125,6 +134,8 @@ export function BestDebatesTeamRowContent({
   draggable: boolean;
   /** Push it down from the row (Preston, 12 Nov), inline after the ranked-by badge. */
   onPushDown?: () => void;
+  /** Starts ranking it. Without it (or once it's in your ranking) there's no Rank button. */
+  onRank?: () => void;
 }) {
   return (
     <div className="flex w-full min-w-0 items-center gap-3" data-testid="best-debates-team-row">
@@ -147,14 +158,9 @@ export function BestDebatesTeamRowContent({
           debateAside={
             myRank ? (
               <span className="text-breadcrumb whitespace-nowrap text-grey-04 tabular-nums">You: #{myRank}</span>
-            ) : (
-              <span
-                className="grid size-8 place-items-center rounded-md border border-grey-02 bg-white text-text md:size-11"
-                aria-hidden
-              >
-                <RankingChart />
-              </span>
-            )
+            ) : onRank ? (
+              <RankButton name={name} onClick={onRank} />
+            ) : null
           }
         />
       </div>

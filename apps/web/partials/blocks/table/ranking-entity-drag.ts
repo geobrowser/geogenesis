@@ -5,7 +5,8 @@ import type * as React from 'react';
  *
  * Native HTML drag and drop, separate from the dnd-kit sorting inside the list: the sources sit in
  * another column with their own scroll, and all a drop needs is an id and an index. Touch devices
- * don't fire these events; on a phone the ranker taps a debate to place it by comparison instead.
+ * don't fire these events; on a phone the ranker uses a row's Rank button to place it by comparison
+ * instead.
  */
 export const RANKING_ENTITY_DRAG_TYPE = 'application/x-geo-ranking-entity';
 

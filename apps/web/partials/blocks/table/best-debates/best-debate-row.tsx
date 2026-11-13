@@ -24,11 +24,17 @@ import { SpaceThumb } from '~/partials/explore/space-thumb';
  */
 export const BestDebateDisplaysContext = React.createContext<ReadonlyMap<string, BestDebateRowData> | null>(null);
 
+/** Where a watch was opened from: the poster, or (on the ranking screen) a press on the row. */
+export type BestDebateWatchEntry = 'poster' | 'row';
+
 /**
- * Opens a debate to watch, from its poster (Preston, 12 Nov): provided by the block and the ranking
- * screen, which draw the watch dialog. Without it the poster is only a picture.
+ * Opens a debate to watch, from its poster (Preston, 12 Nov) or, on the ranking screen, its row
+ * (13 Nov): provided by the block and the ranking screen, which draw the watch dialog. Without it
+ * the poster is only a picture.
  */
-export const BestDebateWatchContext = React.createContext<((entityId: string) => void) | null>(null);
+export const BestDebateWatchContext = React.createContext<
+  ((entityId: string, entry: BestDebateWatchEntry) => void) | null
+>(null);
 
 export function useBestDebateRowData(entityId: string): BestDebateRowData | null | undefined {
   const displays = React.useContext(BestDebateDisplaysContext);
@@ -61,9 +67,10 @@ export function BestDebateThumb({
 }) {
   const [stillFailed, setStillFailed] = React.useState(false);
   const watch = React.useContext(BestDebateWatchContext);
-  // A span with a button's role rather than a <button>: the poster sits inside rows that are
-  // buttons themselves, and a button may not hold another. Its press stops there, so the row's own
-  // action (place it, open the side panel) doesn't run as well.
+  // A span with a button's role rather than a <button>, since the poster can sit inside a row that
+  // handles presses itself. On the ranking screen it is the keyboard and screen-reader Watch control
+  // for its row, which is only a click target (13 Nov). Its press stops there, so the row's own
+  // action doesn't run as well.
   const interactive = watch
     ? {
         role: 'button' as const,
@@ -73,13 +80,13 @@ export function BestDebateThumb({
         onClick: (event: React.MouseEvent) => {
           event.preventDefault();
           event.stopPropagation();
-          watch(entityId);
+          watch(entityId, 'poster');
         },
         onKeyDown: (event: React.KeyboardEvent) => {
           if (event.key !== 'Enter' && event.key !== ' ') return;
           event.preventDefault();
           event.stopPropagation();
-          watch(entityId);
+          watch(entityId, 'poster');
         },
         onPointerDown: (event: React.PointerEvent) => event.stopPropagation(),
         draggable: false,

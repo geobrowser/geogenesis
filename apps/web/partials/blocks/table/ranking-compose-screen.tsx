@@ -937,7 +937,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
 
   return (
     <BestDebateDisplaysContext.Provider value={isBestDebates ? bestDebateDisplays : null}>
-      <MaybeWatch on={isBestDebates}>
+      <MaybeWatch on={isBestDebates} blockId={entityId} spaceId={spaceId}>
         <RankingComposeBallotContext.Provider value={composeBallot}>
           <RankingComposeCreateEntityPanel onFinished={addToMyRanking} rankingName={displayName} />
           <RankingComposeEntitySheet target={entitySheetTarget} onClose={() => setEntitySheetTarget(null)} />
@@ -1024,6 +1024,22 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
 }
 
 /** Best debates posters open their debate to watch; no other ranking block has them. */
-function MaybeWatch({ on, children }: { on: boolean; children: React.ReactNode }) {
-  return on ? <BestDebateWatchProvider>{children}</BestDebateWatchProvider> : <>{children}</>;
+function MaybeWatch({
+  on,
+  blockId,
+  spaceId,
+  children,
+}: {
+  on: boolean;
+  blockId: string;
+  spaceId: string;
+  children: React.ReactNode;
+}) {
+  return on ? (
+    <BestDebateWatchProvider source="best_debates_ranking" blockId={blockId} spaceId={spaceId}>
+      {children}
+    </BestDebateWatchProvider>
+  ) : (
+    <>{children}</>
+  );
 }

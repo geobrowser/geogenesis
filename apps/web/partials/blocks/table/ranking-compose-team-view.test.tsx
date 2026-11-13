@@ -4,7 +4,8 @@ import * as React from 'react';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { BestDebateDisplaysContext } from './best-debates/best-debate-row';
+import { BestDebateDisplaysContext, BestDebateWatchContext } from './best-debates/best-debate-row';
+import { RankButton } from './best-debates/best-debates-team-row';
 import {
   RankingComposeGlobalRanking,
   type RankingComposeTeamMode,
@@ -34,12 +35,22 @@ const entries = new Map(
   ['a', 'b'].map(id => [id, { entityId: id, name: `Debate ${id}`, description: null, image: null }])
 );
 
-function Column({ teamView, onAdd = vi.fn() }: { teamView?: RankingComposeTeamView; onAdd?: (id: string) => void }) {
+function Column({
+  teamView,
+  onAdd = vi.fn(),
+  isMobile = false,
+  orderedIds = [],
+}: {
+  teamView?: RankingComposeTeamView;
+  onAdd?: (id: string) => void;
+  isMobile?: boolean;
+  orderedIds?: string[];
+}) {
   return (
     <RankingComposeGlobalRanking
-      isMobile={false}
+      isMobile={isMobile}
       spaceId="s"
-      orderedIds={[]}
+      orderedIds={orderedIds}
       filteredRankedIds={['a', 'b']}
       filteredUnrankedIds={[]}
       globalRankByEntityId={
@@ -148,6 +159,68 @@ describe('the team column (Best debates)', () => {
     expect(screen.getByRole('tab', { name: 'Global ranking' })).toBeTruthy();
     expect(screen.queryByRole('region', { name: 'Team ranking' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Add Debate a to my ranking' }).getAttribute('draggable')).toBeNull();
+  });
+});
+
+describe('Best debates rows (Preston, 13 Nov)', () => {
+  // The row both lists draw: the claim, then a Rank button unless it's already in your ranking.
+  const teamView = (onRank: (id: string) => void): RankingComposeTeamView => ({
+    mode: 'all',
+    onModeChange: vi.fn(),
+    toRankCount: 0,
+    toRankPanel: null,
+    renderRow: ({ entityId, name, isInMyRanking }) => (
+      <span>
+        {name}
+        {isInMyRanking ? null : <RankButton name={name} onClick={() => onRank(entityId)} />}
+      </span>
+    ),
+  });
+
+  const renderRows = ({ isMobile = false, orderedIds = [] as string[] } = {}) => {
+    const watch = vi.fn();
+    const onRank = vi.fn();
+    const onAdd = vi.fn();
+    render(
+      <BestDebateWatchContext.Provider value={watch}>
+        <Column isMobile={isMobile} orderedIds={orderedIds} onAdd={onAdd} teamView={teamView(onRank)} />
+      </BestDebateWatchContext.Provider>
+    );
+    return { watch, onRank, onAdd };
+  };
+
+  it.each([
+    ['on a desktop', false],
+    ['on a phone', true],
+  ])('opens a debate to watch from its row and ranks it only from Rank, %s', (_label, isMobile) => {
+    const { watch, onRank, onAdd } = renderRows({ isMobile });
+
+    fireEvent.click(screen.getByText('Debate a'));
+    expect(watch).toHaveBeenCalledWith('a', 'row');
+    expect(onRank).not.toHaveBeenCalled();
+    expect(onAdd).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Rank Debate a' }));
+    expect(onRank).toHaveBeenCalledWith('a');
+    expect(watch).toHaveBeenCalledTimes(1);
+    expect(onAdd).not.toHaveBeenCalled();
+  });
+
+  it('keeps the row out of the accessibility tree as a button, so Rank stays reachable', () => {
+    renderRows();
+    expect(screen.queryByRole('button', { name: /Add Debate a/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Watch Debate a/ })).toBeNull();
+    const row = screen.getAllByTestId('best-debates-pick-row')[0];
+    expect(row.getAttribute('role')).toBeNull();
+    expect(row.getAttribute('draggable')).toBe('true');
+  });
+
+  it('opens a debate already in your ranking to watch too, with no Rank button', () => {
+    const { watch, onAdd } = renderRows({ orderedIds: ['b'] });
+    expect(screen.queryByRole('button', { name: 'Rank Debate b' })).toBeNull();
+    fireEvent.click(screen.getByText('Debate b'));
+    expect(watch).toHaveBeenCalledWith('b', 'row');
+    expect(onAdd).not.toHaveBeenCalled();
   });
 });
 

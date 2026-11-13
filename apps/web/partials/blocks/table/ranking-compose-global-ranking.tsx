@@ -19,7 +19,7 @@ import { Button } from '~/design-system/button';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Search } from '~/design-system/icons/search';
 
-import { BestDebateDisplaysContext } from './best-debates/best-debate-row';
+import { BestDebateDisplaysContext, BestDebateWatchContext } from './best-debates/best-debate-row';
 import { BestDebatesMatchingList } from './best-debates/best-debates-matching-list';
 import { BestDebatesGroupedRows } from './best-debates/best-debates-team-row';
 import {
@@ -247,8 +247,26 @@ function RankingComposePickRow({
   /** Best debates: the team row both lists share, in place of the generic row. */
   content?: React.ReactNode;
 }) {
+  // Best debates (Preston, 13 Nov): a press on the row opens the debate to watch, ranked or not,
+  // and only the row's Rank button starts ranking it. The row is not a button itself, so the Rank,
+  // Down rank and poster (Watch) controls inside it stay reachable to keyboards and screen readers;
+  // the poster is the row's Watch control for them.
+  const watch = React.useContext(BestDebateWatchContext);
+  if (content && watch) {
+    return (
+      <div
+        data-testid="best-debates-pick-row"
+        onClick={() => watch(entityId, 'row')}
+        {...(draggable && !isInMyRanking ? rankingEntityDragProps(entityId) : {})}
+        className="flex w-full cursor-pointer items-center py-3 text-left transition"
+      >
+        {content}
+      </div>
+    );
+  }
+
   const handleKeyDown = (event: React.KeyboardEvent) => {
-    if (isInMyRanking) return;
+    if (isInMyRanking || event.target !== event.currentTarget) return;
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
       onAdd();
@@ -709,8 +727,10 @@ export function RankingComposeGlobalRanking({
       />
     );
 
-    // Best debates rows have no side-panel button: the poster opens the debate to watch.
-    if (!isMobile && teamView) return <div key={id}>{pickRow}</div>;
+    // Best debates rows have no side-panel button or swipe actions on any screen: a tap opens the
+    // debate to watch and the row's Rank button ranks it (Preston, 13 Nov). A swipe row's tap would
+    // start ranking as well.
+    if (teamView) return <div key={id}>{pickRow}</div>;
     if (!isMobile) {
       return (
         <RankingGlobalDesktopRow key={id} onOpenSidePanel={() => onViewEntity(id)}>

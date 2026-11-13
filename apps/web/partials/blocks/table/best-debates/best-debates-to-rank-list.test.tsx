@@ -7,7 +7,7 @@ import type { BestDebateRowData } from '~/core/blocks/ranking/use-best-debate-di
 import type { RankersRead } from '~/core/blocks/ranking/use-best-debates-to-rank';
 
 import { RANKING_ENTITY_DRAG_TYPE } from '../ranking-entity-drag';
-import { BestDebateDisplaysContext } from './best-debate-row';
+import { BestDebateDisplaysContext, BestDebateWatchContext } from './best-debate-row';
 import { resetCollapsedSpacesForTests } from './best-debates-team-row';
 import { BestDebatesToRankList } from './best-debates-to-rank-list';
 
@@ -63,8 +63,11 @@ const renderList = (props: Partial<React.ComponentProps<typeof BestDebatesToRank
 describe('To rank', () => {
   it('lists the debates in the order given, saying who has ranked each', () => {
     renderList();
-    const rows = screen.getAllByRole('button');
-    expect(rows.map(row => row.getAttribute('aria-label'))).toEqual(['Rank Newest', 'Rank Older']);
+    // The rows aren't buttons (their Rank and Down rank controls are), so these are the only Rank ones.
+    const ranks = screen.getAllByRole('button', { name: /^Rank / });
+    expect(ranks.map(button => button.getAttribute('aria-label'))).toEqual(['Rank Newest', 'Rank Older']);
+    expect(screen.getAllByTestId('best-debates-to-rank-row')).toHaveLength(2);
+    for (const row of screen.getAllByTestId('best-debates-to-rank-row')) expect(row.getAttribute('role')).toBeNull();
     expect(screen.getByText('Nobody has ranked this yet')).toBeTruthy();
     expect(screen.getByText('Ranked by Preston')).toBeTruthy();
   });
@@ -77,12 +80,39 @@ describe('To rank', () => {
     expect(screen.queryByText('Nobody has ranked this yet')).toBeNull();
   });
 
-  it('places a debate on a press, and can be dragged', () => {
+  it('opens a debate to watch from its row, and ranks it only from its Rank button', () => {
+    const onPlace = vi.fn();
+    const watch = vi.fn();
+    render(
+      <BestDebateWatchContext.Provider value={watch}>
+        <BestDebatesToRankList
+          debates={debates}
+          isLoading={false}
+          error={null}
+          rankers={rankers()}
+          entriesById={new Map()}
+          onPlace={onPlace}
+          draggable
+        />
+      </BestDebateWatchContext.Provider>
+    );
+    fireEvent.click(screen.getByText('Newest'));
+    expect(watch).toHaveBeenCalledWith('d1', 'row');
+    expect(onPlace).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Rank Newest' }), { key: 'Enter' });
+    expect(watch).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Rank Newest' }));
+    expect(onPlace).toHaveBeenCalledWith('d1');
+    expect(watch).toHaveBeenCalledTimes(1);
+  });
+
+  it('places a debate from its Rank button, and the row can be dragged', () => {
     const onPlace = vi.fn();
     renderList({ onPlace });
-    const row = screen.getByRole('button', { name: 'Rank Newest' });
-    fireEvent.click(row);
+    fireEvent.click(screen.getByRole('button', { name: 'Rank Newest' }));
     expect(onPlace).toHaveBeenCalledWith('d1');
+    const row = screen.getAllByTestId('best-debates-to-rank-row')[0];
 
     const setData = vi.fn();
     fireEvent.dragStart(row, { dataTransfer: { setData, effectAllowed: '' } });
@@ -150,11 +180,15 @@ describe('To rank', () => {
       );
 
     withDisplays({ query: 'tariffs' });
-    expect(screen.getAllByRole('button').map(row => row.getAttribute('aria-label'))).toEqual(['Rank Newest']);
+    expect(screen.getAllByRole('button', { name: /^Rank / }).map(row => row.getAttribute('aria-label'))).toEqual([
+      'Rank Newest',
+    ]);
     cleanup();
 
     withDisplays({ topicIds: ['dating'] });
-    expect(screen.getAllByRole('button').map(row => row.getAttribute('aria-label'))).toEqual(['Rank Older']);
+    expect(screen.getAllByRole('button', { name: /^Rank / }).map(row => row.getAttribute('aria-label'))).toEqual([
+      'Rank Older',
+    ]);
     cleanup();
 
     withDisplays({ query: 'nothing like this' });

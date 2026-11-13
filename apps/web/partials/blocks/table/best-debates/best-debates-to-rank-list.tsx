@@ -9,7 +9,7 @@ import type { RankingEntryDisplay } from '~/core/blocks/ranking/use-ranking-entr
 import { normId } from '~/core/utils/norm-id';
 
 import { rankingEntityDragProps } from '../ranking-entity-drag';
-import { BestDebateDisplaysContext } from './best-debate-row';
+import { BestDebateDisplaysContext, BestDebateWatchContext } from './best-debate-row';
 import { BestDebatesGroupedRows, BestDebatesTeamRowContent } from './best-debates-team-row';
 
 type Props = {
@@ -31,7 +31,8 @@ type Props = {
 
 /**
  * To rank (GEO-3678): the last 7 days' debates the ranker hasn't placed, nobody-ranked first, each saying
- * who has ranked it, so the team can spread out. A tap places one by comparison; on a desktop a row
+ * who has ranked it, so the team can spread out. A tap on a row opens it to watch, and Rank places it by
+ * comparison; on a desktop a row
  * can also be dragged straight into the ranking. There is no skip: the window empties itself.
  */
 export function BestDebatesToRankList({
@@ -48,6 +49,7 @@ export function BestDebatesToRankList({
   onPushDown,
 }: Props) {
   const displays = React.useContext(BestDebateDisplaysContext);
+  const watch = React.useContext(BestDebateWatchContext);
   if (isLoading) return <p className="py-3 text-metadata text-grey-04">Loading debates…</p>;
   if (error) return <p className="py-3 text-metadata text-grey-04">Couldn’t load this week’s debates.</p>;
   if (debates.length === 0) return <p className="py-3 text-metadata text-grey-04">You’re up to date.</p>;
@@ -66,20 +68,13 @@ export function BestDebatesToRankList({
     if (!debate) return null;
     const name = nameOf(entityId) ?? 'Untitled debate';
     return (
+      // A press on the row opens the debate to watch (Preston, 13 Nov). The row isn't a button, so
+      // its Rank, Down rank and poster (Watch) controls stay reachable to keyboards and screen readers.
       <div
         key={entityId}
-        role="button"
-        tabIndex={0}
-        aria-label={`Rank ${name}`}
+        data-testid="best-debates-to-rank-row"
         className="flex w-full cursor-pointer items-center py-3 text-left"
-        onClick={() => onPlace(entityId)}
-        onKeyDown={event => {
-          if (event.target !== event.currentTarget) return;
-          if (event.key === 'Enter' || event.key === ' ') {
-            event.preventDefault();
-            onPlace(entityId);
-          }
-        }}
+        onClick={() => watch?.(entityId, 'row')}
         {...(draggable ? rankingEntityDragProps(entityId) : {})}
       >
         <BestDebatesTeamRowContent
@@ -90,6 +85,7 @@ export function BestDebatesToRankList({
           myRank={null}
           draggable={draggable}
           onPushDown={onPushDown ? () => onPushDown(entityId) : undefined}
+          onRank={() => onPlace(entityId)}
         />
       </div>
     );

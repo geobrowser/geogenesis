@@ -183,7 +183,7 @@ export function useBestDebatesCompose({
     toRankCount: toRank.isLoading || toRank.error ? null : toRankIds.length,
     tools,
     toRankIds,
-    // All and To rank draw the same row (Preston, 12 Nov): badge, rank mark or "You: #N", grip.
+    // All and To rank draw the same row (Preston, 12 Nov): badge, Rank button or "You: #N", grip.
     renderRow: ({ entityId, name, rank, spaceId: rowSpaceId, isInMyRanking }) => (
       <BestDebatesTeamRowContent
         entityId={entityId}
@@ -194,6 +194,7 @@ export function useBestDebatesCompose({
         myRank={isInMyRanking ? orderedIds.indexOf(entityId) + 1 || null : null}
         draggable={!isMobile && !isInMyRanking}
         onPushDown={pushDown && !isInMyRanking ? () => placement.requestPushDown(entityId) : undefined}
+        onRank={isInMyRanking ? undefined : () => startPlacement(entityId, 'team')}
       />
     ),
     toRankPanel: (
@@ -233,7 +234,7 @@ export function useBestDebatesCompose({
     dialogs: placement.dialogs,
     isPlacing: placement.isPlacing,
     activeEntityId: placement.activeEntityId,
-    /** A press on a team row places it by comparison instead of appending it. */
+    /** A team row's Rank button places it by comparison instead of appending it. */
     placeFromTeam: (entityId: string) => startPlacement(entityId, 'team'),
     dropEntity,
     publish,
