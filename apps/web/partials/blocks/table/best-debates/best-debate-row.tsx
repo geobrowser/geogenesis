@@ -33,7 +33,7 @@ export type BestDebateWatchEntry = 'poster' | 'row';
  * the poster is only a picture.
  */
 export const BestDebateWatchContext = React.createContext<
-  ((entityId: string, entry?: BestDebateWatchEntry) => void) | null
+  ((entityId: string, entry: BestDebateWatchEntry) => void) | null
 >(null);
 
 export function useBestDebateRowData(entityId: string): BestDebateRowData | null | undefined {

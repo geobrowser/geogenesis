@@ -23,7 +23,7 @@ afterEach(() => {
   mocks.capture.mockClear();
 });
 
-function Opener({ entry }: { entry?: 'row' | 'poster' }) {
+function Opener({ entry }: { entry: 'row' | 'poster' }) {
   const watch = React.useContext(BestDebateWatchContext);
   return (
     <button type="button" onClick={() => watch?.('d1', entry)}>
@@ -38,10 +38,9 @@ describe('BestDebateWatchProvider', () => {
   it.each([
     ['row', 'row'],
     ['poster', 'poster'],
-    [undefined, 'poster'],
   ] as const)('records a watch opened from %s and opens the debate', (entry, recorded) => {
     render(
-      <BestDebateWatchProvider source="best_debates_ranking">
+      <BestDebateWatchProvider source="best_debates_ranking" blockId="block" spaceId="debates">
         <Opener entry={entry} />
       </BestDebateWatchProvider>
     );
@@ -51,6 +50,8 @@ describe('BestDebateWatchProvider', () => {
       element_action: 'watch_debate',
       entity_id: 'd1',
       entry: recorded,
+      block_id: 'block',
+      space_id: 'debates',
     });
     expect(screen.getByText('playing d1')).toBeTruthy();
   });

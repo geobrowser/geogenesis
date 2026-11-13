@@ -19,21 +19,33 @@ const WATCH_PLAYBACK_GROUP = 'best-debates-watch';
  */
 export function BestDebateWatchProvider({
   source,
+  blockId,
+  spaceId,
   children,
 }: {
   /** The analytics `source` of the watches opened here. */
   source: 'best_debates_block' | 'best_debates_ranking';
+  /** The Best debates block and its space, so a watch joins up with that block's placements. */
+  blockId: string;
+  spaceId: string;
   children: React.ReactNode;
 }) {
   const [watching, setWatching] = React.useState<string | null>(null);
   // A watch is the row's main action on the ranking screen (13 Nov), so it's counted: without it a
   // debate watched and not ranked looks the same as one never opened.
   const watch = React.useCallback(
-    (entityId: string, entry: BestDebateWatchEntry = 'poster') => {
-      capture('element_clicked', { source, element_action: 'watch_debate', entity_id: entityId, entry });
+    (entityId: string, entry: BestDebateWatchEntry) => {
+      capture('element_clicked', {
+        source,
+        element_action: 'watch_debate',
+        entity_id: entityId,
+        entry,
+        block_id: blockId,
+        space_id: spaceId,
+      });
       setWatching(entityId);
     },
-    [source]
+    [source, blockId, spaceId]
   );
   return (
     <BestDebateWatchContext.Provider value={watch}>
