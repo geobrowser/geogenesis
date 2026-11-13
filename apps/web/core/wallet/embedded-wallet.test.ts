@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { PrivyValue, WalletsValue } from './auth-store';
-import { accountHasEmbeddedWallet, findEmbeddedWallet } from './embedded-wallet';
+import { accountHasEmbeddedWallet, embeddedWalletAddress, findEmbeddedWallet } from './embedded-wallet';
 
 const user = (linkedAccounts: unknown[]) => ({ linkedAccounts }) as unknown as PrivyValue['user'];
 const wallets = (...types: string[]) =>
@@ -35,5 +35,31 @@ describe('accountHasEmbeddedWallet', () => {
       false
     );
     expect(accountHasEmbeddedWallet(null)).toBe(false);
+  });
+});
+
+describe('embeddedWalletAddress', () => {
+  const ADDRESS = '0x5D6d0E45D76D360AB4F94941CE9a005b0AEa2ebD';
+  const embedded = (address: unknown) => ({
+    type: 'wallet',
+    walletClientType: 'privy',
+    chainType: 'ethereum',
+    address,
+  });
+
+  it("reads the embedded wallet's address off the restored account, checksummed", () => {
+    expect(embeddedWalletAddress(user([{ type: 'email' }, embedded(ADDRESS.toLowerCase())]))).toBe(ADDRESS);
+  });
+
+  it('takes the first embedded wallet, as the server does, over an external one', () => {
+    const other = '0x0000000000000000000000000000000000000001';
+    const linked = [{ type: 'wallet', walletClientType: 'metamask', chainType: 'ethereum', address: other }];
+    expect(embeddedWalletAddress(user([...linked, embedded(ADDRESS), embedded(other)]))).toBe(ADDRESS);
+  });
+
+  it('is null with no embedded wallet yet, no user, or a malformed address', () => {
+    expect(embeddedWalletAddress(user([{ type: 'email' }]))).toBeNull();
+    expect(embeddedWalletAddress(null)).toBeNull();
+    expect(embeddedWalletAddress(user([embedded('not-an-address')]))).toBeNull();
   });
 });
