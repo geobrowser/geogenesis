@@ -117,6 +117,7 @@ vi.mock('~/core/state/feature-flags', () => ({
   useFeatureFlag: () => true,
 }));
 
+vi.mock('~/core/debates/moments-editor/hooks', () => ({ useIsMediaAdmin: () => false }));
 vi.mock('~/core/debates/hooks', () => ({
   useGeoChatAuth: () => ({ ready: true, authenticated: true, accountKey: 'user-a' }),
   useSpaceDebates: () => ({

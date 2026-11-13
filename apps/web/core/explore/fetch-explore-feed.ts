@@ -392,14 +392,46 @@ async function fetchExploreEntitiesPage(args: {
       variables: {
         limit: args.limit,
         after: args.after,
-        filter: buildExploreFeedFilter(args),
+        filter: buildExploreFeedFilter({ ...args, excludeSystemAndBlocks: !hasTypeSelection(args.typeIds) }),
         orderBy: args.orderBy,
-        spaceIds: { in: args.spaceIds },
+        spaceIds: exploreEntitiesSpaceIdsArg(args),
         typeIds: args.typeIds?.length ? { in: [...args.typeIds] } : undefined,
         spaceIdsForLists: args.spaceIds,
       },
     })
   );
+}
+
+/**
+ * GEO-3703. With a type selection, the system-entity / data-block / text-block exclusion is dropped
+ * from the filter. The selection is already narrower: it is sanitized to `EXPLORE_ENTITY_TYPES`,
+ * none of which is a block or system type, so the clause excludes nothing (the same 151 newest
+ * Debate|Claim rows with and without it, testnet 11-12). What it does cost is the plan: next to
+ * `typeIds` its `relations: { none }` anti-join takes New from ~1.1s to 6-8s, and to a gateway 504
+ * under load.
+ */
+function hasTypeSelection(typeIds: readonly string[] | undefined): boolean {
+  return (typeIds?.length ?? 0) > 0;
+}
+
+/**
+ * GEO-3703. The `spaceIds` argument, or `undefined` when the filter already scopes the query to the
+ * same spaces.
+ *
+ * gaia compiles a multi-space `spaceIds: { in }` to `id IN (every entity with a value or relation in
+ * any of those spaces)`. Across the ~40 explore spaces that set is ~1.6M entities, and under
+ * `CREATED_AT_DESC` the planner hashes all of it and sequentially scans every entity before it can
+ * return the newest 22: 165s on testnet (11-12), so New and Fresh never answered inside the feed's
+ * budget. The name clause `buildExploreFeedFilter` adds — a non-empty name value in one of these
+ * spaces — implies that membership, and as an `EXISTS` it lets the planner walk
+ * `entities(created_at, id)` newest-first: the same 22 rows in 0.3s. So while that clause is
+ * present the argument is redundant and is dropped; it is sent only when `requireName` is false.
+ */
+export function exploreEntitiesSpaceIdsArg(args: {
+  spaceIds: readonly string[];
+  requireName?: boolean;
+}): { in: string[] } | undefined {
+  return args.requireName === false ? { in: [...args.spaceIds] } : undefined;
 }
 
 /** One Fresh list per scroll and scope, shared by every page request of that scroll. */
@@ -972,8 +1004,8 @@ export async function fetchExploreFeed(args: {
         ? builtRows.filter(row => !entityMatchesExploreTypeIds(row, excludeTypeIds))
         : builtRows;
 
-    // Best filters by type here rather than in the query (see `fetchBestEntitiesPage`). The other
-    // sorts already came back filtered, so re-checking them would be redundant — and worse than
+    // Best filters by type here rather than in the query (see `fetchBestEntitiesPage`). Top and
+    // New already came back filtered, so re-checking them would be redundant — and worse than
     // redundant: a card's types are the TYPES relations *in its display space*, while the server's
     // predicate is not space-scoped, so the two can disagree at the margin. Applying it only where
     // the server no longer does keeps exactly one source of truth per sort.

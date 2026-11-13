@@ -194,6 +194,15 @@ describe('applyClaimReusePolicy', () => {
     expect(warn).toHaveBeenCalled();
   });
 
+  it('throws instead when strict, so the late claims publish waits rather than mints (GEO-3635)', async () => {
+    const lookup = vi.fn(async () => {
+      throw new Error('graph unavailable');
+    });
+    await expect(applyClaimReusePolicy(claims, SPACE, { enabled: true, lookup, strict: true })).rejects.toThrow(
+      'graph unavailable'
+    );
+  });
+
   it('returns the input untouched when nothing was matched', async () => {
     const lookup = vi.fn(async () => graph);
     const unmatched = claims.map(claim => ({ ...claim, existingClaimEntityId: null }));

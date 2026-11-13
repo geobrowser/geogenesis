@@ -60,11 +60,13 @@ export function buildExploreFeedFilter(args: {
   requireName?: boolean;
   requireDebateTagOnClaims?: boolean;
   includeEntityScopeInFilter?: boolean;
+  /** Defaults to true. See `fetchExploreEntitiesPage` for the one caller that turns it off. */
+  excludeSystemAndBlocks?: boolean;
   entityFilter?: EntityFilter;
 }): EntityFilter {
   const t = timeThresholdSec(args.time);
   const base: EntityFilter = {
-    ...FEED_EXCLUDED_RELATIONS_FILTER,
+    ...(args.excludeSystemAndBlocks !== false ? FEED_EXCLUDED_RELATIONS_FILTER : {}),
     ...(args.requireDebateTagOnClaims ? claimsRequireDebateTagFilter(args.spaceIds) : {}),
     ...topicsRelationFilter(args.topicIds ?? []),
     ...(args.includeEntityScopeInFilter

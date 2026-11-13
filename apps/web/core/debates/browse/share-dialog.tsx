@@ -8,13 +8,12 @@ import { useActionContext } from '~/core/action-context-provider';
 import { capture } from '~/core/analytics';
 import { observeOperation } from '~/core/analytics-operations';
 import type { Debate } from '~/core/debates/api';
+import { debatesAppDebateUrl } from '~/core/debates/debates-app-url';
 import { useDebateMedia } from '~/core/debates/hooks';
 import { useToast } from '~/core/hooks/use-toast';
-import { ID } from '~/core/id';
 import { pushMarketingEvent } from '~/core/marketing-events';
 import { copyShareLink, observeShareLinkHandoff } from '~/core/sharing/share-handoff';
-import { type ShareMethod as LinkShareMethod, type ShareLink, createShareLink } from '~/core/sharing/share-link';
-import { NavUtils } from '~/core/utils/utils';
+import { type ShareMethod as LinkShareMethod, type ShareLink, createTaggedShareLink } from '~/core/sharing/share-link';
 
 import { ArrowLeft } from '~/design-system/icons/arrow-left';
 import { Close } from '~/design-system/icons/close';
@@ -84,12 +83,7 @@ export function DebateShareDialog({ open, onOpenChange, debate, spaceId, openerR
   }, [open, debate.id, spaceId]);
 
   const shareLink = (method: LinkShareMethod) =>
-    createShareLink(
-      `${window.location.origin}${NavUtils.toEntity(spaceId, ID.uuidToHex(debate.id))}`,
-      'debate',
-      debate.id,
-      method
-    );
+    createTaggedShareLink(debatesAppDebateUrl(debate.id), 'debate', debate.id, method);
   const participants = debate.participants?.map(participant => participant.profile_space_id);
 
   const shareMessage = (maxLength: number) => {
@@ -197,7 +191,7 @@ export function DebateShareDialog({ open, onOpenChange, debate, spaceId, openerR
 
   const videoHandoffMethod = (file: File) =>
     isTouchDevice
-      ? getPreparedSocialVideoHandoffMethod(videoShareData(file, NavUtils.toEntity(spaceId, ID.uuidToHex(debate.id))))
+      ? getPreparedSocialVideoHandoffMethod(videoShareData(file, debatesAppDebateUrl(debate.id)))
       : 'download';
 
   const downloadVideo = (video: PreparedSocialVideo, captions: SocialVideoCaptions) => {

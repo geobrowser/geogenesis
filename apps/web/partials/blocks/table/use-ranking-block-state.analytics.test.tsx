@@ -30,6 +30,7 @@ vi.mock('~/atoms/post-onboarding-redirect', () => ({ postOnboardingRedirectAtom:
 vi.mock('~/atoms/ranking-compose-return', () => ({ rankingComposeReturnHrefAtom: {} }));
 vi.mock('~/core/state/pending-personal-space', () => ({ usePendingPersonalSpace: () => ({ isPending: false }) }));
 vi.mock('jotai', () => ({ useSetAtom: () => vi.fn() }));
+vi.mock('~/core/state/feature-flags', () => ({ useFeatureFlag: () => false }));
 vi.mock('~/core/blocks/data/use-data-block', () => ({
   useDataBlock: () => ({
     name: 'Private ranking title',

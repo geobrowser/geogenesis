@@ -485,7 +485,10 @@ async function buildDebateShareCard(
  * report claims for this debate) — the caller then falls back to the raw /transcript merge and
  * publishes with no claims. `turn_index` is expected 0-based and contiguous over non-empty turns.
  */
-export async function loadDebateClaims(debateId: string): Promise<{
+export async function loadDebateClaims(
+  debateId: string,
+  { strict = false }: { strict?: boolean } = {}
+): Promise<{
   transcriptTurns: DebatePublishTurn[];
   claims: DebateClaimInput[];
   dedupPendingUntil: number | null;
@@ -494,6 +497,8 @@ export async function loadDebateClaims(debateId: string): Promise<{
   try {
     response = await geoChatGet<DebateExtractedClaimsResponse>(`/debates/${debateId}/claims`);
   } catch (error) {
+    // The late claims publish (GEO-3635) must not read a failed request as "no claims".
+    if (strict) throw error;
     // A missing/failed claims read shouldn't block publishing the Debate + Transcript.
     console.warn(`[debate-acceptor] could not load extracted claims for ${debateId}; using raw transcript.`, error);
     return null;
@@ -502,19 +507,28 @@ export async function loadDebateClaims(debateId: string): Promise<{
   return decodeExtractedClaims(response);
 }
 
-async function loadTranscriptTurns(debateId: string, debate: Debate) {
+/**
+ * The turns of geo-chat's served transcript (`GET /debates/{id}/transcript`), merged the way the
+ * full publish merges them when it has no claims payload. Throws on a failed read. GEO-3635 compares
+ * a published block's text against these to tell machine text from a human edit before rewriting it.
+ */
+export async function loadServedTranscriptTurns(debateId: string, debate: Debate): Promise<DebatePublishTurn[]> {
   const speakerBySlot = new Map(
     debate.participants.map(p => [
       p.participant_slot as number,
       { spaceEntityId: p.profile_space_id, displayName: p.display_name },
     ])
   );
+  const transcript = await geoChatGet<DebateTranscriptResponse>(`/debates/${debateId}/transcript?format=json`);
+  return mergeTranscriptSegmentsIntoTurns(
+    transcript.segments.map(segment => ({ participantSlot: segment.participant_slot, text: segment.text })),
+    speakerBySlot
+  );
+}
+
+async function loadTranscriptTurns(debateId: string, debate: Debate) {
   try {
-    const transcript = await geoChatGet<DebateTranscriptResponse>(`/debates/${debateId}/transcript?format=json`);
-    return mergeTranscriptSegmentsIntoTurns(
-      transcript.segments.map(segment => ({ participantSlot: segment.participant_slot, text: segment.text })),
-      speakerBySlot
-    );
+    return await loadServedTranscriptTurns(debateId, debate);
   } catch (error) {
     // A missing/failed transcript shouldn't block publishing the Debate + Video entities.
     console.warn(`[debate-acceptor] could not load transcript for ${debateId}; publishing without it.`, error);

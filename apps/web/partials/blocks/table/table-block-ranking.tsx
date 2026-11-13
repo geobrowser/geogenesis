@@ -18,6 +18,7 @@ import { IconButton } from '~/design-system/button';
 import { FilterTable } from '~/design-system/icons/filter-table';
 import { FilterTableWithFilters } from '~/design-system/icons/filter-table-with-filters';
 
+import { BestDebatesBlock } from './best-debates-block';
 import {
   BlockLinkIngestionChip,
   BlockLinkIngestionPanel,
@@ -27,6 +28,7 @@ import { DataBlockExpandControl } from './data-block-expand-control';
 import { DataBlockScopeDropdown } from './data-block-scope-dropdown';
 import { DataBlockViewMenu } from './data-block-view-menu';
 import { RankingBlockBody } from './ranking-block-body';
+import { RankingComposeEntitySheet } from './ranking-compose-entity-sheet';
 import { RankingExploreView } from './ranking-explore-view';
 import { RankingGalleryView } from './ranking-gallery-view';
 import { RankingHeaderActions } from './ranking-header-actions';
@@ -43,10 +45,18 @@ type Props = {
   spaceId: string;
   rankingStartDate?: string;
   rankingEndDate?: string;
+  /** Tests only: stands in for `BEST_DEBATES_BLOCK_ID`, which is null until GEO-3685. */
+  bestDebatesBlockId?: string | null;
 };
 
-export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDate = '' }: Props) {
-  const state = useRankingBlockState({ spaceId, rankingStartDate, rankingEndDate, paginateEmbeddedRanking: true });
+export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDate = '', bestDebatesBlockId }: Props) {
+  const state = useRankingBlockState({
+    spaceId,
+    rankingStartDate,
+    rankingEndDate,
+    paginateEmbeddedRanking: true,
+    bestDebatesBlockId,
+  });
   const isEditing = useUserIsEditing(spaceId);
   const {
     filterState,
@@ -89,6 +99,9 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
     stateView === 'EXPLORE'
   );
 
+  // The Debates space's Best debates block draws its own Day / This week / All time body (GEO-3677).
+  const isBestDebates = state.isBestDebates;
+
   const showHeaderActions = isExploreView || isBulletedListView || isPillView || isGalleryView;
 
   const showBrowseChrome = !showHeaderActions || isEditing;
@@ -100,156 +113,173 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
     [resolvedFilterState]
   );
 
+  // The Best debates block draws this row itself, under its coverage line and with Rank at its end
+  // (GEO-3591 mockups); every other ranking block gets it here.
+  const renderHeaderRow = (extraActions: React.ReactNode) => (
+    <div
+      className={cx('mb-2 flex justify-between gap-4', showHeaderActions ? 'items-center' : 'items-start')}
+      onMouseDown={e => e.stopPropagation()}
+    >
+      <div className="min-w-0 flex-1">
+        <div className="flex min-w-0 items-center gap-2">
+          <h4 className="min-w-0 truncate text-mediumTitle text-text">{displayName}</h4>
+          <div className="shrink-0">
+            <BlockLinkIngestionChip />
+          </div>
+        </div>
+
+        {!showHeaderActions && (periodLabel || hasRankedByOthers) ? (
+          <RankingPeriodMetadata
+            periodState={periodState}
+            periodLabel={periodLabel}
+            hasRankedByOthers={hasRankedByOthers}
+            submissions={submissions}
+            aggregatedSubmitterRefs={aggregatedSubmitterRefs}
+            aggregatedSubmitterSpaceIds={aggregatedSubmitterSpaceIds}
+            aggregatedRankingCount={aggregatedRankingCount}
+          />
+        ) : null}
+      </div>
+
+      <div className="flex shrink-0 items-center gap-5">
+        {showHeaderActions ? <RankingHeaderActions state={state} /> : null}
+
+        {showBrowseChrome ? (
+          <IconButton
+            onClick={() => setIsFilterOpen(open => !open)}
+            icon={filterState.length > 0 ? <FilterTableWithFilters /> : <FilterTable />}
+            color="grey-04"
+          />
+        ) : null}
+
+        {showBrowseChrome ? (
+          <DataBlockExpandControl
+            spaceId={spaceId}
+            blockEntityId={entityId}
+            isEditing={isEditing}
+            onFullscreenClick={() => void openRankingCompose('view')}
+            fullscreenAriaLabel="Open fullscreen ranking"
+          />
+        ) : null}
+
+        <DataBlockViewMenu activeView={stateView} isLoading={false} isRankingBlock />
+
+        {showBrowseChrome ? (
+          <TableBlockContextMenu
+            sourceType={source.type}
+            globalRankingSharePath={globalSharePath}
+            onPrepareGlobalShareLink={ensureGlobalRankingOg}
+          />
+        ) : null}
+
+        {extraActions}
+      </div>
+    </div>
+  );
+
+  const belowHeader = (
+    <>
+      <BlockLinkIngestionPanel />
+
+      {showBrowseChrome && isFilterOpen && (
+        <AnimatePresence>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className={cx('mb-4 overflow-hidden', isEditing ? 'border-t border-divider py-4' : 'py-2')}
+            onMouseDown={e => e.stopPropagation()}
+          >
+            <div className="flex flex-col gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <DataBlockScopeDropdown source={source} setSource={setSource} isEditing={isEditing} />
+                {isEditing && (
+                  <>
+                    <span className="mx-0.5 h-5 w-px shrink-0 bg-divider" aria-hidden />
+                    <TableBlockEditableFilters
+                      ref={filterPromptRef}
+                      filterState={filterState}
+                      setFilterState={setFilterState}
+                      filterSuggestionSpaceId={spaceId}
+                      isEditing={isEditing}
+                    />
+                  </>
+                )}
+                {!isEditing &&
+                  filterGroupsForToolbarPills.map(group => (
+                    <TableBlockFilterGroupPill
+                      key={group.groupKey}
+                      group={group}
+                      mode={modesByColumn[group.columnId] ?? 'AND'}
+                      onToggleMode={() => {
+                        const mode = modesByColumn[group.columnId] ?? 'AND';
+                        setGroupMode(group.columnId, mode === 'AND' ? 'OR' : 'AND');
+                      }}
+                      onDeleteValue={originalIndex => {
+                        setFilterState(
+                          produce(resolvedFilterState, draft => {
+                            draft.splice(originalIndex, 1);
+                          })
+                        );
+                      }}
+                      onClearGroup={() => {
+                        setFilterState(resolvedFilterState.filter(f => filterGroupKey(f) !== group.groupKey));
+                      }}
+                      isEditing={isEditing}
+                    />
+                  ))}
+              </div>
+              {isEditing && filterGroupsForToolbarPills.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2">
+                  {filterGroupsForToolbarPills.map(group => (
+                    <TableBlockFilterGroupPill
+                      key={group.groupKey}
+                      group={group}
+                      mode={modesByColumn[group.columnId] ?? 'AND'}
+                      onToggleMode={() => {
+                        const mode = modesByColumn[group.columnId] ?? 'AND';
+                        setGroupMode(group.columnId, mode === 'AND' ? 'OR' : 'AND');
+                      }}
+                      onDeleteValue={originalIndex => {
+                        setFilterState(
+                          produce(resolvedFilterState, draft => {
+                            draft.splice(originalIndex, 1);
+                          })
+                        );
+                      }}
+                      onClearGroup={() => {
+                        setFilterState(resolvedFilterState.filter(f => filterGroupKey(f) !== group.groupKey));
+                      }}
+                      onAddSimilar={anchorEl => {
+                        requestAnimationFrame(() => {
+                          requestAnimationFrame(() => {
+                            filterPromptRef.current?.openWithColumn(group.columnId, anchorEl);
+                          });
+                        });
+                      }}
+                      isEditing={isEditing}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          </motion.div>
+        </AnimatePresence>
+      )}
+    </>
+  );
+
   return (
     <BlockLinkIngestionProvider spaceId={spaceId}>
       <div
         className={cx('w-full min-w-0', isGalleryView ? 'overflow-x-visible' : 'overflow-x-hidden')}
         onMouseDown={e => e.stopPropagation()}
       >
-        <div
-          className={cx('mb-2 flex justify-between gap-4', showHeaderActions ? 'items-center' : 'items-start')}
-          onMouseDown={e => e.stopPropagation()}
-        >
-          <div className="min-w-0 flex-1">
-            <div className="flex min-w-0 items-center gap-2">
-              <h4 className="min-w-0 truncate text-mediumTitle text-text">{displayName}</h4>
-              <div className="shrink-0">
-                <BlockLinkIngestionChip />
-              </div>
-            </div>
-
-            {!showHeaderActions && (periodLabel || hasRankedByOthers) ? (
-              <RankingPeriodMetadata
-                periodState={periodState}
-                periodLabel={periodLabel}
-                hasRankedByOthers={hasRankedByOthers}
-                submissions={submissions}
-                aggregatedSubmitterRefs={aggregatedSubmitterRefs}
-                aggregatedSubmitterSpaceIds={aggregatedSubmitterSpaceIds}
-                aggregatedRankingCount={aggregatedRankingCount}
-              />
-            ) : null}
-          </div>
-
-          <div className="flex shrink-0 items-center gap-5">
-            {showHeaderActions ? <RankingHeaderActions state={state} /> : null}
-
-            {showBrowseChrome ? (
-              <IconButton
-                onClick={() => setIsFilterOpen(open => !open)}
-                icon={filterState.length > 0 ? <FilterTableWithFilters /> : <FilterTable />}
-                color="grey-04"
-              />
-            ) : null}
-
-            {showBrowseChrome ? (
-              <DataBlockExpandControl
-                spaceId={spaceId}
-                blockEntityId={entityId}
-                isEditing={isEditing}
-                onFullscreenClick={() => void openRankingCompose('view')}
-                fullscreenAriaLabel="Open fullscreen ranking"
-              />
-            ) : null}
-
-            <DataBlockViewMenu activeView={stateView} isLoading={false} isRankingBlock />
-
-            {showBrowseChrome ? (
-              <TableBlockContextMenu
-                sourceType={source.type}
-                globalRankingSharePath={globalSharePath}
-                onPrepareGlobalShareLink={ensureGlobalRankingOg}
-              />
-            ) : null}
-          </div>
-        </div>
-
-        <BlockLinkIngestionPanel />
-
-        {showBrowseChrome && isFilterOpen && (
-          <AnimatePresence>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className={cx('mb-4 overflow-hidden', isEditing ? 'border-t border-divider py-4' : 'py-2')}
-              onMouseDown={e => e.stopPropagation()}
-            >
-              <div className="flex flex-col gap-2">
-                <div className="flex flex-wrap items-center gap-2">
-                  <DataBlockScopeDropdown source={source} setSource={setSource} isEditing={isEditing} />
-                  {isEditing && (
-                    <>
-                      <span className="mx-0.5 h-5 w-px shrink-0 bg-divider" aria-hidden />
-                      <TableBlockEditableFilters
-                        ref={filterPromptRef}
-                        filterState={filterState}
-                        setFilterState={setFilterState}
-                        filterSuggestionSpaceId={spaceId}
-                        isEditing={isEditing}
-                      />
-                    </>
-                  )}
-                  {!isEditing &&
-                    filterGroupsForToolbarPills.map(group => (
-                      <TableBlockFilterGroupPill
-                        key={group.groupKey}
-                        group={group}
-                        mode={modesByColumn[group.columnId] ?? 'AND'}
-                        onToggleMode={() => {
-                          const mode = modesByColumn[group.columnId] ?? 'AND';
-                          setGroupMode(group.columnId, mode === 'AND' ? 'OR' : 'AND');
-                        }}
-                        onDeleteValue={originalIndex => {
-                          setFilterState(
-                            produce(resolvedFilterState, draft => {
-                              draft.splice(originalIndex, 1);
-                            })
-                          );
-                        }}
-                        onClearGroup={() => {
-                          setFilterState(resolvedFilterState.filter(f => filterGroupKey(f) !== group.groupKey));
-                        }}
-                        isEditing={isEditing}
-                      />
-                    ))}
-                </div>
-                {isEditing && filterGroupsForToolbarPills.length > 0 && (
-                  <div className="flex flex-wrap items-center gap-2">
-                    {filterGroupsForToolbarPills.map(group => (
-                      <TableBlockFilterGroupPill
-                        key={group.groupKey}
-                        group={group}
-                        mode={modesByColumn[group.columnId] ?? 'AND'}
-                        onToggleMode={() => {
-                          const mode = modesByColumn[group.columnId] ?? 'AND';
-                          setGroupMode(group.columnId, mode === 'AND' ? 'OR' : 'AND');
-                        }}
-                        onDeleteValue={originalIndex => {
-                          setFilterState(
-                            produce(resolvedFilterState, draft => {
-                              draft.splice(originalIndex, 1);
-                            })
-                          );
-                        }}
-                        onClearGroup={() => {
-                          setFilterState(resolvedFilterState.filter(f => filterGroupKey(f) !== group.groupKey));
-                        }}
-                        onAddSimilar={anchorEl => {
-                          requestAnimationFrame(() => {
-                            requestAnimationFrame(() => {
-                              filterPromptRef.current?.openWithColumn(group.columnId, anchorEl);
-                            });
-                          });
-                        }}
-                        isEditing={isEditing}
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
-            </motion.div>
-          </AnimatePresence>
+        {isBestDebates ? null : (
+          <>
+            {renderHeaderRow(null)}
+            {belowHeader}
+          </>
         )}
 
         {isGalleryView ? (
@@ -260,6 +290,23 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
           <RankingPillView state={state} />
         ) : isExploreView ? (
           <RankingExploreView state={state} />
+        ) : isBestDebates ? (
+          <>
+            <RankingComposeEntitySheet
+              target={state.entitySheetTarget}
+              onClose={() => state.setEntitySheetTarget(null)}
+            />
+            <BestDebatesBlock
+              blockId={entityId}
+              spaceId={spaceId}
+              teamOrder={state.visibleGlobalRankingEntityIds}
+              isLoadingTeamOrder={state.isLoadingTeamOrder}
+              canRank={state.canComposeEdit}
+              onOpenCompose={(mode, extraParams) => void openRankingCompose(mode, extraParams)}
+              renderHeader={renderHeaderRow}
+              belowHeader={belowHeader}
+            />
+          </>
         ) : (
           <RankingBlockBody state={state} presentation="embedded" />
         )}
