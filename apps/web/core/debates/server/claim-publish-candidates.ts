@@ -1,8 +1,4 @@
-import { GeoChatRequestError } from './debate-source';
-import { geoChatBaseUrl } from './geo-chat-base-url';
-
-/** geo-chat's page size for the listing; its own ceiling is 200. */
-const PAGE_SIZE = 100;
+import { collectGeoChatPages } from './publish-candidates';
 
 /** Most candidates one space contributes to one sweep tick, however many geo-chat has. */
 export const MAX_CLAIM_PUBLISH_CANDIDATES_PER_SPACE = 1000;
@@ -35,35 +31,28 @@ export async function listClaimPublishCandidates(
   spaceId: string,
   maxCandidates: number = MAX_CLAIM_PUBLISH_CANDIDATES_PER_SPACE
 ): Promise<ClaimPublishCandidate[] | null> {
-  const candidates: ClaimPublishCandidate[] = [];
-  let cursor: string | null = null;
-  let firstPage = true;
-  while (candidates.length < maxCandidates) {
-    const params = new URLSearchParams({ limit: String(Math.min(PAGE_SIZE, maxCandidates - candidates.length)) });
-    if (cursor) params.set('cursor', cursor);
-    const path = `/spaces/${spaceId}/debates/claim-publish-candidates?${params.toString()}`;
-    const response = await fetch(`${geoChatBaseUrl()}${path}`, { cache: 'no-store' });
-    if (firstPage && response.status === 404) {
-      // geo-chat's own 404 for a space it has no row for (the acceptor's personal space, say):
-      // nothing to publish there. Any other 404 is a geo-chat without the endpoint.
+  let unknownSpace = false;
+  const candidates = await collectGeoChatPages<Page, ClaimPublishCandidate>({
+    path: `/spaces/${spaceId}/debates/claim-publish-candidates`,
+    maxItems: maxCandidates,
+    items: page =>
+      page.debates.flatMap(debate =>
+        typeof debate.debate_id === 'string' && typeof debate.claims_generated_at === 'string'
+          ? [{ debateId: debate.debate_id, claimsGeneratedAt: debate.claims_generated_at }]
+          : []
+      ),
+    nextCursor: page => page.next_cursor,
+    // geo-chat's own 404 for a space it has no row for (the acceptor's personal space, say):
+    // nothing to publish there. Any other 404 is a geo-chat without the endpoint.
+    isMissingEndpoint: async response => {
       const code = await response
         .json()
         .then((body: { error?: { code?: unknown } }) => body?.error?.code)
         .catch(() => null);
-      return code === 'space_not_found' ? [] : null;
-    }
-    if (!response.ok) {
-      throw new GeoChatRequestError(response.status, `geo-chat ${path} failed (${response.status})`);
-    }
-    firstPage = false;
-    const page = (await response.json()) as Page;
-    for (const debate of page.debates) {
-      if (typeof debate.debate_id === 'string' && typeof debate.claims_generated_at === 'string') {
-        candidates.push({ debateId: debate.debate_id, claimsGeneratedAt: debate.claims_generated_at });
-      }
-    }
-    if (!page.next_cursor) break;
-    cursor = page.next_cursor;
-  }
-  return candidates.slice(0, maxCandidates);
+      unknownSpace = code === 'space_not_found';
+      return true;
+    },
+  });
+  if (candidates === null) return unknownSpace ? [] : null;
+  return candidates;
 }

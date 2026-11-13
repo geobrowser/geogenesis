@@ -12,7 +12,6 @@ import {
   lateClaimsMarkerKey,
   runLateClaimsSweep,
 } from './late-claims-sweep';
-import { DEBATE_PUBLISH_LEASE_MS } from './publish-lease';
 import type { LateClaimsPlan, PublishMissingDebateClaimsResult } from './publish-missing-debate-claims';
 
 const AT = '2026-11-12T21:40:03.123456Z';
@@ -36,6 +35,7 @@ function markers(
     defer: vi.fn(async (id: string, ms: number) => {
       deferred.set(id, ms);
     }),
+    leaseRemainingMs: vi.fn(async (id: string) => (id === 'leased' ? 90_000 : id === 'pub' ? 6 * 3_600_000 : null)),
   };
 }
 
@@ -101,8 +101,9 @@ describe('runLateClaimsSweep', () => {
     });
     expect(store.finish).not.toHaveBeenCalled();
     expect(Object.fromEntries(store.deferred)).toEqual({
-      pub: DEBATE_PUBLISH_LEASE_MS,
-      leased: DEBATE_PUBLISH_LEASE_MS,
+      // What is left of each lease, not a fresh six hours.
+      pub: 6 * 3_600_000,
+      leased: 90_000,
       wait: LATE_CLAIMS_WAIT_BACKOFF_MS,
       gate: LATE_CLAIMS_WAIT_BACKOFF_MS,
       boom: LATE_CLAIMS_FAILURE_BACKOFF_MS,
@@ -112,6 +113,17 @@ describe('runLateClaimsSweep', () => {
       waiting: 3,
       failed: [{ debateId: 'boom', error: 'graph down' }],
     });
+  });
+
+  it('backs a pending edit off for the short wait when its lease cannot be read', async () => {
+    const store = markers();
+    const report = await runLateClaimsSweep(['s'], always, {
+      listCandidates: async () => candidates('gone'),
+      markers: store,
+      publish: async () => ({ status: 'submission_pending' }),
+    });
+    expect(report.waiting).toBe(1);
+    expect(store.deferred.get('gone')).toBe(LATE_CLAIMS_WAIT_BACKOFF_MS);
   });
 
   it('skips a debate that is backing off, and reads the markers once per space', async () => {

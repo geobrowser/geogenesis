@@ -2,8 +2,11 @@ import { readEnv } from './acceptor-config';
 import { upstashRedis } from './acceptor-lock';
 import type { ClaimPublishCandidate } from './claim-publish-candidates';
 import { DebateNotPublishableError } from './debate-source';
-import { DEBATE_PUBLISH_LEASE_MS } from './publish-lease';
-import { type PublishMissingDebateClaimsResult, publishMissingDebateClaims } from './publish-missing-debate-claims';
+import {
+  type PublishMissingDebateClaimsResult,
+  lateClaimsLeaseKey,
+  publishMissingDebateClaims,
+} from './publish-missing-debate-claims';
 
 /**
  * GEO-3635: the scheduled half of the late claims publish. Each tick of the early claims sweep, after
@@ -44,6 +47,8 @@ export type LateClaimsMarkerStore = {
   read: (debateIds: string[]) => Promise<Array<{ finishedAt: string | null; deferred: boolean }>>;
   finish: (debateId: string, claimsGeneratedAt: string) => Promise<void>;
   defer: (debateId: string, ms: number) => Promise<void>;
+  /** How long the debate's late-claims publish lease has left, in ms, or null when none is held. */
+  leaseRemainingMs: (debateId: string) => Promise<number | null>;
 };
 
 const dashless = (id: string) => id.replace(/-/g, '').toLowerCase();
@@ -75,6 +80,10 @@ export function upstashMarkerStore(): LateClaimsMarkerStore | null {
     },
     defer: async (debateId, ms) => {
       await redis.set(lateClaimsBackoffKey(debateId), '1', { px: ms });
+    },
+    leaseRemainingMs: async debateId => {
+      const ms = await redis.pttl(lateClaimsLeaseKey(debateId));
+      return ms > 0 ? ms : null;
     },
   };
 }
@@ -166,7 +175,7 @@ export async function runLateClaimsSweep(
         if (result.status === 'published') {
           spent.submitted += 1;
           // Under its publish lease until the edit indexes: nothing to do until the lease lapses.
-          await deps.markers.defer(candidate.debateId, DEBATE_PUBLISH_LEASE_MS).catch(() => {});
+          await deferPastLease(deps.markers, candidate.debateId);
           report.published.push({
             debateId: candidate.debateId,
             statements: result.plan.statements.length,
@@ -177,9 +186,9 @@ export async function runLateClaimsSweep(
           await deps.markers.finish(candidate.debateId, candidate.claimsGeneratedAt);
         } else {
           report.waiting += 1;
-          // An edit under its lease waits out the lease; anything else is a short wait.
-          const ms = result.status === 'submission_pending' ? DEBATE_PUBLISH_LEASE_MS : LATE_CLAIMS_WAIT_BACKOFF_MS;
-          await deps.markers.defer(candidate.debateId, ms).catch(() => {});
+          // An edit under its lease waits out what is left of the lease; anything else is a short wait.
+          if (result.status === 'submission_pending') await deferPastLease(deps.markers, candidate.debateId);
+          else await deps.markers.defer(candidate.debateId, LATE_CLAIMS_WAIT_BACKOFF_MS).catch(() => {});
         }
       } catch (error) {
         if (error instanceof DebateNotPublishableError) {
@@ -198,6 +207,12 @@ export async function runLateClaimsSweep(
     }
   }
   return report;
+}
+
+/** Back a debate off for what is left of its publish lease, or the short wait when that is unknown. */
+async function deferPastLease(markers: LateClaimsMarkerStore, debateId: string): Promise<void> {
+  const remaining = await markers.leaseRemainingMs(debateId).catch(() => null);
+  await markers.defer(debateId, remaining ?? LATE_CLAIMS_WAIT_BACKOFF_MS).catch(() => {});
 }
 
 export const defaultLateClaimsPublish = (debateId: string) =>
