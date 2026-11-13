@@ -263,11 +263,12 @@ function edgeRoom(gap: number | null): number {
 }
 
 /**
- * How far geo-chat moves an end edge past its last word (`tail_room`, GEO-3710), given the gaps to
+ * How far geo-chat moves an end edge past its last word (`clip_ranges::tail_clearance`, applied in
+ * `clear_room`; GEO-3710), given the gaps to
  * that speaker's own next word and to the other debater's (`null`: no such word): 10 ms short of
  * the first, 60 ms short of the second, never past the middle of the gap to the nearer one.
  */
-function tailRoom(ownGap: number | null, otherGap: number | null): number {
+function tailClearance(ownGap: number | null, otherGap: number | null): number {
   const room = (gap: number | null, clearance: number) => (gap === null ? CLIP_EDGE_PAD_MS : gap - clearance);
   const nearest = Math.min(ownGap ?? Infinity, otherGap ?? Infinity);
   const tail = Math.min(
@@ -295,11 +296,11 @@ function geoChatCut(
   if (said.length === 0) return null;
   const first = Math.min(...said.map(word => word.start_ms));
   // The clip's last word as geo-chat takes it (`manual_moments`): the one said last, by start then
-  // slot (`speech_turns`). Its end is where the words end and its speaker is who the end's room is
+  // slot (`speech_turns`), the later of two that tie (its sort is stable). Its end is where the words end and its speaker is who the end's room is
   // measured from: in an exchange it may be the other debater, and a word of theirs said inside it
   // is not the end.
   const lastWord = said.reduce((latest, word) =>
-    word.start_ms > latest.start_ms || (word.start_ms === latest.start_ms && word.slot > latest.slot) ? word : latest
+    word.start_ms > latest.start_ms || (word.start_ms === latest.start_ms && word.slot >= latest.slot) ? word : latest
   );
   const last = lastWord.end_ms;
   const lastSlot = lastWord.slot;
@@ -314,7 +315,7 @@ function geoChatCut(
   const paddedStart = first - edgeRoom(before.length > 0 ? first - Math.max(...before) : null);
   const paddedEnd =
     last +
-    tailRoom(
+    tailClearance(
       ownAfter.length > 0 ? Math.min(...ownAfter) : null,
       otherAfter.length > 0 ? Math.min(...otherAfter) : null
     );

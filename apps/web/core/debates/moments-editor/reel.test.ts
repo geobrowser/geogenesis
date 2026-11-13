@@ -255,6 +255,15 @@ describe('manualReel', () => {
     });
   });
 
+  it('takes the later of two of a debater’s words that start together as the last, as geo-chat does', () => {
+    // A zero-length "uh" at 1.4 s, then a word from 1.4 s: the end is that word's, with room to 2.4 s.
+    const tied = [word(1, 1_000, 1_400), word(1, 1_400, 1_400, 'uh'), word(1, 1_400, 1_700), word(1, 2_400, 2_800)];
+    expect(manualReel([clip(1_000, 1_700), freeEnd(2_400, 2_850)], tied, ONE_CLOCK).clips[0]).toEqual({
+      start: 0.75,
+      end: 1.95,
+    });
+  });
+
   it('gives an end no room over a word the other debater says across it', () => {
     const crosstalk = [word(1, 1_000, 1_400), word(2, 1_300, 1_600), word(1, 2_000, 2_400), word(2, 3_000, 3_400)];
     expect(manualReel([clip(1_000, 1_400), freeEnd(3_000, 3_450)], crosstalk, ONE_CLOCK)).toEqual({
