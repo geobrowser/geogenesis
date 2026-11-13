@@ -13,9 +13,9 @@ import {
   parseGrade,
   placeRegradedEntries,
   pruneGrades,
-  sortIntoTiers,
   removeEntry,
   sameGrades,
+  sortIntoTiers,
   tierAtIndex,
   tierSections,
 } from './ranking-grades';
@@ -121,7 +121,13 @@ describe('tierAtIndex and gradeAtPlace', () => {
 
 describe('tierSections', () => {
   it('always lists A, B and C, and Ungraded only when something is', () => {
-    const sections = tierSections(ids(1, 3), g([[1, 'A'], [3, 'C']]));
+    const sections = tierSections(
+      ids(1, 3),
+      g([
+        [1, 'A'],
+        [3, 'C'],
+      ])
+    );
     expect(sections.map(s => [s.tier, s.ids.length, s.start])).toEqual([
       ['A', 1, 0],
       ['B', 0, 1],
@@ -183,8 +189,24 @@ describe('applyTierLines', () => {
 
 describe('isTierOrdered', () => {
   it('needs A, then B, then C, then ungraded', () => {
-    expect(isTierOrdered(ids(1, 2, 3), g([[1, 'A'], [2, 'B']]))).toBe(true);
-    expect(isTierOrdered(ids(1, 2), g([[1, 'B'], [2, 'A']]))).toBe(false);
+    expect(
+      isTierOrdered(
+        ids(1, 2, 3),
+        g([
+          [1, 'A'],
+          [2, 'B'],
+        ])
+      )
+    ).toBe(true);
+    expect(
+      isTierOrdered(
+        ids(1, 2),
+        g([
+          [1, 'B'],
+          [2, 'A'],
+        ])
+      )
+    ).toBe(false);
     expect(isTierOrdered(ids(1, 2), g([[2, 'C']]))).toBe(false);
   });
 });
@@ -276,11 +298,28 @@ describe('placeRegradedEntries', () => {
 
 describe('pruneGrades and sameGrades', () => {
   it('keeps only the ballot’s entries', () => {
-    expect([...pruneGrades(ids(1), g([[1, 'A'], [2, 'B']])).keys()]).toEqual([id(1)]);
+    expect([
+      ...pruneGrades(
+        ids(1),
+        g([
+          [1, 'A'],
+          [2, 'B'],
+        ])
+      ).keys(),
+    ]).toEqual([id(1)]);
   });
 
   it('compares grades over the given entries', () => {
-    expect(sameGrades(ids(1), g([[1, 'A']]), g([[1, 'A'], [2, 'B']]))).toBe(true);
+    expect(
+      sameGrades(
+        ids(1),
+        g([[1, 'A']]),
+        g([
+          [1, 'A'],
+          [2, 'B'],
+        ])
+      )
+    ).toBe(true);
     expect(sameGrades(ids(1), g([[1, 'A']]), g([[1, 'B']]))).toBe(false);
     expect(sameGrades(ids(1), g([[1, 'A']]), new Map())).toBe(false);
   });
@@ -288,6 +327,15 @@ describe('pruneGrades and sameGrades', () => {
 
 describe('sortIntoTiers', () => {
   it('puts an out-of-order ballot in tier order, keeping the order within each tier', () => {
-    expect(sortIntoTiers(ids(1, 2, 3, 4), g([[1, 'C'], [2, 'A'], [4, 'A']]))).toEqual(ids(2, 4, 1, 3));
+    expect(
+      sortIntoTiers(
+        ids(1, 2, 3, 4),
+        g([
+          [1, 'C'],
+          [2, 'A'],
+          [4, 'A'],
+        ])
+      )
+    ).toEqual(ids(2, 4, 1, 3));
   });
 });

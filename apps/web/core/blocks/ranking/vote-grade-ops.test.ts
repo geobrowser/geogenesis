@@ -13,7 +13,11 @@ const SPACE = 'cccccccccccccccccccccccccccccccc';
 const hex = (bytes: Uint8Array) => Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
 const gradeKey = GRADE_PROPERTY_ID;
 
-type Op = { type: string; id?: Uint8Array; values?: Array<{ property: Uint8Array; value: { type: string; value: unknown } }> };
+type Op = {
+  type: string;
+  id?: Uint8Array;
+  values?: Array<{ property: Uint8Array; value: { type: string; value: unknown } }>;
+};
 
 function gradesOnVotes(ops: readonly unknown[], voteIds: readonly string[]) {
   return voteIds.map(voteId => {
@@ -49,7 +53,12 @@ describe('withVoteGrades', () => {
   });
 
   it('adds an update op when a vote’s create op isn’t there', () => {
-    const ops = withVoteGrades([], [id(50)], [{ entityId: id(1) }], new Map([[id(1), 'A' as Grade]])) as unknown as Op[];
+    const ops = withVoteGrades(
+      [],
+      [id(50)],
+      [{ entityId: id(1) }],
+      new Map([[id(1), 'A' as Grade]])
+    ) as unknown as Op[];
     expect(ops).toHaveLength(1);
     expect(ops[0].type).toBe('updateEntity');
   });

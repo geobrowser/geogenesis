@@ -245,11 +245,7 @@ export function mergeGrades({
  * still sit where this edit had it. Each such entry moves to the bottom of its new tier, as a
  * regrade does, so the ballot the web publishes stays tier-ordered.
  */
-export function placeRegradedEntries(
-  ids: readonly string[],
-  grades: BallotGrades,
-  ourGrades: BallotGrades
-): string[] {
+export function placeRegradedEntries(ids: readonly string[], grades: BallotGrades, ourGrades: BallotGrades): string[] {
   let next: GradedBallot = { ids: [...ids], grades };
   for (const id of ids) {
     const grade = grades.get(normId(id)) ?? null;

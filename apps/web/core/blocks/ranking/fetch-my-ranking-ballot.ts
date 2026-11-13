@@ -9,14 +9,13 @@ import type { Entity } from '~/core/types';
 import { BEST_DEBATES_BLOCK_ID } from './best-debates';
 import { rankTypeOf } from './best-debates-ballot';
 import { fetchBallotGrades } from './fetch-ballot-grades';
-
 import {
   buildMyRankingEntityFilter,
   getMyRankingOrderedEntityIds,
   pickMostRecentlyCreatedRankingEntity,
 } from './my-ranking-entity';
-import type { BallotSnapshot } from './ranking-publish-queue';
 import { type BallotGrades, NO_GRADES } from './ranking-grades';
+import type { BallotSnapshot } from './ranking-publish-queue';
 import { parseTimestampMs } from './ranking-rolling';
 
 /*

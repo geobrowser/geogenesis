@@ -25,7 +25,10 @@ function deferred() {
 
 /** The block's draft, the way `useRankingComposeDraft` holds it, around `useBlockGrading`. */
 function useHarness(publish: (ids: string[], grades?: BallotGrades) => Promise<boolean>) {
-  const published = React.useRef<{ ids: string[]; grades: BallotGrades }>({ ids: [id(1)], grades: new Map([[id(1), 'A']]) });
+  const published = React.useRef<{ ids: string[]; grades: BallotGrades }>({
+    ids: [id(1)],
+    grades: new Map([[id(1), 'A']]),
+  });
   const [draft, setDraftState] = React.useState(published.current);
   const grading = useBlockGrading({
     blockId: id(99),

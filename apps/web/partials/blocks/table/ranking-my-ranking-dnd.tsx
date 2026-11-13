@@ -182,11 +182,10 @@ export function RankingMyRankingDndList({
     () => new Map((groups ?? []).map(group => [groupHeaderId(group.key), group.header])),
     [groups]
   );
-  const flatIds = React.useMemo(() => (groups && onRegroup ? flattenGroups(groups) : entityIds), [
-    groups,
-    onRegroup,
-    entityIds,
-  ]);
+  const flatIds = React.useMemo(
+    () => (groups && onRegroup ? flattenGroups(groups) : entityIds),
+    [groups, onRegroup, entityIds]
+  );
   const flatIdsRef = React.useRef(flatIds);
   flatIdsRef.current = flatIds;
 

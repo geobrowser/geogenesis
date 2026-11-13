@@ -1,11 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { GRADE_PROPERTY_ID, RANK_VOTES_RELATION_TYPE_ID, VOTE_ORDINAL_VALUE_PROPERTY_ID } from '~/core/ranking-block-ids';
+import {
+  GRADE_PROPERTY_ID,
+  RANK_VOTES_RELATION_TYPE_ID,
+  VOTE_ORDINAL_VALUE_PROPERTY_ID,
+} from '~/core/ranking-block-ids';
 import type { Entity, Relation } from '~/core/types';
 
 import {
-  type BallotVoteRow,
   BallotGradesPendingError,
+  type BallotVoteRow,
   decodeBallotVoteRow,
   fetchBallotGrades,
 } from './fetch-ballot-grades';
@@ -104,9 +108,9 @@ describe('fetchBallotGrades', () => {
 
   it('reads again, then refuses, when a vote is missing its ordinal (the index is mid-update)', async () => {
     const fetchPage = pages([row(1, 'A'), row(2, 'B', false)], 10);
-    await expect(fetchBallotGrades(rank(2), AUTHOR, { fetchPage, attempts: 2, retryDelayMs: 0 })).rejects.toBeInstanceOf(
-      BallotGradesPendingError
-    );
+    await expect(
+      fetchBallotGrades(rank(2), AUTHOR, { fetchPage, attempts: 2, retryDelayMs: 0 })
+    ).rejects.toBeInstanceOf(BallotGradesPendingError);
     expect(fetchPage).toHaveBeenCalledTimes(2);
   });
 

@@ -416,7 +416,8 @@ export function rebaseUnsavedDraft(
     return draft;
   }
   const useOvertaken =
-    membershipDistance(publishedIds, draft.overtakenOrderedIds) < membershipDistance(publishedIds, draft.baseOrderedIds);
+    membershipDistance(publishedIds, draft.overtakenOrderedIds) <
+    membershipDistance(publishedIds, draft.baseOrderedIds);
   const merged = mergeBallots({
     base: useOvertaken
       ? { ids: draft.overtakenOrderedIds, grades: draft.overtakenGrades }

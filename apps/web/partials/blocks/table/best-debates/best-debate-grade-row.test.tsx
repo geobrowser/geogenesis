@@ -21,7 +21,10 @@ vi.mock('~/core/blocks/ranking/use-push-down', () => ({ usePushDown: () => mocks
 
 const DEBATE = 'd1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1';
 
-function grading(overrides: Partial<BestDebatesGrading> = {}, state: { grade?: Grade | null; place?: number | null } = {}) {
+function grading(
+  overrides: Partial<BestDebatesGrading> = {},
+  state: { grade?: Grade | null; place?: number | null } = {}
+) {
   return {
     ready: true,
     needsTierLines: false,
@@ -103,7 +106,9 @@ describe('BestDebateGradeRow (GEO-3729)', () => {
   });
 
   it('shows Saving… while the grade publishes, with the grades held', () => {
-    render(<BestDebateGradeRow entityId={DEBATE} grading={grading({ isSaving: () => true }, { grade: 'A', place: 1 })} />);
+    render(
+      <BestDebateGradeRow entityId={DEBATE} grading={grading({ isSaving: () => true }, { grade: 'A', place: 1 })} />
+    );
     expect(screen.getByText('Saving…')).toBeInTheDocument();
     expect(pill('B')).toBeDisabled();
   });

@@ -69,8 +69,8 @@ import { Button } from '~/design-system/button';
 
 import { stepAtom } from '~/partials/onboarding/onboarding-atoms';
 
-import { BestDebateDisplaysContext } from './best-debates/best-debate-row';
 import { type BestDebatesGrading, gradeChanges, useRecordGrade } from './best-debates/best-debate-grading';
+import { BestDebateDisplaysContext } from './best-debates/best-debate-row';
 import { BestDebateWatchProvider } from './best-debates/best-debate-watch';
 import { BestDebatesTierHeader } from './best-debates/best-debates-tier-header';
 import { ClearRankingButton } from './best-debates/clear-ranking-button';
@@ -766,7 +766,11 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   // The watch popup's grade row on this screen (GEO-3729): a grade goes into the draft, like every
   // other change here, and the screen's Publish sends it.
   const draftPlaces = new Map(orderedIds.map((id, index) => [ID.uuidToHex(id), index + 1]));
-  const gradeInDraft = (debateId: string, next: { ids: string[]; grades: typeof draftGrades }, grade: Grade | 'none') => {
+  const gradeInDraft = (
+    debateId: string,
+    next: { ids: string[]; grades: typeof draftGrades },
+    grade: Grade | 'none'
+  ) => {
     setActiveSwipeRowKey(null);
     recordGrade(debateId, {
       grade,

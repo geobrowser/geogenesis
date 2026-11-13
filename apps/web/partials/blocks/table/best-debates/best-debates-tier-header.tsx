@@ -18,7 +18,8 @@ export function BestDebatesTierHeader({ tier, count }: { tier: Tier; count: numb
       data-testid={`best-debates-tier-${tier}`}
     >
       <span className="shrink-0">
-        {tier === 'ungraded' ? UNGRADED_SECTION_LABEL : tier} <span className="font-normal text-grey-04">· {count}</span>
+        {tier === 'ungraded' ? UNGRADED_SECTION_LABEL : tier}{' '}
+        <span className="font-normal text-grey-04">· {count}</span>
       </span>
       <span className="h-px flex-1 bg-grey-02" aria-hidden />
     </div>

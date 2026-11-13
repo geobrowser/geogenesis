@@ -3,8 +3,8 @@
 import * as React from 'react';
 
 import { fetchDebateOwnSpaces } from '~/core/blocks/ranking/best-debates-debates';
-import { insertAt } from '~/core/blocks/ranking/ranking-placement';
 import { type BallotGrades, NO_GRADES, sortIntoTiers } from '~/core/blocks/ranking/ranking-grades';
+import { insertAt } from '~/core/blocks/ranking/ranking-placement';
 import type { RankingSubmissionSlot } from '~/core/blocks/ranking/ranking-submission-types';
 import {
   type RankersRead,
@@ -17,10 +17,9 @@ import type { RankingSubmissionPublishResult } from '~/core/blocks/ranking/use-r
 import { useToast } from '~/core/hooks/use-toast';
 import { normId } from '~/core/utils/norm-id';
 
-import { gradesForOrder } from '../use-ranking-compose-draft';
-
 import type { RankingComposeTeamMode, RankingComposeTeamView } from '../ranking-compose-global-ranking';
 import type { RankingComposeMobileTab, RankingComposeMobileTabs } from '../ranking-compose-layout';
+import { gradesForOrder } from '../use-ranking-compose-draft';
 import { BestDebatesTeamRowContent } from './best-debates-team-row';
 import { useBestDebatesTeamTools } from './best-debates-team-tools';
 import { BestDebatesToRankList } from './best-debates-to-rank-list';
