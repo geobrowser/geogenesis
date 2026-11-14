@@ -13,6 +13,7 @@ import { Text } from '~/design-system/text';
 import type { DebateMediaTurnSegment, ParticipantSlot } from '../api';
 import { GeoChatRequestError } from '../api';
 import { DebateFeedPlayer } from '../browse/debate-feed-player';
+import { MOMENTS_EDITOR_CLOSEABLE_PARAM } from '../debate-routes';
 import { useDebate, useDebateExtractedClaims, useDebateMedia, useDebateTranscript, useGeoChatAuth } from '../hooks';
 import { NEGATIVE_TEXT_CLASS, POSITIVE_TEXT_CLASS, WAITING_TEXT_CLASS } from '../matchmaking/admin-debate-parts';
 import { HUB_LIGHT_CALLOUT_CLASS_NAME } from '../matchmaking/hub-callout';
@@ -82,9 +83,19 @@ export function MomentsEditor({ debateId, closeable = false }: { debateId: strin
 
 const EditorCloseableContext = React.createContext(false);
 
-/** Closes the editor's tab (allowed: the popup opened it with `window.open`). */
+/**
+ * Closes the editor's tab, which the popup opened with `window.open`. A browser only lets a script
+ * close a tab a script opened, and `?close=1` travels with a copied link, a bookmark or a restored
+ * tab: there the close does nothing, so the editor drops `?close=1` and stays, without its Done.
+ */
 export function closeEditorTab() {
   window.close();
+  window.setTimeout(() => {
+    if (window.closed) return;
+    const url = new URL(window.location.href);
+    url.searchParams.delete(MOMENTS_EDITOR_CLOSEABLE_PARAM);
+    window.location.replace(url.toString());
+  }, 100);
 }
 
 /** Done, for a tab opened from the popup: off while there are changes not published or discarded. */
@@ -209,6 +220,7 @@ function Editor({ debateId }: { debateId: string }) {
     requestedAt: string;
     reelKey: string;
     sent: EditorClip[];
+    preview: boolean;
   } | null>(null);
 
   const request = backfill.data?.request ?? null;
@@ -420,7 +432,12 @@ function Editor({ debateId }: { debateId: string }) {
           if (queued?.refusal === 'reel_changed' || queued?.refusal === 'reel_being_reapplied') refreshAfterReel();
           return;
         }
-        setTracked({ requestedAt: queued.request.requested_at, reelKey: reelKey(clips), sent: clips });
+        setTracked({
+          requestedAt: queued.request.requested_at,
+          reelKey: reelKey(clips),
+          sent: clips,
+          preview: kind === 'preview',
+        });
       },
       onError: error => setQueueError(queueErrorMessage(error)),
     });
@@ -437,6 +454,8 @@ function Editor({ debateId }: { debateId: string }) {
   }
 
   const showJob = inFlight || (ours && job.kind !== 'none');
+  // The reel this visit sent to publish, while it is rendering or live (not failed, not a preview).
+  const publishedEdits = tracked && !tracked.preview && ours && job.kind !== 'failed' ? tracked.reelKey : null;
   // A hand-picked reel the media worker sent again itself after a re-render (geo-chat#352), which
   // no longer fits the new video: never this visit's request, so said whenever it is the latest.
   const reapplyFailed = !ours && job.kind === 'failed' && request?.manual_reel?.reapplied ? job : null;
@@ -458,7 +477,9 @@ function Editor({ debateId }: { debateId: string }) {
               Return to automatic
             </Button>
           ) : null}
-          <DoneButton dirty={dirty} />
+          {/* The reel on screen was sent to publish and hasn't failed: Done needn't wait for the
+              render (the popup's tab follows it). An edit made since still has to be dealt with. */}
+          <DoneButton dirty={dirty && publishedEdits !== reelKey(clips)} />
           <Button disabled={!canPublish} onClick={() => setConfirm('publish')}>
             Publish reel
             {warnings.length > 0 && dirty ? (

@@ -9,6 +9,7 @@ import { capture } from '~/core/analytics';
 import { DEBATES_SPACE_ID } from '~/core/blocks/ranking/best-debates';
 import { GeoChatRequestError } from '~/core/debates/api';
 import { useDebateTranscript } from '~/core/debates/hooks';
+import { useIsMediaAdmin } from '~/core/debates/moments-editor/hooks';
 import {
   DebateMomentsPlayer,
   type DebateMomentsPlayerHandle,
@@ -25,12 +26,13 @@ import {
   highlightedLines,
   momentBlocks,
 } from '~/core/debates/moments-player/watch-transcript';
+import { useIsPhoneLayout } from '~/core/hooks/use-is-phone-layout';
 import { ID } from '~/core/id';
 
 import { BestDebateGradeRow } from './best-debate-grade-row';
 import { type BestDebatesGrading, BestDebatesGradingContext } from './best-debate-grading';
 import { BestDebateWatchContext, type BestDebateWatchEntry, useBestDebateRowData } from './best-debate-row';
-import { EditMomentsMenu, ReelRenderWatcher, captureEditMoments } from './edit-moments';
+import { EditMomentsMenu, ReelRenderWatcher, captureEditMoments, debateUuid } from './edit-moments';
 import { RankingFlowDialog } from './ranking-flow-dialog';
 import { type WatchTranscriptContent, WatchTranscriptPanel, type WatchTranscriptView } from './watch-transcript-panel';
 import { type BestDebatesWatchSpeed, bestDebatesWatchSpeedAtom, bestDebatesWatchSpeedOf } from '~/atoms';
@@ -66,13 +68,13 @@ export function BestDebateWatchProvider({
   children: React.ReactNode;
 }) {
   const [watching, setWatching] = React.useState<string | null>(null);
-  // Debates opened in the moments editor this visit, and when (GEO-3742): their new reels are
-  // followed even after the popup closes, so the next open plays them.
-  const [editing, setEditing] = React.useState<ReadonlyMap<string, number>>(new Map());
+  // Debates opened in the moments editor this visit (GEO-3742): their new reels are followed even
+  // after the popup closes, so the next open plays them.
+  const [editing, setEditing] = React.useState<ReadonlySet<string>>(new Set());
   const editMoments = React.useCallback(
     (entityId: string) => {
       captureEditMoments({ source, entity_id: entityId, block_id: blockId, space_id: spaceId });
-      setEditing(current => (current.has(entityId) ? current : new Map(current).set(entityId, Date.now())));
+      setEditing(current => (current.has(entityId) ? current : new Set(current).add(entityId)));
     },
     [source, blockId, spaceId]
   );
@@ -94,8 +96,8 @@ export function BestDebateWatchProvider({
   );
   return (
     <BestDebateWatchContext.Provider value={watch}>
-      {[...editing].map(([entityId, sinceMs]) => (
-        <ReelRenderWatcher key={entityId} entityId={entityId} sinceMs={sinceMs} />
+      {[...editing].map(entityId => (
+        <ReelRenderWatcher key={entityId} entityId={entityId} />
       ))}
       {/* The rows' Grade menus grade through the same surface as the popup (GEO-3729). */}
       <BestDebatesGradingContext.Provider value={grading}>{children}</BestDebatesGradingContext.Provider>
@@ -181,6 +183,11 @@ function WatchDebateDialog({
   onClose: () => void;
 }) {
   const display = useBestDebateRowData(entityId);
+  // The "…" with Edit moments (GEO-3742): media admins only (the check fails closed), and desktop
+  // only, since the editor has no phone layout (GEO-3744). Nobody else gets the header slot at all.
+  const isMediaAdmin = useIsMediaAdmin(debateUuid(entityId), true);
+  const isPhone = useIsPhoneLayout();
+  const canEditMoments = isMediaAdmin && !isPhone;
   const speakers = useMomentsSpeakers(entityId);
   // The same cached read the player plays, so the Moments transcript is the reel on screen.
   const reel = useDebateMoments(entityId);
@@ -271,12 +278,14 @@ function WatchDebateDialog({
       subtitle={meta}
       size="watch"
       headerActions={
-        <EditMomentsMenu
-          entityId={entityId}
-          // The editor's path names a space; the route only checks it is one.
-          spaceId={display?.space?.id ?? DEBATES_SPACE_ID}
-          onOpen={onEditMoments}
-        />
+        canEditMoments ? (
+          <EditMomentsMenu
+            entityId={entityId}
+            // The editor's path names a space; the route only checks it is one.
+            spaceId={display?.space?.id ?? DEBATES_SPACE_ID}
+            onOpen={onEditMoments}
+          />
+        ) : undefined
       }
     >
       <WatchDebateLayout

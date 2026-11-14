@@ -9,13 +9,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EditMomentsMenu, NEW_REEL_LIVE_COPY, REEL_RENDER_FAILED_COPY, ReelRenderWatcher } from './edit-moments';
 
 const mocks = vi.hoisted(() => ({
-  isAdmin: false,
   backfill: { data: undefined as unknown, refetch: vi.fn() },
   setToast: vi.fn(),
 }));
 
 vi.mock('~/core/debates/moments-editor/hooks', () => ({
-  useIsMediaAdmin: () => mocks.isAdmin,
   useMomentBackfill: () => mocks.backfill,
 }));
 vi.mock('~/core/hooks/use-toast', () => ({ useSetToast: () => mocks.setToast }));
@@ -36,35 +34,30 @@ function wrap(children: React.ReactNode, client = new QueryClient()) {
 }
 
 beforeEach(() => {
-  mocks.isAdmin = false;
   mocks.backfill = { data: undefined, refetch: vi.fn() };
   mocks.setToast.mockReset();
 });
 afterEach(cleanup);
 
 describe('EditMomentsMenu (GEO-3742)', () => {
-  it('shows nothing to someone who can’t edit moments', () => {
-    render(wrap(<EditMomentsMenu entityId={HEX} spaceId={SPACE} onOpen={vi.fn()} />));
-    expect(screen.queryByRole('button', { name: 'More debate options' })).toBeNull();
-  });
-
-  it('opens the editor in a tab of its own for a media admin, on desktop only', () => {
-    mocks.isAdmin = true;
+  it('opens the editor in a tab of its own, with no opener, from the shared Admin item', () => {
     const open = vi.spyOn(window, 'open').mockReturnValue(null);
     const onOpen = vi.fn();
     render(wrap(<EditMomentsMenu entityId={HEX} spaceId={SPACE} onOpen={onOpen} />));
-    const trigger = screen.getByRole('button', { name: 'More debate options' });
-    expect(trigger.closest('.md\\:hidden')).not.toBeNull();
-    fireEvent.click(trigger);
-    fireEvent.click(screen.getByRole('button', { name: 'Edit moments' }));
-    expect(open).toHaveBeenCalledWith(`/space/${SPACE}/debates/${UUID}/moments?close=1`, '_blank');
+    fireEvent.click(screen.getByRole('button', { name: 'More debate options' }));
+    const item = screen.getByRole('button', { name: /Edit moments/ });
+    expect(item).toHaveTextContent('Admin');
+    expect(item).toHaveAttribute('data-geo-analytics-label', 'Edit moments');
+    // Desktop only, like the feed's item.
+    expect(item).toHaveClass('md:hidden');
+    fireEvent.click(item);
+    expect(open).toHaveBeenCalledWith(`/space/${SPACE}/debates/${UUID}/moments?close=1`, '_blank', 'noopener');
     expect(onOpen).toHaveBeenCalledWith(HEX);
     open.mockRestore();
   });
 });
 
 describe('ReelRenderWatcher (GEO-3742)', () => {
-  const since = Date.parse('2026-11-14T10:00:00Z');
   const request = (status: string, requestedAt: string, extra: Record<string, unknown> = {}) => ({
     request: { status, requested_at: requestedAt, preview: false, unlock: false, report: null, ...extra },
   });
@@ -72,8 +65,8 @@ describe('ReelRenderWatcher (GEO-3742)', () => {
   function setup() {
     const client = new QueryClient();
     const invalidate = vi.spyOn(client, 'invalidateQueries');
-    const view = render(wrap(<ReelRenderWatcher entityId={HEX} sinceMs={since} />, client));
-    const rerender = () => view.rerender(wrap(<ReelRenderWatcher entityId={HEX} sinceMs={since} />, client));
+    const view = render(wrap(<ReelRenderWatcher entityId={HEX} />, client));
+    const rerender = () => view.rerender(wrap(<ReelRenderWatcher entityId={HEX} />, client));
     return { invalidate, rerender };
   }
 
@@ -102,13 +95,34 @@ describe('ReelRenderWatcher (GEO-3742)', () => {
     expect(toast.props.children).toBe(REEL_RENDER_FAILED_COPY);
   });
 
-  it('ignores the reel that was already live and previews', () => {
-    mocks.backfill.data = request('done', '2026-11-14T10:00:30Z');
-    const { rerender } = setup();
+  it('ignores the request there was when it started, even one still rendering', () => {
+    mocks.backfill.data = request('running', '2026-11-14T10:00:30Z');
+    const { invalidate, rerender } = setup();
+    mocks.backfill = { ...mocks.backfill, data: request('done', '2026-11-14T10:00:30Z') };
+    rerender();
+    expect(invalidate).not.toHaveBeenCalled();
     expect(mocks.setToast).not.toHaveBeenCalled();
+  });
+
+  it('re-reads the moments after a preview, with no toast, so a publish before it isn’t missed', () => {
+    mocks.backfill.data = request('done', '2026-11-13T09:00:00Z');
+    const { invalidate, rerender } = setup();
+    // Published and then previewed while this tab was hidden: only the preview is the latest.
     mocks.backfill = { ...mocks.backfill, data: request('done', '2026-11-14T10:02:00Z', { preview: true }) };
     rerender();
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['debates', 'moments-player', HEX] });
     expect(mocks.setToast).not.toHaveBeenCalled();
+  });
+
+  it('never compares geo-chat’s times with this browser’s clock', () => {
+    // This browser is a day ahead of geo-chat: a render queued now still counts.
+    vi.useFakeTimers({ now: Date.parse('2026-11-15T10:00:00Z'), toFake: ['Date'] });
+    mocks.backfill.data = request('done', '2026-11-13T09:00:00Z');
+    const { rerender } = setup();
+    mocks.backfill = { ...mocks.backfill, data: request('done', '2026-11-14T10:01:00Z') };
+    rerender();
+    expect(mocks.setToast).toHaveBeenCalledTimes(1);
+    vi.useRealTimers();
   });
 
   it('reads the render again when this tab comes back into view', () => {

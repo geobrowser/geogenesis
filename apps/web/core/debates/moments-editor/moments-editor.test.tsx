@@ -1259,6 +1259,61 @@ describe('MomentsEditor in a tab opened from the Best debates popup (GEO-3742)',
     close.mockRestore();
   });
 
+  it('lets Done close once the edit is sent to publish, without waiting for the render, until it fails', () => {
+    const requestedAt = '2026-11-14T10:00:00Z';
+    mocks.mutate.mockImplementation((_body, options: { onSuccess: (entry: unknown) => void }) =>
+      options.onSuccess({ queued: true, refusal: null, request: status({ requested_at: requestedAt }) })
+    );
+    const { rerender } = render(<MomentsEditor debateId={DEBATE_ID} closeable />);
+    fireEvent.change(screen.getByRole('textbox', { name: 'End time' }), { target: { value: '1.45' } });
+    fireEvent.blur(screen.getByRole('textbox', { name: 'End time' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Publish reel/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Publish (and lock|anyway)$/ }));
+    mocks.backfill.data = { request: status({ status: 'running', requested_at: requestedAt }), entry: null };
+    rerender(<MomentsEditor debateId={DEBATE_ID} closeable />);
+    expect(screen.getByRole('button', { name: 'Done' })).toBeEnabled();
+    // The render failed: the edit is unpublished again, so Done waits.
+    mocks.backfill.data = {
+      request: status({ status: 'skipped', requested_at: requestedAt, outcome: 'manual_reel_invalid' }),
+      entry: null,
+    };
+    rerender(<MomentsEditor debateId={DEBATE_ID} closeable />);
+    expect(screen.getByRole('button', { name: 'Done' })).toBeDisabled();
+  });
+
+  it('keeps Done waiting while only a preview of the edit is rendering', () => {
+    const requestedAt = '2026-11-14T10:00:00Z';
+    mocks.mutate.mockImplementation((_body, options: { onSuccess: (entry: unknown) => void }) =>
+      options.onSuccess({ queued: true, refusal: null, request: status({ requested_at: requestedAt, preview: true }) })
+    );
+    const { rerender } = render(<MomentsEditor debateId={DEBATE_ID} closeable />);
+    fireEvent.change(screen.getByRole('textbox', { name: 'End time' }), { target: { value: '1.45' } });
+    fireEvent.blur(screen.getByRole('textbox', { name: 'End time' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Preview/ }));
+    mocks.backfill.data = {
+      request: status({ status: 'running', requested_at: requestedAt, preview: true }),
+      entry: null,
+    };
+    rerender(<MomentsEditor debateId={DEBATE_ID} closeable />);
+    expect(screen.getByRole('button', { name: 'Done' })).toBeDisabled();
+  });
+
+  it('stays open, without Done, where the browser won’t let Done close the tab', () => {
+    vi.useFakeTimers();
+    const close = vi.spyOn(window, 'close').mockImplementation(() => undefined);
+    const replace = vi.fn();
+    const location = window.location;
+    vi.stubGlobal('location', { href: 'https://geo.test/space/s/debates/d/moments?close=1', replace });
+    render(<MomentsEditor debateId={DEBATE_ID} closeable />);
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    expect(close).toHaveBeenCalled();
+    vi.advanceTimersByTime(200);
+    expect(replace).toHaveBeenCalledWith('https://geo.test/space/s/debates/d/moments');
+    vi.stubGlobal('location', location);
+    close.mockRestore();
+    vi.useRealTimers();
+  });
+
   it('offers Done even when it can’t show the editor', () => {
     mocks.backfill = {
       isPending: false,
