@@ -8,6 +8,36 @@ import { DebateVideoTile } from './debate-video-tile';
 afterEach(cleanup);
 
 describe('DebateVideoTile', () => {
+  it.each([false, true])('keeps turn cues in the existing name chip (Open rounds: %s)', openRounds => {
+    const tile = (active: boolean, upNext = false, finishingSince: number | null = null) => (
+      <DebateVideoTile
+        participantPosition={true}
+        participantName="You"
+        active={active}
+        upNext={upNext}
+        inactiveIndicatorId="local"
+        openRounds={openRounds}
+        finishingSince={finishingSince}
+      >
+        <div />
+      </DebateVideoTile>
+    );
+    const view = render(tile(false, true));
+    const nameChip = screen.getByText('You').parentElement!;
+    expect(nameChip).toHaveTextContent('Up next');
+
+    view.rerender(tile(true));
+    expect(screen.getByText('You').parentElement).toBe(nameChip);
+    expect(nameChip).toHaveTextContent('Your turn');
+    expect(screen.queryByText('Up next')).not.toBeInTheDocument();
+
+    view.rerender(tile(false, false, Date.now()));
+    expect(screen.getByText('You').parentElement).toBe(nameChip);
+    expect(nameChip).toHaveTextContent('Finishing');
+    expect(screen.queryByText('Your turn')).not.toBeInTheDocument();
+    expect(view.container.querySelector('section')).not.toHaveClass('outline-[3px]');
+  });
+
   it.each([false, true])(
     'never shows a speaker still finishing past the buzzer as muted (GEO-3407, Open rounds: %s)',
     openRounds => {
@@ -41,8 +71,9 @@ describe('DebateVideoTile', () => {
       expect(screen.getByRole('img', { name: 'Microphone still open' })).toBeInTheDocument();
       expect(tile.querySelector('[data-muted-indicator]')).not.toBeInTheDocument();
       expect(tile).toHaveAttribute('data-turn-finishing', 'true');
-      // Still outlined as the one being heard.
-      expect(tile.className).toContain('outline-[3px]');
+      // The next speaker owns the floor; an open microphone is not a second active turn.
+      expect(tile).not.toHaveClass('outline-[3px]');
+      expect(tile.querySelector('[data-room-speaker-outline]')).not.toBeInTheDocument();
     }
   );
 
@@ -63,17 +94,9 @@ describe('DebateVideoTile', () => {
     expect(view.container.querySelector('[data-muted-indicator]')).not.toBeInTheDocument();
   });
 
-  it('keeps its outline and badges in a stacking context of their own, under the vote card (GEO-3407)', () => {
-    // The outline is z-50 inside the tile and the vote card z-40 across both tiles; without the
-    // tile's own context the outline of a speaker finishing into the vote painted over the card.
+  it('keeps the active outline and badges in a stacking context of their own, under room overlays', () => {
     const view = render(
-      <DebateVideoTile
-        participantPosition={null}
-        active={false}
-        inactiveIndicatorId="remote"
-        openRounds
-        finishingSince={Date.now()}
-      >
+      <DebateVideoTile participantPosition={null} active inactiveIndicatorId="remote" openRounds>
         <div />
       </DebateVideoTile>
     );
