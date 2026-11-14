@@ -34,6 +34,12 @@ const mocks = vi.hoisted(() => ({
   myGrades: new Map() as Map<string, 'A' | 'B' | 'C'>,
   grading: null as null | import('./best-debates/best-debate-grading').BestDebatesGrading,
   reorder: vi.fn(),
+  composeArgs: null as null | Record<string, unknown>,
+  recordGrade: vi.fn(),
+}));
+vi.mock('./best-debates/best-debate-grading', async importOriginal => ({
+  ...(await importOriginal<typeof import('./best-debates/best-debate-grading')>()),
+  useRecordGrade: () => mocks.recordGrade,
 }));
 
 vi.mock('~/core/blocks/ranking/best-debates', async importOriginal => ({
@@ -163,6 +169,7 @@ vi.mock('./best-debates/use-best-debates-compose', () => ({
     serialPublishes?: boolean;
     saveMySubmission: (slots: { id: string; name: string | null; spaceId?: string }[]) => Promise<unknown>;
   }) => {
+    mocks.composeArgs = args;
     mocks.bestDebatesEnabled = args.enabled;
     mocks.bestDebatesSerial = args.serialPublishes;
     return {
@@ -341,5 +348,47 @@ describe('RankingComposeScreen on any other block', () => {
     expect(mocks.canPublish).toBe(true);
     mocks.grading?.reorder(d2);
     expect(mocks.reorder).toHaveBeenCalledWith(d2);
+  });
+
+  it('counts a grade Re-order changed as a reorder, in the draft and again when published (GEO-3729)', async () => {
+    mocks.member = true;
+    mocks.recordGrade.mockReset();
+    const [a1, x] = ['a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1', 'e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5'];
+    mocks.lastIds = [a1, x];
+    mocks.myGrades = new Map([
+      [a1, 'A'],
+      [x, 'B'],
+    ]);
+    renderScreen();
+    const before = { ids: [a1, x], grades: new Map(mocks.myGrades) };
+    const after = {
+      ids: [x, a1],
+      grades: new Map([
+        [a1, 'A'],
+        [x, 'A'],
+      ]),
+    };
+    type End = (o: string, b: typeof before, a: typeof after) => void;
+    await act(async () => (mocks.composeArgs?.onReorderEnd as End)('closed', before, after));
+    expect(mocks.recordGrade).toHaveBeenCalledWith(x, {
+      grade: 'A',
+      previousGrade: 'B',
+      method: 'reorder',
+      mutationKind: 'draft',
+    });
+    type OnPublished = (p: unknown, ids: string[], grades: Map<string, string>) => void;
+    await act(async () =>
+      (mocks.composeArgs?.onPublished as OnPublished)(
+        { orderedEntityIds: after.ids, grades: after.grades, indexingSettled: Promise.resolve(null) },
+        after.ids,
+        after.grades
+      )
+    );
+    expect(mocks.recordGrade).toHaveBeenLastCalledWith(x, {
+      grade: 'A',
+      previousGrade: 'B',
+      method: 'reorder',
+      mutationKind: 'published',
+    });
   });
 });

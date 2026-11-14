@@ -58,6 +58,7 @@ export function useBestDebatesBlockRanking({
   const pushDown = useBestDebatesPushDownSlot({ blockId: enabled ? blockId : null, pushedDownEntityIds });
   const { publish: publishClearingDownvotes, isPublishing } = useBestDebatesBallotPublisher();
 
+  const recordGrade = useRecordGrade(blockId);
   const getPublishedBase = () => ({ ids: getBasedOnOrderedIds(), grades: getBasedOnGrades() });
   const save = async (slots: RankingSubmissionSlot[], basedOn?: PublishedBase) => {
     const base = basedOn ?? getPublishedBase();
@@ -93,6 +94,22 @@ export function useBestDebatesBlockRanking({
     // Done and the popup's grades both publish from here, one at a time (GEO-3729).
     serialPublishes: true,
     getPublishedBase,
+    // Re-order (GEO-3729): Done published the move, so a grade it changed is counted; closed
+    // without Done, the move goes back, since nothing on the block would publish it.
+    onReorderEnd: (outcome, before, after) => {
+      if (outcome === 'closed') {
+        setDraft(before.ids, before.grades);
+        return;
+      }
+      for (const change of gradeChanges(before.ids, before.grades, after.ids, after.grades)) {
+        recordGrade(change.entityId, {
+          grade: change.grade,
+          previousGrade: change.previousGrade,
+          method: 'reorder',
+          mutationKind: 'published',
+        });
+      }
+    },
   });
 
   const myRankById = React.useMemo(() => new Map(orderedIds.map((id, i) => [normId(id), i + 1])), [orderedIds]);

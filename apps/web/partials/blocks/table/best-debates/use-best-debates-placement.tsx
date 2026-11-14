@@ -44,6 +44,8 @@ type FlowState =
       withOtherChanges: boolean;
       /** The last Done or Rank the next one didn't go out. */
       publishFailed?: boolean;
+      /** Opened by Re-order on a debate already in the ranking (GEO-3729). */
+      reorder?: boolean;
     };
 
 export type UseBestDebatesPlacementArgs = {
@@ -69,6 +71,11 @@ export type UseBestDebatesPlacementArgs = {
    * to publish from.
    */
   publishOnDone?: boolean;
+  /**
+   * A Re-order's Placed step ended (GEO-3729): `done` once its Done kept or published the move,
+   * `closed` when it was closed without Done.
+   */
+  onReorderEnd?: (entityId: string, outcome: 'done' | 'closed') => void;
 };
 
 /**
@@ -92,6 +99,7 @@ export function useBestDebatesPlacement({
   isSaving,
   pushDown,
   publishOnDone = false,
+  onReorderEnd,
 }: UseBestDebatesPlacementArgs) {
   const [flow, setFlow] = React.useState<FlowState | null>(null);
   const getContext = useActionContext('ranking_composer', 'ranking', blockId);
@@ -170,6 +178,7 @@ export function useBestDebatesPlacement({
       origin: 'mine',
       placedIndex: index,
       withOtherChanges: hasUnpublishedChangesRef.current,
+      reorder: true,
     });
   }, []);
 
@@ -279,16 +288,19 @@ export function useBestDebatesPlacement({
   );
 
   const done = React.useCallback(
-    async (entityId: string, placedIndex: number) => {
+    async (entityId: string, placedIndex: number, reorder = false) => {
       if (!publishOnDone) {
         keepPlaced(entityId, placedIndex);
         setFlow(null);
+        if (reorder) onReorderEnd?.(entityId, 'done');
         return;
       }
-      if (await publishPlaced(entityId, placedIndex)) setFlow(null);
-      else markPublishFailed();
+      if (await publishPlaced(entityId, placedIndex)) {
+        setFlow(null);
+        if (reorder) onReorderEnd?.(entityId, 'done');
+      } else markPublishFailed();
     },
-    [keepPlaced, markPublishFailed, publishOnDone, publishPlaced]
+    [keepPlaced, markPublishFailed, onReorderEnd, publishOnDone, publishPlaced]
   );
 
   const rankNext = React.useCallback(
@@ -335,8 +347,11 @@ export function useBestDebatesPlacement({
         publishFailed={Boolean(flow.publishFailed)}
         isSaving={isSaving}
         onNudge={direction => setOrderedIds(nudge(orderedIdsRef.current, placedId, direction), placedId)}
-        onDone={() => void done(placedId, flow.placedIndex)}
-        onClose={() => setFlow(null)}
+        onDone={() => void done(placedId, flow.placedIndex, flow.reorder)}
+        onClose={() => {
+          setFlow(null);
+          if (flow.reorder) onReorderEnd?.(placedId, 'closed');
+        }}
         next={
           flow.origin === 'to_rank' && remaining.length > 0
             ? {

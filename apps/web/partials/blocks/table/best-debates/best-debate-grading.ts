@@ -47,8 +47,11 @@ export type BestDebatesGrading = {
   undoDownRank?: (entityId: string) => void;
 };
 
-/** Where a grade was given: the popup, a list row's Grade menu, a drag, the tier lines. */
-export type GradeMethod = 'popup' | 'list' | 'drag' | 'tier_lines' | 'ranking_screen';
+/**
+ * Where a grade was given: the popup, a list row's Grade menu, a drag, the tier lines, or a move
+ * across a tier line in the popup's Re-order.
+ */
+export type GradeMethod = 'popup' | 'list' | 'drag' | 'tier_lines' | 'reorder' | 'ranking_screen';
 
 /** D is Down rank: it is counted by Down rank's own `push_down` action, not here. */
 export type GradeChange = {

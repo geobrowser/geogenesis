@@ -381,6 +381,40 @@ describe('Re-order from the watch popup (GEO-3729)', () => {
     expect(publish).toHaveBeenCalledWith(['d1', 'd3', 'd2']);
   });
 
+  it('says how the step ended: closed, or done once Done went out', async () => {
+    const onReorderEnd = vi.fn();
+    render(<Harness initial={list(3)} startWith={{ id: 'd2', origin: 'mine' }} onReorderEnd={onReorderEnd} />);
+    fireEvent.click(screen.getByText('reorder'));
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    expect(onReorderEnd).toHaveBeenCalledWith('d2', 'closed');
+    fireEvent.click(screen.getByText('reorder'));
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Done' })));
+    expect(onReorderEnd).toHaveBeenLastCalledWith('d2', 'done');
+    expect(onReorderEnd).toHaveBeenCalledTimes(2);
+  });
+
+  it('says nothing when a Done didn’t go out, or for a placement that wasn’t a Re-order', async () => {
+    const onReorderEnd = vi.fn();
+    render(
+      <Harness
+        initial={list(3)}
+        startWith={{ id: 'd2', origin: 'mine' }}
+        onReorderEnd={onReorderEnd}
+        publish={async () => false}
+      />
+    );
+    fireEvent.click(screen.getByText('reorder'));
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Done' })));
+    expect(onReorderEnd).not.toHaveBeenCalled();
+    cleanup();
+    // An empty ranking places a new debate at once, straight onto the Placed step.
+    render(<Harness initial={[]} startWith={{ id: 'new', origin: 'team' }} onReorderEnd={onReorderEnd} />);
+    fireEvent.click(screen.getByText('start'));
+    expect(screen.getByText('Placed #1 of 1')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    expect(onReorderEnd).not.toHaveBeenCalled();
+  });
+
   it('does nothing for a debate that isn’t in the ranking', () => {
     render(<Harness initial={list(3)} startWith={{ id: 'new', origin: 'mine' }} />);
     fireEvent.click(screen.getByText('reorder'));

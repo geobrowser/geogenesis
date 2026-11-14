@@ -720,6 +720,18 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
     },
     openOnToRank: searchParams?.get(BEST_DEBATES_TEAM_VIEW_PARAM) === BEST_DEBATES_TEAM_VIEW_TO_RANK,
     searchQuery,
+    // Re-order's move stays in the draft however it ends; a grade it changed is counted (GEO-3729).
+    onReorderEnd: (_outcome, before, after) => {
+      for (const change of gradeChanges(before.ids, before.grades, after.ids, after.grades)) {
+        recordGrade(change.entityId, {
+          grade: change.grade,
+          previousGrade: change.previousGrade,
+          method: 'reorder',
+          mutationKind: 'draft',
+        });
+        draftGradeMethods.current.set(ID.uuidToHex(change.entityId), 'reorder');
+      }
+    },
   });
 
   // Every debate the screen can show (team column, To rank, yours, pushed down), resolved once for

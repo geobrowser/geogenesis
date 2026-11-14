@@ -68,6 +68,12 @@ export type UseBestDebatesComposeArgs = {
    * it publishes.
    */
   serialPublishes?: boolean;
+  /**
+   * A Re-order's Placed step ended (GEO-3729), with the draft from when it opened (`before`) and as
+   * it ended (`after`). The block puts `before` back on `closed`, since nothing else would publish
+   * the move; the screen keeps the move in the draft either way.
+   */
+  onReorderEnd?: (outcome: 'done' | 'closed', before: PublishedBase, after: PublishedBase) => void;
   /** The team column's search, which To rank filters by too. */
   searchQuery?: string;
   /** Open the team column on To rank (the screen was opened with `?team=to-rank`, GEO-3677). */
@@ -102,6 +108,7 @@ export function useBestDebatesCompose({
   publishOnDone = false,
   serialPublishes = false,
   getPublishedBase,
+  onReorderEnd,
 }: UseBestDebatesComposeArgs) {
   const tools = useBestDebatesTeamTools();
   const [, setToast] = useToast();
@@ -223,6 +230,18 @@ export function useBestDebatesCompose({
   const whenPublishesSettle = React.useCallback(() => whenRankingPublishQueueSettles(queueKey), [queueKey]);
   const publishing = isSaving || queued > 0;
 
+  // The draft as a Re-order opened, and as it stands (read when its Placed step ends).
+  const draftRef = React.useRef<PublishedBase>({ ids: orderedIds, grades });
+  draftRef.current = { ids: orderedIds, grades };
+  const reorderBefore = React.useRef<PublishedBase | null>(null);
+  const onReorderEndRef = React.useRef(onReorderEnd);
+  onReorderEndRef.current = onReorderEnd;
+  const endReorder = React.useCallback((_entityId: string, outcome: 'done' | 'closed') => {
+    const before = reorderBefore.current;
+    reorderBefore.current = null;
+    if (before) onReorderEndRef.current?.(outcome, before, draftRef.current);
+  }, []);
+
   const placement = useBestDebatesPlacement({
     blockId,
     orderedIds,
@@ -235,7 +254,16 @@ export function useBestDebatesCompose({
     isSaving: publishing,
     pushDown,
     publishOnDone,
+    onReorderEnd: endReorder,
   });
+  const placementReorder = placement.reorder;
+  const reorder = React.useCallback(
+    (entityId: string) => {
+      reorderBefore.current = draftRef.current;
+      placementReorder(entityId);
+    },
+    [placementReorder]
+  );
 
   const startPlacement = React.useCallback(
     (entityId: string, origin: PlacementOrigin) => placement.start(entityId, origin),
@@ -305,7 +333,7 @@ export function useBestDebatesCompose({
     publish,
     whenPublishesSettle,
     /** Re-order a debate already in the ranking: the Placed step at its place (GEO-3729). */
-    reorder: placement.reorder,
+    reorder,
     /** Down rank from a row (waits for the ranker's vote, then the toast with Undo). */
     requestPushDown: placement.requestPushDown,
     /** For a coverage line in To rank's terms: the window's debates, and how many are left to rank. */
