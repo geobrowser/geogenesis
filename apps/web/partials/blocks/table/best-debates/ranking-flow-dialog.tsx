@@ -32,6 +32,8 @@ type Props = {
   phoneSheet?: boolean;
   children: React.ReactNode;
   footer?: React.ReactNode;
+  /** Beside the close button (the watch popup's "…", GEO-3742). */
+  headerActions?: React.ReactNode;
   onKeyDown?: (event: React.KeyboardEvent) => void;
 };
 
@@ -55,6 +57,7 @@ export function RankingFlowDialog({
   roundClose = false,
   children,
   footer,
+  headerActions,
   onKeyDown,
 }: Props) {
   return (
@@ -117,6 +120,7 @@ export function RankingFlowDialog({
                   </div>
                 ) : null}
               </div>
+              {headerActions ? <div className="ml-auto flex shrink-0 items-center gap-2">{headerActions}</div> : null}
               <Dialog.Close asChild>
                 {roundClose ? (
                   <button

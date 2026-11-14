@@ -13,6 +13,7 @@ import { Text } from '~/design-system/text';
 import type { DebateMediaTurnSegment, ParticipantSlot } from '../api';
 import { GeoChatRequestError } from '../api';
 import { DebateFeedPlayer } from '../browse/debate-feed-player';
+import { MOMENTS_EDITOR_CLOSEABLE_PARAM } from '../debate-routes';
 import { useDebate, useDebateExtractedClaims, useDebateMedia, useDebateTranscript, useGeoChatAuth } from '../hooks';
 import { NEGATIVE_TEXT_CLASS, POSITIVE_TEXT_CLASS, WAITING_TEXT_CLASS } from '../matchmaking/admin-debate-parts';
 import { HUB_LIGHT_CALLOUT_CLASS_NAME } from '../matchmaking/hub-callout';
@@ -68,7 +69,56 @@ const TRANSCRIPT_INCLUDE = ['words', 'sentences'] as const;
  * geo-chat is the gate: its admin read answers 403 to anyone off the media-admin list, and the page
  * shows nothing of the editor until that read has answered.
  */
-export function MomentsEditor({ debateId }: { debateId: string }) {
+/**
+ * `closeable` (GEO-3742): the editor was opened in a tab of its own, from the Best debates popup, so
+ * its header has a Done that closes the tab and leaves the ranker where they were.
+ */
+export function MomentsEditor({ debateId, closeable = false }: { debateId: string; closeable?: boolean }) {
+  return (
+    <EditorCloseableContext.Provider value={closeable}>
+      <MomentsEditorBody debateId={debateId} />
+    </EditorCloseableContext.Provider>
+  );
+}
+
+const EditorCloseableContext = React.createContext(false);
+
+/**
+ * Closes the editor's tab, which the popup opened with `window.open`. A browser only lets a script
+ * close a tab a script opened, and `?close=1` travels with a copied link, a bookmark or a restored
+ * tab: there the close does nothing, so the editor drops `?close=1` and stays, without its Done.
+ */
+export function closeEditorTab() {
+  window.close();
+  window.setTimeout(() => {
+    if (window.closed) return;
+    const url = new URL(window.location.href);
+    url.searchParams.delete(MOMENTS_EDITOR_CLOSEABLE_PARAM);
+    window.location.replace(url.toString());
+  }, 100);
+}
+
+/** Brings back the clips of a publish that failed after its visit ended. New copy (GEO-3742). */
+export const RESTORE_FAILED_EDIT_LABEL = 'Bring back the edit that failed';
+
+/** Done, for a tab opened from the popup: off while there are changes not published or discarded. */
+function DoneButton({ dirty = false }: { dirty?: boolean }) {
+  const closeable = React.useContext(EditorCloseableContext);
+  if (!closeable) return null;
+  return (
+    <Button
+      variant="secondary"
+      disabled={dirty}
+      title={dirty ? 'Publish or discard your changes first' : undefined}
+      onClick={closeEditorTab}
+      data-geo-analytics-label="Moments editor done"
+    >
+      Done
+    </Button>
+  );
+}
+
+function MomentsEditorBody({ debateId }: { debateId: string }) {
   const { ready, authenticated } = useGeoChatAuth();
   const backfill = useMomentBackfill(debateId, true);
 
@@ -173,6 +223,7 @@ function Editor({ debateId }: { debateId: string }) {
     requestedAt: string;
     reelKey: string;
     sent: EditorClip[];
+    preview: boolean;
   } | null>(null);
 
   const request = backfill.data?.request ?? null;
@@ -362,6 +413,47 @@ function Editor({ debateId }: { debateId: string }) {
     setClips(source.clips);
   };
 
+  // A publish that failed after its visit ended (GEO-3742: the popup's tab closes with Done while it
+  // renders, and its toast says to open Edit moments): shown here as if this visit had sent it, and
+  // its clips can be brought back as an unsaved edit, with the worker's problems on them.
+  const failedElsewhere =
+    !ours &&
+    !tracked &&
+    request &&
+    job.kind === 'failed' &&
+    !request.preview &&
+    !request.unlock &&
+    // The worker's own resend after a re-render has a notice of its own (`UnlinkableNotice`), and a
+    // batch or automatic re-cut has no hand-picked clips: neither is a publish from here.
+    !request.manual_reel?.reapplied &&
+    (request.manual_reel?.clips?.length ?? 0) > 0
+      ? request
+      : null;
+  const failedClips = failedElsewhere?.manual_reel?.clock === 'player' ? failedElsewhere.manual_reel.clips : undefined;
+  const restoreFailedEdit =
+    failedElsewhere && failedClips && failedClips.length > 0 && !readOnly && !dirty
+      ? () => {
+          // The edges as sent. A reel sent `exact` had every edge placed freely, so each stays where it
+          // is (`edgeIsFree`); otherwise they are word edges, and geo-chat adds its room again.
+          const exact = failedElsewhere.manual_reel?.exact === true;
+          const restored: EditorClip[] = failedClips.map(clip => ({
+            key: newClipKey(),
+            start_ms: clip.start_ms,
+            end_ms: clip.end_ms,
+            ...(exact && { free_start_ms: clip.start_ms, free_end_ms: clip.end_ms }),
+            claim_index: typeof clip.claim_index === 'number' ? clip.claim_index : null,
+            live_claim_text: null,
+          }));
+          setClips(restored);
+          setTracked({
+            requestedAt: failedElsewhere.requested_at,
+            reelKey: reelKey(restored),
+            sent: restored,
+            preview: false,
+          });
+        }
+      : null;
+
   const submit = (kind: 'preview' | 'publish' | 'unlock') => {
     setConfirm(null);
     if (!(kind === 'publish' ? canPublish : kind === 'unlock' ? canUnlock : canQueue)) return;
@@ -384,7 +476,12 @@ function Editor({ debateId }: { debateId: string }) {
           if (queued?.refusal === 'reel_changed' || queued?.refusal === 'reel_being_reapplied') refreshAfterReel();
           return;
         }
-        setTracked({ requestedAt: queued.request.requested_at, reelKey: reelKey(clips), sent: clips });
+        setTracked({
+          requestedAt: queued.request.requested_at,
+          reelKey: reelKey(clips),
+          sent: clips,
+          preview: kind === 'preview',
+        });
       },
       onError: error => setQueueError(queueErrorMessage(error)),
     });
@@ -401,6 +498,8 @@ function Editor({ debateId }: { debateId: string }) {
   }
 
   const showJob = inFlight || (ours && job.kind !== 'none');
+  // The reel this visit sent to publish, while it is rendering or live (not failed, not a preview).
+  const publishedEdits = tracked && !tracked.preview && ours && job.kind !== 'failed' ? tracked.reelKey : null;
   // A hand-picked reel the media worker sent again itself after a re-render (geo-chat#352), which
   // no longer fits the new video: never this visit's request, so said whenever it is the latest.
   const reapplyFailed = !ours && job.kind === 'failed' && request?.manual_reel?.reapplied ? job : null;
@@ -422,6 +521,9 @@ function Editor({ debateId }: { debateId: string }) {
               Return to automatic
             </Button>
           ) : null}
+          {/* The reel on screen was sent to publish and hasn't failed: Done needn't wait for the
+              render (the popup's tab follows it). An edit made since still has to be dealt with. */}
+          <DoneButton dirty={dirty && publishedEdits !== reelKey(clips)} />
           <Button disabled={!canPublish} onClick={() => setConfirm('publish')}>
             Publish reel
             {warnings.length > 0 && dirty ? (
@@ -489,6 +591,18 @@ function Editor({ debateId }: { debateId: string }) {
       ) : null}
       {queueError ? <Notice tone="bad">{queueError}</Notice> : null}
       {showJob && !job.preview ? <JobNotice job={job} flagged={flaggedClips} noReel={unlinkable} /> : null}
+      {failedElsewhere ? (
+        <>
+          <JobNotice job={job} flagged={[]} noReel={unlinkable} />
+          {restoreFailedEdit ? (
+            <div>
+              <Button variant="secondary" onClick={restoreFailedEdit}>
+                {RESTORE_FAILED_EDIT_LABEL}
+              </Button>
+            </div>
+          ) : null}
+        </>
+      ) : null}
       {wholeReelProblems.length > 0 ? (
         <Notice tone="bad">
           {wholeReelProblems.map(problem => (
@@ -757,7 +871,7 @@ function EditorShell({
             Edit moments
           </Text>
         </div>
-        {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
+        {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : <DoneButton />}
       </div>
       {typeof children === 'string' ? <Text variant="body">{children}</Text> : children}
     </div>
