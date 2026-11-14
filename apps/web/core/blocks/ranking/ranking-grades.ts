@@ -271,6 +271,12 @@ export function defaultTierLines(count: number): { aCount: number; bCount: numbe
   return { aCount, bCount: Math.min(count - aCount, Math.round(count * 0.4)) };
 }
 
+/**
+ * The smallest published ranking Grade your ranking opens on by itself: the starting lines then
+ * give every tier a debate (1 / 2 / 2). Smaller rankings open it from Grade it.
+ */
+export const TIER_LINES_AUTO_OPEN_MIN = 5;
+
 export function gradePlaceCopy(place: number): string {
   return `#${place} in your ranking`;
 }

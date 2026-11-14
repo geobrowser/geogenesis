@@ -23,6 +23,7 @@ import {
   GRADE_YOUR_RANKING_TITLE,
   type Grade,
   NO_GRADES,
+  TIER_LINES_AUTO_OPEN_MIN,
   TIER_LINES_NOT_NOW_LABEL,
   TIER_LINES_SAVE_LABEL,
   applyTierLines,
@@ -805,12 +806,14 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
 
   // "Grade your ranking" (GEO-3729): once, on a ranking with no grades, the ranker drags an "A ends
   // here" and a "B ends here" line onto their order; Save publishes the same order with the grades.
-  // Opened by itself when the published ranking has no grades (unless they said Not now), from the
-  // popup's Grade it, or by `?grade=tiers` from the block. A first ranking still being drafted isn't
-  // opened by itself: its first placements carry no grade, and the lines would take over the list.
+  // Opened by itself when the published ranking has no grades and at least TIER_LINES_AUTO_OPEN_MIN
+  // debates (unless they said Not now), from the popup's Grade it, or by `?grade=tiers` from the
+  // block. A first ranking being drafted, or a published one of a debate or two, isn't opened by
+  // itself: placements into an ungraded ranking carry no grade, and the lines would take over the
+  // list with starting lines that grade everything C.
   const rankingNeedsGrades = isBestDebates && orderedIds.length > 0 && !hasAnyGrade(orderedIds, draftGrades);
   const publishedIds = mySubmission?.orderedEntityIds ?? [];
-  const publishedNeedsGrades = publishedIds.length > 0 && !hasAnyGrade(publishedIds, myGrades);
+  const publishedNeedsGrades = publishedIds.length >= TIER_LINES_AUTO_OPEN_MIN && !hasAnyGrade(publishedIds, myGrades);
   const [tierLinesDismissed, setTierLinesDismissed] = React.useState(false);
   const [tierLines, setTierLines] = React.useState<{ aCount: number; bCount: number } | null>(null);
   const showTierLines = rankingNeedsGrades && (tierLines !== null || (publishedNeedsGrades && !tierLinesDismissed));
