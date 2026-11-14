@@ -23,7 +23,6 @@ import {
   removeEntry,
   restoreEntry,
   sameGrades,
-  stepEntry,
   tierSections,
 } from '~/core/blocks/ranking/ranking-grades';
 import { generatePersonalRankingOgImages } from '~/core/blocks/ranking/ranking-og-generate-client';
@@ -813,11 +812,10 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
         gradeOf: debateId => (draftPlaces.has(ID.uuidToHex(debateId)) ? gradeOf(draftGrades, debateId) : null),
         placeOf: debateId => draftPlaces.get(ID.uuidToHex(debateId)) ?? null,
         isSaving: () => false,
-        count: orderedIds.length,
         grade: (debateId, grade, method = 'popup') =>
           changeDraft(debateId, draft => gradeInto(draft.ids, draft.grades, debateId, grade), method),
-        move: (debateId, direction) =>
-          changeDraft(debateId, draft => stepEntry(draft.ids, draft.grades, debateId, direction), 'nudge'),
+        // Its Done keeps the move in the draft, like any placement on this screen.
+        reorder: debateId => bestDebates.reorder(debateId),
         remove: debateId => changeDraft(debateId, draft => removeEntry(draft.ids, draft.grades, debateId), 'popup'),
         // Counted as Down rank's own `push_down` once its downvote lands.
         downRank: debateId => {

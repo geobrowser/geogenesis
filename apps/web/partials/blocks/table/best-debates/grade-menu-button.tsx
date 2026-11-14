@@ -10,16 +10,14 @@ import {
   GRADE_ROW_LABEL,
 } from '~/core/blocks/ranking/ranking-grades';
 
+import { Stars } from '~/design-system/icons/stars';
 import { Menu } from '~/design-system/menu';
 
 import { useBestDebatesGrading } from './best-debate-grading';
 
-/**
- * The row buttons' shape: Rank and Grade, side by side. Compact on a phone so the debate's title
- * keeps its room, with the hit area grown to 44px tall without growing the row.
- */
-export const ROW_ACTION_BUTTON_CLASS =
-  'relative inline-flex h-8 shrink-0 items-center justify-center rounded-full border border-grey-02 bg-white px-3 text-metadata text-text transition-colors hover:border-text disabled:cursor-not-allowed disabled:opacity-50 md:px-2.5 md:text-breadcrumb md:after:absolute md:after:inset-x-0 md:after:-inset-y-1.5';
+/** The rows' square icon buttons: Rank (the ranking chart) and Grade beside it (44px on a phone). */
+export const ROW_ICON_BUTTON_CLASS =
+  'grid size-8 shrink-0 place-items-center rounded-md border border-grey-02 bg-white text-text transition-colors hover:border-text disabled:cursor-not-allowed disabled:opacity-50 md:size-11';
 
 /** The rows of the Grade menu, as `DebateOverflowMenu` draws its items. */
 const ITEM_CLASS =
@@ -49,9 +47,9 @@ export function GradeMenuButton({ entityId, name }: { entityId: string; name: st
       draggable={false}
       data-geo-analytics-label="Best debates row grade"
       data-geo-analytics-intent="grade_debate"
-      className={ROW_ACTION_BUTTON_CLASS}
+      className={ROW_ICON_BUTTON_CLASS}
     >
-      {GRADE_ROW_LABEL}
+      <Stars />
     </button>
   );
 

@@ -31,9 +31,8 @@ function grading(
     gradeOf: () => state.grade ?? null,
     placeOf: () => state.place ?? null,
     isSaving: () => false,
-    count: 40,
     grade: vi.fn(),
-    move: vi.fn(),
+    reorder: vi.fn(),
     remove: vi.fn(),
     downRank: vi.fn(),
     ...overrides,
@@ -124,24 +123,16 @@ describe('BestDebateGradeRow (GEO-3729)', () => {
     expect(g.grade).toHaveBeenCalledWith(DEBATE, 'B');
   });
 
-  it('moves the debate one place with ↑ / ↓, and turns them off at the ends', () => {
-    const g = grading({ count: 40 }, { grade: 'B', place: 21 });
+  it('offers Re-order for a debate in the ranking, opening the Rank flow’s Placed step', () => {
+    const g = grading({}, { grade: 'B', place: 21 });
     render(<BestDebateGradeRow entityId={DEBATE} grading={g} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Move up' }));
-    expect(g.move).toHaveBeenCalledWith(DEBATE, -1);
-    fireEvent.click(screen.getByRole('button', { name: 'Move down' }));
-    expect(g.move).toHaveBeenCalledWith(DEBATE, 1);
-    cleanup();
-    render(<BestDebateGradeRow entityId={DEBATE} grading={grading({ count: 40 }, { grade: 'A', place: 1 })} />);
-    expect(screen.getByRole('button', { name: 'Move up' })).toBeDisabled();
-    cleanup();
-    render(<BestDebateGradeRow entityId={DEBATE} grading={grading({ count: 40 }, { grade: 'C', place: 40 })} />);
-    expect(screen.getByRole('button', { name: 'Move down' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Re-order' }));
+    expect(g.reorder).toHaveBeenCalledWith(DEBATE);
   });
 
-  it('shows no arrows for a debate that isn’t in the ranking', () => {
+  it('shows no Re-order for a debate that isn’t in the ranking', () => {
     render(<BestDebateGradeRow entityId={DEBATE} grading={grading()} />);
-    expect(screen.queryByRole('button', { name: 'Move up' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Re-order' })).toBeNull();
   });
 
   it('asks for the tier lines first on a ranking with no grades', () => {

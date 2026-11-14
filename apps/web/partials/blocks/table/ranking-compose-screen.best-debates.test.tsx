@@ -33,6 +33,7 @@ const mocks = vi.hoisted(() => ({
   lastIds: ['d1'] as string[],
   myGrades: new Map() as Map<string, 'A' | 'B' | 'C'>,
   grading: null as null | import('./best-debates/best-debate-grading').BestDebatesGrading,
+  reorder: vi.fn(),
 }));
 
 vi.mock('~/core/blocks/ranking/best-debates', async importOriginal => ({
@@ -173,6 +174,7 @@ vi.mock('./best-debates/use-best-debates-compose', () => ({
       activeEntityId: null,
       placeFromTeam: vi.fn(),
       dropEntity: vi.fn(),
+      reorder: mocks.reorder,
       publish: async (ids: string[]) =>
         Boolean(await args.saveMySubmission(ids.map(id => ({ id, name: null, spaceId: 'debate-space' })))),
     };
@@ -320,7 +322,7 @@ describe('RankingComposeScreen on any other block', () => {
     expect(mocks.saveMySubmission).toHaveBeenCalledTimes(1);
   });
 
-  it('puts the popup’s grades and ↑ / ↓ into the draft, never publishing them (GEO-3729)', async () => {
+  it('puts the popup’s grades into the draft, and opens Re-order in the screen’s Placed step (GEO-3729)', async () => {
     mocks.member = true;
     // IDs are hex, as normId leaves them.
     const [d1, d2] = ['d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1', 'd2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2'];
@@ -331,14 +333,13 @@ describe('RankingComposeScreen on any other block', () => {
     ]);
     renderScreen();
     expect(mocks.grading?.needsTierLines).toBe(false);
-    // ↑ from the top of B crosses the line: d2 becomes the bottom A, in place.
-    await act(async () => mocks.grading?.move(d2, -1));
+    await act(async () => mocks.grading?.grade(d2, 'A'));
     expect(mocks.grading?.gradeOf(d2)).toBe('A');
-    expect(mocks.grading?.placeOf(d2)).toBe(2);
-    // A second press moves it within A.
-    await act(async () => mocks.grading?.move(d2, -1));
+    // Top of A.
     expect(mocks.grading?.placeOf(d2)).toBe(1);
     expect(mocks.saveMySubmission).not.toHaveBeenCalled();
     expect(mocks.canPublish).toBe(true);
+    mocks.grading?.reorder(d2);
+    expect(mocks.reorder).toHaveBeenCalledWith(d2);
   });
 });

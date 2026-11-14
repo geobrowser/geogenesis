@@ -157,6 +157,23 @@ export function useBestDebatesPlacement({
   );
 
   /**
+   * Re-order (GEO-3729): the Placed step for a debate already in the ranking, at its place, from the
+   * watch popup's grade row. Its arrows move it as they do after a placement (across a tier line it
+   * takes that tier), and Done keeps or publishes it as a placement's Done does.
+   */
+  const reorder = React.useCallback((entityId: string) => {
+    const index = indexOfEntity(orderedIdsRef.current, entityId);
+    if (index < 0) return;
+    setFlow({
+      phase: 'placed',
+      entityId,
+      origin: 'mine',
+      placedIndex: index,
+      withOtherChanges: hasUnpublishedChangesRef.current,
+    });
+  }, []);
+
+  /**
    * Push it down, from the compare header or a team row's ↓: the same downvote and draft edit the
    * choice used to start. It waits until the ranker's vote on the debate has been read.
    */
@@ -334,6 +351,7 @@ export function useBestDebatesPlacement({
 
   return {
     start,
+    reorder,
     dialogs,
     isPlacing: flow !== null,
     /** The debate the comparison or confirmation is about, or one being pushed down (push-down binds to it). */

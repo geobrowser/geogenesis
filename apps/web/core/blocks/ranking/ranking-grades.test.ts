@@ -14,7 +14,6 @@ import {
   restoreEntry,
   sameGrades,
   sortIntoTiers,
-  stepEntry,
   tierAtIndex,
   tierSections,
 } from './ranking-grades';
@@ -296,33 +295,5 @@ describe('restoreEntry (Undo of a Down rank on the ranking screen)', () => {
       ]),
     };
     expect(restoreEntry(now, before, id(2)).ids).toEqual(ids(2, 3, 1));
-  });
-});
-
-describe('stepEntry (↑ / ↓ in the grade row)', () => {
-  const ballot = ids(1, 2, 3, 4);
-  const grades = g([
-    [1, 'A'],
-    [2, 'A'],
-    [3, 'B'],
-    [4, 'B'],
-  ]);
-
-  it('moves a debate one place within its tier', () => {
-    expect(stepEntry(ballot, grades, id(2), -1).ids).toEqual(ids(2, 1, 3, 4));
-    expect(stepEntry(ballot, grades, id(3), 1).ids).toEqual(ids(1, 2, 4, 3));
-  });
-
-  it('moves it across a tier line by taking the neighbour’s tier, in place', () => {
-    const up = stepEntry(ballot, grades, id(3), -1);
-    expect(up.ids).toEqual(ballot);
-    expect(up.grades.get(id(3))).toBe('A');
-    const down = stepEntry(ballot, grades, id(2), 1);
-    expect(down.grades.get(id(2))).toBe('B');
-  });
-
-  it('does nothing at either end', () => {
-    expect(stepEntry(ballot, grades, id(1), -1)).toEqual({ ids: ballot, grades });
-    expect(stepEntry(ballot, grades, id(4), 1)).toEqual({ ids: ballot, grades });
   });
 });

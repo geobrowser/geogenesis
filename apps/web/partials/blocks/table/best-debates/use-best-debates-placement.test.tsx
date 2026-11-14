@@ -67,6 +67,9 @@ function Harness({ initial, startWith, ...rest }: HarnessProps) {
       <button type="button" onClick={() => placement.start(startWith.id, startWith.origin)}>
         start
       </button>
+      <button type="button" onClick={() => placement.reorder(startWith.id)}>
+        reorder
+      </button>
       {placement.dialogs}
     </>
   );
@@ -357,5 +360,30 @@ describe('placing a debate by comparison', () => {
     rerender(<RowHarness ready />);
     expect(onSelect).toHaveBeenCalledWith('new');
     expect(screen.getByTestId('active').textContent).toBe('');
+  });
+});
+
+describe('Re-order from the watch popup (GEO-3729)', () => {
+  it('opens the Placed step at the debate’s place, and its arrows move it there', () => {
+    render(<Harness initial={list(4)} startWith={{ id: 'd3', origin: 'mine' }} />);
+    fireEvent.click(screen.getByText('reorder'));
+    expect(screen.getByText('Placed #3 of 4')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Move up' }));
+    expect(latestOrder).toEqual(['d1', 'd3', 'd2', 'd4']);
+  });
+
+  it('publishes the moved list on Done where Done publishes (the block)', async () => {
+    const publish = vi.fn(async () => true);
+    render(<Harness initial={list(3)} startWith={{ id: 'd2', origin: 'mine' }} publish={publish} />);
+    fireEvent.click(screen.getByText('reorder'));
+    fireEvent.click(screen.getByRole('button', { name: 'Move down' }));
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Done' })));
+    expect(publish).toHaveBeenCalledWith(['d1', 'd3', 'd2']);
+  });
+
+  it('does nothing for a debate that isn’t in the ranking', () => {
+    render(<Harness initial={list(3)} startWith={{ id: 'new', origin: 'mine' }} />);
+    fireEvent.click(screen.getByText('reorder'));
+    expect(screen.queryByText(/Placed #/)).toBeNull();
   });
 });

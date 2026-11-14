@@ -10,7 +10,6 @@ import {
   gradeOf,
   hasAnyGrade,
   removeEntry,
-  stepEntry,
 } from '~/core/blocks/ranking/ranking-grades';
 import type { RankingSubmissionSlot } from '~/core/blocks/ranking/ranking-submission-types';
 import {
@@ -111,6 +110,7 @@ export function useBestDebatesBlockRanking({
     publish: compose.publish,
     whenPublishesSettle: compose.whenPublishesSettle,
     downRank: compose.requestPushDown,
+    reorder: compose.reorder,
   });
 
   return {
@@ -150,6 +150,7 @@ export function useBlockGrading({
   publish,
   whenPublishesSettle = () => Promise.resolve(),
   downRank,
+  reorder = () => undefined,
 }: {
   blockId: string;
   ready: boolean;
@@ -165,6 +166,8 @@ export function useBlockGrading({
    */
   whenPublishesSettle?: () => Promise<void>;
   downRank: (entityId: string) => void;
+  /** The Placed step for a debate in the ranking; its Done publishes through the same queue. */
+  reorder?: (entityId: string) => void;
 }): BestDebatesGrading {
   const recordGrade = useRecordGrade(blockId);
   // The draft as of the last grade, read by the publish loop (state lags a render behind).
@@ -226,11 +229,8 @@ export function useBlockGrading({
       const before = latest.current;
       queued.current.push(change);
       latest.current = change(before);
-      // The latest way its grade was changed names the change it publishes; a move that keeps the
-      // grade (↑ / ↓ within a tier) names nothing.
-      if (gradeOf(before.grades, entityId) !== gradeOf(latest.current.grades, entityId) || method !== 'nudge') {
-        methods.current.set(normId(entityId), method);
-      }
+      // The latest way its grade was changed names the change it publishes.
+      methods.current.set(normId(entityId), method);
       setDraft(latest.current.ids, latest.current.grades);
       setSaving(current => new Set(current).add(normId(entityId)));
       void flush();
@@ -246,12 +246,9 @@ export function useBlockGrading({
     gradeOf: entityId => (placeById.has(normId(entityId)) ? gradeOf(grades, entityId) : null),
     placeOf: entityId => placeById.get(normId(entityId)) ?? null,
     isSaving: entityId => saving.has(normId(entityId)),
-    count: orderedIds.length,
     grade: (entityId: string, grade: Grade, method: GradeMethod = 'popup') =>
       apply(entityId, draft => gradeInto(draft.ids, draft.grades, entityId, grade), method),
-    // Presses publish like grades, so a run of them goes out as one publish.
-    move: (entityId: string, direction: -1 | 1) =>
-      apply(entityId, draft => stepEntry(draft.ids, draft.grades, entityId, direction), 'nudge'),
+    reorder,
     remove: (entityId: string) => apply(entityId, draft => removeEntry(draft.ids, draft.grades, entityId), 'popup'),
     // Counted as Down rank's own `push_down` once its downvote lands.
     downRank,

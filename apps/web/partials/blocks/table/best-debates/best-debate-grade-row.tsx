@@ -11,6 +11,7 @@ import {
   GRADE_IT_LABEL,
   GRADE_RANKING_FIRST_COPY,
   GRADE_REMOVE_LABEL,
+  GRADE_REORDER_LABEL,
   GRADE_ROW_LABEL,
   GRADE_SAVING_COPY,
   GRADE_UNDO_LABEL,
@@ -18,10 +19,6 @@ import {
   gradePlaceCopy,
 } from '~/core/blocks/ranking/ranking-grades';
 import { usePushDown } from '~/core/blocks/ranking/use-push-down';
-
-import { SquareButton } from '~/design-system/button';
-import { ChevronDown } from '~/design-system/icons/chevron-down';
-import { ChevronUp } from '~/design-system/icons/chevron-up';
 
 import type { BestDebatesGrading } from './best-debate-grading';
 
@@ -35,11 +32,14 @@ const SEGMENT_CLASS =
 const SEGMENT_IDLE = 'text-text hover:bg-grey-01 disabled:text-grey-04 disabled:hover:bg-transparent';
 const SEGMENT_SELECTED = 'bg-text text-white';
 const LINK_CLASS = 'text-text underline underline-offset-2';
+/** A small outlined pill, as the popup's other secondary actions (44px on a phone). */
+const REORDER_BUTTON_CLASS =
+  'inline-flex h-7 shrink-0 items-center rounded-full border border-grey-02 bg-white px-2.5 text-metadata text-text transition-colors hover:border-text disabled:cursor-default disabled:opacity-50 md:h-11 md:px-3.5';
 
 /**
  * The watch popup's grade row (GEO-3729): A, B and C put the debate at the top of that tier in the
- * ranker's ranking, D is Down rank. Under it: where the debate is, with ↑ / ↓ to fine-tune its place
- * (the placed dialog's arrows) and Remove; or Saving…; or Down ranked with Undo; or, on a ranking
+ * ranker's ranking, D is Down rank. Under it: where the debate is, with Re-order (the Rank flow's
+ * Placed step at its place) and Remove; or Saving…; or Down ranked with Undo; or, on a ranking
  * with no grades yet, "Grade your ranking first".
  */
 export function BestDebateGradeRow({ entityId, grading }: { entityId: string; grading: BestDebatesGrading }) {
@@ -137,23 +137,16 @@ export function BestDebateGradeRow({ entityId, grading }: { entityId: string; gr
         ) : place !== null ? (
           <>
             <span className="tabular-nums">{gradePlaceCopy(place)}</span>
-            {/* The placed dialog's arrows; presses during a save keep coming (they go out together). */}
-            <span className="flex items-center gap-1">
-              <SquareButton
-                icon={<ChevronUp />}
-                aria-label="Move up"
-                disabled={!grading.ready || place <= 1}
-                onClick={() => grading.move(entityId, -1)}
-                className="md:!size-11"
-              />
-              <SquareButton
-                icon={<ChevronDown />}
-                aria-label="Move down"
-                disabled={!grading.ready || place >= grading.count}
-                onClick={() => grading.move(entityId, 1)}
-                className="md:!size-11"
-              />
-            </span>
+            {/* The Rank flow's Placed step at this place: move it up or down, across a tier line too. */}
+            <button
+              type="button"
+              disabled={!grading.ready}
+              onClick={() => grading.reorder(entityId)}
+              className={REORDER_BUTTON_CLASS}
+              data-geo-analytics-label="grade_reorder"
+            >
+              {GRADE_REORDER_LABEL}
+            </button>
             <button
               type="button"
               className={cx(LINK_CLASS, 'ml-1')}

@@ -9,12 +9,13 @@ import { type RankersRead, rankedByLabel, rankedByText } from '~/core/blocks/ran
 import { normId } from '~/core/utils/norm-id';
 
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
+import { RankingChart } from '~/design-system/icons/ranking-chart';
 
 import { SpaceThumb } from '~/partials/explore/space-thumb';
 
 import { RankingEntryRow } from '../ranking-entry-row';
 import { BestDebateDisplaysContext } from './best-debate-row';
-import { GradeMenuButton, ROW_ACTION_BUTTON_CLASS } from './grade-menu-button';
+import { GradeMenuButton, ROW_ICON_BUTTON_CLASS } from './grade-menu-button';
 
 /** Who has ranked a debate: the purple "Nobody has ranked this yet", or "Ranked by …". */
 export function RankedByBadge({ rankers, entityId }: { rankers: RankersRead; entityId: string }) {
@@ -100,9 +101,9 @@ export function RankButton({ name, onClick, disabled }: { name: string; onClick:
       onKeyDown={event => event.stopPropagation()}
       onPointerDown={event => event.stopPropagation()}
       draggable={false}
-      className={ROW_ACTION_BUTTON_CLASS}
+      className={ROW_ICON_BUTTON_CLASS}
     >
-      Rank
+      <RankingChart />
     </button>
   );
 }

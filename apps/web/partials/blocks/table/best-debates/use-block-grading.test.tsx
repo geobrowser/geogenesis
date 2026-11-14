@@ -167,40 +167,23 @@ describe('grading from the block (GEO-3729)', () => {
     expect(publish.mock.calls[0]![0]).toEqual([id(1), id(2), id(8)]);
   });
 
-  it('publishes ↑ / ↓ like grades: a quick run goes out together, and crossing a line regrades', async () => {
-    const first = deferred();
-    const publish = vi.fn().mockReturnValueOnce(first.promise).mockResolvedValue(true);
-    const { result } = renderHook(() => useHarness(publish));
-    // Published: [1 A]. Grade 2 as B, then move it up twice while that publish is out.
-    await act(async () => result.current.grading.grade(id(2), 'B'));
-    expect(publish).toHaveBeenCalledTimes(1);
-    act(() => result.current.grading.move(id(2), -1));
-    expect(result.current.grading.gradeOf(id(2))).toBe('A');
-    act(() => result.current.grading.move(id(2), -1));
-    expect(result.current.grading.placeOf(id(2))).toBe(1);
-    expect(publish).toHaveBeenCalledTimes(1);
-    await act(async () => first.resolve(true));
-    expect(publish).toHaveBeenCalledTimes(2);
-    const [ids, grades] = publish.mock.calls[1] as [string[], BallotGrades];
-    expect(ids).toEqual([id(2), id(1)]);
-    expect(grades.get(id(2))).toBe('A');
-    // One published grade per change, each named for how it was made: the popup, then the arrows.
-    expect(mocks.record.mock.calls.map(([entityId, change]) => [entityId, change.grade, change.method])).toEqual([
-      [id(2), 'B', 'popup'],
-      [id(2), 'A', 'nudge'],
-    ]);
-  });
-
-  it('names a published grade for how the grade was given, not for a later move within its tier', async () => {
-    const first = deferred();
-    const publish = vi.fn().mockReturnValueOnce(first.promise).mockResolvedValue(true);
-    const { result } = renderHook(() => useHarness(publish));
-    await act(async () => result.current.grading.grade(id(9), 'A'));
-    // While that goes out: grade 2 from a list row, then nudge it within A.
-    act(() => result.current.grading.grade(id(2), 'A', 'list'));
-    act(() => result.current.grading.move(id(2), 1));
-    await act(async () => first.resolve(true));
-    const second = mocks.record.mock.calls.filter(([entityId]) => entityId === id(2));
-    expect(second.map(([, change]) => change.method)).toEqual(['list']);
+  it('opens Re-order through the surface’s placement flow', () => {
+    const reorder = vi.fn();
+    const { result } = renderHook(() =>
+      useBlockGrading({
+        blockId: id(99),
+        ready: true,
+        orderedIds: [id(1)],
+        grades: new Map([[id(1), 'A']]),
+        setDraft: vi.fn(),
+        getBasedOnOrderedIds: () => [id(1)],
+        getBasedOnGrades: () => new Map(),
+        publish: vi.fn(),
+        downRank: vi.fn(),
+        reorder,
+      })
+    );
+    result.current.reorder(id(1));
+    expect(reorder).toHaveBeenCalledWith(id(1));
   });
 });

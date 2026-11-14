@@ -27,15 +27,13 @@ export type BestDebatesGrading = {
   placeOf: (entityId: string) => number | null;
   /** A grade of this debate is being published (the block). */
   isSaving: (entityId: string) => boolean;
-  /** How many debates the ranking holds (for ↓ at the last place). */
-  count: number;
   /** A, B or C: the debate goes to the top of that tier. `method` is where it was given. */
   grade: (entityId: string, grade: Grade, method?: GradeMethod) => void;
   /**
-   * ↑ / ↓: one place, the way the placed dialog's arrows nudge (`stepEntry`). At a tier's edge it
-   * crosses the line and takes that tier.
+   * Re-order: the Rank flow's Placed step for this debate at its place (its arrows cross a tier line
+   * into that tier), over the popup. Done keeps the move in the draft, or publishes it on the block.
    */
-  move: (entityId: string, direction: -1 | 1) => void;
+  reorder: (entityId: string) => void;
   /** Takes the debate out of the ranking. */
   remove: (entityId: string) => void;
   /** D: the existing Down rank (downvote, then off the ranking; its toast offers Undo). Its
@@ -49,8 +47,8 @@ export type BestDebatesGrading = {
   undoDownRank?: (entityId: string) => void;
 };
 
-/** Where a grade was given: the popup, a list row's Grade menu, a drag, an arrow, the tier lines. */
-export type GradeMethod = 'popup' | 'list' | 'drag' | 'nudge' | 'tier_lines' | 'ranking_screen';
+/** Where a grade was given: the popup, a list row's Grade menu, a drag, the tier lines. */
+export type GradeMethod = 'popup' | 'list' | 'drag' | 'tier_lines' | 'ranking_screen';
 
 /** D is Down rank: it is counted by Down rank's own `push_down` action, not here. */
 export type GradeChange = {

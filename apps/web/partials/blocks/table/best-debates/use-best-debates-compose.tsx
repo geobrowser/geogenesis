@@ -304,6 +304,8 @@ export function useBestDebatesCompose({
     dropEntity,
     publish,
     whenPublishesSettle,
+    /** Re-order a debate already in the ranking: the Placed step at its place (GEO-3729). */
+    reorder: placement.reorder,
     /** Down rank from a row (waits for the ranker's vote, then the toast with Undo). */
     requestPushDown: placement.requestPushDown,
     /** For a coverage line in To rank's terms: the window's debates, and how many are left to rank. */
