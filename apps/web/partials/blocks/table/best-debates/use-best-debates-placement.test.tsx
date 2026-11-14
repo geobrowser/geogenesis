@@ -466,6 +466,21 @@ describe('Re-order from the watch popup (GEO-3729)', () => {
     expect(screen.queryByText(/Placed #/)).toBeNull();
   });
 
+  it('marks only its own step when a Done that was closed meanwhile fails', async () => {
+    let finish!: (ok: boolean) => void;
+    const publish = vi.fn(() => new Promise<boolean>(resolve => (finish = resolve)));
+    // An empty ranking places at once, straight onto the Placed step.
+    render(<Harness initial={[]} startWith={{ id: 'new', origin: 'team' }} publish={publish} />);
+    fireEvent.click(screen.getByText('start'));
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Done' })));
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    // A new Placed step opens before the first Done fails.
+    fireEvent.click(screen.getByText('start'));
+    await act(async () => finish(false));
+    expect(screen.getByText(/Placed #/)).toBeTruthy();
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
   it('does nothing for a debate that isn’t in the ranking', () => {
     render(<Harness initial={list(3)} startWith={{ id: 'new', origin: 'mine' }} />);
     fireEvent.click(screen.getByText('reorder'));
