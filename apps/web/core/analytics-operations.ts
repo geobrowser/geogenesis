@@ -89,6 +89,9 @@ const CANONICAL_OUTCOME_FIELDS = new Set([
   // GEO-3495. The geo-chat id a debate request, rematch request or challenge was created with, so a
   // request joins to the debate it produced (geo-chat stores it on the debate).
   'request_id',
+  // GEO-3729. A Best debates grade: A, B, C or none (taken out), and the one before.
+  'grade',
+  'previous_grade',
 ]);
 
 /**

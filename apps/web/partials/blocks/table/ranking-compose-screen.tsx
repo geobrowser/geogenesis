@@ -14,6 +14,17 @@ import { RankingComposeBallotContext, useComposeBallot } from '~/core/blocks/ran
 import { resolveRankingSingleTargetSpaceId } from '~/core/blocks/ranking/ranking-compose-publish-spaces';
 import { RANKING_COMPOSE_TAB_MY, rankingComposeHref } from '~/core/blocks/ranking/ranking-compose-url';
 import { countBallotChanges, unpublishedChangesLabel } from '~/core/blocks/ranking/ranking-draft-changes';
+import {
+  type Grade,
+  NO_GRADES,
+  gradeInto,
+  gradeOf,
+  hasAnyGrade,
+  removeEntry,
+  restoreEntry,
+  sameGrades,
+  tierSections,
+} from '~/core/blocks/ranking/ranking-grades';
 import { generatePersonalRankingOgImages } from '~/core/blocks/ranking/ranking-og-generate-client';
 import { buildRankingOgVersion } from '~/core/blocks/ranking/ranking-og-version';
 import {
@@ -59,8 +70,16 @@ import { Button } from '~/design-system/button';
 
 import { stepAtom } from '~/partials/onboarding/onboarding-atoms';
 
+import {
+  type BestDebatesGrading,
+  type GradeChange,
+  gradeChanges,
+  reorderGradeChanges,
+  useRecordGrade,
+} from './best-debates/best-debate-grading';
 import { BestDebateDisplaysContext } from './best-debates/best-debate-row';
 import { BestDebateWatchProvider } from './best-debates/best-debate-watch';
+import { BestDebatesTierHeader } from './best-debates/best-debates-tier-header';
 import { ClearRankingButton } from './best-debates/clear-ranking-button';
 import { CopyTeamRankingStart } from './best-debates/copy-team-ranking-start';
 import { useBestDebatesCompose } from './best-debates/use-best-debates-compose';
@@ -185,6 +204,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
     submissions,
     mySubmission,
     myLastSubmission,
+    myGrades,
     saveMySubmission,
     isSaving,
     personalSpaceId,
@@ -254,13 +274,16 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   // Precedence (GEO-3680): a handed-back draft (another device's edit overtook
   // ours) over the published ballot, with the ranker's own unpublished edits
   // merged onto whichever it is. See `useRankingComposeDraft`.
-  const composeSeed = rankingComposeSeed(unsavedDraft, myLastSubmission?.orderedEntityIds);
+  const composeSeed = rankingComposeSeed(unsavedDraft, myLastSubmission?.orderedEntityIds, myGrades);
   // Best debates' placements and drags also merge through it, and each of its publishes moves the
   // merge base (`markDraftPublished`), so a refetch landing mid-placement keeps the placement.
   const {
     orderedIds,
+    grades: draftGrades,
     setOrderedIds,
+    setDraft,
     getBasedOnOrderedIds,
+    getBasedOnGrades,
     markPublished: markDraftPublished,
   } = useRankingComposeDraft(composeSeed);
   const [searchQuery, setSearchQuery] = React.useState('');
@@ -534,12 +557,18 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
 
   const publishedIdsKey = (mySubmission?.orderedEntityIds ?? []).map(id => ID.uuidToHex(id)).join('|');
   const draftIdsKey = orderedIds.map(id => ID.uuidToHex(id)).join('|');
-  const hasUnpublishedChanges = draftIdsKey !== publishedIdsKey;
+  // A regrade alone is a change too (GEO-3729); grades exist on Best debates only.
+  const publishedGrades = mySubmission ? myGrades : NO_GRADES;
+  const hasUnpublishedChanges =
+    draftIdsKey !== publishedIdsKey || !sameGrades(orderedIds, draftGrades, publishedGrades);
 
   const isPublishBusy = isSaving || isPublishingRanking;
   // Best debates saves every placement at once (Preston, 12 Nov): how many are waiting.
   const unpublishedCount = hasUnpublishedChanges
-    ? countBallotChanges(mySubmission?.orderedEntityIds ?? [], orderedIds)
+    ? countBallotChanges(mySubmission?.orderedEntityIds ?? [], orderedIds, {
+        published: publishedGrades,
+        draft: draftGrades,
+      })
     : 0;
 
   const canPublish =
@@ -636,7 +665,11 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
     }
     const result = await publishBallotClearingDownvotes(
       slots.map(slot => slot.id),
-      () => saveMySubmission(slots, rankingOpportunity.context, { basedOnOrderedIds: getBasedOnOrderedIds() })
+      () =>
+        saveMySubmission(slots, rankingOpportunity.context, {
+          basedOnOrderedIds: getBasedOnOrderedIds(),
+          basedOnGrades: getBasedOnGrades(),
+        })
     );
     return result?.published ?? null;
   };
@@ -646,6 +679,11 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
     [pushedDownDebates]
   );
   const pushDown = useBestDebatesPushDownSlot({ blockId: bestDebatesBlockId, pushedDownEntityIds });
+  const recordGrade = useRecordGrade(entityId);
+  /** The draft as it was before a Down rank from the popup, so the row's Undo can put the debate back. */
+  const draftBeforeDownRank = React.useRef(new Map<string, { ids: string[]; grades: typeof draftGrades }>());
+  /** How each draft grade was made (GEO-3729), so its published event says so. */
+  const draftGradeMethods = React.useRef(new Map<string, GradeChange['method']>());
 
   const bestDebates = useBestDebatesCompose({
     enabled: isBestDebates,
@@ -653,9 +691,10 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
     blockSpaceId: spaceId,
     isMobile,
     orderedIds,
-    setOrderedIds: ids => {
+    grades: draftGrades,
+    setOrderedIds: (ids, movedId) => {
       setActiveSwipeRowKey(null);
-      setOrderedIds(ids);
+      setOrderedIds(ids, movedId);
     },
     hasUnpublishedChanges,
     nameOf,
@@ -663,12 +702,37 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
     saveMySubmission: saveBestDebatesBallot,
     isSaving: isPublishBusy,
     pushDown: pushDown.slot,
-    onPublished: (published, sentIds) => {
-      markDraftPublished(published.orderedEntityIds, sentIds);
+    onPublished: (published, sentIds, sentGrades) => {
+      // The grades this ranker sent, against the ballot they were based on: never another device's
+      // changes the publish merged in. Each keeps the way it was made (popup, drag).
+      const before = { ids: getBasedOnOrderedIds(), grades: getBasedOnGrades() };
+      for (const change of gradeChanges(before.ids, before.grades, sentIds, sentGrades)) {
+        const key = ID.uuidToHex(change.entityId);
+        recordGrade(change.entityId, {
+          grade: change.grade,
+          previousGrade: change.previousGrade,
+          method: draftGradeMethods.current.get(key) ?? 'ranking_screen',
+          mutationKind: 'published',
+        });
+        draftGradeMethods.current.delete(key);
+      }
+      markDraftPublished(published.orderedEntityIds, sentIds, published.grades, sentGrades);
       generateOgImagesOnceIndexed(published);
     },
     openOnToRank: searchParams?.get(BEST_DEBATES_TEAM_VIEW_PARAM) === BEST_DEBATES_TEAM_VIEW_TO_RANK,
     searchQuery,
+    // Re-order's move stays in the draft however it ends; a grade it changed is counted (GEO-3729).
+    onReorderEnd: ({ entityId: movedId, before, after }) => {
+      for (const change of reorderGradeChanges(movedId, before, after)) {
+        recordGrade(change.entityId, {
+          grade: change.grade,
+          previousGrade: change.previousGrade,
+          method: 'reorder',
+          mutationKind: 'draft',
+        });
+        draftGradeMethods.current.set(ID.uuidToHex(change.entityId), 'reorder');
+      }
+    },
   });
 
   // Every debate the screen can show (team column, To rank, yours, pushed down), resolved once for
@@ -715,9 +779,103 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   /** The draft as the ranking screen's ballot, for push-down to edit (`usePushDown`). */
   const composeBallot = useComposeBallot(
     bestDebatesBlockId
-      ? { orderedIds, setOrderedIds, publish: ids => bestDebates.publish(ids), deferPublish: true }
+      ? {
+          orderedIds,
+          grades: draftGrades,
+          setOrderedIds,
+          setDraft,
+          publish: ids => bestDebates.publish(ids),
+          deferPublish: true,
+        }
       : null
   );
+
+  // The watch popup's grade row on this screen (GEO-3729): a grade goes into the draft, like every
+  // other change here, and the screen's Publish sends it.
+  const draftPlaces = new Map(orderedIds.map((id, index) => [ID.uuidToHex(id), index + 1]));
+  // The draft as of the last change here, so presses quicker than a render build on each other.
+  const latestDraft = React.useRef({ ids: orderedIds, grades: draftGrades });
+  latestDraft.current = { ids: orderedIds, grades: draftGrades };
+  const changeDraft = (
+    debateId: string,
+    change: (draft: { ids: string[]; grades: typeof draftGrades }) => { ids: string[]; grades: typeof draftGrades },
+    method: GradeChange['method']
+  ) => {
+    setActiveSwipeRowKey(null);
+    const before = latestDraft.current;
+    const next = change(before);
+    latestDraft.current = next;
+    // Recorded only when the grade changes (a plain move records nothing, like the placed
+    // dialog's arrows); it is recorded again, as published, when Publish lands.
+    for (const gradeChange of gradeChanges(before.ids, before.grades, next.ids, next.grades)) {
+      recordGrade(gradeChange.entityId, {
+        grade: gradeChange.grade,
+        previousGrade: gradeChange.previousGrade,
+        method,
+        mutationKind: 'draft',
+      });
+      draftGradeMethods.current.set(ID.uuidToHex(gradeChange.entityId), method);
+    }
+    setDraft(next.ids, next.grades);
+  };
+  const composeGrading: BestDebatesGrading | null = isBestDebates
+    ? {
+        ready: !isLoadingMySubmission && !ballotReadError,
+        needsTierLines: orderedIds.length > 0 && !hasAnyGrade(orderedIds, draftGrades),
+        gradeOf: debateId => (draftPlaces.has(ID.uuidToHex(debateId)) ? gradeOf(draftGrades, debateId) : null),
+        placeOf: debateId => draftPlaces.get(ID.uuidToHex(debateId)) ?? null,
+        isSaving: () => false,
+        grade: (debateId, grade, method = 'popup') =>
+          changeDraft(debateId, draft => gradeInto(draft.ids, draft.grades, debateId, grade), method),
+        // Its Done keeps the move in the draft, like any placement on this screen.
+        reorder: debateId => bestDebates.reorder(debateId),
+        remove: debateId => changeDraft(debateId, draft => removeEntry(draft.ids, draft.grades, debateId), 'popup'),
+        // Counted as Down rank's own `push_down` once its downvote lands.
+        downRank: debateId => {
+          draftBeforeDownRank.current.set(ID.uuidToHex(debateId), { ids: orderedIds, grades: draftGrades });
+          bestDebates.requestPushDown(debateId);
+        },
+        undoDownRank: debateId => {
+          const key = ID.uuidToHex(debateId);
+          const before = draftBeforeDownRank.current.get(key);
+          draftBeforeDownRank.current.delete(key);
+          if (!before) return;
+          const restored = restoreEntry({ ids: orderedIds, grades: draftGrades }, before, debateId);
+          if (restored.ids !== orderedIds) setDraft(restored.ids, restored.grades);
+        },
+      }
+    : null;
+
+  // "Your ranking" in tiers (GEO-3729): A, B and C with their counts, and Ungraded below when any
+  // debate is. A ranking with no grades at all is the plain list, as before.
+  const tierGroups =
+    isBestDebates && hasAnyGrade(orderedIds, draftGrades)
+      ? tierSections(orderedIds, draftGrades).map(section => ({
+          key: section.tier,
+          header: <BestDebatesTierHeader tier={section.tier} count={section.ids.length} />,
+          entityIds: section.ids,
+        }))
+      : undefined;
+  /** A drag in the tiered list: the new order, and a debate dragged into another tier takes its grade. */
+  const regroupTiers = (groups: Array<{ key: string; entityIds: string[] }>) => {
+    setActiveSwipeRowKey(null);
+    const ids = groups.flatMap(group => group.entityIds);
+    const nextGrades = new Map<string, Grade>();
+    for (const group of groups) {
+      if (group.key === 'ungraded') continue;
+      for (const id of group.entityIds) nextGrades.set(ID.uuidToHex(id), group.key as Grade);
+    }
+    for (const change of gradeChanges(orderedIds, draftGrades, ids, nextGrades)) {
+      recordGrade(change.entityId, {
+        grade: change.grade,
+        previousGrade: change.previousGrade,
+        method: 'drag',
+        mutationKind: 'draft',
+      });
+      draftGradeMethods.current.set(ID.uuidToHex(change.entityId), 'drag');
+    }
+    setDraft(ids, nextGrades);
+  };
 
   const handlePublish = async (): Promise<boolean | undefined> => {
     if (composeEditRefused) return false;
@@ -729,7 +887,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
 
     // Best debates stays on the ranking screen after a publish: rankers place debate after debate.
     if (isBestDebates) {
-      return bestDebates.publish(orderedIds);
+      return bestDebates.publish(orderedIds, draftGrades);
     }
 
     const slots = buildSlots(orderedIds);
@@ -858,6 +1016,8 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
                   ? 'Tap a debate in Team ranking to compare it and place it here.'
                   : 'Drag debates here from the team ranking, or click one to compare.',
                 onDropEntity: bestDebates.dropEntity,
+                groups: tierGroups,
+                onRegroup: tierGroups ? regroupTiers : undefined,
                 headerAction: <ClearRankingButton orderedIds={orderedIds} setDraft={setOrderedIds} />,
                 emptyAction: (
                   <CopyTeamRankingStart
@@ -937,7 +1097,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
 
   return (
     <BestDebateDisplaysContext.Provider value={isBestDebates ? bestDebateDisplays : null}>
-      <MaybeWatch on={isBestDebates} blockId={entityId} spaceId={spaceId}>
+      <MaybeWatch on={isBestDebates} blockId={entityId} spaceId={spaceId} grading={composeGrading}>
         <RankingComposeBallotContext.Provider value={composeBallot}>
           <RankingComposeCreateEntityPanel onFinished={addToMyRanking} rankingName={displayName} />
           <RankingComposeEntitySheet target={entitySheetTarget} onClose={() => setEntitySheetTarget(null)} />
@@ -1028,15 +1188,17 @@ function MaybeWatch({
   on,
   blockId,
   spaceId,
+  grading,
   children,
 }: {
   on: boolean;
   blockId: string;
   spaceId: string;
+  grading: BestDebatesGrading | null;
   children: React.ReactNode;
 }) {
   return on ? (
-    <BestDebateWatchProvider source="best_debates_ranking" blockId={blockId} spaceId={spaceId}>
+    <BestDebateWatchProvider source="best_debates_ranking" blockId={blockId} spaceId={spaceId} grading={grading}>
       {children}
     </BestDebateWatchProvider>
   ) : (

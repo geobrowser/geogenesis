@@ -22,7 +22,7 @@ import {
   isRankingEntityDrag,
 } from './ranking-entity-drag';
 import { RankingEntryRow } from './ranking-entry-row';
-import { RankingMyRankingDndList } from './ranking-my-ranking-dnd';
+import { type RankingDndGroup, RankingMyRankingDndList } from './ranking-my-ranking-dnd';
 
 type Props = {
   isMobile: boolean;
@@ -61,6 +61,9 @@ type Props = {
    * Left out, the list takes no drops, as before.
    */
   onDropEntity?: (entityId: string, index: number) => void;
+  /** Best debates' tiers (GEO-3729): the list drawn in groups, and a drag across one regroups it. */
+  groups?: RankingDndGroup[];
+  onRegroup?: (groups: Array<{ key: string; entityIds: string[] }>) => void;
 };
 
 /** Native drops onto the list: where the pointer would put the entity, and the drop itself. */
@@ -127,6 +130,8 @@ export function RankingComposeMyRanking({
   emptyAction,
   headerAction,
   onDropEntity,
+  groups,
+  onRegroup,
 }: Props) {
   const isDesktop = !isMobile;
   const [isReordering, setIsReordering] = React.useState(false);
@@ -197,6 +202,8 @@ export function RankingComposeMyRanking({
           <RankingMyRankingDndList
             entityIds={displayEntityIds}
             onReorder={onReorder}
+            groups={groups}
+            onRegroup={onRegroup}
             onDragStart={() => {
               onActiveSwipeRowKeyChange(null);
               setIsReordering(true);

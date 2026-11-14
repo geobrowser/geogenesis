@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import cx from 'classnames';
 import { useAtom } from 'jotai';
 
 import { capture } from '~/core/analytics';
@@ -25,6 +26,8 @@ import {
 } from '~/core/debates/moments-player/watch-transcript';
 import { ID } from '~/core/id';
 
+import { BestDebateGradeRow } from './best-debate-grade-row';
+import { type BestDebatesGrading, BestDebatesGradingContext } from './best-debate-grading';
 import { BestDebateWatchContext, type BestDebateWatchEntry, useBestDebateRowData } from './best-debate-row';
 import { RankingFlowDialog } from './ranking-flow-dialog';
 import { type WatchTranscriptContent, WatchTranscriptPanel, type WatchTranscriptView } from './watch-transcript-panel';
@@ -48,6 +51,7 @@ export function BestDebateWatchProvider({
   source,
   blockId,
   spaceId,
+  grading = null,
   children,
 }: {
   /** The analytics `source` of the watches opened here. */
@@ -55,6 +59,8 @@ export function BestDebateWatchProvider({
   /** The Best debates block and its space, so a watch joins up with that block's placements. */
   blockId: string;
   spaceId: string;
+  /** Rankers grade the debate under the player (GEO-3729); null for everyone else. */
+  grading?: BestDebatesGrading | null;
   children: React.ReactNode;
 }) {
   const [watching, setWatching] = React.useState<string | null>(null);
@@ -76,11 +82,13 @@ export function BestDebateWatchProvider({
   );
   return (
     <BestDebateWatchContext.Provider value={watch}>
-      {children}
+      {/* The rows' Grade menus grade through the same surface as the popup (GEO-3729). */}
+      <BestDebatesGradingContext.Provider value={grading}>{children}</BestDebatesGradingContext.Provider>
       {watching ? (
         <WatchDebateDialog
           entityId={watching}
           analytics={{ source, block_id: blockId, space_id: spaceId }}
+          grading={grading}
           onClose={() => setWatching(null)}
         />
       ) : null}
@@ -91,7 +99,11 @@ export function BestDebateWatchProvider({
 /**
  * The watch dialog's frame (GEO-3728): the player, with whatever sits under it, on the left and the
  * transcript on the right; on a phone, one column with the player at the top, so the transcript
- * never scrolls it away. `belowPlayer` is where a debate's grade goes (GEO-3729).
+ * never scrolls it away. `belowPlayer` is the debate's grade (GEO-3729).
+ *
+ * The player is sized from the screen: the 4:5 picture as large as fits beside its row under it,
+ * never wider than 440px. The row sits right under the picture, and the transcript is exactly as
+ * tall as the two together (it scrolls when longer), so the dialog has no empty band.
  */
 export function WatchDebateLayout({
   player,
@@ -102,33 +114,52 @@ export function WatchDebateLayout({
   belowPlayer?: React.ReactNode;
   transcript: React.ReactNode;
 }) {
+  const style = {
+    '--watch-below': belowPlayer ? WATCH_BELOW_PLAYER : '0px',
+    // Desktop: the room the dialog leaves (`--watch-room`, its margin taken off; less on a short,
+    // wide screen), less its padding and title and the row, never smaller than a usable picture.
+    '--watch-w': 'max(180px, min(440px, 42vw, calc((var(--watch-room) - 148px - var(--watch-below)) * 480 / 578)))',
+    // Phone: the picture takes at most 42% of the screen's height, so the transcript keeps the rest.
+    '--watch-w-phone': 'min(100%, calc(42dvh * 480 / 578))',
+  } as React.CSSProperties;
   return (
-    <div className="flex h-full min-h-0 gap-6 md:flex-col md:gap-3" data-testid="best-debate-watch-layout">
-      <div className="flex h-full w-[min(440px,45%)] shrink-0 flex-col gap-3 md:h-auto md:min-h-[160px] md:w-full md:flex-[0_1_42dvh]">
-        {/* Sized from the room it is given: the 4:5 picture as large as fits, whole. */}
-        <div className="[container-type:size] min-h-0 flex-1">
-          <div className="mx-auto" style={WATCH_PLAYER_STYLE} data-testid="best-debate-watch">
-            {player}
-          </div>
+    <div
+      className={cx(
+        'flex min-h-0 gap-6 md:h-full md:flex-col md:gap-3',
+        '[--watch-room:min(760px,100dvh_-_5rem)] [@media(min-width:768px)_and_(max-height:560px)]:[--watch-room:calc(100dvh_-_2rem)]'
+      )}
+      style={style}
+      data-testid="best-debate-watch-layout"
+    >
+      <div className="flex [width:var(--watch-w)] shrink-0 flex-col gap-3 md:w-full md:items-center">
+        <div className="w-full md:[width:var(--watch-w-phone)]" data-testid="best-debate-watch">
+          {player}
         </div>
-        {belowPlayer}
+        {belowPlayer ? <div className="w-full md:[width:var(--watch-w-phone)]">{belowPlayer}</div> : null}
       </div>
-      <div className="flex min-h-[132px] min-w-0 flex-1 flex-col">{transcript}</div>
+      {/* Exactly as tall as the player and its row (the column sets the height; the transcript
+          adds none), and it scrolls when longer. On a phone it takes the rest of the screen. */}
+      <div className="relative min-w-0 flex-1 md:min-h-[132px]">
+        <div className="absolute inset-0 flex flex-col">{transcript}</div>
+      </div>
     </div>
   );
 }
 
-const WATCH_PLAYER_STYLE: React.CSSProperties = { width: 'min(100cqw, calc(100cqh * 480 / 578))' };
+/** About the grade row's height and the gap above it (GEO-3729), for sizing the picture. */
+const WATCH_BELOW_PLAYER = '84px';
 
 const NO_HIGHLIGHT = { moments: null, full: null };
 
 function WatchDebateDialog({
   entityId,
   analytics,
+  grading,
   onClose,
 }: {
   entityId: string;
   analytics: { source: WatchSource; block_id: string; space_id: string };
+  grading: BestDebatesGrading | null;
   onClose: () => void;
 }) {
   const display = useBestDebateRowData(entityId);
@@ -184,6 +215,11 @@ function WatchDebateDialog({
     if (next === shownView) return;
     capture('element_changed', { ...event, element: 'watch_transcript_view', value: next, previous_value: shownView });
     setView(next);
+    // The picture's own switch is off here (GEO-3729), so this one moves the player too: to the full
+    // debate where the moment playing sits in it, or back to the moment the full debate is in.
+    const at = positionRef.current;
+    if (next === 'full') controller.current?.playFullAt(at?.fullMs ?? 0);
+    else if (momentsOffered) controller.current?.playMomentAt(Math.min(shownMoment, reel.moments.length - 1), 0);
   };
   const changeSpeed = (next: BestDebatesWatchSpeed) => {
     if (next === speed) return;
@@ -222,8 +258,12 @@ function WatchDebateDialog({
             onPosition={onPosition}
             onModeChange={onModeChange}
             controllerRef={controller}
+            // The transcript's Moments / Full debate toggle switches the player too (GEO-3729), so
+            // the picture's own pill would be a second switch.
+            showModePill={false}
           />
         }
+        belowPlayer={grading ? <BestDebateGradeRow entityId={entityId} grading={grading} /> : undefined}
         transcript={
           <WatchTranscriptPanel
             view={shownView}

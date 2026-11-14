@@ -29,6 +29,17 @@ const mocks = vi.hoisted(() => ({
   canPublish: null as null | boolean,
   empty: [] as never[],
   bestDebatesEnabled: null as null | boolean,
+  bestDebatesSerial: undefined as undefined | boolean,
+  lastIds: ['d1'] as string[],
+  myGrades: new Map() as Map<string, 'A' | 'B' | 'C'>,
+  grading: null as null | import('./best-debates/best-debate-grading').BestDebatesGrading,
+  reorder: vi.fn(),
+  composeArgs: null as null | Record<string, unknown>,
+  recordGrade: vi.fn(),
+}));
+vi.mock('./best-debates/best-debate-grading', async importOriginal => ({
+  ...(await importOriginal<typeof import('./best-debates/best-debate-grading')>()),
+  useRecordGrade: () => mocks.recordGrade,
 }));
 
 vi.mock('~/core/blocks/ranking/best-debates', async importOriginal => ({
@@ -83,7 +94,8 @@ vi.mock('~/core/blocks/ranking/use-ranking-submissions', () => ({
     submissions: mocks.empty,
     mySubmission: null,
     // A draft with one debate, never published: publishable but for the guard.
-    myLastSubmission: { orderedEntityIds: ['d1'] },
+    myLastSubmission: { orderedEntityIds: mocks.lastIds },
+    myGrades: mocks.myGrades,
     saveMySubmission: mocks.saveMySubmission,
     isSaving: false,
     personalSpaceId: 'me',
@@ -154,9 +166,12 @@ vi.mock('~/core/blocks/ranking/use-best-debate-displays', () => ({ useBestDebate
 vi.mock('./best-debates/use-best-debates-compose', () => ({
   useBestDebatesCompose: (args: {
     enabled: boolean;
+    serialPublishes?: boolean;
     saveMySubmission: (slots: { id: string; name: string | null; spaceId?: string }[]) => Promise<unknown>;
   }) => {
+    mocks.composeArgs = args;
     mocks.bestDebatesEnabled = args.enabled;
+    mocks.bestDebatesSerial = args.serialPublishes;
     return {
       teamView: undefined,
       mobileTabs: undefined,
@@ -166,9 +181,22 @@ vi.mock('./best-debates/use-best-debates-compose', () => ({
       activeEntityId: null,
       placeFromTeam: vi.fn(),
       dropEntity: vi.fn(),
+      reorder: mocks.reorder,
       publish: async (ids: string[]) =>
         Boolean(await args.saveMySubmission(ids.map(id => ({ id, name: null, spaceId: 'debate-space' })))),
     };
+  },
+}));
+vi.mock('./best-debates/best-debate-watch', () => ({
+  BestDebateWatchProvider: ({
+    grading,
+    children,
+  }: {
+    grading?: import('./best-debates/best-debate-grading').BestDebatesGrading | null;
+    children: React.ReactNode;
+  }) => {
+    mocks.grading = grading ?? null;
+    return children;
   },
 }));
 vi.mock('./ranking-compose-pushed-down', () => ({ RankingComposePushedDown: () => null }));
@@ -203,6 +231,9 @@ beforeEach(() => {
   mocks.canPublish = null;
   mocks.bestDebatesEnabled = null;
   mocks.authResolving = false;
+  mocks.lastIds = ['d1'];
+  mocks.myGrades = new Map();
+  mocks.grading = null;
 });
 
 afterEach(cleanup);
@@ -237,13 +268,15 @@ describe('RankingComposeScreen on the Best debates block', () => {
     expect(mocks.replace).not.toHaveBeenCalled();
     expect(mocks.canPublish).toBe(true);
     expect(mocks.bestDebatesEnabled).toBe(true);
+    // The screen's one Publish is off while it publishes; only the block queues publishes (GEO-3729).
+    expect(mocks.bestDebatesSerial).toBeFalsy();
     await act(async () => mocks.publish?.());
     // Through the Best debates publish (own spaces), built on the ballot the draft came from.
     expect(mocks.saveMySubmission).toHaveBeenCalledTimes(1);
     expect(mocks.saveMySubmission).toHaveBeenCalledWith(
       [{ id: 'd1', name: null, spaceId: 'debate-space' }],
       expect.anything(),
-      { basedOnOrderedIds: ['d1'] }
+      { basedOnOrderedIds: ['d1'], basedOnGrades: expect.any(Map) }
     );
   });
 
@@ -294,5 +327,68 @@ describe('RankingComposeScreen on any other block', () => {
     expect(mocks.bestDebatesEnabled).toBe(false);
     await act(async () => mocks.publish?.());
     expect(mocks.saveMySubmission).toHaveBeenCalledTimes(1);
+  });
+
+  it('puts the popup’s grades into the draft, and opens Re-order in the screen’s Placed step (GEO-3729)', async () => {
+    mocks.member = true;
+    // IDs are hex, as normId leaves them.
+    const [d1, d2] = ['d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1', 'd2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2'];
+    mocks.lastIds = [d1, d2];
+    mocks.myGrades = new Map([
+      [d1, 'A'],
+      [d2, 'B'],
+    ]);
+    renderScreen();
+    expect(mocks.grading?.needsTierLines).toBe(false);
+    await act(async () => mocks.grading?.grade(d2, 'A'));
+    expect(mocks.grading?.gradeOf(d2)).toBe('A');
+    // Top of A.
+    expect(mocks.grading?.placeOf(d2)).toBe(1);
+    expect(mocks.saveMySubmission).not.toHaveBeenCalled();
+    expect(mocks.canPublish).toBe(true);
+    mocks.grading?.reorder(d2);
+    expect(mocks.reorder).toHaveBeenCalledWith(d2);
+  });
+
+  it('counts a grade Re-order changed as a reorder, in the draft and again when published (GEO-3729)', async () => {
+    mocks.member = true;
+    mocks.recordGrade.mockReset();
+    const [a1, x] = ['a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1', 'e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5'];
+    mocks.lastIds = [a1, x];
+    mocks.myGrades = new Map([
+      [a1, 'A'],
+      [x, 'B'],
+    ]);
+    renderScreen();
+    const before = { ids: [a1, x], grades: new Map(mocks.myGrades) };
+    const after = {
+      ids: [x, a1],
+      grades: new Map([
+        [a1, 'A'],
+        [x, 'A'],
+      ]),
+    };
+    type End = (end: object) => void;
+    await act(async () => (mocks.composeArgs?.onReorderEnd as End)({ outcome: 'closed', entityId: x, before, after }));
+    expect(mocks.recordGrade).toHaveBeenCalledWith(x, {
+      grade: 'A',
+      previousGrade: 'B',
+      method: 'reorder',
+      mutationKind: 'draft',
+    });
+    type OnPublished = (p: unknown, ids: string[], grades: Map<string, string>) => void;
+    await act(async () =>
+      (mocks.composeArgs?.onPublished as OnPublished)(
+        { orderedEntityIds: after.ids, grades: after.grades, indexingSettled: Promise.resolve(null) },
+        after.ids,
+        after.grades
+      )
+    );
+    expect(mocks.recordGrade).toHaveBeenLastCalledWith(x, {
+      grade: 'A',
+      previousGrade: 'B',
+      method: 'reorder',
+      mutationKind: 'published',
+    });
   });
 });

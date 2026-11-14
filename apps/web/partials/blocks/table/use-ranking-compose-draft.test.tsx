@@ -2,7 +2,12 @@ import { act, renderHook } from '@testing-library/react';
 
 import { describe, expect, it } from 'vitest';
 
-import { type RankingComposeSeed, rankingComposeSeed, useRankingComposeDraft } from './use-ranking-compose-draft';
+import {
+  type RankingComposeSeed,
+  gradesForOrder,
+  rankingComposeSeed,
+  useRankingComposeDraft,
+} from './use-ranking-compose-draft';
 
 const A = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const B = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
@@ -13,11 +18,11 @@ const E = 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
 describe('rankingComposeSeed', () => {
   it('prefers a handed-back draft, based on the draft itself', () => {
     const draft = { orderedEntityIds: [A, D, B], baseOrderedIds: [A, D], overtakenOrderedIds: [A, B] };
-    expect(rankingComposeSeed(draft, [A, B])).toEqual({ ids: [A, D, B], base: [A, D, B] });
+    expect(rankingComposeSeed(draft, [A, B])).toMatchObject({ ids: [A, D, B], base: [A, D, B] });
   });
 
   it('falls back to the published ballot, based on itself', () => {
-    expect(rankingComposeSeed(null, [A, B])).toEqual({ ids: [A, B], base: [A, B] });
+    expect(rankingComposeSeed(null, [A, B])).toMatchObject({ ids: [A, B], base: [A, B] });
   });
 });
 
@@ -50,5 +55,99 @@ describe('useRankingComposeDraft (GEO-3680)', () => {
 
     expect(result.current.orderedIds).toEqual([C, A]);
     expect(result.current.getBasedOnOrderedIds()).toEqual([C, A]);
+  });
+});
+
+describe('grades in the draft (GEO-3729)', () => {
+  const graded = (entries: Array<[string, 'A' | 'B' | 'C']>) => new Map(entries);
+
+  it('gives a debate placed in the list the tier it lands in, and drops a removed one’s grade', () => {
+    const seed: RankingComposeSeed = {
+      ids: [A, B, C],
+      base: [A, B, C],
+      grades: graded([
+        [A, 'A'],
+        [B, 'B'],
+        [C, 'C'],
+      ]),
+    };
+    const { result } = renderHook(() => useRankingComposeDraft(seed));
+    act(() => result.current.setOrderedIds([A, D, B, C]));
+    expect(result.current.grades.get(D)).toBe('A');
+    act(() => result.current.setOrderedIds([A, D, C]));
+    expect(result.current.grades.has(B)).toBe(false);
+  });
+
+  it('keeps a regrade made here when another device’s publish moves the seed', () => {
+    let seed: RankingComposeSeed = {
+      ids: [A, B],
+      base: [A, B],
+      grades: graded([
+        [A, 'A'],
+        [B, 'B'],
+      ]),
+    };
+    const { result, rerender } = renderHook(() => useRankingComposeDraft(seed));
+    act(() =>
+      result.current.setDraft(
+        [A, B],
+        graded([
+          [A, 'A'],
+          [B, 'A'],
+        ])
+      )
+    );
+    seed = {
+      ids: [A, B, E],
+      base: [A, B, E],
+      grades: graded([
+        [A, 'A'],
+        [B, 'B'],
+        [E, 'C'],
+      ]),
+    };
+    rerender();
+    expect(result.current.orderedIds).toEqual([A, B, E]);
+    expect(result.current.grades.get(B)).toBe('A');
+    expect(result.current.grades.get(E)).toBe('C');
+  });
+});
+
+describe('gradesForOrder (GEO-3729)', () => {
+  const grades = new Map([
+    [A, 'A' as const],
+    [B, 'B' as const],
+    [C, 'C' as const],
+  ]);
+
+  it('regrades a debate nudged across a tier line so the order stays in tiers', () => {
+    // A nudged down past B into C's place: one of the two takes the other's tier, never both.
+    const next = gradesForOrder([A, B, C, D], new Map([...grades, [D, 'C' as const]]), [B, C, A, D]);
+    expect(next.get(A)).toBe('C');
+    expect(next.get(B)).toBe('B');
+  });
+
+  it('leaves a debate that still fits between its neighbours alone', () => {
+    const twoB = new Map([
+      [A, 'A' as const],
+      [B, 'B' as const],
+      [D, 'B' as const],
+      [C, 'C' as const],
+    ]);
+    expect(gradesForOrder([A, B, D, C], twoB, [A, D, B, C]).get(D)).toBe('B');
+  });
+
+  it('regrades the nudged debate, not its neighbour, on a one-step nudge across a line', () => {
+    const X = '12121212121212121212121212121212';
+    const five = new Map([
+      [A, 'A' as const],
+      [B, 'A' as const],
+      [X, 'A' as const],
+      [C, 'B' as const],
+      [D, 'B' as const],
+    ]);
+    const next = gradesForOrder([A, B, X, C, D], five, [A, B, C, X, D], X);
+    expect(next.get(X)).toBe('B');
+    expect(next.get(C)).toBe('B');
   });
 });

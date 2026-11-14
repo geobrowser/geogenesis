@@ -67,6 +67,9 @@ function Harness({ initial, startWith, ...rest }: HarnessProps) {
       <button type="button" onClick={() => placement.start(startWith.id, startWith.origin)}>
         start
       </button>
+      <button type="button" onClick={() => placement.reorder(startWith.id)}>
+        reorder
+      </button>
       {placement.dialogs}
     </>
   );
@@ -357,5 +360,130 @@ describe('placing a debate by comparison', () => {
     rerender(<RowHarness ready />);
     expect(onSelect).toHaveBeenCalledWith('new');
     expect(screen.getByTestId('active').textContent).toBe('');
+  });
+});
+
+describe('Re-order from the watch popup (GEO-3729)', () => {
+  it('opens the Placed step at the debate’s place, and its arrows move it there', () => {
+    render(<Harness initial={list(4)} startWith={{ id: 'd3', origin: 'mine' }} />);
+    fireEvent.click(screen.getByText('reorder'));
+    expect(screen.getByText('Placed #3 of 4')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Move up' }));
+    expect(latestOrder).toEqual(['d1', 'd3', 'd2', 'd4']);
+  });
+
+  it('publishes the moved list on Done where Done publishes (the block)', async () => {
+    const publish = vi.fn(async () => true);
+    render(<Harness initial={list(3)} startWith={{ id: 'd2', origin: 'mine' }} publish={publish} />);
+    fireEvent.click(screen.getByText('reorder'));
+    fireEvent.click(screen.getByRole('button', { name: 'Move down' }));
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Done' })));
+    expect(publish).toHaveBeenCalledWith(['d1', 'd3', 'd2']);
+  });
+
+  it('says how the step ended: closed, or done once Done went out', async () => {
+    const onReorderEnd = vi.fn();
+    render(<Harness initial={list(3)} startWith={{ id: 'd2', origin: 'mine' }} onReorderEnd={onReorderEnd} />);
+    fireEvent.click(screen.getByText('reorder'));
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    expect(onReorderEnd).toHaveBeenCalledWith('d2', 'closed');
+    fireEvent.click(screen.getByText('reorder'));
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Done' })));
+    expect(onReorderEnd).toHaveBeenLastCalledWith('d2', 'done');
+    expect(onReorderEnd).toHaveBeenCalledTimes(2);
+  });
+
+  it('says nothing when a Done didn’t go out, or for a placement that wasn’t a Re-order', async () => {
+    const onReorderEnd = vi.fn();
+    render(
+      <Harness
+        initial={list(3)}
+        startWith={{ id: 'd2', origin: 'mine' }}
+        onReorderEnd={onReorderEnd}
+        publish={async () => false}
+      />
+    );
+    fireEvent.click(screen.getByText('reorder'));
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Done' })));
+    expect(onReorderEnd).not.toHaveBeenCalled();
+    cleanup();
+    // An empty ranking places a new debate at once, straight onto the Placed step.
+    render(<Harness initial={[]} startWith={{ id: 'new', origin: 'team' }} onReorderEnd={onReorderEnd} />);
+    fireEvent.click(screen.getByText('start'));
+    expect(screen.getByText('Placed #1 of 1')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    expect(onReorderEnd).not.toHaveBeenCalled();
+  });
+
+  it('lets a Done already publishing say how a Re-order closed meanwhile ended', async () => {
+    for (const lands of [true, false]) {
+      const onReorderEnd = vi.fn();
+      let finish!: (ok: boolean) => void;
+      const publish = vi.fn(() => new Promise<boolean>(resolve => (finish = resolve)));
+      render(
+        <Harness
+          initial={list(3)}
+          startWith={{ id: 'd2', origin: 'mine' }}
+          onReorderEnd={onReorderEnd}
+          publish={publish}
+        />
+      );
+      fireEvent.click(screen.getByText('reorder'));
+      await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Done' })));
+      fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+      expect(onReorderEnd).not.toHaveBeenCalled();
+      await act(async () => finish(lands));
+      expect(onReorderEnd.mock.calls).toEqual([['d2', lands ? 'done' : 'closed']]);
+      cleanup();
+    }
+  });
+
+  it('ends only its own step when a Done that was closed meanwhile lands', async () => {
+    let finish!: (ok: boolean) => void;
+    const publish = vi.fn(() => new Promise<boolean>(resolve => (finish = resolve)));
+    render(<Harness initial={list(4)} startWith={{ id: 'd2', origin: 'mine' }} publish={publish} />);
+    fireEvent.click(screen.getByText('reorder'));
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Done' })));
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    // Another flow opens before the first Done lands.
+    fireEvent.click(screen.getByText('start'));
+    expect(screen.getByText('Which was the better debate?')).toBeTruthy();
+    await act(async () => finish(true));
+    expect(screen.getByText('Which was the better debate?')).toBeTruthy();
+  });
+
+  it('takes one Done at a time, shown as publishing from the press, and closes when it lands', async () => {
+    let finish!: (ok: boolean) => void;
+    const publish = vi.fn(() => new Promise<boolean>(resolve => (finish = resolve)));
+    render(<Harness initial={list(3)} startWith={{ id: 'd2', origin: 'mine' }} publish={publish} />);
+    fireEvent.click(screen.getByText('reorder'));
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Done' })));
+    expect((screen.getByRole('button', { name: 'Publishing…' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'Move up' }) as HTMLButtonElement).disabled).toBe(true);
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Publishing…' })));
+    expect(publish).toHaveBeenCalledTimes(1);
+    await act(async () => finish(true));
+    expect(screen.queryByText(/Placed #/)).toBeNull();
+  });
+
+  it('marks only its own step when a Done that was closed meanwhile fails', async () => {
+    let finish!: (ok: boolean) => void;
+    const publish = vi.fn(() => new Promise<boolean>(resolve => (finish = resolve)));
+    // An empty ranking places at once, straight onto the Placed step.
+    render(<Harness initial={[]} startWith={{ id: 'new', origin: 'team' }} publish={publish} />);
+    fireEvent.click(screen.getByText('start'));
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Done' })));
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    // A new Placed step opens before the first Done fails.
+    fireEvent.click(screen.getByText('start'));
+    await act(async () => finish(false));
+    expect(screen.getByText(/Placed #/)).toBeTruthy();
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('does nothing for a debate that isn’t in the ranking', () => {
+    render(<Harness initial={list(3)} startWith={{ id: 'new', origin: 'mine' }} />);
+    fireEvent.click(screen.getByText('reorder'));
+    expect(screen.queryByText(/Placed #/)).toBeNull();
   });
 });

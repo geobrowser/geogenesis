@@ -256,8 +256,8 @@ export function usePushDown(debateId: string, options: UsePushDownOptions = {}):
     [debateId, sendVote]
   );
 
-  /** The draft order a Push it down just edited, so its toast's Undo can put it back. */
-  const draftBeforePush = React.useRef<string[] | null>(null);
+  /** The draft (order and grades) a Push it down just edited, so its toast's Undo can put it back. */
+  const draftBeforePush = React.useRef<{ ids: string[]; grades?: ComposeBallot['grades'] } | null>(null);
   /** The newest `undo`, for the toast's Undo button (built before `undo` is). */
   const undoRef = React.useRef<(() => Promise<PushDownRunResult>) | null>(null);
 
@@ -269,7 +269,7 @@ export function usePushDown(debateId: string, options: UsePushDownOptions = {}):
       if (!ballotHolds(draft.orderedIds, debateId) && !ballotHolds(published, debateId)) return { ok: true };
       // Down ranking the only debate just empties the draft (Preston, 12 Nov).
       const remaining = ballotWithout(draft.orderedIds, debateId);
-      const before = [...draft.orderedIds];
+      const before = { ids: [...draft.orderedIds], grades: draft.grades };
       if (!(await draft.publish(remaining))) return { ok: false, message: PUSH_DOWN_BALLOT_FAILED_COPY };
       draftBeforePush.current = before;
       return { ok: true };
@@ -321,7 +321,8 @@ export function usePushDown(debateId: string, options: UsePushDownOptions = {}):
         const onUndo = () => {
           setToast(null);
           const draft = latest.current.editBallot;
-          if (previousDraft && draft) void draft.publish(previousDraft);
+          // With its grades (GEO-3729), so the debate comes back in the tier it was in.
+          if (previousDraft && draft) void draft.publish(previousDraft.ids, previousDraft.grades);
           void undoRef.current?.();
         };
         setToast(

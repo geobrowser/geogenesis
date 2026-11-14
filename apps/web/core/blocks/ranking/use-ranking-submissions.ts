@@ -28,11 +28,13 @@ import { buildRankingVotes, mustMintFreshRank, rankingBallotRules } from './best
 import {
   type RankingBallotUnreadableError,
   ballotSnapshot,
+  blockHasGrades,
   fetchRankBallot,
   isRankingBallotUnreadableError,
 } from './fetch-my-ranking-ballot';
 import { clearLocalMyRankingDraft } from './local-ranking-my-draft';
 import { ballotRecencyKey, pickLatestBallot } from './ranking-ballot-recency';
+import { type BallotGrades, NO_GRADES, applyGradeEdits, pruneGrades } from './ranking-grades';
 import {
   type OwnRankingPublish,
   RANKING_CHANGED_ELSEWHERE_MESSAGE,
@@ -48,13 +50,13 @@ import {
   getOwnRankingPublish,
   getRankingBallotMaxItems,
   getUnsavedRankingDraft,
-  mergeBallotOrders,
+  mergeBallots,
   rankingBallotTooLargeMessage,
   rankingPublishKey,
   rankingPublishTiming,
   rebaseUnsavedDraft,
   recordOwnRankingPublish,
-  sameBallotOrder,
+  sameBallot,
   setUnsavedRankingDraft,
   subscribeUnsavedRankingDrafts,
 } from './ranking-publish-queue';
@@ -69,6 +71,7 @@ import {
   useMyRanking,
 } from './use-my-ranking';
 import { useRankingBlockConfig } from './use-ranking-block-config';
+import { withVoteGrades } from './vote-grade-ops';
 
 const MS_PER_HOUR = 60 * 60 * 1000;
 
@@ -76,6 +79,8 @@ export type RankingSubmissionPublishResult = {
   rankEntityId: string;
   authorSpaceId: string;
   orderedEntityIds: string[];
+  /** The grades published with it (Best debates; empty elsewhere). */
+  grades: BallotGrades;
   authorName: string | null;
   authorAvatarUrl: string | null;
   /** Resolves once the index settles past this publish: with the ballot it
@@ -159,8 +164,10 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
   const {
     myRankEntity,
     orderedEntityIds: apiRankingEntityIds,
+    grades: apiGrades = NO_GRADES,
     isLoading: isLoadingMyRanking,
     readError: unreadableBallot,
+    gradesPendingError,
     refetchMyRanking,
   } = useMyRanking(blockId);
 
@@ -243,7 +250,9 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
     [isRolling, submissionFrequencyHours]
   );
   const ballotReadError =
-    unreadableBallot && !isRolledOffUnreadable(unreadableBallot) ? unreadableBallot.message : null;
+    (unreadableBallot && !isRolledOffUnreadable(unreadableBallot) ? unreadableBallot.message : null) ??
+    gradesPendingError?.message ??
+    null;
 
   // A rolled-off ballot reads as absent to the block's views and to the call to action, so the
   // author is prompted to rank again. `hasRolledOff` still drives that prompt, and publishing
@@ -294,6 +303,9 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
         /** The published order the caller built `slots` from. Defaults to the
          *  ballot this hook last read, which is what the screens edit. */
         basedOnOrderedIds?: string[];
+        /** The grades of that ballot (Best debates). Defaults with it. A slot's
+         *  `grade` changes its entry's grade; a slot without one keeps it. */
+        basedOnGrades?: BallotGrades;
       }
     ): Promise<RankingSubmissionPublishResult | null> => {
       const account = readCachedSmartAccount(queryClient, smartAccount);
@@ -326,6 +338,17 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
       }
 
       const basedOnOrderedIds = options?.basedOnOrderedIds ?? apiRankingEntityIds;
+      // Grades (GEO-3729) live on the Best debates block only; everywhere else every grade read
+      // and written below is empty, and publishing is exactly as before.
+      const hasGrades = ballotRules.rankType === 'ORDINAL' && blockHasGrades(blockId);
+      // Without grades of its own, an edit is based on the grades this hook last read: a caller
+      // that doesn't know about grades (Down rank's removal) then keeps every one.
+      const basedOnGrades = hasGrades ? (options?.basedOnGrades ?? apiGrades) : NO_GRADES;
+      const gradeEdits = new Map(
+        hasGrades
+          ? filteredSlots.flatMap(slot => (slot.grade === undefined ? [] : [[ID.uuidToHex(slot.id), slot.grade] as const]))
+          : []
+      );
       const publishKey = rankingPublishKey(personalSpaceId, blockId);
 
       pendingSavesRef.current += 1;
@@ -339,6 +362,7 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
         const op = operation;
         const ourIds = filteredSlots.map(slot => slot.id);
         const basedOn = basedOnOrderedIds;
+        const ourGrades = pruneGrades(ourIds, applyGradeEdits(basedOnGrades, gradeEdits));
         const slotSpaceIds = new Map(filteredSlots.map(slot => [ID.uuidToHex(slot.id), slot.spaceId]));
 
         // An edit re-sends the whole list and replaces the votes the index holds,
@@ -390,29 +414,43 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
         // previous edit, and the other ballot the poll saw) before this edit
         // builds on top, so nothing either device placed is dropped.
         const publishedIds = published.orderedEntityIds;
+        const publishedGrades = hasGrades ? (published.grades ?? NO_GRADES) : NO_GRADES;
         const overtaken =
           previous !== null && (previousStanding === 'superseded' || previousResult?.outcome === 'superseded');
         let theirIds = publishedIds;
+        let theirGrades = publishedGrades;
         if (previous && previousStanding === 'superseded') {
-          theirIds = foldOvertakenPublish(previous, theirIds).ids;
+          const folded = foldOvertakenPublish(previous, theirIds, theirGrades);
+          theirIds = folded.ids;
+          theirGrades = folded.grades;
         }
         if (previous && previousResult?.outcome === 'superseded' && previousResult.seen) {
-          theirIds = mergeBallotOrders({
-            base: previous.baseline.orderedEntityIds,
-            ours: theirIds,
-            theirs: previousResult.seen,
-          }).ids;
+          const folded = mergeBallots({
+            base: { ids: previous.baseline.orderedEntityIds, grades: previous.baseline.grades },
+            ours: { ids: theirIds, grades: theirGrades },
+            theirs: { ids: previousResult.seen, grades: previousResult.seenGrades },
+          });
+          theirIds = folded.ids;
+          theirGrades = folded.grades;
         }
 
         // Merge onto the published ballot when it moved since the caller read
         // it: our own earlier placement (silent) or another device (we say so).
-        const movedSinceRead = !sameBallotOrder(theirIds, basedOn);
+        // A regrade elsewhere is a move too (GEO-3729).
+        const movedSinceRead = !sameBallot(theirIds, theirGrades, basedOn, basedOnGrades);
         const merge = movedSinceRead
-          ? mergeBallotOrders({ base: basedOn, ours: ourIds, theirs: theirIds })
-          : { ids: ourIds, overrodeTheirOrder: false };
+          ? mergeBallots({
+              base: { ids: basedOn, grades: basedOnGrades },
+              ours: { ids: ourIds, grades: ourGrades },
+              theirs: { ids: theirIds, grades: theirGrades },
+            })
+          : { ids: ourIds, grades: ourGrades, overrodeTheirOrder: false };
         const mergedIds = merge.ids;
+        const mergedGrades = pruneGrades(mergedIds, merge.grades);
         const changedElsewhere =
-          overtaken || (movedSinceRead && !(previous && sameBallotOrder(publishedIds, previous.orderedEntityIds)));
+          overtaken ||
+          (movedSinceRead &&
+            !(previous && sameBallot(publishedIds, publishedGrades, previous.orderedEntityIds, previous.grades)));
 
         if (mergedIds.length === 0 && !clearing) {
           // Every item this edit kept was removed elsewhere, and vice versa.
@@ -495,7 +533,8 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
                 blockId,
                 votes,
               });
-          ops = result.ops;
+          // Every vote is re-created, so every grade is written again (GEO-3729).
+          ops = hasGrades ? withVoteGrades(result.ops, result.voteIds, votes, mergedGrades) : result.ops;
           rankId = result.id;
         } catch (error) {
           op.failed('invalid_input');
@@ -552,6 +591,7 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
         }
 
         const publishedEntityIds = votes.map(vote => vote.entityId);
+        const publishedEntityGrades = pruneGrades(publishedEntityIds, mergedGrades);
         const outcomeProperties = {
           ranking_id: blockId,
           rank_id: rankId,
@@ -584,11 +624,12 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
         const baseline = {
           rankId: publishedSnapshot.rankId,
           orderedEntityIds: publishedIds,
+          grades: publishedGrades,
           updatedAtMs: publishedSnapshot.updatedAtMs,
           createdAtMs: publishedSnapshot.createdAtMs,
         };
-        const ownPublish = { rankId, orderedEntityIds: publishedEntityIds, baseline };
-        recordPublishedRank(personalSpaceId, blockId, rankId, publishedEntityIds, baseline);
+        const ownPublish = { rankId, orderedEntityIds: publishedEntityIds, grades: publishedEntityGrades, baseline };
+        recordPublishedRank(personalSpaceId, blockId, rankId, publishedEntityIds, baseline, publishedEntityGrades);
         void refetchMyRanking().catch(e => {
           console.error('[useRankingSubmissions] Refetch after pinning published rank failed:', e);
         });
@@ -611,11 +652,13 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
             let interval = timing.pollIntervalMs;
             try {
               const readBack = reuseExistingRank
-                ? await fetchRankBallot(rankId, personalSpaceId)
+                ? await fetchRankBallot(rankId, personalSpaceId, { withGrades: hasGrades })
                 : await fetchMyRankingBallot(personalSpaceId, blockId);
               // A rank that can't be read yet is still pending.
               const standing = readBack ? classifyReadBack(ballotSnapshot(readBack), ownPublish) : 'pending';
-              if (readBack && standing !== 'pending') return { outcome: standing, seen: readBack.orderedEntityIds };
+              if (readBack && standing !== 'pending') {
+                return { outcome: standing, seen: readBack.orderedEntityIds, seenGrades: readBack.grades };
+              }
               if (!reuseExistingRank) {
                 interval = listingInterval;
                 listingInterval = Math.min(listingInterval * 1.5, timing.listingPollMaxIntervalMs);
@@ -630,7 +673,7 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
         const ownRecord: OwnRankingPublish = { ...ownPublish, publishedAtMs: Date.now(), indexed };
         recordOwnRankingPublish(publishKey, ownRecord);
 
-        const indexingSettled = indexed.then(async ({ outcome, seen }) => {
+        const indexingSettled = indexed.then(async ({ outcome, seen, seenGrades }) => {
           if (outcome === 'ours') op.outcome('ranking_submitted', 'indexed', outcomeProperties);
           if (outcome !== 'timeout') releasePublishedRankPin(personalSpaceId, blockId, rankId);
           if (outcome === 'superseded' && seen && getOwnRankingPublish(publishKey) === ownRecord) {
@@ -639,10 +682,14 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
             // ranker's behalf: hand both back as unpublished changes (this edit
             // folded onto the ballot the poll saw) and tell them. A newer edit
             // of ours, if one follows, folds it in itself and clears this.
+            const folded = foldOvertakenPublish(ownRecord, seen, seenGrades);
             setUnsavedRankingDraft(publishKey, {
-              orderedEntityIds: foldOvertakenPublish(ownRecord, seen).ids,
+              orderedEntityIds: folded.ids,
+              grades: folded.grades,
               baseOrderedIds: seen,
+              baseGrades: seenGrades,
               overtakenOrderedIds: ownRecord.orderedEntityIds,
+              overtakenGrades: ownRecord.grades,
             });
             reportError(RANKING_OVERTAKEN_MESSAGE);
           }
@@ -663,6 +710,7 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
           rankEntityId: rankId,
           authorSpaceId: personalSpaceId,
           orderedEntityIds: publishedEntityIds,
+          grades: publishedEntityGrades,
           authorName: profile?.name ?? null,
           authorAvatarUrl,
           indexingSettled,
@@ -684,6 +732,7 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
     },
     [
       apiRankingEntityIds,
+      apiGrades,
       getContext,
       blockId,
       blockName,
@@ -714,10 +763,10 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
   // published order changes (another tab or device), and drop it once the
   // published ballot holds all of it. Every hook instance runs this; it is
   // idempotent, so the first to see a change wins and the rest no-op.
-  const publishedOrderKey = apiRankingEntityIds.join('|');
+  const publishedOrderKey = `${apiRankingEntityIds.join('|')}#${[...apiGrades].join('|')}`;
   React.useEffect(() => {
     if (!draftKey || !unsavedDraft || isLoadingMyRanking || unreadableBallot) return;
-    const rebased = rebaseUnsavedDraft(unsavedDraft, apiRankingEntityIds);
+    const rebased = rebaseUnsavedDraft(unsavedDraft, apiRankingEntityIds, apiGrades);
     if (rebased !== unsavedDraft) setUnsavedRankingDraft(draftKey, rebased);
     // `publishedOrderKey` stands in for `apiRankingEntityIds`, rebuilt each render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -727,6 +776,8 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
     submissions: [] as RankingSubmissionRecord[],
     mySubmission,
     myLastSubmission,
+    /** Best debates: the grades of the ballot this hook last read (GEO-3729). Empty elsewhere. */
+    myGrades: apiGrades,
     hasMySubmission,
     saveMySubmission,
     isLoading: isLoadingMyRanking,

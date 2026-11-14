@@ -24,3 +24,47 @@ describe('countBallotChanges', () => {
     expect(unpublishedChangesLabel(3)).toBe('3 changes not published');
   });
 });
+
+describe('countBallotChanges with grades (GEO-3729)', () => {
+  const A = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+  const B = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+
+  it('counts a regrade that kept its place as one change', () => {
+    expect(
+      countBallotChanges([A, B], [A, B], {
+        published: new Map([[A, 'A' as const]]),
+        draft: new Map([[A, 'B' as const]]),
+      })
+    ).toBe(1);
+  });
+
+  it('counts a regrade that moved as one change', () => {
+    expect(
+      countBallotChanges([A, B], [B, A], {
+        published: new Map([
+          [A, 'A' as const],
+          [B, 'B' as const],
+        ]),
+        draft: new Map([
+          [A, 'B' as const],
+          [B, 'B' as const],
+        ]),
+      })
+    ).toBe(1);
+  });
+});
+
+describe('countBallotChanges: a move and a regrade of different debates (GEO-3729)', () => {
+  const A = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+  const B = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+  const C = 'cccccccccccccccccccccccccccccccc';
+
+  it('counts two changes', () => {
+    expect(
+      countBallotChanges([A, B, C], [B, A, C], {
+        published: new Map([[C, 'B' as const]]),
+        draft: new Map([[C, 'C' as const]]),
+      })
+    ).toBe(2);
+  });
+});

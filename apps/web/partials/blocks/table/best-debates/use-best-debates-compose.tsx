@@ -3,7 +3,9 @@
 import * as React from 'react';
 
 import { fetchDebateOwnSpaces } from '~/core/blocks/ranking/best-debates-debates';
+import { type BallotGrades, NO_GRADES, sortIntoTiers } from '~/core/blocks/ranking/ranking-grades';
 import { insertAt } from '~/core/blocks/ranking/ranking-placement';
+import { enqueueRankingPublish, whenRankingPublishQueueSettles } from '~/core/blocks/ranking/ranking-publish-queue';
 import type { RankingSubmissionSlot } from '~/core/blocks/ranking/ranking-submission-types';
 import {
   type RankersRead,
@@ -18,11 +20,23 @@ import { normId } from '~/core/utils/norm-id';
 
 import type { RankingComposeTeamMode, RankingComposeTeamView } from '../ranking-compose-global-ranking';
 import type { RankingComposeMobileTab, RankingComposeMobileTabs } from '../ranking-compose-layout';
+import { gradesForOrder } from '../use-ranking-compose-draft';
 import { BestDebatesTeamRowContent } from './best-debates-team-row';
 import { useBestDebatesTeamTools } from './best-debates-team-tools';
 import { BestDebatesToRankList } from './best-debates-to-rank-list';
 import type { PushDownSlot } from './push-down-slot';
 import { type PlacementOrigin, useBestDebatesPlacement } from './use-best-debates-placement';
+
+/** How a Re-order's Placed step ended, with the draft from when it opened and as it ended. */
+export type ReorderEnd = {
+  outcome: 'done' | 'closed';
+  entityId: string;
+  before: PublishedBase;
+  after: PublishedBase;
+};
+
+/** A published ballot an edit was built on: its order and grades. */
+export type PublishedBase = { ids: string[]; grades: BallotGrades };
 
 export type UseBestDebatesComposeArgs = {
   /** False on every other ranking block: every read is off and nothing here is used. */
@@ -32,19 +46,42 @@ export type UseBestDebatesComposeArgs = {
   blockSpaceId: string;
   isMobile: boolean;
   orderedIds: string[];
-  setOrderedIds: (ids: string[]) => void;
+  /** The draft's grades (GEO-3729): every publish sends each entry's grade. */
+  grades?: BallotGrades;
+  setOrderedIds: (ids: string[], movedId?: string) => void;
   hasUnpublishedChanges: boolean;
   nameOf: (entityId: string) => string | null;
   personalSpaceId: string | null | undefined;
-  saveMySubmission: (slots: RankingSubmissionSlot[]) => Promise<RankingSubmissionPublishResult | null>;
+  /**
+   * Writes the ballot. `basedOn` is the published ballot the edit was built on, when the caller
+   * fixed it before the publish had to wait its turn (`serialPublishes`).
+   */
+  saveMySubmission: (
+    slots: RankingSubmissionSlot[],
+    basedOn?: PublishedBase
+  ) => Promise<RankingSubmissionPublishResult | null>;
+  /** The published ballot edits are built on now (with `serialPublishes`). */
+  getPublishedBase?: () => PublishedBase;
   isSaving: boolean;
   /**
    * Runs after each publish that went out, with the ids this device sent (the screen generates its
    * share images there, and folds the published ballot back into its draft).
    */
-  onPublished?: (published: RankingSubmissionPublishResult, sentIds: string[]) => void;
+  onPublished?: (published: RankingSubmissionPublishResult, sentIds: string[], sentGrades: BallotGrades) => void;
   /** Done publishes (see `useBestDebatesPlacement`). Off here: the screen's Publish sends everything. */
   publishOnDone?: boolean;
+  /**
+   * Publishes take turns (the block, where placements and the popup's grades both publish at once),
+   * and a queued one counts as saving. Off on the ranking screen, whose one Publish is off while
+   * it publishes.
+   */
+  serialPublishes?: boolean;
+  /**
+   * A Re-order's Placed step ended (GEO-3729), with the draft from when it opened (`before`) and as
+   * it ended (`after`). The block puts `before` back on `closed`, since nothing else would publish
+   * the move; the screen keeps the move in the draft either way.
+   */
+  onReorderEnd?: (end: ReorderEnd) => void;
   /** The team column's search, which To rank filters by too. */
   searchQuery?: string;
   /** Open the team column on To rank (the screen was opened with `?team=to-rank`, GEO-3677). */
@@ -65,6 +102,7 @@ export function useBestDebatesCompose({
   blockSpaceId,
   isMobile,
   orderedIds,
+  grades = NO_GRADES,
   setOrderedIds,
   hasUnpublishedChanges,
   nameOf,
@@ -76,6 +114,9 @@ export function useBestDebatesCompose({
   pushDown,
   searchQuery = '',
   publishOnDone = false,
+  serialPublishes = false,
+  getPublishedBase,
+  onReorderEnd,
 }: UseBestDebatesComposeArgs) {
   const tools = useBestDebatesTeamTools();
   const [, setToast] = useToast();
@@ -109,13 +150,18 @@ export function useBestDebatesCompose({
     [nameOf, toRankEntriesById, toRankNameById]
   );
 
+  // The draft as it stands, for a publish of an order built from it (a placement's insert).
+  const latestDraft = React.useRef({ ids: orderedIds, grades });
+  latestDraft.current = { ids: orderedIds, grades };
+
   /**
-   * Publishes `ids` as one ballot edit. Each item is filed under the debate's own space (see
+   * Publishes `ids` as one ballot edit, each entry with its grade: `grades` when given, else the
+   * draft's, with a debate that joins taking the tier it lands in (`gradesForOrder`). Each item is filed under the debate's own space (see
    * `best-debates-debates.ts`); a debate whose space can't be found is left out and the ranker told,
    * never filed under the block's space. No vote is cast.
    */
-  const publish = React.useCallback(
-    async (ids: string[]): Promise<boolean> => {
+  const publishNow = React.useCallback(
+    async (ids: string[], givenGrades?: BallotGrades, basedOn?: PublishedBase): Promise<boolean> => {
       if (!personalSpaceId) {
         setToast(<span>Finish setting up your account to publish your ranking.</span>);
         return false;
@@ -131,7 +177,16 @@ export function useBestDebatesCompose({
         return false;
       }
 
-      const slots = ids.map(id => ({ id, name: debateName(id), spaceId: spaces.get(normId(id)) }));
+      const draft = latestDraft.current;
+      const sentGrades = givenGrades ?? gradesForOrder(draft.ids, draft.grades, ids);
+      // Always tier-ordered (GEO-3729): a ballot an agent wrote out of order goes out in tiers.
+      const slots = sortIntoTiers(ids, sentGrades).map(id => ({
+        id,
+        name: debateName(id),
+        spaceId: spaces.get(normId(id)),
+        // Explicit for every entry: this list is the whole ballot, grades included.
+        grade: sentGrades.get(normId(id)) ?? null,
+      }));
       const publishable = slots.filter(slot => Boolean(slot.spaceId));
       const leftOut = slots.length - publishable.length;
       if (slots.length > 0 && publishable.length === 0) {
@@ -139,7 +194,7 @@ export function useBestDebatesCompose({
         return false;
       }
 
-      const published = await saveMySubmission(publishable);
+      const published = await saveMySubmission(publishable, basedOn);
       if (!published) return false;
 
       if (leftOut > 0) {
@@ -152,12 +207,48 @@ export function useBestDebatesCompose({
       refreshRankersAfterIndexing(rankers, published.indexingSettled);
       onPublished?.(
         published,
-        publishable.map(slot => slot.id)
+        publishable.map(slot => slot.id),
+        sentGrades
       );
       return true;
     },
     [debateName, onPublished, personalSpaceId, rankers, saveMySubmission, setToast]
   );
+
+  // On the block (GEO-3729), a placement's Done and the popup's grades both publish through here,
+  // and the ballot publisher refuses a second publish while one is out: so they take turns, each
+  // waiting from its very start, and the turn shows as saving. The ranking screen keeps one
+  // Publish button that is simply off while it publishes.
+  const queueKey = `best-debates-block-publishes:${blockId}`;
+  const [queued, setQueued] = React.useState(0);
+  const publish = React.useCallback(
+    (ids: string[], givenGrades?: BallotGrades): Promise<boolean> => {
+      if (!serialPublishes) return publishNow(ids, givenGrades);
+      // Fixed now, with `ids`: a publish ahead of this one may merge in another device's change and
+      // move the base, and building this edit on the moved base would read that change as removed.
+      const basedOn = getPublishedBase?.();
+      setQueued(count => count + 1);
+      return enqueueRankingPublish(queueKey, () => publishNow(ids, givenGrades, basedOn)).finally(() =>
+        setQueued(count => count - 1)
+      );
+    },
+    [getPublishedBase, publishNow, queueKey, serialPublishes]
+  );
+  /** Resolves once no publish queued here is out (the block's grades wait on it). */
+  const whenPublishesSettle = React.useCallback(() => whenRankingPublishQueueSettles(queueKey), [queueKey]);
+  const publishing = isSaving || queued > 0;
+
+  // The draft as a Re-order opened, and as it stands (read when its Placed step ends).
+  const draftRef = React.useRef<PublishedBase>({ ids: orderedIds, grades });
+  draftRef.current = { ids: orderedIds, grades };
+  const reorderBefore = React.useRef<PublishedBase | null>(null);
+  const onReorderEndRef = React.useRef(onReorderEnd);
+  onReorderEndRef.current = onReorderEnd;
+  const endReorder = React.useCallback((entityId: string, outcome: 'done' | 'closed') => {
+    const before = reorderBefore.current;
+    reorderBefore.current = null;
+    if (before) onReorderEndRef.current?.({ outcome, entityId, before, after: draftRef.current });
+  }, []);
 
   const placement = useBestDebatesPlacement({
     blockId,
@@ -167,10 +258,20 @@ export function useBestDebatesCompose({
     nameOf: debateName,
     toRankIds,
     publish,
-    isSaving,
+    // A Done queued behind a grade publish counts as saving too.
+    isSaving: publishing,
     pushDown,
     publishOnDone,
+    onReorderEnd: endReorder,
   });
+  const placementReorder = placement.reorder;
+  const reorder = React.useCallback(
+    (entityId: string) => {
+      reorderBefore.current = draftRef.current;
+      placementReorder(entityId);
+    },
+    [placementReorder]
+  );
 
   const startPlacement = React.useCallback(
     (entityId: string, origin: PlacementOrigin) => placement.start(entityId, origin),
@@ -238,6 +339,11 @@ export function useBestDebatesCompose({
     placeFromTeam: (entityId: string) => startPlacement(entityId, 'team'),
     dropEntity,
     publish,
+    whenPublishesSettle,
+    /** Re-order a debate already in the ranking: the Placed step at its place (GEO-3729). */
+    reorder,
+    /** A publish from here is out or queued (the block's placement Done, from its press, or a grade). */
+    publishing: publishing || placement.isDoneOut,
     /** Down rank from a row (waits for the ranker's vote, then the toast with Undo). */
     requestPushDown: placement.requestPushDown,
     /** For a coverage line in To rank's terms: the window's debates, and how many are left to rank. */

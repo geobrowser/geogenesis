@@ -44,13 +44,16 @@ type FlowState =
       withOtherChanges: boolean;
       /** The last Done or Rank the next one didn't go out. */
       publishFailed?: boolean;
+      /** Opened by Re-order on a debate already in the ranking (GEO-3729). */
+      reorder?: boolean;
     };
 
 export type UseBestDebatesPlacementArgs = {
   blockId: string;
   /** The ranker's list as drafted, best first. */
   orderedIds: string[];
-  setOrderedIds: (ids: string[]) => void;
+  /** `movedId`: the debate this change moved, when known, so its grade follows it (GEO-3729). */
+  setOrderedIds: (ids: string[], movedId?: string) => void;
   /** True when the draft already differs from the published ballot. */
   hasUnpublishedChanges: boolean;
   nameOf: (entityId: string) => string;
@@ -68,6 +71,11 @@ export type UseBestDebatesPlacementArgs = {
    * to publish from.
    */
   publishOnDone?: boolean;
+  /**
+   * A Re-order's Placed step ended (GEO-3729): `done` once its Done kept or published the move,
+   * `closed` when it was closed without Done.
+   */
+  onReorderEnd?: (entityId: string, outcome: 'done' | 'closed') => void;
 };
 
 /**
@@ -91,8 +99,12 @@ export function useBestDebatesPlacement({
   isSaving,
   pushDown,
   publishOnDone = false,
+  onReorderEnd,
 }: UseBestDebatesPlacementArgs) {
   const [flow, setFlow] = React.useState<FlowState | null>(null);
+  // The flow on screen, for a Done that finishes later to end only its own (never one opened since).
+  const flowRef = React.useRef(flow);
+  flowRef.current = flow;
   const getContext = useActionContext('ranking_composer', 'ranking', blockId);
 
   // Done and Rank the next one publish whatever the list is when pressed, nudges included.
@@ -129,7 +141,7 @@ export function useBestDebatesPlacement({
       const withOtherChanges = !justPublished && hasUnpublishedChangesRef.current;
       const start = startPlacement(list.length);
       if (start.done) {
-        setOrderedIds(insertAt(list, entityId, start.index));
+        setOrderedIds(insertAt(list, entityId, start.index), entityId);
         record('ranking_placed', entityId, { item_position: start.index + 1, variant: origin }, { item_count: 1 });
         setFlow({ phase: 'placed', entityId, origin, placedIndex: start.index, withOtherChanges });
         return;
@@ -154,6 +166,24 @@ export function useBestDebatesPlacement({
     },
     [beginCompare, record]
   );
+
+  /**
+   * Re-order (GEO-3729): the Placed step for a debate already in the ranking, at its place, from the
+   * watch popup's grade row. Its arrows move it as they do after a placement (across a tier line it
+   * takes that tier), and Done keeps or publishes it as a placement's Done does.
+   */
+  const reorder = React.useCallback((entityId: string) => {
+    const index = indexOfEntity(orderedIdsRef.current, entityId);
+    if (index < 0) return;
+    setFlow({
+      phase: 'placed',
+      entityId,
+      origin: 'mine',
+      placedIndex: index,
+      withOtherChanges: hasUnpublishedChangesRef.current,
+      reorder: true,
+    });
+  }, []);
 
   /**
    * Push it down, from the compare header or a team row's ↓: the same downvote and draft edit the
@@ -202,7 +232,7 @@ export function useBestDebatesPlacement({
         return;
       }
       const next = insertAt(flow.list, flow.entityId, result.index);
-      setOrderedIds(next);
+      setOrderedIds(next, flow.entityId);
       record(
         'ranking_placed',
         flow.entityId,
@@ -247,8 +277,28 @@ export function useBestDebatesPlacement({
     [publish, pushDown, setOrderedIds]
   );
 
-  const markPublishFailed = React.useCallback(() => {
-    setFlow(current => (current?.phase === 'placed' ? { ...current, publishFailed: true } : current));
+  /** Marks the step a Done was pressed on (`mine`) as not gone out; never one opened since. */
+  const markPublishFailed = React.useCallback((mine: FlowState | null) => {
+    setFlow(current =>
+      current === mine && current?.phase === 'placed' ? { ...current, publishFailed: true } : current
+    );
+  }, []);
+
+  // A Done or Rank the next one is out, from the press until it ends, including GEO-3679's vote read
+  // before the publish and its clear after (`pushDown.rank`), which the publish queue doesn't see.
+  // A second press is ignored, and the Placed step's Done and arrows wait (`isSaving` below).
+  const doneOutRef = React.useRef(false);
+  const [doneOut, setDoneOut] = React.useState(false);
+  const runDone = React.useCallback(async (run: () => Promise<void>) => {
+    if (doneOutRef.current) return;
+    doneOutRef.current = true;
+    setDoneOut(true);
+    try {
+      await run();
+    } finally {
+      doneOutRef.current = false;
+      setDoneOut(false);
+    }
   }, []);
 
   /** Without publishing: makes sure the placed debate is still in the draft where it was placed. */
@@ -260,17 +310,34 @@ export function useBestDebatesPlacement({
     [setOrderedIds]
   );
 
+  // A Re-order closed while its Done is publishing: the publish says how it ended, not the close.
+  const reorderDoneInFlight = React.useRef(false);
+  const reorderClosedInFlight = React.useRef(false);
   const done = React.useCallback(
-    async (entityId: string, placedIndex: number) => {
+    async (entityId: string, placedIndex: number, reorder = false) => {
       if (!publishOnDone) {
         keepPlaced(entityId, placedIndex);
         setFlow(null);
+        if (reorder) onReorderEnd?.(entityId, 'done');
         return;
       }
-      if (await publishPlaced(entityId, placedIndex)) setFlow(null);
-      else markPublishFailed();
+      await runDone(async () => {
+        if (reorder) {
+          reorderDoneInFlight.current = true;
+          reorderClosedInFlight.current = false;
+        }
+        const mine = flowRef.current;
+        const ok = await publishPlaced(entityId, placedIndex);
+        const closedMeanwhile = reorder && reorderClosedInFlight.current;
+        if (reorder) reorderDoneInFlight.current = false;
+        if (ok) {
+          setFlow(current => (current === mine ? null : current));
+          if (reorder) onReorderEnd?.(entityId, 'done');
+        } else if (closedMeanwhile) onReorderEnd?.(entityId, 'closed');
+        else markPublishFailed(mine);
+      });
     },
-    [keepPlaced, markPublishFailed, publishOnDone, publishPlaced]
+    [keepPlaced, markPublishFailed, onReorderEnd, publishOnDone, publishPlaced, runDone]
   );
 
   const rankNext = React.useCallback(
@@ -280,13 +347,16 @@ export function useBestDebatesPlacement({
         start(nextId, 'to_rank');
         return;
       }
-      if (!(await publishPlaced(entityId, placedIndex))) {
-        markPublishFailed();
-        return;
-      }
-      start(nextId, 'to_rank', true);
+      await runDone(async () => {
+        const mine = flowRef.current;
+        if (!(await publishPlaced(entityId, placedIndex))) {
+          markPublishFailed(mine);
+          return;
+        }
+        start(nextId, 'to_rank', true);
+      });
     },
-    [keepPlaced, markPublishFailed, publishOnDone, publishPlaced, start]
+    [keepPlaced, markPublishFailed, publishOnDone, publishPlaced, runDone, start]
   );
 
   let dialogs: React.ReactNode = null;
@@ -315,10 +385,15 @@ export function useBestDebatesPlacement({
         withOtherChanges={flow.withOtherChanges}
         publishesOnDone={publishOnDone}
         publishFailed={Boolean(flow.publishFailed)}
-        isSaving={isSaving}
-        onNudge={direction => setOrderedIds(nudge(orderedIdsRef.current, placedId, direction))}
-        onDone={() => void done(placedId, flow.placedIndex)}
-        onClose={() => setFlow(null)}
+        isSaving={isSaving || doneOut}
+        onNudge={direction => setOrderedIds(nudge(orderedIdsRef.current, placedId, direction), placedId)}
+        onDone={() => void done(placedId, flow.placedIndex, flow.reorder)}
+        onClose={() => {
+          setFlow(null);
+          if (!flow.reorder) return;
+          if (reorderDoneInFlight.current) reorderClosedInFlight.current = true;
+          else onReorderEnd?.(placedId, 'closed');
+        }}
         next={
           flow.origin === 'to_rank' && remaining.length > 0
             ? {
@@ -333,8 +408,11 @@ export function useBestDebatesPlacement({
 
   return {
     start,
+    reorder,
     dialogs,
     isPlacing: flow !== null,
+    /** A Done or Rank the next one is out, vote read and clear included. */
+    isDoneOut: doneOut,
     /** The debate the comparison or confirmation is about, or one being pushed down (push-down binds to it). */
     activeEntityId: flow?.entityId ?? pushTarget ?? null,
     /** Push a debate down without placing it (a team row's ↓). */

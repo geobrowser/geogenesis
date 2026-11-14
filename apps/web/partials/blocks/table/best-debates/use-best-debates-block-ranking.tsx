@@ -2,6 +2,16 @@
 
 import * as React from 'react';
 
+import {
+  type BallotGrades,
+  type Grade,
+  type GradedBallot,
+  gradeInto,
+  gradeOf,
+  hasAnyGrade,
+  removeEntry,
+  restoreEntry,
+} from '~/core/blocks/ranking/ranking-grades';
 import type { RankingSubmissionSlot } from '~/core/blocks/ranking/ranking-submission-types';
 import {
   useBestDebatesBallotPublisher,
@@ -13,7 +23,14 @@ import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { normId } from '~/core/utils/norm-id';
 
 import { rankingComposeSeed, useRankingComposeDraft } from '../use-ranking-compose-draft';
-import { useBestDebatesCompose } from './use-best-debates-compose';
+import {
+  type BestDebatesGrading,
+  type GradeMethod,
+  gradeChanges,
+  reorderGradeChanges,
+  useRecordGrade,
+} from './best-debate-grading';
+import { type PublishedBase, useBestDebatesCompose } from './use-best-debates-compose';
 import { useBestDebatesPushDownSlot } from './use-best-debates-push-down-slot';
 
 const NO_IDS: readonly string[] = [];
@@ -38,21 +55,23 @@ export function useBestDebatesBlockRanking({
   isMobile: boolean;
 }) {
   const { personalSpaceId } = usePersonalSpaceId();
-  const { myLastSubmission, saveMySubmission, isSaving, isLoading, ballotReadError, unsavedDraft } =
+  const { myLastSubmission, myGrades, saveMySubmission, isSaving, isLoading, ballotReadError, unsavedDraft } =
     useRankingSubmissions(blockId, spaceId, 'Best debates');
-  const { orderedIds, setOrderedIds, getBasedOnOrderedIds, markPublished } = useRankingComposeDraft(
-    rankingComposeSeed(unsavedDraft, myLastSubmission?.orderedEntityIds)
-  );
+  const { orderedIds, grades, setOrderedIds, setDraft, getBasedOnOrderedIds, getBasedOnGrades, markPublished } =
+    useRankingComposeDraft(rankingComposeSeed(unsavedDraft, myLastSubmission?.orderedEntityIds, myGrades));
 
   const { debates: pushedDown } = useMyPushedDownDebates({ blockId: enabled ? blockId : null });
   const pushedDownEntityIds = React.useMemo(() => pushedDown.map(debate => debate.entityId), [pushedDown]);
   const pushDown = useBestDebatesPushDownSlot({ blockId: enabled ? blockId : null, pushedDownEntityIds });
   const { publish: publishClearingDownvotes, isPublishing } = useBestDebatesBallotPublisher();
 
-  const save = async (slots: RankingSubmissionSlot[]) => {
+  const recordGrade = useRecordGrade(blockId);
+  const getPublishedBase = () => ({ ids: getBasedOnOrderedIds(), grades: getBasedOnGrades() });
+  const save = async (slots: RankingSubmissionSlot[], basedOn?: PublishedBase) => {
+    const base = basedOn ?? getPublishedBase();
     const result = await publishClearingDownvotes(
       slots.map(slot => slot.id),
-      () => saveMySubmission(slots, undefined, { basedOnOrderedIds: getBasedOnOrderedIds() })
+      () => saveMySubmission(slots, undefined, { basedOnOrderedIds: base.ids, basedOnGrades: base.grades })
     );
     return result?.published ?? null;
   };
@@ -67,6 +86,7 @@ export function useBestDebatesBlockRanking({
     blockSpaceId: spaceId,
     isMobile,
     orderedIds,
+    grades,
     setOrderedIds,
     hasUnpublishedChanges: false,
     nameOf: entityId => nameById.get(normId(entityId)) ?? null,
@@ -74,14 +94,53 @@ export function useBestDebatesBlockRanking({
     saveMySubmission: save,
     isSaving: isSaving || isPublishing,
     pushDown: pushDown.slot,
-    onPublished: (published, sentIds) => markPublished(published.orderedEntityIds, sentIds),
+    onPublished: (published, sentIds, sentGrades) =>
+      markPublished(published.orderedEntityIds, sentIds, published.grades, sentGrades),
     // Nothing else on this page can save the placement, so Done publishes it.
     publishOnDone: true,
+    // Done and the popup's grades both publish from here, one at a time (GEO-3729).
+    serialPublishes: true,
+    getPublishedBase,
+    // Re-order (GEO-3729): Done published the move, so a grade it changed is counted; closed
+    // without Done, the move goes back, since nothing on the block would publish it.
+    onReorderEnd: ({ outcome, entityId, before, after }) => {
+      if (outcome === 'closed') {
+        // Only the moved debate goes back, onto the draft as it is now: anything merged in while
+        // the step was open stays.
+        const without = removeEntry(after.ids, after.grades, entityId);
+        const restored = restoreEntry(without, before, entityId);
+        setDraft(restored.ids, restored.grades);
+        return;
+      }
+      for (const change of reorderGradeChanges(entityId, before, after)) {
+        recordGrade(change.entityId, {
+          grade: change.grade,
+          previousGrade: change.previousGrade,
+          method: 'reorder',
+          mutationKind: 'published',
+        });
+      }
+    },
   });
 
   const myRankById = React.useMemo(() => new Map(orderedIds.map((id, i) => [normId(id), i + 1])), [orderedIds]);
   // Until the ranker's own ballot is read whole, a placement would compare against the wrong list.
   const ready = enabled && !isLoading && !ballotReadError;
+
+  const grading = useBlockGrading({
+    blockId,
+    ready,
+    orderedIds,
+    grades,
+    setDraft,
+    getBasedOnOrderedIds,
+    getBasedOnGrades,
+    publish: compose.publish,
+    whenPublishesSettle: compose.whenPublishesSettle,
+    downRank: compose.requestPushDown,
+    reorder: compose.reorder,
+    publishing: compose.publishing,
+  });
 
   return {
     enabled,
@@ -89,6 +148,8 @@ export function useBestDebatesBlockRanking({
     myRankOf: (entityId: string) => myRankById.get(normId(entityId)) ?? null,
     rank: (entityId: string) => compose.placeFromTeam(entityId),
     downRank: (entityId: string) => compose.requestPushDown(entityId),
+    /** The watch popup's grade row (GEO-3729): each grade publishes at once. */
+    grading: enabled ? grading : null,
     pushedDownEntityIds: enabled ? pushedDownEntityIds : NO_IDS,
     /** "You've ranked N of M debates from the last 7 days", in To rank's terms. */
     coverage: enabled && compose.toRankCoverage ? compose.toRankCoverage : null,
@@ -98,5 +159,136 @@ export function useBestDebatesBlockRanking({
         {pushDown.binding(compose.activeEntityId)}
       </>
     ) : null,
+  };
+}
+
+/**
+ * Grading from the block's watch popup (GEO-3729). A grade shows at once and publishes straight
+ * away. Grades given while a publish is out are sent together in the next one, so a quick run of
+ * grades never loses a tap and never sends one publish per tap. A failed publish puts the ranking
+ * back as published (its toast says what happened).
+ */
+export function useBlockGrading({
+  blockId,
+  ready,
+  orderedIds,
+  grades,
+  setDraft,
+  getBasedOnOrderedIds,
+  getBasedOnGrades,
+  publish,
+  whenPublishesSettle = () => Promise.resolve(),
+  downRank,
+  reorder = () => undefined,
+  publishing = false,
+}: {
+  blockId: string;
+  ready: boolean;
+  orderedIds: string[];
+  grades: BallotGrades;
+  setDraft: (ids: string[], grades: BallotGrades) => void;
+  getBasedOnOrderedIds: () => string[];
+  getBasedOnGrades: () => BallotGrades;
+  publish: (ids: string[], grades?: BallotGrades) => Promise<boolean>;
+  /**
+   * Resolves once the block's other publishes (a placement's Done) have finished. Grades wait for
+   * it, then build on what it published, so they never meet the ballot publisher busy.
+   */
+  whenPublishesSettle?: () => Promise<void>;
+  downRank: (entityId: string) => void;
+  /** The Placed step for a debate in the ranking; its Done publishes through the same queue. */
+  reorder?: (entityId: string) => void;
+  /** A placement's Done (or any publish from the block) is out: Re-order waits for it too. */
+  publishing?: boolean;
+}): BestDebatesGrading {
+  const recordGrade = useRecordGrade(blockId);
+  // The draft as of the last grade, read by the publish loop (state lags a render behind).
+  const latest = React.useRef({ ids: orderedIds, grades });
+  // Grades not yet sent: each publish replays them onto what is published at that moment, never
+  // sends them from a stale copy.
+  const queued = React.useRef<Array<(draft: GradedBallot) => GradedBallot>>([]);
+  const inFlight = React.useRef(false);
+  /** How each debate's unsent grade was given, for its published event. */
+  const methods = React.useRef(new Map<string, GradeMethod>());
+  const [saving, setSaving] = React.useState<ReadonlySet<string>>(new Set());
+  if (!inFlight.current) latest.current = { ids: orderedIds, grades };
+
+  const flush = React.useCallback(async () => {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    try {
+      let ok = true;
+      while (ok && queued.current.length > 0) {
+        await whenPublishesSettle();
+        // Every grade not yet published, replayed onto what is published now (which a placement or
+        // this loop's last publish may have just moved, merging in another device's changes).
+        const before = { ids: getBasedOnOrderedIds(), grades: getBasedOnGrades() };
+        const sent = queued.current.reduce((draft, change) => change(draft), before);
+        queued.current = [];
+        // How each change in this publish was made; changes from now on go with the next one.
+        const passMethods = methods.current;
+        methods.current = new Map();
+        latest.current = sent;
+        setDraft(sent.ids, sent.grades);
+        ok = await publish(sent.ids, sent.grades);
+        if (ok) {
+          for (const change of gradeChanges(before.ids, before.grades, sent.ids, sent.grades)) {
+            recordGrade(change.entityId, {
+              grade: change.grade,
+              previousGrade: change.previousGrade,
+              method: passMethods.get(normId(change.entityId)) ?? 'popup',
+              mutationKind: 'published',
+            });
+          }
+        }
+      }
+      if (!ok) {
+        // A failed publish puts the ranking back as published, so the row never shows a grade
+        // that didn't go out; grades tapped during it go with it (its toast says what happened).
+        queued.current = [];
+        methods.current.clear();
+        latest.current = { ids: getBasedOnOrderedIds(), grades: getBasedOnGrades() };
+        setDraft(latest.current.ids, latest.current.grades);
+      }
+    } finally {
+      inFlight.current = false;
+      setSaving(new Set());
+    }
+  }, [getBasedOnGrades, getBasedOnOrderedIds, publish, recordGrade, setDraft, whenPublishesSettle]);
+
+  const apply = React.useCallback(
+    (entityId: string, change: (draft: GradedBallot) => GradedBallot, method: GradeMethod) => {
+      const before = latest.current;
+      queued.current.push(change);
+      latest.current = change(before);
+      // The latest way its grade was changed names the change it publishes.
+      methods.current.set(normId(entityId), method);
+      setDraft(latest.current.ids, latest.current.grades);
+      setSaving(current => new Set(current).add(normId(entityId)));
+      void flush();
+    },
+    [flush, setDraft]
+  );
+
+  const placeById = React.useMemo(() => new Map(orderedIds.map((id, i) => [normId(id), i + 1])), [orderedIds]);
+
+  return {
+    ready,
+    needsTierLines: orderedIds.length > 0 && !hasAnyGrade(orderedIds, grades),
+    gradeOf: entityId => (placeById.has(normId(entityId)) ? gradeOf(grades, entityId) : null),
+    placeOf: entityId => placeById.get(normId(entityId)) ?? null,
+    isSaving: entityId => saving.has(normId(entityId)),
+    grade: (entityId: string, grade: Grade, method: GradeMethod = 'popup') =>
+      apply(entityId, draft => gradeInto(draft.ids, draft.grades, entityId, grade), method),
+    // A grade publish still running would replace the draft under the Placed step's moves, and a
+    // placement's Done still out (its step closed meanwhile) would end the new step when it lands.
+    reorder: (entityId: string) => {
+      if (publishing || inFlight.current || queued.current.length > 0) return;
+      reorder(entityId);
+    },
+    reorderBusy: publishing || saving.size > 0,
+    remove: (entityId: string) => apply(entityId, draft => removeEntry(draft.ids, draft.grades, entityId), 'popup'),
+    // Counted as Down rank's own `push_down` once its downvote lands.
+    downRank,
   };
 }
