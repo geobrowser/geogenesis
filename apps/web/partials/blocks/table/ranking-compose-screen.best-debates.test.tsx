@@ -414,8 +414,8 @@ describe('RankingComposeScreen on any other block', () => {
 });
 
 describe('Grade your ranking on the ranking screen (GEO-3729)', () => {
-  // Five debates: the fewest the step opens on by itself.
-  const ids = ['a1', 'b2', 'c3', 'd4', 'e5'].map(pair => pair.repeat(16));
+  // Three debates: the fewest the step opens on by itself (its starting lines are 1 / 1 / 1).
+  const ids = ['a1', 'b2', 'c3'].map(pair => pair.repeat(16));
 
   it('opens by itself on a published ranking with no grades, and Not now closes it', () => {
     mocks.member = true;
@@ -427,10 +427,10 @@ describe('Grade your ranking on the ranking screen (GEO-3729)', () => {
     expect(mocks.myRanking?.tierLines).toBeUndefined();
   });
 
-  it('stays shut on a published ranking of fewer than five debates, where the lines would grade all C', () => {
+  it('stays shut on a published ranking of two debates, whose starting lines leave a tier empty', () => {
     mocks.member = true;
-    mocks.lastIds = ids.slice(0, 4);
-    mocks.mySubmission = { orderedEntityIds: ids.slice(0, 4) };
+    mocks.lastIds = ids.slice(0, 2);
+    mocks.mySubmission = { orderedEntityIds: ids.slice(0, 2) };
     renderScreen();
     expect(mocks.myRanking?.tierLines).toBeUndefined();
   });
@@ -442,9 +442,9 @@ describe('Grade your ranking on the ranking screen (GEO-3729)', () => {
     expect(mocks.myRanking?.tierLines).toBeUndefined();
   });
 
-  it('opens from the block’s ?grade=tiers, and Not now still closes it', () => {
+  it('opens from the block’s ?grade=tiers on any size, and Not now still closes it', () => {
     mocks.member = true;
-    mocks.lastIds = ids;
+    mocks.lastIds = ids.slice(0, 1);
     mocks.search = 'relationId=r&parentEntityId=p&grade=tiers';
     renderScreen();
     expect(mocks.myRanking?.tierLines).toBeDefined();
