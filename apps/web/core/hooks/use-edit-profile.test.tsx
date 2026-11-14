@@ -7,7 +7,7 @@ import { ID } from '~/core/id';
 import { TAGLINE_MAX_LENGTH, TAGLINE_PROPERTY } from '~/core/profile/profile-ontology';
 import type { Relation, Value } from '~/core/types';
 
-import { useEditProfile } from './use-edit-profile';
+import { PROFILE_SETUP_WAIT_MS, useEditProfile } from './use-edit-profile';
 
 // The real ids from the account this modal was first tested against, whose space
 // had a null topicId — see the topicId test below.
@@ -31,6 +31,7 @@ const mocks = vi.hoisted(() => ({
   clearLocalChangesByIds: vi.fn(),
   setStoredAvatar: vi.fn(),
   setQueryData: vi.fn(),
+  invalidateQueries: vi.fn(),
   dispatch: vi.fn(),
   reviewState: 'idle' as string,
   entityName: 'Preston' as string | null,
@@ -64,6 +65,7 @@ vi.mock('~/partials/onboarding/onboarding-atoms', () => ({ avatarAtom: {} }));
 vi.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({
     setQueryData: mocks.setQueryData,
+    invalidateQueries: mocks.invalidateQueries,
     getQueryState: () => (mocks.hydrationStatus ? { status: mocks.hydrationStatus } : undefined),
   }),
 }));
@@ -75,6 +77,7 @@ vi.mock('~/core/hooks/use-smart-account', () => ({
 }));
 
 vi.mock('~/core/hooks/use-personal-space-id', () => ({
+  personalSpaceIdQueryKey: (address: string) => ['personal-space-id', address],
   usePersonalSpaceId: () => ({
     personalSpaceId: SPACE_ID,
     personalEntityId: mocks.personalEntityId,
@@ -264,6 +267,66 @@ describe('resolving the profile entity', () => {
     const { result } = renderHook(() => useEditProfile({ isOpen: true }));
 
     expect(result.current.canEdit).toBe(false);
+  });
+
+  // GEO-3302. A registered space with no entity to point at is a new account whose
+  // profile is not indexed yet, not a missing profile.
+  describe('while a new account’s profile is still being set up', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+      mocks.personalEntityId = null;
+      mocks.profile = { id: ADDRESS, spaceId: SPACE_ID, name: null, avatarUrl: null };
+    });
+    afterEach(() => vi.useRealTimers());
+
+    it('reports it as waiting', () => {
+      const { result } = renderHook(() => useEditProfile({ isOpen: true }));
+
+      expect(result.current.profileSetup).toBe('waiting');
+    });
+
+    it('reports nothing once there is an entity', () => {
+      mocks.personalEntityId = ENTITY_ID;
+
+      const { result } = renderHook(() => useEditProfile({ isOpen: true }));
+
+      expect(result.current.profileSetup).toBeNull();
+    });
+
+    // Neither query refreshes on its own once the space is registered, so without
+    // this the profile would never arrive in an open modal.
+    it('asks for the profile again while open', () => {
+      renderHook(() => useEditProfile({ isOpen: true }));
+
+      act(() => vi.advanceTimersByTime(3_000));
+
+      expect(mocks.invalidateQueries).toHaveBeenCalledWith({ queryKey: ['profile', ADDRESS] });
+      expect(mocks.invalidateQueries).toHaveBeenCalledWith({ queryKey: ['personal-space-id', ADDRESS] });
+    });
+
+    it('keeps asking while closed only when a save is waiting on it', () => {
+      const { rerender } = renderHook(({ keepWaiting }) => useEditProfile({ isOpen: false, keepWaiting }), {
+        initialProps: { keepWaiting: false },
+      });
+
+      act(() => vi.advanceTimersByTime(10_000));
+      expect(mocks.invalidateQueries).not.toHaveBeenCalled();
+
+      rerender({ keepWaiting: true });
+      act(() => vi.advanceTimersByTime(3_000));
+      expect(mocks.invalidateQueries).toHaveBeenCalled();
+    });
+
+    // A broken indexer must surface, not leave a held save waiting forever.
+    it('calls it stalled after the wait limit', () => {
+      const { result } = renderHook(() => useEditProfile({ isOpen: true }));
+
+      act(() => vi.advanceTimersByTime(PROFILE_SETUP_WAIT_MS - 1));
+      expect(result.current.profileSetup).toBe('waiting');
+
+      act(() => vi.advanceTimersByTime(1));
+      expect(result.current.profileSetup).toBe('stalled');
+    });
   });
 
   it('falls back to the profile name while the entity is still hydrating', () => {

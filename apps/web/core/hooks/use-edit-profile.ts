@@ -13,7 +13,7 @@ import { profileUpdated } from '~/core/analytics';
 import { classifyOperationFailure, observeOperation } from '~/core/analytics-operations';
 import { useEntity } from '~/core/database/entities';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
-import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
+import { personalSpaceIdQueryKey, usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePublish } from '~/core/hooks/use-publish';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { ID } from '~/core/id';
@@ -47,6 +47,23 @@ export type ProfileDraft = {
 };
 
 export type EditProfileStatus = 'idle' | 'publishing' | 'error' | 'published';
+
+/**
+ * Where a profile that cannot be resolved yet stands. `null` once there is an
+ * entity to edit, or when there is no registered space to wait on.
+ *
+ * - `waiting`: the space is registered but the profile entity is not indexed yet.
+ *   A brand-new account sits here for a short while after sign-up.
+ * - `stalled`: still unresolved after `PROFILE_SETUP_WAIT_MS`. Something is wrong
+ *   (the indexer is behind or broken), and saying so beats waiting forever.
+ */
+export type ProfileSetup = 'waiting' | 'stalled' | null;
+
+/** How long to keep waiting on a registered space's profile before calling it stuck. */
+export const PROFILE_SETUP_WAIT_MS = 2 * 60 * 1000;
+
+/** How often to re-ask for the profile while it is being set up. */
+const PROFILE_SETUP_POLL_MS = 3_000;
 
 /**
  * The local rows this modal wrote, keyed by id and carrying the `timestamp` each
@@ -123,7 +140,14 @@ const IMAGE_PROPERTIES = {
  * an image would otherwise mint graph rows in the local store, and cancelling the
  * modal would leave them behind as phantom pending edits on the personal space.
  */
-export function useEditProfile({ isOpen }: { isOpen: boolean }) {
+export function useEditProfile({
+  isOpen,
+  keepWaiting = false,
+}: {
+  isOpen: boolean;
+  /** Keep checking for a profile still being set up while closed — a save is waiting on it. */
+  keepWaiting?: boolean;
+}) {
   const { smartAccount } = useSmartAccount();
   const address = smartAccount?.account.address;
   const { personalSpaceId, personalEntityId, isRegistered } = usePersonalSpaceId();
@@ -152,6 +176,18 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
   const profileEntityId = profile && profile.id !== profile.spaceId && IdUtils.isValid(profile.id) ? profile.id : null;
   const entityId = profileEntityId ?? personalEntityId ?? '';
   const canEdit = Boolean(isRegistered && spaceId && entityId);
+
+  // Registered with no entity to point at is a brand-new account, not a missing
+  // profile. The space indexes first; `/profile/address` keeps answering with its
+  // wallet-address fallback until the person entity has a name, and `topicId` is
+  // often null — so for that window there is nothing to edit *yet*.
+  const isAwaitingProfile = Boolean(isRegistered && spaceId && !entityId);
+  const profileSetup = useProfileSetup({
+    isAwaitingProfile,
+    isActive: isOpen || keepWaiting,
+    address,
+    profileQueryKey: ['profile', address],
+  });
 
   const entity = useEntity({ id: entityId, spaceId: spaceId || undefined });
 
@@ -856,6 +892,8 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
 
   return {
     canEdit,
+    profileSetup,
+    address,
     isHydrated,
     isLoading: entity.isLoading,
     entityId,
@@ -866,6 +904,54 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
     publish,
     reset,
   };
+}
+
+/**
+ * Waits out a profile that is still being set up: re-asks for it while someone is
+ * looking (or a save is waiting on it), and calls it stalled after
+ * `PROFILE_SETUP_WAIT_MS` so a broken setup surfaces instead of hanging.
+ */
+function useProfileSetup({
+  isAwaitingProfile,
+  isActive,
+  address,
+  profileQueryKey,
+}: {
+  isAwaitingProfile: boolean;
+  isActive: boolean;
+  address: string | undefined;
+  profileQueryKey: readonly unknown[];
+}): ProfileSetup {
+  const queryClient = useQueryClient();
+  const [isStalled, setIsStalled] = React.useState(false);
+
+  // Neither query refreshes on its own here: the personal-space poll stops once the
+  // space registers, and the profile query has no interval at all. The space query
+  // is asked again too, for the `topicId` it may have picked up since.
+  const keyRef = React.useRef(profileQueryKey);
+  keyRef.current = profileQueryKey;
+  React.useEffect(() => {
+    if (!isAwaitingProfile || !isActive) return;
+    const poll = setInterval(() => {
+      void queryClient.invalidateQueries({ queryKey: keyRef.current });
+      void queryClient.invalidateQueries({ queryKey: personalSpaceIdQueryKey(address) });
+    }, PROFILE_SETUP_POLL_MS);
+    return () => clearInterval(poll);
+  }, [address, isActive, isAwaitingProfile, queryClient]);
+
+  // Timed from when the wait began, not from when the modal opened: closing and
+  // reopening does not buy a stuck setup another two minutes.
+  React.useEffect(() => {
+    if (!isAwaitingProfile) {
+      setIsStalled(false);
+      return;
+    }
+    const timer = setTimeout(() => setIsStalled(true), PROFILE_SETUP_WAIT_MS);
+    return () => clearTimeout(timer);
+  }, [isAwaitingProfile]);
+
+  if (!isAwaitingProfile) return null;
+  return isStalled ? 'stalled' : 'waiting';
 }
 
 /** Whether two sets of extra rows carry the same edit. */
