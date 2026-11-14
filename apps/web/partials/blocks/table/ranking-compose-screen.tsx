@@ -805,12 +805,15 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
 
   // "Grade your ranking" (GEO-3729): once, on a ranking with no grades, the ranker drags an "A ends
   // here" and a "B ends here" line onto their order; Save publishes the same order with the grades.
-  // Opened by itself on such a ranking (unless they said Not now), from the popup's Grade it, or by
-  // `?grade=tiers` from the block.
+  // Opened by itself when the published ranking has no grades (unless they said Not now), from the
+  // popup's Grade it, or by `?grade=tiers` from the block. A first ranking still being drafted isn't
+  // opened by itself: its first placements carry no grade, and the lines would take over the list.
   const rankingNeedsGrades = isBestDebates && orderedIds.length > 0 && !hasAnyGrade(orderedIds, draftGrades);
+  const publishedIds = mySubmission?.orderedEntityIds ?? [];
+  const publishedNeedsGrades = publishedIds.length > 0 && !hasAnyGrade(publishedIds, myGrades);
   const [tierLinesDismissed, setTierLinesDismissed] = React.useState(false);
   const [tierLines, setTierLines] = React.useState<{ aCount: number; bCount: number } | null>(null);
-  const showTierLines = rankingNeedsGrades && (tierLines !== null || !tierLinesDismissed);
+  const showTierLines = rankingNeedsGrades && (tierLines !== null || (publishedNeedsGrades && !tierLinesDismissed));
   const tierLineCounts = tierLines ?? defaultTierLines(orderedIds.length);
   const openTierLines = () => {
     setTierLines(current => current ?? defaultTierLines(orderedIds.length));

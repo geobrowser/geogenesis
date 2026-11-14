@@ -5,6 +5,8 @@ import type * as React from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { applyTierLines } from '~/core/blocks/ranking/ranking-grades';
+
 import { RankingComposeScreen } from './ranking-compose-screen';
 
 /**
@@ -35,6 +37,10 @@ const mocks = vi.hoisted(() => ({
   grading: null as null | import('./best-debates/best-debate-grading').BestDebatesGrading,
   reorder: vi.fn(),
   composeArgs: null as null | Record<string, unknown>,
+  search: 'relationId=r&parentEntityId=p&team=to-rank',
+  mySubmission: null as null | { orderedEntityIds: string[] },
+  myRanking: null as null | { tierLines?: { aCount: number; bCount: number; banner: React.ReactNode } },
+  sentGrades: null as null | Map<string, string>,
   recordGrade: vi.fn(),
 }));
 vi.mock('./best-debates/best-debate-grading', async importOriginal => ({
@@ -48,7 +54,7 @@ vi.mock('~/core/blocks/ranking/best-debates', async importOriginal => ({
 }));
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: mocks.replace, back: vi.fn(), push: vi.fn() }),
-  useSearchParams: () => new URLSearchParams('relationId=r&parentEntityId=p&team=to-rank'),
+  useSearchParams: () => new URLSearchParams(mocks.search),
 }));
 vi.mock('jotai', async importOriginal => ({
   ...(await importOriginal<typeof import('jotai')>()),
@@ -92,7 +98,7 @@ vi.mock('~/core/blocks/ranking/use-ranking-period', () => ({
 vi.mock('~/core/blocks/ranking/use-ranking-submissions', () => ({
   useRankingSubmissions: () => ({
     submissions: mocks.empty,
-    mySubmission: null,
+    mySubmission: mocks.mySubmission,
     // A draft with one debate, never published: publishable but for the guard.
     myLastSubmission: { orderedEntityIds: mocks.lastIds },
     myGrades: mocks.myGrades,
@@ -182,8 +188,10 @@ vi.mock('./best-debates/use-best-debates-compose', () => ({
       placeFromTeam: vi.fn(),
       dropEntity: vi.fn(),
       reorder: mocks.reorder,
-      publish: async (ids: string[]) =>
-        Boolean(await args.saveMySubmission(ids.map(id => ({ id, name: null, spaceId: 'debate-space' })))),
+      publish: async (ids: string[], grades?: Map<string, string>) => {
+        mocks.sentGrades = grades ?? null;
+        return Boolean(await args.saveMySubmission(ids.map(id => ({ id, name: null, spaceId: 'debate-space' }))));
+      },
     };
   },
 }));
@@ -209,8 +217,16 @@ vi.mock('./ranking-compose-fullscreen', () => ({
   RankingComposeFullscreen: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 vi.mock('./ranking-compose-global-ranking', () => ({ RankingComposeGlobalRanking: () => null }));
-vi.mock('./ranking-compose-my-ranking', () => ({ RankingComposeMyRanking: () => null }));
-vi.mock('./ranking-compose-layout', () => ({ RankingComposeLayout: () => null }));
+// Your ranking draws only the tier lines' banner, so its Not now and Save grades can be pressed.
+vi.mock('./ranking-compose-my-ranking', () => ({
+  RankingComposeMyRanking: (props: NonNullable<typeof mocks.myRanking>) => {
+    mocks.myRanking = props;
+    return props.tierLines?.banner ?? null;
+  },
+}));
+vi.mock('./ranking-compose-layout', () => ({
+  RankingComposeLayout: ({ myRanking }: { myRanking: React.ReactNode }) => <>{myRanking}</>,
+}));
 vi.mock('./ranking-compose-header', () => ({
   RankingComposeTitleMetadata: () => null,
   RankingComposePinnedToolbar: ({ canPublish, onPublish }: { canPublish: boolean; onPublish: () => void }) => {
@@ -234,6 +250,10 @@ beforeEach(() => {
   mocks.lastIds = ['d1'];
   mocks.myGrades = new Map();
   mocks.grading = null;
+  mocks.search = 'relationId=r&parentEntityId=p&team=to-rank';
+  mocks.mySubmission = null;
+  mocks.myRanking = null;
+  mocks.sentGrades = null;
 });
 
 afterEach(cleanup);
@@ -390,5 +410,61 @@ describe('RankingComposeScreen on any other block', () => {
       method: 'reorder',
       mutationKind: 'published',
     });
+  });
+});
+
+describe('Grade your ranking on the ranking screen (GEO-3729)', () => {
+  const ids = [
+    'a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1',
+    'b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2',
+    'c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3',
+  ];
+
+  it('opens by itself on a published ranking with no grades, and Not now closes it', () => {
+    mocks.member = true;
+    mocks.lastIds = ids;
+    mocks.mySubmission = { orderedEntityIds: ids };
+    renderScreen();
+    expect(mocks.myRanking?.tierLines).toBeDefined();
+    act(() => screen.getByRole('button', { name: 'Not now' }).click());
+    expect(mocks.myRanking?.tierLines).toBeUndefined();
+  });
+
+  it('stays shut on a first ranking still being drafted', () => {
+    mocks.member = true;
+    mocks.lastIds = ids;
+    renderScreen();
+    expect(mocks.myRanking?.tierLines).toBeUndefined();
+  });
+
+  it('opens from the block’s ?grade=tiers, and Not now still closes it', () => {
+    mocks.member = true;
+    mocks.lastIds = ids;
+    mocks.search = 'relationId=r&parentEntityId=p&grade=tiers';
+    renderScreen();
+    expect(mocks.myRanking?.tierLines).toBeDefined();
+    act(() => screen.getByRole('button', { name: 'Not now' }).click());
+    expect(mocks.myRanking?.tierLines).toBeUndefined();
+  });
+
+  it('publishes the order with the tier lines’ grades, each counted as tier_lines', async () => {
+    mocks.member = true;
+    mocks.recordGrade.mockReset();
+    mocks.lastIds = ids;
+    mocks.mySubmission = { orderedEntityIds: ids };
+    renderScreen();
+    const { aCount, bCount } = mocks.myRanking!.tierLines!;
+    const expected = applyTierLines(ids, aCount, bCount);
+    await act(async () => screen.getByRole('button', { name: 'Save grades' }).click());
+    expect(mocks.sentGrades).toEqual(expected);
+    type OnPublished = (p: unknown, sent: string[], grades: typeof expected) => void;
+    await act(async () =>
+      (mocks.composeArgs?.onPublished as OnPublished)(
+        { orderedEntityIds: ids, grades: expected, indexingSettled: Promise.resolve(null) },
+        ids,
+        expected
+      )
+    );
+    expect(mocks.recordGrade.mock.calls.map(([, change]) => change.method)).toEqual(ids.map(() => 'tier_lines'));
   });
 });
