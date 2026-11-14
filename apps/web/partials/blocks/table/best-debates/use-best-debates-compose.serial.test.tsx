@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
     onReorderEnd?: (entityId: string, outcome: 'done' | 'closed') => void;
   },
   placementReorder: vi.fn(),
+  isDoneOut: false,
 }));
 
 vi.mock('~/core/blocks/ranking/use-best-debates-to-rank', () => ({
@@ -39,6 +40,7 @@ vi.mock('./use-best-debates-placement', () => ({
       requestPushDown: vi.fn(),
       dialogs: null,
       isPlacing: false,
+      isDoneOut: mocks.isDoneOut,
       activeEntityId: null,
     };
   },
@@ -185,5 +187,28 @@ describe('Re-order (GEO-3729)', () => {
     // Once only: a later end without a Re-order open says nothing.
     act(() => mocks.placementArgs!.onReorderEnd!('x', 'done'));
     expect(onReorderEnd).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('publishing, as Re-order waits on it (GEO-3729)', () => {
+  it('counts a placement Done from its press, before its publish is queued', () => {
+    mocks.isDoneOut = true;
+    const { result } = renderHook(() =>
+      useBestDebatesCompose({
+        enabled: true,
+        blockId: 'block4',
+        blockSpaceId: 'debates',
+        isMobile: false,
+        orderedIds: ['a'],
+        setOrderedIds: vi.fn(),
+        hasUnpublishedChanges: false,
+        nameOf: () => null,
+        personalSpaceId: 'me',
+        saveMySubmission: vi.fn(),
+        isSaving: false,
+      })
+    );
+    expect(result.current.publishing).toBe(true);
+    mocks.isDoneOut = false;
   });
 });

@@ -4,7 +4,11 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { useBestDebatesBlockRanking } from './use-best-debates-block-ranking';
 
-const mocks = vi.hoisted(() => ({ composeArgs: null as null | Record<string, unknown>, recordGrade: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  composeArgs: null as null | Record<string, unknown>,
+  recordGrade: vi.fn(),
+  publishing: false,
+}));
 
 vi.mock('~/core/blocks/ranking/use-ranking-submissions', () => ({
   useRankingSubmissions: () => ({
@@ -43,6 +47,7 @@ vi.mock('./use-best-debates-compose', () => ({
       dialogs: null,
       activeEntityId: null,
       toRankCoverage: null,
+      publishing: mocks.publishing,
     };
   },
 }));
@@ -108,5 +113,16 @@ describe('Re-order on the block (GEO-3729)', () => {
       method: 'reorder',
       mutationKind: 'published',
     });
+  });
+});
+
+describe('Re-order waits for the block’s publishes (GEO-3729)', () => {
+  it('is held while compose says a publish is out', () => {
+    mocks.publishing = true;
+    const { result } = renderHook(() =>
+      useBestDebatesBlockRanking({ enabled: true, blockId: 'b', spaceId: 's', isMobile: false })
+    );
+    expect(result.current.grading?.reorderBusy).toBe(true);
+    mocks.publishing = false;
   });
 });

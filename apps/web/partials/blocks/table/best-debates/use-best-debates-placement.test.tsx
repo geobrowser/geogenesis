@@ -452,6 +452,20 @@ describe('Re-order from the watch popup (GEO-3729)', () => {
     expect(screen.getByText('Which was the better debate?')).toBeTruthy();
   });
 
+  it('takes one Done at a time, shown as publishing from the press, and closes when it lands', async () => {
+    let finish!: (ok: boolean) => void;
+    const publish = vi.fn(() => new Promise<boolean>(resolve => (finish = resolve)));
+    render(<Harness initial={list(3)} startWith={{ id: 'd2', origin: 'mine' }} publish={publish} />);
+    fireEvent.click(screen.getByText('reorder'));
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Done' })));
+    expect((screen.getByRole('button', { name: 'Publishing…' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'Move up' }) as HTMLButtonElement).disabled).toBe(true);
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Publishing…' })));
+    expect(publish).toHaveBeenCalledTimes(1);
+    await act(async () => finish(true));
+    expect(screen.queryByText(/Placed #/)).toBeNull();
+  });
+
   it('does nothing for a debate that isn’t in the ranking', () => {
     render(<Harness initial={list(3)} startWith={{ id: 'new', origin: 'mine' }} />);
     fireEvent.click(screen.getByText('reorder'));
