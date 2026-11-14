@@ -1015,6 +1015,12 @@ vi.mock('~/core/debates/todays-claims/debate-agendas', async importOriginal => {
   };
 });
 
+/** GEO-3497: whether every claim reads as on a current agenda. Off by default. */
+const trendingTag = vi.hoisted(() => ({ on: false }));
+vi.mock('~/core/debates/todays-claims/trending', () => ({
+  useIsTrending: (entityId: string | null | undefined) => Boolean(entityId) && trendingTag.on,
+}));
+
 vi.mock('~/core/debates/todays-claims/claim-debate-counts', () => ({
   useClaimDebateCounts: (asks: Array<{ claimId: string; since: string }>, enabled: boolean) => {
     if (enabled) todays.countsAsked.push(asks);
@@ -7998,6 +8004,7 @@ describe('Today’s claims', () => {
       .sort((a, b) => (appearsBefore(a, b) ? -1 : 1));
 
   beforeEach(() => {
+    trendingTag.on = false;
     todays.agendas = { spaces: [], earlier: [], newestDay: null };
     todays.entities = [];
     todays.loading = false;
@@ -8058,6 +8065,15 @@ describe('Today’s claims', () => {
         { claimId: T_OLD, since: '2026-10-26T04:00:00+00:00' },
       ])
     );
+  });
+
+  it('draws no Trending tag on its cards, since every one is on an agenda (GEO-3497)', async () => {
+    twoAgendas();
+    trendingTag.on = true;
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    await screen.findByText('Lula should be re-elected');
+    expect(screen.queryByText('Trending')).toBeNull();
   });
 
   it('keeps the order it opened with when a count changes while the picker is open', async () => {
