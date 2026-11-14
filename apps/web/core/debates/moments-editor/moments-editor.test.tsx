@@ -1346,6 +1346,41 @@ describe('MomentsEditor in a tab opened from the Best debates popup (GEO-3742)',
     expect(screen.getByRole('button', { name: 'Done' })).toBeDisabled();
   });
 
+  it('brings back a failed reel’s free edges only when it was sent exact', () => {
+    for (const exact of [true, false]) {
+      mocks.mutate.mockReset();
+      mocks.backfill.data = {
+        request: status({
+          status: 'skipped',
+          requested_at: '2026-11-14T10:00:00Z',
+          outcome: 'manual_reel_invalid',
+          report: { story_failed: 'clip 1: no words are said in it' },
+          manual_reel: { clock: 'player', clips: [{ start_ms: 900, end_ms: 1_450 }], ...(exact && { exact }) },
+        }),
+        entry: null,
+      };
+      const { unmount } = render(<MomentsEditor debateId={DEBATE_ID} closeable />);
+      fireEvent.click(screen.getByRole('button', { name: RESTORE_FAILED_EDIT_LABEL }));
+      // Fix the clip the worker refused (its end), then publish again.
+      fireEvent.change(screen.getByRole('textbox', { name: 'End time' }), { target: { value: '1.4' } });
+      fireEvent.blur(screen.getByRole('textbox', { name: 'End time' }));
+      fireEvent.click(screen.getByRole('button', { name: /^Publish reel/ }));
+      fireEvent.click(screen.getByRole('button', { name: /^Publish (and lock|anyway)$/ }));
+      const body = mocks.mutate.mock.calls[0][0] as { reel: { exact?: boolean } };
+      expect(body.reel.exact === true).toBe(exact);
+      unmount();
+    }
+  });
+
+  it('says nothing of an automatic re-cut that failed: it was no publish from here', () => {
+    mocks.backfill.data = {
+      request: status({ status: 'skipped', requested_at: '2026-11-14T10:00:00Z', outcome: 'story_pick_failed' }),
+      entry: null,
+    };
+    render(<MomentsEditor debateId={DEBATE_ID} closeable />);
+    expect(screen.queryByText('Nothing changed.')).not.toBeInTheDocument();
+  });
+
   it('offers Done even when it can’t show the editor', () => {
     mocks.backfill = {
       isPending: false,

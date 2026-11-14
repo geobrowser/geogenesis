@@ -423,21 +423,24 @@ function Editor({ debateId }: { debateId: string }) {
     job.kind === 'failed' &&
     !request.preview &&
     !request.unlock &&
-    // The worker's own resend after a re-render has a notice of its own (`UnlinkableNotice`).
-    !request.manual_reel?.reapplied
+    // The worker's own resend after a re-render has a notice of its own (`UnlinkableNotice`), and a
+    // batch or automatic re-cut has no hand-picked clips: neither is a publish from here.
+    !request.manual_reel?.reapplied &&
+    (request.manual_reel?.clips?.length ?? 0) > 0
       ? request
       : null;
   const failedClips = failedElsewhere?.manual_reel?.clock === 'player' ? failedElsewhere.manual_reel.clips : undefined;
   const restoreFailedEdit =
     failedElsewhere && failedClips && failedClips.length > 0 && !readOnly && !dirty
       ? () => {
+          // The edges as sent. A reel sent `exact` had every edge placed freely, so each stays where it
+          // is (`edgeIsFree`); otherwise they are word edges, and geo-chat adds its room again.
+          const exact = failedElsewhere.manual_reel?.exact === true;
           const restored: EditorClip[] = failedClips.map(clip => ({
             key: newClipKey(),
             start_ms: clip.start_ms,
             end_ms: clip.end_ms,
-            // Sent as cut, so each edge stays where it was sent (`edgeIsFree`).
-            free_start_ms: clip.start_ms,
-            free_end_ms: clip.end_ms,
+            ...(exact && { free_start_ms: clip.start_ms, free_end_ms: clip.end_ms }),
             claim_index: typeof clip.claim_index === 'number' ? clip.claim_index : null,
             live_claim_text: null,
           }));
