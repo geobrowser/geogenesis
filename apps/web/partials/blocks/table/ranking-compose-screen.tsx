@@ -9,14 +9,25 @@ import { useAtom, useSetAtom } from 'jotai';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
-import { BEST_DEBATES_TEAM_VIEW_PARAM, BEST_DEBATES_TEAM_VIEW_TO_RANK } from '~/core/blocks/ranking/best-debates-views';
+import {
+  BEST_DEBATES_GRADE_PARAM,
+  BEST_DEBATES_GRADE_TIERS,
+  BEST_DEBATES_TEAM_VIEW_PARAM,
+  BEST_DEBATES_TEAM_VIEW_TO_RANK,
+} from '~/core/blocks/ranking/best-debates-views';
 import { RankingComposeBallotContext, useComposeBallot } from '~/core/blocks/ranking/ranking-compose-ballot-context';
 import { resolveRankingSingleTargetSpaceId } from '~/core/blocks/ranking/ranking-compose-publish-spaces';
 import { RANKING_COMPOSE_TAB_MY, rankingComposeHref } from '~/core/blocks/ranking/ranking-compose-url';
 import { countBallotChanges, unpublishedChangesLabel } from '~/core/blocks/ranking/ranking-draft-changes';
 import {
+  GRADE_YOUR_RANKING_TITLE,
   type Grade,
   NO_GRADES,
+  TIER_LINES_AUTO_OPEN_MIN,
+  TIER_LINES_NOT_NOW_LABEL,
+  TIER_LINES_SAVE_LABEL,
+  applyTierLines,
+  defaultTierLines,
   gradeInto,
   gradeOf,
   hasAnyGrade,
@@ -571,15 +582,18 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
       })
     : 0;
 
-  const canPublish =
+  /** The ranker may write their ballot now (Publish, and "Grade your ranking"'s Save grades). */
+  const canWriteBallot =
     !ballotReadError &&
-    // Best debates can publish an emptied ranking: it clears the ranker's votes (Preston, 12 Nov).
-    (orderedIds.length > 0 || isBestDebates) &&
-    hasUnpublishedChanges &&
     submissionsOpen &&
     (Boolean(personalSpaceId) || isAccountSetupPending) &&
     !isPublishBusy &&
     !composeEditRefused;
+  const canPublish =
+    canWriteBallot &&
+    // Best debates can publish an emptied ranking: it clears the ranker's votes (Preston, 12 Nov).
+    (orderedIds.length > 0 || isBestDebates) &&
+    hasUnpublishedChanges;
 
   // Leaving with unpublished changes asks first (Preston, 12 Nov). The draft lives in this screen
   // only, so leaving without publishing loses it; the prompt says so.
@@ -790,6 +804,69 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
       : null
   );
 
+  // "Grade your ranking" (GEO-3729): once, on a ranking with no grades, the ranker drags an "A ends
+  // here" and a "B ends here" line onto their order; Save publishes the same order with the grades.
+  // Opened by itself when the published ranking has no grades and at least TIER_LINES_AUTO_OPEN_MIN
+  // debates (unless they said Not now), from the popup's Grade it, or by `?grade=tiers` from the
+  // block. A first ranking being drafted, or a published one of a debate or two, isn't opened by
+  // itself: placements into an ungraded ranking carry no grade, and the lines would take over the
+  // list with starting lines that grade everything C.
+  const rankingNeedsGrades = isBestDebates && orderedIds.length > 0 && !hasAnyGrade(orderedIds, draftGrades);
+  const publishedIds = mySubmission?.orderedEntityIds ?? [];
+  const publishedNeedsGrades = publishedIds.length >= TIER_LINES_AUTO_OPEN_MIN && !hasAnyGrade(publishedIds, myGrades);
+  const [tierLinesDismissed, setTierLinesDismissed] = React.useState(false);
+  const [tierLines, setTierLines] = React.useState<{ aCount: number; bCount: number } | null>(null);
+  const showTierLines = rankingNeedsGrades && (tierLines !== null || (publishedNeedsGrades && !tierLinesDismissed));
+  const tierLineCounts = tierLines ?? defaultTierLines(orderedIds.length);
+  const openTierLines = () => {
+    setTierLines(current => current ?? defaultTierLines(orderedIds.length));
+    if (isMobile) bestDebates.mobileTabs.onChange('my');
+  };
+  // From the block's popup (`?grade=tiers`): open it once, as Grade it does here, so Not now still
+  // closes it.
+  const openTierLinesFromUrl = searchParams?.get(BEST_DEBATES_GRADE_PARAM) === BEST_DEBATES_GRADE_TIERS;
+  const openedTierLinesFromUrl = React.useRef(false);
+  React.useEffect(() => {
+    if (!openTierLinesFromUrl || !rankingNeedsGrades || openedTierLinesFromUrl.current) return;
+    openedTierLinesFromUrl.current = true;
+    openTierLines();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, when the ranking it needs has loaded
+  }, [openTierLinesFromUrl, rankingNeedsGrades]);
+  const saveTierLines = async () => {
+    const grades = applyTierLines(orderedIds, tierLineCounts.aCount, tierLineCounts.bCount);
+    setDraft(orderedIds, grades);
+    // Each of these grades says it came from the tier lines when it publishes, now or later.
+    for (const id of orderedIds) draftGradeMethods.current.set(ID.uuidToHex(id), 'tier_lines');
+    if (await bestDebates.publish(orderedIds, grades)) setTierLines(null);
+  };
+  const tierLinesBanner = (
+    <div className="mt-3 mb-1 flex items-center justify-between gap-4 rounded-lg border border-grey-02 p-3">
+      <b className="text-button font-semibold">{GRADE_YOUR_RANKING_TITLE}</b>
+      <div className="flex shrink-0 items-center gap-2">
+        <button
+          type="button"
+          className="h-8 rounded-full px-3.5 text-metadata font-medium text-grey-04 hover:text-text md:h-11"
+          onClick={() => {
+            setTierLines(null);
+            setTierLinesDismissed(true);
+          }}
+          data-geo-analytics-label="tier_lines_not_now"
+        >
+          {TIER_LINES_NOT_NOW_LABEL}
+        </button>
+        <button
+          type="button"
+          className="h-8 rounded-full bg-text px-3.5 text-metadata font-medium text-white hover:bg-text/90 disabled:opacity-50 md:h-11"
+          onClick={() => void saveTierLines()}
+          disabled={!canWriteBallot}
+          data-geo-analytics-label="tier_lines_save"
+        >
+          {TIER_LINES_SAVE_LABEL}
+        </button>
+      </div>
+    </div>
+  );
+
   // The watch popup's grade row on this screen (GEO-3729): a grade goes into the draft, like every
   // other change here, and the screen's Publish sends it.
   const draftPlaces = new Map(orderedIds.map((id, index) => [ID.uuidToHex(id), index + 1]));
@@ -821,7 +898,8 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   const composeGrading: BestDebatesGrading | null = isBestDebates
     ? {
         ready: !isLoadingMySubmission && !ballotReadError,
-        needsTierLines: orderedIds.length > 0 && !hasAnyGrade(orderedIds, draftGrades),
+        needsTierLines: rankingNeedsGrades,
+        onGradeYourRanking: openTierLines,
         gradeOf: debateId => (draftPlaces.has(ID.uuidToHex(debateId)) ? gradeOf(draftGrades, debateId) : null),
         placeOf: debateId => draftPlaces.get(ID.uuidToHex(debateId)) ?? null,
         isSaving: () => false,
@@ -1018,6 +1096,13 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
                 onDropEntity: bestDebates.dropEntity,
                 groups: tierGroups,
                 onRegroup: tierGroups ? regroupTiers : undefined,
+                tierLines: showTierLines
+                  ? {
+                      ...tierLineCounts,
+                      onChange: setTierLines,
+                      banner: tierLinesBanner,
+                    }
+                  : undefined,
                 headerAction: <ClearRankingButton orderedIds={orderedIds} setDraft={setOrderedIds} />,
                 emptyAction: (
                   <CopyTeamRankingStart

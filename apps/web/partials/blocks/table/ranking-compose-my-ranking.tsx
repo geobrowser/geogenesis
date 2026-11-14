@@ -12,6 +12,7 @@ import type { Row, SearchResult } from '~/core/types';
 
 import { Button } from '~/design-system/button';
 
+import { TierLinesList } from './best-debates/tier-lines-list';
 import { RankingMyRankingDesktopRow } from './ranking-block-ui';
 import { RANKING_COMPOSE_PUBLISH_BUTTON_CLASS } from './ranking-compose-header';
 import { RankingComposeSwipeableRow } from './ranking-compose-swipeable-row';
@@ -64,6 +65,16 @@ type Props = {
   /** Best debates' tiers (GEO-3729): the list drawn in groups, and a drag across one regroups it. */
   groups?: RankingDndGroup[];
   onRegroup?: (groups: Array<{ key: string; entityIds: string[] }>) => void;
+  /**
+   * "Grade your ranking" (GEO-3729): the list with the two tier lines to drag, under `banner`, in
+   * place of the draggable list. The debates don't move.
+   */
+  tierLines?: {
+    aCount: number;
+    bCount: number;
+    onChange: (counts: { aCount: number; bCount: number }) => void;
+    banner: React.ReactNode;
+  };
 };
 
 /** Native drops onto the list: where the pointer would put the entity, and the drop itself. */
@@ -132,10 +143,72 @@ export function RankingComposeMyRanking({
   onDropEntity,
   groups,
   onRegroup,
+  tierLines,
 }: Props) {
   const isDesktop = !isMobile;
   const [isReordering, setIsReordering] = React.useState(false);
   const { listRef, dropIndex, dropHandlers } = useEntityDrop(onDropEntity);
+
+  const renderEntry = (entityId: string, index: number, isDragActive?: boolean, overlayImageUrl?: string) => {
+    const entry = entriesById.get(entityId);
+    const row = rowsByEntityId.get(entityId);
+    const searchHit = searchResultsById.get(entityId);
+    if (!entry && !row && !searchHit) return null;
+    const entryDisplay = {
+      entityId,
+      name: entry?.name ?? (row ? getRowDisplayName(row) : searchHit?.name?.trim() || 'Untitled'),
+      description: entry?.description ?? (row ? getRowDescription(row) : (searchHit?.description ?? null)),
+      image: entry?.image ?? row?.columns[SystemIds.NAME_PROPERTY]?.image ?? null,
+    };
+    const entryRow = (
+      <RankingEntryRow
+        rank={index + 1}
+        rankStyle="leading"
+        linkToEntity={false}
+        pending={pendingEntityIds.has(entityId)}
+        entry={entryDisplay}
+        spaceId={spaceId}
+        imageUrl={overlayImageUrl}
+      />
+    );
+
+    const rowContent = !isMobile ? (
+      <RankingMyRankingDesktopRow
+        entityName={entryDisplay.name}
+        onRemove={() => onRemove(entityId)}
+        onOpenSidePanel={hideSidePanel ? undefined : () => onView(entityId)}
+        hideActions={isDragActive}
+      >
+        {entryRow}
+      </RankingMyRankingDesktopRow>
+    ) : (
+      <RankingComposeSwipeableRow
+        rowKey={`my:${entityId}`}
+        activeRowKey={activeSwipeRowKey}
+        onActiveRowKeyChange={onActiveSwipeRowKeyChange}
+        showRemove
+        swipeEnabled={!isReordering}
+        onView={() => onView(entityId)}
+        onRemove={() => onRemove(entityId)}
+        primaryDisabled={isDragActive}
+      >
+        {entryRow}
+      </RankingComposeSwipeableRow>
+    );
+
+    const dropAttribute = { [RANKING_DROP_ROW_ATTRIBUTE]: entityId };
+    return (
+      <div className="relative w-full py-3" {...dropAttribute}>
+        {dropIndex === index ? (
+          <span className="absolute inset-x-0 top-0 h-0.5 rounded-full bg-text" aria-hidden />
+        ) : null}
+        {dropIndex === displayEntityIds.length && index === displayEntityIds.length - 1 ? (
+          <span className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-text" aria-hidden />
+        ) : null}
+        {rowContent}
+      </div>
+    );
+  };
 
   return (
     <div
@@ -198,6 +271,18 @@ export function RankingComposeMyRanking({
             </p>
             {emptyAction}
           </div>
+        ) : tierLines ? (
+          <>
+            {tierLines.banner}
+            <TierLinesList
+              entityIds={displayEntityIds}
+              aCount={tierLines.aCount}
+              bCount={tierLines.bCount}
+              onChange={tierLines.onChange}
+              renderItem={(entityId, index) => renderEntry(entityId, index, true)}
+              className="flex flex-col"
+            />
+          </>
         ) : (
           <RankingMyRankingDndList
             entityIds={displayEntityIds}
@@ -210,66 +295,7 @@ export function RankingComposeMyRanking({
             }}
             onDragEnd={() => setIsReordering(false)}
             className="flex flex-col"
-            renderItem={(entityId, index, isDragActive, overlayImageUrl) => {
-              const entry = entriesById.get(entityId);
-              const row = rowsByEntityId.get(entityId);
-              const searchHit = searchResultsById.get(entityId);
-              if (!entry && !row && !searchHit) return null;
-              const entryDisplay = {
-                entityId,
-                name: entry?.name ?? (row ? getRowDisplayName(row) : searchHit?.name?.trim() || 'Untitled'),
-                description: entry?.description ?? (row ? getRowDescription(row) : (searchHit?.description ?? null)),
-                image: entry?.image ?? row?.columns[SystemIds.NAME_PROPERTY]?.image ?? null,
-              };
-              const entryRow = (
-                <RankingEntryRow
-                  rank={index + 1}
-                  rankStyle="leading"
-                  linkToEntity={false}
-                  pending={pendingEntityIds.has(entityId)}
-                  entry={entryDisplay}
-                  spaceId={spaceId}
-                  imageUrl={overlayImageUrl}
-                />
-              );
-
-              const rowContent = !isMobile ? (
-                <RankingMyRankingDesktopRow
-                  entityName={entryDisplay.name}
-                  onRemove={() => onRemove(entityId)}
-                  onOpenSidePanel={hideSidePanel ? undefined : () => onView(entityId)}
-                  hideActions={isDragActive}
-                >
-                  {entryRow}
-                </RankingMyRankingDesktopRow>
-              ) : (
-                <RankingComposeSwipeableRow
-                  rowKey={`my:${entityId}`}
-                  activeRowKey={activeSwipeRowKey}
-                  onActiveRowKeyChange={onActiveSwipeRowKeyChange}
-                  showRemove
-                  swipeEnabled={!isReordering}
-                  onView={() => onView(entityId)}
-                  onRemove={() => onRemove(entityId)}
-                  primaryDisabled={isDragActive}
-                >
-                  {entryRow}
-                </RankingComposeSwipeableRow>
-              );
-
-              const dropAttribute = { [RANKING_DROP_ROW_ATTRIBUTE]: entityId };
-              return (
-                <div className="relative w-full py-3" {...dropAttribute}>
-                  {dropIndex === index ? (
-                    <span className="absolute inset-x-0 top-0 h-0.5 rounded-full bg-text" aria-hidden />
-                  ) : null}
-                  {dropIndex === displayEntityIds.length && index === displayEntityIds.length - 1 ? (
-                    <span className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-text" aria-hidden />
-                  ) : null}
-                  {rowContent}
-                </div>
-              );
-            }}
+            renderItem={renderEntry}
           />
         )}
         {footer}
