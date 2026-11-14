@@ -102,6 +102,9 @@ export function useBestDebatesPlacement({
   onReorderEnd,
 }: UseBestDebatesPlacementArgs) {
   const [flow, setFlow] = React.useState<FlowState | null>(null);
+  // The flow on screen, for a Done that finishes later to end only its own (never one opened since).
+  const flowRef = React.useRef(flow);
+  flowRef.current = flow;
   const getContext = useActionContext('ranking_composer', 'ranking', blockId);
 
   // Done and Rank the next one publish whatever the list is when pressed, nudges included.
@@ -302,11 +305,12 @@ export function useBestDebatesPlacement({
         reorderDoneInFlight.current = true;
         reorderClosedInFlight.current = false;
       }
+      const mine = flowRef.current;
       const ok = await publishPlaced(entityId, placedIndex);
       const closedMeanwhile = reorder && reorderClosedInFlight.current;
       if (reorder) reorderDoneInFlight.current = false;
       if (ok) {
-        setFlow(null);
+        setFlow(current => (current === mine ? null : current));
         if (reorder) onReorderEnd?.(entityId, 'done');
       } else if (closedMeanwhile) onReorderEnd?.(entityId, 'closed');
       else markPublishFailed();

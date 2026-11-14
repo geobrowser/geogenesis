@@ -139,6 +139,7 @@ export function useBestDebatesBlockRanking({
     whenPublishesSettle: compose.whenPublishesSettle,
     downRank: compose.requestPushDown,
     reorder: compose.reorder,
+    publishing: compose.publishing,
   });
 
   return {
@@ -179,6 +180,7 @@ export function useBlockGrading({
   whenPublishesSettle = () => Promise.resolve(),
   downRank,
   reorder = () => undefined,
+  publishing = false,
 }: {
   blockId: string;
   ready: boolean;
@@ -196,6 +198,8 @@ export function useBlockGrading({
   downRank: (entityId: string) => void;
   /** The Placed step for a debate in the ranking; its Done publishes through the same queue. */
   reorder?: (entityId: string) => void;
+  /** A placement's Done (or any publish from the block) is out: Re-order waits for it too. */
+  publishing?: boolean;
 }): BestDebatesGrading {
   const recordGrade = useRecordGrade(blockId);
   // The draft as of the last grade, read by the publish loop (state lags a render behind).
@@ -276,12 +280,13 @@ export function useBlockGrading({
     isSaving: entityId => saving.has(normId(entityId)),
     grade: (entityId: string, grade: Grade, method: GradeMethod = 'popup') =>
       apply(entityId, draft => gradeInto(draft.ids, draft.grades, entityId, grade), method),
-    // A grade publish still running would replace the draft under the Placed step's moves.
+    // A grade publish still running would replace the draft under the Placed step's moves, and a
+    // placement's Done still out (its step closed meanwhile) would end the new step when it lands.
     reorder: (entityId: string) => {
-      if (inFlight.current || queued.current.length > 0) return;
+      if (publishing || inFlight.current || queued.current.length > 0) return;
       reorder(entityId);
     },
-    reorderBusy: saving.size > 0,
+    reorderBusy: publishing || saving.size > 0,
     remove: (entityId: string) => apply(entityId, draft => removeEntry(draft.ids, draft.grades, entityId), 'popup'),
     // Counted as Down rank's own `push_down` once its downvote lands.
     downRank,

@@ -342,6 +342,8 @@ export function useBestDebatesCompose({
     whenPublishesSettle,
     /** Re-order a debate already in the ranking: the Placed step at its place (GEO-3729). */
     reorder,
+    /** A publish from here is out or queued (the block's placement Done or grade). */
+    publishing,
     /** Down rank from a row (waits for the ranker's vote, then the toast with Undo). */
     requestPushDown: placement.requestPushDown,
     /** For a coverage line in To rank's terms: the window's debates, and how many are left to rank. */

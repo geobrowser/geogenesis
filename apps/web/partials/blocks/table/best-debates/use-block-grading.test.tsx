@@ -187,6 +187,28 @@ describe('grading from the block (GEO-3729)', () => {
     expect(reorder).toHaveBeenCalledWith(id(1));
   });
 
+  it('holds Re-order while a placement’s Done from the block is still publishing', () => {
+    const reorder = vi.fn();
+    const { result } = renderHook(() =>
+      useBlockGrading({
+        blockId: id(97),
+        ready: true,
+        orderedIds: [id(1)],
+        grades: new Map([[id(1), 'A']]),
+        setDraft: vi.fn(),
+        getBasedOnOrderedIds: () => [id(1)],
+        getBasedOnGrades: () => new Map(),
+        publish: vi.fn(),
+        downRank: vi.fn(),
+        reorder,
+        publishing: true,
+      })
+    );
+    expect(result.current.reorderBusy).toBe(true);
+    result.current.reorder(id(1));
+    expect(reorder).not.toHaveBeenCalled();
+  });
+
   it('holds Re-order while a grade is still publishing, whose publish would rewrite the moves', async () => {
     const reorder = vi.fn();
     const pending = deferred();

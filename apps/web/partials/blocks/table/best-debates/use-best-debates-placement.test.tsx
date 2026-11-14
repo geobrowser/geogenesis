@@ -438,6 +438,20 @@ describe('Re-order from the watch popup (GEO-3729)', () => {
     }
   });
 
+  it('ends only its own step when a Done that was closed meanwhile lands', async () => {
+    let finish!: (ok: boolean) => void;
+    const publish = vi.fn(() => new Promise<boolean>(resolve => (finish = resolve)));
+    render(<Harness initial={list(4)} startWith={{ id: 'd2', origin: 'mine' }} publish={publish} />);
+    fireEvent.click(screen.getByText('reorder'));
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Done' })));
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    // Another flow opens before the first Done lands.
+    fireEvent.click(screen.getByText('start'));
+    expect(screen.getByText('Which was the better debate?')).toBeTruthy();
+    await act(async () => finish(true));
+    expect(screen.getByText('Which was the better debate?')).toBeTruthy();
+  });
+
   it('does nothing for a debate that isn’t in the ranking', () => {
     render(<Harness initial={list(3)} startWith={{ id: 'new', origin: 'mine' }} />);
     fireEvent.click(screen.getByText('reorder'));
