@@ -34,6 +34,8 @@ export type BestDebatesGrading = {
    * into that tier), over the popup. Done keeps the move in the draft, or publishes it on the block.
    */
   reorder: (entityId: string) => void;
+  /** Re-order waits while grades are still publishing (the block): their publish rewrites the draft. */
+  reorderBusy?: boolean;
   /** Takes the debate out of the ranking. */
   remove: (entityId: string) => void;
   /** D: the existing Down rank (downvote, then off the ranking; its toast offers Undo). Its
@@ -102,6 +104,17 @@ export function gradeChanges(
     const now = inAfter.has(normId(entityId)) ? (gradeOf(after, entityId) ?? 'none') : 'none';
     return was === now ? [] : [{ entityId, previousGrade: was, grade: now }];
   });
+}
+
+/** The moved debate's grade change from a Re-order, if any: never another debate's (a merge's). */
+export function reorderGradeChanges(
+  entityId: string,
+  before: { ids: readonly string[]; grades: BallotGrades },
+  after: { ids: readonly string[]; grades: BallotGrades }
+) {
+  return gradeChanges(before.ids, before.grades, after.ids, after.grades).filter(
+    change => normId(change.entityId) === normId(entityId)
+  );
 }
 
 /** The grading of the surface rows sit on (the block or the ranking screen), for their Grade menu. */

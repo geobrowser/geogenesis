@@ -130,6 +130,13 @@ describe('BestDebateGradeRow (GEO-3729)', () => {
     expect(g.reorder).toHaveBeenCalledWith(DEBATE);
   });
 
+  it('holds Re-order while grades are still publishing', () => {
+    render(
+      <BestDebateGradeRow entityId={DEBATE} grading={grading({ reorderBusy: true }, { grade: 'B', place: 21 })} />
+    );
+    expect(screen.getByRole('button', { name: 'Re-order' })).toBeDisabled();
+  });
+
   it('shows no Re-order for a debate that isn’t in the ranking', () => {
     render(<BestDebateGradeRow entityId={DEBATE} grading={grading()} />);
     expect(screen.queryByRole('button', { name: 'Re-order' })).toBeNull();

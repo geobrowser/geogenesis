@@ -287,6 +287,9 @@ export function useBestDebatesPlacement({
     [setOrderedIds]
   );
 
+  // A Re-order closed while its Done is publishing: the publish says how it ended, not the close.
+  const reorderDoneInFlight = React.useRef(false);
+  const reorderClosedInFlight = React.useRef(false);
   const done = React.useCallback(
     async (entityId: string, placedIndex: number, reorder = false) => {
       if (!publishOnDone) {
@@ -295,10 +298,18 @@ export function useBestDebatesPlacement({
         if (reorder) onReorderEnd?.(entityId, 'done');
         return;
       }
-      if (await publishPlaced(entityId, placedIndex)) {
+      if (reorder) {
+        reorderDoneInFlight.current = true;
+        reorderClosedInFlight.current = false;
+      }
+      const ok = await publishPlaced(entityId, placedIndex);
+      const closedMeanwhile = reorder && reorderClosedInFlight.current;
+      if (reorder) reorderDoneInFlight.current = false;
+      if (ok) {
         setFlow(null);
         if (reorder) onReorderEnd?.(entityId, 'done');
-      } else markPublishFailed();
+      } else if (closedMeanwhile) onReorderEnd?.(entityId, 'closed');
+      else markPublishFailed();
     },
     [keepPlaced, markPublishFailed, onReorderEnd, publishOnDone, publishPlaced]
   );
@@ -350,7 +361,9 @@ export function useBestDebatesPlacement({
         onDone={() => void done(placedId, flow.placedIndex, flow.reorder)}
         onClose={() => {
           setFlow(null);
-          if (flow.reorder) onReorderEnd?.(placedId, 'closed');
+          if (!flow.reorder) return;
+          if (reorderDoneInFlight.current) reorderClosedInFlight.current = true;
+          else onReorderEnd?.(placedId, 'closed');
         }}
         next={
           flow.origin === 'to_rank' && remaining.length > 0

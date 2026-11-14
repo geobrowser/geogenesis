@@ -415,6 +415,29 @@ describe('Re-order from the watch popup (GEO-3729)', () => {
     expect(onReorderEnd).not.toHaveBeenCalled();
   });
 
+  it('lets a Done already publishing say how a Re-order closed meanwhile ended', async () => {
+    for (const lands of [true, false]) {
+      const onReorderEnd = vi.fn();
+      let finish!: (ok: boolean) => void;
+      const publish = vi.fn(() => new Promise<boolean>(resolve => (finish = resolve)));
+      render(
+        <Harness
+          initial={list(3)}
+          startWith={{ id: 'd2', origin: 'mine' }}
+          onReorderEnd={onReorderEnd}
+          publish={publish}
+        />
+      );
+      fireEvent.click(screen.getByText('reorder'));
+      await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Done' })));
+      fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+      expect(onReorderEnd).not.toHaveBeenCalled();
+      await act(async () => finish(lands));
+      expect(onReorderEnd.mock.calls).toEqual([['d2', lands ? 'done' : 'closed']]);
+      cleanup();
+    }
+  });
+
   it('does nothing for a debate that isn’t in the ranking', () => {
     render(<Harness initial={list(3)} startWith={{ id: 'new', origin: 'mine' }} />);
     fireEvent.click(screen.getByText('reorder'));

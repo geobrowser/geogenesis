@@ -74,6 +74,7 @@ import {
   type BestDebatesGrading,
   type GradeChange,
   gradeChanges,
+  reorderGradeChanges,
   useRecordGrade,
 } from './best-debates/best-debate-grading';
 import { BestDebateDisplaysContext } from './best-debates/best-debate-row';
@@ -721,8 +722,8 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
     openOnToRank: searchParams?.get(BEST_DEBATES_TEAM_VIEW_PARAM) === BEST_DEBATES_TEAM_VIEW_TO_RANK,
     searchQuery,
     // Re-order's move stays in the draft however it ends; a grade it changed is counted (GEO-3729).
-    onReorderEnd: (_outcome, before, after) => {
-      for (const change of gradeChanges(before.ids, before.grades, after.ids, after.grades)) {
+    onReorderEnd: ({ entityId: movedId, before, after }) => {
+      for (const change of reorderGradeChanges(movedId, before, after)) {
         recordGrade(change.entityId, {
           grade: change.grade,
           previousGrade: change.previousGrade,

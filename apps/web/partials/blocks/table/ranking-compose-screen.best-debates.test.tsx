@@ -368,8 +368,8 @@ describe('RankingComposeScreen on any other block', () => {
         [x, 'A'],
       ]),
     };
-    type End = (o: string, b: typeof before, a: typeof after) => void;
-    await act(async () => (mocks.composeArgs?.onReorderEnd as End)('closed', before, after));
+    type End = (end: object) => void;
+    await act(async () => (mocks.composeArgs?.onReorderEnd as End)({ outcome: 'closed', entityId: x, before, after }));
     expect(mocks.recordGrade).toHaveBeenCalledWith(x, {
       grade: 'A',
       previousGrade: 'B',

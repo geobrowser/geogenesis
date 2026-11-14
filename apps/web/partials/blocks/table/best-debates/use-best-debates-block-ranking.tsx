@@ -10,6 +10,7 @@ import {
   gradeOf,
   hasAnyGrade,
   removeEntry,
+  restoreEntry,
 } from '~/core/blocks/ranking/ranking-grades';
 import type { RankingSubmissionSlot } from '~/core/blocks/ranking/ranking-submission-types';
 import {
@@ -22,7 +23,13 @@ import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { normId } from '~/core/utils/norm-id';
 
 import { rankingComposeSeed, useRankingComposeDraft } from '../use-ranking-compose-draft';
-import { type BestDebatesGrading, type GradeMethod, gradeChanges, useRecordGrade } from './best-debate-grading';
+import {
+  type BestDebatesGrading,
+  type GradeMethod,
+  gradeChanges,
+  reorderGradeChanges,
+  useRecordGrade,
+} from './best-debate-grading';
 import { type PublishedBase, useBestDebatesCompose } from './use-best-debates-compose';
 import { useBestDebatesPushDownSlot } from './use-best-debates-push-down-slot';
 
@@ -96,12 +103,16 @@ export function useBestDebatesBlockRanking({
     getPublishedBase,
     // Re-order (GEO-3729): Done published the move, so a grade it changed is counted; closed
     // without Done, the move goes back, since nothing on the block would publish it.
-    onReorderEnd: (outcome, before, after) => {
+    onReorderEnd: ({ outcome, entityId, before, after }) => {
       if (outcome === 'closed') {
-        setDraft(before.ids, before.grades);
+        // Only the moved debate goes back, onto the draft as it is now: anything merged in while
+        // the step was open stays.
+        const without = removeEntry(after.ids, after.grades, entityId);
+        const restored = restoreEntry(without, before, entityId);
+        setDraft(restored.ids, restored.grades);
         return;
       }
-      for (const change of gradeChanges(before.ids, before.grades, after.ids, after.grades)) {
+      for (const change of reorderGradeChanges(entityId, before, after)) {
         recordGrade(change.entityId, {
           grade: change.grade,
           previousGrade: change.previousGrade,
@@ -265,7 +276,12 @@ export function useBlockGrading({
     isSaving: entityId => saving.has(normId(entityId)),
     grade: (entityId: string, grade: Grade, method: GradeMethod = 'popup') =>
       apply(entityId, draft => gradeInto(draft.ids, draft.grades, entityId, grade), method),
-    reorder,
+    // A grade publish still running would replace the draft under the Placed step's moves.
+    reorder: (entityId: string) => {
+      if (inFlight.current || queued.current.length > 0) return;
+      reorder(entityId);
+    },
+    reorderBusy: saving.size > 0,
     remove: (entityId: string) => apply(entityId, draft => removeEntry(draft.ids, draft.grades, entityId), 'popup'),
     // Counted as Down rank's own `push_down` once its downvote lands.
     downRank,

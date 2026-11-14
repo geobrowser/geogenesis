@@ -181,7 +181,7 @@ describe('Re-order (GEO-3729)', () => {
     const after: Draft = { ids: ['x', 'a'], grades: new Map([['x', 'A']]) };
     rerender(after);
     act(() => mocks.placementArgs!.onReorderEnd!('x', 'closed'));
-    expect(onReorderEnd).toHaveBeenCalledWith('closed', before, after);
+    expect(onReorderEnd).toHaveBeenCalledWith({ outcome: 'closed', entityId: 'x', before, after });
     // Once only: a later end without a Re-order open says nothing.
     act(() => mocks.placementArgs!.onReorderEnd!('x', 'done'));
     expect(onReorderEnd).toHaveBeenCalledTimes(1);

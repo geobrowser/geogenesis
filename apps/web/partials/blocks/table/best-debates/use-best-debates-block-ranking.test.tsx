@@ -57,8 +57,8 @@ describe('the Best debates block’s publishing (GEO-3729)', () => {
 });
 
 type Ballot = { ids: string[]; grades: Map<string, 'A' | 'B' | 'C'> };
-const reorderEnd = (outcome: 'done' | 'closed', before: Ballot, after: Ballot) =>
-  (mocks.composeArgs?.onReorderEnd as (o: string, b: Ballot, a: Ballot) => void)(outcome, before, after);
+const reorderEnd = (outcome: 'done' | 'closed', before: Ballot, after: Ballot, entityId = 'x') =>
+  (mocks.composeArgs?.onReorderEnd as (end: object) => void)({ outcome, entityId, before, after });
 
 describe('Re-order on the block (GEO-3729)', () => {
   const before: Ballot = {
@@ -70,13 +70,15 @@ describe('Re-order on the block (GEO-3729)', () => {
       ['b2', 'B'],
     ]),
   };
+  // X moved up into A; meanwhile a publish merged in Y (added elsewhere) and regraded b2 to C.
   const after: Ballot = {
-    ids: ['a1', 'x', 'a2', 'b2'],
+    ids: ['a1', 'x', 'a2', 'y', 'b2'],
     grades: new Map([
       ['a1', 'A'],
       ['x', 'A'],
       ['a2', 'A'],
-      ['b2', 'B'],
+      ['y', 'B'],
+      ['b2', 'C'],
     ]),
   };
 
@@ -86,12 +88,16 @@ describe('Re-order on the block (GEO-3729)', () => {
       useBestDebatesBlockRanking({ enabled: true, blockId: 'b', spaceId: 's', isMobile: false })
     );
     act(() => reorderEnd('closed', before, after));
-    expect(result.current.myRankOf('x')).toBe(3);
+    // Only X goes back (to B, under the A tier); Y and b2's new grade, merged in meanwhile, stay.
     expect(result.current.myRankOf('a2')).toBe(2);
+    expect(result.current.myRankOf('x')).toBe(3);
+    expect(result.current.myRankOf('y')).toBe(4);
+    expect(result.current.grading?.gradeOf('x')).toBe('B');
+    expect(result.current.grading?.gradeOf('b2')).toBe('C');
     expect(mocks.recordGrade).not.toHaveBeenCalled();
   });
 
-  it('counts a grade its published move changed as a reorder', () => {
+  it('counts only the moved debate’s grade change as a reorder, never one merged in', () => {
     mocks.recordGrade.mockReset();
     renderHook(() => useBestDebatesBlockRanking({ enabled: true, blockId: 'b', spaceId: 's', isMobile: false }));
     act(() => reorderEnd('done', before, after));

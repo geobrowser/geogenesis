@@ -27,6 +27,14 @@ import { BestDebatesToRankList } from './best-debates-to-rank-list';
 import type { PushDownSlot } from './push-down-slot';
 import { type PlacementOrigin, useBestDebatesPlacement } from './use-best-debates-placement';
 
+/** How a Re-order's Placed step ended, with the draft from when it opened and as it ended. */
+export type ReorderEnd = {
+  outcome: 'done' | 'closed';
+  entityId: string;
+  before: PublishedBase;
+  after: PublishedBase;
+};
+
 /** A published ballot an edit was built on: its order and grades. */
 export type PublishedBase = { ids: string[]; grades: BallotGrades };
 
@@ -73,7 +81,7 @@ export type UseBestDebatesComposeArgs = {
    * it ended (`after`). The block puts `before` back on `closed`, since nothing else would publish
    * the move; the screen keeps the move in the draft either way.
    */
-  onReorderEnd?: (outcome: 'done' | 'closed', before: PublishedBase, after: PublishedBase) => void;
+  onReorderEnd?: (end: ReorderEnd) => void;
   /** The team column's search, which To rank filters by too. */
   searchQuery?: string;
   /** Open the team column on To rank (the screen was opened with `?team=to-rank`, GEO-3677). */
@@ -236,10 +244,10 @@ export function useBestDebatesCompose({
   const reorderBefore = React.useRef<PublishedBase | null>(null);
   const onReorderEndRef = React.useRef(onReorderEnd);
   onReorderEndRef.current = onReorderEnd;
-  const endReorder = React.useCallback((_entityId: string, outcome: 'done' | 'closed') => {
+  const endReorder = React.useCallback((entityId: string, outcome: 'done' | 'closed') => {
     const before = reorderBefore.current;
     reorderBefore.current = null;
-    if (before) onReorderEndRef.current?.(outcome, before, draftRef.current);
+    if (before) onReorderEndRef.current?.({ outcome, entityId, before, after: draftRef.current });
   }, []);
 
   const placement = useBestDebatesPlacement({

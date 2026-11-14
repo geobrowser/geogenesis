@@ -140,7 +140,7 @@ export function BestDebateGradeRow({ entityId, grading }: { entityId: string; gr
             {/* The Rank flow's Placed step at this place: move it up or down, across a tier line too. */}
             <button
               type="button"
-              disabled={!grading.ready}
+              disabled={!grading.ready || Boolean(grading.reorderBusy)}
               onClick={() => grading.reorder(entityId)}
               className={REORDER_BUTTON_CLASS}
               data-geo-analytics-label="grade_reorder"
