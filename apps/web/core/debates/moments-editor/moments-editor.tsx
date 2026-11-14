@@ -98,6 +98,9 @@ export function closeEditorTab() {
   }, 100);
 }
 
+/** Brings back the clips of a publish that failed after its visit ended. New copy (GEO-3742). */
+export const RESTORE_FAILED_EDIT_LABEL = 'Bring back the edit that failed';
+
 /** Done, for a tab opened from the popup: off while there are changes not published or discarded. */
 function DoneButton({ dirty = false }: { dirty?: boolean }) {
   const closeable = React.useContext(EditorCloseableContext);
@@ -410,6 +413,44 @@ function Editor({ debateId }: { debateId: string }) {
     setClips(source.clips);
   };
 
+  // A publish that failed after its visit ended (GEO-3742: the popup's tab closes with Done while it
+  // renders, and its toast says to open Edit moments): shown here as if this visit had sent it, and
+  // its clips can be brought back as an unsaved edit, with the worker's problems on them.
+  const failedElsewhere =
+    !ours &&
+    !tracked &&
+    request &&
+    job.kind === 'failed' &&
+    !request.preview &&
+    !request.unlock &&
+    // The worker's own resend after a re-render has a notice of its own (`UnlinkableNotice`).
+    !request.manual_reel?.reapplied
+      ? request
+      : null;
+  const failedClips = failedElsewhere?.manual_reel?.clock === 'player' ? failedElsewhere.manual_reel.clips : undefined;
+  const restoreFailedEdit =
+    failedElsewhere && failedClips && failedClips.length > 0 && !readOnly && !dirty
+      ? () => {
+          const restored: EditorClip[] = failedClips.map(clip => ({
+            key: newClipKey(),
+            start_ms: clip.start_ms,
+            end_ms: clip.end_ms,
+            // Sent as cut, so each edge stays where it was sent (`edgeIsFree`).
+            free_start_ms: clip.start_ms,
+            free_end_ms: clip.end_ms,
+            claim_index: typeof clip.claim_index === 'number' ? clip.claim_index : null,
+            live_claim_text: null,
+          }));
+          setClips(restored);
+          setTracked({
+            requestedAt: failedElsewhere.requested_at,
+            reelKey: reelKey(restored),
+            sent: restored,
+            preview: false,
+          });
+        }
+      : null;
+
   const submit = (kind: 'preview' | 'publish' | 'unlock') => {
     setConfirm(null);
     if (!(kind === 'publish' ? canPublish : kind === 'unlock' ? canUnlock : canQueue)) return;
@@ -547,6 +588,18 @@ function Editor({ debateId }: { debateId: string }) {
       ) : null}
       {queueError ? <Notice tone="bad">{queueError}</Notice> : null}
       {showJob && !job.preview ? <JobNotice job={job} flagged={flaggedClips} noReel={unlinkable} /> : null}
+      {failedElsewhere ? (
+        <>
+          <JobNotice job={job} flagged={[]} noReel={unlinkable} />
+          {restoreFailedEdit ? (
+            <div>
+              <Button variant="secondary" onClick={restoreFailedEdit}>
+                {RESTORE_FAILED_EDIT_LABEL}
+              </Button>
+            </div>
+          ) : null}
+        </>
+      ) : null}
       {wholeReelProblems.length > 0 ? (
         <Notice tone="bad">
           {wholeReelProblems.map(problem => (

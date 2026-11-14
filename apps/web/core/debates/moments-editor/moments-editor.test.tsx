@@ -7,7 +7,13 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 
 import { GeoChatRequestError } from '../api';
 import type { MomentBackfillEntry, MomentBackfillStatus } from './api';
-import { MomentsEditor, claimsBySpeaker, editingBlockedReason, keepClaimWithSpeaker } from './moments-editor';
+import {
+  MomentsEditor,
+  RESTORE_FAILED_EDIT_LABEL,
+  claimsBySpeaker,
+  editingBlockedReason,
+  keepClaimWithSpeaker,
+} from './moments-editor';
 
 const DEBATE_ID = '01a0448a-61d3-7101-8434-a20fdadf6f97';
 
@@ -1312,6 +1318,32 @@ describe('MomentsEditor in a tab opened from the Best debates popup (GEO-3742)',
     vi.stubGlobal('location', location);
     close.mockRestore();
     vi.useRealTimers();
+  });
+
+  it('shows a publish that failed after its tab closed, and brings its clips back with the problems', () => {
+    const failed = (clock: string) =>
+      status({
+        status: 'skipped',
+        requested_at: '2026-11-14T10:00:00Z',
+        outcome: 'manual_reel_invalid',
+        report: { story_failed: 'clip 1: no words are said in it' },
+        manual_reel: { clock, clips: [{ start_ms: 1_000, end_ms: 1_450 }] },
+      });
+    mocks.backfill.data = { request: failed('video'), entry: null };
+    const { unmount } = render(<MomentsEditor debateId={DEBATE_ID} closeable />);
+    expect(screen.getByText('Nothing changed.')).toBeInTheDocument();
+    // Cut on another clock: told, but nothing to bring back.
+    expect(screen.queryByRole('button', { name: RESTORE_FAILED_EDIT_LABEL })).not.toBeInTheDocument();
+    unmount();
+
+    mocks.backfill.data = { request: failed('player'), entry: null };
+    render(<MomentsEditor debateId={DEBATE_ID} closeable />);
+    fireEvent.click(screen.getByRole('button', { name: RESTORE_FAILED_EDIT_LABEL }));
+    expect(screen.getByRole('textbox', { name: 'End time' })).toHaveValue('0:01.5');
+    expect(screen.getByText('no words are said in it')).toBeInTheDocument();
+    expect(screen.getAllByText('Nothing changed.')).toHaveLength(1);
+    // An unsaved edit again: Done waits.
+    expect(screen.getByRole('button', { name: 'Done' })).toBeDisabled();
   });
 
   it('offers Done even when it can’t show the editor', () => {
