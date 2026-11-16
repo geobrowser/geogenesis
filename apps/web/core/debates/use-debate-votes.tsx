@@ -270,7 +270,7 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
       // Read through the cache rather than only from this render. A queued vote replays through a
       // closure taken before sign-up, when neither existed yet; the cache has both by the time the
       // runner fires, the same fallback every other queued write uses.
-      const account = await awaitSigningAccount(queryClient, smartAccount);
+      const account = await awaitSigningAccount(smartAccount);
       const voterSpaceId = readRegisteredPersonalSpaceId(queryClient, account?.account.address, {
         personalSpaceId,
         isRegistered,

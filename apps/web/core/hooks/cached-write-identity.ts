@@ -7,6 +7,7 @@ import {
   SignedOutBeforeWriteError,
   SigningAccountFailedError,
   publishedAccountAddress,
+  publishedSigningAccount,
   waitForSigningAccount,
 } from '~/core/wallet/account-readiness';
 
@@ -34,11 +35,9 @@ export function readCachedSmartAccount(
 }
 
 /** The account to write with, waiting for it while it is built. Null if signed out or the build failed. */
-export async function awaitSigningAccount(
-  queryClient: QueryClient,
-  live: GeoWalletClient | null | undefined
-): Promise<GeoWalletClient | null> {
-  const account = readCachedSmartAccount(queryClient, live);
+export async function awaitSigningAccount(live: GeoWalletClient | null | undefined): Promise<GeoWalletClient | null> {
+  // Not the query cache: it can hold a signer before its wallet cookie syncs, or one from an earlier session.
+  const account = live ?? publishedSigningAccount();
   if (account) return account;
   try {
     return await waitForSigningAccount();
@@ -48,8 +47,8 @@ export async function awaitSigningAccount(
   }
 }
 
-export function readAccountAddress(queryClient: QueryClient): string | null {
-  return publishedAccountAddress() ?? readCachedSmartAccount(queryClient, null)?.account.address ?? null;
+export function readAccountAddress(): string | null {
+  return publishedAccountAddress();
 }
 
 export function readCachedPersonalSpace(

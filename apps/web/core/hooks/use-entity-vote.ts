@@ -263,7 +263,7 @@ export function useEntityResponse({ entityId, entityName, spaceId, responseKind 
   // While mounted the reactive value is correct; a queued vote replayed after the button remounted
   const readRegisteredSpace = useCallback((): { personalSpaceId: string | null; isRegistered: boolean } => {
     if (personalSpaceId && isRegistered) return { personalSpaceId, isRegistered };
-    return readCachedPersonalSpace(queryClient, readAccountAddress(queryClient));
+    return readCachedPersonalSpace(queryClient, readAccountAddress());
   }, [personalSpaceId, isRegistered, queryClient]);
   // The retry key for the current account and args. Retry replays through the latest mutation
   // options, so it must only run while they still target the vote that failed.

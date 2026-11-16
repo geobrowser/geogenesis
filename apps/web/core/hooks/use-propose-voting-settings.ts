@@ -1,7 +1,5 @@
 'use client';
 
-import { useQueryClient } from '@tanstack/react-query';
-
 import * as React from 'react';
 
 import { Duration, Effect, Either, Schedule } from 'effect';
@@ -32,13 +30,12 @@ type ProposeVotingSettingsArgs = {
  */
 export function useProposeVotingSettings() {
   const { smartAccount: liveSmartAccount } = useSmartAccount();
-  const queryClient = useQueryClient();
   const { personalSpaceId } = usePersonalSpaceId();
   const [isPending, setIsPending] = React.useState(false);
 
   const propose = React.useCallback(
     async ({ spaceId, votingSettings }: ProposeVotingSettingsArgs) => {
-      const smartAccount = await awaitSigningAccount(queryClient, liveSmartAccount);
+      const smartAccount = await awaitSigningAccount(liveSmartAccount);
       if (!smartAccount) {
         throw new TransactionWriteFailedError(
           'Unable to propose: wallet is not connected. Please reconnect and try again.'
@@ -96,7 +93,7 @@ export function useProposeVotingSettings() {
         setIsPending(false);
       }
     },
-    [liveSmartAccount, queryClient, personalSpaceId]
+    [liveSmartAccount, personalSpaceId]
   );
 
   return { propose, isPending };

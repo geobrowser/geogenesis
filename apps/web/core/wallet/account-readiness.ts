@@ -107,9 +107,18 @@ function publishReadiness(next: Published) {
 }
 
 /** Waits for the signing account; rejects if the person is signed out or the build failed. */
+export function publishedSigningAccount(): GeoWalletClient | null {
+  return published.signingAccount;
+}
+
 export function waitForSigningAccount(): Promise<GeoWalletClient> {
+  const startedFor = published.address?.toLowerCase();
   return new Promise((resolve, reject) => {
     const settle = () => {
+      if (startedFor && published.address && published.address.toLowerCase() !== startedFor) {
+        reject(new SignedOutBeforeWriteError());
+        return true;
+      }
       if (published.signingAccount) {
         resolve(published.signingAccount);
         return true;

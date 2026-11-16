@@ -64,7 +64,7 @@ export function useRequestToBeMember({ spaceId, space }: UseRequestToBeMemberArg
       // Through the cache as well as this render. A join queued before sign-up replays through this
       // hook as it was at the press, before the account or space existed; the cache has both by the
       // time the runner fires. Reading only the render failed that replay on every retry.
-      const account = await awaitSigningAccount(queryClient, smartAccount);
+      const account = await awaitSigningAccount(smartAccount);
       if (!account) {
         throw new Error('No smart account available');
       }

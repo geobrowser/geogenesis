@@ -153,7 +153,7 @@ export function useCreateComment(targetEntityId: string) {
       onOptimistic,
       commentId: existingCommentId,
     }: CreateCommentInput): Promise<CreateCommentResult | null> => {
-      const account = await awaitSigningAccount(queryClient, smartAccount);
+      const account = await awaitSigningAccount(smartAccount);
       if (!account) {
         setToast(<span>Please connect your wallet to comment</span>);
         return null;
@@ -440,7 +440,7 @@ export function useCreateComment(targetEntityId: string) {
       commentSpaceId: string;
       newText: string;
     }): Promise<boolean> => {
-      const account = await awaitSigningAccount(queryClient, smartAccount);
+      const account = await awaitSigningAccount(smartAccount);
       if (!account) {
         setToast(<span>Please connect your wallet to edit</span>);
         return false;

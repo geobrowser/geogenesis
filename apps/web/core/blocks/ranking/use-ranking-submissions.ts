@@ -297,7 +297,7 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
         basedOnOrderedIds?: string[];
       }
     ): Promise<RankingSubmissionPublishResult | null> => {
-      const account = await awaitSigningAccount(queryClient, smartAccount);
+      const account = await awaitSigningAccount(smartAccount);
       if (!account) {
         setToast(React.createElement('span', null, 'Please connect your wallet to publish your ranking'));
         return null;

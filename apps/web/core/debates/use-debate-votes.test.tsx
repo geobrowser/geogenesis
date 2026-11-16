@@ -102,6 +102,7 @@ vi.mock('~/core/wallet/account-readiness', () => {
     SignedOutBeforeWriteError,
     SigningAccountFailedError,
     publishedAccountAddress: () => null,
+    publishedSigningAccount: () => null,
     useAccountAddress: () => (mocks.signedIn ? '0xabc' : null),
     waitForSigningAccount: () => {
       if (mocks.accountError) return Promise.reject(new SigningAccountFailedError());

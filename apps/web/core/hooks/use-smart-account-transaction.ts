@@ -1,5 +1,3 @@
-import { useQueryClient } from '@tanstack/react-query';
-
 import { useCallback } from 'react';
 
 import { Duration, Effect } from 'effect';
@@ -45,7 +43,6 @@ function sanitizeErrorMessage(error: unknown) {
  */
 export function useSmartAccountTransaction() {
   const { smartAccount } = useSmartAccount();
-  const queryClient = useQueryClient();
 
   // Memoized so callers can put it in a `useCallback`/`useEffect` dependency list
   // without re-running on every render — `useRankingComposeAccess` fires its
@@ -53,7 +50,7 @@ export function useSmartAccountTransaction() {
   const sendTransaction = useCallback(
     ({ to, data, value = 0n, onSubmitted }: SendTxArgs) =>
       Effect.gen(function* () {
-        const account = yield* Effect.promise(() => awaitSigningAccount(queryClient, smartAccount));
+        const account = yield* Effect.promise(() => awaitSigningAccount(smartAccount));
 
         if (!account) {
           return yield* Effect.fail(new TransactionWriteFailedError('Missing smart account'));
@@ -89,7 +86,7 @@ export function useSmartAccountTransaction() {
         console.log('Transaction successful', hash);
         return hash;
       }).pipe(Effect.withSpan('web.write.sendTransaction')),
-    [smartAccount, queryClient]
+    [smartAccount]
   );
 
   return sendTransaction;

@@ -38,7 +38,7 @@ describe('readCachedSmartAccount', () => {
 describe('awaitSigningAccount', () => {
   it('waits for an account still being built', async () => {
     resetPublishedReadiness({ state: 'identified', address: '0xabc' });
-    const waiting = awaitSigningAccount(new QueryClient(), null);
+    const waiting = awaitSigningAccount(null);
     const built = account('0xabc');
     publishReadinessForTests({ state: 'ready_to_write', address: '0xabc', signingAccount: built });
 
@@ -48,6 +48,14 @@ describe('awaitSigningAccount', () => {
   it('is null for someone signed out, so the caller can ask them to sign in', async () => {
     resetPublishedReadiness({ state: 'signed_out' });
 
-    await expect(awaitSigningAccount(new QueryClient(), null)).resolves.toBeNull();
+    await expect(awaitSigningAccount(null)).resolves.toBeNull();
+  });
+
+  it('gives up when the session changes to another account while it waits', async () => {
+    resetPublishedReadiness({ state: 'identified', address: '0xaaa' });
+    const waiting = awaitSigningAccount(null);
+    publishReadinessForTests({ state: 'ready_to_write', address: '0xbbb', signingAccount: account('0xbbb') });
+
+    await expect(waiting).resolves.toBeNull();
   });
 });

@@ -208,7 +208,7 @@ export function useDebateVoteWriter() {
       const authorSpaceId =
         personalSpaceId && isRegistered
           ? personalSpaceId
-          : readCachedPersonalSpace(queryClient, readAccountAddress(queryClient)).personalSpaceId;
+          : readCachedPersonalSpace(queryClient, readAccountAddress()).personalSpaceId;
       if (!authorSpaceId) return { ok: false, message: 'You need a personal space to vote.' };
       if (!validateSpaceId(spaceId)) return { ok: false, message: failedCopy };
       // A new downvote belongs to the debate's own space: never the Debates space or the voter's

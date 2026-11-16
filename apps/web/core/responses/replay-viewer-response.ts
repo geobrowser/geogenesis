@@ -25,7 +25,7 @@ export async function readViewerResponseForReplay(
     objectType,
   }: { entityId: string; spaceId: string; responseKind: ResponseKind; objectType: ResponseObjectType }
 ) {
-  const personalSpaceId = readRegisteredPersonalSpaceId(queryClient, readAccountAddress(queryClient), {
+  const personalSpaceId = readRegisteredPersonalSpaceId(queryClient, readAccountAddress(), {
     personalSpaceId: null,
     isRegistered: false,
   });

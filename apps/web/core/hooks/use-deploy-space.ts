@@ -87,7 +87,7 @@ export function useDeploySpace() {
 
   const { mutateAsync } = useMutation({
     mutationFn: async (args: DeployArgs): Promise<string | null> => {
-      const smartAccount = await awaitSigningAccount(queryClient, liveSmartAccount);
+      const smartAccount = await awaitSigningAccount(liveSmartAccount);
       if (!smartAccount) {
         return null;
       }

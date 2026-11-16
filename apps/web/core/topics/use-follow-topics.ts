@@ -72,7 +72,7 @@ export function useFollowEntities({ kind, source }: { kind: FollowKind; source?:
 
   /** One user operation for every call; resolves false if there is no account or it fails. */
   const sendCalls = async (calls: InterestedCall[]) => {
-    const account = await awaitSigningAccount(queryClient, smartAccount);
+    const account = await awaitSigningAccount(smartAccount);
     if (!account) return false;
     try {
       await account.sendUserOperation({ calls: calls.map(call => ({ ...call, value: 0n })) });
