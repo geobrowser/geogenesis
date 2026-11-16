@@ -20,6 +20,7 @@ import { type MomentBackfillEntry, reelCarried, reelUnlinkable } from './api';
 import { type ClaimOption, ClipRow } from './clip-row';
 import {
   isMediaAdminRefusal,
+  useAudioPeaks,
   useMomentBackfill,
   useMomentReelPlan,
   useQueueMomentReel,
@@ -39,6 +40,7 @@ import {
   formatReelTime,
   manualReel,
   newClipKey,
+  playedCuts,
   playerWords,
   reelProblems,
   snapEdge,
@@ -49,6 +51,7 @@ import { ReelTimeline } from './reel-timeline';
 import { ReelTranscript, reelSentences } from './reel-transcript';
 import { type ReelWarningFix, reelWarnings } from './reel-warnings';
 import { ReelWarningsPanel } from './reel-warnings-panel';
+import { ReelWaveform } from './reel-waveform';
 
 /** What a new clip at the playhead runs for, before it is trimmed. */
 const NEW_CLIP_MS = 15_000;
@@ -95,6 +98,8 @@ function Editor({ debateId }: { debateId: string }) {
   const plan = useMomentReelPlan(debateId, true);
   const transcript = useDebateTranscript(debateId, 'json', true, TRANSCRIPT_INCLUDE);
   const backfill = useMomentBackfill(debateId, true);
+  // The waveform never holds the editor up: until it is ready, or without one, editing works the same.
+  const peaks = useAudioPeaks(debateId, true);
   const queue = useQueueMomentReel(debateId);
   const refreshAfterReel = useRefreshAfterReel(debateId);
   const [, setToast] = useToast();
@@ -303,6 +308,12 @@ function Editor({ debateId }: { debateId: string }) {
     ...turns.map(turn => turn.source_end_ms ?? turn.output_end_ms),
     ...(words.length > 0 ? [words[words.length - 1].end_ms] : []),
     ...clips.map(clip => clip.end_ms)
+  );
+  // What each clip will play as geo-chat cuts it: shaded on the waveform, and where "play" starts.
+  // Memoised: the Editor re-renders on every playhead tick and drag move, and each cut scans every word.
+  const played = React.useMemo(
+    () => (carried ? clips.map(() => null) : playedCuts(clips, words, turns)),
+    [carried, clips, words, turns]
   );
   // None for a carried reel: like its clip checks, they would read its old-video cuts at the places
   // the new video's turns map them to, and it is read-only, so there is nothing to fix.
@@ -537,6 +548,22 @@ function Editor({ debateId }: { debateId: string }) {
             onSelect={index => setSelected(index)}
             onChangeClip={(index, span) => updateClip(index, clip => ({ ...clip, ...span }))}
             onSeek={seekTo}
+            peaks={peaks.kind === 'ready' ? peaks.peaks : null}
+          />
+
+          <ReelWaveform
+            view={peaks}
+            clip={clips[selectedIndex] ?? null}
+            index={selectedIndex}
+            speaker={speakers[selectedIndex] ?? null}
+            played={played[selectedIndex] ?? null}
+            words={words}
+            turns={turns}
+            durationMs={durationMs}
+            playheadMs={playheadMs}
+            readOnly={readOnly}
+            onChangeClip={(index, span) => updateClip(index, clip => ({ ...clip, ...span }))}
+            onSeek={seekTo}
           />
 
           <section className="rounded border border-grey-02 bg-white">
@@ -572,7 +599,7 @@ function Editor({ debateId }: { debateId: string }) {
                     onMove={direction => moveClip(index, direction)}
                     isFirst={index === 0}
                     isLast={index === clipViews.length - 1}
-                    onPlay={() => seekTo(view.clip.start_ms)}
+                    onPlay={() => seekTo(played[index]?.start_ms ?? view.clip.start_ms)}
                     onRemove={() => setClips(current => current.filter((_, at) => at !== index))}
                     onChangeClaim={claimIndex => updateClip(index, clip => ({ ...clip, claim_index: claimIndex }))}
                     onChangeEdge={(edge, ms, options) =>
