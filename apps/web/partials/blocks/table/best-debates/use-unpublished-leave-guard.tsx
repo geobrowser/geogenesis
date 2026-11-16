@@ -22,6 +22,9 @@ import { RankingFlowDialog } from './ranking-flow-dialog';
  * stands down until the screen is gone: the leave itself (spending the spare Back entry, a full-page
  * link load, the browser going Back) must not open the prompt, or the browser's, a second time.
  */
+/** How long a chosen leave has to take the person off the screen before the guard comes back on. */
+export const LEAVE_SETTLE_MS = 1500;
+
 export function useUnpublishedLeaveGuard({
   active,
   count,
@@ -43,9 +46,36 @@ export function useUnpublishedLeaveGuard({
   // changes unpublished): a render between the choice and the leave's own popstate or unload would
   // otherwise re-arm the guard and ask again.
   const leavingRef = React.useRef(false);
+  /** The spare history entry the browser's Back spends (see below). */
+  const sentinelRef = React.useRef(false);
   React.useEffect(() => {
     if (!active) leavingRef.current = false;
   }, [active]);
+  // A leave that went nowhere (Back with no page before this one) must not leave the guard off for
+  // the rest of the visit: once it has had time to navigate and the screen is still here, at the
+  // same URL, the guard comes back on. So does a page the browser restores from its cache.
+  const mountedRef = React.useRef(true);
+  const settleTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const rearm = React.useCallback(() => {
+    if (!mountedRef.current || !leavingRef.current) return;
+    leavingRef.current = false;
+    if (activeRef.current && !sentinelRef.current) {
+      window.history.pushState({ rankingLeaveGuard: true }, '', window.location.href);
+      sentinelRef.current = true;
+    }
+  }, []);
+  React.useEffect(() => {
+    mountedRef.current = true;
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) rearm();
+    };
+    window.addEventListener('pageshow', onPageShow);
+    return () => {
+      mountedRef.current = false;
+      if (settleTimer.current) clearTimeout(settleTimer.current);
+      window.removeEventListener('pageshow', onPageShow);
+    };
+  }, [rearm]);
 
   /** Runs `leave` now, or once the person has chosen in the prompt. */
   const guard = React.useCallback((leave: () => void) => {
@@ -88,7 +118,6 @@ export function useUnpublishedLeaveGuard({
   }, [active]);
 
   // The browser's Back: a spare history entry while there are changes, spent by Back.
-  const sentinelRef = React.useRef(false);
   React.useEffect(() => {
     if (!active) return;
     if (!sentinelRef.current) {
@@ -116,15 +145,24 @@ export function useUnpublishedLeaveGuard({
   const leaveNow = (leave: () => void) => {
     leavingRef.current = true;
     setPending(null);
+    const from = window.location.href;
+    const run = () => {
+      leave();
+      if (settleTimer.current) clearTimeout(settleTimer.current);
+      settleTimer.current = setTimeout(() => {
+        // Still on this screen at the same URL: the leave went nowhere.
+        if (window.location.href === from) rearm();
+      }, LEAVE_SETTLE_MS);
+    };
     // A spare entry still in place would make Back land on this screen again: spend it first (it is
     // this same URL, so nothing navigates), then leave once the browser says it's gone.
     if (sentinelRef.current) {
       sentinelRef.current = false;
-      window.addEventListener('popstate', () => leave(), { once: true });
+      window.addEventListener('popstate', run, { once: true });
       window.history.back();
       return;
     }
-    leave();
+    run();
   };
 
   const dialog = pending ? (

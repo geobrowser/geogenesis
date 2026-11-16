@@ -4,7 +4,7 @@ import * as React from 'react';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { useUnpublishedLeaveGuard } from './use-unpublished-leave-guard';
+import { LEAVE_SETTLE_MS, useUnpublishedLeaveGuard } from './use-unpublished-leave-guard';
 
 afterEach(cleanup);
 
@@ -200,6 +200,38 @@ describe('useUnpublishedLeaveGuard', () => {
       const unload = new Event('beforeunload', { cancelable: true });
       window.dispatchEvent(unload);
       expect(unload.defaultPrevented).toBe(false);
+    });
+
+    it('comes back on when the leave went nowhere (no page before this one), but not while leaving', async () => {
+      asyncBack();
+      const leave = vi.fn(); // Back with nothing before it: the screen stays.
+      render(
+        <>
+          <Harness active leave={leave} />
+          <a href="/space/other">elsewhere</a>
+        </>
+      );
+      fireEvent.click(screen.getByText('back'));
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Leave without publishing' }));
+      });
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 5));
+      });
+      expect(leave).toHaveBeenCalledTimes(1);
+      // Right after the choice, nothing asks.
+      const early = new Event('beforeunload', { cancelable: true });
+      window.dispatchEvent(early);
+      expect(early.defaultPrevented).toBe(false);
+      // Once the leave has had its time and the screen is still here, the guard is back.
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, LEAVE_SETTLE_MS + 50));
+      });
+      const later = new Event('beforeunload', { cancelable: true });
+      window.dispatchEvent(later);
+      expect(later.defaultPrevented).toBe(true);
+      fireEvent.click(screen.getByText('elsewhere'));
+      expect(screen.getByText('Publish your ranking?')).toBeTruthy();
     });
   });
 });
