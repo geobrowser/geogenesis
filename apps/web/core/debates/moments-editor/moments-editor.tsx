@@ -314,22 +314,20 @@ function Editor({ debateId }: { debateId: string }) {
   // locked without a reel.
   const canAddClip = !readOnly && clips.length < MANUAL_MAX_CLIPS;
   const canAddAtPlayhead = canAddClip && playheadMs !== null;
-  const addClipAt = (ms: number) => {
+  const addClip = (span: { start_ms: number; end_ms: number }) => {
     if (!canAddClip) return;
-    const start = snapEdge(ms, words, 'start');
     const key = newClipKey();
-    setClips(current => [
-      ...current,
-      {
-        key,
-        start_ms: start,
-        end_ms: snapEdge(start + NEW_CLIP_MS, words, 'end'),
-        claim_index: null,
-        live_claim_text: null,
-      },
-    ]);
+    setClips(current => [...current, { key, ...span, claim_index: null, live_claim_text: null }]);
     setSelectedKey(key);
   };
+  const addClipAt = (ms: number) => {
+    const start = snapEdge(ms, words, 'start');
+    addClip({ start_ms: start, end_ms: snapEdge(start + NEW_CLIP_MS, words, 'end') });
+  };
+  // A transcript selection's words (GEO-3766): both edges are word edges now, so any free placement
+  // the clip had is dropped and geo-chat widens them as it does any snapped edge.
+  const setClipWords = (index: number, span: { start_ms: number; end_ms: number }) =>
+    updateClip(index, ({ free_start_ms: _start, free_end_ms: _end, ...clip }) => ({ ...clip, ...span }));
   const addClipAtPlayhead = () => {
     if (canAddAtPlayhead) addClipAt(playheadMs);
   };
@@ -601,8 +599,13 @@ function Editor({ debateId }: { debateId: string }) {
           />
           <ReelTranscript
             sentences={sentences}
+            words={words}
+            wordTiming={transcript.data?.word_timing}
+            turns={turns}
             canAddClip={canAddClip}
             onAddClip={addClipAt}
+            onSetClipWords={setClipWords}
+            onAddClipWords={addClip}
             clips={clips}
             speakers={speakers}
             selected={selectedIndex}

@@ -12,14 +12,17 @@ import {
   clipsFromServedMoments,
   edgeIsFree,
   formatReelTime,
+  inOneStretch,
   manualReel,
   manualReelClips,
   parseReelTime,
   playerWords,
   realSpeedStretches,
   reelProblems,
+  selectionToClip,
   snapEdge,
   stepEdge,
+  stretchesOrWhole,
 } from './reel';
 
 const word = (slot: 1 | 2, start: number, end: number, text = 'w'): ReelWord => ({
@@ -427,5 +430,95 @@ describe('reel times', () => {
     expect(parseReelTime('1:75')).toBeNull();
     expect(parseReelTime('soon')).toBeNull();
     expect(parseReelTime('')).toBeNull();
+  });
+});
+
+describe('stretchesOrWhole / inOneStretch', () => {
+  it('reads a two-clock render’s real-speed stretches', () => {
+    expect(stretchesOrWhole(RENDERED_TURN_SEGMENTS, 400_000)).toEqual(realSpeedStretches(RENDERED_TURN_SEGMENTS));
+    expect(inOneStretch(115_000, 130_400, RENDERED_TURN_SEGMENTS)).toBe(false);
+    expect(inOneStretch(130_000, 140_400, RENDERED_TURN_SEGMENTS)).toBe(true);
+  });
+
+  // A fixed-format render shares one clock with the recordings and cut nothing.
+  it('takes a fixed format’s whole debate as one stretch', () => {
+    expect(stretchesOrWhole(ONE_CLOCK, 400_000)).toEqual([{ start_ms: 0, end_ms: 400_000 }]);
+    expect(stretchesOrWhole([], 9_000)).toEqual([{ start_ms: 0, end_ms: 9_000 }]);
+    expect(inOneStretch(115_000, 130_400, ONE_CLOCK)).toBe(true);
+  });
+});
+
+describe('selectionToClip (GEO-3766)', () => {
+  const words = [
+    word(1, 1_000, 1_400, 'Coffee'),
+    word(1, 1_500, 2_900, ' dates.'),
+    word(1, 3_000, 3_400, ' Cheap.'),
+    word(2, 5_000, 5_400, 'Dinner'),
+    word(2, 5_500, 5_900, ' wins.'),
+  ];
+
+  it('runs from the first selected word’s start to the last one’s end', () => {
+    expect(selectionToClip(words, 1, 2, [])).toEqual({
+      ok: true,
+      start_ms: 1_500,
+      end_ms: 3_400,
+      speaker: 1,
+      otherWords: 0,
+    });
+  });
+
+  it('reads a selection dragged backwards the same', () => {
+    expect(selectionToClip(words, 2, 1, [])).toEqual(selectionToClip(words, 1, 2, []));
+  });
+
+  it('makes a clip of a single short word', () => {
+    expect(selectionToClip(words, 0, 0, [])).toMatchObject({ ok: true, start_ms: 1_000, end_ms: 1_400 });
+  });
+
+  // Preston, 16 Nov: an exchange is allowed, of whoever says the most words, with a warning.
+  it('allows both debaters’ words, of whoever says the most', () => {
+    expect(selectionToClip(words, 2, 4, [])).toMatchObject({ ok: true, speaker: 2, otherWords: 1 });
+    expect(selectionToClip(words, 1, 3, [])).toMatchObject({ ok: true, speaker: 1, otherWords: 1 });
+    // A tie goes to the lower slot, as geo-chat breaks it.
+    expect(selectionToClip(words, 2, 3, [])).toMatchObject({ ok: true, speaker: 1, otherWords: 1 });
+  });
+
+  // An edge inside the other debater's word would cut it off: it moves out to take the whole word.
+  it('moves an edge that lands inside crosstalk out to the whole word, and counts it', () => {
+    const crosstalk = [
+      word(2, 900, 1_200, 'Well'),
+      word(1, 1_000, 1_400, 'Coffee'),
+      word(1, 1_500, 2_900, ' dates.'),
+      word(2, 2_800, 3_200, ' no'),
+    ];
+    expect(selectionToClip(crosstalk, 1, 2, [])).toEqual({
+      ok: true,
+      start_ms: 900,
+      end_ms: 3_200,
+      speaker: 1,
+      otherWords: 2,
+    });
+  });
+
+  it('refuses words from two stretches the render kept apart, but not on a fixed format', () => {
+    const across = [word(2, 115_000, 115_400), word(1, 130_000, 130_400), word(1, 140_000, 140_400)];
+    expect(selectionToClip(across, 0, 1, RENDERED_TURN_SEGMENTS)).toEqual({ ok: false, reason: 'crosses-cut' });
+    expect(selectionToClip(across, 1, 2, RENDERED_TURN_SEGMENTS)).toMatchObject({ ok: true });
+    expect(selectionToClip(across, 0, 1, ONE_CLOCK)).toMatchObject({ ok: true, start_ms: 115_000, end_ms: 130_400 });
+  });
+
+  // geo-chat merges turns with nothing cut between them, so a reply can be clipped with its point.
+  it('takes words across a handoff with nothing cut between the turns', () => {
+    const handoff = [word(1, 59_000, 59_600), word(2, 60_400, 61_000)];
+    expect(selectionToClip(handoff, 0, 1, RENDERED_TURN_SEGMENTS)).toMatchObject({ ok: true });
+  });
+
+  it('allows a clip over 60 s; the clip’s own check flags it', () => {
+    const long = [word(1, 1_000, 1_400), word(1, 70_000, 70_400)];
+    expect(selectionToClip(long, 0, 1, [])).toMatchObject({ ok: true, start_ms: 1_000, end_ms: 70_400 });
+  });
+
+  it('has nothing to make of no words', () => {
+    expect(selectionToClip([], 0, 0, [])).toEqual({ ok: false, reason: 'no-words' });
   });
 });

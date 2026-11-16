@@ -1,5 +1,7 @@
 'use client';
 
+import * as Popover from '@radix-ui/react-popover';
+
 import * as React from 'react';
 
 import cx from 'classnames';
@@ -7,17 +9,31 @@ import cx from 'classnames';
 import { SmallButton } from '~/design-system/button';
 import { Text } from '~/design-system/text';
 
-import type { DebateTranscriptResponse, ParticipantSlot } from '../api';
+import type { DebateMediaTurnSegment, DebateTranscriptResponse, ParticipantSlot } from '../api';
 import { formatTimecode } from '../claim-timing';
 import { transcriptOnRecordings } from '../recording-clock';
 import { SPEAKER_EDGE_CLASS, SPEAKER_FILL_CLASS } from './clip-row';
-import { type EditorClip, MIN_EDIT_CLIP_MS, formatReelTime } from './reel';
+import {
+  type EditorClip,
+  MIN_EDIT_CLIP_MS,
+  type ReelWord,
+  type SelectionClip,
+  formatReelTime,
+  formatSeconds,
+  selectionToClip,
+} from './reel';
 
 /** A sentence (or, from a transcript served without sentences, a line) on the player's clock. */
 export type ReelSentence = { slot: ParticipantSlot; start_ms: number; end_ms: number; text: string };
 
+/** A clip's words, underlined in its speaker's colour in the transcript. */
+const SPEAKER_UNDERLINE_CLASS = { 1: 'decoration-purple', 2: 'decoration-pink' } as const;
+
 /** How far a sentence must reach into a clip to count as in it, so a shared edge does not. */
 const OVERLAP_MS = 150;
+
+/** How long a keyboard selection rests before the toolbar reads it. */
+const SELECTION_SETTLE_MS = 200;
 
 /**
  * The transcript's sentences on the player's clock, in time order: the served `sentences`
@@ -56,11 +72,77 @@ export function endClipAt(clip: EditorClip, sentence: ReelSentence): EditorClip 
 }
 
 /**
- * The debate's transcript, turn by turn (GEO-3672): which clips each sentence plays in, and from
- * any sentence, start or end the selected clip there, start a new clip there, or play from it.
+ * Which words each sentence shows, as indexes into `words` (GEO-3766): a word belongs to its
+ * speaker's sentence whose `[start, next sentence's start)` holds the word's start, the speaker's last
+ * sentence taking the rest and the first anything before it. Every word of a speaker with sentences
+ * is shown exactly once, so what can be selected is what the clip plays.
+ */
+export function wordsBySentence(sentences: readonly ReelSentence[], words: readonly ReelWord[]): number[][] {
+  const shown = sentences.map(() => [] as number[]);
+  const bySlot = new Map<ParticipantSlot, number[]>();
+  sentences.forEach((sentence, at) => bySlot.set(sentence.slot, [...(bySlot.get(sentence.slot) ?? []), at]));
+  const cursor = new Map<ParticipantSlot, number>();
+  words.forEach((word, index) => {
+    const own = bySlot.get(word.slot);
+    if (!own) return;
+    let at = cursor.get(word.slot) ?? 0;
+    while (at + 1 < own.length && sentences[own[at + 1]].start_ms <= word.start_ms) at += 1;
+    cursor.set(word.slot, at);
+    shown[own[at]].push(index);
+  });
+  return shown;
+}
+
+/** Whether `range` covers any of `element`'s text, not just touches its edge. */
+function coversText(range: Range, element: Element): boolean {
+  const inside = element.ownerDocument.createRange();
+  inside.selectNodeContents(element);
+  if (range.compareBoundaryPoints(Range.START_TO_START, inside) > 0) {
+    inside.setStart(range.startContainer, range.startOffset);
+  }
+  if (range.compareBoundaryPoints(Range.END_TO_END, inside) < 0) inside.setEnd(range.endContainer, range.endOffset);
+  return !inside.collapsed && inside.toString().trim() !== '';
+}
+
+/**
+ * The words a selection covers, as the first and last index into the editor's words, or `null`
+ * when it covers none (GEO-3766). A word partly selected counts whole. An end that rests off a word
+ * (a timecode, a clip's badge, the space between words) counts from the nearest word inside the
+ * selection: the first after its start, the last before its end. `Range` is in document order
+ * whichever way the selection was dragged.
+ */
+export function selectedWordRange(range: Range, root: Element): [number, number] | null {
+  if (range.collapsed) return null;
+  let first: number | null = null;
+  let last: number | null = null;
+  for (const element of root.querySelectorAll<HTMLElement>('[data-word]')) {
+    if (!range.intersectsNode(element) || !coversText(range, element)) continue;
+    const index = Number(element.dataset.word);
+    first = first === null ? index : Math.min(first, index);
+    last = last === null ? index : Math.max(last, index);
+  }
+  return first === null || last === null ? null : [first, last];
+}
+
+/** The space Whisper puts before a word, outside its span, so it reads as text without selecting it. */
+function wordGap(text: string, firstInSentence: boolean) {
+  if (firstInSentence) return '';
+  if (/^\s/.test(text)) return ' ';
+  return /^[.,!?;:%)\]}'’”-]/.test(text) ? '' : ' ';
+}
+
+type WordPick = { from: number; to: number; range: Range };
+
+/**
+ * The debate's transcript, turn by turn (GEO-3672): which words each clip plays, and from any
+ * sentence, start or end the selected clip there, start a new clip there, or play from it.
+ * Highlighting words sets the selected clip to them or makes a new clip of them (GEO-3766).
  */
 export function ReelTranscript({
   sentences,
+  words,
+  wordTiming,
+  turns,
   clips,
   speakers,
   selected,
@@ -69,9 +151,16 @@ export function ReelTranscript({
   nameOf,
   onChangeClip,
   onAddClip,
+  onSetClipWords,
+  onAddClipWords,
   onSeek,
 }: {
   sentences: readonly ReelSentence[];
+  /** The editor's words (`playerWords`): what a selection's `data-word` indexes point into. */
+  words: readonly ReelWord[];
+  /** The transcript's `word_timing`: `false` when it has no word timings to select by. */
+  wordTiming: boolean | undefined;
+  turns: readonly DebateMediaTurnSegment[];
   clips: readonly EditorClip[];
   speakers: readonly (1 | 2 | null)[];
   selected: number;
@@ -82,15 +171,117 @@ export function ReelTranscript({
   onChangeClip: (index: number, clip: EditorClip) => void;
   /** Adds a clip starting at `ms`, the editor's own way, and selects it. */
   onAddClip: (ms: number) => void;
+  /** Sets clip `index` to exactly `span`, a selection's words. */
+  onSetClipWords: (index: number, span: { start_ms: number; end_ms: number }) => void;
+  /** Adds a clip of exactly `span`, a selection's words, and selects it. */
+  onAddClipWords: (span: { start_ms: number; end_ms: number }) => void;
   onSeek: (ms: number) => void;
 }) {
   const selectedClip = clips[selected];
-  const turns: ReelSentence[][] = [];
-  for (const sentence of sentences) {
-    const last = turns.at(-1);
-    if (last && last[0].slot === sentence.slot) last.push(sentence);
-    else turns.push([sentence]);
-  }
+  const turnsOfSentences: { sentence: ReelSentence; at: number }[][] = [];
+  sentences.forEach((sentence, at) => {
+    const last = turnsOfSentences.at(-1);
+    if (last && last[0].sentence.slot === sentence.slot) last.push({ sentence, at });
+    else turnsOfSentences.push([{ sentence, at }]);
+  });
+
+  const shownWords = React.useMemo(() => wordsBySentence(sentences, words), [sentences, words]);
+  // Which clips play each word, as geo-chat counts a clip's words (`wordsIn`), and where each clip's
+  // first word is, for its number.
+  const wordClips = React.useMemo(
+    () =>
+      words.map(word =>
+        clips.flatMap((clip, index) => (word.start_ms >= clip.start_ms && word.end_ms <= clip.end_ms ? [index] : []))
+      ),
+    [words, clips]
+  );
+  const firstWordOf = React.useMemo(() => {
+    const first = new Map<number, number[]>();
+    clips.forEach((clip, index) => {
+      const at = words.findIndex(
+        word => word.text.trim() !== '' && word.start_ms >= clip.start_ms && word.end_ms <= clip.end_ms
+      );
+      if (at >= 0) first.set(at, [...(first.get(at) ?? []), index]);
+    });
+    return first;
+  }, [words, clips]);
+
+  const noWordTimings = sentences.length > 0 && (wordTiming === false || words.length === 0);
+  const canPick = !noWordTimings && !readOnly && (selectedClip !== undefined || canAddClip);
+
+  const rootRef = React.useRef<HTMLDivElement>(null);
+  const pointerDown = React.useRef(false);
+  // While words are being selected, the sentences' buttons stay hidden, so the text doesn't move
+  // under the pointer as it crosses sentences.
+  const [selecting, setSelecting] = React.useState(false);
+  const [pick, setPick] = React.useState<WordPick | null>(null);
+
+  const activeRange = React.useCallback((): Range | null => {
+    const selection = window.getSelection();
+    const root = rootRef.current;
+    if (!selection || selection.rangeCount === 0 || selection.isCollapsed || !root) return null;
+    const range = selection.getRangeAt(0);
+    return range.intersectsNode(root) ? range : null;
+  }, []);
+  const readPick = React.useCallback(() => {
+    const range = activeRange();
+    const root = rootRef.current;
+    const covered = range && root ? selectedWordRange(range, root) : null;
+    setPick(range && covered ? { from: covered[0], to: covered[1], range: range.cloneRange() } : null);
+  }, [activeRange]);
+
+  React.useEffect(() => {
+    let settle: ReturnType<typeof setTimeout> | undefined;
+    const onSelectionChange = () => {
+      clearTimeout(settle);
+      if (!activeRange()) {
+        setPick(null);
+        if (!pointerDown.current) setSelecting(false);
+        return;
+      }
+      setSelecting(true);
+      // A drag is read when it ends; a keyboard selection once it rests.
+      if (!pointerDown.current) settle = setTimeout(readPick, SELECTION_SETTLE_MS);
+    };
+    const onPointerUp = () => {
+      if (!pointerDown.current) return;
+      pointerDown.current = false;
+      readPick();
+      if (!activeRange()) setSelecting(false);
+    };
+    document.addEventListener('selectionchange', onSelectionChange);
+    document.addEventListener('pointerup', onPointerUp);
+    return () => {
+      clearTimeout(settle);
+      document.removeEventListener('selectionchange', onSelectionChange);
+      document.removeEventListener('pointerup', onPointerUp);
+    };
+  }, [activeRange, readPick]);
+
+  const onPointerDown = (event: React.PointerEvent) => {
+    // A sentence's buttons are clicked, not selected from: hiding them here would lose the click.
+    if (event.button > 0 || (event.target as Element).closest('button')) return;
+    pointerDown.current = true;
+    setSelecting(true);
+  };
+
+  const result: SelectionClip | null = pick && canPick ? selectionToClip(words, pick.from, pick.to, turns) : null;
+  const closePick = () => {
+    window.getSelection()?.removeAllRanges();
+    setPick(null);
+    setSelecting(false);
+  };
+  const anchor = React.useMemo(
+    () => ({
+      current: {
+        getBoundingClientRect: () =>
+          typeof pick?.range.getBoundingClientRect === 'function'
+            ? pick.range.getBoundingClientRect()
+            : ({ x: 0, y: 0, top: 0, left: 0, right: 0, bottom: 0, width: 0, height: 0 } as DOMRect),
+      },
+    }),
+    [pick]
+  );
 
   return (
     <section className="rounded border border-grey-02 bg-white">
@@ -104,47 +295,77 @@ export function ReelTranscript({
           </Text>
         ) : null}
       </div>
+      {noWordTimings ? (
+        <Text as="p" variant="metadata" color="grey-04" className="border-b border-divider px-3 py-2">
+          This transcript has no word timings, so clips can&apos;t be made from a selection.
+        </Text>
+      ) : null}
       {sentences.length === 0 ? (
         <Text as="p" variant="metadata" color="grey-04" className="p-3">
           No transcript.
         </Text>
       ) : (
-        <div className="max-h-[880px] overflow-auto">
-          {turns.map(turn => (
-            <div key={turn[0].start_ms} className="border-b border-divider px-3 py-2.5 last:border-b-0">
-              <div className="mb-1.5 flex items-center gap-1.5 text-[14px] font-medium">
-                <span aria-hidden className={cx('h-2 w-2 rounded-full', SPEAKER_FILL_CLASS[turn[0].slot])} />
-                {nameOf(turn[0].slot)}
+        <div
+          ref={rootRef}
+          data-testid="reel-transcript"
+          data-selecting={selecting || undefined}
+          className="max-h-[880px] overflow-auto"
+          onPointerDown={onPointerDown}
+        >
+          {turnsOfSentences.map(turn => (
+            <div key={turn[0].sentence.start_ms} className="border-b border-divider px-3 py-2.5 last:border-b-0">
+              <div className="mb-1.5 flex items-center gap-1.5 text-[14px] font-medium select-none">
+                <span aria-hidden className={cx('h-2 w-2 rounded-full', SPEAKER_FILL_CLASS[turn[0].sentence.slot])} />
+                {nameOf(turn[0].sentence.slot)}
               </div>
-              {turn.map(sentence => {
-                const inClips = clips.flatMap((clip, index) => (sentenceInClip(sentence, clip) ? [index] : []));
+              {turn.map(({ sentence, at }) => {
+                const own = shownWords[at] ?? [];
+                // With words, a sentence is in the clips that play any of them; without, by its times.
+                const inClips =
+                  own.length > 0
+                    ? [...new Set(own.flatMap(index => wordClips[index]))].sort((a, b) => a - b)
+                    : clips.flatMap((clip, index) => (sentenceInClip(sentence, clip) ? [index] : []));
                 const firstSpeaker = inClips.length > 0 ? speakers[inClips[0]] : null;
                 return (
                   <div
                     key={`${sentence.start_ms}-${sentence.end_ms}`}
                     className={cx(
                       'group grid grid-cols-[48px_minmax(0,1fr)] gap-2 rounded px-1.5 py-1 text-[14px] leading-[18px] tracking-[-0.1px] hover:bg-grey-01',
-                      inClips.includes(selected) && 'bg-ctaTertiary',
+                      own.length === 0 && inClips.includes(selected) && 'bg-ctaTertiary',
                       firstSpeaker ? SPEAKER_EDGE_CLASS[firstSpeaker] : null
                     )}
                   >
-                    <span className="pt-px font-mono text-[12px] text-grey-04 tabular-nums">
+                    <span className="pt-px font-mono text-[12px] text-grey-04 tabular-nums select-none">
                       {formatTimecode(sentence.start_ms)}
                     </span>
                     <div>
-                      {sentence.text}
-                      {inClips.map(index => (
-                        <span
-                          key={index}
-                          className={cx(
-                            'ml-1.5 rounded-sm px-[5px] py-px text-[11px] leading-[13px] font-medium text-white',
-                            speakers[index] ? SPEAKER_FILL_CLASS[speakers[index]!] : 'bg-grey-03'
-                          )}
-                        >
-                          {index + 1}
-                        </span>
-                      ))}
-                      <div className="mt-1 hidden flex-wrap gap-1 group-focus-within:flex group-hover:flex">
+                      {own.length > 0 ? (
+                        <SentenceWords
+                          own={own}
+                          words={words}
+                          wordClips={wordClips}
+                          firstWordOf={firstWordOf}
+                          speakers={speakers}
+                          selected={selected}
+                          marks={own
+                            .map(index => `${wordClips[index].join('.')}/${(firstWordOf.get(index) ?? []).join('.')}`)
+                            .join(',')}
+                          speakersKey={speakers.join(',')}
+                        />
+                      ) : (
+                        <>
+                          {sentence.text}
+                          {inClips.map(index => (
+                            <ClipBadge key={index} index={index} speaker={speakers[index]} />
+                          ))}
+                        </>
+                      )}
+                      <div
+                        className={cx(
+                          'mt-1 hidden flex-wrap gap-1 select-none',
+                          !selecting && 'group-focus-within:flex group-hover:flex'
+                        )}
+                      >
                         {selectedClip && !readOnly ? (
                           <>
                             <SmallButton onClick={() => onChangeClip(selected, startClipAt(selectedClip, sentence))}>
@@ -173,6 +394,165 @@ export function ReelTranscript({
           ))}
         </div>
       )}
+      <Popover.Root
+        open={result !== null}
+        onOpenChange={open => {
+          if (!open) setPick(null);
+        }}
+      >
+        <Popover.Anchor virtualRef={anchor as React.RefObject<HTMLElement>} />
+        {result ? (
+          <Popover.Portal>
+            <Popover.Content
+              side="bottom"
+              align="start"
+              sideOffset={6}
+              collisionPadding={16}
+              aria-label="Clip from the selected words"
+              // Reading or clicking the toolbar must not take focus from, or clear, the selection.
+              onOpenAutoFocus={event => event.preventDefault()}
+              onMouseDown={event => event.preventDefault()}
+              className="z-100 flex max-w-[360px] flex-col gap-2 rounded-lg border border-grey-02 bg-white p-2 shadow-lg"
+            >
+              <SelectionToolbar
+                result={result}
+                selected={selectedClip ? selected : null}
+                canAddClip={canAddClip}
+                nameOf={nameOf}
+                onSet={span => {
+                  onSetClipWords(selected, span);
+                  closePick();
+                }}
+                onAdd={span => {
+                  onAddClipWords(span);
+                  closePick();
+                }}
+              />
+            </Popover.Content>
+          </Popover.Portal>
+        ) : null}
+      </Popover.Root>
     </section>
+  );
+}
+
+/**
+ * A sentence's words, each marked with the clips that play it. Kept from re-rendering while its
+ * marks are unchanged (`marks`, `speakersKey`), so a drag on the timeline doesn't redraw every word
+ * of a long debate on each frame.
+ */
+const SentenceWords = React.memo(
+  function SentenceWords({
+    own,
+    words,
+    wordClips,
+    firstWordOf,
+    speakers,
+    selected,
+  }: {
+    own: readonly number[];
+    words: readonly ReelWord[];
+    wordClips: readonly (readonly number[])[];
+    firstWordOf: ReadonlyMap<number, readonly number[]>;
+    speakers: readonly (1 | 2 | null)[];
+    selected: number;
+    /** What this sentence's marks are: the props above it reads, as a string to compare. */
+    marks: string;
+    speakersKey: string;
+  }) {
+    return own.map((index, nth) => {
+      const word = words[index];
+      const body = word.text.trim();
+      if (!body) return null;
+      const playedBy = wordClips[index];
+      const speaker = playedBy.length > 0 ? speakers[playedBy[0]] : null;
+      return (
+        <React.Fragment key={index}>
+          {wordGap(word.text, nth === 0)}
+          {(firstWordOf.get(index) ?? []).map(clipIndex => (
+            <ClipBadge key={clipIndex} index={clipIndex} speaker={speakers[clipIndex]} before />
+          ))}
+          <span
+            data-word={index}
+            className={cx(
+              playedBy.length > 0 && 'underline decoration-2 underline-offset-[3px]',
+              playedBy.length > 0 && (speaker ? SPEAKER_UNDERLINE_CLASS[speaker] : 'decoration-grey-03'),
+              playedBy.includes(selected) && 'bg-ctaTertiary'
+            )}
+          >
+            {body}
+          </span>
+        </React.Fragment>
+      );
+    });
+  },
+  (before, after) =>
+    before.own === after.own &&
+    before.words === after.words &&
+    before.selected === after.selected &&
+    before.marks === after.marks &&
+    before.speakersKey === after.speakersKey
+);
+
+function ClipBadge({ index, speaker, before }: { index: number; speaker: 1 | 2 | null; before?: boolean }) {
+  return (
+    <span
+      className={cx(
+        'rounded-sm px-[5px] py-px text-[11px] leading-[13px] font-medium text-white select-none',
+        before ? 'mr-1' : 'ml-1.5',
+        speaker ? SPEAKER_FILL_CLASS[speaker] : 'bg-grey-03'
+      )}
+    >
+      {index + 1}
+    </span>
+  );
+}
+
+function SelectionToolbar({
+  result,
+  selected,
+  canAddClip,
+  nameOf,
+  onSet,
+  onAdd,
+}: {
+  result: SelectionClip;
+  /** The selected clip's index, or `null` when no clip is selected. */
+  selected: number | null;
+  canAddClip: boolean;
+  nameOf: (slot: ParticipantSlot | null) => string | null;
+  onSet: (span: { start_ms: number; end_ms: number }) => void;
+  onAdd: (span: { start_ms: number; end_ms: number }) => void;
+}) {
+  if (!result.ok) {
+    return (
+      <Text as="p" variant="metadata" color="grey-04">
+        {result.reason === 'crosses-cut'
+          ? 'These words cross a cut in the video. Pick words from one stretch.'
+          : 'No words selected.'}
+      </Text>
+    );
+  }
+  const span = { start_ms: result.start_ms, end_ms: result.end_ms };
+  const other = result.speaker === 1 ? 2 : 1;
+  return (
+    <>
+      <Text as="p" variant="metadata" color="grey-04">
+        {formatReelTime(result.start_ms)} to {formatReelTime(result.end_ms)},{' '}
+        {formatSeconds(result.end_ms - result.start_ms)}
+      </Text>
+      {result.otherWords > 0 ? (
+        <Text as="p" variant="metadata" color="grey-04">
+          An exchange clip: it&apos;s {nameOf(result.speaker)}&apos;s, who says the most words, and also plays{' '}
+          {result.otherWords} {result.otherWords === 1 ? 'word' : 'words'} of {nameOf(other)}&apos;s.
+        </Text>
+      ) : null}
+      <div className="flex flex-wrap gap-1">
+        {selected !== null ? (
+          <SmallButton onClick={() => onSet(span)}>Set clip {selected + 1} to these words</SmallButton>
+        ) : null}
+        {canAddClip ? <SmallButton onClick={() => onAdd(span)}>New clip from these words</SmallButton> : null}
+      </div>
+    </>
   );
 }
