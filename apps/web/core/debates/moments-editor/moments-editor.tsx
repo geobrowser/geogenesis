@@ -410,6 +410,8 @@ function Editor({ debateId }: { debateId: string }) {
   const submit = (kind: 'preview' | 'publish' | 'unlock') => {
     dispatch({ type: 'closePopover' });
     dispatch({ type: 'stop' });
+    // A check's report is about that check: publishing or unlocking from it goes back to the transcript.
+    if (kind !== 'preview' && view.panel === 'check') dispatch({ type: 'closePanel' });
     if (!(kind === 'publish' ? canPublish : kind === 'unlock' ? canUnlock : canQueue)) return;
     setQueueError(null);
     const body =

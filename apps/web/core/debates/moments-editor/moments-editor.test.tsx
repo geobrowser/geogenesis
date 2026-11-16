@@ -1851,6 +1851,28 @@ describe('MomentsEditor view state (GEO-3773)', () => {
     expect(mocks.refresh).toHaveBeenCalledTimes(1);
   });
 
+  it('goes back to the transcript when the admin publishes from a check’s report', () => {
+    const requestedAt = '2026-11-11T21:00:00Z';
+    mocks.mutate.mockImplementation((_body, options: { onSuccess: (entry: unknown) => void }) =>
+      options.onSuccess({ queued: true, refusal: null, request: status({ requested_at: requestedAt, preview: true }) })
+    );
+    reelOf(5);
+    const { rerender } = render(<MomentsEditor debateId={DEBATE_ID} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+    mocks.backfill.data = {
+      request: status({ requested_at: requestedAt, preview: true, status: 'done' }),
+      entry: null,
+    };
+    rerender(<MomentsEditor debateId={DEBATE_ID} />);
+    expect(screen.getByRole('region', { name: 'Check before publishing' })).toBeInTheDocument();
+
+    fireEvent.click(within(clipRow('Word5')).getByRole('button', { name: 'Remove' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Publish reel/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Publish and lock|Publish anyway/ }));
+    expect(screen.queryByRole('region', { name: 'Check before publishing' })).not.toBeInTheDocument();
+    expect(screen.getByText('Clip 1 selected')).toBeInTheDocument();
+  });
+
   it('leaves the transcript from a check’s report with Back to the transcript', () => {
     const requestedAt = '2026-11-11T21:00:00Z';
     mocks.mutate.mockImplementation((_body, options: { onSuccess: (entry: unknown) => void }) =>
