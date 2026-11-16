@@ -20,7 +20,9 @@ import {
   type SelectionClip,
   formatReelTime,
   formatSeconds,
+  isSpoken,
   selectionToClip,
+  wordInSpan,
 } from './reel';
 
 /** A sentence (or, from a transcript served without sentences, a line) on the player's clock. */
@@ -33,7 +35,7 @@ const SPEAKER_UNDERLINE_CLASS = { 1: 'decoration-purple', 2: 'decoration-pink' }
 const OVERLAP_MS = 150;
 
 /** How long a keyboard selection rests before the toolbar reads it. */
-const SELECTION_SETTLE_MS = 200;
+export const SELECTION_SETTLE_MS = 200;
 
 /**
  * The transcript's sentences on the player's clock, in time order: the served `sentences`
@@ -124,6 +126,23 @@ export function selectedWordRange(range: Range, root: Element): [number, number]
   return first === null || last === null ? null : [first, last];
 }
 
+/**
+ * Where the selection toolbar is pinned (GEO-3766): the selection's last line, where the pointer let
+ * go, kept inside the transcript's box. Part of a selection can be scrolled out of that box, and the
+ * toolbar belongs by the words still in view, not by the hidden ones.
+ */
+export function selectionAnchorRect(range: Range, root: Element): DOMRect {
+  const lines = range.getClientRects();
+  const end = lines.length > 0 ? lines[lines.length - 1] : range.getBoundingClientRect();
+  const box = root.getBoundingClientRect();
+  const clamp = (value: number, low: number, high: number) => Math.min(Math.max(value, low), high);
+  const left = clamp(end.left, box.left, box.right);
+  const right = clamp(end.right, box.left, box.right);
+  const top = clamp(end.top, box.top, box.bottom);
+  const bottom = clamp(end.bottom, box.top, box.bottom);
+  return new DOMRect(left, top, right - left, bottom - top);
+}
+
 /** The space Whisper puts before a word, outside its span, so it reads as text without selecting it. */
 function wordGap(text: string, firstInSentence: boolean) {
   if (firstInSentence) return '';
@@ -191,16 +210,14 @@ export function ReelTranscript({
   const wordClips = React.useMemo(
     () =>
       words.map(word =>
-        clips.flatMap((clip, index) => (word.start_ms >= clip.start_ms && word.end_ms <= clip.end_ms ? [index] : []))
+        isSpoken(word) ? clips.flatMap((clip, index) => (wordInSpan(word, clip) ? [index] : [])) : []
       ),
     [words, clips]
   );
   const firstWordOf = React.useMemo(() => {
     const first = new Map<number, number[]>();
     clips.forEach((clip, index) => {
-      const at = words.findIndex(
-        word => word.text.trim() !== '' && word.start_ms >= clip.start_ms && word.end_ms <= clip.end_ms
-      );
+      const at = words.findIndex(word => isSpoken(word) && wordInSpan(word, clip));
       if (at >= 0) first.set(at, [...(first.get(at) ?? []), index]);
     });
     return first;
@@ -221,7 +238,9 @@ export function ReelTranscript({
     const root = rootRef.current;
     if (!selection || selection.rangeCount === 0 || selection.isCollapsed || !root) return null;
     const range = selection.getRangeAt(0);
-    return range.intersectsNode(root) ? range : null;
+    // Only words picked in the transcript: a selection that starts elsewhere (a drag from the
+    // timeline) or takes in the whole transcript (Cmd+A) is not one.
+    return root.contains(range.startContainer) && root.contains(range.endContainer) ? range : null;
   }, []);
   const readPick = React.useCallback(() => {
     const range = activeRange();
@@ -243,18 +262,21 @@ export function ReelTranscript({
       // A drag is read when it ends; a keyboard selection once it rests.
       if (!pointerDown.current) settle = setTimeout(readPick, SELECTION_SETTLE_MS);
     };
-    const onPointerUp = () => {
+    // A press ends with `pointerup`, or, when the browser takes the gesture over (a drag of selected
+    // text, a touch turned into a scroll), with `pointercancel` and `dragend` instead.
+    const onPressEnd = () => {
       if (!pointerDown.current) return;
       pointerDown.current = false;
       readPick();
       if (!activeRange()) setSelecting(false);
     };
+    const pressEnds = ['pointerup', 'pointercancel', 'dragend'] as const;
     document.addEventListener('selectionchange', onSelectionChange);
-    document.addEventListener('pointerup', onPointerUp);
+    for (const type of pressEnds) document.addEventListener(type, onPressEnd);
     return () => {
       clearTimeout(settle);
       document.removeEventListener('selectionchange', onSelectionChange);
-      document.removeEventListener('pointerup', onPointerUp);
+      for (const type of pressEnds) document.removeEventListener(type, onPressEnd);
     };
   }, [activeRange, readPick]);
 
@@ -271,17 +293,19 @@ export function ReelTranscript({
     setPick(null);
     setSelecting(false);
   };
-  const anchor = React.useMemo(
-    () => ({
+  // `contextElement` is inside the transcript's scrolling box, so the toolbar is repositioned when
+  // that box scrolls, not only the window (floating-ui's `autoUpdate` listens on its scroll parents).
+  const anchor = React.useMemo(() => {
+    const end = pick?.range.endContainer;
+    const contextElement = (end instanceof Element ? end : end?.parentElement) ?? rootRef.current ?? undefined;
+    return {
       current: {
         getBoundingClientRect: () =>
-          typeof pick?.range.getBoundingClientRect === 'function'
-            ? pick.range.getBoundingClientRect()
-            : ({ x: 0, y: 0, top: 0, left: 0, right: 0, bottom: 0, width: 0, height: 0 } as DOMRect),
+          pick && rootRef.current ? selectionAnchorRect(pick.range, rootRef.current) : new DOMRect(),
+        contextElement,
       },
-    }),
-    [pick]
-  );
+    };
+  }, [pick]);
 
   return (
     <section className="rounded border border-grey-02 bg-white">
@@ -400,7 +424,7 @@ export function ReelTranscript({
           if (!open) setPick(null);
         }}
       >
-        <Popover.Anchor virtualRef={anchor as React.RefObject<HTMLElement>} />
+        <Popover.Anchor virtualRef={anchor} />
         {result ? (
           <Popover.Portal>
             <Popover.Content

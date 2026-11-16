@@ -1,14 +1,15 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 
 import * as React from 'react';
 
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { GeoChatRequestError } from '../api';
 import { RENDERED_TURN_SEGMENTS } from '../open-rounds-media-fixtures';
 import type { MomentBackfillEntry, MomentBackfillStatus } from './api';
 import { MomentsEditor, claimsBySpeaker, editingBlockedReason, keepClaimWithSpeaker } from './moments-editor';
+import { SELECTION_SETTLE_MS, selectionAnchorRect } from './reel-transcript';
 
 const DEBATE_ID = '01a0448a-61d3-7101-8434-a20fdadf6f97';
 
@@ -1259,11 +1260,25 @@ describe('MomentsEditor transcript selection (GEO-3766)', () => {
     { participant_slot: 2, start_ms: 5_000, end_ms: 5_900, text: 'Dinner wins.' },
   ];
 
+  // jsdom lays nothing out, so a range has no boxes of its own.
+  const rangeBoxes = {
+    getClientRects: Range.prototype.getClientRects,
+    getBoundingClientRect: Range.prototype.getBoundingClientRect,
+  };
+  beforeAll(() => {
+    Range.prototype.getClientRects = () => [] as unknown as DOMRectList;
+    Range.prototype.getBoundingClientRect = () => new DOMRect();
+  });
+  afterAll(() => Object.assign(Range.prototype, rangeBoxes));
+
   beforeEach(() => {
     wordsOverride = WORDS;
     sentencesOverride = SENTENCES;
   });
-  afterEach(() => window.getSelection()?.removeAllRanges());
+  afterEach(() => {
+    window.getSelection()?.removeAllRanges();
+    vi.useRealTimers();
+  });
 
   const transcript = () => screen.getByTestId('reel-transcript');
   const wordSpan = (index: number) => transcript().querySelector<HTMLElement>(`[data-word="${index}"]`)!;
@@ -1280,6 +1295,16 @@ describe('MomentsEditor transcript selection (GEO-3766)', () => {
     fireEvent.pointerUp(document);
   };
   const textOf = (index: number) => wordSpan(index).firstChild!;
+  /** Sets a selection with no pointer, as Shift+Arrow or Cmd+A does, and lets it rest. */
+  const selectByKeyboard = (setUp: (range: Range) => void) => {
+    const range = document.createRange();
+    setUp(range);
+    const selection = window.getSelection()!;
+    selection.removeAllRanges();
+    selection.addRange(range);
+    fireEvent(document, new Event('selectionchange'));
+    act(() => vi.advanceTimersByTime(SELECTION_SETTLE_MS));
+  };
   const buttonRow = (sentence: number) =>
     within(transcript()).getAllByRole('button', { name: /^Play from/ })[sentence].parentElement!;
 
@@ -1441,10 +1466,111 @@ describe('MomentsEditor transcript selection (GEO-3766)', () => {
     expect(screen.queryByRole('button', { name: /these words$/ })).not.toBeInTheDocument();
   });
 
+  it('opens the toolbar for a keyboard selection once it rests', () => {
+    vi.useFakeTimers();
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    selectByKeyboard(range => {
+      range.setStart(textOf(3), 0);
+      range.setEnd(textOf(4), 5);
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'New clip from these words' }));
+    expect(screen.getAllByRole('textbox', { name: 'Start time' })[1]).toHaveValue('0:05.0');
+  });
+
+  it('keeps the selection when a toolbar button is pressed', () => {
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    select([textOf(3), 0], [textOf(4), 5]);
+    // A press that went through would clear the selection before the click lands.
+    expect(fireEvent.mouseDown(screen.getByRole('button', { name: 'New clip from these words' }))).toBe(false);
+  });
+
+  it('offers nothing for a selection of the whole page (Cmd+A)', () => {
+    vi.useFakeTimers();
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    selectByKeyboard(range => range.selectNodeContents(document.body));
+    expect(screen.queryByRole('button', { name: /these words$/ })).not.toBeInTheDocument();
+    expect(screen.queryByText(/cross a cut/)).not.toBeInTheDocument();
+  });
+
+  it('offers nothing for a drag that starts outside the transcript, even when it rests', () => {
+    vi.useFakeTimers();
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    const heading = screen.getByRole('heading', { name: 'Transcript' });
+    fireEvent.pointerDown(heading);
+    selectByKeyboard(range => {
+      range.setStart(heading.firstChild!, 0);
+      range.setEnd(textOf(1), 3);
+    });
+    expect(screen.queryByRole('button', { name: /these words$/ })).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ['pointercancel', () => fireEvent.pointerCancel(document)],
+    ['dragend', () => fireEvent.dragEnd(document)],
+  ])('ends a press that the browser takes over with %s', (_, end) => {
+    vi.useFakeTimers();
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    fireEvent.pointerDown(wordSpan(1));
+    end();
+    // Shift+Arrow afterwards still opens the toolbar: the press is not left held down.
+    selectByKeyboard(range => {
+      range.setStart(textOf(3), 0);
+      range.setEnd(textOf(4), 5);
+    });
+    expect(screen.getByRole('button', { name: 'New clip from these words' })).toBeInTheDocument();
+  });
+
+  it('moves the toolbar with the transcript when the transcript scrolls', () => {
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    transcript().style.overflow = 'auto';
+    const listen = vi.spyOn(transcript(), 'addEventListener');
+    select([textOf(3), 0], [textOf(4), 5]);
+    expect(screen.getByRole('button', { name: 'New clip from these words' })).toBeInTheDocument();
+    expect(listen).toHaveBeenCalledWith('scroll', expect.any(Function), expect.anything());
+  });
+
+  it('marks no clip on a sentence for a blank word the clip takes in', () => {
+    wordsOverride = [...WORDS, { participant_slot: 1, start_ms: 3_050, end_ms: 3_100, text: ' ' }];
+    mocks.plan.data = entry({
+      live_reel: {
+        clock: 'video',
+        clips: [{ start_ms: 900, end_ms: 3_200, speaker_slot: 0, claim_index: 0, claim_text: 'Coffee is low stakes' }],
+      },
+    });
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    // "Cheap." starts at 3.0 s: the blank word is its sentence's, inside the clip, but nothing is heard.
+    expect(buttonRow(0).closest('.group')!.className).toMatch(/shadow-/);
+    expect(buttonRow(1).closest('.group')!.className).not.toMatch(/shadow-/);
+  });
+
   it('offers nothing from a selection while the reel is read-only', () => {
     mocks.plan.data = entry({ refusal: 'media_job_active' });
     render(<MomentsEditor debateId={DEBATE_ID} />);
     select([textOf(0), 0], [textOf(1), 3]);
     expect(screen.queryByRole('button', { name: /these words$/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('selectionAnchorRect (GEO-3766)', () => {
+  const box = (left: number, top: number, right: number, bottom: number) =>
+    new DOMRect(left, top, right - left, bottom - top);
+  const rangeWith = (lines: DOMRect[]) =>
+    ({
+      getClientRects: () => lines as unknown as DOMRectList,
+      getBoundingClientRect: () => box(0, 0, 1_000, 1_000),
+    }) as unknown as Range;
+  const root = { getBoundingClientRect: () => box(100, 100, 500, 400) } as Element;
+  // DOMRect's sides are getters, which toEqual does not see.
+  const sides = (rect: DOMRect) => [rect.left, rect.top, rect.right, rect.bottom];
+
+  it('pins to the selection’s last line, not its whole box', () => {
+    expect(sides(selectionAnchorRect(rangeWith([box(120, 150, 480, 170), box(120, 170, 260, 190)]), root))).toEqual([
+      120, 170, 260, 190,
+    ]);
+  });
+
+  it('keeps an end scrolled out of the transcript at the transcript’s edge', () => {
+    expect(sides(selectionAnchorRect(rangeWith([box(120, 420, 260, 440)]), root))).toEqual([120, 400, 260, 400]);
+    expect(sides(selectionAnchorRect(rangeWith([box(120, 60, 260, 80)]), root))).toEqual([120, 100, 260, 100]);
   });
 });

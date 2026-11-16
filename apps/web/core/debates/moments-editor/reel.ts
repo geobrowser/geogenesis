@@ -60,9 +60,19 @@ export function playerWords(words: readonly DebateTranscriptSpan[] | undefined):
     .sort((a, b) => a.start_ms - b.start_ms || a.end_ms - b.end_ms);
 }
 
+/** Whether `word` is said wholly inside `span`: what makes a clip play it with its caption, as geo-chat counts it. */
+export function wordInSpan(word: ReelWord, span: { start_ms: number; end_ms: number }): boolean {
+  return word.start_ms >= span.start_ms && word.end_ms <= span.end_ms;
+}
+
 /** The words a clip plays with their captions: those said wholly inside it, as geo-chat counts them. */
 export function wordsIn(words: readonly ReelWord[], startMs: number, endMs: number): ReelWord[] {
-  return words.filter(word => word.start_ms >= startMs && word.end_ms <= endMs);
+  return words.filter(word => wordInSpan(word, { start_ms: startMs, end_ms: endMs }));
+}
+
+/** Whether a word has text: geo-chat reads only these (`speech_turns`), and the transcript shows only these. */
+export function isSpoken(word: ReelWord): boolean {
+  return word.text.trim() !== '';
 }
 
 /**
@@ -241,7 +251,9 @@ export function selectionToClip(
   // Words are in start order, but a crosstalk word picked earlier can end after the last one picked.
   const start = snapEdge(Math.min(...picked.map(word => word.start_ms)), words, 'start');
   const end = snapEdge(Math.max(...picked.map(word => word.end_ms)), words, 'end');
-  const said = wordsIn(words, start, end);
+  // Only words with text are heard and shown, so only they count, as geo-chat reads them.
+  const said = wordsIn(words.filter(isSpoken), start, end);
+  if (said.length === 0) return { ok: false, reason: 'no-words' };
   const saidFrom = Math.min(...said.map(word => word.start_ms));
   const saidTo = Math.max(...said.map(word => word.end_ms));
   if (!inOneStretch(saidFrom, saidTo, turns)) return { ok: false, reason: 'crosses-cut' };
@@ -353,7 +365,7 @@ function geoChatCut(
   turns: readonly DebateMediaTurnSegment[]
 ) {
   // geo-chat reads only words with text (`speech_turns`): a blank one is not the word beside a gap.
-  const spoken = words.filter(word => word.text.trim() !== '');
+  const spoken = words.filter(isSpoken);
   const said = wordsIn(spoken, clip.start_ms, clip.end_ms);
   if (said.length === 0) return null;
   const first = Math.min(...said.map(word => word.start_ms));

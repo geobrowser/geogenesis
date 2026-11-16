@@ -521,4 +521,11 @@ describe('selectionToClip (GEO-3766)', () => {
   it('has nothing to make of no words', () => {
     expect(selectionToClip([], 0, 0, [])).toEqual({ ok: false, reason: 'no-words' });
   });
+
+  // geo-chat reads only words with text, and the transcript shows only those: a blank token is not heard.
+  it('counts only words with text as the other debater’s', () => {
+    const blank = [word(1, 1_000, 1_400, 'Coffee'), word(2, 1_450, 1_480, ' '), word(1, 1_500, 2_900, ' dates.')];
+    expect(selectionToClip(blank, 0, 2, [])).toMatchObject({ ok: true, speaker: 1, otherWords: 0 });
+    expect(selectionToClip(blank, 1, 1, [])).toEqual({ ok: false, reason: 'no-words' });
+  });
 });
