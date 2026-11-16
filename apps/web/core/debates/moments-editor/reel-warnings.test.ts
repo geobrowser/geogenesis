@@ -208,6 +208,25 @@ describe('draggedClip (GEO-3672)', () => {
     });
   });
 
+  // The waveform panel (GEO-3673) places to one peaks bucket; the timeline keeps its tenth.
+  it('places a free edge to the step it is given', () => {
+    expect(draggedClip({ ...drag, mode: 'start' }, 1_234, words, 10_000, true, 10)).toEqual({
+      start_ms: 2_230,
+      end_ms: 3_400,
+      free_start_ms: 2_230,
+    });
+    expect(draggedClip({ ...drag, mode: 'end' }, -1_237, words, 10_000, true, 10)).toEqual({
+      start_ms: 1_000,
+      end_ms: 2_160,
+      free_end_ms: 2_160,
+    });
+    // Snapped, the step plays no part.
+    expect(draggedClip({ ...drag, mode: 'start' }, 1_234, words, 10_000, false, 10)).toEqual({
+      start_ms: 2_000,
+      end_ms: 3_400,
+    });
+  });
+
   it('never trims a clip under a second', () => {
     expect(draggedClip({ ...drag, mode: 'end' }, -3_000, words, 10_000, true)).toEqual({
       start_ms: 1_000,

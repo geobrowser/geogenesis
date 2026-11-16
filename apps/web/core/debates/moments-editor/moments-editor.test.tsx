@@ -36,6 +36,8 @@ const mocks = vi.hoisted(() => ({
   turns: [] as unknown[],
   /** The transcript's `word_timing`. */
   wordTiming: true,
+  /** What the waveform's peaks read says (GEO-3673). */
+  peaks: { kind: 'loading' } as unknown,
 }));
 
 vi.mock('../hooks', () => ({
@@ -88,6 +90,7 @@ vi.mock('../hooks', () => ({
 
 vi.mock('./hooks', () => ({
   isMediaAdminRefusal: (error: unknown) => error instanceof GeoChatRequestError && error.status === 403,
+  useAudioPeaks: () => mocks.peaks,
   useMomentBackfill: () => mocks.backfill,
   useMomentReelPlan: () => mocks.plan,
   useQueueMomentReel: () => ({ mutate: mocks.mutate, isPending: false }),
@@ -153,6 +156,7 @@ beforeEach(() => {
   mocks.retainedClaim = false;
   mocks.turns = [];
   mocks.wordTiming = true;
+  mocks.peaks = { kind: 'loading' };
 });
 afterEach(cleanup);
 
@@ -450,6 +454,76 @@ describe('MomentsEditor (GEO-3671)', () => {
       }),
       expect.any(Object)
     );
+  });
+
+  // GEO-3673: the fine-tune panel under the timeline places an edge to 10 ms with "Snap to words" off.
+  it('publishes an edge placed in the waveform panel with snapping off as exact, to the hundredth', () => {
+    mocks.peaks = {
+      kind: 'ready',
+      peaks: { bucketMs: 10, samples: new Uint8Array(600).fill(60), version: 'v1' },
+    };
+    mocks.plan.data = entry({
+      live_reel: {
+        clock: 'video',
+        clips: [
+          { start_ms: 900, end_ms: 3_000, speaker_slot: 0, claim_index: 0, claim_text: 'Coffee is low stakes' },
+          { start_ms: 4_800, end_ms: 5_600, speaker_slot: 1, claim_index: 1, claim_text: 'Dinner shows effort' },
+        ],
+      },
+    });
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    const snap = screen.getByRole('checkbox', { name: 'Snap to words' });
+    expect(snap).toBeChecked();
+    expect(screen.getByTestId('waveform-readout')).toHaveTextContent('Start 0:00.90 · End 0:03.00');
+    fireEvent.click(snap);
+    // Clip 1 with 2 s either side: 0 to 5 s, a ms per px.
+    vi.spyOn(screen.getByTestId('waveform-track'), 'getBoundingClientRect').mockReturnValue({
+      width: 5_000,
+      left: 0,
+    } as DOMRect);
+    const handle = screen.getByTestId('fine-end-handle');
+    fireEvent.pointerDown(handle, { clientX: 3_000, pointerId: 1 });
+    fireEvent.pointerMove(handle, { clientX: 3_107, pointerId: 1 });
+    fireEvent.pointerUp(handle, { pointerId: 1 });
+    expect(screen.getByTestId('waveform-readout')).toHaveTextContent('Start 0:00.90 · End 0:03.11');
+
+    fireEvent.click(screen.getByRole('button', { name: /^Publish reel/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Publish (and lock|anyway)$/ }));
+    expect(mocks.mutate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reel: {
+          clock: 'player',
+          clips: [
+            { start: 0.9, end: 3.11, claim_index: 0 },
+            { start: 4.8, end: 5.6, claim_index: 1 },
+          ],
+          exact: true,
+          base: 'v1',
+        },
+      }),
+      expect.any(Object)
+    );
+  });
+
+  it.each([
+    ['being built', { kind: 'waiting', message: 'Preparing the waveform… (waiting 0:41)' }],
+    ['still waiting after ten minutes', { kind: 'gave-up', message: 'Still waiting for the media worker.' }],
+    ['missing or failed', { kind: 'none', message: 'No waveform for this debate.' }],
+  ])('opens and edits the same with the peaks %s', (_, view) => {
+    mocks.peaks = view;
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    expect(screen.getByText(view.message)).toBeInTheDocument();
+    vi.spyOn(screen.getByTestId('waveform-track'), 'getBoundingClientRect').mockReturnValue({
+      width: 5_000,
+      left: 0,
+    } as DOMRect);
+    // Served moment 1-3 s; Alt flips "Snap to words" off for the drag.
+    const handle = screen.getByTestId('fine-end-handle');
+    fireEvent.pointerDown(handle, { clientX: 3_000, pointerId: 1 });
+    fireEvent.pointerMove(handle, { clientX: 3_204, pointerId: 1, altKey: true });
+    fireEvent.pointerUp(handle, { pointerId: 1 });
+    expect(screen.getByTestId('waveform-readout')).toHaveTextContent('End 0:03.20');
+    expect(screen.getByRole('button', { name: /^Publish reel/ })).toBeEnabled();
   });
 
   // An earlier publish cut clip 1's end exactly, 100 ms after "dates" (2.9 s), where geo-chat's

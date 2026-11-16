@@ -430,6 +430,15 @@ export function manualReel(
   words: readonly ReelWord[],
   turns: readonly DebateMediaTurnSegment[]
 ): { clips: ManualClipBody[]; exact?: true } {
+  return manualReelWithCuts(clips, words, turns).reel;
+}
+
+/** `manualReel`, with the `geoChatCut` of each clip it worked out on the way, for `playedCuts`. */
+function manualReelWithCuts(
+  clips: readonly EditorClip[],
+  words: readonly ReelWord[],
+  turns: readonly DebateMediaTurnSegment[]
+): { reel: { clips: ManualClipBody[]; exact?: true }; cuts: ReturnType<typeof geoChatCut>[] } {
   const cuts = clips.map(clip => geoChatCut(clip, words, turns));
   const freeEdgeWidens = clips.some((clip, index) => {
     const cut = cuts[index];
@@ -439,7 +448,7 @@ export function manualReel(
       (edgeIsFree(clip, 'end') && cut.widened.end_ms > cut.trimmed.end_ms)
     );
   });
-  if (!freeEdgeWidens) return { clips: manualReelClips(clips) };
+  if (!freeEdgeWidens) return { reel: { clips: manualReelClips(clips) }, cuts };
   const sent = clips.map((clip, index) => {
     const cut = cuts[index];
     if (!cut) return clip;
@@ -456,7 +465,26 @@ export function manualReel(
     }
     return { ...clip, start_ms: start, end_ms: end };
   });
-  return { clips: manualReelClips(sent), exact: true };
+  return { reel: { clips: manualReelClips(sent), exact: true }, cuts };
+}
+
+/**
+ * What each clip of the reel will actually play, as geo-chat will cut it (GEO-3673), on the player's
+ * clock: a reel sent without `exact` has each clip widened into the quiet beside its words
+ * (`geoChatCut`); one sent `exact` is cut where `manualReel` sends it, which moves every snapped edge
+ * of the reel out to where geo-chat would have widened it. `null` for a clip with no whole word,
+ * which geo-chat refuses.
+ */
+export function playedCuts(
+  clips: readonly EditorClip[],
+  words: readonly ReelWord[],
+  turns: readonly DebateMediaTurnSegment[]
+): ({ start_ms: number; end_ms: number } | null)[] {
+  const { reel, cuts } = manualReelWithCuts(clips, words, turns);
+  if (!reel.exact) return cuts.map(cut => cut?.widened ?? null);
+  return reel.clips.map((sent, index) =>
+    cuts[index] ? { start_ms: Math.round(sent.start * 1000), end_ms: Math.round(sent.end * 1000) } : null
+  );
 }
 
 /** `m:ss.s`, as the editor shows a time. */

@@ -176,6 +176,9 @@ export const debateQueryKeys = {
     ['debates', 'account', accountKey, 'moment-backfill', dashlessId(debateId)] as const,
   momentReelPlan: (debateId: string, accountKey: string | null) =>
     ['debates', 'account', accountKey, 'moment-reel-plan', dashlessId(debateId)] as const,
+  /** GEO-3673. A debate's audio peaks for the moments editor's waveform, polled while they are built. */
+  audioPeaks: (debateId: string, accountKey: string | null) =>
+    ['debates', 'account', accountKey, 'audio-peaks', dashlessId(debateId)] as const,
   activity: (accountKey: string | null) => ['debates', 'account', accountKey, 'activity'] as const,
   schedule: (accountKey: string | null) => ['debates', 'account', accountKey, 'schedule'] as const,
   /** Prefix-matchable, so saving the viewer's own schedule can drop every variant at once. */
