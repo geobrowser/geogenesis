@@ -51,6 +51,14 @@ export function newClipKey() {
 }
 
 /**
+ * Whether a transcript span has any text: the one rule for blank tokens, shared by the editor's words
+ * (`playerWords`) and its transcript sentences (`reelSentences`), so the two lists can't drift apart.
+ */
+export function isSpoken(span: { text: string }): boolean {
+  return span.text.trim() !== '';
+}
+
+/**
  * The transcript's spoken words on the player's clock, in time order: the editor's one word list, the
  * words every check, count, snap and selection reads. A word the render cut has no player time and is
  * left out, as the player leaves its line out (`transcriptOnRecordings`). A blank token (no text) is
@@ -59,7 +67,7 @@ export function newClipKey() {
  */
 export function playerWords(words: readonly DebateTranscriptSpan[] | undefined): ReelWord[] {
   return transcriptOnRecordings(words ?? [])
-    .filter(word => word.text.trim() !== '')
+    .filter(isSpoken)
     .map(word => ({ slot: word.participant_slot, start_ms: word.start_ms, end_ms: word.end_ms, text: word.text }))
     .sort((a, b) => a.start_ms - b.start_ms || a.end_ms - b.end_ms);
 }

@@ -258,4 +258,28 @@ describe('the transcript picker (GEO-3672)', () => {
       }).map(s => s.text)
     ).toEqual(['Hi.']);
   });
+
+  it('leaves out a blank sentence, as geo-chat serves one when the other debater has blank tokens mid-turn', () => {
+    const line = { participant_slot: 1 as const, source_start_ms: 1_000, source_end_ms: 2_000 };
+    expect(
+      reelSentences({
+        format: 'json',
+        model_id: 'm',
+        segments: [],
+        sentences: [
+          { ...line, start_ms: 1_000, end_ms: 2_000, text: 'We should' },
+          {
+            ...line,
+            participant_slot: 2,
+            start_ms: 2_000,
+            end_ms: 2_100,
+            source_start_ms: 2_000,
+            source_end_ms: 2_100,
+            text: ' ',
+          },
+          { ...line, start_ms: 2_100, end_ms: 3_000, source_start_ms: 2_100, source_end_ms: 3_000, text: 'act now.' },
+        ],
+      }).map(s => s.text)
+    ).toEqual(['We should', 'act now.']);
+  });
 });

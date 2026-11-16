@@ -20,6 +20,7 @@ import {
   type SelectionClip,
   formatReelTime,
   formatSeconds,
+  isSpoken,
   selectionToClip,
   wordInSpan,
 } from './reel';
@@ -38,11 +39,14 @@ export const SELECTION_SETTLE_MS = 200;
 
 /**
  * The transcript's sentences on the player's clock, in time order: the served `sentences`
- * (GEO-3349), or its lines where it has none. A sentence the render cut is left out.
+ * (GEO-3349), or its lines where it has none. A sentence the render cut is left out, and so is a blank
+ * one: geo-chat splits a turn around the other debater's blank tokens, and that blank sentence would
+ * show as an empty row repeating its clip's badge.
  */
 export function reelSentences(transcript: DebateTranscriptResponse | undefined): ReelSentence[] {
   const sentences = transcript?.sentences?.length ? transcript.sentences : (transcript?.segments ?? []);
   return transcriptOnRecordings(sentences)
+    .filter(isSpoken)
     .map(sentence => ({
       slot: sentence.participant_slot,
       start_ms: sentence.start_ms,
