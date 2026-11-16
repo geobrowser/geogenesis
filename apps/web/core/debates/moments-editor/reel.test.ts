@@ -82,6 +82,16 @@ describe('clipSpeaker (as geo-chat’s manual_moments decides it)', () => {
   it('is nobody when no whole word is said', () => {
     expect(clipSpeaker([word(1, 0, 400)], 100, 300)).toBeNull();
   });
+
+  // geo-chat drops blank tokens before it counts (`speech_turns`): they are nobody's words (GEO-3767).
+  it('counts only spoken words, however many blank tokens the other debater has inside', () => {
+    const words = [word(1, 1_100, 1_400, 'Yes.'), word(2, 1_150, 1_200, ' '), word(2, 1_300, 1_400, '')];
+    expect(clipSpeaker(words, 1_000, 1_500)).toBe(1);
+  });
+
+  it('is nobody when the only tokens inside are blank', () => {
+    expect(clipSpeaker([word(2, 1_150, 1_200, ' ')], 1_000, 1_500)).toBeNull();
+  });
 });
 
 describe('snapEdge', () => {

@@ -86,6 +86,21 @@ describe('reelWarnings (GEO-3672)', () => {
     expect(warning.fix?.kind === 'clips' && warning.fix.clips).toEqual(GOOD);
   });
 
+  // Blank tokens are nobody's words, as geo-chat counts them (GEO-3767): two clips of one debater
+  // aren't made an alternation by the other's blanks.
+  it('names the clips’ speakers by spoken words, not blank tokens', () => {
+    const words = [
+      word(1, 1_000, 1_400, 'Yes.'),
+      word(2, 1_100, 1_150, ' '),
+      word(2, 1_200, 1_250, ' '),
+      word(1, 3_000, 3_400, 'No.'),
+    ];
+    const warning = reelWarnings([clip(900, 1_500), clip(2_900, 3_500)], words, nameOf).find(w =>
+      w.id.startsWith('alternate')
+    );
+    expect(warning?.title).toBe('Clips 1 and 2 are both Susan');
+  });
+
   it('warns about a reel that is not 4 clips, offering to add one when it is short', () => {
     expect(reelWarnings(GOOD.slice(0, 2), WORDS, nameOf).find(w => w.id === 'clip-count')).toMatchObject({
       title: 'Only 2 clips',

@@ -77,11 +77,16 @@ export function isSpoken(word: ReelWord): boolean {
 
 /**
  * Who a clip is of, as geo-chat decides it (`manual_moments`): the debater who says most of the
- * words wholly inside it, a tie going to the lower slot. `null` when nobody speaks in it.
+ * spoken words wholly inside it, a tie going to the lower slot. `null` when nobody speaks in it.
+ * Blank tokens don't count: geo-chat drops them before it counts (`speech_turns`), and nobody hears
+ * them. The one rule for a clip's speaker: the timeline, the warnings, the claim kept on an edit and
+ * the transcript's selection toolbar all ask this (GEO-3767).
  */
 export function clipSpeaker(words: readonly ReelWord[], startMs: number, endMs: number): ParticipantSlot | null {
   const counts = new Map<ParticipantSlot, number>();
-  for (const word of wordsIn(words, startMs, endMs)) counts.set(word.slot, (counts.get(word.slot) ?? 0) + 1);
+  for (const word of wordsIn(words, startMs, endMs)) {
+    if (isSpoken(word)) counts.set(word.slot, (counts.get(word.slot) ?? 0) + 1);
+  }
   const ranked = [...counts].sort(([slotA, countA], [slotB, countB]) => countB - countA || slotA - slotB);
   return ranked[0]?.[0] ?? null;
 }
@@ -223,7 +228,7 @@ export type SelectionClip =
       ok: true;
       start_ms: number;
       end_ms: number;
-      /** Who the clip is of: who says the most of its words, as geo-chat and the timeline count it. */
+      /** Who the clip is of: `clipSpeaker` of its edges, as the timeline shows it and geo-chat publishes it. */
       speaker: ParticipantSlot;
       /** The other debater's words it plays too: more than none makes it an exchange. */
       otherWords: number;
@@ -257,9 +262,8 @@ export function selectionToClip(
   const saidFrom = Math.min(...said.map(word => word.start_ms));
   const saidTo = Math.max(...said.map(word => word.end_ms));
   if (!inOneStretch(saidFrom, saidTo, turns)) return { ok: false, reason: 'crosses-cut' };
-  // Ranked over the same spoken words as `otherWords`, as geo-chat ranks them: blank tokens would
-  // otherwise name a debater who isn't heard.
-  const speaker = clipSpeaker(said, start, end)!;
+  // The clip's speaker as the editor shows it once made: `clipSpeaker` counts the same spoken words.
+  const speaker = clipSpeaker(words, start, end)!;
   return {
     ok: true,
     start_ms: start,

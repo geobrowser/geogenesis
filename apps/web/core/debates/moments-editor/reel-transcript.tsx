@@ -109,23 +109,28 @@ function coversText(range: Range, element: Element): boolean {
 }
 
 /**
- * The words a selection covers, as the first and last index into the editor's words, or `null`
- * when it covers none (GEO-3766). A word partly selected counts whole. An end that rests off a word
- * (a timecode, a clip's badge, the space between words) counts from the nearest word inside the
- * selection: the first after its start, the last before its end. `Range` is in document order
- * whichever way the selection was dragged.
+ * The transcript's word spans a selection covers, in document order (GEO-3766): the one rule for
+ * which words a selection picks. A word partly selected counts whole; one the selection only touches
+ * the edge of doesn't.
  */
-export function selectedWordRange(range: Range, root: Element): [number, number] | null {
-  if (range.collapsed) return null;
-  let first: number | null = null;
-  let last: number | null = null;
-  for (const element of root.querySelectorAll<HTMLElement>('[data-word]')) {
-    if (!range.intersectsNode(element) || !coversText(range, element)) continue;
-    const index = Number(element.dataset.word);
-    first = first === null ? index : Math.min(first, index);
-    last = last === null ? index : Math.max(last, index);
-  }
-  return first === null || last === null ? null : [first, last];
+export function coveredWords(range: Range, root: Element): HTMLElement[] {
+  if (range.collapsed) return [];
+  return [...root.querySelectorAll<HTMLElement>('[data-word]')].filter(
+    element => range.intersectsNode(element) && coversText(range, element)
+  );
+}
+
+/**
+ * The words a selection covers (`coveredWords`), as the first and last index into the editor's
+ * words, or `null` when it covers none (GEO-3766). An end that rests off a word (a timecode, a
+ * clip's badge, the space between words) counts from the nearest word inside the selection: the
+ * first after its start, the last before its end. `Range` is in document order whichever way the
+ * selection was dragged.
+ */
+export function selectedWordRange(covered: readonly HTMLElement[]): [number, number] | null {
+  if (covered.length === 0) return null;
+  const indexes = covered.map(element => Number(element.dataset.word));
+  return [Math.min(...indexes), Math.max(...indexes)];
 }
 
 /**
@@ -147,17 +152,15 @@ export function selectionAnchorRect(range: Range, root: Element): DOMRect {
 
 /**
  * `range` with an end outside `root` pulled back to the outermost transcript word it covers
- * (GEO-3766), so the toolbar is pinned by those words, inside the transcript's scrolling box, not by
- * the element below or above it that a drag past the box's edge ended on.
+ * (`covered`, from `coveredWords`; GEO-3766), so the toolbar is pinned by those words, inside the
+ * transcript's scrolling box, not by the element below or above it that a drag past the box's edge
+ * ended on.
  */
-export function wordsOnly(range: Range, root: Element): Range {
-  const words = [...root.querySelectorAll('[data-word]')].filter(
-    element => range.intersectsNode(element) && coversText(range, element)
-  );
+export function wordsOnly(range: Range, root: Element, covered: readonly HTMLElement[]): Range {
   const kept = range.cloneRange();
-  if (words.length === 0) return kept;
-  if (!root.contains(kept.startContainer)) kept.setStartBefore(words[0]);
-  if (!root.contains(kept.endContainer)) kept.setEndAfter(words[words.length - 1]);
+  if (covered.length === 0) return kept;
+  if (!root.contains(kept.startContainer)) kept.setStartBefore(covered[0]);
+  if (!root.contains(kept.endContainer)) kept.setEndAfter(covered[covered.length - 1]);
   return kept;
 }
 
@@ -264,8 +267,11 @@ export function ReelTranscript({
   const readPick = React.useCallback(() => {
     const range = activeRange();
     const root = rootRef.current;
-    const covered = range && root ? selectedWordRange(range, root) : null;
-    setPick(range && root && covered ? { from: covered[0], to: covered[1], range: wordsOnly(range, root) } : null);
+    if (!range || !root) return setPick(null);
+    // One scan of the debate's words for both: a drag can cover thousands of them.
+    const covered = coveredWords(range, root);
+    const picked = selectedWordRange(covered);
+    setPick(picked ? { from: picked[0], to: picked[1], range: wordsOnly(range, root, covered) } : null);
   }, [activeRange]);
 
   React.useEffect(() => {

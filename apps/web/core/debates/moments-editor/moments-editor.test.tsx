@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 import * as React from 'react';
 
@@ -9,7 +9,7 @@ import { GeoChatRequestError } from '../api';
 import { RENDERED_TURN_SEGMENTS } from '../open-rounds-media-fixtures';
 import type { MomentBackfillEntry, MomentBackfillStatus } from './api';
 import { MomentsEditor, claimsBySpeaker, editingBlockedReason, keepClaimWithSpeaker } from './moments-editor';
-import { SELECTION_SETTLE_MS, selectionAnchorRect, wordsOnly } from './reel-transcript';
+import { SELECTION_SETTLE_MS, coveredWords, selectionAnchorRect, wordsOnly } from './reel-transcript';
 
 const DEBATE_ID = '01a0448a-61d3-7101-8434-a20fdadf6f97';
 
@@ -1153,6 +1153,17 @@ describe('keepClaimWithSpeaker', () => {
     expect(keepClaimWithSpeaker(unset, clip, words, unplaced).claim_index).toBeNull();
     expect(keepClaimWithSpeaker(unset, clip, words, () => 1).claim_index).toBe(7);
   });
+
+  // The speaker the claim is judged on is geo-chat's: blank tokens are nobody's words (GEO-3767).
+  it('keeps the claim when the edit only takes in the other debater’s blank tokens', () => {
+    const withBlanks = [...words, { slot: 2 as const, start_ms: 1_420, end_ms: 1_460, text: ' ' }];
+    const blanks = [...withBlanks, { slot: 2 as const, start_ms: 1_470, end_ms: 1_490, text: '' }];
+    // The edit widens the end over two slot-2 blanks: one heard word of slot 1's against two blanks.
+    const tight = { ...clip, end_ms: 1_410 };
+    const wider = { ...clip, end_ms: 1_500 };
+    expect(keepClaimWithSpeaker(tight, wider, blanks, () => 1).claim_index).toBe(7);
+    expect(keepClaimWithSpeaker(tight, wider, blanks, unplaced).claim_index).toBe(7);
+  });
 });
 
 describe('editingBlockedReason', () => {
@@ -1543,18 +1554,50 @@ describe('MomentsEditor transcript selection (GEO-3766)', () => {
     expect(buttonRow(1).closest('.group')!.className).not.toMatch(/shadow-/);
   });
 
-  it('opens the toolbar for a drag pressed on a word that ends past the transcript box', () => {
+  it('opens the toolbar for a drag pressed on a word that ends past the transcript box', async () => {
     render(<MomentsEditor debateId={DEBATE_ID} />);
     // Dragging past the box's bottom edge autoscrolls it and ends the selection on the page below it.
     const below = document.createElement('div');
     below.textContent = 'Below the transcript';
     document.body.append(below);
-    select([textOf(3), 0], [below.firstChild!, 3], wordSpan(3));
-    expect(screen.getByRole('button', { name: 'New clip from these words' })).toBeInTheDocument();
+    // The toolbar is pinned by the range `readPick` keeps: it must end on a transcript word, inside
+    // the scroll box, not on the element below that the drag ended on (`wordsOnly`).
+    const pinnedBy: Range[] = [];
+    const spy = vi.spyOn(Range.prototype, 'getClientRects').mockImplementation(function (this: Range) {
+      pinnedBy.push(this);
+      return [] as unknown as DOMRectList;
+    });
+    try {
+      select([textOf(3), 0], [below.firstChild!, 3], wordSpan(3));
+      expect(screen.getByRole('button', { name: 'New clip from these words' })).toBeInTheDocument();
+      await waitFor(() => expect(pinnedBy.length).toBeGreaterThan(0));
+      for (const range of pinnedBy) {
+        expect(transcript().contains(range.endContainer)).toBe(true);
+        expect(range.toString()).toBe('Dinner wins.');
+      }
+    } finally {
+      spy.mockRestore();
+    }
     fireEvent.click(screen.getByRole('button', { name: 'New clip from these words' }));
     expect(screen.getAllByRole('textbox', { name: 'Start time' })[1]).toHaveValue('0:05.0');
     expect(screen.getAllByRole('textbox', { name: 'End time' })[1]).toHaveValue('0:05.9');
     below.remove();
+  });
+
+  it('opens the toolbar for a drag pressed on a word that runs back up past the transcript box', () => {
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    // Dragging up past the box's top edge ends the selection on the page above it: the range starts
+    // there, though it was pressed (anchored) on a transcript word.
+    const above = document.createElement('h2');
+    above.textContent = 'Above the transcript';
+    document.body.prepend(above);
+    fireEvent.pointerDown(wordSpan(1));
+    window.getSelection()!.setBaseAndExtent(textOf(1), 3, above.firstChild!, 2);
+    fireEvent.pointerUp(document);
+    fireEvent.click(screen.getByRole('button', { name: 'New clip from these words' }));
+    expect(screen.getAllByRole('textbox', { name: 'Start time' })[1]).toHaveValue('0:01.0');
+    expect(screen.getAllByRole('textbox', { name: 'End time' })[1]).toHaveValue('0:02.9');
+    above.remove();
   });
 
   it('shows the text of a sentence whose only words are blank', () => {
@@ -1586,12 +1629,12 @@ describe('wordsOnly (GEO-3766)', () => {
     const range = document.createRange();
     range.setStart(root.querySelector('[data-word="0"]')!.firstChild!, 2);
     range.setEnd(below.firstChild!, 4);
-    const kept = wordsOnly(range, root);
+    const kept = wordsOnly(range, root, coveredWords(range, root));
     expect(root.contains(kept.endContainer)).toBe(true);
     expect(kept.toString()).toBe('ffee dates.');
     range.setStart(heading.firstChild!, 3);
     range.setEnd(root.querySelector('[data-word="1"]')!.firstChild!, 3);
-    expect(wordsOnly(range, root).toString()).toBe('Coffee dat');
+    expect(wordsOnly(range, root, coveredWords(range, root)).toString()).toBe('Coffee dat');
     document.body.innerHTML = '';
   });
 });
