@@ -877,10 +877,14 @@ export function RankingComposeGlobalRanking({
             className="h-8 w-full rounded border border-grey-02 bg-white py-1 pr-2 pl-8 text-metadata text-text outline-hidden focus-visible:border-text md:h-10 md:text-input"
           />
         </div>
-        {teamView?.tools && topicFacet ? <BestDebatesTeamToolbar tools={teamView.tools} facet={topicFacet} /> : null}
+        {teamView?.tools && topicFacet && !rankingFilters ? (
+          <BestDebatesTeamToolbar tools={teamView.tools} facet={topicFacet} />
+        ) : null}
       </div>
       {teamView?.tools && rankingFilters ? (
         <BestDebatesFilterRow
+          // Topic sits in the filter row with the others (Preston, 16 Nov), not alone beside the search.
+          topicMenu={topicFacet ? <BestDebatesTeamToolbar tools={teamView.tools} facet={topicFacet} align="start" /> : null}
           state={rankingFilters.state}
           facets={rankingFilters.facets}
           todayKey={rankingFilters.todayKey}

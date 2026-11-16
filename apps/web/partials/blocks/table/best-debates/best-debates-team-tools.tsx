@@ -32,15 +32,17 @@ export function useBestDebatesTeamTools(): BestDebatesTeamTools {
 }
 
 /**
- * The Topic menu, beside the search field: the Debates panel's own multi-select menu, with counts
+ * The Topic menu, in the filter row (or beside the search field where there is none): the Debates panel's own multi-select menu, with counts
  * over the whole list (`useBestDebatesTopicFacet`) and skeletons while they are pending.
  */
 export function BestDebatesTeamToolbar({
   tools,
   facet,
+  align = 'end',
 }: {
   tools: BestDebatesTeamTools;
   facet: BestDebatesTopicFacet;
+  align?: 'start' | 'end';
 }) {
   const options = React.useMemo(
     () =>
@@ -69,7 +71,7 @@ export function BestDebatesTeamToolbar({
         onToggle={tools.toggleTopic}
         onClear={tools.clearTopics}
         clearLabel="Any topic"
-        align="end"
+        align={align}
         countsPending={facet.pending}
         searchPlaceholder="Search topics"
         emptyLabel="No topics on these debates"

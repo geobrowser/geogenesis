@@ -32,7 +32,7 @@ export function recordedMenuValue(recorded: RecordedFilter | null, todayKey: str
 
 /**
  * The team column's narrowing filters (GEO-3774), on one row under the search field: when the
- * debate was recorded, who debated it and which claim it was on. Topic stays beside the search.
+ * debate was recorded, who debated it, which claim it was on, and its topics (`topicMenu`).
  * Each menu is the Debates panel's own (`HubFilterMenu` / `HubMultiFilterMenu`), with counts over
  * the whole list.
  */
@@ -42,7 +42,10 @@ export function BestDebatesFilterRow({
   todayKey,
   topicsPicked,
   onClearTopics,
+  topicMenu = null,
 }: {
+  /** The Topic menu, drawn after Claim. */
+  topicMenu?: React.ReactNode;
   state: BestDebatesRankingFilterState;
   facets: BestDebatesFilterFacets;
   todayKey: string;
@@ -147,6 +150,7 @@ export function BestDebatesFilterRow({
           searchPlaceholder="Search claims"
           emptyLabel="No claims on these debates"
         />
+        {topicMenu}
         {anyOn ? (
           <button
             type="button"

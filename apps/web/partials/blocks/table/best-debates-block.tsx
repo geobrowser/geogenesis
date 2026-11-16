@@ -287,6 +287,21 @@ export function BestDebatesBlock({
     );
   };
 
+  // On the right of the "Not ranked yet" line (Preston, 16 Nov); on a line of its own when every
+  // debate of the day is in the team ranking but the day still has debates.
+  const showRankDay = view === 'day' && canRank && (!windowQuery.data || (selectedDayCoverage?.total ?? 0) > 0);
+  const rankDayButton = showRankDay ? (
+    <Button
+      variant="secondary"
+      small
+      onClick={rankDay}
+      data-testid="best-debates-rank-day"
+      data-geo-analytics-label="Best debates rank this day"
+    >
+      Rank this day
+    </Button>
+  ) : null;
+
   return (
     // The watch dialog names the debate from the same display data the rows draw.
     <BestDebateDisplaysContext.Provider value={displays}>
@@ -360,19 +375,6 @@ export function BestDebatesBlock({
                 }}
               />
             ) : null}
-            {view === 'day' && canRank && (!windowQuery.data || (selectedDayCoverage?.total ?? 0) > 0) ? (
-              <div className="-mt-2 flex">
-                <Button
-                  variant="secondary"
-                  small
-                  onClick={rankDay}
-                  data-testid="best-debates-rank-day"
-                  data-geo-analytics-label="Best debates rank this day"
-                >
-                  Rank this day
-                </Button>
-              </div>
-            ) : null}
 
             {periodFailed ? (
               <div className="flex items-center gap-3 rounded-lg bg-grey-01 px-4 py-3">
@@ -420,12 +422,15 @@ export function BestDebatesBlock({
                         {unplacedRows.length}
                       </span>
                       <span className="h-px flex-1 bg-grey-02" aria-hidden />
+                      {rankDayButton}
                     </div>
                     <div className="flex flex-col">{visibleUnplaced.map(id => renderRow(id, null))}</div>
                     {unplacedRows.length > unrankedLimit ? (
                       <ShowMore onClick={() => setUnrankedLimit(limit => limit + PAGE)} />
                     ) : null}
                   </section>
+                ) : rankDayButton ? (
+                  <div className="flex justify-end pt-2">{rankDayButton}</div>
                 ) : null}
               </>
             )}
