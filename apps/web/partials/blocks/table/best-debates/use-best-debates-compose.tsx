@@ -5,7 +5,6 @@ import * as React from 'react';
 import { fetchDebateOwnSpaces } from '~/core/blocks/ranking/best-debates-debates';
 import { type BallotGrades, NO_GRADES, sortIntoTiers } from '~/core/blocks/ranking/ranking-grades';
 import { insertAt } from '~/core/blocks/ranking/ranking-placement';
-import { enqueueRankingPublish, whenRankingPublishQueueSettles } from '~/core/blocks/ranking/ranking-publish-queue';
 import type { RankingSubmissionSlot } from '~/core/blocks/ranking/ranking-submission-types';
 import {
   type RankersRead,
@@ -52,16 +51,8 @@ export type UseBestDebatesComposeArgs = {
   hasUnpublishedChanges: boolean;
   nameOf: (entityId: string) => string | null;
   personalSpaceId: string | null | undefined;
-  /**
-   * Writes the ballot. `basedOn` is the published ballot the edit was built on, when the caller
-   * fixed it before the publish had to wait its turn (`serialPublishes`).
-   */
-  saveMySubmission: (
-    slots: RankingSubmissionSlot[],
-    basedOn?: PublishedBase
-  ) => Promise<RankingSubmissionPublishResult | null>;
-  /** The published ballot edits are built on now (with `serialPublishes`). */
-  getPublishedBase?: () => PublishedBase;
+  /** Writes the ballot. */
+  saveMySubmission: (slots: RankingSubmissionSlot[]) => Promise<RankingSubmissionPublishResult | null>;
   isSaving: boolean;
   /**
    * Runs after each publish that went out, with the ids this device sent (the screen generates its
@@ -70,12 +61,6 @@ export type UseBestDebatesComposeArgs = {
   onPublished?: (published: RankingSubmissionPublishResult, sentIds: string[], sentGrades: BallotGrades) => void;
   /** Done publishes (see `useBestDebatesPlacement`). Off here: the screen's Publish sends everything. */
   publishOnDone?: boolean;
-  /**
-   * Publishes take turns (the block, where placements and the popup's grades both publish at once),
-   * and a queued one counts as saving. Off on the ranking screen, whose one Publish is off while
-   * it publishes.
-   */
-  serialPublishes?: boolean;
   /**
    * A Re-order's Placed step ended (GEO-3729), with the draft from when it opened (`before`) and as
    * it ended (`after`). The block puts `before` back on `closed`, since nothing else would publish
@@ -122,8 +107,6 @@ export function useBestDebatesCompose({
   pushDown,
   searchQuery = '',
   publishOnDone = false,
-  serialPublishes = false,
-  getPublishedBase,
   onReorderEnd,
   publishThrough,
   onPlacedClose,
@@ -171,7 +154,7 @@ export function useBestDebatesCompose({
    * never filed under the block's space. No vote is cast.
    */
   const publishNow = React.useCallback(
-    async (ids: string[], givenGrades?: BallotGrades, basedOn?: PublishedBase): Promise<boolean> => {
+    async (ids: string[], givenGrades?: BallotGrades): Promise<boolean> => {
       if (!personalSpaceId) {
         setToast(<span>Finish setting up your account to publish your ranking.</span>);
         return false;
@@ -204,7 +187,7 @@ export function useBestDebatesCompose({
         return false;
       }
 
-      const published = await saveMySubmission(publishable, basedOn);
+      const published = await saveMySubmission(publishable);
       if (!published) return false;
 
       if (leftOut > 0) {
@@ -225,28 +208,10 @@ export function useBestDebatesCompose({
     [debateName, onPublished, personalSpaceId, rankers, saveMySubmission, setToast]
   );
 
-  // On the block (GEO-3729), a placement's Done and the popup's grades both publish through here,
-  // and the ballot publisher refuses a second publish while one is out: so they take turns, each
-  // waiting from its very start, and the turn shows as saving. The ranking screen keeps one
-  // Publish button that is simply off while it publishes.
-  const queueKey = `best-debates-block-publishes:${blockId}`;
-  const [queued, setQueued] = React.useState(0);
-  const publish = React.useCallback(
-    (ids: string[], givenGrades?: BallotGrades): Promise<boolean> => {
-      if (!serialPublishes) return publishNow(ids, givenGrades);
-      // Fixed now, with `ids`: a publish ahead of this one may merge in another device's change and
-      // move the base, and building this edit on the moved base would read that change as removed.
-      const basedOn = getPublishedBase?.();
-      setQueued(count => count + 1);
-      return enqueueRankingPublish(queueKey, () => publishNow(ids, givenGrades, basedOn)).finally(() =>
-        setQueued(count => count - 1)
-      );
-    },
-    [getPublishedBase, publishNow, queueKey, serialPublishes]
-  );
-  /** Resolves once no publish queued here is out (the block's grades wait on it). */
-  const whenPublishesSettle = React.useCallback(() => whenRankingPublishQueueSettles(queueKey), [queueKey]);
-  const publishing = isSaving || queued > 0;
+  // The ranking screen's one Publish (off while it publishes). The block publishes through its
+  // batch instead (`publishThrough`), which sends each publish through `publishNow`.
+  const publish = publishNow;
+  const publishing = isSaving;
 
   // The draft as a Re-order opened, and as it stands (read when its Placed step ends).
   const draftRef = React.useRef<PublishedBase>({ ids: orderedIds, grades });
@@ -268,8 +233,7 @@ export function useBestDebatesCompose({
     nameOf: debateName,
     toRankIds,
     publish: publishThrough ?? (ids => publish(ids)),
-    // A Done queued behind a grade publish counts as saving too. Through the block's batch, a Done
-    // never waits for another publish: it joins the next one.
+    // Through the block's batch, a Done never waits for another publish: it joins the next one.
     isSaving: publishThrough ? false : publishing,
     pushDown,
     publishOnDone,
@@ -357,7 +321,6 @@ export function useBestDebatesCompose({
     publish,
     /** One publish of `ids` now, outside any queue (the block's batch publishes through it). */
     publishNow,
-    whenPublishesSettle,
     /** Re-order a debate already in the ranking: the Placed step at its place (GEO-3729). */
     reorder,
     /** A publish from here is out or queued (the block's placement Done, from its press, or a grade). */

@@ -13,7 +13,7 @@ import {
   placeAsIn,
   removeEntry,
 } from '~/core/blocks/ranking/ranking-grades';
-import { sameBallot } from '~/core/blocks/ranking/ranking-publish-queue';
+import { rankingPublishKey, sameBallot, setUnsavedRankingDraft } from '~/core/blocks/ranking/ranking-publish-queue';
 import type { RankingSubmissionSlot } from '~/core/blocks/ranking/ranking-submission-types';
 import {
   useBestDebatesBallotPublisher,
@@ -32,7 +32,7 @@ import {
   reorderGradeChanges,
   useRecordGrade,
 } from './best-debate-grading';
-import { type PublishedBase, useBestDebatesCompose } from './use-best-debates-compose';
+import { useBestDebatesCompose } from './use-best-debates-compose';
 import { useBestDebatesPushDownSlot } from './use-best-debates-push-down-slot';
 
 const NO_IDS: readonly string[] = [];
@@ -67,9 +67,9 @@ export function useBestDebatesBlockRanking({
   const pushDown = useBestDebatesPushDownSlot({ blockId: enabled ? blockId : null, pushedDownEntityIds });
   const { publish: publishClearingDownvotes, isPublishing } = useBestDebatesBallotPublisher();
 
-  const getPublishedBase = () => ({ ids: getBasedOnOrderedIds(), grades: getBasedOnGrades() });
-  const save = async (slots: RankingSubmissionSlot[], basedOn?: PublishedBase) => {
-    const base = basedOn ?? getPublishedBase();
+  // Built on the published ballot as it stands when the batch sends it.
+  const save = async (slots: RankingSubmissionSlot[]) => {
+    const base = { ids: getBasedOnOrderedIds(), grades: getBasedOnGrades() };
     const result = await publishClearingDownvotes(
       slots.map(slot => slot.id),
       () => saveMySubmission(slots, undefined, { basedOnOrderedIds: base.ids, basedOnGrades: base.grades })
@@ -112,7 +112,6 @@ export function useBestDebatesBlockRanking({
       markPublished(published.orderedEntityIds, sentIds, published.grades, sentGrades),
     // Nothing else on this page can save the placement, so Done publishes it (through the batch).
     publishOnDone: true,
-    getPublishedBase,
     // A placement's Done, and a placement closed without Done, join the batch.
     publishThrough: (ids, entityId) => (entityId ? commitPlacement(entityId, ids) : Promise.resolve(false)),
     onPlacedClose: entityId => void commitPlacement(entityId, draftNow.current.ids),
@@ -133,6 +132,7 @@ export function useBestDebatesBlockRanking({
     getBasedOnOrderedIds,
     getBasedOnGrades,
     publish: compose.publishNow,
+    draftKey: personalSpaceId ? rankingPublishKey(personalSpaceId, blockId) : null,
     downRank: compose.requestPushDown,
     reorder: compose.reorder,
     placeAfterGrade: true,
@@ -200,7 +200,7 @@ export function useBlockGrading({
   getBasedOnOrderedIds,
   getBasedOnGrades,
   publish,
-  whenPublishesSettle = () => Promise.resolve(),
+  draftKey = null,
   downRank,
   reorder = () => false,
   placeAfterGrade = false,
@@ -214,8 +214,11 @@ export function useBlockGrading({
   getBasedOnGrades: () => BallotGrades;
   /** Publishes the whole ballot as given; resolves true once it went out. */
   publish: (ids: string[], grades?: BallotGrades) => Promise<boolean>;
-  /** Resolves once a publish from elsewhere on the block has finished: each publish waits for it. */
-  whenPublishesSettle?: () => Promise<void>;
+  /**
+   * Where edits that never went out are handed back (`setUnsavedRankingDraft`) when the block goes
+   * away with them, so the ranking screen (or the block, when it comes back) starts from them.
+   */
+  draftKey?: string | null;
   downRank: (entityId: string) => void;
   /**
    * Opens the Placed step for a debate in the ranking, at its place; false when it couldn't. Its
@@ -250,8 +253,6 @@ export function useBlockGrading({
     inFlight.current = true;
     try {
       while (queued.current.length > 0 && !holding.current) {
-        await whenPublishesSettle();
-        if (holding.current) break;
         // Every change not yet published, replayed onto what is published now.
         const before = { ids: getBasedOnOrderedIds(), grades: getBasedOnGrades() };
         const pass = [...queued.current];
@@ -296,7 +297,7 @@ export function useBlockGrading({
     } finally {
       inFlight.current = false;
     }
-  }, [getBasedOnGrades, getBasedOnOrderedIds, publish, recordGrade, syncPending, whenPublishesSettle]);
+  }, [getBasedOnGrades, getBasedOnOrderedIds, publish, recordGrade, syncPending]);
 
   /** Queues a change, shows it at once, and publishes it with whatever else is waiting. */
   const enqueue = React.useCallback(
@@ -351,7 +352,10 @@ export function useBlockGrading({
         void flush();
         return;
       }
-      const regraded = reorderGradeChanges(entityId, before, after).length > 0;
+      // A grade given in the popup and then moved across a tier line in its Placed step still
+      // counts as the popup's: one grade event per debate per publish, the way it was first given.
+      const regraded =
+        reorderGradeChanges(entityId, before, after).length > 0 && !methods.current.has(normId(entityId));
       const snapshot = { ids: [...after.ids], grades: after.grades };
       enqueue([entityId], draft => placeAsIn(draft, snapshot, entityId), regraded ? 'reorder' : undefined);
     },
@@ -374,6 +378,29 @@ export function useBlockGrading({
       });
     },
     [commit]
+  );
+
+  // Leaving the block (a link, Grade your ranking) with edits that never went out hands them back
+  // as an unsaved draft: the ranking screen, or the block when it comes back, starts from them.
+  const handBack = React.useRef({ draftKey, getBasedOnOrderedIds, getBasedOnGrades });
+  handBack.current = { draftKey, getBasedOnOrderedIds, getBasedOnGrades };
+  React.useEffect(
+    () => () => {
+      const { draftKey: key, getBasedOnOrderedIds: baseIds, getBasedOnGrades: baseGrades } = handBack.current;
+      if (!key || queued.current.length === 0) return;
+      const base = { ids: baseIds(), grades: baseGrades() };
+      const unsent = queued.current.reduce((draft, item) => item.change(draft), base);
+      if (sameBallot(unsent.ids, unsent.grades, base.ids, base.grades)) return;
+      setUnsavedRankingDraft(key, {
+        orderedEntityIds: unsent.ids,
+        grades: unsent.grades,
+        baseOrderedIds: base.ids,
+        baseGrades: base.grades,
+        overtakenOrderedIds: base.ids,
+        overtakenGrades: base.grades,
+      });
+    },
+    []
   );
 
   // Closing the tab with changes not yet published asks first, as the ranking screen does.

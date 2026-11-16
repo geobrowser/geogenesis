@@ -5,6 +5,7 @@ import * as React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { BallotGrades } from '~/core/blocks/ranking/ranking-grades';
+import { getUnsavedRankingDraft, resetRankingPublishStateForTests } from '~/core/blocks/ranking/ranking-publish-queue';
 
 import { useBlockGrading } from './use-best-debates-block-ranking';
 
@@ -31,8 +32,8 @@ function useHarness(
     ids,
     grades,
   }),
-  busy: { settle?: Promise<void>; published?: { ids: string[]; grades: BallotGrades } } = {},
-  options: { reorder?: (entityId: string) => boolean; placeAfterGrade?: boolean } = {}
+  busy: { published?: { ids: string[]; grades: BallotGrades } } = {},
+  options: { reorder?: (entityId: string) => boolean; placeAfterGrade?: boolean; draftKey?: string } = {}
 ) {
   const published = React.useRef<{ ids: string[]; grades: BallotGrades }>({
     ids: [id(1)],
@@ -47,7 +48,6 @@ function useHarness(
     setDraft: (ids, grades) => setDraftState({ ids, grades }),
     getBasedOnOrderedIds: () => (busy.published ?? published.current).ids,
     getBasedOnGrades: () => (busy.published ?? published.current).grades,
-    whenPublishesSettle: () => busy.settle ?? Promise.resolve(),
     publish: async (ids, grades) => {
       const ok = await publish(ids, grades);
       if (ok) published.current = merge(ids, grades ?? new Map());
@@ -164,29 +164,6 @@ describe('grading from the block (GEO-3729)', () => {
     const [ids, grades] = publish.mock.calls[1] as [string[], BallotGrades];
     expect(ids).toEqual([id(3), id(1), id(2), id(5)]);
     expect(grades.get(id(5))).toBe('C');
-  });
-
-  it('waits for the block’s placement publish, then builds on what it published', async () => {
-    const publish = vi.fn().mockResolvedValue(true);
-    let settle!: () => void;
-    const busy: { settle?: Promise<void>; published?: { ids: string[]; grades: BallotGrades } } = {
-      settle: new Promise<void>(resolve => (settle = resolve)),
-    };
-    const { result } = renderHook(() => useHarness(publish, undefined, busy));
-    act(() => result.current.grading.grade(id(2), 'B'));
-    await act(async () => Promise.resolve());
-    expect(publish).not.toHaveBeenCalled();
-    // The placement publish lands: debate 8, placed as B.
-    busy.published = {
-      ids: [id(1), id(8)],
-      grades: new Map([
-        [id(1), 'A'],
-        [id(8), 'B'],
-      ]),
-    };
-    await act(async () => settle());
-    expect(publish).toHaveBeenCalledTimes(1);
-    expect(publish.mock.calls[0]![0]).toEqual([id(1), id(2), id(8)]);
   });
 
   it('opens Re-order through the surface’s placement flow', () => {
@@ -314,5 +291,43 @@ describe('one publish per sitting from the block (Preston, 16 Nov)', () => {
     const quiet = new Event('beforeunload', { cancelable: true });
     window.dispatchEvent(quiet);
     expect(quiet.defaultPrevented).toBe(false);
+  });
+
+  it('a popup grade moved across a tier line in its Placed step counts once, as the popup’s', async () => {
+    const publish = vi.fn().mockResolvedValue(true);
+    const reorder = vi.fn(() => true);
+    const { result } = renderHook(() => useHarness(publish, undefined, {}, { reorder, placeAfterGrade: true }));
+    await act(async () => result.current.grading.grade(id(2), 'B'));
+    const before = result.current.draft;
+    // Nudged above the A tier's last debate: it takes A.
+    const after = { ids: [id(2), id(1)], grades: new Map([...before.grades, [id(2), 'A' as const]]) };
+    act(() => result.current.setDraft(after));
+    await act(async () => result.current.grading.endPlaced(id(2), before, after));
+    expect(mocks.record.mock.calls.map(([entityId, change]) => [entityId, change.grade, change.method])).toEqual([
+      [id(2), 'A', 'popup'],
+    ]);
+  });
+
+  it('hands back edits that never went out when the block goes away', async () => {
+    resetRankingPublishStateForTests();
+    const publish = vi.fn().mockResolvedValue(false);
+    const { result, unmount } = renderHook(() => useHarness(publish, undefined, {}, { draftKey: 'me:block' }));
+    await act(async () => result.current.grading.grade(id(2), 'B'));
+    expect(getUnsavedRankingDraft('me:block')).toBeNull();
+    unmount();
+    const handedBack = getUnsavedRankingDraft('me:block');
+    expect(handedBack?.orderedEntityIds).toEqual([id(1), id(2)]);
+    expect(handedBack?.grades?.get(id(2))).toBe('B');
+    expect(handedBack?.baseOrderedIds).toEqual([id(1)]);
+    resetRankingPublishStateForTests();
+  });
+
+  it('hands back nothing when everything went out', async () => {
+    resetRankingPublishStateForTests();
+    const publish = vi.fn().mockResolvedValue(true);
+    const { result, unmount } = renderHook(() => useHarness(publish, undefined, {}, { draftKey: 'me:block' }));
+    await act(async () => result.current.grading.grade(id(2), 'B'));
+    unmount();
+    expect(getUnsavedRankingDraft('me:block')).toBeNull();
   });
 });
