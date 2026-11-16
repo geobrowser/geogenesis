@@ -228,6 +228,7 @@ export function useDebatePlayback(
   {
     mediaAttached = true,
     playbackRate = 1,
+    forceSound = false,
   }: {
     mediaAttached?: boolean;
     /**
@@ -236,6 +237,13 @@ export function useDebatePlayback(
      * stay in media seconds; only the wall time between them shrinks.
      */
     playbackRate?: number;
+    /**
+     * Play with sound whatever the feed's sound setting says (GEO-3773): the moments editor, where
+     * an admin is listening for cut points. Neither the saved Mute choice nor the tab's inferred
+     * sound is read or written, so the admin's feed setting is untouched. A browser that refuses
+     * sound still forces this debate muted (`soundBlocked`) until `clearSoundBlocked`.
+     */
+    forceSound?: boolean;
   } = {}
 ) {
   const recordingUrls = useRecordingPlaybackUrl();
@@ -288,10 +296,13 @@ export function useDebatePlayback(
   React.useEffect(() => {
     if (navigator.userActivation?.hasBeenActive) setArrivedByGesture(true);
   }, []);
-  const mutedPreference =
-    soundChoice === 'default' ? !(soundInferred || arrivedByGesture) : soundChoice === 'muted';
+  const mutedPreference = forceSound
+    ? false
+    : soundChoice === 'default'
+      ? !(soundInferred || arrivedByGesture)
+      : soundChoice === 'muted';
   /** The viewer pressed Mute, so a tap must not turn the sound on. */
-  const muteChosen = soundChoice === 'muted';
+  const muteChosen = !forceSound && soundChoice === 'muted';
   /*
    * The browser made this debate play muted, though the viewer wants sound (GEO-3594).
    *
@@ -312,6 +323,12 @@ export function useDebatePlayback(
     },
     [mutedByUser, setSoundChoice, setSoundInferred]
   );
+  /**
+   * Lift this debate's forced mute and nothing else: no saved choice, no tab-wide inferred sound.
+   * For `forceSound`, whose unmute has to come from inside a gesture and must not touch the feed's
+   * sound setting.
+   */
+  const clearSoundBlocked = React.useCallback(() => setSoundBlocked(false), []);
   const [playheadSeconds, setPlayheadSeconds] = React.useState(0);
   const [turnState, setTurnState] = React.useState<TurnState>(null);
   const slot1VideoRef = React.useRef<HTMLVideoElement | null>(null);
@@ -1993,6 +2010,7 @@ export function useDebatePlayback(
     mutedByUser,
     muteChosen,
     setMutedByUser,
+    clearSoundBlocked,
     playheadSeconds,
     livePositionMs,
     recordingStartSeconds,
@@ -2012,6 +2030,7 @@ export function useDebatePlayback(
     togglePlayback,
     playFromStart,
     resumeBoth,
+    pauseBoth,
     holdForTransition,
     suspend,
     seekBoth,

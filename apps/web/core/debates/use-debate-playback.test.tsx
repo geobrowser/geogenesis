@@ -2,6 +2,7 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 
 import * as React from 'react';
 
+import { Provider, createStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Debate, DebateMediaCondensedBreak, DebateMediaTurnSegment } from './api';
@@ -3071,5 +3072,77 @@ describe('useDebatePlayback — sound carries to the next debate (GEO-3594)', ()
     expect(first.result.current.userPaused).toBe(true);
     expect(first.result.current.mutedByUser).toBe(false);
     expect(mocks.forgetGestureVideoUnlock).not.toHaveBeenCalled();
+  });
+});
+
+describe('useDebatePlayback — forced sound for the moments editor (GEO-3773)', () => {
+  const flush = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+  beforeEach(() => {
+    mocks.turnSegments = [];
+    mocks.condensedBreaks = [];
+    mocks.recordingUrl.mockReset();
+    mocks.recordingUrl.mockImplementation(({ filename }: { filename: string }) =>
+      Promise.resolve({ url: `https://cdn.test/${filename}?sig=abc` })
+    );
+    localStorage.removeItem('debateFeedSoundChoice');
+  });
+
+  afterEach(() => vi.restoreAllMocks());
+
+  /** The editor's player and a feed card, in one fresh store: nobody has chosen a sound setting yet. */
+  async function editorBesideFeed() {
+    const store = createStore();
+    const hook = renderHook(
+      () => ({
+        editor: useDebatePlayback(debateFixture('debate-editor'), true, { forceSound: true }),
+        feed: useDebatePlayback(debateFixture('debate-feed'), true),
+      }),
+      { wrapper: ({ children }) => <Provider store={store}>{children}</Provider> }
+    );
+    await waitFor(() => expect(hook.result.current.editor.urls.slot1).not.toBeNull());
+    const slot1 = fakeVideo();
+    const slot2 = fakeVideo();
+    hook.result.current.editor.slot1VideoRef.current = slot1;
+    hook.result.current.editor.slot2VideoRef.current = slot2;
+    return { ...hook, slot1, slot2 };
+  }
+
+  it('plays with sound over a saved Mute, and writes no sound setting', async () => {
+    const { result } = await editorBesideFeed();
+    act(() => result.current.feed.setMutedByUser(true));
+    const saved = localStorage.getItem('debateFeedSoundChoice');
+
+    expect(result.current.editor.mutedByUser).toBe(false);
+    expect(result.current.editor.muteChosen).toBe(false);
+    expect(result.current.feed.mutedByUser).toBe(true);
+    expect(localStorage.getItem('debateFeedSoundChoice')).toBe(saved);
+  });
+
+  it('lifts a refused sound with clearSoundBlocked, writing neither the saved nor the inferred sound', async () => {
+    const { result, slot1, slot2 } = await editorBesideFeed();
+    // Muted by default: a tap (the inferred sound) or a saved choice would turn it on.
+    expect(result.current.feed.mutedByUser).toBe(true);
+
+    // The browser refuses the speaker with sound, so the pair plays muted.
+    slot1.muted = false;
+    await act(async () => {
+      void result.current.editor.resumeBoth();
+      await Promise.resolve();
+      slot1.rejectPlay();
+      slot2.settlePlay();
+      await flush(400);
+      slot1.settlePlay();
+      slot2.settlePlay();
+      await flush(400);
+    });
+    expect(result.current.editor.playing).toBe(true);
+    expect(result.current.editor.mutedByUser).toBe(true);
+
+    act(() => result.current.editor.clearSoundBlocked());
+
+    expect(result.current.editor.mutedByUser).toBe(false);
+    expect(result.current.feed.mutedByUser).toBe(true);
+    expect(localStorage.getItem('debateFeedSoundChoice')).toBeNull();
   });
 });

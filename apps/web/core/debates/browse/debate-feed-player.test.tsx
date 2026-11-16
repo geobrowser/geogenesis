@@ -1,5 +1,7 @@
 import { act, cleanup, fireEvent, render, waitFor, within } from '@testing-library/react';
 
+import { createRef } from 'react';
+
 import { getDefaultStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -11,7 +13,7 @@ import { turnTimerScale } from '~/core/debates/recording-countdown-ring';
 import type { DebatePlaybackController } from '~/core/debates/use-debate-playback';
 import { isGestureVideoUnlocked } from '~/core/utils/video/gesture-media-pool';
 
-import { DebateFeedPlayer } from './debate-feed-player';
+import { DebateFeedPlayer, type DebateFeedPlayerHandle } from './debate-feed-player';
 import { feedFullPlaybackStartedAtom } from './feed-full-playback';
 import { PLAYER_FURNITURE_OPACITY } from './player-overlay-styles';
 
@@ -35,6 +37,12 @@ const mocks = vi.hoisted(() => ({
   mediaAttached: [] as boolean[],
   /** Each render's `playbackRate`, as the player handed it to the playback hook (GEO-3773). */
   playbackRates: [] as (number | undefined)[],
+  /** Each render's options, as the player handed them to the playback hook. */
+  playbackOptions: [] as Record<string, unknown>[],
+  /** Each render's `mediaAttached` argument to the analytics hook: false means it measures nothing. */
+  analyticsAttached: [] as boolean[],
+  /** The analytics hook's control reporter, shared across renders. */
+  control: vi.fn(),
 }));
 
 // Cloudflare Stream previews (NEXT_PUBLIC_DEBATE_STREAM_PLAYBACK). Off by default here, as the
@@ -168,12 +176,16 @@ vi.mock('~/core/debates/use-debate-playback', () => ({
   ) => {
     mocks.mediaAttached.push(options?.mediaAttached ?? true);
     mocks.playbackRates.push(options?.playbackRate);
+    mocks.playbackOptions.push(options ?? {});
     return mocks.controller;
   },
 }));
 
 vi.mock('~/core/debates/use-playback-analytics', () => ({
-  usePlaybackAnalytics: () => ({ elementRef: { current: null }, control: vi.fn() }),
+  usePlaybackAnalytics: (_debate: unknown, _active: boolean, _controller: unknown, mediaAttached = true) => {
+    mocks.analyticsAttached.push(mediaAttached);
+    return { elementRef: { current: null }, control: mocks.control };
+  },
 }));
 
 vi.mock('~/core/hooks/use-entity-side-panel', () => ({
@@ -320,6 +332,8 @@ function controllerFixture(overrides: {
     togglePlayback: vi.fn(),
     playFromStart: vi.fn(),
     resumeBoth: vi.fn(),
+    pauseBoth: vi.fn(),
+    clearSoundBlocked: vi.fn(),
     holdForTransition: vi.fn(() => ({ release: vi.fn(), cancel: vi.fn() })),
     suspend: vi.fn(),
     seekBoth: overrides.seekBoth ?? vi.fn(),
@@ -366,6 +380,9 @@ beforeEach(() => {
   mocks.bylines = new Map();
   mocks.livePosition = null;
   mocks.stackOpens = [];
+  mocks.playbackOptions = [];
+  mocks.analyticsAttached = [];
+  mocks.control = vi.fn();
   vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
   vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {});
 });
@@ -3761,5 +3778,272 @@ describe('Cloudflare Stream previews and full playback (NEXT_PUBLIC_DEBATE_STREA
       expect(fullSrcs(container)).toEqual([]);
       expect(getByRole('button', { name: 'Play debate' })).toBeTruthy();
     });
+  });
+});
+
+describe('the moments editor player (GEO-3773)', () => {
+  type Controller = ReturnType<typeof controllerFixture>;
+  const extendBreak = {
+    kind: 'extend' as const,
+    roundIndex: 0,
+    nextRoundIndex: 1,
+    decidingStartMs: 60_000,
+    startMs: 64_000,
+    endMs: 72_000,
+  };
+  const openRounds = {
+    ...debate,
+    open_rounds: { required_rebuttal_rounds: 1 },
+    started_at: '2026-10-13T19:00:00.000Z',
+  } as unknown as Debate;
+
+  beforeEach(() => watchedMocks.markDebateWatched.mockClear());
+
+  function renderEditor(
+    overrides: Partial<Parameters<typeof controllerFixture>[0]> = {},
+    props: Partial<React.ComponentProps<typeof DebateFeedPlayer>> = {},
+    playerDebate: Debate = debate
+  ) {
+    mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1, ...overrides });
+    const ref = createRef<DebateFeedPlayerHandle>();
+    const onJumpTransition = vi.fn();
+    const element = (extra: typeof props = {}) => (
+      <DebateFeedPlayer
+        ref={ref}
+        debate={playerDebate}
+        active
+        editorMode
+        forceSound
+        cutTransitions
+        measure={false}
+        onJumpTransition={onJumpTransition}
+        {...props}
+        {...extra}
+      />
+    );
+    const view = render(element());
+    return {
+      ...view,
+      ref,
+      onJumpTransition,
+      controller: mocks.controller as Controller,
+      rerenderWith: (extra: typeof props) => view.rerender(element(extra)),
+    };
+  }
+
+  /** Both tiles with a frame to capture, as a decoded video has. */
+  function framesReady(container: HTMLElement) {
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
+      drawImage: vi.fn(),
+    } as unknown as CanvasRenderingContext2D);
+    for (const video of container.querySelectorAll('video')) {
+      for (const [key, value] of Object.entries({
+        videoWidth: 640,
+        videoHeight: 480,
+        clientWidth: 480,
+        clientHeight: 289,
+        readyState: 2,
+        seeking: true,
+      })) {
+        Object.defineProperty(video, key, { value, configurable: true });
+      }
+    }
+  }
+
+  it('never starts itself, and draws none of the feed controls', () => {
+    vi.useFakeTimers();
+    try {
+      const { container, controller } = renderEditor({ playing: false, autoplayBlocked: true });
+      act(() => vi.advanceTimersByTime(PAIR_HOLD_TIMEOUT_MS + 500));
+
+      expect(controller.resumeBoth).not.toHaveBeenCalled();
+      expect(within(container).queryByRole('button', { name: /Unmute|Mute|Play debate|Resume debate/ })).toBeNull();
+      expect(within(container).queryByRole('slider', { name: 'Debate timeline' })).toBeNull();
+      expect(container.querySelector('[data-debate-watch-prompt]')).toBeNull();
+      // A click on the video is the editor's to give a meaning to, not a feed toggle.
+      fireEvent.click(container.querySelectorAll('[aria-label="Pause or play"]')[0]);
+      expect(controller.togglePlayback).not.toHaveBeenCalled();
+    } finally {
+      cleanup();
+      vi.useRealTimers();
+    }
+  });
+
+  it('passes the speed and the forced sound to the playback hook', () => {
+    renderEditor({}, { playbackRate: 2 });
+    expect(mocks.playbackOptions.at(-1)).toMatchObject({ playbackRate: 2, forceSound: true });
+  });
+
+  it('plays, pauses and seeks through the hook directly, writing no feed state and no analytics', () => {
+    const { ref, controller } = renderEditor({ playing: false });
+
+    act(() => ref.current!.play());
+    expect(controller.resumeBoth).toHaveBeenCalledOnce();
+    act(() => ref.current!.pause());
+    expect(controller.pauseBoth).toHaveBeenCalledOnce();
+    act(() => ref.current!.seek(12_500));
+    expect(controller.seekBoth).toHaveBeenCalledWith(12.5);
+
+    expect(controller.togglePlayback).not.toHaveBeenCalled();
+    expect(controller.setMutedByUser).not.toHaveBeenCalled();
+    expect(getDefaultStore().get(feedFullPlaybackStartedAtom)).toBe(false);
+    expect(mocks.control).not.toHaveBeenCalled();
+  });
+
+  it('marks a recording it started inside the click as allowed sound', () => {
+    const { ref, container } = renderEditor({ playing: false });
+    const [slot1] = Array.from(container.querySelectorAll('video'));
+    Object.defineProperty(slot1, 'paused', { value: false, configurable: true });
+
+    act(() => ref.current!.play());
+
+    expect(isGestureVideoUnlocked(slot1)).toBe(true);
+  });
+
+  it('lifts a refused sound from inside the click without touching the feed sound setting', () => {
+    const play = vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined);
+    const { ref, container, controller } = renderEditor({ mutedByUser: true });
+    const videos = Array.from(container.querySelectorAll('video'));
+    for (const video of videos) Object.defineProperty(video, 'paused', { value: false, configurable: true });
+
+    act(() => ref.current!.unmute());
+
+    expect(controller.clearSoundBlocked).toHaveBeenCalledOnce();
+    expect(controller.setMutedByUser).not.toHaveBeenCalled();
+    // Paused and played again in the same tick: what lets iOS give each recording sound.
+    expect(play).toHaveBeenCalledTimes(2);
+  });
+
+  it('reports a refused sound only while it forces sound', () => {
+    const onSoundBlockedChange = vi.fn();
+    const { rerenderWith } = renderEditor({ mutedByUser: true }, { onSoundBlockedChange });
+    expect(onSoundBlockedChange).toHaveBeenLastCalledWith(true);
+
+    rerenderWith({ onSoundBlockedChange, forceSound: false });
+    expect(onSoundBlockedChange).toHaveBeenLastCalledWith(false);
+  });
+
+  it('mounts the cut canvases on a fixed-format debate when asked to cover cuts', () => {
+    const { container } = renderEditor();
+    expect(container.querySelectorAll('canvas')).toHaveLength(2);
+
+    cleanup();
+    mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1 });
+    const feed = render(<DebateFeedPlayer debate={debate} active />);
+    expect(feed.container.querySelectorAll('canvas')).toHaveLength(0);
+  });
+
+  it('jumps under captured frames, and says when the hold starts and ends', () => {
+    vi.useFakeTimers();
+    try {
+      const { ref, container, controller, onJumpTransition } = renderEditor();
+      framesReady(container);
+
+      let outcome: string | undefined;
+      act(() => {
+        outcome = ref.current!.jumpTo(70_000);
+      });
+
+      expect(outcome).toBe('held');
+      expect(controller.seekBoth).toHaveBeenCalledWith(70, { preserveTransitionHold: true });
+      expect(controller.holdForTransition).toHaveBeenCalledOnce();
+      expect(onJumpTransition.mock.calls).toEqual([['start']]);
+
+      // The hold runs out (or both can play on): it is released, once.
+      act(() => {
+        for (const video of container.querySelectorAll('video')) video.dispatchEvent(new Event('seeked'));
+        vi.advanceTimersByTime(PAIR_HOLD_TIMEOUT_MS + 500);
+      });
+      const hold = controller.holdForTransition.mock.results[0].value;
+      expect(hold.release).toHaveBeenCalledOnce();
+      expect(onJumpTransition.mock.calls).toEqual([['start'], ['release']]);
+    } finally {
+      cleanup();
+      vi.useRealTimers();
+    }
+  });
+
+  it('falls back to a plain seek with no frame to capture, and reports no hold', () => {
+    const { ref, controller, onJumpTransition } = renderEditor();
+
+    let outcome: string | undefined;
+    act(() => {
+      outcome = ref.current!.jumpTo(70_000);
+    });
+
+    expect(outcome).toBe('seeked');
+    expect(controller.seekBoth).toHaveBeenCalledWith(70, { preserveTransitionHold: true });
+    expect(onJumpTransition).not.toHaveBeenCalled();
+  });
+
+  it('drops the frames of a jump at once when a seek takes over', () => {
+    vi.useFakeTimers();
+    try {
+      const { ref, container, controller, onJumpTransition } = renderEditor();
+      framesReady(container);
+      act(() => {
+        ref.current!.jumpTo(70_000);
+      });
+      const canvases = [...container.querySelectorAll('canvas')];
+      expect(canvases.map(canvas => canvas.style.opacity)).toEqual(['1', '1']);
+
+      act(() => ref.current!.seek(10_000));
+
+      expect(canvases.map(canvas => canvas.style.opacity)).toEqual(['0', '0']);
+      expect(controller.seekBoth).toHaveBeenLastCalledWith(10);
+      expect(onJumpTransition).toHaveBeenLastCalledWith('cancel');
+    } finally {
+      cleanup();
+      vi.useRealTimers();
+    }
+  });
+
+  it('reports no hold for an automatic break cut, and makes none while the editor holds them', () => {
+    vi.useFakeTimers();
+    try {
+      const playbackBreaks = { breaks: [extendBreak], earlyEnds: [], picks: [] };
+      const { container, controller, onJumpTransition } = renderEditor(
+        { playheadSeconds: 61.1, playbackBreaks },
+        {},
+        openRounds
+      );
+      framesReady(container);
+      act(() => vi.advanceTimersByTime(200));
+      expect(controller.holdForTransition).toHaveBeenCalledOnce();
+      expect(onJumpTransition).not.toHaveBeenCalled();
+
+      cleanup();
+      const held = renderEditor({ playheadSeconds: 61.1, playbackBreaks }, { pauseBreakCuts: true }, openRounds);
+      act(() => vi.advanceTimersByTime(5_000));
+      expect(held.controller.seekBoth).not.toHaveBeenCalled();
+    } finally {
+      cleanup();
+      vi.useRealTimers();
+    }
+  });
+
+  it('measures nothing: no analytics through play, pause, seek, jumps and the end, and no watched mark', () => {
+    const { ref, rerenderWith } = renderEditor({ playing: false });
+    act(() => {
+      ref.current!.play();
+      ref.current!.jumpTo(30_000);
+      ref.current!.seek(40_000);
+      ref.current!.pause();
+    });
+    mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1, playbackEnded: true, playing: false });
+    rerenderWith({});
+
+    expect(mocks.analyticsAttached.length).toBeGreaterThan(0);
+    expect(mocks.analyticsAttached.every(attached => attached === false)).toBe(true);
+    expect(mocks.control).not.toHaveBeenCalled();
+    expect(watchedMocks.markDebateWatched).not.toHaveBeenCalled();
+  });
+
+  it('still measures and marks the debate watched for every other player', () => {
+    mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1, playbackEnded: true, playing: false });
+    render(<DebateFeedPlayer debate={debate} active />);
+
+    expect(mocks.analyticsAttached.at(-1)).toBe(true);
+    expect(watchedMocks.markDebateWatched).toHaveBeenCalledWith(debate.id);
   });
 });
