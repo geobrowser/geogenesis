@@ -19,7 +19,14 @@ import { NEGATIVE_TEXT_CLASS, POSITIVE_TEXT_CLASS, WAITING_TEXT_CLASS } from '..
 import { HUB_LIGHT_CALLOUT_CLASS_NAME } from '../matchmaking/hub-callout';
 import { type MomentBackfillEntry, reelCarried, reelUnlinkable } from './api';
 import { type ClaimOption, ClipRow } from './clip-row';
-import { INITIAL_EDITOR_STATE, editorReducer, escapeTarget, selectedKey } from './editor-state';
+import {
+  type EditorFacts,
+  INITIAL_EDITOR_STATE,
+  editorReducer,
+  editorView,
+  escapeTarget,
+  selectedKey,
+} from './editor-state';
 import {
   isMediaAdminRefusal,
   useAudioPeaks,
@@ -176,9 +183,9 @@ function Editor({ debateId }: { debateId: string }) {
   const seekTo = (ms: number) => setSeek(previous => ({ ms, nonce: (previous?.nonce ?? 0) + 1 }));
 
   // How the admin is looking at the reel: the selected clip or none, the side panel, the open
-  // popover or confirm, and what plays (GEO-3773). The reel itself stays in `clips`.
+  // popover or confirm, and what plays (GEO-3773). The reel itself stays in `clips`. `view` is what
+  // the admin asked for; what is shown is `shown`, below, judged against the data by one rule.
   const [view, dispatch] = React.useReducer(editorReducer, INITIAL_EDITOR_STATE);
-  const confirm = view.popover === 'publish' || view.popover === 'unlock' ? view.popover : null;
   const [queueError, setQueueError] = React.useState<string | null>(null);
   // The request this visit queued: a finished one is reported only if it is ours. `sent` is the reel
   // as sent, in that order: the worker's `clip N` and a preview's moments count in it, not in the
@@ -231,9 +238,6 @@ function Editor({ debateId }: { debateId: string }) {
   // The check's report is about this visit's check: once the debate's request is someone else's (another
   // admin's publish, a fresh automatic pick) or this visit's next one, the panel goes back to the transcript.
   const showsCheck = ours && job.preview;
-  React.useEffect(() => {
-    if (view.panel === 'check' && !showsCheck) dispatch({ type: 'closePanel' });
-  }, [view.panel, showsCheck]);
 
   const participants = debate.data?.participants ?? [];
   const nameOf = (slot: ParticipantSlot | null) =>
@@ -298,12 +302,19 @@ function Editor({ debateId }: { debateId: string }) {
     (payload as { moment_reel_manual?: unknown } | undefined)?.moment_reel_manual === true;
   const canPublish = canQueue && dirty;
   const canUnlock = locked && !dirty && !inFlight && (!readOnly || canUnlockCarried);
-  // A confirm stays open only while what it confirms can still be sent: an edit made under it can
-  // break a clip, or turn a return to automatic into one that would throw the edit away.
-  const confirmAllowed = confirm === 'publish' ? canPublish : confirm === 'unlock' ? canUnlock : true;
+
+  // What is shown: the panel and popover the admin asked for, while the data still allows them
+  // (`effectivePanel` / `effectivePopover`, the one rule). A confirm stays open only while what it
+  // confirms can still be sent: an edit made under it can break a clip, or turn a return to automatic
+  // into one that would throw the edit away. Rendering, Esc and the keyboard read only this.
+  const clipKeyList = clips.map(clip => clip.key).join('|');
+  const facts: EditorFacts = { checkShown: showsCheck, readOnly, canPublish, canUnlock };
+  const shown = editorView(view, { keys: clipKeyList === '' ? [] : clipKeyList.split('|'), ...facts });
+  const confirm = shown.popover === 'publish' || shown.popover === 'unlock' ? shown.popover : null;
+  // What the facts closed stays closed (it doesn't come back when they allow it again).
   React.useEffect(() => {
-    if (!confirmAllowed) dispatch({ type: 'closePopover' });
-  }, [confirmAllowed]);
+    dispatch({ type: 'settle', facts: { checkShown: showsCheck, readOnly, canPublish, canUnlock } });
+  }, [view, showsCheck, readOnly, canPublish, canUnlock]);
 
   // A claim picked for one speaker never rides along when the clip changes speaker, however the
   // clip changed: an edge, a drag, a fix, a sentence from the transcript. Each clip is judged against
@@ -324,7 +335,7 @@ function Editor({ debateId }: { debateId: string }) {
   // The selected clip by its key, not its place: removing or moving another clip leaves it selected,
   // rather than handing the transcript's Start/End to whichever clip took its place. None selected
   // (`-1`) is the whole debate.
-  const selected = selectedKey(view);
+  const selected = selectedKey(shown);
   const selectedIndex = selected === null ? -1 : clips.findIndex(clip => clip.key === selected);
   // A flagged clip (one with a problem to fix) keeps the claim panel open: looked up by key, so a
   // clip that moved or a fix's new list is judged as the clip it is.
@@ -340,7 +351,6 @@ function Editor({ debateId }: { debateId: string }) {
   };
   // The selection follows the reel as it changes: a removed clip hands it to the clip that took its
   // place, and a reel playing stops once its clips change.
-  const clipKeyList = clips.map(clip => clip.key).join('|');
   React.useEffect(() => {
     dispatch({ type: 'clipsChanged', keys: clipKeyList === '' ? [] : clipKeyList.split('|') });
   }, [clipKeyList]);
@@ -418,7 +428,8 @@ function Editor({ debateId }: { debateId: string }) {
     dispatch({ type: 'closePopover' });
     dispatch({ type: 'stop' });
     // A check's report is about that check: publishing or unlocking from it goes back to the transcript.
-    if (kind !== 'preview' && view.panel === 'check') dispatch({ type: 'closePanel' });
+    // The admin is leaving it, at the click, whether or not the publish goes through.
+    if (kind !== 'preview' && shown.panel === 'check') dispatch({ type: 'closePanel' });
     if (!(kind === 'publish' ? canPublish : kind === 'unlock' ? canUnlock : canQueue)) return;
     setQueueError(null);
     const body =
@@ -447,9 +458,10 @@ function Editor({ debateId }: { debateId: string }) {
 
   const rootRef = React.useRef<HTMLDivElement>(null);
   useEditorKeyboard(rootRef, {
-    popoverOpen: view.popover !== null,
+    popoverOpen: shown.popover !== null,
     onEscape: () => {
-      if (escapeTarget(view) === null) return false;
+      if (escapeTarget(shown) === null) return false;
+      dispatch({ type: 'settle', facts });
       dispatch({ type: 'escape' });
       return true;
     },
@@ -537,7 +549,7 @@ function Editor({ debateId }: { debateId: string }) {
       ) : reapplyFailed ? (
         <ReapplyFailedNotice job={reapplyFailed} />
       ) : null}
-      {confirm === 'publish' && confirmAllowed ? (
+      {confirm === 'publish' ? (
         <ConfirmCard
           title="Publish this reel?"
           confirmLabel={warnings.length > 0 ? 'Publish anyway' : 'Publish and lock'}
@@ -557,7 +569,7 @@ function Editor({ debateId }: { debateId: string }) {
           ) : null}
         </ConfirmCard>
       ) : null}
-      {confirm === 'unlock' && confirmAllowed ? (
+      {confirm === 'unlock' ? (
         <ConfirmCard
           title="Return to automatic?"
           confirmLabel="Unlock and re-pick"
@@ -688,7 +700,7 @@ function Editor({ debateId }: { debateId: string }) {
           </section>
         </div>
 
-        {view.panel === 'check' ? (
+        {shown.panel === 'check' ? (
           <section aria-label="Check before publishing" className="flex min-w-0 flex-col gap-2">
             <div className="flex justify-end">
               <Button small variant="secondary" onClick={() => dispatch({ type: 'closePanel' })}>

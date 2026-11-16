@@ -37,8 +37,14 @@ export type EditorPlayback =
 
 export type EditorState = {
   selection: EditorSelection;
+  /** The panel the admin asked for. What is open is {@link effectivePanel}: never read this to render. */
   panel: EditorPanel;
+  /** The clip the panel is about: the selected clip when it opened (`null` for none). */
+  panelFor: string | null;
+  /** The popover the admin asked for. What is open is {@link effectivePopover}. */
   popover: EditorPopover | null;
+  /** The clip the popover is about: the selected clip when it opened. */
+  popoverFor: string | null;
   playback: EditorPlayback;
   /** The reel's clip keys as last seen, in order: where a removed selected clip stood. */
   clipKeys: readonly string[];
@@ -78,12 +84,35 @@ export type EditorAction =
   /** Between two reel clips, while the next one loads. */
   | { type: 'reelLoading'; loading: boolean }
   /** The reel's clips, by key, in order, whenever they change (an edit, a discard, a refetch). */
-  | { type: 'clipsChanged'; keys: readonly string[] };
+  | { type: 'clipsChanged'; keys: readonly string[] }
+  /**
+   * The editor's facts as they are now: whatever they no longer allow closes for good (it does not
+   * come back when they allow it again). Sent whenever they or the view change.
+   */
+  | { type: 'settle'; facts: EditorFacts };
+
+/** What the editor knows that decides which panel and popover can be open, besides the clips. */
+export type EditorFacts = {
+  /** This visit's check is the debate's request, so its report has something to show. */
+  checkShown: boolean;
+  /** Nothing on the reel can be edited (a request in flight, a carried or refused reel, …). */
+  readOnly: boolean;
+  canPublish: boolean;
+  canUnlock: boolean;
+};
+
+/** Facts that close nothing: what the reducer assumes between `settle`s. */
+export const NO_LIMITS: EditorFacts = { checkShown: true, readOnly: false, canPublish: true, canUnlock: true };
+
+/** The data a view is judged against: the clips now, and the facts. */
+export type EditorData = { keys: readonly string[] } & EditorFacts;
 
 export const INITIAL_EDITOR_STATE: EditorState = {
   selection: { kind: 'none' },
   panel: 'transcript',
+  panelFor: null,
   popover: null,
+  popoverFor: null,
   playback: { mode: 'idle' },
   clipKeys: [],
 };
@@ -95,12 +124,127 @@ export function selectedKey(state: Pick<EditorState, 'selection'>): string | nul
   return state.selection.kind === 'clip' ? state.selection.key : null;
 }
 
-/** What one Esc closes, in this order: a popover, then the side panel, then the selection. */
-export function escapeTarget(state: EditorState): 'popover' | 'panel' | 'selection' | null {
+/**
+ * What one Esc closes, in this order: a popover, then the side panel, then the selection. Pass the
+ * view as it is shown ({@link editorView}), not as it was asked for.
+ */
+export function escapeTarget(
+  state: Pick<EditorState, 'popover' | 'panel' | 'selection'>
+): 'popover' | 'panel' | 'selection' | null {
   if (state.popover !== null) return 'popover';
   if (state.panel !== 'transcript') return 'panel';
   if (state.selection.kind === 'clip') return 'selection';
   return null;
+}
+
+/**
+ * The one rule for which panel is open (GEO-3773). The reducer stores what the admin asked for and
+ * what it was about; this says whether that still holds against the data now, so nothing has to
+ * close a panel event by event when a clip goes, a request changes or the editor turns read-only.
+ *
+ * - claim, Replace, Add: about the clip selected when they opened (none, for Add from its card).
+ *   They close once the selection is another clip or that clip is gone, and while nothing is editable.
+ * - check: its report is about this visit's check, so only while that is the debate's request.
+ * - warnings, the transcript: always.
+ *
+ * `state.selection` must already be resolved against the clips now ({@link resolveSelection}).
+ */
+export function effectivePanel(
+  state: Pick<EditorState, 'panel' | 'panelFor' | 'selection'>,
+  facts: EditorFacts
+): EditorPanel {
+  switch (state.panel) {
+    case 'transcript':
+    case 'warnings':
+      return state.panel;
+    case 'check':
+      return facts.checkShown ? 'check' : 'transcript';
+    case 'claim':
+    case 'replace':
+      return !facts.readOnly && aboutSelection(state.panelFor, state) && state.panelFor !== null
+        ? state.panel
+        : 'transcript';
+    case 'add':
+      return !facts.readOnly && aboutSelection(state.panelFor, state) ? 'add' : 'transcript';
+  }
+}
+
+/**
+ * The same rule for popovers: a clip's claim menu and its advanced options are about the clip
+ * selected when they opened; a confirm is open only while what it confirms is allowed.
+ */
+export function effectivePopover(
+  state: Pick<EditorState, 'popover' | 'popoverFor' | 'selection'>,
+  facts: EditorFacts
+): EditorPopover | null {
+  switch (state.popover) {
+    case null:
+    case 'menu':
+      return state.popover;
+    case 'publish':
+      return facts.canPublish ? 'publish' : null;
+    case 'unlock':
+      return facts.canUnlock ? 'unlock' : null;
+    case 'claimMenu':
+    case 'advanced':
+      return !facts.readOnly && state.popoverFor !== null && aboutSelection(state.popoverFor, state)
+        ? state.popover
+        : null;
+  }
+}
+
+/**
+ * The selection is still the clip (or the none) a panel or popover opened for. A clip that went has
+ * already handed the selection on ({@link resolveSelection}), so this also covers a clip that went.
+ */
+function aboutSelection(about: string | null, state: Pick<EditorState, 'selection'>) {
+  return selectedKey(state) === about;
+}
+
+/**
+ * Where the selection is on these clips: a clip still here stays selected; a clip that went hands
+ * it to the clip that took its place, or the last, or none. The editor opens on its first clip when
+ * a reel turns up where there was none, but not while a reel plays or under the Add picker, where
+ * nothing is selected on purpose.
+ */
+export function resolveSelection(
+  state: Pick<EditorState, 'selection' | 'clipKeys' | 'playback' | 'panel'>,
+  keys: readonly string[]
+): EditorSelection {
+  const { selection, clipKeys: previous } = state;
+  if (selection.kind === 'none') {
+    return previous.length === 0 && keys.length > 0 && state.playback.mode !== 'reel' && state.panel !== 'add'
+      ? { kind: 'clip', key: keys[0] }
+      : selection;
+  }
+  if (keys.includes(selection.key)) return selection;
+  const at = previous.indexOf(selection.key);
+  const fallback = keys[Math.min(Math.max(at, 0), keys.length - 1)];
+  return fallback === undefined ? NONE : { kind: 'clip', key: fallback };
+}
+
+/** What is shown: the selection on the clips now, and the panel and popover the rule leaves open. */
+export function editorView(state: EditorState, data: EditorData): Pick<EditorState, 'selection' | 'panel' | 'popover'> {
+  const resolved = { ...state, selection: resolveSelection(state, data.keys) };
+  return {
+    selection: resolved.selection,
+    panel: effectivePanel(resolved, data),
+    popover: effectivePopover(resolved, data),
+  };
+}
+
+/** Commits the rule to the stored view: what it closes stays closed. */
+function settled(state: EditorState, facts: EditorFacts): EditorState {
+  const panel = effectivePanel(state, facts);
+  const popover = effectivePopover(state, facts);
+  if (panel === state.panel && popover === state.popover) return state;
+  return {
+    ...state,
+    panel,
+    panelFor: panel === state.panel ? state.panelFor : null,
+    popover,
+    popoverFor: popover === state.popover ? state.popoverFor : null,
+  };
 }
 
 /** Stops whatever plays, putting a reel's selection back as it was before Play reel. */
@@ -114,52 +258,53 @@ function stopped(state: EditorState): EditorState {
 
 function selected(state: EditorState, key: string, flagged: boolean): EditorState {
   const base = stopped(state);
-  // The claim panel is about one clip: it stays open only for a flagged clip, whose claim is what
-  // needs fixing. The picker's job ends with the clip it was replacing or adding.
-  const panel =
-    (base.panel === 'claim' && !flagged) || base.panel === 'replace' || base.panel === 'add'
-      ? 'transcript'
-      : base.panel;
-  const popover = base.popover === 'claimMenu' || base.popover === 'advanced' ? null : base.popover;
-  return { ...base, selection: { kind: 'clip', key }, panel, popover };
+  // What was open about the clip before closes by the rule (it is about another clip now), except a
+  // claim panel on a flagged clip: its claim is what needs fixing, so the panel moves to it.
+  const panelFor = base.panel === 'claim' && flagged ? key : base.panelFor;
+  return { ...base, selection: { kind: 'clip', key }, panelFor };
 }
 
 export function editorReducer(state: EditorState, action: EditorAction): EditorState {
+  if (action.type === 'settle') return settled(state, action.facts);
+  // Every change is judged by the same rule against the clips the reducer knows; the facts it
+  // doesn't know arrive with `settle`.
+  return settled(reduce(state, action), NO_LIMITS);
+}
+
+function reduce(state: EditorState, action: Exclude<EditorAction, { type: 'settle' }>): EditorState {
   switch (action.type) {
     case 'select':
       return selected(state, action.key, action.flagged === true);
-    case 'deselect': {
-      const base = stopped(state);
-      return {
-        ...base,
-        selection: NONE,
-        panel: base.panel === 'claim' || base.panel === 'replace' ? 'transcript' : base.panel,
-        popover: base.popover === 'claimMenu' || base.popover === 'advanced' ? null : base.popover,
-      };
-    }
+    case 'deselect':
+      return { ...stopped(state), selection: NONE };
     case 'openPanel':
-      return { ...state, panel: action.panel, popover: null };
+      return { ...state, ...panelOpen(state, action.panel), popover: null, popoverFor: null };
     case 'togglePanel':
-      return { ...state, panel: state.panel === action.panel ? 'transcript' : action.panel, popover: null };
+      return {
+        ...state,
+        ...(state.panel === action.panel ? PANEL_CLOSED : panelOpen(state, action.panel)),
+        popover: null,
+        popoverFor: null,
+      };
     case 'closePanel':
-      return state.panel === 'transcript' ? state : { ...state, panel: 'transcript' };
-    case 'startAdd': {
-      const base = stopped(state);
-      return { ...base, selection: NONE, panel: 'add', popover: null };
-    }
+      return state.panel === 'transcript' ? state : { ...state, ...PANEL_CLOSED };
+    case 'startAdd':
+      return { ...stopped(state), selection: NONE, panel: 'add', panelFor: null, popover: null, popoverFor: null };
     case 'added':
-      return { ...selected(state, action.key, false), panel: 'transcript' };
+      return { ...selected(state, action.key, false), ...PANEL_CLOSED };
     case 'openPopover':
-      return { ...state, popover: action.popover };
+      return { ...state, popover: action.popover, popoverFor: selectedKey(state) };
     case 'togglePopover':
-      return { ...state, popover: state.popover === action.popover ? null : action.popover };
+      return state.popover === action.popover
+        ? { ...state, popover: null, popoverFor: null }
+        : { ...state, popover: action.popover, popoverFor: selectedKey(state) };
     case 'closePopover':
-      return state.popover === null ? state : { ...state, popover: null };
+      return state.popover === null ? state : { ...state, popover: null, popoverFor: null };
     case 'escape': {
       const target = escapeTarget(state);
-      if (target === 'popover') return { ...state, popover: null };
-      if (target === 'panel') return { ...state, panel: 'transcript' };
-      if (target === 'selection') return editorReducer(state, { type: 'deselect' });
+      if (target === 'popover') return { ...state, popover: null, popoverFor: null };
+      if (target === 'panel') return { ...state, ...PANEL_CLOSED };
+      if (target === 'selection') return reduce(state, { type: 'deselect' });
       return state;
     }
     case 'playReel': {
@@ -170,6 +315,7 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
       return {
         ...base,
         popover: null,
+        popoverFor: null,
         playback: {
           mode: 'reel',
           keys: action.keys,
@@ -201,34 +347,21 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
   }
 }
 
+const PANEL_CLOSED = { panel: 'transcript', panelFor: null } as const;
+
+/** A panel opened now is about the clip selected now (none for Add from its card). */
+function panelOpen(state: EditorState, panel: EditorPanel) {
+  return { panel, panelFor: selectedKey(state) };
+}
+
 function clipsChanged(state: EditorState, keys: readonly string[]): EditorState {
-  const previous = state.clipKeys;
   let next: EditorState = { ...state, clipKeys: keys };
   // A reel plays the clips it started with: once they change (a refetch after a job, another
   // admin's publish, an edit), it stops, and its selection comes back only if that clip is still here.
   if (next.playback.mode === 'reel' && next.playback.list !== keys.join('|')) next = stopped(next);
   if (next.playback.mode === 'clip' && !keys.includes(next.playback.key)) next = stopped(next);
-
-  const { selection } = next;
-  if (selection.kind === 'none') {
-    // The editor opens on its first clip, as it does when a reel turns up where there was none; not
-    // under the Add picker, where nothing is selected on purpose.
-    return previous.length === 0 && keys.length > 0 && next.playback.mode !== 'reel' && next.panel !== 'add'
-      ? { ...next, selection: { kind: 'clip', key: keys[0] } }
-      : next;
-  }
-  if (keys.includes(selection.key)) return next;
-  // The selected clip went: the clip that took its place is selected, or the last one, or none. What
-  // was open about the clip that went closes, as on any change of clip: a claim panel, a Replace
-  // picker or a clip popover would otherwise act on a clip the admin never chose.
-  const at = previous.indexOf(selection.key);
-  const fallback = keys[Math.min(Math.max(at, 0), keys.length - 1)];
-  return {
-    ...next,
-    selection: fallback === undefined ? NONE : { kind: 'clip', key: fallback },
-    panel: next.panel === 'claim' || next.panel === 'replace' ? 'transcript' : next.panel,
-    popover: next.popover === 'claimMenu' || next.popover === 'advanced' ? null : next.popover,
-  };
+  // What was open about a clip that went closes by the rule, as on any other change of clip.
+  return { ...next, selection: resolveSelection({ ...next, clipKeys: state.clipKeys }, keys) };
 }
 
 /**

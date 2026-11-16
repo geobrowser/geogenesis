@@ -2,9 +2,14 @@ import { describe, expect, it } from 'vitest';
 
 import {
   type EditorAction,
+  type EditorData,
+  type EditorPanel,
+  type EditorPopover,
   type EditorState,
   INITIAL_EDITOR_STATE,
+  NO_LIMITS,
   editorReducer,
+  editorView,
   escapeTarget,
   reelKeys,
   selectedKey,
@@ -296,5 +301,114 @@ describe('reelKeys', () => {
 
   it('plays every clip of a carried reel, which has no cuts on this video', () => {
     expect(reelKeys(['a', 'b'], [null, null], true)).toEqual(['a', 'b']);
+  });
+});
+
+describe('the one rule for what is open (editorView)', () => {
+  // Each case is a change to the data under an open panel or popover, opened on clip b (Add from its
+  // card, on none). `state` changes what the reducer holds; `data` the clips and facts now.
+  const KEYS = ['a', 'b', 'c'];
+  const changes: Record<string, { state?: (state: EditorState) => EditorState; data?: Partial<EditorData> }> = {
+    nothing: {},
+    'another clip selected': { state: state => ({ ...state, selection: { kind: 'clip', key: 'a' } }) },
+    'its clip gone': { data: { keys: ['a', 'c'] } },
+    'read-only': { data: { readOnly: true } },
+    'check no longer shown': { data: { checkShown: false } },
+    'publish not allowed': { data: { canPublish: false } },
+    'unlock not allowed': { data: { canUnlock: false } },
+  };
+  const opened = (open: EditorAction) =>
+    open.type === 'startAdd' ? run([open], loaded(KEYS)) : run([{ type: 'select', key: 'b' }, open], loaded(KEYS));
+  const shownAfter = (state: EditorState, change: string) => {
+    const { state: change_state = (s: EditorState) => s, data = {} } = changes[change];
+    return editorView(change_state(state), { keys: KEYS, ...NO_LIMITS, ...data });
+  };
+
+  const T = 'transcript';
+  const panels: [EditorPanel, EditorAction, EditorPanel[]][] = [
+    // nothing, another clip, clip gone, read-only, check gone, !publish, !unlock
+    ['transcript', { type: 'closePanel' }, [T, T, T, T, T, T, T]],
+    [
+      'warnings',
+      { type: 'openPanel', panel: 'warnings' },
+      ['warnings', 'warnings', 'warnings', 'warnings', 'warnings', 'warnings', 'warnings'],
+    ],
+    ['check', { type: 'openPanel', panel: 'check' }, ['check', 'check', 'check', 'check', T, 'check', 'check']],
+    ['claim', { type: 'openPanel', panel: 'claim' }, ['claim', T, T, T, 'claim', 'claim', 'claim']],
+    ['replace', { type: 'openPanel', panel: 'replace' }, ['replace', T, T, T, 'replace', 'replace', 'replace']],
+    // Opened from its card, on none: a selection is another clip; no selected clip can go.
+    ['add', { type: 'startAdd' }, ['add', T, 'add', T, 'add', 'add', 'add']],
+  ];
+  describe.each(panels)('the %s panel', (_, open, expected) => {
+    it.each(Object.keys(changes).map((change, at) => [change, expected[at]] as const))(
+      'after %s: %s',
+      (change, panel) => {
+        expect(shownAfter(opened(open), change).panel).toBe(panel);
+      }
+    );
+  });
+
+  const popovers: [EditorPopover, (EditorPopover | null)[]][] = [
+    ['menu', ['menu', 'menu', 'menu', 'menu', 'menu', 'menu', 'menu']],
+    ['publish', ['publish', 'publish', 'publish', 'publish', 'publish', null, 'publish']],
+    ['unlock', ['unlock', 'unlock', 'unlock', 'unlock', 'unlock', 'unlock', null]],
+    ['claimMenu', ['claimMenu', null, null, null, 'claimMenu', 'claimMenu', 'claimMenu']],
+    ['advanced', ['advanced', null, null, null, 'advanced', 'advanced', 'advanced']],
+  ];
+  describe.each(popovers)('the %s popover', (popover, expected) => {
+    it.each(Object.keys(changes).map((change, at) => [change, expected[at]] as const))(
+      'after %s: %s',
+      (change, shown) => {
+        expect(shownAfter(opened({ type: 'openPopover', popover }), change).popover).toBe(shown);
+      }
+    );
+  });
+
+  it('shows the clip in a gone clip’s place before the reducer hears of the change', () => {
+    const state = run([{ type: 'select', key: 'b' }], loaded(KEYS));
+    expect(editorView(state, { keys: ['a', 'c'], ...NO_LIMITS }).selection).toEqual({ kind: 'clip', key: 'c' });
+    expect(editorView(loaded([]), { keys: ['x'], ...NO_LIMITS }).selection).toEqual({ kind: 'clip', key: 'x' });
+  });
+
+  it('keeps what the facts closed closed once they allow it again', () => {
+    const claim = run(
+      [
+        { type: 'select', key: 'b' },
+        { type: 'openPanel', panel: 'claim' },
+      ],
+      loaded(KEYS)
+    );
+    const readOnly = editorReducer(claim, { type: 'settle', facts: { ...NO_LIMITS, readOnly: true } });
+    expect(readOnly.panel).toBe('transcript');
+    expect(editorReducer(readOnly, { type: 'settle', facts: NO_LIMITS }).panel).toBe('transcript');
+    const check = run([{ type: 'openPanel', panel: 'check' }], loaded(KEYS));
+    const gone = editorReducer(check, { type: 'settle', facts: { ...NO_LIMITS, checkShown: false } });
+    expect(editorReducer(gone, { type: 'settle', facts: NO_LIMITS }).panel).toBe('transcript');
+    // Nothing to close leaves the state as it was, so the editor's settle never re-renders it.
+    expect(editorReducer(check, { type: 'settle', facts: NO_LIMITS })).toBe(check);
+  });
+
+  it('keeps a flagged clip’s claim panel when the panel moves with it, and not a healthy one', () => {
+    const claim = run(
+      [
+        { type: 'select', key: 'b' },
+        { type: 'openPanel', panel: 'claim' },
+      ],
+      loaded(KEYS)
+    );
+    expect(run([{ type: 'select', key: 'b' }], claim).panel).toBe('claim');
+    expect(run([{ type: 'select', key: 'c', flagged: true }], claim)).toMatchObject({ panel: 'claim', panelFor: 'c' });
+    expect(run([{ type: 'select', key: 'c' }], claim).panel).toBe('transcript');
+  });
+
+  it('lets Esc pass over a panel that is no longer open, to the selection', () => {
+    const claim = run(
+      [
+        { type: 'select', key: 'b' },
+        { type: 'openPanel', panel: 'claim' },
+      ],
+      loaded(KEYS)
+    );
+    expect(escapeTarget(editorView(claim, { keys: KEYS, ...NO_LIMITS, readOnly: true }))).toBe('selection');
   });
 });

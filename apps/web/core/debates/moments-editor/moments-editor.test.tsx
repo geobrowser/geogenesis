@@ -1045,6 +1045,21 @@ describe('MomentsEditor (GEO-3671)', () => {
     expect(mocks.mutate).not.toHaveBeenCalled();
   });
 
+  it('keeps a confirm the reel closed closed once the edit that closed it is mended', () => {
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    const setEnd = (value: string) => {
+      fireEvent.change(screen.getByRole('textbox', { name: 'End time' }), { target: { value } });
+      fireEvent.blur(screen.getByRole('textbox', { name: 'End time' }));
+    };
+    setEnd('1.45');
+    fireEvent.click(screen.getByRole('button', { name: /^Publish reel/ }));
+    setEnd('0.5');
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    setEnd('1.45');
+    expect(screen.getByRole('button', { name: /^Publish reel/ })).toBeEnabled();
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+  });
+
   it('closes the return-to-automatic confirm once the reel is edited', () => {
     mocks.manualReel = true;
     render(<MomentsEditor debateId={DEBATE_ID} />);
