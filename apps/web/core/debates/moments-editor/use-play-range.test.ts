@@ -4,7 +4,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DebateFeedPlayerHandle } from '../browse/debate-feed-player';
 import type { EditorClip } from './reel';
-import { type PlaySegment, RANGE_STALL_MS, nextRangeStep, reelSegments, usePlayRange } from './use-play-range';
+import {
+  type PlaySegment,
+  RANGE_MEDIA_END_LEAD_MS,
+  RANGE_STALL_MS,
+  atMediaEnd,
+  nextRangeStep,
+  reelSegments,
+  usePlayRange,
+} from './use-play-range';
 
 /**
  * A player whose position runs off the (fake) wall clock at its rate, as the real pair does. Jumps
@@ -15,7 +23,9 @@ function fakePlayer() {
   let at = Date.now();
   let running = false;
   let rate = 1;
-  const position = () => (running ? base + (Date.now() - at) * rate : base);
+  // The media's end, where the real pair stops itself; null: unknown, it runs on.
+  let end: number | null = null;
+  const position = () => Math.min(running ? base + (Date.now() - at) * rate : base, end ?? Infinity);
   const rebase = () => {
     base = position();
     at = Date.now();
@@ -42,6 +52,7 @@ function fakePlayer() {
       return state.outcome;
     }),
     livePositionMs: vi.fn((): number | null => position()),
+    endMs: vi.fn((): number | null => end),
     unmute: vi.fn(),
   } satisfies DebateFeedPlayerHandle;
   return Object.assign(state, {
@@ -54,6 +65,9 @@ function fakePlayer() {
     speed(next: number) {
       rebase();
       rate = next;
+    },
+    mediaEnd(ms: number) {
+      end = ms;
     },
   });
 }
@@ -91,6 +105,17 @@ describe('nextRangeStep', () => {
     expect(nextRangeStep([clipA, clipB], 0, 15_000)).toEqual({ kind: 'wait', remainingMs: 5_000 });
     expect(nextRangeStep([clipA, clipB], 0, 20_000)).toEqual({ kind: 'jump', index: 1, toMs: 40_000 });
     expect(nextRangeStep([clipA, clipB], 1, 50_500)).toEqual({ kind: 'end' });
+  });
+
+  it("ends a segment just before the media's end, and a segment that runs past it", () => {
+    const stop = 20_000 - RANGE_MEDIA_END_LEAD_MS;
+    expect(nextRangeStep([clipA, clipB], 0, 15_000, 20_000)).toEqual({ kind: 'wait', remainingMs: stop - 15_000 });
+    expect(nextRangeStep([clipA, clipB], 0, stop, 20_000)).toEqual({ kind: 'jump', index: 1, toMs: 40_000 });
+    // A carried span past the end: the player stops itself at 18 s, and that ends the clip.
+    expect(nextRangeStep([clipA], 0, 18_000, 18_000)).toEqual({ kind: 'end' });
+    expect(atMediaEnd(stop, 20_000)).toBe(false);
+    expect(atMediaEnd(19_960, 20_000)).toBe(true);
+    expect(atMediaEnd(19_960, null)).toBe(false);
   });
 
   it('plays straight on into a clip that starts under 150 ms away', () => {
@@ -283,12 +308,93 @@ describe('usePlayRange', () => {
   });
 
   it('still stalls on a stop short of the end', () => {
-    const { result, update } = setup({ playing: true });
+    const { result, player, update } = setup({ playing: true });
+    player.mediaEnd(60_000);
     act(() => result.current.start('reel', [clipA, clipB]));
-    act(() => vi.advanceTimersByTime(9_990));
+    act(() => vi.advanceTimersByTime(5_000));
     act(() => update({ playing: false }));
 
     expect(result.current.state).toMatchObject({ kind: 'stalled', index: 0 });
+  });
+
+  // A reordered reel: the clip that ends where the debate ends plays first.
+  const late: PlaySegment = { key: 'late', start_ms: 15_000, end_ms: 20_000 };
+  const early: PlaySegment = { key: 'early', start_ms: 2_000, end_ms: 5_000 };
+
+  it('jumps on a playing pair when a non-last clip ends at the debate end', () => {
+    const { result, player } = setup({ playing: true });
+    player.mediaEnd(20_000);
+    act(() => result.current.start('reel', [late, early]));
+    player.handle.play.mockClear();
+
+    // The end timer gets there just before the player would stop itself.
+    act(() => vi.advanceTimersByTime(5_000 - RANGE_MEDIA_END_LEAD_MS));
+
+    expect(player.handle.jumpTo).toHaveBeenLastCalledWith(2_000);
+    expect(player.handle.play).not.toHaveBeenCalled();
+    expect(result.current.state).toMatchObject({ kind: 'playing', key: 'early', index: 1 });
+  });
+
+  it('starts the next clip when the player stopped itself at the debate end, reported by position first', () => {
+    const { result, player, update } = setup({ playing: true });
+    player.mediaEnd(20_000);
+    player.outcome = 'held';
+    act(() => result.current.start('reel', [late, early]));
+    act(() => result.current.onTransition('release'));
+    player.handle.play.mockClear();
+
+    // A late timer (a throttled tab): the final position arrives while `playing` is still true,
+    // then the stop, in the same render.
+    vi.mocked(player.handle.livePositionMs).mockReturnValue(20_000);
+    act(() => {
+      result.current.onPlayhead(20_000);
+      update({ playing: false });
+    });
+    expect(player.handle.jumpTo).toHaveBeenCalledTimes(1);
+    act(() => vi.advanceTimersByTime(0));
+
+    expect(player.handle.play).toHaveBeenCalledOnce();
+    expect(player.handle.jumpTo).toHaveBeenLastCalledWith(2_000);
+    expect(player.handle.play.mock.invocationCallOrder[0]).toBeLessThan(
+      player.handle.jumpTo.mock.invocationCallOrder[1]
+    );
+    expect(result.current.state).toMatchObject({ kind: 'playing', key: 'early', loading: true });
+  });
+
+  it('starts the next clip when the stop at the debate end is all it hears', () => {
+    const { result, player, update } = setup({ playing: true });
+    player.mediaEnd(20_000);
+    act(() => result.current.start('reel', [late, early]));
+    player.handle.play.mockClear();
+    vi.mocked(player.handle.livePositionMs).mockReturnValue(20_000);
+
+    act(() => update({ playing: false }));
+    act(() => vi.advanceTimersByTime(0));
+
+    expect(result.current.state).toMatchObject({ kind: 'playing', key: 'early', index: 1 });
+    expect(player.handle.play).toHaveBeenCalledOnce();
+    expect(player.handle.jumpTo).toHaveBeenLastCalledWith(2_000);
+  });
+
+  it('ends, not stalls, on a last clip that runs past the media end', () => {
+    const { result, player, onEnd, update } = setup({ playing: true });
+    player.mediaEnd(18_000);
+    act(() => result.current.start('reel', [clipA]));
+    vi.mocked(player.handle.livePositionMs).mockReturnValue(18_000);
+
+    act(() => update({ playing: false }));
+
+    expect(result.current.state).toEqual({ kind: 'idle' });
+    expect(onEnd).toHaveBeenCalledWith('reel');
+  });
+
+  it('skips a clip that starts after the media has ended', () => {
+    const { result, player } = setup({ playing: true });
+    player.mediaEnd(30_000);
+    act(() => result.current.start('reel', [clipB, clipA]));
+
+    expect(player.handle.jumpTo).toHaveBeenCalledWith(10_000);
+    expect(result.current.state).toMatchObject({ kind: 'playing', key: 'a', index: 0 });
   });
 
   it('stops, and pauses the player, when the clips change under it', () => {

@@ -30,6 +30,7 @@ const playerMocks = vi.hoisted(() => ({
     seek: vi.fn(),
     jumpTo: vi.fn((_ms: number): 'held' | 'seeked' => 'seeked'),
     livePositionMs: vi.fn((): number | null => null),
+    endMs: vi.fn((): number | null => null),
     unmute: vi.fn(),
   },
 }));

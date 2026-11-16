@@ -3890,6 +3890,11 @@ describe('the moments editor player (GEO-3773)', () => {
     expect(mocks.control).not.toHaveBeenCalled();
   });
 
+  it("reports where the media ends, so the editor's ranges can tell the debate's end from a stall", () => {
+    const { ref } = renderEditor();
+    expect(ref.current!.endMs()).toBe(120_000);
+  });
+
   it('starts over from Play once the debate has played to its end, since the editor has no Replay', () => {
     const { ref, controller } = renderEditor({ playing: false, playbackEnded: true });
 

@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import type { DebateFeedPlayerHandle } from '../browse/debate-feed-player';
+import { PLAYBACK_END_EPSILON_MS } from '../playback-utils';
 import type { EditorClip } from './reel';
 
 /** One stretch to play, on the recordings' clock, and the clip it belongs to. */
@@ -36,11 +37,39 @@ export type RangeStep =
   | { kind: 'jump'; index: number; toMs: number }
   | { kind: 'end' };
 
-/** What to do with the range at `positionMs`, playing segment `index`. Pure. */
-export function nextRangeStep(segments: readonly PlaySegment[], index: number, positionMs: number): RangeStep {
+/**
+ * A clip that runs to the media's end ends this much before it, so its end timer gets there while
+ * the pair is still playing and the jump to the next clip runs on a playing pair.
+ */
+export const RANGE_MEDIA_END_LEAD_MS = 2 * PLAYBACK_END_EPSILON_MS;
+
+/** The latest a segment can end: `RANGE_MEDIA_END_LEAD_MS` before the media does. */
+function mediaStopMs(mediaEndMs: number | null) {
+  return mediaEndMs === null ? Infinity : mediaEndMs - RANGE_MEDIA_END_LEAD_MS;
+}
+
+/**
+ * The player has stopped, or is stopping, at the end of the media: the playback hook's own
+ * `playbackEnded` test. Null `mediaEndMs` (not known yet) is never the end.
+ */
+export function atMediaEnd(positionMs: number, mediaEndMs: number | null) {
+  return mediaEndMs !== null && positionMs >= mediaEndMs - PLAYBACK_END_EPSILON_MS;
+}
+
+/**
+ * What to do with the range at `positionMs`, playing segment `index`. Pure. A segment ends where
+ * it says or where the media does, whichever is first: past the media's end the player has
+ * stopped itself, and that is the end of the segment, not a stall.
+ */
+export function nextRangeStep(
+  segments: readonly PlaySegment[],
+  index: number,
+  positionMs: number,
+  mediaEndMs: number | null = null
+): RangeStep {
   const segment = segments[index];
   if (!segment) return { kind: 'end' };
-  const remainingMs = segment.end_ms - positionMs;
+  const remainingMs = Math.min(segment.end_ms, mediaStopMs(mediaEndMs)) - positionMs;
   if (remainingMs > RANGE_END_TOLERANCE_MS) return { kind: 'wait', remainingMs };
   const next = segments[index + 1];
   if (!next) return { kind: 'end' };
@@ -114,6 +143,8 @@ export function usePlayRange({
   const runRef = React.useRef<Run | null>(null);
   const endTimerRef = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const stallTimerRef = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  /** Starts the next segment after the player stopped itself at the media's end; see `check`. */
+  const restartTimerRef = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const rateRef = React.useRef(rate);
   const playingRef = React.useRef(playing);
   const onEndRef = React.useRef(onEnd);
@@ -143,7 +174,10 @@ export function usePlayRange({
   const clearTimers = React.useCallback(() => {
     clearTimeout(endTimerRef.current);
     clearTimeout(stallTimerRef.current);
+    clearTimeout(restartTimerRef.current);
   }, []);
+
+  const mediaEndMs = React.useCallback(() => handle.current?.endMs() ?? null, [handle]);
 
   const stop = React.useCallback(() => {
     clearTimers();
@@ -207,14 +241,38 @@ export function usePlayRange({
       clearTimeout(endTimerRef.current);
       const run = runRef.current;
       if (!run || run.loading || run.stalled || !playingRef.current) return;
-      const step = nextRangeStep(run.segments, run.index, positionMs);
+      const step = nextRangeStep(run.segments, run.index, positionMs, mediaEndMs());
       if (step.kind !== 'wait') return;
       endTimerRef.current = setTimeout(
         () => checkRef.current(handle.current?.livePositionMs() ?? null),
         Math.max(RANGE_RECHECK_MS, step.remainingMs / rateRef.current)
       );
     },
-    [handle]
+    [handle, mediaEndMs]
+  );
+
+  /**
+   * Start segment `index` after the player stopped itself at the media's end, as `start` does:
+   * `play()` then the jump. From a timer, not from the effect that noticed the end: restarting an
+   * ended player commits a reset synchronously, which React can't do inside an effect, and a reset
+   * committed later would drop the jump's hold.
+   */
+  const restart = React.useCallback(
+    (run: Run, index: number) => {
+      if (runRef.current !== run || run.loading || run.stalled) return;
+      const player = handle.current;
+      if (!player) {
+        stop();
+        return;
+      }
+      run.index = index;
+      const { start_ms } = run.segments[index];
+      player.play();
+      if (!jump(run, start_ms)) return;
+      publish();
+      if (!run.loading) arm(player.livePositionMs() ?? start_ms);
+    },
+    [arm, handle, jump, publish, stop]
   );
 
   /** Where the player is now: end, move on, or wait for the end. */
@@ -230,7 +288,8 @@ export function usePlayRange({
         );
         return;
       }
-      const step = nextRangeStep(run.segments, run.index, positionMs);
+      const mediaEnd = mediaEndMs();
+      const step = nextRangeStep(run.segments, run.index, positionMs, mediaEnd);
       if (step.kind === 'wait') {
         arm(positionMs);
         return;
@@ -244,12 +303,19 @@ export function usePlayRange({
         onEndRef.current?.(run.id);
         return;
       }
+      if (atMediaEnd(positionMs, mediaEnd)) {
+        // The player stops itself here, in the same render that reports this position, so it is
+        // not playing on into a jump: start the next segment the way a paused pair starts.
+        const { index } = step;
+        restartTimerRef.current = setTimeout(() => restart(run, index), 0);
+        return;
+      }
       run.index = step.index;
       if (step.kind === 'jump' && !jump(run, step.toMs)) return;
       publish();
       if (!run.loading) arm(handle.current?.livePositionMs() ?? positionMs);
     },
-    [arm, clearTimers, handle, jump, publish]
+    [arm, clearTimers, handle, jump, mediaEndMs, publish, restart]
   );
   React.useLayoutEffect(() => {
     checkRef.current = check;
@@ -259,7 +325,9 @@ export function usePlayRange({
   const start = React.useCallback(
     (id: string, segments: readonly PlaySegment[]) => {
       clearTimers();
-      const playable = segments.filter(segment => segment.end_ms > segment.start_ms);
+      // A segment that starts where the media has already ended has nothing to play.
+      const stopMs = mediaStopMs(mediaEndMs());
+      const playable = segments.filter(segment => segment.end_ms > segment.start_ms && segment.start_ms < stopMs);
       const player = handle.current;
       if (playable.length === 0 || !player) {
         stop();
@@ -282,7 +350,7 @@ export function usePlayRange({
       publish();
       if (!run.loading) arm(player.livePositionMs() ?? playable[0].start_ms);
     },
-    [arm, clearTimers, clipsKey, handle, jump, publish, stop]
+    [arm, clearTimers, clipsKey, handle, jump, mediaEndMs, publish, stop]
   );
 
   /** Play again after a stall: the current segment, from where it stopped if that is inside it. */
@@ -292,13 +360,14 @@ export function usePlayRange({
     if (!run || !run.stalled || !player) return;
     const segment = run.segments[run.index];
     const live = player.livePositionMs();
-    const from = live !== null && live >= segment.start_ms && live < segment.end_ms ? live : segment.start_ms;
+    const endMs = Math.min(segment.end_ms, mediaStopMs(mediaEndMs()));
+    const from = live !== null && live >= segment.start_ms && live < endMs ? live : segment.start_ms;
     run.stalled = false;
     if (!playingRef.current) player.play();
     if (!jump(run, from)) return;
     publish();
     if (!run.loading) arm(player.livePositionMs() ?? from);
-  }, [arm, handle, jump, publish]);
+  }, [arm, handle, jump, mediaEndMs, publish]);
 
   /** The player's raw position, in ms; every report re-arms the end, and one past it ends now. */
   const onPlayhead = React.useCallback((positionMs: number) => checkRef.current(positionMs), []);
@@ -361,15 +430,19 @@ export function usePlayRange({
     }
     // A jump's hold pauses the elements on purpose; its own release or cancel says how it ended.
     if (!was || !run || run.loading || run.stalled) return;
-    // The debate itself ended where the last clip does, a moment before the end timer: that is the
-    // end of the range, not a stall.
+    // Ended or stalled, decided off where the player is: stopped at the media's end (the debate
+    // ended inside or at the end of this clip, before the end timer fired), the clip is over and
+    // the range moves on or ends; stopped anywhere else, something stopped it.
     const live = handle.current?.livePositionMs() ?? null;
-    if (live !== null && nextRangeStep(run.segments, run.index, live).kind === 'end') {
-      checkRef.current(live);
-      return;
+    if (live !== null) {
+      const mediaEnd = mediaEndMs();
+      if (atMediaEnd(live, mediaEnd) || nextRangeStep(run.segments, run.index, live, mediaEnd).kind === 'end') {
+        checkRef.current(live);
+        return;
+      }
     }
     stall();
-  }, [handle, playing, publish, stall]);
+  }, [handle, mediaEndMs, playing, publish, stall]);
 
   // The player failed or was refused while a run wanted it playing.
   React.useEffect(() => {

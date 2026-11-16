@@ -13,6 +13,7 @@ function handleAt(position: { ms: number }) {
       seek: vi.fn(),
       jumpTo: vi.fn(() => 'seeked' as const),
       livePositionMs: () => position.ms,
+      endMs: () => null,
       unmute: vi.fn(),
     } satisfies DebateFeedPlayerHandle,
   };

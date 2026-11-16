@@ -243,6 +243,8 @@ export type DebateFeedPlayerHandle = {
    */
   jumpTo: (ms: number) => 'held' | 'seeked';
   livePositionMs: () => number | null;
+  /** Where the media ends, in ms on the same clock; null until it is known. The player stops itself there. */
+  endMs: () => number | null;
   /** Lift a refused sound from inside the click, without touching the feed's sound setting. */
   unmute: () => void;
 };
@@ -793,6 +795,7 @@ function PairedDebateFeedPlayer({
       return jump.held ? 'held' : 'seeked';
     },
     livePositionMs,
+    endMs: () => (timelineSeconds > 0 ? timelineSeconds * 1_000 : null),
     unmute: () => {
       activateBothInGesture();
       clearSoundBlocked();
@@ -810,6 +813,7 @@ function PairedDebateFeedPlayer({
       seek: ms => editorControlsRef.current.seek(ms),
       jumpTo: ms => editorControlsRef.current.jumpTo(ms),
       livePositionMs: () => editorControlsRef.current.livePositionMs(),
+      endMs: () => editorControlsRef.current.endMs(),
       unmute: () => editorControlsRef.current.unmute(),
     }),
     []
