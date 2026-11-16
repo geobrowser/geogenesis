@@ -759,9 +759,11 @@ function PairedDebateFeedPlayer({
     play: () => {
       pair.release();
       // Played to the end: start over, as `togglePlayback` does. The editor has no Replay of its own,
-      // and a resume from the end stops again at once.
+      // and a resume from the end stops again at once. The reset is committed here, inside the
+      // click: left to the next render, its cut-transition cleanup would drop the hold of a jump
+      // made right after this (Play reel from the end starts over, then jumps to its first clip).
       if (playbackEnded) {
-        resetAnimationSeek();
+        flushSync(resetAnimationSeek);
         void playFromStartRaw();
       } else void resumeBoth();
       // Started inside the click, so the element may make sound later, as `togglePlayback` marks it.

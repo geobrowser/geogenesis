@@ -3900,6 +3900,28 @@ describe('the moments editor player (GEO-3773)', () => {
     expect(mocks.control).not.toHaveBeenCalled();
   });
 
+  it('keeps a jump made right after Play at the end under its frames: the restart does not drop it', () => {
+    vi.useFakeTimers();
+    try {
+      const { ref, container, controller, onJumpTransition } = renderEditor({ playing: false, playbackEnded: true });
+      framesReady(container);
+
+      // Play reel after the debate ended: Play starts over, then the range jumps to its first clip.
+      act(() => {
+        ref.current!.play();
+        ref.current!.jumpTo(70_000);
+      });
+
+      expect(controller.playFromStart).toHaveBeenCalledOnce();
+      expect(onJumpTransition.mock.calls).toEqual([['start']]);
+      expect(controller.holdForTransition.mock.results[0].value.cancel).not.toHaveBeenCalled();
+      expect([...container.querySelectorAll('canvas')].map(canvas => canvas.style.opacity)).toEqual(['1', '1']);
+    } finally {
+      cleanup();
+      vi.useRealTimers();
+    }
+  });
+
   it('marks a recording it started inside the click as allowed sound', () => {
     const { ref, container } = renderEditor({ playing: false });
     const [slot1] = Array.from(container.querySelectorAll('video'));

@@ -360,7 +360,15 @@ export function usePlayRange({
       return;
     }
     // A jump's hold pauses the elements on purpose; its own release or cancel says how it ended.
-    if (was && run && !run.loading) stall();
+    if (!was || !run || run.loading || run.stalled) return;
+    // The debate itself ended where the last clip does, a moment before the end timer: that is the
+    // end of the range, not a stall.
+    const live = handle.current?.livePositionMs() ?? null;
+    if (live !== null && nextRangeStep(run.segments, run.index, live).kind === 'end') {
+      checkRef.current(live);
+      return;
+    }
+    stall();
   }, [handle, playing, publish, stall]);
 
   // The player failed or was refused while a run wanted it playing.

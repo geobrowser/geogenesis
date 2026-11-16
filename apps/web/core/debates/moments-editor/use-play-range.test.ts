@@ -271,6 +271,26 @@ describe('usePlayRange', () => {
     expect(result.current.state).toMatchObject({ kind: 'playing', loading: false });
   });
 
+  it('ends, not stalls, when the debate itself ends where the last clip does', () => {
+    const { result, onEnd, update } = setup({ playing: true });
+    act(() => result.current.start('reel', [clipA]));
+    // The player reaches the debate's end and stops a moment before the end timer would fire.
+    act(() => vi.advanceTimersByTime(9_990));
+    act(() => update({ playing: false }));
+
+    expect(result.current.state).toEqual({ kind: 'idle' });
+    expect(onEnd).toHaveBeenCalledWith('reel');
+  });
+
+  it('still stalls on a stop short of the end', () => {
+    const { result, update } = setup({ playing: true });
+    act(() => result.current.start('reel', [clipA, clipB]));
+    act(() => vi.advanceTimersByTime(9_990));
+    act(() => update({ playing: false }));
+
+    expect(result.current.state).toMatchObject({ kind: 'stalled', index: 0 });
+  });
+
   it('stops, and pauses the player, when the clips change under it', () => {
     const { result, player, update } = setup({ playing: true, clipsKey: 'a,b' });
     act(() => result.current.start('reel', [clipA, clipB]));
