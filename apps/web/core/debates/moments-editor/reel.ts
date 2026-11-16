@@ -51,11 +51,15 @@ export function newClipKey() {
 }
 
 /**
- * The transcript's words on the player's clock, in time order. A word the render cut has no player
- * time and is left out, as the player leaves its line out (`transcriptOnRecordings`).
+ * The transcript's spoken words on the player's clock, in time order: the editor's one word list, the
+ * words every check, count, snap and selection reads. A word the render cut has no player time and is
+ * left out, as the player leaves its line out (`transcriptOnRecordings`). A blank token (no text) is
+ * left out too (GEO-3767): geo-chat drops them before it counts or cuts anything (`speech_turns`), the
+ * transcript shows none, and nobody hears them, so no clip is judged, measured or snapped by one.
  */
 export function playerWords(words: readonly DebateTranscriptSpan[] | undefined): ReelWord[] {
   return transcriptOnRecordings(words ?? [])
+    .filter(word => word.text.trim() !== '')
     .map(word => ({ slot: word.participant_slot, start_ms: word.start_ms, end_ms: word.end_ms, text: word.text }))
     .sort((a, b) => a.start_ms - b.start_ms || a.end_ms - b.end_ms);
 }
@@ -70,22 +74,16 @@ export function wordsIn(words: readonly ReelWord[], startMs: number, endMs: numb
   return words.filter(word => wordInSpan(word, { start_ms: startMs, end_ms: endMs }));
 }
 
-/** Whether a word has text: geo-chat reads only these (`speech_turns`), and the transcript shows only these. */
-export function isSpoken(word: ReelWord): boolean {
-  return word.text.trim() !== '';
-}
-
 /**
  * Who a clip is of, as geo-chat decides it (`manual_moments`): the debater who says most of the
- * spoken words wholly inside it, a tie going to the lower slot. `null` when nobody speaks in it.
- * Blank tokens don't count: geo-chat drops them before it counts (`speech_turns`), and nobody hears
- * them. The one rule for a clip's speaker: the timeline, the warnings, the claim kept on an edit and
+ * words wholly inside it, a tie going to the lower slot. `null` when nobody speaks in it. The words
+ * are `playerWords`, which has no blank tokens, as geo-chat counts them (`speech_turns`). The one rule for a clip's speaker: the timeline, the warnings, the claim kept on an edit and
  * the transcript's selection toolbar all ask this (GEO-3767).
  */
 export function clipSpeaker(words: readonly ReelWord[], startMs: number, endMs: number): ParticipantSlot | null {
   const counts = new Map<ParticipantSlot, number>();
   for (const word of wordsIn(words, startMs, endMs)) {
-    if (isSpoken(word)) counts.set(word.slot, (counts.get(word.slot) ?? 0) + 1);
+    counts.set(word.slot, (counts.get(word.slot) ?? 0) + 1);
   }
   const ranked = [...counts].sort(([slotA, countA], [slotB, countB]) => countB - countA || slotA - slotB);
   return ranked[0]?.[0] ?? null;
@@ -256,8 +254,7 @@ export function selectionToClip(
   // Words are in start order, but a crosstalk word picked earlier can end after the last one picked.
   const start = snapEdge(Math.min(...picked.map(word => word.start_ms)), words, 'start');
   const end = snapEdge(Math.max(...picked.map(word => word.end_ms)), words, 'end');
-  // Only words with text are heard and shown, so only they count, as geo-chat reads them.
-  const said = wordsIn(words.filter(isSpoken), start, end);
+  const said = wordsIn(words, start, end);
   if (said.length === 0) return { ok: false, reason: 'no-words' };
   const saidFrom = Math.min(...said.map(word => word.start_ms));
   const saidTo = Math.max(...said.map(word => word.end_ms));
@@ -370,9 +367,7 @@ function geoChatCut(
   words: readonly ReelWord[],
   turns: readonly DebateMediaTurnSegment[]
 ) {
-  // geo-chat reads only words with text (`speech_turns`): a blank one is not the word beside a gap.
-  const spoken = words.filter(isSpoken);
-  const said = wordsIn(spoken, clip.start_ms, clip.end_ms);
+  const said = wordsIn(words, clip.start_ms, clip.end_ms);
   if (said.length === 0) return null;
   const first = Math.min(...said.map(word => word.start_ms));
   // The clip's last word as geo-chat takes it (`manual_moments`): the one said last, by start then
@@ -384,12 +379,12 @@ function geoChatCut(
   );
   const last = lastWord.end_ms;
   const lastSlot = lastWord.slot;
-  const before = spoken.filter(word => word.end_ms <= first).map(word => word.end_ms);
-  const ownAfter = spoken
+  const before = words.filter(word => word.end_ms <= first).map(word => word.end_ms);
+  const ownAfter = words
     .filter(word => word.slot === lastSlot && word.start_ms >= last)
     .map(word => word.start_ms - last);
   // Another debater's word said across the end leaves no room (crosstalk).
-  const otherAfter = spoken
+  const otherAfter = words
     .filter(word => word.slot !== lastSlot && word.end_ms > last)
     .map(word => Math.max(0, word.start_ms - last));
   const paddedStart = first - edgeRoom(before.length > 0 ? first - Math.max(...before) : null);

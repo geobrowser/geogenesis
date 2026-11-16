@@ -20,7 +20,6 @@ import {
   type SelectionClip,
   formatReelTime,
   formatSeconds,
-  isSpoken,
   selectionToClip,
   wordInSpan,
 } from './reel';
@@ -76,9 +75,9 @@ export function endClipAt(clip: EditorClip, sentence: ReelSentence): EditorClip 
 /**
  * Which words each sentence shows, as indexes into `words` (GEO-3766): a word belongs to its
  * speaker's sentence whose `[start, next sentence's start)` holds the word's start, the speaker's last
- * sentence taking the rest and the first anything before it. Every spoken word of a speaker with
- * sentences is shown exactly once, so what can be selected is what the clip plays; blank tokens,
- * neither shown nor heard, are left out.
+ * sentence taking the rest and the first anything before it. Every word of a speaker with sentences
+ * is shown exactly once, so what can be selected is what the clip plays. `words` are `playerWords`,
+ * which already leaves blank tokens out.
  */
 export function wordsBySentence(sentences: readonly ReelSentence[], words: readonly ReelWord[]): number[][] {
   const shown = sentences.map(() => [] as number[]);
@@ -87,8 +86,9 @@ export function wordsBySentence(sentences: readonly ReelSentence[], words: reado
   const cursor = new Map<ParticipantSlot, number>();
   words.forEach((word, index) => {
     const own = bySlot.get(word.slot);
-    // A blank token shows nothing: a sentence holding only blanks falls back to its own text.
-    if (!own || !isSpoken(word)) return;
+    // `playerWords` has no blank tokens, so a sentence whose words were all blank holds none and
+    // falls back to its own text.
+    if (!own) return;
     let at = cursor.get(word.slot) ?? 0;
     while (at + 1 < own.length && sentences[own[at + 1]].start_ms <= word.start_ms) at += 1;
     cursor.set(word.slot, at);
@@ -229,16 +229,13 @@ export function ReelTranscript({
   // Which clips play each word, as geo-chat counts a clip's words (`wordsIn`), and where each clip's
   // first word is, for its number.
   const wordClips = React.useMemo(
-    () =>
-      words.map(word =>
-        isSpoken(word) ? clips.flatMap((clip, index) => (wordInSpan(word, clip) ? [index] : [])) : []
-      ),
+    () => words.map(word => clips.flatMap((clip, index) => (wordInSpan(word, clip) ? [index] : []))),
     [words, clips]
   );
   const firstWordOf = React.useMemo(() => {
     const first = new Map<number, number[]>();
     clips.forEach((clip, index) => {
-      const at = words.findIndex(word => isSpoken(word) && wordInSpan(word, clip));
+      const at = words.findIndex(word => wordInSpan(word, clip));
       if (at >= 0) first.set(at, [...(first.get(at) ?? []), index]);
     });
     return first;

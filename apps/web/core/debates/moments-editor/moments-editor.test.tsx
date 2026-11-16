@@ -9,6 +9,7 @@ import { GeoChatRequestError } from '../api';
 import { RENDERED_TURN_SEGMENTS } from '../open-rounds-media-fixtures';
 import type { MomentBackfillEntry, MomentBackfillStatus } from './api';
 import { MomentsEditor, claimsBySpeaker, editingBlockedReason, keepClaimWithSpeaker } from './moments-editor';
+import { playerWords } from './reel';
 import { SELECTION_SETTLE_MS, coveredWords, selectionAnchorRect, wordsOnly } from './reel-transcript';
 
 const DEBATE_ID = '01a0448a-61d3-7101-8434-a20fdadf6f97';
@@ -1156,8 +1157,12 @@ describe('keepClaimWithSpeaker', () => {
 
   // The speaker the claim is judged on is geo-chat's: blank tokens are nobody's words (GEO-3767).
   it('keeps the claim when the edit only takes in the other debater’s blank tokens', () => {
-    const withBlanks = [...words, { slot: 2 as const, start_ms: 1_420, end_ms: 1_460, text: ' ' }];
-    const blanks = [...withBlanks, { slot: 2 as const, start_ms: 1_470, end_ms: 1_490, text: '' }];
+    // Through `playerWords`, the one place blank tokens are dropped.
+    const blanks = playerWords([
+      ...words.map(w => ({ participant_slot: w.slot, start_ms: w.start_ms, end_ms: w.end_ms, text: w.text })),
+      { participant_slot: 2, start_ms: 1_420, end_ms: 1_460, text: ' ' },
+      { participant_slot: 2, start_ms: 1_470, end_ms: 1_490, text: '' },
+    ]);
     // The edit widens the end over two slot-2 blanks: one heard word of slot 1's against two blanks.
     const tight = { ...clip, end_ms: 1_410 };
     const wider = { ...clip, end_ms: 1_500 };
