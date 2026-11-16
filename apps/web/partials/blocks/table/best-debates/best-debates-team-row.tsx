@@ -15,7 +15,6 @@ import { SpaceThumb } from '~/partials/explore/space-thumb';
 
 import { RankingEntryRow } from '../ranking-entry-row';
 import { BestDebateDisplaysContext } from './best-debate-row';
-import { GradeMenuButton, ROW_ICON_BUTTON_CLASS } from './grade-menu-button';
 
 /** Who has ranked a debate: the purple "Nobody has ranked this yet", or "Ranked by …". */
 export function RankedByBadge({ rankers, entityId }: { rankers: RankersRead; entityId: string }) {
@@ -86,6 +85,10 @@ export function DownRankButton({ name, onClick }: { name: string; onClick: () =>
 }
 
 /** The rank mark as a button of its own, for rows that aren't one (the space page's block). */
+/** The rows' square Rank icon button (44px on a phone). */
+const ROW_ICON_BUTTON_CLASS =
+  'grid size-8 shrink-0 place-items-center rounded-md border border-grey-02 bg-white text-text transition-colors hover:border-text disabled:cursor-not-allowed disabled:opacity-50 md:size-11';
+
 export function RankButton({ name, onClick, disabled }: { name: string; onClick: () => void; disabled?: boolean }) {
   return (
     <button
@@ -160,11 +163,8 @@ export function BestDebatesTeamRowContent({
             myRank ? (
               <span className="text-breadcrumb whitespace-nowrap text-grey-04 tabular-nums">You: #{myRank}</span>
             ) : onRank ? (
-              // Grade it straight from the row, or Rank it by comparing (GEO-3729).
-              <span className="flex items-center gap-2">
-                <GradeMenuButton entityId={entityId} name={name} />
-                <RankButton name={name} onClick={onRank} />
-              </span>
+              // Grading happens in the watch popup's Grade row (Preston, 16 Nov); the row keeps Rank.
+              <RankButton name={name} onClick={onRank} />
             ) : null
           }
         />
