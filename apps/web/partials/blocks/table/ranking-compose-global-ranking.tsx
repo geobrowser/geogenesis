@@ -20,6 +20,7 @@ import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Search } from '~/design-system/icons/search';
 
 import { BestDebateDisplaysContext, BestDebateWatchContext } from './best-debates/best-debate-row';
+import { BestDebatesFilterRow } from './best-debates/best-debates-filter-row';
 import { BestDebatesMatchingList } from './best-debates/best-debates-matching-list';
 import { BestDebatesGroupedRows } from './best-debates/best-debates-team-row';
 import {
@@ -27,6 +28,8 @@ import {
   type BestDebatesTeamTools,
   BestDebatesTopicSearchRow,
 } from './best-debates/best-debates-team-tools';
+import type { BestDebatesFilterFacets } from './best-debates/use-best-debates-filter-facets';
+import type { BestDebatesRankingFilterState } from './best-debates/use-best-debates-ranking-filters';
 import { type BestDebatesTopicFacet, useBestDebatesTopicFacet } from './best-debates/use-best-debates-topic-facet';
 import { RankingGlobalDesktopRow } from './ranking-block-ui';
 import { useRankingComposeScrollRoot, useRankingComposeScrollRootRef } from './ranking-compose-layout';
@@ -379,6 +382,19 @@ export type RankingComposeTeamView = {
   toRankIds?: readonly string[];
   /** Topic filter and Group by space, for All and To rank alike. */
   tools?: BestDebatesTeamTools;
+  /**
+   * The recorded, debater and claim filters (GEO-3774), for All, By space and To rank alike. The
+   * ranking screen has them; the block doesn't.
+   */
+  rankingFilters?: {
+    state: BestDebatesRankingFilterState;
+    facets: BestDebatesFilterFacets;
+    todayKey: string;
+    /** The filters as entity clauses for All and By space's server read and topic counts. */
+    clauses: readonly Record<string, unknown>[];
+    /** Any of them is on. */
+    active: boolean;
+  };
   /** The row both lists draw, in place of the generic ranking row. */
   renderRow?: (args: {
     entityId: string;
@@ -822,6 +838,7 @@ export function RankingComposeGlobalRanking({
   // Best debates: the topic filter, then Group by space, over each section of the team column.
   const teamDisplays = React.useContext(BestDebateDisplaysContext);
   const teamTools = teamView?.tools;
+  const rankingFilters = teamView?.rankingFilters;
   // Counted over the whole list the picker shows, never the rows drawn so far (Preston, 12 Nov).
   const keepTeamIds = (ids: string[]) =>
     teamTools
@@ -862,6 +879,15 @@ export function RankingComposeGlobalRanking({
         </div>
         {teamView?.tools && topicFacet ? <BestDebatesTeamToolbar tools={teamView.tools} facet={topicFacet} /> : null}
       </div>
+      {teamView?.tools && rankingFilters ? (
+        <BestDebatesFilterRow
+          state={rankingFilters.state}
+          facets={rankingFilters.facets}
+          todayKey={rankingFilters.todayKey}
+          topicsPicked={teamView.tools.topicIds.length > 0}
+          onClearTopics={teamView.tools.clearTopics}
+        />
+      ) : null}
       {teamView?.tools && topicFacet ? (
         <BestDebatesTopicSearchRow
           query={searchQuery}
@@ -977,6 +1003,7 @@ export function RankingComposeGlobalRanking({
             topicIds={teamTools.topicIds}
             toRankIds={teamView?.toRankIds ?? NO_TOPIC_IDS}
             displays={teamDisplays}
+            extraClauses={rankingFilters?.clauses}
           >
             {topicFacet => renderSearchRow(topicFacet)}
           </TopicFacetScope>
@@ -1004,12 +1031,13 @@ export function RankingComposeGlobalRanking({
         <div ref={setListContainerRef} className={cx(isDesktop && 'min-h-0 flex-1 overflow-x-hidden overflow-y-auto')}>
           {isToRank ? (
             teamView?.toRankPanel
-          ) : teamTools && (teamTools.topicIds.length > 0 || searchQuery.trim()) ? (
+          ) : teamTools && (teamTools.topicIds.length > 0 || searchQuery.trim() || rankingFilters?.active) ? (
             // A search or topic is on: the whole matching list, not the pages scrolled to, so the
             // rows agree with the Topic menu's count (Preston, 12 Nov).
             <BestDebatesMatchingList
               query={searchQuery}
               topicIds={teamTools.topicIds}
+              filterClauses={rankingFilters?.clauses}
               grouped={teamView?.mode === 'by_space'}
               rankOf={id => globalRankByEntityId.get(id)}
               render={(id, rank, name) => renderPickEntity(id, rank, name)}

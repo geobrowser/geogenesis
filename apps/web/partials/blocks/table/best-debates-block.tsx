@@ -5,6 +5,7 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import { capture } from '~/core/analytics';
+import { rankDayParams } from '~/core/blocks/ranking/best-debates-ranking-filters';
 import {
   BEST_DEBATES_GRADE_PARAM,
   BEST_DEBATES_GRADE_TIERS,
@@ -183,6 +184,22 @@ export function BestDebatesBlock({
     ? { ranked: ranking.coverage.total - ranking.coverage.left, total: ranking.coverage.total }
     : null;
   const coverageCounts = canRank ? personal : windowQuery.data ? week : null;
+  // GEO-3774: the ranking screen on just the picked day's debates, its To rank list first.
+  const selectedDayCoverage = coverage.find(day => day.dayKey === dayKey);
+  const rankDay = () => {
+    capture('element_clicked', {
+      source: 'best_debates_block',
+      element_action: 'rank_day',
+      block_id: blockId,
+      space_id: spaceId,
+      day: dayKey === todayKey ? 'today' : dayKey,
+      unranked_count: selectedDayCoverage ? selectedDayCoverage.total - selectedDayCoverage.ranked : null,
+    });
+    onOpenCompose('edit', {
+      [BEST_DEBATES_TEAM_VIEW_PARAM]: BEST_DEBATES_TEAM_VIEW_TO_RANK,
+      ...rankDayParams(dayKey),
+    });
+  };
   const rankTheRest = () => {
     capture('element_clicked', {
       source: 'best_debates_block',
@@ -342,6 +359,19 @@ export function BestDebatesBlock({
                   setPickedDayKey(key === todayKey ? null : key);
                 }}
               />
+            ) : null}
+            {view === 'day' && canRank && (!windowQuery.data || (selectedDayCoverage?.total ?? 0) > 0) ? (
+              <div className="-mt-2 flex">
+                <Button
+                  variant="secondary"
+                  small
+                  onClick={rankDay}
+                  data-testid="best-debates-rank-day"
+                  data-geo-analytics-label="Best debates rank this day"
+                >
+                  Rank this day
+                </Button>
+              </div>
             ) : null}
 
             {periodFailed ? (

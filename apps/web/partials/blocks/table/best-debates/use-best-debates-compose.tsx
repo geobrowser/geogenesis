@@ -3,9 +3,17 @@
 import * as React from 'react';
 
 import { fetchDebateOwnSpaces } from '~/core/blocks/ranking/best-debates-debates';
+import {
+  NO_RANKING_FILTERS,
+  hasRankingFilters,
+  rankingFilterEntityClauses,
+  recordedRangeMs,
+  toRankWindow,
+} from '~/core/blocks/ranking/best-debates-ranking-filters';
 import { type BallotGrades, NO_GRADES, sortIntoTiers } from '~/core/blocks/ranking/ranking-grades';
 import { insertAt } from '~/core/blocks/ranking/ranking-placement';
 import type { RankingSubmissionSlot } from '~/core/blocks/ranking/ranking-submission-types';
+import { useNyTodayKey } from '~/core/blocks/ranking/use-best-debates';
 import {
   type RankersRead,
   refreshRankersAfterIndexing,
@@ -24,7 +32,9 @@ import { BestDebatesTeamRowContent } from './best-debates-team-row';
 import { useBestDebatesTeamTools } from './best-debates-team-tools';
 import { BestDebatesToRankList } from './best-debates-to-rank-list';
 import type { PushDownSlot } from './push-down-slot';
+import { useBestDebatesFilterFacets } from './use-best-debates-filter-facets';
 import { type PlacementOrigin, useBestDebatesPlacement } from './use-best-debates-placement';
+import { type BestDebatesRankingFilterState, writeTeamViewParam } from './use-best-debates-ranking-filters';
 
 /** How a Re-order's Placed step ended, with the draft from when it opened and as it ended. */
 export type ReorderEnd = {
@@ -79,6 +89,11 @@ export type UseBestDebatesComposeArgs = {
   searchQuery?: string;
   /** Open the team column on To rank (the screen was opened with `?team=to-rank`, GEO-3677). */
   openOnToRank?: boolean;
+  /**
+   * The ranking screen's recorded, debater and claim filters (GEO-3774), from the URL. The block
+   * leaves it out: it has no filters, and its To rank stays the last 7 days.
+   */
+  rankingFilters?: BestDebatesRankingFilterState;
   /** GEO-3679 fills this: Push it down (team and To rank rows), and the debates to keep out of To rank. */
   pushDown?: PushDownSlot & { pushedDownEntityIds?: readonly string[] };
 };
@@ -110,8 +125,11 @@ export function useBestDebatesCompose({
   onReorderEnd,
   publishThrough,
   onPlacedClose,
+  rankingFilters,
 }: UseBestDebatesComposeArgs) {
   const tools = useBestDebatesTeamTools();
+  const filters = rankingFilters?.filters ?? NO_RANKING_FILTERS;
+  const todayKey = useNyTodayKey();
   const [, setToast] = useToast();
   const [teamMode, setTeamMode] = React.useState<RankingComposeTeamMode>(openOnToRank ? 'to_rank' : 'all');
   const [mobileTab, setMobileTab] = React.useState<RankingComposeMobileTab>('global');
@@ -122,7 +140,37 @@ export function useBestDebatesCompose({
     () => [...orderedIds, ...(pushDown?.pushedDownEntityIds ?? [])],
     [orderedIds, pushDown?.pushedDownEntityIds]
   );
-  const toRank = useBestDebatesToRank({ enabled, excludeEntityIds: excludeFromToRank, rankers });
+  const toRank = useBestDebatesToRank({ enabled, excludeEntityIds: excludeFromToRank, rankers, filters, todayKey });
+
+  // GEO-3774: All and By space read the recorded range as it is; To rank reads its own window (the
+  // range, else the last 7 days). The menus count over whichever list is showing.
+  const nowHour = Math.floor(Date.now() / HOUR_MS) * HOUR_MS;
+  const allWindow = React.useMemo(
+    () => (filters.recorded ? recordedRangeMs(filters.recorded, todayKey) : null),
+    [filters.recorded, todayKey]
+  );
+  const toRankFacetWindow = React.useMemo(() => toRankWindow(filters, todayKey, nowHour), [filters, todayKey, nowHour]);
+  const allFilterClauses = React.useMemo(
+    () => rankingFilterEntityClauses({ filters, window: allWindow }),
+    [allWindow, filters]
+  );
+  const isToRank = teamMode === 'to_rank';
+  const filterFacets = useBestDebatesFilterFacets({
+    enabled: enabled && Boolean(rankingFilters),
+    query: searchQuery,
+    topicIds: tools.topicIds,
+    filters,
+    window: isToRank ? toRankFacetWindow : allWindow,
+    excludeEntityIds: isToRank ? excludeFromToRank : NO_IDS,
+  });
+  const changeTeamMode = React.useCallback(
+    (mode: RankingComposeTeamMode) => {
+      setTeamMode(mode);
+      // The screen keeps `?team=to-rank` in step, so a reload or a shared link opens on the same list.
+      if (rankingFilters) writeTeamViewParam(mode === 'to_rank');
+    },
+    [rankingFilters]
+  );
   const toRankIds = React.useMemo(() => toRank.debates.map(debate => debate.entityId), [toRank.debates]);
   const { entries: toRankEntries } = useRankingEntryEntities(blockSpaceId, enabled ? toRankIds : []);
   const toRankEntriesById = React.useMemo(
@@ -260,10 +308,19 @@ export function useBestDebatesCompose({
 
   const teamView: RankingComposeTeamView = {
     mode: teamMode,
-    onModeChange: setTeamMode,
+    onModeChange: changeTeamMode,
     toRankCount: toRank.isLoading || toRank.error ? null : toRankIds.length,
     tools,
     toRankIds,
+    rankingFilters: rankingFilters
+      ? {
+          state: rankingFilters,
+          facets: filterFacets,
+          todayKey,
+          clauses: allFilterClauses,
+          active: hasRankingFilters(filters),
+        }
+      : undefined,
     // All and To rank draw the same row (Preston, 12 Nov): badge, Rank button or "You: #N", grip.
     renderRow: ({ entityId, name, rank, spaceId: rowSpaceId, isInMyRanking }) => (
       <BestDebatesTeamRowContent
@@ -289,6 +346,10 @@ export function useBestDebatesCompose({
         draggable={!isMobile}
         query={searchQuery}
         topicIds={tools.topicIds}
+        recorded={filters.recorded}
+        todayKey={todayKey}
+        filtered={hasRankingFilters(filters)}
+        capped={toRank.capped}
         onPushDown={pushDown ? placement.requestPushDown : undefined}
       />
     ),
@@ -334,3 +395,6 @@ export function useBestDebatesCompose({
         : { total: toRank.windowCount, left: Math.min(toRankIds.length, toRank.windowCount) },
   };
 }
+
+const HOUR_MS = 60 * 60 * 1000;
+const NO_IDS: readonly string[] = [];

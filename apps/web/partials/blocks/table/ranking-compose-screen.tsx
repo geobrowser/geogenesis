@@ -95,6 +95,7 @@ import { ClearRankingButton } from './best-debates/clear-ranking-button';
 import { CopyTeamRankingStart } from './best-debates/copy-team-ranking-start';
 import { useBestDebatesCompose } from './best-debates/use-best-debates-compose';
 import { useBestDebatesPushDownSlot } from './best-debates/use-best-debates-push-down-slot';
+import { useBestDebatesRankingFilters } from './best-debates/use-best-debates-ranking-filters';
 import { useUnpublishedLeaveGuard } from './best-debates/use-unpublished-leave-guard';
 import { RankingBallotReadError } from './ranking-ballot-read-error';
 import { RankingComposeCreateEntityPanel } from './ranking-compose-create-entity-panel';
@@ -699,8 +700,11 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   /** How each draft grade was made (GEO-3729), so its published event says so. */
   const draftGradeMethods = React.useRef(new Map<string, GradeChange['method']>());
 
+  // The team column's recorded, debater and claim filters live in the URL (GEO-3774).
+  const rankingFilters = useBestDebatesRankingFilters({ blockId: entityId, spaceId });
   const bestDebates = useBestDebatesCompose({
     enabled: isBestDebates,
+    rankingFilters: isBestDebates ? rankingFilters : undefined,
     blockId: entityId,
     blockSpaceId: spaceId,
     isMobile,

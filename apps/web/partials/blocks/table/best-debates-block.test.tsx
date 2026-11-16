@@ -286,6 +286,34 @@ describe('BestDebatesBlock', () => {
     expect(onOpenCompose).toHaveBeenLastCalledWith('edit');
   });
 
+  it('opens the ranking screen on the picked day’s To rank from Rank this day (GEO-3774)', () => {
+    mocks.flag = true;
+    mocks.canEdit = true;
+    const { onOpenCompose } = renderBlock();
+
+    const strip = screen.getByRole('group', { name: 'Last 7 days' });
+    fireEvent.click(within(strip).getAllByRole('button')[1]);
+    fireEvent.click(screen.getByRole('button', { name: 'Rank this day' }));
+    expect(onOpenCompose).toHaveBeenCalledWith('edit', { team: 'to-rank', recorded: addDays(TODAY, -1) });
+    expect(mocks.capture).toHaveBeenCalledWith(
+      'element_clicked',
+      expect.objectContaining({ element_action: 'rank_day', day: addDays(TODAY, -1), unranked_count: 0 })
+    );
+  });
+
+  it('offers Rank this day only to rankers, and not on a day with no debates', () => {
+    renderBlock();
+    expect(screen.queryByRole('button', { name: 'Rank this day' })).not.toBeInTheDocument();
+    cleanup();
+
+    mocks.flag = true;
+    mocks.canEdit = true;
+    renderBlock();
+    const strip = screen.getByRole('group', { name: 'Last 7 days' });
+    fireEvent.click(within(strip).getAllByRole('button')[2]);
+    expect(screen.queryByRole('button', { name: 'Rank this day' })).not.toBeInTheDocument();
+  });
+
   it('never says "Not ranked yet" or shows counts off a failed ballot read', () => {
     mocks.rankers = { status: 'error', rankerCount: () => null, retry: vi.fn() };
     renderBlock();
