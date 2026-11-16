@@ -26,6 +26,12 @@ export function smartAccountQueryKey(embeddedWalletAddress: string | null | unde
   return ['smart-account', embeddedWalletAddress] as const;
 }
 
+export function signingAccountDelayMs() {
+  const allowed = process.env.NODE_ENV === 'development' || process.env.NEXT_PUBLIC_VERCEL_ENV === 'preview';
+  const ms = Number(process.env.NEXT_PUBLIC_DELAY_SIGNING_ACCOUNT_MS);
+  return allowed && ms > 0 ? ms : 0;
+}
+
 function useWalletCookieSync(address: `0x${string}` | null) {
   React.useEffect(() => {
     if (!address) forgetSyncedWalletCookie();
@@ -74,6 +80,9 @@ export function useSmartAccount() {
       // WalletClient is JSON-RPC and would be rejected by viem's
       // signAuthorization action).
       if (!embeddedWallet) return null;
+
+      const delayMs = signingAccountDelayMs();
+      if (delayMs) await new Promise(resolve => setTimeout(resolve, delayMs));
 
       const signer = await toViemAccount({ wallet: embeddedWallet });
 

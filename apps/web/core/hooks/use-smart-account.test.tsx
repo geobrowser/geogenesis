@@ -5,7 +5,7 @@ import * as React from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { useSmartAccount } from './use-smart-account';
+import { signingAccountDelayMs, useSmartAccount } from './use-smart-account';
 
 const ADDRESS = '0x5D6d0E45D76D360AB4F94941CE9a005b0AEa2ebD';
 
@@ -54,7 +54,11 @@ beforeEach(() => {
   mocks.forgetSyncedWalletCookie.mockReset();
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllEnvs();
+  vi.useRealTimers();
+});
 
 describe('useSmartAccount', () => {
   it('syncs the wallet cookie from the restored address, before the wallet arrives', async () => {
@@ -109,5 +113,46 @@ describe('useSmartAccount', () => {
 
     await waitFor(() => expect(result.current.error).not.toBeNull());
     expect(result.current).toEqual(expect.objectContaining({ smartAccount: null, isLoading: false }));
+  });
+});
+
+describe('signingAccountDelayMs', () => {
+  it('is off when the flag is unset', () => {
+    vi.stubEnv('NODE_ENV', 'development');
+    expect(signingAccountDelayMs()).toBe(0);
+  });
+
+  it('holds the account back on dev and preview', () => {
+    vi.stubEnv('NEXT_PUBLIC_DELAY_SIGNING_ACCOUNT_MS', '30000');
+    vi.stubEnv('NODE_ENV', 'development');
+    expect(signingAccountDelayMs()).toBe(30_000);
+
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('NEXT_PUBLIC_VERCEL_ENV', 'preview');
+    expect(signingAccountDelayMs()).toBe(30_000);
+  });
+
+  it('is ignored on production', () => {
+    vi.stubEnv('NEXT_PUBLIC_DELAY_SIGNING_ACCOUNT_MS', '30000');
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('NEXT_PUBLIC_VERCEL_ENV', 'production');
+    expect(signingAccountDelayMs()).toBe(0);
+  });
+
+  it('builds the account only once the delay has passed', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout'] });
+    vi.stubEnv('NEXT_PUBLIC_DELAY_SIGNING_ACCOUNT_MS', '30000');
+    vi.stubEnv('NODE_ENV', 'development');
+    mocks.wallets = [embedded];
+    const { result } = renderSmartAccount();
+
+    await act(() => vi.advanceTimersByTimeAsync(29_000));
+    expect(mocks.generateZeroDevAccount).not.toHaveBeenCalled();
+    expect(result.current.smartAccount).toBeNull();
+
+    await act(() => vi.advanceTimersByTimeAsync(1_000));
+    expect(mocks.generateZeroDevAccount).toHaveBeenCalledOnce();
+    await act(() => vi.runOnlyPendingTimersAsync());
+    expect(result.current.smartAccount?.account.address).toBe(ADDRESS);
   });
 });
