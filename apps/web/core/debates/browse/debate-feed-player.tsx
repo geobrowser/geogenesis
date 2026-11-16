@@ -758,7 +758,12 @@ function PairedDebateFeedPlayer({
   const editorControls: DebateFeedPlayerHandle = {
     play: () => {
       pair.release();
-      void resumeBoth();
+      // Played to the end: start over, as `togglePlayback` does. The editor has no Replay of its own,
+      // and a resume from the end stops again at once.
+      if (playbackEnded) {
+        resetAnimationSeek();
+        void playFromStartRaw();
+      } else void resumeBoth();
       // Started inside the click, so the element may make sound later, as `togglePlayback` marks it.
       for (const video of [slot1VideoRef.current, slot2VideoRef.current]) {
         if (video && !video.paused) markGestureVideoUnlocked(video);

@@ -3890,6 +3890,16 @@ describe('the moments editor player (GEO-3773)', () => {
     expect(mocks.control).not.toHaveBeenCalled();
   });
 
+  it('starts over from Play once the debate has played to its end, since the editor has no Replay', () => {
+    const { ref, controller } = renderEditor({ playing: false, playbackEnded: true });
+
+    act(() => ref.current!.play());
+    expect(controller.playFromStart).toHaveBeenCalledOnce();
+    expect(controller.resumeBoth).not.toHaveBeenCalled();
+    expect(controller.togglePlayback).not.toHaveBeenCalled();
+    expect(mocks.control).not.toHaveBeenCalled();
+  });
+
   it('marks a recording it started inside the click as allowed sound', () => {
     const { ref, container } = renderEditor({ playing: false });
     const [slot1] = Array.from(container.querySelectorAll('video'));
