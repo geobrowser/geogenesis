@@ -90,8 +90,8 @@ export function wordsBySentence(sentences: readonly ReelSentence[], words: reado
   const cursor = new Map<ParticipantSlot, number>();
   words.forEach((word, index) => {
     const own = bySlot.get(word.slot);
-    // `playerWords` has no blank tokens, so a sentence whose words were all blank holds none and
-    // falls back to its own text.
+    // Neither list holds blank text: `playerWords` drops blank tokens and `reelSentences` drops the
+    // blank sentences geo-chat serves between them (`isSpoken`).
     if (!own) return;
     let at = cursor.get(word.slot) ?? 0;
     while (at + 1 < own.length && sentences[own[at + 1]].start_ms <= word.start_ms) at += 1;
@@ -514,7 +514,6 @@ const SentenceWords = React.memo(
     return own.map((index, nth) => {
       const word = words[index];
       const body = word.text.trim();
-      if (!body) return null;
       const playedBy = wordClips[index];
       const speaker = playedBy.length > 0 ? speakers[playedBy[0]] : null;
       return (
