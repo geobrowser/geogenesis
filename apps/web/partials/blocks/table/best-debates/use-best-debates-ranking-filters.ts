@@ -25,15 +25,26 @@ export type BestDebatesRankingFilterState = {
 
 /**
  * Rewrites the page's query string in place: same path, same history entry and its state (the leave
- * guard keeps a sentinel there). Next keeps `useSearchParams` in step with `history.replaceState`.
- * Read from `window.location` at the moment of writing, never a render's stale copy.
+ * guard keeps a sentinel there). Read from `window.location` at the moment of writing, never a
+ * render's stale copy.
+ *
+ * Next's marker keys (`__NA`, `_N`) are taken off the state passed in: Next's patched
+ * `replaceState` treats a state carrying them as its own write and skips syncing its router, so
+ * `useSearchParams` would never see the change (and Next's next history write would put the old
+ * URL back). Next copies its markers back onto the entry itself.
  */
 export function replaceSearchParams(update: (params: URLSearchParams) => URLSearchParams) {
   if (typeof window === 'undefined') return;
   const next = update(new URLSearchParams(window.location.search));
   const search = next.toString();
   const url = `${window.location.pathname}${search ? `?${search}` : ''}${window.location.hash}`;
-  window.history.replaceState(window.history.state, '', url);
+  window.history.replaceState(withoutNextMarkers(window.history.state), '', url);
+}
+
+function withoutNextMarkers(state: unknown): Record<string, unknown> | null {
+  if (!state || typeof state !== 'object') return null;
+  const { __NA, _N, ...rest } = state as Record<string, unknown>;
+  return rest;
 }
 
 /** Writes `?team=to-rank` while To rank is open, so a reload or a shared link opens on it too. */

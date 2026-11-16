@@ -119,8 +119,10 @@ export function useBestDebatesToRank({
   const query = filtered ? filteredQuery : unfilteredQuery;
 
   const recent = filtered ? filteredQuery.data?.debates : unfilteredQuery.data;
-  // The filtered read is already exact to its window; only the unfiltered one is cut to 7 days here.
-  const windowDays = filtered ? Infinity : TO_RANK_WINDOW_DAYS;
+  // A recorded range is exact on the server. Without one, To rank's own 7 days are read from the top
+  // of the hour (as the plain read is), so they're cut to the last 7 days here either way: a debater
+  // or claim filter never lists a debate the plain To rank has already dropped.
+  const windowDays = filters?.recorded ? Infinity : TO_RANK_WINDOW_DAYS;
   const rankerCount = rankers.status === 'ready' ? rankers.rankerCount : undefined;
   const debates = React.useMemo(
     () => (recent ? selectToRank(recent, excludeEntityIds, Date.now(), { rankerCount, windowDays }) : []),

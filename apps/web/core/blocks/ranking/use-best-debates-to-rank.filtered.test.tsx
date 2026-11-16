@@ -76,6 +76,30 @@ describe('useBestDebatesToRank under the screen’s filters (GEO-3774)', () => {
     });
   });
 
+  it('cuts a debater-only read to the last 7 days, as the plain To rank does', async () => {
+    const now = Date.now();
+    const hourStart = Math.floor(now / 3_600_000) * 3_600_000;
+    const inWindow: RecentDebate = { entityId: 'fresh', name: 'fresh', createdAtMs: now - 86_400_000, spaceId: 's' };
+    // Inside the read (it starts at the top of the hour, 7 days back) but past the 7 days To rank keeps.
+    const dropped: RecentDebate = {
+      entityId: 'dropped',
+      name: 'dropped',
+      createdAtMs: Math.max(hourStart - 7 * 86_400_000, now - 7 * 86_400_000 - 1),
+      spaceId: 's',
+    };
+    mocks.matching.mockResolvedValue({ debates: [inWindow, dropped], capped: false });
+    const filters = { ...NO_RANKING_FILTERS, debaterIds: ['aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'] };
+
+    const { result } = renderHook(
+      () => useBestDebatesToRank({ enabled: true, excludeEntityIds: [], rankers, filters, todayKey: TODAY }),
+      { wrapper }
+    );
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.debates.map(d => d.entityId)).toEqual(['fresh']);
+    expect(result.current.windowCount).toBe(1);
+  });
+
   it('keeps the plain 7-day read when no filter is on', async () => {
     mocks.recent.mockResolvedValue([]);
     const { result } = renderHook(
