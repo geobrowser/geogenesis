@@ -35,20 +35,20 @@ export function useProposeVotingSettings() {
 
   const propose = React.useCallback(
     async ({ spaceId, votingSettings }: ProposeVotingSettingsArgs) => {
-      const smartAccount = await awaitSigningAccount(liveSmartAccount);
-      if (!smartAccount) {
-        throw new TransactionWriteFailedError(
-          'Unable to propose: wallet is not connected. Please reconnect and try again.'
-        );
-      }
-      if (!personalSpaceId) {
-        throw new TransactionWriteFailedError(
-          'Unable to propose: your personal space could not be resolved. Please complete onboarding.'
-        );
-      }
-
       setIsPending(true);
       try {
+        const smartAccount = await awaitSigningAccount(liveSmartAccount);
+        if (!smartAccount) {
+          throw new TransactionWriteFailedError(
+            'Unable to propose: wallet is not connected. Please reconnect and try again.'
+          );
+        }
+        if (!personalSpaceId) {
+          throw new TransactionWriteFailedError(
+            'Unable to propose: your personal space could not be resolved. Please complete onboarding.'
+          );
+        }
+
         const submit = Effect.gen(function* () {
           const { to, calldata } = yield* Effect.try({
             try: () =>
