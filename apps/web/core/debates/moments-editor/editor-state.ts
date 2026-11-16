@@ -211,16 +211,24 @@ function clipsChanged(state: EditorState, keys: readonly string[]): EditorState 
 
   const { selection } = next;
   if (selection.kind === 'none') {
-    // The editor opens on its first clip, as it does when a reel turns up where there was none.
-    return previous.length === 0 && keys.length > 0 && next.playback.mode !== 'reel'
+    // The editor opens on its first clip, as it does when a reel turns up where there was none; not
+    // under the Add picker, where nothing is selected on purpose.
+    return previous.length === 0 && keys.length > 0 && next.playback.mode !== 'reel' && next.panel !== 'add'
       ? { ...next, selection: { kind: 'clip', key: keys[0] } }
       : next;
   }
   if (keys.includes(selection.key)) return next;
-  // The selected clip went: the clip that took its place is selected, or the last one, or none.
+  // The selected clip went: the clip that took its place is selected, or the last one, or none. What
+  // was open about the clip that went closes, as on any change of clip: a claim panel, a Replace
+  // picker or a clip popover would otherwise act on a clip the admin never chose.
   const at = previous.indexOf(selection.key);
   const fallback = keys[Math.min(Math.max(at, 0), keys.length - 1)];
-  return { ...next, selection: fallback === undefined ? NONE : { kind: 'clip', key: fallback } };
+  return {
+    ...next,
+    selection: fallback === undefined ? NONE : { kind: 'clip', key: fallback },
+    panel: next.panel === 'claim' || next.panel === 'replace' ? 'transcript' : next.panel,
+    popover: next.popover === 'claimMenu' || next.popover === 'advanced' ? null : next.popover,
+  };
 }
 
 /**

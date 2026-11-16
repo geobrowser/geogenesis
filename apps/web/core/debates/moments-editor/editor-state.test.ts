@@ -51,6 +51,44 @@ describe('editorReducer (GEO-3773)', () => {
     expect(selectedKey(gone)).toBeNull();
   });
 
+  it.each(['claim', 'replace'] as const)(
+    'closes the %s panel when the selected clip goes from under it, and keeps it when another clip goes',
+    panel => {
+      const open = run(
+        [
+          { type: 'select', key: 'b', flagged: true },
+          { type: 'openPanel', panel },
+        ],
+        loaded()
+      );
+      const fellBack = run([{ type: 'clipsChanged', keys: ['a', 'c'] }], open);
+      expect(selectedKey(fellBack)).toBe('c');
+      expect(fellBack.panel).toBe('transcript');
+      expect(run([{ type: 'clipsChanged', keys: [] }], open).panel).toBe('transcript');
+      expect(run([{ type: 'clipsChanged', keys: ['b', 'c'] }], open).panel).toBe(panel);
+    }
+  );
+
+  it('closes a clip popover when the selected clip goes, and keeps the publish confirm', () => {
+    const menu = run(
+      [
+        { type: 'select', key: 'b' },
+        { type: 'openPopover', popover: 'claimMenu' },
+      ],
+      loaded()
+    );
+    expect(run([{ type: 'clipsChanged', keys: ['a', 'c'] }], menu).popover).toBeNull();
+    const confirm = run([{ type: 'openPopover', popover: 'publish' }], menu);
+    expect(run([{ type: 'clipsChanged', keys: ['a', 'c'] }], confirm).popover).toBe('publish');
+  });
+
+  it('selects nothing under the Add picker when a reel turns up where there was none', () => {
+    const adding = run([{ type: 'startAdd' }], loaded([]));
+    const state = run([{ type: 'clipsChanged', keys: ['a', 'b'] }], adding);
+    expect(selectedKey(state)).toBeNull();
+    expect(state.panel).toBe('add');
+  });
+
   it('keeps the selected clip when another clip is removed or the clips are reordered', () => {
     const state = run(
       [
