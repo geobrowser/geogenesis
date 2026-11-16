@@ -1873,6 +1873,27 @@ describe('MomentsEditor view state (GEO-3773)', () => {
     expect(screen.getByText('Clip 1 selected')).toBeInTheDocument();
   });
 
+  it('goes back to the transcript when another request replaces the check', () => {
+    const requestedAt = '2026-11-11T21:00:00Z';
+    mocks.mutate.mockImplementation((_body, options: { onSuccess: (entry: unknown) => void }) =>
+      options.onSuccess({ queued: true, refusal: null, request: status({ requested_at: requestedAt, preview: true }) })
+    );
+    const { rerender } = render(<MomentsEditor debateId={DEBATE_ID} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+    mocks.backfill.data = {
+      request: status({ requested_at: requestedAt, preview: true, status: 'done' }),
+      entry: null,
+    };
+    rerender(<MomentsEditor debateId={DEBATE_ID} />);
+    expect(screen.getByRole('region', { name: 'Check before publishing' })).toBeInTheDocument();
+
+    // Another admin publishes: the debate's request is theirs now.
+    mocks.backfill.data = { request: status({ requested_at: '2026-11-11T21:05:00Z' }), entry: null };
+    rerender(<MomentsEditor debateId={DEBATE_ID} />);
+    expect(screen.queryByRole('region', { name: 'Check before publishing' })).not.toBeInTheDocument();
+    expect(screen.getByText('Clip 1 selected')).toBeInTheDocument();
+  });
+
   it('leaves the transcript from a check’s report with Back to the transcript', () => {
     const requestedAt = '2026-11-11T21:00:00Z';
     mocks.mutate.mockImplementation((_body, options: { onSuccess: (entry: unknown) => void }) =>

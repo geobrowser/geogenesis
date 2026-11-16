@@ -228,6 +228,13 @@ function Editor({ debateId }: { debateId: string }) {
     }
   }, [inFlight, ours, request, job, tracked, setToast, refreshAfterReel]);
 
+  // The check's report is about this visit's check: once the debate's request is someone else's (another
+  // admin's publish, a fresh automatic pick) or this visit's next one, the panel goes back to the transcript.
+  const showsCheck = ours && job.preview;
+  React.useEffect(() => {
+    if (view.panel === 'check' && !showsCheck) dispatch({ type: 'closePanel' });
+  }, [view.panel, showsCheck]);
+
   const participants = debate.data?.participants ?? [];
   const nameOf = (slot: ParticipantSlot | null) =>
     slot === null ? null : (participants.find(p => p.participant_slot === slot)?.display_name ?? `Debater ${slot}`);
