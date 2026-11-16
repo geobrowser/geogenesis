@@ -10,8 +10,11 @@ import type { CommentEntity } from '~/partials/comments/types';
 // Signed in, with no personal space yet: `createComment` inserts its optimistic row and then returns
 // `{ published: false }` before any transaction — the retained path, and the only one this file is
 // about. Nothing here reaches the chain.
+const mocks = vi.hoisted(() => ({ accountArrives: null as Promise<unknown> | null }));
+
 vi.mock('./cached-write-identity', () => ({
-  awaitSigningAccount: async () => ({ account: { address: '0xabc' } }),
+  awaitSigningAccount: () => mocks.accountArrives ?? Promise.resolve({ account: { address: '0xabc' } }),
+  readAccountAddress: () => '0xabc',
   readCachedPersonalSpace: () => ({ personalSpaceId: null }),
 }));
 vi.mock('./use-smart-account', () => ({ useSmartAccount: () => ({ smartAccount: null }) }));
@@ -46,7 +49,10 @@ function rowsIn(client: QueryClient) {
  * while the Activity heading counted it back in.
  */
 describe('useCreateComment retrying a comment by id', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.accountArrives = null;
+  });
 
   it('puts the row back when an earlier failure took it out, and reports it', async () => {
     const { client, createComment } = setup([]);
@@ -83,5 +89,41 @@ describe('useCreateComment retrying a comment by id', () => {
 
     expect(rowsIn(client)).toHaveLength(1);
     expect(onOptimistic).toHaveBeenCalledOnce();
+  });
+});
+
+describe('useCreateComment while the account is being built', () => {
+  beforeEach(() => {
+    mocks.accountArrives = null;
+  });
+
+  it('shows the row before the account arrives', async () => {
+    let arrive!: (account: unknown) => void;
+    mocks.accountArrives = new Promise(resolve => (arrive = resolve));
+    const { client, createComment } = setup(undefined);
+
+    let creating!: Promise<unknown>;
+    act(() => {
+      creating = createComment({ text: 'Early', targetSpaceId: 'space-1' });
+    });
+    expect(rowsIn(client)).toHaveLength(1);
+
+    await act(async () => {
+      arrive({ account: { address: '0xabc' } });
+      await creating;
+    });
+  });
+
+  it('keeps the comment as unpublished when the account never comes, so it is queued rather than lost', async () => {
+    mocks.accountArrives = Promise.resolve(null);
+    const { client, createComment } = setup(undefined);
+
+    let result: unknown;
+    await act(async () => {
+      result = await createComment({ text: 'Kept', targetSpaceId: 'space-1' });
+    });
+
+    expect(rowsIn(client)).toHaveLength(1);
+    expect(result).toEqual({ id: rowsIn(client)[0], published: false });
   });
 });

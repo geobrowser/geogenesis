@@ -28,6 +28,7 @@ vi.mock('./cached-write-identity', () => ({
     account: { address: '0xabc' },
     sendUserOperation: mocks.sendUserOperation,
   }),
+  readAccountAddress: () => '0xabc',
   readCachedPersonalSpace: () => ({ personalSpaceId: SPACE }),
 }));
 vi.mock('./use-smart-account', () => ({ useSmartAccount: () => ({ smartAccount: null }) }));

@@ -19,7 +19,7 @@ import { useAccountAddress } from '~/core/wallet/account-readiness';
 
 import type { CommentEntity, CreateCommentParams } from '~/partials/comments/types';
 
-import { awaitSigningAccount, readCachedPersonalSpace } from './cached-write-identity';
+import { awaitSigningAccount, readAccountAddress, readCachedPersonalSpace } from './cached-write-identity';
 import { fetchCommentEntitiesForTarget, mergePendingWithServer } from './use-comments';
 import { useGeoProfile } from './use-geo-profile';
 import { usePersonalSpaceId } from './use-personal-space-id';
@@ -153,16 +153,14 @@ export function useCreateComment(targetEntityId: string) {
       onOptimistic,
       commentId: existingCommentId,
     }: CreateCommentInput): Promise<CreateCommentResult | null> => {
-      const account = await awaitSigningAccount(smartAccount);
-      if (!account) {
+      const walletAddr = smartAccount?.account.address ?? readAccountAddress();
+      if (!walletAddr) {
         setToast(<span>Please connect your wallet to comment</span>);
         return null;
       }
 
-      const { personalSpaceId } = readCachedPersonalSpace(queryClient, account.account.address);
       const commentEntityId = existingCommentId ?? IdUtils.generate();
       const commentName = getCommentName(text);
-      const walletAddr = account.account.address;
 
       // Insert the optimistic row whenever it is not in the cache — not only on a first attempt.
       //
@@ -186,7 +184,8 @@ export function useCreateComment(targetEntityId: string) {
           profileSnapshot?.avatarUrl && profileSnapshot.avatarUrl !== PLACEHOLDER_SPACE_IMAGE
             ? profileSnapshot.avatarUrl
             : null;
-        const displaySpaceId = personalSpaceId ?? `pending:${walletAddr}`;
+        const displaySpaceId =
+          readCachedPersonalSpace(queryClient, walletAddr).personalSpaceId ?? `pending:${walletAddr}`;
         const optimisticComment: CommentEntity = {
           id: commentEntityId,
           name: commentName,
@@ -216,6 +215,12 @@ export function useCreateComment(targetEntityId: string) {
         onOptimistic?.(commentEntityId);
       }
 
+      const account = await awaitSigningAccount(smartAccount);
+      if (!account) {
+        return { id: commentEntityId, published: false };
+      }
+
+      const { personalSpaceId } = readCachedPersonalSpace(queryClient, account.account.address);
       if (!personalSpaceId) {
         return { id: commentEntityId, published: false };
       }
