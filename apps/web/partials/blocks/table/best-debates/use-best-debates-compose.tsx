@@ -82,6 +82,14 @@ export type UseBestDebatesComposeArgs = {
    * the move; the screen keeps the move in the draft either way.
    */
   onReorderEnd?: (end: ReorderEnd) => void;
+  /**
+   * The block's batched publish (Preston, 16 Nov): a placement's Done publishes through this, with
+   * the debate it placed, instead of on its own. Re-order's Done then only ends the step (its move
+   * goes to `onReorderEnd`, which joins the batch).
+   */
+  publishThrough?: (ids: string[], entityId?: string) => Promise<boolean>;
+  /** A placement's Placed step closed without Done (with `publishThrough`, the block commits it). */
+  onPlacedClose?: (entityId: string) => void;
   /** The team column's search, which To rank filters by too. */
   searchQuery?: string;
   /** Open the team column on To rank (the screen was opened with `?team=to-rank`, GEO-3677). */
@@ -117,6 +125,8 @@ export function useBestDebatesCompose({
   serialPublishes = false,
   getPublishedBase,
   onReorderEnd,
+  publishThrough,
+  onPlacedClose,
 }: UseBestDebatesComposeArgs) {
   const tools = useBestDebatesTeamTools();
   const [, setToast] = useToast();
@@ -257,18 +267,24 @@ export function useBestDebatesCompose({
     hasUnpublishedChanges,
     nameOf: debateName,
     toRankIds,
-    publish,
-    // A Done queued behind a grade publish counts as saving too.
-    isSaving: publishing,
+    publish: publishThrough ?? (ids => publish(ids)),
+    // A Done queued behind a grade publish counts as saving too. Through the block's batch, a Done
+    // never waits for another publish: it joins the next one.
+    isSaving: publishThrough ? false : publishing,
     pushDown,
     publishOnDone,
+    reorderPublishesOnDone: publishOnDone && !publishThrough,
     onReorderEnd: endReorder,
+    onPlacedClose,
   });
   const placementReorder = placement.reorder;
+  /** Opens Re-order's Placed step; false when the debate isn't in the ranking. */
   const reorder = React.useCallback(
-    (entityId: string) => {
+    (entityId: string): boolean => {
       reorderBefore.current = draftRef.current;
-      placementReorder(entityId);
+      const opened = placementReorder(entityId);
+      if (!opened) reorderBefore.current = null;
+      return opened;
     },
     [placementReorder]
   );
@@ -339,6 +355,8 @@ export function useBestDebatesCompose({
     placeFromTeam: (entityId: string) => startPlacement(entityId, 'team'),
     dropEntity,
     publish,
+    /** One publish of `ids` now, outside any queue (the block's batch publishes through it). */
+    publishNow,
     whenPublishesSettle,
     /** Re-order a debate already in the ranking: the Placed step at its place (GEO-3729). */
     reorder,

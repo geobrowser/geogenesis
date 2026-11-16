@@ -23,6 +23,7 @@ import {
   recentDayKeys,
   teamCoverageSentence,
 } from '~/core/blocks/ranking/best-debates-views';
+import { RankingComposeBallotContext } from '~/core/blocks/ranking/ranking-compose-ballot-context';
 import type { RankingComposeMode } from '~/core/blocks/ranking/ranking-compose-url';
 import { useBestDebateDisplays } from '~/core/blocks/ranking/use-best-debate-displays';
 import {
@@ -276,132 +277,135 @@ export function BestDebatesBlock({
   return (
     // The watch dialog names the debate from the same display data the rows draw.
     <BestDebateDisplaysContext.Provider value={displays}>
-      <BestDebateWatchProvider
-        source="best_debates_block"
-        blockId={blockId}
-        spaceId={spaceId}
-        grading={
-          canRank && ranking.grading
-            ? {
-                ...ranking.grading,
-                // "Grade your ranking" lives on the ranking screen.
-                onGradeYourRanking: () =>
-                  onOpenCompose('edit', { [BEST_DEBATES_GRADE_PARAM]: BEST_DEBATES_GRADE_TIERS }),
-              }
-            : null
-        }
-      >
-        <div className="flex w-full min-w-0 flex-col gap-4" data-testid="best-debates-block">
-          {ranking.dialogs}
-          <CoverageLine
-            counts={coverageCounts}
-            personal={canRank}
-            loading={canRank ? !personal : windowQuery.isLoading}
-            rankers={rankers}
-            onRankTheRest={canRank ? rankTheRest : null}
-          />
-
-          <div className="flex flex-col gap-2">
-            {renderHeader(
-              canRank ? (
-                <Button
-                  variant="primary"
-                  className="h-8 shrink-0 !rounded-full border-text bg-text !px-3.5 text-button whitespace-nowrap text-white hover:bg-text/90 focus-visible:border-text focus-visible:shadow-inner-text"
-                  onClick={() => onOpenCompose('edit')}
-                >
-                  Rank
-                </Button>
-              ) : null
-            )}
-            {belowHeader}
-            <div className="w-[300px] md:w-full">
-              <SegmentedControl
-                label="Period"
-                variant="tinted"
-                options={BEST_DEBATES_VIEWS}
-                value={view}
-                onChange={changeView}
-              />
-            </div>
-          </div>
-
-          {view === 'day' ? (
-            <DayStrip
-              dayKeys={dayKeys}
-              todayKey={todayKey}
-              selectedDayKey={dayKey}
-              coverage={windowQuery.data ? coverage : null}
-              countsKnown={rankers.status === 'ready'}
-              onSelect={key => {
-                capture('element_changed', {
-                  source: 'best_debates_block',
-                  element: 'day',
-                  value: key === todayKey ? 'today' : key,
-                  block_id: blockId,
-                  space_id: spaceId,
-                });
-                setPickedDayKey(key === todayKey ? null : key);
-              }}
+      {/* Down rank edits the block's ballot through its batched publish (the popup's and rows'). */}
+      <RankingComposeBallotContext.Provider value={ranking.ballot ?? null}>
+        <BestDebateWatchProvider
+          source="best_debates_block"
+          blockId={blockId}
+          spaceId={spaceId}
+          grading={
+            canRank && ranking.grading
+              ? {
+                  ...ranking.grading,
+                  // "Grade your ranking" lives on the ranking screen.
+                  onGradeYourRanking: () =>
+                    onOpenCompose('edit', { [BEST_DEBATES_GRADE_PARAM]: BEST_DEBATES_GRADE_TIERS }),
+                }
+              : null
+          }
+        >
+          <div className="flex w-full min-w-0 flex-col gap-4" data-testid="best-debates-block">
+            {ranking.dialogs}
+            <CoverageLine
+              counts={coverageCounts}
+              personal={canRank}
+              loading={canRank ? !personal : windowQuery.isLoading}
+              rankers={rankers}
+              onRankTheRest={canRank ? rankTheRest : null}
             />
-          ) : null}
 
-          {periodFailed ? (
-            <div className="flex items-center gap-3 rounded-lg bg-grey-01 px-4 py-3">
-              <p className="text-metadata text-grey-04">Couldn&rsquo;t load these debates.</p>
-              <Button variant="secondary" small onClick={() => void periodQuery.refetch()}>
-                Retry
-              </Button>
-            </div>
-          ) : periodLoading ? (
-            <div className="flex flex-col gap-3">
-              {[1, 2, 3].map(rank => (
-                <RankingEntryRowSkeleton key={rank} rank={rank} />
-              ))}
-            </div>
-          ) : (
-            <>
-              {rankedRows.length === 0 ? (
-                rankersFailed ? (
-                  <div
-                    className="flex items-center gap-3 rounded-lg bg-grey-01 px-4 py-3"
-                    data-testid="best-debates-rankers-error"
+            <div className="flex flex-col gap-2">
+              {renderHeader(
+                canRank ? (
+                  <Button
+                    variant="primary"
+                    className="h-8 shrink-0 !rounded-full border-text bg-text !px-3.5 text-button whitespace-nowrap text-white hover:bg-text/90 focus-visible:border-text focus-visible:shadow-inner-text"
+                    onClick={() => onOpenCompose('edit')}
                   >
-                    <p className="text-metadata text-grey-04">Couldn&rsquo;t load who ranked these debates.</p>
-                    <Button variant="secondary" small onClick={() => void rankers.retry()}>
-                      Retry
-                    </Button>
-                  </div>
-                ) : (
-                  <p className="text-metadata text-grey-04">{emptyRankedCopy(view, unplacedRows.length > 0)}</p>
-                )
-              ) : (
-                <div className="flex flex-col">
-                  {visibleRanked.map(id => renderRow(id, placeOffset.get(id) ?? null))}
-                </div>
+                    Rank
+                  </Button>
+                ) : null
               )}
-              {rankedRows.length > rankedLimit ? (
-                <ShowMore onClick={() => setRankedLimit(limit => limit + PAGE)} />
-              ) : null}
+              {belowHeader}
+              <div className="w-[300px] md:w-full">
+                <SegmentedControl
+                  label="Period"
+                  variant="tinted"
+                  options={BEST_DEBATES_VIEWS}
+                  value={view}
+                  onChange={changeView}
+                />
+              </div>
+            </div>
 
-              {view !== 'all' && unplacedRows.length > 0 ? (
-                <section className="flex flex-col gap-3" aria-label="Not ranked yet">
-                  <div className="flex items-center gap-3 pt-2">
-                    <span className="text-footnoteMedium whitespace-nowrap text-grey-04">
-                      {rankers.status === 'ready' ? 'Not ranked yet' : 'Not in the team ranking yet'} ·{' '}
-                      {unplacedRows.length}
-                    </span>
-                    <span className="h-px flex-1 bg-grey-02" aria-hidden />
+            {view === 'day' ? (
+              <DayStrip
+                dayKeys={dayKeys}
+                todayKey={todayKey}
+                selectedDayKey={dayKey}
+                coverage={windowQuery.data ? coverage : null}
+                countsKnown={rankers.status === 'ready'}
+                onSelect={key => {
+                  capture('element_changed', {
+                    source: 'best_debates_block',
+                    element: 'day',
+                    value: key === todayKey ? 'today' : key,
+                    block_id: blockId,
+                    space_id: spaceId,
+                  });
+                  setPickedDayKey(key === todayKey ? null : key);
+                }}
+              />
+            ) : null}
+
+            {periodFailed ? (
+              <div className="flex items-center gap-3 rounded-lg bg-grey-01 px-4 py-3">
+                <p className="text-metadata text-grey-04">Couldn&rsquo;t load these debates.</p>
+                <Button variant="secondary" small onClick={() => void periodQuery.refetch()}>
+                  Retry
+                </Button>
+              </div>
+            ) : periodLoading ? (
+              <div className="flex flex-col gap-3">
+                {[1, 2, 3].map(rank => (
+                  <RankingEntryRowSkeleton key={rank} rank={rank} />
+                ))}
+              </div>
+            ) : (
+              <>
+                {rankedRows.length === 0 ? (
+                  rankersFailed ? (
+                    <div
+                      className="flex items-center gap-3 rounded-lg bg-grey-01 px-4 py-3"
+                      data-testid="best-debates-rankers-error"
+                    >
+                      <p className="text-metadata text-grey-04">Couldn&rsquo;t load who ranked these debates.</p>
+                      <Button variant="secondary" small onClick={() => void rankers.retry()}>
+                        Retry
+                      </Button>
+                    </div>
+                  ) : (
+                    <p className="text-metadata text-grey-04">{emptyRankedCopy(view, unplacedRows.length > 0)}</p>
+                  )
+                ) : (
+                  <div className="flex flex-col">
+                    {visibleRanked.map(id => renderRow(id, placeOffset.get(id) ?? null))}
                   </div>
-                  <div className="flex flex-col">{visibleUnplaced.map(id => renderRow(id, null))}</div>
-                  {unplacedRows.length > unrankedLimit ? (
-                    <ShowMore onClick={() => setUnrankedLimit(limit => limit + PAGE)} />
-                  ) : null}
-                </section>
-              ) : null}
-            </>
-          )}
-        </div>
-      </BestDebateWatchProvider>
+                )}
+                {rankedRows.length > rankedLimit ? (
+                  <ShowMore onClick={() => setRankedLimit(limit => limit + PAGE)} />
+                ) : null}
+
+                {view !== 'all' && unplacedRows.length > 0 ? (
+                  <section className="flex flex-col gap-3" aria-label="Not ranked yet">
+                    <div className="flex items-center gap-3 pt-2">
+                      <span className="text-footnoteMedium whitespace-nowrap text-grey-04">
+                        {rankers.status === 'ready' ? 'Not ranked yet' : 'Not in the team ranking yet'} ·{' '}
+                        {unplacedRows.length}
+                      </span>
+                      <span className="h-px flex-1 bg-grey-02" aria-hidden />
+                    </div>
+                    <div className="flex flex-col">{visibleUnplaced.map(id => renderRow(id, null))}</div>
+                    {unplacedRows.length > unrankedLimit ? (
+                      <ShowMore onClick={() => setUnrankedLimit(limit => limit + PAGE)} />
+                    ) : null}
+                  </section>
+                ) : null}
+              </>
+            )}
+          </div>
+        </BestDebateWatchProvider>
+      </RankingComposeBallotContext.Provider>
     </BestDebateDisplaysContext.Provider>
   );
 }

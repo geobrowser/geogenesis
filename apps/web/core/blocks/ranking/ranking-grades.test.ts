@@ -9,6 +9,7 @@ import {
   gradeInto,
   mergeGrades,
   parseGrade,
+  placeAsIn,
   pruneGrades,
   removeEntry,
   restoreEntry,
@@ -295,5 +296,36 @@ describe('restoreEntry (Undo of a Down rank on the ranking screen)', () => {
       ]),
     };
     expect(restoreEntry(now, before, id(2)).ids).toEqual(ids(2, 3, 1));
+  });
+});
+
+describe('placeAsIn (the block’s batch replaying a move)', () => {
+  it('puts the debate under its neighbour above, with its grade, onto a ballot that moved', () => {
+    const snapshot = {
+      ids: ids(1, 2, 3),
+      grades: new Map<string, Grade>([
+        [id(1), 'A'],
+        [id(2), 'A'],
+        [id(3), 'B'],
+      ]),
+    };
+    // Published now: 4 (A) was added at the top elsewhere, and 2 sits under 3 as B.
+    const now = {
+      ids: ids(4, 1, 3, 2),
+      grades: new Map<string, Grade>([
+        [id(4), 'A'],
+        [id(1), 'A'],
+        [id(3), 'B'],
+        [id(2), 'B'],
+      ]),
+    };
+    const placed = placeAsIn(now, snapshot, id(2));
+    expect(placed.ids).toEqual(ids(4, 1, 2, 3));
+    expect(placed.grades.get(id(2))).toBe('A');
+  });
+
+  it('changes nothing for a debate the snapshot doesn’t hold', () => {
+    const now = { ids: ids(1), grades: new Map<string, Grade>() };
+    expect(placeAsIn(now, { ids: [], grades: new Map() }, id(2))).toBe(now);
   });
 });

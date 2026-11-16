@@ -58,6 +58,16 @@ describe('BestDebateGradeRow (GEO-3729)', () => {
     expect(g.grade).toHaveBeenCalledWith(DEBATE, 'B');
   });
 
+  it('says when a change didn’t publish, and Try again sends it (the block, 16 Nov)', () => {
+    const retry = vi.fn();
+    const g = grading({ publishFailed: () => true, retry }, { grade: 'B', place: 3 });
+    render(<BestDebateGradeRow entityId={DEBATE} grading={g} />);
+    expect(screen.getByText('Not saved')).toBeInTheDocument();
+    expect(screen.queryByText('Saving…')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(retry).toHaveBeenCalledTimes(1);
+  });
+
   it('shows the grade and where it landed, with Remove', () => {
     const g = grading({}, { grade: 'B', place: 31 });
     render(<BestDebateGradeRow entityId={DEBATE} grading={g} />);

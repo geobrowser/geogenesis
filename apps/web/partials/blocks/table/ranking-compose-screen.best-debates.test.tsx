@@ -452,16 +452,19 @@ describe('Grade your ranking on the ranking screen (GEO-3729)', () => {
     expect(mocks.myRanking?.tierLines).toBeUndefined();
   });
 
-  it('publishes the order with the tier lines’ grades, each counted as tier_lines', async () => {
+  it('puts the tier lines’ grades in the draft for Publish, each counted as tier_lines', async () => {
     mocks.member = true;
     mocks.recordGrade.mockReset();
     mocks.lastIds = ids;
     mocks.mySubmission = { orderedEntityIds: ids };
+    mocks.sentGrades = null;
     renderScreen();
     const { aCount, bCount } = mocks.myRanking!.tierLines!;
     const expected = applyTierLines(ids, aCount, bCount);
     await act(async () => screen.getByRole('button', { name: 'Save grades' }).click());
-    expect(mocks.sentGrades).toEqual(expected);
+    // Save grades publishes nothing on its own (Preston, 16 Nov): the screen's Publish sends them.
+    expect(mocks.sentGrades).toBeNull();
+    expect(mocks.myRanking?.tierLines).toBeUndefined();
     type OnPublished = (p: unknown, sent: string[], grades: typeof expected) => void;
     await act(async () =>
       (mocks.composeArgs?.onPublished as OnPublished)(

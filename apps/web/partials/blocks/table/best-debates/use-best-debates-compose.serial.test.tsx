@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({
     isSaving: boolean;
     onReorderEnd?: (entityId: string, outcome: 'done' | 'closed') => void;
   },
-  placementReorder: vi.fn(),
+  placementReorder: vi.fn(() => true),
   isDoneOut: false,
 }));
 

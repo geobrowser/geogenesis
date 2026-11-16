@@ -1,8 +1,8 @@
-import { act, renderHook } from '@testing-library/react';
+import { act, cleanup, renderHook } from '@testing-library/react';
 
 import * as React from 'react';
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { BallotGrades } from '~/core/blocks/ranking/ranking-grades';
 
@@ -31,7 +31,8 @@ function useHarness(
     ids,
     grades,
   }),
-  busy: { settle?: Promise<void>; published?: { ids: string[]; grades: BallotGrades } } = {}
+  busy: { settle?: Promise<void>; published?: { ids: string[]; grades: BallotGrades } } = {},
+  options: { reorder?: (entityId: string) => boolean; placeAfterGrade?: boolean } = {}
 ) {
   const published = React.useRef<{ ids: string[]; grades: BallotGrades }>({
     ids: [id(1)],
@@ -53,11 +54,13 @@ function useHarness(
       return ok;
     },
     downRank: vi.fn(),
+    ...options,
   });
-  return { grading, draft };
+  return { grading, draft, setDraft: setDraftState };
 }
 
 beforeEach(() => mocks.record.mockReset());
+afterEach(cleanup);
 
 describe('grading from the block (GEO-3729)', () => {
   it('publishes a grade at once, and sends grades given meanwhile together in the next publish', async () => {
@@ -93,13 +96,32 @@ describe('grading from the block (GEO-3729)', () => {
     ]);
   });
 
-  it('puts the ranking back as published when the publish fails', async () => {
-    const publish = vi.fn().mockResolvedValue(false);
+  it('keeps every change when the publish fails, and Try again sends them all', async () => {
+    const publish = vi.fn().mockResolvedValueOnce(false).mockResolvedValue(true);
     const { result } = renderHook(() => useHarness(publish));
     await act(async () => result.current.grading.grade(id(2), 'B'));
-    expect(result.current.draft.ids).toEqual([id(1)]);
-    expect(result.current.grading.gradeOf(id(2))).toBeNull();
+    // Nothing is dropped: the grade stays on the ranking, marked as not saved.
+    expect(result.current.draft.ids).toEqual([id(1), id(2)]);
+    expect(result.current.grading.gradeOf(id(2))).toBe('B');
+    expect(result.current.grading.publishFailed?.(id(2))).toBe(true);
+    expect(result.current.grading.isSaving(id(2))).toBe(false);
     expect(mocks.record).not.toHaveBeenCalled();
+    // A grade given after the failure goes with the retry, in one publish.
+    await act(async () => result.current.grading.grade(id(3), 'C'));
+    expect(publish).toHaveBeenCalledTimes(2);
+    expect(publish.mock.calls[1]![0]).toEqual([id(1), id(2), id(3)]);
+    expect(result.current.grading.publishFailed?.(id(2))).toBe(false);
+    expect(mocks.record.mock.calls.map(([entityId]) => entityId)).toEqual([id(2), id(3)]);
+  });
+
+  it('Try again resends what failed', async () => {
+    const publish = vi.fn().mockResolvedValueOnce(false).mockResolvedValue(true);
+    const { result } = renderHook(() => useHarness(publish));
+    await act(async () => result.current.grading.grade(id(2), 'B'));
+    await act(async () => result.current.grading.retry?.());
+    expect(publish).toHaveBeenCalledTimes(2);
+    expect(publish.mock.calls[1]![0]).toEqual([id(1), id(2)]);
+    expect(result.current.grading.publishFailed?.(id(2))).toBe(false);
   });
 
   it('removes a debate from the ranking', async () => {
@@ -187,55 +209,110 @@ describe('grading from the block (GEO-3729)', () => {
     expect(reorder).toHaveBeenCalledWith(id(1));
   });
 
-  it('holds Re-order while a placement’s Done from the block is still publishing', () => {
-    const reorder = vi.fn();
-    const { result } = renderHook(() =>
-      useBlockGrading({
-        blockId: id(97),
-        ready: true,
-        orderedIds: [id(1)],
-        grades: new Map([[id(1), 'A']]),
-        setDraft: vi.fn(),
-        getBasedOnOrderedIds: () => [id(1)],
-        getBasedOnGrades: () => new Map(),
-        publish: vi.fn(),
-        downRank: vi.fn(),
-        reorder,
-        publishing: true,
-      })
-    );
-    expect(result.current.reorderBusy).toBe(true);
-    result.current.reorder(id(1));
-    expect(reorder).not.toHaveBeenCalled();
+  it('never holds Re-order back: it opens while a grade is publishing', async () => {
+    const reorder = vi.fn(() => true);
+    const pending = deferred();
+    const publish = vi.fn(() => pending.promise);
+    const { result } = renderHook(() => useHarness(publish, undefined, {}, { reorder }));
+    await act(async () => result.current.grading.grade(id(2), 'B'));
+    expect(result.current.grading.reorderBusy).toBe(false);
+    act(() => result.current.grading.reorder(id(1)));
+    expect(reorder).toHaveBeenCalledWith(id(1));
+  });
+});
+
+describe('one publish per sitting from the block (Preston, 16 Nov)', () => {
+  it('a popup grade opens the Placed step, and the grade and its move publish once, when it ends', async () => {
+    const publish = vi.fn().mockResolvedValue(true);
+    const reorder = vi.fn(() => true);
+    const { result } = renderHook(() => useHarness(publish, undefined, {}, { reorder, placeAfterGrade: true }));
+    // Published: 1 (A). Grade 2 as A: it goes to the top of A, and the Placed step opens on it.
+    await act(async () => result.current.grading.grade(id(2), 'A'));
+    expect(reorder).toHaveBeenCalledWith(id(2));
+    expect(result.current.draft.ids).toEqual([id(2), id(1)]);
+    // Nothing goes out while the step is open.
+    expect(publish).not.toHaveBeenCalled();
+    // Move it down one, then Done.
+    const before = result.current.draft;
+    const after = { ids: [id(1), id(2)], grades: before.grades };
+    act(() => result.current.setDraft(after));
+    await act(async () => result.current.grading.endPlaced(id(2), before, after));
+    expect(publish).toHaveBeenCalledTimes(1);
+    expect(publish.mock.calls[0]![0]).toEqual([id(1), id(2)]);
+    expect((publish.mock.calls[0]![1] as BallotGrades).get(id(2))).toBe('A');
+    expect(mocks.record.mock.calls.map(([entityId, change]) => [entityId, change.grade, change.method])).toEqual([
+      [id(2), 'A', 'popup'],
+    ]);
   });
 
-  it('holds Re-order while a grade is still publishing, whose publish would rewrite the moves', async () => {
-    const reorder = vi.fn();
-    const pending = deferred();
-    const { result } = renderHook(() =>
-      useBlockGrading({
-        blockId: id(98),
-        ready: true,
-        orderedIds: [id(1), id(2)],
-        grades: new Map([
-          [id(1), 'A'],
-          [id(2), 'B'],
-        ]),
-        setDraft: vi.fn(),
-        getBasedOnOrderedIds: () => [id(1), id(2)],
-        getBasedOnGrades: () => new Map(),
-        publish: vi.fn(() => pending.promise),
-        downRank: vi.fn(),
-        reorder,
-      })
-    );
-    await act(async () => result.current.grade(id(2), 'A'));
-    expect(result.current.reorderBusy).toBe(true);
-    result.current.reorder(id(1));
+  it('a list grade (not the popup) publishes straight away, without the Placed step', async () => {
+    const publish = vi.fn().mockResolvedValue(true);
+    const reorder = vi.fn(() => true);
+    const { result } = renderHook(() => useHarness(publish, undefined, {}, { reorder, placeAfterGrade: true }));
+    await act(async () => result.current.grading.grade(id(2), 'B', 'list'));
     expect(reorder).not.toHaveBeenCalled();
+    expect(publish).toHaveBeenCalledTimes(1);
+  });
+
+  it('changes made while a publish is out (a grade, a Re-order, a Down rank) go in one follow-up', async () => {
+    const first = deferred();
+    const publish = vi.fn().mockReturnValueOnce(first.promise).mockResolvedValue(true);
+    const reorder = vi.fn(() => true);
+    const { result } = renderHook(() => useHarness(publish, undefined, {}, { reorder }));
+    // 1 (A) is published. Grade 2 as B: out at once.
+    await act(async () => result.current.grading.grade(id(2), 'B', 'list'));
+    expect(publish).toHaveBeenCalledTimes(1);
+
+    // Meanwhile: grade 3 as C, then Re-order 2 up into A, then Down rank 1 off the ballot.
+    act(() => result.current.grading.grade(id(3), 'C', 'list'));
+    act(() => result.current.grading.reorder(id(2)));
+    const before = result.current.draft;
+    const after = {
+      ids: [id(2), id(1), id(3)],
+      grades: new Map([...before.grades, [id(2), 'A' as const]]),
+    };
+    act(() => result.current.setDraft(after));
+    act(() => result.current.grading.endPlaced(id(2), before, after));
+    let downRanked: Promise<boolean> | undefined;
+    act(() => {
+      downRanked = result.current.grading.commitBallot([id(2), id(3)]);
+    });
+    expect(publish).toHaveBeenCalledTimes(1);
+
+    await act(async () => first.resolve(true));
+    // Exactly one more publish, carrying all three.
+    expect(publish).toHaveBeenCalledTimes(2);
+    expect(publish.mock.calls[1]![0]).toEqual([id(2), id(3)]);
+    const grades = publish.mock.calls[1]![1] as BallotGrades;
+    expect(grades.get(id(2))).toBe('A');
+    expect(grades.get(id(3))).toBe('C');
+    await expect(downRanked).resolves.toBe(true);
+  });
+
+  it('a change the last publish already carried sends nothing again', async () => {
+    const publish = vi.fn().mockResolvedValue(true);
+    const { result } = renderHook(() => useHarness(publish));
+    await act(async () => result.current.grading.grade(id(2), 'B'));
+    expect(publish).toHaveBeenCalledTimes(1);
+    const draft = result.current.draft;
+    await act(async () => {
+      await result.current.grading.commit([id(2)], current => ({ ...current, ids: [...current.ids] }));
+    });
+    expect(draft.ids).toEqual([id(1), id(2)]);
+    expect(publish).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks before the tab closes while a change is unsent', async () => {
+    const pending = deferred();
+    const publish = vi.fn(() => pending.promise);
+    const { result } = renderHook(() => useHarness(publish));
+    await act(async () => result.current.grading.grade(id(2), 'B'));
+    const warned = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(warned);
+    expect(warned.defaultPrevented).toBe(true);
     await act(async () => pending.resolve(true));
-    expect(result.current.reorderBusy).toBe(false);
-    result.current.reorder(id(1));
-    expect(reorder).toHaveBeenCalledWith(id(1));
+    const quiet = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(quiet);
+    expect(quiet.defaultPrevented).toBe(false);
   });
 });
