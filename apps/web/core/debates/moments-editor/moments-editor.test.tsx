@@ -1831,6 +1831,26 @@ describe('MomentsEditor view state (GEO-3773)', () => {
     expect(screen.queryByRole('region', { name: 'Check before publishing' })).not.toBeInTheDocument();
   });
 
+  it('reads the reel again when a check leaves the queue, as any request does', () => {
+    const requestedAt = '2026-11-11T21:00:00Z';
+    mocks.mutate.mockImplementation((_body, options: { onSuccess: (entry: unknown) => void }) =>
+      options.onSuccess({ queued: true, refusal: null, request: status({ requested_at: requestedAt, preview: true }) })
+    );
+    const { rerender } = render(<MomentsEditor debateId={DEBATE_ID} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+    mocks.backfill.data = { request: status({ requested_at: requestedAt, preview: true }), entry: null };
+    rerender(<MomentsEditor debateId={DEBATE_ID} />);
+    expect(mocks.refresh).not.toHaveBeenCalled();
+
+    mocks.backfill.data = {
+      request: status({ requested_at: requestedAt, preview: true, status: 'done' }),
+      entry: null,
+    };
+    rerender(<MomentsEditor debateId={DEBATE_ID} />);
+    expect(screen.getByRole('region', { name: 'Check before publishing' })).toBeInTheDocument();
+    expect(mocks.refresh).toHaveBeenCalledTimes(1);
+  });
+
   it('leaves the transcript from a check’s report with Back to the transcript', () => {
     const requestedAt = '2026-11-11T21:00:00Z';
     mocks.mutate.mockImplementation((_body, options: { onSuccess: (entry: unknown) => void }) =>
@@ -1895,6 +1915,18 @@ describe('MomentsEditor view state (GEO-3773)', () => {
       const confirm = screen.getByRole('alertdialog', { name: 'Publish this reel?' });
       expect(confirm).toHaveTextContent('1 warning still open: This reel has 5 clips. We aim for 4.');
       expect(confirm).not.toHaveTextContent('4..');
+    });
+
+    it('lists it with other warnings as sentences, not run together with a semicolon', () => {
+      reelOf(6);
+      render(<MomentsEditor debateId={DEBATE_ID} />);
+      fireEvent.click(within(clipRow('Word6')).getByRole('button', { name: 'Remove' }));
+      // Clip 3 before clip 2: clips 1 and 2 are now both the first speaker.
+      fireEvent.click(within(clipRow('Word3')).getByRole('button', { name: '↑ Earlier' }));
+      fireEvent.click(screen.getByRole('button', { name: /^Publish reel/ }));
+      const confirm = screen.getByRole('alertdialog', { name: 'Publish this reel?' });
+      expect(confirm).toHaveTextContent(/still open: This reel has 5 clips\. We aim for 4\. Clips 1 and 2 are both /);
+      expect(confirm).not.toHaveTextContent('.;');
     });
   });
 });

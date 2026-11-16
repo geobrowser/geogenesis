@@ -4,6 +4,8 @@ import * as React from 'react';
 
 /** Where typing goes: a key pressed here is the field's, never the editor's. */
 const TEXT_FIELD = 'input, textarea, select, [contenteditable=""], [contenteditable="true"]';
+/** Inputs that take no text: a checkbox's `value` is "on", which is not text typed into it. */
+const NO_TEXT_INPUT = new Set(['checkbox', 'radio', 'button', 'submit', 'reset', 'range', 'color', 'file', 'image']);
 /** Controls with their own keys: an edge handle's arrows, a menu's Space and Esc. */
 const OWN_KEYS = '[role="slider"], [role="menu"], [role="menuitem"], [role="menuitemradio"], [role="listbox"]';
 
@@ -47,7 +49,8 @@ export function editorKeyIntent(
 }
 
 function fieldHasText(field: Element) {
-  if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) return field.value !== '';
+  if (field instanceof HTMLInputElement) return !NO_TEXT_INPUT.has(field.type) && field.value !== '';
+  if (field instanceof HTMLTextAreaElement) return field.value !== '';
   if (field instanceof HTMLSelectElement) return true;
   return (field.textContent ?? '') !== '';
 }

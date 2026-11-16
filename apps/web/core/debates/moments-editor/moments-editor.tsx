@@ -212,6 +212,8 @@ function Editor({ debateId }: { debateId: string }) {
     ) {
       reported.current = request.requested_at;
       dispatch({ type: 'openPanel', panel: 'check' });
+      // Like any request leaving the queue, the reel may have moved on under it meanwhile.
+      if (finished) refreshAfterReel();
     } else if (ours && request && job.kind === 'done' && !job.preview && reported.current !== request.requested_at) {
       reported.current = request.requested_at;
       setToast(<span>{job.unlock ? 'Back to the automatic reel' : 'Hand-picked reel is live'}</span>);
@@ -317,9 +319,17 @@ function Editor({ debateId }: { debateId: string }) {
   // (`-1`) is the whole debate.
   const selected = selectedKey(view);
   const selectedIndex = selected === null ? -1 : clips.findIndex(clip => clip.key === selected);
+  // A flagged clip (one with a problem to fix) keeps the claim panel open: looked up by key, so a
+  // clip that moved or a fix's new list is judged as the clip it is.
+  const selectKey = (key: string) =>
+    dispatch({
+      type: 'select',
+      key,
+      flagged: (clipViews.find(view => view.clip.key === key)?.problems.length ?? 0) > 0,
+    });
   const setSelected = (index: number, list: readonly EditorClip[] = clips) => {
     const key = list[index]?.key;
-    if (key !== undefined) dispatch({ type: 'select', key, flagged: (clipViews[index]?.problems.length ?? 0) > 0 });
+    if (key !== undefined) selectKey(key);
   };
   // The selection follows the reel as it changes: a removed clip hands it to the clip that took its
   // place, and a reel playing stops once its clips change.
@@ -384,7 +394,7 @@ function Editor({ debateId }: { debateId: string }) {
       [next[index], next[to]] = [next[to], next[index]];
       return next;
     });
-    dispatch({ type: 'select', key: clips[index].key });
+    selectKey(clips[index].key);
   };
 
   // Back to the reel that is live now, which is not the one the page opened on when it changed under
@@ -436,6 +446,18 @@ function Editor({ debateId }: { debateId: string }) {
     },
     // Space plays the reel once the editor has a player it can drive (GEO-3773, PR 1b).
   });
+
+  // The check's report: above the transcript, or on its own once a check lands.
+  const previewPanel = (
+    <ReelPreviewPanel
+      job={ours && job.preview ? job : null}
+      stale={tracked !== null && tracked.reelKey !== reelKey(clips)}
+      turns={turns}
+      clips={tracked?.sent ?? []}
+      flagged={flaggedClips}
+      nameOf={nameOf}
+    />
+  );
 
   const title = debate.data?.claim.claim ?? null;
   if (!loaded || transcript.isPending) {
@@ -521,7 +543,7 @@ function Editor({ debateId }: { debateId: string }) {
           {warnings.length > 0 ? (
             <span className={cx('mt-1 block', WAITING_TEXT_CLASS)}>
               {warnings.length} warning{warnings.length > 1 ? 's' : ''} still open:{' '}
-              {sentence(warnings.map(warning => warning.title).join('; '))}
+              {warnings.map(warning => sentence(warning.title)).join(' ')}
             </span>
           ) : null}
         </ConfirmCard>
@@ -664,25 +686,11 @@ function Editor({ debateId }: { debateId: string }) {
                 Back to the transcript
               </Button>
             </div>
-            <ReelPreviewPanel
-              job={ours && job.preview ? job : null}
-              stale={tracked !== null && tracked.reelKey !== reelKey(clips)}
-              turns={turns}
-              clips={tracked?.sent ?? []}
-              flagged={flaggedClips}
-              nameOf={nameOf}
-            />
+            {previewPanel}
           </section>
         ) : (
           <div className="flex min-w-0 flex-col gap-4">
-            <ReelPreviewPanel
-              job={ours && job.preview ? job : null}
-              stale={tracked !== null && tracked.reelKey !== reelKey(clips)}
-              turns={turns}
-              clips={tracked?.sent ?? []}
-              flagged={flaggedClips}
-              nameOf={nameOf}
-            />
+            {previewPanel}
             <ReelTranscript
               sentences={sentences}
               words={words}

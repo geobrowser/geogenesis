@@ -27,6 +27,7 @@ function Harness({
         <input aria-label="Search" defaultValue="" />
         <input aria-label="Start time" defaultValue="0:01.0" />
         <textarea aria-label="Note" />
+        <input type="checkbox" aria-label="Snap" defaultChecked />
         <div role="slider" tabIndex={0} aria-label="Start edge" aria-valuenow={1} />
         <div role="menu">
           <div role="menuitem" tabIndex={0}>
@@ -115,6 +116,14 @@ describe('useEditorKeyboard (GEO-3773)', () => {
     expect(onEscape).not.toHaveBeenCalled();
     expect(press(getByLabelText('Search'), 'Escape')).toBe(false);
     expect(onEscape).toHaveBeenCalledTimes(1);
+  });
+
+  it('takes Esc from a focused checkbox, whose value is no text, but leaves it Space to toggle', () => {
+    const { onEscape, onSpace, getByLabelText } = setup();
+    expect(press(getByLabelText('Snap'), 'Escape')).toBe(false);
+    expect(onEscape).toHaveBeenCalledTimes(1);
+    press(getByLabelText('Snap'), ' ');
+    expect(onSpace).not.toHaveBeenCalled();
   });
 
   it('closes an open popover with Esc even from a field with text in it', () => {
