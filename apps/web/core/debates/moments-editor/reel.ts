@@ -107,12 +107,20 @@ export function clipQuote(words: readonly ReelWord[], startMs: number, endMs: nu
 /**
  * An edge moved off the middle of a word, outward, so the clip takes the whole word: a word crossing
  * an edge plays without its caption. A start goes to the word's start, an end to its end; an edge
- * in silence stays where it is.
+ * in silence stays where it is. In crosstalk the new spot can be inside another word, so it keeps
+ * moving until no word holds it (GEO-3768).
  */
 export function snapEdge(ms: number, words: readonly ReelWord[], edge: 'start' | 'end'): number {
-  const crossing = words.find(word => word.start_ms < ms && ms < word.end_ms);
-  if (!crossing) return ms;
-  return edge === 'start' ? crossing.start_ms : crossing.end_ms;
+  let at = ms;
+  for (;;) {
+    const crossing = words.filter(word => word.start_ms < at && at < word.end_ms);
+    if (crossing.length === 0) return at;
+    // Each pass moves strictly outward, so it ends.
+    at =
+      edge === 'start'
+        ? Math.min(...crossing.map(word => word.start_ms))
+        : Math.max(...crossing.map(word => word.end_ms));
+  }
 }
 
 /** The next word boundary from `ms` in `direction`: word starts for a start edge, word ends for an end. */
