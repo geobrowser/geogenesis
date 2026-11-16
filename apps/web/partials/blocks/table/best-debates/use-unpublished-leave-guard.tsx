@@ -17,6 +17,10 @@ import { RankingFlowDialog } from './ranking-flow-dialog';
  * - closing or reloading the tab, by `beforeunload`, which can only show the browser's own prompt.
  *
  * Nothing is armed while there is nothing unpublished, so right after a publish nothing fires.
+ *
+ * Once the person has chosen to leave (Leave without publishing, or Publish and leave), every catch
+ * stands down until the screen is gone: the leave itself (spending the spare Back entry, a full-page
+ * link load, the browser going Back) must not open the prompt, or the browser's, a second time.
  */
 export function useUnpublishedLeaveGuard({
   active,
@@ -34,10 +38,18 @@ export function useUnpublishedLeaveGuard({
   const [pending, setPending] = React.useState<(() => void) | null>(null);
   const activeRef = React.useRef(active);
   activeRef.current = active;
+  // Set when the person chose to leave. Kept apart from `activeRef`, which every render resets to
+  // `active` (still true until the screen unmounts, since leaving without publishing keeps the
+  // changes unpublished): a render between the choice and the leave's own popstate or unload would
+  // otherwise re-arm the guard and ask again.
+  const leavingRef = React.useRef(false);
+  React.useEffect(() => {
+    if (!active) leavingRef.current = false;
+  }, [active]);
 
   /** Runs `leave` now, or once the person has chosen in the prompt. */
   const guard = React.useCallback((leave: () => void) => {
-    if (!activeRef.current) {
+    if (!activeRef.current || leavingRef.current) {
       leave();
       return;
     }
@@ -48,6 +60,7 @@ export function useUnpublishedLeaveGuard({
   React.useEffect(() => {
     if (!active) return;
     const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (leavingRef.current) return;
       event.preventDefault();
       event.returnValue = '';
     };
@@ -59,7 +72,7 @@ export function useUnpublishedLeaveGuard({
   React.useEffect(() => {
     if (!active) return;
     const onClick = (event: MouseEvent) => {
-      if (event.defaultPrevented || event.button !== 0) return;
+      if (leavingRef.current || event.defaultPrevented || event.button !== 0) return;
       if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
       const anchor = (event.target as Element | null)?.closest?.('a[href]') as HTMLAnchorElement | null;
       if (!anchor || anchor.target === '_blank' || anchor.hasAttribute('download')) return;
@@ -83,7 +96,7 @@ export function useUnpublishedLeaveGuard({
       sentinelRef.current = true;
     }
     const onPopState = () => {
-      if (!activeRef.current) return;
+      if (!activeRef.current || leavingRef.current) return;
       sentinelRef.current = false;
       setPending(() => () => window.history.back());
     };
@@ -94,14 +107,14 @@ export function useUnpublishedLeaveGuard({
   const close = (keepRanking: boolean) => {
     setPending(null);
     // Back spent the spare entry; staying needs it again so the next Back is caught too.
-    if (keepRanking && activeRef.current && !sentinelRef.current) {
+    if (keepRanking && activeRef.current && !leavingRef.current && !sentinelRef.current) {
       window.history.pushState({ rankingLeaveGuard: true }, '', window.location.href);
       sentinelRef.current = true;
     }
   };
 
   const leaveNow = (leave: () => void) => {
-    activeRef.current = false;
+    leavingRef.current = true;
     setPending(null);
     // A spare entry still in place would make Back land on this screen again: spend it first (it is
     // this same URL, so nothing navigates), then leave once the browser says it's gone.
