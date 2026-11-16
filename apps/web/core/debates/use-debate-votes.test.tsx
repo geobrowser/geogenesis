@@ -407,6 +407,33 @@ describe('useDebateVotes castVote', () => {
     expect(publishAt(0).winnerCreates[0]?.toEntity.id).toBe(ALICE_SPACE);
   });
 
+  it('publishes one vote when two picks wait for the same account', async () => {
+    mocks.signedIn = false;
+    mocks.accountLoading = true;
+    let arrive!: (account: unknown) => void;
+    mocks.signingAccountArrives = new Promise(resolve => (arrive = resolve));
+    const view = await renderVotes();
+
+    let first!: Promise<void>;
+    let second!: Promise<void>;
+    await act(async () => {
+      first = view.result.current.castVote(ALICE);
+      second = view.result.current.castVote(BOB);
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      arrive({
+        account: { address: '0xabc' },
+        sendUserOperation: (...args: unknown[]) => mocks.sendUserOperation(...args),
+      });
+      await Promise.all([first, second]);
+    });
+
+    expect(mocks.publishEdit).toHaveBeenCalledOnce();
+    expect(publishAt(0).winnerCreates[0]?.toEntity.id).toBe(ALICE_SPACE);
+  });
+
   // Null again, and `isLoading` is false by then — the case the hook's own comment calls
   // indistinguishable from logged out. A login cannot fix it, so say what happened.
   it('reports an account initialization failure rather than asking the viewer to sign in', async () => {

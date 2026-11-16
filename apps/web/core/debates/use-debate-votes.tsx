@@ -282,6 +282,10 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
           : tally.myVote;
       // Cleared (a sign-out) or replaced (a newer pick) during that read: the vote must not follow.
       if (!isCurrent()) return;
+      if (debatesWithVoteInFlight.has(debateEntityId)) {
+        if (fromQueue) throw new Error('Another vote on this debate is still publishing.');
+        return;
+      }
       if (previousVote && ID.equals(previousVote.winnerSpaceEntityId, participant.profile_space_id)) return;
       if (previousVote && previousVote.winnerRelationId == null) {
         if (fromQueue) throw new Error('Your previous vote is still being indexed.');
