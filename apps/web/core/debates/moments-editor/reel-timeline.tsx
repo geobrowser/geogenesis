@@ -38,6 +38,15 @@ export function dragEdge(ms: number, words: readonly ReelWord[], edge: 'start' |
 }
 
 /**
+ * Where a tick's label is centred: on its tick, but kept half its width inside the track so the first
+ * and last labels show in full (GEO-3769). The labels are monospace, so `ch` is a character's width.
+ */
+export function tickLabelLeft(at: string, label: string): string {
+  const half = `${label.length / 2}ch`;
+  return `clamp(${half}, ${at}, calc(100% - ${half}))`;
+}
+
+/**
  * A clip moved or trimmed by a drag of `deltaMs`, kept inside the debate and at least a second long.
  * Moving keeps the clip's length, then snaps both edges out to whole words (with Alt, neither): an
  * end left mid-word would play that word without its caption.
@@ -185,8 +194,8 @@ export function ReelTimeline({
                 <React.Fragment key={at}>
                   <i className="absolute bottom-0 h-[5px] w-px bg-grey-03" style={{ left: percent(at) }} />
                   <span
-                    className="absolute top-1 -translate-x-1/2 font-mono text-[11px] leading-[13px] text-grey-04 first:translate-x-0"
-                    style={{ left: percent(at) }}
+                    className="absolute top-1 -translate-x-1/2 font-mono text-[11px] leading-[13px] text-grey-04"
+                    style={{ left: tickLabelLeft(percent(at), formatTimecode(at)) }}
                   >
                     {formatTimecode(at)}
                   </span>

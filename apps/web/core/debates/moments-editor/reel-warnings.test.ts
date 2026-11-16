@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { type EditorClip, type ReelWord, playerWords } from './reel';
-import { draggedClip } from './reel-timeline';
+import { draggedClip, tickLabelLeft } from './reel-timeline';
 import { endClipAt, reelSentences, sentenceInClip, startClipAt } from './reel-transcript';
 import { reelWarnings, spokenLength, trimmedEnd } from './reel-warnings';
 
@@ -281,5 +281,12 @@ describe('the transcript picker (GEO-3672)', () => {
         ],
       }).map(s => s.text)
     ).toEqual(['We should', 'act now.']);
+  });
+});
+
+describe('tickLabelLeft (GEO-3769)', () => {
+  it('keeps a label half its width inside the track, so the first and last show in full', () => {
+    expect(tickLabelLeft('0%', '0:00')).toBe('clamp(2ch, 0%, calc(100% - 2ch))');
+    expect(tickLabelLeft('98.5%', '10:30')).toBe('clamp(2.5ch, 98.5%, calc(100% - 2.5ch))');
   });
 });
