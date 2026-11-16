@@ -528,4 +528,10 @@ describe('selectionToClip (GEO-3766)', () => {
     expect(selectionToClip(blank, 0, 2, [])).toMatchObject({ ok: true, speaker: 1, otherWords: 0 });
     expect(selectionToClip(blank, 1, 1, [])).toEqual({ ok: false, reason: 'no-words' });
   });
+
+  it('names the debater who is heard, however many blank tokens the other has in the span', () => {
+    // Slot 2's two blanks inside "Yes." outnumber slot 1's one word, but only "Yes." is heard.
+    const blanks = [word(1, 1_100, 1_400, 'Yes.'), word(2, 1_150, 1_200, ' '), word(2, 1_300, 1_400, ' ')];
+    expect(selectionToClip(blanks, 0, 0, [])).toMatchObject({ ok: true, speaker: 1, otherWords: 0 });
+  });
 });

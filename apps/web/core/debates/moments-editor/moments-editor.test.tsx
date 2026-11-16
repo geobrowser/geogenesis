@@ -9,7 +9,7 @@ import { GeoChatRequestError } from '../api';
 import { RENDERED_TURN_SEGMENTS } from '../open-rounds-media-fixtures';
 import type { MomentBackfillEntry, MomentBackfillStatus } from './api';
 import { MomentsEditor, claimsBySpeaker, editingBlockedReason, keepClaimWithSpeaker } from './moments-editor';
-import { SELECTION_SETTLE_MS, selectionAnchorRect } from './reel-transcript';
+import { SELECTION_SETTLE_MS, selectionAnchorRect, wordsOnly } from './reel-transcript';
 
 const DEBATE_ID = '01a0448a-61d3-7101-8434-a20fdadf6f97';
 
@@ -1543,11 +1543,56 @@ describe('MomentsEditor transcript selection (GEO-3766)', () => {
     expect(buttonRow(1).closest('.group')!.className).not.toMatch(/shadow-/);
   });
 
+  it('opens the toolbar for a drag pressed on a word that ends past the transcript box', () => {
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    // Dragging past the box's bottom edge autoscrolls it and ends the selection on the page below it.
+    const below = document.createElement('div');
+    below.textContent = 'Below the transcript';
+    document.body.append(below);
+    select([textOf(3), 0], [below.firstChild!, 3], wordSpan(3));
+    expect(screen.getByRole('button', { name: 'New clip from these words' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'New clip from these words' }));
+    expect(screen.getAllByRole('textbox', { name: 'Start time' })[1]).toHaveValue('0:05.0');
+    expect(screen.getAllByRole('textbox', { name: 'End time' })[1]).toHaveValue('0:05.9');
+    below.remove();
+  });
+
+  it('shows the text of a sentence whose only words are blank', () => {
+    // "Cheap."'s only word token is blank, its real word timed into the sentence before.
+    wordsOverride = [
+      ...WORDS.slice(0, 2),
+      { participant_slot: 1, start_ms: 2_950, end_ms: 2_990, text: ' Cheap.' },
+      { participant_slot: 1, start_ms: 3_000, end_ms: 3_400, text: ' ' },
+      ...WORDS.slice(3),
+    ];
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    expect(buttonRow(1).parentElement!.textContent).toMatch(/^Cheap\./);
+  });
+
   it('offers nothing from a selection while the reel is read-only', () => {
     mocks.plan.data = entry({ refusal: 'media_job_active' });
     render(<MomentsEditor debateId={DEBATE_ID} />);
     select([textOf(0), 0], [textOf(1), 3]);
     expect(screen.queryByRole('button', { name: /these words$/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('wordsOnly (GEO-3766)', () => {
+  it('pulls an end that a drag left outside the transcript back to the outermost word it covers', () => {
+    document.body.innerHTML =
+      '<h2>Transcript</h2><div id="root"><span data-word="0">Coffee</span> <span data-word="1">dates.</span></div><p>Clip list</p>';
+    const root = document.getElementById('root')!;
+    const [heading, , below] = [...document.body.children];
+    const range = document.createRange();
+    range.setStart(root.querySelector('[data-word="0"]')!.firstChild!, 2);
+    range.setEnd(below.firstChild!, 4);
+    const kept = wordsOnly(range, root);
+    expect(root.contains(kept.endContainer)).toBe(true);
+    expect(kept.toString()).toBe('ffee dates.');
+    range.setStart(heading.firstChild!, 3);
+    range.setEnd(root.querySelector('[data-word="1"]')!.firstChild!, 3);
+    expect(wordsOnly(range, root).toString()).toBe('Coffee dat');
+    document.body.innerHTML = '';
   });
 });
 

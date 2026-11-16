@@ -257,7 +257,9 @@ export function selectionToClip(
   const saidFrom = Math.min(...said.map(word => word.start_ms));
   const saidTo = Math.max(...said.map(word => word.end_ms));
   if (!inOneStretch(saidFrom, saidTo, turns)) return { ok: false, reason: 'crosses-cut' };
-  const speaker = clipSpeaker(words, start, end)!;
+  // Ranked over the same spoken words as `otherWords`, as geo-chat ranks them: blank tokens would
+  // otherwise name a debater who isn't heard.
+  const speaker = clipSpeaker(said, start, end)!;
   return {
     ok: true,
     start_ms: start,

@@ -76,8 +76,9 @@ export function endClipAt(clip: EditorClip, sentence: ReelSentence): EditorClip 
 /**
  * Which words each sentence shows, as indexes into `words` (GEO-3766): a word belongs to its
  * speaker's sentence whose `[start, next sentence's start)` holds the word's start, the speaker's last
- * sentence taking the rest and the first anything before it. Every word of a speaker with sentences
- * is shown exactly once, so what can be selected is what the clip plays.
+ * sentence taking the rest and the first anything before it. Every spoken word of a speaker with
+ * sentences is shown exactly once, so what can be selected is what the clip plays; blank tokens,
+ * neither shown nor heard, are left out.
  */
 export function wordsBySentence(sentences: readonly ReelSentence[], words: readonly ReelWord[]): number[][] {
   const shown = sentences.map(() => [] as number[]);
@@ -86,7 +87,8 @@ export function wordsBySentence(sentences: readonly ReelSentence[], words: reado
   const cursor = new Map<ParticipantSlot, number>();
   words.forEach((word, index) => {
     const own = bySlot.get(word.slot);
-    if (!own) return;
+    // A blank token shows nothing: a sentence holding only blanks falls back to its own text.
+    if (!own || !isSpoken(word)) return;
     let at = cursor.get(word.slot) ?? 0;
     while (at + 1 < own.length && sentences[own[at + 1]].start_ms <= word.start_ms) at += 1;
     cursor.set(word.slot, at);
@@ -141,6 +143,22 @@ export function selectionAnchorRect(range: Range, root: Element): DOMRect {
   const top = clamp(end.top, box.top, box.bottom);
   const bottom = clamp(end.bottom, box.top, box.bottom);
   return new DOMRect(left, top, right - left, bottom - top);
+}
+
+/**
+ * `range` with an end outside `root` pulled back to the outermost transcript word it covers
+ * (GEO-3766), so the toolbar is pinned by those words, inside the transcript's scrolling box, not by
+ * the element below or above it that a drag past the box's edge ended on.
+ */
+export function wordsOnly(range: Range, root: Element): Range {
+  const words = [...root.querySelectorAll('[data-word]')].filter(
+    element => range.intersectsNode(element) && coversText(range, element)
+  );
+  const kept = range.cloneRange();
+  if (words.length === 0) return kept;
+  if (!root.contains(kept.startContainer)) kept.setStartBefore(words[0]);
+  if (!root.contains(kept.endContainer)) kept.setEndAfter(words[words.length - 1]);
+  return kept;
 }
 
 /** The space Whisper puts before a word, outside its span, so it reads as text without selecting it. */
@@ -237,16 +255,17 @@ export function ReelTranscript({
     const selection = window.getSelection();
     const root = rootRef.current;
     if (!selection || selection.rangeCount === 0 || selection.isCollapsed || !root) return null;
-    const range = selection.getRangeAt(0);
-    // Only words picked in the transcript: a selection that starts elsewhere (a drag from the
-    // timeline) or takes in the whole transcript (Cmd+A) is not one.
-    return root.contains(range.startContainer) && root.contains(range.endContainer) ? range : null;
+    // Only words picked in the transcript: a selection pressed elsewhere (a drag from the timeline)
+    // or of the whole page (Cmd+A, anchored on `body`) is not one. Where it was pressed decides, not
+    // where it ends: a drag past the box's edge autoscrolls the box and ends on whatever is under the
+    // pointer outside it, though every word it covers is the transcript's.
+    return selection.anchorNode && root.contains(selection.anchorNode) ? selection.getRangeAt(0) : null;
   }, []);
   const readPick = React.useCallback(() => {
     const range = activeRange();
     const root = rootRef.current;
     const covered = range && root ? selectedWordRange(range, root) : null;
-    setPick(range && covered ? { from: covered[0], to: covered[1], range: range.cloneRange() } : null);
+    setPick(range && root && covered ? { from: covered[0], to: covered[1], range: wordsOnly(range, root) } : null);
   }, [activeRange]);
 
   React.useEffect(() => {
@@ -295,6 +314,7 @@ export function ReelTranscript({
   };
   // `contextElement` is inside the transcript's scrolling box, so the toolbar is repositioned when
   // that box scrolls, not only the window (floating-ui's `autoUpdate` listens on its scroll parents).
+  // `pick.range` ends inside it: `wordsOnly` pulled an end outside the box back to the last word.
   const anchor = React.useMemo(() => {
     const end = pick?.range.endContainer;
     const contextElement = (end instanceof Element ? end : end?.parentElement) ?? rootRef.current ?? undefined;
