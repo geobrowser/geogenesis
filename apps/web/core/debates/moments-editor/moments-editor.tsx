@@ -411,7 +411,8 @@ function Editor({ debateId }: { debateId: string }) {
       [next[index], next[to]] = [next[to], next[index]];
       return next;
     });
-    selectKey(clips[index].key);
+    // The moved clip becomes the selected one; moving the selected clip keeps what is open about it.
+    if (clips[index].key !== selected) selectKey(clips[index].key);
   };
 
   // Back to the reel that is live now, which is not the one the page opened on when it changed under

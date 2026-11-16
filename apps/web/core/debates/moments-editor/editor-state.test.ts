@@ -177,6 +177,41 @@ describe('editorReducer (GEO-3773)', () => {
     ).toBe('publish');
   });
 
+  it('ends the clip’s own jobs when the selected clip is picked again, keeping a flagged clip’s claim panel', () => {
+    const at = loaded();
+    const selectedNow = selectedKey(at) ?? '';
+    for (const panel of ['replace', 'claim'] as const) {
+      expect(
+        run(
+          [
+            { type: 'openPanel', panel },
+            { type: 'select', key: selectedNow },
+          ],
+          at
+        ).panel
+      ).toBe('transcript');
+    }
+    for (const popover of ['claimMenu', 'advanced'] as const) {
+      expect(
+        run(
+          [
+            { type: 'openPopover', popover },
+            { type: 'select', key: selectedNow },
+          ],
+          at
+        ).popover
+      ).toBeNull();
+    }
+    const flagged = run(
+      [
+        { type: 'openPanel', panel: 'claim' },
+        { type: 'select', key: selectedNow, flagged: true },
+      ],
+      at
+    );
+    expect([flagged.panel, flagged.panelFor]).toEqual(['claim', selectedNow]);
+  });
+
   it('adds through the picker: nothing selected while picking, then the new clip, back on the transcript', () => {
     const picking = run([{ type: 'startAdd' }], loaded());
     expect(picking).toMatchObject({ selection: { kind: 'none' }, panel: 'add' });
@@ -388,7 +423,7 @@ describe('the one rule for what is open (editorView)', () => {
     expect(editorReducer(check, { type: 'settle', facts: NO_LIMITS })).toBe(check);
   });
 
-  it('keeps a flagged clip’s claim panel when the panel moves with it, and not a healthy one', () => {
+  it('keeps a flagged clip’s claim panel when the panel moves with it, and not a healthy one’s, even re-picked', () => {
     const claim = run(
       [
         { type: 'select', key: 'b' },
@@ -396,7 +431,7 @@ describe('the one rule for what is open (editorView)', () => {
       ],
       loaded(KEYS)
     );
-    expect(run([{ type: 'select', key: 'b' }], claim).panel).toBe('claim');
+    expect(run([{ type: 'select', key: 'b' }], claim).panel).toBe('transcript');
     expect(run([{ type: 'select', key: 'c', flagged: true }], claim)).toMatchObject({ panel: 'claim', panelFor: 'c' });
     expect(run([{ type: 'select', key: 'c' }], claim).panel).toBe('transcript');
   });

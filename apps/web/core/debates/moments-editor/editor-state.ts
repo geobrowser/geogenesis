@@ -258,10 +258,20 @@ function stopped(state: EditorState): EditorState {
 
 function selected(state: EditorState, key: string, flagged: boolean): EditorState {
   const base = stopped(state);
-  // What was open about the clip before closes by the rule (it is about another clip now), except a
-  // claim panel on a flagged clip: its claim is what needs fixing, so the panel moves to it.
-  const panelFor = base.panel === 'claim' && flagged ? key : base.panelFor;
-  return { ...base, selection: { kind: 'clip', key }, panelFor };
+  // Picking a clip, even the one already selected, ends the clip's own jobs (as the prototype's
+  // setSel does): Replace, Add, its claim menu and advanced options, and a healthy clip's claim
+  // panel. A flagged clip's claim is what needs fixing, so its claim panel moves to it.
+  const keepsClaim = base.panel === 'claim' && flagged;
+  const panel =
+    keepsClaim || !CLIP_PANELS.has(base.panel) ? { panel: base.panel, panelFor: base.panelFor } : PANEL_CLOSED;
+  const clipPopover = base.popover === 'claimMenu' || base.popover === 'advanced';
+  return {
+    ...base,
+    ...panel,
+    ...(keepsClaim ? { panelFor: key } : null),
+    ...(clipPopover ? { popover: null, popoverFor: null } : null),
+    selection: { kind: 'clip', key },
+  };
 }
 
 export function editorReducer(state: EditorState, action: EditorAction): EditorState {
@@ -348,6 +358,8 @@ function reduce(state: EditorState, action: Exclude<EditorAction, { type: 'settl
 }
 
 const PANEL_CLOSED = { panel: 'transcript', panelFor: null } as const;
+/** Panels about the selected clip, which a new pick of a clip ends. */
+const CLIP_PANELS: ReadonlySet<EditorPanel> = new Set(['claim', 'replace', 'add']);
 
 /** A panel opened now is about the clip selected now (none for Add from its card). */
 function panelOpen(state: EditorState, panel: EditorPanel) {
