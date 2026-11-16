@@ -13,6 +13,7 @@ import {
   useReportDrawnHubList,
 } from '../debate-claim-card-surface';
 import { useDebateActivity } from '../hooks';
+import { type AgendaClaimFilter, INACTIVE_AGENDA_FILTER, hubCardScope } from '../todays-claims/agenda-claim-filter';
 import { claimRowKey } from './claim-row-key';
 import {
   type ClaimsLayout,
@@ -56,7 +57,13 @@ export function MatchesList({
   panelFilters,
   notice,
   atomsFrom = 'lobby',
+  agendaFilter = INACTIVE_AGENDA_FILTER,
 }: {
+  /**
+   * GEO-3775. Only matches on a claim a debate agenda lists, as on `ClaimsTab`. The list is whole in
+   * hand, so its counts follow. Unset, every match.
+   */
+  agendaFilter?: AgendaClaimFilter;
   /**
    * The side panel's search and Filters button in place of the menus row (GEO-3463). Panel only:
    * full screen keeps Lobby's toggle and its rail.
@@ -105,14 +112,20 @@ export function MatchesList({
   const activityQuery = useDebateActivity(true);
   const activity = activityQuery.data;
 
-  const serverMatches = React.useMemo(() => matchesQuery.data?.matches ?? [], [matchesQuery.data]);
+  const serverMatches = React.useMemo(
+    () =>
+      agendaFilter.active
+        ? (matchesQuery.data?.matches ?? []).filter(match => agendaFilter.has(match.claim.claim_entity_id))
+        : (matchesQuery.data?.matches ?? []),
+    [agendaFilter, matchesQuery.data]
+  );
   const outbound = requestsQuery.data?.outbound ?? activity?.outbound_request ?? null;
 
   // Same hold as Explore's list: standing down from one claim shouldn't reshuffle the rest. The
   // panel's Sort (GEO-3463) is applied under it, so a count changing does not move rows either;
   // "Best" is Explore's ranking, looked up for these claims, rather than geo-chat's order.
   const clientSort = panelMode ? panelFilters?.clientSort : undefined;
-  const matches = useHeldClaimRows(serverMatches, clientSort, spaceIds.join(','));
+  const matches = useHeldClaimRows(serverMatches, clientSort, `${spaceIds.join(',')}|${agendaFilter.key}`);
 
   // Topics are Knowledge Graph data that `/matchmaking/matches` does not carry — `match.topics` is
   // empty on every row, the same way `MatchmakingClaim.topics` is — and there is no facet beside it
@@ -218,7 +231,7 @@ export function MatchesList({
     spaceIds,
     setSpaceIds,
     memberSpaceIds: null,
-    pending: matchesQuery.isLoading,
+    pending: matchesQuery.isLoading || agendaFilter.pending,
     seedSpent: spaceSeedSpent,
     onSeedSpend: () => setSpaceSeedSpent(true),
   });
@@ -320,10 +333,12 @@ export function MatchesList({
           //
           // Only while empty. A list with rows in it renders on the matches alone, as it always
           // has — nothing above depends on `activity` then.
-          isLoading={matchesQuery.isLoading || (filtered.length === 0 && activityQuery.isLoading)}
-          error={matchesQuery.error}
+          isLoading={
+            matchesQuery.isLoading || agendaFilter.pending || (filtered.length === 0 && activityQuery.isLoading)
+          }
+          error={agendaFilter.error ?? matchesQuery.error}
           failureReason={matchesQuery.failureReason}
-          onRetry={() => void matchesQuery.refetch()}
+          onRetry={() => (agendaFilter.error ? agendaFilter.refetch() : void matchesQuery.refetch())}
           isEmpty={filtered.length === 0}
           // A match needs three things at once, and the old copy asserted which one was missing
           // without being able to know. Name all of them instead, starting with the half the
@@ -380,7 +395,7 @@ export function MatchesList({
                 claimId={match.claim.claim_entity_id}
                 listId="hub_matches"
                 position={index + 1}
-                scope={debouncedSearch ? { list_searched: true } : undefined}
+                scope={hubCardScope(agendaFilter, match.claim.claim_entity_id, Boolean(debouncedSearch))}
               >
                 <MatchCard match={match} />
               </DebateClaimCardSurface>

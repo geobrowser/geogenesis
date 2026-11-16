@@ -12,6 +12,7 @@ import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 
 import type { MatchmakingMatch } from '../api';
 import { type DebateClaimListId, DrawnHubListProvider } from '../debate-claim-card-surface';
+import type { AgendaClaimFilter } from '../todays-claims/agenda-claim-filter';
 import { MatchesList } from './matches-list';
 import { PanelMatchesTab } from './panel-claim-tabs';
 import { panelFilters } from './panel-filters-fixtures';
@@ -825,5 +826,62 @@ describe('MatchesList in the panel', () => {
     render(<MatchesList layout="workspace" />, store);
 
     expect(screen.getByText('Chips are better than fries')).toBeInTheDocument();
+  });
+});
+
+/** GEO-3775. A match on a claim no agenda lists is left out, and nothing is drawn before the agendas. */
+describe('MatchesList agenda-only', () => {
+  const OFF_AGENDA = 'c0000000000000000000000000000009';
+  function agenda(state: 'listed' | 'pending' | 'failed' = 'listed'): AgendaClaimFilter {
+    const ids = state === 'listed' ? [CLAIM_ENTITY_ID] : [];
+    return {
+      active: true,
+      ids,
+      spaceIds: [],
+      key: state,
+      has: claimId => ids.includes(claimId),
+      pending: state === 'pending',
+      error: state === 'failed' ? new Error('gaia down') : null,
+      refetch: vi.fn(),
+      scopeFor: () => undefined,
+    };
+  }
+
+  beforeEach(() => {
+    mocks.matches = [
+      match(),
+      match({
+        claim: {
+          id: 'debate-claim-2',
+          space_id: SPACE_ID,
+          claim_entity_id: OFF_AGENDA,
+          claim: 'A claim on no agenda',
+          description: null,
+        },
+      }),
+    ];
+  });
+
+  it('lists only matches on an agenda claim', () => {
+    render(<MatchesList agendaFilter={agenda()} />);
+
+    expect(screen.getByText('Chips are better than fries')).toBeInTheDocument();
+    expect(screen.queryByText('A claim on no agenda')).not.toBeInTheDocument();
+  });
+
+  it('draws no match while the agendas are out', () => {
+    render(<MatchesList agendaFilter={agenda('pending')} />);
+
+    expect(screen.queryByText('Chips are better than fries')).not.toBeInTheDocument();
+    expect(screen.queryByText('A claim on no agenda')).not.toBeInTheDocument();
+  });
+
+  it('calls an agenda outage an outage, with a way to ask again', () => {
+    const filter = agenda('failed');
+    render(<MatchesList agendaFilter={filter} />);
+
+    expect(screen.getByText('Something went wrong.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(filter.refetch).toHaveBeenCalled();
   });
 });

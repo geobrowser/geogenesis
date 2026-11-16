@@ -6,6 +6,7 @@ import { useAtom } from 'jotai';
 
 import { isAccountWarmingUpQuery } from '../api';
 import { useRecordClaimFilter } from '../debate-claim-card-surface';
+import { type AgendaClaimFilter, INACTIVE_AGENDA_FILTER } from '../todays-claims/agenda-claim-filter';
 import { type ClaimsLayout, ClaimsTab } from './claims-tab';
 import { useMatchmakingMatches } from './hooks';
 import { MatchesList } from './matches-list';
@@ -36,10 +37,13 @@ export function LobbyTab({
   onTabChange,
   layout,
   scopePicker,
+  agendaFilter = INACTIVE_AGENDA_FILTER,
 }: {
   onTabChange: (tab: DebatesHubTab) => void;
   layout?: ClaimsLayout;
   scopePicker?: React.ReactNode;
+  /** GEO-3775: both lists agenda claims only, and "no matches" judged on those. */
+  agendaFilter?: AgendaClaimFilter;
 }) {
   const [matchesOnly, setMatchesOnly] = useAtom(debatesHubMatchesOnlyAtom);
 
@@ -57,9 +61,16 @@ export function LobbyTab({
   // have been stepped back onto the wider list on the strength of a stale one. Later refetches are
   // harmless, because by then the decision is made.
   const matchesState: NarrowedListState =
-    matchesQuery.isLoading || matchesQuery.isFetching || matchesQuery.error
+    matchesQuery.isLoading ||
+    matchesQuery.isFetching ||
+    matchesQuery.error ||
+    agendaFilter.pending ||
+    agendaFilter.error
       ? 'pending'
-      : (matchesQuery.data?.matches.length ?? 0) === 0
+      : (agendaFilter.active
+            ? (matchesQuery.data?.matches ?? []).filter(match => agendaFilter.has(match.claim.claim_entity_id))
+            : (matchesQuery.data?.matches ?? [])
+          ).length === 0
         ? 'empty'
         : 'filled';
 
@@ -131,11 +142,18 @@ export function LobbyTab({
   // their space menus differently, and describe an empty list in different words — the only thing
   // they share is the toggle and the selection it sits beside, which is exactly what is passed.
   return showNarrowed ? (
-    <MatchesList onTabChange={leaveLobby} layout={layout} scopePicker={scopePicker} trailing={toggle} />
+    <MatchesList
+      onTabChange={leaveLobby}
+      layout={layout}
+      scopePicker={scopePicker}
+      trailing={toggle}
+      agendaFilter={agendaFilter}
+    />
   ) : (
     <ClaimsTab
       variant="lobby"
       layout={layout}
+      agendaFilter={agendaFilter}
       scopePicker={scopePicker}
       trailing={toggle}
       // The last rung of the same ladder. Arriving on a wider list with nothing in it, there is

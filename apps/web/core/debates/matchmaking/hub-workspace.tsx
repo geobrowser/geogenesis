@@ -9,6 +9,8 @@ import { Text } from '~/design-system/text';
 
 import { DrawnHubListProvider, useDrawnHubList } from '../debate-claim-card-surface';
 import { useGeoChatAuth } from '../hooks';
+import { AgendaClaimFilterProvider, useAgendaClaimFilterContext } from '../todays-claims/agenda-claim-filter';
+import { AGENDA_ONLY_HUB_PANEL } from '../todays-claims/agenda-only-picker';
 import { fromClaimsFilterSearch } from './claims-filter-params';
 import {
   ClaimsTab,
@@ -162,10 +164,11 @@ export function DebatesHubWorkspace() {
             <div className="min-w-0 flex-1">
               {!ready || !filtersReconciled ? (
                 <HubSkeleton />
-              ) : shown === 'lobby' ? (
-                <LobbyTab onTabChange={showList} layout="workspace" scopePicker={picker} />
               ) : (
-                <ClaimsTab key={shown} variant={shown} layout="workspace" scopePicker={picker} />
+                // GEO-3775: the same agenda-only lists as the side panel, one agendas read for all of them.
+                <AgendaClaimFilterProvider enabled={AGENDA_ONLY_HUB_PANEL}>
+                  <WorkspaceList shown={shown} onTabChange={showList} picker={picker} />
+                </AgendaClaimFilterProvider>
               )}
             </div>
           </HubAskProvider>
@@ -179,5 +182,23 @@ export function DebatesHubWorkspace() {
         </div>
       </div>
     </DrawnHubListProvider>
+  );
+}
+
+/** The list on screen, narrowed by the surface's agenda filter. */
+function WorkspaceList({
+  shown,
+  onTabChange,
+  picker,
+}: {
+  shown: ClaimsTabVariant;
+  onTabChange: (tab: DebatesHubTab) => void;
+  picker: React.ReactNode;
+}) {
+  const agendaFilter = useAgendaClaimFilterContext();
+  return shown === 'lobby' ? (
+    <LobbyTab onTabChange={onTabChange} layout="workspace" scopePicker={picker} agendaFilter={agendaFilter} />
+  ) : (
+    <ClaimsTab key={shown} variant={shown} layout="workspace" scopePicker={picker} agendaFilter={agendaFilter} />
   );
 }
