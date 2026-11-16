@@ -33,6 +33,8 @@ const mocks = vi.hoisted(() => ({
   endCardShown: [] as boolean[],
   /** Each render's `mediaAttached`, as the player handed it to the playback hook. */
   mediaAttached: [] as boolean[],
+  /** Each render's `playbackRate`, as the player handed it to the playback hook (GEO-3773). */
+  playbackRates: [] as (number | undefined)[],
 }));
 
 // Cloudflare Stream previews (NEXT_PUBLIC_DEBATE_STREAM_PLAYBACK). Off by default here, as the
@@ -159,8 +161,13 @@ const emptyTicker = () => ({
 });
 
 vi.mock('~/core/debates/use-debate-playback', () => ({
-  useDebatePlayback: (_debate: unknown, _enabled: boolean, options?: { mediaAttached?: boolean }) => {
+  useDebatePlayback: (
+    _debate: unknown,
+    _enabled: boolean,
+    options?: { mediaAttached?: boolean; playbackRate?: number }
+  ) => {
     mocks.mediaAttached.push(options?.mediaAttached ?? true);
+    mocks.playbackRates.push(options?.playbackRate);
     return mocks.controller;
   },
 }));
@@ -2199,6 +2206,39 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
       renderAt(62.3, { playbackBreaks: breaks({ breaks: [extendBreak] }), seekBoth: pausedSeek, playing: false });
       vi.advanceTimersByTime(5_000);
       expect(pausedSeek).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // GEO-3773: the moments editor plays at 2x. The player hands the rate to the playback hook, and the
+  // cut, 850 ms of recording ahead, fires after 425 ms of wall time rather than 850.
+  it('plays at the rate it is given and times the cut at it', () => {
+    vi.useFakeTimers();
+    try {
+      mocks.playbackRates = [];
+      const seekBoth = vi.fn();
+      mocks.controller = controllerFixture({
+        mutedByUser: false,
+        turnSlot: 1,
+        playheadSeconds: 60.35,
+        playbackBreaks: breaks({ breaks: [extendBreak] }),
+        seekBoth,
+      });
+      render(<DebateFeedPlayer debate={startedDebate} active playbackRate={2} />);
+      const start = Date.now();
+      mocks.livePosition = () => (60.35 + (2 * (Date.now() - start)) / 1_000) * 1_000;
+      expect(mocks.playbackRates.at(-1)).toBe(2);
+
+      vi.advanceTimersByTime(400);
+      expect(seekBoth).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(50);
+      expect(seekBoth).toHaveBeenCalledWith(70.8, { preserveTransitionHold: true });
+
+      cleanup();
+      mocks.playbackRates = [];
+      renderAt(60.35, { playbackBreaks: breaks({ breaks: [extendBreak] }) });
+      expect(mocks.playbackRates.at(-1)).toBe(1);
     } finally {
       vi.useRealTimers();
     }

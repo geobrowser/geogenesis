@@ -2630,15 +2630,45 @@ describe('useDebatePlayback — playback rate (GEO-3773)', () => {
     expect(slot2.playbackRate).toBe(2);
   });
 
-  it('hands both elements back at 1 when it unmounts, so a pooled element carries no speed on', async () => {
-    const { slot1, slot2, rerender, unmount } = await mountedAtRate(1);
+  // Handing an element on at 1 is the pool's job (`releaseGestureVideo`). By the time the player
+  // unmounts, a pooled element it once held may be playing in another card.
+  it('writes nothing to its elements when it unmounts', async () => {
+    const { slot1, slot2, writes1, writes2, rerender, unmount } = await mountedAtRate(1);
     rerender({ rate: 2 });
+    for (const writes of [writes1, writes2]) {
+      writes.playbackRate.length = 0;
+      writes.defaultPlaybackRate.length = 0;
+    }
 
     unmount();
 
+    expect([...writes1.playbackRate, ...writes2.playbackRate]).toEqual([]);
+    expect([...writes1.defaultPlaybackRate, ...writes2.defaultPlaybackRate]).toEqual([]);
+    expect(slot1.playbackRate).toBe(2);
+    expect(slot2.playbackRate).toBe(2);
+  });
+
+  it('keeps a starting rate through the StrictMode remount', async () => {
+    const slot1 = fakeVideo();
+    const slot2 = fakeVideo();
+    spyRates(slot1);
+    spyRates(slot2);
+    const { result } = renderHook(
+      () => {
+        const controller = useDebatePlayback(debateFixture(), true, { playbackRate: 2 });
+        React.useLayoutEffect(() => {
+          controller.slot1VideoRef.current = slot1;
+          controller.slot2VideoRef.current = slot2;
+        }, [controller.slot1VideoRef, controller.slot2VideoRef]);
+        return controller;
+      },
+      { reactStrictMode: true }
+    );
+    await waitFor(() => expect(result.current.urls.slot1).not.toBeNull());
+
     for (const video of [slot1, slot2]) {
-      expect(video.playbackRate).toBe(1);
-      expect(video.defaultPlaybackRate).toBe(1);
+      expect(video.playbackRate).toBe(2);
+      expect(video.defaultPlaybackRate).toBe(2);
     }
   });
 

@@ -323,23 +323,14 @@ export function useDebatePlayback(
    */
   const rateRef = React.useRef(1);
   /**
-   * Elements whose `defaultPlaybackRate` this player moved off 1. `load()` (a re-sign, a source
-   * reattach, hls.js) puts `playbackRate` back to the default, so a rate other than 1 has to be the
-   * default as well; and an element that leaves this player has to go back to 1, since on iOS the
-   * same element is handed on to the next card (`gesture-media-pool.ts`).
-   */
-  const rateDefaultedRef = React.useRef(new Set<HTMLVideoElement>());
-  /**
-   * Make the base rate this element's default too. Touches nothing while the rate is 1 and the
-   * element was never moved off it, which is every feed card.
+   * Make the base rate this element's default too: `load()` (a re-sign, a source reattach, hls.js)
+   * puts `playbackRate` back to the default, so a rate other than 1 has to be the default as well.
+   * A feed element's default is already 1, so at 1 this writes nothing. Handing an element on at 1
+   * is the pool's job (`releaseGestureVideo`): on iOS the same element moves to the next card, and
+   * elsewhere it goes with the player.
    */
   const keepDefaultRate = React.useCallback((video: HTMLVideoElement) => {
-    const rate = rateRef.current;
-    const defaulted = rateDefaultedRef.current;
-    if (rate === 1 && !defaulted.has(video)) return;
-    if (video.defaultPlaybackRate !== rate) video.defaultPlaybackRate = rate;
-    if (rate === 1) defaulted.delete(video);
-    else defaulted.add(video);
+    if (video.defaultPlaybackRate !== rateRef.current) video.defaultPlaybackRate = rateRef.current;
   }, []);
   // Applied when the rate changes, not on mount at 1: a feed card mounting must not reset a nudge
   // or a recovery already running on its elements.
@@ -354,17 +345,6 @@ export function useDebatePlayback(
       keepDefaultRate(video);
     }
   }, [keepDefaultRate, playbackRate]);
-  // Hand every element moved off 1 back at 1, so none carries the editor's speed into a feed card.
-  React.useEffect(() => {
-    const defaulted = rateDefaultedRef.current;
-    return () => {
-      for (const video of defaulted) {
-        video.defaultPlaybackRate = 1;
-        video.playbackRate = 1;
-      }
-      defaulted.clear();
-    };
-  }, []);
   const pendingSeekSecondsRef = React.useRef<number | null>(null);
   // An automatic cut holds physical playback without changing the viewer's play/pause intent.
   const transitionHoldRef = React.useRef<{ resume: boolean } | null>(null);
