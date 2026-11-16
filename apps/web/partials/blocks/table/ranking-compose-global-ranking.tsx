@@ -878,13 +878,13 @@ export function RankingComposeGlobalRanking({
           />
         </div>
         {teamView?.tools && topicFacet && !rankingFilters ? (
-          <BestDebatesTeamToolbar tools={teamView.tools} facet={topicFacet} />
+          <BestDebatesTeamToolbar tools={teamView.tools} facet={topicFacet} align="end" />
         ) : null}
       </div>
       {teamView?.tools && rankingFilters ? (
         <BestDebatesFilterRow
           // Topic sits in the filter row with the others (Preston, 16 Nov), not alone beside the search.
-          topicMenu={topicFacet ? <BestDebatesTeamToolbar tools={teamView.tools} facet={topicFacet} align="start" /> : null}
+          topicMenu={topicFacet ? <BestDebatesTeamToolbar tools={teamView.tools} facet={topicFacet} /> : null}
           state={rankingFilters.state}
           facets={rankingFilters.facets}
           todayKey={rankingFilters.todayKey}

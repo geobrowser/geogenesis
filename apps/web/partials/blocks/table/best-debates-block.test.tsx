@@ -301,6 +301,22 @@ describe('BestDebatesBlock', () => {
     );
   });
 
+  it('puts Rank this day on the Not ranked yet line, or on its own line when the day has none unranked', () => {
+    mocks.flag = true;
+    mocks.canEdit = true;
+    renderBlock();
+
+    // Today has two unranked debates: the button sits on that section's line.
+    const section = screen.getByRole('region', { name: 'Not ranked yet' });
+    expect(within(section).getByRole('button', { name: 'Rank this day' })).toBeInTheDocument();
+
+    // Yesterday's one debate is in the team ranking: no section, the button on a line of its own.
+    const strip = screen.getByRole('group', { name: 'Last 7 days' });
+    fireEvent.click(within(strip).getAllByRole('button')[1]);
+    expect(screen.queryByRole('region', { name: 'Not ranked yet' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Rank this day' })).toBeInTheDocument();
+  });
+
   it('offers Rank this day only to rankers, and not on a day with no debates', () => {
     renderBlock();
     expect(screen.queryByRole('button', { name: 'Rank this day' })).not.toBeInTheDocument();

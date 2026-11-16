@@ -38,10 +38,11 @@ export function useBestDebatesTeamTools(): BestDebatesTeamTools {
 export function BestDebatesTeamToolbar({
   tools,
   facet,
-  align = 'end',
+  align,
 }: {
   tools: BestDebatesTeamTools;
   facet: BestDebatesTopicFacet;
+  /** Left out, the menu places itself by where its trigger sits, like the filter row's other menus. */
   align?: 'start' | 'end';
 }) {
   const options = React.useMemo(
