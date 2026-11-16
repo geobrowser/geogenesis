@@ -2478,6 +2478,213 @@ describe('useDebatePlayback — drift correction leaves the audible recording al
   });
 });
 
+/**
+ * GEO-3773. The moments editor plays at 1.5x and 2x through the same hook every feed card uses, so
+ * the rate is a base the drift sync nudges around, and at 1 the hook writes nothing it did not
+ * write before.
+ */
+describe('useDebatePlayback — playback rate (GEO-3773)', () => {
+  let now = 1_700_000_000_000;
+
+  beforeEach(() => {
+    vi.spyOn(document, 'visibilityState', 'get').mockImplementation(() => 'visible');
+    mocks.turnSegments = [];
+    mocks.condensedBreaks = [];
+    mocks.recordingUrl.mockReset();
+    mocks.recordingUrl.mockImplementation(({ filename }: { filename: string }) =>
+      Promise.resolve({ url: `https://cdn.test/${filename}?sig=abc` })
+    );
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  /** Counts every write to the two rate properties, keeping the values readable. */
+  function spyRates(video: FakeVideo) {
+    const writes = { playbackRate: [] as number[], defaultPlaybackRate: [] as number[] };
+    for (const key of ['playbackRate', 'defaultPlaybackRate'] as const) {
+      let value = (video as unknown as Record<string, number | undefined>)[key] ?? 1;
+      Object.defineProperty(video, key, {
+        configurable: true,
+        get: () => value,
+        set: (next: number) => {
+          writes[key].push(next);
+          value = next;
+        },
+      });
+    }
+    return writes;
+  }
+
+  async function mountedAtRate(rate: number) {
+    const hook = renderHook(
+      ({ rate }: { rate: number }) => useDebatePlayback(debateFixture(), true, { playbackRate: rate }),
+      { initialProps: { rate } }
+    );
+    await waitFor(() => expect(hook.result.current.urls.slot1).not.toBeNull());
+    // Muted, so slot 1 leads (see the drift tests above).
+    act(() => hook.result.current.setMutedByUser(true));
+    const slot1 = fakeVideo();
+    const slot2 = fakeVideo();
+    const writes1 = spyRates(slot1);
+    const writes2 = spyRates(slot2);
+    hook.result.current.slot1VideoRef.current = slot1;
+    hook.result.current.slot2VideoRef.current = slot2;
+    return { ...hook, slot1, slot2, writes1, writes2 };
+  }
+
+  async function playFrom(
+    result: { current: ReturnType<typeof useDebatePlayback> },
+    slot1: FakeVideo,
+    slot2: FakeVideo,
+    seconds: number
+  ) {
+    await act(async () => {
+      void result.current.resumeBoth();
+      await Promise.resolve();
+      slot1.settlePlay();
+      slot2.settlePlay();
+      await new Promise(resolve => setTimeout(resolve, 50));
+    });
+    act(() => result.current.seekBoth(seconds));
+    now = Date.now() + 10_000;
+    vi.spyOn(Date, 'now').mockImplementation(() => now);
+  }
+
+  it.each([1.5, 2])('plays both recordings at %sx, as their default too', async rate => {
+    const { slot1, slot2, rerender } = await mountedAtRate(1);
+
+    rerender({ rate });
+
+    for (const video of [slot1, slot2]) {
+      expect(video.playbackRate).toBe(rate);
+      expect(video.defaultPlaybackRate).toBe(rate);
+    }
+
+    // Back to 1, the elements are put back to 1 as well.
+    rerender({ rate: 1 });
+    for (const video of [slot1, slot2]) {
+      expect(video.playbackRate).toBe(1);
+      expect(video.defaultPlaybackRate).toBe(1);
+    }
+  });
+
+  it('keeps a rate set before the elements arrive, through a seek', async () => {
+    const { result, slot1, slot2 } = await mountedAtRate(2);
+
+    act(() => result.current.seekBoth(12));
+
+    expect(slot1.playbackRate).toBe(2);
+    expect(slot2.playbackRate).toBe(2);
+    expect(slot2.defaultPlaybackRate).toBe(2);
+  });
+
+  it('nudges the follower around the base rate and holds the leader on it', async () => {
+    const { result, slot1, slot2, rerender } = await mountedAtRate(1);
+    rerender({ rate: 2 });
+    await playFrom(result, slot1, slot2, 10);
+
+    // Slot 1 leads; slot 2 behind by more than the nudge threshold.
+    slot1.currentTime = 11;
+    slot2.currentTime = 10.6;
+    act(() => result.current.onPlaybackTick());
+    expect(slot2.playbackRate).toBe(2 * 1.03);
+    expect(slot1.playbackRate).toBe(2);
+
+    // Ahead now: eases off around 2, not around 1.
+    slot2.currentTime = 11.4;
+    act(() => result.current.onPlaybackTick());
+    expect(slot2.playbackRate).toBe(2 * 0.97);
+
+    // Back in step: returns to the base rate.
+    slot2.currentTime = 11;
+    act(() => result.current.onPlaybackTick());
+    expect(slot2.playbackRate).toBe(2);
+  });
+
+  it('puts a nudged leader back on the base rate, not on 1', async () => {
+    const { result, slot1, slot2, rerender } = await mountedAtRate(1);
+    rerender({ rate: 2 });
+    await playFrom(result, slot1, slot2, 10);
+
+    slot1.playbackRate = 1.94;
+    slot1.currentTime = 11;
+    slot2.currentTime = 11;
+    act(() => result.current.onPlaybackTick());
+
+    expect(slot1.playbackRate).toBe(2);
+  });
+
+  it('seeks a far-behind follower at the base rate', async () => {
+    const { result, slot1, slot2, rerender } = await mountedAtRate(1);
+    rerender({ rate: 2 });
+    await playFrom(result, slot1, slot2, 10);
+
+    slot1.currentTime = 11;
+    slot2.currentTime = 13;
+    Object.assign(slot2, { buffered: timeRanges(0, 50) });
+    act(() => result.current.onPlaybackTick());
+
+    expect(slot2.currentTime).toBe(11);
+    expect(slot2.playbackRate).toBe(2);
+  });
+
+  it('hands both elements back at 1 when it unmounts, so a pooled element carries no speed on', async () => {
+    const { slot1, slot2, rerender, unmount } = await mountedAtRate(1);
+    rerender({ rate: 2 });
+
+    unmount();
+
+    for (const video of [slot1, slot2]) {
+      expect(video.playbackRate).toBe(1);
+      expect(video.defaultPlaybackRate).toBe(1);
+    }
+  });
+
+  it('writes nothing new at rate 1: no apply on mount, no default rate, the same nudges', async () => {
+    const slot1 = fakeVideo();
+    const slot2 = fakeVideo();
+    const writes1 = spyRates(slot1);
+    const writes2 = spyRates(slot2);
+    // A nudge already running on an element the card mounts with must survive the mount.
+    slot2.playbackRate = 1.03;
+    writes2.playbackRate.length = 0;
+    // Attached during layout, before the hook's effects run, as the player's elements are.
+    const { result, rerender } = renderHook(
+      ({ rate }: { rate: number }) => {
+        const controller = useDebatePlayback(debateFixture(), true, { playbackRate: rate });
+        React.useLayoutEffect(() => {
+          controller.slot1VideoRef.current = slot1;
+          controller.slot2VideoRef.current = slot2;
+        }, [controller.slot1VideoRef, controller.slot2VideoRef]);
+        return controller;
+      },
+      { initialProps: { rate: 1 } }
+    );
+    await waitFor(() => expect(result.current.urls.slot1).not.toBeNull());
+    act(() => result.current.setMutedByUser(true));
+    rerender({ rate: 1 });
+    expect(slot2.playbackRate).toBe(1.03);
+    expect(writes1.playbackRate).toEqual([]);
+    expect(writes2.playbackRate).toEqual([]);
+
+    await playFrom(result, slot1, slot2, 10);
+    slot1.currentTime = 11;
+    slot2.currentTime = 10.6;
+    act(() => result.current.onPlaybackTick());
+    expect(slot2.playbackRate).toBe(1.03);
+    expect(slot1.playbackRate).toBe(1);
+
+    // Every write is a value the hook wrote before rates existed: 1 or a 3% nudge off it.
+    for (const value of [...writes1.playbackRate, ...writes2.playbackRate]) {
+      expect([1, 1.03, 0.97]).toContain(value);
+    }
+    expect(writes1.defaultPlaybackRate).toEqual([]);
+    expect(writes2.defaultPlaybackRate).toEqual([]);
+  });
+});
+
 describe('useDebatePlayback — where each Stream recording starts loading (GEO-3604)', () => {
   beforeEach(() => {
     vi.spyOn(document, 'visibilityState', 'get').mockImplementation(() => 'visible');

@@ -66,7 +66,7 @@ export type MuteSource = 'explicit' | 'inferred';
 const SYNC_NUDGE_DRIFT_SECONDS = 0.18;
 /** Above this the gap is too wide to close by rate alone, so it is worth one seek. */
 const SYNC_SEEK_DRIFT_SECONDS = 0.75;
-/** How far off 1 the nudge goes. 3% converges 0.18s inside ~6s and is inaudible. */
+/** How far off the base rate the nudge goes, as a share of it. 3% converges 0.18s inside ~6s and is inaudible. */
 const SYNC_NUDGE_RATE = 0.03;
 /** Floor between hard seeks, so a seek that itself causes drift cannot start a storm. */
 const MIN_SYNC_SEEK_INTERVAL_MS = 2_000;
@@ -225,7 +225,18 @@ type StreamSigning = { streamUrls: Set<string>; fallback: RecordingPlaybackVaria
 export function useDebatePlayback(
   debate: Debate,
   enabled: boolean,
-  { mediaAttached = true }: { mediaAttached?: boolean } = {}
+  {
+    mediaAttached = true,
+    playbackRate = 1,
+  }: {
+    mediaAttached?: boolean;
+    /**
+     * The speed both recordings play at (GEO-3773): 1 everywhere but the moments editor, which offers
+     * 1.5 and 2. Drift sync nudges around it. Positions, drift thresholds and the recording clock
+     * stay in media seconds; only the wall time between them shrinks.
+     */
+    playbackRate?: number;
+  } = {}
 ) {
   const recordingUrls = useRecordingPlaybackUrl();
   const [urls, setUrls] = React.useState<PlaybackUrls>({ slot1: null, slot2: null });
@@ -305,6 +316,55 @@ export function useDebatePlayback(
   const [turnState, setTurnState] = React.useState<TurnState>(null);
   const slot1VideoRef = React.useRef<HTMLVideoElement | null>(null);
   const slot2VideoRef = React.useRef<HTMLVideoElement | null>(null);
+  /**
+   * The base rate every write below plays at, read through a ref so the sync tick and the seeks see
+   * a change without being rebuilt. 1 until a caller asks otherwise, and at 1 each write is the
+   * same `1` it always was.
+   */
+  const rateRef = React.useRef(1);
+  /**
+   * Elements whose `defaultPlaybackRate` this player moved off 1. `load()` (a re-sign, a source
+   * reattach, hls.js) puts `playbackRate` back to the default, so a rate other than 1 has to be the
+   * default as well; and an element that leaves this player has to go back to 1, since on iOS the
+   * same element is handed on to the next card (`gesture-media-pool.ts`).
+   */
+  const rateDefaultedRef = React.useRef(new Set<HTMLVideoElement>());
+  /**
+   * Make the base rate this element's default too. Touches nothing while the rate is 1 and the
+   * element was never moved off it, which is every feed card.
+   */
+  const keepDefaultRate = React.useCallback((video: HTMLVideoElement) => {
+    const rate = rateRef.current;
+    const defaulted = rateDefaultedRef.current;
+    if (rate === 1 && !defaulted.has(video)) return;
+    if (video.defaultPlaybackRate !== rate) video.defaultPlaybackRate = rate;
+    if (rate === 1) defaulted.delete(video);
+    else defaulted.add(video);
+  }, []);
+  // Applied when the rate changes, not on mount at 1: a feed card mounting must not reset a nudge
+  // or a recovery already running on its elements.
+  const lastAppliedRateRef = React.useRef(1);
+  React.useEffect(() => {
+    rateRef.current = playbackRate;
+    if (playbackRate === lastAppliedRateRef.current) return;
+    lastAppliedRateRef.current = playbackRate;
+    for (const video of [slot1VideoRef.current, slot2VideoRef.current]) {
+      if (!video) continue;
+      video.playbackRate = playbackRate;
+      keepDefaultRate(video);
+    }
+  }, [keepDefaultRate, playbackRate]);
+  // Hand every element moved off 1 back at 1, so none carries the editor's speed into a feed card.
+  React.useEffect(() => {
+    const defaulted = rateDefaultedRef.current;
+    return () => {
+      for (const video of defaulted) {
+        video.defaultPlaybackRate = 1;
+        video.playbackRate = 1;
+      }
+      defaulted.clear();
+    };
+  }, []);
   const pendingSeekSecondsRef = React.useRef<number | null>(null);
   // An automatic cut holds physical playback without changing the viewer's play/pause intent.
   const transitionHoldRef = React.useRef<{ resume: boolean } | null>(null);
@@ -980,15 +1040,17 @@ export function useDebatePlayback(
       if (!primaryVideo || !secondaryVideo) return false;
       moveTo(primaryVideo, Math.max(0, playhead - offsets.slot1));
       moveTo(secondaryVideo, Math.max(0, playhead - offsets.slot2));
-      primaryVideo.playbackRate = 1;
-      secondaryVideo.playbackRate = 1;
+      primaryVideo.playbackRate = rateRef.current;
+      secondaryVideo.playbackRate = rateRef.current;
+      keepDefaultRate(primaryVideo);
+      keepDefaultRate(secondaryVideo);
       noteDeliberateSeek();
       // This *is* the debate's position now — a scrub backwards must not be dragged forward by
       // where playback had previously got to.
       lastRunningPlayheadRef.current = playhead;
       return true;
     },
-    [noteDeliberateSeek, offsets]
+    [keepDefaultRate, noteDeliberateSeek, offsets]
   );
 
   /**
@@ -1001,7 +1063,7 @@ export function useDebatePlayback(
   const resyncFollowerHeld = React.useCallback((follower: HTMLVideoElement, seconds: number) => {
     const hold = holdForTransitionRef.current?.();
     follower.currentTime = seconds;
-    follower.playbackRate = 1;
+    follower.playbackRate = rateRef.current;
     if (!hold) return;
     stopHeldResyncRef.current?.();
     const primaryVideo = slot1VideoRef.current;
@@ -1178,7 +1240,10 @@ export function useDebatePlayback(
 
     // The leader is never corrected, so a nudge left on it from before the roles swapped (a turn
     // boundary, or the viewer unmuting) goes now.
-    if (leader && leader.playbackRate !== 1) leader.playbackRate = 1;
+    const rate = rateRef.current;
+    if (leader && leader.playbackRate !== rate) leader.playbackRate = rate;
+    if (leader) keepDefaultRate(leader);
+    if (follower) keepDefaultRate(follower);
 
     if (leader && follower && pairIsSettled && !leader.paused && !follower.seeking && !leaderStalled) {
       const drift = follower.currentTime - (leader.currentTime - followerDelta);
@@ -1189,20 +1254,20 @@ export function useDebatePlayback(
         lastSyncSeekAtRef.current = now;
         if (bufferedAheadSeconds(follower, target) >= SYNC_SEEK_BUFFERED_SECONDS) {
           follower.currentTime = target;
-          follower.playbackRate = 1;
+          follower.playbackRate = rate;
         } else {
           resyncFollowerHeld(follower, target);
         }
       } else if (absDrift > SYNC_NUDGE_DRIFT_SECONDS) {
         // Small enough that a rate change closes it within a few seconds, and far enough from 1
         // to actually converge. On the muted element, so the pitch shift is not heard at all.
-        follower.playbackRate = drift > 0 ? 1 - SYNC_NUDGE_RATE : 1 + SYNC_NUDGE_RATE;
-      } else if (follower.playbackRate !== 1) {
-        follower.playbackRate = 1;
+        follower.playbackRate = rate * (drift > 0 ? 1 - SYNC_NUDGE_RATE : 1 + SYNC_NUDGE_RATE);
+      } else if (follower.playbackRate !== rate) {
+        follower.playbackRate = rate;
       }
-    } else if (follower && follower.playbackRate !== 1) {
+    } else if (follower && follower.playbackRate !== rate) {
       // Never leave a nudge running once the pair is no longer being kept in step.
-      follower.playbackRate = 1;
+      follower.playbackRate = rate;
     }
 
     /**
@@ -1349,7 +1414,7 @@ export function useDebatePlayback(
         });
       }
     }
-  }, [offsets, resyncFollowerHeld, seekVideosTo, timelineSeconds, turnStateAt]);
+  }, [keepDefaultRate, offsets, resyncFollowerHeld, seekVideosTo, timelineSeconds, turnStateAt]);
 
   const pauseBoth = React.useCallback(() => {
     if (transitionHoldRef.current) transitionHoldRef.current.resume = false;
@@ -1670,7 +1735,7 @@ export function useDebatePlayback(
           return;
         }
         recovered.currentTime = Math.max(0, partner.currentTime + partnerOffset - recoveredOffset);
-        recovered.playbackRate = 1;
+        recovered.playbackRate = rateRef.current;
         noteDeliberateSeek();
         void recovered
           .play()
