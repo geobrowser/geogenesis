@@ -10,6 +10,7 @@ import { toViemAccount, usePrivy, useWallets } from '~/core/wallet/auth-hooks';
 import { embeddedWalletAddress, findEmbeddedWallet } from '~/core/wallet/embedded-wallet';
 
 import { forgetSyncedWalletCookie, syncWalletCookie } from '../cookie/sync-wallet-cookie';
+import { walletCookieQueryKey } from '../cookie/wallet-cookie-query-key';
 import { ReceiptConfirmationTimeoutError } from '../errors';
 import { GEO_NETWORK } from '../sdk/geo-network';
 import {
@@ -23,10 +24,6 @@ import { sendTransactionReportingSubmission } from './smart-account-submission';
 
 export function smartAccountQueryKey(embeddedWalletAddress: string | null | undefined) {
   return ['smart-account', embeddedWalletAddress] as const;
-}
-
-export function walletCookieQueryKey(address: string | null | undefined) {
-  return ['wallet-cookie', address] as const;
 }
 
 function useWalletCookieSync(address: `0x${string}` | null) {

@@ -70,6 +70,7 @@ vi.mock('~/core/browse/use-browse-sidebar-cache', () => ({
 
 vi.mock('@tanstack/react-query', () => ({
   keepPreviousData: Symbol('keepPreviousData'),
+  skipToken: Symbol('skipToken'),
   useInfiniteQuery: (options: Record<string, unknown>) => {
     mocks.queryOptions = options;
     mocks.queryKeys.push(options.queryKey as unknown[]);
@@ -87,6 +88,7 @@ vi.mock('@tanstack/react-query', () => ({
     };
   },
   useQuery: (options: Record<string, unknown>) => {
+    if ((options.queryKey as unknown[])[0] === 'wallet-cookie') return { isSuccess: true };
     if ((options.queryKey as unknown[])[0] === 'explore-entry') {
       mocks.entryQueryOptions = options;
       return { data: options.enabled ? mocks.entryItem : undefined, isPending: mocks.entryPending };
