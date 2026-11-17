@@ -75,9 +75,8 @@ async function postSession(identityToken: string): Promise<SessionAnswer> {
 }
 
 /**
- * Has the server recognise this tab's wallet from its Privy token; `address` is only compared with
- * the answer. Only `issued` refreshes the page (it was rendered signed out); refreshing on
- * `unchanged` or `renewed` would re-render a signed-in tab on every visit.
+ * Has the server recognise this tab's wallet from its Privy token. Only `issued` refreshes the
+ * page, since that page was rendered signed out; any other refresh would hit every visit.
  */
 export async function syncWalletCookie(address: `0x${string}`) {
   const wanted = address.toLowerCase();

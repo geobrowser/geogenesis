@@ -5,9 +5,8 @@ import { getAddress, isAddress } from 'viem';
 import { WALLET_SESSION_MAX_AGE_SECONDS, WALLET_SESSION_RENEW_AFTER_SECONDS } from './wallet-session-lifetime';
 
 /**
- * `v1.<checksummed address>.<issuedAtSeconds>.<HMAC-SHA256>`, keyed by `WALLET_SESSION_SECRET` and
- * issued only after a Privy login check. Anything that fails the MAC, or any value when the secret
- * is missing, reads as signed out.
+ * `v1.<address>.<issuedAtSeconds>.<HMAC-SHA256>` keyed by `WALLET_SESSION_SECRET`, issued after a
+ * Privy login check. A bad MAC, or a missing secret, reads as signed out.
  */
 export const WALLET_SESSION = 'walletSession';
 

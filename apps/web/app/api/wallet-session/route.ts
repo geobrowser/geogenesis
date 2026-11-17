@@ -17,9 +17,8 @@ export type WalletSessionResponse = { wallet: string | null; status: WalletSessi
 const json = (status: number, body: WalletSessionResponse) => Response.json(body, { status });
 
 /**
- * Issues `walletSession` for the embedded wallet in a verified Privy identity token, never a
- * wallet from the request. A route handler because a Server Action cookie write re-renders the page.
- * Writes only when the session changes or is due for renewal; a bad token writes nothing.
+ * Issues `walletSession` for the verified Privy token's wallet; writes only on change or renewal.
+ * A route handler, since a Server Action cookie write re-renders the page.
  */
 export async function POST(req: Request) {
   if (!isSameOrigin(req)) return new Response(null, { status: 403 });
