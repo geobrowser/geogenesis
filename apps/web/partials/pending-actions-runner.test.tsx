@@ -66,7 +66,13 @@ describe('queued actions after another sign-in', () => {
       });
       act(() =>
         withActionContext(context, () =>
-          enqueue.result.current({ id: 'winner-vote', label: 'winner vote', requires: 'personalSpace', run: vote })
+          enqueue.result.current({
+            id: 'winner-vote',
+            label: 'winner vote',
+            requires: 'personalSpace',
+            survivesRedirect: false,
+            run: vote,
+          })
         )
       );
       const runner = render(<PendingActionsRunner />, { wrapper });
@@ -104,7 +110,7 @@ describe('signing out', () => {
   it('drops what was queued when the account signs out without a reload', () => {
     mocks.privyAuthenticated = true;
     const { store, wrapper, enqueue } = renderQueue();
-    act(() => enqueue({ id: 'vote', label: 'vote', requires: 'personalSpace', run: vi.fn() }));
+    act(() => enqueue({ id: 'vote', label: 'vote', requires: 'personalSpace', survivesRedirect: false, run: vi.fn() }));
     const runner = render(<PendingActionsRunner />, { wrapper });
 
     mocks.privyAuthenticated = false;
@@ -116,7 +122,7 @@ describe('signing out', () => {
   // The press that queued it was made signed out — that is the whole point of the queue.
   it('keeps what a signed-out visitor queued', () => {
     const { store, wrapper, enqueue } = renderQueue();
-    act(() => enqueue({ id: 'vote', label: 'vote', requires: 'personalSpace', run: vi.fn() }));
+    act(() => enqueue({ id: 'vote', label: 'vote', requires: 'personalSpace', survivesRedirect: false, run: vi.fn() }));
     const runner = render(<PendingActionsRunner />, { wrapper });
     runner.rerender(<PendingActionsRunner />);
 
@@ -132,11 +138,11 @@ describe('a press replaced while the one before it runs', () => {
     let finishFirst = () => {};
     const first = vi.fn(() => new Promise<void>(resolve => (finishFirst = resolve)));
     const second = vi.fn();
-    act(() => enqueue({ id: 'vote', label: 'vote', requires: 'personalSpace', run: first }));
+    act(() => enqueue({ id: 'vote', label: 'vote', requires: 'personalSpace', survivesRedirect: false, run: first }));
     render(<PendingActionsRunner />, { wrapper });
     await waitFor(() => expect(first).toHaveBeenCalledOnce());
 
-    act(() => enqueue({ id: 'vote', label: 'vote', requires: 'personalSpace', run: second }));
+    act(() => enqueue({ id: 'vote', label: 'vote', requires: 'personalSpace', survivesRedirect: false, run: second }));
     await act(async () => finishFirst());
 
     await waitFor(() => expect(second).toHaveBeenCalledOnce());
@@ -149,6 +155,7 @@ describe('a press made while sign-in was resolving', () => {
     id,
     label: id,
     requires: 'personalSpace' as const,
+    survivesRedirect: false,
     run: vi.fn(),
     onSignedOut,
   });
