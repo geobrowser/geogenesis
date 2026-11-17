@@ -5,6 +5,7 @@ import { measureTextWidth } from '~/core/blocks/ranking/ranking-og-image';
 import {
   CLAIM_BAND_HEIGHT_PX,
   CLAIM_MEASURE_PX,
+  CLAIM_TALLEST_BLOCK_PX,
   balanceLines,
   claimLineHeight,
   fitClaimToBand,
@@ -23,6 +24,15 @@ function claimOfLength(chars: number): string {
 }
 
 describe('fitClaimToBand', () => {
+  /// The masthead clearance test leans on this bound, so check the fitter really stays under it.
+  it('never returns a block taller than CLAIM_TALLEST_BLOCK_PX', () => {
+    expect(CLAIM_TALLEST_BLOCK_PX).toBe(122);
+    for (let chars = 1; chars <= 400; chars += 3) {
+      const fit = fitClaimToBand(claimOfLength(chars));
+      expect(fit.lines.length * claimLineHeight(fit.fontSize)).toBeLessThanOrEqual(CLAIM_TALLEST_BLOCK_PX);
+    }
+  });
+
   it('puts the short artboard claim on the top rung', () => {
     const fit = fitClaimToBand(SHORT_CLAIM);
 
