@@ -179,5 +179,8 @@ export function useVideoCutTransition({
     [enabled, holdForTransition, seek, slot1VideoRef, slot2VideoRef]
   );
 
-  return { slot1CanvasRef, slot2CanvasRef, seekAcrossCut };
+  /** Drop a cut still in progress, frames and hold alike: a seek of the player's own has taken over. */
+  const cancel = React.useCallback(() => clearRef.current?.(), []);
+
+  return { slot1CanvasRef, slot2CanvasRef, seekAcrossCut, cancel };
 }

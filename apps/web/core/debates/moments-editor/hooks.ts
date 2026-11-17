@@ -2,10 +2,20 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
+import * as React from 'react';
+
 import { GeoChatRequestError } from '../api';
 import { debateQueryKeys, debateQueryNetworkOptions, useGeoChatAuth } from '../hooks';
-import { type MomentBackfillBody, getMomentBackfill, postMomentBackfill } from './api';
+import {
+  type AudioPeaksReady,
+  type AudioPeaksStatus,
+  type MomentBackfillBody,
+  getAudioPeaks,
+  getMomentBackfill,
+  postMomentBackfill,
+} from './api';
 import { jobInFlight, reelJob } from './reel-status';
+import { PEAKS_GIVE_UP_MS, type PeaksView, decodePeaks, isPeaksWaiting, peaksPollDelay, peaksView } from './waveform';
 
 /** How often the editor reads a queued or rendering request again. */
 export const REEL_JOB_POLL_MS = 4_000;
@@ -131,4 +141,69 @@ export function useRefreshAfterReel(debateId: string) {
     void queryClient.invalidateQueries({ queryKey: debateQueryKeys.media(debateId) });
     void queryClient.invalidateQueries({ queryKey: debateQueryKeys.transcripts(debateId) });
   };
+}
+
+/**
+ * The debate's audio peaks for the editor's waveform (GEO-3673). The first read asks geo-chat to
+ * build them if it hasn't; while they are built, they are read again every 5 s, then every 15 s after
+ * two minutes, and not at all after ten, when the editor says it is still waiting. Once ready they are
+ * kept for the visit. A geo-chat without the route (404), or any error, is no waveform: the editor
+ * works the same without one.
+ */
+export function useAudioPeaks(debateId: string, enabled: boolean): PeaksView {
+  const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
+  // When this visit first saw the peaks being built: the ten minutes count from there, so reopening
+  // the editor later waits afresh.
+  const waitingSince = React.useRef<number | null>(null);
+  const query = useQuery({
+    ...debateQueryNetworkOptions,
+    queryKey: debateQueryKeys.audioPeaks(debateId, accountKey),
+    queryFn: async ({ signal }): Promise<AudioPeaksStatus | null> => {
+      try {
+        return await getAudioPeaks(debateId, getPrivyIdentityToken, accountKey, signal);
+      } catch (error) {
+        if (error instanceof GeoChatRequestError && error.status === 404) return null;
+        throw error;
+      }
+    },
+    enabled: enabled && authenticated,
+    retry: (failureCount, error) => !isMediaAdminRefusal(error) && failureCount < 2,
+    // Ready peaks don't change under the same recordings; anything else is asked again on the next open.
+    staleTime: query => (query.state.data?.status === 'ready' ? Infinity : 0),
+    refetchInterval: query => {
+      if (!isPeaksWaiting(query.state.data)) return false;
+      waitingSince.current ??= Date.now();
+      return peaksPollDelay(Date.now() - waitingSince.current);
+    },
+  });
+
+  const waiting = isPeaksWaiting(query.data);
+  const [gaveUp, setGaveUp] = React.useState(false);
+  React.useEffect(() => {
+    if (!waiting) {
+      waitingSince.current = null;
+      setGaveUp(false);
+      return;
+    }
+    waitingSince.current ??= Date.now();
+    const left = PEAKS_GIVE_UP_MS - (Date.now() - waitingSince.current);
+    if (left <= 0) {
+      setGaveUp(true);
+      return;
+    }
+    const timer = setTimeout(() => setGaveUp(true), left);
+    return () => clearTimeout(timer);
+  }, [waiting]);
+
+  const data = query.data;
+  const ready: AudioPeaksReady | null = data?.status === 'ready' ? (data as AudioPeaksReady) : null;
+  // Decoded once per answer: React Query hands back the same object while the peaks are the same.
+  const peaks = React.useMemo(() => (ready ? decodePeaks(ready) : null), [ready]);
+  return peaksView({
+    status: query.data,
+    failed: query.isError,
+    pending: query.isPending,
+    gaveUp,
+    peaks,
+  });
 }

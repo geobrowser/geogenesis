@@ -1,7 +1,9 @@
 import '@testing-library/jest-dom/vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { Provider } from 'jotai';
 
+import { createRef } from 'react';
+
+import { Provider } from 'jotai';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Debate } from '~/core/debates/api';
@@ -9,7 +11,7 @@ import { readWatchedDebateIds } from '~/core/debates/watched-debates';
 import { store } from '~/core/state/jotai-store';
 
 import { CombinedDebatePlayer } from './combined-debate-player';
-import { DebateFeedPlayer } from './debate-feed-player';
+import { DebateFeedPlayer, type DebateFeedPlayerHandle } from './debate-feed-player';
 import { inlinePlaybackUnavailableAtom, isTikTokInAppBrowser, useInlinePlaybackUnavailable } from './inline-playback';
 
 const TIKTOK_IOS =
@@ -155,6 +157,25 @@ describe('DebateFeedPlayer', () => {
     );
 
     expect(container.querySelector('[data-debate-combined-player]')).not.toBeNull();
+  });
+
+  // GEO-3773: the moments editor's player measures nothing, on the fallback as well.
+  it('marks nothing watched and hands the editor no controls when measure is off', () => {
+    store.set(inlinePlaybackUnavailableAtom, true);
+    mocks.media = { data: { artifacts: [{ kind: 'final_video_hevc' }] }, isError: false };
+    const editorDebate = { id: 'f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0' } as Debate;
+    const ref = createRef<DebateFeedPlayerHandle>();
+    const { container } = render(
+      <Provider store={store}>
+        <DebateFeedPlayer ref={ref} debate={editorDebate} active editorMode measure={false} />
+      </Provider>
+    );
+
+    fireEvent.ended(container.querySelector('video')!);
+
+    expect(readWatchedDebateIds().has(editorDebate.id)).toBe(false);
+    expect(mocks.capture).not.toHaveBeenCalled();
+    expect(ref.current).toBeNull();
   });
 });
 
