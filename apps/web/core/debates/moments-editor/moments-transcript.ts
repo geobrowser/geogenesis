@@ -31,6 +31,16 @@ export function isTranscriptWaiting(transcript: TranscriptGate | null | undefine
 }
 
 /**
+ * Whether the answer is one the editor keeps a while: words (published, or a saved fresh transcript),
+ * or a geo-chat without the route. A transcription being made, failed or unavailable is not: the next
+ * open asks again, since that read is what queues it or retries it.
+ */
+export function transcriptSettled(transcript: TranscriptGate | null | undefined): boolean {
+  if (!transcript) return false;
+  return !transcript.backfill || transcript.backfill.status === 'ready';
+}
+
+/**
  * The saved transcript's version, when the editor's words came from it: sent with every reel, so
  * the worker cuts on the words the clips were picked on or refuses (`transcript_changed`). Never
  * for published words, and never from a geo-chat without the route, which doesn't serve one.

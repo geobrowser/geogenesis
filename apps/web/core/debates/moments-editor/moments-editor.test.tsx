@@ -1593,6 +1593,39 @@ describe('MomentsEditor on a fresh transcript (GEO-3642)', () => {
     expect(menuItem('Check before publishing')).toBeDisabled();
   });
 
+  // A re-render under an unsaved edit reads the transcript again (`debate.media_changed`), and once its
+  // fresh transcription is saved the editor shows the new words. The edit was picked on the old ones:
+  // it is sent pinned to them, so the worker refuses it, and only after that refusal does the next
+  // check or publish go out on the new words.
+  it('pins an unsaved edit to the words it was made on, until the worker refuses it as changed', () => {
+    const requestedAt = '2026-11-17T12:00:00Z';
+    mocks.mutate.mockImplementation((_body, options: { onSuccess: (entry: unknown) => void }) =>
+      options.onSuccess({ queued: true, refusal: null, request: status({ requested_at: requestedAt }) })
+    );
+    mocks.transcriptFrom = ready();
+    const { rerender } = render(<MomentsEditor debateId={DEBATE_ID} />);
+    typeEdge('End', '1.45');
+    mocks.transcriptFrom = ready({ version: 'tv2' });
+    rerender(<MomentsEditor debateId={DEBATE_ID} />);
+    publish();
+    expect(mocks.mutate).toHaveBeenLastCalledWith(
+      expect.objectContaining({ reel: expect.objectContaining({ transcript_version: 'tv1' }) }),
+      expect.any(Object)
+    );
+    mocks.backfill.data = { request: status({ requested_at: requestedAt, status: 'running' }), entry: null };
+    rerender(<MomentsEditor debateId={DEBATE_ID} />);
+    mocks.backfill.data = {
+      request: status({ requested_at: requestedAt, status: 'skipped', outcome: 'transcript_changed' }),
+      entry: null,
+    };
+    rerender(<MomentsEditor debateId={DEBATE_ID} />);
+    fireEvent.click(menuItem('Check before publishing'));
+    expect(mocks.mutate).toHaveBeenLastCalledWith(
+      expect.objectContaining({ preview: true, reel: expect.objectContaining({ transcript_version: 'tv2' }) }),
+      expect.any(Object)
+    );
+  });
+
   it('says the debate was re-rendered when the worker refuses the pinned reel, and reads the transcript again', () => {
     const requestedAt = '2026-11-17T12:00:00Z';
     mocks.mutate.mockImplementation((_body, options: { onSuccess: (entry: unknown) => void }) =>

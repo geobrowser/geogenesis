@@ -16,7 +16,7 @@ import {
   getMomentsTranscript,
   postMomentBackfill,
 } from './api';
-import { isTranscriptWaiting, transcriptPollDelay } from './moments-transcript';
+import { isTranscriptWaiting, transcriptPollDelay, transcriptSettled } from './moments-transcript';
 import { jobInFlight, reelJob } from './reel-status';
 import { PEAKS_GIVE_UP_MS, type PeaksView, decodePeaks, isPeaksWaiting, peaksPollDelay, peaksView } from './waveform';
 
@@ -25,6 +25,9 @@ export const REEL_JOB_POLL_MS = 4_000;
 
 /** Media admins rarely change mid-visit; the answer is kept a while so the menu does not re-ask. */
 const MEDIA_ADMIN_STALE_MS = 5 * 60_000;
+
+/** How long the editor's words are kept before the next open asks again (GEO-3642). */
+const TRANSCRIPT_STALE_MS = 5 * 60_000;
 
 /** What the editor snaps to and lists: every word, and whole sentences. */
 const TRANSCRIPT_INCLUDE = ['words', 'sentences'] as const;
@@ -240,9 +243,10 @@ export function useMomentsTranscript(debateId: string, enabled: boolean) {
     },
     enabled: enabled && authenticated,
     retry: (failureCount, error) => !isMediaAdminRefusal(error) && failureCount < 2,
-    // Never kept for good: a re-render can change the words under the same visit (and the refresh
-    // after one reads them again), and one being made is asked again on every open.
-    staleTime: query => (isTranscriptWaiting(query.state.data) ? 0 : MEDIA_ADMIN_STALE_MS),
+    // Words are kept a while, never for good: a re-render can change them under the same visit (and
+    // the refresh after one reads them again). Anything else (being made, failed, unavailable) is
+    // asked again on every open, as its copy says, and as `useAudioPeaks` does.
+    staleTime: query => (transcriptSettled(query.state.data) ? TRANSCRIPT_STALE_MS : 0),
     refetchInterval: query => {
       if (!isTranscriptWaiting(query.state.data)) {
         waitingSince.current = null;

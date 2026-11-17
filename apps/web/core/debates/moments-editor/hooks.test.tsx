@@ -308,6 +308,65 @@ describe('useMomentsTranscript (GEO-3642)', () => {
     expect(mocks.getMomentsTranscript).toHaveBeenCalledTimes(2);
   });
 
+  // A re-render (or a `transcript_changed` refresh) queues a fresh transcription under ready words:
+  // the new wait is read every 15 s again, not at the slow rate a long earlier wait reached.
+  it('reads every 15 s again when ready words go back to being transcribed', async () => {
+    vi.useFakeTimers();
+    mocks.getMomentsTranscript.mockResolvedValue(queued);
+    const client = new QueryClient();
+    const shared = ({ children }: { children: React.ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+    const { result } = renderHook(
+      () => ({ transcript: useMomentsTranscript('debate', true), refresh: useRefreshAfterReel('debate') }),
+      { wrapper: shared }
+    );
+    await advance(0);
+    // Past the ten minutes, so this wait reads once a minute.
+    await advance(11 * 60_000);
+    mocks.getMomentsTranscript.mockResolvedValue(ready);
+    await advance(61_000);
+    expect(result.current.transcript.data).toEqual(ready);
+    mocks.getMomentsTranscript.mockResolvedValue(queued);
+    await act(async () => result.current.refresh());
+    await advance(0);
+    expect(result.current.transcript.data).toEqual(queued);
+    const calls = mocks.getMomentsTranscript.mock.calls.length;
+    await advance(15_000);
+    expect(mocks.getMomentsTranscript).toHaveBeenCalledTimes(calls + 1);
+  });
+
+  // The copy for these says to reopen the editor: the reopen must ask geo-chat, not show the last answer.
+  it.each([
+    ['being transcribed', queued],
+    ['failed', transcript({ status: 'failed', reason: 'download failed', permanent: false })],
+    ['unavailable', transcript({ status: 'unavailable', reason: 'media_job_active' })],
+  ])('asks again on the next open while %s, and keeps words', async (_, answer) => {
+    const client = new QueryClient();
+    const shared = ({ children }: { children: React.ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+    mocks.getMomentsTranscript.mockResolvedValue(answer);
+    const first = renderHook(() => useMomentsTranscript('debate', true), { wrapper: shared });
+    await waitFor(() => expect(first.result.current.data).toEqual(answer));
+    first.unmount();
+    renderHook(() => useMomentsTranscript('debate', true), { wrapper: shared });
+    await waitFor(() => expect(mocks.getMomentsTranscript).toHaveBeenCalledTimes(2));
+
+    mocks.getMomentsTranscript.mockReset();
+    const kept = new QueryClient();
+    const keptWrapper = ({ children }: { children: React.ReactNode }) => (
+      <QueryClientProvider client={kept}>{children}</QueryClientProvider>
+    );
+    mocks.getMomentsTranscript.mockResolvedValue(ready);
+    const words = renderHook(() => useMomentsTranscript('debate', true), { wrapper: keptWrapper });
+    await waitFor(() => expect(words.result.current.data).toEqual(ready));
+    words.unmount();
+    const again = renderHook(() => useMomentsTranscript('debate', true), { wrapper: keptWrapper });
+    await waitFor(() => expect(again.result.current.data).toEqual(ready));
+    expect(mocks.getMomentsTranscript).toHaveBeenCalledTimes(1);
+  });
+
   it.each([
     ['a geo-chat without the route', new GeoChatRequestError('Not found', 'not_found', 404)],
     ['a refusal of the admin route', new GeoChatRequestError('no', 'media_admin_required', 403)],

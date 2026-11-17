@@ -210,7 +210,8 @@ function Editor({ debateId }: { debateId: string }) {
 
   const [saved, setSaved] = React.useState<EditorClip[] | null>(null);
   const [clips, setClips] = React.useState<EditorClip[]>([]);
-  const dirty = saved !== null && reelKey(clips) !== reelKey(saved);
+  const editKey = reelKey(clips);
+  const dirty = saved !== null && editKey !== reelKey(saved);
   const dirtyRef = React.useRef(dirty);
   dirtyRef.current = dirty;
   // The version of the reel the edit was made on, sent as `base`: not the latest the plan says, which
@@ -236,6 +237,20 @@ function Editor({ debateId }: { debateId: string }) {
     setClips(source.clips);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [source]);
+
+  // The saved transcript the edit was made on (GEO-3642), sent as `transcript_version`: like `base`,
+  // not the latest read, which a re-render moves under an unsaved edit (its `media_changed` reads
+  // every transcript of the debate again). Frozen at the edit's first change, so the worker refuses
+  // an edit picked on words that are gone (`transcript_changed`); followed again without an edit,
+  // and after that refusal, whose copy says to check the clips again.
+  const latestTranscriptVersion = pinnedTranscriptVersion(transcript.data);
+  const [editedOn, setEditedOn] = React.useState<{ version: string | undefined } | null>(null);
+  React.useEffect(() => {
+    if (!dirty) setEditedOn(null);
+    else setEditedOn(current => current ?? { version: latestTranscriptVersion });
+    // Only an edit freezes it: the transcript moving on must not.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dirty, editKey]);
 
   // The player, played through its handle (GEO-3773). Null on the combined-video fallback.
   const player = React.useRef<DebateFeedPlayerHandle>(null);
@@ -335,6 +350,10 @@ function Editor({ debateId }: { debateId: string }) {
   React.useEffect(() => {
     const finished = wasInFlight.current && !inFlight;
     wasInFlight.current = inFlight;
+    // The edit's words are gone: the admin is told to check the clips again, on the words read next.
+    if (finished && ours && request?.status === 'skipped' && request.outcome === 'transcript_changed') {
+      setEditedOn(null);
+    }
     // A check this visit asked for opens its report in the side panel once, when it lands.
     if (
       ours &&
@@ -609,7 +628,7 @@ function Editor({ debateId }: { debateId: string }) {
         }
       : null;
 
-  const transcriptVersion = pinnedTranscriptVersion(transcript.data);
+  const transcriptVersion = editedOn ? editedOn.version : latestTranscriptVersion;
   const submit = (kind: 'preview' | 'publish' | 'unlock') => {
     dispatch({ type: 'closePopover' });
     dispatch({ type: 'stop' });
