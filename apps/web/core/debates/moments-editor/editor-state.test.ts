@@ -30,6 +30,39 @@ describe('editorReducer (GEO-3773)', () => {
     expect(run([{ type: 'deselect' }], state).selection).toEqual({ kind: 'none' });
   });
 
+  describe('the fine-tune panel’s focus', () => {
+    const shownFocus = (state: EditorState, keys = ['a', 'b', 'c']) => editorView(state, { keys, ...NO_LIMITS }).focus;
+    const onEnd = () =>
+      run(
+        [
+          { type: 'select', key: 'b' },
+          { type: 'focus', focus: 'end' },
+        ],
+        loaded()
+      );
+
+    it('starts on the whole clip, and holds the edge picked on the clip it was picked on', () => {
+      expect(shownFocus(loaded())).toBe('clip');
+      expect(shownFocus(onEnd())).toBe('end');
+      // A reel played and stopped comes back to the same clip, still on its end.
+      const replayed = run([{ type: 'playReel', keys: ['a', 'b'], list: ['a', 'b', 'c'] }, { type: 'stop' }], onEnd());
+      expect(shownFocus(replayed)).toBe('end');
+    });
+
+    it('goes back to the whole clip on any pick of a clip, even the same one, and with none selected', () => {
+      expect(shownFocus(run([{ type: 'select', key: 'b' }], onEnd()))).toBe('clip');
+      expect(shownFocus(run([{ type: 'select', key: 'a' }], onEnd()))).toBe('clip');
+      expect(shownFocus(run([{ type: 'deselect' }, { type: 'select', key: 'b' }], onEnd()))).toBe('clip');
+      expect(shownFocus(run([{ type: 'deselect' }], onEnd()))).toBe('clip');
+    });
+
+    it('goes back to the whole clip when its clip goes, or its edits are discarded', () => {
+      // b removed: the selection moves to c, which was never zoomed on.
+      expect(shownFocus(run([{ type: 'clipsChanged', keys: ['a', 'c'] }], onEnd()), ['a', 'c'])).toBe('clip');
+      expect(shownFocus(run([{ type: 'discarded', keys: ['a', 'b', 'c'] }], onEnd()))).toBe('clip');
+    });
+  });
+
   it('keeps nothing selected when the reel changes after a deselect', () => {
     const state = run([{ type: 'deselect' }, { type: 'clipsChanged', keys: ['a', 'c'] }], loaded());
     expect(selectedKey(state)).toBeNull();

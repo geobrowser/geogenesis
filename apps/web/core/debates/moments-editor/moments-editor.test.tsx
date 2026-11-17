@@ -3343,6 +3343,59 @@ describe('MomentsEditor side transcript (GEO-3773)', () => {
   const toolbar = () => screen.queryByRole('group', { name: 'Clip from the selected words' });
   const button = (name: string | RegExp) => screen.queryByRole('button', { name });
 
+  describe('a transcript without word timings (GEO-3642)', () => {
+    beforeEach(() => {
+      mocks.wordTiming = false;
+      wordsOverride = [];
+      // Clip 1 spans Susan's two sentences, clip 2 Urban's one.
+      liveReel(liveClip(900, 3_500, 0), liveClip(4_900, 6_000, 1));
+    });
+    const monitor = () => within(screen.getByRole('region', { name: 'Debate player' }));
+    const sentence = (text: string) =>
+      [...transcript().querySelectorAll<HTMLElement>('[data-sentence]')].find(
+        span => span.textContent?.trim() === text
+      )!;
+
+    it('names each clip’s speaker and quotes its sentences', () => {
+      render(<MomentsEditor debateId={DEBATE_ID} />);
+      expect(monitor().getByText('Clip 1 · Susan Winter')).toBeInTheDocument();
+      // A card shows its quote while another clip is selected.
+      expect(card(2)).toHaveTextContent(/^2Urban.*Dinner wins\.$/);
+      expect(screen.queryByText(/No speaker/)).not.toBeInTheDocument();
+      expect(screen.queryByText('No whole words in this range.')).not.toBeInTheDocument();
+      selectClip(2);
+      expect(monitor().getByText('Clip 2 · Urban')).toBeInTheDocument();
+      expect(card(1)).toHaveTextContent(/^1Susan Winter.*Coffee dates\. Cheap\.$/);
+    });
+
+    it('shows each clip’s number once, before its first sentence, and tints the sentences it plays', () => {
+      render(<MomentsEditor debateId={DEBATE_ID} />);
+      const badges = [...transcript().querySelectorAll<HTMLElement>('[data-clip]')];
+      expect(badges.map(badge => badge.dataset.clip)).toEqual(['0', '1']);
+      expect(badges[0].nextElementSibling).toBe(sentence('Coffee dates.'));
+      expect(badges[1].nextElementSibling).toBe(sentence('Dinner wins.'));
+      // Clip 1 is selected: its sentences take the stronger tint, clip 2's the light one.
+      expect(sentence('Coffee dates.')).toHaveClass('bg-purple/25');
+      expect(sentence('Cheap.')).toHaveClass('bg-purple/25');
+      expect(sentence('Dinner wins.')).toHaveClass('bg-pink/10');
+      expect(sentence('Dinner wins.')).not.toHaveClass('bg-pink/25');
+      // The number still selects its clip.
+      fireEvent.click(badges[1]);
+      expect(isSelected(2)).toBe(true);
+      expect(sentence('Dinner wins.')).toHaveClass('bg-pink/25');
+    });
+
+    it('warns when two clips in a row are the same debater’s sentences', () => {
+      // Clip 1 plays "Coffee dates.", clip 2 "Cheap.": both Susan's.
+      liveReel(liveClip(900, 2_950, 0), liveClip(2_950, 3_500, 0));
+      render(<MomentsEditor debateId={DEBATE_ID} />);
+      fireEvent.click(menuItem(/^All warnings/));
+      expect(screen.getByRole('complementary', { name: 'All warnings' })).toHaveTextContent(
+        'Clips 1 and 2 are both Susan Winter.'
+      );
+    });
+  });
+
   it('does not render the transcript on playhead reports, and marks the playhead’s word', () => {
     render(<MomentsEditor debateId={DEBATE_ID} />);
     const report = playerMocks.props.onPlayheadChange as (seconds: number) => void;
@@ -3786,5 +3839,94 @@ describe('MomentsEditor layout at real widths (GEO-3773 2b preview)', () => {
     expect(menu).not.toBeNull();
     expect(menu.className).toContain('max-h-[min(420px,var(--radix-popover-content-available-height))]');
     expect(menu.className).toMatch(/\boverflow-y-auto\b/);
+  });
+});
+
+describe('zooming the fine-tune waveform on an edge (GEO-3773)', () => {
+  beforeEach(() => {
+    mocks.plan.data = entry({
+      live_reel: {
+        clock: 'video',
+        clips: [
+          { start_ms: 900, end_ms: 3_000, speaker_slot: 0, claim_index: 0, claim_text: 'Coffee is low stakes' },
+          { start_ms: 4_800, end_ms: 5_600, speaker_slot: 1, claim_index: 1, claim_text: 'Dinner shows effort' },
+        ],
+      },
+    });
+  });
+  const focusGroup = () => within(clipPanel()).getByRole('group', { name: 'Focus' });
+  const focusOn = (name: 'Clip' | 'Start' | 'End') =>
+    fireEvent.click(within(focusGroup()).getByRole('button', { name }));
+  const focused = () =>
+    within(focusGroup())
+      .getAllByRole('button')
+      .filter(button => button.getAttribute('aria-pressed') === 'true')
+      .map(button => button.textContent);
+  const shownWindow = () => screen.getByTestId('waveform-track').getAttribute('data-window');
+  /** The edge's time over its steppers, which zooms on it when clicked. */
+  const edgeTime = (edge: 'Start' | 'End') =>
+    within(clipPanel()).getByRole('button', { name: new RegExp(`^${edge} \\d`) });
+
+  it('starts on the whole clip, beside the zoom, and centres on either edge from the Focus control', () => {
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    fireEvent.click(within(clipPanel()).getByRole('button', { name: '±1 s' }));
+    expect(focused()).toEqual(['Clip']);
+    // Clip 1 is 0.9-3 s: ±1 s around all of it, kept inside the debate.
+    expect(shownWindow()).toBe('0-4000');
+    focusOn('Start');
+    expect(focused()).toEqual(['Start']);
+    expect(shownWindow()).toBe('0-1900');
+    focusOn('End');
+    expect(focused()).toEqual(['End']);
+    expect(shownWindow()).toBe('2000-4000');
+    // The zoom applies around the edge too.
+    fireEvent.click(within(clipPanel()).getByRole('button', { name: '±2 s' }));
+    expect(shownWindow()).toBe('1000-5000');
+    focusOn('Clip');
+    expect(shownWindow()).toBe('0-5000');
+  });
+
+  it('zooms on an edge when its time is clicked', () => {
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    fireEvent.click(edgeTime('End'));
+    expect(focused()).toEqual(['End']);
+    expect(shownWindow()).toBe('1000-5000');
+    expect(edgeTime('End')).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(edgeTime('Start'));
+    expect(focused()).toEqual(['Start']);
+    expect(edgeTime('Start')).toHaveAttribute('aria-pressed', 'true');
+    expect(edgeTime('End')).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('zooms on an edge when it is stepped a word, and still steps it', () => {
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    fireEvent.click(within(clipPanel()).getByRole('button', { name: 'End one word later' }));
+    expect(focused()).toEqual(['End']);
+    // The end steps from "dates" (2.9 s) on to "Dinner" (5.4 s), and the window follows it.
+    expect(screen.getByTestId('waveform-readout')).toHaveTextContent('End 0:05.40');
+    // ±2 s around it, kept inside the debate (it ends with clip 2, at 5.6 s).
+    expect(shownWindow()).toBe('3400-5600');
+    fireEvent.click(within(clipPanel()).getByRole('button', { name: 'Start one word earlier' }));
+    expect(focused()).toEqual(['Start']);
+  });
+
+  it('goes back to the whole clip when another clip is selected, or the same one again', () => {
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    focusOn('End');
+    selectClip(2);
+    expect(isSelected(2)).toBe(true);
+    expect(focused()).toEqual(['Clip']);
+    // Clip 2 is 4.8-5.6 s, ±2 s.
+    expect(shownWindow()).toMatch(/^2800-/);
+    focusOn('Start');
+    deselect();
+    selectClip(2);
+    expect(focused()).toEqual(['Clip']);
+    // Picking the clip already selected (Next clip on the last one) ends its jobs, its zoom on an
+    // edge with them.
+    focusOn('End');
+    fireEvent.click(screen.getByRole('button', { name: 'Next clip' }));
+    expect(isSelected(2)).toBe(true);
+    expect(focused()).toEqual(['Clip']);
   });
 });
