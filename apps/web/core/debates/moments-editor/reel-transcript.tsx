@@ -29,8 +29,6 @@ import {
 import { EXTRA_CLIP_TOOLTIP } from './reel-strip';
 import { SPEAKER_FILL_CLASS, SPEAKER_TEXT_CLASS } from './speaker-classes';
 
-export { type ReelSentence, sentenceInClip } from './reel';
-
 /** Who says what, as the transcript names the debaters. */
 export type TranscriptNames = Record<1 | 2, string | null>;
 
@@ -427,19 +425,27 @@ export const ReelTranscript = React.memo(function ReelTranscript({
     return { owner, first, last };
   }, [words, clips]);
   // A transcript without word timings marks clips by sentence: which clip each sentence is in (the
-  // first, as with words), and each clip's first sentence, where its number shows once.
+  // first, as with words), and each clip's first sentence, where its number shows once. With word
+  // timings the clips are marked on their words (`clipSpeaker`'s rule too): a sentence with no word to
+  // show is left untinted, with each clip it is in numbered after it.
+  const hasWords = words.length > 0;
   const sentenceOwners = React.useMemo(() => {
     const owner = new Int16Array(sentences.length).fill(-1);
     const first = clips.map(() => -1);
+    const after = sentences.map(() => [] as number[]);
     clips.forEach((clip, index) => {
       sentences.forEach((sentence, at) => {
         if (!sentenceInClip(sentence, clip)) return;
+        if (hasWords) {
+          after[at].push(index);
+          return;
+        }
         if (owner[at] < 0) owner[at] = index;
         if (first[index] < 0) first[index] = at;
       });
     });
-    return { owner, first };
-  }, [sentences, clips]);
+    return { owner, first, after };
+  }, [sentences, clips, hasWords]);
   const wasWords = React.useMemo(() => {
     const out = new Set<number>();
     if (!was || selected < 0) return out;
@@ -484,7 +490,8 @@ export const ReelTranscript = React.memo(function ReelTranscript({
               const starts = clips.flatMap((_, index) =>
                 sentenceOwners.first[index] === item.sentence ? [`${index}${speakers[index] ?? ''}`] : []
               );
-              return `s${owner}${owner >= 0 ? (speakers[owner] ?? '') : ''}${owner >= 0 && owner === selected ? '*' : ''}f${starts.join('.')}`;
+              const after = sentenceOwners.after[item.sentence].map(index => `${index}${speakers[index] ?? ''}`);
+              return `s${owner}${owner >= 0 ? (speakers[owner] ?? '') : ''}${owner >= 0 && owner === selected ? '*' : ''}f${starts.join('.')}a${after.join('.')}`;
             }
             const at = item.word;
             const owner = owners.owner[at];
@@ -984,7 +991,7 @@ const TurnBlock = React.memo(
     words: readonly ReelWord[];
     sentences: readonly ReelSentence[];
     owners: { owner: Int16Array; first: number[]; last: number[] };
-    sentenceOwners: { owner: Int16Array; first: number[] };
+    sentenceOwners: { owner: Int16Array; first: number[]; after: number[][] };
     speakers: readonly (ParticipantSlot | null)[];
     clips: readonly EditorClip[];
     selected: number;
@@ -999,7 +1006,8 @@ const TurnBlock = React.memo(
       const next = turn.items[nth + 1];
       if (!('word' in item)) {
         // A sentence with no words (a transcript without word timings): tinted as its clip's words
-        // are, the clip's number shown once, before the clip's first sentence.
+        // are, the clip's number shown once, before the clip's first sentence. In a word-timed
+        // transcript it is untinted, numbered after it for each clip it is in (`sentenceOwners`).
         const at = item.sentence;
         const owner = sentenceOwners.owner[at];
         const speaker = owner >= 0 ? speakerKey(speakers[owner] ?? null) : null;
@@ -1025,6 +1033,9 @@ const TurnBlock = React.memo(
               {sentences[at].text}
               {joined ? gap : null}
             </span>
+            {sentenceOwners.after[at].map(index => (
+              <ClipButton key={`a${index}`} index={index} speaker={speakers[index] ?? null} after />
+            ))}
             {joined ? null : gap}
           </React.Fragment>
         );
@@ -1093,13 +1104,16 @@ const TurnBlock = React.memo(
     before.sentences === after.sentences
 );
 
-function ClipButton({ index, speaker }: { index: number; speaker: ParticipantSlot | null }) {
+function ClipButton({ index, speaker, after }: { index: number; speaker: ParticipantSlot | null; after?: boolean }) {
   return (
     <button
       type="button"
       data-clip={index}
       aria-label={`Select clip ${index + 1}`}
-      className="mr-[3px] inline-flex cursor-pointer border-0 bg-transparent p-0 align-[1px] select-none"
+      className={cx(
+        'inline-flex cursor-pointer border-0 bg-transparent p-0 align-[1px] select-none',
+        after ? 'ml-1.5' : 'mr-[3px]'
+      )}
     >
       <ClipChip number={index + 1} speaker={speaker} small />
     </button>

@@ -5,10 +5,9 @@ import * as React from 'react';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { EditorClip, ReelWord } from './reel';
+import type { EditorClip, ReelSentence, ReelWord } from './reel';
 import {
   NO_TRANSCRIPT_ACTIONS,
-  type ReelSentence,
   ReelTranscript,
   type TranscriptActions,
   edgeBounds,
@@ -247,6 +246,25 @@ describe('the side transcript without word timings (GEO-3642)', () => {
     expect(spans.filter(span => span.classList.contains('bg-pink/10'))).toHaveLength(0);
     fireEvent.click(badges[0]);
     expect(view.actions.current.selectClip).toHaveBeenCalledWith('a');
+  });
+
+  it('leaves a word-timed transcript’s sentence with no words untinted, numbered after it', () => {
+    // Word timings, but debater 2's sentence has no words to show: it is marked as before this
+    // fallback, while the clip's own number stays on its first word.
+    const words = [word(1, 1_000, 1_400, 'Fix'), word(1, 1_500, 2_400, ' buses.')];
+    const sentences: ReelSentence[] = [
+      { slot: 1, start_ms: 1_000, end_ms: 2_400, text: 'Fix buses.' },
+      { slot: 2, start_ms: 3_000, end_ms: 8_000, text: 'No they should not.' },
+    ];
+    const clips = [clip('a', 1_000, 7_000)];
+    const view = setUp({ words, sentences, clips, speakers: [1], selected: 0 });
+    const badges = [...view.root().querySelectorAll<HTMLElement>('[data-clip]')];
+    expect(badges).toHaveLength(2);
+    expect(badges[0].nextElementSibling).toBe(view.span(0));
+    const sentence = view.root().querySelector<HTMLElement>('[data-sentence="1"]')!;
+    expect(badges[1].previousElementSibling).toBe(sentence);
+    expect(sentence.className).not.toMatch(/bg-/);
+    expect(view.span(0)).toHaveClass('bg-purple/10');
   });
 });
 
