@@ -79,7 +79,7 @@ export function PendingPersonalSpaceRunner() {
     // Wallet switched without a logout cleanup: a record stamped with a different
     // account would otherwise create/remap against the wrong address (or block this
     // account's onboarding). Drop it and let this account onboard fresh.
-    if (pending.address && pending.address !== address) {
+    if (pending.address && pending.address.toLowerCase() !== address.toLowerCase()) {
       setPending(null);
       return;
     }

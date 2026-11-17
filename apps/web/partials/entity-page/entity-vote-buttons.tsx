@@ -376,7 +376,7 @@ function EntityResponseButtons({
       if (!active) return direction === 'positive' ? responseCopy.positiveAction : responseCopy.negativeAction;
       return direction === 'positive' ? responseCopy.removePositive : responseCopy.removeNegative;
     }
-    if (smartAccount) return signedInTitle;
+    if (authenticated) return signedInTitle;
     // Signed out, a press votes on this device: the arrow does what it says (GEO-3214).
     if (signedOut) {
       if (localDirection === direction) return RESPONSE_LOCAL_ONLY_COPY;

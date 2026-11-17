@@ -8,7 +8,6 @@ import { Effect } from 'effect';
 import { useAtom, useAtomValue } from 'jotai';
 
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
-import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { getSpace } from '~/core/io/queries';
 import { pendingPersonalSpaceAtom } from '~/core/state/pending-personal-space';
 import { interestedTopicIds } from '~/core/topics/interested';
@@ -17,6 +16,7 @@ import { interestedTopicsQueryOptions, useFollowedTopics } from '~/core/topics/u
 import type { TopicOption } from '~/core/topics/use-topic-suggestions';
 import { devLog } from '~/core/utils/dev-log';
 import { normId } from '~/core/utils/norm-id';
+import { useAccountAddress } from '~/core/wallet/account-readiness';
 
 import {
   type HeldFeedTopics,
@@ -113,8 +113,7 @@ async function attemptHeldFollows({ owner, spaceId, mayPublish, isCurrent, fetch
  */
 export function PendingTopicFollowsRunner() {
   const [held, setHeld] = useAtom(feedTopicsAtom);
-  const { smartAccount } = useSmartAccount();
-  const address = smartAccount?.account.address;
+  const address = useAccountAddress() ?? undefined;
   const picks = heldTopicsFor(held, address);
   // Re-runs when the set of topics changes, not only its size.
   const picksKey = picks

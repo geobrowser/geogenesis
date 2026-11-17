@@ -105,6 +105,17 @@ describe('a vote pressed while sign-in is still resolving', () => {
   const renderButtons = () =>
     render(<EntityVoteButtons entityId="entity-1" spaceId={SPACE} responseKind="curation" />, { wrapper });
 
+  it('titles the arrows for a signed-in viewer before the signing account is built', () => {
+    mocks.authReady = true;
+    mocks.authenticated = true;
+    mocks.personalSpace = { personalSpaceId: null, isRegistered: false, isLoading: true };
+
+    renderButtons();
+
+    expect(screen.getAllByRole('button', { name: 'Vote now — saved until your account is ready' })).toHaveLength(2);
+    expect(screen.queryByRole('button', { name: 'Sign in to vote' })).toBeNull();
+  });
+
   it('never prompts a viewer who turns out to be signed in', async () => {
     mocks.authReady = true;
     mocks.authenticated = true;
