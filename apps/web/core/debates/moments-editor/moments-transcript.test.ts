@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { debateQueryKeys } from '../hooks';
 import type { BackfillTranscriptStatus } from './api';
 import { editingBlockedReason } from './moments-editor';
 import {
@@ -139,5 +140,19 @@ describe('transcript polling (GEO-3642)', () => {
     expect(isTranscriptWaiting(fresh(ready(0.9, true)))).toBe(false);
     expect(isTranscriptWaiting(fresh({ status: 'failed', reason: 'x', permanent: false }))).toBe(false);
     expect(isTranscriptWaiting({ word_timing: false })).toBe(false);
+  });
+});
+
+describe('the editor transcript query key (GEO-3642)', () => {
+  // `useRefreshAfterReel` invalidates `transcripts(id)` by prefix after a re-render or a
+  // `transcript_changed` refusal: the editor's words must be read again with the rest.
+  it('sits under every transcript of the debate', () => {
+    const id = '01a0448a-61d3-7101-8434-a20fdadf6f97';
+    const prefix = debateQueryKeys.transcripts(id);
+    expect(debateQueryKeys.momentsTranscript(id, 'account').slice(0, prefix.length)).toEqual([...prefix]);
+    // Never the same key as a plain transcript read.
+    expect(debateQueryKeys.momentsTranscript(id, 'account')).not.toEqual(
+      debateQueryKeys.transcript(id, 'json', ['words', 'sentences'])
+    );
   });
 });
