@@ -21,6 +21,7 @@ export type ComposeBallot = {
    * draft's grades; without, entries keep theirs.
    */
   publish: (orderedIds: string[], grades?: BallotGrades) => Promise<boolean>;
+  current?: () => { orderedIds: readonly string[]; grades?: BallotGrades };
 };
 
 export const RankingComposeBallotContext = React.createContext<ComposeBallot | null>(null);
@@ -69,6 +70,10 @@ export function useComposeBallot(
         else current.setOrderedIds(ids);
         if (current.deferPublish) return true;
         return current.publish(ids);
+      },
+      current: () => {
+        const now = latest.current;
+        return now ? { orderedIds: now.orderedIds, grades: now.grades } : { orderedIds, grades };
       },
     };
   }, [isOn, orderedIds, grades]);

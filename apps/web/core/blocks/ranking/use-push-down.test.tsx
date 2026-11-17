@@ -11,6 +11,7 @@ import { RANK_VOTES_RELATION_TYPE_ID } from '~/core/ranking-block-ids';
 import { DEBATES_SPACE_ID } from './best-debates';
 import type { MemberVoteRecord } from './fetch-member-debate-votes';
 import { type ComposeBallot, RankingComposeBallotContext } from './ranking-compose-ballot-context';
+import type { BallotGrades, Grade } from './ranking-grades';
 import { usePushDown } from './use-push-down';
 
 const PERSONAL = 'd4bee0928fb5405baba3b1513f085835';
@@ -161,6 +162,29 @@ function deferredEither() {
   let resolve!: (value: Either) => void;
   const promise = new Promise<Either>(r => (resolve = r));
   return { promise, resolve };
+}
+
+function liveDraft(ids: string[], grades?: BallotGrades) {
+  const state = { ids, grades };
+  const publish = vi.fn(async (next: string[], nextGrades?: BallotGrades) => {
+    state.ids = next;
+    if (nextGrades) state.grades = nextGrades;
+    return true;
+  });
+  const ballot: ComposeBallot = {
+    orderedIds: ids,
+    grades,
+    publish,
+    current: () => ({ orderedIds: state.ids, grades: state.grades }),
+  };
+  return { ballot, publish, state };
+}
+
+async function pressToastUndo() {
+  render(mocks.setToast.mock.calls.at(-1)?.[0] as ReactElement);
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+  });
 }
 
 async function renderReady(ballot: ComposeBallot | null = null) {
@@ -319,27 +343,114 @@ describe('usePushDown', () => {
     expect(mocks.save).not.toHaveBeenCalled();
   });
 
-  it('its toast’s Undo puts the draft back and clears the downvote', async () => {
+  it('takes the debate off the draft as it is when the downvote lands, keeping edits made meanwhile', async () => {
     rankedBallot([RANKED_A, DEBATE]);
-    const publish = vi.fn(async (_ids: string[]) => true);
-    const { result } = await renderReady({ orderedIds: [RANKED_A, DEBATE, DRAFT_ONLY], publish });
+    const { ballot, publish, state } = liveDraft([RANKED_A, DEBATE, RANKED_B]);
+    const { result } = await renderReady(ballot);
+    const vote = deferredEither();
+    mocks.runEffectEither.mockReturnValueOnce(vote.promise);
+
+    let running!: Promise<unknown>;
+    act(() => {
+      running = result.current.pushDown();
+    });
+    await waitFor(() => expect(mocks.downvote).toHaveBeenCalled());
+    state.ids = [RANKED_B, DEBATE, RANKED_A];
+
+    await act(async () => {
+      vote.resolve({ _tag: 'Right', right: '0xop' });
+      await running;
+    });
+
+    expect(publish).toHaveBeenLastCalledWith([RANKED_B, RANKED_A]);
+  });
+
+  it('its toast’s Undo puts the debate back in the draft and clears the downvote', async () => {
+    rankedBallot([RANKED_A, DEBATE]);
+    const { ballot, publish } = liveDraft([RANKED_A, DEBATE, DRAFT_ONLY]);
+    const { result } = await renderReady(ballot);
 
     await act(async () => {
       await result.current.pushDown();
     });
-    const toast = mocks.setToast.mock.calls.at(-1)?.[0] as ReactElement;
-    render(toast);
+    await pressToastUndo();
 
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
-    });
-
-    // With the draft's grades, so the debate comes back in its tier (GEO-3729); none in this draft.
+    // No grades in this draft, so none are sent.
     expect(publish).toHaveBeenLastCalledWith([RANKED_A, DEBATE, DRAFT_ONLY], undefined);
     await waitFor(() =>
       expect(mocks.unvote).toHaveBeenCalledWith({ authorSpaceId: PERSONAL, spaceId: DEBATE_SPACE, entityId: DEBATE })
     );
     await waitFor(() => expect(result.current.isPushedDown).toBe(false));
+  });
+
+  it('its toast’s Undo keeps a drag made after the Down rank', async () => {
+    rankedBallot([RANKED_A, DEBATE]);
+    const { ballot, publish, state } = liveDraft([RANKED_A, DEBATE, RANKED_B, DRAFT_ONLY]);
+    const { result } = await renderReady(ballot);
+
+    await act(async () => {
+      await result.current.pushDown();
+    });
+    state.ids = [DRAFT_ONLY, RANKED_A, RANKED_B];
+    await pressToastUndo();
+
+    expect(publish).toHaveBeenLastCalledWith([DRAFT_ONLY, DEBATE, RANKED_A, RANKED_B], undefined);
+  });
+
+  it('its toast’s Undo keeps a placement and a removal made after the Down rank', async () => {
+    rankedBallot([RANKED_A, DEBATE]);
+    const { ballot, publish, state } = liveDraft([RANKED_A, DEBATE, RANKED_B]);
+    const { result } = await renderReady(ballot);
+
+    await act(async () => {
+      await result.current.pushDown();
+    });
+    state.ids = [DRAFT_ONLY, RANKED_A];
+    await pressToastUndo();
+
+    expect(publish).toHaveBeenLastCalledWith([DRAFT_ONLY, DEBATE, RANKED_A], undefined);
+  });
+
+  it('its toast’s Undo brings back the debate’s grade and keeps grades changed since', async () => {
+    rankedBallot([RANKED_A, DEBATE]);
+    const { ballot, publish, state } = liveDraft(
+      [RANKED_A, DEBATE, RANKED_B],
+      new Map<string, Grade>([
+        [RANKED_A, 'A'],
+        [DEBATE, 'A'],
+        [RANKED_B, 'B'],
+      ])
+    );
+    const { result } = await renderReady(ballot);
+
+    await act(async () => {
+      await result.current.pushDown();
+    });
+    state.grades = new Map<string, Grade>([
+      [RANKED_A, 'A'],
+      [RANKED_B, 'A'],
+    ]);
+    state.ids = [RANKED_A, RANKED_B];
+    await pressToastUndo();
+
+    const [ids, grades] = publish.mock.calls.at(-1)!;
+    expect(ids).toEqual([RANKED_A, DEBATE, RANKED_B]);
+    expect(Object.fromEntries(grades!)).toEqual({ [RANKED_A]: 'A', [DEBATE]: 'A', [RANKED_B]: 'A' });
+  });
+
+  it('its toast’s Undo leaves the draft alone when the debate is already back', async () => {
+    rankedBallot([RANKED_A, DEBATE]);
+    const { ballot, publish, state } = liveDraft([RANKED_A, DEBATE]);
+    const { result } = await renderReady(ballot);
+
+    await act(async () => {
+      await result.current.pushDown();
+    });
+    state.ids = [DEBATE, RANKED_A];
+    const publishes = publish.mock.calls.length;
+    await pressToastUndo();
+
+    expect(publish).toHaveBeenCalledTimes(publishes);
   });
 
   it('keeps a failed ballot edit for a retry that only edits the ballot', async () => {

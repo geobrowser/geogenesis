@@ -47,6 +47,21 @@ describe('useComposeBallot', () => {
     expect(publish).not.toHaveBeenCalled();
   });
 
+  it('reads the newest draft through a ballot object kept from an earlier render', () => {
+    const setOrderedIds = vi.fn();
+    const publish = vi.fn(async (_ids: string[]) => true);
+    const { result, rerender } = renderHook(
+      ({ orderedIds }: { orderedIds: string[] }) => useComposeBallot({ orderedIds, setOrderedIds, publish }),
+      { initialProps: { orderedIds: ['a', 'b'] } }
+    );
+    const held = result.current!;
+
+    rerender({ orderedIds: ['b', 'a', 'c'] });
+
+    expect(held.orderedIds).toEqual(['a', 'b']);
+    expect(held.current?.().orderedIds).toEqual(['b', 'a', 'c']);
+  });
+
   it('is off without a source', () => {
     const { result } = renderHook(() => useComposeBallot(null));
     expect(result.current).toBeNull();

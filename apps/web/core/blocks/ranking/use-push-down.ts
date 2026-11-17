@@ -45,6 +45,7 @@ import {
   runInOrder,
 } from './push-down';
 import { type ComposeBallot, useRankingComposeBallot } from './ranking-compose-ballot-context';
+import { type BallotGrades, restoreEntry } from './ranking-grades';
 import { invalidateBlockRankers } from './use-block-rankers';
 import {
   type DebateVoteOverlays,
@@ -57,6 +58,7 @@ import { useMyRanking } from './use-my-ranking';
 import { useRankingSubmissions } from './use-ranking-submissions';
 
 const BEST_DEBATES_BLOCK_NAME = 'Best debates';
+const NO_GRADES: BallotGrades = new Map();
 
 /** Overlay records, plus the server's records in spaces the overlay doesn't cover. */
 export function combineRecords(
@@ -266,10 +268,11 @@ export function usePushDown(debateId: string, options: UsePushDownOptions = {}):
 
     if (draft) {
       // On the ranking screen: edit the draft and publish it, so nothing unpublished is lost.
-      if (!ballotHolds(draft.orderedIds, debateId) && !ballotHolds(published, debateId)) return { ok: true };
+      const now = draft.current?.() ?? draft;
+      if (!ballotHolds(now.orderedIds, debateId) && !ballotHolds(published, debateId)) return { ok: true };
       // Down ranking the only debate just empties the draft (Preston, 12 Nov).
-      const remaining = ballotWithout(draft.orderedIds, debateId);
-      const before = { ids: [...draft.orderedIds], grades: draft.grades };
+      const remaining = ballotWithout(now.orderedIds, debateId);
+      const before = { ids: [...now.orderedIds], grades: now.grades };
       if (!(await draft.publish(remaining))) return { ok: false, message: PUSH_DOWN_BALLOT_FAILED_COPY };
       draftBeforePush.current = before;
       return { ok: true };
@@ -317,12 +320,18 @@ export function usePushDown(debateId: string, options: UsePushDownOptions = {}):
         const noteSeen = readPushDownNoteSeen();
         const previousDraft = draftBeforePush.current;
         draftBeforePush.current = null;
-        // Undo takes back both halves: the draft edit (put back as it was) and the downvote.
+        // Undo takes back both halves: the draft edit and the downvote.
         const onUndo = () => {
           setToast(null);
           const draft = latest.current.editBallot;
-          // With its grades (GEO-3729), so the debate comes back in the tier it was in.
-          if (previousDraft && draft) void draft.publish(previousDraft.ids, previousDraft.grades);
+          if (previousDraft && draft) {
+            // Only this debate goes back, with its grade, onto the draft as it is now: edits since stay.
+            const now = draft.current?.() ?? draft;
+            const current = { ids: [...now.orderedIds], grades: now.grades ?? NO_GRADES };
+            const before = { ids: previousDraft.ids, grades: previousDraft.grades ?? NO_GRADES };
+            const restored = restoreEntry(current, before, debateId);
+            if (restored !== current) void draft.publish(restored.ids, now.grades ? restored.grades : undefined);
+          }
           void undoRef.current?.();
         };
         setToast(
@@ -346,7 +355,7 @@ export function usePushDown(debateId: string, options: UsePushDownOptions = {}):
       if (action === 'undo') setToast(React.createElement('span', null, PUSH_DOWN_UNDONE_COPY));
       return result;
     },
-    [setState, setToast, stateKey]
+    [debateId, setState, setToast, stateKey]
   );
 
   const start = React.useCallback(
