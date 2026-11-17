@@ -98,21 +98,14 @@ export function SegmentButton({
 }
 
 /** The small switch (`.sw`): Snap to words. The design system's `Toggle`, as a switch button. */
-export function SnapSwitch({
-  checked,
-  labelledBy,
-  onChange,
-}: {
-  checked: boolean;
-  labelledBy: string;
-  onChange: () => void;
-}) {
+export function SnapSwitch({ checked, onChange }: { checked: boolean; onChange: () => void }) {
   return (
     <button
       type="button"
       role="switch"
       aria-checked={checked}
-      aria-labelledby={labelledBy}
+      // Named on the switch itself: a label beside it is only text to a screen reader's switch list.
+      aria-label="Snap to words"
       aria-keyshortcuts="Alt"
       onClick={onChange}
       className="inline-flex flex-none cursor-pointer rounded-full border-0 bg-transparent p-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text"

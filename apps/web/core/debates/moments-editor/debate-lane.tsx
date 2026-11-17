@@ -6,7 +6,7 @@ import cx from 'classnames';
 
 import type { ParticipantSlot } from '../api';
 import { ClipChip } from './editor-ui';
-import { formatReelTime } from './reel';
+import { formatReelTime, formatWholeTime } from './reel';
 import { SPEAKER_SEGMENT_CLASS, SPEAKER_SEGMENT_STRONG_CLASS } from './speaker-classes';
 import type { MixedPeaks } from './waveform';
 import { WaveformCanvas } from './waveform-canvas';
@@ -20,7 +20,7 @@ export type LaneClip = {
   end_ms: number;
 };
 
-/** Whole seconds, `m:ss`. */
+/** A clip's times, to the nearest second, `m:ss`. */
 const wholeTime = (ms: number) => formatReelTime(Math.round(ms / 1000) * 1000).replace(/\.\d$/, '');
 
 /**
@@ -209,7 +209,9 @@ export function DebateLane({
           </div>
         ) : null}
       </div>
-      <span className="text-right text-breadcrumb font-normal text-grey-04 tabular-nums">{wholeTime(durationMs)}</span>
+      <span data-lane-end className="text-right text-breadcrumb font-normal text-grey-04 tabular-nums">
+        {formatWholeTime(durationMs)}
+      </span>
     </section>
   );
 }

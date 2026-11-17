@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DebateMediaTurnSegment } from '../api';
 import { RENDERED_TURN_SEGMENTS } from '../open-rounds-media-fixtures';
 import type { EditorClip, ReelWord } from './reel';
-import { ReelWaveform } from './reel-waveform';
+import { ReelWaveform, wordLabels } from './reel-waveform';
 import type { PeaksView } from './waveform';
 
 const ONE_CLOCK = RENDERED_TURN_SEGMENTS.map(({ source_start_ms: _s, source_end_ms: _e, ...rest }) => rest);
@@ -216,5 +216,37 @@ describe('ReelWaveform (GEO-3673)', () => {
       fireEvent.pointerMove(screen.getByTestId('waveform-track'), { clientX: 3_500, pointerId: 1, buttons: 0 });
       expect(onChangeClip).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe('wordLabels (the prototype’s label rule)', () => {
+  const frame = { start_ms: 0, end_ms: 10_000 };
+  const word = (start_ms: number, end_ms: number, text: string) => ({ start_ms, end_ms, text });
+
+  it('labels short words too, centred on them, as long as they don’t run into the last label', () => {
+    // 1,000 px for 10 s: 0.1 px per ms. "is" (100 ms, 10 px) is narrower than its label but still drawn.
+    const words = [
+      word(1_000, 1_100, 'is'),
+      word(1_100, 1_150, 'a'),
+      word(3_000, 3_400, 'coffee'),
+      word(9_000, 9_400, 'date'),
+    ];
+    expect(wordLabels(words, frame, 1_000).map(w => w.text)).toEqual(['is', 'coffee', 'date']);
+  });
+
+  it('skips a word whose label would collide, and one centred out of view', () => {
+    const words = [
+      word(-400, -100, 'gone'),
+      word(2_000, 2_400, 'Saturday'),
+      word(2_500, 2_700, 'night'),
+      word(4_000, 4_200, 'fun'),
+    ];
+    // "Saturday" ends at 220 + 26.4 px; "night" would start at 260 - 16.5 = 243.5, under 4 px after it.
+    expect(wordLabels(words, frame, 1_000).map(w => w.text)).toEqual(['Saturday', 'fun']);
+  });
+
+  it('labels every word while unmeasured', () => {
+    const words = [word(1_000, 1_010, 'a'), word(1_010, 1_020, 'b')];
+    expect(wordLabels(words, frame, 0)).toHaveLength(2);
   });
 });

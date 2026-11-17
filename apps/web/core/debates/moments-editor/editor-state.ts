@@ -79,6 +79,12 @@ export type EditorAction =
   | { type: 'playFree' }
   /** Pause, Stop, the end of a range, or anything else that stops playback. */
   | { type: 'stop' }
+  /**
+   * The admin moved the playhead (the lane, the transcript, a flag). What plays stops; a reel stops
+   * where they asked, not back on the clip it started from, and with nothing selected: the debate
+   * plays on from there (Preston, 16 Nov), so the monitor and the bottom panel say "Full debate".
+   */
+  | { type: 'seeked' }
   /** The reel moved on to its next clip (`index`), or was told to jump to one. */
   | { type: 'reelAt'; index: number }
   /** Between two reel clips, while the next one loads. */
@@ -350,6 +356,8 @@ function reduce(state: EditorState, action: Exclude<EditorAction, { type: 'settl
       return { ...stopped(state), playback: { mode: 'free' } };
     case 'stop':
       return stopped(state);
+    case 'seeked':
+      return state.playback.mode === 'reel' ? { ...stopped(state), selection: NONE } : stopped(state);
     case 'reelAt': {
       if (state.playback.mode !== 'reel') return state;
       // Past the last clip, the reel is over.

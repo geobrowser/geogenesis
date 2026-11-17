@@ -19,8 +19,35 @@ export const FINE_STEP_MS = 10;
 /** How much of the debate the panel shows either side of the clip. */
 export const PADS = [1_000, 2_000, 4_000, 8_000] as const;
 export type Pad = (typeof PADS)[number];
-/** A word's label is drawn only where it fits: about this many px per character. */
-const LABEL_PX_PER_CHAR = 6.5;
+/** Half a label's width per character, at the labels' 12 px (the prototype's estimate). */
+const LABEL_HALF_PX_PER_CHAR = 3.3;
+/** The least room between two labels. */
+const LABEL_GAP_PX = 4;
+
+/**
+ * The words labelled over the waveform, as the prototype's: each centred on its word, left to
+ * right, skipping one that would run into the last one drawn or whose middle is out of view.
+ * Unmeasured (`width` 0, as in tests), every word is.
+ */
+export function wordLabels<W extends { text: string; start_ms: number; end_ms: number }>(
+  words: readonly W[],
+  frame: { start_ms: number; end_ms: number },
+  width: number
+): W[] {
+  if (width <= 0) return [...words];
+  const span = frame.end_ms - frame.start_ms;
+  if (span <= 0) return [];
+  const shown: W[] = [];
+  let lastRight = -Infinity;
+  for (const word of words) {
+    const mid = (((word.start_ms + word.end_ms) / 2 - frame.start_ms) / span) * width;
+    const half = word.text.trim().length * LABEL_HALF_PX_PER_CHAR;
+    if (mid < 0 || mid > width || mid - half < lastRight + LABEL_GAP_PX) continue;
+    lastRight = mid + half;
+    shown.push(word);
+  }
+  return shown;
+}
 
 type FineDrag = {
   mode: 'start' | 'end';
@@ -77,7 +104,6 @@ export function ReelWaveform({
 }) {
   const [drag, setDrag] = React.useState<FineDrag | null>(null);
   const trackRef = React.useRef<HTMLDivElement | null>(null);
-  const snapLabelId = React.useId();
   const [trackWidth, setTrackWidth] = React.useState(0);
 
   React.useEffect(() => {
@@ -113,10 +139,7 @@ export function ReelWaveform({
     `${((Math.min(frame.end_ms, to) - Math.max(frame.start_ms, from)) / span) * 100}%`;
   const visible = (from: number, to: number) => to > frame.start_ms && from < frame.end_ms;
   const shownWords = words.filter(word => isSpoken(word) && visible(word.start_ms, word.end_ms));
-  // Unmeasured (as in tests), every label is drawn; measured, only those that fit their word.
-  const labelFits = (word: ReelWord) =>
-    trackWidth === 0 ||
-    ((word.end_ms - word.start_ms) / span) * trackWidth >= word.text.trim().length * LABEL_PX_PER_CHAR;
+  const labelled = new Set(wordLabels(shownWords, frame, trackWidth));
   const playedDiffers = played !== null && (played.start_ms !== clip.start_ms || played.end_ms !== clip.end_ms);
 
   const startDrag = (event: React.PointerEvent, mode: FineDrag['mode']) => {
@@ -210,14 +233,14 @@ export function ReelWaveform({
               className="pointer-events-none absolute top-[18px] bottom-0 w-px bg-grey-03/40"
               style={{ left: left(word.end_ms) }}
             />
-            {labelFits(word) ? (
+            {labelled.has(word) ? (
               <span
                 data-testid="waveform-word"
                 className={cx(
-                  'pointer-events-none absolute top-0.5 overflow-hidden pl-0.5 text-[11px] leading-[14px] whitespace-nowrap',
+                  'pointer-events-none absolute top-px -translate-x-1/2 text-[12px] leading-4 font-medium whitespace-nowrap',
                   SPEAKER_TEXT_CLASS[word.slot === 2 ? 2 : 1]
                 )}
-                style={{ left: left(word.start_ms), width: width(word.start_ms, word.end_ms) }}
+                style={{ left: left((word.start_ms + word.end_ms) / 2) }}
               >
                 {word.text.trim()}
               </span>
@@ -271,10 +294,10 @@ export function ReelWaveform({
             : null}
           {playheadMs !== null ? ` · Playhead ${formatFineTime(playheadMs)}` : null}
         </p>
-        <span id={snapLabelId} className="text-breadcrumb whitespace-nowrap">
+        <span aria-hidden className="text-breadcrumb whitespace-nowrap">
           Snap to words
         </span>
-        <SnapSwitch checked={snap} labelledBy={snapLabelId} onChange={onSnap} />
+        <SnapSwitch checked={snap} onChange={onSnap} />
         <span className="text-breadcrumb font-normal whitespace-nowrap text-grey-04">Alt flips it for one drag.</span>
       </div>
     </div>

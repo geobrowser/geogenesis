@@ -50,6 +50,7 @@ import {
   clipsFromServedMoments,
   edgeIsFree,
   formatReelTime,
+  formatWholeTime,
   manualReel,
   newClipKey,
   playedCuts,
@@ -238,14 +239,18 @@ function Editor({ debateId }: { debateId: string }) {
   };
   /** Ends what plays, and the transport's message about the last Play goes with it. The one place
    * that does: a seek, a pause, a select and a play from the picker all end a run through it. */
-  const endPlay = () => {
+  const endPlay = (how: 'stop' | 'seeked' = 'stop') => {
     range.stop();
     setPastEnd(null);
-    if (view.playback.mode !== 'idle') dispatch({ type: 'stop' });
+    // `seeked` is judged against the reducer's own playback, not this render's: a select that
+    // stopped the reel a moment ago has already put its clip back.
+    if (how === 'seeked') dispatch({ type: 'seeked' });
+    else if (view.playback.mode !== 'idle') dispatch({ type: 'stop' });
   };
-  // A seek ends a playing reel where the admin asked, not back on the clip it started from.
+  // A seek ends a playing reel where the admin asked, not back on the clip it started from, and
+  // with nothing selected (`seeked`): what plays on from there is the full debate.
   const seekTo = (ms: number) => {
-    endPlay();
+    endPlay('seeked');
     moveTo(ms);
   };
 
@@ -1131,7 +1136,7 @@ function Editor({ debateId }: { debateId: string }) {
             // Only between a reel's clips: a single clip's start holds too, but nothing is "next".
             loading={range.state.kind === 'playing' && range.state.loading && range.state.index > 0}
             timeRef={timeReadout}
-            durationText={formatReelTime(durationMs).replace(/\.\d$/, '')}
+            durationText={formatWholeTime(durationMs)}
             playing={(playerState.playing || range.active) && range.state.kind !== 'stalled'}
             disabled={inlineUnavailable}
             rate={rate}

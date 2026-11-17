@@ -1304,7 +1304,10 @@ function PairedDebateFeedPlayer({
         // same component is a feed card, an explore card and a fullscreen player, and a breakpoint
         // would get two of the three wrong.
         className={cx(
-          'group @container relative flex flex-col overflow-hidden',
+          // The editor's monitor is 16:9, like the prototype's: the two tiles sit side by side in it
+          // rather than stacked, which would show only the first (GEO-3773).
+          editorMode ? 'grid h-full grid-cols-2 gap-0.5' : 'flex flex-col',
+          'group @container relative overflow-hidden',
           framed ? null : reducedOverlays ? 'rounded-lg' : 'rounded-xl',
           stamped && endCardShown && '[&_[data-debate-end-card]>section]:animate-[fadeIn_250ms_ease-out_both]'
         )}
@@ -1312,6 +1315,7 @@ function PairedDebateFeedPlayer({
         <DebaterVideo
           inert={endCardShown}
           toggleHidden={refusedPrompt || editorMode}
+          fill={editorMode}
           participant={slot1Participant}
           byline={bylineFor(slot1Participant)}
           src={slot1Src}
@@ -1419,6 +1423,7 @@ function PairedDebateFeedPlayer({
         <DebaterVideo
           inert={endCardShown}
           toggleHidden={refusedPrompt || editorMode}
+          fill={editorMode}
           participant={slot2Participant}
           byline={bylineFor(slot2Participant)}
           src={slot2Src}
@@ -1730,6 +1735,7 @@ function DebaterVideo({
   toggleHidden = false,
   stamped = false,
   hideForAnnouncement = false,
+  fill = false,
 }: {
   participant: DebateParticipant | null;
   byline: string | null;
@@ -1788,6 +1794,11 @@ function DebaterVideo({
   stamped?: boolean;
   /** Hide identity and claims in the same frame as the other announcement furniture. */
   hideForAnnouncement?: boolean;
+  /**
+   * Fill the height the player gives the tile instead of keeping the feed's aspect: the moments
+   * editor shows the two tiles side by side in its 16:9 monitor (GEO-3773).
+   */
+  fill?: boolean;
   /**
    * How much of this tile's bottom band the round card or the break's banner has taken, 0–1.
    *
@@ -2088,7 +2099,7 @@ function DebaterVideo({
       // tile" is otherwise only checkable by counting DOM order.
       data-debate-slot={participant?.participant_slot}
       inert={inert}
-      className="relative aspect-480/289 w-full overflow-hidden bg-grey-01"
+      className={cx('relative w-full overflow-hidden bg-grey-01', fill ? 'h-full min-w-0' : 'aspect-480/289')}
     >
       {/* Clicking anywhere on the video toggles pause/play. */}
       <button

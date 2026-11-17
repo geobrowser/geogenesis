@@ -2736,6 +2736,90 @@ describe('playing clips in the editor (GEO-3773)', () => {
     expect(player.seek).toHaveBeenLastCalledWith(2_500);
   });
 
+  it('after a seek during the reel, says Full debate in the monitor and the bottom panel, not clip 1 again', () => {
+    mocks.plan.data = entry({
+      live_reel: {
+        clock: 'video',
+        clips: [
+          { start_ms: 900, end_ms: 3_000, speaker_slot: 1, claim_index: 0, claim_text: 'Coffee is low stakes' },
+          { start_ms: 4_800, end_ms: 5_600, speaker_slot: 2, claim_index: 1, claim_text: 'Dinner shows effort' },
+        ],
+      },
+    });
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    // Clip 1 is selected when the reel starts.
+    expect(clipPanel()).toBeInTheDocument();
+    fireEvent.click(reelCard());
+    act(() => props().onPlayheadChange(1.5));
+
+    fireEvent.keyDown(screen.getByRole('slider', { name: 'Playhead' }), { key: 'ArrowRight' });
+    const monitor = within(screen.getByRole('region', { name: 'Debate player' }));
+    expect(monitor.getByText('Full debate')).toBeInTheDocument();
+    expect(monitor.queryByText(/^Clip 1 · /)).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: /^Clip \d+, / })).not.toBeInTheDocument();
+    expect(screen.getByTestId('debate-lane')).toBeInTheDocument();
+    expect(card(1)).not.toHaveAttribute('role', 'group');
+  });
+
+  it('a card picked during the reel stays selected (its seek is not a free seek)', () => {
+    mocks.plan.data = entry({
+      live_reel: {
+        clock: 'video',
+        clips: [
+          { start_ms: 900, end_ms: 3_000, speaker_slot: 1, claim_index: 0, claim_text: 'Coffee is low stakes' },
+          { start_ms: 4_800, end_ms: 5_600, speaker_slot: 2, claim_index: 1, claim_text: 'Dinner shows effort' },
+        ],
+      },
+    });
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    fireEvent.click(reelCard());
+    fireEvent.click(card(2));
+    expect(screen.getByRole('region', { name: /^Clip 2, / })).toBeInTheDocument();
+    expect(within(screen.getByRole('region', { name: 'Debate player' })).getByText(/^Clip 2 · /)).toBeInTheDocument();
+  });
+
+  it('keeps the add tile in place, off, while the reel plays, so the cards do not move', () => {
+    mocks.plan.data = entry({
+      live_reel: {
+        clock: 'video',
+        clips: [0, 1, 2, 3].map(at => ({
+          start_ms: 900 + at * 1_000,
+          end_ms: 1_700 + at * 1_000,
+          speaker_slot: (at % 2) + 1,
+          claim_index: 0,
+          claim_text: 'Coffee is low stakes',
+        })),
+      },
+    });
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    const reel = () => screen.getByRole('region', { name: 'Reel' });
+    const columns = reel().style.gridTemplateColumns;
+    expect(within(reel()).getByRole('button', { name: 'Add a 5th clip' })).toBeEnabled();
+
+    fireEvent.click(reelCard());
+    expect(reelCard()).toHaveTextContent('Stop');
+    expect(within(reel()).getByRole('button', { name: 'Add a 5th clip' })).toBeDisabled();
+    expect(reel().style.gridTemplateColumns).toBe(columns);
+  });
+
+  it('says the same debate length in the transport and at the lane’s end', () => {
+    // The debate runs to 60.7 s (its last clip's end): one rule says 1:00 in both places.
+    mocks.plan.data = entry({
+      live_reel: {
+        clock: 'video',
+        clips: [
+          { start_ms: 58_000, end_ms: 60_700, speaker_slot: 1, claim_index: 0, claim_text: 'Coffee is low stakes' },
+        ],
+      },
+    });
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    deselect();
+    const transport = within(screen.getByRole('group', { name: 'Playback' })).getByText(/^\/ /).textContent;
+    const laneEnd = document.querySelector('[data-lane-end]')?.textContent;
+    expect(transport).toBe(`/ ${laneEnd}`);
+    expect(laneEnd).toBe('1:00');
+  });
+
   it('says a clip plays its raw span only while that clip plays: not after it ends or a seek', () => {
     mocks.plan.data = entry({
       live_reel: {
@@ -2815,5 +2899,117 @@ describe('playing clips in the editor (GEO-3773)', () => {
     expect(player.pause).not.toHaveBeenCalled();
     expect(player.play).toHaveBeenCalledOnce();
     expect(player.jumpTo).toHaveBeenLastCalledWith(expect.any(Number));
+  });
+});
+
+// The 2b preview test (16 Nov): what the layout has to hold at the editor's real widths, beside the
+// app's sidebar (~650 px at a 1280 px window). jsdom has no layout, so these pin the structure and
+// classes that make it hold.
+describe('MomentsEditor layout at real widths (GEO-3773 2b preview)', () => {
+  const soClip = () => {
+    mocks.plan.data = entry({
+      live_reel: {
+        clock: 'video',
+        clips: [
+          { start_ms: 900, end_ms: 3_000, speaker_slot: 0, claim_index: null, claim_text: null },
+          { start_ms: 4_800, end_ms: 5_600, speaker_slot: 2, claim_index: 1, claim_text: 'Dinner shows effort' },
+        ],
+      },
+    });
+    wordsOverride = [
+      { participant_slot: 1, start_ms: 1_000, end_ms: 1_200, text: 'So,' },
+      { participant_slot: 1, start_ms: 1_300, end_ms: 2_900, text: 'coffee.' },
+    ];
+  };
+
+  it('keeps a card’s length on one line: the name truncates, the quote clamps to two lines', () => {
+    soClip();
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    for (const n of [1, 2]) {
+      const length = card(n).querySelector('[data-card-length]') as HTMLElement;
+      expect(length.className).toMatch(/\bwhitespace-nowrap\b/);
+      expect(length.className).toMatch(/\bflex-none\b/);
+      expect(length.className).toMatch(/\btabular-nums\b/);
+      const name = card(n).querySelector('[data-card-name]') as HTMLElement;
+      expect(name.className).toMatch(/\btruncate\b/);
+      expect(name.className).toMatch(/\bmin-w-0\b/);
+    }
+    const quote = card(2).querySelector('[data-card-quote]') as HTMLElement;
+    expect(quote.className).toMatch(/\bline-clamp-2\b/);
+    // An edit adds "Edited": it doesn't shrink either, so the name gives way instead of the length.
+    typeEdge('End', '2.9', 1);
+    const edited = within(card(1)).getByText('Edited');
+    expect(edited.className).toMatch(/\bflex-none\b/);
+  });
+
+  it('gives a card’s warning icon a tooltip with the warning', async () => {
+    soClip();
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    const icon = card(1).querySelector('[data-card-warning]') as HTMLElement;
+    expect(within(icon).getByRole('img', { name: '1 warning' })).toBeInTheDocument();
+    fireEvent.pointerMove(icon, { pointerType: 'mouse' });
+    await waitFor(() => expect(screen.getByRole('tooltip')).toHaveTextContent('Clip 1 opens on “So”'));
+  });
+
+  it('names the Snap switch', () => {
+    soClip();
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    expect(within(clipPanel()).getByRole('switch', { name: 'Snap to words' })).toBeInTheDocument();
+  });
+
+  it('lets the clip bar wrap: the actions take a row of their own, and the warning truncates with a tooltip', () => {
+    soClip();
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    const bar = within(clipPanel()).getByTestId('clip-bar');
+    expect(bar.className).toMatch(/\bflex-wrap\b/);
+    expect(bar.className.split(' ')).not.toContain('h-10');
+    const about = bar.querySelector('[data-clip-bar-about]') as HTMLElement;
+    const actions = bar.querySelector('[data-clip-bar-actions]') as HTMLElement;
+    expect([...bar.children]).toEqual([about, actions]);
+    expect(about.className).toMatch(/\bmin-w-0\b/);
+    // The actions wrap again rather than run past the panel's edge.
+    expect(actions.className).toMatch(/\bflex-wrap\b/);
+    expect(actions.className).toMatch(/\bmax-w-full\b/);
+    for (const name of ['Play clip', 'Replace', 'Remove', 'Advanced', 'Full debate']) {
+      expect(actions.contains(within(bar).getByRole('button', { name: new RegExp(name) }))).toBe(true);
+    }
+    // The warning and its fix sit with what the clip is, never under the actions.
+    const fix = within(bar).getByRole('button', { name: 'Start on “coffee.”' });
+    expect(about.contains(fix)).toBe(true);
+    expect(fix.className).toMatch(/\bflex-none\b/);
+    const text = bar.querySelector('[data-clip-bar-warning]') as HTMLElement;
+    expect(text).toHaveTextContent('Clip 1 opens on “So”');
+    expect(text.className).toMatch(/\btruncate\b/);
+    expect(text.className).toMatch(/\bmin-w-\[4rem\]/);
+    act(() => text.focus());
+    expect(screen.getByRole('tooltip')).toHaveTextContent('Clip 1 opens on “So”');
+  });
+
+  it('keeps the header’s actions on the title’s row, at its right, with the title truncating', () => {
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    const header = screen.getByRole('banner');
+    const title = header.querySelector('[data-header-title]') as HTMLElement;
+    const actions = header.querySelector('[data-header-actions]') as HTMLElement;
+    expect([...header.children]).toEqual([title, actions]);
+    // Wraps only when the editor stacks (narrow windows).
+    expect(header.className.split(' ')).not.toContain('flex-wrap');
+    expect(title.className).toMatch(/\bflex-1\b/);
+    expect(title.className).toMatch(/\bmin-w-0\b/);
+    expect(actions.className).toMatch(/\bflex-none\b/);
+    expect(actions.className.split(' ')).not.toContain('flex-wrap');
+    expect(within(title).getByRole('heading', { level: 1 }).className).toMatch(/\btruncate\b/);
+    expect(actions.contains(within(header).getByRole('link', { name: /View debate/ }))).toBe(true);
+    for (const name of ['Reel options', 'Publish']) {
+      expect(actions.contains(within(header).getByRole('button', { name }))).toBe(true);
+    }
+  });
+
+  it('caps the claim menu to the window and scrolls inside it', () => {
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    fireEvent.click(within(card(1)).getByRole('button', { name: /^Claim: / }));
+    const menu = document.querySelector('[data-claim-menu]') as HTMLElement;
+    expect(menu).not.toBeNull();
+    expect(menu.className).toContain('max-h-[min(420px,var(--radix-popover-content-available-height))]');
+    expect(menu.className).toMatch(/\boverflow-y-auto\b/);
   });
 });

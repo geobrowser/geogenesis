@@ -130,12 +130,14 @@ export function EditorHeader({
     </button>
   );
   return (
-    <header className="relative flex min-h-[59px] flex-none flex-wrap items-end justify-between gap-x-6 gap-y-2">
-      <div className="flex min-w-0 flex-col gap-1">
-        <div className="flex h-5 items-center gap-3.5">
+    // One row, as the prototype's `.hdr`: the title takes what the actions leave and ends in an
+    // ellipsis, so the actions stay on the title's row, at its right. Stacked windows wrap.
+    <header className="relative flex min-h-[59px] flex-none items-end justify-between gap-x-6 gap-y-2 max-[899px]:flex-wrap">
+      <div data-header-title className="flex min-w-0 flex-1 flex-col gap-1 max-[899px]:basis-full">
+        <div className="flex h-5 min-w-0 items-center gap-3.5">
           <span className="text-breadcrumb text-grey-04">Edit moments</span>
           {debaters.map(debater => (
-            <span key={debater.slot} className="inline-flex items-center gap-1.5">
+            <span key={debater.slot} className="inline-flex min-w-0 items-center gap-1.5">
               <span
                 aria-hidden
                 className={cx(
@@ -145,13 +147,15 @@ export function EditorHeader({
               >
                 {initials(debater.name)}
               </span>
-              <span className="text-breadcrumb">{debater.name}</span>
+              <span className="truncate text-breadcrumb">{debater.name}</span>
             </span>
           ))}
         </div>
-        <h1 className="m-0 truncate text-largeTitle">{title}</h1>
+        <h1 title={title} className="m-0 truncate text-largeTitle max-[899px]:whitespace-normal">
+          {title}
+        </h1>
       </div>
-      <div className="flex flex-wrap items-center gap-2 pb-1.5">
+      <div data-header-actions className="flex flex-none items-center gap-2 pb-1.5 max-[899px]:flex-wrap">
         {viewHref ? (
           <a
             href={viewHref}

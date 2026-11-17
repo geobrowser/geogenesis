@@ -495,6 +495,14 @@ export function formatReelTime(ms: number): string {
   return `${minutes}:${seconds.toFixed(1).padStart(4, '0')}`;
 }
 
+/**
+ * The debate's length to the whole second, as the player's transport and the lane's end both say it
+ * (one rule, so they never differ by a second): down to the second, as a video player counts.
+ */
+export function formatWholeTime(ms: number): string {
+  return formatReelTime(Math.floor(Math.max(0, ms) / 1000) * 1000).replace(/\.\d$/, '');
+}
+
 /** A typed time, `m:ss.s` or plain seconds, in ms; `null` when it is not one. */
 export function parseReelTime(text: string): number | null {
   const trimmed = text.trim();

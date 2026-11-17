@@ -139,7 +139,9 @@ export function ReelStrip({
     });
   }, [playing]);
 
-  const addTile = !playing && !readOnly ? addAffordance(clips.length) : null;
+  // The add tile stays while the reel plays, off, so the cards keep their places (and widths).
+  const addTile = !readOnly ? addAffordance(clips.length) : null;
+  const canAddNow = canAdd && !playing;
   const columns = Math.max(REEL_CLIPS, clips.length + (addTile === 'card' ? 1 : 0));
   const placeholders = addTile === 'card' ? Math.max(0, REEL_CLIPS - clips.length - 1) : 0;
   const warning = over70Tip ? 'over 70 s' : clipCountWarning ? `${clips.length} clips` : null;
@@ -203,12 +205,28 @@ export function ReelStrip({
         const top = (
           <span className="flex w-full items-center gap-1.5">
             <ClipChip number={index + 1} speaker={clip.speaker} />
-            <span className="truncate text-metadataMedium">{clip.name}</span>
+            {/* The name gives way first: a long one ends in an ellipsis, never pushing the length
+                onto a second line. */}
+            <span data-card-name className="min-w-0 truncate text-metadataMedium">
+              {clip.name}
+            </span>
             {clip.edited ? <span className={SMALL_TAG_CLASS}>Edited</span> : null}
             <span className="flex-1" />
-            {clip.warning && !readOnly ? <WarnIcon size={14} label="1 warning" className="text-grey-04" /> : null}
+            {clip.warning && !readOnly ? (
+              <Tooltip
+                variant="light"
+                label={clip.warning}
+                trigger={
+                  <span data-card-warning className="inline-flex flex-none">
+                    <WarnIcon size={14} label="1 warning" className="text-grey-04" />
+                  </span>
+                }
+              />
+            ) : null}
             {clip.bad ? <WarnIcon size={14} label="Can’t publish" className="text-red-01" /> : null}
-            <span className="text-breadcrumb text-grey-04 tabular-nums">{seconds(clip.lengthMs)}</span>
+            <span data-card-length className="flex-none text-breadcrumb whitespace-nowrap text-grey-04 tabular-nums">
+              {seconds(clip.lengthMs)}
+            </span>
           </span>
         );
         const progress = (
@@ -261,7 +279,12 @@ export function ReelStrip({
             )}
           >
             {top}
-            <span className="line-clamp-2 text-[14px] leading-[18px] tracking-[-0.1px] text-grey-05">{clip.quote}</span>
+            <span
+              data-card-quote
+              className="line-clamp-2 min-h-0 text-[14px] leading-[18px] tracking-[-0.1px] break-words text-ellipsis text-grey-05"
+            >
+              {clip.quote}
+            </span>
             {progress}
           </button>
         );
@@ -271,7 +294,7 @@ export function ReelStrip({
         <button
           type="button"
           aria-pressed={addOpen}
-          disabled={!canAdd}
+          disabled={!canAddNow}
           onClick={onAdd}
           className={cx(
             'flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed bg-white text-text disabled:cursor-default disabled:opacity-50',
@@ -293,11 +316,11 @@ export function ReelStrip({
           label={EXTRA_CLIP_TOOLTIP}
           trigger={
             // A disabled button takes no pointer events: the wrapper keeps the reason reachable.
-            <span className="flex" tabIndex={canAdd ? undefined : 0}>
+            <span className="flex" tabIndex={canAddNow ? undefined : 0}>
               <button
                 type="button"
                 aria-pressed={addOpen}
-                disabled={!canAdd}
+                disabled={!canAddNow}
                 onClick={onAdd}
                 className={cx(
                   'flex w-full cursor-pointer items-center justify-center rounded-lg border border-dashed bg-white px-2 text-center text-breadcrumb font-medium text-text disabled:cursor-default disabled:opacity-50',
@@ -379,7 +402,11 @@ function ClaimButton({
           side="bottom"
           sideOffset={8}
           collisionPadding={16}
-          className="z-100 w-[320px] max-w-[calc(100vw-32px)] overflow-hidden rounded-lg border border-grey-02 bg-white py-1 shadow-lg"
+          // Never past the window: flips above when there is more room there, and scrolls inside
+          // what room there is (the editor's page doesn't scroll).
+          avoidCollisions
+          data-claim-menu
+          className="z-100 max-h-[min(420px,var(--radix-popover-content-available-height))] w-[320px] max-w-[calc(100vw-32px)] overflow-y-auto overscroll-contain rounded-lg border border-grey-02 bg-white py-1 shadow-lg"
         >
           <ClaimOptions name={clip.name} choices={choices} current={clip} onPick={onPick} />
         </Popover.Content>
