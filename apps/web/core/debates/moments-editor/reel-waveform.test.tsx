@@ -35,11 +35,11 @@ const READY: PeaksView = {
 
 /** The panel with the editor's snap switch and pad, held here as the editor holds them. */
 function Snapping(
-  props: Omit<React.ComponentProps<typeof ReelWaveform>, 'pad' | 'snap' | 'onSnap'> &
-    Partial<Pick<React.ComponentProps<typeof ReelWaveform>, 'pad'>>
+  props: Omit<React.ComponentProps<typeof ReelWaveform>, 'pad' | 'focus' | 'snap' | 'onSnap'> &
+    Partial<Pick<React.ComponentProps<typeof ReelWaveform>, 'pad' | 'focus'>>
 ) {
   const [snap, setSnap] = React.useState(true);
-  return <ReelWaveform pad={2_000} {...props} snap={snap} onSnap={() => setSnap(on => !on)} />;
+  return <ReelWaveform pad={2_000} focus="clip" {...props} snap={snap} onSnap={() => setSnap(on => !on)} />;
 }
 
 function renderPanel(
@@ -164,6 +164,7 @@ describe('ReelWaveform (GEO-3673)', () => {
         const [current, setCurrent] = React.useState(clip(1_000, 2_900));
         return (
           <Snapping
+            focus="clip"
             view={READY}
             clip={current}
             index={0}
@@ -216,6 +217,106 @@ describe('ReelWaveform (GEO-3673)', () => {
       fireEvent.pointerMove(screen.getByTestId('waveform-track'), { clientX: 3_500, pointerId: 1, buttons: 0 });
       expect(onChangeClip).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe('ReelWaveform zoomed on an edge (GEO-3773)', () => {
+  /** The panel as the editor holds it, zoomed on the clip's end at ±1 s: each drag move becomes the
+   * clip it draws. The clip is 1-2.9 s, so the window is 1.9-3.9 s, drawn 2,000 px wide (a ms per px). */
+  function renderOnEnd() {
+    const onChangeClip = vi.fn();
+    function Live() {
+      const [current, setCurrent] = React.useState(clip(1_000, 2_900));
+      return (
+        <Snapping
+          pad={1_000}
+          focus="end"
+          view={READY}
+          clip={current}
+          index={0}
+          speaker={1}
+          played={null}
+          words={WORDS}
+          turns={ONE_CLOCK}
+          durationMs={10_000}
+          playheadMs={null}
+          readOnly={false}
+          onChangeClip={(index, span) => {
+            onChangeClip(index, span);
+            setCurrent(previous => ({ ...previous, ...span }));
+          }}
+          onSeek={vi.fn()}
+        />
+      );
+    }
+    render(<Live />);
+    vi.spyOn(screen.getByTestId('waveform-track'), 'getBoundingClientRect').mockReturnValue({
+      width: 2_000,
+      left: 0,
+    } as DOMRect);
+    return onChangeClip;
+  }
+
+  it('centres the window on the edge, with the edge handle in its middle and the other out of view', () => {
+    renderOnEnd();
+    expect(screen.getByTestId('waveform-track')).toHaveAttribute('data-window', '1900-3900');
+    expect(screen.getByTestId('fine-end-handle')).toHaveStyle({ left: '50%' });
+    expect(screen.queryByTestId('fine-start-handle')).toBeNull();
+    // Only "dates" (1.5-2.9 s) reaches into the window.
+    expect(screen.getAllByTestId('waveform-word').map(word => word.textContent)).toEqual(['dates']);
+  });
+
+  it('maps a drag to the zoomed window’s ms, keeps the window still under it, and centres on the edge when let go', () => {
+    const onChangeClip = renderOnEnd();
+    fireEvent.click(screen.getByRole('switch', { name: 'Snap to words' }));
+    const handle = screen.getByTestId('fine-end-handle');
+    // The end sits at 1,000 px (2.9 s); 207 px right is 207 ms later: 3.107 s, to the 10 ms.
+    fireEvent.pointerDown(handle, { clientX: 1_000, pointerId: 1 });
+    fireEvent.pointerMove(handle, { clientX: 1_207, pointerId: 1 });
+    expect(onChangeClip).toHaveBeenLastCalledWith(0, expect.objectContaining({ start_ms: 1_000, end_ms: 3_110 }));
+    // The window has not moved under the pointer: the handle is where the pointer is.
+    expect(screen.getByTestId('waveform-track')).toHaveAttribute('data-window', '1900-3900');
+    expect(screen.getByTestId('fine-end-handle')).toHaveStyle({ left: '60.5%' });
+    fireEvent.pointerUp(handle, { pointerId: 1 });
+    expect(screen.getByTestId('waveform-track')).toHaveAttribute('data-window', '2110-4110');
+    expect(screen.getByTestId('fine-end-handle')).toHaveStyle({ left: '50%' });
+  });
+
+  it('snaps a dragged edge to the words in the zoomed window', () => {
+    const onChangeClip = renderOnEnd();
+    const handle = screen.getByTestId('fine-end-handle');
+    // From 2.9 s back 600 ms to 2.3 s, mid "dates": it snaps out to the word's end.
+    fireEvent.pointerDown(handle, { clientX: 1_000, pointerId: 1 });
+    fireEvent.pointerMove(handle, { clientX: 400, pointerId: 1 });
+    expect(onChangeClip).toHaveBeenLastCalledWith(0, expect.objectContaining({ end_ms: 2_900 }));
+  });
+
+  it('seeks to the ms clicked in the zoomed window', () => {
+    const onSeek = vi.fn();
+    render(
+      <Snapping
+        pad={1_000}
+        focus="start"
+        view={READY}
+        clip={clip(1_000, 2_900)}
+        index={0}
+        speaker={1}
+        played={null}
+        words={WORDS}
+        turns={ONE_CLOCK}
+        durationMs={10_000}
+        playheadMs={1_250}
+        readOnly={false}
+        onChangeClip={vi.fn()}
+        onSeek={onSeek}
+      />
+    );
+    const track = screen.getByTestId('waveform-track');
+    // On the start at ±1 s: 0-2 s, drawn 2,000 px wide.
+    expect(track).toHaveAttribute('data-window', '0-2000');
+    vi.spyOn(track, 'getBoundingClientRect').mockReturnValue({ width: 2_000, left: 0 } as DOMRect);
+    fireEvent.pointerDown(track, { clientX: 1_500 });
+    expect(onSeek).toHaveBeenCalledWith(1_500);
   });
 });
 
