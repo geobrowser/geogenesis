@@ -102,6 +102,54 @@ describe('rebaseUnsavedDraft with grades', () => {
   it('drops it once the published ballot holds the regrade', () => {
     expect(rebaseUnsavedDraft(draft, [id(1)], g([[1, 'B']]))).toBeNull();
   });
+
+  const regraded = {
+    orderedEntityIds: [id(1), id(3)],
+    grades: g([
+      [1, 'C'],
+      [3, 'A'],
+    ]),
+    baseOrderedIds: [id(1), id(3)],
+    baseGrades: g([
+      [1, 'C'],
+      [3, 'B'],
+    ]),
+    overtakenOrderedIds: [id(1), id(3)],
+    overtakenGrades: g([
+      [1, 'A'],
+      [3, 'A'],
+    ]),
+  };
+
+  it('keeps a regrade when our overtaken ballot lands and then gains an unrelated debate', () => {
+    const rebased = rebaseUnsavedDraft(
+      regraded,
+      [id(1), id(3), id(2)],
+      g([
+        [1, 'A'],
+        [3, 'A'],
+        [2, 'A'],
+      ])
+    );
+    expect(rebased?.grades?.get(id(1))).toBe('C');
+    expect(rebased?.grades?.get(id(3))).toBe('A');
+    expect(rebased?.grades?.get(id(2))).toBe('A');
+  });
+
+  it('keeps a regrade when the other device’s ballot gains an unrelated debate', () => {
+    const rebased = rebaseUnsavedDraft(
+      regraded,
+      [id(1), id(3), id(2)],
+      g([
+        [1, 'C'],
+        [3, 'B'],
+        [2, 'A'],
+      ])
+    );
+    expect(rebased?.grades?.get(id(1))).toBe('C');
+    expect(rebased?.grades?.get(id(3))).toBe('A');
+    expect(rebased?.grades?.get(id(2))).toBe('A');
+  });
 });
 
 describe('mergeBallots keeps tiers (GEO-3729)', () => {
