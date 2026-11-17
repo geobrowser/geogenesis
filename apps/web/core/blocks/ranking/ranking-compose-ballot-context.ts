@@ -2,6 +2,8 @@
 
 import * as React from 'react';
 
+import type { BallotGrades } from './ranking-grades';
+
 /**
  * The ballot the ranking screen is editing (GEO-3679): its current draft, and a way to publish a
  * new order of it. When push-down runs on the ranking screen it has to edit this draft, not
@@ -11,11 +13,14 @@ import * as React from 'react';
 export type ComposeBallot = {
   /** The draft, in order. */
   orderedIds: readonly string[];
+  /** Its grades (Best debates, GEO-3729). */
+  grades?: BallotGrades;
   /**
    * Makes `orderedIds` the draft and publishes it as the member's ballot. Resolves true once
-   * published, false when it didn't (the screen reports why).
+   * published, false when it didn't (the screen reports why). With `grades`, those become the
+   * draft's grades; without, entries keep theirs.
    */
-  publish: (orderedIds: string[]) => Promise<boolean>;
+  publish: (orderedIds: string[], grades?: BallotGrades) => Promise<boolean>;
 };
 
 export const RankingComposeBallotContext = React.createContext<ComposeBallot | null>(null);
@@ -34,7 +39,10 @@ export function useRankingComposeBallot(): ComposeBallot | null {
 export function useComposeBallot(
   source: {
     orderedIds: readonly string[];
+    grades?: BallotGrades;
     setOrderedIds: (ids: string[]) => void;
+    /** Sets the draft with its grades (Best debates). */
+    setDraft?: (ids: string[], grades: BallotGrades) => void;
     publish: (ids: string[]) => Promise<boolean>;
     /**
      * Edits stay in the draft until the screen's Publish (the Best debates screen, Preston 12 Nov):
@@ -47,18 +55,21 @@ export function useComposeBallot(
   latest.current = source;
   const isOn = source !== null;
   const orderedIds = source?.orderedIds;
+  const grades = source?.grades;
 
   return React.useMemo(() => {
     if (!isOn || !orderedIds) return null;
     return {
       orderedIds,
-      publish: async (ids: string[]) => {
+      grades,
+      publish: async (ids: string[], nextGrades?: BallotGrades) => {
         const current = latest.current;
         if (!current) return false;
-        current.setOrderedIds(ids);
+        if (nextGrades && current.setDraft) current.setDraft(ids, nextGrades);
+        else current.setOrderedIds(ids);
         if (current.deferPublish) return true;
         return current.publish(ids);
       },
     };
-  }, [isOn, orderedIds]);
+  }, [isOn, orderedIds, grades]);
 }

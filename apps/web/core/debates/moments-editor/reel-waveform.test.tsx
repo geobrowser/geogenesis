@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DebateMediaTurnSegment } from '../api';
 import { RENDERED_TURN_SEGMENTS } from '../open-rounds-media-fixtures';
 import type { EditorClip, ReelWord } from './reel';
-import { ReelWaveform } from './reel-waveform';
+import { ReelWaveform, wordLabels } from './reel-waveform';
 import type { PeaksView } from './waveform';
 
 const ONE_CLOCK = RENDERED_TURN_SEGMENTS.map(({ source_start_ms: _s, source_end_ms: _e, ...rest }) => rest);
@@ -33,13 +33,22 @@ const READY: PeaksView = {
   peaks: { bucketMs: 10, samples: new Uint8Array(1_000).fill(80), version: 'v1' },
 };
 
+/** The panel with the editor's snap switch and pad, held here as the editor holds them. */
+function Snapping(
+  props: Omit<React.ComponentProps<typeof ReelWaveform>, 'pad' | 'snap' | 'onSnap'> &
+    Partial<Pick<React.ComponentProps<typeof ReelWaveform>, 'pad'>>
+) {
+  const [snap, setSnap] = React.useState(true);
+  return <ReelWaveform pad={2_000} {...props} snap={snap} onSnap={() => setSnap(on => !on)} />;
+}
+
 function renderPanel(
   props: Partial<React.ComponentProps<typeof ReelWaveform>> & { turns?: readonly DebateMediaTurnSegment[] } = {}
 ) {
   const onChangeClip = vi.fn();
   const onSeek = vi.fn();
   const utils = render(
-    <ReelWaveform
+    <Snapping
       view={READY}
       clip={clip(1_000, 2_900)}
       index={0}
@@ -85,15 +94,15 @@ describe('ReelWaveform (GEO-3673)', () => {
 
   it('has "Snap to words" on to begin with, and snaps a dragged edge out to the whole word', () => {
     const { onChangeClip } = renderPanel();
-    expect(screen.getByRole('checkbox', { name: 'Snap to words' })).toBeChecked();
+    expect(screen.getByRole('switch', { name: 'Snap to words' })).toBeChecked();
     dragStart();
     expect(onChangeClip).toHaveBeenLastCalledWith(0, { start_ms: 1_000, end_ms: 2_900, claim_index: 0 });
   });
 
   it('places an edge freely, to the 10 ms, with snapping off', () => {
     const { onChangeClip } = renderPanel();
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Snap to words' }));
-    expect(screen.getByRole('checkbox', { name: 'Snap to words' })).not.toBeChecked();
+    fireEvent.click(screen.getByRole('switch', { name: 'Snap to words' }));
+    expect(screen.getByRole('switch', { name: 'Snap to words' })).not.toBeChecked();
     dragStart();
     expect(onChangeClip).toHaveBeenLastCalledWith(0, {
       start_ms: 1_230,
@@ -110,7 +119,7 @@ describe('ReelWaveform (GEO-3673)', () => {
       0,
       expect.objectContaining({ start_ms: 1_230, free_start_ms: 1_230 })
     );
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Snap to words' }));
+    fireEvent.click(screen.getByRole('switch', { name: 'Snap to words' }));
     dragStart({ altKey: true });
     expect(onChangeClip).toHaveBeenLastCalledWith(0, { start_ms: 1_000, end_ms: 2_900, claim_index: 0 });
   });
@@ -142,27 +151,9 @@ describe('ReelWaveform (GEO-3673)', () => {
     expect(screen.queryByText(/waveform/i)).not.toBeInTheDocument();
   });
 
-  it('has no handles read-only, and asks for a clip when none is selected', () => {
+  it('has no handles read-only', () => {
     renderPanel({ readOnly: true });
     expect(screen.queryByTestId('fine-start-handle')).not.toBeInTheDocument();
-    cleanup();
-    render(
-      <ReelWaveform
-        view={READY}
-        clip={null}
-        index={0}
-        speaker={null}
-        played={null}
-        words={WORDS}
-        turns={ONE_CLOCK}
-        durationMs={10_000}
-        playheadMs={null}
-        readOnly={false}
-        onChangeClip={vi.fn()}
-        onSeek={vi.fn()}
-      />
-    );
-    expect(screen.getByText('Select a clip to fine-tune it against the waveform.')).toBeInTheDocument();
   });
 
   describe('a handle dragged out of its window', () => {
@@ -172,7 +163,7 @@ describe('ReelWaveform (GEO-3673)', () => {
       function Live() {
         const [current, setCurrent] = React.useState(clip(1_000, 2_900));
         return (
-          <ReelWaveform
+          <Snapping
             view={READY}
             clip={current}
             index={0}
@@ -196,7 +187,7 @@ describe('ReelWaveform (GEO-3673)', () => {
         width: 4_900,
         left: 0,
       } as DOMRect);
-      fireEvent.click(screen.getByRole('checkbox', { name: 'Snap to words' }));
+      fireEvent.click(screen.getByRole('switch', { name: 'Snap to words' }));
       // The end, from 2.9 s out to 6 s: past the window's 4.9 s, and past the track's right edge.
       fireEvent.pointerDown(screen.getByTestId('fine-end-handle'), { clientX: 2_900, pointerId: 1 });
       fireEvent.pointerMove(screen.getByTestId('waveform-track'), { clientX: 6_000, pointerId: 1 });
@@ -225,5 +216,37 @@ describe('ReelWaveform (GEO-3673)', () => {
       fireEvent.pointerMove(screen.getByTestId('waveform-track'), { clientX: 3_500, pointerId: 1, buttons: 0 });
       expect(onChangeClip).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe('wordLabels (the prototype’s label rule)', () => {
+  const frame = { start_ms: 0, end_ms: 10_000 };
+  const word = (start_ms: number, end_ms: number, text: string) => ({ start_ms, end_ms, text });
+
+  it('labels short words too, centred on them, as long as they don’t run into the last label', () => {
+    // 1,000 px for 10 s: 0.1 px per ms. "is" (100 ms, 10 px) is narrower than its label but still drawn.
+    const words = [
+      word(1_000, 1_100, 'is'),
+      word(1_100, 1_150, 'a'),
+      word(3_000, 3_400, 'coffee'),
+      word(9_000, 9_400, 'date'),
+    ];
+    expect(wordLabels(words, frame, 1_000).map(w => w.text)).toEqual(['is', 'coffee', 'date']);
+  });
+
+  it('skips a word whose label would collide, and one centred out of view', () => {
+    const words = [
+      word(-400, -100, 'gone'),
+      word(2_000, 2_400, 'Saturday'),
+      word(2_500, 2_700, 'night'),
+      word(4_000, 4_200, 'fun'),
+    ];
+    // "Saturday" ends at 220 + 26.4 px; "night" would start at 260 - 16.5 = 243.5, under 4 px after it.
+    expect(wordLabels(words, frame, 1_000).map(w => w.text)).toEqual(['Saturday', 'fun']);
+  });
+
+  it('labels every word while unmeasured', () => {
+    const words = [word(1_000, 1_010, 'a'), word(1_010, 1_020, 'b')];
+    expect(wordLabels(words, frame, 0)).toHaveLength(2);
   });
 });

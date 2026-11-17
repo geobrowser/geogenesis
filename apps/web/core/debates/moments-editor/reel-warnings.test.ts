@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
+import { draggedClip } from './clip-drag';
 import { type EditorClip, type ReelWord, playerWords } from './reel';
-import { draggedClip } from './reel-timeline';
-import { endClipAt, reelSentences, sentenceInClip, startClipAt } from './reel-transcript';
+import { reelSentences, sentenceInClip } from './reel-transcript';
 import { reelWarnings, spokenLength, trimmedEnd } from './reel-warnings';
 
 const word = (slot: 1 | 2, start: number, end: number, text = 'word'): ReelWord => ({
@@ -113,6 +113,19 @@ describe('reelWarnings (GEO-3672)', () => {
     expect(
       reelWarnings([...GOOD, clip(20_000, 30_000)], WORDS, nameOf).find(w => w.id === 'clip-count')?.fix
     ).toBeNull();
+  });
+
+  // GEO-3773 (D4): a 5th or 6th clip is the admin's call, so the warning only says what we aim for.
+  it('says a reel of 5 or 6 clips is over the 4 we aim for, as one clip-count warning', () => {
+    const five = reelWarnings([...GOOD, clip(20_000, 30_000)], WORDS, nameOf).filter(w => w.id === 'clip-count');
+    expect(five).toEqual([
+      expect.objectContaining({ title: 'This reel has 5 clips. We aim for 4.', severity: 'warn' }),
+    ]);
+    const six = reelWarnings([...GOOD, clip(20_000, 30_000), clip(31_000, 40_000)], WORDS, nameOf).filter(
+      w => w.id === 'clip-count'
+    );
+    expect(six).toEqual([expect.objectContaining({ title: 'This reel has 6 clips. We aim for 4.' })]);
+    expect(reelWarnings(GOOD, WORDS, nameOf).find(w => w.id === 'clip-count')).toBeUndefined();
   });
 
   it.each(['So', 'and', 'But,'])('warns about a clip opening on “%s” and starts it on the next word', opener => {
@@ -238,16 +251,6 @@ describe('draggedClip (GEO-3672)', () => {
 
 describe('the transcript picker (GEO-3672)', () => {
   const sentence = { slot: 1 as const, start_ms: 20_000, end_ms: 24_000, text: 'Coffee is fine.' };
-
-  it('starts the clip at a sentence, its end following if it would come first', () => {
-    expect(startClipAt(clip(10_000, 30_000), sentence)).toMatchObject({ start_ms: 20_000, end_ms: 30_000 });
-    expect(startClipAt(clip(10_000, 15_000), sentence)).toMatchObject({ start_ms: 20_000, end_ms: 24_000 });
-  });
-
-  it('ends the clip at a sentence, its start following if it would come after', () => {
-    expect(endClipAt(clip(10_000, 30_000), sentence)).toMatchObject({ start_ms: 10_000, end_ms: 24_000 });
-    expect(endClipAt(clip(26_000, 30_000), sentence)).toMatchObject({ start_ms: 20_000, end_ms: 24_000 });
-  });
 
   it('counts a sentence as in a clip only when it reaches into it, not when it shares an edge', () => {
     expect(sentenceInClip(sentence, clip(24_000, 30_000))).toBe(false);

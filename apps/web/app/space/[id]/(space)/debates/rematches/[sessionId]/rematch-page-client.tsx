@@ -2184,11 +2184,10 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    * that is correct for every claim already on it. Going back to a skeleton there would flicker
    * the badge on exactly the event that ought to be invisible.
    */
-  // An agenda outage is in here as viewerCountPending's errors are (GEO-3733): it empties Matches and
-  // Their positions, and a `0` beside it would call the outage "none".
+  // A failed lookup empties Matches and Their positions, and a `0` would call the outage "none".
   const opponentCountPending =
     opponentClaims.length === 0 &&
-    (sessionQuery.isLoading || positions.isLoading || opponentClaimsSettling || Boolean(agendaFilterError));
+    (sessionQuery.isLoading || positions.isLoading || opponentClaimsSettling || Boolean(opponentTabError));
 
   /**
    * The same rule for the same reason: `0` is a claim about the viewer's own backlog, and it is

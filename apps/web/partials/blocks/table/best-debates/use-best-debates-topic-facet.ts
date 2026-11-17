@@ -32,6 +32,7 @@ export type BestDebatesTopicFacet = {
 const STALE_TIME = 60_000;
 const NO_COUNTS: RelationFacetCount[] = [];
 const NO_NAMES = new Map<string, string | null>();
+const NO_CLAUSES: readonly Record<string, unknown>[] = [];
 
 /**
  * The team column's topic counts, over the whole list rather than the rows drawn (Preston, 12 Nov),
@@ -51,6 +52,7 @@ export function useBestDebatesTopicFacet({
   topicIds,
   toRankIds,
   displays,
+  extraClauses = NO_CLAUSES,
 }: {
   enabled: boolean;
   scope: 'team' | 'to_rank';
@@ -58,13 +60,15 @@ export function useBestDebatesTopicFacet({
   topicIds: readonly string[];
   toRankIds: readonly string[];
   displays: ReadonlyMap<string, BestDebateRowData> | null;
+  /** The recorded, debater and claim filters as entity clauses (GEO-3774), for All's counts. */
+  extraClauses?: readonly Record<string, unknown>[];
 }): BestDebatesTopicFacet {
   const debouncedQuery = useDebouncedValue(query.trim(), 250);
   const pickedKey = React.useMemo(() => [...topicIds].map(normId).sort(), [topicIds]);
   const server = enabled && scope === 'team';
 
   const counts = useQuery({
-    queryKey: ['best-debates', 'topic-facet', debouncedQuery, pickedKey] as const,
+    queryKey: ['best-debates', 'topic-facet', debouncedQuery, pickedKey, extraClauses] as const,
     placeholderData: keepPreviousData,
     queryFn: ({ signal }) =>
       Effect.runPromise(
@@ -80,6 +84,7 @@ export function useBestDebatesTopicFacet({
               topicsPropertyId: TOPICS_PROPERTY_ID,
               query: debouncedQuery,
               topicIds: pickedKey,
+              extraClauses,
             }),
             groupBy: ['TO_ENTITY_ID'],
           },

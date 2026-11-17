@@ -18,8 +18,11 @@ type Props = {
   /** The accessible name when `title` isn't plain text. */
   ariaLabel?: string;
   wide?: boolean;
-  /** `narrow` for one player on its own (the watch dialog); `compare` for the compare view (D1). */
-  size?: 'narrow' | 'compare';
+  /**
+   * `compare` for the compare view (D1); `watch` for the watch dialog's player beside its
+   * transcript (GEO-3728), a fixed height whose columns scroll themselves.
+   */
+  size?: 'compare' | 'watch';
   /** D1's round close button. */
   roundClose?: boolean;
   /**
@@ -29,6 +32,8 @@ type Props = {
   phoneSheet?: boolean;
   children: React.ReactNode;
   footer?: React.ReactNode;
+  /** Beside the close button (the watch popup's "…", GEO-3742). */
+  headerActions?: React.ReactNode;
   onKeyDown?: (event: React.KeyboardEvent) => void;
 };
 
@@ -52,6 +57,7 @@ export function RankingFlowDialog({
   roundClose = false,
   children,
   footer,
+  headerActions,
   onKeyDown,
 }: Props) {
   return (
@@ -86,8 +92,16 @@ export function RankingFlowDialog({
                 ? 'w-auto max-w-[min(100%,960px)] min-w-[min(100%,560px)] rounded-[20px] px-[26px] pt-6 pb-[22px] md:w-full md:min-w-0 md:px-3.5 md:pt-[18px]'
                 : wide
                   ? 'max-w-[1350px]'
-                  : size === 'narrow'
-                    ? 'max-w-[560px]'
+                  : size === 'watch'
+                    ? cx(
+                        // As tall as its content (GEO-3729): the player sizes itself to the screen
+                        // (`WatchDebateLayout`) and the transcript beside it to the player, so there
+                        // is no empty band under either.
+                        'max-w-[960px]',
+                        // A short, wide screen (a phone on its side): less margin above, so the player
+                        // isn't squeezed by the 64px the dialog usually keeps above it.
+                        '[@media(min-width:768px)_and_(max-height:560px)]:mt-4 [@media(min-width:768px)_and_(max-height:560px)]:max-h-[calc(100dvh-2rem)]'
+                      )
                     : 'max-w-[880px]'
             )}
           >
@@ -106,6 +120,7 @@ export function RankingFlowDialog({
                   </div>
                 ) : null}
               </div>
+              {headerActions ? <div className="ml-auto flex shrink-0 items-center gap-2">{headerActions}</div> : null}
               <Dialog.Close asChild>
                 {roundClose ? (
                   <button
@@ -122,7 +137,11 @@ export function RankingFlowDialog({
             </div>
             {/* The only part that scrolls. */}
             <div
-              className="-mx-6 flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain px-6 md:-mx-4 md:px-4"
+              className={cx(
+                '-mx-6 flex min-h-0 flex-1 flex-col gap-4 px-6 md:-mx-4 md:px-4',
+                // The watch dialog's transcript scrolls itself, so the player never scrolls away.
+                size === 'watch' ? 'overflow-hidden' : 'overflow-y-auto overscroll-contain'
+              )}
               data-testid="ranking-flow-dialog-body"
             >
               {children}

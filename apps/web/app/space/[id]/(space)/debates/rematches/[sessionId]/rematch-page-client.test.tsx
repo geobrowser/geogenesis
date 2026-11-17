@@ -3018,6 +3018,63 @@ describe('DebateRematchPageClient', () => {
     expect(screen.getByRole('button', { name: /^Their positions/ })).not.toHaveTextContent('0');
   });
 
+  // A failed lookup is an outage, not "none" — as My positions already shows it.
+  it('counts nothing rather than zero on Matches and Their positions when positions failed', async () => {
+    mocks.positions = [];
+    mocks.positionsError = new Error('positions exploded');
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await settleTabSwap();
+
+    expect(screen.getByLabelText('Counting matches')).toBeInTheDocument();
+    expect(screen.getByLabelText('Counting positions')).toBeInTheDocument();
+    expect(screen.getByLabelText('Counting your positions')).toBeInTheDocument();
+  });
+
+  it('counts nothing rather than zero when the claims behind the opponent’s positions failed', async () => {
+    mocks.votedByError = true;
+    mocks.entityHydrationErrorFor = CLAIM_SHARED;
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await settleTabSwap();
+
+    expect(screen.getByLabelText('Counting matches')).toBeInTheDocument();
+    expect(screen.getByLabelText('Counting positions')).toBeInTheDocument();
+  });
+
+  it('keeps the opponent’s counts when a refetch fails under them', async () => {
+    const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await settleTabSwap();
+    const matches = screen.getByRole('button', { name: /^Matches/ }).textContent;
+    const theirs = screen.getByRole('button', { name: /^Their positions/ }).textContent;
+    expect(matches).toMatch(/\d/);
+    expect(theirs).toMatch(/\d/);
+
+    // react-query keeps the data it has and reports the failure alongside it.
+    mocks.positionsError = new Error('positions exploded');
+    view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(screen.queryByLabelText('Counting matches')).toBeNull();
+    expect(screen.queryByLabelText('Counting positions')).toBeNull();
+    expect(screen.getByRole('button', { name: /^Matches/ })).toHaveTextContent(matches!);
+    expect(screen.getByRole('button', { name: /^Their positions/ })).toHaveTextContent(theirs!);
+  });
+
+  it('shows the real counts once a failed load succeeds', async () => {
+    const loaded = mocks.positions.filter(side => side.profileSpaceId !== 'profile-local');
+    mocks.positions = [];
+    mocks.positionsError = new Error('positions exploded');
+    const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await settleTabSwap();
+    expect(screen.getByLabelText('Counting positions')).toBeInTheDocument();
+
+    mocks.positions = loaded;
+    mocks.positionsError = null;
+    view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    await waitFor(() => expect(screen.queryByLabelText('Counting positions')).toBeNull());
+    expect(screen.queryByLabelText('Counting matches')).toBeNull();
+    expect(screen.getByRole('button', { name: /^Their positions/ })).toHaveTextContent('1');
+  });
+
   /**
    * The same hole one step further out: the ids come from positions, and *which* rows of positions
    * belong to whom comes from the viewer's geo-chat id, which is exchanged over the wire when no
