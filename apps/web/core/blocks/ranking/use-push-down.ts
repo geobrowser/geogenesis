@@ -45,7 +45,7 @@ import {
   runInOrder,
 } from './push-down';
 import { type ComposeBallot, useRankingComposeBallot } from './ranking-compose-ballot-context';
-import { type BallotGrades, restoreEntry } from './ranking-grades';
+import { type BallotGrades, NO_GRADES, restoreEntry } from './ranking-grades';
 import { invalidateBlockRankers } from './use-block-rankers';
 import {
   type DebateVoteOverlays,
@@ -58,7 +58,6 @@ import { useMyRanking } from './use-my-ranking';
 import { useRankingSubmissions } from './use-ranking-submissions';
 
 const BEST_DEBATES_BLOCK_NAME = 'Best debates';
-const NO_GRADES: BallotGrades = new Map();
 
 /** Overlay records, plus the server's records in spaces the overlay doesn't cover. */
 export function combineRecords(
@@ -78,6 +77,9 @@ export function pushDownStateQueryKey(personalSpaceId: string | null | undefined
  * is a function, and one debate has one at a time.
  */
 const pendingRankPublishes = new Map<string, () => Promise<boolean>>();
+
+/** The draft a Down rank took the debate off, so any Undo for it can put the debate back. */
+const draftsBeforePush = new Map<string, { ids: string[]; grades?: BallotGrades }>();
 
 export type UsePushDownOptions = {
   /** The ranking block. Defaults to `BEST_DEBATES_BLOCK_ID`; null switches push-down off. */
@@ -258,8 +260,6 @@ export function usePushDown(debateId: string, options: UsePushDownOptions = {}):
     [debateId, sendVote]
   );
 
-  /** The draft (order and grades) a Push it down just edited, so its toast's Undo can put it back. */
-  const draftBeforePush = React.useRef<{ ids: string[]; grades?: ComposeBallot['grades'] } | null>(null);
   /** The newest `undo`, for the toast's Undo button (built before `undo` is). */
   const undoRef = React.useRef<(() => Promise<PushDownRunResult>) | null>(null);
 
@@ -274,7 +274,7 @@ export function usePushDown(debateId: string, options: UsePushDownOptions = {}):
       const remaining = ballotWithout(now.orderedIds, debateId);
       const before = { ids: [...now.orderedIds], grades: now.grades };
       if (!(await draft.publish(remaining))) return { ok: false, message: PUSH_DOWN_BALLOT_FAILED_COPY };
-      draftBeforePush.current = before;
+      draftsBeforePush.set(stateKey.join(':'), before);
       return { ok: true };
     }
 
@@ -305,7 +305,21 @@ export function usePushDown(debateId: string, options: UsePushDownOptions = {}):
     // Ranker counts come from indexed ballots, so refresh them once indexing has settled.
     void submission.indexingSettled.then(() => invalidateBlockRankers(queryClient, blockId!, DEBATES_SPACE_ID));
     return { ok: true };
-  }, [blockId, debateId, personalSpaceId, queryClient, saveMySubmission]);
+  }, [blockId, debateId, personalSpaceId, queryClient, saveMySubmission, stateKey]);
+
+  /** Only this debate goes back, with its grade, onto the draft as it is now. */
+  const restoreDraft = React.useCallback(() => {
+    const key = stateKey.join(':');
+    const previous = draftsBeforePush.get(key);
+    draftsBeforePush.delete(key);
+    const draft = latest.current.editBallot;
+    if (!previous || !draft) return;
+    const now = draft.current?.() ?? draft;
+    const current = { ids: [...now.orderedIds], grades: now.grades ?? NO_GRADES };
+    const before = { ids: previous.ids, grades: previous.grades ?? NO_GRADES };
+    const restored = restoreEntry(current, before, debateId);
+    if (restored !== current) void draft.publish(restored.ids, now.grades ? restored.grades : undefined);
+  }, [debateId, stateKey]);
 
   const finish = React.useCallback(
     (action: PushDownAction, result: PushDownRunResult): PushDownRunResult => {
@@ -318,20 +332,8 @@ export function usePushDown(debateId: string, options: UsePushDownOptions = {}):
       if (action === 'rank') pendingRankPublishes.delete(stateKey.join(':'));
       if (action === 'push-down') {
         const noteSeen = readPushDownNoteSeen();
-        const previousDraft = draftBeforePush.current;
-        draftBeforePush.current = null;
-        // Undo takes back both halves: the draft edit and the downvote.
         const onUndo = () => {
           setToast(null);
-          const draft = latest.current.editBallot;
-          if (previousDraft && draft) {
-            // Only this debate goes back, with its grade, onto the draft as it is now: edits since stay.
-            const now = draft.current?.() ?? draft;
-            const current = { ids: [...now.orderedIds], grades: now.grades ?? NO_GRADES };
-            const before = { ids: previousDraft.ids, grades: previousDraft.grades ?? NO_GRADES };
-            const restored = restoreEntry(current, before, debateId);
-            if (restored !== current) void draft.publish(restored.ids, now.grades ? restored.grades : undefined);
-          }
           void undoRef.current?.();
         };
         setToast(
@@ -355,7 +357,7 @@ export function usePushDown(debateId: string, options: UsePushDownOptions = {}):
       if (action === 'undo') setToast(React.createElement('span', null, PUSH_DOWN_UNDONE_COPY));
       return result;
     },
-    [debateId, setState, setToast, stateKey]
+    [setState, setToast, stateKey]
   );
 
   const start = React.useCallback(
@@ -378,7 +380,7 @@ export function usePushDown(debateId: string, options: UsePushDownOptions = {}):
   const pushDown = React.useCallback(
     () =>
       start('push-down', initial => {
-        draftBeforePush.current = null;
+        draftsBeforePush.delete(stateKey.join(':'));
         const current = { records: initial };
         const ownSpace = latest.current.debateSpaceId!;
         const { editBallot: draft, publishedIds: published } = latest.current;
@@ -403,10 +405,13 @@ export function usePushDown(debateId: string, options: UsePushDownOptions = {}):
           onBallot ? { step: 'ballot', run: removeFromBallot } : null,
         ];
       }),
-    [debateId, removeFromBallot, sendVote, start]
+    [debateId, removeFromBallot, sendVote, start, stateKey]
   );
 
-  const undo = React.useCallback(() => start('undo', initial => clearSteps({ records: initial })), [clearSteps, start]);
+  const undo = React.useCallback(() => {
+    restoreDraft();
+    return start('undo', initial => clearSteps({ records: initial }));
+  }, [clearSteps, restoreDraft, start]);
   undoRef.current = undo;
 
   const publishRanking = React.useCallback(async (publish: () => Promise<boolean>): Promise<StepResult> => {

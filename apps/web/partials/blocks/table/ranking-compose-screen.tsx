@@ -32,7 +32,6 @@ import {
   gradeOf,
   hasAnyGrade,
   removeEntry,
-  restoreEntry,
   sameGrades,
   tierSections,
 } from '~/core/blocks/ranking/ranking-grades';
@@ -695,8 +694,6 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   );
   const pushDown = useBestDebatesPushDownSlot({ blockId: bestDebatesBlockId, pushedDownEntityIds });
   const recordGrade = useRecordGrade(entityId);
-  /** The draft as it was before a Down rank from the popup, so the row's Undo can put the debate back. */
-  const draftBeforeDownRank = React.useRef(new Map<string, { ids: string[]; grades: typeof draftGrades }>());
   /** How each draft grade was made (GEO-3729), so its published event says so. */
   const draftGradeMethods = React.useRef(new Map<string, GradeChange['method']>());
 
@@ -915,18 +912,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
         reorder: debateId => bestDebates.reorder(debateId),
         remove: debateId => changeDraft(debateId, draft => removeEntry(draft.ids, draft.grades, debateId), 'popup'),
         // Counted as Down rank's own `push_down` once its downvote lands.
-        downRank: debateId => {
-          draftBeforeDownRank.current.set(ID.uuidToHex(debateId), { ids: orderedIds, grades: draftGrades });
-          bestDebates.requestPushDown(debateId);
-        },
-        undoDownRank: debateId => {
-          const key = ID.uuidToHex(debateId);
-          const before = draftBeforeDownRank.current.get(key);
-          draftBeforeDownRank.current.delete(key);
-          if (!before) return;
-          const restored = restoreEntry({ ids: orderedIds, grades: draftGrades }, before, debateId);
-          if (restored.ids !== orderedIds) setDraft(restored.ids, restored.grades);
-        },
+        downRank: debateId => bestDebates.requestPushDown(debateId),
       }
     : null;
 

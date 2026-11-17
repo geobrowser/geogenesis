@@ -127,10 +127,7 @@ export function BestDebateGradeRow({ entityId, grading }: { entityId: string; gr
             <button
               type="button"
               className={LINK_CLASS}
-              onClick={() => {
-                void pushDown.undo();
-                grading.undoDownRank?.(entityId);
-              }}
+              onClick={() => void pushDown.undo()}
               data-geo-analytics-label="grade_undo_down_rank"
             >
               {GRADE_UNDO_LABEL}

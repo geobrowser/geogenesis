@@ -453,6 +453,34 @@ describe('usePushDown', () => {
     expect(publish).toHaveBeenCalledTimes(publishes);
   });
 
+  it('puts the debate back on an Undo from another of its hooks, and only once', async () => {
+    rankedBallot([RANKED_A, DEBATE]);
+    const { ballot, publish, state } = liveDraft([RANKED_A, DEBATE, RANKED_B]);
+    const view = renderHook(
+      () => ({ slot: usePushDown(DEBATE, { blockId: BLOCK }), row: usePushDown(DEBATE, { blockId: BLOCK }) }),
+      { wrapper: wrapper(ballot) }
+    );
+    await waitFor(() => expect(view.result.current.slot.enabled).toBe(true));
+
+    await act(async () => {
+      await view.result.current.slot.pushDown();
+    });
+    const pushDownToast = mocks.setToast.mock.calls.at(-1)?.[0] as ReactElement;
+    state.ids = [RANKED_B, RANKED_A];
+    await act(async () => {
+      await view.result.current.row.undo();
+    });
+
+    expect(publish).toHaveBeenLastCalledWith([RANKED_B, DEBATE, RANKED_A], undefined);
+    state.ids = [RANKED_B, RANKED_A];
+    const publishes = publish.mock.calls.length;
+    render(pushDownToast);
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    });
+    expect(publish).toHaveBeenCalledTimes(publishes);
+  });
+
   it('keeps a failed ballot edit for a retry that only edits the ballot', async () => {
     rankedBallot([RANKED_A, DEBATE]);
     mocks.save.mockResolvedValueOnce(null);
