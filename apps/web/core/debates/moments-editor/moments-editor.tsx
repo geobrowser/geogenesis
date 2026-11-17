@@ -189,6 +189,12 @@ function Editor({ debateId }: { debateId: string }) {
     failed: playerState.failed,
     clipsKey: `${clips.map(clip => clip.key).join(',')}#${reelKey(clips)}`,
   });
+  /** Clips the last Play skipped because they start after the video has ended (a carried reel's). */
+  const [pastEnd, setPastEnd] = React.useState<{ skipped: number; of: number } | null>(null);
+  const startRange = (id: string, segments: Parameters<typeof range.start>[1]) => {
+    const skipped = range.start(id, segments).length;
+    setPastEnd(skipped > 0 ? { skipped, of: segments.length } : null);
+  };
   const frame = usePlayheadFrame(player, playerState.playing);
   const timeReadout = usePlayheadText(frame, formatReelTime);
 
@@ -204,6 +210,7 @@ function Editor({ debateId }: { debateId: string }) {
   const [seek, setSeek] = React.useState<{ ms: number; nonce: number } | null>(null);
   const seekTo = (ms: number) => {
     range.stop();
+    setPastEnd(null);
     if (player.current) {
       player.current.seek(ms);
       frame.refresh();
@@ -594,6 +601,7 @@ function Editor({ debateId }: { debateId: string }) {
               onClick={() => {
                 if (range.state.kind === 'stalled') return range.retry();
                 range.stop();
+                setPastEnd(null);
                 if (playerState.playing) player.current?.pause();
                 else player.current?.play();
               }}
@@ -608,7 +616,7 @@ function Editor({ debateId }: { debateId: string }) {
                 if (range.state.kind !== 'idle' && range.state.id === 'reel') {
                   range.stop();
                   player.current?.pause();
-                } else range.start('reel', reelPlayable);
+                } else startRange('reel', reelPlayable);
               }}
             >
               {range.state.kind !== 'idle' && range.state.id === 'reel' ? 'Stop' : 'Play reel'}
@@ -634,6 +642,7 @@ function Editor({ debateId }: { debateId: string }) {
               <span ref={timeReadout} />
               {range.state.kind === 'playing' && range.state.loading ? ' · Loading next clip' : null}
               {range.state.kind === 'stalled' ? " · Couldn't continue — Play to retry" : null}
+              {pastEnd ? ` · ${pastEndText(pastEnd)}` : null}
               {inlineUnavailable ? 'Playback controls need the two-camera player' : null}
             </Text>
           </div>
@@ -708,9 +717,7 @@ function Editor({ debateId }: { debateId: string }) {
                     onPlay={() =>
                       inlineUnavailable
                         ? seekTo(played[index]?.start_ms ?? view.clip.start_ms)
-                        : range.start(`clip:${view.clip.key}`, [
-                            { key: view.clip.key, ...(played[index] ?? view.clip) },
-                          ])
+                        : startRange(`clip:${view.clip.key}`, [{ key: view.clip.key, ...(played[index] ?? view.clip) }])
                     }
                     onRemove={() => setClips(current => current.filter((_, at) => at !== index))}
                     onChangeClaim={claimIndex => updateClip(index, clip => ({ ...clip, claim_index: claimIndex }))}
@@ -764,6 +771,13 @@ function clipKey(clip: EditorClip) {
   // A free edge is sent differently from a word edge at the same time (`manualReel`).
   const free = `${edgeIsFree(clip, 'start') ? 's' : ''}${edgeIsFree(clip, 'end') ? 'e' : ''}`;
   return `${clip.start_ms}-${clip.end_ms}-${clip.claim_index ?? ''}-${free}`;
+}
+
+/** What a Play that skipped clips past the end of the video says. */
+function pastEndText({ skipped, of }: { skipped: number; of: number }) {
+  if (skipped === of)
+    return of === 1 ? 'This clip is past the end of the video' : 'These clips are past the end of the video';
+  return `Skipped ${skipped} ${skipped === 1 ? 'clip' : 'clips'} past the end of the video`;
 }
 
 const PLAYBACK_RATES = [1, 1.5, 2] as const;

@@ -321,17 +321,22 @@ export function usePlayRange({
     checkRef.current = check;
   }, [check]);
 
-  /** Play `segments` in order from the first one's start; from inside the click that asked. */
+  /**
+   * Play `segments` in order from the first one's start; from inside the click that asked. Returns
+   * the keys of the segments it skipped because they start where the media has already ended, so
+   * the caller can say so: with none left, nothing plays.
+   */
   const start = React.useCallback(
-    (id: string, segments: readonly PlaySegment[]) => {
+    (id: string, segments: readonly PlaySegment[]): string[] => {
       clearTimers();
       // A segment that starts where the media has already ended has nothing to play.
       const stopMs = mediaStopMs(mediaEndMs());
+      const pastEnd = segments.filter(segment => segment.start_ms >= stopMs).map(segment => segment.key);
       const playable = segments.filter(segment => segment.end_ms > segment.start_ms && segment.start_ms < stopMs);
       const player = handle.current;
       if (playable.length === 0 || !player) {
         stop();
-        return;
+        return pastEnd;
       }
       const run: Run = {
         id,
@@ -346,9 +351,10 @@ export function usePlayRange({
       // Paused: start the pair inside this click, then move it under the hold, which resumes it.
       // Never a seek and then a play on a running pair, which starts one panel before the other.
       if (!playingRef.current) player.play();
-      if (!jump(run, playable[0].start_ms)) return;
+      if (!jump(run, playable[0].start_ms)) return pastEnd;
       publish();
       if (!run.loading) arm(player.livePositionMs() ?? playable[0].start_ms);
+      return pastEnd;
     },
     [arm, clearTimers, clipsKey, handle, jump, mediaEndMs, publish, stop]
   );

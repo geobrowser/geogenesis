@@ -1776,7 +1776,10 @@ describe('playing clips in the editor (GEO-3773)', () => {
       onSoundBlockedChange: (blocked: boolean) => void;
     };
 
-  afterEach(() => getDefaultStore().set(inlinePlaybackUnavailableAtom, false));
+  afterEach(() => {
+    getDefaultStore().set(inlinePlaybackUnavailableAtom, false);
+    player.endMs.mockReturnValue(null);
+  });
 
   it('plays the debate as an editor: its own controls, with sound, measuring nothing', () => {
     render(<MomentsEditor debateId={DEBATE_ID} />);
@@ -1849,6 +1852,24 @@ describe('playing clips in the editor (GEO-3773)', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Play reel' }));
     expect(player.jumpTo).toHaveBeenCalledWith(3_100);
+  });
+
+  it('says when a carried clip is past the end of the video, rather than doing nothing', () => {
+    player.endMs.mockReturnValue(4_000);
+    const clips = [
+      { start_ms: 1_000, end_ms: 3_000, speaker_slot: 0, claim_index: 0, claim_text: 'Coffee is low stakes' },
+      { start_ms: 5_000, end_ms: 6_000, speaker_slot: 1, claim_index: 1, claim_text: 'Dinner shows effort' },
+    ];
+    mocks.plan.data = entry({ live_reel: { clock: 'video', carried: true, clips } });
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Play from start' })[1]);
+    expect(player.jumpTo).not.toHaveBeenCalled();
+    expect(screen.getByText(/This clip is past the end of the video/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Play reel' }));
+    expect(player.jumpTo).toHaveBeenCalledWith(1_000);
+    expect(screen.getByText(/Skipped 1 clip past the end of the video/)).toBeInTheDocument();
   });
 
   it('offers to unmute a refused sound, from inside the click', () => {

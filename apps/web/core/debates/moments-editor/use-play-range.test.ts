@@ -391,10 +391,28 @@ describe('usePlayRange', () => {
   it('skips a clip that starts after the media has ended', () => {
     const { result, player } = setup({ playing: true });
     player.mediaEnd(30_000);
-    act(() => result.current.start('reel', [clipB, clipA]));
+    let skipped: string[] = [];
+    act(() => {
+      skipped = result.current.start('reel', [clipB, clipA]);
+    });
 
+    expect(skipped).toEqual(['b']);
     expect(player.handle.jumpTo).toHaveBeenCalledWith(10_000);
     expect(result.current.state).toMatchObject({ kind: 'playing', key: 'a', index: 0 });
+  });
+
+  it('says what it skipped when every clip starts after the media has ended, and plays nothing', () => {
+    const { result, player } = setup({ playing: false });
+    player.mediaEnd(30_000);
+    let skipped: string[] = [];
+    act(() => {
+      skipped = result.current.start('clip:b', [clipB]);
+    });
+
+    expect(skipped).toEqual(['b']);
+    expect(player.handle.play).not.toHaveBeenCalled();
+    expect(player.handle.jumpTo).not.toHaveBeenCalled();
+    expect(result.current.state).toEqual({ kind: 'idle' });
   });
 
   it('stops, and pauses the player, when the clips change under it', () => {
