@@ -117,14 +117,24 @@ export function cutStretches(
   return cuts;
 }
 
-/** The fine-tune panel's window: the clip with `padMs` either side, kept inside the debate. */
+/** What the fine-tune panel centres on (GEO-3773): the whole clip, or one of its edges. */
+export type FineFocus = 'clip' | 'start' | 'end';
+
+/**
+ * The fine-tune panel's window, kept inside the debate: the clip with `padMs` either side, or, with
+ * an edge in focus, just that edge with `padMs` either side of it, so a long clip's edge can be
+ * placed at the same zoom as a short one's.
+ */
 export function fineWindow(
   clip: { start_ms: number; end_ms: number },
   durationMs: number,
-  padMs: number
+  padMs: number,
+  focus: FineFocus = 'clip'
 ): { start_ms: number; end_ms: number } {
-  const start = Math.max(0, clip.start_ms - padMs);
-  const end = Math.min(Math.max(durationMs, clip.end_ms), clip.end_ms + padMs);
+  const from = focus === 'end' ? clip.end_ms : clip.start_ms;
+  const to = focus === 'start' ? clip.start_ms : clip.end_ms;
+  const start = Math.max(0, from - padMs);
+  const end = Math.min(Math.max(durationMs, clip.end_ms), to + padMs);
   return { start_ms: start, end_ms: Math.max(end, start + 1) };
 }
 

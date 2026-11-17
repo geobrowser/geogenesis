@@ -5,6 +5,7 @@
  *
  * Pure, so every transition is tested without rendering the editor.
  */
+import type { FineFocus } from './waveform';
 
 /** No clip selected shows the whole debate ("Full debate"). Keyed, so moving clips keeps it. */
 export type EditorSelection = { kind: 'clip'; key: string } | { kind: 'none' };
@@ -45,6 +46,10 @@ export type EditorState = {
   popover: EditorPopover | null;
   /** The clip the popover is about: the selected clip when it opened. */
   popoverFor: string | null;
+  /** What the fine-tune panel centres on, as the admin asked. What shows is {@link effectiveFocus}. */
+  focus: FineFocus;
+  /** The clip `focus` is about: the selected clip when it was picked. */
+  focusFor: string | null;
   playback: EditorPlayback;
   /** The reel's clip keys as last seen, in order: where a removed selected clip stood. */
   clipKeys: readonly string[];
@@ -71,6 +76,8 @@ export type EditorAction =
   /** Toggles a popover: a second press on what opened it closes it. */
   | { type: 'togglePopover'; popover: EditorPopover }
   | { type: 'closePopover' }
+  /** The fine-tune panel's Clip, Start or End, or an edge's time or word stepper. */
+  | { type: 'focus'; focus: FineFocus }
   /** Esc: one level at a time, see {@link escapeTarget}. */
   | { type: 'escape' }
   /** `keys`: the clips that have a cut to play, in order; `list`: every clip's key. */
@@ -93,10 +100,10 @@ export type EditorAction =
   | { type: 'clipsChanged'; keys: readonly string[] }
   /**
    * Discard changes: the reel goes back to the one that is live. Whatever plays stops, and a clip's
-   * own jobs (Replace, Add, its claim panel, claim menu, advanced options) end, even on a clip that
-   * is still there: its edits are gone (the prototype's discard). `keys`: the live reel's clips. A
-   * selected clip that went hands the selection to the clip in its place, or to the first when its
-   * place is past the end; with no reel at all, the Add picker opens.
+   * own jobs (Replace, Add, its claim panel, claim menu, advanced options, an edge zoomed on) end,
+   * even on a clip that is still there: its edits are gone (the prototype's discard). `keys`: the
+   * live reel's clips. A selected clip that went hands the selection to the clip in its place, or to
+   * the first when its place is past the end; with no reel at all, the Add picker opens.
    */
   | { type: 'discarded'; keys: readonly string[] }
   /**
@@ -121,12 +128,16 @@ export const NO_LIMITS: EditorFacts = { checkShown: true, readOnly: false, canPu
 /** The data a view is judged against: the clips now, and the facts. */
 export type EditorData = { keys: readonly string[] } & EditorFacts;
 
+/** The fine-tune panel on the whole clip, as every pick of a clip starts. */
+const FOCUS_CLIP = { focus: 'clip', focusFor: null } as const;
+
 export const INITIAL_EDITOR_STATE: EditorState = {
   selection: { kind: 'none' },
   panel: 'transcript',
   panelFor: null,
   popover: null,
   popoverFor: null,
+  ...FOCUS_CLIP,
   playback: { mode: 'idle' },
   clipKeys: [],
 };
@@ -208,6 +219,14 @@ export function effectivePopover(
 }
 
 /**
+ * The same rule for the fine-tune panel's focus: an edge zoomed on is about the clip selected when it
+ * was picked, so any other clip (or none) shows the whole clip.
+ */
+export function effectiveFocus(state: Pick<EditorState, 'focus' | 'focusFor' | 'selection'>): FineFocus {
+  return aboutSelection(state.focusFor, state) ? state.focus : 'clip';
+}
+
+/**
  * The selection is still the clip (or the none) a panel or popover opened for. A clip that went has
  * already handed the selection on ({@link resolveSelection}), so this also covers a clip that went.
  */
@@ -238,12 +257,16 @@ export function resolveSelection(
 }
 
 /** What is shown: the selection on the clips now, and the panel and popover the rule leaves open. */
-export function editorView(state: EditorState, data: EditorData): Pick<EditorState, 'selection' | 'panel' | 'popover'> {
+export function editorView(
+  state: EditorState,
+  data: EditorData
+): Pick<EditorState, 'selection' | 'panel' | 'popover' | 'focus'> {
   const resolved = { ...state, selection: resolveSelection(state, data.keys) };
   return {
     selection: resolved.selection,
     panel: effectivePanel(resolved, data),
     popover: effectivePopover(resolved, data),
+    focus: effectiveFocus(resolved),
   };
 }
 
@@ -274,7 +297,8 @@ function selected(state: EditorState, key: string, flagged: boolean): EditorStat
   const base = stopped(state);
   // Picking a clip, even the one already selected, ends the clip's own jobs (as the prototype's
   // setSel does): Replace, Add, its claim menu and advanced options, and a healthy clip's claim
-  // panel. A flagged clip's claim is what needs fixing, so its claim panel moves to it.
+  // panel. A flagged clip's claim is what needs fixing, so its claim panel moves to it. The fine-tune
+  // panel goes back to the whole clip.
   const keepsClaim = base.panel === 'claim' && flagged;
   const panel =
     keepsClaim || !CLIP_PANELS.has(base.panel) ? { panel: base.panel, panelFor: base.panelFor } : PANEL_CLOSED;
@@ -284,6 +308,7 @@ function selected(state: EditorState, key: string, flagged: boolean): EditorStat
     ...panel,
     ...(keepsClaim ? { panelFor: key } : null),
     ...(clipPopover ? { popover: null, popoverFor: null } : null),
+    ...FOCUS_CLIP,
     selection: { kind: 'clip', key },
   };
 }
@@ -324,6 +349,8 @@ function reduce(state: EditorState, action: Exclude<EditorAction, { type: 'settl
         : { ...state, popover: action.popover, popoverFor: selectedKey(state) };
     case 'closePopover':
       return state.popover === null ? state : { ...state, popover: null, popoverFor: null };
+    case 'focus':
+      return { ...state, focus: action.focus, focusFor: selectedKey(state) };
     case 'escape': {
       const target = escapeTarget(state);
       if (target === 'popover') return { ...state, popover: null, popoverFor: null };
@@ -377,6 +404,7 @@ function reduce(state: EditorState, action: Exclude<EditorAction, { type: 'settl
         ...base,
         ...(CLIP_PANELS.has(base.panel) ? PANEL_CLOSED : null),
         ...(clipPopover ? { popover: null, popoverFor: null } : null),
+        ...FOCUS_CLIP,
       };
       if (action.keys.length === 0) {
         return { ...closed, selection: NONE, panel: 'add', panelFor: null, popover: null, popoverFor: null };

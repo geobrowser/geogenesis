@@ -126,6 +126,43 @@ describe('fineWindow', () => {
     expect(fineWindow({ start_ms: 5_000, end_ms: 8_000 }, 60_000, 2_000)).toEqual({ start_ms: 3_000, end_ms: 10_000 });
     expect(fineWindow({ start_ms: 500, end_ms: 59_500 }, 60_000, 2_000)).toEqual({ start_ms: 0, end_ms: 60_000 });
   });
+
+  // GEO-3773: a 20 s clip's edges, at every zoom.
+  const LONG = { start_ms: 10_000, end_ms: 30_000 };
+  it.each([1_000, 2_000, 4_000, 8_000])('shows the whole clip ±%i ms in Clip focus, the default', pad => {
+    expect(fineWindow(LONG, 60_000, pad)).toEqual({ start_ms: 10_000 - pad, end_ms: 30_000 + pad });
+    expect(fineWindow(LONG, 60_000, pad, 'clip')).toEqual(fineWindow(LONG, 60_000, pad));
+  });
+
+  it.each([1_000, 2_000, 4_000, 8_000])('centres on the start, ±%i ms either side, in Start focus', pad => {
+    expect(fineWindow(LONG, 60_000, pad, 'start')).toEqual({ start_ms: 10_000 - pad, end_ms: 10_000 + pad });
+  });
+
+  it.each([1_000, 2_000, 4_000, 8_000])('centres on the end, ±%i ms either side, in End focus', pad => {
+    expect(fineWindow(LONG, 60_000, pad, 'end')).toEqual({ start_ms: 30_000 - pad, end_ms: 30_000 + pad });
+  });
+
+  it.each([
+    [1_000, { start_ms: 0, end_ms: 1_500 }],
+    [2_000, { start_ms: 0, end_ms: 2_500 }],
+    [4_000, { start_ms: 0, end_ms: 4_500 }],
+    [8_000, { start_ms: 0, end_ms: 8_500 }],
+  ])('keeps a start near the debate’s beginning inside it at ±%i ms', (pad, window) => {
+    expect(fineWindow({ start_ms: 500, end_ms: 20_000 }, 60_000, pad, 'start')).toEqual(window);
+  });
+
+  it.each([
+    [1_000, { start_ms: 58_500, end_ms: 60_000 }],
+    [2_000, { start_ms: 57_500, end_ms: 60_000 }],
+    [4_000, { start_ms: 55_500, end_ms: 60_000 }],
+    [8_000, { start_ms: 51_500, end_ms: 60_000 }],
+  ])('keeps an end near the debate’s end inside it at ±%i ms', (pad, window) => {
+    expect(fineWindow({ start_ms: 40_000, end_ms: 59_500 }, 60_000, pad, 'end')).toEqual(window);
+  });
+
+  it('keeps an end past a debate whose length is not known yet in view', () => {
+    expect(fineWindow({ start_ms: 1_000, end_ms: 5_000 }, 0, 1_000, 'end')).toEqual({ start_ms: 4_000, end_ms: 5_000 });
+  });
 });
 
 describe('formatFineTime', () => {

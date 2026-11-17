@@ -1081,6 +1081,7 @@ function Editor({ debateId }: { debateId: string }) {
         advancedOpen={shown.popover === 'advanced'}
         snap={snap}
         pad={pad}
+        focus={shown.focus}
         canMoveEarlier={selectedIndex > 0}
         canMoveLater={selectedIndex < clips.length - 1}
         canStep={words.length > 0}
@@ -1097,6 +1098,7 @@ function Editor({ debateId }: { debateId: string }) {
             playheadMs={playheadMs}
             readOnly={!editable}
             pad={pad}
+            focus={shown.focus}
             snap={snap}
             onSnap={() => setSnap(on => !on)}
             onChangeClip={(index, span) => updateClip(index, clip => ({ ...clip, ...span }))}
@@ -1116,6 +1118,7 @@ function Editor({ debateId }: { debateId: string }) {
         onSnap={() => setSnap(on => !on)}
         onMove={direction => moveClip(selectedIndex, direction)}
         onPad={setPad}
+        onFocus={focus => dispatch({ type: 'focus', focus })}
         onFullDebate={() => dispatch({ type: 'deselect' })}
         onStep={(edge, direction) =>
           updateClip(selectedIndex, clip => {
