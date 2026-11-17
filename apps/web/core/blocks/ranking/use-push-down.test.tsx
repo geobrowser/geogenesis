@@ -10,6 +10,7 @@ import { RANK_VOTES_RELATION_TYPE_ID } from '~/core/ranking-block-ids';
 
 import { DEBATES_SPACE_ID } from './best-debates';
 import type { MemberVoteRecord } from './fetch-member-debate-votes';
+import { UNDO_RESTORE_FAILED_COPY } from './push-down';
 import { type ComposeBallot, RankingComposeBallotContext } from './ranking-compose-ballot-context';
 import type { BallotGrades, Grade } from './ranking-grades';
 import { usePushDown } from './use-push-down';
@@ -534,6 +535,36 @@ describe('usePushDown', () => {
       await result.current.retry();
     });
     expect(publish).toHaveBeenLastCalledWith([RANKED_A, DEBATE, RANKED_B], undefined);
+    await waitFor(() => expect(result.current.state).toEqual({ status: 'done', action: 'undo' }));
+  });
+
+  it('reports an Undo whose put-back fails, and puts the debate back on Retry without clearing again', async () => {
+    rankedBallot([RANKED_A, DEBATE]);
+    const { ballot, publish, state } = liveDraft([RANKED_A, DEBATE, RANKED_B]);
+    const { result } = await renderReady(ballot);
+
+    await act(async () => {
+      await result.current.pushDown();
+    });
+    publish.mockResolvedValueOnce(false);
+    await act(async () => {
+      await result.current.undo();
+    });
+    expect(result.current.state).toMatchObject({
+      status: 'failed',
+      action: 'undo',
+      step: 'ballot',
+      partly: true,
+      message: UNDO_RESTORE_FAILED_COPY,
+    });
+    expect(state.ids).toEqual([RANKED_A, RANKED_B]);
+    const unvotes = mocks.unvote.mock.calls.length;
+
+    await act(async () => {
+      await result.current.retry();
+    });
+    expect(publish).toHaveBeenLastCalledWith([RANKED_A, DEBATE, RANKED_B], undefined);
+    expect(mocks.unvote).toHaveBeenCalledTimes(unvotes);
     await waitFor(() => expect(result.current.state).toEqual({ status: 'done', action: 'undo' }));
   });
 

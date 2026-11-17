@@ -34,6 +34,7 @@ import {
   type PushDownStepRun,
   RANK_BALLOT_FAILED_COPY,
   type StepResult,
+  UNDO_RESTORE_FAILED_COPY,
   VOTE_CHECK_FAILED_COPY,
   ballotHolds,
   ballotVoteSpaceIds,
@@ -308,17 +309,23 @@ export function usePushDown(debateId: string, options: UsePushDownOptions = {}):
   }, [blockId, debateId, personalSpaceId, queryClient, saveMySubmission, stateKey]);
 
   /** Only this debate goes back, with its grade, onto the draft as it is now. */
-  const restoreDraft = React.useCallback(() => {
+  const restoreDraft = React.useCallback(async (): Promise<StepResult> => {
     const key = stateKey.join(':');
     const previous = draftsBeforePush.get(key);
-    draftsBeforePush.delete(key);
     const draft = latest.current.editBallot;
-    if (!previous || !draft) return;
+    if (!previous || !draft) {
+      draftsBeforePush.delete(key);
+      return { ok: true };
+    }
     const now = draft.current?.() ?? draft;
     const current = { ids: [...now.orderedIds], grades: now.grades ?? NO_GRADES };
     const before = { ids: previous.ids, grades: previous.grades ?? NO_GRADES };
     const restored = restoreEntry(current, before, debateId);
-    if (restored !== current) void draft.publish(restored.ids, now.grades ? restored.grades : undefined);
+    if (restored !== current && !(await draft.publish(restored.ids, now.grades ? restored.grades : undefined))) {
+      return { ok: false, message: UNDO_RESTORE_FAILED_COPY };
+    }
+    draftsBeforePush.delete(key);
+    return { ok: true };
   }, [debateId, stateKey]);
 
   const finish = React.useCallback(
@@ -409,17 +416,7 @@ export function usePushDown(debateId: string, options: UsePushDownOptions = {}):
   );
 
   const undo = React.useCallback(
-    () =>
-      start('undo', initial => [
-        ...clearSteps({ records: initial }),
-        {
-          step: 'ballot',
-          run: async () => {
-            restoreDraft();
-            return { ok: true };
-          },
-        },
-      ]),
+    () => start('undo', initial => [...clearSteps({ records: initial }), { step: 'ballot', run: restoreDraft }]),
     [clearSteps, restoreDraft, start]
   );
   undoRef.current = undo;
