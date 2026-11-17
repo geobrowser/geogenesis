@@ -52,8 +52,8 @@ describe('feature flags', () => {
     });
   });
 
-  // Claims, debates, scheduling, lobby joining, debate video, the sign-in box and calendar
-  // connections shipped to everyone. Every browser that ever opened the flags dialog still has the
+  // Claims, debates, scheduling, lobby joining, debate video, the sign-in box, calendar
+  // connections and Best debates ranking shipped to everyone. Every browser that ever opened the flags dialog still has the
   // retired ids in storage, and they must not survive normalization — a stray `questionsTab` reaching the dialog would render a checkbox for a flag
   // nothing reads.
   it('drops the retired flags that are still in storage', () => {
@@ -68,6 +68,7 @@ describe('feature flags', () => {
         googleCalendar: true,
         microsoftCalendar: true,
         debateDebugging: true,
+        debateRankings: true,
       })
     ).toEqual({
       playbackDiagnostics: false,

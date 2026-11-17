@@ -111,7 +111,7 @@ export type FeatureFlags = Record<FeatureFlagId, boolean>;
 // `lobbyJoining`, since finding and joining lobbies did (GEO-3306), nor `debateVideo`, since video in
 // the claim picker and lobbies did (GEO-3414), nor `ourSignInBox`, since every sign-in opens the box
 // (GEO-3569), nor `googleCalendar` and `microsoftCalendar`, since connecting a calendar did
-// (GEO-3598). All of them are still sitting in browsers' stored flag objects; normalizing drops
+// (GEO-3598), nor `debateRankings`, since ranking on the Best debates block did (GEO-3591). All of them are still sitting in browsers' stored flag objects; normalizing drops
 // them on the next write rather than reading them back.
 export type StoredFeatureFlags = Partial<
   Record<
@@ -123,7 +123,8 @@ export type StoredFeatureFlags = Partial<
     | 'debateVideo'
     | 'ourSignInBox'
     | 'googleCalendar'
-    | 'microsoftCalendar',
+    | 'microsoftCalendar'
+    | 'debateRankings',
     boolean
   >
 >;

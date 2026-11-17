@@ -121,4 +121,24 @@ describe('DebateOverflowMenu (GEO-2785)', () => {
 
     expect(screen.getByRole('alert')).toHaveTextContent('Only a debater or an editor of this space');
   });
+
+  // GEO-3671: media admins get "Edit moments", which links to the editor; the host decides who.
+  it('offers Edit moments to a media admin, linking to the editor, without Remove when they cannot remove', () => {
+    render(<DebateOverflowMenu debate={debate} canRemove={false} canEditMoments />);
+    fireEvent.click(screen.getByRole('button', { name: 'More debate options' }));
+
+    expect(screen.getByRole('link', { name: /Edit moments/ })).toHaveAttribute(
+      'href',
+      `/space/claim-space/debates/${debate.id}/moments`
+    );
+    expect(screen.queryByRole('button', { name: 'Remove debate' })).not.toBeInTheDocument();
+  });
+
+  it('offers no Edit moments to anyone else', () => {
+    render(<DebateOverflowMenu debate={debate} />);
+    fireEvent.click(screen.getByRole('button', { name: 'More debate options' }));
+
+    expect(screen.queryByRole('link', { name: /Edit moments/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Remove debate' })).toBeInTheDocument();
+  });
 });

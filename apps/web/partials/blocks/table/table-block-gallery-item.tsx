@@ -289,9 +289,7 @@ export function TableBlockGalleryItem({
               alt=""
               fill
             />
-          ) : isImageResolving ? // loading; dropping the placeholder in here would show every card the fallback // Still looking the image up. Leaving the frame empty reads as the card still
-          // image and then swap it for the real one.
-          null : (
+          ) : isImageResolving ? null : ( // image and then swap it for the real one. // loading; dropping the placeholder in here would show every card the fallback // Still looking the image up. Leaving the frame empty reads as the card still
             <NextImage
               src={PLACEHOLDER_SPACE_IMAGE}
               className="object-cover transition-transform duration-150 ease-in-out group-hover:scale-105"

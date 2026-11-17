@@ -65,6 +65,17 @@ describe('pickMostRecentlyCreatedRankingEntity', () => {
     expect(picked?.id).toBe('new');
   });
 
+  it('breaks a same-second createdAt by updatedAt, then id, whatever the list order (GEO-3686)', () => {
+    const a = rankEntity({ id: 'aaa', createdAt: '1793875856', updatedAt: '1793875900' });
+    const b = rankEntity({ id: 'bbb', createdAt: '1793875856', updatedAt: '1793875856' });
+    expect(pickMostRecentlyCreatedRankingEntity([a, b])?.id).toBe('aaa');
+    expect(pickMostRecentlyCreatedRankingEntity([b, a])?.id).toBe('aaa');
+
+    const c = rankEntity({ id: 'ccc', createdAt: '1793875856', updatedAt: '1793875856' });
+    expect(pickMostRecentlyCreatedRankingEntity([c, b])?.id).toBe('ccc');
+    expect(pickMostRecentlyCreatedRankingEntity([b, c])?.id).toBe('ccc');
+  });
+
   it('falls back to updatedAt for entities without a createdAt', () => {
     const picked = pickMostRecentlyCreatedRankingEntity([
       rankEntity({ id: 'old', updatedAt: '2026-01-01T00:00:00.000Z' }),

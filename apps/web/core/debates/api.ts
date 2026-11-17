@@ -308,11 +308,26 @@ export type DebateTranscriptSegment = {
   created_at: string;
 };
 
+/** What `include` adds to a JSON transcript (GEO-3349). Off by default, so a plain read stays small. */
+export type TranscriptInclude = 'words' | 'sentences';
+
+/** A word or a sentence `include` serves (GEO-3349), said by one debater, on both clocks like a line. */
+export type DebateTranscriptSpan = Pick<
+  DebateTranscriptSegment,
+  'start_ms' | 'end_ms' | 'source_start_ms' | 'source_end_ms' | 'text'
+> & { participant_slot: ParticipantSlot };
+
 export type DebateTranscriptResponse = {
   format: TranscriptFormat;
   model_id: string;
   segments: DebateTranscriptSegment[];
   body?: string;
+  /** False for a transcript made before word timing was kept: no words or sentences until retranscribed. */
+  word_timing?: boolean;
+  /** With `include=words`: every word, in time order. */
+  words?: DebateTranscriptSpan[];
+  /** With `include=sentences`: whole sentences with their punctuation. */
+  sentences?: DebateTranscriptSpan[];
 };
 
 export type DebateTurnYield = {
@@ -4145,10 +4160,12 @@ export async function getDebateTranscript(
   format: TranscriptFormat = 'json',
   getPrivyIdentityToken?: GetPrivyIdentityToken,
   accountKey?: string | null,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  include: readonly TranscriptInclude[] = []
 ) {
+  const extras = include.length > 0 ? `&include=${include.join(',')}` : '';
   return geoChatRequest<DebateTranscriptResponse>(
-    `/debates/${debateId}/transcript?format=${encodeURIComponent(format)}`,
+    `/debates/${debateId}/transcript?format=${encodeURIComponent(format)}${extras}`,
     {
       auth: 'optional',
       getPrivyIdentityToken,

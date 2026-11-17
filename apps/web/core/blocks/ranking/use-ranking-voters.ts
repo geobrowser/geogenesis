@@ -1,38 +1,16 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
-
 import * as React from 'react';
 
-import { Effect } from 'effect';
-
-import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
-import { Space } from '~/core/io/dto/spaces';
-import { getSpaces } from '~/core/io/queries';
-import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
-import type { Profile } from '~/core/types';
-import { chunk } from '~/core/utils/chunk';
-
 import type { AggregatedRankingSubmitterRef } from './ranking-block-relations';
+import { type RankerIdentity, useRankerIdentities } from './use-ranker-identities';
 import { useRankEntitySpaceById } from './use-ranking-submitter-space-ids';
 
-export type RankingVoter = {
+/** Identity resolution is shared with `useBlockRankers` (`use-ranker-identities.ts`). */
+export type RankingVoter = RankerIdentity & {
   rankEntityId: string;
   spaceId: string;
-  name: string | null;
-  avatarUrl: string | null;
-  fallbackSeed: string;
-  address: string | null;
 };
-
-const SPACE_ID_REQUEST_LIMIT = 100;
-
-const EMPTY_PROFILE_MAP = new Map<string, Profile>();
-const EMPTY_SPACE_MAP = new Map<string, Space>();
-
-function usableAvatarUrl(url: string | null | undefined): string | null {
-  return url && url !== PLACEHOLDER_SPACE_IMAGE ? url : null;
-}
 
 export function useRankingVoters(refs: AggregatedRankingSubmitterRef[]) {
   const { rankEntitySpaceById, isResolvingSpaces } = useRankEntitySpaceById(refs);
@@ -51,69 +29,19 @@ export function useRankingVoters(refs: AggregatedRankingSubmitterRef[]) {
 
   const spaceIds = React.useMemo(() => resolvedRefs.map(ref => ref.spaceId), [resolvedRefs]);
 
-  const { data: profilesBySpaceId = EMPTY_PROFILE_MAP, isLoading: isLoadingProfiles } = useQuery({
-    queryKey: ['ranking-voter-profiles', spaceIds],
-    enabled: spaceIds.length > 0,
-    staleTime: 60_000,
-    queryFn: async () => {
-      const batches = chunk(spaceIds, SPACE_ID_REQUEST_LIMIT);
-      const results = await Promise.all(batches.map(batch => Effect.runPromise(fetchProfilesBySpaceIds(batch))));
-      const map = new Map<string, Profile>();
-      for (const profiles of results) {
-        for (const profile of profiles) map.set(profile.spaceId, profile);
-      }
-      return map;
-    },
-  });
-
-  // A space is only fetched to borrow its image, and that image is only reached
-  // for when the profile didn't supply an avatar.
-  const spaceIdsNeedingImage = React.useMemo(
-    () =>
-      isLoadingProfiles ? [] : spaceIds.filter(spaceId => !usableAvatarUrl(profilesBySpaceId.get(spaceId)?.avatarUrl)),
-    [isLoadingProfiles, spaceIds, profilesBySpaceId]
-  );
-
-  const { data: spacesById = EMPTY_SPACE_MAP } = useQuery({
-    queryKey: ['ranking-voter-spaces', spaceIdsNeedingImage],
-    enabled: !isLoadingProfiles && spaceIdsNeedingImage.length > 0,
-    staleTime: 60_000,
-    queryFn: async ({ signal }) => {
-      const batches = chunk(spaceIdsNeedingImage, SPACE_ID_REQUEST_LIMIT);
-      const results = await Promise.all(
-        batches.map(batch => Effect.runPromise(getSpaces({ spaceIds: batch }, signal)))
-      );
-      const map = new Map<string, Space>();
-      for (const spaces of results) {
-        for (const space of spaces) map.set(space.id, space);
-      }
-      return map;
-    },
-  });
+  const { identityOf, isLoading: isLoadingProfiles } = useRankerIdentities(spaceIds);
 
   const voters: RankingVoter[] = React.useMemo(
     () =>
-      resolvedRefs.map(ref => {
-        const profile = profilesBySpaceId.get(ref.spaceId);
-        const profileAvatarUrl = usableAvatarUrl(profile?.avatarUrl);
-        const spaceAvatarUrl = usableAvatarUrl(spacesById.get(ref.spaceId)?.entity?.image);
-        return {
-          rankEntityId: ref.rankEntityId,
-          spaceId: ref.spaceId,
-          name: profile?.name ?? null,
-          avatarUrl: profileAvatarUrl ?? spaceAvatarUrl,
-          fallbackSeed: profile?.address ?? ref.spaceId,
-          address: profile?.address ?? null,
-        };
-      }),
-    [resolvedRefs, profilesBySpaceId, spacesById]
+      resolvedRefs.map(ref => ({ rankEntityId: ref.rankEntityId, spaceId: ref.spaceId, ...identityOf(ref.spaceId) })),
+    [resolvedRefs, identityOf]
   );
 
   // `isResolvingSpaces` has to be part of this. Refs whose relation carried no `to_space` — the
   // common shape on testnet — contribute nothing to `spaceIds` until their home space is looked up,
   // so a flag derived only from the profiles query reads `false` for that whole window and the
   // popover renders zero rows with no skeleton, under a footer already claiming N voters.
-  const isLoading = isResolvingSpaces || (spaceIds.length > 0 && isLoadingProfiles);
+  const isLoading = isResolvingSpaces || isLoadingProfiles;
 
   return { voters, isLoading };
 }

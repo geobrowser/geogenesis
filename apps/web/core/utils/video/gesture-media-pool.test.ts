@@ -87,6 +87,19 @@ describe('gesture media pool (GEO-3594)', () => {
     expect(isGestureVideoUnlocked(next)).toBe(true);
   });
 
+  it('hands a sped-up element to the next card at 1x (GEO-3773)', () => {
+    const first = acquireGestureVideo();
+    first.defaultPlaybackRate = 2;
+    first.playbackRate = 2;
+
+    releaseGestureVideo(first);
+
+    const next = acquireGestureVideo();
+    expect(next).toBe(first);
+    expect(next.defaultPlaybackRate).toBe(1);
+    expect(next.playbackRate).toBe(1);
+  });
+
   it('leaves the source alone when the next card takes the element back in the same commit', async () => {
     const first = acquireGestureVideo();
     first.setAttribute('src', 'https://cdn.test/a.webm');

@@ -30,6 +30,7 @@ const mocks = vi.hoisted(() => ({
   bestOrderLoading: false,
   /** Whether the viewer may remove the debate: its space's editors and its debaters. */
   canRemove: false,
+  isMediaAdmin: false,
   /** The anchor fetched by id when it is not in the space listing (GEO-2764). */
   anchorDebate: null as ReturnType<typeof completedDebate> | null,
   anchorLoading: false,
@@ -202,9 +203,12 @@ vi.mock('./share-dialog', () => ({
 // Its eligibility rules and dialog are covered by debate-overflow-menu.test.tsx; here it only has to
 // land among the card's actions.
 vi.mock('./debate-overflow-menu', () => ({
-  DebateOverflowMenu: ({ debate }: { debate: Debate }) => <div data-testid={`overflow-${debate.id}`} />,
+  DebateOverflowMenu: ({ debate, canEditMoments }: { debate: Debate; canEditMoments?: boolean }) => (
+    <div data-testid={`overflow-${debate.id}`} data-edit-moments={String(Boolean(canEditMoments))} />
+  ),
   useCanRemoveDebate: () => mocks.canRemove,
 }));
+vi.mock('../moments-editor/hooks', () => ({ useIsMediaAdmin: () => mocks.isMediaAdmin }));
 vi.mock('~/partials/comments/entity-comments-panel', () => ({
   EntityCommentsPanel: ({ entityId }: { entityId: string }) => <div>Comments panel for {entityId}</div>,
 }));
@@ -228,6 +232,7 @@ beforeEach(() => {
   mocks.bestOrderIds = [];
   mocks.bestOrderLoading = false;
   mocks.canRemove = false;
+  mocks.isMediaAdmin = false;
   mocks.mediaLoading = false;
   mocks.mediaError = false;
   mocks.playerState = { ready: false, playing: false, autoplayBlocked: false, error: false };
@@ -693,6 +698,15 @@ describe('DebatesBrowseFeed layout and scroll nudge', () => {
     // Once: the desktop rail beside the video, which drew a second one, is gone.
     expect(within(screen.getByTestId('claim-footer')).getAllByTestId('overflow-debate-1')).toHaveLength(1);
     expect(screen.getAllByTestId('overflow-debate-1')).toHaveLength(1);
+  });
+
+  // GEO-3671: a media admin gets the "…" for Edit moments, whether or not they may remove the debate.
+  it('puts the overflow menu on the card for a media admin, offering Edit moments', () => {
+    mocks.isMediaAdmin = true;
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+
+    expect(screen.getByTestId('claim-footer')).toHaveAttribute('data-wide-actions', 'true');
+    expect(screen.getByTestId('overflow-debate-1')).toHaveAttribute('data-edit-moments', 'true');
   });
 
   // Everyone else gets no "…", and keeps the row at the width comments and share alone need.

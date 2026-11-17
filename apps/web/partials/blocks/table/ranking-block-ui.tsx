@@ -40,7 +40,8 @@ export function RankingMyRankingDesktopRow({
 }: {
   entityName: string;
   onRemove?: () => void;
-  onOpenSidePanel: () => void;
+  /** Left out, the row has no side-panel button (Best debates rows, Preston 12 Nov). */
+  onOpenSidePanel?: () => void;
   hideActions?: boolean;
   children: React.ReactNode;
 }) {
@@ -65,7 +66,7 @@ export function RankingMyRankingDesktopRow({
       ) : (
         <div className="min-w-0 flex-1">{children}</div>
       )}
-      <RankingRowSidePanelButton onClick={onOpenSidePanel} hidden={hideActions} />
+      {onOpenSidePanel ? <RankingRowSidePanelButton onClick={onOpenSidePanel} hidden={hideActions} /> : null}
     </div>
   );
 }

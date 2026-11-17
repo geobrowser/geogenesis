@@ -74,6 +74,21 @@ describe('applyClaimStancePolicy', () => {
     expect(warn).toHaveBeenCalled();
   });
 
+  it('throws instead when strict: the late claims publish never writes a stance it skipped (GEO-3635)', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    const claims: DebateClaimInput[] = [
+      { text: 'Reused.', isFactual: false, turnIndex: 0, existingClaimEntityId: EXISTING, stance: 'opposes' },
+    ];
+    await expect(
+      applyClaimStancePolicy(claims, SPACE, MOTION, {
+        strict: true,
+        fetchRelationPage: async () => {
+          throw new Error('graph down');
+        },
+      })
+    ).rejects.toThrow('graph down');
+  });
+
   it('re-publishing a debate whose claims are already on the graph writes no second relation', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => {});
     const input = (claims: DebateClaimInput[]) => ({

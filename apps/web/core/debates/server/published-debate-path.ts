@@ -7,7 +7,7 @@ import { NavUtils } from '~/core/utils/utils';
 
 import { isDebateEntity } from '../is-debate-entity';
 
-type DebateEntity = Pick<Entity, 'types' | 'values'>;
+export type DebateEntity = Pick<Entity, 'types' | 'values'>;
 
 /**
  * Long enough for a healthy by-id read, short enough that a slow or failing graph costs a recording
@@ -24,8 +24,13 @@ export const PUBLISHED_DEBATE_LOOKUP_TIMEOUT_MS = 2_500;
  * in flight; the client's retries sleep between attempts (honouring Retry-After, up to 30s), and
  * only interrupting the fiber ends that sleep on time.
  */
-const fetchEntityFromGraph = async (entityId: string, spaceId: string, signal: AbortSignal) =>
+export const fetchEntityFromGraph = async (entityId: string, spaceId: string, signal: AbortSignal) =>
   (await Effect.runPromise(getEntityPage(entityId, spaceId, signal), { signal }))?.entity ?? null;
+
+/** A Debate whose page renders: the entity route 404s a hidden one. */
+export function isVisibleDebate(entity: DebateEntity | null): boolean {
+  return !!entity && isDebateEntity(entity.types) && !isHiddenEntity(entity);
+}
 
 /**
  * Where a debate's recording link should go instead, once the debate is on the graph (GEO-3435).
@@ -64,7 +69,7 @@ export async function publishedDebatePath(
   } catch {
     return null;
   }
-  if (!entity || !isDebateEntity(entity.types) || isHiddenEntity(entity)) return null;
+  if (!isVisibleDebate(entity)) return null;
 
   const qs = searchParams.toString();
   return `${NavUtils.toEntity(spaceId, debateId)}${qs ? `?${qs}` : ''}`;

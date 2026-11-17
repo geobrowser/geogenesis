@@ -30,6 +30,7 @@ import { EntityCommentsPanel } from '~/partials/comments/entity-comments-panel';
 import { holdCommentsInView } from '~/partials/comments/hold-comments-in-view';
 import { EXPLORE_CARD_TITLE_CLASS_NAME } from '~/partials/explore/explore-card-title';
 
+import { useIsMediaAdmin } from '../moments-editor/hooks';
 import {
   DEBATE_CARD_WIDE_WRAPS_BELOW,
   DEBATE_CARD_WRAPS_BELOW,
@@ -668,8 +669,11 @@ function DebateFeedItem({
   // Same arguments as the Comments panel's own useComments, so the two share a
   // cache entry and posting there updates this count without a refetch.
   const { totalCount: commentCount } = useComments({ entityId: debate.id, spaceId });
-  // Only the debate's editors and debaters get the "…", and the row makes room for it only then.
+  // Only the debate's editors and debaters, and media admins (GEO-3671), get the "…", and the row
+  // makes room for it only then.
   const canRemove = useCanRemoveDebate(debate);
+  const canEditMoments = useIsMediaAdmin(debate.id, active);
+  const hasMenu = canRemove || canEditMoments;
 
   React.useEffect(() => {
     const element = itemRef.current;
@@ -703,7 +707,7 @@ function DebateFeedItem({
           scrollHint?.isVisible && scrollHintBounceProps.className
         )}
         style={{
-          ...(canRemove ? DEBATE_COLUMN_WIDE_ACTIONS_STYLE : DEBATE_COLUMN_STYLE),
+          ...(hasMenu ? DEBATE_COLUMN_WIDE_ACTIONS_STYLE : DEBATE_COLUMN_STYLE),
           ...(scrollHint?.isVisible ? scrollHintBounceProps.style : undefined),
         }}
       >
@@ -737,15 +741,15 @@ function DebateFeedItem({
                 onShare={share.onOpen}
                 shareOpen={share.open}
                 overflow={
-                  canRemove ? (
+                  hasMenu ? (
                     <span className="md:hidden">
-                      <DebateOverflowMenu debate={debate} />
+                      <DebateOverflowMenu debate={debate} canRemove={canRemove} canEditMoments={canEditMoments} />
                     </span>
                   ) : null
                 }
               />
             }
-            wideActions={canRemove}
+            wideActions={hasMenu}
           />
         </div>
         {/* `top-full` hangs it just below the debate without taking part in the column's

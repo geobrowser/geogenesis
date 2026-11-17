@@ -6,6 +6,15 @@ import { describe, expect, it, vi } from 'vitest';
 import { RankingBlockBody } from './ranking-block-body';
 import type { RankingBlockState } from './use-ranking-block-state';
 
+const BEST_DEBATES_BLOCK = 'b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0';
+const DEBATES_SPACE = '9284477c8fe746368698994e2e517b32';
+
+// GEO-3685 hasn't created the block yet, so stand one in.
+vi.mock('~/core/blocks/ranking/best-debates', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/blocks/ranking/best-debates')>()),
+  BEST_DEBATES_BLOCK_ID: 'b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0',
+}));
+
 vi.mock('./ranking-compose-entity-sheet', () => ({
   RankingComposeEntitySheet: () => null,
 }));
@@ -54,12 +63,16 @@ vi.mock('./ranking-my-ranking-dnd', () => ({
   ),
 }));
 
-function state(activeTab: 'global' | 'my'): RankingBlockState {
+function state(
+  activeTab: 'global' | 'my',
+  block: { blockId?: string; spaceId?: string; canComposeEdit?: boolean; showEditRankingButton?: boolean } = {}
+): RankingBlockState {
   const entityId = `${activeTab}-entity`;
   const entry = { entityId, name: `${activeTab} entry`, description: null, image: null };
 
   return {
-    spaceId: 'space-1',
+    entityId: block.blockId ?? 'some-other-block',
+    spaceId: block.spaceId ?? 'space-1',
     isMobile: false,
     showFirstRankingPrompt: false,
     showMyRankingTab: activeTab === 'my',
@@ -108,7 +121,8 @@ function state(activeTab: 'global' | 'my'): RankingBlockState {
     entitySheetTarget: null,
     setEntitySheetTarget: vi.fn(),
     pageSize: 10,
-    showEditRankingButton: false,
+    showEditRankingButton: block.showEditRankingButton ?? false,
+    canComposeEdit: block.canComposeEdit ?? true,
     isRollingRolledOff: false,
     isSaving: false,
     openRankingCompose: vi.fn(),
@@ -126,5 +140,58 @@ describe('RankingBlockBody votes', () => {
     expect(markup).toContain(`data-vote-entity-id="${entityId}"`);
     expect(markup).toContain(`data-vote-space-id="entity-space-${entityId}"`);
     expect(markup).toContain(`data-row-space-id="space-1"`);
+  });
+
+  it.each(['global', 'my'] as const)('hides vote actions on the Best debates block (%s)', activeTab => {
+    const markup = renderToStaticMarkup(
+      <RankingBlockBody state={state(activeTab, { blockId: BEST_DEBATES_BLOCK, spaceId: DEBATES_SPACE })} />
+    );
+
+    expect(markup).toContain(`data-row-entity-id="${activeTab}-entity"`);
+    expect(markup).not.toContain('data-vote-actions');
+  });
+
+  it('keeps vote actions on another block in the Debates space', () => {
+    const markup = renderToStaticMarkup(
+      <RankingBlockBody
+        state={state('global', { blockId: 'c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1', spaceId: DEBATES_SPACE })}
+      />
+    );
+
+    expect(markup).toContain('data-vote-actions="true"');
+  });
+});
+
+describe('RankingBlockBody compose buttons (GEO-3677)', () => {
+  const COMPOSE_LABELS = ['Add my ranking', 'Edit my ranking', '>Edit<'];
+
+  it.each(['global', 'my'] as const)(
+    'draws no compose button on the fullscreen Best debates page without the flag and membership (%s)',
+    activeTab => {
+      for (const showEditRankingButton of [false, true]) {
+        const markup = renderToStaticMarkup(
+          <RankingBlockBody
+            presentation="fullscreen"
+            state={state(activeTab, {
+              blockId: BEST_DEBATES_BLOCK,
+              spaceId: DEBATES_SPACE,
+              canComposeEdit: false,
+              showEditRankingButton,
+            })}
+          />
+        );
+        for (const label of COMPOSE_LABELS) expect(markup).not.toContain(label);
+      }
+    }
+  );
+
+  it('still draws them when composing is allowed', () => {
+    const markup = renderToStaticMarkup(
+      <RankingBlockBody
+        presentation="fullscreen"
+        state={state('my', { canComposeEdit: true, showEditRankingButton: true })}
+      />
+    );
+    expect(markup).toContain('>Edit<');
   });
 });

@@ -7,10 +7,10 @@ import {
 
 /** Claim band geometry, from the design (GEO-2755). */
 export const CLAIM_MEASURE_PX = 1136;
-export const CLAIM_BAND_HEIGHT_PX = 210;
+export const CLAIM_BAND_HEIGHT_PX = 144;
 
-/** `round(size * 1.05)`, as the design specifies. */
-export const claimLineHeight = (fontSize: number) => Math.round(fontSize * 1.05);
+/** A tighter leading suits Calibre’s smaller cap height. */
+export const claimLineHeight = (fontSize: number) => Math.round(fontSize * 0.95);
 
 /**
  * The size ladder for the claim, largest rung first.

@@ -233,6 +233,8 @@ describe('loadDebatePublishSource media gating', () => {
         qualityScore: null,
         controversyScore: null,
         stance: 'supports',
+        matchVerdict: null,
+        matchBestScore: null,
       },
       {
         text: 'The action was unjustified.',
@@ -247,6 +249,8 @@ describe('loadDebatePublishSource media gating', () => {
         qualityScore: null,
         controversyScore: null,
         stance: null,
+        matchVerdict: null,
+        matchBestScore: null,
       },
     ]);
     // After the reuse policy, against the debate's space and motion.

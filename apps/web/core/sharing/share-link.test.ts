@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { createShareLink, expandShareLink, parseShareLink } from './share-link';
+import { createShareLink, createTaggedShareLink, expandShareLink, parseShareLink } from './share-link';
 
 const target = '4C81561D-1F95-4131-9CDD-DD20AB831BA2';
 const space = 'c9f267dcb0d270718c2a3c45a64afd32';
@@ -132,5 +132,31 @@ describe('share URLs', () => {
     const url = new URL(createShareLink('https://geobrowser.io/explore', 'debate', target, 'x', shareId).url);
     for (const [key, value] of Object.entries(override)) url.searchParams.set(key, value);
     expect(parseShareLink(url)).toBeNull();
+  });
+});
+
+describe('tagged share links for other sites (GEO-3695)', () => {
+  it('always carries the long tags, even when the path ends in the content id', () => {
+    const link = createTaggedShareLink(
+      `https://debates.geobrowser.io/debate/${target}?utm_source=old&si=xx`,
+      'debate',
+      target,
+      'reddit',
+      shareId
+    );
+    const url = new URL(link.url);
+    expect(url.searchParams.has('si')).toBe(false);
+    expect(url.searchParams.get('utm_source')).toBe('reddit');
+    expect(url.searchParams.get('utm_content')).toBe(
+      `v1:debate:4c81561d1f9541319cdddd20ab831ba2:${shareId.replace(/-/g, '')}`
+    );
+    expect(parseShareLink(url)).toEqual(link.attribution);
+    // Nothing to expand: the long form already is the landing URL.
+    expect(expandShareLink(url)).toBeNull();
+  });
+
+  it('shares the plain destination when the ids are invalid', () => {
+    const url = 'https://debates.geobrowser.io/debate/x';
+    expect(createTaggedShareLink(url, 'debate', 'invalid', 'x')).toEqual({ url, attribution: null });
   });
 });
