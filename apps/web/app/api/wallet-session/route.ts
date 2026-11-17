@@ -15,9 +15,8 @@ import { isSameOrigin } from '../same-origin';
 import { checkWalletSessionIpRateLimit } from './rate-limit';
 
 /**
- * `issued`: the request had no valid session for this wallet, so its page rendered signed out.
- * Failures: `invalid_token` (401), `no_wallet` (403, verified but no embedded wallet yet),
- * `unavailable` (503, Privy's keys unreachable; retry later), `unconfigured` (503, no secret).
+ * `issued` means the page rendered signed out. Failures: `invalid_token` 401, `no_wallet` 403,
+ * `unavailable` 503 (Privy keys unreachable, retry later), `unconfigured` 503 (no secret).
  */
 export type WalletSessionStatus =
   'unchanged' | 'renewed' | 'issued' | 'invalid_token' | 'no_wallet' | 'unavailable' | 'unconfigured' | 'rate_limited';
