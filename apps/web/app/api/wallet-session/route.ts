@@ -17,16 +17,9 @@ export type WalletSessionResponse = { wallet: string | null; status: WalletSessi
 const json = (status: number, body: WalletSessionResponse) => Response.json(body, { status });
 
 /**
- * Issues the `walletSession` cookie for the wallet a Privy identity token proves (GEO-3107). The
- * wallet comes from the token's embedded Ethereum wallet, never from the request, so a caller can
- * only ever be recognised as themselves.
- *
- * A route handler rather than a Server Action on purpose: a cookie write in a Server Action makes
- * Next re-render the current page (and after a deploy, reload it; #2672). Here a write re-renders
- * nothing, and the client refreshes only on `issued`, i.e. when the page was rendered signed out.
- *
- * Writes only when the cookie would change or is due for renewal. An unverifiable token writes and
- * deletes nothing.
+ * Issues `walletSession` for the embedded wallet in a verified Privy identity token, never a
+ * wallet from the request. A route handler because a Server Action cookie write re-renders the page.
+ * Writes only when the session changes or is due for renewal; a bad token writes nothing.
  */
 export async function POST(req: Request) {
   if (!isSameOrigin(req)) return new Response(null, { status: 403 });

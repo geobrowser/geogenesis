@@ -5,12 +5,9 @@ import { getAddress, isAddress } from 'viem';
 import { WALLET_SESSION_MAX_AGE_SECONDS, WALLET_SESSION_RENEW_AFTER_SECONDS } from './wallet-session-lifetime';
 
 /**
- * The signed-in wallet the server trusts, carried in the `walletSession` cookie as
- * `v1.<checksummed address>.<issuedAtSeconds>.<HMAC-SHA256>`, keyed by `WALLET_SESSION_SECRET`.
- *
- * Only `POST /api/wallet-session` issues it, after verifying a Privy identity token for that
- * wallet, so a hand-written value fails the MAC and reads as signed out. Without a secret nothing
- * verifies and everyone reads as signed out: it fails closed rather than trusting an unsigned value.
+ * `v1.<checksummed address>.<issuedAtSeconds>.<HMAC-SHA256>`, keyed by `WALLET_SESSION_SECRET` and
+ * issued only after a Privy login check. Anything that fails the MAC, or any value when the secret
+ * is missing, reads as signed out.
  */
 export const WALLET_SESSION = 'walletSession';
 

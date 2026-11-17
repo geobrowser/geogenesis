@@ -29,10 +29,8 @@ export function setWalletSessionRefresh(refresh: (() => void) | null) {
 }
 
 /**
- * Retry delays for no identity token yet, an unverified token, or a token for another wallet.
- * Nothing else re-runs the sync (the smart-account query is keyed on addresses, not the token), so
- * without these a tab could stay unrecognised by the server. Spaced past `getCachedIdentityToken`'s
- * 30s failure cooldown, and bounded.
+ * Retry delays when the server did not recognise this tab's wallet. Nothing else re-runs the sync,
+ * and the delays are spaced past `getCachedIdentityToken`'s 30s failure cooldown.
  */
 export const SYNC_RETRY_DELAYS_MS = [5_000, 15_000, 35_000, 60_000] as const;
 
@@ -77,12 +75,9 @@ async function postSession(identityToken: string): Promise<SessionAnswer> {
 }
 
 /**
- * Has the server recognise `address` as this tab's wallet. The server takes the wallet from the
- * Privy identity token, never from `address`; `address` only decides whether a call is needed and
- * whether the answer matches.
- *
- * Only `issued` refreshes the page: it means the page was server-rendered signed out. `unchanged`
- * and `renewed` must not, or a signed-in tab would re-render on every visit (#2672).
+ * Has the server recognise this tab's wallet from its Privy token; `address` is only compared with
+ * the answer. Only `issued` refreshes the page (it was rendered signed out); refreshing on
+ * `unchanged` or `renewed` would re-render a signed-in tab on every visit.
  */
 export async function syncWalletCookie(address: `0x${string}`) {
   const wanted = address.toLowerCase();
@@ -135,9 +130,8 @@ export async function syncWalletCookie(address: `0x${string}`) {
 }
 
 /**
- * Call when the wallet goes away, so signing back in with the same one syncs again. The cached
- * identity token belonged to the account that left, so it goes too, but only when this tab had a
- * wallet, so signed-out visitors do not keep resetting a cache the debates hooks share.
+ * Call when the wallet goes away, so signing back in syncs again. Drops the departed account's
+ * cached token, only if this tab had a wallet, so signed-out visitors don't reset the shared cache.
  */
 export function forgetSyncedWalletCookie() {
   if (syncedAddress !== null || retryAddress !== null) setCachedIdentityToken(null);

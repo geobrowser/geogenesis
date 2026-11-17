@@ -26,9 +26,8 @@ function usePrivySignedOut() {
 let staleWalletCookieCleared = false;
 
 /**
- * Drops a wallet session Privy no longer has a session for, so the next load is served as the
- * signed-out reader this is (the cached public feed, no waits). A route, not a Server Action:
- * a cookie write in a Server Action re-renders the current page, which would swap the feed.
+ * Drops the server's wallet session when Privy has none, so the next load is served signed out.
+ * A route, because a Server Action cookie write re-renders the page and would swap the feed.
  */
 function useClearStaleWalletCookie(cookieAddress: string | null, signedOut: boolean) {
   React.useEffect(() => {

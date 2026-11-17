@@ -1,10 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-/**
- * Every chat route keys its signed-in rate limit on the verified wallet session. A forged cookie
- * must not reach `loggedInLimit` (which would burn the named wallet's allowance, or hand out a
- * fresh signed-in allowance per fake address).
- */
+/** A forged cookie must never reach `loggedInLimit`: it would spend the named wallet's allowance. */
 
 const mocks = vi.hoisted(() => {
   const blocked = async () => ({ success: false, reset: Date.now() + 60_000, limit: 0, remaining: 0 });
