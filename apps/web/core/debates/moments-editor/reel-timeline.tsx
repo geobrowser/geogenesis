@@ -10,9 +10,11 @@ import { Text } from '~/design-system/text';
 import { formatTimecode } from '../claim-timing';
 import { SPEAKER_BORDER_CLASS } from './clip-row';
 import { type EditorClip, MIN_EDIT_CLIP_MS, type ReelWord, snapEdge } from './reel';
+import type { MixedPeaks } from './waveform';
+import { WaveformCanvas } from './waveform-canvas';
 
-/** Where a free (Alt) drag lands: the nearest tenth of a second. */
-const FREE_STEP_MS = 100;
+/** Where a free (Alt) drag lands on the timeline: the nearest tenth of a second. */
+export const FREE_STEP_MS = 100;
 const ZOOMS = [1, 2, 4] as const;
 
 type Drag = {
@@ -33,8 +35,14 @@ type Drag = {
  * Where a dragged edge lands: off the middle of any word, outward, so the clip takes whole words
  * (`snapEdge`); with Alt held, wherever it was let go, to the tenth, and cut exactly there.
  */
-export function dragEdge(ms: number, words: readonly ReelWord[], edge: 'start' | 'end', free: boolean) {
-  return free ? Math.round(ms / FREE_STEP_MS) * FREE_STEP_MS : snapEdge(ms, words, edge);
+export function dragEdge(
+  ms: number,
+  words: readonly ReelWord[],
+  edge: 'start' | 'end',
+  free: boolean,
+  stepMs: number = FREE_STEP_MS
+) {
+  return free ? Math.round(ms / stepMs) * stepMs : snapEdge(ms, words, edge);
 }
 
 /**
@@ -47,24 +55,29 @@ export function draggedClip(
   deltaMs: number,
   words: readonly ReelWord[],
   durationMs: number,
-  free: boolean
+  free: boolean,
+  /** Where a free edge lands: the nearest multiple of this. The waveform panel places to 10 ms. */
+  stepMs: number = FREE_STEP_MS
 ): DraggedSpan {
   if (drag.mode === 'start') {
     const start = Math.min(
-      Math.max(0, dragEdge(drag.start + deltaMs, words, 'start', free)),
+      Math.max(0, dragEdge(drag.start + deltaMs, words, 'start', free, stepMs)),
       drag.end - MIN_EDIT_CLIP_MS
     );
     return { start_ms: start, end_ms: drag.end, ...(free && { free_start_ms: start }) };
   }
   if (drag.mode === 'end') {
     const end = Math.max(
-      Math.min(durationMs, dragEdge(drag.end + deltaMs, words, 'end', free)),
+      Math.min(durationMs, dragEdge(drag.end + deltaMs, words, 'end', free, stepMs)),
       drag.start + MIN_EDIT_CLIP_MS
     );
     return { start_ms: drag.start, end_ms: end, ...(free && { free_end_ms: end }) };
   }
   const length = drag.end - drag.start;
-  const start = Math.max(0, Math.min(durationMs - length, dragEdge(drag.start + deltaMs, words, 'start', free)));
+  const start = Math.max(
+    0,
+    Math.min(durationMs - length, dragEdge(drag.start + deltaMs, words, 'start', free, stepMs))
+  );
   const snappedEnd = free ? start + length : Math.min(durationMs, snapEdge(start + length, words, 'end'));
   const end = Math.max(snappedEnd, start + MIN_EDIT_CLIP_MS);
   return { start_ms: start, end_ms: end, ...(free && { free_start_ms: start, free_end_ms: end }) };
@@ -79,7 +92,8 @@ export type DraggedSpan = Pick<EditorClip, 'start_ms' | 'end_ms' | 'free_start_m
 /**
  * The reel on the debate's timeline (GEO-3672): each clip a block, coloured by its speaker, that can
  * be moved or trimmed by its edges; the published clips as outlines behind any that moved; the
- * playhead. A click on the track seeks the player there.
+ * playhead; the debate's waveform faintly behind them, once geo-chat has its peaks (GEO-3673). A click
+ * on the track seeks the player there.
  */
 export function ReelTimeline({
   clips,
@@ -93,6 +107,7 @@ export function ReelTimeline({
   onSelect,
   onChangeClip,
   onSeek,
+  peaks = null,
 }: {
   clips: readonly EditorClip[];
   saved: readonly EditorClip[];
@@ -105,6 +120,7 @@ export function ReelTimeline({
   onSelect: (index: number) => void;
   onChangeClip: (index: number, span: DraggedSpan & { claim_index: number | null }) => void;
   onSeek: (ms: number) => void;
+  peaks?: MixedPeaks | null;
 }) {
   const [zoom, setZoom] = React.useState<(typeof ZOOMS)[number]>(1);
   const trackRef = React.useRef<HTMLDivElement | null>(null);
@@ -193,6 +209,14 @@ export function ReelTimeline({
                 </React.Fragment>
               ))}
             </div>
+            {peaks ? (
+              <WaveformCanvas
+                peaks={peaks}
+                startMs={0}
+                endMs={durationMs}
+                className="pointer-events-none absolute inset-x-0 top-6 bottom-1 h-[calc(100%-28px)] w-full text-grey-04 opacity-30"
+              />
+            ) : null}
             {saved
               .filter(clip => !moved.has(`${clip.start_ms}-${clip.end_ms}`))
               .map(clip => (

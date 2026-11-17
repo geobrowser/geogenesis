@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import type { EditorClip, ReelWord } from './reel';
+import { type EditorClip, type ReelWord, playerWords } from './reel';
 import { draggedClip } from './reel-timeline';
 import { endClipAt, reelSentences, sentenceInClip, startClipAt } from './reel-transcript';
-import { reelWarnings, trimmedEnd } from './reel-warnings';
+import { reelWarnings, spokenLength, trimmedEnd } from './reel-warnings';
 
 const word = (slot: 1 | 2, start: number, end: number, text = 'word'): ReelWord => ({
   slot,
@@ -11,6 +11,10 @@ const word = (slot: 1 | 2, start: number, end: number, text = 'word'): ReelWord 
   end_ms: end,
   text,
 });
+
+/** `words` as the editor reads them: through `playerWords`, the one place blank tokens are dropped (GEO-3767). */
+const heard = (words: readonly ReelWord[]) =>
+  playerWords(words.map(w => ({ participant_slot: w.slot, start_ms: w.start_ms, end_ms: w.end_ms, text: w.text })));
 
 const clip = (start: number, end: number): EditorClip => ({
   key: `${start}`,
@@ -86,6 +90,21 @@ describe('reelWarnings (GEO-3672)', () => {
     expect(warning.fix?.kind === 'clips' && warning.fix.clips).toEqual(GOOD);
   });
 
+  // Blank tokens are nobody's words, as geo-chat counts them (GEO-3767): two clips of one debater
+  // aren't made an alternation by the other's blanks.
+  it('names the clips’ speakers by spoken words, not blank tokens', () => {
+    const words = heard([
+      word(1, 1_000, 1_400, 'Yes.'),
+      word(2, 1_100, 1_150, ' '),
+      word(2, 1_200, 1_250, ' '),
+      word(1, 3_000, 3_400, 'No.'),
+    ]);
+    const warning = reelWarnings([clip(900, 1_500), clip(2_900, 3_500)], words, nameOf).find(w =>
+      w.id.startsWith('alternate')
+    );
+    expect(warning?.title).toBe('Clips 1 and 2 are both Susan');
+  });
+
   it('warns about a reel that is not 4 clips, offering to add one when it is short', () => {
     expect(reelWarnings(GOOD.slice(0, 2), WORDS, nameOf).find(w => w.id === 'clip-count')).toMatchObject({
       title: 'Only 2 clips',
@@ -96,11 +115,32 @@ describe('reelWarnings (GEO-3672)', () => {
     ).toBeNull();
   });
 
+  // GEO-3773 (D4): a 5th or 6th clip is the admin's call, so the warning only says what we aim for.
+  it('says a reel of 5 or 6 clips is over the 4 we aim for, as one clip-count warning', () => {
+    const five = reelWarnings([...GOOD, clip(20_000, 30_000)], WORDS, nameOf).filter(w => w.id === 'clip-count');
+    expect(five).toEqual([
+      expect.objectContaining({ title: 'This reel has 5 clips. We aim for 4.', severity: 'warn' }),
+    ]);
+    const six = reelWarnings([...GOOD, clip(20_000, 30_000), clip(31_000, 40_000)], WORDS, nameOf).filter(
+      w => w.id === 'clip-count'
+    );
+    expect(six).toEqual([expect.objectContaining({ title: 'This reel has 6 clips. We aim for 4.' })]);
+    expect(reelWarnings(GOOD, WORDS, nameOf).find(w => w.id === 'clip-count')).toBeUndefined();
+  });
+
   it.each(['So', 'and', 'But,'])('warns about a clip opening on “%s” and starts it on the next word', opener => {
     const words = [word(1, 1_000, 1_300, opener), word(1, 1_400, 1_800, 'coffee'), ...WORDS.slice(20)];
     const warning = reelWarnings([clip(900, 9_000)], words, nameOf).find(w => w.id === 'opener-0')!;
     expect(warning.title).toBe(`Clip 1 opens on “${opener.replace(',', '')}”`);
     expect(warning.fix?.kind === 'clips' && warning.fix.clips[0].start_ms).toBe(1_400);
+  });
+
+  // geo-chat reads no blank token (`speech_turns`): one before the filler doesn't hide it, GEO-3767.
+  it('finds the opening filler past a blank token', () => {
+    const words = heard([word(1, 950, 990, ' '), word(1, 1_000, 1_300, 'So'), word(1, 1_400, 1_800, 'coffee')]);
+    const warning = reelWarnings([clip(900, 1_900)], words, nameOf).find(w => w.id === 'opener-0');
+    expect(warning?.title).toBe('Clip 1 opens on “So”');
+    expect(warning?.fix?.kind === 'clips' && warning.fix.clips[0].start_ms).toBe(1_400);
   });
 
   it('does not take “Sometimes” or “Andrew” for filler', () => {
@@ -113,6 +153,21 @@ describe('trimmedEnd', () => {
   it('prefers a sentence end, and never leaves the clip under 6 s', () => {
     expect(trimmedEnd(clip(10_000, 40_000), WORDS, 18_000)).toBe(24_800);
     expect(trimmedEnd(clip(10_000, 12_000), WORDS, 18_000)).toBeNull();
+  });
+
+  // Blank tokens are not words geo-chat measures (`speech_turns`), GEO-3767: a blank at either end of
+  // a clip neither starts nor ends its words.
+  it('measures from the first spoken word, not a blank token before it', () => {
+    const withBlank = heard([word(1, 9_850, 9_900, ' '), ...WORDS.filter(w => w.start_ms >= 10_000)]);
+    // 14.8 s from the first word at 10 s reaches the sentence end at 24.8 s; from the blank it would not.
+    expect(trimmedEnd(clip(9_800, 40_000), withBlank, 14_800)).toBe(24_800);
+  });
+});
+
+describe('spokenLength', () => {
+  it('runs first spoken word to last, not from or to a blank token', () => {
+    const words = heard([word(1, 900, 950, ' '), word(1, 1_000, 1_400, 'Yes'), word(1, 2_500, 2_600, '')]);
+    expect(spokenLength(clip(800, 3_000), words)).toBe(400);
   });
 });
 
@@ -166,6 +221,25 @@ describe('draggedClip (GEO-3672)', () => {
     });
   });
 
+  // The waveform panel (GEO-3673) places to one peaks bucket; the timeline keeps its tenth.
+  it('places a free edge to the step it is given', () => {
+    expect(draggedClip({ ...drag, mode: 'start' }, 1_234, words, 10_000, true, 10)).toEqual({
+      start_ms: 2_230,
+      end_ms: 3_400,
+      free_start_ms: 2_230,
+    });
+    expect(draggedClip({ ...drag, mode: 'end' }, -1_237, words, 10_000, true, 10)).toEqual({
+      start_ms: 1_000,
+      end_ms: 2_160,
+      free_end_ms: 2_160,
+    });
+    // Snapped, the step plays no part.
+    expect(draggedClip({ ...drag, mode: 'start' }, 1_234, words, 10_000, false, 10)).toEqual({
+      start_ms: 2_000,
+      end_ms: 3_400,
+    });
+  });
+
   it('never trims a clip under a second', () => {
     expect(draggedClip({ ...drag, mode: 'end' }, -3_000, words, 10_000, true)).toEqual({
       start_ms: 1_000,
@@ -215,5 +289,29 @@ describe('the transcript picker (GEO-3672)', () => {
         ],
       }).map(s => s.text)
     ).toEqual(['Hi.']);
+  });
+
+  it('leaves out a blank sentence, as geo-chat serves one when the other debater has blank tokens mid-turn', () => {
+    const line = { participant_slot: 1 as const, source_start_ms: 1_000, source_end_ms: 2_000 };
+    expect(
+      reelSentences({
+        format: 'json',
+        model_id: 'm',
+        segments: [],
+        sentences: [
+          { ...line, start_ms: 1_000, end_ms: 2_000, text: 'We should' },
+          {
+            ...line,
+            participant_slot: 2,
+            start_ms: 2_000,
+            end_ms: 2_100,
+            source_start_ms: 2_000,
+            source_end_ms: 2_100,
+            text: ' ',
+          },
+          { ...line, start_ms: 2_100, end_ms: 3_000, source_start_ms: 2_100, source_end_ms: 3_000, text: 'act now.' },
+        ],
+      }).map(s => s.text)
+    ).toEqual(['We should', 'act now.']);
   });
 });

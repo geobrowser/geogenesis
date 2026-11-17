@@ -23,6 +23,12 @@ export const SPEAKER_BORDER_CLASS = {
   1: 'border-purple bg-purple/10 text-purple',
   2: 'border-pink bg-pink/10 text-[#c5168f]',
 } as const;
+/** A word's label in the fine-tune panel: the speaker's colour, darkened for pink so it reads as text. */
+export const SPEAKER_TEXT_CLASS = { 1: 'text-purple', 2: 'text-[#c5168f]' } as const;
+/** A clip's outline in the fine-tune panel. */
+export const SPEAKER_OUTLINE_CLASS = { 1: 'border-purple', 2: 'border-pink' } as const;
+/** What a clip will play, shaded under the fine-tune panel's waveform. */
+export const SPEAKER_TINT_CLASS = { 1: 'bg-purple/15', 2: 'bg-pink/15' } as const;
 
 /**
  * A claim the clip can be linked to: its position in the debate's claims, and its text. `retained`:
