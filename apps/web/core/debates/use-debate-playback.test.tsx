@@ -3146,3 +3146,145 @@ describe('useDebatePlayback — forced sound for the moments editor (GEO-3773)',
     expect(localStorage.getItem('debateFeedSoundChoice')).toBeNull();
   });
 });
+
+describe('useDebatePlayback — a recording that ends before the timeline (GEO-3778)', () => {
+  // 60 s of timeline (two 30 s turns, no rendered segments). The short recording stops half a
+  // second early, as geo-chat's trailing pad leaves it.
+  const TIMELINE = 60;
+  const SHORT = 59.5;
+
+  beforeEach(() => {
+    mocks.turnSegments = [];
+    mocks.condensedBreaks = [];
+    mocks.recordingUrl.mockReset();
+    mocks.recordingUrl.mockImplementation(({ filename }: { filename: string }) =>
+      Promise.resolve({ url: `https://cdn.test/${filename}?sig=abc` })
+    );
+  });
+
+  /** Give the fake a duration, and `ended` the way a real element reports it. */
+  function withDuration(video: FakeVideo, duration: number) {
+    Object.defineProperty(video, 'duration', { value: duration, configurable: true });
+    Object.defineProperty(video, 'ended', { get: () => video.currentTime >= duration, configurable: true });
+  }
+
+  /** The element reaching the end of its media: it stops itself and fires `ended`. */
+  function reachEnd(video: FakeVideo, duration: number) {
+    video.currentTime = duration;
+    video.browserPause();
+  }
+
+  async function playingWithShort(shortSlot: 1 | 2) {
+    const { result, slot1, slot2 } = await mountedPair();
+    const short = shortSlot === 1 ? slot1 : slot2;
+    const long = shortSlot === 1 ? slot2 : slot1;
+    withDuration(short, SHORT);
+    withDuration(long, TIMELINE);
+    await startPair(result, slot1, slot2);
+    expect(result.current.playing).toBe(true);
+    // Both play on to the point where the short one runs out.
+    long.currentTime = SHORT;
+    reachEnd(short, SHORT);
+    act(() => result.current.onPlaybackTick());
+    return { result, short, long };
+  }
+
+  describe.each([1, 2] as const)('slot %i ends early', shortSlot => {
+    it('lets the other play on, holding the ended one on its last frame', async () => {
+      const { result, short, long } = await playingWithShort(shortSlot);
+      const playsBefore = short.plays;
+
+      expect(long.paused).toBe(false);
+      expect(result.current.playing).toBe(true);
+      expect(result.current.userPaused).toBe(false);
+      expect(result.current.playbackEnded).toBe(false);
+      expect(short.plays).toBe(playsBefore);
+
+      long.currentTime = 59.8;
+      act(() => result.current.onPlaybackTick());
+      expect(result.current.playheadSeconds).toBeCloseTo(59.8);
+    });
+
+    it('reaches the end card when the other runs out, with no recorded pause', async () => {
+      const { result, long } = await playingWithShort(shortSlot);
+
+      reachEnd(long, TIMELINE);
+      act(() => result.current.onPlaybackTick());
+
+      expect(result.current.playbackEnded).toBe(true);
+      expect(result.current.playing).toBe(false);
+      expect(result.current.userPaused).toBe(false);
+    });
+
+    it('resumes a pause without restarting the ended recording', async () => {
+      const { result, short, long } = await playingWithShort(shortSlot);
+      act(() => result.current.pauseBoth());
+      const playsBefore = short.plays;
+
+      await act(async () => {
+        void result.current.resumeBoth();
+        await Promise.resolve();
+        long.settlePlay();
+        await new Promise(resolve => setTimeout(resolve, 50));
+      });
+
+      expect(short.plays).toBe(playsBefore);
+      expect(result.current.playing).toBe(true);
+      expect(long.paused).toBe(false);
+    });
+
+    it('plays the ended recording again when seeked back inside it', async () => {
+      const { result, short, long } = await playingWithShort(shortSlot);
+      const playsBefore = short.plays;
+
+      act(() => {
+        result.current.seekBoth(30);
+        short.settlePlay();
+      });
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 50));
+        result.current.onPlaybackTick();
+      });
+
+      expect(short.plays).toBe(playsBefore + 1);
+      expect(short.currentTime).toBe(30);
+      expect(short.paused).toBe(false);
+      expect(long.paused).toBe(false);
+      expect(result.current.playing).toBe(true);
+      expect(result.current.userPaused).toBe(false);
+    });
+  });
+
+  it('ends a debate whose recordings both stop short of the timeline', async () => {
+    const { result, slot1, slot2 } = await mountedPair();
+    withDuration(slot1, 59);
+    withDuration(slot2, SHORT);
+    await startPair(result, slot1, slot2);
+
+    reachEnd(slot1, 59);
+    slot2.currentTime = 59;
+    act(() => result.current.onPlaybackTick());
+    expect(result.current.playing).toBe(true);
+
+    reachEnd(slot2, SHORT);
+    act(() => result.current.onPlaybackTick());
+
+    expect(result.current.playbackEnded).toBe(true);
+    expect(result.current.playing).toBe(false);
+    expect(result.current.userPaused).toBe(false);
+  });
+
+  it('still pauses both when a recording stops short of its end', async () => {
+    const { result, slot1, slot2 } = await mountedPair();
+    withDuration(slot1, SHORT);
+    withDuration(slot2, TIMELINE);
+    await startPair(result, slot1, slot2);
+
+    slot1.currentTime = 30;
+    slot1.browserPause();
+    act(() => result.current.onPlaybackTick());
+
+    expect(slot2.paused).toBe(true);
+    expect(result.current.userPaused).toBe(true);
+  });
+});

@@ -201,8 +201,41 @@ function offsetSeconds(startedAtMs: number | null, windowStartMs: number): numbe
   return (startedAtMs - windowStartMs) / 1_000;
 }
 
+/** What `mediaFinished` reads off an element. Optional, so a test fake without them never finishes. */
+export type FinishableVideo = Partial<Pick<HTMLMediaElement, 'ended' | 'currentTime' | 'duration'>>;
+
+/**
+ * Whether `seconds` is at or past the end of `video`'s recording. A MediaRecorder WebM reports a
+ * NaN or Infinity duration until it has played to the end, so without one only an element that
+ * has ended knows where its end is.
+ */
+export function atOrPastMediaEnd(video: FinishableVideo, seconds: number): boolean {
+  const duration = video.duration;
+  if (duration !== undefined && Number.isFinite(duration) && duration > 0) {
+    return seconds >= duration - PLAYBACK_END_EPSILON_SECONDS;
+  }
+  return (
+    Boolean(video.ended) &&
+    video.currentTime !== undefined &&
+    seconds >= video.currentTime - PLAYBACK_END_EPSILON_SECONDS
+  );
+}
+
+/**
+ * Whether `video` has played its recording out (GEO-3778).
+ *
+ * geo-chat pads a recording that stops up to 10 s short of the debate window, so one element can
+ * end before the timeline does. Such an element is finished, not paused: it holds its last frame,
+ * as the render does, while the other carries the debate on.
+ */
+export function mediaFinished(video: FinishableVideo | null | undefined): boolean {
+  if (!video) return false;
+  if (video.ended) return true;
+  return video.currentTime !== undefined && atOrPastMediaEnd(video, video.currentTime);
+}
+
 /** What `pairPlayhead` needs off an element, so tests need not build a whole video. */
-export type ClockVideo = Pick<HTMLVideoElement, 'paused' | 'currentTime'>;
+export type ClockVideo = Pick<HTMLVideoElement, 'paused' | 'currentTime'> & FinishableVideo;
 
 export type PairPlayhead = {
   /** Debate-timeline seconds. */
@@ -255,6 +288,16 @@ export function pairPlayhead(
     // Slot 1 is the clock and a running slot 1 is the whole answer: the record is only there to
     // raise a *frozen* one. Anything else would drag a scrub backwards forward again.
     if (primaryRunning) return { seconds: primarySeconds, live: true };
+    // Slot 1 ended before the timeline (GEO-3778): its clock is frozen at its last frame, so the
+    // clock is slot 2's from here, which plays on to the end.
+    if (secondary && secondary.currentTime > 0 && mediaFinished(primary)) {
+      const secondarySeconds = secondary.currentTime + offsets.slot2;
+      if (!secondary.paused) return { seconds: Math.max(primarySeconds, secondarySeconds), live: true };
+      return {
+        seconds: Math.max(primarySeconds, secondarySeconds, lastRunningSeconds ?? 0),
+        live: false,
+      };
+    }
     return {
       seconds: lastRunningSeconds === null ? primarySeconds : Math.max(primarySeconds, lastRunningSeconds),
       live: false,
@@ -364,16 +407,12 @@ const PLAY_CONFIRM_INTERVAL_MS = 75;
 
 const defaultWait = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
 
-async function bothRunning(
-  primary: PlayableVideo,
-  secondary: PlayableVideo,
-  wait: (ms: number) => Promise<void>
-): Promise<boolean> {
+async function allRunning(members: PlayableVideo[], wait: (ms: number) => Promise<void>): Promise<boolean> {
   for (let poll = 0; poll < PLAY_CONFIRM_POLLS; poll++) {
-    if (!primary.paused && !secondary.paused) return true;
+    if (members.every(video => !video.paused)) return true;
     await wait(PLAY_CONFIRM_INTERVAL_MS);
   }
-  return !primary.paused && !secondary.paused;
+  return members.every(video => !video.paused);
 }
 
 /**
@@ -393,11 +432,17 @@ function isRefusal(reason: unknown): boolean {
   return errorName(reason) === 'NotAllowedError';
 }
 
+/**
+ * A `null` slot is one with nothing to start: its recording ended before the debate's timeline
+ * (GEO-3778), and `play()` on an ended element restarts it from 0. It holds its last frame instead.
+ */
 export async function playBothWithMutedFallback(
-  primary: PlayableVideo,
-  secondary: PlayableVideo,
+  primary: PlayableVideo | null,
+  secondary: PlayableVideo | null,
   { wait = defaultWait, isCancelled }: PlayBothOptions = {}
 ): Promise<PlayBothOutcome> {
+  const members = [primary, secondary].filter((video): video is PlayableVideo => video !== null);
+  const allMuted = () => members.every(video => video.muted);
   /**
    * Whether the browser said no, as opposed to simply not having started yet.
    *
@@ -407,10 +452,10 @@ export async function playBothWithMutedFallback(
    * attempt. Only the first is a fact about the device.
    */
   const attempt = async (): Promise<{ running: boolean; refused: boolean }> => {
-    const settled = await Promise.allSettled([primary.play(), secondary.play()]);
+    const settled = await Promise.allSettled(members.map(video => video.play()));
     const refused = settled.some(result => result.status === 'rejected' && isRefusal(result.reason));
 
-    return { running: await bothRunning(primary, secondary, wait), refused };
+    return { running: await allRunning(members, wait), refused };
   };
 
   const first = await attempt();
@@ -444,7 +489,7 @@ export async function playBothWithMutedFallback(
    * One attempt's delay, not a lost answer. Pinned by a test, since it rests on reasoning about a
    * caller rather than on anything visible here.
    */
-  if (first.refused && primary.muted && secondary.muted) return 'refused';
+  if (first.refused && allMuted()) return 'refused';
 
   // Someone paused these, or scrolled them off screen, while the confirm above was polling. The
   // retry would start them again — and the caller checking ownership after this returns cannot
@@ -452,7 +497,7 @@ export async function playBothWithMutedFallback(
   if (isCancelled?.()) return 'cancelled';
 
   // Nothing to retry if audio was already off — the block is not the autoplay policy.
-  if (primary.muted && secondary.muted) return 'blocked';
+  if (allMuted()) return 'blocked';
 
   // Both outcomes below leave the elements muted, and deliberately so: this function does not
   // know what the caller renders `muted` from, and it has been awaiting for up to ~300ms, so any
@@ -465,8 +510,7 @@ export async function playBothWithMutedFallback(
   // 'playing-muted' is paired by the caller with the state change that makes the mute the
   // rendered truth. 'blocked' is repaired by whoever renders `muted`, once the attempt is over —
   // `DebateFeedPlayer` re-asserts it when `isResuming` falls.
-  primary.muted = true;
-  secondary.muted = true;
+  for (const video of members) video.muted = true;
 
   const retry = await attempt();
 
