@@ -76,12 +76,26 @@ export const DEBATE_OG_GEOMETRY = {
       { offset: DIVIDER_WHITE_W, width: DIVIDER_BLACK_W },
     ];
   },
+  /** The "Geo Debates" masthead, and the header it has to fit in above the claim band. */
+  get masthead() {
+    return {
+      markPx: BRAND_MARK_PX,
+      textPx: BRAND_TEXT_PX,
+      gapPx: BRAND_GAP_PX,
+      centreY: HEADER_H / 2 + BRAND_OFFSET_Y,
+      claimBandTop: HEADER_H,
+    };
+  },
 };
 
 const CARD_W = 1200;
 const CARD_H = 630;
 const HEADER_H = 88;
 const BRAND_OFFSET_Y = 10;
+/** The "Geo Debates" masthead. Sized up from 32/36/10 (GEO-3791) so the brand reads at feed-thumbnail size. */
+const BRAND_MARK_PX = 40;
+const BRAND_TEXT_PX = 45;
+const BRAND_GAP_PX = 12;
 const CLAIM_BAND_H = CLAIM_BAND_HEIGHT_PX;
 const SIDE_MARGIN = 32;
 const VIDEO_H = CARD_H - HEADER_H - CLAIM_BAND_H - SIDE_MARGIN;
@@ -500,15 +514,15 @@ function Card({ data }: { data: DebateOgCardData }) {
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: 10,
+            gap: BRAND_GAP_PX,
             padding: '0 14px',
             background: '#ffffff',
             color: CHROME,
             transform: `translateY(${BRAND_OFFSET_Y}px)`,
           }}
         >
-          <GeoMark size={32} color={CHROME} />
-          <div style={{ display: 'flex', fontSize: 36, fontWeight: 400, letterSpacing: '-0.015em' }}>
+          <GeoMark size={BRAND_MARK_PX} color={CHROME} />
+          <div style={{ display: 'flex', fontSize: BRAND_TEXT_PX, fontWeight: 400, letterSpacing: '-0.015em' }}>
             <span>Geo&nbsp;</span>
             <span style={{ color: '#777777' }}>Debates</span>
           </div>

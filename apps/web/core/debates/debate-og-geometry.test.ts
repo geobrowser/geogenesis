@@ -48,3 +48,20 @@ describe('the divider band', () => {
     expect(bars.reduce((sum, bar) => sum + bar.width, 0)).toBe(g.dividerWidth);
   });
 });
+
+describe('the masthead', () => {
+  /// Option B from GEO-3791, picked off rendered cards: the old 32/36/10 read too small in feeds.
+  it('is drawn at mark 40, text 45, gap 12', () => {
+    const m = g.masthead;
+    expect([m.markPx, m.textPx, m.gapPx]).toEqual([40, 45, 12]);
+  });
+
+  /// Growing it must not push it into the claim band, which starts at the bottom of the header.
+  /// The text's line box (~1.2x font size) is the taller of the two; renders put a 3-line claim
+  /// 26px below the ink, but the box itself must clear the band on its own.
+  it('stays inside the header, above the claim band', () => {
+    const m = g.masthead;
+    const halfBox = Math.max(m.markPx, m.textPx * 1.2) / 2;
+    expect(m.centreY + halfBox).toBeLessThanOrEqual(m.claimBandTop - 4);
+  });
+});
