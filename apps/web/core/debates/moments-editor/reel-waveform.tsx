@@ -4,23 +4,50 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import { SmallButton, SquareButton } from '~/design-system/button';
-import { CheckboxVisual } from '~/design-system/checkbox';
 import { Text } from '~/design-system/text';
 
 import type { DebateMediaTurnSegment } from '../api';
-import { SPEAKER_OUTLINE_CLASS, SPEAKER_TEXT_CLASS, SPEAKER_TINT_CLASS } from './clip-row';
+import { type DraggedSpan, draggedClip } from './clip-drag';
+import { SnapSwitch } from './editor-ui';
 import { type EditorClip, type ReelWord, isSpoken } from './reel';
-import { type DraggedSpan, draggedClip } from './reel-timeline';
+import { SPEAKER_OUTLINE_CLASS, SPEAKER_TEXT_CLASS, SPEAKER_TINT_CLASS } from './speaker-classes';
 import { type PeaksView, cutStretches, fineWindow, formatFineTime } from './waveform';
 import { WaveformCanvas } from './waveform-canvas';
 
 /** Where a free edge lands in the panel: the nearest 10 ms, one peaks bucket. */
 export const FINE_STEP_MS = 10;
 /** How much of the debate the panel shows either side of the clip. */
-const PADS = [1_000, 2_000, 4_000, 8_000] as const;
-/** A word's label is drawn only where it fits: about this many px per character. */
-const LABEL_PX_PER_CHAR = 6.5;
+export const PADS = [1_000, 2_000, 4_000, 8_000] as const;
+export type Pad = (typeof PADS)[number];
+/** Half a label's width per character, at the labels' 12 px (the prototype's estimate). */
+const LABEL_HALF_PX_PER_CHAR = 3.3;
+/** The least room between two labels. */
+const LABEL_GAP_PX = 4;
+
+/**
+ * The words labelled over the waveform, as the prototype's: each centred on its word, left to
+ * right, skipping one that would run into the last one drawn or whose middle is out of view.
+ * Unmeasured (`width` 0, as in tests), every word is.
+ */
+export function wordLabels<W extends { text: string; start_ms: number; end_ms: number }>(
+  words: readonly W[],
+  frame: { start_ms: number; end_ms: number },
+  width: number
+): W[] {
+  if (width <= 0) return [...words];
+  const span = frame.end_ms - frame.start_ms;
+  if (span <= 0) return [];
+  const shown: W[] = [];
+  let lastRight = -Infinity;
+  for (const word of words) {
+    const mid = (((word.start_ms + word.end_ms) / 2 - frame.start_ms) / span) * width;
+    const half = word.text.trim().length * LABEL_HALF_PX_PER_CHAR;
+    if (mid < 0 || mid > width || mid - half < lastRight + LABEL_GAP_PX) continue;
+    lastRight = mid + half;
+    shown.push(word);
+  }
+  return shown;
+}
 
 type FineDrag = {
   mode: 'start' | 'end';
@@ -51,12 +78,14 @@ export function ReelWaveform({
   durationMs,
   playheadMs,
   readOnly,
+  pad,
+  snap,
+  onSnap,
   onChangeClip,
   onSeek,
-  onFullDebate,
 }: {
   view: PeaksView;
-  clip: EditorClip | null;
+  clip: EditorClip;
   index: number;
   speaker: 1 | 2 | null;
   played: { start_ms: number; end_ms: number } | null;
@@ -65,13 +94,14 @@ export function ReelWaveform({
   durationMs: number;
   playheadMs: number | null;
   readOnly: boolean;
+  /** How much of the debate shows either side of the clip, and whether edges snap to words: the
+   * editor's, so both last across a change of clip (GEO-3773). */
+  pad: Pad;
+  snap: boolean;
+  onSnap: () => void;
   onChangeClip: (index: number, span: DraggedSpan & { claim_index: number | null }) => void;
   onSeek: (ms: number) => void;
-  /** Deselects the clip, back to the whole debate (GEO-3773). */
-  onFullDebate?: () => void;
 }) {
-  const [pad, setPad] = React.useState<(typeof PADS)[number]>(2_000);
-  const [snap, setSnap] = React.useState(true);
   const [drag, setDrag] = React.useState<FineDrag | null>(null);
   const trackRef = React.useRef<HTMLDivElement | null>(null);
   const [trackWidth, setTrackWidth] = React.useState(0);
@@ -83,7 +113,7 @@ export function ReelWaveform({
     observer.observe(track);
     setTrackWidth(track.clientWidth);
     return () => observer.disconnect();
-  }, [clip === null]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   // A drag ends however the pointer is let go: off the track, or with capture lost, the track's own
   // pointerup never comes, and a stuck drag would move the edge on every hover after.
@@ -99,51 +129,8 @@ export function ReelWaveform({
     };
   }, [dragging]);
 
-  const frame = clip ? (drag?.window ?? fineWindow(clip, durationMs, pad)) : null;
+  const frame = drag?.window ?? fineWindow(clip, durationMs, pad);
   const cuts = React.useMemo(() => cutStretches(turns, durationMs), [turns, durationMs]);
-
-  const header = (
-    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-divider p-3">
-      <Text as="h2" variant="smallTitle">
-        {clip ? `Fine-tune clip ${index + 1}` : 'Fine-tune'}
-      </Text>
-      <div className="flex items-center gap-3">
-        {clip && onFullDebate ? <SmallButton onClick={onFullDebate}>Full debate</SmallButton> : null}
-        <label className="flex cursor-pointer items-center gap-1.5 text-[14px] text-text">
-          <input type="checkbox" className="sr-only" checked={snap} onChange={event => setSnap(event.target.checked)} />
-          <CheckboxVisual checked={snap} variant="filled" />
-          Snap to words
-        </label>
-        <Text as="span" variant="metadata" color="grey-04">
-          Alt flips it for one drag.
-        </Text>
-        <div className="flex gap-1" role="group" aria-label="Around the clip">
-          {PADS.map(level => (
-            <SquareButton
-              key={level}
-              isActive={pad === level}
-              aria-pressed={pad === level}
-              className="!w-auto px-1.5 text-[14px]"
-              onClick={() => setPad(level)}
-            >
-              ±{level / 1000} s
-            </SquareButton>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-
-  if (!clip || !frame) {
-    return (
-      <section className="rounded border border-grey-02 bg-white">
-        {header}
-        <Text as="p" variant="metadata" color="grey-04" className="p-3">
-          Select a clip to fine-tune it against the waveform.
-        </Text>
-      </section>
-    );
-  }
 
   const span = frame.end_ms - frame.start_ms;
   const left = (ms: number) =>
@@ -152,10 +139,7 @@ export function ReelWaveform({
     `${((Math.min(frame.end_ms, to) - Math.max(frame.start_ms, from)) / span) * 100}%`;
   const visible = (from: number, to: number) => to > frame.start_ms && from < frame.end_ms;
   const shownWords = words.filter(word => isSpoken(word) && visible(word.start_ms, word.end_ms));
-  // Unmeasured (as in tests), every label is drawn; measured, only those that fit their word.
-  const labelFits = (word: ReelWord) =>
-    trackWidth === 0 ||
-    ((word.end_ms - word.start_ms) / span) * trackWidth >= word.text.trim().length * LABEL_PX_PER_CHAR;
+  const labelled = new Set(wordLabels(shownWords, frame, trackWidth));
   const playedDiffers = played !== null && (played.start_ms !== clip.start_ms || played.end_ms !== clip.end_ms);
 
   const startDrag = (event: React.PointerEvent, mode: FineDrag['mode']) => {
@@ -185,130 +169,137 @@ export function ReelWaveform({
   };
 
   return (
-    <section className="rounded border border-grey-02 bg-white" aria-label="Fine-tune">
-      {header}
-      <div className="flex flex-col gap-2 p-3">
-        {view.kind !== 'ready' && view.kind !== 'loading' ? (
-          <Text as="p" variant="metadata" color="grey-04">
-            {view.message}
-          </Text>
-        ) : null}
-        <div
-          ref={trackRef}
-          data-testid="waveform-track"
-          className="relative h-[132px] touch-none overflow-hidden rounded border border-divider bg-bg select-none"
-          onPointerMove={onPointerMove}
-          onPointerUp={() => setDrag(null)}
-          onPointerCancel={() => setDrag(null)}
-          onPointerDown={event => {
-            const rect = event.currentTarget.getBoundingClientRect();
-            if (rect.width > 0) onSeek(Math.round(frame.start_ms + ((event.clientX - rect.left) / rect.width) * span));
-          }}
-        >
-          {cuts
-            .filter(cut => visible(cut.start_ms, cut.end_ms))
-            .map(cut => (
-              <div
-                key={`cut-${cut.start_ms}`}
-                data-testid="waveform-cut"
-                className="pointer-events-none absolute top-0 bottom-0 overflow-hidden bg-[repeating-linear-gradient(135deg,var(--color-grey-02)_0_2px,transparent_2px_7px)]"
-                style={{ left: left(cut.start_ms), width: width(cut.start_ms, cut.end_ms) }}
-              >
-                {/* Above the waveform, so it reads over the bars. */}
-                <span className="absolute bottom-1 left-1 z-10 rounded-sm bg-white/90 px-1 text-[11px] leading-[14px] whitespace-nowrap text-grey-04">
-                  Cut in video
-                </span>
-              </div>
-            ))}
-          {played && visible(played.start_ms, played.end_ms) ? (
+    <div className="flex min-w-0 flex-col gap-1">
+      {view.kind !== 'ready' && view.kind !== 'loading' ? (
+        <Text as="p" variant="metadata" color="grey-04">
+          {view.message}
+        </Text>
+      ) : null}
+      <div
+        ref={trackRef}
+        data-testid="waveform-track"
+        className="relative h-[74px] cursor-crosshair touch-none overflow-hidden rounded-sm bg-bg select-none"
+        onPointerMove={onPointerMove}
+        onPointerUp={() => setDrag(null)}
+        onPointerCancel={() => setDrag(null)}
+        onPointerDown={event => {
+          const rect = event.currentTarget.getBoundingClientRect();
+          if (rect.width > 0) onSeek(Math.round(frame.start_ms + ((event.clientX - rect.left) / rect.width) * span));
+        }}
+      >
+        {cuts
+          .filter(cut => visible(cut.start_ms, cut.end_ms))
+          .map(cut => (
             <div
-              data-testid="waveform-played"
-              title="What geo-chat will cut: an edge snapped to a word widens into the quiet beside it."
-              className={cx('absolute top-[18px] bottom-0', speaker ? SPEAKER_TINT_CLASS[speaker] : 'bg-grey-02/60')}
-              style={{ left: left(played.start_ms), width: width(played.start_ms, played.end_ms) }}
-            />
-          ) : null}
-          <div className="pointer-events-none absolute inset-x-0 top-[18px] bottom-0">
-            {view.kind === 'loading' ? (
-              <div className="absolute inset-x-0 top-1/2 h-8 -translate-y-1/2 animate-pulse rounded bg-grey-01" />
-            ) : null}
-            <WaveformCanvas
-              peaks={view.kind === 'ready' ? view.peaks : null}
-              startMs={frame.start_ms}
-              endMs={frame.end_ms}
-              className="h-full w-full text-grey-04"
-            />
-          </div>
-          {shownWords.map(word => (
-            <React.Fragment key={`${word.slot}-${word.start_ms}-${word.end_ms}`}>
-              <i
-                aria-hidden
-                className="pointer-events-none absolute top-[18px] bottom-0 w-px bg-grey-03/70"
-                style={{ left: left(word.start_ms) }}
-              />
-              <i
-                aria-hidden
-                className="pointer-events-none absolute top-[18px] bottom-0 w-px bg-grey-03/40"
-                style={{ left: left(word.end_ms) }}
-              />
-              {labelFits(word) ? (
-                <span
-                  data-testid="waveform-word"
-                  className={cx(
-                    'pointer-events-none absolute top-0.5 overflow-hidden pl-0.5 text-[11px] leading-[14px] whitespace-nowrap',
-                    SPEAKER_TEXT_CLASS[word.slot === 2 ? 2 : 1]
-                  )}
-                  style={{ left: left(word.start_ms), width: width(word.start_ms, word.end_ms) }}
-                >
-                  {word.text.trim()}
-                </span>
-              ) : null}
-            </React.Fragment>
+              key={`cut-${cut.start_ms}`}
+              data-testid="waveform-cut"
+              className="pointer-events-none absolute top-0 bottom-0 overflow-hidden bg-[repeating-linear-gradient(135deg,var(--color-grey-02)_0_2px,transparent_2px_7px)]"
+              style={{ left: left(cut.start_ms), width: width(cut.start_ms, cut.end_ms) }}
+            >
+              {/* Above the waveform, so it reads over the bars. */}
+              <span className="absolute bottom-1 left-1 z-10 rounded-sm bg-white/90 px-1 text-[11px] leading-[14px] whitespace-nowrap text-grey-04">
+                Cut in video
+              </span>
+            </div>
           ))}
+        {played && visible(played.start_ms, played.end_ms) ? (
+          <div
+            data-testid="waveform-played"
+            title="What geo-chat will cut: an edge snapped to a word widens into the quiet beside it."
+            className={cx('absolute top-[18px] bottom-0', speaker ? SPEAKER_TINT_CLASS[speaker] : 'bg-grey-02/60')}
+            style={{ left: left(played.start_ms), width: width(played.start_ms, played.end_ms) }}
+          />
+        ) : null}
+        <div className="pointer-events-none absolute inset-x-0 top-[18px] bottom-0">
+          {view.kind === 'loading' ? (
+            <div className="absolute inset-x-0 top-1/2 h-8 -translate-y-1/2 animate-pulse rounded bg-grey-01" />
+          ) : null}
+          <WaveformCanvas
+            peaks={view.kind === 'ready' ? view.peaks : null}
+            startMs={frame.start_ms}
+            endMs={frame.end_ms}
+            className="h-full w-full text-grey-04"
+          />
+        </div>
+        {shownWords.map(word => (
+          <React.Fragment key={`${word.slot}-${word.start_ms}-${word.end_ms}`}>
+            <i
+              aria-hidden
+              className="pointer-events-none absolute top-[18px] bottom-0 w-px bg-grey-03/70"
+              style={{ left: left(word.start_ms) }}
+            />
+            <i
+              aria-hidden
+              className="pointer-events-none absolute top-[18px] bottom-0 w-px bg-grey-03/40"
+              style={{ left: left(word.end_ms) }}
+            />
+            {labelled.has(word) ? (
+              <span
+                data-testid="waveform-word"
+                className={cx(
+                  'pointer-events-none absolute top-px -translate-x-1/2 text-[12px] leading-4 font-medium whitespace-nowrap',
+                  SPEAKER_TEXT_CLASS[word.slot === 2 ? 2 : 1]
+                )}
+                style={{ left: left((word.start_ms + word.end_ms) / 2) }}
+              >
+                {word.text.trim()}
+              </span>
+            ) : null}
+          </React.Fragment>
+        ))}
+        <div
+          aria-hidden
+          data-testid="waveform-clip"
+          className={cx(
+            'pointer-events-none absolute top-[18px] bottom-0 border-x-2',
+            speaker ? SPEAKER_OUTLINE_CLASS[speaker] : 'border-grey-04'
+          )}
+          style={{ left: left(clip.start_ms), width: width(clip.start_ms, clip.end_ms) }}
+        />
+        {!readOnly
+          ? (['start', 'end'] as const).map(edge => {
+              const at = edge === 'start' ? clip.start_ms : clip.end_ms;
+              // The handle being dragged stays, pinned at the window's edge (`left` clamps): it holds
+              // the pointer capture, which unmounting it would drop mid-drag.
+              if (drag?.mode !== edge && (at < frame.start_ms || at > frame.end_ms)) return null;
+              return (
+                <span
+                  key={edge}
+                  aria-hidden
+                  data-testid={`fine-${edge}-handle`}
+                  onPointerDown={event => startDrag(event, edge)}
+                  onLostPointerCapture={() => setDrag(null)}
+                  className="absolute top-[18px] bottom-0 w-3 -translate-x-1/2 cursor-ew-resize after:absolute after:top-1/2 after:left-[5px] after:h-8 after:w-0.5 after:-translate-y-1/2 after:rounded-sm after:bg-text"
+                  style={{ left: left(at) }}
+                />
+              );
+            })
+          : null}
+        {playheadMs !== null && visible(playheadMs, playheadMs + 1) ? (
           <div
             aria-hidden
-            data-testid="waveform-clip"
-            className={cx(
-              'pointer-events-none absolute top-[18px] bottom-0 border-x-2',
-              speaker ? SPEAKER_OUTLINE_CLASS[speaker] : 'border-grey-04'
-            )}
-            style={{ left: left(clip.start_ms), width: width(clip.start_ms, clip.end_ms) }}
+            className="pointer-events-none absolute top-0 bottom-0 w-px bg-text"
+            style={{ left: left(playheadMs) }}
           />
-          {!readOnly
-            ? (['start', 'end'] as const).map(edge => {
-                const at = edge === 'start' ? clip.start_ms : clip.end_ms;
-                // The handle being dragged stays, pinned at the window's edge (`left` clamps): it holds
-                // the pointer capture, which unmounting it would drop mid-drag.
-                if (drag?.mode !== edge && (at < frame.start_ms || at > frame.end_ms)) return null;
-                return (
-                  <span
-                    key={edge}
-                    aria-hidden
-                    data-testid={`fine-${edge}-handle`}
-                    onPointerDown={event => startDrag(event, edge)}
-                    onLostPointerCapture={() => setDrag(null)}
-                    className="absolute top-[18px] bottom-0 w-3 -translate-x-1/2 cursor-ew-resize after:absolute after:top-1/2 after:left-[5px] after:h-8 after:w-0.5 after:-translate-y-1/2 after:rounded-sm after:bg-text"
-                    style={{ left: left(at) }}
-                  />
-                );
-              })
-            : null}
-          {playheadMs !== null && visible(playheadMs, playheadMs + 1) ? (
-            <div
-              aria-hidden
-              className="pointer-events-none absolute top-0 bottom-0 w-0.5 bg-red-01"
-              style={{ left: left(playheadMs) }}
-            />
-          ) : null}
-        </div>
-        <p data-testid="waveform-readout" className="text-metadata text-grey-04 tabular-nums">
+        ) : null}
+      </div>
+      <div className="mt-0.5 flex h-[26px] min-w-0 items-center gap-2">
+        <p
+          data-testid="waveform-readout"
+          className="m-0 min-w-0 flex-1 truncate text-breadcrumb font-normal text-grey-04 tabular-nums"
+        >
           Start {formatFineTime(clip.start_ms)} · End {formatFineTime(clip.end_ms)}
           {played && playedDiffers
             ? ` · Plays ${formatFineTime(played.start_ms)} – ${formatFineTime(played.end_ms)}`
             : null}
           {playheadMs !== null ? ` · Playhead ${formatFineTime(playheadMs)}` : null}
         </p>
+        <span aria-hidden className="text-breadcrumb whitespace-nowrap">
+          Snap to words
+        </span>
+        <SnapSwitch checked={snap} onChange={onSnap} />
+        <span className="text-breadcrumb font-normal whitespace-nowrap text-grey-04">Alt flips it for one drag.</span>
       </div>
-    </section>
+    </div>
   );
 }

@@ -3850,6 +3850,18 @@ describe('the moments editor player (GEO-3773)', () => {
     }
   }
 
+  it('lays the two tiles side by side, each filling the 16:9 monitor, not stacked at the feed aspect', () => {
+    const { container } = renderEditor();
+    const tiles = [...container.querySelectorAll<HTMLElement>('[data-debate-slot]')];
+    expect(tiles.map(tile => tile.dataset.debateSlot)).toEqual(['1', '2']);
+    for (const tile of tiles) {
+      expect(tile.className).toContain('h-full');
+      expect(tile.className).not.toContain('aspect-480/289');
+    }
+    expect(tiles[0].parentElement?.className).toMatch(/\bgrid\b.*\bgrid-cols-2\b/);
+    expect(tiles[0].parentElement?.className).not.toContain('flex-col');
+  });
+
   it('never starts itself, and draws none of the feed controls', () => {
     vi.useFakeTimers();
     try {

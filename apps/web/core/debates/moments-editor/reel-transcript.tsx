@@ -13,7 +13,6 @@ import type { DebateMediaTurnSegment, DebateTranscriptResponse, ParticipantSlot 
 import { formatTimecode } from '../claim-timing';
 import { transcriptOnRecordings } from '../recording-clock';
 import { transcriptSpans } from '../transcript-lines';
-import { SPEAKER_EDGE_CLASS, SPEAKER_FILL_CLASS } from './clip-row';
 import {
   type EditorClip,
   MIN_EDIT_CLIP_MS,
@@ -25,6 +24,7 @@ import {
   selectionToClip,
   wordInSpan,
 } from './reel';
+import { SPEAKER_EDGE_CLASS, SPEAKER_FILL_CLASS } from './speaker-classes';
 
 /** A sentence (or, from a transcript served without sentences, a line) on the player's clock. */
 export type ReelSentence = { slot: ParticipantSlot; start_ms: number; end_ms: number; text: string };
