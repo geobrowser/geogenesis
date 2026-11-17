@@ -2,6 +2,7 @@ import { createHmac } from 'node:crypto';
 import { getAddress } from 'viem';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { WALLET_SESSION_MAX_AGE_SECONDS, WALLET_SESSION_RENEW_AFTER_SECONDS } from '../wallet-session-shared';
 import {
   LEGACY_WALLET_ADDRESS,
   WALLET_SESSION,
@@ -11,9 +12,10 @@ import {
   signWalletSession,
   verifyWalletSession,
 } from './wallet-session';
-import { WALLET_SESSION_MAX_AGE_SECONDS, WALLET_SESSION_RENEW_AFTER_SECONDS } from './wallet-session-lifetime';
 
 const jar = vi.hoisted(() => new Map<string, string>());
+const reportError = vi.hoisted(() => vi.fn());
+vi.mock('~/core/telemetry/logger', () => ({ reportError }));
 vi.mock('next/headers', () => ({
   cookies: async () => ({ get: (name: string) => (jar.has(name) ? { name, value: jar.get(name)! } : undefined) }),
 }));
@@ -64,15 +66,27 @@ describe('wallet session', () => {
     expect(verifyWalletSession(value, NOW + (WALLET_SESSION_MAX_AGE_SECONDS + 1) * 1000)).toBeNull();
   });
 
-  it('fails closed in production without a secret', () => {
+  it('fails closed in production without a secret, and reports it to Sentry once', () => {
     const value = signWalletSession(LOWER, NOW)!;
     vi.stubEnv('WALLET_SESSION_SECRET', '');
     vi.stubEnv('NODE_ENV', 'production');
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    reportError.mockClear();
     expect(verifyWalletSession(value, NOW)).toBeNull();
     expect(signWalletSession(LOWER, NOW)).toBeNull();
-    expect(error).toHaveBeenCalledOnce();
+    expect(reportError).toHaveBeenCalledOnce();
+    expect(reportError).toHaveBeenCalledWith(expect.any(Error), { tags: { area: 'wallet-session' } });
     error.mockRestore();
+  });
+
+  it('accepts a session signed with the previous secret, due for renewal', () => {
+    vi.stubEnv('WALLET_SESSION_SECRET', 'old-secret');
+    const value = signWalletSession(LOWER, NOW)!;
+    vi.stubEnv('WALLET_SESSION_SECRET', SECRET);
+    expect(verifyWalletSession(value, NOW)).toBeNull();
+
+    vi.stubEnv('WALLET_SESSION_SECRET_PREVIOUS', 'old-secret');
+    expect(verifyWalletSession(value, NOW)).toEqual({ address: CHECKSUMMED, renewalDue: true });
   });
 
   it('reads the request session and ignores the legacy cookie', async () => {

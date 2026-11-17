@@ -16,7 +16,7 @@ vi.mock('~/core/explore/fetch-explore-feed', () => ({ fetchExploreFeed: mocks.fe
 vi.mock('~/app/home/governance-home-space-ids', () => ({ getGovernanceHomeSpaceContext: vi.fn() }));
 
 const { GET } = await import('./route');
-const { LEGACY_WALLET_ADDRESS, WALLET_SESSION, signWalletSession } = await import('~/core/cookie/wallet-session');
+const { LEGACY_WALLET_ADDRESS, WALLET_SESSION, signWalletSession } = await import('~/core/auth/server/wallet-session');
 
 const WALLET = '0x' + '6'.repeat(40);
 const request = () => new Request('https://example.test/api/activity/feed?spaceId=' + 'b'.repeat(32));

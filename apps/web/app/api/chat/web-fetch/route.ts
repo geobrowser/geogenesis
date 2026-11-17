@@ -12,7 +12,7 @@ import { createAnthropic } from '@ai-sdk/anthropic';
 
 import { generateText, stepCountIs } from 'ai';
 
-import { readWalletSessionLowercase } from '~/core/cookie/wallet-session';
+import { readWalletSessionLowercase } from '~/core/auth/server/wallet-session';
 
 import { logCallCost } from '../cost';
 import { RESEARCH_MODEL } from '../models';

@@ -28,7 +28,7 @@ vi.mock('~/core/blocks/ranking/ranking-og-data', () => ({
 }));
 
 const { POST } = await import('./route');
-const { LEGACY_WALLET_ADDRESS, WALLET_SESSION, signWalletSession } = await import('~/core/cookie/wallet-session');
+const { LEGACY_WALLET_ADDRESS, WALLET_SESSION, signWalletSession } = await import('~/core/auth/server/wallet-session');
 
 const EDITOR = '0x' + '4'.repeat(40);
 const ID = 'a'.repeat(32);

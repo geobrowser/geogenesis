@@ -9,7 +9,7 @@ import { Provider as JotaiProvider } from 'jotai';
 import { AnalyticsUserIdentifier } from './analytics-user-identifier';
 import { CodeStepTracker } from './auth/code-step-tracker';
 import { GoogleOAuthHost } from './auth/google-oauth';
-import { WalletSessionRefresher } from './cookie/wallet-session-refresher';
+import { WalletSessionSync } from './auth/wallet-session-sync';
 import { BrowserTimezoneReporter } from './debates/browser-timezone';
 import { EmailClickReporter } from './notifications/email-click';
 import { NotificationRegistration } from './notifications/hooks';
@@ -30,7 +30,7 @@ export function Providers({ children }: Props) {
   return (
     <>
       <AuthRoot />
-      <WalletSessionRefresher />
+      <WalletSessionSync />
       <PrivyAuthTracker />
       <CodeStepTracker />
       <ReactQueryProvider>

@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { readWalletSession } from '~/core/cookie/wallet-session';
+import { readWalletSession } from '~/core/auth/server/wallet-session';
 import { cachedFetchProfile } from '~/core/io/subgraph';
 
 import {

@@ -15,9 +15,9 @@ import {
   tool,
 } from 'ai';
 
+import { readWalletSessionLowercase } from '~/core/auth/server/wallet-session';
 import { EDIT_TOOL_NAMES } from '~/core/chat/edit-types';
 import { CONTEXT_USAGE_DATA_TYPE, type ContextUsageData, ENTITY_ID_REGEX, MAX_PATH_CHARS } from '~/core/chat/limits';
-import { readWalletSessionLowercase } from '~/core/cookie/wallet-session';
 
 import {
   CLOSER_SYSTEM_PROMPT,

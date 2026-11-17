@@ -24,7 +24,7 @@ vi.mock('./rate-limit', () => ({
   editLimit: { limit: mocks.loggedIn },
 }));
 
-const { LEGACY_WALLET_ADDRESS, WALLET_SESSION, signWalletSession } = await import('~/core/cookie/wallet-session');
+const { LEGACY_WALLET_ADDRESS, WALLET_SESSION, signWalletSession } = await import('~/core/auth/server/wallet-session');
 
 const WALLET = '0x' + '3'.repeat(40);
 

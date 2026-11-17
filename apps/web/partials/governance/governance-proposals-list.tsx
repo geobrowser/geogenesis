@@ -7,7 +7,7 @@ import React from 'react';
 
 import { Effect } from 'effect';
 
-import { readWalletSession } from '~/core/cookie/wallet-session';
+import { readWalletSession } from '~/core/auth/server/wallet-session';
 import { proposalTimestampSeconds } from '~/core/governance/proposal-timestamp';
 import { compareOpenProposals } from '~/core/governance/sort-open-proposals';
 import {

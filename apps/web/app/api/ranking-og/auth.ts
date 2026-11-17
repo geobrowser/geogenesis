@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 
 import { getSpaceAccessById } from '~/core/access/space-access';
-import { readWalletSessionLowercase } from '~/core/cookie/wallet-session';
+import { readWalletSessionLowercase } from '~/core/auth/server/wallet-session';
 import { getSpaceByAddress } from '~/core/io/queries';
 
 const normalizeId = (id: string) => id.replace(/-/g, '').toLowerCase();

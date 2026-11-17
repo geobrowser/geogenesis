@@ -9,7 +9,7 @@ import { createAnthropic } from '@ai-sdk/anthropic';
 
 import { generateText, jsonSchema, stepCountIs, tool } from 'ai';
 
-import { readWalletSessionLowercase } from '~/core/cookie/wallet-session';
+import { readWalletSessionLowercase } from '~/core/auth/server/wallet-session';
 
 import { UTILITY_MODEL } from '../models';
 import { ipCeilingLimit, loggedInLimit } from '../rate-limit';

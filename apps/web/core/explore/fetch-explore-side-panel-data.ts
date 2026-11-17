@@ -1,8 +1,8 @@
 import { cache } from 'react';
 
+import { readWalletSession } from '~/core/auth/server/wallet-session';
 import { resolveMemberSpaceFromWalletSafe } from '~/core/browse/resolve-member-space-from-wallet';
 import { type ExploreCall, fetchCommunityCallsForExplore } from '~/core/community-calls/fetch-community-calls';
-import { readWalletSession } from '~/core/cookie/wallet-session';
 import { type FeaturedRanking, fetchFeaturedRankings } from '~/core/io/subgraph/fetch-featured-rankings';
 import { type FeaturedSpace, fetchFeaturedSpacesShared } from '~/core/io/subgraph/fetch-featured-spaces';
 import { fetchActiveMemberRequest } from '~/core/io/subgraph/fetch-proposed-members';

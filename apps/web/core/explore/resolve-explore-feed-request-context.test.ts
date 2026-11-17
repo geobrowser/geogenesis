@@ -33,7 +33,7 @@ const membership = vi.hoisted(() => ({
 const defaultMembership = membership.read;
 
 const { resolveExploreFeedRequestContext } = await import('./resolve-explore-feed-request-context');
-const { signWalletSession } = await import('~/core/cookie/wallet-session');
+const { signWalletSession } = await import('~/core/auth/server/wallet-session');
 
 const WALLET = '0x' + '1'.repeat(40);
 const SESSION = { value: signWalletSession(WALLET)! };

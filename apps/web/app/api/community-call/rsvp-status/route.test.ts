@@ -14,7 +14,7 @@ vi.mock('next/headers', () => ({
 vi.mock('~/core/browse/resolve-member-space-from-wallet', () => ({ resolveMemberSpaceFromWallet: mocks.resolve }));
 
 const { GET } = await import('./route');
-const { LEGACY_WALLET_ADDRESS, WALLET_SESSION, signWalletSession } = await import('~/core/cookie/wallet-session');
+const { LEGACY_WALLET_ADDRESS, WALLET_SESSION, signWalletSession } = await import('~/core/auth/server/wallet-session');
 
 const WALLET = '0x' + '5'.repeat(40);
 

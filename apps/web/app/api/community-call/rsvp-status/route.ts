@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 
+import { readWalletSession } from '~/core/auth/server/wallet-session';
 import { resolveMemberSpaceFromWallet } from '~/core/browse/resolve-member-space-from-wallet';
-import { readWalletSession } from '~/core/cookie/wallet-session';
 
 /**
  * Whether the signed-in user has RSVP'd to any community call.

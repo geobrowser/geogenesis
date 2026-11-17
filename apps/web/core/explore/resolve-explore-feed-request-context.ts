@@ -1,7 +1,7 @@
+import { readWalletSession } from '~/core/auth/server/wallet-session';
 import type { BrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data';
 import { browseSidebarVisibleSpaces, fetchBrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data';
 import { resolveMemberSpaceFromWalletSafe } from '~/core/browse/resolve-member-space-from-wallet';
-import { readWalletSession } from '~/core/cookie/wallet-session';
 import { normId } from '~/core/utils/norm-id';
 
 import { getGovernanceHomeSpaceContext } from '~/app/home/governance-home-space-ids';

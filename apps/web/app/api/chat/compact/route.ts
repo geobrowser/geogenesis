@@ -8,7 +8,7 @@ import { createAnthropic } from '@ai-sdk/anthropic';
 
 import { type UIMessage, generateText, isTextUIPart, isToolUIPart } from 'ai';
 
-import { readWalletSessionLowercase } from '~/core/cookie/wallet-session';
+import { readWalletSessionLowercase } from '~/core/auth/server/wallet-session';
 
 import { FOLLOW_UPS_MODEL } from '../models';
 import { anonLimit, ipCeilingLimit, loggedInLimit } from '../rate-limit';

@@ -2,10 +2,10 @@ import { IdUtils } from '@geoprotocol/geo-sdk/lite';
 
 import { notFound } from 'next/navigation';
 
+import { readWalletSession } from '~/core/auth/server/wallet-session';
 import { bountiesEnabledForNetwork, isBountyEntity } from '~/core/bounties/config';
 import { EVENT_SCHEMA } from '~/core/community-calls/constants';
 import { getRecordingUrls } from '~/core/community-calls/recordings';
-import { readWalletSession } from '~/core/cookie/wallet-session';
 import { DebateEntityView } from '~/core/debates/browse/debate-entity-view';
 import { DebateRemovedView } from '~/core/debates/browse/debate-removed-view';
 import { isDebateEntity } from '~/core/debates/is-debate-entity';

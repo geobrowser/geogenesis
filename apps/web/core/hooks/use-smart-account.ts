@@ -7,7 +7,6 @@ import { useQuery } from '@tanstack/react-query';
 import { toViemAccount, useWalletClient, useWallets } from '~/core/wallet/auth-hooks';
 import { findEmbeddedWallet } from '~/core/wallet/embedded-wallet';
 
-import { forgetSyncedWalletCookie, syncWalletCookie } from '../cookie/sync-wallet-cookie';
 import { ReceiptConfirmationTimeoutError } from '../errors';
 import { GEO_NETWORK } from '../sdk/geo-network';
 import {
@@ -52,10 +51,7 @@ export function useSmartAccount() {
       // signAuthorization routes through Privy's signing API (the wagmi
       // WalletClient is JSON-RPC and would be rejected by viem's
       // signAuthorization action).
-      if (!embeddedWallet) {
-        forgetSyncedWalletCookie();
-        return null;
-      }
+      if (!embeddedWallet) return null;
 
       const signer = await toViemAccount({ wallet: embeddedWallet });
 
@@ -214,11 +210,6 @@ export function useSmartAccount() {
             )
           ),
       };
-
-      // The EOA address, which the registry keys permissions on and the server's wallet session
-      // names (it takes the wallet from the Privy token, the same embedded EOA). Skips the request
-      // when this tab already synced this address (see `syncWalletCookie`).
-      await syncWalletCookie(wrapped.account.address);
 
       return wrapped;
     },

@@ -4,6 +4,7 @@
 // bigints → strings). The API key never leaves the server.
 import { type Edit, decodeEdit } from '@geoprotocol/grc-20';
 
+import { readWalletSessionLowercase } from '~/core/auth/server/wallet-session';
 import type {
   InjectPollResponse,
   SerializedOp,
@@ -12,7 +13,6 @@ import type {
   SerializedUnsetValue,
   SerializedValue,
 } from '~/core/chat/inject-types';
-import { readWalletSessionLowercase } from '~/core/cookie/wallet-session';
 
 import { ipCeilingLimit, loggedInLimit } from '../../rate-limit';
 

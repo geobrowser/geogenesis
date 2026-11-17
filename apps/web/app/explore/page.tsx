@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { preload } from 'react-dom';
 
-import { readWalletSession } from '~/core/cookie/wallet-session';
+import { readWalletSession } from '~/core/auth/server/wallet-session';
 import { PUBLIC_BEST_FEED_PATH } from '~/core/explore/explore-feed-params';
 import { readLeadPosterUrls } from '~/core/explore/lead-poster-preload';
 

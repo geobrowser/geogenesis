@@ -7,14 +7,25 @@ import {
   WALLET_SESSION_COOKIE_OPTIONS,
   readWalletSessionFrom,
   signWalletSession,
-} from '~/core/cookie/wallet-session';
+} from '~/core/auth/server/wallet-session';
+import { WALLET_SESSION_HINT } from '~/core/auth/wallet-session-shared';
 
+import { getClientIp } from '../client-ip';
 import { isSameOrigin } from '../same-origin';
+import { checkWalletSessionIpRateLimit } from './rate-limit';
 
-export type WalletSessionStatus = 'unchanged' | 'renewed' | 'issued';
-export type WalletSessionResponse = { wallet: string | null; status: WalletSessionStatus | 'unverified' };
+/**
+ * `issued`: the request had no valid session for this wallet, so its page rendered signed out.
+ * `unverified` (401): the token did not verify. `unconfigured` (503): no secret; retrying won't help.
+ */
+export type WalletSessionStatus = 'unchanged' | 'renewed' | 'issued' | 'unverified' | 'unconfigured' | 'rate_limited';
+export type WalletSessionResponse = { wallet: string | null; status: WalletSessionStatus };
 
-const json = (status: number, body: WalletSessionResponse) => Response.json(body, { status });
+const json = (status: number, body: WalletSessionResponse, headers?: HeadersInit) =>
+  Response.json(body, { status, headers });
+
+/** Not httpOnly: the client reads it to know there is a session to clear. */
+const HINT_OPTIONS = { ...WALLET_SESSION_COOKIE_OPTIONS, httpOnly: false } as const;
 
 /**
  * Issues `walletSession` for the verified Privy token's wallet; writes only on change or renewal.
@@ -22,6 +33,11 @@ const json = (status: number, body: WalletSessionResponse) => Response.json(body
  */
 export async function POST(req: Request) {
   if (!isSameOrigin(req)) return new Response(null, { status: 403 });
+
+  const limit = await checkWalletSessionIpRateLimit(getClientIp(req));
+  if (!limit.ok) {
+    return json(429, { wallet: null, status: 'rate_limited' }, { 'Retry-After': String(limit.retryAfter) });
+  }
 
   const appId = process.env.NEXT_PUBLIC_PRIVY_APP_ID ?? '';
   const identity = await verifyPrivyIdentityToken(bearerToken(req.headers.get('authorization')), { appId });
@@ -32,23 +48,25 @@ export async function POST(req: Request) {
 
   const current = readWalletSessionFrom(cookieStore);
   const sameWallet = current?.address.toLowerCase() === identity.walletAddress;
-  if (sameWallet && !current.renewalDue) return json(200, { wallet: identity.walletAddress, status: 'unchanged' });
+  if (sameWallet && !current.renewalDue) {
+    if (!cookieStore.has(WALLET_SESSION_HINT)) cookieStore.set(WALLET_SESSION_HINT, '1', HINT_OPTIONS);
+    return json(200, { wallet: identity.walletAddress, status: 'unchanged' });
+  }
 
   const session = signWalletSession(identity.walletAddress);
-  if (!session) return json(503, { wallet: null, status: 'unverified' });
+  if (!session) return json(503, { wallet: null, status: 'unconfigured' });
   cookieStore.set(WALLET_SESSION, session, WALLET_SESSION_COOKIE_OPTIONS);
+  cookieStore.set(WALLET_SESSION_HINT, '1', HINT_OPTIONS);
 
   return json(200, { wallet: identity.walletAddress, status: sameWallet ? 'renewed' : 'issued' });
 }
 
-/**
- * Clears server identity: sign-out, and the feed's stale-session cleanup when Privy has no session
- * (see `useClearStaleWalletCookie`). Deleting only ever makes the caller anonymous.
- */
+/** Clears server identity on sign-out, or when Privy has no session. Only ever makes the caller anonymous. */
 export async function DELETE(req: Request) {
   if (!isSameOrigin(req)) return new Response(null, { status: 403 });
   const cookieStore = await cookies();
-  if (cookieStore.has(WALLET_SESSION)) cookieStore.delete(WALLET_SESSION);
-  if (cookieStore.has(LEGACY_WALLET_ADDRESS)) cookieStore.delete(LEGACY_WALLET_ADDRESS);
+  for (const name of [WALLET_SESSION, WALLET_SESSION_HINT, LEGACY_WALLET_ADDRESS]) {
+    if (cookieStore.has(name)) cookieStore.delete(name);
+  }
   return new Response(null, { status: 204 });
 }

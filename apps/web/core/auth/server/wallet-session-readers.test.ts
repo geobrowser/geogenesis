@@ -7,8 +7,8 @@ import { describe, expect, it } from 'vitest';
  * from going back to the forgeable `walletAddress` cookie or parsing the session by hand.
  */
 
-const ROOT = join(__dirname, '..', '..');
-const DIRS = ['app', 'core', 'partials', 'lib'];
+const ROOT = join(__dirname, '..', '..', '..');
+const DIRS = ['app', 'core', 'partials'];
 
 function sourceFiles(dir: string): string[] {
   let entries: string[];
@@ -24,18 +24,27 @@ function sourceFiles(dir: string): string[] {
   });
 }
 
-const files = DIRS.flatMap(dir => sourceFiles(join(ROOT, dir))).map(path => ({
+/** Root-level modules such as `proxy.ts` and `instrumentation.ts`. */
+const rootFiles = readdirSync(ROOT)
+  .filter(entry => /\.(ts|tsx)$/.test(entry) && !entry.endsWith('.d.ts'))
+  .map(entry => join(ROOT, entry));
+
+const files = [...rootFiles, ...DIRS.flatMap(dir => sourceFiles(join(ROOT, dir)))].map(path => ({
   path: relative(ROOT, path),
   text: readFileSync(path, 'utf8'),
 }));
 
 describe('wallet session readers', () => {
+  it('scans root modules', () => {
+    expect(files.map(f => f.path)).toEqual(expect.arrayContaining(['proxy.ts', 'instrumentation.ts']));
+  });
+
   it('only the session module and its route touch the legacy cookie', () => {
     const touching = files
       .filter(f => f.text.includes('LEGACY_WALLET_ADDRESS') || /['"]walletAddress['"]\s*\)/.test(f.text))
       .map(f => f.path)
       .sort();
-    expect(touching).toEqual(['app/api/wallet-session/route.ts', 'core/cookie/wallet-session.ts']);
+    expect(touching).toEqual(['app/api/wallet-session/route.ts', 'core/auth/server/wallet-session.ts']);
   });
 
   it('only the session module and its route read the session cookie directly', () => {
@@ -43,6 +52,6 @@ describe('wallet session readers', () => {
       .filter(f => /\bWALLET_SESSION\b/.test(f.text) || /['"]walletSession['"]/.test(f.text))
       .map(f => f.path)
       .sort();
-    expect(reading).toEqual(['app/api/wallet-session/route.ts', 'core/cookie/wallet-session.ts']);
+    expect(reading).toEqual(['app/api/wallet-session/route.ts', 'core/auth/server/wallet-session.ts']);
   });
 });

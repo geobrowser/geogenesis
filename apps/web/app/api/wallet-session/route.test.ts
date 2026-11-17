@@ -5,8 +5,8 @@ import {
   WALLET_SESSION,
   readWalletSessionFrom,
   signWalletSession,
-} from '~/core/cookie/wallet-session';
-import { WALLET_SESSION_RENEW_AFTER_SECONDS } from '~/core/cookie/wallet-session-lifetime';
+} from '~/core/auth/server/wallet-session';
+import { WALLET_SESSION_HINT, WALLET_SESSION_RENEW_AFTER_SECONDS } from '~/core/auth/wallet-session-shared';
 
 const mocks = vi.hoisted(() => {
   const values = new Map<string, string>();
@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => {
       delete: vi.fn((name: string) => void values.delete(name)),
     },
     verify: vi.fn(),
+    rateLimit: vi.fn(async () => ({ ok: true }) as { ok: true } | { ok: false; retryAfter: number }),
   };
 });
 
@@ -27,6 +28,8 @@ vi.mock('~/core/auth/server/privy-identity-token', async importOriginal => ({
   ...(await importOriginal<typeof import('~/core/auth/server/privy-identity-token')>()),
   verifyPrivyIdentityToken: mocks.verify,
 }));
+
+vi.mock('./rate-limit', () => ({ checkWalletSessionIpRateLimit: mocks.rateLimit }));
 
 const { DELETE, POST } = await import('./route');
 
@@ -44,6 +47,7 @@ beforeEach(() => {
   mocks.store.set.mockClear();
   mocks.store.delete.mockClear();
   mocks.verify.mockReset();
+  mocks.rateLimit.mockClear();
   vi.stubEnv('WALLET_SESSION_SECRET', 'test-secret');
   vi.stubEnv('NEXT_PUBLIC_PRIVY_APP_ID', 'app');
 });
@@ -62,6 +66,33 @@ describe('POST /api/wallet-session', () => {
     expect(await res.json()).toEqual({ wallet: WALLET, status: 'issued' });
     expect(mocks.verify).toHaveBeenCalledWith('good', { appId: 'app' });
     expect(readWalletSessionFrom(mocks.store)?.address.toLowerCase()).toBe(WALLET);
+    expect(mocks.store.set).toHaveBeenCalledWith(
+      WALLET_SESSION_HINT,
+      '1',
+      expect.objectContaining({ httpOnly: false })
+    );
+  });
+
+  it('answers 503 unconfigured when there is no secret to sign with', async () => {
+    vi.stubEnv('WALLET_SESSION_SECRET', '');
+    vi.stubEnv('NODE_ENV', 'production');
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mocks.verify.mockResolvedValue({ userId: 'did:privy:1', walletAddress: WALLET });
+
+    const res = await POST(request('POST', { token: 'good' }));
+
+    expect(res.status).toBe(503);
+    expect(await res.json()).toEqual({ wallet: null, status: 'unconfigured' });
+    expect(mocks.store.set).not.toHaveBeenCalled();
+    error.mockRestore();
+  });
+
+  it('caps requests per IP before verifying', async () => {
+    mocks.rateLimit.mockResolvedValueOnce({ ok: false, retryAfter: 9 });
+    const res = await POST(request('POST', { token: 'good' }));
+    expect(res.status).toBe(429);
+    expect(res.headers.get('Retry-After')).toBe('9');
+    expect(mocks.verify).not.toHaveBeenCalled();
   });
 
   it('writes nothing for a missing or unverified token, whatever the body names', async () => {
@@ -85,8 +116,21 @@ describe('POST /api/wallet-session', () => {
   });
 
   // A write on every visit is what #2672 was; the client refreshes only on `issued`.
+  it('adds a missing hint without rewriting the session', async () => {
+    const session = signWalletSession(WALLET)!;
+    mocks.values.set(WALLET_SESSION, session);
+    mocks.verify.mockResolvedValue({ userId: 'did:privy:1', walletAddress: WALLET });
+
+    await POST(request('POST', { token: 'good' }));
+
+    expect(mocks.values.get(WALLET_SESSION)).toBe(session);
+    expect(mocks.store.set).toHaveBeenCalledOnce();
+    expect(mocks.store.set).toHaveBeenCalledWith(WALLET_SESSION_HINT, '1', expect.anything());
+  });
+
   it('does not rewrite a current session for the same wallet', async () => {
     mocks.values.set(WALLET_SESSION, signWalletSession(WALLET)!);
+    mocks.values.set(WALLET_SESSION_HINT, '1');
     mocks.verify.mockResolvedValue({ userId: 'did:privy:1', walletAddress: WALLET });
 
     const res = await POST(request('POST', { token: 'good' }));
@@ -135,8 +179,9 @@ describe('POST /api/wallet-session', () => {
 });
 
 describe('DELETE /api/wallet-session', () => {
-  it('clears the session and any legacy cookie', async () => {
+  it('clears the session, its hint and any legacy cookie', async () => {
     mocks.values.set(WALLET_SESSION, signWalletSession(WALLET)!);
+    mocks.values.set(WALLET_SESSION_HINT, '1');
     mocks.values.set(LEGACY_WALLET_ADDRESS, WALLET);
 
     const res = await DELETE(request('DELETE'));

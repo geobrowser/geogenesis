@@ -2,8 +2,8 @@ import * as React from 'react';
 
 import * as Effect from 'effect/Effect';
 
+import { readWalletSession } from '~/core/auth/server/wallet-session';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
-import { readWalletSession } from '~/core/cookie/wallet-session';
 import type { Space } from '~/core/io/dto/spaces';
 import { getSpaces } from '~/core/io/queries';
 import { cachedFetchProfile } from '~/core/io/subgraph';

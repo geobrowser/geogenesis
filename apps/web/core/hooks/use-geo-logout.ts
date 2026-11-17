@@ -5,7 +5,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useSetAtom } from 'jotai';
 
 import { loggedOut } from '~/core/analytics';
-import { clearWalletSession } from '~/core/cookie/sync-wallet-cookie';
+import { clearWalletSession } from '~/core/auth/wallet-session-client';
 import { resetGeoChatSession } from '~/core/debates/api';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useEditable } from '~/core/state/editable-store';

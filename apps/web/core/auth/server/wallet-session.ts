@@ -2,7 +2,9 @@ import { cookies } from 'next/headers';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { getAddress, isAddress } from 'viem';
 
-import { WALLET_SESSION_MAX_AGE_SECONDS, WALLET_SESSION_RENEW_AFTER_SECONDS } from './wallet-session-lifetime';
+import { reportError } from '~/core/telemetry/logger';
+
+import { WALLET_SESSION_MAX_AGE_SECONDS, WALLET_SESSION_RENEW_AFTER_SECONDS } from '../wallet-session-shared';
 
 /**
  * `v1.<address>.<issuedAtSeconds>.<HMAC-SHA256>` keyed by `WALLET_SESSION_SECRET`, issued after a
@@ -29,26 +31,38 @@ export const WALLET_SESSION_COOKIE_OPTIONS = {
 
 type CookieReader = { get(name: string): { value: string } | undefined };
 
-let warnedMissingSecret = false;
+let reportedMissingSecret = false;
+
+/** Reports a missing production secret to Sentry, once per server instance. */
+export function reportMissingWalletSessionSecret() {
+  if (reportedMissingSecret) return;
+  reportedMissingSecret = true;
+  const error = new Error('WALLET_SESSION_SECRET is not set; every request reads as signed out');
+  console.error(`[wallet-session] ${error.message}`);
+  reportError(error, { tags: { area: 'wallet-session' } });
+}
 
 function secret(): string | null {
   const value = process.env.WALLET_SESSION_SECRET;
   if (value) return value;
   if (process.env.NODE_ENV !== 'production') return DEV_SECRET;
-  if (!warnedMissingSecret) {
-    warnedMissingSecret = true;
-    console.error('[wallet-session] WALLET_SESSION_SECRET is not set; every request reads as signed out.');
-  }
+  reportMissingWalletSessionSecret();
   return null;
 }
 
 /** Test seam. */
 export function resetWalletSessionWarningForTests() {
-  warnedMissingSecret = false;
+  reportedMissingSecret = false;
 }
 
 function mac(key: string, payload: string): Buffer {
   return createHmac('sha256', key).update(payload).digest();
+}
+
+function macMatches(key: string, payload: string, signature: string): boolean {
+  const expected = mac(key, payload);
+  const actual = Buffer.from(signature, 'base64url');
+  return actual.length === expected.length && timingSafeEqual(actual, expected);
 }
 
 /** The cookie value for `address`, or null when there is no secret to sign with. */
@@ -61,7 +75,11 @@ export function signWalletSession(address: string, now = Date.now()): string | n
 
 export type VerifiedWalletSession = { address: `0x${string}`; renewalDue: boolean };
 
-/** The session a cookie value vouches for, or null when it is forged, malformed or expired. */
+/**
+ * The session a cookie value vouches for, or null when it is forged, malformed or expired. A value
+ * signed with `WALLET_SESSION_SECRET_PREVIOUS` verifies but is due for renewal, so it is re-signed
+ * with the current secret on the next sync.
+ */
 export function verifyWalletSession(value: string | undefined, now = Date.now()): VerifiedWalletSession | null {
   if (!value) return null;
   const key = secret();
@@ -76,11 +94,13 @@ export function verifyWalletSession(value: string | undefined, now = Date.now())
   const ageSeconds = now / 1000 - Number(issuedAt);
   if (ageSeconds < -FUTURE_SKEW_SECONDS || ageSeconds > WALLET_SESSION_MAX_AGE_SECONDS) return null;
 
-  const expected = mac(key, `${version}.${address}.${issuedAt}`);
-  const actual = Buffer.from(signature, 'base64url');
-  if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) return null;
-
-  return { address, renewalDue: ageSeconds > WALLET_SESSION_RENEW_AFTER_SECONDS };
+  const payload = `${version}.${address}.${issuedAt}`;
+  if (macMatches(key, payload, signature)) {
+    return { address, renewalDue: ageSeconds > WALLET_SESSION_RENEW_AFTER_SECONDS };
+  }
+  const previous = process.env.WALLET_SESSION_SECRET_PREVIOUS;
+  if (previous && macMatches(previous, payload, signature)) return { address, renewalDue: true };
+  return null;
 }
 
 /** The verified session in `cookieStore`, for the code that issues sessions. */

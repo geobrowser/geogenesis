@@ -1,7 +1,7 @@
 // POST /api/chat/proxy-image — members-only image proxy for `setEntityImage`.
 // Direct browser fetch is CORS-blocked on most public image hosts; this route
 // fetches server-side with a real User-Agent and streams the bytes back.
-import { readWalletSessionLowercase } from '~/core/cookie/wallet-session';
+import { readWalletSessionLowercase } from '~/core/auth/server/wallet-session';
 
 import { ipCeilingLimit, loggedInLimit } from '../rate-limit';
 import { SsrfBlockedError, isPrivateHost, safeFetch } from '../web-fetch/helpers';

@@ -1,8 +1,8 @@
 // POST /api/chat/authorize-write — auth gate before the client dispatcher
 // applies a write intent. Graph-state validation lives client-side in
 // core/chat/write-validators.ts so locally-minted entities are addressable.
+import { readWalletSessionLowercase } from '~/core/auth/server/wallet-session';
 import { EDIT_TOOL_NAMES, type EditToolFailure, notAuthorized, notSignedIn, rateLimited } from '~/core/chat/edit-types';
-import { readWalletSessionLowercase } from '~/core/cookie/wallet-session';
 
 import { buildWriteContext } from '../tools/write/context';
 

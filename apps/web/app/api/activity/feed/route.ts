@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 
+import { readWalletSession } from '~/core/auth/server/wallet-session';
 import type { BrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data';
 import { resolveMemberSpaceFromWalletSafe } from '~/core/browse/resolve-member-space-from-wallet';
-import { readWalletSession } from '~/core/cookie/wallet-session';
 import { parseExploreTime } from '~/core/explore/explore-feed-params';
 import { feedUnavailableResponse } from '~/core/explore/feed-route-response';
 import { fetchExploreFeed } from '~/core/explore/fetch-explore-feed';

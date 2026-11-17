@@ -59,15 +59,6 @@ describe('useFeedViewer', () => {
     expect(result.current.viewerAddress).toBe(COOKIE);
   });
 
-  it('clears the stale wallet cookie once, when Privy finds no session', async () => {
-    mocks.ready = true;
-    const { useFeedViewer } = await load();
-    renderHook(() => useFeedViewer(COOKIE, true));
-    renderHook(() => useFeedViewer(COOKIE, false));
-    expect(mocks.fetch).toHaveBeenCalledTimes(1);
-    expect(mocks.fetch).toHaveBeenCalledWith('/api/wallet-session', { method: 'DELETE' });
-  });
-
   it('keeps the cookie, and the wait, for a reader Privy has signed in', async () => {
     mocks.ready = true;
     mocks.authenticated = true;

@@ -1,7 +1,7 @@
 // POST /api/chat/inject — submits a URL to the external inject pipeline.
 // We proxy here so the bearer token stays server-side.
+import { readWalletSessionLowercase } from '~/core/auth/server/wallet-session';
 import type { InjectType } from '~/core/chat/inject-types';
-import { readWalletSessionLowercase } from '~/core/cookie/wallet-session';
 
 import { ipCeilingLimit, loggedInLimit } from '../rate-limit';
 

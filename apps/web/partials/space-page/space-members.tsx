@@ -1,5 +1,5 @@
 import { getSpaceAccessForRequest } from '~/core/access/get-space-access-for-request';
-import { readWalletSession } from '~/core/cookie/wallet-session';
+import { readWalletSession } from '~/core/auth/server/wallet-session';
 import { getCachedSpaceParticipantsPage } from '~/core/space-members/get-cached-space-participants-page';
 
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';

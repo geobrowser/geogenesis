@@ -6,8 +6,8 @@ import { createAnthropic } from '@ai-sdk/anthropic';
 
 import { generateObject, jsonSchema } from 'ai';
 
+import { readWalletSessionLowercase } from '~/core/auth/server/wallet-session';
 import type { InjectType } from '~/core/chat/inject-types';
-import { readWalletSessionLowercase } from '~/core/cookie/wallet-session';
 
 import { logCallCost } from '../cost';
 import { FOLLOW_UPS_MODEL } from '../models';

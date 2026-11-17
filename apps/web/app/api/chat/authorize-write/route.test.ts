@@ -11,7 +11,7 @@ vi.mock('../tools/write/context', () => ({
 }));
 
 const { POST } = await import('./route');
-const { LEGACY_WALLET_ADDRESS, WALLET_SESSION, signWalletSession } = await import('~/core/cookie/wallet-session');
+const { LEGACY_WALLET_ADDRESS, WALLET_SESSION, signWalletSession } = await import('~/core/auth/server/wallet-session');
 
 const WALLET = '0x' + '1'.repeat(40);
 const signIn = () => jar.set(WALLET_SESSION, signWalletSession(WALLET)!);
