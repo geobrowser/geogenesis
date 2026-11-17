@@ -508,6 +508,14 @@ function Editor({ debateId }: { debateId: string }) {
     });
   };
 
+  // Play reel, or Stop while the reel plays: the transport button and Space.
+  const toggleReel = () => {
+    if (range.state.kind !== 'idle' && range.state.id === 'reel') {
+      range.stop();
+      player.current?.pause();
+    } else startRange('reel', reelPlayable);
+  };
+
   const rootRef = React.useRef<HTMLDivElement>(null);
   useEditorKeyboard(rootRef, {
     popoverOpen: shown.popover !== null,
@@ -517,7 +525,9 @@ function Editor({ debateId }: { debateId: string }) {
       dispatch({ type: 'escape' });
       return true;
     },
-    // Space plays the reel once the editor has a player it can drive (GEO-3773, PR 1b).
+    onSpace: () => {
+      if (!inlineUnavailable && reelPlayable.length > 0) toggleReel();
+    },
   });
 
   // The check's report: above the transcript, or on its own once a check lands.
@@ -700,12 +710,7 @@ function Editor({ debateId }: { debateId: string }) {
               small
               variant="secondary"
               disabled={inlineUnavailable || reelPlayable.length === 0}
-              onClick={() => {
-                if (range.state.kind !== 'idle' && range.state.id === 'reel') {
-                  range.stop();
-                  player.current?.pause();
-                } else startRange('reel', reelPlayable);
-              }}
+              onClick={toggleReel}
             >
               {range.state.kind !== 'idle' && range.state.id === 'reel' ? 'Stop' : 'Play reel'}
             </Button>

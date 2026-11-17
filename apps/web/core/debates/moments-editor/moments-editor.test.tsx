@@ -2090,6 +2090,35 @@ describe('playing clips in the editor (GEO-3773)', () => {
     expect(screen.getByRole('button', { name: 'Play reel' })).toBeInTheDocument();
   });
 
+  it('plays and stops the reel on Space, and leaves Space to a text field', () => {
+    mocks.plan.data = entry({
+      live_reel: {
+        clock: 'video',
+        clips: [{ start_ms: 900, end_ms: 3_000, speaker_slot: 1, claim_index: 0, claim_text: 'Coffee is low stakes' }],
+      },
+    });
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+
+    fireEvent.keyDown(document.body, { key: ' ', code: 'Space' });
+    expect(player.jumpTo).toHaveBeenCalledOnce();
+    expect(screen.getByRole('button', { name: 'Stop' })).toBeInTheDocument();
+
+    fireEvent.keyDown(document.body, { key: ' ', code: 'Space' });
+    expect(player.pause).toHaveBeenCalledOnce();
+    expect(screen.getByRole('button', { name: 'Play reel' })).toBeInTheDocument();
+
+    const field = screen.getAllByRole('textbox')[0];
+    fireEvent.keyDown(field, { key: ' ', code: 'Space' });
+    expect(player.jumpTo).toHaveBeenCalledOnce();
+  });
+
+  it('leaves Space alone while inline playback is unavailable', () => {
+    getDefaultStore().set(inlinePlaybackUnavailableAtom, true);
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    fireEvent.keyDown(document.body, { key: ' ', code: 'Space' });
+    expect(player.jumpTo).not.toHaveBeenCalled();
+  });
+
   it("plays a carried reel's clip spans, which have no played cut", () => {
     const clips = [
       { start_ms: 3_100, end_ms: 4_900, speaker_slot: 0, claim_index: 0, claim_text: 'Coffee is low stakes' },
