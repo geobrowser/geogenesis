@@ -395,6 +395,8 @@ export function useDebatePlayback(
    * into media event listeners, and a new identity on every mute toggle would re-bind them.
    */
   const mutedByUserRef = React.useRef(mutedByUser);
+  /** `playing` for the tick, for the same reason as `mutedByUserRef`. */
+  const playingRef = React.useRef(playing);
   const lastSyncSeekAtRef = React.useRef(0);
   /**
    * The mute each element had at the last tick, and when it last went from muted to unmuted.
@@ -697,6 +699,10 @@ export function useDebatePlayback(
   React.useEffect(() => {
     mutedByUserRef.current = mutedByUser;
   }, [mutedByUser]);
+
+  React.useEffect(() => {
+    playingRef.current = playing;
+  }, [playing]);
 
   // Which recordings `urls` currently holds signed URLs for, so re-entering a card does
   // not re-request them (GEO-2895).
@@ -1347,19 +1353,31 @@ export function useDebatePlayback(
     // listening to — and records it as a *user* pause, which auto-resume then refuses to undo.
     // That is the reported bug: switch windows and the debate goes silent until you click it.
     // A hidden tab is reconciled on return instead; see the visibilitychange effect below.
+    //
+    // One that stopped at its end is finished, not paused: the other carries on (GEO-3778). So the
+    // split is between the element still meant to play and the rest, and once one has finished,
+    // the browser stopping the other leaves both paused while the card still says playing.
+    const primaryHeld = Boolean(primaryVideo?.paused && mediaFinished(primaryVideo));
+    const secondaryHeld = Boolean(secondaryVideo?.paused && mediaFinished(secondaryVideo));
+    const splitPair =
+      primaryVideo &&
+      secondaryVideo &&
+      (primaryVideo.paused !== secondaryVideo.paused
+        ? !mediaFinished(primaryVideo.paused ? primaryVideo : secondaryVideo)
+        : primaryVideo.paused && primaryHeld !== secondaryHeld && playingRef.current);
     if (
       primaryVideo &&
       secondaryVideo &&
+      splitPair &&
       pairIsSettled &&
       !primaryUnplayable &&
       !secondaryUnplayable &&
-      primaryVideo.paused !== secondaryVideo.paused &&
-      // One that stopped at its end is finished, not paused: the other carries on (GEO-3778).
-      !mediaFinished(primaryVideo.paused ? primaryVideo : secondaryVideo) &&
       playhead < timelineSeconds
     ) {
-      const stillPlaying = primaryVideo.paused ? secondaryVideo : primaryVideo;
-      const stopped = primaryVideo.paused ? primaryVideo : secondaryVideo;
+      // With one held at its end, the stopped one is the other, and pausing the held one is a no-op.
+      const primaryStopped = primaryVideo.paused !== secondaryVideo.paused ? primaryVideo.paused : secondaryHeld;
+      const stillPlaying = primaryStopped ? secondaryVideo : primaryVideo;
+      const stopped = primaryStopped ? primaryVideo : secondaryVideo;
       stillPlaying.pause();
       /*
        * Unless the browser was refusing sound rather than stopping playback (GEO-3594).
@@ -1472,6 +1490,8 @@ export function useDebatePlayback(
     if (transitionHoldRef.current) transitionHoldRef.current.resume = false;
     // Supersede any resume still confirming, so it cannot un-pause the viewer.
     resumeGenerationRef.current++;
+    // Before the pause below, so a tick it triggers does not read the stop as the browser's.
+    playingRef.current = false;
     for (const video of videos()) video.pause();
     setPlaying(false);
     setUserPaused(true);

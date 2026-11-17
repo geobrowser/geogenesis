@@ -3255,6 +3255,38 @@ describe('useDebatePlayback — a recording that ends before the timeline (GEO-3
     });
   });
 
+  it('plays on muted when the browser refuses to unmute the one still playing', async () => {
+    const { result, short, long } = await playingWithShort(1);
+    mocks.forgetGestureVideoUnlock.mockReset();
+    act(() => result.current.setMutedByUser(false));
+    try {
+      // The turn gate unmutes slot 2 off-gesture, and the browser answers by pausing it.
+      act(() => result.current.onPlaybackTick());
+      long.muted = false;
+      long.browserPause();
+      act(() => result.current.onPlaybackTick());
+
+      expect(short.paused).toBe(true);
+      expect(result.current.playing).toBe(false);
+      expect(result.current.userPaused).toBe(false);
+      expect(result.current.mutedByUser).toBe(true);
+      expect(mocks.forgetGestureVideoUnlock).toHaveBeenCalledWith(long);
+    } finally {
+      act(() => result.current.setMutedByUser(true));
+    }
+  });
+
+  it('shows a system pause of the one still playing as paused', async () => {
+    const { result, long } = await playingWithShort(1);
+
+    long.browserPause();
+    act(() => result.current.onPlaybackTick());
+
+    expect(result.current.playing).toBe(false);
+    expect(result.current.userPaused).toBe(true);
+    expect(result.current.playbackEnded).toBe(false);
+  });
+
   it('ends a debate whose recordings both stop short of the timeline', async () => {
     const { result, slot1, slot2 } = await mountedPair();
     withDuration(slot1, 59);
