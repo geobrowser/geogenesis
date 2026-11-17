@@ -248,6 +248,23 @@ describe('the side transcript without word timings (GEO-3642)', () => {
     expect(view.actions.current.selectClip).toHaveBeenCalledWith('a');
   });
 
+  it('brings a clip picked elsewhere into view at its first sentence', () => {
+    const { sentences } = longDebate(12, 10);
+    const clips = [clip('a', 10_000, 15_000), clip('b', 42_000, 50_000)];
+    const view = setUp({ words: [], sentences, wordTiming: false, clips, speakers: [1, 2], selected: 0 });
+    const root = view.root();
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      if (this === root) return new DOMRect(0, 0, 360, 600);
+      // Clip 2's first sentence (turn 7) far below the box; every other sentence at the top.
+      return this.dataset.sentence === '7' ? new DOMRect(0, 2_000, 40, 24) : new DOMRect(0, 0, 40, 24);
+    });
+    root.scrollTop = 0;
+    // Picked on the strip or the monitor.
+    view.rerender({ selected: 1 });
+    // 2000 - 0 - 600 × 0.22.
+    expect(root.scrollTop).toBe(1_868);
+  });
+
   it('leaves a word-timed transcript’s sentence with no words untinted, numbered after it', () => {
     // Word timings, but debater 2's sentence has no words to show: it is marked as before this
     // fallback, while the clip's own number stays on its first word.

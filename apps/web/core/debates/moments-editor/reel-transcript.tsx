@@ -556,20 +556,26 @@ export const ReelTranscript = React.memo(function ReelTranscript({
   React.useLayoutEffect(() => markPlayhead(null, false));
 
   // The selected clip comes into view when it is picked anywhere but here, and when the transcript
-  // comes back (✕ on a panel): its first word, a fifth of the way down. With none, the playhead's word.
+  // comes back (✕ on a panel): its first word, a fifth of the way down (its first sentence on a
+  // transcript without word timings). With none, the playhead's word.
   const pickedHere = React.useRef(false);
   const selectedKey = selected >= 0 ? (clips[selected]?.key ?? null) : null;
-  const firstOfSelected = selected >= 0 ? owners.first[selected] : -1;
+  const firstOfSelected = selected >= 0 ? (hasWords ? owners.first[selected] : sentenceOwners.first[selected]) : -1;
   const firstRef = React.useRef(firstOfSelected);
   firstRef.current = firstOfSelected;
+  const hasWordsRef = React.useRef(hasWords);
+  hasWordsRef.current = hasWords;
   React.useEffect(() => {
     const root = rootRef.current;
     if (pickedHere.current) {
       pickedHere.current = false;
       return;
     }
-    if (!root || selectedKey === null) return;
-    scrollWord(root, wordElement(root, firstRef.current), 0.22);
+    if (!root || selectedKey === null || firstRef.current < 0) return;
+    const element = hasWordsRef.current
+      ? wordElement(root, firstRef.current)
+      : root.querySelector(`[data-sentence="${firstRef.current}"]`);
+    scrollWord(root, element, 0.22);
   }, [selectedKey]);
   React.useEffect(() => {
     const root = rootRef.current;
