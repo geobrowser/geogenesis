@@ -9,6 +9,7 @@ import type { DebateLobbyClaim, MatchmakingClaim } from '../api';
 import { claimRowKey } from '../matchmaking/claim-row-key';
 import { type ClaimCardDefaults, ClaimsTab } from '../matchmaking/claims-tab';
 import { useHubScrollSelector } from '../matchmaking/hub-scroll';
+import { useAgendaClaimFilterContext } from '../todays-claims/agenda-claim-filter';
 import { LOBBY_CLAIMS_CONTROLS_TOP_CLASS } from './lobby-claims-sticky';
 import {
   exploreRoomClaimBatches,
@@ -37,6 +38,8 @@ export function LobbyExploreClaims({ lobby }: { lobby: LobbyPageView }) {
     setBatches(current => (sameBatches(current, next) ? current : next));
   }, []);
   const renderRoomCard = useLobbyRoomCardRenderer(lobby, batches);
+  // GEO-3775: agenda claims only when the lobby is; the room provides the filter.
+  const agendaFilter = useAgendaClaimFilterContext();
   const renderClaim = React.useCallback(
     (entry: MatchmakingClaim, card: ClaimCardDefaults) => renderRoomCard(entry, card.answersReady),
     [renderRoomCard]
@@ -48,6 +51,7 @@ export function LobbyExploreClaims({ lobby }: { lobby: LobbyPageView }) {
     <div className="-mx-4">
       <ClaimsTab
         variant="lobbyExplore"
+        agendaFilter={agendaFilter}
         renderClaim={renderClaim}
         onVisibleClaims={onVisibleClaims}
         stickyTopClassName={LOBBY_CLAIMS_CONTROLS_TOP_CLASS}

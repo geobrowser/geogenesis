@@ -3205,6 +3205,23 @@ describe('agenda-only', () => {
     expect(await screen.findByText('No claims are on today’s agendas yet.')).toBeInTheDocument();
   });
 
+  // A lobby's Explore (GEO-3775, AGENDA_ONLY_LOBBY) narrows the same way, with the same copy.
+  it('narrows a lobby’s Explore to the agendas’ claims, and says so when they list none', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [
+      featuredClaim(ON_AGENDA, 'On an agenda'),
+      featuredClaim(OFF_AGENDA, 'On no agenda'),
+    ];
+    render(<ClaimsTab variant="lobbyExplore" agendaFilter={agenda()} />);
+
+    expect(await screen.findByText('On an agenda')).toBeInTheDocument();
+    expect(screen.queryByText('On no agenda')).not.toBeInTheDocument();
+    expect(mocks.taggedFiltersAskedFor.at(-1).onlyClaimIds).toEqual([bare(ON_AGENDA)]);
+    cleanup();
+
+    render(<ClaimsTab variant="lobbyExplore" agendaFilter={agenda('empty')} />);
+    expect(await screen.findByText('No claims are on today’s agendas yet.')).toBeInTheDocument();
+  });
+
   it('asks geo-chat for the agendas’ spaces and lists only their claims', async () => {
     mocks.claims = [
       claim(ON_AGENDA, 'Mine, on an agenda', true),

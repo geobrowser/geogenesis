@@ -8,6 +8,8 @@ import type { DebateLobbyClaim, MatchmakingClaim } from '../api';
 import { claimRowKey } from '../matchmaking/claim-row-key';
 import type { ClaimCardDefaults } from '../matchmaking/claims-tab';
 import { HUB_SCROLL_SELECTOR, HubScrollSelectorProvider } from '../matchmaking/hub-scroll';
+import { AgendaClaimFilterContext, INACTIVE_AGENDA_FILTER } from '../todays-claims/agenda-claim-filter';
+import { agendaFilterFixture } from '../todays-claims/debate-agenda-fixtures';
 import { LobbyExploreClaims, exploreRoomClaim, hasDebateClaimRow } from './lobby-explore-claims';
 import type { LobbyRoomClaim, LobbyRoomOffer } from './lobby-room-claims-list';
 import type { LobbyPageView } from './lobby-view';
@@ -18,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   requestLobbyIds: [] as string[],
   batches: [] as string[][],
   rootSelectors: [] as (string | undefined)[],
+  agendaFilter: undefined as unknown,
 }));
 // Passes through to the real hook, recording the scroll root each card asks to be measured against.
 vi.mock('~/core/hooks/use-near-viewport', async importOriginal => {
@@ -35,10 +38,13 @@ vi.mock('../matchmaking/claims-tab', () => ({
   ClaimsTab: ({
     renderClaim,
     onVisibleClaims,
+    agendaFilter,
   }: {
     renderClaim: (entry: MatchmakingClaim, card: ClaimCardDefaults) => React.ReactElement;
     onVisibleClaims: (entries: MatchmakingClaim[]) => void;
+    agendaFilter?: unknown;
   }) => {
+    mocks.agendaFilter = agendaFilter;
     React.useEffect(() => onVisibleClaims(mocks.entries), [onVisibleClaims]);
     return (
       <div>
@@ -230,5 +236,22 @@ describe('LobbyExploreClaims', () => {
     mocks.entries = [exploreEntry('row-1', ENTITY)];
     render(<LobbyExploreClaims lobby={lobby(false)} />);
     expect(screen.queryByTestId('host-menu-row-1')).toBeNull();
+  });
+});
+
+/** GEO-3775. Explore narrows by the room's agenda filter, which ClaimsTab applies (tested there). */
+describe('LobbyExploreClaims agenda-only', () => {
+  it('hands the list the room’s agenda filter, and the inactive one outside an agenda-only room', () => {
+    const filter = agendaFilterFixture({ ids: ['c1'] });
+    render(
+      <AgendaClaimFilterContext.Provider value={filter}>
+        <LobbyExploreClaims lobby={lobby(false)} />
+      </AgendaClaimFilterContext.Provider>
+    );
+    expect(mocks.agendaFilter).toBe(filter);
+
+    cleanup();
+    render(<LobbyExploreClaims lobby={lobby(false)} />);
+    expect(mocks.agendaFilter).toBe(INACTIVE_AGENDA_FILTER);
   });
 });

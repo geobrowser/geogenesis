@@ -16,6 +16,7 @@ import {
 } from '../api';
 import { debateActionAnalyticsAttributes } from '../matchmaking/hub-analytics';
 import { HubPillButton } from '../matchmaking/hub-pill-button';
+import { agendaHighlightsState, useLobbyHostAgendaFilter, useLobbyRoomClaims } from './lobby-agenda-claims';
 import { moderationErrorMessage, personName } from './lobby-format';
 import { LOBBY_GUEST_COPY } from './lobby-guest';
 import { useIsLobbyGuest } from './lobby-guest-hooks';
@@ -34,7 +35,6 @@ import {
 } from './lobby-highlights-state';
 import { LobbyPopup, LobbyPopupMenuRow } from './lobby-popup';
 import { LobbyClaimRequest, LobbyRoomClaims, lobbyRoomClaimFrom } from './lobby-room-claims';
-import { useDebateLobbyClaims } from './lobby-room-claims-hooks';
 import { type LobbyRoomClaim, LobbyRoomClaimsList, type LobbyRoomOffer } from './lobby-room-claims-list';
 import type { LobbyPageView } from './lobby-view';
 
@@ -54,7 +54,8 @@ export function LobbyRoomClaimsWithHighlights({ lobby, onExplore }: { lobby: Lob
   const { data: state } = useLobbyHighlights(lobby.lobby_id);
   const hosting = lobby.viewer.hosting;
   const excludeClaimIds = React.useMemo(() => highlightedClaimIds(state), [state]);
-  const highlighted = listedHighlights(state);
+  // A host's picks, agenda-only under the host switch (GEO-3775); still left out of the list below.
+  const highlighted = listedHighlights(agendaHighlightsState(state, useLobbyHostAgendaFilter()));
 
   const renderMenu = React.useCallback(
     (entry: LobbyRoomClaim) => <LobbyClaimHostMenu lobbyId={lobby.lobby_id} claim={entry.claim} state={state} />,
@@ -122,7 +123,8 @@ function HighlightedBy({ highlight }: { highlight: DebateLobbyHighlight | undefi
  */
 export function LobbyRoomVote({ lobby }: { lobby: LobbyPageView }) {
   const { data: state } = useLobbyHighlights(lobby.lobby_id);
-  const vote = state?.room_vote ?? null;
+  // A vote on a claim no agenda lists is neither drawn nor hinted in an agenda-only lobby (GEO-3775).
+  const vote = agendaHighlightsState(state, useLobbyHostAgendaFilter())?.room_vote ?? null;
   useRoomVoteHint(lobby.lobby_id, vote, lobby.viewer.connected);
   if (!vote) return null;
   return <RoomVoteCard lobby={lobby} vote={vote} state={state} />;
@@ -367,7 +369,7 @@ export function lobbyHighlightErrorMessage(error: unknown) {
 
 /** The room's list rows by claim id, so highlights and the vote reuse their sides and offers. */
 function useLobbyRoomClaimsById(lobbyId: string) {
-  const { data } = useDebateLobbyClaims(lobbyId);
+  const { data } = useLobbyRoomClaims(lobbyId);
   return React.useMemo(() => new Map((data?.claims ?? []).map(row => [row.claim.id, row])), [data?.claims]);
 }
 

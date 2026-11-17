@@ -11,7 +11,21 @@ export const AGENDA_ONLY_PICKER: boolean = true;
 
 /**
  * GEO-3775. The Debates side panel's Matches and Explore, and the full-screen hub's lists, offer only
- * agenda claims, by the same rule as the room. A lobby's own Explore is not affected. Apart from
- * `AGENDA_ONLY_PICKER` so either surface can be rolled back alone.
+ * agenda claims, by the same rule as the room. Apart from `AGENDA_ONLY_PICKER` so either surface can be rolled back
+ * alone.
  */
 export const AGENDA_ONLY_HUB_PANEL: boolean = true;
+
+/**
+ * GEO-3775. A debate lobby's claims, by the same rule: "In this room", Explore, and the "Disagrees on
+ * N" counts and lists drawn from the room's claims. Today's claims is agenda-sourced already. A
+ * claim someone is debating right now still names itself on their tile: that is news, not an offer.
+ */
+export const AGENDA_ONLY_LOBBY: boolean = true;
+
+/**
+ * GEO-3775. Within an agenda-only lobby (`AGENDA_ONLY_LOBBY`), whether the hosts' own picks narrow
+ * too: the claim lists a host adds with "+", and the claims a host highlights or puts to a room vote.
+ * Its own switch because whether a host's curation should be second-guessed is a separate call.
+ */
+export const AGENDA_ONLY_LOBBY_HOST_LISTS: boolean = true;

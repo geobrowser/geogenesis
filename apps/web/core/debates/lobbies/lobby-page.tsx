@@ -24,6 +24,7 @@ import { useMatchmakingScope } from '../matchmaking/hooks';
 import { HubHeaderControls } from '../matchmaking/hub-header-controls';
 import { HubPillButton, hubPillClassName } from '../matchmaking/hub-pill-button';
 import { debateRoomPath } from '../rooms/room-routes';
+import { AgendaClaimFilterContext } from '../todays-claims/agenda-claim-filter';
 import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
 import { EditLobbyButton, EditLobbyDialog, canEditLobby } from './edit-lobby-dialog';
 import {
@@ -34,6 +35,12 @@ import {
   useEndDebateLobby,
   useLobbyPresence,
 } from './hooks';
+import {
+  agendaHighlightsState,
+  hostAgendaFilter,
+  useLobbyAgendaFilter,
+  useLobbyRoomClaims,
+} from './lobby-agenda-claims';
 import { markLobbyEntry } from './lobby-analytics';
 import { LobbyClaimsArea } from './lobby-claims-area';
 import { useClaimsTabMark } from './lobby-claims-mark';
@@ -56,7 +63,6 @@ import { LobbyHostLists, LobbyRemovedNotice } from './lobby-moderation';
 import { LobbyClaimListNames, LobbyGoing, LobbyHostedBy } from './lobby-pre-open-details';
 import { LobbyQueuedRequestProvider, useLobbyQueuedRequest } from './lobby-queued-request';
 import { LobbyAnalyticsScope } from './lobby-room-analytics';
-import { useDebateLobbyClaims } from './lobby-room-claims-hooks';
 import { LOBBY_ROOM_COPY, type LobbyPhoneTab, LobbyRoomShell } from './lobby-room-shell';
 import { LobbyPeople } from './lobby-roster';
 import { LobbyScheduleProvider } from './lobby-schedule';
@@ -566,57 +572,66 @@ function LobbyRoom({
   const [tab, setTab] = React.useState<LobbyPhoneTab>('people');
 
   const showClaims = state.status === 'joined' || guest;
-  // Per-person disagreements ride on the claims read the claims panel already makes.
-  const disagreements = useDebateLobbyClaims(lobby.lobby_id, showClaims).data?.disagreements ?? null;
+  // GEO-3775: one agenda filter for the room, provided below to People's popups and the claims panel.
+  const agendaFilter = useLobbyAgendaFilter();
+  // Per-person disagreements ride on the claims read the claims panel already makes; agenda-only,
+  // counted again from the agenda claims, and none while the agendas are out.
+  const disagreements = useLobbyRoomClaims(lobby.lobby_id, showClaims, agendaFilter).data?.disagreements ?? null;
   const highlights = useLobbyHighlights(lobby.lobby_id, phone && showClaims).data;
   // The desktop panel always shows the claims, so what arrives there is seen; only a phone on
   // People builds up a mark.
-  const claimsMark = useClaimsTabMark(highlights, !phone || tab === 'aside', lobby.claim_lists);
+  const claimsMark = useClaimsTabMark(
+    agendaHighlightsState(highlights, hostAgendaFilter(agendaFilter)),
+    !phone || tab === 'aside',
+    lobby.claim_lists
+  );
   const availability = guest ? null : <HubHeaderControls analyticsSurface="lobby" />;
 
   return (
-    <LobbyRoomShell
-      lobby={lobby}
-      state={state}
-      onRetry={onRetry}
-      onLeave={onLeave}
-      voice={voice}
-      guestSession={guestSession}
-      exitHref={exitHref}
-      before={
-        ownRematch && !guest ? (
-          <EndPickerLeftBehind
-            joined={state.status === 'joined'}
-            session={ownRematch}
-            checkedAt={activityQuery.dataUpdatedAt}
-          />
-        ) : null
-      }
-      header={<LobbyHeader lobby={lobby} phone={phone} availability={phone ? null : availability} />}
-      belowHeader={!guest && state.status === 'joined' ? <LobbyScheduledRequests lobby={lobby} /> : null}
-      people={
-        // A host's shared screen (GEO-3507), above the speakers as in a call.
-        <CallScreenStage members={lobby.members}>
-          <LobbyPeople
-            lobby={lobby}
-            viewerId={currentUserId}
-            ownAvailable={ownAvailable}
-            disagreements={disagreements}
-          />
-        </CallScreenStage>
-      }
-      aside={{
-        tab: 'Claims',
-        label: 'Claims in the room',
-        mark: claimsMark,
-        content: <LobbyClaimsArea lobby={lobby} />,
-      }}
-      tab={tab}
-      onTab={setTab}
-      availability={availability}
-      queuedOutcome={queuedRequest.outcome}
-      onDismissQueuedOutcome={queuedRequest.dismissOutcome}
-    />
+    <AgendaClaimFilterContext.Provider value={agendaFilter}>
+      <LobbyRoomShell
+        lobby={lobby}
+        state={state}
+        onRetry={onRetry}
+        onLeave={onLeave}
+        voice={voice}
+        guestSession={guestSession}
+        exitHref={exitHref}
+        before={
+          ownRematch && !guest ? (
+            <EndPickerLeftBehind
+              joined={state.status === 'joined'}
+              session={ownRematch}
+              checkedAt={activityQuery.dataUpdatedAt}
+            />
+          ) : null
+        }
+        header={<LobbyHeader lobby={lobby} phone={phone} availability={phone ? null : availability} />}
+        belowHeader={!guest && state.status === 'joined' ? <LobbyScheduledRequests lobby={lobby} /> : null}
+        people={
+          // A host's shared screen (GEO-3507), above the speakers as in a call.
+          <CallScreenStage members={lobby.members}>
+            <LobbyPeople
+              lobby={lobby}
+              viewerId={currentUserId}
+              ownAvailable={ownAvailable}
+              disagreements={disagreements}
+            />
+          </CallScreenStage>
+        }
+        aside={{
+          tab: 'Claims',
+          label: 'Claims in the room',
+          mark: claimsMark,
+          content: <LobbyClaimsArea lobby={lobby} />,
+        }}
+        tab={tab}
+        onTab={setTab}
+        availability={availability}
+        queuedOutcome={queuedRequest.outcome}
+        onDismissQueuedOutcome={queuedRequest.dismissOutcome}
+      />
+    </AgendaClaimFilterContext.Provider>
   );
 }
 
