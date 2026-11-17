@@ -37,7 +37,7 @@ describe('the divider band', () => {
   });
 
   /// Drawn 32px off, the band sat beside the real gap rather than in it — which looked like three
-  /// separate faults at once: the split missing the VS badge, the left panel narrowed by the white
+  /// separate faults at once: the left panel narrowed by the white
   /// bar, and bare background showing before the right panel. One offset, three symptoms.
   it('tiles the gap between the panels exactly', () => {
     const bars = g.bars;
@@ -46,26 +46,5 @@ describe('the divider band', () => {
       expect(bars[i].offset).toBe(bars[i - 1].offset + bars[i - 1].width);
     }
     expect(bars.reduce((sum, bar) => sum + bar.width, 0)).toBe(g.dividerWidth);
-  });
-});
-
-describe('the VS badge', () => {
-  /// Centred on the *white* bar's right edge, not the band's centre and not the black bar's. The
-  /// three are 7.5px and 8.5px apart, so nothing about a render says which one a number was.
-  it('sits on the right edge of the white bar', () => {
-    const [white] = g.bars;
-    expect(g.badgeCentre).toBe(g.seamX + white.width);
-    expect(g.badgeCentre).toBe(g.whiteBarRightEdgeAt(g.badgeCentreY));
-  });
-
-  /// Which is the point of it: the band leans, so no x holds the line through the whole badge.
-  /// Centring on the white bar's edge splits that error evenly. On the black bar's centre the line
-  /// arrived near flush at the top of the badge and left the bottom 15px adrift.
-  it('takes the lean evenly above and below itself', () => {
-    const above = g.whiteBarRightEdgeAt(g.badgeCentreY - g.badgeRadius) - g.badgeCentre;
-    const below = g.whiteBarRightEdgeAt(g.badgeCentreY + g.badgeRadius) - g.badgeCentre;
-
-    expect(above).toBeCloseTo(-below, 10);
-    expect(Math.abs(above)).toBeGreaterThan(0);
   });
 });

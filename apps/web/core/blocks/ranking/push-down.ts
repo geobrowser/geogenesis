@@ -147,7 +147,7 @@ export const PUSH_DOWN_LIVE_NOTE =
 
 /** What Push it down does, for team and To rank rows. */
 export function pushDownChoiceDescription(rankingLive: boolean): string {
-  return rankingLive ? `Low quality. ${PUSH_DOWN_LIVE_NOTE}` : 'Low quality. Records your downvote on this debate.';
+  return rankingLive ? `Low quality. ${PUSH_DOWN_LIVE_NOTE}` : 'Low quality. Records your down rank on this debate.';
 }
 
 /** Confirmation after a push-down: the live note the first time once the ranking is live. */
@@ -156,14 +156,14 @@ export function pushDownToastCopy({ rankingLive, noteSeen }: { rankingLive: bool
   return 'Down ranked.';
 }
 
-export const PUSH_DOWN_UNDONE_COPY = 'Downvote removed.';
+export const PUSH_DOWN_UNDONE_COPY = 'Down rank undone.';
 
-export const PUSH_DOWN_VOTE_FAILED_COPY = 'Your downvote didn’t go through. Try again.';
+export const PUSH_DOWN_VOTE_FAILED_COPY = 'Your down rank didn’t go through. Try again.';
 export const PUSH_DOWN_BALLOT_FAILED_COPY = 'Down ranked, but it’s still in your ranking. Retry to take it out.';
 export const RANK_BALLOT_FAILED_COPY = 'Your ranking didn’t publish, so this debate is still down ranked. Try again.';
-export const RANK_CLEAR_FAILED_COPY = 'Ranked, but your downvote is still on it. Retry to clear it.';
+export const RANK_CLEAR_FAILED_COPY = 'Ranked, but it’s still down ranked. Retry to clear it.';
 export const VOTE_CHECK_FAILED_COPY = 'Couldn’t check your vote on this debate. Try again.';
-export const UNDO_FAILED_COPY = 'Your downvote is still there. Try again.';
+export const UNDO_FAILED_COPY = 'It’s still down ranked. Try again.';
 
 /** Session-scoped "already saw the note" flag; per-viewer convenience, safe when storage is blocked. */
 const NOTE_SEEN_STORAGE_KEY = 'geo:best-debates:push-down-note-seen';

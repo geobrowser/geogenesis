@@ -205,3 +205,47 @@ export async function postMomentBackfill(
   });
   return response.debates[0] ?? null;
 }
+
+/**
+ * A debate's audio peaks (GEO-3673, geo-chat#367): built on demand by the media worker from the
+ * files the player plays, the first time an admin opens the editor. Fields appear only in the states
+ * that name them.
+ */
+export type AudioPeaksLane = { participant_slot: number; offset: number; samples: number };
+
+export type AudioPeaksReady = {
+  debate_id: string;
+  status: 'ready';
+  /** ms from `debates.started_at`: the paired player's clock, offset 0. */
+  clock: 'player';
+  bucket_ms: number;
+  /** Byte `b` is `max(0, dBFS - floor_db) / -floor_db * 255`: `0` is the floor or quieter. */
+  scale: 'dbfs_u8';
+  floor_db: number;
+  lanes: AudioPeaksLane[];
+  /** A hash of the bytes: the same version, the same peaks. */
+  version: string;
+  /** Standard padded base64: every lane's bytes, at its `offset`. */
+  data: string;
+};
+
+export type AudioPeaksStatus =
+  | AudioPeaksReady
+  | { debate_id: string; status: 'queued'; requested_at: string; waiting_s: number; queue_position?: number }
+  | { debate_id: string; status: 'running'; requested_at: string; waiting_s: number }
+  | { debate_id: string; status: 'failed'; reason: string; permanent: boolean; retry_after?: string }
+  | { debate_id: string; status: 'unavailable'; reason: string };
+
+export async function getAudioPeaks(
+  debateId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  signal?: AbortSignal
+): Promise<AudioPeaksStatus> {
+  return geoChatRequest<AudioPeaksStatus>(`/admin/debates/${encodeURIComponent(debateId)}/audio-peaks`, {
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    signal,
+  });
+}

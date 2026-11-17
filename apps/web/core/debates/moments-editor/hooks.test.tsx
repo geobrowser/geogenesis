@@ -1,16 +1,17 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 
 import * as React from 'react';
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { GeoChatRequestError } from '../api';
-import { useIsMediaAdmin, useRefreshAfterReel } from './hooks';
+import { useAudioPeaks, useIsMediaAdmin, useRefreshAfterReel } from './hooks';
 
 const mocks = vi.hoisted(() => ({
   authenticated: true,
   getMomentBackfill: vi.fn(),
+  getAudioPeaks: vi.fn(),
 }));
 
 vi.mock('../hooks', () => ({
@@ -20,6 +21,7 @@ vi.mock('../hooks', () => ({
     transcripts: (id: string) => ['debates', 'transcript', id],
     momentReelPlan: (id: string, account: string | null) => ['debates', 'account', account, 'moment-reel-plan', id],
     mediaAdmin: (account: string | null) => ['debates', 'account', account, 'media-admin'],
+    audioPeaks: (id: string, account: string | null) => ['debates', 'account', account, 'audio-peaks', id],
   },
   debateQueryNetworkOptions: { retry: false, refetchOnReconnect: false, refetchOnWindowFocus: false },
   useGeoChatAuth: () => ({
@@ -32,6 +34,7 @@ vi.mock('../hooks', () => ({
 
 vi.mock('./api', () => ({
   getMomentBackfill: mocks.getMomentBackfill,
+  getAudioPeaks: mocks.getAudioPeaks,
   postMomentBackfill: vi.fn(),
 }));
 
@@ -43,6 +46,7 @@ function wrapper({ children }: { children: React.ReactNode }) {
 beforeEach(() => {
   mocks.authenticated = true;
   mocks.getMomentBackfill.mockReset();
+  mocks.getAudioPeaks.mockReset();
 });
 
 describe('useIsMediaAdmin (GEO-3671)', () => {
@@ -122,5 +126,107 @@ describe('useRefreshAfterReel (GEO-3671)', () => {
       ['debates', 'media', 'debate'],
       ['debates', 'transcript', 'debate'],
     ]);
+  });
+});
+
+describe('useAudioPeaks (GEO-3673)', () => {
+  const queued = (waiting = 3) => ({
+    debate_id: 'debate',
+    status: 'queued',
+    requested_at: '2026-11-16T15:00:00Z',
+    waiting_s: waiting,
+    queue_position: 1,
+  });
+  const ready = {
+    debate_id: 'debate',
+    status: 'ready',
+    clock: 'player',
+    bucket_ms: 10,
+    scale: 'dbfs_u8',
+    floor_db: -60,
+    lanes: [
+      { participant_slot: 1, offset: 0, samples: 3 },
+      { participant_slot: 2, offset: 3, samples: 3 },
+    ],
+    version: 'v1',
+    data: btoa(String.fromCharCode(10, 200, 0, 50, 0, 255)),
+  };
+
+  afterEach(() => {
+    // Unmounted first: a hook left polling would read the next test's answers.
+    cleanup();
+    vi.useRealTimers();
+  });
+
+  /** Lets React Query's timers and promises run `ms` on. */
+  const advance = (ms: number) => act(() => vi.advanceTimersByTimeAsync(ms));
+
+  it('reads the build every 5 s, then 15 s after two minutes, and stops at ten saying it is still waiting', async () => {
+    vi.useFakeTimers();
+    mocks.getAudioPeaks.mockResolvedValue(queued());
+    const { result } = renderHook(() => useAudioPeaks('debate', true), { wrapper });
+    await advance(0);
+    expect(result.current).toEqual({ kind: 'waiting', message: 'Preparing the waveform… (waiting 0:03)' });
+    expect(mocks.getAudioPeaks).toHaveBeenCalledTimes(1);
+
+    await advance(5_000);
+    expect(mocks.getAudioPeaks).toHaveBeenCalledTimes(2);
+    // Two minutes in: 24 reads at 5 s, plus the first.
+    await advance(115_000);
+    expect(mocks.getAudioPeaks).toHaveBeenCalledTimes(25);
+    // Backed off: the next read is 15 s after the last.
+    await advance(14_000);
+    expect(mocks.getAudioPeaks).toHaveBeenCalledTimes(25);
+    await advance(1_000);
+    expect(mocks.getAudioPeaks).toHaveBeenCalledTimes(26);
+
+    await advance(8 * 60_000);
+    expect(result.current).toMatchObject({ kind: 'gave-up' });
+    const atGiveUp = mocks.getAudioPeaks.mock.calls.length;
+    await advance(5 * 60_000);
+    expect(mocks.getAudioPeaks).toHaveBeenCalledTimes(atGiveUp);
+    expect(result.current).toMatchObject({
+      kind: 'gave-up',
+      message: expect.stringMatching(/^Still waiting for the media worker/),
+    });
+  });
+
+  it('stops reading once the peaks are ready, and mixes the two lanes into one waveform', async () => {
+    vi.useFakeTimers();
+    mocks.getAudioPeaks.mockResolvedValueOnce(queued()).mockResolvedValue(ready);
+    const { result } = renderHook(() => useAudioPeaks('debate', true), { wrapper });
+    await advance(0);
+    await advance(5_000);
+    await advance(100);
+    expect(result.current.kind).toBe('ready');
+    if (result.current.kind !== 'ready') return;
+    expect([...result.current.peaks.samples]).toEqual([50, 200, 255]);
+    await advance(60_000);
+    expect(mocks.getAudioPeaks).toHaveBeenCalledTimes(2);
+  });
+
+  // A geo-chat that predates the route answers 404: the editor works on, with no waveform.
+  it('reads a missing route as no waveform, without asking again', async () => {
+    mocks.getAudioPeaks.mockRejectedValue(new GeoChatRequestError('Not found', 'not_found', 404));
+    const { result } = renderHook(() => useAudioPeaks('debate', true), { wrapper });
+    await waitFor(() => expect(result.current).toEqual({ kind: 'none', message: 'No waveform for this debate.' }));
+    expect(mocks.getAudioPeaks).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows no waveform when geo-chat fails, after its retries', async () => {
+    mocks.getAudioPeaks.mockRejectedValue(new GeoChatRequestError('down', null, 500));
+    const { result } = renderHook(() => useAudioPeaks('debate', true), { wrapper });
+    await waitFor(() => expect(result.current).toEqual({ kind: 'none', message: 'No waveform for this debate.' }));
+    expect(mocks.getAudioPeaks).toHaveBeenCalledTimes(3);
+  });
+
+  it('says why an unavailable debate has none, and does not poll it', async () => {
+    vi.useFakeTimers();
+    mocks.getAudioPeaks.mockResolvedValue({ debate_id: 'debate', status: 'unavailable', reason: 'media_job_active' });
+    const { result } = renderHook(() => useAudioPeaks('debate', true), { wrapper });
+    await advance(0);
+    expect(result.current).toMatchObject({ kind: 'none', message: expect.stringMatching(/still processing/) });
+    await advance(60_000);
+    expect(mocks.getAudioPeaks).toHaveBeenCalledTimes(1);
   });
 });

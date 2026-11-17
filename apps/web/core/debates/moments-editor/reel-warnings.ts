@@ -109,7 +109,8 @@ export function reelWarnings(
     warnings.push({
       id: 'clip-count',
       severity: 'warn',
-      title: `${clips.length} clips; reels are built for 4`,
+      // Reels aim for 4; 5 or 6 is the admin's call (GEO-3773, D4), so it's said, not fixed.
+      title: `This reel has ${clips.length} clips. We aim for ${REEL_CLIPS}.`,
       recommendation: 'Four clips, two per speaker, keep the reel near a minute. Remove the clip that adds least.',
       fix: null,
     });
