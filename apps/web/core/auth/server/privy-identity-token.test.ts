@@ -7,6 +7,7 @@ import {
   privyJwksUrl,
   resetPrivyJwksCacheForTests,
   verifyPrivyIdentityToken,
+  verifyPrivyIdentityTokenDetailed,
 } from './privy-identity-token';
 
 const APP_ID = 'app-under-test';
@@ -188,5 +189,46 @@ describe('bearerToken', () => {
     expect(bearerToken('bearer  x ')).toBe('x');
     expect(bearerToken('Basic x')).toBeNull();
     expect(bearerToken(null)).toBeNull();
+  });
+});
+
+describe('verifyPrivyIdentityTokenDetailed', () => {
+  beforeEach(() => resetPrivyJwksCacheForTests());
+
+  it('reports a JWKS outage as unavailable', async () => {
+    const { privateKey } = await keyPair('k1');
+    const fetcher = (async () => new Response('down', { status: 503 })) as unknown as typeof fetch;
+    const token = await sign(privateKey, 'k1', claims());
+    await expect(verifyPrivyIdentityTokenDetailed(token, { appId: APP_ID, fetcher })).resolves.toEqual({
+      ok: false,
+      reason: 'unavailable',
+    });
+  });
+
+  it('reports a bad signature, an unknown kid and an expired token as invalid', async () => {
+    const { privateKey, jwk } = await keyPair('k1');
+    const other = await keyPair('k1');
+    const { fetcher } = jwksFetcher([jwk]);
+    const tokens = [
+      await sign(other.privateKey, 'k1', claims()),
+      await sign(privateKey, 'unknown', claims()),
+      await sign(privateKey, 'k1', claims({ exp: now - 3600 })),
+    ];
+    for (const token of tokens) {
+      await expect(verifyPrivyIdentityTokenDetailed(token, { appId: APP_ID, fetcher })).resolves.toEqual({
+        ok: false,
+        reason: 'invalid',
+      });
+    }
+  });
+
+  it('returns the identity, wallet or not', async () => {
+    const { privateKey, jwk } = await keyPair('k1');
+    const { fetcher } = jwksFetcher([jwk]);
+    const token = await sign(privateKey, 'k1', claims({ linked_accounts: '[]' }));
+    await expect(verifyPrivyIdentityTokenDetailed(token, { appId: APP_ID, fetcher })).resolves.toEqual({
+      ok: true,
+      identity: { userId: 'did:privy:abc', walletAddress: null },
+    });
   });
 });

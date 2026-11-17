@@ -70,7 +70,7 @@ describe('syncWalletSession', () => {
     expect(mocks.refresh).toHaveBeenCalledOnce();
   });
 
-  it('stops for the page on 503, without retrying or dropping the token', async () => {
+  it('stops for the page when the server has no secret, without retrying or dropping the token', async () => {
     vi.useFakeTimers();
     mocks.fetch.mockImplementation(() => answer(503, { wallet: null, status: 'unconfigured' }));
 
@@ -83,9 +83,9 @@ describe('syncWalletSession', () => {
     expect(mocks.getToken).not.toHaveBeenCalled();
   });
 
-  it('drops a rejected token and retries, bounded, with a fresh one', async () => {
+  it('drops an invalid token once and retries, bounded, with a fresh one', async () => {
     vi.useFakeTimers();
-    mocks.fetch.mockImplementation(() => answer(401, { wallet: null, status: 'unverified' }));
+    mocks.fetch.mockImplementation(() => answer(401, { wallet: null, status: 'invalid_token' }));
 
     await syncWalletSession('stale', mocks.refresh);
     expect(mocks.setToken).toHaveBeenCalledWith(null);
@@ -99,6 +99,43 @@ describe('syncWalletSession', () => {
     await vi.advanceTimersByTimeAsync(SESSION_RETRY_DELAYS_MS[1] * 4);
 
     expect(mocks.fetch).toHaveBeenCalledTimes(1 + SESSION_RETRY_DELAYS_MS.length);
+  });
+
+  // Debates and calls poll the shared cache; each drop would become a Privy users/me call.
+  it('drops the shared cache at most once per page under a lasting invalid_token', async () => {
+    vi.useFakeTimers();
+    mocks.fetch.mockImplementation(() => answer(401, { wallet: null, status: 'invalid_token' }));
+
+    for (const token of ['t1', 't2', 't3', 't4']) await syncWalletSession(token, mocks.refresh);
+    await vi.advanceTimersByTimeAsync(SESSION_RETRY_DELAYS_MS[1] * 4);
+
+    expect(mocks.setToken).toHaveBeenCalledOnce();
+  });
+
+  it('treats no_wallet as final for that token, without dropping the cache', async () => {
+    vi.useFakeTimers();
+    mocks.fetch.mockImplementation(() => answer(403, { wallet: null, status: 'no_wallet' }));
+
+    await syncWalletSession('t1', mocks.refresh);
+    await vi.advanceTimersByTimeAsync(SESSION_RETRY_DELAYS_MS[1] * 4);
+    expect(mocks.fetch).toHaveBeenCalledOnce();
+
+    // Once the wallet exists Privy mints a new token, which posts again.
+    await syncWalletSession('t2', mocks.refresh);
+    expect(mocks.fetch).toHaveBeenCalledTimes(2);
+    expect(mocks.setToken).not.toHaveBeenCalled();
+    expect(mocks.getToken).not.toHaveBeenCalled();
+  });
+
+  it('retries unavailable on the bounded schedule without dropping the cache', async () => {
+    vi.useFakeTimers();
+    mocks.fetch.mockImplementation(() => answer(503, { wallet: null, status: 'unavailable' }));
+
+    await syncWalletSession('t1', mocks.refresh);
+    await vi.advanceTimersByTimeAsync(SESSION_RETRY_DELAYS_MS[1] * 4);
+
+    expect(mocks.fetch).toHaveBeenCalledTimes(1 + SESSION_RETRY_DELAYS_MS.length);
+    expect(mocks.setToken).not.toHaveBeenCalled();
   });
 
   it('retries a network error without dropping the token', async () => {
@@ -128,6 +165,46 @@ describe('syncWalletSession', () => {
     await first;
 
     expect(mocks.refresh).not.toHaveBeenCalled();
+  });
+
+  it('undoes a session issued by a POST that finished after sign-out', async () => {
+    let release!: () => void;
+    mocks.fetch.mockImplementationOnce(
+      () =>
+        new Promise<Response>(resolve => {
+          release = () => resolve(new Response(JSON.stringify({ wallet: WALLET, status: 'issued' })));
+        })
+    );
+    mocks.fetch.mockImplementation(() => answer(204));
+
+    const pending = syncWalletSession('t1', mocks.refresh);
+    await vi.waitFor(() => expect(mocks.fetch).toHaveBeenCalledOnce());
+    await clearWalletSession();
+    release();
+    await pending;
+
+    const deletes = mocks.fetch.mock.calls.filter(([, init]) => init?.method === 'DELETE');
+    expect(deletes).toHaveLength(2);
+    expect(mocks.refresh).not.toHaveBeenCalled();
+  });
+
+  it('does not undo a newer sign-in', async () => {
+    let release!: () => void;
+    mocks.fetch.mockImplementationOnce(
+      () =>
+        new Promise<Response>(resolve => {
+          release = () => resolve(new Response(JSON.stringify({ wallet: WALLET, status: 'issued' })));
+        })
+    );
+
+    const pending = syncWalletSession('t1', mocks.refresh);
+    await vi.waitFor(() => expect(mocks.fetch).toHaveBeenCalledOnce());
+    forgetWalletSession();
+    await syncWalletSession('t2', mocks.refresh);
+    release();
+    await pending;
+
+    expect(mocks.fetch.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(false);
   });
 });
 

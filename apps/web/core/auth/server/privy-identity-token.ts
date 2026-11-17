@@ -102,31 +102,37 @@ export function embeddedEthereumWallet(linkedAccountsClaim: unknown): string | n
 }
 
 /**
- * The verified identity behind `token`, or null for anything that does not verify. Never throws
- * for a bad token; a JWKS outage also yields null, so a caller falls back to the signed-out path.
+ * Why a token did not verify: `invalid` for the token itself, `unavailable` when Privy's keys could
+ * not be fetched, so the same token may verify later.
  */
-export async function verifyPrivyIdentityToken(
+export type PrivyVerification =
+  { ok: true; identity: PrivyIdentity } | { ok: false; reason: 'invalid' | 'unavailable' };
+
+const INVALID = { ok: false, reason: 'invalid' } as const;
+
+/** `verifyPrivyIdentityToken`, telling a bad token apart from a key-fetch outage. */
+export async function verifyPrivyIdentityTokenDetailed(
   token: string | null | undefined,
   options: { appId: string; fetcher?: typeof fetch; now?: () => number }
-): Promise<PrivyIdentity | null> {
-  if (!token || !options.appId) return null;
+): Promise<PrivyVerification> {
+  if (!token || !options.appId) return INVALID;
   const parts = token.trim().split('.');
-  if (parts.length !== 3) return null;
+  if (parts.length !== 3) return INVALID;
   const [headerSegment, payloadSegment, signatureSegment] = parts as [string, string, string];
 
   const header = decodeJson(headerSegment);
   const payload = decodeJson(payloadSegment);
-  if (!header || !payload || header.alg !== 'ES256') return null;
+  if (!header || !payload || header.alg !== 'ES256') return INVALID;
 
   const nowMs = options.now?.() ?? Date.now();
   const nowS = Math.floor(nowMs / 1000);
   const aud = payload.aud;
   const audiences = Array.isArray(aud) ? aud : [aud];
-  if (payload.iss !== 'privy.io' || !audiences.includes(options.appId)) return null;
-  if (typeof payload.exp !== 'number' || payload.exp + CLOCK_SKEW_S < nowS) return null;
-  if (typeof payload.nbf === 'number' && payload.nbf - CLOCK_SKEW_S > nowS) return null;
-  if (typeof payload.iat === 'number' && payload.iat - CLOCK_SKEW_S > nowS) return null;
-  if (typeof payload.sub !== 'string' || payload.sub.length === 0) return null;
+  if (payload.iss !== 'privy.io' || !audiences.includes(options.appId)) return INVALID;
+  if (typeof payload.exp !== 'number' || payload.exp + CLOCK_SKEW_S < nowS) return INVALID;
+  if (typeof payload.nbf === 'number' && payload.nbf - CLOCK_SKEW_S > nowS) return INVALID;
+  if (typeof payload.iat === 'number' && payload.iat - CLOCK_SKEW_S > nowS) return INVALID;
+  if (typeof payload.sub !== 'string' || payload.sub.length === 0) return INVALID;
 
   const fetcher = options.fetcher ?? fetch;
   const kid = typeof header.kid === 'string' ? header.kid : null;
@@ -134,14 +140,25 @@ export async function verifyPrivyIdentityToken(
   try {
     signature = base64UrlDecode(signatureSegment);
   } catch {
-    return null;
+    return INVALID;
   }
   const signed = new TextEncoder().encode(`${headerSegment}.${payloadSegment}`);
 
-  const verifyWith = async (forceRefresh: boolean): Promise<boolean | null> => {
+  const keyFor = async (forceRefresh: boolean): Promise<Jwk | null> => {
     const keys = await keysFor(options.appId, fetcher, forceRefresh, nowMs);
-    const jwk = kid ? keys.find(k => k.kid === kid) : keys[0];
-    if (!jwk) return null;
+    return (kid ? keys.find(k => k.kid === kid) : keys[0]) ?? null;
+  };
+
+  let jwk: Jwk | null;
+  try {
+    // An unknown kid means Privy may have rotated keys: refetch once, rate-limited.
+    jwk = (await keyFor(false)) ?? (await keyFor(true));
+  } catch {
+    return { ok: false, reason: 'unavailable' };
+  }
+  if (!jwk) return INVALID;
+
+  try {
     const key = await crypto.subtle.importKey(
       'jwk',
       { kty: jwk.kty, crv: jwk.crv, x: jwk.x, y: jwk.y, ext: true },
@@ -149,19 +166,27 @@ export async function verifyPrivyIdentityToken(
       false,
       ['verify']
     );
-    return crypto.subtle.verify({ name: 'ECDSA', hash: 'SHA-256' }, key, signature, signed);
-  };
-
-  try {
-    // An unknown kid means Privy may have rotated keys: refetch once, rate-limited.
-    let valid = await verifyWith(false);
-    if (valid === null) valid = await verifyWith(true);
-    if (!valid) return null;
+    if (!(await crypto.subtle.verify({ name: 'ECDSA', hash: 'SHA-256' }, key, signature, signed))) return INVALID;
   } catch {
-    return null;
+    return INVALID;
   }
 
-  return { userId: payload.sub, walletAddress: embeddedEthereumWallet(payload.linked_accounts) };
+  return {
+    ok: true,
+    identity: { userId: payload.sub, walletAddress: embeddedEthereumWallet(payload.linked_accounts) },
+  };
+}
+
+/**
+ * The verified identity behind `token`, or null for anything that does not verify. Never throws
+ * for a bad token; a JWKS outage also yields null, so a caller falls back to the signed-out path.
+ */
+export async function verifyPrivyIdentityToken(
+  token: string | null | undefined,
+  options: { appId: string; fetcher?: typeof fetch; now?: () => number }
+): Promise<PrivyIdentity | null> {
+  const result = await verifyPrivyIdentityTokenDetailed(token, options);
+  return result.ok ? result.identity : null;
 }
 
 /** The bearer token from an Authorization header, if any. */

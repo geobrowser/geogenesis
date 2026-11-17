@@ -1,6 +1,6 @@
 import { cookies } from 'next/headers';
 
-import { bearerToken, verifyPrivyIdentityToken } from '~/core/auth/server/privy-identity-token';
+import { bearerToken, verifyPrivyIdentityTokenDetailed } from '~/core/auth/server/privy-identity-token';
 import {
   LEGACY_WALLET_ADDRESS,
   WALLET_SESSION,
@@ -16,9 +16,11 @@ import { checkWalletSessionIpRateLimit } from './rate-limit';
 
 /**
  * `issued`: the request had no valid session for this wallet, so its page rendered signed out.
- * `unverified` (401): the token did not verify. `unconfigured` (503): no secret; retrying won't help.
+ * Failures: `invalid_token` (401), `no_wallet` (403, verified but no embedded wallet yet),
+ * `unavailable` (503, Privy's keys unreachable; retry later), `unconfigured` (503, no secret).
  */
-export type WalletSessionStatus = 'unchanged' | 'renewed' | 'issued' | 'unverified' | 'unconfigured' | 'rate_limited';
+export type WalletSessionStatus =
+  'unchanged' | 'renewed' | 'issued' | 'invalid_token' | 'no_wallet' | 'unavailable' | 'unconfigured' | 'rate_limited';
 export type WalletSessionResponse = { wallet: string | null; status: WalletSessionStatus };
 
 const json = (status: number, body: WalletSessionResponse, headers?: HeadersInit) =>
@@ -40,8 +42,14 @@ export async function POST(req: Request) {
   }
 
   const appId = process.env.NEXT_PUBLIC_PRIVY_APP_ID ?? '';
-  const identity = await verifyPrivyIdentityToken(bearerToken(req.headers.get('authorization')), { appId });
-  if (!identity?.walletAddress) return json(401, { wallet: null, status: 'unverified' });
+  const verification = await verifyPrivyIdentityTokenDetailed(bearerToken(req.headers.get('authorization')), { appId });
+  if (!verification.ok) {
+    return verification.reason === 'unavailable'
+      ? json(503, { wallet: null, status: 'unavailable' }, { 'Retry-After': '15' })
+      : json(401, { wallet: null, status: 'invalid_token' });
+  }
+  const identity = verification.identity;
+  if (!identity.walletAddress) return json(403, { wallet: null, status: 'no_wallet' });
 
   const cookieStore = await cookies();
   if (cookieStore.has(LEGACY_WALLET_ADDRESS)) cookieStore.delete(LEGACY_WALLET_ADDRESS);

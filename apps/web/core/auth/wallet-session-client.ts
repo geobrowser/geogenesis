@@ -7,10 +7,17 @@ import { WALLET_SESSION_HINT, WALLET_SESSION_ROUTE } from './wallet-session-shar
  * Module scope, so it lasts for the page: one POST per distinct token, not per render.
  */
 let sentToken: string | null = null;
-/** The server has no secret (503). Nothing on this page can fix that, so stop asking. */
+/** The server has no secret. Nothing on this page can fix that, so stop asking. */
 let halted = false;
+/**
+ * The shared token cache is dropped at most once per page. Debates and calls poll it, so dropping it
+ * on every rejection would turn a lasting rejection into a Privy `users/me` call per poll.
+ */
+let droppedCachedToken = false;
+/** Bumped by `forgetWalletSession`, so a POST that lands after sign-out is undone. */
+let epoch = 0;
 
-/** Retry delays after a 401 or a failed request; Privy's token reissue covers renewal. */
+/** Retry delays after a retryable failure; Privy's token reissue covers renewal. */
 export const SESSION_RETRY_DELAYS_MS = [15_000, 60_000] as const;
 let retryTimer: ReturnType<typeof setTimeout> | null = null;
 let retryAttempt = 0;
@@ -38,6 +45,7 @@ function scheduleRetry(refresh: () => void) {
 export async function syncWalletSession(token: string, refresh: () => void): Promise<void> {
   if (halted || token === sentToken) return;
   sentToken = token;
+  const startedIn = epoch;
 
   let response: Response;
   try {
@@ -50,27 +58,41 @@ export async function syncWalletSession(token: string, refresh: () => void): Pro
     if (sentToken === token) scheduleRetry(refresh);
     return;
   }
+  if (startedIn !== epoch) {
+    // Signed out while this was in flight: its Set-Cookie may have landed after the DELETE.
+    if (response.ok && sentToken === null) fetch(WALLET_SESSION_ROUTE, { method: 'DELETE' }).catch(() => {});
+    return;
+  }
   if (sentToken !== token) return;
 
-  if (response.status === 503) {
-    halted = true;
+  const body = (await response.json().catch(() => null)) as { status?: string } | null;
+  if (response.ok) {
     clearRetry();
-    return;
-  }
-  if (response.status === 401) {
-    // Drop the token from the shared cache so the retry asks Privy for a fresh one.
-    setCachedIdentityToken(null);
-    scheduleRetry(refresh);
-    return;
-  }
-  if (!response.ok) {
-    scheduleRetry(refresh);
+    if (body?.status === 'issued') refresh();
     return;
   }
 
-  clearRetry();
-  const body = (await response.json().catch(() => null)) as { status?: string } | null;
-  if (body?.status === 'issued') refresh();
+  switch (body?.status) {
+    case 'unconfigured':
+      halted = true;
+      clearRetry();
+      return;
+    case 'no_wallet':
+      // Retrying this token cannot help; Privy's next token, once the wallet exists, posts again.
+      clearRetry();
+      return;
+    case 'invalid_token':
+      // So the retry asks Privy for a fresh token.
+      if (!droppedCachedToken) {
+        droppedCachedToken = true;
+        setCachedIdentityToken(null);
+      }
+      scheduleRetry(refresh);
+      return;
+    default:
+      // `unavailable`, `rate_limited` or an unexpected failure: the same token may work later.
+      scheduleRetry(refresh);
+  }
 }
 
 /** Whether this browser may hold a server session (the readable hint cookie). */
@@ -82,6 +104,7 @@ export function hasWalletSessionHint(): boolean {
 /** Forget what this page sent, so the next sign-in syncs again. */
 export function forgetWalletSession() {
   sentToken = null;
+  epoch += 1;
   clearRetry();
 }
 
@@ -96,4 +119,5 @@ export async function clearWalletSession() {
 export function resetWalletSessionClientForTests() {
   forgetWalletSession();
   halted = false;
+  droppedCachedToken = false;
 }

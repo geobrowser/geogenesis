@@ -26,7 +26,12 @@ const mocks = vi.hoisted(() => {
 vi.mock('next/headers', () => ({ cookies: async () => mocks.store }));
 vi.mock('~/core/auth/server/privy-identity-token', async importOriginal => ({
   ...(await importOriginal<typeof import('~/core/auth/server/privy-identity-token')>()),
-  verifyPrivyIdentityToken: mocks.verify,
+  // `mocks.verify` resolves an identity, null (bad token) or 'unavailable' (JWKS outage).
+  verifyPrivyIdentityTokenDetailed: async (...args: unknown[]) => {
+    const result = await mocks.verify(...args);
+    if (result === 'unavailable') return { ok: false, reason: 'unavailable' };
+    return result ? { ok: true, identity: result } : { ok: false, reason: 'invalid' };
+  },
 }));
 
 vi.mock('./rate-limit', () => ({ checkWalletSessionIpRateLimit: mocks.rateLimit }));
@@ -104,14 +109,25 @@ describe('POST /api/wallet-session', () => {
 
     expect(missing.status).toBe(401);
     expect(forged.status).toBe(401);
+    expect(await forged.json()).toEqual({ wallet: null, status: 'invalid_token' });
     expect(mocks.store.set).not.toHaveBeenCalled();
     expect(mocks.store.delete).not.toHaveBeenCalled();
   });
 
-  it('writes nothing for a token without an embedded wallet', async () => {
+  it('answers no_wallet for a verified token without an embedded wallet', async () => {
     mocks.verify.mockResolvedValue({ userId: 'did:privy:1', walletAddress: null });
     const res = await POST(request('POST', { token: 'good' }));
-    expect(res.status).toBe(401);
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ wallet: null, status: 'no_wallet' });
+    expect(mocks.store.set).not.toHaveBeenCalled();
+  });
+
+  it('answers unavailable when Privy keys cannot be fetched', async () => {
+    mocks.verify.mockResolvedValue('unavailable');
+    const res = await POST(request('POST', { token: 'good' }));
+    expect(res.status).toBe(503);
+    expect(await res.json()).toEqual({ wallet: null, status: 'unavailable' });
+    expect(res.headers.get('Retry-After')).toBe('15');
     expect(mocks.store.set).not.toHaveBeenCalled();
   });
 
