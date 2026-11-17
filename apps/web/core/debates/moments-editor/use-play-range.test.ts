@@ -415,6 +415,23 @@ describe('usePlayRange', () => {
     expect(result.current.state).toEqual({ kind: 'idle' });
   });
 
+  it('keeps a playing clip, and its end, when a Play has nothing to play', () => {
+    const { result, player, onEnd } = setup({ playing: true });
+    player.mediaEnd(30_000);
+    act(() => result.current.start('clip:a', [clipA]));
+    let skipped: string[] = [];
+    act(() => {
+      skipped = result.current.start('clip:b', [clipB]);
+    });
+
+    expect(skipped).toEqual(['b']);
+    expect(result.current.state).toMatchObject({ kind: 'playing', id: 'clip:a', key: 'a' });
+    // Clip A's end timer still runs: the player is paused at its end, not left playing on.
+    act(() => vi.advanceTimersByTime(10_000));
+    expect(player.handle.pause).toHaveBeenCalledOnce();
+    expect(onEnd).toHaveBeenCalledWith('clip:a');
+  });
+
   it('stops, and pauses the player, when the clips change under it', () => {
     const { result, player, update } = setup({ playing: true, clipsKey: 'a,b' });
     act(() => result.current.start('reel', [clipA, clipB]));

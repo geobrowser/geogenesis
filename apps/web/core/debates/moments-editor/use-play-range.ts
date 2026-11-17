@@ -324,17 +324,21 @@ export function usePlayRange({
   /**
    * Play `segments` in order from the first one's start; from inside the click that asked. Returns
    * the keys of the segments it skipped because they start where the media has already ended, so
-   * the caller can say so: with none left, nothing plays.
+   * the caller can say so: with none left, nothing plays, and a range already playing plays on to
+   * its own end.
    */
   const start = React.useCallback(
     (id: string, segments: readonly PlaySegment[]): string[] => {
-      clearTimers();
       // A segment that starts where the media has already ended has nothing to play.
       const stopMs = mediaStopMs(mediaEndMs());
       const pastEnd = segments.filter(segment => segment.start_ms >= stopMs).map(segment => segment.key);
       const playable = segments.filter(segment => segment.end_ms > segment.start_ms && segment.start_ms < stopMs);
+      // Nothing to start: leave the current run and its end alone. Stopping it would let the
+      // player run on past that clip's end as free play.
+      if (playable.length === 0) return pastEnd;
+      clearTimers();
       const player = handle.current;
-      if (playable.length === 0 || !player) {
+      if (!player) {
         stop();
         return pastEnd;
       }
