@@ -420,6 +420,7 @@ function Editor({ debateId }: { debateId: string }) {
   const discard = () => {
     if (!source) return;
     adoptNextVersion.current = false;
+    dispatch({ type: 'discarded' });
     setBase(source.version);
     setSaved(source.clips);
     setClips(source.clips);

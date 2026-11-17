@@ -225,6 +225,24 @@ describe('editorReducer (GEO-3773)', () => {
     expect(added).toMatchObject({ selection: { kind: 'clip', key: 'd' }, panel: 'transcript' });
   });
 
+  it('ends playback and the selected clip’s own jobs on a discard, even when the clip is still there', () => {
+    const at = run([{ type: 'select', key: 'b' }], loaded());
+    for (const panel of ['replace', 'claim'] as const) {
+      const after = run(
+        [{ type: 'openPanel', panel }, { type: 'discarded' }, { type: 'clipsChanged', keys: ['a', 'b', 'c'] }],
+        at
+      );
+      expect(after).toMatchObject({ panel: 'transcript', selection: { kind: 'clip', key: 'b' } });
+    }
+    for (const popover of ['claimMenu', 'advanced'] as const) {
+      expect(run([{ type: 'openPopover', popover }, { type: 'discarded' }], at).popover).toBeNull();
+    }
+    expect(run([{ type: 'playClip', key: 'b' }, { type: 'discarded' }], at).playback).toEqual({ mode: 'idle' });
+    // What isn't about a clip stays: the warnings panel and the header menu.
+    expect(run([{ type: 'openPanel', panel: 'warnings' }, { type: 'discarded' }], at).panel).toBe('warnings');
+    expect(run([{ type: 'openPopover', popover: 'menu' }, { type: 'discarded' }], at).popover).toBe('menu');
+  });
+
   describe('Esc', () => {
     it('closes a popover first, then the panel, then the selection, one level per press', () => {
       let state = run(

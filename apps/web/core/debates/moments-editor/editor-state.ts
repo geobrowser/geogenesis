@@ -86,6 +86,12 @@ export type EditorAction =
   /** The reel's clips, by key, in order, whenever they change (an edit, a discard, a refetch). */
   | { type: 'clipsChanged'; keys: readonly string[] }
   /**
+   * Discard changes: the reel goes back to the one that is live. Whatever plays stops, and a clip's
+   * own jobs (Replace, Add, its claim panel, claim menu, advanced options) end, even on a clip that
+   * is still there: its edits are gone (the prototype's discard).
+   */
+  | { type: 'discarded' }
+  /**
    * The editor's facts as they are now: whatever they no longer allow closes for good (it does not
    * come back when they allow it again). Sent whenever they or the view change.
    */
@@ -354,6 +360,15 @@ function reduce(state: EditorState, action: Exclude<EditorAction, { type: 'settl
         : state;
     case 'clipsChanged':
       return clipsChanged(state, action.keys);
+    case 'discarded': {
+      const base = stopped(state);
+      const clipPopover = base.popover === 'claimMenu' || base.popover === 'advanced';
+      return {
+        ...base,
+        ...(CLIP_PANELS.has(base.panel) ? PANEL_CLOSED : null),
+        ...(clipPopover ? { popover: null, popoverFor: null } : null),
+      };
+    }
   }
 }
 
