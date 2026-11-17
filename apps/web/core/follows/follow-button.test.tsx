@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   authenticated: true,
   smartAccount: {} as object | null,
   identifiedWithoutAccount: false,
+  buildFailed: false,
   personalSpaceId: 'personal-space' as string | null,
   isRegistered: true,
   isLoadingPersonalSpace: false,
@@ -67,7 +68,7 @@ vi.mock('~/core/wallet/account-readiness', async importOriginal => {
         authenticated: mocks.authenticated,
         address,
         signingAccount: Boolean(mocks.smartAccount),
-        buildFailed: false,
+        buildFailed: mocks.buildFailed,
       });
       return { state, address: actual.isIdentified(state) ? address : null };
     },
@@ -112,6 +113,7 @@ beforeEach(() => {
   mocks.authenticated = true;
   mocks.smartAccount = {};
   mocks.identifiedWithoutAccount = false;
+  mocks.buildFailed = false;
   mocks.personalSpaceId = 'personal-space';
   mocks.isRegistered = true;
   mocks.isLoadingPersonalSpace = false;
@@ -206,6 +208,33 @@ describe('FollowTopicButton', () => {
     fireEvent.click(button);
     expect(mocks.follow).toHaveBeenCalled();
     expect(mocks.promptSignIn).not.toHaveBeenCalled();
+  });
+
+  it('holds the press when the signing account failed to build, rather than losing it', () => {
+    mocks.smartAccount = null;
+    mocks.identifiedWithoutAccount = true;
+    mocks.buildFailed = true;
+    renderButton();
+    const button = screen.getByRole('button');
+
+    expect(button).toBeEnabled();
+    fireEvent.click(button);
+    expect(mocks.queue).toHaveBeenCalled();
+    expect(mocks.follow).not.toHaveBeenCalled();
+  });
+
+  it('withdraws a follow held after a failed build on a second press', () => {
+    mocks.smartAccount = null;
+    mocks.identifiedWithoutAccount = true;
+    mocks.buildFailed = true;
+    mocks.isQueued = true;
+    renderButton();
+    const button = screen.getByRole('button');
+
+    expect(button).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(button);
+    expect(mocks.cancel).toHaveBeenCalled();
+    expect(mocks.follow).not.toHaveBeenCalled();
   });
 
   it('waits while Privy is still starting', () => {

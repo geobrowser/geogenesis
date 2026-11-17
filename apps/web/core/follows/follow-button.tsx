@@ -245,11 +245,11 @@ export function FollowButton({
       promptSignIn(undefined, { onCancel: queuedFollow.cancel });
       return;
     }
-    if (personalSpaceId) {
+    if (personalSpaceId && accountState !== 'failed') {
       void observed('follow', () => follow([targetRef]));
       return;
     }
-    // Signed in with the personal space still on its way: hold the press until it exists.
+    // Or signed in with the personal space still on its way: hold the press until it exists.
     queuedFollow.queue();
   };
 
