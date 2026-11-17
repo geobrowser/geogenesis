@@ -60,6 +60,8 @@ const mocks = vi.hoisted(() => ({
   turns: [] as unknown[],
   /** The transcript's `word_timing`. */
   wordTiming: true,
+  /** Where the transcript's words came from (GEO-3642): `words_from` and `backfill`, when served. */
+  transcriptFrom: null as Record<string, unknown> | null,
   /** What the waveform's peaks read says (GEO-3673). */
   peaks: { kind: 'loading' } as unknown,
 }));
@@ -72,7 +74,7 @@ const DEFAULT_WORDS = [
 /** The transcript as a query serves it: the same object until what it holds changes. */
 let servedTranscript: { key: unknown[]; data: unknown } | null = null;
 function transcriptData() {
-  const key = [mocks.wordTiming, wordsOverride, sentencesOverride];
+  const key = [mocks.wordTiming, wordsOverride, sentencesOverride, mocks.transcriptFrom];
   if (!servedTranscript || key.some((part, at) => part !== servedTranscript!.key[at])) {
     servedTranscript = {
       key,
@@ -80,6 +82,7 @@ function transcriptData() {
         word_timing: mocks.wordTiming,
         words: wordsOverride ?? DEFAULT_WORDS,
         ...(sentencesOverride && { sentences: sentencesOverride }),
+        ...mocks.transcriptFrom,
       },
     };
   }
@@ -87,10 +90,6 @@ function transcriptData() {
 }
 
 vi.mock('../hooks', () => ({
-  useDebateTranscript: () =>
-    mocks.transcriptFailed
-      ? { isPending: false, data: undefined, error: new Error('down') }
-      : { isPending: false, data: transcriptData() },
   useGeoChatAuth: () => ({ ready: true, authenticated: true, accountKey: 'a', getPrivyIdentityToken: async () => 't' }),
   useDebate: () => ({
     data: {
@@ -128,6 +127,10 @@ vi.mock('./hooks', () => ({
   useAudioPeaks: () => mocks.peaks,
   useMomentBackfill: () => mocks.backfill,
   useMomentReelPlan: () => mocks.plan,
+  useMomentsTranscript: () =>
+    mocks.transcriptFailed
+      ? { isPending: false, data: undefined, error: new Error('down') }
+      : { isPending: false, data: transcriptData() },
   useQueueMomentReel: () => ({ mutate: mocks.mutate, isPending: false }),
   useRefreshAfterReel: () => mocks.refresh,
 }));
@@ -294,6 +297,7 @@ beforeEach(() => {
   mocks.retainedClaim = false;
   mocks.turns = [];
   mocks.wordTiming = true;
+  mocks.transcriptFrom = null;
   mocks.peaks = { kind: 'loading' };
   playerMocks.props = {};
   for (const control of Object.values(playerMocks.handle)) control.mockClear();
@@ -1479,33 +1483,138 @@ describe('keepClaimWithSpeaker', () => {
 });
 
 describe('editingBlockedReason', () => {
+  const TIMED = { word_timing: true };
+
   it('leaves an editable debate, or one with a request in the queue, editable', () => {
-    expect(editingBlockedReason({ refusal: null }, true, null)).toBeNull();
-    expect(editingBlockedReason({ refusal: 'already_queued' }, true, null)).toBeNull();
+    expect(editingBlockedReason({ refusal: null }, TIMED, null)).toBeNull();
+    expect(editingBlockedReason({ refusal: 'already_queued' }, TIMED, null)).toBeNull();
   });
 
   it('blocks a transcript without word timings, and a failed check', () => {
-    expect(editingBlockedReason({ refusal: null }, false, null)).toMatch(/no word timings/);
-    expect(editingBlockedReason(null, true, new Error('x'))).toMatch(/Couldn't check/);
+    expect(editingBlockedReason({ refusal: null }, { word_timing: false }, null)).toMatch(/no word timings/);
+    expect(editingBlockedReason(null, TIMED, new Error('x'))).toMatch(/Couldn't check/);
     // geo-chat#352's mark is `live_reel.carried`.
     expect(
-      editingBlockedReason({ refusal: null, live_reel: { clock: 'video', clips: [], carried: true } }, true, null)
+      editingBlockedReason({ refusal: null, live_reel: { clock: 'video', clips: [], carried: true } }, TIMED, null)
     ).toMatch(/Nothing is queued to cut it again/);
     expect(
       editingBlockedReason(
         { refusal: null, live_reel: { clock: 'video', clips: [], carried: true } },
-        true,
+        TIMED,
         null,
         false,
         true
       )
     ).toMatch(/in the queue; this page updates/);
     expect(
-      editingBlockedReason({ refusal: null, live_reel: { clock: 'video', clips: [], carried: false } }, true, null)
+      editingBlockedReason({ refusal: null, live_reel: { clock: 'video', clips: [], carried: false } }, TIMED, null)
     ).toBeNull();
     expect(editingBlockedReason({ refusal: null }, undefined, null, true)).toMatch(
       /Couldn't load this debate's transcript/
     );
+  });
+});
+
+describe('MomentsEditor on a fresh transcript (GEO-3642)', () => {
+  const ready = (overrides: Record<string, unknown> = {}) => ({
+    words_from: 'backfill',
+    backfill: { status: 'ready', version: 'tv1', agreement: 0.93, agrees: true, ...overrides },
+  });
+
+  it('is read-only while the debate is transcribed for editing, and says it can take as long as the debate', () => {
+    mocks.wordTiming = false;
+    wordsOverride = [];
+    mocks.transcriptFrom = {
+      words_from: null,
+      backfill: { status: 'queued', requested_at: '2026-11-17T10:00:00Z', waiting_s: 130, queue_position: 3 },
+    };
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      "Transcribing this debate for editing. This can take as long as the debate. It's queued behind 2 other debates (waiting 2 min); this page updates when it's done."
+    );
+    expect(menuItem('Check before publishing')).toBeDisabled();
+    expect(within(clipPanel()).getByRole('button', { name: 'Remove' })).toBeDisabled();
+  });
+
+  it('says a transcription is slow once it has waited longer than the debate runs', () => {
+    mocks.wordTiming = false;
+    wordsOverride = [];
+    mocks.turns = [{ turn_index: 0, participant_slot: 1, output_start_ms: 0, output_end_ms: 60_000 }];
+    mocks.transcriptFrom = {
+      words_from: null,
+      backfill: { status: 'running', requested_at: '2026-11-17T10:00:00Z', waiting_s: 61 },
+    };
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    expect(screen.getByRole('alert')).toHaveTextContent(/taking longer than usual, but it's still running/);
+  });
+
+  it('edits on the saved words, and pins every preview and publish to their version', () => {
+    mocks.mutate.mockImplementation((_body, options: { onSuccess: (entry: unknown) => void }) =>
+      options.onSuccess({ queued: true, refusal: null, request: status({ requested_at: '2026-11-17T11:00:00Z' }) })
+    );
+    mocks.transcriptFrom = ready();
+    const { rerender } = render(<MomentsEditor debateId={DEBATE_ID} />);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    typeEdge('End', '1.45');
+    fireEvent.click(menuItem('Check before publishing'));
+    expect(mocks.mutate).toHaveBeenLastCalledWith(
+      expect.objectContaining({ preview: true, reel: expect.objectContaining({ transcript_version: 'tv1' }) }),
+      expect.any(Object)
+    );
+    mocks.backfill.data = {
+      request: status({ requested_at: '2026-11-17T11:00:00Z', preview: true, status: 'done' }),
+      entry: null,
+    };
+    rerender(<MomentsEditor debateId={DEBATE_ID} />);
+    publish();
+    expect(mocks.mutate).toHaveBeenLastCalledWith(
+      expect.objectContaining({ preview: false, reel: expect.objectContaining({ transcript_version: 'tv1' }) }),
+      expect.any(Object)
+    );
+  });
+
+  it.each([
+    ['published words', { words_from: 'published', backfill: null }],
+    ['a geo-chat without the route', null],
+  ])('sends no transcript version on %s', (_, from) => {
+    mocks.transcriptFrom = from;
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    typeEdge('End', '1.45');
+    publish();
+    const body = mocks.mutate.mock.calls.at(-1)![0] as { reel: Record<string, unknown> };
+    expect(body.reel).toHaveProperty('base', 'v1');
+    expect(body.reel).not.toHaveProperty('transcript_version');
+  });
+
+  it('stays read-only, with the agreement, when the saved words disagree with the published transcript', () => {
+    mocks.transcriptFrom = ready({ agreement: 0.724, agrees: false });
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    expect(screen.getByRole('alert')).toHaveTextContent(/matches its published transcript only 72%/);
+    expect(menuItem('Check before publishing')).toBeDisabled();
+  });
+
+  it('says the debate was re-rendered when the worker refuses the pinned reel, and reads the transcript again', () => {
+    const requestedAt = '2026-11-17T12:00:00Z';
+    mocks.mutate.mockImplementation((_body, options: { onSuccess: (entry: unknown) => void }) =>
+      options.onSuccess({ queued: true, refusal: null, request: status({ requested_at: requestedAt }) })
+    );
+    mocks.transcriptFrom = ready();
+    const { rerender } = render(<MomentsEditor debateId={DEBATE_ID} />);
+    typeEdge('End', '1.45');
+    publish();
+    mocks.backfill.data = { request: status({ requested_at: requestedAt, status: 'running' }), entry: null };
+    rerender(<MomentsEditor debateId={DEBATE_ID} />);
+    mocks.refresh.mockClear();
+    mocks.backfill.data = {
+      request: status({ requested_at: requestedAt, status: 'skipped', outcome: 'transcript_changed' }),
+      entry: null,
+    };
+    rerender(<MomentsEditor debateId={DEBATE_ID} />);
+    expect(
+      screen.getByText(/This debate was re-rendered since you edited it\. Check the clips and publish again\./)
+    ).toBeInTheDocument();
+    // `useRefreshAfterReel` reads every transcript of the debate again, the editor's included.
+    expect(mocks.refresh).toHaveBeenCalled();
   });
 });
 

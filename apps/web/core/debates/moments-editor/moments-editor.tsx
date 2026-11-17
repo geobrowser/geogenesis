@@ -11,7 +11,7 @@ import { GeoChatRequestError } from '../api';
 import { DebateFeedPlayer, type DebateFeedPlayerHandle } from '../browse/debate-feed-player';
 import { useInlinePlaybackUnavailable } from '../browse/inline-playback';
 import { MOMENTS_EDITOR_CLOSEABLE_PARAM, debatePath } from '../debate-routes';
-import { useDebate, useDebateExtractedClaims, useDebateMedia, useDebateTranscript, useGeoChatAuth } from '../hooks';
+import { useDebate, useDebateExtractedClaims, useDebateMedia, useGeoChatAuth } from '../hooks';
 import { speakerStillUrl } from '../speaker-still';
 import { type MomentBackfillEntry, reelCarried, reelUnlinkable } from './api';
 import { ClipPanel } from './clip-panel';
@@ -34,9 +34,11 @@ import {
   useAudioPeaks,
   useMomentBackfill,
   useMomentReelPlan,
+  useMomentsTranscript,
   useQueueMomentReel,
   useRefreshAfterReel,
 } from './hooks';
+import { type TranscriptGate, pinnedTranscriptVersion, transcriptBlockedReason } from './moments-transcript';
 import {
   type EditorClip,
   MANUAL_MAX_CLIPS,
@@ -83,12 +85,6 @@ const NEW_CLIP_MS = 15_000;
 export { EXTRA_CLIP_TOOLTIP } from './reel-strip';
 
 const NO_TURNS: DebateMediaTurnSegment[] = [];
-/**
- * The words the editor snaps edges to and counts speakers with, and the sentences its transcript
- * lists (GEO-3349). Stable, as a query key part.
- */
-const TRANSCRIPT_INCLUDE = ['words', 'sentences'] as const;
-
 /**
  * The moments editor (GEO-3671): a media admin fine-tunes a debate's moment reel, previews exactly
  * what the media worker would publish, then publishes it and watches it go live. Every time here is
@@ -171,7 +167,9 @@ function Editor({ debateId }: { debateId: string }) {
   const media = useDebateMedia(debateId, true);
   const claims = useDebateExtractedClaims(debateId, true);
   const plan = useMomentReelPlan(debateId, true);
-  const transcript = useDebateTranscript(debateId, 'json', true, TRANSCRIPT_INCLUDE);
+  // The words the editor snaps edges to and counts speakers with, and the sentences it lists
+  // (GEO-3349); for a debate published without words, a fresh transcription of it (GEO-3642).
+  const transcript = useMomentsTranscript(debateId, true);
   const backfill = useMomentBackfill(debateId, true);
   // The waveform never holds the editor up: until it is ready, or without one, editing works the same.
   const peaks = useAudioPeaks(debateId, true);
@@ -378,11 +376,13 @@ function Editor({ debateId }: { debateId: string }) {
   const transcriptFailed = !transcript.isPending && transcript.data === undefined;
   const readOnlyReason = editingBlockedReason(
     entry,
-    transcript.data?.word_timing,
+    transcript.data,
     plan.error,
     transcriptFailed,
     inFlight,
-    dirty
+    dirty,
+    // How long the debate runs, for a transcription that is taking longer than that.
+    turns.length > 0 ? Math.max(...turns.map(turn => turn.source_end_ms ?? turn.output_end_ms)) : undefined
   );
   const readOnly = readOnlyReason !== null;
   // A carried reel can't be edited, but it can be returned to automatic, which geo-chat doesn't refuse
@@ -609,6 +609,7 @@ function Editor({ debateId }: { debateId: string }) {
         }
       : null;
 
+  const transcriptVersion = pinnedTranscriptVersion(transcript.data);
   const submit = (kind: 'preview' | 'publish' | 'unlock') => {
     dispatch({ type: 'closePopover' });
     dispatch({ type: 'stop' });
@@ -624,7 +625,13 @@ function Editor({ debateId }: { debateId: string }) {
         : {
             preview: kind === 'preview',
             reason: kind === 'preview' ? 'Moments editor: preview' : 'Moments editor: hand-picked reel',
-            reel: { clock: 'player' as const, ...manualReel(clips, words, turns), ...(base && { base }) },
+            reel: {
+              clock: 'player' as const,
+              ...manualReel(clips, words, turns),
+              ...(base && { base }),
+              // Words from a fresh transcription: cut on exactly those, or refused (`transcript_changed`).
+              ...(transcriptVersion && { transcript_version: transcriptVersion }),
+            },
           };
     queue.mutate(body, {
       onSuccess: queued => {
@@ -1329,20 +1336,22 @@ function turnClockKey(turns: readonly DebateMediaTurnSegment[]) {
 }
 
 /**
- * Why the editor is read-only, or `null`. The dry run's refusal says it for most cases; a transcript
- * without word timings is re-transcribed by every request and is then often skipped
- * (`transcript_differs`), so it is read-only until that is fixed (GEO-3642).
+ * Why the editor is read-only, or `null`. The dry run's refusal says it for most cases. A transcript
+ * without word timings is edited on a fresh transcription geo-chat saves for it (GEO-3642): until
+ * that is ready, and agrees with the published one, the reel is read-only (`transcriptBlockedReason`).
  */
 export function editingBlockedReason(
   entry: (Pick<MomentBackfillEntry, 'refusal'> & Partial<Pick<MomentBackfillEntry, 'live_reel'>>) | null,
-  wordTiming: boolean | undefined,
+  transcript: TranscriptGate | undefined,
   planError: unknown,
   /** The transcript never loaded: without its words no edge snaps and no clip has a speaker or claim. */
   transcriptFailed = false,
   /** A request is queued or rendering: for a carried reel, usually the worker's own re-cut of it. */
   requestInFlight = false,
   /** An unsaved edit is on the reel: Return to automatic waits until it is discarded. */
-  editPending = false
+  editPending = false,
+  /** How long the debate runs: a transcription for editing waiting longer is said to be slow. */
+  debateMs?: number
 ): string | null {
   if (planError) return "Couldn't check whether this debate can be edited. Reload to try again.";
   if (transcriptFailed) return "Couldn't load this debate's transcript. Reload to try again.";
@@ -1360,10 +1369,7 @@ export function editingBlockedReason(
   }
   if (entry && refusalBlocksEditing(entry.refusal))
     return `Can't edit this reel: ${refusalMessage(entry.refusal ?? '')}`;
-  if (wordTiming === false) {
-    return "Can't edit this reel yet: its transcript has no word timings, so geo-chat would transcribe it again and may not match it (GEO-3642).";
-  }
-  return null;
+  return transcriptBlockedReason(transcript, debateMs);
 }
 
 function queueErrorMessage(error: unknown) {

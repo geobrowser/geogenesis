@@ -6,12 +6,19 @@ import * as React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { GeoChatRequestError } from '../api';
-import { useAudioPeaks, useIsMediaAdmin, useRefreshAfterReel } from './hooks';
+import { useAudioPeaks, useIsMediaAdmin, useMomentsTranscript, useRefreshAfterReel } from './hooks';
 
 const mocks = vi.hoisted(() => ({
   authenticated: true,
   getMomentBackfill: vi.fn(),
   getAudioPeaks: vi.fn(),
+  getMomentsTranscript: vi.fn(),
+  getDebateTranscript: vi.fn(),
+}));
+
+vi.mock('../api', async importOriginal => ({
+  ...(await importOriginal<typeof import('../api')>()),
+  getDebateTranscript: mocks.getDebateTranscript,
 }));
 
 vi.mock('../hooks', () => ({
@@ -19,6 +26,7 @@ vi.mock('../hooks', () => ({
     extractedClaims: (id: string) => ['debates', 'extracted-claims', id],
     media: (id: string) => ['debates', 'media', id],
     transcripts: (id: string) => ['debates', 'transcript', id],
+    momentsTranscript: (id: string, account: string | null) => ['debates', 'transcript', id, 'moments', account],
     momentReelPlan: (id: string, account: string | null) => ['debates', 'account', account, 'moment-reel-plan', id],
     mediaAdmin: (account: string | null) => ['debates', 'account', account, 'media-admin'],
     audioPeaks: (id: string, account: string | null) => ['debates', 'account', account, 'audio-peaks', id],
@@ -35,6 +43,7 @@ vi.mock('../hooks', () => ({
 vi.mock('./api', () => ({
   getMomentBackfill: mocks.getMomentBackfill,
   getAudioPeaks: mocks.getAudioPeaks,
+  getMomentsTranscript: mocks.getMomentsTranscript,
   postMomentBackfill: vi.fn(),
 }));
 
@@ -47,6 +56,8 @@ beforeEach(() => {
   mocks.authenticated = true;
   mocks.getMomentBackfill.mockReset();
   mocks.getAudioPeaks.mockReset();
+  mocks.getMomentsTranscript.mockReset();
+  mocks.getDebateTranscript.mockReset();
 });
 
 describe('useIsMediaAdmin (GEO-3671)', () => {
@@ -228,5 +239,122 @@ describe('useAudioPeaks (GEO-3673)', () => {
     expect(result.current).toMatchObject({ kind: 'none', message: expect.stringMatching(/still processing/) });
     await advance(60_000);
     expect(mocks.getAudioPeaks).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('useMomentsTranscript (GEO-3642)', () => {
+  const transcript = (backfill: Record<string, unknown> | null, words_from: string | null = null) => ({
+    format: 'json',
+    model_id: 'm',
+    segments: [],
+    word_timing: words_from !== null,
+    words: [],
+    sentences: [],
+    words_from,
+    backfill,
+  });
+  const queued = transcript({
+    status: 'queued',
+    requested_at: '2026-11-17T10:00:00Z',
+    waiting_s: 3,
+    queue_position: 1,
+  });
+  const ready = transcript({ status: 'ready', version: 'tv1', agreement: 0.9, agrees: true }, 'backfill');
+
+  afterEach(() => {
+    cleanup();
+    vi.useRealTimers();
+  });
+
+  const advance = (ms: number) => act(() => vi.advanceTimersByTimeAsync(ms));
+
+  it('reads a transcription every 15 s, then every minute after ten, for as long as it takes', async () => {
+    vi.useFakeTimers();
+    mocks.getMomentsTranscript.mockResolvedValue(queued);
+    const { result } = renderHook(() => useMomentsTranscript('debate', true), { wrapper });
+    await advance(0);
+    expect(result.current.data).toEqual(queued);
+    expect(mocks.getMomentsTranscript).toHaveBeenCalledTimes(1);
+    expect(mocks.getMomentsTranscript).toHaveBeenCalledWith(
+      'debate',
+      expect.any(Function),
+      'account',
+      expect.anything()
+    );
+
+    await advance(15_000);
+    expect(mocks.getMomentsTranscript).toHaveBeenCalledTimes(2);
+    // Ten minutes in: 40 reads at 15 s, plus the first.
+    await advance(585_000);
+    expect(mocks.getMomentsTranscript).toHaveBeenCalledTimes(41);
+    await advance(59_000);
+    expect(mocks.getMomentsTranscript).toHaveBeenCalledTimes(41);
+    await advance(1_000);
+    expect(mocks.getMomentsTranscript).toHaveBeenCalledTimes(42);
+    // Hours on, still read: geo-chat moves a stuck run on, not the editor.
+    await advance(3 * 60 * 60_000);
+    expect(mocks.getMomentsTranscript).toHaveBeenCalledTimes(42 + 180);
+  });
+
+  it('stops reading once the saved words are ready', async () => {
+    vi.useFakeTimers();
+    mocks.getMomentsTranscript.mockResolvedValueOnce(queued).mockResolvedValue(ready);
+    const { result } = renderHook(() => useMomentsTranscript('debate', true), { wrapper });
+    await advance(0);
+    await advance(15_000);
+    await advance(100);
+    expect(result.current.data).toEqual(ready);
+    await advance(10 * 60_000);
+    expect(mocks.getMomentsTranscript).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([
+    ['a geo-chat without the route', new GeoChatRequestError('Not found', 'not_found', 404)],
+    ['a refusal of the admin route', new GeoChatRequestError('no', 'media_admin_required', 403)],
+  ])('reads the public transcript, with words and sentences, from %s', async (_, error) => {
+    const published = { format: 'json', model_id: 'm', segments: [], word_timing: false };
+    mocks.getMomentsTranscript.mockRejectedValue(error);
+    mocks.getDebateTranscript.mockResolvedValue(published);
+    const { result } = renderHook(() => useMomentsTranscript('debate', true), { wrapper });
+    await waitFor(() => expect(result.current.data).toEqual(published));
+    expect(mocks.getDebateTranscript).toHaveBeenCalledWith(
+      'debate',
+      'json',
+      expect.any(Function),
+      'account',
+      expect.anything(),
+      ['words', 'sentences']
+    );
+    expect(mocks.getMomentsTranscript).toHaveBeenCalledTimes(1);
+  });
+
+  it('fails, without the public read, when geo-chat fails', async () => {
+    mocks.getMomentsTranscript.mockRejectedValue(new GeoChatRequestError('down', null, 500));
+    const { result } = renderHook(() => useMomentsTranscript('debate', true), { wrapper });
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(mocks.getDebateTranscript).not.toHaveBeenCalled();
+  });
+
+  // The refresh after a re-render or a `transcript_changed` refusal invalidates every transcript of
+  // the debate by prefix: the editor's must be one of them.
+  it('is read again by the refresh after a reel', async () => {
+    mocks.getMomentsTranscript.mockResolvedValue(ready);
+    const client = new QueryClient();
+    const shared = ({ children }: { children: React.ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+    const { result } = renderHook(
+      () => ({ transcript: useMomentsTranscript('debate', true), refresh: useRefreshAfterReel('debate') }),
+      { wrapper: shared }
+    );
+    await waitFor(() => expect(result.current.transcript.data).toEqual(ready));
+    act(() => result.current.refresh());
+    await waitFor(() => expect(mocks.getMomentsTranscript).toHaveBeenCalledTimes(2));
+  });
+
+  it('asks nothing signed out', () => {
+    mocks.authenticated = false;
+    renderHook(() => useMomentsTranscript('debate', true), { wrapper });
+    expect(mocks.getMomentsTranscript).not.toHaveBeenCalled();
   });
 });
