@@ -1626,6 +1626,43 @@ describe('MomentsEditor on a fresh transcript (GEO-3642)', () => {
     );
   });
 
+  it('pins a new edit to the words it is made on once the last one is discarded', () => {
+    mocks.transcriptFrom = ready();
+    const { rerender } = render(<MomentsEditor debateId={DEBATE_ID} />);
+    typeEdge('End', '1.45');
+    fireEvent.click(screen.getByRole('button', { name: 'Discard changes' }));
+    mocks.transcriptFrom = ready({ version: 'tv2' });
+    rerender(<MomentsEditor debateId={DEBATE_ID} />);
+    typeEdge('End', '1.45');
+    publish();
+    expect(mocks.mutate).toHaveBeenLastCalledWith(
+      expect.objectContaining({ reel: expect.objectContaining({ transcript_version: 'tv2' }) }),
+      expect.any(Object)
+    );
+  });
+
+  it('pins a new edit to the words it is made on once the last one is live', () => {
+    const requestedAt = '2026-11-17T12:00:00Z';
+    mocks.mutate.mockImplementation((_body, options: { onSuccess: (entry: unknown) => void }) =>
+      options.onSuccess({ queued: true, refusal: null, request: status({ requested_at: requestedAt }) })
+    );
+    mocks.transcriptFrom = ready();
+    const { rerender } = render(<MomentsEditor debateId={DEBATE_ID} />);
+    typeEdge('End', '1.45');
+    publish();
+    mocks.backfill.data = { request: status({ requested_at: requestedAt, status: 'done' }), entry: null };
+    rerender(<MomentsEditor debateId={DEBATE_ID} />);
+    expect(screen.queryByText('Unsaved changes')).not.toBeInTheDocument();
+    mocks.transcriptFrom = ready({ version: 'tv2' });
+    rerender(<MomentsEditor debateId={DEBATE_ID} />);
+    typeEdge('End', '1.3');
+    publish();
+    expect(mocks.mutate).toHaveBeenLastCalledWith(
+      expect.objectContaining({ reel: expect.objectContaining({ transcript_version: 'tv2' }) }),
+      expect.any(Object)
+    );
+  });
+
   it('says the debate was re-rendered when the worker refuses the pinned reel, and reads the transcript again', () => {
     const requestedAt = '2026-11-17T12:00:00Z';
     mocks.mutate.mockImplementation((_body, options: { onSuccess: (entry: unknown) => void }) =>
