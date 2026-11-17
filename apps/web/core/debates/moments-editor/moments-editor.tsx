@@ -76,7 +76,6 @@ import type { ClaimOption } from './speaker-classes';
 import { useEditorKeyboard } from './use-editor-keyboard';
 import { reelSegments, usePlayRange } from './use-play-range';
 import { usePlayheadFrame, usePlayheadText } from './use-playhead-frame';
-import type { FineFocus } from './waveform';
 
 /** What a new clip at the playhead runs for, before it is trimmed. */
 const NEW_CLIP_MS = 15_000;
@@ -649,15 +648,6 @@ function Editor({ debateId }: { debateId: string }) {
 
   const [snap, setSnap] = React.useState(true);
   const [pad, setPad] = React.useState<Pad>(2_000);
-  // What the fine-tune panel centres on (GEO-3773): Clip unless the admin picked an edge of this
-  // clip. Another clip (or none) starts back on Clip, reset as the selection changes rather than in
-  // an effect, so no frame shows the new clip zoomed on the old one's edge.
-  const [focus, setFocus] = React.useState<FineFocus>('clip');
-  const [focusFor, setFocusFor] = React.useState(selected);
-  if (focusFor !== selected) {
-    setFocusFor(selected);
-    setFocus('clip');
-  }
 
   // What plays (GEO-3773): the reel is the view state's (its selection comes back when it stops);
   // the range is the player's. A reel whose range has ended or stopped is over.
@@ -1090,7 +1080,7 @@ function Editor({ debateId }: { debateId: string }) {
         advancedOpen={shown.popover === 'advanced'}
         snap={snap}
         pad={pad}
-        focus={focus}
+        focus={shown.focus}
         canMoveEarlier={selectedIndex > 0}
         canMoveLater={selectedIndex < clips.length - 1}
         canStep={words.length > 0}
@@ -1107,7 +1097,7 @@ function Editor({ debateId }: { debateId: string }) {
             playheadMs={playheadMs}
             readOnly={!editable}
             pad={pad}
-            focus={focus}
+            focus={shown.focus}
             snap={snap}
             onSnap={() => setSnap(on => !on)}
             onChangeClip={(index, span) => updateClip(index, clip => ({ ...clip, ...span }))}
@@ -1127,7 +1117,7 @@ function Editor({ debateId }: { debateId: string }) {
         onSnap={() => setSnap(on => !on)}
         onMove={direction => moveClip(selectedIndex, direction)}
         onPad={setPad}
-        onFocus={setFocus}
+        onFocus={focus => dispatch({ type: 'focus', focus })}
         onFullDebate={() => dispatch({ type: 'deselect' })}
         onStep={(edge, direction) =>
           updateClip(selectedIndex, clip => {

@@ -3690,5 +3690,11 @@ describe('zooming the fine-tune waveform on an edge (GEO-3773)', () => {
     deselect();
     selectClip(2);
     expect(focused()).toEqual(['Clip']);
+    // Picking the clip already selected (Next clip on the last one) ends its jobs, its zoom on an
+    // edge with them.
+    focusOn('End');
+    fireEvent.click(screen.getByRole('button', { name: 'Next clip' }));
+    expect(isSelected(2)).toBe(true);
+    expect(focused()).toEqual(['Clip']);
   });
 });
