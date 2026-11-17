@@ -4,7 +4,7 @@ import * as React from 'react';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { useUnpublishedLeaveGuard } from './use-unpublished-leave-guard';
+import { LEAVE_SETTLE_MS, useUnpublishedLeaveGuard } from './use-unpublished-leave-guard';
 
 afterEach(cleanup);
 
@@ -113,5 +113,125 @@ describe('useUnpublishedLeaveGuard', () => {
     );
     fireEvent.click(screen.getByText('elsewhere'));
     expect(screen.getByText('Publish your ranking?')).toBeTruthy();
+  });
+
+  describe('after choosing to leave, nothing asks again (Preston, 16 Nov)', () => {
+    // A real browser fires popstate for history.back() a task later, after React has re-rendered
+    // the screen with its changes still unpublished.
+    const asyncBack = () =>
+      vi.spyOn(window.history, 'back').mockImplementation(() => {
+        setTimeout(() => window.dispatchEvent(new PopStateEvent('popstate')), 0);
+      });
+
+    afterEach(() => vi.restoreAllMocks());
+
+    it('the back arrow: Leave without publishing leaves once and never reopens the prompt', async () => {
+      asyncBack();
+      const leave = vi.fn();
+      render(<Harness active leave={leave} />);
+      fireEvent.click(screen.getByText('back'));
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Leave without publishing' }));
+      });
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 5));
+      });
+      expect(leave).toHaveBeenCalledTimes(1);
+      expect(screen.queryByText('Publish your ranking?')).toBeNull();
+    });
+
+    it('the back arrow: Publish and leave never reopens the prompt either', async () => {
+      asyncBack();
+      const leave = vi.fn();
+      render(<Harness active leave={leave} onPublish={async () => true} />);
+      fireEvent.click(screen.getByText('back'));
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Publish and leave' }));
+      });
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 5));
+      });
+      expect(leave).toHaveBeenCalledTimes(1);
+      expect(screen.queryByText('Publish your ranking?')).toBeNull();
+    });
+
+    it("an in-app link: Leave without publishing doesn't get the browser's own leave prompt", async () => {
+      asyncBack();
+      render(
+        <>
+          <Harness active leave={vi.fn()} />
+          <a href="/space/other">elsewhere</a>
+        </>
+      );
+      fireEvent.click(screen.getByText('elsewhere'));
+      // The link leaves with a full page load (window.location.assign); jsdom can't navigate, so
+      // the unload it starts is dispatched here.
+      const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Leave without publishing' }));
+      });
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 5));
+      });
+      const unload = new Event('beforeunload', { cancelable: true });
+      window.dispatchEvent(unload);
+      expect(unload.defaultPrevented).toBe(false);
+      expect(screen.queryByText('Publish your ranking?')).toBeNull();
+      errors.mockRestore();
+    });
+
+    it("the browser's Back: Leave without publishing goes back without asking again", async () => {
+      const back = asyncBack();
+      render(<Harness active leave={vi.fn()} />);
+      // Back spends the spare entry and opens the prompt.
+      await act(async () => {
+        window.dispatchEvent(new PopStateEvent('popstate'));
+      });
+      expect(screen.getByText('Publish your ranking?')).toBeTruthy();
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Leave without publishing' }));
+      });
+      // The leave is history.back(), whose popstate lands after a re-render.
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 5));
+      });
+      expect(back).toHaveBeenCalledTimes(1);
+      expect(screen.queryByText('Publish your ranking?')).toBeNull();
+      const unload = new Event('beforeunload', { cancelable: true });
+      window.dispatchEvent(unload);
+      expect(unload.defaultPrevented).toBe(false);
+    });
+
+    it('comes back on when the leave went nowhere (no page before this one), but not while leaving', async () => {
+      asyncBack();
+      const leave = vi.fn(); // Back with nothing before it: the screen stays.
+      render(
+        <>
+          <Harness active leave={leave} />
+          <a href="/space/other">elsewhere</a>
+        </>
+      );
+      fireEvent.click(screen.getByText('back'));
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Leave without publishing' }));
+      });
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 5));
+      });
+      expect(leave).toHaveBeenCalledTimes(1);
+      // Right after the choice, nothing asks.
+      const early = new Event('beforeunload', { cancelable: true });
+      window.dispatchEvent(early);
+      expect(early.defaultPrevented).toBe(false);
+      // Once the leave has had its time and the screen is still here, the guard is back.
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, LEAVE_SETTLE_MS + 50));
+      });
+      const later = new Event('beforeunload', { cancelable: true });
+      window.dispatchEvent(later);
+      expect(later.defaultPrevented).toBe(true);
+      fireEvent.click(screen.getByText('elsewhere'));
+      expect(screen.getByText('Publish your ranking?')).toBeTruthy();
+    });
   });
 });
