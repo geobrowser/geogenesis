@@ -13,7 +13,8 @@ import { Tooltip } from '~/design-system/tooltip';
 
 import type { DebateMediaTurnSegment, ParticipantSlot } from '../api';
 import { GeoChatRequestError } from '../api';
-import { DebateFeedPlayer } from '../browse/debate-feed-player';
+import { DebateFeedPlayer, type DebateFeedPlayerHandle } from '../browse/debate-feed-player';
+import { useInlinePlaybackUnavailable } from '../browse/inline-playback';
 import { useDebate, useDebateExtractedClaims, useDebateMedia, useDebateTranscript, useGeoChatAuth } from '../hooks';
 import { NEGATIVE_TEXT_CLASS, POSITIVE_TEXT_CLASS, WAITING_TEXT_CLASS } from '../matchmaking/admin-debate-parts';
 import { HUB_LIGHT_CALLOUT_CLASS_NAME } from '../matchmaking/hub-callout';
@@ -62,6 +63,8 @@ import { REEL_CLIPS, type ReelWarningFix, reelWarnings } from './reel-warnings';
 import { ReelWarningsPanel } from './reel-warnings-panel';
 import { ReelWaveform } from './reel-waveform';
 import { useEditorKeyboard } from './use-editor-keyboard';
+import { reelSegments, usePlayRange } from './use-play-range';
+import { usePlayheadFrame, usePlayheadText } from './use-playhead-frame';
 
 /** What a new clip at the playhead runs for, before it is trimmed. */
 const NEW_CLIP_MS = 15_000;
@@ -177,10 +180,55 @@ function Editor({ debateId }: { debateId: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [source]);
 
+  // The player, played through its handle (GEO-3773). Null on the combined-video fallback.
+  const player = React.useRef<DebateFeedPlayerHandle>(null);
+  const inlineUnavailable = useInlinePlaybackUnavailable();
+  const [rate, setRate] = React.useState<PlaybackRate>(1);
+  const [playerState, setPlayerState] = React.useState({ playing: false, failed: false });
+  const onPlaybackState = React.useCallback(
+    (state: { playing: boolean; error: boolean; autoplayBlocked: boolean }) =>
+      setPlayerState(current =>
+        current.playing === state.playing && current.failed === (state.error || state.autoplayBlocked)
+          ? current
+          : { playing: state.playing, failed: state.error || state.autoplayBlocked }
+      ),
+    []
+  );
+  const [soundBlocked, setSoundBlocked] = React.useState(false);
+  const range = usePlayRange({
+    handle: player,
+    rate,
+    playing: playerState.playing,
+    failed: playerState.failed,
+    clipsKey: `${clips.map(clip => clip.key).join(',')}#${reelKey(clips)}`,
+  });
+  /** Clips the last Play skipped because they start after the video has ended (a carried reel's). */
+  const [pastEnd, setPastEnd] = React.useState<{ skipped: number; of: number } | null>(null);
+  const startRange = (id: string, segments: Parameters<typeof range.start>[1]) => {
+    const skipped = range.start(id, segments).length;
+    setPastEnd(skipped > 0 ? { skipped, of: segments.length } : null);
+  };
+  const frame = usePlayheadFrame(player, playerState.playing);
+  const timeReadout = usePlayheadText(frame, formatReelTime);
+
   const [playheadMs, setPlayheadMs] = React.useState<number | null>(null);
-  const onPlayheadChange = React.useCallback((seconds: number) => setPlayheadMs(Math.round(seconds * 1000)), []);
+  const onRangePlayhead = range.onPlayhead;
+  const onPlayheadChange = React.useCallback(
+    (seconds: number) => {
+      onRangePlayhead(seconds * 1000);
+      setPlayheadMs(Math.round(seconds * 1000));
+    },
+    [onRangePlayhead]
+  );
   const [seek, setSeek] = React.useState<{ ms: number; nonce: number } | null>(null);
-  const seekTo = (ms: number) => setSeek(previous => ({ ms, nonce: (previous?.nonce ?? 0) + 1 }));
+  const seekTo = (ms: number) => {
+    range.stop();
+    setPastEnd(null);
+    if (player.current) {
+      player.current.seek(ms);
+      frame.refresh();
+    } else setSeek(previous => ({ ms, nonce: (previous?.nonce ?? 0) + 1 }));
+  };
 
   // How the admin is looking at the reel: the selected clip or none, the side panel, the open
   // popover or confirm, and what plays (GEO-3773). The reel itself stays in `clips`. `view` is what
@@ -368,6 +416,8 @@ function Editor({ debateId }: { debateId: string }) {
     () => (carried ? clips.map(() => null) : playedCuts(clips, words, turns)),
     [carried, clips, words, turns]
   );
+  // What Play reel plays: the played cuts, or a carried reel's clip spans (`reelSegments`).
+  const reelPlayable = React.useMemo(() => reelSegments(clips, played, carried), [carried, clips, played]);
   // None for a carried reel: like its clip checks, they would read its old-video cuts at the places
   // the new video's turns map them to, and it is read-only, so there is nothing to fix.
   const warnings = carried ? [] : reelWarnings(clips, words, nameOf);
@@ -609,16 +659,81 @@ function Editor({ debateId }: { debateId: string }) {
           {debate.data ? (
             <div className="overflow-hidden rounded-xl border border-grey-02 bg-black">
               <DebateFeedPlayer
+                ref={player}
                 debate={debate.data}
                 active
                 framed
-                // A seek the editor asks for, applied once per request (the player latches on the
-                // value, so a repeat to the same time is told apart by a negligible offset).
+                editorMode
+                forceSound
+                cutTransitions
+                measure={false}
+                playbackRate={rate}
+                pauseBreakCuts={range.active}
+                onJumpTransition={range.onTransition}
+                onPlaybackState={onPlaybackState}
+                onSoundBlockedChange={setSoundBlocked}
+                // Where the combined-video fallback has no handle: a seek the editor asks for,
+                // applied once per request (the player latches on the value, so a repeat to the
+                // same time is told apart by a negligible offset).
                 initialSeekSeconds={seek ? seek.ms / 1000 + seek.nonce * 1e-6 : null}
                 onPlayheadChange={onPlayheadChange}
               />
             </div>
           ) : null}
+          {/* Temporary transport until the editor's monitor (GEO-3773, PR 2b) replaces it. */}
+          <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Playback">
+            <Button
+              small
+              variant="secondary"
+              disabled={inlineUnavailable}
+              onClick={() => {
+                if (range.state.kind === 'stalled') return range.retry();
+                range.stop();
+                setPastEnd(null);
+                if (playerState.playing) player.current?.pause();
+                else player.current?.play();
+              }}
+            >
+              {playerState.playing && range.state.kind !== 'stalled' ? 'Pause' : 'Play'}
+            </Button>
+            <Button
+              small
+              variant="secondary"
+              disabled={inlineUnavailable || reelPlayable.length === 0}
+              onClick={() => {
+                if (range.state.kind !== 'idle' && range.state.id === 'reel') {
+                  range.stop();
+                  player.current?.pause();
+                } else startRange('reel', reelPlayable);
+              }}
+            >
+              {range.state.kind !== 'idle' && range.state.id === 'reel' ? 'Stop' : 'Play reel'}
+            </Button>
+            {PLAYBACK_RATES.map(option => (
+              <Button
+                key={option}
+                small
+                variant={rate === option ? 'primary' : 'secondary'}
+                aria-pressed={rate === option}
+                disabled={inlineUnavailable}
+                onClick={() => setRate(option)}
+              >
+                {option}x
+              </Button>
+            ))}
+            {soundBlocked && !inlineUnavailable ? (
+              <Button small variant="secondary" onClick={() => player.current?.unmute()}>
+                Sound blocked — click to unmute
+              </Button>
+            ) : null}
+            <Text as="span" variant="metadata" color="grey-04" className="tabular-nums">
+              <span ref={timeReadout} />
+              {range.state.kind === 'playing' && range.state.loading ? ' · Loading next clip' : null}
+              {range.state.kind === 'stalled' ? " · Couldn't continue — Play to retry" : null}
+              {pastEnd ? ` · ${pastEndText(pastEnd)}` : null}
+              {inlineUnavailable ? 'Playback controls need the two-camera player' : null}
+            </Text>
+          </div>
           <Text as="p" variant="metadata" color="grey-04" className="tabular-nums">
             Playhead {playheadMs === null ? '—' : formatReelTime(playheadMs)}. Times are as the debate player shows
             them.
@@ -686,7 +801,11 @@ function Editor({ debateId }: { debateId: string }) {
                     onMove={direction => moveClip(index, direction)}
                     isFirst={index === 0}
                     isLast={index === clipViews.length - 1}
-                    onPlay={() => seekTo(played[index]?.start_ms ?? view.clip.start_ms)}
+                    onPlay={() =>
+                      inlineUnavailable
+                        ? seekTo(played[index]?.start_ms ?? view.clip.start_ms)
+                        : startRange(`clip:${view.clip.key}`, [{ key: view.clip.key, ...(played[index] ?? view.clip) }])
+                    }
                     onRemove={() => setClips(current => current.filter((_, at) => at !== index))}
                     onChangeClaim={claimIndex => updateClip(index, clip => ({ ...clip, claim_index: claimIndex }))}
                     onChangeEdge={(edge, ms, options) =>
@@ -744,6 +863,16 @@ function clipKey(clip: EditorClip) {
   const free = `${edgeIsFree(clip, 'start') ? 's' : ''}${edgeIsFree(clip, 'end') ? 'e' : ''}`;
   return `${clip.start_ms}-${clip.end_ms}-${clip.claim_index ?? ''}-${free}`;
 }
+
+/** What a Play that skipped clips past the end of the video says. */
+function pastEndText({ skipped, of }: { skipped: number; of: number }) {
+  if (skipped === of)
+    return of === 1 ? 'This clip is past the end of the video' : 'These clips are past the end of the video';
+  return `Skipped ${skipped} ${skipped === 1 ? 'clip' : 'clips'} past the end of the video`;
+}
+
+const PLAYBACK_RATES = [1, 1.5, 2] as const;
+type PlaybackRate = (typeof PLAYBACK_RATES)[number];
 
 /** Whether two reels are the same edit: the same cuts and claims, in the same order. */
 function reelKey(clips: readonly EditorClip[]) {
