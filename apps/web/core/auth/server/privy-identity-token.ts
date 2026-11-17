@@ -36,12 +36,20 @@ async function fetchJwks(appId: string, fetcher: typeof fetch): Promise<Jwk[]> {
   return Array.isArray(body.keys) ? body.keys : [];
 }
 
-async function keysFor(appId: string, fetcher: typeof fetch, forceRefresh: boolean, now: number): Promise<Jwk[]> {
+/** The keys, and whether this call fetched them (false when served from cache). */
+async function keysFor(
+  appId: string,
+  fetcher: typeof fetch,
+  forceRefresh: boolean,
+  now: number
+): Promise<{ keys: Jwk[]; fetched: boolean }> {
   const age = jwksCache && jwksCache.appId === appId ? now - jwksCache.fetchedAt : Infinity;
-  if (jwksCache && age < (forceRefresh ? JWKS_FORCED_REFRESH_MIN_MS : JWKS_TTL_MS)) return jwksCache.keys;
+  if (jwksCache && age < (forceRefresh ? JWKS_FORCED_REFRESH_MIN_MS : JWKS_TTL_MS)) {
+    return { keys: jwksCache.keys, fetched: false };
+  }
   const keys = await fetchJwks(appId, fetcher);
   jwksCache = { appId, keys, fetchedAt: now };
-  return keys;
+  return { keys, fetched: true };
 }
 
 /** Test seam. */
@@ -144,15 +152,19 @@ export async function verifyPrivyIdentityTokenDetailed(
   }
   const signed = new TextEncoder().encode(`${headerSegment}.${payloadSegment}`);
 
-  const keyFor = async (forceRefresh: boolean): Promise<Jwk | null> => {
-    const keys = await keysFor(options.appId, fetcher, forceRefresh, nowMs);
-    return (kid ? keys.find(k => k.kid === kid) : keys[0]) ?? null;
-  };
+  const pick = (keys: Jwk[]) => (kid ? keys.find(k => k.kid === kid) : keys[0]) ?? null;
 
   let jwk: Jwk | null;
   try {
-    // An unknown kid means Privy may have rotated keys: refetch once, rate-limited.
-    jwk = (await keyFor(false)) ?? (await keyFor(true));
+    const cached = await keysFor(options.appId, fetcher, false, nowMs);
+    jwk = pick(cached.keys);
+    if (!jwk && !cached.fetched) {
+      // An unknown kid means Privy may have rotated keys: refetch once, rate-limited. When the cap
+      // stops the refetch the token could not be checked, which is not the same as it being bad.
+      const refreshed = await keysFor(options.appId, fetcher, true, nowMs);
+      if (!refreshed.fetched) return { ok: false, reason: 'unavailable' };
+      jwk = pick(refreshed.keys);
+    }
   } catch {
     return { ok: false, reason: 'unavailable' };
   }

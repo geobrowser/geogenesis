@@ -215,11 +215,54 @@ describe('verifyPrivyIdentityTokenDetailed', () => {
       await sign(privateKey, 'k1', claims({ exp: now - 3600 })),
     ];
     for (const token of tokens) {
+      // A cold cache each time, so the unknown kid is checked against freshly fetched keys.
+      resetPrivyJwksCacheForTests();
       await expect(verifyPrivyIdentityTokenDetailed(token, { appId: APP_ID, fetcher })).resolves.toEqual({
         ok: false,
         reason: 'invalid',
       });
     }
+  });
+
+  it('reports an unknown kid as unavailable while the refetch cap holds, and recovers after', async () => {
+    const old = await keyPair('old');
+    const rotated = await keyPair('new');
+    let served = [old.jwk];
+    const calls: string[] = [];
+    const fetcher = (async (url: string) => {
+      calls.push(String(url));
+      return new Response(JSON.stringify({ keys: served }), { status: 200 });
+    }) as unknown as typeof fetch;
+    await verifyPrivyIdentityToken(await sign(old.privateKey, 'old', claims()), { appId: APP_ID, fetcher });
+
+    // Privy rotated within the cap window: the token cannot be checked yet.
+    served = [old.jwk, rotated.jwk];
+    const token = await sign(rotated.privateKey, 'new', claims());
+    await expect(verifyPrivyIdentityTokenDetailed(token, { appId: APP_ID, fetcher })).resolves.toEqual({
+      ok: false,
+      reason: 'unavailable',
+    });
+    expect(calls).toHaveLength(1);
+
+    const later = await verifyPrivyIdentityTokenDetailed(token, {
+      appId: APP_ID,
+      fetcher,
+      now: () => Date.now() + 61_000,
+    });
+    expect(later.ok).toBe(true);
+  });
+
+  it('reports an unknown kid as invalid after a real refetch', async () => {
+    const { privateKey, jwk } = await keyPair('k1');
+    const stranger = await keyPair('stranger');
+    const { fetcher, calls } = jwksFetcher([jwk]);
+    await verifyPrivyIdentityToken(await sign(privateKey, 'k1', claims()), { appId: APP_ID, fetcher });
+
+    const forged = await sign(stranger.privateKey, 'stranger', claims());
+    await expect(
+      verifyPrivyIdentityTokenDetailed(forged, { appId: APP_ID, fetcher, now: () => Date.now() + 61_000 })
+    ).resolves.toEqual({ ok: false, reason: 'invalid' });
+    expect(calls).toHaveLength(2);
   });
 
   it('returns the identity, wallet or not', async () => {
