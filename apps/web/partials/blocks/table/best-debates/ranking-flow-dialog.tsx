@@ -32,6 +32,8 @@ type Props = {
   phoneSheet?: boolean;
   children: React.ReactNode;
   footer?: React.ReactNode;
+  /** Beside the close button (the watch popup's "…", GEO-3742). */
+  headerActions?: React.ReactNode;
   onKeyDown?: (event: React.KeyboardEvent) => void;
 };
 
@@ -55,6 +57,7 @@ export function RankingFlowDialog({
   roundClose = false,
   children,
   footer,
+  headerActions,
   onKeyDown,
 }: Props) {
   return (
@@ -91,10 +94,13 @@ export function RankingFlowDialog({
                   ? 'max-w-[1350px]'
                   : size === 'watch'
                     ? cx(
-                        'h-[min(760px,calc(100vh-5rem))] max-w-[960px] supports-[height:100dvh]:h-[min(760px,calc(100dvh-5rem))]',
-                        // A short, wide screen (a phone on its side): the whole height, less a margin,
-                        // so the player isn't squeezed by the 64px the dialog usually keeps above it.
-                        '[@media(min-width:768px)_and_(max-height:560px)]:mt-4 [@media(min-width:768px)_and_(max-height:560px)]:h-[calc(100dvh-2rem)] [@media(min-width:768px)_and_(max-height:560px)]:max-h-[calc(100dvh-2rem)]'
+                        // As tall as its content (GEO-3729): the player sizes itself to the screen
+                        // (`WatchDebateLayout`) and the transcript beside it to the player, so there
+                        // is no empty band under either.
+                        'max-w-[960px]',
+                        // A short, wide screen (a phone on its side): less margin above, so the player
+                        // isn't squeezed by the 64px the dialog usually keeps above it.
+                        '[@media(min-width:768px)_and_(max-height:560px)]:mt-4 [@media(min-width:768px)_and_(max-height:560px)]:max-h-[calc(100dvh-2rem)]'
                       )
                     : 'max-w-[880px]'
             )}
@@ -114,6 +120,7 @@ export function RankingFlowDialog({
                   </div>
                 ) : null}
               </div>
+              {headerActions ? <div className="ml-auto flex shrink-0 items-center gap-2">{headerActions}</div> : null}
               <Dialog.Close asChild>
                 {roundClose ? (
                   <button

@@ -5,7 +5,6 @@ import { Content, Description, Overlay, Portal, Root, Title } from '@radix-ui/re
 import * as React from 'react';
 
 import cx from 'classnames';
-import Link from 'next/link';
 
 import { DEBATE_HIDE_REASON_MAX_CHARS, type Debate, GeoChatRequestError } from '~/core/debates/api';
 import { canRemoveDebate, debateVisibilityErrorMessage } from '~/core/debates/debate-removal';
@@ -19,9 +18,9 @@ import { useToast } from '~/core/hooks/use-toast';
 import { Button } from '~/design-system/button';
 import { Ellipsis } from '~/design-system/icons/ellipsis';
 import { Menu } from '~/design-system/menu';
-import { Tag } from '~/design-system/tag';
 import { Text } from '~/design-system/text';
 
+import { EditMomentsMenuItem } from './edit-moments-menu-item';
 import { PILL_ACTION_CLASS } from './pill-action';
 
 /**
@@ -86,17 +85,7 @@ export function DebateOverflowMenu({
         trigger={trigger}
       >
         {canEditMoments ? (
-          // Desktop only: the editor has no phone layout. The server checks the admin again on every
-          // read and write the editor makes.
-          <Link
-            href={momentsEditorPath(debate)}
-            data-geo-analytics-label="Edit moments"
-            data-geo-analytics-intent="debate_action"
-            onClick={() => setMenuOpen(false)}
-            className="flex w-full cursor-pointer items-center gap-2 bg-white px-3 py-2.5 text-left text-button text-text hover:bg-bg md:hidden"
-          >
-            Edit moments <Tag>Admin</Tag>
-          </Link>
+          <EditMomentsMenuItem href={momentsEditorPath(debate)} onClick={() => setMenuOpen(false)} />
         ) : null}
         {canRemove ? (
           <button

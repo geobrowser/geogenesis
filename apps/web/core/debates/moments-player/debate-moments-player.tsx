@@ -80,6 +80,11 @@ export type DebateMomentsPlayerProps = {
   onPosition?: (position: MomentsPlayerPosition) => void;
   /** Commands from the host: play a moment, or the full debate, from a given point (a transcript line). */
   controllerRef?: React.Ref<DebateMomentsPlayerHandle>;
+  /**
+   * The "Full debate" / "Moments" pill on the picture. Off where the host has its own switch (the
+   * Best debates watch popup's transcript toggle, GEO-3729), so there aren't two. Defaults to on.
+   */
+  showModePill?: boolean;
 };
 
 /** Where a moments player is: the moment on screen and its clip position, and the full debate's. */
@@ -175,6 +180,7 @@ function MomentsStory({
   playbackRate = 1,
   onPosition,
   controllerRef,
+  showModePill = true,
 }: StoryProps) {
   const [story, dispatch] = React.useReducer(storyReducer, moments.length, initialStoryState);
   const videoRef = React.useRef<HTMLVideoElement | null>(null);
@@ -679,7 +685,7 @@ function MomentsStory({
 
       {/* The switch between the moments and the full debate: a small pill top-right, on a desktop
           only (Preston's D1, 12 Nov). Only when there are moments to switch back to. */}
-      {story.mode === 'moments' && story.count > 0 && (
+      {showModePill && story.mode === 'moments' && story.count > 0 && (
         <button
           ref={expandRef}
           type="button"
@@ -690,7 +696,7 @@ function MomentsStory({
           Full debate
         </button>
       )}
-      {story.mode === 'full' && story.count > 0 && (
+      {showModePill && story.mode === 'full' && story.count > 0 && (
         <button
           ref={collapseRef}
           type="button"

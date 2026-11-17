@@ -23,6 +23,13 @@ export const AGGREGATED_RANKINGS_PROPERTY_NAME = 'Aggregated rankings';
 
 export const RANK_TYPE_ID = '5c74731dfabb4dc8b5c53346521c639a';
 export const RANK_VOTES_RELATION_TYPE_ID = '19a4cfff45f24150abf2af0f43eb2eec';
+/** "Vote Ordinal Value" on a ranking vote's entity: the vote's position string (SDK `VOTE_ORDINAL_VALUE_PROPERTY`). */
+export const VOTE_ORDINAL_VALUE_PROPERTY_ID = '49ee1b8918204e75a1ae38a2dcaad4a5';
+/**
+ * "Grade" (Text, published in the Debates space for GEO-3729): a ranker's tier for a ballot entry,
+ * A, B or C, on the entry's vote entity. See `blocks/ranking/ranking-grades.ts`.
+ */
+export const GRADE_PROPERTY_ID = '72971267f0a4446ba68f54299b4c4e99';
 
 export const RANKING_VIEW_PILL_ID = '60022d24d9df4e1888faa71e915f8101';
 
