@@ -9,11 +9,13 @@ import {
   GRADE_DOWN_RANKED_COPY,
   GRADE_DOWN_RANK_TITLE,
   GRADE_IT_LABEL,
+  GRADE_NOT_SAVED_COPY,
   GRADE_RANKING_FIRST_COPY,
   GRADE_REMOVE_LABEL,
   GRADE_REORDER_LABEL,
   GRADE_ROW_LABEL,
   GRADE_SAVING_COPY,
+  GRADE_TRY_AGAIN_LABEL,
   GRADE_UNDO_LABEL,
   type Grade,
   gradePlaceCopy,
@@ -47,6 +49,20 @@ export function BestDebateGradeRow({ entityId, grading }: { entityId: string; gr
   const grade = grading.gradeOf(entityId);
   const place = grading.placeOf(entityId);
   const saving = grading.isSaving(entityId);
+  const failed = Boolean(grading.publishFailed?.(entityId));
+  // A change that didn't publish stays on the ranking; Try again sends it (and anything else waiting).
+  const status = failed ? (
+    <>
+      <span>{GRADE_NOT_SAVED_COPY}</span>
+      {grading.retry ? (
+        <button type="button" className={LINK_CLASS} onClick={grading.retry} data-geo-analytics-label="grade_retry">
+          {GRADE_TRY_AGAIN_LABEL}
+        </button>
+      ) : null}
+    </>
+  ) : saving ? (
+    <span>{GRADE_SAVING_COPY}</span>
+  ) : null;
   const downRanked = pushDown.isPushedDown && place === null;
   const pushDownWorking = pushDown.state.status === 'working';
   const gradesOff = !grading.ready || grading.needsTierLines;
@@ -155,11 +171,11 @@ export function BestDebateGradeRow({ entityId, grading }: { entityId: string; gr
             >
               {GRADE_REMOVE_LABEL}
             </button>
-            {saving ? <span>{GRADE_SAVING_COPY}</span> : null}
+            {status}
           </>
-        ) : saving ? (
-          <span>{GRADE_SAVING_COPY}</span>
-        ) : null}
+        ) : (
+          status
+        )}
       </div>
     </div>
   );

@@ -95,6 +95,7 @@ import { ClearRankingButton } from './best-debates/clear-ranking-button';
 import { CopyTeamRankingStart } from './best-debates/copy-team-ranking-start';
 import { useBestDebatesCompose } from './best-debates/use-best-debates-compose';
 import { useBestDebatesPushDownSlot } from './best-debates/use-best-debates-push-down-slot';
+import { useBestDebatesRankingFilters } from './best-debates/use-best-debates-ranking-filters';
 import { useUnpublishedLeaveGuard } from './best-debates/use-unpublished-leave-guard';
 import { RankingBallotReadError } from './ranking-ballot-read-error';
 import { RankingComposeCreateEntityPanel } from './ranking-compose-create-entity-panel';
@@ -699,8 +700,11 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   /** How each draft grade was made (GEO-3729), so its published event says so. */
   const draftGradeMethods = React.useRef(new Map<string, GradeChange['method']>());
 
+  // The team column's recorded, debater and claim filters live in the URL (GEO-3774).
+  const rankingFilters = useBestDebatesRankingFilters({ blockId: entityId, spaceId });
   const bestDebates = useBestDebatesCompose({
     enabled: isBestDebates,
+    rankingFilters: isBestDebates ? rankingFilters : undefined,
     blockId: entityId,
     blockSpaceId: spaceId,
     isMobile,
@@ -832,12 +836,14 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
     openTierLines();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once, when the ranking it needs has loaded
   }, [openTierLinesFromUrl, rankingNeedsGrades]);
-  const saveTierLines = async () => {
+  // Into the draft, like every other change on this screen (Preston, 16 Nov: one publish per
+  // sitting): the screen's Publish sends the grades with everything else.
+  const saveTierLines = () => {
     const grades = applyTierLines(orderedIds, tierLineCounts.aCount, tierLineCounts.bCount);
     setDraft(orderedIds, grades);
-    // Each of these grades says it came from the tier lines when it publishes, now or later.
+    // Each of these grades says it came from the tier lines when it publishes.
     for (const id of orderedIds) draftGradeMethods.current.set(ID.uuidToHex(id), 'tier_lines');
-    if (await bestDebates.publish(orderedIds, grades)) setTierLines(null);
+    setTierLines(null);
   };
   const tierLinesBanner = (
     <div className="mt-3 mb-1 flex items-center justify-between gap-4 rounded-lg border border-grey-02 p-3">
@@ -857,7 +863,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
         <button
           type="button"
           className="h-8 rounded-full bg-text px-3.5 text-metadata font-medium text-white hover:bg-text/90 disabled:opacity-50 md:h-11"
-          onClick={() => void saveTierLines()}
+          onClick={saveTierLines}
           disabled={!canWriteBallot}
           data-geo-analytics-label="tier_lines_save"
         >

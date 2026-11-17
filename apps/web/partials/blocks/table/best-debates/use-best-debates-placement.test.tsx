@@ -204,7 +204,7 @@ describe('placing a debate by comparison', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Done' }));
     });
     expect(publish).toHaveBeenCalledTimes(1);
-    expect(publish).toHaveBeenCalledWith(['d1', 'new', 'd2']);
+    expect(publish).toHaveBeenCalledWith(['d1', 'new', 'd2'], 'new');
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
@@ -246,7 +246,7 @@ describe('placing a debate by comparison', () => {
     await act(async () => {
       fireEvent.click(next);
     });
-    expect(publish).toHaveBeenCalledWith(['new']);
+    expect(publish).toHaveBeenCalledWith(['new'], 'new');
     // The next debate's comparison opens against the one just placed.
     expect(screen.getByText('#1 in your ranking')).toBeTruthy();
   });
@@ -378,7 +378,7 @@ describe('Re-order from the watch popup (GEO-3729)', () => {
     fireEvent.click(screen.getByText('reorder'));
     fireEvent.click(screen.getByRole('button', { name: 'Move down' }));
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Done' })));
-    expect(publish).toHaveBeenCalledWith(['d1', 'd3', 'd2']);
+    expect(publish).toHaveBeenCalledWith(['d1', 'd3', 'd2'], 'd2');
   });
 
   it('says how the step ended: closed, or done once Done went out', async () => {
@@ -391,6 +391,43 @@ describe('Re-order from the watch popup (GEO-3729)', () => {
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Done' })));
     expect(onReorderEnd).toHaveBeenLastCalledWith('d2', 'done');
     expect(onReorderEnd).toHaveBeenCalledTimes(2);
+  });
+
+  it('on the block’s batch, Re-order’s Done only ends the step: the batch publishes the move', async () => {
+    const publish = vi.fn(async () => true);
+    const onReorderEnd = vi.fn();
+    render(
+      <Harness
+        initial={list(3)}
+        startWith={{ id: 'd2', origin: 'mine' }}
+        publish={publish}
+        reorderPublishesOnDone={false}
+        onReorderEnd={onReorderEnd}
+      />
+    );
+    fireEvent.click(screen.getByText('reorder'));
+    fireEvent.click(screen.getByRole('button', { name: 'Move down' }));
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Done' })));
+    expect(publish).not.toHaveBeenCalled();
+    expect(onReorderEnd).toHaveBeenCalledWith('d2', 'done');
+    expect(screen.queryByText(/Placed #/)).toBeNull();
+  });
+
+  it('tells the block when a placement’s Placed step closes without Done', () => {
+    const onPlacedClose = vi.fn();
+    const onReorderEnd = vi.fn();
+    render(
+      <Harness
+        initial={[]}
+        startWith={{ id: 'new', origin: 'team' }}
+        onPlacedClose={onPlacedClose}
+        onReorderEnd={onReorderEnd}
+      />
+    );
+    fireEvent.click(screen.getByText('start'));
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    expect(onPlacedClose).toHaveBeenCalledWith('new');
+    expect(onReorderEnd).not.toHaveBeenCalled();
   });
 
   it('says nothing when a Done didn’t go out, or for a placement that wasn’t a Re-order', async () => {

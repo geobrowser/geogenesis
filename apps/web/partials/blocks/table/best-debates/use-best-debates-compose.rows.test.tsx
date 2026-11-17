@@ -19,6 +19,10 @@ vi.mock('~/core/blocks/ranking/use-ranking-entry-entities', () => ({
   useRankingEntryEntities: () => ({ entries: [] }),
 }));
 vi.mock('~/core/hooks/use-toast', () => ({ useToast: () => [null, vi.fn()] }));
+// The filter menus' counts (GEO-3774) are off without the screen's filters; no query client here.
+vi.mock('./use-best-debates-filter-facets', () => ({
+  useBestDebatesFilterFacets: () => ({ debaters: [], claims: [], pending: false }),
+}));
 vi.mock('./best-debates-team-tools', () => ({
   useBestDebatesTeamTools: () => ({ topicIds: [] }),
 }));

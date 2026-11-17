@@ -3,10 +3,17 @@
 import * as React from 'react';
 
 import { fetchDebateOwnSpaces } from '~/core/blocks/ranking/best-debates-debates';
+import {
+  NO_RANKING_FILTERS,
+  hasRankingFilters,
+  rankingFilterEntityClauses,
+  recordedRangeMs,
+  toRankWindow,
+} from '~/core/blocks/ranking/best-debates-ranking-filters';
 import { type BallotGrades, NO_GRADES, sortIntoTiers } from '~/core/blocks/ranking/ranking-grades';
 import { insertAt } from '~/core/blocks/ranking/ranking-placement';
-import { enqueueRankingPublish, whenRankingPublishQueueSettles } from '~/core/blocks/ranking/ranking-publish-queue';
 import type { RankingSubmissionSlot } from '~/core/blocks/ranking/ranking-submission-types';
+import { useNyTodayKey } from '~/core/blocks/ranking/use-best-debates';
 import {
   type RankersRead,
   refreshRankersAfterIndexing,
@@ -25,7 +32,9 @@ import { BestDebatesTeamRowContent } from './best-debates-team-row';
 import { useBestDebatesTeamTools } from './best-debates-team-tools';
 import { BestDebatesToRankList } from './best-debates-to-rank-list';
 import type { PushDownSlot } from './push-down-slot';
+import { useBestDebatesFilterFacets } from './use-best-debates-filter-facets';
 import { type PlacementOrigin, useBestDebatesPlacement } from './use-best-debates-placement';
+import { type BestDebatesRankingFilterState, writeTeamViewParam } from './use-best-debates-ranking-filters';
 
 /** How a Re-order's Placed step ended, with the draft from when it opened and as it ended. */
 export type ReorderEnd = {
@@ -52,16 +61,8 @@ export type UseBestDebatesComposeArgs = {
   hasUnpublishedChanges: boolean;
   nameOf: (entityId: string) => string | null;
   personalSpaceId: string | null | undefined;
-  /**
-   * Writes the ballot. `basedOn` is the published ballot the edit was built on, when the caller
-   * fixed it before the publish had to wait its turn (`serialPublishes`).
-   */
-  saveMySubmission: (
-    slots: RankingSubmissionSlot[],
-    basedOn?: PublishedBase
-  ) => Promise<RankingSubmissionPublishResult | null>;
-  /** The published ballot edits are built on now (with `serialPublishes`). */
-  getPublishedBase?: () => PublishedBase;
+  /** Writes the ballot. */
+  saveMySubmission: (slots: RankingSubmissionSlot[]) => Promise<RankingSubmissionPublishResult | null>;
   isSaving: boolean;
   /**
    * Runs after each publish that went out, with the ids this device sent (the screen generates its
@@ -71,21 +72,28 @@ export type UseBestDebatesComposeArgs = {
   /** Done publishes (see `useBestDebatesPlacement`). Off here: the screen's Publish sends everything. */
   publishOnDone?: boolean;
   /**
-   * Publishes take turns (the block, where placements and the popup's grades both publish at once),
-   * and a queued one counts as saving. Off on the ranking screen, whose one Publish is off while
-   * it publishes.
-   */
-  serialPublishes?: boolean;
-  /**
    * A Re-order's Placed step ended (GEO-3729), with the draft from when it opened (`before`) and as
    * it ended (`after`). The block puts `before` back on `closed`, since nothing else would publish
    * the move; the screen keeps the move in the draft either way.
    */
   onReorderEnd?: (end: ReorderEnd) => void;
+  /**
+   * The block's batched publish (Preston, 16 Nov): a placement's Done publishes through this, with
+   * the debate it placed, instead of on its own. Re-order's Done then only ends the step (its move
+   * goes to `onReorderEnd`, which joins the batch).
+   */
+  publishThrough?: (ids: string[], entityId?: string) => Promise<boolean>;
+  /** A placement's Placed step closed without Done (with `publishThrough`, the block commits it). */
+  onPlacedClose?: (entityId: string) => void;
   /** The team column's search, which To rank filters by too. */
   searchQuery?: string;
   /** Open the team column on To rank (the screen was opened with `?team=to-rank`, GEO-3677). */
   openOnToRank?: boolean;
+  /**
+   * The ranking screen's recorded, debater and claim filters (GEO-3774), from the URL. The block
+   * leaves it out: it has no filters, and its To rank stays the last 7 days.
+   */
+  rankingFilters?: BestDebatesRankingFilterState;
   /** GEO-3679 fills this: Push it down (team and To rank rows), and the debates to keep out of To rank. */
   pushDown?: PushDownSlot & { pushedDownEntityIds?: readonly string[] };
 };
@@ -114,11 +122,14 @@ export function useBestDebatesCompose({
   pushDown,
   searchQuery = '',
   publishOnDone = false,
-  serialPublishes = false,
-  getPublishedBase,
   onReorderEnd,
+  publishThrough,
+  onPlacedClose,
+  rankingFilters,
 }: UseBestDebatesComposeArgs) {
   const tools = useBestDebatesTeamTools();
+  const filters = rankingFilters?.filters ?? NO_RANKING_FILTERS;
+  const todayKey = useNyTodayKey();
   const [, setToast] = useToast();
   const [teamMode, setTeamMode] = React.useState<RankingComposeTeamMode>(openOnToRank ? 'to_rank' : 'all');
   const [mobileTab, setMobileTab] = React.useState<RankingComposeMobileTab>('global');
@@ -129,7 +140,37 @@ export function useBestDebatesCompose({
     () => [...orderedIds, ...(pushDown?.pushedDownEntityIds ?? [])],
     [orderedIds, pushDown?.pushedDownEntityIds]
   );
-  const toRank = useBestDebatesToRank({ enabled, excludeEntityIds: excludeFromToRank, rankers });
+  const toRank = useBestDebatesToRank({ enabled, excludeEntityIds: excludeFromToRank, rankers, filters, todayKey });
+
+  // GEO-3774: All and By space read the recorded range as it is; To rank reads its own window (the
+  // range, else the last 7 days). The menus count over whichever list is showing.
+  const nowHour = Math.floor(Date.now() / HOUR_MS) * HOUR_MS;
+  const allWindow = React.useMemo(
+    () => (filters.recorded ? recordedRangeMs(filters.recorded, todayKey) : null),
+    [filters.recorded, todayKey]
+  );
+  const toRankFacetWindow = React.useMemo(() => toRankWindow(filters, todayKey, nowHour), [filters, todayKey, nowHour]);
+  const allFilterClauses = React.useMemo(
+    () => rankingFilterEntityClauses({ filters, window: allWindow }),
+    [allWindow, filters]
+  );
+  const isToRank = teamMode === 'to_rank';
+  const filterFacets = useBestDebatesFilterFacets({
+    enabled: enabled && Boolean(rankingFilters),
+    query: searchQuery,
+    topicIds: tools.topicIds,
+    filters,
+    window: isToRank ? toRankFacetWindow : allWindow,
+    excludeEntityIds: isToRank ? excludeFromToRank : NO_IDS,
+  });
+  const changeTeamMode = React.useCallback(
+    (mode: RankingComposeTeamMode) => {
+      setTeamMode(mode);
+      // The screen keeps `?team=to-rank` in step, so a reload or a shared link opens on the same list.
+      if (rankingFilters) writeTeamViewParam(mode === 'to_rank');
+    },
+    [rankingFilters]
+  );
   const toRankIds = React.useMemo(() => toRank.debates.map(debate => debate.entityId), [toRank.debates]);
   const { entries: toRankEntries } = useRankingEntryEntities(blockSpaceId, enabled ? toRankIds : []);
   const toRankEntriesById = React.useMemo(
@@ -161,7 +202,7 @@ export function useBestDebatesCompose({
    * never filed under the block's space. No vote is cast.
    */
   const publishNow = React.useCallback(
-    async (ids: string[], givenGrades?: BallotGrades, basedOn?: PublishedBase): Promise<boolean> => {
+    async (ids: string[], givenGrades?: BallotGrades): Promise<boolean> => {
       if (!personalSpaceId) {
         setToast(<span>Finish setting up your account to publish your ranking.</span>);
         return false;
@@ -194,7 +235,7 @@ export function useBestDebatesCompose({
         return false;
       }
 
-      const published = await saveMySubmission(publishable, basedOn);
+      const published = await saveMySubmission(publishable);
       if (!published) return false;
 
       if (leftOut > 0) {
@@ -215,28 +256,10 @@ export function useBestDebatesCompose({
     [debateName, onPublished, personalSpaceId, rankers, saveMySubmission, setToast]
   );
 
-  // On the block (GEO-3729), a placement's Done and the popup's grades both publish through here,
-  // and the ballot publisher refuses a second publish while one is out: so they take turns, each
-  // waiting from its very start, and the turn shows as saving. The ranking screen keeps one
-  // Publish button that is simply off while it publishes.
-  const queueKey = `best-debates-block-publishes:${blockId}`;
-  const [queued, setQueued] = React.useState(0);
-  const publish = React.useCallback(
-    (ids: string[], givenGrades?: BallotGrades): Promise<boolean> => {
-      if (!serialPublishes) return publishNow(ids, givenGrades);
-      // Fixed now, with `ids`: a publish ahead of this one may merge in another device's change and
-      // move the base, and building this edit on the moved base would read that change as removed.
-      const basedOn = getPublishedBase?.();
-      setQueued(count => count + 1);
-      return enqueueRankingPublish(queueKey, () => publishNow(ids, givenGrades, basedOn)).finally(() =>
-        setQueued(count => count - 1)
-      );
-    },
-    [getPublishedBase, publishNow, queueKey, serialPublishes]
-  );
-  /** Resolves once no publish queued here is out (the block's grades wait on it). */
-  const whenPublishesSettle = React.useCallback(() => whenRankingPublishQueueSettles(queueKey), [queueKey]);
-  const publishing = isSaving || queued > 0;
+  // The ranking screen's one Publish (off while it publishes). The block publishes through its
+  // batch instead (`publishThrough`), which sends each publish through `publishNow`.
+  const publish = publishNow;
+  const publishing = isSaving;
 
   // The draft as a Re-order opened, and as it stands (read when its Placed step ends).
   const draftRef = React.useRef<PublishedBase>({ ids: orderedIds, grades });
@@ -257,18 +280,23 @@ export function useBestDebatesCompose({
     hasUnpublishedChanges,
     nameOf: debateName,
     toRankIds,
-    publish,
-    // A Done queued behind a grade publish counts as saving too.
-    isSaving: publishing,
+    publish: publishThrough ?? (ids => publish(ids)),
+    // Through the block's batch, a Done never waits for another publish: it joins the next one.
+    isSaving: publishThrough ? false : publishing,
     pushDown,
     publishOnDone,
+    reorderPublishesOnDone: publishOnDone && !publishThrough,
     onReorderEnd: endReorder,
+    onPlacedClose,
   });
   const placementReorder = placement.reorder;
+  /** Opens Re-order's Placed step; false when the debate isn't in the ranking. */
   const reorder = React.useCallback(
-    (entityId: string) => {
+    (entityId: string): boolean => {
       reorderBefore.current = draftRef.current;
-      placementReorder(entityId);
+      const opened = placementReorder(entityId);
+      if (!opened) reorderBefore.current = null;
+      return opened;
     },
     [placementReorder]
   );
@@ -280,10 +308,19 @@ export function useBestDebatesCompose({
 
   const teamView: RankingComposeTeamView = {
     mode: teamMode,
-    onModeChange: setTeamMode,
+    onModeChange: changeTeamMode,
     toRankCount: toRank.isLoading || toRank.error ? null : toRankIds.length,
     tools,
     toRankIds,
+    rankingFilters: rankingFilters
+      ? {
+          state: rankingFilters,
+          facets: filterFacets,
+          todayKey,
+          clauses: allFilterClauses,
+          active: hasRankingFilters(filters),
+        }
+      : undefined,
     // All and To rank draw the same row (Preston, 12 Nov): badge, Rank button or "You: #N", grip.
     renderRow: ({ entityId, name, rank, spaceId: rowSpaceId, isInMyRanking }) => (
       <BestDebatesTeamRowContent
@@ -309,6 +346,10 @@ export function useBestDebatesCompose({
         draggable={!isMobile}
         query={searchQuery}
         topicIds={tools.topicIds}
+        recorded={filters.recorded}
+        todayKey={todayKey}
+        filtered={hasRankingFilters(filters)}
+        capped={toRank.capped}
         onPushDown={pushDown ? placement.requestPushDown : undefined}
       />
     ),
@@ -339,7 +380,8 @@ export function useBestDebatesCompose({
     placeFromTeam: (entityId: string) => startPlacement(entityId, 'team'),
     dropEntity,
     publish,
-    whenPublishesSettle,
+    /** One publish of `ids` now, outside any queue (the block's batch publishes through it). */
+    publishNow,
     /** Re-order a debate already in the ranking: the Placed step at its place (GEO-3729). */
     reorder,
     /** A publish from here is out or queued (the block's placement Done, from its press, or a grade). */
@@ -353,3 +395,6 @@ export function useBestDebatesCompose({
         : { total: toRank.windowCount, left: Math.min(toRankIds.length, toRank.windowCount) },
   };
 }
+
+const HOUR_MS = 60 * 60 * 1000;
+const NO_IDS: readonly string[] = [];

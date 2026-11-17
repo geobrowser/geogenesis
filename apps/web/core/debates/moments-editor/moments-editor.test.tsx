@@ -7,7 +7,13 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 
 import { GeoChatRequestError } from '../api';
 import type { MomentBackfillEntry, MomentBackfillStatus } from './api';
-import { MomentsEditor, claimsBySpeaker, editingBlockedReason, keepClaimWithSpeaker } from './moments-editor';
+import {
+  MomentsEditor,
+  RESTORE_FAILED_EDIT_LABEL,
+  claimsBySpeaker,
+  editingBlockedReason,
+  keepClaimWithSpeaker,
+} from './moments-editor';
 
 const DEBATE_ID = '01a0448a-61d3-7101-8434-a20fdadf6f97';
 
@@ -1238,5 +1244,150 @@ describe('MomentsEditor warnings (GEO-3672)', () => {
       }),
       expect.any(Object)
     );
+  });
+});
+
+describe('MomentsEditor in a tab opened from the Best debates popup (GEO-3742)', () => {
+  it('has no Done on its own page', () => {
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    expect(screen.queryByRole('button', { name: 'Done' })).not.toBeInTheDocument();
+  });
+
+  it('closes its tab with Done, which waits for changes to be published or discarded', () => {
+    const close = vi.spyOn(window, 'close').mockImplementation(() => undefined);
+    render(<MomentsEditor debateId={DEBATE_ID} closeable />);
+    fireEvent.change(screen.getByRole('textbox', { name: 'End time' }), { target: { value: '1.45' } });
+    fireEvent.blur(screen.getByRole('textbox', { name: 'End time' }));
+    expect(screen.getByRole('button', { name: 'Done' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Discard changes' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    expect(close).toHaveBeenCalled();
+    close.mockRestore();
+  });
+
+  it('lets Done close once the edit is sent to publish, without waiting for the render, until it fails', () => {
+    const requestedAt = '2026-11-14T10:00:00Z';
+    mocks.mutate.mockImplementation((_body, options: { onSuccess: (entry: unknown) => void }) =>
+      options.onSuccess({ queued: true, refusal: null, request: status({ requested_at: requestedAt }) })
+    );
+    const { rerender } = render(<MomentsEditor debateId={DEBATE_ID} closeable />);
+    fireEvent.change(screen.getByRole('textbox', { name: 'End time' }), { target: { value: '1.45' } });
+    fireEvent.blur(screen.getByRole('textbox', { name: 'End time' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Publish reel/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Publish (and lock|anyway)$/ }));
+    mocks.backfill.data = { request: status({ status: 'running', requested_at: requestedAt }), entry: null };
+    rerender(<MomentsEditor debateId={DEBATE_ID} closeable />);
+    expect(screen.getByRole('button', { name: 'Done' })).toBeEnabled();
+    // The render failed: the edit is unpublished again, so Done waits.
+    mocks.backfill.data = {
+      request: status({ status: 'skipped', requested_at: requestedAt, outcome: 'manual_reel_invalid' }),
+      entry: null,
+    };
+    rerender(<MomentsEditor debateId={DEBATE_ID} closeable />);
+    expect(screen.getByRole('button', { name: 'Done' })).toBeDisabled();
+  });
+
+  it('keeps Done waiting while only a preview of the edit is rendering', () => {
+    const requestedAt = '2026-11-14T10:00:00Z';
+    mocks.mutate.mockImplementation((_body, options: { onSuccess: (entry: unknown) => void }) =>
+      options.onSuccess({ queued: true, refusal: null, request: status({ requested_at: requestedAt, preview: true }) })
+    );
+    const { rerender } = render(<MomentsEditor debateId={DEBATE_ID} closeable />);
+    fireEvent.change(screen.getByRole('textbox', { name: 'End time' }), { target: { value: '1.45' } });
+    fireEvent.blur(screen.getByRole('textbox', { name: 'End time' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Preview/ }));
+    mocks.backfill.data = {
+      request: status({ status: 'running', requested_at: requestedAt, preview: true }),
+      entry: null,
+    };
+    rerender(<MomentsEditor debateId={DEBATE_ID} closeable />);
+    expect(screen.getByRole('button', { name: 'Done' })).toBeDisabled();
+  });
+
+  it('stays open, without Done, where the browser won’t let Done close the tab', () => {
+    vi.useFakeTimers();
+    const close = vi.spyOn(window, 'close').mockImplementation(() => undefined);
+    const replace = vi.fn();
+    const location = window.location;
+    vi.stubGlobal('location', { href: 'https://geo.test/space/s/debates/d/moments?close=1', replace });
+    render(<MomentsEditor debateId={DEBATE_ID} closeable />);
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    expect(close).toHaveBeenCalled();
+    vi.advanceTimersByTime(200);
+    expect(replace).toHaveBeenCalledWith('https://geo.test/space/s/debates/d/moments');
+    vi.stubGlobal('location', location);
+    close.mockRestore();
+    vi.useRealTimers();
+  });
+
+  it('shows a publish that failed after its tab closed, and brings its clips back with the problems', () => {
+    const failed = (clock: string) =>
+      status({
+        status: 'skipped',
+        requested_at: '2026-11-14T10:00:00Z',
+        outcome: 'manual_reel_invalid',
+        report: { story_failed: 'clip 1: no words are said in it' },
+        manual_reel: { clock, clips: [{ start_ms: 1_000, end_ms: 1_450 }] },
+      });
+    mocks.backfill.data = { request: failed('video'), entry: null };
+    const { unmount } = render(<MomentsEditor debateId={DEBATE_ID} closeable />);
+    expect(screen.getByText('Nothing changed.')).toBeInTheDocument();
+    // Cut on another clock: told, but nothing to bring back.
+    expect(screen.queryByRole('button', { name: RESTORE_FAILED_EDIT_LABEL })).not.toBeInTheDocument();
+    unmount();
+
+    mocks.backfill.data = { request: failed('player'), entry: null };
+    render(<MomentsEditor debateId={DEBATE_ID} closeable />);
+    fireEvent.click(screen.getByRole('button', { name: RESTORE_FAILED_EDIT_LABEL }));
+    expect(screen.getByRole('textbox', { name: 'End time' })).toHaveValue('0:01.5');
+    expect(screen.getByText('no words are said in it')).toBeInTheDocument();
+    expect(screen.getAllByText('Nothing changed.')).toHaveLength(1);
+    // An unsaved edit again: Done waits.
+    expect(screen.getByRole('button', { name: 'Done' })).toBeDisabled();
+  });
+
+  it('brings back a failed reel’s free edges only when it was sent exact', () => {
+    for (const exact of [true, false]) {
+      mocks.mutate.mockReset();
+      mocks.backfill.data = {
+        request: status({
+          status: 'skipped',
+          requested_at: '2026-11-14T10:00:00Z',
+          outcome: 'manual_reel_invalid',
+          report: { story_failed: 'clip 1: no words are said in it' },
+          manual_reel: { clock: 'player', clips: [{ start_ms: 900, end_ms: 1_450 }], ...(exact && { exact }) },
+        }),
+        entry: null,
+      };
+      const { unmount } = render(<MomentsEditor debateId={DEBATE_ID} closeable />);
+      fireEvent.click(screen.getByRole('button', { name: RESTORE_FAILED_EDIT_LABEL }));
+      // Fix the clip the worker refused (its end), then publish again.
+      fireEvent.change(screen.getByRole('textbox', { name: 'End time' }), { target: { value: '1.4' } });
+      fireEvent.blur(screen.getByRole('textbox', { name: 'End time' }));
+      fireEvent.click(screen.getByRole('button', { name: /^Publish reel/ }));
+      fireEvent.click(screen.getByRole('button', { name: /^Publish (and lock|anyway)$/ }));
+      const body = mocks.mutate.mock.calls[0][0] as { reel: { exact?: boolean } };
+      expect(body.reel.exact === true).toBe(exact);
+      unmount();
+    }
+  });
+
+  it('says nothing of an automatic re-cut that failed: it was no publish from here', () => {
+    mocks.backfill.data = {
+      request: status({ status: 'skipped', requested_at: '2026-11-14T10:00:00Z', outcome: 'story_pick_failed' }),
+      entry: null,
+    };
+    render(<MomentsEditor debateId={DEBATE_ID} closeable />);
+    expect(screen.queryByText('Nothing changed.')).not.toBeInTheDocument();
+  });
+
+  it('offers Done even when it can’t show the editor', () => {
+    mocks.backfill = {
+      isPending: false,
+      error: new GeoChatRequestError('no', 'media_admin_required', 403),
+      data: undefined,
+    };
+    render(<MomentsEditor debateId={DEBATE_ID} closeable />);
+    expect(screen.getByRole('button', { name: 'Done' })).toBeEnabled();
   });
 });
