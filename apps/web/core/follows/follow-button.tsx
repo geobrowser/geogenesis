@@ -163,6 +163,7 @@ export function FollowButton({
     label: 'your follow',
     // The write reads the personal space from the render, which the press predates.
     liveOnly: true,
+    survivesRedirect: true,
     ready: !isLoadingFollows,
     run: async () => {
       // Signed in to an account that already follows it, or that is this person: nothing to write.
