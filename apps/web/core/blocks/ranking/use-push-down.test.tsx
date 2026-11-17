@@ -481,6 +481,39 @@ describe('usePushDown', () => {
     expect(publish).toHaveBeenCalledTimes(publishes);
   });
 
+  it('leaves the draft alone on an Undo refused as busy, and puts the debate back on a later one', async () => {
+    rankedBallot([RANKED_A, DEBATE]);
+    const { ballot, publish, state } = liveDraft([RANKED_A, DEBATE, RANKED_B]);
+    const { result } = await renderReady(ballot);
+
+    await act(async () => {
+      await result.current.pushDown();
+    });
+    let finishRank!: (ok: boolean) => void;
+    let ranking!: Promise<unknown>;
+    act(() => {
+      ranking = result.current.rank(() => new Promise<boolean>(r => (finishRank = r)));
+    });
+    const publishes = publish.mock.calls.length;
+
+    let refused: unknown;
+    await act(async () => {
+      refused = await result.current.undo();
+    });
+    expect(refused).toMatchObject({ ok: false });
+    expect(publish).toHaveBeenCalledTimes(publishes);
+
+    await act(async () => {
+      finishRank(false);
+      await ranking;
+    });
+    state.ids = [RANKED_A, RANKED_B];
+    await act(async () => {
+      await result.current.undo();
+    });
+    expect(publish).toHaveBeenLastCalledWith([RANKED_A, DEBATE, RANKED_B], undefined);
+  });
+
   it('keeps a failed ballot edit for a retry that only edits the ballot', async () => {
     rankedBallot([RANKED_A, DEBATE]);
     mocks.save.mockResolvedValueOnce(null);

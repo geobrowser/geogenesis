@@ -363,12 +363,14 @@ export function usePushDown(debateId: string, options: UsePushDownOptions = {}):
   const start = React.useCallback(
     async (
       action: PushDownAction,
-      plan: (records: MemberVoteRecord[]) => ReadonlyArray<PushDownStepRun | null>
+      plan: (records: MemberVoteRecord[]) => ReadonlyArray<PushDownStepRun | null>,
+      onBegin?: () => void
     ): Promise<PushDownRunResult> => {
       // Only a new downvote needs the debate's own space; clears go wherever the downvotes are.
       if (!latest.current.canRead || (action === 'push-down' && !latest.current.debateSpaceId)) return DISABLED;
       if (isWorking()) return BUSY;
       setState({ status: 'working', action, step: 'vote' });
+      onBegin?.();
       const records = await readRecords();
       if (!records) return finish(action, CHECK_FAILED);
       const result = await runInOrder(plan(records), step => setState({ status: 'working', action, step }));
@@ -408,10 +410,10 @@ export function usePushDown(debateId: string, options: UsePushDownOptions = {}):
     [debateId, removeFromBallot, sendVote, start, stateKey]
   );
 
-  const undo = React.useCallback(() => {
-    restoreDraft();
-    return start('undo', initial => clearSteps({ records: initial }));
-  }, [clearSteps, restoreDraft, start]);
+  const undo = React.useCallback(
+    () => start('undo', initial => clearSteps({ records: initial }), restoreDraft),
+    [clearSteps, restoreDraft, start]
+  );
   undoRef.current = undo;
 
   const publishRanking = React.useCallback(async (publish: () => Promise<boolean>): Promise<StepResult> => {
