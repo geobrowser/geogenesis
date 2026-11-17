@@ -12,6 +12,7 @@ import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 
 import type { MatchmakingMatch } from '../api';
 import { type DebateClaimListId, DrawnHubListProvider } from '../debate-claim-card-surface';
+import type { AgendaClaimFilter } from '../todays-claims/agenda-claim-filter';
 import { MatchesList } from './matches-list';
 import { PanelMatchesTab } from './panel-claim-tabs';
 import { panelFilters } from './panel-filters-fixtures';
@@ -54,6 +55,21 @@ const mocks = vi.hoisted(() => ({
 // Topics come from the claim entities now (GEO-2861), which is a real request. Answerless while
 // loading or failed, exactly as react-query reports it — which is the state the topic filter has to
 // tell apart from "this claim carries no topics".
+// The props each match card is drawn with, so a test can read the attribution it was given.
+const cardSurfaces = vi.hoisted(
+  () => [] as Array<{ claimId: string; listId: string; scope?: Record<string, unknown> }>
+);
+vi.mock('../debate-claim-card-surface', async importOriginal => {
+  const actual = await importOriginal<typeof import('../debate-claim-card-surface')>();
+  return {
+    ...actual,
+    DebateClaimCardSurface: (props: Parameters<typeof actual.DebateClaimCardSurface>[0]) => {
+      cardSurfaces.push({ claimId: props.claimId, listId: props.listId, scope: props.scope });
+      return actual.DebateClaimCardSurface(props);
+    },
+  };
+});
+
 vi.mock('../claim-picker-page', () => ({
   useClaimEntitiesByIds: () => ({
     entities: mocks.claimEntitiesLoading || mocks.claimEntitiesError ? [] : mocks.claimEntities,
@@ -825,5 +841,74 @@ describe('MatchesList in the panel', () => {
     render(<MatchesList layout="workspace" />, store);
 
     expect(screen.getByText('Chips are better than fries')).toBeInTheDocument();
+  });
+});
+
+/** GEO-3775. A match on a claim no agenda lists is left out, and nothing is drawn before the agendas. */
+describe('MatchesList agenda-only', () => {
+  const OFF_AGENDA = 'c0000000000000000000000000000009';
+  function agenda(state: 'listed' | 'pending' | 'failed' = 'listed'): AgendaClaimFilter {
+    const ids = state === 'listed' ? [CLAIM_ENTITY_ID] : [];
+    return {
+      active: true,
+      ids,
+      spaceIds: [],
+      key: state,
+      has: claimId => ids.includes(claimId),
+      pending: state === 'pending',
+      error: state === 'failed' ? new Error('gaia down') : null,
+      refetch: vi.fn(),
+      scopeFor: claimId =>
+        ids.includes(claimId) ? { agenda_id: 'agenda-today', agenda_date: '2026-11-16' } : undefined,
+    };
+  }
+
+  beforeEach(() => {
+    mocks.matches = [
+      match(),
+      match({
+        claim: {
+          id: 'debate-claim-2',
+          space_id: SPACE_ID,
+          claim_entity_id: OFF_AGENDA,
+          claim: 'A claim on no agenda',
+          description: null,
+        },
+      }),
+    ];
+  });
+
+  it('lists only matches on an agenda claim', () => {
+    render(<MatchesList agendaFilter={agenda()} />);
+
+    expect(screen.getByText('Chips are better than fries')).toBeInTheDocument();
+    expect(screen.queryByText('A claim on no agenda')).not.toBeInTheDocument();
+  });
+
+  // The warehouse's `on_agenda` reads `agenda_id` off each card.
+  it('credits each match card to the agenda that lists its claim', () => {
+    cardSurfaces.length = 0;
+    render(<MatchesList agendaFilter={agenda()} />);
+
+    expect(screen.getByText('Chips are better than fries')).toBeInTheDocument();
+    const card = [...cardSurfaces].reverse().find(surface => surface.claimId === CLAIM_ENTITY_ID);
+    expect(card?.listId).toBe('hub_matches');
+    expect(card?.scope).toEqual({ agenda_id: 'agenda-today', agenda_date: '2026-11-16' });
+  });
+
+  it('draws no match while the agendas are out', () => {
+    render(<MatchesList agendaFilter={agenda('pending')} />);
+
+    expect(screen.queryByText('Chips are better than fries')).not.toBeInTheDocument();
+    expect(screen.queryByText('A claim on no agenda')).not.toBeInTheDocument();
+  });
+
+  it('calls an agenda outage an outage, with a way to ask again', () => {
+    const filter = agenda('failed');
+    render(<MatchesList agendaFilter={filter} />);
+
+    expect(screen.getByText('Something went wrong.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(filter.refetch).toHaveBeenCalled();
   });
 });

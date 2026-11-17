@@ -128,11 +128,16 @@ import {
   useTaggedSpaceFacet,
   useTaggedTopicFacet,
 } from '~/core/debates/tagged-claims';
+import { useAgendaClaimFilter } from '~/core/debates/todays-claims/agenda-claim-filter';
 import { AGENDA_ONLY_PICKER } from '~/core/debates/todays-claims/agenda-only-picker';
 import { useClaimDebateCounts } from '~/core/debates/todays-claims/claim-debate-counts';
 import { NO_AGENDAS, useDebateAgendas } from '~/core/debates/todays-claims/debate-agendas';
 import { EARLIER_THIS_WEEK_SECTION, useTodaysSectionsOpen } from '~/core/debates/todays-claims/section-open-state';
-import { type TodaysCardScope, todaysCardScope } from '~/core/debates/todays-claims/todays-claims-attribution';
+import {
+  type TodaysCardScope,
+  agendaScopeIndex,
+  todaysCardScope,
+} from '~/core/debates/todays-claims/todays-claims-attribution';
 import {
   orderAgendaSpaces,
   todaysSectionKey,
@@ -210,8 +215,8 @@ function listLandingState(pending: boolean, rows: number): LandingState {
 
 /**
  * GEO-3148. Where a pair land: the first of these tabs with something in it, and Explore — which
- * always has something — when none does. With Explore hidden (GEO-3733) the fallback is Today's
- * claims, which draws its own empty state.
+ * always has something — when none does. Agenda-only (GEO-3733) the fallback is Today's claims,
+ * which draws its own empty state and its outages; Explore is in the strip but never a landing.
  *
  * Today’s claims first, then Matches, then previous-debate claims when their flag is enabled,
  * then Related, then everything the opponent has taken a side on, where a match is one press away.
@@ -561,20 +566,20 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // space's type are looked up for all of them, so they are ready when it does.
   const todaysClaimIds = todaysAgendasQuery.claimIds;
   /**
-   * GEO-3733. Every claim an agenda lists this week, as the positions tabs are narrowed to. Taken
-   * before publishability rather than from `todaysAgendas`, so those tabs wait on the agendas alone
-   * and not on every space's type: the rows are still dropped by `canPublishDebateIn` as before.
+   * GEO-3733, GEO-3775. Every claim an agenda lists this week, as the positions tabs and Explore are
+   * narrowed to. Taken from the agenda rows alone, before publishability and before the claims are
+   * resolved, so those tabs wait on the agendas alone and not on every space's type: the rows are
+   * still dropped by `canPublishDebateIn` as before.
    * Deliberately wider than Today's claims by one case: an agenda in a space this pair could not
    * publish into still admits its claims here, drawn and published in a space they can. gaia already
    * serves agendas from debate spaces only, so that is a curated claim either way.
-   * Already `normId`'d. An outage with no agenda claims in hand goes to those tabs as an error rather
-   * than reading as "no positions"; one that leaves claims in hand (a background refetch, a failed
-   * batch) keeps what it has, as Today's claims does.
+   * An outage with no agenda claims in hand goes to those tabs as an error rather than reading as "no
+   * positions"; one that leaves claims in hand (a background refetch) keeps what it has, as Today's
+   * claims does. The same filter as the Debates panel's, one request with Today's claims.
    */
-  const agendaClaimIds = React.useMemo(() => new Set(todaysClaimIds), [todaysClaimIds]);
-  const agendaFilterPending = AGENDA_ONLY_PICKER && todaysAgendasQuery.isLoading;
-  const agendaFilterError =
-    AGENDA_ONLY_PICKER && todaysClaimIds.length === 0 ? (todaysAgendasQuery.error ?? null) : null;
+  const agendaFilter = useAgendaClaimFilter(AGENDA_ONLY_PICKER);
+  const agendaFilterPending = agendaFilter.pending;
+  const agendaFilterError = agendaFilter.error;
   const todaysSpaceIds = todaysAgendasQuery.spaceIds;
   const todaysClaimsQuery = useDebateRematchClaimsForIds(sessionId, todaysClaimIds);
 
@@ -782,8 +787,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // would open Explore cold. The rows lookup is keyed on the session; the warm-up has to be too.
   const [warmedSessionId, setWarmedSessionId] = React.useState<string | null>(null);
   const browseWarmed = warmedSessionId === sessionId;
-  // Off entirely while Explore is hidden (GEO-3733): no catalog, no facets, no background warm-up.
-  const taggedEnabled = !AGENDA_ONLY_PICKER && (browsing || !browseWarmed) && source === 'all';
+  const taggedEnabled = (browsing || !browseWarmed) && source === 'all';
   // What goes to the server, so the page and both facet menus describe the same set of spaces.
   //
   // Two of the three gates can be sent; one cannot. The viewer's allowlist and the acceptor's
@@ -825,11 +829,16 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       spaceMatch: 'all',
       eligibleSpaceIds,
       excludeAnsweredBy,
+      // GEO-3775: agenda claims only, answered by the server (`null` with the switch off).
+      onlyClaimIds: agendaFilter.ids,
     }),
-    [debouncedSearch, debouncedTopicIds, eligibleSpaceIds, excludeAnsweredBy, spaceIds]
+    [agendaFilter.ids, debouncedSearch, debouncedTopicIds, eligibleSpaceIds, excludeAnsweredBy, spaceIds]
   );
-  /** What the tagged query waits on before it can be asked the right question. */
-  const taggedScopePending = allowlistPending || excludePending;
+  /**
+   * What the tagged query waits on before it can be asked the right question. The agendas too: asked
+   * before they answer, the list would be the whole tag or nothing. Failed, there is nothing to ask.
+   */
+  const taggedScopePending = allowlistPending || excludePending || agendaFilterPending || Boolean(agendaFilterError);
 
   /**
    * The tag's topics under every filter but the search (GEO-3223) — what the search box matches
@@ -1445,8 +1454,8 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       const rows: DebateRematchClaim[] = [];
       for (const claimId of claimIds) {
         if (isClaimExcluded(claimId)) continue;
-        // GEO-3733: only claims an agenda lists. Raw ids from positions, so normalised here.
-        if (AGENDA_ONLY_PICKER && !agendaClaimIds.has(normId(claimId))) continue;
+        // GEO-3733: only claims an agenda lists (always true with the switch off).
+        if (!agendaFilter.has(claimId)) continue;
         const entity = entitiesById.get(claimId);
         const row = entity ? rowFromEntity(entity) : null;
         if (row && row.participants.some(side => holdsSide(side.user_id) && side.position !== null)) rows.push(row);
@@ -1455,7 +1464,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
         .filter(row => canPublishDebateIn(row.claim.space_id))
         .sort((a, b) => Number(b.shared_preference) - Number(a.shared_preference));
     },
-    [agendaClaimIds, canPublishDebateIn, isClaimExcluded, rowFromEntity]
+    [agendaFilter, canPublishDebateIn, isClaimExcluded, rowFromEntity]
   );
 
   // The agendas are part of settling: a list drawn before them would be unfiltered, and the hold
@@ -2025,9 +2034,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
         ? relatedOffered
         : candidate === 'debate'
           ? debateOffered
-          : candidate === 'explore'
-            ? !AGENDA_ONLY_PICKER
-            : true;
+          : true;
   //
   // Read from state alone — the choice or the latched landing, never `landingNow` — so the tab drawn
   // is always the one the queries were enabled for: `browsing` is derived from the same state, and
@@ -2758,7 +2765,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
                   // is the only one that leaves nothing to show. geo-chat's row lookup is metadata beside
                   // it: losing it costs the faces and the readiness, not the claims, and blanking the tab
                   // for that trades a short list for no list.
-                  taggedCatalogError
+                  // Agenda-only, the agendas are part of the list: failed with none in hand, there is
+                  // no list to ask for, and an empty one would read as "nothing eligible".
+                  (taggedCatalogError ?? agendaFilterError)
                 : curatedClaimsQuery.error);
 
   // A topic the menu no longer offers is unpickable as well as empty — the chip filtering the
@@ -3251,26 +3260,12 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    * more than agenda claims.
    */
   const agendaScopeByClaim = React.useMemo(() => {
-    const byClaim = new Map<string, TodaysCardScope>();
-    if (!AGENDA_ONLY_PICKER) return byClaim;
-    for (const item of todaysItems) {
-      const id = normId(item.row.claim.claim_entity_id);
-      if (!byClaim.has(id)) byClaim.set(id, item.scope);
-    }
-    const all = todaysAgendasQuery.agendasIn(() => true);
-    const debatesOf = (claimId: string) => todaysCountsByClaim?.get(claimId);
-    for (const space of all.spaces)
-      for (const section of space.sections)
-        for (const claimId of section.claimIds) {
-          const id = normId(claimId);
-          if (!byClaim.has(id))
-            byClaim.set(id, todaysCardScope(section.agendaId, section.listedOn, debatesOf(id), section.id));
-        }
-    for (const listing of all.earlier) {
-      const id = normId(listing.claimId);
-      if (!byClaim.has(id)) byClaim.set(id, todaysCardScope(listing.agendaId, listing.listedOn, debatesOf(id)));
-    }
-    return byClaim;
+    if (!AGENDA_ONLY_PICKER) return new Map<string, TodaysCardScope>();
+    return agendaScopeIndex(
+      todaysAgendasQuery.agendasIn(() => true),
+      claimId => todaysCountsByClaim?.get(claimId),
+      todaysItems.map(item => [item.row.claim.claim_entity_id, item.scope] as const)
+    );
   }, [todaysAgendasQuery, todaysCountsByClaim, todaysItems]);
   const renderClaimCard = (claim: DebateRematchClaim, position: number, previouslyDebated = false) => {
     const saidBy = debateSaidByFor(claim);
@@ -3395,8 +3390,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       label: 'Their positions',
       count: { value: opponentPositionCount, pending: opponentCountPending, pendingLabel: 'Counting positions' },
     },
-    // The whole catalogue, and the last place the pair can land.
-    ...(AGENDA_ONLY_PICKER ? [] : [{ id: 'explore', label: 'Explore' } satisfies PickerTabSpec]),
+    // The whole catalogue, and the last place the pair can land. Agenda-only, the agendas' claims
+    // (GEO-3775).
+    { id: 'explore', label: 'Explore' },
     // The viewer's own backlog, promoted out of Explore's source menu the way GEO-2863 promoted the
     // hub's, and named for whose it is now that it sits beside theirs.
     {
@@ -3406,7 +3402,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     },
   ];
 
-  /** Where an empty Matches or Their positions sends the pair: the catalogue, or with it hidden, Today's claims. */
+  /** Where an empty Matches or Their positions sends the pair: the catalogue, or agenda-only, Today's claims. */
   const seeTodaysOrExplore = AGENDA_ONLY_PICKER
     ? { label: 'See today’s claims', onClick: () => setTab('todays') }
     : exploreClaimsAction(setTab);
@@ -3751,7 +3747,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
                                       ? AGENDA_ONLY_PICKER
                                         ? 'You haven’t taken a position on any of today’s claims yet.'
                                         : 'You haven’t taken a position on any claims yet.'
-                                      : 'No other eligible claims are available yet.'
+                                      : AGENDA_ONLY_PICKER
+                                        ? 'No other claims on today’s agendas are available to debate yet.'
+                                        : 'No other eligible claims are available yet.'
           }
           // Each dead end has its own way out. Ordered by how much the viewer has to give up:
           // clearing their filters, then leaving the tab or the source they picked.

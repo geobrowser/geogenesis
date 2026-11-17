@@ -7,8 +7,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { GeoChatRequestError } from '../api';
 import type { ClaimListPage } from '../claim-list-pages';
 import { HUB_SCROLL_SELECTOR, HubScrollSelectorProvider } from '../matchmaking/hub-scroll';
+import { AgendaClaimFilterContext } from '../todays-claims/agenda-claim-filter';
+import { agendaFilterFixture } from '../todays-claims/debate-agenda-fixtures';
 import { TODAYS_CLAIMS_LIST_ID } from '../todays-claims/todays-claims-list-id';
-import { LobbyClaimListTab, useClaimListName } from './lobby-claim-list-tab';
+import { CLAIM_LIST_TAB_COPY, LobbyClaimListTab, useClaimListName } from './lobby-claim-list-tab';
 import type { LobbyPageView } from './lobby-view';
 
 const mocks = vi.hoisted(() => ({
@@ -17,6 +19,8 @@ const mocks = vi.hoisted(() => ({
   removeState: { isPending: false, error: null as Error | null },
   batches: [] as string[][],
   groups: undefined as unknown,
+  refetch: vi.fn(),
+  cardScopes: [] as { claimId: string; scope: unknown }[],
 }));
 
 vi.mock('next/link', () => ({
@@ -28,8 +32,18 @@ vi.mock('next/link', () => ({
 }));
 vi.mock('../claim-list-pages', async importOriginal => ({
   ...(await importOriginal<typeof import('../claim-list-pages')>()),
-  useClaimListPage: () => ({ ...mocks.page, refetch: vi.fn() }),
+  useClaimListPage: () => ({ ...mocks.page, refetch: mocks.refetch }),
 }));
+vi.mock('../debate-claim-card-surface', async importOriginal => {
+  const actual = await importOriginal<typeof import('../debate-claim-card-surface')>();
+  return {
+    ...actual,
+    DebateClaimCardSurface: (props: Parameters<typeof actual.DebateClaimCardSurface>[0]) => {
+      mocks.cardScopes.push({ claimId: props.claimId, scope: props.scope });
+      return actual.DebateClaimCardSurface(props);
+    },
+  };
+});
 vi.mock('../hooks', () => ({
   useGeoChatAuth: () => ({ authenticated: true, accountKey: 'acct' }),
   useDebateClaimsBySpaces: (groups: unknown) => {
@@ -73,6 +87,8 @@ afterEach(() => {
   mocks.page = { data: undefined, isLoading: false, error: null };
   mocks.remove.mockClear();
   mocks.removeState = { isPending: false, error: null };
+  mocks.refetch.mockReset();
+  mocks.cardScopes = [];
 });
 
 describe('LobbyClaimListTab', () => {
@@ -214,6 +230,88 @@ describe('LobbyClaimListTab', () => {
     render(<LobbyClaimListTab lobby={lobbyFor(false)} list={list} />);
     expect(screen.getByText('Something went wrong.')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Try again' })).toBeTruthy();
+  });
+});
+
+/**
+ * GEO-3775. A host's list in an agenda-only lobby (`AGENDA_ONLY_LOBBY_HOST_LISTS`, on: Preston, 17 Nov):
+ * its agenda claims only, themes and counts of what is left.
+ */
+describe('LobbyClaimListTab agenda-only', () => {
+  const C1 = 'c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1';
+  const C2 = 'c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2';
+  const C3 = 'c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3';
+  const claim = (id: string, name: string) => ({ id, name, description: null, tagSpaceIds: [OTHER_SPACE] });
+  const page = (): ClaimListPage => ({
+    entityId: list.entity_id,
+    spaceId: SPACE,
+    name: 'AI highlights',
+    sections: [
+      { id: 'work', name: 'Work', claims: [claim(C1, 'AI will create more jobs')] },
+      {
+        id: 'privacy',
+        name: 'Privacy',
+        claims: [claim(C2, 'No training on private chats'), claim(C3, 'Warrants for AI analysis')],
+      },
+    ],
+  });
+  const renderWith = (filter: ReturnType<typeof agendaFilterFixture>) =>
+    render(
+      <AgendaClaimFilterContext.Provider value={filter}>
+        <LobbyClaimListTab lobby={lobbyFor(false)} list={list} />
+      </AgendaClaimFilterContext.Provider>
+    );
+
+  it('keeps only agenda claims, drops a theme left empty, and counts what is left', () => {
+    mocks.page.data = page();
+    renderWith(agendaFilterFixture({ ids: [C3] }));
+
+    expect(screen.getByText('Added by Maya · 1 theme')).toBeTruthy();
+    expect(screen.queryByRole('region', { name: 'Work' })).toBeNull();
+    expect(screen.getByRole('region', { name: 'Privacy' }).textContent).toContain('1 claim');
+    expect(screen.getAllByRole('article').map(card => card.textContent)).toEqual(['Warrants for AI analysis']);
+    // Only the cards drawn are read from geo-chat.
+    expect(mocks.groups).toEqual([{ spaceId: OTHER_SPACE, claimIds: [C3] }]);
+    // Credited to its agenda, with the section still this list's.
+    expect(mocks.cardScopes).toEqual([
+      {
+        claimId: C3,
+        scope: {
+          agenda_id: `agenda-${C3}`,
+          agenda_date: '2026-11-17',
+          list_entity_id: list.entity_id,
+          list_section_id: 'privacy',
+        },
+      },
+    ]);
+  });
+
+  it('says none of the list’s claims are on today’s agendas when none are', () => {
+    mocks.page.data = page();
+    renderWith(agendaFilterFixture({ ids: ['elsewhere'] }));
+
+    expect(screen.queryByRole('article')).toBeNull();
+    expect(screen.getByText(CLAIM_LIST_TAB_COPY.agendaEmpty)).toBeTruthy();
+  });
+
+  it('draws no card while the agendas load', () => {
+    mocks.page.data = page();
+    renderWith(agendaFilterFixture({ ids: [C1, C2, C3], pending: true }));
+
+    expect(screen.queryByRole('article')).toBeNull();
+    expect(screen.queryByText(CLAIM_LIST_TAB_COPY.agendaEmpty)).toBeNull();
+  });
+
+  it('fails when the agendas do, and Try again asks for them', () => {
+    mocks.page.data = page();
+    const refetch = vi.fn();
+    renderWith(agendaFilterFixture({ ids: [C1], error: new Error('gaia down'), refetch }));
+
+    expect(screen.queryByRole('article')).toBeNull();
+    expect(screen.getByText('Something went wrong.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(refetch).toHaveBeenCalledTimes(1);
+    expect(mocks.refetch).not.toHaveBeenCalled();
   });
 });
 

@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DebateLobbyHighlights, DebateLobbyMember, DebateLobbyView } from '../api';
 import { ResizeObserverStub } from '../resize-observer-fixtures';
+import { agendaFilterFixture } from '../todays-claims/debate-agenda-fixtures';
 
 const claimList = (entityId: string) => ({
   entity_id: entityId,
@@ -17,6 +18,8 @@ const claimList = (entityId: string) => ({
 });
 
 const mocks = vi.hoisted(() => ({
+  lobbyClaims: undefined as import('../api').DebateLobbyClaims | undefined,
+  agendaFilter: undefined as import('../todays-claims/agenda-claim-filter').AgendaClaimFilter | undefined,
   phone: false,
   lobby: undefined as DebateLobbyView | undefined,
   highlights: undefined as Pick<DebateLobbyHighlights, 'highlights' | 'room_vote'> | undefined,
@@ -106,11 +109,26 @@ vi.mock('../track-video', () => ({ TrackVideo: () => <video data-testid="call-sc
 // Reports the scroll root its lists' observers would be handed, which is all the page decides.
 vi.mock('./lobby-claims-area', async () => {
   const { useHubScrollSelector } = await import('../matchmaking/hub-scroll');
+  const { useAgendaClaimFilterContext } = await import('../todays-claims/agenda-claim-filter');
   return {
-    LobbyClaimsArea: () => <div data-testid="claims" data-scroll-root={useHubScrollSelector() ?? 'viewport'} />,
+    LobbyClaimsArea: () => {
+      const agenda = useAgendaClaimFilterContext();
+      return (
+        <div
+          data-testid="claims"
+          data-scroll-root={useHubScrollSelector() ?? 'viewport'}
+          data-agenda-key={agenda.active ? agenda.key : 'inactive'}
+        />
+      );
+    },
   };
 });
-vi.mock('./lobby-room-claims-hooks', () => ({ useDebateLobbyClaims: () => ({ data: undefined }) }));
+// GEO-3775: the room's agenda filter, inactive unless a test sets one.
+vi.mock('../todays-claims/agenda-claim-filter', async importOriginal => {
+  const actual = await importOriginal<typeof import('../todays-claims/agenda-claim-filter')>();
+  return { ...actual, useAgendaClaimFilter: () => mocks.agendaFilter ?? actual.INACTIVE_AGENDA_FILTER };
+});
+vi.mock('./lobby-room-claims-hooks', () => ({ useDebateLobbyClaims: () => ({ data: mocks.lobbyClaims }) }));
 vi.mock('./lobby-guest-sign-in', () => ({ useLobbyGuestSignIn: () => vi.fn(), useLobbySignInPrompt: vi.fn() }));
 vi.mock('./lobby-highlights-hooks', () => ({
   useLobbyHighlights: (_id: string, enabled: boolean) => {
@@ -181,6 +199,8 @@ function view(viewer: Partial<DebateLobbyView['viewer']> = {}): DebateLobbyView 
 }
 
 beforeEach(() => {
+  mocks.agendaFilter = undefined;
+  mocks.lobbyClaims = undefined;
   mocks.phone = false;
   mocks.lobby = view();
   mocks.highlights = { highlights: [], room_vote: null };
@@ -381,6 +401,94 @@ describe('DebateLobbyPage layout on a phone', () => {
 });
 
 // GEO-3507: a host's shared screen sits above the speakers, beside the claims or above them on a phone.
+/** GEO-3775. The room's one agenda filter reaches People's counts and the phone's Claims mark. */
+describe('DebateLobbyPage agenda-only', () => {
+  const adamAgainst = (id: string) => ({
+    claim: { id, space_id: 's1', claim_entity_id: `entity-${id}`, claim: `Claim ${id}`, description: null },
+    response_kind: 'stance' as const,
+    viewer_response: { position: true, position_label: 'Agree' },
+    viewer_debate_ready: true,
+    readiness_disabled_reason: null,
+    active_debate: false,
+    positions: [true, false].map(position => ({
+      position,
+      position_label: position ? 'Agree' : 'Disagree',
+      total_in_room: position ? 0 : 1,
+      requestable_count: 0,
+      participants: position
+        ? []
+        : [{ user_id: 'adam', profile_space_id: 'p-adam', display_name: 'adam', avatar_cid: null, requestable: true }],
+    })),
+  });
+  const vote = (claimEntityId: string) => ({
+    highlights: [],
+    room_vote: { vote_id: 'v1', claim: { claim_entity_id: claimEntityId } } as NonNullable<
+      DebateLobbyHighlights['room_vote']
+    >,
+  });
+
+  beforeEach(() => {
+    mocks.lobbyClaims = {
+      lobby_id: 'lobby1',
+      source: 'room',
+      claims: [adamAgainst('a'), adamAgainst('b')],
+      disagreements: [{ user_id: 'adam', claims: 2 }],
+    };
+  });
+
+  it('counts a person’s disagreements over agenda claims only, and none while the agendas load', () => {
+    render(<DebateLobbyPage lobbyId="lobby1" />);
+    expect(screen.getAllByText('Disagrees on 2').length).toBeGreaterThan(0);
+    cleanup();
+
+    mocks.agendaFilter = agendaFilterFixture({ ids: ['entity-a'] });
+    render(<DebateLobbyPage lobbyId="lobby1" />);
+    expect(screen.getAllByText('Disagrees on 1').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Disagrees on 2')).toBeNull();
+    cleanup();
+
+    mocks.agendaFilter = agendaFilterFixture({ ids: ['entity-a'], pending: true });
+    render(<DebateLobbyPage lobbyId="lobby1" />);
+    expect(screen.queryByText(/Disagrees on/)).toBeNull();
+  });
+
+  it('provides the room’s filter to the claims panel', () => {
+    render(<DebateLobbyPage lobbyId="lobby1" />);
+    expect(screen.getByTestId('claims').getAttribute('data-agenda-key')).toBe('inactive');
+    cleanup();
+
+    mocks.agendaFilter = agendaFilterFixture({ ids: ['entity-a'] });
+    render(<DebateLobbyPage lobbyId="lobby1" />);
+    expect(screen.getByTestId('claims').getAttribute('data-agenda-key')).toBe('entity-a');
+  });
+
+  it('does not mark Claims for a vote on a claim no agenda lists', () => {
+    mocks.phone = true;
+    mocks.agendaFilter = agendaFilterFixture({ ids: ['entity-a'] });
+    const { rerender } = render(<DebateLobbyPage lobbyId="lobby1" />);
+    const claimsTab = () => screen.getByRole('tab', { name: /Claims/ });
+
+    mocks.highlights = vote('entity-elsewhere');
+    act(() => rerender(<DebateLobbyPage lobbyId="lobby1" />));
+    expect(within(claimsTab()).queryByRole('img', { name: 'New' })).toBeNull();
+
+    mocks.highlights = vote('entity-a');
+    act(() => rerender(<DebateLobbyPage lobbyId="lobby1" />));
+    expect(within(claimsTab()).getByRole('img', { name: 'New' })).toBeInTheDocument();
+  });
+
+  it('does not call a vote new for having waited on the agendas', () => {
+    mocks.phone = true;
+    mocks.highlights = vote('entity-a');
+    mocks.agendaFilter = agendaFilterFixture({ ids: ['entity-a'], pending: true });
+    const { rerender } = render(<DebateLobbyPage lobbyId="lobby1" />);
+
+    mocks.agendaFilter = agendaFilterFixture({ ids: ['entity-a'] });
+    act(() => rerender(<DebateLobbyPage lobbyId="lobby1" />));
+    expect(within(screen.getByRole('tab', { name: /Claims/ })).queryByRole('img', { name: 'New' })).toBeNull();
+  });
+});
+
 describe('DebateLobbyPage with a shared screen', () => {
   const share = () => {
     mocks.screens = new Map([['adam', { publication: { track: {} } }]]);

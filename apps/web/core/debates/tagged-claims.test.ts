@@ -13,6 +13,9 @@ import {
   NO_TAGGED_CLAIM_FILTERS,
   TAGGED_CLAIMS_PAGE_SIZE,
   type TaggedClaimFilters,
+  taggedClaimsQueryKey,
+  taggedEntityFilter,
+  taggedFacetQueryKey,
   useTaggedAnsweredCount,
   useTaggedClaims,
   useTaggedSpaceFacet,
@@ -1171,5 +1174,91 @@ describe('the answered count', () => {
 
     expect(result.current.answeredCount).toBe(3);
     expect(graphqlMock.mock.calls.length).toBe(asked);
+  });
+});
+
+/**
+ * GEO-3775. The agenda-only lists narrow the tag to the claims an agenda lists, answered by the
+ * server, so the list, its facets and a search all describe the agenda set.
+ */
+describe('only the claims asked for', () => {
+  it('narrows the tag to those claims', async () => {
+    respondWithPages([[node('a1', 'One')]]);
+    const { result } = renderClaims({ ...NO_TAGGED_CLAIM_FILTERS, onlyClaimIds: ['a1', 'a2'] });
+    await waitFor(() => expect(result.current.claims).toHaveLength(1));
+
+    expect(sentVariables().filter.and).toContainEqual({ id: { in: ['a1', 'a2'] } });
+  });
+
+  // `[]` is an agenda with nothing on it, which must list nothing rather than the whole tag.
+  it('narrows to nothing when the set is empty, and not at all when there is none', () => {
+    expect(taggedEntityFilter(TAG, { ...NO_TAGGED_CLAIM_FILTERS, onlyClaimIds: [] }, null).and).toContainEqual({
+      id: { in: [] },
+    });
+    for (const onlyClaimIds of [null, undefined]) {
+      const { and } = taggedEntityFilter(TAG, { ...NO_TAGGED_CLAIM_FILTERS, onlyClaimIds }, null);
+      expect(and.some((clause: any) => clause.id !== undefined)).toBe(false);
+    }
+  });
+
+  // A list keyed without the set would be served the unfiltered list's cached rows.
+  it('is part of every key', () => {
+    const a = { ...NO_TAGGED_CLAIM_FILTERS, onlyClaimIds: ['a1'] };
+    const b = { ...NO_TAGGED_CLAIM_FILTERS, onlyClaimIds: null };
+    expect(taggedClaimsQueryKey(TAG, a)).not.toEqual(taggedClaimsQueryKey(TAG, b));
+    expect(taggedFacetQueryKey('topics', TAG, a)).not.toEqual(taggedFacetQueryKey('topics', TAG, b));
+    expect(taggedFacetQueryKey('spaces', TAG, a)).not.toEqual(taggedFacetQueryKey('spaces', TAG, b));
+  });
+
+  it('asks again when the set changes', async () => {
+    respondWithPages([[node('a1', 'One')]]);
+    const { result, rerender } = renderEditableClaims({ ...NO_TAGGED_CLAIM_FILTERS, onlyClaimIds: ['a1'] });
+    await waitFor(() => expect(result.current.claims).toHaveLength(1));
+
+    respondWithPages([[node('a2', 'Two')]]);
+    rerender({ filters: { ...NO_TAGGED_CLAIM_FILTERS, onlyClaimIds: ['a2'] } });
+
+    await waitFor(() => expect(result.current.claims.map(claim => claim.entity.id)).toEqual(['a2']));
+    expect(sentVariables(1).filter.and).toContainEqual({ id: { in: ['a2'] } });
+  });
+
+  // One `id in`, the search's hits that are in the set, rather than two clauses for the graph to AND.
+  it('sends a search as its hits within the set', async () => {
+    respondWithSearch([['a1', 'a2', 'a3']]);
+    respondWithPages([[node('a2', 'Two')]]);
+    const { result } = renderClaims({ ...NO_TAGGED_CLAIM_FILTERS, search: 'power', onlyClaimIds: ['a2', 'a9'] });
+    await waitFor(() => expect(result.current.claims).toHaveLength(1));
+
+    const idClauses = sentVariables().filter.and.filter((clause: any) => clause.id !== undefined);
+    expect(idClauses).toEqual([{ id: { in: ['a2'] } }]);
+  });
+
+  // A broad term against a small set: search pages with nothing in the set cost no graph request.
+  it('does not ask the graph for a search page with nothing in the set', async () => {
+    respondWithSearch([['a1'], ['b1'], ['a3']], 3);
+    respondWithPages([[node('a1', 'One')], [node('a3', 'Three')]]);
+    const { result } = renderClaims({ ...NO_TAGGED_CLAIM_FILTERS, search: 'the', onlyClaimIds: ['a1', 'a3'] });
+    await waitFor(() => expect(result.current.claims).toHaveLength(1));
+
+    result.current.fetchNextPage();
+    await waitFor(() => expect(searchMock.mock.calls.length).toBe(2));
+    result.current.fetchNextPage();
+    await waitFor(() => expect(searchMock.mock.calls.length).toBe(3));
+    await waitFor(() => expect(result.current.hasNextPage).toBe(false));
+
+    // And a page after an empty one still lists.
+    await waitFor(() => expect(result.current.claims.map(claim => claim.entity.id)).toEqual(['a1', 'a3']));
+    expect(graphqlMock.mock.calls.length).toBe(2);
+  });
+
+  // Topic matches can admit a claim the hits did not, so the set keeps its own clause there.
+  it('keeps the set on claims a search reaches through a topic', () => {
+    const { and } = taggedEntityFilter(
+      TAG,
+      { ...NO_TAGGED_CLAIM_FILTERS, search: 'power', searchTopicIds: [TOPIC], onlyClaimIds: ['a2'] },
+      ['a1', 'a2']
+    );
+    expect(and).toContainEqual({ id: { in: ['a2'] } });
+    expect(and.some((clause: any) => clause.or?.[0]?.id?.in?.length === 1)).toBe(true);
   });
 });
