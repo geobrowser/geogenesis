@@ -16,8 +16,7 @@ import {
   SearchIcon,
   WarnIcon,
 } from './editor-ui';
-import { type EditorClip, formatReelTime } from './reel';
-import type { ReelSentence } from './reel-transcript';
+import { type EditorClip, type ReelSentence, formatReelTime } from './reel';
 import type { ReelWarning, ReelWarningFix } from './reel-warnings';
 import { SPEAKER_FILL_CLASS } from './speaker-classes';
 

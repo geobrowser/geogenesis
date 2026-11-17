@@ -224,6 +224,7 @@ function EntityResponseButtons({
     id: `entity-vote:${entityId}:${spaceId}`,
     component: 'entity_vote_buttons',
     label: 'your vote',
+    survivesRedirect: true,
     // Held until the viewer's own side is known: right after sign-in it is still loading, and its
     // empty default would read as "holds nothing" — publishing a side they already hold.
     ready: Boolean(personalSpaceId) && (responseBatch.managed ? responseBatch.ready : hasServerResponseAnswered),

@@ -181,6 +181,8 @@ function Editor({ debateId }: { debateId: string }) {
 
   const turns = media.data?.turn_segments ?? NO_TURNS;
   const words = React.useMemo(() => playerWords(transcript.data?.words), [transcript.data?.words]);
+  // A transcript without word timings has only these: the clips' speakers and quotes fall back on them.
+  const sentences = React.useMemo(() => reelSentences(transcript.data), [transcript.data]);
   const payload = claims.data?.payload;
   const entry = plan.data ?? null;
 
@@ -404,8 +406,8 @@ function Editor({ debateId }: { debateId: string }) {
   // Each clip's speaker, once per edit: the strip, the monitor and the side transcript read this one
   // list (memoised, so the transcript doesn't re-render for a new list of the same speakers).
   const speakers = React.useMemo(
-    () => clips.map(clip => clipSpeaker(words, clip.start_ms, clip.end_ms)),
-    [clips, words]
+    () => clips.map(clip => clipSpeaker(words, clip.start_ms, clip.end_ms, sentences)),
+    [clips, words, sentences]
   );
   const clipViews = clips.map((clip, index) => {
     const speaker = speakers[index];
@@ -413,7 +415,7 @@ function Editor({ debateId }: { debateId: string }) {
     return {
       clip,
       speaker,
-      quote: clipQuote(words, clip.start_ms, clip.end_ms),
+      quote: clipQuote(words, clip.start_ms, clip.end_ms, sentences),
       // A carried reel's cuts are on the old video's clock, mapped here through the new one's turns:
       // checked against the new words they would flag spans its clips don't play (it is read-only,
       // so nothing is gated on them).
@@ -489,7 +491,6 @@ function Editor({ debateId }: { debateId: string }) {
   React.useEffect(() => {
     dispatch({ type: 'clipsChanged', keys: clipKeyList === '' ? [] : clipKeyList.split('|') });
   }, [clipKeyList]);
-  const sentences = React.useMemo(() => reelSentences(transcript.data), [transcript.data]);
   const durationMs = Math.max(
     1,
     ...turns.map(turn => turn.source_end_ms ?? turn.output_end_ms),
@@ -510,7 +511,7 @@ function Editor({ debateId }: { debateId: string }) {
   const reelPlayable = React.useMemo(() => reelSegments(clips, played, carried), [carried, clips, played]);
   // None for a carried reel: like its clip checks, they would read its old-video cuts at the places
   // the new video's turns map them to, and it is read-only, so there is nothing to fix.
-  const warnings = carried ? [] : reelWarnings(clips, words, nameOf);
+  const warnings = carried ? [] : reelWarnings(clips, words, nameOf, sentences);
 
   // The header's button and the warning's fix alike: without a playhead there is nowhere to add it.
   // A new clip starts at the playhead or at a transcript sentence. The transcript is the way in when

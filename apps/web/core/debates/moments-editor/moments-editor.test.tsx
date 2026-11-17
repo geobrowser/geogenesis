@@ -3164,6 +3164,59 @@ describe('MomentsEditor side transcript (GEO-3773)', () => {
   const toolbar = () => screen.queryByRole('group', { name: 'Clip from the selected words' });
   const button = (name: string | RegExp) => screen.queryByRole('button', { name });
 
+  describe('a transcript without word timings (GEO-3642)', () => {
+    beforeEach(() => {
+      mocks.wordTiming = false;
+      wordsOverride = [];
+      // Clip 1 spans Susan's two sentences, clip 2 Urban's one.
+      liveReel(liveClip(900, 3_500, 0), liveClip(4_900, 6_000, 1));
+    });
+    const monitor = () => within(screen.getByRole('region', { name: 'Debate player' }));
+    const sentence = (text: string) =>
+      [...transcript().querySelectorAll<HTMLElement>('[data-sentence]')].find(
+        span => span.textContent?.trim() === text
+      )!;
+
+    it('names each clip’s speaker and quotes its sentences', () => {
+      render(<MomentsEditor debateId={DEBATE_ID} />);
+      expect(monitor().getByText('Clip 1 · Susan Winter')).toBeInTheDocument();
+      // A card shows its quote while another clip is selected.
+      expect(card(2)).toHaveTextContent(/^2Urban.*Dinner wins\.$/);
+      expect(screen.queryByText(/No speaker/)).not.toBeInTheDocument();
+      expect(screen.queryByText('No whole words in this range.')).not.toBeInTheDocument();
+      selectClip(2);
+      expect(monitor().getByText('Clip 2 · Urban')).toBeInTheDocument();
+      expect(card(1)).toHaveTextContent(/^1Susan Winter.*Coffee dates\. Cheap\.$/);
+    });
+
+    it('shows each clip’s number once, before its first sentence, and tints the sentences it plays', () => {
+      render(<MomentsEditor debateId={DEBATE_ID} />);
+      const badges = [...transcript().querySelectorAll<HTMLElement>('[data-clip]')];
+      expect(badges.map(badge => badge.dataset.clip)).toEqual(['0', '1']);
+      expect(badges[0].nextElementSibling).toBe(sentence('Coffee dates.'));
+      expect(badges[1].nextElementSibling).toBe(sentence('Dinner wins.'));
+      // Clip 1 is selected: its sentences take the stronger tint, clip 2's the light one.
+      expect(sentence('Coffee dates.')).toHaveClass('bg-purple/25');
+      expect(sentence('Cheap.')).toHaveClass('bg-purple/25');
+      expect(sentence('Dinner wins.')).toHaveClass('bg-pink/10');
+      expect(sentence('Dinner wins.')).not.toHaveClass('bg-pink/25');
+      // The number still selects its clip.
+      fireEvent.click(badges[1]);
+      expect(isSelected(2)).toBe(true);
+      expect(sentence('Dinner wins.')).toHaveClass('bg-pink/25');
+    });
+
+    it('warns when two clips in a row are the same debater’s sentences', () => {
+      // Clip 1 plays "Coffee dates.", clip 2 "Cheap.": both Susan's.
+      liveReel(liveClip(900, 2_950, 0), liveClip(2_950, 3_500, 0));
+      render(<MomentsEditor debateId={DEBATE_ID} />);
+      fireEvent.click(menuItem(/^All warnings/));
+      expect(screen.getByRole('complementary', { name: 'All warnings' })).toHaveTextContent(
+        'Clips 1 and 2 are both Susan Winter.'
+      );
+    });
+  });
+
   it('does not render the transcript on playhead reports, and marks the playhead’s word', () => {
     render(<MomentsEditor debateId={DEBATE_ID} />);
     const report = playerMocks.props.onPlayheadChange as (seconds: number) => void;
