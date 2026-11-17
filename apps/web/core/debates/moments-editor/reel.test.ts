@@ -12,14 +12,18 @@ import {
   clipsFromServedMoments,
   edgeIsFree,
   formatReelTime,
+  inOneStretch,
   manualReel,
   manualReelClips,
   parseReelTime,
+  playedCuts,
   playerWords,
   realSpeedStretches,
   reelProblems,
+  selectionToClip,
   snapEdge,
   stepEdge,
+  stretchesOrWhole,
 } from './reel';
 
 const word = (slot: 1 | 2, start: number, end: number, text = 'w'): ReelWord => ({
@@ -28,6 +32,10 @@ const word = (slot: 1 | 2, start: number, end: number, text = 'w'): ReelWord => 
   end_ms: end,
   text,
 });
+
+/** `words` as the editor reads them: through `playerWords`, the one place blank tokens are dropped (GEO-3767). */
+const heard = (words: readonly ReelWord[]) =>
+  playerWords(words.map(w => ({ participant_slot: w.slot, start_ms: w.start_ms, end_ms: w.end_ms, text: w.text })));
 
 const ONE_CLOCK = RENDERED_TURN_SEGMENTS.map(({ source_start_ms: _s, source_end_ms: _e, ...rest }) => rest);
 
@@ -56,6 +64,13 @@ describe('playerWords', () => {
   it('keeps a fixed format’s words where they are, in time order', () => {
     expect(playerWords([served(2_000, 2_400), served(1_000, 1_400)]).map(w => w.start_ms)).toEqual([1_000, 2_000]);
   });
+
+  // geo-chat drops blank tokens before it counts or cuts anything (`speech_turns`), GEO-3767.
+  it('drops blank tokens, so no check, count or snap reads one', () => {
+    const blank = (start: number, text: string) => ({ ...served(start, start + 50), text });
+    const words = playerWords([served(1_000, 1_400), blank(1_450, ' '), blank(1_500, ''), served(2_000, 2_400)]);
+    expect(words.map(w => w.start_ms)).toEqual([1_000, 2_000]);
+  });
 });
 
 describe('clipSpeaker (as geo-chat’s manual_moments decides it)', () => {
@@ -79,6 +94,16 @@ describe('clipSpeaker (as geo-chat’s manual_moments decides it)', () => {
   it('is nobody when no whole word is said', () => {
     expect(clipSpeaker([word(1, 0, 400)], 100, 300)).toBeNull();
   });
+
+  // geo-chat drops blank tokens before it counts (`speech_turns`): they are nobody's words (GEO-3767).
+  it('counts only spoken words, however many blank tokens the other debater has inside', () => {
+    const words = heard([word(1, 1_100, 1_400, 'Yes.'), word(2, 1_150, 1_200, ' '), word(2, 1_300, 1_400, '')]);
+    expect(clipSpeaker(words, 1_000, 1_500)).toBe(1);
+  });
+
+  it('is nobody when the only tokens inside are blank', () => {
+    expect(clipSpeaker(heard([word(1, 0, 400), word(2, 1_150, 1_200, ' ')]), 1_000, 1_500)).toBeNull();
+  });
 });
 
 describe('snapEdge', () => {
@@ -92,6 +117,14 @@ describe('snapEdge', () => {
   it('leaves an edge in silence, or on a boundary, where it is', () => {
     expect(snapEdge(1_450, words, 'start')).toBe(1_450);
     expect(snapEdge(1_400, words, 'end')).toBe(1_400);
+  });
+
+  // geo-chat cuts where it is told and reads no blank token (`speech_turns`): an edge in one is in silence.
+  it('does not snap to a blank token', () => {
+    const withBlank = heard([...words, word(1, 2_000, 2_400, ' ')]);
+    expect(snapEdge(2_200, withBlank, 'start')).toBe(2_200);
+    expect(snapEdge(2_200, withBlank, 'end')).toBe(2_200);
+    expect(stepEdge(1_900, withBlank, 'end', 1)).toBe(1_900);
   });
 });
 
@@ -206,7 +239,12 @@ describe('manualReel', () => {
 
   // geo-chat's `speech_turns` drops words with no text before it measures the room beside a word.
   it('measures the room beside a word past a blank word, as geo-chat does', () => {
-    const withBlank = [word(1, 1_000, 1_400), word(1, 2_000, 2_400), word(1, 2_550, 2_600, ' '), word(2, 3_000, 3_400)];
+    const withBlank = heard([
+      word(1, 1_000, 1_400),
+      word(1, 2_000, 2_400),
+      word(1, 2_550, 2_600, ' '),
+      word(2, 3_000, 3_400),
+    ]);
     expect(manualReel([freeEnd(1_000, 2_500)], withBlank, ONE_CLOCK)).toEqual({
       clips: [{ start: 0.75, end: 2.5 }],
       exact: true,
@@ -308,6 +346,39 @@ describe('manualReel', () => {
   });
 });
 
+describe('playedCuts (GEO-3673)', () => {
+  // 600 ms of quiet between words: up to 250 ms of room for a cut.
+  const words = [word(1, 1_000, 1_400), word(1, 2_000, 2_400), word(2, 3_000, 3_400)];
+
+  it('widens each clip into the quiet beside its words, as geo-chat cuts a reel sent without exact', () => {
+    expect(playedCuts([clip(1_000, 2_400), clip(3_000, 3_400)], words, ONE_CLOCK)).toEqual([
+      { start_ms: 750, end_ms: 2_650 },
+      { start_ms: 2_750, end_ms: 3_650 },
+    ]);
+  });
+
+  // `exact` is the reel's: one free edge sends every other edge where geo-chat would have widened it.
+  it('follows the exact reel: the free edge where it was placed, the others where they are sent', () => {
+    const free = { ...clip(1_000, 2_500), free_end_ms: 2_500 };
+    expect(playedCuts([free, clip(3_000, 3_400)], words, ONE_CLOCK)).toEqual([
+      { start_ms: 750, end_ms: 2_500 },
+      { start_ms: 2_750, end_ms: 3_650 },
+    ]);
+  });
+
+  it('is nothing for a clip with no whole word, which geo-chat refuses', () => {
+    expect(playedCuts([clip(1_500, 1_900)], words, ONE_CLOCK)).toEqual([null]);
+  });
+
+  it('keeps a cut inside the stretch its words are said in', () => {
+    // Turn 1 ends at 120 s and the render cut up to 128 s: no room past the stretch's end.
+    const atEnd = [word(1, 119_000, 119_900)];
+    expect(playedCuts([clip(119_000, 119_900)], atEnd, RENDERED_TURN_SEGMENTS)).toEqual([
+      { start_ms: 118_750, end_ms: 120_000 },
+    ]);
+  });
+});
+
 describe('clipsFromServedMoments', () => {
   it('reads the served moments’ word ranges onto the player’s clock and names their claims', () => {
     const clips = clipsFromServedMoments(
@@ -324,6 +395,14 @@ describe('clipProblems', () => {
 
   it('finds nothing wrong with a clip inside one turn', () => {
     expect(clipProblems(clip(129_000, 141_000), words, RENDERED_TURN_SEGMENTS)).toEqual([]);
+  });
+
+  // geo-chat refuses a clip with no spoken word ("no words are said in it"); blank tokens are not words.
+  it('flags a clip whose only tokens are blank, as geo-chat refuses it', () => {
+    const withBlanks = heard([...words, word(1, 135_000, 135_400, ' '), word(2, 136_000, 136_400, '')]);
+    expect(clipProblems(clip(134_000, 137_000), withBlanks, RENDERED_TURN_SEGMENTS)).toEqual([
+      'Nobody says a whole word in it.',
+    ]);
   });
 
   // 120 s to 128 s on the recordings is a condensed break. geo-chat trims an edge in it to the
@@ -427,5 +506,113 @@ describe('reel times', () => {
     expect(parseReelTime('1:75')).toBeNull();
     expect(parseReelTime('soon')).toBeNull();
     expect(parseReelTime('')).toBeNull();
+  });
+});
+
+describe('stretchesOrWhole / inOneStretch', () => {
+  it('reads a two-clock render’s real-speed stretches', () => {
+    expect(stretchesOrWhole(RENDERED_TURN_SEGMENTS, 400_000)).toEqual(realSpeedStretches(RENDERED_TURN_SEGMENTS));
+    expect(inOneStretch(115_000, 130_400, RENDERED_TURN_SEGMENTS)).toBe(false);
+    expect(inOneStretch(130_000, 140_400, RENDERED_TURN_SEGMENTS)).toBe(true);
+  });
+
+  // A fixed-format render shares one clock with the recordings and cut nothing.
+  it('takes a fixed format’s whole debate as one stretch', () => {
+    expect(stretchesOrWhole(ONE_CLOCK, 400_000)).toEqual([{ start_ms: 0, end_ms: 400_000 }]);
+    expect(stretchesOrWhole([], 9_000)).toEqual([{ start_ms: 0, end_ms: 9_000 }]);
+    expect(inOneStretch(115_000, 130_400, ONE_CLOCK)).toBe(true);
+  });
+});
+
+describe('selectionToClip (GEO-3766)', () => {
+  const words = [
+    word(1, 1_000, 1_400, 'Coffee'),
+    word(1, 1_500, 2_900, ' dates.'),
+    word(1, 3_000, 3_400, ' Cheap.'),
+    word(2, 5_000, 5_400, 'Dinner'),
+    word(2, 5_500, 5_900, ' wins.'),
+  ];
+
+  it('runs from the first selected word’s start to the last one’s end', () => {
+    expect(selectionToClip(words, 1, 2, [])).toEqual({
+      ok: true,
+      start_ms: 1_500,
+      end_ms: 3_400,
+      speaker: 1,
+      otherWords: 0,
+    });
+  });
+
+  it('reads a selection dragged backwards the same', () => {
+    expect(selectionToClip(words, 2, 1, [])).toEqual(selectionToClip(words, 1, 2, []));
+  });
+
+  it('makes a clip of a single short word', () => {
+    expect(selectionToClip(words, 0, 0, [])).toMatchObject({ ok: true, start_ms: 1_000, end_ms: 1_400 });
+  });
+
+  // Preston, 16 Nov: an exchange is allowed, of whoever says the most words, with a warning.
+  it('allows both debaters’ words, of whoever says the most', () => {
+    expect(selectionToClip(words, 2, 4, [])).toMatchObject({ ok: true, speaker: 2, otherWords: 1 });
+    expect(selectionToClip(words, 1, 3, [])).toMatchObject({ ok: true, speaker: 1, otherWords: 1 });
+    // A tie goes to the lower slot, as geo-chat breaks it.
+    expect(selectionToClip(words, 2, 3, [])).toMatchObject({ ok: true, speaker: 1, otherWords: 1 });
+  });
+
+  // An edge inside the other debater's word would cut it off: it moves out to take the whole word.
+  it('moves an edge that lands inside crosstalk out to the whole word, and counts it', () => {
+    const crosstalk = [
+      word(2, 900, 1_200, 'Well'),
+      word(1, 1_000, 1_400, 'Coffee'),
+      word(1, 1_500, 2_900, ' dates.'),
+      word(2, 2_800, 3_200, ' no'),
+    ];
+    expect(selectionToClip(crosstalk, 1, 2, [])).toEqual({
+      ok: true,
+      start_ms: 900,
+      end_ms: 3_200,
+      speaker: 1,
+      otherWords: 2,
+    });
+  });
+
+  it('refuses words from two stretches the render kept apart, but not on a fixed format', () => {
+    const across = [word(2, 115_000, 115_400), word(1, 130_000, 130_400), word(1, 140_000, 140_400)];
+    expect(selectionToClip(across, 0, 1, RENDERED_TURN_SEGMENTS)).toEqual({ ok: false, reason: 'crosses-cut' });
+    expect(selectionToClip(across, 1, 2, RENDERED_TURN_SEGMENTS)).toMatchObject({ ok: true });
+    expect(selectionToClip(across, 0, 1, ONE_CLOCK)).toMatchObject({ ok: true, start_ms: 115_000, end_ms: 130_400 });
+  });
+
+  // geo-chat merges turns with nothing cut between them, so a reply can be clipped with its point.
+  it('takes words across a handoff with nothing cut between the turns', () => {
+    const handoff = [word(1, 59_000, 59_600), word(2, 60_400, 61_000)];
+    expect(selectionToClip(handoff, 0, 1, RENDERED_TURN_SEGMENTS)).toMatchObject({ ok: true });
+  });
+
+  it('allows a clip over 60 s; the clip’s own check flags it', () => {
+    const long = [word(1, 1_000, 1_400), word(1, 70_000, 70_400)];
+    expect(selectionToClip(long, 0, 1, [])).toMatchObject({ ok: true, start_ms: 1_000, end_ms: 70_400 });
+  });
+
+  it('has nothing to make of no words', () => {
+    expect(selectionToClip([], 0, 0, [])).toEqual({ ok: false, reason: 'no-words' });
+  });
+
+  // geo-chat reads only words with text, and the transcript shows only those: a blank token is not heard.
+  it('counts only words with text as the other debater’s', () => {
+    const blank = heard([
+      word(1, 1_000, 1_400, 'Coffee'),
+      word(2, 1_450, 1_480, ' '),
+      word(1, 1_500, 2_900, ' dates.'),
+    ]);
+    // The blank is not a word to select: the two words are indexes 0 and 1.
+    expect(blank).toHaveLength(2);
+    expect(selectionToClip(blank, 0, 1, [])).toMatchObject({ ok: true, speaker: 1, otherWords: 0 });
+  });
+
+  it('names the debater who is heard, however many blank tokens the other has in the span', () => {
+    // Slot 2's two blanks inside "Yes." outnumber slot 1's one word, but only "Yes." is heard.
+    const blanks = heard([word(1, 1_100, 1_400, 'Yes.'), word(2, 1_150, 1_200, ' '), word(2, 1_300, 1_400, ' ')]);
+    expect(selectionToClip(blanks, 0, 0, [])).toMatchObject({ ok: true, speaker: 1, otherWords: 0 });
   });
 });

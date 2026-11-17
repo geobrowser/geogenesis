@@ -9,6 +9,7 @@ import type { DebateLobbyGuestView, DebateLobbyMember, DebateLobbySummary, Debat
 import { rememberLastPageOutsideDebates } from '../debate-return-navigation';
 
 const mocks = vi.hoisted(() => ({
+  agendaFilter: undefined as import('../todays-claims/agenda-claim-filter').AgendaClaimFilter | undefined,
   spaceCalls: true,
   phone: false,
   authenticated: false,
@@ -172,13 +173,26 @@ vi.mock('./lobby-voice', async () => {
     },
   };
 });
-vi.mock('./lobby-claims-area', () => ({ LobbyClaimsArea: () => <div data-testid="claims" /> }));
+vi.mock('./lobby-claims-area', async () => {
+  const { useAgendaClaimFilterContext } = await import('../todays-claims/agenda-claim-filter');
+  return {
+    LobbyClaimsArea: () => {
+      const agenda = useAgendaClaimFilterContext();
+      return <div data-testid="claims" data-agenda-key={agenda.active ? agenda.key : 'inactive'} />;
+    },
+  };
+});
 vi.mock('./lobby-moderation', () => ({
   LobbyHostLists: () => null,
   LobbyRemovedNotice: () => null,
   useModerationNotice: () => null,
 }));
 vi.mock('./lobby-member-actions', () => ({ hasMemberActions: () => false, LobbyMemberActions: () => null }));
+// GEO-3775: the room's agenda filter, inactive unless a test sets one.
+vi.mock('../todays-claims/agenda-claim-filter', async importOriginal => {
+  const actual = await importOriginal<typeof import('../todays-claims/agenda-claim-filter')>();
+  return { ...actual, useAgendaClaimFilter: () => mocks.agendaFilter ?? actual.INACTIVE_AGENDA_FILTER };
+});
 vi.mock('./lobby-room-claims-hooks', () => ({ useDebateLobbyClaims: () => ({ data: undefined }) }));
 vi.mock('./lobby-highlights-hooks', () => ({ useLobbyHighlights: () => ({ data: undefined }) }));
 vi.mock('./lobby-request-debate', () => ({ LobbyRequestDebate: () => null }));
@@ -253,6 +267,7 @@ const memberView: DebateLobbyView = {
 };
 
 beforeEach(() => {
+  mocks.agendaFilter = undefined;
   window.localStorage.clear();
   window.sessionStorage.clear();
   mocks.spaceCalls = true;
@@ -319,6 +334,16 @@ describe('DebateLobbyPage for a visitor without an account', () => {
     expect(mocks.start).toHaveBeenCalledWith('lobby1', {});
     // No join, so no lobby_* analytics: those count members.
     expect(mocks.presenceAdmitted.every(admitted => !admitted)).toBe(true);
+  });
+
+  // GEO-3775: a guest's claims narrow to the agendas as a member's do.
+  it('hands a guest’s claims panel the room’s agenda filter', async () => {
+    const { agendaFilterFixture } = await import('../todays-claims/debate-agenda-fixtures');
+    mocks.agendaFilter = agendaFilterFixture({ ids: ['entity-a'] });
+    render(<DebateLobbyPage lobbyId="lobby1" />);
+
+    expect(screen.getByTestId('claims')).toHaveAttribute('data-agenda-key', 'entity-a');
+    await screen.findByTestId('guest-room');
   });
 
   it('shows the removal and offers sign-in instead of listening again', async () => {

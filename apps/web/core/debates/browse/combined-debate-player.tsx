@@ -27,6 +27,8 @@ type CombinedDebatePlayerProps = {
   framed?: boolean;
   reducedOverlays?: boolean;
   stills?: { slot1: string | null; slot2: string | null };
+  /** Mark the debate watched at its end; false in the moments editor (GEO-3773). */
+  measure?: boolean;
 };
 
 /**
@@ -43,6 +45,7 @@ export function CombinedDebatePlayer({
   framed = false,
   reducedOverlays = false,
   stills,
+  measure = true,
 }: CombinedDebatePlayerProps) {
   const videoRef = React.useRef<HTMLVideoElement | null>(null);
   const [playing, setPlaying] = React.useState(false);
@@ -91,7 +94,7 @@ export function CombinedDebatePlayer({
         preload="none"
         onPlaying={() => setPlaying(true)}
         onPause={() => setPlaying(false)}
-        onEnded={() => markDebateWatched(debate.id)}
+        onEnded={measure ? () => markDebateWatched(debate.id) : undefined}
         onError={() => setFailed(true)}
         className={cx('absolute inset-0 size-full object-contain', !playing && 'invisible')}
       />

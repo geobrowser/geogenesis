@@ -252,5 +252,5 @@ export const BALLOT_DOWNVOTE_CHECK_FAILED_COPY =
   'Couldn’t check which debates you down ranked, so your ranking didn’t publish. Try again.';
 
 export function ballotClearsLeftCopy(count: number): string {
-  return `Ranking published, but ${count === 1 ? '1 debate still carries' : `${count} debates still carry`} your downvote. Retry under “Down ranked”.`;
+  return `Ranking published, but ${count === 1 ? '1 debate is' : `${count} debates are`} still down ranked. Retry under “Down ranked”.`;
 }

@@ -3,9 +3,9 @@
 import * as React from 'react';
 
 import type { DebateParticipant } from '~/core/debates/api';
+import { speakerShortLabel } from '~/core/debates/debater-name';
 import { useDebate } from '~/core/debates/hooks';
 import { useParticipantBylines } from '~/core/debates/participant-bylines';
-import { speakerLabel } from '~/core/debates/playback-utils';
 import { ID } from '~/core/id';
 import { validateSpaceId } from '~/core/io/rest/validation';
 import { responsePositionLabel } from '~/core/responses/entity-response';
@@ -16,7 +16,7 @@ import type { MomentsSpeaker } from './debate-moments-player';
 export function momentsSpeaker(participant: DebateParticipant | null, byline: string | null): MomentsSpeaker | null {
   if (!participant) return null;
   return {
-    name: speakerLabel(participant),
+    name: speakerShortLabel(participant),
     side: responsePositionLabel(participant.position),
     byline,
     avatarUrl: participant.avatar_cid,

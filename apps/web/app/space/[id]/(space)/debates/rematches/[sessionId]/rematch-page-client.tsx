@@ -128,10 +128,16 @@ import {
   useTaggedSpaceFacet,
   useTaggedTopicFacet,
 } from '~/core/debates/tagged-claims';
+import { useAgendaClaimFilter } from '~/core/debates/todays-claims/agenda-claim-filter';
+import { AGENDA_ONLY_PICKER } from '~/core/debates/todays-claims/agenda-only-picker';
 import { useClaimDebateCounts } from '~/core/debates/todays-claims/claim-debate-counts';
 import { NO_AGENDAS, useDebateAgendas } from '~/core/debates/todays-claims/debate-agendas';
 import { EARLIER_THIS_WEEK_SECTION, useTodaysSectionsOpen } from '~/core/debates/todays-claims/section-open-state';
-import { type TodaysCardScope, todaysCardScope } from '~/core/debates/todays-claims/todays-claims-attribution';
+import {
+  type TodaysCardScope,
+  agendaScopeIndex,
+  todaysCardScope,
+} from '~/core/debates/todays-claims/todays-claims-attribution';
 import {
   orderAgendaSpaces,
   todaysSectionKey,
@@ -209,7 +215,8 @@ function listLandingState(pending: boolean, rows: number): LandingState {
 
 /**
  * GEO-3148. Where a pair land: the first of these tabs with something in it, and Explore — which
- * always has something — when none does.
+ * always has something — when none does. Agenda-only (GEO-3733) the fallback is Today's claims,
+ * which draws its own empty state and its outages; Explore is in the strip but never a landing.
  *
  * Today’s claims first, then Matches, then previous-debate claims when their flag is enabled,
  * then Related, then everything the opponent has taken a side on, where a match is one press away.
@@ -228,7 +235,7 @@ export function resolveLandingTab(states: ReadonlyArray<readonly [PickerTab, Lan
     if (state === 'pending') return null;
     if (state === 'filled') return tab;
   }
-  return 'explore';
+  return AGENDA_ONLY_PICKER ? 'todays' : 'explore';
 }
 
 /** What `feature_exposed` reports the landing as, so the analytics name the tabs as people see them. */
@@ -272,7 +279,8 @@ function captureLandingTab(properties: {
     const instance = crypto.randomUUID();
     capture('feature_exposed', {
       feature_id: 'debate-rematch-landing-tab',
-      feature_version: 'geo-3148-v1',
+      // Bumped with GEO-3733, when the tabs became agenda-only and Explore left the strip.
+      feature_version: AGENDA_ONLY_PICKER ? 'geo-3733-v1' : 'geo-3148-v1',
       build_id: ANALYTICS_BUILD_ID,
       exposure_id: instance,
       presentation_instance_id: instance,
@@ -488,7 +496,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     sections: recommendedSections,
     claimEntities: recommendedEntities,
     isLoading: recommendedLoading,
-  } = useRecommendedClaimSections(participantSpaceIds);
+  } = useRecommendedClaimSections(AGENDA_ONLY_PICKER ? NO_IDS : participantSpaceIds);
 
   const recommendedClaimIds = React.useMemo(
     () => [...new Set(recommendedSections.flatMap(section => section.claimIds))],
@@ -533,7 +541,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    * the cache by the time the pair get here.
    * ---------------------------------------------------------------------------------------------*/
 
-  const related = useRelatedDebateClaims({ claim: sourceDebateQuery.data?.claim });
+  const related = useRelatedDebateClaims({ claim: sourceDebateQuery.data?.claim, enabled: !AGENDA_ONLY_PICKER });
   const relatedSourceSpaceId = related.spaceId;
   const relatedClaimIds = related.claimIds;
 
@@ -557,6 +565,21 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // Every agenda's claims and spaces, before publishability says which count: the rows and each
   // space's type are looked up for all of them, so they are ready when it does.
   const todaysClaimIds = todaysAgendasQuery.claimIds;
+  /**
+   * GEO-3733, GEO-3775. Every claim an agenda lists this week, as the positions tabs and Explore are
+   * narrowed to. Taken from the agenda rows alone, before publishability and before the claims are
+   * resolved, so those tabs wait on the agendas alone and not on every space's type: the rows are
+   * still dropped by `canPublishDebateIn` as before.
+   * Deliberately wider than Today's claims by one case: an agenda in a space this pair could not
+   * publish into still admits its claims here, drawn and published in a space they can. gaia already
+   * serves agendas from debate spaces only, so that is a curated claim either way.
+   * An outage with no agenda claims in hand goes to those tabs as an error rather than reading as "no
+   * positions"; one that leaves claims in hand (a background refetch) keeps what it has, as Today's
+   * claims does. The same filter as the Debates panel's, one request with Today's claims.
+   */
+  const agendaFilter = useAgendaClaimFilter(AGENDA_ONLY_PICKER);
+  const agendaFilterPending = agendaFilter.pending;
+  const agendaFilterError = agendaFilter.error;
   const todaysSpaceIds = todaysAgendasQuery.spaceIds;
   const todaysClaimsQuery = useDebateRematchClaimsForIds(sessionId, todaysClaimIds);
 
@@ -578,7 +601,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const sourceDebateId = session?.source_debate_id ?? null;
   const featureFlagsHydrated = useHydrated();
   const previousDebateClaimsEnabled = useFeatureFlag('previousDebateClaims');
-  const debateOffered = previousDebateClaimsEnabled && sourceDebateId !== null;
+  const debateOffered = !AGENDA_ONLY_PICKER && previousDebateClaimsEnabled && sourceDebateId !== null;
   const extractedClaimsQuery = useDebateExtractedClaims(sourceDebateId ?? '', debateOffered);
   const notInterested = useNotInterestedClaimIds(debateOffered);
   const notInterestedIds = React.useMemo(() => new Set(notInterested.ids.map(normId)), [notInterested.ids]);
@@ -806,11 +829,16 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       spaceMatch: 'all',
       eligibleSpaceIds,
       excludeAnsweredBy,
+      // GEO-3775: agenda claims only, answered by the server (`null` with the switch off).
+      onlyClaimIds: agendaFilter.ids,
     }),
-    [debouncedSearch, debouncedTopicIds, eligibleSpaceIds, excludeAnsweredBy, spaceIds]
+    [agendaFilter.ids, debouncedSearch, debouncedTopicIds, eligibleSpaceIds, excludeAnsweredBy, spaceIds]
   );
-  /** What the tagged query waits on before it can be asked the right question. */
-  const taggedScopePending = allowlistPending || excludePending;
+  /**
+   * What the tagged query waits on before it can be asked the right question. The agendas too: asked
+   * before they answer, the list would be the whole tag or nothing. Failed, there is nothing to ask.
+   */
+  const taggedScopePending = allowlistPending || excludePending || agendaFilterPending || Boolean(agendaFilterError);
 
   /**
    * The tag's topics under every filter but the search (GEO-3223) — what the search box matches
@@ -1426,6 +1454,8 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       const rows: DebateRematchClaim[] = [];
       for (const claimId of claimIds) {
         if (isClaimExcluded(claimId)) continue;
+        // GEO-3733: only claims an agenda lists (always true with the switch off).
+        if (!agendaFilter.has(claimId)) continue;
         const entity = entitiesById.get(claimId);
         const row = entity ? rowFromEntity(entity) : null;
         if (row && row.participants.some(side => holdsSide(side.user_id) && side.position !== null)) rows.push(row);
@@ -1434,11 +1464,13 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
         .filter(row => canPublishDebateIn(row.claim.space_id))
         .sort((a, b) => Number(b.shared_preference) - Number(a.shared_preference));
     },
-    [canPublishDebateIn, isClaimExcluded, rowFromEntity]
+    [agendaFilter, canPublishDebateIn, isClaimExcluded, rowFromEntity]
   );
 
+  // The agendas are part of settling: a list drawn before them would be unfiltered, and the hold
+  // below keeps the first list it is shown.
   const opponentRowsSettling =
-    viewerIdentityUnresolved || opponentClaimsQuery.isLoading || opponentEntitiesQuery.isLoading;
+    viewerIdentityUnresolved || opponentClaimsQuery.isLoading || opponentEntitiesQuery.isLoading || agendaFilterPending;
   const opponentRows = React.useMemo(
     () =>
       opponentRowsSettling
@@ -1491,7 +1523,11 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // Those are keyed on ids that come *from* positions, so while positions is in flight the id list
   // is empty, they are disabled rather than loading, and nothing here would report as pending.
   const viewerRowsSettling =
-    viewerIdentityUnresolved || positions.isLoading || viewerEntitiesQuery.isLoading || viewerClaimsQuery.isLoading;
+    viewerIdentityUnresolved ||
+    positions.isLoading ||
+    viewerEntitiesQuery.isLoading ||
+    viewerClaimsQuery.isLoading ||
+    agendaFilterPending;
   const viewerRows = React.useMemo(
     () =>
       viewerRowsSettling
@@ -1728,7 +1764,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    */
   const relatedRowsFailed = relatedClaimIds.length > 0 && relatedRowsError !== null;
   const relatedOffered =
-    relatedDiscoveryError === null && (relatedClaims.length > 0 || relatedClaimsSettling || relatedRowsFailed);
+    !AGENDA_ONLY_PICKER &&
+    relatedDiscoveryError === null &&
+    (relatedClaims.length > 0 || relatedClaimsSettling || relatedRowsFailed);
 
   // Featured, in the order the tag query ranked it. Built exactly as the curated list is — the
   // entities are the same projection and the rows carry the same session flags — and held the same
@@ -1952,7 +1990,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     [todaysClaims, todaysSectionByRow]
   );
   /** In the strip while it is settling or once it has a row. */
-  const todaysOffered = !todaysFailed && (todaysSettling || todaysListedCount > 0);
+  // Always there while the picker is agenda-only (GEO-3733): it is where the pair land when nothing
+  // else has a claim, and where an agenda outage is drawn.
+  const todaysOffered = AGENDA_ONLY_PICKER || (!todaysFailed && (todaysSettling || todaysListedCount > 0));
 
   /**
    * Both of you hold the same side: nothing to debate. What "Hide agreed" takes off their tab.
@@ -2006,7 +2046,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
         ? null
         : isTabOffered(landedForSession)
           ? landedForSession
-          : 'opponent';
+          : AGENDA_ONLY_PICKER
+            ? 'todays'
+            : 'opponent';
   /** Nothing chosen and the landing not latched yet: the list holds its skeleton and no tab is marked. */
   const landingPending = settledTab === null;
   // Matches stands in while the landing is pending. Nothing is drawn from it in that window — the
@@ -2016,7 +2058,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const activeTab = landingPending ? null : tab;
 
   // One-off decisions need a settled answer, including the mount refetch of cached positions.
-  const opponentTabError = sessionQuery.error ?? positions.error ?? opponentEntitiesQuery.error;
+  const opponentTabError = sessionQuery.error ?? positions.error ?? opponentEntitiesQuery.error ?? agendaFilterError;
   const opponentLandingPending =
     sessionQuery.isLoading || positions.isLoading || positions.isFetching || opponentClaimsSettling;
 
@@ -2142,8 +2184,10 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    * that is correct for every claim already on it. Going back to a skeleton there would flicker
    * the badge on exactly the event that ought to be invisible.
    */
+  // A failed lookup empties Matches and Their positions, and a `0` would call the outage "none".
   const opponentCountPending =
-    opponentClaims.length === 0 && (sessionQuery.isLoading || positions.isLoading || opponentClaimsSettling);
+    opponentClaims.length === 0 &&
+    (sessionQuery.isLoading || positions.isLoading || opponentClaimsSettling || Boolean(opponentTabError));
 
   /**
    * The same rule for the same reason: `0` is a claim about the viewer's own backlog, and it is
@@ -2163,7 +2207,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    * tab below draws its error state from, so the number and the list are answering one question.
    * Named up here because the badge is decided long before `tabError`, which is the composite.
    */
-  const viewerTabError = sessionQuery.error ?? positions.error ?? viewerEntitiesQuery.error;
+  const viewerTabError = sessionQuery.error ?? positions.error ?? viewerEntitiesQuery.error ?? agendaFilterError;
   const viewerCountPending =
     viewerClaims.length === 0 &&
     // The failure belongs with the loading flags rather than beside them: react-query drops
@@ -2200,7 +2244,12 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     // First whenever an agenda lists a claim this pair can debate in a section that starts open
     // (GEO-3489): landing on one closed "Earlier this week" heading is landing on nothing to see.
     // Every input is the session's or the graph's, so both of the pair land on the same tab.
-    ['todays', todaysFailed ? 'empty' : listLandingState(todaysSettling, todaysLandingCount)],
+    // Agenda-only, a failure lands here (GEO-3733): it is the tab that draws it, and the positions
+    // tabs would only draw the same outage.
+    [
+      'todays',
+      todaysFailed ? (AGENDA_ONLY_PICKER ? 'filled' : 'empty') : listLandingState(todaysSettling, todaysLandingCount),
+    ],
     // A lookup that failed cannot say whether there are matches. It is not a reason to wait either.
     ['matches', opponentTabError ? 'empty' : listLandingState(opponentLandingPending, matchClaims.length)],
     // Empty while extraction is still running counts as empty: landing on "pulling the claims out"
@@ -2209,13 +2258,16 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       'debate',
       // A stored opt-in is unknown before hydration. Wait here rather than landing and reporting
       // a later tab too early; Today's claims and Matches can still win without waiting.
-      !featureFlagsHydrated && sourceDebateId !== null
-        ? 'pending'
-        : debateOffered
-          ? listLandingState(debateItemsSettling, debateClaimCount)
-          : 'empty',
+      AGENDA_ONLY_PICKER
+        ? 'empty'
+        : !featureFlagsHydrated && sourceDebateId !== null
+          ? 'pending'
+          : debateOffered
+            ? listLandingState(debateItemsSettling, debateClaimCount)
+            : 'empty',
     ],
-    ['related', listLandingState(relatedClaimsSettling, relatedClaims.length)],
+    // Hidden while agenda-only, and not waited on: its discovery waits on the source debate.
+    ['related', AGENDA_ONLY_PICKER ? 'empty' : listLandingState(relatedClaimsSettling, relatedClaims.length)],
     // Here a failure *is* something to land on: the tab draws it with a retry, where landing on
     // Explore would hide it.
     // Counted with "Hide agreed" applied, so a pair who agree on everything of theirs are not landed
@@ -2694,7 +2746,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
         ? todaysAgendasQuery.error
         : null
       : tab === 'opponent' || tab === 'matches'
-        ? (positions.error ?? opponentEntitiesQuery.error)
+        ? (positions.error ?? opponentEntitiesQuery.error ?? agendaFilterError)
         : tab === 'related'
           ? // Discovery's failure is deliberately *not* here: it takes the tab out of the strip rather
             // than showing an error, so a viewer on Related is on it because rows were found. What can
@@ -2713,7 +2765,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
                   // is the only one that leaves nothing to show. geo-chat's row lookup is metadata beside
                   // it: losing it costs the faces and the readiness, not the claims, and blanking the tab
                   // for that trades a short list for no list.
-                  taggedCatalogError
+                  // Agenda-only, the agendas are part of the list: failed with none in hand, there is
+                  // no list to ask for, and an empty one would read as "nothing eligible".
+                  (taggedCatalogError ?? agendaFilterError)
                 : curatedClaimsQuery.error);
 
   // A topic the menu no longer offers is unpickable as well as empty — the chip filtering the
@@ -3194,6 +3248,25 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     () => new Map(todaysItems.map(item => [claimRowKey(item.row), item.scope])),
     [todaysItems]
   );
+  /**
+   * GEO-3733. The agenda attribution for a card on Matches or either positions tab, which agenda-only
+   * are all agenda claims. Without it their picks and impressions read as off-agenda in the
+   * warehouse's `on_agenda` measures, which is what this change moves.
+   *
+   * The Today's claims card's own scope wherever that tab lists the claim, so a claim on two spaces'
+   * agendas is credited to the same one on every tab. Otherwise (a space this pair cannot publish in,
+   * or an Earlier this week claim Today's folds away) its first listing in the unscoped agendas,
+   * current sections ahead of Earlier this week. Empty with the switch off, where those tabs list
+   * more than agenda claims.
+   */
+  const agendaScopeByClaim = React.useMemo(() => {
+    if (!AGENDA_ONLY_PICKER) return new Map<string, TodaysCardScope>();
+    return agendaScopeIndex(
+      todaysAgendasQuery.agendasIn(() => true),
+      claimId => todaysCountsByClaim?.get(claimId),
+      todaysItems.map(item => [item.row.claim.claim_entity_id, item.scope] as const)
+    );
+  }, [todaysAgendasQuery, todaysCountsByClaim, todaysItems]);
   const renderClaimCard = (claim: DebateRematchClaim, position: number, previouslyDebated = false) => {
     const saidBy = debateSaidByFor(claim);
     return (
@@ -3202,7 +3275,12 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
         claimId={claim.claim.claim_entity_id}
         listId={listId}
         position={position}
-        scope={tab === 'todays' ? { ...cardScope, ...todaysScopeByRow.get(claimRowKey(claim)) } : cardScope}
+        scope={{
+          ...cardScope,
+          ...(tab === 'todays'
+            ? todaysScopeByRow.get(claimRowKey(claim))
+            : agendaScopeByClaim.get(normId(claim.claim.claim_entity_id))),
+        }}
       >
         <RematchClaimCard
           // The list can hold an older row while new claims hydrate. Its content stays visible,
@@ -3312,7 +3390,8 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       label: 'Their positions',
       count: { value: opponentPositionCount, pending: opponentCountPending, pendingLabel: 'Counting positions' },
     },
-    // The whole catalogue, and the last place the pair can land.
+    // The whole catalogue, and the last place the pair can land. Agenda-only, the agendas' claims
+    // (GEO-3775).
     { id: 'explore', label: 'Explore' },
     // The viewer's own backlog, promoted out of Explore's source menu the way GEO-2863 promoted the
     // hub's, and named for whose it is now that it sits beside theirs.
@@ -3322,6 +3401,11 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       count: { value: viewerPositionCount, pending: viewerCountPending, pendingLabel: 'Counting your positions' },
     },
   ];
+
+  /** Where an empty Matches or Their positions sends the pair: the catalogue, or agenda-only, Today's claims. */
+  const seeTodaysOrExplore = AGENDA_ONLY_PICKER
+    ? { label: 'See today’s claims', onClick: () => setTab('todays') }
+    : exploreClaimsAction(setTab);
 
   const pendingRequest = session?.status === 'request_pending' ? session.request : null;
   const incomingRequest = pendingRequest?.recipient_user_id === currentUserId ? pendingRequest : null;
@@ -3628,15 +3712,24 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
                         : tab === 'matches'
                           ? debatedMatchCount > 0
                             ? `You’ve already debated every claim you and ${remoteName} disagree on. Pick a side on another of their claims to find a new one.`
-                            : opponentHasPositions
-                              ? `You and ${remoteName} haven’t taken opposite sides on anything yet. Pick a side on one of their claims to start a debate.`
-                              : `You and ${remoteName} haven’t taken opposite sides on anything yet. Once ${remoteName} takes a side on a claim, take the other one to start a debate.`
+                            : // GEO-3733: agenda-only, "anything" would deny positions the tab filtered out.
+                              opponentHasPositions
+                              ? AGENDA_ONLY_PICKER
+                                ? `You and ${remoteName} haven’t taken opposite sides on any of today’s claims yet. Pick a side on one of their claims to start a debate.`
+                                : `You and ${remoteName} haven’t taken opposite sides on anything yet. Pick a side on one of their claims to start a debate.`
+                              : AGENDA_ONLY_PICKER
+                                ? `You and ${remoteName} haven’t taken opposite sides on any of today’s claims yet. Once ${remoteName} takes a side on one, take the other to start a debate.`
+                                : `You and ${remoteName} haven’t taken opposite sides on anything yet. Once ${remoteName} takes a side on a claim, take the other one to start a debate.`
                           : tab === 'opponent'
                             ? opponentClaims.length > 0
                               ? matchClaims.length > 0
                                 ? 'No other positions to show. Check Matches for claims you can debate.'
-                                : 'No other positions to show. Explore more claims to find something to debate.'
-                              : `${remoteName} hasn’t responded yet. When they do, those claims show up here.`
+                                : AGENDA_ONLY_PICKER
+                                  ? 'No other positions to show. Pick a side on today’s claims to find something to debate.'
+                                  : 'No other positions to show. Explore more claims to find something to debate.'
+                              : AGENDA_ONLY_PICKER
+                                ? `${remoteName} hasn’t taken a side on any of today’s claims yet. When they do, those claims show up here.`
+                                : `${remoteName} hasn’t responded yet. When they do, those claims show up here.`
                             : tab === 'debate'
                               ? debateExtractionRunning
                                 ? 'Pulling the claims out of your debate. They appear here as they’re found.'
@@ -3651,8 +3744,12 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
                                   : source === 'recommended'
                                     ? `Nothing recommended for you and ${remoteName} yet.`
                                     : source === 'mine'
-                                      ? 'You haven’t taken a position on any claims yet.'
-                                      : 'No other eligible claims are available yet.'
+                                      ? AGENDA_ONLY_PICKER
+                                        ? 'You haven’t taken a position on any of today’s claims yet.'
+                                        : 'You haven’t taken a position on any claims yet.'
+                                      : AGENDA_ONLY_PICKER
+                                        ? 'No other claims on today’s agendas are available to debate yet.'
+                                        : 'No other eligible claims are available yet.'
           }
           // Each dead end has its own way out. Ordered by how much the viewer has to give up:
           // clearing their filters, then leaving the tab or the source they picked.
@@ -3680,15 +3777,17 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
                         // the way on.
                         opponentHasPositions
                         ? { label: `See ${remoteFirstName}’s positions`, onClick: () => setTab('opponent') }
-                        : exploreClaimsAction(setTab)
+                        : seeTodaysOrExplore
                       : tab === 'opponent'
                         ? matchClaims.length > 0
                           ? { label: 'See matches', onClick: () => setTab('matches') }
-                          : exploreClaimsAction(setTab)
+                          : seeTodaysOrExplore
                         : source === 'mine'
                           ? // The same dead end one tab over: a viewer who has answered nothing
                             // cannot fill this list from here, and the whole corpus is next door.
-                            { label: 'Show all claims', onClick: () => setTab('explore') }
+                            AGENDA_ONLY_PICKER
+                            ? seeTodaysOrExplore
+                            : { label: 'Show all claims', onClick: () => setTab('explore') }
                           : undefined
           }
         >

@@ -24,6 +24,7 @@ import { DebateClaimCardSurface, type DebateClaimListId } from '../debate-claim-
 import { HubCardList } from '../matchmaking/hub-motion';
 import { useHubScrollSelector } from '../matchmaking/hub-scroll';
 import { MatchmakingClaimCard, isResolvableClaim } from '../matchmaking/matchmaking-claim-card';
+import { useAgendaClaimFilterContext } from '../todays-claims/agenda-claim-filter';
 import { WATCH_LIVE_ENABLED } from '../watch-live';
 import { hostsLabel, personName } from './lobby-format';
 import { useIsLobbyGuest } from './lobby-guest-hooks';
@@ -78,6 +79,8 @@ export function LobbyRoomClaimsList({
   /** Host controls, beside the offer. */
   renderMenu?: (entry: LobbyRoomClaim) => React.ReactNode;
 }) {
+  // GEO-3775: agenda-only, each card is credited to the agenda that lists it.
+  const agenda = useAgendaClaimFilterContext();
   return (
     <HubCardList>
       {claims.map((entry, index) => (
@@ -86,6 +89,7 @@ export function LobbyRoomClaimsList({
           claimId={entry.claim.claim_entity_id}
           listId={listId}
           position={index + 1}
+          scope={agenda.scopeFor(entry.claim.claim_entity_id)}
         >
           <LobbyRoomClaimCard
             entry={entry}

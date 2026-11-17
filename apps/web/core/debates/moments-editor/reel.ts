@@ -51,27 +51,48 @@ export function newClipKey() {
 }
 
 /**
- * The transcript's words on the player's clock, in time order. A word the render cut has no player
- * time and is left out, as the player leaves its line out (`transcriptOnRecordings`).
+ * Whether a transcript span has any text: the one rule for blank tokens, shared by the editor's words
+ * (`playerWords`) and its transcript sentences (`reelSentences`), so the two lists can't drift apart.
+ */
+export function isSpoken(span: { text: string }): boolean {
+  return span.text.trim() !== '';
+}
+
+/**
+ * The transcript's spoken words on the player's clock, in time order: the editor's one word list, the
+ * words every check, count, snap and selection reads. A word the render cut has no player time and is
+ * left out, as the player leaves its line out (`transcriptOnRecordings`). A blank token (no text) is
+ * left out too (GEO-3767): geo-chat drops them before it counts or cuts anything (`speech_turns`), the
+ * transcript shows none, and nobody hears them, so no clip is judged, measured or snapped by one.
  */
 export function playerWords(words: readonly DebateTranscriptSpan[] | undefined): ReelWord[] {
   return transcriptOnRecordings(words ?? [])
+    .filter(isSpoken)
     .map(word => ({ slot: word.participant_slot, start_ms: word.start_ms, end_ms: word.end_ms, text: word.text }))
     .sort((a, b) => a.start_ms - b.start_ms || a.end_ms - b.end_ms);
 }
 
+/** Whether `word` is said wholly inside `span`: what makes a clip play it with its caption, as geo-chat counts it. */
+export function wordInSpan(word: ReelWord, span: { start_ms: number; end_ms: number }): boolean {
+  return word.start_ms >= span.start_ms && word.end_ms <= span.end_ms;
+}
+
 /** The words a clip plays with their captions: those said wholly inside it, as geo-chat counts them. */
 export function wordsIn(words: readonly ReelWord[], startMs: number, endMs: number): ReelWord[] {
-  return words.filter(word => word.start_ms >= startMs && word.end_ms <= endMs);
+  return words.filter(word => wordInSpan(word, { start_ms: startMs, end_ms: endMs }));
 }
 
 /**
  * Who a clip is of, as geo-chat decides it (`manual_moments`): the debater who says most of the
- * words wholly inside it, a tie going to the lower slot. `null` when nobody speaks in it.
+ * words wholly inside it, a tie going to the lower slot. `null` when nobody speaks in it. The words
+ * are `playerWords`, which has no blank tokens, as geo-chat counts them (`speech_turns`). The one rule for a clip's speaker: the timeline, the warnings, the claim kept on an edit and
+ * the transcript's selection toolbar all ask this (GEO-3767).
  */
 export function clipSpeaker(words: readonly ReelWord[], startMs: number, endMs: number): ParticipantSlot | null {
   const counts = new Map<ParticipantSlot, number>();
-  for (const word of wordsIn(words, startMs, endMs)) counts.set(word.slot, (counts.get(word.slot) ?? 0) + 1);
+  for (const word of wordsIn(words, startMs, endMs)) {
+    counts.set(word.slot, (counts.get(word.slot) ?? 0) + 1);
+  }
   const ranked = [...counts].sort(([slotA, countA], [slotB, countB]) => countB - countA || slotA - slotB);
   return ranked[0]?.[0] ?? null;
 }
@@ -188,9 +209,73 @@ export function clipProblems(
  * Whether `startMs..endMs` on the player's clock lies in one stretch the render kept whole at real
  * speed, as geo-chat requires of a clip's words. A render with one clock has no cut to cross.
  */
-function inOneStretch(startMs: number, endMs: number, turns: readonly DebateMediaTurnSegment[]) {
-  if (!turns.some(turn => turn.source_start_ms !== undefined)) return true;
-  return realSpeedStretches(turns).some(stretch => startMs >= stretch.start_ms && endMs <= stretch.end_ms);
+export function inOneStretch(startMs: number, endMs: number, turns: readonly DebateMediaTurnSegment[]) {
+  return stretchesOrWhole(turns, Number.POSITIVE_INFINITY).some(
+    stretch => startMs >= stretch.start_ms && endMs <= stretch.end_ms
+  );
+}
+
+/**
+ * The stretches the render plays at real speed (`realSpeedStretches`), or, for a fixed-format
+ * render, whose turns carry no `source_*` times because the video and the recordings share a clock,
+ * the whole debate as one: it cut nothing, so nothing in it is a cut.
+ */
+export function stretchesOrWhole(
+  turns: readonly DebateMediaTurnSegment[],
+  durationMs: number
+): { start_ms: number; end_ms: number }[] {
+  if (!turns.some(turn => turn.source_start_ms !== undefined)) return [{ start_ms: 0, end_ms: durationMs }];
+  return realSpeedStretches(turns);
+}
+
+/** What a run of transcript words makes as a clip, or why it can't be one (GEO-3766). */
+export type SelectionClip =
+  | {
+      ok: true;
+      start_ms: number;
+      end_ms: number;
+      /** Who the clip is of: `clipSpeaker` of its edges, as the timeline shows it and geo-chat publishes it. */
+      speaker: ParticipantSlot;
+      /** The other debater's words it plays too: more than none makes it an exchange. */
+      otherWords: number;
+    }
+  | { ok: false; reason: 'no-words' | 'crosses-cut' };
+
+/**
+ * The clip a transcript selection makes (GEO-3766): from the first selected word's start to the last
+ * one's end, given as indexes into `words` in either order. The edges are word edges like any other
+ * in the editor: one that lands inside the other debater's word (crosstalk) moves out to take the
+ * whole of it (`snapEdge`), and geo-chat adds its room beside the words when it cuts (`manualReel`).
+ * Words of both debaters are allowed: the clip is of whoever says the most. Words from two stretches
+ * the render kept apart are refused, as geo-chat refuses them.
+ */
+export function selectionToClip(
+  words: readonly ReelWord[],
+  from: number,
+  to: number,
+  turns: readonly DebateMediaTurnSegment[]
+): SelectionClip {
+  const lo = Math.max(0, Math.min(from, to));
+  const hi = Math.min(words.length - 1, Math.max(from, to));
+  const picked = words.slice(lo, hi + 1);
+  if (picked.length === 0) return { ok: false, reason: 'no-words' };
+  // Words are in start order, but a crosstalk word picked earlier can end after the last one picked.
+  const start = snapEdge(Math.min(...picked.map(word => word.start_ms)), words, 'start');
+  const end = snapEdge(Math.max(...picked.map(word => word.end_ms)), words, 'end');
+  const said = wordsIn(words, start, end);
+  if (said.length === 0) return { ok: false, reason: 'no-words' };
+  const saidFrom = Math.min(...said.map(word => word.start_ms));
+  const saidTo = Math.max(...said.map(word => word.end_ms));
+  if (!inOneStretch(saidFrom, saidTo, turns)) return { ok: false, reason: 'crosses-cut' };
+  // The clip's speaker as the editor shows it once made: `clipSpeaker` counts the same spoken words.
+  const speaker = clipSpeaker(words, start, end)!;
+  return {
+    ok: true,
+    start_ms: start,
+    end_ms: end,
+    speaker,
+    otherWords: said.filter(word => word.slot !== speaker).length,
+  };
 }
 
 /**
@@ -290,9 +375,7 @@ function geoChatCut(
   words: readonly ReelWord[],
   turns: readonly DebateMediaTurnSegment[]
 ) {
-  // geo-chat reads only words with text (`speech_turns`): a blank one is not the word beside a gap.
-  const spoken = words.filter(word => word.text.trim() !== '');
-  const said = wordsIn(spoken, clip.start_ms, clip.end_ms);
+  const said = wordsIn(words, clip.start_ms, clip.end_ms);
   if (said.length === 0) return null;
   const first = Math.min(...said.map(word => word.start_ms));
   // The clip's last word as geo-chat takes it (`manual_moments`): the one said last, by start then
@@ -304,12 +387,12 @@ function geoChatCut(
   );
   const last = lastWord.end_ms;
   const lastSlot = lastWord.slot;
-  const before = spoken.filter(word => word.end_ms <= first).map(word => word.end_ms);
-  const ownAfter = spoken
+  const before = words.filter(word => word.end_ms <= first).map(word => word.end_ms);
+  const ownAfter = words
     .filter(word => word.slot === lastSlot && word.start_ms >= last)
     .map(word => word.start_ms - last);
   // Another debater's word said across the end leaves no room (crosstalk).
-  const otherAfter = spoken
+  const otherAfter = words
     .filter(word => word.slot !== lastSlot && word.end_ms > last)
     .map(word => Math.max(0, word.start_ms - last));
   const paddedStart = first - edgeRoom(before.length > 0 ? first - Math.max(...before) : null);
@@ -319,8 +402,7 @@ function geoChatCut(
       ownAfter.length > 0 ? Math.min(...ownAfter) : null,
       otherAfter.length > 0 ? Math.min(...otherAfter) : null
     );
-  const twoClocks = turns.some(turn => turn.source_start_ms !== undefined);
-  const stretch = (twoClocks ? realSpeedStretches(turns) : []).find(
+  const stretch = stretchesOrWhole(turns, Number.POSITIVE_INFINITY).find(
     candidate => first >= candidate.start_ms && last <= candidate.end_ms
   ) ?? { start_ms: 0, end_ms: Number.POSITIVE_INFINITY };
   const trim = (start: number, end: number) => ({
@@ -348,6 +430,15 @@ export function manualReel(
   words: readonly ReelWord[],
   turns: readonly DebateMediaTurnSegment[]
 ): { clips: ManualClipBody[]; exact?: true } {
+  return manualReelWithCuts(clips, words, turns).reel;
+}
+
+/** `manualReel`, with the `geoChatCut` of each clip it worked out on the way, for `playedCuts`. */
+function manualReelWithCuts(
+  clips: readonly EditorClip[],
+  words: readonly ReelWord[],
+  turns: readonly DebateMediaTurnSegment[]
+): { reel: { clips: ManualClipBody[]; exact?: true }; cuts: ReturnType<typeof geoChatCut>[] } {
   const cuts = clips.map(clip => geoChatCut(clip, words, turns));
   const freeEdgeWidens = clips.some((clip, index) => {
     const cut = cuts[index];
@@ -357,7 +448,7 @@ export function manualReel(
       (edgeIsFree(clip, 'end') && cut.widened.end_ms > cut.trimmed.end_ms)
     );
   });
-  if (!freeEdgeWidens) return { clips: manualReelClips(clips) };
+  if (!freeEdgeWidens) return { reel: { clips: manualReelClips(clips) }, cuts };
   const sent = clips.map((clip, index) => {
     const cut = cuts[index];
     if (!cut) return clip;
@@ -374,7 +465,26 @@ export function manualReel(
     }
     return { ...clip, start_ms: start, end_ms: end };
   });
-  return { clips: manualReelClips(sent), exact: true };
+  return { reel: { clips: manualReelClips(sent), exact: true }, cuts };
+}
+
+/**
+ * What each clip of the reel will actually play, as geo-chat will cut it (GEO-3673), on the player's
+ * clock: a reel sent without `exact` has each clip widened into the quiet beside its words
+ * (`geoChatCut`); one sent `exact` is cut where `manualReel` sends it, which moves every snapped edge
+ * of the reel out to where geo-chat would have widened it. `null` for a clip with no whole word,
+ * which geo-chat refuses.
+ */
+export function playedCuts(
+  clips: readonly EditorClip[],
+  words: readonly ReelWord[],
+  turns: readonly DebateMediaTurnSegment[]
+): ({ start_ms: number; end_ms: number } | null)[] {
+  const { reel, cuts } = manualReelWithCuts(clips, words, turns);
+  if (!reel.exact) return cuts.map(cut => cut?.widened ?? null);
+  return reel.clips.map((sent, index) =>
+    cuts[index] ? { start_ms: Math.round(sent.start * 1000), end_ms: Math.round(sent.end * 1000) } : null
+  );
 }
 
 /** `m:ss.s`, as the editor shows a time. */
@@ -383,6 +493,14 @@ export function formatReelTime(ms: number): string {
   const minutes = Math.floor(tenths / 600);
   const seconds = (tenths % 600) / 10;
   return `${minutes}:${seconds.toFixed(1).padStart(4, '0')}`;
+}
+
+/**
+ * The debate's length to the whole second, as the player's transport and the lane's end both say it
+ * (one rule, so they never differ by a second): down to the second, as a video player counts.
+ */
+export function formatWholeTime(ms: number): string {
+  return formatReelTime(Math.floor(Math.max(0, ms) / 1000) * 1000).replace(/\.\d$/, '');
 }
 
 /** A typed time, `m:ss.s` or plain seconds, in ms; `null` when it is not one. */
@@ -398,4 +516,45 @@ export function parseReelTime(text: string): number | null {
 
 export function formatSeconds(ms: number): string {
   return `${(ms / 1000).toFixed(1)} s`;
+}
+
+/**
+ * A clip picked from the transcript in the side panel (GEO-3773, the prototype's `rangeFromWord` +
+ * `fitRange`): from the spoken word at or after `fromMs`, about `lengthMs` of one speaker's words in
+ * one stretch the render kept whole, kept clear of the other clips (`others`). A start inside another
+ * clip moves past it; an end that would run into the next clip stops before it. `null` when there
+ * is no word to start on.
+ */
+export function clipFromWords(
+  words: readonly ReelWord[],
+  fromMs: number,
+  lengthMs: number,
+  turns: readonly DebateMediaTurnSegment[],
+  others: readonly Pick<EditorClip, 'start_ms' | 'end_ms'>[]
+): { start_ms: number; end_ms: number; speaker: ParticipantSlot } | null {
+  const spoken = words.filter(isSpoken);
+  const sorted = [...others].sort((a, b) => a.start_ms - b.start_ms);
+  let at = spoken.findIndex(word => word.end_ms > fromMs);
+  if (at < 0) return null;
+  for (const other of sorted) {
+    if (at >= 0 && spoken[at].start_ms >= other.start_ms - 50 && spoken[at].start_ms < other.end_ms) {
+      at = spoken.findIndex(word => word.start_ms >= other.end_ms + 60);
+    }
+  }
+  if (at < 0) return null;
+  const first = spoken[at];
+  const start = first.start_ms;
+  let end = first.end_ms;
+  for (let next = at + 1; next < spoken.length; next++) {
+    const word = spoken[next];
+    if (word.end_ms > start + lengthMs + 600 || word.slot !== first.slot || !inOneStretch(start, word.end_ms, turns))
+      break;
+    end = word.end_ms;
+  }
+  const following = sorted.find(other => other.start_ms > start);
+  if (following && end > following.start_ms - 50) {
+    const before = spoken.filter(word => word.start_ms >= start && word.end_ms <= following.start_ms - 50);
+    end = before.length > 0 ? before[before.length - 1].end_ms : first.end_ms;
+  }
+  return { start_ms: start, end_ms: end, speaker: first.slot };
 }

@@ -77,7 +77,13 @@ export type ActionKind =
   | 'ranking_place_started'
   | 'ranking_compare_step'
   | 'ranking_placed'
-  | 'ranking_place_cancelled';
+  | 'ranking_place_cancelled'
+  /**
+   * GEO-3729. Grading a debate on the Best debates ranking (A, B, C, or taken out; D is `push_down`).
+   * `mutation_kind` says whether the grade was published (`published`) or only set in the ranking
+   * screen's draft (`draft`); grades per ranker per day count the published ones.
+   */
+  | 'grade_debate';
 export type ActionContext = {
   component: ActionComponent;
   page_path: string;

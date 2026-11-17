@@ -24,7 +24,16 @@ vi.mock('./claims-tab', async importOriginal => {
   return {
     ...actual,
     useRecordHubTabPress: () => mocks.recordTabPress,
-    ClaimsTab: ({ variant, scopePicker }: { variant?: string; scopePicker?: React.ReactNode }) => {
+    ClaimsTab: ({
+      variant,
+      scopePicker,
+      agendaFilter,
+    }: {
+      variant?: string;
+      scopePicker?: React.ReactNode;
+      agendaFilter?: unknown;
+    }) => {
+      mocks.agendaFilters.push(agendaFilter);
       const logged = React.useRef(false);
       React.useEffect(() => {
         if (logged.current) return;
@@ -37,8 +46,21 @@ vi.mock('./claims-tab', async importOriginal => {
 });
 
 vi.mock('./lobby-tab', () => ({
-  LobbyTab: ({ scopePicker }: { scopePicker?: React.ReactNode }) => <div data-testid="lobby-tab">{scopePicker}</div>,
+  LobbyTab: ({ scopePicker, agendaFilter }: { scopePicker?: React.ReactNode; agendaFilter?: unknown }) => {
+    mocks.agendaFilters.push(agendaFilter);
+    return <div data-testid="lobby-tab">{scopePicker}</div>;
+  },
 }));
+
+// GEO-3775: full screen reads the agendas once for its lists. Stubbed: no QueryClient here.
+vi.mock('../todays-claims/agenda-claim-filter', async importOriginal => {
+  const actual = await importOriginal<typeof import('../todays-claims/agenda-claim-filter')>();
+  return {
+    ...actual,
+    useAgendaClaimFilter: (enabled: boolean) =>
+      enabled ? (mocks.agenda as typeof actual.INACTIVE_AGENDA_FILTER) : actual.INACTIVE_AGENDA_FILTER,
+  };
+});
 
 vi.mock('./hub-live-rail', () => ({ HubLiveRail: () => <div data-testid="hub-live-rail" /> }));
 // The open ask is the strip's and the cards' business, covered in their own suites.
@@ -51,6 +73,8 @@ const mocks = vi.hoisted(() => ({
   authenticated: true,
   mounts: [] as string[],
   recordTabPress: vi.fn(),
+  agendaFilters: [] as unknown[],
+  agenda: { active: true, marker: 'the workspace agenda filter' } as unknown,
 }));
 
 /**
@@ -75,6 +99,7 @@ beforeEach(() => {
   mocks.authenticated = true;
   setUrl('');
   mocks.mounts = [];
+  mocks.agendaFilters = [];
   window.ResizeObserver ??= class {
     observe() {}
     unobserve() {}
@@ -469,5 +494,24 @@ describe('keeping the URL in step with the list', () => {
 
     expect(replaceState).not.toHaveBeenCalled();
     expect(currentSearch()).toBe('list=positions&spaces=space-a');
+  });
+});
+
+/** GEO-3775. Full screen lists the same agenda claims as the panel it opens from. */
+describe('agenda-only', () => {
+  it.each([
+    ['explore', 'claims-tab-explore'],
+    ['positions', 'claims-tab-positions'],
+    ['lobby', 'lobby-tab'],
+  ])('hands %s the agenda filter', (list, testId) => {
+    setUrl(`list=${list}`);
+    render(
+      <Provider store={createStore()}>
+        <DebatesHubWorkspace />
+      </Provider>
+    );
+
+    expect(screen.getByTestId(testId)).toBeInTheDocument();
+    expect(mocks.agendaFilters.at(-1)).toBe(mocks.agenda);
   });
 });
