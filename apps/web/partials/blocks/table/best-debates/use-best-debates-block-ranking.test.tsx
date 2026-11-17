@@ -1,19 +1,21 @@
-import { act, renderHook } from '@testing-library/react';
+import { act, cleanup, renderHook } from '@testing-library/react';
 
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useBestDebatesBlockRanking } from './use-best-debates-block-ranking';
 
 const mocks = vi.hoisted(() => ({
   composeArgs: null as null | Record<string, unknown>,
   recordGrade: vi.fn(),
-  publishing: false,
+  publishNow: vi.fn(async (_ids: string[], _grades?: Map<string, string>) => true),
+  reorder: vi.fn((_entityId: string) => true),
+  published: null as null | { ids: string[]; grades: Map<string, string> },
 }));
 
 vi.mock('~/core/blocks/ranking/use-ranking-submissions', () => ({
   useRankingSubmissions: () => ({
-    myLastSubmission: null,
-    myGrades: new Map(),
+    myLastSubmission: mocks.published ? { orderedEntityIds: mocks.published.ids } : null,
+    myGrades: mocks.published?.grades ?? new Map(),
     saveMySubmission: vi.fn(),
     isSaving: false,
     isLoading: false,
@@ -41,22 +43,38 @@ vi.mock('./use-best-debates-compose', () => ({
     mocks.composeArgs = args;
     return {
       publish: vi.fn(),
+      publishNow: mocks.publishNow,
+      reorder: mocks.reorder,
       whenPublishesSettle: () => Promise.resolve(),
       requestPushDown: vi.fn(),
       placeFromTeam: vi.fn(),
       dialogs: null,
       activeEntityId: null,
       toRankCoverage: null,
-      publishing: mocks.publishing,
+      publishing: false,
     };
   },
 }));
 
+beforeEach(() => {
+  mocks.recordGrade.mockReset();
+  mocks.publishNow.mockReset();
+  mocks.publishNow.mockResolvedValue(true);
+  mocks.reorder.mockReset();
+  mocks.reorder.mockReturnValue(true);
+  mocks.published = null;
+});
+afterEach(cleanup);
+
+const renderBlock = () =>
+  renderHook(() => useBestDebatesBlockRanking({ enabled: true, blockId: 'b', spaceId: 's', isMobile: false }));
+
 describe('the Best debates block’s publishing (GEO-3729)', () => {
-  it('queues its publishes, each built on the base it was queued with', () => {
-    renderHook(() => useBestDebatesBlockRanking({ enabled: true, blockId: 'b', spaceId: 's', isMobile: false }));
-    expect(mocks.composeArgs?.serialPublishes).toBe(true);
-    expect(typeof mocks.composeArgs?.getPublishedBase).toBe('function');
+  it('sends a placement’s Done, a closed placement and every Re-order through the one batch', () => {
+    renderBlock();
+    expect(mocks.composeArgs?.serialPublishes).toBeUndefined();
+    expect(typeof mocks.composeArgs?.publishThrough).toBe('function');
+    expect(typeof mocks.composeArgs?.onPlacedClose).toBe('function');
     expect(mocks.composeArgs?.publishOnDone).toBe(true);
   });
 });
@@ -75,37 +93,38 @@ describe('Re-order on the block (GEO-3729)', () => {
       ['b2', 'B'],
     ]),
   };
-  // X moved up into A; meanwhile a publish merged in Y (added elsewhere) and regraded b2 to C.
+  // X moved up into A, between a1 and a2.
   const after: Ballot = {
-    ids: ['a1', 'x', 'a2', 'y', 'b2'],
+    ids: ['a1', 'x', 'a2', 'b2'],
     grades: new Map([
       ['a1', 'A'],
       ['x', 'A'],
       ['a2', 'A'],
-      ['y', 'B'],
-      ['b2', 'C'],
+      ['b2', 'B'],
     ]),
   };
 
-  it('puts the draft back when the Placed step closes without Done, since nothing would publish it', () => {
-    mocks.recordGrade.mockReset();
-    const { result } = renderHook(() =>
-      useBestDebatesBlockRanking({ enabled: true, blockId: 'b', spaceId: 's', isMobile: false })
-    );
-    act(() => reorderEnd('closed', before, after));
-    // Only X goes back (to B, under the A tier); Y and b2's new grade, merged in meanwhile, stay.
-    expect(result.current.myRankOf('a2')).toBe(2);
-    expect(result.current.myRankOf('x')).toBe(3);
-    expect(result.current.myRankOf('y')).toBe(4);
-    expect(result.current.grading?.gradeOf('x')).toBe('B');
-    expect(result.current.grading?.gradeOf('b2')).toBe('C');
-    expect(mocks.recordGrade).not.toHaveBeenCalled();
+  it('publishes the move once, whether the Placed step ended with Done or a close (Preston, 16 Nov)', async () => {
+    for (const outcome of ['done', 'closed'] as const) {
+      mocks.published = before;
+      mocks.publishNow.mockClear();
+      const { result, unmount } = renderBlock();
+      act(() => result.current.grading?.reorder('x'));
+      expect(mocks.reorder).toHaveBeenCalledWith('x');
+      expect(mocks.publishNow).not.toHaveBeenCalled();
+      await act(async () => reorderEnd(outcome, before, after));
+      expect(mocks.publishNow).toHaveBeenCalledTimes(1);
+      expect(mocks.publishNow.mock.calls[0]![0]).toEqual(['a1', 'x', 'a2', 'b2']);
+      expect(mocks.publishNow.mock.calls[0]![1]?.get('x')).toBe('A');
+      unmount();
+    }
   });
 
-  it('counts only the moved debate’s grade change as a reorder, never one merged in', () => {
-    mocks.recordGrade.mockReset();
-    renderHook(() => useBestDebatesBlockRanking({ enabled: true, blockId: 'b', spaceId: 's', isMobile: false }));
-    act(() => reorderEnd('done', before, after));
+  it('counts only the moved debate’s grade change as a reorder', async () => {
+    mocks.published = before;
+    const { result } = renderBlock();
+    act(() => result.current.grading?.reorder('x'));
+    await act(async () => reorderEnd('done', before, after));
     expect(mocks.recordGrade).toHaveBeenCalledTimes(1);
     expect(mocks.recordGrade).toHaveBeenCalledWith('x', {
       grade: 'A',
@@ -114,15 +133,44 @@ describe('Re-order on the block (GEO-3729)', () => {
       mutationKind: 'published',
     });
   });
+
+  it('a Re-order that moved nothing publishes nothing', async () => {
+    mocks.published = before;
+    const { result } = renderBlock();
+    act(() => result.current.grading?.reorder('x'));
+    await act(async () => reorderEnd('closed', before, before));
+    expect(mocks.publishNow).not.toHaveBeenCalled();
+  });
 });
 
-describe('Re-order waits for the block’s publishes (GEO-3729)', () => {
-  it('is held while compose says a publish is out', () => {
-    mocks.publishing = true;
-    const { result } = renderHook(() =>
-      useBestDebatesBlockRanking({ enabled: true, blockId: 'b', spaceId: 's', isMobile: false })
-    );
-    expect(result.current.grading?.reorderBusy).toBe(true);
-    mocks.publishing = false;
+describe('grade then fine-tune from the popup: one publish (Preston, 16 Nov)', () => {
+  it('a popup grade opens the Placed step, and the grade and its move go out in one publish', async () => {
+    mocks.published = {
+      ids: ['a1', 'b1'],
+      grades: new Map([
+        ['a1', 'A'],
+        ['b1', 'B'],
+      ]),
+    };
+    const { result } = renderBlock();
+    // New debate n, graded A: top of A, and the Placed step opens on it once it's in the draft.
+    await act(async () => result.current.grading?.grade('n', 'A'));
+    expect(mocks.reorder).toHaveBeenCalledWith('n');
+    expect(result.current.myRankOf('n')).toBe(1);
+    expect(mocks.publishNow).not.toHaveBeenCalled();
+    // Moved down one (still A), then Done.
+    const opened = {
+      ids: ['n', 'a1', 'b1'],
+      grades: new Map([
+        ['n', 'A'],
+        ['a1', 'A'],
+        ['b1', 'B'],
+      ]),
+    } as Ballot;
+    const moved = { ...opened, ids: ['a1', 'n', 'b1'] } as Ballot;
+    await act(async () => reorderEnd('done', opened, moved, 'n'));
+    expect(mocks.publishNow).toHaveBeenCalledTimes(1);
+    expect(mocks.publishNow.mock.calls[0]![0]).toEqual(['a1', 'n', 'b1']);
+    expect(mocks.publishNow.mock.calls[0]![1]?.get('n')).toBe('A');
   });
 });

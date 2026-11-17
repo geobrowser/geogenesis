@@ -118,12 +118,15 @@ export function teamTopicFacetEntityFilter({
   topicsPropertyId,
   query,
   topicIds,
+  extraClauses = [],
 }: {
   debateTypeId: string;
   typesPropertyId: string;
   topicsPropertyId: string;
   query: string;
   topicIds: readonly string[];
+  /** More entity clauses to AND in: the recorded, debater and claim filters (GEO-3774). */
+  extraClauses?: readonly Record<string, unknown>[];
 }) {
   // The type as a Types relation rather than `typeIds`: under a relation aggregate's `fromEntity`
   // the `typeIds` clause isn't promoted to the indexed path and the request times out on testnet
@@ -131,6 +134,7 @@ export function teamTopicFacetEntityFilter({
   const and = [
     { relations: { some: { typeId: { is: typesPropertyId }, toEntityId: { is: debateTypeId } } } },
     ...teamSearchEntityClauses({ topicsPropertyId, query, topicIds }),
+    ...extraClauses,
   ];
   return { and };
 }

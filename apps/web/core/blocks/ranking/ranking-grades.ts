@@ -123,6 +123,35 @@ export function restoreEntry(current: GradedBallot, before: GradedBallot, entity
 }
 
 /**
+ * Puts a debate where it sits in `snapshot` (just below the nearest entry above it there that is
+ * still in the ballot, with its grade there) into the ballot as it is now, other edits kept. The
+ * block's batched publish replays a Re-order or a placement this way onto whatever is published
+ * when it goes out. Nothing changes when the debate isn't in `snapshot`.
+ */
+export function placeAsIn(current: GradedBallot, snapshot: GradedBallot, entityId: string): GradedBallot {
+  const key = normId(entityId);
+  const at = snapshot.ids.findIndex(id => normId(id) === key);
+  if (at < 0) return current;
+  const rest = removeEntry(current.ids, current.grades, entityId);
+  const restKeys = rest.ids.map(normId);
+  let insert = -1;
+  for (let above = at - 1; above >= 0 && insert < 0; above--) {
+    const found = restKeys.indexOf(normId(snapshot.ids[above]));
+    if (found >= 0) insert = found + 1;
+  }
+  for (let below = at + 1; below < snapshot.ids.length && insert < 0; below++) {
+    const found = restKeys.indexOf(normId(snapshot.ids[below]));
+    if (found >= 0) insert = found;
+  }
+  if (insert < 0) insert = Math.min(at, rest.ids.length);
+  const ids = [...rest.ids.slice(0, insert), entityId, ...rest.ids.slice(insert)];
+  const grades = new Map(rest.grades);
+  const grade = snapshot.grades.get(key);
+  if (grade) grades.set(key, grade);
+  return { ids: sortIntoTiers(ids, grades), grades };
+}
+
+/**
  * The tier a debate placed at `index` of `ids` (a flat position: the compare flow, or a drop from
  * the team column) belongs to: the tier of the entry above it. At the top, the tier of the first
  * entry. A ballot with no grades at all stays ungraded.
@@ -256,6 +285,30 @@ export const GRADE_UNDO_LABEL = 'Undo';
 export const GRADE_RANKING_FIRST_COPY = 'Grade your ranking first';
 export const GRADE_IT_LABEL = 'Grade it';
 export const UNGRADED_SECTION_LABEL = 'Ungraded';
+export const GRADE_YOUR_RANKING_TITLE = 'Grade your ranking';
+export const TIER_LINE_A_LABEL = 'A ends here';
+export const TIER_LINE_B_LABEL = 'B ends here';
+export const TIER_LINES_NOT_NOW_LABEL = 'Not now';
+export const TIER_LINES_SAVE_LABEL = 'Save grades';
+/** The block's batched publish failed (16 Nov): sends the changes again. Pending Preston's approval. */
+export const GRADE_NOT_SAVED_COPY = 'Not saved';
+export const GRADE_TRY_AGAIN_LABEL = 'Try again';
+
+/**
+ * Where the tier lines start on a ranking with no grades: A for the top fifth, B for the next two
+ * fifths, as Preston split his own (20 / 40 / 41 of 101). Only a starting point the ranker moves.
+ */
+export function defaultTierLines(count: number): { aCount: number; bCount: number } {
+  const aCount = Math.round(count * 0.2);
+  return { aCount, bCount: Math.min(count - aCount, Math.round(count * 0.4)) };
+}
+
+/**
+ * The smallest published ranking Grade your ranking opens on by itself: the smallest whose starting
+ * lines give every tier a debate (`defaultTierLines(3)` is 1 / 1 / 1). One or two debates would
+ * start all C, or B and C. Smaller rankings open it from Grade it.
+ */
+export const TIER_LINES_AUTO_OPEN_MIN = 3;
 
 export function gradePlaceCopy(place: number): string {
   return `#${place} in your ranking`;

@@ -59,8 +59,8 @@ export type UseBestDebatesPlacementArgs = {
   nameOf: (entityId: string) => string;
   /** To rank as it stands (it follows `orderedIds`, so a placed debate has already left it). */
   toRankIds: string[];
-  /** Publishes `ids` as one edit; resolves true when it went out. */
-  publish: (ids: string[]) => Promise<boolean>;
+  /** Publishes `ids` as one edit (`entityId`: the debate placed); resolves true when it went out. */
+  publish: (ids: string[], entityId?: string) => Promise<boolean>;
   isSaving: boolean;
   /** GEO-3679's Push it down. Without it, Rank goes straight to the comparison. */
   pushDown?: PushDownSlot;
@@ -76,6 +76,13 @@ export type UseBestDebatesPlacementArgs = {
    * `closed` when it was closed without Done.
    */
   onReorderEnd?: (entityId: string, outcome: 'done' | 'closed') => void;
+  /**
+   * Whether a Re-order's Done publishes (defaults to `publishOnDone`). Off on the block, whose
+   * batch publishes the move when the step ends (`onReorderEnd`), with anything else waiting.
+   */
+  reorderPublishesOnDone?: boolean;
+  /** A placement's Placed step (not a Re-order's) closed without Done. */
+  onPlacedClose?: (entityId: string) => void;
 };
 
 /**
@@ -100,6 +107,8 @@ export function useBestDebatesPlacement({
   pushDown,
   publishOnDone = false,
   onReorderEnd,
+  reorderPublishesOnDone = publishOnDone,
+  onPlacedClose,
 }: UseBestDebatesPlacementArgs) {
   const [flow, setFlow] = React.useState<FlowState | null>(null);
   // The flow on screen, for a Done that finishes later to end only its own (never one opened since).
@@ -172,9 +181,9 @@ export function useBestDebatesPlacement({
    * watch popup's grade row. Its arrows move it as they do after a placement (across a tier line it
    * takes that tier), and Done keeps or publishes it as a placement's Done does.
    */
-  const reorder = React.useCallback((entityId: string) => {
+  const reorder = React.useCallback((entityId: string): boolean => {
     const index = indexOfEntity(orderedIdsRef.current, entityId);
-    if (index < 0) return;
+    if (index < 0) return false;
     setFlow({
       phase: 'placed',
       entityId,
@@ -183,6 +192,7 @@ export function useBestDebatesPlacement({
       withOtherChanges: hasUnpublishedChangesRef.current,
       reorder: true,
     });
+    return true;
   }, []);
 
   /**
@@ -271,7 +281,7 @@ export function useBestDebatesPlacement({
         ids = insertAt(ids, entityId, placedIndex);
         setOrderedIds(ids);
       }
-      const run = () => publish(ids);
+      const run = () => publish(ids, entityId);
       return pushDown?.rank ? pushDown.rank(entityId, run) : run();
     },
     [publish, pushDown, setOrderedIds]
@@ -315,7 +325,7 @@ export function useBestDebatesPlacement({
   const reorderClosedInFlight = React.useRef(false);
   const done = React.useCallback(
     async (entityId: string, placedIndex: number, reorder = false) => {
-      if (!publishOnDone) {
+      if (!(reorder ? reorderPublishesOnDone : publishOnDone)) {
         keepPlaced(entityId, placedIndex);
         setFlow(null);
         if (reorder) onReorderEnd?.(entityId, 'done');
@@ -337,7 +347,7 @@ export function useBestDebatesPlacement({
         else markPublishFailed(mine);
       });
     },
-    [keepPlaced, markPublishFailed, onReorderEnd, publishOnDone, publishPlaced, runDone]
+    [keepPlaced, markPublishFailed, onReorderEnd, publishOnDone, publishPlaced, reorderPublishesOnDone, runDone]
   );
 
   const rankNext = React.useCallback(
@@ -390,7 +400,10 @@ export function useBestDebatesPlacement({
         onDone={() => void done(placedId, flow.placedIndex, flow.reorder)}
         onClose={() => {
           setFlow(null);
-          if (!flow.reorder) return;
+          if (!flow.reorder) {
+            onPlacedClose?.(placedId);
+            return;
+          }
           if (reorderDoneInFlight.current) reorderClosedInFlight.current = true;
           else onReorderEnd?.(placedId, 'closed');
         }}

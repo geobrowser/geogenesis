@@ -2,8 +2,6 @@ import { act, renderHook } from '@testing-library/react';
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { resetRankingPublishStateForTests } from '~/core/blocks/ranking/ranking-publish-queue';
-
 import { useBestDebatesCompose } from './use-best-debates-compose';
 
 const mocks = vi.hoisted(() => ({
@@ -12,7 +10,7 @@ const mocks = vi.hoisted(() => ({
     isSaving: boolean;
     onReorderEnd?: (entityId: string, outcome: 'done' | 'closed') => void;
   },
-  placementReorder: vi.fn(),
+  placementReorder: vi.fn(() => true),
   isDoneOut: false,
 }));
 
@@ -30,6 +28,10 @@ vi.mock('~/core/blocks/ranking/best-debates-debates', () => ({
   fetchDebateOwnSpaces: async (ids: string[]) => new Map(ids.map(id => [id, 'space'])),
 }));
 vi.mock('~/core/hooks/use-toast', () => ({ useToast: () => [null, vi.fn()] }));
+// The filter menus' counts (GEO-3774) are off without the screen's filters; no query client here.
+vi.mock('./use-best-debates-filter-facets', () => ({
+  useBestDebatesFilterFacets: () => ({ debaters: [], claims: [], pending: false }),
+}));
 vi.mock('./best-debates-team-tools', () => ({ useBestDebatesTeamTools: () => ({ topicIds: [] }) }));
 vi.mock('./use-best-debates-placement', () => ({
   useBestDebatesPlacement: (args: NonNullable<typeof mocks.placementArgs>) => {
@@ -47,112 +49,6 @@ vi.mock('./use-best-debates-placement', () => ({
 }));
 vi.mock('./best-debates-team-row', () => ({ BestDebatesTeamRowContent: () => null }));
 vi.mock('./best-debates-to-rank-list', () => ({ BestDebatesToRankList: () => null }));
-
-function deferred() {
-  let resolve!: (value: unknown) => void;
-  const promise = new Promise(r => (resolve = r));
-  return { promise, resolve };
-}
-
-describe('publishing from the Best debates block (GEO-3729)', () => {
-  it('runs a placement’s Done and a grade one at a time, and shows the queued one as saving', async () => {
-    resetRankingPublishStateForTests();
-    const first = deferred();
-    const saves: string[][] = [];
-    const saveMySubmission = vi.fn(async (slots: Array<{ id: string }>) => {
-      saves.push(slots.map(slot => slot.id));
-      if (saves.length === 1) await first.promise;
-      return {
-        rankEntityId: 'r',
-        authorSpaceId: 'me',
-        orderedEntityIds: slots.map(slot => slot.id),
-        grades: new Map(),
-        authorName: null,
-        authorAvatarUrl: null,
-        indexingSettled: Promise.resolve(null),
-      };
-    });
-    const { result } = renderHook(() =>
-      useBestDebatesCompose({
-        enabled: true,
-        blockId: 'block',
-        blockSpaceId: 'debates',
-        isMobile: false,
-        orderedIds: ['a'],
-        setOrderedIds: vi.fn(),
-        hasUnpublishedChanges: false,
-        nameOf: () => null,
-        personalSpaceId: 'me',
-        saveMySubmission,
-        isSaving: false,
-        publishOnDone: true,
-        serialPublishes: true,
-      })
-    );
-    let placement!: Promise<boolean>;
-    let grade!: Promise<boolean>;
-    await act(async () => {
-      placement = mocks.placementArgs!.publish(['a', 'p']);
-      grade = result.current.publish(['a', 'g']);
-    });
-    expect(saves).toEqual([['a', 'p']]);
-    expect(mocks.placementArgs!.isSaving).toBe(true);
-    await act(async () => first.resolve(undefined));
-    await expect(placement).resolves.toBe(true);
-    await expect(grade).resolves.toBe(true);
-    expect(saves).toEqual([
-      ['a', 'p'],
-      ['a', 'g'],
-    ]);
-  });
-
-  it('builds a queued publish on the base it was queued with, not on one a publish ahead moved', async () => {
-    resetRankingPublishStateForTests();
-    const first = deferred();
-    const bases: unknown[] = [];
-    let base = { ids: ['a'], grades: new Map() };
-    const saveMySubmission = vi.fn(async (slots: Array<{ id: string }>, basedOn?: unknown) => {
-      bases.push(basedOn);
-      if (bases.length === 1) await first.promise;
-      return {
-        rankEntityId: 'r',
-        authorSpaceId: 'me',
-        orderedEntityIds: slots.map(slot => slot.id),
-        grades: new Map(),
-        authorName: null,
-        authorAvatarUrl: null,
-        indexingSettled: Promise.resolve(null),
-      };
-    });
-    const { result } = renderHook(() =>
-      useBestDebatesCompose({
-        enabled: true,
-        blockId: 'block2',
-        blockSpaceId: 'debates',
-        isMobile: false,
-        orderedIds: ['a'],
-        setOrderedIds: vi.fn(),
-        hasUnpublishedChanges: false,
-        nameOf: () => null,
-        personalSpaceId: 'me',
-        saveMySubmission,
-        isSaving: false,
-        serialPublishes: true,
-        getPublishedBase: () => base,
-      })
-    );
-    const queuedWith = base;
-    await act(async () => {
-      void result.current.publish(['a', 'g']);
-      void result.current.publish(['a', 'p']);
-    });
-    // The first publish merges in another device's debate and moves the base.
-    base = { ids: ['a', 'y'], grades: new Map() };
-    await act(async () => first.resolve(undefined));
-    await act(async () => Promise.resolve());
-    expect(bases[1]).toBe(queuedWith);
-  });
-});
 
 describe('Re-order (GEO-3729)', () => {
   it('hands back the draft from when Re-order opened, and the draft as its step ended', () => {

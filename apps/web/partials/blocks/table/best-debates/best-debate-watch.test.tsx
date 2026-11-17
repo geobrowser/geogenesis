@@ -33,6 +33,8 @@ const mocks = vi.hoisted(() => ({
     slotNames: Record<number, string>;
   },
   transcript: {} as Record<string, unknown>,
+  isMediaAdmin: true,
+  isPhone: false,
 }));
 
 vi.mock('~/core/analytics', () => ({ capture: mocks.capture }));
@@ -56,7 +58,26 @@ vi.mock('~/core/debates/hooks', async importOriginal => ({
   useDebateTranscript: () => mocks.transcript,
 }));
 vi.mock('./ranking-flow-dialog', () => ({
-  RankingFlowDialog: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  RankingFlowDialog: ({ children, headerActions }: { children: React.ReactNode; headerActions?: React.ReactNode }) => (
+    <div>
+      {headerActions !== undefined ? <div data-testid="header-actions">{headerActions}</div> : null}
+      {children}
+    </div>
+  ),
+}));
+// GEO-3742's "…": a media admin on desktop by default, so the menu is there; its watcher stays idle.
+vi.mock('~/core/debates/moments-editor/hooks', () => ({ useIsMediaAdmin: () => mocks.isMediaAdmin }));
+vi.mock('~/core/hooks/use-is-phone-layout', () => ({ useIsPhoneLayout: () => mocks.isPhone }));
+vi.mock('./edit-moments', () => ({
+  debateUuid: (id: string) => id,
+  EditMomentsMenu: ({ entityId, onOpen }: { entityId: string; onOpen: (id: string) => void }) => (
+    <button type="button" onClick={() => onOpen(entityId)}>
+      Edit moments
+    </button>
+  ),
+  ReelRenderWatcher: ({ entityId }: { entityId: string }) => <span data-testid={`reel-watcher-${entityId}`} />,
+  captureEditMoments: (event: Record<string, unknown>) =>
+    mocks.capture('element_clicked', { ...event, element_action: 'edit_moments' }),
 }));
 
 function moment(i: number, slot: 1 | 2, cues: [number, string][]): DebateMoment {
@@ -117,6 +138,8 @@ beforeEach(() => {
   mocks.player = null;
   mocks.reel = { status: 'ready', moments: REEL, slotNames: { 1: 'Maya Chen', 2: 'Tom Okafor' } };
   mocks.transcript = { data: TRANSCRIPT, isPending: false, isError: false, error: null, refetch: mocks.refetch };
+  mocks.isMediaAdmin = true;
+  mocks.isPhone = false;
 });
 
 afterEach(() => {
@@ -330,5 +353,27 @@ describe('the watch popup’s speed', () => {
     openWatch();
     expect(mocks.player?.playbackRate).toBe(1);
     expect(screen.getByRole('radio', { name: '1x' })).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('offers Edit moments in its header, counts the open, and follows the debate’s new reel (GEO-3742)', () => {
+    openWatch();
+    fireEvent.click(screen.getByRole('button', { name: 'Edit moments' }));
+    expect(mocks.capture).toHaveBeenCalledWith('element_clicked', { ...EVENT, element_action: 'edit_moments' });
+    expect(screen.getByTestId('reel-watcher-d1')).toBeInTheDocument();
+  });
+
+  it('gives no header slot at all to someone who isn’t a media admin, or on a phone (GEO-3742)', () => {
+    for (const [isMediaAdmin, isPhone] of [
+      [false, false],
+      [true, true],
+    ]) {
+      mocks.isMediaAdmin = isMediaAdmin;
+      mocks.isPhone = isPhone;
+      openWatch();
+      expect(screen.queryByTestId('header-actions')).toBeNull();
+      cleanup();
+    }
+    mocks.isMediaAdmin = true;
+    mocks.isPhone = false;
   });
 });

@@ -9,8 +9,8 @@ import { normId } from '~/core/utils/norm-id';
 
 /**
  * What the watch popup's grade row needs from the surface it opens on (GEO-3729). The Best debates
- * block publishes each grade at once; the ranking screen puts it in its draft, which its Publish
- * sends. The row doesn't know which it is on.
+ * block publishes grades through its batch (a popup grade first opens the Placed step); the ranking
+ * screen puts them in its draft, which its Publish sends. The row doesn't know which it is on.
  */
 export type BestDebatesGrading = {
   /** The ranker's ballot has been read whole: grading waits for it. */
@@ -27,6 +27,10 @@ export type BestDebatesGrading = {
   placeOf: (entityId: string) => number | null;
   /** A grade of this debate is being published (the block). */
   isSaving: (entityId: string) => boolean;
+  /** A change to this debate didn't publish and is waiting to be sent again (the block). */
+  publishFailed?: (entityId: string) => boolean;
+  /** Sends every change that didn't publish again (the block). */
+  retry?: () => void;
   /** A, B or C: the debate goes to the top of that tier. `method` is where it was given. */
   grade: (entityId: string, grade: Grade, method?: GradeMethod) => void;
   /**
@@ -34,7 +38,7 @@ export type BestDebatesGrading = {
    * into that tier), over the popup. Done keeps the move in the draft, or publishes it on the block.
    */
   reorder: (entityId: string) => void;
-  /** Re-order waits while grades are still publishing (the block): their publish rewrites the draft. */
+  /** Re-order is off for now. */
   reorderBusy?: boolean;
   /** Takes the debate out of the ranking. */
   remove: (entityId: string) => void;
