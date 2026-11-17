@@ -10,7 +10,7 @@ let sentToken: string | null = null;
 /** The server has no secret (503). Nothing on this page can fix that, so stop asking. */
 let halted = false;
 
-/** Fallback for a rejected token or a failed request; Privy's own reissue covers the rest. */
+/** Retry delays after a 401 or a failed request; Privy's token reissue covers renewal. */
 export const SESSION_RETRY_DELAYS_MS = [15_000, 60_000] as const;
 let retryTimer: ReturnType<typeof setTimeout> | null = null;
 let retryAttempt = 0;
@@ -58,7 +58,7 @@ export async function syncWalletSession(token: string, refresh: () => void): Pro
     return;
   }
   if (response.status === 401) {
-    // Rejected token: drop it from the shared cache so the retry asks Privy for a fresh one.
+    // Drop the token from the shared cache so the retry asks Privy for a fresh one.
     setCachedIdentityToken(null);
     scheduleRetry(refresh);
     return;

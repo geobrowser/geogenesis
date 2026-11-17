@@ -76,9 +76,8 @@ export function signWalletSession(address: string, now = Date.now()): string | n
 export type VerifiedWalletSession = { address: `0x${string}`; renewalDue: boolean };
 
 /**
- * The session a cookie value vouches for, or null when it is forged, malformed or expired. A value
- * signed with `WALLET_SESSION_SECRET_PREVIOUS` verifies but is due for renewal, so it is re-signed
- * with the current secret on the next sync.
+ * The session a cookie value vouches for, or null if forged, malformed or expired. A value signed
+ * with `WALLET_SESSION_SECRET_PREVIOUS` verifies as due for renewal, so the next sync re-signs it.
  */
 export function verifyWalletSession(value: string | undefined, now = Date.now()): VerifiedWalletSession | null {
   if (!value) return null;

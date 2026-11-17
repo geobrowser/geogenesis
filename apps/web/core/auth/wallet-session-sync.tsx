@@ -15,9 +15,8 @@ import {
 } from './wallet-session-client';
 
 /**
- * Keeps the server's wallet session in step with Privy: each new identity token is posted (which
- * also renews the session), and a Privy sign-out clears it. Independent of the smart account, so a
- * ZeroDev or RPC failure cannot leave a signed-in user signed out on the server.
+ * Keeps the server's wallet session in step with Privy: posts each new identity token and clears
+ * the session on Privy sign-out. Independent of the smart account, so ZeroDev failures can't affect it.
  */
 export function WalletSessionSync() {
   const router = useRouter();
