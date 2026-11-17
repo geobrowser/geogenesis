@@ -125,6 +125,10 @@ export function refusalMessage(code: string): string {
     case 'reel_no_longer_fits':
       // geo-chat#352: a re-render re-extracted the debate and the hand-picked reel it re-applied no longer fits.
       return 'A re-render moved the video, so this hand-picked reel no longer fits. Pick its clips again.';
+    case 'transcript_changed':
+      // GEO-3642: the saved transcript the reel was picked on is gone (the recordings or the published
+      // transcript changed). The editor reads the transcript again when the request ends.
+      return 'This debate was re-rendered since you edited it. Check the clips and publish again.';
     case 'transcript_differs':
       return "A fresh transcript of this debate doesn't match the stored one, so its reel can't be redone yet.";
     case 'turns_differ':
