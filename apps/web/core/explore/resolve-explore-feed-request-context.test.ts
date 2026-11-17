@@ -33,6 +33,10 @@ const membership = vi.hoisted(() => ({
 const defaultMembership = membership.read;
 
 const { resolveExploreFeedRequestContext } = await import('./resolve-explore-feed-request-context');
+const { signWalletSession } = await import('~/core/cookie/wallet-session');
+
+const WALLET = '0x' + '1'.repeat(40);
+const SESSION = { value: signWalletSession(WALLET)! };
 
 beforeEach(() => {
   state.sidebar = null;
@@ -81,18 +85,28 @@ describe('the browse fallback', () => {
 describe('the anonymous request', () => {
   const sidebar = () => ({ featured: [], editorOf: [], memberOf: [], documentationImage: null, personalSpaceId: null });
 
-  it('reads the wallet cookie by default', async () => {
-    cookieJar.read.mockReturnValue({ value: '0xabc' });
+  it('reads the wallet session by default', async () => {
+    cookieJar.read.mockReturnValue(SESSION);
     state.sidebar = sidebar;
 
     const context = await resolveExploreFeedRequestContext();
 
-    expect(context.walletAddress).toBe('0xabc');
+    expect(context.walletAddress).toBe(WALLET);
     expect(context.personalMemberSpaceId).toBe('member-space');
   });
 
+  it('treats a bare-address cookie as signed out', async () => {
+    cookieJar.read.mockReturnValue({ value: WALLET });
+    state.sidebar = sidebar;
+
+    const context = await resolveExploreFeedRequestContext();
+
+    expect(memberLookups.count).toBe(0);
+    expect(context).toMatchObject({ walletAddress: null, personalMemberSpaceId: null });
+  });
+
   it('ignores the cookie jar entirely', async () => {
-    cookieJar.read.mockReturnValue({ value: '0xabc' });
+    cookieJar.read.mockReturnValue(SESSION);
     state.sidebar = sidebar;
 
     const context = await resolveExploreFeedRequestContext(undefined, { anonymous: true });
@@ -107,7 +121,7 @@ describe('a signed-in request', () => {
   const sidebar = () => ({ featured: [], editorOf: [], memberOf: [], documentationImage: null, personalSpaceId: null });
 
   beforeEach(() => {
-    cookieJar.read.mockReturnValue({ value: '0xabc' });
+    cookieJar.read.mockReturnValue(SESSION);
   });
 
   it('reads membership and the sidebar side by side, not one after the other', async () => {

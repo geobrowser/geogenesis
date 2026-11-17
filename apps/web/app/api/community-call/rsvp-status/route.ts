@@ -1,8 +1,7 @@
-import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 
 import { resolveMemberSpaceFromWallet } from '~/core/browse/resolve-member-space-from-wallet';
-import { WALLET_ADDRESS } from '~/core/cookie';
+import { readWalletSession } from '~/core/cookie/wallet-session';
 
 /**
  * Whether the signed-in user has RSVP'd to any community call.
@@ -43,7 +42,7 @@ export async function GET() {
     return NextResponse.json({ hasRsvp: false, configured: false });
   }
 
-  const cookieWallet = (await cookies()).get(WALLET_ADDRESS)?.value;
+  const cookieWallet = await readWalletSession();
   if (!cookieWallet) {
     return NextResponse.json({ hasRsvp: false, configured: true });
   }

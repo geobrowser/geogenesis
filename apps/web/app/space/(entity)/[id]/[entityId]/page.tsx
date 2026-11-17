@@ -1,12 +1,11 @@
 import { IdUtils } from '@geoprotocol/geo-sdk/lite';
 
-import { cookies } from 'next/headers';
 import { notFound } from 'next/navigation';
 
 import { bountiesEnabledForNetwork, isBountyEntity } from '~/core/bounties/config';
 import { EVENT_SCHEMA } from '~/core/community-calls/constants';
 import { getRecordingUrls } from '~/core/community-calls/recordings';
-import { WALLET_ADDRESS } from '~/core/cookie';
+import { readWalletSession } from '~/core/cookie/wallet-session';
 import { DebateEntityView } from '~/core/debates/browse/debate-entity-view';
 import { DebateRemovedView } from '~/core/debates/browse/debate-removed-view';
 import { isDebateEntity } from '~/core/debates/is-debate-entity';
@@ -67,10 +66,10 @@ export default async function EntityTemplateStrategy(props: Props) {
     //
     // The same read's body, and the debate's media readiness fetched beside it, go to the feed so
     // the linked debate can render, on the server too, without its own lookups (GEO-3604).
-    const [{ visibility, debate }, media, cookieStore] = await Promise.all([
+    const [{ visibility, debate }, media, signedInWallet] = await Promise.all([
       cachedReadDebateVisibility(params.entityId),
       cachedFetchDebatePageMedia(params.entityId),
-      cookies(),
+      readWalletSession(),
     ]);
     if (visibility === 'removed') {
       return <DebateRemovedView spaceId={params.id} debateId={params.entityId} />;
@@ -91,7 +90,7 @@ export default async function EntityTemplateStrategy(props: Props) {
         <DebateEntityView
           spaceId={params.id}
           debateId={params.entityId}
-          seed={{ debate, media, signedIn: cookieStore.get(WALLET_ADDRESS) !== undefined }}
+          seed={{ debate, media, signedIn: signedInWallet !== null }}
           editView={<DefaultEntityPage params={params} searchParams={searchParams} />}
           removedView={<DebateRemovedView spaceId={params.id} debateId={params.entityId} reportOutcome={false} />}
         />

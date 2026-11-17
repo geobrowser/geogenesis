@@ -65,7 +65,7 @@ describe('useFeedViewer', () => {
     renderHook(() => useFeedViewer(COOKIE, true));
     renderHook(() => useFeedViewer(COOKIE, false));
     expect(mocks.fetch).toHaveBeenCalledTimes(1);
-    expect(mocks.fetch).toHaveBeenCalledWith('/api/wallet-cookie', { method: 'DELETE' });
+    expect(mocks.fetch).toHaveBeenCalledWith('/api/wallet-session', { method: 'DELETE' });
   });
 
   it('keeps the cookie, and the wait, for a reader Privy has signed in', async () => {

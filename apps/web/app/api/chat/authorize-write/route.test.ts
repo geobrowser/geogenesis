@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const mockCookieValue = vi.fn<() => string | undefined>(() => undefined);
+const jar = vi.hoisted(() => new Map<string, string>());
 vi.mock('next/headers', () => ({
-  cookies: async () => ({ get: () => ({ value: mockCookieValue() }) }),
+  cookies: async () => ({ get: (name: string) => (jar.has(name) ? { name, value: jar.get(name)! } : undefined) }),
 }));
 
 const buildWriteContextMock = vi.fn();
@@ -11,6 +11,10 @@ vi.mock('../tools/write/context', () => ({
 }));
 
 const { POST } = await import('./route');
+const { LEGACY_WALLET_ADDRESS, WALLET_SESSION, signWalletSession } = await import('~/core/cookie/wallet-session');
+
+const WALLET = '0x' + '1'.repeat(40);
+const signIn = () => jar.set(WALLET_SESSION, signWalletSession(WALLET)!);
 
 const SPACE = '11111111111111111111111111111111';
 
@@ -32,7 +36,7 @@ function makeRequest(body: unknown, opts: { sameOrigin?: boolean } = {}) {
 }
 
 beforeEach(() => {
-  mockCookieValue.mockReset();
+  jar.clear();
   buildWriteContextMock.mockReset();
 });
 
@@ -49,8 +53,26 @@ describe('authorize-write', () => {
     expect(await res.json()).toEqual({ ok: false, error: 'not_signed_in' });
   });
 
+  it('passes the verified session wallet to the write context', async () => {
+    signIn();
+    buildWriteContextMock.mockReturnValue({ kind: 'guest', walletAddress: null, isMember: async () => false });
+    await POST(makeRequest({ spaceId: SPACE, toolName: 'setEntityValue' }));
+    expect(buildWriteContextMock).toHaveBeenCalledWith({ walletAddress: WALLET });
+  });
+
+  it.each([
+    ['a legacy bare-address cookie', () => jar.set(LEGACY_WALLET_ADDRESS, WALLET)],
+    ['a hand-made session cookie', () => jar.set(WALLET_SESSION, `v1.${WALLET}.${Math.floor(Date.now() / 1000)}.x`)],
+  ])('treats %s as signed out', async (_label, forge) => {
+    forge();
+    buildWriteContextMock.mockReturnValue({ kind: 'guest', walletAddress: null, isMember: async () => false });
+    const res = await POST(makeRequest({ spaceId: SPACE, toolName: 'setEntityValue' }));
+    expect(buildWriteContextMock).toHaveBeenCalledWith({ walletAddress: null });
+    expect(await res.json()).toEqual({ ok: false, error: 'not_signed_in' });
+  });
+
   it('returns not_authorized for a member who does not belong to the target space', async () => {
-    mockCookieValue.mockReturnValue('0x' + '1'.repeat(40));
+    signIn();
     buildWriteContextMock.mockReturnValue({
       kind: 'member',
       walletAddress: '0x' + '1'.repeat(40),
@@ -64,7 +86,7 @@ describe('authorize-write', () => {
   });
 
   it('returns rate_limited when the edit limiter is exhausted', async () => {
-    mockCookieValue.mockReturnValue('0x' + '1'.repeat(40));
+    signIn();
     buildWriteContextMock.mockReturnValue({
       kind: 'member',
       walletAddress: '0x' + '1'.repeat(40),
@@ -78,7 +100,7 @@ describe('authorize-write', () => {
   });
 
   it('passes for a member under the limit', async () => {
-    mockCookieValue.mockReturnValue('0x' + '1'.repeat(40));
+    signIn();
     buildWriteContextMock.mockReturnValue({
       kind: 'member',
       walletAddress: '0x' + '1'.repeat(40),
@@ -93,7 +115,7 @@ describe('authorize-write', () => {
 
   it('toggleEditMode is space-agnostic but still consults the edit limiter', async () => {
     let limiterChecked = false;
-    mockCookieValue.mockReturnValue('0x' + '1'.repeat(40));
+    signIn();
     buildWriteContextMock.mockReturnValue({
       kind: 'member',
       walletAddress: '0x' + '1'.repeat(40),

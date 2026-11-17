@@ -1,9 +1,8 @@
 import * as React from 'react';
 
-import { cookies } from 'next/headers';
 import { preload } from 'react-dom';
 
-import { WALLET_ADDRESS } from '~/core/cookie';
+import { readWalletSession } from '~/core/cookie/wallet-session';
 import { PUBLIC_BEST_FEED_PATH } from '~/core/explore/explore-feed-params';
 import { readLeadPosterUrls } from '~/core/explore/lead-poster-preload';
 
@@ -56,7 +55,7 @@ export default async function ExploreRoutePage({
   const entry = (await searchParams).entry;
   const normalizedEntry = typeof entry === 'string' ? entry.replace(/-/g, '').toLowerCase() : '';
   const entryEntityId = /^[0-9a-f]{32}$/.test(normalizedEntry) ? normalizedEntry : null;
-  const wallet = (await cookies()).get(WALLET_ADDRESS)?.value;
+  const wallet = (await readWalletSession()) ?? undefined;
   // A signed-in reader's Best request carries an identity token while interleaving is on, and a
   // preload can't send one, so the feed's fetch would ignore it and the request would run twice.
   const bestSendsIdentityToken = wallet !== undefined && process.env.NEXT_PUBLIC_FEED_INTERLEAVING_ENABLED === 'true';

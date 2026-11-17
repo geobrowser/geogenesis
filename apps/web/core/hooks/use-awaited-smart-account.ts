@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import { useIdentityToken, usePrivy } from '~/core/wallet/auth-hooks';
 
+import { WALLET_SESSION_ROUTE } from '../cookie/wallet-session-lifetime';
 import { useSmartAccount } from './use-smart-account';
 
 /** Bounds the wait for a signed-in account, so a stale wallet cookie can't hold the page up. */
@@ -25,16 +26,15 @@ function usePrivySignedOut() {
 let staleWalletCookieCleared = false;
 
 /**
- * Drops a wallet cookie Privy no longer has a session for, so the next load is served as the
- * signed-out reader this is (the cached public feed, no waits). A route rather than the
- * `onConnectionChange` Server Action, because a cookie write in a Server Action re-renders the
- * current page from the server, which would swap the feed under the reader.
+ * Drops a wallet session Privy no longer has a session for, so the next load is served as the
+ * signed-out reader this is (the cached public feed, no waits). A route, not a Server Action:
+ * a cookie write in a Server Action re-renders the current page, which would swap the feed.
  */
 function useClearStaleWalletCookie(cookieAddress: string | null, signedOut: boolean) {
   React.useEffect(() => {
     if (!signedOut || cookieAddress === null || staleWalletCookieCleared) return;
     staleWalletCookieCleared = true;
-    fetch('/api/wallet-cookie', { method: 'DELETE' }).catch(() => {
+    fetch(WALLET_SESSION_ROUTE, { method: 'DELETE' }).catch(() => {
       staleWalletCookieCleared = false;
     });
   }, [cookieAddress, signedOut]);

@@ -1,10 +1,9 @@
 /**
  * Server-side verification of a Privy identity token, so a route can know WHO is asking.
  *
- * Until now no route in this app verified anything: the wallet cookie (`WALLET_ADDRESS`) is set by
- * the client and only ever used for public reads, where trusting it costs nothing. For you reads a
- * person's private interest profile, so it cannot trust a cookie anyone can write. The browser
- * sends the identity token it already holds (`getCachedIdentityToken`, the same one debates and
+ * Used directly by routes that need proof per request (For you, the ranking lab), and by
+ * `POST /api/wallet-session`, which issues the signed session cookie every other server read trusts
+ * (`core/cookie/wallet-session`). The browser sends the identity token it already holds (`getCachedIdentityToken`, the same one debates and
  * community calls send to their backends), and this checks it the way geo-chat does
  * (crates/auth/src/privy.rs): ES256 against Privy's published keys, issuer `privy.io`, audience
  * this app's Privy id, not expired. The user's Geo account is the embedded Ethereum wallet in its

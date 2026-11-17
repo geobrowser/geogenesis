@@ -6,9 +6,8 @@
 import React from 'react';
 
 import { Effect } from 'effect';
-import { cookies } from 'next/headers';
 
-import { WALLET_ADDRESS } from '~/core/cookie';
+import { readWalletSession } from '~/core/cookie/wallet-session';
 import { proposalTimestampSeconds } from '~/core/governance/proposal-timestamp';
 import { compareOpenProposals } from '~/core/governance/sort-open-proposals';
 import {
@@ -86,7 +85,7 @@ export async function GovernanceProposalsList({
   category = 'all',
   status = 'pending',
 }: Props): Promise<GovernanceProposalsListResult> {
-  const connectedAddress = (await cookies()).get(WALLET_ADDRESS)?.value;
+  const connectedAddress = (await readWalletSession()) ?? undefined;
   const profile = connectedAddress ? await Effect.runPromise(fetchProfile(connectedAddress)) : null;
   const [result, space] = await Promise.all([
     fetchGovernanceProposals({

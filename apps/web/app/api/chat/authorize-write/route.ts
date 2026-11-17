@@ -1,10 +1,8 @@
 // POST /api/chat/authorize-write — auth gate before the client dispatcher
 // applies a write intent. Graph-state validation lives client-side in
 // core/chat/write-validators.ts so locally-minted entities are addressable.
-import { cookies } from 'next/headers';
-
 import { EDIT_TOOL_NAMES, type EditToolFailure, notAuthorized, notSignedIn, rateLimited } from '~/core/chat/edit-types';
-import { WALLET_ADDRESS } from '~/core/cookie';
+import { readWalletSessionLowercase } from '~/core/cookie/wallet-session';
 
 import { buildWriteContext } from '../tools/write/context';
 
@@ -22,12 +20,6 @@ function isSameOrigin(req: Request): boolean {
   } catch {
     return false;
   }
-}
-
-function parseWalletCookie(raw: string | undefined): string | null {
-  if (!raw) return null;
-  const lower = raw.toLowerCase();
-  return /^0x[0-9a-f]{40}$/.test(lower) ? lower : null;
 }
 
 function jsonResponse(status: number, body: unknown) {
@@ -63,8 +55,7 @@ export async function POST(req: Request): Promise<Response> {
     }
   }
 
-  const cookieStore = await cookies();
-  const wallet = parseWalletCookie(cookieStore.get(WALLET_ADDRESS)?.value);
+  const wallet = await readWalletSessionLowercase();
   const context = buildWriteContext({ walletAddress: wallet });
 
   if (context.kind !== 'member') {

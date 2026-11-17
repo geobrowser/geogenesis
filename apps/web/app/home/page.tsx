@@ -1,8 +1,6 @@
 import * as React from 'react';
 
-import { cookies } from 'next/headers';
-
-import { WALLET_ADDRESS } from '~/core/cookie';
+import { readWalletSession } from '~/core/cookie/wallet-session';
 import { cachedFetchProfile } from '~/core/io/subgraph';
 
 import {
@@ -31,8 +29,7 @@ interface Props {
 }
 
 export default async function PersonalHomePage(props: Props) {
-  const [cookieStore, sp] = await Promise.all([cookies(), props.searchParams]);
-  const connectedAddress = cookieStore.get(WALLET_ADDRESS)?.value;
+  const [connectedAddress, sp] = await Promise.all([readWalletSession().then(a => a ?? undefined), props.searchParams]);
 
   const tab = parseGovernanceTab(sp.tab);
   const governanceFilters: GovernanceFilters = {
