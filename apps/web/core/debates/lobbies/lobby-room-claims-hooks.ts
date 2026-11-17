@@ -86,9 +86,13 @@ function combineNamedReads(
   };
 }
 
-/** geo-chat's order for the room's claims: most disagreeing pairs, then most people. Stable. */
+/**
+ * geo-chat's order for the room's claims: most disagreeing pairs, then most people. Stable. geo-chat
+ * counts the viewer in the room; `total_in_room` leaves them out, so they go back on their own side.
+ */
 export function mostSplitFirst(claims: DebateLobbyClaim[]): DebateLobbyClaim[] {
-  const sides = (row: DebateLobbyClaim) => row.positions.map(side => side.total_in_room);
+  const sides = (row: DebateLobbyClaim) =>
+    row.positions.map(side => side.total_in_room + (side.position === row.viewer_response?.position ? 1 : 0));
   const pairs = (row: DebateLobbyClaim) => sides(row).reduce((product, total) => product * total, 1);
   const people = (row: DebateLobbyClaim) => sides(row).reduce((sum, total) => sum + total, 0);
   return [...claims].sort((a, b) => pairs(b) - pairs(a) || people(b) - people(a));
