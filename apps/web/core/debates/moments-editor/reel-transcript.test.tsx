@@ -232,6 +232,24 @@ describe('the side transcript on a long debate (GEO-3773)', () => {
   });
 });
 
+describe('the side transcript without word timings (GEO-3642)', () => {
+  it('shows a long clip’s number once, before its first sentence, and tints every sentence it plays', () => {
+    // Only sentences, each about 5 s: a 28 s clip reaches into six of them.
+    const { sentences } = longDebate(12, 10);
+    const clips = [clip('a', 10_000, 38_000)];
+    const view = setUp({ words: [], sentences, wordTiming: false, clips, speakers: [1], selected: -1 });
+    const badges = view.root().querySelectorAll<HTMLElement>('[data-clip]');
+    expect(badges).toHaveLength(1);
+    const spans = [...view.root().querySelectorAll<HTMLElement>('[data-sentence]')];
+    const inClip = spans.filter(span => span.classList.contains('bg-purple/10'));
+    expect(inClip.map(span => span.dataset.sentence)).toEqual(['1', '2', '3', '4', '5', '6']);
+    expect(badges[0].nextElementSibling).toBe(inClip[0]);
+    expect(spans.filter(span => span.classList.contains('bg-pink/10'))).toHaveLength(0);
+    fireEvent.click(badges[0]);
+    expect(view.actions.current.selectClip).toHaveBeenCalledWith('a');
+  });
+});
+
 describe('transcript search (GEO-3773)', () => {
   const words = [
     word(1, 0, 400, 'Then'),
