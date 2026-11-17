@@ -188,6 +188,12 @@ type DebateFeedPlayerProps = {
    * reports it; the combined fallback plays the rendered video, which is on another clock.
    */
   onPlayheadChange?: (seconds: number) => void;
+  /**
+   * The speed both recordings play at (GEO-3773): 1, the default, everywhere but the moments
+   * editor. Drift sync and the automatic break cuts keep time at it. Only the paired player plays
+   * at it; the combined fallback stays at 1.
+   */
+  playbackRate?: number;
 };
 
 /** The longest `activateBothInGesture` holds pause ticks while its re-plays settle. */
@@ -236,6 +242,7 @@ function PairedDebateFeedPlayer({
   holdFullPlayback = false,
   previewClips,
   stills,
+  playbackRate = 1,
 }: DebateFeedPlayerProps) {
   const [fullPlaybackStarted, setFullPlaybackStarted] = useAtom(feedFullPlaybackStartedAtom);
   /*
@@ -265,7 +272,10 @@ function PairedDebateFeedPlayer({
   // fetch and the transcript query — playback is driven by `active` in the effect below — so a
   // preloading card fetches without autoplaying off-screen.
   // A held card is detached as a released one is, so its URLs lapse and re-sign the same way.
-  const controller = useDebatePlayback(debate, active || preload, { mediaAttached: !releaseMedia && !held });
+  const controller = useDebatePlayback(debate, active || preload, {
+    mediaAttached: !releaseMedia && !held,
+    playbackRate,
+  });
   // What the <video> elements actually hold: a released card, a held one, or one re-signing lapsed
   // URLs, has none.
   const detached = releaseMedia || held || controller.urlsLapsed;
@@ -611,6 +621,7 @@ function PairedDebateFeedPlayer({
     running: playing && !isScrubbing,
     seek: seekAcrossCut,
     positionMs: livePositionMs,
+    rate: playbackRate,
   });
   const earlyEndCue = React.useMemo(
     () => (reducedOverlays ? null : earlyEndCueAt(playbackBreaks.earlyEnds, playheadMs)),
