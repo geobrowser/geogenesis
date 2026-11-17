@@ -3,9 +3,12 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 
 import * as React from 'react';
 
+import { getDefaultStore } from 'jotai';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { GeoChatRequestError } from '../api';
+import type { DebateFeedPlayerHandle } from '../browse/debate-feed-player';
+import { inlinePlaybackUnavailableAtom } from '../browse/inline-playback';
 import { RENDERED_TURN_SEGMENTS } from '../open-rounds-media-fixtures';
 import type { MomentBackfillEntry, MomentBackfillStatus } from './api';
 import { MomentsEditor, claimsBySpeaker, editingBlockedReason, keepClaimWithSpeaker } from './moments-editor';
@@ -17,6 +20,20 @@ const DEBATE_ID = '01a0448a-61d3-7101-8434-a20fdadf6f97';
 let wordsOverride: unknown[] | null = null;
 /** The transcript's `sentences`, served only when a test sets them. */
 let sentencesOverride: unknown[] | null = null;
+
+/** The player's props as last rendered, and the controls it hands the editor (GEO-3773). */
+const playerMocks = vi.hoisted(() => ({
+  props: {} as Record<string, unknown>,
+  handle: {
+    play: vi.fn(),
+    pause: vi.fn(),
+    seek: vi.fn(),
+    jumpTo: vi.fn((_ms: number): 'held' | 'seeked' => 'seeked'),
+    livePositionMs: vi.fn((): number | null => null),
+    endMs: vi.fn((): number | null => null),
+    unmute: vi.fn(),
+  },
+}));
 
 const mocks = vi.hoisted(() => ({
   backfill: {} as { isPending: boolean; error: unknown; data: { request: unknown; entry: unknown } | undefined },
@@ -98,7 +115,13 @@ vi.mock('./hooks', () => ({
 }));
 
 vi.mock('../browse/debate-feed-player', () => ({
-  DebateFeedPlayer: ({ onPlayheadChange }: { onPlayheadChange?: (seconds: number) => void }) => {
+  DebateFeedPlayer: (props: {
+    onPlayheadChange?: (seconds: number) => void;
+    ref?: React.Ref<DebateFeedPlayerHandle>;
+  }) => {
+    const { onPlayheadChange, ref } = props;
+    playerMocks.props = props as unknown as Record<string, unknown>;
+    React.useImperativeHandle(ref, () => playerMocks.handle, []);
     React.useEffect(() => {
       if (mocks.playheadSeconds !== null) onPlayheadChange?.(mocks.playheadSeconds);
     }, [onPlayheadChange]);
@@ -157,6 +180,8 @@ beforeEach(() => {
   mocks.turns = [];
   mocks.wordTiming = true;
   mocks.peaks = { kind: 'loading' };
+  playerMocks.props = {};
+  for (const control of Object.values(playerMocks.handle)) control.mockClear();
 });
 afterEach(cleanup);
 
@@ -1739,5 +1764,132 @@ describe('selectionAnchorRect (GEO-3766)', () => {
   it('keeps an end scrolled out of the transcript at the transcript’s edge', () => {
     expect(sides(selectionAnchorRect(rangeWith([box(120, 420, 260, 440)]), root))).toEqual([120, 400, 260, 400]);
     expect(sides(selectionAnchorRect(rangeWith([box(120, 60, 260, 80)]), root))).toEqual([120, 100, 260, 100]);
+  });
+});
+
+describe('playing clips in the editor (GEO-3773)', () => {
+  const player = playerMocks.handle;
+  const props = () =>
+    playerMocks.props as Record<string, unknown> & {
+      playbackRate: number;
+      onPlayheadChange: (seconds: number) => void;
+      onSoundBlockedChange: (blocked: boolean) => void;
+    };
+
+  afterEach(() => {
+    getDefaultStore().set(inlinePlaybackUnavailableAtom, false);
+    player.endMs.mockReturnValue(null);
+  });
+
+  it('plays the debate as an editor: its own controls, with sound, measuring nothing', () => {
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    expect(props()).toMatchObject({
+      editorMode: true,
+      forceSound: true,
+      cutTransitions: true,
+      measure: false,
+      playbackRate: 1,
+      pauseBreakCuts: false,
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: '2x' }));
+    expect(props().playbackRate).toBe(2);
+    expect(screen.getByRole('button', { name: '2x' })).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(screen.getByRole('button', { name: '1.5x' }));
+    expect(props().playbackRate).toBe(1.5);
+  });
+
+  it('plays a clip from its start through the hold and stops at its end', () => {
+    mocks.plan.data = entry({
+      live_reel: {
+        clock: 'video',
+        clips: [{ start_ms: 900, end_ms: 3_000, speaker_slot: 1, claim_index: 0, claim_text: 'Coffee is low stakes' }],
+      },
+    });
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Play from start' }));
+    expect(player.play).toHaveBeenCalledOnce();
+    expect(player.jumpTo).toHaveBeenCalledOnce();
+    const startMs = player.jumpTo.mock.calls[0][0];
+    expect(startMs).toBeGreaterThanOrEqual(900);
+    expect(startMs).toBeLessThan(1_100);
+    expect(props().pauseBreakCuts).toBe(true);
+
+    // The player reports a position past the clip's end.
+    act(() => props().onPlayheadChange(3.5));
+    expect(player.pause).toHaveBeenCalledOnce();
+    expect(props().pauseBreakCuts).toBe(false);
+  });
+
+  it('plays the reel and stops it when the clips change under it', () => {
+    mocks.plan.data = entry({
+      live_reel: {
+        clock: 'video',
+        clips: [
+          { start_ms: 900, end_ms: 3_000, speaker_slot: 1, claim_index: 0, claim_text: 'Coffee is low stakes' },
+          { start_ms: 4_800, end_ms: 5_600, speaker_slot: 2, claim_index: 1, claim_text: 'Dinner shows effort' },
+        ],
+      },
+    });
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Play reel' }));
+    expect(player.jumpTo).toHaveBeenCalledOnce();
+    expect(screen.getByRole('button', { name: 'Stop' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByRole('button', { name: /Remove/ })[1]);
+    expect(player.pause).toHaveBeenCalledOnce();
+    expect(screen.getByRole('button', { name: 'Play reel' })).toBeInTheDocument();
+  });
+
+  it("plays a carried reel's clip spans, which have no played cut", () => {
+    const clips = [
+      { start_ms: 3_100, end_ms: 4_900, speaker_slot: 0, claim_index: 0, claim_text: 'Coffee is low stakes' },
+    ];
+    mocks.plan.data = entry({ live_reel: { clock: 'video', carried: true, clips } });
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Play reel' }));
+    expect(player.jumpTo).toHaveBeenCalledWith(3_100);
+  });
+
+  it('says when a carried clip is past the end of the video, rather than doing nothing', () => {
+    player.endMs.mockReturnValue(4_000);
+    const clips = [
+      { start_ms: 1_000, end_ms: 3_000, speaker_slot: 0, claim_index: 0, claim_text: 'Coffee is low stakes' },
+      { start_ms: 5_000, end_ms: 6_000, speaker_slot: 1, claim_index: 1, claim_text: 'Dinner shows effort' },
+    ];
+    mocks.plan.data = entry({ live_reel: { clock: 'video', carried: true, clips } });
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Play from start' })[1]);
+    expect(player.jumpTo).not.toHaveBeenCalled();
+    expect(screen.getByText(/This clip is past the end of the video/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Play reel' }));
+    expect(player.jumpTo).toHaveBeenCalledWith(1_000);
+    expect(screen.getByText(/Skipped 1 clip past the end of the video/)).toBeInTheDocument();
+  });
+
+  it('offers to unmute a refused sound, from inside the click', () => {
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    expect(screen.queryByRole('button', { name: /Sound blocked/ })).not.toBeInTheDocument();
+
+    act(() => props().onSoundBlockedChange(true));
+    fireEvent.click(screen.getByRole('button', { name: 'Sound blocked — click to unmute' }));
+
+    expect(player.unmute).toHaveBeenCalledOnce();
+  });
+
+  it('disables the transport on the combined-video fallback, and says why', () => {
+    getDefaultStore().set(inlinePlaybackUnavailableAtom, true);
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+
+    const transport = screen.getByRole('group', { name: 'Playback' });
+    for (const name of ['Play', 'Play reel', '1x', '1.5x', '2x']) {
+      expect(within(transport).getByRole('button', { name })).toBeDisabled();
+    }
+    expect(screen.getByText('Playback controls need the two-camera player')).toBeInTheDocument();
   });
 });
