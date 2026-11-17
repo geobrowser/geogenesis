@@ -88,6 +88,14 @@ export function useAgendaClaimFilter(enabled: boolean): AgendaClaimFilter {
   }, [enabled, error, failed, ids, pending, refetch, scopes, spaceIds]);
 }
 
+/** The matches on a claim the filter admits: every one when inactive, none while pending or failed. */
+export function agendaMatches<T extends { claim: { claim_entity_id: string } }>(
+  filter: AgendaClaimFilter,
+  matches: readonly T[]
+): T[] {
+  return filter.active ? matches.filter(match => filter.has(match.claim.claim_entity_id)) : [...matches];
+}
+
 /**
  * A hub list card's attribution (GEO-3495): whether the list was searched, and agenda-only the
  * agenda that lists its claim, so the warehouse's `on_agenda` reads true of it.
@@ -98,18 +106,13 @@ export function hubCardScope(filter: AgendaClaimFilter, claimId: string, searche
   return { ...(searched ? { list_searched: true } : {}), ...agendaScope };
 }
 
-/** For a surface that reads the filter itself as well as handing it down. Otherwise use the provider. */
-export const AgendaClaimFilterContext = React.createContext<AgendaClaimFilter>(INACTIVE_AGENDA_FILTER);
-
 /**
  * One agenda filter for a whole surface, so every list on it narrows by the same answer and the
  * agendas stay observed while tabs swap (their query is `gcTime: 0`, and the panel's tab change
- * unmounts one list before the next mounts).
+ * unmounts one list before the next mounts). The surface calls `useAgendaClaimFilter` above its
+ * tabs and provides the result; full screen, with one list at a time, passes it as a prop instead.
  */
-export function AgendaClaimFilterProvider({ enabled, children }: { enabled: boolean; children: React.ReactNode }) {
-  const filter = useAgendaClaimFilter(enabled);
-  return <AgendaClaimFilterContext.Provider value={filter}>{children}</AgendaClaimFilterContext.Provider>;
-}
+export const AgendaClaimFilterContext = React.createContext<AgendaClaimFilter>(INACTIVE_AGENDA_FILTER);
 
 /** The surface's agenda filter, or the inactive one outside a provider. */
 export function useAgendaClaimFilterContext(): AgendaClaimFilter {

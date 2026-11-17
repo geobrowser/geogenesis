@@ -57,13 +57,8 @@ vi.mock('../todays-claims/agenda-claim-filter', async importOriginal => {
   const actual = await importOriginal<typeof import('../todays-claims/agenda-claim-filter')>();
   return {
     ...actual,
-    AgendaClaimFilterProvider: ({ enabled, children }: { enabled: boolean; children: React.ReactNode }) => (
-      <actual.AgendaClaimFilterContext.Provider
-        value={enabled ? (mocks.agenda as typeof actual.INACTIVE_AGENDA_FILTER) : actual.INACTIVE_AGENDA_FILTER}
-      >
-        {children}
-      </actual.AgendaClaimFilterContext.Provider>
-    ),
+    useAgendaClaimFilter: (enabled: boolean) =>
+      enabled ? (mocks.agenda as typeof actual.INACTIVE_AGENDA_FILTER) : actual.INACTIVE_AGENDA_FILTER,
   };
 });
 

@@ -9,7 +9,7 @@ import { Text } from '~/design-system/text';
 
 import { DrawnHubListProvider, useDrawnHubList } from '../debate-claim-card-surface';
 import { useGeoChatAuth } from '../hooks';
-import { AgendaClaimFilterProvider, useAgendaClaimFilterContext } from '../todays-claims/agenda-claim-filter';
+import { useAgendaClaimFilter } from '../todays-claims/agenda-claim-filter';
 import { AGENDA_ONLY_HUB_PANEL } from '../todays-claims/agenda-only-picker';
 import { fromClaimsFilterSearch } from './claims-filter-params';
 import {
@@ -57,6 +57,9 @@ export function DebatesHubWorkspace() {
   const [list, setList] = React.useState<ClaimsTabVariant>(DEFAULT_WORKSPACE_LIST);
 
   const { ready, authenticated, accountKey } = useGeoChatAuth();
+  // GEO-3775: the same agenda-only lists as the side panel. Read here, above the list swap, so one
+  // agendas read serves every list (the query is `gcTime: 0`).
+  const agendaFilter = useAgendaClaimFilter(AGENDA_ONLY_HUB_PANEL);
 
   const searchParams = useSearchParams();
   const store = useStore();
@@ -164,11 +167,16 @@ export function DebatesHubWorkspace() {
             <div className="min-w-0 flex-1">
               {!ready || !filtersReconciled ? (
                 <HubSkeleton />
+              ) : shown === 'lobby' ? (
+                <LobbyTab onTabChange={showList} layout="workspace" scopePicker={picker} agendaFilter={agendaFilter} />
               ) : (
-                // GEO-3775: the same agenda-only lists as the side panel, one agendas read for all of them.
-                <AgendaClaimFilterProvider enabled={AGENDA_ONLY_HUB_PANEL}>
-                  <WorkspaceList shown={shown} onTabChange={showList} picker={picker} />
-                </AgendaClaimFilterProvider>
+                <ClaimsTab
+                  key={shown}
+                  variant={shown}
+                  layout="workspace"
+                  scopePicker={picker}
+                  agendaFilter={agendaFilter}
+                />
               )}
             </div>
           </HubAskProvider>
@@ -182,23 +190,5 @@ export function DebatesHubWorkspace() {
         </div>
       </div>
     </DrawnHubListProvider>
-  );
-}
-
-/** The list on screen, narrowed by the surface's agenda filter. */
-function WorkspaceList({
-  shown,
-  onTabChange,
-  picker,
-}: {
-  shown: ClaimsTabVariant;
-  onTabChange: (tab: DebatesHubTab) => void;
-  picker: React.ReactNode;
-}) {
-  const agendaFilter = useAgendaClaimFilterContext();
-  return shown === 'lobby' ? (
-    <LobbyTab onTabChange={onTabChange} layout="workspace" scopePicker={picker} agendaFilter={agendaFilter} />
-  ) : (
-    <ClaimsTab key={shown} variant={shown} layout="workspace" scopePicker={picker} agendaFilter={agendaFilter} />
   );
 }

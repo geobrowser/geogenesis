@@ -30,8 +30,20 @@ vi.mock('../claim-picker-page', () => ({
   },
 }));
 
-const { AgendaClaimFilterProvider, INACTIVE_AGENDA_FILTER, useAgendaClaimFilter, useAgendaClaimFilterContext } =
-  await import('./agenda-claim-filter');
+const {
+  AgendaClaimFilterContext,
+  INACTIVE_AGENDA_FILTER,
+  agendaMatches,
+  hubCardScope,
+  useAgendaClaimFilter,
+  useAgendaClaimFilterContext,
+} = await import('./agenda-claim-filter');
+
+/** A surface as the panel builds one: the filter read above its tabs and provided to them. */
+function AgendaSurface({ children }: { children: React.ReactNode }) {
+  const filter = useAgendaClaimFilter(true);
+  return <AgendaClaimFilterContext.Provider value={filter}>{children}</AgendaClaimFilterContext.Provider>;
+}
 
 const OTHER = 'c0000000000000000000000000000002';
 const OFF_AGENDA = 'c0000000000000000000000000000009';
@@ -133,12 +145,12 @@ describe('useAgendaClaimFilter', () => {
   });
 });
 
-describe('AgendaClaimFilterProvider', () => {
+describe('AgendaClaimFilterContext', () => {
   it('hands one filter to everything under it, and the inactive one outside', async () => {
     const { result } = renderHook(() => useAgendaClaimFilterContext(), {
       wrapper: ({ children }) => (
         <Wrapper>
-          <AgendaClaimFilterProvider enabled>{children}</AgendaClaimFilterProvider>
+          <AgendaSurface>{children}</AgendaSurface>
         </Wrapper>
       ),
     });
@@ -157,9 +169,7 @@ describe('AgendaClaimFilterProvider', () => {
       return <span>{filter.has(CLAIM) ? 'listed' : 'waiting'}</span>;
     };
     const Surface = ({ tab }: { tab: 'a' | 'b' }) => (
-      <AgendaClaimFilterProvider enabled>
-        {tab === 'a' ? <Reader key="a" /> : <Reader key="b" />}
-      </AgendaClaimFilterProvider>
+      <AgendaSurface>{tab === 'a' ? <Reader key="a" /> : <Reader key="b" />}</AgendaSurface>
     );
     const view = render(
       <Wrapper>
@@ -175,5 +185,40 @@ describe('AgendaClaimFilterProvider', () => {
     );
     expect(view.getByText('listed')).toBeTruthy();
     expect(mocks.calls).toBe(1);
+  });
+});
+
+describe('hubCardScope', () => {
+  const filter = {
+    ...INACTIVE_AGENDA_FILTER,
+    active: true,
+    scopeFor: (claimId: string) =>
+      claimId === CLAIM ? { agenda_id: 'agenda-today', agenda_date: '2026-11-16' } : undefined,
+  };
+
+  it('adds the agenda that lists the claim, and the search beside it', () => {
+    expect(hubCardScope(filter, CLAIM, false)).toEqual({ agenda_id: 'agenda-today', agenda_date: '2026-11-16' });
+    expect(hubCardScope(filter, CLAIM, true)).toEqual({
+      list_searched: true,
+      agenda_id: 'agenda-today',
+      agenda_date: '2026-11-16',
+    });
+  });
+
+  it('is the search alone, or nothing, for a claim no agenda lists', () => {
+    expect(hubCardScope(filter, OFF_AGENDA, true)).toEqual({ list_searched: true });
+    expect(hubCardScope(filter, OFF_AGENDA, false)).toBeUndefined();
+    expect(hubCardScope(INACTIVE_AGENDA_FILTER, CLAIM, false)).toBeUndefined();
+  });
+});
+
+describe('agendaMatches', () => {
+  const on = { claim: { claim_entity_id: CLAIM } };
+  const off = { claim: { claim_entity_id: OFF_AGENDA } };
+
+  it('keeps every match when inactive, and only the listed ones when active', () => {
+    expect(agendaMatches(INACTIVE_AGENDA_FILTER, [on, off])).toEqual([on, off]);
+    const listed = { ...INACTIVE_AGENDA_FILTER, active: true, has: (claimId: string) => claimId === CLAIM };
+    expect(agendaMatches(listed, [on, off])).toEqual([on]);
   });
 });

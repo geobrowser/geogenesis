@@ -13,7 +13,12 @@ import {
   useReportDrawnHubList,
 } from '../debate-claim-card-surface';
 import { useDebateActivity } from '../hooks';
-import { type AgendaClaimFilter, INACTIVE_AGENDA_FILTER, hubCardScope } from '../todays-claims/agenda-claim-filter';
+import {
+  type AgendaClaimFilter,
+  INACTIVE_AGENDA_FILTER,
+  agendaMatches,
+  hubCardScope,
+} from '../todays-claims/agenda-claim-filter';
 import { claimRowKey } from './claim-row-key';
 import {
   type ClaimsLayout,
@@ -113,10 +118,7 @@ export function MatchesList({
   const activity = activityQuery.data;
 
   const serverMatches = React.useMemo(
-    () =>
-      agendaFilter.active
-        ? (matchesQuery.data?.matches ?? []).filter(match => agendaFilter.has(match.claim.claim_entity_id))
-        : (matchesQuery.data?.matches ?? []),
+    () => agendaMatches(agendaFilter, matchesQuery.data?.matches ?? []),
     [agendaFilter, matchesQuery.data]
   );
   const outbound = requestsQuery.data?.outbound ?? activity?.outbound_request ?? null;

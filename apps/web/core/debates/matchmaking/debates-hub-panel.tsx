@@ -26,7 +26,7 @@ import { ElevatedPopoverPortalContext } from '~/design-system/use-elevated-popov
 import { DrawnHubListProvider, useDrawnHubList } from '../debate-claim-card-surface';
 import { useDebateActivity, useGeoChatAuth } from '../hooks';
 import { useLobbyLineup } from '../lobbies/live-lobbies';
-import { AgendaClaimFilterContext, useAgendaClaimFilter } from '../todays-claims/agenda-claim-filter';
+import { AgendaClaimFilterContext, agendaMatches, useAgendaClaimFilter } from '../todays-claims/agenda-claim-filter';
 import { AGENDA_ONLY_HUB_PANEL } from '../todays-claims/agenda-only-picker';
 import { useTodaysCallout } from '../todays-claims/use-todays-callout';
 import { useRecordHubTabPress } from './claims-tab';
@@ -275,12 +275,8 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
   // same query Matches reads, so opening the tab costs nothing more. Agenda claims only, and none
   // counted until the agendas say which those are.
   const { data: matches } = useMatchmakingMatches(authenticated);
-  const matchCount =
-    agendaFilter.pending || agendaFilter.error
-      ? 0
-      : agendaFilter.active
-        ? (matches?.matches ?? []).filter(match => agendaFilter.has(match.claim.claim_entity_id)).length
-        : (matches?.matches.length ?? 0);
+  // `has` admits nothing while the agendas are out or failed, so that counts nothing.
+  const matchCount = agendaMatches(agendaFilter, matches?.matches ?? []).length;
   const lobbyLineup = useLobbyLineup();
   const todaysCallout = useTodaysCallout();
   const setExploreShow = useSetAtom(debatesHubExploreShowAtom);

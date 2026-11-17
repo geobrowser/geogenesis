@@ -55,6 +55,21 @@ const mocks = vi.hoisted(() => ({
 // Topics come from the claim entities now (GEO-2861), which is a real request. Answerless while
 // loading or failed, exactly as react-query reports it — which is the state the topic filter has to
 // tell apart from "this claim carries no topics".
+// The props each match card is drawn with, so a test can read the attribution it was given.
+const cardSurfaces = vi.hoisted(
+  () => [] as Array<{ claimId: string; listId: string; scope?: Record<string, unknown> }>
+);
+vi.mock('../debate-claim-card-surface', async importOriginal => {
+  const actual = await importOriginal<typeof import('../debate-claim-card-surface')>();
+  return {
+    ...actual,
+    DebateClaimCardSurface: (props: Parameters<typeof actual.DebateClaimCardSurface>[0]) => {
+      cardSurfaces.push({ claimId: props.claimId, listId: props.listId, scope: props.scope });
+      return actual.DebateClaimCardSurface(props);
+    },
+  };
+});
+
 vi.mock('../claim-picker-page', () => ({
   useClaimEntitiesByIds: () => ({
     entities: mocks.claimEntitiesLoading || mocks.claimEntitiesError ? [] : mocks.claimEntities,
@@ -843,7 +858,8 @@ describe('MatchesList agenda-only', () => {
       pending: state === 'pending',
       error: state === 'failed' ? new Error('gaia down') : null,
       refetch: vi.fn(),
-      scopeFor: () => undefined,
+      scopeFor: claimId =>
+        ids.includes(claimId) ? { agenda_id: 'agenda-today', agenda_date: '2026-11-16' } : undefined,
     };
   }
 
@@ -867,6 +883,17 @@ describe('MatchesList agenda-only', () => {
 
     expect(screen.getByText('Chips are better than fries')).toBeInTheDocument();
     expect(screen.queryByText('A claim on no agenda')).not.toBeInTheDocument();
+  });
+
+  // The warehouse's `on_agenda` reads `agenda_id` off each card.
+  it('credits each match card to the agenda that lists its claim', () => {
+    cardSurfaces.length = 0;
+    render(<MatchesList agendaFilter={agenda()} />);
+
+    expect(screen.getByText('Chips are better than fries')).toBeInTheDocument();
+    const card = [...cardSurfaces].reverse().find(surface => surface.claimId === CLAIM_ENTITY_ID);
+    expect(card?.listId).toBe('hub_matches');
+    expect(card?.scope).toEqual({ agenda_id: 'agenda-today', agenda_date: '2026-11-16' });
   });
 
   it('draws no match while the agendas are out', () => {

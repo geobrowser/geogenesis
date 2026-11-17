@@ -6,7 +6,7 @@ import { useAtom } from 'jotai';
 
 import { isAccountWarmingUpQuery } from '../api';
 import { useRecordClaimFilter } from '../debate-claim-card-surface';
-import { type AgendaClaimFilter, INACTIVE_AGENDA_FILTER } from '../todays-claims/agenda-claim-filter';
+import { type AgendaClaimFilter, INACTIVE_AGENDA_FILTER, agendaMatches } from '../todays-claims/agenda-claim-filter';
 import { type ClaimsLayout, ClaimsTab } from './claims-tab';
 import { useMatchmakingMatches } from './hooks';
 import { MatchesList } from './matches-list';
@@ -67,10 +67,7 @@ export function LobbyTab({
     agendaFilter.pending ||
     agendaFilter.error
       ? 'pending'
-      : (agendaFilter.active
-            ? (matchesQuery.data?.matches ?? []).filter(match => agendaFilter.has(match.claim.claim_entity_id))
-            : (matchesQuery.data?.matches ?? [])
-          ).length === 0
+      : agendaMatches(agendaFilter, matchesQuery.data?.matches ?? []).length === 0
         ? 'empty'
         : 'filled';
 

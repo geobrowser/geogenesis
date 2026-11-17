@@ -401,6 +401,21 @@ function applyServerFilters(rows: ReturnType<typeof taggedRowsFor>, filters: any
   return kept;
 }
 
+// The props each claim card is drawn with, so a test can read the attribution it was given.
+const cardSurfaces = vi.hoisted(
+  () => [] as Array<{ claimId: string; listId: string; scope?: Record<string, unknown> }>
+);
+vi.mock('../debate-claim-card-surface', async importOriginal => {
+  const actual = await importOriginal<typeof import('../debate-claim-card-surface')>();
+  return {
+    ...actual,
+    DebateClaimCardSurface: (props: Parameters<typeof actual.DebateClaimCardSurface>[0]) => {
+      cardSurfaces.push({ claimId: props.claimId, listId: props.listId, scope: props.scope });
+      return actual.DebateClaimCardSurface(props);
+    },
+  };
+});
+
 vi.mock('../tagged-claims', async importOriginal => ({
   ...(await importOriginal<typeof import('../tagged-claims')>()),
   useTaggedClaims: (tagId: string, filters: any, enabled: boolean) => {
@@ -3237,6 +3252,25 @@ describe('agenda-only', () => {
 
     expect(await screen.findByText('You haven’t taken a position on any of today’s claims yet.')).toBeInTheDocument();
     expect(screen.queryByText('Mine, on no agenda')).not.toBeInTheDocument();
+  });
+
+  // The warehouse's `on_agenda` reads `agenda_id` off each card: without it every panel card would
+  // count as off-agenda, though every one is an agenda claim.
+  it('credits each card to the agenda that lists it, on the tag and on geo-chat’s lists', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [featuredClaim(ON_AGENDA, 'On an agenda')];
+    cardSurfaces.length = 0;
+    const view = render(<ClaimsTab panelFilters={panelFilters()} agendaFilter={agenda()} />);
+    expect(await screen.findByText('On an agenda')).toBeInTheDocument();
+    const tagged = [...cardSurfaces].reverse().find(card => bare(card.claimId) === bare(ON_AGENDA));
+    expect(tagged?.scope).toEqual({ agenda_id: 'agenda-today', agenda_date: '2026-11-16' });
+    view.unmount();
+
+    mocks.claims = [claim(ON_AGENDA, 'Mine, on an agenda', true)];
+    cardSurfaces.length = 0;
+    renderMine(<ClaimsTab variant="positions" panelFilters={panelFilters()} agendaFilter={agenda()} />);
+    expect(await screen.findByText('Mine, on an agenda')).toBeInTheDocument();
+    const positions = [...cardSurfaces].reverse().find(card => bare(card.claimId) === bare(ON_AGENDA));
+    expect(positions?.scope).toEqual({ agenda_id: 'agenda-today', agenda_date: '2026-11-16' });
   });
 
   // The lobby's Explore and every list not handed a filter are untouched.

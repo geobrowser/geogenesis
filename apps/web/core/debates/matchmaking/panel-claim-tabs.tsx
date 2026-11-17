@@ -6,7 +6,7 @@ import { useAtom, useAtomValue } from 'jotai';
 
 import type { MatchmakingClaim } from '../api';
 import { useDebateActivity, useGeoChatAuth, useUpdateDebateAvailability } from '../hooks';
-import { useAgendaClaimFilterContext } from '../todays-claims/agenda-claim-filter';
+import { agendaMatches, useAgendaClaimFilterContext } from '../todays-claims/agenda-claim-filter';
 import { ClaimsTab, type ClaimsTabVariant } from './claims-tab';
 import { useMatchmakingMatches } from './hooks';
 import { otherSideHeld } from './hub-claim-end-slot';
@@ -83,9 +83,7 @@ export function useMatchesShowOffline(enabled = true) {
     !matchesQuery.error &&
     !agenda.pending &&
     !agenda.error &&
-    (agenda.active
-      ? !matchesQuery.data.matches.some(match => agenda.has(match.claim.claim_entity_id))
-      : matchesQuery.data.matches.length === 0);
+    agendaMatches(agenda, matchesQuery.data.matches).length === 0;
   return { nobodyOnline, showsOffline: includeOffline || nobodyOnline };
 }
 
