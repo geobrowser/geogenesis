@@ -16,6 +16,7 @@ import {
   manualReel,
   manualReelClips,
   parseReelTime,
+  playedCuts,
   playerWords,
   realSpeedStretches,
   reelProblems,
@@ -355,6 +356,39 @@ describe('manualReel', () => {
       ],
       exact: true,
     });
+  });
+});
+
+describe('playedCuts (GEO-3673)', () => {
+  // 600 ms of quiet between words: up to 250 ms of room for a cut.
+  const words = [word(1, 1_000, 1_400), word(1, 2_000, 2_400), word(2, 3_000, 3_400)];
+
+  it('widens each clip into the quiet beside its words, as geo-chat cuts a reel sent without exact', () => {
+    expect(playedCuts([clip(1_000, 2_400), clip(3_000, 3_400)], words, ONE_CLOCK)).toEqual([
+      { start_ms: 750, end_ms: 2_650 },
+      { start_ms: 2_750, end_ms: 3_650 },
+    ]);
+  });
+
+  // `exact` is the reel's: one free edge sends every other edge where geo-chat would have widened it.
+  it('follows the exact reel: the free edge where it was placed, the others where they are sent', () => {
+    const free = { ...clip(1_000, 2_500), free_end_ms: 2_500 };
+    expect(playedCuts([free, clip(3_000, 3_400)], words, ONE_CLOCK)).toEqual([
+      { start_ms: 750, end_ms: 2_500 },
+      { start_ms: 2_750, end_ms: 3_650 },
+    ]);
+  });
+
+  it('is nothing for a clip with no whole word, which geo-chat refuses', () => {
+    expect(playedCuts([clip(1_500, 1_900)], words, ONE_CLOCK)).toEqual([null]);
+  });
+
+  it('keeps a cut inside the stretch its words are said in', () => {
+    // Turn 1 ends at 120 s and the render cut up to 128 s: no room past the stretch's end.
+    const atEnd = [word(1, 119_000, 119_900)];
+    expect(playedCuts([clip(119_000, 119_900)], atEnd, RENDERED_TURN_SEGMENTS)).toEqual([
+      { start_ms: 118_750, end_ms: 120_000 },
+    ]);
   });
 });
 

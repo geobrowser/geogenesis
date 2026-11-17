@@ -7,6 +7,7 @@ import { Provider, createStore } from 'jotai';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { MatchmakingClaim } from '../api';
+import { type AgendaClaimFilter, AgendaClaimFilterContext } from '../todays-claims/agenda-claim-filter';
 import type { PanelListFilters } from './hub-filters';
 import { debatesHubExploreShowAtom, debatesHubMatchesIncludeOfflineAtom } from '~/atoms';
 
@@ -19,6 +20,7 @@ type ListProps = {
   keepClaim?: (entry: MatchmakingClaim) => boolean;
   collapsesAnswered?: boolean;
   notice?: React.ReactNode | ((listHasRows: boolean) => React.ReactNode);
+  agendaFilter?: AgendaClaimFilter;
 };
 
 const seen = vi.hoisted(() => ({
@@ -26,7 +28,7 @@ const seen = vi.hoisted(() => ({
   matchesList: null as ListProps | null,
   authenticated: true,
   available: true,
-  matches: [{}] as unknown[],
+  matches: [{ claim: { claim_entity_id: 'c-on' } }] as unknown[],
   matchesLoading: false,
   matchesFetching: false,
   /** Whether the stubbed ClaimsTab has rows to draw under its notice. */
@@ -79,10 +81,30 @@ function claim(
   } as unknown as MatchmakingClaim;
 }
 
-function renderTab(ui: React.ReactElement) {
+function renderTab(ui: React.ReactElement, agenda?: AgendaClaimFilter) {
   const store = createStore();
-  render(<Provider store={store}>{ui}</Provider>);
+  render(
+    <Provider store={store}>
+      {agenda ? <AgendaClaimFilterContext.Provider value={agenda}>{ui}</AgendaClaimFilterContext.Provider> : ui}
+    </Provider>
+  );
   return store;
+}
+
+/** The panel's agenda filter, listing `c-on` only, or still out, or failed. */
+function agendaFilter(state: 'listed' | 'pending' | 'failed' = 'listed'): AgendaClaimFilter {
+  const ids = state === 'listed' ? ['c-on'] : [];
+  return {
+    active: true,
+    ids,
+    spaceIds: [],
+    key: state,
+    has: claimId => ids.includes(claimId),
+    pending: state === 'pending',
+    error: state === 'failed' ? new Error('gaia down') : null,
+    refetch: vi.fn(),
+    scopeFor: () => undefined,
+  };
 }
 
 afterEach(() => {
@@ -91,7 +113,7 @@ afterEach(() => {
   seen.matchesList = null;
   seen.authenticated = true;
   seen.available = true;
-  seen.matches = [{}];
+  seen.matches = [{ claim: { claim_entity_id: 'c-on' } }];
   seen.matchesLoading = false;
   seen.matchesFetching = false;
   seen.claimsTabHasRows = true;
@@ -328,5 +350,70 @@ describe('PanelExploreTab', () => {
 
     expect(seen.claimsTab).toMatchObject({ warm: true, variant: 'explore', atomsFrom: 'panelExplore' });
     expect(seen.claimsTab?.panelFilters).toBeDefined();
+  });
+});
+
+/** GEO-3775. Both tabs list agenda claims only, from the surface's one filter. */
+describe('agenda-only', () => {
+  it('hands the filter to the match list and to the wider list', () => {
+    const agenda = agendaFilter();
+    renderTab(<PanelMatchesTab onTabChange={vi.fn()} />, agenda);
+    expect(seen.matchesList?.agendaFilter).toBe(agenda);
+
+    cleanup();
+    seen.matches = [];
+    renderTab(<PanelMatchesTab onTabChange={vi.fn()} />, agenda);
+    expect(seen.claimsTab?.agendaFilter).toBe(agenda);
+  });
+
+  // Someone online only on an off-agenda claim is nobody to the panel: the tab falls back.
+  it('falls back to the wider list when the only match online is on no agenda', () => {
+    seen.matches = [{ claim: { claim_entity_id: 'c-off' } }];
+    renderTab(<PanelMatchesTab onTabChange={vi.fn()} />, agendaFilter());
+
+    expect(seen.claimsTab).toMatchObject({ variant: 'positions', listId: 'hub_matches_offline' });
+    expect(screen.queryByTestId('matches-list')).not.toBeInTheDocument();
+    expect(screen.getByTestId('matches-nobody-online')).toHaveTextContent(
+      'Nobody who disagrees with you on today’s claims is online'
+    );
+    expect(seen.claimsTab?.panelFilters?.emptyPredicate?.message).toBe(
+      'Nobody holds the other side of one of today’s claims you’ve answered yet.'
+    );
+  });
+
+  it('mounts neither list while the agendas are out', () => {
+    renderTab(<PanelMatchesTab onTabChange={vi.fn()} />, agendaFilter('pending'));
+
+    expect(screen.queryByTestId('matches-list')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('claims-tab')).not.toBeInTheDocument();
+    expect(seen.claimsTab).toBeNull();
+    expect(seen.matchesList).toBeNull();
+  });
+
+  it('says an agenda outage is one, with a way to ask again', () => {
+    const agenda = agendaFilter('failed');
+    renderTab(<PanelMatchesTab onTabChange={vi.fn()} />, agenda);
+
+    expect(screen.getByText('Something went wrong.')).toBeInTheDocument();
+    expect(seen.matchesList).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(agenda.refetch).toHaveBeenCalled();
+  });
+
+  it('narrows every Explore list, signed in or out, warm or not', () => {
+    const agenda = agendaFilter();
+    const store = renderTab(<PanelExploreTab onTabChange={vi.fn()} />, agenda);
+    expect(seen.claimsTab).toMatchObject({ variant: 'explore', agendaFilter: agenda });
+    act(() => store.set(debatesHubExploreShowAtom, 'mine'));
+    expect(seen.claimsTab).toMatchObject({ variant: 'positions', agendaFilter: agenda });
+    act(() => seen.claimsTab?.panelFilters?.toggles?.[0]?.onChange(true));
+    expect(seen.claimsTab?.panelFilters?.emptyPredicate?.message).toBe(
+      'Nobody who disagrees with you on one of today’s claims is online right now.'
+    );
+
+    cleanup();
+    seen.authenticated = false;
+    renderTab(<PanelExploreTab onTabChange={vi.fn()} warm />, agenda);
+    expect(seen.claimsTab).toMatchObject({ warm: true, variant: 'explore', agendaFilter: agenda });
   });
 });

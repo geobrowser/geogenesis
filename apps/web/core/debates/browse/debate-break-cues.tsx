@@ -57,12 +57,15 @@ export function useBreakCuts(
     running,
     seek,
     positionMs,
+    rate = 1,
   }: {
     playheadMs: number;
     running: boolean;
     seek: (seconds: number) => void;
     /** Where the recording is right now, in ms; null when it cannot be read. */
     positionMs?: () => number | null;
+    /** The speed the recordings play at (GEO-3773). The cut is in recording ms; the timer waits wall ms. */
+    rate?: number;
   }
 ) {
   const next = running
@@ -77,7 +80,7 @@ export function useBreakCuts(
       timer = window.setTimeout(() => {
         const live = positionMs?.() ?? null;
         if (live !== null && live < atMs - CUT_TOLERANCE_MS) {
-          arm(Math.max(CUT_RECHECK_MS, atMs - live));
+          arm(Math.max(CUT_RECHECK_MS, (atMs - live) / rate));
           return;
         }
         // A timer that fired late (a throttled background tab) can find the recording already past
@@ -86,9 +89,9 @@ export function useBreakCuts(
         seek(toMs / 1_000);
       }, delayMs);
     };
-    arm(Math.max(0, atMs - playheadMs));
+    arm(Math.max(0, (atMs - playheadMs) / rate));
     return () => window.clearTimeout(timer);
-  }, [atMs, playheadMs, positionMs, seek, toMs]);
+  }, [atMs, playheadMs, positionMs, rate, seek, toMs]);
 }
 
 /** Open rounds playback shows one outlined round or wrap announcement per break. */

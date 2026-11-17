@@ -131,6 +131,11 @@ export function releaseGestureVideo(video: HTMLVideoElement) {
   if (!inUse.delete(video)) return;
   video.pause();
   video.muted = true;
+  // A player that sped this element up (the moments editor, GEO-3773) must not hand that speed on.
+  if (video.defaultPlaybackRate !== 1) {
+    video.defaultPlaybackRate = 1;
+    video.playbackRate = 1;
+  }
   video.removeAttribute('class');
   video.remove();
   if (idle.length >= MAX_IDLE_ELEMENTS) {

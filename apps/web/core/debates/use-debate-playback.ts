@@ -18,7 +18,9 @@ import {
   PLAYBACK_END_EPSILON_SECONDS,
   type PlayBothOutcome,
   type TurnState,
+  atOrPastMediaEnd,
   clampSeconds,
+  mediaFinished,
   pairPlayhead,
   participantForSlot,
   playBothWithMutedFallback,
@@ -66,7 +68,7 @@ export type MuteSource = 'explicit' | 'inferred';
 const SYNC_NUDGE_DRIFT_SECONDS = 0.18;
 /** Above this the gap is too wide to close by rate alone, so it is worth one seek. */
 const SYNC_SEEK_DRIFT_SECONDS = 0.75;
-/** How far off 1 the nudge goes. 3% converges 0.18s inside ~6s and is inaudible. */
+/** How far off the base rate the nudge goes, as a share of it. 3% converges 0.18s inside ~6s and is inaudible. */
 const SYNC_NUDGE_RATE = 0.03;
 /** Floor between hard seeks, so a seek that itself causes drift cannot start a storm. */
 const MIN_SYNC_SEEK_INTERVAL_MS = 2_000;
@@ -225,7 +227,26 @@ type StreamSigning = { streamUrls: Set<string>; fallback: RecordingPlaybackVaria
 export function useDebatePlayback(
   debate: Debate,
   enabled: boolean,
-  { mediaAttached = true }: { mediaAttached?: boolean } = {}
+  {
+    mediaAttached = true,
+    playbackRate = 1,
+    forceSound = false,
+  }: {
+    mediaAttached?: boolean;
+    /**
+     * The speed both recordings play at (GEO-3773): 1 everywhere but the moments editor, which offers
+     * 1.5 and 2. Drift sync nudges around it. Positions, drift thresholds and the recording clock
+     * stay in media seconds; only the wall time between them shrinks.
+     */
+    playbackRate?: number;
+    /**
+     * Play with sound whatever the feed's sound setting says (GEO-3773): the moments editor, where
+     * an admin is listening for cut points. Neither the saved Mute choice nor the tab's inferred
+     * sound is read or written, so the admin's feed setting is untouched. A browser that refuses
+     * sound still forces this debate muted (`soundBlocked`) until `clearSoundBlocked`.
+     */
+    forceSound?: boolean;
+  } = {}
 ) {
   const recordingUrls = useRecordingPlaybackUrl();
   const [urls, setUrls] = React.useState<PlaybackUrls>({ slot1: null, slot2: null });
@@ -246,7 +267,16 @@ export function useDebatePlayback(
   const [urlsLapsed, setUrlsLapsed] = React.useState(false);
   const [resignAttempt, setResignAttempt] = React.useState(0);
   const [error, setError] = React.useState<string | null>(null);
-  const [playing, setPlaying] = React.useState(false);
+  const [playing, setPlayingState] = React.useState(false);
+  /**
+   * `playing` for the tick, which must not take it as a dependency (see `mutedByUserRef`). Written
+   * with the state, not after render: a pause of ours queues a tick that has to see it (GEO-3778).
+   */
+  const playingRef = React.useRef(false);
+  const setPlaying = React.useCallback((next: boolean) => {
+    playingRef.current = next;
+    setPlayingState(next);
+  }, []);
   const [userPaused, setUserPaused] = React.useState(false);
   /**
    * The browser refused to start this pair, so the viewer has to.
@@ -277,10 +307,13 @@ export function useDebatePlayback(
   React.useEffect(() => {
     if (navigator.userActivation?.hasBeenActive) setArrivedByGesture(true);
   }, []);
-  const mutedPreference =
-    soundChoice === 'default' ? !(soundInferred || arrivedByGesture) : soundChoice === 'muted';
+  const mutedPreference = forceSound
+    ? false
+    : soundChoice === 'default'
+      ? !(soundInferred || arrivedByGesture)
+      : soundChoice === 'muted';
   /** The viewer pressed Mute, so a tap must not turn the sound on. */
-  const muteChosen = soundChoice === 'muted';
+  const muteChosen = !forceSound && soundChoice === 'muted';
   /*
    * The browser made this debate play muted, though the viewer wants sound (GEO-3594).
    *
@@ -301,10 +334,45 @@ export function useDebatePlayback(
     },
     [mutedByUser, setSoundChoice, setSoundInferred]
   );
+  /**
+   * Lift this debate's forced mute and nothing else: no saved choice, no tab-wide inferred sound.
+   * For `forceSound`, whose unmute has to come from inside a gesture and must not touch the feed's
+   * sound setting.
+   */
+  const clearSoundBlocked = React.useCallback(() => setSoundBlocked(false), []);
   const [playheadSeconds, setPlayheadSeconds] = React.useState(0);
   const [turnState, setTurnState] = React.useState<TurnState>(null);
   const slot1VideoRef = React.useRef<HTMLVideoElement | null>(null);
   const slot2VideoRef = React.useRef<HTMLVideoElement | null>(null);
+  /**
+   * The base rate every write below plays at, read through a ref so the sync tick and the seeks see
+   * a change without being rebuilt. 1 until a caller asks otherwise, and at 1 each write is the
+   * same `1` it always was.
+   */
+  const rateRef = React.useRef(1);
+  /**
+   * Make the base rate this element's default too: `load()` (a re-sign, a source reattach, hls.js)
+   * puts `playbackRate` back to the default, so a rate other than 1 has to be the default as well.
+   * A feed element's default is already 1, so at 1 this writes nothing. Handing an element on at 1
+   * is the pool's job (`releaseGestureVideo`): on iOS the same element moves to the next card, and
+   * elsewhere it goes with the player.
+   */
+  const keepDefaultRate = React.useCallback((video: HTMLVideoElement) => {
+    if (video.defaultPlaybackRate !== rateRef.current) video.defaultPlaybackRate = rateRef.current;
+  }, []);
+  // Applied when the rate changes, not on mount at 1: a feed card mounting must not reset a nudge
+  // or a recovery already running on its elements.
+  const lastAppliedRateRef = React.useRef(1);
+  React.useEffect(() => {
+    rateRef.current = playbackRate;
+    if (playbackRate === lastAppliedRateRef.current) return;
+    lastAppliedRateRef.current = playbackRate;
+    for (const video of [slot1VideoRef.current, slot2VideoRef.current]) {
+      if (!video) continue;
+      video.playbackRate = playbackRate;
+      keepDefaultRate(video);
+    }
+  }, [keepDefaultRate, playbackRate]);
   const pendingSeekSecondsRef = React.useRef<number | null>(null);
   // An automatic cut holds physical playback without changing the viewer's play/pause intent.
   const transitionHoldRef = React.useRef<{ resume: boolean } | null>(null);
@@ -968,6 +1036,17 @@ export function useDebatePlayback(
     lastSyncSeekAtRef.current = Date.now();
   }, []);
 
+  /**
+   * Finish the debate where its elements stopped. Every playable recording can end short of the
+   * timeline when geo-chat padded it (GEO-3778), and the end card keys on the playhead.
+   */
+  const endAtTimeline = React.useCallback(() => {
+    lastRunningPlayheadRef.current = timelineSeconds;
+    setPlayheadSeconds(timelineSeconds);
+    setPlaying(false);
+    setTurnState(null);
+  }, [setPlaying, timelineSeconds]);
+
   // `playhead` is debate-timeline seconds (0 = debate start). Map it onto each recording's
   // own currentTime via that recording's start offset so the two videos stay aligned.
   // We deliberately don't gate on a finite `video.duration`: MediaRecorder WebM files ship
@@ -978,17 +1057,35 @@ export function useDebatePlayback(
       const primaryVideo = slot1VideoRef.current;
       const secondaryVideo = slot2VideoRef.current;
       if (!primaryVideo || !secondaryVideo) return false;
-      moveTo(primaryVideo, Math.max(0, playhead - offsets.slot1));
-      moveTo(secondaryVideo, Math.max(0, playhead - offsets.slot2));
-      primaryVideo.playbackRate = 1;
-      secondaryVideo.playbackRate = 1;
+      const primaryTarget = Math.max(0, playhead - offsets.slot1);
+      const secondaryTarget = Math.max(0, playhead - offsets.slot2);
+      // An element that ended early stopped on its own while its partner played on (GEO-3778).
+      // Sent back inside its recording, it has to play again, or the pair reads as split.
+      const restart = [
+        { video: primaryVideo, partner: secondaryVideo, target: primaryTarget },
+        { video: secondaryVideo, partner: primaryVideo, target: secondaryTarget },
+      ].filter(
+        ({ video, partner, target }) =>
+          video.paused && !partner.paused && mediaFinished(video) && !atOrPastMediaEnd(video, target)
+      );
+      moveTo(primaryVideo, primaryTarget);
+      moveTo(secondaryVideo, secondaryTarget);
+      for (const { video } of restart) {
+        void video.play().catch(() => {
+          /* A refusal leaves it paused, and the next tick handles the split. */
+        });
+      }
+      primaryVideo.playbackRate = rateRef.current;
+      secondaryVideo.playbackRate = rateRef.current;
+      keepDefaultRate(primaryVideo);
+      keepDefaultRate(secondaryVideo);
       noteDeliberateSeek();
       // This *is* the debate's position now — a scrub backwards must not be dragged forward by
       // where playback had previously got to.
       lastRunningPlayheadRef.current = playhead;
       return true;
     },
-    [noteDeliberateSeek, offsets]
+    [keepDefaultRate, noteDeliberateSeek, offsets]
   );
 
   /**
@@ -1001,7 +1098,7 @@ export function useDebatePlayback(
   const resyncFollowerHeld = React.useCallback((follower: HTMLVideoElement, seconds: number) => {
     const hold = holdForTransitionRef.current?.();
     follower.currentTime = seconds;
-    follower.playbackRate = 1;
+    follower.playbackRate = rateRef.current;
     if (!hold) return;
     stopHeldResyncRef.current?.();
     const primaryVideo = slot1VideoRef.current;
@@ -1178,9 +1275,22 @@ export function useDebatePlayback(
 
     // The leader is never corrected, so a nudge left on it from before the roles swapped (a turn
     // boundary, or the viewer unmuting) goes now.
-    if (leader && leader.playbackRate !== 1) leader.playbackRate = 1;
+    const rate = rateRef.current;
+    if (leader && leader.playbackRate !== rate) leader.playbackRate = rate;
+    if (leader) keepDefaultRate(leader);
+    if (follower) keepDefaultRate(follower);
 
-    if (leader && follower && pairIsSettled && !leader.paused && !follower.seeking && !leaderStalled) {
+    // An element that ended early holds its last frame (GEO-3778), so there is no drift to correct.
+    const eitherFinished = mediaFinished(leader) || mediaFinished(follower);
+    if (
+      leader &&
+      follower &&
+      pairIsSettled &&
+      !eitherFinished &&
+      !leader.paused &&
+      !follower.seeking &&
+      !leaderStalled
+    ) {
       const drift = follower.currentTime - (leader.currentTime - followerDelta);
       const absDrift = Math.abs(drift);
 
@@ -1189,20 +1299,20 @@ export function useDebatePlayback(
         lastSyncSeekAtRef.current = now;
         if (bufferedAheadSeconds(follower, target) >= SYNC_SEEK_BUFFERED_SECONDS) {
           follower.currentTime = target;
-          follower.playbackRate = 1;
+          follower.playbackRate = rate;
         } else {
           resyncFollowerHeld(follower, target);
         }
       } else if (absDrift > SYNC_NUDGE_DRIFT_SECONDS) {
         // Small enough that a rate change closes it within a few seconds, and far enough from 1
         // to actually converge. On the muted element, so the pitch shift is not heard at all.
-        follower.playbackRate = drift > 0 ? 1 - SYNC_NUDGE_RATE : 1 + SYNC_NUDGE_RATE;
-      } else if (follower.playbackRate !== 1) {
-        follower.playbackRate = 1;
+        follower.playbackRate = rate * (drift > 0 ? 1 - SYNC_NUDGE_RATE : 1 + SYNC_NUDGE_RATE);
+      } else if (follower.playbackRate !== rate) {
+        follower.playbackRate = rate;
       }
-    } else if (follower && follower.playbackRate !== 1) {
+    } else if (follower && follower.playbackRate !== rate) {
       // Never leave a nudge running once the pair is no longer being kept in step.
-      follower.playbackRate = 1;
+      follower.playbackRate = rate;
     }
 
     /**
@@ -1220,9 +1330,20 @@ export function useDebatePlayback(
      */
     const primaryUnplayable = Boolean(primaryVideo?.error);
     const secondaryUnplayable = Boolean(secondaryVideo?.error);
+    const primaryFinished = mediaFinished(primaryVideo);
     // Whichever element still speaks for whether the debate is running. Slot 1, as everywhere
-    // else in this file, unless slot 1 is the one that cannot play.
-    const runningVideo = primaryUnplayable ? secondaryVideo : primaryVideo;
+    // else in this file, unless slot 1 cannot play or has stopped at its end (GEO-3778).
+    const runningVideo = primaryUnplayable || (primaryFinished && primaryVideo?.paused) ? secondaryVideo : primaryVideo;
+
+    // Every element that can play has played its recording out, which can be short of the
+    // timeline when a recording was padded (GEO-3778). That is the end of the debate.
+    if (primaryVideo && secondaryVideo && playhead < timelineSeconds) {
+      const playable = [primaryVideo, secondaryVideo].filter(video => !video.error);
+      if (playable.length > 0 && playable.every(video => video.paused && mediaFinished(video))) {
+        endAtTimeline();
+        return;
+      }
+    }
 
     // Keep both videos in the same play/pause state. If the browser pauses one
     // on its own (e.g. it blocks the unmuted speaker under autoplay policy),
@@ -1235,17 +1356,31 @@ export function useDebatePlayback(
     // listening to — and records it as a *user* pause, which auto-resume then refuses to undo.
     // That is the reported bug: switch windows and the debate goes silent until you click it.
     // A hidden tab is reconciled on return instead; see the visibilitychange effect below.
+    //
+    // One that stopped at its end is finished, not paused: the other carries on (GEO-3778). So the
+    // split is between the element still meant to play and the rest, and once one has finished,
+    // the browser stopping the other leaves both paused while the card still says playing.
+    const primaryHeld = Boolean(primaryVideo?.paused && mediaFinished(primaryVideo));
+    const secondaryHeld = Boolean(secondaryVideo?.paused && mediaFinished(secondaryVideo));
+    const splitPair =
+      primaryVideo &&
+      secondaryVideo &&
+      (primaryVideo.paused !== secondaryVideo.paused
+        ? !mediaFinished(primaryVideo.paused ? primaryVideo : secondaryVideo)
+        : primaryVideo.paused && primaryHeld !== secondaryHeld && playingRef.current);
     if (
       primaryVideo &&
       secondaryVideo &&
+      splitPair &&
       pairIsSettled &&
       !primaryUnplayable &&
       !secondaryUnplayable &&
-      primaryVideo.paused !== secondaryVideo.paused &&
       playhead < timelineSeconds
     ) {
-      const stillPlaying = primaryVideo.paused ? secondaryVideo : primaryVideo;
-      const stopped = primaryVideo.paused ? primaryVideo : secondaryVideo;
+      // With one held at its end, the stopped one is the other, and pausing the held one is a no-op.
+      const primaryStopped = primaryVideo.paused !== secondaryVideo.paused ? primaryVideo.paused : secondaryHeld;
+      const stillPlaying = primaryStopped ? secondaryVideo : primaryVideo;
+      const stopped = primaryStopped ? primaryVideo : secondaryVideo;
       stillPlaying.pause();
       /*
        * Unless the browser was refusing sound rather than stopping playback (GEO-3594).
@@ -1334,8 +1469,11 @@ export function useDebatePlayback(
       // refusals, not a lifetime total, and a turn that hands over to a healthy element resets it.
       if (speaking && !speaking.paused) backgroundRestartAttemptsRef.current = 0;
 
+      const speakingTarget = Math.max(0, playhead - speakingOffset);
       if (
         speaking?.paused &&
+        // `play()` at its end would restart it from 0 (GEO-3778).
+        !atOrPastMediaEnd(speaking, speakingTarget) &&
         listening &&
         !listening.paused &&
         backgroundRestartAttemptsRef.current < MAX_BACKGROUND_RESTART_ATTEMPTS &&
@@ -1343,13 +1481,22 @@ export function useDebatePlayback(
       ) {
         lastBackgroundRestartAtRef.current = now;
         backgroundRestartAttemptsRef.current += 1;
-        speaking.currentTime = Math.max(0, playhead - speakingOffset);
+        speaking.currentTime = speakingTarget;
         void speaking.play().catch(() => {
           /* The browser is entitled to refuse an off-screen start; the return path retries. */
         });
       }
     }
-  }, [offsets, resyncFollowerHeld, seekVideosTo, timelineSeconds, turnStateAt]);
+  }, [
+    endAtTimeline,
+    keepDefaultRate,
+    offsets,
+    resyncFollowerHeld,
+    seekVideosTo,
+    setPlaying,
+    timelineSeconds,
+    turnStateAt,
+  ]);
 
   const pauseBoth = React.useCallback(() => {
     if (transitionHoldRef.current) transitionHoldRef.current.resume = false;
@@ -1359,7 +1506,7 @@ export function useDebatePlayback(
     setPlaying(false);
     setUserPaused(true);
     setTurnState(null);
-  }, [videos]);
+  }, [setPlaying, videos]);
 
   const resumeBoth = React.useCallback(
     async (fromSeconds?: number) => {
@@ -1392,7 +1539,20 @@ export function useDebatePlayback(
       // stale clock and rewind the pair over audio the viewer heard while away.
       const resumeFrom =
         fromSeconds ?? pairPlayhead(primaryVideo, secondaryVideo, offsets, lastRunningPlayheadRef.current).seconds;
-      seekVideosTo(clampSeconds(resumeFrom, timelineSeconds));
+      const target = clampSeconds(resumeFrom, timelineSeconds);
+      // A recording that ends before `target` holds its last frame rather than being played, since
+      // `play()` on an element at its end restarts it from 0 (GEO-3778).
+      const primaryHeld = atOrPastMediaEnd(primaryVideo, target - offsets.slot1);
+      const secondaryHeld = atOrPastMediaEnd(secondaryVideo, target - offsets.slot2);
+      seekVideosTo(target);
+      const playable = [
+        { video: primaryVideo, held: primaryHeld },
+        { video: secondaryVideo, held: secondaryHeld },
+      ].filter(({ video }) => !video.error);
+      if (playable.length > 0 && playable.every(({ held }) => held)) {
+        endAtTimeline();
+        return;
+      }
       // allSettled never rejects, so a failed play() (e.g. blocked by autoplay
       // policy) leaves the video paused rather than throwing — check both the
       // settled results and the paused state, and surface the error inline.
@@ -1404,14 +1564,18 @@ export function useDebatePlayback(
       setIsResuming(true);
       let outcome: PlayBothOutcome;
       try {
-        outcome = await playBothWithMutedFallback(primaryVideo, secondaryVideo, {
-          // The helper spends most of its runtime asleep confirming, and a pause, a scrub or a
-          // scroll-away lands in that window routinely. Bumping the generation is how all of those
-          // say "these elements are mine now", so it is the cancellation signal — checked inside,
-          // before the muted retry, because by the time this returns the retry's `play()` has
-          // already happened and no state check here can take it back.
-          isCancelled: () => resumeGenerationRef.current !== generation,
-        });
+        outcome = await playBothWithMutedFallback(
+          primaryHeld ? null : primaryVideo,
+          secondaryHeld ? null : secondaryVideo,
+          {
+            // The helper spends most of its runtime asleep confirming, and a pause, a scrub or a
+            // scroll-away lands in that window routinely. Bumping the generation is how all of those
+            // say "these elements are mine now", so it is the cancellation signal — checked inside,
+            // before the muted retry, because by the time this returns the retry's `play()` has
+            // already happened and no state check here can take it back.
+            isCancelled: () => resumeGenerationRef.current !== generation,
+          }
+        );
       } finally {
         resumesInFlightRef.current--;
         // Only the last one out: overlapping attempts are normal here, and the renderer must not
@@ -1453,6 +1617,14 @@ export function useDebatePlayback(
       }
 
       if (resumeGenerationRef.current !== generation) return;
+
+      // A recording whose duration was unknown can end during the attempt (GEO-3778). With
+      // nothing left playing, the debate is over.
+      const stillPlayable = [primaryVideo, secondaryVideo].filter(video => !video.error);
+      if (stillPlayable.length > 0 && stillPlayable.every(video => video.paused && mediaFinished(video))) {
+        endAtTimeline();
+        return;
+      }
 
       if (outcome === 'refused' || outcome === 'blocked') {
         // The elements and the playback state belong to *this* attempt, so they stay under the
@@ -1513,7 +1685,7 @@ export function useDebatePlayback(
       // Whatever refused last time has stopped refusing.
       setAutoplayBlocked(false);
     },
-    [offsets, seekVideosTo, timelineSeconds]
+    [endAtTimeline, offsets, seekVideosTo, setPlaying, timelineSeconds]
   );
 
   const holdForTransition = React.useCallback((): TransitionHold => {
@@ -1547,7 +1719,7 @@ export function useDebatePlayback(
         setPlaying(false);
       },
     };
-  }, [offsets, playing, resumeBoth, timelineSeconds, videos]);
+  }, [offsets, playing, resumeBoth, setPlaying, timelineSeconds, videos]);
   React.useLayoutEffect(() => {
     holdForTransitionRef.current = holdForTransition;
   }, [holdForTransition]);
@@ -1669,9 +1841,15 @@ export function useDebatePlayback(
           release();
           return;
         }
-        recovered.currentTime = Math.max(0, partner.currentTime + partnerOffset - recoveredOffset);
-        recovered.playbackRate = 1;
+        const target = Math.max(0, partner.currentTime + partnerOffset - recoveredOffset);
+        recovered.currentTime = target;
+        recovered.playbackRate = rateRef.current;
         noteDeliberateSeek();
+        // Past its end it holds its last frame: `play()` there would restart it from 0 (GEO-3778).
+        if (atOrPastMediaEnd(recovered, target)) {
+          release();
+          return;
+        }
         void recovered
           .play()
           .catch(() => {
@@ -1711,7 +1889,7 @@ export function useDebatePlayback(
         } else setPlaying(false);
       }
     },
-    [resumeBoth, seekVideosTo, timelineSeconds, turnStateAt, updateTurnState]
+    [resumeBoth, seekVideosTo, setPlaying, timelineSeconds, turnStateAt, updateTurnState]
   );
 
   const ready = Boolean(urls.slot1 && urls.slot2);
@@ -1805,7 +1983,7 @@ export function useDebatePlayback(
     setPlaying(false);
     setTurnState(null);
     return null;
-  }, [offsets, timelineSeconds, turnStateAt]);
+  }, [offsets, setPlaying, timelineSeconds, turnStateAt]);
 
   const backgroundIntentRef = React.useRef<{
     shouldBePlaying: boolean;
@@ -1859,7 +2037,7 @@ export function useDebatePlayback(
     for (const video of videos()) video.pause();
     setPlaying(false);
     setTurnState(null);
-  }, [videos]);
+  }, [setPlaying, videos]);
 
   // While the viewer drags the scrubber, pause the videos so the playback clock stops
   // advancing the playhead out from under the drag. We don't flip userPaused (so the
@@ -1878,7 +2056,7 @@ export function useDebatePlayback(
     setIsScrubbing(true);
     for (const video of videos()) video.pause();
     setPlaying(false);
-  }, [playing, videos]);
+  }, [playing, setPlaying, videos]);
 
   const endScrub = React.useCallback(() => {
     // Idempotent: pointerup and lostpointercapture can both fire, so only the
@@ -1948,6 +2126,7 @@ export function useDebatePlayback(
     mutedByUser,
     muteChosen,
     setMutedByUser,
+    clearSoundBlocked,
     playheadSeconds,
     livePositionMs,
     recordingStartSeconds,
@@ -1967,6 +2146,7 @@ export function useDebatePlayback(
     togglePlayback,
     playFromStart,
     resumeBoth,
+    pauseBoth,
     holdForTransition,
     suspend,
     seekBoth,

@@ -231,6 +231,16 @@ export type TaggedClaimFilters = {
    * search ranks its hits, and re-sorting them by age would bury the claim the viewer typed.
    */
   order?: TaggedClaimOrder;
+  /**
+   * GEO-3775. Only these claims (`normId`'d), on top of every other clause: the agenda-only lists
+   * pass the claims a debate agenda lists, so the list, its total, both facets and a search all
+   * describe the same agenda set, answered by the server.
+   *
+   * Beside the tag clause rather than instead of it, so the tag relation still decides a claim's
+   * space. `null` or undefined narrows nothing; `[]` narrows to nothing, as `searchClaimIds` does.
+   * Keyed, so it must be a stable, sorted array.
+   */
+  onlyClaimIds?: string[] | null;
 };
 
 export type TaggedClaimOrder = 'best' | 'newest';
@@ -418,13 +428,18 @@ export function taggedEntityFilter(
   //
   // A claim carrying a topic the text matched answers it too (`searchTopicIds`), so the facets and
   // counts built on this clause cover both kinds of match.
+  //
+  // Under `onlyClaimIds` the search's ids are narrowed to that set first, so the request carries one
+  // `id in` rather than two. The set still needs its own clause wherever something else can admit a
+  // claim: no search at all, or the topics a search reaches through.
+  const onlyClaimIds = filters.onlyClaimIds ?? null;
+  const searchTopicIds = searchClaimIds !== null ? searchTopicKey(filters) : null;
   if (searchClaimIds !== null) {
-    const searchTopicIds = searchTopicKey(filters);
-    and.push(
-      searchTopicIds
-        ? { or: [{ id: { in: searchClaimIds } }, carriesAnyTopic(searchTopicIds)] }
-        : { id: { in: searchClaimIds } }
-    );
+    const ids = onlyClaimIds === null ? searchClaimIds : onlyClaimIdsIn(searchClaimIds, onlyClaimIds);
+    and.push(searchTopicIds ? { or: [{ id: { in: ids } }, carriesAnyTopic(searchTopicIds)] } : { id: { in: ids } });
+  }
+  if (onlyClaimIds !== null && (searchClaimIds === null || searchTopicIds)) {
+    and.push({ id: { in: onlyClaimIds } });
   }
 
   // An anti-join through the vote table's primary key (gaia#987), so it costs the same however
@@ -434,6 +449,15 @@ export function taggedEntityFilter(
   }
 
   return { and };
+}
+
+/**
+ * The ids of `ids` that `onlyClaimIds` (already `normId`'d) admits, in `ids`' order. Search hits
+ * arrive as the search endpoint spells them, so each is normalised before the lookup.
+ */
+export function onlyClaimIdsIn(ids: readonly string[], onlyClaimIds: readonly string[]): string[] {
+  const only = new Set(onlyClaimIds);
+  return ids.filter(id => only.has(uuidToHex(id)));
 }
 
 /**
@@ -552,6 +576,7 @@ const taggedSearchClaimsQueryKey = (tagId: string, filters: TaggedClaimFilters, 
     filters.eligibleSpaceIds,
     filters.excludeAnsweredBy ?? null,
     filters.spaceMatch ?? 'any',
+    filters.onlyClaimIds ?? null,
     ids,
   ] as const;
 
@@ -578,6 +603,7 @@ export const taggedClaimsQueryKey = (
     searchTopicKey(filters),
     filters.spaceMatch ?? 'any',
     filters.order ?? 'best',
+    filters.onlyClaimIds ?? null,
   ] as const;
 
 const NO_TAGGED_CLAIMS: TaggedClaim[] = [];
@@ -630,8 +656,19 @@ export function useTaggedClaims(tagId: string, filters: TaggedClaimFilters, enab
    * making and the unit the ordering below is meaningful within. Paging the list means asking the
    * search for another page, which adds a request here; the cursor query above does not run at all.
    */
+  // GEO-3775. Under `onlyClaimIds` a search page is narrowed to that set before it is asked for, and
+  // a page left with nothing is not asked for at all: a broad term against a small set would
+  // otherwise spend a graph request per search page on rows that cannot be listed.
+  const onlyClaimIds = filters.onlyClaimIds ?? null;
+  const searchIdPages = React.useMemo(
+    () =>
+      onlyClaimIds === null
+        ? search.idPages
+        : search.idPages.map(ids => onlyClaimIdsIn(ids, onlyClaimIds)).filter(ids => ids.length > 0),
+    [onlyClaimIds, search.idPages]
+  );
   const searchPages = useQueries({
-    queries: search.idPages.map(ids => ({
+    queries: searchIdPages.map(ids => ({
       // Its own key, not the list key with the ids appended. A one-page search would produce the
       // same key as the cursor query above, and the two store different shapes — an infinite
       // query's `{ pages }` against one page's `{ claims }` — so they answered each other's reads
@@ -680,6 +717,7 @@ export function useTaggedClaims(tagId: string, filters: TaggedClaimFilters, enab
       filters.topicSpaceIds ?? null,
       filters.excludeAnsweredBy ?? null,
       filters.spaceMatch ?? 'any',
+      filters.onlyClaimIds ?? null,
       searchTopicIds,
     ] as const,
     queryFn: ({ signal }) => {
@@ -960,6 +998,7 @@ export const taggedFacetQueryKey = (
     filters.topicSpaceIds ?? null,
     filters.excludeAnsweredBy ?? null,
     searchTopicKey(filters),
+    filters.onlyClaimIds ?? null,
   ] as const;
 
 const NO_FACET_COUNTS: TaggedFacetCount[] = [];

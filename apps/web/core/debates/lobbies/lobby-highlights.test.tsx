@@ -5,6 +5,8 @@ import * as React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type DebateClaimSummary, GeoChatRequestError } from '../api';
+import { AgendaClaimFilterContext } from '../todays-claims/agenda-claim-filter';
+import { agendaFilterFixture } from '../todays-claims/debate-agenda-fixtures';
 import {
   LobbyRoomClaimsWithHighlights,
   LobbyRoomVote,
@@ -243,6 +245,45 @@ describe('LobbyRoomVote', () => {
     render(<LobbyRoomVote lobby={lobby(false)} />);
     expect(screen.getByText('Nobody has voted yet')).toBeTruthy();
     expect(screen.getByText('0 of 4 voted')).toBeTruthy();
+  });
+});
+
+/**
+ * GEO-3775. In an agenda-only lobby a host's highlights and room vote are agenda claims only
+ * (`AGENDA_ONLY_LOBBY_HOST_LISTS`); one on no agenda still leaves the list below.
+ */
+describe('agenda-only', () => {
+  const inLobby = (filter: ReturnType<typeof agendaFilterFixture>, children: React.ReactNode) =>
+    render(<AgendaClaimFilterContext.Provider value={filter}>{children}</AgendaClaimFilterContext.Provider>);
+
+  it('draws only the highlights on an agenda, and still keeps the others out of the list below', () => {
+    mocks.state = stateWith({ vote: false });
+    inLobby(agendaFilterFixture({ ids: ['entity-elsewhere'] }), <LobbyRoomClaimsWithHighlights lobby={lobby(false)} />);
+    expect(screen.queryByTestId('lobby-highlighted-claims')).toBeNull();
+    expect([...(mocks.roomListProps?.excludeClaimIds ?? [])].sort()).toEqual(['h1', 'v']);
+
+    cleanup();
+    inLobby(agendaFilterFixture({ ids: ['entity-h1'] }), <LobbyRoomClaimsWithHighlights lobby={lobby(false)} />);
+    expect(within(screen.getByTestId('lobby-highlighted-claims')).getByTestId('card-h1')).toBeTruthy();
+  });
+
+  it('draws no highlight while the agendas load', () => {
+    mocks.state = stateWith({ vote: false });
+    inLobby(
+      agendaFilterFixture({ ids: ['entity-h1'], pending: true }),
+      <LobbyRoomClaimsWithHighlights lobby={lobby(false)} />
+    );
+    expect(screen.queryByTestId('lobby-highlighted-claims')).toBeNull();
+  });
+
+  it('neither draws nor hints a vote on a claim no agenda lists', () => {
+    inLobby(agendaFilterFixture({ ids: ['entity-h1'] }), <LobbyRoomVote lobby={lobby(false)} />);
+    expect(screen.queryByTestId('lobby-room-vote')).toBeNull();
+    expect(mocks.hint).toHaveBeenCalledWith('lobby', null, true);
+
+    cleanup();
+    inLobby(agendaFilterFixture({ ids: ['entity-v'] }), <LobbyRoomVote lobby={lobby(false)} />);
+    expect(screen.getByTestId('lobby-room-vote')).toBeTruthy();
   });
 });
 

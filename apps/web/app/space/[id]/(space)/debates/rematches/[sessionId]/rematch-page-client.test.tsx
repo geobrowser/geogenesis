@@ -546,6 +546,8 @@ function applyServerFilters(rows: ReturnType<typeof taggedRowsFor>, filters: any
       return false;
     }
     if (spaces && !row.tagSpaceIds.some(spaceId => spaces.some(picked => norm(picked) === norm(spaceId)))) return false;
+    // GEO-3775: the agenda-only list, answered by the server.
+    if (filters.onlyClaimIds != null && !filters.onlyClaimIds.includes(norm(row.entity.id))) return false;
     return true;
   });
   return kept;
@@ -954,6 +956,7 @@ const todays = vi.hoisted(() => ({
   countsAsked: [] as Array<Array<{ claimId: string; since: string }>>,
   /** How many of the two debaters are members of each space, by bare lowercase id. */
   members: {} as Record<string, number>,
+  refetch: (() => {}) as () => void,
 }));
 
 /** Each claim's newest listing, as `buildDebateAgendas` reports it: today's sections, then the week's. */
@@ -1012,6 +1015,35 @@ vi.mock('~/core/debates/todays-claims/debate-agendas', async importOriginal => {
       isLoading: todays.loading,
       error: todays.error,
     }),
+  };
+});
+
+/**
+ * GEO-3775. The agenda filter from the same agendas: the claims they list, held while they load and
+ * an error when they fail with none. Only on when the picker is agenda-only, as the page asks.
+ */
+vi.mock('~/core/debates/todays-claims/agenda-claim-filter', async importOriginal => {
+  const { INACTIVE_AGENDA_FILTER } =
+    await importOriginal<typeof import('~/core/debates/todays-claims/agenda-claim-filter')>();
+  return {
+    INACTIVE_AGENDA_FILTER,
+    useAgendaClaimFilter: (enabled: boolean) => {
+      if (!enabled) return INACTIVE_AGENDA_FILTER;
+      const listed = [...listedAtByClaim(todays.agendas).keys()].map(id => id.replace(/-/g, '').toLowerCase());
+      const ids = todays.loading || listed.length === 0 ? [] : [...new Set(listed)].sort();
+      const failed = !todays.loading && ids.length === 0 && todays.error !== null;
+      return {
+        active: true,
+        ids,
+        spaceIds: [],
+        key: ids.join(','),
+        has: (claimId: string) => ids.includes(claimId.replace(/-/g, '').toLowerCase()),
+        pending: todays.loading,
+        error: failed ? todays.error : null,
+        refetch: todays.refetch,
+        scopeFor: () => undefined,
+      };
+    },
   };
 });
 
@@ -2984,6 +3016,63 @@ describe('DebateRematchPageClient', () => {
 
     expect(screen.getByLabelText('Counting positions')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^Their positions/ })).not.toHaveTextContent('0');
+  });
+
+  // A failed lookup is an outage, not "none" — as My positions already shows it.
+  it('counts nothing rather than zero on Matches and Their positions when positions failed', async () => {
+    mocks.positions = [];
+    mocks.positionsError = new Error('positions exploded');
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await settleTabSwap();
+
+    expect(screen.getByLabelText('Counting matches')).toBeInTheDocument();
+    expect(screen.getByLabelText('Counting positions')).toBeInTheDocument();
+    expect(screen.getByLabelText('Counting your positions')).toBeInTheDocument();
+  });
+
+  it('counts nothing rather than zero when the claims behind the opponent’s positions failed', async () => {
+    mocks.votedByError = true;
+    mocks.entityHydrationErrorFor = CLAIM_SHARED;
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await settleTabSwap();
+
+    expect(screen.getByLabelText('Counting matches')).toBeInTheDocument();
+    expect(screen.getByLabelText('Counting positions')).toBeInTheDocument();
+  });
+
+  it('keeps the opponent’s counts when a refetch fails under them', async () => {
+    const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await settleTabSwap();
+    const matches = screen.getByRole('button', { name: /^Matches/ }).textContent;
+    const theirs = screen.getByRole('button', { name: /^Their positions/ }).textContent;
+    expect(matches).toMatch(/\d/);
+    expect(theirs).toMatch(/\d/);
+
+    // react-query keeps the data it has and reports the failure alongside it.
+    mocks.positionsError = new Error('positions exploded');
+    view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(screen.queryByLabelText('Counting matches')).toBeNull();
+    expect(screen.queryByLabelText('Counting positions')).toBeNull();
+    expect(screen.getByRole('button', { name: /^Matches/ })).toHaveTextContent(matches!);
+    expect(screen.getByRole('button', { name: /^Their positions/ })).toHaveTextContent(theirs!);
+  });
+
+  it('shows the real counts once a failed load succeeds', async () => {
+    const loaded = mocks.positions.filter(side => side.profileSpaceId !== 'profile-local');
+    mocks.positions = [];
+    mocks.positionsError = new Error('positions exploded');
+    const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await settleTabSwap();
+    expect(screen.getByLabelText('Counting positions')).toBeInTheDocument();
+
+    mocks.positions = loaded;
+    mocks.positionsError = null;
+    view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    await waitFor(() => expect(screen.queryByLabelText('Counting positions')).toBeNull());
+    expect(screen.queryByLabelText('Counting matches')).toBeNull();
+    expect(screen.getByRole('button', { name: /^Their positions/ })).toHaveTextContent('1');
   });
 
   /**
@@ -8462,20 +8551,93 @@ describe('agenda-only picker', () => {
     expect(tabButton(/^My positions/)).toHaveTextContent(/1$/);
   });
 
-  it('takes Explore, Related and From this debate out of the strip, and asks for none of their data', async () => {
+  it('keeps Related and From this debate out of the strip, and asks for none of their data', async () => {
     mocks.previousDebateClaimsEnabled = true;
-    mocks.featuredEnabledWith.length = 0;
     agendaListing([CLAIM_SHARED]);
     todays.entities = [sharedEntity()];
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await landed();
 
-    expect(screen.queryByRole('button', { name: 'Explore' })).toBeNull();
     expect(screen.queryByRole('button', { name: /^Related/ })).toBeNull();
     expect(screen.queryByRole('button', { name: /^From this debate/ })).toBeNull();
-    // Explore's catalogue was warmed in the background before; now it is never enabled.
-    expect(mocks.featuredEnabledWith.length).toBeGreaterThan(0);
-    expect(mocks.featuredEnabledWith.every(enabled => !enabled)).toBe(true);
+  });
+
+  /** GEO-3775. Explore is back, narrowed to the agendas' claims by the server. */
+  describe('Explore', () => {
+    const stripOrder = () =>
+      screen
+        .getAllByRole('button')
+        .filter(button => button.hasAttribute('data-tab-active') || button.hasAttribute('aria-pressed'))
+        .map(button => button.textContent ?? '')
+        .filter(label => /^(Their positions|Explore|My positions)/.test(label))
+        .map(label => label.replace(/\d+$/, ''));
+
+    it('sits between Their positions and My positions, and lists only agenda claims', async () => {
+      agendaListing([CLAIM_SHARED]);
+      todays.entities = [sharedEntity()];
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await landed();
+      expect(stripOrder()).toEqual(['Their positions', 'Explore', 'My positions']);
+
+      await showExplore();
+      expect(await screen.findByText('A claim both participants chose')).toBeInTheDocument();
+      // On the tag, but on no agenda.
+      expect(screen.queryByText('A newly published claim')).toBeNull();
+      expect(mocks.taggedFiltersAskedFor.at(-1).onlyClaimIds).toEqual([bare(CLAIM_SHARED)]);
+    });
+
+    it('asks the tag for nothing until the agendas answer', async () => {
+      todays.loading = true;
+      const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await settleTabSwap();
+      expect(mocks.featuredEnabledWith.length).toBeGreaterThan(0);
+      expect(mocks.featuredEnabledWith.every(enabled => !enabled)).toBe(true);
+
+      agendaListing([CLAIM_SHARED]);
+      todays.entities = [sharedEntity()];
+      todays.loading = false;
+      rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+      // The warm-up runs once they are in, under the agenda-only key.
+      await waitFor(() => expect(mocks.featuredEnabledWith).toContain(true));
+      const asked = mocks.taggedFiltersAskedFor.filter((_, index) => mocks.featuredEnabledWith[index]);
+      expect(asked.every(filters => filters.onlyClaimIds?.length === 1)).toBe(true);
+    });
+
+    it('calls an agenda outage an outage, not an empty list', async () => {
+      todays.error = new Error('gaia unavailable');
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await landed();
+
+      await showExplore();
+      expect(screen.getByText('Something went wrong.')).toBeInTheDocument();
+      expect(screen.queryByText('A newly published claim')).toBeNull();
+      expect(mocks.featuredEnabledWith.every(enabled => !enabled)).toBe(true);
+    });
+
+    it('says so when the agendas list nothing', async () => {
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await landed();
+
+      await showExplore();
+      expect(
+        await screen.findByText('No other claims on today’s agendas are available to debate yet.')
+      ).toBeInTheDocument();
+      expect(mocks.taggedFiltersAskedFor.at(-1).onlyClaimIds).toEqual([]);
+    });
+
+    it('attributes its cards to the agenda that lists them', async () => {
+      agendaListing([CLAIM_SHARED]);
+      todays.entities = [sharedEntity()];
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await landed();
+
+      mocks.cardSurfaces.length = 0;
+      await showExplore();
+      await screen.findByText('A claim both participants chose');
+      const card = [...mocks.cardSurfaces].reverse().find(surface => surface.claimId === CLAIM_SHARED);
+      expect(card?.listId).toBe('rematch_explore');
+      expect(card?.scope).toMatchObject({ agenda_id: 'agenda-today', agenda_date: '2026-11-13' });
+    });
   });
 
   it('lands on Today’s claims when no agenda lists anything, and an empty Matches leads back to it', async () => {

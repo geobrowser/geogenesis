@@ -438,6 +438,15 @@ export function manualReel(
   words: readonly ReelWord[],
   turns: readonly DebateMediaTurnSegment[]
 ): { clips: ManualClipBody[]; exact?: true } {
+  return manualReelWithCuts(clips, words, turns).reel;
+}
+
+/** `manualReel`, with the `geoChatCut` of each clip it worked out on the way, for `playedCuts`. */
+function manualReelWithCuts(
+  clips: readonly EditorClip[],
+  words: readonly ReelWord[],
+  turns: readonly DebateMediaTurnSegment[]
+): { reel: { clips: ManualClipBody[]; exact?: true }; cuts: ReturnType<typeof geoChatCut>[] } {
   const cuts = clips.map(clip => geoChatCut(clip, words, turns));
   const freeEdgeWidens = clips.some((clip, index) => {
     const cut = cuts[index];
@@ -447,7 +456,7 @@ export function manualReel(
       (edgeIsFree(clip, 'end') && cut.widened.end_ms > cut.trimmed.end_ms)
     );
   });
-  if (!freeEdgeWidens) return { clips: manualReelClips(clips) };
+  if (!freeEdgeWidens) return { reel: { clips: manualReelClips(clips) }, cuts };
   const sent = clips.map((clip, index) => {
     const cut = cuts[index];
     if (!cut) return clip;
@@ -464,7 +473,26 @@ export function manualReel(
     }
     return { ...clip, start_ms: start, end_ms: end };
   });
-  return { clips: manualReelClips(sent), exact: true };
+  return { reel: { clips: manualReelClips(sent), exact: true }, cuts };
+}
+
+/**
+ * What each clip of the reel will actually play, as geo-chat will cut it (GEO-3673), on the player's
+ * clock: a reel sent without `exact` has each clip widened into the quiet beside its words
+ * (`geoChatCut`); one sent `exact` is cut where `manualReel` sends it, which moves every snapped edge
+ * of the reel out to where geo-chat would have widened it. `null` for a clip with no whole word,
+ * which geo-chat refuses.
+ */
+export function playedCuts(
+  clips: readonly EditorClip[],
+  words: readonly ReelWord[],
+  turns: readonly DebateMediaTurnSegment[]
+): ({ start_ms: number; end_ms: number } | null)[] {
+  const { reel, cuts } = manualReelWithCuts(clips, words, turns);
+  if (!reel.exact) return cuts.map(cut => cut?.widened ?? null);
+  return reel.clips.map((sent, index) =>
+    cuts[index] ? { start_ms: Math.round(sent.start * 1000), end_ms: Math.round(sent.end * 1000) } : null
+  );
 }
 
 /** `m:ss.s`, as the editor shows a time. */
@@ -473,6 +501,14 @@ export function formatReelTime(ms: number): string {
   const minutes = Math.floor(tenths / 600);
   const seconds = (tenths % 600) / 10;
   return `${minutes}:${seconds.toFixed(1).padStart(4, '0')}`;
+}
+
+/**
+ * The debate's length to the whole second, as the player's transport and the lane's end both say it
+ * (one rule, so they never differ by a second): down to the second, as a video player counts.
+ */
+export function formatWholeTime(ms: number): string {
+  return formatReelTime(Math.floor(Math.max(0, ms) / 1000) * 1000).replace(/\.\d$/, '');
 }
 
 /** A typed time, `m:ss.s` or plain seconds, in ms; `null` when it is not one. */
@@ -488,4 +524,45 @@ export function parseReelTime(text: string): number | null {
 
 export function formatSeconds(ms: number): string {
   return `${(ms / 1000).toFixed(1)} s`;
+}
+
+/**
+ * A clip picked from the transcript in the side panel (GEO-3773, the prototype's `rangeFromWord` +
+ * `fitRange`): from the spoken word at or after `fromMs`, about `lengthMs` of one speaker's words in
+ * one stretch the render kept whole, kept clear of the other clips (`others`). A start inside another
+ * clip moves past it; an end that would run into the next clip stops before it. `null` when there
+ * is no word to start on.
+ */
+export function clipFromWords(
+  words: readonly ReelWord[],
+  fromMs: number,
+  lengthMs: number,
+  turns: readonly DebateMediaTurnSegment[],
+  others: readonly Pick<EditorClip, 'start_ms' | 'end_ms'>[]
+): { start_ms: number; end_ms: number; speaker: ParticipantSlot } | null {
+  const spoken = words.filter(isSpoken);
+  const sorted = [...others].sort((a, b) => a.start_ms - b.start_ms);
+  let at = spoken.findIndex(word => word.end_ms > fromMs);
+  if (at < 0) return null;
+  for (const other of sorted) {
+    if (at >= 0 && spoken[at].start_ms >= other.start_ms - 50 && spoken[at].start_ms < other.end_ms) {
+      at = spoken.findIndex(word => word.start_ms >= other.end_ms + 60);
+    }
+  }
+  if (at < 0) return null;
+  const first = spoken[at];
+  const start = first.start_ms;
+  let end = first.end_ms;
+  for (let next = at + 1; next < spoken.length; next++) {
+    const word = spoken[next];
+    if (word.end_ms > start + lengthMs + 600 || word.slot !== first.slot || !inOneStretch(start, word.end_ms, turns))
+      break;
+    end = word.end_ms;
+  }
+  const following = sorted.find(other => other.start_ms > start);
+  if (following && end > following.start_ms - 50) {
+    const before = spoken.filter(word => word.start_ms >= start && word.end_ms <= following.start_ms - 50);
+    end = before.length > 0 ? before[before.length - 1].end_ms : first.end_ms;
+  }
+  return { start_ms: start, end_ms: end, speaker: first.slot };
 }

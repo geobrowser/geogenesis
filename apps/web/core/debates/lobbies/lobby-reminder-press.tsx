@@ -55,6 +55,7 @@ function useQueuedLobbyReminder(reminder: ReturnType<typeof useDebateLobbyRemind
     label: 'your lobby reminder',
     requires: 'auth',
     liveOnly: true,
+    survivesRedirect: true,
     ready: authenticated && (lobbies !== undefined || list.isError),
     run: async (intent, { isCurrent }) => {
       let rows = lobbies;

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
+import { draggedClip } from './clip-drag';
 import { type EditorClip, type ReelWord, playerWords } from './reel';
-import { draggedClip, tickLabelLeft } from './reel-timeline';
-import { endClipAt, reelSentences, sentenceInClip, startClipAt } from './reel-transcript';
+import { reelSentences, sentenceInClip } from './reel-transcript';
 import { reelWarnings, spokenLength, trimmedEnd } from './reel-warnings';
 
 const word = (slot: 1 | 2, start: number, end: number, text = 'word'): ReelWord => ({
@@ -115,6 +115,19 @@ describe('reelWarnings (GEO-3672)', () => {
     ).toBeNull();
   });
 
+  // GEO-3773 (D4): a 5th or 6th clip is the admin's call, so the warning only says what we aim for.
+  it('says a reel of 5 or 6 clips is over the 4 we aim for, as one clip-count warning', () => {
+    const five = reelWarnings([...GOOD, clip(20_000, 30_000)], WORDS, nameOf).filter(w => w.id === 'clip-count');
+    expect(five).toEqual([
+      expect.objectContaining({ title: 'This reel has 5 clips. We aim for 4.', severity: 'warn' }),
+    ]);
+    const six = reelWarnings([...GOOD, clip(20_000, 30_000), clip(31_000, 40_000)], WORDS, nameOf).filter(
+      w => w.id === 'clip-count'
+    );
+    expect(six).toEqual([expect.objectContaining({ title: 'This reel has 6 clips. We aim for 4.' })]);
+    expect(reelWarnings(GOOD, WORDS, nameOf).find(w => w.id === 'clip-count')).toBeUndefined();
+  });
+
   it.each(['So', 'and', 'But,'])('warns about a clip opening on “%s” and starts it on the next word', opener => {
     const words = [word(1, 1_000, 1_300, opener), word(1, 1_400, 1_800, 'coffee'), ...WORDS.slice(20)];
     const warning = reelWarnings([clip(900, 9_000)], words, nameOf).find(w => w.id === 'opener-0')!;
@@ -208,6 +221,25 @@ describe('draggedClip (GEO-3672)', () => {
     });
   });
 
+  // The waveform panel (GEO-3673) places to one peaks bucket; the timeline keeps its tenth.
+  it('places a free edge to the step it is given', () => {
+    expect(draggedClip({ ...drag, mode: 'start' }, 1_234, words, 10_000, true, 10)).toEqual({
+      start_ms: 2_230,
+      end_ms: 3_400,
+      free_start_ms: 2_230,
+    });
+    expect(draggedClip({ ...drag, mode: 'end' }, -1_237, words, 10_000, true, 10)).toEqual({
+      start_ms: 1_000,
+      end_ms: 2_160,
+      free_end_ms: 2_160,
+    });
+    // Snapped, the step plays no part.
+    expect(draggedClip({ ...drag, mode: 'start' }, 1_234, words, 10_000, false, 10)).toEqual({
+      start_ms: 2_000,
+      end_ms: 3_400,
+    });
+  });
+
   it('never trims a clip under a second', () => {
     expect(draggedClip({ ...drag, mode: 'end' }, -3_000, words, 10_000, true)).toEqual({
       start_ms: 1_000,
@@ -219,16 +251,6 @@ describe('draggedClip (GEO-3672)', () => {
 
 describe('the transcript picker (GEO-3672)', () => {
   const sentence = { slot: 1 as const, start_ms: 20_000, end_ms: 24_000, text: 'Coffee is fine.' };
-
-  it('starts the clip at a sentence, its end following if it would come first', () => {
-    expect(startClipAt(clip(10_000, 30_000), sentence)).toMatchObject({ start_ms: 20_000, end_ms: 30_000 });
-    expect(startClipAt(clip(10_000, 15_000), sentence)).toMatchObject({ start_ms: 20_000, end_ms: 24_000 });
-  });
-
-  it('ends the clip at a sentence, its start following if it would come after', () => {
-    expect(endClipAt(clip(10_000, 30_000), sentence)).toMatchObject({ start_ms: 10_000, end_ms: 24_000 });
-    expect(endClipAt(clip(26_000, 30_000), sentence)).toMatchObject({ start_ms: 20_000, end_ms: 24_000 });
-  });
 
   it('counts a sentence as in a clip only when it reaches into it, not when it shares an edge', () => {
     expect(sentenceInClip(sentence, clip(24_000, 30_000))).toBe(false);
@@ -281,12 +303,5 @@ describe('the transcript picker (GEO-3672)', () => {
         ],
       }).map(s => s.text)
     ).toEqual(['We should', 'act now.']);
-  });
-});
-
-describe('tickLabelLeft (GEO-3769)', () => {
-  it('keeps a label half its width inside the track, so the first and last show in full', () => {
-    expect(tickLabelLeft('0%', '0:00')).toBe('clamp(2ch, 0%, calc(100% - 2ch))');
-    expect(tickLabelLeft('98.5%', '10:30')).toBe('clamp(2.5ch, 98.5%, calc(100% - 2.5ch))');
   });
 });

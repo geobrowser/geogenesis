@@ -24,8 +24,13 @@ import { useIsLobbyGuest } from './lobby-guest-hooks';
  * cache keys alone, each sorted so its key doesn't depend on order.
  */
 export function exploreRoomClaimBatches(entries: readonly { claim: { claim_entity_id: string } }[]): string[][] {
+  return roomClaimIdBatches(entries.map(entry => entry.claim.claim_entity_id));
+}
+
+/** Claim ids as filtered room reads take them: deduped, at most `LOBBY_CLAIMS_MAX_IDS` a batch, each sorted. */
+export function roomClaimIdBatches(claimIds: readonly string[]): string[][] {
   // Other ids get no room line: the filter refuses them.
-  const ids = [...new Set(entries.flatMap(entry => geoChatClaimId(entry.claim.claim_entity_id) ?? []))];
+  const ids = [...new Set(claimIds.flatMap(id => geoChatClaimId(id) ?? []))];
   return chunk(ids, LOBBY_CLAIMS_MAX_IDS).map(batch => batch.sort());
 }
 
@@ -76,24 +81,33 @@ export function nearBatchIndexes(batches: string[][], near: { has(id: string): b
  * a side. Keyed under "In this room", so its refetches cover these. Members only.
  */
 export function useLobbyExploreRoomClaims(lobbyId: string, batches: string[][]) {
+  const query = useNamedRoomClaimsQuery(lobbyId, 'explore');
+  return useQueries({ queries: batches.map(query), combine: combineRoomRows });
+}
+
+/**
+ * One filtered "In this room" read per batch of claim ids, as query options. Keyed under the room's
+ * read, so whatever refetches that refetches these. Members only: a guest has no filtered read.
+ */
+export function useNamedRoomClaimsQuery(lobbyId: string, label: string, enabled = true) {
   const { accountKey, authenticated, ready, getPrivyIdentityToken } = useGeoChatAuth();
   const guest = useIsLobbyGuest();
-  const enabled = !guest && Boolean(lobbyId) && ready && authenticated;
+  const on = enabled && !guest && Boolean(lobbyId) && ready && authenticated;
 
-  return useQueries({
-    queries: batches.map(ids => ({
+  return React.useCallback(
+    (ids: string[]) => ({
       ...debateQueryNetworkOptions,
       ...viewerReadRetryOptions(accountKey),
-      queryKey: [...debateQueryKeys.lobbyClaims(accountKey, lobbyId), 'explore', ids.join(',')] as const,
+      queryKey: [...debateQueryKeys.lobbyClaims(accountKey, lobbyId), label, ids.join(',')] as const,
       queryFn: async ({ signal }: { signal: AbortSignal }) =>
         namedRoomClaims(
           await getDebateLobbyClaims(dashlessId(lobbyId), getPrivyIdentityToken, accountKey, signal, ids),
           ids
         ),
-      enabled,
-    })),
-    combine: combineRoomRows,
-  });
+      enabled: on,
+    }),
+    [accountKey, getPrivyIdentityToken, label, lobbyId, on]
+  );
 }
 
 // Module-level so react-query keeps the combined map until a batch's data changes.
