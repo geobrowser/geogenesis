@@ -67,7 +67,12 @@ export function EditorMonitor({
       <div ref={stageRef} className="relative grid min-h-0 flex-1 place-items-center">
         <div
           className="relative overflow-hidden"
-          style={size ? { width: size.width, height: size.height } : { width: '100%', aspectRatio: '16 / 9' }}
+          data-player-box
+          style={
+            size
+              ? { width: size.width, height: size.height }
+              : { height: '100%', maxWidth: '100%', aspectRatio: PLAYER_ASPECT_CSS }
+          }
         >
           {player}
         </div>
@@ -187,7 +192,15 @@ function BarButton({
   );
 }
 
-/** The largest 16:9 box that fits the stage; `null` until measured (and in tests). */
+/**
+ * The player's own shape: the feed's two 480 × 289 tiles stacked, one debater over the other, so
+ * 480 × 578 (Preston, 16 Nov: the editor shows them as the feed does, not side by side). The stage
+ * letterboxes around it in black.
+ */
+const PLAYER_ASPECT = 480 / 578;
+const PLAYER_ASPECT_CSS = '480 / 578';
+
+/** The largest player-shaped box that fits the stage; `null` until measured (and in tests). */
 function useFitted(ref: React.RefObject<HTMLElement | null>) {
   const [size, setSize] = React.useState<{ width: number; height: number } | null>(null);
   React.useEffect(() => {
@@ -197,7 +210,9 @@ function useFitted(ref: React.RefObject<HTMLElement | null>) {
       const { clientWidth: width, clientHeight: height } = element;
       if (width === 0 || height === 0) return;
       const fitted =
-        width / height > 16 / 9 ? { width: (height * 16) / 9, height } : { width, height: (width * 9) / 16 };
+        width / height > PLAYER_ASPECT
+          ? { width: height * PLAYER_ASPECT, height }
+          : { width, height: width / PLAYER_ASPECT };
       setSize(current =>
         current && Math.abs(current.width - fitted.width) < 0.5 && Math.abs(current.height - fitted.height) < 0.5
           ? current

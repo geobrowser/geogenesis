@@ -2754,6 +2754,44 @@ describe('playing clips in the editor (GEO-3773)', () => {
     ).toBeInTheDocument();
   });
 
+  it('fits the player at its stacked 480 × 578 shape inside the monitor, letterboxed, badges on the stage', () => {
+    const size = { width: 1000, height: 400 };
+    const widthSpy = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(() => size.width);
+    const heightSpy = vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockImplementation(() => size.height);
+    try {
+      // A wide stage: the full height, the width the shape allows, black either side.
+      const wide = render(<MomentsEditor debateId={DEBATE_ID} />);
+      const box = () =>
+        screen.getByRole('region', { name: 'Debate player' }).querySelector<HTMLElement>('[data-player-box]')!;
+      expect(box().style.height).toBe('400px');
+      expect(parseFloat(box().style.width)).toBeCloseTo((400 * 480) / 578, 1);
+      // The label stays on the stage, beside the box, not inside the narrower video.
+      const label = within(screen.getByRole('region', { name: 'Debate player' })).getByText(/^Clip 1 · /);
+      expect(box().contains(label)).toBe(false);
+      expect(label.closest('[data-player-box]')).toBeNull();
+      expect(label.parentElement).toBe(box().parentElement);
+      wide.unmount();
+
+      // A narrow, tall stage: the full width, letterboxed above and below.
+      size.width = 300;
+      size.height = 800;
+      render(<MomentsEditor debateId={DEBATE_ID} />);
+      expect(box().style.width).toBe('300px');
+      expect(parseFloat(box().style.height)).toBeCloseTo((300 * 578) / 480, 1);
+    } finally {
+      widthSpy.mockRestore();
+      heightSpy.mockRestore();
+    }
+  });
+
+  it('keeps the player stacked before the stage is measured (no 16:9 box)', () => {
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    const box = screen.getByRole('region', { name: 'Debate player' }).querySelector<HTMLElement>('[data-player-box]')!;
+    expect(box.style.aspectRatio).toBe('480 / 578');
+    expect(box.style.height).toBe('100%');
+    expect(box.style.maxWidth).toBe('100%');
+  });
+
   it('says "Loading next clip" only between a reel’s clips, not while a single clip starts', () => {
     mocks.plan.data = entry({
       live_reel: {
