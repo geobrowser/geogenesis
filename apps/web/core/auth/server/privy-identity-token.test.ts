@@ -139,8 +139,26 @@ describe('verifyPrivyIdentityToken', () => {
     const result = await verifyPrivyIdentityToken(await sign(rotated.privateKey, 'new', claims()), {
       appId: APP_ID,
       fetcher,
+      now: () => Date.now() + 61_000,
     });
     expect(result?.userId).toBe('did:privy:abc');
+    expect(calls).toHaveLength(2);
+  });
+
+  it('refetches for unknown kids at most once a minute', async () => {
+    const { privateKey, jwk } = await keyPair('k1');
+    const stranger = await keyPair('stranger');
+    const { fetcher, calls } = jwksFetcher([jwk]);
+    await verifyPrivyIdentityToken(await sign(privateKey, 'k1', claims()), { appId: APP_ID, fetcher });
+
+    for (let i = 0; i < 5; i += 1) {
+      const forged = await sign(stranger.privateKey, `random-${i}`, claims());
+      await expect(verifyPrivyIdentityToken(forged, { appId: APP_ID, fetcher })).resolves.toBeNull();
+    }
+    expect(calls).toHaveLength(1);
+
+    const later = await sign(stranger.privateKey, 'random-late', claims());
+    await verifyPrivyIdentityToken(later, { appId: APP_ID, fetcher, now: () => Date.now() + 61_000 });
     expect(calls).toHaveLength(2);
   });
 

@@ -1,10 +1,9 @@
 /**
  * Server-side verification of a Privy identity token, so a route can know WHO is asking.
  *
- * Used directly by routes that need proof per request (For you, the ranking lab), and by
- * `POST /api/wallet-session`, which issues the signed session cookie every other server read trusts
- * (`core/cookie/wallet-session`). The browser sends the identity token it already holds (`getCachedIdentityToken`, the same one debates and
- * community calls send to their backends), and this checks it the way geo-chat does
+ * Used per request by For you and the ranking lab, and by `POST /api/wallet-session`, which issues
+ * the signed session every other server read trusts (`./wallet-session`). The browser sends the
+ * identity token it already holds (`getCachedIdentityToken`), and this checks it the way geo-chat does
  * (crates/auth/src/privy.rs): ES256 against Privy's published keys, issuer `privy.io`, audience
  * this app's Privy id, not expired. The user's Geo account is the embedded Ethereum wallet in its
  * `linked_accounts` claim.
@@ -14,6 +13,8 @@
 
 const JWKS_TTL_MS = 60 * 60 * 1000;
 const JWKS_FETCH_TIMEOUT_MS = 2_000;
+/** An unknown kid refetches keys at most this often, so forged kids cannot make every request call Privy. */
+const JWKS_FORCED_REFRESH_MIN_MS = 60_000;
 /** Accepted clock skew, in seconds, on exp / nbf / iat. */
 const CLOCK_SKEW_S = 30;
 
@@ -35,11 +36,9 @@ async function fetchJwks(appId: string, fetcher: typeof fetch): Promise<Jwk[]> {
   return Array.isArray(body.keys) ? body.keys : [];
 }
 
-async function keysFor(appId: string, fetcher: typeof fetch, forceRefresh: boolean): Promise<Jwk[]> {
-  const now = Date.now();
-  if (!forceRefresh && jwksCache && jwksCache.appId === appId && now - jwksCache.fetchedAt < JWKS_TTL_MS) {
-    return jwksCache.keys;
-  }
+async function keysFor(appId: string, fetcher: typeof fetch, forceRefresh: boolean, now: number): Promise<Jwk[]> {
+  const age = jwksCache && jwksCache.appId === appId ? now - jwksCache.fetchedAt : Infinity;
+  if (jwksCache && age < (forceRefresh ? JWKS_FORCED_REFRESH_MIN_MS : JWKS_TTL_MS)) return jwksCache.keys;
   const keys = await fetchJwks(appId, fetcher);
   jwksCache = { appId, keys, fetchedAt: now };
   return keys;
@@ -119,7 +118,8 @@ export async function verifyPrivyIdentityToken(
   const payload = decodeJson(payloadSegment);
   if (!header || !payload || header.alg !== 'ES256') return null;
 
-  const nowS = Math.floor((options.now?.() ?? Date.now()) / 1000);
+  const nowMs = options.now?.() ?? Date.now();
+  const nowS = Math.floor(nowMs / 1000);
   const aud = payload.aud;
   const audiences = Array.isArray(aud) ? aud : [aud];
   if (payload.iss !== 'privy.io' || !audiences.includes(options.appId)) return null;
@@ -139,7 +139,7 @@ export async function verifyPrivyIdentityToken(
   const signed = new TextEncoder().encode(`${headerSegment}.${payloadSegment}`);
 
   const verifyWith = async (forceRefresh: boolean): Promise<boolean | null> => {
-    const keys = await keysFor(options.appId, fetcher, forceRefresh);
+    const keys = await keysFor(options.appId, fetcher, forceRefresh, nowMs);
     const jwk = kid ? keys.find(k => k.kid === kid) : keys[0];
     if (!jwk) return null;
     const key = await crypto.subtle.importKey(
@@ -153,7 +153,7 @@ export async function verifyPrivyIdentityToken(
   };
 
   try {
-    // An unknown kid means Privy rotated keys since the cache was filled: refetch once.
+    // An unknown kid means Privy may have rotated keys: refetch once, rate-limited.
     let valid = await verifyWith(false);
     if (valid === null) valid = await verifyWith(true);
     if (!valid) return null;
