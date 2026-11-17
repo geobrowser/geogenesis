@@ -812,6 +812,26 @@ describe('a recording that ends before the timeline (GEO-3778)', () => {
     expect(pairPlayhead(slot1, slot2, offsets)).toEqual({ seconds: 30, live: false });
   });
 
+  it('does not restart, in the muted retry, an element that ended during the first attempt', async () => {
+    // Unknown duration: nothing could tell beforehand that this one was past its end.
+    const ending = { muted: true, paused: true, ended: false, plays: 0, play: async () => {} };
+    ending.play = async () => {
+      ending.plays += 1;
+      ending.ended = true;
+    };
+    // Refuses with sound, so the first attempt falls through to the muted retry.
+    const speaker = { muted: false, paused: true, plays: 0, play: async () => {} };
+    speaker.play = async () => {
+      speaker.plays += 1;
+      if (!speaker.muted) throw new DOMException('refused', 'NotAllowedError');
+      speaker.paused = false;
+    };
+
+    expect(await playBothWithMutedFallback(ending, speaker, { wait: async () => {} })).toBe('playing-muted');
+    expect(ending.plays).toBe(1);
+    expect(speaker.plays).toBe(2);
+  });
+
   it('starts only the element that has something left to play', async () => {
     const running = { muted: true, paused: true, plays: 0, play: async () => {} };
     running.play = async () => {

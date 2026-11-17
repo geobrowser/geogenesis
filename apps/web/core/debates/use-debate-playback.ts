@@ -267,7 +267,16 @@ export function useDebatePlayback(
   const [urlsLapsed, setUrlsLapsed] = React.useState(false);
   const [resignAttempt, setResignAttempt] = React.useState(0);
   const [error, setError] = React.useState<string | null>(null);
-  const [playing, setPlaying] = React.useState(false);
+  const [playing, setPlayingState] = React.useState(false);
+  /**
+   * `playing` for the tick, which must not take it as a dependency (see `mutedByUserRef`). Written
+   * with the state, not after render: a pause of ours queues a tick that has to see it (GEO-3778).
+   */
+  const playingRef = React.useRef(false);
+  const setPlaying = React.useCallback((next: boolean) => {
+    playingRef.current = next;
+    setPlayingState(next);
+  }, []);
   const [userPaused, setUserPaused] = React.useState(false);
   /**
    * The browser refused to start this pair, so the viewer has to.
@@ -395,8 +404,6 @@ export function useDebatePlayback(
    * into media event listeners, and a new identity on every mute toggle would re-bind them.
    */
   const mutedByUserRef = React.useRef(mutedByUser);
-  /** `playing` for the tick, for the same reason as `mutedByUserRef`. */
-  const playingRef = React.useRef(playing);
   const lastSyncSeekAtRef = React.useRef(0);
   /**
    * The mute each element had at the last tick, and when it last went from muted to unmuted.
@@ -699,10 +706,6 @@ export function useDebatePlayback(
   React.useEffect(() => {
     mutedByUserRef.current = mutedByUser;
   }, [mutedByUser]);
-
-  React.useEffect(() => {
-    playingRef.current = playing;
-  }, [playing]);
 
   // Which recordings `urls` currently holds signed URLs for, so re-entering a card does
   // not re-request them (GEO-2895).
@@ -1042,7 +1045,7 @@ export function useDebatePlayback(
     setPlayheadSeconds(timelineSeconds);
     setPlaying(false);
     setTurnState(null);
-  }, [timelineSeconds]);
+  }, [setPlaying, timelineSeconds]);
 
   // `playhead` is debate-timeline seconds (0 = debate start). Map it onto each recording's
   // own currentTime via that recording's start offset so the two videos stay aligned.
@@ -1484,19 +1487,26 @@ export function useDebatePlayback(
         });
       }
     }
-  }, [endAtTimeline, keepDefaultRate, offsets, resyncFollowerHeld, seekVideosTo, timelineSeconds, turnStateAt]);
+  }, [
+    endAtTimeline,
+    keepDefaultRate,
+    offsets,
+    resyncFollowerHeld,
+    seekVideosTo,
+    setPlaying,
+    timelineSeconds,
+    turnStateAt,
+  ]);
 
   const pauseBoth = React.useCallback(() => {
     if (transitionHoldRef.current) transitionHoldRef.current.resume = false;
     // Supersede any resume still confirming, so it cannot un-pause the viewer.
     resumeGenerationRef.current++;
-    // Before the pause below, so a tick it triggers does not read the stop as the browser's.
-    playingRef.current = false;
     for (const video of videos()) video.pause();
     setPlaying(false);
     setUserPaused(true);
     setTurnState(null);
-  }, [videos]);
+  }, [setPlaying, videos]);
 
   const resumeBoth = React.useCallback(
     async (fromSeconds?: number) => {
@@ -1608,6 +1618,14 @@ export function useDebatePlayback(
 
       if (resumeGenerationRef.current !== generation) return;
 
+      // A recording whose duration was unknown can end during the attempt (GEO-3778). With
+      // nothing left playing, the debate is over.
+      const stillPlayable = [primaryVideo, secondaryVideo].filter(video => !video.error);
+      if (stillPlayable.length > 0 && stillPlayable.every(video => video.paused && mediaFinished(video))) {
+        endAtTimeline();
+        return;
+      }
+
       if (outcome === 'refused' || outcome === 'blocked') {
         // The elements and the playback state belong to *this* attempt, so they stay under the
         // ownership check — pausing elements a newer resume has started would undo it.
@@ -1667,7 +1685,7 @@ export function useDebatePlayback(
       // Whatever refused last time has stopped refusing.
       setAutoplayBlocked(false);
     },
-    [endAtTimeline, offsets, seekVideosTo, timelineSeconds]
+    [endAtTimeline, offsets, seekVideosTo, setPlaying, timelineSeconds]
   );
 
   const holdForTransition = React.useCallback((): TransitionHold => {
@@ -1701,7 +1719,7 @@ export function useDebatePlayback(
         setPlaying(false);
       },
     };
-  }, [offsets, playing, resumeBoth, timelineSeconds, videos]);
+  }, [offsets, playing, resumeBoth, setPlaying, timelineSeconds, videos]);
   React.useLayoutEffect(() => {
     holdForTransitionRef.current = holdForTransition;
   }, [holdForTransition]);
@@ -1871,7 +1889,7 @@ export function useDebatePlayback(
         } else setPlaying(false);
       }
     },
-    [resumeBoth, seekVideosTo, timelineSeconds, turnStateAt, updateTurnState]
+    [resumeBoth, seekVideosTo, setPlaying, timelineSeconds, turnStateAt, updateTurnState]
   );
 
   const ready = Boolean(urls.slot1 && urls.slot2);
@@ -1965,7 +1983,7 @@ export function useDebatePlayback(
     setPlaying(false);
     setTurnState(null);
     return null;
-  }, [offsets, timelineSeconds, turnStateAt]);
+  }, [offsets, setPlaying, timelineSeconds, turnStateAt]);
 
   const backgroundIntentRef = React.useRef<{
     shouldBePlaying: boolean;
@@ -2019,7 +2037,7 @@ export function useDebatePlayback(
     for (const video of videos()) video.pause();
     setPlaying(false);
     setTurnState(null);
-  }, [videos]);
+  }, [setPlaying, videos]);
 
   // While the viewer drags the scrubber, pause the videos so the playback clock stops
   // advancing the playhead out from under the drag. We don't flip userPaused (so the
@@ -2038,7 +2056,7 @@ export function useDebatePlayback(
     setIsScrubbing(true);
     for (const video of videos()) video.pause();
     setPlaying(false);
-  }, [playing, videos]);
+  }, [playing, setPlaying, videos]);
 
   const endScrub = React.useCallback(() => {
     // Idempotent: pointerup and lostpointercapture can both fire, so only the

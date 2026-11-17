@@ -333,7 +333,8 @@ export function orderedParticipants(debate: Debate) {
 export { speakerLabel } from './debater-name';
 
 /** The two elements this helper needs, so tests do not have to build a whole `HTMLVideoElement`. */
-export type PlayableVideo = Pick<HTMLVideoElement, 'muted' | 'paused'> & { play: () => Promise<void> };
+export type PlayableVideo = Pick<HTMLVideoElement, 'muted' | 'paused'> &
+  Partial<Pick<HTMLVideoElement, 'ended'>> & { play: () => Promise<void> };
 
 /**
  * `'refused'` and `'blocked'` are both "it did not start", and the difference between them is
@@ -407,12 +408,15 @@ const PLAY_CONFIRM_INTERVAL_MS = 75;
 
 const defaultWait = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
 
+/** An element that ended while starting has played out, which is as settled as running. */
+const runningOrEnded = (video: PlayableVideo) => !video.paused || Boolean(video.ended);
+
 async function allRunning(members: PlayableVideo[], wait: (ms: number) => Promise<void>): Promise<boolean> {
   for (let poll = 0; poll < PLAY_CONFIRM_POLLS; poll++) {
-    if (members.every(video => !video.paused)) return true;
+    if (members.every(runningOrEnded)) return true;
     await wait(PLAY_CONFIRM_INTERVAL_MS);
   }
-  return members.every(video => !video.paused);
+  return members.every(runningOrEnded);
 }
 
 /**
@@ -441,8 +445,11 @@ export async function playBothWithMutedFallback(
   secondary: PlayableVideo | null,
   { wait = defaultWait, isCancelled }: PlayBothOptions = {}
 ): Promise<PlayBothOutcome> {
-  const members = [primary, secondary].filter((video): video is PlayableVideo => video !== null);
-  const allMuted = () => members.every(video => video.muted);
+  const slots = [primary, secondary].filter((video): video is PlayableVideo => video !== null);
+  // Re-read on every attempt: a recording whose duration was unknown can end during the first
+  // one, and the retry must not restart it from 0.
+  const members = () => slots.filter(video => !video.ended);
+  const allMuted = () => members().every(video => video.muted);
   /**
    * Whether the browser said no, as opposed to simply not having started yet.
    *
@@ -452,10 +459,11 @@ export async function playBothWithMutedFallback(
    * attempt. Only the first is a fact about the device.
    */
   const attempt = async (): Promise<{ running: boolean; refused: boolean }> => {
-    const settled = await Promise.allSettled(members.map(video => video.play()));
+    const starting = members();
+    const settled = await Promise.allSettled(starting.map(video => video.play()));
     const refused = settled.some(result => result.status === 'rejected' && isRefusal(result.reason));
 
-    return { running: await allRunning(members, wait), refused };
+    return { running: await allRunning(starting, wait), refused };
   };
 
   const first = await attempt();
@@ -510,7 +518,7 @@ export async function playBothWithMutedFallback(
   // 'playing-muted' is paired by the caller with the state change that makes the mute the
   // rendered truth. 'blocked' is repaired by whoever renders `muted`, once the attempt is over —
   // `DebateFeedPlayer` re-asserts it when `isResuming` falls.
-  for (const video of members) video.muted = true;
+  for (const video of members()) video.muted = true;
 
   const retry = await attempt();
 

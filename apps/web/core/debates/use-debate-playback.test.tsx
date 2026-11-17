@@ -3287,6 +3287,68 @@ describe('useDebatePlayback — a recording that ends before the timeline (GEO-3
     expect(result.current.playbackEnded).toBe(false);
   });
 
+  // The pause event of our own pause() ticks before React re-renders, so it lands in the same act.
+  it('does not record a pause when a card with one recording held is scrolled away', async () => {
+    const { result, long } = await playingWithShort(1);
+
+    act(() => {
+      result.current.suspend();
+      result.current.onPlaybackTick();
+    });
+
+    expect(result.current.playing).toBe(false);
+    expect(result.current.userPaused).toBe(false);
+
+    // Back in view, autoplay resumes the one with something left to play.
+    await act(async () => {
+      void result.current.resumeBoth();
+      await Promise.resolve();
+      long.settlePlay();
+      await new Promise(resolve => setTimeout(resolve, 50));
+    });
+    expect(result.current.playing).toBe(true);
+  });
+
+  it('shows the end card, with no recorded pause, after a scrub released at the end', async () => {
+    const { result } = await playingWithShort(1);
+
+    act(() => {
+      result.current.beginScrub();
+      result.current.onPlaybackTick();
+    });
+    act(() => result.current.seekBoth(TIMELINE));
+    act(() => result.current.endScrub());
+    act(() => result.current.onPlaybackTick());
+
+    expect(result.current.userPaused).toBe(false);
+    expect(result.current.playbackEnded).toBe(true);
+  });
+
+  it('ends, rather than restarting anything, when both recordings run out during a resume', async () => {
+    // No known durations, as for a cue-less WebM that has not been played through.
+    const { result, slot1, slot2 } = await mountedPair();
+    act(() => result.current.seekBoth(59));
+    expect(result.current.playbackEnded).toBe(false);
+
+    await act(async () => {
+      void result.current.resumeBoth();
+      await Promise.resolve();
+      for (const video of [slot1, slot2]) {
+        video.settlePlay();
+        Object.defineProperty(video, 'ended', { value: true, configurable: true });
+        video.browserPause();
+      }
+      await new Promise(resolve => setTimeout(resolve, 400));
+    });
+
+    expect(slot1.plays).toBe(1);
+    expect(slot2.plays).toBe(1);
+    expect(result.current.playing).toBe(false);
+    expect(result.current.playbackEnded).toBe(true);
+    expect(result.current.error).toBeNull();
+    expect(result.current.userPaused).toBe(false);
+  });
+
   it('ends a debate whose recordings both stop short of the timeline', async () => {
     const { result, slot1, slot2 } = await mountedPair();
     withDuration(slot1, 59);
