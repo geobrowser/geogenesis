@@ -57,7 +57,10 @@ export function EditorMonitor({
   onRate: (rate: PlaybackRate) => void;
 }) {
   const stageRef = React.useRef<HTMLDivElement>(null);
-  const size = useFitted(stageRef);
+  // The combined-video fallback is one 480 × 289 tile, not two stacked: the box takes its shape so
+  // the stage centres it instead of leaving it at the top of a two-tile box.
+  const aspect = disabled ? COMBINED_ASPECT : PLAYER_ASPECT;
+  const size = useFitted(stageRef, aspect);
   return (
     <div
       role="region"
@@ -67,7 +70,12 @@ export function EditorMonitor({
       <div ref={stageRef} className="relative grid min-h-0 flex-1 place-items-center">
         <div
           className="relative overflow-hidden"
-          style={size ? { width: size.width, height: size.height } : { width: '100%', aspectRatio: '16 / 9' }}
+          data-player-box
+          style={
+            size
+              ? { width: size.width, height: size.height }
+              : { height: '100%', maxWidth: '100%', aspectRatio: disabled ? COMBINED_ASPECT_CSS : PLAYER_ASPECT_CSS }
+          }
         >
           {player}
         </div>
@@ -187,8 +195,19 @@ function BarButton({
   );
 }
 
-/** The largest 16:9 box that fits the stage; `null` until measured (and in tests). */
-function useFitted(ref: React.RefObject<HTMLElement | null>) {
+/**
+ * The player's own shape: the feed's two 480 × 289 tiles stacked, one debater over the other, so
+ * 480 × 578 (Preston, 16 Nov: the editor shows them as the feed does, not side by side). The stage
+ * letterboxes around it in black.
+ */
+const PLAYER_ASPECT = 480 / 578;
+const PLAYER_ASPECT_CSS = '480 / 578';
+/** The combined-video fallback: one rendered 480 × 289 video. */
+const COMBINED_ASPECT = 480 / 289;
+const COMBINED_ASPECT_CSS = '480 / 289';
+
+/** The largest player-shaped box that fits the stage; `null` until measured (and in tests). */
+function useFitted(ref: React.RefObject<HTMLElement | null>, aspect: number) {
   const [size, setSize] = React.useState<{ width: number; height: number } | null>(null);
   React.useEffect(() => {
     const element = ref.current;
@@ -196,8 +215,7 @@ function useFitted(ref: React.RefObject<HTMLElement | null>) {
     const measure = () => {
       const { clientWidth: width, clientHeight: height } = element;
       if (width === 0 || height === 0) return;
-      const fitted =
-        width / height > 16 / 9 ? { width: (height * 16) / 9, height } : { width, height: (width * 9) / 16 };
+      const fitted = width / height > aspect ? { width: height * aspect, height } : { width, height: width / aspect };
       setSize(current =>
         current && Math.abs(current.width - fitted.width) < 0.5 && Math.abs(current.height - fitted.height) < 0.5
           ? current
@@ -208,6 +226,6 @@ function useFitted(ref: React.RefObject<HTMLElement | null>) {
     observer.observe(element);
     measure();
     return () => observer.disconnect();
-  }, [ref]);
+  }, [ref, aspect]);
   return size;
 }

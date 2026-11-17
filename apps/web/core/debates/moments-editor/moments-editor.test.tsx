@@ -12,6 +12,7 @@ import { inlinePlaybackUnavailableAtom } from '../browse/inline-playback';
 import { RENDERED_TURN_SEGMENTS } from '../open-rounds-media-fixtures';
 import type { MomentBackfillEntry, MomentBackfillStatus } from './api';
 import {
+  EXTRA_CLIP_TOOLTIP,
   MomentsEditor,
   RESTORE_FAILED_EDIT_LABEL,
   claimsBySpeaker,
@@ -19,7 +20,7 @@ import {
   keepClaimWithSpeaker,
 } from './moments-editor';
 import { playerWords } from './reel';
-import { SELECTION_SETTLE_MS, coveredWords, selectionAnchorRect, wordsOnly } from './reel-transcript';
+import { SELECTION_SETTLE_MS, transcriptRenderCount } from './reel-transcript';
 
 const DEBATE_ID = '01a0448a-61d3-7101-8434-a20fdadf6f97';
 
@@ -63,22 +64,33 @@ const mocks = vi.hoisted(() => ({
   peaks: { kind: 'loading' } as unknown,
 }));
 
+const DEFAULT_WORDS = [
+  { participant_slot: 1, start_ms: 1_000, end_ms: 1_400, text: 'Coffee' },
+  { participant_slot: 1, start_ms: 1_500, end_ms: 2_900, text: 'dates' },
+  { participant_slot: 2, start_ms: 5_000, end_ms: 5_400, text: 'Dinner' },
+];
+/** The transcript as a query serves it: the same object until what it holds changes. */
+let servedTranscript: { key: unknown[]; data: unknown } | null = null;
+function transcriptData() {
+  const key = [mocks.wordTiming, wordsOverride, sentencesOverride];
+  if (!servedTranscript || key.some((part, at) => part !== servedTranscript!.key[at])) {
+    servedTranscript = {
+      key,
+      data: {
+        word_timing: mocks.wordTiming,
+        words: wordsOverride ?? DEFAULT_WORDS,
+        ...(sentencesOverride && { sentences: sentencesOverride }),
+      },
+    };
+  }
+  return servedTranscript.data;
+}
+
 vi.mock('../hooks', () => ({
   useDebateTranscript: () =>
     mocks.transcriptFailed
       ? { isPending: false, data: undefined, error: new Error('down') }
-      : {
-          isPending: false,
-          data: {
-            word_timing: mocks.wordTiming,
-            words: wordsOverride ?? [
-              { participant_slot: 1, start_ms: 1_000, end_ms: 1_400, text: 'Coffee' },
-              { participant_slot: 1, start_ms: 1_500, end_ms: 2_900, text: 'dates' },
-              { participant_slot: 2, start_ms: 5_000, end_ms: 5_400, text: 'Dinner' },
-            ],
-            ...(sentencesOverride && { sentences: sentencesOverride }),
-          },
-        },
+      : { isPending: false, data: transcriptData() },
   useGeoChatAuth: () => ({ ready: true, authenticated: true, accountKey: 'a', getPrivyIdentityToken: async () => 't' }),
   useDebate: () => ({
     data: {
@@ -201,6 +213,18 @@ function typeEdge(edge: 'Start' | 'End', value: string, clip?: number) {
   const field = edgeField(edge);
   fireEvent.change(field, { target: { value } });
   fireEvent.blur(field);
+}
+/** Selects transcript words `from` to `to` (indexes) with the pointer, and lets go. */
+function selectWords(from: number, to: number) {
+  const root = screen.getByTestId('reel-transcript');
+  const word = (index: number) => root.querySelector<HTMLElement>(`[data-word="${index}"]`)!.firstChild!;
+  fireEvent.pointerDown(root);
+  const range = document.createRange();
+  range.setStart(word(from), 0);
+  range.setEnd(word(to), word(to).textContent!.length);
+  window.getSelection()!.removeAllRanges();
+  window.getSelection()!.addRange(range);
+  fireEvent.pointerUp(document);
 }
 /** The header's Publish, which opens its confirm. */
 const publishButton = () =>
@@ -1270,7 +1294,9 @@ describe('MomentsEditor (GEO-3671)', () => {
     expect(screen.getByRole('button', { name: /Use playhead/ })).toBeDisabled();
     fireEvent.click(screen.getByRole('button', { name: 'Back to the transcript' }));
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'New clip here' })[1]);
+    // Words selected in the transcript make the first clip.
+    selectWords(2, 2);
+    fireEvent.click(screen.getByRole('button', { name: 'New clip from these words' }));
     expect(edgeField('Start')).toHaveValue('0:05.0');
     expect(card(1)).toHaveAttribute('role', 'group');
     expect(clipPanel()).toHaveAccessibleName('Clip 1, Urban');
@@ -1281,21 +1307,31 @@ describe('MomentsEditor (GEO-3671)', () => {
     sentencesOverride = [{ participant_slot: 1, start_ms: 1_000, end_ms: 2_900, text: 'Coffee dates.' }];
     mocks.plan.data = entry({ refusal: 'media_job_active' });
     render(<MomentsEditor debateId={DEBATE_ID} />);
-    expect(screen.queryByRole('button', { name: 'New clip here' })).not.toBeInTheDocument();
+    selectWords(0, 1);
+    expect(screen.getByRole('group', { name: 'Clip from the selected words' })).toHaveTextContent('0:01.0 to 0:02.9');
+    expect(screen.queryByRole('button', { name: /these words$/ })).not.toBeInTheDocument();
   });
 
   // Nothing is edited while a request runs (GEO-3773): the transcript's edits included, not only the clip panel's.
   it('offers no new clip from the transcript while a request is in flight', () => {
-    sentencesOverride = [{ participant_slot: 1, start_ms: 1_000, end_ms: 2_900, text: 'Coffee dates.' }];
+    sentencesOverride = [
+      { participant_slot: 1, start_ms: 1_000, end_ms: 2_900, text: 'Coffee dates.' },
+      { participant_slot: 2, start_ms: 5_000, end_ms: 5_400, text: 'Dinner.' },
+    ];
     const { rerender } = render(<MomentsEditor debateId={DEBATE_ID} />);
-    expect(screen.getByRole('button', { name: 'New clip here' })).toBeInTheDocument();
+    selectWords(2, 2);
+    expect(screen.getByRole('button', { name: 'New clip from these words' })).toBeInTheDocument();
+    expect(within(screen.getByTestId('reel-transcript')).getAllByRole('slider')).toHaveLength(2);
 
     mocks.backfill.data = {
       request: status({ status: 'queued', requested_at: '2026-11-11T21:05:00Z' }),
       entry: null,
     };
     rerender(<MomentsEditor debateId={DEBATE_ID} />);
-    expect(screen.queryByRole('button', { name: 'New clip here' })).not.toBeInTheDocument();
+    selectWords(2, 2);
+    expect(screen.getByRole('group', { name: 'Clip from the selected words' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /these words$/ })).not.toBeInTheDocument();
+    expect(within(screen.getByTestId('reel-transcript')).queryByRole('slider')).not.toBeInTheDocument();
   });
 
   it('marks the selected card on a read-only reel, and offers no Advanced options it could not open', () => {
@@ -1733,7 +1769,8 @@ describe('MomentsEditor transcript selection (GEO-3766)', () => {
 
   const transcript = () => screen.getByTestId('reel-transcript');
   const wordSpan = (index: number) => transcript().querySelector<HTMLElement>(`[data-word="${index}"]`)!;
-  const timecodes = () => [...transcript().querySelectorAll<HTMLElement>('span.font-mono')];
+  /** Each turn's timecode, in the gutter. */
+  const timecodes = () => [...transcript().querySelectorAll<HTMLElement>('span.text-right')];
   /** Drags a selection from one point to another, as the pointer does, and lets go. */
   const select = (start: [Node, number], end: [Node, number], downOn: Element = transcript()) => {
     fireEvent.pointerDown(downOn);
@@ -1756,8 +1793,6 @@ describe('MomentsEditor transcript selection (GEO-3766)', () => {
     fireEvent(document, new Event('selectionchange'));
     act(() => vi.advanceTimersByTime(SELECTION_SETTLE_MS));
   };
-  const buttonRow = (sentence: number) =>
-    within(transcript()).getAllByRole('button', { name: /^Play from/ })[sentence].parentElement!;
 
   it('sets the selected clip to exactly the highlighted words, partial words counting whole', () => {
     render(<MomentsEditor debateId={DEBATE_ID} />);
@@ -1799,11 +1834,12 @@ describe('MomentsEditor transcript selection (GEO-3766)', () => {
 
   it('reads an end resting on a timecode, a clip’s badge or a space from the nearest selected word', () => {
     render(<MomentsEditor debateId={DEBATE_ID} />);
-    // Timecode of "Cheap." to the timecode of "Dinner wins.": only "Cheap." is between them.
-    select([timecodes()[1].firstChild!, 0], [timecodes()[2].firstChild!, 1]);
+    // Susan's turn's timecode to Urban's: only Susan's words are between them.
+    select([timecodes()[0].firstChild!, 0], [timecodes()[1].firstChild!, 1]);
     fireEvent.click(screen.getByRole('button', { name: 'Set clip 1 to these words' }));
-    expect(edgeField('Start')).toHaveValue('0:03.0');
+    expect(edgeField('Start')).toHaveValue('0:01.0');
     expect(edgeField('End')).toHaveValue('0:03.4');
+    typeEdge('Start', '0:03.0');
 
     // Clip 1's badge sits before its first word, "Cheap." now.
     const badge = wordSpan(2).previousSibling as HTMLElement;
@@ -1812,13 +1848,16 @@ describe('MomentsEditor transcript selection (GEO-3766)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Set clip 1 to these words' }));
     expect(edgeField('Start')).toHaveValue('0:03.0');
 
-    // From the space before "dates." to the very start of "Cheap.", which covers none of it.
-    const space = wordSpan(1).previousSibling!;
+    // From the space before "Dinner" to the very start of "wins.", which covers none of it.
+    typeEdge('Start', '0:01.0');
+    const space = wordSpan(4).previousSibling!;
     expect(space.textContent).toBe(' ');
-    select([space, 0], [textOf(2), 0]);
-    fireEvent.click(screen.getByRole('button', { name: 'Set clip 1 to these words' }));
-    expect(edgeField('Start')).toHaveValue('0:01.5');
-    expect(edgeField('End')).toHaveValue('0:02.9');
+    select([wordSpan(3).firstChild!, 6], [textOf(4), 0]);
+    expect(screen.queryByRole('group', { name: 'Clip from the selected words' })).not.toBeInTheDocument();
+    select([space, 0], [textOf(4), 2]);
+    fireEvent.click(screen.getByRole('button', { name: 'New clip from these words' }));
+    expect(edgeField('Start')).toHaveValue('0:05.5');
+    expect(edgeField('End')).toHaveValue('0:05.9');
   });
 
   it('allows both debaters’ words, warning that it is an exchange of whoever says the most', () => {
@@ -1853,55 +1892,66 @@ describe('MomentsEditor transcript selection (GEO-3766)', () => {
     expect(screen.queryByRole('button', { name: /these words$/ })).not.toBeInTheDocument();
   });
 
-  it('marks each clip’s words, the selected clip’s highlighted, with its number at its first word', () => {
+  it('marks each clip’s words, the selected clip’s stronger, with its number at its first word', () => {
     render(<MomentsEditor debateId={DEBATE_ID} />);
     // The served moment, 1.0 to 3.0 s, plays "Coffee dates.".
-    expect(wordSpan(0)).toHaveClass('underline', 'decoration-purple', 'bg-ctaTertiary');
-    expect(wordSpan(1)).toHaveClass('underline', 'bg-ctaTertiary');
-    expect(wordSpan(2)).not.toHaveClass('underline');
-    expect(wordSpan(0).previousSibling).toHaveTextContent('1');
+    expect(wordSpan(0)).toHaveClass('bg-purple/10', 'bg-purple/25');
+    expect(wordSpan(1)).toHaveClass('bg-purple/25');
+    expect(wordSpan(2)).not.toHaveClass('bg-purple/10');
+    expect(wordSpan(0).previousSibling).toHaveAccessibleName('Select clip 1');
+    // Every turn: its timecode and its speaker.
+    expect(timecodes().map(timecode => timecode.textContent)).toEqual(['0:01', '0:05']);
+    deselect();
+    expect(wordSpan(0)).toHaveClass('bg-purple/10');
+    expect(wordSpan(0)).not.toHaveClass('bg-purple/25');
   });
 
-  it('keeps the timecodes, badges, speaker names and buttons out of a selection', () => {
+  it('keeps the timecodes, clip numbers and speaker names out of a selection', () => {
     render(<MomentsEditor debateId={DEBATE_ID} />);
     for (const timecode of timecodes()) expect(timecode).toHaveClass('select-none');
     expect(wordSpan(0).previousSibling).toHaveClass('select-none');
     expect(screen.getAllByText('Susan Winter').find(el => transcript().contains(el))!).toHaveClass('select-none');
-    expect(buttonRow(0)).toHaveClass('select-none');
   });
 
-  it('hides the sentences’ buttons while words are selected, and brings them back after', () => {
-    render(<MomentsEditor debateId={DEBATE_ID} />);
-    expect(buttonRow(0)).toHaveClass('group-hover:flex');
-    select([textOf(0), 0], [textOf(1), 3]);
-    expect(buttonRow(0)).not.toHaveClass('group-hover:flex');
-    expect(buttonRow(2)).not.toHaveClass('group-hover:flex');
-
-    window.getSelection()!.removeAllRanges();
-    fireEvent(document, new Event('selectionchange'));
-    expect(buttonRow(0)).toHaveClass('group-hover:flex');
-  });
-
-  it('shows no toolbar for a plain click, and the sentence buttons still work', () => {
+  it('shows no toolbar for a plain click; a click goes to the word, or picks the clip it is in', () => {
     render(<MomentsEditor debateId={DEBATE_ID} />);
     select([textOf(1), 2], [textOf(1), 2], wordSpan(1));
-    expect(screen.queryByRole('button', { name: /these words$/ })).not.toBeInTheDocument();
-    expect(buttonRow(1)).toHaveClass('group-hover:flex');
-    // Pressing a button must not hide its row under the pointer before the click lands.
-    const startHere = screen.getAllByRole('button', { name: 'Start clip 1 here' })[1];
-    fireEvent.pointerDown(startHere);
-    expect(buttonRow(1)).toHaveClass('group-hover:flex');
-    fireEvent.click(startHere);
-    fireEvent.pointerUp(document);
-    expect(edgeField('Start')).toHaveValue('0:03.0');
+    expect(screen.queryByRole('group', { name: 'Clip from the selected words' })).not.toBeInTheDocument();
+    playerMocks.handle.seek.mockClear();
+    fireEvent.click(wordSpan(2));
+    expect(playerMocks.handle.seek).toHaveBeenLastCalledWith(3_000);
+    // A word of the selected clip goes there too.
+    fireEvent.click(wordSpan(1));
+    expect(playerMocks.handle.seek).toHaveBeenLastCalledWith(1_500);
+    expect(isSelected(1)).toBe(true);
   });
 
-  it('shows a word on the line between two sentences once, in the sentence it opens', () => {
+  it('picks a clip from its number or one of its words in the transcript', () => {
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    select([textOf(3), 0], [textOf(4), 5]);
+    fireEvent.click(screen.getByRole('button', { name: 'New clip from these words' }));
+    expect(isSelected(2)).toBe(true);
+    fireEvent.click(within(transcript()).getByRole('button', { name: 'Select clip 1' }));
+    expect(isSelected(1)).toBe(true);
+    fireEvent.click(wordSpan(4));
+    expect(isSelected(2)).toBe(true);
+  });
+
+  it('ignores the click that ends a drag across words', () => {
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    select([textOf(3), 0], [textOf(4), 5]);
+    playerMocks.handle.seek.mockClear();
+    fireEvent.click(wordSpan(4));
+    expect(playerMocks.handle.seek).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'New clip from these words' })).toBeInTheDocument();
+  });
+
+  it('shows a word on the line between two sentences once, in its turn', () => {
     wordsOverride = [...WORDS, { participant_slot: 1, start_ms: 2_950, end_ms: 2_990, text: ' Yes,' }];
     render(<MomentsEditor debateId={DEBATE_ID} />);
     // Sorted by start, "Yes," is word 2, said after "Coffee dates." ends and before "Cheap." starts.
     expect(transcript().querySelectorAll('[data-word="2"]')).toHaveLength(1);
-    expect(wordSpan(2).closest('.group')).toHaveTextContent(/^0:01\s*1Coffee dates\. Yes,Start/);
+    expect(wordSpan(2).closest('.grid')).toHaveTextContent(/^0:01Susan Winter1Coffee dates\. Yes, Cheap\.$/);
     expect(transcript().querySelectorAll('[data-word]')).toHaveLength(6);
   });
 
@@ -1947,7 +1997,7 @@ describe('MomentsEditor transcript selection (GEO-3766)', () => {
   it('offers nothing for a drag that starts outside the transcript, even when it rests', () => {
     vi.useFakeTimers();
     render(<MomentsEditor debateId={DEBATE_ID} />);
-    const heading = screen.getByRole('heading', { name: 'Transcript' });
+    const heading = screen.getByRole('heading', { level: 1 });
     fireEvent.pointerDown(heading);
     selectByKeyboard(range => {
       range.setStart(heading.firstChild!, 0);
@@ -1972,53 +2022,21 @@ describe('MomentsEditor transcript selection (GEO-3766)', () => {
     expect(screen.getByRole('button', { name: 'New clip from these words' })).toBeInTheDocument();
   });
 
-  it('moves the toolbar with the transcript when the transcript scrolls', () => {
+  it('closes the toolbar when the transcript scrolls', () => {
     render(<MomentsEditor debateId={DEBATE_ID} />);
-    transcript().style.overflow = 'auto';
-    const listen = vi.spyOn(transcript(), 'addEventListener');
     select([textOf(3), 0], [textOf(4), 5]);
     expect(screen.getByRole('button', { name: 'New clip from these words' })).toBeInTheDocument();
-    expect(listen).toHaveBeenCalledWith('scroll', expect.any(Function), expect.anything());
+    fireEvent.scroll(transcript());
+    expect(screen.queryByRole('group', { name: 'Clip from the selected words' })).not.toBeInTheDocument();
   });
 
-  it('marks no clip on a sentence for a blank word the clip takes in', () => {
-    wordsOverride = [...WORDS, { participant_slot: 1, start_ms: 3_050, end_ms: 3_100, text: ' ' }];
-    mocks.plan.data = entry({
-      live_reel: {
-        clock: 'video',
-        clips: [{ start_ms: 900, end_ms: 3_200, speaker_slot: 0, claim_index: 0, claim_text: 'Coffee is low stakes' }],
-      },
-    });
-    render(<MomentsEditor debateId={DEBATE_ID} />);
-    // "Cheap." starts at 3.0 s: the blank word is its sentence's, inside the clip, but nothing is heard.
-    expect(buttonRow(0).closest('.group')!.className).toMatch(/shadow-/);
-    expect(buttonRow(1).closest('.group')!.className).not.toMatch(/shadow-/);
-  });
-
-  it('opens the toolbar for a drag pressed on a word that ends past the transcript box', async () => {
+  it('opens the toolbar for a drag pressed on a word that ends past the transcript box', () => {
     render(<MomentsEditor debateId={DEBATE_ID} />);
     // Dragging past the box's bottom edge autoscrolls it and ends the selection on the page below it.
     const below = document.createElement('div');
     below.textContent = 'Below the transcript';
     document.body.append(below);
-    // The toolbar is pinned by the range `readPick` keeps: it must end on a transcript word, inside
-    // the scroll box, not on the element below that the drag ended on (`wordsOnly`).
-    const pinnedBy: Range[] = [];
-    const spy = vi.spyOn(Range.prototype, 'getClientRects').mockImplementation(function (this: Range) {
-      pinnedBy.push(this);
-      return [] as unknown as DOMRectList;
-    });
-    try {
-      select([textOf(3), 0], [below.firstChild!, 3], wordSpan(3));
-      expect(screen.getByRole('button', { name: 'New clip from these words' })).toBeInTheDocument();
-      await waitFor(() => expect(pinnedBy.length).toBeGreaterThan(0));
-      for (const range of pinnedBy) {
-        expect(transcript().contains(range.endContainer)).toBe(true);
-        expect(range.toString()).toBe('Dinner wins.');
-      }
-    } finally {
-      spy.mockRestore();
-    }
+    select([textOf(3), 0], [below.firstChild!, 3], wordSpan(3));
     fireEvent.click(screen.getByRole('button', { name: 'New clip from these words' }));
     expect(clipPanel()).toHaveAccessibleName(/^Clip 2, /);
     expect(edgeField('Start')).toHaveValue('0:05.0');
@@ -2036,8 +2054,13 @@ describe('MomentsEditor transcript selection (GEO-3766)', () => {
     fireEvent.pointerDown(wordSpan(1));
     window.getSelection()!.setBaseAndExtent(textOf(1), 3, above.firstChild!, 2);
     fireEvent.pointerUp(document);
-    fireEvent.click(screen.getByRole('button', { name: 'New clip from these words' }));
-    expect(clipPanel()).toHaveAccessibleName(/^Clip 2, /);
+    // "Coffee dates." is clip 1's: a new clip of them would overlap it.
+    expect(screen.getByRole('button', { name: 'New clip from these words' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'New clip from these words' })).toHaveAttribute(
+      'title',
+      'Overlaps clip 1'
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Set clip 1 to these words' }));
     expect(edgeField('Start')).toHaveValue('0:01.0');
     expect(edgeField('End')).toHaveValue('0:02.9');
     above.remove();
@@ -2052,7 +2075,8 @@ describe('MomentsEditor transcript selection (GEO-3766)', () => {
       ...WORDS.slice(3),
     ];
     render(<MomentsEditor debateId={DEBATE_ID} />);
-    expect(buttonRow(1).parentElement!.textContent).toMatch(/^Cheap\./);
+    // The word " Cheap." is said in "Coffee dates.", the sentence "Cheap." shows as its text.
+    expect(within(transcript()).getAllByText('Cheap.')).toHaveLength(2);
   });
 
   it('offers nothing from a selection while the reel is read-only', () => {
@@ -2070,49 +2094,6 @@ describe('MomentsEditor transcript selection (GEO-3766)', () => {
     render(<MomentsEditor debateId={DEBATE_ID} />);
     select([textOf(0), 0], [textOf(1), 3]);
     expect(screen.queryByRole('button', { name: 'Set clip 1 to these words' })).not.toBeInTheDocument();
-  });
-});
-
-describe('wordsOnly (GEO-3766)', () => {
-  it('pulls an end that a drag left outside the transcript back to the outermost word it covers', () => {
-    document.body.innerHTML =
-      '<h2>Transcript</h2><div id="root"><span data-word="0">Coffee</span> <span data-word="1">dates.</span></div><p>Clip list</p>';
-    const root = document.getElementById('root')!;
-    const [heading, , below] = [...document.body.children];
-    const range = document.createRange();
-    range.setStart(root.querySelector('[data-word="0"]')!.firstChild!, 2);
-    range.setEnd(below.firstChild!, 4);
-    const kept = wordsOnly(range, root, coveredWords(range, root));
-    expect(root.contains(kept.endContainer)).toBe(true);
-    expect(kept.toString()).toBe('ffee dates.');
-    range.setStart(heading.firstChild!, 3);
-    range.setEnd(root.querySelector('[data-word="1"]')!.firstChild!, 3);
-    expect(wordsOnly(range, root, coveredWords(range, root)).toString()).toBe('Coffee dat');
-    document.body.innerHTML = '';
-  });
-});
-
-describe('selectionAnchorRect (GEO-3766)', () => {
-  const box = (left: number, top: number, right: number, bottom: number) =>
-    new DOMRect(left, top, right - left, bottom - top);
-  const rangeWith = (lines: DOMRect[]) =>
-    ({
-      getClientRects: () => lines as unknown as DOMRectList,
-      getBoundingClientRect: () => box(0, 0, 1_000, 1_000),
-    }) as unknown as Range;
-  const root = { getBoundingClientRect: () => box(100, 100, 500, 400) } as Element;
-  // DOMRect's sides are getters, which toEqual does not see.
-  const sides = (rect: DOMRect) => [rect.left, rect.top, rect.right, rect.bottom];
-
-  it('pins to the selection’s last line, not its whole box', () => {
-    expect(sides(selectionAnchorRect(rangeWith([box(120, 150, 480, 170), box(120, 170, 260, 190)]), root))).toEqual([
-      120, 170, 260, 190,
-    ]);
-  });
-
-  it('keeps an end scrolled out of the transcript at the transcript’s edge', () => {
-    expect(sides(selectionAnchorRect(rangeWith([box(120, 420, 260, 440)]), root))).toEqual([120, 400, 260, 400]);
-    expect(sides(selectionAnchorRect(rangeWith([box(120, 60, 260, 80)]), root))).toEqual([120, 100, 260, 100]);
   });
 });
 
@@ -2773,6 +2754,79 @@ describe('playing clips in the editor (GEO-3773)', () => {
     ).toBeInTheDocument();
   });
 
+  it('fits the player at its stacked 480 × 578 shape inside the monitor, letterboxed, badges on the stage', () => {
+    const size = { width: 1000, height: 400 };
+    const widthSpy = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(() => size.width);
+    const heightSpy = vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockImplementation(() => size.height);
+    try {
+      // A wide stage: the full height, the width the shape allows, black either side.
+      const wide = render(<MomentsEditor debateId={DEBATE_ID} />);
+      const box = () =>
+        screen.getByRole('region', { name: 'Debate player' }).querySelector<HTMLElement>('[data-player-box]')!;
+      expect(box().style.height).toBe('400px');
+      expect(parseFloat(box().style.width)).toBeCloseTo((400 * 480) / 578, 1);
+      // The label stays on the stage, beside the box, not inside the narrower video.
+      const label = within(screen.getByRole('region', { name: 'Debate player' })).getByText(/^Clip 1 · /);
+      expect(box().contains(label)).toBe(false);
+      expect(label.closest('[data-player-box]')).toBeNull();
+      expect(label.parentElement).toBe(box().parentElement);
+      wide.unmount();
+
+      // A narrow, tall stage: the full width, letterboxed above and below.
+      size.width = 300;
+      size.height = 800;
+      render(<MomentsEditor debateId={DEBATE_ID} />);
+      expect(box().style.width).toBe('300px');
+      expect(parseFloat(box().style.height)).toBeCloseTo((300 * 578) / 480, 1);
+    } finally {
+      widthSpy.mockRestore();
+      heightSpy.mockRestore();
+    }
+  });
+
+  it('keeps the player stacked before the stage is measured (no 16:9 box)', () => {
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    const box = screen.getByRole('region', { name: 'Debate player' }).querySelector<HTMLElement>('[data-player-box]')!;
+    expect(box.style.aspectRatio).toBe('480 / 578');
+    expect(box.style.height).toBe('100%');
+    expect(box.style.maxWidth).toBe('100%');
+  });
+
+  it('sizes the box to the one combined video on the fallback, so the stage centres it', () => {
+    // The combined video is a single 480 × 289 tile: in a two-tile 480 × 578 box it would sit at
+    // the top with black below.
+    getDefaultStore().set(inlinePlaybackUnavailableAtom, true);
+    const size = { width: 1000, height: 400 };
+    const widthSpy = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(() => size.width);
+    const heightSpy = vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockImplementation(() => size.height);
+    try {
+      const box = () =>
+        screen.getByRole('region', { name: 'Debate player' }).querySelector<HTMLElement>('[data-player-box]')!;
+      // Wide stage: full height, letterboxed left and right at the single tile's shape.
+      const wide = render(<MomentsEditor debateId={DEBATE_ID} />);
+      expect(box().style.height).toBe('400px');
+      expect(parseFloat(box().style.width)).toBeCloseTo((400 * 480) / 289, 1);
+      wide.unmount();
+
+      // Narrower stage: full width, the single tile's height (not the stacked pair's).
+      size.width = 600;
+      size.height = 800;
+      render(<MomentsEditor debateId={DEBATE_ID} />);
+      expect(box().style.width).toBe('600px');
+      expect(parseFloat(box().style.height)).toBeCloseTo((600 * 289) / 480, 1);
+    } finally {
+      widthSpy.mockRestore();
+      heightSpy.mockRestore();
+    }
+  });
+
+  it('gives the unmeasured fallback box the single video’s shape', () => {
+    getDefaultStore().set(inlinePlaybackUnavailableAtom, true);
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    const box = screen.getByRole('region', { name: 'Debate player' }).querySelector<HTMLElement>('[data-player-box]')!;
+    expect(box.style.aspectRatio).toBe('480 / 289');
+  });
+
   it('says "Loading next clip" only between a reel’s clips, not while a single clip starts', () => {
     mocks.plan.data = entry({
       live_reel: {
@@ -3069,6 +3123,378 @@ describe('playing clips in the editor (GEO-3773)', () => {
     expect(player.pause).not.toHaveBeenCalled();
     expect(player.play).toHaveBeenCalledOnce();
     expect(player.jumpTo).toHaveBeenLastCalledWith(expect.any(Number));
+  });
+});
+
+describe('MomentsEditor side transcript (GEO-3773)', () => {
+  const WORDS = [
+    { participant_slot: 1, start_ms: 1_000, end_ms: 1_400, text: 'Coffee' },
+    { participant_slot: 1, start_ms: 1_500, end_ms: 2_900, text: ' dates.' },
+    { participant_slot: 1, start_ms: 3_000, end_ms: 3_400, text: ' Cheap.' },
+    { participant_slot: 2, start_ms: 5_000, end_ms: 5_400, text: 'Dinner' },
+    { participant_slot: 2, start_ms: 5_500, end_ms: 5_900, text: ' wins.' },
+  ];
+  const SENTENCES = [
+    { participant_slot: 1, start_ms: 1_000, end_ms: 2_900, text: 'Coffee dates.' },
+    { participant_slot: 1, start_ms: 3_000, end_ms: 3_400, text: 'Cheap.' },
+    { participant_slot: 2, start_ms: 5_000, end_ms: 5_900, text: 'Dinner wins.' },
+  ];
+  const liveClip = (start: number, end: number, slot = 0) => ({
+    start_ms: start,
+    end_ms: end,
+    speaker_slot: slot,
+    claim_index: null,
+    claim_text: null,
+  });
+  /** A live reel of these clips (on the video's clock, which is the player's here). */
+  const liveReel = (...clips: ReturnType<typeof liveClip>[]) => {
+    mocks.plan.data = entry({ live_reel: { clock: 'video', clips } });
+  };
+  beforeEach(() => {
+    wordsOverride = WORDS;
+    sentencesOverride = SENTENCES;
+  });
+  afterEach(() => {
+    window.getSelection()?.removeAllRanges();
+    vi.restoreAllMocks();
+  });
+
+  const transcript = () => screen.getByTestId('reel-transcript');
+  const wordSpan = (index: number) => transcript().querySelector<HTMLElement>(`[data-word="${index}"]`)!;
+  const toolbar = () => screen.queryByRole('group', { name: 'Clip from the selected words' });
+  const button = (name: string | RegExp) => screen.queryByRole('button', { name });
+
+  it('does not render the transcript on playhead reports, and marks the playhead’s word', () => {
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    const report = playerMocks.props.onPlayheadChange as (seconds: number) => void;
+    const before = transcriptRenderCount();
+    for (const seconds of [1.1, 1.6, 2.2, 3.1, 5.2]) act(() => report(seconds));
+    expect(transcriptRenderCount()).toBe(before);
+    expect(wordSpan(3)).toHaveAttribute('data-playhead');
+    expect(transcript().querySelectorAll('[data-playhead]')).toHaveLength(1);
+  });
+
+  it('closes the selection’s toolbar with Esc before anything else, then deselects', () => {
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    selectWords(3, 4);
+    expect(toolbar()).toBeInTheDocument();
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+    expect(toolbar()).not.toBeInTheDocument();
+    expect(window.getSelection()!.isCollapsed).toBe(true);
+    expect(isSelected(1)).toBe(true);
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+    expect(screen.queryByRole('region', { name: /^Clip \d+, / })).not.toBeInTheDocument();
+  });
+
+  it('leaves Space and Esc to the search field while it has text', () => {
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    const search = screen.getByRole('searchbox', { name: 'Search the transcript' });
+    fireEvent.change(search, { target: { value: 'dinner' } });
+    expect(screen.getByText('1 of 1')).toBeInTheDocument();
+    playerMocks.handle.jumpTo.mockClear();
+    fireEvent.keyDown(search, { key: ' ', code: 'Space' });
+    expect(playerMocks.handle.jumpTo).not.toHaveBeenCalled();
+    fireEvent.keyDown(search, { key: 'Escape' });
+    expect(isSelected(1)).toBe(true);
+    // Space with a selection of words, focus on the page: the reel plays, as anywhere in the editor.
+    selectWords(3, 4);
+    fireEvent.keyDown(document.body, { key: ' ', code: 'Space' });
+    expect(playerMocks.handle.jumpTo).toHaveBeenCalled();
+  });
+
+  it('offers only a new clip for words picked with no clip selected', () => {
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    deselect();
+    selectWords(3, 4);
+    expect(button(/^Set clip/)).not.toBeInTheDocument();
+    expect(button('New clip from these words')).toBeEnabled();
+  });
+
+  it('disables a button whose clip would overlap another, saying which', () => {
+    liveReel(liveClip(900, 3_000), liveClip(4_900, 5_950, 1));
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    selectClip(1);
+    selectWords(2, 3);
+    expect(button('Set clip 1 to these words')).toBeDisabled();
+    expect(button('Set clip 1 to these words')).toHaveAttribute('title', 'Overlaps clip 2');
+    expect(button('New clip from these words')).toBeDisabled();
+    expect(button('New clip from these words')).toHaveAttribute('title', 'Overlaps clip 2');
+    // Its own words don't count against the clip being set.
+    selectWords(1, 2);
+    expect(button('Set clip 1 to these words')).toBeEnabled();
+  });
+
+  /** `count` one-word clips far from the transcript's words, which stay free to pick. */
+  const reelOf = (count: number) =>
+    liveReel(...Array.from({ length: count }, (_, at) => liveClip(60_000 + at * 10_000, 61_000 + at * 10_000)));
+
+  it.each([
+    [3, 'plain'],
+    [4, 'tooltip'],
+    [5, 'tooltip'],
+    [6, 'none'],
+  ] as const)('at %i clips offers a new clip from words: %s', (count, offer) => {
+    reelOf(count);
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    deselect();
+    selectWords(3, 4);
+    const add = button('New clip from these words');
+    if (offer === 'none') {
+      expect(add).not.toBeInTheDocument();
+      expect(toolbar()).toHaveTextContent('0:05.0 to 0:05.9, 0.9 s');
+      return;
+    }
+    expect(add).toBeEnabled();
+    act(() => add!.focus());
+    if (offer === 'plain') expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+    else expect(screen.getByRole('tooltip')).toHaveTextContent(EXTRA_CLIP_TOOLTIP);
+  });
+
+  it('outlines the words the selected clip played before it was edited', () => {
+    liveReel(liveClip(900, 3_000));
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    selectClip(1);
+    expect(transcript().querySelector('.outline-dashed')).toBeNull();
+    typeEdge('End', '0:01.5');
+    expect(wordSpan(1)).toHaveClass('outline-dashed');
+    expect(wordSpan(0)).not.toHaveClass('outline-dashed');
+    // Only the selected clip's.
+    deselect();
+    expect(transcript().querySelector('.outline-dashed')).toBeNull();
+  });
+
+  describe('edge handles', () => {
+    const handle = (edge: 'start' | 'end') =>
+      within(transcript()).getByRole('slider', { name: edge === 'start' ? 'Clip start' : 'Clip end' });
+    /** Drags a handle onto word `index`, at `fraction` of its width, and lets go. */
+    function dragTo(edge: 'start' | 'end', index: number, fraction = 0, altKey = false) {
+      const target = wordSpan(index);
+      vi.spyOn(target, 'getBoundingClientRect').mockReturnValue(new DOMRect(100, 50, 100, 24));
+      document.elementFromPoint = vi.fn(() => target);
+      fireEvent.pointerDown(handle(edge), { button: 0 });
+      fireEvent.pointerMove(document, { buttons: 1, clientX: 100 + fraction * 100, clientY: 60, altKey });
+      fireEvent.pointerUp(document);
+    }
+
+    it('sits on the selected clip’s first and last words', () => {
+      render(<MomentsEditor debateId={DEBATE_ID} />);
+      expect(wordSpan(0)).toContainElement(handle('start'));
+      expect(wordSpan(1)).toContainElement(handle('end'));
+      expect(handle('end')).toHaveAttribute('aria-valuetext', '0:03.0');
+      deselect();
+      expect(within(transcript()).queryByRole('slider')).not.toBeInTheDocument();
+    });
+
+    it('drags an edge word by word, then goes to it', () => {
+      render(<MomentsEditor debateId={DEBATE_ID} />);
+      playerMocks.handle.seek.mockClear();
+      dragTo('end', 2);
+      expect(edgeField('End')).toHaveValue('0:03.4');
+      // A second before the end, to hear it.
+      expect(playerMocks.handle.seek).toHaveBeenLastCalledWith(2_400);
+      expect(handle('end').closest('[data-word]')).toBe(wordSpan(2));
+    });
+
+    it('shows the edge’s time and word while dragging', () => {
+      render(<MomentsEditor debateId={DEBATE_ID} />);
+      const target = wordSpan(2);
+      document.elementFromPoint = vi.fn(() => target);
+      fireEvent.pointerDown(handle('end'), { button: 0 });
+      fireEvent.pointerMove(document, { buttons: 1, clientX: 10, clientY: 10 });
+      expect(within(transcript()).getByRole('tooltip')).toHaveTextContent('0:03.4 · “Cheap.”');
+      fireEvent.pointerUp(document);
+      expect(within(transcript()).queryByRole('tooltip')).not.toBeInTheDocument();
+    });
+
+    it('places an edge inside a word with Alt, to the tenth', () => {
+      render(<MomentsEditor debateId={DEBATE_ID} />);
+      dragTo('end', 2, 0.5, true);
+      expect(edgeField('End')).toHaveValue('0:03.2');
+    });
+
+    it('keeps a dragged edge off the next clip and a second from the other edge', () => {
+      liveReel(liveClip(900, 3_000), liveClip(4_900, 5_950, 1));
+      render(<MomentsEditor debateId={DEBATE_ID} />);
+      selectClip(1);
+      dragTo('end', 4);
+      expect(edgeField('End')).toHaveValue('0:03.0');
+      dragTo('start', 2);
+      expect(edgeField('Start')).toHaveValue('0:00.9');
+    });
+
+    it('scrolls the transcript while dragging near its edges', () => {
+      render(<MomentsEditor debateId={DEBATE_ID} />);
+      const box = transcript();
+      vi.spyOn(box, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 100, 360, 400));
+      document.elementFromPoint = vi.fn(() => null);
+      box.scrollTop = 100;
+      fireEvent.pointerDown(handle('end'), { button: 0 });
+      fireEvent.pointerMove(document, { buttons: 1, clientX: 50, clientY: 495 });
+      expect(box.scrollTop).toBe(114);
+      fireEvent.pointerMove(document, { buttons: 1, clientX: 50, clientY: 105 });
+      expect(box.scrollTop).toBe(100);
+      fireEvent.pointerUp(document);
+    });
+
+    it('steps an edge a word with the arrow keys, a tenth with Shift', () => {
+      render(<MomentsEditor debateId={DEBATE_ID} />);
+      fireEvent.keyDown(handle('end'), { key: 'ArrowRight' });
+      expect(edgeField('End')).toHaveValue('0:03.4');
+      fireEvent.keyDown(handle('end'), { key: 'ArrowLeft', shiftKey: true });
+      expect(edgeField('End')).toHaveValue('0:03.3');
+      fireEvent.keyDown(handle('start'), { key: 'ArrowRight' });
+      expect(edgeField('Start')).toHaveValue('0:01.5');
+    });
+
+    it('follows the Snap toggle: off, a drag places the edge freely, and Alt snaps it', () => {
+      render(<MomentsEditor debateId={DEBATE_ID} />);
+      fireEvent.click(screen.getByRole('switch', { name: 'Snap to words' }));
+      dragTo('end', 2, 0.5);
+      expect(edgeField('End')).toHaveValue('0:03.2');
+      dragTo('end', 2, 0.5, true);
+      expect(edgeField('End')).toHaveValue('0:03.4');
+    });
+
+    it('keeps focus on a handle as its arrow keys step it from word to word', () => {
+      render(<MomentsEditor debateId={DEBATE_ID} />);
+      act(() => handle('end').focus());
+      fireEvent.keyDown(document.activeElement!, { key: 'ArrowRight' });
+      expect(handle('end').closest('[data-word]')).toBe(wordSpan(2));
+      expect(handle('end')).toHaveFocus();
+      fireEvent.keyDown(document.activeElement!, { key: 'ArrowRight' });
+      expect(handle('end').closest('[data-word]')).toBe(wordSpan(3));
+      expect(handle('end')).toHaveFocus();
+    });
+
+    it('takes the click that ends a drag as the drag’s, not a click on the word', () => {
+      render(<MomentsEditor debateId={DEBATE_ID} />);
+      const word = wordSpan(1);
+      vi.spyOn(word, 'getBoundingClientRect').mockReturnValue(new DOMRect(100, 50, 100, 24));
+      document.elementFromPoint = vi.fn(() => word);
+      fireEvent.pointerDown(handle('end'), { button: 0 });
+      fireEvent.pointerMove(document, { buttons: 1, clientX: 150, clientY: 60, altKey: true });
+      fireEvent.pointerUp(document);
+      expect(playerMocks.handle.seek).toHaveBeenLastCalledWith(1_200);
+      // Press on the handle, release on its word: the click lands on the word.
+      fireEvent.click(word);
+      expect(playerMocks.handle.seek).toHaveBeenLastCalledWith(1_200);
+    });
+
+    it('ends a drag whose release never came, as a move with no button held', () => {
+      render(<MomentsEditor debateId={DEBATE_ID} />);
+      const target = wordSpan(2);
+      vi.spyOn(target, 'getBoundingClientRect').mockReturnValue(new DOMRect(100, 50, 100, 24));
+      document.elementFromPoint = vi.fn(() => target);
+      fireEvent.pointerDown(handle('end'), { button: 0 });
+      fireEvent.pointerMove(document, { buttons: 0, clientX: 100, clientY: 60 });
+      fireEvent.pointerMove(document, { buttons: 1, clientX: 100, clientY: 60 });
+      expect(edgeField('End')).toHaveValue('0:03.0');
+    });
+
+    it('ends a drag when the window loses focus mid-drag', () => {
+      render(<MomentsEditor debateId={DEBATE_ID} />);
+      const before = (edgeField('End') as HTMLInputElement).value;
+      const target = wordSpan(2);
+      vi.spyOn(target, 'getBoundingClientRect').mockReturnValue(new DOMRect(100, 50, 100, 24));
+      document.elementFromPoint = vi.fn(() => target);
+      fireEvent.pointerDown(handle('end'), { button: 0 });
+      // Cmd+Tab with the button held: no pointerup ever comes, and the button still reads as held.
+      fireEvent.blur(window);
+      fireEvent.pointerMove(document, { buttons: 1, clientX: 100, clientY: 60 });
+      expect(edgeField('End')).toHaveValue(before);
+    });
+
+    it('ends a drag when the handles go mid-drag', () => {
+      render(<MomentsEditor debateId={DEBATE_ID} />);
+      const before = (edgeField('End') as HTMLInputElement).value;
+      const target = wordSpan(2);
+      vi.spyOn(target, 'getBoundingClientRect').mockReturnValue(new DOMRect(100, 50, 100, 24));
+      document.elementFromPoint = vi.fn(() => target);
+      fireEvent.pointerDown(handle('end'), { button: 0 });
+      const playReel = () =>
+        fireEvent.click(
+          within(screen.getByRole('region', { name: 'Reel' })).getByRole('button', { name: /Play reel|Stop/ })
+        );
+      // The reel starts with the button still held: the handles go.
+      playReel();
+      expect(within(transcript()).queryByRole('slider')).not.toBeInTheDocument();
+      fireEvent.pointerMove(document, { buttons: 1, clientX: 100, clientY: 60 });
+      // Back from the reel, the drag is over: a held move doesn't take the edge.
+      playReel();
+      fireEvent.pointerMove(document, { buttons: 1, clientX: 100, clientY: 60 });
+      expect(edgeField('End')).toHaveValue(before);
+    });
+
+    it('gives a handle the range its edge can move in', () => {
+      render(<MomentsEditor debateId={DEBATE_ID} />);
+      expect(handle('start')).toHaveAttribute('aria-valuemin', '0');
+      expect(handle('start')).toHaveAttribute('aria-valuemax', '2000');
+      expect(handle('end')).toHaveAttribute('aria-valuemin', '2000');
+      expect(handle('end')).toHaveAttribute('aria-valuemax', '5900');
+    });
+
+    it('offers no handles while the reel is read-only', () => {
+      mocks.plan.data = entry({ refusal: 'media_job_active' });
+      render(<MomentsEditor debateId={DEBATE_ID} />);
+      selectClip(1);
+      expect(wordSpan(0)).toHaveClass('bg-purple/25');
+      expect(within(transcript()).queryByRole('slider')).not.toBeInTheDocument();
+    });
+
+    it('offers no handles or Set while the reel plays', () => {
+      render(<MomentsEditor debateId={DEBATE_ID} />);
+      fireEvent.click(within(screen.getByRole('region', { name: 'Reel' })).getByRole('button', { name: /Play reel/ }));
+      expect(within(transcript()).queryByRole('slider')).not.toBeInTheDocument();
+      selectWords(3, 4);
+      expect(button(/^Set clip/)).not.toBeInTheDocument();
+      expect(button('New clip from these words')).toBeInTheDocument();
+    });
+  });
+
+  describe('scrolling to the selected clip', () => {
+    /** Lays each word 100 px below the last, in a 400 px box. */
+    function layOut() {
+      const box = transcript();
+      vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+        if (this === box) return new DOMRect(0, 0, 360, 400);
+        const index = this.dataset.word;
+        return index === undefined ? new DOMRect() : new DOMRect(0, Number(index) * 100 - box.scrollTop, 40, 24);
+      });
+      box.scrollTop = 0;
+      return box;
+    }
+
+    it('brings a clip picked elsewhere into view, but not one picked in the transcript', () => {
+      liveReel(liveClip(900, 3_000), liveClip(4_900, 5_950, 1));
+      render(<MomentsEditor debateId={DEBATE_ID} />);
+      const box = layOut();
+      selectClip(2);
+      // Word 3 at 300 px, a little over a fifth of the way down: 300 - 400 × 0.22.
+      expect(box.scrollTop).toBe(212);
+      box.scrollTop = 0;
+      fireEvent.click(within(box).getByRole('button', { name: 'Select clip 1' }));
+      expect(isSelected(1)).toBe(true);
+      expect(box.scrollTop).toBe(0);
+      fireEvent.click(wordSpan(3));
+      expect(isSelected(2)).toBe(true);
+      expect(box.scrollTop).toBe(0);
+    });
+
+    it('brings the selected clip back into view when the transcript comes back', () => {
+      liveReel(liveClip(900, 3_000), liveClip(4_900, 5_950, 1));
+      render(<MomentsEditor debateId={DEBATE_ID} />);
+      selectClip(2);
+      fireEvent.click(within(clipPanel()).getByRole('button', { name: 'Replace' }));
+      expect(screen.queryByTestId('reel-transcript')).not.toBeInTheDocument();
+      const spy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
+        this: HTMLElement
+      ) {
+        return this.dataset.word === '3' ? new DOMRect(0, 500, 40, 24) : new DOMRect(0, 0, 360, 400);
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Back to the transcript' }));
+      expect(spy).toHaveBeenCalled();
+      expect(transcript().scrollTop).toBe(412);
+    });
   });
 });
 

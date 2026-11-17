@@ -62,7 +62,13 @@ import {
 import { ReelPreviewPanel } from './reel-preview-panel';
 import { jobInFlight, reelJob, refusalBlocksEditing, refusalMessage } from './reel-status';
 import { type ClaimChoice, ClaimOptions, type ClipCardView, ReelStrip } from './reel-strip';
-import { ReelTranscript, reelSentences } from './reel-transcript';
+import {
+  NO_TRANSCRIPT_ACTIONS,
+  ReelTranscript,
+  type TranscriptActions,
+  type TranscriptNames,
+  reelSentences,
+} from './reel-transcript';
 import { REEL_CLIPS, type ReelWarningFix, reelWarnings } from './reel-warnings';
 import { type Pad, ReelWaveform } from './reel-waveform';
 import { ClipPicker, PanelHead, PanelScroll, SidePanel, WarningsList, warningText } from './side-panel';
@@ -395,8 +401,14 @@ function Editor({ debateId }: { debateId: string }) {
     if (sentAt < 0 || clipKey(failedSent.sent[sentAt]) !== clipKey(clip)) return [];
     return failedSent.job.clips[sentAt] ?? [];
   };
-  const clipViews = clips.map(clip => {
-    const speaker = clipSpeaker(words, clip.start_ms, clip.end_ms);
+  // Each clip's speaker, once per edit: the strip, the monitor and the side transcript read this one
+  // list (memoised, so the transcript doesn't re-render for a new list of the same speakers).
+  const speakers = React.useMemo(
+    () => clips.map(clip => clipSpeaker(words, clip.start_ms, clip.end_ms)),
+    [clips, words]
+  );
+  const clipViews = clips.map((clip, index) => {
+    const speaker = speakers[index];
     const reported = reportedOn(clip);
     return {
       clip,
@@ -477,7 +489,6 @@ function Editor({ debateId }: { debateId: string }) {
   React.useEffect(() => {
     dispatch({ type: 'clipsChanged', keys: clipKeyList === '' ? [] : clipKeyList.split('|') });
   }, [clipKeyList]);
-  const speakers = clipViews.map(view => view.speaker);
   const sentences = React.useMemo(() => reelSentences(transcript.data), [transcript.data]);
   const durationMs = Math.max(
     1,
@@ -774,6 +785,38 @@ function Editor({ debateId }: { debateId: string }) {
   const pickerFrom = (fromMs: number) => (shown.panel === 'replace' ? replaceWith(fromMs) : addFrom(fromMs));
   const livePlayhead = () => player.current?.livePositionMs() ?? playheadMs;
 
+  // The side transcript (GEO-3773) renders only when what it shows changes, not on each playhead
+  // report or edit elsewhere: its data is memoised here and its actions come through a ref.
+  const name1 = nameOf(1);
+  const name2 = nameOf(2);
+  const transcriptNames = React.useMemo((): TranscriptNames => ({ 1: name1, 2: name2 }), [name1, name2]);
+  // What the selected clip played before it was edited: the live reel's span, outlined ("was").
+  const liveOfSelected = selected === null ? undefined : saved?.find(clip => clip.key === selected);
+  const nowSelected = selectedIndex >= 0 ? clips[selectedIndex] : undefined;
+  const wasEdited =
+    liveOfSelected !== undefined &&
+    nowSelected !== undefined &&
+    (liveOfSelected.start_ms !== nowSelected.start_ms || liveOfSelected.end_ms !== nowSelected.end_ms);
+  const wasStart = wasEdited ? liveOfSelected.start_ms : null;
+  const wasEnd = wasEdited ? liveOfSelected.end_ms : null;
+  const transcriptWas = React.useMemo(
+    () => (wasStart === null || wasEnd === null ? null : { start_ms: wasStart, end_ms: wasEnd }),
+    [wasStart, wasEnd]
+  );
+  const transcriptActions = React.useRef<TranscriptActions>(NO_TRANSCRIPT_ACTIONS);
+  transcriptActions.current = {
+    selectClip: key => selectClip(key),
+    seekWord: ms => {
+      stopPlayback();
+      seekTo(ms);
+    },
+    seek: seekTo,
+    changeClip: (index, next) => updateClip(index, () => next),
+    setClipWords,
+    addClipWords: addClip,
+    playing: () => playingRef.current,
+  };
+
   const rootRef = React.useRef<HTMLDivElement>(null);
   useEditorKeyboard(rootRef, {
     popoverOpen: shown.popover !== null,
@@ -987,25 +1030,22 @@ function Editor({ debateId }: { debateId: string }) {
         );
       case 'transcript':
         return (
-          <PanelScroll className="px-1 pb-6">
-            <ReelTranscript
-              sentences={sentences}
-              words={words}
-              wordTiming={transcript.data?.word_timing}
-              turns={turns}
-              canAddClip={canAddClip}
-              onAddClip={addClipAt}
-              onSetClipWords={setClipWords}
-              onAddClipWords={addClip}
-              clips={clips}
-              speakers={speakers}
-              selected={selectedIndex}
-              readOnly={editLocked}
-              nameOf={nameOf}
-              onChangeClip={(index, next) => updateClip(index, () => next)}
-              onSeek={seekTo}
-            />
-          </PanelScroll>
+          <ReelTranscript
+            sentences={sentences}
+            words={words}
+            wordTiming={transcript.data?.word_timing}
+            turns={turns}
+            clips={clips}
+            speakers={speakers}
+            selected={reelPlaying ? -1 : selectedIndex}
+            was={reelPlaying ? null : transcriptWas}
+            editable={editable}
+            readOnly={editLocked}
+            snap={snap}
+            names={transcriptNames}
+            subscribe={frame.subscribe}
+            actions={transcriptActions}
+          />
         );
     }
   })();
