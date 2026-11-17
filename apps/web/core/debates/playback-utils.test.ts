@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 import type { DebateMediaArtifactKind, DebateMediaResponse, DebateMediaTurnSegment } from './api';
 import {
+  atOrPastMediaEnd,
   clampSeconds,
   hasProcessedVideo,
+  mediaFinished,
   pairPlayhead,
   playBothWithMutedFallback,
   recordingWindowOffsetsSeconds,
@@ -777,5 +779,66 @@ describe('turn spans', () => {
     ]);
 
     expect(spans[0]).toEqual({ index: 0, slot: 1, startSeconds: 0, endSeconds: 35 });
+  });
+});
+
+describe('a recording that ends before the timeline (GEO-3778)', () => {
+  const offsets = { slot1: 0, slot2: 0 };
+
+  it('counts an element at or past its duration as finished', () => {
+    expect(mediaFinished({ currentTime: 59.5, duration: 59.5 })).toBe(true);
+    expect(mediaFinished({ currentTime: 30, duration: 59.5 })).toBe(false);
+    expect(mediaFinished({ ended: true })).toBe(true);
+    // Unknown duration (a MediaRecorder WebM) is not an end.
+    expect(mediaFinished({ currentTime: 30, duration: Infinity })).toBe(false);
+    expect(mediaFinished(null)).toBe(false);
+  });
+
+  it('places a target against an ended element without a duration by where it stopped', () => {
+    const ended = { ended: true, currentTime: 59.5, duration: NaN };
+    expect(atOrPastMediaEnd(ended, 60)).toBe(true);
+    expect(atOrPastMediaEnd(ended, 30)).toBe(false);
+  });
+
+  it('takes the clock from a running slot 2 once slot 1 has ended', () => {
+    const slot1 = { paused: true, ended: true, currentTime: 59.5, duration: 59.5 };
+    const slot2 = { paused: false, currentTime: 59.8 };
+    expect(pairPlayhead(slot1, slot2, offsets)).toEqual({ seconds: 59.8, live: true });
+  });
+
+  it('keeps slot 1 as the clock while it has not ended', () => {
+    const slot1 = { paused: true, currentTime: 30, duration: 59.5 };
+    const slot2 = { paused: false, currentTime: 31 };
+    expect(pairPlayhead(slot1, slot2, offsets)).toEqual({ seconds: 30, live: false });
+  });
+
+  it('does not restart, in the muted retry, an element that ended during the first attempt', async () => {
+    // Unknown duration: nothing could tell beforehand that this one was past its end.
+    const ending = { muted: true, paused: true, ended: false, plays: 0, play: async () => {} };
+    ending.play = async () => {
+      ending.plays += 1;
+      ending.ended = true;
+    };
+    // Refuses with sound, so the first attempt falls through to the muted retry.
+    const speaker = { muted: false, paused: true, plays: 0, play: async () => {} };
+    speaker.play = async () => {
+      speaker.plays += 1;
+      if (!speaker.muted) throw new DOMException('refused', 'NotAllowedError');
+      speaker.paused = false;
+    };
+
+    expect(await playBothWithMutedFallback(ending, speaker, { wait: async () => {} })).toBe('playing-muted');
+    expect(ending.plays).toBe(1);
+    expect(speaker.plays).toBe(2);
+  });
+
+  it('starts only the element that has something left to play', async () => {
+    const running = { muted: true, paused: true, plays: 0, play: async () => {} };
+    running.play = async () => {
+      running.plays += 1;
+      running.paused = false;
+    };
+    expect(await playBothWithMutedFallback(null, running, { wait: async () => {} })).toBe('playing');
+    expect(running.plays).toBe(1);
   });
 });
