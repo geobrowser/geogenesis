@@ -9,6 +9,7 @@ import { useToast } from '~/core/hooks/use-toast';
 import { Button } from '~/design-system/button';
 import { Spinner } from '~/design-system/spinner';
 import { Text } from '~/design-system/text';
+import { Tooltip } from '~/design-system/tooltip';
 
 import type { DebateMediaTurnSegment, ParticipantSlot } from '../api';
 import { GeoChatRequestError } from '../api';
@@ -19,6 +20,14 @@ import { NEGATIVE_TEXT_CLASS, POSITIVE_TEXT_CLASS, WAITING_TEXT_CLASS } from '..
 import { HUB_LIGHT_CALLOUT_CLASS_NAME } from '../matchmaking/hub-callout';
 import { type MomentBackfillEntry, reelCarried, reelUnlinkable } from './api';
 import { type ClaimOption, ClipRow } from './clip-row';
+import {
+  type EditorFacts,
+  INITIAL_EDITOR_STATE,
+  editorReducer,
+  editorView,
+  escapeTarget,
+  selectedKey,
+} from './editor-state';
 import {
   isMediaAdminRefusal,
   useAudioPeaks,
@@ -50,14 +59,18 @@ import { ReelPreviewPanel } from './reel-preview-panel';
 import { type ReelJob, jobInFlight, reelJob, refusalBlocksEditing, refusalMessage } from './reel-status';
 import { ReelTimeline } from './reel-timeline';
 import { ReelTranscript, reelSentences } from './reel-transcript';
-import { type ReelWarningFix, reelWarnings } from './reel-warnings';
+import { REEL_CLIPS, type ReelWarningFix, reelWarnings } from './reel-warnings';
 import { ReelWarningsPanel } from './reel-warnings-panel';
 import { ReelWaveform } from './reel-waveform';
+import { useEditorKeyboard } from './use-editor-keyboard';
 import { reelSegments, usePlayRange } from './use-play-range';
 import { usePlayheadFrame, usePlayheadText } from './use-playhead-frame';
 
 /** What a new clip at the playhead runs for, before it is trimmed. */
 const NEW_CLIP_MS = 15_000;
+
+/** On the affordance that adds a 5th or 6th clip (GEO-3773, D4): reels aim for 4. */
+export const EXTRA_CLIP_TOOLTIP = 'Reels work best with 4 clips. Add more only when the debate needs it.';
 
 const NO_TURNS: DebateMediaTurnSegment[] = [];
 /**
@@ -217,7 +230,10 @@ function Editor({ debateId }: { debateId: string }) {
     } else setSeek(previous => ({ ms, nonce: (previous?.nonce ?? 0) + 1 }));
   };
 
-  const [confirm, setConfirm] = React.useState<'publish' | 'unlock' | null>(null);
+  // How the admin is looking at the reel: the selected clip or none, the side panel, the open
+  // popover or confirm, and what plays (GEO-3773). The reel itself stays in `clips`. `view` is what
+  // the admin asked for; what is shown is `shown`, below, judged against the data by one rule.
+  const [view, dispatch] = React.useReducer(editorReducer, INITIAL_EDITOR_STATE);
   const [queueError, setQueueError] = React.useState<string | null>(null);
   // The request this visit queued: a finished one is reported only if it is ours. `sent` is the reel
   // as sent, in that order: the worker's `clip N` and a preview's moments count in it, not in the
@@ -241,7 +257,19 @@ function Editor({ debateId }: { debateId: string }) {
   React.useEffect(() => {
     const finished = wasInFlight.current && !inFlight;
     wasInFlight.current = inFlight;
-    if (ours && request && job.kind === 'done' && !job.preview && reported.current !== request.requested_at) {
+    // A check this visit asked for opens its report in the side panel once, when it lands.
+    if (
+      ours &&
+      request &&
+      job.preview &&
+      (job.kind === 'done' || job.kind === 'failed') &&
+      reported.current !== request.requested_at
+    ) {
+      reported.current = request.requested_at;
+      dispatch({ type: 'openPanel', panel: 'check' });
+      // Like any request leaving the queue, the reel may have moved on under it meanwhile.
+      if (finished) refreshAfterReel();
+    } else if (ours && request && job.kind === 'done' && !job.preview && reported.current !== request.requested_at) {
       reported.current = request.requested_at;
       setToast(<span>{job.unlock ? 'Back to the automatic reel' : 'Hand-picked reel is live'}</span>);
       // What was sent is live now, so it is no longer an unsaved edit, and the reel read next is
@@ -254,6 +282,10 @@ function Editor({ debateId }: { debateId: string }) {
       refreshAfterReel();
     }
   }, [inFlight, ours, request, job, tracked, setToast, refreshAfterReel]);
+
+  // The check's report is about this visit's check: once the debate's request is someone else's (another
+  // admin's publish, a fresh automatic pick) or this visit's next one, the panel goes back to the transcript.
+  const showsCheck = ours && job.preview;
 
   const participants = debate.data?.participants ?? [];
   const nameOf = (slot: ParticipantSlot | null) =>
@@ -318,12 +350,19 @@ function Editor({ debateId }: { debateId: string }) {
     (payload as { moment_reel_manual?: unknown } | undefined)?.moment_reel_manual === true;
   const canPublish = canQueue && dirty;
   const canUnlock = locked && !dirty && !inFlight && (!readOnly || canUnlockCarried);
-  // A confirm stays open only while what it confirms can still be sent: an edit made under it can
-  // break a clip, or turn a return to automatic into one that would throw the edit away.
-  const confirmAllowed = confirm === 'publish' ? canPublish : confirm === 'unlock' ? canUnlock : true;
+
+  // What is shown: the panel and popover the admin asked for, while the data still allows them
+  // (`effectivePanel` / `effectivePopover`, the one rule). A confirm stays open only while what it
+  // confirms can still be sent: an edit made under it can break a clip, or turn a return to automatic
+  // into one that would throw the edit away. Rendering, Esc and the keyboard read only this.
+  const clipKeyList = clips.map(clip => clip.key).join('|');
+  const facts: EditorFacts = { checkShown: showsCheck, readOnly, canPublish, canUnlock };
+  const shown = editorView(view, { keys: clipKeyList === '' ? [] : clipKeyList.split('|'), ...facts });
+  const confirm = shown.popover === 'publish' || shown.popover === 'unlock' ? shown.popover : null;
+  // What the facts closed stays closed (it doesn't come back when they allow it again).
   React.useEffect(() => {
-    if (!confirmAllowed) setConfirm(null);
-  }, [confirmAllowed]);
+    dispatch({ type: 'settle', facts: { checkShown: showsCheck, readOnly, canPublish, canUnlock } });
+  }, [view, showsCheck, readOnly, canPublish, canUnlock]);
 
   // A claim picked for one speaker never rides along when the clip changes speaker, however the
   // clip changed: an edge, a drag, a fix, a sentence from the transcript. Each clip is judged against
@@ -342,13 +381,27 @@ function Editor({ debateId }: { debateId: string }) {
     );
 
   // The selected clip by its key, not its place: removing or moving another clip leaves it selected,
-  // rather than handing the transcript's Start/End to whichever clip took its place.
-  const [selectedKey, setSelectedKey] = React.useState<string | null>(null);
-  const selectedIndex = Math.max(
-    0,
-    clips.findIndex(clip => clip.key === selectedKey)
-  );
-  const setSelected = (index: number, list: readonly EditorClip[] = clips) => setSelectedKey(list[index]?.key ?? null);
+  // rather than handing the transcript's Start/End to whichever clip took its place. None selected
+  // (`-1`) is the whole debate.
+  const selected = selectedKey(shown);
+  const selectedIndex = selected === null ? -1 : clips.findIndex(clip => clip.key === selected);
+  // A flagged clip (one with a problem to fix) keeps the claim panel open: looked up by key, so a
+  // clip that moved or a fix's new list is judged as the clip it is.
+  const selectKey = (key: string) =>
+    dispatch({
+      type: 'select',
+      key,
+      flagged: (clipViews.find(view => view.clip.key === key)?.problems.length ?? 0) > 0,
+    });
+  const setSelected = (index: number, list: readonly EditorClip[] = clips) => {
+    const key = list[index]?.key;
+    if (key !== undefined) selectKey(key);
+  };
+  // The selection follows the reel as it changes: a removed clip hands it to the clip that took its
+  // place, and a reel playing stops once its clips change.
+  React.useEffect(() => {
+    dispatch({ type: 'clipsChanged', keys: clipKeyList === '' ? [] : clipKeyList.split('|') });
+  }, [clipKeyList]);
   const speakers = clipViews.map(view => view.speaker);
   const sentences = React.useMemo(() => reelSentences(transcript.data), [transcript.data]);
   const durationMs = Math.max(
@@ -379,7 +432,7 @@ function Editor({ debateId }: { debateId: string }) {
     if (!canAddClip) return;
     const key = newClipKey();
     setClips(current => [...current, { key, ...span, claim_index: null, live_claim_text: null }]);
-    setSelectedKey(key);
+    dispatch({ type: 'added', key });
   };
   const addClipAt = (ms: number) => {
     const start = snapEdge(ms, words, 'start');
@@ -408,7 +461,8 @@ function Editor({ debateId }: { debateId: string }) {
       [next[index], next[to]] = [next[to], next[index]];
       return next;
     });
-    setSelectedKey(clips[index].key);
+    // The moved clip becomes the selected one; moving the selected clip keeps what is open about it.
+    if (clips[index].key !== selected) selectKey(clips[index].key);
   };
 
   // Back to the reel that is live now, which is not the one the page opened on when it changed under
@@ -416,13 +470,18 @@ function Editor({ debateId }: { debateId: string }) {
   const discard = () => {
     if (!source) return;
     adoptNextVersion.current = false;
+    dispatch({ type: 'discarded' });
     setBase(source.version);
     setSaved(source.clips);
     setClips(source.clips);
   };
 
   const submit = (kind: 'preview' | 'publish' | 'unlock') => {
-    setConfirm(null);
+    dispatch({ type: 'closePopover' });
+    dispatch({ type: 'stop' });
+    // A check's report is about that check: publishing or unlocking from it goes back to the transcript.
+    // The admin is leaving it, at the click, whether or not the publish goes through.
+    if (kind !== 'preview' && shown.panel === 'check') dispatch({ type: 'closePanel' });
     if (!(kind === 'publish' ? canPublish : kind === 'unlock' ? canUnlock : canQueue)) return;
     setQueueError(null);
     const body =
@@ -449,6 +508,40 @@ function Editor({ debateId }: { debateId: string }) {
     });
   };
 
+  // Play reel, or Stop while the reel plays: the transport button and Space.
+  const toggleReel = () => {
+    if (range.state.kind !== 'idle' && range.state.id === 'reel') {
+      range.stop();
+      player.current?.pause();
+    } else startRange('reel', reelPlayable);
+  };
+
+  const rootRef = React.useRef<HTMLDivElement>(null);
+  useEditorKeyboard(rootRef, {
+    popoverOpen: shown.popover !== null,
+    onEscape: () => {
+      if (escapeTarget(shown) === null) return false;
+      dispatch({ type: 'settle', facts });
+      dispatch({ type: 'escape' });
+      return true;
+    },
+    onSpace: () => {
+      if (!inlineUnavailable && reelPlayable.length > 0) toggleReel();
+    },
+  });
+
+  // The check's report: above the transcript, or on its own once a check lands.
+  const previewPanel = (
+    <ReelPreviewPanel
+      job={ours && job.preview ? job : null}
+      stale={tracked !== null && tracked.reelKey !== reelKey(clips)}
+      turns={turns}
+      clips={tracked?.sent ?? []}
+      flagged={flaggedClips}
+      nameOf={nameOf}
+    />
+  );
+
   const title = debate.data?.claim.claim ?? null;
   if (!loaded || transcript.isPending) {
     const failed = plan.error ?? media.error ?? claims.error;
@@ -467,6 +560,7 @@ function Editor({ debateId }: { debateId: string }) {
   return (
     <EditorShell
       title={title}
+      rootRef={rootRef}
       actions={
         <>
           <StatusPill job={job} dirty={dirty} handPicked={locked} noReel={unlinkable} />
@@ -477,11 +571,15 @@ function Editor({ debateId }: { debateId: string }) {
             Discard changes
           </Button>
           {canUnlock ? (
-            <Button variant="secondary" disabled={queue.isPending} onClick={() => setConfirm('unlock')}>
+            <Button
+              variant="secondary"
+              disabled={queue.isPending}
+              onClick={() => dispatch({ type: 'openPopover', popover: 'unlock' })}
+            >
               Return to automatic
             </Button>
           ) : null}
-          <Button disabled={!canPublish} onClick={() => setConfirm('publish')}>
+          <Button disabled={!canPublish} onClick={() => dispatch({ type: 'openPopover', popover: 'publish' })}>
             Publish reel
             {warnings.length > 0 && dirty ? (
               <span
@@ -513,11 +611,11 @@ function Editor({ debateId }: { debateId: string }) {
       ) : reapplyFailed ? (
         <ReapplyFailedNotice job={reapplyFailed} />
       ) : null}
-      {confirm === 'publish' && confirmAllowed ? (
+      {confirm === 'publish' ? (
         <ConfirmCard
           title="Publish this reel?"
           confirmLabel={warnings.length > 0 ? 'Publish anyway' : 'Publish and lock'}
-          onCancel={() => setConfirm(null)}
+          onCancel={() => dispatch({ type: 'closePopover' })}
           onConfirm={() => submit('publish')}
         >
           It&apos;s queued for the media worker, which renders the clips from the recordings.{' '}
@@ -528,16 +626,16 @@ function Editor({ debateId }: { debateId: string }) {
           {warnings.length > 0 ? (
             <span className={cx('mt-1 block', WAITING_TEXT_CLASS)}>
               {warnings.length} warning{warnings.length > 1 ? 's' : ''} still open:{' '}
-              {warnings.map(warning => warning.title).join('; ')}.
+              {warnings.map(warning => sentence(warning.title)).join(' ')}
             </span>
           ) : null}
         </ConfirmCard>
       ) : null}
-      {confirm === 'unlock' && confirmAllowed ? (
+      {confirm === 'unlock' ? (
         <ConfirmCard
           title="Return to automatic?"
           confirmLabel="Unlock and re-pick"
-          onCancel={() => setConfirm(null)}
+          onCancel={() => dispatch({ type: 'closePopover' })}
           onConfirm={() => submit('unlock')}
         >
           This unlocks the reel and queues a fresh automatic pick.{' '}
@@ -612,12 +710,7 @@ function Editor({ debateId }: { debateId: string }) {
               small
               variant="secondary"
               disabled={inlineUnavailable || reelPlayable.length === 0}
-              onClick={() => {
-                if (range.state.kind !== 'idle' && range.state.id === 'reel') {
-                  range.stop();
-                  player.current?.pause();
-                } else startRange('reel', reelPlayable);
-              }}
+              onClick={toggleReel}
             >
               {range.state.kind !== 'idle' && range.state.id === 'reel' ? 'Stop' : 'Play reel'}
             </Button>
@@ -679,6 +772,7 @@ function Editor({ debateId }: { debateId: string }) {
             readOnly={readOnly}
             onChangeClip={(index, span) => updateClip(index, clip => ({ ...clip, ...span }))}
             onSeek={seekTo}
+            onFullDebate={() => dispatch({ type: 'deselect' })}
           />
 
           <section className="rounded border border-grey-02 bg-white">
@@ -686,9 +780,7 @@ function Editor({ debateId }: { debateId: string }) {
               <Text as="h2" variant="smallTitle">
                 Reel, in play order
               </Text>
-              <Button small variant="secondary" disabled={!canAddAtPlayhead} onClick={addClipAtPlayhead}>
-                + Add clip at playhead
-              </Button>
+              <AddClipButton count={clips.length} disabled={!canAddAtPlayhead} onAdd={addClipAtPlayhead} />
             </div>
             {clipViews.length === 0 ? (
               <Text as="p" variant="metadata" color="grey-04" className="p-3">
@@ -734,33 +826,37 @@ function Editor({ debateId }: { debateId: string }) {
           </section>
         </div>
 
-        <div className="flex min-w-0 flex-col gap-4">
-          <ReelPreviewPanel
-            job={ours && job.preview ? job : null}
-            stale={tracked !== null && tracked.reelKey !== reelKey(clips)}
-            turns={turns}
-            clips={tracked?.sent ?? []}
-            flagged={flaggedClips}
-            nameOf={nameOf}
-          />
-          <ReelTranscript
-            sentences={sentences}
-            words={words}
-            wordTiming={transcript.data?.word_timing}
-            turns={turns}
-            canAddClip={canAddClip}
-            onAddClip={addClipAt}
-            onSetClipWords={setClipWords}
-            onAddClipWords={addClip}
-            clips={clips}
-            speakers={speakers}
-            selected={selectedIndex}
-            readOnly={readOnly}
-            nameOf={nameOf}
-            onChangeClip={(index, next) => updateClip(index, () => next)}
-            onSeek={seekTo}
-          />
-        </div>
+        {shown.panel === 'check' ? (
+          <section aria-label="Check before publishing" className="flex min-w-0 flex-col gap-2">
+            <div className="flex justify-end">
+              <Button small variant="secondary" onClick={() => dispatch({ type: 'closePanel' })}>
+                Back to the transcript
+              </Button>
+            </div>
+            {previewPanel}
+          </section>
+        ) : (
+          <div className="flex min-w-0 flex-col gap-4">
+            {previewPanel}
+            <ReelTranscript
+              sentences={sentences}
+              words={words}
+              wordTiming={transcript.data?.word_timing}
+              turns={turns}
+              canAddClip={canAddClip}
+              onAddClip={addClipAt}
+              onSetClipWords={setClipWords}
+              onAddClipWords={addClip}
+              clips={clips}
+              speakers={speakers}
+              selected={selectedIndex}
+              readOnly={readOnly}
+              nameOf={nameOf}
+              onChangeClip={(index, next) => updateClip(index, () => next)}
+              onSeek={seekTo}
+            />
+          </div>
+        )}
       </div>
     </EditorShell>
   );
@@ -894,17 +990,64 @@ export function claimsBySpeaker(
   return { bySlot, slot };
 }
 
+/** A list of warnings as one sentence: ends in a full stop, never two. */
+function sentence(text: string) {
+  return /[.?!]$/.test(text) ? text : `${text}.`;
+}
+
+/**
+ * Adds a clip at the playhead, under the clip cap (GEO-3773, D4): a reel aims for 4 clips and takes
+ * up to 6. Under 4 it is the plain add; at 4 or 5 a compact one that names the clip it adds and says
+ * why 4; at 6 there is none.
+ */
+export function AddClipButton({ count, disabled, onAdd }: { count: number; disabled: boolean; onAdd: () => void }) {
+  if (count >= MANUAL_MAX_CLIPS) return null;
+  if (count < REEL_CLIPS) {
+    return (
+      <Button small variant="secondary" disabled={disabled} onClick={onAdd}>
+        + Add clip at playhead
+      </Button>
+    );
+  }
+  return (
+    <Tooltip
+      label={EXTRA_CLIP_TOOLTIP}
+      trigger={
+        // A disabled button takes no pointer events: the wrapper keeps the reason reachable.
+        <span className="inline-flex" tabIndex={disabled ? 0 : undefined}>
+          <Button
+            small
+            variant="secondary"
+            disabled={disabled}
+            className="border-dashed"
+            aria-description={EXTRA_CLIP_TOOLTIP}
+            onClick={onAdd}
+          >
+            Add a {ordinal(count + 1)} clip
+          </Button>
+        </span>
+      }
+    />
+  );
+}
+
+function ordinal(n: number) {
+  return n === 5 ? '5th' : n === 6 ? '6th' : `${n}th`;
+}
+
 function EditorShell({
   title,
   actions,
+  rootRef,
   children,
 }: {
   title: string | null;
   actions?: React.ReactNode;
+  rootRef?: React.Ref<HTMLDivElement>;
   children: React.ReactNode;
 }) {
   return (
-    <div className="mx-auto flex w-full max-w-[1180px] flex-col gap-4 px-4 pt-8 pb-[120px]">
+    <div ref={rootRef} className="mx-auto flex w-full max-w-[1180px] flex-col gap-4 px-4 pt-8 pb-[120px]">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="min-w-0">
           {title ? (

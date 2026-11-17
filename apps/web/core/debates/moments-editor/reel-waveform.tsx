@@ -4,7 +4,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import { SquareButton } from '~/design-system/button';
+import { SmallButton, SquareButton } from '~/design-system/button';
 import { CheckboxVisual } from '~/design-system/checkbox';
 import { Text } from '~/design-system/text';
 
@@ -53,6 +53,7 @@ export function ReelWaveform({
   readOnly,
   onChangeClip,
   onSeek,
+  onFullDebate,
 }: {
   view: PeaksView;
   clip: EditorClip | null;
@@ -66,6 +67,8 @@ export function ReelWaveform({
   readOnly: boolean;
   onChangeClip: (index: number, span: DraggedSpan & { claim_index: number | null }) => void;
   onSeek: (ms: number) => void;
+  /** Deselects the clip, back to the whole debate (GEO-3773). */
+  onFullDebate?: () => void;
 }) {
   const [pad, setPad] = React.useState<(typeof PADS)[number]>(2_000);
   const [snap, setSnap] = React.useState(true);
@@ -105,6 +108,7 @@ export function ReelWaveform({
         {clip ? `Fine-tune clip ${index + 1}` : 'Fine-tune'}
       </Text>
       <div className="flex items-center gap-3">
+        {clip && onFullDebate ? <SmallButton onClick={onFullDebate}>Full debate</SmallButton> : null}
         <label className="flex cursor-pointer items-center gap-1.5 text-[14px] text-text">
           <input type="checkbox" className="sr-only" checked={snap} onChange={event => setSnap(event.target.checked)} />
           <CheckboxVisual checked={snap} variant="filled" />
@@ -220,10 +224,7 @@ export function ReelWaveform({
             <div
               data-testid="waveform-played"
               title="What geo-chat will cut: an edge snapped to a word widens into the quiet beside it."
-              className={cx(
-                'absolute top-[18px] bottom-0',
-                speaker ? SPEAKER_TINT_CLASS[speaker] : 'bg-grey-02/60'
-              )}
+              className={cx('absolute top-[18px] bottom-0', speaker ? SPEAKER_TINT_CLASS[speaker] : 'bg-grey-02/60')}
               style={{ left: left(played.start_ms), width: width(played.start_ms, played.end_ms) }}
             />
           ) : null}

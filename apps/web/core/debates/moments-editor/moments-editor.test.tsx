@@ -1070,6 +1070,21 @@ describe('MomentsEditor (GEO-3671)', () => {
     expect(mocks.mutate).not.toHaveBeenCalled();
   });
 
+  it('keeps a confirm the reel closed closed once the edit that closed it is mended', () => {
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    const setEnd = (value: string) => {
+      fireEvent.change(screen.getByRole('textbox', { name: 'End time' }), { target: { value } });
+      fireEvent.blur(screen.getByRole('textbox', { name: 'End time' }));
+    };
+    setEnd('1.45');
+    fireEvent.click(screen.getByRole('button', { name: /^Publish reel/ }));
+    setEnd('0.5');
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    setEnd('1.45');
+    expect(screen.getByRole('button', { name: /^Publish reel/ })).toBeEnabled();
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+  });
+
   it('closes the return-to-automatic confirm once the reel is edited', () => {
     mocks.manualReel = true;
     render(<MomentsEditor debateId={DEBATE_ID} />);
@@ -1767,6 +1782,238 @@ describe('selectionAnchorRect (GEO-3766)', () => {
   });
 });
 
+describe('MomentsEditor view state (GEO-3773)', () => {
+  /** A reel of `count` clips, one word each, the speakers taking turns. */
+  const reelOf = (count: number) => {
+    wordsOverride = Array.from({ length: 7 }, (_, at) => ({
+      participant_slot: (at % 2) + 1,
+      start_ms: (at + 1) * 10_000,
+      end_ms: (at + 1) * 10_000 + 400,
+      text: `Word${at + 1}`,
+    }));
+    mocks.plan.data = entry({
+      live_reel: {
+        clock: 'video',
+        clips: Array.from({ length: count }, (_, at) => ({
+          start_ms: (at + 1) * 10_000 - 100,
+          end_ms: (at + 1) * 10_000 + 500,
+          speaker_slot: at % 2,
+          claim_index: null,
+          claim_text: null,
+        })),
+      },
+    });
+  };
+  const escape = () => fireEvent.keyDown(document.body, { key: 'Escape' });
+
+  it('deselects to the full debate, from the button or with Esc', () => {
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    expect(clipRow('Coffee')).toHaveAttribute('aria-current', 'true');
+    fireEvent.click(screen.getByRole('button', { name: 'Full debate' }));
+    expect(clipRow('Coffee')).not.toHaveAttribute('aria-current');
+    expect(screen.queryByText('Clip 1 selected')).not.toBeInTheDocument();
+    expect(screen.getByText('Select a clip to fine-tune it against the waveform.')).toBeInTheDocument();
+
+    fireEvent.click(clipRow('Coffee').querySelector('p') as HTMLElement);
+    expect(clipRow('Coffee')).toHaveAttribute('aria-current', 'true');
+    escape();
+    expect(clipRow('Coffee')).not.toHaveAttribute('aria-current');
+  });
+
+  it('closes the publish confirm with the first Esc and deselects only with the second', () => {
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    fireEvent.change(screen.getByRole('textbox', { name: 'End time' }), { target: { value: '1.45' } });
+    fireEvent.blur(screen.getByRole('textbox', { name: 'End time' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Publish reel/ }));
+    expect(screen.getByRole('alertdialog', { name: 'Publish this reel?' })).toBeInTheDocument();
+
+    escape();
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(clipRow('Coffee')).toHaveAttribute('aria-current', 'true');
+    escape();
+    expect(clipRow('Coffee')).not.toHaveAttribute('aria-current');
+    expect(mocks.mutate).not.toHaveBeenCalled();
+  });
+
+  it('selects the clip that took a removed selected clip’s place', () => {
+    reelOf(3);
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    fireEvent.click(screen.getByText('Word2', { selector: 'p' }));
+    fireEvent.click(within(clipRow('Word2')).getByRole('button', { name: 'Remove' }));
+    expect(clipRow('Word3')).toHaveAttribute('aria-current', 'true');
+    expect(clipRow('Word1')).not.toHaveAttribute('aria-current');
+  });
+
+  it('opens a check’s report once when it lands, and goes back to the transcript from it', () => {
+    const requestedAt = '2026-11-11T21:00:00Z';
+    mocks.mutate.mockImplementation((_body, options: { onSuccess: (entry: unknown) => void }) =>
+      options.onSuccess({ queued: true, refusal: null, request: status({ requested_at: requestedAt, preview: true }) })
+    );
+    const { rerender } = render(<MomentsEditor debateId={DEBATE_ID} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+    mocks.backfill.data = { request: status({ requested_at: requestedAt, preview: true }), entry: null };
+    rerender(<MomentsEditor debateId={DEBATE_ID} />);
+    expect(screen.queryByRole('region', { name: 'Check before publishing' })).not.toBeInTheDocument();
+
+    mocks.backfill.data = {
+      request: status({ requested_at: requestedAt, preview: true, status: 'done' }),
+      entry: null,
+    };
+    rerender(<MomentsEditor debateId={DEBATE_ID} />);
+    expect(screen.getByRole('region', { name: 'Check before publishing' })).toBeInTheDocument();
+    expect(screen.queryByText('Clip 1 selected')).not.toBeInTheDocument();
+
+    escape();
+    expect(screen.queryByRole('region', { name: 'Check before publishing' })).not.toBeInTheDocument();
+    expect(screen.getByText('Clip 1 selected')).toBeInTheDocument();
+    // The same report doesn't open again on the next read.
+    rerender(<MomentsEditor debateId={DEBATE_ID} />);
+    expect(screen.queryByRole('region', { name: 'Check before publishing' })).not.toBeInTheDocument();
+  });
+
+  it('reads the reel again when a check leaves the queue, as any request does', () => {
+    const requestedAt = '2026-11-11T21:00:00Z';
+    mocks.mutate.mockImplementation((_body, options: { onSuccess: (entry: unknown) => void }) =>
+      options.onSuccess({ queued: true, refusal: null, request: status({ requested_at: requestedAt, preview: true }) })
+    );
+    const { rerender } = render(<MomentsEditor debateId={DEBATE_ID} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+    mocks.backfill.data = { request: status({ requested_at: requestedAt, preview: true }), entry: null };
+    rerender(<MomentsEditor debateId={DEBATE_ID} />);
+    expect(mocks.refresh).not.toHaveBeenCalled();
+
+    mocks.backfill.data = {
+      request: status({ requested_at: requestedAt, preview: true, status: 'done' }),
+      entry: null,
+    };
+    rerender(<MomentsEditor debateId={DEBATE_ID} />);
+    expect(screen.getByRole('region', { name: 'Check before publishing' })).toBeInTheDocument();
+    expect(mocks.refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('goes back to the transcript when the admin publishes from a check’s report', () => {
+    const requestedAt = '2026-11-11T21:00:00Z';
+    mocks.mutate.mockImplementation((_body, options: { onSuccess: (entry: unknown) => void }) =>
+      options.onSuccess({ queued: true, refusal: null, request: status({ requested_at: requestedAt, preview: true }) })
+    );
+    reelOf(5);
+    const { rerender } = render(<MomentsEditor debateId={DEBATE_ID} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+    mocks.backfill.data = {
+      request: status({ requested_at: requestedAt, preview: true, status: 'done' }),
+      entry: null,
+    };
+    rerender(<MomentsEditor debateId={DEBATE_ID} />);
+    expect(screen.getByRole('region', { name: 'Check before publishing' })).toBeInTheDocument();
+
+    fireEvent.click(within(clipRow('Word5')).getByRole('button', { name: 'Remove' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Publish reel/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Publish and lock|Publish anyway/ }));
+    expect(screen.queryByRole('region', { name: 'Check before publishing' })).not.toBeInTheDocument();
+    expect(screen.getByText('Clip 1 selected')).toBeInTheDocument();
+  });
+
+  it('goes back to the transcript when another request replaces the check', () => {
+    const requestedAt = '2026-11-11T21:00:00Z';
+    mocks.mutate.mockImplementation((_body, options: { onSuccess: (entry: unknown) => void }) =>
+      options.onSuccess({ queued: true, refusal: null, request: status({ requested_at: requestedAt, preview: true }) })
+    );
+    const { rerender } = render(<MomentsEditor debateId={DEBATE_ID} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+    mocks.backfill.data = {
+      request: status({ requested_at: requestedAt, preview: true, status: 'done' }),
+      entry: null,
+    };
+    rerender(<MomentsEditor debateId={DEBATE_ID} />);
+    expect(screen.getByRole('region', { name: 'Check before publishing' })).toBeInTheDocument();
+
+    // Another admin publishes: the debate's request is theirs now.
+    mocks.backfill.data = { request: status({ requested_at: '2026-11-11T21:05:00Z' }), entry: null };
+    rerender(<MomentsEditor debateId={DEBATE_ID} />);
+    expect(screen.queryByRole('region', { name: 'Check before publishing' })).not.toBeInTheDocument();
+    expect(screen.getByText('Clip 1 selected')).toBeInTheDocument();
+  });
+
+  it('leaves the transcript from a check’s report with Back to the transcript', () => {
+    const requestedAt = '2026-11-11T21:00:00Z';
+    mocks.mutate.mockImplementation((_body, options: { onSuccess: (entry: unknown) => void }) =>
+      options.onSuccess({ queued: true, refusal: null, request: status({ requested_at: requestedAt, preview: true }) })
+    );
+    const { rerender } = render(<MomentsEditor debateId={DEBATE_ID} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+    mocks.backfill.data = {
+      request: status({ requested_at: requestedAt, preview: true, status: 'done' }),
+      entry: null,
+    };
+    rerender(<MomentsEditor debateId={DEBATE_ID} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Back to the transcript' }));
+    expect(screen.queryByRole('region', { name: 'Check before publishing' })).not.toBeInTheDocument();
+    expect(screen.getByText('Clip 1 selected')).toBeInTheDocument();
+  });
+
+  describe('clip cap (D4)', () => {
+    it('offers the plain add under 4 clips', () => {
+      reelOf(3);
+      render(<MomentsEditor debateId={DEBATE_ID} />);
+      expect(screen.getByRole('button', { name: '+ Add clip at playhead' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /^Add a \dth clip/ })).not.toBeInTheDocument();
+    });
+
+    it.each([
+      [4, 'Add a 5th clip'],
+      [5, 'Add a 6th clip'],
+    ])('offers a compact add at %i clips that says reels aim for 4', (count, label) => {
+      reelOf(count);
+      mocks.playheadSeconds = 65;
+      render(<MomentsEditor debateId={DEBATE_ID} />);
+      const add = screen.getByRole('button', { name: label });
+      expect(add).toHaveAttribute(
+        'aria-description',
+        'Reels work best with 4 clips. Add more only when the debate needs it.'
+      );
+      expect(screen.queryByRole('button', { name: '+ Add clip at playhead' })).not.toBeInTheDocument();
+      fireEvent.click(add);
+      // The new clip is added at the playhead, and selected.
+      expect(screen.getByText(`Clip ${count + 1} selected`)).toBeInTheDocument();
+    });
+
+    it('offers no add at 6 clips', () => {
+      reelOf(6);
+      mocks.playheadSeconds = 65;
+      render(<MomentsEditor debateId={DEBATE_ID} />);
+      expect(screen.queryByRole('button', { name: /Add/ })).not.toBeInTheDocument();
+    });
+
+    it.each([5, 6])('warns that a reel of %i clips is over the 4 we aim for', count => {
+      reelOf(count);
+      render(<MomentsEditor debateId={DEBATE_ID} />);
+      expect(screen.getByText(`This reel has ${count} clips. We aim for 4.`)).toBeInTheDocument();
+    });
+
+    it('says so in the publish confirm, as one sentence', () => {
+      reelOf(6);
+      render(<MomentsEditor debateId={DEBATE_ID} />);
+      fireEvent.click(within(clipRow('Word6')).getByRole('button', { name: 'Remove' }));
+      fireEvent.click(screen.getByRole('button', { name: /^Publish reel/ }));
+      const confirm = screen.getByRole('alertdialog', { name: 'Publish this reel?' });
+      expect(confirm).toHaveTextContent('1 warning still open: This reel has 5 clips. We aim for 4.');
+      expect(confirm).not.toHaveTextContent('4..');
+    });
+
+    it('lists it with other warnings as sentences, not run together with a semicolon', () => {
+      reelOf(6);
+      render(<MomentsEditor debateId={DEBATE_ID} />);
+      fireEvent.click(within(clipRow('Word6')).getByRole('button', { name: 'Remove' }));
+      // Clip 3 before clip 2: clips 1 and 2 are now both the first speaker.
+      fireEvent.click(within(clipRow('Word3')).getByRole('button', { name: '↑ Earlier' }));
+      fireEvent.click(screen.getByRole('button', { name: /^Publish reel/ }));
+      const confirm = screen.getByRole('alertdialog', { name: 'Publish this reel?' });
+      expect(confirm).toHaveTextContent(/still open: This reel has 5 clips\. We aim for 4\. Clips 1 and 2 are both /);
+      expect(confirm).not.toHaveTextContent('.;');
+    });
+  });
+});
+
 describe('playing clips in the editor (GEO-3773)', () => {
   const player = playerMocks.handle;
   const props = () =>
@@ -1841,6 +2088,35 @@ describe('playing clips in the editor (GEO-3773)', () => {
     fireEvent.click(screen.getAllByRole('button', { name: /Remove/ })[1]);
     expect(player.pause).toHaveBeenCalledOnce();
     expect(screen.getByRole('button', { name: 'Play reel' })).toBeInTheDocument();
+  });
+
+  it('plays and stops the reel on Space, and leaves Space to a text field', () => {
+    mocks.plan.data = entry({
+      live_reel: {
+        clock: 'video',
+        clips: [{ start_ms: 900, end_ms: 3_000, speaker_slot: 1, claim_index: 0, claim_text: 'Coffee is low stakes' }],
+      },
+    });
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+
+    fireEvent.keyDown(document.body, { key: ' ', code: 'Space' });
+    expect(player.jumpTo).toHaveBeenCalledOnce();
+    expect(screen.getByRole('button', { name: 'Stop' })).toBeInTheDocument();
+
+    fireEvent.keyDown(document.body, { key: ' ', code: 'Space' });
+    expect(player.pause).toHaveBeenCalledOnce();
+    expect(screen.getByRole('button', { name: 'Play reel' })).toBeInTheDocument();
+
+    const field = screen.getAllByRole('textbox')[0];
+    fireEvent.keyDown(field, { key: ' ', code: 'Space' });
+    expect(player.jumpTo).toHaveBeenCalledOnce();
+  });
+
+  it('leaves Space alone while inline playback is unavailable', () => {
+    getDefaultStore().set(inlinePlaybackUnavailableAtom, true);
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    fireEvent.keyDown(document.body, { key: ' ', code: 'Space' });
+    expect(player.jumpTo).not.toHaveBeenCalled();
   });
 
   it("plays a carried reel's clip spans, which have no played cut", () => {
