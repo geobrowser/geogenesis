@@ -56,12 +56,16 @@ describe('the masthead', () => {
     expect([m.markPx, m.textPx, m.gapPx]).toEqual([40, 45, 12]);
   });
 
-  /// Growing it must not push it into the claim band, which starts at the bottom of the header.
-  /// The text's line box (~1.2x font size) is the taller of the two; renders put a 3-line claim
-  /// 26px below the ink, but the box itself must clear the band on its own.
-  it('stays inside the header, above the claim band', () => {
+  /// Growing it must not push it into the claim. The claim band is drawn 10px up into the header,
+  /// so its top is not `HEADER_H`; and claims are centred in it, so the tightest case is the tallest
+  /// block the fitter can return. The masthead box is the mark or the text's line box, whichever is
+  /// taller: Satori's `lineHeight: normal` is the font's ascent minus descent, 1.187em for Calibre,
+  /// so 1.2 rounds up. Renders put the masthead ink 23px or more above the claim ink.
+  it('stays clear of the tallest claim the band can hold', () => {
     const m = g.masthead;
     const halfBox = Math.max(m.markPx, m.textPx * 1.2) / 2;
-    expect(m.centreY + halfBox).toBeLessThanOrEqual(m.claimBandTop - 4);
+    expect(m.claimBandTop).toBe(78);
+    expect(m.tallestClaimTop).toBe(89);
+    expect(m.centreY + halfBox).toBeLessThanOrEqual(m.tallestClaimTop - 4);
   });
 });

@@ -8,7 +8,13 @@ import { fitWrappedText, initials, measureTextWidth, seedHue } from '~/core/bloc
 
 import { GeoMark } from '~/design-system/icons/geo-mark';
 
-import { CLAIM_BAND_HEIGHT_PX, CLAIM_MEASURE_PX, claimLineHeight, fitClaimToBand } from './debate-og-claim-fit';
+import {
+  CLAIM_BAND_HEIGHT_PX,
+  CLAIM_MEASURE_PX,
+  CLAIM_TALLEST_BLOCK_PX,
+  claimLineHeight,
+  fitClaimToBand,
+} from './debate-og-claim-fit';
 
 /**
  * The 1200x630 share card for a published debate (GEO-2755).
@@ -82,8 +88,11 @@ export const DEBATE_OG_GEOMETRY = {
       markPx: BRAND_MARK_PX,
       textPx: BRAND_TEXT_PX,
       gapPx: BRAND_GAP_PX,
-      centreY: HEADER_H / 2 + BRAND_OFFSET_Y,
-      claimBandTop: HEADER_H,
+      centreY: BRAND_CENTRE_Y,
+      /** Where the band is drawn: it sits `CLAIM_BAND_OFFSET_Y` up into the header. */
+      claimBandTop: CLAIM_BAND_TOP,
+      /** Where the tallest claim the fitter can produce starts, centred in that band. */
+      tallestClaimTop: CLAIM_BAND_TOP + (CLAIM_BAND_H - CLAIM_TALLEST_BLOCK_PX) / 2,
     };
   },
 };
@@ -92,11 +101,16 @@ const CARD_W = 1200;
 const CARD_H = 630;
 const HEADER_H = 88;
 const BRAND_OFFSET_Y = 10;
+/** The masthead's vertical centre, which is also where the background rays fan out from. */
+const BRAND_CENTRE_Y = HEADER_H / 2 + BRAND_OFFSET_Y;
 /** The "Geo Debates" masthead. Sized up from 32/36/10 (GEO-3791) so the brand reads at feed-thumbnail size. */
 const BRAND_MARK_PX = 40;
 const BRAND_TEXT_PX = 45;
 const BRAND_GAP_PX = 12;
 const CLAIM_BAND_H = CLAIM_BAND_HEIGHT_PX;
+/** The claim band is nudged up into the header, so it starts above `HEADER_H`. */
+const CLAIM_BAND_OFFSET_Y = -10;
+const CLAIM_BAND_TOP = HEADER_H + CLAIM_BAND_OFFSET_Y;
 const SIDE_MARGIN = 32;
 const VIDEO_H = CARD_H - HEADER_H - CLAIM_BAND_H - SIDE_MARGIN;
 const BLOCK_W = CARD_W - SIDE_MARGIN * 2; // 1136, and the claim measure too
@@ -477,15 +491,7 @@ function BackgroundRays() {
         fill="none"
       >
         {ends.map(([x, y], index) => (
-          <line
-            key={index}
-            x1={600}
-            y1={HEADER_H / 2 + BRAND_OFFSET_Y}
-            x2={x}
-            y2={y}
-            stroke={DIVIDER}
-            strokeWidth={1}
-          />
+          <line key={index} x1={600} y1={BRAND_CENTRE_Y} x2={x} y2={y} stroke={DIVIDER} strokeWidth={1} />
         ))}
       </svg>
     </div>
@@ -542,7 +548,7 @@ function Card({ data }: { data: DebateOgCardData }) {
           fontWeight: 500,
           fontSize: claim.fontSize,
           letterSpacing: '-0.022em',
-          transform: 'translateY(-10px)',
+          transform: `translateY(${CLAIM_BAND_OFFSET_Y}px)`,
         }}
       >
         {/* Pre-wrapped: Satori has no `text-wrap: balance`, so the fitter owns line breaks. */}
