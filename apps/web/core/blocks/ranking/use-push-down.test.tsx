@@ -514,6 +514,29 @@ describe('usePushDown', () => {
     expect(publish).toHaveBeenLastCalledWith([RANKED_A, DEBATE, RANKED_B], undefined);
   });
 
+  it('leaves the draft alone when the Undo’s clear fails, and puts the debate back on Retry', async () => {
+    rankedBallot([RANKED_A, DEBATE]);
+    const { ballot, publish } = liveDraft([RANKED_A, DEBATE, RANKED_B]);
+    const { result } = await renderReady(ballot);
+
+    await act(async () => {
+      await result.current.pushDown();
+    });
+    const publishes = publish.mock.calls.length;
+    mocks.runEffectEither.mockResolvedValueOnce({ _tag: 'Left', left: new Error('rejected') });
+    await act(async () => {
+      await result.current.undo();
+    });
+    expect(result.current.state).toMatchObject({ status: 'failed', action: 'undo', step: 'vote' });
+    expect(publish).toHaveBeenCalledTimes(publishes);
+
+    await act(async () => {
+      await result.current.retry();
+    });
+    expect(publish).toHaveBeenLastCalledWith([RANKED_A, DEBATE, RANKED_B], undefined);
+    await waitFor(() => expect(result.current.state).toEqual({ status: 'done', action: 'undo' }));
+  });
+
   it('keeps a failed ballot edit for a retry that only edits the ballot', async () => {
     rankedBallot([RANKED_A, DEBATE]);
     mocks.save.mockResolvedValueOnce(null);
