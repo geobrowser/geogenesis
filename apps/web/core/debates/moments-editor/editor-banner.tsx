@@ -15,13 +15,23 @@ export type EditorBannerView = {
   more?: readonly string[];
   /** The flagged clips, as numbered now: a "See clip N." link selects the first. */
   see?: readonly number[];
-  action?: 'unlock' | 'discard';
+  action?: 'unlock' | 'discard' | 'restore';
 };
+
+/** Brings back the clips of a publish that failed after its visit ended. New copy (GEO-3742). */
+export const RESTORE_FAILED_EDIT_LABEL = 'Bring back the edit that failed';
 
 type BannerInput = {
   queueError: string | null;
   /** This visit's publish or return to automatic, failed. */
   failed: Failed | null;
+  /**
+   * A publish that failed after its visit ended (GEO-3742: the popup's tab closed with Done while it
+   * rendered), shown as if this visit had sent it.
+   */
+  failedElsewhere?: Failed | null;
+  /** Its clips are on the player's clock and the editor is free to take them back as an edit. */
+  canRestore?: boolean;
   flagged: readonly number[];
   reapplyFailed: Failed | null;
   unlinkable: boolean;
@@ -51,6 +61,8 @@ export function bannerFor(input: BannerInput): EditorBannerView | null {
 
 function stateBanner({
   failed,
+  failedElsewhere = null,
+  canRestore = false,
   flagged,
   reapplyFailed,
   unlinkable,
@@ -62,6 +74,14 @@ function stateBanner({
   canUnlock,
 }: BannerInput): EditorBannerView | null {
   if (failed) return { lead: 'Nothing changed.', text: failed.summary, more: failed.other, see: flagged };
+  if (failedElsewhere) {
+    return {
+      lead: 'Nothing changed.',
+      text: failedElsewhere.summary,
+      more: workerLines(failedElsewhere, 'Clip'),
+      ...(canRestore && { action: 'restore' as const }),
+    };
+  }
   if (unlinkable) {
     const lead = 'This debate has no reel.';
     if (inFlight) {
@@ -135,11 +155,13 @@ export function EditorBanner({
   onSee,
   onUnlock,
   onDiscard,
+  onRestore,
 }: {
   banner: EditorBannerView;
   onSee: (clip: number) => void;
   onUnlock: () => void;
   onDiscard: () => void;
+  onRestore?: () => void;
 }) {
   const see = banner.see ?? [];
   return (
@@ -169,8 +191,16 @@ export function EditorBanner({
         ))}
       </span>
       {banner.action ? (
-        <button type="button" className={PILL_CLASS} onClick={banner.action === 'unlock' ? onUnlock : onDiscard}>
-          {banner.action === 'unlock' ? 'Return to automatic' : 'Discard changes'}
+        <button
+          type="button"
+          className={PILL_CLASS}
+          onClick={banner.action === 'unlock' ? onUnlock : banner.action === 'restore' ? onRestore : onDiscard}
+        >
+          {banner.action === 'unlock'
+            ? 'Return to automatic'
+            : banner.action === 'restore'
+              ? RESTORE_FAILED_EDIT_LABEL
+              : 'Discard changes'}
         </button>
       ) : null}
     </div>

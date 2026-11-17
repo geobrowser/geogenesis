@@ -94,6 +94,7 @@ export function EditorHeader({
   unlockConfirm,
   onPublish,
   onUnlock,
+  done = null,
 }: {
   title: string;
   debaters: { slot: 1 | 2; name: string }[];
@@ -122,6 +123,8 @@ export function EditorHeader({
   unlockConfirm: string;
   onPublish: () => void;
   onUnlock: () => void;
+  /** Done, in a tab opened from the Best debates popup (GEO-3742): closes the tab. */
+  done?: React.ReactNode;
 }) {
   const toggle = (which: HeaderPopover) => onPopover(popover === which ? null : which);
   const publishButton = (
@@ -243,6 +246,7 @@ export function EditorHeader({
             </button>
           </div>
         </Menu>
+        {done}
         {publishTip && !canPublish ? (
           // Off, with something to fix: the reason is reachable by hover and by keyboard (a disabled
           // button takes neither, so the wrapper is the tooltip's trigger).

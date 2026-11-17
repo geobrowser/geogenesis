@@ -57,6 +57,8 @@ export type MomentBackfillStatus = {
   manual_reel?: {
     clock?: string;
     clips?: StoredManualClip[];
+    /** Sent with every edge where it is (geo-chat stores it only when true). */
+    exact?: boolean;
     base?: string;
     /** A reel the media worker sent again itself after a re-render re-extracted claims (geo-chat#352). */
     reapplied?: { job_id: string; quotes?: string[] } | null;

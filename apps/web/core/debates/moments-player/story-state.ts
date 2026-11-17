@@ -28,6 +28,8 @@ export type StoryAction =
   | { type: 'previous' }
   | { type: 'clipEnded' }
   | { type: 'restart' }
+  /** Play moment `index` (a transcript line pressed, GEO-3728), from the full debate too. */
+  | { type: 'goTo'; index: number }
   | { type: 'expand'; atMs: number | null }
   | { type: 'collapse' }
   | { type: 'seekFull'; atMs: number; index?: number };
@@ -57,6 +59,9 @@ export function storyReducer(state: StoryState, action: StoryAction): StoryState
         : { ...state, finished: true };
     case 'restart':
       return { ...state, index: 0, finished: false };
+    case 'goTo':
+      if (!Number.isInteger(action.index) || action.index < 0 || action.index >= state.count) return state;
+      return { ...state, mode: 'moments', index: action.index, finished: false };
     case 'expand':
       return {
         ...state,

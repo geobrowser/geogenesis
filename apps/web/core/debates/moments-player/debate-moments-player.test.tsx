@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getGeoChatApiBaseUrl } from '../geo-chat-public-base-url';
 import { type DebateMoment, decodeDebateMoments } from './debate-moments';
-import { DebateMomentsPlayer } from './debate-moments-player';
+import { DebateMomentsPlayer, type DebateMomentsPlayerHandle } from './debate-moments-player';
 
 const mocks = vi.hoisted(() => ({
   getDebateExtractedClaims: vi.fn(),
@@ -69,6 +69,7 @@ function videoOf(player: HTMLElement): HTMLVideoElement {
 
 /** Report a length and a position, as the element would while playing. */
 function advance(video: HTMLVideoElement, seconds: number, duration = 15) {
+  Object.defineProperty(video, 'readyState', { configurable: true, value: HTMLMediaElement.HAVE_METADATA });
   Object.defineProperty(video, 'duration', { configurable: true, value: duration });
   Object.defineProperty(video, 'currentTime', { configurable: true, writable: true, value: seconds });
   fireEvent.loadedMetadata(video);
@@ -332,6 +333,7 @@ describe('DebateMomentsPlayer', () => {
     const video = videoOf(screen.getByRole('region', { name: 'Debate B' }));
     Object.defineProperty(video, 'duration', { configurable: true, value: 300 });
     Object.defineProperty(video, 'currentTime', { configurable: true, writable: true, value: 0 });
+    Object.defineProperty(video, 'readyState', { configurable: true, value: HTMLMediaElement.HAVE_METADATA });
     fireEvent.loadedMetadata(video);
     video.currentTime = 95;
     fireEvent.timeUpdate(video);
@@ -476,5 +478,340 @@ describe('DebateMomentsPlayer', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Back to moments' }));
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Watch the full debate' }));
+  });
+});
+
+// GEO-3728: the watch popup plays faster and jumps from its transcript.
+describe('DebateMomentsPlayer speed and jumps', () => {
+  function renderPlayer(props: Partial<React.ComponentProps<typeof DebateMomentsPlayer>> = {}) {
+    const controller = React.createRef<DebateMomentsPlayerHandle>();
+    const utils = render(
+      <DebateMomentsPlayer debateId={DEBATE} label="Debate A" moments={MOMENTS} controllerRef={controller} {...props} />
+    );
+    const video = () => videoOf(screen.getByRole('region', { name: 'Debate A' }));
+    return { ...utils, controller, video };
+  }
+
+  /** The element's metadata arriving for the src it now has, at `seconds` in. */
+  function metadata(video: HTMLVideoElement, seconds = 0, duration = 15) {
+    Object.defineProperty(video, 'readyState', { configurable: true, value: HTMLMediaElement.HAVE_METADATA });
+    Object.defineProperty(video, 'duration', { configurable: true, value: duration });
+    Object.defineProperty(video, 'currentTime', { configurable: true, writable: true, value: seconds });
+    fireEvent.loadedMetadata(video);
+  }
+
+  it('plays at the speed asked for, and puts it back whenever new media resets it', () => {
+    const { video, rerender } = renderPlayer({ playbackRate: 2 });
+    expect(video().playbackRate).toBe(2);
+    expect(video().defaultPlaybackRate).toBe(2);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+    playToEnd(video());
+    expect(video().getAttribute('src')).toContain('/moments/clip-1/content');
+    // Loading the next clip resets the rate (a browser goes back to the default): it holds.
+    video().playbackRate = 1;
+    metadata(video());
+    expect(video().playbackRate).toBe(2);
+    video().playbackRate = 1;
+    fireEvent(video(), new Event('playing'));
+    expect(video().playbackRate).toBe(2);
+    video().playbackRate = 1;
+    fireEvent(video(), new Event('ratechange'));
+    expect(video().playbackRate).toBe(2);
+
+    rerender(<DebateMomentsPlayer debateId={DEBATE} label="Debate A" moments={MOMENTS} playbackRate={1.5} />);
+    expect(video().playbackRate).toBe(1.5);
+    expect(video().defaultPlaybackRate).toBe(1.5);
+  });
+
+  it('plays at 1x when no speed is given', () => {
+    const { video } = renderPlayer();
+    expect(video().playbackRate).toBe(1);
+  });
+
+  it('jumps into another moment at a point once its clip is loaded, not from its start first', () => {
+    const { controller, video } = renderPlayer();
+    act(() => controller.current?.playMomentAt(2, 4_000));
+    expect(video().getAttribute('src')).toContain('/moments/clip-2/content');
+    expect(mocks.play).not.toHaveBeenCalled();
+    metadata(video());
+    expect(video().currentTime).toBe(4);
+    expect(mocks.play).toHaveBeenCalledTimes(1);
+  });
+
+  it('seeks the moment on screen straight away', () => {
+    const { controller, video } = renderPlayer();
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+    advance(video(), 1);
+    act(() => controller.current?.playMomentAt(0, 6_000));
+    expect(video().currentTime).toBe(6);
+    expect(mocks.play).toHaveBeenCalledTimes(2);
+  });
+
+  it('lands only the last of two quick jumps', () => {
+    const { controller, video } = renderPlayer();
+    act(() => controller.current?.playMomentAt(1, 3_000));
+    act(() => controller.current?.playMomentAt(2, 5_000));
+    expect(video().getAttribute('src')).toContain('/moments/clip-2/content');
+    metadata(video());
+    expect(video().currentTime).toBe(5);
+  });
+
+  it('never lands a jump on a clip it wasn’t for', () => {
+    const { controller, video } = renderPlayer();
+    act(() => controller.current?.playMomentAt(1, 3_000));
+    // Before its clip loads, the viewer steps on to the next moment.
+    fireEvent.click(screen.getByRole('button', { name: 'Next moment' }));
+    expect(video().getAttribute('src')).toContain('/moments/clip-2/content');
+    metadata(video());
+    expect(video().currentTime).toBe(0);
+  });
+
+  it('drops a jump into a clip the player left before it loaded', () => {
+    const { controller, video } = renderPlayer();
+    act(() => controller.current?.playMomentAt(1, 3_000));
+    fireEvent.click(screen.getByRole('button', { name: 'Next moment' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Previous moment' }));
+    expect(video().getAttribute('src')).toContain('/moments/clip-1/content');
+    metadata(video());
+    expect(video().currentTime).toBe(0);
+  });
+
+  it('goes back from the full debate to a moment', () => {
+    const { controller, video } = renderPlayer();
+    act(() => controller.current?.playFullAt(90_000));
+    act(() => controller.current?.playMomentAt(1, 2_000));
+    expect(video().getAttribute('src')).toContain('/moments/clip-1/content');
+    metadata(video());
+    expect(video().currentTime).toBe(2);
+  });
+
+  it('plays the full debate from a point, from the moments', () => {
+    const onModeChange = vi.fn();
+    const { controller, video } = renderPlayer({ onModeChange });
+    act(() => controller.current?.playFullAt(90_000));
+    expect(video().getAttribute('src')).toContain('/final_video/content');
+    expect(onModeChange).toHaveBeenLastCalledWith('full');
+    metadata(video(), 0, 600);
+    expect(video().currentTime).toBe(90);
+    expect(mocks.play).toHaveBeenCalledTimes(1);
+  });
+
+  it('stays playing when a play is cut short by the next media loading', async () => {
+    const { controller, video } = renderPlayer();
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+    advance(video(), 1);
+    mocks.play.mockImplementationOnce(() => Promise.reject(new DOMException('interrupted', 'AbortError')));
+    act(() => controller.current?.playMomentAt(0, 2_000));
+    await act(async () => {});
+    expect(screen.getByRole('button', { name: 'Pause' })).toBeInTheDocument();
+  });
+
+  it('still shows Play when the browser refuses to play', async () => {
+    const { controller, video } = renderPlayer();
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+    advance(video(), 1);
+    mocks.play.mockImplementationOnce(() => Promise.reject(new DOMException('no', 'NotAllowedError')));
+    act(() => controller.current?.playMomentAt(0, 2_000));
+    await act(async () => {});
+    expect(screen.getByRole('button', { name: 'Play' })).toBeInTheDocument();
+  });
+
+  it('never reports a new moment with the last one’s position', () => {
+    const onPosition = vi.fn();
+    const { video } = renderPlayer({ onPosition });
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+    advance(video(), 12);
+    playToEnd(video());
+    const onNext = onPosition.mock.calls.map(([p]) => p).filter(p => p.index === 1);
+    expect(onNext.length).toBeGreaterThan(0);
+    expect(onNext.every(p => p.clipMs === 0)).toBe(true);
+  });
+
+  it('reloads a clip that failed when one of its lines is pressed, then plays from there', () => {
+    const { controller, video } = renderPlayer();
+    fireEvent.error(video());
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+    act(() => controller.current?.playMomentAt(0, 4_000));
+    expect(mocks.load).toHaveBeenCalled();
+    // Played inside the press, as Retry does, so a phone lets it start.
+    expect(mocks.play).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument();
+    metadata(video());
+    expect(video().currentTime).toBe(4);
+  });
+
+  it('reloads a clip that failed mid-play when one of its lines is pressed', () => {
+    const { controller, video } = renderPlayer();
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+    advance(video(), 2);
+    fireEvent.error(video());
+    act(() => controller.current?.playMomentAt(0, 4_000));
+    expect(mocks.load).toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument();
+    metadata(video());
+    expect(video().currentTime).toBe(4);
+    fireEvent.error(video());
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+  });
+
+  it('reloads a full debate that failed, before or after loading, and plays from the line', () => {
+    const { controller, video } = renderPlayer({ moments: [] });
+    fireEvent.error(video());
+    act(() => controller.current?.playFullAt(90_000));
+    expect(mocks.load).toHaveBeenCalled();
+    metadata(video(), 0, 600);
+    expect(video().currentTime).toBe(90);
+    expect(mocks.play).toHaveBeenCalled();
+
+    advance(video(), 95, 600);
+    fireEvent.error(video());
+    mocks.play.mockClear();
+    mocks.load.mockClear();
+    act(() => controller.current?.playFullAt(30_000));
+    expect(mocks.load).toHaveBeenCalled();
+    expect(mocks.play).not.toHaveBeenCalled();
+    metadata(video(), 0, 600);
+    expect(video().currentTime).toBe(30);
+    expect(mocks.play).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows a jump on its way while the clip loads, and a press pauses it rather than playing from the start', () => {
+    const { controller, video } = renderPlayer();
+    act(() => controller.current?.playMomentAt(2, 4_000));
+    expect(screen.getByTestId('advancing-indicator')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Pause' }));
+    expect(mocks.play).not.toHaveBeenCalled();
+    expect(screen.getByTestId('play-indicator')).toBeInTheDocument();
+    metadata(video());
+    expect(video().currentTime).toBe(4);
+    expect(mocks.play).not.toHaveBeenCalled();
+  });
+
+  it('lets go of a jump still loading when another player starts', () => {
+    const controller = React.createRef<DebateMomentsPlayerHandle>();
+    render(
+      <>
+        <DebateMomentsPlayer debateId={DEBATE} label="Debate A" moments={MOMENTS} controllerRef={controller} />
+        <DebateMomentsPlayer debateId={DEBATE} label="Debate B" moments={MOMENTS} />
+      </>
+    );
+    act(() => controller.current?.playMomentAt(2, 4_000));
+    const b = screen.getByRole('region', { name: 'Debate B' });
+    fireEvent.click(within(b).getByRole('button', { name: 'Play' }));
+    const a = screen.getByRole('region', { name: 'Debate A' });
+    expect(within(a).queryByTestId('advancing-indicator')).not.toBeInTheDocument();
+    mocks.play.mockClear();
+    metadata(videoOf(a));
+    expect(mocks.play).not.toHaveBeenCalled();
+  });
+
+  it('reports where a jump is going, not 0, while its media loads', () => {
+    const onPosition = vi.fn();
+    const { controller, video } = renderPlayer({ onPosition });
+    act(() => controller.current?.playMomentAt(2, 4_000));
+    // The new clip's load reports 0 before its metadata is in.
+    Object.defineProperty(video(), 'readyState', { configurable: true, value: HTMLMediaElement.HAVE_NOTHING });
+    Object.defineProperty(video(), 'currentTime', { configurable: true, writable: true, value: 0 });
+    fireEvent.timeUpdate(video());
+    const toClip2 = onPosition.mock.calls.map(([p]) => p).filter(p => p.index === 2);
+    expect(toClip2.length).toBeGreaterThan(0);
+    expect(toClip2.every(p => p.clipMs === 4_000)).toBe(true);
+
+    onPosition.mockClear();
+    act(() => controller.current?.playFullAt(90_000));
+    fireEvent.timeUpdate(video());
+    const full = onPosition.mock.calls.map(([p]) => p).filter(p => p.mode === 'full');
+    expect(full.length).toBeGreaterThan(0);
+    expect(full.every(p => p.fullMs === 90_000)).toBe(true);
+  });
+
+  it('keeps its position moving after an Activity hides and shows it in the full debate', () => {
+    const onPosition = vi.fn();
+    const view = (mode: 'visible' | 'hidden') => (
+      <React.Activity mode={mode}>
+        <DebateMomentsPlayer debateId={DEBATE} label="Debate A" moments={[]} onPosition={onPosition} />
+      </React.Activity>
+    );
+    const { rerender } = render(view('visible'));
+    const element = () => videoOf(screen.getByRole('region', { name: 'Debate A' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+    advance(element(), 0, 600);
+    element().currentTime = 40;
+    fireEvent.timeUpdate(element());
+    rerender(view('hidden'));
+    rerender(view('visible'));
+    // Shown again, it is where it was: no seek back to where the full debate was opened.
+    expect(onPosition).toHaveBeenLastCalledWith(expect.objectContaining({ mode: 'full', fullMs: 40_000 }));
+    // The element kept its media, so no new metadata: it just plays on.
+    element().currentTime = 45;
+    fireEvent.timeUpdate(element());
+    expect(onPosition).toHaveBeenLastCalledWith(expect.objectContaining({ mode: 'full', fullMs: 45_000 }));
+  });
+
+  it('still jumps straight to a line after an Activity hides and shows it', () => {
+    const controller = React.createRef<DebateMomentsPlayerHandle>();
+    const view = (mode: 'visible' | 'hidden') => (
+      <React.Activity mode={mode}>
+        <DebateMomentsPlayer debateId={DEBATE} label="Debate A" moments={MOMENTS} controllerRef={controller} />
+      </React.Activity>
+    );
+    const { rerender } = render(view('visible'));
+    const element = () => videoOf(screen.getByRole('region', { name: 'Debate A' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+    advance(element(), 1);
+    rerender(view('hidden'));
+    rerender(view('visible'));
+    mocks.play.mockClear();
+    act(() => controller.current?.playMomentAt(0, 6_000));
+    expect(element().currentTime).toBe(6);
+    expect(mocks.play).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId('advancing-indicator')).not.toBeInTheDocument();
+  });
+
+  it('comes back from an Activity as it was left: its place, and a failed clip still failed', () => {
+    const onPosition = vi.fn();
+    const view = (mode: 'visible' | 'hidden') => (
+      <React.Activity mode={mode}>
+        <DebateMomentsPlayer debateId={DEBATE} label="Debate A" moments={MOMENTS} onPosition={onPosition} />
+      </React.Activity>
+    );
+    const { rerender } = render(view('visible'));
+    const element = () => videoOf(screen.getByRole('region', { name: 'Debate A' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+    advance(element(), 12);
+    rerender(view('hidden'));
+    rerender(view('visible'));
+    expect(onPosition).toHaveBeenLastCalledWith(expect.objectContaining({ mode: 'moments', index: 0, clipMs: 12_000 }));
+
+    fireEvent.error(element());
+    rerender(view('hidden'));
+    rerender(view('visible'));
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+  });
+
+  it('lets go of a jump still loading when an Activity hides it', () => {
+    const controller = React.createRef<DebateMomentsPlayerHandle>();
+    const view = (mode: 'visible' | 'hidden') => (
+      <React.Activity mode={mode}>
+        <DebateMomentsPlayer debateId={DEBATE} label="Debate A" moments={MOMENTS} controllerRef={controller} />
+      </React.Activity>
+    );
+    const { rerender } = render(view('visible'));
+    act(() => controller.current?.playMomentAt(2, 4_000));
+    expect(screen.getByTestId('advancing-indicator')).toBeInTheDocument();
+    rerender(view('hidden'));
+    rerender(view('visible'));
+    expect(screen.queryByTestId('advancing-indicator')).not.toBeInTheDocument();
+    expect(screen.getByTestId('play-indicator')).toBeInTheDocument();
+  });
+
+  it('reports where it is on mount and as it plays', () => {
+    const onPosition = vi.fn();
+    const { video } = renderPlayer({ onPosition });
+    expect(onPosition).toHaveBeenLastCalledWith({ mode: 'moments', index: 0, clipMs: 0, fullMs: 0 });
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+    advance(video(), 2.5);
+    expect(onPosition).toHaveBeenLastCalledWith({ mode: 'moments', index: 0, clipMs: 2_500, fullMs: 0 });
   });
 });
