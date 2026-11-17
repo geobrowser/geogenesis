@@ -3205,6 +3205,16 @@ describe('MomentsEditor side transcript (GEO-3773)', () => {
       expect(isSelected(2)).toBe(true);
       expect(sentence('Dinner wins.')).toHaveClass('bg-pink/25');
     });
+
+    it('warns when two clips in a row are the same debater’s sentences', () => {
+      // Clip 1 plays "Coffee dates.", clip 2 "Cheap.": both Susan's.
+      liveReel(liveClip(900, 2_950, 0), liveClip(2_950, 3_500, 0));
+      render(<MomentsEditor debateId={DEBATE_ID} />);
+      fireEvent.click(menuItem(/^All warnings/));
+      expect(screen.getByRole('complementary', { name: 'All warnings' })).toHaveTextContent(
+        'Clips 1 and 2 are both Susan Winter.'
+      );
+    });
   });
 
   it('does not render the transcript on playhead reports, and marks the playhead’s word', () => {
