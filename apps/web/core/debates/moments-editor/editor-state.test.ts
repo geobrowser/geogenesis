@@ -229,18 +229,104 @@ describe('editorReducer (GEO-3773)', () => {
     const at = run([{ type: 'select', key: 'b' }], loaded());
     for (const panel of ['replace', 'claim'] as const) {
       const after = run(
-        [{ type: 'openPanel', panel }, { type: 'discarded' }, { type: 'clipsChanged', keys: ['a', 'b', 'c'] }],
+        [
+          { type: 'openPanel', panel },
+          { type: 'discarded', keys: ['a', 'b', 'c'] },
+          { type: 'clipsChanged', keys: ['a', 'b', 'c'] },
+        ],
         at
       );
       expect(after).toMatchObject({ panel: 'transcript', selection: { kind: 'clip', key: 'b' } });
     }
     for (const popover of ['claimMenu', 'advanced'] as const) {
-      expect(run([{ type: 'openPopover', popover }, { type: 'discarded' }], at).popover).toBeNull();
+      expect(
+        run(
+          [
+            { type: 'openPopover', popover },
+            { type: 'discarded', keys: ['a', 'b', 'c'] },
+          ],
+          at
+        ).popover
+      ).toBeNull();
     }
-    expect(run([{ type: 'playClip', key: 'b' }, { type: 'discarded' }], at).playback).toEqual({ mode: 'idle' });
+    expect(
+      run(
+        [
+          { type: 'playClip', key: 'b' },
+          { type: 'discarded', keys: ['a', 'b', 'c'] },
+        ],
+        at
+      ).playback
+    ).toEqual({ mode: 'idle' });
     // What isn't about a clip stays: the warnings panel and the header menu.
-    expect(run([{ type: 'openPanel', panel: 'warnings' }, { type: 'discarded' }], at).panel).toBe('warnings');
-    expect(run([{ type: 'openPopover', popover: 'menu' }, { type: 'discarded' }], at).popover).toBe('menu');
+    expect(
+      run(
+        [
+          { type: 'openPanel', panel: 'warnings' },
+          { type: 'discarded', keys: ['a', 'b', 'c'] },
+        ],
+        at
+      ).panel
+    ).toBe('warnings');
+    expect(
+      run(
+        [
+          { type: 'openPopover', popover: 'menu' },
+          { type: 'discarded', keys: ['a', 'b', 'c'] },
+        ],
+        at
+      ).popover
+    ).toBe('menu');
+  });
+
+  it('hands a discarded clip’s selection to the clip in its place, or the first when that is past the end', () => {
+    const four = run([{ type: 'clipsChanged', keys: ['a', 'b', 'c', 'd'] }], loaded());
+    const fromAdded = (key: string) =>
+      run(
+        [
+          { type: 'select', key },
+          { type: 'discarded', keys: ['a', 'b', 'c'] },
+        ],
+        four
+      ).selection;
+    // 'd' was added after the live reel: its place (4th) is past the live reel's end.
+    expect(fromAdded('d')).toEqual({ kind: 'clip', key: 'a' });
+    const swapped = run([{ type: 'clipsChanged', keys: ['a', 'x', 'c'] }], loaded());
+    expect(
+      run(
+        [
+          { type: 'select', key: 'x' },
+          { type: 'discarded', keys: ['a', 'b', 'c'] },
+        ],
+        swapped
+      ).selection
+    ).toEqual({
+      kind: 'clip',
+      key: 'b',
+    });
+    // The clipsChanged that follows keeps it.
+    expect(
+      run(
+        [
+          { type: 'select', key: 'd' },
+          { type: 'discarded', keys: ['a', 'b', 'c'] },
+          { type: 'clipsChanged', keys: ['a', 'b', 'c'] },
+        ],
+        four
+      ).selection
+    ).toEqual({ kind: 'clip', key: 'a' });
+  });
+
+  it('opens the Add picker, nothing selected, when the discard leaves no reel', () => {
+    const after = run(
+      [
+        { type: 'select', key: 'b' },
+        { type: 'discarded', keys: [] },
+        { type: 'clipsChanged', keys: [] },
+      ],
+      loaded()
+    );
+    expect(after).toMatchObject({ selection: { kind: 'none' }, panel: 'add' });
   });
 
   describe('Esc', () => {

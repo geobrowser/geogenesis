@@ -31,6 +31,8 @@ export type ReelWarning = {
   title: string;
   recommendation: string;
   fix: ReelWarningFix | null;
+  /** The clip it is about (0-based), for a warning about one clip: its card and bar show it (D3). */
+  clip?: number;
 };
 
 /** A word's text as a bare lower-case word: "So," is "so". */
@@ -132,6 +134,7 @@ export function reelWarnings(
     warnings.push({
       id: `alternate-${index}`,
       severity: 'warn',
+      clip: index,
       title: `Clips ${index} and ${index + 1} are both ${nameOf(speaker) ?? 'the same speaker'}`,
       recommendation:
         'Alternating speakers keeps the back-and-forth: a viewer hears an answer to each point.' +
@@ -150,6 +153,7 @@ export function reelWarnings(
     const from = spokenFrom(clip, words);
     warnings.push({
       id: `clip-length-${index}`,
+      clip: index,
       severity: over ? 'bad' : 'warn',
       title: `Clip ${index + 1}'s words run ${formatSeconds(spoken(clip))}`,
       recommendation:
@@ -177,6 +181,7 @@ export function reelWarnings(
     const shown = opener.text.trim().replace(/[,.;:]+$/, '');
     warnings.push({
       id: `opener-${index}`,
+      clip: index,
       severity: 'warn',
       title: `Clip ${index + 1} opens on “${shown}”`,
       recommendation: `A clip that opens on “${shown}” sounds like it starts mid-thought. Start it on the next word.`,

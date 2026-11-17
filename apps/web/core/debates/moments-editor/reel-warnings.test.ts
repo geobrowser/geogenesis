@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import { draggedClip } from './clip-drag';
 import { type EditorClip, type ReelWord, playerWords } from './reel';
-import { draggedClip } from './reel-timeline';
 import { endClipAt, reelSentences, sentenceInClip, startClipAt } from './reel-transcript';
 import { reelWarnings, spokenLength, trimmedEnd } from './reel-warnings';
 

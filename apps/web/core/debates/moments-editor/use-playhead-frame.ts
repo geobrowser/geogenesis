@@ -10,18 +10,20 @@ type Listener = (positionMs: number) => void;
  * four times a second, which jumps half a second at a time at 2x, and re-rendering the editor on
  * every frame would be far worse. So listeners are told directly and write the DOM themselves.
  *
- * Paused, it reads the position once when play stops, and again on `refresh` (after a seek).
+ * Paused, it reads the position once when play stops, and again on `refresh`. A position known
+ * for sure (a seek's target, the player's report while paused) is told with `set`: the player's
+ * live position can lag a seek, and a paused readout would keep the old time.
  */
 export function usePlayheadFrame(handle: React.RefObject<DebateFeedPlayerHandle | null>, playing: boolean) {
   const listenersRef = React.useRef(new Set<Listener>());
   const lastRef = React.useRef<number | null>(null);
 
-  const read = React.useCallback(() => {
-    const positionMs = handle.current?.livePositionMs() ?? null;
+  const tell = React.useCallback((positionMs: number | null) => {
     if (positionMs === null || positionMs === lastRef.current) return;
     lastRef.current = positionMs;
     for (const listener of listenersRef.current) listener(positionMs);
-  }, [handle]);
+  }, []);
+  const read = React.useCallback(() => tell(handle.current?.livePositionMs() ?? null), [handle, tell]);
 
   React.useEffect(() => {
     read();
@@ -42,7 +44,7 @@ export function usePlayheadFrame(handle: React.RefObject<DebateFeedPlayerHandle 
     };
   }, []);
 
-  return { subscribe, refresh: read };
+  return { subscribe, refresh: read, set: tell };
 }
 
 /** Writes the playhead into an element's text each frame, through `format`, without a render. */

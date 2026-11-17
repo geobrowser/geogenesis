@@ -88,9 +88,11 @@ export type EditorAction =
   /**
    * Discard changes: the reel goes back to the one that is live. Whatever plays stops, and a clip's
    * own jobs (Replace, Add, its claim panel, claim menu, advanced options) end, even on a clip that
-   * is still there: its edits are gone (the prototype's discard).
+   * is still there: its edits are gone (the prototype's discard). `keys`: the live reel's clips. A
+   * selected clip that went hands the selection to the clip in its place, or to the first when its
+   * place is past the end; with no reel at all, the Add picker opens.
    */
-  | { type: 'discarded' }
+  | { type: 'discarded'; keys: readonly string[] }
   /**
    * The editor's facts as they are now: whatever they no longer allow closes for good (it does not
    * come back when they allow it again). Sent whenever they or the view change.
@@ -363,11 +365,18 @@ function reduce(state: EditorState, action: Exclude<EditorAction, { type: 'settl
     case 'discarded': {
       const base = stopped(state);
       const clipPopover = base.popover === 'claimMenu' || base.popover === 'advanced';
-      return {
+      const closed: EditorState = {
         ...base,
         ...(CLIP_PANELS.has(base.panel) ? PANEL_CLOSED : null),
         ...(clipPopover ? { popover: null, popoverFor: null } : null),
       };
+      if (action.keys.length === 0) {
+        return { ...closed, selection: NONE, panel: 'add', panelFor: null, popover: null, popoverFor: null };
+      }
+      const key = selectedKey(closed);
+      if (key === null || action.keys.includes(key)) return closed;
+      const at = closed.clipKeys.indexOf(key);
+      return { ...closed, selection: { kind: 'clip', key: action.keys[at >= 0 && at < action.keys.length ? at : 0] } };
     }
   }
 }
