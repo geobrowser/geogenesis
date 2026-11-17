@@ -114,4 +114,21 @@ describe('useUnpublishedLeaveGuard', () => {
     fireEvent.click(screen.getByText('elsewhere'));
     expect(screen.getByText('Publish your ranking?')).toBeTruthy();
   });
+
+  it('Keep ranking after Back keeps the query written since the guard armed (GEO-3774 filters)', () => {
+    window.history.replaceState(null, '', '/ranking');
+    const { rerender } = render(<Harness active leave={vi.fn()} />);
+    // A filter written in place: only the spare entry on top changes.
+    act(() => window.history.replaceState(window.history.state, '', '/ranking?recorded=week'));
+    rerender(<Harness active leave={vi.fn()} />);
+    // Back lands on the entry under it, which still has the query from when the guard armed.
+    act(() => {
+      window.history.replaceState(null, '', '/ranking');
+      window.dispatchEvent(new PopStateEvent('popstate', { state: null }));
+    });
+    expect(screen.getByText('Publish your ranking?')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Keep ranking' }));
+    expect(window.location.pathname + window.location.search).toBe('/ranking?recorded=week');
+    expect(window.history.state).toMatchObject({ rankingLeaveGuard: true });
+  });
 });

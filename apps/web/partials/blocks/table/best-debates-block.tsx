@@ -5,6 +5,7 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import { capture } from '~/core/analytics';
+import { rankDayParams } from '~/core/blocks/ranking/best-debates-ranking-filters';
 import {
   BEST_DEBATES_GRADE_PARAM,
   BEST_DEBATES_GRADE_TIERS,
@@ -183,6 +184,22 @@ export function BestDebatesBlock({
     ? { ranked: ranking.coverage.total - ranking.coverage.left, total: ranking.coverage.total }
     : null;
   const coverageCounts = canRank ? personal : windowQuery.data ? week : null;
+  // GEO-3774: the ranking screen on just the picked day's debates, its To rank list first.
+  const selectedDayCoverage = coverage.find(day => day.dayKey === dayKey);
+  const rankDay = () => {
+    capture('element_clicked', {
+      source: 'best_debates_block',
+      element_action: 'rank_day',
+      block_id: blockId,
+      space_id: spaceId,
+      day: dayKey === todayKey ? 'today' : dayKey,
+      unranked_count: selectedDayCoverage ? selectedDayCoverage.total - selectedDayCoverage.ranked : null,
+    });
+    onOpenCompose('edit', {
+      [BEST_DEBATES_TEAM_VIEW_PARAM]: BEST_DEBATES_TEAM_VIEW_TO_RANK,
+      ...rankDayParams(dayKey),
+    });
+  };
   const rankTheRest = () => {
     capture('element_clicked', {
       source: 'best_debates_block',
@@ -269,6 +286,21 @@ export function BestDebatesBlock({
       </div>
     );
   };
+
+  // On the right of the "Not ranked yet" line (Preston, 16 Nov); on a line of its own when every
+  // debate of the day is in the team ranking but the day still has debates.
+  const showRankDay = view === 'day' && canRank && (!windowQuery.data || (selectedDayCoverage?.total ?? 0) > 0);
+  const rankDayButton = showRankDay ? (
+    <Button
+      variant="secondary"
+      small
+      onClick={rankDay}
+      data-testid="best-debates-rank-day"
+      data-geo-analytics-label="Best debates rank this day"
+    >
+      Rank this day
+    </Button>
+  ) : null;
 
   return (
     // The watch dialog names the debate from the same display data the rows draw.
@@ -390,12 +422,15 @@ export function BestDebatesBlock({
                         {unplacedRows.length}
                       </span>
                       <span className="h-px flex-1 bg-grey-02" aria-hidden />
+                      {rankDayButton}
                     </div>
                     <div className="flex flex-col">{visibleUnplaced.map(id => renderRow(id, null))}</div>
                     {unplacedRows.length > unrankedLimit ? (
                       <ShowMore onClick={() => setUnrankedLimit(limit => limit + PAGE)} />
                     ) : null}
                   </section>
+                ) : rankDayButton ? (
+                  <div className="flex justify-end pt-2">{rankDayButton}</div>
                 ) : null}
               </>
             )}
