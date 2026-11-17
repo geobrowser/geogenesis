@@ -63,3 +63,46 @@ describe('useDebateLobbyClaims', () => {
     expect(getClaims).toHaveBeenCalledTimes(2);
   });
 });
+
+describe('useDebateLobbyClaims for named claims (GEO-3775)', () => {
+  const hex = (n: number) => n.toString(16).padStart(32, '0');
+  const side = (position: boolean, total: number) => ({
+    position,
+    position_label: position ? 'Agree' : 'Disagree',
+    total_in_room: total,
+    requestable_count: 0,
+    participants: [],
+  });
+  const row = (id: string, agree: number, disagree: number) => ({
+    claim: { id, space_id: 's1', claim_entity_id: id, claim: `Claim ${id}`, description: null },
+    positions: [side(true, agree), side(false, disagree)],
+  });
+
+  it('reads every named claim by id in batches, never the room’s top 50, most split first', async () => {
+    getClaims.mockReset();
+    getClaims.mockImplementation(
+      async (_lobby: string, _token: unknown, _account: unknown, _signal: unknown, ids?: string[]) => ({
+        lobby_id: '0192abc',
+        source: 'room',
+        // One claim per batch, each split more than the batch before it.
+        claims: ids ? [row(ids[0], ids[0] === hex(1) ? 1 : ids[0] === hex(51) ? 2 : 3, 2)] : [],
+        disagreements: null,
+      })
+    );
+    const ids = Array.from({ length: 120 }, (_, index) => hex(index + 1));
+    const queryClient = new QueryClient();
+    const { result } = renderHook(() => useDebateLobbyClaims('0192-abc', true, ids), {
+      wrapper: ({ children }: { children: React.ReactNode }) => (
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      ),
+    });
+
+    await waitFor(() => expect(result.current.data?.claims).toHaveLength(3));
+    const reads = getClaims.mock.calls.map(call => call[4] as string[] | undefined);
+    expect(reads.map(read => read?.length)).toEqual([50, 50, 20]);
+    expect(reads.flat()).toEqual(ids);
+    expect(result.current.data?.claims.map(claim => claim.claim.id)).toEqual([hex(101), hex(51), hex(1)]);
+    // A filtered read carries no counts: empty, for the agenda filter to count from the rows.
+    expect(result.current.data?.disagreements).toEqual([]);
+  });
+});

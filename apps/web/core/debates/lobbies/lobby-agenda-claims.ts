@@ -53,9 +53,9 @@ export function agendaHighlightsState<State extends Pick<DebateLobbyHighlights, 
 
 /**
  * The room's claims with the ones on no agenda taken out, and each person's disagreement count taken
- * again from what is left. geo-chat's counts include claims on no agenda, and it lists at most 8
- * people a side, so a busy claim can leave someone off here: an undercount, never a count of claims
- * the lobby does not show.
+ * again from what is left. geo-chat's counts include claims on no agenda (and a member's agenda-only
+ * read carries none), and it lists at most 8 people a side, so a busy claim can leave someone off
+ * here: an undercount, never a count of claims the lobby does not show.
  */
 export function agendaLobbyClaims(data: DebateLobbyClaims, filter: AgendaClaimFilter): DebateLobbyClaims {
   if (!filter.active) return data;
@@ -77,15 +77,17 @@ export function agendaLobbyClaims(data: DebateLobbyClaims, filter: AgendaClaimFi
 }
 
 /**
- * `useDebateLobbyClaims`, agenda-only when the lobby is (GEO-3775). Nothing is handed back while the
- * agendas are out, and a failed agenda read is the read's error, with "Try again" asking for the
- * agendas: never the room's claims unfiltered. `filter` is for the room itself, which reads before
- * it provides; everything under it takes the provided one.
+ * `useDebateLobbyClaims`, agenda-only when the lobby is (GEO-3775): a member reads the agenda's claims
+ * by id; a guest's view has no such read, so a guest's list is the room's 50 most split, narrowed.
+ * Nothing is handed back while the agendas are out, and a failed agenda read is the read's error,
+ * with "Try again" asking for the agendas: never the room's claims unfiltered. `filter` is for the
+ * room itself, which reads before it provides; everything under it takes the provided one.
  */
 export function useLobbyRoomClaims(lobbyId: string, enabled = true, filter?: AgendaClaimFilter) {
   const provided = useAgendaClaimFilterContext();
   const agenda = filter ?? provided;
-  const query = useDebateLobbyClaims(lobbyId, enabled);
+  // A member reads just the agenda's claims: narrowing the room's read would only see its top 50.
+  const query = useDebateLobbyClaims(lobbyId, enabled, agenda.active ? agenda.ids : null);
   const held = agenda.pending || Boolean(agenda.error);
   const data = React.useMemo(
     () => (held || !query.data ? undefined : agendaLobbyClaims(query.data, agenda)),

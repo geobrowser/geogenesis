@@ -1,10 +1,20 @@
 'use client';
 
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { type DebateLobbyGuestView, GeoChatRequestError, dashlessId, getDebateLobbyClaims } from '../api';
+import * as React from 'react';
+
+import {
+  type DebateLobbyClaim,
+  type DebateLobbyClaims,
+  type DebateLobbyGuestView,
+  GeoChatRequestError,
+  dashlessId,
+  getDebateLobbyClaims,
+} from '../api';
 import { debateQueryKeys, debateQueryNetworkOptions, useGeoChatAuth } from '../hooks';
 import { viewerReadRetryOptions } from '../matchmaking/hooks';
+import { roomClaimIdBatches, useNamedRoomClaimsQuery } from './lobby-explore-claims-hooks';
 import { useDebateLobbyGuestView, useIsLobbyGuest } from './lobby-guest-hooks';
 
 const guestClaims = (view: DebateLobbyGuestView) => view.claims ?? undefined;
@@ -13,21 +23,75 @@ const guestClaims = (view: DebateLobbyGuestView) => view.claims ?? undefined;
  * The lobby's "In this room" claims. Refetched on `debate.lobby_changed`, after the viewer's own vote
  * is reported, and on reconnect, so no polling. A failed read retries, since a quiet lobby sends none.
  */
-export function useDebateLobbyClaims(lobbyId: string, enabled = true) {
+export function useDebateLobbyClaims(lobbyId: string, enabled = true, claimIds?: readonly string[] | null) {
   const { accountKey, authenticated, ready, getPrivyIdentityToken } = useGeoChatAuth();
   // A guest reads them off the page's guest view, which polls.
   const guest = useIsLobbyGuest();
   const guestQuery = useDebateLobbyGuestView(lobbyId, { enabled: enabled && guest, select: guestClaims });
+  const named = Boolean(claimIds) && !guest;
 
   const memberQuery = useQuery({
     ...debateQueryNetworkOptions,
     ...viewerReadRetryOptions(accountKey),
     queryKey: debateQueryKeys.lobbyClaims(accountKey, lobbyId),
     queryFn: ({ signal }) => getDebateLobbyClaims(dashlessId(lobbyId), getPrivyIdentityToken, accountKey, signal),
-    enabled: enabled && !guest && Boolean(lobbyId) && ready && authenticated,
+    enabled: enabled && !guest && !named && Boolean(lobbyId) && ready && authenticated,
   });
+  const namedQuery = useNamedLobbyClaims(lobbyId, claimIds ?? NO_IDS, enabled && named);
 
-  return guest ? guestQuery : memberQuery;
+  return guest ? guestQuery : named ? namedQuery : memberQuery;
+}
+
+const NO_IDS: readonly string[] = [];
+
+/**
+ * GEO-3775. "In this room" for just `claimIds`, for a member: the unfiltered read stops at geo-chat's
+ * 50 most split claims, so narrowing that would lose named claims ranked below them. Read in batches
+ * of the filtered read, merged most split first as geo-chat orders them. A filtered read carries no
+ * counts, so `disagreements` is empty for the caller to count from the rows (`agendaLobbyClaims`).
+ */
+function useNamedLobbyClaims(lobbyId: string, claimIds: readonly string[], enabled: boolean) {
+  const { accountKey } = useGeoChatAuth();
+  const queryClient = useQueryClient();
+  const batches = React.useMemo(() => roomClaimIdBatches(claimIds), [claimIds]);
+  const query = useNamedRoomClaimsQuery(lobbyId, NAMED_READ, enabled);
+  const read = useQueries({ queries: batches.map(query), combine: combineNamedReads });
+
+  const data = React.useMemo<DebateLobbyClaims | undefined>(
+    () => read.claims && { lobby_id: dashlessId(lobbyId), source: 'room', claims: read.claims, disagreements: [] },
+    [lobbyId, read.claims]
+  );
+  return {
+    data,
+    isLoading: read.isLoading,
+    error: read.error,
+    failureReason: read.failureReason,
+    refetch: () =>
+      queryClient.refetchQueries({ queryKey: [...debateQueryKeys.lobbyClaims(accountKey, lobbyId), NAMED_READ] }),
+  };
+}
+
+const NAMED_READ = 'named';
+
+// Module-level, and plain data only, so react-query keeps the combined result until a read changes.
+function combineNamedReads(
+  results: readonly { data?: DebateLobbyClaims; isLoading: boolean; error: unknown; failureReason: unknown }[]
+) {
+  const reads = results.flatMap(result => (result.data ? [result.data] : []));
+  return {
+    claims: reads.length === results.length ? mostSplitFirst(reads.flatMap(read => read.claims)) : undefined,
+    isLoading: results.some(result => result.isLoading),
+    error: results.find(result => result.error)?.error ?? null,
+    failureReason: results.find(result => result.failureReason)?.failureReason ?? null,
+  };
+}
+
+/** geo-chat's order for the room's claims: most disagreeing pairs, then most people. Stable. */
+export function mostSplitFirst(claims: DebateLobbyClaim[]): DebateLobbyClaim[] {
+  const sides = (row: DebateLobbyClaim) => row.positions.map(side => side.total_in_room);
+  const pairs = (row: DebateLobbyClaim) => sides(row).reduce((product, total) => product * total, 1);
+  const people = (row: DebateLobbyClaim) => sides(row).reduce((sum, total) => sum + total, 0);
+  return [...claims].sort((a, b) => pairs(b) - pairs(a) || people(b) - people(a));
 }
 
 /** Refusals that mean the list's request offer is out of date. */

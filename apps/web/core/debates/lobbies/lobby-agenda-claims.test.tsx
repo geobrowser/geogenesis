@@ -17,6 +17,7 @@ import {
 
 const mocks = vi.hoisted(() => ({
   hostLists: true,
+  readArgs: [] as unknown[],
   query: {
     data: undefined as DebateLobbyClaims | undefined,
     isLoading: false,
@@ -33,7 +34,12 @@ vi.mock('../todays-claims/agenda-only-picker', () => ({
   },
 }));
 
-vi.mock('./lobby-room-claims-hooks', () => ({ useDebateLobbyClaims: () => mocks.query }));
+vi.mock('./lobby-room-claims-hooks', () => ({
+  useDebateLobbyClaims: (...args: unknown[]) => {
+    mocks.readArgs = args;
+    return mocks.query;
+  },
+}));
 
 afterEach(() => {
   mocks.hostLists = true;
@@ -84,6 +90,14 @@ describe('agendaLobbyClaims', () => {
     expect(narrowed.claims.map(claim => claim.claim.id)).toEqual(['b', 'c']);
     // Only "b": "a" is on no agenda, and the viewer holds no side on "c". Nobody on the viewer's side.
     expect(narrowed.disagreements).toEqual([{ user_id: 'ana', claims: 1 }]);
+  });
+
+  it('counts a member’s by-id read, which comes with none, from its rows', () => {
+    const narrowed = agendaLobbyClaims({ ...room(), disagreements: [] }, agendaFilterFixture({ ids: ['entity-a'] }));
+    expect(narrowed.disagreements).toEqual([
+      { user_id: 'ana', claims: 1 },
+      { user_id: 'bo', claims: 1 },
+    ]);
   });
 
   it('keeps a guest’s missing counts missing', () => {
@@ -175,6 +189,8 @@ describe('useLobbyRoomClaims', () => {
       wrapper: withFilter(agendaFilterFixture({ ids: ['entity-b'] })),
     });
     expect(result.current.data?.claims.map(claim => claim.claim.id)).toEqual(['a']);
+    // The agenda's claims read by id, not the room's top 50 narrowed.
+    expect(mocks.readArgs).toEqual(['l1', true, ['entity-a']]);
     expect(result.current.data?.disagreements).toEqual([
       { user_id: 'ana', claims: 1 },
       { user_id: 'bo', claims: 1 },
@@ -189,5 +205,6 @@ describe('useLobbyRoomClaims', () => {
     mocks.query.data = data;
     const { result } = renderHook(() => useLobbyRoomClaims('l1'));
     expect(result.current.data).toBe(data);
+    expect(mocks.readArgs).toEqual(['l1', true, null]);
   });
 });
