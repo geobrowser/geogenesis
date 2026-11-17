@@ -114,12 +114,26 @@ export function restoreEntry(current: GradedBallot, before: GradedBallot, entity
   if (current.ids.some(id => normId(id) === key)) return current;
   const at = before.ids.findIndex(id => normId(id) === key);
   if (at < 0) return current;
-  const ids = [...current.ids.slice(0, at), entityId, ...current.ids.slice(at)];
+  const ids = [...current.ids];
+  ids.splice(restoreIndex(current.ids, before.ids, at), 0, entityId);
   const grade = before.grades.get(key);
   const grades = new Map(current.grades);
   if (grade) grades.set(key, grade);
   // Its old place may sit in another tier now: the tiers win, the order within them is kept.
   return { ids: sortIntoTiers(ids, grades), grades };
+}
+
+function restoreIndex(current: readonly string[], before: readonly string[], at: number): number {
+  const indexIn = (id: string) => current.findIndex(other => normId(other) === normId(id));
+  for (let i = at - 1; i >= 0; i--) {
+    const index = indexIn(before[i]);
+    if (index >= 0) return index + 1;
+  }
+  for (let i = at + 1; i < before.length; i++) {
+    const index = indexIn(before[i]);
+    if (index >= 0) return index;
+  }
+  return Math.min(at, current.length);
 }
 
 /**

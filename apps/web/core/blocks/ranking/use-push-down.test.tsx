@@ -394,7 +394,7 @@ describe('usePushDown', () => {
     state.ids = [DRAFT_ONLY, RANKED_A, RANKED_B];
     await pressToastUndo();
 
-    expect(publish).toHaveBeenLastCalledWith([DRAFT_ONLY, DEBATE, RANKED_A, RANKED_B], undefined);
+    expect(publish).toHaveBeenLastCalledWith([DRAFT_ONLY, RANKED_A, DEBATE, RANKED_B], undefined);
   });
 
   it('its toast’s Undo keeps a placement and a removal made after the Down rank', async () => {
@@ -408,7 +408,7 @@ describe('usePushDown', () => {
     state.ids = [DRAFT_ONLY, RANKED_A];
     await pressToastUndo();
 
-    expect(publish).toHaveBeenLastCalledWith([DRAFT_ONLY, DEBATE, RANKED_A], undefined);
+    expect(publish).toHaveBeenLastCalledWith([DRAFT_ONLY, RANKED_A, DEBATE], undefined);
   });
 
   it('its toast’s Undo brings back the debate’s grade and keeps grades changed since', async () => {
@@ -471,7 +471,7 @@ describe('usePushDown', () => {
       await view.result.current.row.undo();
     });
 
-    expect(publish).toHaveBeenLastCalledWith([RANKED_B, DEBATE, RANKED_A], undefined);
+    expect(publish).toHaveBeenLastCalledWith([RANKED_B, RANKED_A, DEBATE], undefined);
     state.ids = [RANKED_B, RANKED_A];
     const publishes = publish.mock.calls.length;
     render(pushDownToast);
