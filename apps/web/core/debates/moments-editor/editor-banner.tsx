@@ -73,12 +73,17 @@ function stateBanner({
   inFlight,
   canUnlock,
 }: BannerInput): EditorBannerView | null {
-  if (failed) return { lead: 'Nothing changed.', text: failed.summary, more: failed.other, see: flagged };
+  // A failed publish beats the read-only reason below, so the reason rides along as its last line:
+  // without it a read-only editor says nothing of why it can't be edited (or the edit brought back).
+  const blocked = readOnlyReason ? [readOnlyReason] : [];
+  if (failed) {
+    return { lead: 'Nothing changed.', text: failed.summary, more: [...failed.other, ...blocked], see: flagged };
+  }
   if (failedElsewhere) {
     return {
       lead: 'Nothing changed.',
       text: failedElsewhere.summary,
-      more: workerLines(failedElsewhere, 'Clip'),
+      more: [...workerLines(failedElsewhere, 'Clip'), ...blocked],
       ...(canRestore && { action: 'restore' as const }),
     };
   }

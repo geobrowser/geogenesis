@@ -1634,6 +1634,25 @@ describe('MomentsEditor in a tab opened from the Best debates popup (GEO-3742)',
     expect(screen.getByRole('button', { name: 'Done' })).toBeDisabled();
   });
 
+  it('says why a failed publish can’t be brought back when the editor is read-only', () => {
+    mocks.transcriptFailed = true;
+    mocks.backfill.data = {
+      request: status({
+        status: 'skipped',
+        requested_at: '2026-11-14T10:00:00Z',
+        outcome: 'manual_reel_invalid',
+        report: { story_failed: 'clip 1: no words are said in it' },
+        manual_reel: { clock: 'player', clips: [{ start_ms: 1_000, end_ms: 1_450 }] },
+      }),
+      entry: null,
+    };
+    render(<MomentsEditor debateId={DEBATE_ID} closeable />);
+    const banner = screen.getByRole('alert');
+    expect(banner).toHaveTextContent('Nothing changed.');
+    expect(banner).toHaveTextContent("Couldn't load this debate's transcript. Reload to try again.");
+    expect(screen.queryByRole('button', { name: RESTORE_FAILED_EDIT_LABEL })).not.toBeInTheDocument();
+  });
+
   it('brings back a failed reel’s free edges only when it was sent exact', () => {
     for (const exact of [true, false]) {
       mocks.mutate.mockReset();
