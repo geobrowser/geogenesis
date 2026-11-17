@@ -35,6 +35,8 @@ const mocks = vi.hoisted(() => ({
   lastIds: ['d1'] as string[],
   myGrades: new Map() as Map<string, 'A' | 'B' | 'C'>,
   grading: null as null | import('./best-debates/best-debate-grading').BestDebatesGrading,
+  watchBallot: undefined as
+    undefined | null | import('~/core/blocks/ranking/ranking-compose-ballot-context').ComposeBallot,
   reorder: vi.fn(),
   composeArgs: null as null | Record<string, unknown>,
   search: 'relationId=r&parentEntityId=p&team=to-rank',
@@ -195,18 +197,22 @@ vi.mock('./best-debates/use-best-debates-compose', () => ({
     };
   },
 }));
-vi.mock('./best-debates/best-debate-watch', () => ({
-  BestDebateWatchProvider: ({
-    grading,
-    children,
-  }: {
-    grading?: import('./best-debates/best-debate-grading').BestDebatesGrading | null;
-    children: React.ReactNode;
-  }) => {
-    mocks.grading = grading ?? null;
-    return children;
-  },
-}));
+vi.mock('./best-debates/best-debate-watch', async () => {
+  const { useRankingComposeBallot } = await import('~/core/blocks/ranking/ranking-compose-ballot-context');
+  return {
+    BestDebateWatchProvider: ({
+      grading,
+      children,
+    }: {
+      grading?: import('./best-debates/best-debate-grading').BestDebatesGrading | null;
+      children: React.ReactNode;
+    }) => {
+      mocks.grading = grading ?? null;
+      mocks.watchBallot = useRankingComposeBallot();
+      return children;
+    },
+  };
+});
 vi.mock('./ranking-compose-pushed-down', () => ({ RankingComposePushedDown: () => null }));
 vi.mock('~/app/not-found', () => ({ default: () => <div>404</div> }));
 
@@ -250,6 +256,7 @@ beforeEach(() => {
   mocks.lastIds = ['d1'];
   mocks.myGrades = new Map();
   mocks.grading = null;
+  mocks.watchBallot = undefined;
   mocks.search = 'relationId=r&parentEntityId=p&team=to-rank';
   mocks.mySubmission = null;
   mocks.myRanking = null;
@@ -325,6 +332,13 @@ describe('RankingComposeScreen on the Best debates block', () => {
     rerender(<RankingComposeScreen spaceId={DEBATES_SPACE} />);
     expect(mocks.replace).toHaveBeenCalledTimes(1);
     expect(new URL(mocks.replace.mock.calls[0][0] as string, 'https://geo.test').searchParams.get('mode')).toBe('view');
+  });
+
+  it('gives the watch popup the draft, so its Undo of a Down rank can put the debate back', () => {
+    mocks.member = true;
+    renderScreen();
+
+    expect(mocks.watchBallot?.orderedIds).toEqual(['d1']);
   });
 
   it('shows a loading state, not the generic screen, until the access read settles', () => {

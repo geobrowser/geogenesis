@@ -1174,8 +1174,8 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
 
   return (
     <BestDebateDisplaysContext.Provider value={isBestDebates ? bestDebateDisplays : null}>
-      <MaybeWatch on={isBestDebates} blockId={entityId} spaceId={spaceId} grading={composeGrading}>
-        <RankingComposeBallotContext.Provider value={composeBallot}>
+      <RankingComposeBallotContext.Provider value={composeBallot}>
+        <MaybeWatch on={isBestDebates} blockId={entityId} spaceId={spaceId} grading={composeGrading}>
           <RankingComposeCreateEntityPanel onFinished={addToMyRanking} rankingName={displayName} />
           <RankingComposeEntitySheet target={entitySheetTarget} onClose={() => setEntitySheetTarget(null)} />
           {isBestDebates ? bestDebates.dialogs : null}
@@ -1254,8 +1254,8 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
               )}
             </RankingComposeFullscreen>
           </div>
-        </RankingComposeBallotContext.Provider>
-      </MaybeWatch>
+        </MaybeWatch>
+      </RankingComposeBallotContext.Provider>
     </BestDebateDisplaysContext.Provider>
   );
 }

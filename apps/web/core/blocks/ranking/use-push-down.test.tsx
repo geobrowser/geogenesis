@@ -482,6 +482,36 @@ describe('usePushDown', () => {
     expect(publish).toHaveBeenCalledTimes(publishes);
   });
 
+  it('keeps the put-back for the toast when an Undo comes from a hook without the draft', async () => {
+    rankedBallot([RANKED_A, DEBATE]);
+    const { ballot, publish } = liveDraft([RANKED_A, DEBATE, RANKED_B]);
+    const view = renderHook(
+      () => ({
+        slot: usePushDown(DEBATE, { blockId: BLOCK }),
+        // A surface outside the ranking screen's ballot provider.
+        outside: usePushDown(DEBATE, { blockId: BLOCK, ballot: null }),
+      }),
+      { wrapper: wrapper(ballot) }
+    );
+    await waitFor(() => expect(view.result.current.slot.enabled).toBe(true));
+
+    await act(async () => {
+      await view.result.current.slot.pushDown();
+    });
+    const pushDownToast = mocks.setToast.mock.calls.at(-1)?.[0] as ReactElement;
+    const publishes = publish.mock.calls.length;
+    await act(async () => {
+      await view.result.current.outside.undo();
+    });
+    expect(publish).toHaveBeenCalledTimes(publishes);
+
+    render(pushDownToast);
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    });
+    await waitFor(() => expect(publish).toHaveBeenLastCalledWith([RANKED_A, DEBATE, RANKED_B], undefined));
+  });
+
   it('leaves the draft alone on an Undo refused as busy, and puts the debate back on a later one', async () => {
     rankedBallot([RANKED_A, DEBATE]);
     const { ballot, publish, state } = liveDraft([RANKED_A, DEBATE, RANKED_B]);

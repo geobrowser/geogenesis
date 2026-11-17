@@ -313,10 +313,7 @@ export function usePushDown(debateId: string, options: UsePushDownOptions = {}):
     const key = stateKey.join(':');
     const previous = draftsBeforePush.get(key);
     const draft = latest.current.editBallot;
-    if (!previous || !draft) {
-      draftsBeforePush.delete(key);
-      return { ok: true };
-    }
+    if (!previous || !draft) return { ok: true };
     const now = draft.current?.() ?? draft;
     const current = { ids: [...now.orderedIds], grades: now.grades ?? NO_GRADES };
     const before = { ids: previous.ids, grades: previous.grades ?? NO_GRADES };
