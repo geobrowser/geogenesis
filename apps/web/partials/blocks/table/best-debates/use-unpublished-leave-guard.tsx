@@ -118,6 +118,15 @@ export function useUnpublishedLeaveGuard({
   }, [active]);
 
   // The browser's Back: a spare history entry while there are changes, spent by Back.
+  // The address as of the last render, and the one Back left. The screen rewrites its query in place
+  // (the ranking filters, GEO-3774), which changes only the spare entry: the one under it keeps the
+  // query from when the guard armed. Staying after a caught Back puts the left address back, or the
+  // filters would quietly revert to that older query.
+  const hrefRef = React.useRef('');
+  const leftHrefRef = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    hrefRef.current = window.location.href;
+  });
   React.useEffect(() => {
     if (!active) return;
     if (!sentinelRef.current) {
@@ -127,6 +136,7 @@ export function useUnpublishedLeaveGuard({
     const onPopState = () => {
       if (!activeRef.current || leavingRef.current) return;
       sentinelRef.current = false;
+      leftHrefRef.current = hrefRef.current || null;
       setPending(() => () => window.history.back());
     };
     window.addEventListener('popstate', onPopState);
@@ -137,9 +147,10 @@ export function useUnpublishedLeaveGuard({
     setPending(null);
     // Back spent the spare entry; staying needs it again so the next Back is caught too.
     if (keepRanking && activeRef.current && !leavingRef.current && !sentinelRef.current) {
-      window.history.pushState({ rankingLeaveGuard: true }, '', window.location.href);
+      window.history.pushState({ rankingLeaveGuard: true }, '', leftHrefRef.current ?? window.location.href);
       sentinelRef.current = true;
     }
+    leftHrefRef.current = null;
   };
 
   const leaveNow = (leave: () => void) => {

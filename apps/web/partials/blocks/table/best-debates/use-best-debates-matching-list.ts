@@ -13,27 +13,34 @@ import { normId } from '~/core/utils/norm-id';
 /**
  * The whole list behind All and By space while a search or a topic is active (Preston, 12 Nov), so
  * the rows reachable agree with the Topic menu's count and By space's headers count whole groups.
- * Without a filter the column keeps its own paging and this reads nothing.
+ * Without a filter the column keeps its own paging and this reads nothing. The recorded, debater
+ * and claim filters (GEO-3774) are more clauses on the same read.
  */
 export function useBestDebatesMatchingList({
   active,
   query,
   topicIds,
+  filterClauses = NO_CLAUSES,
 }: {
   active: boolean;
   query: string;
   topicIds: readonly string[];
+  /** The recorded, debater and claim filters as entity clauses (GEO-3774). */
+  filterClauses?: readonly Record<string, unknown>[];
 }) {
   const debouncedQuery = useDebouncedValue(query.trim(), 250);
   const picked = React.useMemo(() => [...topicIds].map(normId).sort(), [topicIds]);
   const result = useQuery({
-    queryKey: ['best-debates', 'matching-list', debouncedQuery, picked] as const,
+    queryKey: ['best-debates', 'matching-list', debouncedQuery, picked, filterClauses] as const,
     queryFn: () => {
-      const clauses = teamSearchEntityClauses({
-        topicsPropertyId: TOPICS_PROPERTY_ID,
-        query: debouncedQuery,
-        topicIds: picked,
-      });
+      const clauses = [
+        ...teamSearchEntityClauses({
+          topicsPropertyId: TOPICS_PROPERTY_ID,
+          query: debouncedQuery,
+          topicIds: picked,
+        }),
+        ...filterClauses,
+      ];
       return fetchMatchingDebates(clauses.length > 0 ? { and: clauses } : null);
     },
     staleTime: 60_000,
@@ -46,3 +53,5 @@ export function useBestDebatesMatchingList({
     error: result.error,
   };
 }
+
+const NO_CLAUSES: readonly Record<string, unknown>[] = [];

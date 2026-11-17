@@ -12,6 +12,7 @@ import { Text } from '~/design-system/text';
 import type { DebateMediaTurnSegment, DebateTranscriptResponse, ParticipantSlot } from '../api';
 import { formatTimecode } from '../claim-timing';
 import { transcriptOnRecordings } from '../recording-clock';
+import { transcriptSpans } from '../transcript-lines';
 import { SPEAKER_EDGE_CLASS, SPEAKER_FILL_CLASS } from './clip-row';
 import {
   type EditorClip,
@@ -44,8 +45,7 @@ export const SELECTION_SETTLE_MS = 200;
  * show as an empty row repeating its clip's badge.
  */
 export function reelSentences(transcript: DebateTranscriptResponse | undefined): ReelSentence[] {
-  const sentences = transcript?.sentences?.length ? transcript.sentences : (transcript?.segments ?? []);
-  return transcriptOnRecordings(sentences)
+  return transcriptOnRecordings(transcriptSpans(transcript))
     .filter(isSpoken)
     .map(sentence => ({
       slot: sentence.participant_slot,

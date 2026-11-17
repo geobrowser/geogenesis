@@ -85,6 +85,10 @@ export function DownRankButton({ name, onClick }: { name: string; onClick: () =>
 }
 
 /** The rank mark as a button of its own, for rows that aren't one (the space page's block). */
+/** The rows' square Rank icon button (44px on a phone). */
+const ROW_ICON_BUTTON_CLASS =
+  'grid size-8 shrink-0 place-items-center rounded-md border border-grey-02 bg-white text-text transition-colors hover:border-text disabled:cursor-not-allowed disabled:opacity-50 md:size-11';
+
 export function RankButton({ name, onClick, disabled }: { name: string; onClick: () => void; disabled?: boolean }) {
   return (
     <button
@@ -100,7 +104,7 @@ export function RankButton({ name, onClick, disabled }: { name: string; onClick:
       onKeyDown={event => event.stopPropagation()}
       onPointerDown={event => event.stopPropagation()}
       draggable={false}
-      className="grid size-8 shrink-0 place-items-center rounded-md border border-grey-02 bg-white text-text transition-colors hover:border-text disabled:cursor-not-allowed disabled:opacity-50 md:size-11"
+      className={ROW_ICON_BUTTON_CLASS}
     >
       <RankingChart />
     </button>
@@ -159,6 +163,7 @@ export function BestDebatesTeamRowContent({
             myRank ? (
               <span className="text-breadcrumb whitespace-nowrap text-grey-04 tabular-nums">You: #{myRank}</span>
             ) : onRank ? (
+              // Grading happens in the watch popup's Grade row (Preston, 16 Nov); the row keeps Rank.
               <RankButton name={name} onClick={onRank} />
             ) : null
           }
