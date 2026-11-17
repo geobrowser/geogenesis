@@ -287,6 +287,37 @@ describe('transcript search (GEO-3773)', () => {
     fireEvent.change(box, { target: { value: '' } });
     expect(screen.queryByText('No matches')).not.toBeInTheDocument();
   });
+
+  it('keeps the transcript where it is while a search is typed on to no matches', () => {
+    // Typing on from a hit goes through a space ("night buses ") before the next word: the same
+    // search, so it must not go back to the first hit (the top), and "No matches" must not move.
+    setUp({ words, sentences });
+    const box = screen.getByRole('searchbox', { name: 'Search the transcript' });
+    const root = screen.getByTestId('reel-transcript');
+    let top = 0;
+    const writes: number[] = [];
+    Object.defineProperty(root, 'scrollTop', {
+      configurable: true,
+      get: () => top,
+      set: (value: number) => {
+        writes.push(value);
+        top = value;
+      },
+    });
+    fireEvent.change(box, { target: { value: 'night buses' } });
+    fireEvent.keyDown(box, { key: 'Enter' });
+    expect(screen.getByText('2 of 2')).toBeInTheDocument();
+    top = 640;
+    writes.length = 0;
+
+    fireEvent.change(box, { target: { value: 'night buses ' } });
+    expect(screen.getByText('2 of 2')).toBeInTheDocument();
+    fireEvent.change(box, { target: { value: 'night buses z' } });
+    expect(screen.getByText('No matches')).toBeInTheDocument();
+    fireEvent.change(box, { target: { value: 'night buses zq' } });
+    expect(writes).toEqual([]);
+    expect(top).toBe(640);
+  });
 });
 
 describe('transcript turns (GEO-3773)', () => {

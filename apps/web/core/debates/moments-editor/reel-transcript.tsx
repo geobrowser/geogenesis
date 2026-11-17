@@ -443,7 +443,10 @@ export const ReelTranscript = React.memo(function ReelTranscript({
 
   const [query, setQuery] = React.useState('');
   const [hitAt, setHitAt] = React.useState(0);
-  const hits = React.useMemo(() => searchHits(words, query), [words, query]);
+  // Keyed on what is searched for, not the box's text: a space typed before the next word is the
+  // same search, so it keeps the hit in view instead of going back to the first (and the top).
+  const needle = query.trim().toLowerCase();
+  const hits = React.useMemo(() => searchHits(words, needle), [words, needle]);
   const hitWords = React.useMemo(() => {
     const out = new Set<number>();
     for (const [from, to] of hits) for (let at = from; at <= to; at += 1) out.add(at);
@@ -568,8 +571,9 @@ export const ReelTranscript = React.memo(function ReelTranscript({
     const hit = hits[at];
     if (root && hit) scrollWord(root, wordElement(root, hit[0]), 0.3);
   };
-  // A new search goes to its first hit.
+  // A new search goes to its first hit; one with no hits leaves the transcript where it is.
   React.useEffect(() => {
+    setHitAt(0);
     goToHit(0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hits]);
@@ -813,7 +817,6 @@ export const ReelTranscript = React.memo(function ReelTranscript({
               value={query}
               onChange={event => {
                 setQuery(event.target.value);
-                setHitAt(0);
               }}
               onKeyDown={onSearchKey}
               className="w-full appearance-none rounded border-0 bg-white py-[9px] pr-2.5 pl-9 text-input shadow-inner-grey-02 outline-none placeholder:text-grey-03 hover:shadow-inner-text focus:shadow-inner-lg-text"

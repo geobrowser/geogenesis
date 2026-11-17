@@ -2792,6 +2792,41 @@ describe('playing clips in the editor (GEO-3773)', () => {
     expect(box.style.maxWidth).toBe('100%');
   });
 
+  it('sizes the box to the one combined video on the fallback, so the stage centres it', () => {
+    // The combined video is a single 480 × 289 tile: in a two-tile 480 × 578 box it would sit at
+    // the top with black below.
+    getDefaultStore().set(inlinePlaybackUnavailableAtom, true);
+    const size = { width: 1000, height: 400 };
+    const widthSpy = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(() => size.width);
+    const heightSpy = vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockImplementation(() => size.height);
+    try {
+      const box = () =>
+        screen.getByRole('region', { name: 'Debate player' }).querySelector<HTMLElement>('[data-player-box]')!;
+      // Wide stage: full height, letterboxed left and right at the single tile's shape.
+      const wide = render(<MomentsEditor debateId={DEBATE_ID} />);
+      expect(box().style.height).toBe('400px');
+      expect(parseFloat(box().style.width)).toBeCloseTo((400 * 480) / 289, 1);
+      wide.unmount();
+
+      // Narrower stage: full width, the single tile's height (not the stacked pair's).
+      size.width = 600;
+      size.height = 800;
+      render(<MomentsEditor debateId={DEBATE_ID} />);
+      expect(box().style.width).toBe('600px');
+      expect(parseFloat(box().style.height)).toBeCloseTo((600 * 289) / 480, 1);
+    } finally {
+      widthSpy.mockRestore();
+      heightSpy.mockRestore();
+    }
+  });
+
+  it('gives the unmeasured fallback box the single video’s shape', () => {
+    getDefaultStore().set(inlinePlaybackUnavailableAtom, true);
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    const box = screen.getByRole('region', { name: 'Debate player' }).querySelector<HTMLElement>('[data-player-box]')!;
+    expect(box.style.aspectRatio).toBe('480 / 289');
+  });
+
   it('says "Loading next clip" only between a reel’s clips, not while a single clip starts', () => {
     mocks.plan.data = entry({
       live_reel: {
