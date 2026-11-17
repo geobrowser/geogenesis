@@ -51,18 +51,25 @@ const PublishImport = ({ spaceId, space }: PublishImportProps) => {
   const accountAddress = useAccountAddress();
   const { makeBulkProposal } = useBulkPublish();
 
+  const [isPublishing, setIsPublishing] = useState(false);
+
   const handlePublish = async () => {
-    if (!accountAddress) return;
-    await makeBulkProposal({
-      values,
-      relations,
-      spaceId,
-      name: proposalName,
-      onSuccess: () => {
-        setIsPublishOpen(false);
-        router.refresh();
-      },
-    });
+    if (!accountAddress || isPublishing) return;
+    setIsPublishing(true);
+    try {
+      await makeBulkProposal({
+        values,
+        relations,
+        spaceId,
+        name: proposalName,
+        onSuccess: () => {
+          setIsPublishOpen(false);
+          router.refresh();
+        },
+      });
+    } finally {
+      setIsPublishing(false);
+    }
   };
 
   return (
@@ -87,7 +94,7 @@ const PublishImport = ({ spaceId, space }: PublishImportProps) => {
           </div>
         </div>
         <div>
-          <Button onClick={handlePublish} disabled={!isReadyToPublish || values.length === 0}>
+          <Button onClick={handlePublish} disabled={!isReadyToPublish || values.length === 0 || isPublishing}>
             Publish
           </Button>
         </div>

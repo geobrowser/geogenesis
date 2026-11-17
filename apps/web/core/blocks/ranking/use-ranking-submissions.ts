@@ -297,13 +297,27 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
         basedOnOrderedIds?: string[];
       }
     ): Promise<RankingSubmissionPublishResult | null> => {
-      const account = await awaitSigningAccount(smartAccount);
+    pendingSavesRef.current += 1;
+      setIsSaving(true);
+      const settle = () => {
+        pendingSavesRef.current -= 1;
+        if (pendingSavesRef.current === 0) setIsSaving(false);
+      };
+
+      const account = await awaitSigningAccount(smartAccount).catch(error => {
+        settle();
+        throw error;
+      });
       if (!account) {
+        settle();
         setToast(React.createElement('span', null, 'Please connect your wallet to publish your ranking'));
         return null;
       }
       const { personalSpaceId } = readCachedPersonalSpace(queryClient, account.account.address);
-      if (!personalSpaceId) return null;
+      if (!personalSpaceId) {
+        settle();
+        return null;
+      }
 
       const filteredSlots = slots.filter(slot => Boolean(slot.id));
       // An empty list is the ranker clearing their ranking (Preston, 12 Nov): the edit deletes every
@@ -316,12 +330,14 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
       const invalidSlot = filteredSlots.find(slot => !validateEntityId(slot.id));
       if (invalidSlot) {
         console.error('[useRankingSubmissions] Invalid vote entity id:', invalidSlot.id);
+        settle();
         reportError(`Failed to publish ranking: invalid entity id "${invalidSlot.id}"`);
         return null;
       }
 
       const maxItems = getRankingBallotMaxItems();
       if (filteredSlots.length > maxItems) {
+        settle();
         reportError(rankingBallotTooLargeMessage(filteredSlots.length, maxItems));
         return null;
       }
@@ -329,8 +345,6 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
       const basedOnOrderedIds = options?.basedOnOrderedIds ?? apiRankingEntityIds;
       const publishKey = rankingPublishKey(personalSpaceId, blockId);
 
-      pendingSavesRef.current += 1;
-      setIsSaving(true);
       const operation = observeOperation('ranking', 'ranking', blockId, opportunity, getContext());
 
       // Runs when every earlier publish of this ballot (from any screen on this
@@ -681,8 +695,7 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
         reportError(message, retry);
         return null;
       } finally {
-        pendingSavesRef.current -= 1;
-        if (pendingSavesRef.current === 0) setIsSaving(false);
+        settle();
       }
     },
     [
