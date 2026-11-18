@@ -347,7 +347,7 @@ describe('sweepCallEntities', () => {
       [1, [500, 1000, 0]],
       [2, [1000, 0, 500]],
     ] as const) {
-      const claimFn = vi.fn(async () => []);
+      const claimFn = vi.fn(async (_spaceIds: string[]) => [] as CallEntityClaim[]);
       const { deps } = harness([], { claim: claimFn, startChunk: () => start });
       await sweepCallEntities(CONFIG, spaces, { canStart: () => true, deps: deps as never });
       expect(claimFn.mock.calls.map(([spaceIds]) => firstOf(spaceIds as string[]))).toEqual(order);
@@ -358,7 +358,7 @@ describe('sweepCallEntities', () => {
     vi.useFakeTimers({ now: 7 * 60_000 });
     try {
       const spaces = Array.from({ length: 1001 }, (_, i) => i.toString(16).padStart(32, '0'));
-      const claimFn = vi.fn(async () => []);
+      const claimFn = vi.fn(async (_spaceIds: string[]) => [] as CallEntityClaim[]);
       const { deps } = harness([], { claim: claimFn, startChunk: undefined });
       await sweepCallEntities(CONFIG, spaces, { canStart: () => true, deps: deps as never });
       // Minute 7 of 3 chunks starts at chunk 1.
