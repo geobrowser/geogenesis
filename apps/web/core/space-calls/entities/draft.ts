@@ -149,6 +149,7 @@ export function buildCallEventDraft({
     });
   };
 
+  // Curator's event keeps its own name, so a moved call keeps curator's original date in it.
   if (minted) setValue(NAME_PROPERTY_ID, 'TEXT', name);
   setValue(EVENT_SCHEMA.START_TIME_PROPERTY, 'DATETIME', entity.starts_at);
   setValue(EVENT_SCHEMA.END_TIME_PROPERTY, 'DATETIME', entity.ends_at);
