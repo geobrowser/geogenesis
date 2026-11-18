@@ -1459,10 +1459,15 @@ function PairedDebateFeedPlayer({
                       event.stopPropagation();
                       restartWhenActive('start_over');
                     }}
-                    className="flex h-10.5 items-center gap-1 rounded-full bg-white px-3 text-smallButton text-text shadow-light"
+                    className={cx(
+                      'flex h-10.5 items-center gap-1 rounded-full bg-white text-smallButton text-text shadow-light',
+                      reducedOverlays
+                        ? 'w-10.5 justify-center [&>svg]:scale-[1.3]'
+                        : 'px-3 @max-md:w-10.5 @max-md:justify-center @max-md:px-0 @max-md:[&>svg]:scale-[1.3]'
+                    )}
                   >
                     <RetrySmall />
-                    Start over
+                    <span className={reducedOverlays ? 'sr-only' : '@max-md:sr-only'}>Start over</span>
                   </button>
                 )}
                 {/* Not a button, so a tap on it is a page tap and gives sound; Unmute is the control
