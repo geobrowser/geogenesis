@@ -46,13 +46,13 @@ describe('GET /api/space-calls/entities-sweep', () => {
     expect(mocks.lockOptions).toEqual([{ ttlMs: 300_000 }]);
   });
 
-  it('stops claiming a minute in', async () => {
+  it('stops claiming 30 s in', async () => {
     vi.useFakeTimers();
     try {
       await GET(request());
       const { canStart } = mocks.sweep.mock.calls[0]![2] as { canStart: () => boolean };
       expect(canStart()).toBe(true);
-      vi.advanceTimersByTime(60_000);
+      vi.advanceTimersByTime(30_000);
       expect(canStart()).toBe(false);
     } finally {
       vi.useRealTimers();

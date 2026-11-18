@@ -8,9 +8,9 @@ import { sweepCallEntities } from '~/core/space-calls/entities/sweep';
 export const maxDuration = 300;
 export const dynamic = 'force-dynamic';
 
-// No call is claimed after this point, so the signing lock is held for a minute plus the write in
+// No call is claimed after this point, so the signing lock is held for 30 s plus the write in
 // flight, never as long as the debate publish sweep.
-const CALL_START_DEADLINE_MS = 60_000;
+const CALL_START_DEADLINE_MS = 30_000;
 
 /**
  * Cron: writes due calls as Call Event entities in the acceptor's editor spaces. Separate from the
