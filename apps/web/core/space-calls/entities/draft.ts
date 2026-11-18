@@ -2,7 +2,7 @@ import { Position } from '@geoprotocol/geo-sdk/lite';
 
 import { CALL_SCHEMA, EVENT_SCHEMA } from '~/core/community-calls/constants';
 import { debatePublishIds } from '~/core/debates/debate-publish-draft';
-import { NAME_PROPERTY_ID, TYPES_PROPERTY_ID, VIDEO_TYPE_ID, WEB_URL_PROPERTY_ID } from '~/core/debates/ontology';
+import { NAME_PROPERTY_ID, TYPES_PROPERTY_ID, WEB_URL_PROPERTY_ID } from '~/core/debates/ontology';
 import { ID } from '~/core/id';
 import type { DataType, Relation, Value } from '~/core/types';
 
@@ -27,7 +27,7 @@ type DraftInput = {
   entityId: string;
   /** The publisher's address, for Published by. */
   publisherAddress: string;
-  /** The canonical web origin, for the recording's stable call page URL. */
+  /** The canonical web origin, for the call page URL. */
   appOrigin: string;
   createPosition?: () => string;
 };
@@ -35,6 +35,11 @@ type DraftInput = {
 /** A minted entity's id is the call id, as a debate's is the debate id. */
 export function mintedCallEntityId(callId: string): string {
   return ID.uuidToHex(callId);
+}
+
+/** Whether `entityId` is one this publisher minted, rather than curator's event it adopted. */
+export function isMintedCallEntity(claim: CallEntityClaim, entityId: string): boolean {
+  return ID.equals(entityId, mintedCallEntityId(claim.call_id));
 }
 
 /** The single-occurrence schedule curator writes on an event's Meeting Time. */
@@ -47,15 +52,59 @@ export function singleOccurrenceSchedule(startIso: string, endIso: string): stri
   return `DTSTART:${fmt(startIso)}\nDTEND:${fmt(endIso)}`;
 }
 
-export function callRecordingPageUrl(appOrigin: string, entity: CallEntity, callId: string): string {
+/** Curator's occurrence name, "{series} · 11 Nov 2026", dated in UTC as its server runs. */
+export function callEventName(entity: CallEntity): string {
+  const date = new Date(entity.original_start ?? entity.starts_at).toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
+  return `${entity.name} · ${date}`;
+}
+
+export function callPageUrl(appOrigin: string, entity: CallEntity, callId: string): string {
   return `${appOrigin.replace(/\/+$/, '')}${spaceCallPath(ID.uuidToHex(entity.space_id), ID.uuidToHex(callId))}`;
 }
 
+/** Values this publisher writes on a minted entity; an adopted one gets only the times and Web URL. */
+const TIME_PROPERTIES = [
+  EVENT_SCHEMA.START_TIME_PROPERTY,
+  EVENT_SCHEMA.END_TIME_PROPERTY,
+  EVENT_SCHEMA.OCCURRENCE_ORIGINAL_START_PROPERTY,
+  CALL_SCHEMA.MEETING_TIME_PROPERTY,
+];
+const MINTED_VALUE_PROPERTIES = [
+  NAME_PROPERTY_ID,
+  ...TIME_PROPERTIES,
+  WEB_URL_PROPERTY_ID,
+  CALL_EVENT_PUBLISHED_BY_PROPERTY_ID,
+];
+
+/** The relation ids this publisher can have written from `entityId`, all derived. */
+function ownRelationIds(claim: CallEntityClaim, entityId: string): Set<string> {
+  if (!isMintedCallEntity(claim, entityId)) return new Set();
+  const ids = debatePublishIds(entityId);
+  const { entity, previous } = claim;
+  const edges: Array<[string, string]> = [[TYPES_PROPERTY_ID, EVENT_SCHEMA.COMMUNITY_CALL_EVENT_TYPE]];
+  for (const series of [entity.series_id, previous?.series_id]) {
+    if (series) edges.push([EVENT_SCHEMA.COMMUNITY_CALL_PARENT_PROPERTY, ID.uuidToHex(series)]);
+  }
+  for (const attendee of [...entity.attendees, ...(previous?.attendees ?? [])]) {
+    edges.push([EVENT_SCHEMA.ATTENDEES_PROPERTY, ID.uuidToHex(attendee)]);
+  }
+  // Each edge once: `relationIds` numbers a repeated edge as another relation.
+  const unique = new Map(edges.map(edge => [edge.join(':'), edge] as const));
+  return new Set([...unique.values()].map(([type, to]) => ID.uuidToHex(ids.relationIds(entityId, type, to).id)));
+}
+
 /**
- * The edit for a `create` or `update` claim, in curator's Call Event shape. Every id is derived from
- * the entity id, so writing the same claim twice rewrites rather than duplicates. The Types and
- * parent relations are written only on an entity this publisher minted: an adopted curator event
- * already has both, under ids nobody here knows.
+ * The edit for a `create` or `update` claim, in curator's Call Event shape. Every id derives from the
+ * entity id, so writing a claim twice rewrites rather than duplicates.
+ *
+ * On a minted entity it writes the whole event. On curator's event it adopted it writes only the
+ * times and the Web URL, never Name, Types, Parent or Published by; an update overwrites the times
+ * curator wrote with the call's. The recording is not on the graph: the call page plays it.
  */
 export function buildCallEventDraft({
   claim,
@@ -67,21 +116,17 @@ export function buildCallEventDraft({
   const { entity, previous } = claim;
   const entityId = ID.uuidToHex(rawEntityId);
   const spaceId = ID.uuidToHex(entity.space_id);
-  const minted = ID.equals(entityId, mintedCallEntityId(claim.call_id));
+  const minted = isMintedCallEntity(claim, entityId);
   const ids = debatePublishIds(entityId);
-  const ref = { id: entityId, name: entity.name };
+  const name = callEventName(entity);
+  const ref = { id: entityId, name };
 
   const values: Value[] = [];
   const relations: Relation[] = [];
-  const setValue = (
-    entityRef: { id: string; name: string | null },
-    propertyId: string,
-    dataType: DataType,
-    value: string
-  ) => {
+  const setValue = (propertyId: string, dataType: DataType, value: string) => {
     values.push({
-      id: ID.createValueId({ entityId: entityRef.id, propertyId, spaceId }),
-      entity: entityRef,
+      id: ID.createValueId({ entityId, propertyId, spaceId }),
+      entity: ref,
       property: { id: propertyId, name: null, dataType },
       value,
       spaceId,
@@ -89,14 +134,8 @@ export function buildCallEventDraft({
       hasBeenPublished: false,
     });
   };
-  const relate = (
-    from: { id: string; name: string | null },
-    propertyId: string,
-    toEntityId: string,
-    toEntityName: string | null,
-    isDeleted = false
-  ) => {
-    const relationIds = ids.relationIds(from.id, propertyId, toEntityId);
+  const relate = (propertyId: string, toEntityId: string, toEntityName: string | null, isDeleted = false) => {
+    const relationIds = ids.relationIds(entityId, propertyId, toEntityId);
     relations.push({
       id: relationIds.id,
       entityId: relationIds.entityId,
@@ -108,65 +147,52 @@ export function buildCallEventDraft({
       hasBeenPublished: false,
       ...(isDeleted ? { isDeleted: true } : {}),
       type: { id: propertyId, name: null },
-      fromEntity: from,
+      fromEntity: ref,
       toEntity: { id: toEntityId, name: toEntityName, value: toEntityId },
     });
   };
 
-  setValue(ref, NAME_PROPERTY_ID, 'TEXT', entity.name);
-  setValue(ref, EVENT_SCHEMA.START_TIME_PROPERTY, 'DATETIME', entity.starts_at);
-  setValue(ref, EVENT_SCHEMA.END_TIME_PROPERTY, 'DATETIME', entity.ends_at);
+  if (minted) setValue(NAME_PROPERTY_ID, 'TEXT', name);
+  setValue(EVENT_SCHEMA.START_TIME_PROPERTY, 'DATETIME', entity.starts_at);
+  setValue(EVENT_SCHEMA.END_TIME_PROPERTY, 'DATETIME', entity.ends_at);
   if (entity.original_start) {
-    setValue(ref, EVENT_SCHEMA.OCCURRENCE_ORIGINAL_START_PROPERTY, 'DATETIME', entity.original_start);
+    setValue(EVENT_SCHEMA.OCCURRENCE_ORIGINAL_START_PROPERTY, 'DATETIME', entity.original_start);
   }
   if (entity.scheduled_starts_at && entity.scheduled_ends_at) {
     setValue(
-      ref,
       CALL_SCHEMA.MEETING_TIME_PROPERTY,
       'SCHEDULE',
       singleOccurrenceSchedule(entity.scheduled_starts_at, entity.scheduled_ends_at)
     );
   }
-  setValue(ref, CALL_EVENT_PUBLISHED_BY_PROPERTY_ID, 'TEXT', publisherAddress.toLowerCase());
+  setValue(WEB_URL_PROPERTY_ID, 'TEXT', callPageUrl(appOrigin, entity, claim.call_id));
+  if (!minted) return { entityId, name, values, relations };
 
-  if (minted) {
-    relate(ref, TYPES_PROPERTY_ID, EVENT_SCHEMA.COMMUNITY_CALL_EVENT_TYPE, 'Community call event');
-    const previousSeries = previous?.series_id ?? null;
-    if (previousSeries && !ID.equals(previousSeries, entity.series_id ?? '')) {
-      relate(ref, EVENT_SCHEMA.COMMUNITY_CALL_PARENT_PROPERTY, ID.uuidToHex(previousSeries), null, true);
-    }
-    if (entity.series_id) {
-      relate(ref, EVENT_SCHEMA.COMMUNITY_CALL_PARENT_PROPERTY, ID.uuidToHex(entity.series_id), null);
-    }
+  setValue(CALL_EVENT_PUBLISHED_BY_PROPERTY_ID, 'TEXT', publisherAddress.toLowerCase());
+  relate(TYPES_PROPERTY_ID, EVENT_SCHEMA.COMMUNITY_CALL_EVENT_TYPE, 'Community call event');
+  const previousSeries = previous?.series_id ?? null;
+  if (previousSeries && !ID.equals(previousSeries, entity.series_id ?? '')) {
+    relate(EVENT_SCHEMA.COMMUNITY_CALL_PARENT_PROPERTY, ID.uuidToHex(previousSeries), null, true);
   }
-
+  if (entity.series_id) relate(EVENT_SCHEMA.COMMUNITY_CALL_PARENT_PROPERTY, ID.uuidToHex(entity.series_id), null);
   for (const attendee of callEventAttendees(entity)) {
-    relate(ref, EVENT_SCHEMA.ATTENDEES_PROPERTY, ID.uuidToHex(attendee), null);
+    relate(EVENT_SCHEMA.ATTENDEES_PROPERTY, ID.uuidToHex(attendee), null);
   }
 
-  // The recording is linked as curator links one, a Video entity under Recordings, holding the call
-  // page's stable URL; the video itself stays off the graph. Unlinking deletes the relation.
-  const videoId = ids.entityId('recording');
-  if (entity.recording?.linked) {
-    const videoName = `${entity.name} | recording`;
-    const videoRef = { id: videoId, name: videoName };
-    setValue(videoRef, NAME_PROPERTY_ID, 'TEXT', videoName);
-    setValue(videoRef, WEB_URL_PROPERTY_ID, 'TEXT', callRecordingPageUrl(appOrigin, entity, claim.call_id));
-    relate(videoRef, TYPES_PROPERTY_ID, VIDEO_TYPE_ID, 'Video');
-    relate(ref, EVENT_SCHEMA.RECORDINGS_PROPERTY, videoId, videoName);
-  } else if (previous?.recording?.linked) {
-    relate(ref, EVENT_SCHEMA.RECORDINGS_PROPERTY, videoId, null, true);
-  }
-
-  return { entityId, name: entity.name, values, relations };
+  return { entityId, name, values, relations };
 }
 
-/** What a `remove` deletes: every value and outgoing relation the entity has in the call's space. */
+/** What the graph holds for the entity in the call's space. */
 export type GraphEntityForRemoval = {
   values: Array<{ propertyId: string; dataType: DataType }>;
   relations: Array<{ id: string; entityId: string; typeId: string; toEntityId: string }>;
 };
 
+/**
+ * A `remove` (a call never held) deletes only what this publisher wrote. A minted entity loses its
+ * values and its derived relations; an editor's own additions stay. Curator's adopted event keeps
+ * everything but the Web URL: it is curator's record, times included.
+ */
 export function buildCallEventRemoval({
   claim,
   entityId: rawEntityId,
@@ -178,30 +204,37 @@ export function buildCallEventRemoval({
 }): CallEventDraft {
   const entityId = ID.uuidToHex(rawEntityId);
   const spaceId = ID.uuidToHex(claim.entity.space_id);
-  const ref = { id: entityId, name: claim.entity.name };
-  const values: Value[] = current.values.map(value => ({
-    id: ID.createValueId({ entityId, propertyId: value.propertyId, spaceId }),
-    entity: ref,
-    property: { id: value.propertyId, name: null, dataType: value.dataType },
-    value: '',
-    spaceId,
-    isLocal: true,
-    isDeleted: true,
-    hasBeenPublished: false,
-  }));
-  const relations: Relation[] = current.relations.map(relation => ({
-    id: relation.id,
-    entityId: relation.entityId,
-    spaceId,
-    renderableType: 'RELATION',
-    verified: false,
+  const name = callEventName(claim.entity);
+  const ref = { id: entityId, name };
+  const ownProperties = isMintedCallEntity(claim, entityId) ? MINTED_VALUE_PROPERTIES : [WEB_URL_PROPERTY_ID];
+  const ownRelations = ownRelationIds(claim, entityId);
 
-    isLocal: true,
-    isDeleted: true,
-    hasBeenPublished: false,
-    type: { id: relation.typeId, name: null },
-    fromEntity: ref,
-    toEntity: { id: relation.toEntityId, name: null, value: relation.toEntityId },
-  }));
-  return { entityId, name: claim.entity.name, values, relations };
+  const values: Value[] = current.values
+    .filter(value => ownProperties.some(id => ID.equals(id, value.propertyId)))
+    .map(value => ({
+      id: ID.createValueId({ entityId, propertyId: value.propertyId, spaceId }),
+      entity: ref,
+      property: { id: value.propertyId, name: null, dataType: value.dataType },
+      value: '',
+      spaceId,
+      isLocal: true,
+      isDeleted: true,
+      hasBeenPublished: false,
+    }));
+  const relations: Relation[] = current.relations
+    .filter(relation => ownRelations.has(ID.uuidToHex(relation.id)))
+    .map(relation => ({
+      id: relation.id,
+      entityId: relation.entityId,
+      spaceId,
+      renderableType: 'RELATION',
+      verified: false,
+      isLocal: true,
+      isDeleted: true,
+      hasBeenPublished: false,
+      type: { id: relation.typeId, name: null },
+      fromEntity: ref,
+      toEntity: { id: relation.toEntityId, name: null, value: relation.toEntityId },
+    }));
+  return { entityId, name, values, relations };
 }

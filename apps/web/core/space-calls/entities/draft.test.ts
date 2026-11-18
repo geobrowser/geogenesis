@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
 import { CALL_SCHEMA, EVENT_SCHEMA } from '~/core/community-calls/constants';
-import { TYPES_PROPERTY_ID, WEB_URL_PROPERTY_ID } from '~/core/debates/ontology';
+import { debatePublishIds } from '~/core/debates/debate-publish-draft';
+import { NAME_PROPERTY_ID, TYPES_PROPERTY_ID, WEB_URL_PROPERTY_ID } from '~/core/debates/ontology';
 
 import {
   CALL_EVENT_PUBLISHED_BY_PROPERTY_ID,
   buildCallEventDraft,
   buildCallEventRemoval,
+  callEventName,
   mintedCallEntityId,
   singleOccurrenceSchedule,
 } from './draft';
@@ -61,16 +63,38 @@ const valueOf = (draft: ReturnType<typeof build>, propertyId: string, entityId =
 const relationsOf = (draft: ReturnType<typeof build>, typeId: string) =>
   draft.relations.filter(r => r.type.id === typeId);
 
+const MINTED = CALL.replace(/-/g, '');
+const PAGE = `https://geobrowser.io/space/${SPACE}/calls/${MINTED}`;
+const BLOCKS = 'beaba5cba67741a8b35377030613fc70';
+const DESCRIPTION = '9b1f76ff9711404c861e59dc3fa7d037';
+const edgeId = (entityId: string, type: string, to: string) =>
+  debatePublishIds(entityId).relationIds(entityId, type, to).id;
+
+describe('callEventName', () => {
+  it('dates the occurrence as curator does, in UTC', () => {
+    expect(callEventName(entity())).toBe('Crypto Community Call · 25 Nov 2026');
+    expect(callEventName(entity({ original_start: '2026-11-25T23:30:00Z' }))).toBe(
+      'Crypto Community Call · 25 Nov 2026'
+    );
+    expect(callEventName(entity({ original_start: null, starts_at: '2026-12-01T00:10:00Z' }))).toBe(
+      'Crypto Community Call · 1 Dec 2026'
+    );
+  });
+});
+
 describe('buildCallEventDraft', () => {
   it('mints a scheduled call under the call id in curator shape', () => {
     const draft = build(claim());
-    expect(draft.entityId).toBe(CALL.replace(/-/g, ''));
+    expect(draft.entityId).toBe(MINTED);
+    expect(draft.name).toBe('Crypto Community Call · 25 Nov 2026');
+    expect(valueOf(draft, NAME_PROPERTY_ID)?.value).toBe('Crypto Community Call · 25 Nov 2026');
     expect(valueOf(draft, EVENT_SCHEMA.START_TIME_PROPERTY)?.value).toBe('2026-11-25T16:00:00Z');
     expect(valueOf(draft, EVENT_SCHEMA.END_TIME_PROPERTY)?.value).toBe('2026-11-25T17:00:00Z');
     expect(valueOf(draft, EVENT_SCHEMA.OCCURRENCE_ORIGINAL_START_PROPERTY)?.value).toBe('2026-11-25T16:00:00Z');
     expect(valueOf(draft, CALL_SCHEMA.MEETING_TIME_PROPERTY)?.value).toBe(
       'DTSTART:20261125T160000Z\nDTEND:20261125T170000Z'
     );
+    expect(valueOf(draft, WEB_URL_PROPERTY_ID)?.value).toBe(PAGE);
     expect(valueOf(draft, CALL_EVENT_PUBLISHED_BY_PROPERTY_ID)?.value).toBe(
       '0xabcdef0000000000000000000000000000000001'
     );
@@ -78,115 +102,127 @@ describe('buildCallEventDraft', () => {
       EVENT_SCHEMA.COMMUNITY_CALL_EVENT_TYPE,
     ]);
     expect(relationsOf(draft, EVENT_SCHEMA.COMMUNITY_CALL_PARENT_PROPERTY).map(r => r.toEntity.id)).toEqual([SERIES]);
-    expect(draft.values.every(v => v.spaceId === SPACE)).toBe(true);
   });
 
-  it('derives every id, so a rewrite of the same claim is the same edit', () => {
-    const first = build(claim());
-    const second = build(claim());
-    expect(second.relations.map(r => [r.id, r.entityId])).toEqual(first.relations.map(r => [r.id, r.entityId]));
-    expect(second.values.map(v => v.id)).toEqual(first.values.map(v => v.id));
+  it('writes the same ids twice, so a rewrite upserts', () => {
+    const a = build(claim());
+    const b = build(claim());
+    expect(b.values.map(v => v.id)).toEqual(a.values.map(v => v.id));
+    expect(b.relations.map(r => r.id)).toEqual(a.relations.map(r => r.id));
   });
 
-  it('writes no Types or parent relation on an adopted curator event', () => {
-    const draft = build(claim(), CURATOR_EVENT);
+  it('writes only the times and the Web URL on an adopted curator event', () => {
+    const draft = build(claim({ entity_id: CURATOR_EVENT }), CURATOR_EVENT);
     expect(draft.entityId).toBe(CURATOR_EVENT);
-    expect(relationsOf(draft, TYPES_PROPERTY_ID)).toEqual([]);
-    expect(relationsOf(draft, EVENT_SCHEMA.COMMUNITY_CALL_PARENT_PROPERTY)).toEqual([]);
-    expect(valueOf(draft, EVENT_SCHEMA.START_TIME_PROPERTY)?.entity.id).toBe(CURATOR_EVENT);
+    expect(draft.values.map(v => v.property.id).sort()).toEqual(
+      [
+        EVENT_SCHEMA.START_TIME_PROPERTY,
+        EVENT_SCHEMA.END_TIME_PROPERTY,
+        EVENT_SCHEMA.OCCURRENCE_ORIGINAL_START_PROPERTY,
+        CALL_SCHEMA.MEETING_TIME_PROPERTY,
+        WEB_URL_PROPERTY_ID,
+      ].sort()
+    );
+    expect(draft.relations).toEqual([]);
   });
 
-  it('leaves attendees off', () => {
-    const draft = build(claim({ entity: entity({ status: 'ended' }) }));
-    expect(relationsOf(draft, EVENT_SCHEMA.ATTENDEES_PROPERTY)).toEqual([]);
-  });
-
-  it('links a linked recording as a Video holding the call page URL', () => {
-    const draft = build(
+  it('puts nothing about the recording on the graph', () => {
+    const recording = { status: 'ready', published: true, linked: true, duration_seconds: 60 };
+    const linked = build(claim({ entity: entity({ status: 'ended', recording }) }));
+    const unlinked = build(
       claim({
         action: 'update',
-        entity: entity({
-          status: 'ended',
-          recording: { status: 'ready', published: true, linked: true, duration_seconds: 60 },
-        }),
+        entity_id: MINTED,
+        entity: entity({ status: 'ended', recording: { ...recording, published: false, linked: false } }),
+        previous: entity({ status: 'ended', recording }),
       })
     );
-    const [link] = relationsOf(draft, EVENT_SCHEMA.RECORDINGS_PROPERTY);
-    expect(link?.isDeleted).toBeUndefined();
-    expect(valueOf(draft, WEB_URL_PROPERTY_ID, link!.toEntity.id)?.value).toBe(
-      `https://geobrowser.io/space/${SPACE}/calls/${CALL.replace(/-/g, '')}`
-    );
+    for (const draft of [linked, unlinked]) {
+      expect(relationsOf(draft, EVENT_SCHEMA.RECORDINGS_PROPERTY)).toEqual([]);
+      expect(draft.values.every(v => v.entity.id === MINTED)).toBe(true);
+    }
   });
 
-  it('deletes the Recordings relation when the recording is unlinked', () => {
-    const linked = entity({
-      status: 'ended',
-      recording: { status: 'ready', published: true, linked: true, duration_seconds: 60 },
-    });
-    const before = relationsOf(build(claim({ entity: linked })), EVENT_SCHEMA.RECORDINGS_PROPERTY)[0]!;
+  it('moves a minted call to its new series', () => {
     const draft = build(
-      claim({
-        action: 'update',
-        previous: linked,
-        entity: entity({
-          status: 'ended',
-          recording: { status: 'ready', published: false, linked: false, duration_seconds: 60 },
-        }),
-      })
+      claim({ action: 'update', entity_id: MINTED, previous: entity({ series_id: 'e'.repeat(32) }) })
     );
-    const [unlink] = relationsOf(draft, EVENT_SCHEMA.RECORDINGS_PROPERTY);
-    expect(unlink).toMatchObject({ id: before.id, isDeleted: true });
-    expect(draft.values.some(v => v.property.id === WEB_URL_PROPERTY_ID)).toBe(false);
-  });
-
-  it('moves the parent when the series changes on a minted entity', () => {
-    const other = 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
-    const draft = build(claim({ action: 'update', previous: entity(), entity: entity({ series_id: other }) }));
-    expect(
-      relationsOf(draft, EVENT_SCHEMA.COMMUNITY_CALL_PARENT_PROPERTY).map(r => [r.toEntity.id, Boolean(r.isDeleted)])
-    ).toEqual([
-      [SERIES, true],
-      [other, false],
+    const parents = relationsOf(draft, EVENT_SCHEMA.COMMUNITY_CALL_PARENT_PROPERTY);
+    expect(parents.map(r => [r.toEntity.id, Boolean(r.isDeleted)])).toEqual([
+      ['e'.repeat(32), true],
+      [SERIES, false],
     ]);
   });
 
-  it('writes no slot for a call started on the spot', () => {
-    const draft = build(
-      claim({
-        entity: entity({
-          status: 'ended',
-          series_id: null,
-          original_start: null,
-          scheduled_starts_at: null,
-          scheduled_ends_at: null,
-        }),
-      })
-    );
-    expect(valueOf(draft, EVENT_SCHEMA.OCCURRENCE_ORIGINAL_START_PROPERTY)).toBeUndefined();
-    expect(valueOf(draft, CALL_SCHEMA.MEETING_TIME_PROPERTY)).toBeUndefined();
+  it('writes no parent for a call started on the spot, and no attendees', () => {
+    const draft = build(claim({ entity: entity({ series_id: null, original_start: null }) }));
     expect(relationsOf(draft, EVENT_SCHEMA.COMMUNITY_CALL_PARENT_PROPERTY)).toEqual([]);
-  });
-});
-
-describe('buildCallEventRemoval', () => {
-  it('unsets every value and deletes every relation it is given', () => {
-    const draft = buildCallEventRemoval({
-      claim: claim({ action: 'remove', entity_id: CURATOR_EVENT }),
-      entityId: CURATOR_EVENT,
-      current: {
-        values: [{ propertyId: EVENT_SCHEMA.START_TIME_PROPERTY, dataType: 'DATETIME' }],
-        relations: [{ id: 'r1', entityId: 'r1e', typeId: TYPES_PROPERTY_ID, toEntityId: 't' }],
-      },
-    });
-    expect(draft.values.map(v => [v.property.id, v.isDeleted])).toEqual([[EVENT_SCHEMA.START_TIME_PROPERTY, true]]);
-    expect(draft.relations.map(r => [r.id, r.isDeleted])).toEqual([['r1', true]]);
+    expect(relationsOf(draft, EVENT_SCHEMA.ATTENDEES_PROPERTY)).toEqual([]);
   });
 });
 
 describe('singleOccurrenceSchedule', () => {
-  it('matches curator', () => {
-    expect(singleOccurrenceSchedule('2026-11-11T16:00:00Z', '2026-11-11T17:00:00Z')).toBe(
-      'DTSTART:20261111T160000Z\nDTEND:20261111T170000Z'
+  it('spells the slot as curator does', () => {
+    expect(singleOccurrenceSchedule('2026-11-25T16:00:00.000Z', '2026-11-25T17:00:00Z')).toBe(
+      'DTSTART:20261125T160000Z\nDTEND:20261125T170000Z'
     );
+  });
+});
+
+describe('buildCallEventRemoval', () => {
+  const removal = (
+    c: CallEntityClaim,
+    entityId: string,
+    current: Parameters<typeof buildCallEventRemoval>[0]['current']
+  ) => buildCallEventRemoval({ claim: c, entityId, current });
+
+  it('deletes only what this publisher wrote on a minted entity', () => {
+    const c = claim({ action: 'remove', entity_id: MINTED, entity: entity({ status: 'not_held' }) });
+    const types = edgeId(MINTED, TYPES_PROPERTY_ID, EVENT_SCHEMA.COMMUNITY_CALL_EVENT_TYPE);
+    const parent = edgeId(MINTED, EVENT_SCHEMA.COMMUNITY_CALL_PARENT_PROPERTY, SERIES);
+    const draft = removal(c, MINTED, {
+      values: [
+        { propertyId: NAME_PROPERTY_ID, dataType: 'TEXT' },
+        { propertyId: EVENT_SCHEMA.START_TIME_PROPERTY, dataType: 'DATETIME' },
+        { propertyId: WEB_URL_PROPERTY_ID, dataType: 'TEXT' },
+        { propertyId: DESCRIPTION, dataType: 'TEXT' },
+      ],
+      relations: [
+        { id: types, entityId: 'r1', typeId: TYPES_PROPERTY_ID, toEntityId: EVENT_SCHEMA.COMMUNITY_CALL_EVENT_TYPE },
+        { id: parent, entityId: 'r2', typeId: EVENT_SCHEMA.COMMUNITY_CALL_PARENT_PROPERTY, toEntityId: SERIES },
+        { id: 'f'.repeat(32), entityId: 'r3', typeId: BLOCKS, toEntityId: 'a'.repeat(32) },
+        { id: 'e'.repeat(32), entityId: 'r4', typeId: TYPES_PROPERTY_ID, toEntityId: 'b'.repeat(32) },
+      ],
+    });
+    expect(draft.values.map(v => v.property.id)).toEqual([
+      NAME_PROPERTY_ID,
+      EVENT_SCHEMA.START_TIME_PROPERTY,
+      WEB_URL_PROPERTY_ID,
+    ]);
+    expect(draft.values.every(v => v.isDeleted)).toBe(true);
+    expect(draft.relations.map(r => r.id)).toEqual([types, parent]);
+    expect(draft.relations.every(r => r.isDeleted)).toBe(true);
+  });
+
+  it('leaves an adopted curator event its record, removing only the Web URL', () => {
+    const c = claim({ action: 'remove', entity_id: CURATOR_EVENT, entity: entity({ status: 'not_held' }) });
+    const draft = removal(c, CURATOR_EVENT, {
+      values: [
+        { propertyId: NAME_PROPERTY_ID, dataType: 'TEXT' },
+        { propertyId: EVENT_SCHEMA.START_TIME_PROPERTY, dataType: 'DATETIME' },
+        { propertyId: WEB_URL_PROPERTY_ID, dataType: 'TEXT' },
+      ],
+      relations: [
+        {
+          id: 'c'.repeat(32),
+          entityId: 'r1',
+          typeId: TYPES_PROPERTY_ID,
+          toEntityId: EVENT_SCHEMA.COMMUNITY_CALL_EVENT_TYPE,
+        },
+        { id: 'd'.repeat(32), entityId: 'r2', typeId: EVENT_SCHEMA.COMMUNITY_CALL_PARENT_PROPERTY, toEntityId: SERIES },
+      ],
+    });
+    expect(draft.values.map(v => v.property.id)).toEqual([WEB_URL_PROPERTY_ID]);
+    expect(draft.relations).toEqual([]);
   });
 });
