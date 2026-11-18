@@ -62,11 +62,7 @@ const defaultLoadSpace = async (spaceId: string) => {
 };
 const defaultLoadEntity = (entityId: string, spaceId: string) => Effect.runPromise(getEntity(entityId, spaceId));
 
-/**
- * Writes run from the production deployment only: Vercel fires the cron there alone, and this keeps
- * a preview that someone calls by hand with its CRON_SECRET from writing. Off Vercel (local
- * rehearsal) it runs.
- */
+/** Production or off Vercel only, so a preview called by hand with its CRON_SECRET never writes. */
 export function deploymentMayWrite(env: string | undefined = process.env.VERCEL_ENV): boolean {
   return env === undefined || env === '' || env === 'production';
 }

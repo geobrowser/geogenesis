@@ -27,9 +27,8 @@ export function isSpaceCallPath(pathname: string): boolean {
 const CALL_PAGE_SEGMENT = /^[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}$/i;
 
 /**
- * The call id (dashless) of an absolute http(s) URL of a Geo call page, `/space/{id}/calls/{callId}`,
- * on any host; `null` for anything else. A published call links its recording this way
- * (GEO-3593): the page plays it, so the URL itself is never a video source.
+ * Dashless call id of an http(s) Geo call page URL on any host, else `null`. A published call's
+ * recording links to it, so the URL is never a video source.
  */
 export function geoCallPageCallId(url: string | null | undefined): string | null {
   if (!url || !/^https?:\/\//i.test(url)) return null;
