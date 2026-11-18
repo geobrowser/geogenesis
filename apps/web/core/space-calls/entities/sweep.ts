@@ -9,12 +9,13 @@ import { GEO_WEB_ORIGIN } from '~/core/sdk/geo-network';
 import type { Entity } from '~/core/types';
 import { Publish } from '~/core/utils/publish';
 
-import { findCuratorCallEvents, needsCuratorLookup } from './adopt';
+import { CURATOR_EVENT_TAKEN, findCuratorCallEvents, needsCuratorLookup } from './adopt';
 import {
   type CallEventDraft,
   type GraphEntityForRemoval,
   buildCallEventDraft,
   buildCallEventRemoval,
+  callPageUrl,
   mintedCallEntityId,
   updateChangesNothing,
 } from './draft';
@@ -133,6 +134,17 @@ export async function sweepCallEntities(
         result.claimLost.push(callId);
         return;
       }
+      if (recorded.status === 'id_taken') {
+        // Curator's event is another call's: fail so the next claim mints instead of adopting.
+        console.warn('[call-entities] adopted event belongs to another call', { callId });
+        result.failed.push({ callId, error: CURATOR_EVENT_TAKEN });
+        await record(claim.call_id, {
+          claim_id: claim.claim_id,
+          outcome: 'failed',
+          error: CURATOR_EVENT_TAKEN,
+        }).catch(error => console.error('[call-entities] could not record outcome', { callId, error: message(error) }));
+        return;
+      }
     } catch (error) {
       // The claim lapses and the call is claimed again; derived ids make the rewrite harmless.
       console.error('[call-entities] could not record outcome', { callId, error: message(error) });
@@ -157,7 +169,10 @@ export async function sweepCallEntities(
     let curator: Map<string, string> | null = null;
     if (needsCuratorLookup(claim)) {
       try {
-        curator = await (deps.findCurator ?? findCuratorCallEvents)([claim]);
+        curator = await (deps.findCurator ?? findCuratorCallEvents)([claim], {
+          publisherAddress,
+          pageUrlOf: c => callPageUrl(appOrigin, c.entity, c.call_id),
+        });
       } catch (error) {
         console.error('[call-entities] curator event lookup failed', { callId, error: message(error) });
       }

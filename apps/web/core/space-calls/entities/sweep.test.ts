@@ -329,6 +329,37 @@ describe('sweepCallEntities', () => {
     expect(submit).toHaveBeenCalledTimes(1);
   });
 
+  it('records failed when the adopted event is another call’s, so the next claim mints', async () => {
+    const callId = 'a'.repeat(32);
+    const outcomes: CallEntityRecord[] = [];
+    const { deps } = harness([claim(callId)], {
+      findCurator: vi.fn(async () => new Map([[callId, 'b'.repeat(32)]])),
+      record: vi.fn(async (_callId: string, record: CallEntityRecord) => {
+        outcomes.push(record);
+        return record.outcome === 'written'
+          ? { status: 'id_taken' as const }
+          : { status: 'recorded' as const, current: true };
+      }),
+    });
+    const result = await run(deps);
+    expect(outcomes.map(o => o.outcome)).toEqual(['written', 'failed']);
+    expect(outcomes[1]).toMatchObject({ error: 'call_entity_id_taken' });
+    expect(result).toMatchObject({ written: [], failed: [{ callId, error: 'call_entity_id_taken' }] });
+  });
+
+  it('passes the publisher and the claim’s call page to the curator lookup', async () => {
+    const callId = 'a'.repeat(32);
+    const findCurator = vi.fn(async () => new Map<string, string>());
+    const { deps } = harness([claim(callId)], { findCurator });
+    await run(deps);
+    const [, options] = findCurator.mock.calls[0] as unknown as [
+      unknown,
+      { publisherAddress: string; pageUrlOf: (c: CallEntityClaim) => string },
+    ];
+    expect(options.publisherAddress).toMatch(/^0x[0-9a-fA-F]{40}$/);
+    expect(options.pageUrlOf(claim(callId))).toBe(`https://geobrowser.io/space/${SPACE}/calls/${callId}`);
+  });
+
   it('reports an id conflict without counting it written', async () => {
     const callId = 'a'.repeat(32);
     const { deps } = harness([claim(callId)], {

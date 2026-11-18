@@ -53,6 +53,8 @@ export type CallEntityRecord =
 export type CallEntityRecordResult =
   | { status: 'recorded'; current: boolean }
   | { status: 'id_conflict'; entityId: string | null }
+  /** The entity id is already recorded for another call. */
+  | { status: 'id_taken' }
   | { status: 'claim_lost' };
 
 export class CallEntityServiceError extends Error {
@@ -126,6 +128,7 @@ export async function recordCallEntity(
       return { status: 'id_conflict', entityId };
     }
     if (code === 'call_entity_claim_lost') return { status: 'claim_lost' };
+    if (code === 'call_entity_id_taken') return { status: 'id_taken' };
   }
   if (!response.ok) {
     throw new CallEntityServiceError(response.status, `geo-chat call entity record failed (${response.status})`);

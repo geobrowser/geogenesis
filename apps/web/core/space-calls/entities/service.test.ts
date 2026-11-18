@@ -82,5 +82,13 @@ describe('recordCallEntity', () => {
         }
       )
     ).toEqual({ status: 'claim_lost' });
+    const taken = vi.fn(async () => json(409, { error: { code: 'call_entity_id_taken' } }));
+    expect(
+      await recordCallEntity(
+        'a'.repeat(32),
+        { claim_id: 'b'.repeat(32), outcome: 'written', entity_id: 'c'.repeat(32) },
+        { token: 't', fetcher: taken }
+      )
+    ).toEqual({ status: 'id_taken' });
   });
 });
