@@ -183,6 +183,20 @@ describe('sweepCallEntities', () => {
     expect(records[0]![1]).toEqual({ claim_id: expect.any(String), outcome: 'failed', error: 'entity_not_indexed' });
   });
 
+  it('records the removal written once the entity stayed unreadable for five tries', async () => {
+    const callId = '8'.repeat(32);
+    const stale = { action: 'remove' as const, entity_id: callId, last_error: 'entity_not_indexed' };
+    const fourth = harness([claim(callId, { ...stale, attempts: 4 })]);
+    await run(fourth.deps);
+    expect(fourth.records[0]![1]).toMatchObject({ outcome: 'failed' });
+
+    const fifth = harness([claim(callId, { ...stale, attempts: 5 })]);
+    const result = await run(fifth.deps);
+    expect(fifth.submit).not.toHaveBeenCalled();
+    expect(result.removed).toEqual([callId]);
+    expect(fifth.records[0]![1]).toMatchObject({ outcome: 'written', entity_id: callId });
+  });
+
   it('records a failed entity read as failed, not removed', async () => {
     const callId = '8'.repeat(32);
     const { deps, records, submit } = harness([claim(callId, { action: 'remove', entity_id: callId })], {

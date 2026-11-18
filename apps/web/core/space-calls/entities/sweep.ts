@@ -26,6 +26,9 @@ export const MAX_CALL_WRITES_PER_SWEEP = 4;
 const UNWRITABLE_SPACE_RETRY_S = 86_400;
 /** A graph read that failed before anything was sent: try again on a near tick. */
 const LOOKUP_RETRY_S = 300;
+const ENTITY_NOT_INDEXED = 'entity_not_indexed';
+/** Failed reads of a removal's entity before it counts as gone. */
+const NOT_INDEXED_MAX_ATTEMPTS = 5;
 
 export type CallEntitySweepResult = {
   skipped?: 'not_configured' | 'not_production';
@@ -191,11 +194,14 @@ export async function sweepCallEntities(
         // geo-chat removes only what it recorded written, so a missing entity is the indexer lagging;
         // its backoff paces the retries.
         if (!current) {
-          await settle(claim, {
-            claim_id: claim.claim_id,
-            outcome: 'failed',
-            error: 'entity_not_indexed',
-          });
+          // Still unreadable after several tries: there is nothing on the graph to remove.
+          const gaveUp = claim.last_error === ENTITY_NOT_INDEXED && claim.attempts >= NOT_INDEXED_MAX_ATTEMPTS;
+          await settle(
+            claim,
+            gaveUp
+              ? { claim_id: claim.claim_id, outcome: 'written', entity_id: entityId }
+              : { claim_id: claim.claim_id, outcome: 'failed', error: ENTITY_NOT_INDEXED }
+          );
           continue;
         }
       }
