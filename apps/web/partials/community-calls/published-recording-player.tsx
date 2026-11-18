@@ -35,19 +35,21 @@ export function PublishedRecordingPlayer({
 
   const { src, onError } = useVideoWithFallback(activeUrl);
 
-  // Nothing resolved to play: no player rather than an empty one.
-  if (!activeUrl) return null;
+  // A source with nothing to play (a call page link, GEO-3593) gets no player, never an empty one.
+  if (!activeUrl && sources.length < 2) return null;
 
   return (
     <div className="flex w-full min-w-0 flex-col gap-3">
-      <video
-        key={src}
-        src={src}
-        onError={onError}
-        controls
-        playsInline
-        className={cx('w-full bg-text', videoClassName ?? 'aspect-video rounded-lg')}
-      />
+      {activeUrl ? (
+        <video
+          key={src}
+          src={src}
+          onError={onError}
+          controls
+          playsInline
+          className={cx('w-full bg-text', videoClassName ?? 'aspect-video rounded-lg')}
+        />
+      ) : null}
 
       {sources.length > 1 && (
         <div className="flex flex-wrap gap-1.5">
