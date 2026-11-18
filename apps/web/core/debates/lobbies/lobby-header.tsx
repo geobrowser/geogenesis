@@ -15,6 +15,7 @@ import {
   useEndCallPublishes,
 } from '~/core/space-calls/recording/call-recording-room';
 import { spaceCallPath } from '~/core/space-calls/routes';
+import { useFeatureFlag } from '~/core/state/feature-flags';
 
 import { Ellipsis } from '~/design-system/icons/ellipsis';
 import { Text } from '~/design-system/text';
@@ -98,6 +99,12 @@ export function LobbyHeader({
   const hostLists = memberLobby ? <LobbyHostListsChip lobby={memberLobby} /> : null;
   const { noun, recording } = useRoomCapabilities();
   const recordingLabel = callRecordingMetaLabel(lobby);
+  const metaLabel = recording ? callMetaLabel(lobby, recordingLabel) : lobbyMetaLabel(lobby);
+  // Rendered only behind `spaceCalls` with an entity recorded; otherwise the header is unchanged.
+  const entityLink =
+    useFeatureFlag('spaceCalls') && lobby.call?.entity_id ? (
+      <CallEntityLink spaceId={lobby.call.space_id} entityId={lobby.call.entity_id} />
+    ) : null;
 
   if (phone) {
     return (
@@ -109,7 +116,7 @@ export function LobbyHeader({
         <div className="flex flex-wrap items-center gap-2">
           <LivePill lobby={lobby} small />
           {hostLists}
-          {lobby.call ? (
+          {entityLink && lobby.call ? (
             <CallEntityLink
               spaceId={lobby.call.space_id}
               entityId={lobby.call.entity_id}
@@ -135,10 +142,16 @@ export function LobbyHeader({
           </Text>
           <LivePill lobby={lobby} />
         </div>
-        <Text as="p" variant="metadata" color="grey-04" className="flex flex-wrap items-center gap-2">
-          <span>{recording ? callMetaLabel(lobby, recordingLabel) : lobbyMetaLabel(lobby)}</span>
-          {lobby.call ? <CallEntityLink spaceId={lobby.call.space_id} entityId={lobby.call.entity_id} /> : null}
-        </Text>
+        {entityLink ? (
+          <Text as="p" variant="metadata" color="grey-04" className="flex flex-wrap items-center gap-2">
+            <span>{metaLabel}</span>
+            {entityLink}
+          </Text>
+        ) : (
+          <Text as="p" variant="metadata" color="grey-04">
+            {metaLabel}
+          </Text>
+        )}
       </div>
       <div className="flex flex-wrap items-center gap-2">
         {hostLists}
