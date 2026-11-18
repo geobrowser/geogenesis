@@ -8,7 +8,7 @@ import type { RecordingSource } from '~/core/community-calls/recordings';
 const mocks = vi.hoisted(() => ({ sources: [] as RecordingSource[] }));
 
 vi.mock('~/core/community-calls/use-recording-sources', () => ({ useRecordingSources: () => mocks.sources }));
-vi.mock('~/core/utils/use-entity-media', () => ({ useVideoUrlFromEntity: () => undefined }));
+vi.mock('~/core/sync/use-store', () => ({ useValues: () => [] }));
 vi.mock('~/core/hooks/use-video-with-fallback', () => ({
   useVideoWithFallback: (value: string | undefined) => ({ src: value, onError: () => {} }),
 }));

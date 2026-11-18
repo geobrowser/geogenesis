@@ -6,7 +6,8 @@ import cx from 'classnames';
 
 import type { RecordingSource } from '~/core/community-calls/recordings';
 import { useVideoWithFallback } from '~/core/hooks/use-video-with-fallback';
-import { useVideoUrlFromEntity } from '~/core/utils/use-entity-media';
+import { useValues } from '~/core/sync/use-store';
+import { findMediaUrlValue } from '~/core/utils/media-url';
 
 /**
  * Playback for a published community-call recording. The active source resolves to a public IPFS
@@ -28,39 +29,45 @@ export function PublishedRecordingPlayer({
   className?: string;
   style?: React.CSSProperties;
 }) {
-  const [activeIndex, setActiveIndex] = React.useState(0);
-  // Clamped: a sync-store update can shrink `sources` out from under a stale index. Everything
-  // below reads the clamped index, so the playing source and the highlighted button can't diverge.
-  const clampedIndex = Math.min(activeIndex, sources.length - 1);
-  const active = sources[clampedIndex];
+  // A source without a URL on its relation resolves from its Video entity's values; one that
+  // resolves to nothing (a call page link, GEO-3593) is left out, so no button opens a blank player.
+  const entityIds = new Set(sources.flatMap(s => (s.directUrl ? [] : s.videoEntityId ? [s.videoEntityId] : [])));
+  const entityValues = useValues({ selector: v => v.spaceId === spaceId && entityIds.has(v.entity.id) });
+  const playable = sources.flatMap(source => {
+    const url =
+      source.directUrl ??
+      (source.videoEntityId
+        ? findMediaUrlValue(entityValues.filter(v => v.entity.id === source.videoEntityId))
+        : undefined);
+    return url ? [{ key: source.directUrl ?? source.videoEntityId ?? url, url }] : [];
+  });
 
-  // A no-op for published sources, whose URL already sits on the relation.
-  const resolvedFromEntity = useVideoUrlFromEntity(active.videoEntityId ?? undefined, spaceId);
-  const activeUrl = active.directUrl ?? resolvedFromEntity;
+  const [activeIndex, setActiveIndex] = React.useState(0);
+  // Clamped: a sync-store update can shrink the list out from under a stale index. Everything
+  // below reads the clamped index, so the playing source and the highlighted button can't diverge.
+  const clampedIndex = Math.min(activeIndex, playable.length - 1);
+  const activeUrl = playable[clampedIndex]?.url;
 
   const { src, onError } = useVideoWithFallback(activeUrl);
 
-  // A source with nothing to play (a call page link, GEO-3593) gets no player, never an empty one.
-  if (!activeUrl && sources.length < 2) return null;
+  if (!activeUrl) return null;
 
   return (
     <div className={cx('flex w-full min-w-0 flex-col gap-3', className)} style={style}>
-      {activeUrl ? (
-        <video
-          key={src}
-          src={src}
-          onError={onError}
-          controls
-          playsInline
-          className={cx('w-full bg-text', videoClassName ?? 'aspect-video rounded-lg')}
-        />
-      ) : null}
+      <video
+        key={src}
+        src={src}
+        onError={onError}
+        controls
+        playsInline
+        className={cx('w-full bg-text', videoClassName ?? 'aspect-video rounded-lg')}
+      />
 
-      {sources.length > 1 && (
+      {playable.length > 1 && (
         <div className="flex flex-wrap gap-1.5">
-          {sources.map((source, i) => (
+          {playable.map((source, i) => (
             <button
-              key={source.directUrl ?? source.videoEntityId ?? i}
+              key={source.key}
               onClick={() => setActiveIndex(i)}
               className={`rounded-md px-2 py-1.5 text-metadata ${
                 i === clampedIndex ? 'bg-grey-01 text-text' : 'text-grey-04 hover:bg-grey-01'
