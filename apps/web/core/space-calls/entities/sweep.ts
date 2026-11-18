@@ -22,6 +22,8 @@ import { type CallEntityClaim, type CallEntityRecord, claimCallEntities, recordC
 
 /** One write is a proposal, a vote and maybe an execute. */
 export const MAX_CALL_WRITES_PER_SWEEP = 4;
+/** A backstop on claims per run, written or settled without an edit. */
+const MAX_CALL_CLAIMS_PER_SWEEP = 20;
 /** The claim route's cap on `space_ids`. */
 const CLAIM_SPACE_LIMIT = 500;
 
@@ -147,7 +149,9 @@ export async function sweepCallEntities(
     return spaces.get(key)!;
   };
 
-  const writeOne = async (claim: CallEntityClaim) => {
+  /** Writes one claim; true when it sent an edit (time spent signing, whatever the outcome). */
+  const writeOne = async (claim: CallEntityClaim): Promise<boolean> => {
+    let signed = false;
     const callId = ID.uuidToHex(claim.call_id);
     // Unanswered, a claim that needs curator's event waits rather than minting a second entity.
     let curator: Map<string, string> | null = null;
@@ -166,13 +170,13 @@ export async function sweepCallEntities(
         error: 'curator_lookup_failed',
         retry_after_seconds: LOOKUP_RETRY_S,
       });
-      return;
+      return false;
     }
 
     const entityId = ID.uuidToHex(claim.entity_id ?? curator?.get(callId) ?? mintedCallEntityId(claim.call_id));
     if (claim.entity_id && updateChangesNothing(claim)) {
       await settle(claim, { claim_id: claim.claim_id, outcome: 'written', entity_id: entityId });
-      return;
+      return false;
     }
     try {
       const space = await spaceOf(claim.entity.space_id);
@@ -183,7 +187,7 @@ export async function sweepCallEntities(
           error: space ? 'space_not_dao' : 'space_not_found',
           retry_after_seconds: UNWRITABLE_SPACE_RETRY_S,
         });
-        return;
+        return false;
       }
 
       let current: Entity | null = null;
@@ -200,7 +204,7 @@ export async function sweepCallEntities(
               ? { claim_id: claim.claim_id, outcome: 'written', entity_id: entityId }
               : { claim_id: claim.claim_id, outcome: 'failed', error: ENTITY_NOT_INDEXED }
           );
-          return;
+          return false;
         }
       }
       const draft = current
@@ -210,6 +214,7 @@ export async function sweepCallEntities(
       const ops = await prepareOps(draft, ID.uuidToHex(space.id));
       // An entity with nothing left in this space has nothing to send.
       if (ops.length > 0) {
+        signed = true;
         await (deps.submit ?? submitEditAsAcceptor)(config, {
           name: claim.action === 'remove' ? `Remove call: ${draft.name}` : `Call: ${draft.name}`,
           ops,
@@ -222,6 +227,7 @@ export async function sweepCallEntities(
       console.error('[call-entities] call entity write failed', { callId, entityId, error: message(error) });
       await settle(claim, { claim_id: claim.claim_id, outcome: 'failed', error: message(error) });
     }
+    return signed;
   };
 
   // The claim route takes at most CLAIM_SPACE_LIMIT spaces; a chunk with nothing due is not asked again.
@@ -240,11 +246,14 @@ export async function sweepCallEntities(
     return null;
   };
 
-  for (let writes = 0; writes < MAX_CALL_WRITES_PER_SWEEP && canStart(); writes += 1) {
+  // Only edits sent count against the write budget; claims settled without one are cheap.
+  let writes = 0;
+  for (let claimed = 0; writes < MAX_CALL_WRITES_PER_SWEEP && claimed < MAX_CALL_CLAIMS_PER_SWEEP; claimed += 1) {
+    if (!canStart()) break;
     const claim = await claimNext();
-    if (claim === 'disabled') return writes === 0 ? { ...result, skipped: 'not_configured' } : result;
+    if (claim === 'disabled') return claimed === 0 ? { ...result, skipped: 'not_configured' } : result;
     if (!claim) break;
-    await writeOne(claim);
+    if (await writeOne(claim)) writes += 1;
   }
 
   return result;

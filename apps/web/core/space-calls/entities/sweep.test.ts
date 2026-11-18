@@ -283,6 +283,30 @@ describe('sweepCallEntities', () => {
     expect(result.written).toEqual(['1'.repeat(32)]);
   });
 
+  it('does not count updates that send nothing against the four writes', async () => {
+    const noop = (digit: string) =>
+      claim(digit.repeat(32), { action: 'update', entity_id: digit.repeat(32), previous: entity() });
+    const calls = [noop('1'), noop('2'), noop('3'), ...['4', '5', '6', '7', '8'].map(d => claim(d.repeat(32)))];
+    const { deps, submit, records } = harness(calls);
+    await run(deps);
+    expect(submit).toHaveBeenCalledTimes(4);
+    expect(records).toHaveLength(7);
+  });
+
+  it('stops after twenty claims however few of them send an edit', async () => {
+    const calls = Array.from({ length: 25 }, (_, i) =>
+      claim(i.toString(16).padStart(32, '0'), {
+        action: 'update',
+        entity_id: i.toString(16).padStart(32, '0'),
+        previous: entity(),
+      })
+    );
+    const { deps, submit } = harness(calls);
+    await run(deps);
+    expect(deps.claim).toHaveBeenCalledTimes(20);
+    expect(submit).not.toHaveBeenCalled();
+  });
+
   it('writes at most four calls a run', async () => {
     const calls = ['1', '2', '3', '4', '5'].map(digit => claim(digit.repeat(32)));
     const { deps, submit } = harness(calls);
