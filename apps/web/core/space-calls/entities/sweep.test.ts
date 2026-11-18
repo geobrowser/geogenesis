@@ -180,7 +180,7 @@ describe('sweepCallEntities', () => {
     const result = await run(deps);
     expect(submit).not.toHaveBeenCalled();
     expect(result.removed).toEqual([]);
-    expect(records[0]![1]).toMatchObject({ outcome: 'failed', error: 'entity_not_indexed', retry_after_seconds: 300 });
+    expect(records[0]![1]).toEqual({ claim_id: expect.any(String), outcome: 'failed', error: 'entity_not_indexed' });
   });
 
   it('records a failed entity read as failed, not removed', async () => {

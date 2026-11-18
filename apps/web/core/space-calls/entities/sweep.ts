@@ -188,13 +188,13 @@ export async function sweepCallEntities(
       let current: Entity | null = null;
       if (claim.action === 'remove') {
         current = await (deps.loadEntity ?? defaultLoadEntity)(entityId, space.id);
-        // geo-chat removes only what it recorded written, so a missing entity is the indexer lagging.
+        // geo-chat removes only what it recorded written, so a missing entity is the indexer lagging;
+        // its backoff paces the retries.
         if (!current) {
           await settle(claim, {
             claim_id: claim.claim_id,
             outcome: 'failed',
             error: 'entity_not_indexed',
-            retry_after_seconds: LOOKUP_RETRY_S,
           });
           continue;
         }
