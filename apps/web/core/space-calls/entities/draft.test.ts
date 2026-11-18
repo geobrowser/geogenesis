@@ -127,7 +127,7 @@ describe('buildCallEventDraft', () => {
   });
 
   it('puts nothing about the recording on the graph', () => {
-    const recording = { status: 'ready', published: true, linked: true, duration_seconds: 60 };
+    const recording = { status: 'ready' as const, published: true, linked: true, duration_seconds: 60 };
     const linked = build(claim({ entity: entity({ status: 'ended', recording }) }));
     const unlinked = build(
       claim({
