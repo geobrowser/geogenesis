@@ -7,15 +7,19 @@ import cx from 'classnames';
 import { useActionContext } from '~/core/action-context-provider';
 import { copyShareLink } from '~/core/sharing/share-handoff';
 import { createShareLink } from '~/core/sharing/share-link';
+import { CallEntityLink } from '~/core/space-calls/call-entity-link';
 import {
   EndCallPublishChoice,
   callRecordingMetaLabel,
+  canManageCallRecording,
   useEndCallPublishes,
 } from '~/core/space-calls/recording/call-recording-room';
 import { spaceCallPath } from '~/core/space-calls/routes';
 
 import { Ellipsis } from '~/design-system/icons/ellipsis';
 import { Text } from '~/design-system/text';
+
+import { GeoPublisherNotice } from '~/partials/space-calls/geo-publisher-notice';
 
 import { debateActionAnalyticsAttributes, debateSurfaceAnalyticsAttributes } from '../matchmaking/hub-analytics';
 import { HubPillButton } from '../matchmaking/hub-pill-button';
@@ -105,6 +109,13 @@ export function LobbyHeader({
         <div className="flex flex-wrap items-center gap-2">
           <LivePill lobby={lobby} small />
           {hostLists}
+          {lobby.call ? (
+            <CallEntityLink
+              spaceId={lobby.call.space_id}
+              entityId={lobby.call.entity_id}
+              className="text-metadata text-ctaPrimary hover:underline"
+            />
+          ) : null}
         </div>
       </header>
     );
@@ -124,8 +135,9 @@ export function LobbyHeader({
           </Text>
           <LivePill lobby={lobby} />
         </div>
-        <Text as="p" variant="metadata" color="grey-04">
-          {recording ? callMetaLabel(lobby, recordingLabel) : lobbyMetaLabel(lobby)}
+        <Text as="p" variant="metadata" color="grey-04" className="flex flex-wrap items-center gap-2">
+          <span>{recording ? callMetaLabel(lobby, recordingLabel) : lobbyMetaLabel(lobby)}</span>
+          {lobby.call ? <CallEntityLink spaceId={lobby.call.space_id} entityId={lobby.call.entity_id} /> : null}
         </Text>
       </div>
       <div className="flex flex-wrap items-center gap-2">
@@ -180,6 +192,13 @@ function EndLobbyControl({ lobby }: { lobby: LobbyPageView }) {
       {confirming ? (
         <>
           <EndCallPublishChoice lobby={lobby} checked={publishRecording} onChange={setPublishRecording} />
+          {lobby.call ? (
+            <GeoPublisherNotice
+              spaceId={lobby.call.space_id}
+              viewerIsEditor={canManageCallRecording(lobby)}
+              className="basis-full"
+            />
+          ) : null}
           <HubPillButton
             variant="primary"
             analyticsLabel="Lobby end confirm"

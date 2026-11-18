@@ -1,0 +1,28 @@
+import { describe, expect, it, vi } from 'vitest';
+
+import { fetchGeoPublisherStatus, geoPublisherNoticeState } from './hooks';
+
+describe('geoPublisherNoticeState', () => {
+  it('shows the button only on a definite not_editor', () => {
+    expect(geoPublisherNoticeState({ status: 'not_editor', sent: false })).toBe('add');
+    expect(geoPublisherNoticeState({ status: 'pending', sent: false })).toBe('pending');
+    expect(geoPublisherNoticeState({ status: 'editor', sent: true })).toBe('hidden');
+    expect(geoPublisherNoticeState({ status: 'unknown', sent: false })).toBe('hidden');
+    expect(geoPublisherNoticeState({ status: undefined, sent: false })).toBe('hidden');
+  });
+
+  it('stays pending after a send while the graph has not caught up', () => {
+    expect(geoPublisherNoticeState({ status: 'not_editor', sent: true })).toBe('pending');
+  });
+});
+
+describe('fetchGeoPublisherStatus', () => {
+  it('is unknown signed out or on any refusal', async () => {
+    expect(await fetchGeoPublisherStatus('a'.repeat(32), async () => null)).toBe('unknown');
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('{}', { status: 403 }));
+    expect(await fetchGeoPublisherStatus('a'.repeat(32), async () => 't')).toBe('unknown');
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ status: 'not_editor' }), { status: 200 }));
+    expect(await fetchGeoPublisherStatus('a'.repeat(32), async () => 't')).toBe('not_editor');
+    fetchMock.mockRestore();
+  });
+});
