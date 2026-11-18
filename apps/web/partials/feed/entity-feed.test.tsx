@@ -1095,9 +1095,9 @@ describe('EntityFeed interleave', () => {
     isMemberOrEditor: true,
     hasPendingMembershipRequest: false,
   });
-  const cardsAfter = (feedLength: number) =>
+  const cards = (feedLength: number) =>
     new Map<number, React.ReactNode>([[1, <p key="extra">{`extra after 2 of ${feedLength}`}</p>]]);
-  const interleave = { cardsAfter, replacesEntityIds: new Set<string>() };
+  const interleave = (feedLength: number) => ({ cards: cards(feedLength), replacesEntityIds: new Set<string>() });
 
   it('draws the extra cards where asked, without touching the request', async () => {
     mocks.pages = [{ items: [item('a'), item('b'), item('c')] }];
@@ -1108,18 +1108,18 @@ describe('EntityFeed interleave', () => {
     expect(await requestedUrl()).not.toContain('interleave');
   });
 
-  it('leaves out the feed cards the extra cards stand for', () => {
+  it('leaves out the feed cards a placed card stands for, slotting by the unfiltered length', () => {
     const b = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
     mocks.pages = [{ items: [item('a'), item(b), item('c')] }];
     render(
       <EntityFeed
         apiEndpoint="/api/explore/feed"
         initialSort="best"
-        interleave={{ cardsAfter, replacesEntityIds: new Set(['b'.repeat(32)]) }}
+        interleave={feedLength => ({ cards: cards(feedLength), replacesEntityIds: new Set(['b'.repeat(32)]) })}
       />
     );
 
-    expect(screen.getByText('extra after 2 of 2')).toBeTruthy();
+    expect(screen.getByText('extra after 2 of 3')).toBeTruthy();
     expect(Object.values(mocks.itemAt).map(entry => (entry as { entityId: string }).entityId)).toEqual(['a', 'c']);
   });
 
@@ -1129,7 +1129,7 @@ describe('EntityFeed interleave', () => {
       <EntityFeed
         apiEndpoint="/api/activity/feed"
         lockedSpaceId="space-1"
-        interleave={{ cardsAfter, replacesEntityIds: new Set(['b']) }}
+        interleave={feedLength => ({ cards: cards(feedLength), replacesEntityIds: new Set(['b']) })}
       />
     );
 

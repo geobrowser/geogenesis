@@ -204,10 +204,13 @@ type EntityFeedProps = {
   interleave?: FeedInterleave;
 };
 
-export type FeedInterleave = {
-  /** By the index of the card they follow, for `feedLength` cards; pages and cursors ignore them. */
-  cardsAfter: (feedLength: number) => ReadonlyMap<number, React.ReactNode>;
-  /** Feed cards these stand for (normalized ids), left out so a thing is shown once (GEO-3593). */
+/**
+ * Extra cards for a feed of `feedLength` cards, by the index of the card they follow; pages and
+ * cursors ignore them. `replacesEntityIds` (normalized) are feed cards a placed card stands for,
+ * left out so a thing is shown once (GEO-3593).
+ */
+export type FeedInterleave = (feedLength: number) => {
+  cards: ReadonlyMap<number, React.ReactNode>;
   replacesEntityIds: ReadonlySet<string>;
 };
 
@@ -809,9 +812,8 @@ export function EntityFeed({
     if (placeholderLeadId !== null) setPinnedLeadId(placeholderLeadId);
   }, [placeholderLeadId, setPinnedLeadId]);
 
-  const replaced = unfiltered ? interleave?.replacesEntityIds : undefined;
-  const shownItems = replaced?.size ? items.filter(item => !replaced.has(normId(item.entityId))) : items;
-  const interleaved = unfiltered ? interleave?.cardsAfter(shownItems.length) : undefined;
+  // Slots follow the unfiltered list, so leaving a replaced card out cannot move them.
+  const interleaved = unfiltered ? interleave?.(items.length) : undefined;
 
   const timeLabel = TIME_OPTIONS.find(o => o.value === time)?.label ?? time;
   const sortLabel = SORT_LABELS[sort];
@@ -972,25 +974,27 @@ export function EntityFeed({
               <LoadingSkeleton key={i} />
             ))}
           </div>
-        ) : shownItems.length === 0 ? (
+        ) : items.length === 0 ? (
           <p className="text-browseMenu text-grey-04">No entities match these filters yet.</p>
         ) : (
-          shownItems.map((item, index) => (
+          items.map((item, index) => (
             <React.Fragment key={`${item.entityId}-${item.spaceId}`}>
               {/* A feed, so its debates play as they come into view; nowhere else does (GEO-3812).
                   Around the card only, not what is interleaved between them. */}
-              <DebateFeedAutoplay>
-                <ExploreFeedCard
-                  itemPosition={index + 1}
-                  item={item}
-                  hideSpaceLink={lockedSpaceId != null}
-                  hideJoinButton={lockedSpaceId != null}
-                  titleOpensSidePanel={titleOpensSidePanel}
-                  claimCardVariant={claimCardVariant}
-                  deferUntilNearViewport={index >= EAGER_CARD_COUNT}
-                />
-              </DebateFeedAutoplay>
-              {interleaved?.get(index)}
+              {interleaved?.replacesEntityIds.has(normId(item.entityId)) ? null : (
+                <DebateFeedAutoplay>
+                  <ExploreFeedCard
+                    itemPosition={index + 1}
+                    item={item}
+                    hideSpaceLink={lockedSpaceId != null}
+                    hideJoinButton={lockedSpaceId != null}
+                    titleOpensSidePanel={titleOpensSidePanel}
+                    claimCardVariant={claimCardVariant}
+                    deferUntilNearViewport={index >= EAGER_CARD_COUNT}
+                  />
+                </DebateFeedAutoplay>
+              )}
+              {interleaved?.cards.get(index)}
             </React.Fragment>
           ))
         )}

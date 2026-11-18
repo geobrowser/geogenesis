@@ -23,24 +23,23 @@ export function usePastCallInterleave(enabled: boolean) {
 
   return React.useMemo((): FeedInterleave | undefined => {
     if (!enabled || !calls || calls.length === 0) return undefined;
-    return {
-      cardsAfter: (feedLength: number) => {
-        const cards = new Map<number, React.ReactNode>();
-        for (const [afterIndex, callIndex] of pastCallSlots(feedLength, calls.length)) {
-          const call = calls[callIndex]!;
-          const last = callIndex === calls.length - 1;
-          cards.set(
-            afterIndex,
-            <React.Fragment key={`past-call-${call.call_id}`}>
-              <PastCallCard call={call} />
-              {last && canLoadMore ? <LoadMorePastCalls load={fetchNextPage} /> : null}
-            </React.Fragment>
-          );
-        }
-        return cards;
-      },
-      // A call written to the graph is also a Call Event card; this card plays, so it stands for both.
-      replacesEntityIds: new Set(calls.flatMap(call => (call.entity_id ? [normId(call.entity_id)] : []))),
+    return (feedLength: number) => {
+      const cards = new Map<number, React.ReactNode>();
+      const replacesEntityIds = new Set<string>();
+      for (const [afterIndex, callIndex] of pastCallSlots(feedLength, calls.length)) {
+        const call = calls[callIndex]!;
+        const last = callIndex === calls.length - 1;
+        cards.set(
+          afterIndex,
+          <React.Fragment key={`past-call-${call.call_id}`}>
+            <PastCallCard call={call} />
+            {last && canLoadMore ? <LoadMorePastCalls load={fetchNextPage} /> : null}
+          </React.Fragment>
+        );
+        // A placed call written to the graph is also its Call Event card; this one plays, so it stands for both.
+        if (call.entity_id) replacesEntityIds.add(normId(call.entity_id));
+      }
+      return { cards, replacesEntityIds };
     };
   }, [calls, canLoadMore, enabled, fetchNextPage]);
 }

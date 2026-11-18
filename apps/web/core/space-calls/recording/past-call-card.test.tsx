@@ -105,19 +105,27 @@ describe('usePastCallInterleave', () => {
   it('places the calls between the cards', () => {
     mocks.calls = [CALL, { ...CALL, call_id: 'call2' }];
     const { result } = renderHook(() => usePastCallInterleave(true));
-    const cards = result.current!.cardsAfter(30);
+    const { cards, replacesEntityIds } = result.current!(30);
     expect([...cards.keys()]).toEqual([3, 13]);
     expect(React.isValidElement(cards.get(3))).toBe(true);
-    expect(result.current!.replacesEntityIds.size).toBe(0);
+    expect(replacesEntityIds.size).toBe(0);
   });
 
-  it('stands for the graph cards of calls written as entities', () => {
-    mocks.calls = [
-      { ...CALL, entity_id: 'AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA' },
-      { ...CALL, call_id: 'call2', entity_id: null },
-    ];
+  it('stands only for the graph cards of calls that get a slot', () => {
+    const entity = (i: number) => i.toString(16).padStart(32, '0');
+    mocks.calls = Array.from({ length: 20 }, (_, i) => ({ ...CALL, call_id: `call${i}`, entity_id: entity(i + 1) }));
     const { result } = renderHook(() => usePastCallInterleave(true));
-    expect([...result.current!.replacesEntityIds]).toEqual(['a'.repeat(32)]);
+    const { cards, replacesEntityIds } = result.current!(20);
+    expect([...cards.keys()]).toEqual([3, 13]);
+    expect([...replacesEntityIds]).toEqual([entity(1), entity(2)]);
+    // A call with no slot keeps its graph card.
+    expect(replacesEntityIds.has(entity(3))).toBe(false);
+  });
+
+  it('compares entity ids in any spelling', () => {
+    mocks.calls = [{ ...CALL, entity_id: 'AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA' }];
+    const { result } = renderHook(() => usePastCallInterleave(true));
+    expect([...result.current!(30).replacesEntityIds]).toEqual(['a'.repeat(32)]);
   });
 
   const drawCards = (
