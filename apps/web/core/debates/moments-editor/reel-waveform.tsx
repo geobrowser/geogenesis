@@ -11,7 +11,7 @@ import { type DraggedSpan, draggedClip } from './clip-drag';
 import { SnapSwitch } from './editor-ui';
 import { type EditorClip, type ReelWord, isSpoken } from './reel';
 import { SPEAKER_OUTLINE_CLASS, SPEAKER_TEXT_CLASS, SPEAKER_TINT_CLASS } from './speaker-classes';
-import { type PeaksView, cutStretches, fineWindow, formatFineTime } from './waveform';
+import { type FineFocus, type PeaksView, cutStretches, fineWindow, formatFineTime } from './waveform';
 import { WaveformCanvas } from './waveform-canvas';
 
 /** Where a free edge lands in the panel: the nearest 10 ms, one peaks bucket. */
@@ -19,6 +19,12 @@ export const FINE_STEP_MS = 10;
 /** How much of the debate the panel shows either side of the clip. */
 export const PADS = [1_000, 2_000, 4_000, 8_000] as const;
 export type Pad = (typeof PADS)[number];
+/** What the panel can centre on: the whole clip, or either edge (GEO-3773). */
+export const FOCUSES = [
+  { focus: 'clip', label: 'Clip' },
+  { focus: 'start', label: 'Start' },
+  { focus: 'end', label: 'End' },
+] as const satisfies readonly { focus: FineFocus; label: string }[];
 /** Half a label's width per character, at the labels' 12 px (the prototype's estimate). */
 const LABEL_HALF_PX_PER_CHAR = 3.3;
 /** The least room between two labels. */
@@ -79,6 +85,7 @@ export function ReelWaveform({
   playheadMs,
   readOnly,
   pad,
+  focus,
   snap,
   onSnap,
   onChangeClip,
@@ -97,6 +104,8 @@ export function ReelWaveform({
   /** How much of the debate shows either side of the clip, and whether edges snap to words: the
    * editor's, so both last across a change of clip (GEO-3773). */
   pad: Pad;
+  /** The whole clip, or the edge centred with `pad` either side of it. Like `pad`, the editor's. */
+  focus: FineFocus;
   snap: boolean;
   onSnap: () => void;
   onChangeClip: (index: number, span: DraggedSpan & { claim_index: number | null }) => void;
@@ -129,7 +138,9 @@ export function ReelWaveform({
     };
   }, [dragging]);
 
-  const frame = drag?.window ?? fineWindow(clip, durationMs, pad);
+  // A drag keeps the window it began in, so the waveform never slides under the pointer; with an
+  // edge in focus, letting go centres the window on where the edge landed.
+  const frame = drag?.window ?? fineWindow(clip, durationMs, pad, focus);
   const cuts = React.useMemo(() => cutStretches(turns, durationMs), [turns, durationMs]);
 
   const span = frame.end_ms - frame.start_ms;
@@ -178,6 +189,7 @@ export function ReelWaveform({
       <div
         ref={trackRef}
         data-testid="waveform-track"
+        data-window={`${frame.start_ms}-${frame.end_ms}`}
         className="relative h-[74px] cursor-crosshair touch-none overflow-hidden rounded-sm bg-bg select-none"
         onPointerMove={onPointerMove}
         onPointerUp={() => setDrag(null)}

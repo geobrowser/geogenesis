@@ -1,5 +1,13 @@
 import type { ParticipantSlot } from '../api';
-import { type EditorClip, type ReelWord, clipSpeaker, formatReelTime, formatSeconds, wordsIn } from './reel';
+import {
+  type EditorClip,
+  type ReelSentence,
+  type ReelWord,
+  clipSpeaker,
+  formatReelTime,
+  formatSeconds,
+  wordsIn,
+} from './reel';
 
 /**
  * What makes a reel watchable, as the automatic picker is held to it (GEO-3672). None of it blocks
@@ -76,10 +84,12 @@ export function trimmedEnd(clip: Pick<EditorClip, 'start_ms' | 'end_ms'>, words:
 export function reelWarnings(
   clips: readonly EditorClip[],
   words: readonly ReelWord[],
-  nameOf: (slot: ParticipantSlot | null) => string | null
+  nameOf: (slot: ParticipantSlot | null) => string | null,
+  /** The transcript's sentences: whose a clip is, from a transcript without word timings (`clipSpeaker`). */
+  sentences: readonly ReelSentence[] = []
 ): ReelWarning[] {
   const warnings: ReelWarning[] = [];
-  const speakers = clips.map(clip => clipSpeaker(words, clip.start_ms, clip.end_ms));
+  const speakers = clips.map(clip => clipSpeaker(words, clip.start_ms, clip.end_ms, sentences));
   // The reel's total is what plays, cuts and all; a clip is held to the picker's limits by its words.
   const length = (clip: EditorClip) => clip.end_ms - clip.start_ms;
   const spoken = (clip: EditorClip) => spokenLength(clip, words);

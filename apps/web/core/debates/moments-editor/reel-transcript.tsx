@@ -16,25 +16,21 @@ import {
   type EditorClip,
   MANUAL_MAX_CLIPS,
   MIN_EDIT_CLIP_MS,
+  type ReelSentence,
   type ReelWord,
   type SelectionClip,
   formatReelTime,
   isSpoken,
   selectionToClip,
+  sentenceInClip,
   stepEdge,
   wordInSpan,
 } from './reel';
 import { EXTRA_CLIP_TOOLTIP } from './reel-strip';
 import { SPEAKER_FILL_CLASS, SPEAKER_TEXT_CLASS } from './speaker-classes';
 
-/** A sentence (or, from a transcript served without sentences, a line) on the player's clock. */
-export type ReelSentence = { slot: ParticipantSlot; start_ms: number; end_ms: number; text: string };
-
 /** Who says what, as the transcript names the debaters. */
 export type TranscriptNames = Record<1 | 2, string | null>;
-
-/** How far a sentence must reach into a clip to count as in it, so a shared edge does not. */
-const OVERLAP_MS = 150;
 
 /** How long a keyboard selection rests before the toolbar reads it. */
 export const SELECTION_SETTLE_MS = 200;
@@ -61,10 +57,6 @@ export function reelSentences(transcript: DebateTranscriptResponse | undefined):
       text: sentence.text,
     }))
     .sort((a, b) => a.start_ms - b.start_ms);
-}
-
-export function sentenceInClip(sentence: ReelSentence, clip: Pick<EditorClip, 'start_ms' | 'end_ms'>) {
-  return sentence.end_ms > clip.start_ms + OVERLAP_MS && sentence.start_ms < clip.end_ms - OVERLAP_MS;
 }
 
 /**
@@ -432,6 +424,28 @@ export const ReelTranscript = React.memo(function ReelTranscript({
     });
     return { owner, first, last };
   }, [words, clips]);
+  // A transcript without word timings marks clips by sentence: which clip each sentence is in (the
+  // first, as with words), and each clip's first sentence, where its number shows once. With word
+  // timings the clips are marked on their words (`clipSpeaker`'s rule too): a sentence with no word to
+  // show is left untinted, with each clip it is in numbered after it.
+  const hasWords = words.length > 0;
+  const sentenceOwners = React.useMemo(() => {
+    const owner = new Int16Array(sentences.length).fill(-1);
+    const first = clips.map(() => -1);
+    const after = sentences.map(() => [] as number[]);
+    clips.forEach((clip, index) => {
+      sentences.forEach((sentence, at) => {
+        if (!sentenceInClip(sentence, clip)) return;
+        if (hasWords) {
+          after[at].push(index);
+          return;
+        }
+        if (owner[at] < 0) owner[at] = index;
+        if (first[index] < 0) first[index] = at;
+      });
+    });
+    return { owner, first, after };
+  }, [sentences, clips, hasWords]);
   const wasWords = React.useMemo(() => {
     const out = new Set<number>();
     if (!was || selected < 0) return out;
@@ -472,10 +486,12 @@ export const ReelTranscript = React.memo(function ReelTranscript({
         turn.items
           .map(item => {
             if (!('word' in item)) {
-              const inClips = clips.flatMap((clip, index) =>
-                sentenceInClip(sentences[item.sentence], clip) ? [index] : []
+              const owner = sentenceOwners.owner[item.sentence];
+              const starts = clips.flatMap((_, index) =>
+                sentenceOwners.first[index] === item.sentence ? [`${index}${speakers[index] ?? ''}`] : []
               );
-              return `s${inClips.map(index => `${index}${speakers[index] ?? ''}`).join('.')}`;
+              const after = sentenceOwners.after[item.sentence].map(index => `${index}${speakers[index] ?? ''}`);
+              return `s${owner}${owner >= 0 ? (speakers[owner] ?? '') : ''}${owner >= 0 && owner === selected ? '*' : ''}f${starts.join('.')}a${after.join('.')}`;
             }
             const at = item.word;
             const owner = owners.owner[at];
@@ -495,7 +511,7 @@ export const ReelTranscript = React.memo(function ReelTranscript({
           })
           .join(',')
       ),
-    [turnList, clips, sentences, speakers, owners, selected, bounds, drag, wasWords, hitWords]
+    [turnList, clips, speakers, owners, sentenceOwners, selected, bounds, drag, wasWords, hitWords]
   );
 
   const noWordTimings = sentences.length > 0 && (wordTiming === false || words.length === 0);
@@ -540,20 +556,26 @@ export const ReelTranscript = React.memo(function ReelTranscript({
   React.useLayoutEffect(() => markPlayhead(null, false));
 
   // The selected clip comes into view when it is picked anywhere but here, and when the transcript
-  // comes back (✕ on a panel): its first word, a fifth of the way down. With none, the playhead's word.
+  // comes back (✕ on a panel): its first word, a fifth of the way down (its first sentence on a
+  // transcript without word timings). With none, the playhead's word.
   const pickedHere = React.useRef(false);
   const selectedKey = selected >= 0 ? (clips[selected]?.key ?? null) : null;
-  const firstOfSelected = selected >= 0 ? owners.first[selected] : -1;
+  const firstOfSelected = selected >= 0 ? (hasWords ? owners.first[selected] : sentenceOwners.first[selected]) : -1;
   const firstRef = React.useRef(firstOfSelected);
   firstRef.current = firstOfSelected;
+  const hasWordsRef = React.useRef(hasWords);
+  hasWordsRef.current = hasWords;
   React.useEffect(() => {
     const root = rootRef.current;
     if (pickedHere.current) {
       pickedHere.current = false;
       return;
     }
-    if (!root || selectedKey === null) return;
-    scrollWord(root, wordElement(root, firstRef.current), 0.22);
+    if (!root || selectedKey === null || firstRef.current < 0) return;
+    const element = hasWordsRef.current
+      ? wordElement(root, firstRef.current)
+      : root.querySelector(`[data-sentence="${firstRef.current}"]`);
+    scrollWord(root, element, 0.22);
   }, [selectedKey]);
   React.useEffect(() => {
     const root = rootRef.current;
@@ -862,6 +884,7 @@ export const ReelTranscript = React.memo(function ReelTranscript({
               words={words}
               sentences={sentences}
               owners={owners}
+              sentenceOwners={sentenceOwners}
               speakers={speakers}
               clips={clips}
               selected={selected}
@@ -959,6 +982,7 @@ const TurnBlock = React.memo(
     words,
     sentences,
     owners,
+    sentenceOwners,
     speakers,
     clips,
     selected,
@@ -973,6 +997,7 @@ const TurnBlock = React.memo(
     words: readonly ReelWord[];
     sentences: readonly ReelSentence[];
     owners: { owner: Int16Array; first: number[]; last: number[] };
+    sentenceOwners: { owner: Int16Array; first: number[]; after: number[][] };
     speakers: readonly (ParticipantSlot | null)[];
     clips: readonly EditorClip[];
     selected: number;
@@ -984,17 +1009,40 @@ const TurnBlock = React.memo(
     turnRenders += 1;
     const parts: React.ReactNode[] = [];
     turn.items.forEach((item, nth) => {
+      const next = turn.items[nth + 1];
       if (!('word' in item)) {
-        const sentence = sentences[item.sentence];
+        // A sentence with no words (a transcript without word timings): tinted as its clip's words
+        // are, the clip's number shown once, before the clip's first sentence. In a word-timed
+        // transcript it is untinted, numbered after it for each clip it is in (`sentenceOwners`).
+        const at = item.sentence;
+        const owner = sentenceOwners.owner[at];
+        const speaker = owner >= 0 ? speakerKey(speakers[owner] ?? null) : null;
+        const gap = next ? ' ' : '';
+        // Within one clip the space is the clip's, so its tint runs on unbroken.
+        const joined =
+          owner >= 0 && next !== undefined && 'sentence' in next && sentenceOwners.owner[next.sentence] === owner;
         parts.push(
-          <React.Fragment key={`s${item.sentence}`}>
-            {nth > 0 ? ' ' : ''}
-            <span>{sentence.text}</span>
-            {clips.flatMap((clip, index) =>
-              sentenceInClip(sentence, clip)
-                ? [<ClipButton key={index} index={index} speaker={speakers[index]} after />]
+          <React.Fragment key={`s${at}`}>
+            {clips.flatMap((_, index) =>
+              sentenceOwners.first[index] === at
+                ? [<ClipButton key={index} index={index} speaker={speakers[index] ?? null} />]
                 : []
             )}
+            <span
+              data-sentence={at}
+              className={cx(
+                'py-0.5',
+                speaker && WORD_CLASS[speaker],
+                speaker && owner === selected && WORD_STRONG_CLASS[speaker]
+              )}
+            >
+              {sentences[at].text}
+              {joined ? gap : null}
+            </span>
+            {sentenceOwners.after[at].map(index => (
+              <ClipButton key={`a${index}`} index={index} speaker={speakers[index] ?? null} after />
+            ))}
+            {joined ? null : gap}
           </React.Fragment>
         );
         return;
@@ -1003,7 +1051,6 @@ const TurnBlock = React.memo(
       const word = words[at];
       const owner = owners.owner[at];
       const speaker = owner >= 0 ? speakerKey(speakers[owner] ?? null) : null;
-      const next = turn.items[nth + 1];
       const nextGap = next && 'word' in next ? wordGap(words[next.word].text, false) : next ? ' ' : '';
       // Within one clip the space is the clip's, so its tint runs on unbroken.
       const joined = owner >= 0 && next !== undefined && 'word' in next && owners.owner[next.word] === owner;

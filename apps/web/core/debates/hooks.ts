@@ -167,6 +167,12 @@ export const debateQueryKeys = {
   /** Every read of one debate's transcript, whatever its format and `include`: a prefix to invalidate. */
   transcripts: (debateId: string) => ['debates', 'transcript', dashlessId(debateId)] as const,
   /**
+   * GEO-3642. The moments editor's transcript, from geo-chat's media-admin route: under
+   * `transcripts`, so the refresh after a re-render reads it again too.
+   */
+  momentsTranscript: (debateId: string, accountKey: string | null) =>
+    ['debates', 'transcript', dashlessId(debateId), 'moments', accountKey] as const,
+  /**
    * GEO-3671. Whether the viewer is a media admin: per viewer, not per debate, since the allowlist
    * does not depend on the debate it is asked about.
    */
