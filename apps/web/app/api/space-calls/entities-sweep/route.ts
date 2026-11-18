@@ -13,9 +13,8 @@ export const dynamic = 'force-dynamic';
 const CALL_START_DEADLINE_MS = 60_000;
 
 /**
- * Cron sweep (vercel.ts): writes due calls to the graph as Call Event entities (GEO-3593), as the
- * debate acceptor, in the spaces it edits. Its own route, so it never lengthens a debate publish
- * run's hold on the signing lock; when another run holds it, this tick is skipped.
+ * Cron: writes due calls as Call Event entities in the acceptor's editor spaces. Separate from the
+ * debate sweep so it never lengthens that run's lock hold; skips the tick when the lock is held.
  */
 export async function GET(request: Request) {
   const startedAt = Date.now();

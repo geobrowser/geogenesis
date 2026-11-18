@@ -99,12 +99,9 @@ function ownRelationIds(claim: CallEntityClaim, entityId: string): Set<string> {
 }
 
 /**
- * The edit for a `create` or `update` claim, in curator's Call Event shape. Every id derives from the
- * entity id, so writing a claim twice rewrites rather than duplicates.
- *
- * On a minted entity it writes the whole event. On curator's event it adopted it writes only the
- * times and the Web URL, never Name, Types, Parent or Published by; an update overwrites the times
- * curator wrote with the call's. The recording is not on the graph: the call page plays it.
+ * A `create` or `update` in curator's Call Event shape, with ids derived from the entity id so a
+ * rewrite upserts. On curator's adopted event only the times (overwritten) and Web URL are written.
+ * The recording stays off the graph; the call page plays it.
  */
 export function buildCallEventDraft({
   claim,
@@ -211,9 +208,8 @@ export type GraphEntityForRemoval = {
 };
 
 /**
- * A `remove` (a call never held) deletes only what this publisher wrote. A minted entity loses its
- * values and its derived relations; an editor's own additions stay. Curator's adopted event keeps
- * everything but the Web URL: it is curator's record, times included.
+ * A `remove` deletes only what this publisher wrote: a minted entity's values and derived relations,
+ * or an adopted curator event's Web URL. Editors' and curator's triples stay.
  */
 export function buildCallEventRemoval({
   claim,
