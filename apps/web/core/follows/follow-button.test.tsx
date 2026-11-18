@@ -198,7 +198,7 @@ describe('FollowTopicButton', () => {
     expect(mocks.queue).not.toHaveBeenCalled();
   });
 
-  it('follows while the signing account is still being built', () => {
+  it('holds the press while the signing account is still being built', () => {
     mocks.smartAccount = null;
     mocks.identifiedWithoutAccount = true;
     renderButton();
@@ -206,7 +206,8 @@ describe('FollowTopicButton', () => {
 
     expect(button).toBeEnabled();
     fireEvent.click(button);
-    expect(mocks.follow).toHaveBeenCalled();
+    expect(mocks.queue).toHaveBeenCalled();
+    expect(mocks.follow).not.toHaveBeenCalled();
     expect(mocks.promptSignIn).not.toHaveBeenCalled();
   });
 

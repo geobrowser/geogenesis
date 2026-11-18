@@ -124,6 +124,27 @@ describe('signing out', () => {
   });
 });
 
+describe('a press made while the signing account is built', () => {
+  it('waits through a build that fails, and runs once the account arrives', async () => {
+    mocks.privyAuthenticated = true;
+    mocks.registered = true;
+    const { store, wrapper, enqueue } = renderQueue();
+    const follow = vi.fn();
+    act(() => enqueue({ id: 'follow', label: 'your follow', requires: 'personalSpace', run: follow }));
+    const runner = render(<PendingActionsRunner />, { wrapper });
+    runner.rerender(<PendingActionsRunner />);
+
+    expect(follow).not.toHaveBeenCalled();
+    expect(store.get(pendingActionsAtom)).toHaveLength(1);
+
+    mocks.authenticated = true;
+    runner.rerender(<PendingActionsRunner />);
+
+    await waitFor(() => expect(store.get(pendingActionsAtom)).toHaveLength(0));
+    expect(follow).toHaveBeenCalledOnce();
+  });
+});
+
 describe('a press replaced while the one before it runs', () => {
   it('is kept, and runs, rather than being cleared with the one it replaced', async () => {
     mocks.authenticated = true;
