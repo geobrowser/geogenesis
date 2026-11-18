@@ -24,6 +24,19 @@ export function isPickerSessionOpen(session: Pick<DebateRematchSession, 'status'
 }
 
 /**
+ * Expired because the browsing window ran out, not because someone went away: geo-chat stamps
+ * `updated_at` on ending, and only the overrun sweep ends a session at or past its deadline.
+ */
+export function rematchBrowsingWindowLapsed(
+  session: Pick<DebateRematchSession, 'status' | 'browsing_expires_at' | 'updated_at'>
+) {
+  if (session.status !== 'expired' || session.browsing_expires_at === null) return false;
+  const deadline = Date.parse(session.browsing_expires_at);
+  const endedAt = Date.parse(session.updated_at);
+  return Number.isFinite(deadline) && Number.isFinite(endedAt) && endedAt >= deadline;
+}
+
+/**
  * Ends a debate-again session when the picker unmounts while the session is still open (GEO-3024).
  *
  * The Leave button used to be the only exit that ended it. Browser back, a link, the nav, anything
