@@ -1,12 +1,11 @@
 import { NextResponse } from 'next/server';
 
-import { type DebateAcceptorConfig, getDebateAcceptorConfig } from '~/core/debates/server/acceptor-config';
+import { getDebateAcceptorConfig } from '~/core/debates/server/acceptor-config';
 import { withAcceptorLock } from '~/core/debates/server/acceptor-lock';
 import { DebateNotPublishableError, assertDebateMediaHostConfigured } from '~/core/debates/server/debate-source';
 import { listEditorSpaceIds } from '~/core/debates/server/editor-spaces';
 import { listPublishCandidateDebateIds } from '~/core/debates/server/publish-candidates';
 import { publishDebateAsAcceptor } from '~/core/debates/server/publish-debate';
-import { type CallEntitySweepResult, sweepCallEntities } from '~/core/space-calls/entities/sweep';
 
 // The sweep can sign several on-chain publishes in one run, so give it room past the default.
 export const maxDuration = 300;
@@ -61,7 +60,7 @@ export async function GET(request: Request) {
 
   // One acceptor signing at a time (see `acceptor-lock.ts`). The early claims sweep beside this one
   // holds the lock for well under a minute, so wait for it rather than skipping a five-minute tick.
-  const outcome = await withAcceptorLock(() => runSweep(config, requestStartedAt), {
+  const outcome = await withAcceptorLock(() => runSweep(config.spaceId, requestStartedAt), {
     ttlMs: maxDuration * 1000,
     waitMs: LOCK_WAIT_MS,
   });
@@ -72,11 +71,11 @@ export async function GET(request: Request) {
   return NextResponse.json(outcome.value);
 }
 
-async function runSweep(config: DebateAcceptorConfig, startedAt: number) {
-  const pastDeadline = () => Date.now() - startedAt >= PUBLISH_START_DEADLINE_MS;
-  const budgetExhausted = (attempted: number) => attempted >= MAX_PUBLISH_ATTEMPTS_PER_SWEEP || pastDeadline();
+async function runSweep(acceptorSpaceId: string, startedAt: number) {
+  const budgetExhausted = (attempted: number) =>
+    attempted >= MAX_PUBLISH_ATTEMPTS_PER_SWEEP || Date.now() - startedAt >= PUBLISH_START_DEADLINE_MS;
 
-  const spaceIds = await listEditorSpaceIds(config.spaceId);
+  const spaceIds = await listEditorSpaceIds(acceptorSpaceId);
   const published: string[] = [];
   const failed: Array<{ debateId: string; error: string }> = [];
   let attempted = 0;
@@ -145,16 +144,6 @@ async function runSweep(config: DebateAcceptorConfig, startedAt: number) {
     }
   }
 
-  // Call entities (GEO-3593) in the same editor spaces, on the time left. geo-chat lists only the
-  // calls its rollout switch allows, so nothing is written while that is off.
-  let calls: CallEntitySweepResult | { error: string };
-  try {
-    calls = await sweepCallEntities(config, spaceIds, { canStart: () => !pastDeadline() });
-  } catch (error) {
-    console.error('[call-entities] sweep failed', error);
-    calls = { error: error instanceof Error ? error.message : String(error) };
-  }
-
   if (mediaFailed.length > 0) {
     console.error('[debate-acceptor] debates permanently unpublishable this sweep', {
       count: mediaFailed.length,
@@ -174,6 +163,5 @@ async function runSweep(config: DebateAcceptorConfig, startedAt: number) {
     mediaFailed,
     skipped,
     failed,
-    calls,
   };
 }

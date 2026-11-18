@@ -46,9 +46,11 @@ const claim = (callId: string, over: Partial<CallEntityClaim> = {}): CallEntityC
 
 function harness(claims: CallEntityClaim[] | null, over: Record<string, unknown> = {}) {
   const records: Array<[string, CallEntityRecord]> = [];
+  const queue = claims === null ? null : [...claims];
   const submit = vi.fn(async () => '0xhash');
   const deps = {
-    claim: vi.fn(async () => claims),
+    // Serves the due calls a claim at a time, as geo-chat leases them.
+    claim: vi.fn(async (_spaceIds: string[], limit: number) => (queue === null ? null : queue.splice(0, limit))),
     record: vi.fn(async (callId: string, record: CallEntityRecord) => {
       records.push([callId, record]);
       return { status: 'recorded' as const, current: true };
@@ -225,12 +227,44 @@ describe('sweepCallEntities', () => {
     expect(records[0]![1]).toMatchObject({ outcome: 'written', entity_id: callId });
   });
 
-  it('starts nothing past the deadline and leaves the claims to lapse', async () => {
+  it('claims nothing past the deadline, so no claim is left to lapse', async () => {
     const { deps, records, submit } = harness([claim('9'.repeat(32))]);
-    let calls = 0;
-    await run(deps, () => calls++ === 0);
+    await run(deps, () => false);
+    expect(deps.claim).not.toHaveBeenCalled();
     expect(submit).not.toHaveBeenCalled();
     expect(records).toEqual([]);
+  });
+
+  it('claims each call just before writing it, and stops at the deadline', async () => {
+    const { deps, submit } = harness([claim('1'.repeat(32)), claim('2'.repeat(32))]);
+    let checks = 0;
+    const result = await run(deps, () => checks++ === 0);
+    expect(deps.claim).toHaveBeenCalledTimes(1);
+    expect(deps.claim).toHaveBeenCalledWith([SPACE], 1);
+    expect(submit).toHaveBeenCalledTimes(1);
+    expect(result.written).toEqual(['1'.repeat(32)]);
+  });
+
+  it('writes at most four calls a run', async () => {
+    const calls = ['1', '2', '3', '4', '5'].map(digit => claim(digit.repeat(32)));
+    const { deps, submit } = harness(calls);
+    await run(deps);
+    expect(submit).toHaveBeenCalledTimes(4);
+  });
+
+  it('claims across spaces in chunks of at most 500, moving on when one has nothing due', async () => {
+    const spaces = Array.from({ length: 1001 }, (_, i) => i.toString(16).padStart(32, '0'));
+    const due = claim('7'.repeat(32));
+    let leased = false;
+    const claimFn = vi.fn(async (spaceIds: string[]) => {
+      if (leased || !spaceIds.includes(spaces[1000]!)) return [];
+      leased = true;
+      return [due];
+    });
+    const { deps, submit } = harness([], { claim: claimFn });
+    await sweepCallEntities(CONFIG, spaces, { canStart: () => true, deps: deps as never });
+    expect(claimFn.mock.calls.map(([spaceIds]) => (spaceIds as string[]).length)).toEqual([500, 500, 1, 1]);
+    expect(submit).toHaveBeenCalledTimes(1);
   });
 
   it('reports an id conflict without counting it written', async () => {

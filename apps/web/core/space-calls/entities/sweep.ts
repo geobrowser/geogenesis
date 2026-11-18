@@ -19,8 +19,10 @@ import {
 } from './draft';
 import { type CallEntityClaim, type CallEntityRecord, claimCallEntities, recordCallEntity } from './service';
 
-/** One write is a proposal, a vote and maybe an execute. Unstarted claims lapse in 15 minutes. */
+/** One write is a proposal, a vote and maybe an execute. */
 export const MAX_CALL_WRITES_PER_SWEEP = 4;
+/** The claim route's cap on `space_ids`. */
+const CLAIM_SPACE_LIMIT = 500;
 
 /** A space the publisher cannot write to (not a DAO, gone) is held back a day, not dropped. */
 const UNWRITABLE_SPACE_RETRY_S = 86_400;
@@ -92,11 +94,12 @@ const message = (error: unknown) => (error instanceof Error ? error.message : St
 /**
  * Writes the Call Event entities geo-chat says are due (GEO-3593), as the debate acceptor, in the
  * spaces it edits. geo-chat decides which calls are listed (its switch, space allowlist and cutoff);
- * this adds no gate of its own. Runs under the acceptor's signing lock, after the debate sweep.
+ * this adds no gate of its own. Runs under the acceptor's signing lock.
  *
- * Each claim is written under one id: the one geo-chat recorded, else curator's event for the same
- * slot, else the call id. Every id inside the edit derives from it, so a retry after a lapsed claim
- * rewrites the same entity. The outcome is recorded back either way; a failure holds the call back.
+ * Each call is claimed just before it is written, so a run that stops early strands no claim. It is
+ * written under one id: the one geo-chat recorded, else curator's event for the same slot, else the
+ * call id. Every id inside the edit derives from it, so a retry after a lapsed claim rewrites the
+ * same entity. The outcome is recorded back either way; a failure holds the call back.
  */
 export async function sweepCallEntities(
   config: DebateAcceptorConfig,
@@ -105,12 +108,6 @@ export async function sweepCallEntities(
 ): Promise<CallEntitySweepResult> {
   const result: CallEntitySweepResult = { written: [], removed: [], failed: [], conflicts: [], claimLost: [] };
   if (!(deps.mayWrite ?? deploymentMayWrite)()) return { ...result, skipped: 'not_production' };
-  if (!canStart()) return result;
-
-  const claims = await (deps.claim ?? claimCallEntities)(editorSpaceIds, MAX_CALL_WRITES_PER_SWEEP);
-  if (claims === null) return { ...result, skipped: 'not_configured' };
-  if (claims.length === 0) return result;
-
   const record = deps.record ?? recordCallEntity;
   const publisherAddress = privateKeyToAccount(config.privateKey).address;
   const appOrigin = deps.appOrigin ?? GEO_CANONICAL_ORIGIN;
@@ -141,16 +138,6 @@ export async function sweepCallEntities(
     else result.written.push(callId);
   };
 
-  // Curator's events, found once per series. Unanswered, a claim that needs it waits rather than
-  // minting a second entity for the same occurrence.
-  let curator: Map<string, string> | null;
-  try {
-    curator = await (deps.findCurator ?? findCuratorCallEvents)(claims);
-  } catch (error) {
-    console.error('[call-entities] curator event lookup failed', { error: message(error) });
-    curator = null;
-  }
-
   const spaces = new Map<string, Promise<SpaceInfo | null>>();
   const spaceOf = (spaceId: string) => {
     const key = ID.uuidToHex(spaceId);
@@ -158,11 +145,16 @@ export async function sweepCallEntities(
     return spaces.get(key)!;
   };
 
-  for (const claim of claims) {
+  const writeOne = async (claim: CallEntityClaim) => {
     const callId = ID.uuidToHex(claim.call_id);
-    if (!canStart()) {
-      // Left to lapse: recording a failure would count against the call for no fault of its own.
-      continue;
+    // Unanswered, a claim that needs curator's event waits rather than minting a second entity.
+    let curator: Map<string, string> | null = null;
+    if (needsCuratorLookup(claim)) {
+      try {
+        curator = await (deps.findCurator ?? findCuratorCallEvents)([claim]);
+      } catch (error) {
+        console.error('[call-entities] curator event lookup failed', { callId, error: message(error) });
+      }
     }
 
     if (needsCuratorLookup(claim) && curator === null) {
@@ -172,7 +164,7 @@ export async function sweepCallEntities(
         error: 'curator_lookup_failed',
         retry_after_seconds: LOOKUP_RETRY_S,
       });
-      continue;
+      return;
     }
 
     const entityId = ID.uuidToHex(claim.entity_id ?? curator?.get(callId) ?? mintedCallEntityId(claim.call_id));
@@ -185,7 +177,7 @@ export async function sweepCallEntities(
           error: space ? 'space_not_dao' : 'space_not_found',
           retry_after_seconds: UNWRITABLE_SPACE_RETRY_S,
         });
-        continue;
+        return;
       }
 
       let current: Entity | null = null;
@@ -202,7 +194,7 @@ export async function sweepCallEntities(
               ? { claim_id: claim.claim_id, outcome: 'written', entity_id: entityId }
               : { claim_id: claim.claim_id, outcome: 'failed', error: ENTITY_NOT_INDEXED }
           );
-          continue;
+          return;
         }
       }
       const draft = current
@@ -224,6 +216,29 @@ export async function sweepCallEntities(
       console.error('[call-entities] call entity write failed', { callId, entityId, error: message(error) });
       await settle(claim, { claim_id: claim.claim_id, outcome: 'failed', error: message(error) });
     }
+  };
+
+  // The claim route takes at most CLAIM_SPACE_LIMIT spaces; a chunk with nothing due is not asked again.
+  const chunks: string[][] = [];
+  const spaceIds = [...new Set(editorSpaceIds.map(id => ID.uuidToHex(id)))];
+  for (let i = 0; i < spaceIds.length; i += CLAIM_SPACE_LIMIT) chunks.push(spaceIds.slice(i, i + CLAIM_SPACE_LIMIT));
+  const drained = new Set<number>();
+  const claimNext = async (): Promise<CallEntityClaim | 'disabled' | null> => {
+    for (const [index, chunk] of chunks.entries()) {
+      if (drained.has(index)) continue;
+      const claims = await (deps.claim ?? claimCallEntities)(chunk, 1);
+      if (claims === null) return 'disabled';
+      if (claims[0]) return claims[0];
+      drained.add(index);
+    }
+    return null;
+  };
+
+  for (let writes = 0; writes < MAX_CALL_WRITES_PER_SWEEP && canStart(); writes += 1) {
+    const claim = await claimNext();
+    if (claim === 'disabled') return writes === 0 ? { ...result, skipped: 'not_configured' } : result;
+    if (!claim) break;
+    await writeOne(claim);
   }
 
   return result;
