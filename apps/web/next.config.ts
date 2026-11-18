@@ -15,6 +15,12 @@ const marketingPaths = [
   '/www/:path*',
   '/api/subscribe',
   '/_marketing/:path*',
+  // The marketing site's Vercel Web Analytics. Vercel builds it with a project-specific
+  // first-party path (NEXT_PUBLIC_VERCEL_OBSERVABILITY_BASEPATH) for the script and its view, event
+  // and session endpoints. Unforwarded, that path 404s here and the site records no visits from
+  // www.geobrowser.io. If Vercel ever changes the path, the bundle names the new one: grep a
+  // /_marketing chunk for "scriptSrc".
+  '/64ad7342c3007104/:path*',
   '/opengraph-image.jpg',
   '/twitter-image.jpg',
   '/favicon.ico',
