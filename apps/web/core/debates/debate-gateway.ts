@@ -120,11 +120,7 @@ type DebateEventPayload = {
   sections?: MatchmakingSection[];
 };
 
-/**
- * Who each event reaches, per geo-chat's `crates/debates/src/events.rs`. A `broadcast` goes to a
- * space, debate scope or matchmaking audience, so its refetches are spread; `participants` reaches
- * named people (a debate's debaters, a lobby's members, one user), who must not wait.
- */
+/** Each event's audience (geo-chat `events.rs`). Only a `broadcast`'s refetches are spread. */
 const DEBATE_EVENT_AUDIENCE = {
   'debate.activity_changed': 'participants',
   'debate.claims_changed': 'broadcast',
