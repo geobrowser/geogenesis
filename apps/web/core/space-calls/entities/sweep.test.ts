@@ -61,6 +61,7 @@ function harness(claims: CallEntityClaim[] | null, over: Record<string, unknown>
     submit,
     appOrigin: 'https://geobrowser.io',
     mayWrite: () => true,
+    startChunk: () => 0,
     ...over,
   };
   return { deps, records, submit };
@@ -336,6 +337,35 @@ describe('sweepCallEntities', () => {
     await sweepCallEntities(CONFIG, spaces, { canStart: () => true, deps: deps as never });
     expect(claimFn.mock.calls.map(([spaceIds]) => (spaceIds as string[]).length)).toEqual([500, 500, 1, 1]);
     expect(submit).toHaveBeenCalledTimes(1);
+  });
+
+  it('starts each run at the chunk it is given, wrapping round, so no chunk is starved', async () => {
+    const spaces = Array.from({ length: 1001 }, (_, i) => i.toString(16).padStart(32, '0'));
+    const firstOf = (spaceIds: string[]) => spaces.indexOf(spaceIds[0]!);
+    for (const [start, order] of [
+      [0, [0, 500, 1000]],
+      [1, [500, 1000, 0]],
+      [2, [1000, 0, 500]],
+    ] as const) {
+      const claimFn = vi.fn(async () => []);
+      const { deps } = harness([], { claim: claimFn, startChunk: () => start });
+      await sweepCallEntities(CONFIG, spaces, { canStart: () => true, deps: deps as never });
+      expect(claimFn.mock.calls.map(([spaceIds]) => firstOf(spaceIds as string[]))).toEqual(order);
+    }
+  });
+
+  it('rotates the default start chunk by the minute', async () => {
+    vi.useFakeTimers({ now: 7 * 60_000 });
+    try {
+      const spaces = Array.from({ length: 1001 }, (_, i) => i.toString(16).padStart(32, '0'));
+      const claimFn = vi.fn(async () => []);
+      const { deps } = harness([], { claim: claimFn, startChunk: undefined });
+      await sweepCallEntities(CONFIG, spaces, { canStart: () => true, deps: deps as never });
+      // Minute 7 of 3 chunks starts at chunk 1.
+      expect((claimFn.mock.calls[0]![0] as string[])[0]).toBe(spaces[500]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('records failed when the adopted event is another call’s, so the next claim mints', async () => {

@@ -60,6 +60,8 @@ type Deps = {
   ) => Promise<string>;
   appOrigin?: string | null;
   mayWrite?: () => boolean;
+  /** The chunk a run starts from, given the chunk count. */
+  startChunk?: (chunkCount: number) => number;
 };
 
 const prepareOps = (draft: CallEventDraft, spaceId: string) =>
@@ -69,6 +71,7 @@ const defaultLoadSpace = async (spaceId: string) => {
   const space = await Effect.runPromise(getSpace(spaceId));
   return space ? { id: space.id, type: space.type, address: space.address } : null;
 };
+const defaultStartChunk = (chunkCount: number) => Math.floor(Date.now() / 60_000) % chunkCount;
 const defaultLoadEntity = (entityId: string, spaceId: string) => Effect.runPromise(getEntity(entityId, spaceId));
 
 /** Production or off Vercel only, so a preview called by hand with its CRON_SECRET never writes. */
@@ -250,10 +253,13 @@ export async function sweepCallEntities(
   const spaceIds = [...new Set(editorSpaceIds.map(id => ID.uuidToHex(id)))];
   for (let i = 0; i < spaceIds.length; i += CLAIM_SPACE_LIMIT) chunks.push(spaceIds.slice(i, i + CLAIM_SPACE_LIMIT));
   const drained = new Set<number>();
+  // Each run starts at a different chunk, so a busy first chunk cannot starve the rest.
+  const firstChunk = chunks.length > 0 ? (deps.startChunk ?? defaultStartChunk)(chunks.length) : 0;
   const claimNext = async (): Promise<CallEntityClaim | 'disabled' | null> => {
-    for (const [index, chunk] of chunks.entries()) {
+    for (let offset = 0; offset < chunks.length; offset += 1) {
+      const index = (firstChunk + offset) % chunks.length;
       if (drained.has(index)) continue;
-      const claims = await (deps.claim ?? claimCallEntities)(chunk, 1);
+      const claims = await (deps.claim ?? claimCallEntities)(chunks[index]!, 1);
       if (claims === null) return 'disabled';
       if (claims[0]) return claims[0];
       drained.add(index);
