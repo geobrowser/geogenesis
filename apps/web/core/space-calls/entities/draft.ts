@@ -27,7 +27,7 @@ type DraftInput = {
   entityId: string;
   /** The publisher's address, for Published by. */
   publisherAddress: string;
-  /** Origin of the web app, for the recording's stable call page URL. */
+  /** The canonical web origin, for the recording's stable call page URL. */
   appOrigin: string;
   createPosition?: () => string;
 };

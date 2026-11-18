@@ -1,6 +1,7 @@
 import { Effect } from 'effect';
 import { privateKeyToAccount } from 'viem/accounts';
 
+import { GEO_CANONICAL_ORIGIN } from '~/core/constants';
 import type { DebateAcceptorConfig } from '~/core/debates/server/acceptor-config';
 import { submitEditAsAcceptor } from '~/core/debates/server/publish-debate';
 import { ID } from '~/core/id';
@@ -27,7 +28,7 @@ const UNWRITABLE_SPACE_RETRY_S = 86_400;
 const LOOKUP_RETRY_S = 300;
 
 export type CallEntitySweepResult = {
-  skipped?: 'not_configured';
+  skipped?: 'not_configured' | 'not_production';
   written: string[];
   removed: string[];
   failed: Array<{ callId: string; error: string }>;
@@ -49,6 +50,7 @@ type Deps = {
     edit: { name: string; ops: Awaited<ReturnType<typeof prepareOps>>; space: SpaceInfo }
   ) => Promise<string>;
   appOrigin?: string;
+  mayWrite?: () => boolean;
 };
 
 const prepareOps = (draft: CallEventDraft, spaceId: string) =>
@@ -60,9 +62,13 @@ const defaultLoadSpace = async (spaceId: string) => {
 };
 const defaultLoadEntity = (entityId: string, spaceId: string) => Effect.runPromise(getEntity(entityId, spaceId));
 
-/** The origin published call page URLs use; the same one the app's metadata uses. */
-export function callEntityAppOrigin(): string {
-  return process.env.ENV_URL || 'https://geobrowser.io';
+/**
+ * Writes run from the production deployment only: Vercel fires the cron there alone, and this keeps
+ * a preview that someone calls by hand with its CRON_SECRET from writing. Off Vercel (local
+ * rehearsal) it runs.
+ */
+export function deploymentMayWrite(env: string | undefined = process.env.VERCEL_ENV): boolean {
+  return env === undefined || env === '' || env === 'production';
 }
 
 function removalOf(entity: Entity | null, spaceId: string): GraphEntityForRemoval {
@@ -100,6 +106,7 @@ export async function sweepCallEntities(
   { canStart, deps = {} }: { canStart: () => boolean; deps?: Deps }
 ): Promise<CallEntitySweepResult> {
   const result: CallEntitySweepResult = { written: [], removed: [], failed: [], conflicts: [], claimLost: [] };
+  if (!(deps.mayWrite ?? deploymentMayWrite)()) return { ...result, skipped: 'not_production' };
   if (!canStart()) return result;
 
   const claims = await (deps.claim ?? claimCallEntities)(editorSpaceIds, MAX_CALL_WRITES_PER_SWEEP);
@@ -108,7 +115,7 @@ export async function sweepCallEntities(
 
   const record = deps.record ?? recordCallEntity;
   const publisherAddress = privateKeyToAccount(config.privateKey).address;
-  const appOrigin = deps.appOrigin ?? callEntityAppOrigin();
+  const appOrigin = deps.appOrigin ?? GEO_CANONICAL_ORIGIN;
 
   const settle = async (claim: CallEntityClaim, outcome: CallEntityRecord) => {
     const callId = ID.uuidToHex(claim.call_id);

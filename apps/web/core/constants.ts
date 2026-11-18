@@ -139,6 +139,12 @@ export const ROOT_SPACE = 'a19c345ab9866679b001d7d2138d88a1';
 /** Static icon shown for the Root space wherever a space thumbnail is rendered (search, sidebar, breadcrumbs, etc). */
 export const ROOT_SPACE_IMAGE = '/browse-nav/root.svg';
 
+/**
+ * The public web app's one canonical origin, for URLs written on chain. Never a deployment's own
+ * host (`ENV_URL` can be a preview), since what is published cannot be changed afterwards.
+ */
+export const GEO_CANONICAL_ORIGIN = 'https://www.geobrowser.io';
+
 /** Legacy external docs URL; browse menu links to `DOCUMENTATION_SPACE_ID` instead. */
 export const GEO_DOCUMENTATION_URL = 'https://docs.geobrowser.io';
 

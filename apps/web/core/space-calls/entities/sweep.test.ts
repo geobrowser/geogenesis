@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { DebateAcceptorConfig } from '~/core/debates/server/acceptor-config';
 
 import type { CallEntity, CallEntityClaim, CallEntityRecord } from './service';
-import { sweepCallEntities } from './sweep';
+import { deploymentMayWrite, sweepCallEntities } from './sweep';
 
 vi.mock('~/core/debates/server/publish-debate', () => ({ submitEditAsAcceptor: vi.fn() }));
 
@@ -58,6 +58,7 @@ function harness(claims: CallEntityClaim[] | null, over: Record<string, unknown>
     loadEntity: vi.fn(async () => null),
     submit,
     appOrigin: 'https://geobrowser.io',
+    mayWrite: () => true,
     ...over,
   };
   return { deps, records, submit };
@@ -71,6 +72,23 @@ describe('sweepCallEntities', () => {
     const { deps, submit } = harness(null);
     expect(await run(deps)).toMatchObject({ skipped: 'not_configured', written: [] });
     expect(submit).not.toHaveBeenCalled();
+  });
+
+  it('writes nothing from a preview deployment', async () => {
+    const { deps, submit } = harness([claim('0'.repeat(32))], { mayWrite: () => false });
+    expect(await run(deps)).toMatchObject({ skipped: 'not_production' });
+    expect(deps.claim).not.toHaveBeenCalled();
+    expect(submit).not.toHaveBeenCalled();
+  });
+
+  it('lets production and a local run write, and no other deployment', () => {
+    expect([undefined, '', 'production', 'preview', 'development'].map(deploymentMayWrite)).toEqual([
+      true,
+      true,
+      true,
+      false,
+      false,
+    ]);
   });
 
   it('mints a new call under its call id and records it', async () => {
