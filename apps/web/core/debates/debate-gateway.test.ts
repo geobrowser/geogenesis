@@ -3534,21 +3534,23 @@ function expectBroadInvalidated(invalidateQueries: ReturnType<typeof vi.spyOn>) 
   );
 }
 
-describe('broadcast invalidation spread', () => {
+describe('invalidation spread', () => {
   let sockets: FakeWebSocket[];
   let invalidateQueries: ReturnType<typeof vi.spyOn>;
   let client: DebateGatewayClient;
   let random: number;
 
+  const SPREAD_END = 50 + BROADCAST_INVALIDATION_SPREAD_MS;
   const invalidatedKeys = () =>
     invalidateQueries.mock.calls.map((call: unknown[]) => (call[0] as { queryKey?: unknown } | undefined)?.queryKey);
+  const event = (id: string, type: string, payload: Record<string, unknown> = {}) =>
+    sockets[0]!.receive('EVENT', { event_id: id, event_type: type, payload });
 
   beforeEach(async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-07-20T12:00:00.000Z'));
     sockets = [];
-    // The gateway's reconnect backoff also reads this; it only matters once connected.
-    random = 0;
+    random = 1;
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries').mockResolvedValue();
     client = new DebateGatewayClient({
@@ -3572,12 +3574,6 @@ describe('broadcast invalidation spread', () => {
     );
     await vi.runAllTicks();
     sockets[0]!.open();
-    // A reconcile is not spread.
-    random = 1;
-    sockets[0]!.receive('READY', readyPayload([]));
-    await flushInvalidations();
-    expectBroadInvalidated(invalidateQueries);
-    invalidateQueries.mockClear();
   });
 
   afterEach(() => {
@@ -3586,27 +3582,66 @@ describe('broadcast invalidation spread', () => {
     vi.restoreAllMocks();
   });
 
-  it('spreads a broadcast refetch over a bounded random delay', async () => {
-    random = 1;
-    sockets[0]!.receive(
-      'EVENT',
-      { event_id: 'event-1', event_type: 'debate.media_changed', payload: { debate_id: 'debate-1' } },
-      1
-    );
-    await vi.advanceTimersByTimeAsync(50 + BROADCAST_INVALIDATION_SPREAD_MS - 1);
+  async function connect() {
+    sockets[0]!.receive('READY', readyPayload([]));
+    await vi.advanceTimersByTimeAsync(SPREAD_END);
+    expectBroadInvalidated(invalidateQueries);
+    invalidateQueries.mockClear();
+  }
+
+  it('spreads the reconcile after a (re)connect', async () => {
+    sockets[0]!.receive('READY', readyPayload([]));
+    await vi.advanceTimersByTimeAsync(SPREAD_END - 1);
     expect(invalidateQueries).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(1);
-    expect(invalidatedKeys()).toContainEqual(['debates', 'media', 'debate1']);
+    expectBroadInvalidated(invalidateQueries);
+
+    invalidateQueries.mockClear();
+    sockets[0]!.receive('RESUME', {});
+    await vi.advanceTimersByTimeAsync(SPREAD_END - 1);
+    expect(invalidateQueries).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expectBroadInvalidated(invalidateQueries);
   });
 
-  it('refetches a user-routed event at the usual coalesce, and brings pending broadcast reads with it', async () => {
-    random = 1;
-    sockets[0]!.receive(
-      'EVENT',
-      { event_id: 'event-1', event_type: 'debate.media_changed', payload: { debate_id: 'debate-1' } },
-      1
-    );
-    sockets[0]!.receive('EVENT', { event_id: 'event-2', event_type: 'debate.requests_changed', payload: {} }, 2);
+  it('reconciles a scope the viewer just opened at the usual coalesce', async () => {
+    await connect();
+    client.retainScope({ scope: 'space', space_id: 'space-1' });
+    sockets[0]!.receive('READY', readyPayload([{ scope: 'space', space_id: 'space-1' }]));
+    await vi.advanceTimersByTimeAsync(50);
+    expect(invalidatedKeys()).toContainEqual(['debates', 'claims', 'space-1']);
+  });
+
+  it.each([
+    ['debate.claims_changed', { space_id: 'space-1' }, ['debates', 'claims', 'space-1']],
+    ['debate.media_changed', { debate_id: 'debate-1' }, ['debates', 'media', 'debate1']],
+    ['debate.matchmaking_changed', {}, ['debates', 'account', 'user-a', 'people']],
+    ['debate.lobbies_changed', {}, ['debates', 'account', 'user-a', 'lobbies']],
+    ['debate.space_calls_changed', { space_id: 'space-1', change: 'ended' }, ['debates', 'space-calls', 'space1']],
+  ])('spreads %s over a bounded random delay', async (type, payload, key) => {
+    await connect();
+    event('event-1', type, payload);
+    await vi.advanceTimersByTimeAsync(SPREAD_END - 1);
+    expect(invalidateQueries).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(invalidatedKeys()).toContainEqual(key);
+  });
+
+  it.each([
+    ['debate.state_changed', { debate_id: 'debate-1' }, ['debates', 'detail', 'debate1']],
+    ['debate.lobby_changed', { lobby_id: 'lobby-1' }, ['debates', 'account', 'user-a', 'lobby', 'lobby1']],
+    ['debate.requests_changed', {}, ['debates', 'account', 'user-a', 'requests']],
+  ])('refetches %s, sent to named people, at the usual coalesce', async (type, payload, key) => {
+    await connect();
+    event('event-1', type, payload);
+    await vi.advanceTimersByTimeAsync(50);
+    expect(invalidatedKeys()).toContainEqual(key);
+  });
+
+  it('brings pending broadcast reads along with a participant event', async () => {
+    await connect();
+    event('event-1', 'debate.media_changed', { debate_id: 'debate-1' });
+    event('event-2', 'debate.requests_changed');
     await vi.advanceTimersByTimeAsync(50);
     expect(invalidatedKeys()).toEqual(
       expect.arrayContaining([
@@ -3617,24 +3652,31 @@ describe('broadcast invalidation spread', () => {
   });
 
   it('keeps an earlier flush when a later broadcast asks for a longer delay', async () => {
+    await connect();
     random = 0.2;
-    sockets[0]!.receive(
-      'EVENT',
-      { event_id: 'event-1', event_type: 'debate.media_changed', payload: { debate_id: 'debate-1' } },
-      1
-    );
+    event('event-1', 'debate.media_changed', { debate_id: 'debate-1' });
     random = 1;
-    sockets[0]!.receive(
-      'EVENT',
-      { event_id: 'event-2', event_type: 'debate.state_changed', payload: { debate_id: 'debate-2' } },
-      2
-    );
+    event('event-2', 'debate.claims_changed', { space_id: 'space-2' });
     await vi.advanceTimersByTimeAsync(50 + 0.2 * BROADCAST_INVALIDATION_SPREAD_MS);
     expect(invalidatedKeys()).toEqual(
       expect.arrayContaining([
         ['debates', 'media', 'debate1'],
-        ['debates', 'detail', 'debate2'],
+        ['debates', 'claims', 'space-2'],
       ])
     );
+  });
+
+  it('brings a pending reconnect reconcile forward for a participant event', async () => {
+    sockets[0]!.receive('READY', readyPayload([]));
+    event('event-1', 'debate.state_changed', { debate_id: 'debate-1' });
+    await vi.advanceTimersByTimeAsync(50);
+    expectBroadInvalidated(invalidateQueries);
+  });
+
+  it('ignores an event type it does not know', async () => {
+    await connect();
+    event('event-1', 'debate.something_new', { space_id: 'space-1' });
+    await vi.advanceTimersByTimeAsync(SPREAD_END);
+    expect(invalidateQueries).not.toHaveBeenCalled();
   });
 });
