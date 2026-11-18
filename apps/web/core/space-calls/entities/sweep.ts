@@ -139,6 +139,7 @@ export async function sweepCallEntities(
       }
       if (recorded.status === 'id_taken') {
         // Curator's event is another call's: fail so the next claim mints instead of adopting.
+        // geo-chat then makes the holder rewrite its entity, so this claim only records failed.
         console.warn('[call-entities] adopted event belongs to another call', { callId });
         result.failed.push({ callId, error: CURATOR_EVENT_TAKEN });
         await record(claim.call_id, {
