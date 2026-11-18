@@ -127,6 +127,19 @@ describe('snapEdge', () => {
     expect(snapEdge(2_200, withBlank, 'end')).toBe(2_200);
     expect(stepEdge(1_900, withBlank, 'end', 1)).toBe(1_900);
   });
+
+  // GEO-3768: crosstalk chains, each word overlapping the next, so one move out lands in another word.
+  it('keeps moving out until no word holds the edge', () => {
+    const chain = [word(1, 1_000, 1_400), word(2, 1_300, 1_700), word(1, 1_600, 2_000)];
+    expect(snapEdge(1_650, chain, 'start')).toBe(1_000);
+    expect(snapEdge(1_350, chain, 'end')).toBe(2_000);
+  });
+
+  it('moves out of every word that holds the edge, not just the first', () => {
+    const nested = [word(1, 1_000, 1_500), word(2, 1_200, 1_900)];
+    expect(snapEdge(1_300, nested, 'end')).toBe(1_900);
+    expect(snapEdge(1_300, nested, 'start')).toBe(1_000);
+  });
 });
 
 describe('stepEdge', () => {
