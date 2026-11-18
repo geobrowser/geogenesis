@@ -154,6 +154,25 @@ describe('buildCallEventDraft', () => {
     ]);
   });
 
+  it('names a call started on the spot by its real start', () => {
+    const draft = build(
+      claim({
+        entity: entity({
+          name: 'Open call',
+          series_id: null,
+          original_start: null,
+          scheduled_starts_at: null,
+          scheduled_ends_at: null,
+          starts_at: '2026-11-30T23:45:00Z',
+          ends_at: '2026-12-01T00:30:00Z',
+        }),
+      })
+    );
+    expect(draft.name).toBe('Open call · 30 Nov 2026');
+    expect(valueOf(draft, NAME_PROPERTY_ID)?.value).toBe('Open call · 30 Nov 2026');
+    expect(valueOf(draft, CALL_SCHEMA.MEETING_TIME_PROPERTY)).toBeUndefined();
+  });
+
   it('writes no parent for a call started on the spot, and no attendees', () => {
     const draft = build(claim({ entity: entity({ series_id: null, original_start: null }) }));
     expect(relationsOf(draft, EVENT_SCHEMA.COMMUNITY_CALL_PARENT_PROPERTY)).toEqual([]);
