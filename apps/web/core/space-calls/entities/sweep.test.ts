@@ -76,6 +76,12 @@ describe('sweepCallEntities', () => {
     expect(submit).not.toHaveBeenCalled();
   });
 
+  it('writes nothing without a web origin for the network', async () => {
+    const { deps } = harness([claim('0'.repeat(32))], { appOrigin: null });
+    expect(await run(deps)).toMatchObject({ skipped: 'no_web_origin' });
+    expect(deps.claim).not.toHaveBeenCalled();
+  });
+
   it('writes nothing from a preview deployment', async () => {
     const { deps, submit } = harness([claim('0'.repeat(32))], { mayWrite: () => false });
     expect(await run(deps)).toMatchObject({ skipped: 'not_production' });

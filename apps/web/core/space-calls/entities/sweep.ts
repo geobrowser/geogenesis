@@ -1,11 +1,11 @@
 import { Effect } from 'effect';
 import { privateKeyToAccount } from 'viem/accounts';
 
-import { GEO_CANONICAL_ORIGIN } from '~/core/constants';
 import type { DebateAcceptorConfig } from '~/core/debates/server/acceptor-config';
 import { submitEditAsAcceptor } from '~/core/debates/server/publish-debate';
 import { ID } from '~/core/id';
 import { getEntity, getSpace } from '~/core/io/queries';
+import { GEO_WEB_ORIGIN } from '~/core/sdk/geo-network';
 import type { Entity } from '~/core/types';
 import { Publish } from '~/core/utils/publish';
 
@@ -34,7 +34,7 @@ const ENTITY_NOT_INDEXED = 'entity_not_indexed';
 const NOT_INDEXED_MAX_ATTEMPTS = 5;
 
 export type CallEntitySweepResult = {
-  skipped?: 'not_configured' | 'not_production';
+  skipped?: 'not_configured' | 'not_production' | 'no_web_origin';
   written: string[];
   removed: string[];
   failed: Array<{ callId: string; error: string }>;
@@ -55,7 +55,7 @@ type Deps = {
     config: DebateAcceptorConfig,
     edit: { name: string; ops: Awaited<ReturnType<typeof prepareOps>>; space: SpaceInfo }
   ) => Promise<string>;
-  appOrigin?: string;
+  appOrigin?: string | null;
   mayWrite?: () => boolean;
 };
 
@@ -111,7 +111,8 @@ export async function sweepCallEntities(
   if (!(deps.mayWrite ?? deploymentMayWrite)()) return { ...result, skipped: 'not_production' };
   const record = deps.record ?? recordCallEntity;
   const publisherAddress = privateKeyToAccount(config.privateKey).address;
-  const appOrigin = deps.appOrigin ?? GEO_CANONICAL_ORIGIN;
+  const appOrigin = deps.appOrigin === undefined ? GEO_WEB_ORIGIN : deps.appOrigin;
+  if (!appOrigin) return { ...result, skipped: 'no_web_origin' };
 
   const settle = async (claim: CallEntityClaim, outcome: CallEntityRecord) => {
     const callId = ID.uuidToHex(claim.call_id);
