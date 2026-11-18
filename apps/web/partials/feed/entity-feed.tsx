@@ -205,9 +205,8 @@ type EntityFeedProps = {
 };
 
 /**
- * Extra cards for a feed of `feedLength` cards, by the index of the card they follow; pages and
- * cursors ignore them. `replacesEntityIds` (normalized) are feed cards a placed card stands for,
- * left out so a thing is shown once (GEO-3593).
+ * Extra cards by the index of the card they follow. `replacesEntityIds` (normalized) are feed cards
+ * a placed card stands for, left out so a thing shows once.
  */
 export type FeedInterleave = (feedLength: number) => {
   cards: ReadonlyMap<number, React.ReactNode>;
