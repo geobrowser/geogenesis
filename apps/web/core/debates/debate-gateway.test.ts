@@ -3539,6 +3539,8 @@ describe('invalidation spread', () => {
   let invalidateQueries: ReturnType<typeof vi.spyOn>;
   let client: DebateGatewayClient;
   let random: number;
+  /** Draws taken before falling back to `random`. */
+  let draws: number[];
 
   const SPREAD_END = 50 + BROADCAST_INVALIDATION_SPREAD_MS;
   const invalidatedKeys = () =>
@@ -3551,6 +3553,7 @@ describe('invalidation spread', () => {
     vi.setSystemTime(new Date('2026-07-20T12:00:00.000Z'));
     sockets = [];
     random = 1;
+    draws = [];
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries').mockResolvedValue();
     client = new DebateGatewayClient({
@@ -3566,7 +3569,7 @@ describe('invalidation spread', () => {
         sockets.push(socket);
         return socket;
       },
-      random: () => random,
+      random: () => draws.shift() ?? random,
     });
     client.start(
       vi.fn(async () => 'privy-token'),
@@ -3671,6 +3674,48 @@ describe('invalidation spread', () => {
     event('event-1', 'debate.state_changed', { debate_id: 'debate-1' });
     await vi.advanceTimersByTimeAsync(50);
     expectBroadInvalidated(invalidateQueries);
+  });
+
+  it('draws one delay for every key a broadcast event queues', async () => {
+    await connect();
+    draws = [0.9, 0.1, 0.1];
+    event('event-1', 'debate.media_changed', { debate_id: 'debate-1', space_id: 'space-1' });
+    await vi.advanceTimersByTimeAsync(50 + 0.9 * BROADCAST_INVALIDATION_SPREAD_MS - 1);
+    expect(invalidateQueries).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(invalidatedKeys()).toEqual(
+      expect.arrayContaining([
+        ['debates', 'media', 'debate1'],
+        ['debates', 'detail', 'debate1'],
+        ['debates', 'transcript', 'debate1'],
+        ['debates', 'space', 'space-1'],
+      ])
+    );
+  });
+
+  it('spreads the reconcile after an events-lagged error', async () => {
+    await connect();
+    sockets[0]!.receive('ERROR', { code: 'events_lagged' });
+    await vi.advanceTimersByTimeAsync(SPREAD_END - 1);
+    expect(invalidateQueries).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expectBroadInvalidated(invalidateQueries);
+  });
+
+  it('drops the spread when queueing throws', async () => {
+    await connect();
+    const spreading = client as unknown as { withInvalidationSpread(spread: boolean, queue: () => void): void };
+    draws = [0.9];
+    expect(() =>
+      spreading.withInvalidationSpread(true, () => {
+        throw new Error('boom');
+      })
+    ).toThrow('boom');
+    // A leaked delay would be reused here instead of a fresh draw of 0.
+    random = 0;
+    event('event-1', 'debate.media_changed', { debate_id: 'debate-1' });
+    await vi.advanceTimersByTimeAsync(50);
+    expect(invalidatedKeys()).toContainEqual(['debates', 'media', 'debate1']);
   });
 
   it('ignores an event type it does not know', async () => {

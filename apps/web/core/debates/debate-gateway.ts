@@ -280,8 +280,8 @@ export class DebateGatewayClient {
   private tokenRotationTimer: ReturnType<typeof setTimeout> | null = null;
   private invalidationTimer: ReturnType<typeof setTimeout> | null = null;
   private invalidationDueAt = 0;
-  /** The random spread for invalidations queued right now; 0 outside `withInvalidationSpread`. */
-  private invalidationSpreadMs = 0;
+  /** One random delay shared by everything queued inside `withInvalidationSpread`; 0 outside it. */
+  private invalidationSpreadDelayMs = 0;
   private invalidationRetryTimers = new Set<ReturnType<typeof setTimeout>>();
   private connectionGeneration = 0;
   /** Signed out and turned away for load; see `retryAfterFocus`. */
@@ -642,15 +642,19 @@ export class DebateGatewayClient {
       if (!readyScopes.has(key)) this.confirmedScopes.delete(key);
     }
 
+    const newlyConfirmed: DebateGatewayScope[] = [];
     for (const key of readyScopes) {
       this.clearSubscriptionRetry(key);
       const retained = this.scopes.get(key);
       if (!retained || this.confirmedScopes.has(key)) continue;
       this.confirmedScopes.add(key);
-      // The retained spelling, which is what the query keys were built from. Spread on a socket's
-      // first READY (a reconnect); a later one confirms a scope the viewer just opened.
-      this.withInvalidationSpread(firstReadyForSocket, () => this.queueScopeReconcile(retained.scope));
+      // The retained spelling, which is what the query keys were built from.
+      newlyConfirmed.push(retained.scope);
     }
+    // Spread on a socket's first READY (a reconnect); a later one confirms a scope the viewer just opened.
+    this.withInvalidationSpread(firstReadyForSocket, () => {
+      for (const scope of newlyConfirmed) this.queueScopeReconcile(scope);
+    });
 
     for (const { scope } of this.scopes.values()) this.sendSubscription(scope, 'SUBSCRIBE');
     this.scopesChanged();
@@ -674,13 +678,15 @@ export class DebateGatewayClient {
     this.withInvalidationSpread(spread, () => this.applyEvent(payload));
   }
 
+  /** Spread: one draw for every key `queue` adds, so several keys don't take the earliest of many. */
   private withInvalidationSpread(spread: boolean, queue: () => void) {
-    const previous = this.invalidationSpreadMs;
-    this.invalidationSpreadMs = spread ? BROADCAST_INVALIDATION_SPREAD_MS : 0;
+    const previous = this.invalidationSpreadDelayMs;
+    if (!spread) this.invalidationSpreadDelayMs = 0;
+    else if (previous === 0) this.invalidationSpreadDelayMs = this.random() * BROADCAST_INVALIDATION_SPREAD_MS;
     try {
       queue();
     } finally {
-      this.invalidationSpreadMs = previous;
+      this.invalidationSpreadDelayMs = previous;
     }
   }
 
@@ -1172,12 +1178,14 @@ export class DebateGatewayClient {
       this.pendingInvalidations.clear();
       this.pendingChangedClaimsBySpace.clear();
     }
-    // A pending broad invalidation covers this one, but its flush may still need to come sooner.
-    if (!this.pendingInvalidations.has(BROAD_INVALIDATION_KEY) || key === BROAD_INVALIDATION_KEY) {
+    // A pending broad invalidation covers this one; only an unspread one brings its flush sooner.
+    if (key !== BROAD_INVALIDATION_KEY && this.pendingInvalidations.has(BROAD_INVALIDATION_KEY)) {
+      if (this.invalidationSpreadDelayMs > 0) return;
+    } else {
       this.pendingInvalidations.set(key, filters);
     }
     // One flush for everything pending, at the earliest time asked for.
-    const delay = INVALIDATION_COALESCE_MS + this.random() * this.invalidationSpreadMs;
+    const delay = INVALIDATION_COALESCE_MS + this.invalidationSpreadDelayMs;
     const dueAt = Date.now() + delay;
     if (this.invalidationTimer) {
       if (dueAt >= this.invalidationDueAt) return;
