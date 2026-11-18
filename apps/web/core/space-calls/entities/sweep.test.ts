@@ -27,7 +27,7 @@ const entity = (over: Partial<CallEntity> = {}): CallEntity => ({
   starts_at: '2026-11-25T16:00:00Z',
   ends_at: '2026-11-25T17:00:00Z',
   attendees: [],
-  recording: null,
+  shape: 1,
   ...over,
 });
 
@@ -235,13 +235,13 @@ describe('sweepCallEntities', () => {
 
   it('records without a proposal an update that changes nothing on the graph', async () => {
     const callId = '6'.repeat(32);
-    const ready = { status: 'ready' as const, published: true, linked: true, duration_seconds: 60 };
-    const ended = entity({ status: 'ended', recording: ready });
+    const ended = entity({ status: 'ended' });
     const { deps, records, submit } = harness([
       claim(callId, {
         action: 'update',
         entity_id: callId,
-        entity: { ...ended, recording: { ...ready, published: false, linked: false } },
+        // Attendees changed, and they are not written while the flag is off.
+        entity: { ...ended, attendees: ['c'.repeat(32)] },
         previous: ended,
       }),
     ]);
@@ -249,6 +249,15 @@ describe('sweepCallEntities', () => {
     expect(submit).not.toHaveBeenCalled();
     expect(result.written).toEqual([callId]);
     expect(records[0]![1]).toMatchObject({ outcome: 'written', entity_id: callId });
+  });
+
+  it('rewrites a call when only the shape changed', async () => {
+    const callId = '6'.repeat(32);
+    const { deps, submit } = harness([
+      claim(callId, { action: 'update', entity_id: callId, entity: entity({ shape: 2 }), previous: entity() }),
+    ]);
+    await run(deps);
+    expect(submit).toHaveBeenCalledTimes(1);
   });
 
   it('writes an update that moves the call', async () => {

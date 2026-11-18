@@ -7,14 +7,6 @@ import { ID } from '~/core/id';
  * only: the bearer token is `GEO_CHAT_CALL_ENTITIES_SERVICE_TOKEN`. Ids in responses are dashless.
  */
 
-export type CallEntityRecording = {
-  status: 'processing' | 'ready' | 'failed';
-  published: boolean;
-  /** `published && status === 'ready'`: the entity links the recording. */
-  linked: boolean;
-  duration_seconds: number | null;
-};
-
 export type CallEntity = {
   space_id: string;
   status: 'scheduled' | 'ended' | 'not_held';
@@ -31,7 +23,8 @@ export type CallEntity = {
   starts_at: string;
   ends_at: string;
   attendees: string[];
-  recording: CallEntityRecording | null;
+  /** geo-chat's entity shape version; a bump lists written calls again so they are rewritten. */
+  shape: number;
 };
 
 export type CallEntityClaim = {

@@ -32,7 +32,7 @@ const entity = (over: Partial<CallEntity> = {}): CallEntity => ({
   starts_at: '2026-11-25T16:00:00Z',
   ends_at: '2026-11-25T17:00:00Z',
   attendees: ['cccccccccccccccccccccccccccccccc'],
-  recording: null,
+  shape: 1,
   ...over,
 });
 
@@ -126,21 +126,10 @@ describe('buildCallEventDraft', () => {
     expect(draft.relations).toEqual([]);
   });
 
-  it('puts nothing about the recording on the graph', () => {
-    const recording = { status: 'ready' as const, published: true, linked: true, duration_seconds: 60 };
-    const linked = build(claim({ entity: entity({ status: 'ended', recording }) }));
-    const unlinked = build(
-      claim({
-        action: 'update',
-        entity_id: MINTED,
-        entity: entity({ status: 'ended', recording: { ...recording, published: false, linked: false } }),
-        previous: entity({ status: 'ended', recording }),
-      })
-    );
-    for (const draft of [linked, unlinked]) {
-      expect(relationsOf(draft, EVENT_SCHEMA.RECORDINGS_PROPERTY)).toEqual([]);
-      expect(draft.values.every(v => v.entity.id === MINTED)).toBe(true);
-    }
+  it('links no recording on the graph', () => {
+    const draft = build(claim({ entity: entity({ status: 'ended' }) }));
+    expect(relationsOf(draft, EVENT_SCHEMA.RECORDINGS_PROPERTY)).toEqual([]);
+    expect(draft.values.every(v => v.entity.id === MINTED)).toBe(true);
   });
 
   it('moves a minted call to its new series', () => {

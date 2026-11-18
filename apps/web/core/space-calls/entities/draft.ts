@@ -181,14 +181,15 @@ export function buildCallEventDraft({
 }
 
 /**
- * Whether an `update` changes nothing the graph holds: geo-chat also lists a call when its recording
- * or attendees change, and neither is written.
+ * Whether an `update` changes nothing the graph holds: geo-chat also lists a call when its attendees
+ * change, which are not written. A shape bump is always a rewrite.
  */
 export function updateChangesNothing(claim: CallEntityClaim): boolean {
   const { entity, previous } = claim;
   if (claim.action !== 'update' || !previous) return false;
   const written = (e: CallEntity) =>
     JSON.stringify([
+      e.shape,
       e.space_id,
       e.name,
       e.series_id,
