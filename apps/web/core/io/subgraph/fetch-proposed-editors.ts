@@ -3,6 +3,7 @@ import { Effect, Either, Schema } from 'effect';
 import { Environment } from '~/core/environment';
 
 import { ApiProposalListResponseSchema, encodePathSegment, restFetch } from '../rest';
+import { getApiProposalCanExecute } from '../rest/schemas/proposal';
 import { AbortError } from './errors';
 
 /** Compare space ids regardless of dashes / 0x prefix / case. */
@@ -12,6 +13,8 @@ export type ActiveEditorRequest = {
   proposalId: string;
   /** False while the vote is still open; true once the period elapsed (passed but not yet executed, or dead). */
   isVotingEnded: boolean;
+  /** Passed and still inside its execution window, by the governance UI's rule. */
+  canExecute: boolean;
 };
 
 /**
@@ -65,5 +68,9 @@ export async function fetchActiveEditorRequest(
   const latest = mine[0];
   if (!latest) return null;
 
-  return { proposalId: latest.proposalId, isVotingEnded: latest.timing.isVotingEnded };
+  return {
+    proposalId: latest.proposalId,
+    isVotingEnded: latest.timing.isVotingEnded,
+    canExecute: getApiProposalCanExecute(latest),
+  };
 }

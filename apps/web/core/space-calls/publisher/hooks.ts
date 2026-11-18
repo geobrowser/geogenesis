@@ -50,7 +50,10 @@ export async function fetchGeoPublisherStatus(
     });
     if (!response.ok) return 'unknown';
     const body = (await response.json()) as { status?: unknown };
-    return body.status === 'editor' || body.status === 'pending' || body.status === 'not_editor'
+    return body.status === 'editor' ||
+      body.status === 'pending' ||
+      body.status === 'executable' ||
+      body.status === 'not_editor'
       ? body.status
       : 'unknown';
   } catch (error) {
@@ -79,14 +82,16 @@ export function useGeoPublisherNotice(spaceId: string, viewerIsEditor: boolean) 
     enabled: enabled && viewerIsEditor && ready && authenticated && Boolean(spaceId),
     staleTime: 60_000,
     refetchInterval: query =>
-      query.state.data === 'pending' || (sent.data === true && query.state.data !== 'editor')
+      query.state.data === 'pending' ||
+      query.state.data === 'executable' ||
+      (sent.data === true && query.state.data !== 'editor')
         ? PENDING_STATUS_POLL_MS
         : false,
   });
   return geoPublisherNoticeState({ status: status.data, sent: sent.data === true });
 }
 
-export type GeoPublisherNoticeState = 'hidden' | 'add' | 'pending';
+export type GeoPublisherNoticeState = 'hidden' | 'add' | 'pending' | 'executable';
 
 /**
  * A sent proposal reads `pending` until the grant lands, even while the indexer has not shown the
@@ -100,6 +105,7 @@ export function geoPublisherNoticeState({
   sent: boolean;
 }): GeoPublisherNoticeState {
   if (status === 'editor' || status === 'unknown' || status === undefined) return 'hidden';
+  if (status === 'executable') return 'executable';
   if (status === 'pending' || sent) return 'pending';
   return 'add';
 }
@@ -108,7 +114,7 @@ class AddGeoPublisherError extends Error {}
 
 const FAILURE_COPY: Record<string, string> = {
   already_editor: 'The Geo publisher is already an editor of this space.',
-  request_pending: 'A proposal to add the Geo publisher is already under vote.',
+  request_pending: 'A proposal to add the Geo publisher is already open in Governance.',
   editor_required: 'Only editors of this space can add the Geo publisher.',
 };
 

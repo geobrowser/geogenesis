@@ -11,6 +11,11 @@ describe('geoPublisherNoticeState', () => {
     expect(geoPublisherNoticeState({ status: undefined, sent: false })).toBe('hidden');
   });
 
+  it('shows a passed proposal as waiting to execute, even after a send', () => {
+    expect(geoPublisherNoticeState({ status: 'executable', sent: false })).toBe('executable');
+    expect(geoPublisherNoticeState({ status: 'executable', sent: true })).toBe('executable');
+  });
+
   it('stays pending after a send while the graph has not caught up', () => {
     expect(geoPublisherNoticeState({ status: 'not_editor', sent: true })).toBe('pending');
   });

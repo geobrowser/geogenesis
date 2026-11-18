@@ -36,18 +36,17 @@ describe('getGeoPublisherStatus', () => {
       await getGeoPublisherStatus(
         request(),
         SPACE,
-        deps({ activeRequest: vi.fn(async () => ({ proposalId: 'p', isVotingEnded: false })) })
+        deps({ activeRequest: vi.fn(async () => ({ proposalId: 'p', isVotingEnded: false, canExecute: false })) })
       )
     ).toEqual({ ok: true, status: 'pending' });
   });
 
-  it('does not count a request whose vote ended', async () => {
-    const result = await getGeoPublisherStatus(
-      request(),
-      SPACE,
-      deps({ activeRequest: vi.fn(async () => ({ proposalId: 'p', isVotingEnded: true })) })
-    );
-    expect(result).toEqual({ ok: true, status: 'not_editor' });
+  it('tells a passed request waiting to execute from a dead one', async () => {
+    const ended = (canExecute: boolean) =>
+      deps({ activeRequest: vi.fn(async () => ({ proposalId: 'p', isVotingEnded: true, canExecute })) });
+    expect(await getGeoPublisherStatus(request(), SPACE, ended(true))).toEqual({ ok: true, status: 'executable' });
+    // Rejected, or past its execution window.
+    expect(await getGeoPublisherStatus(request(), SPACE, ended(false))).toEqual({ ok: true, status: 'not_editor' });
   });
 
   it('refuses anyone who is not a signed-in editor, never naming the publisher', async () => {
@@ -113,8 +112,18 @@ describe('buildGeoPublisherProposal', () => {
       await buildGeoPublisherProposal(
         request(),
         SPACE,
-        deps({ activeRequest: vi.fn(async () => ({ proposalId: 'p', isVotingEnded: false })) })
+        deps({ activeRequest: vi.fn(async () => ({ proposalId: 'p', isVotingEnded: false, canExecute: false })) })
       )
     ).toMatchObject({ status: 409, code: 'request_pending' });
+  });
+
+  it('refuses a second proposal while one waits to execute, but not after one died', async () => {
+    const ended = (canExecute: boolean) =>
+      deps({ activeRequest: vi.fn(async () => ({ proposalId: 'p', isVotingEnded: true, canExecute })) });
+    expect(await buildGeoPublisherProposal(request(), SPACE, ended(true))).toMatchObject({
+      status: 409,
+      code: 'request_pending',
+    });
+    expect(await buildGeoPublisherProposal(request(), SPACE, ended(false))).toMatchObject({ ok: true });
   });
 });

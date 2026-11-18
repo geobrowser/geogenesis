@@ -64,10 +64,12 @@ async function gate(request: Request, rawSpaceId: string | null, deps: Deps): Pr
   return { ok: true, viewerSpaceId, publisherSpaceId, publisherIsEditor: editors.has(publisherSpaceId) };
 }
 
-async function pendingRequest(spaceId: string, publisherSpaceId: string, deps: Deps) {
+/** The open add-editor request's state; a dead one (rejected, or past its window) is none. */
+async function openRequest(spaceId: string, publisherSpaceId: string, deps: Deps) {
   const request = await (deps.activeRequest ?? fetchActiveEditorRequest)(spaceId, publisherSpaceId);
-  // A request whose vote ended without passing can never execute, so it does not count as pending.
-  return request && !request.isVotingEnded ? request : null;
+  if (!request) return null;
+  if (!request.isVotingEnded) return 'pending';
+  return request.canExecute ? 'executable' : null;
 }
 
 export async function getGeoPublisherStatus(
@@ -78,8 +80,8 @@ export async function getGeoPublisherStatus(
   const access = await gate(request, rawSpaceId, deps);
   if (!access.ok) return access;
   if (access.publisherIsEditor) return { ok: true, status: 'editor' };
-  const pending = await pendingRequest(normId(rawSpaceId!), access.publisherSpaceId, deps);
-  return { ok: true, status: pending ? 'pending' : 'not_editor' };
+  const open = await openRequest(normId(rawSpaceId!), access.publisherSpaceId, deps);
+  return { ok: true, status: open ?? 'not_editor' };
 }
 
 /**
@@ -100,7 +102,7 @@ export async function buildGeoPublisherProposal(
   if (!access.ok) return access;
   const spaceId = normId(rawSpaceId!);
   if (access.publisherIsEditor) return { ok: false, status: 409, code: 'already_editor' };
-  if (await pendingRequest(spaceId, access.publisherSpaceId, deps)) {
+  if (await openRequest(spaceId, access.publisherSpaceId, deps)) {
     return { ok: false, status: 409, code: 'request_pending' };
   }
 

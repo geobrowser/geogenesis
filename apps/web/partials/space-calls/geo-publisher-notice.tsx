@@ -14,6 +14,7 @@ export const GEO_PUBLISHER_NOTICE_COPY = {
   add: 'Add Geo publisher',
   adding: 'Sending…',
   pending: 'Proposed · Under vote',
+  executable: 'Approved · Execute it in Governance',
   governance: 'Open Governance',
 } as const;
 
@@ -45,9 +46,9 @@ export function GeoPublisherNotice({
       <Text as="p" variant="metadata">
         {GEO_PUBLISHER_NOTICE_COPY.body}
       </Text>
-      {state === 'pending' ? (
+      {state === 'pending' || state === 'executable' ? (
         <span className="inline-flex items-center gap-2 text-metadata">
-          <span className="text-grey-04">{GEO_PUBLISHER_NOTICE_COPY.pending}</span>
+          <span className="text-grey-04">{GEO_PUBLISHER_NOTICE_COPY[state]}</span>
           <Link href={`/space/${spaceId}/governance`} className="text-ctaPrimary hover:underline">
             {GEO_PUBLISHER_NOTICE_COPY.governance}
           </Link>
