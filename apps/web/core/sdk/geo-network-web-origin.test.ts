@@ -29,4 +29,8 @@ describe('GEO_WEB_ORIGIN', () => {
       'https://geo.example.com'
     );
   }, 30_000);
+
+  it('ignores an override that is not http(s)', async () => {
+    expect(await load({ ...MAINNET, NEXT_PUBLIC_GEO_WEB_ORIGIN: 'javascript:alert(1)' })).toBeNull();
+  }, 30_000);
 });
