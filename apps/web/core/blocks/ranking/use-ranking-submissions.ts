@@ -297,7 +297,7 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
         basedOnOrderedIds?: string[];
       }
     ): Promise<RankingSubmissionPublishResult | null> => {
-    pendingSavesRef.current += 1;
+      pendingSavesRef.current += 1;
       setIsSaving(true);
       const settle = () => {
         pendingSavesRef.current -= 1;
