@@ -3,6 +3,16 @@ import { uuidToHex } from '~/core/id/normalize';
 import { CLAIM_STANCE_PROPERTY_IDS, type DebateClaimInput } from '../debate-publish-draft';
 import { type RelationTargetsPageFetcher, collectRelationTargets } from './relation-targets';
 
+export type StancePolicyOptions = {
+  debateId?: string;
+  fetchRelationPage?: RelationTargetsPageFetcher;
+  /**
+   * Throw when the read fails instead of clearing the stances. The late claims publish (GEO-3635)
+   * treats a claim as done once its block link exists, so a stance cleared there is never written.
+   */
+  strict?: boolean;
+};
+
 /**
  * GEO-3142: makes "one stance relation per (claim, motion)" hold across publishes, not only
  * within one draft.
@@ -15,7 +25,7 @@ import { type RelationTargetsPageFetcher, collectRelationTargets } from './relat
  * and any already linked to the motion in this space by any of the three relations keeps that
  * relation untouched: its stance here is cleared, so the draft writes nothing for it.
  *
- * Never throws. If the read fails, the stance of every looked-up claim is cleared (and logged):
+ * Never throws unless `strict`. If the read fails, the stance of every looked-up claim is cleared (and logged):
  * a missing relation can be backfilled later, a second one is the failure this exists to prevent.
  * Freshly minted claims keep theirs either way.
  */
@@ -23,7 +33,7 @@ export async function applyClaimStancePolicy(
   claims: DebateClaimInput[],
   spaceId: string,
   motionClaimEntityId: string,
-  options: { debateId?: string; fetchRelationPage?: RelationTargetsPageFetcher } = {}
+  options: StancePolicyOptions = {}
 ): Promise<DebateClaimInput[]> {
   const knownId = (claim: DebateClaimInput) => claim.existingClaimEntityId || claim.stableEntityId || null;
   const ids = [
@@ -62,7 +72,7 @@ async function readLinkedToMotion(
   ids: string[],
   spaceId: string,
   motionClaimEntityId: string,
-  options: { debateId?: string; fetchRelationPage?: RelationTargetsPageFetcher }
+  options: StancePolicyOptions
 ): Promise<Set<string>> {
   try {
     const relations = await collectRelationTargets(
@@ -76,6 +86,7 @@ async function readLinkedToMotion(
         .map(relation => uuidToHex(relation.fromEntityId))
     );
   } catch (error) {
+    if (options.strict) throw error;
     console.warn('[debate-acceptor] could not read existing stance relations; publishing those claims without one', {
       debateId: options.debateId,
       claims: ids.length,

@@ -13,6 +13,7 @@ import { useCachedBrowseSidebarData } from '~/core/browse/use-browse-sidebar-cac
 import { keepSelectableSpaces } from '~/core/debates/claim-space-allowlist';
 import { type HubFilterOption, HubMultiFilterMenu, pickerLabel } from '~/core/debates/matchmaking/hub-filter-menu';
 import { keepSelectableTopics, orderFacetOptions, toggleId } from '~/core/debates/matchmaking/topic-facets';
+import { FEED_SESSION_GC_MS } from '~/core/explore/explore-constants';
 import { type ExplorePageSort, PUBLIC_FEED_PARAM } from '~/core/explore/explore-feed-params';
 import type { ExploreFeedResult, ExploreTime } from '~/core/explore/fetch-explore-feed';
 import { composeSeenPages } from '~/core/explore/seen-demotion/hide-seen';
@@ -41,15 +42,22 @@ const EAGER_CARD_COUNT = 4;
 
 // A refetch rebuilds every loaded page from a re-ranked page one, so pages never go stale by age.
 // A failed first load has no data and stays stale, so focus and reconnect still retry it.
-const FEED_SESSION_OPTIONS = { staleTime: Infinity } as const;
+const FEED_SESSION_OPTIONS = { staleTime: Infinity, gcTime: FEED_SESSION_GC_MS } as const;
 
 // A reader still within a screen of the top gets a fresh feed on return; one who has scrolled keeps theirs.
 // The age matches the app's default staleTime (`core/query-client.tsx`).
 const TOP_REFRESH_AFTER_MS = 30_000;
+function readerNearTop(): boolean {
+  return window.scrollY < window.innerHeight;
+}
 function refreshAtTop(query: { state: { data: unknown; dataUpdatedAt: number } }): boolean | 'always' {
   if (query.state.data === undefined) return true;
-  const atTop = window.scrollY < window.innerHeight;
-  return atTop && Date.now() - query.state.dataUpdatedAt > TOP_REFRESH_AFTER_MS ? 'always' : false;
+  return readerNearTop() && Date.now() - query.state.dataUpdatedAt > TOP_REFRESH_AFTER_MS ? 'always' : false;
+}
+
+type AppliedFollows = { ids: readonly string[] | null; pending: boolean; viewer: string | null };
+function followsKey(ids: readonly string[] | null, pending: boolean): string | null {
+  return ids === null ? null : `${ids.join(',')}|${pending}`;
 }
 
 const FEED_PAGES_SESSION_OPTIONS = {
@@ -234,20 +242,67 @@ export function buildFeedQuery(params: FeedQueryParams): string {
   return sp.toString();
 }
 
+/**
+ * GEO-3703. The routes give up at 20s (`FEED_TIME_BUDGET_MS`) and answer 503, so a request still open
+ * past this has been lost somewhere between, and nothing else would ever end it: the reader would sit
+ * on skeletons. Aborting turns it into an ordinary failure, which is retried and then shown.
+ */
+export const FEED_REQUEST_TIMEOUT_MS = 25_000;
+
+/**
+ * React Query's own signal, bounded by the timeout. `AbortSignal.timeout` and `.any` are missing from
+ * Safari before 17.4, where a feed that threw on them would never load at all, so there it falls back
+ * to whichever of the two exists.
+ */
+function feedRequestSignal(signal: AbortSignal | undefined): AbortSignal | undefined {
+  const timeout = typeof AbortSignal.timeout === 'function' ? AbortSignal.timeout(FEED_REQUEST_TIMEOUT_MS) : undefined;
+  if (signal && timeout && typeof AbortSignal.any === 'function') return AbortSignal.any([signal, timeout]);
+  return signal ?? timeout;
+}
+
 async function fetchFeedPage(
   apiEndpoint: string,
   params: FeedQueryParams & {
     identityToken?: string | null;
+    signal?: AbortSignal;
   }
 ): Promise<ExploreFeedResult> {
   const res = await fetch(`${apiEndpoint}?${buildFeedQuery(params)}`, {
     credentials: 'include',
+    signal: feedRequestSignal(params.signal),
     ...(params.identityToken ? { headers: { authorization: `Bearer ${params.identityToken}` } } : {}),
   });
   if (!res.ok) {
     throw new Error('Feed failed');
   }
   return res.json() as Promise<ExploreFeedResult>;
+}
+
+/** GEO-3703. A feed that failed says so and can be asked again, rather than leaving the reader stuck. */
+function FeedRetry({
+  children,
+  onRetry,
+  retrying,
+  className,
+}: {
+  children: React.ReactNode;
+  onRetry: () => void;
+  retrying: boolean;
+  className?: string;
+}) {
+  return (
+    <p role="alert" className={cx('text-browseMenu text-red-01', className)}>
+      {children}{' '}
+      <button
+        type="button"
+        onClick={onRetry}
+        disabled={retrying}
+        className="text-ctaPrimary transition-colors hover:text-ctaHover disabled:text-grey-04"
+      >
+        {retrying ? 'Trying again…' : 'Try again'}
+      </button>
+    </p>
+  );
 }
 
 /** `items` with the card `leadId` names moved to the front, when it is there. */
@@ -344,6 +399,7 @@ export function EntityFeed({
     : showTopicFilter || Boolean(topicFacetEndpoint);
   const typeSelectionTouchedRef = React.useRef(false);
   const contextualTypeDefaultAppliedRef = React.useRef(false);
+  const [defaultTypeIds, setDefaultTypeIds] = React.useState<string[] | null>(null);
   // A locked space is the whole filter; otherwise whatever the revealed space menu has ticked, and
   // nothing ticked (or the menu put away) means every space the reader may see.
   const requestedSpaceIds = React.useMemo(
@@ -368,12 +424,19 @@ export function EntityFeed({
   );
   const selectsWholePopulation = React.useMemo(() => {
     if (selectedTypeIds.length === typeOptions.length) return true;
-    if (!selectTypesWithResultsByDefault || !nonEmptyTypeIds || nonEmptyTypeIds.length === 0) return false;
+    const population = defaultTypeIds ?? nonEmptyTypeIds;
+    if (!selectTypesWithResultsByDefault || !population || population.length === 0) return false;
     return (
-      selectedTypeIds.length === nonEmptyTypeIds.length &&
-      nonEmptyTypeIds.every(typeId => selectedTypeIdSet.has(normId(typeId)))
+      selectedTypeIds.length === population.length && population.every(typeId => selectedTypeIdSet.has(normId(typeId)))
     );
-  }, [nonEmptyTypeIds, selectTypesWithResultsByDefault, selectedTypeIdSet, selectedTypeIds.length, typeOptions.length]);
+  }, [
+    defaultTypeIds,
+    nonEmptyTypeIds,
+    selectTypesWithResultsByDefault,
+    selectedTypeIdSet,
+    selectedTypeIds.length,
+    typeOptions.length,
+  ]);
   // Two different rules for when the selection goes on the wire, because the two kinds of caller
   // read a missing parameter differently. A contextual feed's route reads it as "every type", so it
   // is omitted when every type is ticked. Explore's route reads it as its *default* types (Debate +
@@ -502,6 +565,7 @@ export function EntityFeed({
       return;
     }
     contextualTypeDefaultAppliedRef.current = true;
+    setDefaultTypeIds(nonEmptyTypeIds);
     if (!typeSelectionTouchedRef.current) setSelectedTypeIds(nonEmptyTypeIds);
   }, [nonEmptyTypeIds, selectTypesWithResultsByDefault, showTypeFilter]);
 
@@ -550,7 +614,22 @@ export function EntityFeed({
   const { viewerAddress, awaitingIdentityToken } = useFeedViewer(walletAddress, usesIdentityToken);
   // Keyed on what is actually sent: two Best feeds differing only in a hidden range are the same
   // request, and caching them apart would refetch on a change the viewer never made.
-  const requestedFollowedTopicIds = isForYou ? (followedTopicIds ?? []) : [];
+  const [appliedFollows, setAppliedFollows] = React.useState<AppliedFollows>(() => ({
+    ids: followedTopicIds,
+    pending: pendingTopicFollows,
+    viewer: viewerAddress,
+  }));
+  const incomingFollowsKey = followsKey(followedTopicIds, pendingTopicFollows);
+  const followsHeld = followsKey(appliedFollows.ids, appliedFollows.pending) !== incomingFollowsKey;
+  const applyFollows = () =>
+    setAppliedFollows({ ids: followedTopicIds, pending: pendingTopicFollows, viewer: viewerAddress });
+  if (
+    (followsHeld || appliedFollows.viewer !== viewerAddress) &&
+    (!isForYou || appliedFollows.ids === null || followedTopicIds === null || appliedFollows.viewer !== viewerAddress)
+  ) {
+    applyFollows();
+  }
+  const requestedFollowedTopicIds = isForYou ? (appliedFollows.ids ?? []) : [];
   const queryKey = [
     apiEndpoint,
     sort,
@@ -560,7 +639,7 @@ export function EntityFeed({
     topicIdsKey,
     fixedParamsKey,
     // Only on For you, so every other sort's key, and so its cache, is unchanged.
-    ...(isForYou ? [requestedFollowedTopicIds.join(','), pendingTopicFollows] : []),
+    ...(isForYou ? [requestedFollowedTopicIds.join(','), appliedFollows.pending] : []),
     // Last, so `placeholderData` below can tell a change of account from a change of filter.
     viewerAddress,
   ];
@@ -573,7 +652,7 @@ export function EntityFeed({
     typeIds,
     topicIds: selectedTopicIds,
     followedTopicIds: requestedFollowedTopicIds,
-    pendingTopicFollows: isForYou && pendingTopicFollows,
+    pendingTopicFollows: isForYou && appliedFollows.pending,
     fixedParams,
   };
 
@@ -589,36 +668,59 @@ export function EntityFeed({
   const publicFirstPage = useQuery({
     ...(preserveSession ? FEED_SESSION_OPTIONS : {}),
     queryKey: [apiEndpoint, PUBLIC_FEED_PARAM],
-    queryFn: () => fetchFeedPage(apiEndpoint, { ...feedParams, cursor: undefined, anonymous: true }),
+    queryFn: ({ signal }) => fetchFeedPage(apiEndpoint, { ...feedParams, cursor: undefined, anonymous: true, signal }),
     enabled: paintsFromPublicPage,
     retry: false,
   });
   const publicPlaceholder = paintsFromPublicPage ? publicFirstPage.data : undefined;
 
-  const { data, isLoading, isFetchingNextPage, isPlaceholderData, fetchNextPage, hasNextPage, error } =
-    useInfiniteQuery({
-      ...(preserveSession ? FEED_PAGES_SESSION_OPTIONS : {}),
-      queryKey,
-      queryFn: async ({ pageParam }) =>
-        fetchFeedPage(apiEndpoint, {
-          ...feedParams,
-          identityToken: wantsIdentityToken ? await getCachedIdentityToken() : null,
-          anonymous: cdnFirstPage && viewerAddress === null && !wantsIdentityToken,
-          cursor: pageParam as string | undefined,
-        }),
-      enabled: !awaitingIdentityToken && (!isForYou || followedTopicIds !== null),
-      // When only the account changed (signing in on the page, or an account that arrived after the
-      // wait gave up), keep the cards up while the new page loads instead of dropping to skeletons.
-      // Otherwise a signed-in reader sees the public page meanwhile.
-      placeholderData: (previous, previousQuery) => {
-        if (previousQuery && sameFeedOtherThanAccount(previousQuery.queryKey, queryKey)) return previous;
-        return publicPlaceholder ? { pages: [publicPlaceholder], pageParams: [undefined] } : undefined;
-      },
-      initialPageParam: undefined as string | undefined,
-      getNextPageParam: last => last.nextCursor ?? undefined,
-      retry: 2,
-      retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 8000),
-    });
+  const {
+    data,
+    isLoading,
+    isFetching,
+    isFetchingNextPage,
+    isFetchNextPageError,
+    isPlaceholderData,
+    fetchNextPage,
+    hasNextPage,
+    error,
+    refetch,
+  } = useInfiniteQuery({
+    ...(preserveSession ? FEED_PAGES_SESSION_OPTIONS : {}),
+    queryKey,
+    queryFn: async ({ pageParam, signal }) =>
+      fetchFeedPage(apiEndpoint, {
+        ...feedParams,
+        signal,
+        identityToken: wantsIdentityToken ? await getCachedIdentityToken() : null,
+        anonymous: cdnFirstPage && viewerAddress === null && !wantsIdentityToken,
+        cursor: pageParam as string | undefined,
+      }),
+    enabled: !awaitingIdentityToken && (!isForYou || appliedFollows.ids !== null),
+    // When only the account changed (signing in on the page, or an account that arrived after the
+    // wait gave up), keep the cards up while the new page loads instead of dropping to skeletons.
+    // Otherwise a signed-in reader sees the public page meanwhile.
+    placeholderData: (previous, previousQuery) => {
+      if (previousQuery && sameFeedOtherThanAccount(previousQuery.queryKey, queryKey)) return previous;
+      return publicPlaceholder ? { pages: [publicPlaceholder], pageParams: [undefined] } : undefined;
+    },
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: last => last.nextCursor ?? undefined,
+    retry: 2,
+    retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 8000),
+  });
+
+  const feedOnScreen = data !== undefined && !isPlaceholderData;
+  const applyHeldFollows = React.useEffectEvent(() => {
+    if (!feedOnScreen || readerNearTop()) applyFollows();
+  });
+  React.useEffect(() => {
+    if (!followsHeld) return;
+    applyHeldFollows();
+    const onScroll = () => applyHeldFollows();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [followsHeld, feedOnScreen, incomingFollowsKey]);
 
   const sentinelRef = React.useRef<HTMLDivElement | null>(null);
 
@@ -656,7 +758,9 @@ export function EntityFeed({
     const el = sentinelRef.current;
     // A placeholder's cursor belongs to another feed: its next page would be fetched against this
     // one's key. Wait for the real first page.
-    if (!el || !hasNextPage || isPlaceholderData || awaitingEntry) return;
+    // A failed next page waits for the reader's Try again; the sentinel would otherwise re-ask on
+    // every scroll past it.
+    if (!el || !hasNextPage || isPlaceholderData || awaitingEntry || isFetchNextPageError) return;
     const io = new IntersectionObserver(
       entries => {
         if (entries[0]?.isIntersecting && !isFetchingNextPage) {
@@ -667,7 +771,7 @@ export function EntityFeed({
     );
     io.observe(el);
     return () => io.disconnect();
-  }, [fetchNextPage, hasNextPage, isFetchingNextPage, isPlaceholderData, awaitingEntry]);
+  }, [fetchNextPage, hasNextPage, isFetchingNextPage, isPlaceholderData, awaitingEntry, isFetchNextPageError]);
 
   const items = React.useMemo(() => {
     // GEO-3234. Best's pages composed together for this visitor: seen cards hidden, gaps filled from
@@ -849,11 +953,13 @@ export function EntityFeed({
       {dividerBeforeFeed ? <hr className={cx('border-t border-divider', compactHeader ? 'mt-2' : 'mt-5')} /> : null}
       <div className={feedTopSpacingClassName ?? (showFilterRow ? 'mt-8' : '-mt-1')}>
         {error && items.length === 0 ? (
-          <p className="text-browseMenu text-red-01">Could not load the feed.</p>
+          <FeedRetry onRetry={() => void refetch()} retrying={isFetching}>
+            Could not load the feed.
+          </FeedRetry>
         ) : awaitingEntry ||
           (!entryItem && isLoading) ||
           (!entryItem && awaitingIdentityToken) ||
-          (isForYou && followedTopicIds === null) ? (
+          (isForYou && appliedFollows.ids === null) ? (
           <div className="space-y-4">
             {Array.from({ length: 5 }).map((_, i) => (
               <LoadingSkeleton key={i} />
@@ -878,6 +984,11 @@ export function EntityFeed({
           ))
         )}
         <div ref={sentinelRef} className="h-4 w-full" aria-hidden />
+        {isFetchNextPageError && !isFetchingNextPage && items.length > 0 ? (
+          <FeedRetry className="mt-4" onRetry={() => void fetchNextPage()} retrying={false}>
+            Could not load more.
+          </FeedRetry>
+        ) : null}
         {isFetchingNextPage ? (
           <div className="mt-4 space-y-4">
             {Array.from({ length: 3 }).map((_, i) => (

@@ -32,8 +32,6 @@ describe('feature flags', () => {
     expect(defaultFeatureFlags.spaceChat).toBe(false);
     expect(defaultFeatureFlags.debateDeviceSwitchRecording).toBe(false);
     expect(defaultFeatureFlags.googleSignIn).toBe(false);
-    expect(defaultFeatureFlags.googleCalendar).toBe(false);
-    expect(defaultFeatureFlags.microsoftCalendar).toBe(false);
     expect(defaultFeatureFlags.bountiesTab).toBe(true);
     expect(defaultFeatureFlags.signInRecoveryAutoOpen).toBe(true);
     expect(normalizeFeatureFlags(null)).toEqual({
@@ -49,16 +47,14 @@ describe('feature flags', () => {
       spaceChat: false,
       debateDeviceSwitchRecording: false,
       googleSignIn: false,
-      googleCalendar: false,
-      microsoftCalendar: false,
       bountiesTab: true,
       signInRecoveryAutoOpen: true,
     });
   });
 
-  // Claims, debates, scheduling, lobby joining, debate video and the sign-in box shipped to everyone. Every browser that ever
-  // opened the flags dialog still has the retired ids in storage, and they must not survive
-  // normalization — a stray `questionsTab` reaching the dialog would render a checkbox for a flag
+  // Claims, debates, scheduling, lobby joining, debate video, the sign-in box, calendar
+  // connections and Best debates ranking shipped to everyone. Every browser that ever opened the flags dialog still has the
+  // retired ids in storage, and they must not survive normalization — a stray `questionsTab` reaching the dialog would render a checkbox for a flag
   // nothing reads.
   it('drops the retired flags that are still in storage', () => {
     expect(
@@ -69,7 +65,10 @@ describe('feature flags', () => {
         lobbyJoining: true,
         debateVideo: true,
         ourSignInBox: true,
+        googleCalendar: true,
+        microsoftCalendar: true,
         debateDebugging: true,
+        debateRankings: true,
       })
     ).toEqual({
       playbackDiagnostics: false,
@@ -84,8 +83,6 @@ describe('feature flags', () => {
       spaceChat: false,
       debateDeviceSwitchRecording: false,
       googleSignIn: false,
-      googleCalendar: false,
-      microsoftCalendar: false,
       bountiesTab: true,
       signInRecoveryAutoOpen: true,
     });

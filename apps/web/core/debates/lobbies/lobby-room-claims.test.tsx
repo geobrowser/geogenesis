@@ -6,11 +6,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DebateLobbyClaim, DebateLobbyClaims } from '../api';
 import { REQUEST_PENDING_LABEL } from '../request-gate';
+import { AgendaClaimFilterContext } from '../todays-claims/agenda-claim-filter';
+import { agendaFilterFixture } from '../todays-claims/debate-agenda-fixtures';
 import { LOBBY_ROOM_CLAIMS_COPY, LobbyRoomClaims, lobbyRoomClaimFrom } from './lobby-room-claims';
 import type { LobbyPageView } from './lobby-view';
 
 const mocks = vi.hoisted(() => ({
   data: undefined as DebateLobbyClaims | undefined,
+  refetch: vi.fn(),
+  cardScopes: [] as { claimId: string; scope: unknown }[],
   mutate: vi.fn(),
   recover: vi.fn(),
   backfill: vi.fn(),
@@ -32,9 +36,20 @@ vi.mock('./lobby-room-claims-hooks', async importOriginal => ({
     isLoading: false,
     error: null,
     failureReason: null,
-    refetch: vi.fn(),
+    refetch: mocks.refetch,
   }),
 }));
+
+vi.mock('../debate-claim-card-surface', async importOriginal => {
+  const actual = await importOriginal<typeof import('../debate-claim-card-surface')>();
+  return {
+    ...actual,
+    DebateClaimCardSurface: (props: Parameters<typeof actual.DebateClaimCardSurface>[0]) => {
+      mocks.cardScopes.push({ claimId: props.claimId, scope: props.scope });
+      return actual.DebateClaimCardSurface(props);
+    },
+  };
+});
 
 // Recovery itself is the side panel's, tested with it; here only that a refusal reaches it.
 vi.mock('~/core/claims/browse/use-claim-matchup', async importOriginal => ({
@@ -65,17 +80,32 @@ vi.mock('~/core/hooks/use-entity-vote', () => ({
 
 vi.mock('../matchmaking/hub-states', () => ({
   HubQueryState: ({
+    isLoading,
+    error,
+    onRetry,
     isEmpty,
     emptyMessage,
     emptyAction,
     children,
   }: {
+    isLoading?: boolean;
+    error?: unknown;
+    onRetry?: () => void;
     isEmpty: boolean;
     emptyMessage: string;
     emptyAction?: { label: string; onClick: () => void };
     children: React.ReactNode;
   }) =>
-    isEmpty ? (
+    isLoading ? (
+      <p>Loading</p>
+    ) : error ? (
+      <div>
+        <p>Something went wrong.</p>
+        <button type="button" onClick={onRetry}>
+          Try again
+        </button>
+      </div>
+    ) : isEmpty ? (
       <div>
         <p>{emptyMessage}</p>
         {emptyAction ? (
@@ -131,6 +161,8 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   mocks.data = undefined;
+  mocks.refetch.mockReset();
+  mocks.cardScopes = [];
   mocks.mutate.mockReset();
   mocks.recover.mockReset();
   mocks.backfill.mockReset();
@@ -269,6 +301,67 @@ describe('LobbyRoomClaims', () => {
     expect(screen.getByText(LOBBY_ROOM_CLAIMS_COPY.empty)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Explore claims' }));
     expect(onExplore).toHaveBeenCalled();
+  });
+});
+
+/** GEO-3775. An agenda-only lobby's "In this room": agenda claims only, never the room's list unfiltered. */
+describe('LobbyRoomClaims agenda-only', () => {
+  const room = (): DebateLobbyClaims => ({
+    lobby_id: '0192abc',
+    source: 'room',
+    claims: [row('a', true, 1), row('b', true, 1), row('c', false, 1)],
+  });
+  const renderWith = (filter: ReturnType<typeof agendaFilterFixture>) =>
+    render(
+      <AgendaClaimFilterContext.Provider value={filter}>
+        <LobbyRoomClaims lobby={lobby} />
+      </AgendaClaimFilterContext.Provider>
+    );
+
+  it('lists only the claims an agenda lists, each credited to its agenda', () => {
+    mocks.data = room();
+    renderWith(agendaFilterFixture({ ids: ['entity-a', 'entity-c'] }));
+
+    expect(screen.getAllByRole('heading').map(heading => heading.textContent)).toEqual(['Claim a', 'Claim c']);
+    expect(mocks.cardScopes.map(card => [card.claimId, card.scope])).toEqual([
+      ['entity-a', { agenda_id: 'agenda-entity-a', agenda_date: '2026-11-17' }],
+      ['entity-c', { agenda_id: 'agenda-entity-c', agenda_date: '2026-11-17' }],
+    ]);
+  });
+
+  it('says nobody has a side on one of today’s claims when none of the room’s is on an agenda', () => {
+    mocks.data = room();
+    renderWith(agendaFilterFixture({ ids: ['elsewhere'] }));
+
+    expect(screen.queryByRole('heading')).toBeNull();
+    expect(screen.getByText(LOBBY_ROOM_CLAIMS_COPY.agendaEmpty)).toBeTruthy();
+  });
+
+  it('shows nothing of the room’s claims while the agendas load', () => {
+    mocks.data = room();
+    renderWith(agendaFilterFixture({ ids: ['entity-a'], pending: true }));
+
+    expect(screen.getByText('Loading')).toBeTruthy();
+    expect(screen.queryByRole('heading')).toBeNull();
+  });
+
+  it('fails when the agendas do, and Try again asks for the agendas', () => {
+    mocks.data = room();
+    const agendaRefetch = vi.fn();
+    renderWith(agendaFilterFixture({ ids: ['entity-a'], error: new Error('gaia down'), refetch: agendaRefetch }));
+
+    expect(screen.queryByRole('heading')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(agendaRefetch).toHaveBeenCalledTimes(1);
+    expect(mocks.refetch).not.toHaveBeenCalled();
+  });
+
+  it('is unchanged outside an agenda-only lobby', () => {
+    mocks.data = room();
+    render(<LobbyRoomClaims lobby={lobby} />);
+
+    expect(screen.getAllByRole('heading')).toHaveLength(3);
+    expect(mocks.cardScopes.every(card => card.scope === undefined)).toBe(true);
   });
 });
 

@@ -37,7 +37,7 @@ describe('the divider band', () => {
   });
 
   /// Drawn 32px off, the band sat beside the real gap rather than in it — which looked like three
-  /// separate faults at once: the split missing the VS badge, the left panel narrowed by the white
+  /// separate faults at once: the left panel narrowed by the white
   /// bar, and bare background showing before the right panel. One offset, three symptoms.
   it('tiles the gap between the panels exactly', () => {
     const bars = g.bars;
@@ -49,23 +49,23 @@ describe('the divider band', () => {
   });
 });
 
-describe('the VS badge', () => {
-  /// Centred on the *white* bar's right edge, not the band's centre and not the black bar's. The
-  /// three are 7.5px and 8.5px apart, so nothing about a render says which one a number was.
-  it('sits on the right edge of the white bar', () => {
-    const [white] = g.bars;
-    expect(g.badgeCentre).toBe(g.seamX + white.width);
-    expect(g.badgeCentre).toBe(g.whiteBarRightEdgeAt(g.badgeCentreY));
+describe('the masthead', () => {
+  /// Option B from GEO-3791, picked off rendered cards: the old 32/36/10 read too small in feeds.
+  it('is drawn at mark 40, text 45, gap 12', () => {
+    const m = g.masthead;
+    expect([m.markPx, m.textPx, m.gapPx]).toEqual([40, 45, 12]);
   });
 
-  /// Which is the point of it: the band leans, so no x holds the line through the whole badge.
-  /// Centring on the white bar's edge splits that error evenly. On the black bar's centre the line
-  /// arrived near flush at the top of the badge and left the bottom 15px adrift.
-  it('takes the lean evenly above and below itself', () => {
-    const above = g.whiteBarRightEdgeAt(g.badgeCentreY - g.badgeRadius) - g.badgeCentre;
-    const below = g.whiteBarRightEdgeAt(g.badgeCentreY + g.badgeRadius) - g.badgeCentre;
-
-    expect(above).toBeCloseTo(-below, 10);
-    expect(Math.abs(above)).toBeGreaterThan(0);
+  /// Growing it must not push it into the claim. The claim band is drawn 10px up into the header,
+  /// so its top is not `HEADER_H`; and claims are centred in it, so the tightest case is the tallest
+  /// block the fitter can return. The masthead box is the mark or the text's line box, whichever is
+  /// taller: Satori's `lineHeight: normal` is the font's ascent minus descent, 1.187em for Calibre,
+  /// so 1.2 rounds up. Renders put the masthead ink 23px or more above the claim ink.
+  it('stays clear of the tallest claim the band can hold', () => {
+    const m = g.masthead;
+    const halfBox = Math.max(m.markPx, m.textPx * 1.2) / 2;
+    expect(m.claimBandTop).toBe(78);
+    expect(m.tallestClaimTop).toBe(89);
+    expect(m.centreY + halfBox).toBeLessThanOrEqual(m.tallestClaimTop - 4);
   });
 });

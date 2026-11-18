@@ -9,7 +9,6 @@ import { OWN_SCHEDULE_MODAL } from '~/core/availability/own-schedule-deep-link';
 import { requestsModal } from '~/core/deep-links/modal-deep-link';
 import { useDeepLinkEffect } from '~/core/deep-links/use-deep-link';
 import { useSetToast } from '~/core/hooks/use-toast';
-import { useFeatureFlag } from '~/core/state/feature-flags';
 import { usePrivy } from '~/core/wallet/auth-hooks';
 
 import { calendarReturnCopy } from './calendar-copy';
@@ -22,9 +21,6 @@ import { OwnScheduleModal } from './own-schedule-modal';
  * would sit under its backdrop); else a toast.
  */
 export function GoogleCalendarReturn() {
-  const googleEnabled = useFeatureFlag('googleCalendar');
-  const microsoftEnabled = useFeatureFlag('microsoftCalendar');
-  const enabled = googleEnabled || microsoftEnabled;
   const { ready, authenticated } = usePrivy();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -38,7 +34,7 @@ export function GoogleCalendarReturn() {
     requested: result !== null || scheduleRequested,
     cleanUrl: urlWithoutCalendarReturn(pathname ?? '/', searchParams, hash, scheduleRequested),
     // Held until Privy settles whether there is an editor to open.
-    enabled: enabled && ready,
+    enabled: ready,
     run: () => {
       if (result?.outcome === 'connected') calendarConnected(result.provider);
       else if (result) calendarConnectCallbackFailed(result.provider, result.reason);

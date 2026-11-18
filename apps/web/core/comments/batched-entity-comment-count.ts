@@ -1,6 +1,7 @@
 import { Effect } from 'effect';
 
 import { uuidToHex } from '~/core/id/normalize';
+import { chunk } from '~/core/utils/chunk';
 
 import { getEntityCommentCounts } from './use-entity-comment-counts';
 
@@ -35,15 +36,13 @@ function flush() {
 
   const ids = [...batch.keys()];
 
-  for (let start = 0; start < ids.length; start += MAX_IDS_PER_REQUEST) {
-    const chunk = ids.slice(start, start + MAX_IDS_PER_REQUEST);
-
-    Effect.runPromise(getEntityCommentCounts(chunk)).then(
+  for (const group of chunk(ids, MAX_IDS_PER_REQUEST)) {
+    Effect.runPromise(getEntityCommentCounts(group)).then(
       counts => {
-        for (const id of chunk) for (const waiter of batch.get(id) ?? []) waiter.resolve(counts.get(id) ?? 0);
+        for (const id of group) for (const waiter of batch.get(id) ?? []) waiter.resolve(counts.get(id) ?? 0);
       },
       error => {
-        for (const id of chunk) for (const waiter of batch.get(id) ?? []) waiter.reject(error);
+        for (const id of group) for (const waiter of batch.get(id) ?? []) waiter.reject(error);
       }
     );
   }

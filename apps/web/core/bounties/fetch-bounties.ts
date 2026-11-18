@@ -6,6 +6,7 @@ import type { Space } from '~/core/io/dto/spaces';
 import { ENTITY_ID_BATCH_SIZE, getAllEntities, getRelationsByToEntityIds, getSpaces } from '~/core/io/queries';
 import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
 import type { Entity } from '~/core/types';
+import { chunk } from '~/core/utils/chunk';
 
 import { buildBounty } from './bounty-dto';
 import { interestAllocationTarget } from './interest-identity';
@@ -120,12 +121,6 @@ export function resolveContributors(targetIds: readonly string[]) {
     });
     return byTarget;
   });
-}
-
-function chunk<T>(items: readonly T[], size: number): T[][] {
-  const out: T[][] = [];
-  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
-  return out;
 }
 
 /**

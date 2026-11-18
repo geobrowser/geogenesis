@@ -42,6 +42,7 @@ import {
 import { type CursorPage, collectCursorPages } from '~/core/sync/collect-cursor-pages';
 import { INTERESTED_VOTE_KIND } from '~/core/topics/interested';
 import { Entity, SearchResult } from '~/core/types';
+import { chunk } from '~/core/utils/chunk';
 import { spacesFromRoutingProjections } from '~/core/utils/entity/entities';
 import { sortSpaceIdsByRank } from '~/core/utils/space/space-ranking';
 
@@ -104,14 +105,7 @@ const ENTITIES_CONNECTION_MAX_FIRST = 1000;
 
 /** `ids` in consecutive batches of at most `size`, for `id: { in }` style filters. */
 export function batchEntityIds(ids: readonly string[], size = ENTITY_ID_BATCH_SIZE): string[][] {
-  // Zero or negative never advances the loop below, and a fraction slices at truncated offsets.
-  if (!Number.isInteger(size) || size < 1)
-    throw new RangeError(`batchEntityIds: size must be a positive integer, got ${size}`);
-  const batches: string[][] = [];
-  for (let start = 0; start < ids.length; start += size) {
-    batches.push(ids.slice(start, start + size));
-  }
-  return batches;
+  return chunk(ids, size);
 }
 
 // @TODO(migration): Can we somehow bind the querying patterns to the sync store?
@@ -153,10 +147,7 @@ export function getBatchEntities(entityIds: string[], spaceId?: string, signal?:
   if (entityIds.length === 0) return Effect.succeed([]);
   if (entityIds.length <= ENTITY_ID_BATCH_SIZE) return getBatchEntitiesPage(entityIds, spaceId, signal);
 
-  const batches: string[][] = [];
-  for (let start = 0; start < entityIds.length; start += ENTITY_ID_BATCH_SIZE) {
-    batches.push(entityIds.slice(start, start + ENTITY_ID_BATCH_SIZE));
-  }
+  const batches = batchEntityIds(entityIds);
 
   // `Effect.all` preserves input order in its results, so the flattened output stays in
   // batch order exactly as the sequential loop left it. Callers that relied on that — the
@@ -533,8 +524,7 @@ export function getRelationsByToEntityIds(
     type RelationsPage = { nodes: Row[]; pageInfo: { hasNextPage: boolean; endCursor?: string | null } } | null;
     const rows: Row[] = [];
 
-    for (let start = 0; start < uniqueIds.length; start += ENTITY_ID_BATCH_SIZE) {
-      const chunk = uniqueIds.slice(start, start + ENTITY_ID_BATCH_SIZE);
+    for (const batch of batchEntityIds(uniqueIds)) {
       // Cursor pagination, not offset: the server rejects offsets above 1000,
       // and well-linked chunks (e.g. submission backlinks) can exceed that.
       let after: string | null = null;
@@ -542,7 +532,7 @@ export function getRelationsByToEntityIds(
         const page: RelationsPage = yield* graphql({
           query: relationsByToEntityIdsQuery,
           decoder: data => (data.relationsConnection ?? null) as RelationsPage,
-          variables: { toEntityIds: chunk, typeId, spaceId, first: RELATIONS_PAGE_SIZE, after },
+          variables: { toEntityIds: batch, typeId, spaceId, first: RELATIONS_PAGE_SIZE, after },
           signal,
         });
         if (!page) break;

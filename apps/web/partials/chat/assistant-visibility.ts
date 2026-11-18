@@ -7,9 +7,6 @@ import { useMediaQuery } from '~/core/hooks/use-media-query';
 
 import { debateFullscreenActiveAtom } from '~/atoms';
 
-// Temporarily off while the assistant backend's token issue is fixed. Flip back to false to restore it.
-export const ASSISTANT_DISABLED = true;
-
 const FULLSCREEN_CHILD_ROUTE_SUFFIXES = ['/ranking-compose'] as const;
 
 // The claim-exploration picker is its own full-screen overlay, and it parks a voice dock in the

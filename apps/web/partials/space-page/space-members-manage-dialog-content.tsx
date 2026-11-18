@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import { useViewerVotingMode } from '~/core/hooks/use-fast-path-restricted';
 import { useProposeRemoveMember } from '~/core/hooks/use-propose-remove-member';
 import { type SpaceParticipantsPage } from '~/core/space-members/fetch-space-participants-page';
 import {
@@ -9,11 +10,13 @@ import {
   useInfiniteScrollSentinel,
   useSpaceParticipantsInfinite,
 } from '~/core/space-members/use-space-participants-infinite';
+import { mutationStatusLabel } from '~/core/utils/mutation-status-label';
 
 import { SmallButton } from '~/design-system/button';
 import { Input } from '~/design-system/input';
 import { Skeleton } from '~/design-system/skeleton';
 
+import { MemberFastPathControl } from './member-fast-path-control';
 import { MemberRow } from './space-member-row';
 
 interface Props {
@@ -76,35 +79,32 @@ interface CurrentMemberProps {
 function CurrentMember({ member, spaceId, isEditor }: CurrentMemberProps) {
   const { proposeRemoveMember, status } = useProposeRemoveMember({ spaceId });
 
-  const buttonText = (() => {
-    switch (status) {
-      case 'pending':
-        return 'Proposing removal...';
-      case 'success':
-        return 'Proposal created';
-      case 'error':
-        return 'Try again';
-      default:
-        return 'Remove member';
-    }
-  })();
+  const buttonText = mutationStatusLabel(status, {
+    idle: 'Remove member',
+    pending: 'Proposing removal...',
+    success: 'Proposal created',
+  });
 
   // Fast-path proposals are editor-only on-chain; routing non-editor callers
   // to slow-path avoids an InvalidFromSpace() revert from the DAOSpace contract.
-  const votingMode = isEditor ? 'fast' : 'slow';
+  // A restricted editor is routed to slow-path too, or it reverts FastPathRestricted().
+  const votingMode = useViewerVotingMode({ spaceId, isEditor });
 
   return (
     <div key={member.id} className="flex items-center justify-between transition-colors duration-150 hover:bg-divider">
       <MemberRow user={member} />
-      <SmallButton
-        disabled={status === 'pending' || status === 'success'}
-        onClick={event => {
-          event.preventDefault();
-          proposeRemoveMember({ targetMemberSpaceId: member.spaceId, votingMode });
-        }}
-      >
-        {buttonText}
-      </SmallButton>
+      <div className="flex shrink-0 items-center gap-2">
+        {isEditor ? <MemberFastPathControl spaceId={spaceId} memberSpaceId={member.spaceId} canRestrict /> : null}
+        <SmallButton
+          disabled={status === 'pending' || status === 'success'}
+          onClick={event => {
+            event.preventDefault();
+            proposeRemoveMember({ targetMemberSpaceId: member.spaceId, votingMode });
+          }}
+        >
+          {buttonText}
+        </SmallButton>
+      </div>
     </div>
   );
 }

@@ -1,11 +1,17 @@
-import { act, cleanup, render, renderHook } from '@testing-library/react';
+import { act, cleanup, render, renderHook, waitFor } from '@testing-library/react';
 
 import type { ReactNode } from 'react';
 
 import { Provider as JotaiProvider, createStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { pendingActionsAtom } from '~/core/state/pending-actions';
+import { lockedOutJoinAtom } from '~/core/state/locked-out-join';
+import {
+  type RedirectedPendingAction,
+  pendingActionsAtom,
+  redirectedPendingActions,
+  restorePendingActions,
+} from '~/core/state/pending-actions';
 
 import { PendingActionsRunner } from '~/partials/pending-actions-runner';
 
@@ -15,10 +21,13 @@ const mocks = vi.hoisted(() => ({
   promptSignIn: vi.fn(),
   requestToBeMember: vi.fn(),
   requestToBeMemberAsync: vi.fn(),
+  reset: vi.fn(),
   smartAccount: null as unknown,
   personalSpace: { personalSpaceId: null as string | null, isRegistered: false, isLoading: false },
   accountSetupPending: false,
   authResolving: false,
+  readFastPathRestricted: vi.fn(),
+  reportError: vi.fn(),
 }));
 
 vi.mock('~/core/hooks/use-privy-sign-in', () => ({ usePrivySignIn: () => mocks.promptSignIn }));
@@ -31,12 +40,17 @@ vi.mock('~/core/state/pending-personal-space', () => ({
 vi.mock('~/core/wallet/auth-hooks', () => ({
   usePrivy: () => ({ ready: true, authenticated: Boolean(mocks.smartAccount) }),
 }));
-vi.mock('~/core/state/status-bar-store', () => ({ useReportError: () => vi.fn() }));
+vi.mock('~/core/utils/contracts/read-space-membership', () => ({
+  readFastPathRestricted: mocks.readFastPathRestricted,
+}));
+vi.mock('~/core/state/status-bar-store', () => ({ useReportError: () => mocks.reportError }));
 vi.mock('~/core/hooks/use-request-to-be-member', () => ({
+  LOCKED_OUT: 'locked_out',
   useRequestToBeMember: () => ({
     requestToBeMember: mocks.requestToBeMember,
     requestToBeMemberAsync: mocks.requestToBeMemberAsync,
     status: 'idle' as const,
+    reset: mocks.reset,
   }),
 }));
 
@@ -56,6 +70,7 @@ afterEach(cleanup);
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.requestToBeMemberAsync.mockResolvedValue(undefined);
+  mocks.readFastPathRestricted.mockResolvedValue(false);
   store = createStore();
   mocks.smartAccount = null;
   mocks.personalSpace = { personalSpaceId: null, isRegistered: false, isLoading: false };
@@ -121,16 +136,84 @@ describe('useJoinSpace', () => {
     expect(renderJoin().result.current.optimisticRequested).toBe(true);
   });
 
-  it('requests membership immediately once the personal space is registered', () => {
+  it('requests membership immediately once the personal space is registered', async () => {
     mocks.smartAccount = { account: { address: '0xabc' } };
     mocks.personalSpace = { personalSpaceId: 'personal-1', isRegistered: true, isLoading: false };
     const { result } = renderJoin();
 
     act(() => result.current.join());
 
-    expect(mocks.requestToBeMember).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(mocks.requestToBeMember).toHaveBeenCalledTimes(1));
+    expect(mocks.readFastPathRestricted).toHaveBeenCalledWith('space-1', 'personal-1');
     expect(mocks.promptSignIn).not.toHaveBeenCalled();
     expect(queued()).toHaveLength(0);
+  });
+
+  // A join queued while the space registered resolves as locked out when it replays. Left as success,
+  // every Join control read it as "requested" for a request that was never sent.
+  it('puts the button back to Join when a queued join turns out to be locked out', async () => {
+    mocks.smartAccount = { account: { address: '0xabc' } };
+    mocks.accountSetupPending = true;
+    mocks.requestToBeMemberAsync.mockResolvedValue('locked_out');
+    const runner = renderRunner();
+    const { result, rerender } = renderJoin();
+
+    act(() => result.current.join());
+    mocks.accountSetupPending = false;
+    mocks.personalSpace = { personalSpaceId: 'personal-1', isRegistered: true, isLoading: false };
+    rerender();
+    act(() => runner.rerender());
+
+    await waitFor(() => expect(mocks.reset).toHaveBeenCalledTimes(1));
+    expect(mocks.requestToBeMemberAsync).toHaveBeenCalledWith(expect.objectContaining({ fromQueue: true }));
+  });
+
+  describe('for a viewer on the review path only', () => {
+    beforeEach(() => {
+      mocks.smartAccount = { account: { address: '0xabc' } };
+      mocks.personalSpace = { personalSpaceId: 'personal-1', isRegistered: true, isLoading: false };
+    });
+
+    // The contract refuses their request, so sending it only ever ended in "RPC Request failed".
+    it('opens the ask-an-editor link instead of sending a request that reverts', async () => {
+      mocks.readFastPathRestricted.mockResolvedValue(true);
+      const { result } = renderJoin();
+
+      act(() => result.current.join());
+
+      await waitFor(() =>
+        expect(store.get(lockedOutJoinAtom)).toEqual({
+          link: `${window.location.origin}/space/space-1?addBack=personal-1`,
+          spaceName: undefined,
+        })
+      );
+      expect(mocks.requestToBeMember).not.toHaveBeenCalled();
+    });
+
+    // Fails open: a flaky read must not block someone who can join.
+    it('sends the request when the restriction read fails', async () => {
+      mocks.readFastPathRestricted.mockRejectedValue(new Error('rpc down'));
+      const { result } = renderJoin();
+
+      act(() => result.current.join());
+
+      await waitFor(() => expect(mocks.requestToBeMember).toHaveBeenCalledTimes(1));
+      expect(store.get(lockedOutJoinAtom)).toBeNull();
+    });
+
+    it('shows the press as pending while it checks, and ignores a second press', async () => {
+      let resolve: (value: boolean) => void = () => {};
+      mocks.readFastPathRestricted.mockReturnValue(new Promise<boolean>(r => (resolve = r)));
+      const { result } = renderJoin();
+
+      act(() => result.current.join());
+      expect(result.current.status).toBe('pending');
+      act(() => result.current.join());
+      await act(async () => resolve(false));
+
+      expect(mocks.readFastPathRestricted).toHaveBeenCalledTimes(1);
+      expect(mocks.requestToBeMember).toHaveBeenCalledTimes(1);
+    });
   });
 
   it('queues the request, and shows it as requested, while the personal space is still registering', () => {
@@ -221,5 +304,59 @@ describe('useJoinSpace', () => {
       expect(queued()).toHaveLength(0);
       expect(renderJoin().result.current.optimisticRequested).toBe(false);
     });
+  });
+});
+
+describe('a join pressed before a Google sign-in', () => {
+  const savedJoin: RedirectedPendingAction = {
+    id: 'join:space-1',
+    label: 'your membership request',
+    requires: 'personalSpace',
+    intent: 'queued',
+    context: {
+      component: 'join_space_button',
+      page_path: '/space/space-1',
+      page_type: 'space',
+      page_view_id: 'pv-1',
+      target_id: 'space-1',
+      target_type: 'space',
+    },
+  };
+  const signedInWithSpace = () => {
+    mocks.smartAccount = { account: { address: '0xabc' } };
+    mocks.personalSpace = { personalSpaceId: 'personal-1', isRegistered: true, isLoading: false };
+  };
+
+  it('is kept for the redirect when pressed signed out', () => {
+    const { result } = renderJoin();
+    act(() => result.current.join());
+
+    expect(redirectedPendingActions(store)).toEqual([
+      expect.objectContaining({ id: 'join:space-1', label: 'your membership request', requires: 'personalSpace' }),
+    ]);
+  });
+
+  it('is sent once on the return, through the Join control on the page, and reads as requested until then', async () => {
+    restorePendingActions(store, [savedJoin]);
+    const { result } = renderJoin();
+    expect(result.current.optimisticRequested).toBe(true);
+
+    signedInWithSpace();
+    renderRunner();
+
+    await waitFor(() => expect(queued()).toHaveLength(0));
+    expect(mocks.requestToBeMemberAsync).toHaveBeenCalledTimes(1);
+    expect(mocks.requestToBeMemberAsync).toHaveBeenCalledWith(expect.objectContaining({ fromQueue: true }));
+  });
+
+  it('is dropped quietly for an account that is already a member', async () => {
+    mocks.requestToBeMemberAsync.mockResolvedValue(undefined);
+    restorePendingActions(store, [savedJoin]);
+    renderJoin();
+    signedInWithSpace();
+    renderRunner();
+
+    await waitFor(() => expect(queued()).toHaveLength(0));
+    expect(mocks.reportError).not.toHaveBeenCalled();
   });
 });

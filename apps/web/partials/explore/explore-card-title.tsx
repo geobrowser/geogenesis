@@ -67,6 +67,7 @@ export function ExploreCardTitle({
   opensSidePanel,
   clamped = false,
   showFullTextOnHover = false,
+  debateClaimTitle = false,
 }: {
   item: ExploreFeedItem;
   opensSidePanel: boolean;
@@ -84,6 +85,8 @@ export function ExploreCardTitle({
   clamped?: boolean;
   /** Expose the complete heading through the native tooltip on constrained card surfaces. */
   showFullTextOnHover?: boolean;
+  /** The heading of a debate card, whose tap also starts or unmutes that debate (GEO-3602). */
+  debateClaimTitle?: boolean;
 }) {
   const { text, target } = exploreCardHeading(item);
   const [headingElement, setHeadingElement] = React.useState<HTMLHeadingElement | null>(null);
@@ -94,7 +97,11 @@ export function ExploreCardTitle({
   });
 
   return (
-    <ExploreCardEntityLink item={target} opensSidePanel={opensSidePanel}>
+    <ExploreCardEntityLink
+      item={target}
+      opensSidePanel={opensSidePanel}
+      {...(debateClaimTitle ? { 'data-debate-claim-title': '' } : {})}
+    >
       <h2
         ref={setHeadingElement}
         title={showFullTextOnHover && isOverflowing ? text : undefined}

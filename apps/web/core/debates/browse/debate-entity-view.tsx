@@ -4,12 +4,44 @@ import * as React from 'react';
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
+import type { Debate, DebateMediaResponse } from '~/core/debates/api';
 import { DEBATE_TIME_PARAM, parseDebateTimeParam } from '~/core/debates/debate-timecode';
+import { debateQueryKeys } from '~/core/debates/hooks';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
+import { QuerySeed, type QuerySeedEntry } from '~/core/query-seed';
 
 import { DebatesBrowseFeed } from './debate-feed';
 import { debateIdFromEntityPath } from './debate-feed-url';
+
+/**
+ * What the server already read about the linked debate (GEO-3604): geo-chat's row from the removal
+ * check and its media readiness. Both anonymous; null where a read failed.
+ */
+export type DebatePageSeed = {
+  debate: Debate | null;
+  media: DebateMediaResponse | null;
+  /** The row carries per-viewer fields, so a signed-in reader's copy is seeded stale and re-read. */
+  signedIn: boolean;
+};
+
+/**
+ * The seed as React Query entries, under the keys `useDebate` and `useProcessedVideoDebateIds`
+ * read, so the feed has the linked debate and its readiness on its first render, server and browser.
+ */
+export function debatePageSeedEntries(debateId: string, seed: DebatePageSeed | undefined): QuerySeedEntry[] {
+  if (!seed) return [];
+  const entries: QuerySeedEntry[] = [];
+  if (seed.debate && ID.equals(seed.debate.id, debateId)) {
+    entries.push({
+      queryKey: debateQueryKeys.debate(debateId),
+      data: seed.debate,
+      ...(seed.signedIn ? { updatedAt: 0 } : {}),
+    });
+  }
+  if (seed.media) entries.push({ queryKey: debateQueryKeys.media(debateId), data: seed.media });
+  return entries;
+}
 
 type DebateEntityViewProps = {
   spaceId: string;
@@ -19,6 +51,7 @@ type DebateEntityViewProps = {
   editView: React.ReactNode;
   /** Shown if geo-chat reports the debate removed after the page rendered (GEO-2785). */
   removedView?: React.ReactNode;
+  seed?: DebatePageSeed;
 };
 
 /**
@@ -27,7 +60,17 @@ type DebateEntityViewProps = {
  * (props, relations, blocks) is only for editors and shows up when edit mode is on. If the debates
  * feature is off we fall back to the entity page so nothing is ever hidden without a way to see it.
  */
-export function DebateEntityView({ spaceId, debateId, editView, removedView }: DebateEntityViewProps) {
+export function DebateEntityView({ spaceId, debateId, editView, removedView, seed }: DebateEntityViewProps) {
+  // Memoised: `QuerySeed` seeds again whenever it is handed new entries (harmless, it only fills
+  // keys the cache lacks, but not on every render).
+  const seedEntries = React.useMemo(() => debatePageSeedEntries(debateId, seed), [debateId, seed]);
+  const view = (
+    <DebateEntityViewBody spaceId={spaceId} debateId={debateId} editView={editView} removedView={removedView} />
+  );
+  return seedEntries.length > 0 ? <QuerySeed entries={seedEntries}>{view}</QuerySeed> : view;
+}
+
+function DebateEntityViewBody({ spaceId, debateId, editView, removedView }: Omit<DebateEntityViewProps, 'seed'>) {
   const isEditing = useUserIsEditing(spaceId);
   // A link may name the moment it wants — a claim extracted from this debate pointing back at
   // where it was said. Null when the link is not asking for one, and also when it asks for

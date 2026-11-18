@@ -89,6 +89,9 @@ const CANONICAL_OUTCOME_FIELDS = new Set([
   // GEO-3495. The geo-chat id a debate request, rematch request or challenge was created with, so a
   // request joins to the debate it produced (geo-chat stores it on the debate).
   'request_id',
+  // GEO-3729. A Best debates grade: A, B, C or none (taken out), and the one before.
+  'grade',
+  'previous_grade',
 ]);
 
 /**
@@ -185,7 +188,8 @@ export function observeOperation(
     failed(code: OperationFailureCode, metrics?: Record<string, number>) {
       if (completed) return;
       complete(code === 'unknown' ? 'unknown' : 'failed', { ...metrics, failure_code: code });
-      if (['vote', 'ranking', 'publish'].includes(action))
+      // GEO-3679: push-down and its undo are votes too, so their failures are reported like one.
+      if (['vote', 'ranking', 'publish', 'push_down', 'undo_push_down'].includes(action))
         emit(code === 'unknown' ? 'action_outcome_unknown' : 'action_failed', code, {
           ...metrics,
           failure_code: code,

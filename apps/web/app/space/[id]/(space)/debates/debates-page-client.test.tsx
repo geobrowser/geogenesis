@@ -104,6 +104,8 @@ vi.mock('next/navigation', () => ({
   // `prefetch` is for PrefetchLink, which the feed header's space and claim links use.
   useRouter: () => ({ replace: mocks.replace, prefetch: vi.fn() }),
   useSearchParams: () => new URLSearchParams(),
+  // The feed reads the URL for its `?modal=comments` deep link.
+  usePathname: () => '/space/space-1/debates',
 }));
 
 // PrefetchLink hydrates the entity it points at on hover, which reaches for the sync engine.
@@ -115,6 +117,7 @@ vi.mock('~/core/state/feature-flags', () => ({
   useFeatureFlag: () => true,
 }));
 
+vi.mock('~/core/debates/moments-editor/hooks', () => ({ useIsMediaAdmin: () => false }));
 vi.mock('~/core/debates/hooks', () => ({
   useGeoChatAuth: () => ({ ready: true, authenticated: true, accountKey: 'user-a' }),
   useSpaceDebates: () => ({

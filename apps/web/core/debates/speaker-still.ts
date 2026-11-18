@@ -49,3 +49,14 @@ export function fallBackToDurableStill(fallback: string) {
     if (event.currentTarget.src !== fallback) event.currentTarget.src = fallback;
   };
 }
+
+/**
+ * The stills a debate page's document preloads for its linked debate (GEO-3604): the same `src`s
+ * the player builds from the same readiness, so the card's `<img>`s take the preloaded responses.
+ */
+export function debatePageStillPreloads(
+  debateId: string,
+  artifacts: Pick<DebateMediaArtifact, 'kind'>[] | undefined
+): string[] {
+  return ([1, 2] as const).flatMap(slot => speakerStillUrl(debateId, slot, artifacts) ?? []);
+}

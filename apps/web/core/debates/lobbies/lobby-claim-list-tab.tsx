@@ -25,8 +25,10 @@ import {
   rowsByPlacedClaim,
   taggedClaimEntry,
 } from '../matchmaking/tagged-claim-entry';
+import type { AgendaClaimFilter } from '../todays-claims/agenda-claim-filter';
 import { TODAYS_CLAIMS_LIST_NAME, isTodaysClaimsList } from '../todays-claims/todays-claims-list-id';
 import { useDebatePublishableSpaces } from '../use-debate-publishable-spaces';
+import { useLobbyHostAgendaFilter } from './lobby-agenda-claims';
 import { useRemoveLobbyClaimList } from './lobby-claim-lists-hooks';
 import { LOBBY_CLAIMS_CONTROLS_TOP_CLASS, LOBBY_CLAIMS_SECTION_SCROLL_MARGIN_CLASS } from './lobby-claims-sticky';
 import { useLobbyRoomCardRenderer } from './lobby-explore-claims';
@@ -41,6 +43,8 @@ export const CLAIM_LIST_TAB_COPY = {
   remove: 'Remove from lobby',
   removing: 'Removing…',
   empty: 'This list has no claims yet.',
+  /** Agenda-only (GEO-3775): the list has claims, none of them on an agenda. */
+  agendaEmpty: 'No claims on this list are on today’s agendas yet.',
 };
 
 /** The tab's label: the page's own name, once the page has been read; Today's claims by its own. */
@@ -59,20 +63,39 @@ export function LobbyClaimListTab({ lobby, list }: { lobby: LobbyPageView; list:
   const { data: page, isLoading, error, refetch } = useClaimListPage(list.entity_id, list.space_id);
   const remove = useRemoveLobbyClaimList(lobby.lobby_id);
   const { publishableSpaceIds } = useDebatePublishableSpaces();
-  const sections = React.useMemo(
+  const placed = React.useMemo(
     () => (page ? placeClaimListSections(page, publishableSpaceIds) : []),
     [page, publishableSpaceIds]
+  );
+  // GEO-3775: a host's list is agenda-only too, under its own switch. A theme left with no agenda
+  // claim goes, and the counts are of what is left; nothing is drawn while the agendas are out.
+  const agenda = useLobbyHostAgendaFilter();
+  const sections = React.useMemo(
+    () =>
+      agenda.active
+        ? placed.flatMap(section => {
+            const claims = section.claims.filter(claim => agenda.has(claim.id));
+            return claims.length > 0 ? [{ ...section, claims }] : [];
+          })
+        : placed,
+    [agenda, placed]
   );
   const gone = page === null;
 
   return (
     <HubQueryState
       analyticsSurface="hub"
-      isLoading={isLoading}
-      error={error}
-      onRetry={() => void refetch()}
+      isLoading={isLoading || agenda.pending}
+      error={agenda.error ?? error}
+      onRetry={() => (agenda.error ? agenda.refetch() : void refetch())}
       isEmpty={sections.length === 0}
-      emptyMessage={gone ? CLAIM_LIST_TAB_COPY.gone : CLAIM_LIST_TAB_COPY.empty}
+      emptyMessage={
+        gone
+          ? CLAIM_LIST_TAB_COPY.gone
+          : placed.length > 0
+            ? CLAIM_LIST_TAB_COPY.agendaEmpty
+            : CLAIM_LIST_TAB_COPY.empty
+      }
       // As the tab menu does: why a removal failed, and no second request while one is out.
       emptyNote={
         gone && remove.error ? (
@@ -92,7 +115,7 @@ export function LobbyClaimListTab({ lobby, list }: { lobby: LobbyPageView; list:
           : undefined
       }
     >
-      {page ? <ClaimListSections lobby={lobby} list={list} page={page} sections={sections} /> : null}
+      {page ? <ClaimListSections lobby={lobby} list={list} page={page} sections={sections} agenda={agenda} /> : null}
     </HubQueryState>
   );
 }
@@ -102,11 +125,13 @@ function ClaimListSections({
   list,
   page,
   sections,
+  agenda,
 }: {
   lobby: LobbyPageView;
   list: DebateLobbyClaimList;
   page: { entityId: string; spaceId: string };
   sections: PlacedClaimListSection[];
+  agenda: AgendaClaimFilter;
 }) {
   const { entriesBySection, renderCard } = useLobbyListCards(lobby, sections);
   // GEO-3495. Where each section starts in the page's numbering.
@@ -183,7 +208,13 @@ function ClaimListSections({
                 claimId={entry.claim.claim_entity_id}
                 listId="lobby_list"
                 position={sectionOffsets[index] + position + 1}
-                scope={{ list_entity_id: list.entity_id, list_section_id: section.id }}
+                // Agenda-only, credited to the agenda that lists it too (GEO-3775); the section is
+                // this list's.
+                scope={{
+                  ...agenda.scopeFor(entry.claim.claim_entity_id),
+                  list_entity_id: list.entity_id,
+                  list_section_id: section.id,
+                }}
               >
                 {renderCard(entry)}
               </DebateClaimCardSurface>

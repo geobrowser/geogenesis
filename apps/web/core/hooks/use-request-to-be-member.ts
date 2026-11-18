@@ -5,6 +5,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
 
 import { Effect, Either } from 'effect';
+import { useSetAtom } from 'jotai';
 
 import { requestSpaceMembership } from '~/core/access/request-space-membership';
 import { normalizeSpaceId } from '~/core/access/space-access';
@@ -16,9 +17,11 @@ import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
 import { getIsEditorOfSpace, getIsMemberOfSpace } from '~/core/io/queries';
 import { pushMarketingEvent } from '~/core/marketing-events';
+import { lockedOutJoinAtom } from '~/core/state/locked-out-join';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
+import { readLockedOutLink } from '~/core/utils/add-back-link';
 import { validateSpaceId } from '~/core/utils/utils';
 
 interface UseRequestToBeMemberArgs {
@@ -27,6 +30,13 @@ interface UseRequestToBeMemberArgs {
   /** Optional display data so the optimistic "pending" row can render a name/image immediately. */
   space?: { name?: string; image?: string | null };
 }
+
+/**
+ * What a request resolved with, when it didn't send one: the viewer is on the review path only, so
+ * the Ask-an-editor dialog opened instead. Distinct from success, so no Join control reads it as
+ * "requested", and analytics records it as rejected.
+ */
+export const LOCKED_OUT = 'locked_out' as const;
 
 type RequestToBeMemberOptions = {
   /** Replaying a request queued before the account was ready (see `useJoinSpace`). */
@@ -45,9 +55,12 @@ export function useRequestToBeMember({ spaceId, space }: UseRequestToBeMemberArg
   const queryClient = useQueryClient();
 
   const tx = useSmartAccountTransaction();
+  const setLockedOut = useSetAtom(lockedOutJoinAtom);
 
   const handleRequestToBeMember = useCallback(
-    async ({ fromQueue = false, isCurrent = () => true }: RequestToBeMemberOptions = {}) => {
+    async ({ fromQueue = false, isCurrent = () => true }: RequestToBeMemberOptions = {}): Promise<
+      typeof LOCKED_OUT | void
+    > => {
       // Through the cache as well as this render. A join queued before sign-up replays through this
       // hook as it was at the press, before the account or space existed; the cache has both by the
       // time the runner fires. Reading only the render failed that replay on every retry.
@@ -93,6 +106,18 @@ export function useRequestToBeMember({ spaceId, space }: UseRequestToBeMemberArg
         throw new Error('User is already a member or editor of the space');
       }
 
+      // A join queued while signed out skipped the press-time check in `useJoinSpace`, and is the usual
+      // way someone who left comes back. A restricted requester gets the Ask-an-editor dialog instead
+      // of a request the contract refuses. Resolved rather than thrown, so it leaves the queue.
+      if (fromQueue) {
+        const link = await readLockedOutLink(spaceId, requesterSpaceId);
+        if (!isCurrent()) return;
+        if (link) {
+          setLockedOut({ link, spaceName: space?.name });
+          return LOCKED_OUT;
+        }
+      }
+
       try {
         await requestSpaceMembership({ spaceId, personalSpaceId: requesterSpaceId, tx, queryClient, space });
         pushMarketingEvent('geo_join_space', { space_id: normalizedSpaceId, space_name: space?.name ?? undefined });
@@ -102,18 +127,35 @@ export function useRequestToBeMember({ spaceId, space }: UseRequestToBeMemberArg
         throw error;
       }
     },
-    [dispatch, smartAccount, personalSpaceId, isRegistered, isAccountSetupPending, spaceId, space, tx, queryClient]
+    [
+      dispatch,
+      smartAccount,
+      personalSpaceId,
+      isRegistered,
+      isAccountSetupPending,
+      spaceId,
+      space,
+      tx,
+      queryClient,
+      setLockedOut,
+    ]
   );
 
   const mutation = useMutation({
     // `void` as well, so a live press can still call `mutate()` with nothing.
     mutationFn: (options: RequestToBeMemberOptions | void) => handleRequestToBeMember(options ?? undefined),
   });
-  const { mutate, mutateAsync, status } = useObservedMutation(mutation, 'join_space', () => getContext());
+  const { mutate, mutateAsync, status, reset } = useObservedMutation(
+    mutation,
+    'join_space',
+    () => getContext(),
+    data => (data === LOCKED_OUT ? 'rejected' : null)
+  );
 
   return {
     requestToBeMember: mutate,
     requestToBeMemberAsync: mutateAsync,
     status,
+    reset,
   };
 }

@@ -16,16 +16,25 @@ export const PREVIEW_URL_REFRESH_LEAD_MS = 60_000;
 type Slot = 1 | 2;
 type SignedClip = { url: string; expiresAtMs: number | null };
 /** Null until signed; `failed` once a slot has no clip to show, so nothing asks again in a loop. */
-type SlotClip = SignedClip | 'failed' | null;
+/** `refreshing`: its element failed and a fresh URL is on the way; the pair shows stills meanwhile. */
+type SlotClip = SignedClip | 'failed' | 'refreshing' | null;
 
 export type DebatePreviewClipsState = {
-  /** The signed clip per slot, or null: not ready, not signed yet, failed, or the flag is off. */
+  /** Both slots' signed clips, or both null: either not ready, not signed yet, failed, or the flag off. */
   clips: DebatePreviewClips;
   /**
-   * Whether this debate has a preview for either slot, from the debate alone — known before any
-   * URL is signed, so a card does not change how it holds when the signature lands.
+   * Whether this debate has a preview for both slots, from the debate alone — known before any
+   * URL is signed, so a card does not change how it holds when the signature lands. One debater's
+   * clip looping beside the other's still reads as a broken card (GEO-3641), so a debate with only
+   * one clip has none.
    */
   available: boolean;
+  /**
+   * Whether either slot has a preview, from the debate alone. What the card's hold rule keys on, as
+   * it did before clips were shown only as a pair: a one-clip debate still holds per card, and
+   * still autoplays when fully streamed, though it shows stills.
+   */
+  hasAnyPreview: boolean;
   /** How far slot 2's clip runs ahead of slot 1's to show the same instant; see `previewPairOffsetSeconds`. */
   offsetSeconds: number;
   /** A clip element failed: sign that slot again, once; after that the slot shows its still. */
@@ -46,9 +55,9 @@ function recordingForSlot(debate: Debate, slot: Slot): DebateRecording | null {
  * The preview clips a held feed card loops in place of the stills (Cloudflare Stream).
  *
  * Signed only while `enabled` — the feed passes "near the viewport" (active or preloading) — so a
- * page of cards does not sign a page of clips. Each slot is its own request, and a slot whose clip
- * is not ready, or cannot be signed, is null: the player shows that debater's still beside the
- * other's clip. Re-signed ahead of `expires_at`, and when the element reports the URL dead.
+ * page of cards does not sign a page of clips. Each slot is its own request. The clips come as a
+ * pair: if either is not ready or cannot be signed, both are null and both debaters show their
+ * stills. Re-signed ahead of `expires_at`, and when the element reports the URL dead.
  *
  * With `NEXT_PUBLIC_DEBATE_STREAM_PLAYBACK` off this signs nothing and returns no clips.
  */
@@ -60,13 +69,15 @@ export function useDebatePreviewClips(
   const recordingUrls = useRecordingPlaybackUrl();
   const slot1Recording = recordingForSlot(debate, 1);
   const slot2Recording = recordingForSlot(debate, 2);
-  const slot1Filename = recordingHasPreview(slot1Recording, { enabled: streamEnabled })
-    ? (slot1Recording?.filename ?? null)
-    : null;
-  const slot2Filename = recordingHasPreview(slot2Recording, { enabled: streamEnabled })
-    ? (slot2Recording?.filename ?? null)
-    : null;
-  const available = slot1Filename !== null || slot2Filename !== null;
+  const slot1HasPreview =
+    recordingHasPreview(slot1Recording, { enabled: streamEnabled }) && Boolean(slot1Recording?.filename);
+  const slot2HasPreview =
+    recordingHasPreview(slot2Recording, { enabled: streamEnabled }) && Boolean(slot2Recording?.filename);
+  const bothHavePreview = slot1HasPreview && slot2HasPreview;
+  const hasAnyPreview = slot1HasPreview || slot2HasPreview;
+  const slot1Filename = bothHavePreview ? (slot1Recording?.filename ?? null) : null;
+  const slot2Filename = bothHavePreview ? (slot2Recording?.filename ?? null) : null;
+  const available = bothHavePreview;
 
   const offsetSeconds = previewPairOffsetSeconds(slot1Recording, slot2Recording);
 
@@ -119,8 +130,8 @@ export function useDebatePreviewClips(
   const slot2State = signed.key === key ? signed.slot2 : null;
   const slot1Pending = enabled && slot1Filename !== null && slot1State === null;
   const slot2Pending = enabled && slot2Filename !== null && slot2State === null;
-  const slot1Signed = slot1State === 'failed' ? null : slot1State;
-  const slot2Signed = slot2State === 'failed' ? null : slot2State;
+  const slot1Signed = typeof slot1State === 'object' ? slot1State : null;
+  const slot2Signed = typeof slot2State === 'object' ? slot2State : null;
 
   React.useEffect(() => {
     if (!slot1Pending) return;
@@ -178,13 +189,22 @@ export function useDebatePreviewClips(
         return;
       }
       refreshedSlotsRef.current.add(slotKey);
+      // Off the dead URL at once, so its partner does not loop alone while this one re-signs.
+      setSigned(current =>
+        current.key !== key ? current : { ...current, [slot === 1 ? 'slot1' : 'slot2']: 'refreshing' }
+      );
       sign(slot, true);
     },
     [key, sign]
   );
 
-  const clips = React.useMemo(() => ({ slot1: slot1Url, slot2: slot2Url }), [slot1Url, slot2Url]);
-  return { clips, available, offsetSeconds, refresh };
+  // Both or neither: until both are signed, or once either has failed, both debaters show stills.
+  const pairReady = slot1Url !== null && slot2Url !== null;
+  const clips = React.useMemo(
+    () => (pairReady ? { slot1: slot1Url, slot2: slot2Url } : { slot1: null, slot2: null }),
+    [pairReady, slot1Url, slot2Url]
+  );
+  return { clips, available, hasAnyPreview, offsetSeconds, refresh };
 }
 
 /** How far apart the two clips may drift before slot 2 is moved back into step, in seconds. */

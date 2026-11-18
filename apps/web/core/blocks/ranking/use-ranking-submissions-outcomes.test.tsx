@@ -32,6 +32,8 @@ vi.mock('~/core/sdk/geo-client', () => ({ geo: { personalSpaces: { publishEdit: 
 vi.mock('./use-my-ranking', () => ({
   useMyRanking: () => ({ myRankEntity: null, orderedEntityIds: [], isLoading: false, refetchMyRanking: vi.fn() }),
   recordPublishedRank: vi.fn(),
+  releasePublishedRankPin: vi.fn(),
+  fetchMyRankingBallot: vi.fn(async () => ({ rankEntity: null, orderedEntityIds: [] })),
 }));
 vi.mock('./use-ranking-block-config', () => ({
   useRankingBlockConfig: () => ({ isRolling: false, submissionFrequencyHours: null }),

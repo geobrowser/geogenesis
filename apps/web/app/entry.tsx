@@ -41,7 +41,6 @@ import { SlideUpBodyState } from '~/design-system/slide-up-body-state';
 
 import { BrowseSidebar } from '~/partials/browse-sidebar/browse-sidebar';
 import { MobileBrowseDrawer } from '~/partials/browse-sidebar/mobile-browse-drawer';
-import { ASSISTANT_DISABLED } from '~/partials/chat/assistant-visibility';
 import { ChatLauncher } from '~/partials/chat/chat-launcher';
 import { createSpaceDialogOpenAtom } from '~/partials/create-space/create-space-state';
 import { EntityStickyHeaderHost } from '~/partials/entity-page/entity-sticky-header-host';
@@ -54,6 +53,7 @@ import { shouldMountOnboardingDialog } from '~/partials/onboarding/onboarding-di
 import { PendingActionsRunner } from '~/partials/pending-actions-runner';
 import { LocalVotesSaver } from '~/partials/save-votes/local-votes-saver';
 import { SignInBoxGate } from '~/partials/sign-in/sign-in-box-gate';
+import { AskEditorDialog } from '~/partials/space-page/ask-editor-dialog';
 
 import { PageViewTracker } from '~/app/page-view-tracker';
 import {
@@ -376,6 +376,7 @@ export function App({ children }: { children: React.ReactNode }) {
           <PendingPersonalSpaceGate />
           <PendingTopicFollowsGate />
           <PendingActionsRunner />
+          <AskEditorDialog />
           <LocalVotesSaver />
           <CreateSpaceDialogGate />
           <PendingCreatedSpaceGate />
@@ -391,7 +392,7 @@ export function App({ children }: { children: React.ReactNode }) {
           <FlowBarGate />
           <StatusBarGate />
           <ReviewChangesGate />
-          {!ASSISTANT_DISABLED && <ChatLauncher />}
+          <ChatLauncher />
           <FeatureFlagsGate />
           <DebateCoordinator />
           {/* Suspense: the panel reads `useSearchParams` to tell a debates deep link apart from

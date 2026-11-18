@@ -15,6 +15,7 @@ import { SPACE_STALE_TIME, spacesByRequestedId } from '~/core/io/space-batch-loa
 import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
 import { type CursorPage, collectCursorPages } from '~/core/sync/collect-cursor-pages';
 import type { Profile } from '~/core/types';
+import { chunk } from '~/core/utils/chunk';
 import { mapWithConcurrency } from '~/core/utils/map-with-concurrency';
 
 import { claimResponseTargetKey } from './claim-response-summary-query-keys';
@@ -288,12 +289,6 @@ export async function loadClaimResponderMetadataCaches({
 
 function emptySummary(): ClaimResponseSummary {
   return { counts: { positive: 0, negative: 0 }, viewerResponse: null, responders: [] };
-}
-
-function chunk<T>(items: T[], size: number) {
-  const chunks: T[][] = [];
-  for (let start = 0; start < items.length; start += size) chunks.push(items.slice(start, start + size));
-  return chunks;
 }
 
 function defaultFetchProfiles(spaceIds: string[]) {

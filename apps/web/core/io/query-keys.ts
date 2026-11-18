@@ -42,6 +42,11 @@ export function personalSpaceIdsQueryKey(ids: string[]) {
 }
 
 /** One cache entry per space, for the same reason as {@link profileBySpaceIdQueryKey}. */
+/** A space's DAO contract address, resolved through the registry (`resolveDaoAddress`). */
+export function daoAddressQueryKey(spaceId: string) {
+  return ['dao-address', validateSpaceId(spaceId) ?? spaceId] as const;
+}
+
 export function spaceByIdQueryKey(spaceId: string) {
   return ['space-by-id', validateSpaceId(spaceId) ?? spaceId] as const;
 }

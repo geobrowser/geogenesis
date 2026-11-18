@@ -6,9 +6,9 @@ import * as React from 'react';
 
 import { Effect } from 'effect';
 
-import { chunk } from '~/core/community/community-graphql';
 import { uuidToHex } from '~/core/id/normalize';
 import { graphql } from '~/core/io/graphql-client';
+import { chunk } from '~/core/utils/chunk';
 import { normId } from '~/core/utils/norm-id';
 
 import { type PersonRecord, derivePersonRecord } from './person-record';

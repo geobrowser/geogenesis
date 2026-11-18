@@ -5,6 +5,7 @@ import { useQueries } from '@tanstack/react-query';
 import * as React from 'react';
 
 import { uuidToHex } from '~/core/id/normalize';
+import { chunk } from '~/core/utils/chunk';
 
 import { NAME_BATCH_SIZE, fetchDropdownOptionNames, fingerprintIdList } from './fetch-dropdown-options';
 
@@ -33,22 +34,19 @@ export function useDropdownOptionNames({ ids, enabled }: { ids: string[]; enable
   }
   missing.sort();
 
-  const chunks: string[][] = [];
-  for (let start = 0; start < missing.length; start += NAME_BATCH_SIZE) {
-    chunks.push(missing.slice(start, start + NAME_BATCH_SIZE));
-  }
+  const chunks = chunk(missing, NAME_BATCH_SIZE);
 
   // One query per chunk so a large request (search across a huge facet)
   // resolves progressively instead of all-or-nothing.
   const results = useQueries({
-    queries: chunks.map(chunk => ({
-      queryKey: ['data-block', 'dropdown-option-names', fingerprintIdList(chunk)],
+    queries: chunks.map(batch => ({
+      queryKey: ['data-block', 'dropdown-option-names', fingerprintIdList(batch)],
       queryFn: async ({ signal }: { signal?: AbortSignal }) => {
-        const fetched = await fetchDropdownOptionNames(chunk, signal);
+        const fetched = await fetchDropdownOptionNames(batch, signal);
         for (const [key, name] of fetched) nameCache.set(key, name);
         // An id the API returned nothing for stays unnamed rather than
         // re-requested forever.
-        for (const key of chunk) if (!nameCache.has(key)) nameCache.set(key, null);
+        for (const key of batch) if (!nameCache.has(key)) nameCache.set(key, null);
         return fetched.size;
       },
       enabled,

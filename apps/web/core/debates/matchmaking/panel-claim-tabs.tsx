@@ -6,11 +6,13 @@ import { useAtom, useAtomValue } from 'jotai';
 
 import type { MatchmakingClaim } from '../api';
 import { useDebateActivity, useGeoChatAuth, useUpdateDebateAvailability } from '../hooks';
+import { agendaMatches, useAgendaClaimFilterContext } from '../todays-claims/agenda-claim-filter';
 import { ClaimsTab, type ClaimsTabVariant } from './claims-tab';
 import { useMatchmakingMatches } from './hooks';
 import { otherSideHeld } from './hub-claim-end-slot';
 import type { HubSortOption, PanelListFilters } from './hub-filters';
 import { HubPillButton } from './hub-pill-button';
+import { HubQueryState } from './hub-states';
 import { MatchesList } from './matches-list';
 import { opposingPositions } from './opposing-positions';
 import {
@@ -69,11 +71,19 @@ function hasSomeoneOnlineOpposite(entry: MatchmakingClaim) {
 export function useMatchesShowOffline(enabled = true) {
   const includeOffline = useAtomValue(debatesHubMatchesIncludeOfflineAtom);
   const matchesQuery = useMatchmakingMatches(enabled);
-  // Read off the last answer in hand. A first load or a failed one is not "nobody is online". A
-  // background refresh is not a new answer either: react-query keeps the previous data through it,
-  // and gating on `isFetching` swapped to the bare match list and back on every refresh, flashing
-  // that list's empty state in between (26 Oct).
-  const nobodyOnline = matchesQuery.data !== undefined && !matchesQuery.error && matchesQuery.data.matches.length === 0;
+  // GEO-3775: the panel's agenda filter. Someone online only on a claim no agenda lists is nobody
+  // here, or the tab would sit on an empty match list instead of falling back.
+  const agenda = useAgendaClaimFilterContext();
+  // Read off the last answer in hand. A first load or a failed one is not "nobody is online", and
+  // nor are agendas still out or failed. A background refresh is not a new answer either:
+  // react-query keeps the previous data through it, and gating on `isFetching` swapped to the bare
+  // match list and back on every refresh, flashing that list's empty state in between (26 Oct).
+  const nobodyOnline =
+    matchesQuery.data !== undefined &&
+    !matchesQuery.error &&
+    !agenda.pending &&
+    !agenda.error &&
+    agendaMatches(agenda, matchesQuery.data.matches).length === 0;
   return { nobodyOnline, showsOffline: includeOffline || nobodyOnline };
 }
 
@@ -114,6 +124,7 @@ export function PanelMatchesTab({ onTabChange }: { onTabChange: (tab: DebatesHub
   const [includeOffline, setIncludeOffline] = useAtom(debatesHubMatchesIncludeOfflineAtom);
   const { data: activity } = useDebateActivity(true);
   const { nobodyOnline, showsOffline } = useMatchesShowOffline();
+  const agenda = useAgendaClaimFilterContext();
 
   const filters = React.useMemo<PanelListFilters>(
     () => ({
@@ -130,11 +141,13 @@ export function PanelMatchesTab({ onTabChange }: { onTabChange: (tab: DebatesHub
       onClearExtras: () => setIncludeOffline(false),
       clientSort: sort,
       emptyPredicate: {
-        message: 'Nobody holds the other side of a claim you’ve answered yet.',
+        message: agenda.active
+          ? 'Nobody holds the other side of one of today’s claims you’ve answered yet.'
+          : 'Nobody holds the other side of a claim you’ve answered yet.',
         action: { label: 'Explore claims', onClick: () => onTabChange('explore') },
       },
     }),
-    [includeOffline, onTabChange, setIncludeOffline, setSort, sort]
+    [agenda.active, includeOffline, onTabChange, setIncludeOffline, setSort, sort]
   );
 
   // The fallback's line explains the rows under it, so only over rows: above "You haven't taken a
@@ -147,7 +160,11 @@ export function PanelMatchesTab({ onTabChange }: { onTabChange: (tab: DebatesHub
         {notAvailable ? <NotAvailableCard /> : null}
         {fallback ? (
           <div data-testid="matches-nobody-online">
-            <h3 className="text-quoteMedium text-text">Nobody who disagrees with you is online</h3>
+            <h3 className="text-quoteMedium text-text">
+              {agenda.active
+                ? 'Nobody who disagrees with you on today’s claims is online'
+                : 'Nobody who disagrees with you is online'}
+            </h3>
             <p className="text-breadcrumb text-grey-04">
               These claims have someone on the other side. Pick a time and they get an invite.
             </p>
@@ -157,6 +174,23 @@ export function PanelMatchesTab({ onTabChange }: { onTabChange: (tab: DebatesHub
     ) : null;
   };
 
+  // Which list to draw is the agendas' answer as well as the matches', so neither is mounted before it:
+  // drawing one and swapping to the other is the flash `nobodyOnline` is careful to avoid.
+  if (agenda.pending || agenda.error) {
+    return (
+      <HubQueryState
+        analyticsSurface="hub"
+        isLoading={agenda.pending}
+        error={agenda.error}
+        onRetry={agenda.refetch}
+        isEmpty
+        emptyMessage=""
+      >
+        {null}
+      </HubQueryState>
+    );
+  }
+
   return showsOffline ? (
     <ClaimsTab
       variant="positions"
@@ -165,12 +199,19 @@ export function PanelMatchesTab({ onTabChange }: { onTabChange: (tab: DebatesHub
       atomsFrom="panelMatches"
       panelFilters={filters}
       keepClaim={hasSomeoneOnTheOtherSide}
+      agendaFilter={agenda}
       notice={notice}
       onTabChange={onTabChange}
     />
   ) : (
     // Matches only while someone is online, so never under the fallback's line.
-    <MatchesList atomsFrom="panelMatches" onTabChange={onTabChange} panelFilters={filters} notice={notice(false)} />
+    <MatchesList
+      atomsFrom="panelMatches"
+      onTabChange={onTabChange}
+      panelFilters={filters}
+      notice={notice(false)}
+      agendaFilter={agenda}
+    />
   );
 }
 
@@ -225,6 +266,8 @@ export function PanelExploreTab({
   // Show and "Someone online" are both about the viewer — what they have answered, who could debate
   // *them* — so signed out there is only the tag to browse, and neither control is offered.
   const { authenticated } = useGeoChatAuth();
+  // GEO-3775: every list here, signed in or out, warm or not, is agenda claims only.
+  const agenda = useAgendaClaimFilterContext();
 
   const variant = panelExploreVariant({ authenticated, show, someoneOnline });
 
@@ -279,12 +322,14 @@ export function PanelExploreTab({
         ? {
             ...filters,
             emptyPredicate: {
-              message: 'Nobody who disagrees with you is online right now.',
+              message: agenda.active
+                ? 'Nobody who disagrees with you on one of today’s claims is online right now.'
+                : 'Nobody who disagrees with you is online right now.',
               action: { label: 'Turn off Someone online', onClick: () => setSomeoneOnline(false) },
             },
           }
         : filters,
-    [filters, keepClaim, setSomeoneOnline]
+    [agenda.active, filters, keepClaim, setSomeoneOnline]
   );
 
   return (
@@ -294,6 +339,7 @@ export function PanelExploreTab({
       atomsFrom="panelExplore"
       panelFilters={panelFilters}
       keepClaim={keepClaim}
+      agendaFilter={agenda}
       // `debate_now` keeps the claims you have answered. Under Not answered they fold away the way
       // Explore's do, which also holds one you answer in front of you long enough to press its new
       // Debate now, instead of dropping it on the next refetch.

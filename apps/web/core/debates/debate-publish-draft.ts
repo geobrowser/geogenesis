@@ -117,13 +117,6 @@ export type DebateClaimInput = {
    */
   topics?: DebatePublishTopic[];
   /**
-   * True when the claim is broad enough to be argued for and against. Tagged `Debate`
-   * so it joins the claim picker's candidate motions; a narrowly verifiable claim
-   * publishes as a Claim like any other, just untagged. For a reused entity the reuse
-   * policy has already cleared this when the entity carries the tag already.
-   */
-  isContestable?: boolean;
-  /**
    * When in the debate this claim was said, in integer milliseconds on the transcript's clock:
    * geo-chat's `start_ms`/`end_ms`, the span of the transcript it was extracted from (GEO-2958).
    * Written onto the block → claim relation entity, where the app reads it as a certainty — so
@@ -153,6 +146,13 @@ export type DebateClaimInput = {
    * policy found already linked to the motion (so a reused entity never gets a second one).
    */
   stance?: ClaimStance | null;
+  /**
+   * geo-chat's matching audit for this claim (`match.verdict`, `match.best_score`): what the judge
+   * said when it compared the claim with the space's published claims. Only GEO-3635's late claims
+   * publish reads it, to hold a claim whose judge call failed while a near-identical claim exists.
+   */
+  matchVerdict?: string | null;
+  matchBestScore?: number | null;
 };
 
 export type DebatePublishInput = {
@@ -176,6 +176,13 @@ export type DebatePublishInput = {
    * Debate with no Topics relations.
    */
   claimTopics?: DebatePublishTopic[];
+  /**
+   * Add the Debate tag to the debated claim (GEO-3616). Extracted claims publish untagged, so one
+   * picked as a motion (the rematch picker's From this debate) joins the tagged list only once it
+   * is actually debated. Set only when a read confirmed the claim lacks the tag in this space, so
+   * a claim that has it never gets a second one. Ignored for a question debate.
+   */
+  tagClaimAsDebate?: boolean;
   participants: DebatePublishParticipant[];
   /**
    * Durable https URL for the rendered final video (the geo-chat `…/media/artifacts/{kind}/content`
@@ -241,23 +248,10 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
   // lags it publishes again; on 2026-10-05 that left 11 to 16 copies of three debates' Transcript,
   // Video and share card, and of every relation on the Debate. A key repeated within one edit gets
   // its occurrence appended, so ids stay unique however the input repeats itself.
-  const keyOccurrences = new Map<string, number>();
-  const derivedId = (key: string) => {
-    const occurrence = keyOccurrences.get(key) ?? 0;
-    keyOccurrences.set(key, occurrence + 1);
-    return debatePublishId(debateEntityId, occurrence === 0 ? key : `${key}#${occurrence}`);
-  };
-  const mintEntityId = (key: string) =>
-    options.createEntityId ? options.createEntityId() : derivedId(`entity:${key}`);
+  const { entityId: mintEntityId, relationIds } = debatePublishIds(debateEntityId, options.createEntityId);
 
   const bySlot = [...input.participants].sort((a, b) => a.participantSlot - b.participantSlot);
-  const nameFor = (p: DebatePublishParticipant) => (p.displayName?.trim() ? p.displayName.trim() : 'Anonymous');
-  // "<claim> | <A> vs. <B>": the motion leads, the matchup follows. Names are read in
-  // truncating surfaces — feed cards, side-panel headers, edit titles — where the first
-  // words are the ones that survive, and what a debate is about identifies it far better
-  // than who argued it. `join` rather than a two-name template: the shape is a pair today,
-  // but nothing in the publisher caps participants at two.
-  const debateName = `${claimText} | ${bySlot.map(nameFor).join(' vs. ')}`;
+  const debateName = debatePublishName(claimText, input.participants);
   /**
    * The Video, its keyframe, the share card and the Transcript are named after the debate they
    * belong to, qualified by what they are. One closure so the separator is declared once: it is
@@ -306,12 +300,9 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
      */
     stable?: boolean;
   }): { id: string; name: string | null } => {
-    const edge = `${normalizeId(fromEntity.id)}:${normalizeId(propertyId)}:${normalizeId(toEntityId)}`;
     const ids = stable
       ? stableClaimRelationIds(fromEntity.id, propertyId, toEntityId)
-      : options.createEntityId
-        ? { id: options.createEntityId(), entityId: options.createEntityId() }
-        : { id: derivedId(`relation:${edge}`), entityId: derivedId(`relation-entity:${edge}`) };
+      : relationIds(fromEntity.id, propertyId, toEntityId);
     const entityId = ids.entityId;
     relations.push(
       makeRelation({
@@ -359,6 +350,17 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
   });
   // The Debate is filed under the same topics as the claim it argued.
   for (const topic of input.claimTopics ?? []) relateTopic(debateRef, topic);
+  // A debated claim belongs in the tagged list. The relation's id comes from its endpoints, so two
+  // debates of one untagged claim publishing before either indexes write the same relation, not two.
+  if (input.tagClaimAsDebate && (input.subjectKind ?? 'claim') === 'claim') {
+    relate({
+      fromEntity: { id: input.claimEntityId, name: claimText },
+      propertyId: TAG_PROPERTY_ID,
+      toEntityId: DEBATE_TAG_ID,
+      toEntityName: 'Debate',
+      stable: true,
+    });
+  }
 
   for (const p of bySlot) {
     relate({
@@ -380,27 +382,13 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
   }
 
   // --- Share card (OG image) ---
-  // Same shape as the keyframe block below: an Image entity, then a relation from the debate. It
-  // hangs off the debate rather than the Video because it describes the debate, and because it is
-  // generated once at publish time and never revisited.
   if (input.ogImageUrl) {
-    const ogImageId = mintEntityId('og-image');
-    const ogImageName = derivedName('share card');
-    const ogImageRef = { id: ogImageId, name: ogImageName };
-    setText(ogImageId, ogImageName, NAME_PROPERTY_ID, ogImageName);
-    setText(ogImageId, ogImageName, IMAGE_URL_PROPERTY_ID, input.ogImageUrl);
-    relate({
-      fromEntity: ogImageRef,
-      propertyId: TYPES_PROPERTY_ID,
-      toEntityId: IMAGE_TYPE_ID,
-      toEntityName: 'Image',
-    });
-    relate({
-      fromEntity: debateRef,
-      propertyId: OG_IMAGE_PROPERTY_ID,
-      toEntityId: ogImageId,
-      toEntityName: ogImageName,
-    });
+    const card = shareCardOps(
+      { debateRef, debateName, spaceId: input.spaceId, imageUrl: input.ogImageUrl },
+      { entityId: mintEntityId, relationIds, position: createPosition }
+    );
+    values.push(...card.values);
+    relations.push(...card.relations);
   }
 
   // --- Video entity (+ its Key frame Image) ---
@@ -480,11 +468,10 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
     // claim per debate.
     const linkedBlockClaims = new Set<string>();
     const sourcedClaims = new Set<string>();
-    const debateTaggedClaims = new Set<string>();
     const mintedClaims = new Set<string>();
     // One stance relation per (claim, motion), however many statements share the claim entity: a
     // reused entity or a D1 stable id can sit behind several extracted claims. The first statement
-    // in transcript order decides; keyed like `debateTaggedClaims`, so verbatim twins from an
+    // in transcript order decides; keyed by claim (see `claimKey`), so verbatim twins from an
     // older payload (fresh ids) also yield one verdict per text.
     const stancedClaims = new Set<string>();
     const writesStance = (input.subjectKind ?? 'claim') === 'claim';
@@ -570,30 +557,21 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
         // the reuse policy left after subtracting the graph's current relations. Deduped per
         // (claim, topic): a reused entity can appear behind several extracted claims carrying the
         // same topic, and `relate` does not dedupe.
-        // The Debate tag is what makes a claim a candidate motion in the picker, so it
-        // goes on contestable claims only — minted or reused alike, once per entity.
-        // Reused entities and geo-chat's stable ids (D1) key on the id. A fresh id cannot,
-        // because `mintEntityId` returns a new one per statement, so keying on it would
-        // dedupe nothing: two verbatim extractions from an older payload therefore mint two
-        // entities (the long-standing behaviour) but yield a single motion. Near-duplicates
-        // that differ in wording still slip through — matching upstream is what catches those.
-        const tagKey =
-          existingClaimId || stableClaimId ? normalizeId(claimId) : `text:${claimEntityText.toLowerCase()}`;
-        if (claim.isContestable && !debateTaggedClaims.has(tagKey)) {
-          debateTaggedClaims.add(tagKey);
-          relate({
-            fromEntity: claimRef,
-            propertyId: TAG_PROPERTY_ID,
-            toEntityId: DEBATE_TAG_ID,
-            toEntityName: 'Debate',
-            stable: isStable,
-          });
-        }
         for (const topic of claim.topics ?? []) relateTopic(claimRef, topic, isStable);
+        // No Debate tag, on minted or reused claims (GEO-3616): the tag is what lists a claim as
+        // a candidate motion in the picker and on Explore, and that list is curated. Extracted
+        // claims publish as plain Claims; an entity that already carries the tag keeps it.
+        //
+        // One stance per proposition. Reused entities and geo-chat's stable ids (D1) key on the
+        // id. A fresh id cannot, because `mintEntityId` returns a new one per statement, so
+        // keying on it would dedupe nothing: two verbatim extractions from an older payload mint
+        // two entities (the long-standing behaviour) but take one stance.
+        const claimKey =
+          existingClaimId || stableClaimId ? normalizeId(claimId) : `text:${claimEntityText.toLowerCase()}`;
         // Never from the motion to itself: the reuse policy refuses a reference to the motion,
         // but a stable id is not checked against it, and a self-relation is never right.
-        if (writesStance && claim.stance && normalizeId(claimId) !== motionKey && !stancedClaims.has(tagKey)) {
-          stancedClaims.add(tagKey);
+        if (writesStance && claim.stance && normalizeId(claimId) !== motionKey && !stancedClaims.has(claimKey)) {
+          stancedClaims.add(claimKey);
           relate({
             fromEntity: claimRef,
             propertyId: CLAIM_STANCE_PROPERTY_IDS[claim.stance],
@@ -682,6 +660,197 @@ export function debatePublishId(debateEntityId: string, key: string): string {
 }
 
 /**
+ * The ids a debate publish mints, under the key scheme {@link debatePublishId} derives from:
+ * `entity:<key>` for an entity, `relation:<from>:<property>:<to>` and
+ * `relation-entity:<from>:<property>:<to>` for a relation and its relation entity. A key repeated
+ * within one source gets its occurrence appended, so ids stay unique however the input repeats
+ * itself. With `createEntityId` (tests), every id is fresh instead.
+ *
+ * One source per edit: the full publish ({@link buildDebatePublishDraft}) and the share card redraw
+ * ({@link buildDebateShareCardDraft}) both mint through it, so the redraw cannot drift from the ids
+ * a publish would have written.
+ */
+export function debatePublishIds(
+  debateEntityId: string,
+  createEntityId?: () => string
+): {
+  entityId: (key: string) => string;
+  relationIds: (fromEntityId: string, propertyId: string, toEntityId: string) => { id: string; entityId: string };
+} {
+  const keyOccurrences = new Map<string, number>();
+  const derivedId = (key: string) => {
+    const occurrence = keyOccurrences.get(key) ?? 0;
+    keyOccurrences.set(key, occurrence + 1);
+    return debatePublishId(debateEntityId, occurrence === 0 ? key : `${key}#${occurrence}`);
+  };
+  return {
+    entityId: key => (createEntityId ? createEntityId() : derivedId(`entity:${key}`)),
+    relationIds: (fromEntityId, propertyId, toEntityId) => {
+      if (createEntityId) return { id: createEntityId(), entityId: createEntityId() };
+      const edge = `${normalizeId(fromEntityId)}:${normalizeId(propertyId)}:${normalizeId(toEntityId)}`;
+      return { id: derivedId(`relation:${edge}`), entityId: derivedId(`relation-entity:${edge}`) };
+    },
+  };
+}
+
+/**
+ * The Transcript entity of a published debate: what the full publish mints as `entity:transcript`.
+ * GEO-3635's late claims publish reads the published debate back through these ids.
+ */
+export function debateTranscriptEntityId(debateEntityId: string): string {
+  return debatePublishId(debateEntityId, 'entity:transcript');
+}
+
+/** The text block of one transcript turn: what the full publish mints as `entity:block:<turnIndex>`. */
+export function debateTurnBlockEntityId(debateEntityId: string, turnIndex: number): string {
+  return debatePublishId(debateEntityId, `entity:block:${turnIndex}`);
+}
+
+/**
+ * The share card Image entity a full publish mints for a debate (`entity:og-image`). Older publishes,
+ * from before every id was derived, used other ids; GEO-3722's redraw reads the debate's OG Image
+ * relations rather than assuming this one.
+ */
+export function debateShareCardEntityId(debateEntityId: string): string {
+  return debatePublishIds(debateEntityId).entityId(SHARE_CARD_KEY);
+}
+
+/** The key the share card Image entity is minted under in every debate publish. */
+const SHARE_CARD_KEY = 'og-image';
+
+/**
+ * The Debate entity's Name: "<claim> | <A> vs. <B>". The motion leads, the matchup follows. Names
+ * are read in truncating surfaces — feed cards, side-panel headers, edit titles — where the first
+ * words are the ones that survive, and what a debate is about identifies it far better than who
+ * argued it. `join` rather than a two-name template: the shape is a pair today, but nothing in the
+ * publisher caps participants at two.
+ */
+export function debatePublishName(claimText: string, participants: DebatePublishParticipant[]): string {
+  const bySlot = [...participants].sort((a, b) => a.participantSlot - b.participantSlot);
+  const nameFor = (p: DebatePublishParticipant) => (p.displayName?.trim() ? p.displayName.trim() : 'Anonymous');
+  return `${claimText.trim()} | ${bySlot.map(nameFor).join(' vs. ')}`;
+}
+
+type ShareCardIdSource = ReturnType<typeof debatePublishIds> & { position: () => string };
+
+/**
+ * The share card: an Image entity (Name, Image URL, Types → Image) and the Debate's OG Image
+ * relation to it. Same shape as the keyframe block: it hangs off the debate rather than the Video
+ * because it describes the debate. One builder for the full publish and the redraw (GEO-3722), so a
+ * debate that gets its first card from the redraw gets exactly the ops a publish would have written.
+ */
+function shareCardOps(
+  {
+    debateRef,
+    debateName,
+    spaceId,
+    imageUrl,
+  }: { debateRef: { id: string; name: string | null }; debateName: string; spaceId: string; imageUrl: string },
+  ids: ShareCardIdSource
+): { shareCardEntityId: string; values: Value[]; relations: Relation[] } {
+  const shareCardEntityId = ids.entityId(SHARE_CARD_KEY);
+  const name = `${debateName} | share card`;
+  const ref = { id: shareCardEntityId, name };
+  const values = [
+    makeTextValue({
+      entityId: shareCardEntityId,
+      entityName: name,
+      propertyId: NAME_PROPERTY_ID,
+      value: name,
+      spaceId,
+    }),
+    makeTextValue({
+      entityId: shareCardEntityId,
+      entityName: name,
+      propertyId: IMAGE_URL_PROPERTY_ID,
+      value: imageUrl,
+      spaceId,
+    }),
+  ];
+  const relation = (
+    fromEntity: { id: string; name: string | null },
+    propertyId: string,
+    toEntityId: string,
+    toEntityName: string | null
+  ) => {
+    const { id, entityId } = ids.relationIds(fromEntity.id, propertyId, toEntityId);
+    return makeRelation({
+      id,
+      entityId,
+      position: ids.position(),
+      spaceId,
+      propertyId,
+      fromEntity,
+      toEntityId,
+      toEntityName,
+    });
+  };
+  const relations = [
+    relation(ref, TYPES_PROPERTY_ID, IMAGE_TYPE_ID, 'Image'),
+    relation(debateRef, OG_IMAGE_PROPERTY_ID, shareCardEntityId, name),
+  ];
+  return { shareCardEntityId, values, relations };
+}
+
+export type DebateShareCardDraftInput = Pick<
+  DebatePublishInput,
+  'debateId' | 'spaceId' | 'claimText' | 'participants'
+> & { imageUrl: string };
+
+/**
+ * GEO-3722: the share card ops of a full publish, on their own — what a published debate that never
+ * got a card is given when the redraw adds one. Same ids, values and relations as
+ * {@link buildDebatePublishDraft} writes for `ogImageUrl` (only positions are fresh). Pure.
+ */
+export function buildDebateShareCardDraft(
+  input: DebateShareCardDraftInput,
+  options: BuildOptions = {}
+): { debateEntityId: string; debateName: string; shareCardEntityId: string; values: Value[]; relations: Relation[] } {
+  const claimText = input.claimText.trim();
+  if (claimText.length === 0) throw new Error('Debate claim text is required.');
+  if (input.participants.length === 0) throw new Error('A debate needs participants to publish.');
+  const debateEntityId = ID.uuidToHex(input.debateId);
+  const debateName = debatePublishName(claimText, input.participants);
+  // A fresh id source, as the full draft starts with: every key here occurs once there, so both
+  // derive the same ids.
+  const card = shareCardOps(
+    {
+      debateRef: { id: debateEntityId, name: debateName },
+      debateName,
+      spaceId: input.spaceId,
+      imageUrl: input.imageUrl,
+    },
+    {
+      ...debatePublishIds(debateEntityId, options.createEntityId),
+      position: options.createPosition ?? Position.generate,
+    }
+  );
+  return { debateEntityId, debateName, ...card };
+}
+
+/**
+ * GEO-3722: the Image URL value that points an existing share card Image entity at a new render.
+ * The only thing the redraw changes on a card that already exists.
+ */
+export function debateShareCardImageUrlValue({
+  shareCardEntityId,
+  spaceId,
+  imageUrl,
+}: {
+  shareCardEntityId: string;
+  spaceId: string;
+  imageUrl: string;
+}): Value {
+  return makeTextValue({
+    entityId: shareCardEntityId,
+    entityName: null,
+    propertyId: IMAGE_URL_PROPERTY_ID,
+    value: imageUrl,
+    spaceId,
+  });
+}
+
+/**
  * The UUIDv5 namespace for the relations that describe a claim minted under geo-chat's stable id.
  * Fixed forever: changing it would re-derive every id, and the next publish would add second copies
  * of relations the graph already holds.
@@ -690,11 +859,12 @@ const STABLE_CLAIM_RELATION_NAMESPACE = '6f1d2c8e-3b0a-4f57-9a61-2e870a0c1a1d';
 
 /**
  * GEO-2870 option A. Deterministic ids for one relation describing a claim minted under geo-chat's
- * stable id (D1): its Types, its Debate tag, its Topics and its Sources edge to the Debate.
+ * stable id (D1): its Types, its Topics and its Sources edge to the Debate. Also the debated
+ * claim's Debate tag (GEO-3616), for the same reason: one relation however many publishes write it.
  *
  * A claim is now written twice — by the early claims publish minutes after extraction, and again by
- * the full debate publish — and the two writes must not leave two Types or two Tags relations on
- * the entity. The indexer keys relations on their id and upserts on conflict, so deriving the id
+ * the full debate publish — and the two writes must not leave two Types or two Topics relations
+ * on the entity. The indexer keys relations on their id and upserts on conflict, so deriving the id
  * from (from, property, to) makes the second write an update of the first. It also makes an early
  * publish that ran twice (an overlapping sweep, a retry after an unconfirmed receipt) harmless.
  *
@@ -737,8 +907,8 @@ export type DebateClaimsPublishDraft = {
 
 /**
  * GEO-2870 option A: the early claims publish. Describes each claim minted under geo-chat's stable
- * id — Name, Types → Claim, Is factual, the Debate tag when contestable, and its Topics — so it
- * exists on the graph, and can be voted on and requested, long before the debate itself publishes.
+ * id — Name, Types → Claim, Is factual and its Topics — so it exists on the graph, and can be voted
+ * on and requested, long before the debate itself publishes.
  *
  * Writes nothing that names the debate: no transcript block, no Sources edge, no reference to the
  * Debate entity id. The full publish adds those, and its idempotency check is whether the Debate
@@ -787,7 +957,6 @@ export function buildDebateClaimsDraft(
 
   const claimIds: string[] = [];
   const minted = new Set<string>();
-  const tagged = new Set<string>();
   const topicEdges = new Set<string>();
   let firstClaimText: string | null = null;
 
@@ -826,10 +995,6 @@ export function buildDebateClaimsDraft(
             })
           );
         }
-      }
-      if (claim.isContestable && !tagged.has(key)) {
-        tagged.add(key);
-        relate(claimRef, TAG_PROPERTY_ID, { id: DEBATE_TAG_ID, name: 'Debate' });
       }
       for (const topic of claim.topics ?? []) {
         const edge = `${key}:${normalizeId(topic.id)}`;

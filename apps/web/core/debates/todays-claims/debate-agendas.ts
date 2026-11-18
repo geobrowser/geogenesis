@@ -210,6 +210,31 @@ export async function fetchCurrentDebateAgendas(signal?: AbortSignal): Promise<D
 }
 
 /**
+ * gaia's agenda rows on their own, without the claims they list: the one request behind
+ * {@link useDebateAgendas} and the agenda-only filter (GEO-3775), which needs only the ids. Both
+ * read the same key, so a surface mounting both makes one request.
+ */
+export function useDebateAgendaRows(enabled = true) {
+  const { data, isLoading, error, refetch } = useQuery({
+    queryKey: debateQueryKeys.todaysAgendas(),
+    queryFn: ({ signal }) => fetchCurrentDebateAgendas(signal),
+    enabled,
+    ...debateQueryNetworkOptions,
+    // A public gaia read, unlike the geo-chat fan-out those options are tuned for. `graphql` retries
+    // only transport failures, so a GraphQL error (a statement timeout) gets one retry here, and a
+    // failed load tries again when the tab regains focus. Loaded agendas never refetch on focus.
+    retry: 1,
+    refetchOnWindowFocus: query => query.state.status === 'error',
+    // Read once per visit. A picker left open past midnight keeps the agendas it opened on, and
+    // nothing outlives the visit, so the next one asks again: under `staleTime: Infinity` a cached
+    // answer would otherwise be reused without a request.
+    staleTime: Infinity,
+    gcTime: 0,
+  });
+  return { rows: data ?? NO_ROWS, isLoading, error: error ?? null, refetch };
+}
+
+/**
  * GEO-3489. Every space's current Debate agenda, with the week's earlier listings, read from gaia's
  * `currentDebateAgendas` (GEO-3538) so the picker shows agendas by the rules the Best ranking uses.
  *
@@ -237,26 +262,11 @@ export function useDebateAgendas(enabled = true): {
   refetch: () => void;
 } {
   const {
-    data: rows = NO_ROWS,
+    rows,
     isLoading: agendasLoading,
     error: agendasError,
     refetch: refetchAgendas,
-  } = useQuery({
-    queryKey: debateQueryKeys.todaysAgendas(),
-    queryFn: ({ signal }) => fetchCurrentDebateAgendas(signal),
-    enabled,
-    ...debateQueryNetworkOptions,
-    // A public gaia read, unlike the geo-chat fan-out those options are tuned for. `graphql` retries
-    // only transport failures, so a GraphQL error (a statement timeout) gets one retry here, and a
-    // failed load tries again when the tab regains focus. Loaded agendas never refetch on focus.
-    retry: 1,
-    refetchOnWindowFocus: query => query.state.status === 'error',
-    // Read once per visit. A picker left open past midnight keeps the agendas it opened on, and
-    // nothing outlives the visit, so the next one asks again: under `staleTime: Infinity` a cached
-    // answer would otherwise be reused without a request.
-    staleTime: Infinity,
-    gcTime: 0,
-  });
+  } = useDebateAgendaRows(enabled);
 
   const items = React.useMemo(() => rows.filter(row => row.source === 'block_item'), [rows]);
   const spaceIds = React.useMemo(

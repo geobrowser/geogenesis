@@ -26,10 +26,15 @@ export type DebateExtractedClaimsClaim = {
   turn_index: number;
   /**
    * Find-or-create: the published Claim in the debate's space geo-chat judged logically equivalent
-   * to this one, or null/absent when it found none (or matching was off). geo-chat also sends a
-   * `match` audit object next to it, which the publisher does not read.
+   * to this one, or null/absent when it found none (or matching was off).
    */
   existing_entity_id?: string | null;
+  /**
+   * geo-chat's matching audit. The full publish ignores it; the late claims publish (GEO-3635) reads
+   * `verdict` and `best_score` to hold a claim whose judge call failed (`error`) next to a
+   * near-identical published claim.
+   */
+  match?: { verdict?: string | null; best_score?: number | null } | null;
   /**
    * GEO-2870 D1: the stable entity id geo-chat minted for this claim when it committed the
    * payload (32 hex), so the claim can be requested by id long before this sweep publishes it.
@@ -45,9 +50,9 @@ export type DebateExtractedClaimsClaim = {
   topics?: { entity_id: string; name: string | null }[] | null;
   /**
    * True when the claim's main assertion is broad enough to hold positions for and
-   * against it. Only these are tagged as debate claims on Geo, because the tag is what
-   * the claim picker lists as candidate motions. Absent on payloads from before the
-   * classification shipped, which read as "not a motion".
+   * against it. Read only by the rematch picker's "From this debate" source, which skips
+   * claims marked false. The publisher ignores it: no extracted claim is tagged Debate
+   * (GEO-3616).
    */
   is_contestable?: boolean | null;
   /**
@@ -139,13 +144,17 @@ export function decodeExtractedClaims(response: DebateExtractedClaimsResponse): 
         : null,
     stableEntityId: decodeStableEntityId(claim.entity_id, droppedStableIds),
     topics: decodeTopics(claim.topics, droppedTopics),
-    isContestable: claim.is_contestable === true,
     timing: decodeTiming(claim.start_ms, claim.end_ms),
     highlightScore: decodeScore('highlight_score', claim.highlight_score, droppedScores),
     relevanceScore: decodeScore('relevance_score', claim.relevance_score, droppedScores),
     qualityScore: decodeScore('quality_score', claim.quality_score, droppedScores),
     controversyScore: decodeScore('controversy_score', claim.controversy_score, droppedScores),
     stance: decodeStance(claim.stance),
+    matchVerdict: typeof claim.match?.verdict === 'string' ? claim.match.verdict : null,
+    matchBestScore:
+      typeof claim.match?.best_score === 'number' && Number.isFinite(claim.match.best_score)
+        ? claim.match.best_score
+        : null,
   }));
   if (droppedTopics.length > 0) {
     // Loud, like the malformed-claim-id path in `claim-reuse`: a field rename upstream would

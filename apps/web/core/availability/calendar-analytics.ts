@@ -2,7 +2,7 @@ import { capture } from '~/core/analytics';
 import { type CalendarConnection, type CalendarProvider, GeoChatRequestError } from '~/core/debates/api';
 
 /**
- * Analytics for calendar connections (the `googleCalendar` and `microsoftCalendar` flags). Outcome
+ * Analytics for calendar connections (Google and Outlook Calendar). Outcome
  * events, registered in `geobrowser/analytics`; no account email or provider message leaves here.
  */
 

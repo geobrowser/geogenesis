@@ -76,8 +76,11 @@ type TelemetryEvent = {
   tags?: Record<string, string | number | boolean>;
   /** Not indexed — the place for ids, durations and anything high-cardinality. */
   extra?: Record<string, unknown>;
-  /** `warning` for events that predict a failure and should be alertable; defaults to `info`. */
-  level?: 'info' | 'warning';
+  /**
+   * `warning` for events that predict a failure and should be alertable; `error` for a failure a
+   * user hit that has no exception of its own; defaults to `info`.
+   */
+  level?: 'info' | 'warning' | 'error';
 };
 
 /**

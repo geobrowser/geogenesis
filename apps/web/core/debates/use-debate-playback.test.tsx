@@ -2,9 +2,11 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 
 import * as React from 'react';
 
+import { Provider, createStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Debate, DebateMediaCondensedBreak, DebateMediaTurnSegment } from './api';
+import { timeRanges } from './time-ranges-fixtures';
 import { useDebatePlayback } from './use-debate-playback';
 
 const mocks = vi.hoisted(() => ({
@@ -2334,6 +2336,7 @@ describe('useDebatePlayback — drift correction leaves the audible recording al
 
     slot2.currentTime = 41;
     slot1.currentTime = 43;
+    Object.assign(slot1, { buffered: timeRanges(30, 50) });
     act(() => result.current.onPlaybackTick());
 
     expect(slot1.currentTime).toBe(41);
@@ -2385,9 +2388,395 @@ describe('useDebatePlayback — drift correction leaves the audible recording al
     expect(slot1.playbackRate).toBe(1);
 
     slot2.currentTime = 43;
+    Object.assign(slot2, { buffered: timeRanges(30, 50) });
     act(() => result.current.onPlaybackTick());
     expect(slot2.currentTime).toBe(41);
     expect(slot1.currentTime).toBe(41);
+  });
+
+  /**
+   * GEO-3603. Seeked forward on its own to where nothing was buffered, the follower stalled for
+   * longer than the floor between seeks while the leader ran on, arrived behind again, and was
+   * seeked again: slot 2 froze four times in eight seconds after a break. Holding the pair for that
+   * one seek costs a single wait.
+   */
+  it('holds the pair for a sync seek to where the follower has nothing buffered, then plays both together', async () => {
+    const { result, slot1, slot2 } = await playingAt(10, { unmuted: false });
+    slot1.currentTime = 14;
+    slot2.currentTime = 12;
+    Object.assign(slot2, { buffered: timeRanges(5, 12.5) });
+    slot2.readyState = 1;
+    const playsBefore = [slot1.plays, slot2.plays];
+
+    act(() => result.current.onPlaybackTick());
+
+    expect(slot2.currentTime).toBe(14);
+    expect(slot1.paused).toBe(true);
+    expect(slot2.paused).toBe(true);
+    // Still waiting on slot 2: neither is asked to play, and later ticks do not seek again.
+    await act(() => new Promise(resolve => setTimeout(resolve, 120)));
+    slot2.currentTime = 14.01;
+    now += 3_000;
+    act(() => result.current.onPlaybackTick());
+    expect(slot2.currentTime).toBe(14.01);
+    expect([slot1.plays, slot2.plays]).toEqual(playsBefore);
+    expect(result.current.playing).toBe(true);
+
+    slot2.readyState = 4;
+    await act(() => new Promise(resolve => setTimeout(resolve, 120)));
+    expect(slot1.plays).toBe(playsBefore[0] + 1);
+    expect(slot2.plays).toBe(playsBefore[1] + 1);
+  });
+
+  it('lets a held sync seek go after the hold backstop when the follower never reports it can play', async () => {
+    const { result, slot1, slot2 } = await playingAt(10, { unmuted: false });
+    slot1.currentTime = 14;
+    slot2.currentTime = 12;
+    slot2.readyState = 2;
+    const playsBefore = slot1.plays;
+
+    act(() => result.current.onPlaybackTick());
+    await act(() => new Promise(resolve => setTimeout(resolve, 120)));
+    expect(slot1.plays).toBe(playsBefore);
+
+    now += 3_000;
+    await act(() => new Promise(resolve => setTimeout(resolve, 120)));
+    expect(slot1.plays).toBe(playsBefore + 1);
+  });
+
+  it('cancels a held sync seek when a recording is replaced during the wait, rather than gating on the old one', async () => {
+    const { result, slot1, slot2 } = await playingAt(10, { unmuted: false });
+    slot1.currentTime = 14;
+    slot2.currentTime = 12;
+    slot2.readyState = 1;
+    const playsBefore = slot1.plays;
+
+    act(() => result.current.onPlaybackTick());
+    // `DebaterVideo` rebuilds slot 2 after an error: a new element, which takes its own hold.
+    const rebuilt = fakeVideo();
+    result.current.slot2VideoRef.current = rebuilt;
+    await act(() => new Promise(resolve => setTimeout(resolve, 120)));
+
+    expect(result.current.playing).toBe(false);
+    expect(slot1.plays).toBe(playsBefore);
+    expect(rebuilt.plays).toBe(0);
+  });
+
+  it('leaves the pair held by a sync seek paused when the viewer pauses during the wait', async () => {
+    const { result, slot1, slot2 } = await playingAt(10, { unmuted: false });
+    slot1.currentTime = 14;
+    slot2.currentTime = 12;
+    slot2.readyState = 1;
+    const playsBefore = slot1.plays;
+
+    act(() => result.current.onPlaybackTick());
+    act(() => result.current.togglePlayback());
+    slot2.readyState = 4;
+    await act(() => new Promise(resolve => setTimeout(resolve, 120)));
+
+    expect(slot1.plays).toBe(playsBefore);
+    expect(result.current.playing).toBe(false);
+  });
+});
+
+/**
+ * GEO-3773. The moments editor plays at 1.5x and 2x through the same hook every feed card uses, so
+ * the rate is a base the drift sync nudges around, and at 1 the hook writes nothing it did not
+ * write before.
+ */
+describe('useDebatePlayback — playback rate (GEO-3773)', () => {
+  let now = 1_700_000_000_000;
+
+  beforeEach(() => {
+    vi.spyOn(document, 'visibilityState', 'get').mockImplementation(() => 'visible');
+    mocks.turnSegments = [];
+    mocks.condensedBreaks = [];
+    mocks.recordingUrl.mockReset();
+    mocks.recordingUrl.mockImplementation(({ filename }: { filename: string }) =>
+      Promise.resolve({ url: `https://cdn.test/${filename}?sig=abc` })
+    );
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  /** Counts every write to the two rate properties, keeping the values readable. */
+  function spyRates(video: FakeVideo) {
+    const writes = { playbackRate: [] as number[], defaultPlaybackRate: [] as number[] };
+    for (const key of ['playbackRate', 'defaultPlaybackRate'] as const) {
+      let value = (video as unknown as Record<string, number | undefined>)[key] ?? 1;
+      Object.defineProperty(video, key, {
+        configurable: true,
+        get: () => value,
+        set: (next: number) => {
+          writes[key].push(next);
+          value = next;
+        },
+      });
+    }
+    return writes;
+  }
+
+  async function mountedAtRate(rate: number) {
+    const hook = renderHook(
+      ({ rate }: { rate: number }) => useDebatePlayback(debateFixture(), true, { playbackRate: rate }),
+      { initialProps: { rate } }
+    );
+    await waitFor(() => expect(hook.result.current.urls.slot1).not.toBeNull());
+    // Muted, so slot 1 leads (see the drift tests above).
+    act(() => hook.result.current.setMutedByUser(true));
+    const slot1 = fakeVideo();
+    const slot2 = fakeVideo();
+    const writes1 = spyRates(slot1);
+    const writes2 = spyRates(slot2);
+    hook.result.current.slot1VideoRef.current = slot1;
+    hook.result.current.slot2VideoRef.current = slot2;
+    return { ...hook, slot1, slot2, writes1, writes2 };
+  }
+
+  async function playFrom(
+    result: { current: ReturnType<typeof useDebatePlayback> },
+    slot1: FakeVideo,
+    slot2: FakeVideo,
+    seconds: number
+  ) {
+    await act(async () => {
+      void result.current.resumeBoth();
+      await Promise.resolve();
+      slot1.settlePlay();
+      slot2.settlePlay();
+      await new Promise(resolve => setTimeout(resolve, 50));
+    });
+    act(() => result.current.seekBoth(seconds));
+    now = Date.now() + 10_000;
+    vi.spyOn(Date, 'now').mockImplementation(() => now);
+  }
+
+  it.each([1.5, 2])('plays both recordings at %sx, as their default too', async rate => {
+    const { slot1, slot2, rerender } = await mountedAtRate(1);
+
+    rerender({ rate });
+
+    for (const video of [slot1, slot2]) {
+      expect(video.playbackRate).toBe(rate);
+      expect(video.defaultPlaybackRate).toBe(rate);
+    }
+
+    // Back to 1, the elements are put back to 1 as well.
+    rerender({ rate: 1 });
+    for (const video of [slot1, slot2]) {
+      expect(video.playbackRate).toBe(1);
+      expect(video.defaultPlaybackRate).toBe(1);
+    }
+  });
+
+  it('keeps a rate set before the elements arrive, through a seek', async () => {
+    const { result, slot1, slot2 } = await mountedAtRate(2);
+
+    act(() => result.current.seekBoth(12));
+
+    expect(slot1.playbackRate).toBe(2);
+    expect(slot2.playbackRate).toBe(2);
+    expect(slot2.defaultPlaybackRate).toBe(2);
+  });
+
+  it('nudges the follower around the base rate and holds the leader on it', async () => {
+    const { result, slot1, slot2, rerender } = await mountedAtRate(1);
+    rerender({ rate: 2 });
+    await playFrom(result, slot1, slot2, 10);
+
+    // Slot 1 leads; slot 2 behind by more than the nudge threshold.
+    slot1.currentTime = 11;
+    slot2.currentTime = 10.6;
+    act(() => result.current.onPlaybackTick());
+    expect(slot2.playbackRate).toBe(2 * 1.03);
+    expect(slot1.playbackRate).toBe(2);
+
+    // Ahead now: eases off around 2, not around 1.
+    slot2.currentTime = 11.4;
+    act(() => result.current.onPlaybackTick());
+    expect(slot2.playbackRate).toBe(2 * 0.97);
+
+    // Back in step: returns to the base rate.
+    slot2.currentTime = 11;
+    act(() => result.current.onPlaybackTick());
+    expect(slot2.playbackRate).toBe(2);
+  });
+
+  it('puts a nudged leader back on the base rate, not on 1', async () => {
+    const { result, slot1, slot2, rerender } = await mountedAtRate(1);
+    rerender({ rate: 2 });
+    await playFrom(result, slot1, slot2, 10);
+
+    slot1.playbackRate = 1.94;
+    slot1.currentTime = 11;
+    slot2.currentTime = 11;
+    act(() => result.current.onPlaybackTick());
+
+    expect(slot1.playbackRate).toBe(2);
+  });
+
+  it('seeks a far-behind follower at the base rate', async () => {
+    const { result, slot1, slot2, rerender } = await mountedAtRate(1);
+    rerender({ rate: 2 });
+    await playFrom(result, slot1, slot2, 10);
+
+    slot1.currentTime = 11;
+    slot2.currentTime = 13;
+    Object.assign(slot2, { buffered: timeRanges(0, 50) });
+    act(() => result.current.onPlaybackTick());
+
+    expect(slot2.currentTime).toBe(11);
+    expect(slot2.playbackRate).toBe(2);
+  });
+
+  // Handing an element on at 1 is the pool's job (`releaseGestureVideo`). By the time the player
+  // unmounts, a pooled element it once held may be playing in another card.
+  it('writes nothing to its elements when it unmounts', async () => {
+    const { slot1, slot2, writes1, writes2, rerender, unmount } = await mountedAtRate(1);
+    rerender({ rate: 2 });
+    for (const writes of [writes1, writes2]) {
+      writes.playbackRate.length = 0;
+      writes.defaultPlaybackRate.length = 0;
+    }
+
+    unmount();
+
+    expect([...writes1.playbackRate, ...writes2.playbackRate]).toEqual([]);
+    expect([...writes1.defaultPlaybackRate, ...writes2.defaultPlaybackRate]).toEqual([]);
+    expect(slot1.playbackRate).toBe(2);
+    expect(slot2.playbackRate).toBe(2);
+  });
+
+  it('keeps a starting rate through the StrictMode remount', async () => {
+    const slot1 = fakeVideo();
+    const slot2 = fakeVideo();
+    spyRates(slot1);
+    spyRates(slot2);
+    const { result } = renderHook(
+      () => {
+        const controller = useDebatePlayback(debateFixture(), true, { playbackRate: 2 });
+        React.useLayoutEffect(() => {
+          controller.slot1VideoRef.current = slot1;
+          controller.slot2VideoRef.current = slot2;
+        }, [controller.slot1VideoRef, controller.slot2VideoRef]);
+        return controller;
+      },
+      { reactStrictMode: true }
+    );
+    await waitFor(() => expect(result.current.urls.slot1).not.toBeNull());
+
+    for (const video of [slot1, slot2]) {
+      expect(video.playbackRate).toBe(2);
+      expect(video.defaultPlaybackRate).toBe(2);
+    }
+  });
+
+  it('writes nothing new at rate 1: no apply on mount, no default rate, the same nudges', async () => {
+    const slot1 = fakeVideo();
+    const slot2 = fakeVideo();
+    const writes1 = spyRates(slot1);
+    const writes2 = spyRates(slot2);
+    // A nudge already running on an element the card mounts with must survive the mount.
+    slot2.playbackRate = 1.03;
+    writes2.playbackRate.length = 0;
+    // Attached during layout, before the hook's effects run, as the player's elements are.
+    const { result, rerender } = renderHook(
+      ({ rate }: { rate: number }) => {
+        const controller = useDebatePlayback(debateFixture(), true, { playbackRate: rate });
+        React.useLayoutEffect(() => {
+          controller.slot1VideoRef.current = slot1;
+          controller.slot2VideoRef.current = slot2;
+        }, [controller.slot1VideoRef, controller.slot2VideoRef]);
+        return controller;
+      },
+      { initialProps: { rate: 1 } }
+    );
+    await waitFor(() => expect(result.current.urls.slot1).not.toBeNull());
+    act(() => result.current.setMutedByUser(true));
+    rerender({ rate: 1 });
+    expect(slot2.playbackRate).toBe(1.03);
+    expect(writes1.playbackRate).toEqual([]);
+    expect(writes2.playbackRate).toEqual([]);
+
+    await playFrom(result, slot1, slot2, 10);
+    slot1.currentTime = 11;
+    slot2.currentTime = 10.6;
+    act(() => result.current.onPlaybackTick());
+    expect(slot2.playbackRate).toBe(1.03);
+    expect(slot1.playbackRate).toBe(1);
+
+    // Every write is a value the hook wrote before rates existed: 1 or a 3% nudge off it.
+    for (const value of [...writes1.playbackRate, ...writes2.playbackRate]) {
+      expect([1, 1.03, 0.97]).toContain(value);
+    }
+    expect(writes1.defaultPlaybackRate).toEqual([]);
+    expect(writes2.defaultPlaybackRate).toEqual([]);
+  });
+});
+
+describe('useDebatePlayback — where each Stream recording starts loading (GEO-3604)', () => {
+  beforeEach(() => {
+    vi.spyOn(document, 'visibilityState', 'get').mockImplementation(() => 'visible');
+    mocks.turnSegments = [];
+    mocks.condensedBreaks = [];
+    mocks.recordingUrl.mockReset();
+    mocks.recordingUrl.mockImplementation(({ filename }: { filename: string }) =>
+      Promise.resolve({ url: `https://cdn.test/${filename}?sig=abc` })
+    );
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  /** Recordings that began 4.92s and 3.38s before the debate did. */
+  function preRolledDebate(): Debate {
+    const debate = debateFixture();
+    return {
+      ...debate,
+      recordings: [
+        { participant_slot: 1, filename: 'slot1.webm', started_at_ms: 1_700_000_000_000 - 4_920 },
+        { participant_slot: 2, filename: 'slot2.webm', started_at_ms: 1_700_000_000_000 - 3_380 },
+      ],
+    } as unknown as Debate;
+  }
+
+  it('maps the start of the debate onto each recording', async () => {
+    const { result } = await mountedPair(preRolledDebate());
+    expect(result.current.recordingStartSeconds(1)).toBeCloseTo(4.92);
+    expect(result.current.recordingStartSeconds(2)).toBeCloseTo(3.38);
+  });
+
+  it('starts at a seek asked for before the elements could take it', async () => {
+    const hook = renderHook(() => useDebatePlayback(preRolledDebate(), true));
+    await waitFor(() => expect(hook.result.current.urls.slot1).not.toBeNull());
+    act(() => hook.result.current.seekBoth(20));
+    expect(hook.result.current.recordingStartSeconds(1)).toBeCloseTo(24.92);
+    expect(hook.result.current.recordingStartSeconds(2)).toBeCloseTo(23.38);
+  });
+
+  it('follows the debate once it has moved, so a re-signed slot loads where the pair is', async () => {
+    const { result, slot1, slot2 } = await mountedPair(preRolledDebate());
+    await startPair(result, slot1, slot2);
+    slot1.currentTime = 14.92;
+    act(() => result.current.onPlaybackTick());
+    expect(result.current.recordingStartSeconds(2)).toBeCloseTo(13.38);
+  });
+
+  it('resumes a re-attached pair from where it got to, not from the start', async () => {
+    const { result, slot1, slot2 } = await mountedPair(preRolledDebate());
+    await startPair(result, slot1, slot2);
+    slot1.currentTime = 34.92;
+    act(() => result.current.onPlaybackTick());
+    // Released: fresh elements, back at zero and paused.
+    const fresh1 = fakeVideo();
+    const fresh2 = fakeVideo();
+    result.current.slot1VideoRef.current = fresh1;
+    result.current.slot2VideoRef.current = fresh2;
+    expect(result.current.recordingStartSeconds(1)).toBeCloseTo(34.92);
+    expect(result.current.recordingStartSeconds(2)).toBeCloseTo(33.38);
   });
 });
 
@@ -2683,5 +3072,313 @@ describe('useDebatePlayback — sound carries to the next debate (GEO-3594)', ()
     expect(first.result.current.userPaused).toBe(true);
     expect(first.result.current.mutedByUser).toBe(false);
     expect(mocks.forgetGestureVideoUnlock).not.toHaveBeenCalled();
+  });
+});
+
+describe('useDebatePlayback — forced sound for the moments editor (GEO-3773)', () => {
+  const flush = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+  beforeEach(() => {
+    mocks.turnSegments = [];
+    mocks.condensedBreaks = [];
+    mocks.recordingUrl.mockReset();
+    mocks.recordingUrl.mockImplementation(({ filename }: { filename: string }) =>
+      Promise.resolve({ url: `https://cdn.test/${filename}?sig=abc` })
+    );
+    localStorage.removeItem('debateFeedSoundChoice');
+  });
+
+  afterEach(() => vi.restoreAllMocks());
+
+  /** The editor's player and a feed card, in one fresh store: nobody has chosen a sound setting yet. */
+  async function editorBesideFeed() {
+    const store = createStore();
+    const hook = renderHook(
+      () => ({
+        editor: useDebatePlayback(debateFixture('debate-editor'), true, { forceSound: true }),
+        feed: useDebatePlayback(debateFixture('debate-feed'), true),
+      }),
+      { wrapper: ({ children }) => <Provider store={store}>{children}</Provider> }
+    );
+    await waitFor(() => expect(hook.result.current.editor.urls.slot1).not.toBeNull());
+    const slot1 = fakeVideo();
+    const slot2 = fakeVideo();
+    hook.result.current.editor.slot1VideoRef.current = slot1;
+    hook.result.current.editor.slot2VideoRef.current = slot2;
+    return { ...hook, slot1, slot2 };
+  }
+
+  it('plays with sound over a saved Mute, and writes no sound setting', async () => {
+    const { result } = await editorBesideFeed();
+    act(() => result.current.feed.setMutedByUser(true));
+    const saved = localStorage.getItem('debateFeedSoundChoice');
+
+    expect(result.current.editor.mutedByUser).toBe(false);
+    expect(result.current.editor.muteChosen).toBe(false);
+    expect(result.current.feed.mutedByUser).toBe(true);
+    expect(localStorage.getItem('debateFeedSoundChoice')).toBe(saved);
+  });
+
+  it('lifts a refused sound with clearSoundBlocked, writing neither the saved nor the inferred sound', async () => {
+    const { result, slot1, slot2 } = await editorBesideFeed();
+    // Muted by default: a tap (the inferred sound) or a saved choice would turn it on.
+    expect(result.current.feed.mutedByUser).toBe(true);
+
+    // The browser refuses the speaker with sound, so the pair plays muted.
+    slot1.muted = false;
+    await act(async () => {
+      void result.current.editor.resumeBoth();
+      await Promise.resolve();
+      slot1.rejectPlay();
+      slot2.settlePlay();
+      await flush(400);
+      slot1.settlePlay();
+      slot2.settlePlay();
+      await flush(400);
+    });
+    expect(result.current.editor.playing).toBe(true);
+    expect(result.current.editor.mutedByUser).toBe(true);
+
+    act(() => result.current.editor.clearSoundBlocked());
+
+    expect(result.current.editor.mutedByUser).toBe(false);
+    expect(result.current.feed.mutedByUser).toBe(true);
+    expect(localStorage.getItem('debateFeedSoundChoice')).toBeNull();
+  });
+});
+
+describe('useDebatePlayback — a recording that ends before the timeline (GEO-3778)', () => {
+  // 60 s of timeline (two 30 s turns, no rendered segments). The short recording stops half a
+  // second early, as geo-chat's trailing pad leaves it.
+  const TIMELINE = 60;
+  const SHORT = 59.5;
+
+  beforeEach(() => {
+    mocks.turnSegments = [];
+    mocks.condensedBreaks = [];
+    mocks.recordingUrl.mockReset();
+    mocks.recordingUrl.mockImplementation(({ filename }: { filename: string }) =>
+      Promise.resolve({ url: `https://cdn.test/${filename}?sig=abc` })
+    );
+  });
+
+  /** Give the fake a duration, and `ended` the way a real element reports it. */
+  function withDuration(video: FakeVideo, duration: number) {
+    Object.defineProperty(video, 'duration', { value: duration, configurable: true });
+    Object.defineProperty(video, 'ended', { get: () => video.currentTime >= duration, configurable: true });
+  }
+
+  /** The element reaching the end of its media: it stops itself and fires `ended`. */
+  function reachEnd(video: FakeVideo, duration: number) {
+    video.currentTime = duration;
+    video.browserPause();
+  }
+
+  async function playingWithShort(shortSlot: 1 | 2) {
+    const { result, slot1, slot2 } = await mountedPair();
+    const short = shortSlot === 1 ? slot1 : slot2;
+    const long = shortSlot === 1 ? slot2 : slot1;
+    withDuration(short, SHORT);
+    withDuration(long, TIMELINE);
+    await startPair(result, slot1, slot2);
+    expect(result.current.playing).toBe(true);
+    // Both play on to the point where the short one runs out.
+    long.currentTime = SHORT;
+    reachEnd(short, SHORT);
+    act(() => result.current.onPlaybackTick());
+    return { result, short, long };
+  }
+
+  describe.each([1, 2] as const)('slot %i ends early', shortSlot => {
+    it('lets the other play on, holding the ended one on its last frame', async () => {
+      const { result, short, long } = await playingWithShort(shortSlot);
+      const playsBefore = short.plays;
+
+      expect(long.paused).toBe(false);
+      expect(result.current.playing).toBe(true);
+      expect(result.current.userPaused).toBe(false);
+      expect(result.current.playbackEnded).toBe(false);
+      expect(short.plays).toBe(playsBefore);
+
+      long.currentTime = 59.8;
+      act(() => result.current.onPlaybackTick());
+      expect(result.current.playheadSeconds).toBeCloseTo(59.8);
+    });
+
+    it('reaches the end card when the other runs out, with no recorded pause', async () => {
+      const { result, long } = await playingWithShort(shortSlot);
+
+      reachEnd(long, TIMELINE);
+      act(() => result.current.onPlaybackTick());
+
+      expect(result.current.playbackEnded).toBe(true);
+      expect(result.current.playing).toBe(false);
+      expect(result.current.userPaused).toBe(false);
+    });
+
+    it('resumes a pause without restarting the ended recording', async () => {
+      const { result, short, long } = await playingWithShort(shortSlot);
+      act(() => result.current.pauseBoth());
+      const playsBefore = short.plays;
+
+      await act(async () => {
+        void result.current.resumeBoth();
+        await Promise.resolve();
+        long.settlePlay();
+        await new Promise(resolve => setTimeout(resolve, 50));
+      });
+
+      expect(short.plays).toBe(playsBefore);
+      expect(result.current.playing).toBe(true);
+      expect(long.paused).toBe(false);
+    });
+
+    it('plays the ended recording again when seeked back inside it', async () => {
+      const { result, short, long } = await playingWithShort(shortSlot);
+      const playsBefore = short.plays;
+
+      act(() => {
+        result.current.seekBoth(30);
+        short.settlePlay();
+      });
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 50));
+        result.current.onPlaybackTick();
+      });
+
+      expect(short.plays).toBe(playsBefore + 1);
+      expect(short.currentTime).toBe(30);
+      expect(short.paused).toBe(false);
+      expect(long.paused).toBe(false);
+      expect(result.current.playing).toBe(true);
+      expect(result.current.userPaused).toBe(false);
+    });
+  });
+
+  it('plays on muted when the browser refuses to unmute the one still playing', async () => {
+    const { result, short, long } = await playingWithShort(1);
+    mocks.forgetGestureVideoUnlock.mockReset();
+    act(() => result.current.setMutedByUser(false));
+    try {
+      // The turn gate unmutes slot 2 off-gesture, and the browser answers by pausing it.
+      act(() => result.current.onPlaybackTick());
+      long.muted = false;
+      long.browserPause();
+      act(() => result.current.onPlaybackTick());
+
+      expect(short.paused).toBe(true);
+      expect(result.current.playing).toBe(false);
+      expect(result.current.userPaused).toBe(false);
+      expect(result.current.mutedByUser).toBe(true);
+      expect(mocks.forgetGestureVideoUnlock).toHaveBeenCalledWith(long);
+    } finally {
+      act(() => result.current.setMutedByUser(true));
+    }
+  });
+
+  it('shows a system pause of the one still playing as paused', async () => {
+    const { result, long } = await playingWithShort(1);
+
+    long.browserPause();
+    act(() => result.current.onPlaybackTick());
+
+    expect(result.current.playing).toBe(false);
+    expect(result.current.userPaused).toBe(true);
+    expect(result.current.playbackEnded).toBe(false);
+  });
+
+  // The pause event of our own pause() ticks before React re-renders, so it lands in the same act.
+  it('does not record a pause when a card with one recording held is scrolled away', async () => {
+    const { result, long } = await playingWithShort(1);
+
+    act(() => {
+      result.current.suspend();
+      result.current.onPlaybackTick();
+    });
+
+    expect(result.current.playing).toBe(false);
+    expect(result.current.userPaused).toBe(false);
+
+    // Back in view, autoplay resumes the one with something left to play.
+    await act(async () => {
+      void result.current.resumeBoth();
+      await Promise.resolve();
+      long.settlePlay();
+      await new Promise(resolve => setTimeout(resolve, 50));
+    });
+    expect(result.current.playing).toBe(true);
+  });
+
+  it('shows the end card, with no recorded pause, after a scrub released at the end', async () => {
+    const { result } = await playingWithShort(1);
+
+    act(() => {
+      result.current.beginScrub();
+      result.current.onPlaybackTick();
+    });
+    act(() => result.current.seekBoth(TIMELINE));
+    act(() => result.current.endScrub());
+    act(() => result.current.onPlaybackTick());
+
+    expect(result.current.userPaused).toBe(false);
+    expect(result.current.playbackEnded).toBe(true);
+  });
+
+  it('ends, rather than restarting anything, when both recordings run out during a resume', async () => {
+    // No known durations, as for a cue-less WebM that has not been played through.
+    const { result, slot1, slot2 } = await mountedPair();
+    act(() => result.current.seekBoth(59));
+    expect(result.current.playbackEnded).toBe(false);
+
+    await act(async () => {
+      void result.current.resumeBoth();
+      await Promise.resolve();
+      for (const video of [slot1, slot2]) {
+        video.settlePlay();
+        Object.defineProperty(video, 'ended', { value: true, configurable: true });
+        video.browserPause();
+      }
+      await new Promise(resolve => setTimeout(resolve, 400));
+    });
+
+    expect(slot1.plays).toBe(1);
+    expect(slot2.plays).toBe(1);
+    expect(result.current.playing).toBe(false);
+    expect(result.current.playbackEnded).toBe(true);
+    expect(result.current.error).toBeNull();
+    expect(result.current.userPaused).toBe(false);
+  });
+
+  it('ends a debate whose recordings both stop short of the timeline', async () => {
+    const { result, slot1, slot2 } = await mountedPair();
+    withDuration(slot1, 59);
+    withDuration(slot2, SHORT);
+    await startPair(result, slot1, slot2);
+
+    reachEnd(slot1, 59);
+    slot2.currentTime = 59;
+    act(() => result.current.onPlaybackTick());
+    expect(result.current.playing).toBe(true);
+
+    reachEnd(slot2, SHORT);
+    act(() => result.current.onPlaybackTick());
+
+    expect(result.current.playbackEnded).toBe(true);
+    expect(result.current.playing).toBe(false);
+    expect(result.current.userPaused).toBe(false);
+  });
+
+  it('still pauses both when a recording stops short of its end', async () => {
+    const { result, slot1, slot2 } = await mountedPair();
+    withDuration(slot1, SHORT);
+    withDuration(slot2, TIMELINE);
+    await startPair(result, slot1, slot2);
+
+    slot1.currentTime = 30;
+    slot1.browserPause();
+    act(() => result.current.onPlaybackTick());
+
+    expect(slot2.paused).toBe(true);
+    expect(result.current.userPaused).toBe(true);
   });
 });

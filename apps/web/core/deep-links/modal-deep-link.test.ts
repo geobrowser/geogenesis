@@ -25,6 +25,7 @@ describe('DEEP_LINK_MODALS', () => {
       emailSettings: 'email-settings',
       runningLate: 'running-late',
       cantMakeIt: 'cant-make-it',
+      comments: 'comments',
     });
   });
 

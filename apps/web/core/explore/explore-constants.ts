@@ -67,3 +67,5 @@ export const EXPLORE_COVER_PROPERTY_ID = '34f535072e6b42c5a84443981a77cfa2';
 export const EXPLORE_AVATAR_PROPERTY_ID = '1155befffad549b7a2e0da4777b8792c';
 
 export const EXPLORE_PAGE_SIZE = 22;
+
+export const FEED_SESSION_GC_MS = 30 * 60_000;

@@ -1,6 +1,7 @@
 import { Effect, Either } from 'effect';
 
 import { Environment } from '~/core/environment';
+import { chunk } from '~/core/utils/chunk';
 import { normId } from '~/core/utils/norm-id';
 
 import { graphql } from './graphql';
@@ -17,13 +18,12 @@ export async function fetchSpaceTypes(ids: readonly string[], signal?: AbortSign
   const unique = [...new Set(ids.map(normId))];
   const types = new Map<string, string>();
 
-  for (let start = 0; start < unique.length; start += LOOKUP_SIZE) {
-    const chunk = unique.slice(start, start + LOOKUP_SIZE);
+  for (const batch of chunk(unique, LOOKUP_SIZE)) {
     const result = await Effect.runPromise(
       Effect.either(
         graphql<{ spaces: { id: string; type: string }[] }>({
           query: `query {
-            spaces(filter: { id: { in: [${chunk.map(id => JSON.stringify(id)).join(', ')}] } }, first: ${chunk.length}) {
+            spaces(filter: { id: { in: [${batch.map(id => JSON.stringify(id)).join(', ')}] } }, first: ${batch.length}) {
               id
               type
             }

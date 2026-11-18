@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { speakerStillUrl } from './speaker-still';
+import { debatePageStillPreloads, speakerStillUrl } from './speaker-still';
 
 const artifacts = [{ kind: 'final_video' as const }, { kind: 'speaker_still_slot_2' as const }];
 
@@ -28,5 +28,17 @@ describe('speakerStillUrl', () => {
     expect(speakerStillUrl('debate-1', 1, undefined)).toBeNull();
     expect(speakerStillUrl('debate-1', 3, artifacts)).toBeNull();
     expect(speakerStillUrl('debate-1', null, artifacts)).toBeNull();
+  });
+});
+
+describe('debatePageStillPreloads (GEO-3604)', () => {
+  it('names exactly the stills the player will paint, slot order', () => {
+    const both = [{ kind: 'speaker_still_slot_1' as const }, { kind: 'speaker_still_slot_2' as const }];
+    expect(debatePageStillPreloads('01A13F75-B952-75C0-8BCA-B9465F7BAB9B', both)).toEqual([
+      speakerStillUrl('01a13f75b95275c08bcab9465f7bab9b', 1, both),
+      speakerStillUrl('01a13f75b95275c08bcab9465f7bab9b', 2, both),
+    ]);
+    expect(debatePageStillPreloads('debate1', artifacts)).toEqual([speakerStillUrl('debate1', 2, artifacts)]);
+    expect(debatePageStillPreloads('debate1', undefined)).toEqual([]);
   });
 });

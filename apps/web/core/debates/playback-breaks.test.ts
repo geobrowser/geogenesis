@@ -105,6 +105,49 @@ describe('playbackBreaksFrom', () => {
     expect(silentAt(playback, 110_000)).toBe(true);
   });
 
+  it('folds the next round’s slow start into its break, so the edit falls under the title', () => {
+    // Testnet debate 01a1acad: the lead-in into Round 2 ran 107.7–109.7 s, then 3.3 s of quiet
+    // before the opener's first word. Cut on its own, that quiet jumped the picture as the title cleared.
+    const slowStart = {
+      kind: 'turn_start' as const,
+      turn_index: 2,
+      next_turn_index: 2,
+      source_start_ms: 128_000,
+      source_end_ms: 131_258,
+      output_ms: 0,
+      removed_ms: 3_258,
+      quiet_kept_ms: 300,
+    };
+    const playback = playbackBreaksFrom(
+      openRounds(),
+      { ...RENDERED_MEDIA, early_end_gaps: [...(RENDERED_MEDIA.early_end_gaps ?? []), slowStart] },
+      segments
+    );
+    expect(playback.breaks[0]).toMatchObject({ kind: 'lead_in', decidingStartMs: 120_000, endMs: 131_258 });
+    expect(playback.earlyEnds.some(entry => entry.kind === 'turn_start')).toBe(false);
+    const [cut] = breakCuts(playback);
+    // One edit, mid-title; the title's tail then runs straight into the first word.
+    expect(cut).toEqual({ atMs: 121_200, toMs: 131_258 - 1_200 });
+    expect(breakCueAt(playback.breaks, [], cut.toMs)).toMatchObject({ elapsedMs: 1_200 });
+    expect(breakCueAt(playback.breaks, [], 131_258)).toBeNull();
+  });
+
+  it('leaves a slow start alone when it does not open the round a break leads into', () => {
+    const midRound = {
+      kind: 'turn_start' as const,
+      turn_index: 3,
+      next_turn_index: 3,
+      source_start_ms: 128_000,
+      source_end_ms: 131_258,
+      output_ms: 0,
+      removed_ms: 3_258,
+      quiet_kept_ms: 300,
+    };
+    const playback = playbackBreaksFrom(openRounds(), { ...RENDERED_MEDIA, early_end_gaps: [midRound] }, segments);
+    expect(playback.breaks[0].endMs).toBe(128_000);
+    expect(breakCuts(playback)).toContainEqual({ atMs: 128_000, toMs: 131_258 });
+  });
+
   it('is nothing for a fixed format or a debate with no media yet', () => {
     expect(playbackBreaksFrom({} as Debate, { round_results: [] }, []).breaks).toEqual([]);
     expect(playbackBreaksFrom(openRounds(), undefined, segments).breaks).toEqual([]);

@@ -3,6 +3,7 @@ import { ID } from '~/core/id';
 import { RANK_VOTES_RELATION_TYPE_ID, SUBMITTED_TO_PROPERTY_ID } from '~/core/ranking-block-ids';
 import type { Entity, Relation } from '~/core/types';
 
+import { ballotRecencyKey, pickLatestBallot } from './ranking-ballot-recency';
 import { getOrderedRelationTargetIds } from './ranking-block-relations';
 
 export function buildMyRankingEntityFilter(blockId: string): EntityFilter {
@@ -40,38 +41,19 @@ export function getSubmittedBlockIdFromRank(relations: Relation[], authorSpaceId
   return relation?.toEntity.id ?? null;
 }
 
-function parseEntityTimestampMs(raw: string | number | undefined | null): number {
-  if (raw == null) return 0;
-  if (typeof raw === 'number') {
-    return raw < 1_000_000_000_000 ? raw * 1000 : raw;
-  }
-  const trimmed = raw.trim();
-  if (!trimmed) return 0;
-  const asNumber = Number(trimmed);
-  if (!Number.isNaN(asNumber)) {
-    return asNumber < 1_000_000_000_000 ? asNumber * 1000 : asNumber;
-  }
-  const parsed = Date.parse(trimmed);
-  return Number.isNaN(parsed) ? 0 : parsed;
-}
-
 /**
  * The current ballot is the most recently *created* rank entity: re-submission
  * after a rolling window elapses mints a fresh entity, while in-window edits
  * update the existing one in place (bumping `updatedAt` but not `createdAt`).
  * Picking by `updatedAt` could resurface a superseded ballot that was merely
  * touched after a newer one was minted. `updatedAt` is only a fallback for
- * older entities indexed without a `createdAt`.
+ * older entities indexed without a `createdAt`, and a tie-break.
+ *
+ * The rule lives in `ranking-ballot-recency.ts`, shared with the ranker counts
+ * so every screen agrees on which ballot is yours.
  */
 export function pickMostRecentlyCreatedRankingEntity(entities: Entity[]): Entity | null {
-  if (entities.length === 0) return null;
-
-  return entities.reduce<Entity | null>((latest, entity) => {
-    if (!latest) return entity;
-    const latestTs = parseEntityTimestampMs(latest.createdAt ?? latest.updatedAt);
-    const entityTs = parseEntityTimestampMs(entity.createdAt ?? entity.updatedAt);
-    return entityTs >= latestTs ? entity : latest;
-  }, null);
+  return pickLatestBallot(entities, entity => ballotRecencyKey(entity.id, entity.createdAt, entity.updatedAt));
 }
 
 export function getMyRankingOrderedEntityIds(rankEntity: Entity, personalSpaceId: string): string[] {

@@ -236,7 +236,7 @@ it('preserves the LinkedIn caption allowance independently of the tracked destin
 it.each([
   'Sharing knowledge helps people make better decisions together',
   'Sharing knowledge helps people make better decisions together. '.repeat(8),
-])('budgets X composer text using the shortened link weight for UUID destinations: %s', claim => {
+])("budgets X composer text using X's fixed link weight for the tagged debates app link: %s", claim => {
   const open = vi.spyOn(window, 'open').mockReturnValue(null);
   mount({ ...realDebate, claim: { ...realDebate.claim, claim } }, '33333333-3333-4333-8333-333333333333');
   fireEvent.click(screen.getByRole('button', { name: 'Share on X' }));
@@ -244,9 +244,9 @@ it.each([
   const composer = new URL(open.mock.calls[0][0] as string);
   const destination = new URL(composer.searchParams.get('url')!);
   const text = composer.searchParams.get('text')!;
-  expect(destination.searchParams.get('si')).toHaveLength(24);
+  expect(destination.searchParams.has('si')).toBe(false);
   expect(parseShareLink(destination)).toMatchObject({ method: 'x', share_content_id: realDebate.id });
-  expect(destination.pathname).toContain('33333333-3333-4333-8333-333333333333');
+  expect(destination.href).toMatch(/^https:\/\/debates\.geobrowser\.io\/debate\//);
   expect(text).toContain('Sharing knowledge helps people make better decisions together');
   expect(text).toMatch(/\. Watch the debate on Geo!$/);
   expect(text.length + 1 + 23).toBeLessThanOrEqual(280);
@@ -489,3 +489,32 @@ it('ignores a second choice while the share sheet is open', () => {
 
   expect(mocks.handoff).toHaveBeenCalledTimes(1);
 });
+
+it.each([...cases.slice(0, 3), ['Copy link', 'copy_link']] as const)(
+  'hands out the debates app link with the long share tags from %s (GEO-3695)',
+  async (label, method) => {
+    const write = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: write } });
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    mount(realDebate);
+    fireEvent.click(screen.getByRole('button', { name: label }));
+    let destination: URL;
+    if (method === 'copy_link') {
+      await waitFor(() => expect(write).toHaveBeenCalledTimes(1));
+      destination = new URL(write.mock.calls[0][0]);
+    } else {
+      const composer = new URL(open.mock.calls[0][0] as string);
+      destination = new URL(
+        method === 'linkedin'
+          ? composer.searchParams.get('text')!.split('\n').at(-1)!
+          : composer.searchParams.get('url')!
+      );
+    }
+    expect(destination.origin).toBe('https://debates.geobrowser.io');
+    expect(destination.pathname).toBe(`/debate/${realDebate.id}`);
+    // The debates app has no proxy to expand the short code; it reads the campaign tags directly.
+    expect(destination.searchParams.has('si')).toBe(false);
+    expect(destination.searchParams.get('utm_medium')).toBe('share');
+    expect(parseShareLink(destination)).toMatchObject({ method, share_content_id: realDebate.id });
+  }
+);

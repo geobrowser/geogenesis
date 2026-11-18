@@ -86,21 +86,7 @@ export const featureFlagDefinitions = [
     id: 'googleSignIn',
     label: 'Google sign-in',
     description:
-      'Offer Google in every sign-in prompt (GEO-3139). Google redirects, so an action queued before signing in is dropped. Google must also be enabled in the Privy dashboard.',
-    enabledByDefault: false,
-  },
-  {
-    id: 'googleCalendar',
-    label: 'Google Calendar',
-    description:
-      'Connect Google Calendar in your debate schedule, so busy times are taken out of your availability (GEO-3139). Needs geo-chat with Google Calendar configured.',
-    enabledByDefault: false,
-  },
-  {
-    id: 'microsoftCalendar',
-    label: 'Outlook Calendar',
-    description:
-      'Connect Outlook Calendar in your debate schedule, so busy times are taken out of your availability (GEO-3139). Needs geo-chat with Microsoft Calendar configured.',
+      'Offer Google in every sign-in prompt (GEO-3139). Google redirects, so opted-in actions queued before signing in are restored on the return and carried out when a matching control is on screen. Google must also be enabled in the Privy dashboard.',
     enabledByDefault: false,
   },
   {
@@ -124,8 +110,9 @@ export type FeatureFlags = Record<FeatureFlagId, boolean>;
 // renamed from) are no longer flags; nor is `peerAvailability`, since scheduling did too, nor
 // `lobbyJoining`, since finding and joining lobbies did (GEO-3306), nor `debateVideo`, since video in
 // the claim picker and lobbies did (GEO-3414), nor `ourSignInBox`, since every sign-in opens the box
-// (GEO-3569). All of them are still sitting in browsers' stored flag objects; normalizing drops them
-// on the next write rather than reading them back.
+// (GEO-3569), nor `googleCalendar` and `microsoftCalendar`, since connecting a calendar did
+// (GEO-3598), nor `debateRankings`, since ranking on the Best debates block did (GEO-3591). All of them are still sitting in browsers' stored flag objects; normalizing drops
+// them on the next write rather than reading them back.
 export type StoredFeatureFlags = Partial<
   Record<
     | FeatureFlagId
@@ -134,7 +121,10 @@ export type StoredFeatureFlags = Partial<
     | 'peerAvailability'
     | 'lobbyJoining'
     | 'debateVideo'
-    | 'ourSignInBox',
+    | 'ourSignInBox'
+    | 'googleCalendar'
+    | 'microsoftCalendar'
+    | 'debateRankings',
     boolean
   >
 >;

@@ -59,7 +59,10 @@ export function SpaceTopicFeed({ spaceId, spaceTopicId }: { spaceId: string; spa
   );
 }
 
-/** The Best-ranked, type- and topic-filterable feed both topic surfaces share. */
+/**
+ * The Best-ranked, type- and topic-filterable feed both topic surfaces share. It keeps Explore's
+ * resume policy, so a reader returning while scrolled keeps their place and order.
+ */
 function TopicTypeFeed({
   feedKey,
   apiEndpoint,
@@ -87,6 +90,7 @@ function TopicTypeFeed({
     <EntityFeed
       key={feedKey}
       apiEndpoint={apiEndpoint}
+      preserveSession
       initialSort="best"
       showSortFilter
       showTimeFilter={false}

@@ -9,6 +9,7 @@
  *     <any page>?modal=email-settings                  the viewer's email settings (every email's footer)
  *     /explore?modal=running-late&modalTarget=<req>    Running late, from an email   GEO-3427
  *     /explore?modal=cant-make-it&modalTarget=<req>    Can't make it, from an email
+ *     /space/<id>/<debate>?modal=comments              a debate's comments, from the reply email   GEO-3381
  *
  * The rule the repo already follows, written down: **a fragment addresses a position in the
  * document, a query param triggers an action.** `buildBlockLink` puts a block id in the fragment
@@ -59,6 +60,9 @@ export const DEEP_LINK_MODALS = {
   // GEO-3427: a scheduling email's Running late and Can't make it. `modalTarget` is the request.
   runningLate: 'running-late',
   cantMakeIt: 'cant-make-it',
+  // GEO-3381: the reply email's Reply on a debate. A claim page's comments are inline, so its link
+  // uses the `#entity-comments` fragment instead; a debate's are in a panel, which only opens.
+  comments: 'comments',
 } as const;
 
 export type ModalDeepLink = (typeof DEEP_LINK_MODALS)[keyof typeof DEEP_LINK_MODALS];

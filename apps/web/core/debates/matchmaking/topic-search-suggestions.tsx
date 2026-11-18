@@ -23,7 +23,8 @@ export function TopicSearchSuggestions({
   topics,
   onPick,
 }: {
-  analyticsSurface: DebateAnalyticsSurface;
+  /** Left out on surfaces outside the debates hub (the Best debates ranking screen). */
+  analyticsSurface?: DebateAnalyticsSurface;
   query: string;
   topics: { id: string; name: string | null; count: number }[];
   onPick: (topicId: string) => void;
@@ -45,7 +46,9 @@ export function TopicSearchSuggestions({
             aria-label={`Filter by ${name}`}
             onClick={() => onPick(topic.id)}
             className="gap-1.5"
-            {...debateSurfaceAnalyticsAttributes(analyticsSurface, 'Topic suggestion', 'filter')}
+            {...(analyticsSurface
+              ? debateSurfaceAnalyticsAttributes(analyticsSurface, 'Topic suggestion', 'filter')
+              : {})}
           >
             <span aria-hidden className="text-grey-04">
               +

@@ -56,7 +56,7 @@ function createVideo(): HTMLVideoElement {
  * anything. Marking the element unlocked anyway would leave it locked for good, so check the
  * page's activation where the browser reports it (Safari 16.4 and later).
  */
-function inUserGesture(): boolean {
+export function inUserGesture(): boolean {
   const activation = (navigator as Navigator & { userActivation?: { isActive: boolean } }).userActivation;
   return activation ? activation.isActive : true;
 }
@@ -131,6 +131,11 @@ export function releaseGestureVideo(video: HTMLVideoElement) {
   if (!inUse.delete(video)) return;
   video.pause();
   video.muted = true;
+  // A player that sped this element up (the moments editor, GEO-3773) must not hand that speed on.
+  if (video.defaultPlaybackRate !== 1) {
+    video.defaultPlaybackRate = 1;
+    video.playbackRate = 1;
+  }
   video.removeAttribute('class');
   video.remove();
   if (idle.length >= MAX_IDLE_ELEMENTS) {

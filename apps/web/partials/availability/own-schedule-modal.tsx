@@ -6,10 +6,8 @@ import type { AvailabilityBlock } from '~/core/availability/blocks';
 import { calendarBusyWindow } from '~/core/availability/calendar-busy';
 import type { ScheduleEditorSurface } from '~/core/availability/schedule-analytics';
 import { accountSetupMessage } from '~/core/debates/account-setup-copy';
-import type { CalendarProvider } from '~/core/debates/api';
 import { useCalendarBusy, useCalendarConnections } from '~/core/debates/calendar-hooks';
 import { useDebateSchedule, useSaveDebateSchedule } from '~/core/debates/hooks';
-import { useFeatureFlag } from '~/core/state/feature-flags';
 
 import { AvailabilityModal } from './availability-modal';
 import type { CalendarReturn } from './calendar-return-url';
@@ -30,26 +28,10 @@ type Props = {
 
 /**
  * "Set your debate schedule", wired to the viewer's saved week — the one editor the navbar, the
- * debates hub's header calendar and banner, and your own availability link all open.
+ * debates hub's header calendar and banner, and your own availability link all open. Connected
+ * calendars sit above the grid, with their merged busy time shaded on it.
  */
 export function OwnScheduleModal(props: Props) {
-  const google = useFeatureFlag('googleCalendar');
-  const microsoft = useFeatureFlag('microsoftCalendar');
-  const providers: CalendarProvider[] = [
-    ...(google ? ['google' as const] : []),
-    ...(microsoft ? ['microsoft' as const] : []),
-  ];
-
-  // A separate component, so the calendar reads are not even set up while both flags are off.
-  return providers.length > 0 ? (
-    <ScheduleEditorWithCalendar {...props} providers={providers} />
-  ) : (
-    <ScheduleEditor {...props} />
-  );
-}
-
-/** Connected calendars above the grid, and their merged busy time shaded on it. */
-function ScheduleEditorWithCalendar({ providers, ...props }: Props & { providers: CalendarProvider[] }) {
   const { google, microsoft, disabled } = useCalendarConnections(props.open);
   // Asked for only once there is a connection to have produced any. Busy time is merged server-side.
   const connected = Boolean(google || microsoft);
@@ -67,7 +49,6 @@ function ScheduleEditorWithCalendar({ providers, ...props }: Props & { providers
           ? undefined
           : ({ unsavedChanges, saveDraft }) => (
               <CalendarSection
-                providers={providers}
                 unsavedChanges={unsavedChanges}
                 saveDraft={saveDraft}
                 returned={props.calendarReturn ?? null}

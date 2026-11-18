@@ -31,19 +31,6 @@ describe('decodeExtractedClaims topics', () => {
     expect(claims[1].topics).toEqual([]);
   });
 
-  it('maps is_contestable, defaulting a missing flag to not-a-motion', () => {
-    const { claims } = decodeExtractedClaims({
-      turns: [turn],
-      claims: [
-        { text: 'Broad position', is_factual: false, turn_index: 0, is_contestable: true },
-        { text: 'Narrow fact', is_factual: true, turn_index: 0, is_contestable: false },
-        // Payload from before the classification shipped.
-        { text: 'Unclassified', is_factual: null, turn_index: 0 },
-      ],
-    });
-    expect(claims.map(c => c.isContestable)).toEqual([true, false, false]);
-  });
-
   it('drops topic ids the publish path would throw on, and says so', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const { claims } = decodeExtractedClaims({
@@ -263,6 +250,27 @@ describe('decodeExtractedClaims stance (GEO-3142)', () => {
       ],
     });
     expect(claims.map(c => c.stance)).toEqual(['supports', 'opposes', 'addresses', null, null, null]);
+  });
+});
+
+describe('decodeExtractedClaims match audit (GEO-3635)', () => {
+  it('carries the judge verdict and best score, and reads anything malformed as absent', () => {
+    const { claims } = decodeExtractedClaims({
+      turns: [turn],
+      claims: [
+        { text: 'a', is_factual: false, turn_index: 0, match: { verdict: 'error', best_score: 0.998 } },
+        { text: 'b', is_factual: false, turn_index: 0, match: { verdict: 'not_equivalent', best_score: Number.NaN } },
+        { text: 'c', is_factual: false, turn_index: 0, match: null },
+        // A payload from before matching shipped.
+        { text: 'd', is_factual: false, turn_index: 0 },
+      ],
+    });
+    expect(claims.map(c => [c.matchVerdict, c.matchBestScore])).toEqual([
+      ['error', 0.998],
+      ['not_equivalent', null],
+      [null, null],
+      [null, null],
+    ]);
   });
 });
 

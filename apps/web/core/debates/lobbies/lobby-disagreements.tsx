@@ -11,10 +11,11 @@ import { useBackfillReadinessForHeldPosition } from '../backfill-readiness-for-h
 import { debateActionAnalyticsAttributes } from '../matchmaking/hub-analytics';
 import { HubQueryState, HubSkeleton } from '../matchmaking/hub-states';
 import { sameId } from '../rooms/room-presence';
+import { useLobbyRoomClaims } from './lobby-agenda-claims';
 import { personName } from './lobby-format';
 import { LobbyPopup } from './lobby-popup';
 import { LobbyClaimRequest, lobbyRoomClaimFrom } from './lobby-room-claims';
-import { RECIPIENT_UNAVAILABLE_MESSAGE, useDebateLobbyClaims } from './lobby-room-claims-hooks';
+import { RECIPIENT_UNAVAILABLE_MESSAGE } from './lobby-room-claims-hooks';
 import { roomSideOpposing, useLobbyViewerPosition } from './lobby-room-claims-list';
 import type { LobbyPageView } from './lobby-view';
 
@@ -143,7 +144,8 @@ export function LobbyDisagreementsList({
   member: DebateLobbyMember;
   count: number;
 }) {
-  const query = useDebateLobbyClaims(lobby.lobby_id);
+  // Agenda-only when the lobby is (GEO-3775), as the count on the trigger is.
+  const query = useLobbyRoomClaims(lobby.lobby_id);
   const name = personName(member);
   const claims = query.data?.claims;
   // The last rows shown, so a refresh can keep one a refusal pushed off a full list.
@@ -190,7 +192,7 @@ export function LobbyDisagreementsList({
           isLoading={query.isLoading}
           error={query.error}
           failureReason={query.failureReason}
-          onRetry={() => void query.refetch()}
+          onRetry={query.refetch}
           isEmpty={rows.length === 0}
           emptyMessage={LOBBY_DISAGREEMENTS_COPY.unlisted(count, false)}
           loadingFallback={<HubSkeleton rows={2} />}

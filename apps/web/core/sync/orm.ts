@@ -7,6 +7,7 @@ import { dedupeWith } from 'effect/Array';
 import { type EntitiesOrderBy } from '~/core/gql/graphql';
 import { convertWhereConditionToEntityFilter, extractTypeIdsFromWhere } from '~/core/io/converters';
 import { SortOrder } from '~/core/io/sort-order';
+import { chunk } from '~/core/utils/chunk';
 
 import { readTypes } from '../database/entities';
 import {
@@ -430,13 +431,12 @@ export class E {
 
       const remoteEntities = (
         await Promise.all(
-          Array.from({ length: Math.ceil(requestIds.length / ENTITY_ID_BATCH_SIZE) }, (_, index) => {
-            const batchIds = requestIds.slice(index * ENTITY_ID_BATCH_SIZE, (index + 1) * ENTITY_ID_BATCH_SIZE);
-            return syncFetchQuery(cache, {
+          chunk(requestIds, ENTITY_ID_BATCH_SIZE).map(batchIds =>
+            syncFetchQuery(cache, {
               queryKey: ['network', 'entities', batchIds, spaceId],
               queryFn: ({ signal }) => Effect.runPromise(getBatchEntities(batchIds, spaceId, signal)),
-            });
-          })
+            })
+          )
         )
       ).flat();
 

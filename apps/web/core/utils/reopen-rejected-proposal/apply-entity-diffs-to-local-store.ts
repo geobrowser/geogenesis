@@ -8,6 +8,7 @@ import { ID } from '~/core/id';
 import { getBatchEntities, getProperties } from '~/core/io/queries';
 import { GeoStore } from '~/core/sync/store';
 import type { DataType, Entity, Property, Relation, RenderableEntityType, Value } from '~/core/types';
+import { chunk } from '~/core/utils/chunk';
 import type {
   BlockChange,
   DataBlockChange,
@@ -90,9 +91,8 @@ function isValidGraphQlUuid(id: string): boolean {
 async function fetchEntitiesInBatches(ids: string[], spaceId: string): Promise<Entity[]> {
   if (ids.length === 0) return [];
   const out: Entity[] = [];
-  for (let i = 0; i < ids.length; i += ENTITY_GRAPHQL_BATCH) {
-    const chunk = ids.slice(i, i + ENTITY_GRAPHQL_BATCH);
-    const batch = await Effect.runPromise(getBatchEntities(chunk, spaceId));
+  for (const group of chunk(ids, ENTITY_GRAPHQL_BATCH)) {
+    const batch = await Effect.runPromise(getBatchEntities(group, spaceId));
     out.push(...batch);
   }
   return out;

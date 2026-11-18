@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import * as React from 'react';
 
 import { GEO_CHAT_AUTHORIZATION_HEADER } from '~/core/explore/fresh-slot/ranking-lab-types';
+import { chunk } from '~/core/utils/chunk';
 import { normId } from '~/core/utils/norm-id';
 
 import { adminScheduleOverlaps, getGeoChatSession } from '../api';
@@ -79,8 +80,7 @@ export function useAdminSharedFreeSlots(firstUserId: string | null, candidateUse
     ...debateQueryNetworkOptions,
     queryKey: ['debates', 'admin-shared-free-slots', firstUserId, candidates.join(','), accountKey] as const,
     queryFn: async ({ signal }) => {
-      const batches: string[][] = [];
-      for (let i = 0; i < candidates.length; i += OVERLAP_BATCH) batches.push(candidates.slice(i, i + OVERLAP_BATCH));
+      const batches = chunk(candidates, OVERLAP_BATCH);
       const answers = await Promise.all(
         batches.map(users =>
           adminScheduleOverlaps(

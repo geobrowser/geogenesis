@@ -2,8 +2,8 @@ import { IdUtils } from '@geoprotocol/geo-sdk/lite';
 
 import { Effect, Either } from 'effect';
 
-import { chunk } from '~/core/community/community-graphql';
 import { Environment } from '~/core/environment';
+import { chunk } from '~/core/utils/chunk';
 import { normId } from '~/core/utils/norm-id';
 import { compareTiedSpaceIds } from '~/core/utils/space/space-ranking';
 

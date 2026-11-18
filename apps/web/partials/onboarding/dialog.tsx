@@ -54,8 +54,6 @@ import { Tag } from '~/design-system/tag';
 import { Text } from '~/design-system/text';
 import { Truncate } from '~/design-system/truncate';
 
-import { ASSISTANT_DISABLED } from '~/partials/chat/assistant-visibility';
-
 import { FeedTopicPicker, RECOMMENDED_FEED_TOPIC_COUNT } from './customize-feed';
 import { InterestGrid, preloadInterestImages } from './interest-grid';
 import {
@@ -235,7 +233,7 @@ export const OnboardingDialog = () => {
     // back to. Left unmarked as seen so it still introduces itself on a wider screen.
     // Nor after a name-only run (GEO-3517): it would cover the debate hours page just as the RSVP
     // lands there. It still introduces itself next time.
-    if (!ASSISTANT_DISABLED && !hasSeenAssistant && !isPhone && !nameOnly) {
+    if (!hasSeenAssistant && !isPhone && !nameOnly) {
       setChatOpen(true);
       setHasSeenAssistant(true);
     }

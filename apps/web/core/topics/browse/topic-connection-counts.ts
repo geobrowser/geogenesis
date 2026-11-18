@@ -7,6 +7,7 @@ import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { DEBATE_TYPE_ID } from '~/core/debates/ontology';
 import { ID } from '~/core/id';
 import { graphql } from '~/core/io/graphql-client';
+import { chunk } from '~/core/utils/chunk';
 import { normId } from '~/core/utils/norm-id';
 
 import { NEWS_STORY_TYPE_ID } from '../ontology';
@@ -133,11 +134,7 @@ export const TOPIC_COUNT_BATCH_SIZE = 10;
  */
 export function topicCountBatches(topicIds: readonly string[]): string[][] {
   const ids = [...new Set(topicIds.map(normId))].sort();
-  const batches: string[][] = [];
-  for (let start = 0; start < ids.length; start += TOPIC_COUNT_BATCH_SIZE) {
-    batches.push(ids.slice(start, start + TOPIC_COUNT_BATCH_SIZE));
-  }
-  return batches;
+  return chunk(ids, TOPIC_COUNT_BATCH_SIZE);
 }
 
 /** One batch of `topicCountBatches`, answered. Shared by the hook and the server's seed. */

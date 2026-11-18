@@ -9,6 +9,8 @@ import { geo } from '~/core/sdk/geo-client';
 import { store } from '~/core/state/jotai-store';
 import { requestedMembershipSpacesAtom, upsertRequestedMembershipSpace } from '~/core/state/requested-membership';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
+import { readFastPathRestricted } from '~/core/utils/contracts/read-space-membership';
+import { devLog } from '~/core/utils/dev-log';
 import { validateSpaceId } from '~/core/utils/utils';
 
 /** The shape `useSmartAccountTransaction` returns — kept structural so this module stays hook-free. */
@@ -102,11 +104,23 @@ export async function requestSpaceMembership({
 }
 
 /**
- * Space+account pairs this session has already proposed. Recorded only once a
- * request actually lands, so a request that was skipped (one is already under
- * vote) or that failed can still be made later — the caller's next attempt
- * re-runs the checks against current state instead of being suppressed for the
- * rest of the session.
+ * Whether `personalSpaceId` can't request to join `spaceId`: the one rule every membership request
+ * checks (Join, a queued join, and the automatic join after a vote or ranking).
+ *
+ * Someone on the review path only can't request membership: the contract reverts
+ * `FastPathRestricted`, and only an editor's proposal can add them. Read fresh from the chain. Fails
+ * open: when the read fails this returns false, and the request is sent as before.
+ */
+export function readIsLockedOut(spaceId: string, personalSpaceId: string): Promise<boolean> {
+  return readFastPathRestricted(spaceId, personalSpaceId).catch(() => false);
+}
+
+/**
+ * Space+account pairs this session has already proposed, or that the contract refuses (the
+ * requester is on the review path only). Recorded only once a request actually lands or that refusal
+ * is read, so a request that was skipped (one is already under vote) or that failed can still be
+ * made later — the caller's next attempt re-runs the checks against current state instead of being
+ * suppressed for the rest of the session.
  */
 const autoRequestedMemberships = new Set<string>();
 
@@ -193,6 +207,16 @@ async function runMembershipCheck(
   // block a fresh one, otherwise the user is wedged out of the space for good.
   const activeRequest = await fetchActiveMemberRequest(spaceId, personalSpaceId).catch(() => null);
   if (activeRequest != null && !activeRequest.isVotingEnded) return false;
+
+  // The contract refuses a request from someone on the review path only. Skip quietly, as the user
+  // asked to vote or rank, not to join (Join shows them how to ask an editor). Recorded like a landed
+  // request so later votes don't read or retry it this session; a restriction lifted mid-session
+  // resumes auto-join after a reload. A failed read falls through to the request, as before.
+  if (await readIsLockedOut(spaceId, personalSpaceId)) {
+    devLog('Skipping automatic membership request: requester is restricted', { spaceId, personalSpaceId });
+    autoRequestedMemberships.add(requestKey);
+    return false;
+  }
 
   try {
     await requestSpaceMembership({ spaceId, personalSpaceId, tx, queryClient });

@@ -46,4 +46,17 @@ describe('dedupeSubmissionsByAuthor', () => {
       expect(deduped[0]?.orderedEntityIds).toEqual(['c', 'd']);
     }
   });
+
+  it('breaks a same-second tie by ballot id, whatever the list order (GEO-3686)', () => {
+    const a = { ...submission('alice', ['a'], '1793875856'), id: 'rank-a' };
+    const b = { ...submission('alice', ['b'], '1793875856'), id: 'rank-b' };
+    expect(dedupeSubmissionsByAuthor([a, b])[0]?.id).toBe('rank-b');
+    expect(dedupeSubmissionsByAuthor([b, a])[0]?.id).toBe('rank-b');
+  });
+
+  it('reads a millisecond createdAt as milliseconds (GEO-3686)', () => {
+    const olderMs = { ...submission('alice', ['a'], String(Date.parse('2026-01-01'))), id: 'rank-a' };
+    const newerSeconds = { ...submission('alice', ['b'], String(Date.parse('2026-06-01') / 1000)), id: 'rank-b' };
+    expect(dedupeSubmissionsByAuthor([olderMs, newerSeconds])[0]?.id).toBe('rank-b');
+  });
 });

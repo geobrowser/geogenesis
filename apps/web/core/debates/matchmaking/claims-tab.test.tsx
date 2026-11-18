@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { MatchmakingClaim } from '../api';
 import { type DebateClaimListId, DrawnHubListProvider } from '../debate-claim-card-surface';
+import type { AgendaClaimFilter } from '../todays-claims/agenda-claim-filter';
 import { ClaimsTab } from './claims-tab';
 import { HUB_SCROLL_SELECTOR, HubScrollSelectorProvider } from './hub-scroll';
 import { panelFilters } from './panel-filters-fixtures';
@@ -393,10 +394,27 @@ function applyServerFilters(rows: ReturnType<typeof taggedRowsFor>, filters: any
     }
     if (spaces && !row.tagSpaceIds.some(spaceId => spaces.some(picked => norm(picked) === norm(spaceId)))) return false;
     if (filters.excludeAnsweredBy && mocks.graphAnsweredIds.has(row.entity.id)) return false;
+    // GEO-3775: agenda claims only, answered by the server.
+    if (filters.onlyClaimIds != null && !filters.onlyClaimIds.includes(norm(row.entity.id))) return false;
     return true;
   });
   return kept;
 }
+
+// The props each claim card is drawn with, so a test can read the attribution it was given.
+const cardSurfaces = vi.hoisted(
+  () => [] as Array<{ claimId: string; listId: string; scope?: Record<string, unknown> }>
+);
+vi.mock('../debate-claim-card-surface', async importOriginal => {
+  const actual = await importOriginal<typeof import('../debate-claim-card-surface')>();
+  return {
+    ...actual,
+    DebateClaimCardSurface: (props: Parameters<typeof actual.DebateClaimCardSurface>[0]) => {
+      cardSurfaces.push({ claimId: props.claimId, listId: props.listId, scope: props.scope });
+      return actual.DebateClaimCardSurface(props);
+    },
+  };
+});
 
 vi.mock('../tagged-claims', async importOriginal => ({
   ...(await importOriginal<typeof import('../tagged-claims')>()),
@@ -3123,5 +3141,161 @@ describe('in the side panel', () => {
     await showAllClaims();
 
     expect(mocks.taggedFiltersAskedFor.at(-1)).toMatchObject({ spaceMatch: 'all' });
+  });
+});
+
+/** GEO-3775. A list handed the surface's agenda filter offers agenda claims only. */
+describe('agenda-only', () => {
+  const DEBATE_TAG = '55c95b2626f8482cb9739ea99dfde438';
+  const bare = (id: string) => id.replace(/-/g, '').toLowerCase();
+  const ON_AGENDA = '019fedc1-0c41-7f3e-9a11-2c7d5e8b4401';
+  const OFF_AGENDA = '019fedc2-1d52-7a4f-8b22-3d8e6f9c5502';
+
+  function agenda(state: 'listed' | 'pending' | 'failed' | 'empty' = 'listed'): AgendaClaimFilter {
+    const ids = state === 'listed' ? [bare(ON_AGENDA)] : [];
+    return {
+      active: true,
+      ids,
+      spaceIds: state === 'listed' ? [bare(SPACE_ID)] : [],
+      key: `${state}:${ids.join(',')}`,
+      has: claimId => ids.includes(bare(claimId)),
+      pending: state === 'pending',
+      error: state === 'failed' ? new Error('gaia down') : null,
+      refetch: vi.fn(),
+      scopeFor: claimId =>
+        ids.includes(bare(claimId)) ? { agenda_id: 'agenda-today', agenda_date: '2026-11-16' } : undefined,
+    };
+  }
+
+  it('asks the tag for the agendas’ claims only', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [
+      featuredClaim(ON_AGENDA, 'On an agenda'),
+      featuredClaim(OFF_AGENDA, 'On no agenda'),
+    ];
+    render(<ClaimsTab panelFilters={panelFilters()} agendaFilter={agenda()} />);
+
+    expect(await screen.findByText('On an agenda')).toBeInTheDocument();
+    expect(screen.queryByText('On no agenda')).not.toBeInTheDocument();
+    expect(mocks.taggedFiltersAskedFor.at(-1).onlyClaimIds).toEqual([bare(ON_AGENDA)]);
+  });
+
+  it('asks the tag nothing, and draws nothing, while the agendas are out', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [featuredClaim(OFF_AGENDA, 'On no agenda')];
+    render(<ClaimsTab panelFilters={panelFilters()} agendaFilter={agenda('pending')} />);
+    await act(async () => {});
+
+    expect(mocks.tagsAskedFor).toEqual([]);
+    expect(screen.queryByText('On no agenda')).not.toBeInTheDocument();
+    expect(screen.queryByText(/today’s agendas/)).not.toBeInTheDocument();
+  });
+
+  it('calls an agenda outage an outage, and Try again asks the agendas again', async () => {
+    const filter = agenda('failed');
+    render(<ClaimsTab panelFilters={panelFilters()} agendaFilter={filter} />);
+
+    expect(await screen.findByText('Something went wrong.')).toBeInTheDocument();
+    expect(mocks.tagsAskedFor).toEqual([]);
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(filter.refetch).toHaveBeenCalled();
+  });
+
+  it('says the agendas list nothing rather than that nothing is tagged', async () => {
+    render(<ClaimsTab panelFilters={panelFilters()} agendaFilter={agenda('empty')} />);
+
+    expect(await screen.findByText('No claims are on today’s agendas yet.')).toBeInTheDocument();
+  });
+
+  // A lobby's Explore (GEO-3775, AGENDA_ONLY_LOBBY) narrows the same way, with the same copy.
+  it('narrows a lobby’s Explore to the agendas’ claims, and says so when they list none', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [
+      featuredClaim(ON_AGENDA, 'On an agenda'),
+      featuredClaim(OFF_AGENDA, 'On no agenda'),
+    ];
+    render(<ClaimsTab variant="lobbyExplore" agendaFilter={agenda()} />);
+
+    expect(await screen.findByText('On an agenda')).toBeInTheDocument();
+    expect(screen.queryByText('On no agenda')).not.toBeInTheDocument();
+    expect(mocks.taggedFiltersAskedFor.at(-1).onlyClaimIds).toEqual([bare(ON_AGENDA)]);
+    cleanup();
+
+    render(<ClaimsTab variant="lobbyExplore" agendaFilter={agenda('empty')} />);
+    expect(await screen.findByText('No claims are on today’s agendas yet.')).toBeInTheDocument();
+  });
+
+  it('asks geo-chat for the agendas’ spaces and lists only their claims', async () => {
+    mocks.claims = [
+      claim(ON_AGENDA, 'Mine, on an agenda', true),
+      claim(OFF_AGENDA, 'Mine, on no agenda', true, false, OTHER_SPACE_ID),
+    ];
+    mocks.facetSpaceIds = [SPACE_ID, OTHER_SPACE_ID];
+    renderMine(<ClaimsTab variant="positions" panelFilters={panelFilters()} agendaFilter={agenda()} />);
+
+    expect(await screen.findByText('Mine, on an agenda')).toBeInTheDocument();
+    expect(screen.queryByText('Mine, on no agenda')).not.toBeInTheDocument();
+    expect((mocks.lastQuery as { spaceIds: string[] }).spaceIds.map(bare)).toEqual([bare(SPACE_ID)]);
+  });
+
+  // geo-chat's facets count the agendas' spaces, rows on no agenda included; the pills count the rows.
+  it('counts the pills over the agenda rows in hand', async () => {
+    const ON_AGENDA_ELSEWHERE = '019fedc3-2e63-7b5f-8c33-4e9f7a0d6603';
+    // In an agenda space, but on no agenda: geo-chat's facets count it, the pills must not.
+    mocks.claims = [
+      claim(ON_AGENDA, 'Mine, on an agenda', true),
+      claim(ON_AGENDA_ELSEWHERE, 'Mine, on another agenda', true, false, OTHER_SPACE_ID),
+      claim(OFF_AGENDA, 'Mine, on no agenda', true),
+    ];
+    mocks.facetSpaceIds = [SPACE_ID, OTHER_SPACE_ID];
+    const ids = [bare(ON_AGENDA), bare(ON_AGENDA_ELSEWHERE)];
+    const filter = {
+      ...agenda(),
+      ids,
+      spaceIds: [bare(SPACE_ID), bare(OTHER_SPACE_ID)],
+      has: (claimId: string) => ids.includes(bare(claimId)),
+    };
+    renderMine(<ClaimsTab variant="positions" panelFilters={panelFilters()} agendaFilter={filter} />);
+    expect(await screen.findByText('Mine, on an agenda')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Filters' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Filters' });
+    const counts = within(dialog)
+      .getAllByRole('button', { name: /^Space/ })
+      .map(pill => pill.textContent);
+    expect(counts).toEqual(['Space1', 'Space1']);
+  });
+
+  it('says so when none of your positions is on an agenda', async () => {
+    mocks.claims = [claim(OFF_AGENDA, 'Mine, on no agenda', true)];
+    renderMine(<ClaimsTab variant="positions" panelFilters={panelFilters()} agendaFilter={agenda()} />);
+
+    expect(await screen.findByText('You haven’t taken a position on any of today’s claims yet.')).toBeInTheDocument();
+    expect(screen.queryByText('Mine, on no agenda')).not.toBeInTheDocument();
+  });
+
+  // The warehouse's `on_agenda` reads `agenda_id` off each card: without it every panel card would
+  // count as off-agenda, though every one is an agenda claim.
+  it('credits each card to the agenda that lists it, on the tag and on geo-chat’s lists', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [featuredClaim(ON_AGENDA, 'On an agenda')];
+    cardSurfaces.length = 0;
+    const view = render(<ClaimsTab panelFilters={panelFilters()} agendaFilter={agenda()} />);
+    expect(await screen.findByText('On an agenda')).toBeInTheDocument();
+    const tagged = [...cardSurfaces].reverse().find(card => bare(card.claimId) === bare(ON_AGENDA));
+    expect(tagged?.scope).toEqual({ agenda_id: 'agenda-today', agenda_date: '2026-11-16' });
+    view.unmount();
+
+    mocks.claims = [claim(ON_AGENDA, 'Mine, on an agenda', true)];
+    cardSurfaces.length = 0;
+    renderMine(<ClaimsTab variant="positions" panelFilters={panelFilters()} agendaFilter={agenda()} />);
+    expect(await screen.findByText('Mine, on an agenda')).toBeInTheDocument();
+    const positions = [...cardSurfaces].reverse().find(card => bare(card.claimId) === bare(ON_AGENDA));
+    expect(positions?.scope).toEqual({ agenda_id: 'agenda-today', agenda_date: '2026-11-16' });
+  });
+
+  // The lobby's Explore and every list not handed a filter are untouched.
+  it('narrows nothing without a filter', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [featuredClaim(OFF_AGENDA, 'On no agenda')];
+    render(<ClaimsTab panelFilters={panelFilters()} />);
+
+    expect(await screen.findByText('On no agenda')).toBeInTheDocument();
+    expect(mocks.taggedFiltersAskedFor.at(-1).onlyClaimIds).toBeNull();
   });
 });

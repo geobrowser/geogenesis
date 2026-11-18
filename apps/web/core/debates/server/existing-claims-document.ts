@@ -4,7 +4,7 @@ import { parse } from 'graphql';
 
 /**
  * The three facts the reuse policy verifies about a referenced entity: that it exists, which spaces
- * hold its content, and which types it carries. Its Topics and Tags are read separately, through the
+ * hold its content, and which types it carries. Its Topics are read separately, through the
  * paged `collectRelationTargets`, because a nested `relationsList` is one capped page.
  *
  * Deliberately not the full entity query — that one pulls every value and relation (0.31 MB per 50

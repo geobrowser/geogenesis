@@ -2,6 +2,7 @@
 
 import type { AvailabilityPayload } from '~/core/availability/blocks';
 import { capSearchQuery } from '~/core/io/search-query';
+import { chunk } from '~/core/utils/chunk';
 
 import {
   type GeoChatProfileState,
@@ -307,11 +308,26 @@ export type DebateTranscriptSegment = {
   created_at: string;
 };
 
+/** What `include` adds to a JSON transcript (GEO-3349). Off by default, so a plain read stays small. */
+export type TranscriptInclude = 'words' | 'sentences';
+
+/** A word or a sentence `include` serves (GEO-3349), said by one debater, on both clocks like a line. */
+export type DebateTranscriptSpan = Pick<
+  DebateTranscriptSegment,
+  'start_ms' | 'end_ms' | 'source_start_ms' | 'source_end_ms' | 'text'
+> & { participant_slot: ParticipantSlot };
+
 export type DebateTranscriptResponse = {
   format: TranscriptFormat;
   model_id: string;
   segments: DebateTranscriptSegment[];
   body?: string;
+  /** False for a transcript made before word timing was kept: no words or sentences until retranscribed. */
+  word_timing?: boolean;
+  /** With `include=words`: every word, in time order. */
+  words?: DebateTranscriptSpan[];
+  /** With `include=sentences`: whole sentences with their punctuation. */
+  sentences?: DebateTranscriptSpan[];
 };
 
 export type DebateTurnYield = {
@@ -1648,18 +1664,17 @@ function flushClaimBatch(key: string, spaceId: string) {
   pendingClaimBatches.delete(key);
 
   const ids = [...batch.ids];
-  const chunks: string[][] = [];
   // Re-chunked here rather than trusted from the callers: this coalesces every caller for a space
   // inside the window above, so a batch can hold more ids than any one of them asked for — which is
   // how lists that were each correctly capped still added up to a rejected request.
-  for (let index = 0; index < ids.length; index += GEO_CHAT_CLAIM_IDS_PER_REQUEST) {
-    chunks.push(ids.slice(index, index + GEO_CHAT_CLAIM_IDS_PER_REQUEST));
-  }
+  const chunks = chunk(ids, GEO_CHAT_CLAIM_IDS_PER_REQUEST);
 
   // Deliberately unsignalled. One row unmounting must not abort the request its siblings are
   // waiting on, and a caller that has gone away simply has its own promise settled into a cache
   // entry nobody reads.
-  Promise.all(chunks.map(chunk => fetchDebateClaims(spaceId, chunk, batch.getPrivyIdentityToken, batch.accountKey)))
+  Promise.all(
+    chunks.map(batchIds => fetchDebateClaims(spaceId, batchIds, batch.getPrivyIdentityToken, batch.accountKey))
+  )
     .then(responses => {
       const claims = responses.flatMap(response => response.claims);
       for (const caller of batch.callers) {
@@ -4145,10 +4160,12 @@ export async function getDebateTranscript(
   format: TranscriptFormat = 'json',
   getPrivyIdentityToken?: GetPrivyIdentityToken,
   accountKey?: string | null,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  include: readonly TranscriptInclude[] = []
 ) {
+  const extras = include.length > 0 ? `&include=${include.join(',')}` : '';
   return geoChatRequest<DebateTranscriptResponse>(
-    `/debates/${debateId}/transcript?format=${encodeURIComponent(format)}`,
+    `/debates/${debateId}/transcript?format=${encodeURIComponent(format)}${extras}`,
     {
       auth: 'optional',
       getPrivyIdentityToken,

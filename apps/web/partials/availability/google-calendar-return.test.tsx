@@ -9,8 +9,6 @@ import { calendarReturn, calendarReturnTo, urlWithoutCalendarReturn } from './ca
 import { GoogleCalendarReturn } from './google-calendar-return';
 
 const mocks = vi.hoisted(() => ({
-  flagOn: true,
-  microsoftFlagOn: false,
   ready: true,
   authenticated: true,
   search: '',
@@ -24,11 +22,6 @@ vi.mock('next/navigation', () => ({
 
 vi.mock('~/core/wallet/auth-hooks', () => ({
   usePrivy: () => ({ ready: mocks.ready, authenticated: mocks.authenticated }),
-}));
-
-vi.mock('~/core/state/feature-flags', () => ({
-  useFeatureFlag: (id: string) =>
-    (id === 'googleCalendar' && mocks.flagOn) || (id === 'microsoftCalendar' && mocks.microsoftFlagOn),
 }));
 
 const capture = vi.hoisted(() => vi.fn());
@@ -121,8 +114,6 @@ describe('GoogleCalendarReturn', () => {
   const replaceState = vi.spyOn(window.history, 'replaceState');
 
   beforeEach(() => {
-    mocks.flagOn = true;
-    mocks.microsoftFlagOn = false;
     mocks.ready = true;
     mocks.authenticated = true;
     mocks.search = '';
@@ -179,16 +170,6 @@ describe('GoogleCalendarReturn', () => {
     expect(replaceState).not.toHaveBeenCalled();
   });
 
-  it('leaves the URL alone with the flag off', () => {
-    mocks.flagOn = false;
-    mocks.search = 'modal=schedule&calendar=connected';
-    render(<GoogleCalendarReturn />);
-
-    expect(mocks.setToast).not.toHaveBeenCalled();
-    expect(replaceState).not.toHaveBeenCalled();
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-  });
-
   it('counts a return once, however often it re-renders', () => {
     mocks.search = 'modal=schedule&calendar=connected';
     const { rerender } = render(<GoogleCalendarReturn />);
@@ -216,9 +197,7 @@ describe('GoogleCalendarReturn', () => {
     expect(capture).not.toHaveBeenCalled();
   });
 
-  it('reopens the editor from an Outlook return with only the Outlook flag on, counted as microsoft', () => {
-    mocks.flagOn = false;
-    mocks.microsoftFlagOn = true;
+  it('reopens the editor from an Outlook return, counted as microsoft', () => {
     mocks.search = 'modal=schedule&calendar=connected&calendar_provider=microsoft';
     render(<GoogleCalendarReturn />);
 
@@ -234,7 +213,6 @@ describe('GoogleCalendarReturn', () => {
   });
 
   it('toasts the admin approval message when signed out', () => {
-    mocks.microsoftFlagOn = true;
     mocks.authenticated = false;
     mocks.search = 'calendar=error&reason=admin_consent_required&calendar_provider=microsoft';
     render(<GoogleCalendarReturn />);

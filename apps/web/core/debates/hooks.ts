@@ -22,6 +22,7 @@ import { SCHEDULE_SAVE_FAILED_COPY } from '~/core/availability/schedule-save-cop
 import { useObservedMutation } from '~/core/hooks/use-observed-mutation';
 import { useSetToast } from '~/core/hooks/use-toast';
 import { validateSpaceId } from '~/core/io/rest/validation';
+import { chunk } from '~/core/utils/chunk';
 import { usePrivy } from '~/core/wallet/auth-hooks';
 
 import {
@@ -47,6 +48,7 @@ import {
   type OpenRoundPick,
   RECIPIENT_AWAY_CODE,
   type TranscriptFormat,
+  type TranscriptInclude,
   abortDebate,
   acceptDebateChallenge,
   acceptDebateRematchRequest,
@@ -160,8 +162,29 @@ export const debateQueryKeys = {
     accountKey: string | null,
     variant: RecordingUrlVariant | 'original' = 'original'
   ) => ['debates', 'recording-url', debateId, filename, accountKey, variant] as const,
-  transcript: (debateId: string, format: TranscriptFormat) =>
-    ['debates', 'transcript', dashlessId(debateId), format] as const,
+  transcript: (debateId: string, format: TranscriptFormat, include: readonly TranscriptInclude[] = []) =>
+    ['debates', 'transcript', dashlessId(debateId), format, include.join(',')] as const,
+  /** Every read of one debate's transcript, whatever its format and `include`: a prefix to invalidate. */
+  transcripts: (debateId: string) => ['debates', 'transcript', dashlessId(debateId)] as const,
+  /**
+   * GEO-3642. The moments editor's transcript, from geo-chat's media-admin route: under
+   * `transcripts`, so the refresh after a re-render reads it again too.
+   */
+  momentsTranscript: (debateId: string, accountKey: string | null) =>
+    ['debates', 'transcript', dashlessId(debateId), 'moments', accountKey] as const,
+  /**
+   * GEO-3671. Whether the viewer is a media admin: per viewer, not per debate, since the allowlist
+   * does not depend on the debate it is asked about.
+   */
+  mediaAdmin: (accountKey: string | null) => ['debates', 'account', accountKey, 'media-admin'] as const,
+  /** GEO-3671. A debate's moment-backfill request, and the dry run the moments editor opens with. */
+  momentBackfill: (debateId: string, accountKey: string | null) =>
+    ['debates', 'account', accountKey, 'moment-backfill', dashlessId(debateId)] as const,
+  momentReelPlan: (debateId: string, accountKey: string | null) =>
+    ['debates', 'account', accountKey, 'moment-reel-plan', dashlessId(debateId)] as const,
+  /** GEO-3673. A debate's audio peaks for the moments editor's waveform, polled while they are built. */
+  audioPeaks: (debateId: string, accountKey: string | null) =>
+    ['debates', 'account', accountKey, 'audio-peaks', dashlessId(debateId)] as const,
   activity: (accountKey: string | null) => ['debates', 'account', accountKey, 'activity'] as const,
   schedule: (accountKey: string | null) => ['debates', 'account', accountKey, 'schedule'] as const,
   /** Prefix-matchable, so saving the viewer's own schedule can drop every variant at once. */
@@ -1452,10 +1475,7 @@ export function useDebateProfilesBySpace(profileSpaceIds: readonly string[], ena
     ...debateQueryNetworkOptions,
     queryKey: debateQueryKeys.profileLookup(accountKey, ids),
     queryFn: async ({ signal }) => {
-      const pages: string[][] = [];
-      for (let i = 0; i < ids.length; i += DEBATE_PROFILE_LOOKUP_MAX) {
-        pages.push(ids.slice(i, i + DEBATE_PROFILE_LOOKUP_MAX));
-      }
+      const pages = chunk(ids, DEBATE_PROFILE_LOOKUP_MAX);
       const found = await Promise.all(
         pages.map(page => lookupDebateProfiles(page, getPrivyIdentityToken, accountKey, signal))
       );
@@ -1790,20 +1810,27 @@ export function useDebateMediaArtifactUrl() {
   });
 }
 
-export function useDebateTranscript(debateId: string, format: TranscriptFormat = 'json', enabled = true) {
+export function useDebateTranscript(
+  debateId: string,
+  format: TranscriptFormat = 'json',
+  enabled = true,
+  /** Words and sentences (GEO-3349), which the moments editor snaps and counts speakers with. */
+  include: readonly TranscriptInclude[] = []
+) {
   const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
   useDebateGatewayScope({ scope: 'debate', debate_id: debateId }, enabled && authenticated);
 
   return useQuery({
     ...debateQueryNetworkOptions,
-    queryKey: debateQueryKeys.transcript(debateId, format),
+    queryKey: debateQueryKeys.transcript(debateId, format, include),
     queryFn: ({ signal }) =>
       getDebateTranscript(
         debateId,
         format,
         authenticated ? getPrivyIdentityToken : undefined,
         authenticated ? accountKey : null,
-        signal
+        signal,
+        include
       ),
     enabled,
   });
