@@ -18,10 +18,15 @@ export function PublishedRecordingPlayer({
   sources,
   spaceId,
   videoClassName,
+  className,
+  style,
 }: {
   sources: RecordingSource[];
   spaceId: string;
   videoClassName?: string;
+  /** On the root, so a player that draws nothing leaves no layout behind. */
+  className?: string;
+  style?: React.CSSProperties;
 }) {
   const [activeIndex, setActiveIndex] = React.useState(0);
   // Clamped: a sync-store update can shrink `sources` out from under a stale index. Everything
@@ -39,7 +44,7 @@ export function PublishedRecordingPlayer({
   if (!activeUrl && sources.length < 2) return null;
 
   return (
-    <div className="flex w-full min-w-0 flex-col gap-3">
+    <div className={cx('flex w-full min-w-0 flex-col gap-3', className)} style={style}>
       {activeUrl ? (
         <video
           key={src}
