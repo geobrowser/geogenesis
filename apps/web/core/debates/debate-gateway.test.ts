@@ -12,7 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SpaceChatState } from '~/core/space-chat/state';
 
 import { GeoChatRequestError, getStoredGeoChatAccessToken, resetGeoChatSession } from './api';
-import { DebateGatewayClient, type DebateGatewaySession } from './debate-gateway';
+import { BROADCAST_INVALIDATION_SPREAD_MS, DebateGatewayClient, type DebateGatewaySession } from './debate-gateway';
 import { type LobbyHighlightsState, settleFetchedLobbyHighlights } from './lobbies/lobby-highlights-state';
 import { type RemoteClaimResponse, subscribeRemoteClaimResponses } from './remote-claim-responses';
 
@@ -3533,3 +3533,108 @@ function expectBroadInvalidated(invalidateQueries: ReturnType<typeof vi.spyOn>) 
     { throwOnError: true, cancelRefetch: false }
   );
 }
+
+describe('broadcast invalidation spread', () => {
+  let sockets: FakeWebSocket[];
+  let invalidateQueries: ReturnType<typeof vi.spyOn>;
+  let client: DebateGatewayClient;
+  let random: number;
+
+  const invalidatedKeys = () =>
+    invalidateQueries.mock.calls.map((call: unknown[]) => (call[0] as { queryKey?: unknown } | undefined)?.queryKey);
+
+  beforeEach(async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-07-20T12:00:00.000Z'));
+    sockets = [];
+    // The gateway's reconnect backoff also reads this; it only matters once connected.
+    random = 0;
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries').mockResolvedValue();
+    client = new DebateGatewayClient({
+      queryClient,
+      getSession: async () => ({
+        access_token: 'access token',
+        refresh_token: 'refresh-token',
+        expires_at: '2026-07-20T12:10:00.000Z',
+      }),
+      getApiBaseUrl: () => 'https://chat.example.com/',
+      createWebSocket: url => {
+        const socket = new FakeWebSocket(url);
+        sockets.push(socket);
+        return socket;
+      },
+      random: () => random,
+    });
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    // A reconcile is not spread.
+    random = 1;
+    sockets[0]!.receive('READY', readyPayload([]));
+    await flushInvalidations();
+    expectBroadInvalidated(invalidateQueries);
+    invalidateQueries.mockClear();
+  });
+
+  afterEach(() => {
+    client.stop();
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it('spreads a broadcast refetch over a bounded random delay', async () => {
+    random = 1;
+    sockets[0]!.receive(
+      'EVENT',
+      { event_id: 'event-1', event_type: 'debate.media_changed', payload: { debate_id: 'debate-1' } },
+      1
+    );
+    await vi.advanceTimersByTimeAsync(50 + BROADCAST_INVALIDATION_SPREAD_MS - 1);
+    expect(invalidateQueries).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(invalidatedKeys()).toContainEqual(['debates', 'media', 'debate1']);
+  });
+
+  it('refetches a user-routed event at the usual coalesce, and brings pending broadcast reads with it', async () => {
+    random = 1;
+    sockets[0]!.receive(
+      'EVENT',
+      { event_id: 'event-1', event_type: 'debate.media_changed', payload: { debate_id: 'debate-1' } },
+      1
+    );
+    sockets[0]!.receive('EVENT', { event_id: 'event-2', event_type: 'debate.requests_changed', payload: {} }, 2);
+    await vi.advanceTimersByTimeAsync(50);
+    expect(invalidatedKeys()).toEqual(
+      expect.arrayContaining([
+        ['debates', 'account', 'user-a', 'requests'],
+        ['debates', 'media', 'debate1'],
+      ])
+    );
+  });
+
+  it('keeps an earlier flush when a later broadcast asks for a longer delay', async () => {
+    random = 0.2;
+    sockets[0]!.receive(
+      'EVENT',
+      { event_id: 'event-1', event_type: 'debate.media_changed', payload: { debate_id: 'debate-1' } },
+      1
+    );
+    random = 1;
+    sockets[0]!.receive(
+      'EVENT',
+      { event_id: 'event-2', event_type: 'debate.state_changed', payload: { debate_id: 'debate-2' } },
+      2
+    );
+    await vi.advanceTimersByTimeAsync(50 + 0.2 * BROADCAST_INVALIDATION_SPREAD_MS);
+    expect(invalidatedKeys()).toEqual(
+      expect.arrayContaining([
+        ['debates', 'media', 'debate1'],
+        ['debates', 'detail', 'debate2'],
+      ])
+    );
+  });
+});

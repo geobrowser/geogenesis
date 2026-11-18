@@ -174,6 +174,18 @@ const MAX_RECENT_EVENT_IDS = 256;
 const DEFAULT_HEARTBEAT_INTERVAL_MS = 30_000;
 const HANDSHAKE_TIMEOUT_MS = 10_000;
 const INVALIDATION_COALESCE_MS = 50;
+/** Max random delay on refetches from broadcast events, so many viewers' reads don't land together. */
+export const BROADCAST_INVALIDATION_SPREAD_MS = 500;
+/** Sent to every subscriber of a space, debate, lobby or matchmaking; the rest go to a user. */
+const BROADCAST_EVENT_TYPES = new Set([
+  'debate.claims_changed',
+  'debate.state_changed',
+  'debate.media_changed',
+  'debate.matchmaking_changed',
+  'debate.lobbies_changed',
+  'debate.lobby_changed',
+  'debate.space_calls_changed',
+]);
 const INVALIDATION_RETRY_BASE_MS = 250;
 /**
  * How long an unrecognised `ERROR` frame suppresses another reconnect. One recycle repairs a
@@ -253,6 +265,9 @@ export class DebateGatewayClient {
   private handshakeTimer: ReturnType<typeof setTimeout> | null = null;
   private tokenRotationTimer: ReturnType<typeof setTimeout> | null = null;
   private invalidationTimer: ReturnType<typeof setTimeout> | null = null;
+  private invalidationDueAt = 0;
+  /** Set while a broadcast event queues its refetches. */
+  private handlingBroadcast = false;
   private invalidationRetryTimers = new Set<ReturnType<typeof setTimeout>>();
   private connectionGeneration = 0;
   /** Signed out and turned away for load; see `retryAfterFocus`. */
@@ -640,6 +655,15 @@ export class DebateGatewayClient {
   private handleEvent(payload: unknown) {
     if (!isDebateEvent(payload) || this.recentEventIds.has(payload.event_id)) return;
     this.rememberEvent(payload.event_id);
+    this.handlingBroadcast = BROADCAST_EVENT_TYPES.has(payload.event_type);
+    try {
+      this.applyEvent(payload);
+    } finally {
+      this.handlingBroadcast = false;
+    }
+  }
+
+  private applyEvent(payload: DebateInvalidationEvent) {
     const identifiers = payload.payload;
 
     switch (payload.event_type) {
@@ -1125,14 +1149,22 @@ export class DebateGatewayClient {
       return;
     }
     this.pendingInvalidations.set(key, filters);
-    if (this.invalidationTimer) return;
+    // One flush for everything pending, at the earliest time asked for.
+    const delay =
+      INVALIDATION_COALESCE_MS + (this.handlingBroadcast ? this.random() * BROADCAST_INVALIDATION_SPREAD_MS : 0);
+    const dueAt = Date.now() + delay;
+    if (this.invalidationTimer) {
+      if (dueAt >= this.invalidationDueAt) return;
+      clearTimeout(this.invalidationTimer);
+    }
+    this.invalidationDueAt = dueAt;
     this.invalidationTimer = setTimeout(() => {
       this.invalidationTimer = null;
       const invalidations = [...this.pendingInvalidations.values()];
       this.pendingInvalidations.clear();
       this.pendingChangedClaimsBySpace.clear();
       void this.flushInvalidations(invalidations);
-    }, INVALIDATION_COALESCE_MS);
+    }, delay);
   }
 
   private async flushInvalidations(invalidations: InvalidationFilters[], attempt = 0) {
