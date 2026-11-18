@@ -30,7 +30,7 @@ export function PublishedRecordingPlayer({
   style?: React.CSSProperties;
 }) {
   // A source without a URL on its relation resolves from its Video entity's values; one that
-  // resolves to nothing (a call page link, GEO-3593) is left out, so no button opens a blank player.
+  // resolves to nothing is left out, so no button opens a blank player.
   const entityIds = new Set(sources.flatMap(s => (s.directUrl ? [] : s.videoEntityId ? [s.videoEntityId] : [])));
   const entityValues = useValues({ selector: v => v.spaceId === spaceId && entityIds.has(v.entity.id) });
   const playable = sources.flatMap(source => {

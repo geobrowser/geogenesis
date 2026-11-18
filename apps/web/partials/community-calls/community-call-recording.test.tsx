@@ -19,7 +19,7 @@ afterEach(cleanup);
 
 describe('CommunityCallRecording', () => {
   it('leaves no layout behind when no source has anything to play', () => {
-    mocks.sources = [{ directUrl: null, videoEntityId: 'call-page-video' }];
+    mocks.sources = [{ directUrl: null, videoEntityId: 'no-media' }];
     const { container } = render(<CommunityCallRecording entityId="e" spaceId="s" serverRecordingUrls={[]} />);
     expect(container).toBeEmptyDOMElement();
   });
