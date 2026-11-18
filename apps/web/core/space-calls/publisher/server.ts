@@ -67,10 +67,7 @@ async function gate(request: Request, rawSpaceId: string | null, deps: Deps): Pr
 const strictActiveRequest = (spaceId: string, editorSpaceId: string) =>
   fetchActiveEditorRequest(spaceId, editorSpaceId, { strict: true });
 
-/**
- * The open add-editor request's state; a dead one (rejected, or past its window) is none. A failed
- * lookup is `check_failed`, never none, so an outage cannot lead to a duplicate proposal.
- */
+/** The open add-editor request's state. A failed lookup is `check_failed`, never none. */
 async function openRequest(spaceId: string, publisherSpaceId: string, deps: Deps) {
   let request: Awaited<ReturnType<typeof fetchActiveEditorRequest>>;
   try {
