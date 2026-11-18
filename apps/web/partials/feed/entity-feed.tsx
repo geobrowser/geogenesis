@@ -32,6 +32,7 @@ import type { ClaimCardVariant } from '~/partials/explore/claim-explore-feed-car
 import { ExploreFeedCard } from '~/partials/explore/explore-feed-card';
 
 import { ExploreTypeFilterMenu } from './explore-type-filter-menu';
+import { feedEditionKey } from './feed-edition-key';
 
 /**
  * Cards drawn in full on the first render, whatever the viewport. The rest wait until they are near
@@ -205,12 +206,12 @@ type EntityFeedProps = {
 };
 
 /**
- * Extra cards by the index of the card they follow. `replacesEntityIds` (normalized) are feed cards
- * a placed card stands for, left out so a thing shows once.
+ * Extra cards by the index of the card they follow. `replaces` holds the feed cards (by
+ * `feedEditionKey`) a placed card stands for, left out so a thing shows once.
  */
 export type FeedInterleave = (feedLength: number) => {
   cards: ReadonlyMap<number, React.ReactNode>;
-  replacesEntityIds: ReadonlySet<string>;
+  replaces: ReadonlySet<string>;
 };
 
 /**
@@ -980,7 +981,7 @@ export function EntityFeed({
             <React.Fragment key={`${item.entityId}-${item.spaceId}`}>
               {/* A feed, so its debates play as they come into view; nowhere else does (GEO-3812).
                   Around the card only, not what is interleaved between them. */}
-              {interleaved?.replacesEntityIds.has(normId(item.entityId)) ? null : (
+              {interleaved?.replaces.has(feedEditionKey(item.spaceId, item.entityId)) ? null : (
                 <DebateFeedAutoplay>
                   <ExploreFeedCard
                     itemPosition={index + 1}

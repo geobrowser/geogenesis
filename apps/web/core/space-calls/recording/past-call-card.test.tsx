@@ -5,6 +5,8 @@ import * as React from 'react';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { feedEditionKey } from '~/partials/feed/feed-edition-key';
+
 import type { PastCall } from './api';
 
 const mocks = vi.hoisted(() => ({
@@ -105,27 +107,29 @@ describe('usePastCallInterleave', () => {
   it('places the calls between the cards', () => {
     mocks.calls = [CALL, { ...CALL, call_id: 'call2' }];
     const { result } = renderHook(() => usePastCallInterleave(true));
-    const { cards, replacesEntityIds } = result.current!(30);
+    const { cards, replaces } = result.current!(30);
     expect([...cards.keys()]).toEqual([3, 13]);
     expect(React.isValidElement(cards.get(3))).toBe(true);
-    expect(replacesEntityIds.size).toBe(0);
+    expect(replaces.size).toBe(0);
   });
 
   it('stands only for the graph cards of calls that get a slot', () => {
     const entity = (i: number) => i.toString(16).padStart(32, '0');
     mocks.calls = Array.from({ length: 20 }, (_, i) => ({ ...CALL, call_id: `call${i}`, entity_id: entity(i + 1) }));
     const { result } = renderHook(() => usePastCallInterleave(true));
-    const { cards, replacesEntityIds } = result.current!(20);
+    const { cards, replaces } = result.current!(20);
     expect([...cards.keys()]).toEqual([3, 13]);
-    expect([...replacesEntityIds]).toEqual([entity(1), entity(2)]);
+    expect([...replaces]).toEqual([feedEditionKey('space1', entity(1)), feedEditionKey('space1', entity(2))]);
     // A call with no slot keeps its graph card.
-    expect(replacesEntityIds.has(entity(3))).toBe(false);
+    expect(replaces.has(feedEditionKey('space1', entity(3)))).toBe(false);
   });
 
-  it('compares entity ids in any spelling', () => {
+  it("stands for the edition in the call's space only, in any id spelling", () => {
     mocks.calls = [{ ...CALL, entity_id: 'AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA' }];
     const { result } = renderHook(() => usePastCallInterleave(true));
-    expect([...result.current!(30).replacesEntityIds]).toEqual(['a'.repeat(32)]);
+    const { replaces } = result.current!(30);
+    expect(replaces.has(feedEditionKey('space1', 'a'.repeat(32)))).toBe(true);
+    expect(replaces.has(feedEditionKey('space2', 'a'.repeat(32)))).toBe(false);
   });
 
   const drawCards = (

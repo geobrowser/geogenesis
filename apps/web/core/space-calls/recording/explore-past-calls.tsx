@@ -2,9 +2,8 @@
 
 import * as React from 'react';
 
-import { normId } from '~/core/utils/norm-id';
-
 import type { FeedInterleave } from '~/partials/feed/entity-feed';
+import { feedEditionKey } from '~/partials/feed/feed-edition-key';
 
 import { usePastCalls } from './hooks';
 import { PastCallCard } from './past-call-card';
@@ -25,7 +24,12 @@ export function usePastCallInterleave(enabled: boolean) {
     if (!enabled || !calls || calls.length === 0) return undefined;
     return (feedLength: number) => {
       const cards = new Map<number, React.ReactNode>();
-      const replacesEntityIds = new Set<string>();
+      const replaces = new Set<string>();
+      for (const [afterIndex, callIndex] of pastCallSlots(feedLength, calls.length)) {
+        const call = calls[callIndex]!;
+    return (feedLength: number) => {
+      const cards = new Map<number, React.ReactNode>();
+      const replaces = new Set<string>();
       for (const [afterIndex, callIndex] of pastCallSlots(feedLength, calls.length)) {
         const call = calls[callIndex]!;
         const last = callIndex === calls.length - 1;
@@ -36,10 +40,12 @@ export function usePastCallInterleave(enabled: boolean) {
             {last && canLoadMore ? <LoadMorePastCalls load={fetchNextPage} /> : null}
           </React.Fragment>
         );
-        // A placed call written to the graph is also its Call Event card; this one plays, so it stands for both.
-        if (call.entity_id) replacesEntityIds.add(normId(call.entity_id));
+        // A placed call written to the graph is also its space's Call Event card; this one plays, so it stands for both.
+        if (call.entity_id) replaces.add(feedEditionKey(call.space_id, call.entity_id));
       }
-      return { cards, replacesEntityIds };
+      return { cards, replaces };
+      }
+      return { cards, replaces };
     };
   }, [calls, canLoadMore, enabled, fetchNextPage]);
 }
