@@ -64,9 +64,21 @@ async function gate(request: Request, rawSpaceId: string | null, deps: Deps): Pr
   return { ok: true, viewerSpaceId, publisherSpaceId, publisherIsEditor: editors.has(publisherSpaceId) };
 }
 
-/** The open add-editor request's state; a dead one (rejected, or past its window) is none. */
+const strictActiveRequest = (spaceId: string, editorSpaceId: string) =>
+  fetchActiveEditorRequest(spaceId, editorSpaceId, { strict: true });
+
+/**
+ * The open add-editor request's state; a dead one (rejected, or past its window) is none. A failed
+ * lookup is `check_failed`, never none, so an outage cannot lead to a duplicate proposal.
+ */
 async function openRequest(spaceId: string, publisherSpaceId: string, deps: Deps) {
-  const request = await (deps.activeRequest ?? fetchActiveEditorRequest)(spaceId, publisherSpaceId);
+  let request: Awaited<ReturnType<typeof fetchActiveEditorRequest>>;
+  try {
+    request = await (deps.activeRequest ?? strictActiveRequest)(spaceId, publisherSpaceId);
+  } catch (error) {
+    console.error('[geo-publisher] editor request lookup failed', { spaceId, error });
+    return 'check_failed';
+  }
   if (!request) return null;
   if (!request.isVotingEnded) return 'pending';
   return request.canExecute ? 'executable' : null;
@@ -102,9 +114,9 @@ export async function buildGeoPublisherProposal(
   if (!access.ok) return access;
   const spaceId = normId(rawSpaceId!);
   if (access.publisherIsEditor) return { ok: false, status: 409, code: 'already_editor' };
-  if (await openRequest(spaceId, access.publisherSpaceId, deps)) {
-    return { ok: false, status: 409, code: 'request_pending' };
-  }
+  const open = await openRequest(spaceId, access.publisherSpaceId, deps);
+  if (open === 'check_failed') return { ok: false, status: 503, code: 'status_check_failed' };
+  if (open) return { ok: false, status: 409, code: 'request_pending' };
 
   const { to, calldata, proposalId } = geo.daoSpaces.proposeAddEditor({
     authorSpaceId: access.viewerSpaceId,

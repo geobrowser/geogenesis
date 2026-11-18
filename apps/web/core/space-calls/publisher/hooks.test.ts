@@ -16,6 +16,11 @@ describe('geoPublisherNoticeState', () => {
     expect(geoPublisherNoticeState({ status: 'executable', sent: true })).toBe('executable');
   });
 
+  it('shows a failed check as such, never the add button', () => {
+    expect(geoPublisherNoticeState({ status: 'check_failed', sent: false })).toBe('check_failed');
+    expect(geoPublisherNoticeState({ status: 'check_failed', sent: true })).toBe('check_failed');
+  });
+
   it('stays pending after a send while the graph has not caught up', () => {
     expect(geoPublisherNoticeState({ status: 'not_editor', sent: true })).toBe('pending');
   });

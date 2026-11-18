@@ -53,6 +53,7 @@ export async function fetchGeoPublisherStatus(
     return body.status === 'editor' ||
       body.status === 'pending' ||
       body.status === 'executable' ||
+      body.status === 'check_failed' ||
       body.status === 'not_editor'
       ? body.status
       : 'unknown';
@@ -84,6 +85,7 @@ export function useGeoPublisherNotice(spaceId: string, viewerIsEditor: boolean) 
     refetchInterval: query =>
       query.state.data === 'pending' ||
       query.state.data === 'executable' ||
+      query.state.data === 'check_failed' ||
       (sent.data === true && query.state.data !== 'editor')
         ? PENDING_STATUS_POLL_MS
         : false,
@@ -91,7 +93,7 @@ export function useGeoPublisherNotice(spaceId: string, viewerIsEditor: boolean) 
   return geoPublisherNoticeState({ status: status.data, sent: sent.data === true });
 }
 
-export type GeoPublisherNoticeState = 'hidden' | 'add' | 'pending' | 'executable';
+export type GeoPublisherNoticeState = 'hidden' | 'add' | 'pending' | 'executable' | 'check_failed';
 
 /**
  * A sent proposal reads `pending` until the grant lands, even while the indexer has not shown the
@@ -106,6 +108,7 @@ export function geoPublisherNoticeState({
 }): GeoPublisherNoticeState {
   if (status === 'editor' || status === 'unknown' || status === undefined) return 'hidden';
   if (status === 'executable') return 'executable';
+  if (status === 'check_failed') return 'check_failed';
   if (status === 'pending' || sent) return 'pending';
   return 'add';
 }
@@ -116,6 +119,7 @@ const FAILURE_COPY: Record<string, string> = {
   already_editor: 'The Geo publisher is already an editor of this space.',
   request_pending: 'A proposal to add the Geo publisher is already open in Governance.',
   editor_required: 'Only editors of this space can add the Geo publisher.',
+  status_check_failed: "Couldn't check Geo publisher status. Try again in a moment.",
 };
 
 async function requestProposal(spaceId: string, getToken: () => Promise<string | null>) {

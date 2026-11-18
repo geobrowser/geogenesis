@@ -126,4 +126,18 @@ describe('buildGeoPublisherProposal', () => {
     });
     expect(await buildGeoPublisherProposal(request(), SPACE, ended(false))).toMatchObject({ ok: true });
   });
+
+  it('refuses with a retryable 503 when the proposals cannot be read', async () => {
+    const failing = deps({
+      activeRequest: vi.fn(async () => {
+        throw new Error('api down');
+      }),
+    });
+    expect(await buildGeoPublisherProposal(request(), SPACE, failing)).toEqual({
+      ok: false,
+      status: 503,
+      code: 'status_check_failed',
+    });
+    expect(await getGeoPublisherStatus(request(), SPACE, failing)).toEqual({ ok: true, status: 'check_failed' });
+  });
 });

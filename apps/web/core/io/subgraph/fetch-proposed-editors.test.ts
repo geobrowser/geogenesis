@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { fetchActiveEditorRequest } from './fetch-proposed-editors';
+import { EditorRequestLookupError, fetchActiveEditorRequest } from './fetch-proposed-editors';
 
 const restFetchMock = vi.fn();
 
@@ -111,5 +111,18 @@ describe('fetchActiveEditorRequest', () => {
     await expect(read({ passed: true, executeBy: now + 3600 })).resolves.toMatchObject({ canExecute: true });
     await expect(read({ passed: true, executeBy: now - 60 })).resolves.toMatchObject({ canExecute: false });
     await expect(read({ passed: false })).resolves.toMatchObject({ canExecute: false });
+  });
+
+  it('reads a failed or undecodable lookup as none, or throws when strict', async () => {
+    restFetchMock.mockImplementation(() => Effect.fail(new Error('down')));
+    await expect(fetchActiveEditorRequest(SPACE, EDITOR_DASHLESS)).resolves.toBeNull();
+    await expect(fetchActiveEditorRequest(SPACE, EDITOR_DASHLESS, { strict: true })).rejects.toBeInstanceOf(
+      EditorRequestLookupError
+    );
+    restFetchMock.mockImplementation(() => Effect.succeed({ nope: true }));
+    await expect(fetchActiveEditorRequest(SPACE, EDITOR_DASHLESS)).resolves.toBeNull();
+    await expect(fetchActiveEditorRequest(SPACE, EDITOR_DASHLESS, { strict: true })).rejects.toBeInstanceOf(
+      EditorRequestLookupError
+    );
   });
 });

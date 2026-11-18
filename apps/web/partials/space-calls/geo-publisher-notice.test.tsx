@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { GEO_PUBLISHER_NOTICE_COPY, GeoPublisherNotice } from './geo-publisher-notice';
 
 const mocks = vi.hoisted(() => ({
-  state: 'add' as 'hidden' | 'add' | 'pending' | 'executable',
+  state: 'add' as 'hidden' | 'add' | 'pending' | 'executable' | 'check_failed',
   mutate: vi.fn(),
   isPending: false,
   noticeArgs: [] as unknown[],
@@ -52,6 +52,13 @@ describe('GeoPublisherNotice', () => {
     expect(screen.getByText(GEO_PUBLISHER_NOTICE_COPY.executable)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: GEO_PUBLISHER_NOTICE_COPY.governance })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: GEO_PUBLISHER_NOTICE_COPY.add })).toBeNull();
+  });
+
+  it('says the status could not be checked, with no add button', () => {
+    mocks.state = 'check_failed';
+    render(<GeoPublisherNotice spaceId={'a'.repeat(32)} viewerIsEditor />);
+    expect(screen.getByText(GEO_PUBLISHER_NOTICE_COPY.checkFailed)).toBeInTheDocument();
+    expect(screen.queryByRole('button')).toBeNull();
   });
 
   it('shows nothing to non-editors or once the grant lands', () => {
