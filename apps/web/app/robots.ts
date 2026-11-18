@@ -32,5 +32,7 @@ export default function robots(): MetadataRoute.Robots {
         '/space/*/power-tools',
       ],
     },
+    // Fixed to the canonical host, like sitemap.ts.
+    sitemap: 'https://www.geobrowser.io/sitemap.xml',
   };
 }
