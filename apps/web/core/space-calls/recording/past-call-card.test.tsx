@@ -105,9 +105,19 @@ describe('usePastCallInterleave', () => {
   it('places the calls between the cards', () => {
     mocks.calls = [CALL, { ...CALL, call_id: 'call2' }];
     const { result } = renderHook(() => usePastCallInterleave(true));
-    const cards = result.current!(30);
+    const cards = result.current!.cardsAfter(30);
     expect([...cards.keys()]).toEqual([3, 13]);
     expect(React.isValidElement(cards.get(3))).toBe(true);
+    expect(result.current!.replacesEntityIds.size).toBe(0);
+  });
+
+  it('stands for the graph cards of calls written as entities', () => {
+    mocks.calls = [
+      { ...CALL, entity_id: 'AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA' },
+      { ...CALL, call_id: 'call2', entity_id: null },
+    ];
+    const { result } = renderHook(() => usePastCallInterleave(true));
+    expect([...result.current!.replacesEntityIds]).toEqual(['a'.repeat(32)]);
   });
 
   const drawCards = (

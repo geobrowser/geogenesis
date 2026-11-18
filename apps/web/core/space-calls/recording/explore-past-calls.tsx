@@ -2,6 +2,10 @@
 
 import * as React from 'react';
 
+import { normId } from '~/core/utils/norm-id';
+
+import type { FeedInterleave } from '~/partials/feed/entity-feed';
+
 import { usePastCalls } from './hooks';
 import { PastCallCard } from './past-call-card';
 import { pastCallSlots } from './past-calls-interleave';
@@ -17,22 +21,26 @@ export function usePastCallInterleave(enabled: boolean) {
   // A failed page stops paging; the calls already drawn stay.
   const canLoadMore = hasNextPage && !isFetchingNextPage && !isFetchNextPageError;
 
-  return React.useMemo(() => {
+  return React.useMemo((): FeedInterleave | undefined => {
     if (!enabled || !calls || calls.length === 0) return undefined;
-    return (feedLength: number) => {
-      const cards = new Map<number, React.ReactNode>();
-      for (const [afterIndex, callIndex] of pastCallSlots(feedLength, calls.length)) {
-        const call = calls[callIndex]!;
-        const last = callIndex === calls.length - 1;
-        cards.set(
-          afterIndex,
-          <React.Fragment key={`past-call-${call.call_id}`}>
-            <PastCallCard call={call} />
-            {last && canLoadMore ? <LoadMorePastCalls load={fetchNextPage} /> : null}
-          </React.Fragment>
-        );
-      }
-      return cards;
+    return {
+      cardsAfter: (feedLength: number) => {
+        const cards = new Map<number, React.ReactNode>();
+        for (const [afterIndex, callIndex] of pastCallSlots(feedLength, calls.length)) {
+          const call = calls[callIndex]!;
+          const last = callIndex === calls.length - 1;
+          cards.set(
+            afterIndex,
+            <React.Fragment key={`past-call-${call.call_id}`}>
+              <PastCallCard call={call} />
+              {last && canLoadMore ? <LoadMorePastCalls load={fetchNextPage} /> : null}
+            </React.Fragment>
+          );
+        }
+        return cards;
+      },
+      // A call written to the graph is also a Call Event card; this card plays, so it stands for both.
+      replacesEntityIds: new Set(calls.flatMap(call => (call.entity_id ? [normId(call.entity_id)] : []))),
     };
   }, [calls, canLoadMore, enabled, fetchNextPage]);
 }

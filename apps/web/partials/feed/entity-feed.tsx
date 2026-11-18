@@ -200,11 +200,15 @@ type EntityFeedProps = {
    * the personal URL, because the CDN ignores cookies.
    */
   cdnFirstPage?: boolean;
-  /**
-   * Extra cards between the feed's own, by the index of the card they follow, for `feedLength`
-   * cards (GEO-3421's past calls). Drawn only on an unfiltered feed; pages and cursors ignore them.
-   */
-  interleave?: (feedLength: number) => ReadonlyMap<number, React.ReactNode>;
+  /** Extra cards between the feed's own (GEO-3421's past calls). Only on an unfiltered feed. */
+  interleave?: FeedInterleave;
+};
+
+export type FeedInterleave = {
+  /** By the index of the card they follow, for `feedLength` cards; pages and cursors ignore them. */
+  cardsAfter: (feedLength: number) => ReadonlyMap<number, React.ReactNode>;
+  /** Feed cards these stand for (normalized ids), left out so a thing is shown once (GEO-3593). */
+  replacesEntityIds: ReadonlySet<string>;
 };
 
 /**
@@ -805,7 +809,9 @@ export function EntityFeed({
     if (placeholderLeadId !== null) setPinnedLeadId(placeholderLeadId);
   }, [placeholderLeadId, setPinnedLeadId]);
 
-  const interleaved = unfiltered ? interleave?.(items.length) : undefined;
+  const replaced = unfiltered ? interleave?.replacesEntityIds : undefined;
+  const shownItems = replaced?.size ? items.filter(item => !replaced.has(normId(item.entityId))) : items;
+  const interleaved = unfiltered ? interleave?.cardsAfter(shownItems.length) : undefined;
 
   const timeLabel = TIME_OPTIONS.find(o => o.value === time)?.label ?? time;
   const sortLabel = SORT_LABELS[sort];
@@ -966,10 +972,10 @@ export function EntityFeed({
               <LoadingSkeleton key={i} />
             ))}
           </div>
-        ) : items.length === 0 ? (
+        ) : shownItems.length === 0 ? (
           <p className="text-browseMenu text-grey-04">No entities match these filters yet.</p>
         ) : (
-          items.map((item, index) => (
+          shownItems.map((item, index) => (
             <React.Fragment key={`${item.entityId}-${item.spaceId}`}>
               {/* A feed, so its debates play as they come into view; nowhere else does (GEO-3812).
                   Around the card only, not what is interleaved between them. */}
