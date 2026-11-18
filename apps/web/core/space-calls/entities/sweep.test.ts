@@ -174,6 +174,43 @@ describe('sweepCallEntities', () => {
     expect(records[0]![1]).toMatchObject({ outcome: 'written', entity_id: callId });
   });
 
+  it('holds a removal back while the entity is not readable yet', async () => {
+    const callId = '8'.repeat(32);
+    const { deps, records, submit } = harness([claim(callId, { action: 'remove', entity_id: callId })]);
+    const result = await run(deps);
+    expect(submit).not.toHaveBeenCalled();
+    expect(result.removed).toEqual([]);
+    expect(records[0]![1]).toMatchObject({ outcome: 'failed', error: 'entity_not_indexed', retry_after_seconds: 300 });
+  });
+
+  it('records a failed entity read as failed, not removed', async () => {
+    const callId = '8'.repeat(32);
+    const { deps, records, submit } = harness([claim(callId, { action: 'remove', entity_id: callId })], {
+      loadEntity: vi.fn(async () => {
+        throw new Error('api down');
+      }),
+    });
+    const result = await run(deps);
+    expect(submit).not.toHaveBeenCalled();
+    expect(result.removed).toEqual([]);
+    expect(records[0]![1]).toMatchObject({ outcome: 'failed', error: 'api down' });
+  });
+
+  it('records a removal written once nothing is left in the space', async () => {
+    const callId = '8'.repeat(32);
+    const { deps, records, submit } = harness([claim(callId, { action: 'remove', entity_id: callId })], {
+      loadEntity: vi.fn(async () => ({
+        id: callId,
+        values: [{ spaceId: 'f'.repeat(32), property: { id: 'a126ca530c8e48d5b88882c734c38935', dataType: 'TEXT' } }],
+        relations: [],
+      })),
+    });
+    const result = await run(deps);
+    expect(submit).not.toHaveBeenCalled();
+    expect(result.removed).toEqual([callId]);
+    expect(records[0]![1]).toMatchObject({ outcome: 'written', entity_id: callId });
+  });
+
   it('starts nothing past the deadline and leaves the claims to lapse', async () => {
     const { deps, records, submit } = harness([claim('9'.repeat(32))]);
     let calls = 0;

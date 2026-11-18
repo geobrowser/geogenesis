@@ -67,8 +67,7 @@ export function deploymentMayWrite(env: string | undefined = process.env.VERCEL_
   return env === undefined || env === '' || env === 'production';
 }
 
-function removalOf(entity: Entity | null, spaceId: string): GraphEntityForRemoval {
-  if (!entity) return { values: [], relations: [] };
+function removalOf(entity: Entity, spaceId: string): GraphEntityForRemoval {
   const inSpace = (id: string) => ID.equals(id, spaceId);
   return {
     values: entity.values
@@ -186,17 +185,26 @@ export async function sweepCallEntities(
         continue;
       }
 
-      const draft =
-        claim.action === 'remove'
-          ? buildCallEventRemoval({
-              claim,
-              entityId,
-              current: removalOf(await (deps.loadEntity ?? defaultLoadEntity)(entityId, space.id), space.id),
-            })
-          : buildCallEventDraft({ claim, entityId, publisherAddress, appOrigin });
+      let current: Entity | null = null;
+      if (claim.action === 'remove') {
+        current = await (deps.loadEntity ?? defaultLoadEntity)(entityId, space.id);
+        // geo-chat removes only what it recorded written, so a missing entity is the indexer lagging.
+        if (!current) {
+          await settle(claim, {
+            claim_id: claim.claim_id,
+            outcome: 'failed',
+            error: 'entity_not_indexed',
+            retry_after_seconds: LOOKUP_RETRY_S,
+          });
+          continue;
+        }
+      }
+      const draft = current
+        ? buildCallEventRemoval({ claim, entityId, current: removalOf(current, space.id) })
+        : buildCallEventDraft({ claim, entityId, publisherAddress, appOrigin });
 
       const ops = await prepareOps(draft, ID.uuidToHex(space.id));
-      // A removal of an entity the graph no longer holds has nothing to send.
+      // An entity with nothing left in this space has nothing to send.
       if (ops.length > 0) {
         await (deps.submit ?? submitEditAsAcceptor)(config, {
           name: claim.action === 'remove' ? `Remove call: ${draft.name}` : `Call: ${draft.name}`,
