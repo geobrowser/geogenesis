@@ -127,6 +127,7 @@ export function LobbyQueuedRequestProvider({
     label: 'your debate request',
     // Sent from the lobby as it is after sign-up, never from the tap's closure.
     liveOnly: true,
+    survivesRedirect: true,
     ready,
     run: async (intent, { isCurrent }) => {
       const request = decodeQueuedLobbyRequest(intent);

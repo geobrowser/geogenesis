@@ -51,7 +51,7 @@ import * as atomsModule from '~/atoms';
 
 const mocks = vi.hoisted(() => ({
   /** What the panel handed its warming Explore, so the test can tell it apart from a bare `ClaimsTab`. */
-  warmClaimsTab: null as { atomsFrom?: string; panelFilters?: unknown } | null,
+  warmClaimsTab: null as { atomsFrom?: string; panelFilters?: unknown; agendaFilter?: unknown } | null,
   promptSignIn: vi.fn(),
   ready: true,
   authenticated: true,
@@ -67,7 +67,21 @@ const mocks = vi.hoisted(() => ({
   scheduledRequests: undefined as unknown[] | undefined,
   matches: [] as unknown[],
   capture: vi.fn(),
+  /** GEO-3775: the panel's agenda filter. Off unless a case turns it on. */
+  agendaFilter: null as unknown,
 }));
+
+/** A match on `claimId`, which is all the panel reads off one here. */
+function aMatch(claimId = 'c-on') {
+  return { claim: { claim_entity_id: claimId } };
+}
+
+// The panel reads the agendas once, for every tab (GEO-3775). A gaia read, stubbed: this suite has
+// no QueryClient, and the filter has its own suite.
+vi.mock('../todays-claims/agenda-claim-filter', async importOriginal => {
+  const actual = await importOriginal<typeof import('../todays-claims/agenda-claim-filter')>();
+  return { ...actual, useAgendaClaimFilter: () => mocks.agendaFilter ?? actual.INACTIVE_AGENDA_FILTER };
+});
 
 // The schedule editor reads the viewer's calendars; this suite isn't about them, so geo-chat has them off.
 vi.mock('~/core/debates/calendar-hooks', () => ({
@@ -250,6 +264,7 @@ vi.mock('./claims-tab', async () => {
       panelFilters?: unknown;
       variant?: 'explore' | 'lobby' | 'positions';
       listId?: DebateClaimListId;
+      agendaFilter?: unknown;
     }) => {
       if (props.warm) mocks.warmClaimsTab = props;
       // Says which list it is, as the real one does, so the tab row can record leaving it.
@@ -320,6 +335,7 @@ beforeEach(() => {
   mocks.scheduledAwaitingAnswerCount = undefined;
   mocks.scheduledRequests = undefined;
   mocks.matches = [];
+  mocks.agendaFilter = null;
 });
 
 afterEach(cleanup);
@@ -449,13 +465,13 @@ describe('DebatesHubPanel', () => {
     expect(screen.getByRole('button', { name: /^Matches/ })).toHaveTextContent(/^Matches$/);
     cleanup();
 
-    mocks.matches = [{}, {}, {}];
+    mocks.matches = [aMatch(), aMatch(), aMatch()];
     renderOpen('explore');
     // Review, 27 Oct: read aloud as "3 online", though it counts matched claims.
     expect(screen.getByRole('button', { name: /^Matches/ })).toHaveTextContent(/^Matches3 matches$/);
     cleanup();
 
-    mocks.matches = [{}];
+    mocks.matches = [aMatch()];
     renderOpen('explore');
     expect(screen.getByRole('button', { name: /^Matches/ })).toHaveTextContent(/^Matches1 match$/);
   });
@@ -1118,7 +1134,7 @@ describe('the way out to the full-screen hub', () => {
 
   it('names Lobby in the URL so Matches still opens in the workspace', () => {
     // Someone online who disagrees: Matches is drawing geo-chat's match list, not its fallback.
-    mocks.matches = [{}];
+    mocks.matches = [aMatch()];
     renderOpen('lobby');
 
     const href = screen.getByRole('link', { name: /open full screen/i }).getAttribute('href') ?? '';
@@ -1133,7 +1149,7 @@ describe('the way out to the full-screen hub', () => {
   });
 
   it('hands over Lobby from Lobby, not what its Matches-only toggle says', () => {
-    mocks.matches = [{}];
+    mocks.matches = [aMatch()];
     const store = createStore();
     store.set(debatesHubAtom, { tab: 'lobby' });
     store.set(debatesHubMatchesOnlyAtom, true);
@@ -1158,7 +1174,7 @@ describe('the way out to the full-screen hub', () => {
           .getAttribute('href')
           ?.split('?')[1] ?? ''
       ).get('list');
-    mocks.matches = [{}];
+    mocks.matches = [aMatch()];
     const store = renderOpen('lobby');
     expect(listOf()).toBe('lobby');
 
@@ -1356,5 +1372,47 @@ describe('DebatesHubPanel strip and nudge', () => {
     const link = screen.getByRole('link', { name: /open full screen/i });
     expect(Boolean(nudge.compareDocumentPosition(link) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
     expect(screen.getAllByTestId('no-times-nudge')).toHaveLength(1);
+  });
+});
+
+/** GEO-3775. One agenda filter for the whole panel, and the Matches count over agenda claims only. */
+describe('agenda-only', () => {
+  function agenda(state: 'listed' | 'pending' = 'listed') {
+    const ids = state === 'listed' ? ['c-on'] : [];
+    return {
+      active: true,
+      ids,
+      spaceIds: [],
+      key: state,
+      has: (claimId: string) => ids.includes(claimId),
+      pending: state === 'pending',
+      error: null,
+      refetch: vi.fn(),
+      scopeFor: () => undefined,
+    };
+  }
+
+  it('counts only matches on an agenda claim beside Matches', () => {
+    mocks.agendaFilter = agenda();
+    mocks.matches = [aMatch('c-on'), aMatch('c-off'), aMatch('c-off-2')];
+    renderOpen('explore');
+
+    expect(screen.getByRole('button', { name: /^Matches/ })).toHaveTextContent(/^Matches1 match$/);
+  });
+
+  it('counts nothing while the agendas are out', () => {
+    mocks.agendaFilter = agenda('pending');
+    mocks.matches = [aMatch('c-on')];
+    renderOpen('explore');
+
+    expect(screen.getByRole('button', { name: /^Matches/ })).toHaveTextContent(/^Matches$/);
+  });
+
+  it('hands the same filter to the warming Explore', () => {
+    const filter = agenda();
+    mocks.agendaFilter = filter;
+    renderOpen('people');
+
+    expect(mocks.warmClaimsTab?.agendaFilter).toBe(filter);
   });
 });

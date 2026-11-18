@@ -11,7 +11,7 @@ import { GeoChatRequestError } from '../api';
 import { DebateFeedPlayer, type DebateFeedPlayerHandle } from '../browse/debate-feed-player';
 import { useInlinePlaybackUnavailable } from '../browse/inline-playback';
 import { MOMENTS_EDITOR_CLOSEABLE_PARAM, debatePath } from '../debate-routes';
-import { useDebate, useDebateExtractedClaims, useDebateMedia, useDebateTranscript, useGeoChatAuth } from '../hooks';
+import { useDebate, useDebateExtractedClaims, useDebateMedia, useGeoChatAuth } from '../hooks';
 import { speakerStillUrl } from '../speaker-still';
 import { type MomentBackfillEntry, reelCarried, reelUnlinkable } from './api';
 import { ClipPanel } from './clip-panel';
@@ -34,9 +34,11 @@ import {
   useAudioPeaks,
   useMomentBackfill,
   useMomentReelPlan,
+  useMomentsTranscript,
   useQueueMomentReel,
   useRefreshAfterReel,
 } from './hooks';
+import { type TranscriptGate, pinnedTranscriptVersion, transcriptBlockedReason } from './moments-transcript';
 import {
   type EditorClip,
   MANUAL_MAX_CLIPS,
@@ -62,7 +64,13 @@ import {
 import { ReelPreviewPanel } from './reel-preview-panel';
 import { jobInFlight, reelJob, refusalBlocksEditing, refusalMessage } from './reel-status';
 import { type ClaimChoice, ClaimOptions, type ClipCardView, ReelStrip } from './reel-strip';
-import { ReelTranscript, reelSentences } from './reel-transcript';
+import {
+  NO_TRANSCRIPT_ACTIONS,
+  ReelTranscript,
+  type TranscriptActions,
+  type TranscriptNames,
+  reelSentences,
+} from './reel-transcript';
 import { REEL_CLIPS, type ReelWarningFix, reelWarnings } from './reel-warnings';
 import { type Pad, ReelWaveform } from './reel-waveform';
 import { ClipPicker, PanelHead, PanelScroll, SidePanel, WarningsList, warningText } from './side-panel';
@@ -77,12 +85,6 @@ const NEW_CLIP_MS = 15_000;
 export { EXTRA_CLIP_TOOLTIP } from './reel-strip';
 
 const NO_TURNS: DebateMediaTurnSegment[] = [];
-/**
- * The words the editor snaps edges to and counts speakers with, and the sentences its transcript
- * lists (GEO-3349). Stable, as a query key part.
- */
-const TRANSCRIPT_INCLUDE = ['words', 'sentences'] as const;
-
 /**
  * The moments editor (GEO-3671): a media admin fine-tunes a debate's moment reel, previews exactly
  * what the media worker would publish, then publishes it and watches it go live. Every time here is
@@ -165,7 +167,9 @@ function Editor({ debateId }: { debateId: string }) {
   const media = useDebateMedia(debateId, true);
   const claims = useDebateExtractedClaims(debateId, true);
   const plan = useMomentReelPlan(debateId, true);
-  const transcript = useDebateTranscript(debateId, 'json', true, TRANSCRIPT_INCLUDE);
+  // The words the editor snaps edges to and counts speakers with, and the sentences it lists
+  // (GEO-3349); for a debate published without words, a fresh transcription of it (GEO-3642).
+  const transcript = useMomentsTranscript(debateId, true);
   const backfill = useMomentBackfill(debateId, true);
   // The waveform never holds the editor up: until it is ready, or without one, editing works the same.
   const peaks = useAudioPeaks(debateId, true);
@@ -175,6 +179,8 @@ function Editor({ debateId }: { debateId: string }) {
 
   const turns = media.data?.turn_segments ?? NO_TURNS;
   const words = React.useMemo(() => playerWords(transcript.data?.words), [transcript.data?.words]);
+  // A transcript without word timings has only these: the clips' speakers and quotes fall back on them.
+  const sentences = React.useMemo(() => reelSentences(transcript.data), [transcript.data]);
   const payload = claims.data?.payload;
   const entry = plan.data ?? null;
 
@@ -206,7 +212,8 @@ function Editor({ debateId }: { debateId: string }) {
 
   const [saved, setSaved] = React.useState<EditorClip[] | null>(null);
   const [clips, setClips] = React.useState<EditorClip[]>([]);
-  const dirty = saved !== null && reelKey(clips) !== reelKey(saved);
+  const editKey = reelKey(clips);
+  const dirty = saved !== null && editKey !== reelKey(saved);
   const dirtyRef = React.useRef(dirty);
   dirtyRef.current = dirty;
   // The version of the reel the edit was made on, sent as `base`: not the latest the plan says, which
@@ -232,6 +239,20 @@ function Editor({ debateId }: { debateId: string }) {
     setClips(source.clips);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [source]);
+
+  // The saved transcript the edit was made on (GEO-3642), sent as `transcript_version`: like `base`,
+  // not the latest read, which a re-render moves under an unsaved edit (its `media_changed` reads
+  // every transcript of the debate again). Frozen at the edit's first change, so the worker refuses
+  // an edit picked on words that are gone (`transcript_changed`); followed again without an edit,
+  // and after that refusal, whose copy says to check the clips again.
+  const latestTranscriptVersion = pinnedTranscriptVersion(transcript.data);
+  const [editedOn, setEditedOn] = React.useState<{ version: string | undefined } | null>(null);
+  React.useEffect(() => {
+    if (!dirty) setEditedOn(null);
+    else setEditedOn(current => current ?? { version: latestTranscriptVersion });
+    // Only an edit freezes it: the transcript moving on must not.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dirty, editKey]);
 
   // The player, played through its handle (GEO-3773). Null on the combined-video fallback.
   const player = React.useRef<DebateFeedPlayerHandle>(null);
@@ -331,6 +352,10 @@ function Editor({ debateId }: { debateId: string }) {
   React.useEffect(() => {
     const finished = wasInFlight.current && !inFlight;
     wasInFlight.current = inFlight;
+    // The edit's words are gone: the admin is told to check the clips again, on the words read next.
+    if (finished && ours && request?.status === 'skipped' && request.outcome === 'transcript_changed') {
+      setEditedOn(null);
+    }
     // A check this visit asked for opens its report in the side panel once, when it lands.
     if (
       ours &&
@@ -372,11 +397,13 @@ function Editor({ debateId }: { debateId: string }) {
   const transcriptFailed = !transcript.isPending && transcript.data === undefined;
   const readOnlyReason = editingBlockedReason(
     entry,
-    transcript.data?.word_timing,
+    transcript.data,
     plan.error,
     transcriptFailed,
     inFlight,
-    dirty
+    dirty,
+    // How long the debate runs, for a transcription that is taking longer than that.
+    turns.length > 0 ? Math.max(...turns.map(turn => turn.source_end_ms ?? turn.output_end_ms)) : undefined
   );
   const readOnly = readOnlyReason !== null;
   // A carried reel can't be edited, but it can be returned to automatic, which geo-chat doesn't refuse
@@ -395,13 +422,19 @@ function Editor({ debateId }: { debateId: string }) {
     if (sentAt < 0 || clipKey(failedSent.sent[sentAt]) !== clipKey(clip)) return [];
     return failedSent.job.clips[sentAt] ?? [];
   };
-  const clipViews = clips.map(clip => {
-    const speaker = clipSpeaker(words, clip.start_ms, clip.end_ms);
+  // Each clip's speaker, once per edit: the strip, the monitor and the side transcript read this one
+  // list (memoised, so the transcript doesn't re-render for a new list of the same speakers).
+  const speakers = React.useMemo(
+    () => clips.map(clip => clipSpeaker(words, clip.start_ms, clip.end_ms, sentences)),
+    [clips, words, sentences]
+  );
+  const clipViews = clips.map((clip, index) => {
+    const speaker = speakers[index];
     const reported = reportedOn(clip);
     return {
       clip,
       speaker,
-      quote: clipQuote(words, clip.start_ms, clip.end_ms),
+      quote: clipQuote(words, clip.start_ms, clip.end_ms, sentences),
       // A carried reel's cuts are on the old video's clock, mapped here through the new one's turns:
       // checked against the new words they would flag spans its clips don't play (it is read-only,
       // so nothing is gated on them).
@@ -477,8 +510,6 @@ function Editor({ debateId }: { debateId: string }) {
   React.useEffect(() => {
     dispatch({ type: 'clipsChanged', keys: clipKeyList === '' ? [] : clipKeyList.split('|') });
   }, [clipKeyList]);
-  const speakers = clipViews.map(view => view.speaker);
-  const sentences = React.useMemo(() => reelSentences(transcript.data), [transcript.data]);
   const durationMs = Math.max(
     1,
     ...turns.map(turn => turn.source_end_ms ?? turn.output_end_ms),
@@ -499,7 +530,7 @@ function Editor({ debateId }: { debateId: string }) {
   const reelPlayable = React.useMemo(() => reelSegments(clips, played, carried), [carried, clips, played]);
   // None for a carried reel: like its clip checks, they would read its old-video cuts at the places
   // the new video's turns map them to, and it is read-only, so there is nothing to fix.
-  const warnings = carried ? [] : reelWarnings(clips, words, nameOf);
+  const warnings = carried ? [] : reelWarnings(clips, words, nameOf, sentences);
 
   // The header's button and the warning's fix alike: without a playhead there is nowhere to add it.
   // A new clip starts at the playhead or at a transcript sentence. The transcript is the way in when
@@ -598,6 +629,7 @@ function Editor({ debateId }: { debateId: string }) {
         }
       : null;
 
+  const transcriptVersion = editedOn ? editedOn.version : latestTranscriptVersion;
   const submit = (kind: 'preview' | 'publish' | 'unlock') => {
     dispatch({ type: 'closePopover' });
     dispatch({ type: 'stop' });
@@ -613,7 +645,13 @@ function Editor({ debateId }: { debateId: string }) {
         : {
             preview: kind === 'preview',
             reason: kind === 'preview' ? 'Moments editor: preview' : 'Moments editor: hand-picked reel',
-            reel: { clock: 'player' as const, ...manualReel(clips, words, turns), ...(base && { base }) },
+            reel: {
+              clock: 'player' as const,
+              ...manualReel(clips, words, turns),
+              ...(base && { base }),
+              // Words from a fresh transcription: cut on exactly those, or refused (`transcript_changed`).
+              ...(transcriptVersion && { transcript_version: transcriptVersion }),
+            },
           };
     queue.mutate(body, {
       onSuccess: queued => {
@@ -773,6 +811,38 @@ function Editor({ debateId }: { debateId: string }) {
   };
   const pickerFrom = (fromMs: number) => (shown.panel === 'replace' ? replaceWith(fromMs) : addFrom(fromMs));
   const livePlayhead = () => player.current?.livePositionMs() ?? playheadMs;
+
+  // The side transcript (GEO-3773) renders only when what it shows changes, not on each playhead
+  // report or edit elsewhere: its data is memoised here and its actions come through a ref.
+  const name1 = nameOf(1);
+  const name2 = nameOf(2);
+  const transcriptNames = React.useMemo((): TranscriptNames => ({ 1: name1, 2: name2 }), [name1, name2]);
+  // What the selected clip played before it was edited: the live reel's span, outlined ("was").
+  const liveOfSelected = selected === null ? undefined : saved?.find(clip => clip.key === selected);
+  const nowSelected = selectedIndex >= 0 ? clips[selectedIndex] : undefined;
+  const wasEdited =
+    liveOfSelected !== undefined &&
+    nowSelected !== undefined &&
+    (liveOfSelected.start_ms !== nowSelected.start_ms || liveOfSelected.end_ms !== nowSelected.end_ms);
+  const wasStart = wasEdited ? liveOfSelected.start_ms : null;
+  const wasEnd = wasEdited ? liveOfSelected.end_ms : null;
+  const transcriptWas = React.useMemo(
+    () => (wasStart === null || wasEnd === null ? null : { start_ms: wasStart, end_ms: wasEnd }),
+    [wasStart, wasEnd]
+  );
+  const transcriptActions = React.useRef<TranscriptActions>(NO_TRANSCRIPT_ACTIONS);
+  transcriptActions.current = {
+    selectClip: key => selectClip(key),
+    seekWord: ms => {
+      stopPlayback();
+      seekTo(ms);
+    },
+    seek: seekTo,
+    changeClip: (index, next) => updateClip(index, () => next),
+    setClipWords,
+    addClipWords: addClip,
+    playing: () => playingRef.current,
+  };
 
   const rootRef = React.useRef<HTMLDivElement>(null);
   useEditorKeyboard(rootRef, {
@@ -987,25 +1057,22 @@ function Editor({ debateId }: { debateId: string }) {
         );
       case 'transcript':
         return (
-          <PanelScroll className="px-1 pb-6">
-            <ReelTranscript
-              sentences={sentences}
-              words={words}
-              wordTiming={transcript.data?.word_timing}
-              turns={turns}
-              canAddClip={canAddClip}
-              onAddClip={addClipAt}
-              onSetClipWords={setClipWords}
-              onAddClipWords={addClip}
-              clips={clips}
-              speakers={speakers}
-              selected={selectedIndex}
-              readOnly={editLocked}
-              nameOf={nameOf}
-              onChangeClip={(index, next) => updateClip(index, () => next)}
-              onSeek={seekTo}
-            />
-          </PanelScroll>
+          <ReelTranscript
+            sentences={sentences}
+            words={words}
+            wordTiming={transcript.data?.word_timing}
+            turns={turns}
+            clips={clips}
+            speakers={speakers}
+            selected={reelPlaying ? -1 : selectedIndex}
+            was={reelPlaying ? null : transcriptWas}
+            editable={editable}
+            readOnly={editLocked}
+            snap={snap}
+            names={transcriptNames}
+            subscribe={frame.subscribe}
+            actions={transcriptActions}
+          />
         );
     }
   })();
@@ -1040,6 +1107,7 @@ function Editor({ debateId }: { debateId: string }) {
         advancedOpen={shown.popover === 'advanced'}
         snap={snap}
         pad={pad}
+        focus={shown.focus}
         canMoveEarlier={selectedIndex > 0}
         canMoveLater={selectedIndex < clips.length - 1}
         canStep={words.length > 0}
@@ -1056,6 +1124,7 @@ function Editor({ debateId }: { debateId: string }) {
             playheadMs={playheadMs}
             readOnly={!editable}
             pad={pad}
+            focus={shown.focus}
             snap={snap}
             onSnap={() => setSnap(on => !on)}
             onChangeClip={(index, span) => updateClip(index, clip => ({ ...clip, ...span }))}
@@ -1075,6 +1144,7 @@ function Editor({ debateId }: { debateId: string }) {
         onSnap={() => setSnap(on => !on)}
         onMove={direction => moveClip(selectedIndex, direction)}
         onPad={setPad}
+        onFocus={focus => dispatch({ type: 'focus', focus })}
         onFullDebate={() => dispatch({ type: 'deselect' })}
         onStep={(edge, direction) =>
           updateClip(selectedIndex, clip => {
@@ -1289,20 +1359,22 @@ function turnClockKey(turns: readonly DebateMediaTurnSegment[]) {
 }
 
 /**
- * Why the editor is read-only, or `null`. The dry run's refusal says it for most cases; a transcript
- * without word timings is re-transcribed by every request and is then often skipped
- * (`transcript_differs`), so it is read-only until that is fixed (GEO-3642).
+ * Why the editor is read-only, or `null`. The dry run's refusal says it for most cases. A transcript
+ * without word timings is edited on a fresh transcription geo-chat saves for it (GEO-3642): until
+ * that is ready, and agrees with the published one, the reel is read-only (`transcriptBlockedReason`).
  */
 export function editingBlockedReason(
   entry: (Pick<MomentBackfillEntry, 'refusal'> & Partial<Pick<MomentBackfillEntry, 'live_reel'>>) | null,
-  wordTiming: boolean | undefined,
+  transcript: TranscriptGate | undefined,
   planError: unknown,
   /** The transcript never loaded: without its words no edge snaps and no clip has a speaker or claim. */
   transcriptFailed = false,
   /** A request is queued or rendering: for a carried reel, usually the worker's own re-cut of it. */
   requestInFlight = false,
   /** An unsaved edit is on the reel: Return to automatic waits until it is discarded. */
-  editPending = false
+  editPending = false,
+  /** How long the debate runs: a transcription for editing waiting longer is said to be slow. */
+  debateMs?: number
 ): string | null {
   if (planError) return "Couldn't check whether this debate can be edited. Reload to try again.";
   if (transcriptFailed) return "Couldn't load this debate's transcript. Reload to try again.";
@@ -1320,10 +1392,7 @@ export function editingBlockedReason(
   }
   if (entry && refusalBlocksEditing(entry.refusal))
     return `Can't edit this reel: ${refusalMessage(entry.refusal ?? '')}`;
-  if (wordTiming === false) {
-    return "Can't edit this reel yet: its transcript has no word timings, so geo-chat would transcribe it again and may not match it (GEO-3642).";
-  }
-  return null;
+  return transcriptBlockedReason(transcript, debateMs);
 }
 
 function queueErrorMessage(error: unknown) {

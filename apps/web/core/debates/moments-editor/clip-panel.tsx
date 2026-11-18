@@ -23,15 +23,17 @@ import {
   WarnIcon,
 } from './editor-ui';
 import { formatReelTime, parseReelTime } from './reel';
-import { PADS, type Pad } from './reel-waveform';
+import { FOCUSES, PADS, type Pad } from './reel-waveform';
+import type { FineFocus } from './waveform';
 
 /** A time to the tenth, as the panel's edges read: 0:41.9. */
 export const formatTenths = formatReelTime;
 
 /**
  * The bottom panel for the selected clip (GEO-3773): a bar of what can be done with it (play it,
- * replace or remove it, its advanced options, how far to zoom, back to the full debate), then its
- * start and end with word steppers either side of the zoomed waveform (`waveform`).
+ * replace or remove it, its advanced options, what to zoom on and how far, back to the full debate),
+ * then its start and end with word steppers either side of the zoomed waveform (`waveform`). Clicking
+ * an edge's time, or stepping it, zooms on that edge.
  */
 export function ClipPanel({
   number,
@@ -47,6 +49,7 @@ export function ClipPanel({
   advancedOpen,
   snap,
   pad,
+  focus,
   canMoveEarlier,
   canMoveLater,
   canStep,
@@ -59,6 +62,7 @@ export function ClipPanel({
   onSnap,
   onMove,
   onPad,
+  onFocus,
   onFullDebate,
   onStep,
 }: {
@@ -78,6 +82,7 @@ export function ClipPanel({
   advancedOpen: boolean;
   snap: boolean;
   pad: Pad;
+  focus: FineFocus;
   canMoveEarlier: boolean;
   canMoveLater: boolean;
   canStep: boolean;
@@ -91,36 +96,47 @@ export function ClipPanel({
   onSnap: () => void;
   onMove: (direction: -1 | 1) => void;
   onPad: (pad: Pad) => void;
+  onFocus: (focus: FineFocus) => void;
   onFullDebate: () => void;
   onStep: (edge: 'start' | 'end', direction: -1 | 1) => void;
 }) {
   const compact = cx(PILL_CLASS, PILL_COMPACT_CLASS);
-  const edgeColumn = (edge: 'start' | 'end') => (
-    <div
-      className={cx(
-        'flex flex-col justify-center gap-1.5',
-        edge === 'end' && 'items-end',
-        !editable && 'pointer-events-none opacity-50'
-      )}
-    >
-      <span className="flex items-baseline gap-1.5">
-        <span className="text-metadata text-grey-04">{edge === 'start' ? 'Start' : 'End'}</span>
-        <span className="text-metadataMedium tabular-nums">{formatTenths(edge === 'start' ? startMs : endMs)}</span>
-      </span>
-      <SegmentGroup>
-        {([-1, 1] as const).map(direction => (
-          <SegmentButton
-            key={direction}
-            disabled={!editable || !canStep}
-            aria-label={`${edge === 'start' ? 'Start' : 'End'} one word ${direction < 0 ? 'earlier' : 'later'}`}
-            onClick={() => onStep(edge, direction)}
-          >
-            {direction < 0 ? '‹ word' : 'word ›'}
-          </SegmentButton>
-        ))}
-      </SegmentGroup>
-    </div>
-  );
+  const edgeColumn = (edge: 'start' | 'end') => {
+    const label = edge === 'start' ? 'Start' : 'End';
+    return (
+      <div className={cx('flex flex-col justify-center gap-1.5', edge === 'end' && 'items-end')}>
+        {/* Zooming on an edge only looks, so it stays open when the edges can't be changed. */}
+        <button
+          type="button"
+          title={`Zoom on the ${edge}`}
+          aria-pressed={focus === edge}
+          onClick={() => onFocus(edge)}
+          className={cx(
+            'flex cursor-pointer items-baseline gap-1.5 rounded border-0 bg-transparent p-0 text-text hover:underline',
+            !editable && 'opacity-50'
+          )}
+        >
+          <span className="text-metadata text-grey-04">{label}</span>{' '}
+          <span className="text-metadataMedium tabular-nums">{formatTenths(edge === 'start' ? startMs : endMs)}</span>
+        </button>
+        <SegmentGroup>
+          {([-1, 1] as const).map(direction => (
+            <SegmentButton
+              key={direction}
+              disabled={!editable || !canStep}
+              aria-label={`${label} one word ${direction < 0 ? 'earlier' : 'later'}`}
+              onClick={() => {
+                onFocus(edge);
+                onStep(edge, direction);
+              }}
+            >
+              {direction < 0 ? '‹ word' : 'word ›'}
+            </SegmentButton>
+          ))}
+        </SegmentGroup>
+      </div>
+    );
+  };
   return (
     <section
       aria-label={`Clip ${number}, ${name}`}
@@ -245,6 +261,13 @@ export function ClipPanel({
             </Popover.Portal>
           </Popover.Root>
           <BarSeparator />
+          <SegmentGroup label="Focus">
+            {FOCUSES.map(option => (
+              <SegmentButton key={option.focus} pressed={focus === option.focus} onClick={() => onFocus(option.focus)}>
+                {option.label}
+              </SegmentButton>
+            ))}
+          </SegmentGroup>
           <SegmentGroup label="Zoom around the clip">
             {PADS.map(level => (
               <SegmentButton key={level} pressed={pad === level} onClick={() => onPad(level)}>

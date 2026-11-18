@@ -35,7 +35,8 @@ vi.mock('~/core/action-context-provider', () => ({
   useActionContext: () => () => ({ component: 'debate_matchmaking', target_id: '', target_type: 'entity' }),
 }));
 
-const { pendingActionsAtom } = await import('~/core/state/pending-actions');
+const { pendingActionsAtom, redirectedPendingActions, restorePendingActions } =
+  await import('~/core/state/pending-actions');
 const { LobbyGuestProvider } = await import('./lobby-guest-hooks');
 const {
   LOBBY_QUEUED_REQUEST_COPY,
@@ -217,5 +218,25 @@ describe('LobbyQueuedRequestProvider', () => {
     await waitFor(() =>
       expect(screen.getByTestId('outcome')).toHaveTextContent(LOBBY_QUEUED_REQUEST_COPY.left('Daniel'))
     );
+  });
+});
+
+describe('a lobby request tapped before a Google sign-in', () => {
+  it('is sent once from the lobby it returns to, naming who was tapped until then', async () => {
+    const view = lobby([member('dan')]);
+    const before = renderProvider(view);
+    fireEvent.click(screen.getByRole('button', { name: 'tap' }));
+    const saved = redirectedPendingActions(before.store);
+    expect(saved).toEqual([expect.objectContaining({ id: 'lobby-request:lobby1', label: 'your debate request' })]);
+    cleanup();
+
+    const after = renderProvider(view);
+    act(() => restorePendingActions(after.store, saved));
+    expect(screen.getByTestId('pending')).toHaveTextContent('Daniel');
+    after.signedIn(view);
+    await after.runQueued();
+
+    expect(mocks.mutateAsync).toHaveBeenCalledOnce();
+    expect(mocks.mutateAsync).toHaveBeenCalledWith({ recipient_profile_space_id: 'space-dan', lobby_id: 'lobby1' });
   });
 });

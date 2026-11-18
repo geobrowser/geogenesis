@@ -71,6 +71,8 @@ const { LobbyDisagreementsTrigger, lobbyDisagreements } = await import('./lobby-
 const { GeoChatRequestError } = await import('../api');
 const { RECIPIENT_UNAVAILABLE_MESSAGE } = await import('./lobby-room-claims-hooks');
 const { REQUEST_PENDING_LABEL } = await import('../request-gate');
+const { AgendaClaimFilterContext } = await import('../todays-claims/agenda-claim-filter');
+const { agendaFilterFixture } = await import('../todays-claims/debate-agenda-fixtures');
 
 afterEach(() => {
   cleanup();
@@ -450,5 +452,54 @@ describe('LobbyDisagreementsTrigger', () => {
     expect(list).not.toHaveTextContent('These claims aren’t listed here yet.');
     fireEvent.click(within(list).getByRole('button', { name: 'Try again' }));
     expect(mocks.refetch).toHaveBeenCalled();
+  });
+});
+
+/** GEO-3775. In an agenda-only lobby, the claims behind "Disagrees on N" are agenda claims only. */
+describe('LobbyDisagreementsTrigger agenda-only', () => {
+  const openWith = (filter: ReturnType<typeof agendaFilterFixture>, count: number) => {
+    render(
+      <AgendaClaimFilterContext.Provider value={filter}>
+        <LobbyDisagreementsTrigger lobby={lobby} member={daniel} count={count} variant="pill" />
+      </AgendaClaimFilterContext.Provider>
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: `Disagrees on ${count} ${count === 1 ? 'claim' : 'claims'} with Daniel` })
+    );
+    return screen.getByTestId('lobby-disagreements');
+  };
+  const room = () => ({
+    lobby_id: '0192abc',
+    source: 'room' as const,
+    claims: [row('a', true, [participant('daniel1')]), row('b', false, [participant('daniel1')])],
+    disagreements: [{ user_id: 'daniel1', claims: 2 }],
+  });
+
+  it('lists only the agenda claims, matching the count the room took from them', () => {
+    mocks.data = room();
+    const list = openWith(agendaFilterFixture({ ids: ['entity-a'] }), 1);
+
+    const rows = within(list).getAllByTestId('lobby-disagreement');
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toHaveTextContent('Claim a');
+    expect(list).not.toHaveTextContent('listed here');
+  });
+
+  it('lists nothing while the agendas load', () => {
+    mocks.data = room();
+    const list = openWith(agendaFilterFixture({ ids: ['entity-a'], pending: true }), 1);
+    expect(within(list).queryAllByTestId('lobby-disagreement')).toHaveLength(0);
+  });
+
+  it('fails with the agendas, and Try again asks for them', () => {
+    mocks.data = room();
+    const refetch = vi.fn();
+    const list = openWith(agendaFilterFixture({ error: new Error('gaia down'), refetch }), 1);
+
+    expect(list).toHaveTextContent('Something went wrong.');
+    expect(within(list).queryAllByTestId('lobby-disagreement')).toHaveLength(0);
+    fireEvent.click(within(list).getByRole('button', { name: 'Try again' }));
+    expect(refetch).toHaveBeenCalledTimes(1);
+    expect(mocks.refetch).not.toHaveBeenCalled();
   });
 });

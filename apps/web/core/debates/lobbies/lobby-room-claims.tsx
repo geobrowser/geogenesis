@@ -16,10 +16,11 @@ import { useCreateDebateRequest, useDebateRequests } from '../matchmaking/hooks'
 import { HubMessageNote, HubQueryState } from '../matchmaking/hub-states';
 import { RequestDebateControl } from '../request-debate-control';
 import { debateRequestGate } from '../request-gate';
+import { type AgendaClaimFilter, useAgendaClaimFilterContext } from '../todays-claims/agenda-claim-filter';
+import { useLobbyRoomClaims } from './lobby-agenda-claims';
 import {
   lobbyClaimRequestErrorMessage,
   readinessDisabledMessage,
-  useDebateLobbyClaims,
   useRefreshLobbyClaimsOnRefusal,
 } from './lobby-room-claims-hooks';
 import { type LobbyRoomClaim, LobbyRoomClaimsList, type LobbyRoomOffer } from './lobby-room-claims-list';
@@ -27,6 +28,8 @@ import type { LobbyPageView } from './lobby-view';
 
 export const LOBBY_ROOM_CLAIMS_COPY = {
   empty: 'Nobody here has taken a side on a claim yet.',
+  /** Agenda-only (GEO-3775). */
+  agendaEmpty: 'Nobody here has taken a side on one of today’s claims yet.',
   recent: 'Nobody here has taken a side yet. These claims were voted on recently.',
 } as const;
 
@@ -48,7 +51,8 @@ export function LobbyRoomClaims({
   /** Host controls on each claim. */
   renderMenu?: (entry: LobbyRoomClaim) => React.ReactNode;
 }) {
-  const query = useDebateLobbyClaims(lobby.lobby_id);
+  const query = useLobbyRoomClaims(lobby.lobby_id);
+  const agenda: AgendaClaimFilter = useAgendaClaimFilterContext();
   const source = query.data?.source ?? 'room';
   const claims = React.useMemo(
     () =>
@@ -67,9 +71,9 @@ export function LobbyRoomClaims({
       isLoading={query.isLoading}
       error={query.error}
       failureReason={query.failureReason}
-      onRetry={() => void query.refetch()}
+      onRetry={query.refetch}
       isEmpty={(query.data?.claims.length ?? 0) === 0}
-      emptyMessage={LOBBY_ROOM_CLAIMS_COPY.empty}
+      emptyMessage={agenda.active ? LOBBY_ROOM_CLAIMS_COPY.agendaEmpty : LOBBY_ROOM_CLAIMS_COPY.empty}
       emptyAction={onExplore ? { label: 'Explore claims', onClick: onExplore } : undefined}
     >
       {source === 'recent' && claims.length > 0 ? (

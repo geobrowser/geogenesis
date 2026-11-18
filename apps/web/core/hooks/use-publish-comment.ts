@@ -114,6 +114,7 @@ export function usePublishComment(
         id: `comment:${targetEntityId}:${result.id}`,
         label: 'your comment',
         requires: 'personalSpace',
+        survivesRedirect: false,
         run: async () => {
           // Bind the operation to the now-authenticated actor, preserving the original surface.
           operation = observeOperation('comment', targetEntityType, targetEntityId, undefined, attribution);

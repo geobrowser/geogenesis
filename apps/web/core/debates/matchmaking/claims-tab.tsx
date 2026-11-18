@@ -12,6 +12,7 @@ import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sent
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
+import { normId } from '~/core/utils/norm-id';
 
 import { Input } from '~/design-system/input';
 
@@ -36,6 +37,7 @@ import {
   useTaggedSpaceFacet,
   useTaggedTopicFacet,
 } from '../tagged-claims';
+import { type AgendaClaimFilter, INACTIVE_AGENDA_FILTER, hubCardScope } from '../todays-claims/agenda-claim-filter';
 import { useClaimSpaceAllowlist } from '../use-claim-space-allowlist';
 import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '../use-debate-publishable-spaces';
 import { claimRowKey } from './claim-row-key';
@@ -121,6 +123,13 @@ const NOTHING_HERE: Record<ClaimsTabFilter, string> = {
   all: 'No claims have been tagged for debate yet.',
   mine: 'You haven’t taken a position on any claims yet.',
   debate_now: 'Nobody is ready to debate you on a claim right now.',
+};
+
+/** The same, on a list narrowed to the agendas' claims (GEO-3775). */
+const AGENDA_NOTHING_HERE: Record<ClaimsTabFilter, string> = {
+  all: 'No claims are on today’s agendas yet.',
+  mine: 'You haven’t taken a position on any of today’s claims yet.',
+  debate_now: 'Nobody is ready to debate you on one of today’s claims right now.',
 };
 
 /**
@@ -326,6 +335,7 @@ export function ClaimsTab({
   panelFilters,
   notice,
   keepClaim,
+  agendaFilter = INACTIVE_AGENDA_FILTER,
   collapsesAnswered: collapsesAnsweredOverride,
 }: {
   variant?: ClaimsListVariant;
@@ -349,6 +359,13 @@ export function ClaimsTab({
   notice?: React.ReactNode | ((listHasRows: boolean) => React.ReactNode);
   /** Leaves out rows the list's source cannot narrow by itself, e.g. claims with nobody on the other side. */
   keepClaim?: (entry: MatchmakingClaim) => boolean;
+  /**
+   * GEO-3775. Only claims a debate agenda lists, from the surface's one filter. The tag is narrowed
+   * by the server (`onlyClaimIds`); geo-chat's lists are asked for the agendas' spaces only and
+   * narrowed by claim here, with their space and topic counts taken from the rows in hand. Nothing
+   * is drawn or asked for until the agendas answer. Unset, the list is unchanged (the lobby's).
+   */
+  agendaFilter?: AgendaClaimFilter;
   /**
    * Fold away the claims the viewer has answered, with the usual hold on one answered in front of
    * them, on a list that would not otherwise (the panel's Explore reading `debate_now` under Not
@@ -526,10 +543,19 @@ export function ClaimsTab({
     [debouncedSearch, debouncedTopicIds, graphSourced, filter]
   );
 
-  const scope = React.useMemo(
-    () => ({ spaceIds: eligibleSpaceIds, pending: spacesPending }),
-    [eligibleSpaceIds, spacesPending]
-  );
+  // Agenda-only, geo-chat is asked for the agendas' spaces alone (GEO-3775): it takes no claim ids,
+  // and every agenda claim has a row in one of those spaces (measured 16 Nov). The rows are then
+  // narrowed by claim below. Held while the agendas are out, or failed with nothing to ask for.
+  const agendaPending = agendaFilter.pending || Boolean(agendaFilter.error);
+  const scope = React.useMemo(() => {
+    const agendaSpaces = agendaFilter.spaceIds;
+    if (agendaSpaces === null) return { spaceIds: eligibleSpaceIds, pending: spacesPending };
+    const inAgendas = new Set(agendaSpaces);
+    return {
+      spaceIds: (eligibleSpaceIds ?? agendaSpaces).filter(spaceId => inAgendas.has(normId(spaceId))),
+      pending: spacesPending || agendaPending,
+    };
+  }, [agendaFilter.spaceIds, agendaPending, eligibleSpaceIds, spacesPending]);
 
   // Every way the pages can describe a wider corpus than this tab will show is handled in there,
   // once, for both pickers — see `useScopedMatchmakingClaims`. Explore passes `unusable`: it draws
@@ -558,8 +584,11 @@ export function ClaimsTab({
   const indexedCountsPending = !graphSourced && (claimsQuery.countsPending || topicsSettling || spacesSettling);
 
   const serverClaims = React.useMemo(
-    () => pages.flatMap(page => page.claims).filter(entry => spaceShowsClaims(entry.claim.space_id)),
-    [pages, spaceShowsClaims]
+    () =>
+      pages
+        .flatMap(page => page.claims)
+        .filter(entry => spaceShowsClaims(entry.claim.space_id) && agendaFilter.has(entry.claim.claim_entity_id)),
+    [agendaFilter, pages, spaceShowsClaims]
   );
 
   // Both graph-sourced lists, from one hook and one tag apiece.
@@ -606,8 +635,10 @@ export function ClaimsTab({
       // In the panel spaces narrow like topics, AND, with the pills counting co-occurrence — the
       // debate again picker's arrangement (GEO-3223). Full screen keeps "any of these".
       spaceMatch: panelMode ? 'all' : undefined,
+      onlyClaimIds: agendaFilter.ids,
     }),
     [
+      agendaFilter.ids,
       debouncedSearch,
       debouncedTopicIds,
       eligibleSpaceIds,
@@ -620,7 +651,7 @@ export function ClaimsTab({
 
   // Held while the space gates are still resolving: they pass everything until they land, so asking
   // now would fetch and cache a page scoped to every space and then narrow it under the viewer.
-  const taggedEnabled = graphSourced && !spacesPending && !excludePending;
+  const taggedEnabled = graphSourced && !spacesPending && !excludePending && !agendaPending;
   const {
     claims: taggedClaims,
     isLoading: taggedLoading,
@@ -847,7 +878,7 @@ export function ClaimsTab({
   // rather than which list this is: keyed on it, pressing the switch would re-sort every surviving
   // row to the server's current ranking.
   const keyedSpaceIds = graphSourced ? spaceIds : debouncedSpaceIds;
-  const listKey = `${debouncedSearch}|${keyedSpaceIds.join(',')}|${debouncedTopicIds.join(',')}|${filter}|${eligibleSpaceIds === null ? 'any' : eligibleSpaceIds.join(',')}|${taggedFilters.order ?? 'best'}`;
+  const listKey = `${debouncedSearch}|${keyedSpaceIds.join(',')}|${debouncedTopicIds.join(',')}|${filter}|${eligibleSpaceIds === null ? 'any' : eligibleSpaceIds.join(',')}|${taggedFilters.order ?? 'best'}|${agendaFilter.key}`;
 
   // The panel's Sort, for lists geo-chat orders its own way (GEO-3463). Sorted before the hold, so a
   // page arriving or a live count changing does not move rows already placed; see `useHeldClaimRows`.
@@ -1020,23 +1051,29 @@ export function ClaimsTab({
   // rows on screen, so a count would not say what picking it leaves. The rows are geo-chat's and in
   // hand, so they are counted here instead: spaces off the rows, topics off the claim entities, as
   // the matches list counts its own.
-  const keptRows = keepClaim ? visibleClaims : NO_KEPT_ROWS;
+  // Agenda-only geo-chat lists too (GEO-3775): their facets count the agendas' spaces, rows on no
+  // agenda included.
+  const clientFaceted = Boolean(keepClaim) || (agendaFilter.active && !graphSourced);
+  const keptRows = clientFaceted ? visibleClaims : NO_KEPT_ROWS;
   const { topicsByClaimId: keptTopicsById } = useClaimRowTopics(keptRows);
   const keptFacetTopics = useRowTopicFacet(keptRows, keptTopicsById, topicIds);
   const panelFacetSpaces = React.useMemo(
     // A picked space stays at zero when the rows leave it, as the source's facets keep it, or its
     // pill (the way to un-pick it) and its name go.
     () =>
-      keepClaim
+      clientFaceted
         ? keepSelectedVisible(countBy(keptRows.map(entry => ({ id: entry.claim.space_id, name: null }))), spaceIds)
         : facetSpaces,
-    [facetSpaces, keepClaim, keptRows, spaceIds]
+    [clientFaceted, facetSpaces, keptRows, spaceIds]
   );
-  const panelFacetTopics = keepClaim ? keptFacetTopics : facetTopics;
+  const panelFacetTopics = clientFaceted ? keptFacetTopics : facetTopics;
+  // Full screen's menus count the same rows when it is the agendas narrowing them.
+  const railFacetSpaces = agendaFilter.active && !graphSourced ? panelFacetSpaces : facetSpaces;
+  const railFacetTopics = agendaFilter.active && !graphSourced ? panelFacetTopics : facetTopics;
   // Whether those counts describe the rows on screen, which is what "does this pill still narrow"
   // compares them with. The source's facets count the rows before the client folded any away (the
   // answered ones, or a row outside one of the picked spaces), so then the listed count is unknown.
-  const facetsCountListedRows = Boolean(keepClaim) || visibleClaims.length === claims.length;
+  const facetsCountListedRows = clientFaceted || visibleClaims.length === claims.length;
 
   const countsPending =
     searchSettling || indexedCountsPending || (graphSourced && (topicsSettling || spacesSettling || !facetsSettled));
@@ -1118,8 +1155,9 @@ export function ClaimsTab({
   // publishability gates run over the loaded page, so a page can arrive with everything on it
   // removed while the corpus goes on — and Lobby would then walk the viewer off to Explore before
   // the sentinel had fetched the rows that would have kept them here.
-  const listIsLoading = spacesPending || excludePending || (graphSourced ? taggedLoading : claimsQuery.isLoading);
-  const listError = graphSourced ? taggedError : claimsQuery.error;
+  const listIsLoading =
+    spacesPending || excludePending || agendaFilter.pending || (graphSourced ? taggedLoading : claimsQuery.isLoading);
+  const listError = agendaFilter.error ?? (graphSourced ? taggedError : claimsQuery.error);
   // Whether the rows in hand are the answer to what is picked: not on a first load, and not while a
   // pick's previous rows are held over (`countsPending`), or "Show" would name the old count, or 0.
   const resultPending =
@@ -1222,11 +1260,11 @@ export function ClaimsTab({
       workspace={workspace}
       rail={
         <HubFacetRail
-          facetSpaces={facetSpaces}
+          facetSpaces={railFacetSpaces}
           spaceIds={spaceIds}
           onSpaceToggle={recordedFilters.onSpaceToggle}
           onSpacesClear={recordedFilters.onSpacesClear}
-          facetTopics={facetTopics}
+          facetTopics={railFacetTopics}
           topicIds={topicIds}
           onTopicToggle={recordedFilters.onTopicToggle}
           onTopicsClear={recordedFilters.onTopicsClear}
@@ -1253,7 +1291,7 @@ export function ClaimsTab({
             // A tagged claim can sit in several spaces, so the others stay on offer after a pick.
             spacesAreExclusive={!graphSourced}
             resultCount={resultPending || hasNextPage ? null : visibleClaims.length}
-            countsPending={!keepClaim && countsPending}
+            countsPending={!clientFaceted && countsPending}
           />
         ) : null}
         {/* Pinned above the filters, the way the matches list pins it. A request sent from here used
@@ -1285,8 +1323,8 @@ export function ClaimsTab({
             topicIds={topicIds}
             onTopicToggle={recordedFilters.onTopicToggle}
             onTopicsClear={recordedFilters.onTopicsClear}
-            facetSpaces={facetSpaces}
-            facetTopics={facetTopics}
+            facetSpaces={railFacetSpaces}
+            facetTopics={railFacetTopics}
             countsPending={countsPending}
             // Lobby passes its own ("Matches only"); Explore draws the one that hides answered claims.
             // Positions draws neither: it *is* the list of answered claims, so hiding them there
@@ -1318,6 +1356,7 @@ export function ClaimsTab({
           isLoading={
             spacesPending ||
             excludePending ||
+            agendaFilter.pending ||
             answeredHere.isLoading ||
             (graphSourced ? taggedLoading : claimsQuery.isLoading) ||
             (collapsesAnswered && !answersSettled)
@@ -1336,7 +1375,8 @@ export function ClaimsTab({
           // viewer's topic selection is not spent, and `taggedKindResolvedFor` keeps a card
           // unpressable until its vocabulary and the viewer's own side have actually arrived. A
           // short list beats a blank one; a wrong publish beats neither, and is what those guard.
-          error={graphSourced ? taggedError : claimsQuery.error}
+          // The agendas first: failed with none in hand, there is no list to ask for (GEO-3775).
+          error={listError}
           // Only the index path has one: it is the viewer-relative read, and so the only one here a
           // warming-up account can refuse. The tagged catalog is the graph's and answers anybody.
           failureReason={graphSourced ? undefined : claimsQuery.failureReason}
@@ -1346,15 +1386,19 @@ export function ClaimsTab({
           // was. Invalidated by key rather than through a `refetch` handed back by those hooks:
           // both combine their results, and a fresh closure in a `combine` would be a new identity
           // on every render, which is the one thing those hooks document that they must not be.
-          onRetry={() =>
+          onRetry={() => {
+            if (agendaFilter.error) {
+              agendaFilter.refetch();
+              return;
+            }
             void (graphSourced
               ? Promise.all([
                   refetchTagged(),
                   queryClient.invalidateQueries({ queryKey: CLAIM_ENTITIES_QUERY_PREFIX }),
                   queryClient.invalidateQueries({ queryKey: DEBATE_CLAIMS_QUERY_PREFIX }),
                 ])
-              : claimsQuery.refetch())
-          }
+              : claimsQuery.refetch());
+          }}
           isEmpty={visibleClaims.length === 0}
           signInAction={
             onRequireSignIn
@@ -1373,13 +1417,15 @@ export function ClaimsTab({
               ? searchingMessage
               : collapsedEverything
                 ? panelMode
-                  ? 'You’ve answered every claim here. Choose All under Show to see them, or pick another space or topic.'
+                  ? agendaFilter.active
+                    ? 'You’ve answered every one of today’s claims here. Choose All under Show to see them, or pick another space or topic.'
+                    : 'You’ve answered every claim here. Choose All under Show to see them, or pick another space or topic.'
                   : 'You’ve answered every claim here. Turn off “Hide my positions” to see them, or pick another space or topic.'
                 : predicateEmptied
                   ? (panelFilters?.emptyPredicate?.message ?? 'No claims match these filters.')
                   : hasNarrowingFilters
                     ? 'No claims match these filters.'
-                    : NOTHING_HERE[filter]
+                    : (agendaFilter.active ? AGENDA_NOTHING_HERE : NOTHING_HERE)[filter]
           }
           // "Debate now" is the only filter here scored on who is online, so it is the only one an
           // empty list means "nobody is around" for — Explore is a statement about curation, and My
@@ -1425,7 +1471,8 @@ export function ClaimsTab({
                 claimId={entry.claim.claim_entity_id}
                 listId={listId}
                 position={index + 1}
-                scope={debouncedSearch ? { list_searched: true } : undefined}
+                // GEO-3775: agenda-only, each card is credited to the agenda that lists it.
+                scope={hubCardScope(agendaFilter, entry.claim.claim_entity_id, Boolean(debouncedSearch))}
               >
                 {renderClaim ? (
                   renderClaim(entry, {

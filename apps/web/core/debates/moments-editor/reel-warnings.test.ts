@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import { draggedClip } from './clip-drag';
-import { type EditorClip, type ReelWord, playerWords } from './reel';
-import { endClipAt, reelSentences, sentenceInClip, startClipAt } from './reel-transcript';
+import { type EditorClip, type ReelWord, playerWords, sentenceInClip } from './reel';
+import { reelSentences } from './reel-transcript';
 import { reelWarnings, spokenLength, trimmedEnd } from './reel-warnings';
 
 const word = (slot: 1 | 2, start: number, end: number, text = 'word'): ReelWord => ({
@@ -251,16 +251,6 @@ describe('draggedClip (GEO-3672)', () => {
 
 describe('the transcript picker (GEO-3672)', () => {
   const sentence = { slot: 1 as const, start_ms: 20_000, end_ms: 24_000, text: 'Coffee is fine.' };
-
-  it('starts the clip at a sentence, its end following if it would come first', () => {
-    expect(startClipAt(clip(10_000, 30_000), sentence)).toMatchObject({ start_ms: 20_000, end_ms: 30_000 });
-    expect(startClipAt(clip(10_000, 15_000), sentence)).toMatchObject({ start_ms: 20_000, end_ms: 24_000 });
-  });
-
-  it('ends the clip at a sentence, its start following if it would come after', () => {
-    expect(endClipAt(clip(10_000, 30_000), sentence)).toMatchObject({ start_ms: 10_000, end_ms: 24_000 });
-    expect(endClipAt(clip(26_000, 30_000), sentence)).toMatchObject({ start_ms: 20_000, end_ms: 24_000 });
-  });
 
   it('counts a sentence as in a clip only when it reaches into it, not when it shares an edge', () => {
     expect(sentenceInClip(sentence, clip(24_000, 30_000))).toBe(false);

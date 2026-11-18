@@ -51,6 +51,7 @@ export function useCallRemindPress({
     component: 'debate_room',
     label: 'your call reminder',
     requires: 'auth',
+    survivesRedirect: true,
     ready: authenticated,
     run: async (next, { isCurrent }) => {
       const target = parseReminderIntent(next);

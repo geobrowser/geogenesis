@@ -82,24 +82,66 @@ export function wordsIn(words: readonly ReelWord[], startMs: number, endMs: numb
   return words.filter(word => wordInSpan(word, { start_ms: startMs, end_ms: endMs }));
 }
 
+/** A sentence (or, from a transcript served without sentences, a line) on the player's clock. */
+export type ReelSentence = { slot: ParticipantSlot; start_ms: number; end_ms: number; text: string };
+
+/** How far a sentence must reach into a clip to count as in it, so a shared edge does not. */
+const OVERLAP_MS = 150;
+
+export function sentenceInClip(sentence: ReelSentence, clip: { start_ms: number; end_ms: number }) {
+  return sentence.end_ms > clip.start_ms + OVERLAP_MS && sentence.start_ms < clip.end_ms - OVERLAP_MS;
+}
+
+const NO_SENTENCES: readonly ReelSentence[] = [];
+
 /**
  * Who a clip is of, as geo-chat decides it (`manual_moments`): the debater who says most of the
  * words wholly inside it, a tie going to the lower slot. `null` when nobody speaks in it. The words
  * are `playerWords`, which has no blank tokens, as geo-chat counts them (`speech_turns`). The one rule for a clip's speaker: the timeline, the warnings, the claim kept on an edit and
  * the transcript's selection toolbar all ask this (GEO-3767).
+ *
+ * A transcript without word timings (`word_timing: false`) has no words to count, only its
+ * sentences (`reelSentences`): then the clip is of the debater whose sentences take up most of it,
+ * a tie going to the lower slot. Where there are words, the sentences are never read.
  */
-export function clipSpeaker(words: readonly ReelWord[], startMs: number, endMs: number): ParticipantSlot | null {
+export function clipSpeaker(
+  words: readonly ReelWord[],
+  startMs: number,
+  endMs: number,
+  sentences: readonly ReelSentence[] = NO_SENTENCES
+): ParticipantSlot | null {
   const counts = new Map<ParticipantSlot, number>();
-  for (const word of wordsIn(words, startMs, endMs)) {
-    counts.set(word.slot, (counts.get(word.slot) ?? 0) + 1);
+  if (words.length === 0) {
+    for (const sentence of sentences) {
+      if (!sentenceInClip(sentence, { start_ms: startMs, end_ms: endMs })) continue;
+      const overlap = Math.min(sentence.end_ms, endMs) - Math.max(sentence.start_ms, startMs);
+      counts.set(sentence.slot, (counts.get(sentence.slot) ?? 0) + overlap);
+    }
+  } else {
+    for (const word of wordsIn(words, startMs, endMs)) {
+      counts.set(word.slot, (counts.get(word.slot) ?? 0) + 1);
+    }
   }
   const ranked = [...counts].sort(([slotA, countA], [slotB, countB]) => countB - countA || slotA - slotB);
   return ranked[0]?.[0] ?? null;
 }
 
-export function clipQuote(words: readonly ReelWord[], startMs: number, endMs: number): string {
-  return wordsIn(words, startMs, endMs)
-    .map(word => word.text.trim())
+/**
+ * What a clip says: its whole words, or, from a transcript without word timings, the text of the
+ * sentences it reaches into (`sentenceInClip`, as the side transcript marks them).
+ */
+export function clipQuote(
+  words: readonly ReelWord[],
+  startMs: number,
+  endMs: number,
+  sentences: readonly ReelSentence[] = NO_SENTENCES
+): string {
+  const spans =
+    words.length === 0
+      ? sentences.filter(sentence => sentenceInClip(sentence, { start_ms: startMs, end_ms: endMs }))
+      : wordsIn(words, startMs, endMs);
+  return spans
+    .map(span => span.text.trim())
     .filter(Boolean)
     .join(' ');
 }
@@ -107,12 +149,20 @@ export function clipQuote(words: readonly ReelWord[], startMs: number, endMs: nu
 /**
  * An edge moved off the middle of a word, outward, so the clip takes the whole word: a word crossing
  * an edge plays without its caption. A start goes to the word's start, an end to its end; an edge
- * in silence stays where it is.
+ * in silence stays where it is. In crosstalk the new spot can be inside another word, so it keeps
+ * moving until no word holds it (GEO-3768).
  */
 export function snapEdge(ms: number, words: readonly ReelWord[], edge: 'start' | 'end'): number {
-  const crossing = words.find(word => word.start_ms < ms && ms < word.end_ms);
-  if (!crossing) return ms;
-  return edge === 'start' ? crossing.start_ms : crossing.end_ms;
+  let at = ms;
+  for (;;) {
+    const crossing = words.filter(word => word.start_ms < at && at < word.end_ms);
+    if (crossing.length === 0) return at;
+    // Each pass moves strictly outward, so it ends.
+    at =
+      edge === 'start'
+        ? Math.min(...crossing.map(word => word.start_ms))
+        : Math.max(...crossing.map(word => word.end_ms));
+  }
 }
 
 /** The next word boundary from `ms` in `direction`: word starts for a start edge, word ends for an end. */

@@ -8,6 +8,8 @@ import type { DebateLobbyClaim, MatchmakingClaim } from '../api';
 import { claimRowKey } from '../matchmaking/claim-row-key';
 import type { ClaimCardDefaults } from '../matchmaking/claims-tab';
 import { HUB_SCROLL_SELECTOR, HubScrollSelectorProvider } from '../matchmaking/hub-scroll';
+import { AgendaClaimFilterContext, INACTIVE_AGENDA_FILTER } from '../todays-claims/agenda-claim-filter';
+import { agendaFilterFixture } from '../todays-claims/debate-agenda-fixtures';
 import { LobbyExploreClaims, exploreRoomClaim, hasDebateClaimRow } from './lobby-explore-claims';
 import type { LobbyRoomClaim, LobbyRoomOffer } from './lobby-room-claims-list';
 import type { LobbyPageView } from './lobby-view';
@@ -18,7 +20,19 @@ const mocks = vi.hoisted(() => ({
   requestLobbyIds: [] as string[],
   batches: [] as string[][],
   rootSelectors: [] as (string | undefined)[],
+  agendaFilter: undefined as unknown,
+  agendaRoomRows: undefined as DebateLobbyClaim[] | undefined,
+  agendaRoomEnabled: [] as boolean[],
+  guest: false,
 }));
+// The room's agenda-only "In this room" read (GEO-3775), recording whether it was asked for.
+vi.mock('./lobby-agenda-claims', () => ({
+  useLobbyRoomClaims: (_lobbyId: string, enabled: boolean) => {
+    mocks.agendaRoomEnabled.push(enabled);
+    return { data: enabled && mocks.agendaRoomRows ? { claims: mocks.agendaRoomRows } : undefined };
+  },
+}));
+vi.mock('./lobby-guest-hooks', () => ({ useIsLobbyGuest: () => mocks.guest }));
 // Passes through to the real hook, recording the scroll root each card asks to be measured against.
 vi.mock('~/core/hooks/use-near-viewport', async importOriginal => {
   const actual = await importOriginal<typeof import('~/core/hooks/use-near-viewport')>();
@@ -35,10 +49,13 @@ vi.mock('../matchmaking/claims-tab', () => ({
   ClaimsTab: ({
     renderClaim,
     onVisibleClaims,
+    agendaFilter,
   }: {
     renderClaim: (entry: MatchmakingClaim, card: ClaimCardDefaults) => React.ReactElement;
     onVisibleClaims: (entries: MatchmakingClaim[]) => void;
+    agendaFilter?: unknown;
   }) => {
+    mocks.agendaFilter = agendaFilter;
     React.useEffect(() => onVisibleClaims(mocks.entries), [onVisibleClaims]);
     return (
       <div>
@@ -155,6 +172,9 @@ afterEach(() => {
   mocks.requestLobbyIds = [];
   mocks.batches = [];
   mocks.rootSelectors = [];
+  mocks.agendaRoomRows = undefined;
+  mocks.agendaRoomEnabled = [];
+  mocks.guest = false;
 });
 
 describe('exploreRoomClaim', () => {
@@ -230,5 +250,64 @@ describe('LobbyExploreClaims', () => {
     mocks.entries = [exploreEntry('row-1', ENTITY)];
     render(<LobbyExploreClaims lobby={lobby(false)} />);
     expect(screen.queryByTestId('host-menu-row-1')).toBeNull();
+  });
+});
+
+/** GEO-3775. Explore narrows by the room's agenda filter, which ClaimsTab applies (tested there). */
+describe('LobbyExploreClaims agenda-only', () => {
+  it('hands the list the room’s agenda filter, and the inactive one outside an agenda-only room', () => {
+    const filter = agendaFilterFixture({ ids: ['c1'] });
+    render(
+      <AgendaClaimFilterContext.Provider value={filter}>
+        <LobbyExploreClaims lobby={lobby(false)} />
+      </AgendaClaimFilterContext.Provider>
+    );
+    expect(mocks.agendaFilter).toBe(filter);
+
+    cleanup();
+    render(<LobbyExploreClaims lobby={lobby(false)} />);
+    expect(mocks.agendaFilter).toBe(INACTIVE_AGENDA_FILTER);
+  });
+});
+
+/** GEO-3775. An agenda-only member's room read already holds every agenda claim's room line. */
+describe('LobbyExploreClaims room lines in an agenda-only lobby', () => {
+  const inAgendaRoom = (ids: string[]) => (
+    <AgendaClaimFilterContext.Provider value={agendaFilterFixture({ ids })}>
+      <LobbyExploreClaims lobby={lobby(false)} />
+    </AgendaClaimFilterContext.Provider>
+  );
+
+  it('takes them from the room’s read and reads no batch again', () => {
+    mocks.entries = [exploreEntry('row-1', ENTITY), exploreEntry('row-2', ENTITY_2)];
+    mocks.agendaRoomRows = [roomRow('row-1', ENTITY, 1)];
+    render(inAgendaRoom([ENTITY, ENTITY_2]));
+
+    expect(mocks.batches).toEqual([]);
+    expect(mocks.agendaRoomEnabled.at(-1)).toBe(true);
+    expect(screen.getByTestId('request-row-1')).toBeTruthy();
+    expect(screen.getByTestId('card-row-2').getAttribute('data-outside-room')).toBe('true');
+  });
+
+  it('still reads a batch holding a claim no agenda lists', () => {
+    mocks.entries = [exploreEntry('row-1', ENTITY), exploreEntry('row-2', ENTITY_2)];
+    mocks.agendaRoomRows = [];
+    render(inAgendaRoom([ENTITY]));
+    expect(mocks.batches).toEqual([[ENTITY, ENTITY_2]]);
+  });
+
+  it('leaves a guest, who has no such read, and a lobby that isn’t agenda-only to their own reads', () => {
+    mocks.entries = [exploreEntry('row-1', ENTITY)];
+    mocks.guest = true;
+    render(inAgendaRoom([ENTITY]));
+    expect(mocks.batches).toEqual([[ENTITY]]);
+    expect(mocks.agendaRoomEnabled.every(enabled => !enabled)).toBe(true);
+
+    cleanup();
+    mocks.guest = false;
+    mocks.agendaRoomEnabled = [];
+    render(<LobbyExploreClaims lobby={lobby(false)} />);
+    expect(mocks.batches).toEqual([[ENTITY]]);
+    expect(mocks.agendaRoomEnabled.every(enabled => !enabled)).toBe(true);
   });
 });
