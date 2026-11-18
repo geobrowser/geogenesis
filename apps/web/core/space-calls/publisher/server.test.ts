@@ -71,6 +71,18 @@ describe('getGeoPublisherStatus', () => {
     expect(await getGeoPublisherStatus(request(), 'nope', deps())).toMatchObject({ status: 400 });
   });
 
+  it('names the publisher from its space id alone, with no signing key set', async () => {
+    vi.stubEnv('DEBATE_ACCEPTOR_PRIVATE_KEY', '');
+    vi.stubEnv('DEBATE_ACCEPTOR_SPACE_ID', PUBLISHER);
+    const { publisherSpaceId: _, ...fromEnv } = deps({
+      roles: vi.fn(async () => ({ editorSpaceIds: [VIEWER, PUBLISHER] })),
+    });
+    expect(await getGeoPublisherStatus(request(), SPACE, fromEnv)).toEqual({ ok: true, status: 'editor' });
+    vi.stubEnv('DEBATE_ACCEPTOR_SPACE_ID', '');
+    expect(await getGeoPublisherStatus(request(), SPACE, fromEnv)).toMatchObject({ status: 503 });
+    vi.unstubAllEnvs();
+  });
+
   it('is unavailable without a configured publisher', async () => {
     expect(await getGeoPublisherStatus(request(), SPACE, deps({ publisherSpaceId: () => null }))).toMatchObject({
       status: 503,

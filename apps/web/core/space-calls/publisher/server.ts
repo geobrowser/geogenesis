@@ -2,7 +2,7 @@ import { Effect } from 'effect';
 
 import { bearerToken, verifyPrivyIdentityToken } from '~/core/auth/server/privy-identity-token';
 import { resolveMemberSpaceFromWalletSafe } from '~/core/browse/resolve-member-space-from-wallet';
-import { getDebateAcceptorConfig } from '~/core/debates/server/acceptor-config';
+import { getPublisherSpaceId } from '~/core/debates/server/acceptor-config';
 import { getSpace, getSpaceRolesForParticipants } from '~/core/io/queries';
 import { fetchActiveEditorRequest } from '~/core/io/subgraph/fetch-proposed-editors';
 import { geo } from '~/core/sdk/geo-client';
@@ -33,10 +33,6 @@ type Deps = {
 
 const defaultRoles = (spaceId: string, ids: string[]) => Effect.runPromise(getSpaceRolesForParticipants(spaceId, ids));
 const defaultSpaceType = async (spaceId: string) => (await Effect.runPromise(getSpace(spaceId)))?.type ?? null;
-const defaultPublisherSpaceId = () => {
-  const config = getDebateAcceptorConfig();
-  return config ? normId(config.spaceId) : null;
-};
 
 /** The signed-in viewer must edit `spaceId`, a DAO space, and the publisher must be configured. */
 async function gate(request: Request, rawSpaceId: string | null, deps: Deps): Promise<Gate | PublisherGateFailure> {
@@ -48,7 +44,7 @@ async function gate(request: Request, rawSpaceId: string | null, deps: Deps): Pr
   if (!token) return { ok: false, status: 401, code: 'sign_in_required' };
   if (!appId) return { ok: false, status: 503, code: 'auth_not_configured' };
 
-  const publisherSpaceId = (deps.publisherSpaceId ?? defaultPublisherSpaceId)();
+  const publisherSpaceId = (deps.publisherSpaceId ?? getPublisherSpaceId)();
   if (!publisherSpaceId) return { ok: false, status: 503, code: 'publisher_not_configured' };
 
   const identity = await (deps.verify ?? verifyPrivyIdentityToken)(token, { appId });
