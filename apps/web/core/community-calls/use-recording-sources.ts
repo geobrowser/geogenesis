@@ -20,8 +20,11 @@ export function useRecordingSources({
     selector: r => r.fromEntity.id === entityId && r.type.id === relationTypeId && r.spaceId === spaceId,
   });
 
+  // A published Video with no playable URL decodes to an empty value (a call page link, GEO-3593):
+  // nothing can play it, so it is not a source. A local one still holds its entity id here.
+  const playable = relations.filter(r => r.toEntity.value !== '');
   if (relations.length > 0) {
-    return relations.map(r => ({
+    return playable.map(r => ({
       directUrl: isPlayableRecordingUrl(r.toEntity.value) ? r.toEntity.value : null,
       videoEntityId: r.toEntity.id,
     }));

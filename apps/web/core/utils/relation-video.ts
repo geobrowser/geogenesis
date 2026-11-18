@@ -1,7 +1,10 @@
 import { ID } from '~/core/id';
+import { geoCallPageCallId } from '~/core/space-calls/routes';
 import type { Relation } from '~/core/types';
 
-export const isPlayableVideoUrl = (value: string) => value.startsWith('ipfs://') || value.startsWith('http');
+/** A URL a video element can play. A Geo call page (a published call's recording link) is not one. */
+export const isPlayableVideoUrl = (value: string) =>
+  (value.startsWith('ipfs://') || value.startsWith('http')) && geoCallPageCallId(value) === null;
 
 export function getRelationVideoUrls(relations: Relation[], propertyId: string): string[] {
   return relations

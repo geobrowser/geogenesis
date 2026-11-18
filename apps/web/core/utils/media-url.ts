@@ -1,10 +1,18 @@
 import { ContentIds } from '@geoprotocol/geo-sdk/lite';
 
 import { ID } from '~/core/id';
+import { geoCallPageCallId } from '~/core/space-calls/routes';
 
-/** Whether a value is a loadable media URL: an `ipfs://` URI (resolved via gateway) or an http(s) URL. */
+/**
+ * Whether a value is a loadable media URL: an `ipfs://` URI (resolved via gateway) or an http(s) URL.
+ * A Geo call page is not one: a call's recording links it, and the page is what plays it.
+ */
 export function isDirectMediaUrl(value: string | null | undefined): value is string {
-  return Boolean(value && (value.startsWith('ipfs://') || value.startsWith('http://') || value.startsWith('https://')));
+  return Boolean(
+    value &&
+    (value.startsWith('ipfs://') || value.startsWith('http://') || value.startsWith('https://')) &&
+    geoCallPageCallId(value) === null
+  );
 }
 
 /**

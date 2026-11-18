@@ -35,6 +35,9 @@ export function PublishedRecordingPlayer({
 
   const { src, onError } = useVideoWithFallback(activeUrl);
 
+  // Nothing resolved to play: no player rather than an empty one.
+  if (!activeUrl) return null;
+
   return (
     <div className="flex w-full min-w-0 flex-col gap-3">
       <video
