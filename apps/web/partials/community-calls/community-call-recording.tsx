@@ -26,11 +26,8 @@ export function CommunityCallRecording({
   if (sources.length === 0) return null;
 
   return (
-    <PublishedRecordingPlayer
-      sources={sources}
-      spaceId={spaceId}
-      className="mx-auto mb-6 px-4"
-      style={{ maxWidth: ENTITY_PAGE_CONTENT_MAX_WIDTH }}
-    />
+    <div className="mx-auto mb-6 w-full px-4" style={{ maxWidth: ENTITY_PAGE_CONTENT_MAX_WIDTH }}>
+      <PublishedRecordingPlayer sources={sources} spaceId={spaceId} />
+    </div>
   );
 }

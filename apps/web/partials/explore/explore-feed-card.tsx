@@ -86,12 +86,13 @@ function CommunityCallCardBody({ item, actions, titleOpensSidePanel }: CardBodyP
     <div className="flex min-w-0 flex-col gap-3">
       <ExploreCardTitle item={item} opensSidePanel={titleOpensSidePanel} />
       {sources.length > 0 ? (
-        <PublishedRecordingPlayer
-          sources={sources}
-          spaceId={item.spaceId}
-          className="max-w-[773px]"
-          videoClassName="aspect-[773/435] rounded-xl object-contain"
-        />
+        <div className="w-full max-w-[773px]">
+          <PublishedRecordingPlayer
+            sources={sources}
+            spaceId={item.spaceId}
+            videoClassName="aspect-[773/435] rounded-xl object-contain"
+          />
+        </div>
       ) : null}
       {actions}
     </div>
