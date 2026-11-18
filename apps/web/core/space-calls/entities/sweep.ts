@@ -16,6 +16,7 @@ import {
   buildCallEventDraft,
   buildCallEventRemoval,
   mintedCallEntityId,
+  updateChangesNothing,
 } from './draft';
 import { type CallEntityClaim, type CallEntityRecord, claimCallEntities, recordCallEntity } from './service';
 
@@ -168,6 +169,10 @@ export async function sweepCallEntities(
     }
 
     const entityId = ID.uuidToHex(claim.entity_id ?? curator?.get(callId) ?? mintedCallEntityId(claim.call_id));
+    if (claim.entity_id && updateChangesNothing(claim)) {
+      await settle(claim, { claim_id: claim.claim_id, outcome: 'written', entity_id: entityId });
+      return;
+    }
     try {
       const space = await spaceOf(claim.entity.space_id);
       if (!space || space.type !== 'DAO') {

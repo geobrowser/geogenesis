@@ -182,6 +182,28 @@ export function buildCallEventDraft({
   return { entityId, name, values, relations };
 }
 
+/**
+ * Whether an `update` changes nothing the graph holds: geo-chat also lists a call when its recording
+ * or attendees change, and neither is written.
+ */
+export function updateChangesNothing(claim: CallEntityClaim): boolean {
+  const { entity, previous } = claim;
+  if (claim.action !== 'update' || !previous) return false;
+  const written = (e: CallEntity) =>
+    JSON.stringify([
+      e.space_id,
+      e.name,
+      e.series_id,
+      e.original_start,
+      e.scheduled_starts_at,
+      e.scheduled_ends_at,
+      e.starts_at,
+      e.ends_at,
+      callEventAttendees(e),
+    ]);
+  return written(entity) === written(previous);
+}
+
 /** What the graph holds for the entity in the call's space. */
 export type GraphEntityForRemoval = {
   values: Array<{ propertyId: string; dataType: DataType }>;

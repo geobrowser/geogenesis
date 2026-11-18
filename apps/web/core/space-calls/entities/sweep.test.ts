@@ -227,6 +227,38 @@ describe('sweepCallEntities', () => {
     expect(records[0]![1]).toMatchObject({ outcome: 'written', entity_id: callId });
   });
 
+  it('records without a proposal an update that changes nothing on the graph', async () => {
+    const callId = '6'.repeat(32);
+    const ready = { status: 'ready' as const, published: true, linked: true, duration_seconds: 60 };
+    const ended = entity({ status: 'ended', recording: ready });
+    const { deps, records, submit } = harness([
+      claim(callId, {
+        action: 'update',
+        entity_id: callId,
+        entity: { ...ended, recording: { ...ready, published: false, linked: false } },
+        previous: ended,
+      }),
+    ]);
+    const result = await run(deps);
+    expect(submit).not.toHaveBeenCalled();
+    expect(result.written).toEqual([callId]);
+    expect(records[0]![1]).toMatchObject({ outcome: 'written', entity_id: callId });
+  });
+
+  it('writes an update that moves the call', async () => {
+    const callId = '6'.repeat(32);
+    const { deps, submit } = harness([
+      claim(callId, {
+        action: 'update',
+        entity_id: callId,
+        entity: entity({ starts_at: '2026-11-25T18:00:00Z' }),
+        previous: entity(),
+      }),
+    ]);
+    await run(deps);
+    expect(submit).toHaveBeenCalledTimes(1);
+  });
+
   it('claims nothing past the deadline, so no claim is left to lapse', async () => {
     const { deps, records, submit } = harness([claim('9'.repeat(32))]);
     await run(deps, () => false);
