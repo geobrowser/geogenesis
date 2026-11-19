@@ -5,12 +5,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { WalletSessionSync } from './wallet-session-sync';
 
 const mocks = vi.hoisted(() => ({
-  privy: { ready: true, authenticated: true },
+  privy: { ready: true, authenticated: true, user: null as unknown },
   identityToken: 'token' as string | null,
   getToken: vi.fn(async () => 'fetched' as string | null),
   sync: vi.fn(async () => {}),
   clear: vi.fn(async () => {}),
   forget: vi.fn(),
+  noteWallet: vi.fn(),
   hint: false,
   refresh: vi.fn(),
 }));
@@ -25,12 +26,13 @@ vi.mock('./wallet-session-client', () => ({
   syncWalletSession: mocks.sync,
   clearWalletSession: mocks.clear,
   forgetWalletSession: mocks.forget,
+  noteEmbeddedWallet: mocks.noteWallet,
   hasWalletSessionHint: () => mocks.hint,
 }));
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.privy = { ready: true, authenticated: true };
+  mocks.privy = { ready: true, authenticated: true, user: null };
   mocks.identityToken = 'token';
   mocks.hint = false;
 });
@@ -55,7 +57,7 @@ describe('WalletSessionSync', () => {
   });
 
   it('does nothing while Privy is restoring', () => {
-    mocks.privy = { ready: false, authenticated: false };
+    mocks.privy = { ready: false, authenticated: false, user: null };
     mocks.hint = true;
     render(<WalletSessionSync />);
     expect(mocks.sync).not.toHaveBeenCalled();
@@ -63,7 +65,7 @@ describe('WalletSessionSync', () => {
   });
 
   it('clears a session Privy no longer has', () => {
-    mocks.privy = { ready: true, authenticated: false };
+    mocks.privy = { ready: true, authenticated: false, user: null };
     mocks.hint = true;
     render(<WalletSessionSync />);
     expect(mocks.clear).toHaveBeenCalledOnce();
@@ -71,10 +73,23 @@ describe('WalletSessionSync', () => {
   });
 
   it('sends nothing for a signed-out visitor with no session', () => {
-    mocks.privy = { ready: true, authenticated: false };
+    mocks.privy = { ready: true, authenticated: false, user: null };
     render(<WalletSessionSync />);
     expect(mocks.clear).not.toHaveBeenCalled();
     expect(mocks.forget).toHaveBeenCalled();
+  });
+
+  it('tells the client when the embedded wallet appears', () => {
+    const { rerender } = render(<WalletSessionSync />);
+    expect(mocks.noteWallet).not.toHaveBeenCalled();
+
+    mocks.privy = {
+      ready: true,
+      authenticated: true,
+      user: { linkedAccounts: [{ type: 'wallet', walletClientType: 'privy', chainType: 'ethereum' }] },
+    };
+    rerender(<WalletSessionSync />);
+    expect(mocks.noteWallet).toHaveBeenCalledOnce();
   });
 
   it('refreshes through the router', () => {

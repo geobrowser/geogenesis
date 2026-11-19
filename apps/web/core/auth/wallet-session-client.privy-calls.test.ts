@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * With the real shared token cache: a lasting session failure must not make the debates/calls poll
- * call Privy's `users/me` (`getIdentityToken`) more than once per page.
+ * call Privy's `users/me` (`getIdentityToken`) more than a fixed few times per page.
  */
 
 const mocks = vi.hoisted(() => ({ privyFetches: 0 }));
@@ -18,8 +18,13 @@ vi.mock('~/core/wallet/auth-hooks', () => ({
 }));
 
 const { getCachedIdentityToken, setCachedIdentityToken } = await import('./identity-token');
-const { SESSION_RETRY_DELAYS_MS, resetWalletSessionClientForTests, syncWalletSession } =
-  await import('./wallet-session-client');
+const {
+  NO_WALLET_RETRY_DELAYS_MS,
+  SESSION_RETRY_DELAYS_MS,
+  noteEmbeddedWallet,
+  resetWalletSessionClientForTests,
+  syncWalletSession,
+} = await import('./wallet-session-client');
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -34,11 +39,13 @@ afterEach(() => {
 });
 
 describe.each([
-  ['invalid_token', 401],
-  ['no_wallet', 403],
-  ['unavailable', 503],
-])('a lasting %s', (status, code) => {
-  it('costs at most one users/me call per page', async () => {
+  ['invalid_token', 401, false, 1],
+  ['unavailable', 503, false, 1],
+  ['no_wallet', 403, false, NO_WALLET_RETRY_DELAYS_MS.length],
+  ['no_wallet', 403, true, NO_WALLET_RETRY_DELAYS_MS.length + 1],
+] as const)('a lasting %s (wallet seen: %s)', (status, code, walletSeen, maxCalls) => {
+  it(`costs at most ${maxCalls} users/me calls per page`, async () => {
+    if (walletSeen) noteEmbeddedWallet(() => {});
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => new Response(JSON.stringify({ wallet: null, status }), { status: code }))
@@ -52,6 +59,6 @@ describe.each([
     }
     await vi.advanceTimersByTimeAsync(SESSION_RETRY_DELAYS_MS[1] * 2);
 
-    expect(mocks.privyFetches).toBeLessThanOrEqual(1);
+    expect(mocks.privyFetches).toBeLessThanOrEqual(maxCalls);
   });
 });

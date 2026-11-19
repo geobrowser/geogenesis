@@ -22,6 +22,16 @@ export const SESSION_RETRY_DELAYS_MS = [15_000, 60_000] as const;
 let retryTimer: ReturnType<typeof setTimeout> | null = null;
 let retryAttempt = 0;
 
+/**
+ * A new account's first token can predate its embedded wallet. After `no_wallet`, retry with a fresh
+ * token on this schedule, plus once when the wallet appears: at most 4 `users/me` calls per sign-in.
+ */
+export const NO_WALLET_RETRY_DELAYS_MS = [3_000, 10_000, 30_000] as const;
+let noWalletAttempt = 0;
+let awaitingWallet = false;
+let walletSeen = false;
+let walletRetryUsed = false;
+
 function clearRetry() {
   if (retryTimer !== null) clearTimeout(retryTimer);
   retryTimer = null;
@@ -36,6 +46,37 @@ function scheduleRetry(refresh: () => void) {
     const token = await getCachedIdentityToken();
     if (token) await syncWalletSession(token, refresh);
   }, SESSION_RETRY_DELAYS_MS[retryAttempt++]);
+}
+
+async function resyncWithFreshToken(refresh: () => void) {
+  const startedIn = epoch;
+  setCachedIdentityToken(null);
+  sentToken = null;
+  const token = await getCachedIdentityToken();
+  if (token && startedIn === epoch) await syncWalletSession(token, refresh);
+}
+
+function scheduleNoWalletRetry(refresh: () => void) {
+  if (retryTimer !== null || noWalletAttempt >= NO_WALLET_RETRY_DELAYS_MS.length) return;
+  retryTimer = setTimeout(() => {
+    retryTimer = null;
+    void resyncWithFreshToken(refresh);
+  }, NO_WALLET_RETRY_DELAYS_MS[noWalletAttempt++]);
+}
+
+/** Retries at once, once per sign-in, when the server lacks a wallet the client can already see. */
+function retryForWallet(refresh: () => void): boolean {
+  if (!awaitingWallet || !walletSeen || walletRetryUsed || halted) return false;
+  walletRetryUsed = true;
+  clearRetry();
+  void resyncWithFreshToken(refresh);
+  return true;
+}
+
+/** Called when Privy lists the account's embedded wallet. */
+export function noteEmbeddedWallet(refresh: () => void) {
+  walletSeen = true;
+  retryForWallet(refresh);
 }
 
 /**
@@ -67,6 +108,7 @@ export async function syncWalletSession(token: string, refresh: () => void): Pro
 
   const body = (await response.json().catch(() => null)) as { status?: string } | null;
   if (response.ok) {
+    awaitingWallet = false;
     clearRetry();
     if (body?.status === 'issued') refresh();
     return;
@@ -78,8 +120,10 @@ export async function syncWalletSession(token: string, refresh: () => void): Pro
       clearRetry();
       return;
     case 'no_wallet':
-      // Retrying this token cannot help; Privy's next token, once the wallet exists, posts again.
+      awaitingWallet = true;
+      if (retryForWallet(refresh)) return;
       clearRetry();
+      scheduleNoWalletRetry(refresh);
       return;
     case 'invalid_token':
       // So the retry asks Privy for a fresh token.
@@ -106,6 +150,10 @@ export function forgetWalletSession() {
   sentToken = null;
   epoch += 1;
   clearRetry();
+  noWalletAttempt = 0;
+  awaitingWallet = false;
+  walletSeen = false;
+  walletRetryUsed = false;
 }
 
 /** Clears the server's session (sign-out). Throws when the server did not confirm it. */

@@ -6,11 +6,13 @@ import { useRouter } from 'next/navigation';
 
 import { getCachedIdentityToken, useIdentityTokenSync } from '~/core/auth/identity-token';
 import { usePrivy } from '~/core/wallet/auth-hooks';
+import { accountHasEmbeddedWallet } from '~/core/wallet/embedded-wallet';
 
 import {
   clearWalletSession,
   forgetWalletSession,
   hasWalletSessionHint,
+  noteEmbeddedWallet,
   syncWalletSession,
 } from './wallet-session-client';
 
@@ -20,8 +22,10 @@ import {
  */
 export function WalletSessionSync() {
   const router = useRouter();
-  const { ready, authenticated } = usePrivy();
+  const { ready, authenticated, user } = usePrivy();
   const identityToken = useIdentityTokenSync();
+  // The server reads the wallet from the token's linked accounts, so watch the same list.
+  const hasWallet = accountHasEmbeddedWallet(user);
 
   React.useEffect(() => {
     if (!ready) return;
@@ -46,6 +50,10 @@ export function WalletSessionSync() {
       cancelled = true;
     };
   }, [ready, authenticated, identityToken, router]);
+
+  React.useEffect(() => {
+    if (ready && authenticated && hasWallet) noteEmbeddedWallet(() => router.refresh());
+  }, [ready, authenticated, hasWallet, router]);
 
   return null;
 }

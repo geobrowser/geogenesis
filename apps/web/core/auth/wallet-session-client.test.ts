@@ -1,10 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  NO_WALLET_RETRY_DELAYS_MS,
   SESSION_RETRY_DELAYS_MS,
   clearWalletSession,
   forgetWalletSession,
   hasWalletSessionHint,
+  noteEmbeddedWallet,
   resetWalletSessionClientForTests,
   syncWalletSession,
 } from './wallet-session-client';
@@ -112,19 +114,47 @@ describe('syncWalletSession', () => {
     expect(mocks.setToken).toHaveBeenCalledOnce();
   });
 
-  it('treats no_wallet as final for that token, without dropping the cache', async () => {
+  it('retries no_wallet with a fresh token as soon as the wallet appears', async () => {
+    vi.useFakeTimers();
+    mocks.fetch.mockImplementationOnce(() => answer(403, { wallet: null, status: 'no_wallet' }));
+    mocks.fetch.mockImplementationOnce(() => answer(200, { wallet: WALLET, status: 'issued' }));
+
+    await syncWalletSession('before-wallet', mocks.refresh);
+    noteEmbeddedWallet(mocks.refresh);
+    await vi.waitFor(() => expect(mocks.refresh).toHaveBeenCalledOnce());
+
+    expect(mocks.setToken).toHaveBeenCalledOnce();
+    expect(mocks.getToken).toHaveBeenCalledOnce();
+    expect(mocks.fetch).toHaveBeenCalledTimes(2);
+    expect(mocks.fetch).toHaveBeenLastCalledWith(
+      '/api/wallet-session',
+      expect.objectContaining({ headers: { Authorization: 'Bearer fresh' } })
+    );
+    await vi.advanceTimersByTimeAsync(NO_WALLET_RETRY_DELAYS_MS[2] * 2);
+    expect(mocks.fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('retries at once when the wallet was already seen before no_wallet', async () => {
+    mocks.fetch.mockImplementationOnce(() => answer(403, { wallet: null, status: 'no_wallet' }));
+    noteEmbeddedWallet(mocks.refresh);
+
+    await syncWalletSession('before-wallet', mocks.refresh);
+    await vi.waitFor(() => expect(mocks.fetch).toHaveBeenCalledTimes(2));
+    expect(mocks.setToken).toHaveBeenCalledOnce();
+  });
+
+  it('bounds fresh-token retries when the wallet never appears', async () => {
     vi.useFakeTimers();
     mocks.fetch.mockImplementation(() => answer(403, { wallet: null, status: 'no_wallet' }));
+    let n = 0;
+    mocks.getToken.mockImplementation(async () => `fresh-${++n}`);
 
     await syncWalletSession('t1', mocks.refresh);
-    await vi.advanceTimersByTimeAsync(SESSION_RETRY_DELAYS_MS[1] * 4);
-    expect(mocks.fetch).toHaveBeenCalledOnce();
+    await vi.advanceTimersByTimeAsync(NO_WALLET_RETRY_DELAYS_MS[2] * 4);
 
-    // Once the wallet exists Privy mints a new token, which posts again.
-    await syncWalletSession('t2', mocks.refresh);
-    expect(mocks.fetch).toHaveBeenCalledTimes(2);
-    expect(mocks.setToken).not.toHaveBeenCalled();
-    expect(mocks.getToken).not.toHaveBeenCalled();
+    expect(mocks.setToken).toHaveBeenCalledTimes(NO_WALLET_RETRY_DELAYS_MS.length);
+    expect(mocks.fetch).toHaveBeenCalledTimes(1 + NO_WALLET_RETRY_DELAYS_MS.length);
+    expect(mocks.refresh).not.toHaveBeenCalled();
   });
 
   it('retries unavailable on the bounded schedule without dropping the cache', async () => {
