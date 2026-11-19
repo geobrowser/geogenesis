@@ -1,17 +1,9 @@
 import { Ratelimit } from '@upstash/ratelimit';
 import { Redis } from '@upstash/redis';
 
-/**
- * Caps on session requests. Both fail open: the token check is the control, these only bound the
- * work. Same lazy, env-gated setup as ranking-og.
- *
- * - Per account (after verification): 120 per 10 min, keyed on the verified Privy user id. A tab
- *   posts once per page load and per token reissue, so this is a page load every 5 s for 10 min.
- * - Per IP (before verification): 1,200 per 10 min, about 10 busy accounts' worth, so a venue or
- *   carrier NAT fits while a forged-token flood from one address still can't drive unbounded
- *   JWKS fetches and signature checks.
- */
+/** Fail open: the token check is the control. Per account: a page load every 5 s for 10 min. */
 export const WALLET_SESSION_ACCOUNT_LIMIT = 120;
+/** About ten busy accounts, so a venue or carrier NAT fits; still bounds forged-token verify work. */
 export const WALLET_SESSION_IP_LIMIT = 1_200;
 
 function createLimiter(limit: number, prefix: string): Ratelimit | null {
