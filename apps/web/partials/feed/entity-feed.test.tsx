@@ -70,6 +70,7 @@ vi.mock('~/core/browse/use-browse-sidebar-cache', () => ({
 
 vi.mock('@tanstack/react-query', () => ({
   keepPreviousData: Symbol('keepPreviousData'),
+  skipToken: Symbol('skipToken'),
   useInfiniteQuery: (options: Record<string, unknown>) => {
     mocks.queryOptions = options;
     mocks.queryKeys.push(options.queryKey as unknown[]);
@@ -109,6 +110,13 @@ vi.mock('~/core/hooks/use-smart-account', () => ({
   useSmartAccount: () => ({
     smartAccount: mocks.accountAddress ? { account: { address: mocks.accountAddress } } : null,
   }),
+}));
+vi.mock('~/core/auth/wallet-session-sync', () => ({
+  useWalletSessionSync: () => ({ synced: true, settled: true }),
+}));
+vi.mock('~/core/wallet/account-readiness', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/wallet/account-readiness')>()),
+  useAccountAddress: () => mocks.accountAddress ?? null,
 }));
 
 vi.mock('~/design-system/menu', () => ({

@@ -578,6 +578,50 @@ describe('DebateCoordinator', () => {
     expect(store.get(debatesHubAtom)).toEqual({ tab: 'people' });
   });
 
+  // Producers raise the notice and navigate in the same callback; it shows once the page has left.
+  it.each([
+    ['the debate page', '/space/space-1/debates/debate-1'],
+    ['the picker', '/space/space-1/debates/rematches/rematch-1'],
+    ['a room', '/debate/room-1'],
+  ])('holds the opponent-left notice on %s and shows it after leaving', (_, flowPath) => {
+    mocks.pathname = flowPath;
+    const store = createStore();
+    store.set(opponentLeftNoticeAtom, true);
+
+    const view = render(
+      <Provider store={store}>
+        <DebateCoordinator />
+      </Provider>
+    );
+
+    expect(screen.queryByRole('dialog', { name: 'Opponent left' })).not.toBeInTheDocument();
+    expect(store.get(opponentLeftNoticeAtom)).toBe(true);
+
+    mocks.pathname = '/space/space-1/debates';
+    view.rerender(
+      <Provider store={store}>
+        <DebateCoordinator />
+      </Provider>
+    );
+
+    expect(screen.getByRole('dialog', { name: 'Opponent left' })).toBeInTheDocument();
+  });
+
+  it('shows the opponent-left notice in a lobby', () => {
+    mocks.pathname = '/debate/lobby-1';
+    mocks.roomAtPath = { kind: 'lobby' };
+    const store = createStore();
+    store.set(opponentLeftNoticeAtom, true);
+
+    render(
+      <Provider store={store}>
+        <DebateCoordinator />
+      </Provider>
+    );
+
+    expect(screen.getByRole('dialog', { name: 'Opponent left' })).toBeInTheDocument();
+  });
+
   it('holds an incoming request back behind the opponent-left notice', async () => {
     mocks.activity = { ...idleActivity(), incoming_request_count: 1 };
     mocks.requests = { outbound: null, incoming: [incomingRequest()] };

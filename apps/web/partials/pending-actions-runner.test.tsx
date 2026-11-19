@@ -24,7 +24,7 @@ vi.mock('~/core/wallet/auth-hooks', () => ({
   usePrivy: () => ({ ready: true, authenticated: mocks.privyAuthenticated }),
 }));
 vi.mock('~/core/hooks/use-smart-account', () => ({
-  useSmartAccount: () => ({ smartAccount: mocks.authenticated ? {} : null }),
+  useSmartAccount: () => ({ smartAccount: mocks.authenticated ? { account: { address: '0xviewer' } } : null }),
 }));
 vi.mock('~/core/hooks/use-personal-space-id', () => ({
   usePersonalSpaceId: () => ({
@@ -127,6 +127,29 @@ describe('signing out', () => {
     runner.rerender(<PendingActionsRunner />);
 
     expect(store.get(pendingActionsAtom)).toHaveLength(1);
+  });
+});
+
+describe('a press made while the signing account is built', () => {
+  it('waits through a build that fails, and runs once the account arrives', async () => {
+    mocks.privyAuthenticated = true;
+    mocks.registered = true;
+    const { store, wrapper, enqueue } = renderQueue();
+    const follow = vi.fn();
+    act(() =>
+      enqueue({ id: 'follow', label: 'your follow', requires: 'personalSpace', survivesRedirect: false, run: follow })
+    );
+    const runner = render(<PendingActionsRunner />, { wrapper });
+    runner.rerender(<PendingActionsRunner />);
+
+    expect(follow).not.toHaveBeenCalled();
+    expect(store.get(pendingActionsAtom)).toHaveLength(1);
+
+    mocks.authenticated = true;
+    runner.rerender(<PendingActionsRunner />);
+
+    await waitFor(() => expect(store.get(pendingActionsAtom)).toHaveLength(0));
+    expect(follow).toHaveBeenCalledOnce();
   });
 });
 

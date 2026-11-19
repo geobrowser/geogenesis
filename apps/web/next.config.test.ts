@@ -21,7 +21,8 @@ function matches(source: string, path: string) {
 describe('marketing routing', () => {
   it.each(['/', '/terms', '/www/help', '/www/docs', '/www/faq', '/www/downloads', '/www/api/help', '/www/future-page', '/api/subscribe', '/_marketing/_next/static/chunk.js',
     '/_marketing/image', '/hero/logo.svg', '/hero/debates/debate-1.webm',
-    '/curators/card-grey-1.webp', '/opengraph-image.jpg', '/twitter-image.jpg'])
+    '/curators/card-grey-1.webp', '/opengraph-image.jpg', '/twitter-image.jpg',
+    '/64ad7342c3007104/script.js', '/64ad7342c3007104/view', '/64ad7342c3007104/event'])
   ('forwards %s to the marketing deployment without changing its path', async path => {
     const routes = await marketingRoutes();
     const route = routes.find(route => matches(route.source, path));

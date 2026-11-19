@@ -58,6 +58,9 @@ vi.mock('~/core/hooks/use-publish-comment', () => ({
 }));
 vi.mock('~/core/hooks/use-personal-space-id', () => ({ usePersonalSpaceId: () => ({ personalSpaceId: null }) }));
 vi.mock('~/core/hooks/use-smart-account', () => ({ useSmartAccount: () => ({ smartAccount: mocks.smartAccount }) }));
+vi.mock('~/core/wallet/account-readiness', () => ({
+  useAccountAddress: () => (mocks.smartAccount as { account: { address: string } } | null)?.account.address ?? null,
+}));
 vi.mock('~/core/hooks/use-geo-profile', () => ({ useGeoProfile: () => ({ profile: null }) }));
 vi.mock('~/core/hooks/use-space-editor-ids', () => ({
   useSpaceRoles: () => ({

@@ -48,3 +48,24 @@ describe('the divider band', () => {
     expect(bars.reduce((sum, bar) => sum + bar.width, 0)).toBe(g.dividerWidth);
   });
 });
+
+describe('the masthead', () => {
+  /// Option B from GEO-3791, picked off rendered cards: the old 32/36/10 read too small in feeds.
+  it('is drawn at mark 40, text 45, gap 12', () => {
+    const m = g.masthead;
+    expect([m.markPx, m.textPx, m.gapPx]).toEqual([40, 45, 12]);
+  });
+
+  /// Growing it must not push it into the claim. The claim band is drawn 10px up into the header,
+  /// so its top is not `HEADER_H`; and claims are centred in it, so the tightest case is the tallest
+  /// block the fitter can return. The masthead box is the mark or the text's line box, whichever is
+  /// taller: Satori's `lineHeight: normal` is the font's ascent minus descent, 1.187em for Calibre,
+  /// so 1.2 rounds up. Renders put the masthead ink 23px or more above the claim ink.
+  it('stays clear of the tallest claim the band can hold', () => {
+    const m = g.masthead;
+    const halfBox = Math.max(m.markPx, m.textPx * 1.2) / 2;
+    expect(m.claimBandTop).toBe(78);
+    expect(m.tallestClaimTop).toBe(89);
+    expect(m.centreY + halfBox).toBeLessThanOrEqual(m.tallestClaimTop - 4);
+  });
+});

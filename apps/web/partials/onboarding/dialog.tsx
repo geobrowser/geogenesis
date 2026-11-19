@@ -21,7 +21,6 @@ import { useImageWithFallback } from '~/core/hooks/use-image-with-fallback';
 import { useMediaQuery } from '~/core/hooks/use-media-query';
 import { SUPPRESS_ONBOARDING_PARAM, useOnboarding } from '~/core/hooks/use-onboarding';
 import { searchResultMatchesAllowedTypes } from '~/core/hooks/use-search';
-import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { ID } from '~/core/id';
 import { uploadGeoImage } from '~/core/sdk/geo-client';
 import { hasSeenAssistantAtom, isChatOpenAtom } from '~/core/state/chat-store';
@@ -32,6 +31,7 @@ import type { TopicOption } from '~/core/topics/use-topic-suggestions';
 import type { SearchResult } from '~/core/types';
 import { devLog } from '~/core/utils/dev-log';
 import { NavUtils, validateEntityId } from '~/core/utils/utils';
+import { useAccountAddress } from '~/core/wallet/account-readiness';
 import { useLogout } from '~/core/wallet/auth-hooks';
 
 import { Breadcrumb } from '~/design-system/breadcrumb';
@@ -102,7 +102,7 @@ export const OnboardingDialog = () => {
   const { isOnboardingVisible, hideOnboarding } = useOnboarding();
   const router = useRouter();
 
-  const { smartAccount } = useSmartAccount();
+  const address = useAccountAddress();
   const [topicId, setTopicId] = useAtom(topicIdAtom);
   const setName = useSetAtom(nameAtom);
   const setPending = useSetAtom(pendingPersonalSpaceAtom);
@@ -209,7 +209,6 @@ export const OnboardingDialog = () => {
     trackAuthOnboarding(step, step === 'completed' ? 'completed' : 'viewed');
   }, [isOnboardingVisible, step]);
 
-  const address = smartAccount?.account.address;
   const feedTopics = heldTopicsFor(heldFeedTopics, address);
 
   if (!address) return null;
@@ -244,7 +243,7 @@ export const OnboardingDialog = () => {
   }
 
   async function onProfileContinue(exactMatches: SearchResult[]) {
-    if (!address || !smartAccount) return;
+    if (!address) return;
 
     if (exactMatches.length > 0) {
       setEntityMatchCandidates(exactMatches);
@@ -258,7 +257,7 @@ export const OnboardingDialog = () => {
 
   // `topicId` is empty unless the user claimed an existing entity on the match step.
   function onCompleteOnboard() {
-    if (!address || !smartAccount) return;
+    if (!address) return;
     const outcome = feedTopics.length > 0 ? 'completed' : 'skipped';
     const picks = { topic_count: feedTopics.length, space_pick_count: selectedTopicIds.length };
     trackAuthOnboarding('customize-feed', outcome, picks);

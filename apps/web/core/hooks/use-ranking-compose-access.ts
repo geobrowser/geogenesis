@@ -11,9 +11,9 @@ import { normalizeSpaceId } from '~/core/access/space-access';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
-import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
 import { useSpace } from '~/core/hooks/use-space';
+import { useAccountReadiness } from '~/core/wallet/account-readiness';
 
 import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
 
@@ -35,7 +35,8 @@ export function rankingComposeNeedsAccountStep(status: RankingComposeAccessStatu
 
 export function useRankingComposeAccess(spaceId: string, rankingId?: string) {
   const queryClient = useQueryClient();
-  const { smartAccount, isLoading: isLoadingSmartAccount } = useSmartAccount();
+  const { state: accountState, address } = useAccountReadiness();
+  const isLoadingSmartAccount = accountState === 'restoring';
   const { personalSpaceId, isRegistered, isLoading: isLoadingPersonalSpace, isFetched } = usePersonalSpaceId();
   const { space, isLoading: isLoadingSpace } = useSpace(spaceId);
   const { canEdit, isLoading: isLoadingAccess } = useAccessControl(spaceId);
@@ -48,7 +49,7 @@ export function useRankingComposeAccess(spaceId: string, rankingId?: string) {
 
   const status: RankingComposeAccessStatus = (() => {
     if (isLoadingSmartAccount) return 'loading';
-    if (!smartAccount) return 'needs-login';
+    if (!address) return 'needs-login';
     if (isLoading || !isFetched) return 'loading';
     if (!isRegistered || !personalSpaceId) return 'needs-onboarding';
     if (!space) return 'not-found';
@@ -82,12 +83,12 @@ export function useRankingComposeAccess(spaceId: string, rankingId?: string) {
   );
 
   const ensureAccess = useCallback(async (): Promise<boolean> => {
-    if (!smartAccount || !isRegistered || !personalSpaceId) {
+    if (!address || !isRegistered || !personalSpaceId) {
       return false;
     }
 
     return ensureSpaceMembership({ spaceId, personalSpaceId, tx, queryClient });
-  }, [smartAccount, isRegistered, personalSpaceId, spaceId, tx, queryClient]);
+  }, [address, isRegistered, personalSpaceId, spaceId, tx, queryClient]);
 
   const recheckAccess = useCallback(() => {
     if (!personalSpaceId) return;

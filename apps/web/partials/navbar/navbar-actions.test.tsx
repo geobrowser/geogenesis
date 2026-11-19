@@ -38,6 +38,7 @@ const mocks = vi.hoisted(() => ({
   hasSmartAccount: true,
   authenticated: true,
   walletStall: { stalled: false, reconnecting: false, reconnect: vi.fn() },
+  stallArgs: null as { address: string | null | undefined } | null,
   dialogMounts: 0,
   shortcutCallback: null as (() => void) | null,
   pendingPersonalSpace: { isPending: false, topicId: null as string | null },
@@ -80,7 +81,12 @@ vi.mock('~/core/hooks/use-smart-account', () => ({
   }),
 }));
 // Its timers and telemetry are covered in its own suite; here only what the navbar does with it.
-vi.mock('~/core/wallet/use-wallet-stall', () => ({ useWalletStall: () => mocks.walletStall }));
+vi.mock('~/core/wallet/use-wallet-stall', () => ({
+  useWalletStall: (args: { address: string | null | undefined }) => {
+    mocks.stallArgs = args;
+    return mocks.walletStall;
+  },
+}));
 vi.mock('~/core/hooks/use-geo-profile', () => ({
   useGeoProfile: () => ({ profile: mocks.profile, isLoading: false }),
 }));
@@ -469,6 +475,38 @@ describe('NavbarActions profile menu', () => {
       render(<NavbarActions />);
 
       expect(screen.getByRole('button', { name: 'Connect' })).toBeInTheDocument();
+    });
+  });
+
+  describe('identified while the signing account is still being built', () => {
+    beforeEach(() => {
+      mocks.hasSmartAccount = false;
+      mocks.privyUser = {
+        id: 'user-a',
+        email: { address: 'max@example.com' },
+        linkedAccounts: [{ type: 'wallet', walletClientType: 'privy', chainType: 'ethereum', address }],
+      };
+    });
+
+    it('shows who they are at once, not the skeleton', () => {
+      render(<NavbarActions />);
+
+      expect(screen.getByRole('button', { name: 'Open profile menu' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Reconnect' })).not.toBeInTheDocument();
+    });
+
+    it('keeps the stall watch on the signing account', () => {
+      render(<NavbarActions />);
+
+      expect(mocks.stallArgs?.address).toBeUndefined();
+    });
+
+    it('offers Reconnect beside them once the wait counts as stalled', () => {
+      mocks.walletStall.stalled = true;
+      render(<NavbarActions />);
+
+      expect(screen.getByRole('button', { name: 'Reconnect' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Open profile menu' })).toBeInTheDocument();
     });
   });
 

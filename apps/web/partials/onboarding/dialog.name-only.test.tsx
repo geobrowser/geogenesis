@@ -20,6 +20,7 @@ const MATCH_ID = '5c1432e381c74f5e9a7e92db29b875f2';
 
 const mocks = vi.hoisted(() => ({
   matches: [] as SearchResult[],
+  address: '0x00000000000000000000000000000000000000a1',
 }));
 
 vi.mock('next/navigation', () => ({
@@ -29,9 +30,8 @@ vi.mock('~/core/hooks/use-onboarding', () => ({
   SUPPRESS_ONBOARDING_PARAM: 'suppressOnboarding',
   useOnboarding: () => ({ isOnboardingVisible: true, hideOnboarding: vi.fn() }),
 }));
-vi.mock('~/core/hooks/use-smart-account', () => ({
-  useSmartAccount: () => ({ smartAccount: { account: { address: ADDRESS } } }),
-}));
+vi.mock('~/core/wallet/account-readiness', () => ({ useAccountAddress: () => mocks.address }));
+vi.mock('~/core/hooks/use-smart-account', () => ({ useSmartAccount: () => ({ smartAccount: null }) }));
 vi.mock('~/core/hooks/use-media-query', () => ({ useMediaQuery: () => false }));
 vi.mock('~/core/sync/use-sync-engine', () => ({ useSyncEngine: () => ({ store: {} }) }));
 vi.mock('~/core/sync/orm', () => ({ E: { findFuzzy: vi.fn(async () => mocks.matches) } }));
@@ -83,6 +83,13 @@ beforeEach(() => {
   localStorage.clear();
 });
 afterEach(cleanup);
+
+describe('OnboardingDialog before the signing account is built', () => {
+  it('opens on the restored address', () => {
+    renderDialog(false);
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeInTheDocument();
+  });
+});
 
 describe('OnboardingDialog name-only run (GEO-3517)', () => {
   it('finishes after the name when nothing on Geo shares it', async () => {

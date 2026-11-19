@@ -5,10 +5,9 @@ import * as React from 'react';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { EditorClip, ReelWord } from './reel';
+import type { EditorClip, ReelSentence, ReelWord } from './reel';
 import {
   NO_TRANSCRIPT_ACTIONS,
-  type ReelSentence,
   ReelTranscript,
   type TranscriptActions,
   edgeBounds,
@@ -229,6 +228,60 @@ describe('the side transcript on a long debate (GEO-3773)', () => {
     act(() => view.frame.tell(400_000));
     // 900 - 0 - 600 × 0.25.
     expect(root.scrollTop).toBe(750);
+  });
+});
+
+describe('the side transcript without word timings (GEO-3642)', () => {
+  it('shows a long clip’s number once, before its first sentence, and tints every sentence it plays', () => {
+    // Only sentences, each about 5 s: a 28 s clip reaches into six of them.
+    const { sentences } = longDebate(12, 10);
+    const clips = [clip('a', 10_000, 38_000)];
+    const view = setUp({ words: [], sentences, wordTiming: false, clips, speakers: [1], selected: -1 });
+    const badges = view.root().querySelectorAll<HTMLElement>('[data-clip]');
+    expect(badges).toHaveLength(1);
+    const spans = [...view.root().querySelectorAll<HTMLElement>('[data-sentence]')];
+    const inClip = spans.filter(span => span.classList.contains('bg-purple/10'));
+    expect(inClip.map(span => span.dataset.sentence)).toEqual(['1', '2', '3', '4', '5', '6']);
+    expect(badges[0].nextElementSibling).toBe(inClip[0]);
+    expect(spans.filter(span => span.classList.contains('bg-pink/10'))).toHaveLength(0);
+    fireEvent.click(badges[0]);
+    expect(view.actions.current.selectClip).toHaveBeenCalledWith('a');
+  });
+
+  it('brings a clip picked elsewhere into view at its first sentence', () => {
+    const { sentences } = longDebate(12, 10);
+    const clips = [clip('a', 10_000, 15_000), clip('b', 42_000, 50_000)];
+    const view = setUp({ words: [], sentences, wordTiming: false, clips, speakers: [1, 2], selected: 0 });
+    const root = view.root();
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      if (this === root) return new DOMRect(0, 0, 360, 600);
+      // Clip 2's first sentence (turn 7) far below the box; every other sentence at the top.
+      return this.dataset.sentence === '7' ? new DOMRect(0, 2_000, 40, 24) : new DOMRect(0, 0, 40, 24);
+    });
+    root.scrollTop = 0;
+    // Picked on the strip or the monitor.
+    view.rerender({ selected: 1 });
+    // 2000 - 0 - 600 × 0.22.
+    expect(root.scrollTop).toBe(1_868);
+  });
+
+  it('leaves a word-timed transcript’s sentence with no words untinted, numbered after it', () => {
+    // Word timings, but debater 2's sentence has no words to show: it is marked as before this
+    // fallback, while the clip's own number stays on its first word.
+    const words = [word(1, 1_000, 1_400, 'Fix'), word(1, 1_500, 2_400, ' buses.')];
+    const sentences: ReelSentence[] = [
+      { slot: 1, start_ms: 1_000, end_ms: 2_400, text: 'Fix buses.' },
+      { slot: 2, start_ms: 3_000, end_ms: 8_000, text: 'No they should not.' },
+    ];
+    const clips = [clip('a', 1_000, 7_000)];
+    const view = setUp({ words, sentences, clips, speakers: [1], selected: 0 });
+    const badges = [...view.root().querySelectorAll<HTMLElement>('[data-clip]')];
+    expect(badges).toHaveLength(2);
+    expect(badges[0].nextElementSibling).toBe(view.span(0));
+    const sentence = view.root().querySelector<HTMLElement>('[data-sentence="1"]')!;
+    expect(badges[1].previousElementSibling).toBe(sentence);
+    expect(sentence.className).not.toMatch(/bg-/);
+    expect(view.span(0)).toHaveClass('bg-purple/10');
   });
 });
 

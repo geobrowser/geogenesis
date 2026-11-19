@@ -24,9 +24,9 @@ import { bountyQueryKeys } from '~/core/bounties/use-bounties';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { usePublish } from '~/core/hooks/use-publish';
-import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useToast } from '~/core/hooks/use-toast';
 import { NavUtils } from '~/core/utils/utils';
+import { useAccountAddress } from '~/core/wallet/account-readiness';
 
 import { Button, SmallButton } from '~/design-system/button';
 import { CheckCloseSmall } from '~/design-system/icons/check-close-small';
@@ -87,8 +87,7 @@ export function BountyForm({ spaceId }: Props) {
   const queryClient = useQueryClient();
   const { makeProposal } = usePublish();
   const [, setToast] = useToast();
-  const { smartAccount } = useSmartAccount();
-  const { profile } = useGeoProfile(smartAccount?.account.address);
+  const { profile } = useGeoProfile(useAccountAddress() ?? undefined);
   const access = useAccessControl(spaceId);
 
   const [name, setName] = React.useState('');

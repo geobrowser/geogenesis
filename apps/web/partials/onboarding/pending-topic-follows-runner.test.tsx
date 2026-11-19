@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   isRegistered: true,
   needsProfile: false,
   address: '0xA',
+  signer: true,
   followedLoading: false,
   follow: vi.fn(),
   useActualFollow: false,
@@ -37,8 +38,14 @@ vi.mock('~/core/hooks/use-personal-space-id', () => ({
 }));
 vi.mock('~/core/hooks/use-smart-account', () => ({
   useSmartAccount: () => ({
-    smartAccount: { account: { address: mocks.address }, sendUserOperation: mocks.sendUserOperation },
+    smartAccount: mocks.signer
+      ? { account: { address: mocks.address }, sendUserOperation: mocks.sendUserOperation }
+      : null,
   }),
+}));
+vi.mock('~/core/wallet/account-readiness', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/wallet/account-readiness')>()),
+  useAccountAddress: () => mocks.address,
 }));
 vi.mock('~/core/topics/use-followed-topics', () => ({
   useFollowedTopics: () => ({ isLoading: mocks.followedLoading }),
@@ -84,6 +91,7 @@ beforeEach(() => {
   mocks.isRegistered = true;
   mocks.needsProfile = false;
   mocks.address = '0xA';
+  mocks.signer = true;
   mocks.followedLoading = false;
   mocks.follow.mockReset();
   mocks.capture.mockClear();
@@ -115,6 +123,16 @@ function stubLocks(heldElsewhere: { value: boolean }) {
 }
 
 describe('PendingTopicFollowsRunner', () => {
+  it('starts its checks on the restored address, before the signing account is built', async () => {
+    mocks.signer = false;
+    mount();
+
+    await act(() => vi.runAllTimersAsync());
+
+    expect(mocks.getSpace).toHaveBeenCalledWith('space-1');
+    expect(mocks.follow).toHaveBeenCalledWith(picks);
+  });
+
   it('follows every pick in one call and clears them', async () => {
     mocks.follow.mockResolvedValue(true);
     const store = mount();

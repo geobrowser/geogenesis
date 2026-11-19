@@ -10,7 +10,11 @@ import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { requestSpaceMembership } from '~/core/access/request-space-membership';
 import { trackAuthOnboarding } from '~/core/auth-attempt';
 import { useCreatePersonalSpace } from '~/core/hooks/use-create-personal-space';
-import { type PersonalSpaceIdData, markPersonalProfilePublished } from '~/core/hooks/use-personal-space-id';
+import {
+  type PersonalSpaceIdData,
+  markPersonalProfilePublished,
+  personalSpaceIdQueryKey,
+} from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
 import { getSpace } from '~/core/io/queries';
@@ -75,7 +79,7 @@ export function PendingPersonalSpaceRunner() {
     // Wallet switched without a logout cleanup: a record stamped with a different
     // account would otherwise create/remap against the wrong address (or block this
     // account's onboarding). Drop it and let this account onboard fresh.
-    if (pending.address && pending.address !== address) {
+    if (pending.address && pending.address.toLowerCase() !== address.toLowerCase()) {
       setPending(null);
       return;
     }
@@ -132,7 +136,7 @@ export function PendingPersonalSpaceRunner() {
       // redirects itself onto the real space the moment `setPending(null)`
       // clears the pending state, so no navigation is needed here.
       store.remapSpaceId(pendingPersonalSpaceId(topicId), spaceId);
-      queryClient.setQueryData<PersonalSpaceIdData>(['personal-space-id', address], {
+      queryClient.setQueryData<PersonalSpaceIdData>(personalSpaceIdQueryKey(address), {
         isRegistered: true,
         personalSpaceId: spaceId,
         personalEntityId: topicId,

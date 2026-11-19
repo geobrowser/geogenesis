@@ -6,7 +6,7 @@ import { useAtom, useAtomValue } from 'jotai';
 import { useRouter } from 'next/navigation';
 
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
-import { useSmartAccount } from '~/core/hooks/use-smart-account';
+import { useAccountAddress } from '~/core/wallet/account-readiness';
 
 import { stepAtom } from '~/partials/onboarding/onboarding-atoms';
 
@@ -20,13 +20,13 @@ import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
 export function PostAuthRedirect() {
   const router = useRouter();
   const [redirect, setRedirect] = useAtom(postOnboardingRedirectAtom);
-  const { smartAccount } = useSmartAccount();
+  const accountAddress = useAccountAddress();
   const { personalSpaceId, isRegistered, isFetched } = usePersonalSpaceId();
   const onboardingStep = useAtomValue(stepAtom);
 
   React.useEffect(() => {
     if (!redirect) return;
-    if (!smartAccount || !isFetched) return;
+    if (!accountAddress || !isFetched) return;
     // No personal space yet — the onboarding dialog owns the redirect.
     if (!isRegistered || !personalSpaceId) return;
     // Onboarding mid-flight (incl. 'completed') — the dialog pushes and clears.
@@ -34,7 +34,7 @@ export function PostAuthRedirect() {
 
     setRedirect(null);
     router.push(redirect);
-  }, [redirect, smartAccount, isFetched, isRegistered, personalSpaceId, onboardingStep, router, setRedirect]);
+  }, [redirect, accountAddress, isFetched, isRegistered, personalSpaceId, onboardingStep, router, setRedirect]);
 
   return null;
 }

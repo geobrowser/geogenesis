@@ -7,8 +7,8 @@ import { useQueuedBountyInterest } from '~/core/bounties/use-queued-bounty-inter
 import type { BountyContributor, SpaceBounty } from '~/core/community/bounty-types';
 import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
-import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
+import { useAccountAddress } from '~/core/wallet/account-readiness';
 
 import { Avatar } from '~/design-system/avatar';
 
@@ -263,7 +263,7 @@ function InterestButton({
   onClick: () => Promise<boolean>;
   bountyId: string;
 }) {
-  const { smartAccount } = useSmartAccount();
+  const address = useAccountAddress();
   const openPrivySignIn = usePrivySignIn(undefined, {
     analytics: {
       component: 'bounty_interest',
@@ -286,7 +286,7 @@ function InterestButton({
     register: onClick,
   });
 
-  const isLoggedIn = Boolean(smartAccount?.account.address);
+  const isLoggedIn = Boolean(address);
   // Without a space, queued only while one is being made — with no setup under way, nothing would
   // publish it, so the button stays disabled and says why.
   const { isPending: isAccountSetupPending } = usePendingPersonalSpace();

@@ -4,6 +4,7 @@ import type { DebateTranscriptSpan } from '../api';
 import { RENDERED_TURN_SEGMENTS } from '../open-rounds-media-fixtures';
 import {
   type EditorClip,
+  type ReelSentence,
   type ReelWord,
   clipProblems,
   clipQuote,
@@ -126,6 +127,19 @@ describe('snapEdge', () => {
     expect(snapEdge(2_200, withBlank, 'end')).toBe(2_200);
     expect(stepEdge(1_900, withBlank, 'end', 1)).toBe(1_900);
   });
+
+  // GEO-3768: crosstalk chains, each word overlapping the next, so one move out lands in another word.
+  it('keeps moving out until no word holds the edge', () => {
+    const chain = [word(1, 1_000, 1_400), word(2, 1_300, 1_700), word(1, 1_600, 2_000)];
+    expect(snapEdge(1_650, chain, 'start')).toBe(1_000);
+    expect(snapEdge(1_350, chain, 'end')).toBe(2_000);
+  });
+
+  it('moves out of every word that holds the edge, not just the first', () => {
+    const nested = [word(1, 1_000, 1_500), word(2, 1_200, 1_900)];
+    expect(snapEdge(1_300, nested, 'end')).toBe(1_900);
+    expect(snapEdge(1_300, nested, 'start')).toBe(1_000);
+  });
 });
 
 describe('stepEdge', () => {
@@ -148,6 +162,54 @@ describe('clipQuote', () => {
   it('is the words said wholly inside the clip', () => {
     const words = [word(1, 0, 400, 'So'), word(1, 500, 900, 'coffee'), word(1, 1_000, 1_400, 'dates')];
     expect(clipQuote(words, 450, 1_400)).toBe('coffee dates');
+  });
+});
+
+describe('a clip’s speaker and quote from a transcript without word timings (GEO-3773)', () => {
+  const sentence = (slot: 1 | 2, start: number, end: number, text: string): ReelSentence => ({
+    slot,
+    start_ms: start,
+    end_ms: end,
+    text,
+  });
+  // `word_timing: false`: no words, only phrase-level sentences.
+  const sentences = [
+    sentence(1, 0, 4_000, 'So, coffee dates.'),
+    sentence(2, 4_200, 6_000, 'No way.'),
+    sentence(1, 6_200, 12_000, 'Hear me out on this one.'),
+    sentence(2, 12_200, 20_000, 'Fine, go on then.'),
+  ];
+
+  it('is the debater whose sentences take up most of the clip, a tie to the lower slot', () => {
+    // 1: 0–4 s and 6.2–9 s (6.8 s); 2: 4.2–6 s (1.8 s).
+    expect(clipSpeaker([], 0, 9_000, sentences)).toBe(1);
+    // 1: 11–12 s (1 s); 2: 12.2–19 s (6.8 s).
+    expect(clipSpeaker([], 11_000, 19_000, sentences)).toBe(2);
+    expect(clipSpeaker([], 3_000, 7_000, [sentence(2, 3_000, 5_000, 'a'), sentence(1, 5_000, 7_000, 'b')])).toBe(1);
+  });
+
+  it('is nobody where no sentence reaches into the clip, or there are no sentences', () => {
+    expect(clipSpeaker([], 20_500, 25_000, sentences)).toBeNull();
+    expect(clipSpeaker([], 0, 9_000)).toBeNull();
+  });
+
+  it('quotes the sentences the clip reaches into, not one it only touches at an edge', () => {
+    expect(clipQuote([], 4_100, 12_100, sentences)).toBe('No way. Hear me out on this one.');
+    expect(clipQuote([], 3_000, 13_000, sentences)).toBe(
+      'So, coffee dates. No way. Hear me out on this one. Fine, go on then.'
+    );
+    expect(clipQuote([], 20_500, 25_000, sentences)).toBe('');
+  });
+
+  it('never reads the sentences where there are words', () => {
+    const words = [word(2, 0, 400, 'So'), word(2, 500, 900, 'coffee'), word(1, 1_000, 1_400, 'dates')];
+    const others = [sentence(1, 0, 20_000, 'Something else entirely.')];
+    expect(clipSpeaker(words, 0, 1_500, others)).toBe(clipSpeaker(words, 0, 1_500));
+    expect(clipSpeaker(words, 0, 1_500, others)).toBe(2);
+    expect(clipQuote(words, 450, 1_400, others)).toBe('coffee dates');
+    // A clip of silence in a transcript with words stays nobody's, its quote empty.
+    expect(clipSpeaker(words, 2_000, 5_000, others)).toBeNull();
+    expect(clipQuote(words, 2_000, 5_000, others)).toBe('');
   });
 });
 

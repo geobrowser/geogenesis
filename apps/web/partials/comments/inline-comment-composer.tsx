@@ -6,8 +6,8 @@ import { useAtom } from 'jotai';
 
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { usePublishComment } from '~/core/hooks/use-publish-comment';
-import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { pendingCommentComposerAtom } from '~/core/state/pending-comment-intents';
+import { useAccountAddress } from '~/core/wallet/account-readiness';
 
 import { useAdjustActivityPosts } from './activity-posts';
 import { CommentInput } from './comments-section';
@@ -61,7 +61,7 @@ export function InlineCommentComposer({
     targetEntityType,
     interactionSurface: 'activity_feed',
   });
-  const { smartAccount } = useSmartAccount();
+  const accountAddress = useAccountAddress();
   const promptSignIn = usePrivySignIn(undefined, {
     analytics: {
       component: 'comment_composer',
@@ -72,7 +72,7 @@ export function InlineCommentComposer({
       auth_continuation: 'resume',
     },
   });
-  const isSignedIn = !!smartAccount;
+  const isSignedIn = !!accountAddress;
   const { isComposing, close } = composer;
   const adjustActivityPosts = useAdjustActivityPosts();
 

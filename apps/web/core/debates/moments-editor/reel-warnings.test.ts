@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import { draggedClip } from './clip-drag';
-import { type EditorClip, type ReelWord, playerWords } from './reel';
-import { reelSentences, sentenceInClip } from './reel-transcript';
+import { type EditorClip, type ReelWord, playerWords, sentenceInClip } from './reel';
+import { reelSentences } from './reel-transcript';
 import { reelWarnings, spokenLength, trimmedEnd } from './reel-warnings';
 
 const word = (slot: 1 | 2, start: number, end: number, text = 'word'): ReelWord => ({

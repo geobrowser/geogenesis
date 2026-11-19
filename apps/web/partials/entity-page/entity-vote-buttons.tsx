@@ -49,7 +49,7 @@ import { Profile } from '~/core/types';
 import { entityBrowseViewFromTypes } from '~/core/utils/entity-browse-view';
 import { observePanelNavigation } from '~/core/utils/entity-side-panel-link';
 import { resolveEntitySpaceId } from '~/core/utils/space/entity-home-space';
-import { usePrivy } from '~/core/wallet/auth-hooks';
+import { isIdentified, useAccountReadiness } from '~/core/wallet/account-readiness';
 
 import { Avatar } from '~/design-system/avatar';
 import { ResponsePositionIcon } from '~/design-system/icons/response-position-icon';
@@ -168,9 +168,8 @@ function EntityResponseButtons({
     personalSpaceId,
   } = useEntityResponse({ entityId, entityName: entity?.name, spaceId, responseKind });
   const { smartAccount } = useSmartAccount();
-  const { ready: authReady, authenticated } = usePrivy();
-  // Known to be signed out — not still restoring a session, when `authenticated` reads false too.
-  const signedOut = authReady && !authenticated;
+  const { state: readiness } = useAccountReadiness();
+  const signedOut = readiness === 'signed_out';
   const authResolving = useAuthResolving();
   const queryClient = useQueryClient();
   // Signed in without a usable space, a vote is held only when one is on its way: being created for
@@ -377,7 +376,7 @@ function EntityResponseButtons({
       if (!active) return direction === 'positive' ? responseCopy.positiveAction : responseCopy.negativeAction;
       return direction === 'positive' ? responseCopy.removePositive : responseCopy.removeNegative;
     }
-    if (smartAccount) return signedInTitle;
+    if (isIdentified(readiness)) return signedInTitle;
     // Signed out, a press votes on this device: the arrow does what it says (GEO-3214).
     if (signedOut) {
       if (localDirection === direction) return RESPONSE_LOCAL_ONLY_COPY;
