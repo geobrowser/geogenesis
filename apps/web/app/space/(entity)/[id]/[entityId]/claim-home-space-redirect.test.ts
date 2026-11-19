@@ -3,14 +3,22 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import type { Entity } from '~/core/types';
 
-import { claimHomeSpaceRedirectTarget, redirectClaimToHomeSpace } from './claim-home-space-redirect';
+import {
+  claimCanonicalMetadata,
+  claimHomeSpaceRedirectTarget,
+  redirectClaimToHomeSpace,
+} from './claim-home-space-redirect';
 
 const mocks = vi.hoisted(() => ({
   cachedFetchEntity: vi.fn(),
+  cachedFetchEntityPage: vi.fn(),
   redirect: vi.fn(),
 }));
 
-vi.mock('./cached-fetch-entity', () => ({ cachedFetchEntity: mocks.cachedFetchEntity }));
+vi.mock('./cached-fetch-entity', () => ({
+  cachedFetchEntity: mocks.cachedFetchEntity,
+  cachedFetchEntityPage: mocks.cachedFetchEntityPage,
+}));
 vi.mock('next/navigation', () => ({ redirect: mocks.redirect }));
 
 const NAME = 'a126ca530c8e48d5b88882c734c38935';
@@ -138,5 +146,43 @@ describe('redirectClaimToHomeSpace', () => {
     await redirectClaimToHomeSpace({ routeEntity: claim([]), spaceId: DEBATES, searchParams: {} });
 
     expect(mocks.redirect).not.toHaveBeenCalled();
+  });
+});
+
+describe('claimCanonicalMetadata', () => {
+  const params = (spaceId: string) => Promise.resolve({ id: spaceId, entityId: CLAIM });
+
+  beforeEach(() => {
+    mocks.cachedFetchEntity.mockReset();
+    mocks.cachedFetchEntityPage.mockReset();
+  });
+
+  it('names the home-space URL, with the tab, from any space', async () => {
+    mocks.cachedFetchEntityPage.mockResolvedValue({ entity: claim([]) });
+    mocks.cachedFetchEntity.mockResolvedValue(claim([value(US_POLITICS)]));
+
+    expect(await claimCanonicalMetadata({ params: params(DEBATES), subPath: 'sources' })).toEqual({
+      alternates: { canonical: `https://www.geobrowser.io/space/${US_POLITICS}/${CLAIM}/sources` },
+    });
+  });
+
+  it('gives a claim named in two spaces one canonical URL', async () => {
+    mocks.cachedFetchEntityPage.mockResolvedValue({ entity: claim([value(DEBATES)]) });
+    mocks.cachedFetchEntity.mockResolvedValue(claim([value(US_POLITICS), value(DEBATES)]));
+
+    const fromDebates = await claimCanonicalMetadata({ params: params(DEBATES) });
+    const fromHome = await claimCanonicalMetadata({ params: params(US_POLITICS) });
+
+    expect(fromDebates).toEqual(fromHome);
+  });
+
+  it('adds nothing for other entities or a failed read', async () => {
+    const topic = { ...claim([]), types: [{ id: 'aaaabbbbccccddddeeeeffff00001111', name: 'Topic' }] } as Entity;
+    mocks.cachedFetchEntityPage.mockResolvedValue({ entity: topic });
+    expect(await claimCanonicalMetadata({ params: params(DEBATES) })).toEqual({});
+
+    mocks.cachedFetchEntityPage.mockResolvedValue({ entity: claim([]) });
+    mocks.cachedFetchEntity.mockRejectedValue(new Error('graph down'));
+    expect(await claimCanonicalMetadata({ params: params(DEBATES) })).toEqual({});
   });
 });

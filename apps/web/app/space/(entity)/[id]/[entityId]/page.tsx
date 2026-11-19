@@ -20,7 +20,7 @@ import { BountyDetailSections } from '~/partials/bounties/bounty-detail-sections
 import { CommunityCallRecording } from '~/partials/community-calls/community-call-recording';
 
 import { cachedFetchDebatePageMedia, cachedFetchEntityPage, cachedReadDebateVisibility } from './cached-fetch-entity';
-import { redirectClaimToHomeSpace } from './claim-home-space-redirect';
+import { claimCanonicalMetadata, redirectClaimToHomeSpace } from './claim-home-space-redirect';
 import DefaultEntityPage from './default-entity-page';
 import PostEntityPage from './post-entity-page';
 import { ProfileEntityServerContainer } from './profile-entity-server-container';
@@ -28,6 +28,10 @@ import { ProfileEntityServerContainer } from './profile-entity-server-container'
 interface Props {
   params: Promise<{ id: string; entityId: string }>;
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}
+
+export function generateMetadata(props: Props) {
+  return claimCanonicalMetadata({ params: props.params });
 }
 
 export default async function EntityTemplateStrategy(props: Props) {

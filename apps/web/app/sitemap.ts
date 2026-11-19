@@ -1,5 +1,7 @@
 import type { MetadataRoute } from 'next';
 
+import { CANONICAL_SITE } from '~/core/canonical-site';
+
 /**
  * The fixed public pages, so crawlers have a list instead of only the links they
  * happen to follow. Before this, /sitemap.xml was a 404.
@@ -17,7 +19,7 @@ import type { MetadataRoute } from 'next';
  * URLs, and those must match the marketing site's canonical, which is
  * www.geobrowser.io.
  */
-const SITE = 'https://www.geobrowser.io';
+const SITE = CANONICAL_SITE;
 
 const PAGES: { path: string; priority: number }[] = [
   { path: '/', priority: 1 },
