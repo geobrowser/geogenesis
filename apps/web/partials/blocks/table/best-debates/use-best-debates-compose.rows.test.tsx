@@ -1,4 +1,4 @@
-import { cleanup, render, renderHook } from '@testing-library/react';
+import { act, cleanup, render, renderHook } from '@testing-library/react';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -116,6 +116,7 @@ describe('To rank’s ranked matches', () => {
     const { result } = renderHook(() =>
       useBestDebatesCompose({
         enabled: true,
+        openOnToRank: true,
         blockId: 'block',
         blockSpaceId: 'debates',
         isMobile: false,
@@ -135,5 +136,27 @@ describe('To rank’s ranked matches', () => {
     expect(panel.props.fallbackSpaceId).toBe('debates');
     // The To rank count stays unranked-only.
     expect(result.current.teamView.toRankCount).toBe(0);
+  });
+
+  it('asks for none while All is showing, so no read is made for a list nobody sees', () => {
+    const { result } = renderHook(() =>
+      useBestDebatesCompose({
+        enabled: true,
+        blockId: 'block',
+        blockSpaceId: 'debates',
+        isMobile: false,
+        orderedIds: ['r1', 'r2'],
+        setOrderedIds: vi.fn(),
+        hasUnpublishedChanges: false,
+        nameOf: () => null,
+        personalSpaceId: 'me',
+        saveMySubmission: vi.fn(async () => null),
+        isSaving: false,
+        pushDown: { pushedDownEntityIds: ['p1'] } as never,
+      })
+    );
+    expect(mocks.toRankArgs.at(-1)).toMatchObject({ rankedEntityIds: [], downRankedEntityIds: [] });
+    act(() => result.current.teamView.onModeChange('to_rank'));
+    expect(mocks.toRankArgs.at(-1)).toMatchObject({ rankedEntityIds: ['r1', 'r2'], downRankedEntityIds: ['p1'] });
   });
 });
