@@ -31,6 +31,7 @@ let noWalletAttempt = 0;
 let awaitingWallet = false;
 let walletSeen = false;
 let walletRetryUsed = false;
+let postsInFlight = 0;
 
 function clearRetry() {
   if (retryTimer !== null) clearTimeout(retryTimer);
@@ -49,11 +50,15 @@ function scheduleRetry(refresh: () => void) {
 }
 
 async function resyncWithFreshToken(refresh: () => void) {
+  // A POST in flight answers for the newest token; resetting `sentToken` would discard its `issued`.
+  if (postsInFlight > 0) return;
   const startedIn = epoch;
   setCachedIdentityToken(null);
   sentToken = null;
   const token = await getCachedIdentityToken();
-  if (token && startedIn === epoch) await syncWalletSession(token, refresh);
+  if (startedIn !== epoch) return;
+  if (token) await syncWalletSession(token, refresh);
+  else if (awaitingWallet) scheduleNoWalletRetry(refresh);
 }
 
 function scheduleNoWalletRetry(refresh: () => void) {
@@ -86,9 +91,11 @@ export function noteEmbeddedWallet(refresh: () => void) {
 export async function syncWalletSession(token: string, refresh: () => void): Promise<void> {
   if (halted || token === sentToken) return;
   sentToken = token;
+  awaitingWallet = false;
   const startedIn = epoch;
 
   let response: Response;
+  postsInFlight += 1;
   try {
     response = await fetch(WALLET_SESSION_ROUTE, {
       method: 'POST',
@@ -98,6 +105,8 @@ export async function syncWalletSession(token: string, refresh: () => void): Pro
   } catch {
     if (sentToken === token) scheduleRetry(refresh);
     return;
+  } finally {
+    postsInFlight -= 1;
   }
   if (startedIn !== epoch) {
     // Signed out while this was in flight: its Set-Cookie may have landed after the DELETE.

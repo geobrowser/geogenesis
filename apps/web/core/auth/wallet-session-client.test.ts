@@ -143,6 +143,40 @@ describe('syncWalletSession', () => {
     expect(mocks.setToken).toHaveBeenCalledOnce();
   });
 
+  it('lets an in-flight POST for a reissued token answer when the wallet appears', async () => {
+    mocks.fetch.mockImplementationOnce(() => answer(403, { wallet: null, status: 'no_wallet' }));
+    await syncWalletSession('before-wallet', mocks.refresh);
+
+    let release!: () => void;
+    mocks.fetch.mockImplementationOnce(
+      () =>
+        new Promise<Response>(resolve => {
+          release = () => resolve(new Response(JSON.stringify({ wallet: WALLET, status: 'issued' })));
+        })
+    );
+    const pending = syncWalletSession('reissued', mocks.refresh);
+    await vi.waitFor(() => expect(mocks.fetch).toHaveBeenCalledTimes(2));
+    noteEmbeddedWallet(mocks.refresh);
+    release();
+    await pending;
+
+    expect(mocks.refresh).toHaveBeenCalledOnce();
+    expect(mocks.getToken).not.toHaveBeenCalled();
+    expect(mocks.setToken).not.toHaveBeenCalled();
+  });
+
+  it('keeps the fallback going when a fresh token is not available yet', async () => {
+    vi.useFakeTimers();
+    mocks.fetch.mockImplementation(() => answer(403, { wallet: null, status: 'no_wallet' }));
+    mocks.getToken.mockResolvedValueOnce(null);
+
+    await syncWalletSession('t1', mocks.refresh);
+    await vi.advanceTimersByTimeAsync(NO_WALLET_RETRY_DELAYS_MS[2] * 4);
+
+    expect(mocks.setToken).toHaveBeenCalledTimes(NO_WALLET_RETRY_DELAYS_MS.length);
+    expect(mocks.fetch).toHaveBeenCalledTimes(NO_WALLET_RETRY_DELAYS_MS.length);
+  });
+
   it('bounds fresh-token retries when the wallet never appears', async () => {
     vi.useFakeTimers();
     mocks.fetch.mockImplementation(() => answer(403, { wallet: null, status: 'no_wallet' }));
