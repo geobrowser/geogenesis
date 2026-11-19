@@ -1,4 +1,5 @@
-import { act, cleanup, renderHook } from '@testing-library/react';
+import '@testing-library/jest-dom/vitest';
+import { act, cleanup, renderHook, screen } from '@testing-library/react';
 
 import * as React from 'react';
 
@@ -6,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { BallotGrades } from '~/core/blocks/ranking/ranking-grades';
 import { getUnsavedRankingDraft, resetRankingPublishStateForTests } from '~/core/blocks/ranking/ranking-publish-queue';
+import { Toast } from '~/core/hooks/use-toast';
 
 import { useBlockGrading } from './use-best-debates-block-ranking';
 
@@ -33,12 +35,23 @@ function useHarness(
     grades,
   }),
   busy: { published?: { ids: string[]; grades: BallotGrades } } = {},
-  options: { reorder?: (entityId: string) => boolean; placeAfterGrade?: boolean; draftKey?: string } = {}
+  {
+    initial,
+    ...options
+  }: {
+    reorder?: (entityId: string) => boolean;
+    placeAfterGrade?: boolean;
+    draftKey?: string;
+    nameOf?: (entityId: string) => string | null;
+    initial?: { ids: string[]; grades: BallotGrades };
+  } = {}
 ) {
-  const published = React.useRef<{ ids: string[]; grades: BallotGrades }>({
-    ids: [id(1)],
-    grades: new Map([[id(1), 'A']]),
-  });
+  const published = React.useRef<{ ids: string[]; grades: BallotGrades }>(
+    initial ?? {
+      ids: [id(1)],
+      grades: new Map([[id(1), 'A']]),
+    }
+  );
   const [draft, setDraftState] = React.useState(published.current);
   const grading = useBlockGrading({
     blockId: id(99),
@@ -329,5 +342,119 @@ describe('one publish per sitting from the block (Preston, 16 Nov)', () => {
     await act(async () => result.current.grading.grade(id(2), 'B'));
     unmount();
     expect(getUnsavedRankingDraft('me:block')).toBeNull();
+  });
+});
+
+describe('Undo of a Remove from the block (GEO-3805)', () => {
+  const initial = {
+    ids: [id(1), id(2), id(3)],
+    grades: new Map<string, 'A' | 'B' | 'C'>([
+      [id(1), 'A'],
+      [id(2), 'A'],
+      [id(3), 'B'],
+    ]),
+  };
+  const names = new Map([[id(2), 'Is AI good?']]);
+  const nameOf = (entityId: string) => names.get(entityId) ?? null;
+  // The app's toast, drawn beside the block.
+  const withToast = ({ children }: { children: React.ReactNode }) => (
+    <>
+      {children}
+      <Toast />
+    </>
+  );
+  const renderBlock = (publish: (ids: string[], grades?: BallotGrades) => Promise<boolean>) =>
+    renderHook(() => useHarness(publish, undefined, undefined, { initial, nameOf }), { wrapper: withToast });
+  const undo = () => act(async () => screen.getByRole('button', { name: 'Undo' }).click());
+
+  it('names the debate, and Undo publishes it back at its place and grade, keeping a later grade', async () => {
+    const publish = vi.fn().mockResolvedValue(true);
+    const { result } = renderBlock(publish);
+    await act(async () => result.current.grading.remove(id(2)));
+    expect(publish).toHaveBeenLastCalledWith([id(1), id(3)], expect.any(Map));
+    expect(screen.getByRole('status')).toHaveTextContent('Removed “Is AI good?”.');
+    // Then 3 is regraded A (top of A).
+    await act(async () => result.current.grading.grade(id(3), 'A', 'list'));
+    expect(publish).toHaveBeenLastCalledWith([id(3), id(1)], expect.any(Map));
+
+    await undo();
+    expect(publish).toHaveBeenCalledTimes(3);
+    const [sentIds, sentGrades] = publish.mock.calls[2]!;
+    expect(sentIds).toEqual([id(3), id(1), id(2)]);
+    expect(sentGrades.get(id(2))).toBe('A');
+    expect(sentGrades.get(id(3))).toBe('A');
+    expect(result.current.draft.ids).toEqual([id(3), id(1), id(2)]);
+    // A restore is not a grade: only the remove and the regrade were recorded.
+    expect(mocks.record).toHaveBeenCalledTimes(2);
+  });
+
+  it('says just Removed. when the name is unknown', async () => {
+    const { result } = renderBlock(vi.fn().mockResolvedValue(true));
+    await act(async () => result.current.grading.remove(id(3)));
+    expect(screen.getByRole('status')).toHaveTextContent(/^Removed\.Undo$/);
+  });
+
+  it('changes nothing when the debate was graded back in before Undo', async () => {
+    const publish = vi.fn().mockResolvedValue(true);
+    const { result } = renderBlock(publish);
+    await act(async () => result.current.grading.remove(id(2)));
+    // Graded again from its row: C, at the top of C.
+    await act(async () => result.current.grading.grade(id(2), 'C', 'list'));
+    expect(publish).toHaveBeenCalledTimes(2);
+    await undo();
+    // Nothing more to send: it keeps its new grade and place.
+    expect(publish).toHaveBeenCalledTimes(2);
+    expect(result.current.draft.ids).toEqual([id(1), id(3), id(2)]);
+    expect(result.current.grading.gradeOf(id(2))).toBe('C');
+  });
+
+  it('Undo while the remove is still publishing goes out in the follow-up', async () => {
+    const first = deferred();
+    const publish = vi.fn().mockReturnValueOnce(first.promise).mockResolvedValue(true);
+    const { result } = renderBlock(publish);
+    await act(async () => result.current.grading.remove(id(2)));
+    await undo();
+    // Back on the ranking at once, but nothing else goes out while the remove is out.
+    expect(result.current.draft.ids).toEqual(initial.ids);
+    expect(publish).toHaveBeenCalledTimes(1);
+    await act(async () => first.resolve(true));
+    expect(publish).toHaveBeenCalledTimes(2);
+    expect(publish.mock.calls[1]![0]).toEqual(initial.ids);
+    expect(publish.mock.calls[1]![1].get(id(2))).toBe('A');
+    expect(result.current.grading.isSaving(id(2))).toBe(false);
+  });
+
+  it('Undo after the remove failed to publish: Try again then Undo puts it back', async () => {
+    const publish = vi.fn().mockResolvedValueOnce(false).mockResolvedValue(true);
+    const { result } = renderBlock(publish);
+    await act(async () => result.current.grading.remove(id(2)));
+    expect(result.current.grading.publishFailed?.(id(2))).toBe(true);
+    await act(async () => result.current.grading.retry?.());
+    expect(publish.mock.calls[1]![0]).toEqual([id(1), id(3)]);
+    await undo();
+    expect(publish).toHaveBeenCalledTimes(3);
+    expect(publish.mock.calls[2]![0]).toEqual(initial.ids);
+    expect(result.current.grading.publishFailed?.(id(2))).toBe(false);
+  });
+
+  it('Undo of a remove that never went out sends nothing and leaves nothing marked Not saved', async () => {
+    const publish = vi.fn().mockResolvedValueOnce(false).mockResolvedValue(true);
+    const { result } = renderBlock(publish);
+    await act(async () => result.current.grading.remove(id(2)));
+    await undo();
+    expect(result.current.draft.ids).toEqual(initial.ids);
+    expect(publish).toHaveBeenCalledTimes(1);
+    expect(result.current.grading.publishFailed?.(id(2))).toBe(false);
+    expect(result.current.grading.isSaving(id(2))).toBe(false);
+  });
+
+  it('takes its toast away when the block goes away', async () => {
+    const { result, unmount } = renderBlock(vi.fn().mockResolvedValue(true));
+    await act(async () => result.current.grading.remove(id(2)));
+    expect(screen.getByRole('button', { name: 'Undo' })).toBeInTheDocument();
+    // The toast lives with the app, not the block: draw it again on its own after the block goes.
+    unmount();
+    renderHook(() => null, { wrapper: withToast });
+    expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull();
   });
 });

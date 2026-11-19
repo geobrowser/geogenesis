@@ -295,6 +295,15 @@ export const GRADE_NOT_SAVED_COPY = 'Not saved';
 export const GRADE_TRY_AGAIN_LABEL = 'Try again';
 
 /**
+ * The toast after a debate is taken out of your ranking (GEO-3805, approved 19 Nov), with Undo
+ * (`GRADE_UNDO_LABEL`). Just `Removed.` when its name isn't known.
+ */
+export function removedFromRankingCopy(name: string | null | undefined): string {
+  const trimmed = name?.trim();
+  return trimmed ? `Removed “${trimmed}”.` : 'Removed.';
+}
+
+/**
  * Where the tier lines start on a ranking with no grades: A for the top fifth, B for the next two
  * fifths, as Preston split his own (20 / 40 / 41 of 101). Only a starting point the ranker moves.
  */

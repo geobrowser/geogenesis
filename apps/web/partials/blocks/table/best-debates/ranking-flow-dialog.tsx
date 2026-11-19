@@ -9,6 +9,8 @@ import cx from 'classnames';
 import { SquareButton } from '~/design-system/button';
 import { Close } from '~/design-system/icons/close';
 
+import { isInRankingToast } from './use-removed-toast';
+
 type Props = {
   open: boolean;
   /** Called for the close button, Escape and a press on the backdrop. */
@@ -73,6 +75,11 @@ export function RankingFlowDialog({
             aria-describedby={undefined}
             aria-label={ariaLabel}
             onKeyDown={onKeyDown}
+            // A ranking toast's Undo (GEO-3805: Removed “Name”. from the watch popup) acts on the
+            // popup's debate; pressing it must not close the popup.
+            onPointerDownOutside={event => {
+              if (isInRankingToast(event.target)) event.preventDefault();
+            }}
             // The dialog itself takes focus, not its close button: a ring on the close control is
             // the first thing a tap-opened dialog showed on a phone.
             onOpenAutoFocus={event => {

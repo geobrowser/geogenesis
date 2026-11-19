@@ -22,6 +22,7 @@ import { countBallotChanges, unpublishedChangesLabel } from '~/core/blocks/ranki
 import {
   GRADE_YOUR_RANKING_TITLE,
   type Grade,
+  type GradedBallot,
   NO_GRADES,
   TIER_LINES_AUTO_OPEN_MIN,
   TIER_LINES_NOT_NOW_LABEL,
@@ -96,6 +97,7 @@ import { CopyTeamRankingStart } from './best-debates/copy-team-ranking-start';
 import { useBestDebatesCompose } from './best-debates/use-best-debates-compose';
 import { useBestDebatesPushDownSlot } from './best-debates/use-best-debates-push-down-slot';
 import { useBestDebatesRankingFilters } from './best-debates/use-best-debates-ranking-filters';
+import { useRemovedToast } from './best-debates/use-removed-toast';
 import { useUnpublishedLeaveGuard } from './best-debates/use-unpublished-leave-guard';
 import { RankingBallotReadError } from './ranking-ballot-read-error';
 import { RankingComposeCreateEntityPanel } from './ranking-compose-create-entity-panel';
@@ -298,6 +300,10 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
     getBasedOnGrades,
     markPublished: markDraftPublished,
   } = useRankingComposeDraft(composeSeed);
+  // The draft as of the last change here, so presses quicker than a render build on each other.
+  const latestDraft = React.useRef<GradedBallot>({ ids: orderedIds, grades: draftGrades });
+  latestDraft.current = { ids: orderedIds, grades: draftGrades };
+  const showRemovedToast = useRemovedToast();
   const [searchQuery, setSearchQuery] = React.useState('');
   const [activeSwipeRowKey, setActiveSwipeRowKey] = React.useState<string | null>(null);
   const [entitySheetTarget, setEntitySheetTarget] = React.useState<{
@@ -510,9 +516,15 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
     setOrderedIds(prev => (prev.includes(entityId) ? prev : [...prev, entityId]));
   };
 
+  // A row's trash (GEO-3805): out of the draft, with the toast's Undo. Not a grade change, so it
+  // records no grade event (`changeDraft` is the popup's).
   const removeFromMyRanking = (entityId: string) => {
     setActiveSwipeRowKey(null);
-    setOrderedIds(prev => prev.filter(id => id !== entityId));
+    const before = latestDraft.current;
+    const next = removeEntry(before.ids, before.grades, entityId);
+    latestDraft.current = next;
+    setDraft(next.ids, next.grades);
+    offerUndoRemove(entityId, before);
   };
 
   const reorderMyRanking = (nextIds: string[]) => {
@@ -876,9 +888,21 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   // The watch popup's grade row on this screen (GEO-3729): a grade goes into the draft, like every
   // other change here, and the screen's Publish sends it.
   const draftPlaces = new Map(orderedIds.map((id, index) => [ID.uuidToHex(id), index + 1]));
-  // The draft as of the last change here, so presses quicker than a render build on each other.
-  const latestDraft = React.useRef({ ids: orderedIds, grades: draftGrades });
-  latestDraft.current = { ids: orderedIds, grades: draftGrades };
+  /**
+   * Removed “Name”. with Undo (GEO-3805), after a remove from Your ranking or the popup. Undo puts
+   * the debate back where it was in `before`, with its grade, into the draft as it is by then, so
+   * later edits stay; nothing changes when it is already back. Like Down rank's Undo, a restore
+   * records no grade event.
+   */
+  const offerUndoRemove = (entityId: string, before: GradedBallot) => {
+    showRemovedToast(nameOf(entityId), () => {
+      const current = latestDraft.current;
+      const restored = restoreEntry(current, before, entityId);
+      if (restored === current) return;
+      latestDraft.current = restored;
+      setDraft(restored.ids, restored.grades);
+    });
+  };
   const changeDraft = (
     debateId: string,
     change: (draft: { ids: string[]; grades: typeof draftGrades }) => { ids: string[]; grades: typeof draftGrades },
@@ -913,7 +937,11 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
           changeDraft(debateId, draft => gradeInto(draft.ids, draft.grades, debateId, grade), method),
         // Its Done keeps the move in the draft, like any placement on this screen.
         reorder: debateId => bestDebates.reorder(debateId),
-        remove: debateId => changeDraft(debateId, draft => removeEntry(draft.ids, draft.grades, debateId), 'popup'),
+        remove: debateId => {
+          const before = latestDraft.current;
+          changeDraft(debateId, draft => removeEntry(draft.ids, draft.grades, debateId), 'popup');
+          offerUndoRemove(debateId, before);
+        },
         // Counted as Down rank's own `push_down` once its downvote lands.
         downRank: debateId => {
           draftBeforeDownRank.current.set(ID.uuidToHex(debateId), { ids: orderedIds, grades: draftGrades });

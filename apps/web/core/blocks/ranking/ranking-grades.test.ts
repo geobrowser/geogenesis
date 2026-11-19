@@ -12,6 +12,7 @@ import {
   placeAsIn,
   pruneGrades,
   removeEntry,
+  removedFromRankingCopy,
   restoreEntry,
   sameGrades,
   sortIntoTiers,
@@ -327,5 +328,51 @@ describe('placeAsIn (the block’s batch replaying a move)', () => {
   it('changes nothing for a debate the snapshot doesn’t hold', () => {
     const now = { ids: ids(1), grades: new Map<string, Grade>() };
     expect(placeAsIn(now, { ids: [], grades: new Map() }, id(2))).toBe(now);
+  });
+});
+
+describe('Undo of a Remove (GEO-3805)', () => {
+  const ballot = {
+    ids: ids(1, 2, 3, 4),
+    grades: g([
+      [1, 'A'],
+      [2, 'A'],
+      [3, 'B'],
+      [4, 'C'],
+    ]),
+  };
+
+  it('puts the removed debate back at its place and grade after a later drag, keeping the drag', () => {
+    const removed = removeEntry(ballot.ids, ballot.grades, id(2));
+    // Then 4 was dragged up into B, above 3.
+    const dragged = {
+      ids: ids(1, 4, 3),
+      grades: g([
+        [1, 'A'],
+        [4, 'B'],
+        [3, 'B'],
+      ]),
+    };
+    expect(removed.ids).toEqual(ids(1, 3, 4));
+    const restored = restoreEntry(dragged, ballot, id(2));
+    expect(restored.ids).toEqual(ids(1, 2, 4, 3));
+    expect(restored.grades.get(id(2))).toBe('A');
+    expect(restored.grades.get(id(4))).toBe('B');
+  });
+
+  it('after two removes, undoing the second brings back only the second', () => {
+    const first = removeEntry(ballot.ids, ballot.grades, id(2));
+    const second = removeEntry(first.ids, first.grades, id(3));
+    // The second toast's snapshot is the ballot just before the second remove.
+    const restored = restoreEntry(second, first, id(3));
+    expect(restored.ids).toEqual(ids(1, 3, 4));
+    expect(restored.grades.get(id(3))).toBe('B');
+    expect(restored.grades.has(id(2))).toBe(false);
+  });
+
+  it('names the debate in the toast, or just says Removed.', () => {
+    expect(removedFromRankingCopy('Is AI good?')).toBe('Removed “Is AI good?”.');
+    expect(removedFromRankingCopy('  ')).toBe('Removed.');
+    expect(removedFromRankingCopy(null)).toBe('Removed.');
   });
 });

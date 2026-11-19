@@ -1,4 +1,7 @@
-import { act, cleanup, renderHook } from '@testing-library/react';
+import '@testing-library/jest-dom/vitest';
+import { act, cleanup, render, renderHook } from '@testing-library/react';
+
+import type * as React from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -10,6 +13,8 @@ const mocks = vi.hoisted(() => ({
   publishNow: vi.fn(async (_ids: string[], _grades?: Map<string, string>) => true),
   reorder: vi.fn((_entityId: string) => true),
   published: null as null | { ids: string[]; grades: Map<string, string> },
+  entries: [] as Array<{ entityId: string; name: string }>,
+  setToast: vi.fn(),
 }));
 
 vi.mock('~/core/blocks/ranking/use-ranking-submissions', () => ({
@@ -28,7 +33,11 @@ vi.mock('~/core/blocks/ranking/use-my-pushed-down-debates', () => ({
   useBestDebatesBallotPublisher: () => ({ publish: vi.fn(), isPublishing: false }),
 }));
 vi.mock('~/core/blocks/ranking/use-ranking-entry-entities', () => ({
-  useRankingEntryEntities: () => ({ entries: [] }),
+  useRankingEntryEntities: () => ({ entries: mocks.entries }),
+}));
+vi.mock('~/core/hooks/use-toast', () => ({
+  useSetToast: () => mocks.setToast,
+  useClearToastIfShowing: () => vi.fn(),
 }));
 vi.mock('~/core/hooks/use-personal-space-id', () => ({ usePersonalSpaceId: () => ({ personalSpaceId: 'me' }) }));
 vi.mock('./use-best-debates-push-down-slot', () => ({
@@ -63,6 +72,8 @@ beforeEach(() => {
   mocks.reorder.mockReset();
   mocks.reorder.mockReturnValue(true);
   mocks.published = null;
+  mocks.entries = [];
+  mocks.setToast.mockReset();
 });
 afterEach(cleanup);
 
@@ -172,5 +183,39 @@ describe('grade then fine-tune from the popup: one publish (Preston, 16 Nov)', (
     expect(mocks.publishNow).toHaveBeenCalledTimes(1);
     expect(mocks.publishNow.mock.calls[0]![0]).toEqual(['a1', 'n', 'b1']);
     expect(mocks.publishNow.mock.calls[0]![1]?.get('n')).toBe('A');
+  });
+});
+
+describe('Remove on the block (GEO-3805)', () => {
+  it('names the removed debate in the toast, and its Undo publishes it back', async () => {
+    mocks.published = {
+      ids: ['a1', 'a2', 'b1'],
+      grades: new Map([
+        ['a1', 'A'],
+        ['a2', 'A'],
+        ['b1', 'B'],
+      ]),
+    };
+    mocks.entries = [{ entityId: 'a2', name: 'Is AI good?' }];
+    const { result, rerender } = renderBlock();
+    await act(async () => result.current.grading?.remove('a2'));
+    expect(mocks.publishNow.mock.calls[0]![0]).toEqual(['a1', 'b1']);
+    // The ballot reads back as published.
+    mocks.published = {
+      ids: ['a1', 'b1'],
+      grades: new Map([
+        ['a1', 'A'],
+        ['b1', 'B'],
+      ]),
+    };
+    rerender();
+
+    const toast = mocks.setToast.mock.calls.at(-1)?.[0] as React.ReactElement;
+    const { getByText, getByRole } = render(toast);
+    expect(getByText('Removed “Is AI good?”.')).toBeInTheDocument();
+    await act(async () => getByRole('button', { name: 'Undo' }).click());
+    expect(mocks.publishNow).toHaveBeenCalledTimes(2);
+    expect(mocks.publishNow.mock.calls[1]![0]).toEqual(['a1', 'a2', 'b1']);
+    expect(mocks.publishNow.mock.calls[1]![1]?.get('a2')).toBe('A');
   });
 });
