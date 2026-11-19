@@ -19,17 +19,20 @@ import { useBestDebatesMatchingList } from './use-best-debates-matching-list';
 export function BestDebatesMatchingList({
   query,
   topicIds,
+  filterClauses,
   grouped,
   rankOf,
   render,
 }: {
   query: string;
   topicIds: readonly string[];
+  /** The recorded, debater and claim filters as entity clauses (GEO-3774). */
+  filterClauses?: readonly Record<string, unknown>[];
   grouped: boolean;
   rankOf: (entityId: string) => number | undefined;
   render: (entityId: string, rank: number | undefined, name: string | null) => React.ReactNode;
 }) {
-  const list = useBestDebatesMatchingList({ active: true, query, topicIds });
+  const list = useBestDebatesMatchingList({ active: true, query, topicIds, filterClauses });
   const outer = React.useContext(BestDebateDisplaysContext);
   const ids = React.useMemo(() => (list.debates ?? []).map(debate => debate.entityId), [list.debates]);
   const own = useBestDebateDisplays(ids);

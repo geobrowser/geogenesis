@@ -2,16 +2,35 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { GeoChatRequestError } from '../api';
+import * as React from 'react';
+
+import { GeoChatRequestError, getDebateTranscript } from '../api';
 import { debateQueryKeys, debateQueryNetworkOptions, useGeoChatAuth } from '../hooks';
-import { type MomentBackfillBody, getMomentBackfill, postMomentBackfill } from './api';
+import {
+  type AudioPeaksReady,
+  type AudioPeaksStatus,
+  type MomentBackfillBody,
+  type MomentsTranscript,
+  getAudioPeaks,
+  getMomentBackfill,
+  getMomentsTranscript,
+  postMomentBackfill,
+} from './api';
+import { isTranscriptWaiting, transcriptPollDelay, transcriptSettled } from './moments-transcript';
 import { jobInFlight, reelJob } from './reel-status';
+import { PEAKS_GIVE_UP_MS, type PeaksView, decodePeaks, isPeaksWaiting, peaksPollDelay, peaksView } from './waveform';
 
 /** How often the editor reads a queued or rendering request again. */
 export const REEL_JOB_POLL_MS = 4_000;
 
 /** Media admins rarely change mid-visit; the answer is kept a while so the menu does not re-ask. */
 const MEDIA_ADMIN_STALE_MS = 5 * 60_000;
+
+/** How long the editor's words are kept before the next open asks again (GEO-3642). */
+const TRANSCRIPT_STALE_MS = 5 * 60_000;
+
+/** What the editor snaps to and lists: every word, and whole sentences. */
+const TRANSCRIPT_INCLUDE = ['words', 'sentences'] as const;
 
 /**
  * geo-chat's answer that the viewer is not a media admin: off the allowlist (403
@@ -131,4 +150,110 @@ export function useRefreshAfterReel(debateId: string) {
     void queryClient.invalidateQueries({ queryKey: debateQueryKeys.media(debateId) });
     void queryClient.invalidateQueries({ queryKey: debateQueryKeys.transcripts(debateId) });
   };
+}
+
+/**
+ * The debate's audio peaks for the editor's waveform (GEO-3673). The first read asks geo-chat to
+ * build them if it hasn't; while they are built, they are read again every 5 s, then every 15 s after
+ * two minutes, and not at all after ten, when the editor says it is still waiting. Once ready they are
+ * kept for the visit. A geo-chat without the route (404), or any error, is no waveform: the editor
+ * works the same without one.
+ */
+export function useAudioPeaks(debateId: string, enabled: boolean): PeaksView {
+  const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
+  // When this visit first saw the peaks being built: the ten minutes count from there, so reopening
+  // the editor later waits afresh.
+  const waitingSince = React.useRef<number | null>(null);
+  const query = useQuery({
+    ...debateQueryNetworkOptions,
+    queryKey: debateQueryKeys.audioPeaks(debateId, accountKey),
+    queryFn: async ({ signal }): Promise<AudioPeaksStatus | null> => {
+      try {
+        return await getAudioPeaks(debateId, getPrivyIdentityToken, accountKey, signal);
+      } catch (error) {
+        if (error instanceof GeoChatRequestError && error.status === 404) return null;
+        throw error;
+      }
+    },
+    enabled: enabled && authenticated,
+    retry: (failureCount, error) => !isMediaAdminRefusal(error) && failureCount < 2,
+    // Ready peaks don't change under the same recordings; anything else is asked again on the next open.
+    staleTime: query => (query.state.data?.status === 'ready' ? Infinity : 0),
+    refetchInterval: query => {
+      if (!isPeaksWaiting(query.state.data)) return false;
+      waitingSince.current ??= Date.now();
+      return peaksPollDelay(Date.now() - waitingSince.current);
+    },
+  });
+
+  const waiting = isPeaksWaiting(query.data);
+  const [gaveUp, setGaveUp] = React.useState(false);
+  React.useEffect(() => {
+    if (!waiting) {
+      waitingSince.current = null;
+      setGaveUp(false);
+      return;
+    }
+    waitingSince.current ??= Date.now();
+    const left = PEAKS_GIVE_UP_MS - (Date.now() - waitingSince.current);
+    if (left <= 0) {
+      setGaveUp(true);
+      return;
+    }
+    const timer = setTimeout(() => setGaveUp(true), left);
+    return () => clearTimeout(timer);
+  }, [waiting]);
+
+  const data = query.data;
+  const ready: AudioPeaksReady | null = data?.status === 'ready' ? (data as AudioPeaksReady) : null;
+  // Decoded once per answer: React Query hands back the same object while the peaks are the same.
+  const peaks = React.useMemo(() => (ready ? decodePeaks(ready) : null), [ready]);
+  return peaksView({
+    status: query.data,
+    failed: query.isError,
+    pending: query.isPending,
+    gaveUp,
+    peaks,
+  });
+}
+
+/**
+ * The transcript the moments editor snaps to (GEO-3642), from geo-chat's media-admin route: the
+ * published words, or for a debate published without them, a fresh transcription geo-chat saves for
+ * the editor. The first read queues it; while it is queued or running it is read every 15 s, then
+ * every minute after ten, for as long as it takes (geo-chat always moves the status on). A geo-chat
+ * without the route (404), or one that refuses it (403/503), is read through the public transcript
+ * as before: read-only for these debates.
+ */
+export function useMomentsTranscript(debateId: string, enabled: boolean) {
+  const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
+  // When this visit first saw it waiting: the backoff counts from there.
+  const waitingSince = React.useRef<number | null>(null);
+  return useQuery({
+    ...debateQueryNetworkOptions,
+    queryKey: debateQueryKeys.momentsTranscript(debateId, accountKey),
+    queryFn: async ({ signal }): Promise<MomentsTranscript> => {
+      try {
+        return await getMomentsTranscript(debateId, getPrivyIdentityToken, accountKey, signal);
+      } catch (error) {
+        const older = error instanceof GeoChatRequestError && error.status === 404;
+        if (!older && !isMediaAdminRefusal(error)) throw error;
+        return getDebateTranscript(debateId, 'json', getPrivyIdentityToken, accountKey, signal, TRANSCRIPT_INCLUDE);
+      }
+    },
+    enabled: enabled && authenticated,
+    retry: (failureCount, error) => !isMediaAdminRefusal(error) && failureCount < 2,
+    // Words are kept a while, never for good: a re-render can change them under the same visit (and
+    // the refresh after one reads them again). Anything else (being made, failed, unavailable) is
+    // asked again on every open, as its copy says, and as `useAudioPeaks` does.
+    staleTime: query => (transcriptSettled(query.state.data) ? TRANSCRIPT_STALE_MS : 0),
+    refetchInterval: query => {
+      if (!isTranscriptWaiting(query.state.data)) {
+        waitingSince.current = null;
+        return false;
+      }
+      waitingSince.current ??= Date.now();
+      return transcriptPollDelay(Date.now() - waitingSince.current);
+    },
+  });
 }

@@ -1,15 +1,20 @@
 import { Effect } from 'effect';
 
 import { EntitiesOrderBy } from '~/core/gql/graphql';
+import { ID } from '~/core/id';
 import { getAllEntities, getEntity } from '~/core/io/queries';
 import { RANK_TYPE_ID } from '~/core/ranking-block-ids';
 import type { Entity } from '~/core/types';
 
+import { BEST_DEBATES_BLOCK_ID } from './best-debates';
+import { rankTypeOf } from './best-debates-ballot';
+import { fetchBallotGrades, isBallotGradesPendingError } from './fetch-ballot-grades';
 import {
   buildMyRankingEntityFilter,
   getMyRankingOrderedEntityIds,
   pickMostRecentlyCreatedRankingEntity,
 } from './my-ranking-entity';
+import { type BallotGrades, NO_GRADES } from './ranking-grades';
 import type { BallotSnapshot } from './ranking-publish-queue';
 import { parseTimestampMs } from './ranking-rolling';
 
@@ -24,7 +29,31 @@ import { parseTimestampMs } from './ranking-rolling';
  * the tail.
  */
 
-export type MyRankingBallot = { rankEntity: Entity | null; orderedEntityIds: string[] };
+export type MyRankingBallot = {
+  rankEntity: Entity | null;
+  orderedEntityIds: string[];
+  /** Best debates only (GEO-3729): the ranker's grade per entry. Absent or empty everywhere else. */
+  grades?: BallotGrades;
+};
+
+/** Grades are read and written on the Best debates block only. */
+export function blockHasGrades(blockId: string, bestDebatesBlockId: string | null = BEST_DEBATES_BLOCK_ID): boolean {
+  return Boolean(bestDebatesBlockId) && ID.equals(blockId, bestDebatesBlockId!);
+}
+
+/**
+ * The ballot's grades, when it can carry them: a Rank with votes that isn't known to be anything
+ * but ORDINAL (a stale non-ORDINAL Rank is never built on, a fresh one is minted). Throws `BallotGradesPendingError` when the grades
+ * don't line up with the votes yet.
+ */
+async function readGrades(rankEntity: Entity, personalSpaceId: string, orderedEntityIds: string[]) {
+  // Only a Rank known to be something else is skipped. The entity read often can't decode the Rank
+  // type's text (it comes back empty), and treating that as "not ORDINAL" read every ballot as
+  // ungraded (GEO-3729, found on the preview).
+  const rankType = rankTypeOf(rankEntity);
+  if (orderedEntityIds.length === 0 || (rankType !== null && rankType !== 'ORDINAL')) return NO_GRADES;
+  return fetchBallotGrades(rankEntity, personalSpaceId);
+}
 
 /** Relations the block listing returns per entity (`relationsList(first: 1000)`). */
 const LISTING_RELATIONS_LIMIT = 1000;
@@ -61,6 +90,7 @@ export function ballotSnapshot(ballot: MyRankingBallot): BallotSnapshot {
   return {
     rankId: ballot.rankEntity?.id ?? null,
     orderedEntityIds: ballot.orderedEntityIds,
+    grades: ballot.grades,
     updatedAtMs: ballot.rankEntity ? parseTimestampMs(ballot.rankEntity.updatedAt) || null : null,
     createdAtMs: ballot.rankEntity ? parseTimestampMs(ballot.rankEntity.createdAt) || null : null,
   };
@@ -69,10 +99,24 @@ export function ballotSnapshot(ballot: MyRankingBallot): BallotSnapshot {
 /** One rank's full ballot, every vote. `null` when the index doesn't hold the
  *  rank yet. Carries `updatedAt` but not `createdAt` (the entity query doesn't
  *  select it). */
-export async function fetchRankBallot(rankId: string, personalSpaceId: string): Promise<MyRankingBallot | null> {
-  const rankEntity = await Effect.runPromise(getEntity(rankId, personalSpaceId));
-  if (!rankEntity) return null;
-  return { rankEntity, orderedEntityIds: getMyRankingOrderedEntityIds(rankEntity, personalSpaceId) };
+export async function fetchRankBallot(
+  rankId: string,
+  personalSpaceId: string,
+  { withGrades = false }: { withGrades?: boolean } = {}
+): Promise<MyRankingBallot | null> {
+  // A publish landing between the votes read and the grades read leaves them out of step; the
+  // votes are read again once before giving up (GEO-3729).
+  for (let attempt = 0; ; attempt++) {
+    const rankEntity = await Effect.runPromise(getEntity(rankId, personalSpaceId));
+    if (!rankEntity) return null;
+    const orderedEntityIds = getMyRankingOrderedEntityIds(rankEntity, personalSpaceId);
+    if (!withGrades) return { rankEntity, orderedEntityIds, grades: NO_GRADES };
+    try {
+      return { rankEntity, orderedEntityIds, grades: await readGrades(rankEntity, personalSpaceId, orderedEntityIds) };
+    } catch (error) {
+      if (!isBallotGradesPendingError(error) || attempt >= 1) throw error;
+    }
+  }
 }
 
 /**
@@ -92,15 +136,20 @@ export async function fetchMyRankingBallot(personalSpaceId: string, blockId: str
   );
 
   const listed = pickMostRecentlyCreatedRankingEntity(entities);
-  if (!listed) return { rankEntity: null, orderedEntityIds: [] };
+  if (!listed) return { rankEntity: null, orderedEntityIds: [], grades: NO_GRADES };
 
-  const full = await fetchRankBallot(listed.id, personalSpaceId);
+  const withGrades = blockHasGrades(blockId);
+  const full = await fetchRankBallot(listed.id, personalSpaceId, { withGrades });
   if (!full?.rankEntity) {
     // Listed but the full read returns nothing (it can fail to decode where the
     // listing doesn't). The listing's own votes are whole as long as its
     // relations stopped short of the cap; past it, they may be truncated.
     if ((listed.relations?.length ?? 0) < LISTING_RELATIONS_LIMIT) {
-      return { rankEntity: listed, orderedEntityIds: getMyRankingOrderedEntityIds(listed, personalSpaceId) };
+      const orderedEntityIds = getMyRankingOrderedEntityIds(listed, personalSpaceId);
+      // The listing carries no grades: on Best debates they are read for it the same way, so a
+      // publish built on this read never takes them for "ungraded".
+      const grades = withGrades ? await readGrades(listed, personalSpaceId, orderedEntityIds) : NO_GRADES;
+      return { rankEntity: listed, orderedEntityIds, grades };
     }
     console.error('[fetchMyRankingBallot] Ranking is listed but its full read fails:', listed.id);
     throw new RankingBallotUnreadableError(listed.id, listed.createdAt);
@@ -109,5 +158,6 @@ export async function fetchMyRankingBallot(personalSpaceId: string, blockId: str
   return {
     rankEntity: { ...full.rankEntity, createdAt: listed.createdAt ?? full.rankEntity.createdAt },
     orderedEntityIds: full.orderedEntityIds,
+    grades: full.grades,
   };
 }

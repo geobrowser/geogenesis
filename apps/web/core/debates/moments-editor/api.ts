@@ -1,4 +1,4 @@
-import { type GetPrivyIdentityToken, dashlessId, geoChatRequest } from '../api';
+import { type DebateTranscriptResponse, type GetPrivyIdentityToken, dashlessId, geoChatRequest } from '../api';
 
 /**
  * geo-chat's admin moment-backfill routes (GEO-3613, GEO-3638, GEO-3658), as the moments editor
@@ -57,6 +57,8 @@ export type MomentBackfillStatus = {
   manual_reel?: {
     clock?: string;
     clips?: StoredManualClip[];
+    /** Sent with every edge where it is (geo-chat stores it only when true). */
+    exact?: boolean;
     base?: string;
     /** A reel the media worker sent again itself after a re-render re-extracted claims (geo-chat#352). */
     reapplied?: { job_id: string; quotes?: string[] } | null;
@@ -148,7 +150,18 @@ export type MomentBackfillBody = {
    * `exact` (geo-chat GEO-3683): cut every clip at exactly its edges, not widened into the quiet
    * beside its words. A geo-chat that predates it ignores it.
    */
-  reel?: { clock: 'player' | 'video'; clips: ManualClipBody[]; base?: string; exact?: true };
+  reel?: {
+    clock: 'player' | 'video';
+    clips: ManualClipBody[];
+    base?: string;
+    exact?: true;
+    /**
+     * The saved fresh transcript the clips were picked on (GEO-3642, geo-chat#372): sent only when
+     * the editor's words came from it. The worker cuts on exactly that transcript, or skips the
+     * request as `transcript_changed`.
+     */
+    transcript_version?: string;
+  };
   unlock?: boolean;
   /** Pick the reel as a story (GEO-3638); sent with `unlock` so the re-pick is a story reel. */
   story?: boolean;
@@ -202,4 +215,100 @@ export async function postMomentBackfill(
     signal,
   });
   return response.debates[0] ?? null;
+}
+
+/**
+ * A debate's audio peaks (GEO-3673, geo-chat#367): built on demand by the media worker from the
+ * files the player plays, the first time an admin opens the editor. Fields appear only in the states
+ * that name them.
+ */
+export type AudioPeaksLane = { participant_slot: number; offset: number; samples: number };
+
+export type AudioPeaksReady = {
+  debate_id: string;
+  status: 'ready';
+  /** ms from `debates.started_at`: the paired player's clock, offset 0. */
+  clock: 'player';
+  bucket_ms: number;
+  /** Byte `b` is `max(0, dBFS - floor_db) / -floor_db * 255`: `0` is the floor or quieter. */
+  scale: 'dbfs_u8';
+  floor_db: number;
+  lanes: AudioPeaksLane[];
+  /** A hash of the bytes: the same version, the same peaks. */
+  version: string;
+  /** Standard padded base64: every lane's bytes, at its `offset`. */
+  data: string;
+};
+
+export type AudioPeaksStatus =
+  | AudioPeaksReady
+  | { debate_id: string; status: 'queued'; requested_at: string; waiting_s: number; queue_position?: number }
+  | { debate_id: string; status: 'running'; requested_at: string; waiting_s: number }
+  | { debate_id: string; status: 'failed'; reason: string; permanent: boolean; retry_after?: string }
+  | { debate_id: string; status: 'unavailable'; reason: string };
+
+export async function getAudioPeaks(
+  debateId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  signal?: AbortSignal
+): Promise<AudioPeaksStatus> {
+  return geoChatRequest<AudioPeaksStatus>(`/admin/debates/${encodeURIComponent(debateId)}/audio-peaks`, {
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    signal,
+  });
+}
+
+/**
+ * Where the fresh transcript of a debate whose published transcript has no word timings stands
+ * (GEO-3642, geo-chat#372). geo-chat saves it once per set of recordings and cuts hand-picked reels
+ * on it. The editor's read queues it, and the server always moves the status on: a dead run goes
+ * back to `queued`, and used-up attempts end `failed`. Fields appear only in the states that name
+ * them.
+ */
+export type BackfillTranscriptStatus =
+  | {
+      status: 'queued';
+      requested_at: string;
+      waiting_s: number;
+      /** 1 + the requests ahead. */ queue_position?: number;
+    }
+  | { status: 'running'; requested_at: string; waiting_s: number; started_at?: string }
+  | {
+      status: 'ready';
+      version: string;
+      /** How closely it matches the published transcript, 0 to 1. */
+      agreement?: number | null;
+      /** `agreement` is high enough that the worker takes a hand-picked reel on it (0.8). */
+      agrees: boolean;
+      completed_at?: string;
+    }
+  | { status: 'failed'; reason: string; permanent: boolean; retry_after?: string }
+  | { status: 'unavailable'; reason: string };
+
+/**
+ * The transcript the moments editor snaps to: the public one, plus where its words came from.
+ * `words_from` is `published` (the published transcript has words), `backfill` (the saved fresh
+ * transcript, only when it is `ready`), or `null` (no words yet). `backfill` is `null` when the
+ * published transcript has words. Both are absent from a geo-chat without the route, whose public
+ * transcript the editor reads instead.
+ */
+export type MomentsTranscript = DebateTranscriptResponse & {
+  words_from?: 'published' | 'backfill' | null;
+  backfill?: BackfillTranscriptStatus | null;
+};
+
+/** The editor's transcript, with words and sentences, from geo-chat's media-admin route (GEO-3642). */
+export async function getMomentsTranscript(
+  debateId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  signal?: AbortSignal
+): Promise<MomentsTranscript> {
+  return geoChatRequest<MomentsTranscript>(
+    `/admin/debates/${encodeURIComponent(debateId)}/moments-transcript?format=json&include=words,sentences`,
+    { auth: true, getPrivyIdentityToken, accountKey, signal }
+  );
 }

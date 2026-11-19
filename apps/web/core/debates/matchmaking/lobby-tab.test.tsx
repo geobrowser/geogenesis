@@ -7,6 +7,7 @@ import { Provider, createStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { GeoChatRequestError, GeoChatSessionError } from '../api';
+import type { AgendaClaimFilter } from '../todays-claims/agenda-claim-filter';
 import { LobbyTab } from './lobby-tab';
 import { debatesHubMatchesOnlyAtom } from '~/atoms';
 
@@ -19,6 +20,8 @@ const mocks = vi.hoisted(() => ({
   matchesFailureReason: null as unknown,
   /** Whether the wider list reports a corpus with nothing in it — the last rung of the ladder. */
   widerEmpty: false,
+  /** The agenda filter the drawn list was handed (GEO-3775). */
+  handed: undefined as unknown,
 }));
 
 vi.mock('./hooks', () => ({
@@ -37,12 +40,15 @@ vi.mock('./claims-tab', () => ({
     trailing,
     onSettledEmpty,
     onTabChange,
+    agendaFilter,
   }: {
     variant?: string;
     trailing?: React.ReactNode;
     onSettledEmpty?: () => void;
     onTabChange?: (tab: string) => void;
+    agendaFilter?: unknown;
   }) => {
+    mocks.handed = agendaFilter;
     // Stands in for the real tab reporting an unnarrowed, settled, empty corpus.
     React.useEffect(() => {
       if (mocks.widerEmpty) onSettledEmpty?.();
@@ -59,7 +65,10 @@ vi.mock('./claims-tab', () => ({
 }));
 
 vi.mock('./matches-list', () => ({
-  MatchesList: ({ trailing }: { trailing?: React.ReactNode }) => <div data-testid="matches-list">{trailing}</div>,
+  MatchesList: ({ trailing, agendaFilter }: { trailing?: React.ReactNode; agendaFilter?: unknown }) => {
+    mocks.handed = agendaFilter;
+    return <div data-testid="matches-list">{trailing}</div>;
+  },
 }));
 
 const STORAGE_KEY = 'debatesHubMatchesOnly';
@@ -386,5 +395,46 @@ describe('LobbyTab', () => {
 
     expect(store.get(debatesHubMatchesOnlyAtom)).toBe(false);
     expect(localStorage.getItem(STORAGE_KEY)).toBe('false');
+  });
+});
+
+/** GEO-3775. Full screen's Lobby, agenda claims only: a match on no agenda is no match. */
+describe('agenda-only', () => {
+  function agenda(pending = false): AgendaClaimFilter {
+    return {
+      active: true,
+      ids: pending ? [] : ['c-on'],
+      spaceIds: [],
+      key: '',
+      has: claimId => !pending && claimId === 'c-on',
+      pending,
+      error: null,
+      refetch: vi.fn(),
+      scopeFor: () => undefined,
+    };
+  }
+  const renderWith = (filter: AgendaClaimFilter) =>
+    render(
+      <Provider store={createStore()}>
+        <LobbyTab onTabChange={vi.fn()} agendaFilter={filter} />
+      </Provider>
+    );
+
+  it('opens on matches when one is on an agenda, and hands the list the filter', () => {
+    mocks.matches = [{ claim: { claim_entity_id: 'c-on' } }];
+    const filter = agenda();
+    renderWith(filter);
+
+    expect(screen.getByTestId('matches-list')).toBeInTheDocument();
+    expect(mocks.handed).toBe(filter);
+  });
+
+  it('steps back to the wider list when every match is on no agenda', () => {
+    mocks.matches = [{ claim: { claim_entity_id: 'c-off' } }];
+    const filter = agenda();
+    renderWith(filter);
+
+    expect(screen.getByTestId('claims-tab')).toHaveAttribute('data-variant', 'lobby');
+    expect(mocks.handed).toBe(filter);
   });
 });

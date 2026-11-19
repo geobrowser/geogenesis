@@ -1,5 +1,13 @@
 import type { ParticipantSlot } from '../api';
-import { type EditorClip, type ReelWord, clipSpeaker, formatReelTime, formatSeconds, wordsIn } from './reel';
+import {
+  type EditorClip,
+  type ReelSentence,
+  type ReelWord,
+  clipSpeaker,
+  formatReelTime,
+  formatSeconds,
+  wordsIn,
+} from './reel';
 
 /**
  * What makes a reel watchable, as the automatic picker is held to it (GEO-3672). None of it blocks
@@ -31,6 +39,8 @@ export type ReelWarning = {
   title: string;
   recommendation: string;
   fix: ReelWarningFix | null;
+  /** The clip it is about (0-based), for a warning about one clip: its card and bar show it (D3). */
+  clip?: number;
 };
 
 /** A word's text as a bare lower-case word: "So," is "so". */
@@ -74,10 +84,12 @@ export function trimmedEnd(clip: Pick<EditorClip, 'start_ms' | 'end_ms'>, words:
 export function reelWarnings(
   clips: readonly EditorClip[],
   words: readonly ReelWord[],
-  nameOf: (slot: ParticipantSlot | null) => string | null
+  nameOf: (slot: ParticipantSlot | null) => string | null,
+  /** The transcript's sentences: whose a clip is, from a transcript without word timings (`clipSpeaker`). */
+  sentences: readonly ReelSentence[] = []
 ): ReelWarning[] {
   const warnings: ReelWarning[] = [];
-  const speakers = clips.map(clip => clipSpeaker(words, clip.start_ms, clip.end_ms));
+  const speakers = clips.map(clip => clipSpeaker(words, clip.start_ms, clip.end_ms, sentences));
   // The reel's total is what plays, cuts and all; a clip is held to the picker's limits by its words.
   const length = (clip: EditorClip) => clip.end_ms - clip.start_ms;
   const spoken = (clip: EditorClip) => spokenLength(clip, words);
@@ -109,7 +121,8 @@ export function reelWarnings(
     warnings.push({
       id: 'clip-count',
       severity: 'warn',
-      title: `${clips.length} clips; reels are built for 4`,
+      // Reels aim for 4; 5 or 6 is the admin's call (GEO-3773, D4), so it's said, not fixed.
+      title: `This reel has ${clips.length} clips. We aim for ${REEL_CLIPS}.`,
       recommendation: 'Four clips, two per speaker, keep the reel near a minute. Remove the clip that adds least.',
       fix: null,
     });
@@ -131,6 +144,7 @@ export function reelWarnings(
     warnings.push({
       id: `alternate-${index}`,
       severity: 'warn',
+      clip: index,
       title: `Clips ${index} and ${index + 1} are both ${nameOf(speaker) ?? 'the same speaker'}`,
       recommendation:
         'Alternating speakers keeps the back-and-forth: a viewer hears an answer to each point.' +
@@ -149,6 +163,7 @@ export function reelWarnings(
     const from = spokenFrom(clip, words);
     warnings.push({
       id: `clip-length-${index}`,
+      clip: index,
       severity: over ? 'bad' : 'warn',
       title: `Clip ${index + 1}'s words run ${formatSeconds(spoken(clip))}`,
       recommendation:
@@ -176,6 +191,7 @@ export function reelWarnings(
     const shown = opener.text.trim().replace(/[,.;:]+$/, '');
     warnings.push({
       id: `opener-${index}`,
+      clip: index,
       severity: 'warn',
       title: `Clip ${index + 1} opens on “${shown}”`,
       recommendation: `A clip that opens on “${shown}” sounds like it starts mid-thought. Start it on the next word.`,

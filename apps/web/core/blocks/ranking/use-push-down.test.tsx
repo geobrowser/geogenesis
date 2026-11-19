@@ -334,7 +334,8 @@ describe('usePushDown', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
     });
 
-    expect(publish).toHaveBeenLastCalledWith([RANKED_A, DEBATE, DRAFT_ONLY]);
+    // With the draft's grades, so the debate comes back in its tier (GEO-3729); none in this draft.
+    expect(publish).toHaveBeenLastCalledWith([RANKED_A, DEBATE, DRAFT_ONLY], undefined);
     await waitFor(() =>
       expect(mocks.unvote).toHaveBeenCalledWith({ authorSpaceId: PERSONAL, spaceId: DEBATE_SPACE, entityId: DEBATE })
     );

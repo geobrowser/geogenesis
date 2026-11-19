@@ -7,10 +7,10 @@ import {
 
 /** Claim band geometry, from the design (GEO-2755). */
 export const CLAIM_MEASURE_PX = 1136;
-export const CLAIM_BAND_HEIGHT_PX = 210;
+export const CLAIM_BAND_HEIGHT_PX = 144;
 
-/** `round(size * 1.05)`, as the design specifies. */
-export const claimLineHeight = (fontSize: number) => Math.round(fontSize * 1.05);
+/** A tighter leading suits Calibre’s smaller cap height. */
+export const claimLineHeight = (fontSize: number) => Math.round(fontSize * 0.95);
 
 /**
  * The size ladder for the claim, largest rung first.
@@ -30,6 +30,16 @@ const RUNGS = [
 /** Below the last rung the claim is truncated rather than shrunk further. */
 const FLOOR_PX = 28;
 const FLOOR_MAX_LINES = 4;
+
+/**
+ * The tallest block `fitClaimToBand` can return: each rung at its largest size and line count, and
+ * the floor. The band centres the block, so this is what decides how close a claim gets to the
+ * masthead above it.
+ */
+export const CLAIM_TALLEST_BLOCK_PX = Math.max(
+  ...RUNGS.map(rung => rung.maxLines * claimLineHeight(rung.from)),
+  FLOOR_MAX_LINES * claimLineHeight(FLOOR_PX)
+);
 
 /** Collapsed for comparison: the fitter normalises whitespace, so raw equality would misreport. */
 const collapse = (text: string) => text.replace(/\s+/g, ' ').trim();

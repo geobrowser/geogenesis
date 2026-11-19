@@ -9,12 +9,16 @@ import type { DebateLobbyClaim, MatchmakingClaim } from '../api';
 import { claimRowKey } from '../matchmaking/claim-row-key';
 import { type ClaimCardDefaults, ClaimsTab } from '../matchmaking/claims-tab';
 import { useHubScrollSelector } from '../matchmaking/hub-scroll';
+import { useAgendaClaimFilterContext } from '../todays-claims/agenda-claim-filter';
+import { useLobbyRoomClaims } from './lobby-agenda-claims';
 import { LOBBY_CLAIMS_CONTROLS_TOP_CLASS } from './lobby-claims-sticky';
 import {
   exploreRoomClaimBatches,
+  roomRowsByClaim,
   useLobbyExploreRoomClaims,
   useNearExploreBatches,
 } from './lobby-explore-claims-hooks';
+import { useIsLobbyGuest } from './lobby-guest-hooks';
 import { LobbyClaimHostMenu } from './lobby-highlights';
 import { useLobbyHighlights } from './lobby-highlights-hooks';
 import { LobbyClaimRequest } from './lobby-room-claims';
@@ -37,6 +41,8 @@ export function LobbyExploreClaims({ lobby }: { lobby: LobbyPageView }) {
     setBatches(current => (sameBatches(current, next) ? current : next));
   }, []);
   const renderRoomCard = useLobbyRoomCardRenderer(lobby, batches);
+  // GEO-3775: agenda claims only when the lobby is; the room provides the filter.
+  const agendaFilter = useAgendaClaimFilterContext();
   const renderClaim = React.useCallback(
     (entry: MatchmakingClaim, card: ClaimCardDefaults) => renderRoomCard(entry, card.answersReady),
     [renderRoomCard]
@@ -48,6 +54,7 @@ export function LobbyExploreClaims({ lobby }: { lobby: LobbyPageView }) {
     <div className="-mx-4">
       <ClaimsTab
         variant="lobbyExplore"
+        agendaFilter={agendaFilter}
         renderClaim={renderClaim}
         onVisibleClaims={onVisibleClaims}
         stickyTopClassName={LOBBY_CLAIMS_CONTROLS_TOP_CLASS}
@@ -64,7 +71,7 @@ export function LobbyExploreClaims({ lobby }: { lobby: LobbyPageView }) {
 export function useLobbyRoomCardRenderer(lobby: LobbyPageView, batches: string[][]) {
   const lobbyId = lobby.lobby_id;
   const { active, onNear } = useNearExploreBatches(batches);
-  const roomRows = useLobbyExploreRoomClaims(lobbyId, active);
+  const roomRows = useLobbyCardRoomRows(lobbyId, active);
   const { data: highlights } = useLobbyHighlights(lobbyId);
   const hosting = lobby.viewer.hosting;
 
@@ -93,6 +100,29 @@ export function useLobbyRoomCardRenderer(lobby: LobbyPageView, batches: string[]
     ),
     [hosting, onNear, renderMenu, renderOffer, roomRows]
   );
+}
+
+/**
+ * The room's sides for the batches near the viewport, by `claimRowKey`. GEO-3775: an agenda-only
+ * member's "In this room" read already holds every agenda claim's, so only a batch with a claim no
+ * agenda lists (a host list with `AGENDA_ONLY_LOBBY_HOST_LISTS` off) is read again.
+ */
+function useLobbyCardRoomRows(lobbyId: string, active: string[][]) {
+  const agenda = useAgendaClaimFilterContext();
+  const guest = useIsLobbyGuest();
+  const fromRoom = agenda.active && !guest;
+  const { data: room } = useLobbyRoomClaims(lobbyId, fromRoom);
+  const unread = React.useMemo(
+    () => (fromRoom ? active.filter(batch => batch.some(id => !agenda.has(id))) : active),
+    [active, agenda, fromRoom]
+  );
+  const read = useLobbyExploreRoomClaims(lobbyId, unread);
+  return React.useMemo(() => {
+    if (!fromRoom || !room) return read;
+    const rows = roomRowsByClaim([room.claims]);
+    for (const [key, row] of read) rows.set(key, row);
+    return rows;
+  }, [fromRoom, read, room]);
 }
 
 /** Reports whether its card is near the viewport, both ways, so far-off batches stop being read. */

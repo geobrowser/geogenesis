@@ -5,6 +5,8 @@ import type * as React from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { applyTierLines } from '~/core/blocks/ranking/ranking-grades';
+
 import { RankingComposeScreen } from './ranking-compose-screen';
 
 /**
@@ -29,6 +31,21 @@ const mocks = vi.hoisted(() => ({
   canPublish: null as null | boolean,
   empty: [] as never[],
   bestDebatesEnabled: null as null | boolean,
+  bestDebatesSerial: undefined as undefined | boolean,
+  lastIds: ['d1'] as string[],
+  myGrades: new Map() as Map<string, 'A' | 'B' | 'C'>,
+  grading: null as null | import('./best-debates/best-debate-grading').BestDebatesGrading,
+  reorder: vi.fn(),
+  composeArgs: null as null | Record<string, unknown>,
+  search: 'relationId=r&parentEntityId=p&team=to-rank',
+  mySubmission: null as null | { orderedEntityIds: string[] },
+  myRanking: null as null | { tierLines?: { aCount: number; bCount: number; banner: React.ReactNode } },
+  sentGrades: null as null | Map<string, string>,
+  recordGrade: vi.fn(),
+}));
+vi.mock('./best-debates/best-debate-grading', async importOriginal => ({
+  ...(await importOriginal<typeof import('./best-debates/best-debate-grading')>()),
+  useRecordGrade: () => mocks.recordGrade,
 }));
 
 vi.mock('~/core/blocks/ranking/best-debates', async importOriginal => ({
@@ -37,7 +54,7 @@ vi.mock('~/core/blocks/ranking/best-debates', async importOriginal => ({
 }));
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: mocks.replace, back: vi.fn(), push: vi.fn() }),
-  useSearchParams: () => new URLSearchParams('relationId=r&parentEntityId=p&team=to-rank'),
+  useSearchParams: () => new URLSearchParams(mocks.search),
 }));
 vi.mock('jotai', async importOriginal => ({
   ...(await importOriginal<typeof import('jotai')>()),
@@ -81,9 +98,10 @@ vi.mock('~/core/blocks/ranking/use-ranking-period', () => ({
 vi.mock('~/core/blocks/ranking/use-ranking-submissions', () => ({
   useRankingSubmissions: () => ({
     submissions: mocks.empty,
-    mySubmission: null,
+    mySubmission: mocks.mySubmission,
     // A draft with one debate, never published: publishable but for the guard.
-    myLastSubmission: { orderedEntityIds: ['d1'] },
+    myLastSubmission: { orderedEntityIds: mocks.lastIds },
+    myGrades: mocks.myGrades,
     saveMySubmission: mocks.saveMySubmission,
     isSaving: false,
     personalSpaceId: 'me',
@@ -154,9 +172,12 @@ vi.mock('~/core/blocks/ranking/use-best-debate-displays', () => ({ useBestDebate
 vi.mock('./best-debates/use-best-debates-compose', () => ({
   useBestDebatesCompose: (args: {
     enabled: boolean;
+    serialPublishes?: boolean;
     saveMySubmission: (slots: { id: string; name: string | null; spaceId?: string }[]) => Promise<unknown>;
   }) => {
+    mocks.composeArgs = args;
     mocks.bestDebatesEnabled = args.enabled;
+    mocks.bestDebatesSerial = args.serialPublishes;
     return {
       teamView: undefined,
       mobileTabs: undefined,
@@ -166,9 +187,24 @@ vi.mock('./best-debates/use-best-debates-compose', () => ({
       activeEntityId: null,
       placeFromTeam: vi.fn(),
       dropEntity: vi.fn(),
-      publish: async (ids: string[]) =>
-        Boolean(await args.saveMySubmission(ids.map(id => ({ id, name: null, spaceId: 'debate-space' })))),
+      reorder: mocks.reorder,
+      publish: async (ids: string[], grades?: Map<string, string>) => {
+        mocks.sentGrades = grades ?? null;
+        return Boolean(await args.saveMySubmission(ids.map(id => ({ id, name: null, spaceId: 'debate-space' }))));
+      },
     };
+  },
+}));
+vi.mock('./best-debates/best-debate-watch', () => ({
+  BestDebateWatchProvider: ({
+    grading,
+    children,
+  }: {
+    grading?: import('./best-debates/best-debate-grading').BestDebatesGrading | null;
+    children: React.ReactNode;
+  }) => {
+    mocks.grading = grading ?? null;
+    return children;
   },
 }));
 vi.mock('./ranking-compose-pushed-down', () => ({ RankingComposePushedDown: () => null }));
@@ -181,8 +217,16 @@ vi.mock('./ranking-compose-fullscreen', () => ({
   RankingComposeFullscreen: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 vi.mock('./ranking-compose-global-ranking', () => ({ RankingComposeGlobalRanking: () => null }));
-vi.mock('./ranking-compose-my-ranking', () => ({ RankingComposeMyRanking: () => null }));
-vi.mock('./ranking-compose-layout', () => ({ RankingComposeLayout: () => null }));
+// Your ranking draws only the tier lines' banner, so its Not now and Save grades can be pressed.
+vi.mock('./ranking-compose-my-ranking', () => ({
+  RankingComposeMyRanking: (props: NonNullable<typeof mocks.myRanking>) => {
+    mocks.myRanking = props;
+    return props.tierLines?.banner ?? null;
+  },
+}));
+vi.mock('./ranking-compose-layout', () => ({
+  RankingComposeLayout: ({ myRanking }: { myRanking: React.ReactNode }) => <>{myRanking}</>,
+}));
 vi.mock('./ranking-compose-header', () => ({
   RankingComposeTitleMetadata: () => null,
   RankingComposePinnedToolbar: ({ canPublish, onPublish }: { canPublish: boolean; onPublish: () => void }) => {
@@ -203,6 +247,13 @@ beforeEach(() => {
   mocks.canPublish = null;
   mocks.bestDebatesEnabled = null;
   mocks.authResolving = false;
+  mocks.lastIds = ['d1'];
+  mocks.myGrades = new Map();
+  mocks.grading = null;
+  mocks.search = 'relationId=r&parentEntityId=p&team=to-rank';
+  mocks.mySubmission = null;
+  mocks.myRanking = null;
+  mocks.sentGrades = null;
 });
 
 afterEach(cleanup);
@@ -237,13 +288,15 @@ describe('RankingComposeScreen on the Best debates block', () => {
     expect(mocks.replace).not.toHaveBeenCalled();
     expect(mocks.canPublish).toBe(true);
     expect(mocks.bestDebatesEnabled).toBe(true);
+    // The screen's one Publish is off while it publishes; only the block queues publishes (GEO-3729).
+    expect(mocks.bestDebatesSerial).toBeFalsy();
     await act(async () => mocks.publish?.());
     // Through the Best debates publish (own spaces), built on the ballot the draft came from.
     expect(mocks.saveMySubmission).toHaveBeenCalledTimes(1);
     expect(mocks.saveMySubmission).toHaveBeenCalledWith(
       [{ id: 'd1', name: null, spaceId: 'debate-space' }],
       expect.anything(),
-      { basedOnOrderedIds: ['d1'] }
+      { basedOnOrderedIds: ['d1'], basedOnGrades: expect.any(Map) }
     );
   });
 
@@ -294,5 +347,132 @@ describe('RankingComposeScreen on any other block', () => {
     expect(mocks.bestDebatesEnabled).toBe(false);
     await act(async () => mocks.publish?.());
     expect(mocks.saveMySubmission).toHaveBeenCalledTimes(1);
+  });
+
+  it('puts the popup’s grades into the draft, and opens Re-order in the screen’s Placed step (GEO-3729)', async () => {
+    mocks.member = true;
+    // IDs are hex, as normId leaves them.
+    const [d1, d2] = ['d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1', 'd2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2'];
+    mocks.lastIds = [d1, d2];
+    mocks.myGrades = new Map([
+      [d1, 'A'],
+      [d2, 'B'],
+    ]);
+    renderScreen();
+    expect(mocks.grading?.needsTierLines).toBe(false);
+    await act(async () => mocks.grading?.grade(d2, 'A'));
+    expect(mocks.grading?.gradeOf(d2)).toBe('A');
+    // Top of A.
+    expect(mocks.grading?.placeOf(d2)).toBe(1);
+    expect(mocks.saveMySubmission).not.toHaveBeenCalled();
+    expect(mocks.canPublish).toBe(true);
+    mocks.grading?.reorder(d2);
+    expect(mocks.reorder).toHaveBeenCalledWith(d2);
+  });
+
+  it('counts a grade Re-order changed as a reorder, in the draft and again when published (GEO-3729)', async () => {
+    mocks.member = true;
+    mocks.recordGrade.mockReset();
+    const [a1, x] = ['a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1', 'e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5'];
+    mocks.lastIds = [a1, x];
+    mocks.myGrades = new Map([
+      [a1, 'A'],
+      [x, 'B'],
+    ]);
+    renderScreen();
+    const before = { ids: [a1, x], grades: new Map(mocks.myGrades) };
+    const after = {
+      ids: [x, a1],
+      grades: new Map([
+        [a1, 'A'],
+        [x, 'A'],
+      ]),
+    };
+    type End = (end: object) => void;
+    await act(async () => (mocks.composeArgs?.onReorderEnd as End)({ outcome: 'closed', entityId: x, before, after }));
+    expect(mocks.recordGrade).toHaveBeenCalledWith(x, {
+      grade: 'A',
+      previousGrade: 'B',
+      method: 'reorder',
+      mutationKind: 'draft',
+    });
+    type OnPublished = (p: unknown, ids: string[], grades: Map<string, string>) => void;
+    await act(async () =>
+      (mocks.composeArgs?.onPublished as OnPublished)(
+        { orderedEntityIds: after.ids, grades: after.grades, indexingSettled: Promise.resolve(null) },
+        after.ids,
+        after.grades
+      )
+    );
+    expect(mocks.recordGrade).toHaveBeenLastCalledWith(x, {
+      grade: 'A',
+      previousGrade: 'B',
+      method: 'reorder',
+      mutationKind: 'published',
+    });
+  });
+});
+
+describe('Grade your ranking on the ranking screen (GEO-3729)', () => {
+  // Three debates: the fewest the step opens on by itself (its starting lines are 1 / 1 / 1).
+  const ids = ['a1', 'b2', 'c3'].map(pair => pair.repeat(16));
+
+  it('opens by itself on a published ranking with no grades, and Not now closes it', () => {
+    mocks.member = true;
+    mocks.lastIds = ids;
+    mocks.mySubmission = { orderedEntityIds: ids };
+    renderScreen();
+    expect(mocks.myRanking?.tierLines).toBeDefined();
+    act(() => screen.getByRole('button', { name: 'Not now' }).click());
+    expect(mocks.myRanking?.tierLines).toBeUndefined();
+  });
+
+  it('stays shut on a published ranking of two debates, whose starting lines leave a tier empty', () => {
+    mocks.member = true;
+    mocks.lastIds = ids.slice(0, 2);
+    mocks.mySubmission = { orderedEntityIds: ids.slice(0, 2) };
+    renderScreen();
+    expect(mocks.myRanking?.tierLines).toBeUndefined();
+  });
+
+  it('stays shut on a first ranking still being drafted', () => {
+    mocks.member = true;
+    mocks.lastIds = ids;
+    renderScreen();
+    expect(mocks.myRanking?.tierLines).toBeUndefined();
+  });
+
+  it('opens from the block’s ?grade=tiers on any size, and Not now still closes it', () => {
+    mocks.member = true;
+    mocks.lastIds = ids.slice(0, 1);
+    mocks.search = 'relationId=r&parentEntityId=p&grade=tiers';
+    renderScreen();
+    expect(mocks.myRanking?.tierLines).toBeDefined();
+    act(() => screen.getByRole('button', { name: 'Not now' }).click());
+    expect(mocks.myRanking?.tierLines).toBeUndefined();
+  });
+
+  it('puts the tier lines’ grades in the draft for Publish, each counted as tier_lines', async () => {
+    mocks.member = true;
+    mocks.recordGrade.mockReset();
+    mocks.lastIds = ids;
+    mocks.mySubmission = { orderedEntityIds: ids };
+    mocks.sentGrades = null;
+    renderScreen();
+    const { aCount, bCount } = mocks.myRanking!.tierLines!;
+    const expected = applyTierLines(ids, aCount, bCount);
+    await act(async () => screen.getByRole('button', { name: 'Save grades' }).click());
+    // Save grades publishes nothing on its own (Preston, 16 Nov): the screen's Publish sends them.
+    expect(mocks.sentGrades).toBeNull();
+    expect(mocks.myRanking?.tierLines).toBeUndefined();
+    type OnPublished = (p: unknown, sent: string[], grades: typeof expected) => void;
+    await act(async () =>
+      (mocks.composeArgs?.onPublished as OnPublished)(
+        { orderedEntityIds: ids, grades: expected, indexingSettled: Promise.resolve(null) },
+        ids,
+        expected
+      )
+    );
+    expect(mocks.recordGrade.mock.calls.map(([, change]) => change.method)).toEqual(ids.map(() => 'tier_lines'));
   });
 });

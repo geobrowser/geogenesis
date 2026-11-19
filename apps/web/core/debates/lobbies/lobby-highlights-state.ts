@@ -97,7 +97,9 @@ export function settleFetchedLobbyHighlights(
 }
 
 /** Highlighted claims for the list: the voted one shows in the vote card instead. */
-export function listedHighlights(state: DebateLobbyHighlights | undefined): DebateLobbyHighlight[] {
+export function listedHighlights(
+  state: Pick<DebateLobbyHighlights, 'highlights' | 'room_vote'> | undefined
+): DebateLobbyHighlight[] {
   if (!state) return [];
   const votedId = state.room_vote?.claim.id;
   return state.highlights.filter(highlight => highlight.claim.id !== votedId);

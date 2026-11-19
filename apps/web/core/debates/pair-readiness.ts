@@ -2,6 +2,8 @@
 
 import * as React from 'react';
 
+import { type FinishableVideo, mediaFinished } from './playback-utils';
+
 /**
  * Hold a debate's two recordings until both can play, then let them go together (GEO-2965).
  *
@@ -34,7 +36,8 @@ export const SUSPEND_GRACE_MS = 250;
 
 /** What the hold reads off one element. Deliberately a subset, so tests can pass plain objects. */
 export type PairMember = Pick<HTMLMediaElement, 'readyState' | 'networkState' | 'error'> &
-  Partial<Pick<HTMLMediaElement, 'seeking'>>;
+  Partial<Pick<HTMLMediaElement, 'seeking'>> &
+  FinishableVideo;
 
 /**
  * Enough data to play, *where it is going to play from*. `canplay`'s own threshold, and not while a
@@ -42,7 +45,10 @@ export type PairMember = Pick<HTMLMediaElement, 'readyState' | 'networkState' | 
  * both know their shape, and `readyState` can still report the data at the old position until the
  * seek has begun.
  */
-const canPlay = (video: PairMember) => video.readyState >= 3 /* HAVE_FUTURE_DATA */ && !video.seeking;
+const canPlay = (video: PairMember) =>
+  // At its end an element reports HAVE_CURRENT_DATA, and it holds its last frame rather than
+  // playing (GEO-3778), so a frame is all it needs.
+  (video.readyState >= 3 /* HAVE_FUTURE_DATA */ || (video.readyState >= 2 && mediaFinished(video))) && !video.seeking;
 /** A frame to paint. What revealing the pair needs, which is less than what starting it needs. */
 const hasFrame = (video: PairMember) => video.readyState >= 2; /* HAVE_CURRENT_DATA */
 /** Idle short of a frame with no seek in flight. iOS reports `NETWORK_IDLE` while a paused seek fetches. */

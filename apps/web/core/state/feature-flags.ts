@@ -86,7 +86,7 @@ export const featureFlagDefinitions = [
     id: 'googleSignIn',
     label: 'Google sign-in',
     description:
-      'Offer Google in every sign-in prompt (GEO-3139). Google redirects, so an action queued before signing in is dropped. Google must also be enabled in the Privy dashboard.',
+      'Offer Google in every sign-in prompt (GEO-3139). Google redirects, so opted-in actions queued before signing in are restored on the return and carried out when a matching control is on screen. Google must also be enabled in the Privy dashboard.',
     enabledByDefault: false,
   },
   {
