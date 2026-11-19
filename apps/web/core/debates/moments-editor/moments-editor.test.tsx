@@ -342,10 +342,11 @@ describe('MomentsEditor (GEO-3671)', () => {
     render(<MomentsEditor debateId={DEBATE_ID} />);
     expect(screen.getByRole('alert')).toHaveTextContent(/still being processed/);
     expect(menuItem('Check before publishing')).toBeDisabled();
-    // Nothing about the clip can be changed: its edges, steppers, Replace and Remove.
-    for (const name of ['Replace', 'Remove', 'Start one word earlier', 'End one word later']) {
+    // Nothing about the clip can be changed: Replace and Remove. Listening to its ends still works.
+    for (const name of ['Replace', 'Remove']) {
       expect(within(clipPanel()).getByRole('button', { name })).toBeDisabled();
     }
+    expect(within(clipPanel()).getByRole('button', { name: "Play the clip's last 3 seconds" })).toBeEnabled();
     fireEvent.click(within(clipPanel()).getByRole('button', { name: /^Advanced/ }));
     expect(screen.queryByRole('textbox', { name: 'Start time' })).not.toBeInTheDocument();
   });
@@ -595,7 +596,7 @@ describe('MomentsEditor (GEO-3671)', () => {
     } as DOMRect);
     const handle = screen.getByTestId('fine-end-handle');
     fireEvent.pointerDown(handle, { clientX: 3_000, pointerId: 1 });
-    fireEvent.pointerMove(handle, { clientX: 3_100, pointerId: 1, altKey: true });
+    fireEvent.pointerMove(handle, { clientX: 3_100, pointerId: 1 });
     fireEvent.pointerUp(handle, { pointerId: 1 });
     expect(edgeField('End')).toHaveValue('0:03.1');
 
@@ -616,8 +617,8 @@ describe('MomentsEditor (GEO-3671)', () => {
     );
   });
 
-  // GEO-3673: the fine-tune panel under the timeline places an edge to 10 ms with "Snap to words" off.
-  it('publishes an edge placed in the waveform panel with snapping off as exact, to the hundredth', () => {
+  // GEO-3673: the fine-tune panel under the timeline places an edge to 10 ms, never snapping.
+  it('publishes an edge placed in the waveform panel as exact, to the hundredth', () => {
     mocks.peaks = {
       kind: 'ready',
       peaks: { bucketMs: 10, samples: new Uint8Array(600).fill(60), version: 'v1' },
@@ -632,10 +633,8 @@ describe('MomentsEditor (GEO-3671)', () => {
       },
     });
     render(<MomentsEditor debateId={DEBATE_ID} />);
-    const snap = screen.getByRole('switch', { name: 'Snap to words' });
-    expect(snap).toBeChecked();
+    expect(screen.queryByRole('switch', { name: 'Snap to words' })).toBeNull();
     expect(screen.getByTestId('waveform-readout')).toHaveTextContent('Start 0:00.90 · End 0:03.00');
-    fireEvent.click(snap);
     // Clip 1 with 2 s either side: 0 to 5 s, a ms per px.
     vi.spyOn(screen.getByTestId('waveform-track'), 'getBoundingClientRect').mockReturnValue({
       width: 5_000,
@@ -676,10 +675,10 @@ describe('MomentsEditor (GEO-3671)', () => {
       width: 5_000,
       left: 0,
     } as DOMRect);
-    // Served moment 1-3 s; Alt flips "Snap to words" off for the drag.
+    // Served moment 1-3 s; the drag lands exactly where it is let go.
     const handle = screen.getByTestId('fine-end-handle');
     fireEvent.pointerDown(handle, { clientX: 3_000, pointerId: 1 });
-    fireEvent.pointerMove(handle, { clientX: 3_204, pointerId: 1, altKey: true });
+    fireEvent.pointerMove(handle, { clientX: 3_204, pointerId: 1 });
     fireEvent.pointerUp(handle, { pointerId: 1 });
     expect(screen.getByTestId('waveform-readout')).toHaveTextContent('End 0:03.20');
     expect(publishButton()).toBeEnabled();
@@ -1234,16 +1233,15 @@ describe('MomentsEditor (GEO-3671)', () => {
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
   });
 
-  it('shows the edge as it stands when a typed time snaps back to it', () => {
+  it('places a typed edge exactly where it says, mid-word or not', () => {
     render(<MomentsEditor debateId={DEBATE_ID} />);
     const end = () => edgeField('End');
-    fireEvent.change(end(), { target: { value: '2.0' } });
-    fireEvent.blur(end());
-    expect(end()).toHaveValue('0:02.9');
-    // Mid-"dates" again: it snaps to the same end, so nothing changes, and the box says so.
     fireEvent.change(end(), { target: { value: '2.5' } });
     fireEvent.blur(end());
-    expect(end()).toHaveValue('0:02.9');
+    expect(end()).toHaveValue('0:02.5');
+    expect(screen.getByTestId('waveform-readout')).toHaveTextContent('End 0:02.50');
+    // Mid-word, geo-chat has no word edge to widen: what plays ends where it was typed.
+    expect(screen.getByTestId('waveform-readout')).toHaveTextContent(/Plays .* – 0:02\.50/);
   });
 
   // The "Only 1 clip" fix adds at the playhead, so before the player reports one it can't run.
@@ -1394,10 +1392,10 @@ describe('MomentsEditor (GEO-3671)', () => {
     expect(within(card(2)).getByText('Coffee')).toBeInTheDocument();
   });
 
-  it('snaps a typed edge that falls mid-word out to the whole word', () => {
+  it('does not snap a typed edge that falls mid-word out to the whole word', () => {
     render(<MomentsEditor debateId={DEBATE_ID} />);
     typeEdge('End', '2.0');
-    expect(edgeField('End')).toHaveValue('0:02.9');
+    expect(edgeField('End')).toHaveValue('0:02.0');
   });
 
   it('offers Return to automatic only for a hand-picked reel, and sends the version with it', () => {
@@ -1655,7 +1653,7 @@ describe('MomentsEditor on a fresh transcript (GEO-3642)', () => {
     expect(screen.queryByText('Unsaved changes')).not.toBeInTheDocument();
     mocks.transcriptFrom = ready({ version: 'tv2' });
     rerender(<MomentsEditor debateId={DEBATE_ID} />);
-    typeEdge('End', '1.3');
+    typeEdge('End', '2.0');
     publish();
     expect(mocks.mutate).toHaveBeenLastCalledWith(
       expect.objectContaining({ reel: expect.objectContaining({ transcript_version: 'tv2' }) }),
@@ -2814,6 +2812,87 @@ describe('playing clips in the editor (GEO-3773)', () => {
     expect(props().pauseBreakCuts).toBe(false);
   });
 
+  it("plays only a clip's last 3 s, and stops at its end", () => {
+    mocks.plan.data = entry({
+      live_reel: {
+        clock: 'video',
+        clips: [{ start_ms: 900, end_ms: 5_600, speaker_slot: 1, claim_index: 0, claim_text: 'Coffee is low stakes' }],
+      },
+    });
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+
+    fireEvent.click(within(clipPanel()).getByRole('button', { name: "Play the clip's last 3 seconds" }));
+    expect(player.jumpTo).toHaveBeenCalledOnce();
+    // Three seconds before the played end (5.6 s, give or take geo-chat's widening).
+    const fromMs = player.jumpTo.mock.calls[0][0];
+    expect(fromMs).toBeGreaterThanOrEqual(2_300);
+    expect(fromMs).toBeLessThan(2_900);
+
+    act(() => props().onPlayheadChange(4.5));
+    expect(player.pause).not.toHaveBeenCalled();
+    act(() => props().onPlayheadChange(6));
+    expect(player.pause).toHaveBeenCalledOnce();
+  });
+
+  it("plays only a clip's first 3 s", () => {
+    mocks.plan.data = entry({
+      live_reel: {
+        clock: 'video',
+        clips: [{ start_ms: 900, end_ms: 5_600, speaker_slot: 1, claim_index: 0, claim_text: 'Coffee is low stakes' }],
+      },
+    });
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+
+    fireEvent.click(within(clipPanel()).getByRole('button', { name: "Play the clip's first 3 seconds" }));
+    const fromMs = player.jumpTo.mock.calls[0][0];
+    expect(fromMs).toBeGreaterThanOrEqual(600);
+    expect(fromMs).toBeLessThan(1_100);
+    // Past three seconds in, long before the clip's end: it stops.
+    act(() => props().onPlayheadChange((fromMs + 3_100) / 1000));
+    expect(player.pause).toHaveBeenCalledOnce();
+  });
+
+  it('plays on to the clip’s end from a click in the waveform while the clip plays', () => {
+    mocks.plan.data = entry({
+      live_reel: {
+        clock: 'video',
+        clips: [{ start_ms: 900, end_ms: 3_000, speaker_slot: 1, claim_index: 0, claim_text: 'Coffee is low stakes' }],
+      },
+    });
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    fireEvent.click(within(clipPanel()).getByRole('button', { name: 'Play clip' }));
+    player.seek.mockClear();
+
+    // Clip 1 (0.9-3 s) with 2 s either side: 0 to 5 s, a ms per px. A click at 2.5 s, inside it.
+    const track = screen.getByTestId('waveform-track');
+    vi.spyOn(track, 'getBoundingClientRect').mockReturnValue({ width: 5_000, left: 0 } as DOMRect);
+    fireEvent.pointerDown(track, { clientX: 2_500 });
+    expect(player.jumpTo).toHaveBeenLastCalledWith(2_500);
+    expect(player.seek).not.toHaveBeenCalled();
+
+    // Still a clip play: past its end, it stops.
+    act(() => props().onPlayheadChange(3.5));
+    expect(player.pause).toHaveBeenCalledOnce();
+  });
+
+  it('seeks, ending the clip play, from a click in the waveform outside the clip', () => {
+    mocks.plan.data = entry({
+      live_reel: {
+        clock: 'video',
+        clips: [{ start_ms: 900, end_ms: 3_000, speaker_slot: 1, claim_index: 0, claim_text: 'Coffee is low stakes' }],
+      },
+    });
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    fireEvent.click(within(clipPanel()).getByRole('button', { name: 'Play clip' }));
+    player.jumpTo.mockClear();
+
+    const track = screen.getByTestId('waveform-track');
+    vi.spyOn(track, 'getBoundingClientRect').mockReturnValue({ width: 5_000, left: 0 } as DOMRect);
+    fireEvent.pointerDown(track, { clientX: 4_000 });
+    expect(player.seek).toHaveBeenLastCalledWith(4_000);
+    expect(player.jumpTo).not.toHaveBeenCalled();
+  });
+
   it('plays the reel and stops it when the clips change under it', () => {
     mocks.plan.data = entry({
       live_reel: {
@@ -3243,7 +3322,7 @@ describe('playing clips in the editor (GEO-3773)', () => {
     expect(player.pause).toHaveBeenCalled();
     expect(monitor().queryByText(/raw span/)).not.toBeInTheDocument();
 
-    // A seek on the clip's waveform ends the clip's range, and the notice with it.
+    // A seek on the clip's waveform outside the clip ends the clip's range, and the notice with it.
     playClip();
     expect(monitor().getByText(/playing the raw span/)).toBeInTheDocument();
     vi.spyOn(screen.getByTestId('waveform-track'), 'getBoundingClientRect').mockReturnValue({
@@ -3251,7 +3330,8 @@ describe('playing clips in the editor (GEO-3773)', () => {
       left: 0,
     } as DOMRect);
     player.seek.mockClear();
-    fireEvent.pointerDown(screen.getByTestId('waveform-track'), { clientX: 500, pointerId: 1 });
+    // At 1.39 s, before the clip (3.1-4.9 s, ±2 s: 1.1 to 6.9 s across 1,000 px).
+    fireEvent.pointerDown(screen.getByTestId('waveform-track'), { clientX: 50, pointerId: 1 });
     expect(player.seek).toHaveBeenCalledOnce();
     expect(monitor().queryByText(/raw span/)).not.toBeInTheDocument();
   });
@@ -3538,10 +3618,13 @@ describe('MomentsEditor side transcript (GEO-3773)', () => {
       expect(within(transcript()).queryByRole('tooltip')).not.toBeInTheDocument();
     });
 
-    it('places an edge inside a word with Alt, to the tenth', () => {
+    it('always lands a dragged edge on a word edge: mid-word, with Alt or without', () => {
       render(<MomentsEditor debateId={DEBATE_ID} />);
+      expect(screen.queryByRole('switch', { name: 'Snap to words' })).toBeNull();
+      dragTo('end', 2, 0.5);
+      expect(edgeField('End')).toHaveValue('0:03.4');
       dragTo('end', 2, 0.5, true);
-      expect(edgeField('End')).toHaveValue('0:03.2');
+      expect(edgeField('End')).toHaveValue('0:03.4');
     });
 
     it('keeps a dragged edge off the next clip and a second from the other edge', () => {
@@ -3578,15 +3661,6 @@ describe('MomentsEditor side transcript (GEO-3773)', () => {
       expect(edgeField('Start')).toHaveValue('0:01.5');
     });
 
-    it('follows the Snap toggle: off, a drag places the edge freely, and Alt snaps it', () => {
-      render(<MomentsEditor debateId={DEBATE_ID} />);
-      fireEvent.click(screen.getByRole('switch', { name: 'Snap to words' }));
-      dragTo('end', 2, 0.5);
-      expect(edgeField('End')).toHaveValue('0:03.2');
-      dragTo('end', 2, 0.5, true);
-      expect(edgeField('End')).toHaveValue('0:03.4');
-    });
-
     it('keeps focus on a handle as its arrow keys step it from word to word', () => {
       render(<MomentsEditor debateId={DEBATE_ID} />);
       act(() => handle('end').focus());
@@ -3600,16 +3674,17 @@ describe('MomentsEditor side transcript (GEO-3773)', () => {
 
     it('takes the click that ends a drag as the drag’s, not a click on the word', () => {
       render(<MomentsEditor debateId={DEBATE_ID} />);
-      const word = wordSpan(1);
+      const word = wordSpan(2);
       vi.spyOn(word, 'getBoundingClientRect').mockReturnValue(new DOMRect(100, 50, 100, 24));
       document.elementFromPoint = vi.fn(() => word);
       fireEvent.pointerDown(handle('end'), { button: 0 });
-      fireEvent.pointerMove(document, { buttons: 1, clientX: 150, clientY: 60, altKey: true });
+      fireEvent.pointerMove(document, { buttons: 1, clientX: 150, clientY: 60 });
       fireEvent.pointerUp(document);
-      expect(playerMocks.handle.seek).toHaveBeenLastCalledWith(1_200);
+      // The end moved to "Cheap." (3.4 s): the player goes a second before it.
+      expect(playerMocks.handle.seek).toHaveBeenLastCalledWith(2_400);
       // Press on the handle, release on its word: the click lands on the word.
       fireEvent.click(word);
-      expect(playerMocks.handle.seek).toHaveBeenLastCalledWith(1_200);
+      expect(playerMocks.handle.seek).toHaveBeenLastCalledWith(2_400);
     });
 
     it('ends a drag whose release never came, as a move with no button held', () => {
@@ -3779,10 +3854,13 @@ describe('MomentsEditor layout at real widths (GEO-3773 2b preview)', () => {
     await waitFor(() => expect(screen.getByRole('tooltip')).toHaveTextContent('Clip 1 opens on “So”'));
   });
 
-  it('names the Snap switch', () => {
+  it('has no Snap switch and no word steppers: the transcript is where edges snap to words', () => {
     soClip();
     render(<MomentsEditor debateId={DEBATE_ID} />);
-    expect(within(clipPanel()).getByRole('switch', { name: 'Snap to words' })).toBeInTheDocument();
+    expect(screen.queryByRole('switch', { name: 'Snap to words' })).toBeNull();
+    fireEvent.click(within(clipPanel()).getByRole('button', { name: /^Advanced/ }));
+    expect(screen.queryByRole('switch', { name: 'Snap to words' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /one word (earlier|later)/ })).toBeNull();
   });
 
   it('lets the clip bar wrap: the actions take a row of their own, and the warning truncates with a tooltip', () => {
@@ -3898,15 +3976,11 @@ describe('zooming the fine-tune waveform on an edge (GEO-3773)', () => {
     expect(edgeTime('End')).toHaveAttribute('aria-pressed', 'false');
   });
 
-  it('zooms on an edge when it is stepped a word, and still steps it', () => {
+  it('zooms on an edge when that end of the clip is played', () => {
     render(<MomentsEditor debateId={DEBATE_ID} />);
-    fireEvent.click(within(clipPanel()).getByRole('button', { name: 'End one word later' }));
+    fireEvent.click(within(clipPanel()).getByRole('button', { name: "Play the clip's last 3 seconds" }));
     expect(focused()).toEqual(['End']);
-    // The end steps from "dates" (2.9 s) on to "Dinner" (5.4 s), and the window follows it.
-    expect(screen.getByTestId('waveform-readout')).toHaveTextContent('End 0:05.40');
-    // ±2 s around it, kept inside the debate (it ends with clip 2, at 5.6 s).
-    expect(shownWindow()).toBe('3400-5600');
-    fireEvent.click(within(clipPanel()).getByRole('button', { name: 'Start one word earlier' }));
+    fireEvent.click(within(clipPanel()).getByRole('button', { name: "Play the clip's first 3 seconds" }));
     expect(focused()).toEqual(['Start']);
   });
 

@@ -31,15 +31,15 @@ export type EditorClip = {
   /** The claim the live reel links the clip to, shown until the admin picks another. */
   live_claim_text: string | null;
   /**
-   * Where an edge was last placed freely, with Alt, or where the live reel cut it (GEO-3672): the
-   * edge is free while it is still there, so any other change to it (a snapped drag, a step, a
+   * Where an edge was last placed freely (a waveform drag), or where the live reel cut it (GEO-3672):
+   * the edge is free while it is still there, so any other change to it (a transcript drag or step, a
    * typed time, a fix) makes it a word edge again without having to say so. See `manualReel`.
    */
   free_start_ms?: number;
   free_end_ms?: number;
 };
 
-/** Whether a clip's edge sits where it was placed freely, with Alt, or where the live reel cut it. */
+/** Whether a clip's edge sits where it was placed freely, or where the live reel cut it. */
 export function edgeIsFree(clip: EditorClip, edge: 'start' | 'end'): boolean {
   return edge === 'start' ? clip.free_start_ms === clip.start_ms : clip.free_end_ms === clip.end_ms;
 }

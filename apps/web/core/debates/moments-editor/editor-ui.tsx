@@ -5,7 +5,6 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import { tagStyles } from '~/design-system/tag';
-import { Toggle } from '~/design-system/toggle';
 
 import type { ParticipantSlot } from '../api';
 import { NO_SPEAKER_CHIP_CLASS, SPEAKER_CHIP_CLASS } from './speaker-classes';
@@ -64,7 +63,7 @@ export function ClipChip({
   );
 }
 
-/** A segmented group (`.seg`): the ±s zoom, the word steppers. */
+/** A segmented group (`.seg`): the Focus switch, the ±s zoom. */
 export function SegmentGroup({ label, children }: { label?: string; children: React.ReactNode }) {
   return (
     <span
@@ -94,24 +93,6 @@ export function SegmentButton({
         className
       )}
     />
-  );
-}
-
-/** The small switch (`.sw`): Snap to words. The design system's `Toggle`, as a switch button. */
-export function SnapSwitch({ checked, onChange }: { checked: boolean; onChange: () => void }) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      // Named on the switch itself: a label beside it is only text to a screen reader's switch list.
-      aria-label="Snap to words"
-      aria-keyshortcuts="Alt"
-      onClick={onChange}
-      className="inline-flex flex-none cursor-pointer rounded-full border-0 bg-transparent p-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text"
-    >
-      <Toggle checked={checked} />
-    </button>
   );
 }
 
