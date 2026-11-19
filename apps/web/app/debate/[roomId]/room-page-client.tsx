@@ -32,7 +32,12 @@ import {
   toRoomAccess,
 } from '~/core/debates/rooms/room-access-deep-link';
 import { DebateRoomProvider } from '~/core/debates/rooms/room-context';
-import { ROOM_CANT_MAKE_IT, ROOM_NOT_YET_OPEN, ROOM_NO_ACCESS } from '~/core/debates/rooms/room-copy';
+import {
+  ROOM_CANT_MAKE_IT,
+  ROOM_JOIN_REFUSED,
+  ROOM_NOT_YET_OPEN,
+  ROOM_NO_ACCESS,
+} from '~/core/debates/rooms/room-copy';
 import { opponentName } from '~/core/debates/rooms/room-opponent';
 import { noticeFrom, roomPerson, sameId } from '~/core/debates/rooms/room-presence';
 import { debateRoomPath } from '~/core/debates/rooms/room-routes';
@@ -82,7 +87,7 @@ export function DebateRoomPageClient({ roomId }: { roomId: string }) {
   }, [denial, router]);
 
   const admitted = room?.access.status === 'admitted';
-  const { rejoin } = useRoomPresence(roomId, admitted, room?.starts_at ?? null);
+  const { rejoin, refusal: joinRefusal } = useRoomPresence(roomId, admitted, room?.starts_at ?? null);
   const presence = useDebateRoomPresence(room);
   const { ready, authenticated } = useGeoChatAuth();
   // Signed out, the room's kind is unknown; the guest view answers for a lobby (GEO-3129), and is
@@ -135,6 +140,23 @@ export function DebateRoomPageClient({ roomId }: { roomId: string }) {
         }}
       >
         {lobbyLink ? 'Sign in to join the lobby.' : 'Sign in to join your debate.'}
+      </RoomNotice>
+    );
+  }
+
+  // geo-chat turned the join away because either debater is in another open session (geo-chat#383).
+  // The room reads as admitted, so this has to come before the picker it would otherwise mount.
+  if (joinRefusal) {
+    return (
+      <RoomNotice
+        stacked
+        action={{
+          href: toDebatesPanel({ tab: 'requests' }),
+          label: ROOM_JOIN_REFUSED.action,
+          analytics: debateActionAnalyticsAttributes('room', 'Notice open session'),
+        }}
+      >
+        {joinRefusal}
       </RoomNotice>
     );
   }
