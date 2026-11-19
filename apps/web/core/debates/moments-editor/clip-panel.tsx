@@ -48,6 +48,7 @@ export function ClipPanel({
   number,
   speaker,
   name,
+  round,
   lengthMs,
   startMs,
   endMs,
@@ -75,6 +76,8 @@ export function ClipPanel({
   number: number;
   speaker: ParticipantSlot | null;
   name: string;
+  /** Which round of the debate the clip is from (`clipRoundLabel`), or null without turns. */
+  round: string | null;
   lengthMs: number;
   startMs: number;
   endMs: number;
@@ -156,6 +159,7 @@ export function ClipPanel({
           <ClipChip number={number} speaker={speaker} />
           <span className="min-w-[3rem] truncate text-metadataMedium">{name}</span>
           <span className="flex-none text-breadcrumb font-normal whitespace-nowrap text-grey-04 tabular-nums">
+            {round ? `${round} · ` : ''}
             {Math.round(lengthMs / 1000)} s
           </span>
           {warning ? (

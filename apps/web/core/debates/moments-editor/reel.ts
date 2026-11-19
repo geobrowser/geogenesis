@@ -1,4 +1,5 @@
 import type { DebateMediaTurnSegment, DebateTranscriptSpan, ParticipantSlot } from '../api';
+import { openRoundIndexForTurn, openRoundNumber } from '../open-rounds';
 import { recordingSpanOf, renderedTimeOf, transcriptOnRecordings } from '../recording-clock';
 import type { LiveReel, ManualClipBody } from './api';
 
@@ -566,6 +567,35 @@ export function parseReelTime(text: string): number | null {
 
 export function formatSeconds(ms: number): string {
   return `${(ms / 1000).toFixed(1)} s`;
+}
+
+/**
+ * Which round of the debate a clip is from, as the debate player numbers rounds (the opening is
+ * Round 1, `openRoundNumber`): "Round 2", or "Rounds 2–3" for a clip that runs from one into the next.
+ * A time belongs to the last turn that started at or before it on the player's clock, so a pause
+ * between turns counts with the turn before it. `null` without turns.
+ */
+export function clipRoundLabel(
+  clip: { start_ms: number; end_ms: number },
+  turns: readonly DebateMediaTurnSegment[]
+): string | null {
+  if (turns.length === 0) return null;
+  const starts = turns
+    .map(turn => ({ at: turn.source_start_ms ?? turn.output_start_ms, index: turn.turn_index }))
+    .sort((a, b) => a.at - b.at);
+  // `inclusive` decides whether a turn starting exactly at `ms` counts: yes for a clip's start, no
+  // for its end, so a clip ending where the next round begins stays in its own.
+  const roundAt = (ms: number, inclusive: boolean) => {
+    let turn = starts[0].index;
+    for (const start of starts) {
+      if (inclusive ? start.at <= ms : start.at < ms) turn = start.index;
+      else break;
+    }
+    return openRoundNumber(openRoundIndexForTurn(turn));
+  };
+  const first = roundAt(clip.start_ms, true);
+  const last = Math.max(first, roundAt(clip.end_ms, false));
+  return first === last ? `Round ${first}` : `Rounds ${first}–${last}`;
 }
 
 /**
