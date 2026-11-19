@@ -8,6 +8,7 @@ import { useAtom } from 'jotai';
 import { capture } from '~/core/analytics';
 import { DEBATES_SPACE_ID } from '~/core/blocks/ranking/best-debates';
 import { GeoChatRequestError } from '~/core/debates/api';
+import { useCopyDebateLink } from '~/core/debates/browse/use-copy-debate-link';
 import { useDebateTranscript } from '~/core/debates/hooks';
 import { useIsMediaAdmin } from '~/core/debates/moments-editor/hooks';
 import {
@@ -32,7 +33,7 @@ import { ID } from '~/core/id';
 import { BestDebateGradeRow } from './best-debate-grade-row';
 import { type BestDebatesGrading, BestDebatesGradingContext } from './best-debate-grading';
 import { BestDebateWatchContext, type BestDebateWatchEntry, useBestDebateRowData } from './best-debate-row';
-import { EditMomentsMenu, ReelRenderWatcher, captureEditMoments, debateUuid } from './edit-moments';
+import { DebateWatchMenu, ReelRenderWatcher, captureEditMoments, debateUuid } from './edit-moments';
 import { RankingFlowDialog } from './ranking-flow-dialog';
 import { type WatchTranscriptContent, WatchTranscriptPanel, type WatchTranscriptView } from './watch-transcript-panel';
 import { type BestDebatesWatchSpeed, bestDebatesWatchSpeedAtom, bestDebatesWatchSpeedOf } from '~/atoms';
@@ -183,11 +184,26 @@ function WatchDebateDialog({
   onClose: () => void;
 }) {
   const display = useBestDebateRowData(entityId);
-  // The "…" with Edit moments (GEO-3742): media admins only (the check fails closed), and desktop
-  // only, since the editor has no phone layout (GEO-3744). Nobody else gets the header slot at all.
+  // The "…" (GEO-3809): Copy link for everyone, phone included. Edit moments (GEO-3742) only for
+  // media admins (the check fails closed), and only on desktop, since the editor has no phone
+  // layout (GEO-3744).
   const isMediaAdmin = useIsMediaAdmin(debateUuid(entityId), true);
   const isPhone = useIsPhoneLayout();
   const canEditMoments = isMediaAdmin && !isPhone;
+  // The same link and analytics as the Share sheet's Copy link. `space_id` is required by the share
+  // event, and the debate's own space is unknown until its entity (then its space) loads: the block's
+  // space stands in until then.
+  const copyDebateLink = useCopyDebateLink('best_debates_watch', debateUuid(entityId), {
+    overlay: 'modal',
+    overlay_entity_id: debateUuid(entityId),
+    overlay_entity_type: 'debate',
+  });
+  const copyLink = () =>
+    void copyDebateLink({
+      spaceId: display?.space?.id ?? display?.ownSpaceId ?? analytics.space_id,
+      participants: display?.debaterSpaceIds,
+      properties: { source: analytics.source, block_id: analytics.block_id },
+    });
   const speakers = useMomentsSpeakers(entityId);
   // The same cached read the player plays, so the Moments transcript is the reel on screen.
   const reel = useDebateMoments(entityId);
@@ -278,14 +294,14 @@ function WatchDebateDialog({
       subtitle={meta}
       size="watch"
       headerActions={
-        canEditMoments ? (
-          <EditMomentsMenu
-            entityId={entityId}
-            // The editor's path names a space; the route only checks it is one.
-            spaceId={display?.space?.id ?? DEBATES_SPACE_ID}
-            onOpen={onEditMoments}
-          />
-        ) : undefined
+        <DebateWatchMenu
+          entityId={entityId}
+          // The editor's path names a space; the route only checks it is one.
+          spaceId={display?.space?.id ?? DEBATES_SPACE_ID}
+          canEditMoments={canEditMoments}
+          onCopyLink={copyLink}
+          onEditMoments={onEditMoments}
+        />
       }
     >
       <WatchDebateLayout
