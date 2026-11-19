@@ -164,26 +164,23 @@ describe('findPersonalProfileDeclaration', () => {
     expect(request.mock.calls[2][0].params[0]).toMatchObject({ fromBlock: toHex(0n), toBlock: toHex(5_000n) });
   });
 
-  it('reads the rest of the chain in one query past the window limit', async () => {
-    getBlockNumber.mockResolvedValue(10_000_000n);
-    request.mockResolvedValueOnce([]);
-    for (let i = 1; i < 50; i++) request.mockResolvedValueOnce([]);
+  it('keeps walking in bounded windows to a registration far behind the head', async () => {
+    getBlockNumber.mockResolvedValue(1_000_000n);
+    for (let i = 0; i < 80; i++) request.mockResolvedValueOnce([]);
     request.mockResolvedValueOnce([registeredLog, editLog, declaredLog]);
 
     await expect(findPersonalProfileDeclaration(SPACE_ID)).resolves.toMatchObject({ topicId: TOPIC_ID });
-    expect(request).toHaveBeenCalledTimes(51);
-    expect(request.mock.calls[50][0].params[0]).toMatchObject({
-      fromBlock: toHex(0n),
-      toBlock: toHex(10_000_000n - 50n * 10_000n),
-    });
+    expect(request).toHaveBeenCalledTimes(81);
+    for (const [{ params }] of request.mock.calls) {
+      expect(BigInt(params[0].toBlock) - BigInt(params[0].fromBlock)).toBeLessThan(10_000n);
+    }
   });
 
-  it('throws rather than reporting none when the RPC refuses the rest of the chain', async () => {
-    getBlockNumber.mockResolvedValue(10_000_000n);
-    for (let i = 0; i < 50; i++) request.mockResolvedValueOnce([]);
-    request.mockRejectedValueOnce(new Error('block range too large'));
+  it('throws rather than reporting none when a window cannot be read', async () => {
+    getBlockNumber.mockResolvedValue(1_000_000n);
+    request.mockResolvedValueOnce([]).mockRejectedValueOnce(new Error('rpc unavailable'));
 
-    await expect(findPersonalProfileDeclaration(SPACE_ID)).rejects.toThrow('block range too large');
+    await expect(findPersonalProfileDeclaration(SPACE_ID)).rejects.toThrow('rpc unavailable');
   });
 
   it('stops at registration when no profile was ever published', async () => {

@@ -80,13 +80,6 @@ export async function readRegisteredSpaceId(walletAddress: string): Promise<stri
  */
 const DECLARATION_LOOKBACK_BLOCKS = 10_000n;
 
-/**
- * How many windows `findPersonalProfileDeclaration` walks back before giving up: 500k blocks, about
- * 290 days at testnet's ~1,700 blocks a day (Oct 2026). The walk normally stops much sooner, at the
- * space's registration.
- */
-const MAX_DECLARATION_WINDOWS = 50;
-
 type RegistryLog = {
   topics: Hex[];
   data: Hex;
@@ -125,19 +118,15 @@ export async function findPersonalProfileDeclaration(spaceId: string): Promise<P
 
   const logs: RegistryLog[] = [];
   let toBlock = await client.getBlockNumber();
-  let reachedStart = false;
-  for (let window = 0; window < MAX_DECLARATION_WINDOWS; window++) {
+  // Unbounded in windows, never in range: stopping early would leave "no profile" unproven. It runs
+  // only for a registered space the index shows without a profile.
+  for (;;) {
     const fromBlock = toBlock >= DECLARATION_LOOKBACK_BLOCKS ? toBlock - DECLARATION_LOOKBACK_BLOCKS + 1n : 0n;
     const found = await queryLogs(fromBlock, toBlock);
     logs.push(...found);
-    if (fromBlock === 0n || found.some(log => log.topics[2] === GOVERNANCE_ACTIONS.SPACE_ID_REGISTERED)) {
-      reachedStart = true;
-      break;
-    }
+    if (fromBlock === 0n || found.some(log => log.topics[2] === GOVERNANCE_ACTIONS.SPACE_ID_REGISTERED)) break;
     toBlock = fromBlock - 1n;
   }
-  // Past the window limit, one query for the rest of the chain; an RPC that caps its range throws.
-  if (!reachedStart) logs.push(...(await queryLogs(0n, toBlock)));
 
   const ownLogs = logs
     .filter(log => log.topics[0] === space)
