@@ -23,6 +23,8 @@ vi.mock('next/navigation', () => ({ redirect: mocks.redirect }));
 
 const NAME = 'a126ca530c8e48d5b88882c734c38935';
 const DESCRIPTION = '9b1f76ff9711404c861e59dc3fa7d037';
+const HIDDEN = '6ed78f16da324392b1c5376cd06ee0ca';
+const RELATIONSHIPS = '224406e0de3c48d78ef12774111b8b2f';
 const CLAIM = '0af30a95f81e4632a452ecd6aefdfc65';
 // The GEO-3802 example: the claim lives in US Politics and Debates only holds a Topics link.
 const US_POLITICS = '4582fbbee28a16589154f7e36f1ee3c5';
@@ -91,6 +93,37 @@ describe('claimHomeSpaceRedirectTarget', () => {
     expect(claimHomeSpaceRedirectTarget({ entity: null, spaceId: DEBATES, searchParams: {} })).toBeNull();
     // No values at all: the coarse space list includes the route's space, so it is not diverted.
     expect(claimHomeSpaceRedirectTarget({ entity: claim([]), spaceId: DEBATES, searchParams: {} })).toBeNull();
+  });
+});
+
+describe('a space that marks the claim Hidden', () => {
+  // Named in Relationships (hidden there, and the tie-break winner) and US Politics; linked from Debates.
+  const entity = () =>
+    claim(
+      [value(RELATIONSHIPS), value(RELATIONSHIPS, HIDDEN, 'true'), value(US_POLITICS)],
+      [DEBATES, US_POLITICS, RELATIONSHIPS]
+    );
+
+  it('is never the redirect target', () => {
+    expect(claimHomeSpaceRedirectTarget({ entity: entity(), spaceId: DEBATES, searchParams: {} })).toBe(
+      `/space/${US_POLITICS}/${CLAIM}`
+    );
+  });
+
+  it('is never the canonical', async () => {
+    mocks.cachedFetchEntityPage.mockResolvedValue({ entity: claim([value(US_POLITICS)]) });
+    mocks.cachedFetchEntity.mockResolvedValue(entity());
+
+    expect(await claimCanonicalMetadata({ params: Promise.resolve({ id: US_POLITICS, entityId: CLAIM }) })).toEqual({
+      alternates: { canonical: `https://www.geobrowser.io/space/${US_POLITICS}/${CLAIM}` },
+    });
+  });
+
+  it('leaves no canonical when every copy is hidden', async () => {
+    mocks.cachedFetchEntityPage.mockResolvedValue({ entity: claim([]) });
+    mocks.cachedFetchEntity.mockResolvedValue(claim([value(US_POLITICS), value(US_POLITICS, HIDDEN, 'true')]));
+
+    expect(await claimCanonicalMetadata({ params: Promise.resolve({ id: DEBATES, entityId: CLAIM }) })).toEqual({});
   });
 });
 
