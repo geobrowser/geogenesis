@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { BallotGrades } from '~/core/blocks/ranking/ranking-grades';
 import { getUnsavedRankingDraft, resetRankingPublishStateForTests } from '~/core/blocks/ranking/ranking-publish-queue';
-import { Toast } from '~/core/hooks/use-toast';
+import { Toast, useToast } from '~/core/hooks/use-toast';
 
 import { useBlockGrading } from './use-best-debates-block-ranking';
 
@@ -456,5 +456,17 @@ describe('Undo of a Remove from the block (GEO-3805)', () => {
     unmount();
     renderHook(() => null, { wrapper: withToast });
     expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull();
+  });
+
+  it('leaves a toast shown since its own alone when the block goes away', async () => {
+    const { result, unmount } = renderBlock(vi.fn().mockResolvedValue(true));
+    await act(async () => result.current.grading.remove(id(2)));
+    // Another toast (Down rank's, say) takes the Removed one's place before the block goes.
+    // Read from the toast state: a cleared toast's text lingers in the DOM through its exit animation.
+    const other = renderHook(() => useToast());
+    const somethingElse = <span>Something else.</span>;
+    await act(async () => other.result.current[1](somethingElse));
+    unmount();
+    expect(other.result.current[0]).toBe(somethingElse);
   });
 });

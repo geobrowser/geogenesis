@@ -4,7 +4,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { RankingFlowDialog } from './ranking-flow-dialog';
-import { RANKING_TOAST_ATTRIBUTE } from './use-removed-toast';
+import { RANKING_TOAST_ATTRIBUTE } from './ranking-undo-toast';
 
 afterEach(cleanup);
 

@@ -9,7 +9,7 @@ import cx from 'classnames';
 import { SquareButton } from '~/design-system/button';
 import { Close } from '~/design-system/icons/close';
 
-import { isInRankingToast } from './use-removed-toast';
+import { isInRankingToast } from './ranking-undo-toast';
 
 type Props = {
   open: boolean;

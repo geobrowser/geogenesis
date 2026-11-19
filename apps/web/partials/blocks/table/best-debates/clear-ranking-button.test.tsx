@@ -5,7 +5,7 @@ import * as React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ClearRankingButton } from './clear-ranking-button';
-import { isInRankingToast } from './use-removed-toast';
+import { isInRankingToast } from './ranking-undo-toast';
 
 const mocks = vi.hoisted(() => ({ setToast: vi.fn() }));
 vi.mock('~/core/hooks/use-toast', () => ({ useSetToast: () => mocks.setToast }));

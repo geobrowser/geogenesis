@@ -7,7 +7,7 @@ import { useSetToast } from '~/core/hooks/use-toast';
 import { DIALOG_ACTION_BUTTON_CLASS_NAME, DIALOG_SECONDARY_ACTION_BUTTON_CLASS_NAME } from '~/design-system/button';
 
 import { RankingFlowDialog } from './ranking-flow-dialog';
-import { RankingUndoToast } from './use-removed-toast';
+import { RankingUndoToast } from './ranking-undo-toast';
 
 /**
  * Your ranking's Clear (Preston, 12 Nov): after a confirm, empties the draft. Nothing publishes until
