@@ -92,15 +92,8 @@ type RegistryLog = {
 };
 
 /**
- * The chain's record of this personal space's profile publish: its earliest topic declaration and
- * the edit published in the same userOp. Unlike the index it has no lag, and it survives an index
- * that dropped the edit.
- *
- * Proves presence only. Spaces whose profile predates topic declarations have none, so callers use
- * this only when the index shows no profile, never to rule one out.
- *
- * Walks back from the head one window at a time and stops at the space's registration, so an
- * account that registered recently costs one query.
+ * The space's earliest topic declaration and the edit sent in the same transaction, walking back
+ * to its registration. Proves presence only: spaces older than topic declarations have none.
  */
 export async function findPersonalProfileDeclaration(spaceId: string): Promise<ProfileDeclaration | null> {
   const client = publicClient();
@@ -345,12 +338,8 @@ type RepublishPersonalProfileParams = {
 };
 
 /**
- * Republishes a profile the index dropped: the original edit's ops, read back from IPFS so every id
- * matches, under a new edit id (and so a new CID, which the indexer has not cached as failed).
- *
- * Sends only the edit. The topic declaration is already on chain, and declaring it again would only
- * add a second declaration. Never rebuilds the ops with fresh ids: if the original can't be read, it
- * throws and sends nothing.
+ * Republishes a dropped profile: the original edit's ops by id, under a new edit id and CID. Sends
+ * only the edit, since the declaration is on chain; throws and sends nothing if the original can't be read.
  */
 export async function republishPersonalProfile({
   smartAccount,

@@ -71,9 +71,8 @@ export class ProfileStillProcessingError extends Error {
 }
 
 /**
- * Decodes the original profile edit and checks that it is this space's profile for this topic, so
- * a republish reuses its exact ids. Throws rather than returning something to rebuild from: fresh
- * ids would write a second person entity once the original is indexed.
+ * Decodes the original profile edit and checks it is this space's profile for this topic. Throws
+ * instead of letting a caller rebuild: fresh ids would write a second person entity.
  */
 export function parseOriginalProfileEdit(bytes: Uint8Array, spaceId: string, topicId: string): Edit {
   let edit: Edit;
@@ -107,12 +106,8 @@ export async function fetchOriginalProfileEdit(uri: string, fetchFn: typeof fetc
 }
 
 /**
- * The ops to republish: the original edit's ops with the same ids, so indexing both the original and
- * the republish upserts one profile rather than writing two.
- *
- * - `name` replaces the person's Name value. It is the same value id, so the edit indexed last wins.
- * - `avatarOps` are added only when the original has no avatar. A relation upsert can't retarget
- *   `to`, so a second avatar relation would leave the person with two avatars.
+ * The original ops with their ids, so indexing both edits upserts one profile. `name` replaces the
+ * person's Name; `avatarOps` are added only if there is no avatar, since an upsert can't retarget one.
  */
 export function buildRecoveryOps({
   originalOps,
