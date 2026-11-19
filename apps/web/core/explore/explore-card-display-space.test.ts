@@ -124,3 +124,72 @@ describe('the space a card renders in', () => {
     expect(normId(row.spaceId)).toBe(normId(CRYPTO));
   });
 });
+
+/*
+ * GEO-3802. A feed scoped to a space lists every claim with so much as a Topics relation in it, and
+ * the pick above can only choose among the feed's spaces. A claim that lives elsewhere was drawn
+ * with no types (so not as a claim), linked into that space and voted on there, where no votes are.
+ * The fixture mirrors the example: named and typed in US Politics, linked from Debates.
+ */
+describe('a claim the feed’s space only links to', () => {
+  const US_POLITICS = '4582fbbee28a16589154f7e36f1ee3c5';
+  const DEBATES = '9284477c8fe746368698994e2e517b32';
+  const NAME = 'a126ca530c8e48d5b88882c734c38935';
+  const CLAIM_TYPE_ID = '96f859efa1ca4b229372c86ad58b694b';
+  const TITLE = 'Billionaires should not exist';
+
+  function scopedClaim({
+    valuesIn = [],
+    types = [{ id: CLAIM_TYPE_ID, name: 'Claim' }],
+  }: {
+    valuesIn?: string[];
+    types?: { id: string; name: string }[];
+  } = {}): ExploreCardEntity {
+    return {
+      id: '0af30a95f81e4632a452ecd6aefdfc65',
+      name: TITLE,
+      description: null,
+      spaces: [DEBATES, US_POLITICS],
+      types,
+      // What a Debates-scoped feed query returns: only the lists' values in the feed's space.
+      values: valuesIn.map(spaceId => ({ property: { id: NAME, name: 'Name' }, spaceId, value: TITLE })),
+      relations: [],
+      commentCount: 0,
+      placement: {
+        names: [US_POLITICS, ...valuesIn].map(spaceId => ({ spaceId, text: TITLE })),
+        types: [US_POLITICS, ...valuesIn].map(spaceId => ({ spaceId, id: CLAIM_TYPE_ID, name: 'Claim' })),
+      },
+    } as unknown as ExploreCardEntity;
+  }
+
+  it('links and votes in the claim’s home space', () => {
+    const row = rowFor(scopedClaim(), [DEBATES]);
+
+    expect(normId(row.spaceId)).toBe(US_POLITICS);
+  });
+
+  it('renders as a claim, with its home space’s types and name', () => {
+    const row = rowFor(scopedClaim(), [DEBATES]);
+
+    expect(row.types).toEqual([{ id: CLAIM_TYPE_ID, name: 'Claim' }]);
+    expect(row.title).toBe(TITLE);
+  });
+
+  it('stays in the feed’s space when the claim also lives there', () => {
+    const row = rowFor(scopedClaim({ valuesIn: [DEBATES] }), [DEBATES]);
+
+    expect(normId(row.spaceId)).toBe(DEBATES);
+  });
+
+  it('leaves entities that are not claims where the feed put them', () => {
+    const row = rowFor(scopedClaim({ types: [{ id: 'aaaabbbbccccddddeeeeffff00001111', name: 'Topic' }] }), [DEBATES]);
+
+    expect(normId(row.spaceId)).toBe(DEBATES);
+  });
+
+  it('stays put without the placement projection, rather than guessing', () => {
+    const row = rowFor({ ...scopedClaim(), placement: undefined }, [DEBATES]);
+
+    expect(normId(row.spaceId)).toBe(DEBATES);
+  });
+});

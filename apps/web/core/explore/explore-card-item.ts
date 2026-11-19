@@ -1,6 +1,7 @@
 import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { countActivityForNode } from '~/core/claims/browse/claim-activity-fields';
+import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import { getRecordingUrls } from '~/core/community-calls/recordings';
 import { isDebateEntity } from '~/core/debates/is-debate-entity';
 import { DEBATE_CLAIMS_PROPERTY_ID, DEBATE_VIDEOS_PROPERTY_ID } from '~/core/debates/ontology';
@@ -8,6 +9,7 @@ import { EntityDecoder } from '~/core/io/decoders/entity';
 import type { Entity } from '~/core/types';
 import { normId } from '~/core/utils/norm-id';
 import { getRelationVideoUrls } from '~/core/utils/relation-video';
+import { resolveEntitySpaceId } from '~/core/utils/space/entity-home-space';
 import { getSpaceRank, getTopRankedSpaceId } from '~/core/utils/space/space-ranking';
 
 import {
@@ -121,13 +123,48 @@ export function toExploreFeedItem(row: ExploreFeedRow, label: { name: string; im
   } satisfies ExploreFeedItem;
 }
 
+/**
+ * The entity's names and types in every space, read past whatever space scoping the card's own
+ * value and relation lists had. Optional because only the card selection asks for it.
+ */
+export type ExploreCardPlacement = {
+  names: { spaceId: string; text: string }[];
+  types: { spaceId: string; id: string; name: string | null }[];
+};
+
 /** A decoded entity plus the fields the card needs that aren't part of `Entity`. */
 export type ExploreCardEntity = Entity & {
   commentCount: number;
   activityCount: number;
   activityCommentCount: number;
   createdAt?: string;
+  placement?: ExploreCardPlacement;
 };
+
+function decodePlacement(raw: Record<string, unknown>): ExploreCardPlacement | undefined {
+  const { placementNames, placementTypes } = raw as {
+    placementNames?: unknown;
+    placementTypes?: unknown;
+  };
+  if (!Array.isArray(placementNames) && !Array.isArray(placementTypes)) return undefined;
+
+  const names = (Array.isArray(placementNames) ? placementNames : []).flatMap(value => {
+    const { spaceId, text } = (value ?? {}) as { spaceId?: unknown; text?: unknown };
+    return typeof spaceId === 'string' && typeof text === 'string' && text.trim().length > 0
+      ? [{ spaceId, text: text.trim() }]
+      : [];
+  });
+  const types = (Array.isArray(placementTypes) ? placementTypes : []).flatMap(relation => {
+    const { spaceId, toEntity } = (relation ?? {}) as {
+      spaceId?: unknown;
+      toEntity?: { id?: unknown; name?: unknown } | null;
+    };
+    return typeof spaceId === 'string' && typeof toEntity?.id === 'string'
+      ? [{ spaceId, id: toEntity.id, name: typeof toEntity.name === 'string' ? toEntity.name : null }]
+      : [];
+  });
+  return { names, types };
+}
 
 /** The comment relation type — `backlinks` through it is how a card gets its comment count. */
 export const COMMENT_RELATION_TYPE_ID = '310d4a240e5b451cb2151bfce40d0fe6';
@@ -154,6 +191,7 @@ export function decodeExploreCardEntity(node: unknown): ExploreCardEntity | null
     activityCount: activity.total,
     activityCommentCount: activity.comments,
     createdAt: raw.createdAt,
+    placement: decodePlacement(raw),
   };
 }
 
@@ -241,6 +279,38 @@ function pickDisplaySpaceId(entity: Entity, allowed: Set<string>): string | null
   return getTopRankedSpaceId(typed.length > 0 ? typed : bestRanked);
 }
 
+const CLAIM_TYPE = normId(CLAIM_TYPE_ID);
+const NAME_PROPERTY = normId(EXPLORE_ENTITY_NAME_PROPERTY_ID);
+
+/**
+ * The space a claim card links to and reads its votes in: {@link pickDisplaySpaceId}'s pick, unless
+ * the claim holds nothing there, in which case its home space (GEO-3802).
+ *
+ * A feed scoped to a space lists every claim with so much as a Topics relation in it, and the pick
+ * can only choose among the feed's spaces, so a claim that lives elsewhere was drawn, linked and
+ * voted on in a space with no votes on it. `resolveEntitySpaceId` is the rule every other claim
+ * surface uses: the pick stands wherever the claim holds content, so a claim that lives in two
+ * spaces keeps the one the caller asked for.
+ *
+ * Claims only. The residency test reads the card's own value lists, which carry four properties,
+ * and that is only a fair test of residency for an entity that is always named where it lives.
+ */
+function claimSpaceId(entity: ExploreCardEntity, picked: string): string {
+  if (!entity.types.some(type => normId(type.id) === CLAIM_TYPE)) return picked;
+
+  const names = entity.placement?.names ?? [];
+  return resolveEntitySpaceId(
+    {
+      spaces: entity.spaces,
+      values: [
+        ...entity.values,
+        ...names.map(name => ({ property: { id: NAME_PROPERTY }, spaceId: name.spaceId, value: name.text })),
+      ],
+    },
+    picked
+  );
+}
+
 function textValueForProperty(entity: Entity, propertyId: string, spaceId: string): string | null {
   const pid = normId(propertyId);
   const sid = normId(spaceId);
@@ -298,22 +368,35 @@ export function buildExploreFeedRows(
   const typesRelationIdNorm = normId(SystemIds.TYPES_PROPERTY);
 
   for (const e of entities) {
-    const spaceId = pickDisplaySpaceId(e, allowedSpaceIds);
-    if (!spaceId) continue;
+    const picked = pickDisplaySpaceId(e, allowedSpaceIds);
+    if (!picked) continue;
+    const spaceId = claimSpaceId(e, picked);
+    const displaySpaceIdNorm = normId(spaceId);
 
     // Prefer space-scoped values so a card rendered for space A doesn't leak values
     // from space C. Fall back to the top-level aggregated name/description when the
     // entity has no value in the display space — avoids "Untitled" cards purely
     // because of the space boundary.
-    const title = textValueForProperty(e, EXPLORE_ENTITY_NAME_PROPERTY_ID, spaceId) ?? e.name?.trim() ?? 'Untitled';
+    const title =
+      textValueForProperty(e, EXPLORE_ENTITY_NAME_PROPERTY_ID, spaceId) ??
+      e.placement?.names.find(name => normId(name.spaceId) === displaySpaceIdNorm)?.text ??
+      e.name?.trim() ??
+      'Untitled';
     const description =
       textValueForProperty(e, EXPLORE_ENTITY_DESCRIPTION_PROPERTY_ID, spaceId) ?? e.description ?? null;
 
-    const displaySpaceIdNorm = normId(spaceId);
     const relationsInDisplaySpace = e.relations.filter(r => normId(r.spaceId) === displaySpaceIdNorm);
-    const types = relationsInDisplaySpace
+    const listedTypes = relationsInDisplaySpace
       .filter(r => normId(r.type.id) === typesRelationIdNorm)
       .map(r => ({ id: r.toEntity.id, name: r.toEntity.name }));
+    // A claim moved to its home space by `claimSpaceId` has nothing in the scoped lists there, so
+    // its types come from the unscoped projection, the same relations read past the scoping.
+    const types =
+      listedTypes.length > 0 || spaceId === picked
+        ? listedTypes
+        : (e.placement?.types ?? [])
+            .filter(type => normId(type.spaceId) === displaySpaceIdNorm)
+            .map(type => ({ id: type.id, name: type.name }));
 
     items.push({
       entityId: e.id,

@@ -99,3 +99,35 @@ describe('the real card node', () => {
     expect(row.types.map(type => type.name)).toEqual(['Claim']);
   });
 });
+
+/*
+ * The same node as a personal-space-scoped feed returns it (GEO-3802): the scoped lists come back
+ * empty, because the claim holds nothing in that space, and only the placement projection says
+ * where it lives. Shapes as the API answered `placementNames` / `placementTypes` on 19 Nov.
+ */
+describe('the real card node, scoped to a space that only links to it', () => {
+  const SCOPED = {
+    ...NODE,
+    valuesList: [],
+    relationsList: [],
+    placementNames: [{ spaceId: RELATIONSHIPS, text: NODE.name }],
+    placementTypes: [{ spaceId: RELATIONSHIPS, toEntity: { id: '96f859efa1ca4b229372c86ad58b694b', name: 'Claim' } }],
+  };
+
+  it('decodes the placement projection', () => {
+    expect(decodeExploreCardEntity(SCOPED)?.placement).toEqual({
+      names: [{ spaceId: RELATIONSHIPS, text: NODE.name }],
+      types: [{ spaceId: RELATIONSHIPS, id: '96f859efa1ca4b229372c86ad58b694b', name: 'Claim' }],
+    });
+  });
+
+  it('renders the claim in the space it lives in, as a claim', () => {
+    const entity = decodeExploreCardEntity(SCOPED)!;
+
+    const [row] = buildExploreFeedRows([entity], new Set([normId(PERSONAL)]), new Set());
+
+    expect(normId(row.spaceId)).toBe(normId(RELATIONSHIPS));
+    expect(row.types.map(type => type.name)).toEqual(['Claim']);
+    expect(row.title).toBe(NODE.name);
+  });
+});
