@@ -252,6 +252,21 @@ describe('verifyPrivyIdentityTokenDetailed', () => {
     expect(later.ok).toBe(true);
   });
 
+  it('shares one refetch between concurrent unknown kids', async () => {
+    const { privateKey, jwk } = await keyPair('k1');
+    const stranger = await keyPair('stranger');
+    const { fetcher, calls } = jwksFetcher([jwk]);
+    await verifyPrivyIdentityToken(await sign(privateKey, 'k1', claims()), { appId: APP_ID, fetcher });
+
+    const later = () => Date.now() + 61_000;
+    const forged = await Promise.all(
+      Array.from({ length: 5 }, (_, i) => sign(stranger.privateKey, `burst-${i}`, claims()))
+    );
+    await Promise.all(forged.map(token => verifyPrivyIdentityToken(token, { appId: APP_ID, fetcher, now: later })));
+
+    expect(calls).toHaveLength(2);
+  });
+
   it('reports an unknown kid as invalid after a real refetch', async () => {
     const { privateKey, jwk } = await keyPair('k1');
     const stranger = await keyPair('stranger');

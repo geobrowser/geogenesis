@@ -21,6 +21,8 @@ const CLOCK_SKEW_S = 30;
 type Jwk = JsonWebKey & { kid?: string; alg?: string };
 
 let jwksCache: { appId: string; keys: Jwk[]; fetchedAt: number } | null = null;
+/** One fetch at a time per app, so a burst of unknown kids can't fan out past the refetch cap. */
+let jwksInFlight: { appId: string; keys: Promise<Jwk[]> } | null = null;
 
 export function privyJwksUrl(appId: string): string {
   return `https://auth.privy.io/api/v1/apps/${encodeURIComponent(appId)}/jwks.json`;
@@ -47,14 +49,27 @@ async function keysFor(
   if (jwksCache && age < (forceRefresh ? JWKS_FORCED_REFRESH_MIN_MS : JWKS_TTL_MS)) {
     return { keys: jwksCache.keys, fetched: false };
   }
-  const keys = await fetchJwks(appId, fetcher);
-  jwksCache = { appId, keys, fetchedAt: now };
-  return { keys, fetched: true };
+  if (jwksInFlight?.appId !== appId) {
+    const inFlight = {
+      appId,
+      keys: fetchJwks(appId, fetcher)
+        .then(keys => {
+          jwksCache = { appId, keys, fetchedAt: now };
+          return keys;
+        })
+        .finally(() => {
+          if (jwksInFlight === inFlight) jwksInFlight = null;
+        }),
+    };
+    jwksInFlight = inFlight;
+  }
+  return { keys: await jwksInFlight.keys, fetched: true };
 }
 
 /** Test seam. */
 export function resetPrivyJwksCacheForTests() {
   jwksCache = null;
+  jwksInFlight = null;
 }
 
 function base64UrlDecode(segment: string): Uint8Array<ArrayBuffer> {
