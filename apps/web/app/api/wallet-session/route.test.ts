@@ -20,6 +20,9 @@ const mocks = vi.hoisted(() => {
     },
     verify: vi.fn(),
     rateLimit: vi.fn(async () => ({ ok: true }) as { ok: true } | { ok: false; retryAfter: number }),
+    accountRateLimit: vi.fn(
+      async (_userId: string) => ({ ok: true }) as { ok: true } | { ok: false; retryAfter: number }
+    ),
   };
 });
 
@@ -34,7 +37,10 @@ vi.mock('~/core/auth/server/privy-identity-token', async importOriginal => ({
   },
 }));
 
-vi.mock('./rate-limit', () => ({ checkWalletSessionIpRateLimit: mocks.rateLimit }));
+vi.mock('./rate-limit', () => ({
+  checkWalletSessionIpRateLimit: mocks.rateLimit,
+  checkWalletSessionAccountRateLimit: mocks.accountRateLimit,
+}));
 
 const { DELETE, POST } = await import('./route');
 
@@ -53,6 +59,7 @@ beforeEach(() => {
   mocks.store.delete.mockClear();
   mocks.verify.mockReset();
   mocks.rateLimit.mockClear();
+  mocks.accountRateLimit.mockReset().mockResolvedValue({ ok: true });
   vi.stubEnv('WALLET_SESSION_SECRET', 'test-secret');
   vi.stubEnv('NEXT_PUBLIC_PRIVY_APP_ID', 'app');
 });
@@ -98,6 +105,30 @@ describe('POST /api/wallet-session', () => {
     expect(res.status).toBe(429);
     expect(res.headers.get('Retry-After')).toBe('9');
     expect(mocks.verify).not.toHaveBeenCalled();
+  });
+
+  it('caps each verified account, without capping another account behind the same IP', async () => {
+    mocks.accountRateLimit.mockImplementation(async userId =>
+      userId === 'did:privy:busy' ? { ok: false, retryAfter: 30 } : { ok: true }
+    );
+    mocks.verify.mockResolvedValueOnce({ userId: 'did:privy:busy', walletAddress: WALLET });
+    mocks.verify.mockResolvedValueOnce({ userId: 'did:privy:other', walletAddress: OTHER });
+
+    const busy = await POST(request('POST', { token: 'busy' }));
+    expect(busy.status).toBe(429);
+    expect(busy.headers.get('Retry-After')).toBe('30');
+    expect(await busy.json()).toEqual({ wallet: null, status: 'rate_limited' });
+    expect(mocks.store.set).not.toHaveBeenCalled();
+
+    const other = await POST(request('POST', { token: 'other' }));
+    expect(await other.json()).toEqual({ wallet: OTHER, status: 'issued' });
+    expect(mocks.accountRateLimit.mock.calls.map(([id]) => id)).toEqual(['did:privy:busy', 'did:privy:other']);
+  });
+
+  it('never counts an unverified token against an account', async () => {
+    mocks.verify.mockResolvedValue(null);
+    await POST(request('POST', { token: 'forged' }));
+    expect(mocks.accountRateLimit).not.toHaveBeenCalled();
   });
 
   it('writes nothing for a missing or unverified token, whatever the body names', async () => {

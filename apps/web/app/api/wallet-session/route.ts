@@ -12,7 +12,7 @@ import { WALLET_SESSION_HINT } from '~/core/auth/wallet-session-shared';
 
 import { getClientIp } from '../client-ip';
 import { isSameOrigin } from '../same-origin';
-import { checkWalletSessionIpRateLimit } from './rate-limit';
+import { checkWalletSessionAccountRateLimit, checkWalletSessionIpRateLimit } from './rate-limit';
 
 /**
  * `issued` means the page rendered signed out. Failures: `invalid_token` 401, `no_wallet` 403,
@@ -25,6 +25,9 @@ export type WalletSessionResponse = { wallet: string | null; status: WalletSessi
 const json = (status: number, body: WalletSessionResponse, headers?: HeadersInit) =>
   Response.json(body, { status, headers });
 
+const rateLimited = (retryAfter: number) =>
+  json(429, { wallet: null, status: 'rate_limited' }, { 'Retry-After': String(retryAfter) });
+
 /** Not httpOnly: the client reads it to know there is a session to clear. */
 const HINT_OPTIONS = { ...WALLET_SESSION_COOKIE_OPTIONS, httpOnly: false } as const;
 
@@ -35,10 +38,8 @@ const HINT_OPTIONS = { ...WALLET_SESSION_COOKIE_OPTIONS, httpOnly: false } as co
 export async function POST(req: Request) {
   if (!isSameOrigin(req)) return new Response(null, { status: 403 });
 
-  const limit = await checkWalletSessionIpRateLimit(getClientIp(req));
-  if (!limit.ok) {
-    return json(429, { wallet: null, status: 'rate_limited' }, { 'Retry-After': String(limit.retryAfter) });
-  }
+  const ipLimit = await checkWalletSessionIpRateLimit(getClientIp(req));
+  if (!ipLimit.ok) return rateLimited(ipLimit.retryAfter);
 
   const appId = process.env.NEXT_PUBLIC_PRIVY_APP_ID ?? '';
   const verification = await verifyPrivyIdentityTokenDetailed(bearerToken(req.headers.get('authorization')), { appId });
@@ -48,6 +49,8 @@ export async function POST(req: Request) {
       : json(401, { wallet: null, status: 'invalid_token' });
   }
   const identity = verification.identity;
+  const accountLimit = await checkWalletSessionAccountRateLimit(identity.userId);
+  if (!accountLimit.ok) return rateLimited(accountLimit.retryAfter);
   if (!identity.walletAddress) return json(403, { wallet: null, status: 'no_wallet' });
 
   const cookieStore = await cookies();
