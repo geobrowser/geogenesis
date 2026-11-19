@@ -24,9 +24,8 @@ function queryString(searchParams: SearchParams): string {
 }
 
 /**
- * The claim's home-space URL when `spaceId` holds no content for it, else null. The claim page keys
- * every read on the URL's space, so a link-only space shows no votes (GEO-3802). The target always
- * places the claim, so it cannot loop. `entity` must carry values from every space.
+ * The claim's home-space URL when `spaceId` holds none of its content, else null (GEO-3802).
+ * The target always places the claim, so it cannot loop. `entity` needs values from every space.
  */
 export function claimHomeSpaceRedirectTarget({
   entity,
