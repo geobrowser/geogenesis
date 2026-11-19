@@ -25,6 +25,7 @@ import {
   buildRecoveryOps,
   canPublishFreshUnderDeclaredTopic,
   fetchOriginalProfileEdit,
+  hasProfileAvatar,
   parseEditUriFromLogData,
   parseOriginalProfileEdit,
 } from './personal-profile-recovery';
@@ -107,14 +108,10 @@ export async function findPersonalProfileDeclaration(spaceId: string): Promise<P
     GOVERNANCE_ACTIONS.EDITS_PUBLISHED,
   ];
 
-  const logs: RegistryLog[] = [];
-  let toBlock = await client.getBlockNumber();
-  let reachedStart = false;
-  for (let window = 0; window < MAX_DECLARATION_WINDOWS; window++) {
-    const fromBlock = toBlock >= DECLARATION_LOOKBACK_BLOCKS ? toBlock - DECLARATION_LOOKBACK_BLOCKS + 1n : 0n;
+  const queryLogs = async (fromBlock: bigint, toBlock: bigint) =>
     // `enter` logs [from space, to space, action, topic] as raw topics with no event signature, so
     // viem's typed `getLogs` cannot filter it. Registration logs a zero from-space, hence `null`.
-    const found = (await client.request({
+    (await client.request({
       method: 'eth_getLogs',
       params: [
         {
@@ -125,6 +122,13 @@ export async function findPersonalProfileDeclaration(spaceId: string): Promise<P
         },
       ],
     })) as RegistryLog[];
+
+  const logs: RegistryLog[] = [];
+  let toBlock = await client.getBlockNumber();
+  let reachedStart = false;
+  for (let window = 0; window < MAX_DECLARATION_WINDOWS; window++) {
+    const fromBlock = toBlock >= DECLARATION_LOOKBACK_BLOCKS ? toBlock - DECLARATION_LOOKBACK_BLOCKS + 1n : 0n;
+    const found = await queryLogs(fromBlock, toBlock);
     logs.push(...found);
     if (fromBlock === 0n || found.some(log => log.topics[2] === GOVERNANCE_ACTIONS.SPACE_ID_REGISTERED)) {
       reachedStart = true;
@@ -132,6 +136,8 @@ export async function findPersonalProfileDeclaration(spaceId: string): Promise<P
     }
     toBlock = fromBlock - 1n;
   }
+  // Past the window limit, one query for the rest of the chain; an RPC that caps its range throws.
+  if (!reachedStart) logs.push(...(await queryLogs(0n, toBlock)));
 
   const ownLogs = logs
     .filter(log => log.topics[0] === space)
@@ -144,8 +150,6 @@ export async function findPersonalProfileDeclaration(spaceId: string): Promise<P
     edits.find(edit => edit.transactionHash === declaration.transactionHash);
   // The profile is the earliest declaration sent with its edit; one sent alone has nothing to republish.
   const declaration = declarations.find(pairedEdit) ?? declarations[0];
-  // Not reaching the registration leaves "none" unproven, and a fresh publish could duplicate one.
-  if (!declaration && !reachedStart) throw new Error('Profile declaration scan stopped before the space registration.');
   if (!declaration) return null;
   const edit = pairedEdit(declaration);
 
@@ -439,7 +443,10 @@ async function profileRecoveryOps({
       spaceId,
       declaration.topicId
     );
-    const avatarOps = spaceAvatarUri ? await generateAvatarOps(declaration.topicId, getImagePath(spaceAvatarUri)) : [];
+    const avatarOps =
+      spaceAvatarUri && !hasProfileAvatar(original.ops, declaration.topicId)
+        ? await generateAvatarOps(declaration.topicId, getImagePath(spaceAvatarUri))
+        : [];
     const ops = buildRecoveryOps({
       originalOps: original.ops,
       topicId: declaration.topicId,

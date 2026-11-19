@@ -164,12 +164,26 @@ describe('findPersonalProfileDeclaration', () => {
     expect(request.mock.calls[2][0].params[0]).toMatchObject({ fromBlock: toHex(0n), toBlock: toHex(5_000n) });
   });
 
-  it('throws rather than reporting none when the scan limit ends before registration', async () => {
+  it('reads the rest of the chain in one query past the window limit', async () => {
     getBlockNumber.mockResolvedValue(10_000_000n);
-    request.mockResolvedValue([]);
+    request.mockResolvedValueOnce([]);
+    for (let i = 1; i < 50; i++) request.mockResolvedValueOnce([]);
+    request.mockResolvedValueOnce([registeredLog, editLog, declaredLog]);
 
-    await expect(findPersonalProfileDeclaration(SPACE_ID)).rejects.toThrow(/before the space registration/);
-    expect(request).toHaveBeenCalledTimes(50);
+    await expect(findPersonalProfileDeclaration(SPACE_ID)).resolves.toMatchObject({ topicId: TOPIC_ID });
+    expect(request).toHaveBeenCalledTimes(51);
+    expect(request.mock.calls[50][0].params[0]).toMatchObject({
+      fromBlock: toHex(0n),
+      toBlock: toHex(10_000_000n - 50n * 10_000n),
+    });
+  });
+
+  it('throws rather than reporting none when the RPC refuses the rest of the chain', async () => {
+    getBlockNumber.mockResolvedValue(10_000_000n);
+    for (let i = 0; i < 50; i++) request.mockResolvedValueOnce([]);
+    request.mockRejectedValueOnce(new Error('block range too large'));
+
+    await expect(findPersonalProfileDeclaration(SPACE_ID)).rejects.toThrow('block range too large');
   });
 
   it('stops at registration when no profile was ever published', async () => {

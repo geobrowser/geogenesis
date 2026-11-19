@@ -12,13 +12,14 @@ import { IPFS_GATEWAY_COUNT, getImagePathAtLevel } from '../utils';
 export const INDEX_LAG_WINDOW_MS = 5 * 60 * 1000;
 
 /**
- * How long after the last publish an unreadable original falls back to a fresh profile under the
+ * How long after the last publish a missing original falls back to a fresh profile under the
  * declared topic. Long enough that a slow or flaky IPFS gateway gets retried first.
  */
 export const UNREADABLE_ORIGINAL_FALLBACK_MS = 60 * 60 * 1000;
 
 /** Whether a profile whose original edit can't be read may be published fresh under its declared topic. */
 export function canPublishFreshUnderDeclaredTopic(declaration: ProfileDeclaration, now: number) {
+  // From the latest publish, so a fallback that is still indexing isn't followed by a second one.
   return now - declaration.lastPublishedAtMs > UNREADABLE_ORIGINAL_FALLBACK_MS;
 }
 
@@ -153,6 +154,16 @@ export async function fetchOriginalProfileEdit(uri: string, fetchFn: typeof fetc
   });
 }
 
+/** Whether the ops give the person entity an avatar. */
+export function hasProfileAvatar(ops: readonly Op[], topicId: string) {
+  return ops.some(
+    op =>
+      op.type === 'createRelation' &&
+      formatId(op.from) === topicId &&
+      formatId(op.relationType) === ContentIds.AVATAR_PROPERTY
+  );
+}
+
 /**
  * The original ops with their ids, so indexing both edits upserts one profile. `name` replaces the
  * person's Name; `avatarOps` are added only if there is no avatar, since an upsert can't retarget one.
@@ -180,13 +191,7 @@ export function buildRecoveryOps({
     };
   });
 
-  const hasAvatar = originalOps.some(
-    op =>
-      op.type === 'createRelation' &&
-      formatId(op.from) === topicId &&
-      formatId(op.relationType) === ContentIds.AVATAR_PROPERTY
-  );
-  if (!hasAvatar) ops.push(...avatarOps);
+  if (!hasProfileAvatar(originalOps, topicId)) ops.push(...avatarOps);
 
   return ops;
 }

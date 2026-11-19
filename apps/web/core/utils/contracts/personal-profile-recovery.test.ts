@@ -14,6 +14,7 @@ import {
   canPublishFreshUnderDeclaredTopic,
   decideProfileRetry,
   fetchOriginalProfileEdit,
+  hasProfileAvatar,
   parseEditUriFromLogData,
   parseOriginalProfileEdit,
 } from './personal-profile-recovery';
@@ -222,6 +223,16 @@ describe('buildRecoveryOps', () => {
     const ops = buildRecoveryOps({ originalOps, topicId: TOPIC_ID, name: 'Bryan', avatarOps });
 
     expect(ops).toEqual([...originalOps, ...avatarOps]);
+  });
+
+  it('tells whether the person already has an avatar', () => {
+    const { ops: avatar } = Graph.createRelation({
+      fromEntity: TOPIC_ID,
+      toEntity: '11111111111111111111111111111111',
+      type: ContentIds.AVATAR_PROPERTY,
+    });
+    expect(hasProfileAvatar(originalOps, TOPIC_ID)).toBe(false);
+    expect(hasProfileAvatar([...originalOps, ...avatar], TOPIC_ID)).toBe(true);
   });
 
   it('keeps the original avatar rather than adding a second one', () => {
