@@ -414,9 +414,8 @@ export async function republishPersonalProfile({
 }
 
 /**
- * The ops for a recovered profile. A readable original is always republished by its ids. If it
- * can't be read, a fresh profile under the declared topic is built only once the last publish is
- * past the fallback age; the person entity, and so the page, stays the declared one.
+ * A readable original's ops by id; else, past the fallback age, a fresh profile under the declared
+ * topic, so the person entity and page stay the same.
  */
 async function profileRecoveryOps({
   spaceId,
