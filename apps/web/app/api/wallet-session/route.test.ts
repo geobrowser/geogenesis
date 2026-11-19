@@ -111,6 +111,7 @@ describe('POST /api/wallet-session', () => {
     mocks.accountRateLimit.mockImplementation(async userId =>
       userId === 'did:privy:busy' ? { ok: false, retryAfter: 30 } : { ok: true }
     );
+    mocks.values.set(LEGACY_WALLET_ADDRESS, WALLET);
     mocks.verify.mockResolvedValueOnce({ userId: 'did:privy:busy', walletAddress: WALLET });
     mocks.verify.mockResolvedValueOnce({ userId: 'did:privy:other', walletAddress: OTHER });
 
@@ -119,6 +120,7 @@ describe('POST /api/wallet-session', () => {
     expect(busy.headers.get('Retry-After')).toBe('30');
     expect(await busy.json()).toEqual({ wallet: null, status: 'rate_limited' });
     expect(mocks.store.set).not.toHaveBeenCalled();
+    expect(mocks.store.delete).not.toHaveBeenCalled();
 
     const other = await POST(request('POST', { token: 'other' }));
     expect(await other.json()).toEqual({ wallet: OTHER, status: 'issued' });
