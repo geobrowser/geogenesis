@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   type BallotGrades,
   type Grade,
+  NO_GRADES,
   applyGradeEdits,
   applyTierLines,
   gradeAtPlace,
@@ -296,6 +297,21 @@ describe('restoreEntry (Undo of a Down rank on the ranking screen)', () => {
       ]),
     };
     expect(restoreEntry(now, before, id(2)).ids).toEqual(ids(2, 3, 1));
+  });
+
+  it('goes back after its old neighbour when a debate above it was removed', () => {
+    const now = { ids: ids(2, 4), grades: NO_GRADES };
+    expect(restoreEntry(now, { ids: ids(1, 2, 3, 4), grades: NO_GRADES }, id(3)).ids).toEqual(ids(2, 3, 4));
+  });
+
+  it('follows its old neighbour above when that neighbour was moved', () => {
+    const now = { ids: ids(1, 4, 2), grades: NO_GRADES };
+    expect(restoreEntry(now, { ids: ids(1, 2, 3, 4), grades: NO_GRADES }, id(3)).ids).toEqual(ids(1, 4, 2, 3));
+  });
+
+  it('goes back before its old neighbour below when every one above is gone', () => {
+    const now = { ids: ids(4, 3), grades: NO_GRADES };
+    expect(restoreEntry(now, { ids: ids(1, 2, 3, 4), grades: NO_GRADES }, id(2)).ids).toEqual(ids(4, 2, 3));
   });
 });
 

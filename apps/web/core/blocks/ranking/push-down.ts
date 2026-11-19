@@ -164,6 +164,7 @@ export const RANK_BALLOT_FAILED_COPY = 'Your ranking didn’t publish, so this d
 export const RANK_CLEAR_FAILED_COPY = 'Ranked, but it’s still down ranked. Retry to clear it.';
 export const VOTE_CHECK_FAILED_COPY = 'Couldn’t check your vote on this debate. Try again.';
 export const UNDO_FAILED_COPY = 'It’s still down ranked. Try again.';
+export const UNDO_RESTORE_FAILED_COPY = 'Down rank undone, but it’s not back in your ranking. Retry to put it back.';
 
 /** Session-scoped "already saw the note" flag; per-viewer convenience, safe when storage is blocked. */
 const NOTE_SEEN_STORAGE_KEY = 'geo:best-debates:push-down-note-seen';

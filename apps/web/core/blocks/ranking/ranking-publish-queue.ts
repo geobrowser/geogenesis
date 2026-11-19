@@ -1,6 +1,6 @@
 import { ID } from '~/core/id';
 
-import { type BallotGrades, NO_GRADES, mergeGrades, sameGrades, sortIntoTiers } from './ranking-grades';
+import { type BallotGrades, NO_GRADES, gradeOf, mergeGrades, sameGrades, sortIntoTiers } from './ranking-grades';
 
 /*
  * Ballot publish safety (GEO-3680).
@@ -406,12 +406,20 @@ export function setUnsavedRankingDraft(key: string, draft: UnsavedRankingDraft |
   for (const listener of draftListeners) listener();
 }
 
-/** How far two ballots are apart: items in one but not the other. */
-function membershipDistance(a: readonly string[], b: readonly string[]): number {
+/** How far two ballots are apart: items in one but not the other, plus shared items graded differently. */
+function ballotDistance(
+  a: readonly string[],
+  aGrades: BallotGrades | undefined,
+  b: readonly string[],
+  bGrades: BallotGrades | undefined
+): number {
   const aKeys = new Set(a.map(norm));
   const bKeys = new Set(b.map(norm));
   let distance = 0;
-  for (const key of aKeys) if (!bKeys.has(key)) distance += 1;
+  for (const key of aKeys) {
+    if (!bKeys.has(key)) distance += 1;
+    else if (gradeOf(aGrades ?? NO_GRADES, key) !== gradeOf(bGrades ?? NO_GRADES, key)) distance += 1;
+  }
   for (const key of bKeys) if (!aKeys.has(key)) distance += 1;
   return distance;
 }
@@ -441,8 +449,8 @@ export function rebaseUnsavedDraft(
     return draft;
   }
   const useOvertaken =
-    membershipDistance(publishedIds, draft.overtakenOrderedIds) <
-    membershipDistance(publishedIds, draft.baseOrderedIds);
+    ballotDistance(publishedIds, publishedGrades, draft.overtakenOrderedIds, draft.overtakenGrades) <
+    ballotDistance(publishedIds, publishedGrades, draft.baseOrderedIds, draft.baseGrades);
   const merged = mergeBallots({
     base: useOvertaken
       ? { ids: draft.overtakenOrderedIds, grades: draft.overtakenGrades }
