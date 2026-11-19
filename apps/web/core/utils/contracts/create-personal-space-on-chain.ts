@@ -9,6 +9,7 @@ import { getSpace } from '~/core/io/queries';
 import { geo } from '~/core/sdk/geo-client';
 import { SPACE_REGISTRY_ADDRESS_HEX } from '~/core/sdk/geo-network';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
+import { reportEvent } from '~/core/telemetry/logger';
 import { SpaceType } from '~/core/types';
 import { GEOGENESIS } from '~/core/wallet/geo-chain';
 
@@ -131,21 +132,30 @@ export async function findPersonalProfileDeclaration(spaceId: string): Promise<P
     .sort(
       (a, b) => Number(BigInt(a.blockNumber) - BigInt(b.blockNumber)) || Number(BigInt(a.logIndex) - BigInt(b.logIndex))
     );
-  const declaration = ownLogs.find(log => log.topics[2] === GOVERNANCE_ACTIONS.TOPIC_DECLARED);
+  const declarations = ownLogs.filter(log => log.topics[2] === GOVERNANCE_ACTIONS.TOPIC_DECLARED);
+  const edits = ownLogs.filter(log => log.topics[2] === GOVERNANCE_ACTIONS.EDITS_PUBLISHED);
+  const pairedEdit = (declaration: RegistryLog) =>
+    edits.find(edit => edit.transactionHash === declaration.transactionHash);
+  // The profile is the earliest declaration sent with its edit; one sent alone has nothing to republish.
+  const declaration = declarations.find(pairedEdit) ?? declarations[0];
   if (!declaration) return null;
+  const edit = pairedEdit(declaration);
 
-  const edit = ownLogs.find(
-    log => log.topics[2] === GOVERNANCE_ACTIONS.EDITS_PUBLISHED && log.transactionHash === declaration.transactionHash
-  );
   const blockNumber = BigInt(declaration.blockNumber);
-  const block = await client.getBlock({ blockNumber });
+  const laterEdits = edits.filter(log => BigInt(log.blockNumber) >= blockNumber);
+  const lastBlockNumber = laterEdits.length > 0 ? BigInt(laterEdits[laterEdits.length - 1].blockNumber) : blockNumber;
+  const blockTimeMs = async (number: bigint) =>
+    Number((await client.getBlock({ blockNumber: number })).timestamp) * 1000;
+  const declaredAtMs = await blockTimeMs(blockNumber);
 
   return {
     topicId: declaration.topics[3].slice(2, 34),
     blockNumber,
     transactionHash: declaration.transactionHash,
-    declaredAtMs: Number(block.timestamp) * 1000,
+    declaredAtMs,
     editUri: edit ? parseEditUriFromLogData(edit.data) : null,
+    lastPublishedAtMs: lastBlockNumber === blockNumber ? declaredAtMs : await blockTimeMs(lastBlockNumber),
+    publishCount: laterEdits.length,
   };
 }
 
@@ -361,6 +371,14 @@ export async function republishPersonalProfile({
   const ops = buildRecoveryOps({ originalOps: original.ops, topicId: declaration.topicId, name: spaceName, avatarOps });
 
   const { to, calldata } = await geo.personalSpaces.publishEdit({ name: spaceName, spaceId, ops, author: spaceId });
+
+  // Counted so a republish the index drops again shows up: `publish_count` keeps rising for the space.
+  reportEvent({
+    name: 'personal_profile_republished',
+    level: 'warning',
+    tags: { 'space.id': spaceId },
+    extra: { topicId: declaration.topicId, publishCount: declaration.publishCount, editUri: declaration.editUri },
+  });
 
   const submitResult = await runEffectEither(
     Effect.retry(

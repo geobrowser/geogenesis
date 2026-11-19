@@ -29,6 +29,8 @@ function declaration(ageMs: number) {
     transactionHash: '0x383a',
     declaredAtMs: Date.now() - ageMs,
     editUri: 'ipfs://QmX65gRctsCHnBZSG7izR4vhMUTH3HbMuCuHRYP8tu5BVv',
+    lastPublishedAtMs: Date.now() - ageMs,
+    publishCount: 1,
   };
 }
 

@@ -39,13 +39,12 @@ async function profileRetryDecision(spaceId: string, walletAddress: string) {
   if (!indexLacksPersonalProfile(space)) return { done: true as const, space };
   let decision: ProfileRetryDecision;
   try {
-    decision = decideProfileRetry(await findPersonalProfileDeclaration(spaceId), Date.now());
+    decision = decideProfileRetry(await findPersonalProfileDeclaration(spaceId), {
+      now: Date.now(),
+      recentLocalPublish: recentlyPublishedProfile(walletAddress),
+    });
   } catch (error) {
     throw new ProfileRecoveryError('The profile publish could not be read from the chain.', { cause: error });
-  }
-  // A publish this browser sent moments ago may not be mined yet, so the chain can't show it.
-  if (decision.kind === 'publish-fresh' && recentlyPublishedProfile(walletAddress)) {
-    throw new ProfileStillProcessingError(Date.now(), null);
   }
   return { done: false as const, decision };
 }
@@ -93,10 +92,14 @@ export function useCreatePersonalSpace() {
 
         const { decision } = retry;
         if (decision.kind === 'processing') {
-          // Keep the prompt away until the index has had its chance, counted from the chain's time
+          const { declaration } = decision;
+          // Keep the prompt away while the index has its chance, counted from the chain's time
           // rather than now, so retrying can't push it back. Past that, a retry republishes.
-          markPersonalProfilePublished(walletAddress, decision.declaration.declaredAtMs);
-          throw new ProfileStillProcessingError(decision.declaration.declaredAtMs, decision.declaration.topicId);
+          if (declaration) markPersonalProfilePublished(walletAddress, declaration.lastPublishedAtMs);
+          throw new ProfileStillProcessingError(
+            declaration?.lastPublishedAtMs ?? Date.now(),
+            declaration?.topicId ?? null
+          );
         }
         if (decision.kind === 'republish') {
           return republishPersonalProfile({

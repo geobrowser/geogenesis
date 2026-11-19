@@ -6,8 +6,8 @@ import { type Hex, decodeAbiParameters } from 'viem';
 import { IPFS_GATEWAY_COUNT, getImagePathAtLevel } from '../utils';
 
 /**
- * How old a profile declaration can be before a still-missing profile counts as dropped. The index
- * trails the chain by seconds to a minute, so a younger one is most likely still being indexed.
+ * How long after the space's last edit publish a still-missing profile counts as dropped. The index
+ * trails the chain by seconds to a minute, so a younger publish is most likely still being indexed.
  */
 export const INDEX_LAG_WINDOW_MS = 5 * 60 * 1000;
 
@@ -19,20 +19,30 @@ export type ProfileDeclaration = {
   declaredAtMs: number;
   /** The `ipfs://` URI of the edit published in the same transaction, or null if there was none. */
   editUri: string | null;
+  /** The space's latest edit publish at or after the declaration, so a republish counts too. */
+  lastPublishedAtMs: number;
+  /** Edit publishes at or after the declaration: 1 for the original, more once republished. */
+  publishCount: number;
 };
 
 export type ProfileRetryDecision =
   /** No profile publish on chain: publish one. */
   | { kind: 'publish-fresh' }
-  /** Published recently: the index is most likely still catching up. Publish nothing. */
-  | { kind: 'processing'; declaration: ProfileDeclaration }
+  /** Published recently, maybe not even mined yet: the index is most likely catching up. Publish nothing. */
+  | { kind: 'processing'; declaration: ProfileDeclaration | null }
   /** Published long enough ago that the index dropped it: republish the same edit. */
   | { kind: 'republish'; declaration: ProfileDeclaration };
 
-/** What to do for a registered space whose index shows no profile. */
-export function decideProfileRetry(declaration: ProfileDeclaration | null, now: number): ProfileRetryDecision {
-  if (!declaration) return { kind: 'publish-fresh' };
-  if (now - declaration.declaredAtMs < INDEX_LAG_WINDOW_MS) return { kind: 'processing', declaration };
+/**
+ * What to do for a registered space whose index shows no profile. `recentLocalPublish` is this
+ * browser's own grace window: a publish it sent that the chain may not show yet.
+ */
+export function decideProfileRetry(
+  declaration: ProfileDeclaration | null,
+  { now, recentLocalPublish }: { now: number; recentLocalPublish: boolean }
+): ProfileRetryDecision {
+  if (!declaration) return recentLocalPublish ? { kind: 'processing', declaration: null } : { kind: 'publish-fresh' };
+  if (now - declaration.lastPublishedAtMs < INDEX_LAG_WINDOW_MS) return { kind: 'processing', declaration };
   return { kind: 'republish', declaration };
 }
 

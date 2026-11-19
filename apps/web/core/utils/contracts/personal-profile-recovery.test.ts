@@ -27,13 +27,15 @@ const EDIT_LOG_DATA =
 
 const NOW = Date.UTC(2026, 10, 19, 19, 0, 0);
 
-function declaration(declaredAtMs: number): ProfileDeclaration {
+function declaration(declaredAtMs: number, lastPublishedAtMs = declaredAtMs): ProfileDeclaration {
   return {
     topicId: TOPIC_ID,
     blockNumber: 126_690n,
     transactionHash: '0x383a5c65fc018b74fedce51cb018745c937ab406bbbf5334cc27f1bb330cd800',
     declaredAtMs,
     editUri: EDIT_URI,
+    lastPublishedAtMs,
+    publishCount: 1,
   };
 }
 
@@ -49,23 +51,39 @@ function opIds(ops: readonly Op[]) {
 }
 
 describe('decideProfileRetry', () => {
+  const at = (now: number, recentLocalPublish = false) => ({ now, recentLocalPublish });
+
   it('publishes a fresh profile when the chain has no profile publish at all', () => {
-    expect(decideProfileRetry(null, NOW)).toEqual({ kind: 'publish-fresh' });
+    expect(decideProfileRetry(null, at(NOW))).toEqual({ kind: 'publish-fresh' });
+  });
+
+  it('waits on a publish this browser just sent that the chain does not show yet', () => {
+    expect(decideProfileRetry(null, at(NOW, true))).toEqual({ kind: 'processing', declaration: null });
   });
 
   it('waits on a declaration younger than the index lag window, and publishes nothing', () => {
     const recent = declaration(NOW - 60_000);
-    expect(decideProfileRetry(recent, NOW)).toEqual({ kind: 'processing', declaration: recent });
+    expect(decideProfileRetry(recent, at(NOW))).toEqual({ kind: 'processing', declaration: recent });
   });
 
   it('republishes a declaration older than the window that the index still shows nothing for', () => {
     const old = declaration(NOW - INDEX_LAG_WINDOW_MS - 60_000);
-    expect(decideProfileRetry(old, NOW)).toEqual({ kind: 'republish', declaration: old });
+    expect(decideProfileRetry(old, at(NOW))).toEqual({ kind: 'republish', declaration: old });
+  });
+
+  it('republishes an old declaration even inside this browser grace window', () => {
+    const old = declaration(NOW - INDEX_LAG_WINDOW_MS - 60_000);
+    expect(decideProfileRetry(old, at(NOW, true)).kind).toBe('republish');
   });
 
   it('republishes at exactly the window edge', () => {
     const edge = declaration(NOW - INDEX_LAG_WINDOW_MS);
-    expect(decideProfileRetry(edge, NOW).kind).toBe('republish');
+    expect(decideProfileRetry(edge, at(NOW)).kind).toBe('republish');
+  });
+
+  it('waits after a recent republish from any browser, not only after the declaration', () => {
+    const republished = declaration(NOW - 60 * 60_000, NOW - 30_000);
+    expect(decideProfileRetry(republished, at(NOW)).kind).toBe('processing');
   });
 });
 

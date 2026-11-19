@@ -106,6 +106,8 @@ describe('findPersonalProfileDeclaration', () => {
       transactionHash: TX,
       declaredAtMs: Number(DECLARED_AT_SECONDS) * 1000,
       editUri: EDIT_URI,
+      lastPublishedAtMs: Number(DECLARED_AT_SECONDS) * 1000,
+      publishCount: 1,
     });
     expect(request).toHaveBeenCalledTimes(1);
     expect(request).toHaveBeenCalledWith({
@@ -176,6 +178,35 @@ describe('findPersonalProfileDeclaration', () => {
     });
   });
 
+  it('skips an earlier declaration sent without an edit for the earliest one sent with its edit', async () => {
+    const alone = {
+      ...declaredLog,
+      topics: [...declaredLog.topics.slice(0, 3), `0x${'ab'.repeat(16)}${'0'.repeat(32)}`],
+      blockNumber: toHex(126_689),
+      transactionHash: '0xcccc',
+    };
+    request.mockResolvedValue([registeredLog, alone, editLog, declaredLog]);
+
+    await expect(findPersonalProfileDeclaration(SPACE_ID)).resolves.toMatchObject({
+      topicId: TOPIC_ID,
+      editUri: EDIT_URI,
+    });
+  });
+
+  it('counts a later republish and dates the last publish from it', async () => {
+    const republish = { ...editLog, blockNumber: toHex(126_800), transactionHash: '0xdddd' };
+    getBlock.mockImplementation(async ({ blockNumber }: { blockNumber: bigint }) => ({
+      timestamp: blockNumber === 126_800n ? DECLARED_AT_SECONDS + 3_600n : DECLARED_AT_SECONDS,
+    }));
+    request.mockResolvedValue([registeredLog, editLog, declaredLog, republish]);
+
+    await expect(findPersonalProfileDeclaration(SPACE_ID)).resolves.toMatchObject({
+      declaredAtMs: Number(DECLARED_AT_SECONDS) * 1000,
+      lastPublishedAtMs: Number(DECLARED_AT_SECONDS + 3_600n) * 1000,
+      publishCount: 2,
+    });
+  });
+
   it('reports no edit URI when the declaring transaction published no edit', async () => {
     request.mockResolvedValue([registeredLog, declaredLog]);
 
@@ -201,6 +232,8 @@ describe('republishPersonalProfile', () => {
     transactionHash: TX,
     declaredAtMs: Number(DECLARED_AT_SECONDS) * 1000,
     editUri: EDIT_URI,
+    lastPublishedAtMs: Number(DECLARED_AT_SECONDS) * 1000,
+    publishCount: 1,
   } as const;
 
   beforeEach(() => {
