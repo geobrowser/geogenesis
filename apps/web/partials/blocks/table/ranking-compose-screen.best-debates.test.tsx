@@ -539,7 +539,8 @@ describe('Undo of a Remove on the ranking screen (GEO-3805)', () => {
     expect(mocks.grading?.placeOf(b3)).toBe(1);
 
     await pressUndo();
-    expect(mocks.grading?.placeOf(a2)).toBe(2);
+    // Back below a1, the debate it sat under (as the block's Undo puts it), not at its old place 2.
+    expect(mocks.grading?.placeOf(a2)).toBe(3);
     expect(mocks.grading?.gradeOf(a2)).toBe('A');
     expect(mocks.grading?.placeOf(b3)).toBe(1);
     expect(mocks.grading?.gradeOf(b3)).toBe('A');

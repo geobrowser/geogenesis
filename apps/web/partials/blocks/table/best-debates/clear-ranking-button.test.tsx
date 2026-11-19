@@ -5,6 +5,7 @@ import * as React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ClearRankingButton } from './clear-ranking-button';
+import { isInRankingToast } from './use-removed-toast';
 
 const mocks = vi.hoisted(() => ({ setToast: vi.fn() }));
 vi.mock('~/core/hooks/use-toast', () => ({ useSetToast: () => mocks.setToast }));
@@ -26,8 +27,12 @@ describe('Clear', () => {
 
     cleanup();
     render(mocks.setToast.mock.calls.at(-1)?.[0] as React.ReactElement);
-    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    const undo = screen.getByRole('button', { name: 'Undo' });
+    // The ranking's shared Undo toast (GEO-3805): marked, so an open ranking popup lets it through.
+    expect(isInRankingToast(undo)).toBe(true);
+    fireEvent.click(undo);
     expect(setDraft).toHaveBeenLastCalledWith(['a', 'b', 'c']);
+    expect(mocks.setToast).toHaveBeenLastCalledWith(null);
   });
 
   it('Cancel leaves the draft alone', () => {

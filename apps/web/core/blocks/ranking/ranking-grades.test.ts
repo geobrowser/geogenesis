@@ -14,6 +14,7 @@ import {
   removeEntry,
   removedFromRankingCopy,
   restoreEntry,
+  restoreRemoved,
   sameGrades,
   sortIntoTiers,
   tierAtIndex,
@@ -354,7 +355,7 @@ describe('Undo of a Remove (GEO-3805)', () => {
       ]),
     };
     expect(removed.ids).toEqual(ids(1, 3, 4));
-    const restored = restoreEntry(dragged, ballot, id(2));
+    const restored = restoreRemoved(dragged, ballot, id(2));
     expect(restored.ids).toEqual(ids(1, 2, 4, 3));
     expect(restored.grades.get(id(2))).toBe('A');
     expect(restored.grades.get(id(4))).toBe('B');
@@ -364,10 +365,30 @@ describe('Undo of a Remove (GEO-3805)', () => {
     const first = removeEntry(ballot.ids, ballot.grades, id(2));
     const second = removeEntry(first.ids, first.grades, id(3));
     // The second toast's snapshot is the ballot just before the second remove.
-    const restored = restoreEntry(second, first, id(3));
+    const restored = restoreRemoved(second, first, id(3));
     expect(restored.ids).toEqual(ids(1, 3, 4));
     expect(restored.grades.get(id(3))).toBe('B');
     expect(restored.grades.has(id(2))).toBe(false);
+  });
+
+  it('puts it back below the entry it sat under, even after an entry from below moved above it', () => {
+    // 2 was removed, then 4 was dragged to the top (same tier everywhere).
+    const flat = { ids: ids(1, 2, 3, 4), grades: new Map() };
+    const now = { ids: ids(4, 1, 3), grades: new Map() };
+    expect(restoreRemoved(now, flat, id(2)).ids).toEqual(ids(4, 1, 2, 3));
+  });
+
+  it('changes nothing when the debate is back already, keeping its new grade', () => {
+    const regraded = {
+      ids: ids(1, 3, 2, 4),
+      grades: g([
+        [1, 'A'],
+        [3, 'B'],
+        [2, 'B'],
+        [4, 'C'],
+      ]),
+    };
+    expect(restoreRemoved(regraded, ballot, id(2))).toBe(regraded);
   });
 
   it('names the debate in the toast, or just says Removed.', () => {

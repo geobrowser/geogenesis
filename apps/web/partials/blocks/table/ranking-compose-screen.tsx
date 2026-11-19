@@ -34,6 +34,7 @@ import {
   hasAnyGrade,
   removeEntry,
   restoreEntry,
+  restoreRemoved,
   sameGrades,
   tierSections,
 } from '~/core/blocks/ranking/ranking-grades';
@@ -890,14 +891,15 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   const draftPlaces = new Map(orderedIds.map((id, index) => [ID.uuidToHex(id), index + 1]));
   /**
    * Removed “Name”. with Undo (GEO-3805), after a remove from Your ranking or the popup. Undo puts
-   * the debate back where it was in `before`, with its grade, into the draft as it is by then, so
-   * later edits stay; nothing changes when it is already back. Like Down rank's Undo, a restore
+   * the debate back below the entry it sat under in `before`, with its grade, into the draft as it
+   * is by then, so later edits stay; nothing changes when it is already back (`restoreRemoved`, as
+   * the block's Undo). Like Down rank's Undo, a restore
    * records no grade event.
    */
   const offerUndoRemove = (entityId: string, before: GradedBallot) => {
     showRemovedToast(nameOf(entityId), () => {
       const current = latestDraft.current;
-      const restored = restoreEntry(current, before, entityId);
+      const restored = restoreRemoved(current, before, entityId);
       if (restored === current) return;
       latestDraft.current = restored;
       setDraft(restored.ids, restored.grades);

@@ -12,6 +12,7 @@ import {
   hasAnyGrade,
   placeAsIn,
   removeEntry,
+  restoreRemoved,
 } from '~/core/blocks/ranking/ranking-grades';
 import { rankingPublishKey, sameBallot, setUnsavedRankingDraft } from '~/core/blocks/ranking/ranking-publish-queue';
 import type { RankingSubmissionSlot } from '~/core/blocks/ranking/ranking-submission-types';
@@ -427,11 +428,7 @@ export function useBlockGrading({
   const remove = (entityId: string) => {
     const before = latest.current;
     enqueue([entityId], draft => removeEntry(draft.ids, draft.grades, entityId), 'popup');
-    showRemovedToast(nameOf(entityId), () =>
-      enqueue([entityId], draft =>
-        draft.ids.some(id => normId(id) === normId(entityId)) ? draft : placeAsIn(draft, before, entityId)
-      )
-    );
+    showRemovedToast(nameOf(entityId), () => enqueue([entityId], draft => restoreRemoved(draft, before, entityId)));
   };
 
   const placeById = React.useMemo(() => new Map(orderedIds.map((id, i) => [normId(id), i + 1])), [orderedIds]);
