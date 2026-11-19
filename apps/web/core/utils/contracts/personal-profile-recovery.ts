@@ -62,8 +62,8 @@ export class ProfileRecoveryError extends Error {
 export class ProfileStillProcessingError extends Error {
   constructor(
     readonly declaredAtMs: number,
-    /** The person entity the profile was declared with. */
-    readonly topicId: string
+    /** The person entity the profile was declared with, once the chain shows the declaration. */
+    readonly topicId: string | null
   ) {
     super('Your profile is still being saved. This can take a few minutes.');
     this.name = 'ProfileStillProcessingError';

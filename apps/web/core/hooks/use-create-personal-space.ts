@@ -6,9 +6,10 @@ import { Effect } from 'effect';
 
 import { awaitSigningAccount } from '~/core/hooks/cached-write-identity';
 import {
+  indexLacksPersonalProfile,
   markPersonalProfilePublished,
-  needsPersonalProfile,
   personalEntityIdOf,
+  recentlyPublishedProfile,
 } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { getSpace } from '~/core/io/queries';
@@ -19,29 +20,32 @@ import {
   republishPersonalProfile,
 } from '~/core/utils/contracts/create-personal-space-on-chain';
 import {
+  ProfileRecoveryError,
   type ProfileRetryDecision,
   ProfileStillProcessingError,
   decideProfileRetry,
 } from '~/core/utils/contracts/personal-profile-recovery';
 
 /**
- * What a re-run should do for a registered space, or null when its profile is already published.
+ * What a re-run should do for a registered space, or `done` when the index serves its profile.
  *
- * The index decides first; a failed read throws and the runner offers the retry. When the index
- * says "missing" the chain gets the last word. It can show a profile publish the index has not
- * served yet: recent, from another browser, which must not publish a second profile; or older,
- * which the index dropped and must be republished with the same ids. A failed chain read keeps the
- * index's answer: it must not strand an account whose profile really is missing.
+ * Only the index decides `done`; this browser's grace window must not, or a retry inside it
+ * returns success with nothing published. When the index says "missing" the chain decides. A
+ * failed chain read throws a retryable error rather than publishing fresh ids next to a profile
+ * the chain may already have.
  */
 async function profileRetryDecision(spaceId: string, walletAddress: string) {
   const space = await Effect.runPromise(getSpace(spaceId));
-  if (!needsPersonalProfile(space, walletAddress)) return { done: true as const, space };
+  if (!indexLacksPersonalProfile(space)) return { done: true as const, space };
   let decision: ProfileRetryDecision;
   try {
     decision = decideProfileRetry(await findPersonalProfileDeclaration(spaceId), Date.now());
   } catch (error) {
-    console.warn('[CREATE_SPACE] profile declaration read failed; trusting the index', error);
-    decision = { kind: 'publish-fresh' };
+    throw new ProfileRecoveryError('The profile publish could not be read from the chain.', { cause: error });
+  }
+  // A publish this browser sent moments ago may not be mined yet, so the chain can't show it.
+  if (decision.kind === 'publish-fresh' && recentlyPublishedProfile(walletAddress)) {
+    throw new ProfileStillProcessingError(Date.now(), null);
   }
   return { done: false as const, decision };
 }

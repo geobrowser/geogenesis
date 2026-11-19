@@ -6,7 +6,11 @@ import * as React from 'react';
 import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { INDEX_LAG_WINDOW_MS, ProfileStillProcessingError } from '~/core/utils/contracts/personal-profile-recovery';
+import {
+  INDEX_LAG_WINDOW_MS,
+  ProfileRecoveryError,
+  ProfileStillProcessingError,
+} from '~/core/utils/contracts/personal-profile-recovery';
 
 import { useCreatePersonalSpace } from './use-create-personal-space';
 import { markPersonalProfilePublished, needsPersonalProfile } from './use-personal-space-id';
@@ -183,25 +187,59 @@ describe('useCreatePersonalSpace', () => {
     expect(createPersonalSpaceOnChain).not.toHaveBeenCalled();
   });
 
-  it('still publishes the missing profile when the chain check cannot be read', async () => {
+  it('publishes nothing and asks for a retry when the chain check cannot be read', async () => {
+    // The chain may already hold a profile the index dropped; fresh ids next to it would write a
+    // second person entity once the original is indexed.
     readRegisteredSpaceId.mockResolvedValue(SPACE_ID);
     getSpace.mockReturnValue(Effect.succeed({ id: SPACE_ID, type: 'PERSONAL', hasProfile: false }));
     findPersonalProfileDeclaration.mockRejectedValue(new Error('rpc unavailable'));
-    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const onRegistered = vi.fn();
 
-    await create();
+    await expect(create(onRegistered)).rejects.toBeInstanceOf(ProfileRecoveryError);
 
-    expect(createPersonalSpaceOnChain).toHaveBeenCalledTimes(1);
+    expect(createPersonalSpaceOnChain).not.toHaveBeenCalled();
+    expect(republishPersonalProfile).not.toHaveBeenCalled();
+    expect(onRegistered).not.toHaveBeenCalled();
   });
 
-  it('trusts a profile this browser just sent over an index that has not caught up', async () => {
+  it('waits on a profile this browser just sent that the chain does not show yet', async () => {
     markPersonalProfilePublished(ADDRESS);
     readRegisteredSpaceId.mockResolvedValue(SPACE_ID);
     getSpace.mockReturnValue(Effect.succeed({ id: SPACE_ID, type: 'PERSONAL', hasProfile: false }));
+    const onRegistered = vi.fn();
+
+    await expect(create(onRegistered)).rejects.toBeInstanceOf(ProfileStillProcessingError);
+
+    expect(createPersonalSpaceOnChain).not.toHaveBeenCalled();
+    expect(onRegistered).not.toHaveBeenCalled();
+  });
+
+  it('keeps saying "still being saved" on a retry inside the grace window it set', async () => {
+    // The processing path stamps the grace window. A retry there must not read that stamp as a
+    // published profile and report success with nothing sent.
+    readRegisteredSpaceId.mockResolvedValue(SPACE_ID);
+    getSpace.mockReturnValue(Effect.succeed({ id: SPACE_ID, type: 'PERSONAL', hasProfile: false }));
+    findPersonalProfileDeclaration.mockResolvedValue(declaration(60_000));
+    const onRegistered = vi.fn();
+
+    await expect(create(onRegistered)).rejects.toBeInstanceOf(ProfileStillProcessingError);
+    await expect(create(onRegistered)).rejects.toBeInstanceOf(ProfileStillProcessingError);
+
+    expect(onRegistered).not.toHaveBeenCalled();
+    expect(createPersonalSpaceOnChain).not.toHaveBeenCalled();
+    expect(republishPersonalProfile).not.toHaveBeenCalled();
+  });
+
+  it('republishes once the declaration is past the lag window, even inside the grace window', async () => {
+    readRegisteredSpaceId.mockResolvedValue(SPACE_ID);
+    getSpace.mockReturnValue(Effect.succeed({ id: SPACE_ID, type: 'PERSONAL', hasProfile: false }));
+    const old = declaration(INDEX_LAG_WINDOW_MS + 60_000);
+    markPersonalProfilePublished(ADDRESS, old.declaredAtMs);
+    findPersonalProfileDeclaration.mockResolvedValue(old);
 
     await create();
 
-    expect(createPersonalSpaceOnChain).not.toHaveBeenCalled();
+    expect(republishPersonalProfile).toHaveBeenCalledTimes(1);
   });
 
   it('fails rather than guessing when the profile check cannot be read', async () => {

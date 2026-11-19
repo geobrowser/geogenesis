@@ -155,4 +155,21 @@ describe('PendingPersonalSpaceRunner', () => {
       expect.objectContaining({ personalSpaceId: 'space-1', personalEntityId: 'declared-topic' })
     );
   });
+
+  it('seeds no person entity when none is known, never the job topic it did not publish', async () => {
+    mocks.createPersonalSpace.mockImplementation(
+      async ({ onRegistered }: { onRegistered: (spaceId: string, entityId?: string) => void }) => {
+        onRegistered('space-1');
+        return 'space-1';
+      }
+    );
+
+    const { result } = setup({ status: 'pending' });
+
+    await waitFor(() => expect(result.current.pending).toBeNull());
+    expect(mocks.setQueryData).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ personalSpaceId: 'space-1', personalEntityId: null })
+    );
+  });
 });

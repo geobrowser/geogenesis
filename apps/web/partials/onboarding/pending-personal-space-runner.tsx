@@ -128,9 +128,9 @@ export function PendingPersonalSpaceRunner() {
     // unset so onboarding doesn't pop over that retry — once the cache goes stale, or on
     // a reload or another browser, the index reports the missing profile and onboarding
     // reopens to finish it.
-    // `profileEntityId` is the person entity the profile was published under. A recovered profile
-    // keeps the one it was first declared with, not this job's `topicId`.
-    const resolve = (spaceId: string, profilePublished = true, profileEntityId = topicId) => {
+    // `profileEntityId` is the person entity the profile was published under, or null when none is
+    // known. Never this job's `topicId` by default: a recovered profile keeps its declared one.
+    const resolve = (spaceId: string, profilePublished: boolean, profileEntityId: string | null) => {
       if (resolved) return;
       resolved = true;
 
@@ -279,7 +279,7 @@ export function PendingPersonalSpaceRunner() {
             // Fires once the profile userOp is sent, so the profile is on its way.
             profileSent = true;
             markPersonalProfilePublished(address);
-            resolve(registeredSpaceId, true, profileEntityId);
+            resolve(registeredSpaceId, true, profileEntityId ?? null);
             settleMembership(registeredSpaceId);
           },
         });
@@ -305,13 +305,13 @@ export function PendingPersonalSpaceRunner() {
           const registered = await readRegisteredSpaceId(address);
           if (registered && profileSent) {
             console.warn('[PendingPersonalSpace] creation reported an error after the profile was sent', error);
-            resolve(registered);
+            resolve(registered, true, null);
             settleMembership(registered);
             return;
           }
           if (registered) {
             console.warn('[PendingPersonalSpace] space is registered but the profile publish failed', error);
-            resolve(registered, false, error instanceof ProfileStillProcessingError ? error.topicId : topicId);
+            resolve(registered, false, error instanceof ProfileStillProcessingError ? error.topicId : null);
             settleMembership(registered);
             // The interest picks were just settled; don't request them again on retry.
             setSelectedTopicIds([]);

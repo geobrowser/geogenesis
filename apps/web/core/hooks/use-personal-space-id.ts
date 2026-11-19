@@ -38,7 +38,8 @@ export function markPersonalProfilePublished(address: string, at = Date.now()) {
   }
 }
 
-function recentlyPublishedProfile(address: string) {
+/** Whether this browser sent `address`'s profile publish within the grace window. */
+export function recentlyPublishedProfile(address: string) {
   try {
     const at = Number(window.localStorage.getItem(profilePublishStorageKey(address)));
     return Number.isFinite(at) && Date.now() - at < PROFILE_PUBLISH_GRACE_MS;
@@ -57,6 +58,11 @@ function recentlyPublishedProfile(address: string) {
  */
 export function needsPersonalProfile(space: Pick<Space, 'type' | 'hasProfile'> | null, address: string) {
   if (recentlyPublishedProfile(address)) return false;
+  return indexLacksPersonalProfile(space);
+}
+
+/** The index's answer alone: no space served yet, or a personal space with no profile entity. */
+export function indexLacksPersonalProfile(space: Pick<Space, 'type' | 'hasProfile'> | null) {
   return space === null || (space.type === 'PERSONAL' && !space.hasProfile);
 }
 
