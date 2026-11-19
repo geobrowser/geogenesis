@@ -1,6 +1,7 @@
 import type { DebateMediaTurnSegment, DebateTranscriptSpan, ParticipantSlot } from '../api';
 import { openRoundIndexForTurn, openRoundNumber } from '../open-rounds';
-import { recordingSpanOf, renderedTimeOf, transcriptOnRecordings } from '../recording-clock';
+import { sortTurnSegments } from '../playback-utils';
+import { recordingSpanOf, renderedTimeOf, transcriptOnRecordings, turnOnRecordings } from '../recording-clock';
 import type { LiveReel, ManualClipBody } from './api';
 
 /**
@@ -579,10 +580,11 @@ export function clipRoundLabel(
   clip: { start_ms: number; end_ms: number },
   turns: readonly DebateMediaTurnSegment[]
 ): string | null {
-  if (turns.length === 0) return null;
-  const starts = turns
-    .map(turn => ({ at: turn.source_start_ms ?? turn.output_start_ms, index: turn.turn_index }))
-    .sort((a, b) => a.at - b.at);
+  const starts = sortTurnSegments(turns.map(turnOnRecordings)).map(turn => ({
+    at: turn.output_start_ms,
+    index: turn.turn_index,
+  }));
+  if (starts.length === 0) return null;
   // `inclusive` decides whether a turn starting exactly at `ms` counts: yes for a clip's start, no
   // for its end, so a clip ending where the next round begins stays in its own.
   const roundAt = (ms: number, inclusive: boolean) => {

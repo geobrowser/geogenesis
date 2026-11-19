@@ -712,5 +712,13 @@ describe('clipRoundLabel', () => {
 
   it('shows no round without turns', () => {
     expect(clipRoundLabel({ start_ms: 0, end_ms: 10_000 }, [])).toBeNull();
+    const empty = {
+      ...turns[0],
+      output_start_ms: 5_000,
+      output_end_ms: 5_000,
+      source_start_ms: undefined,
+      source_end_ms: undefined,
+    };
+    expect(clipRoundLabel({ start_ms: 0, end_ms: 10_000 }, [empty])).toBeNull();
   });
 });
