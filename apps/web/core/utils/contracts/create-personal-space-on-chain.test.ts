@@ -156,6 +156,14 @@ describe('findPersonalProfileDeclaration', () => {
     expect(request.mock.calls[2][0].params[0]).toMatchObject({ fromBlock: toHex(0n), toBlock: toHex(5_000n) });
   });
 
+  it('throws rather than reporting none when the scan limit ends before registration', async () => {
+    getBlockNumber.mockResolvedValue(10_000_000n);
+    request.mockResolvedValue([]);
+
+    await expect(findPersonalProfileDeclaration(SPACE_ID)).rejects.toThrow(/before the space registration/);
+    expect(request).toHaveBeenCalledTimes(50);
+  });
+
   it('stops at registration when no profile was ever published', async () => {
     request.mockResolvedValue([registeredLog]);
 

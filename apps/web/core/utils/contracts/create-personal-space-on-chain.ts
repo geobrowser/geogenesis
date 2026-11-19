@@ -107,6 +107,7 @@ export async function findPersonalProfileDeclaration(spaceId: string): Promise<P
 
   const logs: RegistryLog[] = [];
   let toBlock = await client.getBlockNumber();
+  let reachedStart = false;
   for (let window = 0; window < MAX_DECLARATION_WINDOWS; window++) {
     const fromBlock = toBlock >= DECLARATION_LOOKBACK_BLOCKS ? toBlock - DECLARATION_LOOKBACK_BLOCKS + 1n : 0n;
     // `enter` logs [from space, to space, action, topic] as raw topics with no event signature, so
@@ -123,7 +124,10 @@ export async function findPersonalProfileDeclaration(spaceId: string): Promise<P
       ],
     })) as RegistryLog[];
     logs.push(...found);
-    if (fromBlock === 0n || found.some(log => log.topics[2] === GOVERNANCE_ACTIONS.SPACE_ID_REGISTERED)) break;
+    if (fromBlock === 0n || found.some(log => log.topics[2] === GOVERNANCE_ACTIONS.SPACE_ID_REGISTERED)) {
+      reachedStart = true;
+      break;
+    }
     toBlock = fromBlock - 1n;
   }
 
@@ -138,6 +142,8 @@ export async function findPersonalProfileDeclaration(spaceId: string): Promise<P
     edits.find(edit => edit.transactionHash === declaration.transactionHash);
   // The profile is the earliest declaration sent with its edit; one sent alone has nothing to republish.
   const declaration = declarations.find(pairedEdit) ?? declarations[0];
+  // Not reaching the registration leaves "none" unproven, and a fresh publish could duplicate one.
+  if (!declaration && !reachedStart) throw new Error('Profile declaration scan stopped before the space registration.');
   if (!declaration) return null;
   const edit = pairedEdit(declaration);
 
