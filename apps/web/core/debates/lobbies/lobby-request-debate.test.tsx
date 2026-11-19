@@ -81,6 +81,18 @@ describe('LobbyRequestDebate', () => {
     expect(screen.getByRole('alert').textContent).toBe('They’re not in the lobby right now.');
   });
 
+  it('words an open-session refusal', () => {
+    mocks.create.error = new GeoChatRequestError(
+      'you are already in another debate session -- finish or leave it first',
+      'already_in_open_session',
+      409
+    );
+    render(<LobbyRequestDebate lobbyId="LOBBY-1" member={member()} />);
+    expect(screen.getByRole('alert').textContent).toBe(
+      'You’re already in another debate session. Finish or leave it first.'
+    );
+  });
+
   it('renders nothing for someone in a debate', () => {
     const { container } = render(<LobbyRequestDebate lobbyId="LOBBY-1" member={member({ in_debate: true })} />);
     expect(container.innerHTML).toBe('');
