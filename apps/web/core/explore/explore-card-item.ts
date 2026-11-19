@@ -307,8 +307,11 @@ function movedClaimTypes(entity: ExploreCardEntity, spaceIdNorm: string): { id: 
   const placed = (entity.placement?.types ?? [])
     .filter(type => normId(type.spaceId) === spaceIdNorm)
     .map(type => ({ id: type.id, name: type.name }));
-  if (placed.length > 0) return placed;
-  return entity.types.filter(type => normId(type.id) === CLAIM_TYPE).map(type => ({ id: type.id, name: type.name }));
+  if (placed.some(type => normId(type.id) === CLAIM_TYPE)) return placed;
+  const claim = entity.types
+    .filter(type => normId(type.id) === CLAIM_TYPE)
+    .map(type => ({ id: type.id, name: type.name }));
+  return [...placed, ...claim];
 }
 
 function textValueForProperty(entity: Entity, propertyId: string, spaceId: string): string | null {

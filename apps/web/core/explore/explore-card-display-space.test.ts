@@ -192,6 +192,16 @@ describe('a claim the feed’s space only links to', () => {
     expect(row.types).toEqual([{ id: CLAIM_TYPE_ID, name: 'Claim' }]);
   });
 
+  it('keeps the Claim type when its home types it as something else too', () => {
+    const entity = scopedClaim();
+    const otherType = { spaceId: US_POLITICS, id: 'aaaabbbbccccddddeeeeffff00001111', name: 'Topic' };
+    const row = rowFor({ ...entity, placement: { ...entity.placement!, types: [otherType] } } as ExploreCardEntity, [
+      DEBATES,
+    ]);
+
+    expect(row.types.map(type => type.name)).toEqual(['Topic', 'Claim']);
+  });
+
   it('stays put without the placement projection, rather than guessing', () => {
     const row = rowFor({ ...scopedClaim(), placement: undefined }, [DEBATES]);
 
