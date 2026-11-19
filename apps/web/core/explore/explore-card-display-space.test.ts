@@ -125,12 +125,7 @@ describe('the space a card renders in', () => {
   });
 });
 
-/*
- * GEO-3802. A feed scoped to a space lists every claim with so much as a Topics relation in it, and
- * the pick above can only choose among the feed's spaces. A claim that lives elsewhere was drawn
- * with no types (so not as a claim), linked into that space and voted on there, where no votes are.
- * The fixture mirrors the example: named and typed in US Politics, linked from Debates.
- */
+/* GEO-3802: a claim named and typed in US Politics, listed by a Debates-scoped feed. */
 describe('a claim the feed’s space only links to', () => {
   const US_POLITICS = '4582fbbee28a16589154f7e36f1ee3c5';
   const DEBATES = '9284477c8fe746368698994e2e517b32';

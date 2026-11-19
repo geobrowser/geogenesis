@@ -24,18 +24,9 @@ function queryString(searchParams: SearchParams): string {
 }
 
 /**
- * Where a claim page opened under `spaceId` should go instead, or null to stay.
- *
- * Every read on the claim page (counts, the viewer's vote, geo-chat's row, the record tabs) is
- * keyed on the URL's space, so a space that only links to the claim (a Topics relation, say)
- * renders it with no votes, and a vote cast there lands where nothing else reads it (GEO-3802).
- * `resolveEntitySpaceId` keeps the URL's space whenever the claim holds content there, so a claim
- * that lives in two spaces stays put in both, and the target is always a space that places the
- * claim, which is what rules out a loop.
- *
- * `entity` must carry its values from every space: a value list scoped to `spaceId` cannot say
- * where else the claim lives. Edit mode never redirects, so an editor can still add the claim to
- * the space they opened it in.
+ * The claim's home-space URL when `spaceId` holds no content for it, else null. The claim page keys
+ * every read on the URL's space, so a link-only space shows no votes (GEO-3802). The target always
+ * places the claim, so it cannot loop. `entity` must carry values from every space.
  */
 export function claimHomeSpaceRedirectTarget({
   entity,
@@ -57,11 +48,8 @@ export function claimHomeSpaceRedirectTarget({
 }
 
 /**
- * Redirects (307) a claim page to its home space when the route's space only links to it.
- *
- * `routeEntity` is the page's own space-scoped read. When it already places the claim in the
- * route's space, which is every ordinary claim page, nothing more is fetched. Only a link-only URL
- * pays for the unscoped read that says where the claim does live. A failed read stays put.
+ * 307s a claim page to its home space when the route's space only links to it. `routeEntity` is the
+ * page's space-scoped read; the unscoped fetch runs only when that read doesn't place the claim.
  */
 export async function redirectClaimToHomeSpace({
   routeEntity,

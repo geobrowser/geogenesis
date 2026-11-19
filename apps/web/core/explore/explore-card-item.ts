@@ -283,17 +283,9 @@ const CLAIM_TYPE = normId(CLAIM_TYPE_ID);
 const NAME_PROPERTY = normId(EXPLORE_ENTITY_NAME_PROPERTY_ID);
 
 /**
- * The space a claim card links to and reads its votes in: {@link pickDisplaySpaceId}'s pick, unless
- * the claim holds nothing there, in which case its home space (GEO-3802).
- *
- * A feed scoped to a space lists every claim with so much as a Topics relation in it, and the pick
- * can only choose among the feed's spaces, so a claim that lives elsewhere was drawn, linked and
- * voted on in a space with no votes on it. `resolveEntitySpaceId` is the rule every other claim
- * surface uses: the pick stands wherever the claim holds content, so a claim that lives in two
- * spaces keeps the one the caller asked for.
- *
- * Claims only. The residency test reads the card's own value lists, which carry four properties,
- * and that is only a fair test of residency for an entity that is always named where it lives.
+ * The space a claim card links to and votes in: the pick, or the claim's home space when it holds
+ * nothing in the pick (GEO-3802). Claims only: the card's value lists carry four properties, which
+ * is a fair residency test only for an entity always named where it lives.
  */
 function claimSpaceId(entity: ExploreCardEntity, picked: string): string {
   if (!entity.types.some(type => normId(type.id) === CLAIM_TYPE)) return picked;

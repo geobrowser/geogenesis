@@ -30,11 +30,7 @@ function placesEntity(value: { isDeleted?: boolean; property: { id: string } }):
   return true;
 }
 
-/**
- * The spaces where the entity holds live, non-hidden values: the residency test
- * {@link resolveEntitySpaceId} keeps the requested space on. Exported so a caller holding only one
- * space's values can ask whether that space places the entity before fetching the rest.
- */
+/** Spaces where the entity holds live, non-hidden values: the residency test {@link resolveEntitySpaceId} uses. */
 export function placingSpaceIds(entity: Pick<SpaceScopedEntity, 'values'>): string[] {
   return (entity.values ?? []).filter(placesEntity).map(value => value.spaceId);
 }

@@ -100,11 +100,7 @@ describe('the real card node', () => {
   });
 });
 
-/*
- * The same node as a personal-space-scoped feed returns it (GEO-3802): the scoped lists come back
- * empty, because the claim holds nothing in that space, and only the placement projection says
- * where it lives. Shapes as the API answered `placementNames` / `placementTypes` on 19 Nov.
- */
+/* The node as a personal-space-scoped feed returns it: empty scoped lists, placement only (GEO-3802). */
 describe('the real card node, scoped to a space that only links to it', () => {
   const SCOPED = {
     ...NODE,
