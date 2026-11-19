@@ -378,14 +378,6 @@ export async function republishPersonalProfile({
 
   const { to, calldata } = await geo.personalSpaces.publishEdit({ name: spaceName, spaceId, ops, author: spaceId });
 
-  // Counted so a republish the index drops again shows up: `publish_count` keeps rising for the space.
-  reportEvent({
-    name: 'personal_profile_republished',
-    level: 'warning',
-    tags: { 'space.id': spaceId },
-    extra: { topicId: declaration.topicId, publishCount: declaration.publishCount, editUri: declaration.editUri },
-  });
-
   const submitResult = await runEffectEither(
     Effect.retry(
       Effect.tryPromise({
@@ -403,6 +395,13 @@ export async function republishPersonalProfile({
     )
   );
   if (submitResult._tag === 'Left') throw submitResult.left;
+  // Counted so a republish the index drops again shows up: `publish_count` keeps rising for the space.
+  reportEvent({
+    name: 'personal_profile_republished',
+    level: 'warning',
+    tags: { 'space.id': spaceId },
+    extra: { topicId: declaration.topicId, publishCount: declaration.publishCount, editUri: declaration.editUri },
+  });
   devLog('[CREATE_SPACE] profile republished, waiting for index…');
 
   try {
