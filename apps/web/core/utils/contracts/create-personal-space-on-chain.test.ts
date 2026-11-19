@@ -1,3 +1,4 @@
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { formatId } from '@geoprotocol/grc-20';
 
 import { Effect } from 'effect';
@@ -21,6 +22,7 @@ const getBlockNumber = vi.fn();
 const getBlock = vi.fn();
 const publishEdit = vi.fn();
 const getSpace = vi.fn();
+const reportEvent = vi.fn();
 
 vi.mock('viem', async importOriginal => ({
   ...(await importOriginal<typeof import('viem')>()),
@@ -34,12 +36,18 @@ vi.mock('~/core/sdk/geo-client', async importOriginal => ({
 
 vi.mock('~/core/io/queries', () => ({ getSpace: (id: string) => getSpace(id) }));
 
+vi.mock('~/core/telemetry/logger', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/telemetry/logger')>()),
+  reportEvent: (event: unknown) => reportEvent(event),
+}));
+
 beforeEach(() => {
   request.mockReset();
   getBlockNumber.mockReset();
   getBlock.mockReset();
   publishEdit.mockReset();
   getSpace.mockReset();
+  reportEvent.mockReset();
   getBlockNumber.mockResolvedValue(98_482n);
 });
 describe('parseRegisteredSpaceId', () => {
@@ -309,6 +317,12 @@ describe('republishPersonalProfile', () => {
     expect(publishedOpIds()).toEqual(ORIGINAL_IDS);
     expectOnlyThePublishCall();
     expect(onRegistered).toHaveBeenCalledWith(SPACE_ID, TOPIC_ID);
+    expect(reportEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'personal_profile_republished',
+        tags: expect.objectContaining({ outcome: 'original' }),
+      })
+    );
   });
 
   it('always republishes a readable original, however old the publish', async () => {
@@ -335,8 +349,20 @@ describe('republishPersonalProfile', () => {
     expect(sendUserOperation).not.toHaveBeenCalled();
   });
 
-  it('publishes a fresh profile under the declared topic once an unreadable original is over an hour old', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('Payment required', { status: 402 })));
+  it('never replaces an original it could not reach, however old the publish', async () => {
+    const old = declarationPublishedAgo(UNREADABLE_ORIGINAL_FALLBACK_MS + 60_000);
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('Too many requests', { status: 429 })));
+    await expect(republish(old)).rejects.toThrow(ProfileRecoveryError);
+
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')));
+    await expect(republish(old)).rejects.toThrow(ProfileRecoveryError);
+
+    expect(publishEdit).not.toHaveBeenCalled();
+    expect(sendUserOperation).not.toHaveBeenCalled();
+  });
+
+  it('publishes a fresh profile under the declared topic once a missing original is over an hour old', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('Not found', { status: 404 })));
     const onRegistered = vi.fn();
 
     await expect(
@@ -347,8 +373,22 @@ describe('republishPersonalProfile', () => {
     // The person entity is the declared one, so the page stays; the account and relations are new.
     expect(ids[0]).toBe(TOPIC_ID);
     expect(ids).not.toContain('cc4990b3fd5046b194864918e7803978');
+    // Types → SPACE_TYPE on the declared entity is what makes the index serve it as the page.
+    const ops = publishEdit.mock.calls[0][0].ops as { type: string; from?: never; to?: never; relationType?: never }[];
+    expect(
+      ops.some(
+        op =>
+          op.type === 'createRelation' &&
+          formatId(op.from!) === TOPIC_ID &&
+          formatId(op.relationType!) === SystemIds.TYPES_PROPERTY &&
+          formatId(op.to!) === SystemIds.SPACE_TYPE
+      )
+    ).toBe(true);
     expectOnlyThePublishCall();
     expect(onRegistered).toHaveBeenCalledWith(SPACE_ID, TOPIC_ID);
+    expect(reportEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ tags: expect.objectContaining({ outcome: 'fresh_under_declared_topic' }) })
+    );
   });
 
   it('falls back the same way for an old declaration with no paired edit', async () => {

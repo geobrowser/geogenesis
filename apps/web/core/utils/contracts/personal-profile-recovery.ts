@@ -73,10 +73,23 @@ export function parseEditUriFromLogData(data: Hex): string | null {
 
 /** Thrown when the original profile edit can't be read back, so nothing is republished. */
 export class ProfileRecoveryError extends Error {
-  constructor(message: string, options?: { cause?: unknown }) {
+  constructor(
+    message: string,
+    options?: {
+      cause?: unknown;
+      /**
+       * `missing`: the original is gone or isn't this profile, so a fresh publish can't duplicate it.
+       * `unreachable`: it may exist but couldn't be read from here, so it must not be replaced.
+       */
+      reason?: 'missing' | 'unreachable';
+    }
+  ) {
     super(message, options);
     this.name = 'ProfileRecoveryError';
+    this.reason = options?.reason ?? 'unreachable';
   }
+
+  readonly reason: 'missing' | 'unreachable';
 }
 
 /** Thrown when the profile was published moments ago and the index has not caught up yet. */
@@ -100,30 +113,44 @@ export function parseOriginalProfileEdit(bytes: Uint8Array, spaceId: string, top
   try {
     edit = decodeEdit(bytes);
   } catch (error) {
-    throw new ProfileRecoveryError('The original profile edit could not be decoded.', { cause: error });
+    throw new ProfileRecoveryError('The original profile edit could not be decoded.', {
+      cause: error,
+      reason: 'missing',
+    });
   }
   if (!edit.authors.some(author => formatId(author) === spaceId)) {
-    throw new ProfileRecoveryError('The original profile edit was not authored by this space.');
+    throw new ProfileRecoveryError('The original profile edit was not authored by this space.', { reason: 'missing' });
   }
   if (!edit.ops.some(op => op.type === 'createEntity' && formatId(op.id) === topicId)) {
-    throw new ProfileRecoveryError('The original profile edit does not create the declared profile entity.');
+    throw new ProfileRecoveryError('The original profile edit does not create the declared profile entity.', {
+      reason: 'missing',
+    });
   }
   return edit;
 }
 
-/** Fetches an `ipfs://` edit through the app's gateways in fallback order. */
+/**
+ * Fetches an `ipfs://` edit through the app's gateways in fallback order. It counts as missing only
+ * when every gateway answered with a failure; a network error or a 429 leaves it unreachable.
+ */
 export async function fetchOriginalProfileEdit(uri: string, fetchFn: typeof fetch = fetch): Promise<Uint8Array> {
   let lastError: unknown = null;
+  let reachedEveryGateway = true;
   for (let level = 0; level < IPFS_GATEWAY_COUNT; level++) {
     try {
       const response = await fetchFn(getImagePathAtLevel(uri, level));
       if (response.ok) return new Uint8Array(await response.arrayBuffer());
+      if (response.status === 429) reachedEveryGateway = false;
       lastError = new Error(`IPFS gateway answered ${response.status}`);
     } catch (error) {
+      reachedEveryGateway = false;
       lastError = error;
     }
   }
-  throw new ProfileRecoveryError('The original profile edit could not be fetched.', { cause: lastError });
+  throw new ProfileRecoveryError('The original profile edit could not be fetched.', {
+    cause: lastError,
+    reason: reachedEveryGateway ? 'missing' : 'unreachable',
+  });
 }
 
 /**

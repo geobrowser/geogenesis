@@ -134,6 +134,12 @@ describe('parseOriginalProfileEdit', () => {
     ]);
   });
 
+  it('calls a mismatched or undecodable original missing', () => {
+    expect(() => parseOriginalProfileEdit(new Uint8Array([1, 2, 3]), SPACE_ID, TOPIC_ID)).toThrow(
+      expect.objectContaining({ reason: 'missing' })
+    );
+  });
+
   it('rejects an edit authored by another space', () => {
     expect(() => parseOriginalProfileEdit(EDIT_BYTES, '00000000000000000000000000000001', TOPIC_ID)).toThrow(
       ProfileRecoveryError
@@ -161,6 +167,23 @@ describe('fetchOriginalProfileEdit', () => {
     await expect(fetchOriginalProfileEdit(EDIT_URI, fetchFn)).resolves.toEqual(EDIT_BYTES);
     expect(fetchFn).toHaveBeenCalledTimes(2);
     expect(fetchFn.mock.calls[0][0]).toContain('QmX65gRctsCHnBZSG7izR4vhMUTH3HbMuCuHRYP8tu5BVv');
+  });
+
+  it('calls it missing when every gateway answered without it', async () => {
+    const fetchFn = vi.fn().mockResolvedValue(new Response('Not found', { status: 404 }));
+
+    await expect(fetchOriginalProfileEdit(EDIT_URI, fetchFn)).rejects.toMatchObject({ reason: 'missing' });
+  });
+
+  it('calls it unreachable when a gateway was rate-limited or could not be reached', async () => {
+    const limited = vi
+      .fn()
+      .mockResolvedValueOnce(new Response('Too many requests', { status: 429 }))
+      .mockResolvedValue(new Response('Not found', { status: 404 }));
+    await expect(fetchOriginalProfileEdit(EDIT_URI, limited)).rejects.toMatchObject({ reason: 'unreachable' });
+
+    const offline = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'));
+    await expect(fetchOriginalProfileEdit(EDIT_URI, offline)).rejects.toMatchObject({ reason: 'unreachable' });
   });
 
   it('throws a recovery error when no gateway serves it', async () => {

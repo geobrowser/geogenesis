@@ -431,7 +431,9 @@ async function profileRecoveryOps({
   walletAddress: string;
 }): Promise<{ ops: Op[]; source: 'original' | 'fresh_under_declared_topic' }> {
   try {
-    if (!declaration.editUri) throw new ProfileRecoveryError('The original profile edit is not on chain.');
+    if (!declaration.editUri) {
+      throw new ProfileRecoveryError('The original profile edit is not on chain.', { reason: 'missing' });
+    }
     const original = parseOriginalProfileEdit(
       await fetchOriginalProfileEdit(declaration.editUri),
       spaceId,
@@ -446,7 +448,8 @@ async function profileRecoveryOps({
     });
     return { ops, source: 'original' };
   } catch (error) {
-    if (!(error instanceof ProfileRecoveryError) || !canPublishFreshUnderDeclaredTopic(declaration, Date.now())) {
+    const missing = error instanceof ProfileRecoveryError && error.reason === 'missing';
+    if (!missing || !canPublishFreshUnderDeclaredTopic(declaration, Date.now())) {
       throw error;
     }
     const { ops } = await generateOpsForSpaceType({
