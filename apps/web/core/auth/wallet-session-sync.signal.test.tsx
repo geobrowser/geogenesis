@@ -32,7 +32,7 @@ describe('useWalletSessionSync', () => {
     expect(result.current).toEqual({ synced: false, settled: false });
   });
 
-  it('is not synced for another wallet, but settles once syncing gives up', async () => {
+  it('settles without syncing once syncing gives up', async () => {
     vi.stubGlobal('fetch', respond(503, { wallet: null, status: 'unconfigured' }));
     const { result } = renderHook(() => useWalletSessionSync(WALLET));
 

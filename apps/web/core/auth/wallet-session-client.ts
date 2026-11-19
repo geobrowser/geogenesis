@@ -36,7 +36,7 @@ let postingToken: string | null = null;
 
 /**
  * What the server's session is known to hold: `wallet` (lowercased) after an ok answer, and `gaveUp`
- * once syncing has failed with nothing left to try, so gated writes go ahead without it.
+ * once a sync fails with no prompt retry pending, so gated writes go ahead without it.
  */
 export type WalletSessionSyncState = { wallet: string | null; gaveUp: boolean };
 export const NOT_SYNCED: WalletSessionSyncState = { wallet: null, gaveUp: false };

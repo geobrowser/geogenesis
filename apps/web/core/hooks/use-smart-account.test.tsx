@@ -7,7 +7,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { resetWalletSessionClientForTests, syncWalletSession } from '~/core/auth/wallet-session-client';
 
-import { WALLET_SESSION_WAIT_MS, signingAccountDelayMs, useSmartAccount } from './use-smart-account';
+import {
+  WALLET_SESSION_WAIT_MS,
+  resetWalletSessionWaitForTests,
+  signingAccountDelayMs,
+  useSmartAccount,
+} from './use-smart-account';
 
 const ADDRESS = '0x5D6d0E45D76D360AB4F94941CE9a005b0AEa2ebD';
 
@@ -53,6 +58,7 @@ beforeEach(() => {
   mocks.wallets = [];
   mocks.generateZeroDevAccount.mockReset().mockResolvedValue({ account: { address: ADDRESS } });
   resetWalletSessionClientForTests();
+  resetWalletSessionWaitForTests();
 });
 
 afterEach(() => {
@@ -85,7 +91,7 @@ describe('useSmartAccount', () => {
   });
 
   it('hands the account over once the wait for a session runs out', async () => {
-    vi.useFakeTimers({ toFake: ['setTimeout'] });
+    vi.useFakeTimers({ toFake: ['setTimeout', 'Date'] });
     mocks.wallets = [embedded];
     const { result } = renderSmartAccount();
 
@@ -93,6 +99,18 @@ describe('useSmartAccount', () => {
     expect(result.current.smartAccount).toBeNull();
     await act(() => vi.advanceTimersByTimeAsync(1_000));
     expect(result.current.smartAccount?.account.address).toBe(ADDRESS);
+  });
+
+  it('does not restart the wait for a later mount', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'Date'] });
+    mocks.wallets = [embedded];
+    renderSmartAccount();
+    await act(() => vi.advanceTimersByTimeAsync(WALLET_SESSION_WAIT_MS));
+
+    const later = renderSmartAccount();
+    await act(() => vi.advanceTimersByTimeAsync(0));
+    await act(() => vi.advanceTimersByTimeAsync(0));
+    expect(later.result.current.smartAccount?.account.address).toBe(ADDRESS);
   });
 
   it('does not rebuild the account when a browser wallet connects', async () => {

@@ -34,17 +34,26 @@ export function signingAccountDelayMs() {
 /** Bounds the wait for the server's wallet session, so a session that never syncs can't hold writes. */
 export const WALLET_SESSION_WAIT_MS = 10_000;
 
+/** When each address's wait started, shared so a later mount doesn't wait again. Resets with the page. */
+const waitStartedAt = new Map<string, number>();
+
 /** Whether writes may go: the server's session holds `address`, syncing gave up, or the wait ran out. */
 function useWalletSessionReady(address: `0x${string}` | null) {
   const { settled } = useWalletSessionSync(address);
-  const [waitedFor, setWaitedFor] = React.useState<string | null>(null);
-  const waiting = address !== null && !settled && waitedFor !== address;
+  const [expiredFor, setExpiredFor] = React.useState<string | null>(null);
   React.useEffect(() => {
-    if (!waiting) return;
-    const timer = setTimeout(() => setWaitedFor(address), WALLET_SESSION_WAIT_MS);
+    if (address === null || settled) return;
+    const startedAt = waitStartedAt.get(address) ?? Date.now();
+    waitStartedAt.set(address, startedAt);
+    const timer = setTimeout(() => setExpiredFor(address), startedAt + WALLET_SESSION_WAIT_MS - Date.now());
     return () => clearTimeout(timer);
-  }, [waiting, address]);
-  return address !== null && (settled || waitedFor === address);
+  }, [address, settled]);
+  return address !== null && (settled || expiredFor === address);
+}
+
+/** Test seam. */
+export function resetWalletSessionWaitForTests() {
+  waitStartedAt.clear();
 }
 
 /** The signing account, once it is built and the server's wallet session holds it (bounded). */
