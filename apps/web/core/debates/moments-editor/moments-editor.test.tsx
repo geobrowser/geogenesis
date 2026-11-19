@@ -1240,6 +1240,8 @@ describe('MomentsEditor (GEO-3671)', () => {
     fireEvent.blur(end());
     expect(end()).toHaveValue('0:02.5');
     expect(screen.getByTestId('waveform-readout')).toHaveTextContent('End 0:02.50');
+    // Mid-word, geo-chat has no word edge to widen: what plays ends where it was typed.
+    expect(screen.getByTestId('waveform-readout')).toHaveTextContent(/Plays .* – 0:02\.50/);
   });
 
   // The "Only 1 clip" fix adds at the playhead, so before the player reports one it can't run.

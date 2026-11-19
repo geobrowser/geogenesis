@@ -33,7 +33,7 @@ export function dragEdge(
 
 /**
  * A clip moved or trimmed by a drag of `deltaMs`, kept inside the debate and at least a second long.
- * Moving keeps the clip's length, then snaps both edges out to whole words (with Alt, neither): an
+ * Moving keeps the clip's length, then snaps both edges out to whole words (free, neither): an
  * end left mid-word would play that word without its caption.
  */
 export function draggedClip(
@@ -70,7 +70,7 @@ export function draggedClip(
 }
 
 /**
- * A dragged clip's edges, and with Alt held, where they were placed freely: a free edge is cut
+ * A dragged clip's edges, and when free, where they were placed: a free edge is cut
  * exactly there, not widened into the quiet beside its words (`manualReel`).
  */
 export type DraggedSpan = Pick<EditorClip, 'start_ms' | 'end_ms' | 'free_start_ms' | 'free_end_ms'>;
