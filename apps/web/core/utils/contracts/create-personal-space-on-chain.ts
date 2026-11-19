@@ -395,7 +395,7 @@ export async function republishPersonalProfile({
     )
   );
   if (submitResult._tag === 'Left') throw submitResult.left;
-  // Counted so a republish the index drops again shows up: `publish_count` keeps rising for the space.
+  // Counted so a republish the index drops again shows up: `publishCount` keeps rising for the space.
   reportEvent({
     name: 'personal_profile_republished',
     level: 'warning',
