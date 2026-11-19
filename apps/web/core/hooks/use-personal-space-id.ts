@@ -26,10 +26,13 @@ function profilePublishStorageKey(address: string) {
   return `personalProfilePublishedAt:${address.toLowerCase()}`;
 }
 
-/** Record that this browser just sent the personal profile publish for `address`. */
-export function markPersonalProfilePublished(address: string) {
+/**
+ * Record that the personal profile publish for `address` was sent at `at`: now, or the chain's time
+ * for one sent earlier, so a retry can't keep extending the window.
+ */
+export function markPersonalProfilePublished(address: string, at = Date.now()) {
   try {
-    window.localStorage.setItem(profilePublishStorageKey(address), String(Date.now()));
+    window.localStorage.setItem(profilePublishStorageKey(address), String(at));
   } catch {
     // Storage can be unavailable (private mode, blocked site data); the grace is a nicety.
   }
@@ -55,6 +58,14 @@ function recentlyPublishedProfile(address: string) {
 export function needsPersonalProfile(space: Pick<Space, 'type' | 'hasProfile'> | null, address: string) {
   if (recentlyPublishedProfile(address)) return false;
   return space === null || (space.type === 'PERSONAL' && !space.hasProfile);
+}
+
+/**
+ * The person entity of a personal space: its topic, or else its page. The page fills in while the
+ * indexer ignores the web's TOPIC_DECLARED, which leaves `topicId` null on most personal spaces.
+ */
+export function personalEntityIdOf(space: Pick<Space, 'topicId' | 'hasProfile' | 'entity'>) {
+  return space.topicId ?? (space.hasProfile && space.entity.id ? space.entity.id : null);
 }
 
 export type PersonalSpaceIdData = {
@@ -93,7 +104,7 @@ export function usePersonalSpaceId() {
       return {
         isRegistered: true,
         personalSpaceId: space.id,
-        personalEntityId: space.topicId ?? null,
+        personalEntityId: personalEntityIdOf(space),
         needsProfile: needsPersonalProfile(space, address),
       };
     },

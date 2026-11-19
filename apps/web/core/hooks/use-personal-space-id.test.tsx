@@ -10,6 +10,7 @@ import { markPersonalProfilePublished, usePersonalSpaceId } from './use-personal
 
 const ADDRESS = '0x5D6d0E45D76D360AB4F94941CE9a005b0AEa2ebD';
 const SPACE_ID = 'd4bee0928fb5405baba3b1513f085835';
+const TOPIC_ID = '5cc83bb5b39540b3922f9a8664bf6831';
 
 const getSpaceByAddress = vi.fn();
 
@@ -57,12 +58,39 @@ describe('usePersonalSpaceId', () => {
   });
 
   it('does not ask for a profile the space already has', async () => {
-    getSpaceByAddress.mockReturnValue(Effect.succeed({ id: SPACE_ID, type: 'PERSONAL', hasProfile: true }));
+    getSpaceByAddress.mockReturnValue(
+      Effect.succeed({ id: SPACE_ID, type: 'PERSONAL', topicId: TOPIC_ID, hasProfile: true, entity: { id: TOPIC_ID } })
+    );
 
     const { result } = renderHook(() => usePersonalSpaceId(), { wrapper });
 
     await waitFor(() => expect(result.current.isRegistered).toBe(true));
     expect(result.current.needsProfile).toBe(false);
+    expect(result.current.personalEntityId).toBe(TOPIC_ID);
+  });
+
+  it('finds the person entity from the page while the index has no topic for the space', async () => {
+    // The indexer ignores the web's TOPIC_DECLARED, so `topicId` is null on most personal spaces
+    // and the profile is only served as the page (GEO-3803).
+    getSpaceByAddress.mockReturnValue(
+      Effect.succeed({ id: SPACE_ID, type: 'PERSONAL', topicId: null, hasProfile: true, entity: { id: TOPIC_ID } })
+    );
+
+    const { result } = renderHook(() => usePersonalSpaceId(), { wrapper });
+
+    await waitFor(() => expect(result.current.isRegistered).toBe(true));
+    expect(result.current.personalEntityId).toBe(TOPIC_ID);
+  });
+
+  it('reports no person entity for a space with no profile', async () => {
+    getSpaceByAddress.mockReturnValue(
+      Effect.succeed({ id: SPACE_ID, type: 'PERSONAL', topicId: null, hasProfile: false, entity: { id: '' } })
+    );
+
+    const { result } = renderHook(() => usePersonalSpaceId(), { wrapper });
+
+    await waitFor(() => expect(result.current.isRegistered).toBe(true));
+    expect(result.current.personalEntityId).toBeNull();
   });
 
   it('trusts a profile this browser just published over an index that has not caught up', async () => {

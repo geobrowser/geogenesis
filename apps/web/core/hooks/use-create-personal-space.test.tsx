@@ -6,20 +6,38 @@ import * as React from 'react';
 import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { INDEX_LAG_WINDOW_MS, ProfileStillProcessingError } from '~/core/utils/contracts/personal-profile-recovery';
+
 import { useCreatePersonalSpace } from './use-create-personal-space';
-import { markPersonalProfilePublished } from './use-personal-space-id';
+import { markPersonalProfilePublished, needsPersonalProfile } from './use-personal-space-id';
 
 const ADDRESS = '0x2e766B1B973EC3049c5Dd7ea8EbDc30d6D919dDE';
 const SPACE_ID = '17b847abe1d146079294071b11ab81fc';
+const PERSON_ID = '5cc83bb5b39540b3922f9a8664bf6831';
+// A real profile the index serves as the space's page, with `topicId` still null (the indexer
+// ignores the web's TOPIC_DECLARED).
+const indexedProfile = { id: SPACE_ID, type: 'PERSONAL', topicId: null, hasProfile: true, entity: { id: PERSON_ID } };
+
+function declaration(ageMs: number) {
+  return {
+    topicId: PERSON_ID,
+    blockNumber: 126_690n,
+    transactionHash: '0x383a',
+    declaredAtMs: Date.now() - ageMs,
+    editUri: 'ipfs://QmX65gRctsCHnBZSG7izR4vhMUTH3HbMuCuHRYP8tu5BVv',
+  };
+}
 
 const readRegisteredSpaceId = vi.fn();
 const createPersonalSpaceOnChain = vi.fn();
-const hasDeclaredPersonalTopic = vi.fn();
+const findPersonalProfileDeclaration = vi.fn();
+const republishPersonalProfile = vi.fn();
 const getSpace = vi.fn();
 
 vi.mock('~/core/utils/contracts/create-personal-space-on-chain', () => ({
   readRegisteredSpaceId: (address: string) => readRegisteredSpaceId(address),
-  hasDeclaredPersonalTopic: (spaceId: string) => hasDeclaredPersonalTopic(spaceId),
+  findPersonalProfileDeclaration: (spaceId: string) => findPersonalProfileDeclaration(spaceId),
+  republishPersonalProfile: (args: unknown) => republishPersonalProfile(args),
   createPersonalSpaceOnChain: (args: unknown) => createPersonalSpaceOnChain(args),
 }));
 
@@ -44,11 +62,13 @@ function create(onRegistered = vi.fn()) {
 beforeEach(() => {
   readRegisteredSpaceId.mockReset();
   createPersonalSpaceOnChain.mockReset();
-  hasDeclaredPersonalTopic.mockReset();
+  findPersonalProfileDeclaration.mockReset();
+  republishPersonalProfile.mockReset();
   getSpace.mockReset();
   window.localStorage.clear();
   createPersonalSpaceOnChain.mockResolvedValue(SPACE_ID);
-  hasDeclaredPersonalTopic.mockResolvedValue(false);
+  findPersonalProfileDeclaration.mockResolvedValue(null);
+  republishPersonalProfile.mockResolvedValue(SPACE_ID);
 });
 
 describe('useCreatePersonalSpace', () => {
@@ -84,15 +104,15 @@ describe('useCreatePersonalSpace', () => {
 
   it('returns a registered space that already has its profile without publishing again', async () => {
     readRegisteredSpaceId.mockResolvedValue(SPACE_ID);
-    getSpace.mockReturnValue(Effect.succeed({ id: SPACE_ID, type: 'PERSONAL', hasProfile: true }));
+    getSpace.mockReturnValue(Effect.succeed(indexedProfile));
     const onRegistered = vi.fn();
 
     await expect(create(onRegistered)).resolves.toBe(SPACE_ID);
 
     expect(createPersonalSpaceOnChain).not.toHaveBeenCalled();
-    expect(onRegistered).toHaveBeenCalledWith(SPACE_ID);
+    expect(onRegistered).toHaveBeenCalledWith(SPACE_ID, PERSON_ID);
     // The index already answered; the chain is only asked when the index says "missing".
-    expect(hasDeclaredPersonalTopic).not.toHaveBeenCalled();
+    expect(findPersonalProfileDeclaration).not.toHaveBeenCalled();
   });
 
   it('does not publish a second profile that another browser landed while the index lags', async () => {
@@ -100,20 +120,73 @@ describe('useCreatePersonalSpace', () => {
     // dialog minted a fresh topic id, so publishing here would write a second profile under it.
     readRegisteredSpaceId.mockResolvedValue(SPACE_ID);
     getSpace.mockReturnValue(Effect.succeed(null));
-    hasDeclaredPersonalTopic.mockResolvedValue(true);
+    const recent = declaration(60_000);
+    findPersonalProfileDeclaration.mockResolvedValue(recent);
+    const onRegistered = vi.fn();
+
+    await expect(create(onRegistered)).rejects.toBeInstanceOf(ProfileStillProcessingError);
+
+    expect(findPersonalProfileDeclaration).toHaveBeenCalledWith(SPACE_ID);
+    expect(createPersonalSpaceOnChain).not.toHaveBeenCalled();
+    expect(republishPersonalProfile).not.toHaveBeenCalled();
+    // Not "sent": nothing was. The grace window is anchored to the chain's time, not now.
+    expect(onRegistered).not.toHaveBeenCalled();
+    expect(window.localStorage.getItem(`personalProfilePublishedAt:${ADDRESS.toLowerCase()}`)).toBe(
+      String(recent.declaredAtMs)
+    );
+  });
+
+  it('republishes a profile the index dropped, under the declared topic, instead of a fresh one', async () => {
+    // GEO-3803: the sign-up edit and its declaration landed, the indexer dropped the edit, and the
+    // retry was skipped because the declaration existed. The prompt came back every 10 minutes.
+    readRegisteredSpaceId.mockResolvedValue(SPACE_ID);
+    getSpace.mockReturnValue(
+      Effect.succeed({ id: SPACE_ID, type: 'PERSONAL', topicId: null, hasProfile: false, entity: { id: '' } })
+    );
+    const old = declaration(INDEX_LAG_WINDOW_MS + 60_000);
+    findPersonalProfileDeclaration.mockResolvedValue(old);
     const onRegistered = vi.fn();
 
     await expect(create(onRegistered)).resolves.toBe(SPACE_ID);
 
-    expect(hasDeclaredPersonalTopic).toHaveBeenCalledWith(SPACE_ID);
+    expect(republishPersonalProfile).toHaveBeenCalledTimes(1);
+    expect(republishPersonalProfile).toHaveBeenCalledWith(
+      expect.objectContaining({ spaceId: SPACE_ID, declaration: old, spaceName: 'Ada', onRegistered })
+    );
     expect(createPersonalSpaceOnChain).not.toHaveBeenCalled();
-    expect(onRegistered).toHaveBeenCalledWith(SPACE_ID);
+  });
+
+  it('publishes a fresh profile when the chain has no profile publish at all', async () => {
+    readRegisteredSpaceId.mockResolvedValue(SPACE_ID);
+    getSpace.mockReturnValue(
+      Effect.succeed({ id: SPACE_ID, type: 'PERSONAL', topicId: null, hasProfile: false, entity: { id: '' } })
+    );
+    findPersonalProfileDeclaration.mockResolvedValue(null);
+
+    await create();
+
+    expect(createPersonalSpaceOnChain).toHaveBeenCalledTimes(1);
+    expect(republishPersonalProfile).not.toHaveBeenCalled();
+  });
+
+  it('never prompts or publishes for a declared space whose real profile is indexed', async () => {
+    expect(needsPersonalProfile(indexedProfile as never, ADDRESS)).toBe(false);
+
+    readRegisteredSpaceId.mockResolvedValue(SPACE_ID);
+    getSpace.mockReturnValue(Effect.succeed(indexedProfile));
+    findPersonalProfileDeclaration.mockResolvedValue(declaration(INDEX_LAG_WINDOW_MS + 60_000));
+
+    await create();
+
+    expect(findPersonalProfileDeclaration).not.toHaveBeenCalled();
+    expect(republishPersonalProfile).not.toHaveBeenCalled();
+    expect(createPersonalSpaceOnChain).not.toHaveBeenCalled();
   });
 
   it('still publishes the missing profile when the chain check cannot be read', async () => {
     readRegisteredSpaceId.mockResolvedValue(SPACE_ID);
     getSpace.mockReturnValue(Effect.succeed({ id: SPACE_ID, type: 'PERSONAL', hasProfile: false }));
-    hasDeclaredPersonalTopic.mockRejectedValue(new Error('rpc unavailable'));
+    findPersonalProfileDeclaration.mockRejectedValue(new Error('rpc unavailable'));
     vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     await create();
