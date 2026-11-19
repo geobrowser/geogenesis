@@ -140,7 +140,16 @@ export function useBestDebatesCompose({
     () => [...orderedIds, ...(pushDown?.pushedDownEntityIds ?? [])],
     [orderedIds, pushDown?.pushedDownEntityIds]
   );
-  const toRank = useBestDebatesToRank({ enabled, excludeEntityIds: excludeFromToRank, rankers, filters, todayKey });
+  const toRank = useBestDebatesToRank({
+    enabled,
+    excludeEntityIds: excludeFromToRank,
+    rankers,
+    filters,
+    todayKey,
+    // Under a search or filter, To rank can show your ranked and down ranked matches (GEO-3810).
+    rankedEntityIds: orderedIds,
+    downRankedEntityIds: pushDown?.pushedDownEntityIds,
+  });
 
   // GEO-3774: All and By space read the recorded range as it is; To rank reads its own window (the
   // range, else the last 7 days). The menus count over whichever list is showing.
@@ -350,6 +359,9 @@ export function useBestDebatesCompose({
         todayKey={todayKey}
         filtered={hasRankingFilters(filters)}
         capped={toRank.capped}
+        rankedMatches={toRank.rankedMatches}
+        nameOf={nameOf}
+        fallbackSpaceId={blockSpaceId}
         onPushDown={pushDown ? placement.requestPushDown : undefined}
       />
     ),
