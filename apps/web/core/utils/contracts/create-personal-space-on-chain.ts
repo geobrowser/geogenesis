@@ -1,5 +1,6 @@
 import { isRevertedUserOperationError } from '@geogenesis/auth/account';
 import { getCreatePersonalSpaceCalldata } from '@geoprotocol/geo-sdk';
+import type { Op } from '@geoprotocol/geo-sdk/lite';
 
 import { Duration, Effect, Schedule } from 'effect';
 import { type Hex, createPublicClient, http, toHex } from 'viem';
@@ -22,6 +23,7 @@ import {
   type ProfileDeclaration,
   ProfileRecoveryError,
   buildRecoveryOps,
+  canPublishFreshUnderDeclaredTopic,
   fetchOriginalProfileEdit,
   parseEditUriFromLogData,
   parseOriginalProfileEdit,
@@ -345,6 +347,7 @@ export async function createPersonalSpaceOnChain({
 
 type RepublishPersonalProfileParams = {
   smartAccount: SmartAccount;
+  walletAddress: string;
   spaceId: string;
   declaration: ProfileDeclaration;
   spaceName: string;
@@ -354,27 +357,19 @@ type RepublishPersonalProfileParams = {
 };
 
 /**
- * Republishes a dropped profile: the original edit's ops by id, under a new edit id and CID. Sends
- * only the edit, since the declaration is on chain; throws and sends nothing if the original can't be read.
+ * Republishes a dropped profile under a new edit id and CID, sending only the edit since the
+ * declaration is on chain. An unreadable original throws and sends nothing until the fallback age.
  */
 export async function republishPersonalProfile({
   smartAccount,
+  walletAddress,
   spaceId,
   declaration,
   spaceName,
   spaceAvatarUri,
   onRegistered,
 }: RepublishPersonalProfileParams): Promise<string> {
-  if (!declaration.editUri) {
-    throw new ProfileRecoveryError('The original profile edit is not on chain.');
-  }
-  const original = parseOriginalProfileEdit(
-    await fetchOriginalProfileEdit(declaration.editUri),
-    spaceId,
-    declaration.topicId
-  );
-  const avatarOps = spaceAvatarUri ? await generateAvatarOps(declaration.topicId, getImagePath(spaceAvatarUri)) : [];
-  const ops = buildRecoveryOps({ originalOps: original.ops, topicId: declaration.topicId, name: spaceName, avatarOps });
+  const { ops, source } = await profileRecoveryOps({ spaceId, declaration, spaceName, spaceAvatarUri, walletAddress });
 
   const { to, calldata } = await geo.personalSpaces.publishEdit({ name: spaceName, spaceId, ops, author: spaceId });
 
@@ -399,7 +394,7 @@ export async function republishPersonalProfile({
   reportEvent({
     name: 'personal_profile_republished',
     level: 'warning',
-    tags: { 'space.id': spaceId },
+    tags: { 'space.id': spaceId, outcome: source },
     extra: { topicId: declaration.topicId, publishCount: declaration.publishCount, editUri: declaration.editUri },
   });
   devLog('[CREATE_SPACE] profile republished, waiting for index…');
@@ -416,6 +411,55 @@ export async function republishPersonalProfile({
   devLog('[CREATE_SPACE] republished profile %s, spaceId=%s', indexed ? 'indexed' : 'not yet indexed', spaceId);
 
   return spaceId;
+}
+
+/**
+ * The ops for a recovered profile. A readable original is always republished by its ids. If it
+ * can't be read, a fresh profile under the declared topic is built only once the last publish is
+ * past the fallback age; the person entity, and so the page, stays the declared one.
+ */
+async function profileRecoveryOps({
+  spaceId,
+  declaration,
+  spaceName,
+  spaceAvatarUri,
+  walletAddress,
+}: {
+  spaceId: string;
+  declaration: ProfileDeclaration;
+  spaceName: string;
+  spaceAvatarUri?: string | null;
+  walletAddress: string;
+}): Promise<{ ops: Op[]; source: 'original' | 'fresh_under_declared_topic' }> {
+  try {
+    if (!declaration.editUri) throw new ProfileRecoveryError('The original profile edit is not on chain.');
+    const original = parseOriginalProfileEdit(
+      await fetchOriginalProfileEdit(declaration.editUri),
+      spaceId,
+      declaration.topicId
+    );
+    const avatarOps = spaceAvatarUri ? await generateAvatarOps(declaration.topicId, getImagePath(spaceAvatarUri)) : [];
+    const ops = buildRecoveryOps({
+      originalOps: original.ops,
+      topicId: declaration.topicId,
+      name: spaceName,
+      avatarOps,
+    });
+    return { ops, source: 'original' };
+  } catch (error) {
+    if (!(error instanceof ProfileRecoveryError) || !canPublishFreshUnderDeclaredTopic(declaration, Date.now())) {
+      throw error;
+    }
+    const { ops } = await generateOpsForSpaceType({
+      type: 'personal',
+      spaceName,
+      spaceAvatarUri: spaceAvatarUri ? getImagePath(spaceAvatarUri) : null,
+      spaceCoverUri: null,
+      initialEditorAddress: walletAddress,
+      topicId: declaration.topicId,
+    });
+    return { ops, source: 'fresh_under_declared_topic' };
+  }
 }
 
 /** Polls until the index serves `entityId` as the space's named profile entity (its topic or page). */

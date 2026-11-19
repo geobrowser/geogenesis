@@ -104,6 +104,7 @@ export function useCreatePersonalSpace() {
         if (decision.kind === 'republish') {
           return republishPersonalProfile({
             smartAccount,
+            walletAddress,
             spaceId: existingSpaceId,
             declaration: decision.declaration,
             spaceName,

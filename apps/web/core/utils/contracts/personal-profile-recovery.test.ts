@@ -9,7 +9,9 @@ import {
   INDEX_LAG_WINDOW_MS,
   type ProfileDeclaration,
   ProfileRecoveryError,
+  UNREADABLE_ORIGINAL_FALLBACK_MS,
   buildRecoveryOps,
+  canPublishFreshUnderDeclaredTopic,
   decideProfileRetry,
   fetchOriginalProfileEdit,
   parseEditUriFromLogData,
@@ -84,6 +86,18 @@ describe('decideProfileRetry', () => {
   it('waits after a recent republish from any browser, not only after the declaration', () => {
     const republished = declaration(NOW - 60 * 60_000, NOW - 30_000);
     expect(decideProfileRetry(republished, at(NOW)).kind).toBe('processing');
+  });
+});
+
+describe('canPublishFreshUnderDeclaredTopic', () => {
+  it('waits out the fallback age after the last publish', () => {
+    expect(canPublishFreshUnderDeclaredTopic(declaration(NOW - UNREADABLE_ORIGINAL_FALLBACK_MS), NOW)).toBe(false);
+    expect(canPublishFreshUnderDeclaredTopic(declaration(NOW - UNREADABLE_ORIGINAL_FALLBACK_MS - 1), NOW)).toBe(true);
+  });
+
+  it('counts from the latest publish, not the declaration', () => {
+    const republishedRecently = declaration(NOW - 2 * UNREADABLE_ORIGINAL_FALLBACK_MS, NOW - 60_000);
+    expect(canPublishFreshUnderDeclaredTopic(republishedRecently, NOW)).toBe(false);
   });
 });
 

@@ -13,7 +13,7 @@ import {
   parseRegisteredSpaceId,
   republishPersonalProfile,
 } from './create-personal-space-on-chain';
-import { ProfileRecoveryError } from './personal-profile-recovery';
+import { ProfileRecoveryError, UNREADABLE_ORIGINAL_FALLBACK_MS } from './personal-profile-recovery';
 import { GOVERNANCE_ACTIONS } from './space-registry';
 
 const request = vi.fn();
@@ -234,15 +234,52 @@ describe('republishPersonalProfile', () => {
   const smartAccount = { sendUserOperation } as unknown as Parameters<
     typeof republishPersonalProfile
   >[0]['smartAccount'];
-  const declaration = {
-    topicId: TOPIC_ID,
-    blockNumber: 126_690n,
-    transactionHash: TX,
-    declaredAtMs: Number(DECLARED_AT_SECONDS) * 1000,
-    editUri: EDIT_URI,
-    lastPublishedAtMs: Number(DECLARED_AT_SECONDS) * 1000,
-    publishCount: 1,
-  } as const;
+  const WALLET = '0x1561d60DF8b2840264DEc7f508E911fd708dc41F';
+  const ORIGINAL_IDS = [
+    TOPIC_ID,
+    'f7e717740dcf4e72894779e168846db5',
+    '48bbae2340244813b9f7e5b013892a33',
+    'cc4990b3fd5046b194864918e7803978',
+    'a7fe5329e32f44bf84a6470b3bf72d25',
+    'ea27595ba70b40aea0e131a5a08e9611',
+    '6c410f068ad548d08b86f0fbb64f4043',
+  ];
+
+  function declarationPublishedAgo(ageMs: number, editUri: string | null = EDIT_URI) {
+    const at = Date.now() - ageMs;
+    return {
+      topicId: TOPIC_ID,
+      blockNumber: 126_690n,
+      transactionHash: TX,
+      declaredAtMs: at,
+      editUri,
+      lastPublishedAtMs: at,
+      publishCount: 1,
+    } as const;
+  }
+
+  function republish(declaration: ReturnType<typeof declarationPublishedAgo>, onRegistered = vi.fn()) {
+    return republishPersonalProfile({
+      smartAccount,
+      walletAddress: WALLET,
+      spaceId: SPACE_ID,
+      declaration,
+      spaceName: 'Bryan',
+      onRegistered,
+    });
+  }
+
+  function publishedOpIds() {
+    return publishEdit.mock.calls[0][0].ops.map((op: { id: Uint8Array }) => formatId(op.id as never));
+  }
+
+  /** The single call sent: the edit publish, never a TOPIC_DECLARED to the registry. */
+  function expectOnlyThePublishCall() {
+    expect(sendUserOperation).toHaveBeenCalledTimes(1);
+    expect(sendUserOperation.mock.calls[0][0].calls).toEqual([
+      { to: SPACE_REGISTRY_ADDRESS_HEX, value: 0n, data: '0xfeed' },
+    ]);
+  }
 
   beforeEach(() => {
     sendUserOperation.mockReset();
@@ -264,51 +301,70 @@ describe('republishPersonalProfile', () => {
   it('republishes the original ops by id, in one call, with no second topic declaration', async () => {
     const onRegistered = vi.fn();
 
-    await expect(
-      republishPersonalProfile({ smartAccount, spaceId: SPACE_ID, declaration, spaceName: 'Bryan', onRegistered })
-    ).resolves.toBe(SPACE_ID);
+    await expect(republish(declarationPublishedAgo(10 * 60_000), onRegistered)).resolves.toBe(SPACE_ID);
 
     expect(publishEdit).toHaveBeenCalledTimes(1);
-    const { ops, spaceId, author } = publishEdit.mock.calls[0][0];
+    const { spaceId, author } = publishEdit.mock.calls[0][0];
     expect({ spaceId, author }).toEqual({ spaceId: SPACE_ID, author: SPACE_ID });
-    expect(ops.map((op: { id: Uint8Array }) => formatId(op.id as never))).toEqual([
-      TOPIC_ID,
-      'f7e717740dcf4e72894779e168846db5',
-      '48bbae2340244813b9f7e5b013892a33',
-      'cc4990b3fd5046b194864918e7803978',
-      'a7fe5329e32f44bf84a6470b3bf72d25',
-      'ea27595ba70b40aea0e131a5a08e9611',
-      '6c410f068ad548d08b86f0fbb64f4043',
-    ]);
-
-    expect(sendUserOperation).toHaveBeenCalledTimes(1);
-    const { calls } = sendUserOperation.mock.calls[0][0];
-    expect(calls).toEqual([{ to: SPACE_REGISTRY_ADDRESS_HEX, value: 0n, data: '0xfeed' }]);
+    expect(publishedOpIds()).toEqual(ORIGINAL_IDS);
+    expectOnlyThePublishCall();
     expect(onRegistered).toHaveBeenCalledWith(SPACE_ID, TOPIC_ID);
   });
 
-  it('sends nothing and never rebuilds with fresh ids when the original edit cannot be fetched', async () => {
+  it('always republishes a readable original, however old the publish', async () => {
+    await republish(declarationPublishedAgo(30 * 24 * 60 * 60_000));
+
+    expect(publishedOpIds()).toEqual(ORIGINAL_IDS);
+    expectOnlyThePublishCall();
+  });
+
+  it('sends nothing for an unreadable original published under an hour ago', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('Too many requests', { status: 429 })));
 
-    await expect(
-      republishPersonalProfile({ smartAccount, spaceId: SPACE_ID, declaration, spaceName: 'Bryan' })
-    ).rejects.toThrow(ProfileRecoveryError);
+    await expect(republish(declarationPublishedAgo(UNREADABLE_ORIGINAL_FALLBACK_MS - 60_000))).rejects.toThrow(
+      ProfileRecoveryError
+    );
 
     expect(publishEdit).not.toHaveBeenCalled();
     expect(sendUserOperation).not.toHaveBeenCalled();
   });
 
-  it('sends nothing when the declaring transaction published no edit', async () => {
-    await expect(
-      republishPersonalProfile({
-        smartAccount,
-        spaceId: SPACE_ID,
-        declaration: { ...declaration, editUri: null },
-        spaceName: 'Bryan',
-      })
-    ).rejects.toThrow(ProfileRecoveryError);
+  it('sends nothing for a declaration with no paired edit under an hour old', async () => {
+    await expect(republish(declarationPublishedAgo(10 * 60_000, null))).rejects.toThrow(ProfileRecoveryError);
 
     expect(sendUserOperation).not.toHaveBeenCalled();
+  });
+
+  it('publishes a fresh profile under the declared topic once an unreadable original is over an hour old', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('Payment required', { status: 402 })));
+    const onRegistered = vi.fn();
+
+    await expect(
+      republish(declarationPublishedAgo(UNREADABLE_ORIGINAL_FALLBACK_MS + 60_000), onRegistered)
+    ).resolves.toBe(SPACE_ID);
+
+    const ids = publishedOpIds();
+    // The person entity is the declared one, so the page stays; the account and relations are new.
+    expect(ids[0]).toBe(TOPIC_ID);
+    expect(ids).not.toContain('cc4990b3fd5046b194864918e7803978');
+    expectOnlyThePublishCall();
+    expect(onRegistered).toHaveBeenCalledWith(SPACE_ID, TOPIC_ID);
+  });
+
+  it('falls back the same way for an old declaration with no paired edit', async () => {
+    await republish(declarationPublishedAgo(UNREADABLE_ORIGINAL_FALLBACK_MS + 60_000, null));
+
+    expect(publishedOpIds()[0]).toBe(TOPIC_ID);
+    expectOnlyThePublishCall();
+  });
+
+  it('does not fall back when the send itself fails', async () => {
+    sendUserOperation.mockRejectedValue(new Error('bundler down'));
+
+    await expect(republish(declarationPublishedAgo(10 * 60_000))).rejects.toThrow(
+      'Failed to republish personal profile'
+    );
+    expect(publishEdit).toHaveBeenCalledTimes(1);
   });
 });
 

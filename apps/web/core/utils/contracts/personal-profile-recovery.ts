@@ -11,6 +11,17 @@ import { IPFS_GATEWAY_COUNT, getImagePathAtLevel } from '../utils';
  */
 export const INDEX_LAG_WINDOW_MS = 5 * 60 * 1000;
 
+/**
+ * How long after the last publish an unreadable original falls back to a fresh profile under the
+ * declared topic. Long enough that a slow or flaky IPFS gateway gets retried first.
+ */
+export const UNREADABLE_ORIGINAL_FALLBACK_MS = 60 * 60 * 1000;
+
+/** Whether a profile whose original edit can't be read may be published fresh under its declared topic. */
+export function canPublishFreshUnderDeclaredTopic(declaration: ProfileDeclaration, now: number) {
+  return now - declaration.lastPublishedAtMs > UNREADABLE_ORIGINAL_FALLBACK_MS;
+}
+
 /** A personal space's on-chain profile publish: the topic declaration and the edit sent with it. */
 export type ProfileDeclaration = {
   topicId: string;
