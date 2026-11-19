@@ -115,8 +115,16 @@ export async function syncWalletSession(token: string, refresh: () => void): Pro
     if (postingToken === token) postingToken = null;
   }
   if (startedIn !== epoch) {
-    // Signed out while this was in flight: its Set-Cookie may have landed after the DELETE.
-    if (response.ok && sentToken === null) fetch(WALLET_SESSION_ROUTE, { method: 'DELETE' }).catch(() => {});
+    // Signed out while this was in flight, so its Set-Cookie may have overwritten a later DELETE or a
+    // newer account's session. Clear it, or re-post the current token unless that POST lands later.
+    if (!response.ok) return;
+    if (sentToken === null) {
+      fetch(WALLET_SESSION_ROUTE, { method: 'DELETE' }).catch(() => {});
+    } else if (!currentPostInFlight()) {
+      const current = sentToken;
+      sentToken = null;
+      void syncWalletSession(current, refresh);
+    }
     return;
   }
   if (sentToken !== token) return;

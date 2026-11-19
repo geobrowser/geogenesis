@@ -317,6 +317,55 @@ describe('syncWalletSession', () => {
   });
 });
 
+describe('a POST from a previous sign-in', () => {
+  function held(status: string) {
+    let release!: () => void;
+    mocks.fetch.mockImplementationOnce(
+      () =>
+        new Promise<Response>(resolve => {
+          release = () => resolve(new Response(JSON.stringify({ wallet: WALLET, status })));
+        })
+    );
+    return () => release();
+  }
+
+  it("re-posts the new account's token when the old answer lands last", async () => {
+    const releaseOld = held('issued');
+    const old = syncWalletSession('old-account', mocks.refresh);
+    await vi.waitFor(() => expect(mocks.fetch).toHaveBeenCalledOnce());
+
+    forgetWalletSession();
+    mocks.fetch.mockImplementationOnce(() => answer(200, { wallet: WALLET, status: 'issued' }));
+    await syncWalletSession('new-account', mocks.refresh);
+    releaseOld();
+    await old;
+    await vi.waitFor(() => expect(mocks.fetch).toHaveBeenCalledTimes(3));
+
+    expect(mocks.fetch).toHaveBeenLastCalledWith(
+      '/api/wallet-session',
+      expect.objectContaining({ method: 'POST', headers: { Authorization: 'Bearer new-account' } })
+    );
+  });
+
+  it("leaves the new account's POST to answer when it is still in flight", async () => {
+    const releaseOld = held('issued');
+    const old = syncWalletSession('old-account', mocks.refresh);
+    await vi.waitFor(() => expect(mocks.fetch).toHaveBeenCalledOnce());
+
+    forgetWalletSession();
+    const releaseNew = held('issued');
+    const next = syncWalletSession('new-account', mocks.refresh);
+    await vi.waitFor(() => expect(mocks.fetch).toHaveBeenCalledTimes(2));
+    releaseOld();
+    await old;
+    releaseNew();
+    await next;
+
+    expect(mocks.fetch).toHaveBeenCalledTimes(2);
+    expect(mocks.refresh).toHaveBeenCalledOnce();
+  });
+});
+
 describe('clearWalletSession', () => {
   it('deletes the server session and lets the same token sync again', async () => {
     await syncWalletSession('token', mocks.refresh);
