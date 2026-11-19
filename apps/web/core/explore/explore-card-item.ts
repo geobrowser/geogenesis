@@ -303,6 +303,14 @@ function claimSpaceId(entity: ExploreCardEntity, picked: string, allowedSpaceIds
   return resolveEntitySpaceId(scoped, picked);
 }
 
+function movedClaimTypes(entity: ExploreCardEntity, spaceIdNorm: string): { id: string; name: string | null }[] {
+  const placed = (entity.placement?.types ?? [])
+    .filter(type => normId(type.spaceId) === spaceIdNorm)
+    .map(type => ({ id: type.id, name: type.name }));
+  if (placed.length > 0) return placed;
+  return entity.types.filter(type => normId(type.id) === CLAIM_TYPE).map(type => ({ id: type.id, name: type.name }));
+}
+
 function textValueForProperty(entity: Entity, propertyId: string, spaceId: string): string | null {
   const pid = normId(propertyId);
   const sid = normId(spaceId);
@@ -381,14 +389,9 @@ export function buildExploreFeedRows(
     const listedTypes = relationsInDisplaySpace
       .filter(r => normId(r.type.id) === typesRelationIdNorm)
       .map(r => ({ id: r.toEntity.id, name: r.toEntity.name }));
-    // A claim moved to its home space by `claimSpaceId` has nothing in the scoped lists there, so
-    // its types come from the unscoped projection, the same relations read past the scoping.
-    const types =
-      listedTypes.length > 0 || spaceId === picked
-        ? listedTypes
-        : (e.placement?.types ?? [])
-            .filter(type => normId(type.spaceId) === displaySpaceIdNorm)
-            .map(type => ({ id: type.id, name: type.name }));
+    // A claim moved by `claimSpaceId` has nothing in the scoped lists there: its types come from the
+    // unscoped projection, else its known Claim type, so a name-only home still draws a claim card.
+    const types = listedTypes.length > 0 || spaceId === picked ? listedTypes : movedClaimTypes(e, displaySpaceIdNorm);
 
     items.push({
       entityId: e.id,
