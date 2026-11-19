@@ -31,7 +31,13 @@ let noWalletAttempt = 0;
 let awaitingWallet = false;
 let walletSeen = false;
 let walletRetryUsed = false;
-let postsInFlight = 0;
+/** The token whose POST is in flight, if any. */
+let postingToken: string | null = null;
+
+/** A POST for the current token is in flight; resetting `sentToken` now would discard its answer. */
+function currentPostInFlight(): boolean {
+  return postingToken !== null && postingToken === sentToken;
+}
 
 function clearRetry() {
   if (retryTimer !== null) clearTimeout(retryTimer);
@@ -43,6 +49,7 @@ function scheduleRetry(refresh: () => void) {
   if (retryTimer !== null || retryAttempt >= SESSION_RETRY_DELAYS_MS.length) return;
   retryTimer = setTimeout(async () => {
     retryTimer = null;
+    if (currentPostInFlight()) return;
     sentToken = null;
     const token = await getCachedIdentityToken();
     if (token) await syncWalletSession(token, refresh);
@@ -50,8 +57,7 @@ function scheduleRetry(refresh: () => void) {
 }
 
 async function resyncWithFreshToken(refresh: () => void) {
-  // A POST in flight answers for the newest token; resetting `sentToken` would discard its `issued`.
-  if (postsInFlight > 0) return;
+  if (currentPostInFlight()) return;
   const startedIn = epoch;
   setCachedIdentityToken(null);
   sentToken = null;
@@ -95,7 +101,7 @@ export async function syncWalletSession(token: string, refresh: () => void): Pro
   const startedIn = epoch;
 
   let response: Response;
-  postsInFlight += 1;
+  postingToken = token;
   try {
     response = await fetch(WALLET_SESSION_ROUTE, {
       method: 'POST',
@@ -106,7 +112,7 @@ export async function syncWalletSession(token: string, refresh: () => void): Pro
     if (sentToken === token) scheduleRetry(refresh);
     return;
   } finally {
-    postsInFlight -= 1;
+    if (postingToken === token) postingToken = null;
   }
   if (startedIn !== epoch) {
     // Signed out while this was in flight: its Set-Cookie may have landed after the DELETE.
@@ -160,6 +166,7 @@ export function forgetWalletSession() {
   epoch += 1;
   clearRetry();
   noWalletAttempt = 0;
+  postingToken = null;
   awaitingWallet = false;
   walletSeen = false;
   walletRetryUsed = false;

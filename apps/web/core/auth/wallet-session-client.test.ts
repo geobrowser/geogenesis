@@ -165,6 +165,51 @@ describe('syncWalletSession', () => {
     expect(mocks.setToken).not.toHaveBeenCalled();
   });
 
+  it('lets a fallback timer leave an in-flight POST for a reissued token alone', async () => {
+    vi.useFakeTimers();
+    mocks.fetch.mockImplementationOnce(() => answer(403, { wallet: null, status: 'no_wallet' }));
+    await syncWalletSession('before-wallet', mocks.refresh);
+
+    let release!: () => void;
+    mocks.fetch.mockImplementationOnce(
+      () =>
+        new Promise<Response>(resolve => {
+          release = () => resolve(new Response(JSON.stringify({ wallet: WALLET, status: 'issued' })));
+        })
+    );
+    const pending = syncWalletSession('reissued', mocks.refresh);
+    await vi.advanceTimersByTimeAsync(NO_WALLET_RETRY_DELAYS_MS[0]);
+    expect(mocks.getToken).not.toHaveBeenCalled();
+
+    release();
+    await pending;
+    expect(mocks.refresh).toHaveBeenCalledOnce();
+    expect(mocks.setToken).not.toHaveBeenCalled();
+  });
+
+  it('retries for the wallet while only a stale POST is in flight', async () => {
+    let releaseStale!: () => void;
+    mocks.fetch.mockImplementationOnce(
+      () =>
+        new Promise<Response>(resolve => {
+          releaseStale = () =>
+            resolve(new Response(JSON.stringify({ wallet: null, status: 'no_wallet' }), { status: 403 }));
+        })
+    );
+    mocks.fetch.mockImplementationOnce(() => answer(403, { wallet: null, status: 'no_wallet' }));
+    mocks.fetch.mockImplementationOnce(() => answer(200, { wallet: WALLET, status: 'issued' }));
+    noteEmbeddedWallet(mocks.refresh);
+
+    const stale = syncWalletSession('t1', mocks.refresh);
+    await syncWalletSession('t2', mocks.refresh);
+    await vi.waitFor(() => expect(mocks.refresh).toHaveBeenCalledOnce());
+    releaseStale();
+    await stale;
+
+    expect(mocks.getToken).toHaveBeenCalledOnce();
+    expect(mocks.fetch).toHaveBeenCalledTimes(3);
+  });
+
   it('keeps the fallback going when a fresh token is not available yet', async () => {
     vi.useFakeTimers();
     mocks.fetch.mockImplementation(() => answer(403, { wallet: null, status: 'no_wallet' }));
