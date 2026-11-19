@@ -42,7 +42,13 @@ function useWalletSessionReady(address: `0x${string}` | null) {
   const { settled } = useWalletSessionSync(address);
   const [expiredFor, setExpiredFor] = React.useState<string | null>(null);
   React.useEffect(() => {
-    if (address === null || settled) return;
+    if (address === null) {
+      // Signed out: a later sign-in on this page waits afresh.
+      waitStartedAt.clear();
+      setExpiredFor(null);
+      return;
+    }
+    if (settled) return;
     const startedAt = waitStartedAt.get(address) ?? Date.now();
     waitStartedAt.set(address, startedAt);
     const timer = setTimeout(() => setExpiredFor(address), startedAt + WALLET_SESSION_WAIT_MS - Date.now());

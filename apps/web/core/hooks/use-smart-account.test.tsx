@@ -19,12 +19,13 @@ const ADDRESS = '0x5D6d0E45D76D360AB4F94941CE9a005b0AEa2ebD';
 const mocks = vi.hoisted(() => ({
   wallets: [] as Array<{ walletClientType: string; address: string }>,
   generateZeroDevAccount: vi.fn(),
+  authenticated: true,
 }));
 
 vi.mock('~/core/wallet/auth-hooks', () => ({
   usePrivy: () => ({
     ready: true,
-    authenticated: true,
+    authenticated: mocks.authenticated,
     user: {
       linkedAccounts: [{ type: 'wallet', walletClientType: 'privy', chainType: 'ethereum', address: ADDRESS }],
     },
@@ -59,6 +60,7 @@ beforeEach(() => {
   mocks.generateZeroDevAccount.mockReset().mockResolvedValue({ account: { address: ADDRESS } });
   resetWalletSessionClientForTests();
   resetWalletSessionWaitForTests();
+  mocks.authenticated = true;
 });
 
 afterEach(() => {
@@ -111,6 +113,25 @@ describe('useSmartAccount', () => {
     await act(() => vi.advanceTimersByTimeAsync(0));
     await act(() => vi.advanceTimersByTimeAsync(0));
     expect(later.result.current.smartAccount?.account.address).toBe(ADDRESS);
+  });
+
+  it('waits afresh for a sign-in after a sign-out on the same page', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'Date'] });
+    mocks.wallets = [embedded];
+    const { result, rerender } = renderSmartAccount();
+    await act(() => vi.advanceTimersByTimeAsync(WALLET_SESSION_WAIT_MS));
+    expect(result.current.smartAccount).not.toBeNull();
+
+    mocks.authenticated = false;
+    rerender();
+    await act(() => vi.advanceTimersByTimeAsync(0));
+    mocks.authenticated = true;
+    rerender();
+    await act(() => vi.advanceTimersByTimeAsync(0));
+
+    expect(result.current.smartAccount).toBeNull();
+    await act(() => vi.advanceTimersByTimeAsync(WALLET_SESSION_WAIT_MS));
+    expect(result.current.smartAccount?.account.address).toBe(ADDRESS);
   });
 
   it('does not rebuild the account when a browser wallet connects', async () => {
