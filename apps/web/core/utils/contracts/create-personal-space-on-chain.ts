@@ -15,8 +15,16 @@ import { GEOGENESIS } from '~/core/wallet/geo-chain';
 import { devLog } from '../dev-log';
 import { getImagePath } from '../utils';
 import { EMPTY_SPACE_ID } from './dao-space-factory';
-import { generateOpsForSpaceType } from './generate-ops-for-space-type';
+import { generateAvatarOps, generateOpsForSpaceType } from './generate-ops-for-space-type';
 import { padBytes16ToBytes32 } from './governance';
+import {
+  type ProfileDeclaration,
+  ProfileRecoveryError,
+  buildRecoveryOps,
+  fetchOriginalProfileEdit,
+  parseEditUriFromLogData,
+  parseOriginalProfileEdit,
+} from './personal-profile-recovery';
 import { GOVERNANCE_ACTIONS, SpaceRegistryAbi } from './space-registry';
 import { buildPersonalTopicDeclaredCalldata } from './space-topic';
 
@@ -63,42 +71,89 @@ export async function readRegisteredSpaceId(walletAddress: string): Promise<stri
 }
 
 /**
- * How far back `hasDeclaredPersonalTopic` looks. It only has to cover the index's lag (seconds to
- * minutes): a declaration older than that is already served by the index, which answers first.
- * Bounded so the query stays inside RPC block-range caps as the chain grows; the range includes both
- * ends, so it spans exactly this many blocks. Counted in blocks, not time: on testnet (~1,700 blocks
- * a day, Oct 2026) this is about six days, and less on a chain with faster blocks.
+ * The block window for one `eth_getLogs` call. Bounded so each query stays inside RPC block-range
+ * caps as the chain grows; the range includes both ends, so it spans exactly this many blocks.
  */
 const DECLARATION_LOOKBACK_BLOCKS = 10_000n;
 
 /**
- * Whether the chain shows this personal space's profile publish: its own topic declaration,
- * which ships in the same userOp as the profile edit, so it exists only if that publish landed.
- * Unlike the index it has no lag, which is what keeps a second browser from publishing a second
- * profile (under a fresh topic id) while the index still trails the first.
- *
- * Proves presence only. Spaces whose profile predates topic declarations have none, so callers
- * use this to confirm a profile the index has not shown yet, never to rule one out.
+ * How many windows `findPersonalProfileDeclaration` walks back before giving up: 500k blocks, about
+ * 290 days at testnet's ~1,700 blocks a day (Oct 2026). The walk normally stops much sooner, at the
+ * space's registration.
  */
-export async function hasDeclaredPersonalTopic(spaceId: string): Promise<boolean> {
+const MAX_DECLARATION_WINDOWS = 50;
+
+type RegistryLog = {
+  topics: Hex[];
+  data: Hex;
+  blockNumber: Hex;
+  transactionHash: Hex;
+  logIndex: Hex;
+};
+
+/**
+ * The chain's record of this personal space's profile publish: its earliest topic declaration and
+ * the edit published in the same userOp. Unlike the index it has no lag, and it survives an index
+ * that dropped the edit.
+ *
+ * Proves presence only. Spaces whose profile predates topic declarations have none, so callers use
+ * this only when the index shows no profile, never to rule one out.
+ *
+ * Walks back from the head one window at a time and stops at the space's registration, so an
+ * account that registered recently costs one query.
+ */
+export async function findPersonalProfileDeclaration(spaceId: string): Promise<ProfileDeclaration | null> {
   const client = publicClient();
   const space = padBytes16ToBytes32(`0x${spaceId}`);
-  const head = await client.getBlockNumber();
-  const fromBlock = head >= DECLARATION_LOOKBACK_BLOCKS ? head - DECLARATION_LOOKBACK_BLOCKS + 1n : 0n;
-  // `enter` logs [from space, to space, action, topic] as raw topics with no event signature,
-  // so viem's typed `getLogs` cannot filter it.
-  const logs = await client.request({
-    method: 'eth_getLogs',
-    params: [
-      {
-        address: SPACE_REGISTRY_ADDRESS_HEX,
-        fromBlock: toHex(fromBlock),
-        toBlock: toHex(head),
-        topics: [space, space, GOVERNANCE_ACTIONS.TOPIC_DECLARED],
-      },
-    ],
-  });
-  return logs.length > 0;
+  const actions = [
+    GOVERNANCE_ACTIONS.SPACE_ID_REGISTERED,
+    GOVERNANCE_ACTIONS.TOPIC_DECLARED,
+    GOVERNANCE_ACTIONS.EDITS_PUBLISHED,
+  ];
+
+  const logs: RegistryLog[] = [];
+  let toBlock = await client.getBlockNumber();
+  for (let window = 0; window < MAX_DECLARATION_WINDOWS; window++) {
+    const fromBlock = toBlock >= DECLARATION_LOOKBACK_BLOCKS ? toBlock - DECLARATION_LOOKBACK_BLOCKS + 1n : 0n;
+    // `enter` logs [from space, to space, action, topic] as raw topics with no event signature, so
+    // viem's typed `getLogs` cannot filter it. Registration logs a zero from-space, hence `null`.
+    const found = (await client.request({
+      method: 'eth_getLogs',
+      params: [
+        {
+          address: SPACE_REGISTRY_ADDRESS_HEX,
+          fromBlock: toHex(fromBlock),
+          toBlock: toHex(toBlock),
+          topics: [null, space, actions],
+        },
+      ],
+    })) as RegistryLog[];
+    logs.push(...found);
+    if (fromBlock === 0n || found.some(log => log.topics[2] === GOVERNANCE_ACTIONS.SPACE_ID_REGISTERED)) break;
+    toBlock = fromBlock - 1n;
+  }
+
+  const ownLogs = logs
+    .filter(log => log.topics[0] === space)
+    .sort(
+      (a, b) => Number(BigInt(a.blockNumber) - BigInt(b.blockNumber)) || Number(BigInt(a.logIndex) - BigInt(b.logIndex))
+    );
+  const declaration = ownLogs.find(log => log.topics[2] === GOVERNANCE_ACTIONS.TOPIC_DECLARED);
+  if (!declaration) return null;
+
+  const edit = ownLogs.find(
+    log => log.topics[2] === GOVERNANCE_ACTIONS.EDITS_PUBLISHED && log.transactionHash === declaration.transactionHash
+  );
+  const blockNumber = BigInt(declaration.blockNumber);
+  const block = await client.getBlock({ blockNumber });
+
+  return {
+    topicId: declaration.topics[3].slice(2, 34),
+    blockNumber,
+    transactionHash: declaration.transactionHash,
+    declaredAtMs: Number(block.timestamp) * 1000,
+    editUri: edit ? parseEditUriFromLogData(edit.data) : null,
+  };
 }
 
 /**
@@ -159,7 +214,8 @@ type CreatePersonalSpaceOnChainParams = {
   spaceAvatarUri?: string | null;
   spaceCoverUri?: string | null;
   topicId?: string;
-  onRegistered?: (spaceId: string) => void;
+  /** Called once the profile userOp is sent, with the space id and the profile entity id. */
+  onRegistered?: (spaceId: string, profileEntityId: string) => void;
 };
 
 export async function createPersonalSpaceOnChain({
@@ -251,7 +307,7 @@ export async function createPersonalSpaceOnChain({
   devLog('[CREATE_SPACE] publish + topic userOp sent, waiting for index…');
 
   try {
-    onRegistered?.(spaceId);
+    onRegistered?.(spaceId, resolvedTopicId);
   } catch (error) {
     console.error('[CREATE_SPACE] onRegistered callback failed', error);
   }
@@ -276,4 +332,90 @@ export async function createPersonalSpaceOnChain({
   }
 
   return spaceId;
+}
+
+type RepublishPersonalProfileParams = {
+  smartAccount: SmartAccount;
+  spaceId: string;
+  declaration: ProfileDeclaration;
+  spaceName: string;
+  /** Raw image value (pre-`getImagePath`); null/undefined for none. */
+  spaceAvatarUri?: string | null;
+  onRegistered?: (spaceId: string, profileEntityId: string) => void;
+};
+
+/**
+ * Republishes a profile the index dropped: the original edit's ops, read back from IPFS so every id
+ * matches, under a new edit id (and so a new CID, which the indexer has not cached as failed).
+ *
+ * Sends only the edit. The topic declaration is already on chain, and declaring it again would only
+ * add a second declaration. Never rebuilds the ops with fresh ids: if the original can't be read, it
+ * throws and sends nothing.
+ */
+export async function republishPersonalProfile({
+  smartAccount,
+  spaceId,
+  declaration,
+  spaceName,
+  spaceAvatarUri,
+  onRegistered,
+}: RepublishPersonalProfileParams): Promise<string> {
+  if (!declaration.editUri) {
+    throw new ProfileRecoveryError('The original profile edit is not on chain.');
+  }
+  const original = parseOriginalProfileEdit(
+    await fetchOriginalProfileEdit(declaration.editUri),
+    spaceId,
+    declaration.topicId
+  );
+  const avatarOps = spaceAvatarUri ? await generateAvatarOps(declaration.topicId, getImagePath(spaceAvatarUri)) : [];
+  const ops = buildRecoveryOps({ originalOps: original.ops, topicId: declaration.topicId, name: spaceName, avatarOps });
+
+  const { to, calldata } = await geo.personalSpaces.publishEdit({ name: spaceName, spaceId, ops, author: spaceId });
+
+  const submitResult = await runEffectEither(
+    Effect.retry(
+      Effect.tryPromise({
+        try: () => smartAccount.sendUserOperation({ calls: [{ to, value: 0n, data: calldata }] }),
+        catch: error => new Error('Failed to republish personal profile', { cause: error }),
+      }).pipe(
+        Effect.withSpan('web.write.createPersonalSpace.republishProfile'),
+        Effect.annotateSpans({
+          'io.operation': 'submit_user_operation',
+          'space.type': 'PERSONAL',
+          'governance.action': 'space_content_published',
+        })
+      ),
+      publishRetrySchedule()
+    )
+  );
+  if (submitResult._tag === 'Left') throw submitResult.left;
+  devLog('[CREATE_SPACE] profile republished, waiting for index…');
+
+  try {
+    onRegistered?.(spaceId, declaration.topicId);
+  } catch (error) {
+    console.error('[CREATE_SPACE] onRegistered callback failed', error);
+  }
+
+  // The index serves the profile as the space's page; its topic waits on the indexer handling
+  // TOPIC_DECLARED. As with a first publish, a timeout here is not a failure.
+  const indexed = await waitForSpacePage(spaceId, declaration.topicId);
+  devLog('[CREATE_SPACE] republished profile %s, spaceId=%s', indexed ? 'indexed' : 'not yet indexed', spaceId);
+
+  return spaceId;
+}
+
+/** Polls until the index serves `entityId` as the space's named profile entity (its topic or page). */
+async function waitForSpacePage(spaceId: string, entityId: string, maxAttempts = 30, intervalMs = 2_000) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const space = await Effect.runPromise(getSpace(spaceId));
+      if (space?.entity?.id === entityId && space.entity.name) return true;
+    } catch {
+      // keep polling
+    }
+    if (attempt < maxAttempts) await new Promise(r => setTimeout(r, intervalMs));
+  }
+  return false;
 }
