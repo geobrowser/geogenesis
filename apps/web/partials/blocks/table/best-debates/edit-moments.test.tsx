@@ -6,7 +6,7 @@ import type * as React from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { EditMomentsMenu, NEW_REEL_LIVE_COPY, REEL_RENDER_FAILED_COPY, ReelRenderWatcher } from './edit-moments';
+import { DebateWatchMenu, NEW_REEL_LIVE_COPY, REEL_RENDER_FAILED_COPY, ReelRenderWatcher } from './edit-moments';
 
 const mocks = vi.hoisted(() => ({
   backfill: { data: undefined as unknown, refetch: vi.fn() },
@@ -39,12 +39,17 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-describe('EditMomentsMenu (GEO-3742)', () => {
-  it('opens the editor in a tab of its own, with no opener, from the shared Admin item', () => {
+function menu(props: Partial<React.ComponentProps<typeof DebateWatchMenu>> = {}) {
+  const handlers = { onCopyLink: vi.fn(), onEditMoments: vi.fn() };
+  render(wrap(<DebateWatchMenu entityId={HEX} spaceId={SPACE} canEditMoments {...handlers} {...props} />));
+  fireEvent.click(screen.getByRole('button', { name: 'More debate options' }));
+  return handlers;
+}
+
+describe('DebateWatchMenu', () => {
+  it('opens the editor in a tab of its own, with no opener, from the shared Admin item (GEO-3742)', () => {
     const open = vi.spyOn(window, 'open').mockReturnValue(null);
-    const onOpen = vi.fn();
-    render(wrap(<EditMomentsMenu entityId={HEX} spaceId={SPACE} onOpen={onOpen} />));
-    fireEvent.click(screen.getByRole('button', { name: 'More debate options' }));
+    const { onEditMoments, onCopyLink } = menu();
     const item = screen.getByRole('button', { name: /Edit moments/ });
     expect(item).toHaveTextContent('Admin');
     expect(item).toHaveAttribute('data-geo-analytics-label', 'Edit moments');
@@ -52,8 +57,21 @@ describe('EditMomentsMenu (GEO-3742)', () => {
     expect(item).toHaveClass('md:hidden');
     fireEvent.click(item);
     expect(open).toHaveBeenCalledWith(`/space/${SPACE}/debates/${UUID}/moments?close=1`, '_blank', 'noopener');
-    expect(onOpen).toHaveBeenCalledWith(HEX);
+    expect(onEditMoments).toHaveBeenCalledWith(HEX);
+    expect(onCopyLink).not.toHaveBeenCalled();
     open.mockRestore();
+  });
+
+  it('offers Copy link to everyone, phones included, and closes as it copies (GEO-3809)', () => {
+    const { onCopyLink } = menu({ canEditMoments: false });
+    expect(screen.queryByRole('button', { name: /Edit moments/ })).toBeNull();
+    const item = screen.getByRole('button', { name: 'Copy link' });
+    expect(item).toHaveAttribute('data-geo-analytics-label', 'Copy link');
+    // Unlike Edit moments, not hidden on a phone (`md:` is max-width).
+    expect(item.className).not.toMatch(/(^|\s)md:hidden(\s|$)/);
+    fireEvent.click(item);
+    expect(onCopyLink).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('button', { name: 'Copy link' })).toBeNull();
   });
 });
 
