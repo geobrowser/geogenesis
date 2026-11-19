@@ -9,12 +9,25 @@ import { usePrivy } from '~/core/wallet/auth-hooks';
 import { accountHasEmbeddedWallet } from '~/core/wallet/embedded-wallet';
 
 import {
+  NOT_SYNCED,
   clearWalletSession,
   forgetWalletSession,
   hasWalletSessionHint,
   noteEmbeddedWallet,
+  subscribeWalletSessionSync,
   syncWalletSession,
+  walletSessionSyncState,
 } from './wallet-session-client';
+
+/**
+ * Whether the server's wallet session holds `address` (`synced`), or syncing has given up
+ * (`settled` either way). Writes gate on `settled`; anything keyed on what the server reads, on `synced`.
+ */
+export function useWalletSessionSync(address: string | null | undefined) {
+  const state = React.useSyncExternalStore(subscribeWalletSessionSync, walletSessionSyncState, () => NOT_SYNCED);
+  const synced = Boolean(address) && state.wallet === address!.toLowerCase();
+  return { synced, settled: synced || state.gaveUp };
+}
 
 /**
  * Keeps the server's wallet session in step with Privy: posts each new identity token and clears

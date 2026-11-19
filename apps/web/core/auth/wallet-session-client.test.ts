@@ -9,6 +9,7 @@ import {
   noteEmbeddedWallet,
   resetWalletSessionClientForTests,
   syncWalletSession,
+  walletSessionSyncState,
 } from './wallet-session-client';
 
 const mocks = vi.hoisted(() => ({
@@ -363,6 +364,49 @@ describe('a POST from a previous sign-in', () => {
 
     expect(mocks.fetch).toHaveBeenCalledTimes(2);
     expect(mocks.refresh).toHaveBeenCalledOnce();
+  });
+});
+
+describe('walletSessionSyncState', () => {
+  it('names the wallet after an ok answer, and forgets it on sign-out', async () => {
+    mocks.fetch.mockImplementationOnce(() =>
+      answer(200, { wallet: WALLET.toUpperCase().replace('0X', '0x'), status: 'unchanged' })
+    );
+    await syncWalletSession('t1', mocks.refresh);
+    expect(walletSessionSyncState()).toEqual({ wallet: WALLET, gaveUp: false });
+
+    forgetWalletSession();
+    expect(walletSessionSyncState()).toEqual({ wallet: null, gaveUp: false });
+  });
+
+  it('gives up at once on a failure the same token may outlast', async () => {
+    vi.useFakeTimers();
+    mocks.fetch.mockImplementation(() => answer(503, { wallet: null, status: 'unavailable' }));
+    await syncWalletSession('t1', mocks.refresh);
+    expect(walletSessionSyncState().gaveUp).toBe(true);
+  });
+
+  it('waits out the no_wallet retries before giving up', async () => {
+    vi.useFakeTimers();
+    mocks.fetch.mockImplementation(() => answer(403, { wallet: null, status: 'no_wallet' }));
+    let n = 0;
+    mocks.getToken.mockImplementation(async () => `fresh-${++n}`);
+
+    await syncWalletSession('t1', mocks.refresh);
+    expect(walletSessionSyncState().gaveUp).toBe(false);
+    await vi.advanceTimersByTimeAsync(NO_WALLET_RETRY_DELAYS_MS[2] * 4);
+    expect(walletSessionSyncState().gaveUp).toBe(true);
+  });
+
+  it('gives up for a later sign-in once the server has no secret', async () => {
+    mocks.fetch.mockImplementation(() => answer(503, { wallet: null, status: 'unconfigured' }));
+    await syncWalletSession('t1', mocks.refresh);
+    forgetWalletSession();
+    expect(walletSessionSyncState().gaveUp).toBe(false);
+
+    await syncWalletSession('t2', mocks.refresh);
+    expect(walletSessionSyncState().gaveUp).toBe(true);
+    expect(mocks.fetch).toHaveBeenCalledOnce();
   });
 });
 

@@ -34,6 +34,34 @@ let walletRetryUsed = false;
 /** The token whose POST is in flight, if any. */
 let postingToken: string | null = null;
 
+/**
+ * What the server's session is known to hold: `wallet` (lowercased) after an ok answer, and `gaveUp`
+ * once syncing has failed with nothing left to try, so gated writes go ahead without it.
+ */
+export type WalletSessionSyncState = { wallet: string | null; gaveUp: boolean };
+export const NOT_SYNCED: WalletSessionSyncState = { wallet: null, gaveUp: false };
+let syncState = NOT_SYNCED;
+const syncListeners = new Set<() => void>();
+
+function publishSync(next: WalletSessionSyncState) {
+  if (next.wallet === syncState.wallet && next.gaveUp === syncState.gaveUp) return;
+  syncState = next;
+  syncListeners.forEach(listener => listener());
+}
+
+export function walletSessionSyncState(): WalletSessionSyncState {
+  return syncState;
+}
+
+export function subscribeWalletSessionSync(listener: () => void): () => void {
+  syncListeners.add(listener);
+  return () => syncListeners.delete(listener);
+}
+
+function giveUp() {
+  publishSync({ ...syncState, gaveUp: true });
+}
+
 /** A POST for the current token is in flight; resetting `sentToken` now would discard its answer. */
 function currentPostInFlight(): boolean {
   return postingToken !== null && postingToken === sentToken;
@@ -95,7 +123,8 @@ export function noteEmbeddedWallet(refresh: () => void) {
  * the page, since that page was rendered signed out; any other refresh would hit every visit.
  */
 export async function syncWalletSession(token: string, refresh: () => void): Promise<void> {
-  if (halted || token === sentToken) return;
+  if (halted) return giveUp();
+  if (token === sentToken) return;
   sentToken = token;
   awaitingWallet = false;
   const startedIn = epoch;
@@ -109,7 +138,10 @@ export async function syncWalletSession(token: string, refresh: () => void): Pro
       credentials: 'same-origin',
     });
   } catch {
-    if (sentToken === token) scheduleRetry(refresh);
+    if (sentToken === token) {
+      giveUp();
+      scheduleRetry(refresh);
+    }
     return;
   } finally {
     if (postingToken === token) postingToken = null;
@@ -129,10 +161,11 @@ export async function syncWalletSession(token: string, refresh: () => void): Pro
   }
   if (sentToken !== token) return;
 
-  const body = (await response.json().catch(() => null)) as { status?: string } | null;
+  const body = (await response.json().catch(() => null)) as { status?: string; wallet?: string | null } | null;
   if (response.ok) {
     awaitingWallet = false;
     clearRetry();
+    publishSync({ wallet: body?.wallet?.toLowerCase() ?? null, gaveUp: syncState.gaveUp });
     if (body?.status === 'issued') refresh();
     return;
   }
@@ -141,12 +174,14 @@ export async function syncWalletSession(token: string, refresh: () => void): Pro
     case 'unconfigured':
       halted = true;
       clearRetry();
+      giveUp();
       return;
     case 'no_wallet':
       awaitingWallet = true;
       if (retryForWallet(refresh)) return;
       clearRetry();
       scheduleNoWalletRetry(refresh);
+      if (retryTimer === null) giveUp();
       return;
     case 'invalid_token':
       // So the retry asks Privy for a fresh token.
@@ -154,10 +189,12 @@ export async function syncWalletSession(token: string, refresh: () => void): Pro
         droppedCachedToken = true;
         setCachedIdentityToken(null);
       }
+      giveUp();
       scheduleRetry(refresh);
       return;
     default:
       // `unavailable`, `rate_limited` or an unexpected failure: the same token may work later.
+      giveUp();
       scheduleRetry(refresh);
   }
 }
@@ -178,6 +215,7 @@ export function forgetWalletSession() {
   awaitingWallet = false;
   walletSeen = false;
   walletRetryUsed = false;
+  publishSync(NOT_SYNCED);
 }
 
 /** Clears the server's session (sign-out). Throws when the server did not confirm it. */
