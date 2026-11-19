@@ -152,6 +152,16 @@ export function placeAsIn(current: GradedBallot, snapshot: GradedBallot, entityI
 }
 
 /**
+ * Undo of a Remove (GEO-3805), on the ranking screen and the block alike: the debate goes back
+ * below the entry it sat under in `before`, with its grade there, into the ballot as it is now
+ * (later edits kept). Nothing changes when it is back already (graded or placed again since).
+ */
+export function restoreRemoved(current: GradedBallot, before: GradedBallot, entityId: string): GradedBallot {
+  const key = normId(entityId);
+  return current.ids.some(id => normId(id) === key) ? current : placeAsIn(current, before, entityId);
+}
+
+/**
  * The tier a debate placed at `index` of `ids` (a flat position: the compare flow, or a drop from
  * the team column) belongs to: the tier of the entry above it. At the top, the tier of the first
  * entry. A ballot with no grades at all stays ungraded.
@@ -293,6 +303,15 @@ export const TIER_LINES_SAVE_LABEL = 'Save grades';
 /** The block's batched publish failed (16 Nov): sends the changes again. Pending Preston's approval. */
 export const GRADE_NOT_SAVED_COPY = 'Not saved';
 export const GRADE_TRY_AGAIN_LABEL = 'Try again';
+
+/**
+ * The toast after a debate is taken out of your ranking (GEO-3805, approved 19 Nov), with Undo
+ * (`GRADE_UNDO_LABEL`). Just `Removed.` when its name isn't known.
+ */
+export function removedFromRankingCopy(name: string | null | undefined): string {
+  const trimmed = name?.trim();
+  return trimmed ? `Removed “${trimmed}”.` : 'Removed.';
+}
 
 /**
  * Where the tier lines start on a ranking with no grades: A for the top fifth, B for the next two
