@@ -11,7 +11,7 @@ import { useActionContext } from '~/core/action-context-provider';
 import { type OperationContext, classifyOperationFailure, observeOperation } from '~/core/analytics-operations';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { TransactionWriteFailedError } from '~/core/errors';
-import { readCachedPersonalSpace, readCachedSmartAccount } from '~/core/hooks/cached-write-identity';
+import { awaitSigningAccount, readCachedPersonalSpace } from '~/core/hooks/cached-write-identity';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
@@ -23,6 +23,7 @@ import { useReportError } from '~/core/state/status-bar-store';
 import type { Entity } from '~/core/types';
 import { toUserFacingError } from '~/core/utils/error-diagnostics';
 import { validateEntityId } from '~/core/utils/utils';
+import { useAccountAddress } from '~/core/wallet/account-readiness';
 
 import { buildRankingVotes, mustMintFreshRank, rankingBallotRules } from './best-debates-ballot';
 import {
@@ -37,9 +38,9 @@ import { ballotRecencyKey, pickLatestBallot } from './ranking-ballot-recency';
 import { type BallotGrades, NO_GRADES, applyGradeEdits, pruneGrades } from './ranking-grades';
 import {
   type OwnRankingPublish,
+  RANKING_ALREADY_EMPTY_MESSAGE,
   RANKING_CHANGED_ELSEWHERE_MESSAGE,
   RANKING_CHANGED_ELSEWHERE_ORDER_MESSAGE,
-  RANKING_ALREADY_EMPTY_MESSAGE,
   RANKING_NOTHING_LEFT_TO_PUBLISH_MESSAGE,
   RANKING_OVERTAKEN_MESSAGE,
   RANKING_PREVIOUS_PUBLISH_PENDING_MESSAGE,
@@ -155,7 +156,7 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
   const getContext = useActionContext('ranking_composer', 'ranking', blockId);
   const { personalSpaceId } = usePersonalSpaceId();
   const { smartAccount } = useSmartAccount();
-  const walletAddress = smartAccount?.account.address;
+  const walletAddress = useAccountAddress() ?? undefined;
   const queryClient = useQueryClient();
   const { profile } = useGeoProfile(walletAddress);
   const [, setToast] = useToast();
@@ -308,13 +309,27 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
         basedOnGrades?: BallotGrades;
       }
     ): Promise<RankingSubmissionPublishResult | null> => {
-      const account = readCachedSmartAccount(queryClient, smartAccount);
+      pendingSavesRef.current += 1;
+      setIsSaving(true);
+      const settle = () => {
+        pendingSavesRef.current -= 1;
+        if (pendingSavesRef.current === 0) setIsSaving(false);
+      };
+
+      const account = await awaitSigningAccount(smartAccount).catch(error => {
+        settle();
+        throw error;
+      });
       if (!account) {
+        settle();
         setToast(React.createElement('span', null, 'Please connect your wallet to publish your ranking'));
         return null;
       }
       const { personalSpaceId } = readCachedPersonalSpace(queryClient, account.account.address);
-      if (!personalSpaceId) return null;
+      if (!personalSpaceId) {
+        settle();
+        return null;
+      }
 
       const filteredSlots = slots.filter(slot => Boolean(slot.id));
       // An empty list is the ranker clearing their ranking (Preston, 12 Nov): the edit deletes every
@@ -327,12 +342,14 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
       const invalidSlot = filteredSlots.find(slot => !validateEntityId(slot.id));
       if (invalidSlot) {
         console.error('[useRankingSubmissions] Invalid vote entity id:', invalidSlot.id);
+        settle();
         reportError(`Failed to publish ranking: invalid entity id "${invalidSlot.id}"`);
         return null;
       }
 
       const maxItems = getRankingBallotMaxItems();
       if (filteredSlots.length > maxItems) {
+        settle();
         reportError(rankingBallotTooLargeMessage(filteredSlots.length, maxItems));
         return null;
       }
@@ -351,8 +368,6 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
       );
       const publishKey = rankingPublishKey(personalSpaceId, blockId);
 
-      pendingSavesRef.current += 1;
-      setIsSaving(true);
       const operation = observeOperation('ranking', 'ranking', blockId, opportunity, getContext());
 
       // Runs when every earlier publish of this ballot (from any screen on this
@@ -610,10 +625,12 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
             votes.length === 0
               ? 'Ranking cleared.'
               : !changedElsewhere
-              ? 'Ranking published!'
-              : `Ranking published. ${
-                  merge.overrodeTheirOrder ? RANKING_CHANGED_ELSEWHERE_ORDER_MESSAGE : RANKING_CHANGED_ELSEWHERE_MESSAGE
-                }`
+                ? 'Ranking published!'
+                : `Ranking published. ${
+                    merge.overrodeTheirOrder
+                      ? RANKING_CHANGED_ELSEWHERE_ORDER_MESSAGE
+                      : RANKING_CHANGED_ELSEWHERE_MESSAGE
+                  }`
           )
         );
 
@@ -726,8 +743,7 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
         reportError(message, retry);
         return null;
       } finally {
-        pendingSavesRef.current -= 1;
-        if (pendingSavesRef.current === 0) setIsSaving(false);
+        settle();
       }
     },
     [

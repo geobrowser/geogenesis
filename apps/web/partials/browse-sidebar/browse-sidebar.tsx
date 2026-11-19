@@ -18,7 +18,6 @@ import { GEO_APPS_SIDEBAR_LINKS } from '~/core/browse/geo-apps-sidebar-src';
 import { DOCUMENTATION_SPACE_ENTITY_ID, DOCUMENTATION_SPACE_ID } from '~/core/constants';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
-import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSpaceId } from '~/core/hooks/use-space-id';
 import { browseSidebarShownAtom } from '~/core/state/browse-sidebar-state';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
@@ -29,6 +28,7 @@ import {
 } from '~/core/state/requested-membership';
 import { normId } from '~/core/utils/norm-id';
 import { NavUtils } from '~/core/utils/utils';
+import { useAccountAddress } from '~/core/wallet/account-readiness';
 
 import { Avatar } from '~/design-system/avatar';
 import { FallbackImage } from '~/design-system/fallback-image';
@@ -115,8 +115,7 @@ function GeoAppsSidebarLinks() {
 }
 
 function BrowseNavPrimaryLinks({ personalSpaceId }: { personalSpaceId: string | null }) {
-  const { smartAccount } = useSmartAccount();
-  const address = smartAccount?.account.address;
+  const address = useAccountAddress() ?? undefined;
   const isSignedIn = !!address;
   const { profile } = useGeoProfile(address);
   const { isPending, topicId } = usePendingPersonalSpace();
@@ -300,8 +299,7 @@ export function BrowseSidebar(props: BrowseSidebarProps = {}) {
   const mobile = presentation === 'mobile';
   const onClose = props.presentation === 'mobile' ? props.onClose : undefined;
   const { personalSpaceId: personalSpaceIdFromHook } = usePersonalSpaceId();
-  const { smartAccount } = useSmartAccount();
-  const walletAddress = smartAccount?.account.address;
+  const walletAddress = useAccountAddress() ?? undefined;
   const queryClient = useQueryClient();
   const { data = null } = useQuery(
     browseSidebarQueryOptions({ personalSpaceId: personalSpaceIdFromHook, walletAddress })

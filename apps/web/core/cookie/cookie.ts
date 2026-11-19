@@ -17,8 +17,9 @@ type ConnectionChangeArgs =
  * Writes only when the cookie would actually change. Next treats any cookie write inside a Server
  * Action as a revalidation: the client drops its prefetch cache and re-renders the current page
  * from the server, and if a deploy has shipped since the tab loaded, that re-render becomes a full
- * browser reload. `useSmartAccount` calls this on every smart-account refetch, so an unconditional
- * write reloaded pages left sitting open. Reading the cookie does not count as a revalidation.
+ * browser reload. The client calls this on every page load and whenever its cookie query runs again
+ * (`useWalletCookieSync` in `use-smart-account.ts`), so an unconditional write reloaded pages left
+ * sitting open. Reading the cookie does not count as a revalidation.
  */
 export async function onConnectionChange(connectionChange: ConnectionChangeArgs) {
   const cookieStore = await cookies();

@@ -17,8 +17,8 @@ vi.mock('~/core/io/queries', () => ({
   getSpaceByAddress: (address: string) => getSpaceByAddress(address),
 }));
 
-vi.mock('./use-smart-account', () => ({
-  useSmartAccount: () => ({ smartAccount: { account: { address: ADDRESS } }, isLoading: false }),
+vi.mock('~/core/wallet/account-readiness', () => ({
+  useAccountReadiness: () => ({ state: 'identified', address: ADDRESS }),
 }));
 
 function wrapper({ children }: { children: React.ReactNode }) {

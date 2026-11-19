@@ -7,7 +7,6 @@ import { Effect, Either } from 'effect';
 import { type Hex, encodeFunctionData } from 'viem';
 
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
-import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
 import { useSpace } from '~/core/hooks/use-space';
 import { uuidToHex } from '~/core/id/normalize';
@@ -28,6 +27,7 @@ import {
   VOTING_MODE,
 } from '~/core/utils/contracts/space-registry';
 import { validateEntityId, validateSpaceId } from '~/core/utils/utils';
+import { useAccountAddress } from '~/core/wallet/account-readiness';
 
 /**
  * Maps a subspace relation type to its corresponding governance action constants
@@ -83,7 +83,7 @@ interface SubspaceParams {
  */
 export function useSubspace({ spaceId }: UseSubspaceArgs) {
   const { dispatch } = useStatusBar();
-  const { smartAccount } = useSmartAccount();
+  const address = useAccountAddress();
   const { personalSpaceId, isRegistered } = usePersonalSpaceId();
   const { space } = useSpace(spaceId ?? undefined);
 
@@ -92,7 +92,7 @@ export function useSubspace({ spaceId }: UseSubspaceArgs) {
   const handleSubspace =
     (direction: SubspaceDirection) =>
     async ({ subspaceId, relationType, topicEntityId }: SubspaceParams) => {
-      if (!smartAccount) {
+      if (!address) {
         const message = 'Please connect your wallet to manage subspaces';
         console.error('No smart account available');
         dispatch({ type: 'ERROR', payload: message });

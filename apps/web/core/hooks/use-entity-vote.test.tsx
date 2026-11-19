@@ -13,6 +13,7 @@ import {
   retryFailedResponses,
   useFailedResponses,
 } from '~/core/responses/failed-response-retries';
+import { publishReadinessForTests, resetPublishedReadiness } from '~/core/wallet/account-readiness';
 
 import { ReceiptConfirmationTimeoutError } from '../errors';
 import { QueuedSendTimeoutError } from './smart-account-send-queue';
@@ -148,6 +149,7 @@ beforeEach(() => {
   mocks.tx.mockReset();
   mocks.announceResponseConfirmed.mockReset();
   resetFailedResponses();
+  resetPublishedReadiness();
 });
 
 afterEach(() => {
@@ -483,7 +485,7 @@ describe('useEntityResponse indexing reconciliation', () => {
   it('keys the voted lists off the space the response actually used', async () => {
     mocks.fetchResponse.mockReturnValue('positive');
     const { queryClient, wrapper } = createHarness();
-    queryClient.setQueryData(['smart-account', 'test'], { account: { address: '0xwriter' } });
+    publishReadinessForTests({ state: 'identified', address: '0xwriter' });
     queryClient.setQueryData(personalSpaceIdQueryKey('0xwriter'), {
       personalSpaceId: PERSONAL_SPACE_ID,
       isRegistered: true,
@@ -951,7 +953,7 @@ describe('useEntityResponse failed-vote retry', () => {
 
   it('lets a newer vote supersede a retry cast before the personal space resolved', async () => {
     const { queryClient, wrapper } = createHarness();
-    queryClient.setQueryData(['smart-account', 'test'], { account: { address: '0xwriter' } });
+    publishReadinessForTests({ state: 'identified', address: '0xwriter' });
     queryClient.setQueryData(personalSpaceIdQueryKey('0xwriter'), {
       personalSpaceId: PERSONAL_SPACE_ID,
       isRegistered: true,

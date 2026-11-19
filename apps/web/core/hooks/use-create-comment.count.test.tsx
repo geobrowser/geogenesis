@@ -24,10 +24,11 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('./cached-write-identity', () => ({
-  readCachedSmartAccount: () => ({
+  awaitSigningAccount: async () => ({
     account: { address: '0xabc' },
     sendUserOperation: mocks.sendUserOperation,
   }),
+  readAccountAddress: () => '0xabc',
   readCachedPersonalSpace: () => ({ personalSpaceId: SPACE }),
 }));
 vi.mock('./use-smart-account', () => ({ useSmartAccount: () => ({ smartAccount: null }) }));

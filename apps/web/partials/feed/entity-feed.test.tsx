@@ -70,6 +70,7 @@ vi.mock('~/core/browse/use-browse-sidebar-cache', () => ({
 
 vi.mock('@tanstack/react-query', () => ({
   keepPreviousData: Symbol('keepPreviousData'),
+  skipToken: Symbol('skipToken'),
   useInfiniteQuery: (options: Record<string, unknown>) => {
     mocks.queryOptions = options;
     mocks.queryKeys.push(options.queryKey as unknown[]);
@@ -87,6 +88,7 @@ vi.mock('@tanstack/react-query', () => ({
     };
   },
   useQuery: (options: Record<string, unknown>) => {
+    if ((options.queryKey as unknown[])[0] === 'wallet-cookie') return { isSuccess: true };
     if ((options.queryKey as unknown[])[0] === 'explore-entry') {
       mocks.entryQueryOptions = options;
       return { data: options.enabled ? mocks.entryItem : undefined, isPending: mocks.entryPending };
@@ -109,6 +111,10 @@ vi.mock('~/core/hooks/use-smart-account', () => ({
   useSmartAccount: () => ({
     smartAccount: mocks.accountAddress ? { account: { address: mocks.accountAddress } } : null,
   }),
+}));
+vi.mock('~/core/wallet/account-readiness', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/wallet/account-readiness')>()),
+  useAccountAddress: () => mocks.accountAddress ?? null,
 }));
 
 vi.mock('~/design-system/menu', () => ({

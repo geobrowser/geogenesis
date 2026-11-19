@@ -6,8 +6,7 @@ import { Effect } from 'effect';
 
 import type { Space } from '~/core/io/dto/spaces';
 import { getSpaceByAddress } from '~/core/io/queries';
-
-import { useSmartAccount } from './use-smart-account';
+import { useAccountReadiness } from '~/core/wallet/account-readiness';
 
 /**
  * How often to re-check for a personal space that doesn't exist yet. Space creation
@@ -71,14 +70,14 @@ export type PersonalSpaceIdData = {
   needsProfile?: boolean;
 };
 
+/** Lowercased, so the restored address and the signing account's meet whatever their spelling. */
 export function personalSpaceIdQueryKey(address: string | null | undefined) {
-  return ['personal-space-id', address] as const;
+  return ['personal-space-id', address?.toLowerCase()] as const;
 }
 
 /** Hook to get the user's personal space ID from the GraphQL API. */
 export function usePersonalSpaceId() {
-  const { smartAccount, isLoading: isLoadingSmartAccount } = useSmartAccount();
-  const address = smartAccount?.account.address;
+  const { state, address } = useAccountReadiness();
 
   const { data, isLoading, isFetched } = useQuery({
     queryKey: personalSpaceIdQueryKey(address),
@@ -126,7 +125,7 @@ export function usePersonalSpaceId() {
     // TanStack's isLoading can read false for a tick after the query becomes enabled but
     // before it dispatches a fetch — same gap a disabled query has pre-address. isFetched
     // doesn't lag: it stays false until a fetch for this queryKey actually completes.
-    isLoading: isLoadingSmartAccount || (!!address && !isFetched) || isLoading,
+    isLoading: state === 'restoring' || (!!address && !isFetched) || isLoading,
     isFetched,
   };
 }

@@ -19,6 +19,7 @@ import { SentryUserIdentifier } from './sentry-user-identifier';
 import { DiffProvider } from './state/diff-store';
 import { store } from './state/jotai-store';
 import { SyncEngineProvider } from './sync/use-sync-engine';
+import { AccountReadinessSync } from './wallet/account-readiness';
 import { AuthRoot } from './wallet/auth-root';
 
 interface Props {
@@ -38,6 +39,7 @@ export function Providers({ children }: Props) {
         <EmailClickReporter />
         <BrowserTimezoneReporter />
         <SentryUserIdentifier />
+        <AccountReadinessSync />
         <JotaiProvider store={store}>
           {/* Inside the Jotai provider: it reads the googleSignIn flag. */}
           <GoogleOAuthHost />

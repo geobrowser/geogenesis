@@ -1,10 +1,12 @@
 'use client';
 
+import { skipToken, useQuery } from '@tanstack/react-query';
+
 import * as React from 'react';
 
+import { walletCookieQueryKey } from '~/core/cookie/wallet-cookie-query-key';
+import { useAccountAddress } from '~/core/wallet/account-readiness';
 import { useIdentityToken, usePrivy } from '~/core/wallet/auth-hooks';
-
-import { useSmartAccount } from './use-smart-account';
 
 /** Bounds the wait for a signed-in account, so a stale wallet cookie can't hold the page up. */
 export const SIGNED_IN_ACCOUNT_WAIT_MS = 5_000;
@@ -51,8 +53,7 @@ function useClearStaleWalletCookie(cookieAddress: string | null, signedOut: bool
  * most `SIGNED_IN_ACCOUNT_WAIT_MS`.
  */
 export function useAwaitedSmartAccount(signedIn: boolean) {
-  const { smartAccount } = useSmartAccount();
-  const smartAccountAddress = smartAccount?.account.address ?? null;
+  const smartAccountAddress = useAccountAddress();
   const signedOut = usePrivySignedOut();
 
   const [waitOver, setWaitOver] = React.useState(false);
@@ -66,14 +67,21 @@ export function useAwaitedSmartAccount(signedIn: boolean) {
   return { smartAccountAddress, awaitingAccount };
 }
 
+/** Whether the wallet cookie now holds this address, so the server reads it too. `useSmartAccount` runs the sync. */
+function useWalletCookieSynced(address: string | null) {
+  const { isSuccess } = useQuery({ queryKey: walletCookieQueryKey(address), queryFn: skipToken });
+  return address !== null && isSuccess;
+}
+
 /**
  * The address a feed request is made for, and whether that request must wait before it is sent.
  *
  * Unlike `useAwaitedSmartAccount`, this does not wait for the account. The feed routes read the
- * wallet cookie themselves, so on the client the address only keys the cache, and the cookie the
- * server rendered the page with holds the very address `useSmartAccount` reports once ZeroDev has
- * built the account (it writes the cookie from it). Seeding the key from the cookie lets the first
- * page go out at hydration, and it stays the same key when the account arrives, so nothing refetches.
+ * wallet cookie themselves, so on the client the address only keys the cache, and it must be the
+ * address the server reads. The restored account replaces the cookie's address only once the cookie
+ * holds it; until then a missing or previous viewer's cookie would be answered for someone else.
+ * Seeding the key from the cookie lets the first page go out at hydration, and when the cookie already
+ * matches it stays the same key when the account arrives, so nothing refetches.
  *
  * A request that carries a Privy identity token (`needsIdentityToken`) still has to wait, but only
  * for that token, which Privy restores without building the account; at most
@@ -81,9 +89,15 @@ export function useAwaitedSmartAccount(signedIn: boolean) {
  * has restored and found no session, and clears the stale cookie that started the wait.
  */
 export function useFeedViewer(cookieAddress: string | null, needsIdentityToken: boolean) {
-  const { smartAccount } = useSmartAccount();
   const { identityToken } = useIdentityToken();
-  const smartAccountAddress = smartAccount?.account.address ?? null;
+  const accountAddress = useAccountAddress();
+  const cookieSynced = useWalletCookieSynced(accountAddress);
+  const smartAccountAddress =
+    accountAddress && cookieAddress?.toLowerCase() === accountAddress.toLowerCase()
+      ? cookieAddress
+      : cookieSynced
+        ? accountAddress
+        : null;
   const signedOut = usePrivySignedOut();
   useClearStaleWalletCookie(cookieAddress, signedOut);
 

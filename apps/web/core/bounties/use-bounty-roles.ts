@@ -5,8 +5,8 @@ import * as React from 'react';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
-import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { uuidToHex } from '~/core/id/normalize';
+import { useAccountReadiness } from '~/core/wallet/account-readiness';
 
 import { buildBountyAllocationTargets } from './bounty-dto';
 import type { BountyBacklink } from './fetch-bounty-detail';
@@ -37,8 +37,9 @@ export function useBountyRoles(
   bounty: BoardBounty | null | undefined,
   interest: readonly BountyBacklink[] = []
 ): BountyRoles {
-  const { smartAccount, isLoading: isLoadingAccount } = useSmartAccount();
-  const address = smartAccount?.account.address;
+  const { state: accountState, address: accountAddress } = useAccountReadiness();
+  const isLoadingAccount = accountState === 'restoring';
+  const address = accountAddress ?? undefined;
   const { profile, isLoading: isLoadingProfile } = useGeoProfile(address);
   const { personalSpaceId, isLoading: isLoadingSpace } = usePersonalSpaceId();
   const access = useAccessControl(bounty?.spaceId ?? '');

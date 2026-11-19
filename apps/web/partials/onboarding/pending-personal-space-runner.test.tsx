@@ -40,14 +40,14 @@ afterEach(() => {
 });
 
 /** The runner, plus the persisted job and the status bar it reports into. */
-function setup(initial: { status: 'pending' | 'failed' }) {
+function setup(initial: { status: 'pending' | 'failed'; address?: string }) {
   const hook = renderHook(() => {
     PendingPersonalSpaceRunner();
     const [pending, setPending] = useAtom(pendingPersonalSpaceAtom);
     return { pending, setPending, statusBar: useAtomValue(statusBarStateAtom) };
   });
   act(() => {
-    hook.result.current.setPending({ topicId: 'topic-1', address: ADDRESS, status: initial.status });
+    hook.result.current.setPending({ topicId: 'topic-1', address: initial.address ?? ADDRESS, status: initial.status });
   });
   return hook;
 }
@@ -83,6 +83,13 @@ describe('PendingPersonalSpaceRunner', () => {
     hook.rerender();
 
     expect(hook.result.current.statusBar.error).toBeNull();
+  });
+
+  it('keeps a job stamped with the same address in another case', async () => {
+    const { result } = setup({ status: 'failed', address: ADDRESS.toLowerCase() });
+
+    await waitFor(() => expect(result.current.statusBar.error).toBe("Account setup didn't finish."));
+    expect(result.current.pending).not.toBeNull();
   });
 
   it('keeps the real error for a failure in this load', async () => {
