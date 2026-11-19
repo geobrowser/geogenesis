@@ -12,7 +12,7 @@ import { debatesAppDebateUrl } from '~/core/debates/debates-app-url';
 import { useDebateMedia } from '~/core/debates/hooks';
 import { useToast } from '~/core/hooks/use-toast';
 import { pushMarketingEvent } from '~/core/marketing-events';
-import { copyShareLink, observeShareLinkHandoff } from '~/core/sharing/share-handoff';
+import { observeShareLinkHandoff } from '~/core/sharing/share-handoff';
 import { type ShareMethod as LinkShareMethod, type ShareLink, createTaggedShareLink } from '~/core/sharing/share-link';
 
 import { ArrowLeft } from '~/design-system/icons/arrow-left';
@@ -36,6 +36,7 @@ import {
   isAbortError,
   socialVideoShareData,
 } from '../social-video-share';
+import { COPY_LINK_LABEL, useCopyDebateLink } from './use-copy-debate-link';
 import { xShareMessage } from './x-share-message';
 
 type Props = {
@@ -59,11 +60,8 @@ const LINKEDIN_TEXT_MAX = 700;
  * share sheet where the device accepts the file, and downloads everywhere else.
  */
 export function DebateShareDialog({ open, onOpenChange, debate, spaceId, openerRef }: Props) {
-  const getContext = useActionContext('share_dialog', 'debate', debate.id, {
-    overlay: 'modal',
-    overlay_entity_id: debate.id,
-    overlay_entity_type: 'debate',
-  });
+  const shareScope = { overlay: 'modal', overlay_entity_id: debate.id, overlay_entity_type: 'debate' } as const;
+  const getContext = useActionContext('share_dialog', 'debate', debate.id, shareScope);
   const media = useDebateMedia(debate.id, open);
   const socialVideoReady = hasSocialVideo(media.data);
   const [step, setStep] = React.useState<'share' | 'captions'>('share');
@@ -167,20 +165,8 @@ export function DebateShareDialog({ open, onOpenChange, debate, spaceId, openerR
     );
   };
 
-  const onCopy = async () => {
-    const context = getContext();
-    const operation = observeOperation('share', 'debate', debate.id, undefined, context);
-    try {
-      await copyShareLink(shareLink('copy_link'), { ...context, space_id: spaceId }, participants);
-      setToast(<span>Link copied!</span>);
-      operation.succeeded({ method: 'copy_link' });
-      capture('debate_share_action', { debate_id: debate.id, space_id: spaceId, method: 'copy_link' });
-      pushMarketingEvent('geo_share', { debate_id: debate.id, space_id: spaceId, share_method: 'copy_link' });
-    } catch {
-      operation.failed('unavailable');
-      setToast(<span>Could not copy link.</span>);
-    }
-  };
+  const copyLink = useCopyDebateLink('share_dialog', debate.id, shareScope);
+  const onCopy = () => copyLink({ spaceId, participants });
 
   const videoShareData = (file: File, url: string) =>
     socialVideoShareData({
@@ -321,8 +307,8 @@ export function DebateShareDialog({ open, onOpenChange, debate, spaceId, openerR
                 <ShareAction label="X" ariaLabel="Share on X" onClick={onX} tile={<XTile />} />
                 <ShareAction label="Linkedin" ariaLabel="Share on LinkedIn" onClick={onLinkedIn} tile={<LinkedIn />} />
                 <ShareAction
-                  label="Copy link"
-                  ariaLabel="Copy link"
+                  label={COPY_LINK_LABEL}
+                  ariaLabel={COPY_LINK_LABEL}
                   onClick={onCopy}
                   tile={<GlyphTile icon={<Link />} />}
                 />

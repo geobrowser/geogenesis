@@ -36,6 +36,7 @@ export const ACTION_COMPONENTS = [
   'onboarding_customize_feed',
   'person_follow_button',
   'debate_claim_card',
+  'best_debates_watch',
 ] as const;
 export type ActionComponent = (typeof ACTION_COMPONENTS)[number];
 export type ActionKind =
