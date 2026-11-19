@@ -10,6 +10,7 @@ import { speakerStillUrl } from '~/core/debates/speaker-still';
 import { EntitiesOrderBy, type EntityFilter } from '~/core/gql/graphql';
 import { ID } from '~/core/id';
 import { graphql } from '~/core/io/graphql-client';
+import { getSpaces } from '~/core/io/queries';
 import { fetchProfile } from '~/core/io/subgraph';
 import { fetchActiveMemberRequest } from '~/core/io/subgraph/fetch-proposed-members';
 import { normId } from '~/core/utils/norm-id';
@@ -757,6 +758,30 @@ function browseSpaceRowsToMap(data: BrowseSidebarData): Map<string, { name: stri
   return m;
 }
 
+/**
+ * `spaceMeta` plus labels for row spaces outside the reader's sidebar, which a claim card moved to
+ * its home space can have (GEO-3802). Fetched only when such a row exists; a failure keeps the id fragment.
+ */
+export async function withOutsideSpaceLabels(
+  spaceMeta: Map<string, { name: string; image: string | null }>,
+  rows: ExploreFeedRow[]
+): Promise<Map<string, { name: string; image: string | null }>> {
+  const missing = [...new Set(rows.map(row => normId(row.spaceId)).filter(id => !spaceMeta.has(id)))];
+  if (missing.length === 0) return spaceMeta;
+
+  try {
+    const spaces = await Effect.runPromise(getSpaces({ spaceIds: missing }));
+    const labels = new Map(spaceMeta);
+    for (const space of spaces) {
+      const name = space.entity?.name?.trim();
+      if (name) labels.set(normId(space.id), { name, image: space.entity?.image ?? null });
+    }
+    return labels;
+  } catch {
+    return spaceMeta;
+  }
+}
+
 /** The exact visible space scope used by Explore and contextual Topic feeds. */
 export function exploreBrowseSpaceIds(browse: BrowseSidebarData, spaceFilterIds: readonly string[] | null): string[] {
   const visibleIds = [...browseSpaceRowsToMap(browse).keys()];
@@ -866,10 +891,11 @@ export async function fetchExploreFeed(args: {
   const scanChunk = 30;
 
   const attachMeta = async (rows: ExploreFeedRow[]): Promise<ExploreFeedItem[]> => {
+    const labels = await withOutsideSpaceLabels(spaceMeta, rows);
     const out: ExploreFeedItem[] = rows.map(r => ({
       ...r,
-      spaceName: spaceMeta.get(normId(r.spaceId))?.name ?? r.spaceId.slice(0, 8),
-      spaceImage: spaceMeta.get(normId(r.spaceId))?.image ?? null,
+      spaceName: labels.get(normId(r.spaceId))?.name ?? r.spaceId.slice(0, 8),
+      spaceImage: labels.get(normId(r.spaceId))?.image ?? null,
       hasPendingMembershipRequest: false,
     }));
 
