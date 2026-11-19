@@ -167,19 +167,23 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-function Opener({ entry }: { entry: 'row' | 'poster' }) {
+function Opener({ entry, entityId }: { entry: 'row' | 'poster'; entityId: string }) {
   const watch = React.useContext(BestDebateWatchContext);
   return (
-    <button type="button" onClick={() => watch?.('d1', entry)}>
+    <button type="button" onClick={() => watch?.(entityId, entry)}>
       open
     </button>
   );
 }
 
-function openWatch(entry: 'row' | 'poster' = 'row', displays?: ReadonlyMap<string, BestDebateRowData>) {
+function openWatch(
+  entry: 'row' | 'poster' = 'row',
+  displays?: ReadonlyMap<string, BestDebateRowData>,
+  entityId = 'd1'
+) {
   const provider = (
     <BestDebateWatchProvider source="best_debates_ranking" blockId="block" spaceId="debates">
-      <Opener entry={entry} />
+      <Opener entry={entry} entityId={entityId} />
     </BestDebateWatchProvider>
   );
   render(
@@ -440,7 +444,7 @@ describe('the watch popup’s Copy link', () => {
       [
         'debate_share_action',
         {
-          source: 'best_debates_ranking',
+          surface: 'best_debates_ranking',
           block_id: 'block',
           debate_id: 'd1',
           space_id: 'debates',
@@ -464,6 +468,31 @@ describe('the watch popup’s Copy link', () => {
     openWatch('row', new Map([['d1', display]]));
     await copy();
     expect(shareAction()[0][1]).toMatchObject({ space_id: expected });
+  });
+
+  it('hands the debaters over, so a debater copying their own debate is counted as one', async () => {
+    const debate = '11111111111141118111111111111111';
+    const debater = '22222222222242228222222222222222';
+    window.lytics = {
+      getContext: () => ({ is_identified: true }),
+      getIdentity: () => ({ personal_space_id: debater }),
+    };
+    try {
+      const display = {
+        space: null,
+        ownSpaceId: 'own-space',
+        debaterSpaceIds: [debater],
+      } as unknown as BestDebateRowData;
+      openWatch('row', new Map([[debate, display]]), debate);
+      await copy();
+      expect(
+        mocks.capture.mock.calls.filter(([name]) => name === 'share_link_handoff').map(([, props]) => props)
+      ).toEqual([
+        expect.objectContaining({ component: 'best_debates_watch', handoff_kind: 'copied', sharer_role: 'debater' }),
+      ]);
+    } finally {
+      delete window.lytics;
+    }
   });
 
   it('says it could not copy when the clipboard refuses, and counts no share', async () => {

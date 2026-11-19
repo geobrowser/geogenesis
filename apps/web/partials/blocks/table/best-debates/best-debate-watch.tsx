@@ -202,7 +202,7 @@ function WatchDebateDialog({
     void copyDebateLink({
       spaceId: display?.space?.id ?? display?.ownSpaceId ?? analytics.space_id,
       participants: display?.debaterSpaceIds,
-      properties: { source: analytics.source, block_id: analytics.block_id },
+      properties: { surface: analytics.source, block_id: analytics.block_id },
     });
   const speakers = useMomentsSpeakers(entityId);
   // The same cached read the player plays, so the Moments transcript is the reel on screen.

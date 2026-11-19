@@ -21,8 +21,11 @@ export type CopyDebateLinkInput = {
   spaceId: string;
   /** The debaters' profile spaces, so the share can tell a debater sharing their own debate. */
   participants?: readonly string[];
-  /** Extra `debate_share_action` properties, such as where the copy was made from. */
-  properties?: Record<string, unknown>;
+  /**
+   * Extra `debate_share_action` properties, such as the surface the copy was made from. Never
+   * `source` or `session_id`: the analytics runtime owns those names.
+   */
+  properties?: Record<string, unknown> & { source?: never; session_id?: never };
 };
 
 /**

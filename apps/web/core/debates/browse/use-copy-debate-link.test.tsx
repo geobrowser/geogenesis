@@ -46,7 +46,7 @@ describe('useCopyDebateLink (GEO-3809)', () => {
     };
     const { result } = renderHook(() => useCopyDebateLink('best_debates_watch', DEBATE));
     await act(() =>
-      result.current({ spaceId: SPACE, participants: [DEBATER], properties: { source: 'best_debates_block' } })
+      result.current({ spaceId: SPACE, participants: [DEBATER], properties: { surface: 'best_debates_block' } })
     );
 
     expect(write).toHaveBeenCalledTimes(1);
@@ -66,7 +66,7 @@ describe('useCopyDebateLink (GEO-3809)', () => {
       }),
     ]);
     expect(events('debate_share_action')).toEqual([
-      { source: 'best_debates_block', debate_id: DEBATE, space_id: SPACE, method: 'copy_link' },
+      { surface: 'best_debates_block', debate_id: DEBATE, space_id: SPACE, method: 'copy_link' },
     ]);
     expect(events('action_completed')).toEqual([
       expect.objectContaining({
