@@ -188,3 +188,41 @@ describe('a claim the feed’s space only links to', () => {
     expect(normId(row.spaceId)).toBe(DEBATES);
   });
 });
+
+/* A feed space that names the claim beats a higher-ranked home outside the feed, which it could not label. */
+describe('a claim named in another of the feed’s spaces', () => {
+  const ROOT = 'a19c345ab9866679b001d7d2138d88a1';
+  const CRYPTO = 'c9f267dcb0d270718c2a3c45a64afd32';
+  const PERSONAL_NAMED = 'cc31e40f74231d530f1b5d0fc1cd94d8';
+  const NAME = 'a126ca530c8e48d5b88882c734c38935';
+  const CLAIM_TYPE_ID = '96f859efa1ca4b229372c86ad58b694b';
+
+  // Linked from Root (ranked first), named in a personal space the feed covers and in Crypto, which
+  // outranks it but is outside the feed.
+  const claimEntity = {
+    id: '0af30a95f81e4632a452ecd6aefdfc65',
+    name: 'A claim',
+    description: null,
+    spaces: [ROOT, CRYPTO, PERSONAL_NAMED],
+    types: [{ id: CLAIM_TYPE_ID, name: 'Claim' }],
+    values: [{ property: { id: NAME, name: 'Name' }, spaceId: PERSONAL_NAMED, value: 'A claim' }],
+    relations: [],
+    commentCount: 0,
+    placement: {
+      names: [CRYPTO, PERSONAL_NAMED].map(spaceId => ({ spaceId, text: 'A claim' })),
+      types: [CRYPTO, PERSONAL_NAMED].map(spaceId => ({ spaceId, id: CLAIM_TYPE_ID, name: 'Claim' })),
+    },
+  } as unknown as ExploreCardEntity;
+
+  it('moves to the feed space that names it, not the higher-ranked one outside the feed', () => {
+    const row = rowFor(claimEntity, [ROOT, PERSONAL_NAMED]);
+
+    expect(normId(row.spaceId)).toBe(PERSONAL_NAMED);
+  });
+
+  it('falls back to the claim’s own home when no feed space names it', () => {
+    const row = rowFor(claimEntity, [ROOT]);
+
+    expect(normId(row.spaceId)).toBe(CRYPTO);
+  });
+});

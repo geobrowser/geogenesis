@@ -9,7 +9,7 @@ import { EntityDecoder } from '~/core/io/decoders/entity';
 import type { Entity } from '~/core/types';
 import { normId } from '~/core/utils/norm-id';
 import { getRelationVideoUrls } from '~/core/utils/relation-video';
-import { resolveEntitySpaceId } from '~/core/utils/space/entity-home-space';
+import { placingSpaceIds, resolveEntitySpaceId } from '~/core/utils/space/entity-home-space';
 import { getSpaceRank, getTopRankedSpaceId } from '~/core/utils/space/space-ranking';
 
 import {
@@ -283,23 +283,25 @@ const CLAIM_TYPE = normId(CLAIM_TYPE_ID);
 const NAME_PROPERTY = normId(EXPLORE_ENTITY_NAME_PROPERTY_ID);
 
 /**
- * A claim card's link and vote space: the pick, or the claim's home when the pick holds none of it
- * (GEO-3802). Claims only, since four card properties test residency only for always-named entities.
+ * A claim card's link and vote space: the pick, or where the claim lives when the pick holds none of
+ * it (GEO-3802), preferring the caller's spaces so the card keeps a space the feed can label.
+ * Claims only, since four card properties test residency only for always-named entities.
  */
-function claimSpaceId(entity: ExploreCardEntity, picked: string): string {
+function claimSpaceId(entity: ExploreCardEntity, picked: string, allowedSpaceIds: Set<string>): string {
   if (!entity.types.some(type => normId(type.id) === CLAIM_TYPE)) return picked;
 
   const names = entity.placement?.names ?? [];
-  return resolveEntitySpaceId(
-    {
-      spaces: entity.spaces,
-      values: [
-        ...entity.values,
-        ...names.map(name => ({ property: { id: NAME_PROPERTY }, spaceId: name.spaceId, value: name.text })),
-      ],
-    },
-    picked
-  );
+  const values = [
+    ...entity.values,
+    ...names.map(name => ({ property: { id: NAME_PROPERTY }, spaceId: name.spaceId, value: name.text })),
+  ];
+  const isAllowed = (spaceId: string) => allowedSpaceIds.has(normId(spaceId));
+  const inAllowed = values.filter(value => isAllowed(value.spaceId));
+  const scoped =
+    placingSpaceIds({ values: inAllowed }).length > 0
+      ? { spaces: entity.spaces.filter(isAllowed), values: inAllowed }
+      : { spaces: entity.spaces, values };
+  return resolveEntitySpaceId(scoped, picked);
 }
 
 function textValueForProperty(entity: Entity, propertyId: string, spaceId: string): string | null {
@@ -361,7 +363,7 @@ export function buildExploreFeedRows(
   for (const e of entities) {
     const picked = pickDisplaySpaceId(e, allowedSpaceIds);
     if (!picked) continue;
-    const spaceId = claimSpaceId(e, picked);
+    const spaceId = claimSpaceId(e, picked, allowedSpaceIds);
     const displaySpaceIdNorm = normId(spaceId);
 
     // Prefer space-scoped values so a card rendered for space A doesn't leak values
