@@ -14,7 +14,7 @@ import { MOMENTS_EDITOR_CLOSEABLE_PARAM, debatePath } from '../debate-routes';
 import { useDebate, useDebateExtractedClaims, useDebateMedia, useGeoChatAuth } from '../hooks';
 import { speakerStillUrl } from '../speaker-still';
 import { type MomentBackfillEntry, reelCarried, reelUnlinkable } from './api';
-import { ClipPanel } from './clip-panel';
+import { ClipPanel, edgeListenSpan } from './clip-panel';
 import { DebateLane } from './debate-lane';
 import { EditorBanner, bannerFor } from './editor-banner';
 import { EditorHeader, statusOf } from './editor-header';
@@ -59,7 +59,6 @@ import {
   playerWords,
   reelProblems,
   snapEdge,
-  stepEdge,
 } from './reel';
 import { ReelPreviewPanel } from './reel-preview-panel';
 import { jobInFlight, reelJob, refusalBlocksEditing, refusalMessage } from './reel-status';
@@ -673,7 +672,6 @@ function Editor({ debateId }: { debateId: string }) {
     });
   };
 
-  const [snap, setSnap] = React.useState(true);
   const [pad, setPad] = React.useState<Pad>(2_000);
 
   // What plays (GEO-3773): the reel is the view state's (its selection comes back when it stops);
@@ -729,6 +727,34 @@ function Editor({ debateId }: { debateId: string }) {
     const from =
       fromPlayhead && live !== null && live >= span.start_ms && live < span.end_ms - 100 ? live : span.start_ms;
     startRange(`clip:${clip.key}`, [{ key: clip.key, start_ms: from, end_ms: span.end_ms }]);
+  };
+  /**
+   * Plays only the first or last `EDGE_LISTEN_MS` of a clip as it will be cut: how it opens, or how
+   * it ends, without sitting through the rest.
+   */
+  const playClipEdge = (index: number, edge: 'start' | 'end') => {
+    const clip = clips[index];
+    if (!clip) return;
+    const listen = edgeListenSpan(played[index] ?? clip, edge);
+    if (inlineUnavailable) {
+      seekTo(listen.start_ms);
+      return;
+    }
+    if (view.playback.mode !== 'idle') dispatch({ type: 'stop' });
+    startRange(`clip:${clip.key}`, [{ key: clip.key, ...listen }]);
+  };
+  /**
+   * A click in the fine-tune waveform. While that clip plays, a click inside it plays on from there
+   * and still stops at the clip's end; anywhere else it is a seek, which ends what plays.
+   */
+  const seekInClip = (index: number, ms: number) => {
+    const clip = clips[index];
+    const span = clip ? (played[index] ?? clip) : null;
+    if (clip && span && rangeId === `clip:${clip.key}` && ms >= span.start_ms && ms < span.end_ms - 100) {
+      startRange(`clip:${clip.key}`, [{ key: clip.key, start_ms: ms, end_ms: span.end_ms }]);
+      return;
+    }
+    seekTo(ms);
   };
   /** Picks a clip: what plays stops, and the player goes to where the clip starts. */
   const selectClip = (key: string, seek = true) => {
@@ -1068,7 +1094,6 @@ function Editor({ debateId }: { debateId: string }) {
             was={reelPlaying ? null : transcriptWas}
             editable={editable}
             readOnly={editLocked}
-            snap={snap}
             names={transcriptNames}
             subscribe={frame.subscribe}
             actions={transcriptActions}
@@ -1105,12 +1130,10 @@ function Editor({ debateId }: { debateId: string }) {
         locked={editLocked}
         replaceOpen={shown.panel === 'replace'}
         advancedOpen={shown.popover === 'advanced'}
-        snap={snap}
         pad={pad}
         focus={shown.focus}
         canMoveEarlier={selectedIndex > 0}
         canMoveLater={selectedIndex < clips.length - 1}
-        canStep={words.length > 0}
         waveform={
           <ReelWaveform
             view={peaks}
@@ -1125,10 +1148,8 @@ function Editor({ debateId }: { debateId: string }) {
             readOnly={!editable}
             pad={pad}
             focus={shown.focus}
-            snap={snap}
-            onSnap={() => setSnap(on => !on)}
             onChangeClip={(index, span) => updateClip(index, clip => ({ ...clip, ...span }))}
-            onSeek={seekTo}
+            onSeek={ms => seekInClip(selectedIndex, ms)}
           />
         }
         onPlay={() => playClip(selectedIndex, false)}
@@ -1136,22 +1157,13 @@ function Editor({ debateId }: { debateId: string }) {
         onRemove={() => removeClip(selectedIndex)}
         onAdvanced={open => dispatch(open ? { type: 'openPopover', popover: 'advanced' } : { type: 'closePopover' })}
         onSetEdge={(edge, ms) =>
-          updateClip(selectedIndex, clip => {
-            const at = snap ? snapEdge(ms, words, edge) : ms;
-            return edge === 'start' ? { ...clip, start_ms: at } : { ...clip, end_ms: at };
-          })
+          updateClip(selectedIndex, clip => (edge === 'start' ? { ...clip, start_ms: ms } : { ...clip, end_ms: ms }))
         }
-        onSnap={() => setSnap(on => !on)}
         onMove={direction => moveClip(selectedIndex, direction)}
         onPad={setPad}
         onFocus={focus => dispatch({ type: 'focus', focus })}
         onFullDebate={() => dispatch({ type: 'deselect' })}
-        onStep={(edge, direction) =>
-          updateClip(selectedIndex, clip => {
-            const at = stepEdge(edge === 'start' ? clip.start_ms : clip.end_ms, words, edge, direction);
-            return edge === 'start' ? { ...clip, start_ms: at } : { ...clip, end_ms: at };
-          })
-        }
+        onPlayEdge={edge => playClipEdge(selectedIndex, edge)}
       />
     ) : (
       <DebateLane

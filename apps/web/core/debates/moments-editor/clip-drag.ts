@@ -1,6 +1,6 @@
 import { type EditorClip, MIN_EDIT_CLIP_MS, type ReelWord, snapEdge } from './reel';
 
-/** Where a free (Alt) drag lands on the timeline: the nearest tenth of a second. */
+/** Where a free edge lands by default: the nearest tenth of a second. */
 export const FREE_STEP_MS = 100;
 
 type Drag = {
@@ -19,7 +19,7 @@ type Drag = {
 
 /**
  * Where a dragged edge lands: off the middle of any word, outward, so the clip takes whole words
- * (`snapEdge`); with Alt held, wherever it was let go, to the tenth, and cut exactly there.
+ * (`snapEdge`); free (the fine-tune waveform's), wherever it was let go, to `stepMs`, and cut exactly there.
  */
 export function dragEdge(
   ms: number,

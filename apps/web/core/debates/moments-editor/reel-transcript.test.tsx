@@ -92,7 +92,6 @@ function setUp(overrides: Partial<Props> & Pick<Props, 'words' | 'sentences'>) {
     was: null,
     editable: true,
     readOnly: false,
-    snap: true,
     names: { 1: 'Ava', 2: 'Dev' },
     subscribe: frame.subscribe,
     actions,

@@ -19,12 +19,21 @@ import {
   PlayIcon,
   SegmentButton,
   SegmentGroup,
-  SnapSwitch,
   WarnIcon,
 } from './editor-ui';
 import { formatReelTime, parseReelTime } from './reel';
 import { FOCUSES, PADS, type Pad } from './reel-waveform';
 import type { FineFocus } from './waveform';
+
+/** How much of the clip a Start or End play button plays: its first or last few seconds. */
+export const EDGE_LISTEN_MS = 3_000;
+
+/** The stretch an edge's play button plays: the first or last `EDGE_LISTEN_MS` of `span`, or all of a shorter one. */
+export function edgeListenSpan(span: { start_ms: number; end_ms: number }, edge: 'start' | 'end') {
+  return edge === 'start'
+    ? { start_ms: span.start_ms, end_ms: Math.min(span.end_ms, span.start_ms + EDGE_LISTEN_MS) }
+    : { start_ms: Math.max(span.start_ms, span.end_ms - EDGE_LISTEN_MS), end_ms: span.end_ms };
+}
 
 /** A time to the tenth, as the panel's edges read: 0:41.9. */
 export const formatTenths = formatReelTime;
@@ -32,8 +41,8 @@ export const formatTenths = formatReelTime;
 /**
  * The bottom panel for the selected clip (GEO-3773): a bar of what can be done with it (play it,
  * replace or remove it, its advanced options, what to zoom on and how far, back to the full debate),
- * then its start and end with word steppers either side of the zoomed waveform (`waveform`). Clicking
- * an edge's time, or stepping it, zooms on that edge.
+ * then its start and end either side of the zoomed waveform (`waveform`), each with a button that plays
+ * just that end of the clip. Clicking an edge's time, or playing it, zooms on that edge.
  */
 export function ClipPanel({
   number,
@@ -47,24 +56,21 @@ export function ClipPanel({
   locked,
   replaceOpen,
   advancedOpen,
-  snap,
   pad,
   focus,
   canMoveEarlier,
   canMoveLater,
-  canStep,
   waveform,
   onPlay,
   onReplace,
   onRemove,
   onAdvanced,
   onSetEdge,
-  onSnap,
   onMove,
   onPad,
   onFocus,
   onFullDebate,
-  onStep,
+  onPlayEdge,
 }: {
   number: number;
   speaker: ParticipantSlot | null;
@@ -80,25 +86,23 @@ export function ClipPanel({
   locked: boolean;
   replaceOpen: boolean;
   advancedOpen: boolean;
-  snap: boolean;
   pad: Pad;
   focus: FineFocus;
   canMoveEarlier: boolean;
   canMoveLater: boolean;
-  canStep: boolean;
   waveform: React.ReactNode;
   onPlay: () => void;
   onReplace: () => void;
   onRemove: () => void;
   onAdvanced: (open: boolean) => void;
-  /** A typed time: snapped to a word when `snap`. */
+  /** A typed time, placed exactly where it says. */
   onSetEdge: (edge: 'start' | 'end', ms: number) => void;
-  onSnap: () => void;
   onMove: (direction: -1 | 1) => void;
   onPad: (pad: Pad) => void;
   onFocus: (focus: FineFocus) => void;
   onFullDebate: () => void;
-  onStep: (edge: 'start' | 'end', direction: -1 | 1) => void;
+  /** Plays only the clip's first or last `EDGE_LISTEN_MS`, to hear how it opens or ends. */
+  onPlayEdge: (edge: 'start' | 'end') => void;
 }) {
   const compact = cx(PILL_CLASS, PILL_COMPACT_CLASS);
   const edgeColumn = (edge: 'start' | 'end') => {
@@ -119,21 +123,19 @@ export function ClipPanel({
           <span className="text-metadata text-grey-04">{label}</span>{' '}
           <span className="text-metadataMedium tabular-nums">{formatTenths(edge === 'start' ? startMs : endMs)}</span>
         </button>
-        <SegmentGroup>
-          {([-1, 1] as const).map(direction => (
-            <SegmentButton
-              key={direction}
-              disabled={!editable || !canStep}
-              aria-label={`${label} one word ${direction < 0 ? 'earlier' : 'later'}`}
-              onClick={() => {
-                onFocus(edge);
-                onStep(edge, direction);
-              }}
-            >
-              {direction < 0 ? '‹ word' : 'word ›'}
-            </SegmentButton>
-          ))}
-        </SegmentGroup>
+        {/* Listening only looks, so it stays open when the edges can't be changed. */}
+        <button
+          type="button"
+          className={cx(compact, 'w-fit')}
+          aria-label={`Play the clip's ${edge === 'start' ? 'first' : 'last'} ${EDGE_LISTEN_MS / 1000} seconds`}
+          onClick={() => {
+            onFocus(edge);
+            onPlayEdge(edge);
+          }}
+        >
+          <PlayIcon size={9} />
+          {edge === 'start' ? 'First' : 'Last'} {EDGE_LISTEN_MS / 1000} s
+        </button>
       </div>
     );
   };
@@ -232,12 +234,6 @@ export function ClipPanel({
                 <div className="grid grid-cols-2 gap-2">
                   <TimeField label="Start" ms={startMs} disabled={!editable} onSet={ms => onSetEdge('start', ms)} />
                   <TimeField label="End" ms={endMs} disabled={!editable} onSet={ms => onSetEdge('end', ms)} />
-                </div>
-                <div className="flex items-center justify-between">
-                  <span aria-hidden className="text-metadata">
-                    Snap to words
-                  </span>
-                  <SnapSwitch checked={snap} onChange={onSnap} />
                 </div>
                 <div className="flex gap-2">
                   <button
