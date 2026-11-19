@@ -283,9 +283,8 @@ const CLAIM_TYPE = normId(CLAIM_TYPE_ID);
 const NAME_PROPERTY = normId(EXPLORE_ENTITY_NAME_PROPERTY_ID);
 
 /**
- * A claim card's link and vote space: the pick, or where the claim lives when the pick holds none of
- * it (GEO-3802), preferring the caller's spaces so the card keeps a space the feed can label.
- * Claims only, since four card properties test residency only for always-named entities.
+ * A claim card's link and vote space: the pick, else where the claim lives, preferring the caller's
+ * spaces (GEO-3802). Claims only: four card properties test residency only for always-named entities.
  */
 function claimSpaceId(entity: ExploreCardEntity, picked: string, allowedSpaceIds: Set<string>): string {
   if (!entity.types.some(type => normId(type.id) === CLAIM_TYPE)) return picked;
