@@ -136,7 +136,9 @@ describe('a press made while the signing account is built', () => {
     mocks.registered = true;
     const { store, wrapper, enqueue } = renderQueue();
     const follow = vi.fn();
-    act(() => enqueue({ id: 'follow', label: 'your follow', requires: 'personalSpace', run: follow }));
+    act(() =>
+      enqueue({ id: 'follow', label: 'your follow', requires: 'personalSpace', survivesRedirect: false, run: follow })
+    );
     const runner = render(<PendingActionsRunner />, { wrapper });
     runner.rerender(<PendingActionsRunner />);
 
