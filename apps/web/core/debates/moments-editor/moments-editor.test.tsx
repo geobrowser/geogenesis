@@ -3863,6 +3863,33 @@ describe('MomentsEditor layout at real widths (GEO-3773 2b preview)', () => {
     expect(screen.queryByRole('button', { name: /one word (earlier|later)/ })).toBeNull();
   });
 
+  it('says which round of the debate the selected clip is from, and nothing without turns', () => {
+    const about = () =>
+      within(clipPanel()).getByTestId('clip-bar').querySelector('[data-clip-bar-about]') as HTMLElement;
+    const { unmount } = render(<MomentsEditor debateId={DEBATE_ID} />);
+    expect(about()).not.toHaveTextContent(/Round/);
+    unmount();
+    // The served clip plays 1.0 to 3.0 s: in the second round when it starts there (turns 2 and 3).
+    mocks.turns = [
+      { turn_index: 1, participant_slot: 2, output_start_ms: 0, output_end_ms: 500 },
+      { turn_index: 2, participant_slot: 1, output_start_ms: 500, output_end_ms: 60_000 },
+    ];
+    const { unmount: unmountLive } = render(<MomentsEditor debateId={DEBATE_ID} />);
+    expect(about()).toHaveTextContent('Round 2 · 2 s');
+    unmountLive();
+    // A carried reel's cuts are on the old video's clock, so the new turns can't say its round.
+    mocks.manualReel = true;
+    mocks.plan.data = entry({
+      live_reel: {
+        clock: 'video',
+        carried: true,
+        clips: [{ start_ms: 900, end_ms: 3_000, speaker_slot: 0, claim_index: 0, claim_text: 'Coffee is low stakes' }],
+      },
+    });
+    render(<MomentsEditor debateId={DEBATE_ID} />);
+    expect(about()).not.toHaveTextContent(/Round/);
+  });
+
   it('lets the clip bar wrap: the actions take a row of their own, and the warning truncates with a tooltip', () => {
     soClip();
     render(<MomentsEditor debateId={DEBATE_ID} />);
