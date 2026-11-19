@@ -5,7 +5,6 @@ import * as React from 'react';
 import { DIALOG_ACTION_BUTTON_CLASS_NAME, DIALOG_SECONDARY_ACTION_BUTTON_CLASS_NAME } from '~/design-system/button';
 
 import { RankingFlowDialog } from './ranking-flow-dialog';
-import { replaceSearchParams } from './use-best-debates-ranking-filters';
 
 /**
  * Warns before leaving the ranking screen with unpublished changes (Preston, 12 Nov).
@@ -17,8 +16,8 @@ import { replaceSearchParams } from './use-best-debates-ranking-filters';
  *   the prompt instead of leaving;
  * - closing or reloading the tab, by `beforeunload`, which can only show the browser's own prompt.
  *
- * Nothing is armed while there is nothing unpublished, so right after a publish nothing fires, and
- * the spare Back entry is spent so the next Back leaves.
+ * Nothing is armed while there is nothing unpublished, so right after a publish nothing fires. The
+ * spare Back entry can't be removed then without navigating, so a Back that spends it carries on.
  *
  * Once the person has chosen to leave (Leave without publishing, or Publish and leave), every catch
  * stands down until the screen is gone: the leave itself (spending the spare Back entry, a full-page
@@ -50,8 +49,6 @@ export function useUnpublishedLeaveGuard({
   const leavingRef = React.useRef(false);
   /** The spare history entry the browser's Back spends (see below). */
   const sentinelRef = React.useRef(false);
-  const spendingRef = React.useRef(false);
-  const publishingToLeaveRef = React.useRef(false);
   React.useEffect(() => {
     if (!active) leavingRef.current = false;
   }, [active]);
@@ -132,40 +129,28 @@ export function useUnpublishedLeaveGuard({
     hrefRef.current = window.location.href;
   });
   React.useEffect(() => {
-    if (!active) return;
-    if (!sentinelRef.current && !spendingRef.current) {
-      window.history.pushState({ rankingLeaveGuard: true }, '', window.location.href);
-      sentinelRef.current = true;
-    }
+    if (!active || sentinelRef.current) return;
+    window.history.pushState({ rankingLeaveGuard: true }, '', window.location.href);
+    sentinelRef.current = true;
+  }, [active]);
+
+  React.useEffect(() => {
     const onPopState = () => {
-      if (!activeRef.current || leavingRef.current || spendingRef.current) return;
+      if (leavingRef.current) return;
+      if (!activeRef.current) {
+        if (sentinelRef.current) {
+          sentinelRef.current = false;
+          window.history.back();
+        }
+        return;
+      }
       sentinelRef.current = false;
       leftHrefRef.current = hrefRef.current || null;
       setPending(() => () => window.history.back());
     };
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
-  }, [active]);
-
-  React.useEffect(() => {
-    if (active || !sentinelRef.current || publishingToLeaveRef.current) return;
-    sentinelRef.current = false;
-    spendingRef.current = true;
-    const href = window.location.href;
-    const onSpent = () => {
-      spendingRef.current = false;
-      if (!mountedRef.current) return;
-      // The entry under it has the query from when the guard armed; keep the filters written since.
-      if (window.location.href !== href) replaceSearchParams(() => new URL(href).searchParams);
-      // Changed again before Back landed: arm again.
-      if (activeRef.current && !sentinelRef.current) {
-        window.history.pushState({ rankingLeaveGuard: true }, '', window.location.href);
-        sentinelRef.current = true;
-      }
-    };
-    window.addEventListener('popstate', onSpent, { once: true });
-    window.history.back();
-  }, [active]);
+  }, []);
 
   const close = (keepRanking: boolean) => {
     setPending(null);
@@ -233,12 +218,7 @@ export function useUnpublishedLeaveGuard({
             disabled={isPublishing}
             onClick={async () => {
               const leave = pending;
-              publishingToLeaveRef.current = true;
-              try {
-                if (await onPublish()) leaveNow(leave);
-              } finally {
-                publishingToLeaveRef.current = false;
-              }
+              if (await onPublish()) leaveNow(leave);
             }}
           >
             {isPublishing ? 'Publishing…' : 'Publish and leave'}

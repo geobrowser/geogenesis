@@ -132,6 +132,38 @@ describe('useUnpublishedLeaveGuard', () => {
     expect(window.history.state).toMatchObject({ rankingLeaveGuard: true });
   });
 
+  it('after a publish, one Back leaves, filters changed or not, and publishing navigates nowhere', () => {
+    const back = vi.spyOn(window.history, 'back').mockImplementation(() => {});
+    window.history.replaceState(null, '', '/ranking');
+    const { rerender } = render(<Harness active leave={vi.fn()} />);
+    act(() => window.history.replaceState(window.history.state, '', '/ranking?recorded=week'));
+    // Publish clears the changes.
+    rerender(<Harness active={false} leave={vi.fn()} />);
+    expect(back).not.toHaveBeenCalled();
+    // Back spends the spare entry onto the one under it; the guard carries on leaving, without asking.
+    act(() => {
+      window.history.replaceState(null, '', '/ranking');
+      window.dispatchEvent(new PopStateEvent('popstate', { state: null }));
+    });
+    expect(back).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText('Publish your ranking?')).toBeNull();
+
+    act(() => window.dispatchEvent(new PopStateEvent('popstate', { state: null })));
+    expect(back).toHaveBeenCalledTimes(1);
+    back.mockRestore();
+  });
+
+  it('a new change after a publish still asks on Back', () => {
+    const back = vi.spyOn(window.history, 'back').mockImplementation(() => {});
+    const { rerender } = render(<Harness active leave={vi.fn()} />);
+    rerender(<Harness active={false} leave={vi.fn()} />);
+    rerender(<Harness active leave={vi.fn()} />);
+    act(() => window.dispatchEvent(new PopStateEvent('popstate', { state: null })));
+    expect(screen.getByText('Publish your ranking?')).toBeTruthy();
+    expect(back).not.toHaveBeenCalled();
+    back.mockRestore();
+  });
+
   describe('after choosing to leave, nothing asks again (Preston, 16 Nov)', () => {
     // A real browser fires popstate for history.back() a task later, after React has re-rendered
     // the screen with its changes still unpublished.
