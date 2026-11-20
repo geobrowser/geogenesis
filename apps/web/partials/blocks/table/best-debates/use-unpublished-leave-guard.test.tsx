@@ -132,8 +132,19 @@ describe('useUnpublishedLeaveGuard', () => {
     expect(window.history.state).toMatchObject({ rankingLeaveGuard: true });
   });
 
+  function recordBaseStates() {
+    const states: unknown[] = [];
+    const original = window.history.pushState.bind(window.history);
+    const spy = vi.spyOn(window.history, 'pushState').mockImplementation((...args) => {
+      states.push(window.history.state);
+      original(...args);
+    });
+    return { states, restore: () => spy.mockRestore() };
+  }
+
   it('after a publish, one Back leaves, filters changed or not, and publishing navigates nowhere', () => {
     const back = vi.spyOn(window.history, 'back').mockImplementation(() => {});
+    const bases = recordBaseStates();
     window.history.replaceState(null, '', '/ranking');
     const { rerender } = render(<Harness active leave={vi.fn()} />);
     act(() => window.history.replaceState(window.history.state, '', '/ranking?recorded=week'));
@@ -141,15 +152,28 @@ describe('useUnpublishedLeaveGuard', () => {
     rerender(<Harness active={false} leave={vi.fn()} />);
     expect(back).not.toHaveBeenCalled();
     // Back spends the spare entry onto the one under it; the guard carries on leaving, without asking.
+    const base = bases.states[0];
     act(() => {
-      window.history.replaceState(null, '', '/ranking');
-      window.dispatchEvent(new PopStateEvent('popstate', { state: null }));
+      window.history.replaceState(base, '', '/ranking');
+      window.dispatchEvent(new PopStateEvent('popstate', { state: base }));
     });
     expect(back).toHaveBeenCalledTimes(1);
     expect(screen.queryByText('Publish your ranking?')).toBeNull();
 
-    act(() => window.dispatchEvent(new PopStateEvent('popstate', { state: null })));
+    act(() => window.dispatchEvent(new PopStateEvent('popstate', { state: base })));
     expect(back).toHaveBeenCalledTimes(1);
+    bases.restore();
+    back.mockRestore();
+  });
+
+  it('after a publish, jumping to an older page from the Back menu stays there', () => {
+    const back = vi.spyOn(window.history, 'back').mockImplementation(() => {});
+    window.history.replaceState(null, '', '/ranking');
+    const { rerender } = render(<Harness active leave={vi.fn()} />);
+    rerender(<Harness active={false} leave={vi.fn()} />);
+
+    act(() => window.dispatchEvent(new PopStateEvent('popstate', { state: { __NA: true } })));
+    expect(back).not.toHaveBeenCalled();
     back.mockRestore();
   });
 

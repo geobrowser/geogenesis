@@ -49,6 +49,14 @@ export function useUnpublishedLeaveGuard({
   const leavingRef = React.useRef(false);
   /** The spare history entry the browser's Back spends (see below). */
   const sentinelRef = React.useRef(false);
+  const baseTokenRef = React.useRef('');
+  const pushSentinel = React.useCallback((url: string) => {
+    const token = `${Date.now()}-${Math.random()}`;
+    window.history.replaceState({ ...window.history.state, rankingLeaveGuardBase: token }, '');
+    window.history.pushState({ rankingLeaveGuard: true }, '', url);
+    baseTokenRef.current = token;
+    sentinelRef.current = true;
+  }, []);
   React.useEffect(() => {
     if (!active) leavingRef.current = false;
   }, [active]);
@@ -60,11 +68,8 @@ export function useUnpublishedLeaveGuard({
   const rearm = React.useCallback(() => {
     if (!mountedRef.current || !leavingRef.current) return;
     leavingRef.current = false;
-    if (activeRef.current && !sentinelRef.current) {
-      window.history.pushState({ rankingLeaveGuard: true }, '', window.location.href);
-      sentinelRef.current = true;
-    }
-  }, []);
+    if (activeRef.current && !sentinelRef.current) pushSentinel(window.location.href);
+  }, [pushSentinel]);
   React.useEffect(() => {
     mountedRef.current = true;
     const onPageShow = (event: PageTransitionEvent) => {
@@ -130,18 +135,16 @@ export function useUnpublishedLeaveGuard({
   });
   React.useEffect(() => {
     if (!active || sentinelRef.current) return;
-    window.history.pushState({ rankingLeaveGuard: true }, '', window.location.href);
-    sentinelRef.current = true;
-  }, [active]);
+    pushSentinel(window.location.href);
+  }, [active, pushSentinel]);
 
   React.useEffect(() => {
-    const onPopState = () => {
+    const onPopState = (event: PopStateEvent) => {
       if (leavingRef.current) return;
       if (!activeRef.current) {
-        if (sentinelRef.current) {
-          sentinelRef.current = false;
-          window.history.back();
-        }
+        if (!sentinelRef.current) return;
+        sentinelRef.current = false;
+        if (event.state?.rankingLeaveGuardBase === baseTokenRef.current) window.history.back();
         return;
       }
       sentinelRef.current = false;
@@ -156,8 +159,7 @@ export function useUnpublishedLeaveGuard({
     setPending(null);
     // Back spent the spare entry; staying needs it again so the next Back is caught too.
     if (keepRanking && activeRef.current && !leavingRef.current && !sentinelRef.current) {
-      window.history.pushState({ rankingLeaveGuard: true }, '', leftHrefRef.current ?? window.location.href);
-      sentinelRef.current = true;
+      pushSentinel(leftHrefRef.current ?? window.location.href);
     }
     leftHrefRef.current = null;
   };
