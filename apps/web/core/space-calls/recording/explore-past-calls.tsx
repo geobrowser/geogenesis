@@ -27,11 +27,6 @@ export function usePastCallInterleave(enabled: boolean) {
       const replaces = new Set<string>();
       for (const [afterIndex, callIndex] of pastCallSlots(feedLength, calls.length)) {
         const call = calls[callIndex]!;
-    return (feedLength: number) => {
-      const cards = new Map<number, React.ReactNode>();
-      const replaces = new Set<string>();
-      for (const [afterIndex, callIndex] of pastCallSlots(feedLength, calls.length)) {
-        const call = calls[callIndex]!;
         const last = callIndex === calls.length - 1;
         cards.set(
           afterIndex,
@@ -40,10 +35,8 @@ export function usePastCallInterleave(enabled: boolean) {
             {last && canLoadMore ? <LoadMorePastCalls load={fetchNextPage} /> : null}
           </React.Fragment>
         );
-        // A placed call written to the graph is also its space's Call Event card; this one plays, so it stands for both.
+        // A placed call on the graph is also its space's Call Event card; this one plays, so it stands for both.
         if (call.entity_id) replaces.add(feedEditionKey(call.space_id, call.entity_id));
-      }
-      return { cards, replaces };
       }
       return { cards, replaces };
     };

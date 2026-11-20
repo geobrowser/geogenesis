@@ -5,6 +5,7 @@ import * as React from 'react';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import type { FeedInterleave } from '~/partials/feed/entity-feed';
 import { feedEditionKey } from '~/partials/feed/feed-edition-key';
 
 import type { PastCall } from './api';
@@ -132,10 +133,8 @@ describe('usePastCallInterleave', () => {
     expect(replaces.has(feedEditionKey('space2', 'a'.repeat(32)))).toBe(false);
   });
 
-  const drawCards = (
-    feedLength: number,
-    interleave: ((n: number) => ReadonlyMap<number, React.ReactNode>) | undefined
-  ) => render(<>{[...interleave!(feedLength).values()]}</>);
+  const drawCards = (feedLength: number, interleave: FeedInterleave | undefined) =>
+    render(<>{[...interleave!(feedLength).cards.values()]}</>);
 
   it('loads the next page once the feed reaches the last loaded call', () => {
     mocks.calls = [CALL, { ...CALL, call_id: 'call2' }];
@@ -153,10 +152,10 @@ describe('usePastCallInterleave', () => {
   it('keeps earlier calls in their slots when a page arrives', () => {
     mocks.calls = [CALL, { ...CALL, call_id: 'call2' }];
     const { result, rerender } = renderHook(() => usePastCallInterleave(true));
-    const before = [...result.current!(100).keys()];
+    const before = [...result.current!(100).cards.keys()];
     mocks.calls = [...mocks.calls, { ...CALL, call_id: 'call3' }];
     rerender();
-    expect([...result.current!(100).keys()]).toEqual([...before, 23]);
+    expect([...result.current!(100).cards.keys()]).toEqual([...before, 23]);
   });
 
   it('stops at the last page, while a page loads, and after a page fails', () => {
