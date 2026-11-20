@@ -160,11 +160,8 @@ export function usePersonalSpaceId() {
     // doesn't lag: it stays false until a fetch for this queryKey actually completes.
     isLoading: state === 'restoring' || (!!address && !isFetched) || isLoading,
     isFetched,
-    /**
-     * Whether the index has answered for this account. A failed fetch settles as `isFetched` with
-     * no data, which reads as unregistered; "not registered" and "needs a profile" mean something
-     * only when this is true. A failed refetch keeps the last answer.
-     */
+    // The index has answered (a failed refetch keeps the last answer). "Not registered" and
+    // "needs a profile" mean something only when this is true; a failed fetch reads as unregistered.
     hasAnswer: isSuccess || data != null,
   };
 }
