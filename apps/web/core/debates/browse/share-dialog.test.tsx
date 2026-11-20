@@ -340,6 +340,54 @@ it('gives repeated copies different IDs and never counts downloads as link hando
   expect(handoffs()).toHaveLength(2);
 });
 
+// GEO-3809 moved Copy link into useCopyDebateLink, which the Best debates popup shares: the sheet's
+// copy still says so, and still records every event it did, as the Share sheet's.
+it('copies the link with its toast and every share event, as the Share sheet', async () => {
+  (window as { dataLayer?: Record<string, unknown>[] }).dataLayer = [];
+  const write = vi.fn().mockResolvedValue(undefined);
+  Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: write } });
+  mount(realDebate);
+  fireEvent.click(screen.getByRole('button', { name: 'Copy link' }));
+  await waitFor(() => expect(mocks.toast).toHaveBeenCalledTimes(1));
+  expect(mocks.toast.mock.calls[0][0].props.children).toBe('Link copied!');
+  expect(new URL(write.mock.calls[0][0]).pathname).toBe(`/debate/${realDebate.id}`);
+  expect(handoffs()).toEqual([
+    ['share_link_handoff', expect.objectContaining({ component: 'share_dialog', overlay: 'modal', space_id: 'space' })],
+  ]);
+  expect(completed()).toEqual([
+    [
+      'action_completed',
+      expect.objectContaining({ component: 'share_dialog', action_kind: 'share', outcome: 'succeeded' }),
+    ],
+  ]);
+  expect(mocks.capture).toHaveBeenCalledWith('debate_share_action', {
+    debate_id: realDebate.id,
+    space_id: 'space',
+    method: 'copy_link',
+  });
+  const dataLayer = (window as { dataLayer?: Record<string, unknown>[] }).dataLayer!;
+  expect(dataLayer.filter(entry => entry.event === 'geo_share')).toEqual([
+    expect.objectContaining({ debate_id: realDebate.id, space_id: 'space', share_method: 'copy_link' }),
+  ]);
+});
+
+it('says the link could not be copied when the clipboard rejects', async () => {
+  Object.defineProperty(navigator, 'clipboard', {
+    configurable: true,
+    value: { writeText: vi.fn().mockRejectedValue(new Error('denied')) },
+  });
+  mount(realDebate);
+  fireEvent.click(screen.getByRole('button', { name: 'Copy link' }));
+  await waitFor(() => expect(mocks.toast).toHaveBeenCalledTimes(1));
+  expect(mocks.toast.mock.calls[0][0].props.children).toBe('Could not copy link.');
+  expect(completed()[0][1]).toMatchObject({
+    component: 'share_dialog',
+    outcome: 'failed',
+    failure_code: 'unavailable',
+  });
+  expect(mocks.capture).not.toHaveBeenCalledWith('debate_share_action', expect.anything());
+});
+
 it('does not record a link handoff when the clipboard rejects', async () => {
   Object.defineProperty(navigator, 'clipboard', {
     configurable: true,

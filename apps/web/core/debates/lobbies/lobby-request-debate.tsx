@@ -1,6 +1,6 @@
 'use client';
 
-import { debatesErrorMessage } from '~/core/debates/account-setup-copy';
+import { debatesErrorMessage, openSessionRefusalMessage } from '~/core/debates/account-setup-copy';
 
 import { Text } from '~/design-system/text';
 
@@ -28,7 +28,7 @@ export function lobbyChallengeErrorMessage(error: unknown) {
   if (error instanceof GeoChatRequestError && error.code === 'lobby_recipient_not_present') {
     return 'They’re not in the lobby right now.';
   }
-  return lobbyClaimRequestErrorMessage(error);
+  return openSessionRefusalMessage(error) ?? lobbyClaimRequestErrorMessage(error);
 }
 
 /**

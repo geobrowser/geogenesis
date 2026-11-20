@@ -5,6 +5,7 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import { type SpaceGroup, groupBySpace } from '~/core/blocks/ranking/best-debates-team-filters';
+import { GRADE_DOWN_RANKED_COPY } from '~/core/blocks/ranking/ranking-grades';
 import { type RankersRead, rankedByLabel, rankedByText } from '~/core/blocks/ranking/use-best-debates-to-rank';
 import { normId } from '~/core/utils/norm-id';
 
@@ -124,6 +125,7 @@ export function BestDebatesTeamRowContent({
   rank,
   rankers,
   myRank,
+  downRanked = false,
   draggable,
   onPushDown,
   onRank,
@@ -135,6 +137,8 @@ export function BestDebatesTeamRowContent({
   rankers: RankersRead;
   /** The debate's place in your ranking, when it's there. */
   myRank: number | null;
+  /** You down ranked it (To rank's ranked matches, GEO-3810): "Down ranked" where a place would be. */
+  downRanked?: boolean;
   draggable: boolean;
   /** Push it down from the row (Preston, 12 Nov), inline after the ranked-by badge. */
   onPushDown?: () => void;
@@ -143,7 +147,7 @@ export function BestDebatesTeamRowContent({
 }) {
   return (
     <div className="flex w-full min-w-0 items-center gap-3" data-testid="best-debates-team-row">
-      {draggable && !myRank ? GRIP : draggable ? <span className="w-2.5 shrink-0" aria-hidden /> : null}
+      {draggable && !myRank && !downRanked ? GRIP : draggable ? <span className="w-2.5 shrink-0" aria-hidden /> : null}
       <div className="min-w-0 flex-1">
         <RankingEntryRow
           rank={rank}
@@ -156,12 +160,14 @@ export function BestDebatesTeamRowContent({
             // line when there is no badge, so it is always in the same place.
             <div className="flex items-center gap-2">
               <RankedByBadge rankers={rankers} entityId={entityId} />
-              {onPushDown && !myRank ? <DownRankButton name={name} onClick={onPushDown} /> : null}
+              {onPushDown && !myRank && !downRanked ? <DownRankButton name={name} onClick={onPushDown} /> : null}
             </div>
           }
           debateAside={
             myRank ? (
               <span className="text-breadcrumb whitespace-nowrap text-grey-04 tabular-nums">You: #{myRank}</span>
+            ) : downRanked ? (
+              <span className="text-breadcrumb whitespace-nowrap text-grey-04">{GRADE_DOWN_RANKED_COPY}</span>
             ) : onRank ? (
               // Grading happens in the watch popup's Grade row (Preston, 16 Nov); the row keeps Rank.
               <RankButton name={name} onClick={onRank} />

@@ -1918,6 +1918,29 @@ describe('Online only', () => {
     else expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
+  // geo-chat#382: the sender or the recipient is already in another open session.
+  it.each([
+    [
+      'you are already in another debate session -- finish or leave it first',
+      'You’re already in another debate session. Finish or leave it first.',
+    ],
+    ['the other person is already in another debate session', 'The other person is already in another debate session.'],
+  ])('says why a Debate now press was refused for an open session (%s)', (serverMessage, shown) => {
+    mocks.people = [person('user-them', 'Arturas')];
+    mocks.createChallenge.mockImplementation((_request, options) =>
+      options.onError(new GeoChatRequestError(serverMessage, 'already_in_open_session', 409))
+    );
+    render(<PeopleTab onTabChange={mocks.onTabChange} dense />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Debate now' }));
+
+    expect(screen.getByRole('alert')).toHaveTextContent(shown);
+    // A second press starts clean rather than keeping the old refusal up.
+    mocks.createChallenge.mockImplementation(() => undefined);
+    fireEvent.click(screen.getByRole('button', { name: 'Debate now' }));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
   it('offers an away person no Schedule with Online only on', () => {
     mocks.people = [{ ...person('user-them', 'Arturas'), away: true, can_challenge: false }];
     render(<PeopleTab onTabChange={mocks.onTabChange} dense />);

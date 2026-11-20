@@ -110,7 +110,12 @@ describe('CombinedDebatePlayer', () => {
 
     fireEvent.playing(container.querySelector('video')!);
 
-    expect(onPlaybackState).toHaveBeenLastCalledWith({ ready: true, playing: true, autoplayBlocked: false, error: false });
+    expect(onPlaybackState).toHaveBeenLastCalledWith({
+      ready: true,
+      playing: true,
+      autoplayBlocked: false,
+      error: false,
+    });
   });
 
   it('asks to become active from the tap, and pauses once another card is', () => {
@@ -157,6 +162,23 @@ describe('DebateFeedPlayer', () => {
     );
 
     expect(container.querySelector('[data-debate-combined-player]')).not.toBeNull();
+  });
+
+  // GEO-3812: a tap-to-play card hands the fallback the same tap, and nothing has been tapped yet.
+  it('still plays from the tap on a tap-to-play card that holds no tap yet', () => {
+    store.set(inlinePlaybackUnavailableAtom, true);
+    mocks.media = { data: { artifacts: [{ kind: 'final_video_hevc' }] }, isError: false };
+    const onPlaybackRequest = vi.fn();
+    render(
+      <Provider store={store}>
+        <DebateFeedPlayer debate={debate} active={false} preload tapToPlay onPlaybackRequest={onPlaybackRequest} />
+      </Provider>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Play combined debate video' }));
+
+    expect(mocks.play).toHaveBeenCalledTimes(1);
+    expect(onPlaybackRequest).toHaveBeenCalledTimes(1);
   });
 
   // GEO-3773: the moments editor's player measures nothing, on the fallback as well.
