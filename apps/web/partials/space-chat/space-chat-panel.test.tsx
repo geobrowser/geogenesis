@@ -25,6 +25,12 @@ const mocks = vi.hoisted(() => ({
   refetchRooms: vi.fn(),
   messages: [] as unknown[],
   send: vi.fn(),
+  channelsFlag: false,
+  memberExtra: {} as Record<string, unknown>,
+}));
+
+vi.mock('~/core/state/feature-flags', () => ({
+  useFeatureFlag: (id: string) => (id === 'spaceChannels' ? mocks.channelsFlag : true),
 }));
 
 vi.mock('~/core/debates/hooks', () => ({
@@ -58,6 +64,7 @@ vi.mock('~/core/space-chat/hooks', () => ({
       kind: 'member',
       can_post: mocks.canPost,
       can_moderate: mocks.canModerate,
+      ...mocks.memberExtra,
     },
   }),
   useSpaceChatRoom: () => ({
@@ -86,6 +93,8 @@ beforeEach(() => {
   mocks.signIn.mockReset();
   mocks.refetchRooms.mockReset();
   mocks.send.mockReset();
+  mocks.channelsFlag = false;
+  mocks.memberExtra = {};
 });
 afterEach(cleanup);
 
@@ -425,5 +434,44 @@ describe('SpaceChatPanel in a channel (GEO-3818)', () => {
       <SpaceChatPanel spaceId={SPACE} channel={channel({ post_policy: 'everyone_signed_in', can_post: false })} />
     );
     expect(screen.getByText(SPACE_CHAT_COPY.signedOutAnyone)).toBeInTheDocument();
+  });
+});
+
+describe('SpaceChatPanel in a call, where #general has channel rules (GEO-3818)', () => {
+  const editorsPost = { name: 'general', post_policy: 'editors_only', can_post: false, can_reply: true };
+
+  it('gives a member the replies-only line with the channels flag on', () => {
+    mocks.authenticated = true;
+    mocks.channelsFlag = true;
+    mocks.access = { isMember: true, isEditor: false, canEdit: false, isLoading: false };
+    mocks.memberExtra = editorsPost;
+    render(<SpaceChatPanel spaceId={SPACE} roomId="room" />);
+    expect(screen.getByText('Editors post in # general. Members can reply to a message.')).toBeInTheDocument();
+    expect(joinButton()).not.toBeInTheDocument();
+    expect(screen.queryByText(SPACE_CHAT_COPY.joining)).not.toBeInTheDocument();
+    // In-call copy stays its own.
+    expect(screen.queryByText('No messages in #general yet. Say hello.')).not.toBeInTheDocument();
+  });
+
+  it('counts down in slow mode with the channels flag on', async () => {
+    mocks.authenticated = true;
+    mocks.channelsFlag = true;
+    mocks.canPost = true;
+    mocks.memberExtra = { name: 'general', slow_mode: true };
+    mocks.send.mockRejectedValue(new GeoChatRequestError('slow', 'slow_mode', 429, 5_000));
+    render(<SpaceChatPanel spaceId={SPACE} roomId="room" />);
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'again' } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: SPACE_CHAT_VIEW_COPY.send }));
+    });
+    expect(screen.getByRole('status')).toHaveTextContent('Slow mode is on. You can send again in 5s.');
+  });
+
+  it('behaves as before channels with the flag off', () => {
+    mocks.authenticated = true;
+    mocks.memberExtra = editorsPost;
+    render(<SpaceChatPanel spaceId={SPACE} roomId="room" />);
+    expect(screen.queryByText('Editors post in # general. Members can reply to a message.')).not.toBeInTheDocument();
+    expect(joinButton()).toBeInTheDocument();
   });
 });

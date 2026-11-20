@@ -21,6 +21,7 @@ import { mentionedIds } from '~/core/space-chat/mentions';
 import { type ChatPerson, unknownPerson, useChatPeople, useSpaceChatParticipants } from '~/core/space-chat/people';
 import { spaceChatTabPath } from '~/core/space-chat/routes';
 import { type SpaceChatState, shownReactions } from '~/core/space-chat/state';
+import { useFeatureFlag } from '~/core/state/feature-flags';
 import { normId } from '~/core/utils/norm-id';
 
 import { SpaceChatView } from './space-chat-view';
@@ -82,14 +83,19 @@ export function SpaceChatPanel({
   // With a channel, the same list the channel view reads.
   const rooms = useSpaceChatRooms(spaceId, true, { includeArchived: channel !== null });
   const listed = channel ?? rooms.memberRoom;
-  const membership = useChatMembership(spaceId, listed?.can_post === true, settingUp, rooms.refetch);
+  // Channel rules (replies-only, slow mode, archived) apply on the Chat tab and, with the flag, in
+  // calls; with the flag off a call's chat behaves as before channels.
+  const channelsFlag = useFeatureFlag('spaceChannels');
+  const rules = channel !== null || channelsFlag ? listed : null;
+  const mayWrite = listed?.can_post === true || rules?.can_reply === true;
+  const membership = useChatMembership(spaceId, mayWrite, settingUp, rooms.refetch);
   const room = React.useMemo(
     () => listed ?? (knownRoomId ? { id: knownRoomId, space_id: spaceId, kind: 'member' as const } : null),
     [knownRoomId, listed, spaceId]
   );
   // Slow mode: an editor is exempt; anyone else waits after each send, or as long as a refusal says.
   const [cooldownUntil, setCooldownUntil] = React.useState<number | null>(null);
-  const slowed = channel?.slow_mode === true && channel.can_moderate !== true;
+  const slowed = rules?.slow_mode === true && rules.can_moderate !== true;
   const onSent = React.useCallback(() => {
     if (slowed) setCooldownUntil(Date.now() + SLOW_MODE_MS);
   }, [slowed]);
@@ -137,12 +143,14 @@ export function SpaceChatPanel({
   }
 
   // An account geo-chat is still setting up reads the public way and writes nothing.
-  const archived = listed?.archived === true;
+  const archived = rules?.archived === true;
   const writer = authenticated && !settingUp && !archived;
   const canPost = writer && listed?.can_post === true;
   // Replying and reacting: `can_reply` from a geo-chat with channels, else the same as posting.
-  const canReply = writer && (listed?.can_reply ?? listed?.can_post) === true;
+  const canReply = writer && (rules ? (rules.can_reply ?? rules.can_post) : listed?.can_post) === true;
+  // Named copy (placeholder, empty line) is the Chat tab's; the in-call chat keeps its own.
   const name = channel ? channelName(channel) : null;
+  const ruleName = rules ? channelName(rules) : null;
   const postComposer = {
     kind: 'post' as const,
     onSend: send,
@@ -155,8 +163,8 @@ export function SpaceChatPanel({
     ? { kind: 'closed', reason: SPACE_CHAT_COPY.archived }
     : canPost
       ? postComposer
-      : canReply && name
-        ? { ...postComposer, repliesOnly: SPACE_CHAT_COPY.repliesOnly(name) }
+      : canReply && ruleName
+        ? { ...postComposer, repliesOnly: SPACE_CHAT_COPY.repliesOnly(ruleName) }
         : composerWithoutPosting();
   function composerWithoutPosting(): ChatViewComposer {
     return !authReady
@@ -167,7 +175,7 @@ export function SpaceChatPanel({
           ? {
               kind: 'sign_in',
               label:
-                channel && postPolicy(channel) === 'everyone_signed_in'
+                rules && postPolicy(rules) === 'everyone_signed_in'
                   ? SPACE_CHAT_COPY.signedOutAnyone
                   : SPACE_CHAT_COPY.signedOut(membership.spaceName),
               onSignIn: () => void signIn(),
