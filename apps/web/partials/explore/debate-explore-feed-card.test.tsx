@@ -4,12 +4,12 @@ import { act, cleanup, createEvent, fireEvent, render, screen } from '@testing-l
 
 import * as React from 'react';
 
-import { Provider, useAtomValue, useSetAtom } from 'jotai';
+import { Provider, createStore, useAtomValue, useSetAtom } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Debate } from '~/core/debates/api';
 import { DEBATE_CARD_WRAPS_BELOW, debateCardColumnWidth } from '~/core/debates/browse/debate-card-column-width';
-import { DebatePlaybackGate } from '~/core/debates/debate-playback-gate';
+import { DebateFeedAutoplay, tappedDebateAtom } from '~/core/debates/debate-playback-gate';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { InsideMobileSheet } from '~/core/state/mobile-sheet-cover';
 import { lockMobileSheetDocumentOverscroll } from '~/core/utils/mobile-sheet-drag';
@@ -105,6 +105,8 @@ vi.mock('~/core/debates/browse/debate-feed-player', async () => {
       reducedOverlays,
       framed,
       onOpenClaims,
+      tapToPlay,
+      onPlaybackRequest,
     }: {
       debate: Debate;
       active: boolean;
@@ -114,13 +116,22 @@ vi.mock('~/core/debates/browse/debate-feed-player', async () => {
       reducedOverlays?: boolean;
       framed?: boolean;
       onOpenClaims?: () => void;
+      tapToPlay?: boolean;
+      onPlaybackRequest?: () => void;
     }) => (
       <>
+        {/* The real player's Play on a card waiting for a tap: it calls `onPlaybackRequest`. */}
+        {tapToPlay && !active ? (
+          <button type="button" data-testid="player-play" onClick={() => onPlaybackRequest?.()}>
+            Play debate
+          </button>
+        ) : null}
         <button
           type="button"
           data-testid="player"
           data-debate={debate.id}
           data-active={active}
+          data-tap-to-play={tapToPlay ? 'true' : 'false'}
           data-release-media={releaseMedia ? 'true' : 'false'}
           data-buffer={buffer ? 'true' : 'false'}
           data-hold-full-playback={holdFullPlayback ? 'true' : 'false'}
@@ -366,19 +377,20 @@ function CommentsPanelProbe() {
 // so the harness has to provide one too, or the double is laxer than the real tree.
 let client: QueryClient;
 
+/** In a feed by default, where the card's own visibility decides; `feed: false` is every other surface. */
 function CardHarness({
   props,
-  allowedId,
+  feed = true,
 }: {
   props: Partial<React.ComponentProps<typeof DebateExploreFeedCard>>;
-  allowedId?: string | null;
+  feed?: boolean;
 }) {
   const card = <DebateExploreFeedCard item={item} fallback={<div data-testid="fallback" />} {...props} />;
 
   return (
     <QueryClientProvider client={client}>
       <Provider>
-        {allowedId === undefined ? card : <DebatePlaybackGate allowedId={allowedId}>{card}</DebatePlaybackGate>}
+        {feed ? <DebateFeedAutoplay>{card}</DebateFeedAutoplay> : card}
         <ExploreDebateClaimsPanelHost />
         <PanelProbe />
         <CommentsPanelProbe />
@@ -387,14 +399,11 @@ function CardHarness({
   );
 }
 
-function renderCard(
-  props: Partial<React.ComponentProps<typeof DebateExploreFeedCard>> = {},
-  allowedId?: string | null
-) {
-  const result = render(<CardHarness props={props} allowedId={allowedId} />);
+function renderCard(props: Partial<React.ComponentProps<typeof DebateExploreFeedCard>> = {}, feed = true) {
+  const result = render(<CardHarness props={props} feed={feed} />);
   return {
     ...result,
-    rerenderCard: () => result.rerender(<CardHarness props={props} allowedId={allowedId} />),
+    rerenderCard: () => result.rerender(<CardHarness props={props} feed={feed} />),
   };
 }
 
@@ -600,8 +609,10 @@ describe('DebateExploreFeedCard', () => {
     const { container } = render(
       <QueryClientProvider client={client}>
         <Provider>
-          <DebateExploreFeedCard item={item} fallback={<div />} />
-          <DebateExploreFeedCard item={{ ...item, entityId: 'debate-two' }} fallback={<div />} />
+          <DebateFeedAutoplay>
+            <DebateExploreFeedCard item={item} fallback={<div />} />
+            <DebateExploreFeedCard item={{ ...item, entityId: 'debate-two' }} fallback={<div />} />
+          </DebateFeedAutoplay>
         </Provider>
       </QueryClientProvider>
     );
@@ -781,137 +792,43 @@ describe('DebateExploreFeedCard', () => {
     });
   });
 
-  it('requests playback before a player interaction', () => {
-    mocks.debateQuery = { data: watchableDebate(), isError: false };
-    mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
-    const onPlaybackRequest = vi.fn();
-    renderCard({ onPlaybackRequest });
-    intersectAll(0.7);
-
-    const player = screen.getByTestId('player');
-    fireEvent.click(player);
-    expect(onPlaybackRequest).toHaveBeenCalledWith('fd51f935-2063-4617-8039-7b672b23364c');
-    expect(mocks.playerToggle).toHaveBeenCalledOnce();
-  });
-
-  it('consumes an active non-owner click while transferring playback ownership', () => {
-    mocks.debateQuery = { data: watchableDebate(), isError: false };
-    mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
-    const onPlaybackRequest = vi.fn();
-    renderCard({ onPlaybackRequest }, 'another-debate');
-    intersectAll(0.7);
-
-    expect(screen.getByTestId('player')).toHaveAttribute('data-active', 'false');
-    fireEvent.click(screen.getByTestId('player'));
-
-    expect(onPlaybackRequest).toHaveBeenCalledWith('fd51f935-2063-4617-8039-7b672b23364c');
-    expect(mocks.playerToggle).not.toHaveBeenCalled();
-  });
-
-  describe('while another debate holds playback', () => {
-    // A finished debate's end card is drawn inside the capture wrapper, but only its replay is an ask
-    // to play. The rest used to be swallowed as a playback handoff, so a vote was never cast.
-    const nonOwner = () => {
+  describe('while its debate has ended', () => {
+    // A finished debate's end card is drawn inside the media wrapper, but only its replay is an ask
+    // to play; the rest of it must reach its own handlers without bringing the card into view.
+    const ended = () => {
       mocks.debateQuery = { data: watchableDebate(), isError: false };
       mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
       mocks.withEndCard = true;
-      const onPlaybackRequest = vi.fn();
-      renderCard({ onPlaybackRequest }, 'another-debate');
-      intersectAll(0.7);
-      return onPlaybackRequest;
+      const { container } = renderCard();
+      intersectAll(0.3);
+      const scrollIntoView = vi.fn();
+      Object.defineProperty(container.querySelector('article'), 'scrollIntoView', { value: scrollIntoView });
+      return scrollIntoView;
     };
 
     it("lets the end card's own controls through", () => {
-      const onPlaybackRequest = nonOwner();
+      const scrollIntoView = ended();
       fireEvent.click(screen.getByTestId('end-card-vote'));
 
       expect(mocks.endCardVote).toHaveBeenCalledTimes(1);
-      expect(onPlaybackRequest).not.toHaveBeenCalled();
+      expect(scrollIntoView).not.toHaveBeenCalled();
     });
 
     it('lets a popover portalled out of the card through, though React bubbles its clicks here', () => {
-      const onPlaybackRequest = nonOwner();
+      const scrollIntoView = ended();
       fireEvent.click(screen.getByTestId('end-card-portalled'));
 
       expect(mocks.portalledClick).toHaveBeenCalledTimes(1);
-      expect(onPlaybackRequest).not.toHaveBeenCalled();
+      expect(scrollIntoView).not.toHaveBeenCalled();
     });
 
-    it('hands playback over on Replay and lets the press reach the player', () => {
-      // Replay is the one ask to play on the card, so it transfers ownership — and the press goes
-      // through, where the player holds it until playback arrives. Swallowing it here left an ended
-      // debate with nothing to resume it, so Replay took a second tap.
-      const onPlaybackRequest = nonOwner();
+    it('brings the card into view on Replay and lets the press reach the player', () => {
+      const scrollIntoView = ended();
       fireEvent.click(screen.getByTestId('end-card-replay'));
 
-      expect(onPlaybackRequest).toHaveBeenCalledWith('fd51f935-2063-4617-8039-7b672b23364c');
       expect(mocks.endCardReplay).toHaveBeenCalledTimes(1);
+      expect(scrollIntoView).toHaveBeenCalledOnce();
     });
-  });
-
-  it('brings an inactive player into view before requesting playback', () => {
-    mocks.debateQuery = { data: watchableDebate(), isError: false };
-    mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
-    const onPlaybackRequest = vi.fn();
-    const { container } = renderCard({ onPlaybackRequest });
-
-    // The media look-ahead mounts the player before the card is active. Clicking that visible
-    // edge must not transfer the gate to a player which will immediately pause itself.
-    intersectAll(0.1);
-    const card = container.querySelector('article');
-    expect(card).not.toBeNull();
-    const scrollIntoView = vi.fn();
-    Object.defineProperty(card, 'scrollIntoView', { configurable: true, value: scrollIntoView });
-
-    fireEvent.click(screen.getByTestId('player'));
-    expect(onPlaybackRequest).not.toHaveBeenCalled();
-    expect(mocks.playerToggle).not.toHaveBeenCalled();
-    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-
-    // Ownership transfers only after the observer confirms that the clicked player can run.
-    intersectAll(0.6);
-    expect(onPlaybackRequest).toHaveBeenCalledWith('fd51f935-2063-4617-8039-7b672b23364c');
-  });
-
-  it('registers playback availability only while a playable player is mounted', () => {
-    mocks.debateQuery = { data: watchableDebate(), isError: false };
-    mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
-    const onPlaybackAvailabilityChange = vi.fn();
-    renderCard({ onPlaybackAvailabilityChange });
-    expect(onPlaybackAvailabilityChange).not.toHaveBeenCalled();
-
-    intersectAll(0.1);
-    expect(onPlaybackAvailabilityChange).toHaveBeenLastCalledWith('fd51f935-2063-4617-8039-7b672b23364c', true);
-
-    intersectAll(0);
-    expect(onPlaybackAvailabilityChange).toHaveBeenLastCalledWith('fd51f935-2063-4617-8039-7b672b23364c', false);
-  });
-
-  it('unregisters stale playable data when a refetch replaces the player with fallback', () => {
-    mocks.debateQuery = { data: watchableDebate(), isError: false };
-    mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
-    const onPlaybackAvailabilityChange = vi.fn();
-    const view = renderCard({ onPlaybackAvailabilityChange });
-    intersectAll(0.7);
-    expect(onPlaybackAvailabilityChange).toHaveBeenLastCalledWith('fd51f935-2063-4617-8039-7b672b23364c', true);
-
-    // TanStack Query retains the previous data when a background refetch fails.
-    mocks.debateQuery = { data: watchableDebate(), isError: true };
-    view.rerenderCard();
-
-    expect(screen.getByTestId('fallback')).toBeInTheDocument();
-    expect(onPlaybackAvailabilityChange).toHaveBeenLastCalledWith('fd51f935-2063-4617-8039-7b672b23364c', false);
-  });
-
-  it('does not request playback from a loading skeleton that may resolve to the fallback', () => {
-    const onPlaybackRequest = vi.fn();
-    const { container } = renderCard({ onPlaybackRequest });
-
-    const skeleton = container.querySelector<HTMLElement>('[aria-hidden="true"] .animate-pulse')?.parentElement;
-    expect(skeleton).not.toBeNull();
-    fireEvent.click(skeleton as HTMLElement);
-
-    expect(onPlaybackRequest).not.toHaveBeenCalled();
   });
 
   it('evicts the player outside the media window and remounts it on reverse scroll', () => {
@@ -1333,5 +1250,227 @@ describe('DebateExploreFeedCard', () => {
 
       expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent(item.title);
     });
+  });
+});
+
+describe('DebateExploreFeedCard outside a feed (GEO-3812)', () => {
+  // jsdom has no scrolling; a tap on a card short of the active range asks for one.
+  beforeEach(() => {
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { configurable: true, value: vi.fn() });
+  });
+  afterEach(() => {
+    delete (HTMLElement.prototype as Partial<HTMLElement>).scrollIntoView;
+  });
+
+  const ready = () => {
+    mocks.debateQuery = { data: watchableDebate(), isError: false };
+    mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
+  };
+  const player = () => screen.getByTestId('player');
+  const tapPlay = () => fireEvent.click(screen.getByTestId('player-play'));
+
+  it('does not play in full view until it is tapped, and then plays', () => {
+    ready();
+    renderCard({}, false);
+    intersectAll(1);
+
+    expect(player()).toHaveAttribute('data-tap-to-play', 'true');
+    expect(player()).toHaveAttribute('data-active', 'false');
+
+    tapPlay();
+    expect(player()).toHaveAttribute('data-active', 'true');
+  });
+
+  it('keeps its media only while on screen, and never buffers ahead', () => {
+    ready();
+    renderCard({}, false);
+    intersectAll(0.7);
+    intersectUpNext(900);
+    expect(player()).toHaveAttribute('data-release-media', 'false');
+    expect(player()).toHaveAttribute('data-buffer', 'false');
+
+    // Desktop too: nothing here plays next by itself, so an off-screen card holds nothing.
+    intersectOnScreen(0);
+    expect(player()).toHaveAttribute('data-release-media', 'true');
+  });
+
+  it('lets a feed card take a click on its media as before, without anything to tap', () => {
+    ready();
+    renderCard();
+    intersectAll(0.7);
+
+    expect(player()).toHaveAttribute('data-tap-to-play', 'false');
+    expect(screen.queryByTestId('player-play')).toBeNull();
+    expect(player()).toHaveAttribute('data-active', 'true');
+  });
+
+  it('plays a card tapped while partly in view at once, and brings it into view', () => {
+    ready();
+    const { container } = renderCard({}, false);
+    intersectAll(0.3);
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(container.querySelector('article'), 'scrollIntoView', { value: scrollIntoView });
+
+    tapPlay();
+
+    expect(player()).toHaveAttribute('data-active', 'true');
+    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+  });
+
+  it('lets the tap go when the card scrolls away, so it does not resume on the way back', () => {
+    ready();
+    renderCard({}, false);
+    intersectAll(0.7);
+    tapPlay();
+    expect(player()).toHaveAttribute('data-active', 'true');
+
+    intersectOnScreen(0);
+    expect(player()).toHaveAttribute('data-active', 'false');
+
+    intersectOnScreen(0.7);
+    expect(player()).toHaveAttribute('data-active', 'false');
+    expect(screen.getByTestId('player-play')).toBeInTheDocument();
+  });
+
+  it('lets the tap go when the card drops out of the range it played in', () => {
+    ready();
+    renderCard({}, false);
+    intersectAll(0.7);
+    tapPlay();
+
+    intersectOnScreen(0.4);
+    expect(player()).toHaveAttribute('data-active', 'false');
+    intersectOnScreen(0.7);
+    expect(player()).toHaveAttribute('data-active', 'false');
+  });
+
+  it('lets a tap go that the card scrolled away from before it ever reached view', () => {
+    ready();
+    renderCard({}, false);
+    intersectAll(0.3);
+    tapPlay();
+
+    intersectOnScreen(0);
+    intersectOnScreen(0.7);
+
+    expect(player()).toHaveAttribute('data-active', 'false');
+  });
+
+  it('lets the tap go behind a sheet, and does not resume when it closes', () => {
+    ready();
+    renderCard({}, false);
+    intersectAll(0.7);
+    tapPlay();
+
+    let closeSheet = () => {};
+    act(() => {
+      closeSheet = lockMobileSheetDocumentOverscroll();
+    });
+    try {
+      expect(player()).toHaveAttribute('data-active', 'false');
+    } finally {
+      act(() => closeSheet());
+    }
+    expect(player()).toHaveAttribute('data-active', 'false');
+  });
+
+  function renderTwo(second: { feed: boolean; entityId: string }) {
+    const store = createStore();
+    const secondCard = <DebateExploreFeedCard item={{ ...item, entityId: second.entityId }} fallback={<div />} />;
+    const view = render(
+      <QueryClientProvider client={client}>
+        <Provider store={store}>
+          <DebateExploreFeedCard item={item} fallback={<div />} />
+          {second.feed ? <DebateFeedAutoplay>{secondCard}</DebateFeedAutoplay> : secondCard}
+        </Provider>
+      </QueryClientProvider>
+    );
+    intersectAll(0.7);
+    return { store, ...view };
+  }
+
+  it('stops the first tapped card when a second is tapped', () => {
+    ready();
+    renderTwo({ feed: false, entityId: 'debate-two' });
+    const [first, second] = screen.getAllByTestId('player-play');
+
+    fireEvent.click(first);
+    const [firstPlayer, secondPlayer] = screen.getAllByTestId('player');
+    expect(firstPlayer).toHaveAttribute('data-active', 'true');
+
+    fireEvent.click(second);
+    expect(firstPlayer).toHaveAttribute('data-active', 'false');
+    expect(secondPlayer).toHaveAttribute('data-active', 'true');
+  });
+
+  it('plays the same debate only on the card it was tapped on', () => {
+    ready();
+    // The same debate on two surfaces at once, as on a profile's Debates tab and its Activity.
+    renderTwo({ feed: false, entityId: item.entityId });
+    fireEvent.click(screen.getAllByTestId('player-play')[1]);
+
+    const [firstPlayer, secondPlayer] = screen.getAllByTestId('player');
+    expect(firstPlayer).toHaveAttribute('data-active', 'false');
+    expect(secondPlayer).toHaveAttribute('data-active', 'true');
+  });
+
+  it('pauses a feed card while a debate tapped outside the feed plays, and gives it back after', () => {
+    ready();
+    const { container } = renderTwo({ feed: true, entityId: 'debate-two' });
+    const [tapCard] = container.querySelectorAll('article');
+    const [tapPlayer, feedPlayer] = screen.getAllByTestId('player');
+    expect(feedPlayer).toHaveAttribute('data-active', 'true');
+
+    fireEvent.click(screen.getByTestId('player-play'));
+    expect(tapPlayer).toHaveAttribute('data-active', 'true');
+    expect(feedPlayer).toHaveAttribute('data-active', 'false');
+
+    intersectOnScreen(0, tapCard);
+    expect(feedPlayer).toHaveAttribute('data-active', 'true');
+  });
+
+  it('gives the tap up on unmount, so the card remounted on the way back does not play', () => {
+    ready();
+    const store = createStore();
+    const tree = (shown: boolean) => (
+      <QueryClientProvider client={client}>
+        <Provider store={store}>{shown ? <DebateExploreFeedCard item={item} fallback={<div />} /> : null}</Provider>
+      </QueryClientProvider>
+    );
+    const view = render(tree(true));
+    intersectAll(0.7);
+    tapPlay();
+    expect(store.get(tappedDebateAtom)).not.toBeNull();
+
+    view.rerender(tree(false));
+    expect(store.get(tappedDebateAtom)).toBeNull();
+
+    view.rerender(tree(true));
+    intersectAll(0.7);
+    expect(player()).toHaveAttribute('data-active', 'false');
+  });
+
+  it('plays a compact gallery card from its tap too', () => {
+    ready();
+    renderCard({ compactChrome: true }, false);
+    intersectAll(1);
+    expect(player()).toHaveAttribute('data-active', 'false');
+
+    tapPlay();
+    expect(player()).toHaveAttribute('data-active', 'true');
+  });
+
+  it('leaves clicks on its media to the player, which alone says what asks to play', () => {
+    ready();
+    const { container } = renderCard({}, false);
+    intersectAll(0.3);
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(container.querySelector('article'), 'scrollIntoView', { value: scrollIntoView });
+
+    fireEvent.click(player());
+
+    expect(mocks.playerToggle).toHaveBeenCalledOnce();
+    expect(scrollIntoView).not.toHaveBeenCalled();
+    expect(player()).toHaveAttribute('data-active', 'false');
   });
 });
