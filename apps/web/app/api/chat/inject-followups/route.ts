@@ -5,10 +5,9 @@
 import { createAnthropic } from '@ai-sdk/anthropic';
 
 import { generateObject, jsonSchema } from 'ai';
-import { cookies } from 'next/headers';
 
+import { readWalletSessionLowercase } from '~/core/auth/server/wallet-session';
 import type { InjectType } from '~/core/chat/inject-types';
-import { WALLET_ADDRESS } from '~/core/cookie';
 
 import { logCallCost } from '../cost';
 import { FOLLOW_UPS_MODEL } from '../models';
@@ -40,12 +39,6 @@ function isSameOrigin(req: Request): boolean {
   } catch {
     return false;
   }
-}
-
-function parseWalletCookie(raw: string | undefined): string | null {
-  if (!raw) return null;
-  const lower = raw.toLowerCase();
-  return /^0x[0-9a-f]{40}$/.test(lower) ? lower : null;
 }
 
 function getClientIp(req: Request): string {
@@ -88,8 +81,7 @@ export async function POST(req: Request) {
     return jsonError(403, 'Forbidden');
   }
 
-  const cookieStore = await cookies();
-  const wallet = parseWalletCookie(cookieStore.get(WALLET_ADDRESS)?.value);
+  const wallet = await readWalletSessionLowercase();
   if (!wallet) {
     return jsonError(401, 'Sign in to use inject.');
   }

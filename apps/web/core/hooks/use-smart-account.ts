@@ -6,11 +6,10 @@ import { useQuery } from '@tanstack/react-query';
 
 import * as React from 'react';
 
+import { useWalletSessionSync } from '~/core/auth/wallet-session-sync';
 import { toViemAccount, usePrivy, useWallets } from '~/core/wallet/auth-hooks';
 import { embeddedWalletAddress, findEmbeddedWallet } from '~/core/wallet/embedded-wallet';
 
-import { forgetSyncedWalletCookie, syncWalletCookie } from '../cookie/sync-wallet-cookie';
-import { walletCookieQueryKey } from '../cookie/wallet-cookie-query-key';
 import { ReceiptConfirmationTimeoutError } from '../errors';
 import { GEO_NETWORK } from '../sdk/geo-network';
 import {
@@ -32,33 +31,42 @@ export function signingAccountDelayMs() {
   return allowed && ms > 0 ? ms : 0;
 }
 
-function useWalletCookieSync(address: `0x${string}` | null) {
+/** Bounds the wait for the server's wallet session, so a session that never syncs can't hold writes. */
+export const WALLET_SESSION_WAIT_MS = 10_000;
+
+/** When each address's wait started, shared so a later mount doesn't wait again. Resets with the page. */
+const waitStartedAt = new Map<string, number>();
+
+/** Whether writes may go: the server's session holds `address`, syncing gave up, or the wait ran out. */
+function useWalletSessionReady(address: `0x${string}` | null) {
+  const { settled } = useWalletSessionSync(address);
+  const [expiredFor, setExpiredFor] = React.useState<string | null>(null);
   React.useEffect(() => {
-    if (!address) forgetSyncedWalletCookie();
-  }, [address]);
-
-  const { isSuccess, isError, error } = useQuery({
-    queryKey: walletCookieQueryKey(address),
-    queryFn: async () => {
-      await syncWalletCookie(address!);
-      return address;
-    },
-    enabled: address !== null,
-    staleTime: Infinity,
-  });
-
-  React.useEffect(() => {
-    if (isError) console.error('[SMART-ACCOUNT] wallet cookie sync failed:', error);
-  }, [isError, error]);
-
-  return isSuccess || isError;
+    if (address === null) {
+      // Signed out: a later sign-in on this page waits afresh.
+      waitStartedAt.clear();
+      setExpiredFor(null);
+      return;
+    }
+    if (settled) return;
+    const startedAt = waitStartedAt.get(address) ?? Date.now();
+    waitStartedAt.set(address, startedAt);
+    const timer = setTimeout(() => setExpiredFor(address), startedAt + WALLET_SESSION_WAIT_MS - Date.now());
+    return () => clearTimeout(timer);
+  }, [address, settled]);
+  return address !== null && (settled || expiredFor === address);
 }
 
-/** The signing account, once it is built and the wallet cookie is synced. */
+/** Test seam. */
+export function resetWalletSessionWaitForTests() {
+  waitStartedAt.clear();
+}
+
+/** The signing account, once it is built and the server's wallet session holds it (bounded). */
 export function useSmartAccount() {
   const { ready, authenticated, user } = usePrivy();
   const { wallets } = useWallets();
-  const cookieSynced = useWalletCookieSync(authenticated ? embeddedWalletAddress(user) : null);
+  const sessionReady = useWalletSessionReady(authenticated ? embeddedWalletAddress(user) : null);
 
   // Privy embedded wallet — the EIP-7702 authority for the configured Geo chain. We need this
   // separately from the wagmi WalletClient because viem's signAuthorization rejects
@@ -245,7 +253,7 @@ export function useSmartAccount() {
       return wrapped;
     },
   });
-  const smartAccount = builtAccount && cookieSynced ? builtAccount : null;
+  const smartAccount = builtAccount && sessionReady ? builtAccount : null;
 
   if (error) {
     // Without this, an init failure (Privy signing, ZeroDev RPC, 7702 kernel

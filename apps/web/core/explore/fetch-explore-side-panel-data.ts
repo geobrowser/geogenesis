@@ -1,10 +1,8 @@
 import { cache } from 'react';
 
-import { cookies } from 'next/headers';
-
+import { readWalletSession } from '~/core/auth/server/wallet-session';
 import { resolveMemberSpaceFromWalletSafe } from '~/core/browse/resolve-member-space-from-wallet';
 import { type ExploreCall, fetchCommunityCallsForExplore } from '~/core/community-calls/fetch-community-calls';
-import { WALLET_ADDRESS } from '~/core/cookie';
 import { type FeaturedRanking, fetchFeaturedRankings } from '~/core/io/subgraph/fetch-featured-rankings';
 import { type FeaturedSpace, fetchFeaturedSpacesShared } from '~/core/io/subgraph/fetch-featured-spaces';
 import { fetchActiveMemberRequest } from '~/core/io/subgraph/fetch-proposed-members';
@@ -43,7 +41,7 @@ export const fetchExploreSidePanelData = cache(async (): Promise<ExploreSidePane
   const communityCallsPromise = communityCallsCache
     .get('explore', fetchCommunityCallsForExplore)
     .catch(() => [] as ExploreCall[]);
-  const wallet = (await cookies()).get(WALLET_ADDRESS)?.value ?? null;
+  const wallet = await readWalletSession();
   let memberSpaceId: string | null;
   try {
     memberSpaceId = wallet ? await resolveMemberSpaceFromWalletSafe(wallet) : null;

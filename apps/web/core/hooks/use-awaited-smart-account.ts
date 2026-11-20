@@ -1,18 +1,16 @@
 'use client';
 
-import { skipToken, useQuery } from '@tanstack/react-query';
-
 import * as React from 'react';
 
-import { walletCookieQueryKey } from '~/core/cookie/wallet-cookie-query-key';
+import { useWalletSessionSync } from '~/core/auth/wallet-session-sync';
 import { useAccountAddress } from '~/core/wallet/account-readiness';
 import { useIdentityToken, usePrivy } from '~/core/wallet/auth-hooks';
 
-/** Bounds the wait for a signed-in account, so a stale wallet cookie can't hold the page up. */
+/** Bounds the wait for a signed-in account, so a stale wallet session can't hold the page up. */
 export const SIGNED_IN_ACCOUNT_WAIT_MS = 5_000;
 
 /**
- * Whether Privy has finished restoring and found no session. The wallet cookie outlives the Privy
+ * Whether Privy has finished restoring and found no session. The wallet session outlives the Privy
  * session (it is cleared on logout, not on expiry), so a reader whose session lapsed still carries
  * it; without this every wait below ran its full `SIGNED_IN_ACCOUNT_WAIT_MS` on every page load,
  * with the feed held on skeletons the whole time. `ready` comes well under a second in, and before
@@ -23,32 +21,13 @@ function usePrivySignedOut() {
   return ready && !authenticated;
 }
 
-/** Only once per page: the route is a no-op when the cookie is already gone. */
-let staleWalletCookieCleared = false;
-
-/**
- * Drops a wallet cookie Privy no longer has a session for, so the next load is served as the
- * signed-out reader this is (the cached public feed, no waits). A route rather than the
- * `onConnectionChange` Server Action, because a cookie write in a Server Action re-renders the
- * current page from the server, which would swap the feed under the reader.
- */
-function useClearStaleWalletCookie(cookieAddress: string | null, signedOut: boolean) {
-  React.useEffect(() => {
-    if (!signedOut || cookieAddress === null || staleWalletCookieCleared) return;
-    staleWalletCookieCleared = true;
-    fetch('/api/wallet-cookie', { method: 'DELETE' }).catch(() => {
-      staleWalletCookieCleared = false;
-    });
-  }, [cookieAddress, signedOut]);
-}
-
 /**
  * The smart-account address, and whether a reader we believe is signed in is still waiting for it.
  *
  * Privy restores the wallet a beat after hydration, so on the first renders a signed-in reader's
  * account reads as null, exactly like a signed-out one. A query keyed on the address then runs
  * anonymously, renders, and runs again once the address arrives — two requests and a flash of the
- * wrong content. `signedIn` comes from the httpOnly wallet cookie, which the server can read before
+ * wrong content. `signedIn` comes from the verified wallet session, which the server can read before
  * Privy can; while it is set and the account has not resolved, `awaitingAccount` is true, for at
  * most `SIGNED_IN_ACCOUNT_WAIT_MS`.
  */
@@ -67,44 +46,37 @@ export function useAwaitedSmartAccount(signedIn: boolean) {
   return { smartAccountAddress, awaitingAccount };
 }
 
-/** Whether the wallet cookie now holds this address, so the server reads it too. `useSmartAccount` runs the sync. */
-function useWalletCookieSynced(address: string | null) {
-  const { isSuccess } = useQuery({ queryKey: walletCookieQueryKey(address), queryFn: skipToken });
-  return address !== null && isSuccess;
-}
-
 /**
  * The address a feed request is made for, and whether that request must wait before it is sent.
  *
  * Unlike `useAwaitedSmartAccount`, this does not wait for the account. The feed routes read the
- * wallet cookie themselves, so on the client the address only keys the cache, and it must be the
- * address the server reads. The restored account replaces the cookie's address only once the cookie
- * holds it; until then a missing or previous viewer's cookie would be answered for someone else.
- * Seeding the key from the cookie lets the first page go out at hydration, and when the cookie already
- * matches it stays the same key when the account arrives, so nothing refetches.
+ * wallet session themselves, so on the client the address only keys the cache, and it must be the
+ * address the server reads. The restored account replaces the session's address only once the
+ * server's session holds it; until then a missing or previous viewer's session would be answered for
+ * someone else. Seeding the key from the session lets the first page go out at hydration, and when it
+ * already matches it stays the same key when the account arrives, so nothing refetches.
  *
  * A request that carries a Privy identity token (`needsIdentityToken`) still has to wait, but only
  * for that token, which Privy restores without building the account; at most
  * `SIGNED_IN_ACCOUNT_WAIT_MS`, after which it goes without one. It stops waiting as soon as Privy
- * has restored and found no session, and clears the stale cookie that started the wait.
+ * has restored and found no session (`WalletSessionSync` then clears the stale session).
  */
-export function useFeedViewer(cookieAddress: string | null, needsIdentityToken: boolean) {
+export function useFeedViewer(sessionAddress: string | null, needsIdentityToken: boolean) {
   const { identityToken } = useIdentityToken();
   const accountAddress = useAccountAddress();
-  const cookieSynced = useWalletCookieSynced(accountAddress);
+  const { synced } = useWalletSessionSync(accountAddress);
   const smartAccountAddress =
-    accountAddress && cookieAddress?.toLowerCase() === accountAddress.toLowerCase()
-      ? cookieAddress
-      : cookieSynced
+    accountAddress && sessionAddress?.toLowerCase() === accountAddress.toLowerCase()
+      ? sessionAddress
+      : synced
         ? accountAddress
         : null;
   const signedOut = usePrivySignedOut();
-  useClearStaleWalletCookie(cookieAddress, signedOut);
 
   const [waitOver, setWaitOver] = React.useState(false);
   const awaitingIdentityToken =
     needsIdentityToken &&
-    cookieAddress !== null &&
+    sessionAddress !== null &&
     !signedOut &&
     smartAccountAddress === null &&
     identityToken === null &&
@@ -115,5 +87,5 @@ export function useFeedViewer(cookieAddress: string | null, needsIdentityToken: 
     return () => clearTimeout(timer);
   }, [awaitingIdentityToken]);
 
-  return { viewerAddress: smartAccountAddress ?? cookieAddress, awaitingIdentityToken };
+  return { viewerAddress: smartAccountAddress ?? sessionAddress, awaitingIdentityToken };
 }
