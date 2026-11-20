@@ -5,7 +5,8 @@ import { useQueryClient } from '@tanstack/react-query';
 import * as React from 'react';
 
 import { capture } from '~/core/analytics';
-import { EditMomentsMenuItem } from '~/core/debates/browse/edit-moments-menu-item';
+import { DEBATE_MENU_ITEM_CLASS, EditMomentsMenuItem } from '~/core/debates/browse/edit-moments-menu-item';
+import { COPY_LINK_LABEL } from '~/core/debates/browse/use-copy-debate-link';
 import { momentsEditorTabPath } from '~/core/debates/debate-routes';
 import { useMomentBackfill } from '~/core/debates/moments-editor/hooks';
 import { reelJob } from '~/core/debates/moments-editor/reel-status';
@@ -26,21 +27,27 @@ export const NEW_REEL_LIVE_COPY = 'New reel is live';
 export const REEL_RENDER_FAILED_COPY = 'Reel render failed – open Edit moments';
 
 /**
- * The watch popup's "…" (GEO-3742): "Edit moments", which opens the moments editor in a tab of its
- * own, so the ranking tab (the popup, its tab or filter, its scroll, an unpublished draft) is never
- * touched; the editor's Done closes that tab. The popup draws it only for media admins on desktop
- * (`WatchDebateDialog`), as the feed's host does for `DebateOverflowMenu`.
+ * The watch popup's "…": "Copy link" for everyone, phone included (GEO-3809), and for media admins
+ * on desktop "Edit moments" (GEO-3742), which opens the moments editor in a tab of its own, so the
+ * ranking tab (the popup, its tab or filter, its scroll, an unpublished draft) is never touched; the
+ * editor's Done closes that tab. The host (`WatchDebateDialog`) decides `canEditMoments`, as the
+ * feed's host does for `DebateOverflowMenu`.
  */
-export function EditMomentsMenu({
+export function DebateWatchMenu({
   entityId,
   spaceId,
-  onOpen,
+  canEditMoments,
+  onCopyLink,
+  onEditMoments,
 }: {
   entityId: string;
   /** The debate's space, for the editor's path. */
   spaceId: string;
+  /** Media admins on desktop only: the editor has no phone layout (GEO-3744). */
+  canEditMoments: boolean;
+  onCopyLink: () => void;
   /** The editor was opened for this debate: the popup watches for the new reel. */
-  onOpen: (entityId: string) => void;
+  onEditMoments: (entityId: string) => void;
 }) {
   const [open, setOpen] = React.useState(false);
   const triggerRef = React.useRef<HTMLButtonElement | null>(null);
@@ -55,15 +62,29 @@ export function EditMomentsMenu({
       triggerRef={triggerRef}
       trigger={<SquareButton ref={triggerRef} icon={<Ellipsis />} aria-label="More debate options" />}
     >
-      <EditMomentsMenuItem
+      <button
+        type="button"
+        className={DEBATE_MENU_ITEM_CLASS}
+        data-geo-analytics-label="Copy link"
+        data-geo-analytics-intent="debate_action"
         onClick={() => {
           setOpen(false);
-          onOpen(entityId);
-          // No opener, like the app's other new tabs; a noopener tab is still one a script opened, so Done
-          // can close it (checked in Chromium).
-          window.open(momentsEditorTabPath(spaceId, debateUuid(entityId)), '_blank', 'noopener');
+          onCopyLink();
         }}
-      />
+      >
+        {COPY_LINK_LABEL}
+      </button>
+      {canEditMoments ? (
+        <EditMomentsMenuItem
+          onClick={() => {
+            setOpen(false);
+            onEditMoments(entityId);
+            // No opener, like the app's other new tabs; a noopener tab is still one a script opened, so
+            // Done can close it (checked in Chromium).
+            window.open(momentsEditorTabPath(spaceId, debateUuid(entityId)), '_blank', 'noopener');
+          }}
+        />
+      ) : null}
     </Menu>
   );
 }

@@ -8,6 +8,7 @@ import {
   type ReelWord,
   clipProblems,
   clipQuote,
+  clipRoundLabel,
   clipSpeaker,
   clipsFromLiveReel,
   clipsFromServedMoments,
@@ -676,5 +677,48 @@ describe('selectionToClip (GEO-3766)', () => {
     // Slot 2's two blanks inside "Yes." outnumber slot 1's one word, but only "Yes." is heard.
     const blanks = heard([word(1, 1_100, 1_400, 'Yes.'), word(2, 1_150, 1_200, ' '), word(2, 1_300, 1_400, ' ')]);
     expect(selectionToClip(blanks, 0, 0, [])).toMatchObject({ ok: true, speaker: 1, otherWords: 0 });
+  });
+});
+
+describe('clipRoundLabel', () => {
+  // The fixture's turns on the player's clock: 0 and 1 (Round 1) run 0–120 s, 2 and 3 (Round 2)
+  // 128–218 s, 4 and 5 (Round 3) from 229.95 s.
+  const turns = RENDERED_TURN_SEGMENTS;
+
+  it('names the round a clip is in, the opening being Round 1', () => {
+    expect(clipRoundLabel({ start_ms: 10_000, end_ms: 40_000 }, turns)).toBe('Round 1');
+    expect(clipRoundLabel({ start_ms: 70_000, end_ms: 100_000 }, turns)).toBe('Round 1');
+    expect(clipRoundLabel({ start_ms: 180_000, end_ms: 200_000 }, turns)).toBe('Round 2');
+    expect(clipRoundLabel({ start_ms: 280_000, end_ms: 300_000 }, turns)).toBe('Round 3');
+  });
+
+  it('names both rounds for a clip that runs from one into the next', () => {
+    expect(clipRoundLabel({ start_ms: 200_000, end_ms: 240_000 }, turns)).toBe('Rounds 2–3');
+  });
+
+  it('keeps a clip ending exactly where the next round starts in its own round', () => {
+    expect(clipRoundLabel({ start_ms: 100_000, end_ms: 128_000 }, turns)).toBe('Round 1');
+    expect(clipRoundLabel({ start_ms: 128_000, end_ms: 140_000 }, turns)).toBe('Round 2');
+  });
+
+  it('counts the pause between rounds with the round before it', () => {
+    expect(clipRoundLabel({ start_ms: 121_000, end_ms: 126_000 }, turns)).toBe('Round 1');
+  });
+
+  it('uses the video clock for a render without source times', () => {
+    const fixed = turns.map(({ source_start_ms: _s, source_end_ms: _e, ...turn }) => turn);
+    expect(clipRoundLabel({ start_ms: 125_000, end_ms: 160_000 }, fixed)).toBe('Round 2');
+  });
+
+  it('shows no round without turns', () => {
+    expect(clipRoundLabel({ start_ms: 0, end_ms: 10_000 }, [])).toBeNull();
+    const empty = {
+      ...turns[0],
+      output_start_ms: 5_000,
+      output_end_ms: 5_000,
+      source_start_ms: undefined,
+      source_end_ms: undefined,
+    };
+    expect(clipRoundLabel({ start_ms: 0, end_ms: 10_000 }, [empty])).toBeNull();
   });
 });

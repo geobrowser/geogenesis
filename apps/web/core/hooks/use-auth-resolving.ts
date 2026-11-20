@@ -1,15 +1,11 @@
 'use client';
 
-import { useSmartAccount } from '~/core/hooks/use-smart-account';
-import { usePrivy } from '~/core/wallet/auth-hooks';
+import { useAccountResolving } from '~/core/wallet/account-readiness';
 
 /**
  * Whether the viewer is not yet known to be signed out: Privy still starting, or signed in with
- * the account still loading.
+ * the account not ready to write. See `useAccountResolving`.
  */
 export function useAuthResolving(): boolean {
-  const { ready, authenticated } = usePrivy();
-  const { smartAccount } = useSmartAccount();
-
-  return !ready || (authenticated && !smartAccount);
+  return useAccountResolving();
 }

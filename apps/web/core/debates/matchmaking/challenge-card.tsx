@@ -4,6 +4,8 @@ import * as React from 'react';
 
 import { motion } from 'framer-motion';
 
+import { debatesErrorMessage } from '~/core/debates/account-setup-copy';
+
 import { Time } from '~/design-system/icons/time';
 import { Text } from '~/design-system/text';
 
@@ -34,7 +36,7 @@ export function useIncomingChallengeActions(challenge: Pick<DebateChallenge, 'id
     rejecting: rejectChallenge.isPending,
     busy: acceptChallenge.isPending || rejectChallenge.isPending,
     /** Announced with `role="alert"` wherever it is drawn. */
-    error: actionError instanceof Error ? actionError.message : null,
+    error: actionError instanceof Error ? debatesErrorMessage(actionError) : null,
   };
 }
 
@@ -112,21 +114,10 @@ export function DebateChallengeCard({
           whether a debate happens, so they read after the two people rather than above them. */}
       {isRecipient ? (
         <div className="grid grid-cols-2 gap-2">
-          <HubPillButton
-            onClick={reject}
-            disabled={busy}
-            pending={rejecting}
-            pendingLabel="Dismissing…"
-          >
+          <HubPillButton onClick={reject} disabled={busy} pending={rejecting} pendingLabel="Dismissing…">
             Dismiss
           </HubPillButton>
-          <HubPillButton
-            variant="primary"
-            onClick={accept}
-            disabled={busy}
-            pending={accepting}
-            pendingLabel="Opening…"
-          >
+          <HubPillButton variant="primary" onClick={accept} disabled={busy} pending={accepting} pendingLabel="Opening…">
             Explore claims
           </HubPillButton>
         </div>

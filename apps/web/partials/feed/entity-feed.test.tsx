@@ -35,6 +35,8 @@ const mocks = vi.hoisted(() => ({
   pages: null as { items: Record<string, unknown>[] }[] | null,
   /** Props the last rendered card received. */
   cardProps: null as Record<string, unknown> | null,
+  /** Whether the last card rendered inside `DebateFeedAutoplay`, so its debates play in view. */
+  cardInFeed: null as boolean | null,
   /** The item each feed position last rendered. */
   itemAt: {} as Record<number, Record<string, unknown>>,
   /** The error the infinite query reports, so the failed-feed message can be rendered. */
@@ -70,6 +72,7 @@ vi.mock('~/core/browse/use-browse-sidebar-cache', () => ({
 
 vi.mock('@tanstack/react-query', () => ({
   keepPreviousData: Symbol('keepPreviousData'),
+  skipToken: Symbol('skipToken'),
   useInfiniteQuery: (options: Record<string, unknown>) => {
     mocks.queryOptions = options;
     mocks.queryKeys.push(options.queryKey as unknown[]);
@@ -110,6 +113,13 @@ vi.mock('~/core/hooks/use-smart-account', () => ({
     smartAccount: mocks.accountAddress ? { account: { address: mocks.accountAddress } } : null,
   }),
 }));
+vi.mock('~/core/auth/wallet-session-sync', () => ({
+  useWalletSessionSync: () => ({ synced: true, settled: true }),
+}));
+vi.mock('~/core/wallet/account-readiness', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/wallet/account-readiness')>()),
+  useAccountAddress: () => mocks.accountAddress ?? null,
+}));
 
 vi.mock('~/design-system/menu', () => ({
   Menu: ({ trigger, children }: { trigger: React.ReactNode; children: React.ReactNode }) => (
@@ -125,13 +135,19 @@ vi.mock('~/design-system/menu', () => ({
   ),
 }));
 
-vi.mock('~/partials/explore/explore-feed-card', () => ({
-  ExploreFeedCard: (props: Record<string, unknown>) => {
-    mocks.cardProps = props;
-    mocks.itemAt[props.itemPosition as number] = props.item as Record<string, unknown>;
-    return null;
-  },
-}));
+vi.mock('~/partials/explore/explore-feed-card', async () => {
+  const gate = await vi.importActual<typeof import('~/core/debates/debate-playback-gate')>(
+    '~/core/debates/debate-playback-gate'
+  );
+  return {
+    ExploreFeedCard: (props: Record<string, unknown>) => {
+      mocks.cardInFeed = gate.useDebateFeedAutoplay();
+      mocks.cardProps = props;
+      mocks.itemAt[props.itemPosition as number] = props.item as Record<string, unknown>;
+      return null;
+    },
+  };
+});
 
 beforeEach(() => {
   mocks.queryOptions = null;
@@ -142,6 +158,7 @@ beforeEach(() => {
   mocks.facetData = null;
   mocks.pages = null;
   mocks.cardProps = null;
+  mocks.cardInFeed = null;
   mocks.itemAt = {};
   mocks.entryItem = null;
   mocks.entryPending = false;
@@ -341,6 +358,14 @@ describe('EntityFeed card and query wiring', () => {
       render(<EntityFeed apiEndpoint="/api/explore/feed" titleOpensSidePanel />);
 
       expect(mocks.cardProps?.titleOpensSidePanel).toBe(true);
+    });
+
+    // GEO-3812: a feed is the one place debates autoplay; everywhere else they wait for a tap.
+    it('lets its cards autoplay their debates, as a feed', () => {
+      mocks.pages = [{ items: [item] }];
+      render(<EntityFeed apiEndpoint="/api/activity/feed" lockedSpaceId="space-1" />);
+
+      expect(mocks.cardInFeed).toBe(true);
     });
 
     it('leaves cards navigating when it is not', () => {

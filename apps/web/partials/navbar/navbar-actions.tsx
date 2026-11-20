@@ -23,6 +23,7 @@ import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import type { SaveVotesPressReason } from '~/core/state/save-votes-prompt';
 import { NavUtils } from '~/core/utils/utils';
 import { GeoConnectButton } from '~/core/wallet';
+import { useAccountReadiness } from '~/core/wallet/account-readiness';
 import { useLogout, usePrivy } from '~/core/wallet/auth-hooks';
 import { useWalletStall } from '~/core/wallet/use-wallet-stall';
 import { navbarAccountState } from '~/core/wallet/wallet-stall';
@@ -47,11 +48,17 @@ import { avatarAtom } from '../onboarding/onboarding-atoms';
 import { EmailSettingsMenuItem } from './email-settings-menu-item';
 
 function useUser() {
-  const { smartAccount, isLoading: isLoadingSmartAccount, error } = useSmartAccount();
-  const address = smartAccount?.account.address;
-  const { profile, isLoading: isLoadingProfile } = useGeoProfile(address);
+  const { state, address } = useAccountReadiness();
+  const { smartAccount, error } = useSmartAccount();
+  const { profile, isLoading: isLoadingProfile } = useGeoProfile(address ?? undefined);
 
-  return { isLoading: isLoadingSmartAccount || isLoadingProfile, address, profile, error };
+  return {
+    isLoading: state === 'restoring' || isLoadingProfile,
+    address: address ?? undefined,
+    signingAddress: smartAccount?.account.address,
+    profile,
+    error,
+  };
 }
 
 const MOBILE_NAVBAR_QUERY = '(max-width: 639px)';
@@ -111,6 +118,7 @@ export function NavbarActions({ compact = false, signInComponent }: NavbarAction
     isLoading: isUserLoading,
     profile: resolvedProfile,
     address: resolvedAddress,
+    signingAddress,
     error: smartAccountError,
   } = useUser();
   const { personalSpaceId } = usePersonalSpaceId();
@@ -118,7 +126,7 @@ export function NavbarActions({ compact = false, signInComponent }: NavbarAction
   const pendingAvatar = useAtomValue(avatarAtom);
   const { user, authenticated } = usePrivy();
   // Signed in with no smart account is not signed out (GEO-3245): Log in does nothing for it.
-  const walletStall = useWalletStall({ authenticated, address: resolvedAddress, error: smartAccountError });
+  const walletStall = useWalletStall({ authenticated, address: signingAddress, error: smartAccountError });
   // The compact bar only exists on phones, so it always takes the phone layout: the edit mode toggle
   // in the menu, not beside the avatar, even between 640px and the bar's 767px edge.
   const isMobileNavbar = useIsMobileNavbar() || compact;
@@ -147,9 +155,9 @@ export function NavbarActions({ compact = false, signInComponent }: NavbarAction
   // The navbar's own content is swapped inside one stable tree rather than being
   // returned from competing branches. Returning a `<div>` from one branch and a
   // fragment from another changes the root element's type, which makes React
-  // unmount the whole subtree — taking the dialog with it. `isUserLoading` flips
-  // back to true mid-session (the smart-account query key includes the wallet
-  // address, so a tab refocus or Privy re-init re-resolves it), and remounting
+  // unmount the whole subtree — taking the dialog with it. `isUserLoading` can flip
+  // back to true mid-session (a Privy restart restores the session again, or the
+  // profile re-resolves), and remounting
   // `useEditProfile` under an in-flight write loses its staged rows: nothing to
   // reopen on failure, nothing to roll back, and the rows stranded in the space.
   // The keys hold each slot's identity as the content beside it changes.
@@ -166,18 +174,22 @@ export function NavbarActions({ compact = false, signInComponent }: NavbarAction
       stalled: walletStall.stalled,
     });
 
+    const reconnectButton = (
+      <Button
+        variant="secondary"
+        className={PILL_BUTTON_SECONDARY_CLASS_NAME}
+        onClick={walletStall.reconnect}
+        disabled={walletStall.reconnecting}
+        title="Your account didn’t finish loading"
+      >
+        {walletStall.reconnecting ? 'Reconnecting…' : 'Reconnect'}
+      </Button>
+    );
+
     if (state === 'stalled') {
       return (
         <div key="navbar-content" className="flex items-center gap-4">
-          <Button
-            variant="secondary"
-            className={PILL_BUTTON_SECONDARY_CLASS_NAME}
-            onClick={walletStall.reconnect}
-            disabled={walletStall.reconnecting}
-            title="Your account didn’t finish loading"
-          >
-            {walletStall.reconnecting ? 'Reconnecting…' : 'Reconnect'}
-          </Button>
+          {reconnectButton}
         </div>
       );
     }
@@ -210,6 +222,7 @@ export function NavbarActions({ compact = false, signInComponent }: NavbarAction
 
     return (
       <div key="navbar-content" className="flex items-center gap-4">
+        {walletStall.stalled ? reconnectButton : null}
         <ModeToggle
           isMobile={isMobileNavbar}
           isProfileMenuOpen={open}

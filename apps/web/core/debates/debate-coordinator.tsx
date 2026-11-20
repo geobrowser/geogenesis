@@ -5,6 +5,7 @@ import * as React from 'react';
 import { useAtom } from 'jotai';
 import { usePathname, useRouter } from 'next/navigation';
 
+import { debatesErrorMessage } from '~/core/debates/account-setup-copy';
 import { isSpaceCallPath } from '~/core/space-calls/routes';
 import { useFeatureFlag } from '~/core/state/feature-flags';
 import { validateSpaceId } from '~/core/utils/utils';
@@ -642,7 +643,7 @@ export function DebateCoordinator() {
         <DebateChallengeDialog
           challenge={promptedChallenge}
           busy={acceptChallenge.isPending || rejectChallenge.isPending}
-          error={challengeError instanceof Error ? challengeError.message : null}
+          error={challengeError instanceof Error ? debatesErrorMessage(challengeError) : null}
           onAccept={chosen => {
             // Recorded against the session id, which is also what stops the sender's card
             // appearing in front of the person who just answered here.

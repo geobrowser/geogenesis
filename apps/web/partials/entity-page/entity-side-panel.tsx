@@ -18,7 +18,6 @@ import { useIsMobileLayout } from '~/core/hooks/use-is-mobile-layout';
 import { getLocalUnpublishedChangesFingerprint } from '~/core/hooks/use-local-changes';
 import { useMobileSheetDrag } from '~/core/hooks/use-mobile-sheet-drag';
 import { useSidePanelEntityScope } from '~/core/hooks/use-side-panel-entity-scope';
-import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useDiff } from '~/core/state/diff-store';
 import { useEditable } from '~/core/state/editable-store';
 import { SidePanelEditorProvider } from '~/core/state/editor/editor-provider';
@@ -39,6 +38,7 @@ import { ENTITY_SIDE_PANEL_LAYER_SELECTOR } from '~/core/utils/entity-side-panel
 import type { EntitySidePanelTabSelection } from '~/core/utils/entity-tab-navigation';
 import { hideMainPageScrollbars } from '~/core/utils/hide-main-scrollbars';
 import { NavUtils } from '~/core/utils/utils';
+import { useAccountAddress } from '~/core/wallet/account-readiness';
 import { Z_LAYER_CLASS } from '~/core/z-layers';
 
 import { BulkEdit } from '~/design-system/icons/bulk-edit';
@@ -95,8 +95,7 @@ function AnimatedTogglePill({ editable }: { editable: boolean }) {
 function EntitySidePanelModeToggle() {
   const panelCtx = React.useContext(EntitySidePanelEditContext);
   const controls = useAnimation();
-  const { smartAccount } = useSmartAccount();
-  const isLoggedIn = Boolean(smartAccount?.account.address);
+  const isLoggedIn = Boolean(useAccountAddress());
 
   const { canEdit: canEditSpace } = useAccessControl(panelCtx?.spaceId ?? '');
 

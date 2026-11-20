@@ -51,7 +51,9 @@ vi.mock('~/core/analytics', () => ({
   voteCast: vi.fn(),
 }));
 
-vi.mock('~/core/hooks/use-smart-account', () => ({ useSmartAccount: () => ({ smartAccount: {} }) }));
+vi.mock('~/core/hooks/use-smart-account', () => ({
+  useSmartAccount: () => ({ smartAccount: { account: { address: '0xviewer' } } }),
+}));
 
 vi.mock('~/core/io/queries', () => ({
   getClaimResponseSummaryPage: () => Effect.succeed({ items: [], endCursor: null, hasNextPage: false }),

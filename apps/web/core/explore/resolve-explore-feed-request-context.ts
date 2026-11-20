@@ -1,9 +1,7 @@
-import { cookies } from 'next/headers';
-
+import { readWalletSession } from '~/core/auth/server/wallet-session';
 import type { BrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data';
 import { browseSidebarVisibleSpaces, fetchBrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data';
 import { resolveMemberSpaceFromWalletSafe } from '~/core/browse/resolve-member-space-from-wallet';
-import { WALLET_ADDRESS } from '~/core/cookie';
 import { normId } from '~/core/utils/norm-id';
 
 import { getGovernanceHomeSpaceContext } from '~/app/home/governance-home-space-ids';
@@ -29,7 +27,7 @@ const EMPTY_BROWSE: BrowseSidebarData = {
 export async function resolveExploreFeedRequestContext(routeSpaceId?: string, options: { anonymous?: boolean } = {}) {
   // `anonymous` never looks at the cookie jar, so a response built here cannot depend on who asked.
   // The CDN keys on the URL alone and ignores cookies, so a cacheable page must come from here.
-  const walletAddress = options.anonymous ? null : ((await cookies()).get(WALLET_ADDRESS)?.value ?? null);
+  const walletAddress = options.anonymous ? null : await readWalletSession();
   let personalMemberSpaceId: string | null = null;
   let memberOrEditorSpaceIds: string[] = [];
 

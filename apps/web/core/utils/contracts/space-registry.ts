@@ -21,6 +21,10 @@ export const FAST_PATH_RESTRICTED_ROLE = '0x8c7cfc7d0f6a45921559e012263eab395726
  * Used as the `_action` parameter in SpaceRegistry.enter()
  */
 export const GOVERNANCE_ACTIONS = {
+  /** keccak256('GOVERNANCE.SPACE_ID_REGISTERED') - logged when a space id is registered */
+  SPACE_ID_REGISTERED: '0x727334edb8d591a0c071a8a420e344b093f46a26e047eb091ebde72ebd8f4ed6' as Hex,
+  /** keccak256('GOVERNANCE.EDITS_PUBLISHED') - publishes an edit; the payload is the edit's `ipfs://` URI */
+  EDITS_PUBLISHED: '0x4fa19215d8045febfe0318814bb31d47009389b078ae12e4230ecef644adc65e' as Hex,
   /** keccak256('GOVERNANCE.MEMBERSHIP_REQUESTED') - creates a fast-path proposal */
   MEMBERSHIP_REQUESTED: '0xe048e0dc301b1bb4e2446608d8858ecf95c326d7241c9943b14f647fd3a78d9a' as Hex,
   /** keccak256('GOVERNANCE.PROPOSAL_CREATED') - creates a proposal (slow or fast path depending on VotingMode) */

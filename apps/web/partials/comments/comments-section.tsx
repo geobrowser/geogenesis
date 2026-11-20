@@ -24,7 +24,6 @@ import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { usePublishComment } from '~/core/hooks/use-publish-comment';
-import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSpaceRoles } from '~/core/hooks/use-space-editor-ids';
 import { uuidToHex } from '~/core/id/normalize';
 import { useEntityResponseScores } from '~/core/responses/use-entity-response-scores';
@@ -32,6 +31,7 @@ import { renderMarkdownDocument } from '~/core/state/editor/markdown-render';
 import { pendingCommentComposerAtom } from '~/core/state/pending-comment-intents';
 import { observePanelNavigation } from '~/core/utils/entity-side-panel-link';
 import { NavUtils } from '~/core/utils/utils';
+import { useAccountAddress } from '~/core/wallet/account-readiness';
 
 import { Dropdown } from '~/design-system/dropdown';
 import { RightArrowDiagonal } from '~/design-system/icons/right-arrow-diagonal';
@@ -280,7 +280,7 @@ export function CommentSection({
     interactionSurface: variant === 'panel' ? 'comments_panel' : 'entity_page',
   });
   const { personalSpaceId } = usePersonalSpaceId();
-  const { smartAccount } = useSmartAccount();
+  const accountAddress = useAccountAddress();
   const promptSignIn = usePrivySignIn(undefined, {
     analytics: {
       component: 'comment_composer',
@@ -294,11 +294,11 @@ export function CommentSection({
   const [pendingComposer, setPendingComposer] = useAtom(pendingCommentComposerAtom);
   const [composerExpanded, setComposerExpanded] = useState(false);
   const [pendingReplyToId, setPendingReplyToId] = useState<string | null>(null);
-  const isLoggedIn = !!smartAccount;
+  const isLoggedIn = !!accountAddress;
   const isPanel = variant === 'panel';
   const density = isPanel ? PANEL_DENSITY : PAGE_DENSITY;
   // The panel composer leads with the viewer's own avatar (design).
-  const walletAddress = smartAccount?.account.address;
+  const walletAddress = accountAddress ?? undefined;
   // Only the panel composer renders this avatar, so entity pages don't pay for
   // the profile lookup (useGeoProfile disables itself without an account).
   const { profile: viewerProfile } = useGeoProfile(isPanel ? walletAddress : undefined);
@@ -315,14 +315,14 @@ export function CommentSection({
   );
 
   React.useEffect(() => {
-    if (!smartAccount || !pendingComposer || pendingComposer.entityId !== entityId) return;
+    if (!accountAddress || !pendingComposer || pendingComposer.entityId !== entityId) return;
     setPendingComposer(null);
     if (pendingComposer.replyToCommentId) {
       setPendingReplyToId(pendingComposer.replyToCommentId);
       return;
     }
     setComposerExpanded(true);
-  }, [smartAccount, pendingComposer, entityId, setPendingComposer]);
+  }, [accountAddress, pendingComposer, entityId, setPendingComposer]);
   const commentAuthorSpaceIds = React.useMemo(() => collectCommentAuthorSpaceIds(comments), [comments]);
   // Both roles from one request, so a badge cannot show half of someone's standing.
   const {
@@ -409,7 +409,7 @@ export function CommentSection({
   // is updated via the onOptimistic callback so the row pins to the top right away.
   const handleCreateComment = React.useCallback(
     (text: string, ancestorComments?: Array<{ id: string; spaceId: string }>) => {
-      if (!smartAccount) return;
+      if (!accountAddress) return;
 
       void publishComment({
         text,
@@ -424,7 +424,7 @@ export function CommentSection({
         onFailed: () => adjustActivityPosts(-1),
       });
     },
-    [adjustActivityPosts, markSessionNew, publishComment, smartAccount]
+    [adjustActivityPosts, markSessionNew, publishComment, accountAddress]
   );
 
   const handleEditComment = React.useCallback(

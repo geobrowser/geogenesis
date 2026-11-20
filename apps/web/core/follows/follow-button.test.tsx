@@ -17,6 +17,8 @@ const mocks = vi.hoisted(() => ({
   authReady: true,
   authenticated: true,
   smartAccount: {} as object | null,
+  identifiedWithoutAccount: false,
+  buildFailed: false,
   personalSpaceId: 'personal-space' as string | null,
   isRegistered: true,
   isLoadingPersonalSpace: false,
@@ -55,6 +57,23 @@ vi.mock('~/core/topics/use-followed-topics', () => ({
 vi.mock('~/core/hooks/use-smart-account', () => ({
   useSmartAccount: () => ({ smartAccount: mocks.smartAccount }),
 }));
+vi.mock('~/core/wallet/account-readiness', async importOriginal => {
+  const actual = await importOriginal<typeof import('~/core/wallet/account-readiness')>();
+  return {
+    ...actual,
+    useAccountReadiness: () => {
+      const address = mocks.smartAccount || mocks.identifiedWithoutAccount ? '0xviewer' : null;
+      const state = actual.accountReadinessState({
+        privyReady: mocks.authReady,
+        authenticated: mocks.authenticated,
+        address,
+        signingAccount: Boolean(mocks.smartAccount),
+        buildFailed: mocks.buildFailed,
+      });
+      return { state, address: actual.isIdentified(state) ? address : null };
+    },
+  };
+});
 vi.mock('~/core/hooks/use-personal-space-id', () => ({
   usePersonalSpaceId: () => ({
     personalSpaceId: mocks.personalSpaceId,
@@ -93,6 +112,8 @@ beforeEach(() => {
   mocks.authReady = true;
   mocks.authenticated = true;
   mocks.smartAccount = {};
+  mocks.identifiedWithoutAccount = false;
+  mocks.buildFailed = false;
   mocks.personalSpaceId = 'personal-space';
   mocks.isRegistered = true;
   mocks.isLoadingPersonalSpace = false;
@@ -175,6 +196,46 @@ describe('FollowTopicButton', () => {
     fireEvent.click(button);
     expect(mocks.promptSignIn).not.toHaveBeenCalled();
     expect(mocks.queue).not.toHaveBeenCalled();
+  });
+
+  it('holds the press while the signing account is still being built', () => {
+    mocks.smartAccount = null;
+    mocks.identifiedWithoutAccount = true;
+    renderButton();
+    const button = screen.getByRole('button');
+
+    expect(button).toBeEnabled();
+    fireEvent.click(button);
+    expect(mocks.queue).toHaveBeenCalled();
+    expect(mocks.follow).not.toHaveBeenCalled();
+    expect(mocks.promptSignIn).not.toHaveBeenCalled();
+  });
+
+  it('holds the press when the signing account failed to build, rather than losing it', () => {
+    mocks.smartAccount = null;
+    mocks.identifiedWithoutAccount = true;
+    mocks.buildFailed = true;
+    renderButton();
+    const button = screen.getByRole('button');
+
+    expect(button).toBeEnabled();
+    fireEvent.click(button);
+    expect(mocks.queue).toHaveBeenCalled();
+    expect(mocks.follow).not.toHaveBeenCalled();
+  });
+
+  it('withdraws a follow held after a failed build on a second press', () => {
+    mocks.smartAccount = null;
+    mocks.identifiedWithoutAccount = true;
+    mocks.buildFailed = true;
+    mocks.isQueued = true;
+    renderButton();
+    const button = screen.getByRole('button');
+
+    expect(button).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(button);
+    expect(mocks.cancel).toHaveBeenCalled();
+    expect(mocks.follow).not.toHaveBeenCalled();
   });
 
   it('waits while Privy is still starting', () => {

@@ -4,10 +4,12 @@ import type { GeoWalletClient } from '@geogenesis/auth/account';
 import { RevertedUserOperationError } from '@geogenesis/auth/account';
 import { useQuery } from '@tanstack/react-query';
 
-import { toViemAccount, useWalletClient, useWallets } from '~/core/wallet/auth-hooks';
-import { findEmbeddedWallet } from '~/core/wallet/embedded-wallet';
+import * as React from 'react';
 
-import { forgetSyncedWalletCookie, syncWalletCookie } from '../cookie/sync-wallet-cookie';
+import { useWalletSessionSync } from '~/core/auth/wallet-session-sync';
+import { toViemAccount, usePrivy, useWallets } from '~/core/wallet/auth-hooks';
+import { embeddedWalletAddress, findEmbeddedWallet } from '~/core/wallet/embedded-wallet';
+
 import { ReceiptConfirmationTimeoutError } from '../errors';
 import { GEO_NETWORK } from '../sdk/geo-network';
 import {
@@ -19,16 +21,52 @@ import {
 } from './smart-account-send-queue';
 import { sendTransactionReportingSubmission } from './smart-account-submission';
 
-export function smartAccountQueryKey(
-  walletAddress: string | null | undefined,
-  embeddedWalletAddress: string | null | undefined
-) {
-  return ['smart-account', walletAddress, embeddedWalletAddress] as const;
+export function smartAccountQueryKey(embeddedWalletAddress: string | null | undefined) {
+  return ['smart-account', embeddedWalletAddress] as const;
 }
 
+export function signingAccountDelayMs() {
+  const allowed = process.env.NODE_ENV === 'development' || process.env.NEXT_PUBLIC_VERCEL_ENV === 'preview';
+  const ms = Number(process.env.NEXT_PUBLIC_DELAY_SIGNING_ACCOUNT_MS);
+  return allowed && ms > 0 ? ms : 0;
+}
+
+/** Bounds the wait for the server's wallet session, so a session that never syncs can't hold writes. */
+export const WALLET_SESSION_WAIT_MS = 10_000;
+
+/** When each address's wait started, shared so a later mount doesn't wait again. Resets with the page. */
+const waitStartedAt = new Map<string, number>();
+
+/** Whether writes may go: the server's session holds `address`, syncing gave up, or the wait ran out. */
+function useWalletSessionReady(address: `0x${string}` | null) {
+  const { settled } = useWalletSessionSync(address);
+  const [expiredFor, setExpiredFor] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    if (address === null) {
+      // Signed out: a later sign-in on this page waits afresh.
+      waitStartedAt.clear();
+      setExpiredFor(null);
+      return;
+    }
+    if (settled) return;
+    const startedAt = waitStartedAt.get(address) ?? Date.now();
+    waitStartedAt.set(address, startedAt);
+    const timer = setTimeout(() => setExpiredFor(address), startedAt + WALLET_SESSION_WAIT_MS - Date.now());
+    return () => clearTimeout(timer);
+  }, [address, settled]);
+  return address !== null && (settled || expiredFor === address);
+}
+
+/** Test seam. */
+export function resetWalletSessionWaitForTests() {
+  waitStartedAt.clear();
+}
+
+/** The signing account, once it is built and the server's wallet session holds it (bounded). */
 export function useSmartAccount() {
-  const { data: walletClient, isLoading: isLoadingWallet } = useWalletClient();
+  const { ready, authenticated, user } = usePrivy();
   const { wallets } = useWallets();
+  const sessionReady = useWalletSessionReady(authenticated ? embeddedWalletAddress(user) : null);
 
   // Privy embedded wallet — the EIP-7702 authority for the configured Geo chain. We need this
   // separately from the wagmi WalletClient because viem's signAuthorization rejects
@@ -36,12 +74,9 @@ export function useSmartAccount() {
   // usable signAuthorization method.
   const embeddedWallet = findEmbeddedWallet(wallets);
 
-  const {
-    data: smartAccount,
-    isLoading,
-    error,
-  } = useQuery({
-    queryKey: smartAccountQueryKey(walletClient?.account.address, embeddedWallet?.address),
+  const { data: builtAccount, error } = useQuery({
+    queryKey: smartAccountQueryKey(embeddedWallet?.address),
+    enabled: Boolean(embeddedWallet),
     queryFn: async () => {
       // ZeroDev EIP-7702 on every Geo chain — the chain identity comes from the
       // env-driven GEO_NETWORK config, so a network flip changes nothing here.
@@ -52,10 +87,10 @@ export function useSmartAccount() {
       // signAuthorization routes through Privy's signing API (the wagmi
       // WalletClient is JSON-RPC and would be rejected by viem's
       // signAuthorization action).
-      if (!embeddedWallet) {
-        forgetSyncedWalletCookie();
-        return null;
-      }
+      if (!embeddedWallet) return null;
+
+      const delayMs = signingAccountDelayMs();
+      if (delayMs) await new Promise(resolve => setTimeout(resolve, delayMs));
 
       const signer = await toViemAccount({ wallet: embeddedWallet });
 
@@ -215,14 +250,10 @@ export function useSmartAccount() {
           ),
       };
 
-      // The EOA address — registry now keys permissions on this directly (no Safe
-      // indirection) so the cookie value matches what `SpaceRegistry.enter` sees.
-      // Skips the Server Action when this tab already sent this address (see `syncWalletCookie`).
-      await syncWalletCookie(wrapped.account.address);
-
       return wrapped;
     },
   });
+  const smartAccount = builtAccount && sessionReady ? builtAccount : null;
 
   if (error) {
     // Without this, an init failure (Privy signing, ZeroDev RPC, 7702 kernel
@@ -231,5 +262,7 @@ export function useSmartAccount() {
     console.error('[SMART-ACCOUNT] initialization failed:', error);
   }
 
-  return { smartAccount: smartAccount ?? null, isLoading: isLoading || isLoadingWallet, error: error ?? null };
+  const isLoading = !ready || (authenticated && !smartAccount && !error);
+
+  return { smartAccount, isLoading, error: error ?? null };
 }

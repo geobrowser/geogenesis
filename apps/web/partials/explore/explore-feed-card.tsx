@@ -51,10 +51,6 @@ type ExploreFeedCardProps = {
   compactDebateChrome?: boolean;
   /** Let a debate fill the column rather than its viewport-fitted cap. See `DebateExploreFeedCard`. */
   fullWidthDebate?: boolean;
-  /** Transfer playback ownership when this debate's player is clicked. Ignored by other row types. */
-  onDebatePlaybackRequest?: (debateId: string) => void;
-  /** Register whether this debate currently has a mounted player. Ignored by other row types. */
-  onDebatePlaybackAvailabilityChange?: (debateId: string, available: boolean) => void;
   /** Profile-only owner action shown beside the debate's full-screen control. */
   debateEndSlot?: React.ReactNode;
   /**
@@ -178,8 +174,6 @@ function ExploreFeedCardBody(props: ExploreFeedCardProps) {
         titleOpensSidePanel={props.titleOpensSidePanel}
         compactChrome={props.compactDebateChrome}
         fullWidth={props.fullWidthDebate}
-        onPlaybackRequest={props.onDebatePlaybackRequest}
-        onPlaybackAvailabilityChange={props.onDebatePlaybackAvailabilityChange}
         endSlot={props.debateEndSlot}
         fallback={<BaseExploreFeedCard {...props} />}
       />

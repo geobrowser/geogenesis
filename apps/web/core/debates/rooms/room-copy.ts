@@ -162,6 +162,9 @@ export const ROOM_NOT_YET_OPEN = {
   explore: 'Explore',
 } as const;
 
+/** The room's join refused because someone is in another open session; the message itself is geo-chat's, worded in `openSessionRefusalMessage`. */
+export const ROOM_JOIN_REFUSED = { action: 'See my debates' } as const;
+
 /** Under a disabled Request debate in a room, while the opponent has not arrived. */
 export const ROOM_REQUEST_WAITING = 'Waiting for your opponent to arrive';
 

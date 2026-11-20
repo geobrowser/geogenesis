@@ -25,7 +25,7 @@ vi.mock('@tanstack/react-query', () => ({
 
 vi.mock('jotai', () => ({ useSetAtom: () => mocks.setAtom }));
 vi.mock('~/core/analytics', () => ({ loggedOut: vi.fn() }));
-vi.mock('~/core/cookie', () => ({ Cookie: { onConnectionChange: mocks.disconnectCookie } }));
+vi.mock('~/core/auth/wallet-session-client', () => ({ clearWalletSession: mocks.disconnectCookie }));
 vi.mock('~/core/debates/api', () => ({ resetGeoChatSession: mocks.resetGeoChatSession }));
 vi.mock('~/core/hooks/use-personal-space-id', () => ({ usePersonalSpaceId: () => ({ personalSpaceId: null }) }));
 vi.mock('~/core/state/editable-store', () => ({ useEditable: () => ({ setEditable: mocks.setEditable }) }));

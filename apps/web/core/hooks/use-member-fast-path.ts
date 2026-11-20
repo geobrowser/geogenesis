@@ -8,13 +8,13 @@ import { Effect, Either } from 'effect';
 
 import { FAST_PATH_RESTRICTED_QUERY_KEY } from '~/core/hooks/use-fast-path-restricted';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
-import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
 import { useSpace } from '~/core/hooks/use-space';
 import { validateSpaceId } from '~/core/io/rest/validation';
 import { geo } from '~/core/sdk/geo-client';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
+import { useAccountAddress } from '~/core/wallet/account-readiness';
 
 /**
  * - `give_fast_path`: SLOW proposal lifting the person's restriction.
@@ -56,7 +56,7 @@ const ACTIONS = {
 export function useMemberFastPath({ spaceId, action }: { spaceId: string; action: MemberFastPathAction }) {
   const { dispatch } = useStatusBar();
   const queryClient = useQueryClient();
-  const { smartAccount } = useSmartAccount();
+  const address = useAccountAddress();
   const { personalSpaceId, isRegistered } = usePersonalSpaceId();
   const { space } = useSpace(spaceId);
   const tx = useSmartAccountTransaction();
@@ -70,7 +70,7 @@ export function useMemberFastPath({ spaceId, action }: { spaceId: string; action
         throw new Error(message);
       };
 
-      if (!smartAccount) return fail('Please connect your wallet first');
+      if (!address) return fail('Please connect your wallet first');
       if (!personalSpaceId || !isRegistered) return fail('You need a registered personal space to do this');
       // Normalized (dashless, lowercase): the SDK rejects dashed UUIDs.
       const [author, dao, member] = [personalSpaceId, spaceId, memberSpaceId].map(validateSpaceId);
@@ -108,7 +108,7 @@ export function useMemberFastPath({ spaceId, action }: { spaceId: string; action
         },
       });
     },
-    [action, dispatch, isRegistered, personalSpaceId, queryClient, smartAccount, space, spaceId, tx]
+    [action, dispatch, isRegistered, personalSpaceId, queryClient, address, space, spaceId, tx]
   );
 
   const { mutate, status } = useMutation({ mutationFn: run });

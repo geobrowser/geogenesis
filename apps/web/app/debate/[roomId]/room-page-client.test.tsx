@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   },
   debateStatus: { data: undefined, isLoading: false } as { data: string | undefined; isLoading: boolean },
   replace: vi.fn(),
+  joinRefusal: null as string | null,
   access: { status: 'admitted' } as { status: string; opens_at?: string },
   kind: 'debate' as 'debate' | 'lobby',
   authenticated: true,
@@ -98,7 +99,7 @@ vi.mock('~/core/debates/rooms/hooks', () => ({
     error: null,
     isError: false,
   }),
-  useRoomPresence: () => ({ connectionId: 'c', rejoin: vi.fn() }),
+  useRoomPresence: () => ({ connectionId: 'c', rejoin: vi.fn(), refusal: mocks.joinRefusal }),
   useDebateRoomPresence: () => null,
   useRoomSession: () => mocks.session,
   useDebateStatus: (debateId: string | null) =>
@@ -128,6 +129,7 @@ afterEach(() => {
   mocks.guestView = { data: undefined, isPending: true, fetchStatus: 'idle' };
   mocks.guestViewEnabled = [];
   mocks.notices = [];
+  mocks.joinRefusal = null;
   mocks.people = undefined;
   mocks.participants = ['jordan', 'maya'];
   mocks.viewerId = 'jordan';
@@ -220,6 +222,16 @@ describe('DebateRoomPageClient', () => {
   it('asks about a call only once the room is known to be a lobby', () => {
     render(<DebateRoomPageClient roomId="room-1" />);
     expect(mocks.toCallEnabled.at(-1)).toBe(false);
+  });
+
+  // geo-chat#383: the room reads as admitted, but the join was refused for an open session elsewhere.
+  it('says so, rather than mounting the picker, when the join is refused for an open session', () => {
+    mocks.joinRefusal = 'You’re already in another debate session. Finish or leave it first.';
+    render(<DebateRoomPageClient roomId="room-1" />);
+
+    expect(screen.getByText('You’re already in another debate session. Finish or leave it first.')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'See my debates' })).toBeInTheDocument();
+    expect(screen.queryByText(/picker for/)).not.toBeInTheDocument();
   });
 
   // Someone early has nothing to do here yet, so the notice says when and sends them somewhere useful.

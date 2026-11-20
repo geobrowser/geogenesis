@@ -7,13 +7,13 @@ import { useCallback } from 'react';
 import { Effect, Either } from 'effect';
 
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
-import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
 import { useSpace } from '~/core/hooks/use-space';
 import { geo } from '~/core/sdk/geo-client';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
 import { validateSpaceId } from '~/core/utils/utils';
+import { useAccountAddress } from '~/core/wallet/account-readiness';
 
 interface UseProposeAddEditorArgs {
   /** The DAO space ID (bytes16 hex without 0x prefix) to propose adding an editor to */
@@ -34,7 +34,7 @@ interface ProposeAddEditorParams {
 export function useProposeAddEditor({ spaceId }: UseProposeAddEditorArgs) {
   const { dispatch } = useStatusBar();
 
-  const { smartAccount } = useSmartAccount();
+  const address = useAccountAddress();
   const { personalSpaceId, isRegistered } = usePersonalSpaceId();
   const { space } = useSpace(spaceId ?? undefined);
 
@@ -42,7 +42,7 @@ export function useProposeAddEditor({ spaceId }: UseProposeAddEditorArgs) {
 
   const handleProposeAddEditor = useCallback(
     async ({ targetEditorSpaceId }: ProposeAddEditorParams) => {
-      if (!smartAccount) {
+      if (!address) {
         const message = 'Please connect your wallet to propose adding an editor';
         console.error('No smart account available');
         dispatch({ type: 'ERROR', payload: message });
@@ -119,7 +119,7 @@ export function useProposeAddEditor({ spaceId }: UseProposeAddEditorArgs) {
         onRight: hash => console.log('Successfully proposed to add editor. Transaction hash:', hash),
       });
     },
-    [dispatch, smartAccount, personalSpaceId, isRegistered, spaceId, space, tx]
+    [dispatch, address, personalSpaceId, isRegistered, spaceId, space, tx]
   );
 
   const { mutate, status } = useMutation({

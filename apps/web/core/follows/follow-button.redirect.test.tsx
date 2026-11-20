@@ -21,7 +21,9 @@ vi.mock('~/core/topics/use-follow-topics', () => ({
 vi.mock('~/core/topics/use-followed-topics', () => ({
   useFollowedEntities: () => ({ topicIds: mocks.followedIds, rows: [], isLoading: false }),
 }));
-vi.mock('~/core/hooks/use-smart-account', () => ({ useSmartAccount: () => ({ smartAccount: {} }) }));
+vi.mock('~/core/hooks/use-smart-account', () => ({
+  useSmartAccount: () => ({ smartAccount: { account: { address: '0xviewer' } } }),
+}));
 vi.mock('~/core/hooks/use-personal-space-id', () => ({
   usePersonalSpaceId: () => ({ personalSpaceId: 'personal-space', isRegistered: true, isLoading: false }),
 }));

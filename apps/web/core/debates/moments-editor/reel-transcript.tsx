@@ -10,7 +10,7 @@ import type { DebateMediaTurnSegment, DebateTranscriptResponse, ParticipantSlot 
 import { formatTimecode } from '../claim-timing';
 import { transcriptOnRecordings } from '../recording-clock';
 import { transcriptSpans } from '../transcript-lines';
-import { FREE_STEP_MS, dragEdge } from './clip-drag';
+import { FREE_STEP_MS } from './clip-drag';
 import { ClipChip, PILL_CLASS, PILL_COMPACT_CLASS, SearchIcon, WarnIcon } from './editor-ui';
 import {
   type EditorClip,
@@ -367,7 +367,6 @@ export const ReelTranscript = React.memo(function ReelTranscript({
   was,
   editable,
   readOnly,
-  snap,
   names,
   subscribe,
   actions,
@@ -389,8 +388,6 @@ export const ReelTranscript = React.memo(function ReelTranscript({
   editable: boolean;
   /** Nothing can be changed: a selection only reads out its times. */
   readOnly: boolean;
-  /** The editor's Snap: a handle dragged with it on lands on word edges, Alt flipping it (as the waveform). */
-  snap: boolean;
   names: TranscriptNames;
   subscribe: PlayheadSubscribe;
   actions: React.RefObject<TranscriptActions>;
@@ -682,10 +679,10 @@ export const ReelTranscript = React.memo(function ReelTranscript({
     bar.style.top = `${toolbarTop(first.getBoundingClientRect(), last.getBoundingClientRect(), panel.getBoundingClientRect(), bar.offsetHeight)}px`;
   }, [pick, result]);
 
-  // Edge handles: dragged word by word (Alt for anywhere in a word), the box scrolling near its edges.
+  // Edge handles: dragged word by word, always landing on word edges, the box scrolling near its edges.
   // Handlers read the transcript as it is now: a turn whose marks didn't change keeps older ones.
-  const latest = React.useRef({ clips, words, selected, owners, handles, snap, endMs });
-  latest.current = { clips, words, selected, owners, handles, snap, endMs };
+  const latest = React.useRef({ clips, words, selected, owners, handles, endMs });
+  latest.current = { clips, words, selected, owners, handles, endMs };
   // The click that ends a drag lands on the handle's word (the press and the release's common
   // ancestor): it is the drag's, not a click on the word.
   const dragEnded = React.useRef(false);
@@ -727,21 +724,12 @@ export const ReelTranscript = React.memo(function ReelTranscript({
       if (!span) return;
       const word = now.words[Number(span.dataset.word)];
       if (!word) return;
-      // Snap off (or Alt with it on) places the edge anywhere in the word, to the tenth.
-      const free = now.snap === move.altKey;
-      const rect = span.getBoundingClientRect();
-      const fraction = rect.width > 0 ? Math.min(Math.max((move.clientX - rect.left) / rect.width, 0), 1) : 0;
-      const ms = free
-        ? dragEdge(word.start_ms + fraction * (word.end_ms - word.start_ms), now.words, edge, true)
-        : edge === 'start'
-          ? word.start_ms
-          : word.end_ms;
       const next = movedEdge(
         now.clips.map((clip, at) => (at === now.selected ? current : clip)),
         now.selected,
         edge,
-        ms,
-        free,
+        edge === 'start' ? word.start_ms : word.end_ms,
+        false,
         now.endMs
       );
       if (!next) return;

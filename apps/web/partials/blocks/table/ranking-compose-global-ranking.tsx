@@ -16,7 +16,6 @@ import type { Row, SearchResult } from '~/core/types';
 import { normId } from '~/core/utils/norm-id';
 
 import { Button } from '~/design-system/button';
-import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Search } from '~/design-system/icons/search';
 
 import { BestDebateDisplaysContext, BestDebateWatchContext } from './best-debates/best-debate-row';
@@ -33,6 +32,7 @@ import type { BestDebatesRankingFilterState } from './best-debates/use-best-deba
 import { type BestDebatesTopicFacet, useBestDebatesTopicFacet } from './best-debates/use-best-debates-topic-facet';
 import { RankingGlobalDesktopRow } from './ranking-block-ui';
 import { useRankingComposeScrollRoot, useRankingComposeScrollRootRef } from './ranking-compose-layout';
+import { RankingComposePendingDisclosure } from './ranking-compose-pending-disclosure';
 import { RankingComposeSwipeableRow } from './ranking-compose-swipeable-row';
 import { rankingEntityDragProps } from './ranking-entity-drag';
 import { RankingEntryRow } from './ranking-entry-row';
@@ -173,35 +173,6 @@ function RankingComposeSearchListPlaceholder({ height, children }: { height: num
   return (
     <div className="flex shrink-0 flex-col justify-start overflow-hidden" style={{ height }} aria-hidden={!children}>
       {children}
-    </div>
-  );
-}
-
-/**
- * Pending (awaiting-approval) entries are hidden from the global list by default;
- * this collapsed disclosure lets the editor opt in to see and add them.
- */
-function RankingComposePendingDisclosure({ count, children }: { count: number; children: React.ReactNode }) {
-  const [open, setOpen] = React.useState(false);
-
-  if (count === 0) return null;
-
-  return (
-    <div className="border-t border-grey-02">
-      <button
-        type="button"
-        onClick={() => setOpen(value => !value)}
-        aria-expanded={open}
-        className="flex w-full items-center justify-between py-3 text-metadata text-grey-04 transition hover:text-text"
-      >
-        <span>
-          {open ? 'Hide' : 'Show'} pending ({count})
-        </span>
-        <span className={cx('flex transition-transform', open && 'rotate-180')}>
-          <ChevronDownSmall color="grey-04" />
-        </span>
-      </button>
-      {open ? children : null}
     </div>
   );
 }
