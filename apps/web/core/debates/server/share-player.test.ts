@@ -1,12 +1,21 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import type { DebateMediaArtifact, DebateMediaResponse } from '~/core/debates/api';
+import { HIDDEN_PROPERTY_ID } from '~/core/moderation/hidden';
 
-import { sharePlayerEnabled, sharePlayerHtml, sharePlayerMetadata, sharePlayerPath } from './share-player';
+import { DEBATE_TYPE_ID } from '../ontology';
+import {
+  sharePlayerEnabled,
+  sharePlayerHtml,
+  sharePlayerMetadata,
+  sharePlayerPath,
+  sharePlayerResponse,
+} from './share-player';
 
 vi.stubEnv('NEXT_PUBLIC_GEO_CHAT_API_BASE_URL', 'https://chat.example');
 
 const DEBATE_HEX = '01a1ef881e697960ae5db5b6d3ebaacd';
+const SPACE_HEX = '89bd89bf28ff8a0963faf92a8c905e20';
 const ORIGIN = 'https://preview.example';
 
 function artifact(kind: DebateMediaArtifact['kind'], metadata: Record<string, unknown> = {}): DebateMediaArtifact {
@@ -38,7 +47,13 @@ describe('sharePlayerEnabled', () => {
 });
 
 describe('sharePlayerMetadata', () => {
-  const base = { origin: ORIGIN, debateId: DEBATE_HEX, title: 'Claim | A vs. B', description: 'Line' };
+  const base = {
+    origin: ORIGIN,
+    spaceId: SPACE_HEX,
+    debateId: DEBATE_HEX,
+    title: 'Claim | A vs. B',
+    description: 'Line',
+  };
 
   it('keeps the static card for a debate with no share video', () => {
     expect(sharePlayerMetadata({ ...base, media: null })).toBeNull();
@@ -55,7 +70,12 @@ describe('sharePlayerMetadata', () => {
       card: 'player',
       title: 'Claim | A vs. B',
       players: [
-        { playerUrl: `${ORIGIN}/share-player/debate/${DEBATE_HEX}`, streamUrl: videoUrl, width: 1080, height: 1920 },
+        {
+          playerUrl: `${ORIGIN}/share-player/debate/${SPACE_HEX}/${DEBATE_HEX}`,
+          streamUrl: videoUrl,
+          width: 1080,
+          height: 1920,
+        },
       ],
       images: [posterUrl],
     });
@@ -87,7 +107,9 @@ describe('sharePlayerMetadata', () => {
 
 describe('sharePlayerPath', () => {
   it('spells the id without hyphens', () => {
-    expect(sharePlayerPath('01a1ef88-1e69-7960-ae5d-b5b6d3ebaacd')).toBe(`/share-player/debate/${DEBATE_HEX}`);
+    expect(sharePlayerPath('89bd89bf-28ff-8a09-63fa-f92a8c905e20', '01a1ef88-1e69-7960-ae5d-b5b6d3ebaacd')).toBe(
+      `/share-player/debate/${SPACE_HEX}/${DEBATE_HEX}`
+    );
   });
 });
 
@@ -98,5 +120,52 @@ describe('sharePlayerHtml', () => {
     expect(html).toContain(`poster="${posterUrl}"`);
     expect(html).toContain('playsinline');
     expect(html).not.toContain('<b>');
+  });
+});
+
+// X keeps a card for days, so the player must stop playing a debate hidden or removed after it was
+// shared, the way the page, its metadata and its share image already do.
+describe('sharePlayerResponse', () => {
+  const ids = { spaceId: SPACE_HEX, debateId: DEBATE_HEX };
+  const debate = (values: unknown[] = []) => ({ name: 'Claim | A vs. B', types: [{ id: DEBATE_TYPE_ID }], values });
+  const deps = (entity: unknown, visibility: 'visible' | 'removed' | 'unknown' = 'visible') => ({
+    enabled: true,
+    fetchEntity: vi.fn().mockResolvedValue(entity),
+    fetchVisibility: vi.fn().mockResolvedValue(visibility),
+  });
+
+  it("plays a visible debate, titled with its name, reading the hidden flag in the link's space", async () => {
+    const d = deps(debate());
+    const response = await sharePlayerResponse(ids, d);
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain('<title>Claim | A vs. B</title>');
+    expect(d.fetchEntity).toHaveBeenCalledWith(DEBATE_HEX, SPACE_HEX, expect.any(AbortSignal));
+  });
+
+  it('404s a debate hidden in that space', async () => {
+    const hidden = debate([{ property: { id: HIDDEN_PROPERTY_ID }, value: 'true' }]);
+    expect((await sharePlayerResponse(ids, deps(hidden))).status).toBe(404);
+  });
+
+  it('404s a debate geo-chat reports removed', async () => {
+    expect((await sharePlayerResponse(ids, deps(debate(), 'removed'))).status).toBe(404);
+  });
+
+  it('plays when geo-chat cannot say, since its content route refuses a removed video itself', async () => {
+    expect((await sharePlayerResponse(ids, deps(debate(), 'unknown'))).status).toBe(200);
+  });
+
+  it('404s an entity that is not a Debate, or a graph that fails', async () => {
+    expect((await sharePlayerResponse(ids, deps({ name: 'x', types: [], values: [] }))).status).toBe(404);
+    const failing = { ...deps(null), fetchEntity: vi.fn().mockRejectedValue(new Error('graph down')) };
+    expect((await sharePlayerResponse(ids, failing)).status).toBe(404);
+  });
+
+  it('404s off previews without reading anything, and a malformed id', async () => {
+    const off = { ...deps(debate()), enabled: false };
+    expect((await sharePlayerResponse(ids, off)).status).toBe(404);
+    expect(off.fetchEntity).not.toHaveBeenCalled();
+    expect((await sharePlayerResponse({ ...ids, debateId: 'nope' }, deps(debate()))).status).toBe(404);
+    expect((await sharePlayerResponse({ ...ids, spaceId: 'nope' }, deps(debate()))).status).toBe(404);
   });
 });

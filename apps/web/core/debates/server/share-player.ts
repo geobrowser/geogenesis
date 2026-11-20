@@ -1,9 +1,20 @@
+import { IdUtils } from '@geoprotocol/geo-sdk/lite';
+
 import type { Metadata } from 'next';
 
 import type { DebateMediaResponse } from '~/core/debates/api';
 import { ID } from '~/core/id';
+import type { Entity } from '~/core/types';
 
+import { isGeoChatDebateId } from '../debate-removal';
 import { debateArtifactContentUrl } from '../speaker-still';
+import { type DebateVisibility, fetchDebateVisibility } from './debate-visibility';
+import {
+  type DebateEntity,
+  PUBLISHED_DEBATE_LOOKUP_TIMEOUT_MS,
+  fetchEntityFromGraph,
+  isVisibleDebate,
+} from './published-debate-path';
 
 /**
  * GEO-3817 experiment: a playable share card for debate links. X gets a player card (poster with a
@@ -16,9 +27,12 @@ export function sharePlayerEnabled(env: Record<string, string | undefined> = pro
   return env.VERCEL_ENV === 'preview' || env.NODE_ENV === 'development';
 }
 
-/** The page X frames in the card. Outside `/api/`, which robots.txt disallows and X's crawler honours. */
-export function sharePlayerPath(debateId: string): string {
-  return `/share-player/debate/${ID.uuidToHex(debateId)}`;
+/**
+ * The page X frames in the card. Outside `/api/`, which robots.txt disallows and X's crawler honours.
+ * It carries the space so the player reads the hidden flag in the same scope the debate page does.
+ */
+export function sharePlayerPath(spaceId: string, debateId: string): string {
+  return `/share-player/debate/${ID.uuidToHex(spaceId)}/${ID.uuidToHex(debateId)}`;
 }
 
 /** Share videos are 1080×1920; an artifact that does not say otherwise is assumed to be one. */
@@ -40,6 +54,7 @@ function positiveNumber(value: unknown): number | null {
  */
 export function sharePlayerMetadata({
   origin,
+  spaceId,
   debateId,
   media,
   title,
@@ -47,6 +62,7 @@ export function sharePlayerMetadata({
   shape = 'video',
 }: {
   origin: string;
+  spaceId: string;
   debateId: string;
   media: DebateMediaResponse | null;
   title: string;
@@ -66,7 +82,7 @@ export function sharePlayerMetadata({
   // Absolute, because a crawler resolves nothing; the public base is relative in the dev setup.
   const absolute = (url: string) => new URL(url, origin).toString();
   const videoUrl = absolute(debateArtifactContentUrl(debateId, 'social_video'));
-  const playerUrl = absolute(sharePlayerPath(debateId));
+  const playerUrl = absolute(sharePlayerPath(spaceId, debateId));
 
   return {
     openGraph: {
@@ -117,4 +133,43 @@ export function sharePlayerHtml({ debateId, title }: { debateId: string; title: 
 <video src="${src}" poster="${poster}" controls playsinline preload="metadata"></video>
 </body>
 </html>`;
+}
+
+type SharePlayerDeps = {
+  enabled?: boolean;
+  fetchEntity?: (
+    entityId: string,
+    spaceId: string,
+    signal: AbortSignal
+  ) => Promise<(DebateEntity & Pick<Entity, 'name'>) | null>;
+  fetchVisibility?: (entityId: string) => Promise<DebateVisibility>;
+};
+
+/**
+ * The player route's response. X keeps a card for days, so the player itself must stop playing a
+ * debate that was hidden or removed after it was shared: it 404s whenever the debate page would not
+ * show the debate (hidden in this space, not a Debate, or removed by geo-chat). A graph that cannot
+ * be read in time also 404s, as the page would; a geo-chat that cannot be read does not, since its
+ * own content route refuses a removed debate's video anyway.
+ */
+export async function sharePlayerResponse(
+  { spaceId, debateId }: { spaceId: string; debateId: string },
+  {
+    enabled = sharePlayerEnabled(),
+    fetchEntity = fetchEntityFromGraph,
+    fetchVisibility = id => fetchDebateVisibility(id),
+  }: SharePlayerDeps = {}
+): Promise<Response> {
+  const notFound = () => new Response('Not found', { status: 404 });
+  if (!enabled || !IdUtils.isValid(spaceId) || !isGeoChatDebateId(debateId)) return notFound();
+
+  const [entity, visibility] = await Promise.all([
+    fetchEntity(debateId, spaceId, AbortSignal.timeout(PUBLISHED_DEBATE_LOOKUP_TIMEOUT_MS)).catch(() => null),
+    fetchVisibility(debateId),
+  ]);
+  if (!isVisibleDebate(entity) || visibility === 'removed') return notFound();
+
+  return new Response(sharePlayerHtml({ debateId, title: entity?.name || 'Geo debate' }), {
+    headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'public, max-age=300' },
+  });
 }

@@ -62,6 +62,7 @@ export async function generateMetadata(props: Props): Promise<Metadata> {
   return (
     sharePlayerMetadata({
       origin: `${host.startsWith('localhost') ? 'http' : 'https'}://${host}`,
+      spaceId: params.id,
       debateId: params.entityId,
       media: await cachedFetchDebatePageMedia(params.entityId),
       title: entity.name ?? 'Debate',
