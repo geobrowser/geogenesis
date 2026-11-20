@@ -8,6 +8,7 @@ import { GeoChatRequestError, dashlessId } from '~/core/debates/api';
 
 import {
   type SpaceChannelSettings,
+  type SpaceChatAuth,
   type SpaceChatRoom,
   changeSpaceChannelMembers,
   createSpaceChannel,
@@ -106,24 +107,51 @@ export function useSpaceChannelMembers(roomId: string | null, enabled: boolean) 
   return { ...query, change };
 }
 
+/** A shown channel's read cursor is written this long after its newest message, at most. */
+export const READ_CURSOR_DELAY_MS = 5_000;
+
+type ReadCursor = { roomId: string; messageId: string; auth: SpaceChatAuth };
+
+function subscribeVisibility(onChange: () => void) {
+  document.addEventListener('visibilitychange', onChange);
+  return () => document.removeEventListener('visibilitychange', onChange);
+}
+
+function usePageVisible() {
+  return React.useSyncExternalStore(
+    subscribeVisibility,
+    () => document.visibilityState === 'visible',
+    () => false
+  );
+}
+
 /**
- * Moves the read cursor to `newestId` while the channel shows (GEO-3818), and clears its badge in
- * the cached lists at once. Each id is sent once; geo-chat never moves the cursor back.
+ * Moves the read cursor to `newestId` while the channel shows in a visible tab (GEO-3818), and
+ * clears its badge in the cached lists at once. The write trails by `READ_CURSOR_DELAY_MS`, and
+ * goes sooner when the tab hides or loses focus, or the channel closes.
  */
 export function useMarkChannelRead(room: SpaceChatRoom | null, newestId: string | null, showing: boolean) {
   const { auth } = useSpaceChatAuth();
   const queryClient = useQueryClient();
-  const sent = React.useRef<string | null>(null);
+  const visible = usePageVisible();
+  const pending = React.useRef<ReadCursor | null>(null);
+  const timer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const roomId = room?.id ?? null;
   const spaceId = room?.space_id ?? null;
   const lastRead = room?.last_read_message_id ?? null;
 
+  const flush = React.useCallback(() => {
+    if (timer.current !== null) clearTimeout(timer.current);
+    timer.current = null;
+    const cursor = pending.current;
+    pending.current = null;
+    // Geo-chat never moves the cursor back; a failure shows again on the next list read.
+    if (cursor) markSpaceChatRoomRead(cursor.roomId, cursor.messageId, cursor.auth).catch(() => undefined);
+  }, []);
+
   React.useEffect(() => {
-    if (!auth || !roomId || !spaceId || !newestId || !showing) return;
-    const target = dashlessId(newestId);
-    if (sent.current === target) return;
-    if (lastRead && dashlessId(lastRead) >= target) return;
-    sent.current = target;
+    if (!auth || !roomId || !spaceId || !newestId || !showing || !visible) return;
+    if (lastRead && dashlessId(lastRead) >= dashlessId(newestId)) return;
     queryClient.setQueriesData<SpaceChatRoomsData>(
       { queryKey: spaceChatQueryKeys.roomsRoot(spaceId, auth.accountKey) },
       current =>
@@ -136,9 +164,17 @@ export function useMarkChannelRead(room: SpaceChatRoom | null, newestId: string 
             }
           : current
     );
-    markSpaceChatRoomRead(roomId, newestId, auth).catch(() => {
-      // The next room list read shows the server's count again.
-      sent.current = null;
-    });
-  }, [auth, lastRead, newestId, queryClient, roomId, showing, spaceId]);
+    pending.current = { roomId, messageId: newestId, auth };
+    timer.current ??= setTimeout(flush, READ_CURSOR_DELAY_MS);
+  }, [auth, flush, lastRead, newestId, queryClient, roomId, showing, spaceId, visible]);
+
+  // Hiding or leaving the tab, or another channel, writes what is pending now.
+  React.useEffect(() => {
+    if (!visible) flush();
+  }, [flush, visible]);
+  React.useEffect(() => {
+    window.addEventListener('blur', flush);
+    return () => window.removeEventListener('blur', flush);
+  }, [flush]);
+  React.useEffect(() => flush, [flush, roomId]);
 }
