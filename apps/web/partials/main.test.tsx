@@ -70,4 +70,19 @@ describe('Main', () => {
     expect(main).not.toHaveClass('pt-8');
     expect(main).not.toHaveClass('pb-16');
   });
+
+  // The call room is the same shell; the top padding pushed its control bar below the fold.
+  it('drops only the vertical padding around a space call, which fills the viewport itself', () => {
+    mocks.pathname = '/space/25a3b0d1c4e84f1e9a7b6c5d4e3f2a1b/calls/0b5c9d41f2a74e0f9d3a8f6e1c2b7a90';
+    const main = renderMain();
+
+    expect(main).toHaveClass('mx-auto', 'max-w-[1200px]');
+    expect(main).not.toHaveClass('pt-8');
+    expect(main).not.toHaveClass('pb-16');
+  });
+
+  it('keeps the padding on the Calls tab', () => {
+    mocks.pathname = '/space/25a3b0d1c4e84f1e9a7b6c5d4e3f2a1b/calls';
+    expect(renderMain()).toHaveClass(...CHROME);
+  });
 });
