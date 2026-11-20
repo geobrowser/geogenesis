@@ -227,45 +227,68 @@ const SHARE_TEST_BUTTON_CSS = `
     gap: 1.1cqw; padding: 0 0.7cqw 0 2cqw; border-radius: 999px; box-sizing: border-box;
     font-weight: 500; font-size: 2.35cqw; letter-spacing: -0.04em; white-space: nowrap; text-decoration: none;
     box-shadow: 0 0.6cqw 2cqw rgba(0, 0, 0, 0.28);
-    transition: transform 160ms ease, box-shadow 160ms ease, opacity 220ms ease;
+    cursor: pointer; transition: transform 160ms ease, box-shadow 160ms ease, background-color 160ms ease, color 160ms ease, opacity 220ms ease;
     opacity: 0; transform: translateY(1cqw); pointer-events: none;
   }
   .btn.on { opacity: 1; transform: none; pointer-events: auto; }
-  .btn:hover { transform: translateY(-0.3cqw); box-shadow: 0 1cqw 2.6cqw rgba(0, 0, 0, 0.34); }
-  .btn:active { transform: scale(0.96); }
+  /* Hover: lifts and shades, the go circle grows and its arrow nudges on. Press: sinks. */
+  .btn.on:hover { transform: translateY(-0.4cqw); box-shadow: 0 1.2cqw 3cqw rgba(0, 0, 0, 0.38); }
+  .btn.light.on:hover { background: #ececec; }
+  .btn.dark.on:hover { background: #333; }
+  .btn.on:hover .go { transform: scale(1.12); }
+  .btn.on:hover .go svg { transform: translateX(0.2cqw); }
+  .btn .go svg { transition: transform 160ms ease; }
+  .btn.on:active { transform: translateY(0.1cqw) scale(0.95); box-shadow: 0 0.3cqw 1cqw rgba(0, 0, 0, 0.3); transition-duration: 60ms; }
+  .btn.light.on:active { background: #dcdcdc; }
+  .btn.dark.on:active { background: #000; }
+  /* Clicked: Geo purple with a check, for a moment, so the press is plainly acknowledged. */
+  .btn.on.clicked, .btn.on.clicked:hover { background: #9a4eff; color: #fff; }
+  .btn.clicked .go { background: #fff; color: #9a4eff; }
+  .btn .check { display: none; }
+  .btn.clicked .arrow { display: none; }
+  .btn.clicked .check { display: block; }
   .btn:focus-visible { outline: 0.25cqw solid #9a4eff; outline-offset: 0.3cqw; }
   .btn .go {
     flex: none; display: grid; place-items: center; width: 4.4cqw; height: 4.4cqw; border-radius: 50%;
     transition: transform 160ms ease;
   }
-  .btn:hover .go { transform: translateX(0.3cqw); }
   .btn .go svg { width: 2cqw; height: 2cqw; }
   .btn.light { background: #fff; color: #151515; }
   .btn.light .go { background: #151515; color: #fff; }
   .btn.dark { background: #151515; color: #fff; }
   .btn.dark .go { background: #fff; color: #151515; }
   .btn .mark { width: 1.6cqw; height: 1.9cqw; margin-right: -0.4cqw; }
-  /* The one to press: a ring that keeps drawing the eye while its screen is on. */
-  .btn.pulse.on::after {
+  /* Read as tappable without hover (phones): every button rings softly, staggered, the main one
+     stronger, and each arrow nudges on. */
+  .btn.on::after {
     content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
-    animation: ring 1.8s ease-out infinite;
+    animation: ring 2.4s ease-out infinite; animation-delay: var(--delay, 0s); opacity: 0.6;
+  }
+  .btn.on .go svg.arrow { animation: nudge 1.6s ease-in-out infinite; animation-delay: var(--delay, 0s); }
+  @keyframes nudge { 0%, 60%, 100% { transform: translateX(0); } 30% { transform: translateX(0.35cqw); } }
+  .btn.pulse.on::after {
+    animation-duration: 1.8s; opacity: 1;
   }
   @keyframes ring {
     0% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.7); }
     100% { box-shadow: 0 0 0 1.6cqw rgba(255, 255, 255, 0); }
   }
-  .btn.dark.pulse.on::after { animation-name: ring-dark; }
+  .btn.dark.on::after { animation-name: ring-dark; }
   @keyframes ring-dark {
     0% { box-shadow: 0 0 0 0 rgba(21, 21, 21, 0.45); }
     100% { box-shadow: 0 0 0 1.6cqw rgba(21, 21, 21, 0); }
   }
   .btn.watch { top: 3.6cqh; right: 2.6cqw; height: 6.2cqh; font-size: 1.9cqw; padding-left: 1.4cqw; }
   .btn.watch .go { width: 3.6cqw; height: 3.6cqw; }
-  @media (prefers-reduced-motion: reduce) { .btn, .btn .go { transition: none; } .btn.pulse.on::after { animation: none; } }
+  @media (prefers-reduced-motion: reduce) {
+    .btn, .btn .go { transition: none; }
+    .btn.on::after, .btn.on .go svg.arrow { animation: none; }
+  }
 `;
 
 const GO_ARROW =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';
+  '<svg class="arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>' +
+  '<svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
 
 const GEO_MARK =
   '<svg class="mark" viewBox="0 0 25.8662 30" fill="none"><path d="M23.6374 28.2346C23.9907 28.8166 23.5717 29.5611 22.8909 29.5611H2.9992C2.31839 29.5611 1.8994 28.8167 2.25264 28.2347L4.00242 25.3518C4.25863 24.9296 4.81249 24.806 5.24126 25.0509C7.48535 26.333 10.117 27.0718 12.9319 27.0719C15.7543 27.0719 18.3928 26.3292 20.6408 25.0409C21.0697 24.7951 21.6242 24.9185 21.8807 25.341L23.6374 28.2346ZM12.1985 11.8531C12.5386 11.2931 13.3516 11.2933 13.6917 11.8531L19.5432 21.4924C19.7837 21.8887 19.6743 22.4069 19.2749 22.6424C17.4349 23.7272 15.2616 24.3561 12.9319 24.3561C10.6105 24.356 8.44448 23.7315 6.60858 22.6537C6.20827 22.4187 6.09825 21.8997 6.33918 21.5029L12.1985 11.8531Z" fill="currentColor"/><path d="M12.9326 23.5588C6.60632 23.5586 1.55672 18.5905 1.55666 12.5578C1.55666 6.52517 6.60628 1.55711 12.9326 1.55686C19.2592 1.55686 24.3096 6.52502 24.3096 12.5578C24.3095 18.5906 19.2592 23.5588 12.9326 23.5588Z" stroke="currentColor" stroke-width="3.11332"/></svg>';
@@ -314,11 +337,20 @@ ${button('end', 'dark pulse', link(), 'Watch the full debate on Geo', at(end.ful
         if (on === a.classList.contains('on')) return;
         // In one after another, so a screen's buttons arrive rather than appear.
         a.style.transitionDelay = on ? (i % 3) * 90 + 'ms' : '0ms';
+        a.style.setProperty('--delay', (i % 3) * 0.5 + 's');
         a.classList.toggle('on', on);
         a.tabIndex = on ? 0 : -1;
       });
     }
     ['timeupdate', 'seeked', 'ended', 'play'].forEach(function (e) { video.addEventListener(e, sync); });
+    // iOS Safari only shows :active on a touch when the page listens for touches.
+    document.addEventListener('touchstart', function () {}, { passive: true });
+    buttons.forEach(function (a) {
+      a.addEventListener('click', function () {
+        a.classList.add('clicked');
+        setTimeout(function () { a.classList.remove('clicked'); }, 1600);
+      });
+    });
     sync();
   })();
 </script>`;

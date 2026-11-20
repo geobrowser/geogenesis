@@ -26,21 +26,21 @@ const GATEWAY = 'https://mature-tomato-basilisk.myfilebase.com/ipfs/';
 export const SHARE_TEST_EXPERIENCES: Record<string, ShareTestExperience> = {
   // Dovile Sv vs. Preston Mantel: "Bitcoin is a better store of value than gold".
   '01a039bdac2c7ec097758284ce61200d': {
-    videoUrl: `${GATEWAY}QmQjMhGrbWGX9MmFA7fuXa3zsJAFarWbRaFUHoEuNZBNue`,
-    cardUrl: `${GATEWAY}QmXhWR13buN3kxHH9jTPEF5q2xrYh7Dda4tLw8GKPZDZfV`,
+    videoUrl: `${GATEWAY}QmUaPiHovLu4VqDGFpLgph2MPrSqE9uSiaULHoYav1ptg6`,
+    cardUrl: `${GATEWAY}QmYete26HwcqHro3pFjs6kKUN4s6Yd5KU7FocZiXmF5rND`,
     video: { width: 1280, height: 720 },
     claim: {
       start: 6.5,
       end: 12.5,
-      agree: { x: 0.3094, y: 0.6944, w: 0.1719, h: 0.0889 },
-      disagree: { x: 0.4953, y: 0.6944, w: 0.1953, h: 0.0889 },
+      agree: { x: 0.3094, y: 0.6861, w: 0.1719, h: 0.0889 },
+      disagree: { x: 0.4953, y: 0.6861, w: 0.1953, h: 0.0889 },
     },
     reel: { start: 12.5, end: 77.37 },
     end: {
       start: 77.37,
-      agree: { x: 0.3094, y: 0.5167, w: 0.1719, h: 0.0889 },
-      disagree: { x: 0.4953, y: 0.5167, w: 0.1953, h: 0.0889 },
-      full: { x: 0.273, y: 0.8111, w: 0.4539, h: 0.0889 },
+      agree: { x: 0.3094, y: 0.6944, w: 0.1719, h: 0.0889 },
+      disagree: { x: 0.4953, y: 0.6944, w: 0.1953, h: 0.0889 },
+      full: { x: 0.273, y: 0.5694, w: 0.4539, h: 0.0889 },
     },
   },
 };
