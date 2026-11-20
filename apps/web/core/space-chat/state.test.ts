@@ -1,10 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
-import type { SpaceChatMessage, SpaceChatPage } from './api';
+import type { SpaceChatMessage, SpaceChatPage, SpaceChatRoom } from './api';
 import {
+  type SpaceChatRoomsData,
   type SpaceChatState,
+  parseSpaceChannelRoomEvent,
   parseSpaceChatRoomEvent,
   shownReactions,
+  spaceChatQueryKeys,
+  withChannelUpdate,
   withChatMessage,
   withChatPage,
   withOlderChatPage,
@@ -381,5 +385,68 @@ describe('space chat state', () => {
     }
     expect(parseSpaceChatRoomEvent({ event_type: 'message.pinned', payload: {} })).toBeNull();
     expect(parseSpaceChatRoomEvent({ event_type: 'message.deleted', payload: { message_id: 'm' } })).toBeNull();
+  });
+});
+
+describe('channels (GEO-3818)', () => {
+  const room = (overrides: Partial<SpaceChatRoom>): SpaceChatRoom => ({
+    id: '0192aaaa000070008000000000000001',
+    public_dao_space_id: 'p',
+    space_id: 's',
+    kind: 'channel',
+    key: 'k',
+    name: 'markets',
+    version: 2,
+    can_post: true,
+    unread_count: 4,
+    ...overrides,
+  });
+  const data = (rooms: SpaceChatRoom[]): SpaceChatRoomsData => ({
+    supported: true,
+    rooms,
+    channelsEnabled: true,
+    canManageChannels: false,
+  });
+
+  it('lays a newer channel.updated over the row and keeps the viewer fields', () => {
+    const next = withChannelUpdate(data([room({})]), {
+      ...room({ name: 'prices', version: 3, archived: true }),
+      can_post: undefined,
+      unread_count: undefined,
+    });
+    expect(next.rooms[0]).toMatchObject({
+      name: 'prices',
+      version: 3,
+      archived: true,
+      can_post: true,
+      unread_count: 4,
+    });
+  });
+
+  it('drops a stale or unknown channel.updated', () => {
+    const current = data([room({})]);
+    expect(withChannelUpdate(current, room({ name: 'old', version: 2 }))).toBe(current);
+    expect(withChannelUpdate(current, room({ id: 'other', version: 9 }))).toBe(current);
+  });
+
+  it('parses channel room events and leaves message events alone', () => {
+    expect(
+      parseSpaceChannelRoomEvent({ event_type: 'channel.updated', payload: { room: room({ version: 5 }) } })
+    ).toMatchObject({ type: 'updated', room: { version: 5 } });
+    expect(
+      parseSpaceChannelRoomEvent({
+        event_type: 'channel.members_changed',
+        payload: { room_id: 'r', room_kind: 'channel', added_user_ids: ['a'], removed_user_ids: [] },
+      })
+    ).toEqual({ type: 'members_changed', roomId: 'r', added: ['a'], removed: [] });
+    expect(parseSpaceChannelRoomEvent({ event_type: 'message.created', payload: {} })).toBeNull();
+    expect(parseSpaceChannelRoomEvent({ event_type: 'channel.updated', payload: { room: { id: 'x' } } })).toBeNull();
+  });
+
+  it('keys archived lists under the same root as the plain list', () => {
+    const root = spaceChatQueryKeys.roomsRoot('s', 'acct');
+    expect(spaceChatQueryKeys.rooms('s', 'acct').slice(0, root.length)).toEqual(root);
+    expect(spaceChatQueryKeys.rooms('s', 'acct', true).slice(0, root.length)).toEqual(root);
+    expect(spaceChatQueryKeys.rooms('s', 'acct', true)).not.toEqual(spaceChatQueryKeys.rooms('s', 'acct'));
   });
 });

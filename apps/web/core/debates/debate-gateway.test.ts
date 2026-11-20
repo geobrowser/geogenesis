@@ -1613,6 +1613,123 @@ describe('DebateGatewayClient', () => {
     expect(listener).toHaveBeenCalled();
   });
 
+  describe('channels (GEO-3818)', () => {
+    const roomId = '0192aaaa-0000-7000-8000-000000000009';
+    const dashless = '0192aaaa000070008000000000000009';
+    const scope = { scope: 'chat-room', space_id: 'space-1', room_id: roomId, room_kind: 'channel' } as const;
+    const echo = { space_id: 'space-1', room_id: dashless, room_kind: 'channel', resume_after_seq: null };
+    const roomsKey = ['debates', 'account', 'user-a', 'space-chat-rooms', 'space-1'];
+    const archivedKey = [...roomsKey, 'archived'];
+
+    async function connected() {
+      const release = client.retainScope(scope);
+      client.start(
+        vi.fn(async () => 'privy-token'),
+        'user-a'
+      );
+      await vi.runAllTicks();
+      sockets[0]!.open();
+      sockets[0]!.receive('READY', readyPayload([echo]));
+      await flushInvalidations();
+      invalidateQueries.mockClear();
+      return release;
+    }
+
+    function roomEvent(payload: unknown) {
+      sockets[0]!.receiveRaw(
+        JSON.stringify({
+          v: 1,
+          op: 'EVENT',
+          seq: 9,
+          space_id: 'space-1',
+          room_id: dashless,
+          room_kind: 'channel',
+          payload,
+        })
+      );
+    }
+
+    it('subscribes a channel in the room shape', async () => {
+      await connected();
+      expect(sockets[0]!.sent).toContainEqual(
+        expect.objectContaining({ op: 'SUBSCRIBE', payload: { ...echo, room_id: roomId } })
+      );
+      expect(client.isScopeLive(scope)).toBe(true);
+    });
+
+    it('patches every cached room list on a newer channel.updated, then re-reads them', async () => {
+      const row = { id: dashless, space_id: 'space-1', kind: 'channel', name: 'markets', version: 1, can_post: true };
+      queryClient.setQueryData(roomsKey, {
+        supported: true,
+        rooms: [row],
+        channelsEnabled: true,
+        canManageChannels: false,
+      });
+      queryClient.setQueryData(archivedKey, {
+        supported: true,
+        rooms: [row],
+        channelsEnabled: true,
+        canManageChannels: false,
+      });
+      await connected();
+
+      roomEvent({
+        event_type: 'channel.updated',
+        payload: { room: { ...row, can_post: undefined, name: 'prices', version: 2 } },
+      });
+      for (const key of [roomsKey, archivedKey]) {
+        expect(queryClient.getQueryData<{ rooms: { name: string; can_post: boolean }[] }>(key)?.rooms[0]).toMatchObject(
+          {
+            name: 'prices',
+            can_post: true,
+          }
+        );
+      }
+      await flushInvalidations();
+      expectInvalidated(invalidateQueries, { queryKey: roomsKey, refetchType: 'active' });
+    });
+
+    it('re-reads the channel’s people on channel.members_changed', async () => {
+      await connected();
+      roomEvent({
+        event_type: 'channel.members_changed',
+        payload: { room_id: dashless, room_kind: 'channel', added_user_ids: ['a'], removed_user_ids: [] },
+      });
+      await flushInvalidations();
+      expectInvalidated(invalidateQueries, {
+        queryKey: ['debates', 'account', 'user-a', 'space-chat-members', dashless],
+        refetchType: 'active',
+      });
+    });
+
+    it('re-reads the room lists on space.channels_changed', async () => {
+      await connected();
+      sockets[0]!.receive('EVENT', {
+        event_id: 'channels-1',
+        event_type: 'space.channels_changed',
+        payload: { space_id: 'space-1' },
+      });
+      await vi.advanceTimersByTimeAsync(5_000);
+      await flushInvalidations();
+      expectInvalidated(invalidateQueries, { queryKey: roomsKey, refetchType: 'active' });
+    });
+
+    it('marks a revoked channel, stops it, keeps the socket, and clears the mark once released', async () => {
+      const release = await connected();
+      expect(client.isRoomRevoked(roomId)).toBe(false);
+
+      sockets[0]!.receive('ERROR', { code: 'subscription_revoked', subscription: echo });
+      expect(client.isRoomRevoked(roomId)).toBe(true);
+      expect(client.isScopeLive(scope)).toBe(false);
+      expect(client.getSnapshot().status).toBe('ready');
+      await flushInvalidations();
+      expectInvalidated(invalidateQueries, { queryKey: roomsKey, refetchType: 'active' });
+
+      release();
+      expect(client.isRoomRevoked(roomId)).toBe(false);
+    });
+  });
+
   it('resubscribes a chat room on the new token’s socket after a refresh closes the old one, and refetches it', async () => {
     const roomId = '0192aaaa-0000-7000-8000-000000000001';
     const dashless = '0192aaaa000070008000000000000001';

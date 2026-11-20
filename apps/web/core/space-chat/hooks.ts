@@ -23,6 +23,7 @@ import {
   setSpaceChatReaction,
 } from './api';
 import {
+  type SpaceChatRoomsData,
   type SpaceChatState,
   parseReactionCounts,
   spaceChatQueryKeys,
@@ -66,17 +67,22 @@ export function useSpaceChatAuth(): { ready: boolean; auth: SpaceChatAuth | null
  * The space's chat rooms. `supported: false` for a space with no chat (geo-chat's 404 for a space
  * that is not a public DAO space), so the tab hides.
  */
-export function useSpaceChatRooms(spaceId: string, enabled: boolean) {
+export function useSpaceChatRooms(spaceId: string, enabled: boolean, { includeArchived = false } = {}) {
   const { ready, auth } = useSpaceChatAuth();
   const query = useQuery({
-    queryKey: spaceChatQueryKeys.rooms(spaceId, auth?.accountKey ?? null),
-    queryFn: async ({ signal }) => {
+    queryKey: spaceChatQueryKeys.rooms(spaceId, auth?.accountKey ?? null, includeArchived),
+    queryFn: async ({ signal }): Promise<SpaceChatRoomsData> => {
       try {
-        const { rooms } = await listSpaceChatRooms(spaceId, auth, signal);
-        return { supported: true as const, rooms };
+        const list = await listSpaceChatRooms(spaceId, auth, signal, includeArchived);
+        return {
+          supported: true,
+          rooms: list.rooms,
+          channelsEnabled: list.channels_enabled === true,
+          canManageChannels: list.can_manage_channels === true,
+        };
       } catch (error) {
         if (error instanceof GeoChatRequestError && error.status === 404) {
-          return { supported: false as const, rooms: [] as SpaceChatRoom[] };
+          return { supported: false, rooms: [], channelsEnabled: false, canManageChannels: false };
         }
         throw error;
       }
@@ -111,7 +117,8 @@ export type SpaceChatRoomView = {
  */
 export function useSpaceChatRoom(
   room: Pick<SpaceChatRoom, 'id' | 'space_id' | 'kind'> | null,
-  enabled = true
+  enabled = true,
+  { onSent }: { onSent?: () => void } = {}
 ): SpaceChatRoomView {
   const { ready, auth } = useSpaceChatAuth();
   const queryClient = useQueryClient();
@@ -130,7 +137,8 @@ export function useSpaceChatRoom(
   // Live only once this room is confirmed: a refused or pending room polls like a dropped socket.
   const live = useSpaceChatRoomScope(
     room,
-    enabled && ready && (auth !== null || (visible && room?.kind === 'member')),
+    // Signed out, every room but #editors may be readable; the room list only offers those that are.
+    enabled && ready && (auth !== null || (visible && room !== null && room.kind !== 'editor')),
     auth !== null
   );
   const lastFullReadAt = React.useRef(0);
@@ -172,6 +180,8 @@ export function useSpaceChatRoom(
   // A resend of a failed send reuses its nonce, whatever was sent in between: if the first post was
   // stored after all, geo-chat returns it instead of posting twice, and charges no quota.
   const failedSends = React.useRef(new Map<string, string>());
+  const onSentRef = React.useRef(onSent);
+  onSentRef.current = onSent;
   const send = React.useCallback(
     async (body: string, replyTo: string | null) => {
       if (!auth || !roomId) throw new GeoChatRequestError('Sign in to chat', 'authentication_required', 401);
@@ -190,6 +200,7 @@ export function useSpaceChatRoom(
           await postSpaceChatMessage(roomId, { client_nonce: clientNonce, body, reply_to_message_id: replyTo }, auth)
         );
         failedSends.current.delete(key);
+        onSentRef.current?.();
       } catch (error) {
         update(state => withoutPendingMessage(state, clientNonce));
         failedSends.current.set(key, clientNonce);

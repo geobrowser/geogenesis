@@ -11,14 +11,35 @@ export const SPACE_CHAT_ERROR_COPY = {
   deleted: 'That message was deleted.',
   notFound: 'That message is gone.',
   invalid: 'That message can’t be sent.',
+  slowMode: (seconds: number) => `Slow mode is on. Try again in ${seconds}s.`,
+  repliesOnly: 'Only editors post here. Reply to a message instead.',
+  archived: 'This channel is archived.',
 } as const;
+
+/** Seconds to wait from a 429, at least 1. */
+export function retryAfterSeconds(error: GeoChatRequestError, fallbackMs = 10_000) {
+  return Math.max(1, Math.ceil((error.retryAfterMs ?? fallbackMs) / 1000));
+}
+
+/** geo-chat's slow-mode refusal (GEO-3818). */
+export function isSlowModeError(error: unknown): boolean {
+  return (
+    error instanceof GeoChatRequestError &&
+    (error.code === 'slow_mode' || (error.code === 'rate_limited' && error.details?.limit === 'slow_mode'))
+  );
+}
 
 /** A failed send, edit, delete or reaction as one line; `fallback` for anything unrecognised. */
 export function spaceChatErrorMessage(error: unknown, fallback: string): string {
   if (!(error instanceof GeoChatRequestError)) return fallback;
+  if (isSlowModeError(error)) return SPACE_CHAT_ERROR_COPY.slowMode(retryAfterSeconds(error));
   switch (error.code) {
+    case 'replies_only':
+      return SPACE_CHAT_ERROR_COPY.repliesOnly;
+    case 'channel_archived':
+      return SPACE_CHAT_ERROR_COPY.archived;
     case 'rate_limited': {
-      const seconds = Math.max(1, Math.ceil((error.retryAfterMs ?? 10_000) / 1000));
+      const seconds = retryAfterSeconds(error);
       const limit = error.details?.limit;
       if (limit === 'sends_by_room') return SPACE_CHAT_ERROR_COPY.busy(seconds);
       if (limit === 'edits_by_user') return SPACE_CHAT_ERROR_COPY.editsTooFast(seconds);
